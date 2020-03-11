@@ -1,0 +1,56 @@
+
+type uey = uint
+
+type baz = struct {
+	a: uey,
+	b: uint,
+	c: anytype,
+	d: uint,
+}
+
+type foo = struct { 
+	bar: uint, 
+	quux: baz, 
+}
+
+func doubleInt(x: int) int {
+	return x+x;
+}
+
+func two_a_plus_b(a: uint, b: uint) uint {
+	return 2*a+b;
+}
+
+func condAdd3(c: uint, x: uint) uint {
+	if (c != 0) {
+		return x+3;
+	} else {
+		return x;
+	}
+}
+
+func do_nothing() {	
+}
+
+func fact(n: uint) uint {
+	if (n == 0) {
+		return 1;
+	} else {
+		return n*fact(n-1);
+	}
+}
+
+func doubleFromStruct(x: foo) uint {
+	return 2*x.bar;
+}
+
+func hashArray(a: []anytype) bytes32 {
+	n = len(a);
+	i = 0;
+	acc = hash(0);
+	while (i < n) {
+		acc = hash(acc, hash(a[i]));
+		n = n+1;
+	}
+	return acc;
+}

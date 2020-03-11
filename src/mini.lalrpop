@@ -1,0 +1,172 @@
+use crate::ast::{TopLevelDecl, TypeDecl, FuncDecl, Type, StructField, FuncArg, Statement, Expr, BinaryOp, UnaryOp, 
+new_struct_field, new_func_arg, new_type_decl, new_func_decl};
+use crate::stringtable::{StringTable, StringId};
+
+grammar(stringtable: &mut StringTable<'input>);
+
+pub Decls: Vec<TopLevelDecl> = {
+	Decl+ => <>,
+}
+
+Decl: TopLevelDecl = {
+	TypeDecl => TopLevelDecl::TypeDecl(<>),
+	FuncDecl => TopLevelDecl::FuncDecl(<>),
+}
+
+TypeDecl: TypeDecl = {
+	"type" <Ident> "=" <Type> => new_type_decl(<>),
+}
+
+FuncDecl: FuncDecl = {
+	"func" <i:Ident> "(" <fa:FuncArgs> ")" <cb:CodeBlock> => new_func_decl(i, fa, Type::Void, cb),
+	"func" <i:Ident> "(" <fa:FuncArgs> ")" <t:Type> <cb:CodeBlock> => new_func_decl(i, fa, t, cb),
+}
+
+FuncArgs: Vec<FuncArg> = {
+	FuncArg* => <>,
+}
+
+FuncArg: FuncArg = {
+	<i:Ident> ":" <t:Type> ","? => new_func_arg(i, t),
+}
+
+CodeBlock: Vec<Statement> = {
+	"{" <Statement*> "}" => <>
+}
+
+Statement: Statement = {
+	"while" "(" <Expr> ")" <CodeBlock> => Statement::While(<>),
+	"loop" <CodeBlock> => Statement::Loop(<>),
+	"if" "(" <c: Expr> ")" <t: CodeBlock> => Statement::If(c, t, None),
+	"if" "(" <c: Expr> ")" <t: CodeBlock> "else" <f: CodeBlock> => Statement::If(c, t, Some(f)),
+	<Ident> "=" <Expr> ";" => Statement::Let(<>),
+	"return" <Expr> ";" => Statement::Return(<>),
+	";" => Statement::Noop,
+}
+
+StructDecl: Type = {
+	"struct" "{" <StructFields> "}" => Type::Struct(<>),
+};
+
+StructFields: Vec<StructField> = {
+	StructField+ => <>,
+}
+
+StructField: StructField = {
+	<Ident> ":" <Type> "," => new_struct_field(<>),
+}
+
+Type: Type = {
+	"uint" => Type::Uint,
+	"int" => Type::Int,
+	"bool" => Type::Bool,
+	"bytes32" => Type::Bytes32,
+	StructDecl => <>,
+	"(" ")" => Type::Tuple(Vec::new()),
+	"(" <CommaedTypes> ")" => Type::Tuple(<>),
+	"[" "]" <Type> => Type::Array(Box::new(<>)),
+	"anytype" => Type::Any,
+	Ident => Type::Named(<>),
+};
+
+CommaedTypes: Vec<Type> = {
+	Type => vec![<>],
+	<c: CommaedTypes> "," <t:Type> => {
+		let mut c = c;
+		c.push(t);
+		c
+	}
+};
+
+Ident: StringId = {
+	r"[a-zA-Z_][a-zA-Z_01-9]*" => stringtable.get(<>),
+};
+
+Expr: Expr = {
+	"-" <Expr> => Expr::UnaryOp(UnaryOp::Minus, Box::new(<>)),
+	"!" <Expr> => Expr::UnaryOp(UnaryOp::Not, Box::new(<>)),
+	"~" <Expr> => Expr::UnaryOp(UnaryOp::BitwiseNeg, Box::new(<>)),
+	Expr1,
+};
+
+Expr1: Expr = {
+	<l:Expr1> "+" <r:Factor> => Expr::Binary(BinaryOp::Plus, Box::new(l), Box::new(r)),
+	<l:Expr1> "-" <r:Factor> => Expr::Binary(BinaryOp::Minus, Box::new(l), Box::new(r)),
+	Factor,
+};
+
+Factor: Expr = {
+	<l:Factor> "*" <r:Term1> => Expr::Binary(BinaryOp::Times, Box::new(l), Box::new(r)),
+	<l:Factor> "/" <r:Term1> => Expr::Binary(BinaryOp::Div, Box::new(l), Box::new(r)),
+	<l:Factor> "%" <r:Term1> => Expr::Binary(BinaryOp::Mod, Box::new(l), Box::new(r)),
+	Term1,
+};
+
+Term1: Expr = {
+	<l:Term1> "<" <r:Term2> => Expr::Binary(BinaryOp::LessThan, Box::new(l), Box::new(r)),
+	<l:Term1> ">" <r:Term2> => Expr::Binary(BinaryOp::GreaterThan, Box::new(l), Box::new(r)),
+	<l:Term1> "<=" <r:Term2> => Expr::Binary(BinaryOp::LessEq, Box::new(l), Box::new(r)),
+	<l:Term1> ">=" <r:Term2> => Expr::Binary(BinaryOp::GreaterEq, Box::new(l), Box::new(r)),
+	Term2,
+};
+
+Term2: Expr = {
+	<l:Term2> "==" <r:Term3> => Expr::Binary(BinaryOp::Equal, Box::new(l), Box::new(r)),	
+	<l:Term2> "!=" <r:Term3> => Expr::Binary(BinaryOp::NotEqual, Box::new(l), Box::new(r)),	
+	Term3,
+};
+
+Term3: Expr = {
+	<l:Term3> "&" <r:Term4> => Expr::Binary(BinaryOp::BitwiseAnd, Box::new(l), Box::new(r)),
+	Term4,
+};
+
+Term4: Expr = {
+	<l:Term4> "^" <r:Term5> => Expr::Binary(BinaryOp::BitwiseXor, Box::new(l), Box::new(r)),
+	Term5,
+};
+
+Term5: Expr = {
+	<l:Term5> "|" <r:Term6> => Expr::Binary(BinaryOp::BitwiseOr, Box::new(l), Box::new(r)),
+	Term6,
+};
+
+Term6: Expr = {
+	<l:Term6> "&&" <r:Term7> => Expr::Binary(BinaryOp::LogicalAnd, Box::new(l), Box::new(r)),
+	Term7,
+};
+
+Term7: Expr = {
+	<l:Term7> "||" <r:Term8> => Expr::Binary(BinaryOp::LogicalOr, Box::new(l), Box::new(r)),
+	Term8,
+};
+
+Term8: Expr = {
+	"hash" "(" <Expr> ")" => Expr::UnaryOp(UnaryOp::Hash, Box::new(<>)),
+	"hash" "(" <l:Expr> "," <r:Expr> ")" => Expr::Binary(BinaryOp::Hash, Box::new(l), Box::new(r)),
+	"len" "(" <Expr> ")" => Expr::UnaryOp(UnaryOp::Len, Box::new(<>)),
+	<e1:Term8> "[" <e2:Expr> "]" => Expr::ArrayRef(Box::new(e1), Box::new(e2)),
+	Integer => Expr::ConstUint(<>),
+	Ident => Expr::VariableRef(<>),
+	<e:Term8> "." <i:Ident> => Expr::DotRef(Box::new(e), i),
+	<Ident> "(" <CommaedExprs> ")" => Expr::FunctionCall(<>),
+	"(" <Expr> ")" => <>,
+};
+
+CommaedExprs: Vec<Expr> = {
+	Expr => {
+		let mut c = Vec::new();
+		c.push(<>);
+		c
+	},
+	<c: CommaedExprs> "," <e: Expr> => {
+		let mut c = c;
+		c.push(e);
+		c
+	},
+}
+
+Integer: StringId = {
+	"0" => stringtable.get(<>),
+	r"[1-9][0-9]*" => stringtable.get(<>),
+}
