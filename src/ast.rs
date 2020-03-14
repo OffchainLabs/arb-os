@@ -1,5 +1,5 @@
 use crate::stringtable::{StringId};
-use crate::typetable::TypeTable;
+use crate::symtable::SymTable;
 use crate::typecheck::{TypeError, new_type_error};
 
 #[derive(Debug)]
@@ -35,7 +35,7 @@ pub enum Type {
 }
 
 impl Type {
-	pub fn resolve_types(&self, type_table: &TypeTable) -> Result<Self, TypeError> {
+	pub fn resolve_types(&self, type_table: &SymTable<Type>) -> Result<Self, TypeError> {
 		match self {
 			Type::Void |
 			Type::Uint |
@@ -76,6 +76,20 @@ impl Type {
 			}
 		}
 	}
+
+	pub fn get_struct_slot_by_name(&self, name: StringId) -> Option<usize> {
+		match self {
+			Type::Struct(fields) => {
+				for i in 0..fields.len() {
+					if fields[i].name == name {
+						return Some(i);
+					}
+				}
+				None
+			}
+			_ => None
+		}
+	}
 }
 
 pub fn types_equal(t1: &Type, t2: &Type) -> bool {
@@ -114,7 +128,7 @@ pub struct StructField {
 }
 
 impl StructField {
-	pub fn resolve_types(&self, type_table: &TypeTable) -> Result<Self, TypeError> {
+	pub fn resolve_types(&self, type_table: &SymTable<Type>) -> Result<Self, TypeError> {
 		let t = self.tipe.resolve_types(type_table)?;
 		Ok(StructField{ name: self.name, tipe: t })
 	}
@@ -132,7 +146,7 @@ pub struct FuncArg {
 }
 
 impl FuncArg {
-	pub fn resolve_types(&self, type_table: &TypeTable) -> Result<Self, TypeError> {
+	pub fn resolve_types(&self, type_table: &SymTable<Type>) -> Result<Self, TypeError> {
 		Ok(FuncArg { name: self.name, tipe: self.tipe.resolve_types(type_table)? })
 	}
 }
@@ -151,7 +165,7 @@ pub struct FuncDecl {
 }
 
 impl FuncDecl {
-	pub fn resolve_types(&self, type_table: &TypeTable) -> Result<Self, TypeError> {
+	pub fn resolve_types(&self, type_table: &SymTable<Type>) -> Result<Self, TypeError> {
 		let mut rargs = Vec::new();
 		for arg in self.args.iter() {
 			rargs.push(arg.resolve_types(type_table)?);
@@ -197,7 +211,7 @@ pub enum Statement {
 }
 
 impl Statement {
-	pub fn resolve_types(&self, type_table: &TypeTable) -> Result<Self, TypeError> {
+	pub fn resolve_types(&self, type_table: &SymTable<Type>) -> Result<Self, TypeError> {
 		match self {
 			Statement::Noop => Ok(Statement::Noop),
 			Statement::Return(expr) => Ok(Statement::Return(expr.resolve_types(type_table)?)),
@@ -221,7 +235,7 @@ impl Statement {
 		}
 	}
 
-	pub fn resolve_types_vec(v: Vec<Self>, type_table: &TypeTable) -> Result<Vec<Self>, TypeError> {
+	pub fn resolve_types_vec(v: Vec<Self>, type_table: &SymTable<Type>) -> Result<Vec<Self>, TypeError> {
 		let mut vr = Vec::new();
 		for s in v.iter() {
 			vr.push(s.resolve_types(type_table)?);
@@ -243,7 +257,7 @@ pub enum Expr {
 }
 
 impl Expr {
-	pub fn resolve_types(&self, type_table: &TypeTable) -> Result<Self, TypeError> {
+	pub fn resolve_types(&self, type_table: &SymTable<Type>) -> Result<Self, TypeError> {
 		match self {
 			Expr::UnaryOp(op, be) => Ok(Expr::UnaryOp(*op, Box::new(be.resolve_types(type_table)?))),
 			Expr::Binary(op, be1, be2) => Ok(Expr::Binary(

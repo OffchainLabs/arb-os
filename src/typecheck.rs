@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 use crate::ast::{Type, TopLevelDecl, FuncDecl, FuncArg, Statement, Expr, UnaryOp, BinaryOp, types_equal};
-use crate::typetable::TypeTable;
+use crate::symtable::SymTable;
 use crate::stringtable::{StringId};
 
 #[derive(Debug)]
@@ -14,14 +14,15 @@ pub fn new_type_error(msg: &'static str) -> TypeError {
 
 #[derive(Debug)]
 pub struct TypeCheckedFunc {
-	name: StringId,
-	args: Vec<FuncArg>,
-	ret_type: Type,
-	code: Vec<TypeCheckedStatement>,
-	tipe: Type,
+	pub name: StringId,
+	pub args: Vec<FuncArg>,
+	pub ret_type: Type,
+	pub code: Vec<TypeCheckedStatement>,
+	pub tipe: Type,
 }
 
 #[derive(Debug)]
+#[derive(Clone)]
 pub enum TypeCheckedStatement {
 	Noop,
 	Return(TypeCheckedExpr),
@@ -32,6 +33,7 @@ pub enum TypeCheckedStatement {
 }
 
 #[derive(Debug)]
+#[derive(Clone)]
 pub enum TypeCheckedExpr {
 	UnaryOp(UnaryOp, Box<TypeCheckedExpr>, Type),
 	Binary(BinaryOp, Box<TypeCheckedExpr>, Box<TypeCheckedExpr>, Type),
@@ -43,7 +45,7 @@ pub enum TypeCheckedExpr {
 }
 
 impl TypeCheckedExpr {
-	fn get_type(&self) -> Type {
+	pub fn get_type(&self) -> Type {
 		match self {
 			TypeCheckedExpr::UnaryOp(_, _, t) => t.clone(),
 			TypeCheckedExpr::Binary(_, _, _, t) => t.clone(),
@@ -72,7 +74,7 @@ pub fn typecheck_top_level_decls(
 			}
 		}
 	}
-	let type_table = TypeTable::new();
+	let type_table = SymTable::<Type>::new();
 	let type_table = type_table.push_multi(named_types);
 	let type_table = type_table.push_multi(hm);
 
@@ -89,48 +91,9 @@ pub fn typecheck_top_level_decls(
 	return None;
 }
 
-/*
-fn sanity_check_type<'a>(t: &Type, named_types:&HashMap<StringId, &Type>) -> bool {
-	return match t {
-		Type::Void => true,
-		Type::Uint => true,
-		Type::Int => true,
-		Type::Bool => true,
-		Type::Bytes32 => true,
-		Type::Any => true,
-		Type::Array(u) => sanity_check_type(&*u, named_types),
-		Type::Tuple(v) => {
-			for u in v.iter() {
-				if !sanity_check_type(&*u, named_types) {
-					return false;
-				}
-			};
-			true
-		},
-		Type::Struct(v) => {
-			for u in v.iter() {
-				if !sanity_check_type(&u.tipe, named_types) {
-					return false;
-				}
-			}; 
-			true
-		},
-		Type::Func(args, ret) => {
-			for u in args.iter() {
-				if !sanity_check_type(&*u, named_types) {
-					return false;
-				}
-			};
-			sanity_check_type(&*ret, named_types)
-		}
-		Type::Named(n) => named_types.contains_key(&n),
-	}
-}
-*/
-
 pub fn typecheck_function<'a>(
 	fd: &'a FuncDecl, 
-	type_table: &'a TypeTable<'a>
+	type_table: &'a SymTable<'a, Type>
 ) -> Result<TypeCheckedFunc, TypeError> {
 	let mut hm = HashMap::new();
 	for arg in fd.args.iter() {
@@ -150,7 +113,7 @@ pub fn typecheck_function<'a>(
 fn typecheck_statement_sequence<'a>(
 	statements: &[Statement],
 	return_type: &Type,
-	type_table: &'a TypeTable<'a>
+	type_table: &'a SymTable<'a, Type>
 ) -> Result<Vec<TypeCheckedStatement>, TypeError> {
 	if statements.len() == 0 {
 		return Ok(Vec::new());
@@ -176,7 +139,7 @@ fn typecheck_statement_sequence<'a>(
 fn typecheck_statement<'a>(
 	statement: &Statement,
 	return_type: &Type,
-	type_table: &'a TypeTable<'a>
+	type_table: &'a SymTable<'a, Type>
 ) -> Result<(TypeCheckedStatement, Option<(StringId, Type)>), TypeError> {
 	match statement {
 		Statement::Noop => Ok((TypeCheckedStatement::Noop, None)),
@@ -229,7 +192,7 @@ fn typecheck_statement<'a>(
 
 fn typecheck_expr(
 	expr: &Expr,
-	type_table: &TypeTable
+	type_table: &SymTable<Type>
 ) -> Result<TypeCheckedExpr, TypeError> {
 	match expr {
 		Expr::UnaryOp(op, subexpr) => {

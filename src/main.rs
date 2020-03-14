@@ -5,8 +5,10 @@ use std::io::Read;
 
 pub mod ast;
 pub mod typecheck;
-pub mod typetable;
+pub mod symtable;
 pub mod stringtable;
+pub mod mavm;
+pub mod codegen;
 
 fn main() {
     // Create a path to the desired file
@@ -37,8 +39,12 @@ fn main() {
     let mut checked_funcs = Vec::new();
     let res2 = crate::typecheck::typecheck_top_level_decls(&res, &mut checked_funcs);
     match res2 {
-    	None => { print!("{:#?}\n", checked_funcs); },
     	Some(res3) => { print!("type error: {:?}\n", res3); }
+    	None => { 
+            let mut code = Vec::new();
+    		let code_out = crate::codegen::mavm_codegen(checked_funcs, &mut code, &string_table);
+            print!("{:#?}\n", code_out);
+    	},
     }
 }
 
