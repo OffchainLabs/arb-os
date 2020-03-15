@@ -9,6 +9,7 @@ pub mod symtable;
 pub mod stringtable;
 pub mod mavm;
 pub mod codegen;
+pub mod striplabels;
 
 fn main() {
     // Create a path to the desired file
@@ -42,8 +43,15 @@ fn main() {
     	Some(res3) => { print!("type error: {:?}\n", res3); }
     	None => { 
             let mut code = Vec::new();
-    		let code_out = crate::codegen::mavm_codegen(checked_funcs, &mut code, &string_table);
-            print!("{:#?}\n", code_out);
+    		match crate::codegen::mavm_codegen(checked_funcs, &mut code, &string_table) {
+                Ok(code_out) => {
+                    let code_stripped = crate::striplabels::strip_labels(code_out);
+                    for (idx, insn) in code_stripped.iter().enumerate() {
+                        print!("{:04}:  {}\n", idx, insn);
+                    }
+                }
+                Err(e) => { print!("Error generating code: {:?}\n", e); }
+            }
     	},
     }
 }

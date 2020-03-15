@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use crate::mavm::{Label, LabelGenerator, Instruction, Opcode, Value, Uint256};
 use crate::typecheck::{TypeCheckedFunc, TypeCheckedStatement, TypeCheckedExpr};
 use crate::stringtable::StringId;
-use crate::symtable::{SymTable, CopyingSymTable};
+use crate::symtable::CopyingSymTable;
 use crate::ast::{UnaryOp, BinaryOp, FuncArg};
 use crate::stringtable::StringTable;
 
@@ -112,7 +112,7 @@ fn mavm_codegen_statements(
 			let (lg, nl) = mavm_codegen_statements(body.to_vec(), code, num_locals, locals, label_gen, string_table)?;
 			label_gen = lg;
 			num_locals = nl;
-			code.push(Instruction::from_opcode(Opcode::Jump(top_of_loop)));
+			code.push(Instruction::from_opcode_imm(Opcode::Jump, Value::Label(top_of_loop)));
 			Ok((label_gen, num_locals))
 			// no need to append the rest of the statements; they'll never be executed
 		}
@@ -125,11 +125,11 @@ fn mavm_codegen_statements(
 			label_gen = lg;
 			code = c;
 			code.push(Instruction::from_opcode(Opcode::Not));
-			code.push(Instruction::from_opcode(Opcode::Cjump(end_label.clone())));
+			code.push(Instruction::from_opcode_imm(Opcode::Cjump, Value::Label(end_label.clone())));
 			let (lg, nl) = mavm_codegen_statements(body.to_vec(), code, num_locals, locals, label_gen, string_table)?;
 			label_gen = lg;
 			num_locals = nl;
-			code.push(Instruction::from_opcode(Opcode::Jump(cond_label)));
+			code.push(Instruction::from_opcode_imm(Opcode::Jump, Value::Label(cond_label)));
 			code.push(Instruction::from_opcode(Opcode::Label(end_label)));
 			mavm_codegen_statements(rest_of_statements.to_vec(), code, num_locals, locals, label_gen, string_table)
 		}
@@ -140,7 +140,7 @@ fn mavm_codegen_statements(
 			label_gen = lg;
 			code = c;
 			code.push(Instruction::from_opcode(Opcode::Not));
-			code.push(Instruction::from_opcode(Opcode::Cjump(end_label.clone())));
+			code.push(Instruction::from_opcode_imm(Opcode::Cjump, Value::Label(end_label.clone())));
 			let (lg, nl) = mavm_codegen_statements(tbody.to_vec(), code, num_locals, locals, label_gen, string_table)?;
 			label_gen = lg;
 			num_locals = nl;
@@ -154,11 +154,12 @@ fn mavm_codegen_statements(
 			let (lg, c) = mavm_codegen_expr(cond, code, &locals, label_gen, string_table)?;
 			label_gen = lg;
 			code = c;
-			code.push(Instruction::from_opcode(Opcode::Cjump(true_label.clone())));
+			code.push(Instruction::from_opcode_imm(Opcode::Cjump, Value::Label(true_label.clone())));
 			let (lg, nl) = mavm_codegen_statements(fbody.to_vec(), code, num_locals, locals, label_gen, string_table)?;
 			label_gen = lg;
 			num_locals = nl;
-			code.push(Instruction::from_opcode(Opcode::Jump(end_label.clone())));
+			code.push(Instruction::from_opcode_imm(Opcode::Jump, Value::Label(end_label.clone())));
+			code.push(Instruction::from_opcode(Opcode::Label(true_label)));
 			let (lg, nl) = mavm_codegen_statements(tbody.to_vec(), code, num_locals, locals, label_gen, string_table)?;
 			label_gen = lg;
 			num_locals = nl;
@@ -245,7 +246,7 @@ fn mavm_codegen_expr<'a>(
 		TypeCheckedExpr::ConstUint(str_id) => {
 			let s = string_table.name_from_id(*str_id);
 			let val = Value::Int(Uint256::from_string(s));
-			code.push(Instruction::from_opcode(Opcode::Push(val)));
+			code.push(Instruction::from_opcode_imm(Opcode::Noop, val));
 			Ok((label_gen, code))
 		}
 		TypeCheckedExpr::FunctionCall(name, args, _) => {
@@ -257,8 +258,8 @@ fn mavm_codegen_expr<'a>(
 				label_gen = lg;
 				code = c;
 			}
-			code.push(Instruction::from_opcode(Opcode::Push(Value::Label(ret_label.clone()))));
-			code.push(Instruction::from_opcode(Opcode::Jump(Label::Func(*name))));
+			code.push(Instruction::from_opcode_imm(Opcode::Noop, Value::Label(ret_label.clone())));
+			code.push(Instruction::from_opcode_imm(Opcode::Jump, Value::Label(Label::Func(*name))));
 			code.push(Instruction::from_opcode(Opcode::Label(ret_label)));
 			Ok((label_gen, code))
 		}
@@ -287,10 +288,6 @@ impl LocalsTable {
 
 	fn push(&mut self) {
 		self.push_points.push(self.next);
-	}
-
-	fn pop(&mut self, push_point: usize) {
-		self.next = self.push_points.pop().unwrap();
 	}
 
 	fn alloc(&mut self, name: StringId) -> usize {

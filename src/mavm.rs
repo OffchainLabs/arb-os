@@ -1,11 +1,20 @@
+use std::fmt;
+use std::collections::HashMap;
 use crate::stringtable::StringId;
 
-
-#[derive(Debug)]
-#[derive(Clone)]
+#[derive(PartialEq, Eq, Hash, Debug, Clone)]
 pub enum Label {
 	Func(StringId),
 	Anon(usize)
+}
+
+impl fmt::Display for Label {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    	match self {
+    		Label::Func(sid) => write!(f, "function_{}", sid),
+    		Label::Anon(n) => write!(f, "label_{}", n)
+    	}
+    }
 }
 
 pub struct LabelGenerator {
@@ -22,7 +31,7 @@ impl LabelGenerator {
 	}
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Instruction {
 	opcode: Opcode,
 	immediate: Option<Value>,
@@ -40,28 +49,95 @@ impl Instruction {
 	pub fn from_opcode_imm(opcode: Opcode, immediate: Value) -> Self {
 		Instruction::new(opcode, Some(immediate))
 	}
+
+	pub fn get_label(&self) -> Option<&Label> {
+		match &self.opcode {
+			Opcode::Label(label) => Some(label),
+			_ => None
+		}
+	}
+
+	pub fn replace_labels(self, label_map: &HashMap<&Label, usize>) -> Self {
+		match self.immediate {
+			Some(val) => Instruction::from_opcode_imm(self.opcode, val.replace_labels(label_map)),
+			None => self
+		}
+	}
 }
 
-#[derive(Debug)]
+impl fmt::Display for Instruction {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    	match &self.immediate {
+    		Some(v) => write!(f, "[{}] {}", v, self.opcode),
+    		None => write!(f, "{}", self.opcode),
+    	}
+    }
+}
+
+#[derive(Debug, Clone)]
 pub enum Value {
 	Int(Uint256),
 	Tuple(Vec<Value>),
-	CodePoint(u64),
+	CodePoint(usize),
 	Label(Label),
 }
 
-#[derive(Debug)]
+impl Value {
+	//pub fn 
+	pub fn replace_labels(self, label_map: &HashMap<&Label, usize>) -> Self {
+		match self {
+			Value::Int(_) => self,
+			Value::CodePoint(_) => self,
+			Value::Label(label) => {
+				let maybe_pc = label_map.get(&label);
+				match maybe_pc {
+					Some(pc) => Value::CodePoint(*pc),
+					None => {
+						print!("replace_labels failure:\nlabel = {:?}\nmap = {:?}\n", label, label_map);
+						panic!("replace_labels failure");
+					}
+				}
+			},
+			Value::Tuple(tup) => {
+				let mut new_vec = Vec::new();
+				for v in tup.iter() {
+					let val = v.clone();
+					new_vec.push(val.replace_labels(label_map));
+				}
+				Value::Tuple(new_vec)
+			}
+		}
+	}
+}
+
+impl fmt::Display for Value {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    	match self {
+    		Value::Int(i) => i.fmt(f),
+    		Value::CodePoint(pc) => write!(f, "CodePoint({:?})", pc),
+    		Value::Label(label) => write!(f, "Label({})", label),
+    		Value::Tuple(tup) => {
+    			let mut s = "Tuple(".to_owned();
+				for v in tup.iter() {
+					s = format!("{}, {}", s, v);
+				}
+				write!(f, "{})", s)
+    		}
+    	}
+	}	
+}
+
+#[derive(Debug, Clone)]
 pub enum Opcode {
 	Noop,
 	GetLocal,
 	SetLocal,
 	MakeFrame(usize, usize),
-	Jump(Label),
-	Cjump(Label),
 	Label(Label),
+	Jump,
+	Cjump,
 	TupleGet,
 	TupleSet,
-	Push(Value),
 	Return,
 	Not,
 	UnaryMinus,
@@ -87,7 +163,17 @@ pub enum Opcode {
 	Hash2,
 }
 
-#[derive(Debug)]
+impl fmt::Display for Opcode {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    	match self {
+    		Opcode::MakeFrame(s1, s2) => write!(f, "MakeFrame({}, {})", s1, s2),
+    		Opcode::Label(label) => label.fmt(f),
+    		_ => write!(f, "{:?}", self),
+    	}
+    }
+}
+
+#[derive(Debug, Clone)]
 pub struct Uint256 {
 	val: [u64; 4]
 }
@@ -104,5 +190,15 @@ impl Uint256 {
 	pub fn from_string(s: &str) -> Self {
 		//BUGBUG: this panics on values of 2^64 or more
 		Uint256{ val: [s.parse().unwrap(), 0, 0, 0] }
+	}
+}
+
+impl fmt::Display for Uint256 {
+	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+		if self.val[3] == 0 && self.val[2] == 0 && self.val[1] == 0 {
+			write!(f, "{:x}", self.val[0])
+		} else {
+			write!(f, "{:#016x}{:016x}{:016x}{:016x}", self.val[3], self.val[2], self.val[1], self.val[0])
+		}
 	}
 }
