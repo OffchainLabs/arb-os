@@ -25,6 +25,7 @@ pub struct TypeCheckedFunc {
 #[derive(Clone)]
 pub enum TypeCheckedStatement {
 	Noop,
+	ReturnVoid,
 	Return(TypeCheckedExpr),
 	Let(StringId, TypeCheckedExpr),
 	Loop(Vec<TypeCheckedStatement>),
@@ -143,6 +144,7 @@ fn typecheck_statement<'a>(
 ) -> Result<(TypeCheckedStatement, Option<(StringId, Type)>), TypeError> {
 	match statement {
 		Statement::Noop => Ok((TypeCheckedStatement::Noop, None)),
+		Statement::ReturnVoid => Ok((TypeCheckedStatement::ReturnVoid, None)),
 		Statement::Return(expr) => {
 			let tc_expr = typecheck_expr(expr, type_table)?;
 			if types_equal(&tc_expr.get_type(), &return_type) {

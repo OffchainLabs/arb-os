@@ -10,6 +10,8 @@ pub mod stringtable;
 pub mod mavm;
 pub mod codegen;
 pub mod striplabels;
+pub mod xformcode;
+pub mod optimize;
 
 fn main() {
     // Create a path to the desired file
@@ -45,8 +47,30 @@ fn main() {
             let mut code = Vec::new();
     		match crate::codegen::mavm_codegen(checked_funcs, &mut code, &string_table) {
                 Ok(code_out) => {
-                    let code_stripped = crate::striplabels::strip_labels(code_out);
-                    for (idx, insn) in code_stripped.iter().enumerate() {
+                    print!("========== after initial codegen ===========\n");
+                    for (idx, insn) in code_out.iter().enumerate() {
+                        print!("{:04}:  {}\n", idx, insn);
+                    }
+                    let (code_2, jump_table) = crate::striplabels::fix_backward_labels(code_out);
+                    print!("========== after fix_backward_labels ===========\n");
+                    for (idx, insn) in code_2.iter().enumerate() {
+                        print!("{:04}:  {}\n", idx, insn);
+                    }
+                    let code_3 = crate::xformcode::fix_tuple_size(&code_2);
+                    print!("=========== after fix_tuple_size ==============\n");
+                    for (idx, insn) in code_3.iter().enumerate() {
+                        print!("{:04}:  {}\n", idx, insn);
+                    }
+                    let code_4 = crate::optimize::peephole(&code_3);
+                    print!("============ after peephole optimization ===========\n");
+                    for (idx, insn) in code_4.iter().enumerate() {
+                        print!("{:04}:  {}\n", idx, insn);
+                    }
+                    let (code_final, jump_table_final) = crate::striplabels::strip_labels(&code_4, &jump_table);
+                    print!("============ after strip_labels =============\n");
+                    let jump_table_value = crate::xformcode::jump_table_to_value(jump_table_final);
+                    print!("static: {}\n", jump_table_value);
+                    for (idx, insn) in code_final.iter().enumerate() {
                         print!("{:04}:  {}\n", idx, insn);
                     }
                 }

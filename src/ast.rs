@@ -18,8 +18,7 @@ pub fn new_type_decl(name: StringId, tipe: Type) -> TypeDecl {
 	return TypeDecl{ name, tipe };
 }
 
-#[derive(Debug)]
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub enum Type {
 	Void,
 	Uint,
@@ -120,8 +119,7 @@ fn type_vectors_equal(v1: &Vec<Type>, v2: &Vec<Type>) -> bool {
 	return true;
 }
 
-#[derive(Debug)]
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub struct StructField {
 	pub name: StringId,
 	pub tipe: Type,
@@ -138,8 +136,7 @@ pub fn new_struct_field<'a>(name: StringId, tipe: Type) -> StructField {
 	return StructField{ name, tipe };
 }
 
-#[derive(Debug)]
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub struct FuncArg {
 	pub name: StringId,
 	pub tipe: Type,
@@ -199,10 +196,10 @@ pub fn new_func_decl<'a>(name: StringId, args: Vec<FuncArg>, ret_type: Type, cod
 	};
 }
 
-#[derive(Debug)]
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub enum Statement {
 	Noop,
+	ReturnVoid,
 	Return(Expr),
 	Let(StringId, Expr),
 	Loop(Vec<Statement>),
@@ -214,6 +211,7 @@ impl Statement {
 	pub fn resolve_types(&self, type_table: &SymTable<Type>) -> Result<Self, TypeError> {
 		match self {
 			Statement::Noop => Ok(Statement::Noop),
+			Statement::ReturnVoid => Ok(Statement::ReturnVoid),
 			Statement::Return(expr) => Ok(Statement::Return(expr.resolve_types(type_table)?)),
 			Statement::Let(name, expr) => Ok(Statement::Let(*name, expr.resolve_types(type_table)?)),
 			Statement::Loop(body) => Ok(
@@ -244,8 +242,7 @@ impl Statement {
 	}
 }
 
-#[derive(Debug)]
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub enum Expr {
 	UnaryOp(UnaryOp, Box<Expr>),
 	Binary(BinaryOp, Box<Expr>, Box<Expr>),
@@ -283,9 +280,7 @@ impl Expr {
 	}
 }
 
-#[derive(Debug)]
-#[derive(Clone)]
-#[derive(Copy)]
+#[derive(Debug, Clone, Copy)]
 pub enum UnaryOp {
 	Minus,
 	BitwiseNeg,
@@ -294,9 +289,7 @@ pub enum UnaryOp {
 	Len,
 }
 
-#[derive(Debug)]
-#[derive(Clone)]
-#[derive(Copy)]
+#[derive(Debug, Clone, Copy)]
 pub enum BinaryOp {
 	Plus,
 	Minus,

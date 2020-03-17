@@ -41,6 +41,7 @@ Statement: Statement = {
 	"if" "(" <c: Expr> ")" <t: CodeBlock> "else" <f: CodeBlock> => Statement::If(c, t, Some(f)),
 	<Ident> "=" <Expr> ";" => Statement::Let(<>),
 	"return" <Expr> ";" => Statement::Return(<>),
+	"return" ";" => Statement::ReturnVoid,
 	";" => Statement::Noop,
 }
 

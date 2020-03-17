@@ -40,8 +40,20 @@ func fact(n: uint) uint {
 	}
 }
 
+func factagain(n: uint) uint {
+	if (n == 0) {
+		return 1;
+	} else {
+		return n*factagain(n-1);
+	}
+}
+
 func doubleFromStruct(x: foo) uint {
 	return 2*x.bar;
+}
+
+func manyArgs(a: uint, b: uint, c: uint, d: uint, e: uint, f: uint, g: uint, h: uint, i: uint, j: uint, k: uint) uint {
+	return a+b+c+d+e+f+g+h+i+j+k;
 }
 
 func hashArray(a: []anytype) bytes32 {

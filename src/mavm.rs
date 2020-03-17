@@ -2,7 +2,7 @@ use std::fmt;
 use std::collections::HashMap;
 use crate::stringtable::StringId;
 
-#[derive(PartialEq, Eq, Hash, Debug, Clone)]
+#[derive(PartialEq, Eq, Hash, Debug, Clone, Copy)]
 pub enum Label {
 	Func(StringId),
 	Anon(usize)
@@ -33,8 +33,8 @@ impl LabelGenerator {
 
 #[derive(Debug, Clone)]
 pub struct Instruction {
-	opcode: Opcode,
-	immediate: Option<Value>,
+	pub opcode: Opcode,
+	pub immediate: Option<Value>,
 }
 
 impl Instruction {
@@ -83,7 +83,10 @@ pub enum Value {
 }
 
 impl Value {
-	//pub fn 
+	pub fn none() -> Self {
+		Value::Tuple(Vec::new())
+	}
+
 	pub fn replace_labels(self, label_map: &HashMap<&Label, usize>) -> Self {
 		match self {
 			Value::Int(_) => self,
@@ -108,6 +111,13 @@ impl Value {
 			}
 		}
 	}
+
+	pub fn to_usize(&self) -> Option<usize> {
+		match self {
+			Value::Int(i) => i.to_usize(),
+			_ => None
+		}
+	}
 }
 
 impl fmt::Display for Value {
@@ -118,8 +128,12 @@ impl fmt::Display for Value {
     		Value::Label(label) => write!(f, "Label({})", label),
     		Value::Tuple(tup) => {
     			let mut s = "Tuple(".to_owned();
-				for v in tup.iter() {
-					s = format!("{}, {}", s, v);
+				for (i, v) in tup.iter().enumerate() {
+					if i == 0 {
+						s = format!("{}{}", s, v);
+					} else {
+						s = format!("{}, {}", s, v);
+					}
 				}
 				write!(f, "{})", s)
     		}
@@ -127,7 +141,7 @@ impl fmt::Display for Value {
 	}	
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Copy)]
 pub enum Opcode {
 	Noop,
 	GetLocal,
@@ -136,8 +150,20 @@ pub enum Opcode {
 	Label(Label),
 	Jump,
 	Cjump,
-	TupleGet,
-	TupleSet,
+	GetPC,
+	PushStatic,
+	StaticGet,     // get from static slot (used when static size not yet known)
+	TupleGet(usize),  // arg is size of anysize_tuple
+	TupleSet(usize),  // arg is size of anysize_tuple
+	ArrayGet,      
+	Tset,
+	Tget,
+	Pop,
+	AuxPush,
+	AuxPop,
+	Dup0,
+	Dup1,
+	Swap,
 	Return,
 	Not,
 	UnaryMinus,
@@ -179,6 +205,10 @@ pub struct Uint256 {
 }
 
 impl Uint256 {
+	pub fn zero() -> Self {
+		Uint256{ val: [0, 0, 0, 0] }
+	}
+
 	pub fn from_u64(x: u64) -> Self {
 		Uint256{ val: [x, 0, 0, 0] }
 	}
@@ -190,6 +220,19 @@ impl Uint256 {
 	pub fn from_string(s: &str) -> Self {
 		//BUGBUG: this panics on values of 2^64 or more
 		Uint256{ val: [s.parse().unwrap(), 0, 0, 0] }
+	}
+
+	pub fn to_usize(&self) -> Option<usize> {
+		if self.val[1]!=0 || self.val[2]!=0 || self.val[3]!=0 {
+			None
+		} else {
+			let v = self.val[0];
+			if ((v as usize) as u64) == v {
+				Some(v as usize)
+			} else {
+				None
+			}
+		}
 	}
 }
 
