@@ -45,8 +45,19 @@ fn mavm_codegen_func<'a>(
 	let make_frame_slot = code.len();
 	code.push(Instruction::from_opcode(Opcode::Noop));  // placeholder; will replace this later
 
-	let (lg, num_locals, _) = add_args_to_locals_table(locals, &func.args, 0, func.code, code, label_gen, string_table)?;
+	let (lg, num_locals, maybe_continue) = add_args_to_locals_table(locals, &func.args, 0, func.code, code, label_gen, string_table)?;
 	label_gen = lg;
+
+	if maybe_continue {
+		match func.ret_type {
+			Type::Void => {
+				code.push(Instruction::from_opcode(Opcode::Return));
+			} 
+			_ => {
+				return Err(new_codegen_error("apparent path to end of function without return"));
+			}
+		}
+	}
 
 	// put makeframe instruction at beginning of function, to build the frame
 	code[make_frame_slot] = Instruction::from_opcode(Opcode::MakeFrame(num_args, num_locals));

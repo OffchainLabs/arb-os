@@ -87,6 +87,14 @@ impl Value {
 		Value::Tuple(Vec::new())
 	}
 
+	pub fn is_none(&self) -> bool {
+		if let Value::Tuple(v) = self {
+			v.len() == 0
+		} else {
+			false
+		}
+	}
+
 	pub fn replace_labels(self, label_map: &HashMap<&Label, usize>) -> Self {
 		match self {
 			Value::Int(_) => self,
