@@ -1,5 +1,5 @@
 use std::collections::HashMap;
-use crate::stringtable::{StringId};
+use crate::stringtable::StringId;
 
 
 #[derive(Debug)]

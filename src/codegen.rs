@@ -1,7 +1,5 @@
-use std::collections::HashMap;
 use crate::mavm::{Label, LabelGenerator, Instruction, Opcode, Value, Uint256};
 use crate::typecheck::{TypeCheckedFunc, TypeCheckedStatement, TypeCheckedExpr};
-use crate::stringtable::StringId;
 use crate::symtable::CopyingSymTable;
 use crate::ast::{UnaryOp, BinaryOp, FuncArg, Type};
 use crate::stringtable::StringTable;
@@ -97,6 +95,11 @@ fn mavm_codegen_statements(
 	match &statements[0] {
 		TypeCheckedStatement::Noop => 
 			mavm_codegen_statements(rest_of_statements.to_vec(), code, num_locals, locals, label_gen, string_table),
+		TypeCheckedStatement::Panic => {
+			code.push(Instruction::from_opcode(Opcode::Panic));
+			Ok((label_gen, num_locals, false))
+			// no need to append the rest of the statements; they'll never be executed
+		}
 		TypeCheckedStatement::ReturnVoid => {
 			code.push(Instruction::from_opcode(Opcode::Return));
 			Ok((label_gen, num_locals, false))
@@ -217,7 +220,7 @@ fn mavm_codegen_expr<'a>(
 			code.push(Instruction::from_opcode(opcode));
 			Ok((label_gen, code))
 		}
-		TypeCheckedExpr::Binary(op, tce1, tce2, tipe) => {
+		TypeCheckedExpr::Binary(op, tce1, tce2, _) => {
 			let (lg, c) = mavm_codegen_expr(tce2, code, locals, label_gen, string_table)?;
 			let (lg, c) = mavm_codegen_expr(tce1, c, locals, lg, string_table)?;
 			label_gen = lg;
@@ -296,6 +299,36 @@ fn mavm_codegen_expr<'a>(
 			code.push(Instruction::from_opcode(Opcode::Label(ret_label)));
 			Ok((label_gen, code))
 		}
+		TypeCheckedExpr::StructInitializer(fields, _) => {
+			let fields_len = fields.len();
+			for i in 0..fields_len {
+				let field = &fields[fields_len-1-i];
+				let (lg, c) = mavm_codegen_expr(&field.value, code, locals, label_gen, string_table)?;
+				label_gen = lg;
+				code = c;
+			}
+			let empty_vec = vec![Value::none(); fields_len];
+			code.push(Instruction::from_opcode_imm(Opcode::Noop, Value::Tuple(empty_vec)));
+			for i in 0..fields_len {
+				code.push(Instruction::from_opcode_imm(Opcode::TupleSet(fields_len), Value::Int(Uint256::from_usize(i))));
+			}
+			Ok((label_gen, code))
+		}
+		TypeCheckedExpr::Tuple(fields, _) => {
+			let fields_len = fields.len();
+			for i in 0..fields_len {
+				let field = &fields[fields_len-1-i];
+				let (lg, c) = mavm_codegen_expr(&field, code, locals, label_gen, string_table)?;
+				label_gen = lg;
+				code = c;
+			}
+			let empty_vec = vec![Value::none(); fields_len];
+			code.push(Instruction::from_opcode_imm(Opcode::Noop, Value::Tuple(empty_vec)));
+			for i in 0..fields_len {
+				code.push(Instruction::from_opcode_imm(Opcode::TupleSet(fields_len), Value::Int(Uint256::from_usize(i))));
+			}
+			Ok((label_gen, code))
+		}
 		TypeCheckedExpr::ArrayRef(expr1, expr2, _) => {
 			let (lg, c) = mavm_codegen_expr(expr2, code, locals, label_gen, string_table)?;
 			let (lg, c) = mavm_codegen_expr(expr1, c, locals, lg, string_table)?;
@@ -304,9 +337,38 @@ fn mavm_codegen_expr<'a>(
 			code.push(Instruction::from_opcode(Opcode::ArrayGet));
 			Ok((label_gen, code))
 		}
+		TypeCheckedExpr::NewBlock(bo_expr) => match bo_expr {
+			Some(expr) => {
+				let (lg, c) = mavm_codegen_expr(expr, code, locals, label_gen, string_table)?;
+				label_gen = lg;
+				code = c;
+				for _i in 0..7 {
+					code.push(Instruction::from_opcode(Opcode::Dup0));
+				}
+				for i in 0..8 {
+					code.push(Instruction::from_opcode_imm(Opcode::Tset, Value::Int(Uint256::from_usize(i))));
+				}
+				Ok((label_gen, code))
+			}
+			None => {
+				let empty_tuple = vec![Value::Tuple(Vec::new()); 8];
+				code.push(Instruction::from_opcode_imm(Opcode::Noop,Value::Tuple(empty_tuple)));
+				Ok((label_gen, code))
+			}
+		}
+		TypeCheckedExpr::BlockRef(expr1, expr2) => {
+			let (lg, c) = mavm_codegen_expr(expr2, code, locals, label_gen, string_table)?;
+			let (lg, c) = mavm_codegen_expr(expr1, c, locals, lg, string_table)?;
+			label_gen = lg;
+			code = c;
+			code.push(Instruction::from_opcode(Opcode::Tget));
+			Ok((label_gen, code))
+		}
+		TypeCheckedExpr::Cast(expr, _) => mavm_codegen_expr(expr, code, locals, label_gen, string_table),
 	}
 }
 
+/*
 struct LocalsTable {
 	next: usize,
 	max_next: usize,
@@ -345,4 +407,4 @@ impl LocalsTable {
 			None => None
 		}
 	}
-}
+*/

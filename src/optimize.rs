@@ -12,12 +12,15 @@ pub fn peephole(code_in: &Vec<Instruction>) -> Vec<Instruction> {
 				Instruction{ opcode: Opcode::Pop, immediate: Some(_) } => {
 					code_out.pop();
 				}
+				Instruction{ opcode: Opcode::Noop, immediate: None } => {
+					code_out.pop();
+				}
 				Instruction{ opcode: Opcode::AuxPush, immediate: None } => {
 					let insn2 = code_out[code_out.len()-2].clone();
 					if let Instruction{ opcode: Opcode::AuxPop, immediate: imm } = insn2 {
 						code_out.pop();
 						code_out.pop();
-						if let Some(val) = imm.clone() {
+						if let Some(_) = imm.clone() {
 							code_out.push(Instruction::new(Opcode::Noop, imm.clone()));
 						}
 					} else {
@@ -29,6 +32,16 @@ pub fn peephole(code_in: &Vec<Instruction>) -> Vec<Instruction> {
 						} else {
 							done = true;
 						}
+					}
+				}
+				Instruction{ opcode: Opcode::AuxPop, immediate: Some(_) } => {
+					let insn1 = code_out[code_out.len()-1].clone();
+					let insn2 = code_out[code_out.len()-2].clone();
+					if let Instruction{ opcode: Opcode::AuxPush, immediate: None } = insn2 {
+						code_out.pop();
+						code_out.pop();
+						code_out.push(Instruction::new(Opcode::Swap1, insn1.immediate));
+					} else {
 						done = true;
 					}
 				}
@@ -49,7 +62,6 @@ pub fn peephole(code_in: &Vec<Instruction>) -> Vec<Instruction> {
 						} else {
 							done = true;
 						}
-						done = true;
 					}
 				}
 				Instruction{ opcode: Opcode::Not, immediate: None } => {
@@ -105,7 +117,6 @@ pub fn peephole(code_in: &Vec<Instruction>) -> Vec<Instruction> {
 						done = true;
 					}
 				}
-				//TODO: optimize (_; Not) pattern
 				_ => {
 					done = true;
 				}

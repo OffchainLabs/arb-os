@@ -152,6 +152,7 @@ impl fmt::Display for Value {
 #[derive(Debug, Clone, Copy)]
 pub enum Opcode {
 	Noop,
+	Panic,
 	GetLocal,
 	SetLocal,
 	MakeFrame(usize, usize),
@@ -171,7 +172,7 @@ pub enum Opcode {
 	AuxPop,
 	Dup0,
 	Dup1,
-	Swap,
+	Swap1,
 	Return,
 	Not,
 	UnaryMinus,

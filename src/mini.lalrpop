@@ -1,5 +1,5 @@
 use crate::ast::{TopLevelDecl, TypeDecl, FuncDecl, Type, StructField, FuncArg, Statement, Expr, BinaryOp, UnaryOp, 
-new_struct_field, new_func_arg, new_type_decl, new_func_decl};
+FieldInitializer, new_func_arg, new_type_decl, new_func_decl};
 use crate::stringtable::{StringTable, StringId};
 
 grammar(stringtable: &mut StringTable<'input>);
@@ -42,6 +42,7 @@ Statement: Statement = {
 	<Ident> "=" <Expr> ";" => Statement::Let(<>),
 	"return" <Expr> ";" => Statement::Return(<>),
 	"return" ";" => Statement::ReturnVoid,
+	"panic" ";" => Statement::Panic,
 	";" => Statement::Noop,
 }
 
@@ -54,7 +55,7 @@ StructFields: Vec<StructField> = {
 }
 
 StructField: StructField = {
-	<Ident> ":" <Type> "," => new_struct_field(<>),
+	<Ident> ":" <Type> "," => StructField::new(<>),
 }
 
 Type: Type = {
@@ -66,6 +67,7 @@ Type: Type = {
 	"(" ")" => Type::Tuple(Vec::new()),
 	"(" <CommaedTypes> ")" => Type::Tuple(<>),
 	"[" "]" <Type> => Type::Array(Box::new(<>)),
+	"block" => Type::Block,
 	"anytype" => Type::Any,
 	Ident => Type::Named(<>),
 };
@@ -143,16 +145,25 @@ Term7: Expr = {
 };
 
 Term8: Expr = {
+	"struct" "{" <FieldInitializer+> "}" => Expr::StructInitializer(<>),
 	"hash" "(" <Expr> ")" => Expr::UnaryOp(UnaryOp::Hash, Box::new(<>)),
 	"hash" "(" <l:Expr> "," <r:Expr> ")" => Expr::Binary(BinaryOp::Hash, Box::new(l), Box::new(r)),
 	"len" "(" <Expr> ")" => Expr::UnaryOp(UnaryOp::Len, Box::new(<>)),
+	"newblock" "(" ")" => Expr::NewBlock(None),
+	"newblock" "(" <Expr> ")" => Expr::NewBlock(Some(Box::new(<>))),
+	"unsafecast" "(" <e:Expr> "," <t:Type> ")" => Expr::UnsafeCast(Box::new(e), t),
 	<e1:Term8> "[" <e2:Expr> "]" => Expr::ArrayRef(Box::new(e1), Box::new(e2)),
 	Integer => Expr::ConstUint(<>),
 	Ident => Expr::VariableRef(<>),
 	<e:Term8> "." <i:Ident> => Expr::DotRef(Box::new(e), i),
 	<Ident> "(" <CommaedExprs> ")" => Expr::FunctionCall(<>),
 	"(" <Expr> ")" => <>,
+	"(" <CommaedExprs> "," ")" => Expr::Tuple(<>),
 };
+
+FieldInitializer: FieldInitializer = {
+	<Ident> ":" <Expr> "," => FieldInitializer::new(<>),
+}
 
 CommaedExprs: Vec<Expr> = {
 	Expr => {

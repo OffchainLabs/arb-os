@@ -2,15 +2,13 @@ use crate::mavm::{Opcode, Instruction, Value, Uint256};
 
 pub fn fix_tuple_size(code_in: &Vec<Instruction>) -> Vec<Instruction> {
 	let mut code_out = Vec::new();
-	let mut locals_size: usize = 0;
 	let mut locals_tree = TupleTree::new(1);
 
 	for insn in code_in.iter() {
 		match insn.opcode {
 			Opcode::MakeFrame(nargs, ntotal) => {
 				code_out.push(Instruction::from_opcode(Opcode::AuxPush));
-				locals_size = ntotal;
-				locals_tree = TupleTree::new(locals_size);
+				locals_tree = TupleTree::new(ntotal);
 				if let Some(imm) = &insn.immediate {
 					code_out.push(Instruction::from_opcode_imm(Opcode::Noop, imm.clone()));
 				}
@@ -181,7 +179,7 @@ impl TupleTree {
 	fn read_code(&self, index: usize, code: &mut Vec<Instruction>) -> Vec<Instruction> {
 		match self {
 			TupleTree::Single => { code.to_vec() },
-			TupleTree::Tree(size, v) => {
+			TupleTree::Tree(_, v) => {
 				let mut index = index;
 				for (slot, subtree) in v.iter().enumerate() {
 					if index < subtree.tsize() {
@@ -197,7 +195,7 @@ impl TupleTree {
 	}
 
 	fn write_code(&self, index: usize, code: &mut Vec<Instruction>) -> Vec<Instruction> {
-		if let TupleTree::Tree(size, v) = self {
+		if let TupleTree::Tree(_, v) = self {
 			let mut index = index;
 			for (slot, subtree) in v.iter().enumerate() {
 				if index < subtree.tsize() {
@@ -207,11 +205,11 @@ impl TupleTree {
 							return code.to_vec();
 						}
 						TupleTree::Tree(_, _) => {
-							code.push(Instruction::from_opcode(Opcode::Swap));
+							code.push(Instruction::from_opcode(Opcode::Swap1));
 							code.push(Instruction::from_opcode(Opcode::Dup1));
 							code.push(Instruction::from_opcode_imm(Opcode::Tget, Value::Int(Uint256::from_usize(slot))));
 							let mut new_code = subtree.write_code(index, code);
-							new_code.push(Instruction::from_opcode(Opcode::Swap));
+							new_code.push(Instruction::from_opcode(Opcode::Swap1));
 							new_code.push(Instruction::from_opcode_imm(Opcode::Tset, Value::Int(Uint256::from_usize(slot))));
 							return new_code;
 						}

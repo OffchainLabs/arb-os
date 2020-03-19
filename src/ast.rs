@@ -1,4 +1,4 @@
-use crate::stringtable::{StringId};
+use crate::stringtable::StringId;
 use crate::symtable::SymTable;
 use crate::typecheck::{TypeError, new_type_error};
 
@@ -18,7 +18,7 @@ pub fn new_type_decl(name: StringId, tipe: Type) -> TypeDecl {
 	return TypeDecl{ name, tipe };
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Eq)]
 pub enum Type {
 	Void,
 	Uint,
@@ -30,6 +30,7 @@ pub enum Type {
 	Struct(Vec<StructField>),
 	Named(StringId),
 	Func(Vec<Type>, Box<Type>),
+	Block,
 	Any,
 }
 
@@ -41,6 +42,7 @@ impl Type {
 			Type::Int |
 			Type::Bool |
 			Type::Bytes32 |
+			Type::Block |
 			Type::Any => Ok(self.clone()),
 			Type::Tuple(tvec) => {
 				let mut rvec = Vec::new();
@@ -89,21 +91,102 @@ impl Type {
 			_ => None
 		}
 	}
+
+	pub fn assignable(&self, rhs: &Self) -> bool {
+		match self {
+			Type::Any => true,
+			Type::Void |
+			Type::Uint |
+			Type::Int |
+			Type::Bool |
+			Type::Bytes32 |
+			Type::Block => (self == rhs),
+			Type::Tuple(tvec) => {
+				if let Type::Tuple(tvec2) = rhs {
+					type_vectors_assignable(tvec, tvec2)
+				} else {
+					false
+				}
+			}
+			Type::Array(t) => {
+				if let Type::Array(t2) = rhs {
+					t.assignable(t2)
+				} else {
+					false
+				}
+			}
+			Type::Struct(fields) => {
+				if let Type::Struct(fields2) = rhs {
+					field_vectors_assignable(fields, fields2)
+				} else {
+					false
+				}
+			}
+			Type::Named(_) => (self == rhs),
+			Type::Func(args, ret) => {
+				if let Type::Func(args2, ret2) = rhs {
+					arg_vectors_assignable(args, args2) && (ret2.assignable(ret))  // note: rets in reverse order
+				} else {
+					false
+				}
+			}
+		}
+	}
 }
 
-pub fn types_equal(t1: &Type, t2: &Type) -> bool {
-	match (t1, t2) {
-		(Type::Void, Type::Void) => true,
-		(Type::Uint, Type::Uint) => true,
-		(Type::Int, Type::Int) => true,
-		(Type::Bool, Type::Bool) => true,
-		(Type::Bytes32, Type::Bytes32) => true,
-		(Type::Tuple(v1), Type::Tuple(v2)) => type_vectors_equal(&v1, &v2),
-		(Type::Array(a1), Type::Array(a2)) => types_equal(&*a1, &*a2),
-		(Type::Named(n1), Type::Named(n2)) => (n1 == n2),
-		(Type::Func(a1, r1), Type::Func(a2, r2)) => type_vectors_equal(&a1, &a2) && types_equal(&*r1, &*r2),
-		(Type::Any, Type::Any) => true,
-		(_, _) => false,
+pub fn type_vectors_assignable(tvec1: &Vec<Type>, tvec2: &Vec<Type>) -> bool {
+	if tvec1.len() != tvec2.len() {
+		return false;
+	}
+	for (i, t1) in tvec1.iter().enumerate() {
+		if ! t1.assignable(&tvec2[i]) {
+			return false;
+		}
+	}
+	true
+}
+
+pub fn arg_vectors_assignable(tvec1: &Vec<Type>, tvec2: &Vec<Type>) -> bool {
+	if tvec1.len() != tvec2.len() {
+		return false;
+	}
+	for (i, t1) in tvec1.iter().enumerate() {
+		if ! t1.assignable(&tvec2[i]) {
+			return false;
+		}
+	}
+	true
+}
+
+pub fn field_vectors_assignable(tvec1: &Vec<StructField>, tvec2: &Vec<StructField>) -> bool {
+	if tvec1.len() != tvec2.len() {
+		return false;
+	}
+	for (i, t1) in tvec1.iter().enumerate() {
+		if ! t1.tipe.assignable(&tvec2[i].tipe) {
+			return false;
+		}
+	}
+	true
+}
+
+impl PartialEq for Type {
+	fn eq(&self, other: &Self) -> bool {
+		match (self, other) {
+			(Type::Void, Type::Void) => true,
+			(Type::Uint, Type::Uint) => true,
+			(Type::Int, Type::Int) => true,
+			(Type::Bool, Type::Bool) => true,
+			(Type::Bytes32, Type::Bytes32) => true,
+			(Type::Tuple(v1), Type::Tuple(v2)) => type_vectors_equal(&v1, &v2),
+			(Type::Array(a1), Type::Array(a2)) => &*a1 == &*a2,
+			(Type::Struct(f1), Type::Struct(f2)) => struct_field_vectors_equal(&f1, &f2),
+			(Type::Named(n1), Type::Named(n2)) => (n1 == n2),
+			(Type::Func(a1, r1), Type::Func(a2, r2)) => type_vectors_equal(&a1, &a2) && (&*r1 == &*r2),
+			(Type::Block, Type::Block) => true,
+			(Type::Any, Type::Any) => true,
+			(_, _) => false,
+		}
 	}
 }
 
@@ -112,28 +195,40 @@ fn type_vectors_equal(v1: &Vec<Type>, v2: &Vec<Type>) -> bool {
 		return false;
 	}
 	for i in 0..v1.len() {
-		if ! types_equal(&v1[i], &v2[i]) {
+		if &v1[i] != &v2[i] {
 			return false;
 		}
 	}
 	return true;
 }
 
-#[derive(Debug, Clone)]
+fn struct_field_vectors_equal(f1: &Vec<StructField>, f2: &Vec<StructField>) -> bool {
+	if f1.len() != f2.len() {
+		return false;
+	}
+	for (i, sf1) in f1.iter().enumerate() {
+		if *sf1 != f2[i] {
+			return false;
+		}
+	}
+	true
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct StructField {
 	pub name: StringId,
 	pub tipe: Type,
 }
 
 impl StructField {
+	pub fn new(name: StringId, tipe: Type) -> StructField {
+		return StructField{ name, tipe };
+	}
+
 	pub fn resolve_types(&self, type_table: &SymTable<Type>) -> Result<Self, TypeError> {
 		let t = self.tipe.resolve_types(type_table)?;
 		Ok(StructField{ name: self.name, tipe: t })
 	}
-}
-
-pub fn new_struct_field<'a>(name: StringId, tipe: Type) -> StructField {
-	return StructField{ name, tipe };
 }
 
 #[derive(Debug, Clone)]
@@ -199,6 +294,7 @@ pub fn new_func_decl<'a>(name: StringId, args: Vec<FuncArg>, ret_type: Type, cod
 #[derive(Debug, Clone)]
 pub enum Statement {
 	Noop,
+	Panic,
 	ReturnVoid,
 	Return(Expr),
 	Let(StringId, Expr),
@@ -211,6 +307,7 @@ impl Statement {
 	pub fn resolve_types(&self, type_table: &SymTable<Type>) -> Result<Self, TypeError> {
 		match self {
 			Statement::Noop => Ok(Statement::Noop),
+			Statement::Panic => Ok(Statement::Panic),
 			Statement::ReturnVoid => Ok(Statement::ReturnVoid),
 			Statement::Return(expr) => Ok(Statement::Return(expr.resolve_types(type_table)?)),
 			Statement::Let(name, expr) => Ok(Statement::Let(*name, expr.resolve_types(type_table)?)),
@@ -251,6 +348,10 @@ pub enum Expr {
 	ConstUint(StringId),
 	FunctionCall(StringId, Vec<Expr>),
 	ArrayRef(Box<Expr>, Box<Expr>),
+	StructInitializer(Vec<FieldInitializer>),
+	Tuple(Vec<Expr>),
+	NewBlock(Option<Box<Expr>>),
+	UnsafeCast(Box<Expr>, Type),
 }
 
 impl Expr {
@@ -275,6 +376,28 @@ impl Expr {
 			Expr::ArrayRef(e1, e2) => Ok(Expr::ArrayRef(
 				Box::new(e1.resolve_types(type_table)?), 
 				Box::new(e2.resolve_types(type_table)?)
+			)),
+			Expr::StructInitializer(fields) => {
+				let mut rfields = Vec::new();
+				for field in fields.iter() {
+					rfields.push(FieldInitializer::new(field.name, field.value.resolve_types(type_table)?));
+				}
+				Ok(Expr::StructInitializer(rfields))
+			}
+			Expr::Tuple(evec) => {
+				let mut rvec = Vec::new();
+				for expr in evec {
+					rvec.push(expr.resolve_types(type_table)?);
+				}
+				Ok(Expr::Tuple(rvec))
+			}
+			Expr::NewBlock(bo_expr) => match &*bo_expr {
+				Some(expr) => Ok(Expr::NewBlock(Some(Box::new(expr.resolve_types(type_table)?)))),
+				None => Ok(Expr::NewBlock(None)),
+			}
+			Expr::UnsafeCast(be, t) => Ok(Expr::UnsafeCast(
+				Box::new(be.resolve_types(type_table)?), 
+				t.resolve_types(type_table)?
 			)),
 		}
 	}
@@ -310,3 +433,14 @@ pub enum BinaryOp {
 	Hash,
 }
 
+#[derive(Debug, Clone)]
+pub struct FieldInitializer {
+	pub name: StringId,
+	pub value: Expr,
+}
+
+impl FieldInitializer {
+	pub fn new(name: StringId, value: Expr) -> Self {
+		FieldInitializer{ name, value }
+	}
+}

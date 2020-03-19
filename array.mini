@@ -1,0 +1,34 @@
+
+type array = struct {
+	size: uint,
+	topstep: uint,
+	contents: block,
+}
+
+func arraySize(arr: array) uint {
+	return arr.size;
+}
+
+func arrayNew(sz: uint) array {
+	chunk = 1;
+	height = 1;
+	while ((chunk*8) < sz) {
+		chunk = 8*chunk;
+		height = 1+height;
+	}
+	tup = buildTree(height);
+	return struct {
+		size: sz,
+		topstep: chunk,
+		contents: tup,
+	};
+}
+
+func buildTree(height: uint) block {
+	if (height == 1) {
+		return newblock();
+	} else {
+		res = buildTree(height-1);
+		return newblock(res);
+	}
+}

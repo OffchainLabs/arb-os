@@ -1,7 +1,7 @@
 use std::collections::HashMap;
-use crate::ast::{Type, TopLevelDecl, FuncDecl, FuncArg, Statement, Expr, UnaryOp, BinaryOp, types_equal};
+use crate::ast::{Type, TopLevelDecl, FuncDecl, FuncArg, Statement, Expr, StructField, UnaryOp, BinaryOp};
 use crate::symtable::SymTable;
-use crate::stringtable::{StringId};
+use crate::stringtable::StringId;
 
 #[derive(Debug)]
 pub struct TypeError {
@@ -25,6 +25,7 @@ pub struct TypeCheckedFunc {
 #[derive(Clone)]
 pub enum TypeCheckedStatement {
 	Noop,
+	Panic,
 	ReturnVoid,
 	Return(TypeCheckedExpr),
 	Let(StringId, TypeCheckedExpr),
@@ -42,7 +43,12 @@ pub enum TypeCheckedExpr {
 	DotRef(Box<TypeCheckedExpr>, StringId, Type),
 	ConstUint(StringId),
 	FunctionCall(StringId, Vec<TypeCheckedExpr>, Type),
+	StructInitializer(Vec<TypeCheckedStructField>, Type),
 	ArrayRef(Box<TypeCheckedExpr>, Box<TypeCheckedExpr>, Type),
+	BlockRef(Box<TypeCheckedExpr>, Box<TypeCheckedExpr>),
+	Tuple(Vec<TypeCheckedExpr>, Type),
+	NewBlock(Option<Box<TypeCheckedExpr>>),
+	Cast(Box<TypeCheckedExpr>, Type),
 }
 
 impl TypeCheckedExpr {
@@ -54,8 +60,25 @@ impl TypeCheckedExpr {
 			TypeCheckedExpr::DotRef(_, _, t) => t.clone(),
 			TypeCheckedExpr::ConstUint(_) => Type::Uint,
 			TypeCheckedExpr::FunctionCall(_, _, t) => t.clone(),
+			TypeCheckedExpr::StructInitializer(_, t) => t.clone(),
 			TypeCheckedExpr::ArrayRef(_, _, t) => t.clone(),
+			TypeCheckedExpr::BlockRef(_, _) => Type::Any,
+			TypeCheckedExpr::Tuple(_, t) => t.clone(),
+			TypeCheckedExpr::NewBlock(_) => Type::Block,
+			TypeCheckedExpr::Cast(_, t) => t.clone(),
 		}
+	}
+}
+
+#[derive(Debug, Clone)]
+pub struct TypeCheckedStructField {
+	pub name: StringId,
+	pub value: TypeCheckedExpr,
+}
+
+impl TypeCheckedStructField {
+	pub fn new(name: StringId, value: TypeCheckedExpr) -> Self {
+		TypeCheckedStructField{ name, value }
 	}
 }
 
@@ -144,10 +167,11 @@ fn typecheck_statement<'a>(
 ) -> Result<(TypeCheckedStatement, Option<(StringId, Type)>), TypeError> {
 	match statement {
 		Statement::Noop => Ok((TypeCheckedStatement::Noop, None)),
+		Statement::Panic => Ok((TypeCheckedStatement::Panic, None)),
 		Statement::ReturnVoid => Ok((TypeCheckedStatement::ReturnVoid, None)),
 		Statement::Return(expr) => {
 			let tc_expr = typecheck_expr(expr, type_table)?;
-			if types_equal(&tc_expr.get_type(), &return_type) {
+			if return_type.assignable(&tc_expr.get_type()) {
 				Ok((TypeCheckedStatement::Return(tc_expr), None))
 			} else {
 				Err(new_type_error("return statement has wrong type"))
@@ -232,7 +256,7 @@ fn typecheck_expr(
 						for i in 0..args.len() {
 							let tc_arg = typecheck_expr(&args[i], type_table)?;
 							tc_args.push(tc_arg);
-							if ! types_equal(&tc_args[i].get_type(), &arg_types[i]) {
+							if &tc_args[i].get_type() != &arg_types[i] {
 								return Err(new_type_error("wrong argument type in function call"))
 							}
 						};
@@ -247,16 +271,49 @@ fn typecheck_expr(
 		Expr::ArrayRef(array, index) => {
 			let tc_arr = typecheck_expr(&*array, type_table)?;
 			let tc_idx = typecheck_expr(&*index, type_table)?;
-			if let Type::Array(t) = tc_arr.get_type() {
-				if types_equal(&tc_idx.get_type(), &Type::Uint) {
-					Ok(TypeCheckedExpr::ArrayRef(Box::new(tc_arr), Box::new(tc_idx), *t))
-				} else {
-					Err(new_type_error("array index must be Uint"))
+			match tc_arr.get_type() {
+				Type::Array(t) => {
+					if &tc_idx.get_type() == &Type::Uint {
+						Ok(TypeCheckedExpr::ArrayRef(Box::new(tc_arr), Box::new(tc_idx), *t))
+					} else {
+						Err(new_type_error("array index must be Uint"))
+					}
 				}
-			} else {
-				Err(new_type_error("array lookup in non-array type"))
+				Type::Block => {
+					if &tc_idx.get_type() == &Type::Uint {
+						Ok(TypeCheckedExpr::BlockRef(Box::new(tc_arr), Box::new(tc_idx)))
+					} else {
+						Err(new_type_error("block index must be Uint"))
+					}
+				}
+				_ => Err(new_type_error("array lookup in non-array type"))
 			}
 		}
+		Expr::StructInitializer(fieldvec) => {
+			let mut tc_fields = Vec::new();
+			let mut tc_fieldtypes = Vec::new();
+			for field in fieldvec {
+				let tc_expr = typecheck_expr(&field.value, type_table)?;
+				tc_fields.push(TypeCheckedStructField::new(field.name, tc_expr.clone()));
+				tc_fieldtypes.push(StructField::new(field.name, tc_expr.get_type()));
+			}
+			Ok(TypeCheckedExpr::StructInitializer(tc_fields, Type::Struct(tc_fieldtypes)))
+		}
+		Expr::Tuple(fields) => {
+			let mut tc_fields = Vec::new();
+			let mut types = Vec::new();
+			for field in fields {
+				let tc_field = typecheck_expr(field, type_table)?;
+				types.push(tc_field.get_type().clone());
+				tc_fields.push(tc_field);
+			}
+			Ok(TypeCheckedExpr::Tuple(tc_fields, Type::Tuple(types)))
+		}
+		Expr::NewBlock(bo_expr) => match &*bo_expr {
+			Some(expr) => Ok(TypeCheckedExpr::NewBlock(Some(Box::new(typecheck_expr(&expr, type_table)?)))),
+			None => Ok(TypeCheckedExpr::NewBlock(None)),
+		}
+		Expr::UnsafeCast(expr, t) => Ok(TypeCheckedExpr::Cast(Box::new(typecheck_expr(expr, type_table)?), t.clone())),
 	}
 }
 
@@ -314,7 +371,7 @@ fn typecheck_binary_op(
 			_ => Err(new_type_error("invalid argument types to binary op"))
 		},
 		BinaryOp::Equal |
-		BinaryOp::NotEqual => if types_equal(&subtype1, &subtype2) {
+		BinaryOp::NotEqual => if &subtype1 == &subtype2 {
 				Ok(TypeCheckedExpr::Binary(op, Box::new(tcs1), Box::new(tcs2), Type::Bool))
 			} else {
 				Err(new_type_error("invalid argument types to binary op"))
