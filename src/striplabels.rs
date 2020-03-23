@@ -1,5 +1,6 @@
 use std::collections::{HashMap, HashSet};
-use crate::mavm::{Instruction, Opcode, Value, Uint256, Label};
+use crate::mavm::{Instruction, Opcode, Value, Label};
+use crate::uint256::Uint256;
 
 pub fn strip_labels(code_in: &Vec<Instruction>, jump_table: &Vec<Label>) -> (Vec<Instruction>, Vec<usize>) {
 	let mut label_map = HashMap::new();

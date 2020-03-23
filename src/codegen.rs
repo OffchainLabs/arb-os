@@ -1,4 +1,5 @@
-use crate::mavm::{Label, LabelGenerator, Instruction, Opcode, Value, Uint256};
+use crate::mavm::{Label, LabelGenerator, Instruction, Opcode, Value};
+use crate::uint256::Uint256;
 use crate::typecheck::{TypeCheckedFunc, TypeCheckedStatement, TypeCheckedExpr};
 use crate::symtable::CopyingSymTable;
 use crate::ast::{UnaryOp, BinaryOp, FuncArg, Type};
@@ -7,11 +8,11 @@ use crate::stringtable::StringTable;
 
 #[derive(Debug)]
 pub struct CodegenError {
-	msg: &'static str
+	pub reason: &'static str
 }
 
-pub fn new_codegen_error(msg: &'static str) -> CodegenError {
-	CodegenError{ msg }
+pub fn new_codegen_error(reason: &'static str) -> CodegenError {
+	CodegenError{ reason }
 }
 
 pub fn mavm_codegen<'a>(
@@ -60,7 +61,7 @@ fn mavm_codegen_func<'a>(
 	// put makeframe instruction at beginning of function, to build the frame
 	code[make_frame_slot] = Instruction::from_opcode(Opcode::MakeFrame(num_args, num_locals));
 
-	return Ok((label_gen, code));
+	Ok((label_gen, code))
 }
 
 fn add_args_to_locals_table<'a>(
@@ -122,6 +123,17 @@ fn mavm_codegen_statements(
 			code = c;
 			code.push(Instruction::from_opcode_imm(Opcode::SetLocal, Value::Int(Uint256::from_usize(slot_num))));   
 			mavm_codegen_statements(rest_of_statements.to_vec(), code, num_locals, &new_locals, label_gen, string_table)
+		}
+		TypeCheckedStatement::Assign(name, expr) => {
+			let slot_num = match locals.get(*name) {
+				Some(slot) => slot,
+				None => { return Err(new_codegen_error("assigned to non-existent variable")) }
+			};
+			let (lg, c) = mavm_codegen_expr(expr, code, &locals, label_gen, string_table)?;
+			label_gen = lg;
+			code = c;
+			code.push(Instruction::from_opcode_imm(Opcode::SetLocal, Value::Int(Uint256::from_usize(slot_num))));   
+			mavm_codegen_statements(rest_of_statements.to_vec(), code, num_locals, &locals, label_gen, string_table)
 		}
 		TypeCheckedStatement::Loop(body) => {
 			let slot_num = Value::Int(Uint256::from_usize(num_locals));
@@ -187,7 +199,9 @@ fn mavm_codegen_statements(
 			code.push(Instruction::from_opcode(Opcode::Label(true_label)));
 			let (lg, nl, might_continue_2) = mavm_codegen_statements(tbody.to_vec(), code, num_locals, locals, label_gen, string_table)?;
 			label_gen = lg;
-			num_locals = nl;
+			if num_locals < nl {
+				num_locals = nl;
+			}
 			code.push(Instruction::from_opcode(Opcode::Label(end_label)));
 			if might_continue_1 || might_continue_2 {
 				mavm_codegen_statements(rest_of_statements.to_vec(), code, num_locals, locals, label_gen, string_table)
@@ -210,14 +224,19 @@ fn mavm_codegen_expr<'a>(
 			let (lg, c) = mavm_codegen_expr(tce, code, locals, label_gen, string_table)?;
 			label_gen = lg;
 			code = c;
-			let opcode = match op {
-				UnaryOp::Minus => Opcode::UnaryMinus,
-				UnaryOp::BitwiseNeg => Opcode::BitwiseNeg,
-				UnaryOp::Not => Opcode::Not,
-				UnaryOp::Hash => Opcode::Hash,
-				UnaryOp::Len => Opcode::Len,
+			let maybe_opcode = match op {
+				UnaryOp::Minus => Some(Opcode::UnaryMinus),
+				UnaryOp::BitwiseNeg => Some(Opcode::BitwiseNeg),
+				UnaryOp::Not => Some(Opcode::Not),
+				UnaryOp::Hash => Some(Opcode::Hash),
+				UnaryOp::Len => Some(Opcode::Len),
+				UnaryOp::ToUint => None,
+				UnaryOp::ToInt => None,
+				UnaryOp::ToBytes32 => None
 			};
-			code.push(Instruction::from_opcode(opcode));
+			if let Some(opcode) = maybe_opcode {
+				code.push(Instruction::from_opcode(opcode));
+			}
 			Ok((label_gen, code))
 		}
 		TypeCheckedExpr::Binary(op, tce1, tce2, _) => {
@@ -225,16 +244,22 @@ fn mavm_codegen_expr<'a>(
 			let (lg, c) = mavm_codegen_expr(tce1, c, locals, lg, string_table)?;
 			label_gen = lg;
 			code = c;
-			let opcode = match op {     //TODO: distinguish signed from unsigned ops, where needed
+			let opcode = match op {     
 				BinaryOp::Plus => Opcode::Plus,
 				BinaryOp::Minus => Opcode::Minus,
 				BinaryOp::Times => Opcode::Mul,
 				BinaryOp::Div => Opcode::Div,
 				BinaryOp::Mod => Opcode::Mod,
+				BinaryOp::Sdiv => Opcode::Sdiv,
+				BinaryOp::Smod => Opcode::Smod,
 				BinaryOp::LessThan => Opcode::LessThan,
 				BinaryOp::GreaterThan => Opcode::GreaterThan,
-				BinaryOp::LessEq => Opcode::LessEq,
-				BinaryOp::GreaterEq => Opcode::GreaterEq,
+				BinaryOp::LessEq => Opcode::GreaterThan,   // will negate
+				BinaryOp::GreaterEq => Opcode::SLessThan,  // will negate
+				BinaryOp::SLessThan => Opcode::SLessThan,
+				BinaryOp::SGreaterThan => Opcode::SGreaterThan,
+				BinaryOp::SLessEq => Opcode::SGreaterThan, // will negate
+				BinaryOp::SGreaterEq => Opcode::SLessThan, // will negate
 				BinaryOp::Equal => Opcode::Equal,
 				BinaryOp::NotEqual => Opcode::NotEqual,
 				BinaryOp::BitwiseAnd => Opcode::BitwiseAnd,
@@ -245,6 +270,13 @@ fn mavm_codegen_expr<'a>(
 				BinaryOp::Hash => Opcode::Hash2,
 			};
 			code.push(Instruction::from_opcode(opcode));
+			match op {
+				BinaryOp::LessEq |
+				BinaryOp::GreaterEq |
+				BinaryOp::SLessEq |
+				BinaryOp::SGreaterEq => { code.push(Instruction::from_opcode(Opcode::Not)); }
+				_ => {}
+			}
 			Ok((label_gen, code))
 		}
 		TypeCheckedExpr::VariableRef(name, _) => {
@@ -254,7 +286,7 @@ fn mavm_codegen_expr<'a>(
 					Ok((label_gen, code))
 				}
 				None => {
-					print!("local: {:?}\n", *name);
+					println!("local: {:?}", *name);
 					Err(new_codegen_error("tried to access non-existent local variable"))
 				}
 			}
@@ -281,7 +313,12 @@ fn mavm_codegen_expr<'a>(
 		}
 		TypeCheckedExpr::ConstUint(str_id) => {
 			let s = string_table.name_from_id(*str_id);
-			let val = Value::Int(Uint256::from_string(s));
+			let val = match Uint256::from_string(s) {
+				Some(v) => Value::Int(v),
+				None => {
+					return Err(new_codegen_error("invalid numeric constant"));
+				}
+			};
 			code.push(Instruction::from_opcode_imm(Opcode::Noop, val));
 			Ok((label_gen, code))
 		}
@@ -345,6 +382,8 @@ fn mavm_codegen_expr<'a>(
 				for _i in 0..7 {
 					code.push(Instruction::from_opcode(Opcode::Dup0));
 				}
+				let empty_tuple = vec![Value::Tuple(Vec::new()); 8];
+				code.push(Instruction::from_opcode_imm(Opcode::Noop,Value::Tuple(empty_tuple)));
 				for i in 0..8 {
 					code.push(Instruction::from_opcode_imm(Opcode::Tset, Value::Int(Uint256::from_usize(i))));
 				}
@@ -357,11 +396,34 @@ fn mavm_codegen_expr<'a>(
 			}
 		}
 		TypeCheckedExpr::BlockRef(expr1, expr2) => {
-			let (lg, c) = mavm_codegen_expr(expr2, code, locals, label_gen, string_table)?;
-			let (lg, c) = mavm_codegen_expr(expr1, c, locals, lg, string_table)?;
+			let (lg, c) = mavm_codegen_expr(expr1, code, locals, label_gen, string_table)?;
+			let (lg, c) = mavm_codegen_expr(expr2, c, locals, lg, string_table)?;
 			label_gen = lg;
 			code = c;
 			code.push(Instruction::from_opcode(Opcode::Tget));
+			Ok((label_gen, code))
+		}
+		TypeCheckedExpr::ArrayMod(_arr, _index, _val, _) => Err(new_codegen_error("ArrayMod not yet implemented")),
+		TypeCheckedExpr::StructMod(struc, index, val, t) => {
+			let (lg, c) = mavm_codegen_expr(val, code, locals, label_gen, string_table)?;
+			let (lg, c) = mavm_codegen_expr(struc, c, locals, lg, string_table)?;
+			label_gen = lg;
+			code = c;
+			if let Type::Struct(v) = t {
+				let struct_len = v.len();
+				code.push(Instruction::from_opcode_imm(Opcode::TupleSet(struct_len), Value::Int(Uint256::from_usize(*index))));
+			} else {
+				panic!("impossible value in TypeCheckedExpr::StructMod");
+			}
+			Ok((label_gen, code))
+		}
+		TypeCheckedExpr::BlockMod(block, index, val, _) => {
+			let (lg, c) = mavm_codegen_expr(val, code, locals, label_gen, string_table)?;
+			let (lg, c) = mavm_codegen_expr(block, c, locals, lg, string_table)?;
+			let (lg, c) = mavm_codegen_expr(index, c, locals, lg, string_table)?;
+			label_gen = lg;
+			code = c;
+			code.push(Instruction::from_opcode(Opcode::Tset));
 			Ok((label_gen, code))
 		}
 		TypeCheckedExpr::Cast(expr, _) => mavm_codegen_expr(expr, code, locals, label_gen, string_table),

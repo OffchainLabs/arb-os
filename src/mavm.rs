@@ -1,6 +1,7 @@
 use std::fmt;
 use std::collections::HashMap;
 use crate::stringtable::StringId;
+use crate::uint256::Uint256;
 
 #[derive(PartialEq, Eq, Hash, Debug, Clone, Copy)]
 pub enum Label {
@@ -17,6 +18,7 @@ impl fmt::Display for Label {
     }
 }
 
+#[derive(Default)]
 pub struct LabelGenerator {
 	next: usize
 }
@@ -74,7 +76,7 @@ impl fmt::Display for Instruction {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum Value {
 	Int(Uint256),
 	Tuple(Vec<Value>),
@@ -89,7 +91,7 @@ impl Value {
 
 	pub fn is_none(&self) -> bool {
 		if let Value::Tuple(v) = self {
-			v.len() == 0
+			v.is_empty()
 		} else {
 			false
 		}
@@ -126,6 +128,14 @@ impl Value {
 			_ => None
 		}
 	}
+
+	pub fn avm_hash(&self) -> Value {
+		Value::Int(Uint256::zero())   // BUGBUG: need to actually hash things
+	}
+
+	pub fn avm_hash2(_v1: &Self, _v2: &Self) -> Value {
+		Value::Int(Uint256::zero())   // BUGBUG: need to actually hash things
+	}
 }
 
 impl fmt::Display for Value {
@@ -135,15 +145,19 @@ impl fmt::Display for Value {
     		Value::CodePoint(pc) => write!(f, "CodePoint({:?})", pc),
     		Value::Label(label) => write!(f, "Label({})", label),
     		Value::Tuple(tup) => {
-    			let mut s = "Tuple(".to_owned();
-				for (i, v) in tup.iter().enumerate() {
-					if i == 0 {
-						s = format!("{}{}", s, v);
-					} else {
-						s = format!("{}, {}", s, v);
+    			if tup.is_empty() {
+    				write!(f, "_")
+    			} else {
+    				let mut s = "Tuple(".to_owned();
+					for (i, v) in tup.iter().enumerate() {
+						if i == 0 {
+							s = format!("{}{}", s, v);
+						} else {
+							s = format!("{}, {}", s, v);
+						}
 					}
-				}
-				write!(f, "{})", s)
+					write!(f, "{})", s)
+    			}
     		}
     	}
 	}	
@@ -184,10 +198,12 @@ pub enum Opcode {
 	Mul,
 	Div,
 	Mod,
+	Sdiv,
+	Smod,
 	LessThan,
 	GreaterThan,
-	LessEq,
-	GreaterEq,
+	SLessThan,
+	SGreaterThan,
 	Equal,
 	NotEqual,
 	BitwiseAnd,
@@ -206,51 +222,4 @@ impl fmt::Display for Opcode {
     		_ => write!(f, "{:?}", self),
     	}
     }
-}
-
-#[derive(Debug, Clone)]
-pub struct Uint256 {
-	val: [u64; 4]
-}
-
-impl Uint256 {
-	pub fn zero() -> Self {
-		Uint256{ val: [0, 0, 0, 0] }
-	}
-
-	pub fn from_u64(x: u64) -> Self {
-		Uint256{ val: [x, 0, 0, 0] }
-	}
-
-	pub fn from_usize(x: usize) -> Self {
-		Uint256::from_u64(x as u64)
-	}
-
-	pub fn from_string(s: &str) -> Self {
-		//BUGBUG: this panics on values of 2^64 or more
-		Uint256{ val: [s.parse().unwrap(), 0, 0, 0] }
-	}
-
-	pub fn to_usize(&self) -> Option<usize> {
-		if self.val[1]!=0 || self.val[2]!=0 || self.val[3]!=0 {
-			None
-		} else {
-			let v = self.val[0];
-			if ((v as usize) as u64) == v {
-				Some(v as usize)
-			} else {
-				None
-			}
-		}
-	}
-}
-
-impl fmt::Display for Uint256 {
-	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-		if self.val[3] == 0 && self.val[2] == 0 && self.val[1] == 0 {
-			write!(f, "{:x}", self.val[0])
-		} else {
-			write!(f, "{:#016x}{:016x}{:016x}{:016x}", self.val[3], self.val[2], self.val[1], self.val[0])
-		}
-	}
 }

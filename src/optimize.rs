@@ -74,26 +74,6 @@ pub fn peephole(code_in: &Vec<Instruction>) -> Vec<Instruction> {
 								code_out.push(Instruction::new(Opcode::Noop, Some(val)));
 							}
 						}
-						Instruction{ opcode: Opcode::LessThan, immediate: imm } => {
-							code_out.pop();
-							code_out.pop();
-							code_out.push(Instruction::new(Opcode::GreaterEq, imm));
-						}
-						Instruction{ opcode: Opcode::GreaterThan, immediate: imm } => {
-							code_out.pop();
-							code_out.pop();
-							code_out.push(Instruction::new(Opcode::LessEq, imm));
-						}
-						Instruction{ opcode: Opcode::LessEq, immediate: imm } => {
-							code_out.pop();
-							code_out.pop();
-							code_out.push(Instruction::new(Opcode::GreaterThan, imm));
-						}
-						Instruction{ opcode: Opcode::GreaterEq, immediate: imm } => {
-							code_out.pop();
-							code_out.pop();
-							code_out.push(Instruction::new(Opcode::LessThan, imm));
-						}
 						Instruction{ opcode: Opcode::Equal, immediate: imm } => {
 							code_out.pop();
 							code_out.pop();

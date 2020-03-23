@@ -5,11 +5,11 @@ use crate::stringtable::StringId;
 
 #[derive(Debug)]
 pub struct TypeError {
-	reason: &'static str,
+	pub reason: &'static str,
 }
 
 pub fn new_type_error(msg: &'static str) -> TypeError {
-	return TypeError{ reason: msg };
+	TypeError{ reason: msg }
 }
 
 #[derive(Debug)]
@@ -29,6 +29,7 @@ pub enum TypeCheckedStatement {
 	ReturnVoid,
 	Return(TypeCheckedExpr),
 	Let(StringId, TypeCheckedExpr),
+	Assign(StringId, TypeCheckedExpr),
 	Loop(Vec<TypeCheckedStatement>),
 	While(TypeCheckedExpr, Vec<TypeCheckedStatement>),
 	If(TypeCheckedExpr, Vec<TypeCheckedStatement>, Option<Vec<TypeCheckedStatement>>),
@@ -48,6 +49,9 @@ pub enum TypeCheckedExpr {
 	BlockRef(Box<TypeCheckedExpr>, Box<TypeCheckedExpr>),
 	Tuple(Vec<TypeCheckedExpr>, Type),
 	NewBlock(Option<Box<TypeCheckedExpr>>),
+	BlockMod(Box<TypeCheckedExpr>, Box<TypeCheckedExpr>, Box<TypeCheckedExpr>, Type),
+	ArrayMod(Box<TypeCheckedExpr>, Box<TypeCheckedExpr>, Box<TypeCheckedExpr>, Type),
+	StructMod(Box<TypeCheckedExpr>, usize, Box<TypeCheckedExpr>, Type),
 	Cast(Box<TypeCheckedExpr>, Type),
 }
 
@@ -65,6 +69,9 @@ impl TypeCheckedExpr {
 			TypeCheckedExpr::BlockRef(_, _) => Type::Any,
 			TypeCheckedExpr::Tuple(_, t) => t.clone(),
 			TypeCheckedExpr::NewBlock(_) => Type::Block,
+			TypeCheckedExpr::ArrayMod(_, _, _, t) => t.clone(),
+			TypeCheckedExpr::BlockMod(_, _, _, t) => t.clone(),
+			TypeCheckedExpr::StructMod(_, _, _, t) => t.clone(),
 			TypeCheckedExpr::Cast(_, t) => t.clone(),
 		}
 	}
@@ -83,7 +90,7 @@ impl TypeCheckedStructField {
 }
 
 pub fn typecheck_top_level_decls(
-	decls: &Vec<TopLevelDecl>, 
+	decls: &[TopLevelDecl], 
 	checked_funcs: &mut Vec<TypeCheckedFunc>,
 ) -> Option<TypeError> {
 	let mut funcs = Vec::new();
@@ -105,14 +112,16 @@ pub fn typecheck_top_level_decls(
 	for func in funcs.iter() {
 		match func.resolve_types(&type_table) {
 			Ok(f) => match typecheck_function(&f, &type_table) {
-				Ok(f) => { checked_funcs.push(f); }
+				Ok(f) => { 
+					checked_funcs.push(f); 
+				}
 				Err(e) => { return Some(e); }
 			}
 			Err(e) => { return Some(e); }
 		}
 	}
 
-	return None;
+	None
 }
 
 pub fn typecheck_function<'a>(
@@ -139,7 +148,7 @@ fn typecheck_statement_sequence<'a>(
 	return_type: &Type,
 	type_table: &'a SymTable<'a, Type>
 ) -> Result<Vec<TypeCheckedStatement>, TypeError> {
-	if statements.len() == 0 {
+	if statements.is_empty() {
 		return Ok(Vec::new());
 	}
 	let first_stat = &statements[0];
@@ -174,6 +183,8 @@ fn typecheck_statement<'a>(
 			if return_type.assignable(&tc_expr.get_type()) {
 				Ok((TypeCheckedStatement::Return(tc_expr), None))
 			} else {
+				println!("return type: {:?}", return_type);
+				println!("expr type:   {:?}", tc_expr.get_type());
 				Err(new_type_error("return statement has wrong type"))
 			}
 		},
@@ -182,6 +193,18 @@ fn typecheck_statement<'a>(
 			let tce_type = tc_expr.get_type();
 			Ok((TypeCheckedStatement::Let(*name, tc_expr), Some((*name, tce_type))))
 		},
+		Statement::Assign(name, expr) => {
+			let tc_expr = typecheck_expr(expr, type_table)?;
+			let var_type = match type_table.get(*name) {
+				Some(t) => t,
+				None => { return Err(new_type_error("assignment to non-existent variable")) }
+			};
+			if var_type.assignable(&tc_expr.get_type()) {
+				Ok((TypeCheckedStatement::Assign(*name, tc_expr), None))
+			} else {
+				Err(new_type_error("mismatched types in assignment statement"))
+			}
+		}
 		Statement::Loop(body) => {
 			let tc_body = typecheck_statement_sequence(body, return_type, type_table)?;
 			Ok((TypeCheckedStatement::Loop(tc_body), None))
@@ -245,27 +268,31 @@ fn typecheck_expr(
 					}
 				}
 			} 
-			return Err(new_type_error("reference to non-existent struct field"));
+			Err(new_type_error("reference to non-existent struct field"))
 		}
 		Expr::ConstUint(n) => Ok(TypeCheckedExpr::ConstUint(*n)),
 		Expr::FunctionCall(name, args) => {
 			match type_table.get(*name) {
 				Some(Type::Func(arg_types, ret_type)) => {
+					let ret_type = ret_type.resolve_types(type_table)?;
 					if args.len() == arg_types.len() {
 						let mut tc_args = Vec::new();
 						for i in 0..args.len() {
 							let tc_arg = typecheck_expr(&args[i], type_table)?;
 							tc_args.push(tc_arg);
-							if &tc_args[i].get_type() != &arg_types[i] {
+							let resolved_arg_type = arg_types[i].resolve_types(&type_table)?;
+							if !resolved_arg_type.assignable(&tc_args[i].get_type()) {
+								println!("expected {:?}", resolved_arg_type);
+								println!("actual   {:?}", tc_args[i].get_type());
 								return Err(new_type_error("wrong argument type in function call"))
 							}
 						};
-						return Ok(TypeCheckedExpr::FunctionCall(*name, tc_args, *ret_type.clone()));
+						Ok(TypeCheckedExpr::FunctionCall(*name, tc_args, ret_type))
 					} else {
-						return Err(new_type_error("wrong number of args passed to function"));
+						Err(new_type_error("wrong number of args passed to function"))
 					}
 				},
-				_ => { return Err(new_type_error("call to non-existent function")); }
+				_ => Err(new_type_error("call to non-existent function"))
 			}
 		},
 		Expr::ArrayRef(array, index) => {
@@ -273,14 +300,14 @@ fn typecheck_expr(
 			let tc_idx = typecheck_expr(&*index, type_table)?;
 			match tc_arr.get_type() {
 				Type::Array(t) => {
-					if &tc_idx.get_type() == &Type::Uint {
+					if tc_idx.get_type() == Type::Uint {
 						Ok(TypeCheckedExpr::ArrayRef(Box::new(tc_arr), Box::new(tc_idx), *t))
 					} else {
 						Err(new_type_error("array index must be Uint"))
 					}
 				}
 				Type::Block => {
-					if &tc_idx.get_type() == &Type::Uint {
+					if tc_idx.get_type() == Type::Uint {
 						Ok(TypeCheckedExpr::BlockRef(Box::new(tc_arr), Box::new(tc_idx)))
 					} else {
 						Err(new_type_error("block index must be Uint"))
@@ -313,6 +340,57 @@ fn typecheck_expr(
 			Some(expr) => Ok(TypeCheckedExpr::NewBlock(Some(Box::new(typecheck_expr(&expr, type_table)?)))),
 			None => Ok(TypeCheckedExpr::NewBlock(None)),
 		}
+		Expr::ArrayOrBlockMod(arr, index, val) => {
+			let tc_arr = typecheck_expr(arr, type_table)?;
+			let tc_index = typecheck_expr(index, type_table)?;
+			let tc_val = typecheck_expr(val, type_table)?;
+			if tc_index.get_type() != Type::Uint {
+				return Err(new_type_error("array or block modifier requires uint index"));
+			}
+			match tc_arr.get_type() {
+				Type::Array(t) => if t.assignable(&tc_val.get_type()) {
+					Ok(TypeCheckedExpr::ArrayMod(
+						Box::new(tc_arr), 
+						Box::new(tc_index), 
+						Box::new(tc_val), 
+						Type::Array(t)
+					))
+				} else {
+					Err(new_type_error("mismatched types in array modifier"))
+				}
+				Type::Block => Ok(TypeCheckedExpr::BlockMod(
+					Box::new(tc_arr), 
+					Box::new(tc_index), 
+					Box::new(tc_val), 
+					Type::Block
+				)),
+				_ => Err(new_type_error("[] modifier must operate on array or block"))
+			}
+		}
+		Expr::StructMod(struc, name, val) => {
+			let tc_struc = typecheck_expr(struc, type_table)?;
+			let tc_val = typecheck_expr(val, type_table)?;
+			let tcs_type = tc_struc.get_type();
+			if let Type::Struct(fields) = &tcs_type {
+				match tcs_type.get_struct_slot_by_name(*name) {
+					Some(index) => {
+						if fields[index].tipe.assignable(&tc_val.get_type()) {
+							Ok(TypeCheckedExpr::StructMod(
+								Box::new(tc_struc), 
+								index, 
+								Box::new(tc_val), 
+								tcs_type
+							))
+						} else {
+							Err(new_type_error("incorrect value type in struct modifier"))
+						}
+					}
+					None => Err(new_type_error("struct modifier must use valid field name"))
+				}
+			} else {
+				Err(new_type_error("struct modifier must operate on a struct"))
+			}
+		}
 		Expr::UnsafeCast(expr, t) => Ok(TypeCheckedExpr::Cast(Box::new(typecheck_expr(expr, type_table)?), t.clone())),
 	}
 }
@@ -338,10 +416,31 @@ fn typecheck_unary_op(
 		},
 		UnaryOp::Hash => Ok(TypeCheckedExpr::UnaryOp(UnaryOp::Hash, Box::new(sub_expr), Type::Bytes32)),
 		UnaryOp::Len => match tc_type {
-			Type::Tuple(_) => Ok(TypeCheckedExpr::UnaryOp(UnaryOp::Len, Box::new(sub_expr), Type::Uint)),
+			Type::Tuple(_) |
 			Type::Array(_) => Ok(TypeCheckedExpr::UnaryOp(UnaryOp::Len, Box::new(sub_expr), Type::Uint)),
 			_ => Err(new_type_error("invalid operand type for len"))
 		},
+		UnaryOp::ToUint => match tc_type {
+			Type::Uint |
+			Type::Int |
+			Type::Bytes32 |
+			Type::Bool => Ok(TypeCheckedExpr::UnaryOp(UnaryOp::ToUint, Box::new(sub_expr), Type::Uint)),
+			_ => Err(new_type_error("invalid operand type for uint()"))
+		}
+		UnaryOp::ToInt => match tc_type {
+			Type::Uint |
+			Type::Int |
+			Type::Bytes32 |
+			Type::Bool => Ok(TypeCheckedExpr::UnaryOp(UnaryOp::ToInt, Box::new(sub_expr), Type::Int)),
+			_ => Err(new_type_error("invalid operand type for int()"))
+		}
+		UnaryOp::ToBytes32 => match tc_type {
+			Type::Uint |
+			Type::Int |
+			Type::Bytes32 |
+			Type::Bool => Ok(TypeCheckedExpr::UnaryOp(UnaryOp::ToBytes32, Box::new(sub_expr), Type::Bytes32)),
+			_ => Err(new_type_error("invalid operand type for int()"))
+		}
 	}
 }
 
@@ -355,23 +454,43 @@ fn typecheck_binary_op(
 	match op {
 		BinaryOp::Plus | 
 		BinaryOp::Minus |
-		BinaryOp::Times | 
-		BinaryOp::Div |
-		BinaryOp::Mod => match (subtype1, subtype2) {
+		BinaryOp::Times => match (subtype1, subtype2) {
 			(Type::Uint, Type::Uint) => Ok(TypeCheckedExpr::Binary(op, Box::new(tcs1), Box::new(tcs2), Type::Uint)),
 			(Type::Int, Type::Int) => Ok(TypeCheckedExpr::Binary(op, Box::new(tcs1), Box::new(tcs2), Type::Int)),
 			_ => Err(new_type_error("invalid argument types to binary op"))
 		},
-		BinaryOp::LessThan |
-		BinaryOp::GreaterThan | 
-		BinaryOp::LessEq |
-		BinaryOp::GreaterEq => match (subtype1, subtype2) {
-			(Type::Uint, Type::Uint) |
-			(Type::Int, Type::Int) => Ok(TypeCheckedExpr::Binary(op, Box::new(tcs1), Box::new(tcs2), Type::Bool)),
+		BinaryOp::Div => match (subtype1, subtype2) {
+			(Type::Uint, Type::Uint) => Ok(TypeCheckedExpr::Binary(op, Box::new(tcs1), Box::new(tcs2), Type::Uint)),
+			(Type::Int, Type::Int) => Ok(TypeCheckedExpr::Binary(BinaryOp::Sdiv, Box::new(tcs1), Box::new(tcs2), Type::Int)),
 			_ => Err(new_type_error("invalid argument types to binary op"))
-		},
+		}
+		BinaryOp::Mod => match (subtype1, subtype2) {
+			(Type::Uint, Type::Uint) => Ok(TypeCheckedExpr::Binary(op, Box::new(tcs1), Box::new(tcs2), Type::Uint)),
+			(Type::Int, Type::Int) => Ok(TypeCheckedExpr::Binary(BinaryOp::Smod, Box::new(tcs1), Box::new(tcs2), Type::Int)),
+			_ => Err(new_type_error("invalid argument types to binary op"))
+		}			
+		BinaryOp::LessThan => match (subtype1, subtype2) {
+			(Type::Uint, Type::Uint) => Ok(TypeCheckedExpr::Binary(op, Box::new(tcs1), Box::new(tcs2), Type::Bool)),
+			(Type::Int, Type::Int) => Ok(TypeCheckedExpr::Binary(BinaryOp::SLessThan, Box::new(tcs1), Box::new(tcs2), Type::Bool)),
+			_ => Err(new_type_error("invalid argument types to binary op"))			
+		}
+		BinaryOp::GreaterThan => match (subtype1, subtype2) {
+			(Type::Uint, Type::Uint) => Ok(TypeCheckedExpr::Binary(op, Box::new(tcs1), Box::new(tcs2), Type::Bool)),
+			(Type::Int, Type::Int) => Ok(TypeCheckedExpr::Binary(BinaryOp::SGreaterThan, Box::new(tcs1), Box::new(tcs2), Type::Bool)),
+			_ => Err(new_type_error("invalid argument types to binary op"))			
+		}
+		BinaryOp::LessEq => match (subtype1, subtype2) {
+			(Type::Uint, Type::Uint) => Ok(TypeCheckedExpr::Binary(op, Box::new(tcs1), Box::new(tcs2), Type::Bool)),
+			(Type::Int, Type::Int) => Ok(TypeCheckedExpr::Binary(BinaryOp::SLessEq, Box::new(tcs1), Box::new(tcs2), Type::Bool)),
+			_ => Err(new_type_error("invalid argument types to binary op"))			
+		}
+		BinaryOp::GreaterEq => match (subtype1, subtype2) {
+			(Type::Uint, Type::Uint) => Ok(TypeCheckedExpr::Binary(op, Box::new(tcs1), Box::new(tcs2), Type::Bool)),
+			(Type::Int, Type::Int) => Ok(TypeCheckedExpr::Binary(BinaryOp::SGreaterEq, Box::new(tcs1), Box::new(tcs2), Type::Bool)),
+			_ => Err(new_type_error("invalid argument types to binary op"))			
+		}
 		BinaryOp::Equal |
-		BinaryOp::NotEqual => if &subtype1 == &subtype2 {
+		BinaryOp::NotEqual => if (subtype1 == Type::Any) || (subtype2 == Type::Any) || (subtype1 == subtype2) {
 				Ok(TypeCheckedExpr::Binary(op, Box::new(tcs1), Box::new(tcs2), Type::Bool))
 			} else {
 				Err(new_type_error("invalid argument types to binary op"))
@@ -393,5 +512,11 @@ fn typecheck_binary_op(
 			(Type::Bytes32, Type::Bytes32) => Ok(TypeCheckedExpr::Binary(op, Box::new(tcs1), Box::new(tcs2), Type::Bytes32)),
 			_ => Err(new_type_error("invalid argument types to binary op"))
 		}
+		BinaryOp::Smod |
+		BinaryOp::Sdiv |
+		BinaryOp::SLessThan |
+		BinaryOp::SGreaterThan |
+		BinaryOp::SLessEq |
+		BinaryOp::SGreaterEq => { panic!("unexpected op in typecheck_binary_op"); }
 	}
 }

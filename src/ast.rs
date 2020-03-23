@@ -15,7 +15,7 @@ pub struct TypeDecl {
 }
 
 pub fn new_type_decl(name: StringId, tipe: Type) -> TypeDecl {
-	return TypeDecl{ name, tipe };
+	TypeDecl{ name, tipe }
 }
 
 #[derive(Debug, Clone, Eq)]
@@ -49,7 +49,7 @@ impl Type {
 				for t in tvec.iter() {
 					rvec.push(t.resolve_types(type_table)?);
 				}
-				return Ok(Type::Tuple(rvec));
+				Ok(Type::Tuple(rvec))
 			}
 			Type::Array(t) => Ok(Type::Array(Box::new(t.resolve_types(type_table)?))),
 			Type::Struct(vf) => {
@@ -57,7 +57,7 @@ impl Type {
 				for field in vf.iter() {
 					fvec.push(field.resolve_types(type_table)?);
 				}
-				return Ok(Type::Struct(fvec));
+				Ok(Type::Struct(fvec))
 			},
 			Type::Named(name) => {
 				match type_table.get(*name) {
@@ -81,8 +81,8 @@ impl Type {
 	pub fn get_struct_slot_by_name(&self, name: StringId) -> Option<usize> {
 		match self {
 			Type::Struct(fields) => {
-				for i in 0..fields.len() {
-					if fields[i].name == name {
+				for (i, field) in fields.iter().enumerate() {
+					if field.name == name {
 						return Some(i);
 					}
 				}
@@ -134,7 +134,7 @@ impl Type {
 	}
 }
 
-pub fn type_vectors_assignable(tvec1: &Vec<Type>, tvec2: &Vec<Type>) -> bool {
+pub fn type_vectors_assignable(tvec1: &[Type], tvec2: &[Type]) -> bool {
 	if tvec1.len() != tvec2.len() {
 		return false;
 	}
@@ -146,7 +146,7 @@ pub fn type_vectors_assignable(tvec1: &Vec<Type>, tvec2: &Vec<Type>) -> bool {
 	true
 }
 
-pub fn arg_vectors_assignable(tvec1: &Vec<Type>, tvec2: &Vec<Type>) -> bool {
+pub fn arg_vectors_assignable(tvec1: &[Type], tvec2: &[Type]) -> bool {
 	if tvec1.len() != tvec2.len() {
 		return false;
 	}
@@ -158,7 +158,7 @@ pub fn arg_vectors_assignable(tvec1: &Vec<Type>, tvec2: &Vec<Type>) -> bool {
 	true
 }
 
-pub fn field_vectors_assignable(tvec1: &Vec<StructField>, tvec2: &Vec<StructField>) -> bool {
+pub fn field_vectors_assignable(tvec1: &[StructField], tvec2: &[StructField]) -> bool {
 	if tvec1.len() != tvec2.len() {
 		return false;
 	}
@@ -173,41 +173,42 @@ pub fn field_vectors_assignable(tvec1: &Vec<StructField>, tvec2: &Vec<StructFiel
 impl PartialEq for Type {
 	fn eq(&self, other: &Self) -> bool {
 		match (self, other) {
-			(Type::Void, Type::Void) => true,
-			(Type::Uint, Type::Uint) => true,
-			(Type::Int, Type::Int) => true,
-			(Type::Bool, Type::Bool) => true,
-			(Type::Bytes32, Type::Bytes32) => true,
+			(Type::Void, Type::Void) |
+			(Type::Uint, Type::Uint) |
+			(Type::Int, Type::Int) |
+			(Type::Bool, Type::Bool) |
+			(Type::Bytes32, Type::Bytes32) |
+			(Type::Block, Type::Block) |
+			(Type::Any, Type::Any) => true,
 			(Type::Tuple(v1), Type::Tuple(v2)) => type_vectors_equal(&v1, &v2),
-			(Type::Array(a1), Type::Array(a2)) => &*a1 == &*a2,
+			(Type::Array(a1), Type::Array(a2)) => *a1 == *a2,
 			(Type::Struct(f1), Type::Struct(f2)) => struct_field_vectors_equal(&f1, &f2),
 			(Type::Named(n1), Type::Named(n2)) => (n1 == n2),
-			(Type::Func(a1, r1), Type::Func(a2, r2)) => type_vectors_equal(&a1, &a2) && (&*r1 == &*r2),
-			(Type::Block, Type::Block) => true,
-			(Type::Any, Type::Any) => true,
+			(Type::Func(a1, r1), Type::Func(a2, r2)) => type_vectors_equal(&a1, &a2) && (*r1 == *r2),
 			(_, _) => false,
 		}
 	}
 }
 
-fn type_vectors_equal(v1: &Vec<Type>, v2: &Vec<Type>) -> bool {
+fn type_vectors_equal(v1: &[Type], v2: &[Type]) -> bool {
 	if v1.len() != v2.len() {
 		return false;
 	}
 	for i in 0..v1.len() {
-		if &v1[i] != &v2[i] {
+		if v1[i] != 
+		v2[i] {
 			return false;
 		}
 	}
-	return true;
+	true
 }
 
-fn struct_field_vectors_equal(f1: &Vec<StructField>, f2: &Vec<StructField>) -> bool {
+fn struct_field_vectors_equal(f1: &[StructField], f2: &[StructField]) -> bool {
 	if f1.len() != f2.len() {
 		return false;
 	}
-	for (i, sf1) in f1.iter().enumerate() {
-		if *sf1 != f2[i] {
+	for i in 0..f1.len() {
+		if f1[i] != f2[i] {
 			return false;
 		}
 	}
@@ -222,7 +223,7 @@ pub struct StructField {
 
 impl StructField {
 	pub fn new(name: StringId, tipe: Type) -> StructField {
-		return StructField{ name, tipe };
+		StructField{ name, tipe }
 	}
 
 	pub fn resolve_types(&self, type_table: &SymTable<Type>) -> Result<Self, TypeError> {
@@ -243,8 +244,8 @@ impl FuncArg {
 	}
 }
 
-pub fn new_func_arg<'a>(name: StringId, tipe: Type) -> FuncArg {
-	return FuncArg{ name, tipe }
+pub fn new_func_arg(name: StringId, tipe: Type) -> FuncArg {
+	FuncArg{ name, tipe }
 }
 
 #[derive(Debug)]
@@ -276,19 +277,19 @@ impl FuncDecl {
 	}
 }
 
-pub fn new_func_decl<'a>(name: StringId, args: Vec<FuncArg>, ret_type: Type, code: Vec<Statement>) -> FuncDecl {
+pub fn new_func_decl(name: StringId, args: Vec<FuncArg>, ret_type: Type, code: Vec<Statement>) -> FuncDecl {
 	let mut arg_types = Vec::new();
 	let args_vec = args.to_vec();
 	for arg in args.iter() {
 		arg_types.push(arg.tipe.clone());
 	}
-	return FuncDecl{ 
-		name: name, 
+	FuncDecl{ 
+		name, 
 		args: args_vec, 
 		ret_type: ret_type.clone(), 
-		code: code,
+		code,
 		tipe: Type::Func(arg_types, Box::new(ret_type)),
-	};
+	}
 }
 
 #[derive(Debug, Clone)]
@@ -298,6 +299,7 @@ pub enum Statement {
 	ReturnVoid,
 	Return(Expr),
 	Let(StringId, Expr),
+	Assign(StringId, Expr),
 	Loop(Vec<Statement>),
 	While(Expr, Vec<Statement>),
 	If(Expr, Vec<Statement>, Option<Vec<Statement>>),
@@ -311,6 +313,7 @@ impl Statement {
 			Statement::ReturnVoid => Ok(Statement::ReturnVoid),
 			Statement::Return(expr) => Ok(Statement::Return(expr.resolve_types(type_table)?)),
 			Statement::Let(name, expr) => Ok(Statement::Let(*name, expr.resolve_types(type_table)?)),
+			Statement::Assign(name, expr) => Ok(Statement::Assign(*name, expr.resolve_types(type_table)?)),
 			Statement::Loop(body) => Ok(
 				Statement::Loop(Statement::resolve_types_vec(body.to_vec(), type_table)?)
 			),
@@ -351,6 +354,8 @@ pub enum Expr {
 	StructInitializer(Vec<FieldInitializer>),
 	Tuple(Vec<Expr>),
 	NewBlock(Option<Box<Expr>>),
+	ArrayOrBlockMod(Box<Expr>, Box<Expr>, Box<Expr>),
+	StructMod(Box<Expr>, StringId, Box<Expr>),
 	UnsafeCast(Box<Expr>, Type),
 }
 
@@ -395,6 +400,16 @@ impl Expr {
 				Some(expr) => Ok(Expr::NewBlock(Some(Box::new(expr.resolve_types(type_table)?)))),
 				None => Ok(Expr::NewBlock(None)),
 			}
+			Expr::ArrayOrBlockMod(e1, e2, e3) => Ok(Expr::ArrayOrBlockMod(
+				Box::new(e1.resolve_types(type_table)?),
+				Box::new(e2.resolve_types(type_table)?),
+				Box::new(e3.resolve_types(type_table)?),
+			)),
+			Expr::StructMod(e1, i, e3) => Ok(Expr::StructMod(
+				Box::new(e1.resolve_types(type_table)?),
+				*i,
+				Box::new(e3.resolve_types(type_table)?),
+			)),
 			Expr::UnsafeCast(be, t) => Ok(Expr::UnsafeCast(
 				Box::new(be.resolve_types(type_table)?), 
 				t.resolve_types(type_table)?
@@ -410,6 +425,9 @@ pub enum UnaryOp {
 	Not,
 	Hash,
 	Len,
+	ToUint,
+	ToInt,
+	ToBytes32,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -419,10 +437,16 @@ pub enum BinaryOp {
 	Times,
 	Div,
 	Mod,
+	Sdiv,
+	Smod,
 	LessThan,
 	GreaterThan,
 	LessEq,
 	GreaterEq,
+	SLessThan,
+	SGreaterThan,
+	SLessEq,
+	SGreaterEq,
 	Equal,
 	NotEqual,
 	BitwiseAnd,

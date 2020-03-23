@@ -1,4 +1,5 @@
-use crate::mavm::{Opcode, Instruction, Value, Uint256};
+use crate::mavm::{Opcode, Instruction, Value};
+use crate::uint256::Uint256;
 
 pub fn fix_tuple_size(code_in: &Vec<Instruction>) -> Vec<Instruction> {
 	let mut code_out = Vec::new();
@@ -7,7 +8,7 @@ pub fn fix_tuple_size(code_in: &Vec<Instruction>) -> Vec<Instruction> {
 	for insn in code_in.iter() {
 		match insn.opcode {
 			Opcode::MakeFrame(nargs, ntotal) => {
-				code_out.push(Instruction::from_opcode(Opcode::AuxPush));
+				code_out.push(Instruction::from_opcode(Opcode::AuxPush));  // move return address to aux stack
 				locals_tree = TupleTree::new(ntotal);
 				if let Some(imm) = &insn.immediate {
 					code_out.push(Instruction::from_opcode_imm(Opcode::Noop, imm.clone()));
@@ -221,7 +222,7 @@ impl TupleTree {
 			panic!("TupleTree::write_code: out-of-bounds write");
 		} else {
 			code.push(Instruction::from_opcode(Opcode::Pop));
-			return code.to_vec();
+			code.to_vec()
 		}
 	}
 }

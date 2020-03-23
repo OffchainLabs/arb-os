@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 pub type StringId = u64;
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct StringTable<'a> {
 	next_id: StringId,
 	table: HashMap<&'a str, StringId>,
@@ -21,7 +21,7 @@ impl<'a> StringTable<'a> {
 			Some(id) => *id,
 			None => {
 				let new_id = self.next_id;
-				self.next_id = 1 + self.next_id;
+				self.next_id += 1;
 				self.table.insert(name, new_id);
 				self.by_id.push(name);
 				new_id
