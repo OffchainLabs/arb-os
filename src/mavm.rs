@@ -2,8 +2,10 @@ use std::fmt;
 use std::collections::HashMap;
 use crate::stringtable::StringId;
 use crate::uint256::Uint256;
+use serde::{Serialize, Deserialize};
 
-#[derive(PartialEq, Eq, Hash, Debug, Clone, Copy)]
+
+#[derive(PartialEq, Eq, Hash, Debug, Clone, Copy, Serialize, Deserialize)]
 pub enum Label {
 	Func(StringId),
 	Anon(usize)
@@ -33,7 +35,7 @@ impl LabelGenerator {
 	}
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Instruction {
 	pub opcode: Opcode,
 	pub immediate: Option<Value>,
@@ -76,7 +78,7 @@ impl fmt::Display for Instruction {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum Value {
 	Int(Uint256),
 	Tuple(Vec<Value>),
@@ -163,7 +165,7 @@ impl fmt::Display for Value {
 	}	
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 pub enum Opcode {
 	Noop,
 	Panic,

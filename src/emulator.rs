@@ -1,6 +1,13 @@
 use std::fmt;
 use crate::mavm::{Value, Instruction, Opcode};
 use crate::uint256::Uint256;
+use serde::{Serialize, Deserialize};
+
+#[derive(Serialize, Deserialize)]
+pub struct CompiledProgram {
+    pub code: Vec<Instruction>,
+    pub static_val: Value,
+}
 
 #[derive(Debug)]
 pub struct ValueStack {
@@ -130,13 +137,13 @@ pub struct Machine {
 }
 
 impl Machine {
-	pub fn new(code: Vec<Instruction>, static_val: Value) -> Self {
+	pub fn new(program: CompiledProgram) -> Self {
 		Machine{
 			stack: ValueStack::new(),
 			aux_stack: ValueStack::new(),
 			state: MachineState::Stopped,
-			code,
-			static_val, 
+			code: program.code,
+			static_val: program.static_val, 
 		}
 	}
 

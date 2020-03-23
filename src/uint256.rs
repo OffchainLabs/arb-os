@@ -5,6 +5,9 @@ use num_bigint::{BigUint, BigInt, Sign, ToBigInt};
 use num_traits::cast::ToPrimitive;
 use num_traits::identities::{Zero, One};
 use num_traits::sign::Signed;
+use serde::{Serialize, Deserialize, Serializer, Deserializer};
+use serde::de::{self, Visitor};
+
 
 #[derive(Debug, Clone, PartialEq, Eq, Ord, Hash)]
 pub struct Uint256 {
@@ -39,6 +42,10 @@ impl Uint256 {
 			}
 			None => None
 		}
+	}
+
+	pub fn from_bytes(b: &[u8]) -> Self {
+		Uint256{ val: BigUint::from_bytes_be(b), }
 	}
 	
 	pub fn to_usize(&self) -> Option<usize> {
@@ -185,5 +192,32 @@ impl fmt::Display for Uint256 {
 		} else {
 			write!(f, "{:#x}", self.val)
 		}
+	}
+}
+
+impl Serialize for Uint256 {
+	fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error> where S: Serializer, {
+		let bytes = self.val.to_bytes_be();
+		bytes.serialize(serializer)
+	}
+}
+
+struct Uint256Visitor;
+
+impl<'de> Visitor<'de> for Uint256Visitor {
+	type Value = Uint256;
+
+	fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+		formatter.write_str("a sequence of bytes")
+	}
+
+	fn visit_bytes<E>(self, v :&[u8]) -> Result<Self::Value, E> where E: de::Error, {
+		Ok(Uint256::from_bytes(v))
+	}
+}
+
+impl<'de> Deserialize<'de> for Uint256 {
+	fn deserialize<D>(deserializer: D) -> Result<Self, D::Error> where D: Deserializer<'de>, {
+		deserializer.deserialize_bytes(Uint256Visitor)
 	}
 }

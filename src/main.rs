@@ -2,6 +2,7 @@ use std::fs::File;
 use std::path::Path;
 use std::io::Read;
 use std::env;
+use crate::emulator::CompiledProgram;
 
 pub mod ast;
 pub mod typecheck;
@@ -15,7 +16,8 @@ pub mod xformcode;
 pub mod optimize;
 pub mod emulator;
 
-use crate::mavm::{Instruction, Value};
+#[macro_use] extern crate lalrpop_util;
+lalrpop_mod!(pub mini); 
 
 
 const DEBUG: bool = false;
@@ -30,14 +32,15 @@ fn main() {
     let path = Path::new(&args[1]);
     
     match compile_from_file(path) {
-        Ok((code_final, jump_table_value)) => {
- /*
-            let mut machine = crate::emulator::Machine::new(code_final, jump_table_value);
-            match machine.test_call(0, vec![]) {
-                Ok(stack) => { println!("execution finished with stack: {}", stack); }
-                Err(e) => { println!("execution error: {:?}", e); }
-            }
-*/
+        Ok(compiled_program) => {
+            match serde_json::to_string(&compiled_program) {
+                Ok(prog_str) => {
+                    println!("jsonified program: {}", prog_str);
+                }
+                Err(e) => {
+                    println!("json serialization error: {:?}", e);
+                }
+            } 
         }
         Err(e) => {
             println!("Compilation error: {:?}", e);
@@ -45,7 +48,7 @@ fn main() {
     }
 }
 
-pub fn compile_from_file<'a>(path: &Path) -> Result<(Vec<Instruction>, Value), CompileError<'a>> {
+pub fn compile_from_file<'a>(path: &Path) -> Result<CompiledProgram, CompileError<'a>> {
    let display = path.display();
 
     let mut file = match File::open(&path) {
@@ -62,7 +65,7 @@ pub fn compile_from_file<'a>(path: &Path) -> Result<(Vec<Instruction>, Value), C
     compile(s)
 }
 
-pub fn compile<'a>(s: String) -> Result<(Vec<Instruction>, Value), CompileError<'a>> {
+pub fn compile<'a>(s: String) -> Result<CompiledProgram, CompileError<'a>> {
     let mut string_table = stringtable::StringTable::new();
     let res = mini::DeclsParser::new()
     	.parse(&mut string_table, &s)
@@ -112,7 +115,7 @@ pub fn compile<'a>(s: String) -> Result<(Vec<Instruction>, Value), CompileError<
                         println!("{:04}:  {}", idx, insn);
                     }
 
-                    Ok((code_final, jump_table_value))
+                    Ok(CompiledProgram{ code: code_final, static_val: jump_table_value })
                 },
                 Err(e) => Err(CompileError::new(e.reason)),
             }
@@ -131,14 +134,3 @@ impl<'a> CompileError<'a> {
     }
 }
 
-#[macro_use] extern crate lalrpop_util;
-
-lalrpop_mod!(pub mini); 
-
-#[test]
-fn test_mini() {
-	let res = mini::DeclsParser::new()
-		.parse("struct foo { uint bar, struct baz quux, }")
-		.unwrap();
-	let res2 = typecheck_top_level_decls(res).unwrap();
-}
