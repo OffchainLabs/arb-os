@@ -39,7 +39,8 @@ Statement: Statement = {
 	"loop" <CodeBlock> => Statement::Loop(<>),
 	"if" "(" <c: Expr> ")" <t: CodeBlock> => Statement::If(c, t, None),
 	"if" "(" <c: Expr> ")" <t: CodeBlock> "else" <f: CodeBlock> => Statement::If(c, t, Some(f)),
-	<Ident> "=" <Expr> ";" => Statement::Let(<>),
+	"let" <Ident> "=" <Expr> ";" => Statement::Let(<>),
+	<Ident> "=" <Expr> ";" => Statement::Assign(<>),
 	"return" <Expr> ";" => Statement::Return(<>),
 	"return" ";" => Statement::ReturnVoid,
 	"panic" ";" => Statement::Panic,
@@ -149,6 +150,9 @@ Term8: Expr = {
 	"hash" "(" <Expr> ")" => Expr::UnaryOp(UnaryOp::Hash, Box::new(<>)),
 	"hash" "(" <l:Expr> "," <r:Expr> ")" => Expr::Binary(BinaryOp::Hash, Box::new(l), Box::new(r)),
 	"len" "(" <Expr> ")" => Expr::UnaryOp(UnaryOp::Len, Box::new(<>)),
+	"uint" "(" <Expr> ")" => Expr::UnaryOp(UnaryOp::ToUint, Box::new(<>)),
+	"int" "(" <Expr> ")" => Expr::UnaryOp(UnaryOp::ToInt, Box::new(<>)),
+	"bytes32" "(" <Expr> ")" => Expr::UnaryOp(UnaryOp::ToBytes32, Box::new(<>)),
 	"newblock" "(" ")" => Expr::NewBlock(None),
 	"newblock" "(" <Expr> ")" => Expr::NewBlock(Some(Box::new(<>))),
 	"unsafecast" "(" <e:Expr> "," <t:Type> ")" => Expr::UnsafeCast(Box::new(e), t),
@@ -159,6 +163,12 @@ Term8: Expr = {
 	<Ident> "(" <CommaedExprs> ")" => Expr::FunctionCall(<>),
 	"(" <Expr> ")" => <>,
 	"(" <CommaedExprs> "," ")" => Expr::Tuple(<>),
+	<t:Term8> "with" "{" "[" <i:Expr> "]" "=" <v:Expr> "}" => Expr::ArrayOrBlockMod(
+		Box::new(t), 
+		Box::new(i), 
+		Box::new(v)
+	),
+	<t: Term8> "with" "{" <i:Ident> ":" <e: Expr> "}" => Expr::StructMod(Box::new(t), i, Box::new(e)),
 };
 
 FieldInitializer: FieldInitializer = {

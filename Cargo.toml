@@ -12,4 +12,6 @@ lalrpop = "0.17.2"
 [dependencies]
 lalrpop-util = "0.17.2"
 regex = "1"
+num-bigint = "0.2.6"
+num-traits = "0.2.11"
 

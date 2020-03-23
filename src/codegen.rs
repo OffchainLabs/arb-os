@@ -138,7 +138,9 @@ fn mavm_codegen_statements(
 		TypeCheckedStatement::Loop(body) => {
 			let slot_num = Value::Int(Uint256::from_usize(num_locals));
 			num_locals = num_locals+1;
-			code.push(Instruction::from_opcode(Opcode::GetPC));
+			let (top_label, lg) = label_gen.next();
+			label_gen = lg;
+			code.push(Instruction::from_opcode_imm(Opcode::Noop, Value::Label(top_label)));
 			code.push(Instruction::from_opcode_imm(Opcode::SetLocal, slot_num.clone()));
 			let (lg, nl, _) = mavm_codegen_statements(body.to_vec(), code, num_locals, locals, label_gen, string_table)?;
 			label_gen = lg;
