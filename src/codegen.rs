@@ -324,6 +324,17 @@ fn mavm_codegen_expr<'a>(
 			code.push(Instruction::from_opcode_imm(Opcode::Noop, val));
 			Ok((label_gen, code))
 		}
+		TypeCheckedExpr::ConstInt(str_id) => {
+			let s = string_table.name_from_id(*str_id);
+			let val = match Uint256::from_signed_string(s) {
+				Some(v) => Value::Int(v),
+				None => {
+					return Err(new_codegen_error("invalid numeric constant"));
+				}
+			};
+			code.push(Instruction::from_opcode_imm(Opcode::Noop, val));
+			Ok((label_gen, code))
+		}
 		TypeCheckedExpr::FunctionCall(name, args, _) => {
 			let n_args = args.len();
 			let (ret_label, lg) = label_gen.next();

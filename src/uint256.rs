@@ -29,6 +29,17 @@ impl Uint256 {
 			None => None
 		}
 	}
+
+	pub fn from_signed_string(s: &str) -> Option<Self> {
+		let s = s.replace("s", "");
+		match BigInt::parse_bytes(s.as_bytes(), 10) {
+			Some(bi) => match Uint256::trim(&Uint256::bigint_to_biguint(bi)) {
+				(val, true) => Some(Uint256{ val }),
+				(_, false) => None,
+			}
+			None => None
+		}
+	}
 	
 	pub fn to_usize(&self) -> Option<usize> {
 		self.val.to_usize()

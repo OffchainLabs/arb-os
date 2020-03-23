@@ -43,6 +43,7 @@ pub enum TypeCheckedExpr {
 	VariableRef(StringId, Type),
 	DotRef(Box<TypeCheckedExpr>, StringId, Type),
 	ConstUint(StringId),
+	ConstInt(StringId),
 	FunctionCall(StringId, Vec<TypeCheckedExpr>, Type),
 	StructInitializer(Vec<TypeCheckedStructField>, Type),
 	ArrayRef(Box<TypeCheckedExpr>, Box<TypeCheckedExpr>, Type),
@@ -63,6 +64,7 @@ impl TypeCheckedExpr {
 			TypeCheckedExpr::VariableRef(_, t) => t.clone(),
 			TypeCheckedExpr::DotRef(_, _, t) => t.clone(),
 			TypeCheckedExpr::ConstUint(_) => Type::Uint,
+			TypeCheckedExpr::ConstInt(_) => Type::Int,
 			TypeCheckedExpr::FunctionCall(_, _, t) => t.clone(),
 			TypeCheckedExpr::StructInitializer(_, t) => t.clone(),
 			TypeCheckedExpr::ArrayRef(_, _, t) => t.clone(),
@@ -271,6 +273,7 @@ fn typecheck_expr(
 			Err(new_type_error("reference to non-existent struct field"))
 		}
 		Expr::ConstUint(n) => Ok(TypeCheckedExpr::ConstUint(*n)),
+		Expr::ConstInt(n) => Ok(TypeCheckedExpr::ConstInt(*n)),
 		Expr::FunctionCall(name, args) => {
 			match type_table.get(*name) {
 				Some(Type::Func(arg_types, ret_type)) => {

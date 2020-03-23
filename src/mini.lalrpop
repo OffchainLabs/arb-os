@@ -157,7 +157,8 @@ Term8: Expr = {
 	"newblock" "(" <Expr> ")" => Expr::NewBlock(Some(Box::new(<>))),
 	"unsafecast" "(" <e:Expr> "," <t:Type> ")" => Expr::UnsafeCast(Box::new(e), t),
 	<e1:Term8> "[" <e2:Expr> "]" => Expr::ArrayRef(Box::new(e1), Box::new(e2)),
-	Integer => Expr::ConstUint(<>),
+	UnsignedInteger => Expr::ConstUint(<>),
+	SignedInteger => Expr::ConstInt(<>),
 	Ident => Expr::VariableRef(<>),
 	<e:Term8> "." <i:Ident> => Expr::DotRef(Box::new(e), i),
 	<Ident> "(" <CommaedExprs> ")" => Expr::FunctionCall(<>),
@@ -188,7 +189,12 @@ CommaedExprs: Vec<Expr> = {
 	},
 }
 
-Integer: StringId = {
+UnsignedInteger: StringId = {
 	"0" => stringtable.get(<>),
 	r"[1-9][0-9]*" => stringtable.get(<>),
+}
+
+SignedInteger: StringId = {
+	"0s" => stringtable.get(<>),
+	r"[1-9][0-9]*s" => stringtable.get(<>),
 }

@@ -349,6 +349,7 @@ pub enum Expr {
 	VariableRef(StringId),
 	DotRef(Box<Expr>, StringId),
 	ConstUint(StringId),
+	ConstInt(StringId),
 	FunctionCall(StringId, Vec<Expr>),
 	ArrayRef(Box<Expr>, Box<Expr>),
 	StructInitializer(Vec<FieldInitializer>),
@@ -371,6 +372,7 @@ impl Expr {
 			Expr::VariableRef(name) => Ok(Expr::VariableRef(*name)),
 			Expr::DotRef(be, name) => Ok(Expr::DotRef(Box::new(be.resolve_types(type_table)?), *name)),
 			Expr::ConstUint(s) => Ok(Expr::ConstUint(*s)),
+			Expr::ConstInt(s) => Ok(Expr::ConstInt(*s)),
 			Expr::FunctionCall(name, args) => {
 				let mut rargs = Vec::new();
 				for arg in args.iter() {
