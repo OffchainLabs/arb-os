@@ -6,7 +6,6 @@ use num_traits::cast::ToPrimitive;
 use num_traits::identities::{Zero, One};
 use num_traits::sign::Signed;
 use serde::{Serialize, Deserialize, Serializer, Deserializer};
-use serde::de::{self, Visitor};
 
 
 #[derive(Debug, Clone, PartialEq, Eq, Ord, Hash)]
@@ -62,7 +61,7 @@ impl Uint256 {
 
 	pub fn unary_minus(&self) -> Option<Self> {
 		let s = self.to_signed();
-		if s == BigInt::new(Sign::Minus, vec![0x8000_0000, 0, 0, 0, 0, 0, 0, 0]) {
+		if s == BigInt::new(Sign::Minus, vec![0, 0, 0, 0, 0, 0, 0, 0x8000_0000]) {
 			None
 		} else {
 			Some(Uint256{ val: Uint256::bigint_to_biguint(s.neg()) })
@@ -152,26 +151,28 @@ impl Uint256 {
 
 	fn trim(bui: &BigUint) -> (BigUint, bool) {
 		if bui.bits() <= 256 {
+			println!("normal case");
 			(bui.clone(), true)
-		} else {
-			let mask = BigUint::new(vec![0xffff_ffff, 8]);
+		} else { 
+			println!("overflowed case");
+			let mask = BigUint::new(vec![0xffff_ffff; 8]);
 			(bui.bitand(mask), false)
 		}
 	}
 
 	fn to_signed(&self) -> BigInt {
-		if self.val.bits() < 256 {
+		if self.val < BigUint::new(vec![0, 0, 0, 0, 0, 0, 0, 0x8000_0000]) {
 			self.val.to_bigint().unwrap()
 		} else {
 			let unshifted = self.val.to_bigint().unwrap();
-			let shift = BigInt::new(Sign::Plus, vec![1, 0, 0, 0, 0, 0, 0, 0, 0]);
-			unshifted.sub(shift)		
+			let shift = BigInt::new(Sign::Plus, vec![0, 0, 0, 0, 0, 0, 0, 0, 1]);
+			shift.sub(unshifted)		
 		}
 	}
 
 	fn bigint_to_biguint(bi: BigInt) -> BigUint {
 		if bi.is_negative() {
-			bi.add(BigInt::new(Sign::Plus, vec![1, 0, 0, 0, 0, 0, 0, 0, 0])).to_biguint().unwrap()
+			bi.add(BigInt::new(Sign::Plus, vec![0, 0, 0, 0, 0, 0, 0, 0, 1])).to_biguint().unwrap()
 		} else {
 			bi.to_biguint().unwrap()
 		}
@@ -197,11 +198,13 @@ impl fmt::Display for Uint256 {
 
 impl Serialize for Uint256 {
 	fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error> where S: Serializer, {
-		let bytes = self.val.to_bytes_be();
-		bytes.serialize(serializer)
+		let mut s = String::new();
+		s.push_str(&self.val.to_str_radix(16));
+		s.serialize(serializer)
 	}
 }
 
+/*
 struct Uint256Visitor;
 
 impl<'de> Visitor<'de> for Uint256Visitor {
@@ -215,9 +218,11 @@ impl<'de> Visitor<'de> for Uint256Visitor {
 		Ok(Uint256::from_bytes(v))
 	}
 }
+*/
 
 impl<'de> Deserialize<'de> for Uint256 {
 	fn deserialize<D>(deserializer: D) -> Result<Self, D::Error> where D: Deserializer<'de>, {
-		deserializer.deserialize_bytes(Uint256Visitor)
+		let s = String::deserialize(deserializer)?;
+		Ok(Uint256{ val: BigUint::parse_bytes(s.as_bytes(), 16).unwrap(), })
 	}
 }

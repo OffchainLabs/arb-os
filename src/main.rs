@@ -1,12 +1,16 @@
+#![allow(unused_parens)]
+
 use std::path::Path;
 use std::fs::File;
 use std::io;
 use crate::compile::{compile_from_file};
+use crate::run::{run_from_file};
 
 extern crate clap;
 use clap::{Arg,App,SubCommand};
 
 pub mod compile;
+pub mod run;
 pub mod ast;
 pub mod typecheck;
 pub mod symtable;
@@ -87,7 +91,16 @@ fn main() {
         }
     }
     if let Some(matches) = matches.subcommand_matches("run") {
-        //TODO
+        let filename = matches.value_of("INPUT").unwrap();
+        let path = Path::new(filename);
+        match run_from_file(path) {
+            Ok(val) => {
+                println!("Result: {:?}", val);
+            }
+            Err(e) => {
+                println!("{:?}", e);
+            }
+        }
     }
 }
 

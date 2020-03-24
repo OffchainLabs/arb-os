@@ -9,7 +9,7 @@ pub struct CompiledProgram {
     pub static_val: Value,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct ValueStack {
 	contents: Vec<Value>,
 }
@@ -112,7 +112,8 @@ impl ExecutionError {
 	}
 }
 
-enum MachineState {
+#[derive(Clone)]
+pub enum MachineState {
 	Stopped,
 	Error(ExecutionError),
 	Running(usize),  // pc
@@ -153,7 +154,15 @@ impl Machine {
 		self.state = MachineState::Stopped;
 	}
 
-	pub fn test_call(&mut self, func_addr: usize, args: Vec<Value>) -> Result<&ValueStack, ExecutionError> {
+	pub fn get_state(&self) -> MachineState {
+		self.state.clone()
+	}
+
+	pub fn pop_stack(&mut self) -> Result<Value, ExecutionError> {
+		self.stack.pop()
+	}
+
+	pub fn test_call(&mut self, func_addr: usize, args: Vec<Value>) -> Result<ValueStack, ExecutionError> {
 		let num_args = args.len();
 		let stop_pc = self.code.len() + 1;
 		for i in 0..num_args {
@@ -165,7 +174,7 @@ impl Machine {
 		match &self.state {
 			MachineState::Stopped => Err(ExecutionError::new("execution stopped")),
 			MachineState::Error(e) => Err(e.clone()),
-			MachineState::Running(_) => Ok(&self.stack),
+			MachineState::Running(_) => Ok(self.stack.clone()),
 		}
 	}
 
