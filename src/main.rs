@@ -1,9 +1,12 @@
-use std::fs::File;
 use std::path::Path;
-use std::io::Read;
-use std::env;
-use crate::emulator::CompiledProgram;
+use std::fs::File;
+use std::io;
+use crate::compile::{compile_from_file};
 
+extern crate clap;
+use clap::{Arg,App,SubCommand};
+
+pub mod compile;
 pub mod ast;
 pub mod typecheck;
 pub mod symtable;
@@ -19,118 +22,78 @@ pub mod emulator;
 #[macro_use] extern crate lalrpop_util;
 lalrpop_mod!(pub mini); 
 
-
 const DEBUG: bool = false;
 
 fn main() {
-    let args: Vec<String> = env::args().collect();
-    if args.len() != 2 {
-        println!("usage: cargo run [program.mini]");
-        return;
-    }
+    let matches = App::new("Mini compiler")
+                    .version("0.1")
+                    .author("Ed Felten <ed@offchainlabs.com")
+                    .about("compiles the Mini language")
+                    .subcommand(SubCommand::with_name("compile")
+                        .about("compile a source file")
+                        .arg(Arg::with_name("INPUT")
+                            .help("sets the file name to compile")
+                            .required(true)
+                            .index(1))
+                        .arg(Arg::with_name("output")
+                            .help("sets the output file name")
+                            .short("o")
+                            .takes_value(true)
+                            .value_name("output"))
+                        .arg(Arg::with_name("format")
+                            .help("sets the output format")
+                            .short("f")
+                            .takes_value(true)
+                            .value_name("format")))
+                    .subcommand(SubCommand::with_name("run")
+                        .about("run a compiled source file")
+                        .arg(Arg::with_name("INPUT")
+                            .help("sets the file name to compile")
+                            .required(true)
+                            .index(1)))
+                    .get_matches();
 
-    let path = Path::new(&args[1]);
-    
-    match compile_from_file(path) {
-        Ok(compiled_program) => {
-            match serde_json::to_string(&compiled_program) {
-                Ok(prog_str) => {
-                    println!("jsonified program: {}", prog_str);
-                }
-                Err(e) => {
-                    println!("json serialization error: {:?}", e);
-                }
-            } 
-        }
-        Err(e) => {
-            println!("Compilation error: {:?}", e);
-        }
-    }
-}
 
-pub fn compile_from_file<'a>(path: &Path) -> Result<CompiledProgram, CompileError<'a>> {
-   let display = path.display();
-
-    let mut file = match File::open(&path) {
-        Err(why) => panic!("couldn't open {}: {:?}", display, why),
-        Ok(file) => file,
-    };
-
-    let mut s = String::new();
-    s = match file.read_to_string(&mut s) {
-        Err(why) => panic!("couldn't read {}: {:?}", display, why),
-        Ok(_) => s,
-    };
-
-    compile(s)
-}
-
-pub fn compile<'a>(s: String) -> Result<CompiledProgram, CompileError<'a>> {
-    let mut string_table = stringtable::StringTable::new();
-    let res = mini::DeclsParser::new()
-    	.parse(&mut string_table, &s)
-    	.unwrap();
-    let mut checked_funcs = Vec::new();
-    let res2 = crate::typecheck::typecheck_top_level_decls(&res, &mut checked_funcs);
-    match res2 {
-    	Some(res3) => Err(CompileError::new(res3.reason)),
-    	None => { 
-            let mut code = Vec::new();
-    		match crate::codegen::mavm_codegen(checked_funcs, &mut code, &string_table) {
-                Ok(code_out) => {
-                    if DEBUG {
-                        println!("========== after initial codegen ===========");
-                        for (idx, insn) in code_out.iter().enumerate() {
-                         println!("{:04}:  {}", idx, insn);
+    if let Some(matches) = matches.subcommand_matches("compile") {
+        let mut output = get_output(matches.value_of("output")).unwrap();
+        let filename = matches.value_of("INPUT").unwrap();
+        let path = Path::new(filename);   
+        match compile_from_file(path, DEBUG) {
+            Ok(compiled_program) => {
+                match matches.value_of("format") {
+                    Some("pretty") => {
+                        writeln!(output, "static: {}", compiled_program.static_val).unwrap();
+                        for (idx, insn) in compiled_program.code.iter().enumerate() {
+                            writeln!(output, "{:04}:  {}", idx, insn).unwrap();
                         }
                     }
-                    let (code_2, jump_table) = crate::striplabels::fix_backward_labels(code_out);
-                    if DEBUG {
-                        println!("========== after fix_backward_labels ===========");
-                        for (idx, insn) in code_2.iter().enumerate() {
-                            println!("{:04}:  {}", idx, insn);
+                    None |
+                    Some("json") => {
+                        match serde_json::to_string(&compiled_program) {
+                            Ok(prog_str) => {
+                                writeln!(output, "{}", prog_str).unwrap();
+                         }
+                            Err(e) => {
+                                writeln!(output, "json serialization error: {:?}", e).unwrap();
+                            }
                         }
                     }
-                    let code_3 = crate::xformcode::fix_tuple_size(&code_2);
-                    if DEBUG {
-                        println!("=========== after fix_tuple_size ==============");
-                        for (idx, insn) in code_3.iter().enumerate() {
-                            println!("{:04}:  {}", idx, insn);
-                        }
-                    }
-                    let code_4 = crate::optimize::peephole(&code_3);
-                    if DEBUG {
-                        println!("============ after peephole optimization ===========");
-                        for (idx, insn) in code_4.iter().enumerate() {
-                            println!("{:04}:  {}", idx, insn);
-                        }
-                    }
-                    let (code_final, jump_table_final) = crate::striplabels::strip_labels(&code_4, &jump_table);
-                    if DEBUG {
-                        println!("============ after strip_labels =============");
-                    }
-                    let jump_table_value = crate::xformcode::jump_table_to_value(jump_table_final);
-                    println!("static: {}", jump_table_value);
-                    for (idx, insn) in code_final.iter().enumerate() {
-                        println!("{:04}:  {}", idx, insn);
-                    }
-
-                    Ok(CompiledProgram{ code: code_final, static_val: jump_table_value })
-                },
-                Err(e) => Err(CompileError::new(e.reason)),
+                    Some(weird_value) => { writeln!(output, "invalid format: {}", weird_value).unwrap(); }
+                } 
             }
-    	},
+            Err(e) => {
+                writeln!(output, "Compilation error: {:?}", e).unwrap();
+            }
+        }
+    }
+    if let Some(matches) = matches.subcommand_matches("run") {
+        //TODO
     }
 }
 
-#[derive(Debug)]
-pub struct CompileError<'a> {
-    description: &'a str,
-}
-
-impl<'a> CompileError<'a> {
-    fn new(description: &'a str) -> Self {
-        CompileError{ description }
+fn get_output(output_filename: Option<&str>) -> Result<Box<dyn io::Write>, io::Error> {
+    match output_filename {
+        Some(ref path) => File::create(path).map(|f| Box::new(f) as Box<dyn io::Write>),
+        None => Ok(Box::new(io::stdout())),        
     }
 }
-
