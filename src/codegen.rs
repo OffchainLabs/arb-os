@@ -23,9 +23,11 @@ pub fn mavm_codegen<'a>(
 	let mut label_gen = LabelGenerator::new();
 	let mut code = code_in;
 	for func in funcs {
-		let (lg, c) = mavm_codegen_func(func, code, label_gen, string_table)?;
-		label_gen = lg;
-		code = c;
+		if ! func.imported {
+			let (lg, c) = mavm_codegen_func(func, code, label_gen, string_table)?;
+			label_gen = lg;
+			code = c;
+		}
 	}
 	Ok(code)
 }

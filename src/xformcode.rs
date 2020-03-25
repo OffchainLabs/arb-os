@@ -1,4 +1,4 @@
-use crate::mavm::{Opcode, Instruction, Value};
+use crate::mavm::{Opcode, Instruction, Value, CodePt};
 use crate::uint256::Uint256;
 
 pub fn fix_tuple_size(code_in: &Vec<Instruction>) -> Vec<Instruction> {
@@ -91,7 +91,7 @@ pub fn fix_tuple_size(code_in: &Vec<Instruction>) -> Vec<Instruction> {
 	code_out
 }
 
-pub fn jump_table_to_value(jump_table: Vec<usize>) -> Value {
+pub fn jump_table_to_value(jump_table: Vec<CodePt>) -> Value {
 	let mut jump_table_codepoints = Vec::new();
 	for pc in &jump_table {
 		jump_table_codepoints.push(Value::CodePoint(*pc));

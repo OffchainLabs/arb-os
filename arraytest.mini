@@ -1,0 +1,6 @@
+
+import func arrayNew(sz:uint) anytype;
+
+func main() {
+	let a = arrayNew(3);
+}

@@ -1,7 +1,9 @@
 use std::collections::HashMap;
-use crate::ast::{Type, TopLevelDecl, FuncDecl, FuncArg, Statement, Expr, StructField, UnaryOp, BinaryOp};
+use crate::ast::{Type, TopLevelDecl, FuncDecl, FuncDeclKind, FuncArg, Statement, Expr, StructField, UnaryOp, BinaryOp};
 use crate::symtable::SymTable;
-use crate::stringtable::StringId;
+use crate::stringtable::{StringId, StringTable};
+use crate::linker::{ExportedFunc, ImportedFunc};
+use crate::mavm::Label;
 
 #[derive(Debug)]
 pub struct TypeError {
@@ -19,6 +21,7 @@ pub struct TypeCheckedFunc {
 	pub ret_type: Type,
 	pub code: Vec<TypeCheckedStatement>,
 	pub tipe: Type,
+	pub imported: bool,
 }
 
 #[derive(Debug)]
@@ -91,10 +94,13 @@ impl TypeCheckedStructField {
 	}
 }
 
-pub fn typecheck_top_level_decls(
+pub fn typecheck_top_level_decls<'a>(
 	decls: &[TopLevelDecl], 
 	checked_funcs: &mut Vec<TypeCheckedFunc>,
-) -> Option<TypeError> {
+	string_table: &'a StringTable,
+) -> Result<(Vec<ExportedFunc>, Vec<ImportedFunc>), TypeError> {
+	let mut exported_funcs = Vec::new();
+	let mut imported_funcs = Vec::new();
 	let mut funcs = Vec::new();
 	let mut named_types = HashMap::new();
 	let mut hm = HashMap::new();
@@ -115,34 +121,71 @@ pub fn typecheck_top_level_decls(
 		match func.resolve_types(&type_table) {
 			Ok(f) => match typecheck_function(&f, &type_table) {
 				Ok(f) => { 
-					checked_funcs.push(f); 
+					match func.kind {
+						FuncDeclKind::Public => {
+							exported_funcs.push(
+								ExportedFunc::new(
+									f.name, 
+									Label::Func(f.name), 
+									f.tipe.clone(),
+									string_table,
+								)
+							);
+							checked_funcs.push(f); 
+						}
+						FuncDeclKind::Private => {
+							checked_funcs.push(f);
+						}
+						FuncDeclKind::Imported => {
+							imported_funcs.push(
+								ImportedFunc::new(f.name, string_table)
+							);
+						}
+					}
+
 				}
-				Err(e) => { return Some(e); }
+				Err(e) => { return Err(e); }
 			}
-			Err(e) => { return Some(e); }
+			Err(e) => { return Err(e); }
 		}
 	}
 
-	None
+	Ok((exported_funcs, imported_funcs))
 }
 
 pub fn typecheck_function<'a>(
 	fd: &'a FuncDecl, 
 	type_table: &'a SymTable<'a, Type>
 ) -> Result<TypeCheckedFunc, TypeError> {
-	let mut hm = HashMap::new();
-	for arg in fd.args.iter() {
-		hm.insert(arg.name, &arg.tipe);
+	match fd.kind {
+		FuncDeclKind::Public |
+		FuncDeclKind::Private => {
+			let mut hm = HashMap::new();
+			for arg in fd.args.iter() {
+				hm.insert(arg.name, &arg.tipe);
+			}
+			let inner_type_table = type_table.push_multi(hm);
+			let tc_stats = typecheck_statement_sequence(&fd.code, &fd.ret_type, &inner_type_table)?;
+			Ok(TypeCheckedFunc{ 
+				name: fd.name, 
+				args: fd.args.clone(), 
+				ret_type: fd.ret_type.clone(), 
+				code: tc_stats, 
+				tipe: fd.tipe.clone(),
+				imported: false,
+			})
+		}
+		FuncDeclKind::Imported => {
+			Ok(TypeCheckedFunc{
+				name: fd.name,
+				args: fd.args.clone(),
+				ret_type: fd.ret_type.clone(),
+				code: Vec::new(),
+				tipe: fd.tipe.clone(),
+				imported: true,
+			})
+		}
 	}
-	let inner_type_table = type_table.push_multi(hm);
-	let tc_stats = typecheck_statement_sequence(&fd.code, &fd.ret_type, &inner_type_table)?;
-	Ok(TypeCheckedFunc{ 
-		name: fd.name, 
-		args: fd.args.clone(), 
-		ret_type: fd.ret_type.clone(), 
-		code: tc_stats, 
-		tipe: fd.tipe.clone()
-	})
 }
 
 fn typecheck_statement_sequence<'a>(

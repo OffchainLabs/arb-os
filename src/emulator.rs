@@ -1,12 +1,15 @@
 use std::fmt;
-use crate::mavm::{Value, Instruction, Opcode};
+use crate::mavm::{Value, Instruction, Opcode, CodePt};
 use crate::uint256::Uint256;
+use crate::linker::{ExportedFuncPoint, ImportedFunc};
 use serde::{Serialize, Deserialize};
 
 #[derive(Serialize, Deserialize)]
 pub struct CompiledProgram {
     pub code: Vec<Instruction>,
     pub static_val: Value,
+    pub exported_funcs: Vec<ExportedFuncPoint>,
+    pub imported_funcs: Vec<ImportedFunc>,
 }
 
 #[derive(Debug, Clone)]
@@ -35,7 +38,7 @@ impl ValueStack {
 		self.push_uint(Uint256::from_usize(val));
 	}
 
-	pub fn push_codepoint(&mut self, val: usize) {
+	pub fn push_codepoint(&mut self, val: CodePt) {
 		self.push(Value::CodePoint(val));
 	}
 
@@ -50,7 +53,7 @@ impl ValueStack {
 		}
 	}
 
-	pub fn pop_codepoint(&mut self) -> Result<usize, ExecutionError> {
+	pub fn pop_codepoint(&mut self) -> Result<CodePt, ExecutionError> {
 		if let Value::CodePoint(cp) = self.pop()? {
 			Ok(cp)
 		} else {
@@ -116,7 +119,7 @@ impl ExecutionError {
 pub enum MachineState {
 	Stopped,
 	Error(ExecutionError),
-	Running(usize),  // pc
+	Running(CodePt),  // pc
 }
 
 impl MachineState {
@@ -162,9 +165,9 @@ impl Machine {
 		self.stack.pop()
 	}
 
-	pub fn test_call(&mut self, func_addr: usize, args: Vec<Value>) -> Result<ValueStack, ExecutionError> {
+	pub fn test_call(&mut self, func_addr: CodePt, args: Vec<Value>) -> Result<ValueStack, ExecutionError> {
 		let num_args = args.len();
-		let stop_pc = self.code.len() + 1;
+		let stop_pc = CodePt::new_internal(self.code.len() + 1);
 		for i in 0..num_args {
 			self.stack.push(args[num_args-1-i].clone());
 		}
@@ -178,7 +181,7 @@ impl Machine {
 		}
 	}
 
-	pub fn get_pc(&self) -> Result<usize, ExecutionError> {
+	pub fn get_pc(&self) -> Result<CodePt, ExecutionError> {
 		if let MachineState::Running(pc) = &self.state {
 			Ok(*pc)
 		} else {
@@ -188,13 +191,17 @@ impl Machine {
 
 	pub fn incr_pc(&mut self) {
 		if let MachineState::Running(pc) = &self.state {
-			self.state = MachineState::Running(1+pc);
+			if let Some(new_pc) = pc.incr() {
+				self.state = MachineState::Running(new_pc);
+			} else {
+				panic!("machine PC was set of external CodePt")
+			}
 		} else {
 			panic!("tried to increment PC of non-running machine")
 		}
 	}
 
-	pub fn run(&mut self, stop_pc: Option<usize>) {
+	pub fn run(&mut self, stop_pc: Option<CodePt>) {
 		while self.state.is_running() {
 			if let Some(spc) = stop_pc {
 				if let MachineState::Running(pc) = self.state {
@@ -211,8 +218,7 @@ impl Machine {
 
 	pub fn run_one(&mut self) -> Result<bool, ExecutionError> {
 		if let MachineState::Running(pc) = self.state {
-			println!("Running {}", pc);
-			if let Some(insn) = self.code.get(pc) {
+			if let Some(insn) = self.code.get(pc.pc_if_internal().unwrap()) {
 				if let Some(val) = &insn.immediate {
 					self.stack.push(val.clone());
 				}

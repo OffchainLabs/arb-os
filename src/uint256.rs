@@ -151,10 +151,8 @@ impl Uint256 {
 
 	fn trim(bui: &BigUint) -> (BigUint, bool) {
 		if bui.bits() <= 256 {
-			println!("normal case");
 			(bui.clone(), true)
 		} else { 
-			println!("overflowed case");
 			let mask = BigUint::new(vec![0xffff_ffff; 8]);
 			(bui.bitand(mask), false)
 		}

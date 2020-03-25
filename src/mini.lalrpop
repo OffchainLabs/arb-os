@@ -1,5 +1,5 @@
 use crate::ast::{TopLevelDecl, TypeDecl, FuncDecl, Type, StructField, FuncArg, Statement, Expr, BinaryOp, UnaryOp, 
-FieldInitializer, new_func_arg, new_type_decl, new_func_decl};
+FieldInitializer, new_func_arg, new_type_decl};
 use crate::stringtable::{StringTable, StringId};
 
 grammar(stringtable: &mut StringTable<'input>);
@@ -18,8 +18,12 @@ TypeDecl: TypeDecl = {
 }
 
 FuncDecl: FuncDecl = {
-	"func" <i:Ident> "(" <fa:FuncArgs> ")" <cb:CodeBlock> => new_func_decl(i, fa, Type::Void, cb),
-	"func" <i:Ident> "(" <fa:FuncArgs> ")" <t:Type> <cb:CodeBlock> => new_func_decl(i, fa, t, cb),
+	"func" <i:Ident> "(" <fa:FuncArgs> ")" <cb:CodeBlock> => FuncDecl::new(i, fa, Type::Void, cb, false),
+	"func" <i:Ident> "(" <fa:FuncArgs> ")" <t:Type> <cb:CodeBlock> => FuncDecl::new(i, fa, t, cb, false),
+	"public" "func" <i:Ident> "(" <fa:FuncArgs> ")" <cb:CodeBlock> => FuncDecl::new(i, fa, Type::Void, cb, true),
+	"public" "func" <i:Ident> "(" <fa:FuncArgs> ")" <t:Type> <cb:CodeBlock> => FuncDecl::new(i, fa, t, cb, true),
+	"import" "func" <i:Ident> "(" <fa:FuncArgs> ")" ";" => FuncDecl::new_imported(i, fa, Type::Void),
+	"import" "func" <i:Ident> "(" <fa:FuncArgs> ")" <t:Type> ";" => FuncDecl::new_imported(i, fa, t),
 }
 
 FuncArgs: Vec<FuncArg> = {

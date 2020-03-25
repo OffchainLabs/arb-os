@@ -6,11 +6,13 @@ use std::io;
 use crate::compile::{compile_from_file};
 use crate::run::{run_from_file};
 
+extern crate bincode;
 extern crate clap;
 use clap::{Arg,App,SubCommand};
 
 pub mod compile;
 pub mod run;
+pub mod linker;
 pub mod ast;
 pub mod typecheck;
 pub mod symtable;
@@ -66,6 +68,8 @@ fn main() {
             Ok(compiled_program) => {
                 match matches.value_of("format") {
                     Some("pretty") => {
+                        writeln!(output, "exported: {:?}", compiled_program.exported_funcs).unwrap();
+                        writeln!(output, "imported: {:?}", compiled_program.imported_funcs).unwrap();
                         writeln!(output, "static: {}", compiled_program.static_val).unwrap();
                         for (idx, insn) in compiled_program.code.iter().enumerate() {
                             writeln!(output, "{:04}:  {}", idx, insn).unwrap();
@@ -82,6 +86,18 @@ fn main() {
                             }
                         }
                     }
+                    Some("bincode") => {
+                        match bincode::serialize(&compiled_program) {
+                            Ok(encoded) => {
+                                if let Err(e) = output.write_all(&encoded) {
+                                    writeln!(output, "bincode write error: {:?}", e).unwrap();
+                                }
+                            }
+                            Err(e) => {
+                                writeln!(output, "bincode serialization error: {:?}", e).unwrap();
+                            }
+                        }
+                    }
                     Some(weird_value) => { writeln!(output, "invalid format: {}", weird_value).unwrap(); }
                 } 
             }
@@ -95,7 +111,7 @@ fn main() {
         let path = Path::new(filename);
         match run_from_file(path) {
             Ok(val) => {
-                println!("Result: {:?}", val);
+                println!("Result: {}", val);
             }
             Err(e) => {
                 println!("{:?}", e);

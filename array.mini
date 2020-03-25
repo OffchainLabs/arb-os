@@ -5,18 +5,23 @@ type array = struct {
 	contents: block,
 }
 
-func arraySize(arr: array) uint {
+func main() array {
+	let arr = arrayNew(13);
+	return arraySet(arr, 12, 42);
+}
+
+public func arraySize(arr: array) uint {
 	return arr.size;
 }
 
-func arrayNew(sz: uint) array {
-	chunk = 1;
-	height = 1;
+public func arrayNew(sz: uint) array {
+	let chunk = 1;
+	let height = 1;
 	while ((chunk*8) < sz) {
 		chunk = 8*chunk;
 		height = 1+height;
 	}
-	tup = buildTree(height);
+	let tup = buildTree(height);
 	return struct {
 		size: sz,
 		topstep: chunk,
@@ -28,7 +33,80 @@ func buildTree(height: uint) block {
 	if (height == 1) {
 		return newblock();
 	} else {
-		res = buildTree(height-1);
+		let res = buildTree(height-1);
 		return newblock(res);
+	}
+}
+
+public func arrayGet(arr: array, index: uint) anytype {
+	if (index >= arr.size) {
+		panic;
+	}
+	let res = arr.contents;
+	let chunk = arr.topstep;
+	while (chunk >= 1) {
+		let slot = index / chunk;
+		index = index % chunk;
+		res = unsafecast(res[slot], block);
+	}
+	return res;
+}
+
+public func arraySet(arr: array, index: uint, value: anytype) array {
+	if (index >= arr.size) {
+		panic;
+	}
+	return arr with { contents: arraySet2(arr.contents, arr.topstep, index, value) };
+}
+
+func arraySet2(b: block, chunk: uint, index: uint, value: anytype) block {
+	if (chunk == 1) {
+		return b with {[index] = value};
+	} else {
+		return b with {[index/chunk] = arraySet2(
+			unsafecast(b[index/chunk], block), 
+			chunk/8, 
+			index%chunk, 
+			value
+		)};
+	}
+}
+
+type arraySwapResult = struct {
+	arr: array,
+	val: anytype,
+}
+
+func arraySwap(a: array, index: uint, value: anytype) arraySwapResult {
+	if (index >= a.size) {
+		panic;
+	}
+	let sub = arraySwap2(a.contents, a.topstep, index, value);
+	return struct {
+		arr: a with { contents: sub.bloc },
+		val: sub.val,
+	};
+}
+
+type arraySwapSubResult = struct {
+	bloc: block,
+	val:  anytype,
+}
+
+func arraySwap2(b: block, chunk: uint, index: uint, value: anytype)  arraySwapSubResult {
+	if (chunk == 1) {
+		let v = b[index];
+		return struct {
+			bloc: b with {[index] = value},
+			val: v,
+		};
+	} else {
+		let sub = arraySwap2(
+			unsafecast(b[index/chunk], block),
+			chunk/8,
+			index%chunk,
+			value
+		);
+		return sub with { bloc: b with {[index/chunk] = sub.bloc} };
 	}
 }

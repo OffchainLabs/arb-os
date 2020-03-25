@@ -1,14 +1,25 @@
 use std::collections::{HashMap, HashSet};
-use crate::mavm::{Instruction, Opcode, Value, Label};
+use crate::mavm::{Instruction, Opcode, Value, Label, CodePt};
 use crate::uint256::Uint256;
+use crate::linker::{ExportedFunc, ExportedFuncPoint, ImportedFunc};
 
-pub fn strip_labels(code_in: &Vec<Instruction>, jump_table: &Vec<Label>) -> (Vec<Instruction>, Vec<usize>) {
+
+pub fn strip_labels(
+	code_in: &Vec<Instruction>, 
+	jump_table: &Vec<Label>,
+	exported_funcs: &Vec<ExportedFunc>,
+	imported_funcs: &Vec<ImportedFunc>,
+) -> (Vec<Instruction>, Vec<CodePt>, Vec<ExportedFuncPoint>) {
 	let mut label_map = HashMap::new();
+
+	for imp_func in imported_funcs {
+		label_map.insert(Label::Func(imp_func.name_id), CodePt::new_external(imp_func.name_id));
+	}
 
 	let mut after_count = 0;
 	for pc in 0..code_in.len() {
 		match code_in[pc].get_label() {
-			Some(label) => { label_map.insert(label, after_count); }
+			Some(label) => { label_map.insert(*label, CodePt::new_internal(after_count)); }
 			None => { after_count = 1+after_count; }
 		}
 	}
@@ -28,24 +39,44 @@ pub fn strip_labels(code_in: &Vec<Instruction>, jump_table: &Vec<Label>) -> (Vec
 	for i in 0..jump_table.len() {
 		match label_map.get(&jump_table[i]) {
 			Some(index) => { jump_table_out.push(*index); }
-			None => { panic!("strip_labels: lookup failed in label_map"); }
+			None => { panic!("strip_labels: lookup failed for jump table item"); }
 		}
 	}
 
-	(code_out, jump_table_out)
+	let mut exported_funcs_out = Vec::new();
+	for exp_func in exported_funcs {
+		match label_map.get(&exp_func.label) {
+			Some(index) => { exported_funcs_out.push(exp_func.resolve(*index)); }
+			None => { panic!("strip_labels: lookup failed for exported func"); }
+		}
+	}
+
+	(code_out, jump_table_out, exported_funcs_out)
 }
 
-pub fn fix_backward_labels(code_in: &Vec<Instruction>) -> (Vec<Instruction>, Vec<Label>) {
+pub fn fix_nonforward_labels(
+	code_in: &Vec<Instruction>,
+	imported_funcs: &Vec<ImportedFunc>,
+) -> (Vec<Instruction>, Vec<Label>) {
 	let mut jump_table = Vec::new();
 	let mut jump_table_index = HashMap::new();
 	let mut imm_labels_seen = HashSet::new();
 	let mut code_out = Vec::new();
+
+	let mut imported_func_set = HashSet::new();
+	for imp_func in imported_funcs {
+		let new_label = Label::Func(imp_func.name_id);
+		imported_func_set.insert(new_label); 
+		jump_table_index.insert(new_label, jump_table.len());
+		jump_table.push(new_label);
+	}
+
 	for pc in 0..code_in.len() {
 		let insn_in = code_in[pc].clone();
 		match insn_in.immediate {
 			Some(val) => match val {
 				Value::Label(label) => {
-					if imm_labels_seen.contains(&label) {
+					if imm_labels_seen.contains(&label) || imported_func_set.contains(&label) {
 						let idx = match jump_table_index.get(&label) {
 							Some(index) => *index,
 							None => {

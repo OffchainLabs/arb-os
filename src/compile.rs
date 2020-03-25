@@ -31,10 +31,9 @@ pub fn compile<'a>(s: String, debug: bool) -> Result<CompiledProgram, CompileErr
     	.parse(&mut string_table, &s)
     	.unwrap();
     let mut checked_funcs = Vec::new();
-    let res2 = crate::typecheck::typecheck_top_level_decls(&res, &mut checked_funcs);
+    let res2 = crate::typecheck::typecheck_top_level_decls(&res, &mut checked_funcs, &string_table);
     match res2 {
-    	Some(res3) => Err(CompileError::new(res3.reason)),
-    	None => { 
+    	Ok((exported_funcs, imported_funcs)) => { 
             let mut code = Vec::new();
     		match crate::codegen::mavm_codegen(checked_funcs, &mut code, &string_table) {
                 Ok(code_out) => {
@@ -44,7 +43,7 @@ pub fn compile<'a>(s: String, debug: bool) -> Result<CompiledProgram, CompileErr
                          println!("{:04}:  {}", idx, insn);
                         }
                     }
-                    let (code_2, jump_table) = crate::striplabels::fix_backward_labels(code_out);
+                    let (code_2, jump_table) = crate::striplabels::fix_nonforward_labels(code_out, &imported_funcs);
                     if debug {
                         println!("========== after fix_backward_labels ===========");
                         for (idx, insn) in code_2.iter().enumerate() {
@@ -65,7 +64,14 @@ pub fn compile<'a>(s: String, debug: bool) -> Result<CompiledProgram, CompileErr
                             println!("{:04}:  {}", idx, insn);
                         }
                     }
-                    let (code_final, jump_table_final) = crate::striplabels::strip_labels(&code_4, &jump_table);
+                    let (code_final, 
+                        jump_table_final, 
+                        exported_funcs_final) = crate::striplabels::strip_labels(
+                            &code_4, 
+                            &jump_table, 
+                            &exported_funcs,
+                            &imported_funcs,
+                        );
                     let jump_table_value = crate::xformcode::jump_table_to_value(jump_table_final);
 
                     if debug {
@@ -76,11 +82,17 @@ pub fn compile<'a>(s: String, debug: bool) -> Result<CompiledProgram, CompileErr
                         }
                     }
 
-                    Ok(CompiledProgram{ code: code_final, static_val: jump_table_value })
+                    Ok(CompiledProgram{ 
+                        code: code_final, 
+                        static_val: jump_table_value, 
+                        exported_funcs: exported_funcs_final,
+                        imported_funcs,
+                    })
                 },
                 Err(e) => Err(CompileError::new(e.reason)),
             }
     	},
+        Err(res3) => Err(CompileError::new(res3.reason)),
     }
 }
 

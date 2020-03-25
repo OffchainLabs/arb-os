@@ -61,7 +61,7 @@ impl Instruction {
 		}
 	}
 
-	pub fn replace_labels(self, label_map: &HashMap<&Label, usize>) -> Self {
+	pub fn replace_labels(self, label_map: &HashMap<Label, CodePt>) -> Self {
 		match self.immediate {
 			Some(val) => Instruction::from_opcode_imm(self.opcode, val.replace_labels(label_map)),
 			None => self
@@ -78,11 +78,42 @@ impl fmt::Display for Instruction {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub enum CodePt {
+	Internal(usize),
+	External(StringId),
+}
+
+impl CodePt {
+	pub fn new_internal(pc: usize) -> Self {
+		CodePt::Internal(pc)
+	}
+
+	pub fn new_external(name: StringId) -> Self {
+		CodePt::External(name)
+	}
+
+	pub fn incr(&self) -> Option<Self> {
+		match self {
+			CodePt::Internal(pc) => Some(CodePt::Internal(pc+1)),
+			CodePt::External(_) => None,
+		}
+	}
+
+	pub fn pc_if_internal(&self) -> Option<usize> {
+		if let CodePt::Internal(pc) = self {
+			Some(*pc)
+		} else {
+			None
+		}
+	}
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum Value {
 	Int(Uint256),
 	Tuple(Vec<Value>),
-	CodePoint(usize),
+	CodePoint(CodePt),
 	Label(Label),
 }
 
@@ -99,7 +130,7 @@ impl Value {
 		}
 	}
 
-	pub fn replace_labels(self, label_map: &HashMap<&Label, usize>) -> Self {
+	pub fn replace_labels(self, label_map: &HashMap<Label, CodePt>) -> Self {
 		match self {
 			Value::Int(_) => self,
 			Value::CodePoint(_) => self,
@@ -108,7 +139,7 @@ impl Value {
 				match maybe_pc {
 					Some(pc) => Value::CodePoint(*pc),
 					None => {
-						print!("replace_labels failure:\nlabel = {:?}\nmap = {:?}\n", label, label_map);
+						println!("replace_labels failure:\nlabel = {:?}\nmap = {:?}", label, label_map);
 						panic!("replace_labels failure");
 					}
 				}

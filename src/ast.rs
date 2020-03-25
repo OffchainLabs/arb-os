@@ -1,6 +1,8 @@
 use crate::stringtable::StringId;
 use crate::symtable::SymTable;
 use crate::typecheck::{TypeError, new_type_error};
+use serde::{Serialize, Deserialize};
+
 
 #[derive(Debug)]
 pub enum TopLevelDecl {
@@ -18,7 +20,7 @@ pub fn new_type_decl(name: StringId, tipe: Type) -> TypeDecl {
 	TypeDecl{ name, tipe }
 }
 
-#[derive(Debug, Clone, Eq)]
+#[derive(Debug, Clone, Eq, Serialize, Deserialize)]
 pub enum Type {
 	Void,
 	Uint,
@@ -215,7 +217,7 @@ fn struct_field_vectors_equal(f1: &[StructField], f2: &[StructField]) -> bool {
 	true
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct StructField {
 	pub name: StringId,
 	pub tipe: Type,
@@ -248,6 +250,13 @@ pub fn new_func_arg(name: StringId, tipe: Type) -> FuncArg {
 	FuncArg{ name, tipe }
 }
 
+#[derive(Debug, Clone, Copy)]
+pub enum FuncDeclKind {
+	Public,
+	Private,
+	Imported,
+}
+
 #[derive(Debug)]
 pub struct FuncDecl {
 	pub name: StringId,
@@ -255,9 +264,42 @@ pub struct FuncDecl {
 	pub ret_type: Type,
 	pub code: Vec<Statement>,
 	pub tipe: Type,
+	pub kind: FuncDeclKind,
 }
 
 impl FuncDecl {
+	pub fn new(name: StringId, args: Vec<FuncArg>, ret_type: Type, code: Vec<Statement>, exported: bool) -> Self {
+		let mut arg_types = Vec::new();
+		let args_vec = args.to_vec();
+		for arg in args.iter() {
+			arg_types.push(arg.tipe.clone());
+		}
+		FuncDecl{ 
+			name, 
+			args: args_vec, 
+			ret_type: ret_type.clone(), 
+			code,
+			tipe: Type::Func(arg_types, Box::new(ret_type)),
+			kind: if exported { FuncDeclKind::Public } else { FuncDeclKind::Private }
+		}
+	}
+
+	pub fn new_imported(name: StringId, args: Vec<FuncArg>, ret_type: Type) -> Self {
+		let mut arg_types = Vec::new();
+		let args_vec = args.to_vec();
+		for arg in args.iter() {
+			arg_types.push(arg.tipe.clone());
+		}
+		FuncDecl{ 
+			name, 
+			args: args_vec, 
+			ret_type: ret_type.clone(), 
+			code: Vec::new(),
+			tipe: Type::Func(arg_types, Box::new(ret_type)),
+			kind: FuncDeclKind::Imported
+		}
+	}
+
 	pub fn resolve_types(&self, type_table: &SymTable<Type>) -> Result<Self, TypeError> {
 		let mut rargs = Vec::new();
 		for arg in self.args.iter() {
@@ -272,23 +314,9 @@ impl FuncDecl {
 			args: rargs,
 			ret_type: self.ret_type.resolve_types(type_table)?,
 			code: rcode,
-			tipe: self.tipe.resolve_types(type_table)?
+			tipe: self.tipe.resolve_types(type_table)?,
+			kind: self.kind,
 		})
-	}
-}
-
-pub fn new_func_decl(name: StringId, args: Vec<FuncArg>, ret_type: Type, code: Vec<Statement>) -> FuncDecl {
-	let mut arg_types = Vec::new();
-	let args_vec = args.to_vec();
-	for arg in args.iter() {
-		arg_types.push(arg.tipe.clone());
-	}
-	FuncDecl{ 
-		name, 
-		args: args_vec, 
-		ret_type: ret_type.clone(), 
-		code,
-		tipe: Type::Func(arg_types, Box::new(ret_type)),
 	}
 }
 
