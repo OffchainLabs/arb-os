@@ -1,16 +1,8 @@
 use std::fmt;
 use crate::mavm::{Value, Instruction, Opcode, CodePt};
 use crate::uint256::Uint256;
-use crate::linker::{ExportedFuncPoint, ImportedFunc};
-use serde::{Serialize, Deserialize};
+use crate::linker::LinkedProgram;
 
-#[derive(Serialize, Deserialize)]
-pub struct CompiledProgram {
-    pub code: Vec<Instruction>,
-    pub static_val: Value,
-    pub exported_funcs: Vec<ExportedFuncPoint>,
-    pub imported_funcs: Vec<ImportedFunc>,
-}
 
 #[derive(Debug, Clone)]
 pub struct ValueStack {
@@ -141,7 +133,7 @@ pub struct Machine {
 }
 
 impl Machine {
-	pub fn new(program: CompiledProgram) -> Self {
+	pub fn new(program: LinkedProgram) -> Self {
 		Machine{
 			stack: ValueStack::new(),
 			aux_stack: ValueStack::new(),
@@ -513,11 +505,11 @@ impl Machine {
 						self.incr_pc();
 						Ok(true)
 					}
-					Opcode::GetLocal |
-					Opcode::SetLocal |
+					Opcode::GetLocal |  // these opcodes are for intermediate use in compilation only
+					Opcode::SetLocal |  // they should never appear in fully compiled code
 					Opcode::MakeFrame(_, _) |
 					Opcode::Label(_) |
-					Opcode::StaticGet |
+					Opcode::PushExternal(_) |
 					Opcode::TupleGet(_) |
 					Opcode::TupleSet(_) |
 					Opcode::ArrayGet |

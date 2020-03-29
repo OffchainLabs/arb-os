@@ -77,7 +77,7 @@ type arraySwapResult = struct {
 	val: anytype,
 }
 
-func arraySwap(a: array, index: uint, value: anytype) arraySwapResult {
+public func arraySwap(a: array, index: uint, value: anytype) arraySwapResult {
 	if (index >= a.size) {
 		panic;
 	}

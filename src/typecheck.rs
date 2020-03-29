@@ -111,6 +111,10 @@ pub fn typecheck_top_level_decls<'a>(
 				funcs.push(fd); 
 				hm.insert(fd.name, &fd.tipe);
 			}
+			TopLevelDecl::ImpFuncDecl(fd) => {
+				hm.insert(fd.name, &fd.tipe);
+				imported_funcs.push(ImportedFunc::new(imported_funcs.len(), fd.name, string_table));
+			}
 		}
 	}
 	let type_table = SymTable::<Type>::new();
@@ -135,11 +139,6 @@ pub fn typecheck_top_level_decls<'a>(
 						}
 						FuncDeclKind::Private => {
 							checked_funcs.push(f);
-						}
-						FuncDeclKind::Imported => {
-							imported_funcs.push(
-								ImportedFunc::new(f.name, string_table)
-							);
 						}
 					}
 
@@ -173,16 +172,6 @@ pub fn typecheck_function<'a>(
 				code: tc_stats, 
 				tipe: fd.tipe.clone(),
 				imported: false,
-			})
-		}
-		FuncDeclKind::Imported => {
-			Ok(TypeCheckedFunc{
-				name: fd.name,
-				args: fd.args.clone(),
-				ret_type: fd.ret_type.clone(),
-				code: Vec::new(),
-				tipe: fd.tipe.clone(),
-				imported: true,
 			})
 		}
 	}

@@ -1,14 +1,23 @@
-use crate::ast::{TopLevelDecl, TypeDecl, FuncDecl, Type, StructField, FuncArg, Statement, Expr, BinaryOp, UnaryOp, 
+use crate::ast::{TopLevelDecl, TypeDecl, FuncDecl, ImportFuncDecl, Type, StructField, FuncArg, Statement, Expr, BinaryOp, UnaryOp, 
 FieldInitializer, new_func_arg, new_type_decl};
 use crate::stringtable::{StringTable, StringId};
 
 grammar(stringtable: &mut StringTable<'input>);
 
 pub Decls: Vec<TopLevelDecl> = {
-	Decl+ => <>,
+	<mut i:ImportDecl+> <mut n:NonImportDecl+> => TopLevelDecl::concat_vecs(&mut i, &mut n),
 }
 
-Decl: TopLevelDecl = {
+ImportDecl: TopLevelDecl = {
+	ImportFuncDecl => TopLevelDecl::ImpFuncDecl(<>),	
+}
+
+ImportFuncDecl: ImportFuncDecl = {
+	"import" "func" <i:Ident> "(" <fa:FuncArgs> ")" ";" => ImportFuncDecl::new(i, fa, Type::Void),
+	"import" "func" <i:Ident> "(" <fa:FuncArgs> ")" <t:Type> ";" => ImportFuncDecl::new(i, fa, t),
+}
+
+NonImportDecl: TopLevelDecl = {
 	TypeDecl => TopLevelDecl::TypeDecl(<>),
 	FuncDecl => TopLevelDecl::FuncDecl(<>),
 }
@@ -22,8 +31,6 @@ FuncDecl: FuncDecl = {
 	"func" <i:Ident> "(" <fa:FuncArgs> ")" <t:Type> <cb:CodeBlock> => FuncDecl::new(i, fa, t, cb, false),
 	"public" "func" <i:Ident> "(" <fa:FuncArgs> ")" <cb:CodeBlock> => FuncDecl::new(i, fa, Type::Void, cb, true),
 	"public" "func" <i:Ident> "(" <fa:FuncArgs> ")" <t:Type> <cb:CodeBlock> => FuncDecl::new(i, fa, t, cb, true),
-	"import" "func" <i:Ident> "(" <fa:FuncArgs> ")" ";" => FuncDecl::new_imported(i, fa, Type::Void),
-	"import" "func" <i:Ident> "(" <fa:FuncArgs> ")" <t:Type> ";" => FuncDecl::new_imported(i, fa, t),
 }
 
 FuncArgs: Vec<FuncArg> = {

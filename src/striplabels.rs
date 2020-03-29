@@ -1,7 +1,7 @@
 use std::collections::{HashMap, HashSet};
 use crate::mavm::{Instruction, Opcode, Value, Label, CodePt};
-use crate::uint256::Uint256;
 use crate::linker::{ExportedFunc, ExportedFuncPoint, ImportedFunc};
+use crate::uint256::Uint256;
 
 
 pub fn strip_labels(
@@ -13,7 +13,9 @@ pub fn strip_labels(
 	let mut label_map = HashMap::new();
 
 	for imp_func in imported_funcs {
-		label_map.insert(Label::Func(imp_func.name_id), CodePt::new_external(imp_func.name_id));
+		let new_codept = CodePt::new_external(imp_func.slot_num);
+		label_map.insert(Label::External(imp_func.slot_num), new_codept);
+		label_map.insert(Label::Func(imp_func.name_id), new_codept);
 	}
 
 	let mut after_count = 0;
@@ -65,7 +67,7 @@ pub fn fix_nonforward_labels(
 
 	let mut imported_func_set = HashSet::new();
 	for imp_func in imported_funcs {
-		let new_label = Label::Func(imp_func.name_id);
+		let new_label = Label::External(imp_func.slot_num);
 		imported_func_set.insert(new_label); 
 		jump_table_index.insert(new_label, jump_table.len());
 		jump_table.push(new_label);
@@ -87,7 +89,7 @@ pub fn fix_nonforward_labels(
 							}
 						};
 						code_out.push(Instruction::from_opcode(Opcode::PushStatic));
-						code_out.push(Instruction::from_opcode_imm(Opcode::StaticGet, Value::Int(Uint256::from_usize(idx))));
+						code_out.push(Instruction::from_opcode(Opcode::PushExternal(idx)));
 						code_out.push(Instruction::from_opcode(insn_in.opcode));
 					} else {
 						code_out.push(Instruction{ opcode: insn_in.opcode, immediate: Some(val) });
@@ -106,18 +108,17 @@ pub fn fix_nonforward_labels(
 		}
 	}
 
-	// now replace JumpTableGet instructions with regular TupleGets
 	let mut code_xformed = Vec::new();
 	for insn in code_out.iter() {
 		match insn.opcode {
-			Opcode::StaticGet => {
-				code_xformed.push(Instruction{
-					opcode: Opcode::TupleGet(jump_table.len()),
-					immediate: match &insn.immediate {
-						Some(val) => Some(val.clone()),
-						None => None,
-					}
-				});
+			Opcode::PushExternal(idx) => {
+				if let Some(val) = &insn.immediate {
+					code_xformed.push(Instruction::from_opcode_imm(Opcode::Noop, val.clone()));
+				}
+				code_xformed.push(Instruction::from_opcode_imm(
+					Opcode::TupleGet(jump_table.len()),
+					Value::Int(Uint256::from_usize(idx)),
+				));
 			}
 			_ => { code_xformed.push(insn.clone()); }
 		}

@@ -1,6 +1,8 @@
 
 import func arrayNew(sz:uint) anytype;
+import func arrayGet(arr: anytype, idx: uint) uint;
 
 func main() {
-	let a = arrayNew(3);
+	let a = arrayNew(17);
+	let b = arrayGet(a, 6);
 }

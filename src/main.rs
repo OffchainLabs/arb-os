@@ -4,6 +4,7 @@ use std::path::Path;
 use std::fs::File;
 use std::io;
 use crate::compile::{compile_from_file};
+use crate::linker::postlink_compile;
 use crate::run::{run_from_file};
 
 extern crate bincode;
@@ -66,40 +67,47 @@ fn main() {
         let path = Path::new(filename);   
         match compile_from_file(path, DEBUG) {
             Ok(compiled_program) => {
-                match matches.value_of("format") {
-                    Some("pretty") => {
-                        writeln!(output, "exported: {:?}", compiled_program.exported_funcs).unwrap();
-                        writeln!(output, "imported: {:?}", compiled_program.imported_funcs).unwrap();
-                        writeln!(output, "static: {}", compiled_program.static_val).unwrap();
-                        for (idx, insn) in compiled_program.code.iter().enumerate() {
-                            writeln!(output, "{:04}:  {}", idx, insn).unwrap();
-                        }
-                    }
-                    None |
-                    Some("json") => {
-                        match serde_json::to_string(&compiled_program) {
-                            Ok(prog_str) => {
-                                writeln!(output, "{}", prog_str).unwrap();
-                         }
-                            Err(e) => {
-                                writeln!(output, "json serialization error: {:?}", e).unwrap();
-                            }
-                        }
-                    }
-                    Some("bincode") => {
-                        match bincode::serialize(&compiled_program) {
-                            Ok(encoded) => {
-                                if let Err(e) = output.write_all(&encoded) {
-                                    writeln!(output, "bincode write error: {:?}", e).unwrap();
+                match postlink_compile(compiled_program, DEBUG) {
+                    Ok(linked_program) => {
+                        match matches.value_of("format") {
+                            Some("pretty") => {
+                                writeln!(output, "exported: {:?}", linked_program.exported_funcs).unwrap();
+                                writeln!(output, "imported: {:?}", linked_program.imported_funcs).unwrap();
+                                writeln!(output, "static: {}", linked_program.static_val).unwrap();
+                                for (idx, insn) in linked_program.code.iter().enumerate() {
+                                    writeln!(output, "{:04}:  {}", idx, insn).unwrap();
                                 }
                             }
-                            Err(e) => {
-                                writeln!(output, "bincode serialization error: {:?}", e).unwrap();
+                            None |
+                            Some("json") => {
+                                match serde_json::to_string(&linked_program) {
+                                    Ok(prog_str) => {
+                                        writeln!(output, "{}", prog_str).unwrap();
+                                 }
+                                    Err(e) => {
+                                        writeln!(output, "json serialization error: {:?}", e).unwrap();
+                                    }
+                                }
                             }
-                        }
+                            Some("bincode") => {
+                                match bincode::serialize(&linked_program) {
+                                    Ok(encoded) => {
+                                        if let Err(e) = output.write_all(&encoded) {
+                                            writeln!(output, "bincode write error: {:?}", e).unwrap();
+                                        }
+                                    }
+                                    Err(e) => {
+                                        writeln!(output, "bincode serialization error: {:?}", e).unwrap();
+                                    }
+                                }
+                            }
+                            Some(weird_value) => { writeln!(output, "invalid format: {}", weird_value).unwrap(); }
+                        } 
                     }
-                    Some(weird_value) => { writeln!(output, "invalid format: {}", weird_value).unwrap(); }
-                } 
+                    Err(e) => {
+                        writeln!(output, "Linking error: {:?}", e).unwrap();
+                    }
+                }
             }
             Err(e) => {
                 writeln!(output, "Compilation error: {:?}", e).unwrap();

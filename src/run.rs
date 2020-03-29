@@ -2,7 +2,8 @@ use std::path::Path;
 use std::fs::File;
 use std::io::Read;
 use crate::mavm::{Value, CodePt};
-use crate::emulator::{Machine, ExecutionError, CompiledProgram};
+use crate::emulator::{Machine, ExecutionError};
+use crate::linker::LinkedProgram;
 
 
 pub fn run_from_file(path: &Path) -> Result<Value, ExecutionError> {
@@ -23,7 +24,7 @@ pub fn run_from_file(path: &Path) -> Result<Value, ExecutionError> {
 }
 
 fn run_from_string(s: String) -> Result<Value, ExecutionError> {
-    let parse_result: Result<CompiledProgram, serde_json::Error> = serde_json::from_str(&s);
+    let parse_result: Result<LinkedProgram, serde_json::Error> = serde_json::from_str(&s);
     let program = match parse_result {
         Ok(prog) => prog,
         Err(e) => {

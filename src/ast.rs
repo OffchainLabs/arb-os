@@ -4,13 +4,21 @@ use crate::typecheck::{TypeError, new_type_error};
 use serde::{Serialize, Deserialize};
 
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum TopLevelDecl {
 	TypeDecl(TypeDecl),
 	FuncDecl(FuncDecl),
+	ImpFuncDecl(ImportFuncDecl),
 }
 
-#[derive(Debug)]
+impl TopLevelDecl {
+	pub fn concat_vecs(a: &mut Vec<Self>, b: &mut Vec<Self>) -> Vec<Self> {
+		a.append(b);
+		a.to_vec()
+	}
+}
+
+#[derive(Debug, Clone)]
 pub struct TypeDecl {
 	pub name: StringId,
 	pub tipe: Type,
@@ -250,14 +258,36 @@ pub fn new_func_arg(name: StringId, tipe: Type) -> FuncArg {
 	FuncArg{ name, tipe }
 }
 
+#[derive(Debug, Clone)]
+pub struct ImportFuncDecl {
+	pub name: StringId,
+	pub arg_types: Vec<Type>,
+	pub ret_type: Type,
+	pub tipe: Type,
+}
+
+impl ImportFuncDecl {
+	pub fn new(name: StringId, args: Vec<FuncArg>, ret_type: Type) -> Self {
+		let mut arg_types = Vec::new();
+		for arg in args.iter() {
+			arg_types.push(arg.tipe.clone());
+		}
+		ImportFuncDecl{ 
+			name, 
+			arg_types: arg_types.clone(),
+			ret_type: ret_type.clone(), 
+			tipe: Type::Func(arg_types, Box::new(ret_type)),
+		}
+	}
+}
+
 #[derive(Debug, Clone, Copy)]
 pub enum FuncDeclKind {
 	Public,
 	Private,
-	Imported,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct FuncDecl {
 	pub name: StringId,
 	pub args: Vec<FuncArg>,
@@ -281,22 +311,6 @@ impl FuncDecl {
 			code,
 			tipe: Type::Func(arg_types, Box::new(ret_type)),
 			kind: if exported { FuncDeclKind::Public } else { FuncDeclKind::Private }
-		}
-	}
-
-	pub fn new_imported(name: StringId, args: Vec<FuncArg>, ret_type: Type) -> Self {
-		let mut arg_types = Vec::new();
-		let args_vec = args.to_vec();
-		for arg in args.iter() {
-			arg_types.push(arg.tipe.clone());
-		}
-		FuncDecl{ 
-			name, 
-			args: args_vec, 
-			ret_type: ret_type.clone(), 
-			code: Vec::new(),
-			tipe: Type::Func(arg_types, Box::new(ret_type)),
-			kind: FuncDeclKind::Imported
 		}
 	}
 

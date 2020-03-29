@@ -8,14 +8,26 @@ use serde::{Serialize, Deserialize};
 #[derive(PartialEq, Eq, Hash, Debug, Clone, Copy, Serialize, Deserialize)]
 pub enum Label {
 	Func(StringId),
-	Anon(usize)
+	Anon(usize),
+	External(usize),  // slot in imported funcs list
+}
+
+impl Label {
+	pub fn relocate(self, int_offset: usize, ext_offset: usize) -> Self {
+		match self {
+			Label::Func(_) => self,
+			Label::Anon(pc) => Label::Anon(pc+int_offset),
+			Label::External(slot) => Label::External(slot+ext_offset),
+		}
+	}
 }
 
 impl fmt::Display for Label {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
     	match self {
     		Label::Func(sid) => write!(f, "function_{}", sid),
-    		Label::Anon(n) => write!(f, "label_{}", n)
+    		Label::Anon(n) => write!(f, "label_{}", n),
+    		Label::External(slot) => write!(f, "external_{}", slot),
     	}
     }
 }
@@ -67,6 +79,23 @@ impl Instruction {
 			None => self
 		}
 	}
+
+	pub fn relocate(self, int_offset: usize, ext_offset: usize) -> Self {
+		if let Opcode::PushExternal(off) = self.opcode {
+			Instruction::new(
+				Opcode::PushExternal(off+ext_offset),
+				match self.immediate {
+					Some(imm) => Some(imm.relocate(int_offset, ext_offset)),
+					None => None,
+				}
+			)
+		} else {
+			match self.immediate {
+				Some(imm) => Instruction::from_opcode_imm(self.opcode, imm.relocate(int_offset, ext_offset)),
+				None => self,
+			}
+		}
+	}
 }
 
 impl fmt::Display for Instruction {
@@ -81,7 +110,7 @@ impl fmt::Display for Instruction {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum CodePt {
 	Internal(usize),
-	External(StringId),
+	External(usize),  // slot in imported funcs list
 }
 
 impl CodePt {
@@ -105,6 +134,13 @@ impl CodePt {
 			Some(*pc)
 		} else {
 			None
+		}
+	}
+
+	pub fn relocate(self, int_offset: usize, ext_offset: usize) -> Self {
+		match self {
+			CodePt::Internal(pc) => CodePt::Internal(pc+int_offset),
+			CodePt::External(off) => CodePt::External(off+ext_offset),
 		}
 	}
 }
@@ -152,6 +188,21 @@ impl Value {
 				}
 				Value::Tuple(new_vec)
 			}
+		}
+	}
+
+	pub fn relocate(self, int_offset: usize, ext_offset: usize) -> Self {
+		match self {
+			Value::Int(_) => self,
+			Value::Tuple(v) => {
+				let mut rel_v = Vec::new();
+				for val in v {
+					rel_v.push(val.relocate(int_offset, ext_offset));
+				}
+				Value::Tuple(rel_v)
+			}
+			Value::CodePoint(cpt) => Value::CodePoint(cpt.relocate(int_offset, ext_offset)),
+			Value::Label(label) => Value::Label(label.relocate(int_offset, ext_offset)),
 		}
 	}
 
@@ -208,7 +259,7 @@ pub enum Opcode {
 	Cjump,
 	GetPC,
 	PushStatic,
-	StaticGet,     // get from static slot (used when static size not yet known)
+	PushExternal(usize),  // push codeptr of external function -- index in imported_funcs
 	TupleGet(usize),  // arg is size of anysize_tuple
 	TupleSet(usize),  // arg is size of anysize_tuple
 	ArrayGet,      

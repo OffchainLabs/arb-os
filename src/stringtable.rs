@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-pub type StringId = u64;
+pub type StringId = usize;
 
 #[derive(Debug, Default)]
 pub struct StringTable<'a> {
