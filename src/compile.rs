@@ -26,15 +26,24 @@ impl CompiledProgram {
         CompiledProgram{ code, exported_funcs, imported_funcs }
     }
 
-    pub fn relocate(self, int_offset: usize, ext_offset: usize) -> Self {
+    pub fn relocate(self, int_offset: usize, ext_offset: usize, func_offset: usize) -> (Self, usize) {
         let mut relocated_code = Vec::new();
+        let mut max_func_offset = 0;
         for insn in &self.code {
-            relocated_code.push(insn.clone().relocate(int_offset, ext_offset));
+            let (relocated_insn, new_func_offset) = insn.clone().relocate(int_offset, ext_offset, func_offset);
+            relocated_code.push(relocated_insn);
+            if max_func_offset < new_func_offset {
+                max_func_offset = new_func_offset;
+            }
         }
 
         let mut relocated_exported_funcs = Vec::new();
         for exp_func in self.exported_funcs {
-            relocated_exported_funcs.push(exp_func.relocate(int_offset, ext_offset));
+            let (relocated_exp_func, new_func_offset) = exp_func.relocate(int_offset, ext_offset, func_offset);
+            relocated_exported_funcs.push(relocated_exp_func);
+            if max_func_offset < new_func_offset {
+                max_func_offset = new_func_offset;
+            }
         }
 
         let mut relocated_imported_funcs = Vec::new();
@@ -42,7 +51,7 @@ impl CompiledProgram {
             relocated_imported_funcs.push(imp_func.relocate(int_offset, ext_offset));
         }
 
-        CompiledProgram::new(relocated_code, relocated_exported_funcs, relocated_imported_funcs)
+        (CompiledProgram::new(relocated_code, relocated_exported_funcs, relocated_imported_funcs), max_func_offset)
     }
 }
 

@@ -42,7 +42,7 @@ impl ImportedFunc {
 
 impl Debug for ImportedFunc {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> Result<(), fmt::Error> {
-		write!(f, "ImportedFunc({}. {})", self.slot_num, self.name)
+		write!(f, "ImportedFunc({}, {})", self.slot_num, self.name)
 	}
 }
 
@@ -54,12 +54,16 @@ pub struct ExportedFunc {
 }
 
 impl ExportedFunc {
-	pub fn relocate(self, int_offset: usize, ext_offset: usize) -> Self {
-		ExportedFunc{
-			name: self.name,
-			label: self.label.relocate(int_offset, ext_offset),
-			tipe: self.tipe,
-		}
+	pub fn relocate(self, int_offset: usize, ext_offset: usize, func_offset: usize) -> (Self, usize) {
+		let (relocated_label, new_func_offset) = self.label.relocate(int_offset, ext_offset, func_offset);
+		(
+			ExportedFunc{
+				name: self.name,
+				label: relocated_label,
+				tipe: self.tipe,
+			},
+			new_func_offset
+		)
 	}
 }
 
@@ -121,6 +125,7 @@ pub fn postlink_compile<'a>(
         for (idx, insn) in code_final.iter().enumerate() {
             println!("{:04}:  {}", idx, insn);
         }
+        println!("============ after full compile/link =============");
     }
 
     Ok(LinkedProgram{ 
@@ -133,20 +138,31 @@ pub fn postlink_compile<'a>(
 
 pub fn link<'a>(progs: &Vec<CompiledProgram>) -> Result<CompiledProgram, CompileError<'a>> {
 	let mut insns_so_far: usize = 0;
-	let mut statics_so_far: usize = 0;
+	let mut imports_so_far: usize = 0;
 	let mut int_offsets = Vec::new();
 	let mut ext_offsets = Vec::new();
 	for prog in progs {
 		int_offsets.push(insns_so_far);
 		insns_so_far += prog.code.len();
-		ext_offsets.push(statics_so_far);
-		statics_so_far += prog.imported_funcs.len();
+		ext_offsets.push(imports_so_far);
+		imports_so_far += prog.imported_funcs.len();
 	}
 
 	let mut relocated_progs = Vec::new();
+	let mut func_offset: usize = 0;
 	for (i, prog) in progs.iter().enumerate() {
-		relocated_progs.push(prog.clone().relocate(int_offsets[i], ext_offsets[i]));
+		let (relocated_prog, new_func_offset) = prog.clone().relocate(int_offsets[i], ext_offsets[i], func_offset);
+		relocated_progs.push(relocated_prog);
+		func_offset = new_func_offset;
 	}
 
-	Err(CompileError::new("link: not yet implemented"))
+	let mut linked_code = Vec::new();
+	let mut linked_exports = Vec::new();
+	let mut linked_imports = Vec::new();
+	for mut rel_prog in relocated_progs {
+		linked_code.append(&mut rel_prog.code);
+		linked_exports.append(&mut rel_prog.exported_funcs);
+		linked_imports.append(&mut rel_prog.imported_funcs);
+	}
+	Ok(CompiledProgram::new(linked_code, linked_exports, linked_imports))
 }
