@@ -3,7 +3,7 @@ use std::fs::File;
 use std::io::Read;
 use crate::mavm::{Value, CodePt};
 use crate::emulator::{Machine, ExecutionError};
-use crate::linker::LinkedProgram;
+use crate::link::LinkedProgram;
 
 
 pub fn run_from_file(path: &Path) -> Result<Value, ExecutionError> {

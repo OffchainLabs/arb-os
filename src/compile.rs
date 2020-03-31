@@ -4,7 +4,7 @@ use std::path::Path;
 use serde::{Serialize, Deserialize};
 use crate::stringtable;
 use crate::mavm::Instruction;
-use crate::linker::{ExportedFunc, ImportedFunc};
+use crate::link::{ExportedFunc, ImportedFunc};
 
 
 lalrpop_mod!(pub mini); 

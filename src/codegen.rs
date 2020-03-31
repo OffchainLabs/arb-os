@@ -5,7 +5,7 @@ use crate::typecheck::{TypeCheckedFunc, TypeCheckedStatement, TypeCheckedExpr};
 use crate::symtable::CopyingSymTable;
 use crate::ast::{UnaryOp, BinaryOp, FuncArg, Type};
 use crate::stringtable::{StringId, StringTable};
-use crate::linker::ImportedFunc;
+use crate::link::ImportedFunc;
 
 
 #[derive(Debug)]

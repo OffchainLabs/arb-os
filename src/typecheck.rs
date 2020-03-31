@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use crate::ast::{Type, TopLevelDecl, FuncDecl, FuncDeclKind, FuncArg, Statement, Expr, StructField, UnaryOp, BinaryOp};
 use crate::symtable::SymTable;
 use crate::stringtable::{StringId, StringTable};
-use crate::linker::{ExportedFunc, ImportedFunc};
+use crate::link::{ExportedFunc, ImportedFunc};
 use crate::mavm::Label;
 
 #[derive(Debug)]

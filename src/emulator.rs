@@ -1,7 +1,7 @@
 use std::fmt;
 use crate::mavm::{Value, Instruction, Opcode, CodePt};
 use crate::uint256::Uint256;
-use crate::linker::LinkedProgram;
+use crate::link::LinkedProgram;
 
 
 #[derive(Debug, Clone)]

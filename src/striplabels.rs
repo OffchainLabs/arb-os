@@ -1,6 +1,6 @@
 use std::collections::{HashMap, HashSet};
 use crate::mavm::{Instruction, Opcode, Value, Label, CodePt};
-use crate::linker::{ExportedFunc, ExportedFuncPoint, ImportedFunc};
+use crate::link::{ExportedFunc, ExportedFuncPoint, ImportedFunc};
 use crate::uint256::Uint256;
 
 

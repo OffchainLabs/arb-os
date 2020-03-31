@@ -4,7 +4,7 @@ use std::path::Path;
 use std::fs::File;
 use std::io;
 use crate::compile::{compile_from_file};
-use crate::linker::{link, postlink_compile};
+use crate::link::{link, postlink_compile};
 use crate::run::{run_from_file};
 
 extern crate bincode;
@@ -13,7 +13,7 @@ use clap::{Arg,App,SubCommand};
 
 pub mod compile;
 pub mod run;
-pub mod linker;
+pub mod link;
 pub mod ast;
 pub mod typecheck;
 pub mod symtable;
