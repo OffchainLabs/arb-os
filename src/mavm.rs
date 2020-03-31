@@ -105,6 +105,13 @@ impl Instruction {
 		};
 		(Instruction::new(opcode, imm), max_func_offset)
 	}
+
+	pub fn xlate_labels(self, xlate_map: &HashMap<Label, &Label>) -> Self {
+		match self.immediate {
+			Some(val) => Instruction::from_opcode_imm(self.opcode, val.xlate_labels(xlate_map)),
+			None => self,
+		}
+	}
 }
 
 impl fmt::Display for Instruction {
@@ -219,6 +226,24 @@ impl Value {
 			Value::Label(label) => {
 				let (new_label, new_func_offset) = label.relocate(int_offset, ext_offset, func_offset);
 				(Value::Label(new_label), new_func_offset)
+			}
+		}
+	}
+
+	pub fn xlate_labels(self, label_map: &HashMap<Label, &Label>) -> Self {
+		match self {
+			Value::Int(_) |
+			Value::CodePoint(_) => self,
+			Value::Tuple(v) => {
+				let mut newv = Vec::new();
+				for val in v {
+					newv.push(val.xlate_labels(label_map));
+				}
+				Value::Tuple(newv)
+			}
+			Value::Label(label) => match label_map.get(&label) {
+				Some(label2) => Value::Label(**label2),
+				None => self,
 			}
 		}
 	}

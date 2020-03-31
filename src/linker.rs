@@ -1,4 +1,5 @@
 use std::fmt::{self, Debug};
+use std::collections::HashMap;
 use crate::stringtable::StringId;
 use crate::mavm::{Label, Value, CodePt, Instruction};
 use crate::ast::Type;
@@ -164,5 +165,22 @@ pub fn link<'a>(progs: &Vec<CompiledProgram>) -> Result<CompiledProgram, Compile
 		linked_exports.append(&mut rel_prog.exported_funcs);
 		linked_imports.append(&mut rel_prog.imported_funcs);
 	}
-	Ok(CompiledProgram::new(linked_code, linked_exports, linked_imports))
+
+	let mut exports_map = HashMap::new();
+	let mut label_xlate_map = HashMap::new();
+	for exp in &linked_exports {
+		exports_map.insert(exp.name.clone(), exp.label);
+	}
+	for imp in &linked_imports {
+		if let Some(label) = exports_map.get(&imp.name) {
+			label_xlate_map.insert(Label::External(imp.slot_num), label);
+		}
+	}
+
+	let mut linked_xlated_code = Vec::new();
+	for insn in linked_code {
+		linked_xlated_code.push(insn.xlate_labels(&label_xlate_map));
+	}
+
+	Ok(CompiledProgram::new(linked_xlated_code, linked_exports, linked_imports))
 }
