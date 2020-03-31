@@ -74,23 +74,33 @@ fn main() {
         let mut output = get_output(matches.value_of("output")).unwrap();
         let filenames: Vec<_> = matches.values_of("INPUT").unwrap().collect();
         let mut compiled_progs = Vec::new();
-        for filename in filenames {
-            let path = Path::new(filename); 
+        if matches.is_present("compileonly") {
+            let path = Path::new(filenames[0]);
             match compile_from_file(path, debug_mode) {
-                Ok(compiled_program) => { compiled_progs.push(compiled_program); }
+                Ok(compiled_program) => { 
+                    compiled_program.to_output(&mut output, matches.value_of("format"));
+                }
                 Err(e) => { writeln!(output, "Compilation error: {:?}", e).unwrap(); }
             }
-        }
-
-        match link(&compiled_progs) {
-            Ok(linked_prog) => match postlink_compile(linked_prog, debug_mode) {
-                Ok(completed_program) => { 
-                    completed_program.to_output(&mut *output, matches.value_of("format")); 
+        } else {
+            for filename in filenames {
+                let path = Path::new(filename); 
+                match compile_from_file(path, debug_mode) {
+                    Ok(compiled_program) => { compiled_progs.push(compiled_program); }
+                    Err(e) => { writeln!(output, "Compilation error: {:?}", e).unwrap(); }
                 }
-                Err(e) => { writeln!(output, "Linking error: {:?}", e).unwrap(); }
             }
-            Err(e) => {
-                writeln!(output, "Linking error: {:?}", e).unwrap();
+
+            match link(&compiled_progs) {
+                Ok(linked_prog) => match postlink_compile(linked_prog, debug_mode) {
+                    Ok(completed_program) => { 
+                        completed_program.to_output(&mut *output, matches.value_of("format")); 
+                    }
+                    Err(e) => { writeln!(output, "Linking error: {:?}", e).unwrap(); }
+                }
+                Err(e) => {
+                    writeln!(output, "Linking error: {:?}", e).unwrap();
+                }
             }
         }
     }

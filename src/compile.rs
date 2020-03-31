@@ -1,5 +1,5 @@
 use std::fs::File;
-use std::io::Read;
+use std::io::{self, Read};
 use std::path::Path;
 use serde::{Serialize, Deserialize};
 use crate::stringtable;
@@ -53,6 +53,42 @@ impl CompiledProgram {
 
         (CompiledProgram::new(relocated_code, relocated_exported_funcs, relocated_imported_funcs), max_func_offset)
     }
+
+    pub fn to_output(&self, output: &mut dyn io::Write, format: Option<&str>) {
+		match format {
+			Some("pretty") => {
+				writeln!(output, "exported: {:?}", self.exported_funcs).unwrap();
+				writeln!(output, "imported: {:?}", self.imported_funcs).unwrap();
+				for (idx, insn) in self.code.iter().enumerate() {
+					writeln!(output, "{:04}:  {}", idx, insn).unwrap();
+				}
+			}
+			None |
+			Some("json") => {
+				match serde_json::to_string(self) {
+					Ok(prog_str) => {
+						writeln!(output, "{}", prog_str).unwrap();
+					}
+					Err(e) => {
+						writeln!(output, "json serialization error: {:?}", e).unwrap();
+					}
+				}
+			}
+			Some("bincode") => {
+				match bincode::serialize(self) {
+					Ok(encoded) => {
+						if let Err(e) = output.write_all(&encoded) {
+							writeln!(output, "bincode write error: {:?}", e).unwrap();
+					   }
+					}
+					Err(e) => {
+						writeln!(output, "bincode serialization error: {:?}", e).unwrap();
+					}
+				}
+			}
+			Some(weird_value) => { writeln!(output, "invalid format: {}", weird_value).unwrap(); }
+		} 
+	}
 }
 
 pub fn compile_from_file<'a>(path: &Path, debug: bool) -> Result<CompiledProgram, CompileError<'a>> {
@@ -69,10 +105,14 @@ pub fn compile_from_file<'a>(path: &Path, debug: bool) -> Result<CompiledProgram
         Ok(_) => s,
     };
 
-    compile(s, debug)
+    let parse_result: Result<CompiledProgram, serde_json::Error> = serde_json::from_str(&s);
+    match parse_result {
+        Ok(compiled_prog) => Ok(compiled_prog),
+        Err(_) => compile_from_source(s, debug),  // json parsing failed, try to parse as source code
+    }
 }
 
-pub fn compile<'a>(s: String, debug: bool) -> Result<CompiledProgram, CompileError<'a>> {
+pub fn compile_from_source<'a>(s: String, debug: bool) -> Result<CompiledProgram, CompileError<'a>> {
     let mut string_table = stringtable::StringTable::new();
     let res = mini::DeclsParser::new()
     	.parse(&mut string_table, &s)
