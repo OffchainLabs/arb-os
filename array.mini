@@ -5,9 +5,10 @@ type array = struct {
 	contents: block,
 }
 
-func main() array {
+func main() anytype {
 	let arr = arrayNew(13);
-	return arraySet(arr, 12, 42);
+	let arr2 = arraySet(arr, 12, 42);
+	return arrayGet(arr2, 12);
 }
 
 public func arraySize(arr: array) uint {
@@ -48,6 +49,7 @@ public func arrayGet(arr: array, index: uint) anytype {
 		let slot = index / chunk;
 		index = index % chunk;
 		res = unsafecast(res[slot], block);
+		chunk = chunk / 8;
 	}
 	return res;
 }
