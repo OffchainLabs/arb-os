@@ -37,7 +37,10 @@ fn run_from_string(s: String) -> Result<Value, ExecutionError> {
 
 fn run(machine: &mut Machine) -> Result<Value, ExecutionError> {
     match machine.test_call(CodePt::new_internal(0), Vec::new()) {
-        Ok(mut stack) => stack.pop(),
+        Ok(mut stack) => {
+            let machine_state = machine.get_state();
+            stack.pop(&machine_state)
+        }
         Err(e) => Err(e)
     }
 }

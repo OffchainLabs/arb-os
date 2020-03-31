@@ -216,10 +216,12 @@ fn mavm_codegen_statements(
 		TypeCheckedStatement::While(cond, body) => {
 			let slot_num = Value::Int(Uint256::from_usize(num_locals));
 			num_locals = num_locals+1;
-			let (end_label, lg) = label_gen.next();
+			let (top_label, lg) = label_gen.next();
+			let (end_label, lg) = lg.next();
 			label_gen = lg;
-			code.push(Instruction::from_opcode(Opcode::GetPC));
+			code.push(Instruction::from_opcode_imm(Opcode::Noop, Value::Label(top_label)));
 			code.push(Instruction::from_opcode_imm(Opcode::SetLocal, slot_num.clone()));
+			code.push(Instruction::from_opcode(Opcode::Label(top_label)));
 			let (lg, c) = mavm_codegen_expr(cond, code, &locals, label_gen, string_table, import_func_map)?;
 			label_gen = lg;
 			code = c;
