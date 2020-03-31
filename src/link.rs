@@ -1,4 +1,5 @@
 use std::fmt::{self, Debug};
+use std::io;
 use std::collections::HashMap;
 use crate::stringtable::StringId;
 use crate::mavm::{Label, Value, CodePt, Instruction};
@@ -14,6 +15,45 @@ pub struct LinkedProgram {
     pub static_val: Value,
     pub exported_funcs: Vec<ExportedFuncPoint>,
     pub imported_funcs: Vec<ImportedFunc>,
+}
+
+impl LinkedProgram {
+	pub fn to_output(&self, output: &mut dyn io::Write, format: Option<&str>) {
+		match format {
+			Some("pretty") => {
+				writeln!(output, "exported: {:?}", self.exported_funcs).unwrap();
+				writeln!(output, "imported: {:?}", self.imported_funcs).unwrap();
+				writeln!(output, "static: {}", self.static_val).unwrap();
+				for (idx, insn) in self.code.iter().enumerate() {
+					writeln!(output, "{:04}:  {}", idx, insn).unwrap();
+				}
+			}
+			None |
+			Some("json") => {
+				match serde_json::to_string(self) {
+					Ok(prog_str) => {
+						writeln!(output, "{}", prog_str).unwrap();
+					}
+					Err(e) => {
+						writeln!(output, "json serialization error: {:?}", e).unwrap();
+					}
+				}
+			}
+			Some("bincode") => {
+				match bincode::serialize(self) {
+					Ok(encoded) => {
+						if let Err(e) = output.write_all(&encoded) {
+							writeln!(output, "bincode write error: {:?}", e).unwrap();
+					   }
+					}
+					Err(e) => {
+						writeln!(output, "bincode serialization error: {:?}", e).unwrap();
+					}
+				}
+			}
+			Some(weird_value) => { writeln!(output, "invalid format: {}", weird_value).unwrap(); }
+		} 
+	}
 }
 
 #[derive(Clone, Serialize, Deserialize)]

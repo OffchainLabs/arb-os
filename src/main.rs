@@ -52,6 +52,10 @@ fn main() {
                             .short("f")
                             .takes_value(true)
                             .value_name("format"))
+                        .arg(Arg::with_name("compileonly")
+                            .help("compile only not link")
+                            .short("c")
+                            .takes_value(false))
                         .arg(Arg::with_name("debug")
                             .help("provide debug output")
                             .short("d")
@@ -80,41 +84,8 @@ fn main() {
 
         match link(&compiled_progs) {
             Ok(linked_prog) => match postlink_compile(linked_prog, debug_mode) {
-                Ok(completed_program) => {
-                    match matches.value_of("format") {
-                        Some("pretty") => {
-                            writeln!(output, "exported: {:?}", completed_program.exported_funcs).unwrap();
-                            writeln!(output, "imported: {:?}", completed_program.imported_funcs).unwrap();
-                            writeln!(output, "static: {}", completed_program.static_val).unwrap();
-                            for (idx, insn) in completed_program.code.iter().enumerate() {
-                                writeln!(output, "{:04}:  {}", idx, insn).unwrap();
-                            }
-                        }
-                        None |
-                        Some("json") => {
-                            match serde_json::to_string(&completed_program) {
-                                Ok(prog_str) => {
-                                    writeln!(output, "{}", prog_str).unwrap();
-                                }
-                                Err(e) => {
-                                    writeln!(output, "json serialization error: {:?}", e).unwrap();
-                                }
-                            }
-                        }
-                        Some("bincode") => {
-                            match bincode::serialize(&completed_program) {
-                                Ok(encoded) => {
-                                    if let Err(e) = output.write_all(&encoded) {
-                                        writeln!(output, "bincode write error: {:?}", e).unwrap();
-                                   }
-                                }
-                                Err(e) => {
-                                    writeln!(output, "bincode serialization error: {:?}", e).unwrap();
-                                }
-                            }
-                        }
-                        Some(weird_value) => { writeln!(output, "invalid format: {}", weird_value).unwrap(); }
-                    } 
+                Ok(completed_program) => { 
+                    completed_program.to_output(&mut *output, matches.value_of("format")); 
                 }
                 Err(e) => { writeln!(output, "Linking error: {:?}", e).unwrap(); }
             }
