@@ -8,6 +8,7 @@ type array = struct {
 func main() anytype {
 	let arr = arrayNew(13);
 	let arr2 = arraySet(arr, 12, 42);
+	let arr3 = arraySet(arr2, 4, 77);
 	return arrayGet(arr2, 12);
 }
 

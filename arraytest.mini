@@ -2,7 +2,7 @@
 import func arrayNew(sz:uint) anytype;
 import func arrayGet(arr: anytype, idx: uint) uint;
 
-func main() {
+func main() anytype {
 	let a = arrayNew(17);
-	let b = arrayGet(a, 6);
+	return arrayGet(a, 6);
 }
