@@ -1,4 +1,6 @@
 
+type block = [8]anytype
+
 type array = struct {
 	size: uint,
 	topstep: uint,
@@ -7,9 +9,7 @@ type array = struct {
 
 func main() anytype {
 	let arr = arrayNew(13);
-	let arr2 = arraySet(arr, 12, 42);
-	let arr3 = arraySet(arr2, 4, 77);
-	return arrayGet(arr2, 12);
+	return arr;
 }
 
 public func arraySize(arr: array) uint {
@@ -33,10 +33,10 @@ public func arrayNew(sz: uint) array {
 
 func buildTree(height: uint) block {
 	if (height == 1) {
-		return newblock();
+		return newfixedarray(8);
 	} else {
 		let res = buildTree(height-1);
-		return newblock(res);
+		return newfixedarray(8, res);
 	}
 }
 

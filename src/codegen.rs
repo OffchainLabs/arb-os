@@ -6,6 +6,7 @@ use crate::symtable::CopyingSymTable;
 use crate::ast::{UnaryOp, BinaryOp, FuncArg, Type};
 use crate::stringtable::{StringId, StringTable};
 use crate::link::ImportedFunc;
+use crate::xformcode::TUPLE_SIZE;
 
 
 #[derive(Debug)]
@@ -519,11 +520,51 @@ fn mavm_codegen_expr<'a>(
 			code.push(Instruction::from_opcode(Opcode::ArrayGet));
 			Ok((label_gen, code))
 		}
-		TypeCheckedExpr::NewBlock(bo_expr) => match bo_expr {
-			Some(expr) => {
-				let (lg, c) = mavm_codegen_expr(expr, code, locals, label_gen, string_table, import_func_map)?;
+		TypeCheckedExpr::FixedArrayRef(expr1, expr2, size, _) => {
+			let (lg, c) = mavm_codegen_expr(expr2, code, locals, label_gen, string_table, import_func_map)?;
+			let (lg, c) = mavm_codegen_expr(expr1, c, locals, lg, string_table, import_func_map)?;
+			label_gen = lg;
+			code = c;
+			if *size != 8 {  //TODO: also skip check if size is larger power of 8
+				let (cont_label, lg) = label_gen.next();
 				label_gen = lg;
-				code = c;
+				code.push(Instruction::from_opcode(Opcode::Dup0));
+				code.push(Instruction::from_opcode_imm(
+					Opcode::GreaterThan, 
+					Value::Int(Uint256::from_usize(*size)),
+				));
+				code.push(Instruction::from_opcode_imm(
+					Opcode::Cjump,
+					Value::Label(cont_label),
+				));
+				code.push(Instruction::from_opcode(Opcode::Panic));
+				code.push(Instruction::from_opcode(Opcode::Label(cont_label)));
+			}
+			code.push(Instruction::from_opcode(Opcode::UncheckedFixedArrayGet(*size)));
+			Ok((label_gen, code))
+		}
+		TypeCheckedExpr::NewFixedArray(sz, bo_expr, _) => {
+			match bo_expr {
+				Some(expr) => {
+					let (lg, c) = mavm_codegen_expr(expr, code, locals, label_gen, string_table, import_func_map)?;
+					label_gen = lg;
+					code = c;
+					for _i in 0..7 {
+						code.push(Instruction::from_opcode(Opcode::Dup0));
+					}
+					let empty_tuple = vec![Value::Tuple(Vec::new()); 8];
+					code.push(Instruction::from_opcode_imm(Opcode::Noop,Value::Tuple(empty_tuple)));
+					for i in 0..8 {
+						code.push(Instruction::from_opcode_imm(Opcode::Tset, Value::Int(Uint256::from_usize(i))));
+					}
+				}
+				None => {
+					let empty_tuple = vec![Value::Tuple(Vec::new()); 8];
+					code.push(Instruction::from_opcode_imm(Opcode::Noop,Value::Tuple(empty_tuple)));
+				}
+			}
+			let mut tuple_size: usize = 8;
+			while tuple_size < *sz {
 				for _i in 0..7 {
 					code.push(Instruction::from_opcode(Opcode::Dup0));
 				}
@@ -531,24 +572,20 @@ fn mavm_codegen_expr<'a>(
 				code.push(Instruction::from_opcode_imm(Opcode::Noop,Value::Tuple(empty_tuple)));
 				for i in 0..8 {
 					code.push(Instruction::from_opcode_imm(Opcode::Tset, Value::Int(Uint256::from_usize(i))));
-				}
-				Ok((label_gen, code))
+				}				
+				tuple_size *= 8;
 			}
-			None => {
-				let empty_tuple = vec![Value::Tuple(Vec::new()); 8];
-				code.push(Instruction::from_opcode_imm(Opcode::Noop,Value::Tuple(empty_tuple)));
-				Ok((label_gen, code))
-			}
-		}
-		TypeCheckedExpr::BlockRef(expr1, expr2) => {
-			let (lg, c) = mavm_codegen_expr(expr1, code, locals, label_gen, string_table, import_func_map)?;
-			let (lg, c) = mavm_codegen_expr(expr2, c, locals, lg, string_table, import_func_map)?;
-			label_gen = lg;
-			code = c;
-			code.push(Instruction::from_opcode(Opcode::Tget));
 			Ok((label_gen, code))
 		}
 		TypeCheckedExpr::ArrayMod(_arr, _index, _val, _) => Err(new_codegen_error("ArrayMod not yet implemented")),
+		TypeCheckedExpr::FixedArrayMod(arr, index, val, size, _) => codegen_fixed_array_mod(
+			arr, index, val, *size,
+			code,
+			locals,
+			label_gen,
+			string_table,
+			import_func_map,
+		),
 		TypeCheckedExpr::StructMod(struc, index, val, t) => {
 			let (lg, c) = mavm_codegen_expr(val, code, locals, label_gen, string_table, import_func_map)?;
 			let (lg, c) = mavm_codegen_expr(struc, c, locals, lg, string_table, import_func_map)?;
@@ -562,16 +599,90 @@ fn mavm_codegen_expr<'a>(
 			}
 			Ok((label_gen, code))
 		}
-		TypeCheckedExpr::BlockMod(block, index, val, _) => {
-			let (lg, c) = mavm_codegen_expr(val, code, locals, label_gen, string_table, import_func_map)?;
-			let (lg, c) = mavm_codegen_expr(block, c, locals, lg, string_table, import_func_map)?;
-			let (lg, c) = mavm_codegen_expr(index, c, locals, lg, string_table, import_func_map)?;
-			label_gen = lg;
-			code = c;
-			code.push(Instruction::from_opcode(Opcode::Tset));
-			Ok((label_gen, code))
-		}
 		TypeCheckedExpr::Cast(expr, _) => 
 			mavm_codegen_expr(expr, code, locals, label_gen, string_table, import_func_map),
+	}
+}
+
+fn codegen_fixed_array_mod<'a>(
+	arr_expr: &TypeCheckedExpr,
+	idx_expr: &TypeCheckedExpr,
+	val_expr: &TypeCheckedExpr,
+	size: usize,
+	code_in: &'a mut Vec<Instruction>,       
+	locals: &CopyingSymTable<usize>,
+	label_gen_in: LabelGenerator,
+	string_table: &StringTable,
+	import_func_map: &HashMap<StringId, Label>,
+) -> Result<(LabelGenerator, &'a mut Vec<Instruction>), CodegenError> {
+	let (label_gen, code) = mavm_codegen_expr(arr_expr, code_in, locals, label_gen_in, string_table, import_func_map)?;
+	let (mut label_gen, code) = mavm_codegen_expr(idx_expr, code, locals, label_gen, string_table, import_func_map)?;
+	if size != 8 {  // TODO: safe for if-condition to to say size does not equal any power of 8
+		let (ok_label, lg) = label_gen.next();
+		label_gen = lg;
+		code.push(Instruction::from_opcode(Opcode::Dup1));
+		code.push(Instruction::from_opcode_imm(Opcode::GreaterThan, Value::Int(Uint256::from_usize(size))));
+		code.push(Instruction::from_opcode_imm(Opcode::Cjump, Value::Label(ok_label.clone())));
+		code.push(Instruction::from_opcode(Opcode::Panic));
+		code.push(Instruction::from_opcode(Opcode::Label(ok_label)));
+	}
+	codegen_fixed_array_mod_2(val_expr, size, code, locals, label_gen, string_table, import_func_map)
+}
+
+fn codegen_fixed_array_mod_2<'a>(
+	val_expr: &TypeCheckedExpr,
+	size: usize,
+	code_in: &'a mut Vec<Instruction>,
+	locals: &CopyingSymTable<usize>,
+	label_gen_in: LabelGenerator,
+	string_table: &StringTable,
+	import_func_map: &HashMap<StringId, Label>,
+) -> Result<(LabelGenerator, &'a mut Vec<Instruction>), CodegenError> {
+	if size <= 8 {
+		// stack: idx tuple
+		code_in.push(Instruction::from_opcode(Opcode::Swap1));
+		let (label_gen, code) = mavm_codegen_expr(val_expr, code_in, locals, label_gen_in, string_table, import_func_map)?;
+		code.push(Instruction::from_opcode(Opcode::Swap2));
+		// stack: idx tuple value
+		code.push(Instruction::from_opcode(Opcode::Tset));
+		Ok((label_gen, code))
+	} else {
+		let tuple_size = Value::Int(Uint256::from_usize(TUPLE_SIZE));
+		// stack: idx tupletree
+		code_in.push(Instruction::from_opcode_imm(Opcode::Dup2, tuple_size.clone()));
+		code_in.push(Instruction::from_opcode(Opcode::AuxPush));
+		code_in.push(Instruction::from_opcode(Opcode::Dup0));
+		// stack: idx TUPLE_SIZE idx tupletree; aux: tupletree
+		code_in.push(Instruction::from_opcode(Opcode::Div));
+		code_in.push(Instruction::from_opcode(Opcode::Dup0));
+		code_in.push(Instruction::from_opcode(Opcode::AuxPush));
+		// stack: slot idx tupletree; aux: slot tupletree
+		code_in.push(Instruction::from_opcode(Opcode::Swap1));
+		code_in.push(Instruction::from_opcode_imm(Opcode::Swap1, tuple_size));
+		// stack: subidx slot tupletree; aux: slot tupletree
+		code_in.push(Instruction::from_opcode(Opcode::Swap2));
+		code_in.push(Instruction::from_opcode(Opcode::Swap1));
+		code_in.push(Instruction::from_opcode(Opcode::Tget));
+		code_in.push(Instruction::from_opcode(Opcode::Swap1));
+		// stack: subidx subtupletree; aux: slot tupletree
+
+		let (label_gen, code) = codegen_fixed_array_mod_2(
+			val_expr,
+			(size+(TUPLE_SIZE-1))/TUPLE_SIZE,
+			code_in,
+			locals,
+			label_gen_in,
+			string_table,
+			import_func_map,
+		)?;
+
+		// stack: newsubtupletree; aux: slot tupletree
+		code.push(Instruction::from_opcode(Opcode::AuxPop));
+		code.push(Instruction::from_opcode(Opcode::AuxPop));
+		code.push(Instruction::from_opcode(Opcode::Swap1));
+		// stack: slot tupletree newsubtupletree
+		code.push(Instruction::from_opcode(Opcode::Tset));
+
+		Ok((label_gen, code))
 	}
 }

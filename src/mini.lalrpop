@@ -79,7 +79,10 @@ Type: Type = {
 	"(" ")" => Type::Tuple(Vec::new()),
 	"(" <CommaedTypes> ")" => Type::Tuple(<>),
 	"[" "]" <Type> => Type::Array(Box::new(<>)),
-	"block" => Type::Block,
+	"[" <s:UnsignedInteger> "]" <t:Type> => Type::FixedArray(
+		Box::new(t), 
+		stringtable.get_as_usize(s).unwrap(),
+	),
 	"anytype" => Type::Any,
 	Ident => Type::Named(<>),
 };
@@ -164,8 +167,14 @@ Term8: Expr = {
 	"uint" "(" <Expr> ")" => Expr::UnaryOp(UnaryOp::ToUint, Box::new(<>)),
 	"int" "(" <Expr> ")" => Expr::UnaryOp(UnaryOp::ToInt, Box::new(<>)),
 	"bytes32" "(" <Expr> ")" => Expr::UnaryOp(UnaryOp::ToBytes32, Box::new(<>)),
-	"newblock" "(" ")" => Expr::NewBlock(None),
-	"newblock" "(" <Expr> ")" => Expr::NewBlock(Some(Box::new(<>))),
+	"newfixedarray" "(" <s:UnsignedInteger> "," <e:Expr> ")" => Expr::NewFixedArray(
+		stringtable.get_as_usize(s).unwrap(), 
+		Some(Box::new(e))
+	),
+	"newfixedarray" "(" <s:UnsignedInteger> ")" => Expr::NewFixedArray(
+		stringtable.get_as_usize(s).unwrap(), 
+		None
+	),
 	"unsafecast" "(" <e:Expr> "," <t:Type> ")" => Expr::UnsafeCast(Box::new(e), t),
 	<e1:Term8> "[" <e2:Expr> "]" => Expr::ArrayRef(Box::new(e1), Box::new(e2)),
 	UnsignedInteger => Expr::ConstUint(<>),
@@ -175,7 +184,7 @@ Term8: Expr = {
 	<Ident> "(" <CommaedExprs> ")" => Expr::FunctionCall(<>),
 	"(" <Expr> ")" => <>,
 	"(" <CommaedExprs> "," ")" => Expr::Tuple(<>),
-	<t:Term8> "with" "{" "[" <i:Expr> "]" "=" <v:Expr> "}" => Expr::ArrayOrBlockMod(
+	<t:Term8> "with" "{" "[" <i:Expr> "]" "=" <v:Expr> "}" => Expr::ArrayMod(
 		Box::new(t), 
 		Box::new(i), 
 		Box::new(v)

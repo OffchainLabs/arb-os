@@ -12,6 +12,14 @@ pub fn peephole(code_in: &Vec<Instruction>) -> Vec<Instruction> {
 				Instruction{ opcode: Opcode::Pop, immediate: Some(_) } => {
 					code_out.pop();
 				}
+				Instruction { opcode: Opcode::Pop, immediate: None } => {
+					if let Instruction{ opcode: Opcode::Dup0, immediate: None } = code_out[code_out.len()-2] {
+						code_out.pop();
+						code_out.pop();
+					} else {
+						done = true;
+					}
+				}
 				Instruction{ opcode: Opcode::Noop, immediate: None } => {
 					code_out.pop();
 				}

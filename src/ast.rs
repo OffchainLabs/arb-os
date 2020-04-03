@@ -37,10 +37,10 @@ pub enum Type {
 	Bytes32,
 	Tuple(Vec<Type>),
 	Array(Box<Type>),
+	FixedArray(Box<Type>, usize),
 	Struct(Vec<StructField>),
 	Named(StringId),
 	Func(Vec<Type>, Box<Type>),
-	Block,
 	Any,
 }
 
@@ -52,7 +52,6 @@ impl Type {
 			Type::Int |
 			Type::Bool |
 			Type::Bytes32 |
-			Type::Block |
 			Type::Any => Ok(self.clone()),
 			Type::Tuple(tvec) => {
 				let mut rvec = Vec::new();
@@ -62,6 +61,7 @@ impl Type {
 				Ok(Type::Tuple(rvec))
 			}
 			Type::Array(t) => Ok(Type::Array(Box::new(t.resolve_types(type_table)?))),
+			Type::FixedArray(t, s) => Ok(Type::FixedArray(Box::new(t.resolve_types(type_table)?), *s)),
 			Type::Struct(vf) => {
 				let mut fvec = Vec::new();
 				for field in vf.iter() {
@@ -109,8 +109,7 @@ impl Type {
 			Type::Uint |
 			Type::Int |
 			Type::Bool |
-			Type::Bytes32 |
-			Type::Block => (self == rhs),
+			Type::Bytes32 => (self == rhs),
 			Type::Tuple(tvec) => {
 				if let Type::Tuple(tvec2) = rhs {
 					type_vectors_assignable(tvec, tvec2)
@@ -121,6 +120,13 @@ impl Type {
 			Type::Array(t) => {
 				if let Type::Array(t2) = rhs {
 					t.assignable(t2)
+				} else {
+					false
+				}
+			}
+			Type::FixedArray(t, s) => {
+				if let Type::FixedArray(t2, s2) = rhs {
+					(s == s2) && t.assignable(t2)
 				} else {
 					false
 				}
@@ -188,10 +194,10 @@ impl PartialEq for Type {
 			(Type::Int, Type::Int) |
 			(Type::Bool, Type::Bool) |
 			(Type::Bytes32, Type::Bytes32) |
-			(Type::Block, Type::Block) |
 			(Type::Any, Type::Any) => true,
 			(Type::Tuple(v1), Type::Tuple(v2)) => type_vectors_equal(&v1, &v2),
 			(Type::Array(a1), Type::Array(a2)) => *a1 == *a2,
+			(Type::FixedArray(a1, s1), Type::FixedArray(a2, s2)) => (s1 == s2) && (*a1 == *a2),
 			(Type::Struct(f1), Type::Struct(f2)) => struct_field_vectors_equal(&f1, &f2),
 			(Type::Named(n1), Type::Named(n2)) => (n1 == n2),
 			(Type::Func(a1, r1), Type::Func(a2, r2)) => type_vectors_equal(&a1, &a2) && (*r1 == *r2),
@@ -396,8 +402,8 @@ pub enum Expr {
 	ArrayRef(Box<Expr>, Box<Expr>),
 	StructInitializer(Vec<FieldInitializer>),
 	Tuple(Vec<Expr>),
-	NewBlock(Option<Box<Expr>>),
-	ArrayOrBlockMod(Box<Expr>, Box<Expr>, Box<Expr>),
+	NewFixedArray(usize, Option<Box<Expr>>),
+	ArrayMod(Box<Expr>, Box<Expr>, Box<Expr>),
 	StructMod(Box<Expr>, StringId, Box<Expr>),
 	UnsafeCast(Box<Expr>, Type),
 }
@@ -440,11 +446,14 @@ impl Expr {
 				}
 				Ok(Expr::Tuple(rvec))
 			}
-			Expr::NewBlock(bo_expr) => match &*bo_expr {
-				Some(expr) => Ok(Expr::NewBlock(Some(Box::new(expr.resolve_types(type_table)?)))),
-				None => Ok(Expr::NewBlock(None)),
+			Expr::NewFixedArray(sz, init_expr) => match &*init_expr {
+				Some(expr) => Ok(Expr::NewFixedArray(
+					*sz, 
+					Some(Box::new(expr.resolve_types(type_table)?))
+				)),
+				None => Ok(Expr::NewFixedArray(*sz, None)),
 			}
-			Expr::ArrayOrBlockMod(e1, e2, e3) => Ok(Expr::ArrayOrBlockMod(
+			Expr::ArrayMod(e1, e2, e3) => Ok(Expr::ArrayMod(
 				Box::new(e1.resolve_types(type_table)?),
 				Box::new(e2.resolve_types(type_table)?),
 				Box::new(e3.resolve_types(type_table)?),

@@ -50,11 +50,11 @@ pub enum TypeCheckedExpr {
 	FunctionCall(StringId, Vec<TypeCheckedExpr>, Type),
 	StructInitializer(Vec<TypeCheckedStructField>, Type),
 	ArrayRef(Box<TypeCheckedExpr>, Box<TypeCheckedExpr>, Type),
-	BlockRef(Box<TypeCheckedExpr>, Box<TypeCheckedExpr>),
+	FixedArrayRef(Box<TypeCheckedExpr>, Box<TypeCheckedExpr>, usize, Type),
 	Tuple(Vec<TypeCheckedExpr>, Type),
-	NewBlock(Option<Box<TypeCheckedExpr>>),
-	BlockMod(Box<TypeCheckedExpr>, Box<TypeCheckedExpr>, Box<TypeCheckedExpr>, Type),
+	NewFixedArray(usize, Option<Box<TypeCheckedExpr>>, Type),
 	ArrayMod(Box<TypeCheckedExpr>, Box<TypeCheckedExpr>, Box<TypeCheckedExpr>, Type),
+	FixedArrayMod(Box<TypeCheckedExpr>, Box<TypeCheckedExpr>, Box<TypeCheckedExpr>, usize, Type),
 	StructMod(Box<TypeCheckedExpr>, usize, Box<TypeCheckedExpr>, Type),
 	Cast(Box<TypeCheckedExpr>, Type),
 }
@@ -71,11 +71,11 @@ impl TypeCheckedExpr {
 			TypeCheckedExpr::FunctionCall(_, _, t) => t.clone(),
 			TypeCheckedExpr::StructInitializer(_, t) => t.clone(),
 			TypeCheckedExpr::ArrayRef(_, _, t) => t.clone(),
-			TypeCheckedExpr::BlockRef(_, _) => Type::Any,
+			TypeCheckedExpr::FixedArrayRef(_, _, _, t) => t.clone(),
 			TypeCheckedExpr::Tuple(_, t) => t.clone(),
-			TypeCheckedExpr::NewBlock(_) => Type::Block,
+			TypeCheckedExpr::NewFixedArray(_, _, t) => t.clone(),
 			TypeCheckedExpr::ArrayMod(_, _, _, t) => t.clone(),
-			TypeCheckedExpr::BlockMod(_, _, _, t) => t.clone(),
+			TypeCheckedExpr::FixedArrayMod(_, _, _, _, t) => t.clone(),
 			TypeCheckedExpr::StructMod(_, _, _, t) => t.clone(),
 			TypeCheckedExpr::Cast(_, t) => t.clone(),
 		}
@@ -341,15 +341,35 @@ fn typecheck_expr(
 						Err(new_type_error("array index must be Uint"))
 					}
 				}
-				Type::Block => {
+				Type::FixedArray(t, sz) => {
 					if tc_idx.get_type() == Type::Uint {
-						Ok(TypeCheckedExpr::BlockRef(Box::new(tc_arr), Box::new(tc_idx)))
+						Ok(TypeCheckedExpr::FixedArrayRef(
+							Box::new(tc_arr), 
+							Box::new(tc_idx),
+							sz,
+							*t,
+						))
 					} else {
-						Err(new_type_error("block index must be Uint"))
+						Err(new_type_error("fixedarray index must be Uint"))
 					}
 				}
-				_ => Err(new_type_error("array lookup in non-array type"))
+				_ => Err(new_type_error("fixedarray lookup in non-array type"))
 			}
+		}
+		Expr::NewFixedArray(size, maybe_expr) => match maybe_expr {
+			Some(expr) => {
+				let tc_expr = typecheck_expr(expr, type_table)?;
+				Ok(TypeCheckedExpr::NewFixedArray(
+					*size, 
+					Some(Box::new(tc_expr.clone())), 
+					Type::FixedArray(Box::new(tc_expr.get_type()), *size),
+				))
+			}
+			None => Ok(TypeCheckedExpr::NewFixedArray(
+				*size,
+				None, 
+				Type::FixedArray(Box::new(Type::Any), *size),
+			))
 		}
 		Expr::StructInitializer(fieldvec) => {
 			let mut tc_fields = Vec::new();
@@ -371,11 +391,7 @@ fn typecheck_expr(
 			}
 			Ok(TypeCheckedExpr::Tuple(tc_fields, Type::Tuple(types)))
 		}
-		Expr::NewBlock(bo_expr) => match &*bo_expr {
-			Some(expr) => Ok(TypeCheckedExpr::NewBlock(Some(Box::new(typecheck_expr(&expr, type_table)?)))),
-			None => Ok(TypeCheckedExpr::NewBlock(None)),
-		}
-		Expr::ArrayOrBlockMod(arr, index, val) => {
+		Expr::ArrayMod(arr, index, val) => {
 			let tc_arr = typecheck_expr(arr, type_table)?;
 			let tc_index = typecheck_expr(index, type_table)?;
 			let tc_val = typecheck_expr(val, type_table)?;
@@ -393,11 +409,12 @@ fn typecheck_expr(
 				} else {
 					Err(new_type_error("mismatched types in array modifier"))
 				}
-				Type::Block => Ok(TypeCheckedExpr::BlockMod(
+				Type::FixedArray(t, sz) => Ok(TypeCheckedExpr::FixedArrayMod(
 					Box::new(tc_arr), 
 					Box::new(tc_index), 
-					Box::new(tc_val), 
-					Type::Block
+					Box::new(tc_val),
+					sz, 
+					Type::FixedArray(t, sz),
 				)),
 				_ => Err(new_type_error("[] modifier must operate on array or block"))
 			}

@@ -304,7 +304,8 @@ pub enum Opcode {
 	PushExternal(usize),  // push codeptr of external function -- index in imported_funcs
 	TupleGet(usize),  // arg is size of anysize_tuple
 	TupleSet(usize),  // arg is size of anysize_tuple
-	ArrayGet,      
+	ArrayGet, 
+	UncheckedFixedArrayGet(usize),  // arg is size of array     
 	Tset,
 	Tget,
 	Pop,
@@ -312,7 +313,9 @@ pub enum Opcode {
 	AuxPop,
 	Dup0,
 	Dup1,
+	Dup2,
 	Swap1,
+	Swap2,
 	Return,
 	Not,
 	UnaryMinus,

@@ -1,6 +1,9 @@
 use crate::mavm::{Opcode, Instruction, Value, CodePt};
 use crate::uint256::Uint256;
 
+
+pub const TUPLE_SIZE: usize = 8;
+
 pub fn fix_tuple_size(code_in: &Vec<Instruction>) -> Vec<Instruction> {
 	let mut code_out = Vec::new();
 	let mut locals_tree = TupleTree::new(1);
@@ -83,6 +86,29 @@ pub fn fix_tuple_size(code_in: &Vec<Instruction>) -> Vec<Instruction> {
 				code_out.push(Instruction::from_opcode(Opcode::AuxPop));
 				code_out.push(Instruction::from_opcode(Opcode::Jump));
 			}
+			Opcode::UncheckedFixedArrayGet(sz) => {
+				let tup_size_val = Value::Int(Uint256::from_usize((sz)));
+				let mut remaining_size = sz;
+				while remaining_size > TUPLE_SIZE {
+					//TODO: can probably make this more efficient
+					// stack: idx arr
+					code_out.push(Instruction::from_opcode_imm(Opcode::Dup1, tup_size_val.clone()));
+					code_out.push(Instruction::from_opcode(Opcode::Mod));
+					code_out.push(Instruction::from_opcode(Opcode::Swap1));
+					// stack: idx slot arr
+					code_out.push(Instruction::from_opcode_imm(Opcode::Swap1, tup_size_val.clone()));
+					code_out.push(Instruction::from_opcode(Opcode::Div));
+					// stack: subindex slot arr
+					code_out.push(Instruction::from_opcode(Opcode::Swap2));
+					code_out.push(Instruction::from_opcode(Opcode::Swap1));
+					// stack: slot arr subindex
+					code_out.push(Instruction::from_opcode(Opcode::Tget));
+					code_out.push(Instruction::from_opcode(Opcode::Swap1));
+					// stack: subindex subarr
+					remaining_size = (remaining_size+(TUPLE_SIZE-1)) / TUPLE_SIZE;
+				}
+				code_out.push(Instruction::from_opcode(Opcode::Tget));
+			}
 			_ => { 
 				code_out.push(insn.clone()); 
 			}
@@ -104,8 +130,6 @@ enum TupleTree {
 	Single,
 	Tree(usize, Vec<Box<TupleTree>>),
 }
-
-const TUPLE_SIZE: usize = 8;
 
 impl TupleTree {
 	fn new(size: usize) -> TupleTree {

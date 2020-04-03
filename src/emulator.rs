@@ -111,6 +111,12 @@ impl ExecutionError {
 			MachineState::Running(cp) => ExecutionError::RunningErr(why, *cp),
 		}
 	}
+
+	/*
+	fn new_wrapped(txt: &'static str, inner: ExecutionError) -> Self {
+		ExecutionError::Wrapped(txt, Box::new(inner))
+	}
+	*/
 }
 
 #[derive(Clone)]
@@ -309,11 +315,32 @@ impl Machine {
 						self.incr_pc();
 						Ok(true)
 					}
+					Opcode::Dup2 => {
+						let top = self.stack.pop(&self.state)?;
+						let snd = self.stack.pop(&self.state)?;
+						let trd = self.stack.pop(&self.state)?;
+						self.stack.push(trd.clone());
+						self.stack.push(snd);
+						self.stack.push(top);
+						self.stack.push(trd);
+						self.incr_pc();
+						Ok(true)
+					}
 					Opcode::Swap1 => {
 						let top = self.stack.pop(&self.state)?;
 						let snd = self.stack.pop(&self.state)?;
 						self.stack.push(top);
 						self.stack.push(snd);
+						self.incr_pc();
+						Ok(true)
+					}
+					Opcode::Swap2 => {
+						let top = self.stack.pop(&self.state)?;
+						let snd = self.stack.pop(&self.state)?;
+						let trd = self.stack.pop(&self.state)?;
+						self.stack.push(top);
+						self.stack.push(snd);
+						self.stack.push(trd);
 						self.incr_pc();
 						Ok(true)
 					}
@@ -519,6 +546,7 @@ impl Machine {
 					Opcode::TupleGet(_) |
 					Opcode::TupleSet(_) |
 					Opcode::ArrayGet |
+					Opcode::UncheckedFixedArrayGet(_) | 
 					Opcode::Return => Err(ExecutionError::new("invalid opcode", &self.state))
 				}
 			} else {

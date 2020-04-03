@@ -32,4 +32,13 @@ impl<'a> StringTable<'a> {
 	pub fn name_from_id(&self, name: StringId) -> &'a str {
 		self.by_id[name as usize]
 	}
+
+	pub fn get_as_usize(&self, id: StringId) -> Option<usize> {
+		let the_str = self.name_from_id(id);
+		let result: Result<usize, _> = the_str.parse();
+		match result {
+			Ok(res) => Some(res),
+			Err(_) => None
+		}
+	}
 }
