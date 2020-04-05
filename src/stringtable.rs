@@ -29,6 +29,10 @@ impl<'a> StringTable<'a> {
 		}
 	}
 
+	pub fn get_if_exists(&self, name: &'a str) -> Option<&StringId> {
+		self.table.get(name)
+	}
+
 	pub fn name_from_id(&self, name: StringId) -> &'a str {
 		self.by_id[name as usize]
 	}

@@ -1,6 +1,8 @@
 use crate::ast::{TopLevelDecl, TypeDecl, FuncDecl, ImportFuncDecl, Type, StructField, FuncArg, Statement, Expr, BinaryOp, UnaryOp, 
 FieldInitializer, new_func_arg, new_type_decl};
 use crate::stringtable::{StringTable, StringId};
+use crate::uint256::Uint256;
+use crate::mavm::Value;
 
 grammar(stringtable: &mut StringTable<'input>);
 
@@ -81,7 +83,7 @@ Type: Type = {
 	"[" "]" <Type> => Type::Array(Box::new(<>)),
 	"[" <s:UnsignedInteger> "]" <t:Type> => Type::FixedArray(
 		Box::new(t), 
-		stringtable.get_as_usize(s).unwrap(),
+		s.to_usize().unwrap(),
 	),
 	"anytype" => Type::Any,
 	Ident => Type::Named(<>),
@@ -167,12 +169,13 @@ Term8: Expr = {
 	"uint" "(" <Expr> ")" => Expr::UnaryOp(UnaryOp::ToUint, Box::new(<>)),
 	"int" "(" <Expr> ")" => Expr::UnaryOp(UnaryOp::ToInt, Box::new(<>)),
 	"bytes32" "(" <Expr> ")" => Expr::UnaryOp(UnaryOp::ToBytes32, Box::new(<>)),
+	"newarray" "(" <s:UnsignedInteger> "," <t:Type> ")" => Expr::NewArray(s.to_usize().unwrap(), t),
 	"newfixedarray" "(" <s:UnsignedInteger> "," <e:Expr> ")" => Expr::NewFixedArray(
-		stringtable.get_as_usize(s).unwrap(), 
+		s.to_usize().unwrap(), 
 		Some(Box::new(e))
 	),
 	"newfixedarray" "(" <s:UnsignedInteger> ")" => Expr::NewFixedArray(
-		stringtable.get_as_usize(s).unwrap(), 
+		s.to_usize().unwrap(), 
 		None
 	),
 	"unsafecast" "(" <e:Expr> "," <t:Type> ")" => Expr::UnsafeCast(Box::new(e), t),
@@ -181,6 +184,8 @@ Term8: Expr = {
 	SignedInteger => Expr::ConstInt(<>),
 	Ident => Expr::VariableRef(<>),
 	<e:Term8> "." <i:Ident> => Expr::DotRef(Box::new(e), i),
+	<e:Term8> "." <u:UnsignedInteger> => Expr::TupleRef(Box::new(e), u),
+	<Ident> "(" ")" => Expr::FunctionCall(<>, Vec::new()),
 	<Ident> "(" <CommaedExprs> ")" => Expr::FunctionCall(<>),
 	"(" <Expr> ")" => <>,
 	"(" <CommaedExprs> "," ")" => Expr::Tuple(<>),
@@ -190,7 +195,8 @@ Term8: Expr = {
 		Box::new(v)
 	),
 	<t: Term8> "with" "{" <i:Ident> ":" <e: Expr> "}" => Expr::StructMod(Box::new(t), i, Box::new(e)),
-};
+	"null" => Expr::RawValue(Value::none()),
+}
 
 FieldInitializer: FieldInitializer = {
 	<Ident> ":" <Expr> "," => FieldInitializer::new(<>),
@@ -209,12 +215,12 @@ CommaedExprs: Vec<Expr> = {
 	},
 }
 
-UnsignedInteger: StringId = {
-	"0" => stringtable.get(<>),
-	r"[1-9][0-9]*" => stringtable.get(<>),
+UnsignedInteger: Uint256 = {
+	"0" => Uint256::from_usize(0),
+	r"[1-9][0-9]*" => Uint256::from_string(<>).unwrap(),
 }
 
-SignedInteger: StringId = {
-	"0s" => stringtable.get(<>),
-	r"[1-9][0-9]*s" => stringtable.get(<>),
+SignedInteger: Uint256 = {
+	"0s" => Uint256::from_usize(0),
+	r"[1-9][0-9]*s" => Uint256::from_signed_string(<>).unwrap(),
 }

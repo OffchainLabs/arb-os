@@ -415,6 +415,20 @@ fn mavm_codegen_expr<'a>(
 				}
 			}
 		}
+		TypeCheckedExpr::TupleRef(tce, idx, _) => {
+			let tce_type = tce.get_type();
+			let tuple_size = if let Type::Tuple(fields) = tce_type {
+				fields.len()
+			} else {
+				panic!("type-checking bug: tuple lookup in non-tuple type");
+			};
+			let (lg, c) = mavm_codegen_expr(tce, code, locals, label_gen, string_table, import_func_map)?;
+			c.push(Instruction::from_opcode_imm(
+				Opcode::TupleGet(tuple_size), 
+				Value::Int(idx.clone()),
+			));
+			Ok((lg, c))
+		}
 		TypeCheckedExpr::DotRef(tce, name, _) => {
 			let tce_type = tce.get_type();
 			let struct_size = match tce_type.clone() {
@@ -435,26 +449,12 @@ fn mavm_codegen_expr<'a>(
 				None => Err(new_codegen_error("tried to get non-existent struct field"))
 			}
 		}
-		TypeCheckedExpr::ConstUint(str_id) => {
-			let s = string_table.name_from_id(*str_id);
-			let val = match Uint256::from_string(s) {
-				Some(v) => Value::Int(v),
-				None => {
-					return Err(new_codegen_error("invalid numeric constant"));
-				}
-			};
-			code.push(Instruction::from_opcode_imm(Opcode::Noop, val));
-			Ok((label_gen, code))
+		TypeCheckedExpr::ConstUint(ui) => {
+			code.push(Instruction::from_opcode_imm(Opcode::Noop, Value::Int(ui.clone())));
+			Ok((label_gen, code))			
 		}
-		TypeCheckedExpr::ConstInt(str_id) => {
-			let s = string_table.name_from_id(*str_id);
-			let val = match Uint256::from_signed_string(s) {
-				Some(v) => Value::Int(v),
-				None => {
-					return Err(new_codegen_error("invalid numeric constant"));
-				}
-			};
-			code.push(Instruction::from_opcode_imm(Opcode::Noop, val));
+		TypeCheckedExpr::ConstInt(ui) => {
+			code.push(Instruction::from_opcode_imm(Opcode::Noop, Value::Int(ui.clone())));
 			Ok((label_gen, code))
 		}
 		TypeCheckedExpr::FunctionCall(name, args, _) => {
@@ -543,6 +543,29 @@ fn mavm_codegen_expr<'a>(
 			code.push(Instruction::from_opcode(Opcode::UncheckedFixedArrayGet(*size)));
 			Ok((label_gen, code))
 		}
+		TypeCheckedExpr::NewArray(sz, base_type, array_type) => {
+			let default_val = base_type.default_value();
+
+			let the_expr = TypeCheckedExpr::FunctionCall(
+				*string_table.get_if_exists("builtin_arrayNew").unwrap(),
+				vec![
+					TypeCheckedExpr::ConstUint(Uint256::from_usize(*sz)), 
+					TypeCheckedExpr::RawValue(default_val, Type::Any),
+				],
+				Type::Func(
+					vec![Type::Uint, Type::Any],
+					Box::new(array_type.clone()),
+				)
+			);
+			mavm_codegen_expr(
+				&the_expr,
+				code, 
+				locals,
+				label_gen,
+				string_table,
+				import_func_map,
+			)
+		}
 		TypeCheckedExpr::NewFixedArray(sz, bo_expr, _) => {
 			match bo_expr {
 				Some(expr) => {
@@ -577,7 +600,24 @@ fn mavm_codegen_expr<'a>(
 			}
 			Ok((label_gen, code))
 		}
-		TypeCheckedExpr::ArrayMod(_arr, _index, _val, _) => Err(new_codegen_error("ArrayMod not yet implemented")),
+		TypeCheckedExpr::ArrayMod(arr, index, val, _) => {
+			let the_expr = TypeCheckedExpr::FunctionCall(
+				*string_table.get_if_exists("builtin_arraySet").unwrap(),
+				vec![*arr.clone(), *index.clone(), *val.clone()],
+				Type::Func(
+					vec![arr.get_type(), index.get_type(), val.get_type()],
+					Box::new(arr.get_type()),
+				),
+			);
+			mavm_codegen_expr(
+				&the_expr,
+				code,
+				locals,
+				label_gen,
+				string_table,
+				import_func_map,
+			)
+		}
 		TypeCheckedExpr::FixedArrayMod(arr, index, val, size, _) => codegen_fixed_array_mod(
 			arr, index, val, *size,
 			code,
@@ -601,6 +641,10 @@ fn mavm_codegen_expr<'a>(
 		}
 		TypeCheckedExpr::Cast(expr, _) => 
 			mavm_codegen_expr(expr, code, locals, label_gen, string_table, import_func_map),
+		TypeCheckedExpr::RawValue(val, _) => {
+			code.push(Instruction::from_opcode_imm(Opcode::Noop, val.clone()));
+			Ok((label_gen, code))
+		}
 	}
 }
 

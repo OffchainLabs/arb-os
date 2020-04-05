@@ -1,6 +1,9 @@
 use crate::stringtable::StringId;
 use crate::symtable::SymTable;
 use crate::typecheck::{TypeError, new_type_error};
+use crate::mavm::Value;
+use crate::uint256::Uint256;
+use crate::xformcode::{self, TUPLE_SIZE};
 use serde::{Serialize, Deserialize};
 
 
@@ -146,6 +149,52 @@ impl Type {
 					false
 				}
 			}
+		}
+	}
+
+	pub fn default_value(&self) -> Value {
+		match self {
+			Type::Void => { panic!("tried to get default value for void type"); }
+			Type::Uint |
+			Type::Int |
+			Type::Bytes32 |
+			Type::Bool => Value::Int(Uint256::zero()),
+			Type::Tuple(tvec) => {
+				let mut default_tup = Vec::new();
+				for t in tvec {
+					default_tup.push(t.default_value());
+				}
+				Value::Tuple(default_tup)
+			}
+			Type::Array(t) => Value::Tuple(vec![
+				Value::Int(Uint256::one()),
+				Value::Int(Uint256::one()),
+				Value::Tuple(vec![t.default_value()]),
+			]),
+			Type::FixedArray(t, sz) => {
+				let default_val = t.default_value();
+				let mut val = Value::Tuple(vec![default_val; 8]);
+				let mut chunk_size = 1;
+				while chunk_size*TUPLE_SIZE < *sz {
+					val = Value::Tuple(vec![val; 8]);
+					chunk_size *= 8;
+				}
+				val
+			}
+			Type::Struct(fields) => {
+				let mut vals = Vec::new();
+				for field in fields {
+					vals.push(field.tipe.default_value());
+				}
+				xformcode::value_from_field_list(vals)
+			}
+			Type::Named(_) => {
+				panic!("tried to get default value for a named type");
+			}
+			Type::Func(_, _) => {
+				panic!("tried to get default value for a function type");
+			}
+			Type::Any => Value::none(),
 		}
 	}
 }
@@ -395,17 +444,20 @@ pub enum Expr {
 	UnaryOp(UnaryOp, Box<Expr>),
 	Binary(BinaryOp, Box<Expr>, Box<Expr>),
 	VariableRef(StringId),
+	TupleRef(Box<Expr>, Uint256),
 	DotRef(Box<Expr>, StringId),
-	ConstUint(StringId),
-	ConstInt(StringId),
+	ConstUint(Uint256),
+	ConstInt(Uint256),
 	FunctionCall(StringId, Vec<Expr>),
 	ArrayRef(Box<Expr>, Box<Expr>),
 	StructInitializer(Vec<FieldInitializer>),
 	Tuple(Vec<Expr>),
+	NewArray(usize, Type),
 	NewFixedArray(usize, Option<Box<Expr>>),
 	ArrayMod(Box<Expr>, Box<Expr>, Box<Expr>),
 	StructMod(Box<Expr>, StringId, Box<Expr>),
 	UnsafeCast(Box<Expr>, Type),
+	RawValue(Value),
 }
 
 impl Expr {
@@ -418,9 +470,10 @@ impl Expr {
 				Box::new(be2.resolve_types(type_table)?)
 			)),
 			Expr::VariableRef(name) => Ok(Expr::VariableRef(*name)),
+			Expr::TupleRef(be, idx) => Ok(Expr::TupleRef(Box::new(be.resolve_types(type_table)?), idx.clone())),
 			Expr::DotRef(be, name) => Ok(Expr::DotRef(Box::new(be.resolve_types(type_table)?), *name)),
-			Expr::ConstUint(s) => Ok(Expr::ConstUint(*s)),
-			Expr::ConstInt(s) => Ok(Expr::ConstInt(*s)),
+			Expr::ConstUint(s) => Ok(Expr::ConstUint(s.clone())),
+			Expr::ConstInt(s) => Ok(Expr::ConstInt(s.clone())),
 			Expr::FunctionCall(name, args) => {
 				let mut rargs = Vec::new();
 				for arg in args.iter() {
@@ -446,6 +499,7 @@ impl Expr {
 				}
 				Ok(Expr::Tuple(rvec))
 			}
+			Expr::NewArray(sz, tipe) => Ok(Expr::NewArray(*sz, tipe.resolve_types(type_table)?)),
 			Expr::NewFixedArray(sz, init_expr) => match &*init_expr {
 				Some(expr) => Ok(Expr::NewFixedArray(
 					*sz, 
@@ -467,6 +521,7 @@ impl Expr {
 				Box::new(be.resolve_types(type_table)?), 
 				t.resolve_types(type_table)?
 			)),
+			Expr::RawValue(v) => Ok(Expr::RawValue(v.clone())),
 		}
 	}
 }

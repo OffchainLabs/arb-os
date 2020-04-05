@@ -8,22 +8,22 @@ type array = struct {
 }
 
 func main() anytype {
-	let arr = arrayNew(13);
+	let arr = builtin_arrayNew(13, null);
 	return arr;
 }
 
-public func arraySize(arr: array) uint {
+public func builtin_arraySize(arr: array) uint {
 	return arr.size;
 }
 
-public func arrayNew(sz: uint) array {
+public func builtin_arrayNew(sz: uint, base_val: anytype) array {
 	let chunk = 1;
 	let height = 1;
 	while ((chunk*8) < sz) {
 		chunk = 8*chunk;
 		height = 1+height;
 	}
-	let tup = buildTree(height);
+	let tup = buildTree(height, base_val);
 	return struct {
 		size: sz,
 		topstep: chunk,
@@ -31,16 +31,16 @@ public func arrayNew(sz: uint) array {
 	};
 }
 
-func buildTree(height: uint) block {
+func buildTree(height: uint, base_val: anytype) block {
 	if (height == 1) {
-		return newfixedarray(8);
+		return newfixedarray(8, base_val);
 	} else {
-		let res = buildTree(height-1);
+		let res = buildTree(height-1, base_val);
 		return newfixedarray(8, res);
 	}
 }
 
-public func arrayGet(arr: array, index: uint) anytype {
+public func builtin_arrayGet(arr: array, index: uint) anytype {
 	if (index >= arr.size) {
 		panic;
 	}
@@ -55,7 +55,7 @@ public func arrayGet(arr: array, index: uint) anytype {
 	return res;
 }
 
-public func arraySet(arr: array, index: uint, value: anytype) array {
+public func builtin_arraySet(arr: array, index: uint, value: anytype) array {
 	if (index >= arr.size) {
 		panic;
 	}
@@ -75,20 +75,15 @@ func arraySet2(b: block, chunk: uint, index: uint, value: anytype) block {
 	}
 }
 
-type arraySwapResult = struct {
-	arr: array,
-	val: anytype,
-}
-
-public func arraySwap(a: array, index: uint, value: anytype) arraySwapResult {
+public func builtin_arraySwap(a: array, index: uint, value: anytype) (array, anytype) {
 	if (index >= a.size) {
 		panic;
 	}
 	let sub = arraySwap2(a.contents, a.topstep, index, value);
-	return struct {
-		arr: a with { contents: sub.bloc },
-		val: sub.val,
-	};
+	return (
+		a with { contents: sub.bloc },
+		sub.val,
+	);
 }
 
 type arraySwapSubResult = struct {

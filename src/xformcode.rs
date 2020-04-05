@@ -250,3 +250,7 @@ impl TupleTree {
 		}
 	}
 }
+
+pub fn value_from_field_list(lis: Vec<Value>) -> Value {
+	TupleTree::new(lis.len()).make_value(lis)
+}

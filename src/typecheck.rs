@@ -3,7 +3,8 @@ use crate::ast::{Type, TopLevelDecl, FuncDecl, FuncDeclKind, FuncArg, Statement,
 use crate::symtable::SymTable;
 use crate::stringtable::{StringId, StringTable};
 use crate::link::{ExportedFunc, ImportedFunc};
-use crate::mavm::Label;
+use crate::mavm::{Label, Value};
+use crate::uint256::Uint256;
 
 #[derive(Debug)]
 pub struct TypeError {
@@ -44,19 +45,22 @@ pub enum TypeCheckedExpr {
 	UnaryOp(UnaryOp, Box<TypeCheckedExpr>, Type),
 	Binary(BinaryOp, Box<TypeCheckedExpr>, Box<TypeCheckedExpr>, Type),
 	VariableRef(StringId, Type),
+	TupleRef(Box<TypeCheckedExpr>, Uint256, Type),
 	DotRef(Box<TypeCheckedExpr>, StringId, Type),
-	ConstUint(StringId),
-	ConstInt(StringId),
+	ConstUint(Uint256),
+	ConstInt(Uint256),
 	FunctionCall(StringId, Vec<TypeCheckedExpr>, Type),
 	StructInitializer(Vec<TypeCheckedStructField>, Type),
 	ArrayRef(Box<TypeCheckedExpr>, Box<TypeCheckedExpr>, Type),
 	FixedArrayRef(Box<TypeCheckedExpr>, Box<TypeCheckedExpr>, usize, Type),
 	Tuple(Vec<TypeCheckedExpr>, Type),
+	NewArray(usize, Type, Type),
 	NewFixedArray(usize, Option<Box<TypeCheckedExpr>>, Type),
 	ArrayMod(Box<TypeCheckedExpr>, Box<TypeCheckedExpr>, Box<TypeCheckedExpr>, Type),
 	FixedArrayMod(Box<TypeCheckedExpr>, Box<TypeCheckedExpr>, Box<TypeCheckedExpr>, usize, Type),
 	StructMod(Box<TypeCheckedExpr>, usize, Box<TypeCheckedExpr>, Type),
 	Cast(Box<TypeCheckedExpr>, Type),
+	RawValue(Value, Type),
 }
 
 impl TypeCheckedExpr {
@@ -65,6 +69,7 @@ impl TypeCheckedExpr {
 			TypeCheckedExpr::UnaryOp(_, _, t) => t.clone(),
 			TypeCheckedExpr::Binary(_, _, _, t) => t.clone(),
 			TypeCheckedExpr::VariableRef(_, t) => t.clone(),
+			TypeCheckedExpr::TupleRef(_, _, t) => t.clone(),
 			TypeCheckedExpr::DotRef(_, _, t) => t.clone(),
 			TypeCheckedExpr::ConstUint(_) => Type::Uint,
 			TypeCheckedExpr::ConstInt(_) => Type::Int,
@@ -73,11 +78,13 @@ impl TypeCheckedExpr {
 			TypeCheckedExpr::ArrayRef(_, _, t) => t.clone(),
 			TypeCheckedExpr::FixedArrayRef(_, _, _, t) => t.clone(),
 			TypeCheckedExpr::Tuple(_, t) => t.clone(),
+			TypeCheckedExpr::NewArray(_, _, t) => t.clone(),
 			TypeCheckedExpr::NewFixedArray(_, _, t) => t.clone(),
 			TypeCheckedExpr::ArrayMod(_, _, _, t) => t.clone(),
 			TypeCheckedExpr::FixedArrayMod(_, _, _, _, t) => t.clone(),
 			TypeCheckedExpr::StructMod(_, _, _, t) => t.clone(),
 			TypeCheckedExpr::Cast(_, t) => t.clone(),
+			TypeCheckedExpr::RawValue(_, t) => t.clone(),
 		}
 	}
 }
@@ -293,6 +300,19 @@ fn typecheck_expr(
 			},
 			Some(t) => Ok(TypeCheckedExpr::VariableRef(*name, t.clone()))
 		}
+		Expr::TupleRef(tref, idx) => {
+			let tc_sub = typecheck_expr(&*tref, type_table)?;
+			let uidx = idx.to_usize().unwrap();
+			if let Type::Tuple(tv) = tc_sub.get_type() {
+				if uidx < tv.len() {
+					Ok(TypeCheckedExpr::TupleRef(Box::new(tc_sub), idx.clone(), tv[uidx].clone()))
+				} else {
+					Err(new_type_error("tuple field access to non-existent field"))
+				}
+			} else {
+				Err(new_type_error("tuple field access to non-tuple value"))
+			}
+		}
 		Expr::DotRef(sref, name) => {
 			let tc_sub = typecheck_expr(&*sref, type_table)?;
 			if let Type::Struct(v) = tc_sub.get_type() {
@@ -301,11 +321,14 @@ fn typecheck_expr(
 						return Ok(TypeCheckedExpr::DotRef(Box::new(tc_sub), *name, sf.tipe.clone()));
 					}
 				}
-			} 
-			Err(new_type_error("reference to non-existent struct field"))
+				Err(new_type_error("reference to non-existent struct field"))
+
+			} else {
+				Err(new_type_error("struct field access to non-struct value"))
+			}
 		}
-		Expr::ConstUint(n) => Ok(TypeCheckedExpr::ConstUint(*n)),
-		Expr::ConstInt(n) => Ok(TypeCheckedExpr::ConstInt(*n)),
+		Expr::ConstUint(n) => Ok(TypeCheckedExpr::ConstUint(n.clone())),
+		Expr::ConstInt(n) => Ok(TypeCheckedExpr::ConstInt(n.clone())),
 		Expr::FunctionCall(name, args) => {
 			match type_table.get(*name) {
 				Some(Type::Func(arg_types, ret_type)) => {
@@ -356,6 +379,11 @@ fn typecheck_expr(
 				_ => Err(new_type_error("fixedarray lookup in non-array type"))
 			}
 		}
+		Expr::NewArray(size, tipe) => Ok(TypeCheckedExpr::NewArray(
+			*size, 
+			tipe.clone(), 
+			Type::Array(Box::new(tipe.clone())),
+		)),
 		Expr::NewFixedArray(size, maybe_expr) => match maybe_expr {
 			Some(expr) => {
 				let tc_expr = typecheck_expr(expr, type_table)?;
@@ -444,6 +472,7 @@ fn typecheck_expr(
 			}
 		}
 		Expr::UnsafeCast(expr, t) => Ok(TypeCheckedExpr::Cast(Box::new(typecheck_expr(expr, type_table)?), t.clone())),
+		Expr::RawValue(v) => Ok(TypeCheckedExpr::RawValue(v.clone(), Type::Any)),
 	}
 }
 
