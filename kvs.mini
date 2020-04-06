@@ -61,9 +61,10 @@ func simpleHashtable_swap(
 }
 
 func simpleHashtable_expand(table: SimpleHashtable) SimpleHashtable {
+	let newSize = 2*table.size;
 	let newTable = struct {
-		size: 2*table.size,
-		contents: unsafecast(newarray(8, anytype), []ShtItem),
+		size: newSize,
+		contents: unsafecast(newarray(newSize, anytype), []ShtItem),
 	};
 	let i = 0;
 	while (i < table.size) {

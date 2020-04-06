@@ -113,14 +113,14 @@ pub fn compile_from_file<'a>(path: &Path, debug: bool) -> Result<CompiledProgram
 }
 
 pub fn compile_from_source<'a>(s: String, debug: bool) -> Result<CompiledProgram, CompileError<'a>> {
-    let mut string_table = stringtable::StringTable::new();
+    let mut string_table_1 = stringtable::StringTable::new();
     let res = mini::DeclsParser::new()
-    	.parse(&mut string_table, &s)
-    	.unwrap();
+    	.parse(&mut string_table_1, &s)
+        .unwrap();
     let mut checked_funcs = Vec::new();
-    let res2 = crate::typecheck::typecheck_top_level_decls(&res, &mut checked_funcs, &string_table);
+    let res2 = crate::typecheck::typecheck_top_level_decls(&res, &mut checked_funcs, string_table_1);
     match res2 {
-    	Ok((exported_funcs, imported_funcs)) => { 
+    	Ok((exported_funcs, imported_funcs, string_table)) => { 
             let mut code = Vec::new();
     		match crate::codegen::mavm_codegen(checked_funcs, &mut code, &string_table, &imported_funcs) {
                 Ok(code_out) => {

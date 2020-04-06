@@ -334,6 +334,15 @@ impl ImportFuncDecl {
 			tipe: Type::Func(arg_types, Box::new(ret_type)),
 		}
 	}
+
+	pub fn new_types(name: StringId, arg_types: Vec<Type>, ret_type: Type) -> Self {
+		ImportFuncDecl{ 
+			name, 
+			arg_types: arg_types.clone(),
+			ret_type: ret_type.clone(), 
+			tipe: Type::Func(arg_types, Box::new(ret_type)),
+		}
+	}
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -452,7 +461,7 @@ pub enum Expr {
 	ArrayRef(Box<Expr>, Box<Expr>),
 	StructInitializer(Vec<FieldInitializer>),
 	Tuple(Vec<Expr>),
-	NewArray(usize, Type),
+	NewArray(Box<Expr>, Type),
 	NewFixedArray(usize, Option<Box<Expr>>),
 	ArrayMod(Box<Expr>, Box<Expr>, Box<Expr>),
 	StructMod(Box<Expr>, StringId, Box<Expr>),
@@ -499,7 +508,10 @@ impl Expr {
 				}
 				Ok(Expr::Tuple(rvec))
 			}
-			Expr::NewArray(sz, tipe) => Ok(Expr::NewArray(*sz, tipe.resolve_types(type_table)?)),
+			Expr::NewArray(sz, tipe) => Ok(Expr::NewArray(
+				Box::new(sz.resolve_types(type_table)?), 
+				tipe.resolve_types(type_table)?
+			)),
 			Expr::NewFixedArray(sz, init_expr) => match &*init_expr {
 				Some(expr) => Ok(Expr::NewFixedArray(
 					*sz, 

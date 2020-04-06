@@ -169,7 +169,7 @@ Term8: Expr = {
 	"uint" "(" <Expr> ")" => Expr::UnaryOp(UnaryOp::ToUint, Box::new(<>)),
 	"int" "(" <Expr> ")" => Expr::UnaryOp(UnaryOp::ToInt, Box::new(<>)),
 	"bytes32" "(" <Expr> ")" => Expr::UnaryOp(UnaryOp::ToBytes32, Box::new(<>)),
-	"newarray" "(" <s:UnsignedInteger> "," <t:Type> ")" => Expr::NewArray(s.to_usize().unwrap(), t),
+	"newarray" "(" <e:Expr> "," <t:Type> ")" => Expr::NewArray(Box::new(e), t),
 	"newfixedarray" "(" <s:UnsignedInteger> "," <e:Expr> ")" => Expr::NewFixedArray(
 		s.to_usize().unwrap(), 
 		Some(Box::new(e))

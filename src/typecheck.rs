@@ -5,6 +5,7 @@ use crate::stringtable::{StringId, StringTable};
 use crate::link::{ExportedFunc, ImportedFunc};
 use crate::mavm::{Label, Value};
 use crate::uint256::Uint256;
+use crate::builtins::builtin_func_decls;
 
 #[derive(Debug)]
 pub struct TypeError {
@@ -54,7 +55,7 @@ pub enum TypeCheckedExpr {
 	ArrayRef(Box<TypeCheckedExpr>, Box<TypeCheckedExpr>, Type),
 	FixedArrayRef(Box<TypeCheckedExpr>, Box<TypeCheckedExpr>, usize, Type),
 	Tuple(Vec<TypeCheckedExpr>, Type),
-	NewArray(usize, Type, Type),
+	NewArray(Box<TypeCheckedExpr>, Type, Type),
 	NewFixedArray(usize, Option<Box<TypeCheckedExpr>>, Type),
 	ArrayMod(Box<TypeCheckedExpr>, Box<TypeCheckedExpr>, Box<TypeCheckedExpr>, Type),
 	FixedArrayMod(Box<TypeCheckedExpr>, Box<TypeCheckedExpr>, Box<TypeCheckedExpr>, usize, Type),
@@ -104,13 +105,18 @@ impl TypeCheckedStructField {
 pub fn typecheck_top_level_decls<'a>(
 	decls: &[TopLevelDecl], 
 	checked_funcs: &mut Vec<TypeCheckedFunc>,
-	string_table: &'a StringTable,
-) -> Result<(Vec<ExportedFunc>, Vec<ImportedFunc>), TypeError> {
+	string_table_in: StringTable<'a>,
+) -> Result<(Vec<ExportedFunc>, Vec<ImportedFunc>, StringTable<'a>), TypeError> {
 	let mut exported_funcs = Vec::new();
 	let mut imported_funcs = Vec::new();
 	let mut funcs = Vec::new();
 	let mut named_types = HashMap::new();
 	let mut hm = HashMap::new();
+	let (builtin_fds, string_table) = builtin_func_decls(string_table_in);
+	for fd in builtin_fds.iter() {
+		hm.insert(fd.name, &fd.tipe);
+		imported_funcs.push(ImportedFunc::new(imported_funcs.len(), fd.name, &string_table));
+	}
 	for decl in decls.iter() {
 		match decl {
 			TopLevelDecl::TypeDecl(td) => { named_types.insert(td.name, &td.tipe); }
@@ -120,7 +126,7 @@ pub fn typecheck_top_level_decls<'a>(
 			}
 			TopLevelDecl::ImpFuncDecl(fd) => {
 				hm.insert(fd.name, &fd.tipe);
-				imported_funcs.push(ImportedFunc::new(imported_funcs.len(), fd.name, string_table));
+				imported_funcs.push(ImportedFunc::new(imported_funcs.len(), fd.name, &string_table));
 			}
 		}
 	}
@@ -139,7 +145,7 @@ pub fn typecheck_top_level_decls<'a>(
 									f.name, 
 									Label::Func(f.name), 
 									f.tipe.clone(),
-									string_table,
+									&string_table,
 								)
 							);
 							checked_funcs.push(f); 
@@ -156,7 +162,7 @@ pub fn typecheck_top_level_decls<'a>(
 		}
 	}
 
-	Ok((exported_funcs, imported_funcs))
+	Ok((exported_funcs, imported_funcs, string_table))
 }
 
 pub fn typecheck_function<'a>(
@@ -379,8 +385,8 @@ fn typecheck_expr(
 				_ => Err(new_type_error("fixedarray lookup in non-array type"))
 			}
 		}
-		Expr::NewArray(size, tipe) => Ok(TypeCheckedExpr::NewArray(
-			*size, 
+		Expr::NewArray(size_expr, tipe) => Ok(TypeCheckedExpr::NewArray(
+			Box::new(typecheck_expr(size_expr, type_table)?), 
 			tipe.clone(), 
 			Type::Array(Box::new(tipe.clone())),
 		)),

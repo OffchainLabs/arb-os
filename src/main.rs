@@ -25,6 +25,7 @@ pub mod striplabels;
 pub mod xformcode;
 pub mod optimize;
 pub mod emulator;
+pub mod builtins;
 
 #[macro_use] extern crate lalrpop_util;
 lalrpop_mod!(pub mini); 

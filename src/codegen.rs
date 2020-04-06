@@ -512,13 +512,26 @@ fn mavm_codegen_expr<'a>(
 			}
 			Ok((label_gen, code))
 		}
-		TypeCheckedExpr::ArrayRef(expr1, expr2, _) => {
-			let (lg, c) = mavm_codegen_expr(expr2, code, locals, label_gen, string_table, import_func_map)?;
-			let (lg, c) = mavm_codegen_expr(expr1, c, locals, lg, string_table, import_func_map)?;
-			label_gen = lg;
-			code = c;
-			code.push(Instruction::from_opcode(Opcode::ArrayGet));
-			Ok((label_gen, code))
+		TypeCheckedExpr::ArrayRef(expr1, expr2, t) => {
+			let the_expr = TypeCheckedExpr::FunctionCall(
+				*string_table.get_if_exists("builtin_arrayGet").unwrap(),
+				vec![
+					*expr1.clone(), 
+					*expr2.clone(),
+				],
+				Type::Func(
+					vec![Type::Array(Box::new(Type::Any)), Type::Int],
+					Box::new(t.clone()),
+				)
+			);
+			mavm_codegen_expr(
+				&the_expr,
+				code, 
+				locals,
+				label_gen,
+				string_table,
+				import_func_map,
+			)
 		}
 		TypeCheckedExpr::FixedArrayRef(expr1, expr2, size, _) => {
 			let (lg, c) = mavm_codegen_expr(expr2, code, locals, label_gen, string_table, import_func_map)?;
@@ -543,13 +556,12 @@ fn mavm_codegen_expr<'a>(
 			code.push(Instruction::from_opcode(Opcode::UncheckedFixedArrayGet(*size)));
 			Ok((label_gen, code))
 		}
-		TypeCheckedExpr::NewArray(sz, base_type, array_type) => {
+		TypeCheckedExpr::NewArray(sz_expr, base_type, array_type) => {
 			let default_val = base_type.default_value();
-
 			let the_expr = TypeCheckedExpr::FunctionCall(
 				*string_table.get_if_exists("builtin_arrayNew").unwrap(),
 				vec![
-					TypeCheckedExpr::ConstUint(Uint256::from_usize(*sz)), 
+					*sz_expr.clone(), 
 					TypeCheckedExpr::RawValue(default_val, Type::Any),
 				],
 				Type::Func(

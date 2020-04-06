@@ -6,6 +6,7 @@ use crate::mavm::{Label, Value, CodePt, Instruction};
 use crate::ast::Type;
 use crate::stringtable::StringTable;
 use crate::compile::{CompiledProgram, CompileError};
+use crate::builtins::add_auto_link_progs;
 use serde::{Serialize, Deserialize};
 
 
@@ -177,12 +178,13 @@ pub fn postlink_compile<'a>(
     })
 }
 
-pub fn link<'a>(progs: &Vec<CompiledProgram>) -> Result<CompiledProgram, CompileError<'a>> {
+pub fn link<'a>(progs_in: &Vec<CompiledProgram>) -> Result<CompiledProgram, CompileError<'a>> {
+	let progs = add_auto_link_progs(progs_in)?;
 	let mut insns_so_far: usize = 0;
 	let mut imports_so_far: usize = 0;
 	let mut int_offsets = Vec::new();
 	let mut ext_offsets = Vec::new();
-	for prog in progs {
+	for prog in &progs {
 		int_offsets.push(insns_so_far);
 		insns_so_far += prog.code.len();
 		ext_offsets.push(imports_so_far);

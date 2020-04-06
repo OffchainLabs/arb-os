@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 pub type StringId = usize;
 
-#[derive(Debug, Default)]
+#[derive(Clone, Debug, Default)]
 pub struct StringTable<'a> {
 	next_id: StringId,
 	table: HashMap<&'a str, StringId>,
