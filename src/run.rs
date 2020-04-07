@@ -6,7 +6,7 @@ use crate::emulator::{Machine, ExecutionError};
 use crate::link::LinkedProgram;
 
 
-pub fn run_from_file(path: &Path) -> Result<Value, ExecutionError> {
+pub fn run_from_file(path: &Path, args: Vec<Value>) -> Result<Value, ExecutionError> {
    let display = path.display();
 
     let mut file = match File::open(&path) {
@@ -20,10 +20,10 @@ pub fn run_from_file(path: &Path) -> Result<Value, ExecutionError> {
         Ok(_) => s,
     };
 
-    run_from_string(s)
+    run_from_string(s, args)
 }
 
-fn run_from_string(s: String) -> Result<Value, ExecutionError> {
+fn run_from_string(s: String, args: Vec<Value>) -> Result<Value, ExecutionError> {
     let parse_result: Result<LinkedProgram, serde_json::Error> = serde_json::from_str(&s);
     let program = match parse_result {
         Ok(prog) => prog,
@@ -32,11 +32,12 @@ fn run_from_string(s: String) -> Result<Value, ExecutionError> {
             panic!();
         }
     };
-    run(&mut Machine::new(program))
+    let mut new_machine = Machine::new(program);
+    run(&mut new_machine, args)
 }
 
-fn run(machine: &mut Machine) -> Result<Value, ExecutionError> {
-    match machine.test_call(CodePt::new_internal(0), Vec::new()) {
+fn run(machine: &mut Machine, args: Vec<Value>) -> Result<Value, ExecutionError> {
+    match machine.test_call(CodePt::new_internal(0), args) {
         Ok(mut stack) => {
             let machine_state = machine.get_state();
             stack.pop(&machine_state)

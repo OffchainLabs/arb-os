@@ -38,49 +38,74 @@ impl ValueStack {
 		self.push_uint(if val { Uint256::one() } else { Uint256::zero() })
 	}
 
+	pub fn top(&self) -> Option<Value> {
+		match self.contents.get(0) {
+			Some(aval) => Some(aval.clone()),
+			None => None,
+		}
+	}
+
 	pub fn pop(&mut self, state: &MachineState) -> Result<Value, ExecutionError> {
 		match self.contents.pop() {
 			Some(v) => Ok(v),
-			None => Err(ExecutionError::new("stack underflow", state))
+			None => Err(ExecutionError::new("stack underflow", state, None))
 		}
 	}
 
 	pub fn pop_codepoint(&mut self, state: &MachineState) -> Result<CodePt, ExecutionError> {
-		if let Value::CodePoint(cp) = self.pop(state)? {
+		let val = self.pop(state)?;
+		if let Value::CodePoint(cp) = val {
 			Ok(cp)
 		} else {
-			Err(ExecutionError::new("expected CodePoint on stack", state))
+			Err(ExecutionError::new("expected CodePoint on stack", state, Some(val)))
 		}
 	}
 
 	pub fn pop_uint(&mut self, state: &MachineState) -> Result<Uint256, ExecutionError> {
-		if let Value::Int(i) = self.pop(state)? {
+		let val = self.pop(state)?;
+		if let Value::Int(i) = val {
 			Ok(i)
 		} else {
-			Err(ExecutionError::new("expected integer on stack", state))
+			Err(ExecutionError::new("expected integer on stack", state, Some(val)))
 		}
 	}
 
 	pub fn pop_usize(&mut self, state: &MachineState) -> Result<usize, ExecutionError> {
-		match self.pop_uint(state)?.to_usize() {
+		let val = self.pop_uint(state)?;
+		match val.to_usize() {
 			Some(u) => Ok(u),
-			None => Err(ExecutionError::new("expected small integer on stack", state))
+			None => Err(ExecutionError::new(
+				"expected small integer on stack", 
+				state, 
+				Some(Value::Int(val))
+			)),
 		}
 	}
 
 	pub fn pop_bool(&mut self, state: &MachineState) -> Result<bool, ExecutionError> {
-		match self.pop_usize(state) {
+		let val = self.pop_usize(state);
+		match val {
 			Ok(0) => Ok(false),
 			Ok(1) => Ok(true),
-			_ => Err(ExecutionError::new("expected bool on stack", state))
+			Ok(v) => Err(ExecutionError::new(
+				"expected bool on stack", 
+				state, 
+				Some(Value::Int(Uint256::from_usize(v)))
+			)),
+			_ => Err(ExecutionError::new(
+				"expected bool on stack", 
+				state, 
+				None
+			)),
 		}
 	}
 
 	pub fn pop_tuple(&mut self, state: &MachineState) -> Result<Vec<Value>, ExecutionError> {
-		if let Value::Tuple(v) = self.pop(state)? {
+		let val = self.pop(state)?;
+		if let Value::Tuple(v) = val {
 			Ok(v)
 		} else {
-			Err(ExecutionError::new("expected tuple on stack", state))
+			Err(ExecutionError::new("expected tuple on stack", state, Some(val)))
 		}
 	}
 }
@@ -100,15 +125,15 @@ impl fmt::Display for ValueStack {
 pub enum ExecutionError {
 	StoppedErr(&'static str),
 	Wrapped(&'static str, Box<ExecutionError>),
-	RunningErr(&'static str, CodePt),
+	RunningErr(&'static str, CodePt, Option<Value>),
 }
 
 impl ExecutionError {
-	fn new(why: &'static str, state: &MachineState) -> Self {
+	fn new(why: &'static str, state: &MachineState, val: Option<Value>) -> Self {
 		match state {
 			MachineState::Stopped => ExecutionError::StoppedErr(why),
 			MachineState::Error(e) => ExecutionError::Wrapped(why, Box::new(e.clone())),
-			MachineState::Running(cp) => ExecutionError::RunningErr(why, *cp),
+			MachineState::Running(cp) => ExecutionError::RunningErr(why, *cp, val),
 		}
 	}
 
@@ -119,7 +144,7 @@ impl ExecutionError {
 	*/
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub enum MachineState {
 	Stopped,
 	Error(ExecutionError),
@@ -179,7 +204,7 @@ impl Machine {
 		self.state = MachineState::Running(func_addr);
 		self.run(Some(stop_pc));
 		match &self.state {
-			MachineState::Stopped => Err(ExecutionError::new("execution stopped", &self.state)),
+			MachineState::Stopped => Err(ExecutionError::new("execution stopped", &self.state, None)),
 			MachineState::Error(e) => Err(e.clone()),
 			MachineState::Running(_) => Ok(self.stack.clone()),
 		}
@@ -189,7 +214,7 @@ impl Machine {
 		if let MachineState::Running(pc) = &self.state {
 			Ok(*pc)
 		} else {
-			Err(ExecutionError::new("tried to get PC of non-running machine", &self.state))
+			Err(ExecutionError::new("tried to get PC of non-running machine", &self.state, None))
 		}
 	}
 
@@ -231,7 +256,7 @@ impl Machine {
 						self.incr_pc();
 						Ok(true)
 					}
-					Opcode::Panic => Err(ExecutionError::new("panicked", &self.state)),
+					Opcode::Panic => Err(ExecutionError::new("panicked", &self.state, None)),
 					Opcode::Jump => {
 						self.state = MachineState::Running(self.stack.pop_codepoint(&self.state)?);
 						Ok(true)
@@ -270,7 +295,7 @@ impl Machine {
 							self.incr_pc();
 							Ok(true)
 						} else {
-							Err(ExecutionError::new("index out of bounds in Tset", &self.state))
+							Err(ExecutionError::new("index out of bounds in Tset", &self.state, None))
 						}
 					}
 					Opcode::Tget => {
@@ -281,7 +306,7 @@ impl Machine {
 							self.incr_pc();
 							Ok(true)
 						} else {
-							Err(ExecutionError::new("index out of bounds in Tget", &self.state))
+							Err(ExecutionError::new("index out of bounds in Tget", &self.state, None))
 						}
 					}
 					Opcode::Pop => {
@@ -359,7 +384,7 @@ impl Machine {
 								Ok(true)
 							}
 							None => {
-								Err(ExecutionError::new("signed integer overflow in unary minus", &self.state))
+								Err(ExecutionError::new("signed integer overflow in unary minus", &self.state, None))
 							}
 						}
 					}
@@ -412,7 +437,7 @@ impl Machine {
 								self.incr_pc();
 								Ok(true)
 							}
-							None => Err(ExecutionError::new("divide by zero", &self.state))
+							None => Err(ExecutionError::new("divide by zero", &self.state, None))
 						}
 					}
 					Opcode::Mod => {
@@ -425,7 +450,7 @@ impl Machine {
 								self.incr_pc();
 								Ok(true)
 							}
-							None => Err(ExecutionError::new("modulo by zero", &self.state))
+							None => Err(ExecutionError::new("modulo by zero", &self.state, None))
 						}
 					}
 					Opcode::Sdiv => {
@@ -438,7 +463,7 @@ impl Machine {
 								self.incr_pc();
 								Ok(true)
 							}
-							None => Err(ExecutionError::new("divide by zero", &self.state))
+							None => Err(ExecutionError::new("divide by zero", &self.state, None))
 						}
 					}
 					Opcode::Smod => {
@@ -451,7 +476,7 @@ impl Machine {
 								self.incr_pc();
 								Ok(true)
 							}
-							None => Err(ExecutionError::new("modulo by zero", &self.state))
+							None => Err(ExecutionError::new("modulo by zero", &self.state, None))
 						}
 					}
 					Opcode::LessThan => {
@@ -547,13 +572,13 @@ impl Machine {
 					Opcode::TupleSet(_) |
 					Opcode::ArrayGet |
 					Opcode::UncheckedFixedArrayGet(_) | 
-					Opcode::Return => Err(ExecutionError::new("invalid opcode", &self.state))
+					Opcode::Return => Err(ExecutionError::new("invalid opcode", &self.state, None))
 				}
 			} else {
-				Err(ExecutionError::new("invalid program counter", &self.state))
+				Err(ExecutionError::new("invalid program counter", &self.state, None))
 			}
 		} else {
-			Err(ExecutionError::new("tried to run machine that is not runnable", &self.state))
+			Err(ExecutionError::new("tried to run machine that is not runnable", &self.state, None))
 		}
 	}
 }

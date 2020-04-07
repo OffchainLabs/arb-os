@@ -520,7 +520,7 @@ fn mavm_codegen_expr<'a>(
 					*expr2.clone(),
 				],
 				Type::Func(
-					vec![Type::Array(Box::new(Type::Any)), Type::Int],
+					vec![Type::Array(Box::new(Type::Any)), Type::Uint],
 					Box::new(t.clone()),
 				)
 			);
@@ -534,8 +534,8 @@ fn mavm_codegen_expr<'a>(
 			)
 		}
 		TypeCheckedExpr::FixedArrayRef(expr1, expr2, size, _) => {
-			let (lg, c) = mavm_codegen_expr(expr2, code, locals, label_gen, string_table, import_func_map)?;
-			let (lg, c) = mavm_codegen_expr(expr1, c, locals, lg, string_table, import_func_map)?;
+			let (lg, c) = mavm_codegen_expr(expr1, code, locals, label_gen, string_table, import_func_map)?;
+			let (lg, c) = mavm_codegen_expr(expr2, c, locals, lg, string_table, import_func_map)?;
 			label_gen = lg;
 			code = c;
 			if *size != 8 {  //TODO: also skip check if size is larger power of 8

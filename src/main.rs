@@ -26,6 +26,7 @@ pub mod xformcode;
 pub mod optimize;
 pub mod emulator;
 pub mod builtins;
+pub mod minitests;
 
 #[macro_use] extern crate lalrpop_util;
 lalrpop_mod!(pub mini); 
@@ -116,7 +117,7 @@ fn main() {
     if let Some(matches) = matches.subcommand_matches("run") {
         let filename = matches.value_of("INPUT").unwrap();
         let path = Path::new(filename);
-        match run_from_file(path) {
+        match run_from_file(path, Vec::new()) {
             Ok(val) => {
                 println!("Result: {}", val);
             }

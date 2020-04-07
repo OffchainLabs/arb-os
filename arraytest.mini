@@ -1,8 +1,20 @@
 
-import func arrayNew(sz:uint) anytype;
-import func arrayGet(arr: anytype, idx: uint) uint;
-
-func main() anytype {
-	let a = arrayNew(17);
-	return arrayGet(a, 6);
+func tests(which: uint) anytype {
+	if (which == 0) {
+		return newarray(17, anytype);
+	}
+	if (which == 1) {
+		let a = newarray(17, anytype);
+		return a[6];
+	}
+	if (which == 2) {
+		let a = newarray(71, uint);
+		return a[66];
+	}
+	if (which == 3) {
+		let a = newarray(64, uint);
+		a = a with { [17] = 3 };
+		return a[17];
+	}
+	return null;
 }
