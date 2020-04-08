@@ -112,10 +112,10 @@ impl ValueStack {
 
 impl fmt::Display for ValueStack {
 	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-		write!(f, "Stack[\n")?;
+		writeln!(f, "Stack[")?;
 		for i in 0..self.contents.len() {
 			let j = self.contents.len()-1-i;
-			write!(f, "{};;\n", self.contents[j])?;
+			writeln!(f, "{};;", self.contents[j])?;
 		}
         write!(f, "]")
     }

@@ -1,5 +1,4 @@
 use std::path::Path;
-use std::clone::Clone;
 use crate::ast::{Type, ImportFuncDecl};
 use crate::stringtable::StringTable;
 use crate::compile::{CompiledProgram, CompileError, compile_from_file};
@@ -48,12 +47,12 @@ pub fn builtin_func_decls<'a>(mut string_table: StringTable<'a>) -> (Vec<ImportF
 
 
 pub fn add_auto_link_progs<'a>(
-	progs_in: &Vec<CompiledProgram>,
+	progs_in: &[CompiledProgram],
 ) -> Result<Vec<CompiledProgram>, CompileError<'a>> {
 	let builtin_pathnames = vec![
 		"builtin/array.mao"
 	];
-	let mut progs = progs_in.clone();
+	let mut progs = progs_in.to_owned();
 	for pathname in builtin_pathnames {
 		let path = Path::new(pathname); 
 		match compile_from_file(path, false) {

@@ -5,10 +5,10 @@ use crate::uint256::Uint256;
 
 
 pub fn strip_labels(
-	code_in: &Vec<Instruction>, 
-	jump_table: &Vec<Label>,
-	exported_funcs: &Vec<ExportedFunc>,
-	imported_funcs: &Vec<ImportedFunc>,
+	code_in: &[Instruction], 
+	jump_table: &[Label],
+	exported_funcs: &[ExportedFunc],
+	imported_funcs: &[ImportedFunc],
 ) -> (Vec<Instruction>, Vec<CodePt>, Vec<ExportedFuncPoint>) {
 	let mut label_map = HashMap::new();
 
@@ -19,27 +19,27 @@ pub fn strip_labels(
 	}
 
 	let mut after_count = 0;
-	for pc in 0..code_in.len() {
-		match code_in[pc].get_label() {
+	for insn in code_in {
+		match insn.get_label() {
 			Some(label) => { label_map.insert(*label, CodePt::new_internal(after_count)); }
-			None => { after_count = 1+after_count; }
+			None => { after_count += 1; }
 		}
 	}
 
 	let mut code_out = Vec::new();
-	for pc in 0..code_in.len() {
-		match code_in[pc].get_label() {
+	for insn in code_in {
+		match insn.get_label() {
 			Some(_) => {}
 			None => {
-				let insn_in = code_in[pc].clone();
+				let insn_in = insn.clone();
 				code_out.push(insn_in.replace_labels(&label_map));
 			}
 		}
 	}
 
 	let mut jump_table_out = Vec::new();
-	for i in 0..jump_table.len() {
-		match label_map.get(&jump_table[i]) {
+	for jt_item in jump_table {
+		match label_map.get(&jt_item) {
 			Some(index) => { jump_table_out.push(*index); }
 			None => { panic!("strip_labels: lookup failed for jump table item"); }
 		}
@@ -57,8 +57,8 @@ pub fn strip_labels(
 }
 
 pub fn fix_nonforward_labels(
-	code_in: &Vec<Instruction>,
-	imported_funcs: &Vec<ImportedFunc>,
+	code_in: &[Instruction],
+	imported_funcs: &[ImportedFunc],
 ) -> (Vec<Instruction>, Vec<Label>) {
 	let mut jump_table = Vec::new();
 	let mut jump_table_index = HashMap::new();
@@ -73,8 +73,8 @@ pub fn fix_nonforward_labels(
 		jump_table.push(new_label);
 	}
 
-	for pc in 0..code_in.len() {
-		let insn_in = code_in[pc].clone();
+	for insn in code_in {
+		let insn_in = insn.clone();
 		match insn_in.immediate {
 			Some(val) => match val {
 				Value::Label(label) => {

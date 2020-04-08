@@ -178,7 +178,7 @@ pub fn postlink_compile<'a>(
     })
 }
 
-pub fn link<'a>(progs_in: &Vec<CompiledProgram>) -> Result<CompiledProgram, CompileError<'a>> {
+pub fn link<'a>(progs_in: &[CompiledProgram]) -> Result<CompiledProgram, CompileError<'a>> {
 	let progs = add_auto_link_progs(progs_in)?;
 	let mut insns_so_far: usize = 0;
 	let mut imports_so_far: usize = 0;

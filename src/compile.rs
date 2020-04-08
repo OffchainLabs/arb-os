@@ -108,16 +108,16 @@ pub fn compile_from_file<'a>(path: &Path, debug: bool) -> Result<CompiledProgram
     let parse_result: Result<CompiledProgram, serde_json::Error> = serde_json::from_str(&s);
     match parse_result {
         Ok(compiled_prog) => Ok(compiled_prog),
-        Err(_) => compile_from_source(s, debug),  // json parsing failed, try to parse as source code
+        Err(_) => compile_from_source(&s, debug),  // json parsing failed, try to parse as source code
     }
 }
 
-pub fn compile_from_source<'a>(s: String, debug: bool) -> Result<CompiledProgram, CompileError<'a>> {
+pub fn compile_from_source<'a>(s: &str, debug: bool) -> Result<CompiledProgram, CompileError<'a>> {
     println!("compile_from_source:");
     print!("{}", s);
     let mut string_table_1 = stringtable::StringTable::new();
     let res = mini::DeclsParser::new()
-    	.parse(&mut string_table_1, &s)
+        .parse(&mut string_table_1, s)
         .unwrap();
     let mut checked_funcs = Vec::new();
     let res2 = crate::typecheck::typecheck_top_level_decls(&res, &mut checked_funcs, string_table_1);

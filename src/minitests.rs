@@ -27,7 +27,7 @@ fn test3() {
 
 fn test_arraytest(test_num: usize, expected_result: Value) {
     let path = Path::new("arraytest.mexe"); 
-    let res = run_from_file(path, vec![Value::Int(Uint256::from_usize((test_num)))]);
+    let res = run_from_file(path, vec![Value::Int(Uint256::from_usize(test_num))]);
     match res {
         Ok(res) => { assert_eq!(res, expected_result); }
         Err(e) => { panic!("{:?}", e); }

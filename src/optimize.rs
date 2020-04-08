@@ -1,7 +1,7 @@
 use crate::mavm::{Instruction, Opcode};
 
 
-pub fn peephole(code_in: &Vec<Instruction>) -> Vec<Instruction> {
+pub fn peephole(code_in: &[Instruction]) -> Vec<Instruction> {
 	let mut code_out = Vec::new();
 
 	for insn in code_in {
@@ -28,7 +28,7 @@ pub fn peephole(code_in: &Vec<Instruction>) -> Vec<Instruction> {
 					if let Instruction{ opcode: Opcode::AuxPop, immediate: imm } = insn2 {
 						code_out.pop();
 						code_out.pop();
-						if let Some(_) = imm.clone() {
+						if imm.clone().is_some() {
 							code_out.push(Instruction::new(Opcode::Noop, imm.clone()));
 						}
 					} else {

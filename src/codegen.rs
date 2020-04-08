@@ -22,7 +22,7 @@ pub fn mavm_codegen<'a>(
 	funcs: Vec<TypeCheckedFunc>, 
 	code_in: &'a mut Vec<Instruction>,
 	string_table: &'a StringTable,
-	imported_funcs: &Vec<ImportedFunc>,
+	imported_funcs: &[ImportedFunc],
 ) -> Result<&'a mut Vec<Instruction>, CodegenError> {
 	let mut import_func_map = HashMap::new();
 	for imp_func in imported_funcs {
@@ -95,7 +95,7 @@ fn add_args_to_locals_table<'a>(
 	string_table: &StringTable,
 	import_func_map: &HashMap<StringId, Label>,
 ) -> Result<(LabelGenerator, usize, bool), CodegenError> {
-	if args.len() == 0 {
+	if args.is_empty() {
 		mavm_codegen_statements(statements, code, num_locals, &locals, label_gen, string_table, import_func_map)
 	} else {
 		let new_locals = locals.push_one(args[0].name, num_locals);
@@ -121,7 +121,7 @@ fn mavm_codegen_statements(
 	string_table: &StringTable,
 	import_func_map: &HashMap<StringId, Label>,       
 ) -> Result<(LabelGenerator, usize, bool), CodegenError> { // (label_gen, num_labels, execution_might_continue)
-	if statements.len() == 0 {
+	if statements.is_empty() {
 		return Ok((label_gen, num_locals, true));
 	}
 	let rest_of_statements = &statements[1..];
@@ -157,7 +157,7 @@ fn mavm_codegen_statements(
 		TypeCheckedStatement::Let(name, expr) => {
 			let slot_num = num_locals;
 			let new_locals = locals.push_one(*name, slot_num);
-			num_locals = num_locals+1;
+			num_locals += 1;
 			let (lg, c) = mavm_codegen_expr(expr, code, &new_locals, label_gen, string_table, import_func_map)?;
 			label_gen = lg;
 			code = c;
@@ -193,7 +193,7 @@ fn mavm_codegen_statements(
 		}
 		TypeCheckedStatement::Loop(body) => {
 			let slot_num = Value::Int(Uint256::from_usize(num_locals));
-			num_locals = num_locals+1;
+			num_locals += 1;
 			let (top_label, lg) = label_gen.next();
 			label_gen = lg;
 			code.push(Instruction::from_opcode_imm(Opcode::Noop, Value::Label(top_label)));
@@ -216,7 +216,7 @@ fn mavm_codegen_statements(
 		}
 		TypeCheckedStatement::While(cond, body) => {
 			let slot_num = Value::Int(Uint256::from_usize(num_locals));
-			num_locals = num_locals+1;
+			num_locals += 1;
 			let (top_label, lg) = label_gen.next();
 			let (end_label, lg) = lg.next();
 			label_gen = lg;
@@ -227,7 +227,7 @@ fn mavm_codegen_statements(
 			label_gen = lg;
 			code = c;
 			code.push(Instruction::from_opcode(Opcode::Not));
-			code.push(Instruction::from_opcode_imm(Opcode::Cjump, Value::Label(end_label.clone())));
+			code.push(Instruction::from_opcode_imm(Opcode::Cjump, Value::Label(end_label)));
 			let (lg, nl, _) = mavm_codegen_statements(
 				body.to_vec(), 
 				code, 
@@ -259,7 +259,7 @@ fn mavm_codegen_statements(
 			label_gen = lg;
 			code = c;
 			code.push(Instruction::from_opcode(Opcode::Not));
-			code.push(Instruction::from_opcode_imm(Opcode::Cjump, Value::Label(end_label.clone())));
+			code.push(Instruction::from_opcode_imm(Opcode::Cjump, Value::Label(end_label)));
 			let (lg, nl, _) = mavm_codegen_statements(
 				tbody.to_vec(), 
 				code, 
@@ -288,7 +288,7 @@ fn mavm_codegen_statements(
 			let (lg, c) = mavm_codegen_expr(cond, code, &locals, label_gen, string_table, import_func_map)?;
 			label_gen = lg;
 			code = c;
-			code.push(Instruction::from_opcode_imm(Opcode::Cjump, Value::Label(true_label.clone())));
+			code.push(Instruction::from_opcode_imm(Opcode::Cjump, Value::Label(true_label)));
 			let (lg, nl, might_continue_1) = mavm_codegen_statements(
 				fbody.to_vec(), 
 				code, 
@@ -301,7 +301,7 @@ fn mavm_codegen_statements(
 			label_gen = lg;
 			num_locals = nl;
 			if might_continue_1 {
-				code.push(Instruction::from_opcode_imm(Opcode::Jump, Value::Label(end_label.clone())));
+				code.push(Instruction::from_opcode_imm(Opcode::Jump, Value::Label(end_label)));
 			}
 			code.push(Instruction::from_opcode(Opcode::Label(true_label)));
 			let (lg, nl, might_continue_2) = mavm_codegen_statements(
@@ -473,7 +473,7 @@ fn mavm_codegen_expr<'a>(
 				label_gen = lg;
 				code = c;
 			}
-			code.push(Instruction::from_opcode_imm(Opcode::Noop, Value::Label(ret_label.clone())));
+			code.push(Instruction::from_opcode_imm(Opcode::Noop, Value::Label(ret_label)));
 			let func_label = match import_func_map.get(name) {
 				Some(lab) => *lab,
 				None => Label::Func(*name),
@@ -678,7 +678,7 @@ fn codegen_fixed_array_mod<'a>(
 		label_gen = lg;
 		code.push(Instruction::from_opcode(Opcode::Dup1));
 		code.push(Instruction::from_opcode_imm(Opcode::GreaterThan, Value::Int(Uint256::from_usize(size))));
-		code.push(Instruction::from_opcode_imm(Opcode::Cjump, Value::Label(ok_label.clone())));
+		code.push(Instruction::from_opcode_imm(Opcode::Cjump, Value::Label(ok_label)));
 		code.push(Instruction::from_opcode(Opcode::Panic));
 		code.push(Instruction::from_opcode(Opcode::Label(ok_label)));
 	}

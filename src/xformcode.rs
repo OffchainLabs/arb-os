@@ -4,7 +4,7 @@ use crate::uint256::Uint256;
 
 pub const TUPLE_SIZE: usize = 8;
 
-pub fn fix_tuple_size(code_in: &Vec<Instruction>) -> Vec<Instruction> {
+pub fn fix_tuple_size(code_in: &[Instruction]) -> Vec<Instruction> {
 	let mut code_out = Vec::new();
 	let mut locals_tree = TupleTree::new(1);
 
@@ -87,7 +87,7 @@ pub fn fix_tuple_size(code_in: &Vec<Instruction>) -> Vec<Instruction> {
 				code_out.push(Instruction::from_opcode(Opcode::Jump));
 			}
 			Opcode::UncheckedFixedArrayGet(sz) => {
-				let tup_size_val = Value::Int(Uint256::from_usize((sz)));
+				let tup_size_val = Value::Int(Uint256::from_usize(sz));
 				let mut remaining_size = sz;
 				while remaining_size > TUPLE_SIZE {
 					//TODO: can probably make this more efficient
@@ -128,7 +128,7 @@ pub fn jump_table_to_value(jump_table: Vec<CodePt>) -> Value {
 
 enum TupleTree {
 	Single,
-	Tree(usize, Vec<Box<TupleTree>>),
+	Tree(usize, Vec<TupleTree>),
 }
 
 impl TupleTree {
@@ -138,7 +138,7 @@ impl TupleTree {
 		}
 		let mut current_size: usize = 1;
 		while current_size*(TUPLE_SIZE*TUPLE_SIZE) <= size {
-			current_size = current_size*TUPLE_SIZE;
+			current_size *= TUPLE_SIZE;
 		}
 
 		let mut v = Vec::new();
@@ -147,14 +147,14 @@ impl TupleTree {
 
 		while remaining_size > 0 {
 			if current_size >= remaining_size {
-				v.push(Box::new(TupleTree::new(remaining_size)));
+				v.push(TupleTree::new(remaining_size));
 				remaining_size = 0;
 			} else if current_size*(1+(remaining_slots-1)*TUPLE_SIZE) >= remaining_size {
-				v.push(Box::new(TupleTree::new(current_size)));
-				remaining_size = remaining_size-current_size;
-				remaining_slots = remaining_slots-1;
+				v.push(TupleTree::new(current_size));
+				remaining_size -= size-current_size;
+				remaining_slots -= 1;
 			} else {
-				current_size = current_size*TUPLE_SIZE;
+				current_size *= TUPLE_SIZE;
 			}
 		}
 		TupleTree::Tree(size, v)
@@ -211,7 +211,7 @@ impl TupleTree {
 						code.push(Instruction::from_opcode_imm(Opcode::Tget, Value::Int(Uint256::from_usize(slot))));
 						return subtree.read_code(index, code);
 					} else {
-						index = index-subtree.tsize();
+						index -= subtree.tsize();
 					}
 				}
 				panic!("TupleTree::read_code: out-of-bounds read");
@@ -224,7 +224,7 @@ impl TupleTree {
 			let mut index = index;
 			for (slot, subtree) in v.iter().enumerate() {
 				if index < subtree.tsize() {
-					match **subtree {
+					match *subtree {
 						TupleTree::Single => {
 							code.push(Instruction::from_opcode_imm(Opcode::Tset, Value::Int(Uint256::from_usize(slot))));
 							return code.to_vec();
@@ -240,7 +240,7 @@ impl TupleTree {
 						}
 					}
 				} else {
-					index = index-subtree.tsize();
+					index -= subtree.tsize();
 				}
 			}
 			panic!("TupleTree::write_code: out-of-bounds write");
