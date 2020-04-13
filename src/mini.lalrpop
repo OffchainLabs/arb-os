@@ -2,12 +2,12 @@ use crate::ast::{TopLevelDecl, TypeDecl, FuncDecl, ImportFuncDecl, Type, StructF
 FieldInitializer, new_func_arg, new_type_decl};
 use crate::stringtable::{StringTable, StringId};
 use crate::uint256::Uint256;
-use crate::mavm::Value;
+use crate::mavm::Value as AvmValue;
 
 grammar(stringtable: &mut StringTable<'input>);
 
 pub Decls: Vec<TopLevelDecl> = {
-	<mut i:ImportDecl*> <mut n:NonImportDecl+> => TopLevelDecl::concat_vecs(&mut i, &mut n),
+	<i:ImportDecl*> <n:NonImportDecl+> => TopLevelDecl::concat_vecs(i, &n),
 }
 
 ImportDecl: TopLevelDecl = {
@@ -195,7 +195,7 @@ Term8: Expr = {
 		Box::new(v)
 	),
 	<t: Term8> "with" "{" <i:Ident> ":" <e: Expr> "}" => Expr::StructMod(Box::new(t), i, Box::new(e)),
-	"null" => Expr::RawValue(Value::none()),
+	"null" => Expr::RawValue(AvmValue::none()),
 }
 
 FieldInitializer: FieldInitializer = {

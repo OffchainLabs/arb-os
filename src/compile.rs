@@ -113,8 +113,6 @@ pub fn compile_from_file<'a>(path: &Path, debug: bool) -> Result<CompiledProgram
 }
 
 pub fn compile_from_source<'a>(s: &str, debug: bool) -> Result<CompiledProgram, CompileError<'a>> {
-    println!("compile_from_source:");
-    print!("{}", s);
     let mut string_table_1 = stringtable::StringTable::new();
     let res = mini::DeclsParser::new()
         .parse(&mut string_table_1, s)

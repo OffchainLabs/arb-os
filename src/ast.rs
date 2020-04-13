@@ -15,9 +15,11 @@ pub enum TopLevelDecl {
 }
 
 impl TopLevelDecl {
-	pub fn concat_vecs(a: &mut Vec<Self>, b: &mut Vec<Self>) -> Vec<Self> {
-		a.append(b);
-		a.to_vec()
+	pub fn concat_vecs(a: Vec<Self>, b: &Vec<Self>) -> Vec<Self> {
+		let mut aa = a.clone();
+		let mut bb = b.clone();
+		aa.append(&mut bb);
+		aa.to_vec()
 	}
 }
 
