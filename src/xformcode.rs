@@ -126,6 +126,7 @@ pub fn jump_table_to_value(jump_table: Vec<CodePt>) -> Value {
 	shape.make_value(jump_table_codepoints)
 }
 
+#[derive(Debug)]
 enum TupleTree {
 	Single,
 	Tree(usize, Vec<TupleTree>),
@@ -151,7 +152,7 @@ impl TupleTree {
 				remaining_size = 0;
 			} else if current_size*(1+(remaining_slots-1)*TUPLE_SIZE) >= remaining_size {
 				v.push(TupleTree::new(current_size));
-				remaining_size -= size-current_size;
+				remaining_size -= current_size;
 				remaining_slots -= 1;
 			} else {
 				current_size *= TUPLE_SIZE;
@@ -219,9 +220,9 @@ impl TupleTree {
 		}
 	}
 
-	fn write_code(&self, index: usize, code: &mut Vec<Instruction>) -> Vec<Instruction> {
+	fn write_code(&self, index_in: usize, code: &mut Vec<Instruction>) -> Vec<Instruction> {
 		if let TupleTree::Tree(_, v) = self {
-			let mut index = index;
+			let mut index = index_in;
 			for (slot, subtree) in v.iter().enumerate() {
 				if index < subtree.tsize() {
 					match *subtree {
