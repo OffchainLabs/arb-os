@@ -403,6 +403,27 @@ fn mavm_codegen_expr<'a>(
 			}
 			Ok((label_gen, code))
 		}
+		TypeCheckedExpr::ShortcutOr(tce1, tce2) => {
+			let (lg, c) = mavm_codegen_expr(tce1, code, locals, label_gen, string_table, import_func_map)?;
+			let (lab, lg) = lg.next();
+			c.push(Instruction::from_opcode(Opcode::Dup0));
+			c.push(Instruction::from_opcode_imm(Opcode::Cjump, Value::Label(lab)));
+			c.push(Instruction::from_opcode(Opcode::Pop));
+			let (lg, c) = mavm_codegen_expr(tce2, c, locals, lg, string_table, import_func_map)?;
+			c.push(Instruction::from_opcode(Opcode::Label(lab)));
+			Ok((lg, c))
+		}
+		TypeCheckedExpr::ShortcutAnd(tce1, tce2) => {
+			let (lg, c) = mavm_codegen_expr(tce1, code, locals, label_gen, string_table, import_func_map)?;
+			let (lab, lg) = lg.next();
+			c.push(Instruction::from_opcode(Opcode::Dup0));
+			c.push(Instruction::from_opcode(Opcode::Not));
+			c.push(Instruction::from_opcode_imm(Opcode::Cjump, Value::Label(lab)));
+			c.push(Instruction::from_opcode(Opcode::Pop));
+			let (lg, c) = mavm_codegen_expr(tce2, c, locals, lg, string_table, import_func_map)?;
+			c.push(Instruction::from_opcode(Opcode::Label(lab)));
+			Ok((lg, c))
+		}
 		TypeCheckedExpr::VariableRef(name, _) => {
 			match locals.get(*name) {
 				Some(n) => {
@@ -673,10 +694,10 @@ fn codegen_fixed_array_mod<'a>(
 ) -> Result<(LabelGenerator, &'a mut Vec<Instruction>), CodegenError> {
 	let (label_gen, code) = mavm_codegen_expr(arr_expr, code_in, locals, label_gen_in, string_table, import_func_map)?;
 	let (mut label_gen, code) = mavm_codegen_expr(idx_expr, code, locals, label_gen, string_table, import_func_map)?;
-	if size != 8 {  // TODO: safe for if-condition to to say size does not equal any power of 8
+	if size != 8 {  // TODO: safe for if-condition to say size does not equal any power of 8
 		let (ok_label, lg) = label_gen.next();
 		label_gen = lg;
-		code.push(Instruction::from_opcode(Opcode::Dup1));
+		code.push(Instruction::from_opcode(Opcode::Dup0));
 		code.push(Instruction::from_opcode_imm(Opcode::GreaterThan, Value::Int(Uint256::from_usize(size))));
 		code.push(Instruction::from_opcode_imm(Opcode::Cjump, Value::Label(ok_label)));
 		code.push(Instruction::from_opcode(Opcode::Panic));

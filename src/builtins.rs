@@ -24,21 +24,21 @@ pub fn builtin_func_decls<'a>(mut string_table: StringTable<'a>) -> (Vec<ImportF
         ImportFuncDecl::new_types(
             string_table.get("builtin_arraySize"),
             vec![Type::Any],
-            Type::Int,
+            Type::Uint,
         ),
         ImportFuncDecl::new_types(
             string_table.get("builtin_arrayNew"),
-            vec![Type::Int, Type::Any],
+            vec![Type::Uint, Type::Any],
             Type::Any,
         ),
         ImportFuncDecl::new_types(
             string_table.get("builtin_arrayGet"),
-            vec![Type::Any, Type::Int],
+            vec![Type::Any, Type::Uint],
             Type::Any,
         ),
         ImportFuncDecl::new_types(
             string_table.get("builtin_arraySet"),
-            vec![Type::Any, Type::Int, Type::Any],
+            vec![Type::Any, Type::Uint, Type::Any],
             Type::Any,
         ),
     ];

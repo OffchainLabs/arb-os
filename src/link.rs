@@ -129,7 +129,13 @@ impl<'a> ExportedFunc {
 pub fn postlink_compile<'a>(
 	program: CompiledProgram,
     debug: bool,
-) -> Result<LinkedProgram, CompileError<'a>> {             
+) -> Result<LinkedProgram, CompileError<'a>> {   
+	if debug {
+        println!("========== after initial linking ===========");
+        for (idx, insn) in program.code.iter().enumerate() {
+            println!("{:04}:  {}", idx, insn);
+        }
+    }          
     let (code_2, jump_table) = crate::striplabels::fix_nonforward_labels(&program.code, &program.imported_funcs);
     if debug {
         println!("========== after fix_backward_labels ===========");
@@ -194,7 +200,11 @@ pub fn link<'a>(progs_in: &[CompiledProgram]) -> Result<CompiledProgram, Compile
 	let mut relocated_progs = Vec::new();
 	let mut func_offset: usize = 0;
 	for (i, prog) in progs.iter().enumerate() {
-		let (relocated_prog, new_func_offset) = prog.clone().relocate(int_offsets[i], ext_offsets[i], func_offset);
+		let (relocated_prog, new_func_offset) = prog.clone().relocate(
+			int_offsets[i], 
+			ext_offsets[i], 
+			func_offset
+		);
 		relocated_progs.push(relocated_prog);
 		func_offset = new_func_offset;
 	}

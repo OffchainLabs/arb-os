@@ -45,6 +45,8 @@ pub enum TypeCheckedStatement {
 pub enum TypeCheckedExpr {
 	UnaryOp(UnaryOp, Box<TypeCheckedExpr>, Type),
 	Binary(BinaryOp, Box<TypeCheckedExpr>, Box<TypeCheckedExpr>, Type),
+	ShortcutOr(Box<TypeCheckedExpr>, Box<TypeCheckedExpr>),
+	ShortcutAnd(Box<TypeCheckedExpr>, Box<TypeCheckedExpr>),
 	VariableRef(StringId, Type),
 	TupleRef(Box<TypeCheckedExpr>, Uint256, Type),
 	DotRef(Box<TypeCheckedExpr>, StringId, Type),
@@ -69,6 +71,8 @@ impl TypeCheckedExpr {
 		match self {
 			TypeCheckedExpr::UnaryOp(_, _, t) => t.clone(),
 			TypeCheckedExpr::Binary(_, _, _, t) => t.clone(),
+			TypeCheckedExpr::ShortcutOr(_, _) |
+			TypeCheckedExpr::ShortcutAnd(_, _) => Type::Bool,
 			TypeCheckedExpr::VariableRef(_, t) => t.clone(),
 			TypeCheckedExpr::TupleRef(_, _, t) => t.clone(),
 			TypeCheckedExpr::DotRef(_, _, t) => t.clone(),
@@ -127,6 +131,9 @@ pub fn typecheck_top_level_decls<'a>(
 			TopLevelDecl::ImpFuncDecl(fd) => {
 				hm.insert(fd.name, &fd.tipe);
 				imported_funcs.push(ImportedFunc::new(imported_funcs.len(), fd.name, &string_table));
+			}
+			TopLevelDecl::ImpTypeDecl(itd) => {
+				named_types.insert(itd.name, &itd.tipe);
 			}
 		}
 	}
@@ -300,6 +307,28 @@ fn typecheck_expr(
 			let tc_sub2 = typecheck_expr(sub2, type_table)?;
 			typecheck_binary_op(*op, tc_sub1, tc_sub2)
 		},
+		Expr::ShortcutOr(sub1, sub2) => {
+			let tc_sub1 = typecheck_expr(sub1, type_table)?;
+			let tc_sub2 = typecheck_expr(sub2, type_table)?;
+			if tc_sub1.get_type() != Type::Bool {
+				return Err(new_type_error("operands to logical or must be boolean"));
+			}
+			if tc_sub2.get_type() != Type::Bool {
+				return Err(new_type_error("operands to logical or must be boolean"));
+			}
+			Ok(TypeCheckedExpr::ShortcutOr(Box::new(tc_sub1), Box::new(tc_sub2)))
+		}
+		Expr::ShortcutAnd(sub1, sub2) => {
+			let tc_sub1 = typecheck_expr(sub1, type_table)?;
+			let tc_sub2 = typecheck_expr(sub2, type_table)?;
+			if tc_sub1.get_type() != Type::Bool {
+				return Err(new_type_error("operands to logical and must be boolean"));
+			}
+			if tc_sub2.get_type() != Type::Bool {
+				return Err(new_type_error("operands to logical and must be boolean"));
+			}
+			Ok(TypeCheckedExpr::ShortcutAnd(Box::new(tc_sub1), Box::new(tc_sub2)))
+		}
 		Expr::VariableRef(name) => match type_table.get(*name) {
 			None => {
 				Err(new_type_error("referenced non-existent variable"))

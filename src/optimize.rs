@@ -32,7 +32,6 @@ pub fn peephole(code_in: &[Instruction]) -> Vec<Instruction> {
 							code_out.push(Instruction::new(Opcode::Noop, imm.clone()));
 						}
 					} else {
-						let insn2 = code_out[code_out.len()-2].clone();
 						if let Instruction{ opcode: Opcode::Noop, immediate: Some(val) } = insn2 {
 							code_out.pop();
 							code_out.pop();

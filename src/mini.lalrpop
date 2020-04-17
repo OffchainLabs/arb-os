@@ -1,4 +1,4 @@
-use crate::ast::{TopLevelDecl, TypeDecl, FuncDecl, ImportFuncDecl, Type, StructField, FuncArg, Statement, Expr, BinaryOp, UnaryOp, 
+use crate::ast::{TopLevelDecl, TypeDecl, FuncDecl, ImportFuncDecl, ImportTypeDecl, Type, StructField, FuncArg, Statement, Expr, BinaryOp, UnaryOp, 
 FieldInitializer, new_func_arg, new_type_decl};
 use crate::stringtable::{StringTable, StringId};
 use crate::uint256::Uint256;
@@ -11,12 +11,17 @@ pub Decls: Vec<TopLevelDecl> = {
 }
 
 ImportDecl: TopLevelDecl = {
-	ImportFuncDecl => TopLevelDecl::ImpFuncDecl(<>),	
+	ImportFuncDecl => TopLevelDecl::ImpFuncDecl(<>),
+	ImportTypeDecl => TopLevelDecl::ImpTypeDecl(<>),	
 }
 
 ImportFuncDecl: ImportFuncDecl = {
 	"import" "func" <i:Ident> "(" <fa:FuncArgs> ")" ";" => ImportFuncDecl::new(i, fa, Type::Void),
 	"import" "func" <i:Ident> "(" <fa:FuncArgs> ")" <t:Type> ";" => ImportFuncDecl::new(i, fa, t),
+}
+
+ImportTypeDecl: ImportTypeDecl = {
+	"import" "type" <Ident> ";" => ImportTypeDecl::new(<>),
 }
 
 NonImportDecl: TopLevelDecl = {
@@ -152,12 +157,12 @@ Term5: Expr = {
 };
 
 Term6: Expr = {
-	<l:Term6> "&&" <r:Term7> => Expr::Binary(BinaryOp::LogicalAnd, Box::new(l), Box::new(r)),
+	<l:Term6> "&&" <r:Term7> => Expr::ShortcutAnd(Box::new(l), Box::new(r)),
 	Term7,
 };
 
 Term7: Expr = {
-	<l:Term7> "||" <r:Term8> => Expr::Binary(BinaryOp::LogicalOr, Box::new(l), Box::new(r)),
+	<l:Term7> "||" <r:Term8> => Expr::ShortcutOr(Box::new(l), Box::new(r)),
 	Term8,
 };
 

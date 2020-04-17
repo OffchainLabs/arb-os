@@ -108,6 +108,16 @@ impl ValueStack {
 			Err(ExecutionError::new("expected tuple on stack", state, Some(val)))
 		}
 	}
+
+	pub fn all_codepts(&self) -> Vec<CodePt> {
+		let mut ret = Vec::new();
+		for item in self.contents.iter() {
+			if let Value::CodePoint(cp) = item {
+				ret.push(*cp);
+			}
+		}
+		ret
+	}
 }
 
 impl fmt::Display for ValueStack {
@@ -192,6 +202,10 @@ impl Machine {
 
 	pub fn pop_stack(&mut self) -> Result<Value, ExecutionError> {
 		self.stack.pop(&self.state)
+	}
+
+	pub fn get_stack_trace(&self) -> StackTrace {
+		StackTrace::Known(self.aux_stack.all_codepts())
 	}
 
 	pub fn test_call(&mut self, func_addr: CodePt, args: Vec<Value>) -> Result<ValueStack, ExecutionError> {
@@ -508,8 +522,8 @@ impl Machine {
 						Ok(true)
 					}
 					Opcode::Equal => {
-						let r1 = self.stack.pop_uint(&self.state)?;
-						let r2 = self.stack.pop_uint(&self.state)?;
+						let r1 = self.stack.pop(&self.state)?;
+						let r2 = self.stack.pop(&self.state)?;
 						self.stack.push_usize(if r1 == r2 { 1 } else { 0 });
 						self.incr_pc();
 						Ok(true)
@@ -581,4 +595,10 @@ impl Machine {
 			Err(ExecutionError::new("tried to run machine that is not runnable", &self.state, None))
 		}
 	}
+}
+
+#[derive(Debug)]
+pub enum StackTrace {
+	Unknown,
+	Known(Vec<CodePt>),
 }

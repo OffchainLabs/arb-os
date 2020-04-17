@@ -1,0 +1,20 @@
+
+import type KeyValueStore;
+
+import func kvs_new() KeyValueStore;
+import func kvs_get(kvs: KeyValueStore, key: anytype) anytype;
+import func kvs_set(kvs: KeyValueStore, key: anytype, value:anytype) KeyValueStore;
+
+
+func tests(which: uint) anytype {
+	if (which == 0) {
+		let s = kvs_new();
+		return kvs_get(s, 17);
+	}
+	if (which == 1) {
+		let s = kvs_new();
+		s = kvs_set(s, 42, 42);
+		return kvs_get(s, 42);
+	}
+	return null;
+}

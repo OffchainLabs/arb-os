@@ -15,7 +15,7 @@ pub enum Label {
 impl Label {
 	pub fn relocate(self, int_offset: usize, ext_offset: usize, func_offset: usize) -> (Self, usize) {
 		match self {
-			Label::Func(sid) => (Label::Func(sid+func_offset), func_offset),
+			Label::Func(sid) => (Label::Func(sid+func_offset), sid),
 			Label::Anon(pc) => (Label::Anon(pc+int_offset), 0),
 			Label::External(slot) => (Label::External(slot+ext_offset), 0),
 		}

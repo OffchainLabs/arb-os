@@ -1,9 +1,5 @@
 
-import func builtin_arrayNew(sz:uint) anytype;
-import func builtin_arrayGet(arr: []anytype, idx: uint) anytype;
-import func builtin_arraySet(arr: []anytype, idx: uint, val: anytype) []anytype;
-import func builtin_arraySwap(arr: []anytype, idx: uint, val: anytype) ([]anytype, anytype);
-
+import func builtin_arraySwap(a: []anytype, b: uint, c: anytype) ([]anytype, anytype);
 
 type ShtItem = struct {
 	key: bytes32,

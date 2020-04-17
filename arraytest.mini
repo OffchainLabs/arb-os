@@ -1,8 +1,5 @@
 
 func tests(which: uint) anytype {
-	if (which == 0) {
-		return newarray(17, anytype);
-	}
 	if (which == 1) {
 		let a = newarray(17, anytype);
 		return a[6];
@@ -15,6 +12,20 @@ func tests(which: uint) anytype {
 		let a = newarray(64, uint);
 		a = a with { [17] = 3 };
 		return a[17];
+	}
+	if (which == 4) {
+		let a = newarray(111, uint);
+		a = a with { [42] = 3 };
+		a = a with { [99] = 4 };
+		a = a with { [42] = 5 };
+		return a[42];
+	}
+	if (which == 5) {
+		let a = newarray(111, uint);
+		a = a with { [42] = 3 };
+		a = a with { [99] = 4 };
+		a = a with { [42] = 5 };
+		return a[99];
 	}
 	return null;
 }

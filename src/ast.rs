@@ -12,6 +12,7 @@ pub enum TopLevelDecl {
 	TypeDecl(TypeDecl),
 	FuncDecl(FuncDecl),
 	ImpFuncDecl(ImportFuncDecl),
+	ImpTypeDecl(ImportTypeDecl),
 }
 
 impl TopLevelDecl {
@@ -46,6 +47,7 @@ pub enum Type {
 	Struct(Vec<StructField>),
 	Named(StringId),
 	Func(Vec<Type>, Box<Type>),
+	Imported(StringId),
 	Any,
 }
 
@@ -57,6 +59,7 @@ impl Type {
 			Type::Int |
 			Type::Bool |
 			Type::Bytes32 |
+			Type::Imported(_) |
 			Type::Any => Ok(self.clone()),
 			Type::Tuple(tvec) => {
 				let mut rvec = Vec::new();
@@ -114,7 +117,8 @@ impl Type {
 			Type::Uint |
 			Type::Int |
 			Type::Bool |
-			Type::Bytes32 => (self == rhs),
+			Type::Bytes32 |
+			Type::Imported(_) => (self == rhs),
 			Type::Tuple(tvec) => {
 				if let Type::Tuple(tvec2) = rhs {
 					type_vectors_assignable(tvec, tvec2)
@@ -196,6 +200,9 @@ impl Type {
 			Type::Func(_, _) => {
 				panic!("tried to get default value for a function type");
 			}
+			Type::Imported(_) => {
+				panic!("tried to get default value for an imported type");
+			}
 			Type::Any => Value::none(),
 		}
 	}
@@ -252,6 +259,7 @@ impl PartialEq for Type {
 			(Type::Struct(f1), Type::Struct(f2)) => struct_field_vectors_equal(&f1, &f2),
 			(Type::Named(n1), Type::Named(n2)) => (n1 == n2),
 			(Type::Func(a1, r1), Type::Func(a2, r2)) => type_vectors_equal(&a1, &a2) && (*r1 == *r2),
+			(Type::Imported(n1), Type::Imported(n2)) => (n1 == n2),
 			(_, _) => false,
 		}
 	}
@@ -344,6 +352,18 @@ impl ImportFuncDecl {
 			ret_type: ret_type.clone(), 
 			tipe: Type::Func(arg_types, Box::new(ret_type)),
 		}
+	}
+}
+
+#[derive(Clone, Debug)]
+pub struct ImportTypeDecl {
+	pub name: StringId,
+	pub tipe: Type,
+}
+
+impl ImportTypeDecl {
+	pub fn new(name: StringId) -> Self {
+		ImportTypeDecl{ name, tipe: Type::Imported(name) }
 	}
 }
 
@@ -454,6 +474,8 @@ impl Statement {
 pub enum Expr {
 	UnaryOp(UnaryOp, Box<Expr>),
 	Binary(BinaryOp, Box<Expr>, Box<Expr>),
+	ShortcutOr(Box<Expr>, Box<Expr>),
+	ShortcutAnd(Box<Expr>, Box<Expr>),
 	VariableRef(StringId),
 	TupleRef(Box<Expr>, Uint256),
 	DotRef(Box<Expr>, StringId),
@@ -477,6 +499,14 @@ impl Expr {
 			Expr::UnaryOp(op, be) => Ok(Expr::UnaryOp(*op, Box::new(be.resolve_types(type_table)?))),
 			Expr::Binary(op, be1, be2) => Ok(Expr::Binary(
 				*op, 
+				Box::new(be1.resolve_types(type_table)?),
+				Box::new(be2.resolve_types(type_table)?)
+			)),
+			Expr::ShortcutOr(be1, be2) => Ok(Expr::ShortcutOr(
+				Box::new(be1.resolve_types(type_table)?),
+				Box::new(be2.resolve_types(type_table)?)
+			)),
+			Expr::ShortcutAnd(be1, be2) => Ok(Expr::ShortcutAnd(
 				Box::new(be1.resolve_types(type_table)?),
 				Box::new(be2.resolve_types(type_table)?)
 			)),

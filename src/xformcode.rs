@@ -42,7 +42,7 @@ pub fn fix_tuple_size(code_in: &[Instruction]) -> Vec<Instruction> {
 						Some(iu) => {
 							code_out = ttree.write_code(iu, &mut code_out);
 						}
-						None => { panic!("fix_tuple_size: index too large") }
+						None => { panic!("fix_tuple_size: TupleSet index too large") }
 					}
 				} else {
 					panic!("fix_tuple_size: TupleSet without immediate arg")
