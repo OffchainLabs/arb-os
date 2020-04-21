@@ -5,7 +5,7 @@ use crate::stringtable::StringId;
 use crate::mavm::{Label, Value, CodePt, Instruction};
 use crate::ast::Type;
 use crate::stringtable::StringTable;
-use crate::compile::{CompiledProgram, CompileError};
+use crate::compile::{CompiledProgram, CompileError, SourceFileMap};
 use crate::builtins::add_auto_link_progs;
 use serde::{Serialize, Deserialize};
 
@@ -18,8 +18,8 @@ pub struct LinkedProgram {
     pub imported_funcs: Vec<ImportedFunc>,
 }
 
-impl LinkedProgram {
-	pub fn to_output(&self, output: &mut dyn io::Write, format: Option<&str>) {
+impl<'a> LinkedProgram {
+	pub fn to_output(&'a self, output: &mut dyn io::Write, format: Option<&str>) {
 		match format {
 			Some("pretty") => {
 				writeln!(output, "exported: {:?}", self.exported_funcs).unwrap();
@@ -190,7 +190,9 @@ pub fn link<'a>(progs_in: &[CompiledProgram]) -> Result<CompiledProgram, Compile
 	let mut imports_so_far: usize = 0;
 	let mut int_offsets = Vec::new();
 	let mut ext_offsets = Vec::new();
+	let mut merged_source_file_map = SourceFileMap::new_empty();
 	for prog in &progs {
+		merged_source_file_map.push(prog.code.len(), prog.source_file_map.get(0));
 		int_offsets.push(insns_so_far);
 		insns_so_far += prog.code.len();
 		ext_offsets.push(imports_so_far);
@@ -203,7 +205,8 @@ pub fn link<'a>(progs_in: &[CompiledProgram]) -> Result<CompiledProgram, Compile
 		let (relocated_prog, new_func_offset) = prog.clone().relocate(
 			int_offsets[i], 
 			ext_offsets[i], 
-			func_offset
+			func_offset,
+			prog.clone().source_file_map,
 		);
 		relocated_progs.push(relocated_prog);
 		func_offset = new_func_offset;
@@ -234,5 +237,5 @@ pub fn link<'a>(progs_in: &[CompiledProgram]) -> Result<CompiledProgram, Compile
 		linked_xlated_code.push(insn.xlate_labels(&label_xlate_map));
 	}
 
-	Ok(CompiledProgram::new(linked_xlated_code, linked_exports, linked_imports))
+	Ok(CompiledProgram::new(linked_xlated_code, linked_exports, linked_imports, merged_source_file_map))
 }

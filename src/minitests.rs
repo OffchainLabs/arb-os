@@ -54,7 +54,7 @@ fn test_kvstest(test_num: usize, expected_result: Value) {
     let res = run_from_file(path, vec![Value::Int(Uint256::from_usize(test_num))]);
     match res {
         Ok(res) => { assert_eq!(res, expected_result); }
-        Err(e) => { panic!("{:?}", e); }
+        Err(e) => { panic!("{}\n{}", e.0, e.1); }
     }
 }
 

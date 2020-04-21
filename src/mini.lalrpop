@@ -1,10 +1,12 @@
 use crate::ast::{TopLevelDecl, TypeDecl, FuncDecl, ImportFuncDecl, ImportTypeDecl, Type, StructField, FuncArg, Statement, Expr, BinaryOp, UnaryOp, 
 FieldInitializer, new_func_arg, new_type_decl};
 use crate::stringtable::{StringTable, StringId};
+use crate::source::Lines;
+use crate::pos::BytePos;
 use crate::uint256::Uint256;
 use crate::mavm::Value as AvmValue;
 
-grammar(stringtable: &mut StringTable<'input>);
+grammar(stringtable: &mut StringTable<'input>, file_info: &Lines);
 
 pub Decls: Vec<TopLevelDecl> = {
 	<i:ImportDecl*> <n:NonImportDecl+> => TopLevelDecl::concat_vecs(i, &n),
@@ -34,10 +36,10 @@ TypeDecl: TypeDecl = {
 }
 
 FuncDecl: FuncDecl = {
-	"func" <i:Ident> "(" <fa:FuncArgs> ")" <cb:CodeBlock> => FuncDecl::new(i, fa, Type::Void, cb, false),
-	"func" <i:Ident> "(" <fa:FuncArgs> ")" <t:Type> <cb:CodeBlock> => FuncDecl::new(i, fa, t, cb, false),
-	"public" "func" <i:Ident> "(" <fa:FuncArgs> ")" <cb:CodeBlock> => FuncDecl::new(i, fa, Type::Void, cb, true),
-	"public" "func" <i:Ident> "(" <fa:FuncArgs> ")" <t:Type> <cb:CodeBlock> => FuncDecl::new(i, fa, t, cb, true),
+	<lno: @L> "func" <i:Ident> "(" <fa:FuncArgs> ")" <cb:CodeBlock> => FuncDecl::new(i, fa, Type::Void, cb, false, file_info.location(BytePos::from(lno))),
+	<lno: @L> "func" <i:Ident> "(" <fa:FuncArgs> ")" <t:Type> <cb:CodeBlock> => FuncDecl::new(i, fa, t, cb, false, file_info.location(BytePos::from(lno))),
+	<lno: @L> "public" "func" <i:Ident> "(" <fa:FuncArgs> ")" <cb:CodeBlock> => FuncDecl::new(i, fa, Type::Void, cb, true, file_info.location(BytePos::from(lno))),
+	<lno: @L> "public" "func" <i:Ident> "(" <fa:FuncArgs> ")" <t:Type> <cb:CodeBlock> => FuncDecl::new(i, fa, t, cb, true, file_info.location(BytePos::from(lno))),
 }
 
 FuncArgs: Vec<FuncArg> = {
@@ -53,16 +55,16 @@ CodeBlock: Vec<Statement> = {
 }
 
 Statement: Statement = {
-	"while" "(" <Expr> ")" <CodeBlock> => Statement::While(<>),
-	"loop" <CodeBlock> => Statement::Loop(<>),
-	"if" "(" <c: Expr> ")" <t: CodeBlock> => Statement::If(c, t, None),
-	"if" "(" <c: Expr> ")" <t: CodeBlock> "else" <f: CodeBlock> => Statement::If(c, t, Some(f)),
-	"let" <Ident> "=" <Expr> ";" => Statement::Let(<>),
-	<Ident> "=" <Expr> ";" => Statement::Assign(<>),
-	"return" <Expr> ";" => Statement::Return(<>),
-	"return" ";" => Statement::ReturnVoid,
-	"panic" ";" => Statement::Panic,
-	";" => Statement::Noop,
+	<lno: @L> "while" "(" <e: Expr> ")" <cb: CodeBlock> => Statement::While(e, cb, file_info.location(BytePos::from(lno))),
+	<lno: @L> "loop" <cb: CodeBlock> => Statement::Loop(cb, file_info.location(BytePos::from(lno))),
+	<lno: @L> "if" "(" <c: Expr> ")" <t: CodeBlock> => Statement::If(c, t, None, file_info.location(BytePos::from(lno))),
+	<lno: @L> "if" "(" <c: Expr> ")" <t: CodeBlock> "else" <f: CodeBlock> => Statement::If(c, t, Some(f), file_info.location(BytePos::from(lno))),
+	<lno: @L> "let" <i: Ident> "=" <e: Expr> ";" => Statement::Let(i, e, file_info.location(BytePos::from(lno))),
+	<lno: @L> <i: Ident> "=" <e: Expr> ";" => Statement::Assign(i, e, file_info.location(BytePos::from(lno))),
+	<lno: @L> "return" <e: Expr> ";" => Statement::Return(e, file_info.location(BytePos::from(lno))),
+	<lno: @L> "return" ";" => Statement::ReturnVoid(file_info.location(BytePos::from(lno))),
+	<lno: @L> "panic" ";" => Statement::Panic(file_info.location(BytePos::from(lno))),
+	<lno: @L> ";" => Statement::Noop(file_info.location(BytePos::from(lno))),
 }
 
 StructDecl: Type = {
@@ -108,99 +110,102 @@ Ident: StringId = {
 };
 
 Expr: Expr = {
-	"-" <Expr> => Expr::UnaryOp(UnaryOp::Minus, Box::new(<>)),
-	"!" <Expr> => Expr::UnaryOp(UnaryOp::Not, Box::new(<>)),
-	"~" <Expr> => Expr::UnaryOp(UnaryOp::BitwiseNeg, Box::new(<>)),
+	<lno: @L> "-" <e: Expr> => Expr::UnaryOp(UnaryOp::Minus, Box::new(e), file_info.location(BytePos::from(lno))),
+	<lno: @L> "!" <e: Expr> => Expr::UnaryOp(UnaryOp::Not, Box::new(e), file_info.location(BytePos::from(lno))),
+	<lno: @L> "~" <e: Expr> => Expr::UnaryOp(UnaryOp::BitwiseNeg, Box::new(e), file_info.location(BytePos::from(lno))),
 	Expr1,
 };
 
 Expr1: Expr = {
-	<l:Expr1> "+" <r:Factor> => Expr::Binary(BinaryOp::Plus, Box::new(l), Box::new(r)),
-	<l:Expr1> "-" <r:Factor> => Expr::Binary(BinaryOp::Minus, Box::new(l), Box::new(r)),
+	<lno: @L> <l:Expr1> "+" <r:Factor> => Expr::Binary(BinaryOp::Plus, Box::new(l), Box::new(r), file_info.location(BytePos::from(lno))),
+	<lno: @L> <l:Expr1> "-" <r:Factor> => Expr::Binary(BinaryOp::Minus, Box::new(l), Box::new(r), file_info.location(BytePos::from(lno))),
 	Factor,
 };
 
 Factor: Expr = {
-	<l:Factor> "*" <r:Term1> => Expr::Binary(BinaryOp::Times, Box::new(l), Box::new(r)),
-	<l:Factor> "/" <r:Term1> => Expr::Binary(BinaryOp::Div, Box::new(l), Box::new(r)),
-	<l:Factor> "%" <r:Term1> => Expr::Binary(BinaryOp::Mod, Box::new(l), Box::new(r)),
+	<lno: @L> <l:Factor> "*" <r:Term1> => Expr::Binary(BinaryOp::Times, Box::new(l), Box::new(r), file_info.location(BytePos::from(lno))),
+	<lno: @L> <l:Factor> "/" <r:Term1> => Expr::Binary(BinaryOp::Div, Box::new(l), Box::new(r), file_info.location(BytePos::from(lno))),
+	<lno: @L> <l:Factor> "%" <r:Term1> => Expr::Binary(BinaryOp::Mod, Box::new(l), Box::new(r), file_info.location(BytePos::from(lno))),
 	Term1,
 };
 
 Term1: Expr = {
-	<l:Term1> "<" <r:Term2> => Expr::Binary(BinaryOp::LessThan, Box::new(l), Box::new(r)),
-	<l:Term1> ">" <r:Term2> => Expr::Binary(BinaryOp::GreaterThan, Box::new(l), Box::new(r)),
-	<l:Term1> "<=" <r:Term2> => Expr::Binary(BinaryOp::LessEq, Box::new(l), Box::new(r)),
-	<l:Term1> ">=" <r:Term2> => Expr::Binary(BinaryOp::GreaterEq, Box::new(l), Box::new(r)),
+	<lno: @L> <l:Term1> "<" <r:Term2> => Expr::Binary(BinaryOp::LessThan, Box::new(l), Box::new(r), file_info.location(BytePos::from(lno))),
+	<lno: @L> <l:Term1> ">" <r:Term2> => Expr::Binary(BinaryOp::GreaterThan, Box::new(l), Box::new(r), file_info.location(BytePos::from(lno))),
+	<lno: @L> <l:Term1> "<=" <r:Term2> => Expr::Binary(BinaryOp::LessEq, Box::new(l), Box::new(r), file_info.location(BytePos::from(lno))),
+	<lno: @L> <l:Term1> ">=" <r:Term2> => Expr::Binary(BinaryOp::GreaterEq, Box::new(l), Box::new(r), file_info.location(BytePos::from(lno))),
 	Term2,
 };
 
 Term2: Expr = {
-	<l:Term2> "==" <r:Term3> => Expr::Binary(BinaryOp::Equal, Box::new(l), Box::new(r)),	
-	<l:Term2> "!=" <r:Term3> => Expr::Binary(BinaryOp::NotEqual, Box::new(l), Box::new(r)),	
+	<lno: @L> <l:Term2> "==" <r:Term3> => Expr::Binary(BinaryOp::Equal, Box::new(l), Box::new(r), file_info.location(BytePos::from(lno))),	
+	<lno: @L> <l:Term2> "!=" <r:Term3> => Expr::Binary(BinaryOp::NotEqual, Box::new(l), Box::new(r), file_info.location(BytePos::from(lno))),	
 	Term3,
 };
 
 Term3: Expr = {
-	<l:Term3> "&" <r:Term4> => Expr::Binary(BinaryOp::BitwiseAnd, Box::new(l), Box::new(r)),
+	<lno: @L> <l:Term3> "&" <r:Term4> => Expr::Binary(BinaryOp::BitwiseAnd, Box::new(l), Box::new(r), file_info.location(BytePos::from(lno))),
 	Term4,
 };
 
 Term4: Expr = {
-	<l:Term4> "^" <r:Term5> => Expr::Binary(BinaryOp::BitwiseXor, Box::new(l), Box::new(r)),
+	<lno: @L> <l:Term4> "^" <r:Term5> => Expr::Binary(BinaryOp::BitwiseXor, Box::new(l), Box::new(r), file_info.location(BytePos::from(lno))),
 	Term5,
 };
 
 Term5: Expr = {
-	<l:Term5> "|" <r:Term6> => Expr::Binary(BinaryOp::BitwiseOr, Box::new(l), Box::new(r)),
+	<lno: @L> <l:Term5> "|" <r:Term6> => Expr::Binary(BinaryOp::BitwiseOr, Box::new(l), Box::new(r), file_info.location(BytePos::from(lno))),
 	Term6,
 };
 
 Term6: Expr = {
-	<l:Term6> "&&" <r:Term7> => Expr::ShortcutAnd(Box::new(l), Box::new(r)),
+	<lno: @L> <l:Term6> "&&" <r:Term7> => Expr::ShortcutAnd(Box::new(l), Box::new(r), file_info.location(BytePos::from(lno))),
 	Term7,
 };
 
 Term7: Expr = {
-	<l:Term7> "||" <r:Term8> => Expr::ShortcutOr(Box::new(l), Box::new(r)),
+	<lno: @L> <l:Term7> "||" <r:Term8> => Expr::ShortcutOr(Box::new(l), Box::new(r), file_info.location(BytePos::from(lno))),
 	Term8,
 };
 
 Term8: Expr = {
-	"struct" "{" <FieldInitializer+> "}" => Expr::StructInitializer(<>),
-	"hash" "(" <Expr> ")" => Expr::UnaryOp(UnaryOp::Hash, Box::new(<>)),
-	"hash" "(" <l:Expr> "," <r:Expr> ")" => Expr::Binary(BinaryOp::Hash, Box::new(l), Box::new(r)),
-	"len" "(" <Expr> ")" => Expr::UnaryOp(UnaryOp::Len, Box::new(<>)),
-	"uint" "(" <Expr> ")" => Expr::UnaryOp(UnaryOp::ToUint, Box::new(<>)),
-	"int" "(" <Expr> ")" => Expr::UnaryOp(UnaryOp::ToInt, Box::new(<>)),
-	"bytes32" "(" <Expr> ")" => Expr::UnaryOp(UnaryOp::ToBytes32, Box::new(<>)),
-	"newarray" "(" <e:Expr> "," <t:Type> ")" => Expr::NewArray(Box::new(e), t),
-	"newfixedarray" "(" <s:UnsignedInteger> "," <e:Expr> ")" => Expr::NewFixedArray(
+	<lno: @L> "struct" "{" <fi: FieldInitializer+> "}" => Expr::StructInitializer(fi, file_info.location(BytePos::from(lno))),
+	<lno: @L> "hash" "(" <e: Expr> ")" => Expr::UnaryOp(UnaryOp::Hash, Box::new(e), file_info.location(BytePos::from(lno))),
+	<lno: @L> "hash" "(" <l:Expr> "," <r:Expr> ")" => Expr::Binary(BinaryOp::Hash, Box::new(l), Box::new(r), file_info.location(BytePos::from(lno))),
+	<lno: @L> "len" "(" <e: Expr> ")" => Expr::UnaryOp(UnaryOp::Len, Box::new(e), file_info.location(BytePos::from(lno))),
+	<lno: @L> "uint" "(" <e: Expr> ")" => Expr::UnaryOp(UnaryOp::ToUint, Box::new(e), file_info.location(BytePos::from(lno))),
+	<lno: @L> "int" "(" <e: Expr> ")" => Expr::UnaryOp(UnaryOp::ToInt, Box::new(e), file_info.location(BytePos::from(lno))),
+	<lno: @L> "bytes32" "(" <e: Expr> ")" => Expr::UnaryOp(UnaryOp::ToBytes32, Box::new(e), file_info.location(BytePos::from(lno))),
+	<lno: @L> "newarray" "(" <e:Expr> "," <t:Type> ")" => Expr::NewArray(Box::new(e), t, file_info.location(BytePos::from(lno))),
+	<lno: @L> "newfixedarray" "(" <s:UnsignedInteger> "," <e:Expr> ")" => Expr::NewFixedArray(
 		s.to_usize().unwrap(), 
-		Some(Box::new(e))
+		Some(Box::new(e)),
+		file_info.location(BytePos::from(lno)),
 	),
-	"newfixedarray" "(" <s:UnsignedInteger> ")" => Expr::NewFixedArray(
+	<lno: @L> "newfixedarray" "(" <s:UnsignedInteger> ")" => Expr::NewFixedArray(
 		s.to_usize().unwrap(), 
-		None
+		None,
+		file_info.location(BytePos::from(lno)),
 	),
-	"unsafecast" "(" <e:Expr> "," <t:Type> ")" => Expr::UnsafeCast(Box::new(e), t),
-	<e1:Term8> "[" <e2:Expr> "]" => Expr::ArrayRef(Box::new(e1), Box::new(e2)),
-	UnsignedInteger => Expr::ConstUint(<>),
-	SignedInteger => Expr::ConstInt(<>),
-	Ident => Expr::VariableRef(<>),
-	<e:Term8> "." <i:Ident> => Expr::DotRef(Box::new(e), i),
-	<e:Term8> "." <u:UnsignedInteger> => Expr::TupleRef(Box::new(e), u),
-	<Ident> "(" ")" => Expr::FunctionCall(<>, Vec::new()),
-	<Ident> "(" <CommaedExprs> ")" => Expr::FunctionCall(<>),
-	"(" <Expr> ")" => <>,
-	"(" <CommaedExprs> "," ")" => Expr::Tuple(<>),
-	<t:Term8> "with" "{" "[" <i:Expr> "]" "=" <v:Expr> "}" => Expr::ArrayMod(
+	<lno: @L> "unsafecast" "(" <e:Expr> "," <t:Type> ")" => Expr::UnsafeCast(Box::new(e), t, file_info.location(BytePos::from(lno))),
+	<lno: @L> <e1:Term8> "[" <e2:Expr> "]" => Expr::ArrayRef(Box::new(e1), Box::new(e2), file_info.location(BytePos::from(lno))),
+	<lno: @L> <u: UnsignedInteger> => Expr::ConstUint(u, file_info.location(BytePos::from(lno))),
+	<lno: @L> <s: SignedInteger> => Expr::ConstInt(s, file_info.location(BytePos::from(lno))),
+	<lno: @L> <i: Ident> => Expr::VariableRef(i, file_info.location(BytePos::from(lno))),
+	<lno: @L> <e:Term8> "." <i:Ident> => Expr::DotRef(Box::new(e), i, file_info.location(BytePos::from(lno))),
+	<lno: @L> <e:Term8> "." <u:UnsignedInteger> => Expr::TupleRef(Box::new(e), u, file_info.location(BytePos::from(lno))),
+	<lno: @L> <i: Ident> "(" ")" => Expr::FunctionCall(i, Vec::new(), file_info.location(BytePos::from(lno))),
+	<lno: @L> <i: Ident> "(" <c: CommaedExprs> ")" => Expr::FunctionCall(i, c, file_info.location(BytePos::from(lno))),
+	"(" <e: Expr> ")" => <>,
+	<lno: @L> "(" <c: CommaedExprs> "," ")" => Expr::Tuple(c, file_info.location(BytePos::from(lno))),
+	<lno: @L> <t:Term8> "with" "{" "[" <i:Expr> "]" "=" <v:Expr> "}" => Expr::ArrayMod(
 		Box::new(t), 
 		Box::new(i), 
-		Box::new(v)
+		Box::new(v),
+		file_info.location(BytePos::from(lno)),
 	),
-	<t: Term8> "with" "{" <i:Ident> ":" <e: Expr> "}" => Expr::StructMod(Box::new(t), i, Box::new(e)),
-	"null" => Expr::RawValue(AvmValue::none()),
+	<lno: @L> <t: Term8> "with" "{" <i:Ident> ":" <e: Expr> "}" => Expr::StructMod(Box::new(t), i, Box::new(e), file_info.location(BytePos::from(lno))),
+	<lno: @L> "null" => Expr::RawValue(AvmValue::none(), file_info.location(BytePos::from(lno))),
 }
 
 FieldInitializer: FieldInitializer = {

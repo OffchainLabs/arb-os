@@ -5,6 +5,7 @@ use serde::{Serialize, Deserialize};
 use crate::stringtable;
 use crate::mavm::Instruction;
 use crate::link::{ExportedFunc, ImportedFunc};
+use crate::source::Lines;
 
 
 lalrpop_mod!(pub mini); 
@@ -15,20 +16,22 @@ pub struct CompiledProgram {
     pub code: Vec<Instruction>,
     pub exported_funcs: Vec<ExportedFunc>,
     pub imported_funcs: Vec<ImportedFunc>,
+    pub source_file_map: SourceFileMap,
 }
 
-impl CompiledProgram {
+impl<'a> CompiledProgram {
     pub fn new(
         code: Vec<Instruction>, 
         exported_funcs: Vec<ExportedFunc>, 
-        imported_funcs: Vec<ImportedFunc>
+        imported_funcs: Vec<ImportedFunc>,
+        source_file_map: SourceFileMap,
     ) -> Self {
-        CompiledProgram{ code, exported_funcs, imported_funcs }
+        CompiledProgram{ code, exported_funcs, imported_funcs, source_file_map }
     }
 
-    pub fn relocate(self, int_offset: usize, ext_offset: usize, func_offset: usize) -> (Self, usize) {
+    pub fn relocate(self, int_offset: usize, ext_offset: usize, func_offset: usize, source_file_map: SourceFileMap) -> (Self, usize) {
         let mut relocated_code = Vec::new();
-        let mut max_func_offset = 0;
+        let mut max_func_offset = func_offset;
         for insn in &self.code {
             let (relocated_insn, new_func_offset) = insn.clone().relocate(int_offset, ext_offset, func_offset);
             relocated_code.push(relocated_insn);
@@ -51,7 +54,7 @@ impl CompiledProgram {
             relocated_imported_funcs.push(imp_func.relocate(int_offset, ext_offset));
         }
 
-        (CompiledProgram::new(relocated_code, relocated_exported_funcs, relocated_imported_funcs), max_func_offset)
+        (CompiledProgram::new(relocated_code, relocated_exported_funcs, relocated_imported_funcs, source_file_map), max_func_offset)
     }
 
     pub fn to_output(&self, output: &mut dyn io::Write, format: Option<&str>) {
@@ -108,14 +111,19 @@ pub fn compile_from_file<'a>(path: &Path, debug: bool) -> Result<CompiledProgram
     let parse_result: Result<CompiledProgram, serde_json::Error> = serde_json::from_str(&s);
     match parse_result {
         Ok(compiled_prog) => Ok(compiled_prog),
-        Err(_) => compile_from_source(&s, debug),  // json parsing failed, try to parse as source code
+        Err(_) => compile_from_source(s, display, debug),  // json parsing failed, try to parse as source code
     }
 }
 
-pub fn compile_from_source<'a>(s: &str, debug: bool) -> Result<CompiledProgram, CompileError<'a>> {
+pub fn compile_from_source<'a>(
+    s: String, 
+    pathname: std::path::Display, 
+    debug: bool,
+) -> Result<CompiledProgram, CompileError<'a>> {
     let mut string_table_1 = stringtable::StringTable::new();
+    let lines = Lines::new(s.bytes());
     let res = mini::DeclsParser::new()
-        .parse(&mut string_table_1, s)
+        .parse(&mut string_table_1, &lines, &s)
         .unwrap();
     let mut checked_funcs = Vec::new();
     let res2 = crate::typecheck::typecheck_top_level_decls(&res, &mut checked_funcs, string_table_1);
@@ -132,7 +140,7 @@ pub fn compile_from_source<'a>(s: &str, debug: bool) -> Result<CompiledProgram, 
                          println!("{:04}:  {}", idx, insn);
                         }
                     }
-                    Ok(CompiledProgram::new(code_out.to_vec(), exported_funcs, imported_funcs))
+                    Ok(CompiledProgram::new(code_out.to_vec(), exported_funcs, imported_funcs, SourceFileMap::new(code_out.len(), pathname.to_string())))
                 }
                 Err(e) => Err(CompileError::new(e.reason)),
             }
@@ -149,5 +157,41 @@ pub struct CompileError<'a> {
 impl<'a> CompileError<'a> {
     pub fn new(description: &'a str) -> Self {
         CompileError{ description }
+    }
+}
+
+#[derive(Clone, Serialize, Deserialize)]
+pub struct SourceFileMap {
+    offsets: Vec<(usize, String)>,
+    end:     usize,
+}
+
+impl SourceFileMap {
+    pub fn new(size: usize, first_filepath: String) -> Self {
+        SourceFileMap {
+            offsets: vec![(0, first_filepath),],
+            end: size,
+        }
+    }
+
+    pub fn new_empty() -> Self {
+        SourceFileMap{ offsets: Vec::new(), end: 0 }
+    }
+
+    pub fn push(&mut self, size: usize, filepath: String) {
+        self.offsets.push((self.end, filepath));
+        self.end += size;
+    }
+
+    pub fn get(&self, offset: usize) -> String {
+        for i in 0..(self.offsets.len()-1) {
+            if offset < self.offsets[i+1].0 {
+                return self.offsets[i].1.clone();
+            }
+        }
+        if offset < self.end {
+            return self.offsets[self.offsets.len()-1].1.clone();
+        }
+        panic!("SourceFileMap: bounds check error");
     }
 }

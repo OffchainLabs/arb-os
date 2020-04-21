@@ -30,7 +30,7 @@ func simpleHashtable_get(table: SimpleHashtable, key: bytes32) anytype {
 
 func simpleHashtable_set(table:SimpleHashtable, key: bytes32, val: anytype) SimpleHashtable {
 	let slot = uint(key) % table.size;
-	let newitem = struct { key: key, value: val, };
+	let newitem = struct { key: key, value: val, }; 
 	return table with { contents: table.contents with {[slot] = newitem} };
 }
 
@@ -101,10 +101,7 @@ public func kvs_set(kvs: KeyValueStore, key: anytype, value:anytype) KeyValueSto
 		value: value,
 	};
 	while (retries < 5) {
-		let res = unsafecast(
-			simpleHashtable_swap(kvs[which], item.key, item.value),
-			([]ShtItem, ShtItem)
-		);
+		let res = simpleHashtable_swap(kvs[which], item.key, item.value);
 		kvs = kvs with { [which] = res.0 };
 		if (res.1 == null) {
 			return kvs;

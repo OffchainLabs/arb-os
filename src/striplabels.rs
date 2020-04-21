@@ -4,7 +4,7 @@ use crate::link::{ExportedFunc, ExportedFuncPoint, ImportedFunc};
 use crate::uint256::Uint256;
 
 
-pub fn strip_labels(
+pub fn strip_labels<'a>(
 	code_in: &[Instruction], 
 	jump_table: &[Label],
 	exported_funcs: &[ExportedFunc],
@@ -56,7 +56,7 @@ pub fn strip_labels(
 	(code_out, jump_table_out, exported_funcs_out)
 }
 
-pub fn fix_nonforward_labels(
+pub fn fix_nonforward_labels<'a>(
 	code_in: &[Instruction],
 	imported_funcs: &[ImportedFunc],
 ) -> (Vec<Instruction>, Vec<Label>) {
@@ -88,19 +88,19 @@ pub fn fix_nonforward_labels(
 								index
 							}
 						};
-						code_out.push(Instruction::from_opcode(Opcode::PushStatic));
-						code_out.push(Instruction::from_opcode(Opcode::PushExternal(idx)));
-						code_out.push(Instruction::from_opcode(insn_in.opcode));
+						code_out.push(Instruction::from_opcode(Opcode::PushStatic, insn_in.location));
+						code_out.push(Instruction::from_opcode(Opcode::PushExternal(idx), insn_in.location));
+						code_out.push(Instruction::from_opcode(insn_in.opcode, insn_in.location));
 					} else {
-						code_out.push(Instruction{ opcode: insn_in.opcode, immediate: Some(val) });
+						code_out.push(Instruction::from_opcode_imm(insn_in.opcode, val, insn_in.location));
 					}
 				}
 				_ => {
-					code_out.push(Instruction{ opcode: insn_in.opcode, immediate: Some(val) });
+					code_out.push(Instruction::from_opcode_imm(insn_in.opcode, val, insn_in.location));
 				}
 			}
 			None => {
-				code_out.push(Instruction{ opcode: insn_in.opcode, immediate: None });
+				code_out.push(Instruction::from_opcode(insn_in.opcode, insn_in.location));
 			}
 		}
 		if let Opcode::Label(label) = insn_in.opcode {
@@ -113,11 +113,12 @@ pub fn fix_nonforward_labels(
 		match insn.opcode {
 			Opcode::PushExternal(idx) => {
 				if let Some(val) = &insn.immediate {
-					code_xformed.push(Instruction::from_opcode_imm(Opcode::Noop, val.clone()));
+					code_xformed.push(Instruction::from_opcode_imm(Opcode::Noop, val.clone(), insn.location));
 				}
 				code_xformed.push(Instruction::from_opcode_imm(
 					Opcode::TupleGet(jump_table.len()),
 					Value::Int(Uint256::from_usize(idx)),
+					insn.location,
 				));
 			}
 			_ => { code_xformed.push(insn.clone()); }

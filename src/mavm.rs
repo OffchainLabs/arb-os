@@ -2,6 +2,7 @@ use std::fmt;
 use std::collections::HashMap;
 use crate::stringtable::StringId;
 use crate::uint256::Uint256;
+use crate::pos::Location;
 use serde::{Serialize, Deserialize};
 
 
@@ -15,9 +16,9 @@ pub enum Label {
 impl Label {
 	pub fn relocate(self, int_offset: usize, ext_offset: usize, func_offset: usize) -> (Self, usize) {
 		match self {
-			Label::Func(sid) => (Label::Func(sid+func_offset), sid),
-			Label::Anon(pc) => (Label::Anon(pc+int_offset), 0),
-			Label::External(slot) => (Label::External(slot+ext_offset), 0),
+			Label::Func(sid) => (Label::Func(sid+func_offset), sid+func_offset),
+			Label::Anon(pc) => (Label::Anon(pc+int_offset), func_offset),
+			Label::External(slot) => (Label::External(slot+ext_offset), func_offset),
 		}
 	}
 }
@@ -51,19 +52,20 @@ impl LabelGenerator {
 pub struct Instruction {
 	pub opcode: Opcode,
 	pub immediate: Option<Value>,
+	pub location: Option<Location>,
 }
 
 impl Instruction {
-	pub fn new(opcode: Opcode, immediate: Option<Value>) -> Self {
-		Instruction{ opcode, immediate }
+	pub fn new(opcode: Opcode, immediate: Option<Value>, location: Option<Location>) -> Self {
+		Instruction{ opcode, immediate, location }
 	}
 
-	pub fn from_opcode(opcode: Opcode) -> Self {
-		Instruction::new(opcode, None)
+	pub fn from_opcode(opcode: Opcode, location: Option<Location>) -> Self {
+		Instruction::new(opcode, None, location)
 	}
 
-	pub fn from_opcode_imm(opcode: Opcode, immediate: Value) -> Self {
-		Instruction::new(opcode, Some(immediate))
+	pub fn from_opcode_imm(opcode: Opcode, immediate: Value, location: Option<Location>) -> Self {
+		Instruction::new(opcode, Some(immediate), location)
 	}
 
 	pub fn get_label(&self) -> Option<&Label> {
@@ -75,13 +77,13 @@ impl Instruction {
 
 	pub fn replace_labels(self, label_map: &HashMap<Label, CodePt>) -> Self {
 		match self.immediate {
-			Some(val) => Instruction::from_opcode_imm(self.opcode, val.replace_labels(label_map)),
+			Some(val) => Instruction::from_opcode_imm(self.opcode, val.replace_labels(label_map), self.location),
 			None => self
 		}
 	}
 
 	pub fn relocate(self, int_offset: usize, ext_offset: usize, func_offset: usize) -> (Self, usize) {
-		let mut max_func_offset = 0;
+		let mut max_func_offset = func_offset;
 		let opcode = match self.opcode {
 			Opcode::PushExternal(off) => Opcode::PushExternal(off+ext_offset),
 			Opcode::Label(label) => {
@@ -103,12 +105,12 @@ impl Instruction {
 			}
 			None => None,
 		};
-		(Instruction::new(opcode, imm), max_func_offset)
+		(Instruction::new(opcode, imm, self.location), max_func_offset)
 	}
 
 	pub fn xlate_labels(self, xlate_map: &HashMap<Label, &Label>) -> Self {
 		match self.immediate {
-			Some(val) => Instruction::from_opcode_imm(self.opcode, val.xlate_labels(xlate_map)),
+			Some(val) => Instruction::from_opcode_imm(self.opcode, val.xlate_labels(xlate_map), self.location),
 			None => self,
 		}
 	}
@@ -117,8 +119,14 @@ impl Instruction {
 impl fmt::Display for Instruction {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
     	match &self.immediate {
-    		Some(v) => write!(f, "[{}] {}", v, self.opcode),
-    		None => write!(f, "{}", self.opcode),
+    		Some(v) => match self.location {
+				Some(loc) => write!(f, "[{}] {}\t\t{}", v, self.opcode, loc),
+				None => write!(f, "[{}] {}\t\t[no location]", v, self.opcode),
+			}
+    		None => match self.location {
+				Some(loc) => write!(f, "{}\t\t{}", self.opcode, loc),
+				None => write!(f, "{}", self.opcode),
+			}
     	}
     }
 }

@@ -146,12 +146,19 @@ impl ExecutionError {
 			MachineState::Running(cp) => ExecutionError::RunningErr(why, *cp, val),
 		}
 	}
+}
 
-	/*
-	fn new_wrapped(txt: &'static str, inner: ExecutionError) -> Self {
-		ExecutionError::Wrapped(txt, Box::new(inner))
+impl fmt::Display for ExecutionError {
+	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+		match self {
+			ExecutionError::StoppedErr(s) => writeln!(f, "error with machine stopped: {}", s),
+			ExecutionError::Wrapped(s, bee) => writeln!(f, "{} ({})", s, *bee),
+			ExecutionError::RunningErr(s, cp, ov) => match ov {
+				Some(val) => writeln!(f, "{} ({:?}) with value {}", s, cp, val),
+				None => writeln!(f, "{} ({:?})", s, cp),
+			}
+		}
 	}
-	*/
 }
 
 #[derive(Clone, Debug)]
@@ -179,7 +186,7 @@ pub struct Machine {
 	static_val: Value,
 }
 
-impl Machine {
+impl<'a> Machine {
 	pub fn new(program: LinkedProgram) -> Self {
 		Machine{
 			stack: ValueStack::new(),
@@ -529,8 +536,8 @@ impl Machine {
 						Ok(true)
 					}
 					Opcode::NotEqual => {
-						let r1 = self.stack.pop_uint(&self.state)?;
-						let r2 = self.stack.pop_uint(&self.state)?;
+						let r1 = self.stack.pop(&self.state)?;
+						let r2 = self.stack.pop(&self.state)?;
 						self.stack.push_usize(if r1 != r2 { 1 } else { 0 });
 						self.incr_pc();
 						Ok(true)
@@ -601,4 +608,13 @@ impl Machine {
 pub enum StackTrace {
 	Unknown,
 	Known(Vec<CodePt>),
+}
+
+impl fmt::Display for StackTrace {
+	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+		match self {
+			StackTrace::Unknown => writeln!(f, "[stack trace unknown]"),
+			StackTrace::Known(v) => writeln!(f, "{:?}", v),
+		}
+	}
 }
