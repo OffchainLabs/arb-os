@@ -38,6 +38,17 @@ func simpleHashtable_set(table:SimpleHashtable, key: bytes32, val: anytype) Simp
 	return table with { contents: table.contents with {[slot] = newitem} };
 }
 
+func simpleHashtable_delete(table: SimpleHashtable, key: bytes32) SimpleHashtable {
+	let salted_key = hash(table.salt, key);
+	let slot = uint(salted_key) % table.size;
+	let item = table.contents[slot];
+	if ((item != null) && (key == item.key)) {
+		return table with { contents: table.contents with {[slot] = unsafecast(null, ShtItem) } };
+	} else {
+		return table;
+	}
+}
+
 func simpleHashtable_swap(
 	table: SimpleHashtable, 
 	key: bytes32, 
@@ -116,4 +127,15 @@ public func kvs_set(kvs: KeyValueStore, key: anytype, value:anytype) KeyValueSto
 		item.key,
 		item.value
 	);
+}
+
+public func kvs_delete(kvs: KeyValueStore, key: anytype) KeyValueStore {
+	let val = simpleHashtable_get(kvs[0], hash(key));
+	if (val != null) {
+		return kvs with { [0] = simpleHashtable_delete(kvs[0], hash(key)) };
+	}
+	if (val != null) {
+		return kvs with { [1] = simpleHashtable_delete(kvs[1], hash(key)) };
+	}
+	return kvs;
 }

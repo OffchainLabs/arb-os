@@ -4,6 +4,7 @@ import type KeyValueStore;
 import func kvs_new() KeyValueStore;
 import func kvs_get(kvs: KeyValueStore, key: anytype) anytype;
 import func kvs_set(kvs: KeyValueStore, key: anytype, value:anytype) KeyValueStore;
+import func kvs_delete(kvs: KeyValueStore, key: anytype) KeyValueStore;
 
 
 func tests(which: uint) anytype {
@@ -37,6 +38,16 @@ func tests(which: uint) anytype {
 			s = kvs_set(s, i, 1000+i);
 			i = i+1;
 		}
+		return kvs_get(s, 17);
+	}
+	if (which == 5) {
+		let s = kvs_new();
+		let i = 0;
+		while (i < 27) {
+			s = kvs_set(s, i, 1000+i);
+			i = i+1;
+		}
+		s = kvs_delete(s, 17);
 		return kvs_get(s, 17);
 	}
 	return null;

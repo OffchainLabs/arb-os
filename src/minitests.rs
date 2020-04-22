@@ -64,6 +64,11 @@ fn testkvs4() {
     test_kvstest(4, Value::Int(Uint256::from_usize(1017)));
 }
 
+#[test]
+fn testkvs5() {
+    test_kvstest(5, Value::none());
+}
+
 fn test_kvstest(test_num: usize, expected_result: Value) {
     let path = Path::new("kvstest.mexe"); 
     let res = run_from_file(path, vec![Value::Int(Uint256::from_usize(test_num))]);
