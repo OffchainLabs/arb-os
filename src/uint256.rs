@@ -1,11 +1,13 @@
 use std::cmp::Ordering;
 use std::fmt;
+use std::io::Write;
 use std::ops::{Add, BitAnd, BitOr, BitXor, Div, Mul, Neg, Rem, Sub};
 use num_bigint::{BigUint, BigInt, Sign, ToBigInt};
 use num_traits::cast::ToPrimitive;
 use num_traits::identities::{Zero, One};
 use num_traits::sign::Signed;
 use serde::{Serialize, Deserialize, Serializer, Deserializer};
+use crypto_hash;
 
 
 #[derive(Debug, Clone, PartialEq, Eq, Ord, Hash)]
@@ -174,6 +176,24 @@ impl Uint256 {
 		} else {
 			bi.to_biguint().unwrap()
 		}
+	}
+
+	pub fn avm_hash(&self) -> Self {
+		let bytes_buf = self.val.to_bytes_be();
+		let mut hasher = crypto_hash::Hasher::new(crypto_hash::Algorithm::SHA256);
+		hasher.write_all(&bytes_buf).expect("Uint256::avm_hash: write to hasher failed");
+		let result_bytes = hasher.finish();
+		Uint256::from_bytes(&result_bytes)
+	}
+
+	pub fn avm_hash2(v1: &Self, v2: &Self) -> Self {
+		let bytes1 = v1.val.to_bytes_be();
+		let bytes2 = v2.val.to_bytes_be();
+		let mut hasher = crypto_hash::Hasher::new(crypto_hash::Algorithm::SHA256);
+		hasher.write_all(&bytes1).expect("Uint256::avm_hash2: write to hasher failed");
+		hasher.write_all(&bytes2).expect("Uint256::avm_hash2: write to hasher failed");
+		let result_bytes = hasher.finish();
+		Uint256::from_bytes(&result_bytes)
 	}
 }
 

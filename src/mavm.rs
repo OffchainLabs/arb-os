@@ -21,6 +21,14 @@ impl Label {
 			Label::External(slot) => (Label::External(slot+ext_offset), func_offset),
 		}
 	}
+
+	pub fn avm_hash(&self) -> Value {
+		match self {
+			Label::Func(sid) => Value::avm_hash2(&Value::Int(Uint256::from_usize(4)), &Value::Int(Uint256::from_usize(*sid))),
+			Label::Anon(n) => Value::avm_hash2(&Value::Int(Uint256::from_usize(5)), &Value::Int(Uint256::from_usize(*n))),
+			Label::External(n) => Value::avm_hash2(&Value::Int(Uint256::from_usize(6)), &Value::Int(Uint256::from_usize(*n))),
+		}
+	}
 }
 
 impl fmt::Display for Label {
@@ -167,6 +175,13 @@ impl CodePt {
 			CodePt::External(off) => CodePt::External(off+ext_offset),
 		}
 	}
+
+	pub fn avm_hash(&self) -> Value {
+		match self {
+			CodePt::Internal(sz) => Value::avm_hash2(&Value::Int(Uint256::from_usize(3)), &Value::Int(Uint256::from_usize(*sz))),
+			CodePt::External(sz) => Value::avm_hash2(&Value::Int(Uint256::from_usize(4)), &Value::Int(Uint256::from_usize(*sz))),
+		}
+	}
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -263,12 +278,28 @@ impl Value {
 		}
 	}
 
-	pub fn avm_hash(&self) -> Value {
-		Value::Int(Uint256::zero())   // BUGBUG: need to actually hash things
+	pub fn avm_hash(&self) -> Value {  //BUGBUG: should do same hash as AVM
+		match self {
+			Value::Int(ui) => Value::Int(ui.avm_hash()),
+			Value::Tuple(v) => {
+				let mut acc = Uint256::zero();
+				for val in v {
+					let vhash = val.avm_hash();
+					if let Value::Int(ui) = vhash {
+						acc = Uint256::avm_hash2(&acc, &ui);
+					} else {
+						panic!("avm_hash returned wrong datatype")
+					}
+				}
+				Value::Int(acc)
+			}
+			Value::CodePoint(cp) => Value::avm_hash2(&Value::Int(Uint256::one()), &cp.avm_hash()),
+			Value::Label(label) => Value::avm_hash2(&Value::Int(Uint256::from_usize(2)), &label.avm_hash()),
+		}
 	}
 
-	pub fn avm_hash2(_v1: &Self, _v2: &Self) -> Value {
-		Value::Int(Uint256::zero())   // BUGBUG: need to actually hash things
+	pub fn avm_hash2(v1: &Self, v2: &Self) -> Value {
+		Value::Tuple(vec![v1.clone(), v2.clone()]).avm_hash()
 	}
 }
 

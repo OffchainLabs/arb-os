@@ -6,6 +6,7 @@ use crate::stringtable;
 use crate::mavm::Instruction;
 use crate::link::{ExportedFunc, ImportedFunc};
 use crate::source::Lines;
+use crate::pos::Location;
 
 
 lalrpop_mod!(pub mini); 
@@ -142,21 +143,22 @@ pub fn compile_from_source<'a>(
                     }
                     Ok(CompiledProgram::new(code_out.to_vec(), exported_funcs, imported_funcs, SourceFileMap::new(code_out.len(), pathname.to_string())))
                 }
-                Err(e) => Err(CompileError::new(e.reason)),
+                Err(e) => Err(CompileError::new(e.reason, e.location)),
             }
         },
-        Err(res3) => Err(CompileError::new(res3.reason)),
+        Err(res3) => Err(CompileError::new(res3.reason, res3.location)),
     }
 } 
 
 #[derive(Debug)]
 pub struct CompileError<'a> {
     description: &'a str,
+    location: Option<Location>,
 }
 
 impl<'a> CompileError<'a> {
-    pub fn new(description: &'a str) -> Self {
-        CompileError{ description }
+    pub fn new(description: &'a str, location: Option<Location>) -> Self {
+        CompileError{ description, location }
     }
 }
 

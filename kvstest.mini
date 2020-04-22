@@ -16,5 +16,28 @@ func tests(which: uint) anytype {
 		s = kvs_set(s, 42, 42);
 		return kvs_get(s, 42);
 	}
+	if (which == 2) {
+		let s = kvs_new();
+		s = kvs_set(s, 42, 43);
+		s = kvs_set(s, 55, 56);
+		s = kvs_set(s, 42, 99);
+		return kvs_get(s, 42);
+	}
+	if (which == 3) {
+		let s = kvs_new();
+		s = kvs_set(s, 42, 43);
+		s = kvs_set(s, 55, 56);
+		s = kvs_set(s, 42, 99);
+		return kvs_get(s, 55);
+	}
+	if (which == 4) {
+		let s = kvs_new();
+		let i = 0;
+		while (i < 150) {
+			s = kvs_set(s, i, 1000+i);
+			i = i+1;
+		}
+		return kvs_get(s, 17);
+	}
 	return null;
 }

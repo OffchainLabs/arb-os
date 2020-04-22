@@ -12,11 +12,12 @@ use crate::pos::Location;
 
 #[derive(Debug)]
 pub struct CodegenError {
-	pub reason: &'static str
+	pub reason: &'static str,
+	pub location: Option<Location>,
 }
 
-pub fn new_codegen_error(reason: &'static str) -> CodegenError {
-	CodegenError{ reason }
+pub fn new_codegen_error(reason: &'static str, location: Option<Location>) -> CodegenError {
+	CodegenError{ reason, location }
 }
 
 pub fn mavm_codegen<'a>(
@@ -76,7 +77,7 @@ fn mavm_codegen_func<'a>(
 				code.push(Instruction::from_opcode(Opcode::Return, location));
 			} 
 			_ => {
-				return Err(new_codegen_error("apparent path to end of function without return"));
+				return Err(new_codegen_error("apparent path to end of function without return", location));
 			}
 		}
 	}
@@ -177,7 +178,7 @@ fn mavm_codegen_statements<'a>(
 		TypeCheckedStatement::Assign(name, expr, loc) => {
 			let slot_num = match locals.get(*name) {
 				Some(slot) => slot,
-				None => { return Err(new_codegen_error("assigned to non-existent variable")) }
+				None => { return Err(new_codegen_error("assigned to non-existent variable", *loc)) }
 			};
 			let (lg, c) = mavm_codegen_expr(expr, code, &locals, label_gen, string_table, import_func_map)?;
 			label_gen = lg;
@@ -434,7 +435,7 @@ fn mavm_codegen_expr<'a>(
 				}
 				None => {
 					println!("local: {:?}", *name);
-					Err(new_codegen_error("tried to access non-existent local variable"))
+					Err(new_codegen_error("tried to access non-existent local variable", *loc))
 				}
 			}
 		}
@@ -471,7 +472,7 @@ fn mavm_codegen_expr<'a>(
 					));
 					Ok((label_gen, code))
 				}
-				None => Err(new_codegen_error("tried to get non-existent struct field"))
+				None => Err(new_codegen_error("tried to get non-existent struct field", *loc))
 			}
 		}
 		TypeCheckedExpr::ConstUint(ui, loc) => {

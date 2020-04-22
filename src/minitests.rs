@@ -49,6 +49,21 @@ fn testkvs1() {
     test_kvstest(1, Value::Int(Uint256::from_usize(42)));
 }
 
+#[test]
+fn testkvs2() {
+    test_kvstest(2, Value::Int(Uint256::from_usize(99)));
+}
+
+#[test]
+fn testkvs3() {
+    test_kvstest(3, Value::Int(Uint256::from_usize(56)));
+}
+
+#[test]
+fn testkvs4() {
+    test_kvstest(4, Value::Int(Uint256::from_usize(1017)));
+}
+
 fn test_kvstest(test_num: usize, expected_result: Value) {
     let path = Path::new("kvstest.mexe"); 
     let res = run_from_file(path, vec![Value::Int(Uint256::from_usize(test_num))]);

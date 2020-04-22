@@ -53,7 +53,7 @@ pub enum Type {
 }
 
 impl Type {
-	pub fn resolve_types(&self, type_table: &SymTable<Type>) -> Result<Self, TypeError> {
+	pub fn resolve_types(&self, type_table: &SymTable<Type>, location: Option<Location>) -> Result<Self, TypeError> {
 		match self {
 			Type::Void |
 			Type::Uint |
@@ -65,32 +65,32 @@ impl Type {
 			Type::Tuple(tvec) => {
 				let mut rvec = Vec::new();
 				for t in tvec.iter() {
-					rvec.push(t.resolve_types(type_table)?);
+					rvec.push(t.resolve_types(type_table, location)?);
 				}
 				Ok(Type::Tuple(rvec))
 			}
-			Type::Array(t) => Ok(Type::Array(Box::new(t.resolve_types(type_table)?))),
-			Type::FixedArray(t, s) => Ok(Type::FixedArray(Box::new(t.resolve_types(type_table)?), *s)),
+			Type::Array(t) => Ok(Type::Array(Box::new(t.resolve_types(type_table, location)?))),
+			Type::FixedArray(t, s) => Ok(Type::FixedArray(Box::new(t.resolve_types(type_table, location)?), *s)),
 			Type::Struct(vf) => {
 				let mut fvec = Vec::new();
 				for field in vf.iter() {
-					fvec.push(field.resolve_types(type_table)?);
+					fvec.push(field.resolve_types(type_table, location)?);
 				}
 				Ok(Type::Struct(fvec))
 			},
 			Type::Named(name) => {
 				match type_table.get(*name) {
-					Some(t) => Ok(t.resolve_types(type_table)?),
+					Some(t) => Ok(t.resolve_types(type_table, location)?),
 					None => { 
-						Err(new_type_error("referenced non-existent type name"))
+						Err(new_type_error("referenced non-existent type name", location))
 					}
 				}
 			}
 			Type::Func(args, ret) => {
-				let rret = ret.resolve_types(type_table)?;
+				let rret = ret.resolve_types(type_table, location)?;
 				let mut rargs = Vec::new();
 				for arg in args.iter() {
-					rargs.push(arg.resolve_types(type_table)?);
+					rargs.push(arg.resolve_types(type_table, location)?);
 				}
 				Ok(Type::Func(rargs, Box::new(rret)))
 			}
@@ -302,8 +302,8 @@ impl StructField {
 		StructField{ name, tipe }
 	}
 
-	pub fn resolve_types(&self, type_table: &SymTable<Type>) -> Result<Self, TypeError> {
-		let t = self.tipe.resolve_types(type_table)?;
+	pub fn resolve_types(&self, type_table: &SymTable<Type>, location: Option<Location>) -> Result<Self, TypeError> {
+		let t = self.tipe.resolve_types(type_table, location)?;
 		Ok(StructField{ name: self.name, tipe: t })
 	}
 }
@@ -315,8 +315,8 @@ pub struct FuncArg {
 }
 
 impl FuncArg {
-	pub fn resolve_types(&self, type_table: &SymTable<Type>) -> Result<Self, TypeError> {
-		Ok(FuncArg { name: self.name, tipe: self.tipe.resolve_types(type_table)? })
+	pub fn resolve_types(&self, type_table: &SymTable<Type>, location: Option<Location>) -> Result<Self, TypeError> {
+		Ok(FuncArg { name: self.name, tipe: self.tipe.resolve_types(type_table, location)? })
 	}
 }
 
@@ -410,10 +410,10 @@ impl FuncDecl {
 		}
 	}
 
-	pub fn resolve_types(&self, type_table: &SymTable<Type>) -> Result<Self, TypeError> {
+	pub fn resolve_types(&self, type_table: &SymTable<Type>, location: Option<Location>) -> Result<Self, TypeError> {
 		let mut rargs = Vec::new();
 		for arg in self.args.iter() {
-			rargs.push(arg.resolve_types(type_table)?);
+			rargs.push(arg.resolve_types(type_table, location)?);
 		}
 		let mut rcode = Vec::new();
 		for stat in self.code.iter() {
@@ -422,9 +422,9 @@ impl FuncDecl {
 		Ok(FuncDecl{
 			name: self.name,
 			args: rargs,
-			ret_type: self.ret_type.resolve_types(type_table)?,
+			ret_type: self.ret_type.resolve_types(type_table, location)?,
 			code: rcode,
-			tipe: self.tipe.resolve_types(type_table)?,
+			tipe: self.tipe.resolve_types(type_table, location)?,
 			kind: self.kind,
 			location: self.location,
 		})
@@ -558,7 +558,7 @@ impl<'a> Expr {
 			}
 			Expr::NewArray(sz, tipe, loc) => Ok(Expr::NewArray(
 				Box::new(sz.resolve_types(type_table)?), 
-				tipe.resolve_types(type_table)?,
+				tipe.resolve_types(type_table, *loc)?,
 				loc.clone()
 			)),
 			Expr::NewFixedArray(sz, init_expr, loc) => match &*init_expr {
@@ -583,7 +583,7 @@ impl<'a> Expr {
 			)),
 			Expr::UnsafeCast(be, t, loc) => Ok(Expr::UnsafeCast(
 				Box::new(be.resolve_types(type_table)?), 
-				t.resolve_types(type_table)?,
+				t.resolve_types(type_table, *loc)?,
 				loc.clone()
 			)),
 			Expr::RawValue(v, loc) => Ok(Expr::RawValue(v.clone(), loc.clone())),
