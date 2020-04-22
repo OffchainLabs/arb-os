@@ -46,7 +46,7 @@ Type
 * struct { StructField+ }
 * ( )
 * ( CommaedTypes )
-* \[ ] Type
+* \[ \] Type
 * [ UnsignedInteger ] Type
 * anytype
 * Ident
