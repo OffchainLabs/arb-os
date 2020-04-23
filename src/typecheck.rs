@@ -39,13 +39,13 @@ pub enum TypeCheckedStatement {
 	Assign(StringId, TypeCheckedExpr, Option<Location>),
 	Loop(Vec<TypeCheckedStatement>, Option<Location>),
 	While(TypeCheckedExpr, Vec<TypeCheckedStatement>, Option<Location>),
-	If(Vec<TypeCheckedIfArm>, Option<Location>),
+	If(TypeCheckedIfArm),
 }
 
 #[derive(Debug, Clone)]
 pub enum TypeCheckedIfArm {
-	Cond(TypeCheckedExpr, Vec<TypeCheckedStatement>),
-	Catchall(Vec<TypeCheckedStatement>),
+	Cond(TypeCheckedExpr, Vec<TypeCheckedStatement>, Option<Box<TypeCheckedIfArm>>, Option<Location>),
+	Catchall(Vec<TypeCheckedStatement>, Option<Location>),
 }
 
 #[derive(Debug, Clone)]
@@ -307,30 +307,40 @@ fn typecheck_statement<'a>(
 				_ => Err(new_type_error("while condition is not bool", *loc)),
 			}
 		}
-		Statement::If(arms, loc) => {
-			let mut tc_arms = Vec::new();
-			for arm in arms {
-				match arm {
-					IfArm::Cond(cond, body) => {
-						let tc_cond = typecheck_expr(&cond, type_table)?;
-						match tc_cond.get_type() {
-							Type::Bool => {
-								tc_arms.push(TypeCheckedIfArm::Cond(
-									tc_cond,
-									typecheck_statement_sequence(body, return_type, type_table)?,
-								));
-							}
-							_ => { return Err(new_type_error("if/elseif condition is not bool", *loc)); }
-						}
-					}
-					IfArm::Catchall(body) => {
-						tc_arms.push(TypeCheckedIfArm::Catchall(
-							typecheck_statement_sequence(body, return_type, type_table)?,
-						));
-					}
+		Statement::If(arm) => {
+			Ok((TypeCheckedStatement::If(typecheck_if_arm(arm, return_type, type_table)?), None))
+		}
+	}
+}
+
+fn typecheck_if_arm(
+	arm: &IfArm, 
+	return_type: &Type,
+	type_table: &SymTable<Type>,
+) -> Result<TypeCheckedIfArm, TypeError> {
+	match arm {
+		IfArm::Cond(cond, body, orest, loc) => {
+			let tc_cond = typecheck_expr(cond, type_table)?;
+			match tc_cond.get_type() {
+				Type::Bool => {
+					Ok(TypeCheckedIfArm::Cond(
+						tc_cond,
+						typecheck_statement_sequence(body, return_type, type_table)?,
+						match orest {
+							Some(rest) => Some(Box::new(typecheck_if_arm(rest, return_type, type_table)?)),
+							None => None,
+						},
+						*loc,
+					))
 				}
+				_ => Err(new_type_error("if condition must be boolean", *loc))
 			}
-			Ok((TypeCheckedStatement::If(tc_arms, loc.clone()), None))
+		}
+		IfArm::Catchall(body, loc) => {
+			Ok(TypeCheckedIfArm::Catchall(
+				typecheck_statement_sequence(body, return_type, type_table)?,
+				*loc,
+			))
 		}
 	}
 }

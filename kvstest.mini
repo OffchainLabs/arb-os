@@ -11,27 +11,23 @@ func tests(which: uint) anytype {
 	if (which == 0) {
 		let s = kvs_new();
 		return kvs_get(s, 17);
-	}
-	if (which == 1) {
+	} elseif (which == 1) {
 		let s = kvs_new();
 		s = kvs_set(s, 42, 42);
 		return kvs_get(s, 42);
-	}
-	if (which == 2) {
+	} elseif (which == 2) {
 		let s = kvs_new();
 		s = kvs_set(s, 42, 43);
 		s = kvs_set(s, 55, 56);
 		s = kvs_set(s, 42, 99);
 		return kvs_get(s, 42);
-	}
-	if (which == 3) {
+	} elseif (which == 3) {
 		let s = kvs_new();
 		s = kvs_set(s, 42, 43);
 		s = kvs_set(s, 55, 56);
 		s = kvs_set(s, 42, 99);
 		return kvs_get(s, 55);
-	}
-	if (which == 4) {
+	} elseif (which == 4) {
 		let s = kvs_new();
 		let i = 0;
 		while (i < 150) {
@@ -39,8 +35,7 @@ func tests(which: uint) anytype {
 			i = i+1;
 		}
 		return kvs_get(s, 17);
-	}
-	if (which == 5) {
+	} elseif (which == 5) {
 		let s = kvs_new();
 		let i = 0;
 		while (i < 27) {
@@ -49,6 +44,7 @@ func tests(which: uint) anytype {
 		}
 		s = kvs_delete(s, 17);
 		return kvs_get(s, 17);
+	} else {
+		return null;
 	}
-	return null;
 }

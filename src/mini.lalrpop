@@ -57,14 +57,20 @@ CodeBlock: Vec<Statement> = {
 Statement: Statement = {
 	<lno: @L> "while" "(" <e: Expr> ")" <cb: CodeBlock> => Statement::While(e, cb, file_info.location(BytePos::from(lno))),
 	<lno: @L> "loop" <cb: CodeBlock> => Statement::Loop(cb, file_info.location(BytePos::from(lno))),
-	<lno: @L> "if" "(" <c: Expr> ")" <t: CodeBlock> => Statement::If(vec![IfArm::Cond(c, t)], file_info.location(BytePos::from(lno))),
-	<lno: @L> "if" "(" <c: Expr> ")" <t: CodeBlock> "else" <f: CodeBlock> => Statement::If(vec![IfArm::Cond(c, t), IfArm::Catchall(f)], file_info.location(BytePos::from(lno))),
+	<lno: @L> "if" "(" <c: Expr> ")" <t: CodeBlock> => Statement::If(IfArm::Cond(c, t, None, file_info.location(BytePos::from(lno)))),
+	<lno: @L> "if" "(" <c: Expr> ")" <t: CodeBlock> <r: IfArm> => Statement::If(IfArm::Cond(c, t, Some(Box::new(r)), file_info.location(BytePos::from(lno)))),
 	<lno: @L> "let" <i: Ident> "=" <e: Expr> ";" => Statement::Let(i, e, file_info.location(BytePos::from(lno))),
 	<lno: @L> <i: Ident> "=" <e: Expr> ";" => Statement::Assign(i, e, file_info.location(BytePos::from(lno))),
 	<lno: @L> "return" <e: Expr> ";" => Statement::Return(e, file_info.location(BytePos::from(lno))),
 	<lno: @L> "return" ";" => Statement::ReturnVoid(file_info.location(BytePos::from(lno))),
 	<lno: @L> "panic" ";" => Statement::Panic(file_info.location(BytePos::from(lno))),
 	<lno: @L> ";" => Statement::Noop(file_info.location(BytePos::from(lno))),
+}
+
+IfArm: IfArm = {
+	<lno: @L> "else" <cb: CodeBlock> => IfArm::Catchall(cb, file_info.location(BytePos::from(lno))),
+	<lno: @L> "elseif" "(" <c: Expr> ")" <cb: CodeBlock> => IfArm::Cond(c, cb, None, file_info.location(BytePos::from(lno))),
+	<lno: @L> "elseif" "(" <c: Expr> ")" <cb: CodeBlock> <r: IfArm> => IfArm::Cond(c, cb, Some(Box::new(r)), file_info.location(BytePos::from(lno))),
 }
 
 StructDecl: Type = {

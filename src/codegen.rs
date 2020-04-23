@@ -255,72 +255,100 @@ fn mavm_codegen_statements<'a>(
 				import_func_map
 			)
 		}
-		TypeCheckedStatement::If(arms, loc) => {
-			let mut might_ever_continue = false;
-			let mut have_catchall = false;
+		TypeCheckedStatement::If(arm) => {
 			let (end_label, lg) = label_gen.next();
-			label_gen = lg;
-			for arm in arms {
-				match arm {
-					TypeCheckedIfArm::Cond(cond, body) => {
-						let (after_label, lg) = label_gen.next();
-						let (lg, c) = mavm_codegen_expr(cond, code, &locals, lg, string_table, import_func_map)?;
-						label_gen = lg;
-						code = c;
-						code.push(Instruction::from_opcode(Opcode::Not, *loc));
-						code.push(Instruction::from_opcode_imm(Opcode::Cjump, Value::Label(after_label), loc.clone()));
-						let (lg, nl, might_continue_here) = mavm_codegen_statements(
-							body.to_vec(), 
-							code, 
-							num_locals, 
-							locals, 
-							label_gen, 
-							string_table,
-							import_func_map
-						)?;
-						label_gen = lg;
-						num_locals = nl;
-						if might_continue_here {
-							might_ever_continue = true;
-							code.push(Instruction::from_opcode_imm(Opcode::Jump, Value::Label(end_label), loc.clone()));
-						}
-						code.push(Instruction::from_opcode(Opcode::Label(after_label), loc.clone()));
-					}
-					TypeCheckedIfArm::Catchall(body) => {
-						have_catchall = true;
-						let (lg, nl, might_continue_here) = mavm_codegen_statements(
-							body.to_vec(), 
-							code, 
-							num_locals, 
-							locals, 
-							label_gen, 
-							string_table,
-							import_func_map
-						)?;
-						label_gen = lg;
-						num_locals = nl;
-						if might_continue_here {
-							might_ever_continue = true;
-							code.push(Instruction::from_opcode_imm(Opcode::Jump, Value::Label(end_label), loc.clone()));
-						}
-					}
-				}
-			}
-			code.push(Instruction::from_opcode(Opcode::Label(end_label), loc.clone()));
-			if might_ever_continue || !have_catchall {
-				code.push(Instruction::from_opcode(Opcode::Label(end_label), loc.clone()));
+			let (lg, nl, might_continue) = mavm_codegen_if_arm(
+				arm,
+				end_label,
+				code,
+				num_locals,
+				locals,
+				lg,
+				string_table,
+				import_func_map,
+			)?;
+			if might_continue {
 				mavm_codegen_statements(
-					rest_of_statements.to_vec(), 
-					code, 
-					num_locals, 
-					locals, 
-					label_gen, 
+					rest_of_statements.to_vec(),
+					code,
+					nl,
+					locals,
+					lg,
 					string_table,
-					import_func_map
+					import_func_map,
 				)
 			} else {
-				Ok((label_gen, num_locals, false))
+				Ok((lg, nl, false))
 			}
+		}
+	}
+}
+
+fn mavm_codegen_if_arm<'a>(
+	arm: &TypeCheckedIfArm,  
+	end_label: Label,   
+	mut code: &'a mut Vec<Instruction>,        // accumulates the code as it's generated
+	mut num_locals: usize,                         // num locals that have been allocated
+	locals: &CopyingSymTable<usize>,               // lookup local variable slot number by name
+	mut label_gen: LabelGenerator,   
+	string_table: &StringTable,
+	import_func_map: &HashMap<StringId, Label>,       
+) -> Result<(LabelGenerator, usize, bool), CodegenError> { // (label_gen, num_labels, execution_might_continue)
+	match arm {
+		TypeCheckedIfArm::Cond(cond, body, orest, loc) => {
+			let (after_label, lg) = label_gen.next();
+			let (lg, c) = mavm_codegen_expr(cond, code, &locals, lg, string_table, import_func_map)?;
+			label_gen = lg;
+			code = c;
+			code.push(Instruction::from_opcode(Opcode::Not, *loc));
+			code.push(Instruction::from_opcode_imm(Opcode::Cjump, Value::Label(after_label), loc.clone()));
+			let (lg, nl, might_continue_here) = mavm_codegen_statements(
+				body.to_vec(), 
+				code, 
+				num_locals, 
+				locals, 
+				label_gen, 
+				string_table,
+				import_func_map
+			)?;
+			label_gen = lg;
+			num_locals = nl;
+			if might_continue_here {
+				code.push(Instruction::from_opcode_imm(Opcode::Jump, Value::Label(end_label), *loc));
+			}
+			code.push(Instruction::from_opcode(Opcode::Label(after_label), *loc));
+			match orest {
+				Some(inner_arm) => {
+					let (lg, nl, inner_might_continue) = mavm_codegen_if_arm(
+						inner_arm,
+						end_label,
+						code,
+						num_locals,
+						locals,
+						label_gen,
+						string_table,
+						import_func_map,
+					)?;
+					Ok((lg, nl, inner_might_continue || might_continue_here))
+				}
+				None => {
+					code.push(Instruction::from_opcode(Opcode::Label(end_label), *loc));
+					Ok((label_gen, num_locals, true))
+				}
+			}
+		}
+		TypeCheckedIfArm::Catchall(body, loc) => {
+			let (lg, nl, might_continue) = mavm_codegen_statements(
+				body.to_vec(), 
+				code, 
+				num_locals, 
+				locals, 
+				label_gen, 
+				string_table, 
+				import_func_map
+			)?;
+			code.push(Instruction::from_opcode(Opcode::Label(end_label), *loc));
+			Ok((lg, nl, might_continue))
 		}
 	}
 }

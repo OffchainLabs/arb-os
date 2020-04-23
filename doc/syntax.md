@@ -30,13 +30,18 @@ CodeBlock
 Statement 
 * loop CodeBlock
 * while ( Expr ) CodeBlock
-* if ( Expr ) CodeBlock 
-* if ( Expr ) CodeBlock else CodeBlock
+* if ( Expr ) CodeBlock ElseIfBlock* ElseBlock?
 * let Ident = Expr ;
 * Ident = Expr ; 
 * return Expr? ;
 * panic ; 
 * ;
+
+ElseIfBlock
+* elseif ( Expr ) CodeBlock
+
+ElseBlock
+* else CodeBlock
 
 Type
 * uint
