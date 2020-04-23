@@ -1,5 +1,5 @@
 use std::collections::HashMap;
-use crate::ast::{Type, TopLevelDecl, FuncDecl, FuncDeclKind, FuncArg, Statement, Expr, StructField, UnaryOp, BinaryOp};
+use crate::ast::{Type, TopLevelDecl, FuncDecl, FuncDeclKind, FuncArg, Statement, IfArm, Expr, StructField, UnaryOp, BinaryOp};
 use crate::symtable::SymTable;
 use crate::stringtable::{StringId, StringTable};
 use crate::link::{ExportedFunc, ImportedFunc};
@@ -39,7 +39,13 @@ pub enum TypeCheckedStatement {
 	Assign(StringId, TypeCheckedExpr, Option<Location>),
 	Loop(Vec<TypeCheckedStatement>, Option<Location>),
 	While(TypeCheckedExpr, Vec<TypeCheckedStatement>, Option<Location>),
-	If(TypeCheckedExpr, Vec<TypeCheckedStatement>, Option<Vec<TypeCheckedStatement>>, Option<Location>),
+	If(Vec<TypeCheckedIfArm>, Option<Location>),
+}
+
+#[derive(Debug, Clone)]
+pub enum TypeCheckedIfArm {
+	Cond(TypeCheckedExpr, Vec<TypeCheckedStatement>),
+	Catchall(Vec<TypeCheckedStatement>),
 }
 
 #[derive(Debug, Clone)]
@@ -301,22 +307,30 @@ fn typecheck_statement<'a>(
 				_ => Err(new_type_error("while condition is not bool", *loc)),
 			}
 		}
-		Statement::If(cond, tbody, ofbody, loc) => {
-			let tc_cond = typecheck_expr(cond, type_table)?;
-			match tc_cond.get_type() {
-				Type::Bool => {
-					let tc_tbody = typecheck_statement_sequence(tbody, return_type, type_table)?;
-					let o_tc_fbody = match ofbody {
-						None => None,
-						Some(fbody) => {
-							let tc_fbody = typecheck_statement_sequence(fbody, return_type, type_table)?;
-							Some(tc_fbody)
+		Statement::If(arms, loc) => {
+			let mut tc_arms = Vec::new();
+			for arm in arms {
+				match arm {
+					IfArm::Cond(cond, body) => {
+						let tc_cond = typecheck_expr(&cond, type_table)?;
+						match tc_cond.get_type() {
+							Type::Bool => {
+								tc_arms.push(TypeCheckedIfArm::Cond(
+									tc_cond,
+									typecheck_statement_sequence(body, return_type, type_table)?,
+								));
+							}
+							_ => { return Err(new_type_error("if/elseif condition is not bool", *loc)); }
 						}
-					};
-					Ok((TypeCheckedStatement::If(tc_cond, tc_tbody, o_tc_fbody, loc.clone()), None))
-				},
-				_ => Err(new_type_error("if condition is not bool", *loc)),
+					}
+					IfArm::Catchall(body) => {
+						tc_arms.push(TypeCheckedIfArm::Catchall(
+							typecheck_statement_sequence(body, return_type, type_table)?,
+						));
+					}
+				}
 			}
+			Ok((TypeCheckedStatement::If(tc_arms, loc.clone()), None))
 		}
 	}
 }

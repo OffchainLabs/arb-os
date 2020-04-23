@@ -441,7 +441,7 @@ pub enum Statement {
 	Assign(StringId, Expr, Option<Location>),
 	Loop(Vec<Statement>, Option<Location>),
 	While(Expr, Vec<Statement>, Option<Location>),
-	If(Expr, Vec<Statement>, Option<Vec<Statement>>, Option<Location>),
+	If(Vec<IfArm>, Option<Location>),
 }
 
 impl<'a> Statement {
@@ -459,17 +459,13 @@ impl<'a> Statement {
 			Statement::While(c, body, loc) => Ok(
 				Statement::While(c.resolve_types(type_table)?, Statement::resolve_types_vec(body.to_vec(), type_table)?, loc.clone())
 			),
-			Statement::If(c, tbody, None, loc) => Ok(
-				Statement::If(c.resolve_types(type_table)?, Statement::resolve_types_vec(tbody.to_vec(), type_table)?, None, loc.clone())
-			),
-			Statement::If(c, tbody, Some(fbody), loc) => Ok(
-				Statement::If(
-					c.resolve_types(type_table)?, 
-					Statement::resolve_types_vec(tbody.to_vec(), type_table)?,
-					Some(Statement::resolve_types_vec(fbody.to_vec(), type_table)?),
-					loc.clone()
-				)
-			),
+			Statement::If(arms, loc) => {
+				let mut res_arms = Vec::new();
+				for arm in arms {
+					res_arms.push(arm.resolve_types(type_table)?);
+				}
+				Ok(Statement::If(res_arms, loc.clone()))
+			}
 		}
 	}
 
@@ -479,6 +475,26 @@ impl<'a> Statement {
 			vr.push(s.resolve_types(type_table)?);
 		}
 		Ok(vr)
+	}
+}
+
+#[derive(Debug, Clone)]
+pub enum IfArm {
+	Cond(Expr, Vec<Statement>),
+	Catchall(Vec<Statement>),
+}
+
+impl IfArm {
+	pub fn resolve_types(&self, type_table: &SymTable<Type>) -> Result<Self, TypeError> {
+		match self {
+			IfArm::Cond(cond, body) => Ok(IfArm::Cond(
+				cond.resolve_types(type_table)?,
+				Statement::resolve_types_vec(body.to_vec(), type_table)?,
+			)),
+			IfArm::Catchall(body) => Ok(IfArm::Catchall(
+				Statement::resolve_types_vec(body.to_vec(), type_table)?,
+			))
+		}
 	}
 }
 

@@ -1,4 +1,4 @@
-use crate::ast::{TopLevelDecl, TypeDecl, FuncDecl, ImportFuncDecl, ImportTypeDecl, Type, StructField, FuncArg, Statement, Expr, BinaryOp, UnaryOp, 
+use crate::ast::{TopLevelDecl, TypeDecl, FuncDecl, ImportFuncDecl, ImportTypeDecl, Type, StructField, FuncArg, Statement, IfArm, Expr, BinaryOp, UnaryOp, 
 FieldInitializer, new_func_arg, new_type_decl};
 use crate::stringtable::{StringTable, StringId};
 use crate::source::Lines;
@@ -57,8 +57,8 @@ CodeBlock: Vec<Statement> = {
 Statement: Statement = {
 	<lno: @L> "while" "(" <e: Expr> ")" <cb: CodeBlock> => Statement::While(e, cb, file_info.location(BytePos::from(lno))),
 	<lno: @L> "loop" <cb: CodeBlock> => Statement::Loop(cb, file_info.location(BytePos::from(lno))),
-	<lno: @L> "if" "(" <c: Expr> ")" <t: CodeBlock> => Statement::If(c, t, None, file_info.location(BytePos::from(lno))),
-	<lno: @L> "if" "(" <c: Expr> ")" <t: CodeBlock> "else" <f: CodeBlock> => Statement::If(c, t, Some(f), file_info.location(BytePos::from(lno))),
+	<lno: @L> "if" "(" <c: Expr> ")" <t: CodeBlock> => Statement::If(vec![IfArm::Cond(c, t)], file_info.location(BytePos::from(lno))),
+	<lno: @L> "if" "(" <c: Expr> ")" <t: CodeBlock> "else" <f: CodeBlock> => Statement::If(vec![IfArm::Cond(c, t), IfArm::Catchall(f)], file_info.location(BytePos::from(lno))),
 	<lno: @L> "let" <i: Ident> "=" <e: Expr> ";" => Statement::Let(i, e, file_info.location(BytePos::from(lno))),
 	<lno: @L> <i: Ident> "=" <e: Expr> ";" => Statement::Assign(i, e, file_info.location(BytePos::from(lno))),
 	<lno: @L> "return" <e: Expr> ";" => Statement::Return(e, file_info.location(BytePos::from(lno))),
