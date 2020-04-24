@@ -123,9 +123,10 @@ pub fn compile_from_source<'a>(
 ) -> Result<CompiledProgram, CompileError<'a>> {
     let mut string_table_1 = stringtable::StringTable::new();
     let lines = Lines::new(s.bytes());
-    let res = mini::DeclsParser::new()
-        .parse(&mut string_table_1, &lines, &s)
-        .unwrap();
+    let res = match mini::DeclsParser::new().parse(&mut string_table_1, &lines, &s) {
+        Ok(r) => r,
+        Err(e) => { panic!("{:?}", e); }
+    };
     let mut checked_funcs = Vec::new();
     let res2 = crate::typecheck::typecheck_top_level_decls(&res, &mut checked_funcs, string_table_1);
     match res2 {

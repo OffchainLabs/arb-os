@@ -350,6 +350,8 @@ pub enum Opcode {
 	Pop,
 	AuxPush,
 	AuxPop,
+	Xget,
+	Xset,
 	Dup0,
 	Dup1,
 	Dup2,

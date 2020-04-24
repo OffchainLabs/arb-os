@@ -59,7 +59,7 @@ fn mavm_codegen_func<'a>(
 	let make_frame_slot = code.len();
 	code.push(Instruction::from_opcode(Opcode::Noop, location));  // placeholder; will replace this later
 
-	let (lg, num_locals, maybe_continue) = add_args_to_locals_table(
+	let (lg, max_num_locals, maybe_continue) = add_args_to_locals_table(
 		locals, 
 		&func.args, 
 		0, 
@@ -83,7 +83,7 @@ fn mavm_codegen_func<'a>(
 	}
 
 	// put makeframe Instruction at beginning of function, to build the frame
-	code[make_frame_slot] = Instruction::from_opcode(Opcode::MakeFrame(num_args, num_locals), location);
+	code[make_frame_slot] = Instruction::from_opcode(Opcode::MakeFrame(num_args, max_num_locals), location);
 
 	Ok((label_gen, code))
 }
@@ -218,6 +218,7 @@ fn mavm_codegen_statements<'a>(
 			// no need to append the rest of the statements; they'll never be executed
 		}
 		TypeCheckedStatement::While(cond, body, loc) => {
+			let num_locals_at_start = num_locals;
 			let slot_num = Value::Int(Uint256::from_usize(num_locals));
 			num_locals += 1;
 			let (top_label, lg) = label_gen.next();
@@ -245,19 +246,20 @@ fn mavm_codegen_statements<'a>(
 			code.push(Instruction::from_opcode_imm(Opcode::GetLocal, slot_num, loc.clone()));
 			code.push(Instruction::from_opcode(Opcode::Jump, loc.clone()));
 			code.push(Instruction::from_opcode(Opcode::Label(end_label), loc.clone()));
-			mavm_codegen_statements(
+			let (lg, nl, more) = mavm_codegen_statements(
 				rest_of_statements.to_vec(), 
 				code, 
-				num_locals, 
+				num_locals_at_start, 
 				locals, 
 				label_gen, 
 				string_table,
 				import_func_map
-			)
+			)?;
+			Ok((lg, if nl>num_locals { nl } else { num_locals }, more))
 		}
 		TypeCheckedStatement::If(arm) => {
 			let (end_label, lg) = label_gen.next();
-			let (lg, nl, might_continue) = mavm_codegen_if_arm(
+			let (lg, nl1, might_continue) = mavm_codegen_if_arm(
 				arm,
 				end_label,
 				code,
@@ -268,17 +270,18 @@ fn mavm_codegen_statements<'a>(
 				import_func_map,
 			)?;
 			if might_continue {
-				mavm_codegen_statements(
+				let (lg, nl2, more) = mavm_codegen_statements(
 					rest_of_statements.to_vec(),
 					code,
-					nl,
+					num_locals,
 					locals,
 					lg,
 					string_table,
 					import_func_map,
-				)
+				)?;
+				Ok((lg, if nl1 > nl2 { nl1 } else { nl2 }, more))
 			} else {
-				Ok((lg, nl, false))
+				Ok((lg, nl1, false))
 			}
 		}
 	}
@@ -288,8 +291,8 @@ fn mavm_codegen_if_arm<'a>(
 	arm: &TypeCheckedIfArm,  
 	end_label: Label,   
 	mut code: &'a mut Vec<Instruction>,        // accumulates the code as it's generated
-	mut num_locals: usize,                         // num locals that have been allocated
-	locals: &CopyingSymTable<usize>,               // lookup local variable slot number by name
+	num_locals: usize,                         // num locals that have been allocated
+	locals: &CopyingSymTable<usize>,           // lookup local variable slot number by name
 	mut label_gen: LabelGenerator,   
 	string_table: &StringTable,
 	import_func_map: &HashMap<StringId, Label>,       
@@ -302,7 +305,7 @@ fn mavm_codegen_if_arm<'a>(
 			code = c;
 			code.push(Instruction::from_opcode(Opcode::Not, *loc));
 			code.push(Instruction::from_opcode_imm(Opcode::Cjump, Value::Label(after_label), loc.clone()));
-			let (lg, nl, might_continue_here) = mavm_codegen_statements(
+			let (lg, nl1, might_continue_here) = mavm_codegen_statements(
 				body.to_vec(), 
 				code, 
 				num_locals, 
@@ -312,14 +315,13 @@ fn mavm_codegen_if_arm<'a>(
 				import_func_map
 			)?;
 			label_gen = lg;
-			num_locals = nl;
 			if might_continue_here {
 				code.push(Instruction::from_opcode_imm(Opcode::Jump, Value::Label(end_label), *loc));
 			}
 			code.push(Instruction::from_opcode(Opcode::Label(after_label), *loc));
 			match orest {
 				Some(inner_arm) => {
-					let (lg, nl, inner_might_continue) = mavm_codegen_if_arm(
+					let (lg, nl2, inner_might_continue) = mavm_codegen_if_arm(
 						inner_arm,
 						end_label,
 						code,
@@ -329,11 +331,11 @@ fn mavm_codegen_if_arm<'a>(
 						string_table,
 						import_func_map,
 					)?;
-					Ok((lg, nl, inner_might_continue || might_continue_here))
+					Ok((lg, if nl1 > nl2 { nl1 } else { nl2 }, inner_might_continue || might_continue_here))
 				}
 				None => {
 					code.push(Instruction::from_opcode(Opcode::Label(end_label), *loc));
-					Ok((label_gen, num_locals, true))
+					Ok((label_gen, nl1, true))
 				}
 			}
 		}

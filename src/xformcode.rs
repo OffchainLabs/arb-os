@@ -7,29 +7,28 @@ pub const TUPLE_SIZE: usize = 8;
 
 pub fn fix_tuple_size<'a>(code_in: &[Instruction]) -> Vec<Instruction> {
 	let mut code_out = Vec::new();
-	let mut locals_tree = TupleTree::new(1);
+	let mut locals_tree = TupleTree::new(1, true);
 
 	for insn in code_in.iter() {
 		let location = insn.location;
 		match insn.opcode {
 			Opcode::MakeFrame(nargs, ntotal) => {
 				code_out.push(Instruction::from_opcode(Opcode::AuxPush, location));  // move return address to aux stack
-				locals_tree = TupleTree::new(ntotal);
+				locals_tree = TupleTree::new(ntotal, true);
 				if let Some(imm) = &insn.immediate {
 					code_out.push(Instruction::from_opcode_imm(Opcode::Noop, imm.clone(), location));
 				}
-				code_out.push(Instruction::from_opcode_imm(Opcode::Noop, TupleTree::make_empty(&locals_tree), location));
+				code_out.push(Instruction::from_opcode_imm(Opcode::AuxPush, TupleTree::make_empty(&locals_tree), location));
 				for lnum in 0..nargs {
-					code_out = locals_tree.write_code(lnum, &mut code_out, location);
+					code_out = locals_tree.write_code(true, lnum, &mut code_out, location);
 				}
-				code_out.push(Instruction::from_opcode(Opcode::AuxPush, location));
 			}
 			Opcode::TupleGet(size) => {
-				let ttree = TupleTree::new(size);
+				let ttree = TupleTree::new(size, false);
 				if let Some(index) = &insn.immediate {
 					match index.to_usize() {
 						Some(iu) => {
-							code_out = ttree.read_code(iu, &mut code_out, location);
+							code_out = ttree.read_code(false, iu, &mut code_out, location);
 						}
 						None => { panic!("fix_tuple_size: index too large") }
 					}
@@ -38,11 +37,11 @@ pub fn fix_tuple_size<'a>(code_in: &[Instruction]) -> Vec<Instruction> {
 				}
 			}
 			Opcode::TupleSet(size) => {
-				let ttree = TupleTree::new(size);
+				let ttree = TupleTree::new(size, false);
 				if let Some(index) = &insn.immediate {
 					match index.to_usize() {
 						Some(iu) => {
-							code_out = ttree.write_code(iu, &mut code_out, location);
+							code_out = ttree.write_code(false, iu, &mut code_out, location);
 						}
 						None => { panic!("fix_tuple_size: TupleSet index too large") }
 					}
@@ -51,27 +50,22 @@ pub fn fix_tuple_size<'a>(code_in: &[Instruction]) -> Vec<Instruction> {
 				}
 			}				
 			Opcode::SetLocal => {
-				code_out.push(Instruction::from_opcode(Opcode::AuxPop, location));
 				if let Some(index) = &insn.immediate {
 					match index.to_usize() {
 						Some(iu) => {
-							code_out = locals_tree.write_code(iu, &mut code_out, location);
+							code_out = locals_tree.write_code(true, iu, &mut code_out, location);
 						}
 						None => { panic!("fix_tuple_size: index too large") }
 					}
 				} else {
 					panic!("fix_tuple_size: SetLocal without immediate arg")
 				}
-				code_out.push(Instruction::from_opcode(Opcode::AuxPush, location));
 			}
 			Opcode::GetLocal => {
-				code_out.push(Instruction::from_opcode(Opcode::AuxPop, location));
-				code_out.push(Instruction::from_opcode(Opcode::Dup0, location));
-				code_out.push(Instruction::from_opcode(Opcode::AuxPush, location));
 				if let Some(index) = &insn.immediate {
 					match index.to_usize() {
 						Some(iu) => {
-							code_out = locals_tree.read_code(iu, &mut code_out, location);
+							code_out = locals_tree.read_code(true, iu, &mut code_out, location);
 						}
 						None => { panic!("fix_tuple_size: index too large") }
 					}
@@ -128,7 +122,7 @@ pub fn jump_table_to_value(jump_table: Vec<CodePt>) -> Value {
 	for pc in &jump_table {
 		jump_table_codepoints.push(Value::CodePoint(*pc));
 	}
-	let shape = TupleTree::new(jump_table.len());
+	let shape = TupleTree::new(jump_table.len(), false);
 	shape.make_value(jump_table_codepoints)
 }
 
@@ -139,8 +133,8 @@ enum TupleTree {
 }
 
 impl TupleTree {
-	fn new(size: usize) -> TupleTree {
-		if size == 1 {
+	fn new(size: usize, is_local: bool) -> TupleTree {
+		if (size == 1) && !is_local {
 			return TupleTree::Single;
 		}
 		let mut current_size: usize = 1;
@@ -154,10 +148,10 @@ impl TupleTree {
 
 		while remaining_size > 0 {
 			if current_size >= remaining_size {
-				v.push(TupleTree::new(remaining_size));
+				v.push(TupleTree::new(remaining_size, false));
 				remaining_size = 0;
 			} else if current_size*(1+(remaining_slots-1)*TUPLE_SIZE) >= remaining_size {
-				v.push(TupleTree::new(current_size));
+				v.push(TupleTree::new(current_size, false));
 				remaining_size -= current_size;
 				remaining_slots -= 1;
 			} else {
@@ -208,15 +202,26 @@ impl TupleTree {
 		}
 	}
 
-	fn read_code(&self, index: usize, code: &mut Vec<Instruction>, location: Option<Location>) -> Vec<Instruction> {
+	fn read_code(&self, is_local: bool, index: usize, code: &mut Vec<Instruction>, location: Option<Location>) -> Vec<Instruction> {
 		match self {
-			TupleTree::Single => { code.to_vec() },
+			TupleTree::Single => if is_local {
+				code.push(Instruction::from_opcode(Opcode::AuxPop, location));
+				code.push(Instruction::from_opcode(Opcode::Dup0, location));
+				code.push(Instruction::from_opcode(Opcode::AuxPush, location));
+				code.to_vec()
+			} else { 
+				code.to_vec() 
+			},
 			TupleTree::Tree(_, v) => {
 				let mut index = index;
 				for (slot, subtree) in v.iter().enumerate() {
 					if index < subtree.tsize() {
-						code.push(Instruction::from_opcode_imm(Opcode::Tget, Value::Int(Uint256::from_usize(slot)), location));
-						return subtree.read_code(index, code, location);
+						code.push(Instruction::from_opcode_imm(
+							if is_local { Opcode::Xget } else { Opcode::Tget }, 
+							Value::Int(Uint256::from_usize(slot)), 
+							location,
+						));
+						return subtree.read_code(false, index, code, location);
 					} else {
 						index -= subtree.tsize();
 					}
@@ -226,23 +231,31 @@ impl TupleTree {
 		}
 	}
 
-	fn write_code<'a>(&self, index_in: usize, code: &mut Vec<Instruction>, location: Option<Location>) -> Vec<Instruction> {
+	fn write_code<'a>(&self, is_local: bool, index_in: usize, code: &mut Vec<Instruction>, location: Option<Location>) -> Vec<Instruction> {
 		if let TupleTree::Tree(_, v) = self {
 			let mut index = index_in;
 			for (slot, subtree) in v.iter().enumerate() {
 				if index < subtree.tsize() {
 					match *subtree {
 						TupleTree::Single => {
-							code.push(Instruction::from_opcode_imm(Opcode::Tset, Value::Int(Uint256::from_usize(slot)), location));
+							code.push(Instruction::from_opcode_imm(
+								if is_local { Opcode::Xset } else { Opcode::Tset }, 
+								Value::Int(Uint256::from_usize(slot)), 
+								location
+							));
 							return code.to_vec();
 						}
 						TupleTree::Tree(_, _) => {
 							code.push(Instruction::from_opcode(Opcode::Swap1, location));
 							code.push(Instruction::from_opcode(Opcode::Dup1, location));
 							code.push(Instruction::from_opcode_imm(Opcode::Tget, Value::Int(Uint256::from_usize(slot)), location));
-							let mut new_code = subtree.write_code(index, code, location);
+							let mut new_code = subtree.write_code(false, index, code, location);
 							new_code.push(Instruction::from_opcode(Opcode::Swap1, location));
-							new_code.push(Instruction::from_opcode_imm(Opcode::Tset, Value::Int(Uint256::from_usize(slot)), location));
+							new_code.push(Instruction::from_opcode_imm(
+								if is_local { Opcode::Xset } else { Opcode::Tset }, 
+								Value::Int(Uint256::from_usize(slot)), 
+								location
+							));
 							return new_code;
 						}
 					}
@@ -259,5 +272,5 @@ impl TupleTree {
 }
 
 pub fn value_from_field_list(lis: Vec<Value>) -> Value {
-	TupleTree::new(lis.len()).make_value(lis)
+	TupleTree::new(lis.len(), false).make_value(lis)
 }

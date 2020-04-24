@@ -14,6 +14,10 @@ impl ValueStack {
 		ValueStack{ contents: Vec::new() }
 	}
 
+	pub fn is_empty(&self) -> bool {
+		self.contents.len() == 0
+	}
+
 	pub fn make_empty(&mut self) {
 		self.contents.clear();
 	}
@@ -39,9 +43,10 @@ impl ValueStack {
 	}
 
 	pub fn top(&self) -> Option<Value> {
-		match self.contents.get(0) {
-			Some(aval) => Some(aval.clone()),
-			None => None,
+		if self.is_empty() {
+			None
+		} else {
+			Some(self.contents[self.contents.len()-1].clone())
 		}
 	}
 
@@ -344,6 +349,38 @@ impl<'a> Machine {
 						self.stack.push(self.aux_stack.pop(&self.state)?);
 						self.incr_pc();
 						Ok(true)
+					}
+					Opcode::Xget => {
+						let slot_num = self.stack.pop_usize(&self.state)?;
+						let aux_top = match self.aux_stack.top() {
+							Some(top) => top,
+							None => { return Err(ExecutionError::new("aux stack underflow", &self.state, None)); }
+						};
+						if let Value::Tuple(v) = aux_top {
+							match v.get(slot_num) {
+								Some(val) => {
+									self.stack.push(val.clone());
+									self.incr_pc();
+									Ok(true)
+								}
+								None => Err(ExecutionError::new("tuple access out of bounds", &self.state, None))
+							}
+						} else {
+							Err(ExecutionError::new("expected tuple on aux stack", &self.state, Some(aux_top)))
+						}
+					}
+					Opcode::Xset => {
+						let slot_num = self.stack.pop_usize(&self.state)?;
+						let tup = self.aux_stack.pop_tuple(&self.state)?;
+						if slot_num < tup.len() {
+							let mut new_tup = tup;
+							new_tup[slot_num] = self.stack.pop(&self.state)?;
+							self.aux_stack.push(Value::Tuple(new_tup));
+							self.incr_pc();
+							Ok(true)
+						} else {
+							Err(ExecutionError::new("tuple access out of bounds", &self.state, None))
+						}
 					}
 					Opcode::Dup0 => {
 						let top = self.stack.pop(&self.state)?;
