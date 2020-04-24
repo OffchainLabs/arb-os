@@ -29,7 +29,7 @@ fn testarray5() {
     test_arraytest(5, Value::Int(Uint256::from_usize(4)));
 }
 
-
+#[allow(dead_code)]
 fn test_arraytest(test_num: usize, expected_result: Value) {
     let path = Path::new("arraytest.mexe"); 
     let res = run_from_file(path, vec![Value::Int(Uint256::from_usize(test_num))]);
@@ -69,6 +69,7 @@ fn testkvs5() {
     test_kvstest(5, Value::none());
 }
 
+#[allow(dead_code)]
 fn test_kvstest(test_num: usize, expected_result: Value) {
     let path = Path::new("kvstest.mexe"); 
     let res = run_from_file(path, vec![Value::Int(Uint256::from_usize(test_num))]);
