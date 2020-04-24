@@ -1,0 +1,87 @@
+
+type BoundedQueue = struct {
+    capacity: uint,
+    nextPut: uint,
+    nextGet: uint,
+    contents: []anytype,
+}
+
+public func boundedQueue_new(capacity: uint) BoundedQueue {
+    return struct {
+        capacity: capacity,
+        nextPut: 0,
+        nextGet: 0,
+        contents: newarray(capacity, anytype),
+    };
+}
+
+public func boundedQueue_isEmpty(q: BoundedQueue) bool {
+    return q.nextPut == q.nextGet;
+}
+
+public func boundedQueue_isFull(q: BoundedQueue) bool {
+    return ((q.nextPut+1) % q.capacity) == q.nextGet;
+}
+
+public func boundedQueue_size(q: BoundedQueue) uint {
+    return (q.nextPut + q.capacity - q.nextGet) % q.capacity;
+}
+
+public func boundedQueue_put(q: BoundedQueue, val: anytype) BoundedQueue {
+    if (boundedQueue_isFull(q)) {
+        return q;
+    } else {
+        let putIndex = q.nextPut;
+        return q with { nextPut: (putIndex+1) % q.capacity } 
+                 with { contents: q.contents with { [putIndex] = val } };
+    }
+}
+
+public func boundedQueue_get(q: BoundedQueue) (BoundedQueue, anytype) {
+    if (boundedQueue_isEmpty(q)) {
+        return (q, null,);
+    } else {
+        return (
+            q with { nextGet: (q.nextGet+1) % q.capacity },
+            q.contents[q.nextGet],
+        );
+    }
+}
+
+public func boundedQueue_expand(q: BoundedQueue, newSize: uint) BoundedQueue {
+    if (newSize <= q.capacity) {
+        panic;
+    }
+    let newQ = boundedQueue_new(newSize);
+    while ( ! boundedQueue_isEmpty(q) ) {
+        let res = boundedQueue_get(q);
+        q = res.0;
+        newQ = boundedQueue_put(newQ, res.1);
+    }
+    return newQ;
+}
+
+type Queue = BoundedQueue
+
+public func queue_new() Queue {
+    return boundedQueue_new(8);
+}
+
+public func queue_isEmpty(q: Queue) bool {
+    return boundedQueue_isEmpty(q);
+}
+
+public func queue_size(q: Queue) uint {
+    return boundedQueue_size(q);
+}
+
+public func queue_put(q: Queue, val: anytype) Queue {
+    if (boundedQueue_isFull(q)) {
+        q = boundedQueue_expand(q, 2*q.capacity);
+    }
+    return boundedQueue_put(q, val);
+}
+
+public func queue_get(q: Queue) (Queue, anytype) {
+    return boundedQueue_get(q);
+}

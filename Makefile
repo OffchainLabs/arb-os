@@ -1,9 +1,14 @@
 
-test: kvstest.mexe arraytest.mexe
+test: all
 	cargo test
+
+all: kvstest.mexe queuetest.mexe arraytest.mexe
 
 kvstest.mexe: builtin/array.mao kvstest.mini kvs.mini
 	cargo run compile kvstest.mini kvs.mini -o kvstest.mexe
+
+queuetest.mexe: builtin/array.mao queuetest.mini queue.mini
+	cargo run compile queuetest.mini queue.mini -o queuetest.mexe
 
 arraytest.mexe: builtin/array.mao arraytest.mini
 	cargo run compile arraytest.mini -o arraytest.mexe

@@ -80,3 +80,32 @@ fn test_kvstest(test_num: usize, expected_result: Value) {
 }
 
 
+#[test]
+fn testq0() {
+    test_queuetest(0, Value::Int(Uint256::one()));
+}
+
+#[test]
+fn testq1() {
+    test_queuetest(1, Value::Int(Uint256::zero()));
+}
+
+#[test]
+fn testq2() {
+    test_queuetest(2, Value::Int(Uint256::from_usize(42)));
+}
+
+#[test]
+fn testq3() {
+    test_queuetest(3, Value::Int(Uint256::from_usize(21)));
+}
+
+#[allow(dead_code)]
+fn test_queuetest(test_num: usize, expected_result: Value) {
+    let path = Path::new("queuetest.mexe"); 
+    let res = run_from_file(path, vec![Value::Int(Uint256::from_usize(test_num))]);
+    match res {
+        Ok(res) => { assert_eq!(res, expected_result); }
+        Err(e) => { panic!("{}\n{}", e.0, e.1); }
+    }
+}

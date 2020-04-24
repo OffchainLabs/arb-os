@@ -1,0 +1,48 @@
+
+import type Queue;
+
+import func queue_new() Queue;
+import func queue_isEmpty(q: Queue) bool;
+import func queue_put(q: Queue, val: anytype) Queue;
+import func queue_get(q: Queue) (Queue, anytype);
+
+
+func tests(which: uint) anytype {
+	if (which == 0) {
+		let q = queue_new();
+		if (queue_isEmpty(q)) {
+			return 1;
+		} else {
+			return 0;
+		}
+	} elseif (which == 1) {
+		let q = queue_new();
+		q = queue_put(q, 42);
+		if (queue_isEmpty(q)) {
+			return 1;
+		} else {
+			return 0;
+		}
+	} elseif (which == 2) {
+		let q = queue_new();
+		q = queue_put(q, 42);
+		q = queue_put(q, 97);
+		let pair = queue_get(q);
+		return pair.1;
+	} elseif (which == 3) {
+		let q = queue_new();
+		let i = 0;
+		while (i < 25) {
+			q = queue_put(q, i);
+			i = i+1;
+		}
+		i = 0;
+		while (i < 21) {
+			q = queue_get(q).0;
+			i = i+1;
+		}
+		return queue_get(q).1;
+	} else {
+		return null;
+	}
+}
