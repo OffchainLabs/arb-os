@@ -6,8 +6,8 @@ use crate::stringtable;
 use crate::mavm::Instruction;
 use crate::link::{ExportedFunc, ImportedFunc};
 use crate::source::Lines;
-use crate::pos::Location;
-
+use crate::pos::{Location, BytePos};
+use lalrpop_util;
 
 lalrpop_mod!(pub mini); 
 
@@ -125,7 +125,12 @@ pub fn compile_from_source<'a>(
     let lines = Lines::new(s.bytes());
     let res = match mini::DeclsParser::new().parse(&mut string_table_1, &lines, &s) {
         Ok(r) => r,
-        Err(e) => { panic!("{:?}", e); }
+        Err(e) => match e {
+            lalrpop_util::ParseError::UnrecognizedToken{ token: (offset, tok, _), expected: _ } => {
+                panic!("unexpected token at {:?} {:?}", lines.location(BytePos::from(offset)).unwrap(), tok);
+            }
+            _ => { panic!("{:?}", e); }
+        }
     };
     let mut checked_funcs = Vec::new();
     let res2 = crate::typecheck::typecheck_top_level_decls(&res, &mut checked_funcs, string_table_1);
