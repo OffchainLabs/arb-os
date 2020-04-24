@@ -23,11 +23,10 @@ public func builtin_arrayNew(sz: uint, base_val: anytype) array {
 		chunk = 8*chunk;
 		height = 1+height;
 	}
-	let tup = buildTree(height, base_val);
 	return struct {
 		size: sz,
 		topstep: chunk,
-		contents: tup,
+		contents: buildTree(height, base_val),
 	};
 }
 
@@ -35,8 +34,7 @@ func buildTree(height: uint, base_val: anytype) block {
 	if (height == 1) {
 		return newfixedarray(8, base_val);
 	} else {
-		let res = buildTree(height-1, base_val);
-		return newfixedarray(8, res);
+		return newfixedarray(8, buildTree(height-1, base_val));
 	}
 }
 
@@ -47,9 +45,8 @@ public func builtin_arrayGet(arr: array, index: uint) anytype {
 	let res = arr.contents;
 	let chunk = arr.topstep;
 	while (chunk >= 1) {
-		let slot = index / chunk;
+		res = unsafecast(res[index/chunk], block);
 		index = index % chunk;
-		res = unsafecast(res[slot], block);
 		chunk = chunk / 8;
 	}
 	return res;
@@ -93,10 +90,9 @@ type arraySwapSubResult = struct {
 
 func arraySwap2(b: block, chunk: uint, index: uint, value: anytype)  arraySwapSubResult {
 	if (chunk == 1) {
-		let v = b[index];
 		return struct {
 			bloc: b with {[index] = value},
-			val: v,
+			val: b[index],
 		};
 	} else {
 		let sub = arraySwap2(
