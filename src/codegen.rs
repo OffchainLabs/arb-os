@@ -222,16 +222,12 @@ fn mavm_codegen_statements<'a>(
 			let slot_num = Value::Int(Uint256::from_usize(num_locals));
 			num_locals += 1;
 			let (top_label, lg) = label_gen.next();
-			let (end_label, lg) = lg.next();
+			let (cond_label, lg) = lg.next();
 			label_gen = lg;
 			code.push(Instruction::from_opcode_imm(Opcode::Noop, Value::Label(top_label), loc.clone()));
 			code.push(Instruction::from_opcode_imm(Opcode::SetLocal, slot_num.clone(), loc.clone()));
+			code.push(Instruction::from_opcode_imm(Opcode::Jump, Value::Label(cond_label), loc.clone()));
 			code.push(Instruction::from_opcode(Opcode::Label(top_label), loc.clone()));
-			let (lg, c) = mavm_codegen_expr(cond, code, &locals, label_gen, string_table, import_func_map)?;
-			label_gen = lg;
-			code = c;
-			code.push(Instruction::from_opcode(Opcode::Not, loc.clone()));
-			code.push(Instruction::from_opcode_imm(Opcode::Cjump, Value::Label(end_label), loc.clone()));
 			let (lg, nl, _) = mavm_codegen_statements(
 				body.to_vec(), 
 				code, 
@@ -243,17 +239,19 @@ fn mavm_codegen_statements<'a>(
 			)?;
 			label_gen = lg;
 			num_locals = nl;
-			code.push(Instruction::from_opcode_imm(Opcode::GetLocal, slot_num, loc.clone()));
-			code.push(Instruction::from_opcode(Opcode::Jump, loc.clone()));
-			code.push(Instruction::from_opcode(Opcode::Label(end_label), loc.clone()));
+			code.push(Instruction::from_opcode(Opcode::Label(cond_label), loc.clone()));
+			let (lg, c) = mavm_codegen_expr(cond, code, &locals, label_gen, string_table, import_func_map)?;
+			label_gen = lg;
+			code = c;
+			code.push(Instruction::from_opcode_imm(Opcode::Cjump, Value::Label(top_label), loc.clone()));
 			let (lg, nl, more) = mavm_codegen_statements(
-				rest_of_statements.to_vec(), 
-				code, 
-				num_locals_at_start, 
-				locals, 
-				label_gen, 
+				rest_of_statements.to_vec(),
+				code,
+				num_locals_at_start,
+				locals,
+				label_gen,
 				string_table,
-				import_func_map
+				import_func_map,
 			)?;
 			Ok((lg, if nl>num_locals { nl } else { num_locals }, more))
 		}
