@@ -69,8 +69,10 @@ pub fn fix_nonforward_labels<'a>(
 	for imp_func in imported_funcs {
 		let new_label = Label::External(imp_func.slot_num);
 		imported_func_set.insert(new_label); 
+		/*
 		jump_table_index.insert(new_label, jump_table.len());
 		jump_table.push(new_label);
+		*/
 	}
 
 	for insn in code_in {
