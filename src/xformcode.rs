@@ -5,9 +5,10 @@ use crate::pos::Location;
 
 pub const TUPLE_SIZE: usize = 8;
 
-pub fn fix_tuple_size<'a>(code_in: &[Instruction]) -> Vec<Instruction> {
+pub fn fix_tuple_size<'a>(code_in: &[Instruction], num_globals: usize) -> Vec<Instruction> {
 	let mut code_out = Vec::new();
 	let mut locals_tree = TupleTree::new(1, true);
+	let global_tree = TupleTree::new(num_globals, false);
 
 	for insn in code_in.iter() {
 		let location = insn.location;
@@ -73,6 +74,15 @@ pub fn fix_tuple_size<'a>(code_in: &[Instruction]) -> Vec<Instruction> {
 					panic!("fix_tuple_size: GetLocal without immediate arg")
 				}
 			}
+			Opcode::SetGlobalVar(idx) => {
+				code_out.push(Instruction::from_opcode(Opcode::Rget, location));
+				code_out = global_tree.write_code(false, idx, &mut code_out, location);
+				code_out.push(Instruction::from_opcode(Opcode::Rset, location));
+			}
+			Opcode::GetGlobalVar(idx) => {
+				code_out.push(Instruction::from_opcode(Opcode::Rget, location));
+				code_out = global_tree.read_code(false, idx, &mut code_out, location);
+			}
 			Opcode::Return => {
 				code_out.push(Instruction::new(
 					Opcode::AuxPop, 
@@ -124,6 +134,10 @@ pub fn jump_table_to_value(jump_table: Vec<CodePt>) -> Value {
 	}
 	let shape = TupleTree::new(jump_table.len(), false);
 	shape.make_value(jump_table_codepoints)
+}
+
+pub fn make_uninitialized_tuple(size: usize) -> Value {
+	TupleTree::new(size, false).make_empty()
 }
 
 #[derive(Debug)]

@@ -2,10 +2,11 @@ use std::fmt::{self, Debug};
 use std::io;
 use std::collections::HashMap;
 use crate::stringtable::StringId;
-use crate::mavm::{Label, Value, CodePt, Instruction};
+use crate::mavm::{Label, Value, CodePt, Instruction, Opcode};
 use crate::ast::Type;
 use crate::stringtable::StringTable;
 use crate::compile::{CompiledProgram, CompileError, SourceFileMap};
+use crate::xformcode::make_uninitialized_tuple;
 use crate::builtins::add_auto_link_progs;
 use serde::{Serialize, Deserialize};
 
@@ -143,7 +144,7 @@ pub fn postlink_compile<'a>(
             println!("{:04}:  {}", idx, insn);
         }
     }
-    let code_3 = crate::xformcode::fix_tuple_size(&code_2);
+    let code_3 = crate::xformcode::fix_tuple_size(&code_2, program.global_num_limit);
     if debug {
         println!("=========== after fix_tuple_size ==============");
         for (idx, insn) in code_3.iter().enumerate() {
@@ -186,11 +187,13 @@ pub fn postlink_compile<'a>(
 
 pub fn link<'a>(progs_in: &[CompiledProgram]) -> Result<CompiledProgram, CompileError<'a>> {
 	let progs = add_auto_link_progs(progs_in)?;
-	let mut insns_so_far: usize = 0;
+	let mut insns_so_far: usize = 1;   // leave 1 insn of space at beginning for initialization
 	let mut imports_so_far: usize = 0;
 	let mut int_offsets = Vec::new();
 	let mut ext_offsets = Vec::new();
 	let mut merged_source_file_map = SourceFileMap::new_empty();
+	let mut global_num_limit = 0;
+
 	for prog in &progs {
 		merged_source_file_map.push(prog.code.len(), prog.source_file_map.get(0));
 		int_offsets.push(insns_so_far);
@@ -206,13 +209,15 @@ pub fn link<'a>(progs_in: &[CompiledProgram]) -> Result<CompiledProgram, Compile
 			int_offsets[i], 
 			ext_offsets[i], 
 			func_offset,
+			global_num_limit,
 			prog.clone().source_file_map,
 		);
+		global_num_limit = relocated_prog.global_num_limit;
 		relocated_progs.push(relocated_prog);
 		func_offset = new_func_offset;
 	}
 
-	let mut linked_code = Vec::new();
+	let mut linked_code = vec![Instruction::from_opcode_imm(Opcode::Rset, make_uninitialized_tuple(global_num_limit), None)];
 	let mut linked_exports = Vec::new();
 	let mut linked_imports = Vec::new();
 	for mut rel_prog in relocated_progs {
@@ -237,5 +242,5 @@ pub fn link<'a>(progs_in: &[CompiledProgram]) -> Result<CompiledProgram, Compile
 		linked_xlated_code.push(insn.xlate_labels(&label_xlate_map));
 	}
 
-	Ok(CompiledProgram::new(linked_xlated_code, linked_exports, linked_imports, merged_source_file_map))
+	Ok(CompiledProgram::new(linked_xlated_code, linked_exports, linked_imports, global_num_limit, merged_source_file_map))
 }

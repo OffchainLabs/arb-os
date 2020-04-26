@@ -12,6 +12,7 @@ use serde::{Serialize, Deserialize};
 pub enum TopLevelDecl {
 	TypeDecl(TypeDecl),
 	FuncDecl(FuncDecl),
+	VarDecl(GlobalVarDecl),
 	ImpFuncDecl(ImportFuncDecl),
 	ImpTypeDecl(ImportTypeDecl),
 }
@@ -322,6 +323,23 @@ impl FuncArg {
 
 pub fn new_func_arg(name: StringId, tipe: Type) -> FuncArg {
 	FuncArg{ name, tipe }
+}
+
+#[derive(Debug, Clone)]
+pub struct GlobalVarDecl {
+	pub name: StringId,
+	pub tipe: Type,
+	pub location: Option<Location>,
+}
+
+impl GlobalVarDecl {
+	pub fn new(name: StringId, tipe: Type, location: Option<Location>) -> Self {
+		GlobalVarDecl{ name, tipe, location }
+	}
+
+	pub fn resolve_types(&self, type_table: &SymTable<Type>) -> Result<Self, TypeError> {
+		Ok(GlobalVarDecl::new(self.name, self.tipe.resolve_types(type_table, self.location)?, self.location))
+	}
 }
 
 #[derive(Debug, Clone)]

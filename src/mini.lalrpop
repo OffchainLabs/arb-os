@@ -1,4 +1,4 @@
-use crate::ast::{TopLevelDecl, TypeDecl, FuncDecl, ImportFuncDecl, ImportTypeDecl, Type, StructField, FuncArg, Statement, IfArm, Expr, BinaryOp, UnaryOp, 
+use crate::ast::{TopLevelDecl, TypeDecl, FuncDecl, GlobalVarDecl, ImportFuncDecl, ImportTypeDecl, Type, StructField, FuncArg, Statement, IfArm, Expr, BinaryOp, UnaryOp, 
 FieldInitializer, new_func_arg, new_type_decl};
 use crate::stringtable::{StringTable, StringId};
 use crate::source::Lines;
@@ -29,6 +29,7 @@ ImportTypeDecl: ImportTypeDecl = {
 NonImportDecl: TopLevelDecl = {
 	TypeDecl => TopLevelDecl::TypeDecl(<>),
 	FuncDecl => TopLevelDecl::FuncDecl(<>),
+	GlobalVarDecl => TopLevelDecl::VarDecl(<>),
 }
 
 TypeDecl: TypeDecl = {
@@ -48,6 +49,10 @@ FuncArgs: Vec<FuncArg> = {
 
 FuncArg: FuncArg = {
 	<i:Ident> ":" <t:Type> ","? => new_func_arg(i, t),
+}
+
+GlobalVarDecl: GlobalVarDecl = {
+	<lno: @L> "var" <i:Ident> ":" <t:Type> ";" => GlobalVarDecl::new(i, t, file_info.location(BytePos::from(lno))),
 }
 
 CodeBlock: Vec<Statement> = {

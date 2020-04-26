@@ -90,7 +90,7 @@ impl Instruction {
 		}
 	}
 
-	pub fn relocate(self, int_offset: usize, ext_offset: usize, func_offset: usize) -> (Self, usize) {
+	pub fn relocate(self, int_offset: usize, ext_offset: usize, func_offset: usize, globals_offset: usize) -> (Self, usize) {
 		let mut max_func_offset = func_offset;
 		let opcode = match self.opcode {
 			Opcode::PushExternal(off) => Opcode::PushExternal(off+ext_offset),
@@ -101,6 +101,8 @@ impl Instruction {
 				}
 				Opcode::Label(new_label)
 			}
+			Opcode::GetGlobalVar(idx) => Opcode::GetGlobalVar(idx + globals_offset),
+			Opcode::SetGlobalVar(idx) => Opcode::SetGlobalVar(idx + globals_offset),
 			_ => self.opcode,
 		};
 		let imm = match self.immediate {
@@ -339,12 +341,16 @@ pub enum Opcode {
 	Jump,
 	Cjump,
 	GetPC,
+	Rget,
+	Rset,
 	PushStatic,
 	PushExternal(usize),  // push codeptr of external function -- index in imported_funcs
 	TupleGet(usize),  // arg is size of anysize_tuple
 	TupleSet(usize),  // arg is size of anysize_tuple
 	ArrayGet, 
-	UncheckedFixedArrayGet(usize),  // arg is size of array     
+	UncheckedFixedArrayGet(usize),  // arg is size of array  
+	GetGlobalVar(usize),
+	SetGlobalVar(usize),   
 	Tset,
 	Tget,
 	Pop,

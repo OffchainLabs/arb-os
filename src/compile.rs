@@ -17,6 +17,7 @@ pub struct CompiledProgram {
     pub code: Vec<Instruction>,
     pub exported_funcs: Vec<ExportedFunc>,
     pub imported_funcs: Vec<ImportedFunc>,
+    pub global_num_limit: usize,
     pub source_file_map: SourceFileMap,
 }
 
@@ -25,16 +26,24 @@ impl<'a> CompiledProgram {
         code: Vec<Instruction>, 
         exported_funcs: Vec<ExportedFunc>, 
         imported_funcs: Vec<ImportedFunc>,
+        global_num_limit: usize,
         source_file_map: SourceFileMap,
     ) -> Self {
-        CompiledProgram{ code, exported_funcs, imported_funcs, source_file_map }
+        CompiledProgram{ code, exported_funcs, imported_funcs, global_num_limit, source_file_map }
     }
 
-    pub fn relocate(self, int_offset: usize, ext_offset: usize, func_offset: usize, source_file_map: SourceFileMap) -> (Self, usize) {
+    pub fn relocate(
+        self, 
+        int_offset: usize, 
+        ext_offset: usize, 
+        func_offset: usize, 
+        globals_offset: usize,
+        source_file_map: SourceFileMap
+    ) -> (Self, usize) {
         let mut relocated_code = Vec::new();
         let mut max_func_offset = func_offset;
         for insn in &self.code {
-            let (relocated_insn, new_func_offset) = insn.clone().relocate(int_offset, ext_offset, func_offset);
+            let (relocated_insn, new_func_offset) = insn.clone().relocate(int_offset, ext_offset, func_offset, globals_offset);
             relocated_code.push(relocated_insn);
             if max_func_offset < new_func_offset {
                 max_func_offset = new_func_offset;
@@ -55,7 +64,16 @@ impl<'a> CompiledProgram {
             relocated_imported_funcs.push(imp_func.relocate(int_offset, ext_offset));
         }
 
-        (CompiledProgram::new(relocated_code, relocated_exported_funcs, relocated_imported_funcs, source_file_map), max_func_offset)
+        (
+            CompiledProgram::new(
+                relocated_code, 
+                relocated_exported_funcs, 
+                relocated_imported_funcs, 
+                self.global_num_limit + globals_offset,
+                source_file_map
+            ), 
+            max_func_offset
+        )
     }
 
     pub fn to_output(&self, output: &mut dyn io::Write, format: Option<&str>) {
@@ -108,6 +126,7 @@ pub fn compile_from_file<'a>(path: &Path, debug: bool) -> Result<CompiledProgram
         Err(why) => panic!("couldn't read {}: {:?}", display, why),
         Ok(_) => s,
     };
+    //print!("read-in file:\n{}", s);
 
     let parse_result: Result<CompiledProgram, serde_json::Error> = serde_json::from_str(&s);
     match parse_result {
@@ -135,9 +154,9 @@ pub fn compile_from_source<'a>(
     let mut checked_funcs = Vec::new();
     let res2 = crate::typecheck::typecheck_top_level_decls(&res, &mut checked_funcs, string_table_1);
     match res2 {
-    	Ok((exported_funcs, imported_funcs, string_table)) => { 
+    	Ok((exported_funcs, imported_funcs, global_vars, string_table)) => { 
             let mut code = Vec::new();
-    		match crate::codegen::mavm_codegen(checked_funcs, &mut code, &string_table, &imported_funcs) {
+    		match crate::codegen::mavm_codegen(checked_funcs, &mut code, &string_table, &imported_funcs, &global_vars) {
                 Ok(code_out) => {
                     if debug {
                         println!("========== after initial codegen ===========");
@@ -147,7 +166,7 @@ pub fn compile_from_source<'a>(
                          println!("{:04}:  {}", idx, insn);
                         }
                     }
-                    Ok(CompiledProgram::new(code_out.to_vec(), exported_funcs, imported_funcs, SourceFileMap::new(code_out.len(), pathname.to_string())))
+                    Ok(CompiledProgram::new(code_out.to_vec(), exported_funcs, imported_funcs, global_vars.len(), SourceFileMap::new(code_out.len(), pathname.to_string())))
                 }
                 Err(e) => Err(CompileError::new(e.reason, e.location)),
             }

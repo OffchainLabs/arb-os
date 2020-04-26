@@ -189,6 +189,7 @@ pub struct Machine {
 	state: MachineState,
 	code: Vec<Instruction>,
 	static_val: Value,
+	register: Value,
 }
 
 impl<'a> Machine {
@@ -199,6 +200,7 @@ impl<'a> Machine {
 			state: MachineState::Stopped,
 			code: program.code,
 			static_val: program.static_val, 
+			register: Value::none(),
 		}
 	}
 
@@ -299,6 +301,17 @@ impl<'a> Machine {
 					}
 					Opcode::GetPC => {
 						self.stack.push_codepoint(self.get_pc()?);
+						self.incr_pc();
+						Ok(true)
+					}
+					Opcode::Rget => {
+						self.stack.push(self.register.clone());
+						self.incr_pc();
+						Ok(true)
+					}
+					Opcode::Rset => {
+						let val = self.stack.pop(&self.state)?;
+						self.register = val;
 						self.incr_pc();
 						Ok(true)
 					}
@@ -630,6 +643,8 @@ impl<'a> Machine {
 					Opcode::TupleSet(_) |
 					Opcode::ArrayGet |
 					Opcode::UncheckedFixedArrayGet(_) | 
+					Opcode::GetGlobalVar(_) |
+					Opcode::SetGlobalVar(_) |
 					Opcode::Return => Err(ExecutionError::new("invalid opcode", &self.state, None))
 				}
 			} else {
