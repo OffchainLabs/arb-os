@@ -59,8 +59,7 @@ pub enum TypeCheckedExpr {
 	GlobalVariableRef(usize, Type, Option<Location>),
 	TupleRef(Box<TypeCheckedExpr>, Uint256, Type, Option<Location>),
 	DotRef(Box<TypeCheckedExpr>, StringId, Type, Option<Location>),
-	ConstUint(Uint256, Option<Location>),
-	ConstInt(Uint256, Option<Location>),
+	Const(Value, Type, Option<Location>),
 	FunctionCall(StringId, Vec<TypeCheckedExpr>, Type, Option<Location>),
 	StructInitializer(Vec<TypeCheckedStructField>, Type, Option<Location>),
 	ArrayRef(Box<TypeCheckedExpr>, Box<TypeCheckedExpr>, Type, Option<Location>),
@@ -86,8 +85,7 @@ impl<'a> TypeCheckedExpr {
 			TypeCheckedExpr::GlobalVariableRef(_, t, _) => t.clone(),
 			TypeCheckedExpr::TupleRef(_, _, t, _) => t.clone(),
 			TypeCheckedExpr::DotRef(_, _, t, _) => t.clone(),
-			TypeCheckedExpr::ConstUint(_, _) => Type::Uint,
-			TypeCheckedExpr::ConstInt(_, _) => Type::Int,
+			TypeCheckedExpr::Const(_, t, _) => t.clone(),
 			TypeCheckedExpr::FunctionCall(_, _, t, _) => t.clone(),
 			TypeCheckedExpr::StructInitializer(_, t, _) => t.clone(),
 			TypeCheckedExpr::ArrayRef(_, _, t, _) => t.clone(),
@@ -113,8 +111,7 @@ impl<'a> TypeCheckedExpr {
 			TypeCheckedExpr::GlobalVariableRef(_, _, loc) => loc.clone(),
 			TypeCheckedExpr::TupleRef(_, _, _, loc) => loc.clone(),
 			TypeCheckedExpr::DotRef(_, _, _, loc) => loc.clone(),
-			TypeCheckedExpr::ConstUint(_, loc) => loc.clone(),
-			TypeCheckedExpr::ConstInt(_, loc) => loc.clone(),
+			TypeCheckedExpr::Const(_, _, loc) => loc.clone(),
 			TypeCheckedExpr::FunctionCall(_, _, _, loc) => loc.clone(),
 			TypeCheckedExpr::StructInitializer(_, _, loc) => loc.clone(),
 			TypeCheckedExpr::ArrayRef(_, _, _, loc) => loc.clone(),
@@ -449,8 +446,13 @@ fn typecheck_expr(
 				Err(new_type_error("struct field access to non-struct value", *loc))
 			}
 		}
-		Expr::ConstUint(n, loc) => Ok(TypeCheckedExpr::ConstUint(n.clone(), loc.clone())),
-		Expr::ConstInt(n, loc) => Ok(TypeCheckedExpr::ConstInt(n.clone(), loc.clone())),
+		Expr::ConstUint(n, loc) => Ok(TypeCheckedExpr::Const(Value::Int(n.clone()), Type::Uint, loc.clone())),
+		Expr::ConstInt(n, loc) => Ok(TypeCheckedExpr::Const(Value::Int(n.clone()), Type::Int, loc.clone())),
+		Expr::ConstBool(b, loc) => Ok(TypeCheckedExpr::Const(
+			Value::Int(if *b { Uint256::one() } else { Uint256::zero() }), 
+			Type::Bool, 
+			loc.clone()
+		)),
 		Expr::FunctionCall(name, args, loc) => {
 			match type_table.get(*name) {
 				Some(Type::Func(arg_types, ret_type)) => {

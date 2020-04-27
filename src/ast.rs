@@ -529,6 +529,7 @@ pub enum Expr {
 	DotRef(Box<Expr>, StringId, Option<Location>),
 	ConstUint(Uint256, Option<Location>),
 	ConstInt(Uint256, Option<Location>),
+	ConstBool(bool, Option<Location>),
 	FunctionCall(StringId, Vec<Expr>, Option<Location>),
 	ArrayRef(Box<Expr>, Box<Expr>, Option<Location>),
 	StructInitializer(Vec<FieldInitializer>, Option<Location>),
@@ -566,6 +567,7 @@ impl<'a> Expr {
 			Expr::DotRef(be, name, loc) => Ok(Expr::DotRef(Box::new(be.resolve_types(type_table)?), *name, loc.clone())),
 			Expr::ConstUint(s, loc) => Ok(Expr::ConstUint(s.clone(), loc.clone())),
 			Expr::ConstInt(s, loc) => Ok(Expr::ConstInt(s.clone(), loc.clone())),
+			Expr::ConstBool(b, loc) => Ok(Expr::ConstBool(*b, loc.clone())),
 			Expr::FunctionCall(name, args, loc) => {
 				let mut rargs = Vec::new();
 				for arg in args.iter() {
@@ -637,6 +639,7 @@ impl<'a> Expr {
 			Expr::DotRef(_, _, loc) => loc.clone(),
 			Expr::ConstUint(_, loc) => loc.clone(),
 			Expr::ConstInt(_, loc) => loc.clone(),
+			Expr::ConstBool(_, loc) => loc.clone(),
 			Expr::FunctionCall(_, _, loc) => loc.clone(),
 			Expr::ArrayRef(_, _, loc) => loc.clone(),
 			Expr::StructInitializer(_, loc) => loc.clone(),

@@ -69,6 +69,16 @@ fn testkvs5() {
     test_kvstest(5, Value::none());
 }
 
+#[test]
+fn testkvs6() {
+    test_kvstest(6, Value::Int(Uint256::one()));
+}
+
+#[test]
+fn testkvs7() {
+    test_kvstest(7, Value::Int(Uint256::zero()));
+}
+
 #[allow(dead_code)]
 fn test_kvstest(test_num: usize, expected_result: Value) {
     let path = Path::new("kvstest.mexe"); 

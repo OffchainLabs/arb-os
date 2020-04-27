@@ -532,13 +532,9 @@ fn mavm_codegen_expr<'a>(
 				None => Err(new_codegen_error("tried to get non-existent struct field", *loc))
 			}
 		}
-		TypeCheckedExpr::ConstUint(ui, loc) => {
-			code.push(Instruction::from_opcode_imm(Opcode::Noop, Value::Int(ui.clone()), loc.clone()));
+		TypeCheckedExpr::Const(val, _, loc) => {
+			code.push(Instruction::from_opcode_imm(Opcode::Noop, val.clone(), loc.clone()));
 			Ok((label_gen, code))			
-		}
-		TypeCheckedExpr::ConstInt(ui, loc) => {
-			code.push(Instruction::from_opcode_imm(Opcode::Noop, Value::Int(ui.clone()), loc.clone()));
-			Ok((label_gen, code))
 		}
 		TypeCheckedExpr::FunctionCall(name, args, _, loc) => {
 			let n_args = args.len();

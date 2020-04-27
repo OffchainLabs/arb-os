@@ -216,6 +216,8 @@ Term8: Expr = {
 		file_info.location(BytePos::from(lno)),
 	),
 	<lno: @L> <t: Term8> "with" "{" <i:Ident> ":" <e: Expr> "}" => Expr::StructMod(Box::new(t), i, Box::new(e), file_info.location(BytePos::from(lno))),
+	<lno: @L> "false" => Expr::ConstBool(false, file_info.location(BytePos::from(lno))),
+	<lno: @L> "true" => Expr::ConstBool(true, file_info.location(BytePos::from(lno))),
 	<lno: @L> "null" => Expr::RawValue(AvmValue::none(), file_info.location(BytePos::from(lno))),
 }
 
