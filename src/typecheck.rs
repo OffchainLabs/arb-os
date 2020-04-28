@@ -1,5 +1,5 @@
 use std::collections::HashMap;
-use crate::ast::{Type, TopLevelDecl, FuncDecl, FuncDeclKind, FuncArg, GlobalVarDecl, Statement, IfArm, Expr, StructField, UnaryOp, BinaryOp};
+use crate::ast::{Type, TopLevelDecl, FuncDecl, FuncDeclKind, FuncArg, GlobalVarDecl, Statement, MatchPattern, IfArm, Expr, StructField, UnaryOp, BinaryOp};
 use crate::symtable::SymTable;
 use crate::stringtable::{StringId, StringTable};
 use crate::link::{ExportedFunc, ImportedFunc};
@@ -35,12 +35,18 @@ pub enum TypeCheckedStatement {
 	Panic(Option<Location>),
 	ReturnVoid(Option<Location>),
 	Return(TypeCheckedExpr, Option<Location>),
-	Let(StringId, TypeCheckedExpr, Option<Location>),
+	Let(TypeCheckedMatchPattern, TypeCheckedExpr, Option<Location>),
 	AssignLocal(StringId, TypeCheckedExpr, Option<Location>),
 	AssignGlobal(usize, TypeCheckedExpr, Option<Location>),
 	Loop(Vec<TypeCheckedStatement>, Option<Location>),
 	While(TypeCheckedExpr, Vec<TypeCheckedStatement>, Option<Location>),
 	If(TypeCheckedIfArm),
+}
+
+#[derive(Debug, Clone)]
+pub enum TypeCheckedMatchPattern {
+	Simple(StringId, Type),
+	Tuple(Vec<TypeCheckedMatchPattern>, Type)
 }
 
 #[derive(Debug, Clone)]
@@ -258,18 +264,25 @@ fn typecheck_statement_sequence<'a>(
 	let first_stat = &statements[0];
 	let rest_of_stats = &statements[1..];
 
-	match typecheck_statement(first_stat, return_type, type_table, global_vars)? {
-		(tcs, None) => {
-			let mut rest_result = typecheck_statement_sequence(rest_of_stats, return_type, type_table, global_vars)?;
-			rest_result.insert(0, tcs);
-			Ok(rest_result)
-		},
-		(tcs, Some((sid, tipe))) => {
-			let inner_type_table = type_table.push_one(sid, &tipe);
-			let mut rest_result = typecheck_statement_sequence(rest_of_stats, return_type, &inner_type_table, global_vars)?;
-			rest_result.insert(0, tcs);
-			Ok(rest_result)
-		}
+	let (tcs, bindings) = typecheck_statement(first_stat, return_type, type_table, global_vars)?;
+	let mut rest_result = typecheck_statement_sequence_with_bindings(rest_of_stats, return_type, type_table, global_vars, &bindings)?;
+	rest_result.insert(0, tcs);
+	Ok(rest_result)
+}
+
+fn typecheck_statement_sequence_with_bindings<'a>(
+	statements: &'a [Statement],
+	return_type: &Type,
+	type_table: &'a SymTable<'a, Type>,
+	global_vars: &'a HashMap<StringId, (Type, usize)>,
+	bindings: &[(StringId, Type)],
+) -> Result<Vec<TypeCheckedStatement>, TypeError> {
+	if bindings.is_empty() {
+		typecheck_statement_sequence(statements, return_type, type_table, global_vars)
+	} else {
+		let (sid, tipe) = &bindings[0];
+		let inner_type_table = type_table.push_one(*sid, &tipe);
+		typecheck_statement_sequence_with_bindings(statements, return_type, &inner_type_table, global_vars, &bindings[1..])
 	}
 }
 
@@ -278,32 +291,52 @@ fn typecheck_statement<'a>(
 	return_type: &Type,
 	type_table: &'a SymTable<'a, Type>,
 	global_vars: &'a HashMap<StringId, (Type, usize)>,
-) -> Result<(TypeCheckedStatement, Option<(StringId, Type)>), TypeError> {
+) -> Result<(TypeCheckedStatement, Vec<(StringId, Type)>), TypeError> {
 	match statement {
-		Statement::Noop(loc) => Ok((TypeCheckedStatement::Noop(loc.clone()), None)),
-		Statement::Panic(loc) => Ok((TypeCheckedStatement::Panic(loc.clone()), None)),
-		Statement::ReturnVoid(loc) => Ok((TypeCheckedStatement::ReturnVoid(loc.clone()), None)),
+		Statement::Noop(loc) => Ok((TypeCheckedStatement::Noop(loc.clone()), vec![])),
+		Statement::Panic(loc) => Ok((TypeCheckedStatement::Panic(loc.clone()), vec![])),
+		Statement::ReturnVoid(loc) => Ok((TypeCheckedStatement::ReturnVoid(loc.clone()), vec![])),
 		Statement::Return(expr, loc) => {
 			let tc_expr = typecheck_expr(expr, type_table, global_vars)?;
 			if return_type.assignable(&tc_expr.get_type()) {
-				Ok((TypeCheckedStatement::Return(tc_expr, loc.clone()), None))
+				Ok((TypeCheckedStatement::Return(tc_expr, loc.clone()), vec![]))
 			} else {
 				println!("return type: {:?}", return_type);
 				println!("expr type:   {:?}", tc_expr.get_type());
 				Err(new_type_error("return statement has wrong type", *loc))
 			}
 		},
-		Statement::Let(name, expr, loc) => {
+		Statement::Let(pat, expr, loc) => {
 			let tc_expr = typecheck_expr(expr, type_table, global_vars)?;
 			let tce_type = tc_expr.get_type();
-			Ok((TypeCheckedStatement::Let(*name, tc_expr, loc.clone()), Some((*name, tce_type))))
+			match pat {
+				MatchPattern::Simple(name) => Ok((
+					TypeCheckedStatement::Let(
+						TypeCheckedMatchPattern::Simple(*name, tce_type.clone()),
+						tc_expr, 
+						loc.clone()
+					), 
+					vec![(*name, tce_type)]
+				)),
+				MatchPattern::Tuple(pats) => {
+					let (tc_pats, bindings) = typecheck_patvec(tce_type.clone(), pats.to_vec(), *loc)?;
+					Ok((
+						TypeCheckedStatement::Let(
+							TypeCheckedMatchPattern::Tuple(tc_pats, tce_type),
+							tc_expr,
+							loc.clone()
+						),
+						bindings
+					))
+				}
+			}
 		},
 		Statement::Assign(name, expr, loc) => {
 			let tc_expr = typecheck_expr(expr, type_table, global_vars)?;
 			match type_table.get(*name) {
 				Some(var_type) => {
 					if var_type.assignable(&tc_expr.get_type()) {
-						Ok((TypeCheckedStatement::AssignLocal(*name, tc_expr, loc.clone()), None))
+						Ok((TypeCheckedStatement::AssignLocal(*name, tc_expr, loc.clone()), vec![]))
 					} else {
 						Err(new_type_error("mismatched types in assignment statement", *loc))
 					}					
@@ -311,7 +344,7 @@ fn typecheck_statement<'a>(
 				None => match global_vars.get(&*name) {
 					Some((var_type, idx)) => {
 						if var_type.assignable(&tc_expr.get_type()) {
-							Ok((TypeCheckedStatement::AssignGlobal(*idx, tc_expr, loc.clone()), None))
+							Ok((TypeCheckedStatement::AssignGlobal(*idx, tc_expr, loc.clone()), vec![]))
 						} else {
 							Err(new_type_error("mismatched types in assignment statement", *loc))
 						}
@@ -322,21 +355,51 @@ fn typecheck_statement<'a>(
 		}
 		Statement::Loop(body, loc) => {
 			let tc_body = typecheck_statement_sequence(body, return_type, type_table, global_vars)?;
-			Ok((TypeCheckedStatement::Loop(tc_body, loc.clone()), None))
+			Ok((TypeCheckedStatement::Loop(tc_body, loc.clone()), vec![]))
 		}
 		Statement::While(cond, body, loc) => {
 			let tc_cond = typecheck_expr(cond, type_table, global_vars)?;
 			match tc_cond.get_type() {
 				Type::Bool => {
 					let tc_body = typecheck_statement_sequence(body, return_type, type_table, global_vars)?;
-					Ok((TypeCheckedStatement::While(tc_cond, tc_body, loc.clone()), None))
+					Ok((TypeCheckedStatement::While(tc_cond, tc_body, loc.clone()), vec![]))
 				},
 				_ => Err(new_type_error("while condition is not bool", *loc)),
 			}
 		}
 		Statement::If(arm) => {
-			Ok((TypeCheckedStatement::If(typecheck_if_arm(arm, return_type, type_table, global_vars)?), None))
+			Ok((TypeCheckedStatement::If(typecheck_if_arm(arm, return_type, type_table, global_vars)?), vec![]))
 		}
+	}
+}
+
+fn typecheck_patvec(
+	rhs_type: Type,
+	patterns: Vec<MatchPattern>,
+	location: Option<Location>,
+) -> Result<(Vec<TypeCheckedMatchPattern>, Vec<(StringId, Type)>), TypeError> {
+	if let Type::Tuple(tvec) = rhs_type {
+		if tvec.len() == patterns.len() {
+			let mut tc_pats = Vec::new();
+			let mut bindings = Vec::new();
+			for (i, rhs_type) in tvec.iter().enumerate() {
+				let pat = &patterns[i];
+				match pat {
+					MatchPattern::Simple(name) => {
+						tc_pats.push(TypeCheckedMatchPattern::Simple(*name, rhs_type.clone()));
+						bindings.push((*name, rhs_type.clone()));
+					},
+					MatchPattern::Tuple(_) => { //TODO: implement this properly
+						return Err(new_type_error("nested pattern not yet supported in let", location));
+					}
+				}
+			}
+			Ok((tc_pats, bindings))
+		} else {
+			Err(new_type_error("tuple-match let must receive tuple of equal size", location))
+		}
+	} else {
+		Err(new_type_error("tuple-match let must receive tuple value", location))
 	}
 }
 

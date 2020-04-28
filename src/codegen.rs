@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use crate::mavm::{Label, LabelGenerator, Instruction, Opcode, Value};
 use crate::uint256::Uint256;
-use crate::typecheck::{TypeCheckedFunc, TypeCheckedStatement, TypeCheckedIfArm, TypeCheckedExpr};
+use crate::typecheck::{TypeCheckedFunc, TypeCheckedStatement, TypeCheckedMatchPattern, TypeCheckedIfArm, TypeCheckedExpr};
 use crate::symtable::CopyingSymTable;
 use crate::ast::{UnaryOp, BinaryOp, FuncArg, Type, GlobalVarDecl};
 use crate::stringtable::{StringId, StringTable};
@@ -129,7 +129,7 @@ fn mavm_codegen_statements<'a>(
 	statements: Vec<TypeCheckedStatement>,     // statements to codegen
 	mut code: &'a mut Vec<Instruction>,        // accumulates the code as it's generated
 	mut num_locals: usize,                         // num locals that have been allocated
-	locals: &CopyingSymTable<usize>,               // lookup local variable slot number by name
+	locals: &'a CopyingSymTable<'a, usize>,               // lookup local variable slot number by name
 	mut label_gen: LabelGenerator,   
 	string_table: &StringTable,
 	import_func_map: &HashMap<StringId, Label>,
@@ -169,24 +169,55 @@ fn mavm_codegen_statements<'a>(
 			Ok((label_gen, num_locals, false))
 			// no need to append the rest of the statements; they'll never be executed
 		}
-		TypeCheckedStatement::Let(name, expr, loc) => {
-			let slot_num = num_locals;
-			let new_locals = locals.push_one(*name, slot_num);
-			num_locals += 1;
-			let (lg, c) = mavm_codegen_expr(expr, code, &new_locals, label_gen, string_table, import_func_map, global_var_map)?;
-			label_gen = lg;
-			code = c;
-			code.push(Instruction::from_opcode_imm(Opcode::SetLocal, Value::Int(Uint256::from_usize(slot_num)), loc.clone()));   
-			mavm_codegen_statements(
-				rest_of_statements.to_vec(), 
-				code, 
-				num_locals, 
-				&new_locals, 
-				label_gen, 
-				string_table,
-				import_func_map,
-				global_var_map,
-			)
+		TypeCheckedStatement::Let(pat, expr, loc) => match pat {
+			TypeCheckedMatchPattern::Simple(name, _) => {
+				let slot_num = num_locals;
+				let new_locals = locals.push_one(*name, slot_num);
+				num_locals += 1;
+				let (lg, c) = mavm_codegen_expr(expr, code, &new_locals, label_gen, string_table, import_func_map, global_var_map)?;
+				label_gen = lg;
+				code = c;
+				code.push(Instruction::from_opcode_imm(Opcode::SetLocal, Value::Int(Uint256::from_usize(slot_num)), loc.clone())); 
+				mavm_codegen_statements(
+					rest_of_statements.to_vec(), 
+					code, 
+					num_locals, 
+					&new_locals, 
+					label_gen, 
+					string_table,
+					import_func_map,
+					global_var_map,
+				)
+			}
+			TypeCheckedMatchPattern::Tuple(pattern, _) => {
+				let (lg, c) = mavm_codegen_expr(expr, code, &locals, label_gen, string_table, import_func_map, global_var_map)?;
+				label_gen = lg;
+				code = c;
+				let local_slot_num_base = num_locals;
+				let mut pairs = HashMap::new();
+				for (i, sub_pat) in pattern.clone().iter().enumerate() {
+					match sub_pat {
+						TypeCheckedMatchPattern::Simple(name, _) => {
+							pairs.insert(*name, local_slot_num_base+i);
+						}
+						TypeCheckedMatchPattern::Tuple(_, _) => {
+							return Err(new_codegen_error("nested pattern not supported in pattern-match let", *loc));
+						}
+					}
+				}
+				num_locals += pattern.len();
+				mavm_codegen_tuple_pattern(code, pattern, local_slot_num_base, *loc);	
+				mavm_codegen_statements(
+					rest_of_statements.to_vec(), 
+					code, 
+					num_locals, 
+					&locals.push_multi(pairs), 
+					label_gen, 
+					string_table,
+					import_func_map,
+					global_var_map,
+				)			
+			}  
 		}
 		TypeCheckedStatement::AssignLocal(name, expr, loc) => {
 			let slot_num = match locals.get(*name) {
@@ -313,6 +344,37 @@ fn mavm_codegen_statements<'a>(
 				Ok((lg, if nl1 > nl2 { nl1 } else { nl2 }, more))
 			} else {
 				Ok((lg, nl1, false))
+			}
+		}
+	}
+}
+
+fn mavm_codegen_tuple_pattern<'a>(
+	code: &'a mut Vec<Instruction>, 
+	pattern: &[TypeCheckedMatchPattern], 
+	local_slot_num_base: usize,
+	loc: Option<Location>,
+) {
+	let pat_size = pattern.len();
+	for (i, pat) in pattern.iter().enumerate() {
+		if i < pat_size-1 {
+			code.push(Instruction::from_opcode(Opcode::Dup0, loc));
+		}
+		match pat {
+			TypeCheckedMatchPattern::Simple(_, _) => {
+				code.push(Instruction::from_opcode_imm(
+					Opcode::TupleGet(pat_size),
+					Value::Int(Uint256::from_usize(i)),
+					loc
+				));
+				code.push(Instruction::from_opcode_imm(
+					Opcode::SetLocal, 
+					Value::Int(Uint256::from_usize(local_slot_num_base+i)), 
+					loc
+				));
+			}
+			TypeCheckedMatchPattern::Tuple(_, _) => {
+				panic!("Can't yet generate code for pattern-match let with nested tuples");
 			}
 		}
 	}

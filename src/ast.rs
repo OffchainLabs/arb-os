@@ -455,7 +455,7 @@ pub enum Statement {
 	Panic(Option<Location>),
 	ReturnVoid(Option<Location>),
 	Return(Expr, Option<Location>),
-	Let(StringId, Expr, Option<Location>),
+	Let(MatchPattern, Expr, Option<Location>),
 	Assign(StringId, Expr, Option<Location>),
 	Loop(Vec<Statement>, Option<Location>),
 	While(Expr, Vec<Statement>, Option<Location>),
@@ -469,7 +469,7 @@ impl<'a> Statement {
 			Statement::Panic(loc) => Ok(Statement::Panic(loc.clone())),
 			Statement::ReturnVoid(loc) => Ok(Statement::ReturnVoid(loc.clone())),
 			Statement::Return(expr, loc) => Ok(Statement::Return(expr.resolve_types(type_table)?, loc.clone())),
-			Statement::Let(name, expr, loc) => Ok(Statement::Let(*name, expr.resolve_types(type_table)?, loc.clone())),
+			Statement::Let(pat, expr, loc) => Ok(Statement::Let(pat.clone(), expr.resolve_types(type_table)?, loc.clone())),
 			Statement::Assign(name, expr, loc) => Ok(Statement::Assign(*name, expr.resolve_types(type_table)?, loc.clone())),
 			Statement::Loop(body, loc) => Ok(
 				Statement::Loop(Statement::resolve_types_vec(body.to_vec(), type_table)?, loc.clone())
@@ -490,6 +490,12 @@ impl<'a> Statement {
 		}
 		Ok(vr)
 	}
+}
+
+#[derive(Debug, Clone)]
+pub enum MatchPattern {
+	Simple(StringId),
+	Tuple(Vec<MatchPattern>),
 }
 
 #[derive(Debug, Clone)]

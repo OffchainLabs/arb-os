@@ -1,4 +1,4 @@
-use crate::ast::{TopLevelDecl, TypeDecl, FuncDecl, GlobalVarDecl, ImportFuncDecl, ImportTypeDecl, Type, StructField, FuncArg, Statement, IfArm, Expr, BinaryOp, UnaryOp, 
+use crate::ast::{TopLevelDecl, TypeDecl, FuncDecl, GlobalVarDecl, ImportFuncDecl, ImportTypeDecl, Type, StructField, FuncArg, Statement, MatchPattern, IfArm, Expr, BinaryOp, UnaryOp, 
 FieldInitializer, new_func_arg, new_type_decl};
 use crate::stringtable::{StringTable, StringId};
 use crate::source::Lines;
@@ -64,12 +64,29 @@ Statement: Statement = {
 	<lno: @L> "loop" <cb: CodeBlock> => Statement::Loop(cb, file_info.location(BytePos::from(lno))),
 	<lno: @L> "if" "(" <c: Expr> ")" <t: CodeBlock> => Statement::If(IfArm::Cond(c, t, None, file_info.location(BytePos::from(lno)))),
 	<lno: @L> "if" "(" <c: Expr> ")" <t: CodeBlock> <r: IfArm> => Statement::If(IfArm::Cond(c, t, Some(Box::new(r)), file_info.location(BytePos::from(lno)))),
-	<lno: @L> "let" <i: Ident> "=" <e: Expr> ";" => Statement::Let(i, e, file_info.location(BytePos::from(lno))),
+	<lno: @L> "let" <p: MatchPattern> "=" <e: Expr> ";" => Statement::Let(p, e, file_info.location(BytePos::from(lno))),
 	<lno: @L> <i: Ident> "=" <e: Expr> ";" => Statement::Assign(i, e, file_info.location(BytePos::from(lno))),
 	<lno: @L> "return" <e: Expr> ";" => Statement::Return(e, file_info.location(BytePos::from(lno))),
 	<lno: @L> "return" ";" => Statement::ReturnVoid(file_info.location(BytePos::from(lno))),
 	<lno: @L> "panic" ";" => Statement::Panic(file_info.location(BytePos::from(lno))),
 	<lno: @L> ";" => Statement::Noop(file_info.location(BytePos::from(lno))),
+}
+
+MatchPattern: MatchPattern = {
+	<Ident> => MatchPattern::Simple(<>),
+	"(" <CommaedMatchPatterns> ")" => MatchPattern::Tuple(<>),
+}
+
+CommaedMatchPattern: Vec<MatchPattern> = {
+	MatchPattern => vec![<>], 
+	<c: CommaedMatchPattern> "," <p: MatchPattern> => {
+		let mut c = c;
+		c.push(p);
+		c
+	},
+}
+CommaedMatchPatterns: Vec<MatchPattern> = {
+	( <MatchPattern> "," )+ => <>,
 }
 
 IfArm: IfArm = {

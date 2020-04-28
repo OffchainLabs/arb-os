@@ -260,16 +260,20 @@ impl TupleTree {
 							return code.to_vec();
 						}
 						TupleTree::Tree(_, _) => {
-							code.push(Instruction::from_opcode(Opcode::Swap1, location));
-							code.push(Instruction::from_opcode(Opcode::Dup1, location));
-							code.push(Instruction::from_opcode_imm(Opcode::Tget, Value::Int(Uint256::from_usize(slot)), location));
+							if is_local {
+								code.push(Instruction::from_opcode_imm(Opcode::Xget, Value::Int(Uint256::from_usize(slot)), location));
+							} else {
+								code.push(Instruction::from_opcode(Opcode::Swap1, location));
+								code.push(Instruction::from_opcode(Opcode::Dup1, location));
+								code.push(Instruction::from_opcode_imm(Opcode::Tget, Value::Int(Uint256::from_usize(slot)), location));
+							}
 							let mut new_code = subtree.write_code(false, index, code, location);
-							new_code.push(Instruction::from_opcode(Opcode::Swap1, location));
-							new_code.push(Instruction::from_opcode_imm(
-								if is_local { Opcode::Xset } else { Opcode::Tset }, 
-								Value::Int(Uint256::from_usize(slot)), 
-								location
-							));
+							if is_local {
+								new_code.push(Instruction::from_opcode_imm(Opcode::Xset, Value::Int(Uint256::from_usize(slot)), location));
+							} else {
+								new_code.push(Instruction::from_opcode(Opcode::Swap1, location));
+								new_code.push(Instruction::from_opcode_imm(Opcode::Tset, Value::Int(Uint256::from_usize(slot)), location));
+							}
 							return new_code;
 						}
 					}
