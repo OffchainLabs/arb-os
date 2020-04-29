@@ -8,8 +8,7 @@ type array = struct {
 }
 
 func main() anytype {
-	let arr = builtin_arrayNew(13, null);
-	return arr;
+	return builtin_arrayNew(13, null);
 }
 
 public func builtin_arraySize(arr: array) uint {
@@ -19,7 +18,7 @@ public func builtin_arraySize(arr: array) uint {
 public func builtin_arrayNew(sz: uint, base_val: anytype) array {
 	let chunk = 1;
 	let height = 1;
-	while ((chunk*8) < sz) {
+	while ((8*chunk) < sz) {
 		chunk = 8*chunk;
 		height = 1+height;
 	}
@@ -31,7 +30,7 @@ public func builtin_arrayNew(sz: uint, base_val: anytype) array {
 }
 
 func buildTree(height: uint, base_val: anytype) block {
-	if (height == 1) {
+	if (1 == height) {
 		return newfixedarray(8, base_val);
 	} else {
 		return newfixedarray(8, buildTree(height-1, base_val));
@@ -44,7 +43,7 @@ public func builtin_arrayGet(arr: array, index: uint) anytype {
 	}
 	let res = arr.contents;
 	let chunk = arr.topstep;
-	while (chunk >= 1) {
+	while (1 <= chunk) {
 		res = unsafecast(res[index/chunk], block);
 		index = index % chunk;
 		chunk = chunk / 8;
@@ -60,7 +59,7 @@ public func builtin_arraySet(arr: array, index: uint, value: anytype) array {
 }
 
 func arraySet2(b: block, chunk: uint, index: uint, value: anytype) block {
-	if (chunk == 1) {
+	if (1 == chunk) {
 		return b with {[index] = value};
 	} else {
 		return b with {[index/chunk] = arraySet2(
@@ -89,18 +88,19 @@ type arraySwapSubResult = struct {
 }
 
 func arraySwap2(b: block, chunk: uint, index: uint, value: anytype)  arraySwapSubResult {
-	if (chunk == 1) {
+	if (1 == chunk) {
 		return struct {
 			bloc: b with {[index] = value},
 			val: b[index],
 		};
 	} else {
+		let subIndex = index/chunk;
 		let sub = arraySwap2(
-			unsafecast(b[index/chunk], block),
+			unsafecast(b[subIndex], block),
 			chunk/8,
 			index%chunk,
 			value
 		);
-		return sub with { bloc: b with {[index/chunk] = sub.bloc} };
+		return sub with { bloc: b with {[subIndex] = sub.bloc} };
 	}
 }
