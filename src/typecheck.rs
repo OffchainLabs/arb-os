@@ -766,7 +766,7 @@ fn typecheck_unary_op<'a>(
 }
 
 fn typecheck_binary_op<'a>(
-	op: BinaryOp,
+	mut op: BinaryOp,
 	mut tcs1: TypeCheckedExpr,
 	mut tcs2: TypeCheckedExpr,
 	loc: Option<Location>,
@@ -785,6 +785,30 @@ fn typecheck_binary_op<'a>(
 				BinaryOp::BitwiseOr |
 				BinaryOp::BitwiseXor => {
 					// swap the args, so code generator will be able to supply the constant as an immediate
+					let tmp = tcs2;
+					tcs2 = tcs1;
+					tcs1 = tmp;
+				}
+				BinaryOp::LessThan => {
+					op = BinaryOp::GreaterThan;
+					let tmp = tcs2;
+					tcs2 = tcs1;
+					tcs1 = tmp;
+				}
+				BinaryOp::GreaterThan => {
+					op = BinaryOp::LessThan;
+					let tmp = tcs2;
+					tcs2 = tcs1;
+					tcs1 = tmp;
+				}
+				BinaryOp::LessEq => {
+					op = BinaryOp::GreaterEq;
+					let tmp = tcs2;
+					tcs2 = tcs1;
+					tcs1 = tmp;
+				}
+				BinaryOp::GreaterEq => {
+					op = BinaryOp::LessEq;
 					let tmp = tcs2;
 					tcs2 = tcs1;
 					tcs1 = tmp;
