@@ -545,7 +545,7 @@ pub enum Expr {
 	ArrayMod(Box<Expr>, Box<Expr>, Box<Expr>, Option<Location>),
 	StructMod(Box<Expr>, StringId, Box<Expr>, Option<Location>),
 	UnsafeCast(Box<Expr>, Type, Option<Location>),
-	RawValue(Value, Option<Location>),
+	Null(Option<Location>),
 }
 
 impl<'a> Expr {
@@ -561,7 +561,8 @@ impl<'a> Expr {
 		match self {
 			Expr::ConstUint(_, _) |
 			Expr::ConstInt(_, _) |
-			Expr::ConstBool(_, _) => true,
+			Expr::ConstBool(_, _) |
+			Expr::Null(_) => true,
 			_ => false
 		}
 	}
@@ -647,7 +648,7 @@ impl<'a> Expr {
 				t.resolve_types(type_table, *loc)?,
 				loc.clone()
 			)),
-			Expr::RawValue(v, loc) => Ok(Expr::RawValue(v.clone(), loc.clone())),
+			Expr::Null(loc) => Ok(Expr::Null(loc.clone())),
 		}
 	}
 
@@ -672,7 +673,7 @@ impl<'a> Expr {
 			Expr::ArrayMod(_, _, _, loc) => loc.clone(),
 			Expr::StructMod(_, _, _, loc) => loc.clone(),
 			Expr::UnsafeCast(_, _, loc) => loc.clone(),
-			Expr::RawValue(_, loc) => loc.clone(),
+			Expr::Null(loc) => loc.clone(),
 		}
 	}
 }

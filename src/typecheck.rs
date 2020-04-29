@@ -77,7 +77,6 @@ pub enum TypeCheckedExpr {
 	FixedArrayMod(Box<TypeCheckedExpr>, Box<TypeCheckedExpr>, Box<TypeCheckedExpr>, usize, Type, Option<Location>),
 	StructMod(Box<TypeCheckedExpr>, usize, Box<TypeCheckedExpr>, Type, Option<Location>),
 	Cast(Box<TypeCheckedExpr>, Type, Option<Location>),
-	RawValue(Value, Type, Option<Location>),
 }
 
 impl<'a> TypeCheckedExpr {
@@ -103,7 +102,6 @@ impl<'a> TypeCheckedExpr {
 			TypeCheckedExpr::FixedArrayMod(_, _, _, _, t, _) => t.clone(),
 			TypeCheckedExpr::StructMod(_, _, _, t, _) => t.clone(),
 			TypeCheckedExpr::Cast(_, t, _) => t.clone(),
-			TypeCheckedExpr::RawValue(_, t, _) => t.clone(),
 		}
 	}
 
@@ -129,7 +127,6 @@ impl<'a> TypeCheckedExpr {
 			TypeCheckedExpr::FixedArrayMod(_, _, _, _, _, loc) => loc.clone(),
 			TypeCheckedExpr::StructMod(_, _, _, _, loc) => loc.clone(),
 			TypeCheckedExpr::Cast(_, _, loc) => loc.clone(),
-			TypeCheckedExpr::RawValue(_, _, loc) => loc.clone(),
 		}
 	}
 }
@@ -670,7 +667,7 @@ fn typecheck_expr(
 			t.clone(), 
 			loc.clone()
 		)),
-		Expr::RawValue(v, loc) => Ok(TypeCheckedExpr::RawValue(v.clone(), Type::Any, loc.clone())),
+		Expr::Null(loc) => Ok(TypeCheckedExpr::Const(Value::none(), Type::Any, loc.clone())),
 	}
 }
 

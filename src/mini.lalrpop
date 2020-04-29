@@ -4,7 +4,7 @@ use crate::stringtable::{StringTable, StringId};
 use crate::source::Lines;
 use crate::pos::BytePos;
 use crate::uint256::Uint256;
-use crate::mavm::Value as AvmValue;
+
 
 grammar(stringtable: &mut StringTable<'input>, file_info: &Lines);
 
@@ -235,7 +235,7 @@ Term8: Expr = {
 	<lno: @L> <t: Term8> "with" "{" <i:Ident> ":" <e: Expr> "}" => Expr::StructMod(Box::new(t), i, Box::new(e), file_info.location(BytePos::from(lno))),
 	<lno: @L> "false" => Expr::ConstBool(false, file_info.location(BytePos::from(lno))),
 	<lno: @L> "true" => Expr::ConstBool(true, file_info.location(BytePos::from(lno))),
-	<lno: @L> "null" => Expr::RawValue(AvmValue::none(), file_info.location(BytePos::from(lno))),
+	<lno: @L> "null" => Expr::Null(file_info.location(BytePos::from(lno))),
 }
 
 FieldInitializer: FieldInitializer = {

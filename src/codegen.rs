@@ -708,7 +708,7 @@ fn mavm_codegen_expr<'a>(
 				*string_table.get_if_exists("builtin_arrayNew").unwrap(),
 				vec![
 					*sz_expr.clone(), 
-					TypeCheckedExpr::RawValue(default_val, Type::Any, loc.clone()),
+					TypeCheckedExpr::Const(default_val, Type::Any, loc.clone()),
 				],
 				Type::Func(
 					vec![Type::Uint, Type::Any],
@@ -805,10 +805,6 @@ fn mavm_codegen_expr<'a>(
 		}
 		TypeCheckedExpr::Cast(expr, _, _) => 
 			mavm_codegen_expr(expr, code, locals, label_gen, string_table, import_func_map, global_var_map),
-		TypeCheckedExpr::RawValue(val, _, loc) => {
-			code.push(Instruction::from_opcode_imm(Opcode::Noop, val.clone(), loc.clone()));
-			Ok((label_gen, code))
-		}
 	}
 }
 
