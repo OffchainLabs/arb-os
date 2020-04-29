@@ -8,6 +8,7 @@ use crate::link::{ExportedFunc, ImportedFunc};
 use crate::source::Lines;
 use crate::pos::{Location, BytePos};
 use lalrpop_util;
+extern crate regex;
 
 lalrpop_mod!(pub mini); 
 
@@ -140,6 +141,8 @@ pub fn compile_from_source<'a>(
     pathname: std::path::Display, 
     debug: bool,
 ) -> Result<CompiledProgram, CompileError<'a>> {
+    let comment_re = regex::Regex::new(r"//.*").unwrap();
+    let s = comment_re.replace_all(&s, "");
     let mut string_table_1 = stringtable::StringTable::new();
     let lines = Lines::new(s.bytes());
     let res = match mini::DeclsParser::new().parse(&mut string_table_1, &lines, &s) {
