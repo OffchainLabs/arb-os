@@ -682,54 +682,117 @@ fn typecheck_unary_op<'a>(
 	let tc_type = sub_expr.get_type();
 	match op {
 		UnaryOp::Minus => match tc_type {
-			Type::Int => Ok(TypeCheckedExpr::UnaryOp(UnaryOp::Minus, Box::new(sub_expr), Type::Int, loc)),
+			Type::Int => if let TypeCheckedExpr::Const(Value::Int(ui), _, loc) = sub_expr {
+				Ok(TypeCheckedExpr::Const(Value::Int(ui.unary_minus().unwrap()), Type::Int, loc))
+			} else {
+				Ok(TypeCheckedExpr::UnaryOp(UnaryOp::Minus, Box::new(sub_expr), Type::Int, loc))
+			}
 			_ => Err(new_type_error("invalid operand type for unary minus", loc))
 		},
-		UnaryOp::BitwiseNeg => match tc_type {
-			Type::Uint => Ok(TypeCheckedExpr::UnaryOp(UnaryOp::BitwiseNeg, Box::new(sub_expr), Type::Uint, loc)),
-			Type::Int => Ok(TypeCheckedExpr::UnaryOp(UnaryOp::BitwiseNeg, Box::new(sub_expr), Type::Int, loc)),
-			_ => Err(new_type_error("invalid operand type for bitwise negation", loc))
-		},
+		UnaryOp::BitwiseNeg => 
+			if let TypeCheckedExpr::Const(Value::Int(ui), _, loc) = sub_expr {
+				match tc_type {
+					Type::Uint |
+					Type::Int |
+					Type::Bytes32 => Ok(TypeCheckedExpr::Const(Value::Int(ui.bitwise_neg()), tc_type, loc)),
+					_ => Err(new_type_error("invalid operand type for bitwise negation", loc))
+				}
+			} else {
+				match tc_type {
+					Type::Uint |
+					Type::Int |
+					Type::Bytes32 => Ok(TypeCheckedExpr::UnaryOp(UnaryOp::BitwiseNeg, Box::new(sub_expr), tc_type, loc)),
+					_ => Err(new_type_error("invalid operand type for bitwise negation", loc))
+				}
+			},
 		UnaryOp::Not => match tc_type {
-			Type::Bool => Ok(TypeCheckedExpr::UnaryOp(UnaryOp::Not, Box::new(sub_expr), Type::Bool, loc)),
+			Type::Bool => if let TypeCheckedExpr::Const(Value::Int(ui), _, loc) = sub_expr {
+				let b = ui.to_usize().unwrap();
+				Ok(TypeCheckedExpr::Const(Value::Int(Uint256::from_usize(1-b)), Type::Bool, loc))
+			} else {
+				Ok(TypeCheckedExpr::UnaryOp(UnaryOp::Not, Box::new(sub_expr), Type::Bool, loc))
+			}
 			_ => Err(new_type_error("invalid operand type for logical negation", loc))
 		},
-		UnaryOp::Hash => Ok(TypeCheckedExpr::UnaryOp(UnaryOp::Hash, Box::new(sub_expr), Type::Bytes32, loc)),
+		UnaryOp::Hash => 
+			if let TypeCheckedExpr::Const(Value::Int(ui), _, loc) = sub_expr {
+				Ok(TypeCheckedExpr::Const(Value::Int(ui.avm_hash()), Type::Bytes32, loc))
+			} else {
+				Ok(TypeCheckedExpr::UnaryOp(UnaryOp::Hash, Box::new(sub_expr), Type::Bytes32, loc))
+			}
 		UnaryOp::Len => match tc_type {
-			Type::Tuple(_) |
+			Type::Tuple(tv) => Ok(TypeCheckedExpr::Const(Value::Int(Uint256::from_usize(tv.len())), Type::Uint, loc)),
+			Type::FixedArray(_, sz) => Ok(TypeCheckedExpr::Const(Value::Int(Uint256::from_usize(sz)), Type::Uint, loc)),
 			Type::Array(_) => Ok(TypeCheckedExpr::UnaryOp(UnaryOp::Len, Box::new(sub_expr), Type::Uint, loc)),
 			_ => Err(new_type_error("invalid operand type for len", loc))
 		},
-		UnaryOp::ToUint => match tc_type {
-			Type::Uint |
-			Type::Int |
-			Type::Bytes32 |
-			Type::Bool => Ok(TypeCheckedExpr::UnaryOp(UnaryOp::ToUint, Box::new(sub_expr), Type::Uint, loc)),
-			_ => Err(new_type_error("invalid operand type for uint()", loc))
-		}
-		UnaryOp::ToInt => match tc_type {
-			Type::Uint |
-			Type::Int |
-			Type::Bytes32 |
-			Type::Bool => Ok(TypeCheckedExpr::UnaryOp(UnaryOp::ToInt, Box::new(sub_expr), Type::Int, loc)),
-			_ => Err(new_type_error("invalid operand type for int()", loc))
-		}
-		UnaryOp::ToBytes32 => match tc_type {
-			Type::Uint |
-			Type::Int |
-			Type::Bytes32 |
-			Type::Bool => Ok(TypeCheckedExpr::UnaryOp(UnaryOp::ToBytes32, Box::new(sub_expr), Type::Bytes32, loc)),
-			_ => Err(new_type_error("invalid operand type for int()", loc))
-		}
+		UnaryOp::ToUint => 
+			if let TypeCheckedExpr::Const(val, _, loc) = sub_expr {
+				Ok(TypeCheckedExpr::Const(val, Type::Uint, loc))
+			} else {
+				match tc_type {
+					Type::Uint |
+					Type::Int |
+					Type::Bytes32 |
+					Type::Bool => Ok(TypeCheckedExpr::UnaryOp(UnaryOp::ToUint, Box::new(sub_expr), Type::Uint, loc)),
+					_ => Err(new_type_error("invalid operand type for uint()", loc))
+				}
+			}
+		UnaryOp::ToInt => 
+			if let TypeCheckedExpr::Const(val, _, loc) = sub_expr {
+				Ok(TypeCheckedExpr::Const(val, Type::Int, loc))
+			} else {
+				match tc_type {
+					Type::Uint |
+					Type::Int |
+					Type::Bytes32 |
+					Type::Bool => Ok(TypeCheckedExpr::UnaryOp(UnaryOp::ToInt, Box::new(sub_expr), Type::Int, loc)),
+					_ => Err(new_type_error("invalid operand type for int()", loc))
+				}
+			}		
+		UnaryOp::ToBytes32 => 
+			if let TypeCheckedExpr::Const(val, _, loc) = sub_expr {
+				Ok(TypeCheckedExpr::Const(val, Type::Bytes32, loc))
+			} else {
+				match tc_type {
+					Type::Uint |
+					Type::Int |
+					Type::Bytes32 |
+					Type::Bool => Ok(TypeCheckedExpr::UnaryOp(UnaryOp::ToBytes32, Box::new(sub_expr), Type::Bytes32, loc)),
+					_ => Err(new_type_error("invalid operand type for bytes32()", loc))
+				}
+			}		
 	}
 }
 
 fn typecheck_binary_op<'a>(
 	op: BinaryOp,
-	tcs1: TypeCheckedExpr,
-	tcs2: TypeCheckedExpr,
+	mut tcs1: TypeCheckedExpr,
+	mut tcs2: TypeCheckedExpr,
 	loc: Option<Location>,
 ) -> Result<TypeCheckedExpr, TypeError> {
+	if let TypeCheckedExpr::Const(Value::Int(val2), t2, _) = tcs2.clone() {
+		if let TypeCheckedExpr::Const(Value::Int(val1), t1, _) = tcs1.clone() {
+			// both args are constants, so we can do the op at compile time
+			return typecheck_binary_op_const(op, val1, t1, val2, t2, loc)
+		} else {
+			match op {
+				BinaryOp::Plus |
+				BinaryOp::Times |
+				BinaryOp::Equal |
+				BinaryOp::NotEqual |
+				BinaryOp::BitwiseAnd |
+				BinaryOp::BitwiseOr |
+				BinaryOp::BitwiseXor => {
+					// swap the args, so code generator will be able to supply the constant as an immediate
+					let tmp = tcs2;
+					tcs2 = tcs1;
+					tcs1 = tmp;
+				}
+				_ => {}
+			}
+		}
+	}
 	let subtype1 = tcs1.get_type();
 	let subtype2 = tcs2.get_type();
 	match op {
@@ -793,6 +856,144 @@ fn typecheck_binary_op<'a>(
 			(Type::Bytes32, Type::Bytes32) => Ok(TypeCheckedExpr::Binary(op, Box::new(tcs1), Box::new(tcs2), Type::Bytes32, loc)),
 			_ => Err(new_type_error("invalid argument types to binary op", loc))
 		}
+		BinaryOp::Smod |
+		BinaryOp::Sdiv |
+		BinaryOp::SLessThan |
+		BinaryOp::SGreaterThan |
+		BinaryOp::SLessEq |
+		BinaryOp::SGreaterEq => { panic!("unexpected op in typecheck_binary_op"); }
+	}
+}
+
+fn typecheck_binary_op_const(
+	op: BinaryOp, 
+	val1: Uint256, 
+	t1: Type, 
+	val2: Uint256, 
+	t2: Type, 
+	loc: Option<Location>
+) -> Result<TypeCheckedExpr, TypeError> {
+	match op {
+		BinaryOp::Plus |
+		BinaryOp::Minus |
+		BinaryOp::Times => match (&t1, &t2) {
+			(Type::Uint, Type::Uint) |
+			(Type::Int, Type::Int) => Ok(TypeCheckedExpr::Const(
+				Value::Int(match op {
+					BinaryOp::Plus => val1.add(&val2),
+					BinaryOp::Minus => val1.sub(&val2),
+					BinaryOp::Times => val1.mul(&val2),
+					_ => { panic!(); }
+				}),
+				t1,
+				loc
+			)),
+			_ => Err(new_type_error("invalid argument types to binary op", loc))
+		}
+		BinaryOp::Div => match (&t1, &t2) {
+			(Type::Uint, Type::Uint) => {
+				match val1.div(&val2) {
+					Some(v) => Ok(TypeCheckedExpr::Const(Value::Int(v), t1, loc)),
+					None => Err(new_type_error("divide by constant zero", loc))
+				}
+			}
+			(Type::Int, Type::Int) => {
+				match val1.sdiv(&val2) {
+					Some(v) => Ok(TypeCheckedExpr::Const(Value::Int(v), t1, loc)),
+					None => Err(new_type_error("divide by constant zero", loc))
+				}
+			}
+			_ => Err(new_type_error("invalid argument types to binary op", loc))
+		}
+		BinaryOp::Mod => match (&t1, &t2) {
+			(Type::Uint, Type::Uint) => {
+				match val1.modulo(&val2) {
+					Some(v) => Ok(TypeCheckedExpr::Const(Value::Int(v), t1, loc)),
+					None => Err(new_type_error("divide by constant zero", loc))
+				}
+			}
+			(Type::Int, Type::Int) => {
+				match val1.smodulo(&val2) {
+					Some(v) => Ok(TypeCheckedExpr::Const(Value::Int(v), t1, loc)),
+					None => Err(new_type_error("divide by constant zero", loc))
+				}
+			}
+			_ => Err(new_type_error("invalid argument types to binary op", loc))
+		}
+		BinaryOp::LessThan => match (t1, t2) {
+			(Type::Uint, Type::Uint) => Ok(TypeCheckedExpr::Const(Value::Int(Uint256::from_bool(val1 < val2)), Type::Bool, loc)),
+			(Type::Int, Type::Int) => Ok(TypeCheckedExpr::Const(Value::Int(Uint256::from_bool(val1.s_less_than(&val2))), Type::Bool, loc)),
+			_ => Err(new_type_error("invalid argument types to binary op", loc))
+		}
+		BinaryOp::GreaterThan => match (t1, t2) {
+			(Type::Uint, Type::Uint) => Ok(TypeCheckedExpr::Const(Value::Int(Uint256::from_bool(val1 > val2)), Type::Bool, loc)),
+			(Type::Int, Type::Int) => Ok(TypeCheckedExpr::Const(Value::Int(Uint256::from_bool(val2.s_less_than(&val1))), Type::Bool, loc)),
+			_ => Err(new_type_error("invalid argument types to binary op", loc))
+		}
+		BinaryOp::LessEq => match (t1, t2) {
+			(Type::Uint, Type::Uint) => Ok(TypeCheckedExpr::Const(Value::Int(Uint256::from_bool(val1 <= val2)), Type::Bool, loc)),
+			(Type::Int, Type::Int) => Ok(TypeCheckedExpr::Const(Value::Int(Uint256::from_bool(!val2.s_less_than(&val1))), Type::Bool, loc)),
+			_ => Err(new_type_error("invalid argument types to binary op", loc))
+		}
+		BinaryOp::GreaterEq => match (t1, t2) {
+			(Type::Uint, Type::Uint) => Ok(TypeCheckedExpr::Const(Value::Int(Uint256::from_bool(val1 >= val2)), Type::Bool, loc)),
+			(Type::Int, Type::Int) => Ok(TypeCheckedExpr::Const(Value::Int(Uint256::from_bool(!val1.s_less_than(&val2))), Type::Bool, loc)),
+			_ => Err(new_type_error("invalid argument types to binary op", loc))
+		}
+		BinaryOp::Equal |
+		BinaryOp::NotEqual |
+		BinaryOp::BitwiseAnd |
+		BinaryOp::BitwiseOr |
+		BinaryOp::BitwiseXor |
+		BinaryOp::Hash => 
+			if t1 == t2 {
+				Ok(TypeCheckedExpr::Const(
+					Value::Int(
+						match op {
+							BinaryOp::Equal => Uint256::from_bool(val1 == val2),
+							BinaryOp::NotEqual => Uint256::from_bool(val1 != val2),
+							BinaryOp::BitwiseAnd => val1.bitwise_and(&val2),
+							BinaryOp::BitwiseOr => val1.bitwise_or(&val2),
+							BinaryOp::BitwiseXor => val1.bitwise_xor(&val2),
+							BinaryOp::Hash => 
+								if let Type::Bytes32 = t1 {
+									return Ok(TypeCheckedExpr::Const(
+										Value::avm_hash2(&Value::Int(val1), &Value::Int(val2)), 
+										Type::Bool, 
+										loc
+									));
+								} else {
+									return Err(new_type_error("invalid argument types to binary op", loc));
+								}
+							_ => { panic!(); }
+						}
+					), 
+					Type::Bool, 
+					loc
+				))
+			} else {
+				Err(new_type_error("invalid argument types to binary op", loc))
+			}
+		BinaryOp::LogicalAnd =>
+			if (t1 == Type::Bool) && (t2 == Type::Bool) {
+				Ok(TypeCheckedExpr::Const(
+					Value::Int(Uint256::from_bool( !val1.is_zero() && !val2.is_zero())),
+					Type::Bool,
+					loc
+				))
+			} else {
+				Err(new_type_error("invalid argument types to binary op", loc))
+			}
+		BinaryOp::LogicalOr =>
+			if (t1 == Type::Bool) && (t2 == Type::Bool) {
+				Ok(TypeCheckedExpr::Const(
+					Value::Int(Uint256::from_bool( !val1.is_zero() || !val2.is_zero())),
+					Type::Bool,
+					loc
+				))
+			} else {
+				Err(new_type_error("invalid argument types to binary op", loc))
+			}
 		BinaryOp::Smod |
 		BinaryOp::Sdiv |
 		BinaryOp::SLessThan |

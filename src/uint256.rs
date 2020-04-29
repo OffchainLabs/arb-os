@@ -24,6 +24,10 @@ impl Uint256 {
 		Uint256{ val: BigUint::from(x) }
 	}
 
+	pub fn from_bool(b: bool) -> Self {
+		if b { Uint256::one() } else { Uint256::zero() }
+	}
+
 	pub fn from_string(s: &str) -> Option<Self> {
 		match BigUint::parse_bytes(s.as_bytes(), 10) {
 			Some(bui) => match Uint256::trim(&bui) {
@@ -59,6 +63,10 @@ impl Uint256 {
 
 	pub fn one() -> Self {
 		Uint256{ val: BigUint::one() }
+	}
+
+	pub fn is_zero(&self) -> bool {
+		self.val == BigUint::zero()
 	}
 
 	pub fn unary_minus(&self) -> Option<Self> {

@@ -138,51 +138,51 @@ Ident: StringId = {
 };
 
 Expr: Expr = {
-	<lno: @L> "-" <e: Expr> => Expr::UnaryOp(UnaryOp::Minus, Box::new(e), file_info.location(BytePos::from(lno))),
-	<lno: @L> "!" <e: Expr> => Expr::UnaryOp(UnaryOp::Not, Box::new(e), file_info.location(BytePos::from(lno))),
-	<lno: @L> "~" <e: Expr> => Expr::UnaryOp(UnaryOp::BitwiseNeg, Box::new(e), file_info.location(BytePos::from(lno))),
+	<lno: @L> "-" <e: Expr> => Expr::new_unary(UnaryOp::Minus, e, file_info.location(BytePos::from(lno))),
+	<lno: @L> "!" <e: Expr> => Expr::new_unary(UnaryOp::Not, e, file_info.location(BytePos::from(lno))),
+	<lno: @L> "~" <e: Expr> => Expr::new_unary(UnaryOp::BitwiseNeg, e, file_info.location(BytePos::from(lno))),
 	Expr1,
 };
 
 Expr1: Expr = {
-	<lno: @L> <l:Expr1> "+" <r:Factor> => Expr::Binary(BinaryOp::Plus, Box::new(l), Box::new(r), file_info.location(BytePos::from(lno))),
-	<lno: @L> <l:Expr1> "-" <r:Factor> => Expr::Binary(BinaryOp::Minus, Box::new(l), Box::new(r), file_info.location(BytePos::from(lno))),
+	<lno: @L> <l:Expr1> "+" <r:Factor> => Expr::new_binary(BinaryOp::Plus, l, r, file_info.location(BytePos::from(lno))),
+	<lno: @L> <l:Expr1> "-" <r:Factor> => Expr::new_binary(BinaryOp::Minus, l, r, file_info.location(BytePos::from(lno))),
 	Factor,
 };
 
 Factor: Expr = {
-	<lno: @L> <l:Factor> "*" <r:Term1> => Expr::Binary(BinaryOp::Times, Box::new(l), Box::new(r), file_info.location(BytePos::from(lno))),
-	<lno: @L> <l:Factor> "/" <r:Term1> => Expr::Binary(BinaryOp::Div, Box::new(l), Box::new(r), file_info.location(BytePos::from(lno))),
-	<lno: @L> <l:Factor> "%" <r:Term1> => Expr::Binary(BinaryOp::Mod, Box::new(l), Box::new(r), file_info.location(BytePos::from(lno))),
+	<lno: @L> <l:Factor> "*" <r:Term1> => Expr::new_binary(BinaryOp::Times, l, r, file_info.location(BytePos::from(lno))),
+	<lno: @L> <l:Factor> "/" <r:Term1> => Expr::new_binary(BinaryOp::Div, l, r, file_info.location(BytePos::from(lno))),
+	<lno: @L> <l:Factor> "%" <r:Term1> => Expr::new_binary(BinaryOp::Mod, l, r, file_info.location(BytePos::from(lno))),
 	Term1,
 };
 
 Term1: Expr = {
-	<lno: @L> <l:Term1> "<" <r:Term2> => Expr::Binary(BinaryOp::LessThan, Box::new(l), Box::new(r), file_info.location(BytePos::from(lno))),
-	<lno: @L> <l:Term1> ">" <r:Term2> => Expr::Binary(BinaryOp::GreaterThan, Box::new(l), Box::new(r), file_info.location(BytePos::from(lno))),
-	<lno: @L> <l:Term1> "<=" <r:Term2> => Expr::Binary(BinaryOp::LessEq, Box::new(l), Box::new(r), file_info.location(BytePos::from(lno))),
-	<lno: @L> <l:Term1> ">=" <r:Term2> => Expr::Binary(BinaryOp::GreaterEq, Box::new(l), Box::new(r), file_info.location(BytePos::from(lno))),
+	<lno: @L> <l:Term1> "<" <r:Term2> => Expr::new_binary(BinaryOp::LessThan, l, r, file_info.location(BytePos::from(lno))),
+	<lno: @L> <l:Term1> ">" <r:Term2> => Expr::new_binary(BinaryOp::GreaterThan, l, r, file_info.location(BytePos::from(lno))),
+	<lno: @L> <l:Term1> "<=" <r:Term2> => Expr::new_binary(BinaryOp::LessEq, l, r, file_info.location(BytePos::from(lno))),
+	<lno: @L> <l:Term1> ">=" <r:Term2> => Expr::new_binary(BinaryOp::GreaterEq, l, r, file_info.location(BytePos::from(lno))),
 	Term2,
 };
 
 Term2: Expr = {
-	<lno: @L> <l:Term2> "==" <r:Term3> => Expr::Binary(BinaryOp::Equal, Box::new(l), Box::new(r), file_info.location(BytePos::from(lno))),	
-	<lno: @L> <l:Term2> "!=" <r:Term3> => Expr::Binary(BinaryOp::NotEqual, Box::new(l), Box::new(r), file_info.location(BytePos::from(lno))),	
+	<lno: @L> <l:Term2> "==" <r:Term3> => Expr::new_binary(BinaryOp::Equal, l, r, file_info.location(BytePos::from(lno))),	
+	<lno: @L> <l:Term2> "!=" <r:Term3> => Expr::new_binary(BinaryOp::NotEqual, l, r, file_info.location(BytePos::from(lno))),	
 	Term3,
 };
 
 Term3: Expr = {
-	<lno: @L> <l:Term3> "&" <r:Term4> => Expr::Binary(BinaryOp::BitwiseAnd, Box::new(l), Box::new(r), file_info.location(BytePos::from(lno))),
+	<lno: @L> <l:Term3> "&" <r:Term4> => Expr::new_binary(BinaryOp::BitwiseAnd, l, r, file_info.location(BytePos::from(lno))),
 	Term4,
 };
 
 Term4: Expr = {
-	<lno: @L> <l:Term4> "^" <r:Term5> => Expr::Binary(BinaryOp::BitwiseXor, Box::new(l), Box::new(r), file_info.location(BytePos::from(lno))),
+	<lno: @L> <l:Term4> "^" <r:Term5> => Expr::new_binary(BinaryOp::BitwiseXor, l, r, file_info.location(BytePos::from(lno))),
 	Term5,
 };
 
 Term5: Expr = {
-	<lno: @L> <l:Term5> "|" <r:Term6> => Expr::Binary(BinaryOp::BitwiseOr, Box::new(l), Box::new(r), file_info.location(BytePos::from(lno))),
+	<lno: @L> <l:Term5> "|" <r:Term6> => Expr::new_binary(BinaryOp::BitwiseOr, l, r, file_info.location(BytePos::from(lno))),
 	Term6,
 };
 
@@ -198,12 +198,12 @@ Term7: Expr = {
 
 Term8: Expr = {
 	<lno: @L> "struct" "{" <fi: FieldInitializer+> "}" => Expr::StructInitializer(fi, file_info.location(BytePos::from(lno))),
-	<lno: @L> "hash" "(" <e: Expr> ")" => Expr::UnaryOp(UnaryOp::Hash, Box::new(e), file_info.location(BytePos::from(lno))),
-	<lno: @L> "hash" "(" <l:Expr> "," <r:Expr> ")" => Expr::Binary(BinaryOp::Hash, Box::new(l), Box::new(r), file_info.location(BytePos::from(lno))),
-	<lno: @L> "len" "(" <e: Expr> ")" => Expr::UnaryOp(UnaryOp::Len, Box::new(e), file_info.location(BytePos::from(lno))),
-	<lno: @L> "uint" "(" <e: Expr> ")" => Expr::UnaryOp(UnaryOp::ToUint, Box::new(e), file_info.location(BytePos::from(lno))),
-	<lno: @L> "int" "(" <e: Expr> ")" => Expr::UnaryOp(UnaryOp::ToInt, Box::new(e), file_info.location(BytePos::from(lno))),
-	<lno: @L> "bytes32" "(" <e: Expr> ")" => Expr::UnaryOp(UnaryOp::ToBytes32, Box::new(e), file_info.location(BytePos::from(lno))),
+	<lno: @L> "hash" "(" <e: Expr> ")" => Expr::new_unary(UnaryOp::Hash, e, file_info.location(BytePos::from(lno))),
+	<lno: @L> "hash" "(" <l:Expr> "," <r:Expr> ")" => Expr::new_binary(BinaryOp::Hash, l, r, file_info.location(BytePos::from(lno))),
+	<lno: @L> "len" "(" <e: Expr> ")" => Expr::new_unary(UnaryOp::Len, e, file_info.location(BytePos::from(lno))),
+	<lno: @L> "uint" "(" <e: Expr> ")" => Expr::new_unary(UnaryOp::ToUint, e, file_info.location(BytePos::from(lno))),
+	<lno: @L> "int" "(" <e: Expr> ")" => Expr::new_unary(UnaryOp::ToInt, e, file_info.location(BytePos::from(lno))),
+	<lno: @L> "bytes32" "(" <e: Expr> ")" => Expr::new_unary(UnaryOp::ToBytes32, e, file_info.location(BytePos::from(lno))),
 	<lno: @L> "newarray" "(" <e:Expr> "," <t:Type> ")" => Expr::NewArray(Box::new(e), t, file_info.location(BytePos::from(lno))),
 	<lno: @L> "newfixedarray" "(" <s:UnsignedInteger> "," <e:Expr> ")" => Expr::NewFixedArray(
 		s.to_usize().unwrap(), 

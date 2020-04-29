@@ -549,6 +549,23 @@ pub enum Expr {
 }
 
 impl<'a> Expr {
+	pub fn new_unary(op: UnaryOp, e: Expr, loc: Option<Location>) -> Self {
+		Expr::UnaryOp(op, Box::new(e), loc)
+	}
+
+	pub fn new_binary(op: BinaryOp, e1: Expr, e2: Expr, loc: Option<Location>) -> Self {
+		Expr::Binary(op, Box::new(e1), Box::new(e2), loc)
+	}
+
+	pub fn is_const(&self) -> bool {
+		match self {
+			Expr::ConstUint(_, _) |
+			Expr::ConstInt(_, _) |
+			Expr::ConstBool(_, _) => true,
+			_ => false
+		}
+	}
+
 	pub fn resolve_types(&self, type_table: &SymTable<Type>) -> Result<Self, TypeError> {
 		match self {
 			Expr::UnaryOp(op, be, loc) => Ok(Expr::UnaryOp(*op, Box::new(be.resolve_types(type_table)?), loc.clone())),
