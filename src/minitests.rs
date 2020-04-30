@@ -29,6 +29,11 @@ fn testarray5() {
     test_arraytest(5, Value::Int(Uint256::from_usize(4)));
 }
 
+#[test]
+fn testarray6() {
+    test_arraytest(6, Value::Int(Uint256::from_usize(7)));
+}
+
 #[allow(dead_code)]
 fn test_arraytest(test_num: usize, expected_result: Value) {
     let path = Path::new("arraytest.mexe"); 

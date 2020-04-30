@@ -558,6 +558,14 @@ fn mavm_codegen_expr<'a>(
 			code.push(Instruction::from_opcode(Opcode::GetGlobalVar(*idx), loc.clone()));
 			Ok((label_gen, code))
 		}
+		TypeCheckedExpr::FuncRef(name, _, loc) => {
+			let the_label = match import_func_map.get(name) {
+				Some(label) => *label,
+				None => Label::Func(*name),
+			};
+			code.push(Instruction::from_opcode_imm(Opcode::Noop, Value::Label(the_label), *loc));
+			Ok((label_gen, code))
+		}
 		TypeCheckedExpr::TupleRef(tce, idx, _, loc) => {
 			let tce_type = tce.get_type();
 			let tuple_size = if let Type::Tuple(fields) = tce_type {
@@ -598,7 +606,7 @@ fn mavm_codegen_expr<'a>(
 			code.push(Instruction::from_opcode_imm(Opcode::Noop, val.clone(), loc.clone()));
 			Ok((label_gen, code))			
 		}
-		TypeCheckedExpr::FunctionCall(name, args, _, loc) => {
+		TypeCheckedExpr::FunctionCall(fexpr, args, _, loc) => {
 			let n_args = args.len();
 			let (ret_label, lg) = label_gen.next();
 			label_gen = lg;
@@ -616,13 +624,24 @@ fn mavm_codegen_expr<'a>(
 				code = c;
 			}
 			code.push(Instruction::from_opcode_imm(Opcode::Noop, Value::Label(ret_label), loc.clone()));
+			/*
 			let func_label = match import_func_map.get(name) {
 				Some(lab) => *lab,
 				None => Label::Func(*name),
 			};
-			code.push(Instruction::from_opcode_imm(Opcode::Jump, Value::Label(func_label), loc.clone()));
-			code.push(Instruction::from_opcode(Opcode::Label(ret_label), loc.clone()));
-			Ok((label_gen, code))
+			*/
+			let (lg, c) = mavm_codegen_expr(
+				fexpr,
+				code,
+				locals,
+				label_gen,
+				string_table,
+				import_func_map,
+				global_var_map,
+			)?;
+			c.push(Instruction::from_opcode(Opcode::Jump, loc.clone()));
+			c.push(Instruction::from_opcode(Opcode::Label(ret_label), loc.clone()));
+			Ok((lg, c))
 		}
 		TypeCheckedExpr::StructInitializer(fields, _, loc) => {
 			let fields_len = fields.len();
@@ -655,16 +674,17 @@ fn mavm_codegen_expr<'a>(
 			Ok((label_gen, code))
 		}
 		TypeCheckedExpr::ArrayRef(expr1, expr2, t, loc) => {
+			let call_type = Type::Func(
+				vec![Type::Array(Box::new(Type::Any)), Type::Uint],
+				Box::new(t.clone()),
+			);
 			let the_expr = TypeCheckedExpr::FunctionCall(
-				*string_table.get_if_exists("builtin_arrayGet").unwrap(),
+				Box::new(TypeCheckedExpr::FuncRef(*string_table.get_if_exists("builtin_arrayGet").unwrap(), call_type.clone(), *loc)),
 				vec![
 					*expr1.clone(), 
 					*expr2.clone(),
 				],
-				Type::Func(
-					vec![Type::Array(Box::new(Type::Any)), Type::Uint],
-					Box::new(t.clone()),
-				),
+				call_type,
 				loc.clone()
 			);
 			mavm_codegen_expr(
@@ -703,17 +723,18 @@ fn mavm_codegen_expr<'a>(
 			Ok((label_gen, code))
 		}
 		TypeCheckedExpr::NewArray(sz_expr, base_type, array_type, loc) => {
+			let call_type = Type::Func(
+				vec![Type::Uint, Type::Any],
+				Box::new(array_type.clone()),
+			);
 			let default_val = base_type.default_value();
 			let the_expr = TypeCheckedExpr::FunctionCall(
-				*string_table.get_if_exists("builtin_arrayNew").unwrap(),
+				Box::new(TypeCheckedExpr::FuncRef(*string_table.get_if_exists("builtin_arrayNew").unwrap(), call_type.clone(), *loc)),
 				vec![
 					*sz_expr.clone(), 
 					TypeCheckedExpr::Const(default_val, Type::Any, loc.clone()),
 				],
-				Type::Func(
-					vec![Type::Uint, Type::Any],
-					Box::new(array_type.clone()),
-				),
+				call_type,
 				loc.clone(),
 			);
 			mavm_codegen_expr(
@@ -761,13 +782,14 @@ fn mavm_codegen_expr<'a>(
 			Ok((label_gen, code))
 		}
 		TypeCheckedExpr::ArrayMod(arr, index, val, _, loc) => {
+			let call_type = Type::Func(
+				vec![arr.get_type(), index.get_type(), val.get_type()],
+				Box::new(arr.get_type()),
+			);
 			let the_expr = TypeCheckedExpr::FunctionCall(
-				*string_table.get_if_exists("builtin_arraySet").unwrap(),
+				Box::new(TypeCheckedExpr::FuncRef(*string_table.get_if_exists("builtin_arraySet").unwrap(), call_type.clone(), *loc)),
 				vec![*arr.clone(), *index.clone(), *val.clone()],
-				Type::Func(
-					vec![arr.get_type(), index.get_type(), val.get_type()],
-					Box::new(arr.get_type()),
-				),
+				call_type,
 				loc.clone(),
 			);
 			mavm_codegen_expr(

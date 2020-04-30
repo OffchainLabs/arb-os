@@ -104,3 +104,38 @@ func arraySwap2(b: block, chunk: uint, index: uint, value: anytype)  arraySwapSu
 		return sub with { bloc: b with {[subIndex] = sub.bloc} };
 	}
 }
+
+type opClosure = struct {
+	f: func(anytype, anytype) (anytype, anytype),
+	val: anytype,
+}
+
+public func builtin_arrayOp(a: array, index: uint, closure: opClosure) (array, anytype) {
+	if (index >= a.size) {
+		panic;
+	}
+	let sub = arrayOp2(a.contents, a.topstep, index, closure);
+	return (
+		a with { contents: sub.bloc },
+		sub.val,
+	);
+}
+
+func arrayOp2(b: block, chunk: uint, index: uint, closure: opClosure)  arraySwapSubResult {
+	if (1 == chunk) {
+		let result = closure.f(closure.val, b[index]);
+		return struct {
+			bloc: b with {[index] = result.0},
+			val: result.1,
+		};
+	} else {
+		let subIndex = index/chunk;
+		let sub = arrayOp2(
+			unsafecast(b[subIndex], block),
+			chunk/8,
+			index%chunk,
+			closure
+		);
+		return sub with { bloc: b with {[subIndex] = sub.bloc} };
+	}
+}

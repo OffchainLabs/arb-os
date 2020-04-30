@@ -1,31 +1,50 @@
 
+import func builtin_arrayOp(a: anytype, index: uint, closure: opClosure) (anytype, anytype);
+
+type opClosure = struct {
+	f: func(anytype, anytype) (anytype, anytype),
+	val: anytype,
+}
+
+
 func tests(which: uint) anytype {
 	if (which == 1) {
 		let a = newarray(17, anytype);
 		return a[6];
-	}
-	if (which == 2) {
+	} elseif (which == 2) {
 		let a = newarray(71, uint);
 		return a[66];
-	}
-	if (which == 3) {
+	} elseif (which == 3) {
 		let a = newarray(64, uint);
 		a = a with { [17] = 3 };
 		return a[17];
-	}
-	if (which == 4) {
+	} elseif (which == 4) {
 		let a = newarray(111, uint);
 		a = a with { [42] = 3 };
 		a = a with { [99] = 4 };
 		a = a with { [42] = 5 };
 		return a[42];
-	}
-	if (which == 5) {
+	} elseif (which == 5) {
 		let a = newarray(111, uint);
 		a = a with { [42] = 3 };
 		a = a with { [99] = 4 };
 		a = a with { [42] = 5 };
 		return a[99];
+	} elseif (which == 6) {
+		let a = newarray(17, uint);
+		a = a with { [11] = 3 };
+		let result = builtin_arrayOp(
+			a,
+			11,
+			unsafecast(struct { f: addFunc, val: 4, }, opClosure)
+		);
+		return result.1;
+	} else {
+		return null;
 	}
-	return null;
+}
+
+func addFunc(thunk: uint, oldVal: uint) (uint, uint) {
+	let res = thunk + oldVal;
+	return (res, res,);
 }

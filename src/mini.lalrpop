@@ -37,9 +37,9 @@ TypeDecl: TypeDecl = {
 }
 
 FuncDecl: FuncDecl = {
-	<lno: @L> "func" <i:Ident> "(" <fa:FuncArgs> ")" <cb:CodeBlock> => FuncDecl::new(i, fa, Type::Void, cb, false, file_info.location(BytePos::from(lno))),
+	<lno: @L> "func" <i:Ident> "(" <fa:FuncArgs> ")" "void" <cb:CodeBlock> => FuncDecl::new(i, fa, Type::Void, cb, false, file_info.location(BytePos::from(lno))),
 	<lno: @L> "func" <i:Ident> "(" <fa:FuncArgs> ")" <t:Type> <cb:CodeBlock> => FuncDecl::new(i, fa, t, cb, false, file_info.location(BytePos::from(lno))),
-	<lno: @L> "public" "func" <i:Ident> "(" <fa:FuncArgs> ")" <cb:CodeBlock> => FuncDecl::new(i, fa, Type::Void, cb, true, file_info.location(BytePos::from(lno))),
+	<lno: @L> "public" "func" <i:Ident> "(" <fa:FuncArgs> ")" "void" <cb:CodeBlock> => FuncDecl::new(i, fa, Type::Void, cb, true, file_info.location(BytePos::from(lno))),
 	<lno: @L> "public" "func" <i:Ident> "(" <fa:FuncArgs> ")" <t:Type> <cb:CodeBlock> => FuncDecl::new(i, fa, t, cb, true, file_info.location(BytePos::from(lno))),
 }
 
@@ -120,6 +120,8 @@ Type: Type = {
 		Box::new(t), 
 		s.to_usize().unwrap(),
 	),
+	"func" "(" <CommaedTypes> ")" "void" => Type::Func(<>, Box::new(Type::Void)),
+	"func" "(" <a: CommaedTypes> ")" <r: Type> => Type::Func(a, Box::new(r)),
 	"anytype" => Type::Any,
 	Ident => Type::Named(<>),
 };
@@ -222,8 +224,8 @@ Term8: Expr = {
 	<lno: @L> <i: Ident> => Expr::VariableRef(i, file_info.location(BytePos::from(lno))),
 	<lno: @L> <e:Term8> "." <i:Ident> => Expr::DotRef(Box::new(e), i, file_info.location(BytePos::from(lno))),
 	<lno: @L> <e:Term8> "." <u:UnsignedInteger> => Expr::TupleRef(Box::new(e), u, file_info.location(BytePos::from(lno))),
-	<lno: @L> <i: Ident> "(" ")" => Expr::FunctionCall(i, Vec::new(), file_info.location(BytePos::from(lno))),
-	<lno: @L> <i: Ident> "(" <c: CommaedExprs> ")" => Expr::FunctionCall(i, c, file_info.location(BytePos::from(lno))),
+	<lno: @L> <f: Term8> "(" ")" => Expr::FunctionCall(Box::new(f), Vec::new(), file_info.location(BytePos::from(lno))),
+	<lno: @L> <f: Term8> "(" <c: CommaedExprs> ")" => Expr::FunctionCall(Box::new(f), c, file_info.location(BytePos::from(lno))),
 	"(" <e: Expr> ")" => <>,
 	<lno: @L> "(" <c: CommaedExprs> "," ")" => Expr::Tuple(c, file_info.location(BytePos::from(lno))),
 	<lno: @L> <t:Term8> "with" "{" "[" <i:Expr> "]" "=" <v:Expr> "}" => Expr::ArrayMod(

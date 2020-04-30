@@ -536,7 +536,7 @@ pub enum Expr {
 	ConstUint(Uint256, Option<Location>),
 	ConstInt(Uint256, Option<Location>),
 	ConstBool(bool, Option<Location>),
-	FunctionCall(StringId, Vec<Expr>, Option<Location>),
+	FunctionCall(Box<Expr>, Vec<Expr>, Option<Location>),
 	ArrayRef(Box<Expr>, Box<Expr>, Option<Location>),
 	StructInitializer(Vec<FieldInitializer>, Option<Location>),
 	Tuple(Vec<Expr>, Option<Location>),
@@ -592,12 +592,12 @@ impl<'a> Expr {
 			Expr::ConstUint(s, loc) => Ok(Expr::ConstUint(s.clone(), loc.clone())),
 			Expr::ConstInt(s, loc) => Ok(Expr::ConstInt(s.clone(), loc.clone())),
 			Expr::ConstBool(b, loc) => Ok(Expr::ConstBool(*b, loc.clone())),
-			Expr::FunctionCall(name, args, loc) => {
+			Expr::FunctionCall(fexpr, args, loc) => {
 				let mut rargs = Vec::new();
 				for arg in args.iter() {
 					rargs.push(arg.resolve_types(type_table)?);
 				}
-				Ok(Expr::FunctionCall(*name, rargs, loc.clone()))
+				Ok(Expr::FunctionCall(Box::new(fexpr.resolve_types(type_table)?), rargs, loc.clone()))
 			},
 			Expr::ArrayRef(e1, e2, loc) => Ok(Expr::ArrayRef(
 				Box::new(e1.resolve_types(type_table)?), 
