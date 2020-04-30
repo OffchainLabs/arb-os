@@ -5,7 +5,7 @@ import func kvs_new() KeyValueStore;
 import func kvs_get(kvs: KeyValueStore, key: anytype) (anytype, bool);
 import func kvs_set(kvs: KeyValueStore, key: anytype, value:anytype) KeyValueStore;
 import func kvs_delete(kvs: KeyValueStore, key: anytype) KeyValueStore;
-
+import func kvs_forall(kvs: KeyValueStore, cb: func(anytype, anytype, anytype) anytype, state: anytype) anytype; 
 
 func tests(which: uint) anytype {
 	if (which == 0) {
@@ -56,7 +56,18 @@ func tests(which: uint) anytype {
 		s = kvs_set(s, 55, 56);
 		s = kvs_set(s, 42, 99);
 		return kvs_get(s, 3).1;
+	} elseif (which == 8) {
+		let s = kvs_new();
+		s = kvs_set(s, 42, 43);
+		s = kvs_set(s, 55, 56);
+		s = kvs_set(s, 42, 99);
+		let rawResult = kvs_forall(s, sumForKvsIterator, 0);
+		return unsafecast(rawResult, uint);
 	} else {
 		return null;
 	}
+}
+
+func sumForKvsIterator(key: anytype, value: anytype, state: anytype) anytype {
+	return unsafecast(value, uint) + unsafecast(state, uint);
 }

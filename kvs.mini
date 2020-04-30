@@ -72,6 +72,22 @@ func simpleHashtable_swap(
 	);
 }
 
+func simpleHashtable_forall(
+	table: SimpleHashtable,
+	cb: func(anytype, anytype, anytype) anytype,
+	state: anytype
+) anytype {
+	let i = 0;
+	while (i < table.size) {
+		let this = table.contents[i];
+		if (this != null) {
+			state = cb(this.key, this.value, state);
+		}
+		i = i+1;
+	}
+	return state;
+}
+
 func simpleHashtable_expand(table: SimpleHashtable) SimpleHashtable {
 	let newSize = 2*table.size;
 	let newTable = struct {
@@ -142,4 +158,20 @@ public func kvs_delete(kvs: KeyValueStore, key: anytype) KeyValueStore {
 		return kvs with { [1] = simpleHashtable_delete(kvs[1], hash(key)) };
 	}
 	return kvs;
+}
+
+public func kvs_forall(
+	kvs: KeyValueStore,
+	cb: func(anytype, anytype, anytype) anytype,
+	state: anytype
+) anytype {
+	return simpleHashtable_forall(
+		kvs[1],
+		cb,
+		simpleHashtable_forall(
+			kvs[0],
+			cb,
+			state
+		)
+	);
 }
