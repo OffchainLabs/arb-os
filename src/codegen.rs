@@ -827,6 +827,26 @@ fn mavm_codegen_expr<'a>(
 		}
 		TypeCheckedExpr::Cast(expr, _, _) => 
 			mavm_codegen_expr(expr, code, locals, label_gen, string_table, import_func_map, global_var_map),
+		TypeCheckedExpr::Asm(_, insns, args, _) => {
+			let n_args = args.len();
+			for i in 0..n_args {
+				let (lg, c) = mavm_codegen_expr(
+					&args[n_args-1-i], 
+					code, 
+					locals, 
+					label_gen, 
+					string_table, 
+					import_func_map,
+					global_var_map,
+				)?;
+				label_gen = lg;
+				code = c;
+			}
+			for insn in insns {
+				code.push(insn.clone());
+			}	
+			Ok((label_gen, code))		
+		}
 	}
 }
 

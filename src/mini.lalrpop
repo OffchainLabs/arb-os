@@ -3,6 +3,7 @@ FieldInitializer, new_func_arg, new_type_decl};
 use crate::stringtable::{StringTable, StringId};
 use crate::source::Lines;
 use crate::pos::BytePos;
+use crate::mavm::{Value, Instruction, Opcode};
 use crate::uint256::Uint256;
 
 
@@ -136,7 +137,7 @@ CommaedTypes: Vec<Type> = {
 };
 
 Ident: StringId = {
-	r"[a-zA-Z_][a-zA-Z_01-9]*" => stringtable.get(<>),
+	IdentStr => stringtable.get(<>),
 };
 
 Expr: Expr = {
@@ -221,7 +222,6 @@ Term8: Expr = {
 	<lno: @L> <e1:Term8> "[" <e2:Expr> "]" => Expr::ArrayRef(Box::new(e1), Box::new(e2), file_info.location(BytePos::from(lno))),
 	<lno: @L> <u: UnsignedInteger> => Expr::ConstUint(u, file_info.location(BytePos::from(lno))),
 	<lno: @L> <s: SignedInteger> => Expr::ConstInt(s, file_info.location(BytePos::from(lno))),
-	<lno: @L> <i: Ident> => Expr::VariableRef(i, file_info.location(BytePos::from(lno))),
 	<lno: @L> <e:Term8> "." <i:Ident> => Expr::DotRef(Box::new(e), i, file_info.location(BytePos::from(lno))),
 	<lno: @L> <e:Term8> "." <u:UnsignedInteger> => Expr::TupleRef(Box::new(e), u, file_info.location(BytePos::from(lno))),
 	<lno: @L> <f: Term8> "(" ")" => Expr::FunctionCall(Box::new(f), Vec::new(), file_info.location(BytePos::from(lno))),
@@ -238,6 +238,9 @@ Term8: Expr = {
 	<lno: @L> "false" => Expr::ConstBool(false, file_info.location(BytePos::from(lno))),
 	<lno: @L> "true" => Expr::ConstBool(true, file_info.location(BytePos::from(lno))),
 	<lno: @L> "null" => Expr::Null(file_info.location(BytePos::from(lno))),
+	<lno: @L> "asm" "(" ")" <rt:Type> "{" <body:AsmInsn*> "}" => Expr::Asm(rt, body, vec![], file_info.location(BytePos::from(lno))),
+	<lno: @L> "asm" "(" <a:CommaedExprs> ")" <rt:Type> "{" <body:AsmInsn*> "}" => Expr::Asm(rt, body, a, file_info.location(BytePos::from(lno))),
+	<lno: @L> <i: Ident> => Expr::VariableRef(i, file_info.location(BytePos::from(lno))),
 }
 
 FieldInitializer: FieldInitializer = {
@@ -256,6 +259,23 @@ CommaedExprs: Vec<Expr> = {
 		c
 	},
 }
+
+AsmInsn: Instruction = {
+	<lno: @L> <o: AsmOpcode> => Instruction::from_opcode(o, file_info.location(BytePos::from(lno))),
+	<lno: @L> "[" <v:AsmVal> "]" <o:AsmOpcode> => Instruction::from_opcode_imm(o, v, file_info.location(BytePos::from(lno))),
+}
+
+AsmOpcode: Opcode = {
+	IdentStr => Opcode::from_name(<>),
+}
+
+AsmVal: Value = {
+	<UnsignedInteger> => Value::Int(<>),
+}
+
+IdentStr: &'input str = {
+	r"[a-zA-Z_][a-zA-Z_01-9]*" => <>,
+};
 
 UnsignedInteger: Uint256 = {
 	"0" => Uint256::from_usize(0),

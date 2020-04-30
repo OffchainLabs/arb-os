@@ -1,7 +1,7 @@
 use crate::stringtable::StringId;
 use crate::symtable::SymTable;
 use crate::typecheck::{TypeError, new_type_error};
-use crate::mavm::Value;
+use crate::mavm::{Value, Instruction};
 use crate::uint256::Uint256;
 use crate::xformcode::{self, TUPLE_SIZE};
 use crate::pos::Location;
@@ -546,6 +546,7 @@ pub enum Expr {
 	StructMod(Box<Expr>, StringId, Box<Expr>, Option<Location>),
 	UnsafeCast(Box<Expr>, Type, Option<Location>),
 	Null(Option<Location>),
+	Asm(Type, Vec<Instruction>, Vec<Expr>, Option<Location>),
 }
 
 impl<'a> Expr {
@@ -649,6 +650,13 @@ impl<'a> Expr {
 				loc.clone()
 			)),
 			Expr::Null(loc) => Ok(Expr::Null(loc.clone())),
+			Expr::Asm(t, insns, exprs, loc) => {
+				let mut res_exprs = Vec::new();
+				for ex in exprs {
+					res_exprs.push(ex.resolve_types(type_table)?);
+				}
+				Ok(Expr::Asm(t.resolve_types(type_table, *loc)?, insns.to_vec(), res_exprs, *loc))
+			}
 		}
 	}
 
@@ -674,6 +682,7 @@ impl<'a> Expr {
 			Expr::StructMod(_, _, _, loc) => loc.clone(),
 			Expr::UnsafeCast(_, _, loc) => loc.clone(),
 			Expr::Null(loc) => loc.clone(),
+			Expr::Asm(_, _, _, loc) => loc.clone(),
 		}
 	}
 }

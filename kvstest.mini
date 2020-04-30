@@ -3,7 +3,7 @@ import type KeyValueStore;
 
 import func kvs_new() KeyValueStore;
 import func kvs_get(kvs: KeyValueStore, key: anytype) (anytype, bool);
-import func kvs_set(kvs: KeyValueStore, key: anytype, value:anytype) KeyValueStore;
+import func kvs_set(kvs: KeyValueStore, key: anytype, value: anytype) KeyValueStore;
 import func kvs_delete(kvs: KeyValueStore, key: anytype) KeyValueStore;
 import func kvs_forall(kvs: KeyValueStore, cb: func(anytype, anytype, anytype) anytype, state: anytype) anytype; 
 

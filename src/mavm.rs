@@ -368,6 +368,7 @@ pub enum Opcode {
 	UnaryMinus,
 	BitwiseNeg,
 	Hash,
+	Hash2,
 	Len,
 	Plus,
 	Minus,
@@ -387,7 +388,52 @@ pub enum Opcode {
 	BitwiseXor,
 	LogicalAnd,
 	LogicalOr,
-	Hash2,
+}
+
+impl Opcode {
+	pub fn from_name(name: &str) -> Self {
+		match name {
+			"rget" => Opcode::Rget,
+			"rset" => Opcode::Rset,
+			"pushstatic" => Opcode::PushStatic,
+			"tset" => Opcode::Tset,
+			"tget" => Opcode::Tget,
+			"pop" => Opcode::Pop,
+			"auxpush" => Opcode::AuxPush,
+			"auxpop" => Opcode::AuxPop,
+			"xget" => Opcode::Xget,
+			"xset" => Opcode::Xset,
+			"dup0" => Opcode::Dup0,
+			"dup1" => Opcode::Dup1,
+			"dup2" => Opcode::Dup2,
+			"swap1" => Opcode::Swap1,
+			"swap2" => Opcode::Swap2,
+			"unaryminus" => Opcode::UnaryMinus,
+			"bitwiseneg" => Opcode::BitwiseNeg,
+			"hash" => Opcode::Hash,
+			"hash2" => Opcode::Hash2,
+			"len" => Opcode::Len,
+			"plus" => Opcode::Plus,
+			"minus" => Opcode::Minus,
+			"mul" => Opcode::Mul,
+			"div" => Opcode::Div,
+			"mod" => Opcode::Mod,
+			"sdiv" => Opcode::Sdiv,
+			"smod" => Opcode::Smod,
+			"lt" => Opcode::LessThan,
+			"gt" => Opcode::GreaterThan,
+			"slt" => Opcode::SLessThan,
+			"sgt" => Opcode::SGreaterThan,
+			"eq" => Opcode::Equal,
+			"neq" => Opcode::NotEqual,
+			"bitwiseand" => Opcode::BitwiseAnd,
+			"bitwiseor" => Opcode::BitwiseOr,
+			"bitwisexor" => Opcode::BitwiseXor,
+			"logicaland" => Opcode::LogicalAnd,
+			"logicalor" => Opcode::LogicalOr,
+			_ => { panic!("opcode not supported in asm segment: {}", name); }
+		}
+	}
 }
 
 impl fmt::Display for Opcode {

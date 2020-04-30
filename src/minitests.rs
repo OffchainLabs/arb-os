@@ -151,6 +151,11 @@ fn testglobal3() {
     test_globaltest(3, Value::Int(Uint256::from_usize(6)));
 }
 
+#[test]
+fn testglobal4() {
+    test_globaltest(4, Value::Int(Uint256::from_usize(7)));
+}
+
 #[allow(dead_code)]
 fn test_globaltest(test_num: usize, expected_result: Value) {
     let path = Path::new("globaltest.mexe"); 

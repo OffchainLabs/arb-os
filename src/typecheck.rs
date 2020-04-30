@@ -3,7 +3,7 @@ use crate::ast::{Type, TopLevelDecl, FuncDecl, FuncDeclKind, FuncArg, GlobalVarD
 use crate::symtable::SymTable;
 use crate::stringtable::{StringId, StringTable};
 use crate::link::{ExportedFunc, ImportedFunc};
-use crate::mavm::{Label, Value};
+use crate::mavm::{Label, Value, Instruction};
 use crate::uint256::Uint256;
 use crate::builtins::builtin_func_decls;
 use crate::pos::Location;
@@ -78,6 +78,7 @@ pub enum TypeCheckedExpr {
 	FixedArrayMod(Box<TypeCheckedExpr>, Box<TypeCheckedExpr>, Box<TypeCheckedExpr>, usize, Type, Option<Location>),
 	StructMod(Box<TypeCheckedExpr>, usize, Box<TypeCheckedExpr>, Type, Option<Location>),
 	Cast(Box<TypeCheckedExpr>, Type, Option<Location>),
+	Asm(Type, Vec<Instruction>, Vec<TypeCheckedExpr>, Option<Location>),
 }
 
 impl<'a> TypeCheckedExpr {
@@ -104,6 +105,7 @@ impl<'a> TypeCheckedExpr {
 			TypeCheckedExpr::FixedArrayMod(_, _, _, _, t, _) => t.clone(),
 			TypeCheckedExpr::StructMod(_, _, _, t, _) => t.clone(),
 			TypeCheckedExpr::Cast(_, t, _) => t.clone(),
+			TypeCheckedExpr::Asm(t, _, _, _) => t.clone(),
 		}
 	}
 
@@ -130,6 +132,7 @@ impl<'a> TypeCheckedExpr {
 			TypeCheckedExpr::FixedArrayMod(_, _, _, _, _, loc) => loc.clone(),
 			TypeCheckedExpr::StructMod(_, _, _, _, loc) => loc.clone(),
 			TypeCheckedExpr::Cast(_, _, loc) => loc.clone(),
+			TypeCheckedExpr::Asm(_, _, _, loc) => loc.clone(),
 		}
 	}
 }
@@ -682,6 +685,13 @@ fn typecheck_expr(
 			loc.clone()
 		)),
 		Expr::Null(loc) => Ok(TypeCheckedExpr::Const(Value::none(), Type::Any, loc.clone())),
+		Expr::Asm(ret_type, insns, args, loc) => {
+			let mut tc_args = Vec::new();
+			for arg in args {
+				tc_args.push(typecheck_expr(arg, type_table, global_vars, func_table)?);
+			}
+			Ok(TypeCheckedExpr::Asm(ret_type.clone(), insns.to_vec(), tc_args, *loc))
+		}
 	}
 }
 

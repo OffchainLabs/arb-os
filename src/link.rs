@@ -217,7 +217,9 @@ pub fn link<'a>(progs_in: &[CompiledProgram]) -> Result<CompiledProgram, Compile
 		func_offset = new_func_offset;
 	}
 
+	// Initialize globals
 	let mut linked_code = vec![Instruction::from_opcode_imm(Opcode::Rset, make_uninitialized_tuple(global_num_limit), None)];
+	
 	let mut linked_exports = Vec::new();
 	let mut linked_imports = Vec::new();
 	for mut rel_prog in relocated_progs {

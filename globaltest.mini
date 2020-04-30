@@ -26,6 +26,12 @@ func tests(which: uint) anytype {
         global9 = 6;
         global0 = 3;
         return global9;
+    } elseif (which == 4) {
+        let sum = asm (4, 0, 3) uint {
+            plus
+            plus
+        };
+        return sum;
     } else {
         return null;
     }

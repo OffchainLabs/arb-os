@@ -124,7 +124,7 @@ public func kvs_hasKey(kvs: KeyValueStore, key: anytype) bool {
 	return kvs_get(kvs, key).1;
 }
 
-public func kvs_set(kvs: KeyValueStore, key: anytype, value:anytype) KeyValueStore {
+public func kvs_set(kvs: KeyValueStore, key: anytype, value: anytype) KeyValueStore {
 	let which = 0;
 	let retries = 0;
 	let item = struct {
