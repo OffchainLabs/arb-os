@@ -18,9 +18,9 @@ pub enum TopLevelDecl {
 }
 
 impl TopLevelDecl {
-	pub fn concat_vecs(a: Vec<Self>, b: &Vec<Self>) -> Vec<Self> {
-		let mut aa = a.clone();
-		let mut bb = b.clone();
+	pub fn concat_vecs(a: Vec<Self>, b: Vec<Self>) -> Vec<Self> {
+		let mut aa = a;
+		let mut bb = b;
 		aa.append(&mut bb);
 		aa.to_vec()
 	}
@@ -465,17 +465,17 @@ pub enum Statement {
 impl<'a> Statement {
 	pub fn resolve_types(&self, type_table: &SymTable<Type>) -> Result<Self, TypeError> {
 		match self {
-			Statement::Noop(loc) => Ok(Statement::Noop(loc.clone())),
-			Statement::Panic(loc) => Ok(Statement::Panic(loc.clone())),
-			Statement::ReturnVoid(loc) => Ok(Statement::ReturnVoid(loc.clone())),
-			Statement::Return(expr, loc) => Ok(Statement::Return(expr.resolve_types(type_table)?, loc.clone())),
-			Statement::Let(pat, expr, loc) => Ok(Statement::Let(pat.clone(), expr.resolve_types(type_table)?, loc.clone())),
-			Statement::Assign(name, expr, loc) => Ok(Statement::Assign(*name, expr.resolve_types(type_table)?, loc.clone())),
+			Statement::Noop(loc) => Ok(Statement::Noop(*loc)),
+			Statement::Panic(loc) => Ok(Statement::Panic(*loc)),
+			Statement::ReturnVoid(loc) => Ok(Statement::ReturnVoid(*loc)),
+			Statement::Return(expr, loc) => Ok(Statement::Return(expr.resolve_types(type_table)?, *loc)),
+			Statement::Let(pat, expr, loc) => Ok(Statement::Let(pat.clone(), expr.resolve_types(type_table)?, *loc)),
+			Statement::Assign(name, expr, loc) => Ok(Statement::Assign(*name, expr.resolve_types(type_table)?, *loc)),
 			Statement::Loop(body, loc) => Ok(
-				Statement::Loop(Statement::resolve_types_vec(body.to_vec(), type_table)?, loc.clone())
+				Statement::Loop(Statement::resolve_types_vec(body.to_vec(), type_table)?, *loc)
 			),
 			Statement::While(c, body, loc) => Ok(
-				Statement::While(c.resolve_types(type_table)?, Statement::resolve_types_vec(body.to_vec(), type_table)?, loc.clone())
+				Statement::While(c.resolve_types(type_table)?, Statement::resolve_types_vec(body.to_vec(), type_table)?, *loc)
 			),
 			Statement::If(arms) => {
 				Ok(Statement::If(arms.resolve_types(type_table)?))
@@ -570,86 +570,86 @@ impl<'a> Expr {
 
 	pub fn resolve_types(&self, type_table: &SymTable<Type>) -> Result<Self, TypeError> {
 		match self {
-			Expr::UnaryOp(op, be, loc) => Ok(Expr::UnaryOp(*op, Box::new(be.resolve_types(type_table)?), loc.clone())),
+			Expr::UnaryOp(op, be, loc) => Ok(Expr::UnaryOp(*op, Box::new(be.resolve_types(type_table)?), *loc)),
 			Expr::Binary(op, be1, be2, loc) => Ok(Expr::Binary(
 				*op, 
 				Box::new(be1.resolve_types(type_table)?),
 				Box::new(be2.resolve_types(type_table)?),
-				loc.clone()
+				*loc
 			)),
 			Expr::ShortcutOr(be1, be2, loc) => Ok(Expr::ShortcutOr(
 				Box::new(be1.resolve_types(type_table)?),
 				Box::new(be2.resolve_types(type_table)?),
-				loc.clone()
+				*loc
 			)),
 			Expr::ShortcutAnd(be1, be2, loc) => Ok(Expr::ShortcutAnd(
 				Box::new(be1.resolve_types(type_table)?),
 				Box::new(be2.resolve_types(type_table)?),
-				loc.clone()
+				*loc
 			)),
-			Expr::VariableRef(name, loc) => Ok(Expr::VariableRef(*name, loc.clone())),
-			Expr::TupleRef(be, idx, loc) => Ok(Expr::TupleRef(Box::new(be.resolve_types(type_table)?), idx.clone(), loc.clone())),
-			Expr::DotRef(be, name, loc) => Ok(Expr::DotRef(Box::new(be.resolve_types(type_table)?), *name, loc.clone())),
-			Expr::ConstUint(s, loc) => Ok(Expr::ConstUint(s.clone(), loc.clone())),
-			Expr::ConstInt(s, loc) => Ok(Expr::ConstInt(s.clone(), loc.clone())),
-			Expr::ConstBool(b, loc) => Ok(Expr::ConstBool(*b, loc.clone())),
+			Expr::VariableRef(name, loc) => Ok(Expr::VariableRef(*name, *loc)),
+			Expr::TupleRef(be, idx, loc) => Ok(Expr::TupleRef(Box::new(be.resolve_types(type_table)?), idx.clone(), *loc)),
+			Expr::DotRef(be, name, loc) => Ok(Expr::DotRef(Box::new(be.resolve_types(type_table)?), *name, *loc)),
+			Expr::ConstUint(s, loc) => Ok(Expr::ConstUint(s.clone(), *loc)),
+			Expr::ConstInt(s, loc) => Ok(Expr::ConstInt(s.clone(), *loc)),
+			Expr::ConstBool(b, loc) => Ok(Expr::ConstBool(*b, *loc)),
 			Expr::FunctionCall(fexpr, args, loc) => {
 				let mut rargs = Vec::new();
 				for arg in args.iter() {
 					rargs.push(arg.resolve_types(type_table)?);
 				}
-				Ok(Expr::FunctionCall(Box::new(fexpr.resolve_types(type_table)?), rargs, loc.clone()))
+				Ok(Expr::FunctionCall(Box::new(fexpr.resolve_types(type_table)?), rargs, *loc))
 			},
 			Expr::ArrayRef(e1, e2, loc) => Ok(Expr::ArrayRef(
 				Box::new(e1.resolve_types(type_table)?), 
 				Box::new(e2.resolve_types(type_table)?),
-				loc.clone()
+				*loc
 			)),
 			Expr::StructInitializer(fields, loc) => {
 				let mut rfields = Vec::new();
 				for field in fields.iter() {
 					rfields.push(FieldInitializer::new(field.name, field.value.resolve_types(type_table)?));
 				}
-				Ok(Expr::StructInitializer(rfields, loc.clone()))
+				Ok(Expr::StructInitializer(rfields, *loc))
 			}
 			Expr::Tuple(evec, loc) => {
 				let mut rvec = Vec::new();
 				for expr in evec {
 					rvec.push(expr.resolve_types(type_table)?);
 				}
-				Ok(Expr::Tuple(rvec, loc.clone()))
+				Ok(Expr::Tuple(rvec, *loc))
 			}
 			Expr::NewArray(sz, tipe, loc) => Ok(Expr::NewArray(
 				Box::new(sz.resolve_types(type_table)?), 
 				tipe.resolve_types(type_table, *loc)?,
-				loc.clone()
+				*loc
 			)),
 			Expr::NewFixedArray(sz, init_expr, loc) => match &*init_expr {
 				Some(expr) => Ok(Expr::NewFixedArray(
 					*sz, 
 					Some(Box::new(expr.resolve_types(type_table)?)),
-					loc.clone()
+					*loc
 				)),
-				None => Ok(Expr::NewFixedArray(*sz, None, loc.clone())),
+				None => Ok(Expr::NewFixedArray(*sz, None, *loc)),
 			}
 			Expr::ArrayMod(e1, e2, e3, loc) => Ok(Expr::ArrayMod(
 				Box::new(e1.resolve_types(type_table)?),
 				Box::new(e2.resolve_types(type_table)?),
 				Box::new(e3.resolve_types(type_table)?),
-				loc.clone()
+				*loc
 			)),
 			Expr::StructMod(e1, i, e3, loc) => Ok(Expr::StructMod(
 				Box::new(e1.resolve_types(type_table)?),
 				*i,
 				Box::new(e3.resolve_types(type_table)?),
-				loc.clone()
+				*loc
 			)),
 			Expr::UnsafeCast(be, t, loc) => Ok(Expr::UnsafeCast(
 				Box::new(be.resolve_types(type_table)?), 
 				t.resolve_types(type_table, *loc)?,
-				loc.clone()
+				*loc
 			)),
-			Expr::Null(loc) => Ok(Expr::Null(loc.clone())),
+			Expr::Null(loc) => Ok(Expr::Null(*loc)),
 			Expr::Asm(t, insns, exprs, loc) => {
 				let mut res_exprs = Vec::new();
 				for ex in exprs {
@@ -662,27 +662,27 @@ impl<'a> Expr {
 
 	pub fn get_location(&self) -> Option<Location> {
 		match self {
-			Expr::UnaryOp(_, _, loc) => loc.clone(),
-			Expr::Binary(_, _, _, loc) => loc.clone(),
-			Expr::ShortcutOr(_, _, loc) => loc.clone(),
-			Expr::ShortcutAnd(_, _, loc) => loc.clone(),
-			Expr::VariableRef(_, loc) => loc.clone(),
-			Expr::TupleRef(_, _, loc) => loc.clone(),
-			Expr::DotRef(_, _, loc) => loc.clone(),
-			Expr::ConstUint(_, loc) => loc.clone(),
-			Expr::ConstInt(_, loc) => loc.clone(),
-			Expr::ConstBool(_, loc) => loc.clone(),
-			Expr::FunctionCall(_, _, loc) => loc.clone(),
-			Expr::ArrayRef(_, _, loc) => loc.clone(),
-			Expr::StructInitializer(_, loc) => loc.clone(),
-			Expr::Tuple(_, loc) => loc.clone(),
-			Expr::NewArray(_, _, loc) => loc.clone(),
-			Expr::NewFixedArray(_, _, loc) => loc.clone(),
-			Expr::ArrayMod(_, _, _, loc) => loc.clone(),
-			Expr::StructMod(_, _, _, loc) => loc.clone(),
-			Expr::UnsafeCast(_, _, loc) => loc.clone(),
-			Expr::Null(loc) => loc.clone(),
-			Expr::Asm(_, _, _, loc) => loc.clone(),
+			Expr::UnaryOp(_, _, loc) => *loc,
+			Expr::Binary(_, _, _, loc) => *loc,
+			Expr::ShortcutOr(_, _, loc) => *loc,
+			Expr::ShortcutAnd(_, _, loc) => *loc,
+			Expr::VariableRef(_, loc) => *loc,
+			Expr::TupleRef(_, _, loc) => *loc,
+			Expr::DotRef(_, _, loc) => *loc,
+			Expr::ConstUint(_, loc) => *loc,
+			Expr::ConstInt(_, loc) => *loc,
+			Expr::ConstBool(_, loc) => *loc,
+			Expr::FunctionCall(_, _, loc) => *loc,
+			Expr::ArrayRef(_, _, loc) => *loc,
+			Expr::StructInitializer(_, loc) => *loc,
+			Expr::Tuple(_, loc) => *loc,
+			Expr::NewArray(_, _, loc) => *loc,
+			Expr::NewFixedArray(_, _, loc) => *loc,
+			Expr::ArrayMod(_, _, _, loc) => *loc,
+			Expr::StructMod(_, _, _, loc) => *loc,
+			Expr::UnsafeCast(_, _, loc) => *loc,
+			Expr::Null(loc) => *loc,
+			Expr::Asm(_, _, _, loc) => *loc,
 		}
 	}
 }

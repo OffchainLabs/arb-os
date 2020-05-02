@@ -4,7 +4,7 @@ use crate::link::{ExportedFunc, ExportedFuncPoint, ImportedFunc};
 use crate::uint256::Uint256;
 
 
-pub fn strip_labels<'a>(
+pub fn strip_labels(
 	code_in: &[Instruction], 
 	jump_table: &[Label],
 	exported_funcs: &[ExportedFunc],
@@ -56,7 +56,7 @@ pub fn strip_labels<'a>(
 	(code_out, jump_table_out, exported_funcs_out)
 }
 
-pub fn fix_nonforward_labels<'a>(
+pub fn fix_nonforward_labels(
 	code_in: &[Instruction],
 	imported_funcs: &[ImportedFunc],
 ) -> (Vec<Instruction>, Vec<Label>) {

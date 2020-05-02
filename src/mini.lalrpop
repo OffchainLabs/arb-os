@@ -10,7 +10,7 @@ use crate::uint256::Uint256;
 grammar(stringtable: &mut StringTable<'input>, file_info: &Lines);
 
 pub Decls: Vec<TopLevelDecl> = {
-	<i:ImportDecl*> <n:NonImportDecl+> => TopLevelDecl::concat_vecs(i, &n),
+	<i:ImportDecl*> <n:NonImportDecl+> => TopLevelDecl::concat_vecs(i, n),
 }
 
 ImportDecl: TopLevelDecl = {

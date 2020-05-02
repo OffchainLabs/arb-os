@@ -7,7 +7,6 @@ use crate::mavm::Instruction;
 use crate::link::{ExportedFunc, ImportedFunc};
 use crate::source::Lines;
 use crate::pos::{Location, BytePos};
-use lalrpop_util;
 extern crate regex;
 
 lalrpop_mod!(pub mini); 

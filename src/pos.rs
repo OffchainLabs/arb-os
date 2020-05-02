@@ -189,8 +189,8 @@ impl<Pos: Ord> Span<Pos> {
         // FIXME #416
         // debug_assert!(start <= end, "Invalid span");
         Span {
-            start: start,
-            end: end,
+            start,
+            end,
             expansion_id: no_expansion,
         }
     }
@@ -270,23 +270,23 @@ impl<T: fmt::Display, Pos: fmt::Display> fmt::Display for Spanned<T, Pos> {
 
 pub fn span<Pos>(start: Pos, end: Pos) -> Span<Pos> {
     Span {
-        start: start,
-        end: end,
+        start,
+        end,
         expansion_id: NO_EXPANSION,
     }
 }
 
 pub fn spanned<T, Pos>(span: Span<Pos>, value: T) -> Spanned<T, Pos> {
     Spanned {
-        span: span,
-        value: value,
+        span,
+        value,
     }
 }
 
 pub fn spanned2<T, Pos>(start: Pos, end: Pos, value: T) -> Spanned<T, Pos> {
     Spanned {
         span: span(start, end),
-        value: value,
+        value,
     }
 }
 

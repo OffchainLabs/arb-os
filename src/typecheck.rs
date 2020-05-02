@@ -111,28 +111,28 @@ impl<'a> TypeCheckedExpr {
 
 	pub fn get_location(&self) -> Option<Location> {
 		match self {
-			TypeCheckedExpr::UnaryOp(_, _, _, loc) => loc.clone(),
-			TypeCheckedExpr::Binary(_, _, _, _, loc) => loc.clone(),
-			TypeCheckedExpr::ShortcutOr(_, _, loc) => loc.clone(),
-			TypeCheckedExpr::ShortcutAnd(_, _, loc) => loc.clone(),
-			TypeCheckedExpr::LocalVariableRef(_, _, loc) => loc.clone(),
-			TypeCheckedExpr::GlobalVariableRef(_, _, loc) => loc.clone(),
-			TypeCheckedExpr::FuncRef(_, _, loc) => loc.clone(),
-			TypeCheckedExpr::TupleRef(_, _, _, loc) => loc.clone(),
-			TypeCheckedExpr::DotRef(_, _, _, loc) => loc.clone(),
-			TypeCheckedExpr::Const(_, _, loc) => loc.clone(),
-			TypeCheckedExpr::FunctionCall(_, _, _, loc) => loc.clone(),
-			TypeCheckedExpr::StructInitializer(_, _, loc) => loc.clone(),
-			TypeCheckedExpr::ArrayRef(_, _, _, loc) => loc.clone(),
-			TypeCheckedExpr::FixedArrayRef(_, _, _, _, loc) => loc.clone(),
-			TypeCheckedExpr::Tuple(_, _, loc) => loc.clone(),
-			TypeCheckedExpr::NewArray(_, _, _, loc) => loc.clone(),
-			TypeCheckedExpr::NewFixedArray(_, _, _, loc) => loc.clone(),
-			TypeCheckedExpr::ArrayMod(_, _, _, _, loc) => loc.clone(),
-			TypeCheckedExpr::FixedArrayMod(_, _, _, _, _, loc) => loc.clone(),
-			TypeCheckedExpr::StructMod(_, _, _, _, loc) => loc.clone(),
-			TypeCheckedExpr::Cast(_, _, loc) => loc.clone(),
-			TypeCheckedExpr::Asm(_, _, _, loc) => loc.clone(),
+			TypeCheckedExpr::UnaryOp(_, _, _, loc) => *loc,
+			TypeCheckedExpr::Binary(_, _, _, _, loc) => *loc,
+			TypeCheckedExpr::ShortcutOr(_, _, loc) => *loc,
+			TypeCheckedExpr::ShortcutAnd(_, _, loc) => *loc,
+			TypeCheckedExpr::LocalVariableRef(_, _, loc) => *loc,
+			TypeCheckedExpr::GlobalVariableRef(_, _, loc) => *loc,
+			TypeCheckedExpr::FuncRef(_, _, loc) => *loc,
+			TypeCheckedExpr::TupleRef(_, _, _, loc) => *loc,
+			TypeCheckedExpr::DotRef(_, _, _, loc) => *loc,
+			TypeCheckedExpr::Const(_, _, loc) => *loc,
+			TypeCheckedExpr::FunctionCall(_, _, _, loc) => *loc,
+			TypeCheckedExpr::StructInitializer(_, _, loc) => *loc,
+			TypeCheckedExpr::ArrayRef(_, _, _, loc) => *loc,
+			TypeCheckedExpr::FixedArrayRef(_, _, _, _, loc) => *loc,
+			TypeCheckedExpr::Tuple(_, _, loc) => *loc,
+			TypeCheckedExpr::NewArray(_, _, _, loc) => *loc,
+			TypeCheckedExpr::NewFixedArray(_, _, _, loc) => *loc,
+			TypeCheckedExpr::ArrayMod(_, _, _, _, loc) => *loc,
+			TypeCheckedExpr::FixedArrayMod(_, _, _, _, _, loc) => *loc,
+			TypeCheckedExpr::StructMod(_, _, _, _, loc) => *loc,
+			TypeCheckedExpr::Cast(_, _, loc) => *loc,
+			TypeCheckedExpr::Asm(_, _, _, loc) => *loc,
 		}
 	}
 }
@@ -303,13 +303,13 @@ fn typecheck_statement<'a>(
 	func_table: &SymTable<Type>,
 ) -> Result<(TypeCheckedStatement, Vec<(StringId, Type)>), TypeError> {
 	match statement {
-		Statement::Noop(loc) => Ok((TypeCheckedStatement::Noop(loc.clone()), vec![])),
-		Statement::Panic(loc) => Ok((TypeCheckedStatement::Panic(loc.clone()), vec![])),
-		Statement::ReturnVoid(loc) => Ok((TypeCheckedStatement::ReturnVoid(loc.clone()), vec![])),
+		Statement::Noop(loc) => Ok((TypeCheckedStatement::Noop(*loc), vec![])),
+		Statement::Panic(loc) => Ok((TypeCheckedStatement::Panic(*loc), vec![])),
+		Statement::ReturnVoid(loc) => Ok((TypeCheckedStatement::ReturnVoid(*loc), vec![])),
 		Statement::Return(expr, loc) => {
 			let tc_expr = typecheck_expr(expr, type_table, global_vars, func_table)?;
 			if return_type.assignable(&tc_expr.get_type()) {
-				Ok((TypeCheckedStatement::Return(tc_expr, loc.clone()), vec![]))
+				Ok((TypeCheckedStatement::Return(tc_expr, *loc), vec![]))
 			} else {
 				println!("return type: {:?}", return_type);
 				println!("expr type:   {:?}", tc_expr.get_type());
@@ -324,7 +324,7 @@ fn typecheck_statement<'a>(
 					TypeCheckedStatement::Let(
 						TypeCheckedMatchPattern::Simple(*name, tce_type.clone()),
 						tc_expr, 
-						loc.clone()
+						*loc
 					), 
 					vec![(*name, tce_type)]
 				)),
@@ -334,7 +334,7 @@ fn typecheck_statement<'a>(
 						TypeCheckedStatement::Let(
 							TypeCheckedMatchPattern::Tuple(tc_pats, tce_type),
 							tc_expr,
-							loc.clone()
+							*loc
 						),
 						bindings
 					))
@@ -346,7 +346,7 @@ fn typecheck_statement<'a>(
 			match type_table.get(*name) {
 				Some(var_type) => {
 					if var_type.assignable(&tc_expr.get_type()) {
-						Ok((TypeCheckedStatement::AssignLocal(*name, tc_expr, loc.clone()), vec![]))
+						Ok((TypeCheckedStatement::AssignLocal(*name, tc_expr, *loc), vec![]))
 					} else {
 						Err(new_type_error("mismatched types in assignment statement", *loc))
 					}					
@@ -354,25 +354,25 @@ fn typecheck_statement<'a>(
 				None => match global_vars.get(&*name) {
 					Some((var_type, idx)) => {
 						if var_type.assignable(&tc_expr.get_type()) {
-							Ok((TypeCheckedStatement::AssignGlobal(*idx, tc_expr, loc.clone()), vec![]))
+							Ok((TypeCheckedStatement::AssignGlobal(*idx, tc_expr, *loc), vec![]))
 						} else {
 							Err(new_type_error("mismatched types in assignment statement", *loc))
 						}
 					}
-					None => { return Err(new_type_error("assignment to non-existent variable", *loc)) }
+					None => Err(new_type_error("assignment to non-existent variable", *loc)),
 				}
 			}
 		}
 		Statement::Loop(body, loc) => {
 			let tc_body = typecheck_statement_sequence(body, return_type, type_table, global_vars, func_table)?;
-			Ok((TypeCheckedStatement::Loop(tc_body, loc.clone()), vec![]))
+			Ok((TypeCheckedStatement::Loop(tc_body, *loc), vec![]))
 		}
 		Statement::While(cond, body, loc) => {
 			let tc_cond = typecheck_expr(cond, type_table, global_vars, func_table)?;
 			match tc_cond.get_type() {
 				Type::Bool => {
 					let tc_body = typecheck_statement_sequence(body, return_type, type_table, global_vars, func_table)?;
-					Ok((TypeCheckedStatement::While(tc_cond, tc_body, loc.clone()), vec![]))
+					Ok((TypeCheckedStatement::While(tc_cond, tc_body, *loc), vec![]))
 				},
 				_ => Err(new_type_error("while condition is not bool", *loc)),
 			}
@@ -456,12 +456,12 @@ fn typecheck_expr(
 	match expr {
 		Expr::UnaryOp(op, subexpr, loc) => {
 			let tc_sub = typecheck_expr(subexpr, type_table, global_vars, func_table)?;
-			typecheck_unary_op(*op, tc_sub, loc.clone())
+			typecheck_unary_op(*op, tc_sub, *loc)
 		},
 		Expr::Binary(op, sub1, sub2, loc) => {
 			let tc_sub1 = typecheck_expr(sub1, type_table, global_vars, func_table)?;
 			let tc_sub2 = typecheck_expr(sub2, type_table, global_vars, func_table)?;
-			typecheck_binary_op(*op, tc_sub1, tc_sub2, loc.clone())
+			typecheck_binary_op(*op, tc_sub1, tc_sub2, *loc)
 		},
 		Expr::ShortcutOr(sub1, sub2, loc) => {
 			let tc_sub1 = typecheck_expr(sub1, type_table, global_vars, func_table)?;
@@ -472,7 +472,7 @@ fn typecheck_expr(
 			if tc_sub2.get_type() != Type::Bool {
 				return Err(new_type_error("operands to logical or must be boolean", *loc));
 			}
-			Ok(TypeCheckedExpr::ShortcutOr(Box::new(tc_sub1), Box::new(tc_sub2), loc.clone()))
+			Ok(TypeCheckedExpr::ShortcutOr(Box::new(tc_sub1), Box::new(tc_sub2), *loc))
 		}
 		Expr::ShortcutAnd(sub1, sub2, loc) => {
 			let tc_sub1 = typecheck_expr(sub1, type_table, global_vars, func_table)?;
@@ -483,15 +483,15 @@ fn typecheck_expr(
 			if tc_sub2.get_type() != Type::Bool {
 				return Err(new_type_error("operands to logical and must be boolean", *loc));
 			}
-			Ok(TypeCheckedExpr::ShortcutAnd(Box::new(tc_sub1), Box::new(tc_sub2), loc.clone()))
+			Ok(TypeCheckedExpr::ShortcutAnd(Box::new(tc_sub1), Box::new(tc_sub2), *loc))
 		}
 		Expr::VariableRef(name, loc) => match func_table.get(*name) {
-			Some(t) => Ok(TypeCheckedExpr::FuncRef(*name, t.clone(), loc.clone())),
+			Some(t) => Ok(TypeCheckedExpr::FuncRef(*name, t.clone(), *loc)),
 			None => match type_table.get(*name) {
-				Some(t) => Ok(TypeCheckedExpr::LocalVariableRef(*name, t.clone(), loc.clone())),
+				Some(t) => Ok(TypeCheckedExpr::LocalVariableRef(*name, t.clone(), *loc)),
 				None => match global_vars.get(name) {
-					Some((t, idx)) => Ok(TypeCheckedExpr::GlobalVariableRef(*idx, t.clone(), loc.clone())),
-					None => Err(new_type_error("reference to unrecognized identifier", loc.clone())),
+					Some((t, idx)) => Ok(TypeCheckedExpr::GlobalVariableRef(*idx, t.clone(), *loc)),
+					None => Err(new_type_error("reference to unrecognized identifier", *loc)),
 				},
 			}
 		}
@@ -500,7 +500,7 @@ fn typecheck_expr(
 			let uidx = idx.to_usize().unwrap();
 			if let Type::Tuple(tv) = tc_sub.get_type() {
 				if uidx < tv.len() {
-					Ok(TypeCheckedExpr::TupleRef(Box::new(tc_sub), idx.clone(), tv[uidx].clone(), loc.clone()))
+					Ok(TypeCheckedExpr::TupleRef(Box::new(tc_sub), idx.clone(), tv[uidx].clone(), *loc))
 				} else {
 					Err(new_type_error("tuple field access to non-existent field", *loc))
 				}
@@ -513,7 +513,7 @@ fn typecheck_expr(
 			if let Type::Struct(v) = tc_sub.get_type() {
 				for sf in v.iter() {
 					if *name==sf.name {
-						return Ok(TypeCheckedExpr::DotRef(Box::new(tc_sub), *name, sf.tipe.clone(), loc.clone()));
+						return Ok(TypeCheckedExpr::DotRef(Box::new(tc_sub), *name, sf.tipe.clone(), *loc));
 					}
 				}
 				Err(new_type_error("reference to non-existent struct field", *loc))
@@ -522,12 +522,12 @@ fn typecheck_expr(
 				Err(new_type_error("struct field access to non-struct value", *loc))
 			}
 		}
-		Expr::ConstUint(n, loc) => Ok(TypeCheckedExpr::Const(Value::Int(n.clone()), Type::Uint, loc.clone())),
-		Expr::ConstInt(n, loc) => Ok(TypeCheckedExpr::Const(Value::Int(n.clone()), Type::Int, loc.clone())),
+		Expr::ConstUint(n, loc) => Ok(TypeCheckedExpr::Const(Value::Int(n.clone()), Type::Uint, *loc)),
+		Expr::ConstInt(n, loc) => Ok(TypeCheckedExpr::Const(Value::Int(n.clone()), Type::Int, *loc)),
 		Expr::ConstBool(b, loc) => Ok(TypeCheckedExpr::Const(
 			Value::Int(if *b { Uint256::one() } else { Uint256::zero() }), 
 			Type::Bool, 
-			loc.clone()
+			*loc
 		)),
 		Expr::FunctionCall(fexpr, args, loc) => {
 			let tc_fexpr = typecheck_expr(fexpr, type_table, global_vars, func_table)?;
@@ -546,7 +546,7 @@ fn typecheck_expr(
 								return Err(new_type_error("wrong argument type in function call", *loc))
 							}
 						};
-						Ok(TypeCheckedExpr::FunctionCall(Box::new(tc_fexpr), tc_args, ret_type, loc.clone()))
+						Ok(TypeCheckedExpr::FunctionCall(Box::new(tc_fexpr), tc_args, ret_type, *loc))
 					} else {
 						Err(new_type_error("wrong number of args passed to function", *loc))
 					}
@@ -560,7 +560,7 @@ fn typecheck_expr(
 			match tc_arr.get_type() {
 				Type::Array(t) => {
 					if tc_idx.get_type() == Type::Uint {
-						Ok(TypeCheckedExpr::ArrayRef(Box::new(tc_arr), Box::new(tc_idx), *t, loc.clone()))
+						Ok(TypeCheckedExpr::ArrayRef(Box::new(tc_arr), Box::new(tc_idx), *t, *loc))
 					} else {
 						Err(new_type_error("array index must be Uint", *loc))
 					}
@@ -572,7 +572,7 @@ fn typecheck_expr(
 							Box::new(tc_idx),
 							sz,
 							*t,
-							loc.clone()
+							*loc
 						))
 					} else {
 						Err(new_type_error("fixedarray index must be Uint", *loc))
@@ -585,7 +585,7 @@ fn typecheck_expr(
 			Box::new(typecheck_expr(size_expr, type_table, global_vars, func_table)?), 
 			tipe.clone(), 
 			Type::Array(Box::new(tipe.clone())),
-			loc.clone()
+			*loc
 		)),
 		Expr::NewFixedArray(size, maybe_expr, loc) => match maybe_expr {
 			Some(expr) => {
@@ -594,14 +594,14 @@ fn typecheck_expr(
 					*size, 
 					Some(Box::new(tc_expr.clone())), 
 					Type::FixedArray(Box::new(tc_expr.get_type()), *size),
-					loc.clone(),
+					*loc,
 				))
 			}
 			None => Ok(TypeCheckedExpr::NewFixedArray(
 				*size,
 				None, 
 				Type::FixedArray(Box::new(Type::Any), *size),
-				loc.clone(),
+				*loc,
 			))
 		}
 		Expr::StructInitializer(fieldvec, loc) => {
@@ -612,7 +612,7 @@ fn typecheck_expr(
 				tc_fields.push(TypeCheckedStructField::new(field.name, tc_expr.clone()));
 				tc_fieldtypes.push(StructField::new(field.name, tc_expr.get_type()));
 			}
-			Ok(TypeCheckedExpr::StructInitializer(tc_fields, Type::Struct(tc_fieldtypes), loc.clone()))
+			Ok(TypeCheckedExpr::StructInitializer(tc_fields, Type::Struct(tc_fieldtypes), *loc))
 		}
 		Expr::Tuple(fields, loc) => {
 			let mut tc_fields = Vec::new();
@@ -622,7 +622,7 @@ fn typecheck_expr(
 				types.push(tc_field.get_type().clone());
 				tc_fields.push(tc_field);
 			}
-			Ok(TypeCheckedExpr::Tuple(tc_fields, Type::Tuple(types), loc.clone()))
+			Ok(TypeCheckedExpr::Tuple(tc_fields, Type::Tuple(types), *loc))
 		}
 		Expr::ArrayMod(arr, index, val, loc) => {
 			let tc_arr = typecheck_expr(arr, type_table, global_vars, func_table)?;
@@ -638,7 +638,7 @@ fn typecheck_expr(
 						Box::new(tc_index), 
 						Box::new(tc_val), 
 						Type::Array(t),
-						loc.clone()
+						*loc
 					))
 				} else {
 					Err(new_type_error("mismatched types in array modifier", *loc))
@@ -649,7 +649,7 @@ fn typecheck_expr(
 					Box::new(tc_val),
 					sz, 
 					Type::FixedArray(t, sz),
-					loc.clone(),
+					*loc,
 				)),
 				_ => Err(new_type_error("[] modifier must operate on array or block", *loc))
 			}
@@ -667,7 +667,7 @@ fn typecheck_expr(
 								index, 
 								Box::new(tc_val), 
 								tcs_type,
-								loc.clone()
+								*loc
 							))
 						} else {
 							Err(new_type_error("incorrect value type in struct modifier", *loc))
@@ -682,9 +682,9 @@ fn typecheck_expr(
 		Expr::UnsafeCast(expr, t, loc) => Ok(TypeCheckedExpr::Cast(
 			Box::new(typecheck_expr(expr, type_table, global_vars, func_table)?), 
 			t.clone(), 
-			loc.clone()
+			*loc
 		)),
-		Expr::Null(loc) => Ok(TypeCheckedExpr::Const(Value::none(), Type::Any, loc.clone())),
+		Expr::Null(loc) => Ok(TypeCheckedExpr::Const(Value::none(), Type::Any, *loc)),
 		Expr::Asm(ret_type, insns, args, loc) => {
 			let mut tc_args = Vec::new();
 			for arg in args {
@@ -695,7 +695,7 @@ fn typecheck_expr(
 	}
 }
 
-fn typecheck_unary_op<'a>(
+fn typecheck_unary_op(
 	op: UnaryOp,
 	sub_expr: TypeCheckedExpr,
 	loc: Option<Location>,
@@ -786,7 +786,7 @@ fn typecheck_unary_op<'a>(
 	}
 }
 
-fn typecheck_binary_op<'a>(
+fn typecheck_binary_op(
 	mut op: BinaryOp,
 	mut tcs1: TypeCheckedExpr,
 	mut tcs2: TypeCheckedExpr,
@@ -806,33 +806,23 @@ fn typecheck_binary_op<'a>(
 				BinaryOp::BitwiseOr |
 				BinaryOp::BitwiseXor => {
 					// swap the args, so code generator will be able to supply the constant as an immediate
-					let tmp = tcs2;
-					tcs2 = tcs1;
-					tcs1 = tmp;
+					std::mem::swap(&mut tcs1, &mut tcs2);
 				}
 				BinaryOp::LessThan => {
 					op = BinaryOp::GreaterThan;
-					let tmp = tcs2;
-					tcs2 = tcs1;
-					tcs1 = tmp;
+					std::mem::swap(&mut tcs1, &mut tcs2);
 				}
 				BinaryOp::GreaterThan => {
 					op = BinaryOp::LessThan;
-					let tmp = tcs2;
-					tcs2 = tcs1;
-					tcs1 = tmp;
+					std::mem::swap(&mut tcs1, &mut tcs2);
 				}
 				BinaryOp::LessEq => {
 					op = BinaryOp::GreaterEq;
-					let tmp = tcs2;
-					tcs2 = tcs1;
-					tcs1 = tmp;
+					std::mem::swap(&mut tcs1, &mut tcs2);
 				}
 				BinaryOp::GreaterEq => {
 					op = BinaryOp::LessEq;
-					let tmp = tcs2;
-					tcs2 = tcs1;
-					tcs1 = tmp;
+					std::mem::swap(&mut tcs1, &mut tcs2);
 				}
 				_ => {}
 			}

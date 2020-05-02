@@ -152,12 +152,12 @@ fn mavm_codegen_statements<'a>(
 				global_var_map,
 			),
 		TypeCheckedStatement::Panic(loc) => {
-			code.push(Instruction::from_opcode(Opcode::Panic, loc.clone()));
+			code.push(Instruction::from_opcode(Opcode::Panic, *loc));
 			Ok((label_gen, num_locals, false))
 			// no need to append the rest of the statements; they'll never be executed
 		}
 		TypeCheckedStatement::ReturnVoid(loc) => {
-			code.push(Instruction::from_opcode(Opcode::Return, loc.clone()));
+			code.push(Instruction::from_opcode(Opcode::Return, *loc));
 			Ok((label_gen, num_locals, false))
 			// no need to append the rest of the statements; they'll never be executed
 		}
@@ -165,7 +165,7 @@ fn mavm_codegen_statements<'a>(
 			let (lg, c) = mavm_codegen_expr(expr, code, &locals, label_gen, string_table, import_func_map, global_var_map)?;
 			label_gen = lg;
 			code = c;
-			code.push(Instruction::from_opcode(Opcode::Return, loc.clone()));
+			code.push(Instruction::from_opcode(Opcode::Return, *loc));
 			Ok((label_gen, num_locals, false))
 			// no need to append the rest of the statements; they'll never be executed
 		}
@@ -177,7 +177,7 @@ fn mavm_codegen_statements<'a>(
 				let (lg, c) = mavm_codegen_expr(expr, code, &new_locals, label_gen, string_table, import_func_map, global_var_map)?;
 				label_gen = lg;
 				code = c;
-				code.push(Instruction::from_opcode_imm(Opcode::SetLocal, Value::Int(Uint256::from_usize(slot_num)), loc.clone())); 
+				code.push(Instruction::from_opcode_imm(Opcode::SetLocal, Value::Int(Uint256::from_usize(slot_num)), *loc)); 
 				mavm_codegen_statements(
 					rest_of_statements.to_vec(), 
 					code, 
@@ -227,7 +227,7 @@ fn mavm_codegen_statements<'a>(
 			let (lg, c) = mavm_codegen_expr(expr, code, &locals, label_gen, string_table, import_func_map, global_var_map)?;
 			label_gen = lg;
 			code = c;
-			code.push(Instruction::from_opcode_imm(Opcode::SetLocal, Value::Int(Uint256::from_usize(slot_num)), loc.clone()));   
+			code.push(Instruction::from_opcode_imm(Opcode::SetLocal, Value::Int(Uint256::from_usize(slot_num)), *loc));   
 			mavm_codegen_statements(
 				rest_of_statements.to_vec(), 
 				code, 
@@ -241,7 +241,7 @@ fn mavm_codegen_statements<'a>(
 		}
 		TypeCheckedStatement::AssignGlobal(idx, expr, loc) => {
 			let (lg, c) = mavm_codegen_expr(expr, code, &locals, label_gen, string_table, import_func_map, global_var_map)?;
-			c.push(Instruction::from_opcode(Opcode::SetGlobalVar(*idx), loc.clone()));
+			c.push(Instruction::from_opcode(Opcode::SetGlobalVar(*idx), *loc));
 			mavm_codegen_statements(
 				rest_of_statements.to_vec(),
 				c,
@@ -258,8 +258,8 @@ fn mavm_codegen_statements<'a>(
 			num_locals += 1;
 			let (top_label, lg) = label_gen.next();
 			label_gen = lg;
-			code.push(Instruction::from_opcode_imm(Opcode::Noop, Value::Label(top_label), loc.clone()));
-			code.push(Instruction::from_opcode_imm(Opcode::SetLocal, slot_num.clone(), loc.clone()));
+			code.push(Instruction::from_opcode_imm(Opcode::Noop, Value::Label(top_label), *loc));
+			code.push(Instruction::from_opcode_imm(Opcode::SetLocal, slot_num.clone(), *loc));
 			let (lg, nl, _) = mavm_codegen_statements(
 				body.to_vec(), 
 				code, 
@@ -272,8 +272,8 @@ fn mavm_codegen_statements<'a>(
 			)?;
 			label_gen = lg;
 			num_locals = nl;
-			code.push(Instruction::from_opcode_imm(Opcode::GetLocal, slot_num, loc.clone()));
-			code.push(Instruction::from_opcode(Opcode::Jump, loc.clone()));
+			code.push(Instruction::from_opcode_imm(Opcode::GetLocal, slot_num, *loc));
+			code.push(Instruction::from_opcode(Opcode::Jump, *loc));
 			Ok((label_gen, num_locals, false))
 			// no need to append the rest of the statements; they'll never be executed
 		}
@@ -284,10 +284,10 @@ fn mavm_codegen_statements<'a>(
 			let (top_label, lg) = label_gen.next();
 			let (cond_label, lg) = lg.next();
 			label_gen = lg;
-			code.push(Instruction::from_opcode_imm(Opcode::Noop, Value::Label(top_label), loc.clone()));
-			code.push(Instruction::from_opcode_imm(Opcode::SetLocal, slot_num.clone(), loc.clone()));
-			code.push(Instruction::from_opcode_imm(Opcode::Jump, Value::Label(cond_label), loc.clone()));
-			code.push(Instruction::from_opcode(Opcode::Label(top_label), loc.clone()));
+			code.push(Instruction::from_opcode_imm(Opcode::Noop, Value::Label(top_label), *loc));
+			code.push(Instruction::from_opcode_imm(Opcode::SetLocal, slot_num, *loc));
+			code.push(Instruction::from_opcode_imm(Opcode::Jump, Value::Label(cond_label), *loc));
+			code.push(Instruction::from_opcode(Opcode::Label(top_label), *loc));
 			let (lg, nl, _) = mavm_codegen_statements(
 				body.to_vec(), 
 				code, 
@@ -300,11 +300,11 @@ fn mavm_codegen_statements<'a>(
 			)?;
 			label_gen = lg;
 			num_locals = nl;
-			code.push(Instruction::from_opcode(Opcode::Label(cond_label), loc.clone()));
+			code.push(Instruction::from_opcode(Opcode::Label(cond_label), *loc));
 			let (lg, c) = mavm_codegen_expr(cond, code, &locals, label_gen, string_table, import_func_map, global_var_map)?;
 			label_gen = lg;
 			code = c;
-			code.push(Instruction::from_opcode_imm(Opcode::Cjump, Value::Label(top_label), loc.clone()));
+			code.push(Instruction::from_opcode_imm(Opcode::Cjump, Value::Label(top_label), *loc));
 			let (lg, nl, more) = mavm_codegen_statements(
 				rest_of_statements.to_vec(),
 				code,
@@ -398,7 +398,7 @@ fn mavm_codegen_if_arm<'a>(
 			label_gen = lg;
 			code = c;
 			code.push(Instruction::from_opcode(Opcode::Not, *loc));
-			code.push(Instruction::from_opcode_imm(Opcode::Cjump, Value::Label(after_label), loc.clone()));
+			code.push(Instruction::from_opcode_imm(Opcode::Cjump, Value::Label(after_label), *loc));
 			let (lg, nl1, might_continue_here) = mavm_codegen_statements(
 				body.to_vec(), 
 				code, 
@@ -477,7 +477,7 @@ fn mavm_codegen_expr<'a>(
 				UnaryOp::ToBytes32 => None
 			};
 			if let Some(opcode) = maybe_opcode {
-				code.push(Instruction::from_opcode(opcode, loc.clone()));
+				code.push(Instruction::from_opcode(opcode, *loc));
 			}
 			Ok((label_gen, code))
 		}
@@ -511,12 +511,12 @@ fn mavm_codegen_expr<'a>(
 				BinaryOp::LogicalOr => Opcode::LogicalOr,
 				BinaryOp::Hash => Opcode::Hash2,
 			};
-			code.push(Instruction::from_opcode(opcode, loc.clone()));
+			code.push(Instruction::from_opcode(opcode, *loc));
 			match op {
 				BinaryOp::LessEq |
 				BinaryOp::GreaterEq |
 				BinaryOp::SLessEq |
-				BinaryOp::SGreaterEq => { code.push(Instruction::from_opcode(Opcode::Not, loc.clone())); }
+				BinaryOp::SGreaterEq => { code.push(Instruction::from_opcode(Opcode::Not, *loc)); }
 				_ => {}
 			}
 			Ok((label_gen, code))
@@ -524,28 +524,28 @@ fn mavm_codegen_expr<'a>(
 		TypeCheckedExpr::ShortcutOr(tce1, tce2, loc) => {
 			let (lg, c) = mavm_codegen_expr(tce1, code, locals, label_gen, string_table, import_func_map, global_var_map)?;
 			let (lab, lg) = lg.next();
-			c.push(Instruction::from_opcode(Opcode::Dup0, loc.clone()));
-			c.push(Instruction::from_opcode_imm(Opcode::Cjump, Value::Label(lab), loc.clone()));
-			c.push(Instruction::from_opcode(Opcode::Pop, loc.clone()));
+			c.push(Instruction::from_opcode(Opcode::Dup0, *loc));
+			c.push(Instruction::from_opcode_imm(Opcode::Cjump, Value::Label(lab), *loc));
+			c.push(Instruction::from_opcode(Opcode::Pop, *loc));
 			let (lg, c) = mavm_codegen_expr(tce2, c, locals, lg, string_table, import_func_map, global_var_map)?;
-			c.push(Instruction::from_opcode(Opcode::Label(lab), loc.clone()));
+			c.push(Instruction::from_opcode(Opcode::Label(lab), *loc));
 			Ok((lg, c))
 		}
 		TypeCheckedExpr::ShortcutAnd(tce1, tce2, loc) => {
 			let (lg, c) = mavm_codegen_expr(tce1, code, locals, label_gen, string_table, import_func_map, global_var_map)?;
 			let (lab, lg) = lg.next();
-			c.push(Instruction::from_opcode(Opcode::Dup0, loc.clone()));
-			c.push(Instruction::from_opcode(Opcode::Not, loc.clone()));
-			c.push(Instruction::from_opcode_imm(Opcode::Cjump, Value::Label(lab), loc.clone()));
-			c.push(Instruction::from_opcode(Opcode::Pop, loc.clone()));
+			c.push(Instruction::from_opcode(Opcode::Dup0, *loc));
+			c.push(Instruction::from_opcode(Opcode::Not, *loc));
+			c.push(Instruction::from_opcode_imm(Opcode::Cjump, Value::Label(lab), *loc));
+			c.push(Instruction::from_opcode(Opcode::Pop, *loc));
 			let (lg, c) = mavm_codegen_expr(tce2, c, locals, lg, string_table, import_func_map, global_var_map)?;
-			c.push(Instruction::from_opcode(Opcode::Label(lab), loc.clone()));
+			c.push(Instruction::from_opcode(Opcode::Label(lab), *loc));
 			Ok((lg, c))
 		}
 		TypeCheckedExpr::LocalVariableRef(name, _, loc) => {
 			match locals.get(*name) {
 				Some(n) => {
-					code.push(Instruction::from_opcode_imm(Opcode::GetLocal, Value::Int(Uint256::from_usize(n)), loc.clone())); 
+					code.push(Instruction::from_opcode_imm(Opcode::GetLocal, Value::Int(Uint256::from_usize(n)), *loc)); 
 					Ok((label_gen, code))
 				}
 				None => {
@@ -555,7 +555,7 @@ fn mavm_codegen_expr<'a>(
 			}
 		}
 		TypeCheckedExpr::GlobalVariableRef(idx, _, loc) => {
-			code.push(Instruction::from_opcode(Opcode::GetGlobalVar(*idx), loc.clone()));
+			code.push(Instruction::from_opcode(Opcode::GetGlobalVar(*idx), *loc));
 			Ok((label_gen, code))
 		}
 		TypeCheckedExpr::FuncRef(name, _, loc) => {
@@ -577,7 +577,7 @@ fn mavm_codegen_expr<'a>(
 			c.push(Instruction::from_opcode_imm(
 				Opcode::TupleGet(tuple_size), 
 				Value::Int(idx.clone()),
-				loc.clone(),
+				*loc,
 			));
 			Ok((lg, c))
 		}
@@ -595,7 +595,7 @@ fn mavm_codegen_expr<'a>(
 					code.push(Instruction::from_opcode_imm(
 						Opcode::TupleGet(struct_size), 
 						Value::Int(Uint256::from_usize(slot_num)),
-						loc.clone()
+						*loc
 					));
 					Ok((label_gen, code))
 				}
@@ -603,7 +603,7 @@ fn mavm_codegen_expr<'a>(
 			}
 		}
 		TypeCheckedExpr::Const(val, _, loc) => {
-			code.push(Instruction::from_opcode_imm(Opcode::Noop, val.clone(), loc.clone()));
+			code.push(Instruction::from_opcode_imm(Opcode::Noop, val.clone(), *loc));
 			Ok((label_gen, code))			
 		}
 		TypeCheckedExpr::FunctionCall(fexpr, args, _, loc) => {
@@ -623,7 +623,7 @@ fn mavm_codegen_expr<'a>(
 				label_gen = lg;
 				code = c;
 			}
-			code.push(Instruction::from_opcode_imm(Opcode::Noop, Value::Label(ret_label), loc.clone()));
+			code.push(Instruction::from_opcode_imm(Opcode::Noop, Value::Label(ret_label), *loc));
 			/*
 			let func_label = match import_func_map.get(name) {
 				Some(lab) => *lab,
@@ -639,8 +639,8 @@ fn mavm_codegen_expr<'a>(
 				import_func_map,
 				global_var_map,
 			)?;
-			c.push(Instruction::from_opcode(Opcode::Jump, loc.clone()));
-			c.push(Instruction::from_opcode(Opcode::Label(ret_label), loc.clone()));
+			c.push(Instruction::from_opcode(Opcode::Jump, *loc));
+			c.push(Instruction::from_opcode(Opcode::Label(ret_label), *loc));
 			Ok((lg, c))
 		}
 		TypeCheckedExpr::StructInitializer(fields, _, loc) => {
@@ -652,9 +652,9 @@ fn mavm_codegen_expr<'a>(
 				code = c;
 			}
 			let empty_vec = vec![Value::none(); fields_len];
-			code.push(Instruction::from_opcode_imm(Opcode::Noop, Value::Tuple(empty_vec), loc.clone()));
+			code.push(Instruction::from_opcode_imm(Opcode::Noop, Value::Tuple(empty_vec), *loc));
 			for i in 0..fields_len {
-				code.push(Instruction::from_opcode_imm(Opcode::TupleSet(fields_len), Value::Int(Uint256::from_usize(i)), loc.clone()));
+				code.push(Instruction::from_opcode_imm(Opcode::TupleSet(fields_len), Value::Int(Uint256::from_usize(i)), *loc));
 			}
 			Ok((label_gen, code))
 		}
@@ -667,9 +667,9 @@ fn mavm_codegen_expr<'a>(
 				code = c;
 			}
 			let empty_vec = vec![Value::none(); fields_len];
-			code.push(Instruction::from_opcode_imm(Opcode::Noop, Value::Tuple(empty_vec), loc.clone()));
+			code.push(Instruction::from_opcode_imm(Opcode::Noop, Value::Tuple(empty_vec), *loc));
 			for i in 0..fields_len {
-				code.push(Instruction::from_opcode_imm(Opcode::TupleSet(fields_len), Value::Int(Uint256::from_usize(i)), loc.clone()));
+				code.push(Instruction::from_opcode_imm(Opcode::TupleSet(fields_len), Value::Int(Uint256::from_usize(i)), *loc));
 			}
 			Ok((label_gen, code))
 		}
@@ -685,7 +685,7 @@ fn mavm_codegen_expr<'a>(
 					*expr2.clone(),
 				],
 				call_type,
-				loc.clone()
+				*loc
 			);
 			mavm_codegen_expr(
 				&the_expr,
@@ -705,21 +705,21 @@ fn mavm_codegen_expr<'a>(
 			if *size != 8 {  //TODO: also skip check if size is larger power of 8
 				let (cont_label, lg) = label_gen.next();
 				label_gen = lg;
-				code.push(Instruction::from_opcode(Opcode::Dup0, loc.clone()));
+				code.push(Instruction::from_opcode(Opcode::Dup0, *loc));
 				code.push(Instruction::from_opcode_imm(
 					Opcode::GreaterThan, 
 					Value::Int(Uint256::from_usize(*size)),
-					loc.clone(),
+					*loc,
 				));
 				code.push(Instruction::from_opcode_imm(
 					Opcode::Cjump,
 					Value::Label(cont_label),
-					loc.clone(),
+					*loc,
 				));
-				code.push(Instruction::from_opcode(Opcode::Panic, loc.clone()));
-				code.push(Instruction::from_opcode(Opcode::Label(cont_label), loc.clone()));
+				code.push(Instruction::from_opcode(Opcode::Panic, *loc));
+				code.push(Instruction::from_opcode(Opcode::Label(cont_label), *loc));
 			}
-			code.push(Instruction::from_opcode(Opcode::UncheckedFixedArrayGet(*size), loc.clone()));
+			code.push(Instruction::from_opcode(Opcode::UncheckedFixedArrayGet(*size), *loc));
 			Ok((label_gen, code))
 		}
 		TypeCheckedExpr::NewArray(sz_expr, base_type, array_type, loc) => {
@@ -732,10 +732,10 @@ fn mavm_codegen_expr<'a>(
 				Box::new(TypeCheckedExpr::FuncRef(*string_table.get_if_exists("builtin_arrayNew").unwrap(), call_type.clone(), *loc)),
 				vec![
 					*sz_expr.clone(), 
-					TypeCheckedExpr::Const(default_val, Type::Any, loc.clone()),
+					TypeCheckedExpr::Const(default_val, Type::Any, *loc),
 				],
 				call_type,
-				loc.clone(),
+				*loc,
 			);
 			mavm_codegen_expr(
 				&the_expr,
@@ -754,28 +754,28 @@ fn mavm_codegen_expr<'a>(
 					label_gen = lg;
 					code = c;
 					for _i in 0..7 {
-						code.push(Instruction::from_opcode(Opcode::Dup0, loc.clone()));
+						code.push(Instruction::from_opcode(Opcode::Dup0, *loc));
 					}
 					let empty_tuple = vec![Value::Tuple(Vec::new()); 8];
-					code.push(Instruction::from_opcode_imm(Opcode::Noop,Value::Tuple(empty_tuple), loc.clone()));
+					code.push(Instruction::from_opcode_imm(Opcode::Noop,Value::Tuple(empty_tuple), *loc));
 					for i in 0..8 {
-						code.push(Instruction::from_opcode_imm(Opcode::Tset, Value::Int(Uint256::from_usize(i)), loc.clone()));
+						code.push(Instruction::from_opcode_imm(Opcode::Tset, Value::Int(Uint256::from_usize(i)), *loc));
 					}
 				}
 				None => {
 					let empty_tuple = vec![Value::Tuple(Vec::new()); 8];
-					code.push(Instruction::from_opcode_imm(Opcode::Noop,Value::Tuple(empty_tuple), loc.clone()));
+					code.push(Instruction::from_opcode_imm(Opcode::Noop,Value::Tuple(empty_tuple), *loc));
 				}
 			}
 			let mut tuple_size: usize = 8;
 			while tuple_size < *sz {
 				for _i in 0..7 {
-					code.push(Instruction::from_opcode(Opcode::Dup0, loc.clone()));
+					code.push(Instruction::from_opcode(Opcode::Dup0, *loc));
 				}
 				let empty_tuple = vec![Value::Tuple(Vec::new()); 8];
-				code.push(Instruction::from_opcode_imm(Opcode::Noop,Value::Tuple(empty_tuple), loc.clone()));
+				code.push(Instruction::from_opcode_imm(Opcode::Noop,Value::Tuple(empty_tuple), *loc));
 				for i in 0..8 {
-					code.push(Instruction::from_opcode_imm(Opcode::Tset, Value::Int(Uint256::from_usize(i)), loc.clone()));
+					code.push(Instruction::from_opcode_imm(Opcode::Tset, Value::Int(Uint256::from_usize(i)), *loc));
 				}				
 				tuple_size *= 8;
 			}
@@ -790,7 +790,7 @@ fn mavm_codegen_expr<'a>(
 				Box::new(TypeCheckedExpr::FuncRef(*string_table.get_if_exists("builtin_arraySet").unwrap(), call_type.clone(), *loc)),
 				vec![*arr.clone(), *index.clone(), *val.clone()],
 				call_type,
-				loc.clone(),
+				*loc,
 			);
 			mavm_codegen_expr(
 				&the_expr,
@@ -819,7 +819,7 @@ fn mavm_codegen_expr<'a>(
 			code = c;
 			if let Type::Struct(v) = t {
 				let struct_len = v.len();
-				code.push(Instruction::from_opcode_imm(Opcode::TupleSet(struct_len), Value::Int(Uint256::from_usize(*index)), loc.clone()));
+				code.push(Instruction::from_opcode_imm(Opcode::TupleSet(struct_len), Value::Int(Uint256::from_usize(*index)), *loc));
 			} else {
 				panic!("impossible value in TypeCheckedExpr::StructMod");
 			}

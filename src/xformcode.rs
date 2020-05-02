@@ -5,7 +5,7 @@ use crate::pos::Location;
 
 pub const TUPLE_SIZE: usize = 8;
 
-pub fn fix_tuple_size<'a>(code_in: &[Instruction], num_globals: usize) -> Vec<Instruction> {
+pub fn fix_tuple_size(code_in: &[Instruction], num_globals: usize) -> Vec<Instruction> {
 	let mut code_out = Vec::new();
 	let mut locals_tree = TupleTree::new(1, true);
 	let global_tree = TupleTree::new(num_globals, false);
@@ -245,7 +245,7 @@ impl TupleTree {
 		}
 	}
 
-	fn write_code<'a>(&self, is_local: bool, index_in: usize, code: &mut Vec<Instruction>, location: Option<Location>) -> Vec<Instruction> {
+	fn write_code(&self, is_local: bool, index_in: usize, code: &mut Vec<Instruction>, location: Option<Location>) -> Vec<Instruction> {
 		if let TupleTree::Tree(_, v) = self {
 			let mut index = index_in;
 			for (slot, subtree) in v.iter().enumerate() {
