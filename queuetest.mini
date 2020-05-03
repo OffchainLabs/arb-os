@@ -38,10 +38,10 @@ func tests(which: uint) anytype {
 		}
 		i = 0;
 		while (i < 21) {
-			q = queue_get(q).0;
+			q = (queue_get(q)).0;
 			i = i+1;
 		}
-		return queue_get(q).1;
+		return (queue_get(q)).1;
 	} else {
 		return null;
 	}
