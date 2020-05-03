@@ -20,17 +20,17 @@ Within each group (import or non-import) the order of declarations does not matt
 
 `import` type *name*;
 
-> This declares an imported type, which is assumed to be defined in another source code file.  The code in the local file can refer to the type as *name*, but it cannot know anything about the internals of the type. 
+> This declares an imported type, which is assumed to be defined in another source code file.  The code in the local file can refer to the type as *name*, but it cannot know anything about the internals of the type.  The only operations that can be done on imported types are operations that are valid for any type.
 
 `import func` *name* ( *argname1: type1, argname2: type2, ...* ) *returntype*;
 
-> This declares an imported function, which is assumed to be defined in another source code file. The code in the local file can call this function as if it were in the local file.  The syntax follows functional declaration syntax (as defined below), except that an import ends with a semicolon where a local function declaration would instead have the function's code.
+> This declares an imported function, which is assumed to be defined in another source code file. The code in the local file can call this function as if it were in the local file. (The linker will generate an error if this function is called in the local file but is not provided by another file that is being linked.) The syntax follows function declaration syntax (as defined below), except that an import ends with a semicolon where a local function declaration would instead have the function's code.
 >
-> The compiler does not check whether the type signature declared here matches the type signature of the actual implementation of the function elsewhere.  If the type signatures are different, this may lead to a runtime error.
+> The compiler does not check whether the type signature declared here matches the type signature of the actual implementation of the function elsewhere.  If the type signatures are different, this might lead to a runtime error.
 >
 > [Potential change: we could add the word unsafe to this somehow. Then we could say that every construction that can lead to an undetected type error has the word `unsafe` in its name.]
 >
-> [Potential improvement: allow interfaces to be specified in separate files, and allow a code file to say that it implements or uses a particular interface. This would make it easier to maintain consistency. Alternatively, the linker could verify consistency.]
+> [Potential improvement: allow interfaces to be specified in separate files, and allow a code file to say that it implements or uses a particular interface. This would make it easier to maintain consistency, and easier for the compiler to check consistency..]
 
 ### Non-import declarations
 
@@ -40,17 +40,19 @@ Within each group (import or non-import) the order of declarations does not matt
 
 var *name* : *type* ;
 
-> This declares a global variable. If type is an atomic type, the variable will be initialized to the zero value for that type. Otherwise the variable will be uninitialized. Reading a global variable of non-atomic type before initializing it will cause undefined behavior.
+> This declares a global variable. If type is an atomic type, the variable will be initialized to the zero value for that type. Otherwise the variable will be uninitialized. Reading an uninitialized variable before initializing it will cause undefined behavior.
 
-`[public]  func`` *name* ( *argname1: type1, argname2: type2, ...* ) *returntype codeblock*
+`[public] func` *name* ( *argname1: type1, argname2: type2, ...* ) *returntype codeblock*
 
 > This declares a function and provides its code.
 >
-> The public modifier is optional.  It indicates that the function can be called by code outside this source code file. Non-public functions cannot be called directly by outside code.  (However, pointers to non-public functions can be passed to outside code, and this would allow the pointed-to function to be called externally.
+> The public modifier is optional.  It indicates that the function can be called by code outside this source code file. Non-public functions cannot be called directly by outside code.  (However, pointers to non-public functions can be passed to outside code, and this would allow the pointed-to function to be called by outside code.)
+>
+> The arguments are treated as local variables within the function, so code in the function can read them or assign to them.
 >
 > If the function does not return a value, *returntype* should be `void`. Otherwise the function will return a single value of the specified type. (We'll see below that the type can be a tuple, allowing multiple values to be packaged together into a single return value.)
 >
-> If *returntype* is not `void`, then the compiler must be able to infer that execution cannot reach the end of *codeblock* (so that the function terminates via a `return` statement, or the function runs forever).
+> If *returntype* is not `void`, then the compiler must be able to infer that execution cannot reach the end of *codeblock* (so that the function terminates via a `return` statement, or the function runs forever). If the compiler is unable to verify this, it will generate an error.
 
 ## Types
 
@@ -64,11 +66,11 @@ Mini has the following types:
 
 `uint`
 
-> a 256-bit unsigned integer (an atomic type with the zero value `0`, and a numeric type)
+> a 256-bit unsigned big-endian integer (an atomic type with the zero value `0`, and a numeric type)
 
 `int`
 
-> a 256-bit signed (twos complement) integer (an atomic type with the zero value `0`, and a numeric type)
+> a 256-bit signed (twos complement) big-endian integer (an atomic type with the zero value `0`, and a numeric type)
 
 `bytes32`
 
@@ -86,7 +88,7 @@ Mini has the following types:
 
 > an array of values, all of the same type (a compound type)
 
-`struct` { *name1: type1, name2:type2, ... ,* }
+`struct` { *name1: type1 , name2 : type2 , ... ,* }
 
 > a struct with one or more named, typed fields (a compound type)
 
@@ -100,19 +102,19 @@ Mini has the following types:
 
 void
 
-> strictly speaking, this is not a type but is used as the "return type" for a function that does not return a value
+> strictly speaking, this is not a type, but it's used as the "return type" for a function that does not return a value
 
 ## Equality and assignability for types
 
-Two types are equal if they have the same structure. Type aliases, as defined by non-import declarations, do not create a new type but simply define a shorthand method for referring to the underlying type.  
+Two types are equal if they have the same structure. Type aliases, as defined by non-import declarations, do not create a new type but simply define a shorthand method for referring to the underlying type.  (For example, after the declaration "`type foo = uint`", foo and uint are the same type.)
 
 Every atomic type is equal to itself.
 
 Two tuple types are equal if they have the same number of fields and their field types are equal, field-by-field.
 
-Two fixed-size array types are equal if they have the same size and same field type.
+Two fixed-size array types are equal if they have the same size and their field types are equal.
 
-Two array types are equal if they have the same field type.
+Two array types are equal if their field types are equal.
 
 Two struct types are equal if have the same number of fields, and each field has the same name and equal type, field-by-field.
 
@@ -124,13 +126,25 @@ Each imported type equals itself.
 
 Unless specified as equal by the rules above, a pair of types is unequal.
 
-A variable, field or function parameter of type *T1* can receive a value of type *T2* if either (a) *T1* and *T2* are equal, or (b) *T1* is `anytype`.
+### Assignability
+
+A value of type `V` is assignable to storage of type `S` if:
+
+* `S` is `anytype`, or
+* `S` equals `V`,
+* S and V are tuple types with the same number of fields, and each field of V is assignable to the corresponding field of S,
+* S and V are fixed-size arrays of the same size, and the field type of V is assignable to the field type of S,
+* S and V are arrays, and the field typeof V is assignable to the field type of S,
+* S and V are structs, with the same number of fields, and each field of V has the same name as the corresponding field of S, and each field of V is assignable to the corresponding field of V,
+* S and V are function types, with the same number of arguments, and each argument type of V is assignable to the corresponding argument type of S, and either (a) both S and V return void, or (b) the return type of S is assignable to the return type of V.  (Note that the return type is compared "in the reverse order". This is needed to make calls through function references type-safe.)
+
+These rules guarantee that assignability is a partial order. 
 
 ## Values
 
 All values in Mini are immutable. There is no way to modify a value. You can only create new values that are equal to existing ones with modifications.  (That's what the `with` operator does.)
 
-Because values are immutable, there is no notion of a reference to a value.  As far as the semantics of Mini are concerned, there are only values, and any assignment or passing of values is done by copying (although the compiler can optimize by creating a new pointer to the underlying immutable object). 
+Because values are immutable, there is no notion of a reference to a value.  As far as the semantics of Mini are concerned, there are only values, and any assignment or passing of values is done by copying (although the compiler might optimize by copying a pointer rather than copying the object)
 
 [Implementation note: Because of immutability, the compiler can choose whether to implement "copying" of an object by creating a fresh copy of its contents or by just creating a new pointer reference to the object. The difference only affects the efficiency of the generated code. It is impossible to create a cyclic data structure. This means that the underlying implementation doesn't need to use garbage collection but can always use reference-counting to achieve optimal cleanup of unused copy-by-reference objects.]
 
@@ -146,7 +160,7 @@ Values of type anytype are not understood by the compiler; they will be equal if
 
 `{` *statement* * `}`
 
-> A codeblock is a sequence of zero or more statements, enclosed in curly braces.  Codeblocks for the bodies of functions, `if` statements, and loops.  Local variables may be declared and used within a codeblock. A local variable that is declared within a codeblock can be used only within that same codeblock (or other codeblocks nested inside of it).
+> A codeblock is a sequence of zero or more statements, enclosed in curly braces.  Codeblocks form the bodies of functions, `if` statements, and loops.  Local variables may be declared and used within a codeblock. A local variable that is declared within a codeblock can be used only within that same codeblock (or other codeblocks nested inside of it).
 
 ## Statements
 
@@ -166,25 +180,25 @@ Values of type anytype are not understood by the compiler; they will be equal if
 
 `if` ( *condition* ) *codeblock* `elseif` ( *condition* ) *codeblock* `else` *codeblock*
 
-> If statements, with the expected behavior.  You can use as many elseifs as you want.
+> If statements, with the expected behavior.  You can string together as many elseifs as you want.
 
 `let` *name* = *expression* ;
 
-> Create a new local variable and initialize it with the value of *expression*.  The compiler infers that the new variable has the same type as *expression* .  The variable goes out of scope and stops existing when execution leaves the current codeblock.
+> Create a new local variable and initialize it with the value of *expression*.  The compiler infers that the new variable has the same type as *expression* .  The variable goes out of scope when execution leaves the current codeblock.
 
 `let` ( *name1* , *name2*, ... ) = *expression* ;
 
 > Create multiple new variables based on unpacking a tuple. *expression* must be a tuple type, with the number of fields in the tuple equal to the number of names on the left-hand side.  The compiler creates a new local variable for each name on the left-hand side, and infers the type of each new variable based on the type of the corresponding field of the right-hand side tuple.
 >
-> [Potential improvement: Allow left-hand side names to be replaced by `_`, allowing unneeded components to be discarded without needing to create a variable.]
+> [Potential improvement: Allow left-hand side names to be replaced by `_`, allowing unneeded components to be discarded without creating a variable.]
 >
-> [Potential improvement: Allow assignment directly into existing variables, rather than requiring creation of new variables.  Would have done this already but couldn't figure out a clean syntax for it.]
+> [Potential improvement: Allow assignment directly into existing variables, or a mix of new and existing variables, rather than requiring creation of new variables.  Would have done this already but couldn't figure out a clean syntax for it.]
 >
 > [Potential improvement: This could become a more general pattern-matching assignment mechanism.  Currently it pattern-matches only for a one-level tuple.]
 
 *name* = *expression* ;
 
-> Assign a new value to a variable, which might be a global variable, a local variable, or a function argument. The type of *expression* must be assignable to the variable's type.
+> Assign a new value to a variable, which can be a global variable or a local variable. The type of *expression* must be assignable to the variable's type.
 
 `return` ;
 
@@ -281,6 +295,12 @@ Mini never automatically converts types to make an operation succeed.  Programme
 `hash` ( *expression* , *expression* )
 
 > Compute the hash of the value(s).  The single-argument version can take a value of any type.  The two-argument version requires both arguments to be `bytes32`. Both produce a `bytes32`.
+>
+> [Improvement needed: Currently the one-argument hash  just hashes the underlying AVM representation of the value. This will cause some values of different types to have equal hashes.  It seems better to guarantee that two values test as equal (using ==) if and only if they have the same hash. To do that, we would need to generate code that incorporates a typecode of some sort in the hash.]
+>
+> [Possible improvement: For some user-defined data structures, the "representation hash" approach we use here won't make sense.  We might approach this by adding a "nohash" modifier to types.  Attempts to hash an object whose type had the nohash modifier would generate an error.
+>
+> [Likely improvement: Eliminate the two-argument hash, on the theory that the programmer can always make a tuple and hash that using the single-argument hash. Applying the single-argument hash to general values is a more powerful and flexible mechanism.]
 
 `struct` { *name1* : *expression1* , *name2* : *expression2* , ... }
 
@@ -350,7 +370,7 @@ structExpression with { name : valExpression }
 
 `asm` ( *expression1* , *expression2* , ... ) *type* { *instructions* }
 
-> Escape to assembly code.  The arguments (*expression1*, *expression2*, etc.), if any, are pushed onto the AVM stack (with *expression1* at the top of stack). Then the *instructions*, which are a sequence of AVM assembly instructions, are executed.  If *type* is `void`, the assembly instructions are assumed to consume the arguments and leave nothing on the stack. If *type* is non-`void`, the assembly instructions are assumed to consume the arguments and leave on the stack a single value of type *type*, which becomes the result of this expression.
+> Escape to assembly code.  The arguments (*expression1*, *expression2*, etc.), if any, are pushed onto the AVM stack (with *expression1* at the top of the stack). Then the *instructions*, which are a sequence of AVM assembly instructions, are executed.  If *type* is `void`, the assembly instructions are assumed to consume the arguments and leave nothing on the stack. If *type* is non-`void`, the assembly instructions are assumed to consume the arguments and leave on the stack a single value of type *type*, which becomes the result of this expression.
 
 
 

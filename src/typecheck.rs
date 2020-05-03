@@ -806,23 +806,33 @@ fn typecheck_binary_op(
 				BinaryOp::BitwiseOr |
 				BinaryOp::BitwiseXor => {
 					// swap the args, so code generator will be able to supply the constant as an immediate
-					std::mem::swap(&mut tcs1, &mut tcs2);
+					let tmp = tcs1;
+					tcs1 = tcs2; 
+					tcs2 = tmp;
 				}
 				BinaryOp::LessThan => {
 					op = BinaryOp::GreaterThan;
-					std::mem::swap(&mut tcs1, &mut tcs2);
+					let tmp = tcs1;
+					tcs1 = tcs2; 
+					tcs2 = tmp;
 				}
 				BinaryOp::GreaterThan => {
 					op = BinaryOp::LessThan;
-					std::mem::swap(&mut tcs1, &mut tcs2);
+					let tmp = tcs1;
+					tcs1 = tcs2; 
+					tcs2 = tmp;
 				}
 				BinaryOp::LessEq => {
 					op = BinaryOp::GreaterEq;
-					std::mem::swap(&mut tcs1, &mut tcs2);
+					let tmp = tcs1;
+					tcs1 = tcs2; 
+					tcs2 = tmp;
 				}
 				BinaryOp::GreaterEq => {
 					op = BinaryOp::LessEq;
-					std::mem::swap(&mut tcs1, &mut tcs2);
+					let tmp = tcs1;
+					tcs1 = tcs2; 
+					tcs2 = tmp;
 				}
 				_ => {}
 			}
@@ -841,38 +851,38 @@ fn typecheck_binary_op(
 		BinaryOp::Div => match (subtype1, subtype2) {
 			(Type::Uint, Type::Uint) => Ok(TypeCheckedExpr::Binary(op, Box::new(tcs1), Box::new(tcs2), Type::Uint, loc)),
 			(Type::Int, Type::Int) => Ok(TypeCheckedExpr::Binary(BinaryOp::Sdiv, Box::new(tcs1), Box::new(tcs2), Type::Int, loc)),
-			_ => Err(new_type_error("invalid argument types to binary op", loc))
+			_ => Err(new_type_error("invalid argument types to divide", loc))
 		}
 		BinaryOp::Mod => match (subtype1, subtype2) {
 			(Type::Uint, Type::Uint) => Ok(TypeCheckedExpr::Binary(op, Box::new(tcs1), Box::new(tcs2), Type::Uint, loc)),
 			(Type::Int, Type::Int) => Ok(TypeCheckedExpr::Binary(BinaryOp::Smod, Box::new(tcs1), Box::new(tcs2), Type::Int, loc)),
-			_ => Err(new_type_error("invalid argument types to binary op", loc))
+			_ => Err(new_type_error("invalid argument types to mod", loc))
 		}			
 		BinaryOp::LessThan => match (subtype1, subtype2) {
 			(Type::Uint, Type::Uint) => Ok(TypeCheckedExpr::Binary(op, Box::new(tcs1), Box::new(tcs2), Type::Bool, loc)),
 			(Type::Int, Type::Int) => Ok(TypeCheckedExpr::Binary(BinaryOp::SLessThan, Box::new(tcs1), Box::new(tcs2), Type::Bool, loc)),
-			_ => Err(new_type_error("invalid argument types to binary op", loc))			
+			_ => Err(new_type_error("invalid argument types to <", loc))			
 		}
 		BinaryOp::GreaterThan => match (subtype1, subtype2) {
 			(Type::Uint, Type::Uint) => Ok(TypeCheckedExpr::Binary(op, Box::new(tcs1), Box::new(tcs2), Type::Bool, loc)),
 			(Type::Int, Type::Int) => Ok(TypeCheckedExpr::Binary(BinaryOp::SGreaterThan, Box::new(tcs1), Box::new(tcs2), Type::Bool, loc)),
-			_ => Err(new_type_error("invalid argument types to binary op", loc))			
+			_ => Err(new_type_error("invalid argument types to >", loc))			
 		}
 		BinaryOp::LessEq => match (subtype1, subtype2) {
 			(Type::Uint, Type::Uint) => Ok(TypeCheckedExpr::Binary(op, Box::new(tcs1), Box::new(tcs2), Type::Bool, loc)),
 			(Type::Int, Type::Int) => Ok(TypeCheckedExpr::Binary(BinaryOp::SLessEq, Box::new(tcs1), Box::new(tcs2), Type::Bool, loc)),
-			_ => Err(new_type_error("invalid argument types to binary op", loc))			
+			_ => Err(new_type_error("invalid argument types to <=", loc))			
 		}
 		BinaryOp::GreaterEq => match (subtype1, subtype2) {
 			(Type::Uint, Type::Uint) => Ok(TypeCheckedExpr::Binary(op, Box::new(tcs1), Box::new(tcs2), Type::Bool, loc)),
 			(Type::Int, Type::Int) => Ok(TypeCheckedExpr::Binary(BinaryOp::SGreaterEq, Box::new(tcs1), Box::new(tcs2), Type::Bool, loc)),
-			_ => Err(new_type_error("invalid argument types to binary op", loc))			
+			_ => Err(new_type_error("invalid argument types to >=", loc))			
 		}
 		BinaryOp::Equal |
 		BinaryOp::NotEqual => if (subtype1 == Type::Any) || (subtype2 == Type::Any) || (subtype1 == subtype2) {
 				Ok(TypeCheckedExpr::Binary(op, Box::new(tcs1), Box::new(tcs2), Type::Bool, loc))
 			} else {
-				Err(new_type_error("invalid argument types to binary op", loc))
+				Err(new_type_error("invalid argument types to equality comparison", loc))
 			},
 		BinaryOp::BitwiseAnd |
 		BinaryOp::BitwiseOr |
@@ -880,16 +890,16 @@ fn typecheck_binary_op(
 			(Type::Uint, Type::Uint) => Ok(TypeCheckedExpr::Binary(op, Box::new(tcs1), Box::new(tcs2), Type::Uint, loc)),
 			(Type::Int, Type::Int) => Ok(TypeCheckedExpr::Binary(op, Box::new(tcs1), Box::new(tcs2), Type::Int, loc)),
 			(Type::Bytes32, Type::Bytes32) => Ok(TypeCheckedExpr::Binary(op, Box::new(tcs1), Box::new(tcs2), Type::Bytes32, loc)),
-			_ => Err(new_type_error("invalid argument types to binary op", loc))
+			_ => Err(new_type_error("invalid argument types to binary bitwise operator", loc))
 		},
 		BinaryOp::LogicalAnd | 
 		BinaryOp::LogicalOr => match (subtype1, subtype2) {
 			(Type::Bool, Type::Bool) => Ok(TypeCheckedExpr::Binary(op, Box::new(tcs1), Box::new(tcs2), Type::Bool, loc)),
-			_ => Err(new_type_error("invalid argument types to binary op", loc))
+			_ => Err(new_type_error("invalid argument types to binary logical operator", loc))
 		},
 		BinaryOp::Hash => match (subtype1, subtype2) {
 			(Type::Bytes32, Type::Bytes32) => Ok(TypeCheckedExpr::Binary(op, Box::new(tcs1), Box::new(tcs2), Type::Bytes32, loc)),
-			_ => Err(new_type_error("invalid argument types to binary op", loc))
+			_ => Err(new_type_error("invalid argument types to binary hash operator", loc))
 		}
 		BinaryOp::Smod |
 		BinaryOp::Sdiv |
@@ -938,7 +948,7 @@ fn typecheck_binary_op_const(
 					None => Err(new_type_error("divide by constant zero", loc))
 				}
 			}
-			_ => Err(new_type_error("invalid argument types to binary op", loc))
+			_ => Err(new_type_error("invalid argument types to divide", loc))
 		}
 		BinaryOp::Mod => match (&t1, &t2) {
 			(Type::Uint, Type::Uint) => {
@@ -953,27 +963,27 @@ fn typecheck_binary_op_const(
 					None => Err(new_type_error("divide by constant zero", loc))
 				}
 			}
-			_ => Err(new_type_error("invalid argument types to binary op", loc))
+			_ => Err(new_type_error("invalid argument types to mod", loc))
 		}
 		BinaryOp::LessThan => match (t1, t2) {
 			(Type::Uint, Type::Uint) => Ok(TypeCheckedExpr::Const(Value::Int(Uint256::from_bool(val1 < val2)), Type::Bool, loc)),
 			(Type::Int, Type::Int) => Ok(TypeCheckedExpr::Const(Value::Int(Uint256::from_bool(val1.s_less_than(&val2))), Type::Bool, loc)),
-			_ => Err(new_type_error("invalid argument types to binary op", loc))
+			_ => Err(new_type_error("invalid argument types to <", loc))
 		}
 		BinaryOp::GreaterThan => match (t1, t2) {
 			(Type::Uint, Type::Uint) => Ok(TypeCheckedExpr::Const(Value::Int(Uint256::from_bool(val1 > val2)), Type::Bool, loc)),
 			(Type::Int, Type::Int) => Ok(TypeCheckedExpr::Const(Value::Int(Uint256::from_bool(val2.s_less_than(&val1))), Type::Bool, loc)),
-			_ => Err(new_type_error("invalid argument types to binary op", loc))
+			_ => Err(new_type_error("invalid argument types to >", loc))
 		}
 		BinaryOp::LessEq => match (t1, t2) {
 			(Type::Uint, Type::Uint) => Ok(TypeCheckedExpr::Const(Value::Int(Uint256::from_bool(val1 <= val2)), Type::Bool, loc)),
 			(Type::Int, Type::Int) => Ok(TypeCheckedExpr::Const(Value::Int(Uint256::from_bool(!val2.s_less_than(&val1))), Type::Bool, loc)),
-			_ => Err(new_type_error("invalid argument types to binary op", loc))
+			_ => Err(new_type_error("invalid argument types to <=", loc))
 		}
 		BinaryOp::GreaterEq => match (t1, t2) {
 			(Type::Uint, Type::Uint) => Ok(TypeCheckedExpr::Const(Value::Int(Uint256::from_bool(val1 >= val2)), Type::Bool, loc)),
 			(Type::Int, Type::Int) => Ok(TypeCheckedExpr::Const(Value::Int(Uint256::from_bool(!val1.s_less_than(&val2))), Type::Bool, loc)),
-			_ => Err(new_type_error("invalid argument types to binary op", loc))
+			_ => Err(new_type_error("invalid argument types to >=", loc))
 		}
 		BinaryOp::Equal |
 		BinaryOp::NotEqual |
@@ -1017,7 +1027,7 @@ fn typecheck_binary_op_const(
 					loc
 				))
 			} else {
-				Err(new_type_error("invalid argument types to binary op", loc))
+				Err(new_type_error("invalid argument types to logical and", loc))
 			}
 		BinaryOp::LogicalOr =>
 			if (t1 == Type::Bool) && (t2 == Type::Bool) {
@@ -1027,7 +1037,7 @@ fn typecheck_binary_op_const(
 					loc
 				))
 			} else {
-				Err(new_type_error("invalid argument types to binary op", loc))
+				Err(new_type_error("invalid argument types to logical or", loc))
 			}
 		BinaryOp::Smod |
 		BinaryOp::Sdiv |
