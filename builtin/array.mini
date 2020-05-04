@@ -2,7 +2,7 @@
 type block = [8]anytype
 
 type array = struct {
-	size: uint,
+	size: uint,  // This must be the first field--codegen relies on this.
 	topstep: uint,
 	contents: block,
 }
@@ -11,30 +11,17 @@ func main() anytype {
 	return builtin_arrayNew(13, null);
 }
 
-public func builtin_arraySize(arr: array) uint {
-	return arr.size;
-}
-
 public func builtin_arrayNew(sz: uint, base_val: anytype) array {
 	let chunk = 1;
-	let height = 1;
-	while ((8*chunk) < sz) {
+	while (8*chunk < sz) {
 		chunk = 8*chunk;
-		height = 1+height;
+		base_val = newfixedarray(8, base_val);
 	}
 	return struct {
 		size: sz,
 		topstep: chunk,
-		contents: buildTree(height, base_val),
+		contents: unsafecast(newfixedarray(8, base_val), block),
 	};
-}
-
-func buildTree(height: uint, base_val: anytype) block {
-	if (1 == height) {
-		return newfixedarray(8, base_val);
-	} else {
-		return newfixedarray(8, buildTree(height-1, base_val));
-	}
 }
 
 public func builtin_arrayGet(arr: array, index: uint) anytype {
@@ -138,4 +125,19 @@ func arrayOp2(b: block, chunk: uint, index: uint, closure: opClosure)  arraySwap
 		);
 		return sub with { bloc: b with {[subIndex] = sub.bloc} };
 	}
+}
+
+public func array_resize(a: array, newSize: uint, baseVal: anytype) array { 
+	// TODO: make this more efficient by reusing more of the tree-structure of a
+	let minSize = a.size;
+	if (minSize > newSize) {
+		minSize = newSize;
+	}
+	let ret = builtin_arrayNew(newSize, baseVal);
+	let i = 0;
+	while (i < minSize) {
+		ret = builtin_arraySet(ret, i, builtin_arrayGet(a, i));
+		i = i+1;
+	}
+	return ret;
 }

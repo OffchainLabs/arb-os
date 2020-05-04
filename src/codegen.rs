@@ -483,41 +483,18 @@ fn mavm_codegen_expr<'a>(
 			let (lg, c) = mavm_codegen_expr(tce, code, locals, label_gen, string_table, import_func_map, global_var_map)?;
 			label_gen = lg;
 			code = c;
-			let maybe_opcode = match op {
-				UnaryOp::Minus => Some(Opcode::UnaryMinus),
-				UnaryOp::BitwiseNeg => Some(Opcode::BitwiseNeg),
-				UnaryOp::Not => Some(Opcode::Not),
-				UnaryOp::Hash => Some(Opcode::Hash),
-				UnaryOp::ToUint => None,
-				UnaryOp::ToInt => None,
-				UnaryOp::ToBytes32 => None,
-				UnaryOp::Len => {
-					let call_type = Type::Func(
-						vec![],    // lie about the type, because the argument is already on the stack
-						Box::new(Type::Uint),
-					);
-					let the_expr = TypeCheckedExpr::FunctionCall(
-						Box::new(TypeCheckedExpr::FuncRef(*string_table.get_if_exists("builtin_arraySize").unwrap(), call_type.clone(), *loc)),
-						vec![],  // omit the argument here, because it is already on the stack
-						call_type,
-						*loc
-					);
-					let (lg, c) = mavm_codegen_expr(
-						&the_expr,
-						code, 
-						locals,
-						label_gen,
-						string_table,
-						import_func_map,
-						global_var_map,
-					)?;	
-					label_gen = lg;
-					code = c;				
-					None
-				}
+			let (maybe_opcode, maybe_imm) = match op {
+				UnaryOp::Minus => (Some(Opcode::UnaryMinus), None),
+				UnaryOp::BitwiseNeg => (Some(Opcode::BitwiseNeg), None),
+				UnaryOp::Not => (Some(Opcode::Not), None),
+				UnaryOp::Hash => (Some(Opcode::Hash), None),
+				UnaryOp::ToUint => (None, None),
+				UnaryOp::ToInt => (None, None),
+				UnaryOp::ToBytes32 => (None, None),
+				UnaryOp::Len => (Some(Opcode::TupleGet(3)), Some(Value::Int(Uint256::zero()))),
 			};
 			if let Some(opcode) = maybe_opcode {
-				code.push(Instruction::from_opcode(opcode, *loc));
+				code.push(Instruction::new(opcode, maybe_imm, *loc));
 			}
 			Ok((label_gen, code))
 		}
