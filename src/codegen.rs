@@ -260,6 +260,7 @@ fn mavm_codegen_statements<'a>(
 			label_gen = lg;
 			code.push(Instruction::from_opcode_imm(Opcode::Noop, Value::Label(top_label), *loc));
 			code.push(Instruction::from_opcode_imm(Opcode::SetLocal, slot_num.clone(), *loc));
+			code.push(Instruction::from_opcode(Opcode::Label(top_label), *loc));
 			let (lg, nl, _) = mavm_codegen_statements(
 				body.to_vec(), 
 				code, 
