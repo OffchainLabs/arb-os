@@ -4,12 +4,12 @@ use crate::link::{ExportedFunc, ExportedFuncPoint, ImportedFunc};
 use crate::uint256::Uint256;
 
 
-pub fn strip_labels(
+pub fn strip_labels<'a>(
 	code_in: &[Instruction], 
 	jump_table: &[Label],
 	exported_funcs: &[ExportedFunc],
 	imported_funcs: &[ImportedFunc],
-) -> (Vec<Instruction>, Vec<CodePt>, Vec<ExportedFuncPoint>) {
+) -> Result<(Vec<Instruction>, Vec<CodePt>, Vec<ExportedFuncPoint>), Label> {
 	let mut label_map = HashMap::new();
 
 	for imp_func in imported_funcs {
@@ -32,7 +32,7 @@ pub fn strip_labels(
 			Some(_) => {}
 			None => {
 				let insn_in = insn.clone();
-				code_out.push(insn_in.replace_labels(&label_map));
+				code_out.push(insn_in.replace_labels(&label_map)?);
 			}
 		}
 	}
@@ -53,10 +53,10 @@ pub fn strip_labels(
 		}
 	}
 
-	(code_out, jump_table_out, exported_funcs_out)
+	Ok((code_out, jump_table_out, exported_funcs_out))
 }
 
-pub fn fix_nonforward_labels(
+pub fn fix_nonforward_labels<'a>(
 	code_in: &[Instruction],
 	imported_funcs: &[ImportedFunc],
 ) -> (Vec<Instruction>, Vec<Label>) {

@@ -1,0 +1,119 @@
+
+type PqItem = struct {
+    priority: uint,
+    item: anytype,
+}
+
+type PriorityQ = struct {
+    size: uint,
+    capacity: uint,
+    contents: []PqItem,
+}
+
+public func priorityq_new(capacity: uint) PriorityQ {
+    return struct {
+        size: 0,
+        capacity: capacity,
+        contents: newarray(capacity, PqItem),
+    };
+}
+
+public func priorityq_isEmpty(pq: PriorityQ) bool {
+    return pq.size == 0;
+}
+
+public func priorityq_isFull(pq: PriorityQ) bool {
+    return pq.size == pq.capacity;
+}
+
+// priorityq_get returns (false, null, pq) if empty; otherwise (true, item, updatedPq)
+public func priorityq_get(pq: PriorityQ) (bool, anytype, PriorityQ) {  
+    if (priorityq_isEmpty(pq)) {
+        return (false, null, pq,);
+    } else {
+        let ret = pq.contents[0].item;
+        let newpq = pq with { size: pq.size-1 }
+                       with { contents: pq.contents with { [0] = pq.contents[pq.size-1] } };
+        return (true, ret, pq_pushDown(newpq, 0),);
+    }
+}
+
+func pq_pushDown(pq: PriorityQ, index: uint) PriorityQ {
+    loop {
+        let firstKidIdx = 2*index+1;
+        if (firstKidIdx >= pq.size) {
+            return pq;
+        } elseif (firstKidIdx+1 == pq.size) {
+            // only one kid is in play
+            let this = pq.contents[index];
+            let kid = pq.contents[firstKidIdx];
+            if (kid.priority > this.priority) {
+                return pq with { contents: pq.contents with { [index] = kid }
+                                                       with { [firstKidIdx] = this } };
+            } else {
+                return pq;
+            }
+        } else {
+            let this = pq.contents[index];
+            let firstKid = pq.contents[firstKidIdx];
+            let secondKidIdx = firstKidIdx+1;
+            let secondKid = pq.contents[secondKidIdx];
+            if (firstKid.priority > secondKid.priority) {
+                if (firstKid.priority > this.priority) {
+                    pq = pq with { contents: pq.contents with { [index] = firstKid }
+                                                         with { [firstKidIdx] = this } };
+                    index = firstKidIdx;
+                } else {
+                    return pq;
+                }
+            } else {
+               if (secondKid.priority > this.priority) {
+                    pq = pq with { contents: pq.contents with { [index] = secondKid }
+                                                         with { [secondKidIdx] = this } };
+                    index = secondKidIdx;
+                } else {
+                    return pq;
+                }
+            }
+        }
+    }
+}
+
+func pq_pushUp(pq: PriorityQ, index: uint) PriorityQ {
+    let this = pq.contents[index];
+    loop {
+        if (index == 0) {
+            return pq;
+        }
+        let parentIdx = (index-1)/2;
+        let parent = pq.contents[parentIdx];
+        if (parent.priority >= this.priority) {
+            return pq;
+        } else {
+            pq = pq with { contents: pq.contents with { [index] = parent }
+                                                 with { [parentIdx] = this } };
+            index = parentIdx;
+        }
+    }
+}
+
+public func priorityq_insert(pq: PriorityQ, item: anytype, priority: uint) (bool, PriorityQ) {
+    if (priorityq_isFull(pq)) {
+        return (false, pq,);
+    }
+    let index = pq.size;
+    let newpq = pq with { size: index+1 }
+                   with { contents: pq.contents with { [index] = struct { priority: priority, item: item, } } };
+    return (true, pq_pushUp(newpq, index),);
+}
+
+public func priorityq_printAsArray(pq: PriorityQ) uint {
+    let ret = pq.size;
+    let cont = pq.contents;
+    let i = 0;
+    while (i < ret) {
+        debug(cont[i]);
+        i = i+1;
+    }
+    return ret;
+}

@@ -41,6 +41,7 @@ pub enum TypeCheckedStatement {
 	Loop(Vec<TypeCheckedStatement>, Option<Location>),
 	While(TypeCheckedExpr, Vec<TypeCheckedStatement>, Option<Location>),
 	If(TypeCheckedIfArm),
+	DebugPrint(TypeCheckedExpr, Option<Location>),
 }
 
 #[derive(Debug, Clone)]
@@ -379,6 +380,10 @@ fn typecheck_statement<'a>(
 		}
 		Statement::If(arm) => {
 			Ok((TypeCheckedStatement::If(typecheck_if_arm(arm, return_type, type_table, global_vars, func_table)?), vec![]))
+		}
+		Statement::DebugPrint(e, loc) => {
+			let tce = typecheck_expr(e, type_table, global_vars, func_table)?;
+			Ok((TypeCheckedStatement::DebugPrint(tce, *loc), vec![]))
 		}
 	}
 }

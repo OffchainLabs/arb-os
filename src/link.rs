@@ -160,12 +160,19 @@ pub fn postlink_compile<'a>(
     }
     let (code_final, 
         jump_table_final, 
-        exported_funcs_final) = crate::striplabels::strip_labels(
-            &code_4, 
-            &jump_table, 
-            &program.exported_funcs,
-            &program.imported_funcs,
-        );
+		exported_funcs_final) = 
+			match crate::striplabels::strip_labels(
+            	&code_4, 
+            	&jump_table, 
+           	 	&program.exported_funcs,
+            	&program.imported_funcs,
+        	) {
+				Ok(tup) => tup,
+				Err(label) => { 
+					println!("missing label {:?}", label);
+					return Err(CompileError::new("reference to non-existent function", None)); 
+				}
+			};
     let jump_table_value = crate::xformcode::jump_table_to_value(jump_table_final);
 
     if debug {

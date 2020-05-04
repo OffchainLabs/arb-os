@@ -347,6 +347,22 @@ fn mavm_codegen_statements<'a>(
 				Ok((lg, nl1, false))
 			}
 		}
+		TypeCheckedStatement::DebugPrint(e, loc) => {
+			let (lg, c) = mavm_codegen_expr(e, code, &locals, label_gen, string_table, import_func_map, global_var_map)?;
+			label_gen = lg;
+			code = c;
+			code.push(Instruction::from_opcode(Opcode::DebugPrint, *loc));
+			mavm_codegen_statements(
+				rest_of_statements.to_vec(),
+				code,
+				num_locals,
+				locals,
+				label_gen,
+				string_table,
+				import_func_map,
+				global_var_map,
+			)
+		}
 	}
 }
 
@@ -472,10 +488,33 @@ fn mavm_codegen_expr<'a>(
 				UnaryOp::BitwiseNeg => Some(Opcode::BitwiseNeg),
 				UnaryOp::Not => Some(Opcode::Not),
 				UnaryOp::Hash => Some(Opcode::Hash),
-				UnaryOp::Len => Some(Opcode::Len),
 				UnaryOp::ToUint => None,
 				UnaryOp::ToInt => None,
-				UnaryOp::ToBytes32 => None
+				UnaryOp::ToBytes32 => None,
+				UnaryOp::Len => {
+					let call_type = Type::Func(
+						vec![],    // lie about the type, because the argument is already on the stack
+						Box::new(Type::Uint),
+					);
+					let the_expr = TypeCheckedExpr::FunctionCall(
+						Box::new(TypeCheckedExpr::FuncRef(*string_table.get_if_exists("builtin_arraySize").unwrap(), call_type.clone(), *loc)),
+						vec![],  // omit the argument here, because it is already on the stack
+						call_type,
+						*loc
+					);
+					let (lg, c) = mavm_codegen_expr(
+						&the_expr,
+						code, 
+						locals,
+						label_gen,
+						string_table,
+						import_func_map,
+						global_var_map,
+					)?;	
+					label_gen = lg;
+					code = c;				
+					None
+				}
 			};
 			if let Some(opcode) = maybe_opcode {
 				code.push(Instruction::from_opcode(opcode, *loc));

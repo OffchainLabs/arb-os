@@ -2,7 +2,7 @@
 test: all
 	cargo test
 
-all: kvstest.mexe queuetest.mexe arraytest.mexe globaltest.mexe
+all: kvstest.mexe queuetest.mexe arraytest.mexe globaltest.mexe priorityqtest.mexe
 
 kvstest.mexe: builtin/array.mao kvstest.mini kvs.mini
 	cargo run compile kvstest.mini kvs.mini -o kvstest.mexe
@@ -16,6 +16,9 @@ arraytest.mexe: builtin/array.mao arraytest.mini
 globaltest.mexe: builtin/array.mao globaltest.mini
 	cargo run compile globaltest.mini -o globaltest.mexe
 
+priorityqtest.mexe: builtin/array.mao priorityqtest.mini priorityq.mini
+	cargo run compile priorityqtest.mini priorityq.mini -o priorityqtest.mexe
+	
 builtin/array.mao: builtin/array.mini
 	cargo run compile builtin/array.mini -c -o builtin/array.mao
 

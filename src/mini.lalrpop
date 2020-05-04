@@ -70,6 +70,7 @@ Statement: Statement = {
 	<lno: @L> "return" <e: Expr> ";" => Statement::Return(e, file_info.location(BytePos::from(lno))),
 	<lno: @L> "return" ";" => Statement::ReturnVoid(file_info.location(BytePos::from(lno))),
 	<lno: @L> "panic" ";" => Statement::Panic(file_info.location(BytePos::from(lno))),
+	<lno: @L> "debug" "(" <e: Expr> ")" ";" => Statement::DebugPrint(e, file_info.location(BytePos::from(lno))),
 	<lno: @L> ";" => Statement::Noop(file_info.location(BytePos::from(lno))),
 }
 
@@ -207,6 +208,15 @@ Expr9: Expr = {
 };
 
 Expr10: Expr = {
+	<lno: @L> <f: Expr10> "(" ")" => Expr::FunctionCall(Box::new(f), Vec::new(), file_info.location(BytePos::from(lno))),
+	<lno: @L> <f: Expr10> "(" <c: CommaedExprs> ")" => Expr::FunctionCall(Box::new(f), c, file_info.location(BytePos::from(lno))),
+	<lno: @L> <e1:Expr10> "[" <e2:Expr> "]" => Expr::ArrayRef(Box::new(e1), Box::new(e2), file_info.location(BytePos::from(lno))),
+	<lno: @L> <e:Expr10> "." <i:Ident> => Expr::DotRef(Box::new(e), i, file_info.location(BytePos::from(lno))),
+	<lno: @L> <e:Expr10> "." <u:UnsignedInteger> => Expr::TupleRef(Box::new(e), u, file_info.location(BytePos::from(lno))),
+	Expr11,
+}
+
+Expr11: Expr = {
 	<lno: @L> "hash" "(" <e: Expr> ")" => Expr::new_unary(UnaryOp::Hash, e, file_info.location(BytePos::from(lno))),
 	<lno: @L> "hash" "(" <l:Expr> "," <r:Expr> ")" => Expr::new_binary(BinaryOp::Hash, l, r, file_info.location(BytePos::from(lno))),
 	<lno: @L> "len" "(" <e: Expr> ")" => Expr::new_unary(UnaryOp::Len, e, file_info.location(BytePos::from(lno))),
@@ -225,11 +235,6 @@ Expr10: Expr = {
 		file_info.location(BytePos::from(lno)),
 	),
 	<lno: @L> "unsafecast" "(" <e:Expr> "," <t:Type> ")" => Expr::UnsafeCast(Box::new(e), t, file_info.location(BytePos::from(lno))),
-	<lno: @L> <f: Expr10> "(" ")" => Expr::FunctionCall(Box::new(f), Vec::new(), file_info.location(BytePos::from(lno))),
-	<lno: @L> <f: Expr10> "(" <c: CommaedExprs> ")" => Expr::FunctionCall(Box::new(f), c, file_info.location(BytePos::from(lno))),
-	<lno: @L> <e1:Expr10> "[" <e2:Expr> "]" => Expr::ArrayRef(Box::new(e1), Box::new(e2), file_info.location(BytePos::from(lno))),
-	<lno: @L> <e:Expr10> "." <i:Ident> => Expr::DotRef(Box::new(e), i, file_info.location(BytePos::from(lno))),
-	<lno: @L> <e:Expr10> "." <u:UnsignedInteger> => Expr::TupleRef(Box::new(e), u, file_info.location(BytePos::from(lno))),
 	Expr13,
 }
 

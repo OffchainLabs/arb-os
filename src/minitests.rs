@@ -165,3 +165,38 @@ fn test_globaltest(test_num: usize, expected_result: Value) {
         Err(e) => { panic!("{}\n{}", e.0, e.1); }
     }
 }
+
+#[test]
+fn testpq0() {
+    test_pqtest(0, Value::Int(Uint256::from_usize(1)));
+}
+
+#[test]
+fn testpq1() {
+    test_pqtest(1, Value::Int(Uint256::from_usize(0)));
+}
+
+#[test]
+fn testpq2() {
+    test_pqtest(2, Value::Int(Uint256::from_usize(1)));
+}
+
+#[test]
+fn testpq3() {
+    test_pqtest(3, Value::Int(Uint256::from_usize(96)));
+}
+
+#[test]
+fn testpq4() {
+    test_pqtest(4, Value::Int(Uint256::from_usize(96)));
+}
+
+#[allow(dead_code)]
+fn test_pqtest(test_num: usize, expected_result: Value) {
+    let path = Path::new("priorityqtest.mexe"); 
+    let res = run_from_file(path, vec![Value::Int(Uint256::from_usize(test_num))]);
+    match res {
+        Ok(res) => { assert_eq!(res, expected_result); }
+        Err(e) => { panic!("{}\n{}", e.0, e.1); }
+    }
+}

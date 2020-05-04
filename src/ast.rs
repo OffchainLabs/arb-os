@@ -460,6 +460,7 @@ pub enum Statement {
 	Loop(Vec<Statement>, Option<Location>),
 	While(Expr, Vec<Statement>, Option<Location>),
 	If(IfArm),
+	DebugPrint(Expr, Option<Location>),
 }
 
 impl<'a> Statement {
@@ -480,6 +481,7 @@ impl<'a> Statement {
 			Statement::If(arms) => {
 				Ok(Statement::If(arms.resolve_types(type_table)?))
 			}
+			Statement::DebugPrint(e, loc) => Ok(Statement::DebugPrint(e.resolve_types(type_table)?, *loc))
 		}
 	}
 

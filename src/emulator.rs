@@ -634,6 +634,12 @@ impl<'a> Machine {
 						self.incr_pc();
 						Ok(true)
 					}
+					Opcode::DebugPrint => {
+						let r1 = self.stack.pop(&self.state)?;
+						println!("{:?}", r1);
+						self.incr_pc();
+						Ok(true)
+					}
 					Opcode::GetLocal |  // these opcodes are for intermediate use in compilation only
 					Opcode::SetLocal |  // they should never appear in fully compiled code
 					Opcode::MakeFrame(_, _) |

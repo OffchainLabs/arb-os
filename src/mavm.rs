@@ -83,10 +83,10 @@ impl Instruction {
 		}
 	}
 
-	pub fn replace_labels(self, label_map: &HashMap<Label, CodePt>) -> Self {
+	pub fn replace_labels(self, label_map: &HashMap<Label, CodePt>) -> Result<Self, Label> {
 		match self.immediate {
-			Some(val) => Instruction::from_opcode_imm(self.opcode, val.replace_labels(label_map), self.location),
-			None => self
+			Some(val) => Ok(Instruction::from_opcode_imm(self.opcode, val.replace_labels(label_map)?, self.location)),
+			None => Ok(self),
 		}
 	}
 
@@ -207,27 +207,24 @@ impl Value {
 		}
 	}
 
-	pub fn replace_labels(self, label_map: &HashMap<Label, CodePt>) -> Self {
+	pub fn replace_labels(self, label_map: &HashMap<Label, CodePt>) -> Result<Self, Label> {
 		match self {
-			Value::Int(_) => self,
-			Value::CodePoint(_) => self,
+			Value::Int(_) => Ok(self),
+			Value::CodePoint(_) => Ok(self),
 			Value::Label(label) => {
 				let maybe_pc = label_map.get(&label);
 				match maybe_pc {
-					Some(pc) => Value::CodePoint(*pc),
-					None => {
-						println!("replace_labels failure:\nlabel = {:?}\nmap = {:?}", label, label_map);
-						panic!("replace_labels failure");
-					}
+					Some(pc) => Ok(Value::CodePoint(*pc)),
+					None => Err(label),
 				}
 			},
 			Value::Tuple(tup) => {
 				let mut new_vec = Vec::new();
 				for v in tup.iter() {
 					let val = v.clone();
-					new_vec.push(val.replace_labels(label_map));
+					new_vec.push(val.replace_labels(label_map)?);
 				}
-				Value::Tuple(new_vec)
+				Ok(Value::Tuple(new_vec))
 			}
 		}
 	}
@@ -388,6 +385,7 @@ pub enum Opcode {
 	BitwiseXor,
 	LogicalAnd,
 	LogicalOr,
+	DebugPrint,
 }
 
 impl Opcode {
