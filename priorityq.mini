@@ -1,4 +1,6 @@
 
+import func array_resize(a: []PqItem, newSize: uint, baseVal: anytype) []PqItem;
+
 type PqItem = struct {
     priority: uint,
     item: anytype,
@@ -10,11 +12,11 @@ type PriorityQ = struct {
     contents: []PqItem,
 }
 
-public func priorityq_new(capacity: uint) PriorityQ {
+public func priorityq_new() PriorityQ {
     return struct {
         size: 0,
-        capacity: capacity,
-        contents: newarray(capacity, PqItem),
+        capacity: 8,
+        contents: newarray(8, PqItem),
     };
 }
 
@@ -22,8 +24,8 @@ public func priorityq_isEmpty(pq: PriorityQ) bool {
     return pq.size == 0;
 }
 
-public func priorityq_isFull(pq: PriorityQ) bool {
-    return pq.size == pq.capacity;
+public func priorityq_size(pq: PriorityQ) uint {
+    return pq.size;
 }
 
 // priorityq_get returns (false, null, pq) if empty; otherwise (true, item, updatedPq)
@@ -97,14 +99,16 @@ func pq_pushUp(pq: PriorityQ, index: uint) PriorityQ {
     }
 }
 
-public func priorityq_insert(pq: PriorityQ, item: anytype, priority: uint) (bool, PriorityQ) {
-    if (priorityq_isFull(pq)) {
-        return (false, pq,);
+public func priorityq_insert(pq: PriorityQ, item: anytype, priority: uint) PriorityQ {
+    if (pq.size == pq.capacity) {
+        let newCapacity = 8*pq.capacity;
+        pq = pq with { capacity: newCapacity }
+                with { contents: array_resize(pq.contents, newCapacity, null) };
     }
     let index = pq.size;
     let newpq = pq with { size: index+1 }
                    with { contents: pq.contents with { [index] = struct { priority: priority, item: item, } } };
-    return (true, pq_pushUp(newpq, index),);
+    return pq_pushUp(newpq, index);
 }
 
 public func priorityq_printAsArray(pq: PriorityQ) uint {

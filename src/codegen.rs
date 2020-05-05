@@ -169,6 +169,46 @@ fn mavm_codegen_statements<'a>(
 			Ok((label_gen, num_locals, false))
 			// no need to append the rest of the statements; they'll never be executed
 		}
+		TypeCheckedStatement::FunctionCall(fexpr, args, loc) => {
+			let n_args = args.len();
+			let (ret_label, lg) = label_gen.next();
+			label_gen = lg;
+			for i in 0..n_args {
+				let (lg, c) = mavm_codegen_expr(
+					&args[n_args-1-i], 
+					code, 
+					locals, 
+					label_gen, 
+					string_table, 
+					import_func_map,
+					global_var_map,
+				)?;
+				label_gen = lg;
+				code = c;
+			}
+			code.push(Instruction::from_opcode_imm(Opcode::Noop, Value::Label(ret_label), *loc));
+			let (lg, c) = mavm_codegen_expr(
+				fexpr,
+				code,
+				locals,
+				label_gen,
+				string_table,
+				import_func_map,
+				global_var_map,
+			)?;
+			c.push(Instruction::from_opcode(Opcode::Jump, *loc));
+			c.push(Instruction::from_opcode(Opcode::Label(ret_label), *loc));
+			mavm_codegen_statements(
+				rest_of_statements.to_vec(), 
+				c, 
+				num_locals, 
+				locals, 
+				lg, 
+				string_table,
+				import_func_map,
+				global_var_map,
+			)
+		}
 		TypeCheckedStatement::Let(pat, expr, loc) => match pat {
 			TypeCheckedMatchPattern::Simple(name, _) => {
 				let slot_num = num_locals;

@@ -35,6 +35,7 @@ pub enum TypeCheckedStatement {
 	Panic(Option<Location>),
 	ReturnVoid(Option<Location>),
 	Return(TypeCheckedExpr, Option<Location>),
+	FunctionCall(TypeCheckedExpr, Vec<TypeCheckedExpr>, Option<Location>),
 	Let(TypeCheckedMatchPattern, TypeCheckedExpr, Option<Location>),
 	AssignLocal(StringId, TypeCheckedExpr, Option<Location>),
 	AssignGlobal(usize, TypeCheckedExpr, Option<Location>),
@@ -312,11 +313,33 @@ fn typecheck_statement<'a>(
 			if return_type.assignable(&tc_expr.get_type()) {
 				Ok((TypeCheckedStatement::Return(tc_expr, *loc), vec![]))
 			} else {
-				println!("return type: {:?}", return_type);
-				println!("expr type:   {:?}", tc_expr.get_type());
 				Err(new_type_error("return statement has wrong type", *loc))
 			}
 		},
+		Statement::FunctionCall(fexpr, args, loc) => {
+			let tc_fexpr = typecheck_expr(fexpr, type_table, global_vars, func_table)?;
+			if let Type::Func(arg_types, ret_type) = tc_fexpr.get_type() {
+				if *ret_type != Type::Void {
+					return Err(new_type_error("function call statement to non-void function", *loc));
+				}
+				if args.len() == arg_types.len() {
+					let mut tc_args = Vec::new();
+					for i in 0..args.len() {
+						let tc_arg = typecheck_expr(&args[i], type_table, global_vars, func_table)?;
+						tc_args.push(tc_arg);
+						let resolved_arg_type = arg_types[i].resolve_types(&type_table, *loc)?;
+						if !resolved_arg_type.assignable(&tc_args[i].get_type()) {
+							return Err(new_type_error("wrong argument type in function call", *loc))
+						}
+					};
+					Ok((TypeCheckedStatement::FunctionCall(tc_fexpr, tc_args, *loc), vec![]))
+				} else {
+					Err(new_type_error("wrong number of args passed to function", *loc))
+				}				
+			} else {
+				Err(new_type_error("function call to non-function object", *loc))
+			}
+		}
 		Statement::Let(pat, expr, loc) => {
 			let tc_expr = typecheck_expr(expr, type_table, global_vars, func_table)?;
 			let tce_type = tc_expr.get_type();

@@ -66,6 +66,8 @@ Statement: Statement = {
 	<lno: @L> "if" "(" <c: Expr> ")" <t: CodeBlock> => Statement::If(IfArm::Cond(c, t, None, file_info.location(BytePos::from(lno)))),
 	<lno: @L> "if" "(" <c: Expr> ")" <t: CodeBlock> <r: IfArm> => Statement::If(IfArm::Cond(c, t, Some(Box::new(r)), file_info.location(BytePos::from(lno)))),
 	<lno: @L> "let" <p: MatchPattern> "=" <e: Expr> ";" => Statement::Let(p, e, file_info.location(BytePos::from(lno))),
+	<lno: @L> <f: Expr10> "(" ")" ";" => Statement::FunctionCall(f, vec![], file_info.location(BytePos::from(lno))),
+	<lno: @L> <f: Expr10> "(" <c: CommaedExprs> ")" ";" => Statement::FunctionCall(f, c, file_info.location(BytePos::from(lno))),
 	<lno: @L> <i: Ident> "=" <e: Expr> ";" => Statement::Assign(i, e, file_info.location(BytePos::from(lno))),
 	<lno: @L> "return" <e: Expr> ";" => Statement::Return(e, file_info.location(BytePos::from(lno))),
 	<lno: @L> "return" ";" => Statement::ReturnVoid(file_info.location(BytePos::from(lno))),
