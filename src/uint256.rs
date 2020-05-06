@@ -6,6 +6,7 @@ use num_bigint::{BigUint, BigInt, Sign, ToBigInt};
 use num_traits::cast::ToPrimitive;
 use num_traits::identities::{Zero, One};
 use num_traits::sign::Signed;
+use num_traits::pow::Pow;
 use serde::{Serialize, Deserialize, Serializer, Deserializer};
 
 
@@ -29,6 +30,16 @@ impl Uint256 {
 
 	pub fn from_string(s: &str) -> Option<Self> {
 		match BigUint::parse_bytes(s.as_bytes(), 10) {
+			Some(bui) => match Uint256::trim(&bui) {
+				(val, true) => Some(Uint256{ val }),
+				(_, false) => None,
+			}
+			None => None
+		}
+	}
+
+	pub fn from_string_hex(s: &str) -> Option<Self> {
+		match BigUint::parse_bytes(s.as_bytes(), 16) {
 			Some(bui) => match Uint256::trim(&bui) {
 				(val, true) => Some(Uint256{ val }),
 				(_, false) => None,
@@ -152,6 +163,10 @@ impl Uint256 {
 			let val = self.to_signed().rem(&other.to_signed());  
 			Some(Uint256{ val: Uint256::bigint_to_biguint(val) })
 		}
+	}
+	
+	pub fn exp(&self, other: &Self) -> Self {
+		Uint256{ val: Uint256::trim(&self.val.pow(&other.val)).0 }
 	}
 
 	pub fn s_less_than(&self, other: &Self) -> bool {

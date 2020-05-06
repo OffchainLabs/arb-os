@@ -73,6 +73,8 @@ Statement: Statement = {
 	<lno: @L> "return" ";" => Statement::ReturnVoid(file_info.location(BytePos::from(lno))),
 	<lno: @L> "panic" ";" => Statement::Panic(file_info.location(BytePos::from(lno))),
 	<lno: @L> "debug" "(" <e: Expr> ")" ";" => Statement::DebugPrint(e, file_info.location(BytePos::from(lno))),
+	<lno: @L> "asm" "(" ")" "{" <body:AsmInsn*> "}" ";" => Statement::Asm(body, vec![], file_info.location(BytePos::from(lno))),
+	<lno: @L> "asm" "(" <a:CommaedExprs> ")" "{" <body:AsmInsn*> "}" ";" => Statement::Asm(body, a, file_info.location(BytePos::from(lno))),
 	<lno: @L> ";" => Statement::Noop(file_info.location(BytePos::from(lno))),
 }
 
@@ -297,6 +299,7 @@ IdentStr: &'input str = {
 UnsignedInteger: Uint256 = {
 	"0" => Uint256::from_usize(0),
 	r"[1-9][0-9]*" => Uint256::from_string(<>).unwrap(),
+	r"0x[0-9a-fA-F]+" => Uint256::from_string_hex(&<>[2..]).unwrap()
 }
 
 SignedInteger: Uint256 = {

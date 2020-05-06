@@ -54,6 +54,13 @@ pub enum Type {
 }
 
 impl Type {
+	pub fn is_void(&self) -> bool {
+		match self {
+			Type::Void => true,
+			_ => false,
+		}
+	}
+
 	pub fn resolve_types(&self, type_table: &SymTable<Type>, location: Option<Location>) -> Result<Self, TypeError> {
 		match self {
 			Type::Void |
@@ -461,6 +468,7 @@ pub enum Statement {
 	Loop(Vec<Statement>, Option<Location>),
 	While(Expr, Vec<Statement>, Option<Location>),
 	If(IfArm),
+	Asm(Vec<Instruction>, Vec<Expr>, Option<Location>),
 	DebugPrint(Expr, Option<Location>),
 }
 
@@ -488,6 +496,13 @@ impl<'a> Statement {
 			),
 			Statement::If(arms) => {
 				Ok(Statement::If(arms.resolve_types(type_table)?))
+			}
+			Statement::Asm(insns, args, loc) => {
+				let mut rargs = Vec::new();
+				for arg in args.iter() {
+					rargs.push(arg.resolve_types(type_table)?);
+				}
+				Ok(Statement::Asm(insns.to_vec(), rargs, *loc))
 			}
 			Statement::DebugPrint(e, loc) => Ok(Statement::DebugPrint(e.resolve_types(type_table)?, *loc))
 		}

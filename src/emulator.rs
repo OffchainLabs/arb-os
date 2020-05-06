@@ -550,6 +550,13 @@ impl<'a> Machine {
 							None => Err(ExecutionError::new("modulo by zero", &self.state, None))
 						}
 					}
+					Opcode::Exp => {
+						let r1 = self.stack.pop_uint(&self.state)?;
+						let r2 = self.stack.pop_uint(&self.state)?;
+						self.stack.push_uint(r1.exp(&r2));
+						self.incr_pc();
+						Ok(true)
+					}
 					Opcode::LessThan => {
 						let r1 = self.stack.pop_uint(&self.state)?;
 						let r2 = self.stack.pop_uint(&self.state)?;

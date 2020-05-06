@@ -196,9 +196,13 @@ Values of type anytype are not understood by the compiler; they will be equal if
 >
 > [Potential improvement: This could become a more general pattern-matching assignment mechanism.  Currently it pattern-matches only for a one-level tuple.]
 
+*funcExpression* ( *argExpression1* , *argExpression2* , ... )
+
+> Function call.  The value of *funcExpression* must be a function reference. (Typically *funcExpression* will just be the name of a function.) The number of *argExpressions* must be consistent with the number of arguments in *funcExpression*'s type, and each *argExpression* must be assignable to the type of the corresponding argument of *funcExpression*.  The function's return type must be `void`.  (Functions returning non-void types are expressions, not statements.)
+
 *name* = *expression* ;
 
-> Assign a new value to a variable, which can be a global variable or a local variable. The type of *expression* must be assignable to the variable's type.
+> Assign a new value to an existing variable, which can be a global variable or a local variable. The type of *expression* must be assignable to the variable's type.
 
 `return` ;
 
@@ -207,6 +211,10 @@ Values of type anytype are not understood by the compiler; they will be equal if
 `return` *expression* ;
 
 > Return a value from the current function. The value of *expression* must be assignable to the function's *returntype*.
+
+`asm` (*expression1*, *expression2*, ... )  { *instructions* } ;
+
+> Escape to assembly code.  The arguments (*expression1*, *expression2*, etc.), if any, are pushed onto the AVM stack (with *expression1* at the top of the stack). Then the *instructions*, which are a sequence of AVM assembly instructions, are executed.  The assembly instructions are assumed to consume the arguments and leave nothing on the stack.  (There is another form of `asm`, which is an expression and returns a value.)
 
 `panic` ;
 
@@ -262,7 +270,7 @@ Mini never automatically converts types to make an operation succeed.  Programme
 
 *expression* != *expression*
 
-> Equality comparison, under the rules described above. The result has type `bool`.
+> Equality comparison, under the rules for equality comparison of values as described above. The result has type `bool`.
 
 *expression* & *expression*
 
@@ -276,7 +284,7 @@ Mini never automatically converts types to make an operation succeed.  Programme
 
 *expression* || *expression*
 
-> Logical and / or.  Both operands must have type `bool`, and the result has type `bool`.  Execution shortcuts, so that the second operand is evaluated only if the outcome is still in doubt after evaluating the first operand.
+> Logical and / or.  Both operands must have type `bool`, and the result has type `bool`.  Execution will shortcut, so that the second expression is evaluated only if the outcome is still in doubt after evaluating the first expression.
 
 `uint`( *expression* )
 
@@ -288,7 +296,7 @@ Mini never automatically converts types to make an operation succeed.  Programme
 
 `len` ( *expression* ) 
 
-> Get the length of *expression*, whose value must be a non-fixed size array. (Panic if *expression* has any other type.) Result is a `uint`.
+> Get the length of *expression*, whose value must be a non-fixed size array.  Result is a `uint`.
 
 `hash` ( *expression* )
 
@@ -300,7 +308,7 @@ Mini never automatically converts types to make an operation succeed.  Programme
 >
 > [Possible improvement: For some user-defined data structures, the "representation hash" approach we use here won't make sense.  We might approach this by adding a "nohash" modifier to types.  Attempts to hash an object whose type had the nohash modifier would generate an error.
 >
-> [Likely improvement: Eliminate the two-argument hash, on the theory that the programmer can always make a tuple and hash that using the single-argument hash. Applying the single-argument hash to general values is a more powerful and flexible mechanism.]
+> [Likely improvement: Eliminate the two-argument hash, on the theory that the programmer can always make a tuple and hash that using the single-argument hash. Applying the single-argument hash to general values is a simpler and equally expressive mechanism.]
 
 `struct` { *name1* : *expression1* , *name2* : *expression2* , ... }
 
@@ -336,17 +344,17 @@ Mini never automatically converts types to make an operation succeed.  Programme
 
 *expression* . *number*
 
-> Access a field of a tuple.  *number*, which must be a `uint`, specifies which field number to access.  *expression* must be a tuple type with more than *number* fields. The result has the type of that field.
+> Access a field of a tuple.  *number*, which must be a constant `uint`, specifies which field number to access.  (The first field is number zero.) *expression* must be a tuple type with more than *number* fields. The result has the type of that field.
 
 *funcExpression* ( *argExpression1* , *argExpression2* , ... )
 
-> Function call.  The value of *funcExpression* must be a function reference. (Typically *funcExpression* will just be the name of a function.) The number of *argExpressions* must be consistent with the number of arguments in *funcExpression*'s type, and each *argExpression* must be assignable to the type of the corresponding argument of *funcExpression*.  The result has the type of *funcExpression's* return value. (If the return type is void, then the result is the empty tuple ( ).)
+> Function call.  The value of *funcExpression* must be a function reference. (Typically *funcExpression* will just be the name of a function.) The number of *argExpressions* must be consistent with the number of arguments in *funcExpression*'s type, and each *argExpression* must be assignable to the type of the corresponding argument of *funcExpression*.  The result has the type of *funcExpression's* return value, which must not be `void`. (Calls to functions returning `void` are statements, not expressions.)
 
-arrayExpression with { [ indexExpression ] = valExpression }
+*arrayExpression* with { [ *indexExpression* ] = *valExpression* }
 
 > Create a new array by copying an existing array with one element modified.  *arrayExpression*, which must be an array type, specifies the array to start with. *indexExpression*, which must have type `uint`, specifies which slot in the array should be modified.  *valExpression*, whose type must be assignable to the element type of the array, is the new value to put into the slot.  The result has the same type as *arrayExpression*. If the index is out of bounds, this will cause either a compile-time error or a runtime panic.  
 
-structExpression with { name : valExpression }
+*structExpression* with { *name* : *valExpression* }
 
 > Create a new struct by copying an existing struct with one field modified.  *structExpression*, which must be a struct type with a field called *name*, specifies the struct to start with.  *valExpression*, which must have a type assignable to the named field, is the value that will be assigned to the named field in the newly created struct. 
 
@@ -360,17 +368,15 @@ structExpression with { name : valExpression }
 
 *number*
 
-> An integer constant, in decimal form. This will be interpreted as a `uint`, and it must be representable as a `uint`. If a literal number is followed by the single character 's', it is interpreted as a signed integer `int`; in this case it must be representable as an `int`.
+> An integer constant, in decimal format (or hexadecimal format, if it starts with "0x"). This will be interpreted as a `uint`, and it must be representable as a `uint`. If a decimal number is followed by the single character 's', it is interpreted as a signed integer `int`; in this case it must be representable as an `int`.
 
 *name*
 
 > A reference to a local variable, a global variable, or a function. It will have the type of the referenced variable or function.
 
-`asm` ( ) *type* { *instructions* }
-
 `asm` ( *expression1* , *expression2* , ... ) *type* { *instructions* }
 
-> Escape to assembly code.  The arguments (*expression1*, *expression2*, etc.), if any, are pushed onto the AVM stack (with *expression1* at the top of the stack). Then the *instructions*, which are a sequence of AVM assembly instructions, are executed.  If *type* is `void`, the assembly instructions are assumed to consume the arguments and leave nothing on the stack. If *type* is non-`void`, the assembly instructions are assumed to consume the arguments and leave on the stack a single value of type *type*, which becomes the result of this expression.
+> Escape to assembly code.  The arguments (*expression1*, *expression2*, etc.), if any, are pushed onto the AVM stack (with *expression1* at the top of the stack). Then the *instructions*, which are a sequence of AVM assembly instructions, are executed.  *type* must not be `void`. The assembly instructions are assumed to consume the arguments and leave on the stack a single value of type *type*, which becomes the result of this expression. (There is another form of `asm`, which produces no result value and is a statement.)
 
 
 

@@ -387,6 +387,35 @@ fn mavm_codegen_statements<'a>(
 				Ok((lg, nl1, false))
 			}
 		}
+		TypeCheckedStatement::Asm(insns, args, _loc) => {
+			let n_args = args.len();
+			for i in 0..n_args {
+				let (lg, c) = mavm_codegen_expr(
+					&args[n_args-1-i], 
+					code, 
+					locals, 
+					label_gen, 
+					string_table, 
+					import_func_map,
+					global_var_map,
+				)?;
+				label_gen = lg;
+				code = c;
+			}
+			for insn in insns {
+				code.push(insn.clone());
+			}
+			mavm_codegen_statements(
+				rest_of_statements.to_vec(),
+				code,
+				num_locals,
+				locals,
+				label_gen,
+				string_table,
+				import_func_map,
+				global_var_map,
+			)				
+		}
 		TypeCheckedStatement::DebugPrint(e, loc) => {
 			let (lg, c) = mavm_codegen_expr(e, code, &locals, label_gen, string_table, import_func_map, global_var_map)?;
 			label_gen = lg;

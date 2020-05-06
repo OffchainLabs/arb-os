@@ -42,6 +42,7 @@ pub enum TypeCheckedStatement {
 	Loop(Vec<TypeCheckedStatement>, Option<Location>),
 	While(TypeCheckedExpr, Vec<TypeCheckedStatement>, Option<Location>),
 	If(TypeCheckedIfArm),
+	Asm(Vec<Instruction>, Vec<TypeCheckedExpr>, Option<Location>),
 	DebugPrint(TypeCheckedExpr, Option<Location>),
 }
 
@@ -404,6 +405,13 @@ fn typecheck_statement<'a>(
 		Statement::If(arm) => {
 			Ok((TypeCheckedStatement::If(typecheck_if_arm(arm, return_type, type_table, global_vars, func_table)?), vec![]))
 		}
+		Statement::Asm(insns, args, loc) => {
+			let mut tc_args = Vec::new();
+			for arg in args {
+				tc_args.push(typecheck_expr(arg, type_table, global_vars, func_table)?);
+			}
+			Ok((TypeCheckedStatement::Asm(insns.to_vec(), tc_args, *loc), vec![]))
+		}
 		Statement::DebugPrint(e, loc) => {
 			let tce = typecheck_expr(e, type_table, global_vars, func_table)?;
 			Ok((TypeCheckedStatement::DebugPrint(tce, *loc), vec![]))
@@ -714,6 +722,9 @@ fn typecheck_expr(
 		)),
 		Expr::Null(loc) => Ok(TypeCheckedExpr::Const(Value::none(), Type::Any, *loc)),
 		Expr::Asm(ret_type, insns, args, loc) => {
+			if ret_type.is_void() {
+				return Err(new_type_error("asm expression cannot return void", *loc));
+			}
 			let mut tc_args = Vec::new();
 			for arg in args {
 				tc_args.push(typecheck_expr(arg, type_table, global_vars, func_table)?);
