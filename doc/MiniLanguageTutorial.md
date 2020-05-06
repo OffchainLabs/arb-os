@@ -1,5 +1,7 @@
 # Mini language tutorial
 
+[version of May 6, 2020]
+
 Mini is a programming language and compiler designed for writing code for the Arbitrum Virtual Machine (AVM) platform.  The language is simple but has some features customized for AVM.  This tutorial will tell you what you need to know to write Mini programs.
 
 [This document lists potential changes or improvements to Mini in brackets like this.  Your feedback on these ideas is welcome.]
@@ -134,25 +136,27 @@ A value of type `V` is assignable to storage of type `S` if:
 * `S` equals `V`,
 * S and V are tuple types with the same number of fields, and each field of V is assignable to the corresponding field of S,
 * S and V are fixed-size arrays of the same size, and the field type of V is assignable to the field type of S,
-* S and V are arrays, and the field typeof V is assignable to the field type of S,
+* S and V are arrays, and the field type of V is assignable to the field type of S,
 * S and V are structs, with the same number of fields, and each field of V has the same name as the corresponding field of S, and each field of V is assignable to the corresponding field of V,
-* S and V are function types, with the same number of arguments, and each argument type of V is assignable to the corresponding argument type of S, and either (a) both S and V return void, or (b) the return type of S is assignable to the return type of V.  (Note that the return type is compared "in the reverse order". This is needed to make calls through function references type-safe.)
+* S and V are function types, with the same number of arguments, and each argument type of V is assignable to the corresponding argument type of S, and either (a) both S and V return void, or (b) the return type of S is assignable to the return type of V.  (Note that the return type is compared for assignability "backwards". This is needed to make calls through function references type-safe.)
 
 These rules guarantee that assignability is a partial order. 
+
+The compiler uses often uses type inference to infer the types of variables from the types of values assigned to them.  If a programmer wants the compiler to infer a different type, they should use an explicit type-casting operation to convert the value to the desired type.
 
 ## Values
 
 All values in Mini are immutable. There is no way to modify a value. You can only create new values that are equal to existing ones with modifications.  (That's what the `with` operator does.)
 
-Because values are immutable, there is no notion of a reference to a value.  As far as the semantics of Mini are concerned, there are only values, and any assignment or passing of values is done by copying (although the compiler might optimize by copying a pointer rather than copying the object)
+Because values are immutable, there is no notion of a reference to a value.  As far as the semantics of Mini are concerned, there are only values, and any assignment or passing of values is done by copying (although the compiler might optimize by copying a pointer rather than copying the object).
 
-[Implementation note: Because of immutability, the compiler can choose whether to implement "copying" of an object by creating a fresh copy of its contents or by just creating a new pointer reference to the object. The difference only affects the efficiency of the generated code. It is impossible to create a cyclic data structure. This means that the underlying implementation doesn't need to use garbage collection but can always use reference-counting to achieve optimal cleanup of unused copy-by-reference objects.]
+[Implementation note: Because of immutability, the compiler can choose whether to implement "copying" of an object by creating a fresh copy of its contents or by just creating a new pointer reference to the object. The difference only affects the efficiency of the generated code.  Currently, the compiler copies a value if its type is atomic, and copies a reference to it otherwise.  Because of immutability, it is impossible to create a cyclic data structure. This means that the underlying implementation doesn't need to use garbage collection but can always use reference-counting to achieve perfect cleanup of unreachable copy-by-reference objects.]
 
 ### Comparing values for equality
 
 Two values are equal if they have the same type and the same contents.  Equality checking for compound types works as expected, with a "deep comparison" of the fields.  Two function references are equal if they refer to the same function.  
 
-Values of type anytype are not understood by the compiler; they will be equal if they have the same representation in the underlying architecture.  So it could be the case that if values of two different types are constructed, and both are assigned to variables of type anytype, the resulting values could test as equal.  (Details of data representations are not described here.) So caution is advised before comparing `anytype` values.
+Values of type `anytype` do not have any representation that is understood by the compiler; they will be equal if they have the same representation in the underlying AVM architecture.  So it could be the case that if values of two different types are constructed, and both are assigned to variables of type `anytype`, the resulting values could test as equal.  (Details of data representations are not described here.) So caution is advised before comparing `anytype` values.
 
 [Potential improvement: prohibit equality comparison of anytypes.]
 
@@ -184,7 +188,7 @@ Values of type anytype are not understood by the compiler; they will be equal if
 
 `let` *name* = *expression* ;
 
-> Create a new local variable and initialize it with the value of *expression*.  The compiler infers that the new variable has the same type as *expression* .  The variable goes out of scope when execution leaves the current codeblock.
+> Create a new local variable and initialize it with the value of *expression*.  The compiler infers that the new variable has the same type as *expression* .  The variable goes out of scope when execution leaves the current codeblock.  If the new variable has the same name as an already-existing variable, it will mask the existing variable definition for as long as the new variable is in scope.
 
 `let` ( *name1* , *name2*, ... ) = *expression* ;
 
@@ -192,7 +196,7 @@ Values of type anytype are not understood by the compiler; they will be equal if
 >
 > [Potential improvement: Allow left-hand side names to be replaced by `_`, allowing unneeded components to be discarded without creating a variable.]
 >
-> [Potential improvement: Allow assignment directly into existing variables, or a mix of new and existing variables, rather than requiring creation of new variables.  Would have done this already but couldn't figure out a clean syntax for it.]
+> [Potential improvement: Allow assignment directly into existing variables, or a mix of new and existing variables, rather than requiring creation of new variables.  I would have done this already but couldn't figure out a clean syntax for it--suggestions are welcome.]
 >
 > [Potential improvement: This could become a more general pattern-matching assignment mechanism.  Currently it pattern-matches only for a one-level tuple.]
 
@@ -214,7 +218,7 @@ Values of type anytype are not understood by the compiler; they will be equal if
 
 `asm` (*expression1*, *expression2*, ... )  { *instructions* } ;
 
-> Escape to assembly code.  The arguments (*expression1*, *expression2*, etc.), if any, are pushed onto the AVM stack (with *expression1* at the top of the stack). Then the *instructions*, which are a sequence of AVM assembly instructions, are executed.  The assembly instructions are assumed to consume the arguments and leave nothing on the stack.  (There is another form of `asm`, which is an expression and returns a value.)
+> Escape to assembly code.  The arguments (*expression1*, *expression2*, etc.), if any, are pushed onto the AVM stack (with *expression1* at the top of the stack). Then the *instructions*, which are a sequence of AVM assembly instructions, are executed.  The assembly instructions are assumed to consume the arguments and leave nothing on the stack.  (There is another form of `asm`, which is an expression and returns a value on the stack.)
 
 `panic` ;
 
@@ -246,7 +250,7 @@ Mini never automatically converts types to make an operation succeed.  Programme
 
 *expression* - *expression*
 
-> Addition and subtraction.  Both operands must have the same numeric type, and the result is of that same type. This does 256-bit arithmetic and does not check for overflow or underflow.
+> Addition and subtraction.  Both operands must have the same numeric type, and the result is of that same type. These do 256-bit arithmetic and do not check for overflow or underflow.
 
 *expression* * *expression*
 
@@ -304,15 +308,15 @@ Mini never automatically converts types to make an operation succeed.  Programme
 
 > Compute the hash of the value(s).  The single-argument version can take a value of any type.  The two-argument version requires both arguments to be `bytes32`. Both produce a `bytes32`.
 >
-> [Improvement needed: Currently the one-argument hash  just hashes the underlying AVM representation of the value. This will cause some values of different types to have equal hashes.  It seems better to guarantee that two values test as equal (using ==) if and only if they have the same hash. To do that, we would need to generate code that incorporates a typecode of some sort in the hash.]
+> [Improvement needed: Currently the one-argument hash  just hashes the underlying AVM representation of the value. This will cause some values of different types to have equal hashes.  It seems better to guarantee that two values test as equal (using ==) if and only if they have the same hash. To do that, we would need to generate code that incorporates a typecode of some sort into the hash.]
 >
-> [Possible improvement: For some user-defined data structures, the "representation hash" approach we use here won't make sense.  We might approach this by adding a "nohash" modifier to types.  Attempts to hash an object whose type had the nohash modifier would generate an error.
+> [Possible improvement: For some user-defined data structures, the "representation hash" approach we use here won't make sense.  We might approach this by adding a "nohash" modifier to types.  Attempts to hash an object whose type had the nohash modifier would generate an error. Or possibly we want a "nocompare" modifier which would prohibit both equality comparisons and hashing.  Note that the underlying implementation uses hashing to do comparisons of non-atomic types, so values are comparable if and only if they are hashable.]
 >
-> [Likely improvement: Eliminate the two-argument hash, on the theory that the programmer can always make a tuple and hash that using the single-argument hash. Applying the single-argument hash to general values is a simpler and equally expressive mechanism.]
+> [Likely improvement: Eliminate the two-argument hash, on the rationale that the programmer can always make a tuple and hash that using the single-argument hash. Applying the single-argument hash to general values is a simpler and equally expressive mechanism.]
 
 `struct` { *name1* : *expression1* , *name2* : *expression2* , ... }
 
-> Create a new struct object. The types of the struct fields are inferred from the types of the expressions. Returns a struct value whose type is determined by the sequence of names and expression types given.
+> Create a new struct value. The types of the struct fields are inferred from the types of the expressions. Returns a struct value whose type is determined by the sequence of names and expression types given.
 
 ( *expression1* , *expression2*, ... )
 
