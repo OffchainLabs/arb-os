@@ -1,0 +1,31 @@
+
+import type ByteArray;
+
+import func bytearray_new(size: uint) ByteArray;
+import func bytearray_size(ba: ByteArray) uint;
+import func bytearray_get(ba: ByteArray, idx: uint) uint;
+import func bytearray_set(ba: ByteArray, idx: uint, val: uint) ByteArray;
+
+
+func tests(which: uint) anytype {
+	if (which == 0) {
+		let ba = bytearray_new(33);
+		return bytearray_size(ba);
+	} elseif (which == 1) {
+		let ba = bytearray_new(117);
+		ba = bytearray_set(ba, 33, 42);
+		return bytearray_get(ba, 33);
+	} elseif (which == 2) {
+		let ba = bytearray_new(117);
+		ba = bytearray_set(ba, 33, 42);
+		ba = bytearray_set(ba, 37, 99);
+		return bytearray_get(ba, 33);
+	} elseif (which == 3) {
+		let ba = bytearray_new(117);
+		ba = bytearray_set(ba, 37, 42+99*256);
+		ba = bytearray_set(ba, 36, 999999999999999999);
+		return bytearray_get(ba, 37);
+	} else {
+		return null;
+	}
+}
