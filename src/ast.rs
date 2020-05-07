@@ -49,6 +49,7 @@ pub enum Type {
 	Struct(Vec<StructField>),
 	Named(StringId),
 	Func(Vec<Type>, Box<Type>),
+	Map(Box<Type>, Box<Type>),
 	Imported(StringId),
 	Any,
 }
@@ -101,6 +102,12 @@ impl Type {
 					rargs.push(arg.resolve_types(type_table, location)?);
 				}
 				Ok(Type::Func(rargs, Box::new(rret)))
+			}
+			Type::Map(key, val) => {
+				Ok(Type::Map(
+					Box::new(key.resolve_types(type_table, location)?), 
+					Box::new(val.resolve_types(type_table, location)?),
+				))
 			}
 		}
 	}
@@ -164,6 +171,13 @@ impl Type {
 					false
 				}
 			}
+			Type::Map(key1, val1) => {
+				if let Type::Map(key2, val2) = rhs {
+					key1.assignable(key2) && (val1 == val2)
+				} else {
+					false
+				}
+			}
 		}
 	}
 
@@ -202,6 +216,10 @@ impl Type {
 					vals.push(field.tipe.default_value());
 				}
 				xformcode::value_from_field_list(vals)
+			}
+			Type::Map(_key, _val) => {
+				// an unusable dummy value -- application will panic if it accesses this
+				Value::none()
 			}
 			Type::Named(_) => {
 				panic!("tried to get default value for a named type");
@@ -562,12 +580,13 @@ pub enum Expr {
 	ConstInt(Uint256, Option<Location>),
 	ConstBool(bool, Option<Location>),
 	FunctionCall(Box<Expr>, Vec<Expr>, Option<Location>),
-	ArrayRef(Box<Expr>, Box<Expr>, Option<Location>),
+	ArrayOrMapRef(Box<Expr>, Box<Expr>, Option<Location>),
 	StructInitializer(Vec<FieldInitializer>, Option<Location>),
 	Tuple(Vec<Expr>, Option<Location>),
 	NewArray(Box<Expr>, Type, Option<Location>),
 	NewFixedArray(usize, Option<Box<Expr>>, Option<Location>),
-	ArrayMod(Box<Expr>, Box<Expr>, Box<Expr>, Option<Location>),
+	NewMap(Type, Type, Option<Location>),
+	ArrayOrMapMod(Box<Expr>, Box<Expr>, Box<Expr>, Option<Location>),
 	StructMod(Box<Expr>, StringId, Box<Expr>, Option<Location>),
 	UnsafeCast(Box<Expr>, Type, Option<Location>),
 	Null(Option<Location>),
@@ -625,7 +644,7 @@ impl<'a> Expr {
 				}
 				Ok(Expr::FunctionCall(Box::new(fexpr.resolve_types(type_table)?), rargs, *loc))
 			},
-			Expr::ArrayRef(e1, e2, loc) => Ok(Expr::ArrayRef(
+			Expr::ArrayOrMapRef(e1, e2, loc) => Ok(Expr::ArrayOrMapRef(
 				Box::new(e1.resolve_types(type_table)?), 
 				Box::new(e2.resolve_types(type_table)?),
 				*loc
@@ -657,7 +676,13 @@ impl<'a> Expr {
 				)),
 				None => Ok(Expr::NewFixedArray(*sz, None, *loc)),
 			}
-			Expr::ArrayMod(e1, e2, e3, loc) => Ok(Expr::ArrayMod(
+			Expr::NewMap(key_type, value_type, loc) =>
+				Ok(Expr::NewMap(
+					key_type.resolve_types(type_table, *loc)?,
+					value_type.resolve_types(type_table, *loc)?,
+					*loc,
+				)),
+			Expr::ArrayOrMapMod(e1, e2, e3, loc) => Ok(Expr::ArrayOrMapMod(
 				Box::new(e1.resolve_types(type_table)?),
 				Box::new(e2.resolve_types(type_table)?),
 				Box::new(e3.resolve_types(type_table)?),
@@ -698,12 +723,13 @@ impl<'a> Expr {
 			Expr::ConstInt(_, loc) => *loc,
 			Expr::ConstBool(_, loc) => *loc,
 			Expr::FunctionCall(_, _, loc) => *loc,
-			Expr::ArrayRef(_, _, loc) => *loc,
+			Expr::ArrayOrMapRef(_, _, loc) => *loc,
 			Expr::StructInitializer(_, loc) => *loc,
 			Expr::Tuple(_, loc) => *loc,
 			Expr::NewArray(_, _, loc) => *loc,
 			Expr::NewFixedArray(_, _, loc) => *loc,
-			Expr::ArrayMod(_, _, _, loc) => *loc,
+			Expr::NewMap(_, _, loc) => *loc,
+			Expr::ArrayOrMapMod(_, _, _, loc) => *loc,
 			Expr::StructMod(_, _, _, loc) => *loc,
 			Expr::UnsafeCast(_, _, loc) => *loc,
 			Expr::Null(loc) => *loc,

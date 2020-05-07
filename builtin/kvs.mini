@@ -108,11 +108,11 @@ func simpleHashtable_expand(table: SimpleHashtable) SimpleHashtable {
 
 type KeyValueStore = [2]SimpleHashtable
 
-public func kvs_new() KeyValueStore {
+public func builtin_kvsNew() KeyValueStore {
 	return newfixedarray(2, simpleHashtable_new(bytes32(0))) with { [1] = simpleHashtable_new(bytes32(1)) };
 }
 
-public func kvs_get(kvs: KeyValueStore, key: anytype) (anytype, bool) {
+public func builtin_kvsGet(kvs: KeyValueStore, key: anytype) (anytype, bool) {
 	let val1 = simpleHashtable_get(kvs[0], hash(key));
 	if (val1.1) {
 		return val1;
@@ -120,11 +120,11 @@ public func kvs_get(kvs: KeyValueStore, key: anytype) (anytype, bool) {
 	return simpleHashtable_get(kvs[1], hash(key));
 }
 
-public func kvs_hasKey(kvs: KeyValueStore, key: anytype) bool {
-	return (kvs_get(kvs, key)).1;
+public func builtin_kvsHasKey(kvs: KeyValueStore, key: anytype) bool {
+	return (builtin_kvsGet(kvs, key)).1;
 }
 
-public func kvs_set(kvs: KeyValueStore, key: anytype, value: anytype) KeyValueStore {
+public func builtin_kvsSet(kvs: KeyValueStore, key: anytype, value: anytype) KeyValueStore {
 	let which = 0;
 	let retries = 0;
 	let item = struct {
@@ -141,7 +141,7 @@ public func kvs_set(kvs: KeyValueStore, key: anytype, value: anytype) KeyValueSt
 		which = 1-which;
 		retries = 1+retries;
 	}
-	return kvs_set(
+	return builtin_kvsSet(
 		kvs with { [0] = simpleHashtable_expand(kvs[0]) } 
 	        with { [1] = simpleHashtable_expand(kvs[1]) },
 		item.key,
@@ -149,7 +149,7 @@ public func kvs_set(kvs: KeyValueStore, key: anytype, value: anytype) KeyValueSt
 	);
 }
 
-public func kvs_delete(kvs: KeyValueStore, key: anytype) KeyValueStore {
+public func builtin_kvsDelete(kvs: KeyValueStore, key: anytype) KeyValueStore {
 	let val = simpleHashtable_get(kvs[0], hash(key));
 	if (val != null) {
 		return kvs with { [0] = simpleHashtable_delete(kvs[0], hash(key)) };
@@ -160,7 +160,7 @@ public func kvs_delete(kvs: KeyValueStore, key: anytype) KeyValueStore {
 	return kvs;
 }
 
-public func kvs_forall(
+public func builtin_kvsForall(
 	kvs: KeyValueStore,
 	cb: func(anytype, anytype, anytype) anytype,
 	state: anytype

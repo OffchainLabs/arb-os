@@ -90,6 +90,10 @@ Mini has the following types:
 
 > an array of values, all of the same type (a compound type)
 
+map [ *type* ] *type*
+
+> a hash map, which maps keys of one type to values of another type
+
 `struct` { *name1: type1 , name2 : type2 , ... ,* }
 
 > a struct with one or more named, typed fields (a compound type)
@@ -122,6 +126,8 @@ Two struct types are equal if have the same number of fields, and each field has
 
 Two func types are equal if they have the same number of argument types, each argument type is equal, argument-by-argument, and the return types are equal (or both return types are `void`).
 
+Two map types are equal if their key types are equal and their value types are equal.
+
 `anytype` equals itself.
 
 Each imported type equals itself.
@@ -139,6 +145,7 @@ A value of type `V` is assignable to storage of type `S` if:
 * S and V are arrays, and the field type of V is assignable to the field type of S,
 * S and V are structs, with the same number of fields, and each field of V has the same name as the corresponding field of S, and each field of V is assignable to the corresponding field of V,
 * S and V are function types, with the same number of arguments, and each argument type of V is assignable to the corresponding argument type of S, and either (a) both S and V return void, or (b) the return type of S is assignable to the return type of V.  (Note that the return type is compared for assignability "backwards". This is needed to make calls through function references type-safe.)
+* S and V are maps types, and the key type of V is assignable to the key type of S, and the value types of S and V are equal.
 
 These rules guarantee that assignability is a partial order. 
 
@@ -334,6 +341,10 @@ Mini never automatically converts types to make an operation succeed.  Programme
 
 > Create a new fixed-size array of elements, with every slot initialized to the value of *expression*. *size*, which must be a `uint` constant, is the size of the new array. The element type is inferred from the type of *expression*.
 
+`newmap` [ *type* ] *type* 
+
+> Create a new map object, initially empty.
+
 `unsafecast` ( *expression* , *type* )
 
 > Evaluate *expression*, and then treat the in-memory representation of the result as an object having type *type*. This is an unsafe operation.  It is most often used to convert a value of type `anytype` into a more specific type, when the programmer knows the real type of the value.  
@@ -341,6 +352,10 @@ Mini never automatically converts types to make an operation succeed.  Programme
 *arrExpression* [ *indexExpression* ]
 
 > Get an element of an array.  *arrExpression* must have type [ ]T or [N]T for some type T.  *indexExpression* must have type `uint`.  The access is bounds-checked, and this will panic at runtime if the index is outside the bounds of the array. The result has type T.
+
+mapExpression [ keyExpression ]
+
+> Get a value from a map.  mapExpression must be a map type. keyExpression, which must be assignable to the map's key type, gives the key to look up in the map. The result, which is of type (V, bool) where V is the value type of the map, will be (undefined, false) is there is not a value associated with the key, or (value, true) if value is associated with the key.
 
 *expression* . *name*
 
@@ -357,6 +372,10 @@ Mini never automatically converts types to make an operation succeed.  Programme
 *arrayExpression* with { [ *indexExpression* ] = *valExpression* }
 
 > Create a new array by copying an existing array with one element modified.  *arrayExpression*, which must be an array type, specifies the array to start with. *indexExpression*, which must have type `uint`, specifies which slot in the array should be modified.  *valExpression*, whose type must be assignable to the element type of the array, is the new value to put into the slot.  The result has the same type as *arrayExpression*. If the index is out of bounds, this will cause either a compile-time error or a runtime panic.  
+
+*mapExpression* `with` { [ *keyExpression* ] = *valExpression* }
+
+> Create a new map by copying an existing map with one element added or modified. *mapExpression*, which must be a map type, specifies the map to start with. *keyExpression*, which must be assignable to the map's key type, specifies the key to be added or modified. *valExpression*, which must match the map's value type, is the new value to be associated with the key.  The result has the same type as *mapExpression*.
 
 *structExpression* with { *name* : *valExpression* }
 

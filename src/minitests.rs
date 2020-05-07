@@ -200,3 +200,68 @@ fn test_pqtest(test_num: usize, expected_result: Value) {
         Err(e) => { panic!("{}\n{}", e.0, e.1); }
     }
 }
+
+#[test]
+fn testba0() {
+    test_bytearray(0, Value::Int(Uint256::from_usize(33)));
+}
+
+#[test]
+fn testba1() {
+    test_bytearray(1, Value::Int(Uint256::from_usize(42)));
+}
+
+#[test]
+fn testba2() {
+    test_bytearray(2, Value::Int(Uint256::from_usize(42)));
+}
+
+#[test]
+fn testba3() {
+    test_bytearray(3, Value::Int(Uint256::from_usize(42)));
+}
+
+#[allow(dead_code)]
+fn test_bytearray(test_num: usize, expected_result: Value) {
+    let path = Path::new("bytearraytest.mexe"); 
+    let res = run_from_file(path, vec![Value::Int(Uint256::from_usize(test_num))]);
+    match res {
+        Ok(res) => { assert_eq!(res, expected_result); }
+        Err(e) => { panic!("{}\n{}", e.0, e.1); }
+    }
+}
+
+#[test]
+fn testmap0() {
+    test_map(0, Value::none());
+}
+
+#[test]
+fn testmap1() {
+    test_map(1, Value::Int(Uint256::from_usize(0)));
+}
+
+#[test]
+fn testmap2() {
+    test_map(2, Value::Int(Uint256::from_usize(1)));
+}
+
+#[test]
+fn testmap3() {
+    test_map(3, Value::Int(Uint256::from_usize(42)));
+}
+
+#[test]
+fn testmap4() {
+    test_map(4, Value::Int(Uint256::from_usize(13)));
+}
+
+#[allow(dead_code)]
+fn test_map(test_num: usize, expected_result: Value) {
+    let path = Path::new("maptest.mexe"); 
+    let res = run_from_file(path, vec![Value::Int(Uint256::from_usize(test_num))]);
+    match res {
+        Ok(res) => { assert_eq!(res, expected_result); }
+        Err(e) => { panic!("{}\n{}", e.0, e.1); }
+    }
+}

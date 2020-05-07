@@ -126,6 +126,7 @@ Type: Type = {
 		Box::new(t), 
 		s.to_usize().unwrap(),
 	),
+	"map" "[" <t1:Type> "]" <t2:Type> => Type::Map(Box::new(t1), Box::new(t2)),
 	"func" "(" <CommaedTypes> ")" "void" => Type::Func(<>, Box::new(Type::Void)),
 	"func" "(" <a: CommaedTypes> ")" <r: Type> => Type::Func(a, Box::new(r)),
 	"anytype" => Type::Any,
@@ -146,7 +147,7 @@ Ident: StringId = {
 };
 
 Expr: Expr = {
-	<lno: @L> <t:Expr> "with" "{" "[" <i:Expr> "]" "=" <v:Expr> "}" => Expr::ArrayMod(
+	<lno: @L> <t:Expr> "with" "{" "[" <i:Expr> "]" "=" <v:Expr> "}" => Expr::ArrayOrMapMod(
 		Box::new(t), 
 		Box::new(i), 
 		Box::new(v),
@@ -214,7 +215,7 @@ Expr9: Expr = {
 Expr10: Expr = {
 	<lno: @L> <f: Expr10> "(" ")" => Expr::FunctionCall(Box::new(f), Vec::new(), file_info.location(BytePos::from(lno))),
 	<lno: @L> <f: Expr10> "(" <c: CommaedExprs> ")" => Expr::FunctionCall(Box::new(f), c, file_info.location(BytePos::from(lno))),
-	<lno: @L> <e1:Expr10> "[" <e2:Expr> "]" => Expr::ArrayRef(Box::new(e1), Box::new(e2), file_info.location(BytePos::from(lno))),
+	<lno: @L> <e1:Expr10> "[" <e2:Expr> "]" => Expr::ArrayOrMapRef(Box::new(e1), Box::new(e2), file_info.location(BytePos::from(lno))),
 	<lno: @L> <e:Expr10> "." <i:Ident> => Expr::DotRef(Box::new(e), i, file_info.location(BytePos::from(lno))),
 	<lno: @L> <e:Expr10> "." <u:UnsignedInteger> => Expr::TupleRef(Box::new(e), u, file_info.location(BytePos::from(lno))),
 	Expr11,
@@ -238,6 +239,7 @@ Expr11: Expr = {
 		None,
 		file_info.location(BytePos::from(lno)),
 	),
+	<lno: @L> "newmap" "[" <k:Type> "]" <v:Type> => Expr::NewMap(k, v, file_info.location(BytePos::from(lno))),
 	<lno: @L> "unsafecast" "(" <e:Expr> "," <t:Type> ")" => Expr::UnsafeCast(Box::new(e), t, file_info.location(BytePos::from(lno))),
 	Expr13,
 }

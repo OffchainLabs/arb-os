@@ -21,6 +21,31 @@ pub fn builtin_func_decls<'a>(mut string_table: StringTable<'a>) -> (Vec<ImportF
             vec![Type::Any, Type::Uint, Type::Any],
             Type::Any,
         ),
+        ImportFuncDecl::new_types(
+            string_table.get("builtin_kvsNew"),
+            vec![],
+            Type::Any,
+        ),
+        ImportFuncDecl::new_types(
+            string_table.get("builtin_kvsHasKey"),
+            vec![Type::Any, Type::Any],
+            Type::Bool,
+        ),
+        ImportFuncDecl::new_types(
+            string_table.get("builtin_kvsGet"),
+            vec![Type::Any, Type::Any],
+            Type::Tuple(vec![Type::Any, Type::Bool]),
+        ),
+        ImportFuncDecl::new_types(
+            string_table.get("builtin_kvsSet"),
+            vec![Type::Any, Type::Any, Type::Any],
+            Type::Any,
+        ),
+        ImportFuncDecl::new_types(
+            string_table.get("builtin_kvsDelete"),
+            vec![Type::Any, Type::Any],
+            Type::Any,
+        )
     ];
     (imps, string_table)
 }
@@ -30,7 +55,8 @@ pub fn add_auto_link_progs<'a>(
 	progs_in: &[CompiledProgram],
 ) -> Result<Vec<CompiledProgram>, CompileError<'a>> {
 	let builtin_pathnames = vec![
-		"builtin/array.mao"
+        "builtin/array.mao",
+        "builtin/kvs.mao",
 	];
 	let mut progs = progs_in.to_owned();
 	for pathname in builtin_pathnames {

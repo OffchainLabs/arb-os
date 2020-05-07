@@ -1,67 +1,62 @@
 
-import type KeyValueStore;
-
-import func kvs_new() KeyValueStore;
-import func kvs_get(kvs: KeyValueStore, key: anytype) (anytype, bool);
-import func kvs_set(kvs: KeyValueStore, key: anytype, value: anytype) KeyValueStore;
-import func kvs_delete(kvs: KeyValueStore, key: anytype) KeyValueStore;
-import func kvs_forall(kvs: KeyValueStore, cb: func(anytype, anytype, anytype) anytype, state: anytype) anytype; 
+import func builtin_kvsDelete(kvs: anytype, key: anytype) anytype;
+import func builtin_kvsForall(kvs: anytype, cb: func(anytype, anytype, anytype) anytype, state: anytype) anytype; 
 
 func tests(which: uint) anytype {
 	if (which == 0) {
-		let s = kvs_new();
-		return (kvs_get(s, 17)).0;
+		let s = builtin_kvsNew();
+		return (builtin_kvsGet(s, 17)).0;
 	} elseif (which == 1) {
-		let s = kvs_new();
-		s = kvs_set(s, 42, 42);
-		return (kvs_get(s, 42)).0;
+		let s = builtin_kvsNew();
+		s = builtin_kvsSet(s, 42, 42);
+		return (builtin_kvsGet(s, 42)).0;
 	} elseif (which == 2) {
-		let s = kvs_new();
-		s = kvs_set(s, 42, 43);
-		s = kvs_set(s, 55, 56);
-		s = kvs_set(s, 42, 99);
-		return (kvs_get(s, 42)).0;
+		let s = builtin_kvsNew();
+		s = builtin_kvsSet(s, 42, 43);
+		s = builtin_kvsSet(s, 55, 56);
+		s = builtin_kvsSet(s, 42, 99);
+		return (builtin_kvsGet(s, 42)).0;
 	} elseif (which == 3) {
-		let s = kvs_new();
-		s = kvs_set(s, 42, 43);
-		s = kvs_set(s, 55, 56);
-		s = kvs_set(s, 42, 99);
-		return (kvs_get(s, 55)).0;
+		let s = builtin_kvsNew();
+		s = builtin_kvsSet(s, 42, 43);
+		s = builtin_kvsSet(s, 55, 56);
+		s = builtin_kvsSet(s, 42, 99);
+		return (builtin_kvsGet(s, 55)).0;
 	} elseif (which == 4) {
-		let s = kvs_new();
+		let s = builtin_kvsNew();
 		let i = 0;
-		while (i < 150) {
-			s = kvs_set(s, i, 1000+i);
+		while (i < 41) {
+			s = builtin_kvsSet(s, i, 1000+i);
 			i = i+1;
 		}
-		return (kvs_get(s, 17)).0;
+		return (builtin_kvsGet(s, 17)).0;
 	} elseif (which == 5) {
-		let s = kvs_new();
+		let s = builtin_kvsNew();
 		let i = 0;
 		while (i < 27) {
-			s = kvs_set(s, i, 1000+i);
+			s = builtin_kvsSet(s, i, 1000+i);
 			i = i+1;
 		}
-		s = kvs_delete(s, 17);
-		return (kvs_get(s, 17)).0;
+		s = builtin_kvsDelete(s, 17);
+		return (builtin_kvsGet(s, 17)).0;
 	} elseif (which == 6) {
-		let s = kvs_new();
-		s = kvs_set(s, 42, 43);
-		s = kvs_set(s, 55, 56);
-		s = kvs_set(s, 42, 99);
-		return (kvs_get(s, 42)).1;
+		let s = builtin_kvsNew();
+		s = builtin_kvsSet(s, 42, 43);
+		s = builtin_kvsSet(s, 55, 56);
+		s = builtin_kvsSet(s, 42, 99);
+		return (builtin_kvsGet(s, 42)).1;
 	} elseif (which == 7) {
-		let s = kvs_new();
-		s = kvs_set(s, 42, 43);
-		s = kvs_set(s, 55, 56);
-		s = kvs_set(s, 42, 99);
-		return (kvs_get(s, 3)).1;
+		let s = builtin_kvsNew();
+		s = builtin_kvsSet(s, 42, 43);
+		s = builtin_kvsSet(s, 55, 56);
+		s = builtin_kvsSet(s, 42, 99);
+		return (builtin_kvsGet(s, 3)).1;
 	} elseif (which == 8) {
-		let s = kvs_new();
-		s = kvs_set(s, 42, 43);
-		s = kvs_set(s, 55, 56);
-		s = kvs_set(s, 42, 99);
-		let rawResult = kvs_forall(s, sumForKvsIterator, 0);
+		let s = builtin_kvsNew();
+		s = builtin_kvsSet(s, 42, 43);
+		s = builtin_kvsSet(s, 55, 56);
+		s = builtin_kvsSet(s, 42, 99);
+		let rawResult = builtin_kvsForall(s, sumForKvsIterator, 0);
 		return unsafecast(rawResult, uint);
 	} else {
 		return null;

@@ -1,0 +1,51 @@
+
+import func builtin_arrayOp(a: []uint, index: uint, closure: opClosure) ([]uint, uint);
+
+type opClosure = struct {
+	f: func((uint, uint), uint) (uint, uint),  // (closure.val, oldVal) -> (newVal, return)
+	val: (uint, uint),
+}
+
+type ByteArray = (uint, []uint)
+
+public func bytearray_new(size: uint) ByteArray {
+    return(size, newarray((size+31)/32, uint),);
+}
+
+public func bytearray_size(ba: ByteArray) uint {
+    return ba.0;
+}
+
+public func bytearray_get(ba: ByteArray, idx: uint) uint {
+    if (idx >= ba.0) {
+        panic;
+    }
+    let slot = ba.1[idx/32];
+    let byteno = idx%32;
+    return (slot / (asm (2, 8*byteno) uint { exp })) & 0xff;
+}
+
+public func bytearray_set(ba: ByteArray, idx: uint, val: uint) ByteArray {
+    if (idx >= ba.0) {
+        panic;
+    }
+    return (
+        ba.0,
+        builtin_arrayOp(
+            ba.1, 
+            idx/32, 
+            struct { f: baput_closure_func, val: (idx%32, val,), } 
+        ).0,
+    );
+}
+
+func baput_closure_func(args: (uint, uint), oldval: uint) (uint, uint) { // returns (newval, junk)
+    let (subidx, newbval,) = args;
+    let shiftFac = asm (2, 8*subidx) uint { exp };
+    let mask = 0xff * shiftFac;
+    let pasteIn = (newbval & 0xff) * shiftFac;
+    return (
+        (oldval & ~mask) | pasteIn,
+        0, 
+    );
+}

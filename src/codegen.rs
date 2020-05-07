@@ -710,12 +710,6 @@ fn mavm_codegen_expr<'a>(
 				code = c;
 			}
 			code.push(Instruction::from_opcode_imm(Opcode::Noop, Value::Label(ret_label), *loc));
-			/*
-			let func_label = match import_func_map.get(name) {
-				Some(lab) => *lab,
-				None => Label::Func(*name),
-			};
-			*/
 			let (lg, c) = mavm_codegen_expr(
 				fexpr,
 				code,
@@ -808,6 +802,27 @@ fn mavm_codegen_expr<'a>(
 			code.push(Instruction::from_opcode(Opcode::UncheckedFixedArrayGet(*size), *loc));
 			Ok((label_gen, code))
 		}
+		TypeCheckedExpr::MapRef(map_expr, key_expr, _, loc) => {
+			let call_type = Type::Func(
+				vec![Type::Any, Type::Any],
+				Box::new(Type::Tuple(vec![Type::Bool, Type::Any])),
+			);
+			let the_expr = TypeCheckedExpr::FunctionCall(
+				Box::new(TypeCheckedExpr::FuncRef(*string_table.get_if_exists("builtin_kvsGet").unwrap(), call_type.clone(), *loc)),
+				vec![*map_expr.clone(), *key_expr.clone()],
+				call_type,
+				*loc,
+			);
+			mavm_codegen_expr(
+				&the_expr,
+				code, 
+				locals,
+				label_gen,
+				string_table,
+				import_func_map,
+				global_var_map,
+			)
+		}
 		TypeCheckedExpr::NewArray(sz_expr, base_type, array_type, loc) => {
 			let call_type = Type::Func(
 				vec![Type::Uint, Type::Any],
@@ -867,6 +882,27 @@ fn mavm_codegen_expr<'a>(
 			}
 			Ok((label_gen, code))
 		}
+		TypeCheckedExpr::NewMap(_, loc) => {
+			let call_type = Type::Func(
+				vec![],
+				Box::new(Type::Any),
+			);
+			let the_expr = TypeCheckedExpr::FunctionCall(
+				Box::new(TypeCheckedExpr::FuncRef(*string_table.get_if_exists("builtin_kvsNew").unwrap(), call_type.clone(), *loc)),
+				vec![],
+				call_type,
+				*loc,
+			);
+			mavm_codegen_expr(
+				&the_expr,
+				code, 
+				locals,
+				label_gen,
+				string_table,
+				import_func_map,
+				global_var_map,
+			)
+		}
 		TypeCheckedExpr::ArrayMod(arr, index, val, _, loc) => {
 			let call_type = Type::Func(
 				vec![arr.get_type(), index.get_type(), val.get_type()],
@@ -898,6 +934,27 @@ fn mavm_codegen_expr<'a>(
 			global_var_map,
 			*loc,
 		),
+		TypeCheckedExpr::MapMod(map_expr, key_expr, val_expr, _, loc) => {
+			let call_type = Type::Func(
+				vec![map_expr.get_type(), key_expr.get_type(), val_expr.get_type()],
+				Box::new(map_expr.get_type()),
+			);
+			let the_expr = TypeCheckedExpr::FunctionCall(
+				Box::new(TypeCheckedExpr::FuncRef(*string_table.get_if_exists("builtin_kvsSet").unwrap(), call_type.clone(), *loc)),
+				vec![*map_expr.clone(), *key_expr.clone(), *val_expr.clone()],
+				call_type,
+				*loc,
+			);
+			mavm_codegen_expr(
+				&the_expr,
+				code,
+				locals,
+				label_gen,
+				string_table,
+				import_func_map,
+				global_var_map,
+			)			
+		}
 		TypeCheckedExpr::StructMod(struc, index, val, t, loc) => {
 			let (lg, c) = mavm_codegen_expr(val, code, locals, label_gen, string_table, import_func_map, global_var_map)?;
 			let (lg, c) = mavm_codegen_expr(struc, c, locals, lg, string_table, import_func_map, global_var_map)?;

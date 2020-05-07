@@ -74,11 +74,14 @@ pub enum TypeCheckedExpr {
 	StructInitializer(Vec<TypeCheckedStructField>, Type, Option<Location>),
 	ArrayRef(Box<TypeCheckedExpr>, Box<TypeCheckedExpr>, Type, Option<Location>),
 	FixedArrayRef(Box<TypeCheckedExpr>, Box<TypeCheckedExpr>, usize, Type, Option<Location>),
+	MapRef(Box<TypeCheckedExpr>, Box<TypeCheckedExpr>, Type, Option<Location>),
 	Tuple(Vec<TypeCheckedExpr>, Type, Option<Location>),
 	NewArray(Box<TypeCheckedExpr>, Type, Type, Option<Location>),
 	NewFixedArray(usize, Option<Box<TypeCheckedExpr>>, Type, Option<Location>),
+	NewMap(Type, Option<Location>),
 	ArrayMod(Box<TypeCheckedExpr>, Box<TypeCheckedExpr>, Box<TypeCheckedExpr>, Type, Option<Location>),
 	FixedArrayMod(Box<TypeCheckedExpr>, Box<TypeCheckedExpr>, Box<TypeCheckedExpr>, usize, Type, Option<Location>),
+	MapMod(Box<TypeCheckedExpr>, Box<TypeCheckedExpr>, Box<TypeCheckedExpr>, Type, Option<Location>),
 	StructMod(Box<TypeCheckedExpr>, usize, Box<TypeCheckedExpr>, Type, Option<Location>),
 	Cast(Box<TypeCheckedExpr>, Type, Option<Location>),
 	Asm(Type, Vec<Instruction>, Vec<TypeCheckedExpr>, Option<Location>),
@@ -101,11 +104,14 @@ impl<'a> TypeCheckedExpr {
 			TypeCheckedExpr::StructInitializer(_, t, _) => t.clone(),
 			TypeCheckedExpr::ArrayRef(_, _, t, _) => t.clone(),
 			TypeCheckedExpr::FixedArrayRef(_, _, _, t, _) => t.clone(),
+			TypeCheckedExpr::MapRef(_, _, t, _) => t.clone(),
 			TypeCheckedExpr::Tuple(_, t, _) => t.clone(),
 			TypeCheckedExpr::NewArray(_, _, t, _) => t.clone(),
 			TypeCheckedExpr::NewFixedArray(_, _, t, _) => t.clone(),
+			TypeCheckedExpr::NewMap(t, _) => t.clone(),
 			TypeCheckedExpr::ArrayMod(_, _, _, t, _) => t.clone(),
 			TypeCheckedExpr::FixedArrayMod(_, _, _, _, t, _) => t.clone(),
+			TypeCheckedExpr::MapMod(_, _, _, t, _) => t.clone(),
 			TypeCheckedExpr::StructMod(_, _, _, t, _) => t.clone(),
 			TypeCheckedExpr::Cast(_, t, _) => t.clone(),
 			TypeCheckedExpr::Asm(t, _, _, _) => t.clone(),
@@ -128,11 +134,14 @@ impl<'a> TypeCheckedExpr {
 			TypeCheckedExpr::StructInitializer(_, _, loc) => *loc,
 			TypeCheckedExpr::ArrayRef(_, _, _, loc) => *loc,
 			TypeCheckedExpr::FixedArrayRef(_, _, _, _, loc) => *loc,
+			TypeCheckedExpr::MapRef(_, _, _, loc) => *loc,
 			TypeCheckedExpr::Tuple(_, _, loc) => *loc,
 			TypeCheckedExpr::NewArray(_, _, _, loc) => *loc,
 			TypeCheckedExpr::NewFixedArray(_, _, _, loc) => *loc,
+			TypeCheckedExpr::NewMap(_, loc) => *loc,
 			TypeCheckedExpr::ArrayMod(_, _, _, _, loc) => *loc,
 			TypeCheckedExpr::FixedArrayMod(_, _, _, _, _, loc) => *loc,
+			TypeCheckedExpr::MapMod(_, _, _, _, loc) => *loc,
 			TypeCheckedExpr::StructMod(_, _, _, _, loc) => *loc,
 			TypeCheckedExpr::Cast(_, _, loc) => *loc,
 			TypeCheckedExpr::Asm(_, _, _, loc) => *loc,
@@ -590,7 +599,7 @@ fn typecheck_expr(
 				_ => Err(new_type_error("function call to value that is not a function", *loc))
 			}
 		},
-		Expr::ArrayRef(array, index, loc) => {
+		Expr::ArrayOrMapRef(array, index, loc) => {
 			let tc_arr = typecheck_expr(&*array, type_table, global_vars, func_table)?;
 			let tc_idx = typecheck_expr(&*index, type_table, global_vars, func_table)?;
 			match tc_arr.get_type() {
@@ -612,6 +621,18 @@ fn typecheck_expr(
 						))
 					} else {
 						Err(new_type_error("fixedarray index must be Uint", *loc))
+					}
+				}
+				Type::Map(kt, vt) => {
+					if tc_idx.get_type() == *kt {
+						Ok(TypeCheckedExpr::MapRef(
+							Box::new(tc_arr), 
+							Box::new(tc_idx), 
+							Type::Tuple(vec![*vt, Type::Bool]),
+							*loc
+						))
+					} else {
+						Err(new_type_error("invalid key value in map lookup", *loc))
 					}
 				}
 				_ => Err(new_type_error("fixedarray lookup in non-array type", *loc))
@@ -640,6 +661,8 @@ fn typecheck_expr(
 				*loc,
 			))
 		}
+		Expr::NewMap(key_type, value_type, loc) => 
+			Ok(TypeCheckedExpr::NewMap(Type::Map(Box::new(key_type.clone()), Box::new(value_type.clone())), *loc)),
 		Expr::StructInitializer(fieldvec, loc) => {
 			let mut tc_fields = Vec::new();
 			let mut tc_fieldtypes = Vec::new();
@@ -660,33 +683,57 @@ fn typecheck_expr(
 			}
 			Ok(TypeCheckedExpr::Tuple(tc_fields, Type::Tuple(types), *loc))
 		}
-		Expr::ArrayMod(arr, index, val, loc) => {
+		Expr::ArrayOrMapMod(arr, index, val, loc) => {
 			let tc_arr = typecheck_expr(arr, type_table, global_vars, func_table)?;
 			let tc_index = typecheck_expr(index, type_table, global_vars, func_table)?;
 			let tc_val = typecheck_expr(val, type_table, global_vars, func_table)?;
-			if tc_index.get_type() != Type::Uint {
-				return Err(new_type_error("array or block modifier requires uint index", *loc));
-			}
 			match tc_arr.get_type() {
 				Type::Array(t) => if t.assignable(&tc_val.get_type()) {
-					Ok(TypeCheckedExpr::ArrayMod(
-						Box::new(tc_arr), 
-						Box::new(tc_index), 
-						Box::new(tc_val), 
-						Type::Array(t),
-						*loc
-					))
+					if tc_index.get_type() != Type::Uint {
+						Err(new_type_error("array modifier requires uint index", *loc))
+					} else {
+						Ok(TypeCheckedExpr::ArrayMod(
+							Box::new(tc_arr), 
+							Box::new(tc_index), 
+							Box::new(tc_val), 
+							Type::Array(t),
+							*loc
+						))
+					}
 				} else {
 					Err(new_type_error("mismatched types in array modifier", *loc))
 				}
-				Type::FixedArray(t, sz) => Ok(TypeCheckedExpr::FixedArrayMod(
-					Box::new(tc_arr), 
-					Box::new(tc_index), 
-					Box::new(tc_val),
-					sz, 
-					Type::FixedArray(t, sz),
-					*loc,
-				)),
+				Type::FixedArray(t, sz) => {
+					if tc_index.get_type() != Type::Uint {
+						Err(new_type_error("array modifier requires uint index", *loc))
+					} else {
+						Ok(TypeCheckedExpr::FixedArrayMod(
+							Box::new(tc_arr), 
+							Box::new(tc_index), 
+							Box::new(tc_val),
+							sz, 
+							Type::FixedArray(t, sz),
+							*loc,
+						))
+					}
+				}
+				Type::Map(kt, vt) => { 
+					if tc_index.get_type() == *kt {
+						if vt.assignable(&tc_val.get_type()) {
+							Ok(TypeCheckedExpr::MapMod(
+								Box::new(tc_arr), 
+								Box::new(tc_index), 
+								Box::new(tc_val), 
+								Type::Map(kt,vt), 
+								*loc
+							))
+						} else {
+							Err(new_type_error("invalid value type for map modifier", *loc))
+						}
+					} else {
+						Err(new_type_error("invalid key type for map modifier", *loc))
+					}
+				}
 				_ => Err(new_type_error("[] modifier must operate on array or block", *loc))
 			}
 		}
