@@ -36,7 +36,7 @@ fn testarray6() {
 
 #[allow(dead_code)]
 fn test_arraytest(test_num: usize, expected_result: Value) {
-    let path = Path::new("arraytest.mexe"); 
+    let path = Path::new("builtin/arraytest.mexe"); 
     let res = run_from_file(path, vec![Value::Int(Uint256::from_usize(test_num))]);
     match res {
         Ok(res) => { assert_eq!(res, expected_result); }
@@ -91,7 +91,7 @@ fn testkvs8() {
 
 #[allow(dead_code)]
 fn test_kvstest(test_num: usize, expected_result: Value) {
-    let path = Path::new("kvstest.mexe"); 
+    let path = Path::new("builtin/kvstest.mexe"); 
     let res = run_from_file(path, vec![Value::Int(Uint256::from_usize(test_num))]);
     match res {
         Ok(res) => { assert_eq!(res, expected_result); }
@@ -122,7 +122,7 @@ fn testq3() {
 
 #[allow(dead_code)]
 fn test_queuetest(test_num: usize, expected_result: Value) {
-    let path = Path::new("queuetest.mexe"); 
+    let path = Path::new("stdlib/queuetest.mexe"); 
     let res = run_from_file(path, vec![Value::Int(Uint256::from_usize(test_num))]);
     match res {
         Ok(res) => { assert_eq!(res, expected_result); }
@@ -158,7 +158,7 @@ fn testglobal4() {
 
 #[allow(dead_code)]
 fn test_globaltest(test_num: usize, expected_result: Value) {
-    let path = Path::new("globaltest.mexe"); 
+    let path = Path::new("builtin/globaltest.mexe"); 
     let res = run_from_file(path, vec![Value::Int(Uint256::from_usize(test_num))]);
     match res {
         Ok(res) => { assert_eq!(res, expected_result); }
@@ -193,7 +193,7 @@ fn testpq4() {
 
 #[allow(dead_code)]
 fn test_pqtest(test_num: usize, expected_result: Value) {
-    let path = Path::new("priorityqtest.mexe"); 
+    let path = Path::new("stdlib/priorityqtest.mexe"); 
     let res = run_from_file(path, vec![Value::Int(Uint256::from_usize(test_num))]);
     match res {
         Ok(res) => { assert_eq!(res, expected_result); }
@@ -223,7 +223,7 @@ fn testba3() {
 
 #[allow(dead_code)]
 fn test_bytearray(test_num: usize, expected_result: Value) {
-    let path = Path::new("bytearraytest.mexe"); 
+    let path = Path::new("stdlib/bytearraytest.mexe"); 
     let res = run_from_file(path, vec![Value::Int(Uint256::from_usize(test_num))]);
     match res {
         Ok(res) => { assert_eq!(res, expected_result); }
@@ -258,7 +258,7 @@ fn testmap4() {
 
 #[allow(dead_code)]
 fn test_map(test_num: usize, expected_result: Value) {
-    let path = Path::new("maptest.mexe"); 
+    let path = Path::new("builtin/maptest.mexe"); 
     let res = run_from_file(path, vec![Value::Int(Uint256::from_usize(test_num))]);
     match res {
         Ok(res) => { assert_eq!(res, expected_result); }

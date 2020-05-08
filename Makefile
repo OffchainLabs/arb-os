@@ -1,41 +1,44 @@
 
+BUILTINDIR = builtin
+STDDIR = stdlib
+
 test: all
 	cargo test
 
-EXES = kvstest.mexe queuetest.mexe arraytest.mexe globaltest.mexe priorityqtest.mexe bytearraytest.mexe maptest.mexe
-BUILTINMAOS = builtin/array.mao builtin/kvs.mao
+TESTEXES = $(BUILTINDIR)/kvstest.mexe $(STDDIR)/queuetest.mexe $(BUILTINDIR)/arraytest.mexe $(BUILTINDIR)/globaltest.mexe $(STDDIR)/priorityqtest.mexe $(STDDIR)/bytearraytest.mexe $(BUILTINDIR)/maptest.mexe
+BUILTINMAOS = $(BUILTINDIR)/array.mao $(BUILTINDIR)/kvs.mao
 
-all: $(EXES)
+all: $(TESTEXES)
 
-kvstest.mexe: $(BUILTINMAOS) kvstest.mini
-	cargo run compile kvstest.mini -o kvstest.mexe
+$(BUILTINDIR)/kvstest.mexe: $(BUILTINMAOS) $(BUILTINDIR)/kvstest.mini
+	cargo run compile $(BUILTINDIR)/kvstest.mini -o $(BUILTINDIR)/kvstest.mexe
 
-queuetest.mexe: $(BUILTINMAOS) queuetest.mini queue.mini
-	cargo run compile queuetest.mini queue.mini -o queuetest.mexe
+$(STDDIR)/queuetest.mexe: $(BUILTINMAOS) $(STDDIR)/queuetest.mini $(STDDIR)/queue.mini
+	cargo run compile $(STDDIR)/queuetest.mini $(STDDIR)/queue.mini -o $(STDDIR)/queuetest.mexe
 
-arraytest.mexe: $(BUILTINMAOS) arraytest.mini
-	cargo run compile arraytest.mini -o arraytest.mexe
+$(BUILTINDIR)/arraytest.mexe: $(BUILTINMAOS) $(BUILTINDIR)/arraytest.mini
+	cargo run compile $(BUILTINDIR)/arraytest.mini -o $(BUILTINDIR)/arraytest.mexe
 
-globaltest.mexe: $(BUILTINMAOS) globaltest.mini
-	cargo run compile globaltest.mini -o globaltest.mexe
+$(BUILTINDIR)/globaltest.mexe: $(BUILTINMAOS) $(BUILTINDIR)/globaltest.mini
+	cargo run compile $(BUILTINDIR)/globaltest.mini -o $(BUILTINDIR)/globaltest.mexe
 
-priorityqtest.mexe: $(BUILTINMAOS) priorityqtest.mini priorityq.mini
-	cargo run compile priorityqtest.mini priorityq.mini -o priorityqtest.mexe
+$(STDDIR)/priorityqtest.mexe: $(BUILTINMAOS) $(STDDIR)/priorityqtest.mini $(STDDIR)/priorityq.mini
+	cargo run compile $(STDDIR)/priorityqtest.mini $(STDDIR)/priorityq.mini -o $(STDDIR)/priorityqtest.mexe
 	
-bytearraytest.mexe: $(BUILTINMAOS) bytearraytest.mini bytearray.mini
-	cargo run compile bytearraytest.mini bytearray.mini -o bytearraytest.mexe
+$(STDDIR)/bytearraytest.mexe: $(BUILTINMAOS) $(STDDIR)/bytearraytest.mini $(STDDIR)/bytearray.mini
+	cargo run compile $(STDDIR)/bytearraytest.mini $(STDDIR)/bytearray.mini -o $(STDDIR)/bytearraytest.mexe
 
-maptest.mexe: $(BUILTINMAOS) maptest.mini
-	cargo run compile maptest.mini -o maptest.mexe
+$(BUILTINDIR)/maptest.mexe: $(BUILTINMAOS) $(BUILTINDIR)/maptest.mini
+	cargo run compile $(BUILTINDIR)/maptest.mini -o $(BUILTINDIR)/maptest.mexe
 
-builtin/array.mao: builtin/array.mini
-	cargo run compile builtin/array.mini -c -o builtin/array.mao
+$(BUILTINDIR)/array.mao: $(BUILTINDIR)/array.mini
+	cargo run compile $(BUILTINDIR)/array.mini -c -o $(BUILTINDIR)/array.mao
 
-builtin/kvs.mao: builtin/kvs.mini
-	cargo run compile builtin/kvs.mini -c -o builtin/kvs.mao
+$(BUILTINDIR)/kvs.mao: $(BUILTINDIR)/kvs.mini
+	cargo run compile $(BUILTINDIR)/kvs.mini -c -o $(BUILTINDIR)/kvs.mao
 
 compiler: 
 	cargo build
 
 clean: 
-	rm -f builtin/array.mao builtin/kvs.mao kvstest.mexe queuetest.mexe arraytest.mexe globaltest.mexe priorityqtest.mexe bytearraytest.mexe
+	rm -f $(BUILTINMAOS) $(TESTEXES)
