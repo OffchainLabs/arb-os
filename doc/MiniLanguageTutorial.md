@@ -139,15 +139,15 @@ Unless specified as equal by the rules above, a pair of types is unequal.
 A value of type `V` is assignable to storage of type `S` if:
 
 * `S` is `anytype`, or
-* `S` equals `V`,
-* S and V are tuple types with the same number of fields, and each field of V is assignable to the corresponding field of S,
-* S and V are fixed-size arrays of the same size, and the field type of V is assignable to the field type of S,
-* S and V are arrays, and the field type of V is assignable to the field type of S,
-* S and V are structs, with the same number of fields, and each field of V has the same name as the corresponding field of S, and each field of V is assignable to the corresponding field of V,
-* S and V are function types, with the same number of arguments, and each argument type of V is assignable to the corresponding argument type of S, and either (a) both S and V return void, or (b) the return type of S is assignable to the return type of V.  (Note that the return type is compared for assignability "backwards". This is needed to make calls through function references type-safe.)
-* S and V are maps types, and the key type of V is assignable to the key type of S, and the value types of S and V are equal.
+* `V` equals `S`,
+* `V` and `S` are tuple types with the same number of fields, and each field of `V` is assignable to the corresponding field of `S`,
+* `V` and `S` are fixed-size arrays of the same size, and the field type of `V` is assignable to the field type of `S`,
+* `V` and `S` are arrays, and the field type of `V` is assignable to the field type of `S`,
+* `V` and `S` are structs, with the same number of fields, and each field of `V` has the same name as the corresponding field of `S`, and each field of `V` is assignable to the corresponding field of `S`,
+* `V` and `S` are function types, with the same number of arguments, and each argument type of `V` is assignable to the corresponding argument type of `S`, and either (a) both `S` and `V` return void, or (b) the return type of `S` is assignable to the return type of `V`.  (Note that the return type is compared for assignability "backwards". This is needed to make calls through function references type-safe.)
+* `V` and `S` are map types, and the key type of `V` is assignable to the key type of `S`, and the value types of `V` and `S` are equal.
 
-These rules guarantee that assignability is a partial order. 
+These rules guarantee that assignability is transitive. 
 
 The compiler uses often uses type inference to infer the types of variables from the types of values assigned to them.  If a programmer wants the compiler to infer a different type, they should use an explicit type-casting operation to convert the value to the desired type.
 
@@ -157,13 +157,13 @@ All values in Mini are immutable. There is no way to modify a value. You can onl
 
 Because values are immutable, there is no notion of a reference to a value.  As far as the semantics of Mini are concerned, there are only values, and any assignment or passing of values is done by copying (although the compiler might optimize by copying a pointer rather than copying the object).
 
-[Implementation note: Because of immutability, the compiler can choose whether to implement "copying" of an object by creating a fresh copy of its contents or by just creating a new pointer reference to the object. The difference only affects the efficiency of the generated code.  Currently, the compiler copies a value if its type is atomic, and copies a reference to it otherwise.  Because of immutability, it is impossible to create a cyclic data structure. This means that the underlying implementation doesn't need to use garbage collection but can always use reference-counting to achieve perfect cleanup of unreachable copy-by-reference objects.]
+[Implementation note: Because of immutability, the compiler can choose whether to implement "copying" of an object by creating a fresh copy of its contents or by just creating a new pointer reference to the object. The difference only affects the efficiency of the generated code.  Currently, the underlying AVM emulator copies a value if its type is atomic, and copies a reference to it otherwise.  Because of immutability, it is impossible to create a cyclic data structure. This means that the underlying implementation doesn't need to use garbage collection but can always use reference-counting to achieve perfect cleanup of unreachable copy-by-reference objects.]
 
 ### Comparing values for equality
 
 Two values are equal if they have the same type and the same contents.  Equality checking for compound types works as expected, with a "deep comparison" of the fields.  Two function references are equal if they refer to the same function.  
 
-Values of type `anytype` do not have any representation that is understood by the compiler; they will be equal if they have the same representation in the underlying AVM architecture.  So it could be the case that if values of two different types are constructed, and both are assigned to variables of type `anytype`, the resulting values could test as equal.  (Details of data representations are not described here.) So caution is advised before comparing `anytype` values.
+Values of type `anytype` do not have any representation that is understood by the compiler. Two `anytype` values will be equal if they have the same representation in the underlying AVM architecture.  So it could be the case that if values of two different types are constructed, and both are assigned to variables of type `anytype`, the resulting values could test as equal.  (Details of data representations are not described here.) Caution is advised before comparing `anytype` values.
 
 [Potential improvement: prohibit equality comparison of anytypes.]
 
