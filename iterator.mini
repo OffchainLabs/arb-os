@@ -1,0 +1,7 @@
+
+type Iterator = func(state: anytype) (bool, anytype, anytype)
+// return type: (false, _, _) if no more values
+//              (true, value, nextState) otherwise
+
+
+

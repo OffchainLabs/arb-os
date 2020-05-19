@@ -75,6 +75,10 @@ impl Uint256 {
 		Uint256{ val: BigUint::one() }
 	}
 
+	pub fn max_neg_int() -> Self {
+		Uint256::one().exp(&Uint256::from_usize(255))
+	}
+
 	pub fn is_zero(&self) -> bool {
 		self.val == BigUint::zero()
 	}
@@ -165,6 +169,24 @@ impl Uint256 {
 		}
 	}
 	
+	pub fn add_mod(&self, denom: &Self, modulus: &Self) -> Option<Self> {
+		if modulus.val.is_zero() {
+			None
+		} else {
+			let val = self.val.clone().add(denom.val.clone()).rem(modulus.val.clone());
+			Some(Uint256{ val })
+		}
+	}
+
+	pub fn mul_mod(&self, denom: &Self, modulus: &Self) -> Option<Self> {
+		if modulus.val.is_zero() {
+			None
+		} else {
+			let val = self.val.clone().mul(denom.val.clone()).rem(modulus.val.clone());
+			Some(Uint256{ val })
+		}
+	}
+
 	pub fn exp(&self, other: &Self) -> Self {
 		Uint256{ val: Uint256::trim(&self.val.pow(&other.val)).0 }
 	}

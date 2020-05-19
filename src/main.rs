@@ -5,6 +5,7 @@ use std::fs::File;
 use std::io;
 use crate::compile::{compile_from_file};
 use crate::link::{link, postlink_compile};
+use crate::evm::compile_evm_file;
 use crate::run::{run_from_file};
 
 extern crate bincode;
@@ -28,6 +29,8 @@ pub mod emulator;
 pub mod builtins;
 pub mod source;
 pub mod pos;
+pub mod evm;
+pub mod build_builtins;
 pub mod minitests;
 
 #[macro_use] extern crate lalrpop_util;
@@ -70,6 +73,22 @@ fn main() {
                             .help("sets the file name to run")
                             .required(true)
                             .index(1)))
+                    .subcommand(SubCommand::with_name("evm")
+                        .about("compile an EVM/Truffle file")
+                        .arg(Arg::with_name("INPUT")
+                            .help("sets the file name to compile")
+                            .required(true)
+                            .index(1))
+                        .arg(Arg::with_name("format")
+                            .help("sets the output format")
+                            .short("f")
+                            .takes_value(true)
+                            .value_name("format"))                       
+                        .arg(Arg::with_name("output")
+                            .help("sets the output file name")
+                            .short("o")
+                            .takes_value(true)
+                            .value_name("output")))
                     .get_matches();
 
 
@@ -120,6 +139,16 @@ fn main() {
             Err(e) => {
                 println!("{:?}", e);
             }
+        }
+    }
+
+    if let Some(matches) = matches.subcommand_matches("evm") {
+        let mut output = get_output(matches.value_of("output")).unwrap();
+        let filename = matches.value_of("INPUT").unwrap();
+        let path = Path::new(filename);
+        match compile_evm_file(path) {
+            Ok(compiled_program) => { compiled_program.to_output(&mut *output, matches.value_of("format")); }
+            Err(e) => { panic!("Compilation error: {:?}", e); }
         }
     }
 }

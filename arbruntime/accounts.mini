@@ -1,0 +1,70 @@
+
+type Address = bytes32
+
+type Account = struct {
+    ethBalance: uint,
+    nextSeqNum: uint,
+    code: ByteArray,
+    codePoint: uint,    // FIXME
+    codeSize: uint,
+    codeHash: bytes32,
+    contractStorage: map[bytes32]uint,
+}
+
+var accountDb: map[Address]Account;   // needs to be initialized before use
+var pristineAccount: Account;         // needs to be initialized before use
+
+
+func get_account(addr: Address) Account {
+    if (unsafecast(accountDb, anytype) == null) {
+        accountDb = newmap[Address]Account;
+        pristineAccount = struct {
+            ethBalance: 0,
+            contractStorage: newmap[bytes32]uint,
+        };
+    }
+    let (acct, exists) = accountDb[addr];
+    if (exists) {
+        return acct;
+    } else {
+        return pristineAccount;
+    }
+}
+
+public func account_getEthBalance(addr: Address) uint {
+    return get_account(addr).ethBalance;
+}
+
+public func account_setEthBalance(addr: Address, newBal: uint) {
+    accountDb = accountDb with { [addr] = get_account(addr) with { ethBalance: newBal } };
+}
+
+// transfer eth; return true if transfer happened, or false if insufficient funds
+public func account_transferEthBalance(from: Address, to:Address, amount: uint) bool {
+    let fromAcct = get_account(from);
+    if (fromAcct.ethBalance <= amount) {
+        return false;
+    }
+    let toAcct = get_account(to);
+    accountDb = accountDb with { [from] = fromAcct with { ethBalance: fromAcct.ethBalance - amount }}
+                          with { [to] = fromAcct with { ethBalance: toAcct.ethBalance + amount }};
+    return true;
+}
+
+public func account_getAllStorage(addr: Address) map[bytes32]uint {
+    return get_account(addr).contractStorage;
+}
+
+public func account_getStorageCell(addr: Address, cell: uint) uint {
+    let (contents, exists) = get_account(addr).contractStorage[cell];
+    if (exists) {
+        return contents;
+    } else {
+        return 0;
+    }
+}
+
+public func account_setStorageCell(addr: Address, cell: uint, value: uint) {
+    let account = get_account[addr];
+    accountDb = accountDb with { [addr] = account with { contractStorage: account.contractStorage with { [cell] = value }}};
+}

@@ -550,6 +550,34 @@ impl<'a> Machine {
 							None => Err(ExecutionError::new("modulo by zero", &self.state, None))
 						}
 					}
+					Opcode::AddMod => {
+						let r1 = self.stack.pop_uint(&self.state)?;
+						let r2 = self.stack.pop_uint(&self.state)?;
+						let r3 = self.stack.pop_uint(&self.state)?;
+						let ores = r1.add_mod(&r2, &r3);
+						match ores {
+							Some(res) => {
+								self.stack.push_uint(res);
+								self.incr_pc();
+								Ok(true)
+							}
+							None => Err(ExecutionError::new("modulo by zero", &self.state, None))
+						}
+					}
+					Opcode::MulMod => {
+						let r1 = self.stack.pop_uint(&self.state)?;
+						let r2 = self.stack.pop_uint(&self.state)?;
+						let r3 = self.stack.pop_uint(&self.state)?;
+						let ores = r1.mul_mod(&r2, &r3);
+						match ores {
+							Some(res) => {
+								self.stack.push_uint(res);
+								self.incr_pc();
+								Ok(true)
+							}
+							None => Err(ExecutionError::new("modulo by zero", &self.state, None))
+						}
+					}
 					Opcode::Exp => {
 						let r1 = self.stack.pop_uint(&self.state)?;
 						let r2 = self.stack.pop_uint(&self.state)?;
@@ -617,6 +645,45 @@ impl<'a> Machine {
 						let r1 = self.stack.pop_uint(&self.state)?;
 						let r2 = self.stack.pop_uint(&self.state)?;
 						self.stack.push_uint(r1.bitwise_xor(&r2));
+						self.incr_pc();
+						Ok(true)
+					}
+					Opcode::Byte => {
+						let r1 = self.stack.pop_uint(&self.state)?;
+						let r2 = self.stack.pop_uint(&self.state)?;
+						self.stack.push_uint(
+							if r1 < Uint256::from_usize(32) {
+								let shift_factor = Uint256::one().exp(&Uint256::from_usize(8*(31-r1.to_usize().unwrap())));
+								r2.div(&shift_factor).unwrap().bitwise_and(&Uint256::from_usize(255))
+							} else {
+								Uint256::zero()
+							}
+						);
+						self.incr_pc();
+						Ok(true)
+					}
+					Opcode::SignExtend => {
+						let bnum = self.stack.pop_uint(&self.state)?;
+						let x = self.stack.pop_uint(&self.state)?;
+						let out = match bnum.to_usize() {
+							Some(ub) => {
+								if ub > 31 {
+									x
+								} else {
+									let t = 248-ub;
+									let shifted_bit = Uint256::from_usize(2).exp(&Uint256::from_usize(t));
+									let sign_bit = ! (x.bitwise_and(&shifted_bit) == Uint256::zero());
+									let mask = shifted_bit.sub(&Uint256::one());
+									if sign_bit {
+										x.bitwise_and(&mask)
+									} else {
+										x.bitwise_or(&mask.bitwise_neg())
+									}
+								}
+							}
+							None => x,
+						};
+						self.stack.push_uint(out);
 						self.incr_pc();
 						Ok(true)
 					}

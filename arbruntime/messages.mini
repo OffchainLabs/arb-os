@@ -1,0 +1,44 @@
+
+import type MarshalledBytes
+
+
+type Address = uint
+
+type TxMessage = struct {
+    to: Address,
+    from: Address,
+    seqNumber: uint,
+    value: uint,
+    data: MarshalledBytes,
+}
+
+type EthDepositMessage = struct {
+    to: Address,
+    from: Address,
+    value: uint,
+    messageNum: uint,
+}
+
+type ERC20DepositMessage = struct {
+    to: Address,
+    from: Address,
+    erc20: Address,
+    value: uint,
+    messageNum: uint,
+}
+
+type ERC721DepositMessage = struct {
+    to: Address,
+    from: Address,
+    erc721: Address,
+    id: uint,
+    messageNum: uint,
+}
+
+type ContractTxMessage = struct {
+    to: Address,
+    from: Address,
+    value: uint,
+    data: MarshalledBytes,
+    messageNum: uint,
+}

@@ -1,0 +1,51 @@
+
+import type Queue;
+import func queue_new() Queue;
+import func queue_isEmpty(q: Queue) bool;
+import func queue_get(q: Queue) (Queue, anytype);
+import func queue_put(q: Queue, val: anytype) Queue;
+
+
+func main() void {
+    let inbox = queue_new();
+    loop {
+        inbox = getInbox(input);
+        while ( ! queue_isEmpty(inbox)) {
+            let (newInbox, thisMsg) = queue_get(inbox);
+            inbox = newInbox;
+            // process thisMsg
+        }
+    }
+}
+
+type timeTuple = struct {
+    blockLowerBound: uint,
+    blockUpperBound: uint,
+    timestampLowerBound: uint,
+    timestampUpperBound: uint,
+}
+
+func getTime() timeTuple {
+    return asm() timeTuple { gettime };
+}
+
+type inboxCell = struct {
+    rest: inboxCell,
+    msg: anytype
+}
+
+func getInbox(msgq: Queue) Queue {
+    let newMsgs = asm(0) { inbox }
+    return addInboxToQueue(msgq, newMsgs);
+}
+
+func addInboxToQueue(msgq: Queue, newMsgs: inboxCell) Queue {
+    if (unsafecast(newMsgs, anytype) == null) {
+        return msgq;
+    } else {
+        return queue_put(
+            addInboxToQueue(msgq, newMsgs.rest),
+            newMsgs.msg,
+        );
+    }
+}

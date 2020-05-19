@@ -177,7 +177,7 @@ pub fn compile_from_source<'a>(
     }
 } 
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct CompileError<'a> {
     description: &'a str,
     location: Option<Location>,
