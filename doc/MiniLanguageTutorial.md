@@ -1,6 +1,6 @@
 # Mini language tutorial
 
-[version of May 6, 2020]
+[version of May 21, 2020]
 
 Mini is a programming language and compiler designed for writing code for the Arbitrum Virtual Machine (AVM) platform.  The language is simple but has some features customized for AVM.  This tutorial will tell you what you need to know to write Mini programs.
 
@@ -24,9 +24,11 @@ Within each group (import or non-import) the order of declarations does not matt
 
 > This declares an imported type, which is assumed to be defined in another source code file.  The code in the local file can refer to the type as *name*, but it cannot know anything about the internals of the type.  The only operations that can be done on imported types are operations that are valid for any type.
 
-`import func` *name* ( *argname1: type1, argname2: type2, ...* ) *returntype*;
+`import [impure] func` *name* ( *argname1: type1, argname2: type2, ...* ) *returntype*;
 
 > This declares an imported function, which is assumed to be defined in another source code file. The code in the local file can call this function as if it were in the local file. (The linker will generate an error if this function is called in the local file but is not provided by another file that is being linked.) The syntax follows function declaration syntax (as defined below), except that an import ends with a semicolon where a local function declaration would instead have the function's code.
+>
+> The optional `impure` modifier specifies that the function is impure, as defined below.
 >
 > The compiler does not check whether the type signature declared here matches the type signature of the actual implementation of the function elsewhere.  If the type signatures are different, this might lead to a runtime error.
 >
@@ -44,17 +46,19 @@ var *name* : *type* ;
 
 > This declares a global variable. If type is an atomic type, the variable will be initialized to the zero value for that type. Otherwise the variable will be uninitialized. Reading an uninitialized variable before initializing it will cause undefined behavior.
 
-`[public] func` *name* ( *argname1: type1, argname2: type2, ...* ) *returntype codeblock*
+`[public] [impure] func` *name* ( *argname1: type1, argname2: type2, ...* ) [-> *returntype] codeblock*
 
 > This declares a function and provides its code.
 >
-> The public modifier is optional.  It indicates that the function can be called by code outside this source code file. Non-public functions cannot be called directly by outside code.  (However, pointers to non-public functions can be passed to outside code, and this would allow the pointed-to function to be called by outside code.)
+> The `public` modifier is optional.  It indicates that the function can be called by code outside this source code file. Non-public functions cannot be called directly by outside code.  (However, pointers to non-public functions can be passed to outside code, and this would allow the pointed-to function to be called by outside code.)
+>
+> The `impure` modifier is optional. It indicates that the function is impure, meaning that it might access global variables or call other impure functions.
 >
 > The arguments are treated as local variables within the function, so code in the function can read them or assign to them.
 >
-> If the function does not return a value, *returntype* should be `void`. Otherwise the function will return a single value of the specified type. (We'll see below that the type can be a tuple, allowing multiple values to be packaged together into a single return value.)
+> If there is a `returntype`, the function will return a single value of the specified type. (We'll see below that the type can be a tuple, allowing multiple values to be packaged together into a single return value.)
 >
-> If *returntype* is not `void`, then the compiler must be able to infer that execution cannot reach the end of *codeblock* (so that the function terminates via a `return` statement, or the function runs forever). If the compiler is unable to verify this, it will generate an error.
+> If there is a `returntype`, the compiler must be able to infer that execution cannot reach the end of *codeblock* (so that the function terminates via a `return` statement, or the function runs forever). If the compiler is unable to verify this, it will generate an error.
 
 ## Types
 
@@ -90,7 +94,7 @@ Mini has the following types:
 
 > an array of values, all of the same type (a compound type)
 
-map [ *type* ] *type*
+`map` < *type* , *type* >
 
 > a hash map, which maps keys of one type to values of another type
 
@@ -98,17 +102,13 @@ map [ *type* ] *type*
 
 > a struct with one or more named, typed fields (a compound type)
 
-`func` ( *type1, type2, ...*) *returntype*
+[`impure`] `func` ( *type1, type2, ...*) [-> *returntype*]
 
 > a reference to a function
 
-`anytype`
+`any`
 
 > a value of unknown type
-
-void
-
-> strictly speaking, this is not a type, but it's used as the "return type" for a function that does not return a value
 
 ## Equality and assignability for types
 
@@ -124,11 +124,11 @@ Two array types are equal if their field types are equal.
 
 Two struct types are equal if have the same number of fields, and each field has the same name and equal type, field-by-field.
 
-Two func types are equal if they have the same number of argument types, each argument type is equal, argument-by-argument, and the return types are equal (or both return types are `void`).
+Two func types are equal if they are both impure or both not-impure, and they have the same number of argument types, and each argument type is equal, argument-by-argument, and the return types are equal (or neither has a return type).
 
 Two map types are equal if their key types are equal and their value types are equal.
 
-`anytype` equals itself.
+`any` equals itself.
 
 Each imported type equals itself.
 
@@ -144,7 +144,7 @@ A value of type `V` is assignable to storage of type `S` if:
 * `V` and `S` are fixed-size arrays of the same size, and the field type of `V` is assignable to the field type of `S`,
 * `V` and `S` are arrays, and the field type of `V` is assignable to the field type of `S`,
 * `V` and `S` are structs, with the same number of fields, and each field of `V` has the same name as the corresponding field of `S`, and each field of `V` is assignable to the corresponding field of `S`,
-* `V` and `S` are function types, with the same number of arguments, and each argument type of `V` is assignable to the corresponding argument type of `S`, and either (a) both `S` and `V` return void, or (b) the return type of `S` is assignable to the return type of `V`.  (Note that the return type is compared for assignability "backwards". This is needed to make calls through function references type-safe.)
+* `V` and `S` are function types, with the same number of arguments, and either `S` is impure or `V` is not impure, and each argument type of `V` is assignable to the corresponding argument type of `S`, and either (a) both `S` and `V` return void, or (b) the return type of `S` is assignable to the return type of `V`.  (Note that the return type is compared for assignability "backwards". This is needed to make calls through function references type-safe.)
 * `V` and `S` are map types, and the key type of `V` is assignable to the key type of `S`, and the value types of `V` and `S` are equal.
 
 These rules guarantee that assignability is transitive. 
@@ -217,7 +217,7 @@ Values of type `anytype` do not have any representation that is understood by th
 
 `return` ;
 
-> Return from the current function. This is an error unless the function's *returntype* is `void`.
+> Return from the current function. This is an error if the function has a *returntype*.
 
 `return` *expression* ;
 
@@ -329,7 +329,7 @@ Mini never automatically converts types to make an operation succeed.  Programme
 
 > Create a new tuple value, whose type will be inferred from the number and types of the expressions.
 
-`newarray` ( *expression* , *type* )
+`newarray` < *type* > ( *expression* )
 
 > Create a new array object. *expression*, which must have type `uint`, gives the size of the array, and *type* is the type of its elements. The contents of the array are initialized to the zero value if *type* is an atomic type, or uninitialized otherwise.
 
@@ -341,19 +341,19 @@ Mini never automatically converts types to make an operation succeed.  Programme
 
 > Create a new fixed-size array of elements, with every slot initialized to the value of *expression*. *size*, which must be a `uint` constant, is the size of the new array. The element type is inferred from the type of *expression*.
 
-`newmap` [ *type* ] *type* 
+`newmap` < *type* ,  *type* > 
 
 > Create a new map object, initially empty.
 
-`unsafecast` ( *expression* , *type* )
+`unsafecast` < *type* > ( *expression*  )
 
-> Evaluate *expression*, and then treat the in-memory representation of the result as an object having type *type*. This is an unsafe operation.  It is most often used to convert a value of type `anytype` into a more specific type, when the programmer knows the real type of the value.  
+> Evaluate *expression*, and then treat the in-memory representation of the result as an object having type *type*. This is an unsafe operation.  It is most often used to convert a value of type `any` into a more specific type, when the programmer knows the real type of the value.  
 
 *arrExpression* [ *indexExpression* ]
 
 > Get an element of an array.  *arrExpression* must have type [ ]T or [N]T for some type T.  *indexExpression* must have type `uint`.  The access is bounds-checked, and this will panic at runtime if the index is outside the bounds of the array. The result has type T.
 
-mapExpression [ keyExpression ]
+*mapExpression* [ *keyExpression* ]
 
 > Get a value from a map.  mapExpression must be a map type. keyExpression, which must be assignable to the map's key type, gives the key to look up in the map. The result, which is of type (V, bool) where V is the value type of the map, will be (undefined, false) is there is not a value associated with the key, or (value, true) if value is associated with the key.
 
@@ -367,7 +367,7 @@ mapExpression [ keyExpression ]
 
 *funcExpression* ( *argExpression1* , *argExpression2* , ... )
 
-> Function call.  The value of *funcExpression* must be a function reference. (Typically *funcExpression* will just be the name of a function.) The number of *argExpressions* must be consistent with the number of arguments in *funcExpression*'s type, and each *argExpression* must be assignable to the type of the corresponding argument of *funcExpression*.  The result has the type of *funcExpression's* return value, which must not be `void`. (Calls to functions returning `void` are statements, not expressions.)
+> Function call.  The value of *funcExpression* must be a function reference. (Typically *funcExpression* will just be the name of a function.) The number of *argExpressions* must be consistent with the number of arguments in *funcExpression*'s type, and each *argExpression* must be assignable to the type of the corresponding argument of *funcExpression*.  The result has the type of *funcExpression's* return value. (Calls to functions without a returntype are statements, not expressions.)
 
 *arrayExpression* with { [ *indexExpression* ] = *valExpression* }
 
@@ -399,7 +399,7 @@ mapExpression [ keyExpression ]
 
 `asm` ( *expression1* , *expression2* , ... ) *type* { *instructions* }
 
-> Escape to assembly code.  The arguments (*expression1*, *expression2*, etc.), if any, are pushed onto the AVM stack (with *expression1* at the top of the stack). Then the *instructions*, which are a sequence of AVM assembly instructions, are executed.  *type* must not be `void`. The assembly instructions are assumed to consume the arguments and leave on the stack a single value of type *type*, which becomes the result of this expression. (There is another form of `asm`, which produces no result value and is a statement.)
+> Escape to assembly code.  The arguments (*expression1*, *expression2*, etc.), if any, are pushed onto the AVM stack (with *expression1* at the top of the stack). Then the *instructions*, which are a sequence of AVM assembly instructions, are executed.  The assembly instructions are assumed to consume the arguments and leave on the stack a single value of type *type*, which becomes the result of this expression. (There is another form of `asm`, which produces no result value and is a statement.)
 
 
 

@@ -1,13 +1,13 @@
 
 import type ByteArray;
 
-import func bytearray_new(size: uint) ByteArray;
-import func bytearray_size(ba: ByteArray) uint;
-import func bytearray_get(ba: ByteArray, idx: uint) uint;
-import func bytearray_set(ba: ByteArray, idx: uint, val: uint) ByteArray;
+import func bytearray_new(size: uint) -> ByteArray;
+import func bytearray_size(ba: ByteArray) -> uint;
+import func bytearray_get(ba: ByteArray, idx: uint) -> uint;
+import func bytearray_set(ba: ByteArray, idx: uint, val: uint) -> ByteArray;
 
 
-func tests(which: uint) anytype {
+func tests(which: uint) -> any {
 	if (which == 0) {
 		let ba = bytearray_new(33);
 		return bytearray_size(ba);

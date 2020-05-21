@@ -8,41 +8,49 @@ pub fn builtin_func_decls<'a>(mut string_table: StringTable<'a>) -> (Vec<ImportF
     let imps = vec![
         ImportFuncDecl::new_types(
             string_table.get("builtin_arrayNew"),
+            false, 
             vec![Type::Uint, Type::Any],
             Type::Any,
         ),
         ImportFuncDecl::new_types(
             string_table.get("builtin_arrayGet"),
+            false,
             vec![Type::Any, Type::Uint],
             Type::Any,
         ),
         ImportFuncDecl::new_types(
             string_table.get("builtin_arraySet"),
+            false,
             vec![Type::Any, Type::Uint, Type::Any],
             Type::Any,
         ),
         ImportFuncDecl::new_types(
             string_table.get("builtin_kvsNew"),
+            false,
             vec![],
             Type::Any,
         ),
         ImportFuncDecl::new_types(
             string_table.get("builtin_kvsHasKey"),
+            false,
             vec![Type::Any, Type::Any],
             Type::Bool,
         ),
         ImportFuncDecl::new_types(
             string_table.get("builtin_kvsGet"),
+            false,
             vec![Type::Any, Type::Any],
             Type::Tuple(vec![Type::Any, Type::Bool]),
         ),
         ImportFuncDecl::new_types(
             string_table.get("builtin_kvsSet"),
+            false,
             vec![Type::Any, Type::Any, Type::Any],
             Type::Any,
         ),
         ImportFuncDecl::new_types(
             string_table.get("builtin_kvsDelete"),
+            false,
             vec![Type::Any, Type::Any],
             Type::Any,
         )

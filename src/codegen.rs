@@ -755,6 +755,7 @@ fn mavm_codegen_expr<'a>(
 		}
 		TypeCheckedExpr::ArrayRef(expr1, expr2, t, loc) => {
 			let call_type = Type::Func(
+				false,
 				vec![Type::Array(Box::new(Type::Any)), Type::Uint],
 				Box::new(t.clone()),
 			);
@@ -804,6 +805,7 @@ fn mavm_codegen_expr<'a>(
 		}
 		TypeCheckedExpr::MapRef(map_expr, key_expr, _, loc) => {
 			let call_type = Type::Func(
+				false,
 				vec![Type::Any, Type::Any],
 				Box::new(Type::Tuple(vec![Type::Bool, Type::Any])),
 			);
@@ -825,6 +827,7 @@ fn mavm_codegen_expr<'a>(
 		}
 		TypeCheckedExpr::NewArray(sz_expr, base_type, array_type, loc) => {
 			let call_type = Type::Func(
+				false,
 				vec![Type::Uint, Type::Any],
 				Box::new(array_type.clone()),
 			);
@@ -884,6 +887,7 @@ fn mavm_codegen_expr<'a>(
 		}
 		TypeCheckedExpr::NewMap(_, loc) => {
 			let call_type = Type::Func(
+				false,
 				vec![],
 				Box::new(Type::Any),
 			);
@@ -905,6 +909,7 @@ fn mavm_codegen_expr<'a>(
 		}
 		TypeCheckedExpr::ArrayMod(arr, index, val, _, loc) => {
 			let call_type = Type::Func(
+				false,
 				vec![arr.get_type(), index.get_type(), val.get_type()],
 				Box::new(arr.get_type()),
 			);
@@ -936,6 +941,7 @@ fn mavm_codegen_expr<'a>(
 		),
 		TypeCheckedExpr::MapMod(map_expr, key_expr, val_expr, _, loc) => {
 			let call_type = Type::Func(
+				false,
 				vec![map_expr.get_type(), key_expr.get_type(), val_expr.get_type()],
 				Box::new(map_expr.get_type()),
 			);

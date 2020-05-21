@@ -1,9 +1,9 @@
 
-import func array_resize(a: []PqItem, newSize: uint, baseVal: anytype) []PqItem;
+import func array_resize(a: []PqItem, newSize: uint, baseVal: any) -> []PqItem;
 
 type PqItem = struct {
     priority: uint,
-    item: anytype,
+    item: any,
 }
 
 type PriorityQ = struct {
@@ -12,24 +12,24 @@ type PriorityQ = struct {
     contents: []PqItem,
 }
 
-public func priorityq_new() PriorityQ {
+public func priorityq_new() -> PriorityQ {
     return struct {
         size: 0,
         capacity: 8,
-        contents: newarray(8, PqItem),
+        contents: newarray<PqItem>(8),
     };
 }
 
-public func priorityq_isEmpty(pq: PriorityQ) bool {
+public func priorityq_isEmpty(pq: PriorityQ) -> bool {
     return pq.size == 0;
 }
 
-public func priorityq_size(pq: PriorityQ) uint {
+public func priorityq_size(pq: PriorityQ) -> uint {
     return pq.size;
 }
 
 // priorityq_get returns (false, null, pq) if empty; otherwise (true, item, updatedPq)
-public func priorityq_get(pq: PriorityQ) (bool, anytype, PriorityQ) {  
+public func priorityq_get(pq: PriorityQ) -> (bool, any, PriorityQ) {  
     if (priorityq_isEmpty(pq)) {
         return (false, null, pq,);
     } else {
@@ -40,7 +40,7 @@ public func priorityq_get(pq: PriorityQ) (bool, anytype, PriorityQ) {
     }
 }
 
-func pq_pushDown(pq: PriorityQ, index: uint) PriorityQ {
+func pq_pushDown(pq: PriorityQ, index: uint) -> PriorityQ {
     loop {
         let firstKidIdx = 2*index+1;
         if (firstKidIdx >= pq.size) {
@@ -81,7 +81,7 @@ func pq_pushDown(pq: PriorityQ, index: uint) PriorityQ {
     }
 }
 
-func pq_pushUp(pq: PriorityQ, index: uint) PriorityQ {
+func pq_pushUp(pq: PriorityQ, index: uint) -> PriorityQ {
     let this = pq.contents[index];
     loop {
         if (index == 0) {
@@ -99,7 +99,7 @@ func pq_pushUp(pq: PriorityQ, index: uint) PriorityQ {
     }
 }
 
-public func priorityq_insert(pq: PriorityQ, item: anytype, priority: uint) PriorityQ {
+public func priorityq_insert(pq: PriorityQ, item: any, priority: uint) -> PriorityQ {
     if (pq.size == pq.capacity) {
         let newCapacity = 8*pq.capacity;
         pq = pq with { capacity: newCapacity }
@@ -111,7 +111,7 @@ public func priorityq_insert(pq: PriorityQ, item: anytype, priority: uint) Prior
     return pq_pushUp(newpq, index);
 }
 
-public func priorityq_printAsArray(pq: PriorityQ) uint {
+public func priorityq_printAsArray(pq: PriorityQ) -> uint {
     let ret = pq.size;
     let cont = pq.contents;
     let i = 0;
