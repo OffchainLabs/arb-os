@@ -48,7 +48,7 @@ pub enum Type {
 	FixedArray(Box<Type>, usize),
 	Struct(Vec<StructField>),
 	Named(StringId),
-	Func(Vec<Type>, Box<Type>),
+	Func(bool, Vec<Type>, Box<Type>),
 	Map(Box<Type>, Box<Type>),
 	Imported(StringId),
 	Any,
@@ -95,13 +95,13 @@ impl Type {
 					}
 				}
 			}
-			Type::Func(args, ret) => {
+			Type::Func(is_impure, args, ret) => {
 				let rret = ret.resolve_types(type_table, location)?;
 				let mut rargs = Vec::new();
 				for arg in args.iter() {
 					rargs.push(arg.resolve_types(type_table, location)?);
 				}
-				Ok(Type::Func(rargs, Box::new(rret)))
+				Ok(Type::Func(*is_impure, rargs, Box::new(rret)))
 			}
 			Type::Map(key, val) => {
 				Ok(Type::Map(
@@ -164,9 +164,9 @@ impl Type {
 				}
 			}
 			Type::Named(_) => (self == rhs),
-			Type::Func(args, ret) => {
-				if let Type::Func(args2, ret2) = rhs {
-					arg_vectors_assignable(args, args2) && (ret2.assignable(ret))  // note: rets in reverse order
+			Type::Func(is_impure, args, ret) => {
+				if let Type::Func(is_impure2, args2, ret2) = rhs {
+					(*is_impure || !is_impure2) && arg_vectors_assignable(args, args2) && (ret2.assignable(ret))  // note: rets in reverse order
 				} else {
 					false
 				}
@@ -224,7 +224,7 @@ impl Type {
 			Type::Named(_) => {
 				panic!("tried to get default value for a named type");
 			}
-			Type::Func(_, _) => {
+			Type::Func(_, _, _) => {
 				panic!("tried to get default value for a function type");
 			}
 			Type::Imported(_) => {
@@ -285,7 +285,7 @@ impl PartialEq for Type {
 			(Type::FixedArray(a1, s1), Type::FixedArray(a2, s2)) => (s1 == s2) && (*a1 == *a2),
 			(Type::Struct(f1), Type::Struct(f2)) => struct_field_vectors_equal(&f1, &f2),
 			(Type::Named(n1), Type::Named(n2)) => (n1 == n2),
-			(Type::Func(a1, r1), Type::Func(a2, r2)) => type_vectors_equal(&a1, &a2) && (*r1 == *r2),
+			(Type::Func(i1, a1, r1), Type::Func(i2, a2, r2)) => (i1==i2) && type_vectors_equal(&a1, &a2) && (*r1 == *r2),
 			(Type::Imported(n1), Type::Imported(n2)) => (n1 == n2),
 			(_, _) => false,
 		}
@@ -370,31 +370,34 @@ impl GlobalVarDecl {
 #[derive(Debug, Clone)]
 pub struct ImportFuncDecl {
 	pub name: StringId,
+	pub is_impure: bool, 
 	pub arg_types: Vec<Type>,
 	pub ret_type: Type,
 	pub tipe: Type,
 }
 
 impl ImportFuncDecl {
-	pub fn new(name: StringId, args: Vec<FuncArg>, ret_type: Type) -> Self {
+	pub fn new(name: StringId, is_impure: bool, args: Vec<FuncArg>, ret_type: Type) -> Self {
 		let mut arg_types = Vec::new();
 		for arg in args.iter() {
 			arg_types.push(arg.tipe.clone());
 		}
 		ImportFuncDecl{ 
 			name, 
+			is_impure,
 			arg_types: arg_types.clone(),
 			ret_type: ret_type.clone(), 
-			tipe: Type::Func(arg_types, Box::new(ret_type)),
+			tipe: Type::Func(is_impure, arg_types, Box::new(ret_type)),
 		}
 	}
 
-	pub fn new_types(name: StringId, arg_types: Vec<Type>, ret_type: Type) -> Self {
+	pub fn new_types(name: StringId, is_impure: bool, arg_types: Vec<Type>, ret_type: Type) -> Self {
 		ImportFuncDecl{ 
 			name, 
+			is_impure,
 			arg_types: arg_types.clone(),
 			ret_type: ret_type.clone(), 
-			tipe: Type::Func(arg_types, Box::new(ret_type)),
+			tipe: Type::Func(is_impure, arg_types, Box::new(ret_type)),
 		}
 	}
 }
@@ -420,6 +423,7 @@ pub enum FuncDeclKind {
 #[derive(Debug, Clone)]
 pub struct FuncDecl {
 	pub name: StringId,
+	pub is_impure: bool,
 	pub args: Vec<FuncArg>,
 	pub ret_type: Type,
 	pub code: Vec<Statement>,
@@ -431,6 +435,7 @@ pub struct FuncDecl {
 impl FuncDecl {
 	pub fn new(
 		name: StringId, 
+		is_impure: bool, 
 		args: Vec<FuncArg>, 
 		ret_type: Type, 
 		code: Vec<Statement>, 
@@ -444,10 +449,11 @@ impl FuncDecl {
 		}
 		FuncDecl{ 
 			name, 
+			is_impure,
 			args: args_vec, 
 			ret_type: ret_type.clone(), 
 			code,
-			tipe: Type::Func(arg_types, Box::new(ret_type)),
+			tipe: Type::Func(is_impure, arg_types, Box::new(ret_type)),
 			kind: if exported { FuncDeclKind::Public } else { FuncDeclKind::Private },
 			location,
 		}
@@ -464,6 +470,7 @@ impl FuncDecl {
 		}
 		Ok(FuncDecl{
 			name: self.name,
+			is_impure: self.is_impure,
 			args: rargs,
 			ret_type: self.ret_type.resolve_types(type_table, location)?,
 			code: rcode,

@@ -1,9 +1,9 @@
 
-import func builtin_arraySwap(a: []anytype, b: uint, c: anytype) ([]anytype, anytype);
+import func builtin_arraySwap(a: []any, b: uint, c: any) -> ([]any, any);
 
 type ShtItem = struct {
 	key: bytes32,
-	value: anytype,
+	value: any,
 }
 
 type SimpleHashtable = struct {
@@ -12,15 +12,15 @@ type SimpleHashtable = struct {
 	contents: []ShtItem,
 }
 
-func simpleHashtable_new(salt: bytes32) SimpleHashtable {
+func simpleHashtable_new(salt: bytes32) -> SimpleHashtable {
 	return struct {
 		salt: salt,
 		size: 8,
-		contents: unsafecast(newarray(8, anytype), []ShtItem),
+		contents: unsafecast<[]ShtItem>(newarray<any>(8)),
 	};
 }
 
-func simpleHashtable_get(table: SimpleHashtable, key: bytes32) (anytype, bool) {
+func simpleHashtable_get(table: SimpleHashtable, key: bytes32) -> (any, bool) {
 	let salted_key = hash(table.salt, key);
 	let slot = uint(salted_key) % table.size;
 	let item = table.contents[slot];
@@ -31,19 +31,19 @@ func simpleHashtable_get(table: SimpleHashtable, key: bytes32) (anytype, bool) {
 	}
 }
 
-func simpleHashtable_set(table:SimpleHashtable, key: bytes32, val: anytype) SimpleHashtable {
+func simpleHashtable_set(table:SimpleHashtable, key: bytes32, val: any) -> SimpleHashtable {
 	let salted_key = hash(table.salt, key);
 	let slot = uint(salted_key) % table.size;
 	let newitem = struct { key: key, value: val, }; 
 	return table with { contents: table.contents with {[slot] = newitem} };
 }
 
-func simpleHashtable_delete(table: SimpleHashtable, key: bytes32) SimpleHashtable {
+func simpleHashtable_delete(table: SimpleHashtable, key: bytes32) -> SimpleHashtable {
 	let salted_key = hash(table.salt, key);
 	let slot = uint(salted_key) % table.size;
 	let item = table.contents[slot];
 	if ((item != null) && (key == item.key)) {
-		return table with { contents: table.contents with {[slot] = unsafecast(null, ShtItem) } };
+		return table with { contents: table.contents with {[slot] = unsafecast<ShtItem>(null) } };
 	} else {
 		return table;
 	}
@@ -52,10 +52,10 @@ func simpleHashtable_delete(table: SimpleHashtable, key: bytes32) SimpleHashtabl
 func simpleHashtable_swap(
 	table: SimpleHashtable, 
 	key: bytes32, 
-	val: anytype
-) (SimpleHashtable, ShtItem) {
+	val: any
+) -> (SimpleHashtable, ShtItem) {
 	let salted_key = hash(table.salt, key);
-	let sres = unsafecast(
+	let sres = unsafecast<([]ShtItem, ShtItem)>(
 		builtin_arraySwap(
 			table.contents, 
 			uint(salted_key) % table.size, 
@@ -63,8 +63,7 @@ func simpleHashtable_swap(
 				key: key,
 				value: val,
 			}
-		),
-		([]ShtItem, ShtItem)
+		)
 	);
 	return (
 		table with { contents: sres.0 },
@@ -74,9 +73,9 @@ func simpleHashtable_swap(
 
 func simpleHashtable_forall(
 	table: SimpleHashtable,
-	cb: func(anytype, anytype, anytype) anytype,
-	state: anytype
-) anytype {
+	cb: func(any, any, any) -> any,
+	state: any
+) -> any {
 	let i = 0;
 	while (i < table.size) {
 		let this = table.contents[i];
@@ -88,12 +87,12 @@ func simpleHashtable_forall(
 	return state;
 }
 
-func simpleHashtable_expand(table: SimpleHashtable) SimpleHashtable {
+func simpleHashtable_expand(table: SimpleHashtable) -> SimpleHashtable {
 	let newSize = 2*table.size;
 	let newTable = struct {
 		salt: table.salt,
 		size: newSize,
-		contents: unsafecast(newarray(newSize, anytype), []ShtItem),
+		contents: unsafecast<[]ShtItem>(newarray<any>(newSize)),
 	};
 	let i = 0;
 	while (i < table.size) {
@@ -108,11 +107,11 @@ func simpleHashtable_expand(table: SimpleHashtable) SimpleHashtable {
 
 type KeyValueStore = [2]SimpleHashtable
 
-public func builtin_kvsNew() KeyValueStore {
+public func builtin_kvsNew() -> KeyValueStore {
 	return newfixedarray(2, simpleHashtable_new(bytes32(0))) with { [1] = simpleHashtable_new(bytes32(1)) };
 }
 
-public func builtin_kvsGet(kvs: KeyValueStore, key: anytype) (anytype, bool) {
+public func builtin_kvsGet(kvs: KeyValueStore, key: any) -> (any, bool) {
 	let val1 = simpleHashtable_get(kvs[0], hash(key));
 	if (val1.1) {
 		return val1;
@@ -120,11 +119,11 @@ public func builtin_kvsGet(kvs: KeyValueStore, key: anytype) (anytype, bool) {
 	return simpleHashtable_get(kvs[1], hash(key));
 }
 
-public func builtin_kvsHasKey(kvs: KeyValueStore, key: anytype) bool {
+public func builtin_kvsHasKey(kvs: KeyValueStore, key: any) -> bool {
 	return (builtin_kvsGet(kvs, key)).1;
 }
 
-public func builtin_kvsSet(kvs: KeyValueStore, key: anytype, value: anytype) KeyValueStore {
+public func builtin_kvsSet(kvs: KeyValueStore, key: any, value: any) -> KeyValueStore {
 	let which = 0;
 	let retries = 0;
 	let item = struct {
@@ -149,7 +148,7 @@ public func builtin_kvsSet(kvs: KeyValueStore, key: anytype, value: anytype) Key
 	);
 }
 
-public func builtin_kvsDelete(kvs: KeyValueStore, key: anytype) KeyValueStore {
+public func builtin_kvsDelete(kvs: KeyValueStore, key: any) -> KeyValueStore {
 	let val = simpleHashtable_get(kvs[0], hash(key));
 	if (val != null) {
 		return kvs with { [0] = simpleHashtable_delete(kvs[0], hash(key)) };
@@ -162,9 +161,9 @@ public func builtin_kvsDelete(kvs: KeyValueStore, key: anytype) KeyValueStore {
 
 public func builtin_kvsForall(
 	kvs: KeyValueStore,
-	cb: func(anytype, anytype, anytype) anytype,
-	state: anytype
-) anytype {
+	cb: func(any, any, any) -> any,
+	state: any
+) -> any {
 	return simpleHashtable_forall(
 		kvs[1],
 		cb,

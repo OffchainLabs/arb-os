@@ -1,14 +1,14 @@
 
 import type PriorityQ;
 
-import func priorityq_new() PriorityQ;
-import func priorityq_isEmpty(pq: PriorityQ) bool;
-import func priorityq_insert(pq: PriorityQ, item: anytype, priority: uint) PriorityQ;
-import func priorityq_get(pq: PriorityQ) (bool, anytype, PriorityQ);
-import func priorityq_printAsArray(pq: PriorityQ) uint;
+import func priorityq_new() -> PriorityQ;
+import func priorityq_isEmpty(pq: PriorityQ) -> bool;
+import func priorityq_insert(pq: PriorityQ, item: any, priority: uint) -> PriorityQ;
+import func priorityq_get(pq: PriorityQ) -> (bool, any, PriorityQ);
+import func priorityq_printAsArray(pq: PriorityQ) -> uint;
 
 
-func tests(which: uint) anytype {
+func tests(which: uint) -> any {
 	if (which == 0) {
 		let q = priorityq_new();
 		if (priorityq_isEmpty(q)) {
@@ -63,10 +63,10 @@ func tests(which: uint) anytype {
 }
 
 // stuff below here is for testing the compiler
-func nullFunc() void {
+func nullFunc() {
 	return;
 }
 
-func callNullFunc() void {
+func callNullFunc() {
 	callNullFunc();
 }

@@ -3,31 +3,31 @@ type BoundedQueue = struct {
     capacity: uint,
     nextPut: uint,
     nextGet: uint,
-    contents: []anytype,
+    contents: []any,
 }
 
-public func boundedQueue_new(capacity: uint) BoundedQueue {
+public func boundedQueue_new(capacity: uint) -> BoundedQueue {
     return struct {
         capacity: capacity,
         nextPut: 0,
         nextGet: 0,
-        contents: newarray(capacity, anytype),
+        contents: newarray<any>(capacity),
     };
 }
 
-public func boundedQueue_isEmpty(q: BoundedQueue) bool {
+public func boundedQueue_isEmpty(q: BoundedQueue) -> bool {
     return q.nextPut == q.nextGet;
 }
 
-public func boundedQueue_isFull(q: BoundedQueue) bool {
+public func boundedQueue_isFull(q: BoundedQueue) -> bool {
     return ((q.nextPut+1) % q.capacity) == q.nextGet;
 }
 
-public func boundedQueue_size(q: BoundedQueue) uint {
+public func boundedQueue_size(q: BoundedQueue) -> uint {
     return (q.nextPut + q.capacity - q.nextGet) % q.capacity;
 }
 
-public func boundedQueue_put(q: BoundedQueue, val: anytype) BoundedQueue {
+public func boundedQueue_put(q: BoundedQueue, val: any) -> BoundedQueue {
     if (boundedQueue_isFull(q)) {
         return q;
     } else {
@@ -37,7 +37,7 @@ public func boundedQueue_put(q: BoundedQueue, val: anytype) BoundedQueue {
     }
 }
 
-public func boundedQueue_get(q: BoundedQueue) (BoundedQueue, anytype) {
+public func boundedQueue_get(q: BoundedQueue) -> (BoundedQueue, any) {
     if (boundedQueue_isEmpty(q)) {
         return (q, null,);
     } else {
@@ -48,7 +48,7 @@ public func boundedQueue_get(q: BoundedQueue) (BoundedQueue, anytype) {
     }
 }
 
-public func boundedQueue_expand(q: BoundedQueue, newSize: uint) BoundedQueue {
+public func boundedQueue_expand(q: BoundedQueue, newSize: uint) -> BoundedQueue {
     if (newSize <= q.capacity) {
         panic;
     }
@@ -63,25 +63,25 @@ public func boundedQueue_expand(q: BoundedQueue, newSize: uint) BoundedQueue {
 
 type Queue = BoundedQueue
 
-public func queue_new() Queue {
+public func queue_new() -> Queue {
     return boundedQueue_new(8);
 }
 
-public func queue_isEmpty(q: Queue) bool {
+public func queue_isEmpty(q: Queue) -> bool {
     return boundedQueue_isEmpty(q);
 }
 
-public func queue_size(q: Queue) uint {
+public func queue_size(q: Queue) -> uint {
     return boundedQueue_size(q);
 }
 
-public func queue_put(q: Queue, val: anytype) Queue {
+public func queue_put(q: Queue, val: any) -> Queue {
     if (boundedQueue_isFull(q)) {
         q = boundedQueue_expand(q, 2*q.capacity);
     }
     return boundedQueue_put(q, val);
 }
 
-public func queue_get(q: Queue) (Queue, anytype) {
+public func queue_get(q: Queue) -> (Queue, any) {
     return boundedQueue_get(q);
 }

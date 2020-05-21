@@ -1,7 +1,7 @@
 
 var global0: uint;
 var global1: uint;
-var global2: anytype;
+var global2: any;
 var global3: (uint, int, bool);
 var global4: int;
 var global5: bool;
@@ -11,7 +11,7 @@ var global8: [13]uint;
 var global9: uint;
 
 
-func tests(which: uint) anytype {
+func tests(which: uint) -> any {
     if (which == 0) {
         global0 = 3;
         return global0;

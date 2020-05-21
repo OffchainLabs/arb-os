@@ -1,8 +1,8 @@
 
-import func builtin_kvsDelete(kvs: anytype, key: anytype) anytype;
-import func builtin_kvsForall(kvs: anytype, cb: func(anytype, anytype, anytype) anytype, state: anytype) anytype; 
+import func builtin_kvsDelete(kvs: any, key: any) -> any;
+import func builtin_kvsForall(kvs: any, cb: func(any, any, any) -> any, state: any) -> any; 
 
-func tests(which: uint) anytype {
+func tests(which: uint) -> any {
 	if (which == 0) {
 		let s = builtin_kvsNew();
 		return (builtin_kvsGet(s, 17)).0;
@@ -57,12 +57,12 @@ func tests(which: uint) anytype {
 		s = builtin_kvsSet(s, 55, 56);
 		s = builtin_kvsSet(s, 42, 99);
 		let rawResult = builtin_kvsForall(s, sumForKvsIterator, 0);
-		return unsafecast(rawResult, uint);
+		return unsafecast<uint>(rawResult);
 	} else {
 		return null;
 	}
 }
 
-func sumForKvsIterator(key: anytype, value: anytype, state: anytype) anytype {
-	return unsafecast(value, uint) + unsafecast(state, uint);
+func sumForKvsIterator(key: any, value: any, state: any) -> any {
+	return unsafecast<uint>(value) + unsafecast<uint>(state);
 }

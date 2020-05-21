@@ -19,8 +19,10 @@ ImportDecl: TopLevelDecl = {
 }
 
 ImportFuncDecl: ImportFuncDecl = {
-	"import" "func" <i:Ident> "(" <fa:FuncArgs> ")" ";" => ImportFuncDecl::new(i, fa, Type::Void),
-	"import" "func" <i:Ident> "(" <fa:FuncArgs> ")" <t:Type> ";" => ImportFuncDecl::new(i, fa, t),
+	"import" "func" <i:Ident> "(" <fa:FuncArgs> ")" ";" => ImportFuncDecl::new(i, false, fa, Type::Void),
+	"import" "func" <i:Ident> "(" <fa:FuncArgs> ")" "->" <t:Type> ";" => ImportFuncDecl::new(i, false, fa, t),
+	"import" "impure" "func" <i:Ident> "(" <fa:FuncArgs> ")" ";" => ImportFuncDecl::new(i, true, fa, Type::Void),
+	"import" "impure" "func" <i:Ident> "(" <fa:FuncArgs> ")" "->" <t:Type> ";" => ImportFuncDecl::new(i, true, fa, t),
 }
 
 ImportTypeDecl: ImportTypeDecl = {
@@ -38,10 +40,15 @@ TypeDecl: TypeDecl = {
 }
 
 FuncDecl: FuncDecl = {
-	<lno: @L> "func" <i:Ident> "(" <fa:FuncArgs> ")" "void" <cb:CodeBlock> => FuncDecl::new(i, fa, Type::Void, cb, false, file_info.location(BytePos::from(lno))),
-	<lno: @L> "func" <i:Ident> "(" <fa:FuncArgs> ")" <t:Type> <cb:CodeBlock> => FuncDecl::new(i, fa, t, cb, false, file_info.location(BytePos::from(lno))),
-	<lno: @L> "public" "func" <i:Ident> "(" <fa:FuncArgs> ")" "void" <cb:CodeBlock> => FuncDecl::new(i, fa, Type::Void, cb, true, file_info.location(BytePos::from(lno))),
-	<lno: @L> "public" "func" <i:Ident> "(" <fa:FuncArgs> ")" <t:Type> <cb:CodeBlock> => FuncDecl::new(i, fa, t, cb, true, file_info.location(BytePos::from(lno))),
+	<lno: @L> "func" <i:Ident> "(" <fa:FuncArgs> ")" <cb:CodeBlock> => FuncDecl::new(i, false, fa, Type::Void, cb, false, file_info.location(BytePos::from(lno))),
+	<lno: @L> "func" <i:Ident> "(" <fa:FuncArgs> ")" "->" <t:Type> <cb:CodeBlock> => FuncDecl::new(i, false, fa, t, cb, false, file_info.location(BytePos::from(lno))),
+	<lno: @L> "public" "func" <i:Ident> "(" <fa:FuncArgs> ")" <cb:CodeBlock> => FuncDecl::new(i, false, fa, Type::Void, cb, true, file_info.location(BytePos::from(lno))),
+	<lno: @L> "public" "func" <i:Ident> "(" <fa:FuncArgs> ")" "->" <t:Type> <cb:CodeBlock> => FuncDecl::new(i, false, fa, t, cb, true, file_info.location(BytePos::from(lno))),
+	<lno: @L> "impure" "func" <i:Ident> "(" <fa:FuncArgs> ")" <cb:CodeBlock> => FuncDecl::new(i, true, fa, Type::Void, cb, false, file_info.location(BytePos::from(lno))),
+	<lno: @L> "impure" "func" <i:Ident> "(" <fa:FuncArgs> ")" "->" <t:Type> <cb:CodeBlock> => FuncDecl::new(i, true, fa, t, cb, false, file_info.location(BytePos::from(lno))),
+	<lno: @L> "public" "impure" "func" <i:Ident> "(" <fa:FuncArgs> ")" <cb:CodeBlock> => FuncDecl::new(i, true, fa, Type::Void, cb, true, file_info.location(BytePos::from(lno))),
+	<lno: @L> "public" "impure" "func" <i:Ident> "(" <fa:FuncArgs> ")" "->" <t:Type> <cb:CodeBlock> => FuncDecl::new(i, true, fa, t, cb, true, file_info.location(BytePos::from(lno))),
+
 }
 
 FuncArgs: Vec<FuncArg> = {
@@ -126,10 +133,12 @@ Type: Type = {
 		Box::new(t), 
 		s.to_usize().unwrap(),
 	),
-	"map" "[" <t1:Type> "]" <t2:Type> => Type::Map(Box::new(t1), Box::new(t2)),
-	"func" "(" <CommaedTypes> ")" "void" => Type::Func(<>, Box::new(Type::Void)),
-	"func" "(" <a: CommaedTypes> ")" <r: Type> => Type::Func(a, Box::new(r)),
-	"anytype" => Type::Any,
+	"map" "<" <t1:Type> "," <t2:Type> ">" => Type::Map(Box::new(t1), Box::new(t2)),
+	"func" "(" <CommaedTypes> ")" => Type::Func(false, <>, Box::new(Type::Void)),
+	"func" "(" <a: CommaedTypes> ")" "->" <r: Type> => Type::Func(false, a, Box::new(r)),
+	"impure" "func" "(" <CommaedTypes> ")" => Type::Func(true, <>, Box::new(Type::Void)),
+	"impure" "func" "(" <a: CommaedTypes> ")" "->" <r: Type> => Type::Func(true, a, Box::new(r)),
+	"any" => Type::Any,
 	Ident => Type::Named(<>),
 };
 
@@ -228,7 +237,7 @@ Expr11: Expr = {
 	<lno: @L> "uint" "(" <e: Expr> ")" => Expr::new_unary(UnaryOp::ToUint, e, file_info.location(BytePos::from(lno))),
 	<lno: @L> "int" "(" <e: Expr> ")" => Expr::new_unary(UnaryOp::ToInt, e, file_info.location(BytePos::from(lno))),
 	<lno: @L> "bytes32" "(" <e: Expr> ")" => Expr::new_unary(UnaryOp::ToBytes32, e, file_info.location(BytePos::from(lno))),
-	<lno: @L> "newarray" "(" <e:Expr> "," <t:Type> ")" => Expr::NewArray(Box::new(e), t, file_info.location(BytePos::from(lno))),
+	<lno: @L> "newarray" "<" <t:Type> ">" "(" <e:Expr> ")" => Expr::NewArray(Box::new(e), t, file_info.location(BytePos::from(lno))),
 	<lno: @L> "newfixedarray" "(" <s:UnsignedInteger> "," <e:Expr> ")" => Expr::NewFixedArray(
 		s.to_usize().unwrap(), 
 		Some(Box::new(e)),
@@ -239,8 +248,8 @@ Expr11: Expr = {
 		None,
 		file_info.location(BytePos::from(lno)),
 	),
-	<lno: @L> "newmap" "[" <k:Type> "]" <v:Type> => Expr::NewMap(k, v, file_info.location(BytePos::from(lno))),
-	<lno: @L> "unsafecast" "(" <e:Expr> "," <t:Type> ")" => Expr::UnsafeCast(Box::new(e), t, file_info.location(BytePos::from(lno))),
+	<lno: @L> "newmap" "<" <k:Type> "," <v:Type> ">" => Expr::NewMap(k, v, file_info.location(BytePos::from(lno))),
+	<lno: @L> "unsafecast" "<" <t:Type> ">" "(" <e:Expr> ")" => Expr::UnsafeCast(Box::new(e), t, file_info.location(BytePos::from(lno))),
 	Expr13,
 }
 

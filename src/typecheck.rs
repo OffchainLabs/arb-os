@@ -328,7 +328,7 @@ fn typecheck_statement<'a>(
 		},
 		Statement::FunctionCall(fexpr, args, loc) => {
 			let tc_fexpr = typecheck_expr(fexpr, type_table, global_vars, func_table)?;
-			if let Type::Func(arg_types, ret_type) = tc_fexpr.get_type() {
+			if let Type::Func(_, arg_types, ret_type) = tc_fexpr.get_type() {
 				if *ret_type != Type::Void {
 					return Err(new_type_error("function call statement to non-void function", *loc));
 				}
@@ -577,7 +577,7 @@ fn typecheck_expr(
 		Expr::FunctionCall(fexpr, args, loc) => {
 			let tc_fexpr = typecheck_expr(fexpr, type_table, global_vars, func_table)?;
 			match tc_fexpr.get_type() {
-				Type::Func(arg_types, ret_type) => {
+				Type::Func(_, arg_types, ret_type) => {
 					let ret_type = ret_type.resolve_types(type_table, *loc)?;
 					if args.len() == arg_types.len() {
 						let mut tc_args = Vec::new();

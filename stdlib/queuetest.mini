@@ -1,13 +1,13 @@
 
 import type Queue;
 
-import func queue_new() Queue;
-import func queue_isEmpty(q: Queue) bool;
-import func queue_put(q: Queue, val: anytype) Queue;
-import func queue_get(q: Queue) (Queue, anytype);
+import func queue_new() -> Queue;
+import func queue_isEmpty(q: Queue) -> bool;
+import func queue_put(q: Queue, val: any) -> Queue;
+import func queue_get(q: Queue) -> (Queue, any);
 
 
-func tests(which: uint) anytype {
+func tests(which: uint) -> any {
 	if (which == 0) {
 		let q = queue_new();
 		if (queue_isEmpty(q)) {
