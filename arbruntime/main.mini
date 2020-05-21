@@ -1,12 +1,12 @@
 
 import type Queue;
-import func queue_new() Queue;
-import func queue_isEmpty(q: Queue) bool;
-import func queue_get(q: Queue) (Queue, anytype);
-import func queue_put(q: Queue, val: anytype) Queue;
+import func queue_new() -> Queue;
+import func queue_isEmpty(q: Queue) -> bool;
+import func queue_get(q: Queue) -> (Queue, anytype);
+import func queue_put(q: Queue, val: anytype) -> Queue;
 
 
-func main() void {
+func main() {
     let inbox = queue_new();
     loop {
         inbox = getInbox(input);
@@ -25,7 +25,7 @@ type timeTuple = struct {
     timestampUpperBound: uint,
 }
 
-func getTime() timeTuple {
+func impure getTime() -> timeTuple {
     return asm() timeTuple { gettime };
 }
 
@@ -34,13 +34,13 @@ type inboxCell = struct {
     msg: anytype
 }
 
-func getInbox(msgq: Queue) Queue {
+func impure getInbox(msgq: Queue) -> Queue {
     let newMsgs = asm(0) { inbox }
     return addInboxToQueue(msgq, newMsgs);
 }
 
-func addInboxToQueue(msgq: Queue, newMsgs: inboxCell) Queue {
-    if (unsafecast(newMsgs, anytype) == null) {
+func addInboxToQueue(msgq: Queue, newMsgs: inboxCell) -> Queue {
+    if (unsafecast<any>(newMsgs) == null) {
         return msgq;
     } else {
         return queue_put(
