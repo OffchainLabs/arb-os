@@ -36,7 +36,7 @@ impl BuiltinArray {
     fn tuple_tree(top_step: usize, arr:&[Value]) -> Value {
         let mut v = Vec::new();
         if top_step == 1 {
-            Value::Tuple(arr.to_vec());
+            return Value::Tuple(arr.to_vec());
         }
         for i in 0..8 {
             v.push(BuiltinArray::tuple_tree(top_step/8, &arr[(8*i)..(8*(i+1))]));
