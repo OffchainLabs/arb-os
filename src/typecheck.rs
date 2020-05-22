@@ -847,6 +847,7 @@ fn typecheck_unary_op(
 					Type::Uint |
 					Type::Int |
 					Type::Bytes32 |
+					Type::EthAddress | 
 					Type::Bool => Ok(TypeCheckedExpr::UnaryOp(UnaryOp::ToUint, Box::new(sub_expr), Type::Uint, loc)),
 					_ => Err(new_type_error("invalid operand type for uint()", loc))
 				}
@@ -859,6 +860,7 @@ fn typecheck_unary_op(
 					Type::Uint |
 					Type::Int |
 					Type::Bytes32 |
+					Type::EthAddress | 
 					Type::Bool => Ok(TypeCheckedExpr::UnaryOp(UnaryOp::ToInt, Box::new(sub_expr), Type::Int, loc)),
 					_ => Err(new_type_error("invalid operand type for int()", loc))
 				}
@@ -871,10 +873,24 @@ fn typecheck_unary_op(
 					Type::Uint |
 					Type::Int |
 					Type::Bytes32 |
+					Type::EthAddress |
 					Type::Bool => Ok(TypeCheckedExpr::UnaryOp(UnaryOp::ToBytes32, Box::new(sub_expr), Type::Bytes32, loc)),
 					_ => Err(new_type_error("invalid operand type for bytes32()", loc))
 				}
-			}		
+			}	
+		UnaryOp::ToAddress => 	
+			if let TypeCheckedExpr::Const(val, _, loc) = sub_expr {
+				Ok(TypeCheckedExpr::Const(val, Type::EthAddress, loc))
+			} else {
+				match tc_type {
+					Type::Uint |
+					Type::Int |
+					Type::Bytes32 |
+					Type::EthAddress | 
+					Type::Bool => Ok(TypeCheckedExpr::UnaryOp(UnaryOp::ToAddress, Box::new(sub_expr), Type::EthAddress, loc)),
+					_ => Err(new_type_error("invalid operand type for bytes32()", loc))
+				}
+			}	
 	}
 }
 
