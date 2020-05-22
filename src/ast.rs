@@ -43,6 +43,7 @@ pub enum Type {
 	Int,
 	Bool,
 	Bytes32,
+	EthAddress,
 	Tuple(Vec<Type>),
 	Array(Box<Type>),
 	FixedArray(Box<Type>, usize),
@@ -69,6 +70,7 @@ impl Type {
 			Type::Int |
 			Type::Bool |
 			Type::Bytes32 |
+			Type::EthAddress |
 			Type::Imported(_) |
 			Type::Any => Ok(self.clone()),
 			Type::Tuple(tvec) => {
@@ -134,6 +136,7 @@ impl Type {
 			Type::Int |
 			Type::Bool |
 			Type::Bytes32 |
+			Type::EthAddress | 
 			Type::Imported(_) => (self == rhs),
 			Type::Tuple(tvec) => {
 				if let Type::Tuple(tvec2) = rhs {
@@ -187,6 +190,7 @@ impl Type {
 			Type::Uint |
 			Type::Int |
 			Type::Bytes32 |
+			Type::EthAddress | 
 			Type::Bool => Value::Int(Uint256::zero()),
 			Type::Tuple(tvec) => {
 				let mut default_tup = Vec::new();
@@ -279,6 +283,7 @@ impl PartialEq for Type {
 			(Type::Int, Type::Int) |
 			(Type::Bool, Type::Bool) |
 			(Type::Bytes32, Type::Bytes32) |
+			(Type::EthAddress, Type::EthAddress) | 
 			(Type::Any, Type::Any) => true,
 			(Type::Tuple(v1), Type::Tuple(v2)) => type_vectors_equal(&v1, &v2),
 			(Type::Array(a1), Type::Array(a2)) => *a1 == *a2,
@@ -756,6 +761,7 @@ pub enum UnaryOp {
 	ToUint,
 	ToInt,
 	ToBytes32,
+	ToAddress,
 }
 
 #[derive(Debug, Clone, Copy)]
