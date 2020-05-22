@@ -28,6 +28,9 @@ $(STDDIR)/priorityqtest.mexe: $(BUILTINMAOS) $(STDDIR)/priorityqtest.mini $(STDD
 $(STDDIR)/bytearraytest.mexe: $(BUILTINMAOS) $(STDDIR)/bytearraytest.mini $(STDDIR)/bytearray.mini
 	cargo run compile $(STDDIR)/bytearraytest.mini $(STDDIR)/bytearray.mini -o $(STDDIR)/bytearraytest.mexe
 
+$(STDDIR)/random.mao: $(STDDIR)/random.mini
+	cargo run compile $(STDDIR)/random.mini -c -o $(STDDIR)/random.mao
+
 $(BUILTINDIR)/maptest.mexe: $(BUILTINMAOS) $(BUILTINDIR)/maptest.mini
 	cargo run compile $(BUILTINDIR)/maptest.mini -o $(BUILTINDIR)/maptest.mexe
 

@@ -17,3 +17,4 @@ builtin/kvstest.mexe
 builtin/maptest.mexe
 stdlib/bytearraytest.mexe
 stdlib/priorityqtest.mexe
+stdlib/random.mao

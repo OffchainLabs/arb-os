@@ -1,0 +1,13 @@
+
+type RandomGenerator = bytes32
+
+public func random_new(seed: bytes32) -> RandomGenerator {
+    return seed;
+}
+
+public func random_next(rand: RandomGenerator) -> (bytes32, RandomGenerator) {
+    return (
+        hash(bytes32(0), rand), 
+        hash(bytes32(1), rand),
+    );
+}
