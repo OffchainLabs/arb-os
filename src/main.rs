@@ -31,6 +31,7 @@ pub mod source;
 pub mod pos;
 pub mod evm;
 pub mod build_builtins;
+#[cfg(test)]
 pub mod minitests;
 
 #[macro_use] extern crate lalrpop_util;

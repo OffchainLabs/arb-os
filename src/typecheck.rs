@@ -892,33 +892,23 @@ fn typecheck_binary_op(
 				BinaryOp::BitwiseOr |
 				BinaryOp::BitwiseXor => {
 					// swap the args, so code generator will be able to supply the constant as an immediate
-					let tmp = tcs1;
-					tcs1 = tcs2; 
-					tcs2 = tmp;
+					std::mem::swap(&mut tcs1, &mut tcs2);
 				}
 				BinaryOp::LessThan => {
 					op = BinaryOp::GreaterThan;
-					let tmp = tcs1;
-					tcs1 = tcs2; 
-					tcs2 = tmp;
+					std::mem::swap(&mut tcs1, &mut tcs2);
 				}
 				BinaryOp::GreaterThan => {
 					op = BinaryOp::LessThan;
-					let tmp = tcs1;
-					tcs1 = tcs2; 
-					tcs2 = tmp;
+					std::mem::swap(&mut tcs1, &mut tcs2);
 				}
 				BinaryOp::LessEq => {
 					op = BinaryOp::GreaterEq;
-					let tmp = tcs1;
-					tcs1 = tcs2; 
-					tcs2 = tmp;
+					std::mem::swap(&mut tcs1, &mut tcs2)
 				}
 				BinaryOp::GreaterEq => {
 					op = BinaryOp::LessEq;
-					let tmp = tcs1;
-					tcs1 = tcs2; 
-					tcs2 = tmp;
+					std::mem::swap(&mut tcs1, &mut tcs2)
 				}
 				_ => {}
 			}

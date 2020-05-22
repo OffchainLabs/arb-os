@@ -34,7 +34,6 @@ fn testarray6() {
     test_arraytest(6, Value::Int(Uint256::from_usize(7)));
 }
 
-#[allow(dead_code)]
 fn test_arraytest(test_num: usize, expected_result: Value) {
     let path = Path::new("builtin/arraytest.mexe"); 
     let res = run_from_file(path, vec![Value::Int(Uint256::from_usize(test_num))]);
@@ -89,7 +88,6 @@ fn testkvs8() {
     test_kvstest(8, Value::Int(Uint256::from_usize(155)));
 }
 
-#[allow(dead_code)]
 fn test_kvstest(test_num: usize, expected_result: Value) {
     let path = Path::new("builtin/kvstest.mexe"); 
     let res = run_from_file(path, vec![Value::Int(Uint256::from_usize(test_num))]);
@@ -120,7 +118,6 @@ fn testq3() {
     test_queuetest(3, Value::Int(Uint256::from_usize(21)));
 }
 
-#[allow(dead_code)]
 fn test_queuetest(test_num: usize, expected_result: Value) {
     let path = Path::new("stdlib/queuetest.mexe"); 
     let res = run_from_file(path, vec![Value::Int(Uint256::from_usize(test_num))]);
@@ -156,7 +153,6 @@ fn testglobal4() {
     test_globaltest(4, Value::Int(Uint256::from_usize(7)));
 }
 
-#[allow(dead_code)]
 fn test_globaltest(test_num: usize, expected_result: Value) {
     let path = Path::new("builtin/globaltest.mexe"); 
     let res = run_from_file(path, vec![Value::Int(Uint256::from_usize(test_num))]);
@@ -191,7 +187,6 @@ fn testpq4() {
     test_pqtest(4, Value::Int(Uint256::from_usize(96)));
 }
 
-#[allow(dead_code)]
 fn test_pqtest(test_num: usize, expected_result: Value) {
     let path = Path::new("stdlib/priorityqtest.mexe"); 
     let res = run_from_file(path, vec![Value::Int(Uint256::from_usize(test_num))]);
@@ -221,7 +216,6 @@ fn testba3() {
     test_bytearray(3, Value::Int(Uint256::from_usize(42)));
 }
 
-#[allow(dead_code)]
 fn test_bytearray(test_num: usize, expected_result: Value) {
     let path = Path::new("stdlib/bytearraytest.mexe"); 
     let res = run_from_file(path, vec![Value::Int(Uint256::from_usize(test_num))]);
@@ -256,7 +250,6 @@ fn testmap4() {
     test_map(4, Value::Int(Uint256::from_usize(13)));
 }
 
-#[allow(dead_code)]
 fn test_map(test_num: usize, expected_result: Value) {
     let path = Path::new("builtin/maptest.mexe"); 
     let res = run_from_file(path, vec![Value::Int(Uint256::from_usize(test_num))]);
