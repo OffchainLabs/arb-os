@@ -11,3 +11,9 @@ Cargo.lock
 arbruntime/accounts.mao
 arbruntime/messages.mao
 builtin/globaltest.mexe
+builtin/arraytest.mexe
+builtin/globaltest.mexe
+builtin/kvstest.mexe
+builtin/maptest.mexe
+stdlib/bytearraytest.mexe
+stdlib/priorityqtest.mexe
