@@ -1,9 +1,7 @@
 
 import type ByteArray;
-import func tokens_getERC20template() -> Address;
-import func tokens_getERC721template() -> Address;
-
-type Address = bytes32
+import func tokens_getERC20template() -> address;
+import func tokens_getERC721template() -> address;
 
 type Account = struct {
     nextSeqNum: uint,
@@ -15,11 +13,11 @@ type Account = struct {
     ethBalance: uint,
 }
 
-var accountStore: map<Address, Account>;   // needs to be initialized before use
+var accountStore: map<address, Account>;   // needs to be initialized before use
 var pristineAccount: Account;              // needs to be initialized before use
 
 
-impure func get_account(addr: Address) -> Account {
+impure func get_account(addr: address) -> Account {
     if (unsafecast<any>(accountStore) == null) {
         pristineAccount = struct {
             nextSeqNum: 1,
@@ -30,7 +28,7 @@ impure func get_account(addr: Address) -> Account {
             storage: newmap<uint, uint>,
             ethBalance: 0,
         };
-        accountStore = newmap<Address, Account>;
+        accountStore = newmap<address, Account>;
     }
     let (acct, exists,) = accountStore[addr];
     if (exists) {
@@ -44,7 +42,7 @@ public func account_isEmpty(acct: Account) -> bool {
     return (acct.nextSeqNum == 0) && (acct.ethBalance == 0) && (acct.codeSize == 0);
 }
 
-public impure func account_checkSeqNum(addr: Address, seqNumRecvd: uint) -> bool {
+public impure func account_checkSeqNum(addr: address, seqNumRecvd: uint) -> bool {
     // if seqNumRecvd has the expected value, increment seqNum in account and return true
     // else just return false
     let account = get_account(addr);
@@ -61,7 +59,7 @@ public impure func account_checkSeqNum(addr: Address, seqNumRecvd: uint) -> bool
     }
 }
 
-public impure func account_fetchAndIncrSeqNum(addr: Address) -> uint {
+public impure func account_fetchAndIncrSeqNum(addr: address) -> uint {
     let account = get_account(addr);
     let ret = account.nextSeqNum;
     accountStore = accountStore with {
@@ -72,7 +70,7 @@ public impure func account_fetchAndIncrSeqNum(addr: Address) -> uint {
     return ret;
 }
 
-public impure func createERC20(addr: Address) -> bool {
+public impure func createERC20(addr: address) -> bool {
     // returns true iff success
     if (account_isEmpty(get_account(addr))) {
         cloneContract(tokens_getERC20template(), addr);
@@ -82,7 +80,7 @@ public impure func createERC20(addr: Address) -> bool {
     }
 }
 
-public impure func createERC721(addr: Address) -> bool {
+public impure func createERC721(addr: address) -> bool {
     // returns true iff success
     if (account_isEmpty(get_account(addr))) {
         cloneContract(tokens_getERC721template(), addr);
@@ -92,7 +90,7 @@ public impure func createERC721(addr: Address) -> bool {
     }
 }
 
-public impure func cloneContract(oldAddr: Address, newAddr: Address) {
+public impure func cloneContract(oldAddr: address, newAddr: address) {
     let oldAccount = get_account(oldAddr);
     let newAccount = oldAccount with { ethBalance: 0 }
                                 with { nextSeqNum: 1 }
@@ -100,11 +98,11 @@ public impure func cloneContract(oldAddr: Address, newAddr: Address) {
     accountStore = accountStore with { [newAddr] = newAccount };
 }
 
-public impure func account_getEthBalance(addr: Address) -> uint {
+public impure func account_getEthBalance(addr: address) -> uint {
     return get_account(addr).ethBalance;
 }
 
-public impure func account_setEthBalance(addr: Address, newBal: uint) {
+public impure func account_setEthBalance(addr: address, newBal: uint) {
     accountStore = accountStore with { 
         [addr] = get_account(addr) with { 
             ethBalance: newBal 
@@ -113,7 +111,7 @@ public impure func account_setEthBalance(addr: Address, newBal: uint) {
 }
 
 // transfer eth; return true if transfer happened, or false if insufficient funds
-public impure func account_transferEthBalance(from: Address, to:Address, amount: uint) -> bool {
+public impure func account_transferEthBalance(from: address, to:address, amount: uint) -> bool {
     let fromAcct = get_account(from);
     if (fromAcct.ethBalance < amount) {
         return false;
@@ -124,11 +122,11 @@ public impure func account_transferEthBalance(from: Address, to:Address, amount:
     return true;
 }
 
-public impure func account_getAllStorage(addr: Address) -> map<uint, uint> {
+public impure func account_getAllStorage(addr: address) -> map<uint, uint> {
     return get_account(addr).storage;
 }
 
-public impure func account_getStorageCell(addr: Address, cell: uint) -> uint {
+public impure func account_getStorageCell(addr: address, cell: uint) -> uint {
     let (contents, exists,) = get_account(addr).storage[cell];
     if (exists) {
         return contents;
@@ -137,7 +135,7 @@ public impure func account_getStorageCell(addr: Address, cell: uint) -> uint {
     }
 }
 
-public impure func account_setStorageCell(addr: Address, cell: uint, value: uint) {
+public impure func account_setStorageCell(addr: address, cell: uint, value: uint) {
     let myAccount = get_account(addr);
     accountStore = accountStore with {
         [addr] = myAccount with {
