@@ -134,13 +134,18 @@ Type: Type = {
 		s.to_usize().unwrap(),
 	),
 	"map" "<" <t1:Type> "," <t2:Type> ">" => Type::Map(Box::new(t1), Box::new(t2)),
-	"func" "(" <CommaedTypes> ")" => Type::Func(false, <>, Box::new(Type::Void)),
-	"func" "(" <a: CommaedTypes> ")" "->" <r: Type> => Type::Func(false, a, Box::new(r)),
-	"impure" "func" "(" <CommaedTypes> ")" => Type::Func(true, <>, Box::new(Type::Void)),
-	"impure" "func" "(" <a: CommaedTypes> ")" "->" <r: Type> => Type::Func(true, a, Box::new(r)),
+	"func" <CommaedTypesInParens> => Type::Func(false, <>, Box::new(Type::Void)),
+	"func" <a: CommaedTypesInParens> "->" <r: Type> => Type::Func(false, a, Box::new(r)),
+	"impure" "func" <CommaedTypesInParens> => Type::Func(true, <>, Box::new(Type::Void)),
+	"impure" "func" <a: CommaedTypesInParens> "->" <r: Type> => Type::Func(true, a, Box::new(r)),
 	"any" => Type::Any,
 	Ident => Type::Named(<>),
 };
+
+CommaedTypesInParens: Vec<Type> = {
+	"(" ")" => vec![],
+	"(" <CommaedTypes> ")" => <>,
+}
 
 CommaedTypes: Vec<Type> = {
 	Type => vec![<>],
