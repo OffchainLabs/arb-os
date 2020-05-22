@@ -4,7 +4,7 @@ use crate::uint256::Uint256;
 use crate::link::LinkedProgram;
 
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Default, Clone)]
 pub struct ValueStack {
 	contents: Vec<Value>,
 }
@@ -672,7 +672,7 @@ impl<'a> Machine {
 								} else {
 									let t = 248-ub;
 									let shifted_bit = Uint256::from_usize(2).exp(&Uint256::from_usize(t));
-									let sign_bit = ! (x.bitwise_and(&shifted_bit) == Uint256::zero());
+									let sign_bit = x.bitwise_and(&shifted_bit) != Uint256::zero();
 									let mask = shifted_bit.sub(&Uint256::one());
 									if sign_bit {
 										x.bitwise_and(&mask)
