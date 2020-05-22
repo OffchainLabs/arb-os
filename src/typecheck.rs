@@ -200,16 +200,22 @@ pub fn typecheck_top_level_decls<'a>(
 			}
 		}
 	}
+
 	let type_table = SymTable::<Type>::new();
 	let type_table = type_table.push_multi(named_types);
 	let type_table = type_table.push_multi(hm.clone());
+
+	let mut resolved_global_vars_map = HashMap::new();
+	for (name, (tipe, slot_num)) in global_vars_map {
+		resolved_global_vars_map.insert(name, (tipe.resolve_types(&type_table, None)?, slot_num));
+	}
 
 	let func_table = SymTable::<Type>::new();
 	let func_table = func_table.push_multi(hm);
 
 	for func in funcs.iter() {
 		match func.resolve_types(&type_table, func.location) {
-			Ok(f) => match typecheck_function(&f, &type_table, &global_vars_map, &func_table) {
+			Ok(f) => match typecheck_function(&f, &type_table, &resolved_global_vars_map, &func_table) {
 				Ok(f) => { 
 					match func.kind {
 						FuncDeclKind::Public => {
