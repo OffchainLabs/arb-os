@@ -4,16 +4,17 @@ import func queue_new() -> Queue;
 import func queue_isEmpty(q: Queue) -> bool;
 import func queue_get(q: Queue) -> (Queue, anytype);
 import func queue_put(q: Queue, val: anytype) -> Queue;
+import impure func handleEthbridgeMessage(any);
 
 
-func main() {
+impure func main() {
     let inbox = queue_new();
     loop {
         inbox = getInbox(input);
         while ( ! queue_isEmpty(inbox)) {
             let (newInbox, thisMsg) = queue_get(inbox);
             inbox = newInbox;
-            // process thisMsg
+            handleEthbridgeMessage(thisMsg);
         }
     }
 }

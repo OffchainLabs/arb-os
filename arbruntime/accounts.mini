@@ -42,7 +42,7 @@ public func account_isEmpty(acct: Account) -> bool {
     return (acct.nextSeqNum == 0) && (acct.ethBalance == 0) && (acct.codeSize == 0);
 }
 
-public impure func account_checkSeqNum(addr: address, seqNumRecvd: uint) -> bool {
+public impure func account_checkAndIncrSeqNum(addr: address, seqNumRecvd: uint) -> bool {
     // if seqNumRecvd has the expected value, increment seqNum in account and return true
     // else just return false
     let account = get_account(addr);

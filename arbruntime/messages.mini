@@ -1,34 +1,69 @@
 
 import type MarshalledBytes;
 
-
-type Address = bytes32
+import impure func account_checkAndIncrSeqNum(addr: address, seqNumRecvd: uint) -> bool;
+import impure func account_transferEthBalance(from: address, to:address, amount: uint) -> bool;
+import impure func account_addToEthBalance(addr: address, addition: uint);
 
 type ArbMessage = struct {
     msgType: uint,
-    sender: Address,
+    sender: address,
     message: any,
 }
 
 type TokenTransferMessage = struct {
-    tokenAddress: Address,
-    dest: Address,
+    tokenAddress: address,
+    dest: address,
     amount: uint,
 }
 
 type EthTransferMessage = struct {
-    dest: Address,
+    dest: address,
     amount: uint,
 }
 
 type TxMessage = struct {
-    to: Address,
+    to: address,
     seqNumber: uint,
     value: uint,
     data: MarshalledBytes,
 }
 
 type CallMessage = struct {
-    to: Address,
+    to: address,
     data: MarshalledBytes,
+}
+
+public impure func handleEthbridgeMessage(msg: ArbMessage) {
+    let msgType = msg.msgType;
+    if (msgType == 0) {
+        let txMsg = unsafecast<TxMessage>(msg.message);
+        if (account_checkAndIncrSeqNum(msg.sender, txMsg.seqNumber)) {
+            handleValidTxMessage(txMsg);
+            panic; //TODO
+        } else {
+            // sequence number was invalid
+            panic; //TODO
+        }
+    } elseif (msgType == 1) {
+        let depMsg = unsafecast<EthTransferMessage>(msg.message);
+        let success = account_transferEthBalance(msg.sender, depMsg.dest, depMsg.amount);
+        panic; //TODO
+    } elseif (msgType == 2) {
+        let depMsg = unsafecast<TokenTransferMessage>(msg.message);
+        panic; // deposit ERC 20
+    } elseif (msgType == 3) {
+        let depMsg = unsafecast<TokenTransferMessage>(msg.message);
+        panic; // deposit ERC 721
+    } elseif (msgType == 4) {
+        panic; // contract tx call message
+    } elseif (msgType == 5) {
+        let callMsg = unsafecast<CallMessage>(msg.message);
+        panic; // call message
+    }
+    // if no case matches, unrecognized message type; ignore it
+}
+
+impure func handleValidTxMessage(txMsg: TxMessage) {
+    //TODO
 }
