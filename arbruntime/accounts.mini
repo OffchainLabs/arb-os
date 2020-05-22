@@ -110,6 +110,15 @@ public impure func account_setEthBalance(addr: address, newBal: uint) {
     };
 }
 
+public impure func account_addToEthBalance(addr: address, addition: uint) {
+    let account = get_account(addr);
+    accountStore = accountStore with {
+        [addr] = account with {
+            ethBalance: account.ethBalance + addition
+        }
+    };
+}
+
 // transfer eth; return true if transfer happened, or false if insufficient funds
 public impure func account_transferEthBalance(from: address, to:address, amount: uint) -> bool {
     let fromAcct = get_account(from);
