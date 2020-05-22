@@ -16,6 +16,7 @@ jobs:
     - name: Build
       run: cargo build --verbose
     - name: Build mini tests
+      run: make clean
       run: make all
     - name: Run tests
       run: cargo test --verbose

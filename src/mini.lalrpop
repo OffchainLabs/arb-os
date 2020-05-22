@@ -125,6 +125,7 @@ Type: Type = {
 	"int" => Type::Int,
 	"bool" => Type::Bool,
 	"bytes32" => Type::Bytes32,
+	"address" => Type::EthAddress,
 	StructDecl => <>,
 	"(" ")" => Type::Tuple(Vec::new()),
 	"(" <CommaedTypes> ")" => Type::Tuple(<>),
@@ -237,6 +238,7 @@ Expr11: Expr = {
 	<lno: @L> "uint" "(" <e: Expr> ")" => Expr::new_unary(UnaryOp::ToUint, e, file_info.location(BytePos::from(lno))),
 	<lno: @L> "int" "(" <e: Expr> ")" => Expr::new_unary(UnaryOp::ToInt, e, file_info.location(BytePos::from(lno))),
 	<lno: @L> "bytes32" "(" <e: Expr> ")" => Expr::new_unary(UnaryOp::ToBytes32, e, file_info.location(BytePos::from(lno))),
+	<lno: @L> "address" "(" <e: Expr> ")" => Expr::new_unary(UnaryOp::ToAddress, e, file_info.location(BytePos::from(lno))),
 	<lno: @L> "newarray" "<" <t:Type> ">" "(" <e:Expr> ")" => Expr::NewArray(Box::new(e), t, file_info.location(BytePos::from(lno))),
 	<lno: @L> "newfixedarray" "(" <s:UnsignedInteger> "," <e:Expr> ")" => Expr::NewFixedArray(
 		s.to_usize().unwrap(), 
