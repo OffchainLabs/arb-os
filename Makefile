@@ -37,6 +37,17 @@ $(BUILTINDIR)/array.mao: $(BUILTINDIR)/array.mini
 $(BUILTINDIR)/kvs.mao: $(BUILTINDIR)/kvs.mini
 	cargo run compile $(BUILTINDIR)/kvs.mini -c -o $(BUILTINDIR)/kvs.mao
 
+RUNTIMEDIR = arbruntime
+RUNTIMEMAOS = $(RUNTIMEDIR)/accounts.mao $(RUNTIMEDIR)/messages.mao
+
+runtime: $(RUNTIMEMAOS)
+
+$(RUNTIMEDIR)/accounts.mao: $(RUNTIMEDIR)/accounts.mini
+	cargo run compile $(RUNTIMEDIR)/accounts.mini -c -o $(RUNTIMEDIR)/accounts.mao
+
+$(RUNTIMEDIR)/messages.mao: $(RUNTIMEDIR)/messages.mini
+	cargo run compile $(RUNTIMEDIR)/messages.mini -c -o $(RUNTIMEDIR)/messages.mao
+
 compiler: 
 	cargo build
 
