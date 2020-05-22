@@ -1,7 +1,7 @@
 
 import type ByteArray;
 
-import func bytearray_new(size: uint) -> ByteArray;
+import func bytearray_new(size: uint, autoExpand: bool) -> ByteArray;
 import func bytearray_size(ba: ByteArray) -> uint;
 import func bytearray_getByte(ba: ByteArray, idx: uint) -> uint;
 import func bytearray_setByte(ba: ByteArray, idx: uint, val: uint) -> ByteArray;
@@ -11,32 +11,32 @@ import func bytearray_set256(ba: ByteArray, offset: uint, value: uint) -> ByteAr
 
 func tests(which: uint) -> any {
 	if (which == 0) {
-		let ba = bytearray_new(33);
+		let ba = bytearray_new(33, false);
 		return bytearray_size(ba);
 	} elseif (which == 1) {
-		let ba = bytearray_new(117);
+		let ba = bytearray_new(117, true);
 		ba = bytearray_setByte(ba, 33, 42);
 		return bytearray_getByte(ba, 33);
 	} elseif (which == 2) {
-		let ba = bytearray_new(117);
+		let ba = bytearray_new(117, false);
 		ba = bytearray_setByte(ba, 33, 42);
 		ba = bytearray_setByte(ba, 37, 99);
 		return bytearray_getByte(ba, 33);
 	} elseif (which == 3) {
-		let ba = bytearray_new(117);
+		let ba = bytearray_new(117, true);
 		ba = bytearray_setByte(ba, 37, 42+99*256);
 		ba = bytearray_setByte(ba, 36, 999999999999999999);
 		return bytearray_getByte(ba, 37);
 	} elseif (which == 4) {
-		let ba = bytearray_new(117);
+		let ba = bytearray_new(117, false);
 		ba = bytearray_set256(ba, 64, 7373);
 		return bytearray_get256(ba, 64);
 	} elseif (which == 5) {
-		let ba = bytearray_new(117);
+		let ba = bytearray_new(117, true);
 		ba = bytearray_set256(ba, 64, 7373);
 		return bytearray_get256(ba, 65);
 	} elseif (which == 6) {
-		let ba = bytearray_new(117);
+		let ba = bytearray_new(117, true);
 		ba = bytearray_set256(ba, 13, ~0);
 		ba = bytearray_set256(ba, 13+32, 0);
 		ba = bytearray_set256(ba, 13+64, ~0);

@@ -1,4 +1,5 @@
 
+import func builtin_arrayResize(a: []uint, newSize: uint, baseVal: uint) -> []uint;
 import func builtin_arrayGetConsecutive(a: []uint, index: uint) -> (uint, uint);
 import func builtin_arrayOp(a: []uint, index: uint, closure: opClosure) -> ([]uint, uint);
 import func builtin_arrayOpConsecutive(a: []uint, index: uint, closure1: opClosure, closure2: opClosure) -> ([]uint, uint, uint);
@@ -11,12 +12,21 @@ type opClosure = struct {
 type ByteArray = struct { 
     size: uint, 
     contents: []uint,
+    autoExpand: bool,
 }
 
-public func bytearray_new(size: uint) -> ByteArray {
+public func bytearray_new(size: uint, autoExpand: bool) -> ByteArray {
+    if (autoExpand) {
+        let roundedUpSize = 8*32;
+        while (roundedUpSize < size) {
+            roundedUpSize = 8*roundedUpSize;
+        }
+        size = roundedUpSize;
+    }
     return struct { 
         size: size, 
         contents: newarray<uint>((size+31)/32),
+        autoExpand: autoExpand,
     };
 }
 
@@ -26,7 +36,11 @@ public func bytearray_size(ba: ByteArray) -> uint {
 
 public func bytearray_getByte(ba: ByteArray, idx: uint) -> uint {
     if (idx >= ba.size) {
-        panic;
+        if (ba.autoExpand) {
+            return 0;
+        } else {
+            panic;
+        }
     }
     let slot = ba.contents[idx/32];
     let byteno = idx%32;
@@ -35,7 +49,16 @@ public func bytearray_getByte(ba: ByteArray, idx: uint) -> uint {
 
 public func bytearray_setByte(ba: ByteArray, idx: uint, val: uint) -> ByteArray {
     if (idx >= ba.size) {
-        panic;
+        if (ba.autoExpand) {
+            let newSize = 8*ba.size;
+            while (newSize < idx) {
+                newSize = 8*newSize;
+            }
+            ba = ba with { size: newSize }
+                    with { contents: builtin_arrayResize(ba.contents, newSize/32, 0) };
+        } else {
+            panic;
+        }
     }
     return ba with {
         contents: builtin_arrayOp(
@@ -50,9 +73,41 @@ public func bytearray_get256(ba: ByteArray, offset: uint) -> uint {
     let lowWordIndex = offset / 32;
     let alignment = offset % 32;
     if (alignment == 0) {
+        if (offset+32 > ba.size) {
+            if (ba.autoExpand) {
+                // because size is a multiple of 32 in this case, access is entirely outside the ByteArray
+                return 0;
+            } else {
+                panic;
+            }
+        } 
         return ba.contents[lowWordIndex];
     } else {
-        let (lowWord, hiWord,) = builtin_arrayGetConsecutive(ba.contents, lowWordIndex);
+        let lowWord = 0;
+        let hiWord = 0;
+        if (ba.autoExpand) {
+            if (offset+32 > ba.size) {
+                let offsetBase = offset & 0x1f;
+                let offsetBaseDiv32 = offsetBase / 32;
+                if (offsetBase < ba.size) {
+                    lowWord = ba.contents[offsetBaseDiv32];
+                }
+                if (offsetBase+32 < ba.size) {
+                    hiWord = ba.contents[1+offsetBaseDiv32];
+                }
+            } else {
+                let words = builtin_arrayGetConsecutive(ba.contents, lowWordIndex);
+                lowWord = words.0;
+                hiWord = words.1;
+            }
+            let shiftFactor = asm(2, 8*alignment) uint { exp };
+            let invShiftFactor = asm(2, 256-8*alignment) uint { exp };
+            return (lowWord/shiftFactor) | (hiWord*invShiftFactor);
+        } else {
+            let words = builtin_arrayGetConsecutive(ba.contents, lowWordIndex);
+            lowWord = words.0;
+            hiWord = words.1;
+        }
         let shiftFactor = asm(2, 8*alignment) uint { exp };
         let invShiftFactor = asm(2, 256-8*alignment) uint { exp };
         return (lowWord/shiftFactor) | (hiWord*invShiftFactor);
