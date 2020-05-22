@@ -153,6 +153,11 @@ fn testglobal4() {
     test_globaltest(4, Value::Int(Uint256::from_usize(7)));
 }
 
+#[test]
+fn testglobal5() {
+    test_globaltest(5, Value::Int(Uint256::from_usize(13)));
+}
+
 fn test_globaltest(test_num: usize, expected_result: Value) {
     let path = Path::new("builtin/globaltest.mexe"); 
     let res = run_from_file(path, vec![Value::Int(Uint256::from_usize(test_num))]);
