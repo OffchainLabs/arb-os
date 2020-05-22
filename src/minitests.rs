@@ -226,6 +226,21 @@ fn testba3() {
     test_bytearray(3, Value::Int(Uint256::from_usize(42)));
 }
 
+#[test]
+fn testba4() {
+    test_bytearray(4, Value::Int(Uint256::from_usize(7373)));
+}
+
+#[test]
+fn testba5() {
+    test_bytearray(5, Value::Int(Uint256::from_usize(7373/256)));
+}
+
+#[test]
+fn testba6() {
+    test_bytearray(6, Value::Int(Uint256::from_usize(1)));
+}
+
 #[allow(dead_code)]
 fn test_bytearray(test_num: usize, expected_result: Value) {
     let path = Path::new("stdlib/bytearraytest.mexe"); 

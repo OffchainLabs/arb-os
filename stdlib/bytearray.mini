@@ -1,45 +1,84 @@
 
+import func builtin_arrayGetConsecutive(a: []uint, index: uint) -> (uint, uint);
 import func builtin_arrayOp(a: []uint, index: uint, closure: opClosure) -> ([]uint, uint);
+import func builtin_arrayOpConsecutive(a: []uint, index: uint, closure1: opClosure, closure2: opClosure) -> ([]uint, uint, uint);
 
 type opClosure = struct {
 	f: func((uint, uint), uint) -> (uint, uint),  // (closure.val, oldVal) -> (newVal, return)
 	val: (uint, uint),
 }
 
-type ByteArray = (uint, []uint)
+type ByteArray = struct { 
+    size: uint, 
+    contents: []uint,
+}
 
 public func bytearray_new(size: uint) -> ByteArray {
-    return(size, newarray<uint>((size+31)/32),);
+    return struct { 
+        size: size, 
+        contents: newarray<uint>((size+31)/32),
+    };
 }
 
 public func bytearray_size(ba: ByteArray) -> uint {
-    return ba.0;
+    return ba.size;
 }
 
-public func bytearray_get(ba: ByteArray, idx: uint) -> uint {
-    if (idx >= ba.0) {
+public func bytearray_getByte(ba: ByteArray, idx: uint) -> uint {
+    if (idx >= ba.size) {
         panic;
     }
-    let slot = ba.1[idx/32];
+    let slot = ba.contents[idx/32];
     let byteno = idx%32;
     return (slot / (asm (2, 8*byteno) uint { exp })) & 0xff;
 }
 
-public func bytearray_set(ba: ByteArray, idx: uint, val: uint) -> ByteArray {
-    if (idx >= ba.0) {
+public func bytearray_setByte(ba: ByteArray, idx: uint, val: uint) -> ByteArray {
+    if (idx >= ba.size) {
         panic;
     }
-    return (
-        ba.0,
-        builtin_arrayOp(
-            ba.1, 
+    return ba with {
+        contents: builtin_arrayOp(
+            ba.contents, 
             idx/32, 
-            struct { f: baput_closure_func, val: (idx%32, val,), } 
-        ).0,
-    );
+            struct { f: basb_closure_func, val: (idx%32, val,), } 
+        ).0
+    };
 }
 
-func baput_closure_func(args: (uint, uint), oldval: uint) -> (uint, uint) { // returns (newval, junk)
+public func bytearray_get256(ba: ByteArray, offset: uint) -> uint {
+    let lowWordIndex = offset / 32;
+    let alignment = offset % 32;
+    if (alignment == 0) {
+        return ba.contents[lowWordIndex];
+    } else {
+        let (lowWord, hiWord,) = builtin_arrayGetConsecutive(ba.contents, lowWordIndex);
+        let shiftFactor = asm(2, 8*alignment) uint { exp };
+        let invShiftFactor = asm(2, 256-8*alignment) uint { exp };
+        return (lowWord/shiftFactor) | (hiWord*invShiftFactor);
+    }
+}
+
+public func bytearray_set256(ba: ByteArray, offset: uint, value: uint) -> ByteArray {
+    let lowWordIndex = offset / 32;
+    let alignment = offset % 32;
+    if (alignment == 0) {
+        return ba with {
+            contents: ba.contents with { [lowWordIndex] = value }
+        };
+    } else {
+        return ba with {
+            contents: builtin_arrayOpConsecutive(
+                ba.contents,
+                lowWordIndex,
+                struct { f: bas256_low_closure_func, val: (alignment, value,), },
+                struct { f: bas256_hi_closure_func, val: (alignment, value,), }
+            ).0
+        };
+    }
+}
+
+func basb_closure_func(args: (uint, uint), oldval: uint) -> (uint, uint) { // returns (newval, junk)
     let (subidx, newbval,) = args;
     let shiftFac = asm (2, 8*subidx) uint { exp };
     let mask = 0xff * shiftFac;
@@ -48,4 +87,21 @@ func baput_closure_func(args: (uint, uint), oldval: uint) -> (uint, uint) { // r
         (oldval & ~mask) | pasteIn,
         0, 
     );
+}
+
+func bas256_low_closure_func(args: (uint, uint), oldval: uint) -> (uint, uint) { // returns (newval, junk)
+    let (alignment, value,) = args; 
+    let revAlignment = 32-alignment;
+    let factor = asm(2, 8*revAlignment) uint { exp };
+    let newVal = (value*factor) | (oldval & (factor-1));
+    return (newVal, 0,);
+}
+
+func bas256_hi_closure_func(args: (uint, uint), oldval: uint) -> (uint, uint) { // returns (newval, junk)
+    let (alignment, value,) = args; 
+    let revAlignment = 32-alignment;
+    let factor = asm(2, 8*alignment) uint { exp };
+    let invFactor = asm(2, 8*revAlignment) uint { exp };
+    let newVal = (value/factor) | (oldval & (invFactor * ~0));
+    return (newVal, 0,);
 }
