@@ -346,7 +346,13 @@ pub fn compile_evm_insn(
             code.push(Instruction::from_opcode(Opcode::Div, None));
             Some((code, label_gen))
         }
-        0x1d => evm_emulate(code, label_gen, evm_func_map, "sar"), // SAR
+        0x1d => { // SAR
+            code.push(Instruction::from_opcode(Opcode::Swap1, None));
+            code.push(Instruction::from_opcode_imm(Opcode::Exp, Value::Int(Uint256::from_usize(2)), None));
+            code.push(Instruction::from_opcode(Opcode::Swap1, None));
+            code.push(Instruction::from_opcode(Opcode::Sdiv, None));
+            Some((code, label_gen))
+        }
         // 0x1e - 0x1f unused
         0x20 => evm_emulate(code, label_gen, evm_func_map,  "sha3"), // SHA3
         // 0x21-0x2f unused
@@ -492,11 +498,12 @@ pub fn compile_evm_insn(
         0x9d => Some((gen_swapn(code, 14), label_gen)), 
         0x9e => Some((gen_swapn(code, 15), label_gen)), 
         0x9f => Some((gen_swapn(code, 16), label_gen)), 
-        0xa0 => evm_emulate(code, label_gen, evm_func_map,  "log1"), // LOG1
-        0xa1 => evm_emulate(code, label_gen, evm_func_map,  "log2"), // LOG2
-        0xa2 => evm_emulate(code, label_gen, evm_func_map,  "log3"), // LOG3 
-        0xa3 => evm_emulate(code, label_gen, evm_func_map,  "log4"), // LOG4 
-        // 0xa4-0xaf unused
+        0xa0 => evm_emulate(code, label_gen, evm_func_map,  "log0"), // LOG0
+        0xa1 => evm_emulate(code, label_gen, evm_func_map,  "log1"), // LOG1
+        0xa2 => evm_emulate(code, label_gen, evm_func_map,  "log2"), // LOG2
+        0xa3 => evm_emulate(code, label_gen, evm_func_map,  "log3"), // LOG3 
+        0xa4 => evm_emulate(code, label_gen, evm_func_map,  "log4"), // LOG4 
+        // 0xa5-0xaf unused
         // 0xb0-0xba unused, reserved for EIP 615
         // 0xbb-0xe0 unused
         0xe1 => evm_emulate(code, label_gen, evm_func_map,  "sloadbytes"), // SLOADBYTES 
@@ -568,7 +575,6 @@ fn evm_emulate(
 
 const EMULATION_FUNCS: [&str; 41] = [
     "stop",
-    "sar",
     "sha3",
     "address",
     "balance",
@@ -593,6 +599,7 @@ const EMULATION_FUNCS: [&str; 41] = [
     "sstore",
     "getjumpaddr",
     "msize",
+    "log0",
     "log1",
     "log2",
     "log3",
