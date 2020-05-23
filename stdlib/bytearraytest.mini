@@ -15,8 +15,10 @@
 //
 
 import type ByteArray;
+import type MarshalledBytes;
 
 import func bytearray_new(size: uint, autoExpand: bool) -> ByteArray;
+import func bytearray_unmarshalBytes(mbytes: MarshalledBytes, dest: ByteArray, offset: uint) -> ByteArray;
 import func bytearray_size(ba: ByteArray) -> uint;
 import func bytearray_getByte(ba: ByteArray, idx: uint) -> uint;
 import func bytearray_setByte(ba: ByteArray, idx: uint, val: uint) -> ByteArray;
@@ -58,6 +60,31 @@ func tests(which: uint) -> any {
 		return (bytearray_get256(ba, 13) == ~0) 
 			&& (bytearray_get256(ba, 13+32) == 0)
 			&& (bytearray_get256(ba, 13+64) == ~0);
+	} elseif (which == 7) {
+		let marshalledStruct = unsafecast<MarshalledBytes>((
+			67,
+			(
+				(
+					(
+						null,
+						0x1f1e1d1c1b1a191817161514131211100f0e0d0c0b0a09080706050403020100,
+					),
+					0x3f3e3d3c3b3a393837363534333231302f2e2d2c2b2a29282726252423222120,
+				),
+				0x424140,
+			),
+		));
+		let ba = bytearray_new(67, false);
+		ba = bytearray_unmarshalBytes(marshalledStruct, ba, 0);
+		let i = 0;
+		while (i < 67) {
+			let b = bytearray_getByte(ba, i);
+			if (b != i) {
+				return (i, b,);
+			}
+			i = i+1;
+		}
+		return 100;
 	} else {
 		return null;
 	}

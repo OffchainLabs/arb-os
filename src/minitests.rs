@@ -252,6 +252,11 @@ fn testba6() {
     test_bytearray(6, Value::Int(Uint256::from_usize(1)));
 }
 
+#[test]
+fn testba7() {
+    test_bytearray(7, Value::Int(Uint256::from_usize(100)));
+}
+
 fn test_bytearray(test_num: usize, expected_result: Value) {
     let path = Path::new("stdlib/bytearraytest.mexe"); 
     let res = run_from_file(path, vec![Value::Int(Uint256::from_usize(test_num))]);
