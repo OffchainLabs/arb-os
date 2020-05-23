@@ -148,7 +148,7 @@ pub fn compile_evm_insn(
 ) -> Option<(Vec<Instruction>, LabelGenerator)> {
     println!("insn {:2x}", evm_insn);
     match evm_insn {
-        0x00 => evm_emulate(code, label_gen, evm_func_map,  "stop"), // STOP
+        0x00 => evm_emulate(code, label_gen, evm_func_map, "evmOp_stop"), // STOP
         0x01 => { // ADD
             code.push(Instruction::from_opcode(Opcode::Plus, None));
             Some((code, label_gen))
@@ -354,31 +354,31 @@ pub fn compile_evm_insn(
             Some((code, label_gen))
         }
         // 0x1e - 0x1f unused
-        0x20 => evm_emulate(code, label_gen, evm_func_map,  "sha3"), // SHA3
+        0x20 => evm_emulate(code, label_gen, evm_func_map, "evmOp_sha3"), // SHA3
         // 0x21-0x2f unused
-        0x30 => evm_emulate(code, label_gen, evm_func_map,  "address"), // ADDRESS
-        0x31 => evm_emulate(code, label_gen, evm_func_map,  "balance"),// BALANCE
-        0x32 => evm_emulate(code, label_gen, evm_func_map,  "origin"), // ORIGIN
-        0x33 => evm_emulate(code, label_gen, evm_func_map,  "caller"), // CALLER
-        0x34 => evm_emulate(code, label_gen, evm_func_map,  "callvalue"), // CALLVALUE
-        0x35 => evm_emulate(code, label_gen, evm_func_map,  "calldataload"), // CALLDATALOAD
-        0x36 => evm_emulate(code, label_gen, evm_func_map,  "calldatasize"), // CALLDATASIZE
-        0x37 => evm_emulate(code, label_gen, evm_func_map,  "calldatacopy"), // CALLDATACOPY
-        0x38 => evm_emulate(code, label_gen, evm_func_map,  "codesize"), // CODESIZE
-        0x39 => evm_emulate(code, label_gen, evm_func_map,  "codecopy"), // CODECOPY
+        0x30 => evm_emulate(code, label_gen, evm_func_map, "evmOp_address"), // ADDRESS
+        0x31 => evm_emulate(code, label_gen, evm_func_map, "evmOp_balance"),// BALANCE
+        0x32 => evm_emulate(code, label_gen, evm_func_map, "evmOp_origin"), // ORIGIN
+        0x33 => evm_emulate(code, label_gen, evm_func_map, "evmOp_caller"), // CALLER
+        0x34 => evm_emulate(code, label_gen, evm_func_map, "evmOp_callvalue"), // CALLVALUE
+        0x35 => evm_emulate(code, label_gen, evm_func_map, "evmOp_calldataload"), // CALLDATALOAD
+        0x36 => evm_emulate(code, label_gen, evm_func_map, "evmOp_calldatasize"), // CALLDATASIZE
+        0x37 => evm_emulate(code, label_gen, evm_func_map, "evmOp_calldatacopy"), // CALLDATACOPY
+        0x38 => evm_emulate(code, label_gen, evm_func_map, "evmOp_codesize"), // CODESIZE
+        0x39 => evm_emulate(code, label_gen, evm_func_map, "evmOp_codecopy"), // CODECOPY
         0x3a => { // GASPRICE
             code.push(Instruction::from_opcode_imm(Opcode::Noop, Value::Int(Uint256::one()), None));
             Some((code, label_gen))
         }   
-        0x3b => evm_emulate(code, label_gen, evm_func_map,  "extcodesize"), // EXTCODESIZE 
-        0x3c => evm_emulate(code, label_gen, evm_func_map,  "extcodecopy"), // EXTCODECOPY  
-        0x3d => evm_emulate(code, label_gen, evm_func_map,  "returndatasize"), // RETURNDATASIZE 
-        0x3e => evm_emulate(code, label_gen, evm_func_map,  "returndatacopy"), // RETURNDATACOPY
+        0x3b => evm_emulate(code, label_gen, evm_func_map, "evmOp_extcodesize"), // EXTCODESIZE 
+        0x3c => evm_emulate(code, label_gen, evm_func_map, "evmOp_extcodecopy"), // EXTCODECOPY  
+        0x3d => evm_emulate(code, label_gen, evm_func_map, "evmOp_returndatasize"), // RETURNDATASIZE 
+        0x3e => evm_emulate(code, label_gen, evm_func_map, "evmOp_returndatacopy"), // RETURNDATACOPY
         // 0x3f unused
         0x40 => None, // BLOCKHASH
         0x41 => None, // COINBASE
-        0x42 => evm_emulate(code, label_gen, evm_func_map,  "timestamp"), // TIMESTAMP 
-        0x43 => evm_emulate(code, label_gen, evm_func_map,  "number"), // NUMBER
+        0x42 => evm_emulate(code, label_gen, evm_func_map, "evmOp_timestamp"), // TIMESTAMP 
+        0x43 => evm_emulate(code, label_gen, evm_func_map, "evmOp_number"), // NUMBER
         0x44 => None, // DIFFICULTY
         0x45 => { // GASLIMIT
             code.push(Instruction::from_opcode_imm(Opcode::Noop, Value::Int(Uint256::from_usize(10_000_000_000)), None));
@@ -389,27 +389,27 @@ pub fn compile_evm_insn(
             code.push(Instruction::from_opcode(Opcode::Pop, None));
             Some((code, label_gen))
         }   
-        0x51 => evm_emulate(code, label_gen, evm_func_map,  "mload"), // MLOAD
-        0x52 => evm_emulate(code, label_gen, evm_func_map,  "mstore"), // MSTORE
-        0x53 => evm_emulate(code, label_gen, evm_func_map,  "mstore8"), // MSTORE8
-        0x54 => evm_emulate(code, label_gen, evm_func_map,  "sload"), // SLOAD
-        0x55 => evm_emulate(code, label_gen, evm_func_map,  "sstore"), // SSTORE
+        0x51 => evm_emulate(code, label_gen, evm_func_map, "evmOp_mload"), // MLOAD
+        0x52 => evm_emulate(code, label_gen, evm_func_map, "evmOp_mstore"), // MSTORE
+        0x53 => evm_emulate(code, label_gen, evm_func_map, "evmOp_mstore8"), // MSTORE8
+        0x54 => evm_emulate(code, label_gen, evm_func_map, "evmOp_sload"), // SLOAD
+        0x55 => evm_emulate(code, label_gen, evm_func_map, "evmOp_sstore"), // SSTORE
         0x56 => { // JUMP
-            let (c, lg) = evm_emulate(code, label_gen, evm_func_map, "getjumpaddr")?;
+            let (c, lg) = evm_emulate(code, label_gen, evm_func_map, "evmOp_getjumpaddr")?;
             code = c;
             code.push(Instruction::from_opcode(Opcode::Jump, None));
             Some((code, lg))
         }
         0x57 => {  // JUMPI
             code.push(Instruction::from_opcode(Opcode::Swap1, None));
-            let (c, lg) = evm_emulate(code, label_gen, evm_func_map, "getjumpaddr")?;
+            let (c, lg) = evm_emulate(code, label_gen, evm_func_map, "evmOp_getjumpaddr")?;
             code = c;
             code.push(Instruction::from_opcode(Opcode::Swap1, None));
             code.push(Instruction::from_opcode(Opcode::Cjump, None));
             Some((code, lg))
         }
         0x58 => None, // GETPC
-        0x59 => evm_emulate(code, label_gen, evm_func_map,  "msize"), // MSIZE
+        0x59 => evm_emulate(code, label_gen, evm_func_map, "evmOp_msize"), // MSIZE
         0x5a => { // GAS
             code.push(Instruction::from_opcode_imm(Opcode::Noop, Value::Int(Uint256::from_usize(9_999_999_999)), None));
             Some((code, label_gen))
@@ -498,34 +498,34 @@ pub fn compile_evm_insn(
         0x9d => Some((gen_swapn(code, 14), label_gen)), 
         0x9e => Some((gen_swapn(code, 15), label_gen)), 
         0x9f => Some((gen_swapn(code, 16), label_gen)), 
-        0xa0 => evm_emulate(code, label_gen, evm_func_map,  "log0"), // LOG0
-        0xa1 => evm_emulate(code, label_gen, evm_func_map,  "log1"), // LOG1
-        0xa2 => evm_emulate(code, label_gen, evm_func_map,  "log2"), // LOG2
-        0xa3 => evm_emulate(code, label_gen, evm_func_map,  "log3"), // LOG3 
-        0xa4 => evm_emulate(code, label_gen, evm_func_map,  "log4"), // LOG4 
-        // 0xa5-0xaf unused
+        0xa0 => evm_emulate(code, label_gen, evm_func_map, "evmOp_log0"), // LOG0
+        0xa1 => evm_emulate(code, label_gen, evm_func_map, "evmOp_log1"), // LOG1
+        0xa2 => evm_emulate(code, label_gen, evm_func_map, "evmOp_log2"), // LOG2
+        0xa3 => evm_emulate(code, label_gen, evm_func_map, "evmOp_log3"), // LOG3 
+        0xa4 => evm_emulate(code, label_gen, evm_func_map, "evmOp_log4"), // LOG4 
+        // 0xa4-0xaf unused
         // 0xb0-0xba unused, reserved for EIP 615
         // 0xbb-0xe0 unused
-        0xe1 => evm_emulate(code, label_gen, evm_func_map,  "sloadbytes"), // SLOADBYTES 
-        0xe2 => evm_emulate(code, label_gen, evm_func_map,  "sstorebytes"), // SSTOREBYTES 
-        0xe3 => evm_emulate(code, label_gen, evm_func_map,  "ssize"), // SSIZE
+        0xe1 => evm_emulate(code, label_gen, evm_func_map, "evmOp_sloadbytes"), // SLOADBYTES 
+        0xe2 => evm_emulate(code, label_gen, evm_func_map, "evmOp_sstorebytes"), // SSTOREBYTES 
+        0xe3 => evm_emulate(code, label_gen, evm_func_map, "evmOp_ssize"), // SSIZE
         // 0xe4-0xef unused
         0xf0 => None, // CREATE
-        0xf1 => evm_emulate(code, label_gen, evm_func_map,  "call"), // CALL 
-        0xf2 => evm_emulate(code, label_gen, evm_func_map,  "callcode"), // CALLCODE 
-        0xf3 => evm_emulate(code, label_gen, evm_func_map,  "return"), // RETURN 
-        0xf4 => evm_emulate(code, label_gen, evm_func_map,  "delegatecall"), // DELEGATECALL
+        0xf1 => evm_emulate(code, label_gen, evm_func_map, "evmOp_call"), // CALL 
+        0xf2 => evm_emulate(code, label_gen, evm_func_map, "evmOp_callcode"), // CALLCODE 
+        0xf3 => evm_emulate(code, label_gen, evm_func_map, "evmOp_return"), // RETURN 
+        0xf4 => evm_emulate(code, label_gen, evm_func_map, "evmOp_delegatecall"), // DELEGATECALL
         0xf5 => None, // CREATE2
         // 0xf6-0xf9 unused
-        0xfa => evm_emulate(code, label_gen, evm_func_map,  "staticcall"), // STATICCALL
-        0xfb => evm_emulate(code, label_gen, evm_func_map,  "revert"), // REVERT 
-        0xfc => evm_emulate(code, label_gen, evm_func_map,  "txexecgas"), // TXEXECGAS
-        0xfd => evm_emulate(code, label_gen, evm_func_map,  "revert"), // REVERT
+        0xfa => evm_emulate(code, label_gen, evm_func_map, "evmOp_staticcall"), // STATICCALL
+        0xfb => evm_emulate(code, label_gen, evm_func_map, "evmOp_revert"), // REVERT 
+        0xfc => evm_emulate(code, label_gen, evm_func_map, "evmOp_txexecgas"), // TXEXECGAS
+        0xfd => evm_emulate(code, label_gen, evm_func_map, "evmOp_revert"), // REVERT
         0xfe => { // INVALID  
             code.push(Instruction::from_opcode(Opcode::Panic, None));
             Some((code, label_gen))
         }   
-        0xff => evm_emulate(code, label_gen, evm_func_map,  "selfdestruct"), // SELFDESTRUCT
+        0xff => evm_emulate(code, label_gen, evm_func_map, "evmOp_selfdestruct"), // SELFDESTRUCT
         _ => { panic!("invalid EVM instruction {}", evm_insn); }
     }
 }
@@ -573,48 +573,49 @@ fn evm_emulate(
     }
 }
 
-const EMULATION_FUNCS: [&str; 41] = [
-    "stop",
-    "sha3",
-    "address",
-    "balance",
-    "origin",
-    "caller",
-    "callvalue",
-    "calldataload",
-    "calldatasize",
-    "calldatacopy",
-    "codesize",
-    "codecopy",
-    "extcodesize",
-    "extcodecopy",
-    "returndatasize",
-    "returndatacopy",
-    "timestamp",
-    "number",
-    "mload",
-    "mstore",
-    "mstore8",
-    "sload",
-    "sstore",
-    "getjumpaddr",
-    "msize",
-    "log0",
-    "log1",
-    "log2",
-    "log3",
-    "log4",
-    "sloadbytes",
-    "sstorebytes",
-    "ssize",
-    "call",
-    "callcode",
-    "return",
-    "delegatecall",
-    "staticcall",
-    "revert",
-    "txexecgas",
-    "selfdestruct",
+const EMULATION_FUNCS: [&str; 42] = [
+    "evmOp_stop",
+    "evmOp_sar",
+    "evmOp_sha3",
+    "evmOp_address",
+    "evmOp_balance",
+    "evmOp_origin",
+    "evmOp_caller",
+    "evmOp_callvalue",
+    "evmOp_calldataload",
+    "evmOp_calldatasize",
+    "evmOp_calldatacopy",
+    "evmOp_codesize",
+    "evmOp_codecopy",
+    "evmOp_extcodesize",
+    "evmOp_extcodecopy",
+    "evmOp_returndatasize",
+    "evmOp_returndatacopy",
+    "evmOp_timestamp",
+    "evmOp_number",
+    "evmOp_mload",
+    "evmOp_mstore",
+    "evmOp_mstore8",
+    "evmOp_sload",
+    "evmOp_sstore",
+    "evmOp_getjumpaddr",
+    "evmOp_msize",
+    "evmOp_log0",
+    "evmOp_log1",
+    "evmOp_log2",
+    "evmOp_log3",
+    "evmOp_log4",
+    "evmOp_sloadbytes",
+    "evmOp_sstorebytes",
+    "evmOp_ssize",
+    "evmOp_call",
+    "evmOp_callcode",
+    "evmOp_return",
+    "evmOp_delegatecall",
+    "evmOp_staticcall",
+    "evmOp_revert",
+    "evmOp_txexecgas",
+    "evmOp_selfdestruct",
 ];
 
 fn compile_push_insn(data: &[u8], mut code: Vec<Instruction>) -> Vec<Instruction> {
