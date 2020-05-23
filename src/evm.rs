@@ -9,8 +9,6 @@ use crate::mavm::{Instruction, Opcode, Value, Label, LabelGenerator};
 use crate::link::{link, ImportedFunc};
 use crate::stringtable::StringTable;
 use crate::build_builtins::BuiltinArray;
-use serde_json;
-use hex;
 
 
 pub fn compile_evm_file<'a>(path: &Path) -> Result<CompiledProgram, CompileError<'a>> {
@@ -47,10 +45,8 @@ impl CompiledEvmContract {
     fn get_info_datastruct(&self) -> Value {
         let num_storages = self.storage.len();
         let mut storages_array = BuiltinArray::new(num_storages, Value::none());
-        let mut i = 0;
-        for (mem_addr, mem_val) in &self.storage {
+        for (i, (mem_addr, mem_val)) in self.storage.iter().enumerate() {
             storages_array.set(i, Value::Tuple(vec![Value::Int(mem_addr.clone()), Value::Int(mem_val.clone())]));
-            i += 1;
         }
         Value::Tuple(vec![
             Value::Int(self.address.clone()),
@@ -379,7 +375,7 @@ pub fn compile_evm_insn(
         0x43 => evm_emulate(code, label_gen, evm_func_map,  "number"), // NUMBER
         0x44 => None, // DIFFICULTY
         0x45 => { // GASLIMIT
-            code.push(Instruction::from_opcode_imm(Opcode::Noop, Value::Int(Uint256::from_usize(10000000000)), None));
+            code.push(Instruction::from_opcode_imm(Opcode::Noop, Value::Int(Uint256::from_usize(10_000_000_000)), None));
             Some((code, label_gen))
         }   
         // 0x46-0x4f unused
@@ -409,7 +405,7 @@ pub fn compile_evm_insn(
         0x58 => None, // GETPC
         0x59 => evm_emulate(code, label_gen, evm_func_map,  "msize"), // MSIZE
         0x5a => { // GAS
-            code.push(Instruction::from_opcode_imm(Opcode::Noop, Value::Int(Uint256::from_usize(9999999999)), None));
+            code.push(Instruction::from_opcode_imm(Opcode::Noop, Value::Int(Uint256::from_usize(9_999_999_999)), None));
             Some((code, label_gen))
         }  
         0x5b => { // JUMPDEST
@@ -562,7 +558,7 @@ fn evm_emulate(
         Some(func_label) => {
             let (ret_label, lg) = label_gen.next();
             code.push(Instruction::from_opcode_imm(Opcode::Noop, Value::Label(ret_label), None));
-            code.push(Instruction::from_opcode_imm(Opcode::Jump, Value::Label(func_label.clone()), None));
+            code.push(Instruction::from_opcode_imm(Opcode::Jump, Value::Label(*func_label), None));
             code.push(Instruction::from_opcode(Opcode::Label(ret_label), None));
             Some((code, lg))
         }
