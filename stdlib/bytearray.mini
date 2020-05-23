@@ -45,6 +45,48 @@ public func bytearray_new(size: uint, autoExpand: bool) -> ByteArray {
     };
 }
 
+type MarshalledBytes = struct {
+    nbytes: uint,
+    contents: MarshalledBytesCell,
+}
+
+type MarshalledBytesCell = struct {
+    rest: any,  // really a MarshalledbytesCell, but compiler can't handle recursive types
+    first: uint,
+}
+
+public func bytearray_unmarshalBytes(
+    mbytes: MarshalledBytes, 
+    dest: ByteArray,
+    offset: uint
+) -> ByteArray {
+    // unmarshal bytes from the bytestack data structure that we receive from L1
+    let nbytes = mbytes.nbytes;
+    let words = mbytes.contents;
+    if ((nbytes % 32) != 0) {
+        let first = words.first;
+        words = unsafecast<MarshalledBytesCell>(words.rest);
+        let bytesLeft = nbytes % 32;
+        nbytes = nbytes-bytesLeft;
+        while (bytesLeft > 0) {
+            bytesLeft = bytesLeft-1;
+            dest = bytearray_setByte(
+                dest, 
+                nbytes+bytesLeft, 
+                (first / (asm(2, 8*bytesLeft) uint {exp})) & 0xff
+            );
+        }
+    }
+    let wordsLeft = nbytes/32;
+    while (nbytes > 0) {
+        let first = words.first;
+        words = unsafecast<MarshalledBytesCell>(words.rest);
+        nbytes = nbytes-32;
+        dest = bytearray_set256(dest, offset+nbytes, first);
+    }
+    return dest;
+}
+
 public func bytearray_size(ba: ByteArray) -> uint {
     return ba.size;
 }

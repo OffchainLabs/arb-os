@@ -34,3 +34,10 @@ builtin/maptest.mexe
 stdlib/bytearraytest.mexe
 stdlib/priorityqtest.mexe
 stdlib/queuetest.mexe
+builtin/arraytest.mexe
+builtin/globaltest.mexe
+builtin/kvstest.mexe
+builtin/maptest.mexe
+stdlib/bytearraytest.mexe
+stdlib/priorityqtest.mexe
+stdlib/queuetest.mexe
