@@ -27,8 +27,7 @@ public func evmOp_callvalue() -> uint {
     panic; //TODO
 }
 
-public func evmOp_calldataload(fixTypeOfThis: any) -> any {
-    //BUGBUG: not sure of what type signature of this should be 
+public func evmOp_calldataload(offset: uint) -> uint {
     panic; //TODO
 }
 
@@ -220,7 +219,6 @@ public func evmOp_txexecgas() {
     panic; //TODO
 }
 
-public func evmOp_selfdestruct(arg: any) {
-    // not sure what the arg is for
+public func evmOp_selfdestruct(owner: address) {
     panic; //TODO
 }
