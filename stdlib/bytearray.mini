@@ -28,6 +28,7 @@ type ByteArray = struct {
     size: uint, 
     contents: []uint,
     autoExpand: bool,
+    sizeNeeded: uint,   // minimum size array that could have accepted all writes so far
 }
 
 public func bytearray_new(size: uint, autoExpand: bool) -> ByteArray {
@@ -42,6 +43,7 @@ public func bytearray_new(size: uint, autoExpand: bool) -> ByteArray {
         size: size, 
         contents: newarray<uint>((size+31)/32),
         autoExpand: autoExpand,
+        sizeNeeded: 0,
     };
 }
 
@@ -88,7 +90,13 @@ public func bytearray_unmarshalBytes(
 }
 
 public func bytearray_size(ba: ByteArray) -> uint {
-    return ba.size;
+    // if autoExpand==false, this returns the size
+    // if autoExpand==true, this returns sizeNeeded
+    if (ba.autoExpand) {
+        return ba.sizeNeeded;
+    } else {
+        return ba.size;
+    }
 }
 
 public func bytearray_getByte(ba: ByteArray, idx: uint) -> uint {
@@ -116,6 +124,9 @@ public func bytearray_setByte(ba: ByteArray, idx: uint, val: uint) -> ByteArray 
         } else {
             panic;
         }
+    }
+    if (idx >= ba.sizeNeeded) {
+        ba = ba with { sizeNeeded: idx+1 };
     }
     return ba with {
         contents: builtin_arrayOp(
@@ -172,6 +183,9 @@ public func bytearray_get256(ba: ByteArray, offset: uint) -> uint {
 }
 
 public func bytearray_set256(ba: ByteArray, offset: uint, value: uint) -> ByteArray {
+    if (offset+32 >= ba.sizeNeeded) {
+        ba = ba with { sizeNeeded: offset+32 };
+    }
     let lowWordIndex = offset / 32;
     let alignment = offset % 32;
     if (alignment == 0) {
@@ -197,6 +211,9 @@ public func bytearray_copy(
     toOffset: uint,
     nbytes: uint,
 ) -> ByteArray {   // TODO: optimize this to exploit alignment and speed up the endgame
+    if (toOffset+nbytes >= to.sizeNeeded) {
+        to = to with { sizeNeeded: toOffset+nbytes };
+    }
     while (nbytes >= 32) {
         to = bytearray_set256(
             to,
