@@ -198,7 +198,7 @@ public func bytearray_get256(ba: ByteArray, offset: uint) -> uint {
 
 // bytearray_set256 writes a 32-byte chunk to a ByteArray, returning the resulting ByteArray
 public func bytearray_set256(ba: ByteArray, offset: uint, value: uint) -> ByteArray {
-    if (offset+32 >= ba.size) {
+    if (offset+32 > ba.size) {
         if (ba.variableSize) {
             ba = ba with { size: offset+32 };
             if (offset+32 > ba.capacity) {
