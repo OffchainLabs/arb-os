@@ -41,3 +41,4 @@ builtin/maptest.mexe
 stdlib/bytearraytest.mexe
 stdlib/priorityqtest.mexe
 stdlib/queuetest.mexe
+stdlib/keccak.mao
