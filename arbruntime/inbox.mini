@@ -1,0 +1,60 @@
+//
+// Copyright 2020, Offchain Labs, Inc.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//    http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+//
+
+import type Queue;
+import func queue_new() -> Queue;
+import func queue_isEmpty(q: Queue) -> bool;
+import func queue_get(q: Queue) -> (Queue, any);
+import func queue_put(q: Queue, val: any) -> Queue;
+
+
+var globalInbox: Queue;
+
+
+public impure func inbox_init() {
+    globalInbox = queue_new();
+}
+
+public impure func inbox_get() -> any {
+    let inbox = globalInbox;
+    while (queue_isEmpty(inbox)) {
+        inbox = getFromL1Inbox(inbox);
+    }
+    let (in, ret,) = queue_get(inbox);
+    globalInbox = in;
+    return ret;
+}
+
+type InboxCell = struct {
+    rest: any,   // really an InboxCell, but language doesn't allow recursive types
+    msg: any,
+}
+
+impure func getFromL1Inbox(msgq: Queue) -> Queue {
+    let newMsgs = asm(0) InboxCell { inbox };
+    return addInboxToQueue(msgq, newMsgs);
+}
+
+func addInboxToQueue(msgq: Queue, newMsgs: InboxCell) -> Queue {
+    if (unsafecast<any>(newMsgs) == null) {
+        return msgq;
+    } else {
+        return queue_put(
+            addInboxToQueue(msgq, unsafecast<InboxCell>(newMsgs.rest)),
+            newMsgs.msg
+        );
+    }
+}
