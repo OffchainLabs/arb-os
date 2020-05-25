@@ -15,10 +15,24 @@
 //
 
 import type MarshalledBytes;
+import type AccountStore;
+import type Account;
 
-import impure func account_checkAndIncrSeqNum(addr: address, seqNumRecvd: uint) -> bool;
-import impure func account_transferEthBalance(from: address, to:address, amount: uint) -> bool;
-import impure func account_addToEthBalance(addr: address, addition: uint);
+import impure func getGlobalAccountStore() -> AccountStore;
+import impure func setGlobalAccountStore(acctStore: AccountStore);
+import func accountStore_get(acctStore: AccountStore, addr: address) -> Account;
+import func accountStore_set(acctStore: AccountStore, addr: address, acct: Account) -> AccountStore;
+import func accountStore_transferEthBalance(
+    acctStore: AccountStore,
+    from: address, 
+    to: address, 
+    amount: uint
+) -> (bool, AccountStore);
+import func account_checkAndIncrSeqNum(
+    account: Account, 
+    seqNumRecvd: uint
+) -> (bool, Account);
+
 
 type ArbMessage = struct {
     msgType: uint,
@@ -53,7 +67,13 @@ public impure func handleEthbridgeMessage(msg: ArbMessage) {
     let msgType = msg.msgType;
     if (msgType == 0) {
         let txMsg = unsafecast<TxMessage>(msg.message);
-        if (account_checkAndIncrSeqNum(msg.sender, txMsg.seqNumber)) {
+        let globalAS = getGlobalAccountStore();
+        let account = accountStore_get(globalAS, msg.sender);
+        let (success, updatedAcct,) = account_checkAndIncrSeqNum(account, txMsg.seqNumber);
+        if (success) {
+            setGlobalAccountStore(
+                accountStore_set(globalAS, msg.sender, updatedAcct)
+            );
             handleValidTxMessage(txMsg);
             panic; //TODO
         } else {
@@ -62,8 +82,19 @@ public impure func handleEthbridgeMessage(msg: ArbMessage) {
         }
     } elseif (msgType == 1) {
         let depMsg = unsafecast<EthTransferMessage>(msg.message);
-        let success = account_transferEthBalance(msg.sender, depMsg.dest, depMsg.amount);
-        panic; //TODO
+        let globalAS = getGlobalAccountStore();
+        let (success, newGAS,) = accountStore_transferEthBalance(
+            globalAS, 
+            msg.sender, 
+            depMsg.dest, 
+            depMsg.amount
+        );
+        if (success) {
+            setGlobalAccountStore(newGAS);
+            panic; // TODO
+        } else {
+            panic; //TODO
+        }
     } elseif (msgType == 2) {
         let depMsg = unsafecast<TokenTransferMessage>(msg.message);
         panic; // deposit ERC 20

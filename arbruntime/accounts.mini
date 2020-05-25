@@ -50,13 +50,29 @@ public impure func accountStore_init() {   // This must be called first!
     }   
 }
 
-func get_account(acctStore: AccountStore, addr: address) -> Account {
+public impure func getGlobalAccountStore() -> AccountStore {
+    return globalAccountStore;
+}
+
+public impure func setGlobalAccountStore(acctStore: AccountStore) {
+    globalAccountStore = acctStore;;
+}
+
+func accountStore_get(acctStore: AccountStore, addr: address) -> Account {
     let (acct, exists,) = acctStore[addr];
     if (exists) {
         return acct;
     } else {
         return pristineAccount;
     }
+}
+
+func accountStore_set(
+    acctStore: AccountStore, 
+    addr: address, 
+    acct: Account
+) -> AccountStore {
+    return acctStore with { [addr] = acct };
 }
 
 public func account_isEmpty(acct: Account) -> bool {
@@ -93,7 +109,7 @@ public func accountStore_createERC20(
     addr: address
 ) -> (bool, AccountStore) {
     // returns true iff success
-    if (account_isEmpty(get_account(acctStore, addr))) {
+    if (account_isEmpty(accountStore_get(acctStore, addr))) {
         acctStore = accountStore_cloneContract(
             acctStore, 
             tokens_getERC20template(), 
@@ -110,7 +126,7 @@ public func accountStore_createERC721(
     addr: address
 ) -> (bool, AccountStore) {
     // returns true iff success
-    if (account_isEmpty(get_account(acctStore, addr))) {
+    if (account_isEmpty(accountStore_get(acctStore, addr))) {
         acctStore = accountStore_cloneContract(
             acctStore,
             tokens_getERC721template(), 
@@ -127,7 +143,7 @@ public func accountStore_cloneContract(
     oldAddr: address, 
     newAddr: address
 ) -> AccountStore {
-    let oldAccount = get_account(acctStore, oldAddr);
+    let oldAccount = accountStore_get(acctStore, oldAddr);
     let newAccount = oldAccount with { ethBalance: 0 }
                                 with { nextSeqNum: 1 }
                                 with { storage: newmap<uint, uint> };
@@ -153,11 +169,11 @@ public func accountStore_transferEthBalance(
     to: address, 
     amount: uint
 ) -> (bool, AccountStore) {
-    let fromAcct = get_account(acctStore, from);
+    let fromAcct = accountStore_get(acctStore, from);
     if (fromAcct.ethBalance < amount) {
         return (false, acctStore,);
     }
-    let toAcct = get_account(acctStore, to);
+    let toAcct = accountStore_get(acctStore, to);
     acctStore = acctStore 
         with { [from] = fromAcct with { ethBalance: fromAcct.ethBalance - amount }}
         with { [to] = fromAcct with { ethBalance: toAcct.ethBalance + amount }};
