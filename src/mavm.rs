@@ -390,6 +390,8 @@ pub enum Opcode {
 	BitwiseXor,
 	LogicalAnd,
 	LogicalOr,
+	GetTime,
+	Inbox,
 	DebugPrint,
 }
 
@@ -437,6 +439,8 @@ impl Opcode {
 			"bitwisexor" => Opcode::BitwiseXor,
 			"logicaland" => Opcode::LogicalAnd,
 			"logicalor" => Opcode::LogicalOr,
+			"gettime" => Opcode::GetTime,
+			"inbox" => Opcode::Inbox,
 			_ => { panic!("opcode not supported in asm segment: {}", name); }
 		}
 	}
