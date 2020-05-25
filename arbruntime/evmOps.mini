@@ -1,0 +1,224 @@
+
+public func evmOp_stop() {
+    panic; //TODO
+}
+
+public func evmOp_sha3(baseMemAddr: uint, nbytes: uint) -> bytes32 {
+    panic; //TODO
+}
+
+public func evmOp_address() -> address {
+    panic; //TODO
+}
+
+public func evmOp_balance(addr: address) -> uint {
+    panic; //TODO
+}
+    
+public func evmOp_origin() -> address {
+    panic; //TODO
+}
+    
+public func evmOp_caller() -> address {
+    panic; //TODO
+}
+
+public func evmOp_callvalue() -> uint {
+    panic; //TODO
+}
+
+public func evmOp_calldataload(offset: uint) -> uint {
+    panic; //TODO
+}
+
+public func evmOp_calldatasize() -> uint {
+    panic; //TODO
+}
+
+public func evmOp_calldatacopy(memAddr: uint, calldataOffset: uint, nbytes: uint) {
+    panic; //TODO
+}
+
+public func evmOp_codesize() -> uint {
+    panic; //TODO
+}
+
+public func evmOp_codecopy(memAddr: uint, codeOffset: uint, nbytes: uint) {
+    panic; //TODO
+}
+
+public func evmOp_extcodesize(addr: address) -> uint {
+    panic; //TODO
+}
+
+public func evmOp_extcodecopy(addr: address, memAddr: uint, codeOffset: uint, nbytes: uint) {
+    panic; //TODO
+}
+
+public func evmOp_returndatasize() -> uint {
+    panic; //TODO
+}
+
+public func evmOp_returndatacopy(memAddr: uint, dataOffset: uint, nbytes: uint) {
+    panic; //TODO
+}
+
+public func evmOp_timestamp() -> uint {
+    panic; //TODO
+}
+
+public func evmOp_number() -> uint {
+    panic; //TODO
+}
+
+public func evmOp_mload(memAddr: uint) -> uint {
+    panic; //TODO
+}
+
+public func evmOp_mstore(memAddr: uint, value: uint) {
+    panic; //TODO
+}
+
+public func evmOp_mstore8(memAddr: uint, value:uint) {
+    panic; //TODO
+}
+    
+public func evmOp_sload(storageAddr: uint) -> uint {
+    panic; //TODO
+}
+
+public func evmOp_sstore(storageAddr: uint, value: uint) {
+    panic; //TODO
+}
+    
+public func evmOp_getjumpaddr() {
+    //BUGBUG: don't know the type signature of this one
+    panic; //TODO
+}
+
+public func evmOp_msize() -> uint {
+    panic; //TODO
+}
+
+public func evmOp_log0(
+    memAddr: uint, 
+    nbytes: uint
+) {
+    panic; //TODO
+}
+
+public func evmOp_log1(
+    memAddr: uint, 
+    nbytes: uint, 
+    topic0: uint
+) {
+    panic; //TODO
+}
+
+public func evmOp_log2(
+    memAddr: uint, 
+    nbytes: uint, 
+    topic0: uint,
+    topic1: uint,
+) {
+    panic; //TODO
+}
+
+public func evmOp_log3(
+    memAddr: uint, 
+    nbytes: uint, 
+    topic0: uint,
+    topic1: uint,
+    topic2: uint,
+) {
+    panic; //TODO
+}
+
+public func evmOp_log4(
+    memAddr: uint, 
+    nbytes: uint, 
+    topic0: uint,
+    topic1: uint,
+    topic2: uint,
+    topic3: uint,
+) {
+    panic; //TODO
+}
+
+public func evmOp_sloadbytes() {
+    //BUGBUG: don't know type signature of this one 
+    panic; //TODO
+}
+
+public func evmOp_sstorebytes() {
+    //BUGBUG: don't know type signature of this one 
+    panic; //TODO
+}
+
+public func evmOp_ssize() {
+    //BUGBUG: don't know type signature of this one 
+    panic; //TODO
+}
+
+public func evmOp_call(
+    gas: uint,
+    callee: address,
+    balance: uint,
+    inMemOffset: uint,
+    inNbytes: uint,
+    outMemOffset: uint,
+    outMemSize: uint
+) -> bool {
+    panic; //TODO
+}
+
+public func evmOp_callcode(
+    gas: uint,
+    callee: address,
+    balance: uint,
+    inMemOffset: uint,
+    inNbytes: uint,
+    outMemOffset: uint,
+    outMemSize: uint
+) -> bool {
+    panic; //TODO
+}
+
+public func evmOp_delegatecall(
+    gas: uint,
+    callee: address,
+    inMemOffset: uint,
+    inNbytes: uint,
+    outMemOffset: uint,
+    outMemSize: uint
+) -> bool {
+    panic; //TODO
+}
+
+public func evmOp_staticcall(
+    gas: uint,
+    callee: address,
+    inMemOffset: uint,
+    inNbytes: uint,
+    outMemOffset: uint,
+    outMemSize: uint
+) -> bool {
+    panic; //TODO
+}
+
+public func evmOp_revert(memOffset: uint, memNbytes: uint) {
+    panic; //TODO
+}
+
+public func evmOp_return(memOffset: uint, memNbytes: uint) {
+    panic; //TODO
+}
+
+public func evmOp_txexecgas() {
+    //BUGBUG: don't know the type signature of this one 
+    panic; //TODO
+}
+
+public func evmOp_selfdestruct(owner: address) {
+    panic; //TODO
+}
