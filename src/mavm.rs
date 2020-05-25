@@ -433,7 +433,7 @@ impl Opcode {
 			"bitwiseneg" => Opcode::BitwiseNeg,
 			"hash" => Opcode::Hash,
 			"hash2" => Opcode::Hash2,
-			"len" => Opcode::Len,
+			"length" => Opcode::Len,
 			"plus" => Opcode::Plus,
 			"minus" => Opcode::Minus,
 			"mul" => Opcode::Mul,
