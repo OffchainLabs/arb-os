@@ -724,6 +724,12 @@ impl<'a> Machine {
 						self.incr_pc();
 						Ok(true)
 					}
+					Opcode::GetTime => {
+						panic!("GetTime instruction not yet implemented");
+					}
+					Opcode::Inbox => {
+						panic!("Inbox instruction not yet implemented");
+					}
 					Opcode::DebugPrint => {
 						let r1 = self.stack.pop(&self.state)?;
 						println!("{:?}", r1);
