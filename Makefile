@@ -52,7 +52,7 @@ $(BUILTINDIR)/kvs.mao: $(BUILTINDIR)/kvs.mini
 	cargo run compile $(BUILTINDIR)/kvs.mini -c -o $(BUILTINDIR)/kvs.mao
 
 RUNTIMEDIR = arbruntime
-RUNTIMEMAOS = $(RUNTIMEDIR)/accounts.mao $(RUNTIMEDIR)/messages.mao $(RUNTIMEDIR)/main.mao
+RUNTIMEMAOS = $(RUNTIMEDIR)/accounts.mao $(RUNTIMEDIR)/messages.mao $(RUNTIMEDIR)/main.mao $(RUNTIMEDIR)/inbox.mao
 RUNTIME = $(RUNTIMEDIR)/runtime.mexe
 
 runtime: $(RUNTIME)
@@ -66,6 +66,9 @@ $(RUNTIMEDIR)/messages.mao: $(RUNTIMEDIR)/messages.mini
 $(RUNTIMEDIR)/main.mao: $(RUNTIMEDIR)/main.mini
 	cargo run compile $(RUNTIMEDIR)/main.mini -c -o $(RUNTIMEDIR)/main.mao
 
+$(RUNTIMEDIR)/inbox.mao: $(RUNTIMEDIR)/inbox.mini
+	cargo run compile $(RUNTIMEDIR)/inbox.mini -c -o $(RUNTIMEDIR)/inbox.mao
+
 $(RUNTIME): $(RUNTIMEMAOS) $(STDLIB) $(BUILTINMAOS)
 	cargo run compile $(RUNTIMEMAOS) $(STDLIB) -o $(RUNTIME)
 
@@ -73,4 +76,4 @@ compiler:
 	cargo build
 
 clean: 
-	rm -f $(BUILTINMAOS) $(TESTEXES) $(STDLIBMAOS)
+	rm -f $(BUILTINMAOS) $(TESTEXES) $(STDLIBMAOS) $(RUNTIMEMAOS)

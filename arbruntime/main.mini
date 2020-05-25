@@ -14,26 +14,25 @@
 // limitations under the License.
 //
 
+import impure func inbox_init();
 import impure func accountStore_init();
 
-import type Queue;
-import func queue_new() -> Queue;
-import func queue_isEmpty(q: Queue) -> bool;
-import func queue_get(q: Queue) -> (Queue, any);
-import func queue_put(q: Queue, val: any) -> Queue;
+import impure func inbox_get() -> any;
 import impure func handleEthbridgeMessage(msg: any);
 
 
 impure func main() {
+    inbox_init();
     accountStore_init();
-    let inbox = queue_new();
+    
+    mainRunLoop();
+}
+
+public impure func mainRunLoop() {
     loop {
-        inbox = getFromL1Inbox(inbox);
-        while ( ! queue_isEmpty(inbox)) {
-            let (newInbox, thisMsg,) = queue_get(inbox);
-            inbox = newInbox;
-            handleEthbridgeMessage(thisMsg);
-        }
+        handleEthbridgeMessage(
+            inbox_get()
+        );
     }
 }
 
@@ -46,25 +45,4 @@ type TimeTuple = struct {
 
 impure func getTime() -> TimeTuple {
     return asm() TimeTuple { gettime };
-}
-
-type InboxCell = struct {
-    rest: any,   // really an InboxCell, but language doesn't allow recursive types
-    msg: any,
-}
-
-impure func getFromL1Inbox(msgq: Queue) -> Queue {
-    let newMsgs = asm(0) InboxCell { inbox };
-    return addInboxToQueue(msgq, newMsgs);
-}
-
-func addInboxToQueue(msgq: Queue, newMsgs: InboxCell) -> Queue {
-    if (unsafecast<any>(newMsgs) == null) {
-        return msgq;
-    } else {
-        return queue_put(
-            addInboxToQueue(msgq, unsafecast<InboxCell>(newMsgs.rest)),
-            newMsgs.msg
-        );
-    }
 }
