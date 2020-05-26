@@ -1070,17 +1070,19 @@ fn codegen_fixed_array_mod_2<'a>(
 		// stack: idx tupletree
 		code_in.push(Instruction::from_opcode_imm(Opcode::Dup2, tuple_size.clone(), location));
 		code_in.push(Instruction::from_opcode(Opcode::AuxPush, location));
-		code_in.push(Instruction::from_opcode(Opcode::Dup0, location));
+		code_in.push(Instruction::from_opcode(Opcode::Dup1, location));
 		// stack: idx TUPLE_SIZE idx tupletree; aux: tupletree
-		code_in.push(Instruction::from_opcode(Opcode::Div, location));
+		code_in.push(Instruction::from_opcode(Opcode::Mod, location));
 		code_in.push(Instruction::from_opcode(Opcode::Dup0, location));
 		code_in.push(Instruction::from_opcode(Opcode::AuxPush, location));
 		// stack: slot idx tupletree; aux: slot tupletree
 		code_in.push(Instruction::from_opcode(Opcode::Swap1, location));
 		code_in.push(Instruction::from_opcode_imm(Opcode::Swap1, tuple_size, location));
+		code_in.push(Instruction::from_opcode(Opcode::Div, location));
 		// stack: subidx slot tupletree; aux: slot tupletree
 		code_in.push(Instruction::from_opcode(Opcode::Swap2, location));
 		code_in.push(Instruction::from_opcode(Opcode::Swap1, location));
+		// stack: slot tupletree subidx; aux: slot tupletree
 		code_in.push(Instruction::from_opcode(Opcode::Tget, location));
 		code_in.push(Instruction::from_opcode(Opcode::Swap1, location));
 		// stack: subidx subtupletree; aux: slot tupletree

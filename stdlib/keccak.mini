@@ -51,6 +51,9 @@ public func keccak256(ba: ByteArray, offset: uint, nbytes: uint) -> bytes32 {
             0x80
         );
     }
+
+    let _ = keccak_xorblock(accumulator, lastBlock, 0); return bytes32(0);  //DEBUG
+    
     accumulator = keccak_permutation(
         keccak_xorblock(accumulator, lastBlock, 0)
     );
@@ -68,14 +71,17 @@ func keccak_xorblock(accumulator: [25]uint, ba: ByteArray, offset: uint) -> [25]
     let i = 0;
     while (i < 4) {
         let word = bytearray_get256(ba, offset+32*i);
+        let val = accumulator[4*i] & (word & 0xffffffffffffffff);  //DEBUG
         accumulator = accumulator 
-            with { [4*i] = accumulator[4*i] ^ (word & 0xffffffffffffffff) }
-            with { [4*i+1] = accumulator[4*i+1] ^ ((word/0x10000000000000000) & 0xffffffffffffffff) }
-            with { [4*i+2] = accumulator[4*i+2] ^ ((word/0x100000000000000000000000000000000) & 0xffffffffffffffff) }
-            with { [4*i+3] = accumulator[4*i+3] ^ ((word/0x1000000000000000000000000000000000000000000000000) & 0xffffffffffffffff) };
+            with //{ [4*i] = accumulator[4*i] ^ (word & 0xffffffffffffffff) } 
+            { [0] = val }; return accumulator; //DEBUG
+
+           // with { [4*i+1] = accumulator[4*i+1] ^ ((word/0x10000000000000000) & 0xffffffffffffffff) }
+           // with { [4*i+2] = accumulator[4*i+2] ^ ((word/0x100000000000000000000000000000000) & 0xffffffffffffffff) }
+           // with { [4*i+3] = accumulator[4*i+3] ^ ((word/0x1000000000000000000000000000000000000000000000000) & 0xffffffffffffffff) };
         i = i+1;
     }
-    return accumulator with { [24] = accumulator[24] ^ bytearray_get64(ba, offset+128) };
+    return accumulator with { [16] = accumulator[16] ^ bytearray_get64(ba, offset+128) };
 }
 
 var keccakConstants: struct {

@@ -57,6 +57,10 @@ func tests(which: uint) -> any {
         } else {
             return 0;
         }
+    } elseif (which == 6) {
+        let farr = newfixedarray(25, 0);
+        farr = farr with { [0] = 33 };
+        return farr[0];
     } else {
         return null;
     }

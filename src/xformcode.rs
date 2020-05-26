@@ -113,7 +113,7 @@ pub fn fix_tuple_size(code_in: &[Instruction], num_globals: usize) -> Vec<Instru
 				code_out.push(Instruction::from_opcode(Opcode::Jump, location));
 			}
 			Opcode::UncheckedFixedArrayGet(sz) => {
-				let tup_size_val = Value::Int(Uint256::from_usize(sz));
+				let tup_size_val = Value::Int(Uint256::from_usize(TUPLE_SIZE));
 				let mut remaining_size = sz;
 				while remaining_size > TUPLE_SIZE {
 					//TODO: can probably make this more efficient
