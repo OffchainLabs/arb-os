@@ -34,7 +34,8 @@ func tests(which: uint) -> any {
 	if (which == 0) {
 		let ba = bytearray_new(1, false);
 		ba = bytearray_setByte(ba, 0, 48);
-		return uint(keccak256(ba, 0, 1)) ^ 0x044852b2a670ade5407e78fb2863c51de9fcb96542a07186fe3aeda6bb8a116d;
+		return uint(keccak256(ba, 0, 0)); //^ for the one character: 0x044852b2a670ade5407e78fb2863c51de9fcb96542a07186fe3aeda6bb8a116d;
+		                                  // for empty string: c5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470
 	} else {
 		return null;
 	}

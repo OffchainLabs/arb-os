@@ -41,14 +41,14 @@ public func keccak256(ba: ByteArray, offset: uint, nbytes: uint) -> bytes32 {
     lastBlock = bytearray_copy(ba, offset, lastBlock, 0, nbytes);
     if (nbytes == 135) {
         // add one byte of padding
-        lastBlock = bytearray_setByte(lastBlock, 135, 0x86);
+        lastBlock = bytearray_setByte(lastBlock, 135, 0x81);
     } else {
         // add nbytes of padding
         // take advantage of the fact that lastBlock is already zero-filled
         lastBlock = bytearray_setByte(
-            bytearray_setByte(lastBlock, 135, 0x06),
+            bytearray_setByte(lastBlock, 135, 0x80),
             nbytes,
-            0x80
+            0x01
         );
     }
 
