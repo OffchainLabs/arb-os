@@ -1032,7 +1032,8 @@ fn codegen_fixed_array_mod<'a>(
 	global_var_map: &HashMap<StringId, usize>,
 	location: Option<Location>,
 ) -> Result<(LabelGenerator, &'a mut Vec<Instruction>), CodegenError> {
-	let (label_gen, code) = mavm_codegen_expr(arr_expr, code_in, locals, label_gen_in, string_table, import_func_map, global_var_map)?;
+	let (label_gen, code) = mavm_codegen_expr(val_expr, code_in, locals, label_gen_in, string_table, import_func_map, global_var_map)?;
+	let (label_gen, code) = mavm_codegen_expr(arr_expr, code, locals, label_gen, string_table, import_func_map, global_var_map)?;
 	let (mut label_gen, code) = mavm_codegen_expr(idx_expr, code, locals, label_gen, string_table, import_func_map, global_var_map)?;
 	if size != 8 {  // TODO: safe for if-condition to say size does not equal any power of 8
 		let (ok_label, lg) = label_gen.next();
@@ -1058,32 +1059,30 @@ fn codegen_fixed_array_mod_2<'a>(
 	location: Option<Location>,
 ) -> Result<(LabelGenerator, &'a mut Vec<Instruction>), CodegenError> {
 	if size <= 8 {
-		// stack: idx tuple
-		code_in.push(Instruction::from_opcode(Opcode::Swap1, location));
-		let (label_gen, code) = mavm_codegen_expr(val_expr, code_in, locals, label_gen_in, string_table, import_func_map, global_var_map)?;
-		code.push(Instruction::from_opcode(Opcode::Swap2, location));
-		// stack: idx tuple value
-		code.push(Instruction::from_opcode(Opcode::Tset, location));
-		Ok((label_gen, code))
+		// stack: idx tuple val
+		code_in.push(Instruction::from_opcode(Opcode::Tset, location));
+		Ok((label_gen_in, code_in))
 	} else {
 		let tuple_size = Value::Int(Uint256::from_usize(TUPLE_SIZE));
-		// stack: idx tupletree
+		// stack: idx tupletree val
 		code_in.push(Instruction::from_opcode_imm(Opcode::Dup2, tuple_size.clone(), location));
 		code_in.push(Instruction::from_opcode(Opcode::AuxPush, location));
-		code_in.push(Instruction::from_opcode(Opcode::Dup0, location));
-		// stack: idx TUPLE_SIZE idx tupletree; aux: tupletree
-		code_in.push(Instruction::from_opcode(Opcode::Div, location));
+		code_in.push(Instruction::from_opcode(Opcode::Dup1, location));
+		// stack: idx TUPLE_SIZE idx tupletree val; aux: tupletree
+		code_in.push(Instruction::from_opcode(Opcode::Mod, location));
 		code_in.push(Instruction::from_opcode(Opcode::Dup0, location));
 		code_in.push(Instruction::from_opcode(Opcode::AuxPush, location));
-		// stack: slot idx tupletree; aux: slot tupletree
+		// stack: slot idx tupletree val; aux: slot tupletree
 		code_in.push(Instruction::from_opcode(Opcode::Swap1, location));
 		code_in.push(Instruction::from_opcode_imm(Opcode::Swap1, tuple_size, location));
-		// stack: subidx slot tupletree; aux: slot tupletree
+		code_in.push(Instruction::from_opcode(Opcode::Div, location));
+		// stack: subidx slot tupletree val; aux: slot tupletree
 		code_in.push(Instruction::from_opcode(Opcode::Swap2, location));
 		code_in.push(Instruction::from_opcode(Opcode::Swap1, location));
+		// stack: slot tupletree subidx val; aux: slot tupletree
 		code_in.push(Instruction::from_opcode(Opcode::Tget, location));
 		code_in.push(Instruction::from_opcode(Opcode::Swap1, location));
-		// stack: subidx subtupletree; aux: slot tupletree
+		// stack: subidx subtupletree val; aux: slot tupletree
 
 		let (label_gen, code) = codegen_fixed_array_mod_2(
 			val_expr,

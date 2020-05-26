@@ -174,6 +174,11 @@ fn testglobal5() {
     test_globaltest(5, Value::Int(Uint256::from_usize(13)));
 }
 
+#[test]
+fn testglobal6() {
+    test_globaltest(6, Value::Int(Uint256::from_usize(33)));
+}
+
 fn test_globaltest(test_num: usize, expected_result: Value) {
     let path = Path::new("builtin/globaltest.mexe"); 
     let res = run_from_file(path, vec![Value::Int(Uint256::from_usize(test_num))]);
@@ -257,6 +262,21 @@ fn testba7() {
     test_bytearray(7, Value::Int(Uint256::from_usize(100)));
 }
 
+#[test]
+fn testba8() {
+    test_bytearray(8, Value::Int(Uint256::from_usize(0)));
+}
+
+#[test]
+fn testba9() {
+    test_bytearray(9, Value::Int(Uint256::from_usize(0)));
+}
+
+#[test]
+fn testba10() {
+    test_bytearray(10, Value::Int(Uint256::from_usize(0)));
+}
+
 fn test_bytearray(test_num: usize, expected_result: Value) {
     let path = Path::new("stdlib/bytearraytest.mexe"); 
     let res = run_from_file(path, vec![Value::Int(Uint256::from_usize(test_num))]);
@@ -293,6 +313,20 @@ fn testmap4() {
 
 fn test_map(test_num: usize, expected_result: Value) {
     let path = Path::new("builtin/maptest.mexe"); 
+    let res = run_from_file(path, vec![Value::Int(Uint256::from_usize(test_num))]);
+    match res {
+        Ok(res) => { assert_eq!(res, expected_result); }
+        Err(e) => { panic!("{}\n{}", e.0, e.1); }
+    }
+}
+
+#[test]
+fn testkeccak0() {
+    test_keccak(0, Value::Int(Uint256::from_usize(0)));
+}
+
+fn test_keccak(test_num: usize, expected_result: Value) {
+    let path = Path::new("stdlib/keccaktest.mexe"); 
     let res = run_from_file(path, vec![Value::Int(Uint256::from_usize(test_num))]);
     match res {
         Ok(res) => { assert_eq!(res, expected_result); }
