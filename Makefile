@@ -58,7 +58,7 @@ $(BUILTINDIR)/kvs.mao: $(BUILTINDIR)/kvs.mini
 	cargo run compile $(BUILTINDIR)/kvs.mini -c -o $(BUILTINDIR)/kvs.mao
 
 RUNTIMEDIR = arbruntime
-RUNTIMEMAOS = $(RUNTIMEDIR)/accounts.mao $(RUNTIMEDIR)/messages.mao $(RUNTIMEDIR)/main.mao $(RUNTIMEDIR)/inbox.mao
+RUNTIMEMAOS = $(RUNTIMEDIR)/accounts.mao $(RUNTIMEDIR)/messages.mao $(RUNTIMEDIR)/main.mao $(RUNTIMEDIR)/inbox.mao $(RUNTIMEDIR)/evmCallStack.mao
 RUNTIME = $(RUNTIMEDIR)/runtime.mexe
 
 runtime: $(RUNTIME)
@@ -74,6 +74,10 @@ $(RUNTIMEDIR)/main.mao: $(RUNTIMEDIR)/main.mini
 
 $(RUNTIMEDIR)/inbox.mao: $(RUNTIMEDIR)/inbox.mini
 	cargo run compile $(RUNTIMEDIR)/inbox.mini -c -o $(RUNTIMEDIR)/inbox.mao
+
+
+$(RUNTIMEDIR)/evmCallStack.mao: $(RUNTIMEDIR)/evmCallStack.mini
+	cargo run compile $(RUNTIMEDIR)/evmCallStack.mini -c -o $(RUNTIMEDIR)/evmCallStack.mao
 
 $(RUNTIME): $(RUNTIMEMAOS) $(STDLIB) $(BUILTINMAOS)
 	cargo run compile $(RUNTIMEMAOS) $(STDLIB) -o $(RUNTIME)
