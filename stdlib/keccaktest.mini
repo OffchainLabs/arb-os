@@ -32,8 +32,9 @@ import func keccak256(ba: ByteArray, offset: uint, nbytes: uint) -> bytes32;
 
 func tests(which: uint) -> any {
 	if (which == 0) {
-		let ba = setupFromUnmarshal();
-		return keccak256(ba, 0, 13);
+		let ba = bytearray_new(1, false);
+		ba = bytearray_setByte(ba, 0, 48);
+		return uint(keccak256(ba, 0, 1)) ^ 0x044852b2a670ade5407e78fb2863c51de9fcb96542a07186fe3aeda6bb8a116d;
 	} else {
 		return null;
 	}

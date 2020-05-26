@@ -52,14 +52,14 @@ public func keccak256(ba: ByteArray, offset: uint, nbytes: uint) -> bytes32 {
         );
     }
 
-    let _ = keccak_xorblock(accumulator, lastBlock, 0); return bytes32(0);  //DEBUG
+    let _ = keccak_xorblock(accumulator, lastBlock, 0);
     
     accumulator = keccak_permutation(
         keccak_xorblock(accumulator, lastBlock, 0)
     );
 
     return bytes32(
-        accumulator[0] + 10000000000000000 * (
+        accumulator[0] + 0x10000000000000000 * (
             accumulator[1] + 0x10000000000000000 * (
                 accumulator[2] + 0x10000000000000000 * accumulator[3]
             )
@@ -73,12 +73,10 @@ func keccak_xorblock(accumulator: [25]uint, ba: ByteArray, offset: uint) -> [25]
         let word = bytearray_get256(ba, offset+32*i);
         let val = accumulator[4*i] & (word & 0xffffffffffffffff);  //DEBUG
         accumulator = accumulator 
-            with //{ [4*i] = accumulator[4*i] ^ (word & 0xffffffffffffffff) } 
-            { [0] = val }; return accumulator; //DEBUG
-
-           // with { [4*i+1] = accumulator[4*i+1] ^ ((word/0x10000000000000000) & 0xffffffffffffffff) }
-           // with { [4*i+2] = accumulator[4*i+2] ^ ((word/0x100000000000000000000000000000000) & 0xffffffffffffffff) }
-           // with { [4*i+3] = accumulator[4*i+3] ^ ((word/0x1000000000000000000000000000000000000000000000000) & 0xffffffffffffffff) };
+            with { [4*i] = accumulator[4*i] ^ (word & 0xffffffffffffffff) } 
+            with { [4*i+1] = accumulator[4*i+1] ^ ((word/0x10000000000000000) & 0xffffffffffffffff) }
+            with { [4*i+2] = accumulator[4*i+2] ^ ((word/0x100000000000000000000000000000000) & 0xffffffffffffffff) }
+            with { [4*i+3] = accumulator[4*i+3] ^ ((word/0x1000000000000000000000000000000000000000000000000) & 0xffffffffffffffff) };
         i = i+1;
     }
     return accumulator with { [16] = accumulator[16] ^ bytearray_get64(ba, offset+128) };
@@ -108,12 +106,12 @@ func keccak_permutation(s: [25]uint) -> [25]uint {
         i = 0;
         while (i < 5) {
             let t = bc[(i + 4) % 5] + sha3_rotl64(bc[(i + 1) % 5], 1);
-            i = i+1;
             let j = 0;
             while (j < 25) {
                 s = s with { [j+i] = s[j+i]^t };
                 j = j+5;
             }
+            i = i+1;
         }
 
         // rho pi
