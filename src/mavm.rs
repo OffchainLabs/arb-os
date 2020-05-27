@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
- use std::fmt;
+use std::fmt;
 use std::collections::HashMap;
 use crate::stringtable::StringId;
 use crate::uint256::Uint256;

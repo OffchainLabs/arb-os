@@ -24,6 +24,7 @@ use crate::link::{ExportedFunc, ImportedFunc};
 use crate::source::Lines;
 use crate::pos::{Location, BytePos};
 use crate::mini::DeclsParser;
+use std::fmt::Formatter;
 
 
 #[derive(Clone, Serialize, Deserialize)]
@@ -188,6 +189,17 @@ pub fn compile_from_source(
 pub struct CompileError {
     description: String,
     location: Option<Location>,
+}
+
+impl std::fmt::Display for CompileError {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result<(),std::fmt::Error> {
+        if let Some(loc) = self.location {
+            write!(f, "{},\n{}", self.description, loc)?;
+        } else {
+            write!(f, "{},\n No location", self.description)?;
+        }
+        Ok(())
+    }
 }
 
 impl CompileError {
