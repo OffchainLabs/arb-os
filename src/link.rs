@@ -146,7 +146,7 @@ impl<'a> ExportedFunc {
 pub fn postlink_compile<'a>(
 	program: CompiledProgram,
     debug: bool,
-) -> Result<LinkedProgram, CompileError<'a>> {   
+) -> Result<LinkedProgram, CompileError> {
 	if debug {
         println!("========== after initial linking ===========");
         for (idx, insn) in program.code.iter().enumerate() {
@@ -186,7 +186,7 @@ pub fn postlink_compile<'a>(
 				Ok(tup) => tup,
 				Err(label) => { 
 					println!("missing label {:?}", label);
-					return Err(CompileError::new("reference to non-existent function", None)); 
+					return Err(CompileError::new("reference to non-existent function".to_string(), None));
 				}
 			};
     let jump_table_value = crate::xformcode::jump_table_to_value(jump_table_final);
@@ -208,7 +208,7 @@ pub fn postlink_compile<'a>(
     })
 }
 
-pub fn link<'a>(progs_in: &[CompiledProgram]) -> Result<CompiledProgram, CompileError<'a>> {
+pub fn link<'a>(progs_in: &[CompiledProgram]) -> Result<CompiledProgram, CompileError> {
 	let progs = add_auto_link_progs(progs_in)?;
 	let mut insns_so_far: usize = 1;   // leave 1 insn of space at beginning for initialization
 	let mut imports_so_far: usize = 0;

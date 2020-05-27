@@ -129,19 +129,15 @@ impl<'a> CompiledProgram {
 	}
 }
 
-pub fn compile_from_file<'a>(path: &Path, debug: bool) -> Result<CompiledProgram, CompileError<'a>> {
+pub fn compile_from_file<'a>(path: &Path, debug: bool) -> Result<CompiledProgram, CompileError> {
    let display = path.display();
 
-    let mut file = match File::open(&path) {
-        Err(why) => panic!("couldn't open {}: {:?}", display, why),
-        Ok(file) => file,
-    };
+    let mut file = File::open(&path).map_err(|why|
+        CompileError::new(format!("couldn't open {}: {:?}", display, why),None))?;
 
     let mut s = String::new();
-    s = match file.read_to_string(&mut s) {
-        Err(why) => panic!("couldn't read {}: {:?}", display, why),
-        Ok(_) => s,
-    };
+    file.read_to_string(&mut s).map_err(|why|
+        CompileError::new(format!("couldn't read {}: {:?}", display, why),None))?;
     //print!("read-in file:\n{}", s);
 
     let parse_result: Result<CompiledProgram, serde_json::Error> = serde_json::from_str(&s);
@@ -155,7 +151,7 @@ pub fn compile_from_source<'a>(
     s: String, 
     pathname: std::path::Display, 
     debug: bool,
-) -> Result<CompiledProgram, CompileError<'a>> {
+) -> Result<CompiledProgram, CompileError> {
     let comment_re = regex::Regex::new(r"//.*").unwrap();
     let s = comment_re.replace_all(&s, "");
     let mut string_table_1 = stringtable::StringTable::new();
@@ -163,10 +159,11 @@ pub fn compile_from_source<'a>(
     let res = match mini::DeclsParser::new().parse(&mut string_table_1, &lines, &s) {
         Ok(r) => r,
         Err(e) => match e {
-            lalrpop_util::ParseError::UnrecognizedToken{ token: (offset, tok, _), expected: _ } => {
-                panic!("unexpected token at {:?} {:?}", lines.location(BytePos::from(offset)).unwrap(), tok);
+            lalrpop_util::ParseError::UnrecognizedToken{ token: (offset, tok, end), expected: _ } => {
+                return Err(CompileError::new(format!("unexpected token: {}, Type: {:?}", &s[offset..end], tok),
+                                             Some(lines.location(BytePos::from(offset)).unwrap())));
             }
-            _ => { panic!("{:?}", e); }
+            _ => { return Err(CompileError::new(format!("{:?}", e), None)); }
         }
     };
     let mut checked_funcs = Vec::new();
@@ -186,21 +183,21 @@ pub fn compile_from_source<'a>(
                     }
                     Ok(CompiledProgram::new(code_out.to_vec(), exported_funcs, imported_funcs, global_vars.len(), SourceFileMap::new(code_out.len(), pathname.to_string())))
                 }
-                Err(e) => Err(CompileError::new(e.reason, e.location)),
+                Err(e) => Err(CompileError::new(e.reason.to_string(), e.location)),
             }
         },
-        Err(res3) => Err(CompileError::new(res3.reason, res3.location)),
+        Err(res3) => Err(CompileError::new(res3.reason.to_string(), res3.location)),
     }
 } 
 
 #[derive(Debug, Clone)]
-pub struct CompileError<'a> {
-    description: &'a str,
+pub struct CompileError {
+    description: String,
     location: Option<Location>,
 }
 
-impl<'a> CompileError<'a> {
-    pub fn new(description: &'a str, location: Option<Location>) -> Self {
+impl CompileError {
+    pub fn new(description: String, location: Option<Location>) -> Self {
         CompileError{ description, location }
     }
 }
