@@ -1040,7 +1040,11 @@ fn typecheck_binary_op_const(
 			(Type::Int, Type::Int) => Ok(TypeCheckedExpr::Const(
 				Value::Int(match op {
 					BinaryOp::Plus => val1.add(&val2),
-					BinaryOp::Minus => val1.sub(&val2),
+					BinaryOp::Minus => if let Some(val) = val1.sub(&val2) {
+						val
+					} else {
+						return Err(new_type_error("underflow on substraction", loc))
+					},
 					BinaryOp::Times => val1.mul(&val2),
 					_ => { panic!(); }
 				}),

@@ -500,7 +500,8 @@ impl<'a> Machine {
 					Opcode::Minus => {
 						let r1 = self.stack.pop_uint(&self.state)?;
 						let r2 = self.stack.pop_uint(&self.state)?;
-						self.stack.push_uint(r1.sub(&r2));
+						self.stack.push_uint(r1.sub(&r2)
+							.ok_or(ExecutionError::new("signed integer underflow in subtraction", &self.state, None))?);
 						self.incr_pc();
 						Ok(true)
 					}
@@ -686,7 +687,7 @@ impl<'a> Machine {
 									let t = 248-ub;
 									let shifted_bit = Uint256::from_usize(2).exp(&Uint256::from_usize(t));
 									let sign_bit = x.bitwise_and(&shifted_bit) != Uint256::zero();
-									let mask = shifted_bit.sub(&Uint256::one());
+									let mask = shifted_bit.sub(&Uint256::one()).ok_or(ExecutionError::new("underflow in signextend", &self.state, None))?;
 									if sign_bit {
 										x.bitwise_and(&mask)
 									} else {

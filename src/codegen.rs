@@ -577,7 +577,8 @@ fn mavm_codegen_expr<'a>(
 				UnaryOp::ToInt => (None, None),
 				UnaryOp::ToBytes32 => (None, None),
 				UnaryOp::ToAddress => {
-					let mask = Uint256::from_usize(2).exp(&Uint256::from_usize(20)).sub(&Uint256::one());
+					let mask = Uint256::from_usize(2).exp(&Uint256::from_usize(20))
+						.sub(&Uint256::one()).ok_or(new_codegen_error("Underflow on substraction", *loc))?;
 					(Some(Opcode::BitwiseAnd), Some(Value::Int(mask)))
 				}
 				UnaryOp::Len => (Some(Opcode::TupleGet(3)), Some(Value::Int(Uint256::zero()))),

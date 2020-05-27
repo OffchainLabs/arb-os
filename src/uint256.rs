@@ -24,6 +24,7 @@ use num_traits::identities::{Zero, One};
 use num_traits::sign::Signed;
 use num_traits::pow::Pow;
 use serde::{Serialize, Deserialize, Serializer, Deserializer};
+use num_traits::CheckedSub;
 
 
 #[derive(Debug, Clone, PartialEq, Eq, Ord, Hash)]
@@ -137,10 +138,10 @@ impl Uint256 {
 		Uint256{ val }
 	}
 
-	pub fn sub(&self, other: &Self) -> Self {
-		let res = self.val.clone().sub(&other.val);
+	pub fn sub(&self, other: &Self) -> Option<Self> {
+		let res = self.val.clone().checked_sub(&other.val)?;
 		let (val, _) = Uint256::trim(&res);
-		Uint256{ val }
+		Some(Uint256{ val })
 	}
 
 	pub fn mul(&self, other: &Self) -> Self {
