@@ -23,9 +23,7 @@ use crate::mavm::Instruction;
 use crate::link::{ExportedFunc, ImportedFunc};
 use crate::source::Lines;
 use crate::pos::{Location, BytePos};
-extern crate regex;
-
-lalrpop_mod!(pub mini); 
+use crate::mini::DeclsParser;
 
 
 #[derive(Clone, Serialize, Deserialize)]
@@ -152,7 +150,7 @@ pub fn compile_from_source(
     let s = comment_re.replace_all(&s, "");
     let mut string_table_1 = stringtable::StringTable::new();
     let lines = Lines::new(s.bytes());
-    let res = match mini::DeclsParser::new().parse(&mut string_table_1, &lines, &s) {
+    let res = match DeclsParser::new().parse(&mut string_table_1, &lines, &s) {
         Ok(r) => r,
         Err(e) => match e {
             lalrpop_util::ParseError::UnrecognizedToken{ token: (offset, tok, end), expected: _ } => {
