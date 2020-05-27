@@ -16,10 +16,10 @@
 
 #![allow(unused_parens)]
 
-use crate::compile::compile_from_file;
-use crate::evm::compile_evm_file;
-use crate::link::{link, postlink_compile};
-use crate::run::run_from_file;
+use compile::compile_from_file;
+use evm::compile_evm_file;
+use link::{link, postlink_compile};
+use run::run_from_file;
 use std::fs::File;
 use std::io;
 use std::path::Path;
@@ -28,12 +28,7 @@ extern crate bincode;
 extern crate clap;
 use clap::{App, Arg, SubCommand};
 
-pub mod ast;
-pub mod build_builtins;
-pub mod builtins;
-pub mod codegen;
 pub mod compile;
-pub mod emulator;
 pub mod evm;
 pub mod link;
 pub mod mavm;
@@ -42,17 +37,13 @@ pub mod minitests;
 pub mod optimize;
 pub mod pos;
 pub mod run;
-pub mod source;
 pub mod stringtable;
 pub mod striplabels;
 pub mod symtable;
-pub mod typecheck;
 pub mod uint256;
-pub mod xformcode;
 
 #[macro_use]
 extern crate lalrpop_util;
-lalrpop_mod!(pub mini);
 
 fn main() {
     let matches = App::new("Mini compiler")

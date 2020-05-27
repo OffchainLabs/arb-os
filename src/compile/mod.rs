@@ -16,15 +16,23 @@
 
 use crate::link::{ExportedFunc, ImportedFunc};
 use crate::mavm::Instruction;
-use crate::mini::DeclsParser;
 use crate::pos::{BytePos, Location};
-use crate::source::Lines;
 use crate::stringtable;
+use mini::DeclsParser;
 use serde::{Deserialize, Serialize};
 use std::fmt::Formatter;
 use std::fs::File;
 use std::io::{self, Read};
 use std::path::Path;
+
+pub use ast::Type;
+pub use source::Lines;
+
+pub mod ast;
+mod codegen;
+mod source;
+mod typecheck;
+lalrpop_mod!(mini);
 
 #[derive(Clone, Serialize, Deserialize)]
 pub struct CompiledProgram {
@@ -175,10 +183,10 @@ pub fn compile_from_source(
     };
     let mut checked_funcs = Vec::new();
     let (exported_funcs, imported_funcs, global_vars, string_table) =
-        crate::typecheck::typecheck_top_level_decls(&res, &mut checked_funcs, string_table_1)
+        typecheck::typecheck_top_level_decls(&res, &mut checked_funcs, string_table_1)
             .map_err(|res3| CompileError::new(res3.reason.to_string(), res3.location))?;
     let mut code = Vec::new();
-    let code_out = crate::codegen::mavm_codegen(
+    let code_out = codegen::mavm_codegen(
         checked_funcs,
         &mut code,
         &string_table,

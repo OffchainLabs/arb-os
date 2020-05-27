@@ -14,12 +14,14 @@
  * limitations under the License.
  */
 
-use crate::emulator::{ExecutionError, Machine, StackTrace};
 use crate::link::LinkedProgram;
 use crate::mavm::{CodePt, Value};
+use emulator::{ExecutionError, Machine, StackTrace};
 use std::fs::File;
 use std::io::Read;
 use std::path::Path;
+
+mod emulator;
 
 pub fn run_from_file(path: &Path, args: Vec<Value>) -> Result<Value, (ExecutionError, StackTrace)> {
     let display = path.display();

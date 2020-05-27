@@ -14,18 +14,18 @@
  * limitations under the License.
  */
 
-use crate::ast::{BinaryOp, FuncArg, GlobalVarDecl, Type, UnaryOp};
+use super::ast::{BinaryOp, FuncArg, GlobalVarDecl, Type, UnaryOp};
+use super::typecheck::{
+    TypeCheckedExpr, TypeCheckedFunc, TypeCheckedIfArm, TypeCheckedMatchPattern,
+    TypeCheckedStatement,
+};
 use crate::link::ImportedFunc;
+use crate::link::TUPLE_SIZE;
 use crate::mavm::{Instruction, Label, LabelGenerator, Opcode, Value};
 use crate::pos::Location;
 use crate::stringtable::{StringId, StringTable};
 use crate::symtable::CopyingSymTable;
-use crate::typecheck::{
-    TypeCheckedExpr, TypeCheckedFunc, TypeCheckedIfArm, TypeCheckedMatchPattern,
-    TypeCheckedStatement,
-};
 use crate::uint256::Uint256;
-use crate::xformcode::TUPLE_SIZE;
 use std::collections::HashMap;
 
 #[derive(Debug)]

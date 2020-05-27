@@ -14,13 +14,13 @@
  * limitations under the License.
  */
 
+use super::typecheck::{new_type_error, TypeError};
+use crate::link::{value_from_field_list, TUPLE_SIZE};
 use crate::mavm::{Instruction, Value};
 use crate::pos::Location;
 use crate::stringtable::StringId;
 use crate::symtable::SymTable;
-use crate::typecheck::{new_type_error, TypeError};
 use crate::uint256::Uint256;
-use crate::xformcode::{self, TUPLE_SIZE};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone)]
@@ -242,7 +242,7 @@ impl Type {
                 for field in fields {
                     vals.push(field.tipe.default_value());
                 }
-                xformcode::value_from_field_list(vals)
+                value_from_field_list(vals)
             }
             Type::Map(_key, _val) => {
                 // an unusable dummy value -- application will panic if it accesses this

@@ -4,7 +4,7 @@
 //! Module containing types and functions for mapping between byte indexes and line and column
 //! locations
 
-use crate::pos::{BytePos, Column, Line, Location, Span};
+use crate::pos::{BytePos, Column, Line, Location};
 
 /// Type which provides a bidirectional mapping between byte offsets and line and column locations
 /// for some source file
@@ -93,6 +93,7 @@ pub struct Source<'a> {
     lines: Lines,
 }
 
+#[cfg(test)]
 impl<'a> Source<'a> {
     pub fn new(src: &str) -> Source {
         Source::with_lines(src, Lines::new(src.as_bytes().iter().cloned()))
@@ -100,15 +101,6 @@ impl<'a> Source<'a> {
 
     pub fn with_lines(src: &str, lines: Lines) -> Source {
         Source { src, lines }
-    }
-
-    /// Returns the string which defines the source
-    pub fn src(&self) -> &'a str {
-        self.src
-    }
-
-    pub fn lines(&self) -> &Lines {
-        &self.lines
     }
 
     /// Returns the byte offset and source of `line_number`
@@ -123,12 +115,6 @@ impl<'a> Source<'a> {
         })
     }
 
-    /// Returns the line number and the source at `byte`
-    pub fn line_at_byte(&self, byte: BytePos) -> Option<(BytePos, &str)> {
-        let line_number = self.line_number_at_byte(byte);
-        self.line(line_number)
-    }
-
     /// Returns which line `byte` points to
     pub fn line_number_at_byte(&self, byte: BytePos) -> Line {
         self.lines.line_number_at_byte(byte)
@@ -137,20 +123,6 @@ impl<'a> Source<'a> {
     /// Returns the line and column location of `byte`
     pub fn location(&self, byte: BytePos) -> Option<Location> {
         self.lines.location(byte)
-    }
-
-    /// Returns the starting position of any comments and whitespace before `end`
-    pub fn comment_start_before(&self, end: BytePos) -> BytePos {
-        let mut iter = self.comments_between(Span::new(BytePos::from(0), end));
-        // Scan from `end` until a non comment token is found
-        for _ in iter.by_ref().rev() {}
-        BytePos::from(iter.src.len())
-    }
-
-    pub fn comments_between(&self, span: Span<BytePos>) -> CommentIter<'a> {
-        CommentIter {
-            src: &self.src[span.start.to_usize()..span.end.to_usize()],
-        }
     }
 }
 

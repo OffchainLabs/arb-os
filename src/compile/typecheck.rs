@@ -14,11 +14,10 @@
  * limitations under the License.
  */
 
-use crate::ast::{
-    BinaryOp, Expr, FuncArg, FuncDecl, FuncDeclKind, GlobalVarDecl, IfArm, MatchPattern, Statement,
-    StructField, TopLevelDecl, Type, UnaryOp,
+use crate::compile::ast::{
+    BinaryOp, Expr, FuncArg, FuncDecl, FuncDeclKind, GlobalVarDecl, IfArm, ImportFuncDecl,
+    MatchPattern, Statement, StructField, TopLevelDecl, Type, UnaryOp,
 };
-use crate::builtins::builtin_func_decls;
 use crate::link::{ExportedFunc, ImportedFunc};
 use crate::mavm::{Instruction, Label, Value};
 use crate::pos::Location;
@@ -202,36 +201,6 @@ impl<'a> TypeCheckedExpr {
             TypeCheckedExpr::Asm(t, _, _, _) => t.clone(),
         }
     }
-
-    pub fn get_location(&self) -> Option<Location> {
-        match self {
-            TypeCheckedExpr::UnaryOp(_, _, _, loc) => *loc,
-            TypeCheckedExpr::Binary(_, _, _, _, loc) => *loc,
-            TypeCheckedExpr::ShortcutOr(_, _, loc) => *loc,
-            TypeCheckedExpr::ShortcutAnd(_, _, loc) => *loc,
-            TypeCheckedExpr::LocalVariableRef(_, _, loc) => *loc,
-            TypeCheckedExpr::GlobalVariableRef(_, _, loc) => *loc,
-            TypeCheckedExpr::FuncRef(_, _, loc) => *loc,
-            TypeCheckedExpr::TupleRef(_, _, _, loc) => *loc,
-            TypeCheckedExpr::DotRef(_, _, _, loc) => *loc,
-            TypeCheckedExpr::Const(_, _, loc) => *loc,
-            TypeCheckedExpr::FunctionCall(_, _, _, loc) => *loc,
-            TypeCheckedExpr::StructInitializer(_, _, loc) => *loc,
-            TypeCheckedExpr::ArrayRef(_, _, _, loc) => *loc,
-            TypeCheckedExpr::FixedArrayRef(_, _, _, _, loc) => *loc,
-            TypeCheckedExpr::MapRef(_, _, _, loc) => *loc,
-            TypeCheckedExpr::Tuple(_, _, loc) => *loc,
-            TypeCheckedExpr::NewArray(_, _, _, loc) => *loc,
-            TypeCheckedExpr::NewFixedArray(_, _, _, loc) => *loc,
-            TypeCheckedExpr::NewMap(_, loc) => *loc,
-            TypeCheckedExpr::ArrayMod(_, _, _, _, loc) => *loc,
-            TypeCheckedExpr::FixedArrayMod(_, _, _, _, _, loc) => *loc,
-            TypeCheckedExpr::MapMod(_, _, _, _, loc) => *loc,
-            TypeCheckedExpr::StructMod(_, _, _, _, loc) => *loc,
-            TypeCheckedExpr::Cast(_, _, loc) => *loc,
-            TypeCheckedExpr::Asm(_, _, _, loc) => *loc,
-        }
-    }
 }
 
 #[derive(Debug, Clone)]
@@ -244,6 +213,55 @@ impl<'a> TypeCheckedStructField {
     pub fn new(name: StringId, value: TypeCheckedExpr) -> Self {
         TypeCheckedStructField { name, value }
     }
+}
+
+fn builtin_func_decls(mut string_table: StringTable) -> (Vec<ImportFuncDecl>, StringTable) {
+    let imps = vec![
+        ImportFuncDecl::new_types(
+            string_table.get("builtin_arrayNew"),
+            false,
+            vec![Type::Uint, Type::Any],
+            Type::Any,
+        ),
+        ImportFuncDecl::new_types(
+            string_table.get("builtin_arrayGet"),
+            false,
+            vec![Type::Any, Type::Uint],
+            Type::Any,
+        ),
+        ImportFuncDecl::new_types(
+            string_table.get("builtin_arraySet"),
+            false,
+            vec![Type::Any, Type::Uint, Type::Any],
+            Type::Any,
+        ),
+        ImportFuncDecl::new_types(string_table.get("builtin_kvsNew"), false, vec![], Type::Any),
+        ImportFuncDecl::new_types(
+            string_table.get("builtin_kvsHasKey"),
+            false,
+            vec![Type::Any, Type::Any],
+            Type::Bool,
+        ),
+        ImportFuncDecl::new_types(
+            string_table.get("builtin_kvsGet"),
+            false,
+            vec![Type::Any, Type::Any],
+            Type::Tuple(vec![Type::Any, Type::Bool]),
+        ),
+        ImportFuncDecl::new_types(
+            string_table.get("builtin_kvsSet"),
+            false,
+            vec![Type::Any, Type::Any, Type::Any],
+            Type::Any,
+        ),
+        ImportFuncDecl::new_types(
+            string_table.get("builtin_kvsDelete"),
+            false,
+            vec![Type::Any, Type::Any],
+            Type::Any,
+        ),
+    ];
+    (imps, string_table)
 }
 
 pub fn typecheck_top_level_decls<'a>(

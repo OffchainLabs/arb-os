@@ -40,10 +40,6 @@ impl BuiltinArray {
         self.contents[idx] = val;
     }
 
-    pub fn get(&self, idx: usize) -> Value {
-        self.contents[idx].clone()
-    }
-
     pub fn to_value(&self) -> Value {
         Value::Tuple(vec![
             Value::Int(Uint256::from_usize(self.size)),

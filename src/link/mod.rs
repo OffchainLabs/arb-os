@@ -14,17 +14,19 @@
  * limitations under the License.
  */
 
-use crate::ast::Type;
-use crate::builtins::add_auto_link_progs;
-use crate::compile::{CompileError, CompiledProgram, SourceFileMap};
+use crate::compile::{compile_from_file, CompileError, CompiledProgram, SourceFileMap, Type};
 use crate::mavm::{CodePt, Instruction, Label, Opcode, Value};
-use crate::stringtable::StringId;
-use crate::stringtable::StringTable;
-use crate::xformcode::make_uninitialized_tuple;
+use crate::stringtable::{StringId, StringTable};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fmt::{self, Debug};
 use std::io;
+use std::path::Path;
+use xformcode::make_uninitialized_tuple;
+
+pub use xformcode::{value_from_field_list, TUPLE_SIZE};
+
+mod xformcode;
 
 #[derive(Serialize, Deserialize)]
 pub struct LinkedProgram {
@@ -171,7 +173,7 @@ pub fn postlink_compile<'a>(
             println!("{:04}:  {}", idx, insn);
         }
     }
-    let code_3 = crate::xformcode::fix_tuple_size(&code_2, program.global_num_limit);
+    let code_3 = xformcode::fix_tuple_size(&code_2, program.global_num_limit);
     if debug {
         println!("=========== after fix_tuple_size ==============");
         for (idx, insn) in code_3.iter().enumerate() {
@@ -201,7 +203,7 @@ pub fn postlink_compile<'a>(
                 ));
             }
         };
-    let jump_table_value = crate::xformcode::jump_table_to_value(jump_table_final);
+    let jump_table_value = xformcode::jump_table_to_value(jump_table_final);
 
     if debug {
         println!("============ after strip_labels =============");
@@ -218,6 +220,25 @@ pub fn postlink_compile<'a>(
         exported_funcs: exported_funcs_final,
         imported_funcs: program.imported_funcs,
     })
+}
+
+pub fn add_auto_link_progs(
+    progs_in: &[CompiledProgram],
+) -> Result<Vec<CompiledProgram>, CompileError> {
+    let builtin_pathnames = vec!["builtin/array.mao", "builtin/kvs.mao"];
+    let mut progs = progs_in.to_owned();
+    for pathname in builtin_pathnames {
+        let path = Path::new(pathname);
+        match compile_from_file(path, false) {
+            Ok(compiled_program) => {
+                progs.push(compiled_program);
+            }
+            Err(e) => {
+                return Err(e);
+            }
+        }
+    }
+    Ok(progs)
 }
 
 pub fn link<'a>(progs_in: &[CompiledProgram]) -> Result<CompiledProgram, CompileError> {

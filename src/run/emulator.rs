@@ -35,10 +35,6 @@ impl ValueStack {
         self.contents.len() == 0
     }
 
-    pub fn make_empty(&mut self) {
-        self.contents.clear();
-    }
-
     pub fn push(&mut self, val: Value) {
         self.contents.push(val);
     }
@@ -231,18 +227,8 @@ impl<'a> Machine {
         }
     }
 
-    pub fn reset(&mut self) {
-        self.stack.make_empty();
-        self.aux_stack.make_empty();
-        self.state = MachineState::Stopped;
-    }
-
     pub fn get_state(&self) -> MachineState {
         self.state.clone()
-    }
-
-    pub fn pop_stack(&mut self) -> Result<Value, ExecutionError> {
-        self.stack.pop(&self.state)
     }
 
     pub fn get_stack_trace(&self) -> StackTrace {

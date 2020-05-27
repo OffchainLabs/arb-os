@@ -14,17 +14,19 @@
  * limitations under the License.
  */
 
-use crate::build_builtins::BuiltinArray;
 use crate::compile::{CompileError, CompiledProgram, SourceFileMap};
 use crate::link::{link, ImportedFunc};
 use crate::mavm::{Instruction, Label, LabelGenerator, Opcode, Value};
 use crate::stringtable::StringTable;
 use crate::uint256::Uint256;
+use build_builtins::BuiltinArray;
 use std::collections::HashMap;
 use std::fs::File;
 use std::io::Read;
 use std::path::Path;
 use std::usize;
+
+mod build_builtins;
 
 pub fn compile_evm_file(path: &Path) -> Result<CompiledProgram, CompileError> {
     let display = path.display();
