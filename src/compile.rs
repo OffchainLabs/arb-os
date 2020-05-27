@@ -37,7 +37,7 @@ pub struct CompiledProgram {
     pub source_file_map: SourceFileMap,
 }
 
-impl<'a> CompiledProgram {
+impl CompiledProgram {
     pub fn new(
         code: Vec<Instruction>, 
         exported_funcs: Vec<ExportedFunc>, 
@@ -140,14 +140,10 @@ pub fn compile_from_file<'a>(path: &Path, debug: bool) -> Result<CompiledProgram
         CompileError::new(format!("couldn't read {}: {:?}", display, why),None))?;
     //print!("read-in file:\n{}", s);
 
-    let parse_result: Result<CompiledProgram, serde_json::Error> = serde_json::from_str(&s);
-    match parse_result {
-        Ok(compiled_prog) => Ok(compiled_prog),
-        Err(_) => compile_from_source(s, display, debug),  // json parsing failed, try to parse as source code
-    }
+    serde_json::from_str(&s).or_else(|_| compile_from_source(s, display, debug))
 }
 
-pub fn compile_from_source<'a>(
+pub fn compile_from_source(
     s: String, 
     pathname: std::path::Display, 
     debug: bool,
@@ -167,28 +163,28 @@ pub fn compile_from_source<'a>(
         }
     };
     let mut checked_funcs = Vec::new();
-    let res2 = crate::typecheck::typecheck_top_level_decls(&res, &mut checked_funcs, string_table_1);
-    match res2 {
-    	Ok((exported_funcs, imported_funcs, global_vars, string_table)) => { 
-            let mut code = Vec::new();
-    		match crate::codegen::mavm_codegen(checked_funcs, &mut code, &string_table, &imported_funcs, &global_vars) {
-                Ok(code_out) => {
-                    if debug {
-                        println!("========== after initial codegen ===========");
-                        println!("Exported: {:?}", exported_funcs);
-                        println!("Imported: {:?}", imported_funcs);
-                        for (idx, insn) in code_out.iter().enumerate() {
-                         println!("{:04}:  {}", idx, insn);
-                        }
-                    }
-                    Ok(CompiledProgram::new(code_out.to_vec(), exported_funcs, imported_funcs, global_vars.len(), SourceFileMap::new(code_out.len(), pathname.to_string())))
-                }
-                Err(e) => Err(CompileError::new(e.reason.to_string(), e.location)),
-            }
-        },
-        Err(res3) => Err(CompileError::new(res3.reason.to_string(), res3.location)),
+    let (exported_funcs, imported_funcs, global_vars, string_table) =
+        crate::typecheck::typecheck_top_level_decls(&res, &mut checked_funcs, string_table_1)
+            .map_err(|res3| CompileError::new(res3.reason.to_string(), res3.location))?;
+    let mut code = Vec::new();
+    let code_out = crate::codegen::mavm_codegen(checked_funcs, &mut code,
+                                                &string_table, &imported_funcs, &global_vars)
+        .map_err(|e|CompileError::new(e.reason.to_string(), e.location))?;
+    if debug {
+        println!("========== after initial codegen ===========");
+        println!("Exported: {:?}", exported_funcs);
+        println!("Imported: {:?}", imported_funcs);
+        for (idx, insn) in code_out.iter().enumerate() {
+            println!("{:04}:  {}", idx, insn);
+        }
     }
-} 
+    Ok(CompiledProgram::new(code_out.to_vec(),
+                            exported_funcs,
+                            imported_funcs,
+                            global_vars.len(),
+                            SourceFileMap::new(code_out.len(), pathname.to_string())))
+}
+
 
 #[derive(Debug, Clone)]
 pub struct CompileError {
