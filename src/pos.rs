@@ -5,16 +5,17 @@
 //!
 //! [libsyntax_pos]: https://github.com/rust-lang/rust/blob/master/src/libsyntax_pos/lib.rs
 
+use serde::{Deserialize, Serialize};
 use std::cmp::{self, Ordering};
 use std::fmt;
 use std::ops::{Add, AddAssign, Sub, SubAssign};
-use serde::{Serialize, Deserialize};
-
 
 macro_rules! pos_struct {
     (#[$doc:meta] pub struct $Pos:ident($T:ty);) => {
         #[$doc]
-        #[derive(Clone, Copy, Default, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
+        #[derive(
+            Clone, Copy, Default, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize,
+        )]
         #[cfg_attr(feature = "serde_derive", derive(Serialize, Deserialize))]
         pub struct $Pos($T);
 
@@ -100,7 +101,9 @@ impl fmt::Display for Line {
 }
 
 /// A location in a source file
-#[derive(Copy, Clone, Default, Eq, PartialEq, Debug, Hash, Ord, PartialOrd, Serialize, Deserialize)]
+#[derive(
+    Copy, Clone, Default, Eq, PartialEq, Debug, Hash, Ord, PartialOrd, Serialize, Deserialize,
+)]
 pub struct Location {
     pub line: Line,
     pub column: Column,
@@ -277,10 +280,7 @@ pub fn span<Pos>(start: Pos, end: Pos) -> Span<Pos> {
 }
 
 pub fn spanned<T, Pos>(span: Span<Pos>, value: T) -> Spanned<T, Pos> {
-    Spanned {
-        span,
-        value,
-    }
+    Spanned { span, value }
 }
 
 pub fn spanned2<T, Pos>(start: Pos, end: Pos, value: T) -> Spanned<T, Pos> {

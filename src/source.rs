@@ -24,7 +24,8 @@ impl Lines {
 
         let mut len = 0;
         let starting_bytes = {
-            let input_indices = src.into_iter()
+            let input_indices = src
+                .into_iter()
                 .inspect(|_| len += 1)
                 .enumerate()
                 .filter(|&(_, b)| b == b'\n')
@@ -60,12 +61,10 @@ impl Lines {
         if byte.to_usize() <= self.end {
             let line_index = self.line_number_at_byte(byte);
 
-            self.line(line_index).map(|line_byte| {
-                Location {
-                    line: line_index,
-                    column: Column::from((byte - line_byte).to_usize()),
-                    absolute: byte,
-                }
+            self.line(line_index).map(|line_byte| Location {
+                line: line_index,
+                column: Column::from((byte - line_byte).to_usize()),
+                absolute: byte,
             })
         } else {
             None
@@ -166,7 +165,8 @@ impl<'a> Iterator for CommentIter<'a> {
         if self.src.is_empty() {
             None
         } else {
-            self.src = self.src
+            self.src = self
+                .src
                 .trim_matches(|c: char| c.is_whitespace() && c != '\n');
             if self.src.starts_with("//") && !self.src.starts_with("///") {
                 let comment_line = self.src.lines().next().unwrap();
@@ -199,7 +199,8 @@ impl<'a> DoubleEndedIterator for CommentIter<'a> {
         if self.src.is_empty() {
             None
         } else {
-            self.src = self.src
+            self.src = self
+                .src
                 .trim_end_matches(|c: char| c.is_whitespace() && c != '\n');
             if self.src.ends_with('\n') {
                 let comment_line = self.src[..self.src.len() - 1].lines().next_back().unwrap();

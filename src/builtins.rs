@@ -14,17 +14,18 @@
  * limitations under the License.
  */
 
- use std::path::Path;
-use crate::ast::{Type, ImportFuncDecl};
+use crate::ast::{ImportFuncDecl, Type};
+use crate::compile::{compile_from_file, CompileError, CompiledProgram};
 use crate::stringtable::StringTable;
-use crate::compile::{CompiledProgram, CompileError, compile_from_file};
+use std::path::Path;
 
-
-pub fn builtin_func_decls<'a>(mut string_table: StringTable<'a>) -> (Vec<ImportFuncDecl>, StringTable<'a>) {
+pub fn builtin_func_decls<'a>(
+    mut string_table: StringTable<'a>,
+) -> (Vec<ImportFuncDecl>, StringTable<'a>) {
     let imps = vec![
         ImportFuncDecl::new_types(
             string_table.get("builtin_arrayNew"),
-            false, 
+            false,
             vec![Type::Uint, Type::Any],
             Type::Any,
         ),
@@ -40,12 +41,7 @@ pub fn builtin_func_decls<'a>(mut string_table: StringTable<'a>) -> (Vec<ImportF
             vec![Type::Any, Type::Uint, Type::Any],
             Type::Any,
         ),
-        ImportFuncDecl::new_types(
-            string_table.get("builtin_kvsNew"),
-            false,
-            vec![],
-            Type::Any,
-        ),
+        ImportFuncDecl::new_types(string_table.get("builtin_kvsNew"), false, vec![], Type::Any),
         ImportFuncDecl::new_types(
             string_table.get("builtin_kvsHasKey"),
             false,
@@ -69,28 +65,26 @@ pub fn builtin_func_decls<'a>(mut string_table: StringTable<'a>) -> (Vec<ImportF
             false,
             vec![Type::Any, Type::Any],
             Type::Any,
-        )
+        ),
     ];
     (imps, string_table)
 }
 
-
 pub fn add_auto_link_progs(
-	progs_in: &[CompiledProgram],
+    progs_in: &[CompiledProgram],
 ) -> Result<Vec<CompiledProgram>, CompileError> {
-	let builtin_pathnames = vec![
-        "builtin/array.mao",
-        "builtin/kvs.mao",
-	];
-	let mut progs = progs_in.to_owned();
-	for pathname in builtin_pathnames {
-		let path = Path::new(pathname); 
-		match compile_from_file(path, false) {
-			Ok(compiled_program) => { 
-				progs.push(compiled_program); 
-			}
-			Err(e) => { return Err(e); },
-		}
-	}
-	Ok(progs)
+    let builtin_pathnames = vec!["builtin/array.mao", "builtin/kvs.mao"];
+    let mut progs = progs_in.to_owned();
+    for pathname in builtin_pathnames {
+        let path = Path::new(pathname);
+        match compile_from_file(path, false) {
+            Ok(compiled_program) => {
+                progs.push(compiled_program);
+            }
+            Err(e) => {
+                return Err(e);
+            }
+        }
+    }
+    Ok(progs)
 }
