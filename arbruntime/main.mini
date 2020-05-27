@@ -35,14 +35,3 @@ public impure func mainRunLoop() {
         );
     }
 }
-
-type TimeTuple = struct {
-    blockLowerBound: uint,
-    blockUpperBound: uint,
-    timestampLowerBound: uint,
-    timestampUpperBound: uint,
-}
-
-impure func getTime() -> TimeTuple {
-    return asm() TimeTuple { gettime };
-}

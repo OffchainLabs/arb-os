@@ -16,13 +16,23 @@
 
 import type AccountStore;
 import type Account;
+import type Queue;
+import type ByteArray;
 
 import func accountStore_get(store: AccountStore, addr: address) -> Account;
+import func accountStore_set(store: AccountStore, addr: address, acct: Account) -> AccountStore;
+
+import func queue_new() -> Queue;
+import func queue_isEmpty(q: Queue) -> bool;
+import func queue_get(q: Queue) -> (Queue, any);
+import func queue_put(q: Queue, val: any) -> Queue;
+
 
 type EvmCallFrame = struct {
     addr: address,
     accountStore: AccountStore,
     currentAccount: Account,
+    memory: ByteArray,
     parent: any,      // really an EvmCallFrame (or null), but compiler doesn't allow recursive types
 }
 
@@ -30,6 +40,10 @@ var globalCallStack: EvmCallFrame;
 
 public impure func evmCallStack_isEmpty() -> bool {
     return null == unsafecast<any>(globalCallStack);
+}
+
+public impure func evmCallStack_currentFrame() -> EvmCallFrame {
+    return globalCallStack;
 }
 
 public impure func evmCallStack_currentAccount() -> Account {
@@ -53,5 +67,40 @@ public impure func evmCallStack_getAccount(addr: address) -> Account {
         return globalCallStack.currentAccount;
     } else {
         return accountStore_get(globalCallStack.accountStore, addr);
+    }
+}
+
+public impure func evmCallStack_setAccount(addr: address, acct: Account) -> bool {
+    if (evmCallStack_isEmpty()) {
+        return false;
+    }
+    if (globalCallStack.addr == addr) {
+        globalCallStack = globalCallStack with { currentAccount: acct };
+    } else {
+        globalCallStack = globalCallStack with { 
+            accountStore: accountStore_set(globalCallStack.accountStore, addr, acct)
+        };
+    }
+    return true;
+}
+
+var selfDestructQueue: Queue;
+
+impure func initSelfDestructQueue() {
+    if (null == unsafecast<any>(selfDestructQueue)) {
+        selfDestructQueue = queue_new();
+    }
+}
+
+public impure func selfDestructQueue_put(addr: address, owner: address) {
+    selfDestructQueue = queue_put(selfDestructQueue, (addr, owner,));
+}
+
+func selfDestructQueue_execute() {
+    while ( ! queue_isEmpty(selfDestructQueue)) {
+        let (q, item,) = queue_get(selfDestructQueue);
+        selfDestructQueue = q;
+        let (addr, owner,) = unsafecast<(address, address)>(item);
+        //BUGBUG: destroy addr, send addr's funds to owner
     }
 }

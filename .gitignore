@@ -31,3 +31,6 @@ arbruntime/main.mao
 arbruntime/runtime.mexe
 
 arbruntime/evmCallStack.mao
+stdlib/keccak.mao
+arbruntime/evmOps.mao
+arbruntime/inbox.mao

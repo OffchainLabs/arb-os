@@ -58,3 +58,24 @@ func addInboxToQueue(msgq: Queue, newMsgs: InboxCell) -> Queue {
         );
     }
 }
+
+type TimeTuple = struct {
+    blockLowerBound: uint,
+    blockUpperBound: uint,
+    timestampLowerBound: uint,
+    timestampUpperBound: uint,
+}
+
+impure func getTime() -> TimeTuple {
+    return asm() TimeTuple { gettime };
+}
+
+public impure func inbox_currentTimestamp() -> uint {
+    //BUGBUG: this should incorporate message timestamps per our spec
+    return getTime().timestampLowerBound;
+}
+
+public impure func inbox_currentBlockNumber() -> uint {
+    //BUGBUG: this should incorporate message blocknums per our spec
+    return getTime().blockLowerBound;
+}

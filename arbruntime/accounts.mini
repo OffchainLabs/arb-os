@@ -204,3 +204,11 @@ public func account_setStorageCell(
         }
     };
 }
+
+public func account_getCodeSize(acct: Account) -> uint {
+    return acct.codeSize;
+}
+
+public func account_getCode(acct: Account) -> ByteArray {
+    return acct.code;
+}
