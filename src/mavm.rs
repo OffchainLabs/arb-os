@@ -343,7 +343,7 @@ impl fmt::Display for Value {
 	}	
 }
 
-#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, Eq, PartialEq)]
 pub enum Opcode {
 	Noop,
 	Panic,
