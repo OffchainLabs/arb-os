@@ -128,7 +128,7 @@ impl CompiledProgram {
 	}
 }
 
-pub fn compile_from_file<'a>(path: &Path, debug: bool) -> Result<CompiledProgram, CompileError> {
+pub fn compile_from_file(path: &Path, debug: bool) -> Result<CompiledProgram, CompileError> {
    let display = path.display();
 
     let mut file = File::open(&path).map_err(|why|

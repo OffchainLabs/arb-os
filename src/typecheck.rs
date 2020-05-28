@@ -1043,7 +1043,7 @@ fn typecheck_binary_op_const(
 					BinaryOp::Minus => if let Some(val) = val1.sub(&val2) {
 						val
 					} else {
-						return Err(new_type_error("underflow on substraction", loc))
+						return Err(new_type_error("underflow on subtraction", loc))
 					},
 					BinaryOp::Times => val1.mul(&val2),
 					_ => { panic!(); }
