@@ -14,11 +14,10 @@
  * limitations under the License.
  */
 
-use std::path::Path;
 use crate::mavm::Value;
-use crate::uint256::Uint256;
 use crate::run::run_from_file;
-
+use crate::uint256::Uint256;
+use std::path::Path;
 
 #[test]
 fn testarray1() {
@@ -51,11 +50,15 @@ fn testarray6() {
 }
 
 fn test_arraytest(test_num: usize, expected_result: Value) {
-    let path = Path::new("builtin/arraytest.mexe"); 
+    let path = Path::new("builtin/arraytest.mexe");
     let res = run_from_file(path, vec![Value::Int(Uint256::from_usize(test_num))]);
     match res {
-        Ok(res) => { assert_eq!(res, expected_result); }
-        Err(e) => { panic!("{:?}", e); }
+        Ok(res) => {
+            assert_eq!(res, expected_result);
+        }
+        Err(e) => {
+            panic!("{:?}", e);
+        }
     }
 }
 
@@ -105,14 +108,17 @@ fn testkvs8() {
 }
 
 fn test_kvstest(test_num: usize, expected_result: Value) {
-    let path = Path::new("builtin/kvstest.mexe"); 
+    let path = Path::new("builtin/kvstest.mexe");
     let res = run_from_file(path, vec![Value::Int(Uint256::from_usize(test_num))]);
     match res {
-        Ok(res) => { assert_eq!(res, expected_result); }
-        Err(e) => { panic!("{}\n{}", e.0, e.1); }
+        Ok(res) => {
+            assert_eq!(res, expected_result);
+        }
+        Err(e) => {
+            panic!("{}\n{}", e.0, e.1);
+        }
     }
 }
-
 
 #[test]
 fn testq0() {
@@ -135,11 +141,15 @@ fn testq3() {
 }
 
 fn test_queuetest(test_num: usize, expected_result: Value) {
-    let path = Path::new("stdlib/queuetest.mexe"); 
+    let path = Path::new("stdlib/queuetest.mexe");
     let res = run_from_file(path, vec![Value::Int(Uint256::from_usize(test_num))]);
     match res {
-        Ok(res) => { assert_eq!(res, expected_result); }
-        Err(e) => { panic!("{}\n{}", e.0, e.1); }
+        Ok(res) => {
+            assert_eq!(res, expected_result);
+        }
+        Err(e) => {
+            panic!("{}\n{}", e.0, e.1);
+        }
     }
 }
 
@@ -147,7 +157,6 @@ fn test_queuetest(test_num: usize, expected_result: Value) {
 fn testglobal0() {
     test_globaltest(0, Value::Int(Uint256::from_usize(3)));
 }
-
 
 #[test]
 fn testglobal1() {
@@ -180,11 +189,15 @@ fn testglobal6() {
 }
 
 fn test_globaltest(test_num: usize, expected_result: Value) {
-    let path = Path::new("builtin/globaltest.mexe"); 
+    let path = Path::new("builtin/globaltest.mexe");
     let res = run_from_file(path, vec![Value::Int(Uint256::from_usize(test_num))]);
     match res {
-        Ok(res) => { assert_eq!(res, expected_result); }
-        Err(e) => { panic!("{}\n{}", e.0, e.1); }
+        Ok(res) => {
+            assert_eq!(res, expected_result);
+        }
+        Err(e) => {
+            panic!("{}\n{}", e.0, e.1);
+        }
     }
 }
 
@@ -214,11 +227,15 @@ fn testpq4() {
 }
 
 fn test_pqtest(test_num: usize, expected_result: Value) {
-    let path = Path::new("stdlib/priorityqtest.mexe"); 
+    let path = Path::new("stdlib/priorityqtest.mexe");
     let res = run_from_file(path, vec![Value::Int(Uint256::from_usize(test_num))]);
     match res {
-        Ok(res) => { assert_eq!(res, expected_result); }
-        Err(e) => { panic!("{}\n{}", e.0, e.1); }
+        Ok(res) => {
+            assert_eq!(res, expected_result);
+        }
+        Err(e) => {
+            panic!("{}\n{}", e.0, e.1);
+        }
     }
 }
 
@@ -249,7 +266,7 @@ fn testba4() {
 
 #[test]
 fn testba5() {
-    test_bytearray(5, Value::Int(Uint256::from_usize(7373/256)));
+    test_bytearray(5, Value::Int(Uint256::from_usize(7373 / 256)));
 }
 
 #[test]
@@ -278,11 +295,15 @@ fn testba10() {
 }
 
 fn test_bytearray(test_num: usize, expected_result: Value) {
-    let path = Path::new("stdlib/bytearraytest.mexe"); 
+    let path = Path::new("stdlib/bytearraytest.mexe");
     let res = run_from_file(path, vec![Value::Int(Uint256::from_usize(test_num))]);
     match res {
-        Ok(res) => { assert_eq!(res, expected_result); }
-        Err(e) => { panic!("{}\n{}", e.0, e.1); }
+        Ok(res) => {
+            assert_eq!(res, expected_result);
+        }
+        Err(e) => {
+            panic!("{}\n{}", e.0, e.1);
+        }
     }
 }
 
@@ -312,11 +333,15 @@ fn testmap4() {
 }
 
 fn test_map(test_num: usize, expected_result: Value) {
-    let path = Path::new("builtin/maptest.mexe"); 
+    let path = Path::new("builtin/maptest.mexe");
     let res = run_from_file(path, vec![Value::Int(Uint256::from_usize(test_num))]);
     match res {
-        Ok(res) => { assert_eq!(res, expected_result); }
-        Err(e) => { panic!("{}\n{}", e.0, e.1); }
+        Ok(res) => {
+            assert_eq!(res, expected_result);
+        }
+        Err(e) => {
+            panic!("{}\n{}", e.0, e.1);
+        }
     }
 }
 
@@ -326,10 +351,14 @@ fn testkeccak0() {
 }
 
 fn test_keccak(test_num: usize, expected_result: Value) {
-    let path = Path::new("stdlib/keccaktest.mexe"); 
+    let path = Path::new("stdlib/keccaktest.mexe");
     let res = run_from_file(path, vec![Value::Int(Uint256::from_usize(test_num))]);
     match res {
-        Ok(res) => { assert_eq!(res, expected_result); }
-        Err(e) => { panic!("{}\n{}", e.0, e.1); }
+        Ok(res) => {
+            assert_eq!(res, expected_result);
+        }
+        Err(e) => {
+            panic!("{}\n{}", e.0, e.1);
+        }
     }
 }

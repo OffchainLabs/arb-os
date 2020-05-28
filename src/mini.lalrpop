@@ -14,10 +14,10 @@
 // limitations under the License.
 //
 
-use crate::ast::{TopLevelDecl, TypeDecl, FuncDecl, GlobalVarDecl, ImportFuncDecl, ImportTypeDecl, Type, StructField, FuncArg, Statement, MatchPattern, IfArm, Expr, BinaryOp, UnaryOp, 
+use crate::compile::ast::{TopLevelDecl, TypeDecl, FuncDecl, GlobalVarDecl, ImportFuncDecl, ImportTypeDecl, Type, StructField, FuncArg, Statement, MatchPattern, IfArm, Expr, BinaryOp, UnaryOp,
 FieldInitializer, new_func_arg, new_type_decl};
 use crate::stringtable::{StringTable, StringId};
-use crate::source::Lines;
+use crate::compile::Lines;
 use crate::pos::BytePos;
 use crate::mavm::{Value, Instruction, Opcode};
 use crate::uint256::Uint256;
