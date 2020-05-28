@@ -61,6 +61,7 @@ pub struct CompiledEvmContract {
     address: Uint256,
     storage: HashMap<Uint256, Uint256>,
     code: Vec<Instruction>,
+    evm_pcs: Vec<usize>,
 }
 
 impl CompiledEvmContract {
@@ -141,6 +142,7 @@ pub fn compile_from_json(evm_json: serde_json::Value, debug: bool) -> Result<Vec
                         true,
                     ).unwrap(),  // BUGBUG--this should handle errors gracefully, not just panic 
                     true,
+                    compiled_contract.evm_pcs,
                     debug
                 ).unwrap();  //BUGBUG--this should handle errors gracefully, not just panic
                 linked_contracts.push(linked_contract);
@@ -185,6 +187,7 @@ pub fn compile_from_evm_contract(
     let cbor_length = cbor_length as usize;
     let decoded_insns = &decoded_insns[..(decoded_insns.len()-cbor_length-2)];
 
+    let mut evm_pcs = Vec::new();
     let mut i = 0;
     while i < decoded_insns.len() {
         let insn = decoded_insns[i];
@@ -196,10 +199,13 @@ pub fn compile_from_evm_contract(
             );
             i += (nbytes + 1);
         } else {
-            match compile_evm_insn(insn, code, label_gen, &evm_func_map) {
-                Some((c, lg)) => {
+            match compile_evm_insn(insn, i, code, label_gen, &evm_func_map) {
+                Some((c, lg, maybe_pc)) => {
                     code = c;
                     label_gen = lg;
+                    if let Some(pc) = maybe_pc {
+                        evm_pcs.push(pc);
+                    }
                     i += 1;
                 }
                 None => {
@@ -245,6 +251,7 @@ pub fn compile_from_evm_contract(
                 ));
             },
             code,
+            evm_pcs,
         },
         label_gen,
     ))
@@ -252,23 +259,24 @@ pub fn compile_from_evm_contract(
 
 pub fn compile_evm_insn(
     evm_insn: u8,
+    evm_pc: usize,
     mut code: Vec<Instruction>,
     label_gen: LabelGenerator,
     evm_func_map: &HashMap<&str, Label>,
-) -> Option<(Vec<Instruction>, LabelGenerator)> {
+) -> Option<(Vec<Instruction>, LabelGenerator, Option<usize>)> {
     match evm_insn {
         0x00 => evm_emulate(code, label_gen, evm_func_map, "evmOp_stop"), // STOP
         0x01 => { // ADD
             code.push(Instruction::from_opcode(Opcode::Plus, None));
-            Some((code, label_gen))
+            Some((code, label_gen, None))
         }
         0x02 => { // MUL
             code.push(Instruction::from_opcode(Opcode::Mul, None));
-            Some((code, label_gen))
+            Some((code, label_gen, None))
         }
         0x03 => { // SUB
             code.push(Instruction::from_opcode(Opcode::Minus, None));
-            Some((code, label_gen))
+            Some((code, label_gen, None))
         }
         0x04 => { // DIV
             // structure is complex because of nonstandard semantics of DIV in EVM
@@ -284,7 +292,7 @@ pub fn compile_evm_insn(
             code.push(Instruction::from_opcode(Opcode::Label(mid_label), None));
             code.push(Instruction::from_opcode(Opcode::Div, None));
             code.push(Instruction::from_opcode(Opcode::Label(end_label), None));
-            Some((code, lg))
+            Some((code, lg, None))
         }
         0x05 => { // SDIV
              // structure is complex because of nonstandard semantics of SDIV in EVM
@@ -323,7 +331,7 @@ pub fn compile_evm_insn(
             code.push(Instruction::from_opcode(Opcode::Div, None));
 
             code.push(Instruction::from_opcode(Opcode::Label(end_label), None));
-            Some((code, lg))
+            Some((code, lg, None))
         }
         0x06 => { // MOD
             // structure is complex because of nonstandard semantics of MOD in EVM
@@ -339,7 +347,7 @@ pub fn compile_evm_insn(
             code.push(Instruction::from_opcode(Opcode::Label(mid_label), None));
             code.push(Instruction::from_opcode(Opcode::Mod, None));
             code.push(Instruction::from_opcode(Opcode::Label(end_label), None));
-            Some((code, lg))
+            Some((code, lg, None))
         }
         0x07 => { // SMOD
             // structure is complex because of nonstandard semantics of SMOD in EVM
@@ -355,7 +363,7 @@ pub fn compile_evm_insn(
             code.push(Instruction::from_opcode(Opcode::Label(mid_label), None));
             code.push(Instruction::from_opcode(Opcode::Smod, None));
             code.push(Instruction::from_opcode(Opcode::Label(end_label), None));
-            Some((code, lg))
+            Some((code, lg, None))
         }
         0x08 => { // ADDMOD
             // structure is complex because of nonstandard semantics of ADDMOD in EVM
@@ -371,7 +379,7 @@ pub fn compile_evm_insn(
             code.push(Instruction::from_opcode(Opcode::Label(mid_label), None));
             code.push(Instruction::from_opcode(Opcode::AddMod, None));
             code.push(Instruction::from_opcode(Opcode::Label(end_label), None));
-            Some((code, lg))
+            Some((code, lg, None))
         }
         0x09 => { // MULMOD
             // structure is complex because of nonstandard semantics of MULMOD in EVM
@@ -387,80 +395,80 @@ pub fn compile_evm_insn(
             code.push(Instruction::from_opcode(Opcode::Label(mid_label), None));
             code.push(Instruction::from_opcode(Opcode::MulMod, None));
             code.push(Instruction::from_opcode(Opcode::Label(end_label), None));
-            Some((code, lg))
+            Some((code, lg, None))
         }
         0x0a => { // EXP
             code.push(Instruction::from_opcode(Opcode::Exp, None));
-            Some((code, label_gen))
+            Some((code, label_gen, None))
         }
         0x0b => { // SIGNEXTEND
             code.push(Instruction::from_opcode(Opcode::SignExtend, None));
-            Some((code, label_gen))
+            Some((code, label_gen, None))
         }
         // 0x0c - 0x0f unused
         0x10 => { // LT
             code.push(Instruction::from_opcode(Opcode::LessThan, None));
-            Some((code, label_gen))
+            Some((code, label_gen, None))
         }
         0x11 => { // GT
             code.push(Instruction::from_opcode(Opcode::GreaterThan, None));
-            Some((code, label_gen))
+            Some((code, label_gen, None))
         }
         0x12 => { // SLT
             code.push(Instruction::from_opcode(Opcode::SLessThan, None));
-            Some((code, label_gen))
+            Some((code, label_gen, None))
         }
         0x13 => { // SGT
             code.push(Instruction::from_opcode(Opcode::SGreaterThan, None));
-            Some((code, label_gen))
+            Some((code, label_gen, None))
         }
         0x14 => { // EQ
             code.push(Instruction::from_opcode(Opcode::Equal, None));
-            Some((code, label_gen))
+            Some((code, label_gen, None))
         }
         0x15 => { // ISZERO
             code.push(Instruction::from_opcode(Opcode::Not, None));
-            Some((code, label_gen))
+            Some((code, label_gen, None))
         }
         0x16 => { // AND
             code.push(Instruction::from_opcode(Opcode::BitwiseAnd, None));
-            Some((code, label_gen))
+            Some((code, label_gen, None))
         }
         0x17 => { // OR
             code.push(Instruction::from_opcode(Opcode::BitwiseOr, None));
-            Some((code, label_gen))
+            Some((code, label_gen, None))
         }
         0x18 => { // XOR
             code.push(Instruction::from_opcode(Opcode::BitwiseXor, None));
-            Some((code, label_gen))
+            Some((code, label_gen, None))
         }
         0x19 => { // NOT
             code.push(Instruction::from_opcode(Opcode::BitwiseNeg, None));
-            Some((code, label_gen))
+            Some((code, label_gen, None))
         }
         0x1a => { // BYTE
             code.push(Instruction::from_opcode(Opcode::Byte, None));
-            Some((code, label_gen))
+            Some((code, label_gen, None))
         }
         0x1b => { // SHL
             code.push(Instruction::from_opcode(Opcode::Swap1, None));
             code.push(Instruction::from_opcode_imm(Opcode::Exp, Value::Int(Uint256::from_usize(2)), None));
             code.push(Instruction::from_opcode(Opcode::Mul, None));
-            Some((code, label_gen))
+            Some((code, label_gen, None))
         }
         0x1c => { // SHR
             code.push(Instruction::from_opcode(Opcode::Swap1, None));
             code.push(Instruction::from_opcode_imm(Opcode::Exp, Value::Int(Uint256::from_usize(2)), None));
             code.push(Instruction::from_opcode(Opcode::Swap1, None));
             code.push(Instruction::from_opcode(Opcode::Div, None));
-            Some((code, label_gen))
+            Some((code, label_gen, None))
         }
         0x1d => { // SAR
             code.push(Instruction::from_opcode(Opcode::Swap1, None));
             code.push(Instruction::from_opcode_imm(Opcode::Exp, Value::Int(Uint256::from_usize(2)), None));
             code.push(Instruction::from_opcode(Opcode::Swap1, None));
             code.push(Instruction::from_opcode(Opcode::Sdiv, None));
-            Some((code, label_gen))
+            Some((code, label_gen, None))
         }
         // 0x1e - 0x1f unused
         0x20 => evm_emulate(code, label_gen, evm_func_map, "evmOp_sha3"), // SHA3
@@ -477,7 +485,7 @@ pub fn compile_evm_insn(
         0x39 => evm_emulate(code, label_gen, evm_func_map, "evmOp_codecopy"), // CODECOPY
         0x3a => { // GASPRICE
             code.push(Instruction::from_opcode_imm(Opcode::Noop, Value::Int(Uint256::one()), None));
-            Some((code, label_gen))
+            Some((code, label_gen, None))
         }
         0x3b => evm_emulate(code, label_gen, evm_func_map, "evmOp_extcodesize"), // EXTCODESIZE 
         0x3c => evm_emulate(code, label_gen, evm_func_map, "evmOp_extcodecopy"), // EXTCODECOPY  
@@ -491,12 +499,12 @@ pub fn compile_evm_insn(
         0x44 => None, // DIFFICULTY
         0x45 => { // GASLIMIT
             code.push(Instruction::from_opcode_imm(Opcode::Noop, Value::Int(Uint256::from_usize(10_000_000_000)), None));
-            Some((code, label_gen))
+            Some((code, label_gen, None))
         }
         // 0x46-0x4f unused
         0x50 => { // POP
             code.push(Instruction::from_opcode(Opcode::Pop, None));
-            Some((code, label_gen))
+            Some((code, label_gen, None))
         }
         0x51 => evm_emulate(code, label_gen, evm_func_map, "evmOp_mload"), // MLOAD
         0x52 => evm_emulate(code, label_gen, evm_func_map, "evmOp_mstore"), // MSTORE
@@ -504,27 +512,28 @@ pub fn compile_evm_insn(
         0x54 => evm_emulate(code, label_gen, evm_func_map, "evmOp_sload"), // SLOAD
         0x55 => evm_emulate(code, label_gen, evm_func_map, "evmOp_sstore"), // SSTORE
         0x56 => { // JUMP
-            let (c, lg) = evm_emulate(code, label_gen, evm_func_map, "evmOp_getjumpaddr")?;
+            let (c, lg, mpc) = evm_emulate(code, label_gen, evm_func_map, "evmOp_getjumpaddr")?;
             code = c;
             code.push(Instruction::from_opcode(Opcode::Jump, None));
-            Some((code, lg))
+            Some((code, lg, mpc))
         }
         0x57 => {  // JUMPI
             code.push(Instruction::from_opcode(Opcode::Swap1, None));
-            let (c, lg) = evm_emulate(code, label_gen, evm_func_map, "evmOp_getjumpaddr")?;
+            let (c, lg, mpc) = evm_emulate(code, label_gen, evm_func_map, "evmOp_getjumpaddr")?;
             code = c;
             code.push(Instruction::from_opcode(Opcode::Swap1, None));
             code.push(Instruction::from_opcode(Opcode::Cjump, None));
-            Some((code, lg))
+            Some((code, lg, mpc))
         }
         0x58 => None, // GETPC
         0x59 => evm_emulate(code, label_gen, evm_func_map, "evmOp_msize"), // MSIZE
         0x5a => { // GAS
             code.push(Instruction::from_opcode_imm(Opcode::Noop, Value::Int(Uint256::from_usize(9_999_999_999)), None));
-            Some((code, label_gen))
+            Some((code, label_gen, None))
         }
         0x5b => { // JUMPDEST
-            Some((code, label_gen))
+            code.push(Instruction::from_opcode(Opcode::Label(Label::Evm(evm_pc)), None));
+            Some((code, label_gen, Some(evm_pc)))
         }
         // 0x5c - 0x5f unused
         0x60 | // PUSHn instructions -- will call another function to handle these
@@ -562,51 +571,51 @@ pub fn compile_evm_insn(
         // DUP instructions follow; note that DUPn on EVM corresponds to dup(n-1) on AVM
         0x80 => { // DUP1  
             code.push(Instruction::from_opcode(Opcode::Dup0, None));
-            Some((code, label_gen))
+            Some((code, label_gen, None))
         }
         0x81 => { // DUP2 
             code.push(Instruction::from_opcode(Opcode::Dup1, None));
-            Some((code, label_gen))
+            Some((code, label_gen, None))
         }
         0x82 => { // DUP3  
             code.push(Instruction::from_opcode(Opcode::Dup2, None));
-            Some((code, label_gen))
+            Some((code, label_gen, None))
         }
-        0x83 => Some((gen_dupn(code, 3), label_gen)),
-        0x84 => Some((gen_dupn(code, 4), label_gen)),
-        0x85 => Some((gen_dupn(code, 5), label_gen)),
-        0x86 => Some((gen_dupn(code, 6), label_gen)),
-        0x87 => Some((gen_dupn(code, 7), label_gen)),
-        0x88 => Some((gen_dupn(code, 8), label_gen)),
-        0x89 => Some((gen_dupn(code, 9), label_gen)),
-        0x8a => Some((gen_dupn(code, 10), label_gen)),
-        0x8b => Some((gen_dupn(code, 11), label_gen)),
-        0x8c => Some((gen_dupn(code, 12), label_gen)),
-        0x8d => Some((gen_dupn(code, 13), label_gen)),
-        0x8e => Some((gen_dupn(code, 14), label_gen)),
-        0x8f => Some((gen_dupn(code, 15), label_gen)),
+        0x83 => Some((gen_dupn(code, 3), label_gen, None)),
+        0x84 => Some((gen_dupn(code, 4), label_gen, None)),
+        0x85 => Some((gen_dupn(code, 5), label_gen, None)),
+        0x86 => Some((gen_dupn(code, 6), label_gen, None)),
+        0x87 => Some((gen_dupn(code, 7), label_gen, None)),
+        0x88 => Some((gen_dupn(code, 8), label_gen, None)),
+        0x89 => Some((gen_dupn(code, 9), label_gen, None)),
+        0x8a => Some((gen_dupn(code, 10), label_gen, None)),
+        0x8b => Some((gen_dupn(code, 11), label_gen, None)),
+        0x8c => Some((gen_dupn(code, 12), label_gen, None)),
+        0x8d => Some((gen_dupn(code, 13), label_gen, None)),
+        0x8e => Some((gen_dupn(code, 14), label_gen, None)),
+        0x8f => Some((gen_dupn(code, 15), label_gen, None)),
         0x90 => { // SWAP1  
             code.push(Instruction::from_opcode(Opcode::Swap1, None));
-            Some((code, label_gen))
+            Some((code, label_gen, None))
         }
         0x91 => { // SWAP2  
             code.push(Instruction::from_opcode(Opcode::Swap2, None));
-            Some((code, label_gen))
+            Some((code, label_gen, None))
         }
-        0x92 => Some((gen_swapn(code, 3), label_gen)),
-        0x93 => Some((gen_swapn(code, 4), label_gen)),
-        0x94 => Some((gen_swapn(code, 5), label_gen)),
-        0x95 => Some((gen_swapn(code, 6), label_gen)),
-        0x96 => Some((gen_swapn(code, 7), label_gen)),
-        0x97 => Some((gen_swapn(code, 8), label_gen)),
-        0x98 => Some((gen_swapn(code, 9), label_gen)),
-        0x99 => Some((gen_swapn(code, 10), label_gen)),
-        0x9a => Some((gen_swapn(code, 11), label_gen)),
-        0x9b => Some((gen_swapn(code, 12), label_gen)),
-        0x9c => Some((gen_swapn(code, 13), label_gen)),
-        0x9d => Some((gen_swapn(code, 14), label_gen)),
-        0x9e => Some((gen_swapn(code, 15), label_gen)),
-        0x9f => Some((gen_swapn(code, 16), label_gen)),
+        0x92 => Some((gen_swapn(code, 3), label_gen, None)),
+        0x93 => Some((gen_swapn(code, 4), label_gen, None)),
+        0x94 => Some((gen_swapn(code, 5), label_gen, None)),
+        0x95 => Some((gen_swapn(code, 6), label_gen, None)),
+        0x96 => Some((gen_swapn(code, 7), label_gen, None)),
+        0x97 => Some((gen_swapn(code, 8), label_gen, None)),
+        0x98 => Some((gen_swapn(code, 9), label_gen, None)),
+        0x99 => Some((gen_swapn(code, 10), label_gen, None)),
+        0x9a => Some((gen_swapn(code, 11), label_gen, None)),
+        0x9b => Some((gen_swapn(code, 12), label_gen, None)),
+        0x9c => Some((gen_swapn(code, 13), label_gen, None)),
+        0x9d => Some((gen_swapn(code, 14), label_gen, None)),
+        0x9e => Some((gen_swapn(code, 15), label_gen, None)),
+        0x9f => Some((gen_swapn(code, 16), label_gen, None)),
         0xa0 => evm_emulate(code, label_gen, evm_func_map, "evmOp_log0"), // LOG0
         0xa1 => evm_emulate(code, label_gen, evm_func_map, "evmOp_log1"), // LOG1
         0xa2 => evm_emulate(code, label_gen, evm_func_map, "evmOp_log2"), // LOG2
@@ -632,7 +641,7 @@ pub fn compile_evm_insn(
         0xfd => evm_emulate(code, label_gen, evm_func_map, "evmOp_revert"), // REVERT
         0xfe => { // INVALID  
             code.push(Instruction::from_opcode(Opcode::Panic, None));
-            Some((code, label_gen))
+            Some((code, label_gen, None))
         }
         0xff => evm_emulate(code, label_gen, evm_func_map, "evmOp_selfdestruct"), // SELFDESTRUCT
         _ => { panic!("invalid EVM instruction {}", evm_insn); }
@@ -669,7 +678,7 @@ fn evm_emulate(
     label_gen: LabelGenerator,
     evm_func_map: &HashMap<&str, Label>,
     name: &str,
-) -> Option<(Vec<Instruction>, LabelGenerator)> {
+) -> Option<(Vec<Instruction>, LabelGenerator, Option<usize>)> {
     match evm_func_map.get(name) {
         Some(func_label) => {
             let (ret_label, lg) = label_gen.next();
@@ -684,7 +693,7 @@ fn evm_emulate(
                 None,
             ));
             code.push(Instruction::from_opcode(Opcode::Label(ret_label), None));
-            Some((code, lg))
+            Some((code, lg, None))
         }
         None => {
             panic!("nonexistent evm emulation func: {}", name);

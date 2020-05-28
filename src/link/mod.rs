@@ -160,6 +160,7 @@ impl<'a> ExportedFunc {
 pub fn postlink_compile<'a>(
     program: CompiledProgram,
     is_module: bool,
+    evm_pcs: Vec<usize>,  // ignored unless we're in a module
     debug: bool,
 ) -> Result<LinkedProgram, CompileError> {
     if debug {
@@ -191,10 +192,11 @@ pub fn postlink_compile<'a>(
         }
     }
     let (mut code_final, jump_table_final, exported_funcs_final) = match striplabels::strip_labels(
-        &code_4,
+        code_4,
         &jump_table,
         &program.exported_funcs,
         &program.imported_funcs,
+        if is_module { evm_pcs } else { vec![] },
     ) {
         Ok(tup) => tup,
         Err(label) => {
@@ -205,12 +207,8 @@ pub fn postlink_compile<'a>(
             ));
         }
     };
-    let mut jump_table_value = xformcode::jump_table_to_value(jump_table_final);
-    if is_module {
-        code_final[0] = Instruction::from_opcode_imm(Opcode::Swap1, jump_table_value, None);
-        jump_table_value = Value::none();
-    }
-
+    let jump_table_value = xformcode::jump_table_to_value(jump_table_final);
+    
     if debug {
         println!("============ after strip_labels =============");
         println!("static: {}", jump_table_value);
@@ -291,8 +289,10 @@ pub fn link<'a>(progs_in: &[CompiledProgram], is_module: bool) -> Result<Compile
 
     // Initialize globals or allow jump table retrieval
     let mut linked_code = if is_module {
-        // because this is a module, we want a 2-instruction function at the begining that returns our static jumptable
-        // the postlink compilation phase will plug in the actual jumptable as immediate in the first instruction
+        // because this is a module, we want a 2-instruction function at the begining that returns
+        //     a list of (evm_pc, compiled_pc) correspondences
+        // the postlink compilation phase (strip_labels) will plug in the actual table contents
+        //     as the immediate in the first instruction
         vec![
             Instruction::from_opcode_imm(Opcode::Swap1, Value::none(), None),
             Instruction::from_opcode(Opcode::Jump, None),

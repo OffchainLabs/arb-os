@@ -26,8 +26,9 @@ use std::fmt;
 pub enum Label {
     Func(StringId),
     Anon(usize),
-    External(usize), // slot in imported funcs list
+    External(usize),  // slot in imported funcs list
     Runtime(usize),   // function exported by the trusted runtime
+    Evm(usize),       // program counter in EVM contract
 }
 
 impl Label {
@@ -42,6 +43,7 @@ impl Label {
             Label::Anon(pc) => (Label::Anon(pc + int_offset), func_offset),
             Label::External(slot) => (Label::External(slot + ext_offset), func_offset),
             Label::Runtime(_) => (self, func_offset),
+            Label::Evm(_) => (self, func_offset),
         }
     }
 
@@ -59,10 +61,8 @@ impl Label {
                 &Value::Int(Uint256::from_usize(6)),
                 &Value::Int(Uint256::from_usize(*n)),
             ),
-            Label::Runtime(n) => Value::avm_hash2(
-                &Value::Int(Uint256::from_usize(7)),
-                &Value::Int(Uint256::from_usize(*n)),
-            ),
+            Label::Runtime(_) => { panic!("tried to avm_hash a runtime call index"); },
+            Label::Evm(_) => { panic!("tried to avm_hash an EVM label"); }
         }
     }
 }
@@ -74,6 +74,7 @@ impl fmt::Display for Label {
             Label::Anon(n) => write!(f, "label_{}", n),
             Label::External(slot) => write!(f, "external_{}", slot),
             Label::Runtime(slot) => write!(f, "{}", runtime_func_name(*slot)),
+            Label::Evm(pc) => write!(f, "EvmPC({})", pc),
         }
     }
 }
