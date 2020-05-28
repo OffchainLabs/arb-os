@@ -248,7 +248,11 @@ pub fn add_auto_link_progs(
 }
 
 pub fn link<'a>(progs_in: &[CompiledProgram], is_module: bool) -> Result<CompiledProgram, CompileError> {
-    let progs = add_auto_link_progs(progs_in)?;
+    let progs = if is_module {
+        progs_in.to_vec()
+    } else {
+        add_auto_link_progs(progs_in)?
+    };
     let mut insns_so_far: usize = if is_module { 2 } else { 1 }; // leave space at beginning for initialization
     let mut imports_so_far: usize = 0;
     let mut int_offsets = Vec::new();
