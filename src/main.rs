@@ -26,6 +26,7 @@ use std::path::Path;
 
 use clap::{App, Arg, SubCommand};
 
+mod build_builtins;
 pub mod compile;
 pub mod evm;
 pub mod link;
