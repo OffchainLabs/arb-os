@@ -14,288 +14,294 @@
  * limitations under the License.
  */
 
- use std::fmt;
-use crate::mavm::{Value, Instruction, Opcode, CodePt};
-use crate::uint256::Uint256;
 use crate::link::LinkedProgram;
-
+use crate::mavm::{CodePt, Instruction, Opcode, Value};
+use crate::uint256::Uint256;
+use std::fmt;
 
 #[derive(Debug, Default, Clone)]
 pub struct ValueStack {
-	contents: Vec<Value>,
+    contents: Vec<Value>,
 }
 
 impl ValueStack {
-	pub fn new() -> Self {
-		ValueStack{ contents: Vec::new() }
-	}
+    pub fn new() -> Self {
+        ValueStack {
+            contents: Vec::new(),
+        }
+    }
 
-	pub fn is_empty(&self) -> bool {
-		self.contents.len() == 0
-	}
+    pub fn is_empty(&self) -> bool {
+        self.contents.len() == 0
+    }
 
-	pub fn make_empty(&mut self) {
-		self.contents.clear();
-	}
+    pub fn push(&mut self, val: Value) {
+        self.contents.push(val);
+    }
 
-	pub fn push(&mut self, val: Value) {
-		self.contents.push(val);
-	}
+    pub fn push_uint(&mut self, val: Uint256) {
+        self.push(Value::Int(val))
+    }
 
-	pub fn push_uint(&mut self, val: Uint256) {
-		self.push(Value::Int(val))
-	}
+    pub fn push_usize(&mut self, val: usize) {
+        self.push_uint(Uint256::from_usize(val));
+    }
 
-	pub fn push_usize(&mut self, val: usize) {
-		self.push_uint(Uint256::from_usize(val));
-	}
+    pub fn push_codepoint(&mut self, val: CodePt) {
+        self.push(Value::CodePoint(val));
+    }
 
-	pub fn push_codepoint(&mut self, val: CodePt) {
-		self.push(Value::CodePoint(val));
-	}
+    pub fn push_bool(&mut self, val: bool) {
+        self.push_uint(if val { Uint256::one() } else { Uint256::zero() })
+    }
 
-	pub fn push_bool(&mut self, val: bool) {
-		self.push_uint(if val { Uint256::one() } else { Uint256::zero() })
-	}
+    pub fn top(&self) -> Option<Value> {
+        if self.is_empty() {
+            None
+        } else {
+            Some(self.contents[self.contents.len() - 1].clone())
+        }
+    }
 
-	pub fn top(&self) -> Option<Value> {
-		if self.is_empty() {
-			None
-		} else {
-			Some(self.contents[self.contents.len()-1].clone())
-		}
-	}
+    pub fn pop(&mut self, state: &MachineState) -> Result<Value, ExecutionError> {
+        match self.contents.pop() {
+            Some(v) => Ok(v),
+            None => Err(ExecutionError::new("stack underflow", state, None)),
+        }
+    }
 
-	pub fn pop(&mut self, state: &MachineState) -> Result<Value, ExecutionError> {
-		match self.contents.pop() {
-			Some(v) => Ok(v),
-			None => Err(ExecutionError::new("stack underflow", state, None))
-		}
-	}
+    pub fn pop_codepoint(&mut self, state: &MachineState) -> Result<CodePt, ExecutionError> {
+        let val = self.pop(state)?;
+        if let Value::CodePoint(cp) = val {
+            Ok(cp)
+        } else {
+            Err(ExecutionError::new(
+                "expected CodePoint on stack",
+                state,
+                Some(val),
+            ))
+        }
+    }
 
-	pub fn pop_codepoint(&mut self, state: &MachineState) -> Result<CodePt, ExecutionError> {
-		let val = self.pop(state)?;
-		if let Value::CodePoint(cp) = val {
-			Ok(cp)
-		} else {
-			Err(ExecutionError::new("expected CodePoint on stack", state, Some(val)))
-		}
-	}
+    pub fn pop_uint(&mut self, state: &MachineState) -> Result<Uint256, ExecutionError> {
+        let val = self.pop(state)?;
+        if let Value::Int(i) = val {
+            Ok(i)
+        } else {
+            Err(ExecutionError::new(
+                "expected integer on stack",
+                state,
+                Some(val),
+            ))
+        }
+    }
 
-	pub fn pop_uint(&mut self, state: &MachineState) -> Result<Uint256, ExecutionError> {
-		let val = self.pop(state)?;
-		if let Value::Int(i) = val {
-			Ok(i)
-		} else {
-			Err(ExecutionError::new("expected integer on stack", state, Some(val)))
-		}
-	}
+    pub fn pop_usize(&mut self, state: &MachineState) -> Result<usize, ExecutionError> {
+        let val = self.pop_uint(state)?;
+        match val.to_usize() {
+            Some(u) => Ok(u),
+            None => Err(ExecutionError::new(
+                "expected small integer on stack",
+                state,
+                Some(Value::Int(val)),
+            )),
+        }
+    }
 
-	pub fn pop_usize(&mut self, state: &MachineState) -> Result<usize, ExecutionError> {
-		let val = self.pop_uint(state)?;
-		match val.to_usize() {
-			Some(u) => Ok(u),
-			None => Err(ExecutionError::new(
-				"expected small integer on stack", 
-				state, 
-				Some(Value::Int(val))
-			)),
-		}
-	}
+    pub fn pop_bool(&mut self, state: &MachineState) -> Result<bool, ExecutionError> {
+        let val = self.pop_usize(state);
+        match val {
+            Ok(0) => Ok(false),
+            Ok(1) => Ok(true),
+            Ok(v) => Err(ExecutionError::new(
+                "expected bool on stack",
+                state,
+                Some(Value::Int(Uint256::from_usize(v))),
+            )),
+            _ => Err(ExecutionError::new("expected bool on stack", state, None)),
+        }
+    }
 
-	pub fn pop_bool(&mut self, state: &MachineState) -> Result<bool, ExecutionError> {
-		let val = self.pop_usize(state);
-		match val {
-			Ok(0) => Ok(false),
-			Ok(1) => Ok(true),
-			Ok(v) => Err(ExecutionError::new(
-				"expected bool on stack", 
-				state, 
-				Some(Value::Int(Uint256::from_usize(v)))
-			)),
-			_ => Err(ExecutionError::new(
-				"expected bool on stack", 
-				state, 
-				None
-			)),
-		}
-	}
+    pub fn pop_tuple(&mut self, state: &MachineState) -> Result<Vec<Value>, ExecutionError> {
+        let val = self.pop(state)?;
+        if let Value::Tuple(v) = val {
+            Ok(v)
+        } else {
+            Err(ExecutionError::new(
+                "expected tuple on stack",
+                state,
+                Some(val),
+            ))
+        }
+    }
 
-	pub fn pop_tuple(&mut self, state: &MachineState) -> Result<Vec<Value>, ExecutionError> {
-		let val = self.pop(state)?;
-		if let Value::Tuple(v) = val {
-			Ok(v)
-		} else {
-			Err(ExecutionError::new("expected tuple on stack", state, Some(val)))
-		}
-	}
-
-	pub fn all_codepts(&self) -> Vec<CodePt> {
-		let mut ret = Vec::new();
-		for item in self.contents.iter() {
-			if let Value::CodePoint(cp) = item {
-				ret.push(*cp);
-			}
-		}
-		ret
-	}
+    pub fn all_codepts(&self) -> Vec<CodePt> {
+        self.contents
+            .iter()
+            .filter_map(|item| {
+                if let Value::CodePoint(cp) = item {
+                    Some(*cp)
+                } else {
+                    None
+                }
+            })
+            .collect()
+    }
 }
 
 impl fmt::Display for ValueStack {
-	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-		writeln!(f, "Stack[")?;
-		for i in 0..self.contents.len() {
-			let j = self.contents.len()-1-i;
-			writeln!(f, "{};;", self.contents[j])?;
-		}
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        writeln!(f, "Stack[")?;
+        for i in self.contents.iter().rev() {
+            writeln!(f, "{};;", i)?;
+        }
         write!(f, "]")
     }
 }
 
 #[derive(Clone, Debug)]
 pub enum ExecutionError {
-	StoppedErr(&'static str),
-	Wrapped(&'static str, Box<ExecutionError>),
-	RunningErr(&'static str, CodePt, Option<Value>),
+    StoppedErr(&'static str),
+    Wrapped(&'static str, Box<ExecutionError>),
+    RunningErr(&'static str, CodePt, Option<Value>),
 }
 
 impl ExecutionError {
-	fn new(why: &'static str, state: &MachineState, val: Option<Value>) -> Self {
-		match state {
-			MachineState::Stopped => ExecutionError::StoppedErr(why),
-			MachineState::Error(e) => ExecutionError::Wrapped(why, Box::new(e.clone())),
-			MachineState::Running(cp) => ExecutionError::RunningErr(why, *cp, val),
-		}
-	}
+    fn new(why: &'static str, state: &MachineState, val: Option<Value>) -> Self {
+        match state {
+            MachineState::Stopped => ExecutionError::StoppedErr(why),
+            MachineState::Error(e) => ExecutionError::Wrapped(why, Box::new(e.clone())),
+            MachineState::Running(cp) => ExecutionError::RunningErr(why, *cp, val),
+        }
+    }
 }
 
 impl fmt::Display for ExecutionError {
-	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-		match self {
-			ExecutionError::StoppedErr(s) => writeln!(f, "error with machine stopped: {}", s),
-			ExecutionError::Wrapped(s, bee) => writeln!(f, "{} ({})", s, *bee),
-			ExecutionError::RunningErr(s, cp, ov) => match ov {
-				Some(val) => writeln!(f, "{} ({:?}) with value {}", s, cp, val),
-				None => writeln!(f, "{} ({:?})", s, cp),
-			}
-		}
-	}
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            ExecutionError::StoppedErr(s) => writeln!(f, "error with machine stopped: {}", s),
+            ExecutionError::Wrapped(s, bee) => writeln!(f, "{} ({})", s, *bee),
+            ExecutionError::RunningErr(s, cp, ov) => match ov {
+                Some(val) => writeln!(f, "{} ({:?}) with value {}", s, cp, val),
+                None => writeln!(f, "{} ({:?})", s, cp),
+            },
+        }
+    }
 }
 
 #[derive(Clone, Debug)]
 pub enum MachineState {
-	Stopped,
-	Error(ExecutionError),
-	Running(CodePt),  // pc
+    Stopped,
+    Error(ExecutionError),
+    Running(CodePt), // pc
 }
 
 impl MachineState {
-	pub fn is_running(&self) -> bool {
-		if let MachineState::Running(_) = self {
-			true
-		} else {
-			false
-		}
-	}
+    pub fn is_running(&self) -> bool {
+        if let MachineState::Running(_) = self {
+            true
+        } else {
+            false
+        }
+    }
 }
 
 pub struct Machine {
-	stack: ValueStack,
-	aux_stack: ValueStack,
-	state: MachineState,
-	code: Vec<Instruction>,
-	static_val: Value,
-	register: Value,
+    stack: ValueStack,
+    aux_stack: ValueStack,
+    state: MachineState,
+    code: Vec<Instruction>,
+    static_val: Value,
+    register: Value,
 }
 
 impl<'a> Machine {
-	pub fn new(program: LinkedProgram) -> Self {
-		Machine{
-			stack: ValueStack::new(),
-			aux_stack: ValueStack::new(),
-			state: MachineState::Stopped,
-			code: program.code,
-			static_val: program.static_val, 
-			register: Value::none(),
-		}
-	}
+    pub fn new(program: LinkedProgram) -> Self {
+        Machine {
+            stack: ValueStack::new(),
+            aux_stack: ValueStack::new(),
+            state: MachineState::Stopped,
+            code: program.code,
+            static_val: program.static_val,
+            register: Value::none(),
+        }
+    }
 
-	pub fn reset(&mut self) {
-		self.stack.make_empty();
-		self.aux_stack.make_empty();
-		self.state = MachineState::Stopped;
-	}
+    pub fn get_state(&self) -> MachineState {
+        self.state.clone()
+    }
 
-	pub fn get_state(&self) -> MachineState {
-		self.state.clone()
-	}
+    pub fn get_stack_trace(&self) -> StackTrace {
+        StackTrace::Known(self.aux_stack.all_codepts())
+    }
 
-	pub fn pop_stack(&mut self) -> Result<Value, ExecutionError> {
-		self.stack.pop(&self.state)
-	}
+    pub fn test_call(
+        &mut self,
+        func_addr: CodePt,
+        args: Vec<Value>,
+    ) -> Result<ValueStack, ExecutionError> {
+        let stop_pc = CodePt::new_internal(self.code.len() + 1);
+        for i in args.iter().rev().cloned() {
+            self.stack.push(i);
+        }
+        self.stack.push(Value::CodePoint(stop_pc));
+        self.state = MachineState::Running(func_addr);
+        self.run(Some(stop_pc));
+        match &self.state {
+            MachineState::Stopped => {
+                Err(ExecutionError::new("execution stopped", &self.state, None))
+            }
+            MachineState::Error(e) => Err(e.clone()),
+            MachineState::Running(_) => Ok(self.stack.clone()),
+        }
+    }
 
-	pub fn get_stack_trace(&self) -> StackTrace {
-		StackTrace::Known(self.aux_stack.all_codepts())
-	}
+    pub fn get_pc(&self) -> Result<CodePt, ExecutionError> {
+        if let MachineState::Running(pc) = &self.state {
+            Ok(*pc)
+        } else {
+            Err(ExecutionError::new(
+                "tried to get PC of non-running machine",
+                &self.state,
+                None,
+            ))
+        }
+    }
 
-	pub fn test_call(&mut self, func_addr: CodePt, args: Vec<Value>) -> Result<ValueStack, ExecutionError> {
-		let num_args = args.len();
-		let stop_pc = CodePt::new_internal(self.code.len() + 1);
-		for i in 0..num_args {
-			self.stack.push(args[num_args-1-i].clone());
-		}
-		self.stack.push(Value::CodePoint(stop_pc));
-		self.state = MachineState::Running(func_addr);
-		self.run(Some(stop_pc));
-		match &self.state {
-			MachineState::Stopped => Err(ExecutionError::new("execution stopped", &self.state, None)),
-			MachineState::Error(e) => Err(e.clone()),
-			MachineState::Running(_) => Ok(self.stack.clone()),
-		}
-	}
+    pub fn incr_pc(&mut self) {
+        if let MachineState::Running(pc) = &self.state {
+            if let Some(new_pc) = pc.incr() {
+                self.state = MachineState::Running(new_pc);
+            } else {
+                panic!("machine PC was set of external CodePt")
+            }
+        } else {
+            panic!("tried to increment PC of non-running machine")
+        }
+    }
 
-	pub fn get_pc(&self) -> Result<CodePt, ExecutionError> {
-		if let MachineState::Running(pc) = &self.state {
-			Ok(*pc)
-		} else {
-			Err(ExecutionError::new("tried to get PC of non-running machine", &self.state, None))
-		}
-	}
+    pub fn run(&mut self, stop_pc: Option<CodePt>) {
+        while self.state.is_running() {
+            if let Some(spc) = stop_pc {
+                if let MachineState::Running(pc) = self.state {
+                    if pc == spc {
+                        return;
+                    }
+                }
+            }
+            if let Err(e) = self.run_one() {
+                self.state = MachineState::Error(e);
+            }
+        }
+    }
 
-	pub fn incr_pc(&mut self) {
-		if let MachineState::Running(pc) = &self.state {
-			if let Some(new_pc) = pc.incr() {
-				self.state = MachineState::Running(new_pc);
-			} else {
-				panic!("machine PC was set of external CodePt")
-			}
-		} else {
-			panic!("tried to increment PC of non-running machine")
-		}
-	}
-
-	pub fn run(&mut self, stop_pc: Option<CodePt>) {
-		while self.state.is_running() {
-			if let Some(spc) = stop_pc {
-				if let MachineState::Running(pc) = self.state {
-					if pc == spc {
-						return;
-					}
-				}
-			}
-			if let Err(e) = self.run_one() {
-				self.state = MachineState::Error(e); 
-			}
-		}
-	}
-
-	pub fn run_one(&mut self) -> Result<bool, ExecutionError> {
-		if let MachineState::Running(pc) = self.state {
-			if let Some(insn) = self.code.get(pc.pc_if_internal().unwrap()) {
-				if let Some(val) = &insn.immediate {
-					self.stack.push(val.clone());
-				}
-				match insn.opcode {
+    pub fn run_one(&mut self) -> Result<bool, ExecutionError> {
+        if let MachineState::Running(pc) = self.state {
+            if let Some(insn) = self.code.get(pc.pc_if_internal().unwrap()) {
+                if let Some(val) = &insn.immediate {
+                    self.stack.push(val.clone());
+                }
+                match insn.opcode {
 					Opcode::Noop => {
 						self.incr_pc();
 						Ok(true)
@@ -503,7 +509,8 @@ impl<'a> Machine {
 					Opcode::Minus => {
 						let r1 = self.stack.pop_uint(&self.state)?;
 						let r2 = self.stack.pop_uint(&self.state)?;
-						self.stack.push_uint(r1.sub(&r2));
+						self.stack.push_uint(r1.sub(&r2)
+							.ok_or(ExecutionError::new("signed integer underflow in subtraction", &self.state, None))?);
 						self.incr_pc();
 						Ok(true)
 					}
@@ -689,7 +696,7 @@ impl<'a> Machine {
 									let t = 248-ub;
 									let shifted_bit = Uint256::from_usize(2).exp(&Uint256::from_usize(t));
 									let sign_bit = x.bitwise_and(&shifted_bit) != Uint256::zero();
-									let mask = shifted_bit.sub(&Uint256::one());
+									let mask = shifted_bit.sub(&Uint256::one()).ok_or(ExecutionError::new("underflow in signextend", &self.state, None))?;
 									if sign_bit {
 										x.bitwise_and(&mask)
 									} else {
@@ -744,31 +751,39 @@ impl<'a> Machine {
 					Opcode::TupleGet(_) |
 					Opcode::TupleSet(_) |
 					Opcode::ArrayGet |
-					Opcode::UncheckedFixedArrayGet(_) | 
+					Opcode::UncheckedFixedArrayGet(_) |
 					Opcode::GetGlobalVar(_) |
 					Opcode::SetGlobalVar(_) |
 					Opcode::Return => Err(ExecutionError::new("invalid opcode", &self.state, None))
 				}
-			} else {
-				Err(ExecutionError::new("invalid program counter", &self.state, None))
-			}
-		} else {
-			Err(ExecutionError::new("tried to run machine that is not runnable", &self.state, None))
-		}
-	}
+            } else {
+                Err(ExecutionError::new(
+                    "invalid program counter",
+                    &self.state,
+                    None,
+                ))
+            }
+        } else {
+            Err(ExecutionError::new(
+                "tried to run machine that is not runnable",
+                &self.state,
+                None,
+            ))
+        }
+    }
 }
 
 #[derive(Debug)]
 pub enum StackTrace {
-	Unknown,
-	Known(Vec<CodePt>),
+    Unknown,
+    Known(Vec<CodePt>),
 }
 
 impl fmt::Display for StackTrace {
-	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-		match self {
-			StackTrace::Unknown => writeln!(f, "[stack trace unknown]"),
-			StackTrace::Known(v) => writeln!(f, "{:?}", v),
-		}
-	}
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            StackTrace::Unknown => writeln!(f, "[stack trace unknown]"),
+            StackTrace::Known(v) => writeln!(f, "{:?}", v),
+        }
+    }
 }

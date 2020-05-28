@@ -14,16 +14,17 @@
  * limitations under the License.
  */
 
-use std::path::Path;
+use crate::link::LinkedProgram;
+use crate::mavm::{CodePt, Value};
+use emulator::{ExecutionError, Machine, StackTrace};
 use std::fs::File;
 use std::io::Read;
-use crate::mavm::{Value, CodePt};
-use crate::emulator::{Machine, StackTrace, ExecutionError};
-use crate::link::LinkedProgram;
+use std::path::Path;
 
+mod emulator;
 
 pub fn run_from_file(path: &Path, args: Vec<Value>) -> Result<Value, (ExecutionError, StackTrace)> {
-   let display = path.display();
+    let display = path.display();
 
     let mut file = match File::open(&path) {
         Err(why) => panic!("couldn't open {}: {:?}", display, why),
@@ -54,12 +55,10 @@ fn run_from_string(s: String, args: Vec<Value>) -> Result<Value, (ExecutionError
 
 fn run(machine: &mut Machine, args: Vec<Value>) -> Result<Value, (ExecutionError, StackTrace)> {
     match machine.test_call(CodePt::new_internal(0), args) {
-        Ok(mut stack) => {
-            match stack.pop(&machine.get_state()) {
-                Ok(res) => Ok(res),
-                Err(e) => Err((e, machine.get_stack_trace())),
-            }
-        }
+        Ok(mut stack) => match stack.pop(&machine.get_state()) {
+            Ok(res) => Ok(res),
+            Err(e) => Err((e, machine.get_stack_trace())),
+        },
         Err(e) => Err((e, machine.get_stack_trace())),
     }
 }
