@@ -131,22 +131,20 @@ impl ValueStack {
 	}
 
 	pub fn all_codepts(&self) -> Vec<CodePt> {
-		let mut ret = Vec::new();
-		for item in self.contents.iter() {
+		self.contents.iter().filter_map(|item|
 			if let Value::CodePoint(cp) = item {
-				ret.push(*cp);
-			}
-		}
-		ret
+				Some(*cp)
+			} else {
+				None
+			}).collect()
 	}
 }
 
 impl fmt::Display for ValueStack {
 	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
 		writeln!(f, "Stack[")?;
-		for i in 0..self.contents.len() {
-			let j = self.contents.len()-1-i;
-			writeln!(f, "{};;", self.contents[j])?;
+		for i in self.contents.iter().rev() {
+			writeln!(f, "{};;", i)?;
 		}
         write!(f, "]")
     }
@@ -239,10 +237,9 @@ impl<'a> Machine {
 	}
 
 	pub fn test_call(&mut self, func_addr: CodePt, args: Vec<Value>) -> Result<ValueStack, ExecutionError> {
-		let num_args = args.len();
 		let stop_pc = CodePt::new_internal(self.code.len() + 1);
-		for i in 0..num_args {
-			self.stack.push(args[num_args-1-i].clone());
+		for i in args.iter().rev().cloned() {
+			self.stack.push(i);
 		}
 		self.stack.push(Value::CodePoint(stop_pc));
 		self.state = MachineState::Running(func_addr);
@@ -503,7 +500,8 @@ impl<'a> Machine {
 					Opcode::Minus => {
 						let r1 = self.stack.pop_uint(&self.state)?;
 						let r2 = self.stack.pop_uint(&self.state)?;
-						self.stack.push_uint(r1.sub(&r2));
+						self.stack.push_uint(r1.sub(&r2)
+							.ok_or(ExecutionError::new("signed integer underflow in subtraction", &self.state, None))?);
 						self.incr_pc();
 						Ok(true)
 					}
@@ -689,7 +687,7 @@ impl<'a> Machine {
 									let t = 248-ub;
 									let shifted_bit = Uint256::from_usize(2).exp(&Uint256::from_usize(t));
 									let sign_bit = x.bitwise_and(&shifted_bit) != Uint256::zero();
-									let mask = shifted_bit.sub(&Uint256::one());
+									let mask = shifted_bit.sub(&Uint256::one()).ok_or(ExecutionError::new("underflow in signextend", &self.state, None))?;
 									if sign_bit {
 										x.bitwise_and(&mask)
 									} else {

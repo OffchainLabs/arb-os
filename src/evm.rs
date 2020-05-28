@@ -27,7 +27,7 @@ use crate::stringtable::StringTable;
 use crate::build_builtins::BuiltinArray;
 
 
-pub fn compile_evm_file<'a>(path: &Path) -> Result<CompiledProgram, CompileError<'a>> {
+pub fn compile_evm_file(path: &Path) -> Result<CompiledProgram, CompileError> {
     let display = path.display();
      
     let mut file = match File::open(&path) {
@@ -46,7 +46,7 @@ pub fn compile_evm_file<'a>(path: &Path) -> Result<CompiledProgram, CompileError
         Ok(evm_json) => compile_from_json(evm_json),
         Err(e) => {
             println!("Error reading in EVM file: {:?}", e);
-            Err(CompileError::new("error parsing compiled EVM file", None))
+            Err(CompileError::new("error parsing compiled EVM file".to_string(), None))
         }
     }
 }
@@ -71,7 +71,7 @@ impl CompiledEvmContract {
     }
 }
 
-pub fn compile_from_json<'a>(evm_json: serde_json::Value) -> Result<CompiledProgram, CompileError<'a>> {
+pub fn compile_from_json(evm_json: serde_json::Value) -> Result<CompiledProgram, CompileError> {
     if let serde_json::Value::Array(contracts) = evm_json {
         let mut compiled_contracts = Vec::new();
         let mut label_gen = LabelGenerator::new();
@@ -81,23 +81,23 @@ pub fn compile_from_json<'a>(evm_json: serde_json::Value) -> Result<CompiledProg
                 compiled_contracts.push(compiled_contract);
                 label_gen = lg;
             } else {
-                return Err(CompileError::new("unexpected contents in EVM json file", None));
+                return Err(CompileError::new("unexpected contents in EVM json file".to_string(), None));
             }
         }
         evm_link(compiled_contracts)
     } else {
-        Err(CompileError::new("unexpected contents in EVM json file", None))
+        Err(CompileError::new("unexpected contents in EVM json file".to_string(), None))
     }
 }
 
-pub fn compile_from_evm_contract<'a>(
+pub fn compile_from_evm_contract(
     contract: serde_json::map::Map<String, serde_json::Value>,
     mut label_gen: LabelGenerator,
-) -> Result<(CompiledEvmContract, LabelGenerator), CompileError<'a>> {
+) -> Result<(CompiledEvmContract, LabelGenerator), CompileError> {
     let code_str = if let serde_json::Value::String(s) = &contract["code"] {
         s
     } else {
-        return Err(CompileError::new("bad code string in EVM json file", None));
+        return Err(CompileError::new("bad code string in EVM json file".to_string(), None));
     };
     let mut code = Vec::new();
     let mut evm_func_map = HashMap::new();
@@ -120,7 +120,7 @@ pub fn compile_from_evm_contract<'a>(
                     i += 1;
                 }
                 None => { 
-                    return Err(CompileError::new("unsupported instruction in EVM code", None));
+                    return Err(CompileError::new("unsupported instruction in EVM code".to_string(), None));
                 }
             }
         }
@@ -132,7 +132,7 @@ pub fn compile_from_evm_contract<'a>(
                 if let serde_json::Value::String(s) = &contract["address"] {
                     Uint256::from_string_hex(&s[2..]).unwrap()
                 } else {
-                    return Err(CompileError::new("invalid address format in EVM json file", None));
+                    return Err(CompileError::new("invalid address format in EVM json file".to_string(), None));
                 },
             storage: 
                 if let serde_json::Value::Object(m) = &contract["storage"] {
@@ -143,13 +143,13 @@ pub fn compile_from_evm_contract<'a>(
                             if let serde_json::Value::String(s) = v {
                                 Uint256::from_string_hex(&s[2..]).unwrap()
                             } else {
-                                return Err(CompileError::new("invalid storage value format in EVM json file", None));
+                                return Err(CompileError::new("invalid storage value format in EVM json file".to_string(), None));
                             }
                         );
                     }
                     hm
                 } else {
-                    return Err(CompileError::new("invalid storage format in EVM json file", None));
+                    return Err(CompileError::new("invalid storage format in EVM json file".to_string(), None));
                 },
             insns: code,
         }, 
@@ -643,7 +643,7 @@ fn compile_push_insn(data: &[u8], mut code: Vec<Instruction>) -> Vec<Instruction
     code
 }
 
-fn evm_link(contracts: Vec<CompiledEvmContract>) -> Result<CompiledProgram, CompileError<'static>> {
+fn evm_link(contracts: Vec<CompiledEvmContract>) -> Result<CompiledProgram, CompileError> {
     let (imports, _string_table) = imported_funcs_for_evm();
     let num_contracts = contracts.len();
     let mut summary_array = BuiltinArray::new(num_contracts, Value::none());

@@ -17,17 +17,22 @@
  use crate::mavm::{Instruction, Opcode};
 
 
+fn useless_opcodes_layer<'a, I>(iter: I) -> impl Iterator<Item=&'a Instruction>
+	where
+		I: Iterator<Item=&'a Instruction> {
+	iter.filter(|&insn|
+		!(insn.opcode == Opcode::Noop && insn.immediate.is_none()) &&
+			!(insn.opcode == Opcode::Pop && insn.immediate.is_some()))
+}
+
 pub fn peephole(code_in: &[Instruction]) -> Vec<Instruction> {
 	let mut code_out = Vec::new();
 
-	for insn in code_in {
+	for insn in useless_opcodes_layer(code_in.iter()) {
 		code_out.push(insn.clone());
 		let mut done = false;
 		while (!done) && (code_out.len() > 1) {
-			match code_out[code_out.len()-1] {
-				Instruction{ opcode: Opcode::Pop, immediate: Some(_), location: _ } => {
-					code_out.pop();
-				}
+			match *code_out.last().unwrap() {
 				Instruction{ opcode: Opcode::Pop, immediate: None, location: _ } => {
 					if let Instruction{ opcode: Opcode::Dup0, immediate: None, location: _ } = code_out[code_out.len()-2] {
 						code_out.pop();
@@ -36,11 +41,7 @@ pub fn peephole(code_in: &[Instruction]) -> Vec<Instruction> {
 						done = true;
 					}
 				}
-				Instruction{ opcode: Opcode::Noop, immediate: None, location: _ } => {
-					code_out.pop();
-				}
-				Instruction{ opcode: Opcode::AuxPush, immediate: None, location: _ } => {
-					let loc1 = code_out[code_out.len()-1].location;
+				Instruction{ opcode: Opcode::AuxPush, immediate: None, location: loc1 } => {
 					let insn2 = code_out[code_out.len()-2].clone();
 					if let Instruction{ opcode: Opcode::AuxPop, immediate: imm, location: loc2 } = insn2 {
 						code_out.pop();
@@ -56,8 +57,7 @@ pub fn peephole(code_in: &[Instruction]) -> Vec<Instruction> {
 						done = true;
 					}
 				}
-				Instruction{ opcode: Opcode::AuxPop, immediate: Some(_), location: _ } => {
-					let loc1 = code_out[code_out.len()-1].location;
+				Instruction{ opcode: Opcode::AuxPop, immediate: Some(_), location: loc1 } => {
 					let insn1 = code_out[code_out.len()-1].clone();
 					let insn2 = code_out[code_out.len()-2].clone();
 					if let Instruction{ opcode: Opcode::AuxPush, immediate: None, location: _ } = insn2 {
@@ -68,8 +68,7 @@ pub fn peephole(code_in: &[Instruction]) -> Vec<Instruction> {
 						done = true;
 					}
 				}
-				Instruction{ opcode: Opcode::AuxPop, immediate: None, location: _ } => {
-					let loc1 = code_out[code_out.len()-1].location;
+				Instruction{ opcode: Opcode::AuxPop, immediate: None, location: loc1 } => {
 					let insn2 = code_out[code_out.len()-2].clone();
 					if let Instruction{ opcode: Opcode::AuxPush, immediate: imm, location: loc2 } = insn2 {
 						code_out.pop();
@@ -111,8 +110,7 @@ pub fn peephole(code_in: &[Instruction]) -> Vec<Instruction> {
 						_ => { done = true; }
 					}
 				}
-				Instruction{ opcode, immediate: None, location: _ } => {
-					let loc1 = code_out[code_out.len()-1].location;
+				Instruction{ opcode, immediate: None, location: loc1 } => {
 					let insn2 = code_out[code_out.len()-2].clone();
 					if let Instruction{ opcode: Opcode::Noop, immediate: Some(val), location: _ } = insn2 {
 						code_out.pop();

@@ -119,7 +119,7 @@ fn main() {
             match compile_from_file(path, debug_mode) {
                 Ok(compiled_program) => { compiled_program.to_output(&mut *output, matches.value_of("format")); }
                 Err(e) => { 
-                    panic!("Compilation error: {:?}", e); 
+                    println!("Compilation error: {:?}", e);
                 }
             }
         } else {
@@ -128,7 +128,7 @@ fn main() {
                 let path = Path::new(filename); 
                 match compile_from_file(path, debug_mode) {
                     Ok(compiled_program) => { compiled_progs.push(compiled_program); }
-                    Err(e) => { panic!("Compilation error: {:?}", e); }
+                    Err(e) => { println!("Compilation error: {}", e); return; }
                 }
             }
 
@@ -137,10 +137,10 @@ fn main() {
                     Ok(completed_program) => { 
                         completed_program.to_output(&mut *output, matches.value_of("format")); 
                     }
-                    Err(e) => { panic!("Linking error: {:?}", e); }
+                    Err(e) => { println!("Linking error: {}", e); return; }
                 }
                 Err(e) => {
-                    panic!("Linking error: {:?}", e);
+                    println!("Linking error: {}", e);
                 }
             }
         }
@@ -165,7 +165,7 @@ fn main() {
         let path = Path::new(filename);
         match compile_evm_file(path) {
             Ok(compiled_program) => { compiled_program.to_output(&mut *output, matches.value_of("format")); }
-            Err(e) => { panic!("Compilation error: {:?}", e); }
+            Err(e) => { panic!("Compilation error: {}", e); }
         }
     }
 }

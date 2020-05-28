@@ -23,9 +23,8 @@ use crate::mavm::Instruction;
 use crate::link::{ExportedFunc, ImportedFunc};
 use crate::source::Lines;
 use crate::pos::{Location, BytePos};
-extern crate regex;
-
-lalrpop_mod!(pub mini); 
+use crate::mini::DeclsParser;
+use std::fmt::Formatter;
 
 
 #[derive(Clone, Serialize, Deserialize)]
@@ -37,7 +36,7 @@ pub struct CompiledProgram {
     pub source_file_map: SourceFileMap,
 }
 
-impl<'a> CompiledProgram {
+impl CompiledProgram {
     pub fn new(
         code: Vec<Instruction>, 
         exported_funcs: Vec<ExportedFunc>, 
@@ -129,78 +128,82 @@ impl<'a> CompiledProgram {
 	}
 }
 
-pub fn compile_from_file<'a>(path: &Path, debug: bool) -> Result<CompiledProgram, CompileError<'a>> {
+pub fn compile_from_file(path: &Path, debug: bool) -> Result<CompiledProgram, CompileError> {
    let display = path.display();
 
-    let mut file = match File::open(&path) {
-        Err(why) => panic!("couldn't open {}: {:?}", display, why),
-        Ok(file) => file,
-    };
+    let mut file = File::open(&path).map_err(|why|
+        CompileError::new(format!("couldn't open {}: {:?}", display, why),None))?;
 
     let mut s = String::new();
-    s = match file.read_to_string(&mut s) {
-        Err(why) => panic!("couldn't read {}: {:?}", display, why),
-        Ok(_) => s,
-    };
+    file.read_to_string(&mut s).map_err(|why|
+        CompileError::new(format!("couldn't read {}: {:?}", display, why),None))?;
     //print!("read-in file:\n{}", s);
 
-    let parse_result: Result<CompiledProgram, serde_json::Error> = serde_json::from_str(&s);
-    match parse_result {
-        Ok(compiled_prog) => Ok(compiled_prog),
-        Err(_) => compile_from_source(s, display, debug),  // json parsing failed, try to parse as source code
-    }
+    serde_json::from_str(&s).or_else(|_| compile_from_source(s, display, debug))
 }
 
-pub fn compile_from_source<'a>(
+pub fn compile_from_source(
     s: String, 
     pathname: std::path::Display, 
     debug: bool,
-) -> Result<CompiledProgram, CompileError<'a>> {
+) -> Result<CompiledProgram, CompileError> {
     let comment_re = regex::Regex::new(r"//.*").unwrap();
     let s = comment_re.replace_all(&s, "");
     let mut string_table_1 = stringtable::StringTable::new();
     let lines = Lines::new(s.bytes());
-    let res = match mini::DeclsParser::new().parse(&mut string_table_1, &lines, &s) {
+    let res = match DeclsParser::new().parse(&mut string_table_1, &lines, &s) {
         Ok(r) => r,
         Err(e) => match e {
-            lalrpop_util::ParseError::UnrecognizedToken{ token: (offset, tok, _), expected: _ } => {
-                panic!("unexpected token at {:?} {:?}", lines.location(BytePos::from(offset)).unwrap(), tok);
+            lalrpop_util::ParseError::UnrecognizedToken{ token: (offset, tok, end), expected: _ } => {
+                return Err(CompileError::new(format!("unexpected token: {}, Type: {:?}", &s[offset..end], tok),
+                                             Some(lines.location(BytePos::from(offset)).unwrap())));
             }
-            _ => { panic!("{:?}", e); }
+            _ => { return Err(CompileError::new(format!("{:?}", e), None)); }
         }
     };
     let mut checked_funcs = Vec::new();
-    let res2 = crate::typecheck::typecheck_top_level_decls(&res, &mut checked_funcs, string_table_1);
-    match res2 {
-    	Ok((exported_funcs, imported_funcs, global_vars, string_table)) => { 
-            let mut code = Vec::new();
-    		match crate::codegen::mavm_codegen(checked_funcs, &mut code, &string_table, &imported_funcs, &global_vars) {
-                Ok(code_out) => {
-                    if debug {
-                        println!("========== after initial codegen ===========");
-                        println!("Exported: {:?}", exported_funcs);
-                        println!("Imported: {:?}", imported_funcs);
-                        for (idx, insn) in code_out.iter().enumerate() {
-                         println!("{:04}:  {}", idx, insn);
-                        }
-                    }
-                    Ok(CompiledProgram::new(code_out.to_vec(), exported_funcs, imported_funcs, global_vars.len(), SourceFileMap::new(code_out.len(), pathname.to_string())))
-                }
-                Err(e) => Err(CompileError::new(e.reason, e.location)),
-            }
-        },
-        Err(res3) => Err(CompileError::new(res3.reason, res3.location)),
+    let (exported_funcs, imported_funcs, global_vars, string_table) =
+        crate::typecheck::typecheck_top_level_decls(&res, &mut checked_funcs, string_table_1)
+            .map_err(|res3| CompileError::new(res3.reason.to_string(), res3.location))?;
+    let mut code = Vec::new();
+    let code_out = crate::codegen::mavm_codegen(checked_funcs, &mut code,
+                                                &string_table, &imported_funcs, &global_vars)
+        .map_err(|e|CompileError::new(e.reason.to_string(), e.location))?;
+    if debug {
+        println!("========== after initial codegen ===========");
+        println!("Exported: {:?}", exported_funcs);
+        println!("Imported: {:?}", imported_funcs);
+        for (idx, insn) in code_out.iter().enumerate() {
+            println!("{:04}:  {}", idx, insn);
+        }
     }
-} 
+    Ok(CompiledProgram::new(code_out.to_vec(),
+                            exported_funcs,
+                            imported_funcs,
+                            global_vars.len(),
+                            SourceFileMap::new(code_out.len(), pathname.to_string())))
+}
+
 
 #[derive(Debug, Clone)]
-pub struct CompileError<'a> {
-    description: &'a str,
+pub struct CompileError {
+    description: String,
     location: Option<Location>,
 }
 
-impl<'a> CompileError<'a> {
-    pub fn new(description: &'a str, location: Option<Location>) -> Self {
+impl std::fmt::Display for CompileError {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result<(),std::fmt::Error> {
+        if let Some(loc) = self.location {
+            write!(f, "{},\n{}", self.description, loc)?;
+        } else {
+            write!(f, "{},\n No location", self.description)?;
+        }
+        Ok(())
+    }
+}
+
+impl CompileError {
+    pub fn new(description: String, location: Option<Location>) -> Self {
         CompileError{ description, location }
     }
 }

@@ -75,9 +75,9 @@ pub fn builtin_func_decls<'a>(mut string_table: StringTable<'a>) -> (Vec<ImportF
 }
 
 
-pub fn add_auto_link_progs<'a>(
+pub fn add_auto_link_progs(
 	progs_in: &[CompiledProgram],
-) -> Result<Vec<CompiledProgram>, CompileError<'a>> {
+) -> Result<Vec<CompiledProgram>, CompileError> {
 	let builtin_pathnames = vec![
         "builtin/array.mao",
         "builtin/kvs.mao",
