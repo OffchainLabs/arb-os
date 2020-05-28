@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+use crate::evm::num_runtime_funcs;
 use crate::link::{ExportedFunc, ExportedFuncPoint, ImportedFunc};
 use crate::mavm::{CodePt, Instruction, Label, Opcode, Value};
 use crate::uint256::Uint256;
@@ -26,6 +27,10 @@ pub fn strip_labels(
     imported_funcs: &[ImportedFunc],
 ) -> Result<(Vec<Instruction>, Vec<CodePt>, Vec<ExportedFuncPoint>), Label> {
     let mut label_map = HashMap::new();
+
+    for i in 0..num_runtime_funcs() {
+        label_map.insert(Label::Runtime(i), CodePt::new_runtime(i));
+    }
 
     for imp_func in imported_funcs {
         let new_codept = CodePt::new_external(imp_func.slot_num);

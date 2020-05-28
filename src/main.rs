@@ -146,7 +146,7 @@ fn main() {
                 }
             }
 
-            match link(&compiled_progs) {
+            match link(&compiled_progs, false) {
                 Ok(linked_prog) => match postlink_compile(linked_prog, false, debug_mode) {
                     Ok(completed_program) => {
                         completed_program.to_output(&mut *output, matches.value_of("format"));

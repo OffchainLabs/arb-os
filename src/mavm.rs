@@ -17,6 +17,7 @@
 use crate::pos::Location;
 use crate::stringtable::StringId;
 use crate::uint256::Uint256;
+use crate::evm::runtime_func_name;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fmt;
@@ -57,6 +58,7 @@ impl Label {
             Label::External(n) => Value::avm_hash2(
                 &Value::Int(Uint256::from_usize(6)),
                 &Value::Int(Uint256::from_usize(*n)),
+            ),
             Label::Runtime(n) => Value::avm_hash2(
                 &Value::Int(Uint256::from_usize(7)),
                 &Value::Int(Uint256::from_usize(*n)),
@@ -227,6 +229,7 @@ impl CodePt {
         match self {
             CodePt::Internal(pc) => Some(CodePt::Internal(pc + 1)),
             CodePt::External(_) => None,
+            CodePt::Runtime(_) => None,
         }
     }
 
@@ -261,6 +264,16 @@ impl CodePt {
                 &Value::Int(Uint256::from_usize(*sz)),
             ),
 
+        }
+    }
+}
+
+impl fmt::Display for CodePt {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            CodePt::Internal(pc) => write!(f, "Internal({})", pc),
+            CodePt::External(idx) => write!(f, "External({})", idx),
+            CodePt::Runtime(slot) => write!(f, "{}", runtime_func_name(*slot)),
         }
     }
 }
@@ -394,7 +407,7 @@ impl fmt::Display for Value {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             Value::Int(i) => i.fmt(f),
-            Value::CodePoint(pc) => write!(f, "CodePoint({:?})", pc),
+            Value::CodePoint(pc) => write!(f, "CodePoint({})", pc),
             Value::Label(label) => write!(f, "Label({})", label),
             Value::Tuple(tup) => {
                 if tup.is_empty() {

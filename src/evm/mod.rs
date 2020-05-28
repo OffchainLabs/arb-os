@@ -14,15 +14,17 @@
  * limitations under the License.
  */
 
-use crate::compile::{CompileError, CompiledProgram, SourceFileMap};
-use crate::link::{link, ImportedFunc};
+use crate::compile::{CompileError, CompiledProgram};
+use crate::link::{link, postlink_compile, ImportedFunc, LinkedProgram};
 use crate::mavm::{Instruction, Label, LabelGenerator, Opcode, Value};
 use crate::stringtable::StringTable;
 use crate::uint256::Uint256;
 use crate::build_builtins::BuiltinArray;
+use serde::{Serialize};
 use std::collections::HashMap;
+use std::convert::TryInto;
 use std::fs::File;
-use std::io::Read;
+use std::io::{self, Read};
 use std::path::Path;
 use std::usize;
 
