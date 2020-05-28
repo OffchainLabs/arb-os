@@ -19,6 +19,7 @@ use std::collections::HashMap;
 use crate::stringtable::StringId;
 use crate::uint256::Uint256;
 use crate::pos::Location;
+use crate::evm::runtime_func_name;
 use serde::{Serialize, Deserialize};
 
 
@@ -27,6 +28,7 @@ pub enum Label {
 	Func(StringId),
 	Anon(usize),
 	External(usize),  // slot in imported funcs list
+	Runtime(usize),   // function exported by the trusted runtime
 }
 
 impl Label {
@@ -35,6 +37,7 @@ impl Label {
 			Label::Func(sid) => (Label::Func(sid+func_offset), sid+func_offset),
 			Label::Anon(pc) => (Label::Anon(pc+int_offset), func_offset),
 			Label::External(slot) => (Label::External(slot+ext_offset), func_offset),
+			Label::Runtime(_) => (self, func_offset),
 		}
 	}
 
@@ -43,6 +46,7 @@ impl Label {
 			Label::Func(sid) => Value::avm_hash2(&Value::Int(Uint256::from_usize(4)), &Value::Int(Uint256::from_usize(*sid))),
 			Label::Anon(n) => Value::avm_hash2(&Value::Int(Uint256::from_usize(5)), &Value::Int(Uint256::from_usize(*n))),
 			Label::External(n) => Value::avm_hash2(&Value::Int(Uint256::from_usize(6)), &Value::Int(Uint256::from_usize(*n))),
+			Label::Runtime(n) => Value::avm_hash2(&Value::Int(Uint256::from_usize(7)), &Value::Int(Uint256::from_usize(*n))),
 		}
 	}
 }
@@ -52,7 +56,8 @@ impl fmt::Display for Label {
     	match self {
     		Label::Func(sid) => write!(f, "function_{}", sid),
     		Label::Anon(n) => write!(f, "label_{}", n),
-    		Label::External(slot) => write!(f, "external_{}", slot),
+			Label::External(slot) => write!(f, "external_{}", slot),
+			Label::Runtime(slot) => write!(f, "{}", runtime_func_name(*slot)),
     	}
     }
 }
@@ -161,6 +166,7 @@ impl fmt::Display for Instruction {
 pub enum CodePt {
 	Internal(usize),
 	External(usize),  // slot in imported funcs list
+	Runtime(usize),   // slot in runtime funcs list
 }
 
 impl CodePt {
@@ -172,10 +178,15 @@ impl CodePt {
 		CodePt::External(name)
 	}
 
+	pub fn new_runtime(slot: usize) -> Self {
+		CodePt::Runtime(slot)
+	}
+
 	pub fn incr(&self) -> Option<Self> {
 		match self {
 			CodePt::Internal(pc) => Some(CodePt::Internal(pc+1)),
 			CodePt::External(_) => None,
+			CodePt::Runtime(_) => None,
 		}
 	}
 
@@ -191,6 +202,7 @@ impl CodePt {
 		match self {
 			CodePt::Internal(pc) => CodePt::Internal(pc+int_offset),
 			CodePt::External(off) => CodePt::External(off+ext_offset),
+			CodePt::Runtime(_) => self,
 		}
 	}
 
@@ -198,6 +210,7 @@ impl CodePt {
 		match self {
 			CodePt::Internal(sz) => Value::avm_hash2(&Value::Int(Uint256::from_usize(3)), &Value::Int(Uint256::from_usize(*sz))),
 			CodePt::External(sz) => Value::avm_hash2(&Value::Int(Uint256::from_usize(4)), &Value::Int(Uint256::from_usize(*sz))),
+			CodePt::Runtime(sz) => Value::avm_hash2(&Value::Int(Uint256::from_usize(5)), &Value::Int(Uint256::from_usize(*sz))),
 		}
 	}
 }

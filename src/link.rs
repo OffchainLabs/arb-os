@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
- use std::fmt::{self, Debug};
+use std::fmt::{self, Debug};
 use std::io;
 use std::collections::HashMap;
 use crate::stringtable::StringId;
@@ -145,6 +145,7 @@ impl<'a> ExportedFunc {
 
 pub fn postlink_compile<'a>(
 	program: CompiledProgram,
+	is_module: bool,
     debug: bool,
 ) -> Result<LinkedProgram, CompileError<'a>> {   
 	if debug {
@@ -174,7 +175,7 @@ pub fn postlink_compile<'a>(
             println!("{:04}:  {}", idx, insn);
         }
     }
-    let (code_final, 
+    let (mut code_final, 
         jump_table_final, 
 		exported_funcs_final) = 
 			match crate::striplabels::strip_labels(
@@ -189,7 +190,11 @@ pub fn postlink_compile<'a>(
 					return Err(CompileError::new("reference to non-existent function", None)); 
 				}
 			};
-    let jump_table_value = crate::xformcode::jump_table_to_value(jump_table_final);
+	let mut jump_table_value = crate::xformcode::jump_table_to_value(jump_table_final);
+	if is_module {
+		code_final[0] = Instruction::from_opcode_imm(Opcode::Swap1, jump_table_value, None);
+		jump_table_value = Value::none();
+	}
 
     if debug {
         println!("============ after strip_labels =============");
@@ -203,12 +208,12 @@ pub fn postlink_compile<'a>(
     Ok(LinkedProgram{ 
         code: code_final, 
         static_val: jump_table_value, 
-        exported_funcs: exported_funcs_final,
-        imported_funcs: program.imported_funcs,
+        exported_funcs: if is_module { vec![] } else { exported_funcs_final},
+        imported_funcs: if is_module { vec![] } else { program.imported_funcs },
     })
 }
 
-pub fn link<'a>(progs_in: &[CompiledProgram]) -> Result<CompiledProgram, CompileError<'a>> {
+pub fn link<'a>(progs_in: &[CompiledProgram], is_module: bool) -> Result<CompiledProgram, CompileError<'a>> {
 	let progs = add_auto_link_progs(progs_in)?;
 	let mut insns_so_far: usize = 1;   // leave 1 insn of space at beginning for initialization
 	let mut imports_so_far: usize = 0;
@@ -243,8 +248,18 @@ pub fn link<'a>(progs_in: &[CompiledProgram]) -> Result<CompiledProgram, Compile
 		func_offset = new_func_offset;
 	}
 
-	// Initialize globals
-	let mut linked_code = vec![Instruction::from_opcode_imm(Opcode::Rset, make_uninitialized_tuple(global_num_limit), None)];
+	// Initialize globals or allow jump table retrieval
+	let mut linked_code = if is_module {
+		// because this is a module, we want a 2-instruction function at the begining that returns our static jumptable
+		// the postlink compilation phase will plug in the actual jumptable as immediate in the first instruction
+		vec![
+			Instruction::from_opcode_imm(Opcode::Swap1, Value::none(), None),
+			Instruction::from_opcode(Opcode::Jump, None),
+		]
+	} else {
+		// not a module, add an instruction that creates space for the globals
+		vec![Instruction::from_opcode_imm(Opcode::Rset, make_uninitialized_tuple(global_num_limit), None)]
+	};
 	
 	let mut linked_exports = Vec::new();
 	let mut linked_imports = Vec::new();

@@ -18,17 +18,18 @@ use std::usize;
 use std::convert::TryInto;
 use std::fs::File;
 use std::path::Path;
-use std::io::Read;
+use std::io::{self, Read};
 use std::collections::HashMap;
+use serde::{Serialize};
 use crate::compile::{CompiledProgram, CompileError};
 use crate::uint256::Uint256;
 use crate::mavm::{Instruction, Opcode, Value, Label, LabelGenerator};
-use crate::link::{link, ImportedFunc};
+use crate::link::{link, ImportedFunc, LinkedProgram, postlink_compile};
 use crate::stringtable::StringTable;
 use crate::build_builtins::BuiltinArray;
 
 
-pub fn compile_evm_file<'a>(path: &Path) -> Result<CompiledProgram, CompileError<'a>> {
+pub fn compile_evm_file<'a>(path: &Path, debug: bool) -> Result<Vec<LinkedProgram>, CompileError<'a>> {
     let display = path.display();
      
     let mut file = match File::open(&path) {
@@ -44,7 +45,7 @@ pub fn compile_evm_file<'a>(path: &Path) -> Result<CompiledProgram, CompileError
      
     let parse_result: Result<serde_json::Value, serde_json::Error> = serde_json::from_str(&s);
     match parse_result {
-        Ok(evm_json) => compile_from_json(evm_json),
+        Ok(evm_json) => compile_from_json(evm_json, debug),
         Err(e) => {
             println!("Error reading in EVM file: {:?}", e);
             Err(CompileError::new("error parsing compiled EVM file", None))
@@ -52,10 +53,11 @@ pub fn compile_evm_file<'a>(path: &Path) -> Result<CompiledProgram, CompileError
     }
 }
 
+#[derive(Serialize)]
 pub struct CompiledEvmContract {
     address: Uint256,
     storage: HashMap<Uint256, Uint256>,
-    insns: Vec<Instruction>,
+    code: Vec<Instruction>,
 }
 
 impl CompiledEvmContract {
@@ -70,22 +72,75 @@ impl CompiledEvmContract {
             storages_array.to_value(),
         ])
     }
+
+    pub fn to_output(&self, output: &mut dyn io::Write, format: Option<&str>) {
+		match format {
+			Some("pretty") => {
+				writeln!(output, "address: {}", self.address).unwrap();
+				writeln!(output, "storage: {:?}", self.storage).unwrap();
+				for (idx, insn) in self.code.iter().enumerate() {
+					writeln!(output, "{:04}:  {}", idx, insn).unwrap();
+				}
+			}
+			None |
+			Some("json") => {
+				match serde_json::to_string(self) {
+					Ok(prog_str) => {
+						writeln!(output, "{}", prog_str).unwrap();
+					}
+					Err(e) => {
+						writeln!(output, "json serialization error: {:?}", e).unwrap();
+					}
+				}
+			}
+			Some("bincode") => {
+				match bincode::serialize(self) {
+					Ok(encoded) => {
+						if let Err(e) = output.write_all(&encoded) {
+							writeln!(output, "bincode write error: {:?}", e).unwrap();
+					   }
+					}
+					Err(e) => {
+						writeln!(output, "bincode serialization error: {:?}", e).unwrap();
+					}
+				}
+			}
+			Some(weird_value) => { writeln!(output, "invalid format: {}", weird_value).unwrap(); }
+		} 
+	}
 }
 
-pub fn compile_from_json<'a>(evm_json: serde_json::Value) -> Result<CompiledProgram, CompileError<'a>> {
+
+pub fn compile_from_json<'a>(evm_json: serde_json::Value, debug: bool) -> Result<Vec<LinkedProgram>, CompileError<'a>> {
     if let serde_json::Value::Array(contracts) = evm_json {
-        let mut compiled_contracts = Vec::new();
+        let mut linked_contracts = Vec::new();
         let mut label_gen = LabelGenerator::new();
         for contract in contracts {
             if let serde_json::Value::Object(items) = contract {
                 let (compiled_contract, lg) = compile_from_evm_contract(items, label_gen)?;
-                compiled_contracts.push(compiled_contract);
+                let linked_contract = postlink_compile(
+                    link(
+                        &[
+                            CompiledProgram::new(
+                                compiled_contract.code,
+                                vec![],
+                                vec![],
+                                0,
+                                None
+                            ),
+                        ],
+                        true,
+                    ).unwrap(),  // BUGBUG--this should handle errors gracefully, not just panic 
+                    true,
+                    debug
+                ).unwrap();  //BUGBUG--this should handle errors gracefully, not just panic
+                linked_contracts.push(linked_contract);
                 label_gen = lg;
             } else {
                 return Err(CompileError::new("unexpected contents in EVM json file", None));
             }
         }
-        evm_link(compiled_contracts)
+        Ok(linked_contracts)
     } else {
         Err(CompileError::new("unexpected contents in EVM json file", None))
     }
@@ -103,7 +158,7 @@ pub fn compile_from_evm_contract<'a>(
     let mut code = Vec::new();
     let mut evm_func_map = HashMap::new();
     for (idx, name) in EMULATION_FUNCS.iter().enumerate() {
-        evm_func_map.insert(*name, Label::External(idx));
+        evm_func_map.insert(*name, Label::Runtime(idx));
     }
     let decoded_insns = hex::decode(&code_str[2..]).unwrap();
 
@@ -158,7 +213,7 @@ pub fn compile_from_evm_contract<'a>(
                 } else {
                     return Err(CompileError::new("invalid storage format in EVM json file", None));
                 },
-            insns: code,
+            code,
         }, 
         label_gen
     ))
@@ -169,7 +224,6 @@ pub fn compile_evm_insn(
     label_gen: LabelGenerator,
     evm_func_map: &HashMap<&str, Label>,
 ) -> Option<(Vec<Instruction>, LabelGenerator)> {
-    println!("insn {:2x}", evm_insn);
     match evm_insn {
         0x00 => evm_emulate(code, label_gen, evm_func_map, "evmOp_stop"), // STOP
         0x01 => { // ADD
@@ -641,32 +695,21 @@ const EMULATION_FUNCS: [&str; 42] = [
     "evmOp_selfdestruct",
 ];
 
+pub fn runtime_func_name(slot: usize) -> &'static str {
+    EMULATION_FUNCS[slot]
+}
+
+pub fn num_runtime_funcs() -> usize {
+    EMULATION_FUNCS.len()
+}
+
 fn compile_push_insn(data: &[u8], mut code: Vec<Instruction>) -> Vec<Instruction> {
-    println!("insn {:2x}", 0x5f+data.len());
     let mut val = Uint256::zero();
     for d in data {
         val = val.mul(&Uint256::from_usize(256)).add(&Uint256::from_usize(usize::from(*d)));
     }
     code.push(Instruction::from_opcode_imm(Opcode::Noop, Value::Int(val), None));
     code
-}
-
-fn evm_link(contracts: Vec<CompiledEvmContract>) -> Result<CompiledProgram, CompileError<'static>> {
-    let (imports, _string_table) = imported_funcs_for_evm();
-    let num_contracts = contracts.len();
-    let mut summary_array = BuiltinArray::new(num_contracts, Value::none());
-    let mut comp_progs = Vec::new();
-    for (i, contract) in contracts.iter().enumerate() {
-        summary_array.set(i, contract.get_info_datastruct());
-        comp_progs.push(CompiledProgram {
-            code: contract.insns.clone(),
-            exported_funcs: vec![],
-            imported_funcs: imports.clone(),
-            global_num_limit: 0,
-            source_file_map: None,
-        });
-    }
-    link(&comp_progs)
 }
 
 fn imported_funcs_for_evm() -> (Vec<ImportedFunc>, StringTable<'static>) {

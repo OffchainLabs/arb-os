@@ -132,8 +132,8 @@ fn main() {
                 }
             }
 
-            match link(&compiled_progs) {
-                Ok(linked_prog) => match postlink_compile(linked_prog, debug_mode) {
+            match link(&compiled_progs, false) {
+                Ok(linked_prog) => match postlink_compile(linked_prog, false, debug_mode) {
                     Ok(completed_program) => { 
                         completed_program.to_output(&mut *output, matches.value_of("format")); 
                     }
@@ -160,11 +160,16 @@ fn main() {
     }
 
     if let Some(matches) = matches.subcommand_matches("evm") {
+        let debug_mode = matches.is_present("debug");  
         let mut output = get_output(matches.value_of("output")).unwrap();
         let filename = matches.value_of("INPUT").unwrap();
         let path = Path::new(filename);
-        match compile_evm_file(path) {
-            Ok(compiled_program) => { compiled_program.to_output(&mut *output, matches.value_of("format")); }
+        match compile_evm_file(path, debug_mode) {
+            Ok(compiled_contracts) => { 
+                for contract in compiled_contracts {
+                    contract.to_output(&mut *output, matches.value_of("format")); 
+                }
+            }
             Err(e) => { panic!("Compilation error: {:?}", e); }
         }
     }
