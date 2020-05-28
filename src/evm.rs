@@ -14,12 +14,13 @@
  * limitations under the License.
  */
 
- use std::usize;
+use std::usize;
+use std::convert::TryInto;
 use std::fs::File;
 use std::path::Path;
 use std::io::Read;
 use std::collections::HashMap;
-use crate::compile::{CompiledProgram, CompileError, SourceFileMap};
+use crate::compile::{CompiledProgram, CompileError};
 use crate::uint256::Uint256;
 use crate::mavm::{Instruction, Opcode, Value, Label, LabelGenerator};
 use crate::link::{link, ImportedFunc};
@@ -105,6 +106,12 @@ pub fn compile_from_evm_contract<'a>(
         evm_func_map.insert(*name, Label::External(idx));
     }
     let decoded_insns = hex::decode(&code_str[2..]).unwrap();
+
+    // strip cbor info
+    let cbor_length = u16::from_be_bytes(decoded_insns[decoded_insns.len()-2..].try_into().expect("unexpected u16 parsing error"));
+    let cbor_length = cbor_length as usize;
+    let decoded_insns = &decoded_insns[..(decoded_insns.len()-cbor_length-2)];
+
     let mut i = 0;
     while i < decoded_insns.len() {
         let insn = decoded_insns[i];
@@ -162,6 +169,7 @@ pub fn compile_evm_insn(
     label_gen: LabelGenerator,
     evm_func_map: &HashMap<&str, Label>,
 ) -> Option<(Vec<Instruction>, LabelGenerator)> {
+    println!("insn {:2x}", evm_insn);
     match evm_insn {
         0x00 => evm_emulate(code, label_gen, evm_func_map, "evmOp_stop"), // STOP
         0x01 => { // ADD
@@ -655,7 +663,7 @@ fn evm_link(contracts: Vec<CompiledEvmContract>) -> Result<CompiledProgram, Comp
             exported_funcs: vec![],
             imported_funcs: imports.clone(),
             global_num_limit: 0,
-            source_file_map: SourceFileMap::new_empty(),
+            source_file_map: None,
         });
     }
     link(&comp_progs)

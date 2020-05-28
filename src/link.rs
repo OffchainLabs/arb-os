@@ -218,7 +218,10 @@ pub fn link<'a>(progs_in: &[CompiledProgram]) -> Result<CompiledProgram, Compile
 	let mut global_num_limit = 0;
 
 	for prog in &progs {
-		merged_source_file_map.push(prog.code.len(), prog.source_file_map.get(0));
+		merged_source_file_map.push(prog.code.len(), match &prog.source_file_map {
+			Some(sfm) => sfm.get(0),
+			None => "".to_string(),
+		});
 		int_offsets.push(insns_so_far);
 		insns_so_far += prog.code.len();
 		ext_offsets.push(imports_so_far);
@@ -267,5 +270,5 @@ pub fn link<'a>(progs_in: &[CompiledProgram]) -> Result<CompiledProgram, Compile
 		linked_xlated_code.push(insn.xlate_labels(&label_xlate_map));
 	}
 
-	Ok(CompiledProgram::new(linked_xlated_code, linked_exports, linked_imports, global_num_limit, merged_source_file_map))
+	Ok(CompiledProgram::new(linked_xlated_code, linked_exports, linked_imports, global_num_limit, Some(merged_source_file_map)))
 }

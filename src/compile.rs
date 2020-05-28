@@ -34,7 +34,7 @@ pub struct CompiledProgram {
     pub exported_funcs: Vec<ExportedFunc>,
     pub imported_funcs: Vec<ImportedFunc>,
     pub global_num_limit: usize,
-    pub source_file_map: SourceFileMap,
+    pub source_file_map: Option<SourceFileMap>,
 }
 
 impl<'a> CompiledProgram {
@@ -43,7 +43,7 @@ impl<'a> CompiledProgram {
         exported_funcs: Vec<ExportedFunc>, 
         imported_funcs: Vec<ImportedFunc>,
         global_num_limit: usize,
-        source_file_map: SourceFileMap,
+        source_file_map: Option<SourceFileMap>,
     ) -> Self {
         CompiledProgram{ code, exported_funcs, imported_funcs, global_num_limit, source_file_map }
     }
@@ -54,7 +54,7 @@ impl<'a> CompiledProgram {
         ext_offset: usize, 
         func_offset: usize, 
         globals_offset: usize,
-        source_file_map: SourceFileMap
+        source_file_map: Option<SourceFileMap>
     ) -> (Self, usize) {
         let mut relocated_code = Vec::new();
         let mut max_func_offset = func_offset;
@@ -184,7 +184,13 @@ pub fn compile_from_source<'a>(
                          println!("{:04}:  {}", idx, insn);
                         }
                     }
-                    Ok(CompiledProgram::new(code_out.to_vec(), exported_funcs, imported_funcs, global_vars.len(), SourceFileMap::new(code_out.len(), pathname.to_string())))
+                    Ok(CompiledProgram::new(
+                        code_out.to_vec(), 
+                        exported_funcs, 
+                        imported_funcs, 
+                        global_vars.len(), 
+                        Some(SourceFileMap::new(code_out.len(), pathname.to_string())),
+                    ))
                 }
                 Err(e) => Err(CompileError::new(e.reason, e.location)),
             }
