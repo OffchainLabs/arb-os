@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+use super::symtable::SymTable;
 use crate::compile::ast::{
     BinaryOp, Expr, FuncArg, FuncDecl, FuncDeclKind, GlobalVarDecl, IfArm, ImportFuncDecl,
     MatchPattern, Statement, StructField, TopLevelDecl, Type, UnaryOp,
@@ -22,7 +23,6 @@ use crate::link::{ExportedFunc, ImportedFunc};
 use crate::mavm::{Instruction, Label, Value};
 use crate::pos::Location;
 use crate::stringtable::{StringId, StringTable};
-use crate::symtable::SymTable;
 use crate::uint256::Uint256;
 use std::collections::HashMap;
 

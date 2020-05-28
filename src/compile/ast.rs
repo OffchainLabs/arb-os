@@ -14,12 +14,12 @@
  * limitations under the License.
  */
 
+use super::symtable::SymTable;
 use super::typecheck::{new_type_error, TypeError};
 use crate::link::{value_from_field_list, TUPLE_SIZE};
 use crate::mavm::{Instruction, Value};
 use crate::pos::Location;
 use crate::stringtable::StringId;
-use crate::symtable::SymTable;
 use crate::uint256::Uint256;
 use serde::{Deserialize, Serialize};
 

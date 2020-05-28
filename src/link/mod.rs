@@ -26,6 +26,8 @@ use xformcode::make_uninitialized_tuple;
 
 pub use xformcode::{value_from_field_list, TUPLE_SIZE};
 
+mod optimize;
+mod striplabels;
 mod xformcode;
 
 #[derive(Serialize, Deserialize)]
@@ -166,7 +168,7 @@ pub fn postlink_compile<'a>(
         }
     }
     let (code_2, jump_table) =
-        crate::striplabels::fix_nonforward_labels(&program.code, &program.imported_funcs);
+        striplabels::fix_nonforward_labels(&program.code, &program.imported_funcs);
     if debug {
         println!("========== after fix_backward_labels ===========");
         for (idx, insn) in code_2.iter().enumerate() {
@@ -180,29 +182,28 @@ pub fn postlink_compile<'a>(
             println!("{:04}:  {}", idx, insn);
         }
     }
-    let code_4 = crate::optimize::peephole(&code_3);
+    let code_4 = optimize::peephole(&code_3);
     if debug {
         println!("============ after peephole optimization ===========");
         for (idx, insn) in code_4.iter().enumerate() {
             println!("{:04}:  {}", idx, insn);
         }
     }
-    let (code_final, jump_table_final, exported_funcs_final) =
-        match crate::striplabels::strip_labels(
-            &code_4,
-            &jump_table,
-            &program.exported_funcs,
-            &program.imported_funcs,
-        ) {
-            Ok(tup) => tup,
-            Err(label) => {
-                println!("missing label {:?}", label);
-                return Err(CompileError::new(
-                    "reference to non-existent function".to_string(),
-                    None,
-                ));
-            }
-        };
+    let (code_final, jump_table_final, exported_funcs_final) = match striplabels::strip_labels(
+        &code_4,
+        &jump_table,
+        &program.exported_funcs,
+        &program.imported_funcs,
+    ) {
+        Ok(tup) => tup,
+        Err(label) => {
+            println!("missing label {:?}", label);
+            return Err(CompileError::new(
+                "reference to non-existent function".to_string(),
+                None,
+            ));
+        }
+    };
     let jump_table_value = xformcode::jump_table_to_value(jump_table_final);
 
     if debug {

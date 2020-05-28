@@ -24,8 +24,6 @@ use std::fs::File;
 use std::io;
 use std::path::Path;
 
-extern crate bincode;
-extern crate clap;
 use clap::{App, Arg, SubCommand};
 
 pub mod compile;
@@ -34,16 +32,10 @@ pub mod link;
 pub mod mavm;
 #[cfg(test)]
 pub mod minitests;
-pub mod optimize;
 pub mod pos;
 pub mod run;
 pub mod stringtable;
-pub mod striplabels;
-pub mod symtable;
 pub mod uint256;
-
-#[macro_use]
-extern crate lalrpop_util;
 
 fn main() {
     let matches = App::new("Mini compiler")

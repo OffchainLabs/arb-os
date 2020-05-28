@@ -15,6 +15,7 @@
  */
 
 use super::ast::{BinaryOp, FuncArg, GlobalVarDecl, Type, UnaryOp};
+use super::symtable::CopyingSymTable;
 use super::typecheck::{
     TypeCheckedExpr, TypeCheckedFunc, TypeCheckedIfArm, TypeCheckedMatchPattern,
     TypeCheckedStatement,
@@ -24,7 +25,6 @@ use crate::link::TUPLE_SIZE;
 use crate::mavm::{Instruction, Label, LabelGenerator, Opcode, Value};
 use crate::pos::Location;
 use crate::stringtable::{StringId, StringTable};
-use crate::symtable::CopyingSymTable;
 use crate::uint256::Uint256;
 use std::collections::HashMap;
 

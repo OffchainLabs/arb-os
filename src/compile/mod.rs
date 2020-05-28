@@ -18,6 +18,7 @@ use crate::link::{ExportedFunc, ImportedFunc};
 use crate::mavm::Instruction;
 use crate::pos::{BytePos, Location};
 use crate::stringtable;
+use lalrpop_util::lalrpop_mod;
 use mini::DeclsParser;
 use serde::{Deserialize, Serialize};
 use std::fmt::Formatter;
@@ -31,6 +32,7 @@ pub use source::Lines;
 pub mod ast;
 mod codegen;
 mod source;
+mod symtable;
 mod typecheck;
 lalrpop_mod!(mini);
 
@@ -142,7 +144,7 @@ impl CompiledProgram {
 }
 
 pub fn compile_from_file(path: &Path, debug: bool) -> Result<CompiledProgram, CompileError> {
-   let display = path.display();
+    let display = path.display();
 
     let mut file = File::open(&path)
         .map_err(|why| CompileError::new(format!("couldn't open {}: {:?}", display, why), None))?;
@@ -210,7 +212,6 @@ pub fn compile_from_source(
         SourceFileMap::new(code_out.len(), pathname.to_string()),
     ))
 }
-
 
 #[derive(Debug, Clone)]
 pub struct CompileError {
