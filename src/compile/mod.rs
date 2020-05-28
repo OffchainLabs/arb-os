@@ -141,8 +141,8 @@ impl CompiledProgram {
     }
 }
 
-pub fn compile_from_file<'a>(path: &Path, debug: bool) -> Result<CompiledProgram, CompileError> {
-    let display = path.display();
+pub fn compile_from_file(path: &Path, debug: bool) -> Result<CompiledProgram, CompileError> {
+   let display = path.display();
 
     let mut file = File::open(&path)
         .map_err(|why| CompileError::new(format!("couldn't open {}: {:?}", display, why), None))?;
@@ -210,6 +210,7 @@ pub fn compile_from_source(
         SourceFileMap::new(code_out.len(), pathname.to_string()),
     ))
 }
+
 
 #[derive(Debug, Clone)]
 pub struct CompileError {
