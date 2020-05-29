@@ -39,3 +39,4 @@ builtin/arraytest.mexe
 builtin/arraytest.mexe
 stdlib/bytestream.mao
 stdlib/keccaktest.mexe
+minitests/codeloadtest.mexe

@@ -396,3 +396,25 @@ fn test_keccak(test_num: usize, expected_result: Value) {
         }
     }
 }
+
+#[test]
+fn testcodeload1() {
+    test_codeload(1, Value::Int(Uint256::from_usize(3)));
+}
+
+fn test_codeload(test_num: usize, expected_result: Value) {
+    let path = Path::new("minitests/codeloadtest.mexe");
+    let res = run_from_file(
+        path, 
+        vec![Value::Int(Uint256::from_usize(test_num))],
+        RuntimeEnvironment::new()
+    );
+    match res {
+        Ok(res) => {
+            assert_eq!(res, expected_result);
+        }
+        Err(e) => {
+            panic!("{}\n{}", e.0, e.1);
+        }
+    }
+}
