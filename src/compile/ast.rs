@@ -117,7 +117,7 @@ impl Type {
             Type::Named(name) => match type_table.get(*name) {
                 Some(t) => Ok(t.resolve_types(type_table, location)?),
                 None => Err(new_type_error(
-                    "referenced non-existent type name",
+                    "referenced non-existent type name".to_string(),
                     location,
                 )),
             },
