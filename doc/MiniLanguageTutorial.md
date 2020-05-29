@@ -82,6 +82,10 @@ Mini has the following types:
 
 > a string of 32 bytes (an atomic type with the zero value of 32 zero bytes)
 
+`address`
+
+> a 20-byte Ethereum address (an atomic type with zero value of 0)
+
 ( *type1*, *type2*, ... )
 
 > a tuple, consisting of zero or more ordered, typed fields (a compound type)
@@ -303,7 +307,9 @@ Mini never automatically converts types to make an operation succeed.  Programme
 
 `bytes32`( *expression* )
 
-> Type conversions. The operand must be an atomic type. The result type is per the operator name.
+`address` ( *expression* )
+
+> Type conversions. The operand must be an atomic type. The result type is per the operator name.  Conversion to address truncates the operand value to 20 (lowest-order) bytes.
 
 `len` ( *expression* ) 
 
