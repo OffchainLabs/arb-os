@@ -1096,6 +1096,7 @@ fn typecheck_expr(
                 *loc,
             ))
         }
+        Expr::ConstOption(_) => unimplemented!(),
     }
 }
 

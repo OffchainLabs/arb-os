@@ -14,7 +14,8 @@
 // limitations under the License.
 //
 
-use crate::compile::ast::{TopLevelDecl, TypeDecl, FuncDecl, GlobalVarDecl, ImportFuncDecl, ImportTypeDecl, Type, StructField, FuncArg, Statement, MatchPattern, IfArm, Expr, BinaryOp, UnaryOp,
+use crate::compile::ast::{TopLevelDecl, TypeDecl, FuncDecl, GlobalVarDecl, ImportFuncDecl, ImportTypeDecl, Type,
+StructField, FuncArg, Statement, MatchPattern, IfArm, Expr, BinaryOp, UnaryOp, Constant,
 FieldInitializer, new_func_arg, new_type_decl};
 use crate::stringtable::{StringTable, StringId};
 use crate::compile::Lines;
@@ -156,6 +157,7 @@ Type: Type = {
 	"impure" "func" <CommaedTypesInParens> => Type::Func(true, <>, Box::new(Type::Void)),
 	"impure" "func" <a: CommaedTypesInParens> "->" <r: Type> => Type::Func(true, a, Box::new(r)),
 	"any" => Type::Any,
+	"option<" <t1:Type> ">" => Type::Option(Box::new(t1)),
 	Ident => Type::Named(<>),
 };
 
@@ -244,6 +246,10 @@ Expr9: Expr = {
 };
 
 Expr10: Expr = {
+	<lno: @L> "Some(" <f: Expr> ")" => Expr::ConstOption(match f {
+	    Expr::ConstUint(u, _) => Constant::Uint(u),
+	    _ => unimplemented!(),
+	}),
 	<lno: @L> <f: Expr10> "(" ")" => Expr::FunctionCall(Box::new(f), Vec::new(), file_info.location(BytePos::from(lno))),
 	<lno: @L> <f: Expr10> "(" <c: CommaedExprs> ")" => Expr::FunctionCall(Box::new(f), c, file_info.location(BytePos::from(lno))),
 	<lno: @L> <e1:Expr10> "[" <e2:Expr> "]" => Expr::ArrayOrMapRef(Box::new(e1), Box::new(e2), file_info.location(BytePos::from(lno))),

@@ -68,6 +68,7 @@ pub enum Type {
     Map(Box<Type>, Box<Type>),
     Imported(StringId),
     Any,
+    Option(Box<Type>),
 }
 
 impl Type {
@@ -132,6 +133,7 @@ impl Type {
                 Box::new(key.resolve_types(type_table, location)?),
                 Box::new(val.resolve_types(type_table, location)?),
             )),
+            Type::Option(t) => t.resolve_types(type_table, location),
         }
     }
 
@@ -204,6 +206,7 @@ impl Type {
                     false
                 }
             }
+            Type::Option(_) => unimplemented!(),
         }
     }
 
@@ -258,6 +261,7 @@ impl Type {
                 panic!("tried to get default value for an imported type");
             }
             Type::Any => Value::none(),
+            Type::Option(_) => unimplemented!(),
         }
     }
 }
@@ -663,6 +667,14 @@ impl IfArm {
 }
 
 #[derive(Debug, Clone)]
+pub enum Constant {
+    Uint(Uint256),
+    Int(Uint256),
+    Bool(bool),
+    Option(Box<Constant>),
+}
+
+#[derive(Debug, Clone)]
 pub enum Expr {
     UnaryOp(UnaryOp, Box<Expr>, Option<Location>),
     Binary(BinaryOp, Box<Expr>, Box<Expr>, Option<Location>),
@@ -674,6 +686,7 @@ pub enum Expr {
     ConstUint(Uint256, Option<Location>),
     ConstInt(Uint256, Option<Location>),
     ConstBool(bool, Option<Location>),
+    ConstOption(Constant),
     FunctionCall(Box<Expr>, Vec<Expr>, Option<Location>),
     ArrayOrMapRef(Box<Expr>, Box<Expr>, Option<Location>),
     StructInitializer(Vec<FieldInitializer>, Option<Location>),
@@ -825,6 +838,7 @@ impl<'a> Expr {
                     *loc,
                 ))
             }
+            Expr::ConstOption(_) => unimplemented!(),
         }
     }
 
@@ -852,6 +866,7 @@ impl<'a> Expr {
             Expr::UnsafeCast(_, _, loc) => *loc,
             Expr::Null(loc) => *loc,
             Expr::Asm(_, _, _, loc) => *loc,
+            Expr::ConstOption(_) => unimplemented!(),
         }
     }
 }
