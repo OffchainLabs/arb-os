@@ -838,7 +838,7 @@ impl<'a> Expr {
                     *loc,
                 ))
             }
-            Expr::ConstOption(_) => unimplemented!(),
+            Expr::ConstOption(t) => Ok(Expr::ConstOption(t.clone())),
         }
     }
 

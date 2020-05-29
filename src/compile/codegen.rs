@@ -950,6 +950,7 @@ fn mavm_codegen_expr<'a>(
                 )),
             }
         }
+        TypeCheckedExpr::ConstOption(_) => unimplemented!(),
         TypeCheckedExpr::Const(val, _, loc) => {
             code.push(Instruction::from_opcode_imm(
                 Opcode::Noop,

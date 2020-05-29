@@ -16,8 +16,8 @@
 
 use super::symtable::SymTable;
 use crate::compile::ast::{
-    BinaryOp, Expr, FuncArg, FuncDecl, FuncDeclKind, GlobalVarDecl, IfArm, ImportFuncDecl,
-    MatchPattern, Statement, StructField, TopLevelDecl, Type, UnaryOp,
+    BinaryOp, Constant, Expr, FuncArg, FuncDecl, FuncDeclKind, GlobalVarDecl, IfArm,
+    ImportFuncDecl, MatchPattern, Statement, StructField, TopLevelDecl, Type, UnaryOp,
 };
 use crate::link::{ExportedFunc, ImportedFunc};
 use crate::mavm::{Instruction, Label, Value};
@@ -101,6 +101,7 @@ pub enum TypeCheckedExpr {
     FuncRef(usize, Type, Option<Location>),
     TupleRef(Box<TypeCheckedExpr>, Uint256, Type, Option<Location>),
     DotRef(Box<TypeCheckedExpr>, StringId, Type, Option<Location>),
+    ConstOption(Box<Constant>),
     Const(Value, Type, Option<Location>),
     FunctionCall(
         Box<TypeCheckedExpr>,
@@ -183,6 +184,12 @@ impl<'a> TypeCheckedExpr {
             TypeCheckedExpr::FuncRef(_, t, _) => t.clone(),
             TypeCheckedExpr::TupleRef(_, _, t, _) => t.clone(),
             TypeCheckedExpr::DotRef(_, _, t, _) => t.clone(),
+            TypeCheckedExpr::ConstOption(t) => match *t.clone() {
+                Constant::Uint(_) => Type::Uint,
+                Constant::Int(_) => Type::Int,
+                Constant::Bool(_) => Type::Bool,
+                Constant::Option(_) => unimplemented!(),
+            },
             TypeCheckedExpr::Const(_, t, _) => t.clone(),
             TypeCheckedExpr::FunctionCall(_, _, t, _) => t.clone(),
             TypeCheckedExpr::StructInitializer(_, t, _) => t.clone(),
@@ -1096,7 +1103,7 @@ fn typecheck_expr(
                 *loc,
             ))
         }
-        Expr::ConstOption(_) => unimplemented!(),
+        Expr::ConstOption(t) => Ok(TypeCheckedExpr::ConstOption(Box::new(t.clone()))),
     }
 }
 
