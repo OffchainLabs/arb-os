@@ -239,6 +239,37 @@ impl CodeStore {
 			_ => { panic!("unlinked codepoint reference in running code"); }
 		}
 	}
+
+	fn create_segment(&mut self) -> CodePt {
+		self.segments.push(
+			vec![
+				Instruction::from_opcode(Opcode::Panic, None),
+			]
+		);
+		CodePt::new_in_segment(self.segments.len()-1, 0)
+	}
+
+	fn push_insn(&mut self, op: usize, imm: Option<Value>, codept: CodePt) -> Option<CodePt> {
+		if let CodePt::InSegment(seg_num, old_offset) = codept {
+			if seg_num >= self.segments.len() {
+				None
+			} else {
+				let segment = &mut self.segments[seg_num];
+				if old_offset == segment.len()-1 {
+					if let Some(opcode) = Opcode::from_number(op) {
+						segment.push(Instruction::new(opcode, imm, None));
+						Some(CodePt::new_in_segment(seg_num, old_offset+1))
+					} else {
+						None
+					}
+				} else {
+					panic!("branching segments not yet implemented");
+				}
+			}
+		} else {
+			panic!("invalid codepoint in push_insn");
+		}
+	}
 }
 
 pub struct Machine {
@@ -247,7 +278,8 @@ pub struct Machine {
     state: MachineState,
     code: CodeStore,
     static_val: Value,
-    register: Value,
+	register: Value,
+	err_codepoint: CodePt,
 }
 
 impl<'a> Machine {
@@ -258,7 +290,8 @@ impl<'a> Machine {
             state: MachineState::Stopped,
             code: CodeStore::new(program.code),
             static_val: program.static_val,
-            register: Value::none(),
+			register: Value::none(),
+			err_codepoint: CodePt::Null,
         }
     }
 
@@ -405,8 +438,19 @@ impl<'a> Machine {
 							Err(ExecutionError::new("index out of bounds in Tget", &self.state, None))
 						}
 					}
+					Opcode::Tlen => {
+						let tup = self.stack.pop_tuple(&self.state)?;
+						self.stack.push_usize(tup.len());
+						self.incr_pc();
+						Ok(true)
+					}
 					Opcode::Pop => {
 						let _ = self.stack.pop(&self.state)?;
+						self.incr_pc();
+						Ok(true)
+					}
+					Opcode::StackEmpty => {
+						self.stack.push_bool(self.stack.is_empty());
 						self.incr_pc();
 						Ok(true)
 					}
@@ -417,6 +461,11 @@ impl<'a> Machine {
 					}
 					Opcode::AuxPop => {
 						self.stack.push(self.aux_stack.pop(&self.state)?);
+						self.incr_pc();
+						Ok(true)
+					}
+					Opcode::AuxStackEmpty => {
+						self.stack.push_bool(self.aux_stack.is_empty());
 						self.incr_pc();
 						Ok(true)
 					}
@@ -685,6 +734,12 @@ impl<'a> Machine {
 						self.incr_pc();
 						Ok(true)
 					}
+					Opcode::Type => {
+						let val = self.stack.pop(&self.state)?;
+						self.stack.push_usize(val.type_insn_result());
+						self.incr_pc();
+						Ok(true)
+					}
 					Opcode::BitwiseAnd => {
 						let r1 = self.stack.pop_uint(&self.state)?;
 						let r2 = self.stack.pop_uint(&self.state)?;
@@ -773,10 +828,61 @@ impl<'a> Machine {
 						panic!("Inbox instruction not yet implemented");
 					}
 					Opcode::ErrCodePoint => {
-						panic!("ErrCodePoint instruction not yet implemented");
+						self.stack.push(Value::CodePoint(
+							self.code.create_segment()
+						));
+						self.incr_pc();
+						Ok(true)
+					}
+					Opcode::Send => {
+						panic!("Send instruction not yet implemented");
+					}
+					Opcode::Log => {
+						panic!("Log instruction not yet implemented");
+					}
+					Opcode::ErrSet => {
+						let cp = self.stack.pop_codepoint(&self.state)?;
+						self.err_codepoint = cp;
+						self.incr_pc();
+						Ok(true)
+					}
+					Opcode::ErrPush => {
+						self.stack.push_codepoint(self.err_codepoint);
+						self.incr_pc();
+						Ok(true)
 					}
 					Opcode::PushInsn => {
-						panic!("PushInsn instruction not yet implemented");
+						let opcode = self.stack.pop_usize(&self.state)?;
+						let cp = self.stack.pop_codepoint(&self.state)?;
+						let new_cp = self.code.push_insn(opcode, None, cp);
+						if let Some(cp) = new_cp {
+							self.stack.push_codepoint(cp);
+							self.incr_pc();
+							Ok(true)
+						} else {
+							Err(ExecutionError::new("invalid args to PushInsn", &self.state, None))
+						}
+					}
+					Opcode::PushInsnImm => {
+						let opcode = self.stack.pop_usize(&self.state)?;
+						let imm = self.stack.pop(&self.state)?;
+						let cp = self.stack.pop_codepoint(&self.state)?;
+						let new_cp = self.code.push_insn(opcode, Some(imm), cp);
+						if let Some(cp) = new_cp {
+							self.stack.push_codepoint(cp);
+							self.incr_pc();
+							Ok(true)
+						} else {
+							Err(ExecutionError::new("invalid args to PushInsnImm", &self.state, None))
+						}
+					}
+					Opcode::Breakpoint => {
+						self.incr_pc();
+						Ok(false)
+					}
+					Opcode::Halt => {
+						self.state = MachineState::Stopped;
+						Ok(false)
 					}
 					Opcode::DebugPrint => {
 						let r1 = self.stack.pop(&self.state)?;
