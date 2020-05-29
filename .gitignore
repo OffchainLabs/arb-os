@@ -35,3 +35,7 @@ stdlib/keccak.mao
 arbruntime/evmOps.mao
 arbruntime/inbox.mao
 arbruntime/parseModule.mao
+builtin/arraytest.mexe
+builtin/arraytest.mexe
+stdlib/bytestream.mao
+stdlib/keccaktest.mexe
