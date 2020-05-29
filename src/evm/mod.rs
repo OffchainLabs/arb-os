@@ -518,11 +518,18 @@ pub fn compile_evm_insn(
             Some((code, lg, mpc))
         }
         0x57 => {  // JUMPI
+            let (not_taken_label, lg) = label_gen.next();
             code.push(Instruction::from_opcode(Opcode::Swap1, None));
-            let (c, lg, mpc) = evm_emulate(code, label_gen, evm_func_map, "evmOp_getjumpaddr")?;
+            code.push(Instruction::from_opcode(Opcode::Not, None));
+            code.push(Instruction::from_opcode_imm(
+                Opcode::Cjump, 
+                Value::Label(not_taken_label), 
+                None
+            ));
+            let (c, lg, mpc) = evm_emulate(code, lg, evm_func_map, "evmOp_getjumpaddr")?;
             code = c;
-            code.push(Instruction::from_opcode(Opcode::Swap1, None));
-            code.push(Instruction::from_opcode(Opcode::Cjump, None));
+            code.push(Instruction::from_opcode(Opcode::Jump, None));
+            code.push(Instruction::from_opcode(Opcode::Label(not_taken_label), None));
             Some((code, lg, mpc))
         }
         0x58 => None, // GETPC

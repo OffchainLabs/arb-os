@@ -78,7 +78,7 @@ $(RUNTIMEDIR)/inbox.mao: $(RUNTIMEDIR)/inbox.mini
 $(RUNTIMEDIR)/evmCallStack.mao: $(RUNTIMEDIR)/evmCallStack.mini
 	cargo run compile $(RUNTIMEDIR)/evmCallStack.mini -c -o $(RUNTIMEDIR)/evmCallStack.mao
 
-$(RUNTIMEDIR)/evmOpsma.mao: $(RUNTIMEDIR)/evmOps.mini
+$(RUNTIMEDIR)/evmOps.mao: $(RUNTIMEDIR)/evmOps.mini
 	cargo run compile $(RUNTIMEDIR)/evmOps.mini -c -o $(RUNTIMEDIR)/evmOps.mao
 
 $(RUNTIME): $(RUNTIMEMAOS) $(STDLIB) $(BUILTINMAOS)

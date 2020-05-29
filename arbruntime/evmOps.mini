@@ -32,6 +32,7 @@ import func account_getCodeSize(acct: Account) -> uint;
 import func account_getBalance(acct: Account) -> uint;
 import func account_getCode(acct: Account) -> ByteArray;
 import func account_getStorageCell(acct: Account, offset: uint) -> uint;
+import func account_getEvmJumpMap(acct: Account) -> map<uint, func()>;
 
 import impure func inbox_currentTimestamp() -> uint;
 import impure func inbox_currentBlockNumber() -> uint;
@@ -195,9 +196,17 @@ public impure func evmOp_sstore(storageAddr: uint, value: uint) {
     );
 }
     
-public func evmOp_getjumpaddr() {
-    //BUGBUG: don't know the type signature of this one
-    panic; //TODO
+public func evmOp_getjumpaddr(evm_pc: uint) -> func() {
+    let (codePt, success,) = account_getEvmJumpMap(
+        evmCallFrame_currentAccount(
+            evmCallStack_currentFrame()
+        )
+    )[evm_pc];
+    if (success) {
+        return codePt;
+    } else {
+        panic;  // EVM code tried to jump to a forbidden code addres
+    }
 }
 
 public func evmOp_msize() -> uint {
