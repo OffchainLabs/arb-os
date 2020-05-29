@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+use super::runtime_env::RuntimeEnvironment;
 use crate::link::LinkedProgram;
 use crate::mavm::{CodePt, Instruction, Opcode, Value};
 use crate::uint256::Uint256;
@@ -280,10 +281,11 @@ pub struct Machine {
     static_val: Value,
 	register: Value,
 	err_codepoint: CodePt,
+	runtime_env: RuntimeEnvironment,
 }
 
 impl<'a> Machine {
-    pub fn new(program: LinkedProgram) -> Self {
+    pub fn new(program: LinkedProgram, env: RuntimeEnvironment) -> Self {
         Machine {
             stack: ValueStack::new(),
             aux_stack: ValueStack::new(),
@@ -292,6 +294,7 @@ impl<'a> Machine {
             static_val: program.static_val,
 			register: Value::none(),
 			err_codepoint: CodePt::Null,
+			runtime_env: env,
         }
     }
 
@@ -825,7 +828,15 @@ impl<'a> Machine {
 						panic!("GetTime instruction not yet implemented");
 					}
 					Opcode::Inbox => {
-						panic!("Inbox instruction not yet implemented");
+						let msgs = self.runtime_env.get_inbox();
+						if msgs.is_none() {
+							// machine is blocked, waiting for nonempty inbox
+							Ok(false)
+						} else {
+							self.stack.push(msgs);
+							self.incr_pc();
+							Ok(true)
+						}
 					}
 					Opcode::ErrCodePoint => {
 						self.stack.push(Value::CodePoint(
@@ -838,7 +849,10 @@ impl<'a> Machine {
 						panic!("Send instruction not yet implemented");
 					}
 					Opcode::Log => {
-						panic!("Log instruction not yet implemented");
+						let val = self.stack.pop(&self.state)?;
+						self.runtime_env.push_log(val);
+						self.incr_pc();
+						Ok(true)
 					}
 					Opcode::ErrSet => {
 						let cp = self.stack.pop_codepoint(&self.state)?;
