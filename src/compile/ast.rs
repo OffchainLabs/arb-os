@@ -133,7 +133,9 @@ impl Type {
                 Box::new(key.resolve_types(type_table, location)?),
                 Box::new(val.resolve_types(type_table, location)?),
             )),
-            Type::Option(t) => t.resolve_types(type_table, location),
+            Type::Option(t) => Ok(Type::Option(Box::new(
+                t.resolve_types(type_table, location)?,
+            ))),
         }
     }
 
@@ -206,7 +208,7 @@ impl Type {
                     false
                 }
             }
-            Type::Option(_) => unimplemented!(),
+            Type::Option(_) => (self == rhs),
         }
     }
 
@@ -322,6 +324,7 @@ impl PartialEq for Type {
                 (i1 == i2) && type_vectors_equal(&a1, &a2) && (*r1 == *r2)
             }
             (Type::Imported(n1), Type::Imported(n2)) => (n1 == n2),
+            (Type::Option(x), Type::Option(y)) => x == y,
             (_, _) => false,
         }
     }
@@ -680,16 +683,22 @@ pub enum Constant {
     Option(OptionConst),
 }
 
+impl OptionConst {
+    pub(crate) fn type_of(&self) -> Type {
+        Type::Option(Box::new(match self {
+            OptionConst::Some(c) => (*c).type_of(),
+            OptionConst::None(t) => t.clone(),
+        }))
+    }
+}
+
 impl Constant {
     pub(crate) fn type_of(&self) -> Type {
         match self {
             Constant::Uint(_) => Type::Uint,
             Constant::Int(_) => Type::Int,
             Constant::Bool(_) => Type::Bool,
-            Constant::Option(inner) => Type::Option(Box::new(match inner.clone() {
-                OptionConst::Some(c) => (*c).type_of(),
-                OptionConst::None(t) => t,
-            })),
+            Constant::Option(inner) => inner.type_of(),
         }
     }
     pub(crate) fn value(&self) -> Value {
