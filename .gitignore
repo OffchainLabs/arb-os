@@ -34,3 +34,4 @@ arbruntime/evmCallStack.mao
 stdlib/keccak.mao
 arbruntime/evmOps.mao
 arbruntime/inbox.mao
+arbruntime/parseModule.mao

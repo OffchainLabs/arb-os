@@ -737,6 +737,12 @@ impl<'a> Machine {
 					Opcode::Inbox => {
 						panic!("Inbox instruction not yet implemented");
 					}
+					Opcode::ErrCodePoint => {
+						panic!("ErrCodePoint instruction not yet implemented");
+					}
+					Opcode::PushInsn => {
+						panic!("PushInsn instruction not yet implemented");
+					}
 					Opcode::DebugPrint => {
 						let r1 = self.stack.pop(&self.state)?;
 						println!("{:?}", r1);

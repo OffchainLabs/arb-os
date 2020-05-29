@@ -1,0 +1,116 @@
+//
+// Copyright 2020, Offchain Labs, Inc.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//    http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+//
+
+import type ByteStream;
+
+import func bytestream_bytesRemaining(bs: ByteStream) -> uint;
+import func bytestream_getByte(bs: ByteStream) -> (bool, ByteStream, uint);
+import func bytestream_getUint(bs: ByteStream) -> (bool, ByteStream, uint);
+
+type AvmCodePoint = func()
+
+
+public func parseModule(bs: ByteStream) -> (bool, AvmCodePoint) {
+    let (success, ubs,) = verifyMagicNumber(bs);
+    if ( ! success) {
+        return (false, unsafecast<AvmCodePoint>(0),);
+    }
+    bs = ubs;
+
+    let (success, ubs, numInsns,) = bytestream_getUint(bs);
+    if ( ! success) {
+        return (false, unsafecast<AvmCodePoint>(0),);
+    }
+    bs = ubs;
+
+    if (bytestream_bytesRemaining(bs) > 1000000) {
+        // reject module as too large
+        return (false, unsafecast<AvmCodePoint>(0),);
+    }
+
+    let code = makeCodeStub();
+    while (numInsns > 0) {
+        let (success, cpt, ubs,) = parseAndAddInsn(code, bs);
+        if (! success) {
+            return (false, unsafecast<AvmCodePoint>(0),);
+        }
+        code = cpt;
+        bs = ubs;
+        numInsns = numInsns-1;
+    }
+
+    closeCodeSegment(code);
+    return (true, code,);
+}
+
+func parseAndAddInsn(code: AvmCodePoint, bs: ByteStream) -> (bool, AvmCodePoint, ByteStream) {
+    let (success, ubs, opcode,) = bytestream_getByte(bs);
+    if ( ! success) {
+        return (false, code, bs,);
+    }
+    bs = ubs;
+    let (success, ubs, val,) = parseAvmValue(bs);
+    if ( ! success) {
+        return (false, code, bs,);
+    }
+    bs = ubs;
+
+    return (
+        true,
+        pushInstruction(code, opcode, val),
+        bs,
+    );
+}
+
+func parseAvmValue(bs: ByteStream) -> (bool, ByteStream, any) {
+    let (success, ubs, kind,) = bytestream_getByte(bs);
+    if ( ! success) {
+        return (false, bs, 0,);
+    }
+    bs = ubs;
+    if (kind == 0) {
+        // parse and return an int
+    } elseif (kind == 8) {
+        // parse and return a codepoint inside the segment
+    } elseif (kind == 9) {
+        // parse and return a codepoint of a runtime call
+    } elseif (kind == 16) {
+        return (true, bs, (),);
+    } elseif (kind == 17) {
+        let tuple = newfixedarray(1);
+        let i = 0;
+        while (i < 1) {
+            let (success, ubs, val,) = parseAvmValue(bs);
+            if ( ! success) {
+                return (false, bs, 0,);
+            }
+            bs = ubs;
+            tuple = tuple with { [i] = val };
+            i = i+1;
+        }
+        return (true, bs, tuple,);        
+    } else {
+        return (false, bs, 0,);
+    }
+}
+
+func makeCodeStub() -> AvmCodePoint {
+    return asm() AvmCodePoint { errcodept };
+}
+
+func pushInstruction(code: AvmCodePoint, opcode: uint, val: any) -> AvmCodePoint {
+    return asm(opcode, val, code) AvmCodePoint { pushinsn };
+}

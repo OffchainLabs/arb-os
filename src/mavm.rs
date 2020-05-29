@@ -494,6 +494,8 @@ pub enum Opcode {
     LogicalOr,
     GetTime,
     Inbox,
+    ErrCodePoint,
+    PushInsn,
     DebugPrint,
 }
 
@@ -543,6 +545,8 @@ impl Opcode {
             "logicalor" => Opcode::LogicalOr,
             "gettime" => Opcode::GetTime,
             "inbox" => Opcode::Inbox,
+            "errcodept" => Opcode::ErrCodePoint,
+            "pushinsn" => Opcode::PushInsn,
             _ => {
                 panic!("opcode not supported in asm segment: {}", name);
             }
