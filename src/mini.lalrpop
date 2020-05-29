@@ -15,7 +15,7 @@
 //
 
 use crate::compile::ast::{TopLevelDecl, TypeDecl, FuncDecl, GlobalVarDecl, ImportFuncDecl, ImportTypeDecl, Type,
-StructField, FuncArg, Statement, MatchPattern, IfArm, Expr, BinaryOp, UnaryOp, Constant,
+StructField, FuncArg, Statement, MatchPattern, IfArm, Expr, BinaryOp, UnaryOp, Constant, OptionConst,
 FieldInitializer, new_func_arg, new_type_decl};
 use crate::stringtable::{StringTable, StringId};
 use crate::compile::Lines;
@@ -246,13 +246,13 @@ Expr9: Expr = {
 };
 
 Expr10: Expr = {
-	<lno: @L> "Some(" <f: Expr> ")" => Expr::ConstOption(match f {
+	<lno: @L> "Some(" <f: Expr> ")" => Expr::ConstOption(OptionConst::Some(Box::new(match f {
 	    Expr::ConstUint(u, _) => Constant::Uint(u),
 	    Expr::ConstInt(i, _) => Constant::Int(i),
 	    Expr::ConstBool(b, _) => Constant::Bool(b),
-	    Expr::ConstOption(c) => Constant::Option(Box::new(c)),
+	    Expr::ConstOption(c) => Constant::Option(c),
 	    _ => unimplemented!(),
-	}),
+	}))),
 	<lno: @L> <f: Expr10> "(" ")" => Expr::FunctionCall(Box::new(f), Vec::new(), file_info.location(BytePos::from(lno))),
 	<lno: @L> <f: Expr10> "(" <c: CommaedExprs> ")" => Expr::FunctionCall(Box::new(f), c, file_info.location(BytePos::from(lno))),
 	<lno: @L> <e1:Expr10> "[" <e2:Expr> "]" => Expr::ArrayOrMapRef(Box::new(e1), Box::new(e2), file_info.location(BytePos::from(lno))),
@@ -297,6 +297,7 @@ Expr14: Expr = {
 	<lno: @L> "struct" "{" <fi: FieldInitializer+> "}" => Expr::StructInitializer(fi, file_info.location(BytePos::from(lno))),
 	<lno: @L> <u: UnsignedInteger> => Expr::ConstUint(u, file_info.location(BytePos::from(lno))),
 	<lno: @L> <s: SignedInteger> => Expr::ConstInt(s, file_info.location(BytePos::from(lno))),
+	"None<" <t: Type> ">" => Expr::ConstOption(OptionConst::None(t)),
 	"(" <e: Expr> ")" => <>,
 	<lno: @L> "(" <c: CommaedExprs> "," ")" => Expr::Tuple(c, file_info.location(BytePos::from(lno))),
 	<lno: @L> "false" => Expr::ConstBool(false, file_info.location(BytePos::from(lno))),

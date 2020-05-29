@@ -667,11 +667,17 @@ impl IfArm {
 }
 
 #[derive(Debug, Clone)]
+pub enum OptionConst {
+    Some(Box<Constant>),
+    None(Type),
+}
+
+#[derive(Debug, Clone)]
 pub enum Constant {
     Uint(Uint256),
     Int(Uint256),
     Bool(bool),
-    Option(Box<Constant>),
+    Option(OptionConst),
 }
 
 impl Constant {
@@ -680,7 +686,10 @@ impl Constant {
             Constant::Uint(_) => Type::Uint,
             Constant::Int(_) => Type::Int,
             Constant::Bool(_) => Type::Bool,
-            Constant::Option(inner) => Type::Option(Box::new((*inner).type_of())),
+            Constant::Option(inner) => Type::Option(Box::new(match inner.clone() {
+                OptionConst::Some(c) => (*c).type_of(),
+                OptionConst::None(t) => t,
+            })),
         }
     }
     pub(crate) fn value(&self) -> Value {
@@ -688,7 +697,13 @@ impl Constant {
             Constant::Uint(ui) => Value::Int(ui.clone()),
             Constant::Int(i) => Value::Int(i.clone()),
             Constant::Bool(b) => Value::Int(Uint256::from_bool(b.clone())),
-            Constant::Option(c) => (*c).value(),
+            Constant::Option(c) => {
+                if let OptionConst::Some(constant) = c.clone() {
+                    (*constant).value()
+                } else {
+                    Value::Int(Uint256::zero())
+                }
+            }
         }
     }
 }
@@ -705,7 +720,7 @@ pub enum Expr {
     ConstUint(Uint256, Option<Location>),
     ConstInt(Uint256, Option<Location>),
     ConstBool(bool, Option<Location>),
-    ConstOption(Constant),
+    ConstOption(OptionConst),
     FunctionCall(Box<Expr>, Vec<Expr>, Option<Location>),
     ArrayOrMapRef(Box<Expr>, Box<Expr>, Option<Location>),
     StructInitializer(Vec<FieldInitializer>, Option<Location>),
