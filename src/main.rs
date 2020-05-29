@@ -19,7 +19,7 @@
 use compile::compile_from_file;
 use evm::compile_evm_file;
 use link::{link, postlink_compile};
-use run::run_from_file;
+use run::{run_from_file, runtime_env::RuntimeEnvironment};
 use std::fs::File;
 use std::io;
 use std::path::Path;
@@ -166,7 +166,7 @@ fn main() {
     if let Some(matches) = matches.subcommand_matches("run") {
         let filename = matches.value_of("INPUT").unwrap();
         let path = Path::new(filename);
-        match run_from_file(path, Vec::new()) {
+        match run_from_file(path, Vec::new(), RuntimeEnvironment::new()) {
             Ok(val) => {
                 println!("Result: {}", val);
             }
