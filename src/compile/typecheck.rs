@@ -188,7 +188,7 @@ impl<'a> TypeCheckedExpr {
                 Constant::Uint(_) => Type::Uint,
                 Constant::Int(_) => Type::Int,
                 Constant::Bool(_) => Type::Bool,
-                Constant::Option(_) => unimplemented!(),
+                Constant::Option(inner) => (*inner).type_of(),
             },
             TypeCheckedExpr::Const(_, t, _) => t.clone(),
             TypeCheckedExpr::FunctionCall(_, _, t, _) => t.clone(),

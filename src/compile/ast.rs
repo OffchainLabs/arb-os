@@ -674,6 +674,25 @@ pub enum Constant {
     Option(Box<Constant>),
 }
 
+impl Constant {
+    pub(crate) fn type_of(&self) -> Type {
+        match self {
+            Constant::Uint(_) => Type::Uint,
+            Constant::Int(_) => Type::Int,
+            Constant::Bool(_) => Type::Bool,
+            Constant::Option(inner) => Type::Option(Box::new((*inner).type_of())),
+        }
+    }
+    pub(crate) fn value(&self) -> Value {
+        match self {
+            Constant::Uint(ui) => Value::Int(ui.clone()),
+            Constant::Int(i) => Value::Int(i.clone()),
+            Constant::Bool(b) => Value::Int(Uint256::from_bool(b.clone())),
+            Constant::Option(c) => (*c).value(),
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 pub enum Expr {
     UnaryOp(UnaryOp, Box<Expr>, Option<Location>),
