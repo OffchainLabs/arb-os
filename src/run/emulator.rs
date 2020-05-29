@@ -281,7 +281,7 @@ pub struct Machine {
     static_val: Value,
 	register: Value,
 	err_codepoint: CodePt,
-	runtime_env: RuntimeEnvironment,
+	pub runtime_env: RuntimeEnvironment,
 }
 
 impl<'a> Machine {

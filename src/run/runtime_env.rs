@@ -34,6 +34,12 @@ impl RuntimeEnvironment {
         self.l1_inbox = Value::Tuple(vec![self.l1_inbox.clone(), msg]);
     }
 
+    pub fn insert_messages(&mut self, msgs: &[Value]) {
+        for msg in msgs {
+            self.insert_message(msg.clone());
+        }
+    }
+
     pub fn get_inbox(&mut self) -> Value {
         let ret = self.l1_inbox.clone();
         self.l1_inbox = Value::none();
@@ -44,7 +50,7 @@ impl RuntimeEnvironment {
         self.logs.push(log_item);
     }
 
-    pub fn get_all_logs(&self) -> &Vec<Value> {
-        &self.logs
+    pub fn get_all_logs(&self) -> Vec<Value> {
+        self.logs.clone()
     }
 }
