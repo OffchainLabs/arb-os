@@ -954,6 +954,8 @@ fn mavm_codegen_expr<'a>(
         TypeCheckedExpr::ConstOption(t) => {
             let val = match *t.clone() {
                 Constant::Uint(ui) => Value::Int(ui),
+                Constant::Int(i) => Value::Int(i),
+                Constant::Bool(b) => Value::Int(Uint256::from_bool(b)),
                 _ => unimplemented!(),
             };
             code.push(Instruction::from_opcode_imm(Opcode::Noop, val, None));

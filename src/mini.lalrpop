@@ -248,6 +248,8 @@ Expr9: Expr = {
 Expr10: Expr = {
 	<lno: @L> "Some(" <f: Expr> ")" => Expr::ConstOption(match f {
 	    Expr::ConstUint(u, _) => Constant::Uint(u),
+	    Expr::ConstInt(i, _) => Constant::Int(i),
+	    Expr::ConstBool(b, _) => Constant::Bool(b),
 	    _ => unimplemented!(),
 	}),
 	<lno: @L> <f: Expr10> "(" ")" => Expr::FunctionCall(Box::new(f), Vec::new(), file_info.location(BytePos::from(lno))),
