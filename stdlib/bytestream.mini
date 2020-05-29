@@ -1,0 +1,67 @@
+//
+// Copyright 2020, Offchain Labs, Inc.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//    http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+//
+
+import type ByteArray;
+
+import func bytearray_size(ba: ByteArray) -> uint;
+import func bytearray_getByte(ba: ByteArray, offset: uint) -> uint;
+import func bytearray_get256(ba: ByteArray, offset: uint) -> uint;
+
+type ByteStream = struct {
+    contents: ByteArray,
+    capacity: uint,
+    currentOffset: uint,
+}
+
+public func bytestream_new(contents: ByteArray) -> ByteStream {
+    return struct {
+        contents: contents,
+        capacity: bytearray_size(contents),
+        currentOffset: 0,
+    };
+}
+
+public func bytestream_atEof(bs: ByteStream) -> bool {
+    return bs.currentOffset >= bs.capacity;
+}
+
+public func bytestream_bytesRemaining(bs: ByteStream) -> uint {
+    return bs.capacity - bs.currentOffset;
+}
+
+public func bytestream_getByte(bs: ByteStream) -> (bool, ByteStream, uint) {
+    if (bs.currentOffset >= bs.capacity) {
+        return (false, bs, 0,);
+    } else {
+        return (
+            true,
+            bs with { currentOffset: bs.currentOffset+1 },
+            bytearray_getByte(bs.contents, bs.currentOffset),
+        );
+    }
+}
+
+public func bytestream_getUint(bs: ByteStream) -> (bool, ByteStream, uint) {
+    if (bs.currentOffset+32 > bs.capacity) {
+        return (false, bs, 0,);
+    } else {
+        return (
+            true,
+            bs with { currentOffset: bs.currentOffset+32 },
+            bytearray_get256(bs.contents, bs.currentOffset),
+        );
+    }
+}
