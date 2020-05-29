@@ -953,7 +953,7 @@ fn mavm_codegen_expr<'a>(
         }
         TypeCheckedExpr::ConstOption(optconst) => {
             let val = match optconst {
-                OptionConst::Some(t) => (*t).value(),
+                OptionConst::Some(t) => Value::Tuple(vec![(*t).value()]),
                 OptionConst::None(_) => Value::Int(Uint256::zero()),
             };
             code.push(Instruction::from_opcode_imm(Opcode::Noop, val, None));
