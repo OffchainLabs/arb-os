@@ -206,11 +206,46 @@ impl MachineState {
     }
 }
 
+struct CodeStore {
+	segments: Vec<Vec<Instruction>>,
+}
+
+impl CodeStore {
+	fn new(runtime: Vec<Instruction>) -> Self {
+		CodeStore{ segments: vec![runtime] }
+	}
+
+	fn segment_size(&self, seg_num: usize) -> Option<usize> {
+		match self.segments.get(seg_num) {
+			Some(seg) => Some(seg.len()),
+			None => None,
+		}
+	}
+	
+	fn runtime_segment_size(&self) -> usize {
+		self.segments[0].len()
+	}
+
+	fn get_insn(&self, codept: CodePt) -> Option<&Instruction> {
+		match codept {
+			CodePt::Internal(pc) => self.segments[0].get(pc),
+			CodePt::InSegment(seg_num, pc) => {
+				if seg_num < self.segments.len() {
+					self.segments[seg_num].get(pc)
+				} else {
+					None
+				}
+			}
+			_ => { panic!("unlinked codepoint reference in running code"); }
+		}
+	}
+}
+
 pub struct Machine {
     stack: ValueStack,
     aux_stack: ValueStack,
     state: MachineState,
-    code: Vec<Instruction>,
+    code: CodeStore,
     static_val: Value,
     register: Value,
 }
@@ -221,7 +256,7 @@ impl<'a> Machine {
             stack: ValueStack::new(),
             aux_stack: ValueStack::new(),
             state: MachineState::Stopped,
-            code: program.code,
+            code: CodeStore::new(program.code),
             static_val: program.static_val,
             register: Value::none(),
         }
@@ -240,7 +275,7 @@ impl<'a> Machine {
         func_addr: CodePt,
         args: Vec<Value>,
     ) -> Result<ValueStack, ExecutionError> {
-        let stop_pc = CodePt::new_internal(self.code.len() + 1);
+        let stop_pc = CodePt::new_internal(self.code.runtime_segment_size());
         for i in args.iter().rev().cloned() {
             self.stack.push(i);
         }
@@ -297,7 +332,7 @@ impl<'a> Machine {
 
     pub fn run_one(&mut self) -> Result<bool, ExecutionError> {
         if let MachineState::Running(pc) = self.state {
-            if let Some(insn) = self.code.get(pc.pc_if_internal().unwrap()) {
+            if let Some(insn) = self.code.get_insn(pc) {
                 if let Some(val) = &insn.immediate {
                     self.stack.push(val.clone());
                 }

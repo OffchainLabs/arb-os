@@ -211,6 +211,7 @@ pub enum CodePt {
     Internal(usize),
     External(usize), // slot in imported funcs list
     Runtime(usize),   // slot in runtime funcs list
+    InSegment(usize, usize),   // in code segment, at offset
 }
 
 impl CodePt {
@@ -226,9 +227,15 @@ impl CodePt {
         CodePt::Runtime(slot)
     }
 
+    pub fn new_in_segment(seg_num: usize, offset: usize) -> Self {
+        CodePt::InSegment(seg_num, offset)
+    }
+
     pub fn incr(&self) -> Option<Self> {
         match self {
             CodePt::Internal(pc) => Some(CodePt::Internal(pc + 1)),
+            CodePt::InSegment(seg, offset) => 
+                if *offset == 0 { None } else { Some(CodePt::InSegment(*seg, offset-1)) },
             CodePt::External(_) => None,
             CodePt::Runtime(_) => None,
         }
@@ -247,6 +254,9 @@ impl CodePt {
             CodePt::Internal(pc) => CodePt::Internal(pc + int_offset),
             CodePt::External(off) => CodePt::External(off + ext_offset),
             CodePt::Runtime(_) => self,
+            CodePt::InSegment(_, _) => {
+                panic!("tried to relocate/link code at runtime");
+            }
         }
     }
 
@@ -256,15 +266,16 @@ impl CodePt {
                 &Value::Int(Uint256::from_usize(3)),
                 &Value::Int(Uint256::from_usize(*sz)),
             ),
-            CodePt::External(sz) => Value::avm_hash2(
-                &Value::Int(Uint256::from_usize(4)),
-                &Value::Int(Uint256::from_usize(*sz)),
-            ),
+            CodePt::External(_) => {
+                panic!("tried to avm_hash unlinked codepoint");
+            }
             CodePt::Runtime(sz) => Value::avm_hash2(
                 &Value::Int(Uint256::from_usize(5)), 
                 &Value::Int(Uint256::from_usize(*sz)),
             ),
-
+            CodePt::InSegment(_, _) => {
+                panic!("avm_hash not yet implemented for in-module codepoints");
+            }
         }
     }
 }
@@ -275,6 +286,7 @@ impl fmt::Display for CodePt {
             CodePt::Internal(pc) => write!(f, "Internal({})", pc),
             CodePt::External(idx) => write!(f, "External({})", idx),
             CodePt::Runtime(slot) => write!(f, "{}", runtime_func_name(*slot)),
+            CodePt::InSegment(seg, offset) => write!(f, "(segment {}, offset {})", seg, offset),
         }
     }
 }
