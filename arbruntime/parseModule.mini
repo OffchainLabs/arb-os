@@ -56,6 +56,15 @@ public func parseModule(bs: ByteStream) -> (bool, AvmCodePoint) {
     return (true, code,);
 }
 
+func verifyMagicNumber(bs: ByteStream) -> (bool, ByteStream) {
+    // magic number is sha3("Arbitrum module format version 0")
+    let (success, ubs, maybeMagic,) = bytestream_getUint(bs);
+    if ( (!success) || (maybeMagic != 0x224722a7c787e71ecf289674f202198afd5e0441d838db2383e85e6111035b65) {
+        return (false, bs,);        
+    }
+    return (true, ubs,);
+}
+
 func parseAndAddInsn(code: AvmCodePoint, bs: ByteStream) -> (bool, AvmCodePoint, ByteStream) {
     let (success, ubs, opcode,) = bytestream_getByte(bs);
     if ( ! success) {

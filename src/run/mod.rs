@@ -17,13 +17,19 @@
 use crate::link::LinkedProgram;
 use crate::mavm::{CodePt, Value};
 use emulator::{ExecutionError, Machine, StackTrace};
+use runtime_env::RuntimeEnvironment;
 use std::fs::File;
 use std::io::Read;
 use std::path::Path;
 
 mod emulator;
+pub mod runtime_env;
 
-pub fn run_from_file(path: &Path, args: Vec<Value>) -> Result<Value, (ExecutionError, StackTrace)> {
+pub fn run_from_file(
+    path: &Path, 
+    args: Vec<Value>,
+    env: RuntimeEnvironment,
+) -> Result<Value, (ExecutionError, StackTrace)> {
     let display = path.display();
 
     let mut file = match File::open(&path) {
@@ -37,10 +43,14 @@ pub fn run_from_file(path: &Path, args: Vec<Value>) -> Result<Value, (ExecutionE
         Ok(_) => s,
     };
 
-    run_from_string(s, args)
+    run_from_string(s, args, env)
 }
 
-fn run_from_string(s: String, args: Vec<Value>) -> Result<Value, (ExecutionError, StackTrace)> {
+fn run_from_string(
+    s: String, 
+    args: Vec<Value>, 
+    env: RuntimeEnvironment,
+) -> Result<Value, (ExecutionError, StackTrace)> {
     let parse_result: Result<LinkedProgram, serde_json::Error> = serde_json::from_str(&s);
     let program = match parse_result {
         Ok(prog) => prog,
@@ -49,7 +59,7 @@ fn run_from_string(s: String, args: Vec<Value>) -> Result<Value, (ExecutionError
             panic!();
         }
     };
-    let mut new_machine = Machine::new(program);
+    let mut new_machine = Machine::new(program, env);
     run(&mut new_machine, args)
 }
 
