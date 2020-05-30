@@ -68,11 +68,11 @@ FuncDecl: FuncDecl = {
 }
 
 FuncArgs: Vec<FuncArg> = {
-	FuncArg* => <>,
+	<mut a: (<FuncArg> ",")*> <b: FuncArg?> => {if let Some(c) = b {a.push(c)};a},
 }
 
 FuncArg: FuncArg = {
-	<i:Ident> ":" <t:Type> ","? => new_func_arg(i, t),
+	<i:Ident> ":" <t:Type> => new_func_arg(i, t),
 }
 
 GlobalVarDecl: GlobalVarDecl = {
@@ -106,16 +106,8 @@ MatchPattern: MatchPattern = {
 	"(" <CommaedMatchPatterns> ")" => MatchPattern::Tuple(<>),
 }
 
-CommaedMatchPattern: Vec<MatchPattern> = {
-	MatchPattern => vec![<>], 
-	<c: CommaedMatchPattern> "," <p: MatchPattern> => {
-		let mut c = c;
-		c.push(p);
-		c
-	},
-}
 CommaedMatchPatterns: Vec<MatchPattern> = {
-	( <MatchPattern> "," )+ => <>,
+	<mut a: ( <MatchPattern> "," )+> <b: MatchPattern?> => {if let Some(c) = b {a.push(c)}a},
 }
 
 IfArm: IfArm = {
@@ -129,11 +121,11 @@ StructDecl: Type = {
 };
 
 StructFields: Vec<StructField> = {
-	StructField+ => <>,
+	<mut a: (<StructField> ",")*> <b: StructField> ","? => {a.push(b);a},
 }
 
 StructField: StructField = {
-	<Ident> ":" <Type> "," => StructField::new(<>),
+	<Ident> ":" <Type> => StructField::new(<>),
 }
 
 Type: Type = {
@@ -150,7 +142,7 @@ Type: Type = {
 		Box::new(t), 
 		s.to_usize().unwrap(),
 	),
-	"map" "<" <t1:Type> "," <t2:Type> ">" => Type::Map(Box::new(t1), Box::new(t2)),
+	"map" "<" <t1:Type> "," <t2:Type> ","? ">" => Type::Map(Box::new(t1), Box::new(t2)),
 	"func" <CommaedTypesInParens> => Type::Func(false, <>, Box::new(Type::Void)),
 	"func" <a: CommaedTypesInParens> "->" <r: Type> => Type::Func(false, a, Box::new(r)),
 	"impure" "func" <CommaedTypesInParens> => Type::Func(true, <>, Box::new(Type::Void)),
@@ -165,12 +157,10 @@ CommaedTypesInParens: Vec<Type> = {
 }
 
 CommaedTypes: Vec<Type> = {
-	Type => vec![<>],
-	<c: CommaedTypes> "," <t:Type> => {
-		let mut c = c;
-		c.push(t);
-		c
-	}
+	<mut t: (<Type> ",")*> <e: (Type)> ","? => {
+        t.push(e);
+        t
+    },
 };
 
 Ident: StringId = {
@@ -245,6 +235,7 @@ Expr9: Expr = {
 
 Expr10: Expr = {
 	<lno: @L> <f: Expr10> "(" ")" => Expr::FunctionCall(Box::new(f), Vec::new(), file_info.location(BytePos::from(lno))),
+	<lno: @L> <f: Expr10> "(" <e: Expr> ")" => Expr::FunctionCall(Box::new(f), vec![e], file_info.location(BytePos::from(lno))),
 	<lno: @L> <f: Expr10> "(" <c: CommaedExprs> ")" => Expr::FunctionCall(Box::new(f), c, file_info.location(BytePos::from(lno))),
 	<lno: @L> <e1:Expr10> "[" <e2:Expr> "]" => Expr::ArrayOrMapRef(Box::new(e1), Box::new(e2), file_info.location(BytePos::from(lno))),
 	<lno: @L> <e:Expr10> "." <i:Ident> => Expr::DotRef(Box::new(e), i, file_info.location(BytePos::from(lno))),
@@ -254,14 +245,14 @@ Expr10: Expr = {
 
 Expr11: Expr = {
 	<lno: @L> "hash" "(" <e: Expr> ")" => Expr::new_unary(UnaryOp::Hash, e, file_info.location(BytePos::from(lno))),
-	<lno: @L> "hash" "(" <l:Expr> "," <r:Expr> ")" => Expr::new_binary(BinaryOp::Hash, l, r, file_info.location(BytePos::from(lno))),
+	<lno: @L> "hash" "(" <l:Expr> "," <r:Expr> ","? ")" => Expr::new_binary(BinaryOp::Hash, l, r, file_info.location(BytePos::from(lno))),
 	<lno: @L> "len" "(" <e: Expr> ")" => Expr::new_unary(UnaryOp::Len, e, file_info.location(BytePos::from(lno))),
 	<lno: @L> "uint" "(" <e: Expr> ")" => Expr::new_unary(UnaryOp::ToUint, e, file_info.location(BytePos::from(lno))),
 	<lno: @L> "int" "(" <e: Expr> ")" => Expr::new_unary(UnaryOp::ToInt, e, file_info.location(BytePos::from(lno))),
 	<lno: @L> "bytes32" "(" <e: Expr> ")" => Expr::new_unary(UnaryOp::ToBytes32, e, file_info.location(BytePos::from(lno))),
 	<lno: @L> "address" "(" <e: Expr> ")" => Expr::new_unary(UnaryOp::ToAddress, e, file_info.location(BytePos::from(lno))),
 	<lno: @L> "newarray" "<" <t:Type> ">" "(" <e:Expr> ")" => Expr::NewArray(Box::new(e), t, file_info.location(BytePos::from(lno))),
-	<lno: @L> "newfixedarray" "(" <s:UnsignedInteger> "," <e:Expr> ")" => Expr::NewFixedArray(
+	<lno: @L> "newfixedarray" "(" <s:UnsignedInteger> "," <e:Expr> ","? ")" => Expr::NewFixedArray(
 		s.to_usize().unwrap(), 
 		Some(Box::new(e)),
 		file_info.location(BytePos::from(lno)),
@@ -271,7 +262,7 @@ Expr11: Expr = {
 		None,
 		file_info.location(BytePos::from(lno)),
 	),
-	<lno: @L> "newmap" "<" <k:Type> "," <v:Type> ">" => Expr::NewMap(k, v, file_info.location(BytePos::from(lno))),
+	<lno: @L> "newmap" "<" <k:Type> "," <v:Type> ","? ">" => Expr::NewMap(k, v, file_info.location(BytePos::from(lno))),
 	<lno: @L> "unsafecast" "<" <t:Type> ">" "(" <e:Expr> ")" => Expr::UnsafeCast(Box::new(e), t, file_info.location(BytePos::from(lno))),
 	Expr13,
 }
@@ -285,32 +276,32 @@ Expr13: Expr = {
 }
 
 Expr14: Expr = {
-	<lno: @L> "struct" "{" <fi: FieldInitializer+> "}" => Expr::StructInitializer(fi, file_info.location(BytePos::from(lno))),
+	<lno: @L> "struct" "{" <fi: FieldInitializers> "}" => Expr::StructInitializer(fi, file_info.location(BytePos::from(lno))),
 	<lno: @L> <u: UnsignedInteger> => Expr::ConstUint(u, file_info.location(BytePos::from(lno))),
 	<lno: @L> <s: SignedInteger> => Expr::ConstInt(s, file_info.location(BytePos::from(lno))),
 	"(" <e: Expr> ")" => <>,
-	<lno: @L> "(" <c: CommaedExprs> "," ")" => Expr::Tuple(c, file_info.location(BytePos::from(lno))),
+	<lno: @L> "(" <c: CommaedExprs> ")" => Expr::Tuple(c, file_info.location(BytePos::from(lno))),
 	<lno: @L> "false" => Expr::ConstBool(false, file_info.location(BytePos::from(lno))),
 	<lno: @L> "true" => Expr::ConstBool(true, file_info.location(BytePos::from(lno))),
 	<lno: @L> "null" => Expr::Null(file_info.location(BytePos::from(lno))),
 	<lno: @L> <i: Ident> => Expr::VariableRef(i, file_info.location(BytePos::from(lno))),
 }
 
+FieldInitializers: Vec<FieldInitializer> = {
+	<mut l: (<FieldInitializer> ",")*> <f: FieldInitializer> ","? => {l.push(f);l},
+}
+
 FieldInitializer: FieldInitializer = {
-	<Ident> ":" <Expr> "," => FieldInitializer::new(<>),
+	<Ident> ":" <Expr> => FieldInitializer::new(<>),
 }
 
 CommaedExprs: Vec<Expr> = {
-	Expr => {
-		let mut c = Vec::new();
-		c.push(<>);
-		c
-	},
-	<c: CommaedExprs> "," <e: Expr> => {
-		let mut c = c;
-		c.push(e);
-		c
-	},
+	<mut c: (<Expr> ",")+> <e: (Expr)?> => {
+    		if let Some(s) = e {
+    		    c.push(s);
+    		}
+    		c
+    	},
 }
 
 AsmInsn: Instruction = {
@@ -324,11 +315,7 @@ AsmOpcode: Opcode = {
 
 AsmVal: Value = {
 	<UnsignedInteger> => Value::Int(<>),
-	"(" <AsmValComma*> ")" => Value::Tuple(<>),
-}
-
-AsmValComma: Value = {
-	<AsmVal> "," => <>,
+	"(" <mut l: (<AsmVal> ",")*> <v: AsmVal> ","? ")" => Value::Tuple({l.push(v);l}),
 }
 
 IdentStr: &'input str = {
