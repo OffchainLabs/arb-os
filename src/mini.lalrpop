@@ -106,16 +106,8 @@ MatchPattern: MatchPattern = {
 	"(" <CommaedMatchPatterns> ")" => MatchPattern::Tuple(<>),
 }
 
-CommaedMatchPattern: Vec<MatchPattern> = {
-	MatchPattern => vec![<>], 
-	<c: CommaedMatchPattern> "," <p: MatchPattern> => {
-		let mut c = c;
-		c.push(p);
-		c
-	},
-}
 CommaedMatchPatterns: Vec<MatchPattern> = {
-	( <MatchPattern> "," )+ => <>,
+	<mut a: ( <MatchPattern> "," )+> <b: MatchPattern?> => {if let Some(c) = b {a.push(c)}a},
 }
 
 IfArm: IfArm = {
