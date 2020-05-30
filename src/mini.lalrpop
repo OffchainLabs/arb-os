@@ -246,10 +246,7 @@ Expr9: Expr = {
 };
 
 Expr10: Expr = {
-	<lno: @L> "Some(" <f: Expr> ")" => Expr::Constant(Constant::Option(OptionConst::Some(Box::new(match f {
-	    Expr::Constant(n, _) => n,
-	    _ => unimplemented!(),
-	}))), file_info.location(BytePos::from(lno))),
+	<lno: @L> <c: Const> => Expr::Constant(c, file_info.location(BytePos::from(lno))),
 	<lno: @L> <f: Expr10> "(" ")" => Expr::FunctionCall(Box::new(f), Vec::new(), file_info.location(BytePos::from(lno))),
 	<lno: @L> <f: Expr10> "(" <c: CommaedExprs> ")" => Expr::FunctionCall(Box::new(f), c, file_info.location(BytePos::from(lno))),
 	<lno: @L> <e1:Expr10> "[" <e2:Expr> "]" => Expr::ArrayOrMapRef(Box::new(e1), Box::new(e2), file_info.location(BytePos::from(lno))),
@@ -292,15 +289,19 @@ Expr13: Expr = {
 
 Expr14: Expr = {
 	<lno: @L> "struct" "{" <fi: FieldInitializer+> "}" => Expr::StructInitializer(fi, file_info.location(BytePos::from(lno))),
-	<lno: @L> <u: UnsignedInteger> => Expr::Constant(Constant::Uint(u), file_info.location(BytePos::from(lno))),
-	<lno: @L> <s: SignedInteger> => Expr::Constant(Constant::Int(s), file_info.location(BytePos::from(lno))),
-	<lno: @L> "None<" <t: Type> ">" => Expr::Constant(Constant::Option(OptionConst::None(t)), file_info.location(BytePos::from(lno))),
 	"(" <e: Expr> ")" => <>,
 	<lno: @L> "(" <c: CommaedExprs> "," ")" => Expr::Tuple(c, file_info.location(BytePos::from(lno))),
-	<lno: @L> "false" => Expr::Constant(Constant::Bool(false), file_info.location(BytePos::from(lno))),
-	<lno: @L> "true" => Expr::Constant(Constant::Bool(true), file_info.location(BytePos::from(lno))),
-	<lno: @L> "null" => Expr::Constant(Constant::Null,file_info.location(BytePos::from(lno))),
 	<lno: @L> <i: Ident> => Expr::VariableRef(i, file_info.location(BytePos::from(lno))),
+}
+
+Const: Constant = {
+    "Some(" <c: Const> ")" => Constant::Option(OptionConst::Some(Box::new(c))),
+    <u: UnsignedInteger> => Constant::Uint(u),
+	<s: SignedInteger> => Constant::Int(s),
+	"None<" <t: Type> ">" => Constant::Option(OptionConst::None(t)),
+	"false" => Constant::Bool(false),
+	"true" => Constant::Bool(true),
+	"null" => Constant::Null,
 }
 
 FieldInitializer: FieldInitializer = {
