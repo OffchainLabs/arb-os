@@ -98,7 +98,7 @@ Mini has the following types:
 
 > a hash map, which maps keys of one type to values of another type
 
-`struct` { *name1: type1 , name2 : type2 , ... ,* }
+`struct` { *name1: type1 , name2 : type2 , ...* }
 
 > a struct with one or more named, typed fields (a compound type)
 
