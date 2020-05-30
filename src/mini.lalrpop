@@ -68,11 +68,11 @@ FuncDecl: FuncDecl = {
 }
 
 FuncArgs: Vec<FuncArg> = {
-	FuncArg* => <>,
+	<mut a: (<FuncArg> ",")*> <b: FuncArg?> => {if let Some(c) = b {a.push(c)};a},
 }
 
 FuncArg: FuncArg = {
-	<i:Ident> ":" <t:Type> ","? => new_func_arg(i, t),
+	<i:Ident> ":" <t:Type> => new_func_arg(i, t),
 }
 
 GlobalVarDecl: GlobalVarDecl = {
