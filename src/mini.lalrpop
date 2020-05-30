@@ -142,7 +142,7 @@ Type: Type = {
 		Box::new(t), 
 		s.to_usize().unwrap(),
 	),
-	"map" "<" <t1:Type> "," <t2:Type> ">" => Type::Map(Box::new(t1), Box::new(t2)),
+	"map" "<" <t1:Type> "," <t2:Type> ","? ">" => Type::Map(Box::new(t1), Box::new(t2)),
 	"func" <CommaedTypesInParens> => Type::Func(false, <>, Box::new(Type::Void)),
 	"func" <a: CommaedTypesInParens> "->" <r: Type> => Type::Func(false, a, Box::new(r)),
 	"impure" "func" <CommaedTypesInParens> => Type::Func(true, <>, Box::new(Type::Void)),
@@ -247,14 +247,14 @@ Expr10: Expr = {
 
 Expr11: Expr = {
 	<lno: @L> "hash" "(" <e: Expr> ")" => Expr::new_unary(UnaryOp::Hash, e, file_info.location(BytePos::from(lno))),
-	<lno: @L> "hash" "(" <l:Expr> "," <r:Expr> ")" => Expr::new_binary(BinaryOp::Hash, l, r, file_info.location(BytePos::from(lno))),
+	<lno: @L> "hash" "(" <l:Expr> "," <r:Expr> ","? ")" => Expr::new_binary(BinaryOp::Hash, l, r, file_info.location(BytePos::from(lno))),
 	<lno: @L> "len" "(" <e: Expr> ")" => Expr::new_unary(UnaryOp::Len, e, file_info.location(BytePos::from(lno))),
 	<lno: @L> "uint" "(" <e: Expr> ")" => Expr::new_unary(UnaryOp::ToUint, e, file_info.location(BytePos::from(lno))),
 	<lno: @L> "int" "(" <e: Expr> ")" => Expr::new_unary(UnaryOp::ToInt, e, file_info.location(BytePos::from(lno))),
 	<lno: @L> "bytes32" "(" <e: Expr> ")" => Expr::new_unary(UnaryOp::ToBytes32, e, file_info.location(BytePos::from(lno))),
 	<lno: @L> "address" "(" <e: Expr> ")" => Expr::new_unary(UnaryOp::ToAddress, e, file_info.location(BytePos::from(lno))),
 	<lno: @L> "newarray" "<" <t:Type> ">" "(" <e:Expr> ")" => Expr::NewArray(Box::new(e), t, file_info.location(BytePos::from(lno))),
-	<lno: @L> "newfixedarray" "(" <s:UnsignedInteger> "," <e:Expr> ")" => Expr::NewFixedArray(
+	<lno: @L> "newfixedarray" "(" <s:UnsignedInteger> "," <e:Expr> ","? ")" => Expr::NewFixedArray(
 		s.to_usize().unwrap(), 
 		Some(Box::new(e)),
 		file_info.location(BytePos::from(lno)),
@@ -264,7 +264,7 @@ Expr11: Expr = {
 		None,
 		file_info.location(BytePos::from(lno)),
 	),
-	<lno: @L> "newmap" "<" <k:Type> "," <v:Type> ">" => Expr::NewMap(k, v, file_info.location(BytePos::from(lno))),
+	<lno: @L> "newmap" "<" <k:Type> "," <v:Type> ","? ">" => Expr::NewMap(k, v, file_info.location(BytePos::from(lno))),
 	<lno: @L> "unsafecast" "<" <t:Type> ">" "(" <e:Expr> ")" => Expr::UnsafeCast(Box::new(e), t, file_info.location(BytePos::from(lno))),
 	Expr13,
 }
