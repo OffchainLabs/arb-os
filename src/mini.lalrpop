@@ -245,6 +245,7 @@ Expr9: Expr = {
 
 Expr10: Expr = {
 	<lno: @L> <f: Expr10> "(" ")" => Expr::FunctionCall(Box::new(f), Vec::new(), file_info.location(BytePos::from(lno))),
+	<lno: @L> <f: Expr10> "(" <e: Expr> ")" => Expr::FunctionCall(Box::new(f), vec![e], file_info.location(BytePos::from(lno))),
 	<lno: @L> <f: Expr10> "(" <c: CommaedExprs> ")" => Expr::FunctionCall(Box::new(f), c, file_info.location(BytePos::from(lno))),
 	<lno: @L> <e1:Expr10> "[" <e2:Expr> "]" => Expr::ArrayOrMapRef(Box::new(e1), Box::new(e2), file_info.location(BytePos::from(lno))),
 	<lno: @L> <e:Expr10> "." <i:Ident> => Expr::DotRef(Box::new(e), i, file_info.location(BytePos::from(lno))),
@@ -289,7 +290,7 @@ Expr14: Expr = {
 	<lno: @L> <u: UnsignedInteger> => Expr::ConstUint(u, file_info.location(BytePos::from(lno))),
 	<lno: @L> <s: SignedInteger> => Expr::ConstInt(s, file_info.location(BytePos::from(lno))),
 	"(" <e: Expr> ")" => <>,
-	<lno: @L> "(" <c: CommaedExprs> "," ")" => Expr::Tuple(c, file_info.location(BytePos::from(lno))),
+	<lno: @L> "(" <c: CommaedExprs> ")" => Expr::Tuple(c, file_info.location(BytePos::from(lno))),
 	<lno: @L> "false" => Expr::ConstBool(false, file_info.location(BytePos::from(lno))),
 	<lno: @L> "true" => Expr::ConstBool(true, file_info.location(BytePos::from(lno))),
 	<lno: @L> "null" => Expr::Null(file_info.location(BytePos::from(lno))),
@@ -301,16 +302,12 @@ FieldInitializer: FieldInitializer = {
 }
 
 CommaedExprs: Vec<Expr> = {
-	Expr => {
-		let mut c = Vec::new();
-		c.push(<>);
-		c
-	},
-	<c: CommaedExprs> "," <e: Expr> => {
-		let mut c = c;
-		c.push(e);
-		c
-	},
+	<mut c: (<Expr> ",")+> <e: (Expr)?> => {
+    		if let Some(s) = e {
+    		    c.push(s);
+    		}
+    		c
+    	},
 }
 
 AsmInsn: Instruction = {
