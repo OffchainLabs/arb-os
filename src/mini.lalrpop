@@ -276,7 +276,7 @@ Expr13: Expr = {
 }
 
 Expr14: Expr = {
-	<lno: @L> "struct" "{" <fi: FieldInitializer+> "}" => Expr::StructInitializer(fi, file_info.location(BytePos::from(lno))),
+	<lno: @L> "struct" "{" <fi: FieldInitializers> "}" => Expr::StructInitializer(fi, file_info.location(BytePos::from(lno))),
 	<lno: @L> <u: UnsignedInteger> => Expr::ConstUint(u, file_info.location(BytePos::from(lno))),
 	<lno: @L> <s: SignedInteger> => Expr::ConstInt(s, file_info.location(BytePos::from(lno))),
 	"(" <e: Expr> ")" => <>,
@@ -287,8 +287,12 @@ Expr14: Expr = {
 	<lno: @L> <i: Ident> => Expr::VariableRef(i, file_info.location(BytePos::from(lno))),
 }
 
+FieldInitializers: Vec<FieldInitializer> = {
+	<mut l: (<FieldInitializer> ",")*> <f: FieldInitializer> ","? => {l.push(f);l},
+}
+
 FieldInitializer: FieldInitializer = {
-	<Ident> ":" <Expr> "," => FieldInitializer::new(<>),
+	<Ident> ":" <Expr> => FieldInitializer::new(<>),
 }
 
 CommaedExprs: Vec<Expr> = {
