@@ -691,6 +691,16 @@ impl OptionConst {
             OptionConst::None(t) => t.clone(),
         }))
     }
+    pub(crate) fn value(&self) -> Option<Value> {
+        match self {
+            OptionConst::Some(c) => Some(if let Some(val) = c.clone().value() {
+                Value::Tuple(vec![val])
+            } else {
+                Value::Int(Uint256::one())
+            }),
+            OptionConst::None(_) => Some(Value::Int(Uint256::zero())),
+        }
+    }
 }
 
 impl Constant {
@@ -729,7 +739,6 @@ pub enum Expr {
     VariableRef(StringId, Option<Location>),
     TupleRef(Box<Expr>, Uint256, Option<Location>),
     DotRef(Box<Expr>, StringId, Option<Location>),
-    ConstOption(OptionConst),
     Constant(Constant, Option<Location>),
     FunctionCall(Box<Expr>, Vec<Expr>, Option<Location>),
     ArrayOrMapRef(Box<Expr>, Box<Expr>, Option<Location>),
@@ -744,7 +753,7 @@ pub enum Expr {
     Asm(Type, Vec<Instruction>, Vec<Expr>, Option<Location>),
 }
 
-impl<'a> Expr {
+impl Expr {
     pub fn new_unary(op: UnaryOp, e: Expr, loc: Option<Location>) -> Self {
         Expr::UnaryOp(op, Box::new(e), loc)
     }
@@ -875,7 +884,6 @@ impl<'a> Expr {
                     *loc,
                 ))
             }
-            Expr::ConstOption(t) => Ok(Expr::ConstOption(t.clone())),
         }
     }
 
@@ -900,7 +908,6 @@ impl<'a> Expr {
             Expr::StructMod(_, _, _, loc) => *loc,
             Expr::UnsafeCast(_, _, loc) => *loc,
             Expr::Asm(_, _, _, loc) => *loc,
-            Expr::ConstOption(_) => unimplemented!(),
         }
     }
 }

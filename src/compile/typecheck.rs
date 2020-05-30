@@ -17,7 +17,7 @@
 use super::symtable::SymTable;
 use crate::compile::ast::{
     BinaryOp, Constant, Expr, FuncArg, FuncDecl, FuncDeclKind, GlobalVarDecl, IfArm,
-    ImportFuncDecl, MatchPattern, OptionConst, Statement, StructField, TopLevelDecl, Type, UnaryOp,
+    ImportFuncDecl, MatchPattern, Statement, StructField, TopLevelDecl, Type, UnaryOp,
 };
 use crate::link::{ExportedFunc, ImportedFunc};
 use crate::mavm::{Instruction, Label, Value};
@@ -101,7 +101,6 @@ pub enum TypeCheckedExpr {
     FuncRef(usize, Type, Option<Location>),
     TupleRef(Box<TypeCheckedExpr>, Uint256, Type, Option<Location>),
     DotRef(Box<TypeCheckedExpr>, StringId, Type, Option<Location>),
-    ConstOption(OptionConst),
     Const(Value, Type, Option<Location>),
     FunctionCall(
         Box<TypeCheckedExpr>,
@@ -184,7 +183,6 @@ impl<'a> TypeCheckedExpr {
             TypeCheckedExpr::FuncRef(_, t, _) => t.clone(),
             TypeCheckedExpr::TupleRef(_, _, t, _) => t.clone(),
             TypeCheckedExpr::DotRef(_, _, t, _) => t.clone(),
-            TypeCheckedExpr::ConstOption(opconst) => opconst.type_of(),
             TypeCheckedExpr::Const(_, t, _) => t.clone(),
             TypeCheckedExpr::FunctionCall(_, _, t, _) => t.clone(),
             TypeCheckedExpr::StructInitializer(_, t, _) => t.clone(),
@@ -858,8 +856,12 @@ fn typecheck_expr(
                 Type::Bool,
                 *loc,
             ),
+            Constant::Option(o) => TypeCheckedExpr::Const(
+                o.clone().value().unwrap_or_else(Value::none),
+                o.clone().type_of(),
+                *loc,
+            ),
             Constant::Null => TypeCheckedExpr::Const(Value::none(), Type::Any, *loc),
-            _ => unimplemented!(),
         }),
         Expr::FunctionCall(fexpr, args, loc) => {
             let tc_fexpr = typecheck_expr(fexpr, type_table, global_vars, func_table)?;
@@ -1142,7 +1144,6 @@ fn typecheck_expr(
                 *loc,
             ))
         }
-        Expr::ConstOption(t) => Ok(TypeCheckedExpr::ConstOption(t.clone())),
     }
 }
 

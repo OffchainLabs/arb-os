@@ -20,7 +20,6 @@ use super::typecheck::{
     TypeCheckedExpr, TypeCheckedFunc, TypeCheckedIfArm, TypeCheckedMatchPattern,
     TypeCheckedStatement,
 };
-use crate::compile::ast::OptionConst;
 use crate::link::ImportedFunc;
 use crate::link::TUPLE_SIZE;
 use crate::mavm::{Instruction, Label, LabelGenerator, Opcode, Value};
@@ -950,18 +949,6 @@ fn mavm_codegen_expr<'a>(
                     *loc,
                 )),
             }
-        }
-        TypeCheckedExpr::ConstOption(optconst) => {
-            let val = match optconst {
-                OptionConst::Some(t) => Value::Tuple(if let Some(thing) = (*t).value() {
-                    vec![thing]
-                } else {
-                    vec![]
-                }),
-                OptionConst::None(_) => Value::Int(Uint256::zero()),
-            };
-            code.push(Instruction::from_opcode_imm(Opcode::Noop, val, None));
-            Ok((label_gen, code))
         }
         TypeCheckedExpr::Const(val, _, loc) => {
             code.push(Instruction::from_opcode_imm(

@@ -246,11 +246,10 @@ Expr9: Expr = {
 };
 
 Expr10: Expr = {
-	<lno: @L> "Some(" <f: Expr> ")" => Expr::ConstOption(OptionConst::Some(Box::new(match f {
+	<lno: @L> "Some(" <f: Expr> ")" => Expr::Constant(Constant::Option(OptionConst::Some(Box::new(match f {
 	    Expr::Constant(n, _) => n,
-	    Expr::ConstOption(c) => Constant::Option(c),
 	    _ => unimplemented!(),
-	}))),
+	}))), file_info.location(BytePos::from(lno))),
 	<lno: @L> <f: Expr10> "(" ")" => Expr::FunctionCall(Box::new(f), Vec::new(), file_info.location(BytePos::from(lno))),
 	<lno: @L> <f: Expr10> "(" <c: CommaedExprs> ")" => Expr::FunctionCall(Box::new(f), c, file_info.location(BytePos::from(lno))),
 	<lno: @L> <e1:Expr10> "[" <e2:Expr> "]" => Expr::ArrayOrMapRef(Box::new(e1), Box::new(e2), file_info.location(BytePos::from(lno))),
@@ -295,7 +294,7 @@ Expr14: Expr = {
 	<lno: @L> "struct" "{" <fi: FieldInitializer+> "}" => Expr::StructInitializer(fi, file_info.location(BytePos::from(lno))),
 	<lno: @L> <u: UnsignedInteger> => Expr::Constant(Constant::Uint(u), file_info.location(BytePos::from(lno))),
 	<lno: @L> <s: SignedInteger> => Expr::Constant(Constant::Int(s), file_info.location(BytePos::from(lno))),
-	"None<" <t: Type> ">" => Expr::ConstOption(OptionConst::None(t)),
+	<lno: @L> "None<" <t: Type> ">" => Expr::Constant(Constant::Option(OptionConst::None(t)), file_info.location(BytePos::from(lno))),
 	"(" <e: Expr> ")" => <>,
 	<lno: @L> "(" <c: CommaedExprs> "," ")" => Expr::Tuple(c, file_info.location(BytePos::from(lno))),
 	<lno: @L> "false" => Expr::Constant(Constant::Bool(false), file_info.location(BytePos::from(lno))),
