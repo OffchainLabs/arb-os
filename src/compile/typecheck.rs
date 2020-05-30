@@ -16,8 +16,8 @@
 
 use super::symtable::SymTable;
 use crate::compile::ast::{
-    BinaryOp, Expr, FuncArg, FuncDecl, FuncDeclKind, GlobalVarDecl, IfArm, ImportFuncDecl,
-    MatchPattern, OptionConst, Statement, StructField, TopLevelDecl, Type, UnaryOp,
+    BinaryOp, Constant, Expr, FuncArg, FuncDecl, FuncDeclKind, GlobalVarDecl, IfArm,
+    ImportFuncDecl, MatchPattern, OptionConst, Statement, StructField, TopLevelDecl, Type, UnaryOp,
 };
 use crate::link::{ExportedFunc, ImportedFunc};
 use crate::mavm::{Instruction, Label, Value};
@@ -850,21 +850,17 @@ fn typecheck_expr(
                 ))
             }
         }
-        Expr::ConstUint(n, loc) => Ok(TypeCheckedExpr::Const(
-            Value::Int(n.clone()),
-            Type::Uint,
-            *loc,
-        )),
-        Expr::ConstInt(n, loc) => Ok(TypeCheckedExpr::Const(
-            Value::Int(n.clone()),
-            Type::Int,
-            *loc,
-        )),
-        Expr::ConstBool(b, loc) => Ok(TypeCheckedExpr::Const(
-            Value::Int(if *b { Uint256::one() } else { Uint256::zero() }),
-            Type::Bool,
-            *loc,
-        )),
+        Expr::Constant(constant, loc) => Ok(match constant {
+            Constant::Uint(n) => TypeCheckedExpr::Const(Value::Int(n.clone()), Type::Uint, *loc),
+            Constant::Int(n) => TypeCheckedExpr::Const(Value::Int(n.clone()), Type::Int, *loc),
+            Constant::Bool(b) => TypeCheckedExpr::Const(
+                Value::Int(if *b { Uint256::one() } else { Uint256::zero() }),
+                Type::Bool,
+                *loc,
+            ),
+            Constant::Null => TypeCheckedExpr::Const(Value::none(), Type::Any, *loc),
+            _ => unimplemented!(),
+        }),
         Expr::FunctionCall(fexpr, args, loc) => {
             let tc_fexpr = typecheck_expr(fexpr, type_table, global_vars, func_table)?;
             match tc_fexpr.get_type() {
@@ -1128,7 +1124,6 @@ fn typecheck_expr(
             t.clone(),
             *loc,
         )),
-        Expr::Null(loc) => Ok(TypeCheckedExpr::Const(Value::none(), Type::Any, *loc)),
         Expr::Asm(ret_type, insns, args, loc) => {
             if ret_type.is_void() {
                 return Err(new_type_error(
