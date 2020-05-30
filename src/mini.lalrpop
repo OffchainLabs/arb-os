@@ -157,12 +157,10 @@ CommaedTypesInParens: Vec<Type> = {
 }
 
 CommaedTypes: Vec<Type> = {
-	Type => vec![<>],
-	<c: CommaedTypes> "," <t:Type> => {
-		let mut c = c;
-		c.push(t);
-		c
-	}
+	<mut t: (<Type> ",")*> <e: (Type)> ","? => {
+        t.push(e);
+        t
+    },
 };
 
 Ident: StringId = {
