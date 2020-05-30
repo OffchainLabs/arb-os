@@ -315,11 +315,7 @@ AsmOpcode: Opcode = {
 
 AsmVal: Value = {
 	<UnsignedInteger> => Value::Int(<>),
-	"(" <AsmValComma*> ")" => Value::Tuple(<>),
-}
-
-AsmValComma: Value = {
-	<AsmVal> "," => <>,
+	"(" <mut l: (<AsmVal> ",")*> <v: AsmVal> ","? ")" => Value::Tuple({l.push(v);l}),
 }
 
 IdentStr: &'input str = {
