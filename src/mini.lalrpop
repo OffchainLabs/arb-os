@@ -121,11 +121,11 @@ StructDecl: Type = {
 };
 
 StructFields: Vec<StructField> = {
-	StructField+ => <>,
+	<mut a: (<StructField> ",")*> <b: StructField> ","? => {a.push(b);a},
 }
 
 StructField: StructField = {
-	<Ident> ":" <Type> "," => StructField::new(<>),
+	<Ident> ":" <Type> => StructField::new(<>),
 }
 
 Type: Type = {
