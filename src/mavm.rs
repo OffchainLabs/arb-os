@@ -189,6 +189,16 @@ impl Instruction {
             None => self,
         }
     }
+
+    pub fn marshal_for_module(&self, buf: &mut Vec<u8>, module_size: usize) {
+        buf.push(self.opcode.to_number().unwrap());
+        if let Some(val) = &self.immediate {
+            buf.push(1);
+            val.marshal_for_module(buf, module_size);
+        } else {
+            buf.push(0);
+        }
+    }
 }
 
 impl fmt::Display for Instruction {
@@ -432,6 +442,40 @@ impl Value {
     pub fn avm_hash2(v1: &Self, v2: &Self) -> Value {
         Value::Tuple(vec![v1.clone(), v2.clone()]).avm_hash()
     }
+
+    pub fn marshal_for_module(&self, buf: &mut Vec<u8>, module_size: usize) {
+        match self {
+            Value::Int(ui) => {
+                let mut ui: Uint256 = ui.clone();
+                buf.push(0);
+                let ui_mod = Uint256::from_usize(256);
+                for _i in 0..32 {
+                    let low_byte = ui.modulo(&ui_mod).unwrap().to_usize().unwrap();
+                    buf.push(low_byte as u8);
+                    ui = ui.div(&ui_mod).unwrap();  // safe because denominator is not zero
+                }
+            }
+            Value::Tuple(tup) => {
+                buf.push((16 + tup.len()) as u8);
+                for val in tup {
+                    val.marshal_for_module(buf, module_size);
+                }
+            }
+            Value::CodePoint(CodePt::Internal(pc)) => {
+                buf.push(8);
+                let mut offset = module_size-pc;
+                for _i in 0..8 {
+                    buf.push((offset % 256) as u8);
+                    offset /= 256;
+                }
+            }
+            Value::CodePoint(CodePt::Runtime(slot)) => {
+                buf.push(9);
+                buf.push(*slot as u8);
+            }
+            _ => { panic!("invalid immediate value in module instruction"); }
+        }
+    }
 }
 
 impl fmt::Display for Value {
@@ -459,7 +503,7 @@ impl fmt::Display for Value {
     }
 }
 
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, Eq, PartialEq)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, Eq, PartialEq, Hash)]
 pub enum Opcode {
     Noop,
     Panic,
@@ -652,6 +696,75 @@ impl Opcode {
             0x73 => Some(Opcode::Panic),
             0x74 => Some(Opcode::Halt),
             _ => None,
+        }
+    }
+
+    pub fn to_number(&self) -> Option<u8> {
+        match self {
+            Opcode::Plus => Some(0x01),
+            Opcode::Mul => Some(0x02),
+            Opcode::Minus => Some(0x03),
+            Opcode::Div => Some(0x04),
+            Opcode::Sdiv => Some(0x05),
+            Opcode::Mod => Some(0x06),
+            Opcode::Smod => Some(0x07),
+            Opcode::AddMod => Some(0x08),
+            Opcode::MulMod => Some(0x09),
+            Opcode::Exp => Some(0x0a),
+            Opcode::LessThan => Some(0x10),
+            Opcode::GreaterThan => Some(0x11),
+            Opcode::SLessThan => Some(0x012),
+            Opcode::SGreaterThan => Some(0x13),
+            Opcode::Equal => Some(0x14),
+            Opcode::Not => Some(0x15),
+            Opcode::BitwiseAnd => Some(0x16),
+            Opcode::BitwiseOr => Some(0x17),
+            Opcode::BitwiseXor => Some(0x18),
+            Opcode::BitwiseNeg => Some(0x19),
+            Opcode::Byte => Some(0x1a),
+            Opcode::SignExtend => Some(0x1b),
+            Opcode::Hash => Some(0x20),
+            Opcode::Type => Some(0x21),
+            Opcode::Hash2 => Some(0x22),
+            Opcode::Pop => Some(0x30),
+            Opcode::PushStatic => Some(0x31),
+            Opcode::Rget => Some(0x32),
+            Opcode::Rset => Some(0x33),
+            Opcode::Jump => Some(0x34),   
+            Opcode::Cjump => Some(0x35),
+            Opcode::StackEmpty => Some(0x36),
+            Opcode::GetPC => Some(0x37),
+            Opcode::AuxPush => Some(0x38),
+            Opcode::AuxPop => Some(0x39),
+            Opcode::AuxStackEmpty => Some(0x3a),
+            Opcode::Noop => Some(0x3b),
+            Opcode::ErrPush => Some(0x3c),
+            Opcode::ErrSet => Some(0x3d),
+            Opcode::Dup0 => Some(0x40),
+            Opcode::Dup1 => Some(0x41),
+            Opcode::Dup2 => Some(0x42),
+            Opcode::Swap1 => Some(0x43),
+            Opcode::Swap2 => Some(0x44),
+            Opcode::Tget => Some(0x50),
+            Opcode::Tset => Some(0x51),
+            Opcode::Tlen => Some(0x52),
+            Opcode::Breakpoint => Some(0x60),
+            Opcode::Log => Some(0x61),
+            Opcode::Send => Some(0x70),
+            Opcode::GetTime => Some(0x71),
+            Opcode::Inbox => Some(0x72),
+            Opcode::Panic => Some(0x73),
+            Opcode::Halt => Some(0x74),
+            _ => None,
+        }
+    }
+}
+
+#[test]
+fn test_consistent_opcode_numbers() {
+    for i in 0..256 {
+        if let Some(op) = Opcode::from_number(i) {
+            assert_eq!(i as u8, op.to_number().unwrap());
         }
     }
 }

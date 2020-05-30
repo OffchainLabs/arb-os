@@ -18,18 +18,22 @@ import type ByteStream;
 
 import func bytestream_bytesRemaining(bs: ByteStream) -> uint;
 import func bytestream_getByte(bs: ByteStream) -> (bool, ByteStream, uint);
+import func bytestream_getUint64(bs: ByteStream) -> (bool, ByteStream, uint);
 import func bytestream_getUint(bs: ByteStream) -> (bool, ByteStream, uint);
 
+import func getRuntimeCallback(slot: uint) -> func();
+
+
 type AvmCodePoint = func()
+type Segment = struct {
+    size: uint,
+    capacity: uint,
+    currentCodePt: AvmCodePoint,
+    codePtMap: map<uint, AvmCodePoint>,
+}
 
 
 public func parseModule(bs: ByteStream) -> (bool, AvmCodePoint) {
-    let (success, ubs,) = verifyMagicNumber(bs);
-    if ( ! success) {
-        return (false, unsafecast<AvmCodePoint>(0),);
-    }
-    bs = ubs;
-
     let (success, ubs, numInsns,) = bytestream_getUint(bs);
     if ( ! success) {
         return (false, unsafecast<AvmCodePoint>(0),);
@@ -41,47 +45,48 @@ public func parseModule(bs: ByteStream) -> (bool, AvmCodePoint) {
         return (false, unsafecast<AvmCodePoint>(0),);
     }
 
-    let code = makeCodeStub();
-    while (numInsns > 0) {
-        let (success, cpt, ubs,) = parseAndAddInsn(code, bs);
+    let seg = segment_new(numInsns);
+    while (seg.size < seg.capacity) {
+        let (success, uSeg, ubs,) = parseAndAddInsn(seg, bs);
         if (! success) {
             return (false, unsafecast<AvmCodePoint>(0),);
         }
-        code = cpt;
+        seg = uSeg;
         bs = ubs;
-        numInsns = numInsns-1;
     }
 
-    closeCodeSegment(code);
-    return (true, code,);
+    seg = segment_close(seg);
+    return (true, seg.currentCodePt,);
 }
 
-func verifyMagicNumber(bs: ByteStream) -> (bool, ByteStream) {
-    // magic number is sha3("Arbitrum module format version 0")
-    let (success, ubs, maybeMagic,) = bytestream_getUint(bs);
-    if ( (!success) || (maybeMagic != 0x224722a7c787e71ecf289674f202198afd5e0441d838db2383e85e6111035b65) {
-        return (false, bs,);        
-    }
-    return (true, ubs,);
-}
-
-func parseAndAddInsn(code: AvmCodePoint, bs: ByteStream) -> (bool, AvmCodePoint, ByteStream) {
+func parseAndAddInsn(seg: Segment, bs: ByteStream) -> (bool, Segment, ByteStream) {
     let (success, ubs, opcode,) = bytestream_getByte(bs);
     if ( ! success) {
-        return (false, code, bs,);
+        return (false, seg, bs,);
     }
     bs = ubs;
-    let (success, ubs, val,) = parseAvmValue(bs);
+    let (success, ubs, isImm,) = bytestream_getByte(bs);
     if ( ! success) {
-        return (false, code, bs,);
+        return (false, seg, bs,);
     }
     bs = ubs;
-
-    return (
-        true,
-        pushInstruction(code, opcode, val),
-        bs,
-    );
+    if (isImm == 0) {
+        return (
+            true, 
+            segment_addInsn(seg, opcode, false, 0), 
+            bs,
+        );
+    } else {
+        let (success, ubs, val,) = parseAvmValue(bs);
+        if ( ! success) {
+            return (false, seg, bs,);
+        }
+        return (
+            true, 
+            segment_addInsn(seg, opcode, true, val), 
+            ubs,
+        );
+    }
 }
 
 func parseAvmValue(bs: ByteStream) -> (bool, ByteStream, any) {
@@ -92,10 +97,28 @@ func parseAvmValue(bs: ByteStream) -> (bool, ByteStream, any) {
     bs = ubs;
     if (kind == 0) {
         // parse and return an int
+        let (success, ubs, val,) = bytestream_getUint(bs);
+        if (success) {
+            return (true, ubs, val,);
+        } else {
+            return (false, bs, 0,);
+        }
     } elseif (kind == 8) {
-        // parse and return a codepoint inside the segment
+        // parse and return a codepoint inside the segment, as 64-bit int
+        let (success, ubs, val,) = bytestream_getUint64(bs);
+        if (success) {
+            return (true, ubs, val,);
+        } else {
+            return (false, bs, 0,);
+        }
     } elseif (kind == 9) {
-        // parse and return a codepoint of a runtime call
+        // parse and return a codepoint of a runtime call, as byte
+        let (success, ubs, val,) = bytestream_getByte(bs);
+        if (success) {
+            return (true, bs, getRuntimeCallback(val),);
+        } else {
+            return (false, bs, 0,);
+        }
     } elseif (kind == 16) {
         return (true, bs, (),);
     } elseif (kind == 17) {
@@ -116,10 +139,36 @@ func parseAvmValue(bs: ByteStream) -> (bool, ByteStream, any) {
     }
 }
 
-func makeCodeStub() -> AvmCodePoint {
-    return asm() AvmCodePoint { errcodept };
+func segment_new(capacity: uint) -> Segment {
+    return struct {
+        size: 0,
+        capacity: capacity,
+        currentCodePt: asm() AvmCodePoint { errcodept },
+        codePtMap: newmap<uint, AvmCodePoint>,
+    };
 }
 
-func pushInstruction(code: AvmCodePoint, opcode: uint, val: any) -> AvmCodePoint {
-    return asm(opcode, val, code) AvmCodePoint { pushinsn };
+func segment_addInsn(seg: Segment, opcode: uint, hasImm: bool, imm: any) -> Segment {
+    let curCodePt = seg.currentCodePt;
+    if (hasImm) {
+        curCodePt = asm(opcode, imm, seg.currentCodePt) AvmCodePoint { pushinsnimm };
+    } else {
+        curCodePt = asm(opcode, seg.currentCodePt) AvmCodePoint { pushinsn };
+    }
+    return seg with { currentCodePt: curCodePt }
+               with { size: seg.size+1 }
+               with { codePtMap: seg.codePtMap with { [seg.size] = curCodePt } };
+}
+
+func pushInstruction(code: AvmCodePoint, opcode: uint) -> AvmCodePoint {
+    return asm(opcode, code) AvmCodePoint { pushinsn };
+}
+
+func pushInstructionImm(code: AvmCodePoint, opcode: uint, val: any) -> AvmCodePoint {
+    return asm(opcode, val, code) AvmCodePoint { pushinsnimm };
+}
+
+func segment_close(seg: Segment) -> Segment {
+    // we might eventually have something to do here
+    return seg;
 }

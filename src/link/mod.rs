@@ -72,6 +72,19 @@ impl<'a> LinkedProgram {
             }
         }
     }
+
+    pub fn marshal_as_module(&self) -> Vec<u8> {
+        let mut buf: Vec<u8> = Vec::new();
+        let mut num = self.code.len();
+        for _ in 0..32 {
+            buf.push((num % 256) as u8);
+            num /= 256;
+        }
+        for (_, insn) in self.code.iter().enumerate() {
+            insn.marshal_for_module(&mut buf, self.code.len());
+        }
+        buf
+    }
 }
 
 #[derive(Clone, Serialize, Deserialize)]

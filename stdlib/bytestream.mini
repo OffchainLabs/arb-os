@@ -18,6 +18,7 @@ import type ByteArray;
 
 import func bytearray_size(ba: ByteArray) -> uint;
 import func bytearray_getByte(ba: ByteArray, offset: uint) -> uint;
+import func bytearray_get64(ba: ByteArray, offset: uint) -> uint;
 import func bytearray_get256(ba: ByteArray, offset: uint) -> uint;
 
 type ByteStream = struct {
@@ -50,6 +51,18 @@ public func bytestream_getByte(bs: ByteStream) -> (bool, ByteStream, uint) {
             true,
             bs with { currentOffset: bs.currentOffset+1 },
             bytearray_getByte(bs.contents, bs.currentOffset),
+        );
+    }
+}
+
+public func bytestream_get64(bs: ByteStream) -> (bool, ByteStream, uint) {
+    if (bs.currentOffset+8 > bs.capacity) {
+        return (false, bs, 0,);
+    } else {
+        return (
+            true,
+            bs with { currentOffset: bs.currentOffset+8 },
+            bytearray_get64(bs.contents, bs.currentOffset),
         );
     }
 }
