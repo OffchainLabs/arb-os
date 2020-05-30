@@ -851,16 +851,10 @@ fn typecheck_expr(
         Expr::Constant(constant, loc) => Ok(match constant {
             Constant::Uint(n) => TypeCheckedExpr::Const(Value::Int(n.clone()), Type::Uint, *loc),
             Constant::Int(n) => TypeCheckedExpr::Const(Value::Int(n.clone()), Type::Int, *loc),
-            Constant::Bool(b) => TypeCheckedExpr::Const(
-                Value::Int(if *b { Uint256::one() } else { Uint256::zero() }),
-                Type::Bool,
-                *loc,
-            ),
-            Constant::Option(o) => TypeCheckedExpr::Const(
-                o.clone().value().unwrap_or_else(Value::none),
-                o.clone().type_of(),
-                *loc,
-            ),
+            Constant::Bool(b) => {
+                TypeCheckedExpr::Const(Value::Int(Uint256::from_bool(*b)), Type::Bool, *loc)
+            }
+            Constant::Option(o) => TypeCheckedExpr::Const(o.value(), o.type_of(), *loc),
             Constant::Null => TypeCheckedExpr::Const(Value::none(), Type::Any, *loc),
         }),
         Expr::FunctionCall(fexpr, args, loc) => {

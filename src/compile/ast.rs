@@ -691,14 +691,17 @@ impl OptionConst {
             OptionConst::None(t) => t.clone(),
         }))
     }
-    pub(crate) fn value(&self) -> Option<Value> {
+    pub(crate) fn value(&self) -> Value {
         match self {
-            OptionConst::Some(c) => Some(if let Some(val) = c.clone().value() {
-                Value::Tuple(vec![val])
-            } else {
-                Value::Int(Uint256::one())
-            }),
-            OptionConst::None(_) => Some(Value::Int(Uint256::zero())),
+            OptionConst::Some(c) => {
+                let val = c.clone().value();
+                if val == Value::none() {
+                    Value::Int(Uint256::one())
+                } else {
+                    Value::Tuple(vec![val])
+                }
+            }
+            OptionConst::None(_) => Value::Int(Uint256::zero()),
         }
     }
 }
@@ -713,19 +716,13 @@ impl Constant {
             Constant::Null => Type::Void,
         }
     }
-    pub(crate) fn value(&self) -> Option<Value> {
+    pub(crate) fn value(&self) -> Value {
         match self {
-            Constant::Uint(ui) => Some(Value::Int(ui.clone())),
-            Constant::Int(i) => Some(Value::Int(i.clone())),
-            Constant::Bool(b) => Some(Value::Int(Uint256::from_bool(b.clone()))),
-            Constant::Option(c) => {
-                if let OptionConst::Some(constant) = c.clone() {
-                    Some((*constant).value().unwrap_or(Value::Int(Uint256::one())))
-                } else {
-                    Some(Value::Int(Uint256::zero()))
-                }
-            }
-            Constant::Null => None,
+            Constant::Uint(ui) => Value::Int(ui.clone()),
+            Constant::Int(i) => Value::Int(i.clone()),
+            Constant::Bool(b) => Value::Int(Uint256::from_bool(b.clone())),
+            Constant::Option(c) => c.value(),
+            Constant::Null => Value::none(),
         }
     }
 }
