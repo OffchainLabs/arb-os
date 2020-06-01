@@ -57,52 +57,34 @@ impl RuntimeEnvironment {
 }
 
 pub fn bytestack_from_bytes(b: &[u8]) -> Value {
+    Value::Tuple(vec![
+        Value::Int(Uint256::from_usize(b.len())),
+        bytestack_from_bytes_2(b, Value::none()),
+    ])
+}
+
+fn bytestack_from_bytes_2(b: &[u8], so_far: Value) -> Value {
     let size = b.len();
-    if size >= 7*32 {
-        bytestack_build_full_block(
-            &b[..7*32],
-            bytestack_from_bytes(&b[7*32..]),
+    if size > 32 {
+        bytestack_from_bytes_2(
+            &b[32..],
+            Value::Tuple(vec![
+                so_far,
+                bytestack_build_uint(&b[..32]),
+            ]),
         )
     } else {
-        bytestack_build_partial_block(b)
-    }
-}
-
-fn bytestack_build_full_block(b: &[u8], rest: Value) -> Value {
-    let mut tup = Vec::new();
-    for i in 0..7 {
-        let mut ui = Uint256::zero();
-        for j in (0..31).rev() {
-            ui = ui.mul(&Uint256::from_usize(256)).add(&Uint256::from_usize(b[32*i+j] as usize));
-        }
-        tup.push(Value::Int(ui));
+        Value::Tuple(vec![
+            so_far,
+            bytestack_build_uint(b),
+        ])
     } 
-    tup.push(rest);
-    Value::Tuple(tup)
 }
 
-fn bytestack_build_partial_block(b: &[u8]) -> Value {
-    let size = b.len();
-    let chunks = size / 32;
-    let remainder = size % 32;
-    if size == 0 {
-        Value::none()
-    } else {
-        let mut tup = Vec::new();
-        for i in 0..chunks {
-            let mut ui = Uint256::zero();
-            for j in (0..32).rev() {
-                ui = ui.mul(&Uint256::from_usize(256)).add(&Uint256::from_usize(b[32*i+j] as usize));
-            }
-            tup.push(Value::Int(ui));            
-        }
-        if remainder > 0 {
-            let mut ui = Uint256::zero();
-            for j in (0..remainder).rev() {
-                ui = ui.mul(&Uint256::from_usize(256)).add(&Uint256::from_usize(b[32*chunks+j] as usize));
-            }
-            tup.push(Value::Int(ui));            
-        }
-        Value::Tuple(tup)
+fn bytestack_build_uint(b: &[u8]) -> Value {
+    let mut ui = Uint256::zero();
+    for j in (0..b.len()).rev() {
+        ui = ui.mul(&Uint256::from_usize(256)).add(&Uint256::from_usize(b[j] as usize));
     }
+    Value::Int(ui)
 }

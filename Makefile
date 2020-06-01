@@ -5,7 +5,8 @@ STDDIR = stdlib
 test: all
 	cargo test
 
-TESTEXES = $(BUILTINDIR)/kvstest.mexe $(STDDIR)/queuetest.mexe $(BUILTINDIR)/arraytest.mexe $(BUILTINDIR)/globaltest.mexe $(STDDIR)/priorityqtest.mexe $(STDDIR)/bytearraytest.mexe $(STDDIR)/keccaktest.mexe $(BUILTINDIR)/maptest.mexe minitests/codeloadtest.mexe
+LOADERTESTS = arbruntime/loader.mexe minitests/loadertest1.mexe
+TESTEXES = $(BUILTINDIR)/kvstest.mexe $(STDDIR)/queuetest.mexe $(BUILTINDIR)/arraytest.mexe $(BUILTINDIR)/globaltest.mexe $(STDDIR)/priorityqtest.mexe $(STDDIR)/bytearraytest.mexe $(STDDIR)/keccaktest.mexe $(BUILTINDIR)/maptest.mexe minitests/codeloadtest.mexe $(LOADERTESTS)
 BUILTINMAOS = $(BUILTINDIR)/array.mao $(BUILTINDIR)/kvs.mao
 STDLIBMAOS = $(STDDIR)/bytearray.mao $(STDDIR)/priorityq.mao $(STDDIR)/random.mao $(STDDIR)/queue.mao $(STDDIR)/keccak.mao $(STDDIR)/bytestream.mao
 STDLIB = $(STDLIBMAOS)
@@ -32,6 +33,9 @@ $(STDDIR)/bytearraytest.mexe: $(BUILTINMAOS) $(STDDIR)/bytearraytest.mini $(STDL
 
 minitests/codeloadtest.mexe: minitests/codeloadtest.mini
 	cargo run compile minitests/codeloadtest.mini -o minitests/codeloadtest.mexe
+
+minitests/loadertest1.mexe: minitests/loadertest1.mini
+	cargo run compile minitests/loadertest1.mini -o minitests/loadertest1.mexe
 
 $(STDDIR)/keccaktest.mexe: $(BUILTINMAOS) $(STDDIR)/keccaktest.mini $(STDDIR)/keccak.mao $(STDDIR)/bytearray.mao
 	cargo run compile $(STDDIR)/keccaktest.mini $(STDDIR)/keccak.mao $(STDDIR)/bytearray.mao -o $(STDDIR)/keccaktest.mexe
@@ -90,11 +94,19 @@ $(RUNTIMEDIR)/evmOps.mao: $(RUNTIMEDIR)/evmOps.mini
 $(RUNTIMEDIR)/parseModule.mao: $(RUNTIMEDIR)/parseModule.mini
 	cargo run compile $(RUNTIMEDIR)/parseModule.mini -c -o $(RUNTIMEDIR)/parseModule.mao
 
+$(RUNTIMEDIR)/loader.mao: $(RUNTIMEDIR)/loader.mini
+	cargo run compile $(RUNTIMEDIR)/loader.mini -c -o $(RUNTIMEDIR)/loader.mao
+
 $(RUNTIME): $(RUNTIMEMAOS) $(STDLIB) $(BUILTINMAOS)
 	cargo run compile $(RUNTIMEMAOS) $(STDLIB) -o $(RUNTIME)
+
+loader: $(RUNTIMEDIR)/loader.mexe
+
+$(RUNTIMEDIR)/loader.mexe: $(RUNTIMEDIR)/loader.mao $(RUNTIMEDIR)/inbox.mao $(RUNTIMEDIR)/parseModule.mao $(STDLIB) $(BUILTINMAOS)
+	cargo run compile $(RUNTIMEDIR)/loader.mao $(RUNTIMEDIR)/inbox.mao $(RUNTIMEDIR)/parseModule.mao $(STDLIB) -o $(RUNTIMEDIR)/loader.mexe
 
 compiler: 
 	cargo build
 
 clean: 
-	rm -f $(BUILTINMAOS) $(TESTEXES) $(STDLIBMAOS) $(RUNTIMEMAOS)
+	rm -f $(BUILTINMAOS) $(TESTEXES) $(LOADERTESTS) $(STDLIBMAOS) $(RUNTIMEMAOS) $(RUNTIMEDIR)/*.mexe

@@ -15,7 +15,7 @@
  */
 
 use crate::mavm::Value;
-use crate::run::run_from_file;
+use crate::run::{run_from_file, run_from_file_with_msgs, module_from_file_path};
 use crate::uint256::Uint256;
 use crate::run::runtime_env::RuntimeEnvironment;
 use std::path::Path;
@@ -416,5 +416,29 @@ fn test_codeload(test_num: usize, expected_result: Value) {
         Err(e) => {
             panic!("{}\n{}", e.0, e.1);
         }
+    }
+}
+
+#[test]
+fn test_loader1() {
+    run_using_loader("minitests/loadertest1.mexe", vec![Value::Int(Uint256::one())]);
+}
+
+fn run_using_loader(filename: &str, expected_result: Vec<Value>) {
+    let loader_path = Path::new("arbruntime/loader.mexe");
+    let module_path = Path::new(filename);
+    let maybe_msg = module_from_file_path(module_path);
+    if let Some(msg) = maybe_msg {
+        let res = run_from_file_with_msgs(loader_path, vec![msg]);
+        match res {
+            Ok(res) => {
+                assert_eq!(res, expected_result);
+            }
+            Err(e) => {
+                panic!("{}", e);
+            }
+        }
+    } else {
+        panic!("failed to load and convert module from {}", filename);
     }
 }

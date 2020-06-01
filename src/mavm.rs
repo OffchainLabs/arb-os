@@ -191,12 +191,17 @@ impl Instruction {
     }
 
     pub fn marshal_for_module(&self, buf: &mut Vec<u8>, module_size: usize) {
-        buf.push(self.opcode.to_number().unwrap());
-        if let Some(val) = &self.immediate {
-            buf.push(1);
-            val.marshal_for_module(buf, module_size);
+        let maybe_opcode_num = self.opcode.to_number();
+        if let Some(opcode_num) = maybe_opcode_num {
+            buf.push(opcode_num);
+            if let Some(val) = &self.immediate {
+                buf.push(1);
+                val.marshal_for_module(buf, module_size);
+            } else {
+                buf.push(0);
+            }
         } else {
-            buf.push(0);
+            panic!("unrecognized opcode {}", self.opcode);
         }
     }
 }
@@ -630,6 +635,7 @@ impl Opcode {
             "logicalor" => Opcode::LogicalOr,
             "gettime" => Opcode::GetTime,
             "inbox" => Opcode::Inbox,
+            "log" => Opcode::Log,
             "errcodept" => Opcode::ErrCodePoint,
             "pushinsn" => Opcode::PushInsn,
             "pushinsnimm" => Opcode::PushInsnImm,
@@ -663,6 +669,7 @@ impl Opcode {
             0x19 => Some(Opcode::BitwiseNeg),
             0x1a => Some(Opcode::Byte),
             0x1b => Some(Opcode::SignExtend),
+            0x1c => Some(Opcode::NotEqual),  //BUGBUG: this should be eliminated, doesn't exist in AVM
             0x20 => Some(Opcode::Hash),
             0x21 => Some(Opcode::Type),
             0x22 => Some(Opcode::Hash2),
@@ -688,6 +695,8 @@ impl Opcode {
             0x50 => Some(Opcode::Tget),
             0x51 => Some(Opcode::Tset),
             0x52 => Some(Opcode::Tlen),
+            0x53 => Some(Opcode::Xget),
+            0x54 => Some(Opcode::Xset),
             0x60 => Some(Opcode::Breakpoint),
             0x61 => Some(Opcode::Log),
             0x70 => Some(Opcode::Send),
@@ -723,6 +732,7 @@ impl Opcode {
             Opcode::BitwiseNeg => Some(0x19),
             Opcode::Byte => Some(0x1a),
             Opcode::SignExtend => Some(0x1b),
+            Opcode::NotEqual => Some(0x1c),
             Opcode::Hash => Some(0x20),
             Opcode::Type => Some(0x21),
             Opcode::Hash2 => Some(0x22),
@@ -748,6 +758,8 @@ impl Opcode {
             Opcode::Tget => Some(0x50),
             Opcode::Tset => Some(0x51),
             Opcode::Tlen => Some(0x52),
+            Opcode::Xget => Some(0x53),
+            Opcode::Xset => Some(0x54),
             Opcode::Breakpoint => Some(0x60),
             Opcode::Log => Some(0x61),
             Opcode::Send => Some(0x70),

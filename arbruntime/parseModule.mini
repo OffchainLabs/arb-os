@@ -18,7 +18,7 @@ import type ByteStream;
 
 import func bytestream_bytesRemaining(bs: ByteStream) -> uint;
 import func bytestream_getByte(bs: ByteStream) -> (bool, ByteStream, uint);
-import func bytestream_getUint64(bs: ByteStream) -> (bool, ByteStream, uint);
+import func bytestream_get64(bs: ByteStream) -> (bool, ByteStream, uint);
 import func bytestream_getUint(bs: ByteStream) -> (bool, ByteStream, uint);
 
 import func getRuntimeCallback(slot: uint) -> func();
@@ -51,6 +51,7 @@ public func parseModule(bs: ByteStream) -> (bool, AvmCodePoint) {
         if (! success) {
             return (false, unsafecast<AvmCodePoint>(0),);
         }
+        asm(2) { log };
         seg = uSeg;
         bs = ubs;
     }
@@ -62,23 +63,28 @@ public func parseModule(bs: ByteStream) -> (bool, AvmCodePoint) {
 func parseAndAddInsn(seg: Segment, bs: ByteStream) -> (bool, Segment, ByteStream) {
     let (success, ubs, opcode,) = bytestream_getByte(bs);
     if ( ! success) {
+        asm(3) { log };
         return (false, seg, bs,);
     }
     bs = ubs;
     let (success, ubs, isImm,) = bytestream_getByte(bs);
     if ( ! success) {
+        asm(4) { log };
         return (false, seg, bs,);
     }
     bs = ubs;
     if (isImm == 0) {
+        asm(10) { log };
         return (
             true, 
             segment_addInsn(seg, opcode, false, 0), 
             bs,
         );
     } else {
+        asm(11) { log };
         let (success, ubs, val,) = parseAvmValue(bs);
         if ( ! success) {
+            asm(5) { log };
             return (false, seg, bs,);
         }
         return (
@@ -95,6 +101,7 @@ func parseAvmValue(bs: ByteStream) -> (bool, ByteStream, any) {
         return (false, bs, 0,);
     }
     bs = ubs;
+    asm(20+kind) { log };
     if (kind == 0) {
         // parse and return an int
         let (success, ubs, val,) = bytestream_getUint(bs);
@@ -105,7 +112,7 @@ func parseAvmValue(bs: ByteStream) -> (bool, ByteStream, any) {
         }
     } elseif (kind == 8) {
         // parse and return a codepoint inside the segment, as 64-bit int
-        let (success, ubs, val,) = bytestream_getUint64(bs);
+        let (success, ubs, val,) = bytestream_get64(bs);
         if (success) {
             return (true, ubs, val,);
         } else {
@@ -119,21 +126,107 @@ func parseAvmValue(bs: ByteStream) -> (bool, ByteStream, any) {
         } else {
             return (false, bs, 0,);
         }
-    } elseif (kind == 16) {
-        return (true, bs, (),);
-    } elseif (kind == 17) {
-        let tuple = newfixedarray(1);
-        let i = 0;
-        while (i < 1) {
-            let (success, ubs, val,) = parseAvmValue(bs);
-            if ( ! success) {
-                return (false, bs, 0,);
+    } elseif (kind >= 16 && kind <= 24) {
+        let tup = unsafecast<any>(0);
+        if (kind == 16) {
+            return (true, bs, (),);
+        } elseif(kind == 17) {
+            let ret = newfixedarray(1);
+            let i = 0;
+            while (i < kind-16) {
+                let (success, ubs, val,) = parseAvmValue(bs);
+                if ( ! success) {
+                    return (false, bs, 0,);
+                }
+                bs = ubs;
+                i = i+1;
             }
-            bs = ubs;
-            tuple = tuple with { [i] = val };
-            i = i+1;
+            return (true, bs, ret,);
+        } elseif(kind == 18) {
+            let ret = newfixedarray(2);
+            let i = 0;
+            while (i < kind-16) {
+                let (success, ubs, val,) = parseAvmValue(bs);
+                if ( ! success) {
+                    return (false, bs, 0,);
+                }
+                bs = ubs;
+                i = i+1;
+            }
+            return (true, bs, ret,); 
+        } elseif(kind == 19) {
+            let ret = newfixedarray(3);
+            let i = 0;
+            while (i < kind-16) {
+                let (success, ubs, val,) = parseAvmValue(bs);
+                if ( ! success) {
+                    return (false, bs, 0,);
+                }
+                bs = ubs;
+                i = i+1;
+            }
+            return (true, bs, ret,);
+        } elseif(kind == 20) {
+            let ret = newfixedarray(4);
+            let i = 0;
+            while (i < kind-16) {
+                let (success, ubs, val,) = parseAvmValue(bs);
+                if ( ! success) {
+                    return (false, bs, 0,);
+                }
+                bs = ubs;
+                i = i+1;
+            }
+            return (true, bs, ret,);  
+        } elseif(kind == 21) {
+            let ret = newfixedarray(5);
+            let i = 0;
+            while (i < kind-16) {
+                let (success, ubs, val,) = parseAvmValue(bs);
+                if ( ! success) {
+                    return (false, bs, 0,);
+                }
+                bs = ubs;
+                i = i+1;
+            }
+            return (true, bs, ret,);  
+        } elseif(kind == 22) {
+            let ret = newfixedarray(6);
+            let i = 0;
+            while (i < kind-16) {
+                let (success, ubs, val,) = parseAvmValue(bs);
+                if ( ! success) {
+                    return (false, bs, 0,);
+                }
+                bs = ubs;
+                i = i+1;
+            }
+            return (true, bs, ret,);   
+        } elseif(kind == 23) {
+            let ret = newfixedarray(7);
+            let i = 0;
+            while (i < kind-16) {
+                let (success, ubs, val,) = parseAvmValue(bs);
+                if ( ! success) {
+                    return (false, bs, 0,);
+                }
+                bs = ubs;
+                i = i+1;
+            }
+            return (true, bs, ret,);  
+        } else {   // kind==24 is the only possibility here
+            let ret = newfixedarray(8);
+            let i = 0;
+            while (i < kind-16) {
+                let (success, ubs, val,) = parseAvmValue(bs);
+                if ( ! success) {
+                    return (false, bs, 0,);
+                }
+                bs = ubs;
+                i = i+1;
+            }
+            return (true, bs, ret,);  
         }
-        return (true, bs, tuple,);        
     } else {
         return (false, bs, 0,);
     }

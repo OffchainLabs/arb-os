@@ -14,7 +14,7 @@
 // limitations under the License.
 //
 
-import func builtin_arrayResize(a: []uint, newSize: uint, baseVal: uint) -> []uint;
+import func array_resize(a: []uint, newSize: uint, baseVal: uint) -> []uint;
 import func builtin_arrayGetConsecutive(a: []uint, index: uint) -> (uint, uint);
 import func builtin_arrayOp(a: []uint, index: uint, closure: opClosure) -> ([]uint, uint);
 import func builtin_arrayOpConsecutive(a: []uint, index: uint, closure1: opClosure, closure2: opClosure) -> ([]uint, uint, uint);
@@ -133,7 +133,7 @@ public func bytearray_setByte(ba: ByteArray, offset: uint, val: uint) -> ByteArr
                 newCapacity = 8*newCapacity;
             }
             ba = ba with { capacity: newCapacity }
-                    with { contents: builtin_arrayResize(ba.contents, newCapacity/32, 0) };
+                    with { contents: array_resize(ba.contents, newCapacity/32, 0) };
         } else {
             panic;
         }
@@ -179,7 +179,7 @@ public func bytearray_set64(ba: ByteArray, offset: uint, value: uint) -> ByteArr
                     newCapacity = 8*newCapacity;
                 }
                 ba = ba with { capacity: newCapacity }
-                        with { contents: builtin_arrayResize(ba.contents, newCapacity/32, 0) };
+                        with { contents: array_resize(ba.contents, newCapacity/32, 0) };
             }
         } else {
             panic;
@@ -264,7 +264,7 @@ public func bytearray_set256(ba: ByteArray, offset: uint, value: uint) -> ByteAr
                     newCapacity = 8*newCapacity;
                 }
                 ba = ba with { capacity: newCapacity }
-                        with { contents: builtin_arrayResize(ba.contents, newCapacity/32, 0) };
+                        with { contents: array_resize(ba.contents, newCapacity/32, 0) };
             }
         } else {
             panic;

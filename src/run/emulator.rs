@@ -237,7 +237,7 @@ impl CodeStore {
 					None
 				}
 			}
-			_ => { panic!("unlinked codepoint reference in running code"); }
+			_ => { panic!("unlinked codepoint reference in running code: {:?}", codept); }
 		}
 	}
 
@@ -253,6 +253,7 @@ impl CodeStore {
 	fn push_insn(&mut self, op: usize, imm: Option<Value>, codept: CodePt) -> Option<CodePt> {
 		if let CodePt::InSegment(seg_num, old_offset) = codept {
 			if seg_num >= self.segments.len() {
+				panic!("bad segment number in push_insn");
 				None
 			} else {
 				let segment = &mut self.segments[seg_num];
@@ -261,6 +262,7 @@ impl CodeStore {
 						segment.push(Instruction::new(opcode, imm, None));
 						Some(CodePt::new_in_segment(seg_num, old_offset+1))
 					} else {
+						panic!("bad opcode number {} in push_insn at length {}", op, segment.len());
 						None
 					}
 				} else {
@@ -359,10 +361,18 @@ impl<'a> Machine {
                         return;
                     }
                 }
-            }
-            if let Err(e) = self.run_one() {
-                self.state = MachineState::Error(e);
-            }
+			}
+			match self.run_one() {
+				Ok(still_runnable) => {
+					if ! still_runnable {
+						return;
+					}
+				}
+            	Err(e) => {
+					self.state = MachineState::Error(e);
+					return;
+				}
+			}
         }
     }
 
@@ -733,7 +743,7 @@ impl<'a> Machine {
 					Opcode::NotEqual => {
 						let r1 = self.stack.pop(&self.state)?;
 						let r2 = self.stack.pop(&self.state)?;
-						self.stack.push_usize(if r1 != r2 { 1 } else { 0 });
+						self.stack.push_usize(if r1 == r2 { 0 } else { 1 });
 						self.incr_pc();
 						Ok(true)
 					}

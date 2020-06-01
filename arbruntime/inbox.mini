@@ -54,15 +54,17 @@ type InboxCell = struct {
 
 impure func getFromL1Inbox(inbox: Inbox) -> Inbox {
     let newMsgs = asm(0) InboxCell { inbox };
-    return addInboxToQueue(inbox, newMsgs);
+    inbox = addInboxToQueue(inbox, newMsgs);
+    return inbox;
 }
 
 func addInboxToQueue(inbox: Inbox, newMsgs: InboxCell) -> Inbox {
     if (unsafecast<any>(newMsgs) == null) {
         return inbox;
     } else {
-        let inbox = addInboxToQueue(inbox, unsafecast<InboxCell>(newMsgs.rest));
-        return inbox with { queue: queue_put(inbox.queue, newMsgs.msg) };
+        inbox = addInboxToQueue(inbox, unsafecast<InboxCell>(newMsgs.rest));
+        let qp = queue_put(inbox.queue, newMsgs.msg);
+        return inbox with { queue: qp };
     }
 }
 
