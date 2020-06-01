@@ -23,58 +23,52 @@ import func priorityq_get(pq: PriorityQ) -> (bool, any, PriorityQ);
 import func priorityq_printAsArray(pq: PriorityQ) -> uint;
 
 
-func tests(which: uint) -> any {
-	if (which == 0) {
-		let q = priorityq_new();
-		if (priorityq_isEmpty(q)) {
-			return 1;
-		} else {
-			return 0;
-		}
-	} elseif (which == 1) {
-		let q = priorityq_new();
-		q = priorityq_insert(q, 97, 3);
-		if (priorityq_isEmpty(q)) {
-			return 1;
-		} else {
-			return 0;
-		}
-	} elseif (which == 2) {
-		let q = priorityq_new();
-		let pq = priorityq_insert(q, 97, 3);
-		if (pq != q) {
-			return 1;
-		} else {
-			return 0;
-		}
-	} elseif (which == 3) {
-		let q = priorityq_new();
-		q = priorityq_insert(q, 97, 3);
-		q = priorityq_insert(q, 98, 2);
-		q = priorityq_insert(q, 96, 4);
-		let (success, ret, pq,) = priorityq_get(q);
-		if (!success) {
-			return 3;
-		}
-		return ret;
-	} elseif (which == 4) {
-		let q = priorityq_new();
-		let i = 0;
-		while (i < 58) {
-			q = priorityq_insert(q, i+30, i+100);
-			i = i+1;
-		}
-		q = priorityq_insert(q, 97, 293);
-		q = priorityq_insert(q, 98, 292);
-		q = priorityq_insert(q, 96, 294);
-		let (success, ret, pq,) = priorityq_get(q);
-		if (!success) {
-			return 28;
-		}
-		return ret;
-	} else {
-		return null;
+func main() {
+	asm(tests()) { log };
+}
+
+func tests() -> uint {
+	let q = priorityq_new();
+	if ( ! priorityq_isEmpty(q)) {
+		return 1;
 	}
+
+	q = priorityq_new();
+	q = priorityq_insert(q, 97, 3);
+	if (priorityq_isEmpty(q)) {
+		return 2;
+	}	
+
+	q = priorityq_new();
+	let pq = priorityq_insert(q, 97, 3);
+	if (pq == q) {
+		return 3;
+	}
+
+	q = priorityq_new();
+	q = priorityq_insert(q, 97, 3);
+	q = priorityq_insert(q, 98, 2);
+	q = priorityq_insert(q, 96, 4);
+	let (success, ret, pq,) = priorityq_get(q);
+	if ( (!success) || (ret != 96) ) {
+		return 4;
+	}
+
+	q = priorityq_new();
+	let i = 0;
+	while (i < 58) {
+		q = priorityq_insert(q, i+30, i+100);
+		i = i+1;
+	}
+	q = priorityq_insert(q, 97, 293);
+	q = priorityq_insert(q, 98, 292);
+	q = priorityq_insert(q, 96, 294);
+	let (success, ret, pq,) = priorityq_get(q);
+	if ( (!success) || (ret != 96) ) {
+		return 5;
+	}
+		
+	return 0;
 }
 
 // stuff below here is for testing the compiler

@@ -29,39 +29,51 @@ type MyType = uint
 var global10: MyType;
 
 
-func tests(which: uint) -> any {
-    if (which == 0) {
-        global0 = 3;
-        return global0;
-    } elseif (which == 1) {
-        global9 = 4;
-        return global9;
-    } elseif (which == 2) {
-        global0 = 5;
-        global9 = 4;
-        return global0;
-    } elseif (which == 3) {
-        global9 = 6;
-        global0 = 3;
-        return global9;
-    } elseif (which == 4) {
-        let sum = asm (4, 0, 3) uint {
-            plus
-            plus
-        };
-        return sum;
-    } elseif (which == 5) {
-        global10 = 3;
-        if (global10 == 3) {
-            return 13;
-        } else {
-            return 0;
-        }
-    } elseif (which == 6) {
-        let farr = newfixedarray(25, 0);
-        farr = farr with { [0] = 33 };
-        return farr[0];
-    } else {
-        return null;
+func main() {
+    asm(tests()) { log };
+}
+
+func tests() -> uint {
+    global0 = 3;
+    if (global0 != 3) {
+        return 1;
     }
+        
+    global9 = 4;
+    if (global9 != 4) {
+        return 2;
+    }
+
+    global0 = 5;
+    global9 = 4;
+    if (global0 != 5) {
+        return 3;
+    }
+
+    global9 = 6;
+    global0 = 3;
+    if (global9 != 6) {
+        return 4;
+    }
+
+    let sum = asm (4, 0, 3) uint {
+        plus
+        plus
+    };
+    if (sum != 7) {
+        return 5;
+    }
+
+    global10 = 3;
+    if (global10 != 3) {
+        return 6;
+    }
+
+    let farr = newfixedarray(25, 0);
+    farr = farr with { [0] = 33 };
+    if (farr[0] != 33) {
+        return 7;
+    }
+ 
+    return 0;
 }

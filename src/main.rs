@@ -166,9 +166,10 @@ fn main() {
     if let Some(matches) = matches.subcommand_matches("run") {
         let filename = matches.value_of("INPUT").unwrap();
         let path = Path::new(filename);
-        match run_from_file(path, Vec::new(), RuntimeEnvironment::new()) {
-            Ok(val) => {
-                println!("Result: {}", val);
+        let env = RuntimeEnvironment::new();
+        match run_from_file(path, Vec::new(), env) {
+            Ok(logs) => {
+                println!("Logs: {:?}", logs);
             }
             Err(e) => {
                 println!("{:?}", e);

@@ -24,7 +24,7 @@ import type ByteStream;
 import impure func inbox_init();
 import impure func inbox_get() -> any;
 import func bytearray_new(size: uint, autoExpand: bool) -> ByteArray;
-import func bytearray_unmarshalBytes(mb: MarshalledBytes, ba: ByteArray, offset: uint) -> ByteArray;
+import func bytearray_unmarshalBytes(mb: MarshalledBytes) -> ByteArray;
 import func bytestream_new(ba: ByteArray) -> ByteStream;
 import func parseModule(bs: ByteStream) -> (bool, func());
 
@@ -32,7 +32,7 @@ func main() {
     inbox_init();
     let msg = inbox_get();
     let mb = unsafecast<MarshalledBytes>(msg);
-    let ba = bytearray_unmarshalBytes(mb, bytearray_new(4096, true), 0);
+    let ba = bytearray_unmarshalBytes(mb);
     let bs = bytestream_new(ba);
     let (success, codept,) = parseModule(bs);
     asm(success) { log };

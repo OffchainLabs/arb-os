@@ -14,39 +14,42 @@
 // limitations under the License.
 //
 
+func main() {
+	asm(tests()) { log };
+}
 
-func tests(which: uint) -> any {
-	if (which == 0) {
-		let m = newmap<(uint, uint), uint>;
-		return m[(17, 18,)].0;
-	} elseif (which == 1) {
-		let m = newmap<uint, uint>;
-		if ( m[17].1 ) { 
-			return 1;
-		} else {
-			return 0;
-		}
-	} elseif (which == 2) {
-		let m = newmap<(uint, uint), uint>;
-		m = m with { [(999, 321,)] = 42 };
-		if ( m[(999, 321,)].1 ) { 
-			return 1;
-		} else {
-			return 0;
-		}
-	} elseif (which == 3) {
-		let m = newmap<(uint, uint), uint>;
-		m = m with { [(999, 321,)] = 42 };
-		m = m with { [(0, 0,)] = 73 };
-		return m[(999, 321,)].0;
-	} elseif (which == 4) {
-		let m = newmap<(uint, uint), uint>;
-		m = m with { [(999, 321,)] = 42 };
-		m = m with { [(0, 0,)] = 73 };
-		m = m with { [(999, 321,)] = 13 };
-		m = m with { [(0, 0,)] = 173 };
-		return m[(999, 321,)].0;
-	} else {
-		return null;
+func tests() -> uint {
+	let m = newmap<(uint, uint), uint>;
+	if (m[(17, 18,)] != (unsafecast<uint>(null), false,)) {
+		return 1;
 	}
+
+	let m = newmap<uint, uint>;
+	if (m[17].1 != false) {
+		return 2;
+	}
+
+	let m = newmap<(uint, uint), uint>;
+	m = m with { [(999, 321,)] = 42 };
+	if ( m[(999, 321,)] != (42, true,) ) { 
+		return 3;
+	}
+
+	m = newmap<(uint, uint), uint>;
+	m = m with { [(999, 321,)] = 42 };
+	m = m with { [(0, 0,)] = 73 };
+	if ( m[(999, 321,)] != (42, true,) ) { 
+		return 4;
+	}
+
+	m = newmap<(uint, uint), uint>;
+	m = m with { [(999, 321,)] = 42 };
+	m = m with { [(0, 0,)] = 73 };
+	m = m with { [(999, 321,)] = 13 };
+	m = m with { [(0, 0,)] = 173 };
+	if (m[(999, 321,)] != (13, true,) ){
+		return 5;
+	}
+
+	return 0;
 }

@@ -21,43 +21,44 @@ import func queue_isEmpty(q: Queue) -> bool;
 import func queue_put(q: Queue, val: any) -> Queue;
 import func queue_get(q: Queue) -> (Queue, any);
 
+func main() {
+	asm(tests()) { log };
+}
 
-func tests(which: uint) -> any {
-	if (which == 0) {
-		let q = queue_new();
-		if (queue_isEmpty(q)) {
-			return 1;
-		} else {
-			return 0;
-		}
-	} elseif (which == 1) {
-		let q = queue_new();
-		q = queue_put(q, 42);
-		if (queue_isEmpty(q)) {
-			return 1;
-		} else {
-			return 0;
-		}
-	} elseif (which == 2) {
-		let q = queue_new();
-		q = queue_put(q, 42);
-		q = queue_put(q, 97);
-		let pair = queue_get(q);
-		return pair.1;
-	} elseif (which == 3) {
-		let q = queue_new();
-		let i = 0;
-		while (i < 25) {
-			q = queue_put(q, i);
-			i = i+1;
-		}
-		i = 0;
-		while (i < 21) {
-			q = (queue_get(q)).0;
-			i = i+1;
-		}
-		return (queue_get(q)).1;
-	} else {
-		return null;
+func tests() -> uint {
+	let q = queue_new();
+	if ( ! queue_isEmpty(q)) {
+		return 1;
 	}
+
+	q = queue_new();
+	q = queue_put(q, 42);
+	if (queue_isEmpty(q)) {
+		return 2;
+	} 
+
+	q = queue_new();
+	q = queue_put(q, 42);
+	q = queue_put(q, 97);
+	let pair = queue_get(q);
+	if (pair.1 != 42) {
+		return 3;
+	}
+
+	q = queue_new();
+	let i = 0;
+	while (i < 25) {
+		q = queue_put(q, i);
+		i = i+1;
+	}
+	i = 0;
+	while (i < 21) {
+		q = (queue_get(q)).0;
+		i = i+1;
+	}
+	if (queue_get(q).1 != 21) {
+		return 4;
+	}
+
+	return 0;
 }

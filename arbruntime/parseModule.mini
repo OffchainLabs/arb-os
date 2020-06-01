@@ -51,7 +51,6 @@ public func parseModule(bs: ByteStream) -> (bool, AvmCodePoint) {
         if (! success) {
             return (false, unsafecast<AvmCodePoint>(0),);
         }
-        asm(2) { log };
         seg = uSeg;
         bs = ubs;
     }
@@ -63,28 +62,26 @@ public func parseModule(bs: ByteStream) -> (bool, AvmCodePoint) {
 func parseAndAddInsn(seg: Segment, bs: ByteStream) -> (bool, Segment, ByteStream) {
     let (success, ubs, opcode,) = bytestream_getByte(bs);
     if ( ! success) {
-        asm(3) { log };
         return (false, seg, bs,);
     }
     bs = ubs;
+    if (opcode == 0) {
+        return (false, seg, bs,);
+    }
     let (success, ubs, isImm,) = bytestream_getByte(bs);
     if ( ! success) {
-        asm(4) { log };
         return (false, seg, bs,);
     }
     bs = ubs;
     if (isImm == 0) {
-        asm(10) { log };
         return (
             true, 
             segment_addInsn(seg, opcode, false, 0), 
             bs,
         );
     } else {
-        asm(11) { log };
         let (success, ubs, val,) = parseAvmValue(bs);
         if ( ! success) {
-            asm(5) { log };
             return (false, seg, bs,);
         }
         return (
@@ -101,7 +98,6 @@ func parseAvmValue(bs: ByteStream) -> (bool, ByteStream, any) {
         return (false, bs, 0,);
     }
     bs = ubs;
-    asm(20+kind) { log };
     if (kind == 0) {
         // parse and return an int
         let (success, ubs, val,) = bytestream_getUint(bs);

@@ -22,41 +22,55 @@ type opClosure = struct {
 }
 
 
-func tests(which: uint) -> any {
-	if (which == 1) {
-		let a = newarray<any>(17);
-		return a[6];
-	} elseif (which == 2) {
-		let a = newarray<uint>(71);
-		return a[66];
-	} elseif (which == 3) {
-		let a = newarray<uint>(64);
-		a = a with { [17] = 3 };
-		return a[17];
-	} elseif (which == 4) {
-		let a = newarray<uint>(111);
-		a = a with { [42] = 3 };
-		a = a with { [99] = 4 };
-		a = a with { [42] = 5 };
-		return a[42];
-	} elseif (which == 5) {
-		let a = newarray<uint>(111);
-		a = a with { [42] = 3 };
-		a = a with { [99] = 4 };
-		a = a with { [42] = 5 };
-		return a[99];
-	} elseif (which == 6) {
-		let a = newarray<uint>(17);
-		a = a with { [11] = 3 };
-		let result = builtin_arrayOp(
-			a,
-			11,
-			unsafecast<opClosure>(struct { f: addFunc, val: 4, })
-		);
-		return result.1;
-	} else {
-		return null;
+func main() {
+	asm(tests()) { log };
+}
+
+func tests() -> uint {
+	let a = newarray<any>(17);
+	if (a[6] != null) {
+		return 1;
+	};
+
+	a = newarray<uint>(71);
+	if (a[66] != 0) {
+		return 2;
 	}
+
+	a = newarray<uint>(64);
+	a = a with { [17] = 3 };
+	if (a[17] != 3) {
+		return 3;
+	}
+
+	a = newarray<uint>(111);
+	a = a with { [42] = 3 };
+	a = a with { [99] = 4 };
+	a = a with { [42] = 5 };
+	if (a[42] != 5) {
+		return 4;
+	}
+
+	a = newarray<uint>(111);
+	a = a with { [42] = 3 };
+	a = a with { [99] = 4 };
+	a = a with { [42] = 5 };
+	if (a[99] != 4) {
+		return 5;
+	}
+
+	let a = newarray<uint>(17);
+	a = a with { [11] = 3 };
+	let result = builtin_arrayOp(
+		a,
+		11,
+		unsafecast<opClosure>(struct { f: addFunc, val: 4, })
+	);
+	if (result.1 != 7) {
+		return 6;
+	}
+
+	return 0;
 }
 
 func addFunc(thunk: uint, oldVal: uint) -> (uint, uint) {
