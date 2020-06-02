@@ -63,6 +63,12 @@ pub enum TypeCheckedStatement {
     Loop(Vec<TypeCheckedStatement>, Option<Location>),
     While(TypeCheckedExpr, Vec<TypeCheckedStatement>, Option<Location>),
     If(TypeCheckedIfArm),
+    IfLet(
+        StringId,
+        TypeCheckedExpr,
+        Vec<TypeCheckedStatement>,
+        Option<Location>,
+    ),
     Asm(Vec<Instruction>, Vec<TypeCheckedExpr>, Option<Location>),
     DebugPrint(TypeCheckedExpr, Option<Location>),
 }
@@ -640,6 +646,25 @@ fn typecheck_statement<'a>(
         Statement::DebugPrint(e, loc) => {
             let tce = typecheck_expr(e, type_table, global_vars, func_table)?;
             Ok((TypeCheckedStatement::DebugPrint(tce, *loc), vec![]))
+        }
+        Statement::IfLet(l, r, s, no) => {
+            let tcr = typecheck_expr(r, type_table, global_vars, func_table)?;
+            let tct = tcr.get_type();
+            Ok((
+                TypeCheckedStatement::IfLet(
+                    *l,
+                    tcr,
+                    typecheck_statement_sequence(
+                        s,
+                        return_type,
+                        type_table,
+                        global_vars,
+                        func_table,
+                    )?,
+                    *no,
+                ),
+                vec![(*l, tct)],
+            ))
         }
     }
 }

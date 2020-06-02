@@ -572,6 +572,55 @@ fn mavm_codegen_statements<'a>(
                 global_var_map,
             )
         }
+        TypeCheckedStatement::IfLet(name, expr, block, loc) => {
+            let (after_label, lgg) = label_gen.next();
+            let slot_num = num_locals;
+            let new_locals = locals.push_one(*name, slot_num);
+            num_locals += 1;
+            let (lg, c) = mavm_codegen_expr(
+                expr,
+                code,
+                &new_locals,
+                lgg,
+                string_table,
+                import_func_map,
+                global_var_map,
+            )?;
+            label_gen = lg;
+            code = c;
+            code.push(Instruction::from_opcode(Opcode::Dup0, *loc));
+            code.push(Instruction::from_opcode_imm(
+                Opcode::Tget,
+                Value::Int(Uint256::from_usize(0)),
+                *loc,
+            ));
+            code.push(Instruction::from_opcode_imm(
+                Opcode::Cjump,
+                Value::Label(after_label),
+                *loc,
+            ));
+            code.push(Instruction::from_opcode_imm(
+                Opcode::Tget,
+                Value::Int(Uint256::from_usize(0)),
+                *loc,
+            ));
+            code.push(Instruction::from_opcode_imm(
+                Opcode::SetLocal,
+                Value::Int(Uint256::from_usize(slot_num)),
+                *loc,
+            ));
+            code.push(Instruction::from_opcode(Opcode::Label(after_label), *loc));
+            mavm_codegen_statements(
+                rest_of_statements.to_vec(),
+                code,
+                num_locals,
+                &new_locals,
+                label_gen,
+                string_table,
+                import_func_map,
+                global_var_map,
+            )
+        }
     }
 }
 
