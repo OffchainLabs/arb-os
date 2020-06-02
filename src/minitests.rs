@@ -183,7 +183,7 @@ fn test_codeload() {
     }
 }
 
-//#[test]
+#[test]
 fn test_loader1() {
     run_using_loader("minitests/loadertest1.mexe", vec![Value::Int(Uint256::one())]);
 }

@@ -35,5 +35,5 @@ func main() {
     let ba = bytearray_unmarshalBytes(mb);
     let bs = bytestream_new(ba);
     let (success, codept,) = parseModule(bs);
-    asm(success) { log };
+    codept();
 }

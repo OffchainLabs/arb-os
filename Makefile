@@ -3,7 +3,7 @@ BUILTINDIR = builtin
 STDDIR = stdlib
 
 test: all
-	cargo test
+	cargo test --release
 
 LOADERTESTS = arbruntime/loader.mexe minitests/loadertest1.mexe
 TESTEXES = $(BUILTINDIR)/kvstest.mexe $(STDDIR)/queuetest.mexe $(BUILTINDIR)/arraytest.mexe $(BUILTINDIR)/globaltest.mexe $(STDDIR)/priorityqtest.mexe $(STDDIR)/bytearraytest.mexe $(STDDIR)/keccaktest.mexe $(BUILTINDIR)/maptest.mexe minitests/codeloadtest.mexe $(LOADERTESTS)
