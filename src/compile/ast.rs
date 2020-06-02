@@ -698,12 +698,12 @@ impl OptionConst {
             OptionConst::Some(c) => {
                 let val = c.clone().value();
                 if val == Value::none() {
-                    Value::Int(Uint256::one())
+                    Value::Tuple(vec![Value::Int(Uint256::one())])
                 } else {
-                    Value::Tuple(vec![val])
+                    Value::Tuple(vec![Value::Int(Uint256::one()), val])
                 }
             }
-            OptionConst::None(_) => Value::Int(Uint256::zero()),
+            OptionConst::None(_) => Value::Tuple(vec![Value::Int(Uint256::zero())]),
         }
     }
 }

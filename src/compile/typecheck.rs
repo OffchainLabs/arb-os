@@ -647,21 +647,30 @@ fn typecheck_statement<'a>(
             let tce = typecheck_expr(e, type_table, global_vars, func_table)?;
             Ok((TypeCheckedStatement::DebugPrint(tce, *loc), vec![]))
         }
-        Statement::IfLet(l, r, s, no) => {
+        Statement::IfLet(l, r, s, loc) => {
             let tcr = typecheck_expr(r, type_table, global_vars, func_table)?;
-            let tct = tcr.get_type();
+            let tct = match tcr.get_type() {
+                Type::Option(t) => *t,
+                unexpected => {
+                    return Err(new_type_error(
+                        format!("Expected option type got: {:?}", unexpected),
+                        *loc,
+                    ))
+                }
+            };
             Ok((
                 TypeCheckedStatement::IfLet(
                     *l,
                     tcr,
-                    typecheck_statement_sequence(
+                    typecheck_statement_sequence_with_bindings(
                         s,
                         return_type,
                         type_table,
                         global_vars,
                         func_table,
+                        &vec![(*l, tct.clone())],
                     )?,
-                    *no,
+                    *loc,
                 ),
                 vec![(*l, tct)],
             ))

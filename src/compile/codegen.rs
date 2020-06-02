@@ -594,6 +594,7 @@ fn mavm_codegen_statements<'a>(
                 Value::Int(Uint256::from_usize(0)),
                 *loc,
             ));
+            code.push(Instruction::from_opcode(Opcode::Not, *loc));
             code.push(Instruction::from_opcode_imm(
                 Opcode::Cjump,
                 Value::Label(after_label),
@@ -601,7 +602,7 @@ fn mavm_codegen_statements<'a>(
             ));
             code.push(Instruction::from_opcode_imm(
                 Opcode::Tget,
-                Value::Int(Uint256::from_usize(0)),
+                Value::Int(Uint256::from_usize(1)),
                 *loc,
             ));
             code.push(Instruction::from_opcode_imm(
@@ -609,13 +610,23 @@ fn mavm_codegen_statements<'a>(
                 Value::Int(Uint256::from_usize(slot_num)),
                 *loc,
             ));
+            let (lg, _, _) = mavm_codegen_statements(
+                block.clone(),
+                code,
+                num_locals,
+                &new_locals,
+                label_gen,
+                string_table,
+                import_func_map,
+                global_var_map,
+            )?;
             code.push(Instruction::from_opcode(Opcode::Label(after_label), *loc));
             mavm_codegen_statements(
                 rest_of_statements.to_vec(),
                 code,
                 num_locals,
                 &new_locals,
-                label_gen,
+                lg,
                 string_table,
                 import_func_map,
                 global_var_map,
