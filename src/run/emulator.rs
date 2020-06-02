@@ -900,6 +900,17 @@ impl<'a> Machine {
 							Err(ExecutionError::new("invalid args to PushInsnImm", &self.state, None))
 						}
 					}
+					Opcode::OpenInsn => {
+						let insn = self.code.get_insn(self.stack.pop_codepoint(&self.state)?).unwrap();
+						if let Some(val) = &insn.immediate {
+							self.stack.push(Value::Tuple(vec![val.clone()]));
+						} else {
+							self.stack.push(Value::none());
+						}
+						self.stack.push_usize(insn.opcode.to_number().unwrap() as usize);
+						self.incr_pc();
+						Ok(true)
+					}
 					Opcode::Breakpoint => {
 						self.incr_pc();
 						Ok(false)

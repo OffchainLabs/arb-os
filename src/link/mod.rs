@@ -83,7 +83,7 @@ impl<'a> LinkedProgram {
                 buf.push( ((num >> (8*i)) & 0xff) as u8);
             }
         }
-        for (_, insn) in self.code.iter().enumerate() {
+        for insn in self.code.iter().rev() {
             insn.marshal_for_module(&mut buf, self.code.len());
         }
         buf

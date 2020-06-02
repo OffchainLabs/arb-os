@@ -11,7 +11,7 @@ BUILTINMAOS = $(BUILTINDIR)/array.mao $(BUILTINDIR)/kvs.mao
 STDLIBMAOS = $(STDDIR)/bytearray.mao $(STDDIR)/priorityq.mao $(STDDIR)/random.mao $(STDDIR)/queue.mao $(STDDIR)/keccak.mao $(STDDIR)/bytestream.mao
 STDLIB = $(STDLIBMAOS)
 
-all: $(TESTEXES)
+all: $(TESTEXES) runtime
 
 $(BUILTINDIR)/kvstest.mexe: $(BUILTINMAOS) $(BUILTINDIR)/kvstest.mini
 	cargo run compile $(BUILTINDIR)/kvstest.mini -o $(BUILTINDIR)/kvstest.mexe
@@ -35,7 +35,7 @@ minitests/codeloadtest.mexe: minitests/codeloadtest.mini
 	cargo run compile minitests/codeloadtest.mini -o minitests/codeloadtest.mexe
 
 minitests/loadertest1.mexe: minitests/loadertest1.mini
-	cargo run compile minitests/loadertest1.mini -o minitests/loadertest1.mexe
+	cargo run compile minitests/loadertest1.mini -m -o minitests/loadertest1.mexe
 
 $(STDDIR)/keccaktest.mexe: $(BUILTINMAOS) $(STDDIR)/keccaktest.mini $(STDDIR)/keccak.mao $(STDDIR)/bytearray.mao
 	cargo run compile $(STDDIR)/keccaktest.mini $(STDDIR)/keccak.mao $(STDDIR)/bytearray.mao -o $(STDDIR)/keccaktest.mexe

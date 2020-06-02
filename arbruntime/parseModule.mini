@@ -33,30 +33,38 @@ type Segment = struct {
 }
 
 
-public func parseModule(bs: ByteStream) -> (bool, AvmCodePoint) {
+public func parseModule(bs: ByteStream) -> (bool, func() -> any, func()) {
     let (success, ubs, numInsns,) = bytestream_getUint(bs);
     if ( ! success) {
-        return (false, unsafecast<AvmCodePoint>(0),);
+        return (false, unsafecast<func()->any>(0), unsafecast<func()>(0),);
     }
     bs = ubs;
 
     if (bytestream_bytesRemaining(bs) > 1000000) {
         // reject module as too large
-        return (false, unsafecast<AvmCodePoint>(0),);
+        return (false, unsafecast<func()->any>(0), unsafecast<func()>(0),);
     }
 
     let seg = segment_new(numInsns);
+    let twoAgo = unsafecast<func()>(0);
+    let oneAgo = unsafecast<func()>(0);
     while (seg.size < seg.capacity) {
+        twoAgo = oneAgo;
+        oneAgo = seg.currentCodePt;
         let (success, uSeg, ubs,) = parseAndAddInsn(seg, bs);
         if (! success) {
-            return (false, unsafecast<AvmCodePoint>(0),);
+            return (false, unsafecast<func()->any>(0), unsafecast<func()>(0),);
         }
         seg = uSeg;
         bs = ubs;
     }
 
     seg = segment_close(seg);
-    return (true, seg.currentCodePt,);
+    return (
+        true, 
+        unsafecast<func()->any>(seg.currentCodePt), 
+        twoAgo,
+    );
 }
 
 func parseAndAddInsn(seg: Segment, bs: ByteStream) -> (bool, Segment, ByteStream) {
@@ -230,14 +238,15 @@ func parseAvmValue(bs: ByteStream) -> (bool, ByteStream, any) {
 
 func segment_new(capacity: uint) -> Segment {
     return struct {
-        size: 0,
-        capacity: capacity,
+        size: 1,
+        capacity: capacity+1,
         currentCodePt: asm() AvmCodePoint { errcodept },
         codePtMap: newmap<uint, AvmCodePoint>,
     };
 }
 
 func segment_addInsn(seg: Segment, opcode: uint, hasImm: bool, imm: any) -> Segment {
+    let sizeIn = seg.size;
     let curCodePt = seg.currentCodePt;
     if (hasImm) {
         curCodePt = asm(opcode, imm, seg.currentCodePt) AvmCodePoint { pushinsnimm };
@@ -245,8 +254,8 @@ func segment_addInsn(seg: Segment, opcode: uint, hasImm: bool, imm: any) -> Segm
         curCodePt = asm(opcode, seg.currentCodePt) AvmCodePoint { pushinsn };
     }
     return seg with { currentCodePt: curCodePt }
-               with { size: seg.size+1 }
-               with { codePtMap: seg.codePtMap with { [seg.size] = curCodePt } };
+               with { size: sizeIn+1 }
+               with { codePtMap: seg.codePtMap with { [sizeIn] = curCodePt } };
 }
 
 func pushInstruction(code: AvmCodePoint, opcode: uint) -> AvmCodePoint {

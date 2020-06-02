@@ -74,6 +74,12 @@ fn main() {
                         .takes_value(false),
                 )
                 .arg(
+                    Arg::with_name("module")
+                        .help("compile as loadable module")
+                        .short("m")
+                        .takes_value(false),
+                )
+                .arg(
                     Arg::with_name("debug")
                         .help("provide debug output")
                         .short("d")
@@ -146,7 +152,7 @@ fn main() {
                 }
             }
 
-            match link(&compiled_progs, false) {
+            match link(&compiled_progs, matches.is_present("module")) {
                 Ok(linked_prog) => match postlink_compile(linked_prog, false, Vec::new(), debug_mode) {
                     Ok(completed_program) => {
                         completed_program.to_output(&mut *output, matches.value_of("format"));

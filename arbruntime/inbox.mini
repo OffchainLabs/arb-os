@@ -43,7 +43,7 @@ public impure func inbox_get() -> any {  //BUGBUG: need to update blockNum and t
         inbox = getFromL1Inbox(inbox);
     }
     let (updatedQ, ret,) = queue_get(inbox.queue);
-    globalInbox = globalInbox with { queue: updatedQ };
+    globalInbox = inbox with { queue: updatedQ };
     return ret;
 }
 

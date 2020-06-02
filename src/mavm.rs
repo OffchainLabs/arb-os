@@ -580,6 +580,7 @@ pub enum Opcode {
     ErrCodePoint,
     PushInsn,
     PushInsnImm,
+    OpenInsn,
     Halt,
     Send,
     Log,
@@ -639,6 +640,7 @@ impl Opcode {
             "errcodept" => Opcode::ErrCodePoint,
             "pushinsn" => Opcode::PushInsn,
             "pushinsnimm" => Opcode::PushInsnImm,
+            "openinsn" => Opcode::OpenInsn,
             _ => {
                 panic!("opcode not supported in asm segment: {}", name);
             }
@@ -704,6 +706,11 @@ impl Opcode {
             0x72 => Some(Opcode::Inbox),
             0x73 => Some(Opcode::Panic),
             0x74 => Some(Opcode::Halt),
+            0x75 => Some(Opcode::ErrCodePoint),
+            0x76 => Some(Opcode::PushInsn),
+            0x77 => Some(Opcode::PushInsnImm),
+            //0x78 => Some(Opcode::CloseSegment),
+            0x79 => Some(Opcode::OpenInsn),
             _ => None,
         }
     }
@@ -767,6 +774,11 @@ impl Opcode {
             Opcode::Inbox => Some(0x72),
             Opcode::Panic => Some(0x73),
             Opcode::Halt => Some(0x74),
+            Opcode::ErrCodePoint => Some(0x75),
+            Opcode::PushInsn => Some(0x76),
+            Opcode::PushInsnImm => Some(0x77),
+            //Opcode::CloseSegment => Some(0x78),
+            Opcode::OpenInsn => Some(0x79),
             _ => None,
         }
     }

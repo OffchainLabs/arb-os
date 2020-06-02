@@ -14,6 +14,8 @@
 // limitations under the License.
 //
 
+import type ByteArray;
+import type ByteStream;
 import type MarshalledBytes;
 import type AccountStore;
 import type Account;
@@ -32,6 +34,9 @@ import func account_checkAndIncrSeqNum(
     account: Account, 
     seqNumRecvd: uint
 ) -> (bool, Account);
+import func bytearray_unmarshalBytes(mb: MarshalledBytes) -> ByteArray;
+import func bytestream_new(ba: ByteArray) -> ByteStream;
+import func parseModule(bs: ByteStream) -> (bool, func()->any, func());
 
 
 type ArbMessage = struct {
@@ -63,8 +68,14 @@ type CallMessage = struct {
     data: MarshalledBytes,
 }
 
+type CodeLoadMessage = struct {
+    addr: address,
+    data: MarshalledBytes,
+}
+
 public impure func handleEthbridgeMessage(msg: ArbMessage) {
     let msgType = msg.msgType;
+    //asm(1000+msg.msgType) { log };
     if (msgType == 0) {
         let txMsg = unsafecast<TxMessage>(msg.message);
         let globalAS = getGlobalAccountStore();
@@ -106,6 +117,16 @@ public impure func handleEthbridgeMessage(msg: ArbMessage) {
     } elseif (msgType == 5) {
         let callMsg = unsafecast<CallMessage>(msg.message);
         panic; // call message
+    } elseif (msgType == 6) {
+        let codeLoadMsg = unsafecast<CodeLoadMessage>(msg.message);
+        let ba = bytearray_unmarshalBytes(codeLoadMsg.data);
+        let bs = bytestream_new(ba);
+        let (success, initCodePt, callCodePt,) = parseModule(bs);
+        if (success) {
+            let initData = initCodePt();
+            // TODO: install the loaded code as a contract
+            callCodePt();
+        }
     }
     // if no case matches, unrecognized message type; ignore it
 }

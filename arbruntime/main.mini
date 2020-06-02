@@ -30,10 +30,7 @@ impure func main() {
 
 public impure func mainRunLoop() {
     loop {
-        asm(42) { log };
         let msg = inbox_get();
-        asm(43) { log };
         handleEthbridgeMessage(msg);
-        asm(44) { log };
     }
 }
