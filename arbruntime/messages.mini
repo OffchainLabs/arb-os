@@ -36,7 +36,8 @@ import func account_checkAndIncrSeqNum(
 ) -> (bool, Account);
 import func bytearray_unmarshalBytes(mb: MarshalledBytes) -> ByteArray;
 import func bytestream_new(ba: ByteArray) -> ByteStream;
-import func parseModule(bs: ByteStream) -> (bool, func()->any, func());
+import func unmarshalCodeSegment(bs: ByteStream) -> (bool, func()->any, func());
+import func makeEvmPcMap(v: any) -> map<uint, func()>;
 
 
 type ArbMessage = struct {
@@ -69,13 +70,12 @@ type CallMessage = struct {
 }
 
 type CodeLoadMessage = struct {
-    addr: address,
+    seqNum: uint,
     data: MarshalledBytes,
 }
 
 public impure func handleEthbridgeMessage(msg: ArbMessage) {
     let msgType = msg.msgType;
-    //asm(1000+msg.msgType) { log };
     if (msgType == 0) {
         let txMsg = unsafecast<TxMessage>(msg.message);
         let globalAS = getGlobalAccountStore();
@@ -119,13 +119,21 @@ public impure func handleEthbridgeMessage(msg: ArbMessage) {
         panic; // call message
     } elseif (msgType == 6) {
         let codeLoadMsg = unsafecast<CodeLoadMessage>(msg.message);
-        let ba = bytearray_unmarshalBytes(codeLoadMsg.data);
-        let bs = bytestream_new(ba);
-        let (success, initCodePt, callCodePt,) = parseModule(bs);
+        let globalAS = getGlobalAccountStore();
+        let account = accountStore_get(globalAS, msg.sender);
+        let (success, updatedAcct,) = account_checkAndIncrSeqNum(account, codeLoadMsg.seqNum);
         if (success) {
-            let initData = initCodePt();
-            // TODO: install the loaded code as a contract
-            callCodePt();
+            setGlobalAccountStore(
+                accountStore_set(globalAS, msg.sender, updatedAcct)
+            );
+            let ba = bytearray_unmarshalBytes(codeLoadMsg.data);
+            let bs = bytestream_new(ba);
+            let (success, initCodePt, callCodePt,) = unmarshalCodeSegment(bs);
+            if (success) {
+                let initData = initCodePt();
+                let evmPcMap = makeEvmPcMap(initData);
+                callCodePt();
+            }
         }
     }
     // if no case matches, unrecognized message type; ignore it

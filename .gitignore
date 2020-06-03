@@ -40,3 +40,6 @@ builtin/arraytest.mexe
 stdlib/bytestream.mao
 stdlib/keccaktest.mexe
 minitests/codeloadtest.mexe
+arbruntime/codeSegment.mao
+arbruntime/evmJumpTable.mao
+arbruntime/evmJumpTable.mini

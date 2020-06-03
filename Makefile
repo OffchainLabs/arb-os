@@ -68,7 +68,7 @@ $(BUILTINDIR)/kvs.mao: $(BUILTINDIR)/kvs.mini
 	cargo run compile $(BUILTINDIR)/kvs.mini -c -o $(BUILTINDIR)/kvs.mao
 
 RUNTIMEDIR = arbruntime
-RUNTIMEMAOS = $(RUNTIMEDIR)/main.mao $(RUNTIMEDIR)/accounts.mao $(RUNTIMEDIR)/messages.mao $(RUNTIMEDIR)/inbox.mao $(RUNTIMEDIR)/evmCallStack.mao $(RUNTIMEDIR)/evmOps.mao $(RUNTIMEDIR)/parseModule.mao
+RUNTIMEMAOS = $(RUNTIMEDIR)/main.mao $(RUNTIMEDIR)/evmJumpTable.mao $(RUNTIMEDIR)/accounts.mao $(RUNTIMEDIR)/messages.mao $(RUNTIMEDIR)/inbox.mao $(RUNTIMEDIR)/evmCallStack.mao $(RUNTIMEDIR)/evmOps.mao $(RUNTIMEDIR)/codeSegment.mao
 RUNTIME = $(RUNTIMEDIR)/runtime.mexe
 
 runtime: $(RUNTIME)
@@ -91,8 +91,8 @@ $(RUNTIMEDIR)/evmCallStack.mao: $(RUNTIMEDIR)/evmCallStack.mini
 $(RUNTIMEDIR)/evmOps.mao: $(RUNTIMEDIR)/evmOps.mini
 	cargo run compile $(RUNTIMEDIR)/evmOps.mini -c -o $(RUNTIMEDIR)/evmOps.mao
 
-$(RUNTIMEDIR)/parseModule.mao: $(RUNTIMEDIR)/parseModule.mini
-	cargo run compile $(RUNTIMEDIR)/parseModule.mini -c -o $(RUNTIMEDIR)/parseModule.mao
+$(RUNTIMEDIR)/codeSegment.mao: $(RUNTIMEDIR)/codeSegment.mini
+	cargo run compile $(RUNTIMEDIR)/codeSegment.mini -c -o $(RUNTIMEDIR)/codeSegment.mao
 
 $(RUNTIMEDIR)/loader.mao: $(RUNTIMEDIR)/loader.mini
 	cargo run compile $(RUNTIMEDIR)/loader.mini -c -o $(RUNTIMEDIR)/loader.mao
@@ -100,10 +100,16 @@ $(RUNTIMEDIR)/loader.mao: $(RUNTIMEDIR)/loader.mini
 $(RUNTIME): $(RUNTIMEMAOS) $(STDLIB) $(BUILTINMAOS)
 	cargo run compile $(RUNTIMEMAOS) $(STDLIB) -o $(RUNTIME)
 
+$(RUNTIMEDIR)/evmJumpTable.mao: $(RUNTIMEDIR)/evmJumpTable.mini
+	cargo run compile $(RUNTIMEDIR)/evmJumpTable.mini -c -o $(RUNTIMEDIR)/evmJumpTable.mao
+
+$(RUNTIMEDIR)/evmJumpTable.mini: src/evm/mod.rs 
+	cargo run jumptable
+
 loader: $(RUNTIMEDIR)/loader.mexe
 
-$(RUNTIMEDIR)/loader.mexe: $(RUNTIMEDIR)/loader.mao $(RUNTIMEDIR)/inbox.mao $(RUNTIMEDIR)/parseModule.mao $(STDLIB) $(BUILTINMAOS)
-	cargo run compile $(RUNTIMEDIR)/loader.mao $(RUNTIMEDIR)/inbox.mao $(RUNTIMEDIR)/parseModule.mao $(STDLIB) -o $(RUNTIMEDIR)/loader.mexe
+$(RUNTIMEDIR)/loader.mexe: $(RUNTIMEDIR)/loader.mao $(RUNTIMEDIR)/inbox.mao $(RUNTIMEDIR)/codeSegment.mao $(STDLIB) $(BUILTINMAOS)
+	cargo run compile $(RUNTIMEDIR)/loader.mao $(RUNTIMEDIR)/inbox.mao $(RUNTIMEDIR)/codeSegment.mao $(STDLIB) -o $(RUNTIMEDIR)/loader.mexe
 
 run: runtime
 	cargo run run $(RUNTIME)

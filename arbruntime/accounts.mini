@@ -58,7 +58,7 @@ public impure func setGlobalAccountStore(acctStore: AccountStore) {
     globalAccountStore = acctStore;;
 }
 
-func accountStore_get(acctStore: AccountStore, addr: address) -> Account {
+public func accountStore_get(acctStore: AccountStore, addr: address) -> Account {
     let (acct, exists,) = acctStore[addr];
     if (exists) {
         return acct;
@@ -67,7 +67,7 @@ func accountStore_get(acctStore: AccountStore, addr: address) -> Account {
     }
 }
 
-func accountStore_set(
+public func accountStore_set(
     acctStore: AccountStore, 
     addr: address, 
     acct: Account

@@ -224,7 +224,7 @@ fn run_using_runtime(filename: &str, expected_result: Vec<Value>) {
                     Value::Int(Uint256::from_usize(6)),
                     Value::Int(Uint256::zero()),   // sender address
                     Value::Tuple(vec![
-                        Value::Int(Uint256::from_usize(111)), 
+                        Value::Int(Uint256::from_usize(1)), 
                         msg                    
                     ])
                 ]

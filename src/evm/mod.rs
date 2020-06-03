@@ -23,8 +23,9 @@ use crate::build_builtins::BuiltinArray;
 use serde::{Serialize};
 use std::collections::HashMap;
 use std::convert::TryInto;
+use std::error::Error;
 use std::fs::File;
-use std::io::{self, Read};
+use std::io::{self, Read, Write};
 use std::path::Path;
 use std::usize;
 
@@ -708,7 +709,7 @@ fn evm_emulate(
     }
 }
 
-const EMULATION_FUNCS: [&str; 42] = [
+const EMULATION_FUNCS: [&str; 42] = [  // If you modify this, be sure to regenerate the EVM jumptable
     "evmOp_stop",
     "evmOp_sar",
     "evmOp_sha3",
@@ -786,4 +787,32 @@ fn imported_funcs_for_evm() -> (Vec<ImportedFunc>, StringTable<'static>) {
         imp_funcs.push(ImportedFunc::new(i, string_table.get(name), &string_table));
     }
     (imp_funcs, string_table)
+}
+
+
+pub fn make_evm_jumptable_mini(filepath: &Path) -> Result<(), io::Error> {
+    let path = Path::new(filepath);
+    let display = path.display();
+
+    // Open a file in write-only mode, returns `io::Result<File>`
+    let mut file = match File::create(&path) {
+        Err(why) => panic!("couldn't create {}: {}", display, why.description()),
+        Ok(file) => file,
+    }; 
+    writeln!(file, "// Automatically generated file -- do not edit")?;
+    for name in EMULATION_FUNCS.iter() {
+        writeln!(file, "import func {}();", name)?;
+    }
+    writeln!(file, "")?;
+    writeln!(file, "var evm_jumptable: [{}]func();", EMULATION_FUNCS.len())?;
+    writeln!(file, "")?;
+    writeln!(file, "public func init_evm_jumptable() {{")?;
+    writeln!(file, "    evm_jumptable = evm_jumptable")?;
+    for (i, name) in EMULATION_FUNCS.iter().enumerate() {
+        writeln!(file, "        with {{ [{}] = unsafecast<func()>({}) }}", i, name)?;
+    }
+    writeln!(file, "        ;")?;
+    writeln!(file, "}}")?;
+    write!(file, "\npublic func evm_jumptable_get(idx: uint) -> func()\n{{\n    return evm_jumptable[idx];\n}}\n")?;
+    Ok(())
 }

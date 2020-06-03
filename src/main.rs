@@ -17,7 +17,7 @@
 #![allow(unused_parens)]
 
 use compile::compile_from_file;
-use evm::compile_evm_file;
+use evm::{compile_evm_file, make_evm_jumptable_mini};
 use link::{link, postlink_compile};
 use run::{run_from_file, runtime_env::RuntimeEnvironment};
 use std::fs::File;
@@ -120,6 +120,17 @@ fn main() {
                         .value_name("output"),
                 ),
         )
+        .subcommand(
+            SubCommand::with_name("jumptable")
+                .about("generate the EVM jumptable")
+                .arg(
+                    Arg::with_name("output")
+                        .help("sets the output file name")
+                        .short("o")
+                        .takes_value(true)
+                        .value_name("output"),
+                ),
+        )
         .get_matches();
 
     if let Some(matches) = matches.subcommand_matches("compile") {
@@ -197,6 +208,19 @@ fn main() {
             Err(e) => {
                 panic!("Compilation error: {}", e);
             }
+        }
+    }
+
+    if let Some(matches) = matches.subcommand_matches("jumptable") {
+        let filepath = Path::new(
+            if let Some(pathname) = matches.value_of("output") {
+                pathname
+            } else {
+                "arbruntime/evmJumpTable.mini"
+            }
+        );
+        if let Err(e) = make_evm_jumptable_mini(filepath) {
+            panic!("I/O error: {}", e);
         }
     }
 }

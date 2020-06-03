@@ -21,7 +21,7 @@ import func bytestream_getByte(bs: ByteStream) -> (bool, ByteStream, uint);
 import func bytestream_get64(bs: ByteStream) -> (bool, ByteStream, uint);
 import func bytestream_getUint(bs: ByteStream) -> (bool, ByteStream, uint);
 
-import func getRuntimeCallback(slot: uint) -> func();
+import func evm_jumptable_get(slot: uint) -> func();
 
 
 type AvmCodePoint = func()
@@ -33,7 +33,7 @@ type Segment = struct {
 }
 
 
-public func parseModule(bs: ByteStream) -> (bool, func() -> any, func()) {
+public func unmarshalCodeSegment(bs: ByteStream) -> (bool, func() -> any, func()) {
     let (success, ubs, numInsns,) = bytestream_getUint(bs);
     if ( ! success) {
         return (false, unsafecast<func()->any>(0), unsafecast<func()>(0),);
@@ -126,7 +126,7 @@ func parseAvmValue(bs: ByteStream) -> (bool, ByteStream, any) {
         // parse and return a codepoint of a runtime call, as byte
         let (success, ubs, val,) = bytestream_getByte(bs);
         if (success) {
-            return (true, bs, getRuntimeCallback(val),);
+            return (true, bs, evm_jumptable_get(val),);
         } else {
             return (false, bs, 0,);
         }
@@ -269,4 +269,20 @@ func pushInstructionImm(code: AvmCodePoint, opcode: uint, val: any) -> AvmCodePo
 func segment_close(seg: Segment) -> Segment {
     // we might eventually have something to do here
     return seg;
+}
+
+type EvmPcStruct = struct {
+    rest: any,   // actually an EvmPcStruct, but language doesn't allow recursive types
+    evmPc: uint,
+    codePt: func(),
+}
+
+public func makeEvmPcMap(v: any) -> map<uint, func()> {
+    let ret = newmap<uint, func()>;
+    let ve = unsafecast<EvmPcStruct>(v);
+    while(null != unsafecast<any>(ve)) {
+        ret = ret with { [ve.evmPc] = ve.codePt };
+        ve = unsafecast<EvmPcStruct>(ve.rest);
+    }
+    return ret;
 }
