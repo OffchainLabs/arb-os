@@ -100,6 +100,9 @@ $(RUNTIMEDIR)/loader.mao: $(RUNTIMEDIR)/loader.mini
 $(RUNTIME): $(RUNTIMEMAOS) $(STDLIB) $(BUILTINMAOS)
 	cargo run compile $(RUNTIMEMAOS) $(STDLIB) -o $(RUNTIME)
 
+runtime.pretty: $(RUNTIMEMAOS) $(STDLIB) $(BUILTINMAOS)
+	cargo run compile $(RUNTIMEMAOS) $(STDLIB) -f pretty >runtime.pretty
+
 $(RUNTIMEDIR)/evmJumpTable.mao: $(RUNTIMEDIR)/evmJumpTable.mini
 	cargo run compile $(RUNTIMEDIR)/evmJumpTable.mini -c -o $(RUNTIMEDIR)/evmJumpTable.mao
 

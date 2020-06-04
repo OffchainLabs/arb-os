@@ -39,6 +39,10 @@ public func bytestream_atEof(bs: ByteStream) -> bool {
     return bs.currentOffset >= bs.capacity;
 }
 
+public func bytestream_bytesReadSoFar(bs: ByteStream) -> uint {
+    return bs.currentOffset;
+}
+
 public func bytestream_bytesRemaining(bs: ByteStream) -> uint {
     return bs.capacity - bs.currentOffset;
 }

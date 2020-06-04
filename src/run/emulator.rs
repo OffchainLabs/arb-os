@@ -216,6 +216,7 @@ impl CodeStore {
 		CodeStore{ segments: vec![runtime] }
 	}
 
+	#[allow(dead_code)]
 	fn segment_size(&self, seg_num: usize) -> Option<usize> {
 		match self.segments.get(seg_num) {
 			Some(seg) => Some(seg.len()),
@@ -254,7 +255,7 @@ impl CodeStore {
 		if let CodePt::InSegment(seg_num, old_offset) = codept {
 			if seg_num >= self.segments.len() {
 				panic!("bad segment number in push_insn");
-				None
+				//None
 			} else {
 				let segment = &mut self.segments[seg_num];
 				if old_offset == segment.len()-1 {
@@ -263,7 +264,7 @@ impl CodeStore {
 						Some(CodePt::new_in_segment(seg_num, old_offset+1))
 					} else {
 						panic!("bad opcode number {} in push_insn at length {}", op, segment.len());
-						None
+						//None
 					}
 				} else {
 					panic!("branching segments not yet implemented");
@@ -300,6 +301,7 @@ impl<'a> Machine {
         }
     }
 
+	#[allow(dead_code)]
     pub fn get_state(&self) -> MachineState {
         self.state.clone()
     }

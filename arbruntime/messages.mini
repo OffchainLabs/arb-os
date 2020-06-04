@@ -30,6 +30,13 @@ import func accountStore_transferEthBalance(
     to: address, 
     amount: uint
 ) -> (bool, AccountStore);
+import func accountStore_createAccountFromEvmCode(
+    acctStore: AccountStore,
+    evmCode: ByteArray,
+    evmJumpTable: map<uint, func()>,
+    startCodePt: func(),
+    storageMap: map<uint, uint>
+) -> AccountStore;
 import func account_checkAndIncrSeqNum(
     account: Account, 
     seqNumRecvd: uint
@@ -37,7 +44,8 @@ import func account_checkAndIncrSeqNum(
 import func bytearray_unmarshalBytes(mb: MarshalledBytes) -> ByteArray;
 import func bytestream_new(ba: ByteArray) -> ByteStream;
 import func unmarshalCodeSegment(bs: ByteStream) -> (bool, func()->any, func());
-import func makeEvmPcMap(v: any) -> map<uint, func()>;
+import func makeInitStructures(v: any) -> (map<uint, func()>, map<uint, uint>);
+import func translateEvmCodeSegment(bs: ByteStream) -> (bool, func(), map<uint, func()>);
 
 
 type ArbMessage = struct {
@@ -69,9 +77,21 @@ type CallMessage = struct {
     data: MarshalledBytes,
 }
 
-type CodeLoadMessage = struct {
+type AvmCodeLoadMessage = struct {
     seqNum: uint,
     data: MarshalledBytes,
+}
+
+type EvmCodeLoadMessage = struct {
+    seqNum: uint,
+    data: MarshalledBytes,
+    storageInfo: StorageInfo,
+}
+    
+type StorageInfo = struct {
+    offset: uint,
+    value: uint,
+    more: any,
 }
 
 public impure func handleEthbridgeMessage(msg: ArbMessage) {
@@ -118,7 +138,7 @@ public impure func handleEthbridgeMessage(msg: ArbMessage) {
         let callMsg = unsafecast<CallMessage>(msg.message);
         panic; // call message
     } elseif (msgType == 6) {
-        let codeLoadMsg = unsafecast<CodeLoadMessage>(msg.message);
+        let codeLoadMsg = unsafecast<AvmCodeLoadMessage>(msg.message);
         let globalAS = getGlobalAccountStore();
         let account = accountStore_get(globalAS, msg.sender);
         let (success, updatedAcct,) = account_checkAndIncrSeqNum(account, codeLoadMsg.seqNum);
@@ -131,12 +151,48 @@ public impure func handleEthbridgeMessage(msg: ArbMessage) {
             let (success, initCodePt, callCodePt,) = unmarshalCodeSegment(bs);
             if (success) {
                 let initData = initCodePt();
-                let evmPcMap = makeEvmPcMap(initData);
+                let (evmPcMap, initStorageMap,) = makeInitStructures(initData);
                 callCodePt();
             }
         }
+    } elseif (msgType == 7) {
+        let codeLoadMsg = unsafecast<EvmCodeLoadMessage>(msg.message);
+        let globalAS = getGlobalAccountStore();
+        let account = accountStore_get(globalAS, msg.sender);
+        let (success, updatedAcct,) = account_checkAndIncrSeqNum(account, codeLoadMsg.seqNum);
+        globalAS = accountStore_set(globalAS, msg.sender, updatedAcct);
+        if (success) {
+            let ba = bytearray_unmarshalBytes(codeLoadMsg.data);
+            let bs = bytestream_new(ba);
+            let (success, codept, evmJumpTable,) = translateEvmCodeSegment(bs);
+            if (success) {
+                // address of new contract is derived by hashing of the full message,
+                //       then truncating to address size (20 bytes)
+                // this is unique on the current chain, 
+                //       because it contains sender address and sender seq number
+                // also it contains the full EVM code
+                let newAddr = address(hash(msg));
+                globalAS = accountStore_createAccountFromEvmCode(
+                    globalAS,
+                    ba,
+                    evmJumpTable,
+                    codept,
+                    makeStorageMap(codeLoadMsg.storageInfo)
+                );
+            }
+            setGlobalAccountStore(globalAS);
+        }
     }
     // if no case matches, unrecognized message type; ignore it
+}
+
+func makeStorageMap(storageInfo: StorageInfo) -> map<uint, uint> {
+    let ret = newmap<uint, uint>;
+    while (null != unsafecast<any>(storageInfo)) {
+        ret = ret with { [storageInfo.offset] = storageInfo.value };
+        storageInfo = unsafecast<StorageInfo>(storageInfo.more);
+    }
+    return ret;
 }
 
 impure func handleValidTxMessage(txMsg: TxMessage) {

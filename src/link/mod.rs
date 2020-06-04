@@ -75,7 +75,7 @@ impl<'a> LinkedProgram {
 
     pub fn marshal_as_module(&self) -> Vec<u8> {
         let mut buf: Vec<u8> = Vec::new();
-        let mut num = self.code.len();
+        let num = self.code.len();
         for i in (0..32) {
             if (i >= 8) {
                 buf.push(0);
@@ -212,7 +212,7 @@ pub fn postlink_compile<'a>(
         &jump_table,
         &program.exported_funcs,
         &program.imported_funcs,
-        if is_module { evm_pcs } else { vec![] },
+        if is_module { Some(evm_pcs) } else { None },
     ) {
         Ok(tup) => tup,
         Err(label) => {
@@ -261,7 +261,11 @@ pub fn add_auto_link_progs(
     Ok(progs)
 }
 
-pub fn link<'a>(progs_in: &[CompiledProgram], is_module: bool) -> Result<CompiledProgram, CompileError> {
+pub fn link<'a>(
+    progs_in: &[CompiledProgram], 
+    is_module: bool,
+    init_storage_descriptor: Option<Value>,  // used only for compiling modules
+) -> Result<CompiledProgram, CompileError> {
     let progs = if is_module {
         progs_in.to_vec()
     } else {
@@ -309,8 +313,12 @@ pub fn link<'a>(progs_in: &[CompiledProgram], is_module: bool) -> Result<Compile
         //     a list of (evm_pc, compiled_pc) correspondences
         // the postlink compilation phase (strip_labels) will plug in the actual table contents
         //     as the immediate in the first instruction
+        let init_immediate = match init_storage_descriptor {
+            Some(val) => val,
+            None => Value::none(),
+        };
         vec![
-            Instruction::from_opcode_imm(Opcode::Swap1, Value::none(), None),
+            Instruction::from_opcode_imm(Opcode::Swap1, init_immediate, None),
             Instruction::from_opcode(Opcode::Jump, None),
         ]
     } else {

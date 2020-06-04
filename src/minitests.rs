@@ -147,7 +147,8 @@ fn test_map() {
     }
 }
 
-#[test]
+// #[test]
+#[allow(dead_code)]
 fn test_keccak() {
     let path = Path::new("stdlib/keccaktest.mexe");
     let res = run_from_file(
@@ -210,6 +211,11 @@ fn run_using_loader(filename: &str, expected_result: Vec<Value>) {
 #[test]
 fn test_runtime1() {
     run_using_runtime("minitests/loadertest1.mexe", vec![Value::Int(Uint256::from_usize(777))]);
+}
+
+#[test]
+fn test_runtime_add() {
+    run_using_runtime("evm-add.mexe", vec![Value::Int(Uint256::from_usize(777))]);
 }
 
 fn run_using_runtime(filename: &str, expected_result: Vec<Value>) {

@@ -20,6 +20,7 @@ use compile::compile_from_file;
 use evm::{compile_evm_file, make_evm_jumptable_mini};
 use link::{link, postlink_compile};
 use run::{run_from_file, runtime_env::RuntimeEnvironment};
+use mavm::Value;
 use std::fs::File;
 use std::io;
 use std::path::Path;
@@ -163,8 +164,9 @@ fn main() {
                 }
             }
 
-            match link(&compiled_progs, matches.is_present("module")) {
-                Ok(linked_prog) => match postlink_compile(linked_prog, false, Vec::new(), debug_mode) {
+            let is_module = matches.is_present("module");
+            match link(&compiled_progs, is_module, Some(Value::none())) {
+                Ok(linked_prog) => match postlink_compile(linked_prog, is_module, Vec::new(), debug_mode) {
                     Ok(completed_program) => {
                         completed_program.to_output(&mut *output, matches.value_of("format"));
                     }

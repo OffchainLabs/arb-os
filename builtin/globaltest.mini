@@ -75,5 +75,12 @@ func tests() -> uint {
         return 7;
     }
  
+    let farr2 = newfixedarray(42, 0);
+    farr2 = farr2 with { [21] = 44 };
+    farr2 = farr2 with { [0] = 33 };
+    if (farr2[21] != 44) {
+        return 8;
+    }
+
     return 0;
 }

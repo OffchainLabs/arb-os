@@ -67,7 +67,7 @@ fn run_from_string(
 
 fn run(machine: &mut Machine, args: Vec<Value>) -> Result<Vec<Value>, (ExecutionError, StackTrace)> {
     match machine.test_call(CodePt::new_internal(0), args) {
-        Ok(mut stack) => Ok(machine.runtime_env.get_all_logs()),
+        Ok(_stack) => Ok(machine.runtime_env.get_all_logs()),
         Err(e) => Err((e, machine.get_stack_trace())),
     }
 }

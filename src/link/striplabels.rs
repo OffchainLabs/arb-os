@@ -25,9 +25,9 @@ pub fn strip_labels(
     jump_table: &[Label],
     exported_funcs: &[ExportedFunc],
     imported_funcs: &[ImportedFunc],
-    evm_pcs: Vec<usize>,  // will be empty if this is not a module
+    maybe_evm_pcs: Option<Vec<usize>>,     // will be Some iff this is a module 
 ) -> Result<(Vec<Instruction>, Vec<CodePt>, Vec<ExportedFuncPoint>), Label> {
-    if ! evm_pcs.is_empty() {
+    if let Some(evm_pcs) = maybe_evm_pcs {
         let mut list_val = Value::none();
         for evm_pc in evm_pcs {
             list_val = Value::Tuple(vec![
@@ -39,7 +39,10 @@ pub fn strip_labels(
         // re-do the first instruction in the code, which got a dummy value in link
         code_in[0] = Instruction::from_opcode_imm(
             Opcode::Swap1, 
-            list_val, 
+            Value::Tuple(vec![
+                list_val, 
+                code_in[0].immediate.as_ref().expect("module did not have storage immediate").clone(),
+            ]),
             None,
         );
     }

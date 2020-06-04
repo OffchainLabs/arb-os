@@ -24,6 +24,7 @@ type AccountStore = map<address, Account>
 type Account = struct {
     nextSeqNum: uint,
     code: ByteArray,
+    evmJumpTable: map<uint, func()>,
     codePoint: func(),  
     codeSize: uint,
     codeHash: bytes32,
@@ -40,6 +41,7 @@ public impure func accountStore_init() {   // This must be called first!
         pristineAccount = struct {
             nextSeqNum: 1,
             code: unsafecast<ByteArray>(null),
+            evmJumpTable: newmap<uint, func()>,
             codePoint: unsafecast<func()>(null),
             codeSize: 0,
             codeHash: bytes32(0xc5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470),

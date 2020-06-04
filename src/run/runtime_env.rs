@@ -16,11 +16,13 @@
 
 use crate::uint256::Uint256;
 use crate::mavm::{Value};
+use std::collections::HashMap;
 
 
 pub struct RuntimeEnvironment {
     pub l1_inbox: Value,
     pub logs: Vec<Value>,
+    pub seq_nums: HashMap<Uint256, Uint256>,
 }
 
 impl RuntimeEnvironment {
@@ -28,6 +30,7 @@ impl RuntimeEnvironment {
         RuntimeEnvironment{ 
             l1_inbox: Value::none(),
             logs: Vec::new(),
+            seq_nums: HashMap::new(),
         }
     }
 
@@ -39,6 +42,15 @@ impl RuntimeEnvironment {
         for msg in msgs {
             self.insert_message(msg.clone());
         }
+    }
+
+    pub fn get_and_incr_seq_num(&mut self, addr: &Uint256) -> Uint256 {
+        let cur_seq_num = match self.seq_nums.get(&addr) {
+            Some(sn) => sn.clone(),
+            None => Uint256::one(),
+        };
+        self.seq_nums.insert(addr.clone(), cur_seq_num.add(&Uint256::one()));
+        cur_seq_num.clone()
     }
 
     pub fn get_inbox(&mut self) -> Value {

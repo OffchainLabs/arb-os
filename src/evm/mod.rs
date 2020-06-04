@@ -18,12 +18,11 @@ use crate::compile::{CompileError, CompiledProgram};
 use crate::link::{link, postlink_compile, ImportedFunc, LinkedProgram};
 use crate::mavm::{Instruction, Label, LabelGenerator, Opcode, Value};
 use crate::stringtable::StringTable;
+use crate::run::runtime_env::{RuntimeEnvironment, bytestack_from_bytes};
 use crate::uint256::Uint256;
-use crate::build_builtins::BuiltinArray;
 use serde::{Serialize};
 use std::collections::HashMap;
 use std::convert::TryInto;
-use std::error::Error;
 use std::fs::File;
 use std::io::{self, Read, Write};
 use std::path::Path;
@@ -66,22 +65,16 @@ pub struct CompiledEvmContract {
 }
 
 impl CompiledEvmContract {
-    fn get_info_datastruct(&self) -> Value {
-        let num_storages = self.storage.len();
-        let mut storages_array = BuiltinArray::new(num_storages, Value::none());
-        for (i, (mem_addr, mem_val)) in self.storage.iter().enumerate() {
-            storages_array.set(
-                i,
-                Value::Tuple(vec![
-                    Value::Int(mem_addr.clone()),
-                    Value::Int(mem_val.clone()),
-                ]),
-            );
+    fn get_storage_info_struct(&self) -> Value {
+        let mut ret = Value::none();
+        for (offset, val) in &self.storage {
+            ret = Value::Tuple(vec![
+                ret,
+                Value::Int(offset.clone()),
+                Value::Int(val.clone()),
+            ]);
         }
-        Value::Tuple(vec![
-            Value::Int(self.address.clone()),
-            storages_array.to_value(),
-        ])
+        ret
     }
 
     pub fn to_output(&self, output: &mut dyn io::Write, format: Option<&str>) {
@@ -121,6 +114,60 @@ impl CompiledEvmContract {
 	}
 }
 
+pub fn send_inject_evm_messages(evm_json: serde_json::Value, env: &mut RuntimeEnvironment) -> bool {
+    if let serde_json::Value::Array(contracts) = evm_json {
+        let mut messages_out = Vec::new();
+        for contract in contracts {
+            if let serde_json::Value::Object(items) = contract {
+                let code_str = if let serde_json::Value::String(s) = &items["code"] {
+                    s
+                } else {
+                    return false;
+                };
+                let decoded_insns = hex::decode(&code_str[2..]).unwrap();
+
+                // strip cbor info
+                let cbor_length = u16::from_be_bytes(decoded_insns[decoded_insns.len()-2..].try_into().expect("unexpected u16 parsing error"));
+                let cbor_length = cbor_length as usize;
+                let decoded_insns = &decoded_insns[..(decoded_insns.len()-cbor_length-2)];
+
+                let mut storage_map = Value::none();
+                if let serde_json::Value::Object(m) = &items["storage"] {
+                    for (k, v) in m {
+                        if let serde_json::Value::String(s) = v {
+                            storage_map = Value::Tuple(vec![
+                                storage_map,
+                                Value::Int(Uint256::from_string_hex(&k[2..]).unwrap()),
+                                Value::Int(Uint256::from_string_hex(&s[2..]).unwrap()),
+                            ]);
+                        } else {
+                            return false;
+                        }
+                    }
+                } 
+
+                let address = Uint256::zero();
+                let seq_num = env.get_and_incr_seq_num(&address);
+                let msg = Value::Tuple(vec![
+                    Value::Int(Uint256::from_usize(7)),
+                    Value::Int(address.clone()),
+                    Value::Tuple(vec![
+                        Value::Int(seq_num),
+                        bytestack_from_bytes(decoded_insns),
+                        storage_map,
+                    ]),
+                ]);
+                messages_out.push(msg);
+            } else {
+                return false;
+            }
+        }
+        env.insert_messages(&messages_out);
+        true
+    } else {
+        false
+    }    
+}
 
 pub fn compile_from_json(evm_json: serde_json::Value, debug: bool) -> Result<Vec<LinkedProgram>, CompileError> {
     if let serde_json::Value::Array(contracts) = evm_json {
@@ -129,6 +176,7 @@ pub fn compile_from_json(evm_json: serde_json::Value, debug: bool) -> Result<Vec
         for contract in contracts {
             if let serde_json::Value::Object(items) = contract {
                 let (compiled_contract, lg) = compile_from_evm_contract(items, label_gen)?;
+                let storage_info_struct = compiled_contract.get_storage_info_struct();
                 let linked_contract = postlink_compile(
                     link(
                         &[
@@ -141,6 +189,7 @@ pub fn compile_from_json(evm_json: serde_json::Value, debug: bool) -> Result<Vec
                             ),
                         ],
                         true,
+                        Some(storage_info_struct),
                     ).unwrap(),  // BUGBUG--this should handle errors gracefully, not just panic 
                     true,
                     compiled_contract.evm_pcs,
@@ -777,6 +826,7 @@ fn compile_push_insn(data: &[u8], mut code: Vec<Instruction>) -> Vec<Instruction
     code
 }
 
+#[allow(dead_code)]
 fn imported_funcs_for_evm() -> (Vec<ImportedFunc>, StringTable<'static>) {
     let mut imp_funcs = Vec::new();
     let mut string_table = StringTable::new();
@@ -796,7 +846,7 @@ pub fn make_evm_jumptable_mini(filepath: &Path) -> Result<(), io::Error> {
 
     // Open a file in write-only mode, returns `io::Result<File>`
     let mut file = match File::create(&path) {
-        Err(why) => panic!("couldn't create {}: {}", display, why.description()),
+        Err(why) => panic!("couldn't create {}: {}", display, why.to_string()),
         Ok(file) => file,
     }; 
     writeln!(file, "// Automatically generated file -- do not edit")?;

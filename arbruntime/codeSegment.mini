@@ -16,6 +16,8 @@
 
 import type ByteStream;
 
+import func bytestream_atEof(bs: ByteStream) -> bool;
+import func bytestream_bytesReadSoFar(bs: ByteStream) -> uint;
 import func bytestream_bytesRemaining(bs: ByteStream) -> uint;
 import func bytestream_getByte(bs: ByteStream) -> (bool, ByteStream, uint);
 import func bytestream_get64(bs: ByteStream) -> (bool, ByteStream, uint);
@@ -23,6 +25,47 @@ import func bytestream_getUint(bs: ByteStream) -> (bool, ByteStream, uint);
 
 import func evm_jumptable_get(slot: uint) -> func();
 
+import func evmOp_address();
+import func evmOp_balance();
+import func evmOp_call();
+import func evmOp_callcode();
+import func evmOp_calldatacopy();
+import func evmOp_calldataload();
+import func evmOp_calldatasize();
+import func evmOp_caller();
+import func evmOp_callvalue();
+import func evmOp_codecopy();
+import func evmOp_codesize();
+import func evmOp_delegatecall();
+import func evmOp_extcodesize();
+import func evmOp_extcodecopy();
+import func evmOp_getjumpaddr();
+import func evmOp_log0();
+import func evmOp_log1();
+import func evmOp_log2();
+import func evmOp_log3();
+import func evmOp_log4();
+import func evmOp_msize();
+import func evmOp_mload();
+import func evmOp_mstore();
+import func evmOp_mstore8();
+import func evmOp_number();
+import func evmOp_origin();
+import func evmOp_return();
+import func evmOp_returndatasize();
+import func evmOp_returndatacopy();
+import func evmOp_revert();
+import func evmOp_selfdestruct();
+import func evmOp_sha3();
+import func evmOp_sload();
+import func evmOp_sstore();
+import func evmOp_sloadbytes();
+import func evmOp_sstorebytes();
+import func evmOp_ssize();
+import func evmOp_staticcall();
+import func evmOp_stop();
+import func evmOp_timestamp();
+import func evmOp_txexecgas();
 
 type AvmCodePoint = func()
 type Segment = struct {
@@ -126,7 +169,7 @@ func parseAvmValue(bs: ByteStream) -> (bool, ByteStream, any) {
         // parse and return a codepoint of a runtime call, as byte
         let (success, ubs, val,) = bytestream_getByte(bs);
         if (success) {
-            return (true, bs, evm_jumptable_get(val),);
+            return (true, ubs, evm_jumptable_get(val),);
         } else {
             return (false, bs, 0,);
         }
@@ -258,12 +301,16 @@ func segment_addInsn(seg: Segment, opcode: uint, hasImm: bool, imm: any) -> Segm
                with { codePtMap: seg.codePtMap with { [sizeIn] = curCodePt } };
 }
 
-func pushInstruction(code: AvmCodePoint, opcode: uint) -> AvmCodePoint {
-    return asm(opcode, code) AvmCodePoint { pushinsn };
+func pushInstruction(opcode: uint, restOfCode: AvmCodePoint) -> AvmCodePoint {
+    return asm(opcode, restOfCode) AvmCodePoint { pushinsn };
 }
 
-func pushInstructionImm(code: AvmCodePoint, opcode: uint, val: any) -> AvmCodePoint {
-    return asm(opcode, val, code) AvmCodePoint { pushinsnimm };
+func pushInstructionImm(opcode: uint, val: any, restOfCode: AvmCodePoint) -> AvmCodePoint {
+    return asm(opcode, val, restOfCode) AvmCodePoint { pushinsnimm };
+}
+
+func pushValue(val: any, restOfCode: AvmCodePoint) -> AvmCodePoint {
+    return asm(0x3b, val, restOfCode) AvmCodePoint { pushinsnimm };
 }
 
 func segment_close(seg: Segment) -> Segment {
@@ -277,12 +324,393 @@ type EvmPcStruct = struct {
     codePt: func(),
 }
 
-public func makeEvmPcMap(v: any) -> map<uint, func()> {
-    let ret = newmap<uint, func()>;
-    let ve = unsafecast<EvmPcStruct>(v);
+type InitStorageStruct = struct {
+    rest: any,   // actually an InitStorageStruct, but language doesn't allow recursive types
+    offset: uint,
+    val: uint,
+}
+
+public func makeInitStructures(v: any) -> (map<uint, func()>, map<uint, uint>) {
+    let (ve, vs,) = unsafecast<(EvmPcStruct, InitStorageStruct)>(v);
+
+    let jumpTable = newmap<uint, func()>;
     while(null != unsafecast<any>(ve)) {
-        ret = ret with { [ve.evmPc] = ve.codePt };
+        jumpTable = jumpTable with { [ve.evmPc] = ve.codePt };
         ve = unsafecast<EvmPcStruct>(ve.rest);
     }
-    return ret;
+
+    let storageMap = newmap<uint, uint>;
+    while(null != unsafecast<any>(vs)) {
+        storageMap = storageMap with { [vs.offset] = vs.val };
+        vs = unsafecast<InitStorageStruct>(vs.rest);
+    }
+
+    return (jumpTable, storageMap,);
+}
+
+public func translateEvmCodeSegment(bs: ByteStream) -> (bool, AvmCodePoint, map<uint, AvmCodePoint>) {
+    if (bytestream_atEof(bs)) {
+        return (true, asm() AvmCodePoint { errcodept }, newmap<uint, AvmCodePoint>,);
+    }
+
+    let (success, ubs, opcode,) = bytestream_getByte(bs);
+    bs = ubs;
+    if (! success) {
+        return (false, unsafecast<AvmCodePoint>(0), newmap<uint, AvmCodePoint>,);
+    }
+
+    if ((opcode >= 0x60) && (opcode <= 0x7f)) {
+        // it's a pushN instruction; unmarshal value and push it
+        let numBytes = opcode - 0x5f;
+        let imm = 0;
+        while (numBytes > 0) {
+            let (success, ubs, val,) = bytestream_getByte(bs);
+            if (! success) {
+                return (false, unsafecast<AvmCodePoint>(0), newmap<uint, AvmCodePoint>,);
+            }
+            imm = 256*imm + val;
+        }
+        let (success, restOfCode, evmJumpTable,) = translateEvmCodeSegment(bs);
+        if (! success) {
+            return (false, unsafecast<AvmCodePoint>(0), newmap<uint, AvmCodePoint>,);
+        }
+        return (true, pushValue(imm, restOfCode), evmJumpTable,);
+    } 
+
+    let (success, restOfCode, evmJumpTable,) = translateEvmCodeSegment(bs);
+    if (! success) {
+        return (success, restOfCode, evmJumpTable,);
+    }   
+
+    if (opcode == 0x00) { // STOP
+        return pushEvmInsnCall(restOfCode, evmOp_stop, evmJumpTable);
+    } elseif (opcode == 0x01) { // ADD
+        return (true, pushInstruction(0x01, restOfCode), evmJumpTable,);
+    } elseif (opcode == 0x02) { // MUL
+        return (true, pushInstruction(0x02, restOfCode), evmJumpTable,);
+    } elseif (opcode == 0x03) { // SUB
+        return (true, pushInstruction(0x03, restOfCode), evmJumpTable,);    
+    } elseif ( (opcode >= 0x04) && (opcode <= 0x09) ) { // DIV, MOD, SDIV, SMOD, ADDMOD, MULMOD
+        return pushEvmInsnDenomCheck(opcode, restOfCode, evmJumpTable); 
+    } elseif (opcode == 0x0a) { // EXP
+        return (true, pushInstruction(0x0a, restOfCode), evmJumpTable,); 
+    } elseif (opcode == 0x0b) { // SIGNEXTEND
+        return (true, pushInstruction(0x1b, restOfCode), evmJumpTable,);  // note diff opcode
+    } elseif ( (opcode >= 0x10) && (opcode <= 0x1a) ) {
+        return (true, pushInstruction(opcode, restOfCode), evmJumpTable,);
+    } elseif (opcode == 0x1b) { // SHL
+        return (
+            true,
+            pushInstruction(
+                0x43, // swap1
+                pushInstructionImm(
+                    0x0a, 2,   // [2] exp
+                    pushInstruction(
+                        0x02, // mul
+                        restOfCode
+                    )
+                )
+            ),
+            evmJumpTable,
+        );
+    } elseif (opcode == 0x1c) { // SHR
+        return (
+            true,
+            pushInstruction(
+                0x43, // swap1
+                pushInstructionImm(
+                    0x0a, 2,   // [2] exp
+                    pushInstruction(
+                        0x43, // swap1
+                        pushInstruction(
+                            0x04, // div 
+                            restOfCode
+                        )
+                    )
+                )
+            ),
+            evmJumpTable,
+        );
+    } elseif (opcode == 0x1d) { // SHA
+        return (
+            true,
+            pushInstruction(
+                0x43, // swap1
+                pushInstructionImm(
+                    0x0a, 2,   // [2] exp
+                    pushInstruction(
+                        0x43, // swap1
+                        pushInstruction(
+                            0x05, // sdiv 
+                            restOfCode
+                        )
+                    )
+                )
+            ),
+            evmJumpTable,
+        );  
+    } elseif (opcode == 0x20) { // SHA3
+        return pushEvmInsnCall(evmOp_sha3, restOfCode, evmJumpTable);     
+    } elseif (opcode == 0x30) { // ADDRESS
+        return pushEvmInsnCall(evmOp_address, restOfCode, evmJumpTable);  
+    } elseif (opcode == 0x31) { // BALANCE
+        return pushEvmInsnCall(evmOp_balance, restOfCode, evmJumpTable);  
+    } elseif (opcode == 0x32) { // ORIGIN
+        return pushEvmInsnCall(evmOp_origin, restOfCode, evmJumpTable);  
+    } elseif (opcode == 0x33) { // CALLER
+        return pushEvmInsnCall(evmOp_caller, restOfCode, evmJumpTable);  
+    } elseif (opcode == 0x34) { // CALLVALUE
+        return pushEvmInsnCall(evmOp_callvalue, restOfCode, evmJumpTable);  
+    } elseif (opcode == 0x35) { // CALLDATALOAD
+        return pushEvmInsnCall(evmOp_calldataload, restOfCode, evmJumpTable);  
+    } elseif (opcode == 0x36) { // CALLDATASIZE
+        return pushEvmInsnCall(evmOp_calldatasize, restOfCode, evmJumpTable);  
+    } elseif (opcode == 0x37) { // CALLDATACOPY
+        return pushEvmInsnCall(evmOp_calldatacopy, restOfCode, evmJumpTable);  
+    } elseif (opcode == 0x38) { // CODESIZE
+        return pushEvmInsnCall(evmOp_codesize, restOfCode, evmJumpTable);  
+    } elseif (opcode == 0x39) { // CODECOPY
+        return pushEvmInsnCall(evmOp_codecopy, restOfCode, evmJumpTable); 
+    } elseif (opcode == 0x3a) { // GASPRICE
+        return (true, pushValue(1, restOfCode), evmJumpTable,);
+    } elseif (opcode == 0x3b) { // EXTCODESIZE
+        return pushEvmInsnCall(evmOp_extcodesize, restOfCode, evmJumpTable); 
+    } elseif (opcode == 0x3c) { // EXTCODECOPY
+        return pushEvmInsnCall(evmOp_extcodecopy, restOfCode, evmJumpTable); 
+    } elseif (opcode == 0x3d) { // RETURNDATASIZE
+        return pushEvmInsnCall(evmOp_returndatasize, restOfCode, evmJumpTable); 
+    } elseif (opcode == 0x3e) { // RETURNDATACOPY
+        return pushEvmInsnCall(evmOp_returndatacopy, restOfCode, evmJumpTable); 
+    } elseif (opcode == 0x40) { // BLOCKHASH
+        return (false, unsafecast<AvmCodePoint>(0), newmap<uint, AvmCodePoint>,);
+    } elseif (opcode == 0x41) { // COINBASE
+        return (false, unsafecast<AvmCodePoint>(0), newmap<uint, AvmCodePoint>,);
+    } elseif (opcode == 0x42) { // TIMESTAMP
+        return pushEvmInsnCall(evmOp_timestamp, restOfCode, evmJumpTable); 
+    } elseif (opcode == 0x43) { // NUMBER
+        return pushEvmInsnCall(evmOp_number, restOfCode, evmJumpTable); 
+    } elseif (opcode == 0x44) { // DIFFICULTY
+        return (false, unsafecast<AvmCodePoint>(0), newmap<uint, AvmCodePoint>,);    
+    } elseif (opcode == 0x45) { // GASLIMIT
+        return (true, pushValue(10000000000, restOfCode), evmJumpTable,); 
+    } elseif (opcode == 0x50) { // POP
+        return (true, pushInstruction(0x30, restOfCode), evmJumpTable,); // pop  
+    } elseif (opcode == 0x51) { // MLOAD
+        return pushEvmInsnCall(evmOp_mload, restOfCode, evmJumpTable);     
+    } elseif (opcode == 0x52) { // MSTORE
+        return pushEvmInsnCall(evmOp_mstore, restOfCode, evmJumpTable);     
+    } elseif (opcode == 0x53) { // MSTORE8
+        return pushEvmInsnCall(evmOp_mstore8, restOfCode, evmJumpTable);
+    } elseif (opcode == 0x54) { // SLOAD
+        return pushEvmInsnCall(evmOp_sload, restOfCode, evmJumpTable);    
+    } elseif (opcode == 0x55) { // SSTORE
+        return pushEvmInsnCall(evmOp_sstore, restOfCode, evmJumpTable);   
+    } elseif (opcode == 0x56) { // JUMP
+        return pushEvmInsnCall(
+            evmOp_getjumpaddr, 
+            pushInstruction(0x34, restOfCode), // jump
+            evmJumpTable
+        );
+    } elseif (opcode == 0x57) { // JUMPI
+        return (
+            true, 
+            pushInstruction(
+                0x43,  // swap1
+                pushInstruction(
+                    0x15,  // iszero
+                    pushInstructionImm(
+                        0x35, // cjump
+                        restOfCode, 
+                        pushInstructionImm(
+                            0x43,  // swap1
+                            restOfCode,
+                            pushInstruction(
+                                0x34, //jump
+                                restOfCode
+                            )
+                        )
+                    )
+                )
+            ),
+            evmJumpTable,
+        );
+    } elseif (opcode == 0x58) {  // GETPC
+        return (false, unsafecast<AvmCodePoint>(0), newmap<uint, AvmCodePoint>,);
+    } elseif (opcode == 0x59) { // MSIZE
+        return pushEvmInsnCall(evmOp_msize, restOfCode, evmJumpTable);
+    } elseif (opcode == 0x5a) { // MSIZE
+        return (true, pushValue(9999999999, restOfCode), evmJumpTable,);
+    } elseif (opcode == 0x5b) { // JUMPDEST
+        evmJumpTable = evmJumpTable with { 
+            [bytestream_bytesReadSoFar(bs)] = restOfCode 
+        };
+        return (
+            true, 
+            restOfCode, 
+            evmJumpTable with { 
+                [bytestream_bytesReadSoFar(bs)] = restOfCode 
+            },
+        );
+    } elseif (opcode == 0x80) {  // DUP1 -- note that DUPn in EVM corresponds to DUP(n-1) in AvmCodePoint
+        return (true, pushInstruction(0x40, restOfCode), evmJumpTable,);  // dup0
+    } elseif (opcode == 0x81) {  // DUP2 
+        return (true, pushInstruction(0x41, restOfCode), evmJumpTable,);  // dup1
+    } elseif (opcode == 0x82) {  // DUP3 
+        return (true, pushInstruction(0x42, restOfCode), evmJumpTable,);  // DUP2
+    } elseif ( (opcode >= 0x83) && (opcode <= 0x8f) ) {
+        return pushDupn(opcode-0x80, restOfCode, evmJumpTable);
+    } elseif (opcode == 0x90) {  // SWAP1
+        return (true, pushInstruction(0x43, restOfCode), evmJumpTable,);  // swap1
+    } elseif (opcode == 0x91) {  // SWAP2
+        return (true, pushInstruction(0x44, restOfCode), evmJumpTable,);  // swap2
+    } elseif ( (opcode >= 0x92) && (opcode <= 0x9f) ) {
+        return pushSwapn(opcode-0x8f, restOfCode, evmJumpTable);
+    } elseif (opcode == 0xa0) { // LOG0
+        return pushEvmInsnCall(evmOp_log0, restOfCode, evmJumpTable);
+    } elseif (opcode == 0xa1) { // LOG1
+        return pushEvmInsnCall(evmOp_log1, restOfCode, evmJumpTable);
+    } elseif (opcode == 0xa2) { // LOG2
+        return pushEvmInsnCall(evmOp_log2, restOfCode, evmJumpTable);
+    } elseif (opcode == 0xa3) { // LOG3
+        return pushEvmInsnCall(evmOp_log3, restOfCode, evmJumpTable);
+    } elseif (opcode == 0xa4) { // LOG0
+        return pushEvmInsnCall(evmOp_log4, restOfCode, evmJumpTable);
+    } elseif (opcode == 0xe1) { // SLOADBYTES
+        return pushEvmInsnCall(evmOp_sloadbytes, restOfCode, evmJumpTable);
+    } elseif (opcode == 0xe2) { // SSTOREBYTES
+        return pushEvmInsnCall(evmOp_sstorebytes, restOfCode, evmJumpTable);
+    } elseif (opcode == 0xe3) { // SSIZE
+        return pushEvmInsnCall(evmOp_ssize, restOfCode, evmJumpTable);    
+    } elseif (opcode == 0xf0) {  // CREATE
+        return (false, unsafecast<AvmCodePoint>(0), newmap<uint, AvmCodePoint>,);    
+    } elseif (opcode == 0xf1) { // CALL
+        return pushEvmInsnCall(evmOp_call, restOfCode, evmJumpTable);  
+    } elseif (opcode == 0xf2) { // CALLCODE
+        return pushEvmInsnCall(evmOp_ssize, restOfCode, evmJumpTable);  
+    } elseif (opcode == 0xf3) { // RETURN
+        return pushEvmInsnCall(evmOp_return, restOfCode, evmJumpTable);  
+    } elseif (opcode == 0xf4) { // DELEGATECALL
+        return pushEvmInsnCall(evmOp_delegatecall, restOfCode, evmJumpTable); 
+    } elseif (opcode == 0xf5) {  // CREATE2
+        return (false, unsafecast<AvmCodePoint>(0), newmap<uint, AvmCodePoint>,);  
+    } elseif (opcode == 0xfa) { // STATICCALL
+        return pushEvmInsnCall(evmOp_staticcall, restOfCode, evmJumpTable); 
+    } elseif (opcode == 0xfc) { // TXEXECGAS
+        return pushEvmInsnCall(evmOp_txexecgas, restOfCode, evmJumpTable); 
+    } elseif (opcode == 0xfd) { // REVERT
+        return pushEvmInsnCall(evmOp_revert, restOfCode, evmJumpTable); 
+    } elseif (opcode == 0xfe) { // INVALID
+        return (true, pushInstruction(0x73, restOfCode), evmJumpTable,);  // error
+    } elseif (opcode == 0xff) { // SELFDESTRUCT
+        return pushEvmInsnCall(evmOp_selfdestruct, restOfCode, evmJumpTable); 
+    } else {
+        return (false, unsafecast<AvmCodePoint>(0), newmap<uint, AvmCodePoint>,);
+    }
+}
+
+func pushEvmInsnDenomCheck(
+    opcode: uint, 
+    restOfCode: AvmCodePoint,
+    evmJumpTable: map<uint, AvmCodePoint>
+) -> (bool, AvmCodePoint, map<uint, AvmCodePoint>) {
+    let doTheOp = pushInstruction(opcode, restOfCode);
+    return (
+        true,
+        pushInstruction(
+            0x41,  // dup1
+            pushInstructionImm(
+                0x35,  // cjump
+                doTheOp,
+                pushInstruction(
+                    0x73,  // error
+                    doTheOp
+                )
+            )
+        ),
+        evmJumpTable,
+    );
+}
+
+func pushDupn(
+    n: uint, 
+    restOfCode: AvmCodePoint
+    evmJumpTable: map<uint, AvmCodePoint>
+) -> (bool, AvmCodePoint, map<uint, AvmCodePoint>) {
+    let i = 2;
+    while (i < n) {
+        restOfCode = pushInstruction(
+            0x39, // auxpop
+            pushInstruction(
+                0x43, // swap1
+                restOfCode
+            )
+        );
+        i = i+1;
+    }
+    restOfCode = pushInstruction(
+        0x42, // dup2
+        restOfCode
+    );
+    i = 2;
+    while (i < n) {
+        restOfCode = pushInstruction(
+            0x38, // auxpush
+            restOfCode
+        );
+        i = i+1;
+    }
+    return (true, restOfCode, evmJumpTable,);
+}
+
+func pushSwapn(
+    n: uint, 
+    restOfCode: AvmCodePoint,
+    evmJumpTable: map<uint, AvmCodePoint>
+) -> (bool, AvmCodePoint, map<uint, AvmCodePoint>) {
+    let i = 2;
+    while (i < n) {
+        restOfCode = pushInstruction(
+            0x39, // auxpop
+            restOfCode
+        );
+        i = i+1;
+    }
+    restOfCode = pushInstruction(
+        0x44, // swap2
+        pushInstruction(
+            0x43, // swap1
+            restOfCode
+        )
+    );
+    i = 2;
+    while (i < n) {
+        restOfCode = pushInstruction(
+            0x43, // swap1
+            pushInstruction(
+                0x38, // auxpush
+                restOfCode
+            )
+        );
+        i = i+1;
+    }
+    return (true, restOfCode, evmJumpTable,);
+}
+
+func pushEvmInsnCall(
+    evmOp: func(), 
+    restOfCode: AvmCodePoint,
+    evmJumpTable: map<uint, AvmCodePoint>
+) -> (bool, AvmCodePoint, map<uint, AvmCodePoint>) {
+    return (
+        true,
+        pushValue(
+            restOfCode,  // push return address
+            pushInstructionImm(
+                0x34, // jump
+                evmOp,
+                restOfCode
+            )
+        ),
+        evmJumpTable,
+    );
 }
