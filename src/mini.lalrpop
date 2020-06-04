@@ -87,7 +87,7 @@ CodeBlock: Vec<Statement> = {
 Statement: Statement = {
 	<lno: @L> "while" "(" <e: Expr> ")" <cb: CodeBlock> => Statement::While(e, cb, file_info.location(BytePos::from(lno))),
 	<lno: @L> "loop" <cb: CodeBlock> => Statement::Loop(cb, file_info.location(BytePos::from(lno))),
-	<lno: @L> "if let" <l: Ident> "=" <r:Expr> <t: CodeBlock> => Statement::IfLet(l,r,t,file_info.location(BytePos::from(lno))),
+	<lno: @L> "if let" <l: Ident> "=" <r:Expr> <t: CodeBlock> <e: ("else" <CodeBlock>)?> => Statement::IfLet(l,r,t,e,file_info.location(BytePos::from(lno))),
 	<lno: @L> "if" "(" <c: Expr> ")" <t: CodeBlock> => Statement::If(IfArm::Cond(c, t, None, file_info.location(BytePos::from(lno)))),
 	<lno: @L> "if" "(" <c: Expr> ")" <t: CodeBlock> <r: IfArm> => Statement::If(IfArm::Cond(c, t, Some(Box::new(r)), file_info.location(BytePos::from(lno)))),
 	<lno: @L> "let" <p: MatchPattern> "=" <e: Expr> ";" => Statement::Let(p, e, file_info.location(BytePos::from(lno))),

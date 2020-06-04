@@ -568,7 +568,13 @@ pub enum Statement {
     Loop(Vec<Statement>, Option<Location>),
     While(Expr, Vec<Statement>, Option<Location>),
     If(IfArm),
-    IfLet(StringId, Expr, Vec<Statement>, Option<Location>),
+    IfLet(
+        StringId,
+        Expr,
+        Vec<Statement>,
+        Option<Vec<Statement>>,
+        Option<Location>,
+    ),
     Asm(Vec<Instruction>, Vec<Expr>, Option<Location>),
     DebugPrint(Expr, Option<Location>),
 }
@@ -623,7 +629,9 @@ impl<'a> Statement {
             Statement::DebugPrint(e, loc) => {
                 Ok(Statement::DebugPrint(e.resolve_types(type_table)?, *loc))
             }
-            Statement::IfLet(l, r, s, loc) => Ok(Statement::IfLet(*l, r.clone(), s.clone(), *loc)),
+            Statement::IfLet(l, r, s, e, loc) => {
+                Ok(Statement::IfLet(*l, r.clone(), s.clone(), e.clone(), *loc))
+            }
         }
     }
 
