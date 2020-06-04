@@ -51,7 +51,7 @@ fn testarray6() {
 
 fn test_arraytest(test_num: usize, expected_result: Value) {
     let path = Path::new("builtin/arraytest.mexe");
-    let res = run_from_file(path, vec![Value::Int(Uint256::from_usize(test_num))]);
+    let res = run_from_file(path, vec![Value::Int(Uint256::from_usize(test_num))], false);
     match res {
         Ok(res) => {
             assert_eq!(res, expected_result);
@@ -109,7 +109,7 @@ fn testkvs8() {
 
 fn test_kvstest(test_num: usize, expected_result: Value) {
     let path = Path::new("builtin/kvstest.mexe");
-    let res = run_from_file(path, vec![Value::Int(Uint256::from_usize(test_num))]);
+    let res = run_from_file(path, vec![Value::Int(Uint256::from_usize(test_num))], false);
     match res {
         Ok(res) => {
             assert_eq!(res, expected_result);
@@ -142,7 +142,7 @@ fn testq3() {
 
 fn test_queuetest(test_num: usize, expected_result: Value) {
     let path = Path::new("stdlib/queuetest.mexe");
-    let res = run_from_file(path, vec![Value::Int(Uint256::from_usize(test_num))]);
+    let res = run_from_file(path, vec![Value::Int(Uint256::from_usize(test_num))], false);
     match res {
         Ok(res) => {
             assert_eq!(res, expected_result);
@@ -190,7 +190,7 @@ fn testglobal6() {
 
 fn test_globaltest(test_num: usize, expected_result: Value) {
     let path = Path::new("builtin/globaltest.mexe");
-    let res = run_from_file(path, vec![Value::Int(Uint256::from_usize(test_num))]);
+    let res = run_from_file(path, vec![Value::Int(Uint256::from_usize(test_num))], false);
     match res {
         Ok(res) => {
             assert_eq!(res, expected_result);
@@ -228,7 +228,7 @@ fn testpq4() {
 
 fn test_pqtest(test_num: usize, expected_result: Value) {
     let path = Path::new("stdlib/priorityqtest.mexe");
-    let res = run_from_file(path, vec![Value::Int(Uint256::from_usize(test_num))]);
+    let res = run_from_file(path, vec![Value::Int(Uint256::from_usize(test_num))], false);
     match res {
         Ok(res) => {
             assert_eq!(res, expected_result);
@@ -296,7 +296,7 @@ fn testba10() {
 
 fn test_bytearray(test_num: usize, expected_result: Value) {
     let path = Path::new("stdlib/bytearraytest.mexe");
-    let res = run_from_file(path, vec![Value::Int(Uint256::from_usize(test_num))]);
+    let res = run_from_file(path, vec![Value::Int(Uint256::from_usize(test_num))], false);
     match res {
         Ok(res) => {
             assert_eq!(res, expected_result);
@@ -334,7 +334,7 @@ fn testmap4() {
 
 fn test_map(test_num: usize, expected_result: Value) {
     let path = Path::new("builtin/maptest.mexe");
-    let res = run_from_file(path, vec![Value::Int(Uint256::from_usize(test_num))]);
+    let res = run_from_file(path, vec![Value::Int(Uint256::from_usize(test_num))], false);
     match res {
         Ok(res) => {
             assert_eq!(res, expected_result);
@@ -352,7 +352,7 @@ fn testkeccak0() {
 
 fn test_keccak(test_num: usize, expected_result: Value) {
     let path = Path::new("stdlib/keccaktest.mexe");
-    let res = run_from_file(path, vec![Value::Int(Uint256::from_usize(test_num))]);
+    let res = run_from_file(path, vec![Value::Int(Uint256::from_usize(test_num))], false);
     match res {
         Ok(res) => {
             assert_eq!(res, expected_result);

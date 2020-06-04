@@ -206,6 +206,7 @@ impl MachineState {
     }
 }
 
+#[derive(Debug)]
 pub struct Machine {
     stack: ValueStack,
     aux_stack: ValueStack,
@@ -239,6 +240,7 @@ impl<'a> Machine {
         &mut self,
         func_addr: CodePt,
         args: Vec<Value>,
+        debug: bool,
     ) -> Result<ValueStack, ExecutionError> {
         let stop_pc = CodePt::new_internal(self.code.len() + 1);
         for i in args.iter().rev().cloned() {
@@ -246,7 +248,11 @@ impl<'a> Machine {
         }
         self.stack.push(Value::CodePoint(stop_pc));
         self.state = MachineState::Running(func_addr);
-        self.run(Some(stop_pc));
+        if debug {
+            self.debug(Some(stop_pc));
+        } else {
+            self.run(Some(stop_pc));
+        }
         match &self.state {
             MachineState::Stopped => {
                 Err(ExecutionError::new("execution stopped", &self.state, None))
@@ -277,6 +283,96 @@ impl<'a> Machine {
             }
         } else {
             panic!("tried to increment PC of non-running machine")
+        }
+    }
+
+    fn next_opcode(&self) -> Option<Instruction> {
+        if let MachineState::Running(pc) = self.state {
+            if let Some(insn) = self.code.get(pc.pc_if_internal()?) {
+                Some(insn.clone())
+            } else {
+                None
+            }
+        } else {
+            None
+        }
+    }
+
+    pub fn debug(&mut self, stop_pc: Option<CodePt>) {
+        println!("Blank line or \"step\" to run one opcode, \"set break\" followed by a \
+         line number to resume program until that line, \"show static\" to show the static contents.");
+        let mut breakpoint = true;
+        let mut break_line = 0;
+        while self.state.is_running() {
+            if !breakpoint {
+                if let Some(insn) = self.next_opcode() {
+                    if let Some(location) = insn.location {
+                        if location.line() == break_line {
+                            breakpoint = true;
+                        }
+                    }
+                    if insn.opcode == Opcode::DebugPrint {
+                        breakpoint = true;
+                    }
+                }
+            }
+            if breakpoint {
+                if let Ok(pc) = self.get_pc() {
+                    println!("PC: {:?}", pc);
+                }
+                println!("Stack contents: {}", self.stack);
+                println!("Aux-stack contents: {}", self.aux_stack);
+                println!("Register contents: {}", self.register);
+                if let Some(code) = self.next_opcode() {
+                    println!("Next Opcode: {}", code.opcode);
+                    if let Some(imm) = code.immediate {
+                        println!("Immediate: {}", imm);
+                    }
+                    if let Some(location) = code.location {
+                        let line = location.line.to_usize();
+                        let column = location.column.to_usize();
+                        println!("Origin: (Line: {}, Column: {})", line, column);
+                    }
+                }
+                println!();
+                let mut exit = false;
+                loop {
+                    let mut debugger_state = String::new();
+                    std::io::stdin().read_line(&mut debugger_state).unwrap();
+                    match debugger_state.as_str() {
+                        "\n" | "step\n" => exit = true,
+                        "set break\n" => {
+                            breakpoint = false;
+                            loop {
+                                let mut debugger_state = String::new();
+                                std::io::stdin().read_line(&mut debugger_state).unwrap();
+                                if let Ok(val) = str::parse(&debugger_state.trim()) {
+                                    break_line = val;
+                                    exit = true;
+                                    break;
+                                } else {
+                                    println!("Could not parse input as number");
+                                }
+                            }
+                        }
+                        "show static\n" => println!("Static contents: {}", self.static_val),
+                        _ => println!("invalid input"),
+                    }
+                    if exit {
+                        break;
+                    }
+                }
+            }
+            if let Some(spc) = stop_pc {
+                if let MachineState::Running(pc) = self.state {
+                    if pc == spc {
+                        return;
+                    }
+                }
+            }
+            if let Err(e) = self.run_one() {
+                self.state = MachineState::Error(e);
+            }
         }
     }
 
