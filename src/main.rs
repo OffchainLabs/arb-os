@@ -88,6 +88,12 @@ fn main() {
                         .help("sets the file name to run")
                         .required(true)
                         .index(1),
+                )
+                .arg(
+                    Arg::with_name("debug")
+                        .help("provide debug output")
+                        .short("d")
+                        .takes_value(false),
                 ),
         )
         .subcommand(
@@ -165,8 +171,10 @@ fn main() {
 
     if let Some(matches) = matches.subcommand_matches("run") {
         let filename = matches.value_of("INPUT").unwrap();
+        let debug = matches.is_present("debug");
         let path = Path::new(filename);
-        match run_from_file(path, Vec::new()) {
+
+        match run_from_file(path, Vec::new(), debug) {
             Ok(val) => {
                 println!("Result: {}", val);
             }
