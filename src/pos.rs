@@ -121,6 +121,9 @@ impl Location {
         self.absolute += BytePos::from(ch.len_utf8());
         self
     }
+    pub fn line(&self) -> u32 {
+        self.line.0
+    }
 }
 
 impl fmt::Display for Location {

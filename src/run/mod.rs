@@ -31,6 +31,7 @@ pub fn run_from_file(
     path: &Path, 
     args: Vec<Value>,
     env: RuntimeEnvironment,
+    debug: bool,
 ) -> Result<Vec<Value>, (ExecutionError, StackTrace)> {
     let display = path.display();
 
@@ -45,13 +46,14 @@ pub fn run_from_file(
         Ok(_) => s,
     };
 
-    run_from_string(s, args, env)
+    run_from_string(s, args, env, debug)
 }
 
 fn run_from_string(
     s: String, 
     args: Vec<Value>, 
     env: RuntimeEnvironment,
+    debug: bool,
 ) -> Result<Vec<Value>, (ExecutionError, StackTrace)> {
     let parse_result: Result<LinkedProgram, serde_json::Error> = serde_json::from_str(&s);
     let program = match parse_result {
@@ -62,11 +64,15 @@ fn run_from_string(
         }
     };
     let mut new_machine = Machine::new(program, env);
-    run(&mut new_machine, args)
+    run(&mut new_machine, args, debug)
 }
 
-fn run(machine: &mut Machine, args: Vec<Value>) -> Result<Vec<Value>, (ExecutionError, StackTrace)> {
-    match machine.test_call(CodePt::new_internal(0), args) {
+fn run(
+    machine: &mut Machine, 
+    args: Vec<Value>, 
+    debug: bool
+) -> Result<Vec<Value>, (ExecutionError, StackTrace)> {
+    match machine.test_call(CodePt::new_internal(0), args, debug) {
         Ok(_stack) => Ok(machine.runtime_env.get_all_logs()),
         Err(e) => Err((e, machine.get_stack_trace())),
     }

@@ -26,7 +26,8 @@ fn test_arraytest() {
     let res = run_from_file(
         path, 
         vec![],
-        RuntimeEnvironment::new()
+        RuntimeEnvironment::new(),
+        false
     );
     match res {
         Ok(res) => {
@@ -44,7 +45,8 @@ fn test_kvstest() {
     let res = run_from_file(
         path, 
         vec![],
-        RuntimeEnvironment::new()
+        RuntimeEnvironment::new(),
+        false
     );
     match res {
         Ok(res) => {
@@ -63,7 +65,7 @@ fn test_queuetest() {
         path, 
         vec![],
         RuntimeEnvironment::new()
-
+        false
     );
     match res {
         Ok(res) => {
@@ -81,7 +83,8 @@ fn test_globaltest() {
     let res = run_from_file(
         path, 
         vec![],
-        RuntimeEnvironment::new()
+        RuntimeEnvironment::new(),
+        false
     );
     match res {
         Ok(res) => {
@@ -99,7 +102,8 @@ fn test_pqtest() {
     let res = run_from_file(
         path,
         vec![],
-        RuntimeEnvironment::new()
+        RuntimeEnvironment::new(),
+        false
     );
     match res {
         Ok(res) => {
@@ -117,7 +121,8 @@ fn test_bytearray() {
     let res = run_from_file(
         path, 
         vec![],
-        RuntimeEnvironment::new()
+        RuntimeEnvironment::new(),
+        false
     );
     match res {
         Ok(res) => {
@@ -135,7 +140,8 @@ fn test_map() {
     let res = run_from_file(
         path, 
         vec![],
-        RuntimeEnvironment::new()
+        RuntimeEnvironment::new(),
+        false
     );
     match res {
         Ok(res) => {
@@ -172,7 +178,8 @@ fn test_codeload() {
     let res = run_from_file(
         path, 
         vec![],
-        RuntimeEnvironment::new()
+        RuntimeEnvironment::new(),
+        false
     );
     match res {
         Ok(res) => {
