@@ -23,7 +23,11 @@ use std::path::Path;
 
 mod emulator;
 
-pub fn run_from_file(path: &Path, args: Vec<Value>) -> Result<Value, (ExecutionError, StackTrace)> {
+pub fn run_from_file(
+    path: &Path,
+    args: Vec<Value>,
+    debug: bool,
+) -> Result<Value, (ExecutionError, StackTrace)> {
     let display = path.display();
 
     let mut file = match File::open(&path) {
@@ -37,10 +41,14 @@ pub fn run_from_file(path: &Path, args: Vec<Value>) -> Result<Value, (ExecutionE
         Ok(_) => s,
     };
 
-    run_from_string(s, args)
+    run_from_string(s, args, debug)
 }
 
-fn run_from_string(s: String, args: Vec<Value>) -> Result<Value, (ExecutionError, StackTrace)> {
+fn run_from_string(
+    s: String,
+    args: Vec<Value>,
+    debug: bool,
+) -> Result<Value, (ExecutionError, StackTrace)> {
     let parse_result: Result<LinkedProgram, serde_json::Error> = serde_json::from_str(&s);
     let program = match parse_result {
         Ok(prog) => prog,
@@ -50,11 +58,15 @@ fn run_from_string(s: String, args: Vec<Value>) -> Result<Value, (ExecutionError
         }
     };
     let mut new_machine = Machine::new(program);
-    run(&mut new_machine, args)
+    run(&mut new_machine, args, debug)
 }
 
-fn run(machine: &mut Machine, args: Vec<Value>) -> Result<Value, (ExecutionError, StackTrace)> {
-    match machine.test_call(CodePt::new_internal(0), args) {
+fn run(
+    machine: &mut Machine,
+    args: Vec<Value>,
+    debug: bool,
+) -> Result<Value, (ExecutionError, StackTrace)> {
+    match machine.test_call(CodePt::new_internal(0), args, debug) {
         Ok(mut stack) => match stack.pop(&machine.get_state()) {
             Ok(res) => Ok(res),
             Err(e) => Err((e, machine.get_stack_trace())),
