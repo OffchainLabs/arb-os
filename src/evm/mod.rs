@@ -114,6 +114,37 @@ impl CompiledEvmContract {
 	}
 }
 
+pub fn send_inject_evm_messages_from_file(
+    pathname: &str, 
+    evn: &muyt RuntimeEnvironment
+) -> Result<(), CompileError> {
+    let path = Path::new(pathname);
+    let display = path.display();
+
+    let mut file = match File::open(&path) {
+        Err(why) => panic!("couldn't open {}: {:?}", display, why),
+        Ok(file) => file,
+    };
+
+    let mut s = String::new();
+    s = match file.read_to_string(&mut s) {
+        Err(why) => panic!("couldn't read {}: {:?}", display, why),
+        Ok(_) => s,
+    };
+
+    let parse_result: Result<serde_json::Value, serde_json::Error> = serde_json::from_str(&s);
+    match parse_result {
+        Ok(evm_json) => compile_from_json(evm_json, debug),
+        Err(e) => {
+            println!("Error reading in EVM file: {:?}", e);
+            Err(CompileError::new(
+                "error parsing compiled Solidity file".to_string(),
+                None,
+            ))
+        }
+    }    
+}
+
 pub fn send_inject_evm_messages(evm_json: serde_json::Value, env: &mut RuntimeEnvironment) -> bool {
     if let serde_json::Value::Array(contracts) = evm_json {
         let mut messages_out = Vec::new();
