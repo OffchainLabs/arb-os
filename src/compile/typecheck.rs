@@ -835,7 +835,7 @@ fn typecheck_expr(
                 *loc,
             ))
         }
-        Expr::Variant(inner, loc) => Ok(TypeCheckedExpr::Variant(
+        Expr::OptionInitializer(inner, loc) => Ok(TypeCheckedExpr::Variant(
             Box::new(typecheck_expr(inner, type_table, global_vars, func_table)?),
             *loc,
         )),

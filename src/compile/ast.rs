@@ -629,9 +629,17 @@ impl<'a> Statement {
             Statement::DebugPrint(e, loc) => {
                 Ok(Statement::DebugPrint(e.resolve_types(type_table)?, *loc))
             }
-            Statement::IfLet(l, r, s, e, loc) => {
-                Ok(Statement::IfLet(*l, r.clone(), s.clone(), e.clone(), *loc))
-            }
+            Statement::IfLet(l, r, s, e, loc) => Ok(Statement::IfLet(
+                *l,
+                r.resolve_types(type_table)?,
+                s.iter()
+                    .map(|x| x.resolve_types(type_table))
+                    .collect::<Result<Vec<_>, _>>()?,
+                e.clone()
+                    .map(|block| block.iter().map(|x| x.resolve_types(type_table)).collect())
+                    .transpose()?,
+                *loc,
+            )),
         }
     }
 
@@ -704,12 +712,7 @@ impl OptionConst {
     pub(crate) fn value(&self) -> Value {
         match self {
             OptionConst::Some(c) => {
-                let val = c.clone().value();
-                if val == Value::none() {
-                    Value::Tuple(vec![Value::Int(Uint256::one())])
-                } else {
-                    Value::Tuple(vec![Value::Int(Uint256::one()), val])
-                }
+                Value::Tuple(vec![Value::Int(Uint256::one()), c.clone().value()])
             }
             OptionConst::None(_) => Value::Tuple(vec![Value::Int(Uint256::zero())]),
         }
@@ -747,7 +750,7 @@ pub enum Expr {
     TupleRef(Box<Expr>, Uint256, Option<Location>),
     DotRef(Box<Expr>, StringId, Option<Location>),
     Constant(Constant, Option<Location>),
-    Variant(Box<Expr>, Option<Location>),
+    OptionInitializer(Box<Expr>, Option<Location>),
     FunctionCall(Box<Expr>, Vec<Expr>, Option<Location>),
     ArrayOrMapRef(Box<Expr>, Box<Expr>, Option<Location>),
     StructInitializer(Vec<FieldInitializer>, Option<Location>),
@@ -838,7 +841,7 @@ impl Expr {
                 }
                 Ok(Expr::StructInitializer(rfields, *loc))
             }
-            Expr::Variant(inner, loc) => Ok(Expr::Variant(
+            Expr::OptionInitializer(inner, loc) => Ok(Expr::OptionInitializer(
                 Box::new(inner.resolve_types(type_table)?),
                 *loc,
             )),
@@ -909,7 +912,7 @@ impl Expr {
             Expr::TupleRef(_, _, loc) => *loc,
             Expr::DotRef(_, _, loc) => *loc,
             Expr::Constant(_, loc) => *loc,
-            Expr::Variant(_, loc) => *loc,
+            Expr::OptionInitializer(_, loc) => *loc,
             Expr::FunctionCall(_, _, loc) => *loc,
             Expr::ArrayOrMapRef(_, _, loc) => *loc,
             Expr::StructInitializer(_, loc) => *loc,
