@@ -214,9 +214,10 @@ Values of type `anytype` do not have any representation that is understood by th
 >
 > [Potential improvement: This could become a more general pattern-matching assignment mechanism.  Currently it pattern-matches only for a one-level tuple.]
 
-`if let` Some(*nameLeft*) = *nameRight* *codeblock*
+`if let` Some(*nameLeft*) = *nameRight* *codeblock* [else *elseblock*]
 
-> Assigns the inner value of *nameRight* to *nameLeft*, if the type of *nameRight* is not option<*type*>, then this will be an error
+> Assigns the inner value of *nameRight* to *nameLeft* if *nameLeft* has an inner value, and runs *codeblock* otherwise will run *elseblock* if it is included.
+> This will not compile if the type of *nameRight* is not option<*type*>.
 
 *funcExpression* ( *argExpression1* , *argExpression2* , ... )
 
