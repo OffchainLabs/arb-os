@@ -747,6 +747,7 @@ pub enum Expr {
     TupleRef(Box<Expr>, Uint256, Option<Location>),
     DotRef(Box<Expr>, StringId, Option<Location>),
     Constant(Constant, Option<Location>),
+    Variant(Box<Expr>, Option<Location>),
     FunctionCall(Box<Expr>, Vec<Expr>, Option<Location>),
     ArrayOrMapRef(Box<Expr>, Box<Expr>, Option<Location>),
     StructInitializer(Vec<FieldInitializer>, Option<Location>),
@@ -837,6 +838,10 @@ impl Expr {
                 }
                 Ok(Expr::StructInitializer(rfields, *loc))
             }
+            Expr::Variant(inner, loc) => Ok(Expr::Variant(
+                Box::new(inner.resolve_types(type_table)?),
+                *loc,
+            )),
             Expr::Tuple(evec, loc) => {
                 let mut rvec = Vec::new();
                 for expr in evec {
@@ -904,6 +909,7 @@ impl Expr {
             Expr::TupleRef(_, _, loc) => *loc,
             Expr::DotRef(_, _, loc) => *loc,
             Expr::Constant(_, loc) => *loc,
+            Expr::Variant(_, loc) => *loc,
             Expr::FunctionCall(_, _, loc) => *loc,
             Expr::ArrayOrMapRef(_, _, loc) => *loc,
             Expr::StructInitializer(_, loc) => *loc,

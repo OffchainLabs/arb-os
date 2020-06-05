@@ -105,6 +105,7 @@ pub enum TypeCheckedExpr {
     ShortcutAnd(Box<TypeCheckedExpr>, Box<TypeCheckedExpr>, Option<Location>),
     LocalVariableRef(StringId, Type, Option<Location>),
     GlobalVariableRef(usize, Type, Option<Location>),
+    Variant(Box<TypeCheckedExpr>, Option<Location>),
     FuncRef(usize, Type, Option<Location>),
     TupleRef(Box<TypeCheckedExpr>, Uint256, Type, Option<Location>),
     DotRef(Box<TypeCheckedExpr>, StringId, Type, Option<Location>),
@@ -189,6 +190,7 @@ impl<'a> TypeCheckedExpr {
             TypeCheckedExpr::GlobalVariableRef(_, t, _) => t.clone(),
             TypeCheckedExpr::FuncRef(_, t, _) => t.clone(),
             TypeCheckedExpr::TupleRef(_, _, t, _) => t.clone(),
+            TypeCheckedExpr::Variant(t, _) => Type::Option(Box::new(t.get_type())),
             TypeCheckedExpr::DotRef(_, _, t, _) => t.clone(),
             TypeCheckedExpr::Const(_, t, _) => t.clone(),
             TypeCheckedExpr::FunctionCall(_, _, t, _) => t.clone(),
@@ -833,6 +835,10 @@ fn typecheck_expr(
                 *loc,
             ))
         }
+        Expr::Variant(inner, loc) => Ok(TypeCheckedExpr::Variant(
+            Box::new(typecheck_expr(inner, type_table, global_vars, func_table)?),
+            *loc,
+        )),
         Expr::VariableRef(name, loc) => match func_table.get(*name) {
             Some(t) => Ok(TypeCheckedExpr::FuncRef(*name, t.clone(), *loc)),
             None => match type_table.get(*name) {

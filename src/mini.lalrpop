@@ -238,6 +238,7 @@ Expr9: Expr = {
 
 Expr10: Expr = {
 	<lno: @L> <c: Const> => Expr::Constant(c, file_info.location(BytePos::from(lno))),
+	<lno: @L> "Some(" <e: Expr> ")" => Expr::Variant(Box::new(e), file_info.location(BytePos::from(lno))),
 	<lno: @L> <f: Expr10> "(" ")" => Expr::FunctionCall(Box::new(f), Vec::new(), file_info.location(BytePos::from(lno))),
 	<lno: @L> <f: Expr10> "(" <e: Expr> ")" => Expr::FunctionCall(Box::new(f), vec![e], file_info.location(BytePos::from(lno))),
 	<lno: @L> <f: Expr10> "(" <c: CommaedExprs> ")" => Expr::FunctionCall(Box::new(f), c, file_info.location(BytePos::from(lno))),
@@ -287,7 +288,7 @@ Expr14: Expr = {
 }
 
 Const: Constant = {
-    "Some(" <c: Const> ")" => Constant::Option(OptionConst::Some(Box::new(c))),
+    //"Some(" <c: Const> ")" => Constant::Option(OptionConst::Some(Box::new(c))),
     <u: UnsignedInteger> => Constant::Uint(u),
 	<s: SignedInteger> => Constant::Int(s),
 	"None<" <t: Type> ">" => Constant::Option(OptionConst::None(t)),

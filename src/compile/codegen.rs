@@ -826,6 +826,28 @@ fn mavm_codegen_expr<'a>(
             }
             Ok((label_gen, code))
         }
+        TypeCheckedExpr::Variant(inner, loc) => {
+            let (lg, c) = mavm_codegen_expr(
+                inner,
+                code,
+                locals,
+                label_gen,
+                string_table,
+                import_func_map,
+                global_var_map,
+            )?;
+            c.push(Instruction::from_opcode_imm(
+                Opcode::Noop,
+                Value::Tuple(vec![Value::Int(Uint256::from_usize(1)), Value::none()]),
+                *loc,
+            ));
+            c.push(Instruction::from_opcode_imm(
+                Opcode::Tset,
+                Value::Int(Uint256::from_u64(1)),
+                *loc,
+            ));
+            Ok((lg, c))
+        }
         TypeCheckedExpr::Binary(op, tce1, tce2, _, loc) => {
             let (lg, c) = mavm_codegen_expr(
                 tce2,
