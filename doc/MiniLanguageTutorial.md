@@ -1,6 +1,6 @@
 # Mini language tutorial
 
-[version of May 21, 2020]
+[version of June 5th, 2020]
 
 Mini is a programming language and compiler designed for writing code for the Arbitrum Virtual Machine (AVM) platform.  The language is simple but has some features customized for AVM.  This tutorial will tell you what you need to know to write Mini programs.
 
@@ -102,6 +102,10 @@ Mini has the following types:
 
 > a struct with one or more named, typed fields (a compound type)
 
+`option`< *type* >
+
+> either the contained type or "None<*type*>", must be unwrapped to compare with inner type
+
 [`impure`] `func` ( *type1, type2, ...*) [-> *returntype*]
 
 > a reference to a function
@@ -128,6 +132,8 @@ Two func types are equal if they are both impure or both not-impure, and they ha
 
 Two map types are equal if their key types are equal and their value types are equal.
 
+Two option types are equal if their inner types are equal
+
 `any` equals itself.
 
 Each imported type equals itself.
@@ -146,6 +152,7 @@ A value of type `V` is assignable to storage of type `S` if:
 * `V` and `S` are structs, with the same number of fields, and each field of `V` has the same name as the corresponding field of `S`, and each field of `V` is assignable to the corresponding field of `S`,
 * `V` and `S` are function types, with the same number of arguments, and either `S` is impure or `V` is not impure, and each argument type of `V` is assignable to the corresponding argument type of `S`, and either (a) both `S` and `V` return void, or (b) the return type of `S` is assignable to the return type of `V`.  (Note that the return type is compared for assignability "backwards". This is needed to make calls through function references type-safe.)
 * `V` and `S` are map types, and the key type of `V` is assignable to the key type of `S`, and the value types of `V` and `S` are equal.
+* `V` and `S` are optional types, and the inner type of `V` is assignable to the inner type of `S`
 
 These rules guarantee that assignability is transitive. 
 
@@ -206,6 +213,10 @@ Values of type `anytype` do not have any representation that is understood by th
 > [Potential improvement: Allow assignment directly into existing variables, or a mix of new and existing variables, rather than requiring creation of new variables.  I would have done this already but couldn't figure out a clean syntax for it--suggestions are welcome.]
 >
 > [Potential improvement: This could become a more general pattern-matching assignment mechanism.  Currently it pattern-matches only for a one-level tuple.]
+
+`if let` Some(*nameLeft*) = *nameRight* *codeblock*
+
+> Assigns the inner value of *nameRight* to *nameLeft*, if the type of *nameRight* is not option<*type*>, then this will be an error
 
 *funcExpression* ( *argExpression1* , *argExpression2* , ... )
 
@@ -348,6 +359,14 @@ Mini never automatically converts types to make an operation succeed.  Programme
 `unsafecast` < *type* > ( *expression*  )
 
 > Evaluate *expression*, and then treat the in-memory representation of the result as an object having type *type*. This is an unsafe operation.  It is most often used to convert a value of type `any` into a more specific type, when the programmer knows the real type of the value.  
+
+`Some` (*expression*)
+
+> Creates an optional with inner value equal to the result of *expression*
+
+`None`<*type*>
+
+> Creates an optional value of type option<*type*> with no inner value 
 
 *arrExpression* [ *indexExpression* ]
 
