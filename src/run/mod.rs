@@ -81,6 +81,7 @@ fn run(
 pub fn run_from_file_with_msgs(
     path: &Path, 
     in_msgs: Vec<Value>,
+    debug: bool,
 ) -> Result<Vec<Value>, ExecutionError> {
     let display = path.display();
 
@@ -95,12 +96,13 @@ pub fn run_from_file_with_msgs(
         Ok(_) => s,
     };
 
-    run_from_string_with_msgs(s, in_msgs)
+    run_from_string_with_msgs(s, in_msgs, debug)
 }
 
 fn run_from_string_with_msgs(
     s: String, 
     in_msgs: Vec<Value>, 
+    debug: bool,
 ) -> Result<Vec<Value>, ExecutionError> {
     let parse_result: Result<LinkedProgram, serde_json::Error> = serde_json::from_str(&s);
     let program = match parse_result {
@@ -110,17 +112,18 @@ fn run_from_string_with_msgs(
             panic!();
         }
     };
-    run_with_msgs(program, in_msgs)
+    run_with_msgs(program, in_msgs, debug)
 }
 
 fn run_with_msgs(
     prog: LinkedProgram,
     in_msgs: Vec<Value>,
+    debug: bool,
 ) -> Result<Vec<Value>, ExecutionError> {
     let mut env = RuntimeEnvironment::new();
     env.insert_messages(&in_msgs);
     let mut machine = Machine::new(prog, env);
-    match run(&mut machine, vec![]) {
+    match run(&mut machine, vec![], debug) {
         Ok(_) => Ok(machine.runtime_env.get_all_logs()),
         Err((e, _)) => Err(e),
     }
@@ -169,7 +172,8 @@ fn test_inbox_and_log() {
             imported_funcs: vec![],
             exported_funcs: vec![],
         },
-        vec![val.clone()]
+        vec![val.clone()],
+        false
     ).unwrap();
     assert_eq!(logs.len(), 1);
     assert_eq!(logs[0]==val, true);

@@ -633,7 +633,7 @@ func pushEvmInsnDenomCheck(
 
 func pushDupn(
     n: uint, 
-    restOfCode: AvmCodePoint
+    restOfCode: AvmCodePoint,
     evmJumpTable: map<uint, AvmCodePoint>
 ) -> (bool, AvmCodePoint, map<uint, AvmCodePoint>) {
     let i = 2;

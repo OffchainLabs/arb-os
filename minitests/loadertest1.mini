@@ -15,5 +15,5 @@
 //
 
 public func main() {
-    asm(777) { log };
+    asm(777,) { log };
 }

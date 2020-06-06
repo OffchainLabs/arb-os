@@ -30,7 +30,7 @@ var global10: MyType;
 
 
 func main() {
-    asm(tests()) { log };
+    asm(tests(),) { log };
 }
 
 func tests() -> uint {

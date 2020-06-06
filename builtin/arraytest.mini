@@ -23,7 +23,7 @@ type opClosure = struct {
 
 
 func main() {
-	asm(tests()) { log };
+	asm(tests(),) { log };
 }
 
 func tests() -> uint {

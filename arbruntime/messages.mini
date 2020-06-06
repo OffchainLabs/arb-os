@@ -103,9 +103,9 @@ public impure func handleEthbridgeMessage(msg: ArbMessage) {
         let (success, updatedAcct,) = account_checkAndIncrSeqNum(account, txMsg.seqNumber);
         if (success) {
             setGlobalAccountStore(
-                accountStore_set(globalAS, msg.sender, updatedAcct)
+                accountStore_set(globalAS, msg.sender, updatedAcct),
             );
-            handleValidTxMessage(txMsg);
+            handleValidTxMessage(txMsg,);
             panic; //TODO
         } else {
             // sequence number was invalid
@@ -121,7 +121,7 @@ public impure func handleEthbridgeMessage(msg: ArbMessage) {
             depMsg.amount
         );
         if (success) {
-            setGlobalAccountStore(newGAS);
+            setGlobalAccountStore(newGAS,);
             panic; // TODO
         } else {
             panic; //TODO
@@ -144,7 +144,7 @@ public impure func handleEthbridgeMessage(msg: ArbMessage) {
         let (success, updatedAcct,) = account_checkAndIncrSeqNum(account, codeLoadMsg.seqNum);
         if (success) {
             setGlobalAccountStore(
-                accountStore_set(globalAS, msg.sender, updatedAcct)
+                accountStore_set(globalAS, msg.sender, updatedAcct),
             );
             let ba = bytearray_unmarshalBytes(codeLoadMsg.data);
             let bs = bytestream_new(ba);
@@ -180,7 +180,7 @@ public impure func handleEthbridgeMessage(msg: ArbMessage) {
                     makeStorageMap(codeLoadMsg.storageInfo)
                 );
             }
-            setGlobalAccountStore(globalAS);
+            setGlobalAccountStore(globalAS,);
         }
     }
     // if no case matches, unrecognized message type; ignore it

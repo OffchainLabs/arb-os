@@ -18,7 +18,7 @@ use crate::uint256::Uint256;
 use crate::mavm::{Value};
 use std::collections::HashMap;
 
-
+#[derive(Debug)]
 pub struct RuntimeEnvironment {
     pub l1_inbox: Value,
     pub logs: Vec<Value>,

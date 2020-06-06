@@ -53,7 +53,7 @@ type InboxCell = struct {
 }
 
 impure func getFromL1Inbox(inbox: Inbox) -> Inbox {
-    let newMsgs = asm(0) InboxCell { inbox };
+    let newMsgs = asm(0,) InboxCell { inbox };
     inbox = addInboxToQueue(inbox, newMsgs);
     return inbox;
 }

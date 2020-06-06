@@ -31,6 +31,6 @@ impure func main() {
 public impure func mainRunLoop() {
     loop {
         let msg = inbox_get();
-        handleEthbridgeMessage(msg);
+        handleEthbridgeMessage(msg,);
     }
 }

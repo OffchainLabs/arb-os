@@ -117,7 +117,7 @@ impl CompiledEvmContract {
 
 pub fn send_inject_evm_messages_from_file(
     pathname: &str, 
-    evn: &muyt RuntimeEnvironment
+    rt_env: &mut RuntimeEnvironment
 ) -> Result<(), CompileError> {
     let path = Path::new(pathname);
     let display = path.display();
@@ -135,7 +135,12 @@ pub fn send_inject_evm_messages_from_file(
 
     let parse_result: Result<serde_json::Value, serde_json::Error> = serde_json::from_str(&s);
     match parse_result {
-        Ok(evm_json) => compile_from_json(evm_json, debug),
+        Ok(evm_json) => 
+            if send_inject_evm_messages(evm_json, rt_env) {
+                Ok(())
+            } else {
+                Err(CompileError::new("failed to inject EVM messages".to_string(), None))
+            }
         Err(e) => {
             println!("Error reading in EVM file: {:?}", e);
             Err(CompileError::new(

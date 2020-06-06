@@ -207,6 +207,7 @@ impl MachineState {
     }
 }
 
+#[derive(Debug)]
 struct CodeStore {
 	segments: Vec<Vec<Instruction>>,
 }
@@ -363,7 +364,7 @@ impl<'a> Machine {
 
     fn next_opcode(&self) -> Option<Instruction> {
         if let MachineState::Running(pc) = self.state {
-            if let Some(insn) = self.code.get(pc.pc_if_internal()?) {
+            if let Some(insn) = self.code.get_insn(pc) {
                 Some(insn.clone())
             } else {
                 None

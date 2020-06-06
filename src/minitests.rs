@@ -64,7 +64,7 @@ fn test_queuetest() {
     let res = run_from_file(
         path, 
         vec![],
-        RuntimeEnvironment::new()
+        RuntimeEnvironment::new(),
         false
     );
     match res {
@@ -160,7 +160,8 @@ fn test_keccak() {
     let res = run_from_file(
         path, 
         vec![],
-        RuntimeEnvironment::new()
+        RuntimeEnvironment::new(),
+        false
     );
     match res {
         Ok(res) => {
@@ -201,7 +202,7 @@ fn run_using_loader(filename: &str, expected_result: Vec<Value>) {
     let module_path = Path::new(filename);
     let maybe_msg = module_from_file_path(module_path);
     if let Some(msg) = maybe_msg {
-        let res = run_from_file_with_msgs(loader_path, vec![msg]);
+        let res = run_from_file_with_msgs(loader_path, vec![msg], false);
         match res {
             Ok(res) => {
                 assert_eq!(res, expected_result);
@@ -220,7 +221,7 @@ fn test_runtime1() {
     run_using_runtime("minitests/loadertest1.mexe", vec![Value::Int(Uint256::from_usize(777))]);
 }
 
-#[test]
+// #[test]  disabled because we're using a different EVM upload approach
 fn test_runtime_add() {
     run_using_runtime("evm-add.mexe", vec![Value::Int(Uint256::from_usize(777))]);
 }
@@ -242,6 +243,7 @@ fn run_using_runtime(filename: &str, expected_result: Vec<Value>) {
                     ])
                 ]
             )],
+            false,
         );
         match res {
             Ok(res) => {

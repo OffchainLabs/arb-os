@@ -30,7 +30,7 @@ import func bytearray_set256(ba: ByteArray, offset: uint, value: uint) -> ByteAr
 import func keccak256(ba: ByteArray, offset: uint, nbytes: uint) -> bytes32;
 
 func main() {
-	asm(tests()) { log };
+	asm(tests(),) { log };
 }
 
 func tests() -> uint {

@@ -280,6 +280,7 @@ Expr14: Expr = {
 	<lno: @L> <u: UnsignedInteger> => Expr::ConstUint(u, file_info.location(BytePos::from(lno))),
 	<lno: @L> <s: SignedInteger> => Expr::ConstInt(s, file_info.location(BytePos::from(lno))),
 	"(" <e: Expr> ")" => <>,
+	<lno: @L> "(" ")" => Expr::Tuple(vec![], file_info.location(BytePos::from(lno))),
 	<lno: @L> "(" <c: CommaedExprs> ")" => Expr::Tuple(c, file_info.location(BytePos::from(lno))),
 	<lno: @L> "false" => Expr::ConstBool(false, file_info.location(BytePos::from(lno))),
 	<lno: @L> "true" => Expr::ConstBool(true, file_info.location(BytePos::from(lno))),

@@ -24,7 +24,7 @@ import func priorityq_printAsArray(pq: PriorityQ) -> uint;
 
 
 func main() {
-	asm(tests()) { log };
+	asm(tests(),) { log };
 }
 
 func tests() -> uint {

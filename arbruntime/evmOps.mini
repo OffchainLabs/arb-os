@@ -119,7 +119,7 @@ public impure func evmOp_codecopy(memAddr: uint, codeOffset: uint, nbytes: uint)
         memAddr,
         nbytes
     );
-    evmCallStack_setCurrentFrameMemory(memory);
+    evmCallStack_setCurrentFrameMemory(memory,);
 }
 
 public func evmOp_extcodesize(addr: address) -> uint {
@@ -161,7 +161,7 @@ public impure func evmOp_mstore(memAddr: uint, value: uint) {
             evmCallFrame_getMemory(evmCallStack_currentFrame()),
             memAddr,
             value
-        )
+        ),
     );
 }
 
@@ -171,7 +171,7 @@ public impure func evmOp_mstore8(memAddr: uint, value:uint) {
             evmCallFrame_getMemory(evmCallStack_currentFrame()),
             memAddr,
             value
-        )
+        ),
     );
 }
     
