@@ -79,14 +79,18 @@ pub struct ImportedFunc {
     pub name_id: StringId,
     pub slot_num: usize,
     pub name: String,
+    pub arg_types: Vec<Type>,
+    pub ret_type: Type,
 }
 
 impl ImportedFunc {
-    pub fn new(slot_num: usize, name_id: StringId, string_table: &StringTable) -> Self {
+    pub fn new(slot_num: usize, name_id: StringId, string_table: &StringTable, arg_types: Vec<Type>, ret_type: Type) -> Self {
         ImportedFunc {
             name_id,
             slot_num,
             name: string_table.name_from_id(name_id).to_string(),
+            arg_types,
+            ret_type,
         }
     }
 
@@ -95,6 +99,8 @@ impl ImportedFunc {
             name_id: self.name_id,
             slot_num: self.slot_num + ext_offset,
             name: self.name,
+            arg_types: self.arg_types,
+            ret_type: self.ret_type,
         }
     }
 }
