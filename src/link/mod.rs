@@ -81,16 +81,25 @@ pub struct ImportedFunc {
     pub name: String,
     pub arg_types: Vec<Type>,
     pub ret_type: Type,
+    pub is_impure: bool,
 }
 
 impl ImportedFunc {
-    pub fn new(slot_num: usize, name_id: StringId, string_table: &StringTable, arg_types: Vec<Type>, ret_type: Type) -> Self {
+    pub fn new(
+        slot_num: usize,
+        name_id: StringId,
+        string_table: &StringTable,
+        arg_types: Vec<Type>,
+        ret_type: Type,
+        is_impure: bool,
+    ) -> Self {
         ImportedFunc {
             name_id,
             slot_num,
             name: string_table.name_from_id(name_id).to_string(),
             arg_types,
             ret_type,
+            is_impure,
         }
     }
 
@@ -101,6 +110,7 @@ impl ImportedFunc {
             name: self.name,
             arg_types: self.arg_types,
             ret_type: self.ret_type,
+            is_impure: self.is_impure,
         }
     }
 }
@@ -298,10 +308,33 @@ pub fn link<'a>(progs_in: &[CompiledProgram]) -> Result<CompiledProgram, Compile
     let mut exports_map = HashMap::new();
     let mut label_xlate_map = HashMap::new();
     for exp in &linked_exports {
-        exports_map.insert(exp.name.clone(), exp.label);
+        exports_map.insert(exp.name.clone(), (exp.label, exp.tipe.clone()));
     }
     for imp in &linked_imports {
-        if let Some(label) = exports_map.get(&imp.name) {
+        if let Some((label, tipe)) = exports_map.get(&imp.name) {
+            if *tipe
+                != Type::Func(
+                    imp.is_impure,
+                    imp.arg_types.clone(),
+                    Box::new(imp.ret_type.clone()),
+                )
+            {
+                println!(
+                    "Warning: {:?}",
+                    CompileError::new(
+                        format!(
+                            "Imported type \"{:?}\" doesn't match exported type, \"{:?}\"",
+                            Type::Func(
+                                imp.is_impure,
+                                imp.arg_types.clone(),
+                                Box::new(imp.ret_type.clone())
+                            ),
+                            tipe
+                        ),
+                        None
+                    )
+                );
+            }
             label_xlate_map.insert(Label::External(imp.slot_num), label);
         }
     }

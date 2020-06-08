@@ -303,6 +303,7 @@ pub fn typecheck_top_level_decls<'a>(
             &string_table,
             fd.arg_types.clone(),
             fd.ret_type.clone(),
+            fd.is_impure,
         ));
     }
     for decl in decls.iter() {
@@ -327,6 +328,7 @@ pub fn typecheck_top_level_decls<'a>(
                     &string_table,
                     fd.arg_types.clone(),
                     fd.ret_type.clone(),
+                    fd.is_impure,
                 ));
             }
             TopLevelDecl::ImpTypeDecl(itd) => {
