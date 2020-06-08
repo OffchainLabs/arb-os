@@ -216,8 +216,7 @@ Values of type `anytype` do not have any representation that is understood by th
 
 `if let` Some(*nameLeft*) = *nameRight* *codeblock* [else *elseblock*]
 
-> Assigns the inner value of *nameRight* to *nameLeft* if *nameLeft* has an inner value, and runs *codeblock* otherwise will run *elseblock* if it is included.
-> This will not compile if the type of *nameRight* is not option<*type*>.
+> if *nameRight* is the Some variant of an option type, a new local variable *nameLeft* is created with the inner value of *nameRight* inside *codeblock*, and *codeblock* is run.  If *nameRight* is the None variant and *elseblock* is present, then *elseblock* is run instead.  *nameRight* must always be an option type.
 
 *funcExpression* ( *argExpression1* , *argExpression2* , ... )
 
