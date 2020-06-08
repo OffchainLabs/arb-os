@@ -577,7 +577,6 @@ fn mavm_codegen_statements<'a>(
             let (after_label, lgg) = label_gen.next();
             let slot_num = num_locals;
             let new_locals = locals.push_one(*name, slot_num);
-            num_locals += 1;
             let (lg, c) = mavm_codegen_expr(
                 expr,
                 code,
@@ -614,7 +613,7 @@ fn mavm_codegen_statements<'a>(
             let (lg, mut total_locals, mut can_continue) = mavm_codegen_statements(
                 block.clone(),
                 code,
-                num_locals,
+                num_locals + 1,
                 &new_locals,
                 label_gen,
                 string_table,
