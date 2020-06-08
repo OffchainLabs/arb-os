@@ -14,7 +14,8 @@
 // limitations under the License.
 //
 
-use crate::compile::ast::{TopLevelDecl, TypeDecl, FuncDecl, GlobalVarDecl, ImportFuncDecl, ImportTypeDecl, Type, StructField, FuncArg, Statement, MatchPattern, IfArm, Expr, BinaryOp, UnaryOp,
+use crate::compile::ast::{TopLevelDecl, TypeDecl, FuncDecl, GlobalVarDecl, ImportFuncDecl, ImportTypeDecl, Type,
+StructField, FuncArg, Statement, MatchPattern, IfArm, Expr, BinaryOp, UnaryOp, Constant, OptionConst,
 FieldInitializer, new_func_arg, new_type_decl};
 use crate::stringtable::{StringTable, StringId};
 use crate::compile::Lines;
@@ -86,6 +87,7 @@ CodeBlock: Vec<Statement> = {
 Statement: Statement = {
 	<lno: @L> "while" "(" <e: Expr> ")" <cb: CodeBlock> => Statement::While(e, cb, file_info.location(BytePos::from(lno))),
 	<lno: @L> "loop" <cb: CodeBlock> => Statement::Loop(cb, file_info.location(BytePos::from(lno))),
+	<lno: @L> "if" "let" "Some(" <l: Ident> ")" "=" <r:Expr> <t: CodeBlock> <e: ("else" <CodeBlock>)?> => Statement::IfLet(l,r,t,e,file_info.location(BytePos::from(lno))),
 	<lno: @L> "if" "(" <c: Expr> ")" <t: CodeBlock> => Statement::If(IfArm::Cond(c, t, None, file_info.location(BytePos::from(lno)))),
 	<lno: @L> "if" "(" <c: Expr> ")" <t: CodeBlock> <r: IfArm> => Statement::If(IfArm::Cond(c, t, Some(Box::new(r)), file_info.location(BytePos::from(lno)))),
 	<lno: @L> "let" <p: MatchPattern> "=" <e: Expr> ";" => Statement::Let(p, e, file_info.location(BytePos::from(lno))),
@@ -148,6 +150,7 @@ Type: Type = {
 	"impure" "func" <CommaedTypesInParens> => Type::Func(true, <>, Box::new(Type::Void)),
 	"impure" "func" <a: CommaedTypesInParens> "->" <r: Type> => Type::Func(true, a, Box::new(r)),
 	"any" => Type::Any,
+	"option<" <t1:Type> ">" => Type::Option(Box::new(t1)),
 	Ident => Type::Named(<>),
 };
 
@@ -234,6 +237,8 @@ Expr9: Expr = {
 };
 
 Expr10: Expr = {
+	<lno: @L> <c: Const> => Expr::Constant(c, file_info.location(BytePos::from(lno))),
+	<lno: @L> "Some(" <e: Expr> ")" => Expr::OptionInitializer(Box::new(e), file_info.location(BytePos::from(lno))),
 	<lno: @L> <f: Expr10> "(" ")" => Expr::FunctionCall(Box::new(f), Vec::new(), file_info.location(BytePos::from(lno))),
 	<lno: @L> <f: Expr10> "(" <e: Expr> ")" => Expr::FunctionCall(Box::new(f), vec![e], file_info.location(BytePos::from(lno))),
 	<lno: @L> <f: Expr10> "(" <c: CommaedExprs> ")" => Expr::FunctionCall(Box::new(f), c, file_info.location(BytePos::from(lno))),
@@ -277,15 +282,20 @@ Expr13: Expr = {
 
 Expr14: Expr = {
 	<lno: @L> "struct" "{" <fi: FieldInitializers> "}" => Expr::StructInitializer(fi, file_info.location(BytePos::from(lno))),
-	<lno: @L> <u: UnsignedInteger> => Expr::ConstUint(u, file_info.location(BytePos::from(lno))),
-	<lno: @L> <s: SignedInteger> => Expr::ConstInt(s, file_info.location(BytePos::from(lno))),
 	"(" <e: Expr> ")" => <>,
 	<lno: @L> "(" ")" => Expr::Tuple(vec![], file_info.location(BytePos::from(lno))),
 	<lno: @L> "(" <c: CommaedExprs> ")" => Expr::Tuple(c, file_info.location(BytePos::from(lno))),
-	<lno: @L> "false" => Expr::ConstBool(false, file_info.location(BytePos::from(lno))),
-	<lno: @L> "true" => Expr::ConstBool(true, file_info.location(BytePos::from(lno))),
-	<lno: @L> "null" => Expr::Null(file_info.location(BytePos::from(lno))),
 	<lno: @L> <i: Ident> => Expr::VariableRef(i, file_info.location(BytePos::from(lno))),
+}
+
+Const: Constant = {
+    //"Some(" <c: Const> ")" => Constant::Option(OptionConst::Some(Box::new(c))),
+    <u: UnsignedInteger> => Constant::Uint(u),
+	<s: SignedInteger> => Constant::Int(s),
+	"None<" <t: Type> ">" => Constant::Option(OptionConst::None(t)),
+	"false" => Constant::Bool(false),
+	"true" => Constant::Bool(true),
+	"null" => Constant::Null,
 }
 
 FieldInitializers: Vec<FieldInitializer> = {

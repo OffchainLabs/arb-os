@@ -68,6 +68,7 @@ pub enum Type {
     Map(Box<Type>, Box<Type>),
     Imported(StringId),
     Any,
+    Option(Box<Type>),
 }
 
 impl Type {
@@ -116,7 +117,7 @@ impl Type {
             Type::Named(name) => match type_table.get(*name) {
                 Some(t) => Ok(t.resolve_types(type_table, location)?),
                 None => Err(new_type_error(
-                    "referenced non-existent type name",
+                    "referenced non-existent type name".to_string(),
                     location,
                 )),
             },
@@ -132,6 +133,9 @@ impl Type {
                 Box::new(key.resolve_types(type_table, location)?),
                 Box::new(val.resolve_types(type_table, location)?),
             )),
+            Type::Option(t) => Ok(Type::Option(Box::new(
+                t.resolve_types(type_table, location)?,
+            ))),
         }
     }
 
@@ -204,6 +208,7 @@ impl Type {
                     false
                 }
             }
+            Type::Option(_) => (self == rhs),
         }
     }
 
@@ -258,6 +263,7 @@ impl Type {
                 panic!("tried to get default value for an imported type");
             }
             Type::Any => Value::none(),
+            Type::Option(_) => unimplemented!(),
         }
     }
 }
@@ -318,6 +324,7 @@ impl PartialEq for Type {
                 (i1 == i2) && type_vectors_equal(&a1, &a2) && (*r1 == *r2)
             }
             (Type::Imported(n1), Type::Imported(n2)) => (n1 == n2),
+            (Type::Option(x), Type::Option(y)) => *x == *y,
             (_, _) => false,
         }
     }
@@ -561,6 +568,13 @@ pub enum Statement {
     Loop(Vec<Statement>, Option<Location>),
     While(Expr, Vec<Statement>, Option<Location>),
     If(IfArm),
+    IfLet(
+        StringId,
+        Expr,
+        Vec<Statement>,
+        Option<Vec<Statement>>,
+        Option<Location>,
+    ),
     Asm(Vec<Instruction>, Vec<Expr>, Option<Location>),
     DebugPrint(Expr, Option<Location>),
 }
@@ -615,6 +629,17 @@ impl<'a> Statement {
             Statement::DebugPrint(e, loc) => {
                 Ok(Statement::DebugPrint(e.resolve_types(type_table)?, *loc))
             }
+            Statement::IfLet(l, r, s, e, loc) => Ok(Statement::IfLet(
+                *l,
+                r.resolve_types(type_table)?,
+                s.iter()
+                    .map(|x| x.resolve_types(type_table))
+                    .collect::<Result<Vec<_>, _>>()?,
+                e.clone()
+                    .map(|block| block.iter().map(|x| x.resolve_types(type_table)).collect())
+                    .transpose()?,
+                *loc,
+            )),
         }
     }
 
@@ -663,6 +688,59 @@ impl IfArm {
 }
 
 #[derive(Debug, Clone)]
+pub enum OptionConst {
+    Some(Box<Constant>),
+    None(Type),
+}
+
+#[derive(Debug, Clone)]
+pub enum Constant {
+    Uint(Uint256),
+    Int(Uint256),
+    Bool(bool),
+    Option(OptionConst),
+    Null,
+}
+
+impl OptionConst {
+    pub(crate) fn type_of(&self) -> Type {
+        Type::Option(Box::new(match self {
+            OptionConst::Some(c) => (*c).type_of(),
+            OptionConst::None(t) => t.clone(),
+        }))
+    }
+    pub(crate) fn value(&self) -> Value {
+        match self {
+            OptionConst::Some(c) => {
+                Value::Tuple(vec![Value::Int(Uint256::one()), c.clone().value()])
+            }
+            OptionConst::None(_) => Value::Tuple(vec![Value::Int(Uint256::zero())]),
+        }
+    }
+}
+
+impl Constant {
+    pub(crate) fn type_of(&self) -> Type {
+        match self {
+            Constant::Uint(_) => Type::Uint,
+            Constant::Int(_) => Type::Int,
+            Constant::Bool(_) => Type::Bool,
+            Constant::Option(inner) => inner.type_of(),
+            Constant::Null => Type::Void,
+        }
+    }
+    pub(crate) fn value(&self) -> Value {
+        match self {
+            Constant::Uint(ui) => Value::Int(ui.clone()),
+            Constant::Int(i) => Value::Int(i.clone()),
+            Constant::Bool(b) => Value::Int(Uint256::from_bool(b.clone())),
+            Constant::Option(c) => c.value(),
+            Constant::Null => Value::none(),
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
 pub enum Expr {
     UnaryOp(UnaryOp, Box<Expr>, Option<Location>),
     Binary(BinaryOp, Box<Expr>, Box<Expr>, Option<Location>),
@@ -671,9 +749,8 @@ pub enum Expr {
     VariableRef(StringId, Option<Location>),
     TupleRef(Box<Expr>, Uint256, Option<Location>),
     DotRef(Box<Expr>, StringId, Option<Location>),
-    ConstUint(Uint256, Option<Location>),
-    ConstInt(Uint256, Option<Location>),
-    ConstBool(bool, Option<Location>),
+    Constant(Constant, Option<Location>),
+    OptionInitializer(Box<Expr>, Option<Location>),
     FunctionCall(Box<Expr>, Vec<Expr>, Option<Location>),
     ArrayOrMapRef(Box<Expr>, Box<Expr>, Option<Location>),
     StructInitializer(Vec<FieldInitializer>, Option<Location>),
@@ -684,11 +761,10 @@ pub enum Expr {
     ArrayOrMapMod(Box<Expr>, Box<Expr>, Box<Expr>, Option<Location>),
     StructMod(Box<Expr>, StringId, Box<Expr>, Option<Location>),
     UnsafeCast(Box<Expr>, Type, Option<Location>),
-    Null(Option<Location>),
     Asm(Type, Vec<Instruction>, Vec<Expr>, Option<Location>),
 }
 
-impl<'a> Expr {
+impl Expr {
     pub fn new_unary(op: UnaryOp, e: Expr, loc: Option<Location>) -> Self {
         Expr::UnaryOp(op, Box::new(e), loc)
     }
@@ -699,10 +775,7 @@ impl<'a> Expr {
 
     pub fn is_const(&self) -> bool {
         match self {
-            Expr::ConstUint(_, _)
-            | Expr::ConstInt(_, _)
-            | Expr::ConstBool(_, _)
-            | Expr::Null(_) => true,
+            Expr::Constant(_, _) => true,
             _ => false,
         }
     }
@@ -741,9 +814,7 @@ impl<'a> Expr {
                 *name,
                 *loc,
             )),
-            Expr::ConstUint(s, loc) => Ok(Expr::ConstUint(s.clone(), *loc)),
-            Expr::ConstInt(s, loc) => Ok(Expr::ConstInt(s.clone(), *loc)),
-            Expr::ConstBool(b, loc) => Ok(Expr::ConstBool(*b, *loc)),
+            Expr::Constant(b, loc) => Ok(Expr::Constant(b.clone(), *loc)),
             Expr::FunctionCall(fexpr, args, loc) => {
                 let mut rargs = Vec::new();
                 for arg in args.iter() {
@@ -770,6 +841,10 @@ impl<'a> Expr {
                 }
                 Ok(Expr::StructInitializer(rfields, *loc))
             }
+            Expr::OptionInitializer(inner, loc) => Ok(Expr::OptionInitializer(
+                Box::new(inner.resolve_types(type_table)?),
+                *loc,
+            )),
             Expr::Tuple(evec, loc) => {
                 let mut rvec = Vec::new();
                 for expr in evec {
@@ -812,7 +887,6 @@ impl<'a> Expr {
                 t.resolve_types(type_table, *loc)?,
                 *loc,
             )),
-            Expr::Null(loc) => Ok(Expr::Null(*loc)),
             Expr::Asm(t, insns, exprs, loc) => {
                 let mut res_exprs = Vec::new();
                 for ex in exprs {
@@ -837,9 +911,8 @@ impl<'a> Expr {
             Expr::VariableRef(_, loc) => *loc,
             Expr::TupleRef(_, _, loc) => *loc,
             Expr::DotRef(_, _, loc) => *loc,
-            Expr::ConstUint(_, loc) => *loc,
-            Expr::ConstInt(_, loc) => *loc,
-            Expr::ConstBool(_, loc) => *loc,
+            Expr::Constant(_, loc) => *loc,
+            Expr::OptionInitializer(_, loc) => *loc,
             Expr::FunctionCall(_, _, loc) => *loc,
             Expr::ArrayOrMapRef(_, _, loc) => *loc,
             Expr::StructInitializer(_, loc) => *loc,
@@ -850,7 +923,6 @@ impl<'a> Expr {
             Expr::ArrayOrMapMod(_, _, _, loc) => *loc,
             Expr::StructMod(_, _, _, loc) => *loc,
             Expr::UnsafeCast(_, _, loc) => *loc,
-            Expr::Null(loc) => *loc,
             Expr::Asm(_, _, _, loc) => *loc,
         }
     }
