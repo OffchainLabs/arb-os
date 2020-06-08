@@ -103,15 +103,9 @@ impl ImportedFunc {
         }
     }
 
-    pub fn relocate(self, _int_offset: usize, ext_offset: usize) -> Self {
-        ImportedFunc {
-            name_id: self.name_id,
-            slot_num: self.slot_num + ext_offset,
-            name: self.name,
-            arg_types: self.arg_types,
-            ret_type: self.ret_type,
-            is_impure: self.is_impure,
-        }
+    pub fn relocate(mut self, _int_offset: usize, ext_offset: usize) -> Self {
+        self.slot_num += ext_offset;
+        self
     }
 }
 

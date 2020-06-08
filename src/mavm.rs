@@ -170,15 +170,9 @@ impl Instruction {
         )
     }
 
-    pub fn xlate_labels(self, xlate_map: &HashMap<Label, &Label>) -> Self {
-        match self.immediate {
-            Some(val) => Instruction::from_opcode_imm(
-                self.opcode,
-                val.xlate_labels(xlate_map),
-                self.location,
-            ),
-            None => self,
-        }
+    pub fn xlate_labels(mut self, xlate_map: &HashMap<Label, &Label>) -> Self {
+        self.immediate = self.immediate.map(|val| val.xlate_labels(xlate_map));
+        self
     }
 }
 
