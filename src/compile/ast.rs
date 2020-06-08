@@ -208,7 +208,12 @@ impl Type {
                     false
                 }
             }
-            Type::Option(_) => (self == rhs),
+            Type::Option(inner) => 
+                if let Type::Option(inner2) = rhs {
+                    inner.assignable(inner2)
+                } else {
+                    false
+                }
         }
     }
 
