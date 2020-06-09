@@ -317,13 +317,14 @@ pub fn link(progs_in: &[CompiledProgram]) -> Result<CompiledProgram, CompileErro
                     "Warning: {:?}",
                     CompileError::new(
                         format!(
-                            "Imported type \"{:?}\" doesn't match exported type, \"{:?}\"",
+                            "Imported type \"{:?}\" doesn't match exported type, \"{:?}\" in function {}",
                             Type::Func(
                                 imp.is_impure,
                                 imp.arg_types.clone(),
                                 Box::new(imp.ret_type.clone())
                             ),
-                            tipe
+                            tipe,
+                            imp.name
                         ),
                         None
                     )
