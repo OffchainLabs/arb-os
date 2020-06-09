@@ -98,6 +98,22 @@ func tests() -> uint {
 	return 0;
 }
 
+func isSome(x: option<any>) -> bool {
+	if let Some(unused) = x {
+		return true;
+	} else {
+		return false;
+	}
+}
+
+func getSomeOr(x: option<any>, backupVal: any) -> any {
+	if let Some(val) = x {
+		return val;
+	} else {
+		return backupVal;
+	}
+}
+
 func sumForKvsIterator(key: any, value: any, state: any) -> any {
 	return unsafecast<uint>(value) + unsafecast<uint>(state);
 }
