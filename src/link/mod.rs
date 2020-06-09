@@ -167,7 +167,7 @@ impl<'a> ExportedFunc {
     }
 }
 
-pub fn postlink_compile<'a>(
+pub fn postlink_compile(
     program: CompiledProgram,
     debug: bool,
 ) -> Result<LinkedProgram, CompileError> {
@@ -252,7 +252,7 @@ pub fn add_auto_link_progs(
     Ok(progs)
 }
 
-pub fn link<'a>(progs_in: &[CompiledProgram]) -> Result<CompiledProgram, CompileError> {
+pub fn link(progs_in: &[CompiledProgram]) -> Result<CompiledProgram, CompileError> {
     let progs = add_auto_link_progs(progs_in)?;
     let mut insns_so_far: usize = 1; // leave 1 insn of space at beginning for initialization
     let mut imports_so_far: usize = 0;
