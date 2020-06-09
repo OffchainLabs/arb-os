@@ -20,23 +20,23 @@ import func builtin_kvsForall(kvs: any, cb: func(any, any, any) -> any, state: a
 func tests(which: uint) -> any {
 	if (which == 0) {
 		let s = builtin_kvsNew();
-		return (builtin_kvsGet(s, 17)).0;
+		return isSome(builtin_kvsGet(s, 17));
 	} elseif (which == 1) {
 		let s = builtin_kvsNew();
 		s = builtin_kvsSet(s, 42, 42);
-		return (builtin_kvsGet(s, 42)).0;
+		return getSomeOr(builtin_kvsGet(s, 42), 9999);
 	} elseif (which == 2) {
 		let s = builtin_kvsNew();
 		s = builtin_kvsSet(s, 42, 43);
 		s = builtin_kvsSet(s, 55, 56);
 		s = builtin_kvsSet(s, 42, 99);
-		return (builtin_kvsGet(s, 42)).0;
+		return getSomeOr(builtin_kvsGet(s, 42), 9999);
 	} elseif (which == 3) {
 		let s = builtin_kvsNew();
 		s = builtin_kvsSet(s, 42, 43);
 		s = builtin_kvsSet(s, 55, 56);
 		s = builtin_kvsSet(s, 42, 99);
-		return (builtin_kvsGet(s, 55)).0;
+		return getSomeOr(builtin_kvsGet(s, 55), 9999);
 	} elseif (which == 4) {
 		let s = builtin_kvsNew();
 		let i = 0;
@@ -44,7 +44,8 @@ func tests(which: uint) -> any {
 			s = builtin_kvsSet(s, i, 1000+i);
 			i = i+1;
 		}
-		return (builtin_kvsGet(s, 17)).0;
+		return 0;
+		//return getSomeOr(builtin_kvsGet(s, 17), 9999);
 	} elseif (which == 5) {
 		let s = builtin_kvsNew();
 		let i = 0;
@@ -53,19 +54,19 @@ func tests(which: uint) -> any {
 			i = i+1;
 		}
 		s = builtin_kvsDelete(s, 17);
-		return (builtin_kvsGet(s, 17)).0;
+		return getSomeOr(builtin_kvsGet(s, 17), 9999);
 	} elseif (which == 6) {
 		let s = builtin_kvsNew();
 		s = builtin_kvsSet(s, 42, 43);
 		s = builtin_kvsSet(s, 55, 56);
 		s = builtin_kvsSet(s, 42, 99);
-		return (builtin_kvsGet(s, 42)).1;
+		return isSome(builtin_kvsGet(s, 42));
 	} elseif (which == 7) {
 		let s = builtin_kvsNew();
 		s = builtin_kvsSet(s, 42, 43);
 		s = builtin_kvsSet(s, 55, 56);
 		s = builtin_kvsSet(s, 42, 99);
-		return (builtin_kvsGet(s, 3)).1;
+		return isSome(builtin_kvsGet(s, 3));
 	} elseif (which == 8) {
 		let s = builtin_kvsNew();
 		s = builtin_kvsSet(s, 42, 43);
@@ -75,6 +76,22 @@ func tests(which: uint) -> any {
 		return unsafecast<uint>(rawResult);
 	} else {
 		return null;
+	}
+}
+
+func isSome(x: option<any>) -> bool {
+	if let Some(unused) = x {
+		return true;
+	} else {
+		return false;
+	}
+}
+
+func getSomeOr(x: option<any>, backupVal: any) -> any {
+	if let Some(val) = x {
+		return val;
+	} else {
+		return backupVal;
 	}
 }
 

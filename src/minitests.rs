@@ -64,7 +64,7 @@ fn test_arraytest(test_num: usize, expected_result: Value) {
 
 #[test]
 fn testkvs0() {
-    test_kvstest(0, Value::none());
+    test_kvstest(0, Value::Int(Uint256::zero()));
 }
 
 #[test]
