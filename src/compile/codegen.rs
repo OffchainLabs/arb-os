@@ -628,6 +628,7 @@ fn mavm_codegen_statements<'a>(
                     *loc,
                 ));
                 code.push(Instruction::from_opcode(Opcode::Label(after_label), *loc));
+                code.push(Instruction::from_opcode(Opcode::Pop, *loc));
                 let (lg3, else_locals, else_can_continue) = mavm_codegen_statements(
                     else_block.clone(),
                     code,
@@ -645,6 +646,7 @@ fn mavm_codegen_statements<'a>(
             } else {
                 can_continue = true;
                 code.push(Instruction::from_opcode(Opcode::Label(after_label), *loc));
+                code.push(Instruction::from_opcode(Opcode::Pop, *loc));
                 lg
             };
             if !can_continue {
