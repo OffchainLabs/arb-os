@@ -643,6 +643,7 @@ fn mavm_codegen_statements<'a>(
                 code.push(Instruction::from_opcode(Opcode::Label(outside_label), *loc));
                 lg3
             } else {
+                can_continue = true;
                 code.push(Instruction::from_opcode(Opcode::Label(after_label), *loc));
                 lg
             };
