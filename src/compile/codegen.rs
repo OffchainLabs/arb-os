@@ -646,6 +646,7 @@ fn mavm_codegen_statements<'a>(
             } else {
                 can_continue = true;
                 code.push(Instruction::from_opcode(Opcode::Label(after_label), *loc));
+                code.push(Instruction::from_opcode(Opcode::Pop, *loc));
                 lg
             };
             if !can_continue {
