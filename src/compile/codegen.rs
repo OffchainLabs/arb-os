@@ -620,15 +620,16 @@ fn mavm_codegen_statements<'a>(
                 import_func_map,
                 global_var_map,
             )?;
-            label_gen = if let Some(else_block) = else_block {
-                let (outside_label, lg2) = lg.next();
-                code.push(Instruction::from_opcode_imm(
-                    Opcode::Jump,
-                    Value::Label(outside_label),
-                    *loc,
-                ));
-                code.push(Instruction::from_opcode(Opcode::Label(after_label), *loc));
-                code.push(Instruction::from_opcode(Opcode::Pop, *loc));
+            
+            let (outside_label, lg2) = lg.next();
+            code.push(Instruction::from_opcode_imm(
+                Opcode::Jump,
+                Value::Label(outside_label),
+                *loc,
+            ));
+            code.push(Instruction::from_opcode(Opcode::Label(after_label), *loc));
+            code.push(Instruction::from_opcode(Opcode::Pop, *loc));
+            if let Some(else_block) = else_block {
                 let (lg3, else_locals, else_can_continue) = mavm_codegen_statements(
                     else_block.clone(),
                     code,
@@ -641,14 +642,12 @@ fn mavm_codegen_statements<'a>(
                 )?;
                 can_continue |= else_can_continue;
                 total_locals = max(total_locals, else_locals);
-                code.push(Instruction::from_opcode(Opcode::Label(outside_label), *loc));
-                lg3
+                label_gen = lg3;
             } else {
                 can_continue = true;
-                code.push(Instruction::from_opcode(Opcode::Label(after_label), *loc));
-                code.push(Instruction::from_opcode(Opcode::Pop, *loc));
-                lg
+                label_gen = lg2;
             };
+            code.push(Instruction::from_opcode(Opcode::Label(outside_label), *loc));
             if !can_continue {
                 return Ok((label_gen, max(num_locals, total_locals), can_continue));
             }
