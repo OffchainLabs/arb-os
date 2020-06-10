@@ -255,7 +255,7 @@ fn builtin_func_decls(mut string_table: StringTable) -> (Vec<ImportFuncDecl>, St
             string_table.get("builtin_kvsGet"),
             false,
             vec![Type::Any, Type::Any],
-            Type::Tuple(vec![Type::Any, Type::Bool]),
+            Type::Option(Box::new(Type::Any)),
         ),
         ImportFuncDecl::new_types(
             string_table.get("builtin_kvsSet"),
@@ -301,9 +301,6 @@ pub fn typecheck_top_level_decls<'a>(
             imported_funcs.len(),
             fd.name,
             &string_table,
-            fd.arg_types.clone(),
-            fd.ret_type.clone(),
-            fd.is_impure,
         ));
     }
     for decl in decls.iter() {
@@ -326,9 +323,6 @@ pub fn typecheck_top_level_decls<'a>(
                     imported_funcs.len(),
                     fd.name,
                     &string_table,
-                    fd.arg_types.clone(),
-                    fd.ret_type.clone(),
-                    fd.is_impure,
                 ));
             }
             TopLevelDecl::ImpTypeDecl(itd) => {
@@ -993,7 +987,7 @@ fn typecheck_expr(
                         Ok(TypeCheckedExpr::MapRef(
                             Box::new(tc_arr),
                             Box::new(tc_idx),
-                            Type::Tuple(vec![*vt, Type::Bool]),
+                            Type::Option(Box::new(*vt)),
                             *loc,
                         ))
                     } else {

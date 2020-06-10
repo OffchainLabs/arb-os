@@ -30,19 +30,7 @@ impure func main() {
 
 public impure func mainRunLoop() {
     loop {
-        handleEthbridgeMessage(
-            inbox_get()
-        );
+        let msg = inbox_get();
+        handleEthbridgeMessage(msg,);
     }
-}
-
-type TimeTuple = struct {
-    blockLowerBound: uint,
-    blockUpperBound: uint,
-    timestampLowerBound: uint,
-    timestampUpperBound: uint,
-}
-
-impure func getTime() -> TimeTuple {
-    return asm() TimeTuple { gettime };
 }

@@ -1,0 +1,106 @@
+//
+// Copyright 2020, Offchain Labs, Inc.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//    http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+//
+
+import type AccountStore;
+import type Account;
+import type Queue;
+import type ByteArray;
+
+import func accountStore_get(store: AccountStore, addr: address) -> Account;
+import func accountStore_set(store: AccountStore, addr: address, acct: Account) -> AccountStore;
+
+import func queue_new() -> Queue;
+import func queue_isEmpty(q: Queue) -> bool;
+import func queue_get(q: Queue) -> (Queue, any);
+import func queue_put(q: Queue, val: any) -> Queue;
+
+
+type EvmCallFrame = struct {
+    addr: address,
+    accountStore: AccountStore,
+    currentAccount: Account,
+    memory: ByteArray,
+    parent: any,      // really an EvmCallFrame (or null), but compiler doesn't allow recursive types
+}
+
+var globalCallStack: EvmCallFrame;
+
+public impure func evmCallStack_isEmpty() -> bool {
+    return null == unsafecast<any>(globalCallStack);
+}
+
+public impure func evmCallStack_currentFrame() -> EvmCallFrame {
+    return globalCallStack;
+}
+
+public impure func evmCallStack_currentAccount() -> Account {
+    if (evmCallStack_isEmpty()) {
+        return unsafecast<Account>(null);
+    }
+    return globalCallStack.currentAccount;
+}
+
+public impure func evmCallStack_writeCurrentAccount(acct: Account) {
+    if ( ! evmCallStack_isEmpty()) {
+        globalCallStack = globalCallStack with { currentAccount: acct };
+    }
+}
+
+public impure func evmCallStack_getAccount(addr: address) -> Account {
+    if (evmCallStack_isEmpty()){
+        return unsafecast<Account>(null);
+    }
+    if (globalCallStack.addr == addr) {
+        return globalCallStack.currentAccount;
+    } else {
+        return accountStore_get(globalCallStack.accountStore, addr);
+    }
+}
+
+public impure func evmCallStack_setAccount(addr: address, acct: Account) -> bool {
+    if (evmCallStack_isEmpty()) {
+        return false;
+    }
+    if (globalCallStack.addr == addr) {
+        globalCallStack = globalCallStack with { currentAccount: acct };
+    } else {
+        globalCallStack = globalCallStack with { 
+            accountStore: accountStore_set(globalCallStack.accountStore, addr, acct)
+        };
+    }
+    return true;
+}
+
+var selfDestructQueue: Queue;
+
+impure func initSelfDestructQueue() {
+    if (null == unsafecast<any>(selfDestructQueue)) {
+        selfDestructQueue = queue_new();
+    }
+}
+
+public impure func selfDestructQueue_put(addr: address, owner: address) {
+    selfDestructQueue = queue_put(selfDestructQueue, (addr, owner,));
+}
+
+func selfDestructQueue_execute() {
+    while ( ! queue_isEmpty(selfDestructQueue)) {
+        let (q, item,) = queue_get(selfDestructQueue);
+        selfDestructQueue = q;
+        let (addr, owner,) = unsafecast<(address, address)>(item);
+        //BUGBUG: destroy addr, send addr's funds to owner
+    }
+}

@@ -72,6 +72,22 @@ impl<'a> LinkedProgram {
             }
         }
     }
+
+    pub fn marshal_as_module(&self) -> Vec<u8> {
+        let mut buf: Vec<u8> = Vec::new();
+        let num = self.code.len();
+        for i in (0..32) {
+            if (i >= 8) {
+                buf.push(0);
+            } else {
+                buf.push( ((num >> (8*i)) & 0xff) as u8);
+            }
+        }
+        for insn in self.code.iter().rev() {
+            insn.marshal_for_module(&mut buf, self.code.len());
+        }
+        buf
+    }
 }
 
 #[derive(Clone, Serialize, Deserialize)]
@@ -79,33 +95,23 @@ pub struct ImportedFunc {
     pub name_id: StringId,
     pub slot_num: usize,
     pub name: String,
-    pub arg_types: Vec<Type>,
-    pub ret_type: Type,
-    pub is_impure: bool,
 }
 
 impl ImportedFunc {
-    pub fn new(
-        slot_num: usize,
-        name_id: StringId,
-        string_table: &StringTable,
-        arg_types: Vec<Type>,
-        ret_type: Type,
-        is_impure: bool,
-    ) -> Self {
+    pub fn new(slot_num: usize, name_id: StringId, string_table: &StringTable) -> Self {
         ImportedFunc {
             name_id,
             slot_num,
             name: string_table.name_from_id(name_id).to_string(),
-            arg_types,
-            ret_type,
-            is_impure,
         }
     }
 
-    pub fn relocate(mut self, _int_offset: usize, ext_offset: usize) -> Self {
-        self.slot_num += ext_offset;
-        self
+    pub fn relocate(self, _int_offset: usize, ext_offset: usize) -> Self {
+        ImportedFunc {
+            name_id: self.name_id,
+            slot_num: self.slot_num + ext_offset,
+            name: self.name,
+        }
     }
 }
 
@@ -167,8 +173,10 @@ impl<'a> ExportedFunc {
     }
 }
 
-pub fn postlink_compile(
+pub fn postlink_compile<'a>(
     program: CompiledProgram,
+    is_module: bool,
+    evm_pcs: Vec<usize>,  // ignored unless we're in a module
     debug: bool,
 ) -> Result<LinkedProgram, CompileError> {
     if debug {
@@ -200,10 +208,11 @@ pub fn postlink_compile(
         }
     }
     let (code_final, jump_table_final, exported_funcs_final) = match striplabels::strip_labels(
-        &code_4,
+        code_4,
         &jump_table,
         &program.exported_funcs,
         &program.imported_funcs,
+        if is_module { Some(evm_pcs) } else { None },
     ) {
         Ok(tup) => tup,
         Err(label) => {
@@ -228,8 +237,8 @@ pub fn postlink_compile(
     Ok(LinkedProgram {
         code: code_final,
         static_val: jump_table_value,
-        exported_funcs: exported_funcs_final,
-        imported_funcs: program.imported_funcs,
+        exported_funcs: if is_module { vec![] } else { exported_funcs_final },
+        imported_funcs: if is_module { vec![] } else { program.imported_funcs },
     })
 }
 
@@ -291,12 +300,27 @@ pub fn link(
         func_offset = new_func_offset;
     }
 
-    // Initialize globals
-    let mut linked_code = vec![Instruction::from_opcode_imm(
-        Opcode::Rset,
-        make_uninitialized_tuple(global_num_limit),
-        None,
-    )];
+    // Initialize globals or allow jump table retrieval
+    let mut linked_code = if is_module {
+        // because this is a module, we want a 2-instruction function at the begining that returns
+        //     a list of (evm_pc, compiled_pc) correspondences
+        // the postlink compilation phase (strip_labels) will plug in the actual table contents
+        //     as the immediate in the first instruction
+        let init_immediate = match init_storage_descriptor {
+            Some(val) => val,
+            None => Value::none(),
+        };
+        vec![
+            Instruction::from_opcode_imm(Opcode::Swap1, init_immediate, None),
+            Instruction::from_opcode(Opcode::Jump, None),
+        ]
+    } else {
+        // not a module, add an instruction that creates space for the globals
+        vec![Instruction::from_opcode_imm(
+            Opcode::Rset,
+            make_uninitialized_tuple(global_num_limit), None
+        )]
+    };
 
     let mut linked_exports = Vec::new();
     let mut linked_imports = Vec::new();
@@ -370,6 +394,6 @@ pub fn link(
         linked_exports.into_iter().map(|x| x.0).collect(),
         linked_imports.into_iter().map(|x| x.0).collect(),
         global_num_limit,
-        merged_source_file_map,
+        Some(merged_source_file_map),
     ))
 }
