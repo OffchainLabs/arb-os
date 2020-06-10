@@ -1243,7 +1243,7 @@ fn mavm_codegen_expr<'a>(
             let call_type = Type::Func(
                 false,
                 vec![Type::Any, Type::Any],
-                Box::new(Type::Tuple(vec![Type::Bool, Type::Any])),
+                Box::new(Type::Option(Box::new(Type::Any))),
             );
             let the_expr = TypeCheckedExpr::FunctionCall(
                 Box::new(TypeCheckedExpr::FuncRef(

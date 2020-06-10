@@ -15,46 +15,23 @@
  */
 
 use crate::mavm::Value;
-use crate::run::run_from_file;
+use crate::run::{run_from_file, run_from_file_with_msgs, module_from_file_path};
 use crate::uint256::Uint256;
+use crate::run::runtime_env::RuntimeEnvironment;
 use std::path::Path;
 
 #[test]
-fn testarray1() {
-    test_arraytest(1, Value::none());
-}
-
-#[test]
-fn testarray2() {
-    test_arraytest(2, Value::Int(Uint256::zero()));
-}
-
-#[test]
-fn testarray3() {
-    test_arraytest(3, Value::Int(Uint256::from_usize(3)));
-}
-
-#[test]
-fn testarray4() {
-    test_arraytest(4, Value::Int(Uint256::from_usize(5)));
-}
-
-#[test]
-fn testarray5() {
-    test_arraytest(5, Value::Int(Uint256::from_usize(4)));
-}
-
-#[test]
-fn testarray6() {
-    test_arraytest(6, Value::Int(Uint256::from_usize(7)));
-}
-
-fn test_arraytest(test_num: usize, expected_result: Value) {
+fn test_arraytest() {
     let path = Path::new("builtin/arraytest.mexe");
-    let res = run_from_file(path, vec![Value::Int(Uint256::from_usize(test_num))], false);
+    let res = run_from_file(
+        path, 
+        vec![],
+        RuntimeEnvironment::new(),
+        false
+    );
     match res {
         Ok(res) => {
-            assert_eq!(res, expected_result);
+            assert_eq!(res[0], Value::Int(Uint256::zero()));
         }
         Err(e) => {
             panic!("{:?}", e);
@@ -63,56 +40,17 @@ fn test_arraytest(test_num: usize, expected_result: Value) {
 }
 
 #[test]
-fn testkvs0() {
-    test_kvstest(0, Value::none());
-}
-
-#[test]
-fn testkvs1() {
-    test_kvstest(1, Value::Int(Uint256::from_usize(42)));
-}
-
-#[test]
-fn testkvs2() {
-    test_kvstest(2, Value::Int(Uint256::from_usize(99)));
-}
-
-#[test]
-fn testkvs3() {
-    test_kvstest(3, Value::Int(Uint256::from_usize(56)));
-}
-
-#[test]
-fn testkvs4() {
-    test_kvstest(4, Value::Int(Uint256::from_usize(1017)));
-}
-
-#[test]
-fn testkvs5() {
-    test_kvstest(5, Value::none());
-}
-
-#[test]
-fn testkvs6() {
-    test_kvstest(6, Value::Int(Uint256::one()));
-}
-
-#[test]
-fn testkvs7() {
-    test_kvstest(7, Value::Int(Uint256::zero()));
-}
-
-#[test]
-fn testkvs8() {
-    test_kvstest(8, Value::Int(Uint256::from_usize(155)));
-}
-
-fn test_kvstest(test_num: usize, expected_result: Value) {
+fn test_kvstest() {
     let path = Path::new("builtin/kvstest.mexe");
-    let res = run_from_file(path, vec![Value::Int(Uint256::from_usize(test_num))], false);
+    let res = run_from_file(
+        path, 
+        vec![],
+        RuntimeEnvironment::new(),
+        false
+    );
     match res {
         Ok(res) => {
-            assert_eq!(res, expected_result);
+            assert_eq!(res[0], Value::Int(Uint256::zero()));
         }
         Err(e) => {
             panic!("{}\n{}", e.0, e.1);
@@ -121,31 +59,17 @@ fn test_kvstest(test_num: usize, expected_result: Value) {
 }
 
 #[test]
-fn testq0() {
-    test_queuetest(0, Value::Int(Uint256::one()));
-}
-
-#[test]
-fn testq1() {
-    test_queuetest(1, Value::Int(Uint256::zero()));
-}
-
-#[test]
-fn testq2() {
-    test_queuetest(2, Value::Int(Uint256::from_usize(42)));
-}
-
-#[test]
-fn testq3() {
-    test_queuetest(3, Value::Int(Uint256::from_usize(21)));
-}
-
-fn test_queuetest(test_num: usize, expected_result: Value) {
+fn test_queuetest() {
     let path = Path::new("stdlib/queuetest.mexe");
-    let res = run_from_file(path, vec![Value::Int(Uint256::from_usize(test_num))], false);
+    let res = run_from_file(
+        path, 
+        vec![],
+        RuntimeEnvironment::new(),
+        false
+    );
     match res {
         Ok(res) => {
-            assert_eq!(res, expected_result);
+            assert_eq!(res[0], Value::Int(Uint256::zero()));
         }
         Err(e) => {
             panic!("{}\n{}", e.0, e.1);
@@ -154,46 +78,17 @@ fn test_queuetest(test_num: usize, expected_result: Value) {
 }
 
 #[test]
-fn testglobal0() {
-    test_globaltest(0, Value::Int(Uint256::from_usize(3)));
-}
-
-#[test]
-fn testglobal1() {
-    test_globaltest(1, Value::Int(Uint256::from_usize(4)));
-}
-
-#[test]
-fn testglobal2() {
-    test_globaltest(2, Value::Int(Uint256::from_usize(5)));
-}
-
-#[test]
-fn testglobal3() {
-    test_globaltest(3, Value::Int(Uint256::from_usize(6)));
-}
-
-#[test]
-fn testglobal4() {
-    test_globaltest(4, Value::Int(Uint256::from_usize(7)));
-}
-
-#[test]
-fn testglobal5() {
-    test_globaltest(5, Value::Int(Uint256::from_usize(13)));
-}
-
-#[test]
-fn testglobal6() {
-    test_globaltest(6, Value::Int(Uint256::from_usize(33)));
-}
-
-fn test_globaltest(test_num: usize, expected_result: Value) {
+fn test_globaltest() {
     let path = Path::new("builtin/globaltest.mexe");
-    let res = run_from_file(path, vec![Value::Int(Uint256::from_usize(test_num))], false);
+    let res = run_from_file(
+        path, 
+        vec![],
+        RuntimeEnvironment::new(),
+        false
+    );
     match res {
         Ok(res) => {
-            assert_eq!(res, expected_result);
+            assert_eq!(res[0], Value::Int(Uint256::zero()));
         }
         Err(e) => {
             panic!("{}\n{}", e.0, e.1);
@@ -202,36 +97,17 @@ fn test_globaltest(test_num: usize, expected_result: Value) {
 }
 
 #[test]
-fn testpq0() {
-    test_pqtest(0, Value::Int(Uint256::from_usize(1)));
-}
-
-#[test]
-fn testpq1() {
-    test_pqtest(1, Value::Int(Uint256::from_usize(0)));
-}
-
-#[test]
-fn testpq2() {
-    test_pqtest(2, Value::Int(Uint256::from_usize(1)));
-}
-
-#[test]
-fn testpq3() {
-    test_pqtest(3, Value::Int(Uint256::from_usize(96)));
-}
-
-#[test]
-fn testpq4() {
-    test_pqtest(4, Value::Int(Uint256::from_usize(96)));
-}
-
-fn test_pqtest(test_num: usize, expected_result: Value) {
+fn test_pqtest() {
     let path = Path::new("stdlib/priorityqtest.mexe");
-    let res = run_from_file(path, vec![Value::Int(Uint256::from_usize(test_num))], false);
+    let res = run_from_file(
+        path,
+        vec![],
+        RuntimeEnvironment::new(),
+        false
+    );
     match res {
         Ok(res) => {
-            assert_eq!(res, expected_result);
+            assert_eq!(res[0], Value::Int(Uint256::zero()));
         }
         Err(e) => {
             panic!("{}\n{}", e.0, e.1);
@@ -240,66 +116,17 @@ fn test_pqtest(test_num: usize, expected_result: Value) {
 }
 
 #[test]
-fn testba0() {
-    test_bytearray(0, Value::Int(Uint256::from_usize(33)));
-}
-
-#[test]
-fn testba1() {
-    test_bytearray(1, Value::Int(Uint256::from_usize(42)));
-}
-
-#[test]
-fn testba2() {
-    test_bytearray(2, Value::Int(Uint256::from_usize(42)));
-}
-
-#[test]
-fn testba3() {
-    test_bytearray(3, Value::Int(Uint256::from_usize(42)));
-}
-
-#[test]
-fn testba4() {
-    test_bytearray(4, Value::Int(Uint256::from_usize(7373)));
-}
-
-#[test]
-fn testba5() {
-    test_bytearray(5, Value::Int(Uint256::from_usize(7373 / 256)));
-}
-
-#[test]
-fn testba6() {
-    test_bytearray(6, Value::Int(Uint256::from_usize(1)));
-}
-
-#[test]
-fn testba7() {
-    test_bytearray(7, Value::Int(Uint256::from_usize(100)));
-}
-
-#[test]
-fn testba8() {
-    test_bytearray(8, Value::Int(Uint256::from_usize(0)));
-}
-
-#[test]
-fn testba9() {
-    test_bytearray(9, Value::Int(Uint256::from_usize(0)));
-}
-
-#[test]
-fn testba10() {
-    test_bytearray(10, Value::Int(Uint256::from_usize(0)));
-}
-
-fn test_bytearray(test_num: usize, expected_result: Value) {
+fn test_bytearray() {
     let path = Path::new("stdlib/bytearraytest.mexe");
-    let res = run_from_file(path, vec![Value::Int(Uint256::from_usize(test_num))], false);
+    let res = run_from_file(
+        path, 
+        vec![],
+        RuntimeEnvironment::new(),
+        false
+    );
     match res {
         Ok(res) => {
-            assert_eq!(res, expected_result);
+            assert_eq!(res[0], Value::Int(Uint256::zero()));
         }
         Err(e) => {
             panic!("{}\n{}", e.0, e.1);
@@ -308,36 +135,37 @@ fn test_bytearray(test_num: usize, expected_result: Value) {
 }
 
 #[test]
-fn testmap0() {
-    test_map(0, Value::none());
-}
-
-#[test]
-fn testmap1() {
-    test_map(1, Value::Int(Uint256::from_usize(0)));
-}
-
-#[test]
-fn testmap2() {
-    test_map(2, Value::Int(Uint256::from_usize(1)));
-}
-
-#[test]
-fn testmap3() {
-    test_map(3, Value::Int(Uint256::from_usize(42)));
-}
-
-#[test]
-fn testmap4() {
-    test_map(4, Value::Int(Uint256::from_usize(13)));
-}
-
-fn test_map(test_num: usize, expected_result: Value) {
+fn test_map() {
     let path = Path::new("builtin/maptest.mexe");
-    let res = run_from_file(path, vec![Value::Int(Uint256::from_usize(test_num))], false);
+    let res = run_from_file(
+        path, 
+        vec![],
+        RuntimeEnvironment::new(),
+        false
+    );
     match res {
         Ok(res) => {
-            assert_eq!(res, expected_result);
+            assert_eq!(res[0], Value::Int(Uint256::zero()));
+        }
+        Err(e) => {
+            panic!("{}\n{}", e.0, e.1);
+        }
+    }
+}
+
+// #[test]
+#[allow(dead_code)]
+fn test_keccak() {
+    let path = Path::new("stdlib/keccaktest.mexe");
+    let res = run_from_file(
+        path, 
+        vec![],
+        RuntimeEnvironment::new(),
+        false
+    );
+    match res {
+        Ok(res) => {
+            assert_eq!(res[0], Value::Int(Uint256::zero()));
         }
         Err(e) => {
             panic!("{}\n{}", e.0, e.1);
@@ -346,19 +174,91 @@ fn test_map(test_num: usize, expected_result: Value) {
 }
 
 #[test]
-fn testkeccak0() {
-    test_keccak(0, Value::Int(Uint256::from_usize(0)));
-}
-
-fn test_keccak(test_num: usize, expected_result: Value) {
-    let path = Path::new("stdlib/keccaktest.mexe");
-    let res = run_from_file(path, vec![Value::Int(Uint256::from_usize(test_num))], false);
+fn test_codeload() {
+    let path = Path::new("minitests/codeloadtest.mexe");
+    let res = run_from_file(
+        path, 
+        vec![],
+        RuntimeEnvironment::new(),
+        false
+    );
     match res {
         Ok(res) => {
-            assert_eq!(res, expected_result);
+            assert_eq!(res[0], Value::Int(Uint256::zero()));
         }
         Err(e) => {
             panic!("{}\n{}", e.0, e.1);
         }
+    }
+}
+
+#[test]
+fn test_loader1() {
+    run_using_loader("minitests/loadertest1.mexe", vec![Value::Int(Uint256::from_usize(777))]);
+}
+
+#[test]
+fn test_loader2() {
+    run_using_loader("minitests/loadertest2.mexe", vec![Value::Int(Uint256::from_usize(120))]);
+}
+
+fn run_using_loader(filename: &str, expected_result: Vec<Value>) {
+    let loader_path = Path::new("arbruntime/loader.mexe");
+    let module_path = Path::new(filename);
+    let maybe_msg = module_from_file_path(module_path);
+    if let Some(msg) = maybe_msg {
+        let res = run_from_file_with_msgs(loader_path, vec![msg], false);
+        match res {
+            Ok(res) => {
+                assert_eq!(res, expected_result);
+            }
+            Err(e) => {
+                panic!("{}", e);
+            }
+        }
+    } else {
+        panic!("failed to load and convert module from {}", filename);
+    }
+}
+
+#[test]
+fn test_runtime1() {
+    run_using_runtime("minitests/loadertest1.mexe", vec![Value::Int(Uint256::from_usize(777))]);
+}
+
+// #[test]  disabled because we're using a different EVM upload approach
+fn test_runtime_add() {
+    run_using_runtime("evm-add.mexe", vec![Value::Int(Uint256::from_usize(777))]);
+}
+
+fn run_using_runtime(filename: &str, expected_result: Vec<Value>) {
+    let loader_path = Path::new("arbruntime/runtime.mexe");
+    let module_path = Path::new(filename);
+    let maybe_msg = module_from_file_path(module_path);
+    if let Some(msg) = maybe_msg {
+        let res = run_from_file_with_msgs(
+            loader_path, 
+            vec![Value::Tuple(
+                vec![
+                    Value::Int(Uint256::from_usize(6)),
+                    Value::Int(Uint256::zero()),   // sender address
+                    Value::Tuple(vec![
+                        Value::Int(Uint256::from_usize(1)), 
+                        msg                    
+                    ])
+                ]
+            )],
+            false,
+        );
+        match res {
+            Ok(res) => {
+                assert_eq!(res, expected_result);
+            }
+            Err(e) => {
+                panic!("{}", e);
+            }
+        }
+    } else {
+        panic!("failed to load and convert module from {}", filename);
     }
 }

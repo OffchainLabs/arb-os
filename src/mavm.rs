@@ -17,6 +17,7 @@
 use crate::pos::Location;
 use crate::stringtable::StringId;
 use crate::uint256::Uint256;
+use crate::evm::runtime_func_name;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fmt;
@@ -25,7 +26,9 @@ use std::fmt;
 pub enum Label {
     Func(StringId),
     Anon(usize),
-    External(usize), // slot in imported funcs list
+    External(usize),  // slot in imported funcs list
+    Runtime(usize),   // function exported by the trusted runtime
+    Evm(usize),       // program counter in EVM contract
 }
 
 impl Label {
@@ -39,6 +42,8 @@ impl Label {
             Label::Func(sid) => (Label::Func(sid + func_offset), sid + func_offset),
             Label::Anon(pc) => (Label::Anon(pc + int_offset), func_offset),
             Label::External(slot) => (Label::External(slot + ext_offset), func_offset),
+            Label::Runtime(_) => (self, func_offset),
+            Label::Evm(_) => (self, func_offset),
         }
     }
 
@@ -56,6 +61,8 @@ impl Label {
                 &Value::Int(Uint256::from_usize(6)),
                 &Value::Int(Uint256::from_usize(*n)),
             ),
+            Label::Runtime(_) => { panic!("tried to avm_hash a runtime call index"); },
+            Label::Evm(_) => { panic!("tried to avm_hash an EVM label"); }
         }
     }
 }
@@ -66,6 +73,8 @@ impl fmt::Display for Label {
             Label::Func(sid) => write!(f, "function_{}", sid),
             Label::Anon(n) => write!(f, "label_{}", n),
             Label::External(slot) => write!(f, "external_{}", slot),
+            Label::Runtime(slot) => write!(f, "{}", runtime_func_name(*slot)),
+            Label::Evm(pc) => write!(f, "EvmPC({})", pc),
         }
     }
 }
@@ -180,6 +189,21 @@ impl Instruction {
             None => self,
         }
     }
+
+    pub fn marshal_for_module(&self, buf: &mut Vec<u8>, module_size: usize) {
+        let maybe_opcode_num = self.opcode.to_number();
+        if let Some(opcode_num) = maybe_opcode_num {
+            buf.push(opcode_num);
+            if let Some(val) = &self.immediate {
+                buf.push(1);
+                val.marshal_for_module(buf, module_size);
+            } else {
+                buf.push(0);
+            }
+        } else {
+            panic!("unrecognized opcode {}", self.opcode);
+        }
+    }
 }
 
 impl fmt::Display for Instruction {
@@ -201,6 +225,9 @@ impl fmt::Display for Instruction {
 pub enum CodePt {
     Internal(usize),
     External(usize), // slot in imported funcs list
+    Runtime(usize),   // slot in runtime funcs list
+    InSegment(usize, usize),   // in code segment, at offset
+    Null,            // initial value of the Error Codepoint register
 }
 
 impl CodePt {
@@ -212,13 +239,26 @@ impl CodePt {
         CodePt::External(name)
     }
 
+    pub fn new_runtime(slot: usize) -> Self {
+        CodePt::Runtime(slot)
+    }
+
+    pub fn new_in_segment(seg_num: usize, offset: usize) -> Self {
+        CodePt::InSegment(seg_num, offset)
+    }
+
     pub fn incr(&self) -> Option<Self> {
         match self {
             CodePt::Internal(pc) => Some(CodePt::Internal(pc + 1)),
+            CodePt::InSegment(seg, offset) => 
+                if *offset == 0 { None } else { Some(CodePt::InSegment(*seg, offset-1)) },
             CodePt::External(_) => None,
+            CodePt::Runtime(_) => None,
+            CodePt::Null => None,
         }
     }
 
+    /*
     pub fn pc_if_internal(&self) -> Option<usize> {
         if let CodePt::Internal(pc) = self {
             Some(*pc)
@@ -226,11 +266,19 @@ impl CodePt {
             None
         }
     }
+    */
 
     pub fn relocate(self, int_offset: usize, ext_offset: usize) -> Self {
         match self {
             CodePt::Internal(pc) => CodePt::Internal(pc + int_offset),
             CodePt::External(off) => CodePt::External(off + ext_offset),
+            CodePt::Runtime(_) => self,
+            CodePt::InSegment(_, _) => {
+                panic!("tried to relocate/link code at runtime");
+            }
+            CodePt::Null => {
+                panic!("tried to relocate/link null codepoint");
+            }
         }
     }
 
@@ -240,10 +288,29 @@ impl CodePt {
                 &Value::Int(Uint256::from_usize(3)),
                 &Value::Int(Uint256::from_usize(*sz)),
             ),
-            CodePt::External(sz) => Value::avm_hash2(
-                &Value::Int(Uint256::from_usize(4)),
+            CodePt::External(_) => {
+                panic!("tried to avm_hash unlinked codepoint");
+            }
+            CodePt::Runtime(sz) => Value::avm_hash2(
+                &Value::Int(Uint256::from_usize(5)), 
                 &Value::Int(Uint256::from_usize(*sz)),
             ),
+            CodePt::InSegment(_, _) => {
+                panic!("avm_hash not yet implemented for in-module codepoints");
+            }
+            CodePt::Null => Value::Int(Uint256::zero()),
+        }
+    }
+}
+
+impl fmt::Display for CodePt {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            CodePt::Internal(pc) => write!(f, "Internal({})", pc),
+            CodePt::External(idx) => write!(f, "External({})", idx),
+            CodePt::Runtime(slot) => write!(f, "{}", runtime_func_name(*slot)),
+            CodePt::InSegment(seg, offset) => write!(f, "(segment {}, offset {})", seg, offset),
+            CodePt::Null => write!(f, "Null"),
         }
     }
 }
@@ -266,6 +333,15 @@ impl Value {
             v.is_empty()
         } else {
             false
+        }
+    }
+
+    pub fn type_insn_result(&self) -> usize {
+        match self {
+            Value::Int(_) => 0,
+            Value::CodePoint(_) => 1,
+            Value::Tuple(_) => 3,
+            Value::Label(_) => { panic!("tried to run type instruction on a label"); }
         }
     }
 
@@ -371,13 +447,47 @@ impl Value {
     pub fn avm_hash2(v1: &Self, v2: &Self) -> Value {
         Value::Tuple(vec![v1.clone(), v2.clone()]).avm_hash()
     }
+
+    pub fn marshal_for_module(&self, buf: &mut Vec<u8>, module_size: usize) {
+        match self {
+            Value::Int(ui) => {
+                let mut ui: Uint256 = ui.clone();
+                buf.push(0);
+                let ui_mod = Uint256::from_usize(256);
+                for _i in 0..32 {
+                    let low_byte = ui.modulo(&ui_mod).unwrap().to_usize().unwrap();
+                    buf.push(low_byte as u8);
+                    ui = ui.div(&ui_mod).unwrap();  // safe because denominator is not zero
+                }
+            }
+            Value::Tuple(tup) => {
+                buf.push((16 + tup.len()) as u8);
+                for val in tup {
+                    val.marshal_for_module(buf, module_size);
+                }
+            }
+            Value::CodePoint(CodePt::Internal(pc)) => {
+                buf.push(8);
+                let mut offset = module_size-pc;
+                for _i in 0..8 {
+                    buf.push((offset % 256) as u8);
+                    offset /= 256;
+                }
+            }
+            Value::CodePoint(CodePt::Runtime(slot)) => {
+                buf.push(9);
+                buf.push(*slot as u8);
+            }
+            _ => { panic!("invalid immediate value in module instruction"); }
+        }
+    }
 }
 
 impl fmt::Display for Value {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             Value::Int(i) => i.fmt(f),
-            Value::CodePoint(pc) => write!(f, "CodePoint({:?})", pc),
+            Value::CodePoint(pc) => write!(f, "CodePoint({})", pc),
             Value::Label(label) => write!(f, "Label({})", label),
             Value::Tuple(tup) => {
                 if tup.is_empty() {
@@ -398,7 +508,7 @@ impl fmt::Display for Value {
     }
 }
 
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, Eq, PartialEq)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, Eq, PartialEq, Hash)]
 pub enum Opcode {
     Noop,
     Panic,
@@ -421,9 +531,12 @@ pub enum Opcode {
     SetGlobalVar(usize),
     Tset,
     Tget,
+    Tlen,
     Pop,
+    StackEmpty,
     AuxPush,
     AuxPop,
+    AuxStackEmpty,
     Xget,
     Xset,
     Dup0,
@@ -456,6 +569,7 @@ pub enum Opcode {
     NotEqual,
     Byte,
     SignExtend,
+    Type,
     BitwiseAnd,
     BitwiseOr,
     BitwiseXor,
@@ -463,6 +577,16 @@ pub enum Opcode {
     LogicalOr,
     GetTime,
     Inbox,
+    ErrCodePoint,
+    PushInsn,
+    PushInsnImm,
+    OpenInsn,
+    Halt,
+    Send,
+    Log,
+    ErrSet,
+    ErrPush,
+    Breakpoint,
     DebugPrint,
 }
 
@@ -512,9 +636,159 @@ impl Opcode {
             "logicalor" => Opcode::LogicalOr,
             "gettime" => Opcode::GetTime,
             "inbox" => Opcode::Inbox,
+            "log" => Opcode::Log,
+            "errcodept" => Opcode::ErrCodePoint,
+            "pushinsn" => Opcode::PushInsn,
+            "pushinsnimm" => Opcode::PushInsnImm,
+            "openinsn" => Opcode::OpenInsn,
             _ => {
                 panic!("opcode not supported in asm segment: {}", name);
             }
+        }
+    }
+
+    pub fn from_number(num: usize) -> Option<Self> {
+        match num {
+            0x01 => Some(Opcode::Plus),
+            0x02 => Some(Opcode::Mul),
+            0x03 => Some(Opcode::Minus),
+            0x04 => Some(Opcode::Div),
+            0x05 => Some(Opcode::Sdiv),
+            0x06 => Some(Opcode::Mod),
+            0x07 => Some(Opcode::Smod),
+            0x08 => Some(Opcode::AddMod),
+            0x09 => Some(Opcode::MulMod),
+            0x0a => Some(Opcode::Exp),
+            0x10 => Some(Opcode::LessThan),
+            0x11 => Some(Opcode::GreaterThan),
+            0x12 => Some(Opcode::SLessThan),
+            0x13 => Some(Opcode::SGreaterThan),
+            0x14 => Some(Opcode::Equal),
+            0x15 => Some(Opcode::Not),
+            0x16 => Some(Opcode::BitwiseAnd),
+            0x17 => Some(Opcode::BitwiseOr),
+            0x18 => Some(Opcode::BitwiseXor),
+            0x19 => Some(Opcode::BitwiseNeg),
+            0x1a => Some(Opcode::Byte),
+            0x1b => Some(Opcode::SignExtend),
+            0x1c => Some(Opcode::NotEqual),  //BUGBUG: this should be eliminated, doesn't exist in AVM
+            0x20 => Some(Opcode::Hash),
+            0x21 => Some(Opcode::Type),
+            0x22 => Some(Opcode::Hash2),
+            0x30 => Some(Opcode::Pop),
+            0x31 => Some(Opcode::PushStatic),
+            0x32 => Some(Opcode::Rget),
+            0x33 => Some(Opcode::Rset),
+            0x34 => Some(Opcode::Jump),   
+            0x35 => Some(Opcode::Cjump),
+            0x36 => Some(Opcode::StackEmpty),
+            0x37 => Some(Opcode::GetPC),
+            0x38 => Some(Opcode::AuxPush),
+            0x39 => Some(Opcode::AuxPop),
+            0x3a => Some(Opcode::AuxStackEmpty),
+            0x3b => Some(Opcode::Noop),
+            0x3c => Some(Opcode::ErrPush),
+            0x3d => Some(Opcode::ErrSet),
+            0x40 => Some(Opcode::Dup0),
+            0x41 => Some(Opcode::Dup1),
+            0x42 => Some(Opcode::Dup2),
+            0x43 => Some(Opcode::Swap1),
+            0x44 => Some(Opcode::Swap2),
+            0x50 => Some(Opcode::Tget),
+            0x51 => Some(Opcode::Tset),
+            0x52 => Some(Opcode::Tlen),
+            0x53 => Some(Opcode::Xget),
+            0x54 => Some(Opcode::Xset),
+            0x60 => Some(Opcode::Breakpoint),
+            0x61 => Some(Opcode::Log),
+            0x70 => Some(Opcode::Send),
+            0x71 => Some(Opcode::GetTime),
+            0x72 => Some(Opcode::Inbox),
+            0x73 => Some(Opcode::Panic),
+            0x74 => Some(Opcode::Halt),
+            0x75 => Some(Opcode::ErrCodePoint),
+            0x76 => Some(Opcode::PushInsn),
+            0x77 => Some(Opcode::PushInsnImm),
+            //0x78 => Some(Opcode::CloseSegment),
+            0x79 => Some(Opcode::OpenInsn),
+            _ => None,
+        }
+    }
+
+    pub fn to_number(&self) -> Option<u8> {
+        match self {
+            Opcode::Plus => Some(0x01),
+            Opcode::Mul => Some(0x02),
+            Opcode::Minus => Some(0x03),
+            Opcode::Div => Some(0x04),
+            Opcode::Sdiv => Some(0x05),
+            Opcode::Mod => Some(0x06),
+            Opcode::Smod => Some(0x07),
+            Opcode::AddMod => Some(0x08),
+            Opcode::MulMod => Some(0x09),
+            Opcode::Exp => Some(0x0a),
+            Opcode::LessThan => Some(0x10),
+            Opcode::GreaterThan => Some(0x11),
+            Opcode::SLessThan => Some(0x012),
+            Opcode::SGreaterThan => Some(0x13),
+            Opcode::Equal => Some(0x14),
+            Opcode::Not => Some(0x15),
+            Opcode::BitwiseAnd => Some(0x16),
+            Opcode::BitwiseOr => Some(0x17),
+            Opcode::BitwiseXor => Some(0x18),
+            Opcode::BitwiseNeg => Some(0x19),
+            Opcode::Byte => Some(0x1a),
+            Opcode::SignExtend => Some(0x1b),
+            Opcode::NotEqual => Some(0x1c),
+            Opcode::Hash => Some(0x20),
+            Opcode::Type => Some(0x21),
+            Opcode::Hash2 => Some(0x22),
+            Opcode::Pop => Some(0x30),
+            Opcode::PushStatic => Some(0x31),
+            Opcode::Rget => Some(0x32),
+            Opcode::Rset => Some(0x33),
+            Opcode::Jump => Some(0x34),   
+            Opcode::Cjump => Some(0x35),
+            Opcode::StackEmpty => Some(0x36),
+            Opcode::GetPC => Some(0x37),
+            Opcode::AuxPush => Some(0x38),
+            Opcode::AuxPop => Some(0x39),
+            Opcode::AuxStackEmpty => Some(0x3a),
+            Opcode::Noop => Some(0x3b),
+            Opcode::ErrPush => Some(0x3c),
+            Opcode::ErrSet => Some(0x3d),
+            Opcode::Dup0 => Some(0x40),
+            Opcode::Dup1 => Some(0x41),
+            Opcode::Dup2 => Some(0x42),
+            Opcode::Swap1 => Some(0x43),
+            Opcode::Swap2 => Some(0x44),
+            Opcode::Tget => Some(0x50),
+            Opcode::Tset => Some(0x51),
+            Opcode::Tlen => Some(0x52),
+            Opcode::Xget => Some(0x53),
+            Opcode::Xset => Some(0x54),
+            Opcode::Breakpoint => Some(0x60),
+            Opcode::Log => Some(0x61),
+            Opcode::Send => Some(0x70),
+            Opcode::GetTime => Some(0x71),
+            Opcode::Inbox => Some(0x72),
+            Opcode::Panic => Some(0x73),
+            Opcode::Halt => Some(0x74),
+            Opcode::ErrCodePoint => Some(0x75),
+            Opcode::PushInsn => Some(0x76),
+            Opcode::PushInsnImm => Some(0x77),
+            //Opcode::CloseSegment => Some(0x78),
+            Opcode::OpenInsn => Some(0x79),
+            _ => None,
+        }
+    }
+}
+
+#[test]
+fn test_consistent_opcode_numbers() {
+    for i in 0..256 {
+        if let Some(op) = Opcode::from_number(i) {
+            assert_eq!(i as u8, op.to_number().unwrap());
         }
     }
 }

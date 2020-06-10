@@ -14,23 +14,16 @@
 // limitations under the License.
 //
 
-import impure func inbox_init();
-import impure func accountStore_init();
-
-import impure func inbox_get() -> any;
-import impure func handleEthbridgeMessage(msg: any);
-
-
-impure func main() {
-    inbox_init();
-    accountStore_init();
-    
-    mainRunLoop();
+public func main() {
+    let ret = fact(5);
+    asm(ret,) { log };
 }
 
-public impure func mainRunLoop() {
-    loop {
-        let msg = inbox_get();
-        handleEthbridgeMessage(msg,);
+func fact(n: uint) -> uint {
+    let ret = 1;
+    while (n > 0) {
+        ret = ret*n;
+        n = n-1;
     }
+    return ret;
 }

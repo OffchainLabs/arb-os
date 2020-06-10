@@ -282,7 +282,8 @@ Expr13: Expr = {
 
 Expr14: Expr = {
 	<lno: @L> "struct" "{" <fi: FieldInitializers> "}" => Expr::StructInitializer(fi, file_info.location(BytePos::from(lno))),
-    "(" <e: Expr> ")" => <>,
+	"(" <e: Expr> ")" => <>,
+	<lno: @L> "(" ")" => Expr::Tuple(vec![], file_info.location(BytePos::from(lno))),
 	<lno: @L> "(" <c: CommaedExprs> ")" => Expr::Tuple(c, file_info.location(BytePos::from(lno))),
 	<lno: @L> <i: Ident> => Expr::VariableRef(i, file_info.location(BytePos::from(lno))),
 }

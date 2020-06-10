@@ -19,37 +19,28 @@ func main() {
 }
 
 func tests() -> uint {
-	let m = newmap<(uint, uint), uint>;
-	if (m[(17, 18,)] != None<uint>) {
-		return 1;
-	}
+	let codept = loadFunc1();
+    let res = unsafecast<func() -> uint>(codept)();
+    if (res != 3) {
+        return 1;
+    }
 
-	let m = newmap<uint, uint>;
-	if (m[17] != None<uint>) {
-		return 2;
-	}
+    return 0;
+}
 
-	let m = newmap<(uint, uint), uint>;
-	m = m with { [(999, 321,)] = 42 };
-	if ( m[(999, 321,)] != Some(42) ) { 
-		return 3;
-	}
+func loadFunc1() -> func() {
+    let ret = asm() func() { errcodept };
 
-	m = newmap<(uint, uint), uint>;
-	m = m with { [(999, 321,)] = 42 };
-	m = m with { [(0, 0,)] = 73 };
-	if ( m[(999, 321,)] != Some(42) ) { 
-		return 4;
-	}
+    ret = addInsn(0x34, ret);    // jump
+    ret = addInsnImm(0x43, 3, ret);  // [3] swap1
 
-	m = newmap<(uint, uint), uint>;
-	m = m with { [(999, 321,)] = 42 };
-	m = m with { [(0, 0,)] = 73 };
-	m = m with { [(999, 321,)] = 13 };
-	m = m with { [(0, 0,)] = 173 };
-	if (m[(999, 321,)] != Some(13) ){
-		return 5;
-	}
+    return ret;
+}
 
-	return 0;
+func addInsn(op: uint, codept: func()) -> func() {
+    return asm(op, codept) func() { pushinsn };
+}
+
+func addInsnImm(op: uint, imm: any, codept: func()) -> func() {
+    return asm(op, imm, codept) func() { pushinsnimm };
 }
