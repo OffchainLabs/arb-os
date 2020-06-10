@@ -57,15 +57,7 @@ TypeDecl: TypeDecl = {
 }
 
 FuncDecl: FuncDecl = {
-	<lno: @L> "func" <i:Ident> "(" <fa:FuncArgs> ")" <cb:CodeBlock> => FuncDecl::new(i, false, fa, Type::Void, cb, false, file_info.location(BytePos::from(lno))),
-	<lno: @L> "func" <i:Ident> "(" <fa:FuncArgs> ")" "->" <t:Type> <cb:CodeBlock> => FuncDecl::new(i, false, fa, t, cb, false, file_info.location(BytePos::from(lno))),
-	<lno: @L> "public" "func" <i:Ident> "(" <fa:FuncArgs> ")" <cb:CodeBlock> => FuncDecl::new(i, false, fa, Type::Void, cb, true, file_info.location(BytePos::from(lno))),
-	<lno: @L> "public" "func" <i:Ident> "(" <fa:FuncArgs> ")" "->" <t:Type> <cb:CodeBlock> => FuncDecl::new(i, false, fa, t, cb, true, file_info.location(BytePos::from(lno))),
-	<lno: @L> "impure" "func" <i:Ident> "(" <fa:FuncArgs> ")" <cb:CodeBlock> => FuncDecl::new(i, true, fa, Type::Void, cb, false, file_info.location(BytePos::from(lno))),
-	<lno: @L> "impure" "func" <i:Ident> "(" <fa:FuncArgs> ")" "->" <t:Type> <cb:CodeBlock> => FuncDecl::new(i, true, fa, t, cb, false, file_info.location(BytePos::from(lno))),
-	<lno: @L> "public" "impure" "func" <i:Ident> "(" <fa:FuncArgs> ")" <cb:CodeBlock> => FuncDecl::new(i, true, fa, Type::Void, cb, true, file_info.location(BytePos::from(lno))),
-	<lno: @L> "public" "impure" "func" <i:Ident> "(" <fa:FuncArgs> ")" "->" <t:Type> <cb:CodeBlock> => FuncDecl::new(i, true, fa, t, cb, true, file_info.location(BytePos::from(lno))),
-
+	<lno: @L> <p: "public"?> <imp: "impure"?> "func" <i:Ident> "(" <fa:FuncArgs> ")" <t: ("->" <Type>)?> <cb:CodeBlock> => FuncDecl::new(i, imp.is_some(), fa, t.unwrap_or(Type::Void), cb, p.is_some(), file_info.location(BytePos::from(lno))),
 }
 
 FuncArgs: Vec<FuncArg> = {
