@@ -15,7 +15,7 @@
  */
 
 use crate::build_builtins::BuiltinArray;
-use crate::compile::{CompileError, CompiledProgram, SourceFileMap};
+use crate::compile::{CompileError, CompiledProgram, SourceFileMap, Type};
 use crate::link::{link, postlink_compile, ImportedFunc, LinkedProgram};
 use crate::mavm::{Instruction, Label, LabelGenerator, Opcode, Value};
 use crate::stringtable::StringTable;
@@ -227,6 +227,7 @@ pub fn compile_from_json(evm_json: serde_json::Value, debug: bool) -> Result<Vec
                         ],
                         true,
                         Some(storage_info_struct),
+                        false,
                     ).unwrap(),  // BUGBUG--this should handle errors gracefully, not just panic
                     true,
                     compiled_contract.evm_pcs,
@@ -871,7 +872,7 @@ fn imported_funcs_for_evm() -> (Vec<ImportedFunc>, StringTable<'static>) {
         string_table.get(name);
     }
     for (i, name) in EMULATION_FUNCS.iter().enumerate() {
-        imp_funcs.push(ImportedFunc::new(i, string_table.get(name), &string_table));
+        imp_funcs.push(ImportedFunc::new(i, string_table.get(name), &string_table, vec![], Type::Void, true));
     }
     (imp_funcs, string_table)
 }

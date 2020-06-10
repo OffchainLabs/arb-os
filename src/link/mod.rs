@@ -95,23 +95,33 @@ pub struct ImportedFunc {
     pub name_id: StringId,
     pub slot_num: usize,
     pub name: String,
+    pub arg_types: Vec<Type>,
+    pub ret_type: Type,
+    pub is_impure: bool,
 }
 
 impl ImportedFunc {
-    pub fn new(slot_num: usize, name_id: StringId, string_table: &StringTable) -> Self {
+    pub fn new(
+            slot_num: usize,
+               name_id: StringId,
+               string_table: &StringTable,
+               arg_types: Vec<Type>,
+               ret_type: Type,
+               is_impure: bool,
+    ) -> Self {
         ImportedFunc {
             name_id,
             slot_num,
             name: string_table.name_from_id(name_id).to_string(),
+            arg_types,
+            ret_type,
+            is_impure,
         }
     }
 
-    pub fn relocate(self, _int_offset: usize, ext_offset: usize) -> Self {
-        ImportedFunc {
-            name_id: self.name_id,
-            slot_num: self.slot_num + ext_offset,
-            name: self.name,
-        }
+    pub fn relocate(mut self, _int_offset: usize, ext_offset: usize) -> Self {
+        self.slot_num += ext_offset;
+        self
     }
 }
 
@@ -263,6 +273,8 @@ pub fn add_auto_link_progs(
 
 pub fn link(
     progs_in: &[CompiledProgram],
+    is_module: bool,
+    init_storage_descriptor: Option<Value>,  // used only for compiling modules
     typecheck: bool,
 ) -> Result<CompiledProgram, CompileError> {
     let progs_in: Vec<_> = progs_in
@@ -278,7 +290,10 @@ pub fn link(
     let mut global_num_limit = 0;
 
     for (prog, _) in &progs {
-        merged_source_file_map.push(prog.code.len(), prog.source_file_map.get(0));
+        merged_source_file_map.push(prog.code.len(), match &prog.source_file_map {
+            Some(sfm) => sfm.get(0),
+            None => "".to_string(),
+        });
         int_offsets.push(insns_so_far);
         insns_so_far += prog.code.len();
         ext_offsets.push(imports_so_far);
