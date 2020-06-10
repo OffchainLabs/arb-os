@@ -620,7 +620,7 @@ fn mavm_codegen_statements<'a>(
                 import_func_map,
                 global_var_map,
             )?;
-            
+
             let (outside_label, lg2) = lg.next();
             code.push(Instruction::from_opcode_imm(
                 Opcode::Jump,

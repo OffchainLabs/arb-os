@@ -209,72 +209,77 @@ impl MachineState {
 
 #[derive(Debug)]
 struct CodeStore {
-	segments: Vec<Vec<Instruction>>,
+    segments: Vec<Vec<Instruction>>,
 }
 
 impl CodeStore {
-	fn new(runtime: Vec<Instruction>) -> Self {
-		CodeStore{ segments: vec![runtime] }
-	}
+    fn new(runtime: Vec<Instruction>) -> Self {
+        CodeStore {
+            segments: vec![runtime],
+        }
+    }
 
-	#[allow(dead_code)]
-	fn segment_size(&self, seg_num: usize) -> Option<usize> {
-		match self.segments.get(seg_num) {
-			Some(seg) => Some(seg.len()),
-			None => None,
-		}
-	}
-	
-	fn runtime_segment_size(&self) -> usize {
-		self.segments[0].len()
-	}
+    #[allow(dead_code)]
+    fn segment_size(&self, seg_num: usize) -> Option<usize> {
+        match self.segments.get(seg_num) {
+            Some(seg) => Some(seg.len()),
+            None => None,
+        }
+    }
 
-	fn get_insn(&self, codept: CodePt) -> Option<&Instruction> {
-		match codept {
-			CodePt::Internal(pc) => self.segments[0].get(pc),
-			CodePt::InSegment(seg_num, pc) => {
-				if seg_num < self.segments.len() {
-					self.segments[seg_num].get(pc)
-				} else {
-					None
-				}
-			}
-			_ => { panic!("unlinked codepoint reference in running code: {:?}", codept); }
-		}
-	}
+    fn runtime_segment_size(&self) -> usize {
+        self.segments[0].len()
+    }
 
-	fn create_segment(&mut self) -> CodePt {
-		self.segments.push(
-			vec![
-				Instruction::from_opcode(Opcode::Panic, None),
-			]
-		);
-		CodePt::new_in_segment(self.segments.len()-1, 0)
-	}
+    fn get_insn(&self, codept: CodePt) -> Option<&Instruction> {
+        match codept {
+            CodePt::Internal(pc) => self.segments[0].get(pc),
+            CodePt::InSegment(seg_num, pc) => {
+                if seg_num < self.segments.len() {
+                    self.segments[seg_num].get(pc)
+                } else {
+                    None
+                }
+            }
+            _ => {
+                panic!("unlinked codepoint reference in running code: {:?}", codept);
+            }
+        }
+    }
 
-	fn push_insn(&mut self, op: usize, imm: Option<Value>, codept: CodePt) -> Option<CodePt> {
-		if let CodePt::InSegment(seg_num, old_offset) = codept {
-			if seg_num >= self.segments.len() {
-				panic!("bad segment number in push_insn");
-				//None
-			} else {
-				let segment = &mut self.segments[seg_num];
-				if old_offset == segment.len()-1 {
-					if let Some(opcode) = Opcode::from_number(op) {
-						segment.push(Instruction::new(opcode, imm, None));
-						Some(CodePt::new_in_segment(seg_num, old_offset+1))
-					} else {
-						panic!("bad opcode number {} in push_insn at length {}", op, segment.len());
-						//None
-					}
-				} else {
-					panic!("branching segments not yet implemented");
-				}
-			}
-		} else {
-			panic!("invalid codepoint in push_insn");
-		}
-	}
+    fn create_segment(&mut self) -> CodePt {
+        self.segments
+            .push(vec![Instruction::from_opcode(Opcode::Panic, None)]);
+        CodePt::new_in_segment(self.segments.len() - 1, 0)
+    }
+
+    fn push_insn(&mut self, op: usize, imm: Option<Value>, codept: CodePt) -> Option<CodePt> {
+        if let CodePt::InSegment(seg_num, old_offset) = codept {
+            if seg_num >= self.segments.len() {
+                panic!("bad segment number in push_insn");
+            //None
+            } else {
+                let segment = &mut self.segments[seg_num];
+                if old_offset == segment.len() - 1 {
+                    if let Some(opcode) = Opcode::from_number(op) {
+                        segment.push(Instruction::new(opcode, imm, None));
+                        Some(CodePt::new_in_segment(seg_num, old_offset + 1))
+                    } else {
+                        panic!(
+                            "bad opcode number {} in push_insn at length {}",
+                            op,
+                            segment.len()
+                        );
+                        //None
+                    }
+                } else {
+                    panic!("branching segments not yet implemented");
+                }
+            }
+        } else {
+            panic!("invalid codepoint in push_insn");
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -284,9 +289,9 @@ pub struct Machine {
     state: MachineState,
     code: CodeStore,
     static_val: Value,
-	register: Value,
-	err_codepoint: CodePt,
-	pub runtime_env: RuntimeEnvironment,
+    register: Value,
+    err_codepoint: CodePt,
+    pub runtime_env: RuntimeEnvironment,
 }
 
 impl<'a> Machine {
@@ -297,13 +302,13 @@ impl<'a> Machine {
             state: MachineState::Stopped,
             code: CodeStore::new(program.code),
             static_val: program.static_val,
-			register: Value::none(),
-			err_codepoint: CodePt::Null,
-			runtime_env: env,
+            register: Value::none(),
+            err_codepoint: CodePt::Null,
+            runtime_env: env,
         }
     }
 
-	#[allow(dead_code)]
+    #[allow(dead_code)]
     pub fn get_state(&self) -> MachineState {
         self.state.clone()
     }
@@ -460,18 +465,18 @@ impl<'a> Machine {
                         return;
                     }
                 }
-			}
-			match self.run_one() {
-				Ok(still_runnable) => {
-					if ! still_runnable {
-						return;
-					}
-				}
-            	Err(e) => {
-					self.state = MachineState::Error(e);
-					return;
-				}
-			}
+            }
+            match self.run_one() {
+                Ok(still_runnable) => {
+                    if !still_runnable {
+                        return;
+                    }
+                }
+                Err(e) => {
+                    self.state = MachineState::Error(e);
+                    return;
+                }
+            }
         }
     }
 

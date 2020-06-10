@@ -14,10 +14,9 @@
  * limitations under the License.
  */
 
-use crate::run::runtime_env::bytestack_from_bytes;
 use crate::link::LinkedProgram;
-use crate::mavm::{CodePt, Value, Instruction, Opcode};
-use crate::uint256::Uint256;
+use crate::mavm::{CodePt, Value};
+use crate::run::runtime_env::bytestack_from_bytes;
 use emulator::{ExecutionError, Machine, StackTrace};
 use runtime_env::RuntimeEnvironment;
 use std::fs::File;
@@ -28,7 +27,7 @@ mod emulator;
 pub mod runtime_env;
 
 pub fn run_from_file(
-    path: &Path, 
+    path: &Path,
     args: Vec<Value>,
     env: RuntimeEnvironment,
     debug: bool,
@@ -50,8 +49,8 @@ pub fn run_from_file(
 }
 
 fn run_from_string(
-    s: String, 
-    args: Vec<Value>, 
+    s: String,
+    args: Vec<Value>,
     env: RuntimeEnvironment,
     debug: bool,
 ) -> Result<Vec<Value>, (ExecutionError, StackTrace)> {
@@ -68,9 +67,9 @@ fn run_from_string(
 }
 
 fn run(
-    machine: &mut Machine, 
-    args: Vec<Value>, 
-    debug: bool
+    machine: &mut Machine,
+    args: Vec<Value>,
+    debug: bool,
 ) -> Result<Vec<Value>, (ExecutionError, StackTrace)> {
     match machine.test_call(CodePt::new_internal(0), args, debug) {
         Ok(_stack) => Ok(machine.runtime_env.get_all_logs()),
@@ -79,7 +78,7 @@ fn run(
 }
 
 pub fn run_from_file_with_msgs(
-    path: &Path, 
+    path: &Path,
     in_msgs: Vec<Value>,
     debug: bool,
 ) -> Result<Vec<Value>, ExecutionError> {
@@ -100,8 +99,8 @@ pub fn run_from_file_with_msgs(
 }
 
 fn run_from_string_with_msgs(
-    s: String, 
-    in_msgs: Vec<Value>, 
+    s: String,
+    in_msgs: Vec<Value>,
     debug: bool,
 ) -> Result<Vec<Value>, ExecutionError> {
     let parse_result: Result<LinkedProgram, serde_json::Error> = serde_json::from_str(&s);
@@ -142,7 +141,7 @@ pub fn module_from_file_path(module_path: &Path) -> Option<Value> {
         Err(why) => panic!("couldn't read {}: {:?}", display, why),
         Ok(_) => s,
     };
-      
+
     let parse_result: Result<LinkedProgram, serde_json::Error> = serde_json::from_str(&s);
     let program = match parse_result {
         Ok(prog) => prog,
@@ -159,6 +158,8 @@ pub fn module_from_file_path(module_path: &Path) -> Option<Value> {
 
 #[test]
 fn test_inbox_and_log() {
+    use crate::uint256::Uint256;
+    use crate::mavm::{Instruction,Opcode};
     let val = Value::Int(Uint256::from_usize(3));
     let logs = run_with_msgs(
         LinkedProgram {
@@ -166,15 +167,16 @@ fn test_inbox_and_log() {
                 Instruction::from_opcode(Opcode::Inbox, None),
                 Instruction::from_opcode_imm(Opcode::Tget, Value::Int(Uint256::one()), None),
                 Instruction::from_opcode(Opcode::Log, None),
-                Instruction::from_opcode(Opcode::Inbox, None),  // should block, stopping execution
+                Instruction::from_opcode(Opcode::Inbox, None), // should block, stopping execution
             ],
             static_val: Value::none(),
             imported_funcs: vec![],
             exported_funcs: vec![],
         },
         vec![val.clone()],
-        false
-    ).unwrap();
+        false,
+    )
+    .unwrap();
     assert_eq!(logs.len(), 1);
-    assert_eq!(logs[0]==val, true);
+    assert_eq!(logs[0] == val, true);
 }

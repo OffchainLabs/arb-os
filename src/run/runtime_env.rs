@@ -14,8 +14,8 @@
  * limitations under the License.
  */
 
+use crate::mavm::Value;
 use crate::uint256::Uint256;
-use crate::mavm::{Value};
 use std::collections::HashMap;
 
 #[derive(Debug)]
@@ -27,7 +27,7 @@ pub struct RuntimeEnvironment {
 
 impl RuntimeEnvironment {
     pub fn new() -> Self {
-        RuntimeEnvironment{ 
+        RuntimeEnvironment {
             l1_inbox: Value::none(),
             logs: Vec::new(),
             seq_nums: HashMap::new(),
@@ -49,7 +49,8 @@ impl RuntimeEnvironment {
             Some(sn) => sn.clone(),
             None => Uint256::one(),
         };
-        self.seq_nums.insert(addr.clone(), cur_seq_num.add(&Uint256::one()));
+        self.seq_nums
+            .insert(addr.clone(), cur_seq_num.add(&Uint256::one()));
         cur_seq_num.clone()
     }
 
@@ -80,23 +81,19 @@ fn bytestack_from_bytes_2(b: &[u8], so_far: Value) -> Value {
     if size > 32 {
         bytestack_from_bytes_2(
             &b[32..],
-            Value::Tuple(vec![
-                so_far,
-                bytestack_build_uint(&b[..32]),
-            ]),
+            Value::Tuple(vec![so_far, bytestack_build_uint(&b[..32])]),
         )
     } else {
-        Value::Tuple(vec![
-            so_far,
-            bytestack_build_uint(b),
-        ])
-    } 
+        Value::Tuple(vec![so_far, bytestack_build_uint(b)])
+    }
 }
 
 fn bytestack_build_uint(b: &[u8]) -> Value {
     let mut ui = Uint256::zero();
     for j in (0..b.len()).rev() {
-        ui = ui.mul(&Uint256::from_usize(256)).add(&Uint256::from_usize(b[j] as usize));
+        ui = ui
+            .mul(&Uint256::from_usize(256))
+            .add(&Uint256::from_usize(b[j] as usize));
     }
     Value::Int(ui)
 }

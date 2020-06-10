@@ -14,21 +14,19 @@
  * limitations under the License.
  */
 
-use crate::build_builtins::BuiltinArray;
-use crate::compile::{CompileError, CompiledProgram, SourceFileMap};
+use crate::compile::{CompileError, CompiledProgram, Type};
 use crate::link::{link, postlink_compile, ImportedFunc, LinkedProgram};
 use crate::mavm::{Instruction, Label, LabelGenerator, Opcode, Value};
+use crate::run::runtime_env::{bytestack_from_bytes, RuntimeEnvironment};
 use crate::stringtable::StringTable;
-use crate::run::runtime_env::{RuntimeEnvironment, bytestack_from_bytes};
 use crate::uint256::Uint256;
-use serde::{Serialize};
+use serde::Serialize;
 use std::collections::HashMap;
 use std::convert::TryInto;
 use std::fs::File;
 use std::io::{self, Read, Write};
 use std::path::Path;
 use std::usize;
-
 
 pub fn compile_evm_file(path: &Path, debug: bool) -> Result<Vec<LinkedProgram>, CompileError> {
     let display = path.display();
@@ -79,45 +77,42 @@ impl CompiledEvmContract {
     }
 
     pub fn to_output(&self, output: &mut dyn io::Write, format: Option<&str>) {
-		match format {
-			Some("pretty") => {
-				writeln!(output, "address: {}", self.address).unwrap();
-				writeln!(output, "storage: {:?}", self.storage).unwrap();
-				for (idx, insn) in self.code.iter().enumerate() {
-					writeln!(output, "{:04}:  {}", idx, insn).unwrap();
-				}
-			}
-			None |
-			Some("json") => {
-				match serde_json::to_string(self) {
-					Ok(prog_str) => {
-						writeln!(output, "{}", prog_str).unwrap();
-					}
-					Err(e) => {
-						writeln!(output, "json serialization error: {:?}", e).unwrap();
-					}
-				}
-			}
-			Some("bincode") => {
-				match bincode::serialize(self) {
-					Ok(encoded) => {
-						if let Err(e) = output.write_all(&encoded) {
-							writeln!(output, "bincode write error: {:?}", e).unwrap();
-					   }
-					}
-					Err(e) => {
-						writeln!(output, "bincode serialization error: {:?}", e).unwrap();
-					}
-				}
-			}
-			Some(weird_value) => { writeln!(output, "invalid format: {}", weird_value).unwrap(); }
-		} 
-	}
+        match format {
+            Some("pretty") => {
+                writeln!(output, "address: {}", self.address).unwrap();
+                writeln!(output, "storage: {:?}", self.storage).unwrap();
+                for (idx, insn) in self.code.iter().enumerate() {
+                    writeln!(output, "{:04}:  {}", idx, insn).unwrap();
+                }
+            }
+            None | Some("json") => match serde_json::to_string(self) {
+                Ok(prog_str) => {
+                    writeln!(output, "{}", prog_str).unwrap();
+                }
+                Err(e) => {
+                    writeln!(output, "json serialization error: {:?}", e).unwrap();
+                }
+            },
+            Some("bincode") => match bincode::serialize(self) {
+                Ok(encoded) => {
+                    if let Err(e) = output.write_all(&encoded) {
+                        writeln!(output, "bincode write error: {:?}", e).unwrap();
+                    }
+                }
+                Err(e) => {
+                    writeln!(output, "bincode serialization error: {:?}", e).unwrap();
+                }
+            },
+            Some(weird_value) => {
+                writeln!(output, "invalid format: {}", weird_value).unwrap();
+            }
+        }
+    }
 }
 
 pub fn send_inject_evm_messages_from_file(
-    pathname: &str, 
-    rt_env: &mut RuntimeEnvironment
+    pathname: &str,
+    rt_env: &mut RuntimeEnvironment,
 ) -> Result<(), CompileError> {
     let path = Path::new(pathname);
     let display = path.display();
@@ -135,12 +130,16 @@ pub fn send_inject_evm_messages_from_file(
 
     let parse_result: Result<serde_json::Value, serde_json::Error> = serde_json::from_str(&s);
     match parse_result {
-        Ok(evm_json) => 
+        Ok(evm_json) => {
             if send_inject_evm_messages(evm_json, rt_env) {
                 Ok(())
             } else {
-                Err(CompileError::new("failed to inject EVM messages".to_string(), None))
+                Err(CompileError::new(
+                    "failed to inject EVM messages".to_string(),
+                    None,
+                ))
             }
+        }
         Err(e) => {
             println!("Error reading in EVM file: {:?}", e);
             Err(CompileError::new(
@@ -148,7 +147,7 @@ pub fn send_inject_evm_messages_from_file(
                 None,
             ))
         }
-    }    
+    }
 }
 
 pub fn send_inject_evm_messages(evm_json: serde_json::Value, env: &mut RuntimeEnvironment) -> bool {
@@ -164,9 +163,13 @@ pub fn send_inject_evm_messages(evm_json: serde_json::Value, env: &mut RuntimeEn
                 let decoded_insns = hex::decode(&code_str[2..]).unwrap();
 
                 // strip cbor info
-                let cbor_length = u16::from_be_bytes(decoded_insns[decoded_insns.len()-2..].try_into().expect("unexpected u16 parsing error"));
+                let cbor_length = u16::from_be_bytes(
+                    decoded_insns[decoded_insns.len() - 2..]
+                        .try_into()
+                        .expect("unexpected u16 parsing error"),
+                );
                 let cbor_length = cbor_length as usize;
-                let decoded_insns = &decoded_insns[..(decoded_insns.len()-cbor_length-2)];
+                let decoded_insns = &decoded_insns[..(decoded_insns.len() - cbor_length - 2)];
 
                 let mut storage_map = Value::none();
                 if let serde_json::Value::Object(m) = &items["storage"] {
@@ -181,7 +184,7 @@ pub fn send_inject_evm_messages(evm_json: serde_json::Value, env: &mut RuntimeEn
                             return false;
                         }
                     }
-                } 
+                }
 
                 let address = Uint256::zero();
                 let seq_num = env.get_and_incr_seq_num(&address);
@@ -203,10 +206,13 @@ pub fn send_inject_evm_messages(evm_json: serde_json::Value, env: &mut RuntimeEn
         true
     } else {
         false
-    }    
+    }
 }
 
-pub fn compile_from_json(evm_json: serde_json::Value, debug: bool) -> Result<Vec<LinkedProgram>, CompileError> {
+pub fn compile_from_json(
+    evm_json: serde_json::Value,
+    debug: bool,
+) -> Result<Vec<LinkedProgram>, CompileError> {
     if let serde_json::Value::Array(contracts) = evm_json {
         let mut linked_contracts = Vec::new();
         let mut label_gen = LabelGenerator::new();
@@ -216,22 +222,23 @@ pub fn compile_from_json(evm_json: serde_json::Value, debug: bool) -> Result<Vec
                 let storage_info_struct = compiled_contract.get_storage_info_struct();
                 let linked_contract = postlink_compile(
                     link(
-                        &[
-                            CompiledProgram::new(
-                                compiled_contract.code,
-                                vec![],
-                                vec![],
-                                0,
-                                None
-                            ),
-                        ],
+                        &[CompiledProgram::new(
+                            compiled_contract.code,
+                            vec![],
+                            vec![],
+                            0,
+                            None,
+                        )],
                         true,
                         Some(storage_info_struct),
-                    ).unwrap(),  // BUGBUG--this should handle errors gracefully, not just panic 
+                        false,
+                    )
+                    .unwrap(), // BUGBUG--this should handle errors gracefully, not just panic
                     true,
                     compiled_contract.evm_pcs,
-                    debug
-                ).unwrap();  //BUGBUG--this should handle errors gracefully, not just panic
+                    debug,
+                )
+                .unwrap(); //BUGBUG--this should handle errors gracefully, not just panic
                 linked_contracts.push(linked_contract);
                 label_gen = lg;
             } else {
@@ -270,9 +277,13 @@ pub fn compile_from_evm_contract(
     let decoded_insns = hex::decode(&code_str[2..]).unwrap();
 
     // strip cbor info
-    let cbor_length = u16::from_be_bytes(decoded_insns[decoded_insns.len()-2..].try_into().expect("unexpected u16 parsing error"));
+    let cbor_length = u16::from_be_bytes(
+        decoded_insns[decoded_insns.len() - 2..]
+            .try_into()
+            .expect("unexpected u16 parsing error"),
+    );
     let cbor_length = cbor_length as usize;
-    let decoded_insns = &decoded_insns[..(decoded_insns.len()-cbor_length-2)];
+    let decoded_insns = &decoded_insns[..(decoded_insns.len() - cbor_length - 2)];
 
     let mut evm_pcs = Vec::new();
     let mut i = 0;
@@ -609,8 +620,8 @@ pub fn compile_evm_insn(
             code.push(Instruction::from_opcode(Opcode::Swap1, None));
             code.push(Instruction::from_opcode(Opcode::Not, None));
             code.push(Instruction::from_opcode_imm(
-                Opcode::Cjump, 
-                Value::Label(not_taken_label), 
+                Opcode::Cjump,
+                Value::Label(not_taken_label),
                 None
             ));
             let (c, lg, mpc) = evm_emulate(code, lg, evm_func_map, "evmOp_getjumpaddr")?;
@@ -795,7 +806,8 @@ fn evm_emulate(
     }
 }
 
-const EMULATION_FUNCS: [&str; 42] = [  // If you modify this, be sure to regenerate the EVM jumptable
+const EMULATION_FUNCS: [&str; 42] = [
+    // If you modify this, be sure to regenerate the EVM jumptable
     "evmOp_stop",
     "evmOp_sar",
     "evmOp_sha3",
@@ -871,11 +883,17 @@ fn imported_funcs_for_evm() -> (Vec<ImportedFunc>, StringTable<'static>) {
         string_table.get(name);
     }
     for (i, name) in EMULATION_FUNCS.iter().enumerate() {
-        imp_funcs.push(ImportedFunc::new(i, string_table.get(name), &string_table));
+        imp_funcs.push(ImportedFunc::new(
+            i,
+            string_table.get(name),
+            &string_table,
+            vec![],
+            Type::Void,
+            true,
+        ));
     }
     (imp_funcs, string_table)
 }
-
 
 pub fn make_evm_jumptable_mini(filepath: &Path) -> Result<(), io::Error> {
     let path = Path::new(filepath);
@@ -885,23 +903,38 @@ pub fn make_evm_jumptable_mini(filepath: &Path) -> Result<(), io::Error> {
     let mut file = match File::create(&path) {
         Err(why) => panic!("couldn't create {}: {}", display, why.to_string()),
         Ok(file) => file,
-    }; 
+    };
     writeln!(file, "// Automatically generated file -- do not edit")?;
     for name in EMULATION_FUNCS.iter() {
         writeln!(file, "import func {}();", name)?;
     }
     writeln!(file, "")?;
-    writeln!(file, "var evm_jumptable: [{}]func();", EMULATION_FUNCS.len())?;
+    writeln!(
+        file,
+        "var evm_jumptable: [{}]func();",
+        EMULATION_FUNCS.len()
+    )?;
     writeln!(file, "")?;
     writeln!(file, "public func init_evm_jumptable() {{")?;
     writeln!(file, "    evm_jumptable = evm_jumptable")?;
     for (i, name) in EMULATION_FUNCS.iter().enumerate() {
-        writeln!(file, "        with {{ [{}] = unsafecast<func()>({}) }}", i, name)?;
+        writeln!(
+            file,
+            "        with {{ [{}] = unsafecast<func()>({}) }}",
+            i, name
+        )?;
     }
     writeln!(file, "        ;")?;
     writeln!(file, "}}")?;
-    write!(file, "\npublic func evm_jumptable_get(idx: uint) -> option<func()>\n{{\n")?;
-    write!(file, "    if (idx >= {}) {{\n        return None<func()>;\n    }} else {{\n", EMULATION_FUNCS.len())?;
+    write!(
+        file,
+        "\npublic func evm_jumptable_get(idx: uint) -> option<func()>\n{{\n"
+    )?;
+    write!(
+        file,
+        "    if (idx >= {}) {{\n        return None<func()>;\n    }} else {{\n",
+        EMULATION_FUNCS.len()
+    )?;
     write!(file, "        return Some(evm_jumptable[idx]);\n")?;
     write!(file, "    }}\n}}\n")?;
     Ok(())

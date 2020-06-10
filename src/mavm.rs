@@ -14,10 +14,10 @@
  * limitations under the License.
  */
 
+use crate::evm::runtime_func_name;
 use crate::pos::Location;
 use crate::stringtable::StringId;
 use crate::uint256::Uint256;
-use crate::evm::runtime_func_name;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fmt;
@@ -26,9 +26,9 @@ use std::fmt;
 pub enum Label {
     Func(StringId),
     Anon(usize),
-    External(usize),  // slot in imported funcs list
-    Runtime(usize),   // function exported by the trusted runtime
-    Evm(usize),       // program counter in EVM contract
+    External(usize), // slot in imported funcs list
+    Runtime(usize),  // function exported by the trusted runtime
+    Evm(usize),      // program counter in EVM contract
 }
 
 impl Label {
@@ -61,8 +61,12 @@ impl Label {
                 &Value::Int(Uint256::from_usize(6)),
                 &Value::Int(Uint256::from_usize(*n)),
             ),
-            Label::Runtime(_) => { panic!("tried to avm_hash a runtime call index"); },
-            Label::Evm(_) => { panic!("tried to avm_hash an EVM label"); }
+            Label::Runtime(_) => {
+                panic!("tried to avm_hash a runtime call index");
+            }
+            Label::Evm(_) => {
+                panic!("tried to avm_hash an EVM label");
+            }
         }
     }
 }
@@ -224,10 +228,10 @@ impl fmt::Display for Instruction {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum CodePt {
     Internal(usize),
-    External(usize), // slot in imported funcs list
-    Runtime(usize),   // slot in runtime funcs list
-    InSegment(usize, usize),   // in code segment, at offset
-    Null,            // initial value of the Error Codepoint register
+    External(usize),         // slot in imported funcs list
+    Runtime(usize),          // slot in runtime funcs list
+    InSegment(usize, usize), // in code segment, at offset
+    Null,                    // initial value of the Error Codepoint register
 }
 
 impl CodePt {
@@ -250,8 +254,13 @@ impl CodePt {
     pub fn incr(&self) -> Option<Self> {
         match self {
             CodePt::Internal(pc) => Some(CodePt::Internal(pc + 1)),
-            CodePt::InSegment(seg, offset) => 
-                if *offset == 0 { None } else { Some(CodePt::InSegment(*seg, offset-1)) },
+            CodePt::InSegment(seg, offset) => {
+                if *offset == 0 {
+                    None
+                } else {
+                    Some(CodePt::InSegment(*seg, offset - 1))
+                }
+            }
             CodePt::External(_) => None,
             CodePt::Runtime(_) => None,
             CodePt::Null => None,
@@ -292,7 +301,7 @@ impl CodePt {
                 panic!("tried to avm_hash unlinked codepoint");
             }
             CodePt::Runtime(sz) => Value::avm_hash2(
-                &Value::Int(Uint256::from_usize(5)), 
+                &Value::Int(Uint256::from_usize(5)),
                 &Value::Int(Uint256::from_usize(*sz)),
             ),
             CodePt::InSegment(_, _) => {
@@ -341,7 +350,9 @@ impl Value {
             Value::Int(_) => 0,
             Value::CodePoint(_) => 1,
             Value::Tuple(_) => 3,
-            Value::Label(_) => { panic!("tried to run type instruction on a label"); }
+            Value::Label(_) => {
+                panic!("tried to run type instruction on a label");
+            }
         }
     }
 
@@ -457,7 +468,7 @@ impl Value {
                 for _i in 0..32 {
                     let low_byte = ui.modulo(&ui_mod).unwrap().to_usize().unwrap();
                     buf.push(low_byte as u8);
-                    ui = ui.div(&ui_mod).unwrap();  // safe because denominator is not zero
+                    ui = ui.div(&ui_mod).unwrap(); // safe because denominator is not zero
                 }
             }
             Value::Tuple(tup) => {
@@ -468,7 +479,7 @@ impl Value {
             }
             Value::CodePoint(CodePt::Internal(pc)) => {
                 buf.push(8);
-                let mut offset = module_size-pc;
+                let mut offset = module_size - pc;
                 for _i in 0..8 {
                     buf.push((offset % 256) as u8);
                     offset /= 256;
@@ -478,7 +489,9 @@ impl Value {
                 buf.push(9);
                 buf.push(*slot as u8);
             }
-            _ => { panic!("invalid immediate value in module instruction"); }
+            _ => {
+                panic!("invalid immediate value in module instruction");
+            }
         }
     }
 }
@@ -671,7 +684,7 @@ impl Opcode {
             0x19 => Some(Opcode::BitwiseNeg),
             0x1a => Some(Opcode::Byte),
             0x1b => Some(Opcode::SignExtend),
-            0x1c => Some(Opcode::NotEqual),  //BUGBUG: this should be eliminated, doesn't exist in AVM
+            0x1c => Some(Opcode::NotEqual), //BUGBUG: this should be eliminated, doesn't exist in AVM
             0x20 => Some(Opcode::Hash),
             0x21 => Some(Opcode::Type),
             0x22 => Some(Opcode::Hash2),
@@ -679,7 +692,7 @@ impl Opcode {
             0x31 => Some(Opcode::PushStatic),
             0x32 => Some(Opcode::Rget),
             0x33 => Some(Opcode::Rset),
-            0x34 => Some(Opcode::Jump),   
+            0x34 => Some(Opcode::Jump),
             0x35 => Some(Opcode::Cjump),
             0x36 => Some(Opcode::StackEmpty),
             0x37 => Some(Opcode::GetPC),
@@ -747,7 +760,7 @@ impl Opcode {
             Opcode::PushStatic => Some(0x31),
             Opcode::Rget => Some(0x32),
             Opcode::Rset => Some(0x33),
-            Opcode::Jump => Some(0x34),   
+            Opcode::Jump => Some(0x34),
             Opcode::Cjump => Some(0x35),
             Opcode::StackEmpty => Some(0x36),
             Opcode::GetPC => Some(0x37),
