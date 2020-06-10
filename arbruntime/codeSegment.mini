@@ -128,7 +128,7 @@ func parseAndAddInsn(seg: Segment, bs: ByteStream) -> option<(Segment, ByteStrea
                     bs
                 ));
             } else {
-                if let Some(res3) = parseAvmValue(bs) {
+                if let Some(res3) = parseAvmValue(bs, seg) {
                     bs = res3.0;
                     let val = res3.1;
                     return Some((
@@ -147,7 +147,7 @@ func parseAndAddInsn(seg: Segment, bs: ByteStream) -> option<(Segment, ByteStrea
     }
 }
 
-func parseAvmValue(bs: ByteStream) -> option<(ByteStream, any)>{
+func parseAvmValue(bs: ByteStream, seg: Segment) -> option<(ByteStream, any)>{
     let kind = 0;
     if let Some(res) = bytestream_getByte(bs) {
         bs = res.0;
@@ -161,6 +161,17 @@ func parseAvmValue(bs: ByteStream) -> option<(ByteStream, any)>{
         return bytestream_getUint(bs);
     } elseif (kind == 8) {
         // parse and return a codepoint inside the segment, as 64-bit int
+        if let Some(res) = bytestream_get64(bs) {
+            bs = res.0;
+            let pc = res.1;
+            if let Some(cp) = seg.codePtMap[pc] {
+                return Some((bs, cp));
+            } else {
+                return None<(ByteStream, any)>;
+            }
+        } else {
+            return None<(ByteStream, any)>;
+        }
         return bytestream_get64(bs);  //BUGBUG -- need to convert to codepoint, I think
     } elseif (kind == 9) {
         // parse and return a codepoint of a runtime call, as byte
@@ -181,7 +192,7 @@ func parseAvmValue(bs: ByteStream) -> option<(ByteStream, any)>{
             let ret = newfixedarray(1);
             let i = 0;
             while (i < kind-16) {
-                if let Some(res) = parseAvmValue(bs) {
+                if let Some(res) = parseAvmValue(bs, seg) {
                     bs = res.0;
                     ret = ret with { [i] = res.1 };
                 } else {
@@ -194,7 +205,7 @@ func parseAvmValue(bs: ByteStream) -> option<(ByteStream, any)>{
             let ret = newfixedarray(2);
             let i = 0;
             while (i < kind-16) {
-                if let Some(res) = parseAvmValue(bs) {
+                if let Some(res) = parseAvmValue(bs, seg) {
                     bs = res.0;
                     ret = ret with { [i] = res.1 };
                 } else {
@@ -207,7 +218,7 @@ func parseAvmValue(bs: ByteStream) -> option<(ByteStream, any)>{
             let ret = newfixedarray(3);
             let i = 0;
             while (i < kind-16) {
-                if let Some(res) = parseAvmValue(bs) {
+                if let Some(res) = parseAvmValue(bs, seg) {
                     bs = res.0;
                     ret = ret with { [i] = res.1 };
                 } else {
@@ -220,7 +231,7 @@ func parseAvmValue(bs: ByteStream) -> option<(ByteStream, any)>{
             let ret = newfixedarray(4);
             let i = 0;
             while (i < kind-16) {
-                if let Some(res) = parseAvmValue(bs) {
+                if let Some(res) = parseAvmValue(bs, seg) {
                     bs = res.0;
                     ret = ret with { [i] = res.1 };
                 } else {
@@ -233,7 +244,7 @@ func parseAvmValue(bs: ByteStream) -> option<(ByteStream, any)>{
             let ret = newfixedarray(5);
             let i = 0;
             while (i < kind-16) {
-                if let Some(res) = parseAvmValue(bs) {
+                if let Some(res) = parseAvmValue(bs, seg) {
                     bs = res.0;
                     ret = ret with { [i] = res.1 };
                 } else {
@@ -246,7 +257,7 @@ func parseAvmValue(bs: ByteStream) -> option<(ByteStream, any)>{
             let ret = newfixedarray(6);
             let i = 0;
             while (i < kind-16) {
-                if let Some(res) = parseAvmValue(bs) {
+                if let Some(res) = parseAvmValue(bs, seg) {
                     bs = res.0;
                     ret = ret with { [i] = res.1 };
                 } else {
@@ -259,7 +270,7 @@ func parseAvmValue(bs: ByteStream) -> option<(ByteStream, any)>{
             let ret = newfixedarray(7);
             let i = 0;
             while (i < kind-16) {
-                if let Some(res) = parseAvmValue(bs) {
+                if let Some(res) = parseAvmValue(bs, seg) {
                     bs = res.0;
                     ret = ret with { [i] = res.1 };
                 } else {
@@ -272,7 +283,7 @@ func parseAvmValue(bs: ByteStream) -> option<(ByteStream, any)>{
             let ret = newfixedarray(8);
             let i = 0;
             while (i < kind-16) {
-                if let Some(res) = parseAvmValue(bs) {
+                if let Some(res) = parseAvmValue(bs, seg) {
                     bs = res.0;
                     ret = ret with { [i] = res.1 };
                 } else {
