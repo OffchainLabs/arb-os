@@ -16,8 +16,7 @@
 
 use crate::run::runtime_env::bytestack_from_bytes;
 use crate::link::LinkedProgram;
-use crate::mavm::{CodePt, Value, Instruction, Opcode};
-use crate::uint256::Uint256;
+use crate::mavm::{CodePt, Value};
 use emulator::{ExecutionError, Machine, StackTrace};
 use runtime_env::RuntimeEnvironment;
 use std::fs::File;

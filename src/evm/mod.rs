@@ -14,8 +14,7 @@
  * limitations under the License.
  */
 
-use crate::build_builtins::BuiltinArray;
-use crate::compile::{CompileError, CompiledProgram, SourceFileMap, Type};
+use crate::compile::{CompileError, CompiledProgram, Type};
 use crate::link::{link, postlink_compile, ImportedFunc, LinkedProgram};
 use crate::mavm::{Instruction, Label, LabelGenerator, Opcode, Value};
 use crate::stringtable::StringTable;
