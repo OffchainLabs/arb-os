@@ -871,7 +871,15 @@ fn imported_funcs_for_evm() -> (Vec<ImportedFunc>, StringTable<'static>) {
         string_table.get(name);
     }
     for (i, name) in EMULATION_FUNCS.iter().enumerate() {
-        imp_funcs.push(ImportedFunc::new(i, string_table.get(name), &string_table));
+        //TODO: fix this to work with imported func signatures
+        imp_funcs.push(ImportedFunc::new(
+            i,
+            string_table.get(name),
+            &string_table,
+            vec![Type::Any],
+            Type::Any,
+            true,
+        ));
     }
     (imp_funcs, string_table)
 }

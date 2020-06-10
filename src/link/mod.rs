@@ -95,23 +95,33 @@ pub struct ImportedFunc {
     pub name_id: StringId,
     pub slot_num: usize,
     pub name: String,
+    pub arg_types: Vec<Type>,
+    pub ret_type: Type,
+    pub is_impure: bool,
 }
 
 impl ImportedFunc {
-    pub fn new(slot_num: usize, name_id: StringId, string_table: &StringTable) -> Self {
+    pub fn new(
+        slot_num: usize,
+        name_id: StringId,
+        string_table: &StringTable,
+        arg_types: Vec<Type>,
+        ret_type: Type,
+        is_impure: bool,
+    ) -> Self {
         ImportedFunc {
             name_id,
             slot_num,
             name: string_table.name_from_id(name_id).to_string(),
+            arg_types,
+            ret_type,
+            is_impure,
         }
     }
 
-    pub fn relocate(self, _int_offset: usize, ext_offset: usize) -> Self {
-        ImportedFunc {
-            name_id: self.name_id,
-            slot_num: self.slot_num + ext_offset,
-            name: self.name,
-        }
+    pub fn relocate(mut self, _int_offset: usize, ext_offset: usize) -> Self {
+        self.slot_num += ext_offset;
+        self
     }
 }
 
@@ -173,7 +183,7 @@ impl<'a> ExportedFunc {
     }
 }
 
-pub fn postlink_compile<'a>(
+pub fn postlink_compile(
     program: CompiledProgram,
     is_module: bool,
     evm_pcs: Vec<usize>,  // ignored unless we're in a module
@@ -340,10 +350,34 @@ pub fn link<'a>(
     let mut exports_map = HashMap::new();
     let mut label_xlate_map = HashMap::new();
     for exp in &linked_exports {
-        exports_map.insert(exp.name.clone(), exp.label);
+        exports_map.insert(exp.name.clone(), (exp.label, exp.tipe.clone()));
     }
     for imp in &linked_imports {
-        if let Some(label) = exports_map.get(&imp.name) {
+        if let Some((label, tipe)) = exports_map.get(&imp.name) {
+            if *tipe
+                != Type::Func(
+                    imp.is_impure,
+                    imp.arg_types.clone(),
+                    Box::new(imp.ret_type.clone()),
+                )
+            {
+                println!(
+                    "Warning: {:?}",
+                    CompileError::new(
+                        format!(
+                            "Imported type \"{:?}\" doesn't match exported type, \"{:?}\" in function {}",
+                            Type::Func(
+                                imp.is_impure,
+                                imp.arg_types.clone(),
+                                Box::new(imp.ret_type.clone())
+                            ),
+                            tipe,
+                            imp.name
+                        ),
+                        None
+                    )
+                );
+            }
             label_xlate_map.insert(Label::External(imp.slot_num), label);
         }
     }
