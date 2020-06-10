@@ -158,6 +158,8 @@ pub fn module_from_file_path(module_path: &Path) -> Option<Value> {
 
 #[test]
 fn test_inbox_and_log() {
+    use crate::uint256::Uint256;
+    use crate::mavm::{Instruction,Opcode};
     let val = Value::Int(Uint256::from_usize(3));
     let logs = run_with_msgs(
         LinkedProgram {

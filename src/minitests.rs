@@ -191,9 +191,9 @@ fn test_runtime1() {
 }
 
 // #[test]  disabled because we're using a different EVM upload approach
-fn test_runtime_add() {
+/*fn test_runtime_add() {
     run_using_runtime("evm-add.mexe", vec![Value::Int(Uint256::from_usize(777))]);
-}
+}*/
 
 fn run_using_runtime(filename: &str, expected_result: Vec<Value>) {
     let loader_path = Path::new("arbruntime/runtime.mexe");
