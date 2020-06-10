@@ -5,7 +5,7 @@ STDDIR = stdlib
 test: all
 	cargo test --release
 
-LOADERTESTS = arbruntime/loader.mexe minitests/loadertest1.mexe
+LOADERTESTS = arbruntime/loader.mexe minitests/loadertest1.mexe minitests/loadertest2.mexe
 TESTEXES = $(BUILTINDIR)/kvstest.mexe $(STDDIR)/queuetest.mexe $(BUILTINDIR)/arraytest.mexe $(BUILTINDIR)/globaltest.mexe $(STDDIR)/priorityqtest.mexe $(STDDIR)/bytearraytest.mexe $(STDDIR)/keccaktest.mexe $(BUILTINDIR)/maptest.mexe minitests/codeloadtest.mexe $(LOADERTESTS)
 BUILTINMAOS = $(BUILTINDIR)/array.mao $(BUILTINDIR)/kvs.mao
 STDLIBMAOS = $(STDDIR)/bytearray.mao $(STDDIR)/priorityq.mao $(STDDIR)/random.mao $(STDDIR)/queue.mao $(STDDIR)/keccak.mao $(STDDIR)/bytestream.mao
@@ -36,6 +36,9 @@ minitests/codeloadtest.mexe: minitests/codeloadtest.mini
 
 minitests/loadertest1.mexe: minitests/loadertest1.mini
 	cargo run compile minitests/loadertest1.mini -m -o minitests/loadertest1.mexe
+
+minitests/loadertest2.mexe: minitests/loadertest2.mini
+	cargo run compile minitests/loadertest2.mini -m -o minitests/loadertest2.mexe
 
 $(STDDIR)/keccaktest.mexe: $(BUILTINMAOS) $(STDDIR)/keccaktest.mini $(STDDIR)/keccak.mao $(STDDIR)/bytearray.mao
 	cargo run compile $(STDDIR)/keccaktest.mini $(STDDIR)/keccak.mao $(STDDIR)/bytearray.mao -o $(STDDIR)/keccaktest.mexe

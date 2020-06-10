@@ -197,6 +197,11 @@ fn test_loader1() {
     run_using_loader("minitests/loadertest1.mexe", vec![Value::Int(Uint256::from_usize(777))]);
 }
 
+#[test]
+fn test_loader2() {
+    run_using_loader("minitests/loadertest2.mexe", vec![Value::Int(Uint256::from_usize(120))]);
+}
+
 fn run_using_loader(filename: &str, expected_result: Vec<Value>) {
     let loader_path = Path::new("arbruntime/loader.mexe");
     let module_path = Path::new(filename);
