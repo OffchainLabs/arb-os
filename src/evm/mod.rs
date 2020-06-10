@@ -900,6 +900,6 @@ pub fn make_evm_jumptable_mini(filepath: &Path) -> Result<(), io::Error> {
     }
     writeln!(file, "        ;")?;
     writeln!(file, "}}")?;
-    write!(file, "\npublic func evm_jumptable_get(idx: uint) -> func()\n{{\n    return evm_jumptable[idx];\n}}\n")?;
+    write!(file, "\npublic func evm_jumptable_get(idx: uint) -> option<func()>\n{{\n    return evm_jumptable[idx];\n}}\n")?;
     Ok(())
 }

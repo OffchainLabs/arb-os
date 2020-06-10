@@ -125,12 +125,12 @@ public func builtin_arraySwap(a: array, index: uint, value: any) -> (array, any)
 	);
 }
 
-public func builtin_arraySwapSafe(a: array, index: uint, value: any) -> (array, option<any>) {
+public func builtin_arraySwapSafe(a: array, index: uint, value: any) -> option<(array, any)> {
 	if (index >= a.size) {
-		return (a, None<any>);
+		return None<(array, any)>;
 	}
 	let (aOut, valOut) = builtin_arraySwap(a, index, value);
-	return (aOut, Some(valOut));
+	return Some((aOut, valOut));
 }
 
 type arraySwapSubResult = struct {
@@ -172,12 +172,12 @@ public func builtin_arrayOp(a: array, index: uint, closure: opClosure) -> (array
 	);
 }
 
-public func builtin_arrayOpSafe(a: array, index: uint, closure: opClosure) -> (array, option<any>) {
+public func builtin_arrayOpSafe(a: array, index: uint, closure: opClosure) -> option<(array, any)> {
 	if (index >= a.size) {
-		return (a, None<any>);
+		return None<(array, any)>;
 	}
 	let (aOut, valOut) = builtin_arrayOp(a, index, closure);
-	return (aOut, Some(valOut));
+	return Some((aOut, valOut));
 }
 
 func arrayOp2(b: block, chunk: uint, index: uint, closure: opClosure) -> arraySwapSubResult {
@@ -216,17 +216,17 @@ public func builtin_arrayOpConsecutiveSafe(
 	index: uint, 
 	closure1: opClosure, 
 	closure2: opClosure
-) -> (array, option<(any, any)>) { 	
-	let (arr1, maybeRet1) = builtin_arrayOpSafe(a, index, closure1);
-	if let Some(ret1) = maybeRet1 {
-		let (arr2, maybeRet2) = builtin_arrayOpSafe(arr1, index+1, closure2);
-		if let Some(ret2) = maybeRet2 {
-			return (arr2, Some((ret1, ret2)));
+) -> option<(array, any, any)> {
+	if let Some(res1) = builtin_arrayOpSafe(a, index, closure1) { 	
+		let (arr1, ret1) = res1;
+		if let Some(res2) = builtin_arrayOpSafe(arr1, index+1, closure2) {
+			let (arr2, ret2) = res2;
+			return Some((arr2, ret1, ret2));
 		} else {
-			return (a, None<(any, any)>);
+			return None<(array, any, any)>;
 		}
 	} else {
-		return (a, None<(any, any)>);
+		return None<(array, any, any)>;
 	}
 }
 

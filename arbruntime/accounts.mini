@@ -83,7 +83,7 @@ public func account_isEmpty(acct: Account) -> bool {
 public func account_checkAndIncrSeqNum(
     account: Account, 
     seqNumRecvd: uint
-) -> (bool, Account) {
+) -> option<Account> {
     // if seqNumRecvd has the expected value, increment seqNum in account and return true
     // else just return false
     let nextSeq = account.nextSeqNum;
@@ -91,9 +91,9 @@ public func account_checkAndIncrSeqNum(
         account = account with {
             nextSeqNum: nextSeq+1
         };
-        return (true, account,);
+        return Some(account);
     } else {
-        return (false, account,);
+        return None<Account>;
     }
 }
 
@@ -108,7 +108,7 @@ public func account_fetchAndIncrSeqNum(account: Account) -> (uint, Account) {
 public func accountStore_createERC20(
     acctStore: AccountStore, 
     addr: address
-) -> (bool, AccountStore) {
+) -> option<AccountStore> {
     // returns true iff success
     if (account_isEmpty(accountStore_get(acctStore, addr))) {
         acctStore = accountStore_cloneContract(
@@ -116,16 +116,16 @@ public func accountStore_createERC20(
             tokens_getERC20template(), 
             addr
         );
-        return (true, acctStore,);
+        return Some(acctStore);
     } else {
-        return (false, acctStore,);
+        return None<AccountStore>;
     }
 }
 
 public func accountStore_createERC721(
     acctStore: AccountStore,
     addr: address
-) -> (bool, AccountStore) {
+) -> option<AccountStore> {
     // returns true iff success
     if (account_isEmpty(accountStore_get(acctStore, addr))) {
         acctStore = accountStore_cloneContract(
@@ -133,9 +133,9 @@ public func accountStore_createERC721(
             tokens_getERC721template(), 
             addr
         );
-        return (true, acctStore,);
+        return Some(acctStore);
     } else {
-        return (false, acctStore,);
+        return None<AccountStore>;
     }
 }
 
@@ -163,22 +163,22 @@ public func account_addToEthBalance(account: Account, addition: uint) -> Account
     return account with { ethBalance: account.ethBalance + addition };
 }
 
-// transfer eth; return true if transfer happened, or false if insufficient funds
+// transfer eth; return None if insufficient funds
 public func accountStore_transferEthBalance(
     acctStore: AccountStore,
     from: address, 
     to: address, 
     amount: uint
-) -> (bool, AccountStore) {
+) -> option<AccountStore> {
     let fromAcct = accountStore_get(acctStore, from);
     if (fromAcct.ethBalance < amount) {
-        return (false, acctStore,);
+        return None<AccountStore>;
     }
     let toAcct = accountStore_get(acctStore, to);
     acctStore = acctStore 
         with { [from] = fromAcct with { ethBalance: fromAcct.ethBalance - amount }}
         with { [to] = fromAcct with { ethBalance: toAcct.ethBalance + amount }};
-    return (true, acctStore,);
+    return Some(acctStore);
 }
 
 public func account_getAllStorage(account: Account) -> map<uint, uint> {

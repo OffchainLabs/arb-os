@@ -19,11 +19,11 @@ import type ByteStream;
 import func bytestream_atEof(bs: ByteStream) -> bool;
 import func bytestream_bytesReadSoFar(bs: ByteStream) -> uint;
 import func bytestream_bytesRemaining(bs: ByteStream) -> uint;
-import func bytestream_getByte(bs: ByteStream) -> (bool, ByteStream, uint);
-import func bytestream_get64(bs: ByteStream) -> (bool, ByteStream, uint);
-import func bytestream_getUint(bs: ByteStream) -> (bool, ByteStream, uint);
+import func bytestream_getByte(bs: ByteStream) -> option<(ByteStream, uint)>;
+import func bytestream_get64(bs: ByteStream) -> option<(ByteStream, uint)>;
+import func bytestream_getUint(bs: ByteStream) -> option<(ByteStream, uint)>;
 
-import func evm_jumptable_get(slot: uint) -> func();
+import func evm_jumptable_get(slot: uint) -> option<func()>;
 
 import func evmOp_address();
 import func evmOp_balance();
@@ -76,16 +76,19 @@ type Segment = struct {
 }
 
 
-public func unmarshalCodeSegment(bs: ByteStream) -> (bool, func() -> any, func()) {
-    let (success, ubs, numInsns,) = bytestream_getUint(bs);
-    if ( ! success) {
-        return (false, unsafecast<func()->any>(0), unsafecast<func()>(0),);
+public func unmarshalCodeSegment(bs: ByteStream) -> option<(func() -> any, func())> {
+    let numInsns = 0;
+    if let Some(res) = bytestream_getUint(bs) {
+        let (ubs, ni) = res;
+        bs = ubs;
+        numInsns = ni;
+    } else {
+        return None<(func() -> any, func())>;
     }
-    bs = ubs;
 
     if (bytestream_bytesRemaining(bs) > 1000000) {
         // reject module as too large
-        return (false, unsafecast<func()->any>(0), unsafecast<func()>(0),);
+        return None<(func() -> any, func())>;
     }
 
     let seg = segment_new(numInsns);
@@ -94,188 +97,193 @@ public func unmarshalCodeSegment(bs: ByteStream) -> (bool, func() -> any, func()
     while (seg.size < seg.capacity) {
         twoAgo = oneAgo;
         oneAgo = seg.currentCodePt;
-        let (success, uSeg, ubs,) = parseAndAddInsn(seg, bs);
-        if (! success) {
-            return (false, unsafecast<func()->any>(0), unsafecast<func()>(0),);
+        if let Some(res) = parseAndAddInsn(seg, bs) {
+            seg = res.0;
+            bs = res.1;
+        } else {
+            return None<(func() -> any, func())>;
         }
-        seg = uSeg;
-        bs = ubs;
     }
 
     seg = segment_close(seg);
-    return (
-        true, 
+    return Some((
         unsafecast<func()->any>(seg.currentCodePt), 
-        twoAgo,
-    );
+        twoAgo
+    ));
 }
 
-func parseAndAddInsn(seg: Segment, bs: ByteStream) -> (bool, Segment, ByteStream) {
-    let (success, ubs, opcode,) = bytestream_getByte(bs);
-    if ( ! success) {
-        return (false, seg, bs,);
-    }
-    bs = ubs;
-    if (opcode == 0) {
-        return (false, seg, bs,);
-    }
-    let (success, ubs, isImm,) = bytestream_getByte(bs);
-    if ( ! success) {
-        return (false, seg, bs,);
-    }
-    bs = ubs;
-    if (isImm == 0) {
-        return (
-            true, 
-            segment_addInsn(seg, opcode, false, 0), 
-            bs,
-        );
-    } else {
-        let (success, ubs, val,) = parseAvmValue(bs);
-        if ( ! success) {
-            return (false, seg, bs,);
+func parseAndAddInsn(seg: Segment, bs: ByteStream) -> option<(Segment, ByteStream)> {
+    if let Some(res) = bytestream_getByte(bs) {
+        bs = res.0;
+        let opcode = res.1;
+        if (opcode == 0) {
+            return None<(Segment, ByteStream)>;
         }
-        return (
-            true, 
-            segment_addInsn(seg, opcode, true, val), 
-            ubs,
-        );
+        if let Some(res2) = bytestream_getByte(bs) {
+            bs = res2.0;
+            let isImm = res2.1;
+            if (isImm == 0) {
+                return Some((
+                    segment_addInsn(seg, opcode, false, 0),
+                    bs
+                ));
+            } else {
+                if let Some(res3) = parseAvmValue(bs) {
+                    bs = res3.0;
+                    let val = res3.1;
+                    return Some((
+                        segment_addInsn(seg, opcode, true, val),
+                        bs
+                    ));
+                } else {
+                    return None<(Segment, ByteStream)>;
+                }
+            }
+        } else {
+            return None<(Segment, ByteStream)>;
+        }
+    } else {
+        return None<(Segment, ByteStream)>;
     }
 }
 
-func parseAvmValue(bs: ByteStream) -> (bool, ByteStream, any) {
-    let (success, ubs, kind,) = bytestream_getByte(bs);
-    if ( ! success) {
-        return (false, bs, 0,);
+func parseAvmValue(bs: ByteStream) -> option<(ByteStream, any)>{
+    let kind = 0;
+    if let Some(res) = bytestream_getByte(bs) {
+        bs = res.0;
+        kind = res.1;
+    } else {
+        return None<(ByteStream, any)>;
     }
-    bs = ubs;
+
     if (kind == 0) {
         // parse and return an int
-        let (success, ubs, val,) = bytestream_getUint(bs);
-        if (success) {
-            return (true, ubs, val,);
-        } else {
-            return (false, bs, 0,);
-        }
+        return bytestream_getUint(bs);
     } elseif (kind == 8) {
         // parse and return a codepoint inside the segment, as 64-bit int
-        let (success, ubs, val,) = bytestream_get64(bs);
-        if (success) {
-            return (true, ubs, val,);
-        } else {
-            return (false, bs, 0,);
-        }
+        return bytestream_get64(bs);  //BUGBUG -- need to convert to codepoint
     } elseif (kind == 9) {
         // parse and return a codepoint of a runtime call, as byte
-        let (success, ubs, val,) = bytestream_getByte(bs);
-        if (success) {
-            return (true, ubs, evm_jumptable_get(val),);
+        if let Some(res) = bytestream_getByte(bs) {
+            bs = res.0;
+            if let Some(cp) = evm_jumptable_get(res.1) {
+                return Some((bs, cp));
+            } else {
+                return None<(ByteStream, any)>;
+            }
         } else {
-            return (false, bs, 0,);
+            return None<(ByteStream, any)>;
         }
     } elseif (kind >= 16 && kind <= 24) {
-        let tup = unsafecast<any>(0);
         if (kind == 16) {
-            return (true, bs, (),);
+            return Some((bs, ()));
         } elseif(kind == 17) {
             let ret = newfixedarray(1);
             let i = 0;
             while (i < kind-16) {
-                let (success, ubs, val,) = parseAvmValue(bs);
-                if ( ! success) {
-                    return (false, bs, 0,);
+                if let Some(res) = parseAvmValue(bs) {
+                    bs = res.0;
+                    ret = ret with { [i] = res.1 };
+                } else {
+                    return None<(ByteStream, any)>;
                 }
-                bs = ubs;
                 i = i+1;
             }
-            return (true, bs, ret,);
+            return Some((bs, ret));
         } elseif(kind == 18) {
             let ret = newfixedarray(2);
             let i = 0;
             while (i < kind-16) {
-                let (success, ubs, val,) = parseAvmValue(bs);
-                if ( ! success) {
-                    return (false, bs, 0,);
+                if let Some(res) = parseAvmValue(bs) {
+                    bs = res.0;
+                    ret = ret with { [i] = res.1 };
+                } else {
+                    return None<(ByteStream, any)>;
                 }
-                bs = ubs;
                 i = i+1;
             }
-            return (true, bs, ret,); 
+            return Some((bs, ret));
         } elseif(kind == 19) {
             let ret = newfixedarray(3);
             let i = 0;
             while (i < kind-16) {
-                let (success, ubs, val,) = parseAvmValue(bs);
-                if ( ! success) {
-                    return (false, bs, 0,);
+                if let Some(res) = parseAvmValue(bs) {
+                    bs = res.0;
+                    ret = ret with { [i] = res.1 };
+                } else {
+                    return None<(ByteStream, any)>;
                 }
-                bs = ubs;
                 i = i+1;
             }
-            return (true, bs, ret,);
+            return Some((bs, ret));
         } elseif(kind == 20) {
             let ret = newfixedarray(4);
             let i = 0;
             while (i < kind-16) {
-                let (success, ubs, val,) = parseAvmValue(bs);
-                if ( ! success) {
-                    return (false, bs, 0,);
+                if let Some(res) = parseAvmValue(bs) {
+                    bs = res.0;
+                    ret = ret with { [i] = res.1 };
+                } else {
+                    return None<(ByteStream, any)>;
                 }
-                bs = ubs;
                 i = i+1;
             }
-            return (true, bs, ret,);  
+            return Some((bs, ret));
         } elseif(kind == 21) {
             let ret = newfixedarray(5);
             let i = 0;
             while (i < kind-16) {
-                let (success, ubs, val,) = parseAvmValue(bs);
-                if ( ! success) {
-                    return (false, bs, 0,);
+                if let Some(res) = parseAvmValue(bs) {
+                    bs = res.0;
+                    ret = ret with { [i] = res.1 };
+                } else {
+                    return None<(ByteStream, any)>;
                 }
-                bs = ubs;
                 i = i+1;
             }
-            return (true, bs, ret,);  
+            return Some((bs, ret));  
         } elseif(kind == 22) {
             let ret = newfixedarray(6);
             let i = 0;
             while (i < kind-16) {
-                let (success, ubs, val,) = parseAvmValue(bs);
-                if ( ! success) {
-                    return (false, bs, 0,);
+                if let Some(res) = parseAvmValue(bs) {
+                    bs = res.0;
+                    ret = ret with { [i] = res.1 };
+                } else {
+                    return None<(ByteStream, any)>;
                 }
-                bs = ubs;
                 i = i+1;
             }
-            return (true, bs, ret,);   
+            return Some((bs, ret));   
         } elseif(kind == 23) {
             let ret = newfixedarray(7);
             let i = 0;
             while (i < kind-16) {
-                let (success, ubs, val,) = parseAvmValue(bs);
-                if ( ! success) {
-                    return (false, bs, 0,);
+                if let Some(res) = parseAvmValue(bs) {
+                    bs = res.0;
+                    ret = ret with { [i] = res.1 };
+                } else {
+                    return None<(ByteStream, any)>;
                 }
-                bs = ubs;
                 i = i+1;
             }
-            return (true, bs, ret,);  
+            return Some((bs, ret));  
         } else {   // kind==24 is the only possibility here
             let ret = newfixedarray(8);
             let i = 0;
             while (i < kind-16) {
-                let (success, ubs, val,) = parseAvmValue(bs);
-                if ( ! success) {
-                    return (false, bs, 0,);
+                if let Some(res) = parseAvmValue(bs) {
+                    bs = res.0;
+                    ret = ret with { [i] = res.1 };
+                } else {
+                    return None<(ByteStream, any)>;
                 }
-                bs = ubs;
                 i = i+1;
             }
-            return (true, bs, ret,);  
+            return Some((bs, ret));
         }
     } else {
-        return (false, bs, 0,);
+        return None<(ByteStream, any)>;
     }
 }
 
@@ -348,15 +356,22 @@ public func makeInitStructures(v: any) -> (map<uint, func()>, map<uint, uint>) {
     return (jumpTable, storageMap,);
 }
 
-public func translateEvmCodeSegment(bs: ByteStream) -> (bool, AvmCodePoint, map<uint, AvmCodePoint>) {
+public func translateEvmCodeSegment(
+    bs: ByteStream
+) -> option<(AvmCodePoint, map<uint, AvmCodePoint>)> {
     if (bytestream_atEof(bs)) {
-        return (true, asm() AvmCodePoint { errcodept }, newmap<uint, AvmCodePoint>,);
+        return Some((
+            asm() AvmCodePoint { errcodept }, 
+            newmap<uint, AvmCodePoint>
+        ));
     }
 
-    let (success, ubs, opcode,) = bytestream_getByte(bs);
-    bs = ubs;
-    if (! success) {
-        return (false, unsafecast<AvmCodePoint>(0), newmap<uint, AvmCodePoint>,);
+    let opcode = 0;
+    if let Some(res) = bytestream_getByte(bs) {
+        bs = res.0;
+        opcode = res.1;
+    } else {
+        return None<(AvmCodePoint, map<uint, AvmCodePoint>)>;
     }
 
     if ((opcode >= 0x60) && (opcode <= 0x7f)) {

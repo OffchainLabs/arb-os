@@ -17,9 +17,9 @@
 import type ByteArray;
 
 import func bytearray_size(ba: ByteArray) -> uint;
-import func bytearray_getByte(ba: ByteArray, offset: uint) -> uint;
-import func bytearray_get64(ba: ByteArray, offset: uint) -> uint;
-import func bytearray_get256(ba: ByteArray, offset: uint) -> uint;
+import func bytearray_getByte(ba: ByteArray, offset: uint) -> option<uint>;
+import func bytearray_get64(ba: ByteArray, offset: uint) -> option<uint>;
+import func bytearray_get256(ba: ByteArray, offset: uint) -> option<uint>;
 
 type ByteStream = struct {
     contents: ByteArray,
@@ -47,38 +47,47 @@ public func bytestream_bytesRemaining(bs: ByteStream) -> uint {
     return bs.capacity - bs.currentOffset;
 }
 
-public func bytestream_getByte(bs: ByteStream) -> (bool, ByteStream, uint) {
+public func bytestream_getByte(bs: ByteStream) -> option<(ByteStream, uint)> {
     if (bs.currentOffset >= bs.capacity) {
-        return (false, bs, 0,);
+        return None<(ByteStream, uint)>;
     } else {
-        return (
-            true,
-            bs with { currentOffset: bs.currentOffset+1 },
-            bytearray_getByte(bs.contents, bs.currentOffset),
-        );
+        if let Some(byteVal) = bytearray_getByte(bs.contents, bs.currentOffset) {
+            return Some((
+                bs with { currentOffset: bs.currentOffset+1 },
+                byteVal
+            ));
+        } else {
+            return None<(ByteStream, uint)>;
+        }
     }
 }
 
-public func bytestream_get64(bs: ByteStream) -> (bool, ByteStream, uint) {
+public func bytestream_get64(bs: ByteStream) -> option<(ByteStream, uint)> {
     if (bs.currentOffset+8 > bs.capacity) {
-        return (false, bs, 0,);
+        return None<(ByteStream, uint)>;
     } else {
-        return (
-            true,
-            bs with { currentOffset: bs.currentOffset+8 },
-            bytearray_get64(bs.contents, bs.currentOffset),
-        );
+        if let Some(byteVal) = bytearray_get64(bs.contents, bs.currentOffset) {
+            return Some((
+                bs with { currentOffset: bs.currentOffset+8 },
+                byteVal
+            ));
+        } else {
+            return None<(ByteStream, uint)>;
+        }
     }
 }
 
-public func bytestream_getUint(bs: ByteStream) -> (bool, ByteStream, uint) {
+public func bytestream_getUint(bs: ByteStream) -> option<(ByteStream, uint)> {
     if (bs.currentOffset+32 > bs.capacity) {
-        return (false, bs, 0,);
+        return None<(ByteStream, uint)>;
     } else {
-        return (
-            true,
-            bs with { currentOffset: bs.currentOffset+32 },
-            bytearray_get256(bs.contents, bs.currentOffset),
-        );
+        if let Some(byteVal) = bytearray_get256(bs.contents, bs.currentOffset) {
+            return Some((
+                bs with { currentOffset: bs.currentOffset+8 },
+                byteVal
+            ));
+        } else {
+            return None<(ByteStream, uint)>;
+        }
     }
 }
