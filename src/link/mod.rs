@@ -289,8 +289,12 @@ pub fn link(
         .iter()
         .map(|prog| (prog.clone(), typecheck))
         .collect();
-    let progs = add_auto_link_progs(&progs_in)?;
-    let mut insns_so_far: usize = 1; // leave 1 insn of space at beginning for initialization
+    let progs = if is_module {
+        progs_in.to_vec()
+    } else {
+        add_auto_link_progs(&progs_in)?
+    };
+    let mut insns_so_far: usize = if is_module { 2 } else { 1 }; // leave 1 insn of space at beginning for initialization
     let mut imports_so_far: usize = 0;
     let mut int_offsets = Vec::new();
     let mut ext_offsets = Vec::new();
