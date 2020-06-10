@@ -83,7 +83,7 @@ public func bytestream_getUint(bs: ByteStream) -> option<(ByteStream, uint)> {
     } else {
         if let Some(byteVal) = bytearray_get256(bs.contents, bs.currentOffset) {
             return Some((
-                bs with { currentOffset: bs.currentOffset+8 },
+                bs with { currentOffset: bs.currentOffset+32 },
                 byteVal
             ));
         } else {

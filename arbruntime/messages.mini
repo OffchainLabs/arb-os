@@ -29,7 +29,7 @@ import func accountStore_transferEthBalance(
     from: address, 
     to: address, 
     amount: uint
-) -> (bool, AccountStore);
+) -> option<AccountStore>;
 import func accountStore_createAccountFromEvmCode(
     acctStore: AccountStore,
     evmCode: ByteArray,
@@ -40,12 +40,12 @@ import func accountStore_createAccountFromEvmCode(
 import func account_checkAndIncrSeqNum(
     account: Account, 
     seqNumRecvd: uint
-) -> (bool, Account);
+) -> option<Account>;
 import func bytearray_unmarshalBytes(mb: MarshalledBytes) -> ByteArray;
 import func bytestream_new(ba: ByteArray) -> ByteStream;
-import func unmarshalCodeSegment(bs: ByteStream) -> (bool, func()->any, func());
+import func unmarshalCodeSegment(bs: ByteStream) -> option<(func()->any, func())>;
 import func makeInitStructures(v: any) -> (map<uint, func()>, map<uint, uint>);
-import func translateEvmCodeSegment(bs: ByteStream) -> (bool, func(), map<uint, func()>);
+import func translateEvmCodeSegment(bs: ByteStream) -> option<(func(), map<uint, func()>)>;
 
 
 type ArbMessage = struct {
@@ -100,8 +100,7 @@ public impure func handleEthbridgeMessage(msg: ArbMessage) {
         let txMsg = unsafecast<TxMessage>(msg.message);
         let globalAS = getGlobalAccountStore();
         let account = accountStore_get(globalAS, msg.sender);
-        let (success, updatedAcct,) = account_checkAndIncrSeqNum(account, txMsg.seqNumber);
-        if (success) {
+        if let Some(updatedAcct) = account_checkAndIncrSeqNum(account, txMsg.seqNumber) {
             setGlobalAccountStore(
                 accountStore_set(globalAS, msg.sender, updatedAcct),
             );
@@ -114,13 +113,12 @@ public impure func handleEthbridgeMessage(msg: ArbMessage) {
     } elseif (msgType == 1) {
         let depMsg = unsafecast<EthTransferMessage>(msg.message);
         let globalAS = getGlobalAccountStore();
-        let (success, newGAS,) = accountStore_transferEthBalance(
+        if let Some(newGAS) = accountStore_transferEthBalance(
             globalAS, 
             msg.sender, 
             depMsg.dest, 
             depMsg.amount
-        );
-        if (success) {
+        ) {
             setGlobalAccountStore(newGAS,);
             panic; // TODO
         } else {
@@ -141,15 +139,14 @@ public impure func handleEthbridgeMessage(msg: ArbMessage) {
         let codeLoadMsg = unsafecast<AvmCodeLoadMessage>(msg.message);
         let globalAS = getGlobalAccountStore();
         let account = accountStore_get(globalAS, msg.sender);
-        let (success, updatedAcct,) = account_checkAndIncrSeqNum(account, codeLoadMsg.seqNum);
-        if (success) {
+        if let Some(updatedAcct) = account_checkAndIncrSeqNum(account, codeLoadMsg.seqNum) {
             setGlobalAccountStore(
                 accountStore_set(globalAS, msg.sender, updatedAcct),
             );
             let ba = bytearray_unmarshalBytes(codeLoadMsg.data);
             let bs = bytestream_new(ba);
-            let (success, initCodePt, callCodePt,) = unmarshalCodeSegment(bs);
-            if (success) {
+            if let Some(res) = unmarshalCodeSegment(bs) {
+                let (initCodePt, callCodePt) = res;
                 let initData = initCodePt();
                 let (evmPcMap, initStorageMap,) = makeInitStructures(initData);
                 callCodePt();
@@ -159,13 +156,12 @@ public impure func handleEthbridgeMessage(msg: ArbMessage) {
         let codeLoadMsg = unsafecast<EvmCodeLoadMessage>(msg.message);
         let globalAS = getGlobalAccountStore();
         let account = accountStore_get(globalAS, msg.sender);
-        let (success, updatedAcct,) = account_checkAndIncrSeqNum(account, codeLoadMsg.seqNum);
-        globalAS = accountStore_set(globalAS, msg.sender, updatedAcct);
-        if (success) {
+        if let Some(updatedAcct) = account_checkAndIncrSeqNum(account, codeLoadMsg.seqNum) {
+            globalAS = accountStore_set(globalAS, msg.sender, updatedAcct);
             let ba = bytearray_unmarshalBytes(codeLoadMsg.data);
             let bs = bytestream_new(ba);
-            let (success, codept, evmJumpTable,) = translateEvmCodeSegment(bs);
-            if (success) {
+            if let Some(res) = translateEvmCodeSegment(bs) {
+                let (codept, evmJumpTable) = res;
                 // address of new contract is derived by hashing of the full message,
                 //       then truncating to address size (20 bytes)
                 // this is unique on the current chain, 

@@ -26,7 +26,7 @@ import impure func inbox_get() -> any;
 import func bytearray_new(size: uint, autoExpand: bool) -> ByteArray;
 import func bytearray_unmarshalBytes(mb: MarshalledBytes) -> ByteArray;
 import func bytestream_new(ba: ByteArray) -> ByteStream;
-import func unmarshalCodeSegment(bs: ByteStream) -> (bool, func() -> any, func());
+import func unmarshalCodeSegment(bs: ByteStream) -> option<(func() -> any, func())>;
 
 func main() {
     inbox_init();
@@ -34,8 +34,10 @@ func main() {
     let mb = unsafecast<MarshalledBytes>(msg);
     let ba = bytearray_unmarshalBytes(mb);
     let bs = bytestream_new(ba);
-    let (success, initCodePt, callCodePt,) = unmarshalCodeSegment(bs);
-    if (success) {
+    if let Some(res) = unmarshalCodeSegment(bs) {
+        let (initCodePt, callCodePt) = res;
         callCodePt();
+    } else {
+        ;//panic;
     }
 }
