@@ -78,6 +78,12 @@ fn main() {
                         .help("provide debug output")
                         .short("d")
                         .takes_value(false),
+                )
+                .arg(
+                    Arg::with_name("typecheck")
+                        .help("typechecks imported functions")
+                        .short("t")
+                        .takes_value(false),
                 ),
         )
         .subcommand(
@@ -124,6 +130,7 @@ fn main() {
 
     if let Some(matches) = matches.subcommand_matches("compile") {
         let debug_mode = matches.is_present("debug");
+        let typecheck = matches.is_present("typecheck");
         let mut output = get_output(matches.value_of("output")).unwrap();
         let filenames: Vec<_> = matches.values_of("INPUT").unwrap().collect();
         if matches.is_present("compileonly") {
@@ -152,7 +159,7 @@ fn main() {
                 }
             }
 
-            match link(&compiled_progs) {
+            match link(&compiled_progs, typecheck) {
                 Ok(linked_prog) => match postlink_compile(linked_prog, debug_mode) {
                     Ok(completed_program) => {
                         completed_program.to_output(&mut *output, matches.value_of("format"));

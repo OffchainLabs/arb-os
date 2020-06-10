@@ -705,7 +705,7 @@ fn evm_link(contracts: Vec<CompiledEvmContract>) -> Result<CompiledProgram, Comp
             source_file_map: SourceFileMap::new_empty(),
         });
     }
-    link(&comp_progs)
+    link(&comp_progs, false)
 }
 
 fn imported_funcs_for_evm() -> (Vec<ImportedFunc>, StringTable<'static>) {
