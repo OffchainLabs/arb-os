@@ -23,13 +23,13 @@ func main() {
 
 func tests() -> uint {
 	let s = builtin_kvsNew();
-	if ((builtin_kvsGet(s, 17)).0 != null) {
+	if (builtin_kvsGet(s, 17) != None<any>) {
 		return 1;
 	}
 
 	s = builtin_kvsNew();
 	s = builtin_kvsSet(s, 42, 42);
-	if ((builtin_kvsGet(s, 42)).0 != 42) {
+	if (builtin_kvsGet(s, 42) != Some(unsafecast<any>(42))) {
 		return 2;
 	}
 
@@ -37,7 +37,7 @@ func tests() -> uint {
 	s = builtin_kvsSet(s, 42, 43);
 	s = builtin_kvsSet(s, 55, 56);
 	s = builtin_kvsSet(s, 42, 99);
-	if ( (builtin_kvsGet(s, 42)).0 != 99) {
+	if (builtin_kvsGet(s, 42) != Some(unsafecast<any>(99))) {
 		return 3;
 	}
 
@@ -45,7 +45,7 @@ func tests() -> uint {
 	s = builtin_kvsSet(s, 42, 43);
 	s = builtin_kvsSet(s, 55, 56);
 	s = builtin_kvsSet(s, 42, 99);
-	if ( (builtin_kvsGet(s, 55)).0 != 56) {
+	if (builtin_kvsGet(s, 55) != Some(unsafecast<any>(56))) {
 		return 4;
 	}
 
@@ -55,7 +55,7 @@ func tests() -> uint {
 		s = builtin_kvsSet(s, i, 1000+i);
 		i = i+1;
 	}
-	if ( (builtin_kvsGet(s, 17)).0 != 1017) {
+	if (builtin_kvsGet(s, 17) != Some(unsafecast<any>(1017))) {
 		return 5;
 	}
 
@@ -66,7 +66,7 @@ func tests() -> uint {
 		i = i+1;
 	}
 	s = builtin_kvsDelete(s, 17);
-	if ( (builtin_kvsGet(s, 17)).0 != null) {
+	if (builtin_kvsGet(s, 17) != None<any>) {
 		return 6;
 	}
 
@@ -74,7 +74,7 @@ func tests() -> uint {
 	s = builtin_kvsSet(s, 42, 43);
 	s = builtin_kvsSet(s, 55, 56);
 	s = builtin_kvsSet(s, 42, 99);
-	if ( (builtin_kvsGet(s, 42)).1 != true) {
+	if (builtin_kvsGet(s, 42) != Some(unsafecast<any>(99))) {
 		return 7;
 	}
 
@@ -82,7 +82,7 @@ func tests() -> uint {
 	s = builtin_kvsSet(s, 42, 43);
 	s = builtin_kvsSet(s, 55, 56);
 	s = builtin_kvsSet(s, 42, 99);
-	if ( (builtin_kvsGet(s, 3)).1 ) {
+	if (builtin_kvsGet(s, 3) != None<any>) {
 		return 8;
 	}
 

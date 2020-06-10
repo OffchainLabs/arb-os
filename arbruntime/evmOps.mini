@@ -197,12 +197,11 @@ public impure func evmOp_sstore(storageAddr: uint, value: uint) {
 }
     
 public func evmOp_getjumpaddr(evm_pc: uint) -> func() {
-    let (codePt, success,) = account_getEvmJumpMap(
+    if let Some(codePt) = account_getEvmJumpMap(
         evmCallFrame_currentAccount(
             evmCallStack_currentFrame()
         )
-    )[evm_pc];
-    if (success) {
+    )[evm_pc] {
         return codePt;
     } else {
         panic;  // EVM code tried to jump to a forbidden code addres

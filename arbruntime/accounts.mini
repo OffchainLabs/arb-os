@@ -61,8 +61,7 @@ public impure func setGlobalAccountStore(acctStore: AccountStore) {
 }
 
 public func accountStore_get(acctStore: AccountStore, addr: address) -> Account {
-    let (acct, exists,) = acctStore[addr];
-    if (exists) {
+    if let Some(acct) = acctStore[addr] {
         return acct;
     } else {
         return pristineAccount;
@@ -187,8 +186,7 @@ public func account_getAllStorage(account: Account) -> map<uint, uint> {
 }
 
 public func account_getStorageCell(account: Account, cell: uint) -> uint {
-    let (contents, exists,) = account.storage[cell];
-    if (exists) {
+    if let Some(contents) = account.storage[cell] {
         return contents;
     } else {
         return 0;
