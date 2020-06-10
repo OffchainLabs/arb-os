@@ -53,6 +53,13 @@ public func builtin_arrayGet(arr: array, index: uint) -> any {
 	return res;
 }
 
+public func builtin_arrayGetSafe(arr: array, index: uint) -> option<any> {
+	if (index >= arr.size) {
+		return None<any>;
+	}
+	return Some(builtin_arrayGet(arr, index));
+}
+
 public func builtin_arrayGetConsecutive(arr: array, index: uint) -> (any, any) {
 	// get two consecutive items at [index] and [index+1]
 	if (index+1 >= arr.size) {
@@ -73,11 +80,25 @@ public func builtin_arrayGetConsecutive(arr: array, index: uint) -> (any, any) {
 	}
 }
 
+public func builtin_arrayGetConsecutiveSafe(arr: array, index: uint) -> option<(any, any)> {
+	if (index+1 >= arr.size) {
+		return None<(any, any)>;
+	}
+	return Some(builtin_arrayGetConsecutive(arr, index));
+}
+
 public func builtin_arraySet(arr: array, index: uint, value: any) -> array {
 	if (index >= arr.size) {
 		panic;
 	}
 	return arr with { contents: arraySet2(arr.contents, arr.topstep, index, value) };
+}
+
+public func builtin_arraySetSafe(arr: array, index: uint, value:any) -> option<array> {
+	if (index >= arr.size) {
+		return None<array>;
+	}
+	return Some(builtin_arraySet(arr, index, value));
 }
 
 func arraySet2(b: block, chunk: uint, index: uint, value: any) -> block {
@@ -102,6 +123,14 @@ public func builtin_arraySwap(a: array, index: uint, value: any) -> (array, any)
 		a with { contents: sub.bloc },
 		sub.val,
 	);
+}
+
+public func builtin_arraySwapSafe(a: array, index: uint, value: any) -> (array, option<any>) {
+	if (index >= a.size) {
+		return (a, None<any>);
+	}
+	let (aOut, valOut) = builtin_arraySwap(a, index, value);
+	return (aOut, Some(valOut));
 }
 
 type arraySwapSubResult = struct {
@@ -143,6 +172,14 @@ public func builtin_arrayOp(a: array, index: uint, closure: opClosure) -> (array
 	);
 }
 
+public func builtin_arrayOpSafe(a: array, index: uint, closure: opClosure) -> (array, option<any>) {
+	if (index >= a.size) {
+		return (a, None<any>);
+	}
+	let (aOut, valOut) = builtin_arrayOp(a, index, closure);
+	return (aOut, Some(valOut));
+}
+
 func arrayOp2(b: block, chunk: uint, index: uint, closure: opClosure) -> arraySwapSubResult {
 	if (1 == chunk) {
 		let result = closure.f(closure.val, b[index]);
@@ -172,6 +209,25 @@ public func builtin_arrayOpConsecutive(
 	let (arr1, ret1,) = builtin_arrayOp(a, index, closure1);
 	let (arr2, ret2,) = builtin_arrayOp(arr1, index+1, closure2);
 	return (arr2, ret1, ret2,);
+}
+
+public func builtin_arrayOpConsecutiveSafe(
+	a: array, 
+	index: uint, 
+	closure1: opClosure, 
+	closure2: opClosure
+) -> (array, option<(any, any)>) { 	
+	let (arr1, maybeRet1) = builtin_arrayOpSafe(a, index, closure1);
+	if let Some(ret1) = maybeRet1 {
+		let (arr2, maybeRet2) = builtin_arrayOpSafe(arr1, index+1, closure2);
+		if let Some(ret2) = maybeRet2 {
+			return (arr2, Some((ret1, ret2)));
+		} else {
+			return (a, None<(any, any)>);
+		}
+	} else {
+		return (a, None<(any, any)>);
+	}
 }
 
 public func array_resize(a: array, newSize: uint, baseVal: any) -> array { 
