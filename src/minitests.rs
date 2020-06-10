@@ -15,20 +15,15 @@
  */
 
 use crate::mavm::Value;
-use crate::run::{run_from_file, run_from_file_with_msgs, module_from_file_path};
-use crate::uint256::Uint256;
 use crate::run::runtime_env::RuntimeEnvironment;
+use crate::run::{module_from_file_path, run_from_file, run_from_file_with_msgs};
+use crate::uint256::Uint256;
 use std::path::Path;
 
 #[test]
 fn test_arraytest() {
     let path = Path::new("builtin/arraytest.mexe");
-    let res = run_from_file(
-        path, 
-        vec![],
-        RuntimeEnvironment::new(),
-        false
-    );
+    let res = run_from_file(path, vec![], RuntimeEnvironment::new(), false);
     match res {
         Ok(res) => {
             assert_eq!(res[0], Value::Int(Uint256::zero()));
@@ -42,12 +37,7 @@ fn test_arraytest() {
 #[test]
 fn test_kvstest() {
     let path = Path::new("builtin/kvstest.mexe");
-    let res = run_from_file(
-        path, 
-        vec![],
-        RuntimeEnvironment::new(),
-        false
-    );
+    let res = run_from_file(path, vec![], RuntimeEnvironment::new(), false);
     match res {
         Ok(res) => {
             assert_eq!(res[0], Value::Int(Uint256::zero()));
@@ -61,12 +51,7 @@ fn test_kvstest() {
 #[test]
 fn test_queuetest() {
     let path = Path::new("stdlib/queuetest.mexe");
-    let res = run_from_file(
-        path, 
-        vec![],
-        RuntimeEnvironment::new(),
-        false
-    );
+    let res = run_from_file(path, vec![], RuntimeEnvironment::new(), false);
     match res {
         Ok(res) => {
             assert_eq!(res[0], Value::Int(Uint256::zero()));
@@ -80,12 +65,7 @@ fn test_queuetest() {
 #[test]
 fn test_globaltest() {
     let path = Path::new("builtin/globaltest.mexe");
-    let res = run_from_file(
-        path, 
-        vec![],
-        RuntimeEnvironment::new(),
-        false
-    );
+    let res = run_from_file(path, vec![], RuntimeEnvironment::new(), false);
     match res {
         Ok(res) => {
             assert_eq!(res[0], Value::Int(Uint256::zero()));
@@ -99,12 +79,7 @@ fn test_globaltest() {
 #[test]
 fn test_pqtest() {
     let path = Path::new("stdlib/priorityqtest.mexe");
-    let res = run_from_file(
-        path,
-        vec![],
-        RuntimeEnvironment::new(),
-        false
-    );
+    let res = run_from_file(path, vec![], RuntimeEnvironment::new(), false);
     match res {
         Ok(res) => {
             assert_eq!(res[0], Value::Int(Uint256::zero()));
@@ -118,12 +93,7 @@ fn test_pqtest() {
 #[test]
 fn test_bytearray() {
     let path = Path::new("stdlib/bytearraytest.mexe");
-    let res = run_from_file(
-        path, 
-        vec![],
-        RuntimeEnvironment::new(),
-        false
-    );
+    let res = run_from_file(path, vec![], RuntimeEnvironment::new(), false);
     match res {
         Ok(res) => {
             assert_eq!(res[0], Value::Int(Uint256::zero()));
@@ -137,12 +107,7 @@ fn test_bytearray() {
 #[test]
 fn test_map() {
     let path = Path::new("builtin/maptest.mexe");
-    let res = run_from_file(
-        path, 
-        vec![],
-        RuntimeEnvironment::new(),
-        false
-    );
+    let res = run_from_file(path, vec![], RuntimeEnvironment::new(), false);
     match res {
         Ok(res) => {
             assert_eq!(res[0], Value::Int(Uint256::zero()));
@@ -157,12 +122,7 @@ fn test_map() {
 #[allow(dead_code)]
 fn test_keccak() {
     let path = Path::new("stdlib/keccaktest.mexe");
-    let res = run_from_file(
-        path, 
-        vec![],
-        RuntimeEnvironment::new(),
-        false
-    );
+    let res = run_from_file(path, vec![], RuntimeEnvironment::new(), false);
     match res {
         Ok(res) => {
             assert_eq!(res[0], Value::Int(Uint256::zero()));
@@ -176,12 +136,7 @@ fn test_keccak() {
 #[test]
 fn test_codeload() {
     let path = Path::new("minitests/codeloadtest.mexe");
-    let res = run_from_file(
-        path, 
-        vec![],
-        RuntimeEnvironment::new(),
-        false
-    );
+    let res = run_from_file(path, vec![], RuntimeEnvironment::new(), false);
     match res {
         Ok(res) => {
             assert_eq!(res[0], Value::Int(Uint256::zero()));
@@ -194,12 +149,18 @@ fn test_codeload() {
 
 #[test]
 fn test_loader1() {
-    run_using_loader("minitests/loadertest1.mexe", vec![Value::Int(Uint256::from_usize(777))]);
+    run_using_loader(
+        "minitests/loadertest1.mexe",
+        vec![Value::Int(Uint256::from_usize(777))],
+    );
 }
 
 #[test]
 fn test_loader2() {
-    run_using_loader("minitests/loadertest2.mexe", vec![Value::Int(Uint256::from_usize(120))]);
+    run_using_loader(
+        "minitests/loadertest2.mexe",
+        vec![Value::Int(Uint256::from_usize(120))],
+    );
 }
 
 fn run_using_loader(filename: &str, expected_result: Vec<Value>) {
@@ -223,7 +184,10 @@ fn run_using_loader(filename: &str, expected_result: Vec<Value>) {
 
 #[test]
 fn test_runtime1() {
-    run_using_runtime("minitests/loadertest1.mexe", vec![Value::Int(Uint256::from_usize(777))]);
+    run_using_runtime(
+        "minitests/loadertest1.mexe",
+        vec![Value::Int(Uint256::from_usize(777))],
+    );
 }
 
 // #[test]  disabled because we're using a different EVM upload approach
@@ -237,17 +201,12 @@ fn run_using_runtime(filename: &str, expected_result: Vec<Value>) {
     let maybe_msg = module_from_file_path(module_path);
     if let Some(msg) = maybe_msg {
         let res = run_from_file_with_msgs(
-            loader_path, 
-            vec![Value::Tuple(
-                vec![
-                    Value::Int(Uint256::from_usize(6)),
-                    Value::Int(Uint256::zero()),   // sender address
-                    Value::Tuple(vec![
-                        Value::Int(Uint256::from_usize(1)), 
-                        msg                    
-                    ])
-                ]
-            )],
+            loader_path,
+            vec![Value::Tuple(vec![
+                Value::Int(Uint256::from_usize(6)),
+                Value::Int(Uint256::zero()), // sender address
+                Value::Tuple(vec![Value::Int(Uint256::from_usize(1)), msg]),
+            ])],
             false,
         );
         match res {

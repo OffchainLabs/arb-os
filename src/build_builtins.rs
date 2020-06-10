@@ -17,7 +17,6 @@
 use crate::mavm::Value;
 use crate::uint256::Uint256;
 
-
 pub struct BuiltinArray {
     size: usize,
     top_step: usize,

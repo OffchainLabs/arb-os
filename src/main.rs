@@ -19,8 +19,8 @@
 use compile::compile_from_file;
 use evm::{compile_evm_file, make_evm_jumptable_mini};
 use link::{link, postlink_compile};
-use run::{run_from_file, runtime_env::RuntimeEnvironment};
 use mavm::Value;
+use run::{run_from_file, runtime_env::RuntimeEnvironment};
 use std::fs::File;
 use std::io;
 use std::path::Path;
@@ -179,15 +179,17 @@ fn main() {
 
             let is_module = matches.is_present("module");
             match link(&compiled_progs, is_module, Some(Value::none()), typecheck) {
-                Ok(linked_prog) => match postlink_compile(linked_prog, is_module, Vec::new(), debug_mode) {
-                    Ok(completed_program) => {
-                        completed_program.to_output(&mut *output, matches.value_of("format"));
+                Ok(linked_prog) => {
+                    match postlink_compile(linked_prog, is_module, Vec::new(), debug_mode) {
+                        Ok(completed_program) => {
+                            completed_program.to_output(&mut *output, matches.value_of("format"));
+                        }
+                        Err(e) => {
+                            println!("Linking error: {}", e);
+                            return;
+                        }
                     }
-                    Err(e) => {
-                        println!("Linking error: {}", e);
-                        return;
-                    }
-                },
+                }
                 Err(e) => {
                     println!("Linking error: {}", e);
                 }
@@ -216,7 +218,7 @@ fn main() {
         let filename = matches.value_of("INPUT").unwrap();
         let path = Path::new(filename);
         match compile_evm_file(path, debug_mode) {
-           Ok(compiled_contracts) => {
+            Ok(compiled_contracts) => {
                 for contract in compiled_contracts {
                     contract.to_output(&mut *output, matches.value_of("format"));
                 }
@@ -228,13 +230,11 @@ fn main() {
     }
 
     if let Some(matches) = matches.subcommand_matches("jumptable") {
-        let filepath = Path::new(
-            if let Some(pathname) = matches.value_of("output") {
-                pathname
-            } else {
-                "arbruntime/evmJumpTable.mini"
-            }
-        );
+        let filepath = Path::new(if let Some(pathname) = matches.value_of("output") {
+            pathname
+        } else {
+            "arbruntime/evmJumpTable.mini"
+        });
         if let Err(e) = make_evm_jumptable_mini(filepath) {
             panic!("I/O error: {}", e);
         }

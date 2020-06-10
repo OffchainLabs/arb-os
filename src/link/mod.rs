@@ -80,7 +80,7 @@ impl<'a> LinkedProgram {
             if (i >= 8) {
                 buf.push(0);
             } else {
-                buf.push( ((num >> (8*i)) & 0xff) as u8);
+                buf.push(((num >> (8 * i)) & 0xff) as u8);
             }
         }
         for insn in self.code.iter().rev() {
@@ -102,12 +102,12 @@ pub struct ImportedFunc {
 
 impl ImportedFunc {
     pub fn new(
-            slot_num: usize,
-               name_id: StringId,
-               string_table: &StringTable,
-               arg_types: Vec<Type>,
-               ret_type: Type,
-               is_impure: bool,
+        slot_num: usize,
+        name_id: StringId,
+        string_table: &StringTable,
+        arg_types: Vec<Type>,
+        ret_type: Type,
+        is_impure: bool,
     ) -> Self {
         ImportedFunc {
             name_id,
@@ -186,7 +186,7 @@ impl<'a> ExportedFunc {
 pub fn postlink_compile<'a>(
     program: CompiledProgram,
     is_module: bool,
-    evm_pcs: Vec<usize>,  // ignored unless we're in a module
+    evm_pcs: Vec<usize>, // ignored unless we're in a module
     debug: bool,
 ) -> Result<LinkedProgram, CompileError> {
     if debug {
@@ -247,8 +247,16 @@ pub fn postlink_compile<'a>(
     Ok(LinkedProgram {
         code: code_final,
         static_val: jump_table_value,
-        exported_funcs: if is_module { vec![] } else { exported_funcs_final },
-        imported_funcs: if is_module { vec![] } else { program.imported_funcs },
+        exported_funcs: if is_module {
+            vec![]
+        } else {
+            exported_funcs_final
+        },
+        imported_funcs: if is_module {
+            vec![]
+        } else {
+            program.imported_funcs
+        },
     })
 }
 
@@ -274,7 +282,7 @@ pub fn add_auto_link_progs(
 pub fn link(
     progs_in: &[CompiledProgram],
     is_module: bool,
-    init_storage_descriptor: Option<Value>,  // used only for compiling modules
+    init_storage_descriptor: Option<Value>, // used only for compiling modules
     typecheck: bool,
 ) -> Result<CompiledProgram, CompileError> {
     let progs_in: Vec<_> = progs_in
@@ -290,10 +298,13 @@ pub fn link(
     let mut global_num_limit = 0;
 
     for (prog, _) in &progs {
-        merged_source_file_map.push(prog.code.len(), match &prog.source_file_map {
-            Some(sfm) => sfm.get(0),
-            None => "".to_string(),
-        });
+        merged_source_file_map.push(
+            prog.code.len(),
+            match &prog.source_file_map {
+                Some(sfm) => sfm.get(0),
+                None => "".to_string(),
+            },
+        );
         int_offsets.push(insns_so_far);
         insns_so_far += prog.code.len();
         ext_offsets.push(imports_so_far);
@@ -333,7 +344,8 @@ pub fn link(
         // not a module, add an instruction that creates space for the globals
         vec![Instruction::from_opcode_imm(
             Opcode::Rset,
-            make_uninitialized_tuple(global_num_limit), None
+            make_uninitialized_tuple(global_num_limit),
+            None,
         )]
     };
 
