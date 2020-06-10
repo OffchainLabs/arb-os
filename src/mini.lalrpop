@@ -184,13 +184,17 @@ Expr2: Expr = {
 };
 
 Expr3: Expr = {
-	<lno: @L> <l:Expr3> "<" <r:Expr4> => Expr::new_binary(BinaryOp::LessThan, l, r, file_info.location(BytePos::from(lno))),
-	<lno: @L> <l:Expr3> ">" <r:Expr4> => Expr::new_binary(BinaryOp::GreaterThan, l, r, file_info.location(BytePos::from(lno))),
-	<lno: @L> <l:Expr3> "<=" <r:Expr4> => Expr::new_binary(BinaryOp::LessEq, l, r, file_info.location(BytePos::from(lno))),
-	<lno: @L> <l:Expr3> ">=" <r:Expr4> => Expr::new_binary(BinaryOp::GreaterEq, l, r, file_info.location(BytePos::from(lno))),
-	<lno: @L> <l:Expr3> "==" <r:Expr4> => Expr::new_binary(BinaryOp::Equal, l, r, file_info.location(BytePos::from(lno))),	
-	<lno: @L> <l:Expr3> "!=" <r:Expr4> => Expr::new_binary(BinaryOp::NotEqual, l, r, file_info.location(BytePos::from(lno))),
+	<lno: @L> <l:Expr3> <op: BinaryOpMidfix3> <r:Expr4> => Expr::new_binary(op, l, r, file_info.location(BytePos::from(lno))),
 	Expr4,	
+}
+
+BinaryOpMidfix3: BinaryOp = {
+	"<" => BinaryOp::LessThan,
+	">" => BinaryOp::GreaterThan,
+	"<=" => BinaryOp::LessEq,
+	">=" => BinaryOp::GreaterEq,
+	"==" => BinaryOp::Equal,
+	"!=" => BinaryOp::NotEqual,
 }
 
 Expr4: Expr = {
