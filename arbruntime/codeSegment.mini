@@ -409,7 +409,7 @@ public func translateEvmCodeSegment(
     if let Some(res) = translateEvmCodeSegment(bs) {
         let (restOfCode, evmJumpTable) = res;
         if (opcode == 0x00) { // STOP
-            return pushEvmInsnCall(restOfCode, evmOp_stop, evmJumpTable);
+            return pushEvmInsnCall(evmOp_stop, restOfCode, evmJumpTable);
         } elseif (opcode == 0x01) { // ADD
             return Some((pushInstruction(0x01, restOfCode), evmJumpTable));
         } elseif (opcode == 0x02) { // MUL
