@@ -24,6 +24,7 @@ pub struct BuiltinArray {
 }
 
 impl BuiltinArray {
+    #[allow(dead_code)]
     pub fn new(size: usize, base_val: Value) -> Self {
         let mut top_step = 1;
         while 8 * top_step < size {
@@ -36,10 +37,12 @@ impl BuiltinArray {
         }
     }
 
+    #[allow(dead_code)]
     pub fn set(&mut self, idx: usize, val: Value) {
         self.contents[idx] = val;
     }
 
+    #[allow(dead_code)]
     pub fn to_value(&self) -> Value {
         Value::Tuple(vec![
             Value::Int(Uint256::from_usize(self.size)),
@@ -48,15 +51,16 @@ impl BuiltinArray {
         ])
     }
 
+    #[allow(dead_code)]
     fn tuple_tree(top_step: usize, arr: &[Value]) -> Value {
-        let mut v = Vec::new();
         if top_step == 1 {
             return Value::Tuple(arr.to_vec());
         }
+        let mut v = Vec::new();
         for i in 0..8 {
             v.push(BuiltinArray::tuple_tree(
                 top_step / 8,
-                &arr[(8 * i)..(8 * (i + 1))],
+                &arr[(top_step * i)..(top_step * (i + 1))],
             ));
         }
         Value::Tuple(v)

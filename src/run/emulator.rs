@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+use super::runtime_env::RuntimeEnvironment;
 use crate::link::LinkedProgram;
 use crate::mavm::{CodePt, Instruction, Opcode, Value};
 use crate::uint256::Uint256;
@@ -207,27 +208,107 @@ impl MachineState {
 }
 
 #[derive(Debug)]
+struct CodeStore {
+    segments: Vec<Vec<Instruction>>,
+}
+
+impl CodeStore {
+    fn new(runtime: Vec<Instruction>) -> Self {
+        CodeStore {
+            segments: vec![runtime],
+        }
+    }
+
+    #[allow(dead_code)]
+    fn segment_size(&self, seg_num: usize) -> Option<usize> {
+        match self.segments.get(seg_num) {
+            Some(seg) => Some(seg.len()),
+            None => None,
+        }
+    }
+
+    fn runtime_segment_size(&self) -> usize {
+        self.segments[0].len()
+    }
+
+    fn get_insn(&self, codept: CodePt) -> Option<&Instruction> {
+        match codept {
+            CodePt::Internal(pc) => self.segments[0].get(pc),
+            CodePt::InSegment(seg_num, pc) => {
+                if seg_num < self.segments.len() {
+                    self.segments[seg_num].get(pc)
+                } else {
+                    None
+                }
+            }
+            _ => {
+                panic!("unlinked codepoint reference in running code: {:?}", codept);
+            }
+        }
+    }
+
+    fn create_segment(&mut self) -> CodePt {
+        self.segments
+            .push(vec![Instruction::from_opcode(Opcode::Panic, None)]);
+        CodePt::new_in_segment(self.segments.len() - 1, 0)
+    }
+
+    fn push_insn(&mut self, op: usize, imm: Option<Value>, codept: CodePt) -> Option<CodePt> {
+        if let CodePt::InSegment(seg_num, old_offset) = codept {
+            if seg_num >= self.segments.len() {
+                panic!("bad segment number in push_insn");
+            //None
+            } else {
+                let segment = &mut self.segments[seg_num];
+                if old_offset == segment.len() - 1 {
+                    if let Some(opcode) = Opcode::from_number(op) {
+                        segment.push(Instruction::new(opcode, imm, None));
+                        Some(CodePt::new_in_segment(seg_num, old_offset + 1))
+                    } else {
+                        panic!(
+                            "bad opcode number {} in push_insn at length {}",
+                            op,
+                            segment.len()
+                        );
+                        //None
+                    }
+                } else {
+                    panic!("branching segments not yet implemented");
+                }
+            }
+        } else {
+            panic!("invalid codepoint in push_insn");
+        }
+    }
+}
+
+#[derive(Debug)]
 pub struct Machine {
     stack: ValueStack,
     aux_stack: ValueStack,
     state: MachineState,
-    code: Vec<Instruction>,
+    code: CodeStore,
     static_val: Value,
     register: Value,
+    err_codepoint: CodePt,
+    pub runtime_env: RuntimeEnvironment,
 }
 
 impl<'a> Machine {
-    pub fn new(program: LinkedProgram) -> Self {
+    pub fn new(program: LinkedProgram, env: RuntimeEnvironment) -> Self {
         Machine {
             stack: ValueStack::new(),
             aux_stack: ValueStack::new(),
             state: MachineState::Stopped,
-            code: program.code,
+            code: CodeStore::new(program.code),
             static_val: program.static_val,
             register: Value::none(),
+            err_codepoint: CodePt::Null,
+            runtime_env: env,
         }
     }
 
+    #[allow(dead_code)]
     pub fn get_state(&self) -> MachineState {
         self.state.clone()
     }
@@ -242,7 +323,7 @@ impl<'a> Machine {
         args: Vec<Value>,
         debug: bool,
     ) -> Result<ValueStack, ExecutionError> {
-        let stop_pc = CodePt::new_internal(self.code.len() + 1);
+        let stop_pc = CodePt::new_internal(self.code.runtime_segment_size());
         for i in args.iter().rev().cloned() {
             self.stack.push(i);
         }
@@ -288,7 +369,7 @@ impl<'a> Machine {
 
     fn next_opcode(&self) -> Option<Instruction> {
         if let MachineState::Running(pc) = self.state {
-            if let Some(insn) = self.code.get(pc.pc_if_internal()?) {
+            if let Some(insn) = self.code.get_insn(pc) {
                 Some(insn.clone())
             } else {
                 None
@@ -385,15 +466,23 @@ impl<'a> Machine {
                     }
                 }
             }
-            if let Err(e) = self.run_one() {
-                self.state = MachineState::Error(e);
+            match self.run_one() {
+                Ok(still_runnable) => {
+                    if !still_runnable {
+                        return;
+                    }
+                }
+                Err(e) => {
+                    self.state = MachineState::Error(e);
+                    return;
+                }
             }
         }
     }
 
     pub fn run_one(&mut self) -> Result<bool, ExecutionError> {
         if let MachineState::Running(pc) = self.state {
-            if let Some(insn) = self.code.get(pc.pc_if_internal().unwrap()) {
+            if let Some(insn) = self.code.get_insn(pc) {
                 if let Some(val) = &insn.immediate {
                     self.stack.push(val.clone());
                 }
@@ -466,8 +555,19 @@ impl<'a> Machine {
 							Err(ExecutionError::new("index out of bounds in Tget", &self.state, None))
 						}
 					}
+					Opcode::Tlen => {
+						let tup = self.stack.pop_tuple(&self.state)?;
+						self.stack.push_usize(tup.len());
+						self.incr_pc();
+						Ok(true)
+					}
 					Opcode::Pop => {
 						let _ = self.stack.pop(&self.state)?;
+						self.incr_pc();
+						Ok(true)
+					}
+					Opcode::StackEmpty => {
+						self.stack.push_bool(self.stack.is_empty());
 						self.incr_pc();
 						Ok(true)
 					}
@@ -478,6 +578,11 @@ impl<'a> Machine {
 					}
 					Opcode::AuxPop => {
 						self.stack.push(self.aux_stack.pop(&self.state)?);
+						self.incr_pc();
+						Ok(true)
+					}
+					Opcode::AuxStackEmpty => {
+						self.stack.push_bool(self.aux_stack.is_empty());
 						self.incr_pc();
 						Ok(true)
 					}
@@ -742,7 +847,13 @@ impl<'a> Machine {
 					Opcode::NotEqual => {
 						let r1 = self.stack.pop(&self.state)?;
 						let r2 = self.stack.pop(&self.state)?;
-						self.stack.push_usize(if r1 != r2 { 1 } else { 0 });
+						self.stack.push_usize(if r1 == r2 { 0 } else { 1 });
+						self.incr_pc();
+						Ok(true)
+					}
+					Opcode::Type => {
+						let val = self.stack.pop(&self.state)?;
+						self.stack.push_usize(val.type_insn_result());
 						self.incr_pc();
 						Ok(true)
 					}
@@ -831,7 +942,86 @@ impl<'a> Machine {
 						panic!("GetTime instruction not yet implemented");
 					}
 					Opcode::Inbox => {
-						panic!("Inbox instruction not yet implemented");
+						let msgs = self.runtime_env.get_inbox();
+						if msgs.is_none() {
+							// machine is blocked, waiting for nonempty inbox
+							Ok(false)
+						} else {
+							self.stack.push(msgs);
+							self.incr_pc();
+							Ok(true)
+						}
+					}
+					Opcode::ErrCodePoint => {
+						self.stack.push(Value::CodePoint(
+							self.code.create_segment()
+						));
+						self.incr_pc();
+						Ok(true)
+					}
+					Opcode::Send => {
+						panic!("Send instruction not yet implemented");
+					}
+					Opcode::Log => {
+						let val = self.stack.pop(&self.state)?;
+						self.runtime_env.push_log(val);
+						self.incr_pc();
+						Ok(true)
+					}
+					Opcode::ErrSet => {
+						let cp = self.stack.pop_codepoint(&self.state)?;
+						self.err_codepoint = cp;
+						self.incr_pc();
+						Ok(true)
+					}
+					Opcode::ErrPush => {
+						self.stack.push_codepoint(self.err_codepoint);
+						self.incr_pc();
+						Ok(true)
+					}
+					Opcode::PushInsn => {
+						let opcode = self.stack.pop_usize(&self.state)?;
+						let cp = self.stack.pop_codepoint(&self.state)?;
+						let new_cp = self.code.push_insn(opcode, None, cp);
+						if let Some(cp) = new_cp {
+							self.stack.push_codepoint(cp);
+							self.incr_pc();
+							Ok(true)
+						} else {
+							Err(ExecutionError::new("invalid args to PushInsn", &self.state, None))
+						}
+					}
+					Opcode::PushInsnImm => {
+						let opcode = self.stack.pop_usize(&self.state)?;
+						let imm = self.stack.pop(&self.state)?;
+						let cp = self.stack.pop_codepoint(&self.state)?;
+						let new_cp = self.code.push_insn(opcode, Some(imm), cp);
+						if let Some(cp) = new_cp {
+							self.stack.push_codepoint(cp);
+							self.incr_pc();
+							Ok(true)
+						} else {
+							Err(ExecutionError::new("invalid args to PushInsnImm", &self.state, None))
+						}
+					}
+					Opcode::OpenInsn => {
+						let insn = self.code.get_insn(self.stack.pop_codepoint(&self.state)?).unwrap();
+						if let Some(val) = &insn.immediate {
+							self.stack.push(Value::Tuple(vec![val.clone()]));
+						} else {
+							self.stack.push(Value::none());
+						}
+						self.stack.push_usize(insn.opcode.to_number().unwrap() as usize);
+						self.incr_pc();
+						Ok(true)
+					}
+					Opcode::Breakpoint => {
+						self.incr_pc();
+						Ok(false)
+					}
+					Opcode::Halt => {
+						self.state = MachineState::Stopped;
+						Ok(false)
 					}
 					Opcode::DebugPrint => {
 						let r1 = self.stack.pop(&self.state)?;

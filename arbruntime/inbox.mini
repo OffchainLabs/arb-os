@@ -21,20 +21,29 @@ import func queue_get(q: Queue) -> (Queue, any);
 import func queue_put(q: Queue, val: any) -> Queue;
 
 
-var globalInbox: Queue;
-
-
-public impure func inbox_init() {
-    globalInbox = queue_new();
+type Inbox = struct {
+    queue: Queue,
+    blockNum: uint,
+    timestamp: uint,
 }
 
-public impure func inbox_get() -> any {
+var globalInbox: Inbox;
+
+public impure func inbox_init() {
+    globalInbox = struct {
+        queue: queue_new(),
+        blockNum: 0,
+        timestamp: 0,
+    };
+}
+
+public impure func inbox_get() -> any {  //BUGBUG: need to update blockNum and timestamp based on message
     let inbox = globalInbox;
-    while (queue_isEmpty(inbox)) {
+    while (queue_isEmpty(inbox.queue)) {
         inbox = getFromL1Inbox(inbox);
     }
-    let (in, ret,) = queue_get(inbox);
-    globalInbox = in;
+    let (updatedQ, ret,) = queue_get(inbox.queue);
+    globalInbox = inbox with { queue: updatedQ };
     return ret;
 }
 
@@ -43,18 +52,26 @@ type InboxCell = struct {
     msg: any,
 }
 
-impure func getFromL1Inbox(msgq: Queue) -> Queue {
-    let newMsgs = asm(0) InboxCell { inbox };
-    return addInboxToQueue(msgq, newMsgs);
+impure func getFromL1Inbox(inbox: Inbox) -> Inbox {
+    let newMsgs = asm(0,) InboxCell { inbox };
+    inbox = addInboxToQueue(inbox, newMsgs);
+    return inbox;
 }
 
-func addInboxToQueue(msgq: Queue, newMsgs: InboxCell) -> Queue {
+func addInboxToQueue(inbox: Inbox, newMsgs: InboxCell) -> Inbox {
     if (unsafecast<any>(newMsgs) == null) {
-        return msgq;
+        return inbox;
     } else {
-        return queue_put(
-            addInboxToQueue(msgq, unsafecast<InboxCell>(newMsgs.rest)),
-            newMsgs.msg
-        );
+        inbox = addInboxToQueue(inbox, unsafecast<InboxCell>(newMsgs.rest));
+        let qp = queue_put(inbox.queue, newMsgs.msg);
+        return inbox with { queue: qp };
     }
+}
+
+public impure func inbox_currentTimestamp() -> uint {
+    return globalInbox.timestamp;
+}
+
+public impure func inbox_currentBlockNumber() -> uint {
+    return globalInbox.blockNum;
 }

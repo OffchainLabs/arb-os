@@ -43,15 +43,14 @@ public func priorityq_size(pq: PriorityQ) -> uint {
     return pq.size;
 }
 
-// priorityq_get returns (false, null, pq) if empty; otherwise (true, item, updatedPq)
-public func priorityq_get(pq: PriorityQ) -> (bool, any, PriorityQ) {  
+public func priorityq_get(pq: PriorityQ) -> (option<any>, PriorityQ) {  
     if (priorityq_isEmpty(pq)) {
-        return (false, null, pq,);
+        return (None<any>, pq,);
     } else {
         let ret = pq.contents[0].item;
         let newpq = pq with { size: pq.size-1 }
                        with { contents: pq.contents with { [0] = pq.contents[pq.size-1] } };
-        return (true, ret, pq_pushDown(newpq, 0),);
+        return (Some(ret), pq_pushDown(newpq, 0),);
     }
 }
 

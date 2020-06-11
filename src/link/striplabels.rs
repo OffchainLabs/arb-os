@@ -14,18 +14,47 @@
  * limitations under the License.
  */
 
+use crate::evm::num_runtime_funcs;
 use crate::link::{ExportedFunc, ExportedFuncPoint, ImportedFunc};
 use crate::mavm::{CodePt, Instruction, Label, Opcode, Value};
 use crate::uint256::Uint256;
 use std::collections::{HashMap, HashSet};
 
 pub fn strip_labels(
-    code_in: &[Instruction],
+    mut code_in: Vec<Instruction>,
     jump_table: &[Label],
     exported_funcs: &[ExportedFunc],
     imported_funcs: &[ImportedFunc],
+    maybe_evm_pcs: Option<Vec<usize>>, // will be Some iff this is a module
 ) -> Result<(Vec<Instruction>, Vec<CodePt>, Vec<ExportedFuncPoint>), Label> {
+    if let Some(evm_pcs) = maybe_evm_pcs {
+        let mut list_val = Value::none();
+        for evm_pc in evm_pcs {
+            list_val = Value::Tuple(vec![
+                list_val,
+                Value::Int(Uint256::from_usize(evm_pc)),
+                Value::Label(Label::Evm(evm_pc)),
+            ]);
+        }
+        // re-do the first instruction in the code, which got a dummy value in link
+        code_in[0] = Instruction::from_opcode_imm(
+            Opcode::Swap1,
+            Value::Tuple(vec![
+                list_val,
+                code_in[0]
+                    .immediate
+                    .as_ref()
+                    .expect("module did not have storage immediate")
+                    .clone(),
+            ]),
+            None,
+        );
+    }
     let mut label_map = HashMap::new();
+
+    for i in 0..num_runtime_funcs() {
+        label_map.insert(Label::Runtime(i), CodePt::new_runtime(i));
+    }
 
     for imp_func in imported_funcs {
         let new_codept = CodePt::new_external(imp_func.slot_num);
@@ -34,7 +63,7 @@ pub fn strip_labels(
     }
 
     let mut after_count = 0;
-    for insn in code_in {
+    for insn in &code_in {
         match insn.get_label() {
             Some(label) => {
                 label_map.insert(*label, CodePt::new_internal(after_count));

@@ -208,12 +208,13 @@ impl Type {
                     false
                 }
             }
-            Type::Option(inner) => 
+            Type::Option(inner) => {
                 if let Type::Option(inner2) = rhs {
                     inner.assignable(inner2)
                 } else {
                     false
                 }
+            }
         }
     }
 
@@ -722,6 +723,13 @@ impl OptionConst {
             OptionConst::None(_) => Value::Tuple(vec![Value::Int(Uint256::zero())]),
         }
     }
+
+    pub fn resolve_types(&self, type_table: &SymTable<Type>) -> Result<Self, TypeError> {
+        match self {
+            OptionConst::Some(bc) => Ok(OptionConst::Some(Box::new(bc.resolve_types(type_table)?))),
+            OptionConst::None(t) => Ok(OptionConst::None(t.resolve_types(type_table, None)?)),
+        }
+    }
 }
 
 impl Constant {
@@ -741,6 +749,14 @@ impl Constant {
             Constant::Bool(b) => Value::Int(Uint256::from_bool(b.clone())),
             Constant::Option(c) => c.value(),
             Constant::Null => Value::none(),
+        }
+    }
+
+    pub fn resolve_types(&self, type_table: &SymTable<Type>) -> Result<Self, TypeError> {
+        if let Constant::Option(oc) = self {
+            Ok(Constant::Option(oc.resolve_types(type_table)?))
+        } else {
+            Ok(self.clone())
         }
     }
 }
@@ -819,7 +835,7 @@ impl Expr {
                 *name,
                 *loc,
             )),
-            Expr::Constant(b, loc) => Ok(Expr::Constant(b.clone(), *loc)),
+            Expr::Constant(b, loc) => Ok(Expr::Constant(b.resolve_types(type_table)?, *loc)),
             Expr::FunctionCall(fexpr, args, loc) => {
                 let mut rargs = Vec::new();
                 for arg in args.iter() {
