@@ -114,8 +114,8 @@ $(RUNTIMEDIR)/evmJumpTable.mini: src/evm/mod.rs
 
 loader: $(RUNTIMEDIR)/loader.mexe
 
-$(RUNTIMEDIR)/loader.mexe: $(RUNTIMEDIR)/loader.mao $(RUNTIMEDIR)/inbox.mao $(RUNTIMEDIR)/codeSegment.mao $(STDLIB) $(BUILTINMAOS)
-	cargo run compile $(RUNTIMEDIR)/loader.mao $(RUNTIMEDIR)/inbox.mao $(RUNTIMEDIR)/codeSegment.mao $(STDLIB) -o $(RUNTIMEDIR)/loader.mexe
+$(RUNTIMEDIR)/loader.mexe: $(RUNTIMEDIR)/loader.mao $(RUNTIMEMAOS) $(STDLIB) $(BUILTINMAOS)
+	cargo run compile $(RUNTIMEDIR)/loader.mao $(RUNTIMEMAOS) $(STDLIB) -o $(RUNTIMEDIR)/loader.mexe
 
 run: runtime
 	cargo run run $(RUNTIME)

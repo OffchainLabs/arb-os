@@ -23,7 +23,7 @@ import impure func evmCallStack_setCurrentFrameMemory(mem: ByteArray);
 import impure func evmCallStack_setCurrentFrameStorageCell(addr: address, offset: uint, val: uint);
 
 import func evmCallFrame_currentAccount(frame: EvmCallFrame) -> Account;
-import func evmCallFrame_getAccount(frame: EvmCallFrame, addr: address) -> Account;
+import func evmCallFrame_getAccount(frame: EvmCallFrame) -> Account;
 import func evmCallFrame_getMemory(frame: EvmCallFrame) -> ByteArray;
 import impure func selfDestructQueue_put(victim: address, owner: address);
 
@@ -32,17 +32,17 @@ import func account_getCodeSize(acct: Account) -> uint;
 import func account_getBalance(acct: Account) -> uint;
 import func account_getCode(acct: Account) -> ByteArray;
 import func account_getStorageCell(acct: Account, offset: uint) -> uint;
-import func account_getEvmJumpMap(acct: Account) -> map<uint, func()>;
+import func account_getEvmJumpTable(acct: Account) -> map<uint, func()>;
 
 import impure func inbox_currentTimestamp() -> uint;
 import impure func inbox_currentBlockNumber() -> uint;
 
-import func byteArray_size(ba: ByteArray) -> uint;
-import func byteArray_getByte(ba: ByteArray, offset: uint) -> uint;
-import func byteArray_setByte(ba: ByteArray, offset: uint, val: uint) -> ByteArray;
-import func byteArray_get256(ba: ByteArray, offset: uint) -> uint;
-import func byteArray_set256(ba: ByteArray, offset: uint, val: uint) -> ByteArray;
-import func byteArray_copy(from: ByteArray, fromOffset: uint, to: ByteArray, toOffset: uint, nbytes: uint) -> ByteArray;
+import func bytearray_size(ba: ByteArray) -> uint;
+import func bytearray_getByte(ba: ByteArray, offset: uint) -> uint;
+import func bytearray_setByte(ba: ByteArray, offset: uint, val: uint) -> ByteArray;
+import func bytearray_get256(ba: ByteArray, offset: uint) -> uint;
+import func bytearray_set256(ba: ByteArray, offset: uint, val: uint) -> ByteArray;
+import func bytearray_copy(from: ByteArray, fromOffset: uint, to: ByteArray, toOffset: uint, nbytes: uint) -> ByteArray;
 
 import func keccak256(array: ByteArray, offset: uint, nbytes: uint) -> bytes32;
 
@@ -69,8 +69,7 @@ public func evmOp_address() -> address {
 public func evmOp_balance(addr: address) -> uint {
     return account_getBalance(
         evmCallFrame_getAccount(
-            evmCallStack_currentFrame(),
-            addr
+            evmCallStack_currentFrame()
         )
     );
 }
@@ -110,7 +109,7 @@ public impure func evmOp_codesize() -> uint {
 public impure func evmOp_codecopy(memAddr: uint, codeOffset: uint, nbytes: uint) {
     let frame = evmCallStack_currentFrame();
     let memory = evmCallFrame_getMemory(frame);
-    memory = byteArray_copy(
+    memory = bytearray_copy(
         account_getCode(
             evmCallFrame_currentAccount(frame)
         ),
@@ -147,7 +146,7 @@ public func evmOp_number() -> uint {
 }
 
 public impure func evmOp_mload(memAddr: uint) -> uint {
-    return byteArray_get256(
+    return bytearray_get256(
         evmCallFrame_getMemory(
             evmCallStack_currentFrame()
         ),
@@ -157,7 +156,7 @@ public impure func evmOp_mload(memAddr: uint) -> uint {
 
 public impure func evmOp_mstore(memAddr: uint, value: uint) {
     evmCallStack_setCurrentFrameMemory(
-        byteArray_set256(
+        bytearray_set256(
             evmCallFrame_getMemory(evmCallStack_currentFrame()),
             memAddr,
             value
@@ -167,7 +166,7 @@ public impure func evmOp_mstore(memAddr: uint, value: uint) {
 
 public impure func evmOp_mstore8(memAddr: uint, value:uint) {
        evmCallStack_setCurrentFrameMemory(
-        byteArray_setByte(
+        bytearray_setByte(
             evmCallFrame_getMemory(evmCallStack_currentFrame()),
             memAddr,
             value
@@ -197,7 +196,7 @@ public impure func evmOp_sstore(storageAddr: uint, value: uint) {
 }
     
 public func evmOp_getjumpaddr(evm_pc: uint) -> func() {
-    if let Some(codePt) = account_getEvmJumpMap(
+    if let Some(codePt) = account_getEvmJumpTable(
         evmCallFrame_currentAccount(
             evmCallStack_currentFrame()
         )
@@ -209,7 +208,7 @@ public func evmOp_getjumpaddr(evm_pc: uint) -> func() {
 }
 
 public func evmOp_msize() -> uint {
-    return byteArray_size(
+    return bytearray_size(
         evmCallFrame_getMemory(
             evmCallStack_currentFrame()
         )

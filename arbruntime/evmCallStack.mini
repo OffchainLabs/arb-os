@@ -21,6 +21,7 @@ import type ByteArray;
 
 import func accountStore_get(store: AccountStore, addr: address) -> Account;
 import func accountStore_set(store: AccountStore, addr: address, acct: Account) -> AccountStore;
+import func account_setStorageCell(acct: Account, offset: uint, value: uint) -> Account;
 
 import func queue_new() -> Queue;
 import func queue_isEmpty(q: Queue) -> bool;
@@ -82,6 +83,36 @@ public impure func evmCallStack_setAccount(addr: address, acct: Account) -> bool
         };
     }
     return true;
+}
+
+public impure func evmCallStack_setCurrentFrameMemory(mem: ByteArray) {
+    globalCallStack = globalCallStack with { memory: mem };
+}
+
+public impure func evmCallStack_setCurrentFrameStorageCell(offset: uint, value: uint) {
+    globalCallStack = globalCallStack with {
+        currentAccount: account_setStorageCell(
+            globalCallStack.currentAccount,
+            offset,
+            value
+        )
+    };
+}
+
+public func evmCallFrame_currentAccount(frame: EvmCallFrame) -> Account {
+    return frame.currentAccount;
+}
+
+public func evmCallFrame_getAccount(frame: EvmCallFrame, addr: address) -> Account {
+    if (addr == frame.addr) {
+        return frame.currentAccount;
+    } else {
+        return accountStore_get(frame.accountStore, addr);
+    }
+}
+
+public func evmCallFrame_getMemory(frame: EvmCallFrame) -> ByteArray {
+    return frame.memory;
 }
 
 var selfDestructQueue: Queue;

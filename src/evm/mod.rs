@@ -806,10 +806,9 @@ fn evm_emulate(
     }
 }
 
-const EMULATION_FUNCS: [&str; 42] = [
+const EMULATION_FUNCS: [&str; 41] = [
     // If you modify this, be sure to regenerate the EVM jumptable
     "evmOp_stop",
-    "evmOp_sar",
     "evmOp_sha3",
     "evmOp_address",
     "evmOp_balance",
