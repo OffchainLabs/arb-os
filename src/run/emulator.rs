@@ -277,7 +277,7 @@ impl CodeStore {
                 }
             }
         } else {
-            panic!("invalid codepoint in push_insn");
+            panic!("invalid codepoint in push_insn: {:?}", codept);
         }
     }
 }

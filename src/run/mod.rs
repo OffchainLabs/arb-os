@@ -25,6 +25,7 @@ use std::path::Path;
 
 mod emulator;
 pub mod runtime_env;
+pub mod chain;
 
 pub fn run_from_file(
     path: &Path,
@@ -32,6 +33,14 @@ pub fn run_from_file(
     env: RuntimeEnvironment,
     debug: bool,
 ) -> Result<Vec<Value>, (ExecutionError, StackTrace)> {
+    let mut machine = load_from_file(path, env);
+    run(&mut machine, args, debug)
+}
+
+pub fn load_from_file(
+    path: &Path,
+    env: RuntimeEnvironment,
+) -> Machine {
     let display = path.display();
 
     let mut file = match File::open(&path) {
@@ -45,7 +54,7 @@ pub fn run_from_file(
         Ok(_) => s,
     };
 
-    run_from_string(s, args, env, debug)
+    load_from_string(s, env)
 }
 
 fn run_from_string(
@@ -54,6 +63,14 @@ fn run_from_string(
     env: RuntimeEnvironment,
     debug: bool,
 ) -> Result<Vec<Value>, (ExecutionError, StackTrace)> {
+    let mut new_machine = load_from_string(s, env);
+    run(&mut new_machine, args, debug)
+}
+
+fn load_from_string(
+    s: String,
+    env: RuntimeEnvironment,
+) -> Machine {
     let parse_result: Result<LinkedProgram, serde_json::Error> = serde_json::from_str(&s);
     let program = match parse_result {
         Ok(prog) => prog,
@@ -62,8 +79,7 @@ fn run_from_string(
             panic!();
         }
     };
-    let mut new_machine = Machine::new(program, env);
-    run(&mut new_machine, args, debug)
+    return Machine::new(program, env);
 }
 
 fn run(
@@ -158,8 +174,8 @@ pub fn module_from_file_path(module_path: &Path) -> Option<Value> {
 
 #[test]
 fn test_inbox_and_log() {
+    use crate::mavm::{Instruction, Opcode};
     use crate::uint256::Uint256;
-    use crate::mavm::{Instruction,Opcode};
     let val = Value::Int(Uint256::from_usize(3));
     let logs = run_with_msgs(
         LinkedProgram {

@@ -16,6 +16,7 @@
 
 use crate::mavm::Value;
 use crate::run::runtime_env::RuntimeEnvironment;
+use crate::run::chain::AvmChain;
 use crate::run::{module_from_file_path, run_from_file, run_from_file_with_msgs};
 use crate::uint256::Uint256;
 use std::path::Path;
@@ -220,4 +221,14 @@ fn run_using_runtime(filename: &str, expected_result: Vec<Value>) {
     } else {
         panic!("failed to load and convert module from {}", filename);
     }
+}
+
+#[test]
+fn test_evm_load_add() {
+    run_evm_using_runtime("contracts/add/compiled.json");
+}
+
+fn run_evm_using_runtime(contract_file_name: &str) {
+    let mut chain = AvmChain::new(Some(contract_file_name));
+    let res = chain.run(false);
 }

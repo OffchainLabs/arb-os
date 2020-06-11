@@ -29,6 +29,19 @@ use std::path::Path;
 use std::usize;
 
 pub fn compile_evm_file(path: &Path, debug: bool) -> Result<Vec<LinkedProgram>, CompileError> {
+    match evm_json_from_file(path) {
+        Ok(evm_json) => compile_from_json(evm_json, debug),
+        Err(e) => {
+            println!("Error reading in EVM file: {:?}", e);
+            Err(CompileError::new(
+                "error parsing compiled EVM file".to_string(),
+                None,
+            ))
+        }
+    }
+}
+
+fn evm_json_from_file(path: &Path) -> Result<serde_json::Value, serde_json::Error> {
     let display = path.display();
 
     let mut file = match File::open(&path) {
@@ -42,17 +55,7 @@ pub fn compile_evm_file(path: &Path, debug: bool) -> Result<Vec<LinkedProgram>, 
         Ok(_) => s,
     };
 
-    let parse_result: Result<serde_json::Value, serde_json::Error> = serde_json::from_str(&s);
-    match parse_result {
-        Ok(evm_json) => compile_from_json(evm_json, debug),
-        Err(e) => {
-            println!("Error reading in EVM file: {:?}", e);
-            Err(CompileError::new(
-                "error parsing compiled EVM file".to_string(),
-                None,
-            ))
-        }
-    }
+    return serde_json::from_str(&s);
 }
 
 #[derive(Serialize)]
