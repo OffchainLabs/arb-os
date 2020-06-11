@@ -36,10 +36,7 @@ ImportDecl: TopLevelDecl = {
 }
 
 ImportFuncDecl: ImportFuncDecl = {
-	"import" "func" <i:Ident> "(" <fa:FuncArgs> ")" ";" => ImportFuncDecl::new(i, false, fa, Type::Void),
-	"import" "func" <i:Ident> "(" <fa:FuncArgs> ")" "->" <t:Type> ";" => ImportFuncDecl::new(i, false, fa, t),
-	"import" "impure" "func" <i:Ident> "(" <fa:FuncArgs> ")" ";" => ImportFuncDecl::new(i, true, fa, Type::Void),
-	"import" "impure" "func" <i:Ident> "(" <fa:FuncArgs> ")" "->" <t:Type> ";" => ImportFuncDecl::new(i, true, fa, t),
+	"import" <imp: "impure"?> "func" <i:Ident> "(" <fa:FuncArgs> ")" <t: ("->" <Type>)?> ";" => ImportFuncDecl::new(i, imp.is_some(), fa, t.unwrap_or(Type::Void)),
 }
 
 ImportTypeDecl: ImportTypeDecl = {
