@@ -176,6 +176,7 @@ pub enum TypeCheckedExpr {
         Vec<TypeCheckedExpr>,
         Option<Location>,
     ),
+    Try(Box<TypeCheckedExpr>, Type, Option<Location>),
 }
 
 impl<'a> TypeCheckedExpr {
@@ -208,6 +209,7 @@ impl<'a> TypeCheckedExpr {
             TypeCheckedExpr::StructMod(_, _, _, t, _) => t.clone(),
             TypeCheckedExpr::Cast(_, t, _) => t.clone(),
             TypeCheckedExpr::Asm(t, _, _, _) => t.clone(),
+            TypeCheckedExpr::Try(_, t, _) => t.clone(),
         }
     }
 }
@@ -1196,6 +1198,16 @@ fn typecheck_expr(
                 *loc,
             ))
         }
+        Expr::Try(inner, loc) => {
+            let res = typecheck_expr(inner, type_table, global_vars, func_table)?;
+            match res.get_type() {
+                Type::Option(t) => Ok(TypeCheckedExpr::Try(Box::new(res), *t, *loc)),
+                other => Err(new_type_error(
+                    format!("Try expression requires option type, found\"{:?}\"", other),
+                    *loc,
+                )),
+            }
+        }
     }
 }
 
@@ -1461,7 +1473,7 @@ fn typecheck_binary_op(
                 loc,
             )),
             _ => Err(new_type_error(
-                "invalid argument types to binary op".to_string(),
+                "invalid argument types to binary op 1".to_string(),
                 loc,
             )),
         },
@@ -1699,7 +1711,7 @@ fn typecheck_binary_op_const(
                 loc,
             )),
             _ => Err(new_type_error(
-                "invalid argument types to binary op".to_string(),
+                "invalid argument types to binary op 2".to_string(),
                 loc,
             )),
         },
@@ -1818,7 +1830,7 @@ fn typecheck_binary_op_const(
                                 ));
                             } else {
                                 return Err(new_type_error(
-                                    "invalid argument types to binary op".to_string(),
+                                    "invalid argument types to binary op 3".to_string(),
                                     loc,
                                 ));
                             }
@@ -1832,7 +1844,7 @@ fn typecheck_binary_op_const(
                 ))
             } else {
                 Err(new_type_error(
-                    "invalid argument types to binary op".to_string(),
+                    "invalid argument types to binary op 4".to_string(),
                     loc,
                 ))
             }

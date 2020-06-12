@@ -783,6 +783,7 @@ pub enum Expr {
     StructMod(Box<Expr>, StringId, Box<Expr>, Option<Location>),
     UnsafeCast(Box<Expr>, Type, Option<Location>),
     Asm(Type, Vec<Instruction>, Vec<Expr>, Option<Location>),
+    Try(Box<Expr>, Option<Location>),
 }
 
 impl Expr {
@@ -920,6 +921,7 @@ impl Expr {
                     *loc,
                 ))
             }
+            Expr::Try(expr, loc) => Ok(Expr::Try(Box::new(expr.resolve_types(type_table)?), *loc)),
         }
     }
 
@@ -945,6 +947,7 @@ impl Expr {
             Expr::StructMod(_, _, _, loc) => *loc,
             Expr::UnsafeCast(_, _, loc) => *loc,
             Expr::Asm(_, _, _, loc) => *loc,
+            Expr::Try(_, loc) => *loc,
         }
     }
 }

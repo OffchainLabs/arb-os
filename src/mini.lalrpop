@@ -250,6 +250,12 @@ Expr11: Expr = {
 	),
 	<lno: @L> "newmap" "<" <k:Type> "," <v:Type> ","? ">" => Expr::NewMap(k, v, file_info.location(BytePos::from(lno))),
 	<lno: @L> "unsafecast" "<" <t:Type> ">" "(" <e:Expr> ")" => Expr::UnsafeCast(Box::new(e), t, file_info.location(BytePos::from(lno))),
+	Expr0,
+}
+
+
+Expr0: Expr = {
+	<lno: @L> <e: Expr0> "?" => Expr::Try(Box::new(e), file_info.location(BytePos::from(lno))),
 	Expr12,
 }
 

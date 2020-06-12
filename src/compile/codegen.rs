@@ -1510,6 +1510,7 @@ fn mavm_codegen_expr<'a>(
             }
             Ok((label_gen, code))
         }
+        TypeCheckedExpr::Try(_exp, _, _loc) => unimplemented!(),
     }
 }
 
