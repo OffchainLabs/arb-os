@@ -34,7 +34,7 @@ pub struct AbiForDapp {
 pub struct AbiForContract {
     code: Vec<u8>,
     contract: ethabi::Contract,
-    address: Uint256,
+    pub address: Uint256,
     storage_map: Value,
     name: String,
 }
@@ -93,7 +93,7 @@ impl AbiForDapp {
                         Some(val) => {
                             let code_str = val.as_str().unwrap().to_string();
                             hex::decode(&code_str[2..]).unwrap()
-                        },
+                        }
                         None => {
                             return Err(ethabi::Error::from("no code key in json"));
                         }
@@ -177,9 +177,10 @@ impl AbiForContract {
         let seq_num = rt_env.get_and_incr_seq_num(&self.address);
         let msg = Value::Tuple(vec![
             Value::Int(Uint256::from_usize(7)),
-            Value::Int(self.address.clone()),
+            Value::Int(Uint256::zero()),
             Value::Tuple(vec![
                 Value::Int(seq_num),
+                Value::Int(self.address.clone()),
                 bytestack_from_bytes(decoded_insns),
                 self.storage_map.clone(),
             ]),

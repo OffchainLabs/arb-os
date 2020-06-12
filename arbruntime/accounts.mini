@@ -28,7 +28,7 @@ type Account = struct {
     nextSeqNum: uint,
     code: option<ByteArray>,
     evmJumpTable: map<uint, func()>,
-    codePoint: func(),  
+    codePoint: option<func()>,
     codeHash: bytes32,
     storage: map<uint, uint>,
     ethBalance: uint,
@@ -45,7 +45,7 @@ public impure func accountStore_init() {   // This must be called first!
             nextSeqNum: 1,
             code: None<ByteArray>,
             evmJumpTable: newmap<uint, func()>,
-            codePoint: unsafecast<func()>(null),
+            codePoint: None<func()>,
             codeHash: bytes32(0xc5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470),
             storage: newmap<uint, uint>,
             ethBalance: 0,
@@ -103,8 +103,16 @@ public func account_getAddress(account: Account) -> address {
     return account.addr;
 }
 
+public func account_getCodePoint(account: Account) -> option<func()> {
+    return account.codePoint;
+}
+
 public func account_getBalance(account: Account) -> uint {
     return account.ethBalance;
+}
+
+public func account_setBalance(account: Account, balance: uint) -> Account {
+    return account with { ethBalance: balance };
 }
 
 public func account_getEvmJumpTable(account: Account) -> map<uint, func()> {
@@ -132,7 +140,12 @@ public func accountStore_createAccountFromEvmCode(
         return Some(accountStore_set(
             store,
             newAddr,
-            oldAcct //BUGBUG
+            oldAcct with { code: Some(code) }
+                    with { evmJumpTable: evmJumpTable }
+                    with { codePoint: Some(initCodePt) }
+                    // BUGBUG: need to init codeHash
+                    with { storage: storageMap }
+                    with { ethBalance: 0 }
         ));
     } else {
         return None<AccountStore>;

@@ -43,7 +43,10 @@ import func account_checkAndIncrSeqNum(
     seqNumRecvd: uint
 ) -> option<Account>;
 
-import func initEvmCallStack(addr: address);
+import func account_getCodePoint(acct: Account) -> option<func()>;
+
+import func initEvmCallStack(addr: address, calldata: ByteArray, callvalue: uint);
+import func evmCallStack_currentAccount() -> option<Account>;
 
 import func bytearray_unmarshalBytes(mb: MarshalledBytes) -> ByteArray;
 
@@ -90,6 +93,7 @@ type AvmCodeLoadMessage = struct {
 
 type EvmCodeLoadMessage = struct {
     seqNum: uint,
+    contractAddr: address,
     data: MarshalledBytes,
     storageInfo: StorageInfo,
 }
@@ -110,8 +114,9 @@ public impure func handleEthbridgeMessage(msg: ArbMessage) {
             setGlobalAccountStore(
                 accountStore_set(globalAS, msg.sender, updatedAcct),
             );
-            handleValidTxMessage(txMsg,);
-            panic; //TODO
+            if ( ! handleValidTxMessage(txMsg,)) {
+                panic; // for debugging -- call failed
+            }
         } else {
             // sequence number was invalid
             panic; //TODO
@@ -168,12 +173,16 @@ public impure func handleEthbridgeMessage(msg: ArbMessage) {
             let bs = bytestream_new(ba);
             if let Some(res) = translateEvmCodeSegment(bs) {
                 let (codept, evmJumpTable) = res;
+                // FOR NOW: disable this automated address generation feature,
+                //          use the address submitted by sender
+                // EVENTUALLY:
                 // address of new contract is derived by hashing of the full message,
                 //       then truncating to address size (20 bytes)
                 // this is unique on the current chain, 
                 //       because it contains sender address and sender seq number
                 // also it contains the full EVM code
-                let newAddr = address(hash(msg));
+                // let newAddr = address(hash(msg));
+                let newAddr = codeLoadMsg.contractAddr;
                 if let Some(as) = accountStore_createAccountFromEvmCode(
                     globalAS,
                     newAddr,
@@ -204,6 +213,20 @@ func makeStorageMap(storageInfo: StorageInfo) -> map<uint, uint> {
     return ret;
 }
 
-impure func handleValidTxMessage(txMsg: TxMessage) {
-    initEvmCallStack(txMsg.to,);
+impure func handleValidTxMessage(txMsg: TxMessage) -> bool {
+    initEvmCallStack(
+        txMsg.to,
+        bytearray_unmarshalBytes(txMsg.data),
+        txMsg.value
+    );
+    if let Some(currentAcct) = evmCallStack_currentAccount() {
+        if let Some(codept) = account_getCodePoint(currentAcct) {
+            codept();
+            return true;
+        } else {
+            return false;
+        }
+    } else {
+        return false;
+    }
 }

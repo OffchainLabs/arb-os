@@ -18,7 +18,7 @@ use crate::evm::abi::{AbiForContract, AbiForDapp};
 use crate::mavm::Value;
 use crate::run::chain::AvmChain;
 use crate::run::runtime_env::RuntimeEnvironment;
-use crate::run::{module_from_file_path, run_from_file, run_from_file_with_msgs, load_from_file};
+use crate::run::{load_from_file, module_from_file_path, run_from_file, run_from_file_with_msgs, run};
 use crate::uint256::Uint256;
 use std::path::Path;
 
@@ -235,16 +235,36 @@ fn test_evm_load_add() {
     };
     let add_contract = match dapp_abi.get_contract("Add") {
         Some(contract) => contract,
-        None => { panic!("couldn't find Add contract"); }
+        None => {
+            panic!("couldn't find Add contract");
+        }
     };
+
     let mut rt_env = RuntimeEnvironment::new();
     add_contract.insert_upload_message(&mut rt_env);
     let add_func = match add_contract.get_function("add") {
         Ok(func) => func,
-        Err(e) => { panic!("couldn't find add function in Add contract: {:?}", e.to_string()); }
+        Err(e) => {
+            panic!(
+                "couldn't find add function in Add contract: {:?}",
+                e.to_string()
+            );
+        }
     };
+    let calldata = add_func
+        .encode_input(&[
+            ethabi::Token::Uint(ethabi::Uint::one()),
+            ethabi::Token::Uint(ethabi::Uint::one()),
+        ])
+        .unwrap();
+    rt_env.insert_txcall_message(add_contract.address.clone(), Uint256::zero(), &calldata);
 
-    let machine = load_from_file(Path::new("arbruntime/runtime.mexe"), rt_env);
+    let mut machine = load_from_file(Path::new("arbruntime/runtime.mexe"), rt_env);
+
+    match run(&mut machine, vec![], false) {
+        Ok(logs) => { return; }
+        Err(e) => { panic!("run failed: {:?}", e); }
+    }
 }
 
 fn run_evm_using_runtime(contract_file_name: &str, call_msgs: Vec<Value>) {

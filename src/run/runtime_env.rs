@@ -44,6 +44,21 @@ impl RuntimeEnvironment {
         }
     }
 
+    pub fn insert_txcall_message(&mut self, to_addr: Uint256, value: Uint256, data: &[u8]) {
+        let txcall_msg = Value::Tuple(vec![
+            Value::Int(to_addr.clone()),
+            Value::Int(self.get_and_incr_seq_num(&to_addr)),
+            Value::Int(value),
+            bytestack_from_bytes(data),
+        ]);
+        let msg = Value::Tuple(vec![
+            Value::Int(Uint256::zero()), // message type 0
+            Value::Int(Uint256::zero()), // sent from address 0
+            txcall_msg,
+        ]);
+        self.insert_message(msg);
+    }
+
     pub fn get_and_incr_seq_num(&mut self, addr: &Uint256) -> Uint256 {
         let cur_seq_num = match self.seq_nums.get(&addr) {
             Some(sn) => sn.clone(),
