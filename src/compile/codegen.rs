@@ -1125,7 +1125,7 @@ fn mavm_codegen_expr<'a>(
                 string_table,
                 import_func_map,
                 global_var_map,
-                prepushed_vars + n_args,
+                prepushed_vars + n_args + 1,
             )?;
             c.push(Instruction::from_opcode(Opcode::Jump, *loc));
             c.push(Instruction::from_opcode(Opcode::Label(ret_label), *loc));
