@@ -84,6 +84,7 @@ Statement: Statement = {
 	<lno: @L> <i: Ident> "=" <e: Expr> ";" => Statement::Assign(i, e, file_info.location(BytePos::from(lno))),
 	<lno: @L> "return" <e: Expr> ";" => Statement::Return(e, file_info.location(BytePos::from(lno))),
 	<lno: @L> "return" ";" => Statement::ReturnVoid(file_info.location(BytePos::from(lno))),
+	<lno: @L> "return" "None" ";" => Statement::Return(Expr::Constant(Constant::Option(OptionConst::None(Type::Every)),file_info.location(BytePos::from(lno))), file_info.location(BytePos::from(lno))),
 	<lno: @L> "panic" ";" => Statement::Panic(file_info.location(BytePos::from(lno))),
 	<lno: @L> "debug" "(" <e: Expr> ")" ";" => Statement::DebugPrint(e, file_info.location(BytePos::from(lno))),
 	<lno: @L> "asm" "(" <a:CommaedExprs?> ")" "{" <body:AsmInsn*> "}" ";" => Statement::Asm(body, a.unwrap_or(vec![]), file_info.location(BytePos::from(lno))),
