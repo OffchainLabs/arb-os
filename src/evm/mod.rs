@@ -28,6 +28,8 @@ use std::io::{self, Read, Write};
 use std::path::Path;
 use std::usize;
 
+pub mod abi;
+
 pub fn compile_evm_file(path: &Path, debug: bool) -> Result<Vec<LinkedProgram>, CompileError> {
     match evm_json_from_file(path) {
         Ok(evm_json) => compile_from_json(evm_json, debug),
@@ -179,9 +181,9 @@ pub fn send_inject_evm_messages(evm_json: serde_json::Value, env: &mut RuntimeEn
                     for (k, v) in m {
                         if let serde_json::Value::String(s) = v {
                             storage_map = Value::Tuple(vec![
-                                storage_map,
                                 Value::Int(Uint256::from_string_hex(&k[2..]).unwrap()),
                                 Value::Int(Uint256::from_string_hex(&s[2..]).unwrap()),
+                                storage_map,
                             ]);
                         } else {
                             return false;

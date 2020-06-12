@@ -14,36 +14,45 @@
  * limitations under the License.
  */
 
-use crate::run::runtime_env::RuntimeEnvironment;
-use crate::run::emulator::{Machine, ExecutionError, StackTrace};
-use std::path::Path;
-use crate::run::load_from_file;
 use crate::evm::send_inject_evm_messages_from_file;
-use crate::mavm::{Value, CodePt};
-
+use crate::mavm::{CodePt, Value};
+use crate::run::emulator::{ExecutionError, Machine, StackTrace};
+use crate::run::load_from_file;
+use crate::run::runtime_env::RuntimeEnvironment;
+use std::path::Path;
 
 pub struct AvmChain {
     machine: Machine,
 }
 
 impl AvmChain {
-    pub fn new(contract_file: Option<&str>) -> Self {
-        AvmChain::new_from_file(Path::new("arbruntime/runtime.mexe"), contract_file)
+    pub fn new(contract_file: Option<&str>, call_msgs: &[Value]) -> Self {
+        AvmChain::new_from_file(
+            Path::new("arbruntime/runtime.mexe"),
+            contract_file,
+            call_msgs,
+        )
     }
 
-    pub fn new_from_file(pathname: &Path, contract_file: Option<&str>) -> Self {
+    pub fn new_from_file(
+        pathname: &Path,
+        contract_file: Option<&str>,
+        call_msgs: &[Value],
+    ) -> Self {
         let mut rt_env = RuntimeEnvironment::new();
         if let Some(contract_file_name) = contract_file {
             send_inject_evm_messages_from_file(contract_file_name, &mut rt_env);
         }
+        rt_env.insert_messages(call_msgs);
         let machine = load_from_file(pathname, rt_env);
-        AvmChain {
-            machine,
-        }
+        AvmChain { machine }
     }
 
     pub fn run(&mut self, debug: bool) -> Result<Vec<Value>, (ExecutionError, StackTrace)> {
-        match self.machine.test_call(CodePt::new_internal(0), vec![], debug) {
+        match self
+            .machine
+            .test_call(CodePt::new_internal(0), vec![], debug)
+        {
             Ok(_stack) => Ok(self.machine.runtime_env.get_all_logs()),
             Err(e) => Err((e, self.machine.get_stack_trace())),
         }

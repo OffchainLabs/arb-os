@@ -14,10 +14,11 @@
  * limitations under the License.
  */
 
+use crate::evm::abi::{AbiForContract, AbiForDapp};
 use crate::mavm::Value;
-use crate::run::runtime_env::RuntimeEnvironment;
 use crate::run::chain::AvmChain;
-use crate::run::{module_from_file_path, run_from_file, run_from_file_with_msgs};
+use crate::run::runtime_env::RuntimeEnvironment;
+use crate::run::{module_from_file_path, run_from_file, run_from_file_with_msgs, load_from_file};
 use crate::uint256::Uint256;
 use std::path::Path;
 
@@ -225,10 +226,36 @@ fn run_using_runtime(filename: &str, expected_result: Vec<Value>) {
 
 #[test]
 fn test_evm_load_add() {
-    run_evm_using_runtime("contracts/add/compiled.json");
+    let dapp_file_name = "contracts/add/compiled.json";
+    let dapp_abi = match AbiForDapp::new_from_file(dapp_file_name) {
+        Ok(dabi) => dabi,
+        Err(e) => {
+            panic!("failed to load add ABI from file");
+        }
+    };
+    let add_contract = match dapp_abi.get_contract("Add") {
+        Some(contract) => contract,
+        None => { panic!("couldn't find Add contract"); }
+    };
+    let mut rt_env = RuntimeEnvironment::new();
+    add_contract.insert_upload_message(&mut rt_env);
+    let add_func = match add_contract.get_function("add") {
+        Ok(func) => func,
+        Err(e) => { panic!("couldn't find add function in Add contract: {:?}", e.to_string()); }
+    };
+
+    let machine = load_from_file(Path::new("arbruntime/runtime.mexe"), rt_env);
 }
 
-fn run_evm_using_runtime(contract_file_name: &str) {
-    let mut chain = AvmChain::new(Some(contract_file_name));
+fn run_evm_using_runtime(contract_file_name: &str, call_msgs: Vec<Value>) {
+    let mut chain = AvmChain::new(Some(contract_file_name), &call_msgs);
     let res = chain.run(false);
+    match res {
+        Ok(logs) => {
+            assert_eq!(logs, vec![]);
+        }
+        Err(e) => {
+            panic!("{:?}", e);
+        }
+    }
 }
