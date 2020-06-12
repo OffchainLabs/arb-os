@@ -36,10 +36,7 @@ ImportDecl: TopLevelDecl = {
 }
 
 ImportFuncDecl: ImportFuncDecl = {
-	"import" "func" <i:Ident> "(" <fa:FuncArgs> ")" ";" => ImportFuncDecl::new(i, false, fa, Type::Void),
-	"import" "func" <i:Ident> "(" <fa:FuncArgs> ")" "->" <t:Type> ";" => ImportFuncDecl::new(i, false, fa, t),
-	"import" "impure" "func" <i:Ident> "(" <fa:FuncArgs> ")" ";" => ImportFuncDecl::new(i, true, fa, Type::Void),
-	"import" "impure" "func" <i:Ident> "(" <fa:FuncArgs> ")" "->" <t:Type> ";" => ImportFuncDecl::new(i, true, fa, t),
+	"import" <imp: "impure"?> "func" <i:Ident> "(" <fa:FuncArgs> ")" <t: ("->" <Type>)?> ";" => ImportFuncDecl::new(i, imp.is_some(), fa, t.unwrap_or(Type::Void)),
 }
 
 ImportTypeDecl: ImportTypeDecl = {
@@ -57,15 +54,8 @@ TypeDecl: TypeDecl = {
 }
 
 FuncDecl: FuncDecl = {
-	<lno: @L> "func" <i:Ident> "(" <fa:FuncArgs> ")" <cb:CodeBlock> => FuncDecl::new(i, false, fa, Type::Void, cb, false, file_info.location(BytePos::from(lno))),
-	<lno: @L> "func" <i:Ident> "(" <fa:FuncArgs> ")" "->" <t:Type> <cb:CodeBlock> => FuncDecl::new(i, false, fa, t, cb, false, file_info.location(BytePos::from(lno))),
-	<lno: @L> "public" "func" <i:Ident> "(" <fa:FuncArgs> ")" <cb:CodeBlock> => FuncDecl::new(i, false, fa, Type::Void, cb, true, file_info.location(BytePos::from(lno))),
-	<lno: @L> "public" "func" <i:Ident> "(" <fa:FuncArgs> ")" "->" <t:Type> <cb:CodeBlock> => FuncDecl::new(i, false, fa, t, cb, true, file_info.location(BytePos::from(lno))),
-	<lno: @L> "impure" "func" <i:Ident> "(" <fa:FuncArgs> ")" <cb:CodeBlock> => FuncDecl::new(i, true, fa, Type::Void, cb, false, file_info.location(BytePos::from(lno))),
-	<lno: @L> "impure" "func" <i:Ident> "(" <fa:FuncArgs> ")" "->" <t:Type> <cb:CodeBlock> => FuncDecl::new(i, true, fa, t, cb, false, file_info.location(BytePos::from(lno))),
-	<lno: @L> "public" "impure" "func" <i:Ident> "(" <fa:FuncArgs> ")" <cb:CodeBlock> => FuncDecl::new(i, true, fa, Type::Void, cb, true, file_info.location(BytePos::from(lno))),
-	<lno: @L> "public" "impure" "func" <i:Ident> "(" <fa:FuncArgs> ")" "->" <t:Type> <cb:CodeBlock> => FuncDecl::new(i, true, fa, t, cb, true, file_info.location(BytePos::from(lno))),
-
+	<lno: @L> <p: "public"?> <imp: "impure"?> "func" <i:Ident> "(" <fa:FuncArgs> ")" <t: ("->" <Type>)?> <cb:CodeBlock> =>
+	        FuncDecl::new(i, imp.is_some(), fa, t.unwrap_or(Type::Void), cb, p.is_some(), file_info.location(BytePos::from(lno))),
 }
 
 FuncArgs: Vec<FuncArg> = {
@@ -88,18 +78,15 @@ Statement: Statement = {
 	<lno: @L> "while" "(" <e: Expr> ")" <cb: CodeBlock> => Statement::While(e, cb, file_info.location(BytePos::from(lno))),
 	<lno: @L> "loop" <cb: CodeBlock> => Statement::Loop(cb, file_info.location(BytePos::from(lno))),
 	<lno: @L> "if" "let" "Some(" <l: Ident> ")" "=" <r:Expr> <t: CodeBlock> <e: ("else" <CodeBlock>)?> => Statement::IfLet(l,r,t,e,file_info.location(BytePos::from(lno))),
-	<lno: @L> "if" "(" <c: Expr> ")" <t: CodeBlock> => Statement::If(IfArm::Cond(c, t, None, file_info.location(BytePos::from(lno)))),
-	<lno: @L> "if" "(" <c: Expr> ")" <t: CodeBlock> <r: IfArm> => Statement::If(IfArm::Cond(c, t, Some(Box::new(r)), file_info.location(BytePos::from(lno)))),
+	<lno: @L> "if" "(" <c: Expr> ")" <t: CodeBlock> <r: IfArm?> => Statement::If(IfArm::Cond(c, t, r.map(|m|Box::new(m)), file_info.location(BytePos::from(lno)))),
 	<lno: @L> "let" <p: MatchPattern> "=" <e: Expr> ";" => Statement::Let(p, e, file_info.location(BytePos::from(lno))),
-	<lno: @L> <f: Expr10> "(" ")" ";" => Statement::FunctionCall(f, vec![], file_info.location(BytePos::from(lno))),
-	<lno: @L> <f: Expr10> "(" <c: CommaedExprs> ")" ";" => Statement::FunctionCall(f, c, file_info.location(BytePos::from(lno))),
+	<lno: @L> <f: Expr10> "(" <c: CommaedExprs?> ")" ";" => Statement::FunctionCall(f, c.unwrap_or(vec![]), file_info.location(BytePos::from(lno))),
 	<lno: @L> <i: Ident> "=" <e: Expr> ";" => Statement::Assign(i, e, file_info.location(BytePos::from(lno))),
 	<lno: @L> "return" <e: Expr> ";" => Statement::Return(e, file_info.location(BytePos::from(lno))),
 	<lno: @L> "return" ";" => Statement::ReturnVoid(file_info.location(BytePos::from(lno))),
 	<lno: @L> "panic" ";" => Statement::Panic(file_info.location(BytePos::from(lno))),
 	<lno: @L> "debug" "(" <e: Expr> ")" ";" => Statement::DebugPrint(e, file_info.location(BytePos::from(lno))),
-	<lno: @L> "asm" "(" ")" "{" <body:AsmInsn*> "}" ";" => Statement::Asm(body, vec![], file_info.location(BytePos::from(lno))),
-	<lno: @L> "asm" "(" <a:CommaedExprs> ")" "{" <body:AsmInsn*> "}" ";" => Statement::Asm(body, a, file_info.location(BytePos::from(lno))),
+	<lno: @L> "asm" "(" <a:CommaedExprs?> ")" "{" <body:AsmInsn*> "}" ";" => Statement::Asm(body, a.unwrap_or(vec![]), file_info.location(BytePos::from(lno))),
 	<lno: @L> ";" => Statement::Noop(file_info.location(BytePos::from(lno))),
 }
 
@@ -114,13 +101,8 @@ CommaedMatchPatterns: Vec<MatchPattern> = {
 
 IfArm: IfArm = {
 	<lno: @L> "else" <cb: CodeBlock> => IfArm::Catchall(cb, file_info.location(BytePos::from(lno))),
-	<lno: @L> "elseif" "(" <c: Expr> ")" <cb: CodeBlock> => IfArm::Cond(c, cb, None, file_info.location(BytePos::from(lno))),
-	<lno: @L> "elseif" "(" <c: Expr> ")" <cb: CodeBlock> <r: IfArm> => IfArm::Cond(c, cb, Some(Box::new(r)), file_info.location(BytePos::from(lno))),
+	<lno: @L> "elseif" "(" <c: Expr> ")" <cb: CodeBlock> <r: IfArm?> => IfArm::Cond(c, cb, r.map(|m| Box::new(m)), file_info.location(BytePos::from(lno))),
 }
-
-StructDecl: Type = {
-	"struct" "{" <StructFields> "}" => Type::Struct(<>),
-};
 
 StructFields: Vec<StructField> = {
 	<mut a: (<StructField> ",")*> <b: StructField> ","? => {a.push(b);a},
@@ -136,19 +118,15 @@ Type: Type = {
 	"bool" => Type::Bool,
 	"bytes32" => Type::Bytes32,
 	"address" => Type::EthAddress,
-	StructDecl => <>,
-	"(" ")" => Type::Tuple(Vec::new()),
-	"(" <CommaedTypes> ")" => Type::Tuple(<>),
+	"struct" "{" <StructFields> "}" => Type::Struct(<>),
+	<CommaedTypesInParens> => Type::Tuple(<>),
 	"[" "]" <Type> => Type::Array(Box::new(<>)),
 	"[" <s:UnsignedInteger> "]" <t:Type> => Type::FixedArray(
 		Box::new(t), 
 		s.to_usize().unwrap(),
 	),
 	"map" "<" <t1:Type> "," <t2:Type> ","? ">" => Type::Map(Box::new(t1), Box::new(t2)),
-	"func" <CommaedTypesInParens> => Type::Func(false, <>, Box::new(Type::Void)),
-	"func" <a: CommaedTypesInParens> "->" <r: Type> => Type::Func(false, a, Box::new(r)),
-	"impure" "func" <CommaedTypesInParens> => Type::Func(true, <>, Box::new(Type::Void)),
-	"impure" "func" <a: CommaedTypesInParens> "->" <r: Type> => Type::Func(true, a, Box::new(r)),
+	<i: "impure"?> "func" <a: CommaedTypesInParens> <r: ("->" <Type>)?> => Type::Func(i.is_some(), a, Box::new(r.unwrap_or(Type::Void))),
 	"any" => Type::Any,
 	"option<" <t1:Type> ">" => Type::Option(Box::new(t1)),
 	Ident => Type::Named(<>),
@@ -192,13 +170,17 @@ Expr2: Expr = {
 };
 
 Expr3: Expr = {
-	<lno: @L> <l:Expr3> "<" <r:Expr4> => Expr::new_binary(BinaryOp::LessThan, l, r, file_info.location(BytePos::from(lno))),
-	<lno: @L> <l:Expr3> ">" <r:Expr4> => Expr::new_binary(BinaryOp::GreaterThan, l, r, file_info.location(BytePos::from(lno))),
-	<lno: @L> <l:Expr3> "<=" <r:Expr4> => Expr::new_binary(BinaryOp::LessEq, l, r, file_info.location(BytePos::from(lno))),
-	<lno: @L> <l:Expr3> ">=" <r:Expr4> => Expr::new_binary(BinaryOp::GreaterEq, l, r, file_info.location(BytePos::from(lno))),
-	<lno: @L> <l:Expr3> "==" <r:Expr4> => Expr::new_binary(BinaryOp::Equal, l, r, file_info.location(BytePos::from(lno))),	
-	<lno: @L> <l:Expr3> "!=" <r:Expr4> => Expr::new_binary(BinaryOp::NotEqual, l, r, file_info.location(BytePos::from(lno))),
+	<lno: @L> <l:Expr3> <op: BinaryOpMidfix3> <r:Expr4> => Expr::new_binary(op, l, r, file_info.location(BytePos::from(lno))),
 	Expr4,	
+}
+
+BinaryOpMidfix3: BinaryOp = {
+	"<" => BinaryOp::LessThan,
+	">" => BinaryOp::GreaterThan,
+	"<=" => BinaryOp::LessEq,
+	">=" => BinaryOp::GreaterEq,
+	"==" => BinaryOp::Equal,
+	"!=" => BinaryOp::NotEqual,
 }
 
 Expr4: Expr = {
@@ -239,9 +221,8 @@ Expr9: Expr = {
 Expr10: Expr = {
 	<lno: @L> <c: Const> => Expr::Constant(c, file_info.location(BytePos::from(lno))),
 	<lno: @L> "Some(" <e: Expr> ")" => Expr::OptionInitializer(Box::new(e), file_info.location(BytePos::from(lno))),
-	<lno: @L> <f: Expr10> "(" ")" => Expr::FunctionCall(Box::new(f), Vec::new(), file_info.location(BytePos::from(lno))),
 	<lno: @L> <f: Expr10> "(" <e: Expr> ")" => Expr::FunctionCall(Box::new(f), vec![e], file_info.location(BytePos::from(lno))),
-	<lno: @L> <f: Expr10> "(" <c: CommaedExprs> ")" => Expr::FunctionCall(Box::new(f), c, file_info.location(BytePos::from(lno))),
+	<lno: @L> <f: Expr10> "(" <c: CommaedExprs?> ")" => Expr::FunctionCall(Box::new(f), c.unwrap_or(vec![]), file_info.location(BytePos::from(lno))),
 	<lno: @L> <e1:Expr10> "[" <e2:Expr> "]" => Expr::ArrayOrMapRef(Box::new(e1), Box::new(e2), file_info.location(BytePos::from(lno))),
 	<lno: @L> <e:Expr10> "." <i:Ident> => Expr::DotRef(Box::new(e), i, file_info.location(BytePos::from(lno))),
 	<lno: @L> <e:Expr10> "." <u:UnsignedInteger> => Expr::TupleRef(Box::new(e), u, file_info.location(BytePos::from(lno))),
@@ -269,27 +250,18 @@ Expr11: Expr = {
 	),
 	<lno: @L> "newmap" "<" <k:Type> "," <v:Type> ","? ">" => Expr::NewMap(k, v, file_info.location(BytePos::from(lno))),
 	<lno: @L> "unsafecast" "<" <t:Type> ">" "(" <e:Expr> ")" => Expr::UnsafeCast(Box::new(e), t, file_info.location(BytePos::from(lno))),
-	Expr13,
+	Expr12,
 }
 
-// Expr12 does not exist
-
-Expr13: Expr = {
-	<lno: @L> "asm" "(" ")" <rt:Type> "{" <body:AsmInsn*> "}" => Expr::Asm(rt, body, vec![], file_info.location(BytePos::from(lno))),
-	<lno: @L> "asm" "(" <a:CommaedExprs> ")" <rt:Type> "{" <body:AsmInsn*> "}" => Expr::Asm(rt, body, a, file_info.location(BytePos::from(lno))),
-	Expr14,	
-}
-
-Expr14: Expr = {
+Expr12: Expr = {
+	<lno: @L> "asm" "(" <a:CommaedExprs?> ")" <rt:Type> "{" <body:AsmInsn*> "}" => Expr::Asm(rt, body, a.unwrap_or(vec![]), file_info.location(BytePos::from(lno))),
 	<lno: @L> "struct" "{" <fi: FieldInitializers> "}" => Expr::StructInitializer(fi, file_info.location(BytePos::from(lno))),
 	"(" <e: Expr> ")" => <>,
-	<lno: @L> "(" ")" => Expr::Tuple(vec![], file_info.location(BytePos::from(lno))),
-	<lno: @L> "(" <c: CommaedExprs> ")" => Expr::Tuple(c, file_info.location(BytePos::from(lno))),
+	<lno: @L> "(" <c: CommaedExprs?> ")" => Expr::Tuple(c.unwrap_or(vec![]), file_info.location(BytePos::from(lno))),
 	<lno: @L> <i: Ident> => Expr::VariableRef(i, file_info.location(BytePos::from(lno))),
 }
 
 Const: Constant = {
-    //"Some(" <c: Const> ")" => Constant::Option(OptionConst::Some(Box::new(c))),
     <u: UnsignedInteger> => Constant::Uint(u),
 	<s: SignedInteger> => Constant::Int(s),
 	"None<" <t: Type> ">" => Constant::Option(OptionConst::None(t)),
