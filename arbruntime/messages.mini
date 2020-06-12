@@ -32,17 +32,23 @@ import func accountStore_transferEthBalance(
 ) -> option<AccountStore>;
 import func accountStore_createAccountFromEvmCode(
     acctStore: AccountStore,
+    newAddr: address,
     evmCode: ByteArray,
     evmJumpTable: map<uint, func()>,
     startCodePt: func(),
     storageMap: map<uint, uint>
-) -> AccountStore;
+) -> option<AccountStore>;
 import func account_checkAndIncrSeqNum(
     account: Account, 
     seqNumRecvd: uint
 ) -> option<Account>;
+
+import func initEvmCallStack(addr: address);
+
 import func bytearray_unmarshalBytes(mb: MarshalledBytes) -> ByteArray;
+
 import func bytestream_new(ba: ByteArray) -> ByteStream;
+
 import func unmarshalCodeSegment(bs: ByteStream) -> option<(func()->any, func())>;
 import func makeInitStructures(v: any) -> (map<uint, func()>, map<uint, uint>);
 import func translateEvmCodeSegment(bs: ByteStream) -> option<(func(), map<uint, func()>)>;
@@ -168,13 +174,20 @@ public impure func handleEthbridgeMessage(msg: ArbMessage) {
                 //       because it contains sender address and sender seq number
                 // also it contains the full EVM code
                 let newAddr = address(hash(msg));
-                globalAS = accountStore_createAccountFromEvmCode(
+                if let Some(as) = accountStore_createAccountFromEvmCode(
                     globalAS,
+                    newAddr,
                     ba,
                     evmJumpTable,
                     codept,
                     makeStorageMap(codeLoadMsg.storageInfo)
-                );
+                ) {
+                    globalAS = as;
+                } else {
+                    asm((666, 0),) { log };
+                }
+            } else {
+                asm((666, 1),) { log };
             }
             setGlobalAccountStore(globalAS,);
         }
@@ -192,5 +205,5 @@ func makeStorageMap(storageInfo: StorageInfo) -> map<uint, uint> {
 }
 
 impure func handleValidTxMessage(txMsg: TxMessage) {
-    //TODO
+    initEvmCallStack(txMsg.to,);
 }

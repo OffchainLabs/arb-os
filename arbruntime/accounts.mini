@@ -15,6 +15,7 @@
 //
 
 import type ByteArray;
+
 import func bytearray_size(ba: ByteArray) -> uint;
 import func tokens_getERC20template() -> address;
 import func tokens_getERC721template() -> address;
@@ -78,7 +79,7 @@ public func accountStore_set(
 }
 
 public func account_isEmpty(acct: Account) -> bool {
-    return (acct.nextSeqNum == 0) && (acct.ethBalance == 0) && (acct.code == None<ByteArray>);
+    return (acct.nextSeqNum == 1) && (acct.ethBalance == 0) && (acct.code == None<ByteArray>);
 }
 
 public func account_checkAndIncrSeqNum(
@@ -116,6 +117,26 @@ public func account_fetchAndIncrSeqNum(account: Account) -> (uint, Account) {
         nextSeqNum: ret+1
     };
     return (ret, account,);
+}
+
+public func accountStore_createAccountFromEvmCode(
+    store: AccountStore,
+    newAddr: address,
+    code: ByteArray,
+    evmJumpTable: map<uint, func()>,
+    initCodePt: func(),
+    storageMap: map<uint, uint>
+) -> option<AccountStore> {
+    let oldAcct = accountStore_get(store, newAddr);
+    if (account_isEmpty(oldAcct)) {
+        return Some(accountStore_set(
+            store,
+            newAddr,
+            oldAcct //BUGBUG
+        ));
+    } else {
+        return None<AccountStore>;
+    }
 }
 
 public func accountStore_createERC20(
@@ -174,6 +195,16 @@ public func account_setEthBalance(account: Account, newBal: uint) -> Account {
 
 public func account_addToEthBalance(account: Account, addition: uint) -> Account {
     return account with { ethBalance: account.ethBalance + addition };
+}
+
+public func account_deductFromEthBalance(account: Account, deduction: uint) -> option<Account> {
+    if (account.ethBalance >= deduction) {
+        return Some(
+            account with { ethBalance: account.ethBalance-deduction }
+        );
+    } else {
+        return None<Account>;
+    }
 }
 
 // transfer eth; return None if insufficient funds

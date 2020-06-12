@@ -19,9 +19,15 @@ import type Account;
 import type Queue;
 import type ByteArray;
 
+import func getGlobalAccountStore() -> AccountStore;
 import func accountStore_get(store: AccountStore, addr: address) -> Account;
 import func accountStore_set(store: AccountStore, addr: address, acct: Account) -> AccountStore;
 import func account_setStorageCell(acct: Account, offset: uint, value: uint) -> Account;
+import func account_getBalance(acct: Account) -> uint;
+import func account_setBalance(acct: Account, bal: uint) -> Account;
+import func account_deductFromEthBalance(account: Account, deduction: uint) -> option<Account>;
+
+import func bytearray_new(capacity: uint, variableSize: bool) -> ByteArray;
 
 import func queue_new() -> Queue;
 import func queue_isEmpty(q: Queue) -> bool;
@@ -34,69 +40,136 @@ type EvmCallFrame = struct {
     accountStore: AccountStore,
     currentAccount: Account,
     memory: ByteArray,
-    parent: any,      // really an EvmCallFrame (or null), but compiler doesn't allow recursive types
+    parent: option<any>,      // really an option<EvmCallFrame>, but compiler doesn't allow recursive types
 }
 
-var globalCallStack: EvmCallFrame;
+var globalCallStack: option<EvmCallFrame>;
 
-public impure func evmCallStack_isEmpty() -> bool {
-    return null == unsafecast<any>(globalCallStack);
+public impure func initEvmCallStack(
+    addr: address,
+) {
+    let globalAS = getGlobalAccountStore();
+    globalCallStack = Some(struct {
+        addr: addr,
+        accountStore: globalAS,
+        currentAccount: accountStore_get(globalAS, addr),
+        memory: bytearray_new(8, true),
+        parent: None<any>
+    });
 }
 
-public impure func evmCallStack_currentFrame() -> EvmCallFrame {
+public impure func evmCallStack_currentFrame() -> option<EvmCallFrame> {
     return globalCallStack;
 }
 
-public impure func evmCallStack_currentAccount() -> Account {
-    if (evmCallStack_isEmpty()) {
-        return unsafecast<Account>(null);
-    }
-    return globalCallStack.currentAccount;
-}
-
-public impure func evmCallStack_writeCurrentAccount(acct: Account) {
-    if ( ! evmCallStack_isEmpty()) {
-        globalCallStack = globalCallStack with { currentAccount: acct };
-    }
-}
-
-public impure func evmCallStack_getAccount(addr: address) -> Account {
-    if (evmCallStack_isEmpty()){
-        return unsafecast<Account>(null);
-    }
-    if (globalCallStack.addr == addr) {
-        return globalCallStack.currentAccount;
+public impure func evmCallStack_currentAccount() -> option<Account> {
+    if let Some(topFrame) = globalCallStack {
+        return Some(topFrame.currentAccount);
     } else {
-        return accountStore_get(globalCallStack.accountStore, addr);
+        return None<Account>;
+    }
+}
+
+public impure func evmCallStack_currentAccountAndAddr() -> option<(Account, address)> {
+    if let Some(topFrame) = globalCallStack {
+        return Some((topFrame.currentAccount, topFrame.addr));
+    } else {
+        return None<(Account, address)>;
+    }
+}
+
+public impure func evmCallStack_writeCurrentAccount(acct: Account) -> bool {
+    if let Some(topFrame) = globalCallStack {
+        globalCallStack = Some(topFrame with { currentAccount: acct });
+        return true;
+    } else {
+        return false;
+    }
+}
+
+public impure func evmCallStack_getAccount(addr: address) -> option<Account> {
+    if let Some(topFrame) = globalCallStack {
+       if (topFrame.addr == addr) {
+            return Some(topFrame.currentAccount);
+        } else {
+            return Some(accountStore_get(topFrame.accountStore, addr));
+        }
+    } else {
+        return None<Account>;
     }
 }
 
 public impure func evmCallStack_setAccount(addr: address, acct: Account) -> bool {
-    if (evmCallStack_isEmpty()) {
+    if let Some(topFrame) = globalCallStack {
+        if (topFrame.addr == addr) {
+            globalCallStack = Some(topFrame with { currentAccount: acct });
+        } else {
+            globalCallStack = Some(topFrame with {
+                accountStore: accountStore_set(topFrame.accountStore, addr, acct)
+            });
+        }
+        return true;
+    } else {
         return false;
     }
-    if (globalCallStack.addr == addr) {
-        globalCallStack = globalCallStack with { currentAccount: acct };
+}
+
+public impure func evmCallStack_setCurrentFrameMemory(mem: ByteArray) -> bool {
+    if let Some(topFrame) = globalCallStack {
+        globalCallStack = Some(topFrame with { memory: mem });
+        return true;
     } else {
-        globalCallStack = globalCallStack with { 
-            accountStore: accountStore_set(globalCallStack.accountStore, addr, acct)
-        };
+        return false;
     }
-    return true;
 }
 
-public impure func evmCallStack_setCurrentFrameMemory(mem: ByteArray) {
-    globalCallStack = globalCallStack with { memory: mem };
+public impure func evmCallStack_transferEthFromCurrent(
+    dest: address,
+    amount: uint,
+) -> bool {
+    if let Some(topFrame) = globalCallStack {
+        if (topFrame.addr == dest) {
+            return false;   // can't do a self-transfer
+        }
+        let curAcct = topFrame.currentAccount;
+        let curBalance = account_getBalance(curAcct);
+        if (curBalance < amount) {
+            return false;   // insufficient funds
+        }
+        topFrame = topFrame with {
+            currentAccount: account_setBalance(curAcct, curBalance-amount)
+        };
+        let otherAcct = accountStore_get(topFrame.accountStore, dest);
+        topFrame = topFrame with {
+            accountStore: accountStore_set(
+                topFrame.accountStore,
+                dest,
+                account_setBalance(
+                    otherAcct,
+                    account_getBalance(otherAcct) + amount
+                )
+            )
+        };
+        globalCallStack = Some(topFrame);
+        return true;
+    } else {
+        return false;  // no current call frame
+    }
 }
 
-public impure func evmCallStack_setCurrentFrameStorageCell(offset: uint, value: uint) {
-    globalCallStack = globalCallStack with {
-        currentAccount: account_setStorageCell(
-            globalCallStack.currentAccount,
-            offset,
-            value
-        )
-    };
+public impure func evmCallStack_setCurrentFrameStorageCell(offset: uint, value: uint) -> bool {
+    if let Some(topFrame) = globalCallStack {
+        globalCallStack = Some(topFrame with {
+            currentAccount: account_setStorageCell(
+                topFrame.currentAccount,
+                offset,
+                value
+            )
+        });
+        return true;
+    } else {
+        return false;
+    }
 }
 
 public func evmCallFrame_currentAccount(frame: EvmCallFrame) -> Account {
