@@ -209,22 +209,22 @@ Expr8: Expr = {
 	<lno: @L> <l:Expr8> "*" <r:Expr9> => Expr::new_binary(BinaryOp::Times, l, r, file_info.location(BytePos::from(lno))),
 	<lno: @L> <l:Expr8> "/" <r:Expr9> => Expr::new_binary(BinaryOp::Div, l, r, file_info.location(BytePos::from(lno))),
 	<lno: @L> <l:Expr8> "%" <r:Expr9> => Expr::new_binary(BinaryOp::Mod, l, r, file_info.location(BytePos::from(lno))),
-	Expr0,
+	Expr9,
 };
 
-Expr0: Expr = {
+Expr9: Expr = {
 	<lno: @L> <e: Expr0> "?" => Expr::Try(Box::new(e), file_info.location(BytePos::from(lno))),
-	Expr9,
+	Expr10,
 }
 
-Expr9: Expr = {
+Expr10: Expr = {
 	<lno: @L> "-" <e: Expr9> => Expr::new_unary(UnaryOp::Minus, e, file_info.location(BytePos::from(lno))),
 	<lno: @L> "!" <e: Expr9> => Expr::new_unary(UnaryOp::Not, e, file_info.location(BytePos::from(lno))),
 	<lno: @L> "~" <e: Expr9> => Expr::new_unary(UnaryOp::BitwiseNeg, e, file_info.location(BytePos::from(lno))),
-	Expr10,
+	Expr11,
 };
 
-Expr10: Expr = {
+Expr11: Expr = {
 	<lno: @L> <c: Const> => Expr::Constant(c, file_info.location(BytePos::from(lno))),
 	<lno: @L> "Some(" <e: Expr> ")" => Expr::OptionInitializer(Box::new(e), file_info.location(BytePos::from(lno))),
 	<lno: @L> <f: Expr10> "(" <e: Expr> ")" => Expr::FunctionCall(Box::new(f), vec![e], file_info.location(BytePos::from(lno))),
@@ -232,10 +232,10 @@ Expr10: Expr = {
 	<lno: @L> <e1:Expr10> "[" <e2:Expr> "]" => Expr::ArrayOrMapRef(Box::new(e1), Box::new(e2), file_info.location(BytePos::from(lno))),
 	<lno: @L> <e:Expr10> "." <i:Ident> => Expr::DotRef(Box::new(e), i, file_info.location(BytePos::from(lno))),
 	<lno: @L> <e:Expr10> "." <u:UnsignedInteger> => Expr::TupleRef(Box::new(e), u, file_info.location(BytePos::from(lno))),
-	Expr11,
+	Expr12,
 }
 
-Expr11: Expr = {
+Expr12: Expr = {
 	<lno: @L> "hash" "(" <e: Expr> ")" => Expr::new_unary(UnaryOp::Hash, e, file_info.location(BytePos::from(lno))),
 	<lno: @L> "hash" "(" <l:Expr> "," <r:Expr> ","? ")" => Expr::new_binary(BinaryOp::Hash, l, r, file_info.location(BytePos::from(lno))),
 	<lno: @L> "len" "(" <e: Expr> ")" => Expr::new_unary(UnaryOp::Len, e, file_info.location(BytePos::from(lno))),
@@ -256,10 +256,10 @@ Expr11: Expr = {
 	),
 	<lno: @L> "newmap" "<" <k:Type> "," <v:Type> ","? ">" => Expr::NewMap(k, v, file_info.location(BytePos::from(lno))),
 	<lno: @L> "unsafecast" "<" <t:Type> ">" "(" <e:Expr> ")" => Expr::UnsafeCast(Box::new(e), t, file_info.location(BytePos::from(lno))),
-	Expr12,
+	Expr13,
 }
 
-Expr12: Expr = {
+Expr13: Expr = {
 	<lno: @L> "asm" "(" <a:CommaedExprs?> ")" <rt:Type> "{" <body:AsmInsn*> "}" => Expr::Asm(rt, body, a.unwrap_or(vec![]), file_info.location(BytePos::from(lno))),
 	<lno: @L> "struct" "{" <fi: FieldInitializers> "}" => Expr::StructInitializer(fi, file_info.location(BytePos::from(lno))),
 	"(" <e: Expr> ")" => <>,
