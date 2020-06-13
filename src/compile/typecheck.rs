@@ -1248,7 +1248,8 @@ fn typecheck_expr(
                 Type::Option(_) | Type::Any => {}
                 _ => {
                     return Err(new_type_error(
-                        "Can only use \"?\" operator in functions that can return option".to_string(),
+                        "Can only use \"?\" operator in functions that can return option"
+                            .to_string(),
                         *loc,
                     ))
                 }

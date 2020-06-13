@@ -233,7 +233,7 @@ fn mavm_codegen_statements<'a>(
                     string_table,
                     import_func_map,
                     global_var_map,
-                    0,
+                    i,
                 )?;
                 label_gen = lg;
                 code = c;
@@ -251,7 +251,7 @@ fn mavm_codegen_statements<'a>(
                 string_table,
                 import_func_map,
                 global_var_map,
-                0,
+                n_args,
             )?;
             c.push(Instruction::from_opcode(Opcode::Jump, *loc));
             c.push(Instruction::from_opcode(Opcode::Label(ret_label), *loc));
@@ -539,7 +539,7 @@ fn mavm_codegen_statements<'a>(
                     string_table,
                     import_func_map,
                     global_var_map,
-                    0,
+                    i,
                 )?;
                 label_gen = lg;
                 code = c;
@@ -810,7 +810,7 @@ fn mavm_codegen_expr<'a>(
     string_table: &StringTable,
     import_func_map: &HashMap<StringId, Label>,
     global_var_map: &HashMap<StringId, usize>,
-    prepushed_vars: usize,
+    prepushed_vals: usize,
 ) -> Result<(LabelGenerator, &'a mut Vec<Instruction>), CodegenError> {
     match expr {
         TypeCheckedExpr::UnaryOp(op, tce, _, loc) => {
@@ -822,7 +822,7 @@ fn mavm_codegen_expr<'a>(
                 string_table,
                 import_func_map,
                 global_var_map,
-                prepushed_vars,
+                prepushed_vals,
             )?;
             label_gen = lg;
             code = c;
@@ -857,7 +857,7 @@ fn mavm_codegen_expr<'a>(
                 string_table,
                 import_func_map,
                 global_var_map,
-                prepushed_vars,
+                prepushed_vals,
             )?;
             c.push(Instruction::from_opcode_imm(
                 Opcode::Noop,
@@ -880,7 +880,7 @@ fn mavm_codegen_expr<'a>(
                 string_table,
                 import_func_map,
                 global_var_map,
-                prepushed_vars,
+                prepushed_vals,
             )?;
             let (lg, c) = mavm_codegen_expr(
                 tce1,
@@ -890,7 +890,7 @@ fn mavm_codegen_expr<'a>(
                 string_table,
                 import_func_map,
                 global_var_map,
-                prepushed_vars + 1,
+                prepushed_vals + 1,
             )?;
             label_gen = lg;
             code = c;
@@ -940,7 +940,7 @@ fn mavm_codegen_expr<'a>(
                 string_table,
                 import_func_map,
                 global_var_map,
-                prepushed_vars,
+                prepushed_vals,
             )?;
             let (lab, lg) = lg.next();
             c.push(Instruction::from_opcode(Opcode::Dup0, *loc));
@@ -958,7 +958,7 @@ fn mavm_codegen_expr<'a>(
                 string_table,
                 import_func_map,
                 global_var_map,
-                prepushed_vars,
+                prepushed_vals,
             )?;
             c.push(Instruction::from_opcode(Opcode::Label(lab), *loc));
             Ok((lg, c))
@@ -972,7 +972,7 @@ fn mavm_codegen_expr<'a>(
                 string_table,
                 import_func_map,
                 global_var_map,
-                prepushed_vars,
+                prepushed_vals,
             )?;
             let (lab, lg) = lg.next();
             c.push(Instruction::from_opcode(Opcode::Dup0, *loc));
@@ -991,7 +991,7 @@ fn mavm_codegen_expr<'a>(
                 string_table,
                 import_func_map,
                 global_var_map,
-                prepushed_vars,
+                prepushed_vals,
             )?;
             c.push(Instruction::from_opcode(Opcode::Label(lab), *loc));
             Ok((lg, c))
@@ -1044,7 +1044,7 @@ fn mavm_codegen_expr<'a>(
                 string_table,
                 import_func_map,
                 global_var_map,
-                prepushed_vars,
+                prepushed_vals,
             )?;
             c.push(Instruction::from_opcode_imm(
                 Opcode::TupleGet(tuple_size),
@@ -1067,7 +1067,7 @@ fn mavm_codegen_expr<'a>(
                 string_table,
                 import_func_map,
                 global_var_map,
-                prepushed_vars,
+                prepushed_vals,
             )?;
             label_gen = lg;
             code = c;
@@ -1107,7 +1107,7 @@ fn mavm_codegen_expr<'a>(
                     string_table,
                     import_func_map,
                     global_var_map,
-                    prepushed_vars + i,
+                    prepushed_vals + i,
                 )?;
                 label_gen = lg;
                 code = c;
@@ -1125,7 +1125,7 @@ fn mavm_codegen_expr<'a>(
                 string_table,
                 import_func_map,
                 global_var_map,
-                prepushed_vars + n_args + 1,
+                prepushed_vals + n_args + 1,
             )?;
             c.push(Instruction::from_opcode(Opcode::Jump, *loc));
             c.push(Instruction::from_opcode(Opcode::Label(ret_label), *loc));
@@ -1143,7 +1143,7 @@ fn mavm_codegen_expr<'a>(
                     string_table,
                     import_func_map,
                     global_var_map,
-                    prepushed_vars + i,
+                    prepushed_vals + i,
                 )?;
                 label_gen = lg;
                 code = c;
@@ -1175,7 +1175,7 @@ fn mavm_codegen_expr<'a>(
                     string_table,
                     import_func_map,
                     global_var_map,
-                    prepushed_vars + i,
+                    prepushed_vals + i,
                 )?;
                 label_gen = lg;
                 code = c;
@@ -1219,7 +1219,7 @@ fn mavm_codegen_expr<'a>(
                 string_table,
                 import_func_map,
                 global_var_map,
-                prepushed_vars,
+                prepushed_vals,
             )
         }
         TypeCheckedExpr::FixedArrayRef(expr1, expr2, size, _, loc) => {
@@ -1231,7 +1231,7 @@ fn mavm_codegen_expr<'a>(
                 string_table,
                 import_func_map,
                 global_var_map,
-                prepushed_vars,
+                prepushed_vals,
             )?;
             let (lg, c) = mavm_codegen_expr(
                 expr2,
@@ -1241,7 +1241,7 @@ fn mavm_codegen_expr<'a>(
                 string_table,
                 import_func_map,
                 global_var_map,
-                prepushed_vars + 1,
+                prepushed_vals + 1,
             )?;
             label_gen = lg;
             code = c;
@@ -1293,7 +1293,7 @@ fn mavm_codegen_expr<'a>(
                 string_table,
                 import_func_map,
                 global_var_map,
-                prepushed_vars,
+                prepushed_vals,
             )
         }
         TypeCheckedExpr::NewArray(sz_expr, base_type, array_type, loc) => {
@@ -1324,7 +1324,7 @@ fn mavm_codegen_expr<'a>(
                 string_table,
                 import_func_map,
                 global_var_map,
-                prepushed_vars,
+                prepushed_vals,
             )
         }
         TypeCheckedExpr::NewFixedArray(sz, bo_expr, _, loc) => {
@@ -1338,7 +1338,7 @@ fn mavm_codegen_expr<'a>(
                         string_table,
                         import_func_map,
                         global_var_map,
-                        prepushed_vars,
+                        prepushed_vals,
                     )?;
                     label_gen = lg;
                     code = c;
@@ -1410,7 +1410,7 @@ fn mavm_codegen_expr<'a>(
                 string_table,
                 import_func_map,
                 global_var_map,
-                prepushed_vars,
+                prepushed_vals,
             )
         }
         TypeCheckedExpr::ArrayMod(arr, index, val, _, loc) => {
@@ -1437,7 +1437,7 @@ fn mavm_codegen_expr<'a>(
                 string_table,
                 import_func_map,
                 global_var_map,
-                prepushed_vars,
+                prepushed_vals,
             )
         }
         TypeCheckedExpr::FixedArrayMod(arr, index, val, size, _, loc) => codegen_fixed_array_mod(
@@ -1481,7 +1481,7 @@ fn mavm_codegen_expr<'a>(
                 string_table,
                 import_func_map,
                 global_var_map,
-                prepushed_vars,
+                prepushed_vals,
             )
         }
         TypeCheckedExpr::StructMod(struc, index, val, t, loc) => {
@@ -1493,7 +1493,7 @@ fn mavm_codegen_expr<'a>(
                 string_table,
                 import_func_map,
                 global_var_map,
-                prepushed_vars,
+                prepushed_vals,
             )?;
             let (lg, c) = mavm_codegen_expr(
                 struc,
@@ -1503,7 +1503,7 @@ fn mavm_codegen_expr<'a>(
                 string_table,
                 import_func_map,
                 global_var_map,
-                prepushed_vars + 1,
+                prepushed_vals + 1,
             )?;
             label_gen = lg;
             code = c;
@@ -1527,7 +1527,7 @@ fn mavm_codegen_expr<'a>(
             string_table,
             import_func_map,
             global_var_map,
-            prepushed_vars,
+            prepushed_vals,
         ),
         TypeCheckedExpr::Asm(_, insns, args, _) => {
             let n_args = args.len();
@@ -1540,7 +1540,7 @@ fn mavm_codegen_expr<'a>(
                     string_table,
                     import_func_map,
                     global_var_map,
-                    prepushed_vars + i,
+                    prepushed_vals + i,
                 )?;
                 label_gen = lg;
                 code = c;
@@ -1559,10 +1559,9 @@ fn mavm_codegen_expr<'a>(
                 string_table,
                 import_func_map,
                 global_var_map,
-                prepushed_vars,
+                prepushed_vals,
             )?;
             let (extract, label_gen) = label_gen.next();
-            let (end, label_gen) = label_gen.next();
             code.push(Instruction::from_opcode(Opcode::Dup0, *loc));
             code.push(Instruction::from_opcode_imm(
                 Opcode::Tget,
@@ -1574,24 +1573,19 @@ fn mavm_codegen_expr<'a>(
                 Value::Label(extract),
                 *loc,
             ));
+            // We use the auxstack here to temporarily store the return value while we clear the temp values on the stack
             code.push(Instruction::from_opcode(Opcode::AuxPush, *loc));
-            for _ in 0..prepushed_vars {
+            for _ in 0..prepushed_vals {
                 code.push(Instruction::from_opcode(Opcode::Pop, *loc));
             }
             code.push(Instruction::from_opcode(Opcode::AuxPop, *loc));
             code.push(Instruction::from_opcode(Opcode::Return, *loc));
-            code.push(Instruction::from_opcode_imm(
-                Opcode::Jump,
-                Value::Label(end),
-                *loc,
-            ));
             code.push(Instruction::from_opcode(Opcode::Label(extract), *loc));
             code.push(Instruction::from_opcode_imm(
                 Opcode::Tget,
                 Value::Int(Uint256::one()),
                 *loc,
             ));
-            code.push(Instruction::from_opcode(Opcode::Label(end), *loc));
             Ok((label_gen, code))
         }
     }
@@ -1628,7 +1622,7 @@ fn codegen_fixed_array_mod<'a>(
         string_table,
         import_func_map,
         global_var_map,
-        0,
+        1,
     )?;
     let (mut label_gen, code) = mavm_codegen_expr(
         idx_expr,
@@ -1638,7 +1632,7 @@ fn codegen_fixed_array_mod<'a>(
         string_table,
         import_func_map,
         global_var_map,
-        0,
+        2,
     )?;
     if size != 8 {
         // TODO: safe for if-condition to say size does not equal any power of 8
