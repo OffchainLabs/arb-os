@@ -97,6 +97,24 @@ public func bytearray_unmarshalBytes(inBytes: MarshalledBytes) -> ByteArray {
     return ba;
 }
 
+public func bytearray_marshalFull(ba: ByteArray) -> MarshalledBytes {
+    let nbytes = ba.size;
+    let nwords = (nbytes+31)/32;
+    let words = unsafecast<MarshalledBytesCell>(0);
+    let i = 0;
+    while (i < nwords) {
+        words = struct {
+            rest: words,
+            first: ba.contents[i],
+        };
+        i = i+1;
+    }
+    return struct {
+        nbytes: nbytes,
+        contents: words,
+    };
+}
+
 // bytearray_size gets the size of a ByteArray
 public func bytearray_size(ba: ByteArray) -> uint {
     return ba.size;
