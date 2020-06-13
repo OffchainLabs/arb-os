@@ -39,6 +39,7 @@ import func account_getEvmJumpTable(acct: Account) -> map<uint, func()>;
 import impure func inbox_currentTimestamp() -> uint;
 import impure func inbox_currentBlockNumber() -> uint;
 
+import func bytearray_new(capacity: uint, autoExpand: bool) -> ByteArray;
 import func bytearray_size(ba: ByteArray) -> uint;
 import func bytearray_getByte(ba: ByteArray, offset: uint) -> option<uint>;
 import func bytearray_setByte(ba: ByteArray, offset: uint, val: uint) -> option<ByteArray>;
@@ -411,6 +412,7 @@ public func evmOp_revert(memOffset: uint, memNbytes: uint) {
             memNbytes
         ) {
             //BUGBUG: do the appropriate thing with the returndata
+            // emit log item Tuple(fullcallmsg, evmLogsAsStack, returnDataAsBytestack, returnCode0)
         }
     }
 
