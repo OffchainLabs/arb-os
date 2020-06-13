@@ -28,7 +28,7 @@ pub use xformcode::{value_from_field_list, TUPLE_SIZE};
 
 mod optimize;
 mod striplabels;
-mod xformcode;
+pub mod xformcode;
 
 #[derive(Serialize, Deserialize)]
 pub struct LinkedProgram {

@@ -20,7 +20,7 @@ use super::typecheck::{
     TypeCheckedExpr, TypeCheckedFunc, TypeCheckedIfArm, TypeCheckedMatchPattern,
     TypeCheckedStatement,
 };
-use crate::link::ImportedFunc;
+use crate::link::{ImportedFunc, xformcode::TupleTree};
 use crate::link::TUPLE_SIZE;
 use crate::mavm::{Instruction, Label, LabelGenerator, Opcode, Value};
 use crate::pos::Location;
@@ -1148,10 +1148,10 @@ fn mavm_codegen_expr<'a>(
                 label_gen = lg;
                 code = c;
             }
-            let empty_vec = vec![Value::none(); fields_len];
+            let empty_vec = TupleTree::new(fields_len, false).make_empty();
             code.push(Instruction::from_opcode_imm(
                 Opcode::Noop,
-                Value::Tuple(empty_vec),
+                empty_vec,
                 *loc,
             ));
             for i in 0..fields_len {

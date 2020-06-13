@@ -172,13 +172,13 @@ pub fn make_uninitialized_tuple(size: usize) -> Value {
 }
 
 #[derive(Debug)]
-enum TupleTree {
+pub enum TupleTree {
     Single,
     Tree(usize, Vec<TupleTree>),
 }
 
 impl TupleTree {
-    fn new(size: usize, is_local: bool) -> TupleTree {
+    pub fn new(size: usize, is_local: bool) -> TupleTree {
         if (size == 1) && !is_local {
             return TupleTree::Single;
         }
@@ -206,7 +206,7 @@ impl TupleTree {
         TupleTree::Tree(size, v)
     }
 
-    fn make_empty(&self) -> Value {
+    pub fn make_empty(&self) -> Value {
         match self {
             TupleTree::Single => Value::Tuple(Vec::new()),
             TupleTree::Tree(_, v) => {
