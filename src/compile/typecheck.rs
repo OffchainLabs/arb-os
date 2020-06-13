@@ -1247,19 +1247,20 @@ fn typecheck_expr(
             ))
         }
         Expr::Try(inner, loc) => {
-            if let Type::Option(_) = unwind_type {
-                () // We should use if !let when it is stabilized
-            } else {
-                return Err(new_type_error(
-                    "Can only use \"?\" operator in functions that return option".to_string(),
-                    *loc,
-                ));
+            match unwind_type {
+                Type::Option(_) | Type::Any => {}
+                _ => {
+                    return Err(new_type_error(
+                        "Can only use \"?\" operator in functions that return option".to_string(),
+                        *loc,
+                    ))
+                }
             }
             let res = typecheck_expr(inner, type_table, global_vars, func_table, unwind_type)?;
             match res.get_type() {
                 Type::Option(t) => Ok(TypeCheckedExpr::Try(Box::new(res), *t, *loc)),
                 other => Err(new_type_error(
-                    format!("Try expression requires option type, found\"{:?}\"", other),
+                    format!("Try expression requires option type, found \"{:?}\"", other),
                     *loc,
                 )),
             }
