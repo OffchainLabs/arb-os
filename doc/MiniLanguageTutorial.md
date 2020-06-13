@@ -238,6 +238,10 @@ Values of type `anytype` do not have any representation that is understood by th
 
 > Return a value from the current function. The value of *expression* must be assignable to the function's *returntype*.
 
+`return` `None` `;`
+
+> In a function that returns *option\<type\>*, this returns *None\<type\>*.
+
 `asm` (*expression1*, *expression2*, ... )  { *instructions* } ;
 
 > Escape to assembly code.  The arguments (*expression1*, *expression2*, etc.), if any, are pushed onto the AVM stack (with *expression1* at the top of the stack). Then the *instructions*, which are a sequence of AVM assembly instructions, are executed.  The assembly instructions are assumed to consume the arguments and leave nothing on the stack.  (There is another form of `asm`, which is an expression and returns a value on the stack.)
@@ -267,6 +271,10 @@ Mini never automatically converts types to make an operation succeed.  Programme
 ~ *expression*
 
 > Bitwise negation.  Defined for numeric types and `bytes32`. Produces a result of the same type as the operand.
+
+*expression* ?
+
+> The containing function must return either option or any, and *expression* must be an option. If expression is the Some variant, then it evaluates as the inner value, otherwise, this will cause the function to return None.
 
 *expression* + *expression*
 
