@@ -437,6 +437,11 @@ impl<'a> Machine {
                             }
                         }
                         "show static\n" => println!("Static contents: {}", self.static_val),
+                        "run\n" => {
+                            breakpoint = false;
+                            exit = true;
+                            break;
+                        }
                         _ => println!("invalid input"),
                     }
                     if exit {

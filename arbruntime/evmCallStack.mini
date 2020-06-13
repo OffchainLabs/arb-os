@@ -41,6 +41,7 @@ type EvmCallFrame = struct {
     currentAccount: Account,
     calldata: ByteArray,
     callvalue: uint,
+    returndata: option<ByteArray>,
     memory: ByteArray,
     parent: option<any>,      // really an option<EvmCallFrame>, but compiler doesn't allow recursive types
 }
@@ -59,6 +60,7 @@ public impure func initEvmCallStack(
         currentAccount: accountStore_get(globalAS, addr),
         calldata: calldata,
         callvalue: callvalue,
+        returndata: None<ByteArray>,
         memory: bytearray_new(8, true),
         parent: None<any>
     });
@@ -198,6 +200,9 @@ public func evmCallFrame_getCallvalue(frame: EvmCallFrame) -> uint {
     return frame.callvalue;
 }
 
+public func evmCallFrame_getCalldata(frame: EvmCallFrame) -> ByteArray {
+    return frame.calldata;
+}
 
 var selfDestructQueue: Queue;
 

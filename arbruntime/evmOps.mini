@@ -26,6 +26,7 @@ import func evmCallFrame_currentAccount(frame: EvmCallFrame) -> Account;
 import func evmCallFrame_getAccount(frame: EvmCallFrame) -> Account;
 import func evmCallFrame_getMemory(frame: EvmCallFrame) -> ByteArray;
 import func evmCallFrame_getCallvalue(frame: EvmCallFrame) -> uint;
+import func evmCallFrame_getCalldata(fram: EvmCallFrame) -> ByteArray;
 import impure func selfDestructQueue_put(victim: address, owner: address);
 
 import func account_getAddress(acct: Account) -> address;
@@ -39,17 +40,17 @@ import impure func inbox_currentTimestamp() -> uint;
 import impure func inbox_currentBlockNumber() -> uint;
 
 import func bytearray_size(ba: ByteArray) -> uint;
-import func bytearray_getByte(ba: ByteArray, offset: uint) -> uint;
-import func bytearray_setByte(ba: ByteArray, offset: uint, val: uint) -> ByteArray;
-import func bytearray_get256(ba: ByteArray, offset: uint) -> uint;
-import func bytearray_set256(ba: ByteArray, offset: uint, val: uint) -> ByteArray;
-import func bytearray_copy(from: ByteArray, fromOffset: uint, to: ByteArray, toOffset: uint, nbytes: uint) -> ByteArray;
+import func bytearray_getByte(ba: ByteArray, offset: uint) -> option<uint>;
+import func bytearray_setByte(ba: ByteArray, offset: uint, val: uint) -> option<ByteArray>;
+import func bytearray_get256(ba: ByteArray, offset: uint) -> option<uint>;
+import func bytearray_set256(ba: ByteArray, offset: uint, val: uint) -> option<ByteArray>;
+import func bytearray_copy(from: ByteArray, fromOffset: uint, to: ByteArray, toOffset: uint, nbytes: uint) -> option<ByteArray>;
 
 import func keccak256(array: ByteArray, offset: uint, nbytes: uint) -> bytes32;
 
 
 public func evmOp_stop() {
-    panic; //TODO
+    evm_notYetImplemented(1,);
 }
 
 public func evmOp_sha3(baseMemAddr: uint, nbytes: uint) -> bytes32 {
@@ -85,11 +86,13 @@ public func evmOp_balance(addr: address) -> uint {
 }
     
 public func evmOp_origin() -> address {
-    panic; //TODO
+    evm_notYetImplemented(2,);
+    return address(0);
 }
     
 public func evmOp_caller() -> address {
-    panic; //TODO
+    evm_notYetImplemented(3,);
+    return address(0);
 }
 
 public func evmOp_callvalue() -> uint {
@@ -102,15 +105,27 @@ public func evmOp_callvalue() -> uint {
 }
 
 public func evmOp_calldataload(offset: uint) -> uint {
-    panic; //TODO
+    if let Some(topFrame) = evmCallStack_currentFrame() {
+        if let Some(val) = bytearray_get256(evmCallFrame_getCalldata(topFrame), offset) {
+            return val;
+        }
+    }
+
+    evm_runtimePanic();
+    return 0;
 }
 
 public func evmOp_calldatasize() -> uint {
-    panic; //TODO
+    if let Some(topFrame) = evmCallStack_currentFrame() {
+        return bytearray_size(evmCallFrame_getCalldata(topFrame));
+    } else {
+        evm_runtimePanic();
+        return 0;
+    }
 }
 
 public func evmOp_calldatacopy(memAddr: uint, calldataOffset: uint, nbytes: uint) {
-    panic; //TODO
+    evm_notYetImplemented(4,);
 }
 
 public impure func evmOp_codesize() -> uint {
@@ -127,7 +142,7 @@ public impure func evmOp_codesize() -> uint {
 public impure func evmOp_codecopy(memAddr: uint, codeOffset: uint, nbytes: uint) {
     if let Some(topFrame) = evmCallStack_currentFrame() {
         let memory = evmCallFrame_getMemory(topFrame);
-        memory = bytearray_copy(
+        if let Some(updatedMemory) = bytearray_copy(
             account_getCode(
                 evmCallFrame_currentAccount(topFrame)
             ),
@@ -135,29 +150,32 @@ public impure func evmOp_codecopy(memAddr: uint, codeOffset: uint, nbytes: uint)
             memory,
             memAddr,
             nbytes
-        );
-        if ( ! evmCallStack_setCurrentFrameMemory(memory,)) {
-            evm_runtimePanic();
+        ) {
+            if (evmCallStack_setCurrentFrameMemory(updatedMemory,)) {
+                return;
+            }
         }
-    } else {
-        evm_runtimePanic();
     }
+
+    evm_runtimePanic();
 }
 
 public func evmOp_extcodesize(addr: address) -> uint {
-    panic; //TODO
+    evm_notYetImplemented(5,);
+    return 0;
 }
 
 public func evmOp_extcodecopy(addr: address, memAddr: uint, codeOffset: uint, nbytes: uint) {
-    panic; //TODO
+    evm_notYetImplemented(6,);
 }
 
 public func evmOp_returndatasize() -> uint {
-    panic; //TODO
+    evm_notYetImplemented(7,);
+    return 0;
 }
 
 public func evmOp_returndatacopy(memAddr: uint, dataOffset: uint, nbytes: uint) {
-    panic; //TODO
+    evm_notYetImplemented(8,);
 }
 
 public impure func evmOp_timestamp() -> uint {
@@ -170,46 +188,48 @@ public func evmOp_number() -> uint {
 
 public impure func evmOp_mload(memAddr: uint) -> uint {
     if let Some(topFrame) = evmCallStack_currentFrame() {
-        return bytearray_get256(
+        if let Some(val) = bytearray_get256(
             evmCallFrame_getMemory(topFrame),
             memAddr
-        );
-    } else {
-        evm_runtimePanic();
-        return 0;
+        ) {
+            return val;
+        }
     }
+
+    evm_runtimePanic();
+    return 0;
 }
 
 public impure func evmOp_mstore(memAddr: uint, value: uint) {
     if let Some(topFrame) = evmCallStack_currentFrame() {
-        if ( ! evmCallStack_setCurrentFrameMemory(
-            bytearray_set256(
-                evmCallFrame_getMemory(topFrame),
-                memAddr,
-                value
-            ),
-        )) {
-            evm_runtimePanic();
+        if let Some(memory) = bytearray_set256(
+            evmCallFrame_getMemory(topFrame),
+            memAddr,
+            value
+        ) {
+            if (evmCallStack_setCurrentFrameMemory(memory)) {
+                return;
+            }
         }
-    } else {
-        evm_runtimePanic();
     }
+
+    evm_runtimePanic();
 }
 
 public impure func evmOp_mstore8(memAddr: uint, value:uint) {
     if let Some(topFrame) = evmCallStack_currentFrame() {
-        if ( ! evmCallStack_setCurrentFrameMemory(
-            bytearray_setByte(
-                evmCallFrame_getMemory(topFrame),
-                memAddr,
-                value
-            ),
-        )) {
-            evm_runtimePanic();
+        if let Some(memory) = bytearray_setByte(
+            evmCallFrame_getMemory(topFrame),
+            memAddr,
+            value
+        ) {
+            if (evmCallStack_setCurrentFrameMemory(memory)) {
+                return;
+            }
         }
-    } else {
-        evm_runtimePanic();
     }
+
+    evm_runtimePanic();
 }
     
 public impure func evmOp_sload(storageAddr: uint) -> uint {
@@ -242,6 +262,9 @@ public impure func evmOp_sstore(storageAddr: uint, value: uint) {
     
 public func evmOp_getjumpaddr(evm_pc: uint) -> func() {
     if let Some(topFrame) = evmCallStack_currentFrame() {
+        let theTable = account_getEvmJumpTable(
+            evmCallFrame_currentAccount(topFrame)
+        );
         if let Some(codePt) = account_getEvmJumpTable(
             evmCallFrame_currentAccount(topFrame)
         )[evm_pc] {
@@ -271,7 +294,7 @@ public func evmOp_log0(
     memAddr: uint, 
     nbytes: uint
 ) {
-    panic; //TODO
+    evm_notYetImplemented(9,);
 }
 
 public func evmOp_log1(
@@ -279,7 +302,7 @@ public func evmOp_log1(
     nbytes: uint, 
     topic0: uint
 ) {
-    panic; //TODO
+    evm_notYetImplemented(10,);
 }
 
 public func evmOp_log2(
@@ -288,7 +311,7 @@ public func evmOp_log2(
     topic0: uint,
     topic1: uint,
 ) {
-    panic; //TODO
+    evm_notYetImplemented(11,);
 }
 
 public func evmOp_log3(
@@ -298,7 +321,7 @@ public func evmOp_log3(
     topic1: uint,
     topic2: uint,
 ) {
-    panic; //TODO
+    evm_notYetImplemented(12,);
 }
 
 public func evmOp_log4(
@@ -309,22 +332,22 @@ public func evmOp_log4(
     topic2: uint,
     topic3: uint,
 ) {
-    panic; //TODO
+    evm_notYetImplemented(13,);
 }
 
 public func evmOp_sloadbytes() {
-    //BUGBUG: don't know type signature of this one 
-    panic; //TODO
+    //BUGBUG: don't know type signature of this one
+    evm_notYetImplemented(14,);
 }
 
 public func evmOp_sstorebytes() {
-    //BUGBUG: don't know type signature of this one 
-    panic; //TODO
+    //BUGBUG: don't know type signature of this one
+    evm_notYetImplemented(15,);
 }
 
 public func evmOp_ssize() {
-    //BUGBUG: don't know type signature of this one 
-    panic; //TODO
+    //BUGBUG: don't know type signature of this one
+    evm_notYetImplemented(16,);
 }
 
 public func evmOp_call(
@@ -336,7 +359,8 @@ public func evmOp_call(
     outMemOffset: uint,
     outMemSize: uint
 ) -> bool {
-    panic; //TODO
+    evm_notYetImplemented(17,);
+    return false;
 }
 
 public func evmOp_callcode(
@@ -348,7 +372,8 @@ public func evmOp_callcode(
     outMemOffset: uint,
     outMemSize: uint
 ) -> bool {
-    panic; //TODO
+    evm_notYetImplemented(18,);
+    return false;
 }
 
 public func evmOp_delegatecall(
@@ -359,7 +384,8 @@ public func evmOp_delegatecall(
     outMemOffset: uint,
     outMemSize: uint
 ) -> bool {
-    panic; //TODO
+    evm_notYetImplemented(19,);
+    return false;
 }
 
 public func evmOp_staticcall(
@@ -370,20 +396,34 @@ public func evmOp_staticcall(
     outMemOffset: uint,
     outMemSize: uint
 ) -> bool {
-    panic; //TODO
+    evm_notYetImplemented(20,);
+    return false;
 }
 
 public func evmOp_revert(memOffset: uint, memNbytes: uint) {
-    panic; //TODO
+    if let Some(topFrame) = evmCallStack_currentFrame() {
+        let memory = evmCallFrame_getMemory(topFrame);
+        if let Some(returnData) = bytearray_copy(
+            memory,
+            memOffset,
+            bytearray_new(0, true),
+            0,
+            memNbytes
+        ) {
+            //BUGBUG: do the appropriate thing with the returndata
+        }
+    }
+
+    evm_notYetImplemented(21,);
 }
 
 public func evmOp_return(memOffset: uint, memNbytes: uint) {
-    panic; //TODO
+    evm_notYetImplemented(22,);
 }
 
 public func evmOp_txexecgas() {
-    //BUGBUG: don't know the type signature of this one 
-    panic; //TODO
+    //BUGBUG: don't know the type signature of this one
+    evm_notYetImplemented(23,);
 }
 
 public func evmOp_selfdestruct(owner: address) {
@@ -409,5 +449,10 @@ func evm_runtimePanic() {
     // This should be called when something that "shouldn't ever happen" has occurred.
     // It should only be called if something has gone wrong in the trusted code.
     // If untrusted code has encountered an error, that will be handled elsewhere.
+    panic;
+}
+
+func evm_notYetImplemented(op: uint) {
+    asm((66, op),) { debugprint };
     panic;
 }

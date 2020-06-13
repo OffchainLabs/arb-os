@@ -654,6 +654,7 @@ impl Opcode {
             "pushinsn" => Opcode::PushInsn,
             "pushinsnimm" => Opcode::PushInsnImm,
             "openinsn" => Opcode::OpenInsn,
+            "debugprint" => Opcode::DebugPrint,
             _ => {
                 panic!("opcode not supported in asm segment: {}", name);
             }
@@ -724,6 +725,7 @@ impl Opcode {
             0x77 => Some(Opcode::PushInsnImm),
             //0x78 => Some(Opcode::CloseSegment),
             0x79 => Some(Opcode::OpenInsn),
+            0x90 => Some(Opcode::DebugPrint),
             _ => None,
         }
     }
@@ -792,6 +794,7 @@ impl Opcode {
             Opcode::PushInsnImm => Some(0x77),
             //Opcode::CloseSegment => Some(0x78),
             Opcode::OpenInsn => Some(0x79),
+            Opcode::DebugPrint => Some(0x90),
             _ => None,
         }
     }

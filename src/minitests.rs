@@ -226,6 +226,10 @@ fn run_using_runtime(filename: &str, expected_result: Vec<Value>) {
 
 #[test]
 fn test_evm_load_add() {
+    evm_load_add(false);
+}
+
+pub fn evm_load_add(debug: bool) {
     let dapp_file_name = "contracts/add/compiled.json";
     let dapp_abi = match AbiForDapp::new_from_file(dapp_file_name) {
         Ok(dabi) => dabi,
@@ -261,7 +265,7 @@ fn test_evm_load_add() {
 
     let mut machine = load_from_file(Path::new("arbruntime/runtime.mexe"), rt_env);
 
-    match run(&mut machine, vec![], false) {
+    match run(&mut machine, vec![], debug) {
         Ok(logs) => { return; }
         Err(e) => { panic!("run failed: {:?}", e); }
     }

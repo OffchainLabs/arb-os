@@ -38,6 +38,7 @@ public impure func inbox_init() {
 }
 
 public impure func inbox_get() -> any {  //BUGBUG: need to update blockNum and timestamp based on message
+    asm(3,) { debugprint };  //DEBUG
     let inbox = globalInbox;
     while (queue_isEmpty(inbox.queue)) {
         inbox = getFromL1Inbox(inbox);

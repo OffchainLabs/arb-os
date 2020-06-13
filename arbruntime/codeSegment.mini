@@ -398,8 +398,11 @@ public func translateEvmCodeSegment(
             }
             bytesRemaining = bytesRemaining-1;
         }
+        let numBytesRead = bytestream_bytesReadSoFar(bs);
         if let Some(res) = translateEvmCodeSegment(bs) {
             let (restOfCode, evmJumpTable) = res;
+                // for debugging
+                restOfCode = pushInstructionImm(0x90, (42, numBytesRead-1, opcode), restOfCode);
             return Some((pushValue(imm, restOfCode), evmJumpTable));
         } else {
             return None<(AvmCodePoint, map<uint, AvmCodePoint>)>;
@@ -408,6 +411,9 @@ public func translateEvmCodeSegment(
 
     if let Some(res) = translateEvmCodeSegment(bs) {
         let (restOfCode, evmJumpTable) = res;
+        let numBytesRead = bytestream_bytesReadSoFar(bs);
+            // for debugging
+            restOfCode = pushInstructionImm(0x90, (42, numBytesRead-1, opcode), restOfCode);
         if (opcode == 0x00) { // STOP
             return pushEvmInsnCall(evmOp_stop, restOfCode, evmJumpTable);
         } elseif (opcode == 0x01) { // ADD
@@ -426,30 +432,24 @@ public func translateEvmCodeSegment(
             return Some((pushInstruction(opcode, restOfCode), evmJumpTable));
         } elseif (opcode == 0x1b) { // SHL
             return Some((
-                pushInstruction(
-                    0x43, // swap1
-                    pushInstructionImm(
-                        0x0a, 2,   // [2] exp
-                        pushInstruction(
-                            0x02, // mul
-                            restOfCode
-                        )
+                pushInstructionImm(
+                    0x0a, 2,   // [2] exp
+                    pushInstruction(
+                        0x02, // mul
+                        restOfCode
                     )
                 ),
                 evmJumpTable
             ));
         } elseif (opcode == 0x1c) { // SHR
             return Some((
-                pushInstruction(
-                    0x43, // swap1
-                    pushInstructionImm(
-                        0x0a, 2,   // [2] exp
+                pushInstructionImm(
+                    0x0a, 2,   // [2] exp
+                    pushInstruction(
+                        0x43, // swap1
                         pushInstruction(
-                            0x43, // swap1
-                            pushInstruction(
-                                0x04, // div 
-                                restOfCode
-                            )
+                            0x04, // div
+                            restOfCode
                         )
                     )
                 ),
@@ -457,16 +457,13 @@ public func translateEvmCodeSegment(
             ));
         } elseif (opcode == 0x1d) { // SHA
             return Some((
-                pushInstruction(
-                    0x43, // swap1
-                    pushInstructionImm(
-                        0x0a, 2,   // [2] exp
+                pushInstructionImm(
+                    0x0a, 2,   // [2] exp
+                    pushInstruction(
+                        0x43, // swap1
                         pushInstruction(
-                            0x43, // swap1
-                            pushInstruction(
-                                0x05, // sdiv 
-                                restOfCode
-                            )
+                            0x05, // sdiv
+                            restOfCode
                         )
                     )
                 ),
@@ -535,27 +532,33 @@ public func translateEvmCodeSegment(
                 evmJumpTable
             );
         } elseif (opcode == 0x57) { // JUMPI
-            return Some((
-                pushInstruction(
-                    0x43,  // swap1
+            if let Some(res) = pushEvmInsnCall(
+                evmOp_getjumpaddr,
+                pushInstruction(0x34, restOfCode), // jump
+                evmJumpTable
+            ) {
+                let (doJump, _) = res;
+                return Some((
                     pushInstruction(
-                        0x15,  // iszero
-                        pushInstructionImm(
-                            0x35, // cjump
-                            restOfCode, 
+                        0x43,  // swap1
+                        pushInstruction(
+                            0x15,  // iszero
                             pushInstructionImm(
-                                0x43,  // swap1
+                                0x35, // cjump
                                 restOfCode,
-                                pushInstruction(
-                                    0x34, //jump
-                                    restOfCode
+                                pushInstructionImm(
+                                    0x43,  // swap1
+                                    restOfCode,
+                                    doJump,
                                 )
                             )
                         )
-                    )
-                ),
-                evmJumpTable
-            ));
+                    ),
+                    evmJumpTable
+                ));
+            } else {
+                panic; // should never happen; pushEvmInsnCall always returns Some
+            }
         } elseif (opcode == 0x58) {  // GETPC
             return None<(AvmCodePoint, map<uint, AvmCodePoint>)>;
         } elseif (opcode == 0x59) { // MSIZE
@@ -563,13 +566,10 @@ public func translateEvmCodeSegment(
         } elseif (opcode == 0x5a) { // MSIZE
             return Some((pushValue(9999999999, restOfCode), evmJumpTable));
         } elseif (opcode == 0x5b) { // JUMPDEST
-            evmJumpTable = evmJumpTable with { 
-                [bytestream_bytesReadSoFar(bs)] = restOfCode 
-            };
             return Some((
                 restOfCode, 
                 evmJumpTable with { 
-                    [bytestream_bytesReadSoFar(bs)] = restOfCode 
+                    [numBytesRead-1] = restOfCode
                 }
             ));
         } elseif (opcode == 0x80) {  // DUP1 -- note that DUPn in EVM corresponds to DUP(n-1) in AvmCodePoint
