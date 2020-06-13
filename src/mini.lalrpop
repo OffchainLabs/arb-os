@@ -80,10 +80,11 @@ Statement: Statement = {
 	<lno: @L> "if" "let" "Some(" <l: Ident> ")" "=" <r:Expr> <t: CodeBlock> <e: ("else" <CodeBlock>)?> => Statement::IfLet(l,r,t,e,file_info.location(BytePos::from(lno))),
 	<lno: @L> "if" "(" <c: Expr> ")" <t: CodeBlock> <r: IfArm?> => Statement::If(IfArm::Cond(c, t, r.map(|m|Box::new(m)), file_info.location(BytePos::from(lno)))),
 	<lno: @L> "let" <p: MatchPattern> "=" <e: Expr> ";" => Statement::Let(p, e, file_info.location(BytePos::from(lno))),
-	<lno: @L> <f: Expr10> "(" <c: CommaedExprs?> ")" ";" => Statement::FunctionCall(f, c.unwrap_or(vec![]), file_info.location(BytePos::from(lno))),
+	<lno: @L> <f: Expr11> "(" <c: CommaedExprs?> ")" ";" => Statement::FunctionCall(f, c.unwrap_or(vec![]), file_info.location(BytePos::from(lno))),
 	<lno: @L> <i: Ident> "=" <e: Expr> ";" => Statement::Assign(i, e, file_info.location(BytePos::from(lno))),
 	<lno: @L> "return" <e: Expr> ";" => Statement::Return(e, file_info.location(BytePos::from(lno))),
 	<lno: @L> "return" ";" => Statement::ReturnVoid(file_info.location(BytePos::from(lno))),
+	<lno: @L> "return" "None" ";" => Statement::Return(Expr::Constant(Constant::Option(OptionConst::None(Type::Every)),file_info.location(BytePos::from(lno))), file_info.location(BytePos::from(lno))),
 	<lno: @L> "panic" ";" => Statement::Panic(file_info.location(BytePos::from(lno))),
 	<lno: @L> "debug" "(" <e: Expr> ")" ";" => Statement::DebugPrint(e, file_info.location(BytePos::from(lno))),
 	<lno: @L> "asm" "(" <a:CommaedExprs?> ")" "{" <body:AsmInsn*> "}" ";" => Statement::Asm(body, a.unwrap_or(vec![]), file_info.location(BytePos::from(lno))),
@@ -212,24 +213,29 @@ Expr8: Expr = {
 };
 
 Expr9: Expr = {
-	<lno: @L> "-" <e: Expr9> => Expr::new_unary(UnaryOp::Minus, e, file_info.location(BytePos::from(lno))),
-	<lno: @L> "!" <e: Expr9> => Expr::new_unary(UnaryOp::Not, e, file_info.location(BytePos::from(lno))),
-	<lno: @L> "~" <e: Expr9> => Expr::new_unary(UnaryOp::BitwiseNeg, e, file_info.location(BytePos::from(lno))),
+	<lno: @L> <e: Expr9> "?" => Expr::Try(Box::new(e), file_info.location(BytePos::from(lno))),
 	Expr10,
-};
-
-Expr10: Expr = {
-	<lno: @L> <c: Const> => Expr::Constant(c, file_info.location(BytePos::from(lno))),
-	<lno: @L> "Some(" <e: Expr> ")" => Expr::OptionInitializer(Box::new(e), file_info.location(BytePos::from(lno))),
-	<lno: @L> <f: Expr10> "(" <e: Expr> ")" => Expr::FunctionCall(Box::new(f), vec![e], file_info.location(BytePos::from(lno))),
-	<lno: @L> <f: Expr10> "(" <c: CommaedExprs?> ")" => Expr::FunctionCall(Box::new(f), c.unwrap_or(vec![]), file_info.location(BytePos::from(lno))),
-	<lno: @L> <e1:Expr10> "[" <e2:Expr> "]" => Expr::ArrayOrMapRef(Box::new(e1), Box::new(e2), file_info.location(BytePos::from(lno))),
-	<lno: @L> <e:Expr10> "." <i:Ident> => Expr::DotRef(Box::new(e), i, file_info.location(BytePos::from(lno))),
-	<lno: @L> <e:Expr10> "." <u:UnsignedInteger> => Expr::TupleRef(Box::new(e), u, file_info.location(BytePos::from(lno))),
-	Expr11,
 }
 
+Expr10: Expr = {
+	<lno: @L> "-" <e: Expr10> => Expr::new_unary(UnaryOp::Minus, e, file_info.location(BytePos::from(lno))),
+	<lno: @L> "!" <e: Expr10> => Expr::new_unary(UnaryOp::Not, e, file_info.location(BytePos::from(lno))),
+	<lno: @L> "~" <e: Expr10> => Expr::new_unary(UnaryOp::BitwiseNeg, e, file_info.location(BytePos::from(lno))),
+	Expr11,
+};
+
 Expr11: Expr = {
+	<lno: @L> <c: Const> => Expr::Constant(c, file_info.location(BytePos::from(lno))),
+	<lno: @L> "Some(" <e: Expr> ")" => Expr::OptionInitializer(Box::new(e), file_info.location(BytePos::from(lno))),
+	<lno: @L> <f: Expr11> "(" <e: Expr> ")" => Expr::FunctionCall(Box::new(f), vec![e], file_info.location(BytePos::from(lno))),
+	<lno: @L> <f: Expr11> "(" <c: CommaedExprs?> ")" => Expr::FunctionCall(Box::new(f), c.unwrap_or(vec![]), file_info.location(BytePos::from(lno))),
+	<lno: @L> <e1:Expr11> "[" <e2:Expr> "]" => Expr::ArrayOrMapRef(Box::new(e1), Box::new(e2), file_info.location(BytePos::from(lno))),
+	<lno: @L> <e:Expr11> "." <i:Ident> => Expr::DotRef(Box::new(e), i, file_info.location(BytePos::from(lno))),
+	<lno: @L> <e:Expr11> "." <u:UnsignedInteger> => Expr::TupleRef(Box::new(e), u, file_info.location(BytePos::from(lno))),
+	Expr12,
+}
+
+Expr12: Expr = {
 	<lno: @L> "hash" "(" <e: Expr> ")" => Expr::new_unary(UnaryOp::Hash, e, file_info.location(BytePos::from(lno))),
 	<lno: @L> "hash" "(" <l:Expr> "," <r:Expr> ","? ")" => Expr::new_binary(BinaryOp::Hash, l, r, file_info.location(BytePos::from(lno))),
 	<lno: @L> "len" "(" <e: Expr> ")" => Expr::new_unary(UnaryOp::Len, e, file_info.location(BytePos::from(lno))),
@@ -239,21 +245,21 @@ Expr11: Expr = {
 	<lno: @L> "address" "(" <e: Expr> ")" => Expr::new_unary(UnaryOp::ToAddress, e, file_info.location(BytePos::from(lno))),
 	<lno: @L> "newarray" "<" <t:Type> ">" "(" <e:Expr> ")" => Expr::NewArray(Box::new(e), t, file_info.location(BytePos::from(lno))),
 	<lno: @L> "newfixedarray" "(" <s:UnsignedInteger> "," <e:Expr> ","? ")" => Expr::NewFixedArray(
-		s.to_usize().unwrap(), 
+		s.to_usize().unwrap(),
 		Some(Box::new(e)),
 		file_info.location(BytePos::from(lno)),
 	),
 	<lno: @L> "newfixedarray" "(" <s:UnsignedInteger> ")" => Expr::NewFixedArray(
-		s.to_usize().unwrap(), 
+		s.to_usize().unwrap(),
 		None,
 		file_info.location(BytePos::from(lno)),
 	),
 	<lno: @L> "newmap" "<" <k:Type> "," <v:Type> ","? ">" => Expr::NewMap(k, v, file_info.location(BytePos::from(lno))),
 	<lno: @L> "unsafecast" "<" <t:Type> ">" "(" <e:Expr> ")" => Expr::UnsafeCast(Box::new(e), t, file_info.location(BytePos::from(lno))),
-	Expr12,
+	Expr13,
 }
 
-Expr12: Expr = {
+Expr13: Expr = {
 	<lno: @L> "asm" "(" <a:CommaedExprs?> ")" <rt:Type> "{" <body:AsmInsn*> "}" => Expr::Asm(rt, body, a.unwrap_or(vec![]), file_info.location(BytePos::from(lno))),
 	<lno: @L> "struct" "{" <fi: FieldInitializers> "}" => Expr::StructInitializer(fi, file_info.location(BytePos::from(lno))),
 	"(" <e: Expr> ")" => <>,

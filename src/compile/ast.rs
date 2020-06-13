@@ -68,6 +68,7 @@ pub enum Type {
     Map(Box<Type>, Box<Type>),
     Imported(StringId),
     Any,
+    Every,
     Option(Box<Type>),
 }
 
@@ -92,6 +93,7 @@ impl Type {
             | Type::Bytes32
             | Type::EthAddress
             | Type::Imported(_)
+            | Type::Every
             | Type::Any => Ok(self.clone()),
             Type::Tuple(tvec) => {
                 let mut rvec = Vec::new();
@@ -154,6 +156,9 @@ impl Type {
     }
 
     pub fn assignable(&self, rhs: &Self) -> bool {
+        if *rhs == Type::Every {
+            return true;
+        }
         match self {
             Type::Any => true,
             Type::Void
@@ -162,7 +167,8 @@ impl Type {
             | Type::Bool
             | Type::Bytes32
             | Type::EthAddress
-            | Type::Imported(_) => (self == rhs),
+            | Type::Imported(_)
+            | Type::Every => (self == rhs),
             Type::Tuple(tvec) => {
                 if let Type::Tuple(tvec2) = rhs {
                     type_vectors_assignable(tvec, tvec2)
@@ -269,7 +275,10 @@ impl Type {
                 panic!("tried to get default value for an imported type");
             }
             Type::Any => Value::none(),
-            Type::Option(_) => unimplemented!(),
+            Type::Every => {
+                panic!("tried to get default value for the every type");
+            }
+            Type::Option(_) => Value::Tuple(vec![Value::Int(Uint256::zero())]),
         }
     }
 }
@@ -319,7 +328,8 @@ impl PartialEq for Type {
             | (Type::Bool, Type::Bool)
             | (Type::Bytes32, Type::Bytes32)
             | (Type::EthAddress, Type::EthAddress)
-            | (Type::Any, Type::Any) => true,
+            | (Type::Any, Type::Any)
+            | (Type::Every, Type::Every) => true,
             (Type::Tuple(v1), Type::Tuple(v2)) => type_vectors_equal(&v1, &v2),
             (Type::Array(a1), Type::Array(a2)) => *a1 == *a2,
             (Type::FixedArray(a1, s1), Type::FixedArray(a2, s2)) => (s1 == s2) && (*a1 == *a2),
@@ -783,6 +793,7 @@ pub enum Expr {
     StructMod(Box<Expr>, StringId, Box<Expr>, Option<Location>),
     UnsafeCast(Box<Expr>, Type, Option<Location>),
     Asm(Type, Vec<Instruction>, Vec<Expr>, Option<Location>),
+    Try(Box<Expr>, Option<Location>),
 }
 
 impl Expr {
@@ -920,6 +931,7 @@ impl Expr {
                     *loc,
                 ))
             }
+            Expr::Try(expr, loc) => Ok(Expr::Try(Box::new(expr.resolve_types(type_table)?), *loc)),
         }
     }
 
@@ -945,6 +957,7 @@ impl Expr {
             Expr::StructMod(_, _, _, loc) => *loc,
             Expr::UnsafeCast(_, _, loc) => *loc,
             Expr::Asm(_, _, _, loc) => *loc,
+            Expr::Try(_, loc) => *loc,
         }
     }
 }
