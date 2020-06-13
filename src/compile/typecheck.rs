@@ -647,7 +647,6 @@ fn typecheck_statement<'a>(
                 type_table,
                 global_vars,
                 func_table,
-                return_type,
             )?),
             vec![],
         )),
@@ -759,7 +758,6 @@ fn typecheck_if_arm(
     type_table: &SymTable<Type>,
     global_vars: &HashMap<StringId, (Type, usize)>,
     func_table: &SymTable<Type>,
-    unwind_type: &Type,
 ) -> Result<TypeCheckedIfArm, TypeError> {
     match arm {
         IfArm::Cond(cond, body, orest, loc) => {
@@ -781,7 +779,6 @@ fn typecheck_if_arm(
                             type_table,
                             global_vars,
                             func_table,
-                            unwind_type,
                         )?)),
                         None => None,
                     },
@@ -805,21 +802,21 @@ fn typecheck_expr(
     type_table: &SymTable<Type>,
     global_vars: &HashMap<StringId, (Type, usize)>,
     func_table: &SymTable<Type>,
-    unwind_type: &Type,
+    return_type: &Type,
 ) -> Result<TypeCheckedExpr, TypeError> {
     match expr {
         Expr::UnaryOp(op, subexpr, loc) => {
-            let tc_sub = typecheck_expr(subexpr, type_table, global_vars, func_table, unwind_type)?;
+            let tc_sub = typecheck_expr(subexpr, type_table, global_vars, func_table, return_type)?;
             typecheck_unary_op(*op, tc_sub, *loc)
         }
         Expr::Binary(op, sub1, sub2, loc) => {
-            let tc_sub1 = typecheck_expr(sub1, type_table, global_vars, func_table, unwind_type)?;
-            let tc_sub2 = typecheck_expr(sub2, type_table, global_vars, func_table, unwind_type)?;
+            let tc_sub1 = typecheck_expr(sub1, type_table, global_vars, func_table, return_type)?;
+            let tc_sub2 = typecheck_expr(sub2, type_table, global_vars, func_table, return_type)?;
             typecheck_binary_op(*op, tc_sub1, tc_sub2, *loc)
         }
         Expr::ShortcutOr(sub1, sub2, loc) => {
-            let tc_sub1 = typecheck_expr(sub1, type_table, global_vars, func_table, unwind_type)?;
-            let tc_sub2 = typecheck_expr(sub2, type_table, global_vars, func_table, unwind_type)?;
+            let tc_sub1 = typecheck_expr(sub1, type_table, global_vars, func_table, return_type)?;
+            let tc_sub2 = typecheck_expr(sub2, type_table, global_vars, func_table, return_type)?;
             if tc_sub1.get_type() != Type::Bool {
                 return Err(new_type_error(
                     "operands to logical or must be boolean".to_string(),
@@ -839,8 +836,8 @@ fn typecheck_expr(
             ))
         }
         Expr::ShortcutAnd(sub1, sub2, loc) => {
-            let tc_sub1 = typecheck_expr(sub1, type_table, global_vars, func_table, unwind_type)?;
-            let tc_sub2 = typecheck_expr(sub2, type_table, global_vars, func_table, unwind_type)?;
+            let tc_sub1 = typecheck_expr(sub1, type_table, global_vars, func_table, return_type)?;
+            let tc_sub2 = typecheck_expr(sub2, type_table, global_vars, func_table, return_type)?;
             if tc_sub1.get_type() != Type::Bool {
                 return Err(new_type_error(
                     "operands to logical and must be boolean".to_string(),
@@ -865,7 +862,7 @@ fn typecheck_expr(
                 type_table,
                 global_vars,
                 func_table,
-                unwind_type,
+                return_type,
             )?),
             *loc,
         )),
@@ -883,7 +880,7 @@ fn typecheck_expr(
             },
         },
         Expr::TupleRef(tref, idx, loc) => {
-            let tc_sub = typecheck_expr(&*tref, type_table, global_vars, func_table, unwind_type)?;
+            let tc_sub = typecheck_expr(&*tref, type_table, global_vars, func_table, return_type)?;
             let uidx = idx.to_usize().unwrap();
             if let Type::Tuple(tv) = tc_sub.get_type() {
                 if uidx < tv.len() {
@@ -907,7 +904,7 @@ fn typecheck_expr(
             }
         }
         Expr::DotRef(sref, name, loc) => {
-            let tc_sub = typecheck_expr(&*sref, type_table, global_vars, func_table, unwind_type)?;
+            let tc_sub = typecheck_expr(&*sref, type_table, global_vars, func_table, return_type)?;
             if let Type::Struct(v) = tc_sub.get_type() {
                 for sf in v.iter() {
                     if *name == sf.name {
@@ -940,7 +937,7 @@ fn typecheck_expr(
             Constant::Null => TypeCheckedExpr::Const(Value::none(), Type::Any, *loc),
         }),
         Expr::FunctionCall(fexpr, args, loc) => {
-            let tc_fexpr = typecheck_expr(fexpr, type_table, global_vars, func_table, unwind_type)?;
+            let tc_fexpr = typecheck_expr(fexpr, type_table, global_vars, func_table, return_type)?;
             match tc_fexpr.get_type() {
                 Type::Func(_, arg_types, ret_type) => {
                     let ret_type = ret_type.resolve_types(type_table, *loc)?;
@@ -952,7 +949,7 @@ fn typecheck_expr(
                                 type_table,
                                 global_vars,
                                 func_table,
-                                unwind_type,
+                                return_type,
                             )?;
                             tc_args.push(tc_arg);
                             let resolved_arg_type =
@@ -986,8 +983,8 @@ fn typecheck_expr(
             }
         }
         Expr::ArrayOrMapRef(array, index, loc) => {
-            let tc_arr = typecheck_expr(&*array, type_table, global_vars, func_table, unwind_type)?;
-            let tc_idx = typecheck_expr(&*index, type_table, global_vars, func_table, unwind_type)?;
+            let tc_arr = typecheck_expr(&*array, type_table, global_vars, func_table, return_type)?;
+            let tc_idx = typecheck_expr(&*index, type_table, global_vars, func_table, return_type)?;
             match tc_arr.get_type() {
                 Type::Array(t) => {
                     if tc_idx.get_type() == Type::Uint {
@@ -1044,7 +1041,7 @@ fn typecheck_expr(
                 type_table,
                 global_vars,
                 func_table,
-                unwind_type,
+                return_type,
             )?),
             tipe.clone(),
             Type::Array(Box::new(tipe.clone())),
@@ -1053,7 +1050,7 @@ fn typecheck_expr(
         Expr::NewFixedArray(size, maybe_expr, loc) => match maybe_expr {
             Some(expr) => {
                 let tc_expr =
-                    typecheck_expr(expr, type_table, global_vars, func_table, unwind_type)?;
+                    typecheck_expr(expr, type_table, global_vars, func_table, return_type)?;
                 Ok(TypeCheckedExpr::NewFixedArray(
                     *size,
                     Some(Box::new(tc_expr.clone())),
@@ -1081,7 +1078,7 @@ fn typecheck_expr(
                     type_table,
                     global_vars,
                     func_table,
-                    unwind_type,
+                    return_type,
                 )?;
                 tc_fields.push(TypeCheckedStructField::new(field.name, tc_expr.clone()));
                 tc_fieldtypes.push(StructField::new(field.name, tc_expr.get_type()));
@@ -1097,16 +1094,16 @@ fn typecheck_expr(
             let mut types = Vec::new();
             for field in fields {
                 let tc_field =
-                    typecheck_expr(field, type_table, global_vars, func_table, unwind_type)?;
+                    typecheck_expr(field, type_table, global_vars, func_table, return_type)?;
                 types.push(tc_field.get_type().clone());
                 tc_fields.push(tc_field);
             }
             Ok(TypeCheckedExpr::Tuple(tc_fields, Type::Tuple(types), *loc))
         }
         Expr::ArrayOrMapMod(arr, index, val, loc) => {
-            let tc_arr = typecheck_expr(arr, type_table, global_vars, func_table, unwind_type)?;
-            let tc_index = typecheck_expr(index, type_table, global_vars, func_table, unwind_type)?;
-            let tc_val = typecheck_expr(val, type_table, global_vars, func_table, unwind_type)?;
+            let tc_arr = typecheck_expr(arr, type_table, global_vars, func_table, return_type)?;
+            let tc_index = typecheck_expr(index, type_table, global_vars, func_table, return_type)?;
+            let tc_val = typecheck_expr(val, type_table, global_vars, func_table, return_type)?;
             match tc_arr.get_type() {
                 Type::Array(t) => {
                     if t.assignable(&tc_val.get_type()) {
@@ -1178,8 +1175,8 @@ fn typecheck_expr(
             }
         }
         Expr::StructMod(struc, name, val, loc) => {
-            let tc_struc = typecheck_expr(struc, type_table, global_vars, func_table, unwind_type)?;
-            let tc_val = typecheck_expr(val, type_table, global_vars, func_table, unwind_type)?;
+            let tc_struc = typecheck_expr(struc, type_table, global_vars, func_table, return_type)?;
+            let tc_val = typecheck_expr(val, type_table, global_vars, func_table, return_type)?;
             let tcs_type = tc_struc.get_type();
             if let Type::Struct(fields) = &tcs_type {
                 match tcs_type.get_struct_slot_by_name(*name) {
@@ -1217,7 +1214,7 @@ fn typecheck_expr(
                 type_table,
                 global_vars,
                 func_table,
-                unwind_type,
+                return_type,
             )?),
             t.clone(),
             *loc,
@@ -1236,7 +1233,7 @@ fn typecheck_expr(
                     type_table,
                     global_vars,
                     func_table,
-                    unwind_type,
+                    return_type,
                 )?);
             }
             Ok(TypeCheckedExpr::Asm(
@@ -1247,16 +1244,16 @@ fn typecheck_expr(
             ))
         }
         Expr::Try(inner, loc) => {
-            match unwind_type {
+            match return_type {
                 Type::Option(_) | Type::Any => {}
                 _ => {
                     return Err(new_type_error(
-                        "Can only use \"?\" operator in functions that return option".to_string(),
+                        "Can only use \"?\" operator in functions that can return option".to_string(),
                         *loc,
                     ))
                 }
             }
-            let res = typecheck_expr(inner, type_table, global_vars, func_table, unwind_type)?;
+            let res = typecheck_expr(inner, type_table, global_vars, func_table, return_type)?;
             match res.get_type() {
                 Type::Option(t) => Ok(TypeCheckedExpr::Try(Box::new(res), *t, *loc)),
                 other => Err(new_type_error(
