@@ -82,7 +82,7 @@ fn load_from_string(
     return Machine::new(program, env);
 }
 
-fn run(
+pub fn run(
     machine: &mut Machine,
     args: Vec<Value>,
     debug: bool,
