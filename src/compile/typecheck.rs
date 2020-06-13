@@ -1530,7 +1530,7 @@ fn typecheck_binary_op(
                 loc,
             )),
             _ => Err(new_type_error(
-                "invalid argument types to binary op 1".to_string(),
+                "invalid argument types to binary op".to_string(),
                 loc,
             )),
         },
@@ -1768,7 +1768,7 @@ fn typecheck_binary_op_const(
                 loc,
             )),
             _ => Err(new_type_error(
-                "invalid argument types to binary op 2".to_string(),
+                "invalid argument types to binary op".to_string(),
                 loc,
             )),
         },
@@ -1887,7 +1887,7 @@ fn typecheck_binary_op_const(
                                 ));
                             } else {
                                 return Err(new_type_error(
-                                    "invalid argument types to binary op 3".to_string(),
+                                    "invalid argument types to binary op".to_string(),
                                     loc,
                                 ));
                             }
@@ -1901,7 +1901,7 @@ fn typecheck_binary_op_const(
                 ))
             } else {
                 Err(new_type_error(
-                    "invalid argument types to binary op 4".to_string(),
+                    "invalid argument types to binary op".to_string(),
                     loc,
                 ))
             }
