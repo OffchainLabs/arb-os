@@ -209,8 +209,13 @@ Expr8: Expr = {
 	<lno: @L> <l:Expr8> "*" <r:Expr9> => Expr::new_binary(BinaryOp::Times, l, r, file_info.location(BytePos::from(lno))),
 	<lno: @L> <l:Expr8> "/" <r:Expr9> => Expr::new_binary(BinaryOp::Div, l, r, file_info.location(BytePos::from(lno))),
 	<lno: @L> <l:Expr8> "%" <r:Expr9> => Expr::new_binary(BinaryOp::Mod, l, r, file_info.location(BytePos::from(lno))),
-	Expr9,
+	Expr0,
 };
+
+Expr0: Expr = {
+	<lno: @L> <e: Expr0> "?" => Expr::Try(Box::new(e), file_info.location(BytePos::from(lno))),
+	Expr9,
+}
 
 Expr9: Expr = {
 	<lno: @L> "-" <e: Expr9> => Expr::new_unary(UnaryOp::Minus, e, file_info.location(BytePos::from(lno))),
@@ -251,12 +256,6 @@ Expr11: Expr = {
 	),
 	<lno: @L> "newmap" "<" <k:Type> "," <v:Type> ","? ">" => Expr::NewMap(k, v, file_info.location(BytePos::from(lno))),
 	<lno: @L> "unsafecast" "<" <t:Type> ">" "(" <e:Expr> ")" => Expr::UnsafeCast(Box::new(e), t, file_info.location(BytePos::from(lno))),
-	Expr0,
-}
-
-
-Expr0: Expr = {
-	<lno: @L> <e: Expr0> "?" => Expr::Try(Box::new(e), file_info.location(BytePos::from(lno))),
 	Expr12,
 }
 
