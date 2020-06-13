@@ -761,7 +761,7 @@ fn typecheck_if_arm(
 ) -> Result<TypeCheckedIfArm, TypeError> {
     match arm {
         IfArm::Cond(cond, body, orest, loc) => {
-            let tc_cond = typecheck_expr(cond, type_table, global_vars, func_table, unwind_type)?;
+            let tc_cond = typecheck_expr(cond, type_table, global_vars, func_table, return_type)?;
             match tc_cond.get_type() {
                 Type::Bool => Ok(TypeCheckedIfArm::Cond(
                     tc_cond,
