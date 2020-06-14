@@ -74,7 +74,7 @@ $(BUILTINDIR)/kvs.mao: $(BUILTINDIR)/kvs.mini
 	cargo run compile $(BUILTINDIR)/kvs.mini -c -o $(BUILTINDIR)/kvs.mao
 
 RUNTIMEDIR = arbruntime
-RUNTIMEMAOS = $(RUNTIMEDIR)/main.mao $(RUNTIMEDIR)/evmJumpTable.mao $(RUNTIMEDIR)/accounts.mao $(RUNTIMEDIR)/messages.mao $(RUNTIMEDIR)/inbox.mao $(RUNTIMEDIR)/evmCallStack.mao $(RUNTIMEDIR)/evmOps.mao $(RUNTIMEDIR)/codeSegment.mao
+RUNTIMEMAOS = $(RUNTIMEDIR)/main.mao $(RUNTIMEDIR)/evmJumpTable.mao $(RUNTIMEDIR)/accounts.mao $(RUNTIMEDIR)/messages.mao $(RUNTIMEDIR)/inbox.mao $(RUNTIMEDIR)/evmCallStack.mao $(RUNTIMEDIR)/evmOps.mao $(RUNTIMEDIR)/codeSegment.mao $(RUNTIMEDIR)/evmlogs.mao
 RUNTIME = $(RUNTIMEDIR)/runtime.mexe
 
 runtime: $(RUNTIME)
@@ -99,6 +99,9 @@ $(RUNTIMEDIR)/evmOps.mao: $(RUNTIMEDIR)/evmOps.mini
 
 $(RUNTIMEDIR)/codeSegment.mao: $(RUNTIMEDIR)/codeSegment.mini
 	cargo run compile $(RUNTIMEDIR)/codeSegment.mini -c -o $(RUNTIMEDIR)/codeSegment.mao
+
+$(RUNTIMEDIR)/evmlogs.mao: $(RUNTIMEDIR)/evmlogs.mini
+	cargo run compile $(RUNTIMEDIR)/evmlogs.mini -c -o $(RUNTIMEDIR)/evmlogs.mao
 
 $(RUNTIMEDIR)/loader.mao: $(RUNTIMEDIR)/loader.mini
 	cargo run compile $(RUNTIMEDIR)/loader.mini -c -o $(RUNTIMEDIR)/loader.mao

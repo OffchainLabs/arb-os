@@ -136,7 +136,7 @@ fn run_with_msgs(
     debug: bool,
 ) -> Result<Vec<Value>, ExecutionError> {
     let mut env = RuntimeEnvironment::new();
-    env.insert_messages(&in_msgs);
+    env.insert_arb_messages(&in_msgs);
     let mut machine = Machine::new(prog, env);
     match run(&mut machine, vec![], debug) {
         Ok(_) => Ok(machine.runtime_env.get_all_logs()),
@@ -182,6 +182,7 @@ fn test_inbox_and_log() {
             code: vec![
                 Instruction::from_opcode(Opcode::Inbox, None),
                 Instruction::from_opcode_imm(Opcode::Tget, Value::Int(Uint256::one()), None),
+                Instruction::from_opcode_imm(Opcode::Tget, Value::Int(Uint256::from_usize(3)), None),
                 Instruction::from_opcode(Opcode::Log, None),
                 Instruction::from_opcode(Opcode::Inbox, None), // should block, stopping execution
             ],

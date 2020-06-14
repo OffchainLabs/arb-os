@@ -185,7 +185,7 @@ impl AbiForContract {
                 self.storage_map.clone(),
             ]),
         ]);
-        rt_env.insert_message(msg);
+        rt_env.insert_arb_message(msg);
     }
 
     pub fn get_function(&self, name: &str) -> Result<&ethabi::Function, ethabi::Error> {

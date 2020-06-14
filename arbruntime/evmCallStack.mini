@@ -16,6 +16,7 @@
 
 import type AccountStore;
 import type Account;
+import type EvmLogs;
 import type Queue;
 import type ByteArray;
 
@@ -26,6 +27,8 @@ import func account_setStorageCell(acct: Account, offset: uint, value: uint) -> 
 import func account_getBalance(acct: Account) -> uint;
 import func account_setBalance(acct: Account, bal: uint) -> Account;
 import func account_deductFromEthBalance(account: Account, deduction: uint) -> option<Account>;
+
+import func evmlogs_empty() -> EvmLogs;
 
 import func bytearray_new(capacity: uint, variableSize: bool) -> ByteArray;
 
@@ -39,10 +42,13 @@ type EvmCallFrame = struct {
     addr: address,
     accountStore: AccountStore,
     currentAccount: Account,
+    codePoint: option<func()>,
     calldata: ByteArray,
     callvalue: uint,
     returndata: option<ByteArray>,
+    returnstatus: option<uint>,
     memory: ByteArray,
+    evmLogs: EvmLogs,
     parent: option<any>,      // really an option<EvmCallFrame>, but compiler doesn't allow recursive types
 }
 
@@ -58,10 +64,13 @@ public impure func initEvmCallStack(
         addr: addr,
         accountStore: globalAS,
         currentAccount: accountStore_get(globalAS, addr),
+        codePoint: None<func()>,
         calldata: calldata,
         callvalue: callvalue,
         returndata: None<ByteArray>,
+        returnstatus: None<uint>,
         memory: bytearray_new(8, true),
+        evmLogs: evmlogs_empty(),
         parent: None<any>
     });
 }
@@ -180,6 +189,17 @@ public impure func evmCallStack_setCurrentFrameStorageCell(offset: uint, value: 
     }
 }
 
+public impure func evmCallStack_pop(status: uint, returndata: ByteArray) -> option<EvmCallFrame> {
+    // if callstack is empty, return None
+    // else pop the callstack, set up returndata and returnstatus in new top, return Some(newtopframe)
+    let top = globalCallStack?;
+    let parent = unsafecast<EvmCallFrame>(top.parent?);
+    globalCallStack = Some(parent with { returndata: Some(returndata) }
+                                  with { returnstatus: Some(status) }
+                      );
+    return globalCallStack;
+}
+
 public func evmCallFrame_currentAccount(frame: EvmCallFrame) -> Account {
     return frame.currentAccount;
 }
@@ -194,6 +214,10 @@ public func evmCallFrame_getAccount(frame: EvmCallFrame, addr: address) -> Accou
 
 public func evmCallFrame_getMemory(frame: EvmCallFrame) -> ByteArray {
     return frame.memory;
+}
+
+public func evmCallFrame_getCodePoint(frame: EvmCallFrame) -> option<func()> {
+    return frame.codePoint;
 }
 
 public func evmCallFrame_getCallvalue(frame: EvmCallFrame) -> uint {

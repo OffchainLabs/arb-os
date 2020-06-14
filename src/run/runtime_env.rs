@@ -21,26 +21,47 @@ use std::collections::HashMap;
 #[derive(Debug)]
 pub struct RuntimeEnvironment {
     pub l1_inbox: Value,
+    pub currentBlockNum: Uint256,
+    pub currentTimestamp: Uint256,
     pub logs: Vec<Value>,
     pub seq_nums: HashMap<Uint256, Uint256>,
+    nextId: Uint256,   // used to assign unique (but artificial) txids to messages
 }
 
 impl RuntimeEnvironment {
     pub fn new() -> Self {
         RuntimeEnvironment {
             l1_inbox: Value::none(),
+            currentBlockNum: Uint256::zero(),
+            currentTimestamp: Uint256::zero(),
             logs: Vec::new(),
             seq_nums: HashMap::new(),
+            nextId: Uint256::zero(),
         }
     }
 
-    pub fn insert_message(&mut self, msg: Value) {
-        self.l1_inbox = Value::Tuple(vec![self.l1_inbox.clone(), msg]);
+    pub fn insert_eth_message(&mut self, ethMsg: Value) {
+        self.l1_inbox = Value::Tuple(vec![
+            self.l1_inbox.clone(),
+            ethMsg
+        ]);
     }
 
-    pub fn insert_messages(&mut self, msgs: &[Value]) {
+    pub fn insert_arb_message(&mut self, msg: Value) {
+        self.insert_eth_message(
+            Value::Tuple(vec![
+                Value::Int(self.currentBlockNum.clone()),
+                Value::Int(self.currentTimestamp.clone()),
+                Value::Int(self.nextId.clone()),
+                msg
+            ]),
+        );
+        self.nextId = self.nextId.add(&Uint256::one());
+    }
+
+    pub fn insert_arb_messages(&mut self, msgs: &[Value]) {
         for msg in msgs {
-            self.insert_message(msg.clone());
+            self.insert_arb_message(msg.clone());
         }
     }
 
@@ -56,7 +77,7 @@ impl RuntimeEnvironment {
             Value::Int(Uint256::zero()), // sent from address 0
             txcall_msg,
         ]);
-        self.insert_message(msg);
+        self.insert_arb_message(msg);
     }
 
     pub fn get_and_incr_seq_num(&mut self, addr: &Uint256) -> Uint256 {

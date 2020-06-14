@@ -16,15 +16,18 @@
 
 import type Account;
 import type EvmCallFrame;
+import type EvmLogs;
 import type ByteArray;
 
 import impure func evmCallStack_currentFrame() -> option<EvmCallFrame>;
 import impure func evmCallStack_setCurrentFrameMemory(mem: ByteArray) -> bool;
 import impure func evmCallStack_setCurrentFrameStorageCell(addr: address, offset: uint, val: uint) -> bool;
+import impure func evmCallStack_pop(status: uint, returnData: ByteArray) -> option<EvmCallFrame>;
 
 import func evmCallFrame_currentAccount(frame: EvmCallFrame) -> Account;
 import func evmCallFrame_getAccount(frame: EvmCallFrame) -> Account;
 import func evmCallFrame_getMemory(frame: EvmCallFrame) -> ByteArray;
+import func evmCallFrame_getCodePoint(frame: EvmCallFrame) -> option<func()>;
 import func evmCallFrame_getCallvalue(frame: EvmCallFrame) -> uint;
 import func evmCallFrame_getCalldata(fram: EvmCallFrame) -> ByteArray;
 import impure func selfDestructQueue_put(victim: address, owner: address);
@@ -38,6 +41,10 @@ import func account_getEvmJumpTable(acct: Account) -> map<uint, func()>;
 
 import impure func inbox_currentTimestamp() -> uint;
 import impure func inbox_currentBlockNumber() -> uint;
+
+import func messages_callFinished(status: uint, returndata: ByteArray, logs: EvmLogs);
+
+import func evmlogs_empty() -> EvmLogs;
 
 import func bytearray_new(capacity: uint, autoExpand: bool) -> ByteArray;
 import func bytearray_size(ba: ByteArray) -> uint;
@@ -411,12 +418,35 @@ public func evmOp_revert(memOffset: uint, memNbytes: uint) {
             0,
             memNbytes
         ) {
-            //BUGBUG: do the appropriate thing with the returndata
-            // emit log item Tuple(fullcallmsg, evmLogsAsStack, returnDataAsBytestack, returnCode0)
+            if let Some(newTopFrame) = evmCallStack_pop(0, returnData) {
+                // return control to evm caller
+                if let Some(evmTargetCodept) = evmCallFrame_getCodePoint(newTopFrame) {
+                    // replace the return address on our stack with evmTargetCodept
+                    asm(evmTargetCodept,) {
+                        auxpop
+                        auxpop
+                        swap2
+                        auxpush
+                        auxpush
+                        pop
+                    };
+                    // now return, which will throw control to evmTargetCodept
+                    return;
+                }
+            } else {
+                // top-level call finished
+                // emit log item Tuple(fullcallmsg, evmLogsAsStack, returnDataAsBytestack, returnCode0)
+                messages_callFinished(
+                    0,
+                    returnData,
+                    evmlogs_empty()
+                );  // this should never return
+                panic;
+            }
         }
     }
 
-    evm_notYetImplemented(21,);
+    evm_runtimePanic();
 }
 
 public func evmOp_return(memOffset: uint, memNbytes: uint) {

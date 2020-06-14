@@ -43,7 +43,7 @@ impl AvmChain {
         if let Some(contract_file_name) = contract_file {
             send_inject_evm_messages_from_file(contract_file_name, &mut rt_env);
         }
-        rt_env.insert_messages(call_msgs);
+        rt_env.insert_arb_messages(call_msgs);
         let machine = load_from_file(pathname, rt_env);
         AvmChain { machine }
     }

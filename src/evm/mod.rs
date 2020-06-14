@@ -207,7 +207,7 @@ pub fn send_inject_evm_messages(evm_json: serde_json::Value, env: &mut RuntimeEn
                 return false;
             }
         }
-        env.insert_messages(&messages_out);
+        env.insert_arb_messages(&messages_out);
         true
     } else {
         false
