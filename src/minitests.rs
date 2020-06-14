@@ -14,11 +14,12 @@
  * limitations under the License.
  */
 
-use crate::evm::abi::{AbiForContract, AbiForDapp};
+use crate::evm::abi::AbiForDapp;
 use crate::mavm::Value;
-use crate::run::chain::AvmChain;
 use crate::run::runtime_env::RuntimeEnvironment;
-use crate::run::{load_from_file, module_from_file_path, run_from_file, run_from_file_with_msgs, run};
+use crate::run::{
+    load_from_file, module_from_file_path, run, run_from_file, run_from_file_with_msgs,
+};
 use crate::uint256::Uint256;
 use std::path::Path;
 
@@ -233,7 +234,7 @@ pub fn evm_load_add(debug: bool) {
     let dapp_file_name = "contracts/add/compiled.json";
     let dapp_abi = match AbiForDapp::new_from_file(dapp_file_name) {
         Ok(dabi) => dabi,
-        Err(e) => {
+        Err(_) => {
             panic!("failed to load add ABI from file");
         }
     };
@@ -266,20 +267,11 @@ pub fn evm_load_add(debug: bool) {
     let mut machine = load_from_file(Path::new("arbruntime/runtime.mexe"), rt_env);
 
     match run(&mut machine, vec![], debug) {
-        Ok(logs) => { return; }
-        Err(e) => { panic!("run failed: {:?}", e); }
-    }
-}
-
-fn run_evm_using_runtime(contract_file_name: &str, call_msgs: Vec<Value>) {
-    let mut chain = AvmChain::new(Some(contract_file_name), &call_msgs);
-    let res = chain.run(false);
-    match res {
-        Ok(logs) => {
-            assert_eq!(logs, vec![]);
+        Ok(_logs) => {
+            return;
         }
         Err(e) => {
-            panic!("{:?}", e);
+            panic!("run failed: {:?}", e);
         }
     }
 }

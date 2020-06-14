@@ -25,8 +25,8 @@ use std::fs::File;
 use std::io;
 use std::path::Path;
 
-use clap::{App, Arg, SubCommand};
 use crate::minitests::evm_load_add;
+use clap::{App, Arg, SubCommand};
 
 mod build_builtins;
 pub mod compile;
@@ -144,10 +144,7 @@ fn main() {
                         .value_name("output"),
                 ),
         )
-        .subcommand(
-            SubCommand::with_name("evmdebug")
-                .about("debug the EVM functionality")
-        )
+        .subcommand(SubCommand::with_name("evmdebug").about("debug the EVM functionality"))
         .get_matches();
 
     if let Some(matches) = matches.subcommand_matches("compile") {
@@ -244,7 +241,7 @@ fn main() {
         }
     }
 
-    if let Some(matches) = matches.subcommand_matches("evmdebug") {
+    if let Some(_) = matches.subcommand_matches("evmdebug") {
         evm_load_add(true);
     }
 }

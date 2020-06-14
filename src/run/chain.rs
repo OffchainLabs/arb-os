@@ -41,7 +41,12 @@ impl AvmChain {
     ) -> Self {
         let mut rt_env = RuntimeEnvironment::new();
         if let Some(contract_file_name) = contract_file {
-            send_inject_evm_messages_from_file(contract_file_name, &mut rt_env);
+            match send_inject_evm_messages_from_file(contract_file_name, &mut rt_env) {
+                Ok(_) => {}
+                Err(e) => {
+                    panic!("error injecting messages: {:?}", e);
+                }
+            }
         }
         rt_env.insert_arb_messages(call_msgs);
         let machine = load_from_file(pathname, rt_env);

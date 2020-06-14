@@ -435,7 +435,6 @@ public func evmOp_revert(memOffset: uint, memNbytes: uint) {
                 }
             } else {
                 // top-level call finished
-                // emit log item Tuple(fullcallmsg, evmLogsAsStack, returnDataAsBytestack, returnCode0)
                 messages_callFinished(
                     0,
                     returnData,

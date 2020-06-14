@@ -23,9 +23,9 @@ use std::fs::File;
 use std::io::Read;
 use std::path::Path;
 
+pub mod chain;
 mod emulator;
 pub mod runtime_env;
-pub mod chain;
 
 pub fn run_from_file(
     path: &Path,
@@ -37,10 +37,7 @@ pub fn run_from_file(
     run(&mut machine, args, debug)
 }
 
-pub fn load_from_file(
-    path: &Path,
-    env: RuntimeEnvironment,
-) -> Machine {
+pub fn load_from_file(path: &Path, env: RuntimeEnvironment) -> Machine {
     let display = path.display();
 
     let mut file = match File::open(&path) {
@@ -57,20 +54,7 @@ pub fn load_from_file(
     load_from_string(s, env)
 }
 
-fn run_from_string(
-    s: String,
-    args: Vec<Value>,
-    env: RuntimeEnvironment,
-    debug: bool,
-) -> Result<Vec<Value>, (ExecutionError, StackTrace)> {
-    let mut new_machine = load_from_string(s, env);
-    run(&mut new_machine, args, debug)
-}
-
-fn load_from_string(
-    s: String,
-    env: RuntimeEnvironment,
-) -> Machine {
+fn load_from_string(s: String, env: RuntimeEnvironment) -> Machine {
     let parse_result: Result<LinkedProgram, serde_json::Error> = serde_json::from_str(&s);
     let program = match parse_result {
         Ok(prog) => prog,
@@ -182,7 +166,11 @@ fn test_inbox_and_log() {
             code: vec![
                 Instruction::from_opcode(Opcode::Inbox, None),
                 Instruction::from_opcode_imm(Opcode::Tget, Value::Int(Uint256::one()), None),
-                Instruction::from_opcode_imm(Opcode::Tget, Value::Int(Uint256::from_usize(3)), None),
+                Instruction::from_opcode_imm(
+                    Opcode::Tget,
+                    Value::Int(Uint256::from_usize(3)),
+                    None,
+                ),
                 Instruction::from_opcode(Opcode::Log, None),
                 Instruction::from_opcode(Opcode::Inbox, None), // should block, stopping execution
             ],

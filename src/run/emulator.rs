@@ -440,7 +440,6 @@ impl<'a> Machine {
                         "run\n" => {
                             breakpoint = false;
                             exit = true;
-                            break;
                         }
                         _ => println!("invalid input"),
                     }

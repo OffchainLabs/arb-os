@@ -21,42 +21,37 @@ use std::collections::HashMap;
 #[derive(Debug)]
 pub struct RuntimeEnvironment {
     pub l1_inbox: Value,
-    pub currentBlockNum: Uint256,
-    pub currentTimestamp: Uint256,
+    pub current_block_num: Uint256,
+    pub current_timestamp: Uint256,
     pub logs: Vec<Value>,
     pub seq_nums: HashMap<Uint256, Uint256>,
-    nextId: Uint256,   // used to assign unique (but artificial) txids to messages
+    next_id: Uint256, // used to assign unique (but artificial) txids to messages
 }
 
 impl RuntimeEnvironment {
     pub fn new() -> Self {
         RuntimeEnvironment {
             l1_inbox: Value::none(),
-            currentBlockNum: Uint256::zero(),
-            currentTimestamp: Uint256::zero(),
+            current_block_num: Uint256::zero(),
+            current_timestamp: Uint256::zero(),
             logs: Vec::new(),
             seq_nums: HashMap::new(),
-            nextId: Uint256::zero(),
+            next_id: Uint256::zero(),
         }
     }
 
-    pub fn insert_eth_message(&mut self, ethMsg: Value) {
-        self.l1_inbox = Value::Tuple(vec![
-            self.l1_inbox.clone(),
-            ethMsg
-        ]);
+    pub fn insert_eth_message(&mut self, eth_msg: Value) {
+        self.l1_inbox = Value::Tuple(vec![self.l1_inbox.clone(), eth_msg]);
     }
 
     pub fn insert_arb_message(&mut self, msg: Value) {
-        self.insert_eth_message(
-            Value::Tuple(vec![
-                Value::Int(self.currentBlockNum.clone()),
-                Value::Int(self.currentTimestamp.clone()),
-                Value::Int(self.nextId.clone()),
-                msg
-            ]),
-        );
-        self.nextId = self.nextId.add(&Uint256::one());
+        self.insert_eth_message(Value::Tuple(vec![
+            Value::Int(self.current_block_num.clone()),
+            Value::Int(self.current_timestamp.clone()),
+            Value::Int(self.next_id.clone()),
+            msg,
+        ]));
+        self.next_id = self.next_id.add(&Uint256::one());
     }
 
     pub fn insert_arb_messages(&mut self, msgs: &[Value]) {

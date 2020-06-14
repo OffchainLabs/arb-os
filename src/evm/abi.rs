@@ -19,7 +19,6 @@ use crate::run::runtime_env::{bytestack_from_bytes, RuntimeEnvironment};
 use crate::uint256::Uint256;
 use std::collections::HashMap;
 use std::convert::TryInto;
-use std::error::Error;
 use std::fs::File;
 use std::io::Read;
 use std::path::Path;

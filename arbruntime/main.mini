@@ -43,6 +43,7 @@ public func cleanUpAndJumpToRunLoop() {
     // This function will discard all of that stuff and then jump to mainRunLoop
 
     // discard everything from the auxstack, except the current callframe (which is on top)
+    // keep the callframe on top of the auxstack (except during asm blocks) because the code generator might use it
     while ( ! asm() bool { auxpop auxstackempty swap1 auxpush }) {
         asm() {
             auxpop
@@ -62,7 +63,7 @@ public func cleanUpAndJumpToRunLoop() {
     asm(mainRunLoop,) {
         auxpop
         pop
-        [0] swap1  // bogus return address, which mainRunLoop expects to see but will never use
+        [0] swap1  // bogus return address, which mainRunLoop will save in its callframe but will never use
         jump
     };
 
