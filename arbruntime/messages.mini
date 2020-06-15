@@ -49,6 +49,7 @@ import func account_getCodePoint(acct: Account) -> option<func()>;
 import func initEvmCallStack(addr: address, calldata: ByteArray, callvalue: uint);
 import func evmCallStack_currentAccount() -> option<Account>;
 
+import func bytearray_size(ba: ByteArray) -> uint;
 import func bytearray_unmarshalBytes(mb: MarshalledBytes) -> ByteArray;
 import func bytearray_marshalFull(ba: ByteArray) -> MarshalledBytes;
 

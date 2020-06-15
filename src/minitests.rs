@@ -233,7 +233,10 @@ fn test_evm_load_add() {
         assert_eq!(tup[1], Value::none());
         assert_eq!(
             tup[2],
-            Value::Tuple(vec![Value::Int(Uint256::zero()), Value::none()])
+            Value::Tuple(vec![
+                Value::Int(Uint256::from_usize(32)),
+                Value::Tuple(vec![Value::none(), Value::Int(Uint256::from_usize(2))])
+            ])
         );
         assert_eq!(tup[3], Value::Int(Uint256::one()));
     } else {

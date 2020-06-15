@@ -455,7 +455,7 @@ public func evmOp_return(memOffset: uint, memNbytes: uint) {
         if let Some(returnData) = bytearray_copy(
             memory,
             memOffset,
-            bytearray_new(0, true),
+            bytearray_new(memNbytes, true),
             0,
             memNbytes
         ) {
