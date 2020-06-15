@@ -228,6 +228,10 @@ public func evmCallFrame_getCalldata(frame: EvmCallFrame) -> ByteArray {
     return frame.calldata;
 }
 
+public func evmCallFrame_getEvmLogs(frame: EvmCallFrame) -> EvmLogs {
+    return frame.evmLogs;
+}
+
 var selfDestructQueue: Queue;
 
 impure func initSelfDestructQueue() {

@@ -121,10 +121,14 @@ fn bytestack_from_bytes_2(b: &[u8], so_far: Value) -> Value {
 
 fn bytestack_build_uint(b: &[u8]) -> Value {
     let mut ui = Uint256::zero();
-    for j in (0..b.len()).rev() {
-        ui = ui
-            .mul(&Uint256::from_usize(256))
-            .add(&Uint256::from_usize(b[j] as usize));
+    for j in (0..32) {
+        if j < b.len() {
+            ui = ui
+                .mul(&Uint256::from_usize(256))
+                .add(&Uint256::from_usize(b[j] as usize));
+        } else {
+            ui = ui.mul(&Uint256::from_usize(256));
+        }
     }
     Value::Int(ui)
 }

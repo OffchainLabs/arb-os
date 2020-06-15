@@ -80,7 +80,7 @@ impl<'a> LinkedProgram {
             if (i >= 8) {
                 buf.push(0);
             } else {
-                buf.push(((num >> (8 * i)) & 0xff) as u8);
+                buf.push(((num >> (8 * (7 - i))) & 0xff) as u8);
             }
         }
         for insn in self.code.iter().rev() {

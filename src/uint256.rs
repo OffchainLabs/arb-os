@@ -127,7 +127,7 @@ impl Uint256 {
     pub fn bitwise_neg(&self) -> Self {
         let all_ones = BigUint::new(vec![0xffff_ffff; 8]);
         let val = self.val.clone().bitxor(all_ones);
-        Uint256{ val }
+        Uint256 { val }
     }
 
     pub fn bitwise_and(&self, other: &Self) -> Self {

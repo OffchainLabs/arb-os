@@ -541,13 +541,13 @@ public func translateEvmCodeSegment(
                 return Some((
                     pushInstruction(
                         0x43,  // swap1
-                        pushInstruction(
-                            0x15,  // iszero
-                            pushInstructionImm(
-                                0x35, // cjump
-                                restOfCode,
+                        pushInstructionImm(
+                            0x35, // cjump
+                            doJump,
+                            pushInstruction(
+                                0x30, // pop
                                 pushInstructionImm(
-                                    0x43,  // swap1
+                                    0x34,  // jump
                                     restOfCode,
                                     doJump,
                                 )
@@ -579,13 +579,13 @@ public func translateEvmCodeSegment(
         } elseif (opcode == 0x82) {  // DUP3 
             return Some((pushInstruction(0x42, restOfCode), evmJumpTable));  // DUP2
         } elseif ( (opcode >= 0x83) && (opcode <= 0x8f) ) {
-            return pushDupn(opcode-0x80, restOfCode, evmJumpTable);
+            return Some((pushDupn(opcode-0x80, restOfCode), evmJumpTable));
         } elseif (opcode == 0x90) {  // SWAP1
             return Some((pushInstruction(0x43, restOfCode), evmJumpTable));  // swap1
         } elseif (opcode == 0x91) {  // SWAP2
             return Some((pushInstruction(0x44, restOfCode), evmJumpTable));  // swap2
         } elseif ( (opcode >= 0x92) && (opcode <= 0x9f) ) {
-            return pushSwapn(opcode-0x8f, restOfCode, evmJumpTable);
+            return Some((pushSwapn(opcode-0x8f, restOfCode), evmJumpTable));
         } elseif (opcode == 0xa0) { // LOG0
             return pushEvmInsnCall(evmOp_log0, restOfCode, evmJumpTable);
         } elseif (opcode == 0xa1) { // LOG1
@@ -657,66 +657,50 @@ func pushEvmInsnDenomCheck(
 func pushDupn(
     n: uint, 
     restOfCode: AvmCodePoint,
-    evmJumpTable: map<uint, AvmCodePoint>
-) -> option<(AvmCodePoint, map<uint, AvmCodePoint>)> {
-    let i = 2;
-    while (i < n) {
-        restOfCode = pushInstruction(
-            0x39, // auxpop
-            pushInstruction(
-                0x43, // swap1
-                restOfCode
+) -> AvmCodePoint {
+    if (n == 2) {
+        return pushInstruction(0x42, restOfCode);  //dup2
+    } else {
+        return pushInstruction(
+            0x38,  // auxpush,
+            pushDupn(
+                n-1,
+                pushInstruction(
+                    0x39,  // auxpop
+                    pushInstruction(
+                        0x43,  // swap1
+                        restOfCode
+                    )
+                )
             )
         );
-        i = i+1;
     }
-    restOfCode = pushInstruction(
-        0x42, // dup2
-        restOfCode
-    );
-    i = 2;
-    while (i < n) {
-        restOfCode = pushInstruction(
-            0x38, // auxpush
-            restOfCode
-        );
-        i = i+1;
-    }
-    return Some((restOfCode, evmJumpTable));
 }
 
 func pushSwapn(
     n: uint, 
     restOfCode: AvmCodePoint,
-    evmJumpTable: map<uint, AvmCodePoint>
-) -> option<(AvmCodePoint, map<uint, AvmCodePoint>)> {
-    let i = 2;
-    while (i < n) {
-        restOfCode = pushInstruction(
-            0x39, // auxpop
-            restOfCode
-        );
-        i = i+1;
-    }
-    restOfCode = pushInstruction(
-        0x44, // swap2
-        pushInstruction(
-            0x43, // swap1
-            restOfCode
-        )
-    );
-    i = 2;
-    while (i < n) {
-        restOfCode = pushInstruction(
+) -> AvmCodePoint {
+    if (n == 2) {
+        return pushInstruction(0x44, restOfCode);  // swap2
+    } else {
+        return pushInstruction(
             0x43, // swap1
             pushInstruction(
                 0x38, // auxpush
-                restOfCode
+                pushSwapn(
+                    n-1,
+                    pushInstruction(
+                        0x39, // auxpop
+                        pushInstruction(
+                            0x43, // swap1
+                            restOfCode
+                        )
+                    )
+                )
             )
         );
-        i = i+1;
     }
-    return Some((restOfCode, evmJumpTable));
 }
 
 func pushEvmInsnCall(

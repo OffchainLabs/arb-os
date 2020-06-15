@@ -29,7 +29,8 @@ import func evmCallFrame_getAccount(frame: EvmCallFrame) -> Account;
 import func evmCallFrame_getMemory(frame: EvmCallFrame) -> ByteArray;
 import func evmCallFrame_getCodePoint(frame: EvmCallFrame) -> option<func()>;
 import func evmCallFrame_getCallvalue(frame: EvmCallFrame) -> uint;
-import func evmCallFrame_getCalldata(fram: EvmCallFrame) -> ByteArray;
+import func evmCallFrame_getCalldata(frame: EvmCallFrame) -> ByteArray;
+import func evmCallFrame_getEvmLogs(frame: EvmCallFrame) -> EvmLogs;
 import impure func selfDestructQueue_put(victim: address, owner: address);
 
 import func account_getAddress(acct: Account) -> address;
@@ -449,7 +450,34 @@ public func evmOp_revert(memOffset: uint, memNbytes: uint) {
 }
 
 public func evmOp_return(memOffset: uint, memNbytes: uint) {
-    evm_notYetImplemented(22,);
+    if let Some(topFrame) = evmCallStack_currentFrame() {
+        let memory = evmCallFrame_getMemory(topFrame);
+        if let Some(returnData) = bytearray_copy(
+            memory,
+            memOffset,
+            bytearray_new(0, true),
+            0,
+            memNbytes
+        ) {
+            if let Some(newTopFrame) = evmCallStack_pop(0, returnData) {
+                // copy the state back to the parent frame
+                evm_notYetImplemented(22,);
+                return;
+            } else {
+                // top-level call finished
+                // BUGBUG: should process the self-destruct queue here
+                //         (deferred that because it might affect the logs)
+                messages_callFinished(
+                    1,
+                    returnData,
+                    evmCallFrame_getEvmLogs(topFrame),
+                );  // this should never return
+                panic;
+            }
+        }
+    }
+
+    evm_runtimePanic();
 }
 
 public func evmOp_txexecgas() {
