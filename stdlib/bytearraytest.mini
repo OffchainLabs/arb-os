@@ -50,9 +50,9 @@ func tests() -> uint {
 	ba = bytearray_new(117, false);
 	if let Some(ba2) = bytearray_setByte(ba, 33, 42) {
 		if let Some(ba3) = bytearray_setByte(ba2, 37, 99) {
-			if (bytearray_getByte(ba3, 33) != Some(42)) {
-				return 3;
-			}
+		    if (bytearray_getByte(ba3, 33) != Some(42)) {
+		        return 3;
+		    }
 		} else {
 			return 103;
 		}
@@ -149,6 +149,16 @@ func tests() -> uint {
 	let _ = bytearray_get64(ba, 29); // ^ 0x24232221201f1e1d;
 	if (bytearray_get256(ba, 32) != before) {
 		return 11;
+	}
+
+	// test for big-endian byte order
+	ba = bytearray_new(32, false);
+	if let Some(ba2) = bytearray_setByte(ba, 31, 1) {
+	    if (bytearray_get256(ba2, 0) != Some(1)) {
+	        return 12;
+	    }
+	} else {
+	    return 1012;
 	}
 
 	return 0;
