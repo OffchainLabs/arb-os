@@ -100,7 +100,7 @@ public func bytearray_unmarshalBytes(inBytes: MarshalledBytes) -> ByteArray {
 public func bytearray_marshalFull(ba: ByteArray) -> MarshalledBytes {
     let nbytes = ba.size;
     let nwords = (nbytes+31)/32;
-    let words = unsafecast<MarshalledBytesCell>(0);
+    let words = unsafecast<MarshalledBytesCell>(());
     let i = 0;
     while (i < nwords) {
         words = struct {
