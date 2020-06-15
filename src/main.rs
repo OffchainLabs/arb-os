@@ -242,7 +242,11 @@ fn main() {
     }
 
     if let Some(_) = matches.subcommand_matches("evmdebug") {
-        evm_load_add(true);
+        let logs = evm_load_add(false);
+        println!("=== logs ===");
+        for log in logs {
+            println!("{}", log);
+        }
     }
 }
 
