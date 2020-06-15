@@ -17,9 +17,7 @@
 use crate::evm::abi::AbiForDapp;
 use crate::mavm::Value;
 use crate::run::runtime_env::RuntimeEnvironment;
-use crate::run::{
-    load_from_file, module_from_file_path, run, run_from_file, run_from_file_with_msgs,
-};
+use crate::run::{load_from_file, run, run_from_file};
 use crate::uint256::Uint256;
 use std::path::Path;
 
@@ -121,7 +119,7 @@ fn test_map() {
     }
 }
 
-// #[test]
+//#[test]
 #[allow(dead_code)]
 fn test_keccak() {
     let path = Path::new("stdlib/keccaktest.mexe");
@@ -150,6 +148,7 @@ fn test_codeload() {
     }
 }
 
+/*
 #[test]
 fn test_loader1() {
     run_using_loader(
@@ -185,7 +184,7 @@ fn run_using_loader(filename: &str, expected_result: Vec<Value>) {
     }
 }
 
-#[test]
+//#[test]
 fn test_runtime1() {
     run_using_runtime(
         "minitests/loadertest1.mexe",
@@ -194,9 +193,9 @@ fn test_runtime1() {
 }
 
 // #[test]  disabled because we're using a different EVM upload approach
-/*fn test_runtime_add() {
+fn test_runtime_add() {
     run_using_runtime("evm-add.mexe", vec![Value::Int(Uint256::from_usize(777))]);
-}*/
+}
 
 fn run_using_runtime(filename: &str, expected_result: Vec<Value>) {
     let loader_path = Path::new("arbruntime/runtime.mexe");
@@ -224,10 +223,22 @@ fn run_using_runtime(filename: &str, expected_result: Vec<Value>) {
         panic!("failed to load and convert module from {}", filename);
     }
 }
+*/
 
 #[test]
 fn test_evm_load_add() {
-    evm_load_add(false);
+    let logs = evm_load_add(false);
+    assert_eq!(logs.len(), 1);
+    if let Value::Tuple(tup) = &logs[0] {
+        assert_eq!(tup[1], Value::none());
+        assert_eq!(
+            tup[2],
+            Value::Tuple(vec![Value::Int(Uint256::zero()), Value::none()])
+        );
+        assert_eq!(tup[3], Value::Int(Uint256::one()));
+    } else {
+        panic!();
+    }
 }
 
 pub fn evm_load_add(debug: bool) -> Vec<Value> {

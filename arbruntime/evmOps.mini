@@ -500,8 +500,8 @@ public func evmOp_selfdestruct(owner: address) {
 
 func evm_error() {
     // This should be called when EVM code has generated an EVM error.
-    // We'll revert the transaction per the EVM spec.
-    panic;  //BUGBUG
+    evmOp_revert(0, 0);  // should never return
+    panic;
 }
 
 func evm_runtimePanic() {

@@ -95,7 +95,7 @@ public func account_checkAndIncrSeqNum(
         };
         return Some(account);
     } else {
-        return None<Account>;
+        return None;
     }
 }
 
@@ -148,7 +148,7 @@ public func accountStore_createAccountFromEvmCode(
                     with { ethBalance: 0 }
         ));
     } else {
-        return None<AccountStore>;
+        return None;
     }
 }
 
@@ -165,7 +165,7 @@ public func accountStore_createERC20(
         );
         return Some(acctStore);
     } else {
-        return None<AccountStore>;
+        return None;
     }
 }
 
@@ -182,7 +182,7 @@ public func accountStore_createERC721(
         );
         return Some(acctStore);
     } else {
-        return None<AccountStore>;
+        return None;
     }
 }
 
@@ -216,7 +216,7 @@ public func account_deductFromEthBalance(account: Account, deduction: uint) -> o
             account with { ethBalance: account.ethBalance-deduction }
         );
     } else {
-        return None<Account>;
+        return None;
     }
 }
 
@@ -229,7 +229,7 @@ public func accountStore_transferEthBalance(
 ) -> option<AccountStore> {
     let fromAcct = accountStore_get(acctStore, from);
     if (fromAcct.ethBalance < amount) {
-        return None<AccountStore>;
+        return None;
     }
     let toAcct = accountStore_get(acctStore, to);
     acctStore = acctStore 

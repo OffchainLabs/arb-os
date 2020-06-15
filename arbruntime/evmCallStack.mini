@@ -80,19 +80,12 @@ public impure func evmCallStack_currentFrame() -> option<EvmCallFrame> {
 }
 
 public impure func evmCallStack_currentAccount() -> option<Account> {
-    if let Some(topFrame) = globalCallStack {
-        return Some(topFrame.currentAccount);
-    } else {
-        return None<Account>;
-    }
+    return Some((globalCallStack?).currentAccount);
 }
 
 public impure func evmCallStack_currentAccountAndAddr() -> option<(Account, address)> {
-    if let Some(topFrame) = globalCallStack {
-        return Some((topFrame.currentAccount, topFrame.addr));
-    } else {
-        return None<(Account, address)>;
-    }
+    let topFrame = globalCallStack?;
+    return Some((topFrame.currentAccount, topFrame.addr));
 }
 
 public impure func evmCallStack_writeCurrentAccount(acct: Account) -> bool {
@@ -105,14 +98,11 @@ public impure func evmCallStack_writeCurrentAccount(acct: Account) -> bool {
 }
 
 public impure func evmCallStack_getAccount(addr: address) -> option<Account> {
-    if let Some(topFrame) = globalCallStack {
-       if (topFrame.addr == addr) {
-            return Some(topFrame.currentAccount);
-        } else {
-            return Some(accountStore_get(topFrame.accountStore, addr));
-        }
+    let topFrame = globalCallStack?;
+    if (topFrame.addr == addr) {
+        return Some(topFrame.currentAccount);
     } else {
-        return None<Account>;
+        return Some(accountStore_get(topFrame.accountStore, addr));
     }
 }
 

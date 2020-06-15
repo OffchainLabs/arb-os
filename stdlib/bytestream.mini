@@ -49,45 +49,33 @@ public func bytestream_bytesRemaining(bs: ByteStream) -> uint {
 
 public func bytestream_getByte(bs: ByteStream) -> option<(ByteStream, uint)> {
     if (bs.currentOffset >= bs.capacity) {
-        return None<(ByteStream, uint)>;
+        return None;
     } else {
-        if let Some(byteVal) = bytearray_getByte(bs.contents, bs.currentOffset) {
-            return Some((
-                bs with { currentOffset: bs.currentOffset+1 },
-                byteVal
-            ));
-        } else {
-            return None<(ByteStream, uint)>;
-        }
+        return Some((
+            bs with { currentOffset: bs.currentOffset+1 },
+            bytearray_getByte(bs.contents, bs.currentOffset)?
+        ));
     }
 }
 
 public func bytestream_get64(bs: ByteStream) -> option<(ByteStream, uint)> {
     if (bs.currentOffset+8 > bs.capacity) {
-        return None<(ByteStream, uint)>;
+        return None;
     } else {
-        if let Some(byteVal) = bytearray_get64(bs.contents, bs.currentOffset) {
-            return Some((
-                bs with { currentOffset: bs.currentOffset+8 },
-                byteVal
-            ));
-        } else {
-            return None<(ByteStream, uint)>;
-        }
+        return Some((
+            bs with { currentOffset: bs.currentOffset+8 },
+            bytearray_get64(bs.contents, bs.currentOffset)?
+        ));
     }
 }
 
 public func bytestream_getUint(bs: ByteStream) -> option<(ByteStream, uint)> {
     if (bs.currentOffset+32 > bs.capacity) {
-        return None<(ByteStream, uint)>;
+        return None;
     } else {
-        if let Some(byteVal) = bytearray_get256(bs.contents, bs.currentOffset) {
-            return Some((
-                bs with { currentOffset: bs.currentOffset+32 },
-                byteVal
-            ));
-        } else {
-            return None<(ByteStream, uint)>;
-        }
+        return Some((
+            bs with { currentOffset: bs.currentOffset+32 },
+            bytearray_get256(bs.contents, bs.currentOffset)?
+        ));
     }
 }

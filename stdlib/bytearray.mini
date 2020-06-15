@@ -293,7 +293,7 @@ public func bytearray_copy(
 func bytearray_expandToFit(ba: ByteArray, neededCapacity: uint) -> option<ByteArray> {
     if (ba.capacity < neededCapacity) {
         if ( ! ba.variableSize) {
-            return None<ByteArray>;  // tried to expand a fixed-size array
+            return None;  // tried to expand a fixed-size array
         }
         let newCapacity = ba.capacity*8;
         while (newCapacity < neededCapacity) {
