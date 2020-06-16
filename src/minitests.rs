@@ -16,12 +16,12 @@
 
 use crate::evm::abi::AbiForDapp;
 use crate::mavm::Value;
-use crate::run::runtime_env::{RuntimeEnvironment, bytes_from_bytestack};
+use crate::run::runtime_env::{bytes_from_bytestack, RuntimeEnvironment};
 use crate::run::{load_from_file, run, run_from_file};
 use crate::uint256::Uint256;
-use std::path::Path;
 use ethabi::{Token, Uint};
 use std::convert::TryFrom;
+use std::path::Path;
 
 #[test]
 fn test_arraytest() {
@@ -292,14 +292,17 @@ pub fn evm_load_add(debug: bool) -> Vec<Value> {
                         assert_eq!(ui, Uint::try_from(2).unwrap());
                         logs
                     }
-                    _ => { panic!("token was not a uint: {:?}", tokens[0]); }
+                    _ => {
+                        panic!("token was not a uint: {:?}", tokens[0]);
+                    }
+                },
+                Err(e) => {
+                    panic!("error decoding function output: {:?}", e);
                 }
-                Err(e) => { panic!("error decoding function output: {:?}", e); }
             }
         } else {
             panic!("log element was not a bytestack");
         }
-
     } else {
         panic!("log item was not a Tuple");
     }
