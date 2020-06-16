@@ -38,11 +38,11 @@ import func queue_get(q: Queue) -> (Queue, any);
 import func queue_put(q: Queue, val: any) -> Queue;
 
 
-type EvmCallFrame = struct {
+type EvmCallFrame = struct {  //FIXME: include self destruct queue
     addr: address,
     accountStore: AccountStore,
     currentAccount: Account,
-    codePoint: option<func()>,
+    codePoint: option<func()>,  //FIXME: resumeCodePoint
     calldata: ByteArray,
     callvalue: uint,
     returndata: option<ByteArray>,
@@ -51,6 +51,8 @@ type EvmCallFrame = struct {
     evmLogs: EvmLogs,
     parent: option<any>,      // really an option<EvmCallFrame>, but compiler doesn't allow recursive types
 }
+
+//FIXME:  add OrDie variants of the getters that return options; use in evmOps
 
 var globalCallStack: option<EvmCallFrame>;
 
