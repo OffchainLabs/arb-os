@@ -132,3 +132,76 @@ fn bytestack_build_uint(b: &[u8]) -> Value {
     }
     Value::Int(ui)
 }
+
+fn bytes_from_bytestack(bs: Value) -> Option<Vec<u8>> {
+    if let Value::Tuple(tup) = bs {
+        if let Value::Int(ui) = &tup[0] {
+            if let Some(nbytes) = ui.to_usize() {
+                return bytes_from_bytestack_2(tup[1].clone(), nbytes);
+            }
+        }
+    }
+    None
+}
+
+fn bytes_from_bytestack_2(cell: Value, nbytes: usize) -> Option<Vec<u8>> {
+    if nbytes == 0 {
+        Some(vec![])
+    } else {
+        if let Value::Tuple(tup) = cell {
+            assert_eq!((tup.len(), nbytes), (2, nbytes));
+            if let Value::Int(mut int_val) = tup[1].clone() {
+                let _256 = Uint256::from_usize(256);
+                if (nbytes % 32) == 0 {
+                    let mut sub_arr = match bytes_from_bytestack_2(tup[0].clone(), nbytes - 32) {
+                        Some(arr) => arr,
+                        None => {
+                            return None;
+                        }
+                    };
+                    let mut this_arr = vec![0u8; 32];
+                    for i in 0..32 {
+                        let rem = int_val.modulo(&_256).unwrap().to_usize().unwrap(); // safe because denom != 0 and result fits in usize
+                        this_arr[31 - i] = rem as u8;
+                        int_val = int_val.div(&_256).unwrap(); // safe because denom != 0
+                    }
+                    sub_arr.append(&mut this_arr);
+                    Some(sub_arr)
+                } else {
+                    let mut sub_arr =
+                        match bytes_from_bytestack_2(tup[0].clone(), 32 * (nbytes / 32)) {
+                            Some(arr) => arr,
+                            None => {
+                                return None;
+                            }
+                        };
+                    let this_size = nbytes % 32;
+                    let mut this_arr = vec![0u8; this_size];
+                    for _ in 0..(32 - this_size) {
+                        int_val = int_val.div(&_256).unwrap(); // safe because denom != 0
+                    }
+                    for i in 0..this_size {
+                        let rem = int_val.modulo(&_256).unwrap().to_usize().unwrap(); // safe because denom != 0 and result fits in usize
+                        this_arr[this_size - 1 - i] = rem as u8;
+                        int_val = int_val.div(&_256).unwrap(); // safe because denom != 0
+                    }
+                    sub_arr.append(&mut this_arr);
+                    Some(sub_arr)
+                }
+            } else {
+                None
+            }
+        } else {
+            None
+        }
+    }
+}
+
+#[test]
+fn test_bytestacks() {
+    let before =
+        "The quick brown fox jumped over the lazy dog. Lorem ipsum and all that.".as_bytes();
+    let bs = bytestack_from_bytes(before);
+    let after = bytes_from_bytestack(bs);
+    assert_eq!(after, Some(before.to_vec()));
+}
