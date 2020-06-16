@@ -173,12 +173,10 @@ impl AbiForContract {
         let cbor_length = cbor_length as usize;
         let decoded_insns = &decoded_insns[..(decoded_insns.len() - cbor_length - 2)];
 
-        let seq_num = rt_env.get_and_incr_seq_num(&self.address);
         let msg = Value::Tuple(vec![
             Value::Int(Uint256::from_usize(7)),
             Value::Int(Uint256::zero()),
             Value::Tuple(vec![
-                Value::Int(seq_num),
                 Value::Int(self.address.clone()),
                 bytestack_from_bytes(decoded_insns),
                 self.storage_map.clone(),

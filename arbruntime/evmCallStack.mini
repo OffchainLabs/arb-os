@@ -38,17 +38,18 @@ import func queue_get(q: Queue) -> (Queue, any);
 import func queue_put(q: Queue, val: any) -> Queue;
 
 
-type EvmCallFrame = struct {  //FIXME: include self destruct queue
+type EvmCallFrame = struct {
     addr: address,
     accountStore: AccountStore,
     currentAccount: Account,
-    codePoint: option<func()>,  //FIXME: resumeCodePoint
+    resumeCodePoint: option<func()>,
     calldata: ByteArray,
     callvalue: uint,
     returndata: option<ByteArray>,
     returnstatus: option<uint>,
     memory: ByteArray,
     evmLogs: EvmLogs,
+    selfDestructQueue: Queue,
     parent: option<any>,      // really an option<EvmCallFrame>, but compiler doesn't allow recursive types
 }
 
@@ -66,13 +67,14 @@ public impure func initEvmCallStack(
         addr: addr,
         accountStore: globalAS,
         currentAccount: accountStore_get(globalAS, addr),
-        codePoint: None<func()>,
+        resumeCodePoint: None<func()>,
         calldata: calldata,
         callvalue: callvalue,
         returndata: None<ByteArray>,
         returnstatus: None<uint>,
         memory: bytearray_new(8, true),
         evmLogs: evmlogs_empty(),
+        selfDestructQueue: queue_new(),
         parent: None<any>
     });
 }
@@ -120,6 +122,14 @@ public impure func evmCallStack_setAccount(addr: address, acct: Account) -> bool
         return true;
     } else {
         return false;
+    }
+}
+
+public impure func evmCallStack_getCurrentFrameMemoryOrDie() -> ByteArray {
+    if let Some(topFrame) = globalCallStack {
+        return topFrame.memory;
+    } else {
+        panic;
     }
 }
 
@@ -181,6 +191,20 @@ public impure func evmCallStack_setCurrentFrameStorageCell(offset: uint, value: 
     }
 }
 
+public impure func evmCallStack_selfDestructCurrentAccount(owner: address) {
+    if let Some(topFrame) = globalCallStack {
+        globalCallStack = Some(
+            topFrame with {
+                selfDestructQueue: queue_put(
+                    topFrame.selfDestructQueue,
+                    (topFrame.addr, owner)
+                )
+            }
+        );
+    }
+}
+
+
 public impure func evmCallStack_pop(status: uint, returndata: ByteArray) -> option<EvmCallFrame> {
     // if callstack is empty, return None
     // else pop the callstack, set up returndata and returnstatus in new top, return Some(newtopframe)
@@ -208,8 +232,8 @@ public func evmCallFrame_getMemory(frame: EvmCallFrame) -> ByteArray {
     return frame.memory;
 }
 
-public func evmCallFrame_getCodePoint(frame: EvmCallFrame) -> option<func()> {
-    return frame.codePoint;
+public func evmCallFrame_getResumeCodePoint(frame: EvmCallFrame) -> option<func()> {
+    return frame.resumeCodePoint;
 }
 
 public func evmCallFrame_getCallvalue(frame: EvmCallFrame) -> uint {
@@ -224,23 +248,6 @@ public func evmCallFrame_getEvmLogs(frame: EvmCallFrame) -> EvmLogs {
     return frame.evmLogs;
 }
 
-var selfDestructQueue: Queue;
-
-impure func initSelfDestructQueue() {
-    if (null == unsafecast<any>(selfDestructQueue)) {
-        selfDestructQueue = queue_new();
-    }
-}
-
-public impure func selfDestructQueue_put(addr: address, owner: address) {
-    selfDestructQueue = queue_put(selfDestructQueue, (addr, owner,));
-}
-
-func selfDestructQueue_execute() {
-    while ( ! queue_isEmpty(selfDestructQueue)) {
-        let (q, item,) = queue_get(selfDestructQueue);
-        selfDestructQueue = q;
-        let (addr, owner,) = unsafecast<(address, address)>(item);
-        //BUGBUG: destroy addr, send addr's funds to owner
-    }
+public func evmCallFrame_getSelfDestructQueue(frame: EvmCallFrame) -> Queue {
+    return frame.selfDestructQueue;
 }
