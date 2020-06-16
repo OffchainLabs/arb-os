@@ -103,7 +103,7 @@ type AvmCodeLoadMessage = struct {
 }
 
 type EvmCodeLoadMessage = struct {
-    seqNum: uint,
+    seqNum: uint,   // FIXME: don't need this
     contractAddr: address,
     data: MarshalledBytes,
     storageInfo: StorageInfo,

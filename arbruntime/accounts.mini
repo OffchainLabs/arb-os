@@ -23,19 +23,20 @@ import func tokens_getERC721template() -> address;
 
 type AccountStore = map<address, Account>
 
+//FIXME: put contract fields into a single option<struct>
 type Account = struct {
     addr: address,
     nextSeqNum: uint,
     code: option<ByteArray>,
-    evmJumpTable: map<uint, func()>,
+    evmJumpTable: map<uint, func()>,  //FIXME: should be option
     codePoint: option<func()>,
-    codeHash: bytes32,
+    codeHash: bytes32,   //FIXME: should be option
     storage: map<uint, uint>,
     ethBalance: uint,
 }
 
 var globalAccountStore: AccountStore;   // needs to be initialized before use
-var pristineAccount: Account;           // needs to be initialized before use
+var pristineAccount: Account;           // needs to be initialized before use  //FIXME: use getPristineAccount
 
 
 public impure func accountStore_init() {   // This must be called first!

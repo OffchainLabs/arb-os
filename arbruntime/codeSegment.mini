@@ -75,7 +75,7 @@ type Segment = struct {
     codePtMap: map<uint, AvmCodePoint>,
 }
 
-
+//FIXME: comment out the AVM code unmarshalling
 public func unmarshalCodeSegment(bs: ByteStream) -> option<(func() -> any, func())> {
     let (ubs, numInsns) = bytestream_getUint(bs)?;
     bs = ubs;
