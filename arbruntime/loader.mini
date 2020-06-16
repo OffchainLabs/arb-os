@@ -30,8 +30,9 @@ import func unmarshalCodeSegment(bs: ByteStream) -> option<(func() -> any, func(
 
 func main() {
     inbox_init();
-    let msg = inbox_get();
-    let mb = unsafecast<MarshalledBytes>(msg);
+    let ethMsg = inbox_get();
+    let arbMsg = asm(ethMsg,) any { [3] tget };
+    let mb = unsafecast<MarshalledBytes>(arbMsg);
     let ba = bytearray_unmarshalBytes(mb);
     let bs = bytestream_new(ba);
     if let Some(res) = unmarshalCodeSegment(bs) {

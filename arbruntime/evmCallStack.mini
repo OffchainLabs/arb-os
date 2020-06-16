@@ -16,12 +16,21 @@
 
 import type AccountStore;
 import type Account;
+import type EvmLogs;
 import type Queue;
 import type ByteArray;
 
+import func getGlobalAccountStore() -> AccountStore;
 import func accountStore_get(store: AccountStore, addr: address) -> Account;
 import func accountStore_set(store: AccountStore, addr: address, acct: Account) -> AccountStore;
 import func account_setStorageCell(acct: Account, offset: uint, value: uint) -> Account;
+import func account_getBalance(acct: Account) -> uint;
+import func account_setBalance(acct: Account, bal: uint) -> Account;
+import func account_deductFromEthBalance(account: Account, deduction: uint) -> option<Account>;
+
+import func evmlogs_empty() -> EvmLogs;
+
+import func bytearray_new(capacity: uint, variableSize: bool) -> ByteArray;
 
 import func queue_new() -> Queue;
 import func queue_isEmpty(q: Queue) -> bool;
@@ -29,74 +38,158 @@ import func queue_get(q: Queue) -> (Queue, any);
 import func queue_put(q: Queue, val: any) -> Queue;
 
 
-type EvmCallFrame = struct {
+type EvmCallFrame = struct {  //FIXME: include self destruct queue
     addr: address,
     accountStore: AccountStore,
     currentAccount: Account,
+    codePoint: option<func()>,  //FIXME: resumeCodePoint
+    calldata: ByteArray,
+    callvalue: uint,
+    returndata: option<ByteArray>,
+    returnstatus: option<uint>,
     memory: ByteArray,
-    parent: any,      // really an EvmCallFrame (or null), but compiler doesn't allow recursive types
+    evmLogs: EvmLogs,
+    parent: option<any>,      // really an option<EvmCallFrame>, but compiler doesn't allow recursive types
 }
 
-var globalCallStack: EvmCallFrame;
+//FIXME:  add OrDie variants of the getters that return options; use in evmOps
 
-public impure func evmCallStack_isEmpty() -> bool {
-    return null == unsafecast<any>(globalCallStack);
+var globalCallStack: option<EvmCallFrame>;
+
+public impure func initEvmCallStack(
+    addr: address,
+    calldata: ByteArray,
+    callvalue: uint,
+) {
+    let globalAS = getGlobalAccountStore();
+    globalCallStack = Some(struct {
+        addr: addr,
+        accountStore: globalAS,
+        currentAccount: accountStore_get(globalAS, addr),
+        codePoint: None<func()>,
+        calldata: calldata,
+        callvalue: callvalue,
+        returndata: None<ByteArray>,
+        returnstatus: None<uint>,
+        memory: bytearray_new(8, true),
+        evmLogs: evmlogs_empty(),
+        parent: None<any>
+    });
 }
 
-public impure func evmCallStack_currentFrame() -> EvmCallFrame {
+public impure func evmCallStack_currentFrame() -> option<EvmCallFrame> {
     return globalCallStack;
 }
 
-public impure func evmCallStack_currentAccount() -> Account {
-    if (evmCallStack_isEmpty()) {
-        return unsafecast<Account>(null);
-    }
-    return globalCallStack.currentAccount;
+public impure func evmCallStack_currentAccount() -> option<Account> {
+    return Some((globalCallStack?).currentAccount);
 }
 
-public impure func evmCallStack_writeCurrentAccount(acct: Account) {
-    if ( ! evmCallStack_isEmpty()) {
-        globalCallStack = globalCallStack with { currentAccount: acct };
-    }
+public impure func evmCallStack_currentAccountAndAddr() -> option<(Account, address)> {
+    let topFrame = globalCallStack?;
+    return Some((topFrame.currentAccount, topFrame.addr));
 }
 
-public impure func evmCallStack_getAccount(addr: address) -> Account {
-    if (evmCallStack_isEmpty()){
-        return unsafecast<Account>(null);
-    }
-    if (globalCallStack.addr == addr) {
-        return globalCallStack.currentAccount;
+public impure func evmCallStack_writeCurrentAccount(acct: Account) -> bool {
+    if let Some(topFrame) = globalCallStack {
+        globalCallStack = Some(topFrame with { currentAccount: acct });
+        return true;
     } else {
-        return accountStore_get(globalCallStack.accountStore, addr);
+        return false;
+    }
+}
+
+public impure func evmCallStack_getAccount(addr: address) -> option<Account> {
+    let topFrame = globalCallStack?;
+    if (topFrame.addr == addr) {
+        return Some(topFrame.currentAccount);
+    } else {
+        return Some(accountStore_get(topFrame.accountStore, addr));
     }
 }
 
 public impure func evmCallStack_setAccount(addr: address, acct: Account) -> bool {
-    if (evmCallStack_isEmpty()) {
+    if let Some(topFrame) = globalCallStack {
+        if (topFrame.addr == addr) {
+            globalCallStack = Some(topFrame with { currentAccount: acct });
+        } else {
+            globalCallStack = Some(topFrame with {
+                accountStore: accountStore_set(topFrame.accountStore, addr, acct)
+            });
+        }
+        return true;
+    } else {
         return false;
     }
-    if (globalCallStack.addr == addr) {
-        globalCallStack = globalCallStack with { currentAccount: acct };
+}
+
+public impure func evmCallStack_setCurrentFrameMemory(mem: ByteArray) -> bool {
+    if let Some(topFrame) = globalCallStack {
+        globalCallStack = Some(topFrame with { memory: mem });
+        return true;
     } else {
-        globalCallStack = globalCallStack with { 
-            accountStore: accountStore_set(globalCallStack.accountStore, addr, acct)
-        };
+        return false;
     }
-    return true;
 }
 
-public impure func evmCallStack_setCurrentFrameMemory(mem: ByteArray) {
-    globalCallStack = globalCallStack with { memory: mem };
+public impure func evmCallStack_transferEthFromCurrent(
+    dest: address,
+    amount: uint,
+) -> bool {
+    if let Some(topFrame) = globalCallStack {
+        if (topFrame.addr == dest) {
+            return false;   // can't do a self-transfer
+        }
+        let curAcct = topFrame.currentAccount;
+        let curBalance = account_getBalance(curAcct);
+        if (curBalance < amount) {
+            return false;   // insufficient funds
+        }
+        topFrame = topFrame with {
+            currentAccount: account_setBalance(curAcct, curBalance-amount)
+        };
+        let otherAcct = accountStore_get(topFrame.accountStore, dest);
+        topFrame = topFrame with {
+            accountStore: accountStore_set(
+                topFrame.accountStore,
+                dest,
+                account_setBalance(
+                    otherAcct,
+                    account_getBalance(otherAcct) + amount
+                )
+            )
+        };
+        globalCallStack = Some(topFrame);
+        return true;
+    } else {
+        return false;  // no current call frame
+    }
 }
 
-public impure func evmCallStack_setCurrentFrameStorageCell(offset: uint, value: uint) {
-    globalCallStack = globalCallStack with {
-        currentAccount: account_setStorageCell(
-            globalCallStack.currentAccount,
-            offset,
-            value
-        )
-    };
+public impure func evmCallStack_setCurrentFrameStorageCell(offset: uint, value: uint) -> bool {
+    if let Some(topFrame) = globalCallStack {
+        globalCallStack = Some(topFrame with {
+            currentAccount: account_setStorageCell(
+                topFrame.currentAccount,
+                offset,
+                value
+            )
+        });
+        return true;
+    } else {
+        return false;
+    }
+}
+
+public impure func evmCallStack_pop(status: uint, returndata: ByteArray) -> option<EvmCallFrame> {
+    // if callstack is empty, return None
+    // else pop the callstack, set up returndata and returnstatus in new top, return Some(newtopframe)
+    let top = globalCallStack?;
+    let parent = unsafecast<EvmCallFrame>(top.parent?);
+    globalCallStack = Some(parent with { returndata: Some(returndata) }
+                                  with { returnstatus: Some(status) }
+                      );
+    return globalCallStack;
 }
 
 public func evmCallFrame_currentAccount(frame: EvmCallFrame) -> Account {
@@ -113,6 +206,22 @@ public func evmCallFrame_getAccount(frame: EvmCallFrame, addr: address) -> Accou
 
 public func evmCallFrame_getMemory(frame: EvmCallFrame) -> ByteArray {
     return frame.memory;
+}
+
+public func evmCallFrame_getCodePoint(frame: EvmCallFrame) -> option<func()> {
+    return frame.codePoint;
+}
+
+public func evmCallFrame_getCallvalue(frame: EvmCallFrame) -> uint {
+    return frame.callvalue;
+}
+
+public func evmCallFrame_getCalldata(frame: EvmCallFrame) -> ByteArray {
+    return frame.calldata;
+}
+
+public func evmCallFrame_getEvmLogs(frame: EvmCallFrame) -> EvmLogs {
+    return frame.evmLogs;
 }
 
 var selfDestructQueue: Queue;

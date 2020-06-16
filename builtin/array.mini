@@ -55,7 +55,7 @@ public func builtin_arrayGet(arr: array, index: uint) -> any {
 
 public func builtin_arrayGetSafe(arr: array, index: uint) -> option<any> {
 	if (index >= arr.size) {
-		return None<any>;
+		return None;
 	}
 	return Some(builtin_arrayGet(arr, index));
 }
@@ -82,7 +82,7 @@ public func builtin_arrayGetConsecutive(arr: array, index: uint) -> (any, any) {
 
 public func builtin_arrayGetConsecutiveSafe(arr: array, index: uint) -> option<(any, any)> {
 	if (index+1 >= arr.size) {
-		return None<(any, any)>;
+		return None;
 	}
 	return Some(builtin_arrayGetConsecutive(arr, index));
 }
@@ -96,7 +96,7 @@ public func builtin_arraySet(arr: array, index: uint, value: any) -> array {
 
 public func builtin_arraySetSafe(arr: array, index: uint, value:any) -> option<array> {
 	if (index >= arr.size) {
-		return None<array>;
+		return None;
 	}
 	return Some(builtin_arraySet(arr, index, value));
 }
@@ -127,7 +127,7 @@ public func builtin_arraySwap(a: array, index: uint, value: any) -> (array, any)
 
 public func builtin_arraySwapSafe(a: array, index: uint, value: any) -> option<(array, any)> {
 	if (index >= a.size) {
-		return None<(array, any)>;
+		return None;
 	}
 	let (aOut, valOut) = builtin_arraySwap(a, index, value);
 	return Some((aOut, valOut));
@@ -174,7 +174,7 @@ public func builtin_arrayOp(a: array, index: uint, closure: opClosure) -> (array
 
 public func builtin_arrayOpSafe(a: array, index: uint, closure: opClosure) -> option<(array, any)> {
 	if (index >= a.size) {
-		return None<(array, any)>;
+		return None;
 	}
 	let (aOut, valOut) = builtin_arrayOp(a, index, closure);
 	return Some((aOut, valOut));
@@ -217,17 +217,9 @@ public func builtin_arrayOpConsecutiveSafe(
 	closure1: opClosure, 
 	closure2: opClosure
 ) -> option<(array, any, any)> {
-	if let Some(res1) = builtin_arrayOpSafe(a, index, closure1) { 	
-		let (arr1, ret1) = res1;
-		if let Some(res2) = builtin_arrayOpSafe(arr1, index+1, closure2) {
-			let (arr2, ret2) = res2;
-			return Some((arr2, ret1, ret2));
-		} else {
-			return None<(array, any, any)>;
-		}
-	} else {
-		return None<(array, any, any)>;
-	}
+	let (arr1, ret1) = builtin_arrayOpSafe(a, index, closure1)?;
+	let (arr2, ret2) = builtin_arrayOpSafe(arr1, index+1, closure2)?;
+	return Some((arr2, ret1, ret2));
 }
 
 public func array_resize(a: array, newSize: uint, baseVal: any) -> array { 

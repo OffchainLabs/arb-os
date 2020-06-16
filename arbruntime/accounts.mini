@@ -15,6 +15,7 @@
 //
 
 import type ByteArray;
+
 import func bytearray_size(ba: ByteArray) -> uint;
 import func tokens_getERC20template() -> address;
 import func tokens_getERC721template() -> address;
@@ -22,19 +23,20 @@ import func tokens_getERC721template() -> address;
 
 type AccountStore = map<address, Account>
 
+//FIXME: put contract fields into a single option<struct>
 type Account = struct {
     addr: address,
     nextSeqNum: uint,
     code: option<ByteArray>,
-    evmJumpTable: map<uint, func()>,
-    codePoint: func(),  
-    codeHash: bytes32,
+    evmJumpTable: map<uint, func()>,  //FIXME: should be option
+    codePoint: option<func()>,
+    codeHash: bytes32,   //FIXME: should be option
     storage: map<uint, uint>,
     ethBalance: uint,
 }
 
 var globalAccountStore: AccountStore;   // needs to be initialized before use
-var pristineAccount: Account;           // needs to be initialized before use
+var pristineAccount: Account;           // needs to be initialized before use  //FIXME: use getPristineAccount
 
 
 public impure func accountStore_init() {   // This must be called first!
@@ -44,7 +46,7 @@ public impure func accountStore_init() {   // This must be called first!
             nextSeqNum: 1,
             code: None<ByteArray>,
             evmJumpTable: newmap<uint, func()>,
-            codePoint: unsafecast<func()>(null),
+            codePoint: None<func()>,
             codeHash: bytes32(0xc5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470),
             storage: newmap<uint, uint>,
             ethBalance: 0,
@@ -78,7 +80,7 @@ public func accountStore_set(
 }
 
 public func account_isEmpty(acct: Account) -> bool {
-    return (acct.nextSeqNum == 0) && (acct.ethBalance == 0) && (acct.code == None<ByteArray>);
+    return (acct.nextSeqNum == 1) && (acct.ethBalance == 0) && (acct.code == None<ByteArray>);
 }
 
 public func account_checkAndIncrSeqNum(
@@ -94,7 +96,7 @@ public func account_checkAndIncrSeqNum(
         };
         return Some(account);
     } else {
-        return None<Account>;
+        return None;
     }
 }
 
@@ -102,8 +104,16 @@ public func account_getAddress(account: Account) -> address {
     return account.addr;
 }
 
+public func account_getCodePoint(account: Account) -> option<func()> {
+    return account.codePoint;
+}
+
 public func account_getBalance(account: Account) -> uint {
     return account.ethBalance;
+}
+
+public func account_setBalance(account: Account, balance: uint) -> Account {
+    return account with { ethBalance: balance };
 }
 
 public func account_getEvmJumpTable(account: Account) -> map<uint, func()> {
@@ -116,6 +126,31 @@ public func account_fetchAndIncrSeqNum(account: Account) -> (uint, Account) {
         nextSeqNum: ret+1
     };
     return (ret, account,);
+}
+
+public func accountStore_createAccountFromEvmCode(
+    store: AccountStore,
+    newAddr: address,
+    code: ByteArray,
+    evmJumpTable: map<uint, func()>,
+    initCodePt: func(),
+    storageMap: map<uint, uint>
+) -> option<AccountStore> {
+    let oldAcct = accountStore_get(store, newAddr);
+    if (account_isEmpty(oldAcct)) {
+        return Some(accountStore_set(
+            store,
+            newAddr,
+            oldAcct with { code: Some(code) }
+                    with { evmJumpTable: evmJumpTable }
+                    with { codePoint: Some(initCodePt) }
+                    // BUGBUG: need to init codeHash
+                    with { storage: storageMap }
+                    with { ethBalance: 0 }
+        ));
+    } else {
+        return None;
+    }
 }
 
 public func accountStore_createERC20(
@@ -131,7 +166,7 @@ public func accountStore_createERC20(
         );
         return Some(acctStore);
     } else {
-        return None<AccountStore>;
+        return None;
     }
 }
 
@@ -148,7 +183,7 @@ public func accountStore_createERC721(
         );
         return Some(acctStore);
     } else {
-        return None<AccountStore>;
+        return None;
     }
 }
 
@@ -176,6 +211,16 @@ public func account_addToEthBalance(account: Account, addition: uint) -> Account
     return account with { ethBalance: account.ethBalance + addition };
 }
 
+public func account_deductFromEthBalance(account: Account, deduction: uint) -> option<Account> {
+    if (account.ethBalance >= deduction) {
+        return Some(
+            account with { ethBalance: account.ethBalance-deduction }
+        );
+    } else {
+        return None;
+    }
+}
+
 // transfer eth; return None if insufficient funds
 public func accountStore_transferEthBalance(
     acctStore: AccountStore,
@@ -185,7 +230,7 @@ public func accountStore_transferEthBalance(
 ) -> option<AccountStore> {
     let fromAcct = accountStore_get(acctStore, from);
     if (fromAcct.ethBalance < amount) {
-        return None<AccountStore>;
+        return None;
     }
     let toAcct = accountStore_get(acctStore, to);
     acctStore = acctStore 

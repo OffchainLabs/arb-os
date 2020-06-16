@@ -75,20 +75,14 @@ type Segment = struct {
     codePtMap: map<uint, AvmCodePoint>,
 }
 
-
+//FIXME: comment out the AVM code unmarshalling
 public func unmarshalCodeSegment(bs: ByteStream) -> option<(func() -> any, func())> {
-    let numInsns = 0;
-    if let Some(res) = bytestream_getUint(bs) {
-        let (ubs, ni) = res;
-        bs = ubs;
-        numInsns = ni;
-    } else {
-        return None<(func() -> any, func())>;
-    }
+    let (ubs, numInsns) = bytestream_getUint(bs)?;
+    bs = ubs;
 
     if (bytestream_bytesRemaining(bs) > 1000000) {
         // reject module as too large
-        return None<(func() -> any, func())>;
+        return None;
     }
 
     let seg = segment_new(numInsns);
@@ -97,12 +91,9 @@ public func unmarshalCodeSegment(bs: ByteStream) -> option<(func() -> any, func(
     while (seg.size < seg.capacity) {
         twoAgo = oneAgo;
         oneAgo = seg.currentCodePt;
-        if let Some(res) = parseAndAddInsn(seg, bs) {
-            seg = res.0;
-            bs = res.1;
-        } else {
-            return None<(func() -> any, func())>;
-        }
+        let res = parseAndAddInsn(seg, bs)?;
+        seg = res.0;
+        bs = res.1;
     }
 
     seg = segment_close(seg);
@@ -113,78 +104,42 @@ public func unmarshalCodeSegment(bs: ByteStream) -> option<(func() -> any, func(
 }
 
 func parseAndAddInsn(seg: Segment, bs: ByteStream) -> option<(Segment, ByteStream)> {
-    if let Some(res) = bytestream_getByte(bs) {
-        bs = res.0;
-        let opcode = res.1;
-        if (opcode == 0) {
-            return None<(Segment, ByteStream)>;
-        }
-        if let Some(res2) = bytestream_getByte(bs) {
-            bs = res2.0;
-            let isImm = res2.1;
-            if (isImm == 0) {
-                return Some((
-                    segment_addInsn(seg, opcode, false, 0),
-                    bs
-                ));
-            } else {
-                if let Some(res3) = parseAvmValue(bs, seg) {
-                    bs = res3.0;
-                    let val = res3.1;
-                    return Some((
-                        segment_addInsn(seg, opcode, true, val),
-                        bs
-                    ));
-                } else {
-                    return None<(Segment, ByteStream)>;
-                }
-            }
-        } else {
-            return None<(Segment, ByteStream)>;
-        }
+    let (ubs, opcode) = bytestream_getByte(bs)?;
+    bs = ubs;
+    if (opcode == 0) {
+        return None;
+    }
+    let (ubs, isImm) = bytestream_getByte(bs)?;
+    bs = ubs;
+    if (isImm == 0) {
+        return Some((
+            segment_addInsn(seg, opcode, false, 0),
+            bs
+        ));
     } else {
-        return None<(Segment, ByteStream)>;
+        let (ubs, val) = parseAvmValue(bs, seg)?;
+        return Some((
+            segment_addInsn(seg, opcode, true, val),
+            ubs
+        ));
     }
 }
 
 func parseAvmValue(bs: ByteStream, seg: Segment) -> option<(ByteStream, any)>{
-    let kind = 0;
-    if let Some(res) = bytestream_getByte(bs) {
-        bs = res.0;
-        kind = res.1;
-    } else {
-        return None<(ByteStream, any)>;
-    }
+    let (ubs, kind) = bytestream_getByte(bs)?;
+    bs = ubs;
 
     if (kind == 0) {
         // parse and return an int
         return bytestream_getUint(bs);
     } elseif (kind == 8) {
         // parse and return a codepoint inside the segment, as 64-bit int
-        if let Some(res) = bytestream_get64(bs) {
-            bs = res.0;
-            let pc = res.1;
-            if let Some(cp) = seg.codePtMap[pc] {
-                return Some((bs, cp));
-            } else {
-                return None<(ByteStream, any)>;
-            }
-        } else {
-            return None<(ByteStream, any)>;
-        }
-        return bytestream_get64(bs);  //BUGBUG -- need to convert to codepoint, I think
+        let(ubs, pc) = bytestream_get64(bs)?;
+        return Some((ubs, seg.codePtMap[pc]?));
     } elseif (kind == 9) {
         // parse and return a codepoint of a runtime call, as byte
-        if let Some(res) = bytestream_getByte(bs) {
-            bs = res.0;
-            if let Some(cp) = evm_jumptable_get(res.1) {
-                return Some((bs, cp));
-            } else {
-                return None<(ByteStream, any)>;
-            }
-        } else {
-            return None<(ByteStream, any)>;
-        }
+        let (ubs, byteVal) = bytestream_getByte(bs)?;
+        return Some((ubs, evm_jumptable_get(byteVal)?));
     } elseif (kind >= 16 && kind <= 24) {
         if (kind == 16) {
             return Some((bs, ()));
@@ -192,12 +147,9 @@ func parseAvmValue(bs: ByteStream, seg: Segment) -> option<(ByteStream, any)>{
             let ret = newfixedarray(1);
             let i = 0;
             while (i < kind-16) {
-                if let Some(res) = parseAvmValue(bs, seg) {
-                    bs = res.0;
-                    ret = ret with { [i] = res.1 };
-                } else {
-                    return None<(ByteStream, any)>;
-                }
+                let (ubs, val) = parseAvmValue(bs, seg)?;
+                bs = ubs;
+                ret = ret with { [i] = val };
                 i = i+1;
             }
             return Some((bs, ret));
@@ -205,12 +157,9 @@ func parseAvmValue(bs: ByteStream, seg: Segment) -> option<(ByteStream, any)>{
             let ret = newfixedarray(2);
             let i = 0;
             while (i < kind-16) {
-                if let Some(res) = parseAvmValue(bs, seg) {
-                    bs = res.0;
-                    ret = ret with { [i] = res.1 };
-                } else {
-                    return None<(ByteStream, any)>;
-                }
+                let (ubs, val) = parseAvmValue(bs, seg)?;
+                bs = ubs;
+                ret = ret with { [i] = val };
                 i = i+1;
             }
             return Some((bs, ret));
@@ -218,12 +167,9 @@ func parseAvmValue(bs: ByteStream, seg: Segment) -> option<(ByteStream, any)>{
             let ret = newfixedarray(3);
             let i = 0;
             while (i < kind-16) {
-                if let Some(res) = parseAvmValue(bs, seg) {
-                    bs = res.0;
-                    ret = ret with { [i] = res.1 };
-                } else {
-                    return None<(ByteStream, any)>;
-                }
+                let (ubs, val) = parseAvmValue(bs, seg)?;
+                bs = ubs;
+                ret = ret with { [i] = val };
                 i = i+1;
             }
             return Some((bs, ret));
@@ -231,12 +177,9 @@ func parseAvmValue(bs: ByteStream, seg: Segment) -> option<(ByteStream, any)>{
             let ret = newfixedarray(4);
             let i = 0;
             while (i < kind-16) {
-                if let Some(res) = parseAvmValue(bs, seg) {
-                    bs = res.0;
-                    ret = ret with { [i] = res.1 };
-                } else {
-                    return None<(ByteStream, any)>;
-                }
+                let (ubs, val) = parseAvmValue(bs, seg)?;
+                bs = ubs;
+                ret = ret with { [i] = val };
                 i = i+1;
             }
             return Some((bs, ret));
@@ -244,12 +187,9 @@ func parseAvmValue(bs: ByteStream, seg: Segment) -> option<(ByteStream, any)>{
             let ret = newfixedarray(5);
             let i = 0;
             while (i < kind-16) {
-                if let Some(res) = parseAvmValue(bs, seg) {
-                    bs = res.0;
-                    ret = ret with { [i] = res.1 };
-                } else {
-                    return None<(ByteStream, any)>;
-                }
+                let (ubs, val) = parseAvmValue(bs, seg)?;
+                bs = ubs;
+                ret = ret with { [i] = val };
                 i = i+1;
             }
             return Some((bs, ret));  
@@ -257,12 +197,9 @@ func parseAvmValue(bs: ByteStream, seg: Segment) -> option<(ByteStream, any)>{
             let ret = newfixedarray(6);
             let i = 0;
             while (i < kind-16) {
-                if let Some(res) = parseAvmValue(bs, seg) {
-                    bs = res.0;
-                    ret = ret with { [i] = res.1 };
-                } else {
-                    return None<(ByteStream, any)>;
-                }
+                let (ubs, val) = parseAvmValue(bs, seg)?;
+                bs = ubs;
+                ret = ret with { [i] = val };
                 i = i+1;
             }
             return Some((bs, ret));   
@@ -270,12 +207,9 @@ func parseAvmValue(bs: ByteStream, seg: Segment) -> option<(ByteStream, any)>{
             let ret = newfixedarray(7);
             let i = 0;
             while (i < kind-16) {
-                if let Some(res) = parseAvmValue(bs, seg) {
-                    bs = res.0;
-                    ret = ret with { [i] = res.1 };
-                } else {
-                    return None<(ByteStream, any)>;
-                }
+                let (ubs, val) = parseAvmValue(bs, seg)?;
+                bs = ubs;
+                ret = ret with { [i] = val };
                 i = i+1;
             }
             return Some((bs, ret));  
@@ -283,18 +217,15 @@ func parseAvmValue(bs: ByteStream, seg: Segment) -> option<(ByteStream, any)>{
             let ret = newfixedarray(8);
             let i = 0;
             while (i < kind-16) {
-                if let Some(res) = parseAvmValue(bs, seg) {
-                    bs = res.0;
-                    ret = ret with { [i] = res.1 };
-                } else {
-                    return None<(ByteStream, any)>;
-                }
+                let (ubs, val) = parseAvmValue(bs, seg)?;
+                bs = ubs;
+                ret = ret with { [i] = val };
                 i = i+1;
             }
             return Some((bs, ret));
         }
     } else {
-        return None<(ByteStream, any)>;
+        return None;
     }
 }
 
@@ -377,256 +308,240 @@ public func translateEvmCodeSegment(
         ));
     }
 
-    let opcode = 0;
-    if let Some(res) = bytestream_getByte(bs) {
-        bs = res.0;
-        opcode = res.1;
-    } else {
-        return None<(AvmCodePoint, map<uint, AvmCodePoint>)>;
-    }
+    let (ubs, opcode) = bytestream_getByte(bs)?;
+    bs = ubs;
 
     if ((opcode >= 0x60) && (opcode <= 0x7f)) {
         // it's a pushN instruction; unmarshal value and push it
         let bytesRemaining = opcode - 0x5f;
         let imm = 0;
         while (bytesRemaining > 0) {
-            if let Some(res) = bytestream_getByte(bs) {
-                bs = res.0;
-                imm = 256*imm + res.1;
-            } else {
-                return None<(AvmCodePoint, map<uint, AvmCodePoint>)>;
-            }
+            let (ubs, val) = bytestream_getByte(bs)?;
+            bs = ubs;
+            imm = 256*imm + val;
             bytesRemaining = bytesRemaining-1;
         }
-        if let Some(res) = translateEvmCodeSegment(bs) {
-            let (restOfCode, evmJumpTable) = res;
-            return Some((pushValue(imm, restOfCode), evmJumpTable));
-        } else {
-            return None<(AvmCodePoint, map<uint, AvmCodePoint>)>;
-        }
+        let numBytesRead = bytestream_bytesReadSoFar(bs);
+        let (restOfCode, evmJumpTable) = translateEvmCodeSegment(bs)?;
+            // for debugging
+            restOfCode = pushInstructionImm(0x90, (42, numBytesRead-1, opcode), restOfCode);
+        return Some((pushValue(imm, restOfCode), evmJumpTable));
     } 
 
-    if let Some(res) = translateEvmCodeSegment(bs) {
-        let (restOfCode, evmJumpTable) = res;
-        if (opcode == 0x00) { // STOP
-            return pushEvmInsnCall(restOfCode, evmOp_stop, evmJumpTable);
-        } elseif (opcode == 0x01) { // ADD
-            return Some((pushInstruction(0x01, restOfCode), evmJumpTable));
-        } elseif (opcode == 0x02) { // MUL
-            return Some((pushInstruction(0x02, restOfCode), evmJumpTable));
-        } elseif (opcode == 0x03) { // SUB
-            return Some((pushInstruction(0x03, restOfCode), evmJumpTable));    
-        } elseif ( (opcode >= 0x04) && (opcode <= 0x09) ) { // DIV, MOD, SDIV, SMOD, ADDMOD, MULMOD
-            return pushEvmInsnDenomCheck(opcode, restOfCode, evmJumpTable); 
-        } elseif (opcode == 0x0a) { // EXP
-            return Some((pushInstruction(0x0a, restOfCode), evmJumpTable)); 
-        } elseif (opcode == 0x0b) { // SIGNEXTEND
-            return Some((pushInstruction(0x1b, restOfCode), evmJumpTable));  // note diff opcode
-        } elseif ( (opcode >= 0x10) && (opcode <= 0x1a) ) {
-            return Some((pushInstruction(opcode, restOfCode), evmJumpTable));
-        } elseif (opcode == 0x1b) { // SHL
-            return Some((
+    let (restOfCode, evmJumpTable) = translateEvmCodeSegment(bs)?;
+    let numBytesRead = bytestream_bytesReadSoFar(bs);
+        // for debugging
+        restOfCode = pushInstructionImm(0x90, (42, numBytesRead-1, opcode), restOfCode);
+    if (opcode == 0x00) { // STOP
+        return pushEvmInsnCall(evmOp_stop, restOfCode, evmJumpTable);
+    } elseif (opcode == 0x01) { // ADD
+        return Some((pushInstruction(0x01, restOfCode), evmJumpTable));
+    } elseif (opcode == 0x02) { // MUL
+        return Some((pushInstruction(0x02, restOfCode), evmJumpTable));
+    } elseif (opcode == 0x03) { // SUB
+        return Some((pushInstruction(0x03, restOfCode), evmJumpTable));
+    } elseif ( (opcode >= 0x04) && (opcode <= 0x09) ) { // DIV, MOD, SDIV, SMOD, ADDMOD, MULMOD
+        return pushEvmInsnDenomCheck(opcode, restOfCode, evmJumpTable);
+    } elseif (opcode == 0x0a) { // EXP
+        return Some((pushInstruction(0x0a, restOfCode), evmJumpTable));
+    } elseif (opcode == 0x0b) { // SIGNEXTEND
+        return Some((pushInstruction(0x1b, restOfCode), evmJumpTable));  // note diff opcode
+    } elseif ( (opcode >= 0x10) && (opcode <= 0x1a) ) {
+        return Some((pushInstruction(opcode, restOfCode), evmJumpTable));
+    } elseif (opcode == 0x1b) { // SHL
+        return Some((
+            pushInstructionImm(
+                0x0a, 2,   // [2] exp
+                pushInstruction(
+                    0x02, // mul
+                    restOfCode
+                )
+            ),
+            evmJumpTable
+        ));
+    } elseif (opcode == 0x1c) { // SHR
+        return Some((
+            pushInstructionImm(
+                0x0a, 2,   // [2] exp
                 pushInstruction(
                     0x43, // swap1
-                    pushInstructionImm(
-                        0x0a, 2,   // [2] exp
-                        pushInstruction(
-                            0x02, // mul
-                            restOfCode
-                        )
+                    pushInstruction(
+                        0x04, // div
+                        restOfCode
                     )
-                ),
-                evmJumpTable
-            ));
-        } elseif (opcode == 0x1c) { // SHR
-            return Some((
+                )
+            ),
+            evmJumpTable
+        ));
+    } elseif (opcode == 0x1d) { // SHA
+        return Some((
+            pushInstructionImm(
+                0x0a, 2,   // [2] exp
                 pushInstruction(
                     0x43, // swap1
-                    pushInstructionImm(
-                        0x0a, 2,   // [2] exp
-                        pushInstruction(
-                            0x43, // swap1
-                            pushInstruction(
-                                0x04, // div 
-                                restOfCode
-                            )
-                        )
+                    pushInstruction(
+                        0x05, // sdiv
+                        restOfCode
                     )
-                ),
-                evmJumpTable
-            ));
-        } elseif (opcode == 0x1d) { // SHA
-            return Some((
-                pushInstruction(
-                    0x43, // swap1
-                    pushInstructionImm(
-                        0x0a, 2,   // [2] exp
-                        pushInstruction(
-                            0x43, // swap1
-                            pushInstruction(
-                                0x05, // sdiv 
-                                restOfCode
-                            )
-                        )
-                    )
-                ),
-                evmJumpTable
-            ));  
-        } elseif (opcode == 0x20) { // SHA3
-            return pushEvmInsnCall(evmOp_sha3, restOfCode, evmJumpTable);     
-        } elseif (opcode == 0x30) { // ADDRESS
-            return pushEvmInsnCall(evmOp_address, restOfCode, evmJumpTable);  
-        } elseif (opcode == 0x31) { // BALANCE
-            return pushEvmInsnCall(evmOp_balance, restOfCode, evmJumpTable);  
-        } elseif (opcode == 0x32) { // ORIGIN
-            return pushEvmInsnCall(evmOp_origin, restOfCode, evmJumpTable);  
-        } elseif (opcode == 0x33) { // CALLER
-            return pushEvmInsnCall(evmOp_caller, restOfCode, evmJumpTable);  
-        } elseif (opcode == 0x34) { // CALLVALUE
-            return pushEvmInsnCall(evmOp_callvalue, restOfCode, evmJumpTable);  
-        } elseif (opcode == 0x35) { // CALLDATALOAD
-            return pushEvmInsnCall(evmOp_calldataload, restOfCode, evmJumpTable);  
-        } elseif (opcode == 0x36) { // CALLDATASIZE
-            return pushEvmInsnCall(evmOp_calldatasize, restOfCode, evmJumpTable);  
-        } elseif (opcode == 0x37) { // CALLDATACOPY
-            return pushEvmInsnCall(evmOp_calldatacopy, restOfCode, evmJumpTable);  
-        } elseif (opcode == 0x38) { // CODESIZE
-            return pushEvmInsnCall(evmOp_codesize, restOfCode, evmJumpTable);  
-        } elseif (opcode == 0x39) { // CODECOPY
-            return pushEvmInsnCall(evmOp_codecopy, restOfCode, evmJumpTable); 
-        } elseif (opcode == 0x3a) { // GASPRICE
-            return Some((pushValue(1, restOfCode), evmJumpTable));
-        } elseif (opcode == 0x3b) { // EXTCODESIZE
-            return pushEvmInsnCall(evmOp_extcodesize, restOfCode, evmJumpTable); 
-        } elseif (opcode == 0x3c) { // EXTCODECOPY
-            return pushEvmInsnCall(evmOp_extcodecopy, restOfCode, evmJumpTable); 
-        } elseif (opcode == 0x3d) { // RETURNDATASIZE
-            return pushEvmInsnCall(evmOp_returndatasize, restOfCode, evmJumpTable); 
-        } elseif (opcode == 0x3e) { // RETURNDATACOPY
-            return pushEvmInsnCall(evmOp_returndatacopy, restOfCode, evmJumpTable); 
-        } elseif (opcode == 0x40) { // BLOCKHASH
-            return None<(AvmCodePoint, map<uint, AvmCodePoint>)>;
-        } elseif (opcode == 0x41) { // COINBASE
-            return None<(AvmCodePoint, map<uint, AvmCodePoint>)>;
-        } elseif (opcode == 0x42) { // TIMESTAMP
-            return pushEvmInsnCall(evmOp_timestamp, restOfCode, evmJumpTable); 
-        } elseif (opcode == 0x43) { // NUMBER
-            return pushEvmInsnCall(evmOp_number, restOfCode, evmJumpTable); 
-        } elseif (opcode == 0x44) { // DIFFICULTY
-            return None<(AvmCodePoint, map<uint, AvmCodePoint>)>;
-        } elseif (opcode == 0x45) { // GASLIMIT
-            return Some((pushValue(10000000000, restOfCode), evmJumpTable)); 
-        } elseif (opcode == 0x50) { // POP
-            return Some((pushInstruction(0x30, restOfCode), evmJumpTable)); // pop  
-        } elseif (opcode == 0x51) { // MLOAD
-            return pushEvmInsnCall(evmOp_mload, restOfCode, evmJumpTable);     
-        } elseif (opcode == 0x52) { // MSTORE
-            return pushEvmInsnCall(evmOp_mstore, restOfCode, evmJumpTable);     
-        } elseif (opcode == 0x53) { // MSTORE8
-            return pushEvmInsnCall(evmOp_mstore8, restOfCode, evmJumpTable);
-        } elseif (opcode == 0x54) { // SLOAD
-            return pushEvmInsnCall(evmOp_sload, restOfCode, evmJumpTable);    
-        } elseif (opcode == 0x55) { // SSTORE
-            return pushEvmInsnCall(evmOp_sstore, restOfCode, evmJumpTable);   
-        } elseif (opcode == 0x56) { // JUMP
-            return pushEvmInsnCall(
-                evmOp_getjumpaddr, 
-                pushInstruction(0x34, restOfCode), // jump
-                evmJumpTable
-            );
-        } elseif (opcode == 0x57) { // JUMPI
+                )
+            ),
+            evmJumpTable
+        ));
+    } elseif (opcode == 0x20) { // SHA3
+        return pushEvmInsnCall(evmOp_sha3, restOfCode, evmJumpTable);
+    } elseif (opcode == 0x30) { // ADDRESS
+        return pushEvmInsnCall(evmOp_address, restOfCode, evmJumpTable);
+    } elseif (opcode == 0x31) { // BALANCE
+        return pushEvmInsnCall(evmOp_balance, restOfCode, evmJumpTable);
+    } elseif (opcode == 0x32) { // ORIGIN
+        return pushEvmInsnCall(evmOp_origin, restOfCode, evmJumpTable);
+    } elseif (opcode == 0x33) { // CALLER
+        return pushEvmInsnCall(evmOp_caller, restOfCode, evmJumpTable);
+    } elseif (opcode == 0x34) { // CALLVALUE
+        return pushEvmInsnCall(evmOp_callvalue, restOfCode, evmJumpTable);
+    } elseif (opcode == 0x35) { // CALLDATALOAD
+        return pushEvmInsnCall(evmOp_calldataload, restOfCode, evmJumpTable);
+    } elseif (opcode == 0x36) { // CALLDATASIZE
+        return pushEvmInsnCall(evmOp_calldatasize, restOfCode, evmJumpTable);
+    } elseif (opcode == 0x37) { // CALLDATACOPY
+        return pushEvmInsnCall(evmOp_calldatacopy, restOfCode, evmJumpTable);
+    } elseif (opcode == 0x38) { // CODESIZE
+        return pushEvmInsnCall(evmOp_codesize, restOfCode, evmJumpTable);
+    } elseif (opcode == 0x39) { // CODECOPY
+        return pushEvmInsnCall(evmOp_codecopy, restOfCode, evmJumpTable);
+    } elseif (opcode == 0x3a) { // GASPRICE
+        return Some((pushValue(1, restOfCode), evmJumpTable));
+    } elseif (opcode == 0x3b) { // EXTCODESIZE
+        return pushEvmInsnCall(evmOp_extcodesize, restOfCode, evmJumpTable);
+    } elseif (opcode == 0x3c) { // EXTCODECOPY
+        return pushEvmInsnCall(evmOp_extcodecopy, restOfCode, evmJumpTable);
+    } elseif (opcode == 0x3d) { // RETURNDATASIZE
+        return pushEvmInsnCall(evmOp_returndatasize, restOfCode, evmJumpTable);
+    } elseif (opcode == 0x3e) { // RETURNDATACOPY
+        return pushEvmInsnCall(evmOp_returndatacopy, restOfCode, evmJumpTable);
+    } elseif (opcode == 0x40) { // BLOCKHASH
+        return None<(AvmCodePoint, map<uint, AvmCodePoint>)>;
+    } elseif (opcode == 0x41) { // COINBASE
+        return None<(AvmCodePoint, map<uint, AvmCodePoint>)>;
+    } elseif (opcode == 0x42) { // TIMESTAMP
+        return pushEvmInsnCall(evmOp_timestamp, restOfCode, evmJumpTable);
+    } elseif (opcode == 0x43) { // NUMBER
+        return pushEvmInsnCall(evmOp_number, restOfCode, evmJumpTable);
+    } elseif (opcode == 0x44) { // DIFFICULTY
+        return None<(AvmCodePoint, map<uint, AvmCodePoint>)>;
+    } elseif (opcode == 0x45) { // GASLIMIT
+        return Some((pushValue(10000000000, restOfCode), evmJumpTable));
+    } elseif (opcode == 0x50) { // POP
+        return Some((pushInstruction(0x30, restOfCode), evmJumpTable)); // pop
+    } elseif (opcode == 0x51) { // MLOAD
+        return pushEvmInsnCall(evmOp_mload, restOfCode, evmJumpTable);
+    } elseif (opcode == 0x52) { // MSTORE
+        return pushEvmInsnCall(evmOp_mstore, restOfCode, evmJumpTable);
+    } elseif (opcode == 0x53) { // MSTORE8
+        return pushEvmInsnCall(evmOp_mstore8, restOfCode, evmJumpTable);
+    } elseif (opcode == 0x54) { // SLOAD
+        return pushEvmInsnCall(evmOp_sload, restOfCode, evmJumpTable);
+    } elseif (opcode == 0x55) { // SSTORE
+        return pushEvmInsnCall(evmOp_sstore, restOfCode, evmJumpTable);
+    } elseif (opcode == 0x56) { // JUMP
+        return pushEvmInsnCall(
+            evmOp_getjumpaddr,
+            pushInstruction(0x34, restOfCode), // jump
+            evmJumpTable
+        );
+    } elseif (opcode == 0x57) { // JUMPI
+        if let Some(res) = pushEvmInsnCall(
+            evmOp_getjumpaddr,
+            pushInstruction(0x34, restOfCode), // jump
+            evmJumpTable
+        ) {
+            let (doJump, _) = res;
             return Some((
                 pushInstruction(
                     0x43,  // swap1
-                    pushInstruction(
-                        0x15,  // iszero
-                        pushInstructionImm(
-                            0x35, // cjump
-                            restOfCode, 
+                    pushInstructionImm(
+                        0x35, // cjump
+                        doJump,
+                        pushInstruction(
+                            0x30, // pop
                             pushInstructionImm(
-                                0x43,  // swap1
+                                0x34,  // jump
                                 restOfCode,
-                                pushInstruction(
-                                    0x34, //jump
-                                    restOfCode
-                                )
+                                doJump,
                             )
                         )
                     )
                 ),
                 evmJumpTable
             ));
-        } elseif (opcode == 0x58) {  // GETPC
-            return None<(AvmCodePoint, map<uint, AvmCodePoint>)>;
-        } elseif (opcode == 0x59) { // MSIZE
-            return pushEvmInsnCall(evmOp_msize, restOfCode, evmJumpTable);
-        } elseif (opcode == 0x5a) { // MSIZE
-            return Some((pushValue(9999999999, restOfCode), evmJumpTable));
-        } elseif (opcode == 0x5b) { // JUMPDEST
-            evmJumpTable = evmJumpTable with { 
-                [bytestream_bytesReadSoFar(bs)] = restOfCode 
-            };
-            return Some((
-                restOfCode, 
-                evmJumpTable with { 
-                    [bytestream_bytesReadSoFar(bs)] = restOfCode 
-                }
-            ));
-        } elseif (opcode == 0x80) {  // DUP1 -- note that DUPn in EVM corresponds to DUP(n-1) in AvmCodePoint
-            return Some((pushInstruction(0x40, restOfCode), evmJumpTable));  // dup0
-        } elseif (opcode == 0x81) {  // DUP2 
-            return Some((pushInstruction(0x41, restOfCode), evmJumpTable));  // dup1
-        } elseif (opcode == 0x82) {  // DUP3 
-            return Some((pushInstruction(0x42, restOfCode), evmJumpTable));  // DUP2
-        } elseif ( (opcode >= 0x83) && (opcode <= 0x8f) ) {
-            return pushDupn(opcode-0x80, restOfCode, evmJumpTable);
-        } elseif (opcode == 0x90) {  // SWAP1
-            return Some((pushInstruction(0x43, restOfCode), evmJumpTable));  // swap1
-        } elseif (opcode == 0x91) {  // SWAP2
-            return Some((pushInstruction(0x44, restOfCode), evmJumpTable));  // swap2
-        } elseif ( (opcode >= 0x92) && (opcode <= 0x9f) ) {
-            return pushSwapn(opcode-0x8f, restOfCode, evmJumpTable);
-        } elseif (opcode == 0xa0) { // LOG0
-            return pushEvmInsnCall(evmOp_log0, restOfCode, evmJumpTable);
-        } elseif (opcode == 0xa1) { // LOG1
-            return pushEvmInsnCall(evmOp_log1, restOfCode, evmJumpTable);
-        } elseif (opcode == 0xa2) { // LOG2
-            return pushEvmInsnCall(evmOp_log2, restOfCode, evmJumpTable);
-        } elseif (opcode == 0xa3) { // LOG3
-            return pushEvmInsnCall(evmOp_log3, restOfCode, evmJumpTable);
-        } elseif (opcode == 0xa4) { // LOG0
-            return pushEvmInsnCall(evmOp_log4, restOfCode, evmJumpTable);
-        } elseif (opcode == 0xe1) { // SLOADBYTES
-            return pushEvmInsnCall(evmOp_sloadbytes, restOfCode, evmJumpTable);
-        } elseif (opcode == 0xe2) { // SSTOREBYTES
-            return pushEvmInsnCall(evmOp_sstorebytes, restOfCode, evmJumpTable);
-        } elseif (opcode == 0xe3) { // SSIZE
-            return pushEvmInsnCall(evmOp_ssize, restOfCode, evmJumpTable);    
-        } elseif (opcode == 0xf0) {  // CREATE
-            return None<(AvmCodePoint, map<uint, AvmCodePoint>)>;
-        } elseif (opcode == 0xf1) { // CALL
-            return pushEvmInsnCall(evmOp_call, restOfCode, evmJumpTable);  
-        } elseif (opcode == 0xf2) { // CALLCODE
-            return pushEvmInsnCall(evmOp_ssize, restOfCode, evmJumpTable);  
-        } elseif (opcode == 0xf3) { // RETURN
-            return pushEvmInsnCall(evmOp_return, restOfCode, evmJumpTable);  
-        } elseif (opcode == 0xf4) { // DELEGATECALL
-            return pushEvmInsnCall(evmOp_delegatecall, restOfCode, evmJumpTable); 
-        } elseif (opcode == 0xf5) {  // CREATE2
-            return None<(AvmCodePoint, map<uint, AvmCodePoint>)>;
-        } elseif (opcode == 0xfa) { // STATICCALL
-            return pushEvmInsnCall(evmOp_staticcall, restOfCode, evmJumpTable); 
-        } elseif (opcode == 0xfc) { // TXEXECGAS
-            return pushEvmInsnCall(evmOp_txexecgas, restOfCode, evmJumpTable); 
-        } elseif (opcode == 0xfd) { // REVERT
-            return pushEvmInsnCall(evmOp_revert, restOfCode, evmJumpTable); 
-        } elseif (opcode == 0xfe) { // INVALID
-            return Some((pushInstruction(0x73, restOfCode), evmJumpTable));  // error
-        } elseif (opcode == 0xff) { // SELFDESTRUCT
-            return pushEvmInsnCall(evmOp_selfdestruct, restOfCode, evmJumpTable); 
         } else {
-            return None<(AvmCodePoint, map<uint, AvmCodePoint>)>;
+            panic; // should never happen; pushEvmInsnCall always returns Some
         }
+    } elseif (opcode == 0x58) {  // GETPC
+        return None<(AvmCodePoint, map<uint, AvmCodePoint>)>;
+    } elseif (opcode == 0x59) { // MSIZE
+        return pushEvmInsnCall(evmOp_msize, restOfCode, evmJumpTable);
+    } elseif (opcode == 0x5a) { // MSIZE
+        return Some((pushValue(9999999999, restOfCode), evmJumpTable));
+    } elseif (opcode == 0x5b) { // JUMPDEST
+        return Some((
+            restOfCode,
+            evmJumpTable with {
+                [numBytesRead-1] = restOfCode
+            }
+        ));
+    } elseif (opcode == 0x80) {  // DUP1 -- note that DUPn in EVM corresponds to DUP(n-1) in AvmCodePoint
+        return Some((pushInstruction(0x40, restOfCode), evmJumpTable));  // dup0
+    } elseif (opcode == 0x81) {  // DUP2
+        return Some((pushInstruction(0x41, restOfCode), evmJumpTable));  // dup1
+    } elseif (opcode == 0x82) {  // DUP3
+        return Some((pushInstruction(0x42, restOfCode), evmJumpTable));  // DUP2
+    } elseif ( (opcode >= 0x83) && (opcode <= 0x8f) ) {
+        return Some((pushDupn(opcode-0x80, restOfCode), evmJumpTable));
+    } elseif (opcode == 0x90) {  // SWAP1
+        return Some((pushInstruction(0x43, restOfCode), evmJumpTable));  // swap1
+    } elseif (opcode == 0x91) {  // SWAP2
+        return Some((pushInstruction(0x44, restOfCode), evmJumpTable));  // swap2
+    } elseif ( (opcode >= 0x92) && (opcode <= 0x9f) ) {
+        return Some((pushSwapn(opcode-0x8f, restOfCode), evmJumpTable));
+    } elseif (opcode == 0xa0) { // LOG0
+        return pushEvmInsnCall(evmOp_log0, restOfCode, evmJumpTable);
+    } elseif (opcode == 0xa1) { // LOG1
+        return pushEvmInsnCall(evmOp_log1, restOfCode, evmJumpTable);
+    } elseif (opcode == 0xa2) { // LOG2
+        return pushEvmInsnCall(evmOp_log2, restOfCode, evmJumpTable);
+    } elseif (opcode == 0xa3) { // LOG3
+        return pushEvmInsnCall(evmOp_log3, restOfCode, evmJumpTable);
+    } elseif (opcode == 0xa4) { // LOG0
+        return pushEvmInsnCall(evmOp_log4, restOfCode, evmJumpTable);
+    } elseif (opcode == 0xe1) { // SLOADBYTES
+        return pushEvmInsnCall(evmOp_sloadbytes, restOfCode, evmJumpTable);
+    } elseif (opcode == 0xe2) { // SSTOREBYTES
+        return pushEvmInsnCall(evmOp_sstorebytes, restOfCode, evmJumpTable);
+    } elseif (opcode == 0xe3) { // SSIZE
+        return pushEvmInsnCall(evmOp_ssize, restOfCode, evmJumpTable);
+    } elseif (opcode == 0xf0) {  // CREATE
+        return None<(AvmCodePoint, map<uint, AvmCodePoint>)>;
+    } elseif (opcode == 0xf1) { // CALL
+        return pushEvmInsnCall(evmOp_call, restOfCode, evmJumpTable);
+    } elseif (opcode == 0xf2) { // CALLCODE
+        return pushEvmInsnCall(evmOp_ssize, restOfCode, evmJumpTable);
+    } elseif (opcode == 0xf3) { // RETURN
+        return pushEvmInsnCall(evmOp_return, restOfCode, evmJumpTable);
+    } elseif (opcode == 0xf4) { // DELEGATECALL
+        return pushEvmInsnCall(evmOp_delegatecall, restOfCode, evmJumpTable);
+    } elseif (opcode == 0xf5) {  // CREATE2
+        return None<(AvmCodePoint, map<uint, AvmCodePoint>)>;
+    } elseif (opcode == 0xfa) { // STATICCALL
+        return pushEvmInsnCall(evmOp_staticcall, restOfCode, evmJumpTable);
+    } elseif (opcode == 0xfc) { // TXEXECGAS
+        return pushEvmInsnCall(evmOp_txexecgas, restOfCode, evmJumpTable);
+    } elseif (opcode == 0xfd) { // REVERT
+        return pushEvmInsnCall(evmOp_revert, restOfCode, evmJumpTable);
+    } elseif (opcode == 0xfe) { // INVALID
+        return Some((pushInstruction(0x73, restOfCode), evmJumpTable));  // error
+    } elseif (opcode == 0xff) { // SELFDESTRUCT
+        return pushEvmInsnCall(evmOp_selfdestruct, restOfCode, evmJumpTable);
     } else {
         return None<(AvmCodePoint, map<uint, AvmCodePoint>)>;
     }
@@ -657,66 +572,50 @@ func pushEvmInsnDenomCheck(
 func pushDupn(
     n: uint, 
     restOfCode: AvmCodePoint,
-    evmJumpTable: map<uint, AvmCodePoint>
-) -> option<(AvmCodePoint, map<uint, AvmCodePoint>)> {
-    let i = 2;
-    while (i < n) {
-        restOfCode = pushInstruction(
-            0x39, // auxpop
-            pushInstruction(
-                0x43, // swap1
-                restOfCode
+) -> AvmCodePoint {
+    if (n == 2) {
+        return pushInstruction(0x42, restOfCode);  //dup2
+    } else {
+        return pushInstruction(
+            0x38,  // auxpush,
+            pushDupn(
+                n-1,
+                pushInstruction(
+                    0x39,  // auxpop
+                    pushInstruction(
+                        0x43,  // swap1
+                        restOfCode
+                    )
+                )
             )
         );
-        i = i+1;
     }
-    restOfCode = pushInstruction(
-        0x42, // dup2
-        restOfCode
-    );
-    i = 2;
-    while (i < n) {
-        restOfCode = pushInstruction(
-            0x38, // auxpush
-            restOfCode
-        );
-        i = i+1;
-    }
-    return Some((restOfCode, evmJumpTable));
 }
 
 func pushSwapn(
     n: uint, 
     restOfCode: AvmCodePoint,
-    evmJumpTable: map<uint, AvmCodePoint>
-) -> option<(AvmCodePoint, map<uint, AvmCodePoint>)> {
-    let i = 2;
-    while (i < n) {
-        restOfCode = pushInstruction(
-            0x39, // auxpop
-            restOfCode
-        );
-        i = i+1;
-    }
-    restOfCode = pushInstruction(
-        0x44, // swap2
-        pushInstruction(
-            0x43, // swap1
-            restOfCode
-        )
-    );
-    i = 2;
-    while (i < n) {
-        restOfCode = pushInstruction(
+) -> AvmCodePoint {
+    if (n == 2) {
+        return pushInstruction(0x44, restOfCode);  // swap2
+    } else {
+        return pushInstruction(
             0x43, // swap1
             pushInstruction(
                 0x38, // auxpush
-                restOfCode
+                pushSwapn(
+                    n-1,
+                    pushInstruction(
+                        0x39, // auxpop
+                        pushInstruction(
+                            0x43, // swap1
+                            restOfCode
+                        )
+                    )
+                )
             )
         );
-        i = i+1;
     }
-    return Some((restOfCode, evmJumpTable));
 }
 
 func pushEvmInsnCall(
