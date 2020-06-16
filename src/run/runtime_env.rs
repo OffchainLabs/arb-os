@@ -133,7 +133,7 @@ fn bytestack_build_uint(b: &[u8]) -> Value {
     Value::Int(ui)
 }
 
-fn bytes_from_bytestack(bs: Value) -> Option<Vec<u8>> {
+pub fn bytes_from_bytestack(bs: Value) -> Option<Vec<u8>> {
     if let Value::Tuple(tup) = bs {
         if let Value::Int(ui) = &tup[0] {
             if let Some(nbytes) = ui.to_usize() {
