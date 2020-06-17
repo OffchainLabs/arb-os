@@ -50,9 +50,9 @@ func tests() -> uint {
 	ba = bytearray_new(117, false);
 	if let Some(ba2) = bytearray_setByte(ba, 33, 42) {
 		if let Some(ba3) = bytearray_setByte(ba2, 37, 99) {
-			if (bytearray_getByte(ba3, 33) != Some(42)) {
-				return 3;
-			}
+		    if (bytearray_getByte(ba3, 33) != Some(42)) {
+		        return 3;
+		    }
 		} else {
 			return 103;
 		}
@@ -84,9 +84,13 @@ func tests() -> uint {
 
 	ba = bytearray_new(117, true);
 	if let Some(ba2) = bytearray_set256(ba, 64, 7373) {
-		if (bytearray_get256(ba2, 65) != Some(7373/256) ){
-			return 6;
-		}
+	    if let Some(res) = bytearray_get256(ba2, 63) {
+	        if (res != 7373/256) {
+	            return 60000+res;
+	        }
+	    } else {
+	        return 106;
+	    }
 	} else {
 		return 106;
 	}
@@ -116,11 +120,11 @@ func tests() -> uint {
 			(
 				(
 					null,
-					0x1f1e1d1c1b1a191817161514131211100f0e0d0c0b0a09080706050403020100,
+					0x000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f,
 				),
-				0x3f3e3d3c3b3a393837363534333231302f2e2d2c2b2a29282726252423222120,
+				0x202122232425262728292a2b2c2d2e2f303132333435363738393a3b3c3d3e3f,
 			),
-			0x424140,
+			0x4041420000000000000000000000000000000000000000000000000000000000,
 		),
 	));
 	ba = bytearray_new(67, false);
@@ -135,12 +139,16 @@ func tests() -> uint {
 	}
 
 	ba = setupFromUnmarshal();
-	if (bytearray_get64(ba, 3) != Some(0x0a09080706050403)) {
-		return 9;
+	if let Some(res) = bytearray_get64(ba, 3) {
+	    if (res != 0x030405060708090a) {
+		    return 9;
+		}
+	} else {
+	    return 109;
 	}
 
 	ba = setupFromUnmarshal();
-	if (bytearray_get64(ba, 29) != Some(0x24232221201f1e1d)) {
+	if (bytearray_get64(ba, 29) != Some(0x1d1e1f2021222324)) {
 		return 10;
 	}
 
@@ -149,6 +157,16 @@ func tests() -> uint {
 	let _ = bytearray_get64(ba, 29); // ^ 0x24232221201f1e1d;
 	if (bytearray_get256(ba, 32) != before) {
 		return 11;
+	}
+
+	// test for big-endian byte order
+	ba = bytearray_new(32, false);
+	if let Some(ba2) = bytearray_setByte(ba, 31, 1) {
+	    if (bytearray_get256(ba2, 0) != Some(1)) {
+	        return 12;
+	    }
+	} else {
+	    return 1012;
 	}
 
 	return 0;
@@ -161,11 +179,11 @@ func setupFromUnmarshal() -> ByteArray {
 			(
 				(
 					null,
-					0x1f1e1d1c1b1a191817161514131211100f0e0d0c0b0a09080706050403020100,
+					0x000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f,
 				),
-				0x3f3e3d3c3b3a393837363534333231302f2e2d2c2b2a29282726252423222120,
+				0x202122232425262728292a2b2c2d2e2f303132333435363738393a3b3c3d3e3f,
 			),
-			0x424140,
+			0x4041420000000000000000000000000000000000000000000000000000000000,
 		),
 	));
 	return bytearray_unmarshalBytes(marshalledStruct);

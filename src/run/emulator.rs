@@ -277,7 +277,7 @@ impl CodeStore {
                 }
             }
         } else {
-            panic!("invalid codepoint in push_insn");
+            panic!("invalid codepoint in push_insn: {:?}", codept);
         }
     }
 }
@@ -437,6 +437,10 @@ impl<'a> Machine {
                             }
                         }
                         "show static\n" => println!("Static contents: {}", self.static_val),
+                        "run\n" => {
+                            breakpoint = false;
+                            exit = true;
+                        }
                         _ => println!("invalid input"),
                     }
                     if exit {
@@ -451,7 +455,7 @@ impl<'a> Machine {
                     }
                 }
             }
-            if let Err(e) = self.run_one() {
+            if let Err(e) = self.run_one(true) {
                 self.state = MachineState::Error(e);
             }
         }
@@ -466,7 +470,7 @@ impl<'a> Machine {
                     }
                 }
             }
-            match self.run_one() {
+            match self.run_one(false) {
                 Ok(still_runnable) => {
                     if !still_runnable {
                         return;
@@ -480,7 +484,7 @@ impl<'a> Machine {
         }
     }
 
-    pub fn run_one(&mut self) -> Result<bool, ExecutionError> {
+    pub fn run_one(&mut self, debug: bool) -> Result<bool, ExecutionError> {
         if let MachineState::Running(pc) = self.state {
             if let Some(insn) = self.code.get_insn(pc) {
                 if let Some(val) = &insn.immediate {
@@ -1025,7 +1029,9 @@ impl<'a> Machine {
 					}
 					Opcode::DebugPrint => {
 						let r1 = self.stack.pop(&self.state)?;
-						println!("{:?}", r1);
+						if debug {
+                            println!("debugprint: {}", r1);
+                        }
 						self.incr_pc();
 						Ok(true)
 					}

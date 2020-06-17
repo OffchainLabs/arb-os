@@ -23,6 +23,7 @@ use std::fs::File;
 use std::io::Read;
 use std::path::Path;
 
+pub mod chain;
 mod emulator;
 pub mod runtime_env;
 
@@ -32,6 +33,11 @@ pub fn run_from_file(
     env: RuntimeEnvironment,
     debug: bool,
 ) -> Result<Vec<Value>, (ExecutionError, StackTrace)> {
+    let mut machine = load_from_file(path, env);
+    run(&mut machine, args, debug)
+}
+
+pub fn load_from_file(path: &Path, env: RuntimeEnvironment) -> Machine {
     let display = path.display();
 
     let mut file = match File::open(&path) {
@@ -45,15 +51,10 @@ pub fn run_from_file(
         Ok(_) => s,
     };
 
-    run_from_string(s, args, env, debug)
+    load_from_string(s, env)
 }
 
-fn run_from_string(
-    s: String,
-    args: Vec<Value>,
-    env: RuntimeEnvironment,
-    debug: bool,
-) -> Result<Vec<Value>, (ExecutionError, StackTrace)> {
+fn load_from_string(s: String, env: RuntimeEnvironment) -> Machine {
     let parse_result: Result<LinkedProgram, serde_json::Error> = serde_json::from_str(&s);
     let program = match parse_result {
         Ok(prog) => prog,
@@ -62,11 +63,10 @@ fn run_from_string(
             panic!();
         }
     };
-    let mut new_machine = Machine::new(program, env);
-    run(&mut new_machine, args, debug)
+    return Machine::new(program, env);
 }
 
-fn run(
+pub fn run(
     machine: &mut Machine,
     args: Vec<Value>,
     debug: bool,
@@ -120,7 +120,7 @@ fn run_with_msgs(
     debug: bool,
 ) -> Result<Vec<Value>, ExecutionError> {
     let mut env = RuntimeEnvironment::new();
-    env.insert_messages(&in_msgs);
+    env.insert_arb_messages(&in_msgs);
     let mut machine = Machine::new(prog, env);
     match run(&mut machine, vec![], debug) {
         Ok(_) => Ok(machine.runtime_env.get_all_logs()),
@@ -166,6 +166,11 @@ fn test_inbox_and_log() {
             code: vec![
                 Instruction::from_opcode(Opcode::Inbox, None),
                 Instruction::from_opcode_imm(Opcode::Tget, Value::Int(Uint256::one()), None),
+                Instruction::from_opcode_imm(
+                    Opcode::Tget,
+                    Value::Int(Uint256::from_usize(3)),
+                    None,
+                ),
                 Instruction::from_opcode(Opcode::Log, None),
                 Instruction::from_opcode(Opcode::Inbox, None), // should block, stopping execution
             ],

@@ -14,12 +14,19 @@
 // limitations under the License.
 //
 
+import type ArbMessage;
 import type Queue;
 import func queue_new() -> Queue;
 import func queue_isEmpty(q: Queue) -> bool;
 import func queue_get(q: Queue) -> (Queue, any);
 import func queue_put(q: Queue, val: any) -> Queue;
 
+type EthBridgeMessage = struct {
+    blockNum: uint,
+    timestamp: uint,
+    txId: uint,
+    message: ArbMessage,
+}
 
 type Inbox = struct {
     queue: Queue,
@@ -37,14 +44,24 @@ public impure func inbox_init() {
     };
 }
 
-public impure func inbox_get() -> any {  //BUGBUG: need to update blockNum and timestamp based on message
+public impure func inbox_get() -> EthBridgeMessage {
+    asm(3,) { debugprint };  //DEBUG
     let inbox = globalInbox;
     while (queue_isEmpty(inbox.queue)) {
         inbox = getFromL1Inbox(inbox);
     }
     let (updatedQ, ret,) = queue_get(inbox.queue);
+    let ebMsg = unsafecast<EthBridgeMessage>(ret);
+
+    if (inbox.blockNum < ebMsg.blockNum) {
+        inbox = inbox with { blockNum: ebMsg.blockNum };
+    }
+    if (inbox.timestamp < ebMsg.timestamp) {
+        inbox = inbox with { timestamp: ebMsg.timestamp };
+    }
     globalInbox = inbox with { queue: updatedQ };
-    return ret;
+
+    return ebMsg;
 }
 
 type InboxCell = struct {

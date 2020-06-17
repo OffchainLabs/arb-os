@@ -28,7 +28,22 @@ use std::io::{self, Read, Write};
 use std::path::Path;
 use std::usize;
 
+pub mod abi;
+
 pub fn compile_evm_file(path: &Path, debug: bool) -> Result<Vec<LinkedProgram>, CompileError> {
+    match evm_json_from_file(path) {
+        Ok(evm_json) => compile_from_json(evm_json, debug),
+        Err(e) => {
+            println!("Error reading in EVM file: {:?}", e);
+            Err(CompileError::new(
+                "error parsing compiled EVM file".to_string(),
+                None,
+            ))
+        }
+    }
+}
+
+fn evm_json_from_file(path: &Path) -> Result<serde_json::Value, serde_json::Error> {
     let display = path.display();
 
     let mut file = match File::open(&path) {
@@ -42,17 +57,7 @@ pub fn compile_evm_file(path: &Path, debug: bool) -> Result<Vec<LinkedProgram>, 
         Ok(_) => s,
     };
 
-    let parse_result: Result<serde_json::Value, serde_json::Error> = serde_json::from_str(&s);
-    match parse_result {
-        Ok(evm_json) => compile_from_json(evm_json, debug),
-        Err(e) => {
-            println!("Error reading in EVM file: {:?}", e);
-            Err(CompileError::new(
-                "error parsing compiled EVM file".to_string(),
-                None,
-            ))
-        }
-    }
+    return serde_json::from_str(&s);
 }
 
 #[derive(Serialize)]
@@ -176,9 +181,9 @@ pub fn send_inject_evm_messages(evm_json: serde_json::Value, env: &mut RuntimeEn
                     for (k, v) in m {
                         if let serde_json::Value::String(s) = v {
                             storage_map = Value::Tuple(vec![
-                                storage_map,
                                 Value::Int(Uint256::from_string_hex(&k[2..]).unwrap()),
                                 Value::Int(Uint256::from_string_hex(&s[2..]).unwrap()),
+                                storage_map,
                             ]);
                         } else {
                             return false;
@@ -202,7 +207,7 @@ pub fn send_inject_evm_messages(evm_json: serde_json::Value, env: &mut RuntimeEn
                 return false;
             }
         }
-        env.insert_messages(&messages_out);
+        env.insert_arb_messages(&messages_out);
         true
     } else {
         false

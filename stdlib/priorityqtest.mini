@@ -19,7 +19,7 @@ import type PriorityQ;
 import func priorityq_new() -> PriorityQ;
 import func priorityq_isEmpty(pq: PriorityQ) -> bool;
 import func priorityq_insert(pq: PriorityQ, item: any, priority: uint) -> PriorityQ;
-import func priorityq_get(pq: PriorityQ) -> (option<any>, PriorityQ);
+import func priorityq_get(pq: PriorityQ) -> option<(any, PriorityQ)>;
 import func priorityq_printAsArray(pq: PriorityQ) -> uint;
 
 
@@ -49,9 +49,13 @@ func tests() -> uint {
 	q = priorityq_insert(q, 97, 3);
 	q = priorityq_insert(q, 98, 2);
 	q = priorityq_insert(q, 96, 4);
-	let (ret, pq,) = priorityq_get(q);
-	if (ret != Some(unsafecast<any>(96))) {
-		return 4;
+	if let Some(res) = priorityq_get(q) {
+	    let (ret, pq) = res;
+	    if (ret != unsafecast<any>(96)) {
+		    return 4;
+	    }
+	} else {
+	    return 104;
 	}
 
 	q = priorityq_new();
@@ -63,9 +67,13 @@ func tests() -> uint {
 	q = priorityq_insert(q, 97, 293);
 	q = priorityq_insert(q, 98, 292);
 	q = priorityq_insert(q, 96, 294);
-	let (ret, pq,) = priorityq_get(q);
-	if (ret != Some(unsafecast<any>(96))) {
-		return 5;
+	if let Some(res) = priorityq_get(q) {
+	    let (ret, pq,) = res;
+	    if (ret != unsafecast<any>(96)) {
+		    return 5;
+	    }
+	} else {
+	    return 105;
 	}
 		
 	return 0;

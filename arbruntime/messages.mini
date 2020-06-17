@@ -19,6 +19,7 @@ import type ByteStream;
 import type MarshalledBytes;
 import type AccountStore;
 import type Account;
+import type EvmLogs;
 
 import impure func getGlobalAccountStore() -> AccountStore;
 import impure func setGlobalAccountStore(acctStore: AccountStore);
@@ -32,21 +33,39 @@ import func accountStore_transferEthBalance(
 ) -> option<AccountStore>;
 import func accountStore_createAccountFromEvmCode(
     acctStore: AccountStore,
+    newAddr: address,
     evmCode: ByteArray,
     evmJumpTable: map<uint, func()>,
     startCodePt: func(),
     storageMap: map<uint, uint>
-) -> AccountStore;
+) -> option<AccountStore>;
 import func account_checkAndIncrSeqNum(
     account: Account, 
     seqNumRecvd: uint
 ) -> option<Account>;
+
+import func account_getResumeCodePoint(acct: Account) -> option<func()>;
+
+import func initEvmCallStack(addr: address, calldata: ByteArray, callvalue: uint);
+import func evmCallStack_currentAccount() -> option<Account>;
+
+import func bytearray_size(ba: ByteArray) -> uint;
 import func bytearray_unmarshalBytes(mb: MarshalledBytes) -> ByteArray;
+import func bytearray_marshalFull(ba: ByteArray) -> MarshalledBytes;
+
 import func bytestream_new(ba: ByteArray) -> ByteStream;
-import func unmarshalCodeSegment(bs: ByteStream) -> option<(func()->any, func())>;
+
 import func makeInitStructures(v: any) -> (map<uint, func()>, map<uint, uint>);
 import func translateEvmCodeSegment(bs: ByteStream) -> option<(func(), map<uint, func()>)>;
 
+import func cleanUpAndJumpToRunLoop();
+
+type EthBridgeMessage = struct {
+    blockNum: uint,
+    timestamp: uint,
+    txId: uint,
+    message: ArbMessage,
+}
 
 type ArbMessage = struct {
     msgType: uint,
@@ -83,7 +102,7 @@ type AvmCodeLoadMessage = struct {
 }
 
 type EvmCodeLoadMessage = struct {
-    seqNum: uint,
+    contractAddr: address,
     data: MarshalledBytes,
     storageInfo: StorageInfo,
 }
@@ -94,28 +113,30 @@ type StorageInfo = struct {
     more: any,
 }
 
-public impure func handleEthbridgeMessage(msg: ArbMessage) {
-    let msgType = msg.msgType;
+public impure func handleEthbridgeMessage(ethMsg: EthBridgeMessage) {
+    let arbMsg = ethMsg.message;
+    let msgType = arbMsg.msgType;
     if (msgType == 0) {
-        let txMsg = unsafecast<TxMessage>(msg.message);
+        let txMsg = unsafecast<TxMessage>(arbMsg.message);
         let globalAS = getGlobalAccountStore();
-        let account = accountStore_get(globalAS, msg.sender);
+        let account = accountStore_get(globalAS, arbMsg.sender);
         if let Some(updatedAcct) = account_checkAndIncrSeqNum(account, txMsg.seqNumber) {
             setGlobalAccountStore(
-                accountStore_set(globalAS, msg.sender, updatedAcct),
+                accountStore_set(globalAS, arbMsg.sender, updatedAcct),
             );
-            handleValidTxMessage(txMsg,);
-            panic; //TODO
+            if ( ! handleValidTxMessage(txMsg, ethMsg)) {
+                panic; // for debugging -- call failed
+            }
         } else {
             // sequence number was invalid
             panic; //TODO
         }
     } elseif (msgType == 1) {
-        let depMsg = unsafecast<EthTransferMessage>(msg.message);
+        let depMsg = unsafecast<EthTransferMessage>(arbMsg.message);
         let globalAS = getGlobalAccountStore();
         if let Some(newGAS) = accountStore_transferEthBalance(
             globalAS, 
-            msg.sender, 
+            arbMsg.sender,
             depMsg.dest, 
             depMsg.amount
         ) {
@@ -125,59 +146,41 @@ public impure func handleEthbridgeMessage(msg: ArbMessage) {
             panic; //TODO
         }
     } elseif (msgType == 2) {
-        let depMsg = unsafecast<TokenTransferMessage>(msg.message);
+        let depMsg = unsafecast<TokenTransferMessage>(arbMsg.message);
         panic; // deposit ERC 20
     } elseif (msgType == 3) {
-        let depMsg = unsafecast<TokenTransferMessage>(msg.message);
+        let depMsg = unsafecast<TokenTransferMessage>(arbMsg.message);
         panic; // deposit ERC 721
     } elseif (msgType == 4) {
         panic; // contract tx call message
     } elseif (msgType == 5) {
-        let callMsg = unsafecast<CallMessage>(msg.message);
+        let callMsg = unsafecast<CallMessage>(arbMsg.message);
         panic; // call message
-    } elseif (msgType == 6) {
-        let codeLoadMsg = unsafecast<AvmCodeLoadMessage>(msg.message);
-        let globalAS = getGlobalAccountStore();
-        let account = accountStore_get(globalAS, msg.sender);
-        if let Some(updatedAcct) = account_checkAndIncrSeqNum(account, codeLoadMsg.seqNum) {
-            setGlobalAccountStore(
-                accountStore_set(globalAS, msg.sender, updatedAcct),
-            );
-            let ba = bytearray_unmarshalBytes(codeLoadMsg.data);
-            let bs = bytestream_new(ba);
-            if let Some(res) = unmarshalCodeSegment(bs) {
-                let (initCodePt, callCodePt) = res;
-                let initData = initCodePt();
-                let (evmPcMap, initStorageMap,) = makeInitStructures(initData);
-                callCodePt();
-            }
-        }
+    // msgType 6  is currently unused
     } elseif (msgType == 7) {
-        let codeLoadMsg = unsafecast<EvmCodeLoadMessage>(msg.message);
+        let codeLoadMsg = unsafecast<EvmCodeLoadMessage>(arbMsg.message);
         let globalAS = getGlobalAccountStore();
-        let account = accountStore_get(globalAS, msg.sender);
-        if let Some(updatedAcct) = account_checkAndIncrSeqNum(account, codeLoadMsg.seqNum) {
-            globalAS = accountStore_set(globalAS, msg.sender, updatedAcct);
-            let ba = bytearray_unmarshalBytes(codeLoadMsg.data);
-            let bs = bytestream_new(ba);
-            if let Some(res) = translateEvmCodeSegment(bs) {
-                let (codept, evmJumpTable) = res;
-                // address of new contract is derived by hashing of the full message,
-                //       then truncating to address size (20 bytes)
-                // this is unique on the current chain, 
-                //       because it contains sender address and sender seq number
-                // also it contains the full EVM code
-                let newAddr = address(hash(msg));
-                globalAS = accountStore_createAccountFromEvmCode(
-                    globalAS,
-                    ba,
-                    evmJumpTable,
-                    codept,
-                    makeStorageMap(codeLoadMsg.storageInfo)
-                );
+        let ba = bytearray_unmarshalBytes(codeLoadMsg.data);
+        let bs = bytestream_new(ba);
+        if let Some(res) = translateEvmCodeSegment(bs) {
+            let (codept, evmJumpTable) = res;
+            let newAddr = codeLoadMsg.contractAddr;
+            if let Some(as) = accountStore_createAccountFromEvmCode(
+                globalAS,
+                newAddr,
+                ba,
+                evmJumpTable,
+                codept,
+                makeStorageMap(codeLoadMsg.storageInfo)
+            ) {
+                globalAS = as;
+            } else {
+                asm((666, 0),) { log };
             }
-            setGlobalAccountStore(globalAS,);
+        } else {
+            asm((666, 1),) { log };
         }
+        setGlobalAccountStore(globalAS,);
     }
     // if no case matches, unrecognized message type; ignore it
 }
@@ -191,6 +194,35 @@ func makeStorageMap(storageInfo: StorageInfo) -> map<uint, uint> {
     return ret;
 }
 
-impure func handleValidTxMessage(txMsg: TxMessage) {
-    //TODO
+var globalCurrentMessage: EthBridgeMessage;
+
+impure func handleValidTxMessage(txMsg: TxMessage, fullMsg: EthBridgeMessage) -> bool {
+    initEvmCallStack(
+        txMsg.to,
+        bytearray_unmarshalBytes(txMsg.data),
+        txMsg.value
+    );
+    if let Some(currentAcct) = evmCallStack_currentAccount() {
+        if let Some(codept) = account_getResumeCodePoint(currentAcct) {
+            globalCurrentMessage = fullMsg;
+            codept();   // should never return
+            panic;
+        } else {
+            return false;
+        }
+    } else {
+        return false;
+    }
+}
+
+public impure func messages_callFinished(
+    status: uint,
+    returnData: ByteArray,
+    logs: EvmLogs,
+) {
+    let logItem = (globalCurrentMessage, logs, bytearray_marshalFull(returnData), status);
+    asm(logItem,) { log };
+
+    cleanUpAndJumpToRunLoop();  // should never return
+    panic;
 }

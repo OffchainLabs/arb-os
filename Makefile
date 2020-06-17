@@ -3,10 +3,12 @@ BUILTINDIR = builtin
 STDDIR = stdlib
 
 test: all
-	cargo test --release
+	cargo test
 
-LOADERTESTS = arbruntime/loader.mexe minitests/loadertest1.mexe minitests/loadertest2.mexe
-TESTEXES = $(BUILTINDIR)/kvstest.mexe $(STDDIR)/queuetest.mexe $(BUILTINDIR)/arraytest.mexe $(BUILTINDIR)/globaltest.mexe $(STDDIR)/priorityqtest.mexe $(STDDIR)/bytearraytest.mexe $(STDDIR)/keccaktest.mexe $(BUILTINDIR)/maptest.mexe minitests/codeloadtest.mexe $(LOADERTESTS)
+evmdebug: all
+	cargo run evmdebug
+
+TESTEXES = $(BUILTINDIR)/kvstest.mexe $(STDDIR)/queuetest.mexe $(BUILTINDIR)/arraytest.mexe $(BUILTINDIR)/globaltest.mexe $(STDDIR)/priorityqtest.mexe $(STDDIR)/bytearraytest.mexe $(STDDIR)/keccaktest.mexe $(BUILTINDIR)/maptest.mexe minitests/codeloadtest.mexe
 BUILTINMAOS = $(BUILTINDIR)/array.mao $(BUILTINDIR)/kvs.mao
 STDLIBMAOS = $(STDDIR)/bytearray.mao $(STDDIR)/priorityq.mao $(STDDIR)/random.mao $(STDDIR)/queue.mao $(STDDIR)/keccak.mao $(STDDIR)/bytestream.mao
 STDLIB = $(STDLIBMAOS)
@@ -33,12 +35,6 @@ $(STDDIR)/bytearraytest.mexe: $(BUILTINMAOS) $(STDDIR)/bytearraytest.mini $(STDL
 
 minitests/codeloadtest.mexe: minitests/codeloadtest.mini
 	cargo run compile minitests/codeloadtest.mini -o minitests/codeloadtest.mexe
-
-minitests/loadertest1.mexe: minitests/loadertest1.mini
-	cargo run compile minitests/loadertest1.mini -m -o minitests/loadertest1.mexe
-
-minitests/loadertest2.mexe: minitests/loadertest2.mini
-	cargo run compile minitests/loadertest2.mini -m -o minitests/loadertest2.mexe
 
 $(STDDIR)/keccaktest.mexe: $(BUILTINMAOS) $(STDDIR)/keccaktest.mini $(STDDIR)/keccak.mao $(STDDIR)/bytearray.mao
 	cargo run compile $(STDDIR)/keccaktest.mini $(STDDIR)/keccak.mao $(STDDIR)/bytearray.mao -o $(STDDIR)/keccaktest.mexe
@@ -71,7 +67,7 @@ $(BUILTINDIR)/kvs.mao: $(BUILTINDIR)/kvs.mini
 	cargo run compile $(BUILTINDIR)/kvs.mini -c -o $(BUILTINDIR)/kvs.mao
 
 RUNTIMEDIR = arbruntime
-RUNTIMEMAOS = $(RUNTIMEDIR)/main.mao $(RUNTIMEDIR)/evmJumpTable.mao $(RUNTIMEDIR)/accounts.mao $(RUNTIMEDIR)/messages.mao $(RUNTIMEDIR)/inbox.mao $(RUNTIMEDIR)/evmCallStack.mao $(RUNTIMEDIR)/evmOps.mao $(RUNTIMEDIR)/codeSegment.mao
+RUNTIMEMAOS = $(RUNTIMEDIR)/main.mao $(RUNTIMEDIR)/evmJumpTable.mao $(RUNTIMEDIR)/accounts.mao $(RUNTIMEDIR)/messages.mao $(RUNTIMEDIR)/inbox.mao $(RUNTIMEDIR)/evmCallStack.mao $(RUNTIMEDIR)/evmOps.mao $(RUNTIMEDIR)/codeSegment.mao $(RUNTIMEDIR)/evmlogs.mao
 RUNTIME = $(RUNTIMEDIR)/runtime.mexe
 
 runtime: $(RUNTIME)
@@ -97,8 +93,8 @@ $(RUNTIMEDIR)/evmOps.mao: $(RUNTIMEDIR)/evmOps.mini
 $(RUNTIMEDIR)/codeSegment.mao: $(RUNTIMEDIR)/codeSegment.mini
 	cargo run compile $(RUNTIMEDIR)/codeSegment.mini -c -o $(RUNTIMEDIR)/codeSegment.mao
 
-$(RUNTIMEDIR)/loader.mao: $(RUNTIMEDIR)/loader.mini
-	cargo run compile $(RUNTIMEDIR)/loader.mini -c -o $(RUNTIMEDIR)/loader.mao
+$(RUNTIMEDIR)/evmlogs.mao: $(RUNTIMEDIR)/evmlogs.mini
+	cargo run compile $(RUNTIMEDIR)/evmlogs.mini -c -o $(RUNTIMEDIR)/evmlogs.mao
 
 $(RUNTIME): $(RUNTIMEMAOS) $(STDLIB) $(BUILTINMAOS)
 	cargo run compile $(RUNTIMEMAOS) $(STDLIB) -o $(RUNTIME)
@@ -112,11 +108,6 @@ $(RUNTIMEDIR)/evmJumpTable.mao: $(RUNTIMEDIR)/evmJumpTable.mini
 $(RUNTIMEDIR)/evmJumpTable.mini: src/evm/mod.rs 
 	cargo run jumptable
 
-loader: $(RUNTIMEDIR)/loader.mexe
-
-$(RUNTIMEDIR)/loader.mexe: $(RUNTIMEDIR)/loader.mao $(RUNTIMEMAOS) $(STDLIB) $(BUILTINMAOS)
-	cargo run compile $(RUNTIMEDIR)/loader.mao $(RUNTIMEMAOS) $(STDLIB) -o $(RUNTIMEDIR)/loader.mexe
-
 run: runtime
 	cargo run run $(RUNTIME)
 
@@ -124,4 +115,4 @@ compiler:
 	cargo build
 
 clean: 
-	rm -f $(BUILTINMAOS) $(TESTEXES) $(LOADERTESTS) $(STDLIBMAOS) $(RUNTIMEMAOS) $(RUNTIMEDIR)/*.mexe
+	rm -f $(BUILTINMAOS) $(TESTEXES) $(STDLIBMAOS) $(RUNTIMEMAOS) $(RUNTIMEDIR)/*.mexe

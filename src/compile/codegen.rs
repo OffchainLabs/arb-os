@@ -21,7 +21,6 @@ use super::typecheck::{
     TypeCheckedStatement,
 };
 use crate::compile::typecheck::PropertiesList;
-use crate::link::TUPLE_SIZE;
 use crate::link::{xformcode::TupleTree, ImportedFunc};
 use crate::mavm::{Instruction, Label, LabelGenerator, Opcode, Value};
 use crate::pos::Location;

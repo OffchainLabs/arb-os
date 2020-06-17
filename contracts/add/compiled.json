@@ -1,26 +1,96 @@
 [
   {
-    "name": "Migrations",
-    "address": "0x5DfBB3D6775B7D0e702D6c9Ccd1fCF4Ba08DA97c",
-    "code": "0x608060405234801561001057600080fd5b50600436106100415760003560e01c8063445df0ac146100465780638da5cb5b14610064578063fdacd576146100ae575b600080fd5b61004e6100dc565b6040518082815260200191505060405180910390f35b61006c6100e2565b604051808273ffffffffffffffffffffffffffffffffffffffff1673ffffffffffffffffffffffffffffffffffffffff16815260200191505060405180910390f35b6100da600480360360208110156100c457600080fd5b8101908080359060200190929190505050610107565b005b60015481565b6000809054906101000a900473ffffffffffffffffffffffffffffffffffffffff1681565b6000809054906101000a900473ffffffffffffffffffffffffffffffffffffffff1673ffffffffffffffffffffffffffffffffffffffff163373ffffffffffffffffffffffffffffffffffffffff16141561016457806001819055505b5056fea265627a7a72315820649a0f328e136ce55691729a85c77b6891b5b83a512caca670edaa31978abc1d64736f6c63430005100032",
-    "storage": {
-      "0x0": "0x81183c9c61bdf79db7330bbcda47be30c0a85064",
-      "0x1": "0x1"
-    },
+    "name": "Add",
+    "address": "0x895521964D724c8362A36608AAf09A3D7d0A0445",
+    "code": "0x608060405234801561001057600080fd5b50600436106100415760003560e01c8063771602f7146100465780639aa727f614610092578063e4156bc5146100de575b600080fd5b61007c6004803603604081101561005c57600080fd5b81019080803590602001909291908035906020019092919050505061012a565b6040518082815260200191505060405180910390f35b6100c8600480360360408110156100a857600080fd5b810190808035906020019092919080359060200190929190505050610137565b6040518082815260200191505060405180910390f35b610114600480360360408110156100f457600080fd5b810190808035906020019092919080359060200190929190505050610144565b6040518082815260200191505060405180910390f35b6000818301905092915050565b6000818302905092915050565b60006101626101538485610137565b61015d8485610137565b61012a565b90509291505056fea265627a7a72305820862f8ade86df10dd8ad94380fb9dc6c28508a961efaa9ec3fd820fa319d2fbbc64736f6c634300050a0032",
+    "storage": {},
     "abi": [
       {
-        "inputs": [],
+        "constant": true,
+        "inputs": [
+          {
+            "name": "x",
+            "type": "uint256"
+          },
+          {
+            "name": "y",
+            "type": "uint256"
+          }
+        ],
+        "name": "add",
+        "outputs": [
+          {
+            "name": "",
+            "type": "uint256"
+          }
+        ],
         "payable": false,
-        "stateMutability": "nonpayable",
-        "type": "constructor"
+        "stateMutability": "pure",
+        "type": "function"
       },
+      {
+        "constant": true,
+        "inputs": [
+          {
+            "name": "x",
+            "type": "uint256"
+          },
+          {
+            "name": "y",
+            "type": "uint256"
+          }
+        ],
+        "name": "mult",
+        "outputs": [
+          {
+            "name": "",
+            "type": "uint256"
+          }
+        ],
+        "payable": false,
+        "stateMutability": "pure",
+        "type": "function"
+      },
+      {
+        "constant": true,
+        "inputs": [
+          {
+            "name": "x",
+            "type": "uint256"
+          },
+          {
+            "name": "y",
+            "type": "uint256"
+          }
+        ],
+        "name": "pythag",
+        "outputs": [
+          {
+            "name": "",
+            "type": "uint256"
+          }
+        ],
+        "payable": false,
+        "stateMutability": "pure",
+        "type": "function"
+      }
+    ]
+  },
+  {
+    "name": "Migrations",
+    "address": "0x5DfBB3D6775B7D0e702D6c9Ccd1fCF4Ba08DA97c",
+    "code": "0x608060405234801561001057600080fd5b50600436106100415760003560e01c8063445df0ac146100465780638da5cb5b14610064578063fdacd576146100ae575b600080fd5b61004e6100dc565b6040518082815260200191505060405180910390f35b61006c6100e2565b604051808273ffffffffffffffffffffffffffffffffffffffff1673ffffffffffffffffffffffffffffffffffffffff16815260200191505060405180910390f35b6100da600480360360208110156100c457600080fd5b8101908080359060200190929190505050610107565b005b60015481565b6000809054906101000a900473ffffffffffffffffffffffffffffffffffffffff1681565b6000809054906101000a900473ffffffffffffffffffffffffffffffffffffffff1673ffffffffffffffffffffffffffffffffffffffff163373ffffffffffffffffffffffffffffffffffffffff16141561016457806001819055505b5056fea265627a7a723058206055ef131be32a53f6ec7558f9915b64b12eeec6888b7b8c56441f3a625eb06564736f6c634300050a0032",
+    "storage": {
+      "0x0": "0x81183c9c61bdf79db7330bbcda47be30c0a85064",
+      "0x1": "0x2"
+    },
+    "abi": [
       {
         "constant": true,
         "inputs": [],
         "name": "last_completed_migration",
         "outputs": [
           {
-            "internalType": "uint256",
             "name": "",
             "type": "uint256"
           }
@@ -35,7 +105,6 @@
         "name": "owner",
         "outputs": [
           {
-            "internalType": "address",
             "name": "",
             "type": "address"
           }
@@ -45,10 +114,15 @@
         "type": "function"
       },
       {
+        "inputs": [],
+        "payable": false,
+        "stateMutability": "nonpayable",
+        "type": "constructor"
+      },
+      {
         "constant": false,
         "inputs": [
           {
-            "internalType": "uint256",
             "name": "completed",
             "type": "uint256"
           }

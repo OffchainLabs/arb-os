@@ -25,6 +25,7 @@ use std::fs::File;
 use std::io;
 use std::path::Path;
 
+use crate::minitests::evm_load_add;
 use clap::{App, Arg, SubCommand};
 
 mod build_builtins;
@@ -32,7 +33,6 @@ pub mod compile;
 pub mod evm;
 pub mod link;
 pub mod mavm;
-#[cfg(test)]
 pub mod minitests;
 pub mod pos;
 pub mod run;
@@ -144,6 +144,7 @@ fn main() {
                         .value_name("output"),
                 ),
         )
+        .subcommand(SubCommand::with_name("evmdebug").about("debug the EVM functionality"))
         .get_matches();
 
     if let Some(matches) = matches.subcommand_matches("compile") {
@@ -237,6 +238,14 @@ fn main() {
         });
         if let Err(e) = make_evm_jumptable_mini(filepath) {
             panic!("I/O error: {}", e);
+        }
+    }
+
+    if let Some(_) = matches.subcommand_matches("evmdebug") {
+        let logs = evm_load_add(false);
+        println!("=== logs ===");
+        for log in logs {
+            println!("{}", log);
         }
     }
 }

@@ -15,6 +15,7 @@
 //
 
 import type ByteArray;
+
 import func bytearray_size(ba: ByteArray) -> uint;
 import func tokens_getERC20template() -> address;
 import func tokens_getERC721template() -> address;
@@ -25,30 +26,22 @@ type AccountStore = map<address, Account>
 type Account = struct {
     addr: address,
     nextSeqNum: uint,
-    code: option<ByteArray>,
-    evmJumpTable: map<uint, func()>,
-    codePoint: func(),  
-    codeHash: bytes32,
-    storage: map<uint, uint>,
     ethBalance: uint,
+    contractInfo: option<AccountContractInfo>,
+}
+
+type AccountContractInfo = struct {
+    code: ByteArray,
+    evmJumpTable: map<uint, func()>,
+    resumeCodePoint: func(),
+    storage: map<uint, uint>,
 }
 
 var globalAccountStore: AccountStore;   // needs to be initialized before use
-var pristineAccount: Account;           // needs to be initialized before use
 
 
 public impure func accountStore_init() {   // This must be called first!
      if (unsafecast<any>(globalAccountStore) == null) {
-        pristineAccount = struct {
-            addr: address(0),
-            nextSeqNum: 1,
-            code: None<ByteArray>,
-            evmJumpTable: newmap<uint, func()>,
-            codePoint: unsafecast<func()>(null),
-            codeHash: bytes32(0xc5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470),
-            storage: newmap<uint, uint>,
-            ethBalance: 0,
-        };
         globalAccountStore = newmap<address, Account>;
     }   
 }
@@ -65,7 +58,12 @@ public func accountStore_get(acctStore: AccountStore, addr: address) -> Account 
     if let Some(acct) = acctStore[addr] {
         return acct;
     } else {
-        return pristineAccount with { addr: addr };
+        return struct {
+            addr: addr,
+            nextSeqNum: 1,
+            ethBalance: 0,
+            contractInfo: None<AccountContractInfo>
+        };
     }
 }
 
@@ -78,7 +76,7 @@ public func accountStore_set(
 }
 
 public func account_isEmpty(acct: Account) -> bool {
-    return (acct.nextSeqNum == 0) && (acct.ethBalance == 0) && (acct.code == None<ByteArray>);
+    return (acct.nextSeqNum == 1) && (acct.ethBalance == 0) && (acct.contractInfo == None<AccountContractInfo>);
 }
 
 public func account_checkAndIncrSeqNum(
@@ -94,7 +92,7 @@ public func account_checkAndIncrSeqNum(
         };
         return Some(account);
     } else {
-        return None<Account>;
+        return None;
     }
 }
 
@@ -102,12 +100,20 @@ public func account_getAddress(account: Account) -> address {
     return account.addr;
 }
 
+public func account_getResumeCodePoint(account: Account) -> option<func()> {
+    return Some((account.contractInfo?).resumeCodePoint);
+}
+
 public func account_getBalance(account: Account) -> uint {
     return account.ethBalance;
 }
 
-public func account_getEvmJumpTable(account: Account) -> map<uint, func()> {
-    return account.evmJumpTable;
+public func account_setBalance(account: Account, balance: uint) -> Account {
+    return account with { ethBalance: balance };
+}
+
+public func account_getEvmJumpTable(account: Account) -> option<map<uint, func()>> {
+    return Some((account.contractInfo?).evmJumpTable);
 }
 
 public func account_fetchAndIncrSeqNum(account: Account) -> (uint, Account) {
@@ -116,6 +122,33 @@ public func account_fetchAndIncrSeqNum(account: Account) -> (uint, Account) {
         nextSeqNum: ret+1
     };
     return (ret, account,);
+}
+
+public func accountStore_createAccountFromEvmCode(
+    store: AccountStore,
+    newAddr: address,
+    code: ByteArray,
+    evmJumpTable: map<uint, func()>,
+    initCodePt: func(),
+    storageMap: map<uint, uint>
+) -> option<AccountStore> {
+    let oldAcct = accountStore_get(store, newAddr);
+    if (account_isEmpty(oldAcct)) {
+        return Some(accountStore_set(
+            store,
+            newAddr,
+            oldAcct with {
+                contractInfo: Some(struct {
+                    code: code,
+                    evmJumpTable: evmJumpTable,
+                    resumeCodePoint: initCodePt,
+                    storage: storageMap,
+                })
+            }
+        ));
+    } else {
+        return None;
+    }
 }
 
 public func accountStore_createERC20(
@@ -128,10 +161,10 @@ public func accountStore_createERC20(
             acctStore, 
             tokens_getERC20template(), 
             addr
-        );
+        )?;
         return Some(acctStore);
     } else {
-        return None<AccountStore>;
+        return None;
     }
 }
 
@@ -145,10 +178,10 @@ public func accountStore_createERC721(
             acctStore,
             tokens_getERC721template(), 
             addr
-        );
+        )?;
         return Some(acctStore);
     } else {
-        return None<AccountStore>;
+        return None;
     }
 }
 
@@ -156,12 +189,13 @@ public func accountStore_cloneContract(
     acctStore: AccountStore,
     oldAddr: address, 
     newAddr: address
-) -> AccountStore {
+) -> option<AccountStore> {
     let oldAccount = accountStore_get(acctStore, oldAddr);
-    let newAccount = oldAccount with { ethBalance: 0 }
-                                with { nextSeqNum: 1 }
-                                with { storage: newmap<uint, uint> };
-    return acctStore with { [newAddr] = newAccount };
+    let newAccount = oldAccount
+        with { ethBalance: 0 }
+        with { nextSeqNum: 1 }
+        with { contractInfo: Some((oldAccount.contractInfo?) with { storage: newmap<uint, uint> }) };
+    return Some(acctStore with { [newAddr] = newAccount });
 }
 
 public func account_getEthBalance(account: Account) -> uint {
@@ -176,6 +210,16 @@ public func account_addToEthBalance(account: Account, addition: uint) -> Account
     return account with { ethBalance: account.ethBalance + addition };
 }
 
+public func account_deductFromEthBalance(account: Account, deduction: uint) -> option<Account> {
+    if (account.ethBalance >= deduction) {
+        return Some(
+            account with { ethBalance: account.ethBalance-deduction }
+        );
+    } else {
+        return None;
+    }
+}
+
 // transfer eth; return None if insufficient funds
 public func accountStore_transferEthBalance(
     acctStore: AccountStore,
@@ -185,7 +229,7 @@ public func accountStore_transferEthBalance(
 ) -> option<AccountStore> {
     let fromAcct = accountStore_get(acctStore, from);
     if (fromAcct.ethBalance < amount) {
-        return None<AccountStore>;
+        return None;
     }
     let toAcct = accountStore_get(acctStore, to);
     acctStore = acctStore 
@@ -194,15 +238,15 @@ public func accountStore_transferEthBalance(
     return Some(acctStore);
 }
 
-public func account_getAllStorage(account: Account) -> map<uint, uint> {
-    return account.storage;
+public func account_getAllStorage(account: Account) -> option<map<uint, uint>> {
+    return Some((account.contractInfo?).storage);
 }
 
-public func account_getStorageCell(account: Account, cell: uint) -> uint {
-    if let Some(contents) = account.storage[cell] {
-        return contents;
+public func account_getStorageCell(account: Account, cell: uint) -> option<uint> {
+    if let Some(contents) = (account.contractInfo?).storage[cell] {
+        return Some(contents);
     } else {
-        return 0;
+        return Some(0);
     }
 }
 
@@ -210,22 +254,25 @@ public func account_setStorageCell(
     account: Account, 
     cell: uint, 
     value: uint
-) -> Account {
-    return account with {
-        storage: account.storage with {
-            [cell] = value
-        }
-    };
+) -> option<Account> {
+    let contractInfo = account.contractInfo?;
+    return Some(account with {
+        contractInfo: Some(contractInfo with {
+            storage: contractInfo.storage with {
+                [cell] = value
+            }
+        })
+    });
 }
 
 public func account_getCodeSize(acct: Account) -> uint {
-    if let Some(code) = acct.code {
-        return bytearray_size(code);
+    if let Some(contractInfo) = acct.contractInfo {
+        return bytearray_size(contractInfo.code);
     } else {
         return 0;
     }
 }
 
 public func account_getCode(acct: Account) -> option<ByteArray> {
-    return acct.code;
+    return Some((acct.contractInfo?).code);
 }

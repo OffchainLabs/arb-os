@@ -472,11 +472,13 @@ impl Value {
                 let mut ui: Uint256 = ui.clone();
                 buf.push(0);
                 let ui_mod = Uint256::from_usize(256);
-                for _i in 0..32 {
+                let mut acc_buf = vec![0u8; 32];
+                for i in (0..32).rev() {
                     let low_byte = ui.modulo(&ui_mod).unwrap().to_usize().unwrap();
-                    buf.push(low_byte as u8);
+                    acc_buf[i] = (low_byte as u8);
                     ui = ui.div(&ui_mod).unwrap(); // safe because denominator is not zero
                 }
+                buf.append(&mut acc_buf);
             }
             Value::Tuple(tup) => {
                 buf.push((16 + tup.len()) as u8);
@@ -487,10 +489,12 @@ impl Value {
             Value::CodePoint(CodePt::Internal(pc)) => {
                 buf.push(8);
                 let mut offset = module_size - pc;
-                for _i in 0..8 {
-                    buf.push((offset % 256) as u8);
+                let mut acc_buf = vec![0u8; 8];
+                for i in (0..8).rev() {
+                    acc_buf[i] = ((offset % 256) as u8);
                     offset /= 256;
                 }
+                buf.append(&mut acc_buf);
             }
             Value::CodePoint(CodePt::Runtime(slot)) => {
                 buf.push(9);
@@ -628,8 +632,10 @@ impl Opcode {
             "tset" => Opcode::Tset,
             "tget" => Opcode::Tget,
             "pop" => Opcode::Pop,
+            "stackempty" => Opcode::StackEmpty,
             "auxpush" => Opcode::AuxPush,
             "auxpop" => Opcode::AuxPop,
+            "auxstackempty" => Opcode::AuxStackEmpty,
             "xget" => Opcode::Xget,
             "xset" => Opcode::Xset,
             "dup0" => Opcode::Dup0,
@@ -665,11 +671,13 @@ impl Opcode {
             "logicalor" => Opcode::LogicalOr,
             "gettime" => Opcode::GetTime,
             "inbox" => Opcode::Inbox,
+            "jump" => Opcode::Jump,
             "log" => Opcode::Log,
             "errcodept" => Opcode::ErrCodePoint,
             "pushinsn" => Opcode::PushInsn,
             "pushinsnimm" => Opcode::PushInsnImm,
             "openinsn" => Opcode::OpenInsn,
+            "debugprint" => Opcode::DebugPrint,
             _ => {
                 panic!("opcode not supported in asm segment: {}", name);
             }
@@ -740,6 +748,7 @@ impl Opcode {
             0x77 => Some(Opcode::PushInsnImm),
             //0x78 => Some(Opcode::CloseSegment),
             0x79 => Some(Opcode::OpenInsn),
+            0x90 => Some(Opcode::DebugPrint),
             _ => None,
         }
     }
@@ -808,6 +817,7 @@ impl Opcode {
             Opcode::PushInsnImm => Some(0x77),
             //Opcode::CloseSegment => Some(0x78),
             Opcode::OpenInsn => Some(0x79),
+            Opcode::DebugPrint => Some(0x90),
             _ => None,
         }
     }

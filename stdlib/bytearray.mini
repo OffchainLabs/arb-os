@@ -97,6 +97,24 @@ public func bytearray_unmarshalBytes(inBytes: MarshalledBytes) -> ByteArray {
     return ba;
 }
 
+public func bytearray_marshalFull(ba: ByteArray) -> MarshalledBytes {
+    let nbytes = ba.size;
+    let nwords = (nbytes+31)/32;
+    let words = unsafecast<MarshalledBytesCell>(());
+    let i = 0;
+    while (i < nwords) {
+        words = struct {
+            rest: words,
+            first: ba.contents[i],
+        };
+        i = i+1;
+    }
+    return struct {
+        nbytes: nbytes,
+        contents: words,
+    };
+}
+
 // bytearray_size gets the size of a ByteArray
 public func bytearray_size(ba: ByteArray) -> uint {
     return ba.size;
@@ -108,101 +126,74 @@ public func bytearray_getByte(ba: ByteArray, offset: uint) -> option<uint> {
         if (ba.variableSize) {
             return Some(0);
         } else {
-            return None<uint>;
+            return None;
         }
     }
-    if let Some(slot) = builtin_arrayGetSafe(ba.contents, offset/32) {
-        let byteno = offset%32;
-        return Some((slot / (asm (2, 8*byteno) uint { exp })) & 0xff);
-    } else {
-        return None<uint>;
-    }
+    let slot = builtin_arrayGetSafe(ba.contents, offset/32)?;
+    let byteno = 31-(offset%32);
+    return Some((slot / (asm (2, 8*byteno) uint { exp })) & 0xff);
 }
 
 // bytearray_setbyte writes one byte to a ByteArray, returns the resulting ByteArray
 public func bytearray_setByte(ba: ByteArray, offset: uint, val: uint) -> option<ByteArray> {
     if (offset >= ba.capacity) {
-        if let Some(expandedBa) = bytearray_expandToFit(ba, offset+1) {
-            ba = expandedBa;
-        } else {
-            return None<ByteArray>;
-        }
+        ba = bytearray_expandToFit(ba, offset+1)?;
     }
     if (ba.variableSize && (offset >= ba.size)) {
         ba = ba with { size: offset+1 };
     }
-    if let Some(res) = builtin_arrayOpSafe(
+    let res = builtin_arrayOpSafe(
         ba.contents, 
         offset/32, 
-        struct { f: basb_closure_func, val: (offset%32, val,), } 
-    ) {
-        return Some(ba with { contents: res.0 });
-    } else {
-        return None<ByteArray>;
-    }
+        struct { f: basb_closure_func, val: (31-(offset%32), val,), }
+    )?;
+    return Some(ba with { contents: res.0 });
 }
 
 // bytearray_get64 reads a chunk of 8 bytes from a ByteArray 
 public func bytearray_get64(ba: ByteArray, offset: uint) -> option<uint> {
     if ( (!ba.variableSize) && (offset+8 > ba.size)) {
-        return None<uint>;
+        return None;
     }
     let alignment = offset % 32;
     if (alignment <= 24) {
-        if let Some(res) = builtin_arrayGetSafe(ba.contents, offset/32) {
-            return Some((res / asm(2, 8*alignment) uint { exp }) & 0xffffffffffffffff);
-        } else {
-            return None<uint>;
-        }
+        let res = builtin_arrayGetSafe(ba.contents, offset/32)?;
+        return Some((res / asm(2, 192-8*alignment) uint { exp }) & 0xffffffffffffffff);
     } elseif (ba.variableSize) {
-        if let Some(res) = bytearray_get256(ba, offset) {
-            return Some(res & 0xffffffffffffffff);
-        } else {
-            return None<uint>;
-        }
+        let res = bytearray_get256(ba, offset)?;
+        return Some(res / 0x1000000000000000000000000000000000000000000000000);
     } else {
-        if let Some(words) = builtin_arrayGetConsecutiveSafe(ba.contents, offset/32) {
-            let shiftFactor = asm(2, 8*alignment) uint { exp };
-            let invShiftFactor = asm(2, 256-8*alignment) uint { exp };
-            return Some((((words.0)/shiftFactor) | ((words.1)*invShiftFactor)) & 0xffffffffffffffff);        
-        } else {
-            return None<uint>;
-        }
+        let (lowWord, hiWord) = builtin_arrayGetConsecutiveSafe(ba.contents, offset/32)?;
+        let shiftFactor = asm(2, 8*alignment) uint { exp };
+        let invShiftFactor = asm(2, 256-8*alignment) uint { exp };
+        return Some(
+            ((hiWord/invShiftFactor) | (lowWord*shiftFactor))
+                  / 0x1000000000000000000000000000000000000000000000000);
     }
 }
 
 // bytearray_set64 writes an 8-byte chunk to a ByteArray, returning the resulting ByteArray
 public func bytearray_set64(ba: ByteArray, offset: uint, value: uint) -> option<ByteArray> {
     if (offset+8 > ba.size) {
-        if let Some(expandedBa) = bytearray_expandToFit(ba, offset+8) {
-            ba = expandedBa;
-        } else {
-            return None<ByteArray>;
-        }
+        ba = bytearray_expandToFit(ba, offset+8)?;
     }
     let lowWordIndex = offset / 32;
     let alignment = offset % 32;
     if (alignment <= 24) {
-        if let Some(res) = builtin_arrayOpSafe(
+        let res = builtin_arrayOpSafe(
             ba.contents,
             lowWordIndex,
             struct{ f: bas64_single_closure_func, val: (alignment, value,), }
-        ) {
-            return Some(ba with { contents: res.0 });
-        } else {
-            return None<ByteArray>;
-        }
+        )?;
+        return Some(ba with { contents: res.0 });
     } else {
-        if let Some(res) = builtin_arrayOpConsecutiveSafe(
+        let res = builtin_arrayOpConsecutiveSafe(
             ba.contents,
             lowWordIndex,
-            struct { f: basmulti_low_closure_func, val: (alignment, value,), }, 
-            struct { f: bas64_hi_closure_func, val: (alignment, value,), }
-        ) {
-            return Some(ba with { contents: res.0 });
-        } else {
-            return None<ByteArray>;
-        }
+            struct { f: bas64_low_closure_func, val: (alignment, value,), },
+            struct { f: basmulti_hi_closure_func, val: (alignment, value,), }
+        )?;
+        return Some(ba with { contents: res.0 });
     }
 }
 
@@ -216,64 +207,44 @@ public func bytearray_get256(ba: ByteArray, offset: uint) -> option<uint> {
                 // because capacity is a multiple of 32 in this case, access is entirely beyond size
                 return Some(0);
             } else {
-                return None<uint>;
+                return None;
             }
         } 
         return builtin_arrayGetSafe(ba.contents, lowWordIndex);
     } else {
-        let lowWord = 0;
-        let hiWord = 0;
+        let lowWord = 0;  // word from lower-numbered array slot
+        let hiWord = 0;   // word from higher-numbered array slot
         if (ba.variableSize) {
             if (offset+32 > ba.capacity) {
-                let offsetBase = offset & 0x1f;
+                // read contents, but only if they exist; otherwise let xxxWord remain 0
+                let offsetBase = offset & ~0x1f;
                 let offsetBaseDiv32 = offsetBase / 32;
                 if (offsetBase < ba.capacity) {
-                    if let Some(lw) = builtin_arrayGetSafe(ba.contents, offsetBaseDiv32) {
-                        lowWord = lw;
-                    } else {
-                        return None<uint>;
-                    }
-                }
-                if (offsetBase+32 < ba.capacity) {
-                    if let Some(hw) = builtin_arrayGetSafe(ba.contents, 1+offsetBaseDiv32) {
-                        hiWord = hw;
-                    } else {
-                        return None<uint>;
+                    lowWord = builtin_arrayGetSafe(ba.contents, offsetBaseDiv32)?;
+                    if (offsetBase+32 < ba.capacity) {
+                        hiWord = builtin_arrayGetSafe(ba.contents, 1+offsetBaseDiv32)?;
                     }
                 }
             } else {
-                if let Some(words) = builtin_arrayGetConsecutiveSafe(ba.contents, lowWordIndex) {
-                    lowWord = words.0;
-                    hiWord = words.1;
-                } else {
-                    return None<uint>;
-                }
-            }
-            let shiftFactor = asm(2, 8*alignment) uint { exp };
-            let invShiftFactor = asm(2, 256-8*alignment) uint { exp };
-            return Some((lowWord/shiftFactor) | (hiWord*invShiftFactor));
-        } else {
-            if let Some(words) = builtin_arrayGetConsecutiveSafe(ba.contents, lowWordIndex) {
+                let words = builtin_arrayGetConsecutiveSafe(ba.contents, lowWordIndex)?;
                 lowWord = words.0;
                 hiWord = words.1;
-            } else {
-                return None<uint>;
             }
+        } else {
+            let words = builtin_arrayGetConsecutiveSafe(ba.contents, lowWordIndex)?;
+            lowWord = words.0;
+            hiWord = words.1;
         }
         let shiftFactor = asm(2, 8*alignment) uint { exp };
         let invShiftFactor = asm(2, 256-8*alignment) uint { exp };
-        return Some((lowWord/shiftFactor) | (hiWord*invShiftFactor));
+        return Some((hiWord/invShiftFactor) | (lowWord*shiftFactor));
     }
 }
 
 // bytearray_set256 writes a 32-byte chunk to a ByteArray, returning the resulting ByteArray
 public func bytearray_set256(ba: ByteArray, offset: uint, value: uint) -> option<ByteArray> {
     if (offset+32 > ba.size) {
-        if let Some(expandedBa) = bytearray_expandToFit(ba, offset+32) {
-            ba = expandedBa;
-        } else {
-            return None<ByteArray>;
-        }
+        ba = bytearray_expandToFit(ba, offset+32)?;
     }
     let lowWordIndex = offset / 32;
     let alignment = offset % 32;
@@ -282,16 +253,13 @@ public func bytearray_set256(ba: ByteArray, offset: uint, value: uint) -> option
             contents: ba.contents with { [lowWordIndex] = value }
         });
     } else {
-        if let Some(res) = builtin_arrayOpConsecutiveSafe(
+        let res = builtin_arrayOpConsecutiveSafe(
             ba.contents,
             lowWordIndex,
-            struct { f: basmulti_low_closure_func, val: (alignment, value,), },
-            struct { f: bas256_hi_closure_func, val: (alignment, value,), }
-        ) {
-            return Some(ba with { contents: res.0 });
-        } else {
-            return None<ByteArray>;
-        }
+            struct { f: bas256_low_closure_func, val: (alignment, value,), },
+            struct { f: basmulti_hi_closure_func, val: (alignment, value,), }
+        )?;
+        return Some(ba with { contents: res.0 });
     }
 }
 
@@ -306,47 +274,38 @@ public func bytearray_copy(
 ) -> option<ByteArray> {   
     // TODO: optimize this to exploit alignment and speed up the endgame
     while (nbytes >= 32) {
-        if let Some(val) = bytearray_get256(from, fromOffset) {
-            if let Some(nto) = bytearray_set256(to, toOffset, val) {
-                to = nto;
-                fromOffset = 32+fromOffset;
-                toOffset = 32+toOffset;
-                nbytes = nbytes-32;
-            } else {
-                return None<ByteArray>;
-            }
-        } else {
-            return None<ByteArray>;
-        }
+        let val = bytearray_get256(from, fromOffset)?;
+        to = bytearray_set256(to, toOffset, val)?;
+        fromOffset = 32+fromOffset;
+        toOffset = 32+toOffset;
+        nbytes = nbytes-32;
     }
     while (nbytes > 0) {
-        if let Some(val) = bytearray_getByte(from, fromOffset) {
-            if let Some(nto) = bytearray_setByte(to, toOffset, val) {
-                to = nto;
-                fromOffset = 1+fromOffset;
-                toOffset = 1+toOffset;
-                nbytes = nbytes-1;
-            } else {
-                return None<ByteArray>;
-            }
-        } else {
-            return None<ByteArray>;
-        }
+        let val = bytearray_getByte(from, fromOffset)?;
+        to = bytearray_setByte(to, toOffset, val)?;
+        fromOffset = 1+fromOffset;
+        toOffset = 1+toOffset;
+        nbytes = nbytes-1;
     }
     return Some(to);
 }
 
 func bytearray_expandToFit(ba: ByteArray, neededCapacity: uint) -> option<ByteArray> {
-    if (ba.capacity < neededCapacity) {
+    if (ba.size < neededCapacity) {
         if ( ! ba.variableSize) {
-            return None<ByteArray>;  // tried to expand a fixed-size array
+            return None;  // tried to expand a fixed-size array
         }
-        let newCapacity = ba.capacity*8;
-        while (newCapacity < neededCapacity) {
-                newCapacity = 8*newCapacity;
+        ba = ba with { size: neededCapacity };
+        if (ba.capacity < neededCapacity) {
+            let newCapacity = ba.capacity*8;
+            while (newCapacity < neededCapacity) {
+                    newCapacity = 8*newCapacity;
+            }
+            return Some(ba with { capacity: newCapacity }
+                           with { contents: array_resize(ba.contents, newCapacity/32, 0) });
+        } else {
+            return Some(ba);
         }
-        return Some(ba with { capacity: newCapacity }
-                  with { contents: array_resize(ba.contents, newCapacity/32, 0) });   
     } else {
         return Some(ba);
     }
@@ -374,7 +333,7 @@ func bas64_single_closure_func(args: (uint, uint), oldval: uint) -> (uint, uint)
     );
 }
 
-func basmulti_low_closure_func(args: (uint, uint), oldval: uint) -> (uint, uint) { // returns (newval, junk)
+func basmulti_hi_closure_func(args: (uint, uint), oldval: uint) -> (uint, uint) { // returns (newval, junk)
     let (alignment, value,) = args; 
     let revAlignment = 32-alignment;
     let factor = asm(2, 8*revAlignment) uint { exp };
@@ -382,7 +341,7 @@ func basmulti_low_closure_func(args: (uint, uint), oldval: uint) -> (uint, uint)
     return (newVal, 0,);
 }
 
-func bas64_hi_closure_func(args: (uint, uint), oldval: uint) -> (uint, uint) { // returns (newval, junk)
+func bas64_low_closure_func(args: (uint, uint), oldval: uint) -> (uint, uint) { // returns (newval, junk)
     let (alignment, value,) = args; 
     let revAlignment = 8-alignment;
     let factor = asm(2, 8*alignment) uint { exp };
@@ -391,7 +350,7 @@ func bas64_hi_closure_func(args: (uint, uint), oldval: uint) -> (uint, uint) { /
     return (newVal, 0,);
 }
 
-func bas256_hi_closure_func(args: (uint, uint), oldval: uint) -> (uint, uint) { // returns (newval, junk)
+func bas256_low_closure_func(args: (uint, uint), oldval: uint) -> (uint, uint) { // returns (newval, junk)
     let (alignment, value,) = args; 
     let revAlignment = 32-alignment;
     let factor = asm(2, 8*alignment) uint { exp };
