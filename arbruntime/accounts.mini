@@ -33,7 +33,7 @@ type Account = struct {
 type AccountContractInfo = struct {
     code: ByteArray,
     evmJumpTable: map<uint, func()>,
-    resumeCodePoint: func(),
+    startCodePoint: func(),
     storage: map<uint, uint>,
 }
 
@@ -100,8 +100,8 @@ public func account_getAddress(account: Account) -> address {
     return account.addr;
 }
 
-public func account_getResumeCodePoint(account: Account) -> option<func()> {
-    return Some((account.contractInfo?).resumeCodePoint);
+public func account_getStartCodePoint(account: Account) -> option<func()> {
+    return Some((account.contractInfo?).startCodePoint);
 }
 
 public func account_getBalance(account: Account) -> uint {

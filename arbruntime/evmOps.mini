@@ -26,6 +26,17 @@ import impure func evmCallStack_setCurrentFrameMemory(mem: ByteArray) -> bool;
 import impure func evmCallStack_setCurrentFrameStorageCell(addr: address, offset: uint, val: uint) -> bool;
 import impure func evmCallStack_selfDestructCurrentAccount(owner: address);
 import impure func evmCallStack_pop(status: uint, returnData: ByteArray) -> option<EvmCallFrame>;
+import impure func evmCallStack_doCall(
+    kind: uint,
+    gas: uint,
+    calleeAddr: address,
+    balance: uint,
+    argsOffset: uint,
+    argsLength: uint,
+    retOffset: uint,
+    retLength: uint,
+    resumeCodePoint: func(),
+) -> option<()>;
 
 import func evmCallFrame_currentAccount(frame: EvmCallFrame) -> Account;
 import func evmCallFrame_getAccount(frame: EvmCallFrame) -> Account;
@@ -376,8 +387,31 @@ public func evmOp_call(
     retOffset: uint,
     retLength: uint
 ) -> bool {
-    evm_notYetImplemented(17,);
-    return false;
+    let resumeCodePoint = asm() func() {  // get return address of our caller
+        auxpop
+        auxpop
+        dup0
+        swap2
+        swap1
+        auxpush
+        auxpush
+    };
+    if (evmCallStack_doCall(
+        0,
+        gas,
+        callee,
+        balance,
+        argsOffset,
+        argsLength,
+        retOffset,
+        retLength,
+        resumeCodePoint
+    ) == None<()>) {
+        return false;  // not a valid call, return failure
+    } else {
+        // should never get here -- control should have been thrown elsewhere
+        panic;
+    }
 }
 
 public func evmOp_callcode(
