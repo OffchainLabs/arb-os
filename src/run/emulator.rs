@@ -502,8 +502,8 @@ impl<'a> Machine {
 					}
 					Opcode::Cjump => {
 						let cp = self.stack.pop_codepoint(&self.state)?;
-						let cond = self.stack.pop_bool(&self.state)?;
-						if cond {
+						let cond = self.stack.pop_uint(&self.state)?;
+						if cond != Uint256::zero() {
 							self.state = MachineState::Running(cp);
 						} else {
 							self.incr_pc();
