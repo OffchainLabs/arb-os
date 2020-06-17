@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+use crate::compile::MiniProperties;
 use crate::evm::runtime_func_name;
 use crate::pos::Location;
 use crate::stringtable::StringId;
@@ -108,6 +109,12 @@ pub struct Instruction {
     pub opcode: Opcode,
     pub immediate: Option<Value>,
     pub location: Option<Location>,
+}
+
+impl MiniProperties for Instruction {
+    fn is_pure(&self) -> bool {
+        self.opcode.is_pure()
+    }
 }
 
 impl Instruction {
@@ -605,6 +612,24 @@ pub enum Opcode {
     ErrPush,
     Breakpoint,
     DebugPrint,
+}
+
+impl MiniProperties for Opcode {
+    fn is_pure(&self) -> bool {
+        match self {
+            Opcode::Log
+            | Opcode::Send
+            | Opcode::GetTime
+            | Opcode::Rset
+            | Opcode::Rget
+            | Opcode::PushInsn
+            | Opcode::PushInsnImm
+            | Opcode::ErrCodePoint
+            | Opcode::ErrSet
+            | Opcode::ErrPush => false,
+            _ => true,
+        }
+    }
 }
 
 impl Opcode {

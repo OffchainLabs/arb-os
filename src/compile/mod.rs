@@ -36,6 +36,10 @@ mod symtable;
 mod typecheck;
 lalrpop_mod!(mini);
 
+pub(crate) trait MiniProperties {
+    fn is_pure(&self) -> bool;
+}
+
 #[derive(Clone, Serialize, Deserialize)]
 pub struct CompiledProgram {
     pub code: Vec<Instruction>,
@@ -188,6 +192,22 @@ pub fn compile_from_source(
         typecheck::typecheck_top_level_decls(&res, &mut checked_funcs, string_table_1)
             .map_err(|res3| CompileError::new(res3.reason.to_string(), res3.location))?;
     let mut code = Vec::new();
+    checked_funcs.iter().for_each(|func| {
+        let detected_purity = func.is_pure();
+        let declared_purity = func.properties.pure;
+        if !detected_purity && declared_purity {
+            println!(
+                "Warning: func {} is impure but not marked impure",
+                string_table.name_from_id(func.name)
+            )
+        } else if detected_purity && !declared_purity {
+            println!(
+                "Warning: func {} is declared impure but does not contain impure code",
+                string_table.name_from_id(func.name)
+            )
+        }
+    });
+
     let code_out = codegen::mavm_codegen(
         checked_funcs,
         &mut code,
