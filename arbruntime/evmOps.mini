@@ -371,10 +371,10 @@ public func evmOp_call(
     gas: uint,
     callee: address,
     balance: uint,
-    inMemOffset: uint,
-    inNbytes: uint,
-    outMemOffset: uint,
-    outMemSize: uint
+    argsOffset: uint,
+    argsLength: uint,
+    retOffset: uint,
+    retLength: uint
 ) -> bool {
     evm_notYetImplemented(17,);
     return false;
@@ -384,10 +384,10 @@ public func evmOp_callcode(
     gas: uint,
     callee: address,
     balance: uint,
-    inMemOffset: uint,
-    inNbytes: uint,
-    outMemOffset: uint,
-    outMemSize: uint
+    argsOffset: uint,
+    argsLength: uint,
+    retOffset: uint,
+    retLength: uint
 ) -> bool {
     evm_notYetImplemented(18,);
     return false;
@@ -396,10 +396,10 @@ public func evmOp_callcode(
 public func evmOp_delegatecall(
     gas: uint,
     callee: address,
-    inMemOffset: uint,
-    inNbytes: uint,
-    outMemOffset: uint,
-    outMemSize: uint
+    argsOffset: uint,
+    argsLength: uint,
+    retOffset: uint,
+    retLength: uint
 ) -> bool {
     evm_notYetImplemented(19,);
     return false;
@@ -408,10 +408,10 @@ public func evmOp_delegatecall(
 public func evmOp_staticcall(
     gas: uint,
     callee: address,
-    inMemOffset: uint,
-    inNbytes: uint,
-    outMemOffset: uint,
-    outMemSize: uint
+    argsOffset: uint,
+    argsLength: uint,
+    retOffset: uint,
+    retLength: uint
 ) -> bool {
     evm_notYetImplemented(20,);
     return false;
