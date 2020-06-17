@@ -918,7 +918,7 @@ fn mavm_codegen_expr<'a>(
                 BinaryOp::BitwiseAnd => Opcode::BitwiseAnd,
                 BinaryOp::BitwiseOr => Opcode::BitwiseOr,
                 BinaryOp::BitwiseXor => Opcode::BitwiseXor,
-                BinaryOp::LogicalAnd => Opcode::LogicalAnd,
+                BinaryOp::_LogicalAnd => Opcode::LogicalAnd,
                 BinaryOp::LogicalOr => Opcode::LogicalOr,
                 BinaryOp::Hash => Opcode::Hash2,
             };

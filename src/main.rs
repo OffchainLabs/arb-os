@@ -28,16 +28,16 @@ use std::path::Path;
 use clap::{App, Arg, SubCommand};
 
 mod build_builtins;
-pub mod compile;
-pub mod evm;
-pub mod link;
-pub mod mavm;
+mod compile;
+mod evm;
+mod link;
+mod mavm;
 #[cfg(test)]
 mod minitests;
 pub mod pos;
-pub mod run;
-pub mod stringtable;
-pub mod uint256;
+mod run;
+mod stringtable;
+mod uint256;
 
 fn main() {
     let matches = App::new("Mini compiler")

@@ -1846,7 +1846,7 @@ fn typecheck_binary_op(
                 )),
             }
         }
-        BinaryOp::LogicalAnd | BinaryOp::LogicalOr => match (subtype1, subtype2) {
+        BinaryOp::_LogicalAnd | BinaryOp::LogicalOr => match (subtype1, subtype2) {
             (Type::Bool, Type::Bool) => Ok(TypeCheckedExpr::Binary(
                 op,
                 Box::new(tcs1),
@@ -2053,7 +2053,7 @@ fn typecheck_binary_op_const(
                 ))
             }
         }
-        BinaryOp::LogicalAnd => {
+        BinaryOp::_LogicalAnd => {
             if (t1 == Type::Bool) && (t2 == Type::Bool) {
                 Ok(TypeCheckedExpr::Const(
                     Value::Int(Uint256::from_bool(!val1.is_zero() && !val2.is_zero())),

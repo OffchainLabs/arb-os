@@ -152,12 +152,6 @@ impl AbiForDapp {
     pub fn get_contract(&self, name: &str) -> Option<&AbiForContract> {
         self.by_name.get(name)
     }
-
-    pub fn insert_upload_messages(&self, rt_env: &mut RuntimeEnvironment) {
-        for contract in &self.contracts {
-            contract.insert_upload_message(rt_env);
-        }
-    }
 }
 
 impl AbiForContract {

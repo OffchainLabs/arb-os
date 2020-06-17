@@ -18,7 +18,7 @@ use crate::compile::{CompileError, CompiledProgram, Type};
 use crate::link::{link, postlink_compile, ImportedFunc, LinkedProgram};
 use crate::mavm::{Instruction, Label, LabelGenerator, Opcode, Value};
 use crate::run::load_from_file;
-use crate::run::runtime_env::{bytes_from_bytestack, bytestack_from_bytes, RuntimeEnvironment};
+use crate::run::runtime_env::{bytes_from_bytestack, RuntimeEnvironment};
 use crate::stringtable::StringTable;
 use crate::uint256::Uint256;
 use ethabi::Token;
@@ -81,138 +81,6 @@ impl CompiledEvmContract {
             ]);
         }
         ret
-    }
-
-    pub fn to_output(&self, output: &mut dyn io::Write, format: Option<&str>) {
-        match format {
-            Some("pretty") => {
-                writeln!(output, "address: {}", self.address).unwrap();
-                writeln!(output, "storage: {:?}", self.storage).unwrap();
-                for (idx, insn) in self.code.iter().enumerate() {
-                    writeln!(output, "{:04}:  {}", idx, insn).unwrap();
-                }
-            }
-            None | Some("json") => match serde_json::to_string(self) {
-                Ok(prog_str) => {
-                    writeln!(output, "{}", prog_str).unwrap();
-                }
-                Err(e) => {
-                    writeln!(output, "json serialization error: {:?}", e).unwrap();
-                }
-            },
-            Some("bincode") => match bincode::serialize(self) {
-                Ok(encoded) => {
-                    if let Err(e) = output.write_all(&encoded) {
-                        writeln!(output, "bincode write error: {:?}", e).unwrap();
-                    }
-                }
-                Err(e) => {
-                    writeln!(output, "bincode serialization error: {:?}", e).unwrap();
-                }
-            },
-            Some(weird_value) => {
-                writeln!(output, "invalid format: {}", weird_value).unwrap();
-            }
-        }
-    }
-}
-
-pub fn send_inject_evm_messages_from_file(
-    pathname: &str,
-    rt_env: &mut RuntimeEnvironment,
-) -> Result<(), CompileError> {
-    let path = Path::new(pathname);
-    let display = path.display();
-
-    let mut file = match File::open(&path) {
-        Err(why) => panic!("couldn't open {}: {:?}", display, why),
-        Ok(file) => file,
-    };
-
-    let mut s = String::new();
-    s = match file.read_to_string(&mut s) {
-        Err(why) => panic!("couldn't read {}: {:?}", display, why),
-        Ok(_) => s,
-    };
-
-    let parse_result: Result<serde_json::Value, serde_json::Error> = serde_json::from_str(&s);
-    match parse_result {
-        Ok(evm_json) => {
-            if send_inject_evm_messages(evm_json, rt_env) {
-                Ok(())
-            } else {
-                Err(CompileError::new(
-                    "failed to inject EVM messages".to_string(),
-                    None,
-                ))
-            }
-        }
-        Err(e) => {
-            println!("Error reading in EVM file: {:?}", e);
-            Err(CompileError::new(
-                "error parsing compiled Solidity file".to_string(),
-                None,
-            ))
-        }
-    }
-}
-
-pub fn send_inject_evm_messages(evm_json: serde_json::Value, env: &mut RuntimeEnvironment) -> bool {
-    if let serde_json::Value::Array(contracts) = evm_json {
-        let mut messages_out = Vec::new();
-        for contract in contracts {
-            if let serde_json::Value::Object(items) = contract {
-                let code_str = if let serde_json::Value::String(s) = &items["code"] {
-                    s
-                } else {
-                    return false;
-                };
-                let decoded_insns = hex::decode(&code_str[2..]).unwrap();
-
-                // strip cbor info
-                let cbor_length = u16::from_be_bytes(
-                    decoded_insns[decoded_insns.len() - 2..]
-                        .try_into()
-                        .expect("unexpected u16 parsing error"),
-                );
-                let cbor_length = cbor_length as usize;
-                let decoded_insns = &decoded_insns[..(decoded_insns.len() - cbor_length - 2)];
-
-                let mut storage_map = Value::none();
-                if let serde_json::Value::Object(m) = &items["storage"] {
-                    for (k, v) in m {
-                        if let serde_json::Value::String(s) = v {
-                            storage_map = Value::Tuple(vec![
-                                Value::Int(Uint256::from_string_hex(&k[2..]).unwrap()),
-                                Value::Int(Uint256::from_string_hex(&s[2..]).unwrap()),
-                                storage_map,
-                            ]);
-                        } else {
-                            return false;
-                        }
-                    }
-                }
-
-                let address = Uint256::zero();
-                let seq_num = env.get_and_incr_seq_num(&address);
-                let msg = Value::Tuple(vec![
-                    Value::Int(Uint256::from_usize(7)),
-                    Value::Int(address.clone()),
-                    Value::Tuple(vec![
-                        Value::Int(seq_num),
-                        bytestack_from_bytes(decoded_insns),
-                        storage_map,
-                    ]),
-                ]);
-                messages_out.push(msg);
-            } else {
-                return false;
-            }
-        }
-        env.insert_arb_messages(&messages_out);
-        true
-    } else {
-        false
     }
 }
 

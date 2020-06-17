@@ -200,21 +200,6 @@ impl Instruction {
             None => self,
         }
     }
-
-    pub fn marshal_for_module(&self, buf: &mut Vec<u8>, module_size: usize) {
-        let maybe_opcode_num = self.opcode.to_number();
-        if let Some(opcode_num) = maybe_opcode_num {
-            buf.push(opcode_num);
-            if let Some(val) = &self.immediate {
-                buf.push(1);
-                val.marshal_for_module(buf, module_size);
-            } else {
-                buf.push(0);
-            }
-        } else {
-            panic!("unrecognized opcode {}", self.opcode);
-        }
-    }
 }
 
 impl fmt::Display for Instruction {
@@ -464,46 +449,6 @@ impl Value {
 
     pub fn avm_hash2(v1: &Self, v2: &Self) -> Value {
         Value::Tuple(vec![v1.clone(), v2.clone()]).avm_hash()
-    }
-
-    pub fn marshal_for_module(&self, buf: &mut Vec<u8>, module_size: usize) {
-        match self {
-            Value::Int(ui) => {
-                let mut ui: Uint256 = ui.clone();
-                buf.push(0);
-                let ui_mod = Uint256::from_usize(256);
-                let mut acc_buf = vec![0u8; 32];
-                for i in (0..32).rev() {
-                    let low_byte = ui.modulo(&ui_mod).unwrap().to_usize().unwrap();
-                    acc_buf[i] = (low_byte as u8);
-                    ui = ui.div(&ui_mod).unwrap(); // safe because denominator is not zero
-                }
-                buf.append(&mut acc_buf);
-            }
-            Value::Tuple(tup) => {
-                buf.push((16 + tup.len()) as u8);
-                for val in tup {
-                    val.marshal_for_module(buf, module_size);
-                }
-            }
-            Value::CodePoint(CodePt::Internal(pc)) => {
-                buf.push(8);
-                let mut offset = module_size - pc;
-                let mut acc_buf = vec![0u8; 8];
-                for i in (0..8).rev() {
-                    acc_buf[i] = ((offset % 256) as u8);
-                    offset /= 256;
-                }
-                buf.append(&mut acc_buf);
-            }
-            Value::CodePoint(CodePt::Runtime(slot)) => {
-                buf.push(9);
-                buf.push(*slot as u8);
-            }
-            _ => {
-                panic!("invalid immediate value in module instruction");
-            }
-        }
     }
 }
 
