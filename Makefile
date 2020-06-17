@@ -10,7 +10,7 @@ evmdebug: all
 
 TESTEXES = $(BUILTINDIR)/kvstest.mexe $(STDDIR)/queuetest.mexe $(BUILTINDIR)/arraytest.mexe $(BUILTINDIR)/globaltest.mexe $(STDDIR)/priorityqtest.mexe $(STDDIR)/bytearraytest.mexe $(STDDIR)/keccaktest.mexe $(BUILTINDIR)/maptest.mexe minitests/codeloadtest.mexe
 BUILTINMAOS = $(BUILTINDIR)/array.mao $(BUILTINDIR)/kvs.mao
-STDLIBMAOS = $(STDDIR)/bytearray.mao $(STDDIR)/priorityq.mao $(STDDIR)/random.mao $(STDDIR)/queue.mao $(STDDIR)/keccak.mao $(STDDIR)/bytestream.mao
+STDLIBMAOS = $(STDDIR)/bytearray.mao $(STDDIR)/priorityq.mao $(STDDIR)/random.mao $(STDDIR)/queue.mao $(STDDIR)/keccak.mao $(STDDIR)/bytestream.mao $(STDDIR)/stack.mao
 STDLIB = $(STDLIBMAOS)
 
 all: $(TESTEXES) runtime
@@ -53,6 +53,9 @@ $(STDDIR)/bytestream.mao: $(BUILTINMAOS) $(STDDIR)/bytestream.mini
 
 $(STDDIR)/random.mao: $(STDDIR)/random.mini
 	cargo run compile $(STDDIR)/random.mini -c -o $(STDDIR)/random.mao
+
+$(STDDIR)/stack.mao: $(STDDIR)/stack.mini
+	cargo run compile $(STDDIR)/stack.mini -c -o $(STDDIR)/stack.mao
 
 $(STDDIR)/keccak.mao: $(STDDIR)/keccak.mini		
 	cargo run compile $(STDDIR)/keccak.mini -c -o $(STDDIR)/keccak.mao
