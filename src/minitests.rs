@@ -15,8 +15,7 @@
  */
 
 use crate::mavm::Value;
-use crate::run::run_from_file;
-use crate::run::runtime_env::RuntimeEnvironment;
+use crate::run::{run_from_file, RuntimeEnvironment};
 use crate::uint256::Uint256;
 use std::path::Path;
 

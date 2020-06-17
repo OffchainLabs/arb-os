@@ -15,7 +15,7 @@
  */
 
 use crate::mavm::Value;
-use crate::run::runtime_env::{bytestack_from_bytes, RuntimeEnvironment};
+use crate::run::{bytestack_from_bytes, RuntimeEnvironment};
 use crate::uint256::Uint256;
 use std::collections::HashMap;
 use std::convert::TryInto;

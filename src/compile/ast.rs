@@ -736,7 +736,9 @@ impl OptionConst {
 
     pub fn resolve_types(&self, type_table: &SymTable<Type>) -> Result<Self, TypeError> {
         match self {
-            OptionConst::_Some(bc) => Ok(OptionConst::_Some(Box::new(bc.resolve_types(type_table)?))),
+            OptionConst::_Some(bc) => {
+                Ok(OptionConst::_Some(Box::new(bc.resolve_types(type_table)?)))
+            }
             OptionConst::None(t) => Ok(OptionConst::None(t.resolve_types(type_table, None)?)),
         }
     }

@@ -20,7 +20,7 @@ use compile::compile_from_file;
 use evm::{compile_evm_file, make_evm_jumptable_mini};
 use link::{link, postlink_compile};
 use mavm::Value;
-use run::{run_from_file, runtime_env::RuntimeEnvironment};
+use run::{run_from_file, RuntimeEnvironment};
 use std::fs::File;
 use std::io;
 use std::path::Path;

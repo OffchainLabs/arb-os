@@ -17,13 +17,14 @@
 use crate::link::LinkedProgram;
 use crate::mavm::{CodePt, Value};
 use emulator::{ExecutionError, Machine, StackTrace};
-use runtime_env::RuntimeEnvironment;
 use std::fs::File;
 use std::io::Read;
 use std::path::Path;
 
+pub use runtime_env::{bytes_from_bytestack, bytestack_from_bytes, RuntimeEnvironment};
+
 mod emulator;
-pub mod runtime_env;
+mod runtime_env;
 
 pub fn run_from_file(
     path: &Path,
@@ -118,7 +119,7 @@ mod tests {
             vec![val.clone()],
             false,
         )
-            .unwrap();
+        .unwrap();
         assert_eq!(logs.len(), 1);
         assert_eq!(logs[0] == val, true);
     }

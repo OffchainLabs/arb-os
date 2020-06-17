@@ -24,11 +24,11 @@ use std::io;
 use std::path::Path;
 use xformcode::make_uninitialized_tuple;
 
-pub use xformcode::{value_from_field_list, TUPLE_SIZE};
+pub use xformcode::{value_from_field_list, TupleTree, TUPLE_SIZE};
 
 mod optimize;
 mod striplabels;
-pub mod xformcode;
+mod xformcode;
 
 #[derive(Serialize, Deserialize)]
 pub struct LinkedProgram {

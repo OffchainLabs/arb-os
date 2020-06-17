@@ -17,8 +17,7 @@
 use crate::compile::{CompileError, CompiledProgram, Type};
 use crate::link::{link, postlink_compile, ImportedFunc, LinkedProgram};
 use crate::mavm::{Instruction, Label, LabelGenerator, Opcode, Value};
-use crate::run::load_from_file;
-use crate::run::runtime_env::{bytes_from_bytestack, RuntimeEnvironment};
+use crate::run::{bytes_from_bytestack, load_from_file, RuntimeEnvironment};
 use crate::stringtable::StringTable;
 use crate::uint256::Uint256;
 use ethabi::Token;
@@ -30,7 +29,7 @@ use std::io::{self, Read, Write};
 use std::path::Path;
 use std::usize;
 
-pub mod abi;
+mod abi;
 
 pub fn compile_evm_file(path: &Path, debug: bool) -> Result<Vec<LinkedProgram>, CompileError> {
     match evm_json_from_file(path) {
