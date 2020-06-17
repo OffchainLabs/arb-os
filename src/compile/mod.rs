@@ -194,7 +194,7 @@ pub fn compile_from_source(
     let mut code = Vec::new();
     checked_funcs.iter().for_each(|func| {
         let purity = func.is_pure();
-        if  !purity && func.properties.pure {
+        if !purity && func.properties.pure {
             println!(
                 "Warning: func {} is impure but not marked impure",
                 string_table.name_from_id(func.name)

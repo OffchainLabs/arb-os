@@ -71,7 +71,12 @@ pub enum TypeCheckedStatement {
     Panic(Option<Location>),
     ReturnVoid(Option<Location>),
     Return(TypeCheckedExpr, Option<Location>),
-    FunctionCall(TypeCheckedExpr, Vec<TypeCheckedExpr>, PropertiesList, Option<Location>),
+    FunctionCall(
+        TypeCheckedExpr,
+        Vec<TypeCheckedExpr>,
+        PropertiesList,
+        Option<Location>,
+    ),
     Let(TypeCheckedMatchPattern, TypeCheckedExpr, Option<Location>),
     AssignLocal(StringId, TypeCheckedExpr, Option<Location>),
     AssignGlobal(usize, TypeCheckedExpr, Option<Location>),
@@ -106,9 +111,7 @@ impl MiniProperties for TypeCheckedStatement {
             TypeCheckedStatement::While(exp, block, _) => {
                 exp.is_pure() && block.iter().all(|statement| statement.is_pure())
             }
-            TypeCheckedStatement::If(if_arm) => {
-                if_arm.is_pure()
-            }
+            TypeCheckedStatement::If(if_arm) => if_arm.is_pure(),
             TypeCheckedStatement::IfLet(_, expr, block, eblock, _) => {
                 expr.is_pure()
                     && block.iter().all(|statement| statement.is_pure())
@@ -147,17 +150,19 @@ pub enum TypeCheckedIfArm {
 impl MiniProperties for TypeCheckedIfArm {
     fn is_pure(&self) -> bool {
         match self {
-            TypeCheckedIfArm::Cond(expr, statements, else_block, _) =>
+            TypeCheckedIfArm::Cond(expr, statements, else_block, _) => {
                 expr.is_pure()
                     && statements.iter().all(|statement| statement.is_pure())
                     && if let Some(block) = else_block {
                         block.is_pure()
                     } else {
                         true
-                    },
-                TypeCheckedIfArm::Catchall(statements, _) => statements.iter().all(|statement| statement.is_pure())
+                    }
             }
-
+            TypeCheckedIfArm::Catchall(statements, _) => {
+                statements.iter().all(|statement| statement.is_pure())
+            }
+        }
     }
 }
 
@@ -670,7 +675,12 @@ fn typecheck_statement<'a>(
                         }
                     }
                     Ok((
-                        TypeCheckedStatement::FunctionCall(tc_fexpr, tc_args, PropertiesList {pure: !impure}, *loc),
+                        TypeCheckedStatement::FunctionCall(
+                            tc_fexpr,
+                            tc_args,
+                            PropertiesList { pure: !impure },
+                            *loc,
+                        ),
                         vec![],
                     ))
                 } else {
