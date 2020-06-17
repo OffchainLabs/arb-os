@@ -42,7 +42,7 @@ pub fn new_type_error(msg: String, location: Option<Location>) -> TypeError {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct PropertiesList {
     pub pure: bool,
 }
@@ -185,6 +185,7 @@ pub enum TypeCheckedExpr {
         Box<TypeCheckedExpr>,
         Vec<TypeCheckedExpr>,
         Type,
+        PropertiesList,
         Option<Location>,
     ),
     StructInitializer(Vec<TypeCheckedStructField>, Type, Option<Location>),
@@ -261,8 +262,8 @@ impl MiniProperties for TypeCheckedExpr {
             TypeCheckedExpr::GlobalVariableRef(_, _, _) => false,
             TypeCheckedExpr::Variant(expr, _) => expr.is_pure(),
             TypeCheckedExpr::FuncRef(_, func_type, _) => {
-                if let Type::Func(pure, _, _) = func_type {
-                    *pure
+                if let Type::Func(impure, _, _) = func_type {
+                    !*impure
                 } else {
                     panic!("Internal error: func ref has non function type")
                 }
@@ -270,18 +271,10 @@ impl MiniProperties for TypeCheckedExpr {
             TypeCheckedExpr::TupleRef(expr, _, _, _) => expr.is_pure(),
             TypeCheckedExpr::DotRef(expr, _, _, _) => expr.is_pure(),
             TypeCheckedExpr::Const(_, _, _) => true,
-            TypeCheckedExpr::FunctionCall(name_expr, fields_exprs, the_type, _) => {
+            TypeCheckedExpr::FunctionCall(name_expr, fields_exprs, _, properties, _) => {
                 name_expr.is_pure()
                     && fields_exprs.iter().all(|statement| statement.is_pure())
-                    && if let Type::Func(pure, _, _) = the_type {
-                        *pure
-                    } else {
-                        println!(
-                            "Internal error: function call to non function type\"{:?}\"",
-                            the_type
-                        );
-                        false
-                    }
+                    && properties.pure
             }
             TypeCheckedExpr::StructInitializer(fields, _, _) => {
                 fields.iter().all(|field| field.value.is_pure())
@@ -337,7 +330,7 @@ impl<'a> TypeCheckedExpr {
             TypeCheckedExpr::Variant(t, _) => Type::Option(Box::new(t.get_type())),
             TypeCheckedExpr::DotRef(_, _, t, _) => t.clone(),
             TypeCheckedExpr::Const(_, t, _) => t.clone(),
-            TypeCheckedExpr::FunctionCall(_, _, t, _) => t.clone(),
+            TypeCheckedExpr::FunctionCall(_, _, t, _, _) => t.clone(),
             TypeCheckedExpr::StructInitializer(_, t, _) => t.clone(),
             TypeCheckedExpr::ArrayRef(_, _, t, _) => t.clone(),
             TypeCheckedExpr::FixedArrayRef(_, _, _, t, _) => t.clone(),
@@ -1085,7 +1078,7 @@ fn typecheck_expr(
         Expr::FunctionCall(fexpr, args, loc) => {
             let tc_fexpr = typecheck_expr(fexpr, type_table, global_vars, func_table, return_type)?;
             match tc_fexpr.get_type() {
-                Type::Func(_, arg_types, ret_type) => {
+                Type::Func(properties, arg_types, ret_type) => {
                     let ret_type = ret_type.resolve_types(type_table, *loc)?;
                     if args.len() == arg_types.len() {
                         let mut tc_args = Vec::new();
@@ -1113,6 +1106,7 @@ fn typecheck_expr(
                             Box::new(tc_fexpr),
                             tc_args,
                             ret_type,
+                            PropertiesList { pure: !properties },
                             *loc,
                         ))
                     } else {
