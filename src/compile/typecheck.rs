@@ -15,9 +15,12 @@
  */
 
 use super::symtable::SymTable;
-use crate::compile::ast::{
-    BinaryOp, Constant, Expr, FuncArg, FuncDecl, FuncDeclKind, GlobalVarDecl, IfArm,
-    ImportFuncDecl, MatchPattern, Statement, StructField, TopLevelDecl, Type, UnaryOp,
+use crate::compile::{
+    ast::{
+        BinaryOp, Constant, Expr, FuncArg, FuncDecl, FuncDeclKind, GlobalVarDecl, IfArm,
+        ImportFuncDecl, MatchPattern, Statement, StructField, TopLevelDecl, Type, UnaryOp,
+    },
+    MiniProperties,
 };
 use crate::link::{ExportedFunc, ImportedFunc};
 use crate::mavm::{Instruction, Label, Value};
@@ -39,6 +42,11 @@ pub fn new_type_error(msg: String, location: Option<Location>) -> TypeError {
     }
 }
 
+#[derive(Debug, Clone)]
+pub struct PropertiesList {
+    pub pure: bool,
+}
+
 #[derive(Debug)]
 pub struct TypeCheckedFunc {
     pub name: StringId,
@@ -48,6 +56,13 @@ pub struct TypeCheckedFunc {
     pub tipe: Type,
     pub imported: bool,
     pub location: Option<Location>,
+    pub properties: PropertiesList,
+}
+
+impl MiniProperties for TypeCheckedFunc {
+    fn is_pure(&self) -> bool {
+        self.code.iter().all(|statement| statement.is_pure())
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -56,7 +71,12 @@ pub enum TypeCheckedStatement {
     Panic(Option<Location>),
     ReturnVoid(Option<Location>),
     Return(TypeCheckedExpr, Option<Location>),
-    FunctionCall(TypeCheckedExpr, Vec<TypeCheckedExpr>, Option<Location>),
+    FunctionCall(
+        TypeCheckedExpr,
+        Vec<TypeCheckedExpr>,
+        PropertiesList,
+        Option<Location>,
+    ),
     Let(TypeCheckedMatchPattern, TypeCheckedExpr, Option<Location>),
     AssignLocal(StringId, TypeCheckedExpr, Option<Location>),
     AssignGlobal(usize, TypeCheckedExpr, Option<Location>),
@@ -74,6 +94,42 @@ pub enum TypeCheckedStatement {
     DebugPrint(TypeCheckedExpr, Option<Location>),
 }
 
+impl MiniProperties for TypeCheckedStatement {
+    fn is_pure(&self) -> bool {
+        match self {
+            TypeCheckedStatement::Noop(_)
+            | TypeCheckedStatement::Panic(_)
+            | TypeCheckedStatement::ReturnVoid(_) => true,
+            TypeCheckedStatement::Return(something, _) => something.is_pure(),
+            TypeCheckedStatement::FunctionCall(name_expr, args, properties, _) => {
+                name_expr.is_pure() && args.iter().all(|expr| expr.is_pure()) && properties.pure
+            }
+            TypeCheckedStatement::Let(_, exp, _) => exp.is_pure(),
+            TypeCheckedStatement::AssignLocal(_, exp, _) => exp.is_pure(),
+            TypeCheckedStatement::AssignGlobal(_, _, _) => false,
+            TypeCheckedStatement::Loop(code, _) => code.iter().all(|statement| statement.is_pure()),
+            TypeCheckedStatement::While(exp, block, _) => {
+                exp.is_pure() && block.iter().all(|statement| statement.is_pure())
+            }
+            TypeCheckedStatement::If(if_arm) => if_arm.is_pure(),
+            TypeCheckedStatement::IfLet(_, expr, block, eblock, _) => {
+                expr.is_pure()
+                    && block.iter().all(|statement| statement.is_pure())
+                    && eblock
+                        // This clone can most likely be avoided and it would probably be good idea to do so
+                        .clone()
+                        .map(|statements| statements.iter().all(|statement| statement.is_pure()))
+                        .unwrap_or(true)
+            }
+            TypeCheckedStatement::Asm(instrs, exprs, _) => {
+                instrs.iter().all(|instr| instr.is_pure())
+                    && exprs.iter().all(|expr| expr.is_pure())
+            }
+            TypeCheckedStatement::DebugPrint(_, _) => true,
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 pub enum TypeCheckedMatchPattern {
     Simple(StringId, Type),
@@ -89,6 +145,25 @@ pub enum TypeCheckedIfArm {
         Option<Location>,
     ),
     Catchall(Vec<TypeCheckedStatement>, Option<Location>),
+}
+
+impl MiniProperties for TypeCheckedIfArm {
+    fn is_pure(&self) -> bool {
+        match self {
+            TypeCheckedIfArm::Cond(expr, statements, else_block, _) => {
+                expr.is_pure()
+                    && statements.iter().all(|statement| statement.is_pure())
+                    && if let Some(block) = else_block {
+                        block.is_pure()
+                    } else {
+                        true
+                    }
+            }
+            TypeCheckedIfArm::Catchall(statements, _) => {
+                statements.iter().all(|statement| statement.is_pure())
+            }
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -114,6 +189,7 @@ pub enum TypeCheckedExpr {
         Box<TypeCheckedExpr>,
         Vec<TypeCheckedExpr>,
         Type,
+        PropertiesList,
         Option<Location>,
     ),
     StructInitializer(Vec<TypeCheckedStructField>, Type, Option<Location>),
@@ -179,6 +255,70 @@ pub enum TypeCheckedExpr {
     Try(Box<TypeCheckedExpr>, Type, Option<Location>),
 }
 
+impl MiniProperties for TypeCheckedExpr {
+    fn is_pure(&self) -> bool {
+        match self {
+            TypeCheckedExpr::UnaryOp(_, expr, _, _) => expr.is_pure(),
+            TypeCheckedExpr::Binary(_, left, right, _, _) => left.is_pure() && right.is_pure(),
+            TypeCheckedExpr::ShortcutOr(left, right, _) => left.is_pure() && right.is_pure(),
+            TypeCheckedExpr::ShortcutAnd(left, right, _) => left.is_pure() && right.is_pure(),
+            TypeCheckedExpr::LocalVariableRef(_, _, _) => true,
+            TypeCheckedExpr::GlobalVariableRef(_, _, _) => false,
+            TypeCheckedExpr::Variant(expr, _) => expr.is_pure(),
+            TypeCheckedExpr::FuncRef(_, func_type, _) => {
+                if let Type::Func(impure, _, _) = func_type {
+                    !*impure
+                } else {
+                    panic!("Internal error: func ref has non function type")
+                }
+            }
+            TypeCheckedExpr::TupleRef(expr, _, _, _) => expr.is_pure(),
+            TypeCheckedExpr::DotRef(expr, _, _, _) => expr.is_pure(),
+            TypeCheckedExpr::Const(_, _, _) => true,
+            TypeCheckedExpr::FunctionCall(name_expr, fields_exprs, _, properties, _) => {
+                name_expr.is_pure()
+                    && fields_exprs.iter().all(|statement| statement.is_pure())
+                    && properties.pure
+            }
+            TypeCheckedExpr::StructInitializer(fields, _, _) => {
+                fields.iter().all(|field| field.value.is_pure())
+            }
+            TypeCheckedExpr::ArrayRef(expr, expr2, _, _) => expr.is_pure() && expr2.is_pure(),
+            TypeCheckedExpr::FixedArrayRef(expr, expr2, _, _, _) => {
+                expr.is_pure() && expr2.is_pure()
+            }
+            TypeCheckedExpr::MapRef(expr, expr2, _, _) => expr.is_pure() && expr2.is_pure(),
+            TypeCheckedExpr::Tuple(exprs, _, _) => exprs.iter().all(|expr| expr.is_pure()),
+            TypeCheckedExpr::NewArray(expr, _, _, _) => expr.is_pure(),
+            TypeCheckedExpr::NewFixedArray(_, opt_expr, _, _) => {
+                if let Some(expr) = opt_expr {
+                    expr.is_pure()
+                } else {
+                    true
+                }
+            }
+            TypeCheckedExpr::NewMap(_, _) => true,
+            TypeCheckedExpr::ArrayMod(arr, index, val, _, _) => {
+                arr.is_pure() && index.is_pure() && val.is_pure()
+            }
+            TypeCheckedExpr::FixedArrayMod(arr, index, val, _, _, _) => {
+                arr.is_pure() && index.is_pure() && val.is_pure()
+            }
+            TypeCheckedExpr::MapMod(map, key, val, _, _) => {
+                map.is_pure() && key.is_pure() && val.is_pure()
+            }
+            TypeCheckedExpr::StructMod(the_struct, _, val, _, _) => {
+                the_struct.is_pure() && val.is_pure()
+            }
+            TypeCheckedExpr::Cast(expr, _, _) => expr.is_pure(),
+            TypeCheckedExpr::Asm(_, instrs, args, _) => {
+                instrs.iter().all(|inst| inst.is_pure()) && args.iter().all(|expr| expr.is_pure())
+            }
+            TypeCheckedExpr::Try(expr, _, _) => expr.is_pure(),
+        }
+    }
+}
+
 impl<'a> TypeCheckedExpr {
     pub fn get_type(&self) -> Type {
         match self {
@@ -194,7 +334,7 @@ impl<'a> TypeCheckedExpr {
             TypeCheckedExpr::Variant(t, _) => Type::Option(Box::new(t.get_type())),
             TypeCheckedExpr::DotRef(_, _, t, _) => t.clone(),
             TypeCheckedExpr::Const(_, t, _) => t.clone(),
-            TypeCheckedExpr::FunctionCall(_, _, t, _) => t.clone(),
+            TypeCheckedExpr::FunctionCall(_, _, t, _, _) => t.clone(),
             TypeCheckedExpr::StructInitializer(_, t, _) => t.clone(),
             TypeCheckedExpr::ArrayRef(_, _, t, _) => t.clone(),
             TypeCheckedExpr::FixedArrayRef(_, _, _, t, _) => t.clone(),
@@ -421,6 +561,9 @@ pub fn typecheck_function<'a>(
                 tipe: fd.tipe.clone(),
                 imported: false,
                 location: fd.location,
+                properties: PropertiesList {
+                    pure: !fd.is_impure,
+                },
             })
         }
     }
@@ -505,7 +648,7 @@ fn typecheck_statement<'a>(
         }
         Statement::FunctionCall(fexpr, args, loc) => {
             let tc_fexpr = typecheck_expr(fexpr, type_table, global_vars, func_table, return_type)?;
-            if let Type::Func(_, arg_types, ret_type) = tc_fexpr.get_type() {
+            if let Type::Func(impure, arg_types, ret_type) = tc_fexpr.get_type() {
                 if *ret_type != Type::Void {
                     return Err(new_type_error(
                         "function call statement to non-void function".to_string(),
@@ -532,7 +675,12 @@ fn typecheck_statement<'a>(
                         }
                     }
                     Ok((
-                        TypeCheckedStatement::FunctionCall(tc_fexpr, tc_args, *loc),
+                        TypeCheckedStatement::FunctionCall(
+                            tc_fexpr,
+                            tc_args,
+                            PropertiesList { pure: !impure },
+                            *loc,
+                        ),
                         vec![],
                     ))
                 } else {
@@ -939,7 +1087,7 @@ fn typecheck_expr(
         Expr::FunctionCall(fexpr, args, loc) => {
             let tc_fexpr = typecheck_expr(fexpr, type_table, global_vars, func_table, return_type)?;
             match tc_fexpr.get_type() {
-                Type::Func(_, arg_types, ret_type) => {
+                Type::Func(impure, arg_types, ret_type) => {
                     let ret_type = ret_type.resolve_types(type_table, *loc)?;
                     if args.len() == arg_types.len() {
                         let mut tc_args = Vec::new();
@@ -967,6 +1115,7 @@ fn typecheck_expr(
                             Box::new(tc_fexpr),
                             tc_args,
                             ret_type,
+                            PropertiesList { pure: !impure },
                             *loc,
                         ))
                     } else {

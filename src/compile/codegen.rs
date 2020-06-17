@@ -20,8 +20,11 @@ use super::typecheck::{
     TypeCheckedExpr, TypeCheckedFunc, TypeCheckedIfArm, TypeCheckedMatchPattern,
     TypeCheckedStatement,
 };
-use crate::link::TUPLE_SIZE;
-use crate::link::{xformcode::TupleTree, ImportedFunc};
+use crate::compile::typecheck::PropertiesList;
+use crate::link::{
+    xformcode::{TupleTree, TUPLE_SIZE},
+    ImportedFunc,
+};
 use crate::mavm::{Instruction, Label, LabelGenerator, Opcode, Value};
 use crate::pos::Location;
 use crate::stringtable::{StringId, StringTable};
@@ -220,7 +223,7 @@ fn mavm_codegen_statements<'a>(
             Ok((label_gen, num_locals, false))
             // no need to append the rest of the statements; they'll never be executed
         }
-        TypeCheckedStatement::FunctionCall(fexpr, args, loc) => {
+        TypeCheckedStatement::FunctionCall(fexpr, args, _, loc) => {
             let n_args = args.len();
             let (ret_label, lg) = label_gen.next();
             label_gen = lg;
@@ -1094,7 +1097,7 @@ fn mavm_codegen_expr<'a>(
             ));
             Ok((label_gen, code))
         }
-        TypeCheckedExpr::FunctionCall(fexpr, args, _, loc) => {
+        TypeCheckedExpr::FunctionCall(fexpr, args, _, _, loc) => {
             let n_args = args.len();
             let (ret_label, lg) = label_gen.next();
             label_gen = lg;
@@ -1205,6 +1208,7 @@ fn mavm_codegen_expr<'a>(
                 )),
                 vec![*expr1.clone(), *expr2.clone()],
                 call_type,
+                PropertiesList { pure: true },
                 *loc,
             );
             mavm_codegen_expr(
@@ -1279,6 +1283,7 @@ fn mavm_codegen_expr<'a>(
                 )),
                 vec![*map_expr.clone(), *key_expr.clone()],
                 call_type,
+                PropertiesList { pure: true },
                 *loc,
             );
             mavm_codegen_expr(
@@ -1310,6 +1315,7 @@ fn mavm_codegen_expr<'a>(
                     TypeCheckedExpr::Const(default_val, Type::Any, *loc),
                 ],
                 call_type,
+                PropertiesList { pure: true },
                 *loc,
             );
             mavm_codegen_expr(
@@ -1396,6 +1402,7 @@ fn mavm_codegen_expr<'a>(
                 )),
                 vec![],
                 call_type,
+                PropertiesList { pure: true },
                 *loc,
             );
             mavm_codegen_expr(
@@ -1423,6 +1430,7 @@ fn mavm_codegen_expr<'a>(
                 )),
                 vec![*arr.clone(), *index.clone(), *val.clone()],
                 call_type,
+                PropertiesList { pure: true },
                 *loc,
             );
             mavm_codegen_expr(
@@ -1467,6 +1475,7 @@ fn mavm_codegen_expr<'a>(
                 )),
                 vec![*map_expr.clone(), *key_expr.clone(), *val_expr.clone()],
                 call_type,
+                PropertiesList { pure: true },
                 *loc,
             );
             mavm_codegen_expr(

@@ -23,7 +23,7 @@ import func priorityq_get(pq: PriorityQ) -> option<(any, PriorityQ)>;
 import func priorityq_printAsArray(pq: PriorityQ) -> uint;
 
 
-func main() {
+impure func main() {
 	asm(tests(),) { log };
 }
 

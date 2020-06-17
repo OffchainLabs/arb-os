@@ -38,7 +38,7 @@ public impure func mainRunLoop() {
     panic;  // should never be reached
 }
 
-public func cleanUpAndJumpToRunLoop() {
+public impure func cleanUpAndJumpToRunLoop() {
     // When this is called, there might be unwanted junk in the stack and auxstack
     // This function will discard all of that stuff and then jump to mainRunLoop
 
