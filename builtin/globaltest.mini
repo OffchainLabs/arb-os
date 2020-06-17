@@ -29,11 +29,11 @@ type MyType = uint
 var global10: MyType;
 
 
-func main() {
+impure func main() {
     asm(tests(),) { log };
 }
 
-func tests() -> uint {
+impure func tests() -> uint {
     global0 = 3;
     if (global0 != 3) {
         return 1;

@@ -75,7 +75,7 @@ type Segment = struct {
     codePtMap: map<uint, AvmCodePoint>,
 }
 
-func segment_new(capacity: uint) -> Segment {
+impure func segment_new(capacity: uint) -> Segment {
     return struct {
         size: 1,
         capacity: capacity+1,
@@ -84,7 +84,7 @@ func segment_new(capacity: uint) -> Segment {
     };
 }
 
-func segment_addInsn(seg: Segment, opcode: uint, hasImm: bool, imm: any) -> Segment {
+impure func segment_addInsn(seg: Segment, opcode: uint, hasImm: bool, imm: any) -> Segment {
     let sizeIn = seg.size;
     let curCodePt = seg.currentCodePt;
     if (hasImm) {
@@ -97,15 +97,15 @@ func segment_addInsn(seg: Segment, opcode: uint, hasImm: bool, imm: any) -> Segm
                with { codePtMap: seg.codePtMap with { [sizeIn] = curCodePt } };
 }
 
-func pushInstruction(opcode: uint, restOfCode: AvmCodePoint) -> AvmCodePoint {
+impure func pushInstruction(opcode: uint, restOfCode: AvmCodePoint) -> AvmCodePoint {
     return asm(opcode, restOfCode) AvmCodePoint { pushinsn };
 }
 
-func pushInstructionImm(opcode: uint, val: any, restOfCode: AvmCodePoint) -> AvmCodePoint {
+impure func pushInstructionImm(opcode: uint, val: any, restOfCode: AvmCodePoint) -> AvmCodePoint {
     return asm(opcode, val, restOfCode) AvmCodePoint { pushinsnimm };
 }
 
-func pushValue(val: any, restOfCode: AvmCodePoint) -> AvmCodePoint {
+impure func pushValue(val: any, restOfCode: AvmCodePoint) -> AvmCodePoint {
     return asm(0x3b, val, restOfCode) AvmCodePoint { pushinsnimm };
 }
 
@@ -144,7 +144,7 @@ public func makeInitStructures(v: any) -> (map<uint, func()>, map<uint, uint>) {
     return (jumpTable, storageMap,);
 }
 
-public func translateEvmCodeSegment(
+public impure func translateEvmCodeSegment(
     bs: ByteStream
 ) -> option<(AvmCodePoint, map<uint, AvmCodePoint>)> {
     if (bytestream_atEof(bs)) {
@@ -393,7 +393,7 @@ public func translateEvmCodeSegment(
     }
 }
 
-func pushEvmInsnDenomCheck(
+impure func pushEvmInsnDenomCheck(
     opcode: uint, 
     restOfCode: AvmCodePoint,
     evmJumpTable: map<uint, AvmCodePoint>
@@ -415,7 +415,7 @@ func pushEvmInsnDenomCheck(
     ));
 }
 
-func pushDupn(
+impure func pushDupn(
     n: uint, 
     restOfCode: AvmCodePoint,
 ) -> AvmCodePoint {
@@ -438,7 +438,7 @@ func pushDupn(
     }
 }
 
-func pushSwapn(
+impure func pushSwapn(
     n: uint, 
     restOfCode: AvmCodePoint,
 ) -> AvmCodePoint {
@@ -464,7 +464,7 @@ func pushSwapn(
     }
 }
 
-func pushEvmInsnCall(
+impure func pushEvmInsnCall(
     evmOp: func(), 
     restOfCode: AvmCodePoint,
     evmJumpTable: map<uint, AvmCodePoint>

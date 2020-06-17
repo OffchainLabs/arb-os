@@ -28,7 +28,7 @@ import func bytearray_get256(ba: ByteArray, offset: uint) -> option<uint>;
 import func bytearray_set256(ba: ByteArray, offset: uint, value: uint) -> option<ByteArray>;
 
 
-func main() {
+impure func main() {
 	asm(tests(),) { log };
 }
 

@@ -14,11 +14,11 @@
 // limitations under the License.
 //
 
-func main() {
+impure func main() {
 	asm(tests(),) { log };
 }
 
-func tests() -> uint {
+impure func tests() -> uint {
 	let codept = loadFunc1();
     let res = unsafecast<func() -> uint>(codept)();
     if (res != 3) {
@@ -28,7 +28,7 @@ func tests() -> uint {
     return 0;
 }
 
-func loadFunc1() -> func() {
+impure func loadFunc1() -> func() {
     let ret = asm() func() { errcodept };
 
     ret = addInsn(0x34, ret);    // jump
@@ -37,10 +37,10 @@ func loadFunc1() -> func() {
     return ret;
 }
 
-func addInsn(op: uint, codept: func()) -> func() {
+impure func addInsn(op: uint, codept: func()) -> func() {
     return asm(op, codept) func() { pushinsn };
 }
 
-func addInsnImm(op: uint, imm: any, codept: func()) -> func() {
+impure func addInsnImm(op: uint, imm: any, codept: func()) -> func() {
     return asm(op, imm, codept) func() { pushinsnimm };
 }
