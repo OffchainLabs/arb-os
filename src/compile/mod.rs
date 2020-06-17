@@ -196,7 +196,7 @@ pub fn compile_from_source(
         if !func.is_pure() && func.properties.pure {
             println!(
                 "Warning: func {} is impure but not marked impure",
-                func.name
+                string_table.name_from_id(func.name)
             )
         }
     });
