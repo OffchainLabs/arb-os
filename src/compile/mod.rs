@@ -193,9 +193,15 @@ pub fn compile_from_source(
             .map_err(|res3| CompileError::new(res3.reason.to_string(), res3.location))?;
     let mut code = Vec::new();
     checked_funcs.iter().for_each(|func| {
-        if !func.is_pure() && func.properties.pure {
+        let purity = func.is_pure();
+        if  !purity && func.properties.pure {
             println!(
                 "Warning: func {} is impure but not marked impure",
+                string_table.name_from_id(func.name)
+            )
+        } else if purity && !func.properties.pure {
+            println!(
+                "Warning: func {} is declared impure but does not contain impure code",
                 string_table.name_from_id(func.name)
             )
         }
