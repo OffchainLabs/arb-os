@@ -71,7 +71,7 @@ pub enum TypeCheckedStatement {
     Panic(Option<Location>),
     ReturnVoid(Option<Location>),
     Return(TypeCheckedExpr, Option<Location>),
-    FunctionCall(TypeCheckedExpr, Vec<TypeCheckedExpr>, Option<Location>),
+    FunctionCall(TypeCheckedExpr, Vec<TypeCheckedExpr>, PropertiesList, Option<Location>),
     Let(TypeCheckedMatchPattern, TypeCheckedExpr, Option<Location>),
     AssignLocal(StringId, TypeCheckedExpr, Option<Location>),
     AssignGlobal(usize, TypeCheckedExpr, Option<Location>),
@@ -96,9 +96,8 @@ impl MiniProperties for TypeCheckedStatement {
             | TypeCheckedStatement::Panic(_)
             | TypeCheckedStatement::ReturnVoid(_) => true,
             TypeCheckedStatement::Return(something, _) => something.is_pure(),
-            TypeCheckedStatement::FunctionCall(_, _, _) => {
-                println!("Function call statement case not implemented");
-                true
+            TypeCheckedStatement::FunctionCall(name, args, properties, _) => {
+                name.is_pure() && args.iter().all(|expr| expr.is_pure()) && properties.pure
             }
             TypeCheckedStatement::Let(_, exp, _) => exp.is_pure(),
             TypeCheckedStatement::AssignLocal(_, exp, _) => exp.is_pure(),
@@ -644,7 +643,7 @@ fn typecheck_statement<'a>(
         }
         Statement::FunctionCall(fexpr, args, loc) => {
             let tc_fexpr = typecheck_expr(fexpr, type_table, global_vars, func_table, return_type)?;
-            if let Type::Func(_, arg_types, ret_type) = tc_fexpr.get_type() {
+            if let Type::Func(impure, arg_types, ret_type) = tc_fexpr.get_type() {
                 if *ret_type != Type::Void {
                     return Err(new_type_error(
                         "function call statement to non-void function".to_string(),
@@ -671,7 +670,7 @@ fn typecheck_statement<'a>(
                         }
                     }
                     Ok((
-                        TypeCheckedStatement::FunctionCall(tc_fexpr, tc_args, *loc),
+                        TypeCheckedStatement::FunctionCall(tc_fexpr, tc_args, PropertiesList {pure: !impure}, *loc),
                         vec![],
                     ))
                 } else {

@@ -221,7 +221,7 @@ fn mavm_codegen_statements<'a>(
             Ok((label_gen, num_locals, false))
             // no need to append the rest of the statements; they'll never be executed
         }
-        TypeCheckedStatement::FunctionCall(fexpr, args, loc) => {
+        TypeCheckedStatement::FunctionCall(fexpr, args, _, loc) => {
             let n_args = args.len();
             let (ret_label, lg) = label_gen.next();
             label_gen = lg;
