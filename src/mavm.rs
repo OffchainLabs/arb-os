@@ -617,7 +617,16 @@ pub enum Opcode {
 impl MiniProperties for Opcode {
     fn is_pure(&self) -> bool {
         match self {
-            Opcode::Log | Opcode::Send | Opcode::GetTime | Opcode::Rset | Opcode::Rget => false,
+            Opcode::Log
+            | Opcode::Send
+            | Opcode::GetTime
+            | Opcode::Rset
+            | Opcode::Rget
+            | Opcode::PushInsn
+            | Opcode::PushInsnImm
+            | Opcode::ErrCodePoint
+            | Opcode::ErrSet
+            | Opcode::ErrPush => false,
             _ => true,
         }
     }

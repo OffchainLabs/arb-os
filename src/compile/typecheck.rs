@@ -101,8 +101,8 @@ impl MiniProperties for TypeCheckedStatement {
             | TypeCheckedStatement::Panic(_)
             | TypeCheckedStatement::ReturnVoid(_) => true,
             TypeCheckedStatement::Return(something, _) => something.is_pure(),
-            TypeCheckedStatement::FunctionCall(name, args, properties, _) => {
-                name.is_pure() && args.iter().all(|expr| expr.is_pure()) && properties.pure
+            TypeCheckedStatement::FunctionCall(name_expr, args, properties, _) => {
+                name_expr.is_pure() && args.iter().all(|expr| expr.is_pure()) && properties.pure
             }
             TypeCheckedStatement::Let(_, exp, _) => exp.is_pure(),
             TypeCheckedStatement::AssignLocal(_, exp, _) => exp.is_pure(),
@@ -125,7 +125,7 @@ impl MiniProperties for TypeCheckedStatement {
                 instrs.iter().all(|instr| instr.is_pure())
                     && exprs.iter().all(|expr| expr.is_pure())
             }
-            TypeCheckedStatement::DebugPrint(_, _) => false,
+            TypeCheckedStatement::DebugPrint(_, _) => true,
         }
     }
 }
@@ -1087,7 +1087,7 @@ fn typecheck_expr(
         Expr::FunctionCall(fexpr, args, loc) => {
             let tc_fexpr = typecheck_expr(fexpr, type_table, global_vars, func_table, return_type)?;
             match tc_fexpr.get_type() {
-                Type::Func(properties, arg_types, ret_type) => {
+                Type::Func(impure, arg_types, ret_type) => {
                     let ret_type = ret_type.resolve_types(type_table, *loc)?;
                     if args.len() == arg_types.len() {
                         let mut tc_args = Vec::new();
@@ -1115,7 +1115,7 @@ fn typecheck_expr(
                             Box::new(tc_fexpr),
                             tc_args,
                             ret_type,
-                            PropertiesList { pure: !properties },
+                            PropertiesList { pure: !impure },
                             *loc,
                         ))
                     } else {
