@@ -15,9 +15,12 @@
  */
 
 use super::symtable::SymTable;
-use crate::compile::ast::{
-    BinaryOp, Constant, Expr, FuncArg, FuncDecl, FuncDeclKind, GlobalVarDecl, IfArm,
-    ImportFuncDecl, MatchPattern, Statement, StructField, TopLevelDecl, Type, UnaryOp,
+use crate::compile::{
+    ast::{
+        BinaryOp, Constant, Expr, FuncArg, FuncDecl, FuncDeclKind, GlobalVarDecl, IfArm,
+        ImportFuncDecl, MatchPattern, Statement, StructField, TopLevelDecl, Type, UnaryOp,
+    },
+    MiniProperties,
 };
 use crate::link::{ExportedFunc, ImportedFunc};
 use crate::mavm::{Instruction, Label, Value};
@@ -40,6 +43,11 @@ pub fn new_type_error(msg: String, location: Option<Location>) -> TypeError {
 }
 
 #[derive(Debug)]
+pub struct PropertiesList {
+    pub pure: bool,
+}
+
+#[derive(Debug)]
 pub struct TypeCheckedFunc {
     pub name: StringId,
     pub args: Vec<FuncArg>,
@@ -48,6 +56,13 @@ pub struct TypeCheckedFunc {
     pub tipe: Type,
     pub imported: bool,
     pub location: Option<Location>,
+    pub properties: PropertiesList,
+}
+
+impl MiniProperties for TypeCheckedFunc {
+    fn is_pure(&self) -> bool {
+        self.code.iter().all(|statement| statement.is_pure())
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -74,6 +89,45 @@ pub enum TypeCheckedStatement {
     DebugPrint(TypeCheckedExpr, Option<Location>),
 }
 
+impl MiniProperties for TypeCheckedStatement {
+    fn is_pure(&self) -> bool {
+        match self {
+            TypeCheckedStatement::Noop(_)
+            | TypeCheckedStatement::Panic(_)
+            | TypeCheckedStatement::ReturnVoid(_) => true,
+            TypeCheckedStatement::Return(something, _) => something.is_pure(),
+            TypeCheckedStatement::FunctionCall(_, _, _) => {
+                println!("Function call statement case not implemented");
+                true
+            }
+            TypeCheckedStatement::Let(_, exp, _) => exp.is_pure(),
+            TypeCheckedStatement::AssignLocal(_, exp, _) => exp.is_pure(),
+            TypeCheckedStatement::AssignGlobal(_, _, _) => false,
+            TypeCheckedStatement::Loop(code, _) => code.iter().all(|statement| statement.is_pure()),
+            TypeCheckedStatement::While(exp, block, _) => {
+                exp.is_pure() && block.iter().all(|statement| statement.is_pure())
+            }
+            TypeCheckedStatement::If(if_arm) => {
+                if_arm.is_pure()
+            }
+            TypeCheckedStatement::IfLet(_, expr, block, eblock, _) => {
+                expr.is_pure()
+                    && block.iter().all(|statement| statement.is_pure())
+                    && eblock
+                        // This clone can most likely be avoided and it would probably be good idea to do so
+                        .clone()
+                        .map(|statements| statements.iter().all(|statement| statement.is_pure()))
+                        .unwrap_or(true)
+            }
+            TypeCheckedStatement::Asm(instrs, exprs, _) => {
+                instrs.iter().all(|instr| instr.is_pure())
+                    && exprs.iter().all(|expr| expr.is_pure())
+            }
+            TypeCheckedStatement::DebugPrint(_, _) => false,
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 pub enum TypeCheckedMatchPattern {
     Simple(StringId, Type),
@@ -89,6 +143,23 @@ pub enum TypeCheckedIfArm {
         Option<Location>,
     ),
     Catchall(Vec<TypeCheckedStatement>, Option<Location>),
+}
+
+impl MiniProperties for TypeCheckedIfArm {
+    fn is_pure(&self) -> bool {
+        match self {
+            TypeCheckedIfArm::Cond(expr, statements, else_block, _) =>
+                expr.is_pure()
+                    && statements.iter().all(|statement| statement.is_pure())
+                    && if let Some(block) = else_block {
+                        block.is_pure()
+                    } else {
+                        true
+                    },
+                TypeCheckedIfArm::Catchall(statements, _) => statements.iter().all(|statement| statement.is_pure())
+            }
+
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -177,6 +248,78 @@ pub enum TypeCheckedExpr {
         Option<Location>,
     ),
     Try(Box<TypeCheckedExpr>, Type, Option<Location>),
+}
+
+impl MiniProperties for TypeCheckedExpr {
+    fn is_pure(&self) -> bool {
+        match self {
+            TypeCheckedExpr::UnaryOp(_, expr, _, _) => expr.is_pure(),
+            TypeCheckedExpr::Binary(_, left, right, _, _) => left.is_pure() && right.is_pure(),
+            TypeCheckedExpr::ShortcutOr(left, right, _) => left.is_pure() && right.is_pure(),
+            TypeCheckedExpr::ShortcutAnd(left, right, _) => left.is_pure() && right.is_pure(),
+            TypeCheckedExpr::LocalVariableRef(_, _, _) => true,
+            TypeCheckedExpr::GlobalVariableRef(_, _, _) => false,
+            TypeCheckedExpr::Variant(expr, _) => expr.is_pure(),
+            TypeCheckedExpr::FuncRef(_, func_type, _) => {
+                if let Type::Func(pure, _, _) = func_type {
+                    *pure
+                } else {
+                    panic!("Internal error: func ref has non function type")
+                }
+            }
+            TypeCheckedExpr::TupleRef(expr, _, _, _) => expr.is_pure(),
+            TypeCheckedExpr::DotRef(expr, _, _, _) => expr.is_pure(),
+            TypeCheckedExpr::Const(_, _, _) => true,
+            TypeCheckedExpr::FunctionCall(name_expr, fields_exprs, the_type, _) => {
+                name_expr.is_pure()
+                    && fields_exprs.iter().all(|statement| statement.is_pure())
+                    && if let Type::Func(pure, _, _) = the_type {
+                        *pure
+                    } else {
+                        println!(
+                            "Internal error: function call to non function type\"{:?}\"",
+                            the_type
+                        );
+                        false
+                    }
+            }
+            TypeCheckedExpr::StructInitializer(fields, _, _) => {
+                fields.iter().all(|field| field.value.is_pure())
+            }
+            TypeCheckedExpr::ArrayRef(expr, expr2, _, _) => expr.is_pure() && expr2.is_pure(),
+            TypeCheckedExpr::FixedArrayRef(expr, expr2, _, _, _) => {
+                expr.is_pure() && expr2.is_pure()
+            }
+            TypeCheckedExpr::MapRef(expr, expr2, _, _) => expr.is_pure() && expr2.is_pure(),
+            TypeCheckedExpr::Tuple(exprs, _, _) => exprs.iter().all(|expr| expr.is_pure()),
+            TypeCheckedExpr::NewArray(expr, _, _, _) => expr.is_pure(),
+            TypeCheckedExpr::NewFixedArray(_, opt_expr, _, _) => {
+                if let Some(expr) = opt_expr {
+                    expr.is_pure()
+                } else {
+                    true
+                }
+            }
+            TypeCheckedExpr::NewMap(_, _) => true,
+            TypeCheckedExpr::ArrayMod(arr, index, val, _, _) => {
+                arr.is_pure() && index.is_pure() && val.is_pure()
+            }
+            TypeCheckedExpr::FixedArrayMod(arr, index, val, _, _, _) => {
+                arr.is_pure() && index.is_pure() && val.is_pure()
+            }
+            TypeCheckedExpr::MapMod(map, key, val, _, _) => {
+                map.is_pure() && key.is_pure() && val.is_pure()
+            }
+            TypeCheckedExpr::StructMod(the_struct, _, val, _, _) => {
+                the_struct.is_pure() && val.is_pure()
+            }
+            TypeCheckedExpr::Cast(expr, _, _) => expr.is_pure(),
+            TypeCheckedExpr::Asm(_, instrs, args, _) => {
+                instrs.iter().all(|inst| inst.is_pure()) && args.iter().all(|expr| expr.is_pure())
+            }
+            TypeCheckedExpr::Try(expr, _, _) => expr.is_pure(),
+        }
+    }
 }
 
 impl<'a> TypeCheckedExpr {
@@ -421,6 +564,9 @@ pub fn typecheck_function<'a>(
                 tipe: fd.tipe.clone(),
                 imported: false,
                 location: fd.location,
+                properties: PropertiesList {
+                    pure: !fd.is_impure,
+                },
             })
         }
     }
