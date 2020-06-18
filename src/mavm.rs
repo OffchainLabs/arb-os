@@ -571,7 +571,9 @@ impl MiniProperties for Opcode {
             | Opcode::PushInsnImm
             | Opcode::ErrCodePoint
             | Opcode::ErrSet
-            | Opcode::ErrPush => false,
+            | Opcode::ErrPush
+            | Opcode::Jump
+            | Opcode::Cjump => false,
             _ => true,
         }
     }
