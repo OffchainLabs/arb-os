@@ -674,6 +674,7 @@ fn mavm_codegen_statements(
             )
             .map(|(a, b, c)| (a, max(b, total_locals), c))
         }
+        TypeCheckedStatement::CodeBlock(_, _) => unimplemented!(),
     }
 }
 
