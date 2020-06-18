@@ -369,44 +369,44 @@ impl TypeCheckedStructField {
 fn builtin_func_decls(mut string_table: StringTable) -> (Vec<ImportFuncDecl>, StringTable) {
     let imps = vec![
         ImportFuncDecl::new_types(
-            string_table.get("builtin_arrayNew"),
+            string_table.get("builtin_arrayNew".to_string()),
             false,
             vec![Type::Uint, Type::Any],
             Type::Any,
         ),
         ImportFuncDecl::new_types(
-            string_table.get("builtin_arrayGet"),
+            string_table.get("builtin_arrayGet".to_string()),
             false,
             vec![Type::Any, Type::Uint],
             Type::Any,
         ),
         ImportFuncDecl::new_types(
-            string_table.get("builtin_arraySet"),
+            string_table.get("builtin_arraySet".to_string()),
             false,
             vec![Type::Any, Type::Uint, Type::Any],
             Type::Any,
         ),
-        ImportFuncDecl::new_types(string_table.get("builtin_kvsNew"), false, vec![], Type::Any),
+        ImportFuncDecl::new_types(string_table.get("builtin_kvsNew".to_string()), false, vec![], Type::Any),
         ImportFuncDecl::new_types(
-            string_table.get("builtin_kvsHasKey"),
+            string_table.get("builtin_kvsHasKey".to_string()),
             false,
             vec![Type::Any, Type::Any],
             Type::Bool,
         ),
         ImportFuncDecl::new_types(
-            string_table.get("builtin_kvsGet"),
+            string_table.get("builtin_kvsGet".to_string()),
             false,
             vec![Type::Any, Type::Any],
             Type::Option(Box::new(Type::Any)),
         ),
         ImportFuncDecl::new_types(
-            string_table.get("builtin_kvsSet"),
+            string_table.get("builtin_kvsSet".to_string()),
             false,
             vec![Type::Any, Type::Any, Type::Any],
             Type::Any,
         ),
         ImportFuncDecl::new_types(
-            string_table.get("builtin_kvsDelete"),
+            string_table.get("builtin_kvsDelete".to_string()),
             false,
             vec![Type::Any, Type::Any],
             Type::Any,
@@ -418,13 +418,13 @@ fn builtin_func_decls(mut string_table: StringTable) -> (Vec<ImportFuncDecl>, St
 pub fn typecheck_top_level_decls<'a>(
     decls: &[TopLevelDecl],
     checked_funcs: &mut Vec<TypeCheckedFunc>,
-    string_table_in: StringTable<'a>,
+    string_table_in: StringTable,
 ) -> Result<
     (
         Vec<ExportedFunc>,
         Vec<ImportedFunc>,
         Vec<GlobalVarDecl>,
-        StringTable<'a>,
+        StringTable,
     ),
     TypeError,
 > {
