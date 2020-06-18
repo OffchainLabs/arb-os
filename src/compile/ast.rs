@@ -657,7 +657,10 @@ impl Statement {
                     .transpose()?,
                 *loc,
             )),
-            Statement::CodeBlock(_, _) => unimplemented!(),
+            Statement::CodeBlock(body, loc) => Ok(Statement::CodeBlock(
+                Statement::resolve_types_vec(body.to_vec(), type_table)?,
+                *loc,
+            )),
         }
     }
 

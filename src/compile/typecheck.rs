@@ -127,7 +127,9 @@ impl MiniProperties for TypeCheckedStatement {
                     && exprs.iter().all(|expr| expr.is_pure())
             }
             TypeCheckedStatement::DebugPrint(_, _) => true,
-            TypeCheckedStatement::CodeBlock(_, _) => unimplemented!(),
+            TypeCheckedStatement::CodeBlock(code, _) => {
+                code.iter().all(|statement| statement.is_pure())
+            }
         }
     }
 }
