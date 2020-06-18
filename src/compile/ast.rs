@@ -593,6 +593,7 @@ pub enum Statement {
     ),
     Asm(Vec<Instruction>, Vec<Expr>, Option<Location>),
     DebugPrint(Expr, Option<Location>),
+    CodeBlock(Vec<Statement>, Option<Location>),
 }
 
 impl Statement {
@@ -656,6 +657,7 @@ impl Statement {
                     .transpose()?,
                 *loc,
             )),
+            Statement::CodeBlock(_, _) => unimplemented!(),
         }
     }
 

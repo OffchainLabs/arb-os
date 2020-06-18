@@ -862,6 +862,7 @@ fn typecheck_statement<'a>(
                 vec![(*l, tct)],
             ))
         }
+        Statement::CodeBlock(_, _) => unimplemented!(),
     }
 }
 

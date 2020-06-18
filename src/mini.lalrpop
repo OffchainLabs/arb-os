@@ -88,6 +88,7 @@ Statement: Statement = {
 	<lno: @L> "panic" ";" => Statement::Panic(file_info.location(BytePos::from(lno))),
 	<lno: @L> "debug" "(" <e: Expr> ")" ";" => Statement::DebugPrint(e, file_info.location(BytePos::from(lno))),
 	<lno: @L> "asm" "(" <a:CommaedExprs?> ")" "{" <body:AsmInsn*> "}" ";" => Statement::Asm(body, a.unwrap_or(vec![]), file_info.location(BytePos::from(lno))),
+	<lno: @L> <cb: CodeBlock> ";" => Statement::CodeBlock(cb, file_info.location(BytePos::from(lno))),
 	<lno: @L> ";" => Statement::Noop(file_info.location(BytePos::from(lno))),
 }
 
