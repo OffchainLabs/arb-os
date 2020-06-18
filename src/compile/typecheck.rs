@@ -92,6 +92,7 @@ pub enum TypeCheckedStatement {
     ),
     Asm(Vec<Instruction>, Vec<TypeCheckedExpr>, Option<Location>),
     DebugPrint(TypeCheckedExpr, Option<Location>),
+    CodeBlock(Vec<TypeCheckedStatement>, Option<Location>),
 }
 
 impl MiniProperties for TypeCheckedStatement {
@@ -126,6 +127,9 @@ impl MiniProperties for TypeCheckedStatement {
                     && exprs.iter().all(|expr| expr.is_pure())
             }
             TypeCheckedStatement::DebugPrint(_, _) => true,
+            TypeCheckedStatement::CodeBlock(code, _) => {
+                code.iter().all(|statement| statement.is_pure())
+            }
         }
     }
 }
@@ -862,6 +866,19 @@ fn typecheck_statement<'a>(
                 vec![(*l, tct)],
             ))
         }
+        Statement::CodeBlock(body, loc) => Ok((
+            TypeCheckedStatement::CodeBlock(
+                typecheck_statement_sequence(
+                    body,
+                    return_type,
+                    type_table,
+                    global_vars,
+                    func_table,
+                )?,
+                *loc,
+            ),
+            vec![],
+        )),
     }
 }
 
