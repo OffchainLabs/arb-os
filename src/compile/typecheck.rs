@@ -386,7 +386,12 @@ fn builtin_func_decls(mut string_table: StringTable) -> (Vec<ImportFuncDecl>, St
             vec![Type::Any, Type::Uint, Type::Any],
             Type::Any,
         ),
-        ImportFuncDecl::new_types(string_table.get("builtin_kvsNew".to_string()), false, vec![], Type::Any),
+        ImportFuncDecl::new_types(
+            string_table.get("builtin_kvsNew".to_string()),
+            false,
+            vec![],
+            Type::Any,
+        ),
         ImportFuncDecl::new_types(
             string_table.get("builtin_kvsHasKey".to_string()),
             false,
