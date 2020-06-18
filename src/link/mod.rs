@@ -38,8 +38,8 @@ pub struct LinkedProgram {
     pub imported_funcs: Vec<ImportedFunc>,
 }
 
-impl<'a> LinkedProgram {
-    pub fn to_output(&'a self, output: &mut dyn io::Write, format: Option<&str>) {
+impl LinkedProgram {
+    pub fn to_output(&self, output: &mut dyn io::Write, format: Option<&str>) {
         match format {
             Some("pretty") => {
                 writeln!(output, "exported: {:?}", self.exported_funcs).unwrap();
@@ -149,7 +149,7 @@ pub struct ExportedFuncPoint {
     pub tipe: Type,
 }
 
-impl<'a> ExportedFunc {
+impl ExportedFunc {
     pub fn new(name_id: StringId, label: Label, tipe: Type, string_table: &StringTable) -> Self {
         Self {
             name: string_table.name_from_id(name_id).to_string(),
@@ -167,7 +167,7 @@ impl<'a> ExportedFunc {
     }
 }
 
-pub fn postlink_compile<'a>(
+pub fn postlink_compile(
     program: CompiledProgram,
     is_module: bool,
     evm_pcs: Vec<usize>, // ignored unless we're in a module

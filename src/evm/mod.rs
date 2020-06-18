@@ -749,16 +749,16 @@ fn compile_push_insn(data: &[u8], mut code: Vec<Instruction>) -> Vec<Instruction
 }
 
 #[allow(dead_code)]
-fn imported_funcs_for_evm() -> (Vec<ImportedFunc>, StringTable<'static>) {
+fn imported_funcs_for_evm() -> (Vec<ImportedFunc>, StringTable) {
     let mut imp_funcs = Vec::new();
     let mut string_table = StringTable::new();
     for name in EMULATION_FUNCS.iter() {
-        string_table.get(name);
+        string_table.get(name.to_string());
     }
     for (i, name) in EMULATION_FUNCS.iter().enumerate() {
         imp_funcs.push(ImportedFunc::new(
             i,
-            string_table.get(name),
+            string_table.get(name.to_string()),
             &string_table,
             vec![],
             Type::Void,

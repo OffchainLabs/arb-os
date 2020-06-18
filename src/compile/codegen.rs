@@ -42,7 +42,7 @@ pub fn new_codegen_error(reason: &'static str, location: Option<Location>) -> Co
 pub fn mavm_codegen<'a>(
     funcs: Vec<TypeCheckedFunc>,
     code_in: &'a mut Vec<Instruction>,
-    string_table: &'a StringTable,
+    string_table: &StringTable,
     imported_funcs: &[ImportedFunc],
     global_vars: &[GlobalVarDecl],
 ) -> Result<&'a mut Vec<Instruction>, CodegenError> {
@@ -79,7 +79,7 @@ fn mavm_codegen_func<'a>(
     func: TypeCheckedFunc,
     code: &'a mut Vec<Instruction>,
     mut label_gen: LabelGenerator,
-    string_table: &'a StringTable,
+    string_table: &StringTable,
     import_func_map: &HashMap<StringId, Label>,
     global_var_map: &HashMap<StringId, usize>,
 ) -> Result<(LabelGenerator, &'a mut Vec<Instruction>), CodegenError> {
@@ -129,12 +129,12 @@ fn mavm_codegen_func<'a>(
     Ok((label_gen, code))
 }
 
-fn add_args_to_locals_table<'a>(
-    locals: CopyingSymTable<'a, usize>,
-    args: &'a [FuncArg],
+fn add_args_to_locals_table(
+    locals: CopyingSymTable<'_, usize>,
+    args: &[FuncArg],
     num_locals: usize,
     statements: Vec<TypeCheckedStatement>,
-    code: &'a mut Vec<Instruction>,
+    code: &mut Vec<Instruction>,
     label_gen: LabelGenerator,
     string_table: &StringTable,
     import_func_map: &HashMap<StringId, Label>,
@@ -167,11 +167,11 @@ fn add_args_to_locals_table<'a>(
     }
 }
 
-fn mavm_codegen_statements<'a>(
-    statements: Vec<TypeCheckedStatement>,  // statements to codegen
-    mut code: &'a mut Vec<Instruction>,     // accumulates the code as it's generated
-    mut num_locals: usize,                  // num locals that have been allocated
-    locals: &'a CopyingSymTable<'a, usize>, // lookup local variable slot number by name
+fn mavm_codegen_statements(
+    statements: Vec<TypeCheckedStatement>, // statements to codegen
+    mut code: &mut Vec<Instruction>,       // accumulates the code as it's generated
+    mut num_locals: usize,                 // num locals that have been allocated
+    locals: &CopyingSymTable<'_, usize>,   // lookup local variable slot number by name
     mut label_gen: LabelGenerator,
     string_table: &StringTable,
     import_func_map: &HashMap<StringId, Label>,
@@ -677,8 +677,8 @@ fn mavm_codegen_statements<'a>(
     }
 }
 
-fn mavm_codegen_tuple_pattern<'a>(
-    code: &'a mut Vec<Instruction>,
+fn mavm_codegen_tuple_pattern(
+    code: &mut Vec<Instruction>,
     pattern: &[TypeCheckedMatchPattern],
     local_slot_num_base: usize,
     loc: Option<Location>,
@@ -708,12 +708,12 @@ fn mavm_codegen_tuple_pattern<'a>(
     }
 }
 
-fn mavm_codegen_if_arm<'a>(
+fn mavm_codegen_if_arm(
     arm: &TypeCheckedIfArm,
     end_label: Label,
-    mut code: &'a mut Vec<Instruction>, // accumulates the code as it's generated
-    num_locals: usize,                  // num locals that have been allocated
-    locals: &CopyingSymTable<usize>,    // lookup local variable slot number by name
+    mut code: &mut Vec<Instruction>, // accumulates the code as it's generated
+    num_locals: usize,               // num locals that have been allocated
+    locals: &CopyingSymTable<usize>, // lookup local variable slot number by name
     mut label_gen: LabelGenerator,
     string_table: &StringTable,
     import_func_map: &HashMap<StringId, Label>,
