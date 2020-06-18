@@ -595,7 +595,7 @@ pub enum Statement {
     DebugPrint(Expr, Option<Location>),
 }
 
-impl<'a> Statement {
+impl Statement {
     pub fn resolve_types(&self, type_table: &SymTable<Type>) -> Result<Self, TypeError> {
         match self {
             Statement::Noop(loc) => Ok(Statement::Noop(*loc)),
@@ -977,7 +977,7 @@ pub struct FieldInitializer {
     pub value: Expr,
 }
 
-impl<'a> FieldInitializer {
+impl FieldInitializer {
     pub fn new(name: StringId, value: Expr) -> Self {
         FieldInitializer { name, value }
     }

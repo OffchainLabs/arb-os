@@ -319,7 +319,7 @@ impl MiniProperties for TypeCheckedExpr {
     }
 }
 
-impl<'a> TypeCheckedExpr {
+impl TypeCheckedExpr {
     pub fn get_type(&self) -> Type {
         match self {
             TypeCheckedExpr::UnaryOp(_, _, t, _) => t.clone(),
@@ -360,7 +360,7 @@ pub struct TypeCheckedStructField {
     pub value: TypeCheckedExpr,
 }
 
-impl<'a> TypeCheckedStructField {
+impl TypeCheckedStructField {
     pub fn new(name: StringId, value: TypeCheckedExpr) -> Self {
         TypeCheckedStructField { name, value }
     }

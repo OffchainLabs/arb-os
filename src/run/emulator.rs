@@ -294,7 +294,7 @@ pub struct Machine {
     pub runtime_env: RuntimeEnvironment,
 }
 
-impl<'a> Machine {
+impl Machine {
     pub fn new(program: LinkedProgram, env: RuntimeEnvironment) -> Self {
         Machine {
             stack: ValueStack::new(),
