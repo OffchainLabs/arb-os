@@ -563,6 +563,7 @@ impl MiniProperties for Opcode {
     fn is_pure(&self) -> bool {
         match self {
             Opcode::Log
+            | Opcode::Inbox
             | Opcode::Send
             | Opcode::GetTime
             | Opcode::Rset

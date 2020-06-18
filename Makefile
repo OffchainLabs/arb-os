@@ -70,7 +70,7 @@ $(BUILTINDIR)/kvs.mao: $(BUILTINDIR)/kvs.mini
 	cargo run compile $(BUILTINDIR)/kvs.mini -c -o $(BUILTINDIR)/kvs.mao
 
 RUNTIMEDIR = arbruntime
-RUNTIMEMAOS = $(RUNTIMEDIR)/main.mao $(RUNTIMEDIR)/evmJumpTable.mao $(RUNTIMEDIR)/accounts.mao $(RUNTIMEDIR)/messages.mao $(RUNTIMEDIR)/inbox.mao $(RUNTIMEDIR)/evmCallStack.mao $(RUNTIMEDIR)/evmOps.mao $(RUNTIMEDIR)/codeSegment.mao $(RUNTIMEDIR)/evmlogs.mao
+RUNTIMEMAOS = $(RUNTIMEDIR)/main.mao $(RUNTIMEDIR)/accounts.mao $(RUNTIMEDIR)/messages.mao $(RUNTIMEDIR)/inbox.mao $(RUNTIMEDIR)/evmCallStack.mao $(RUNTIMEDIR)/evmOps.mao $(RUNTIMEDIR)/codeSegment.mao $(RUNTIMEDIR)/evmlogs.mao
 RUNTIME = $(RUNTIMEDIR)/runtime.mexe
 
 runtime: $(RUNTIME)
@@ -104,12 +104,6 @@ $(RUNTIME): $(RUNTIMEMAOS) $(STDLIB) $(BUILTINMAOS)
 
 runtime.pretty: $(RUNTIMEMAOS) $(STDLIB) $(BUILTINMAOS)
 	cargo run compile $(RUNTIMEMAOS) $(STDLIB) -f pretty >runtime.pretty
-
-$(RUNTIMEDIR)/evmJumpTable.mao: $(RUNTIMEDIR)/evmJumpTable.mini
-	cargo run compile $(RUNTIMEDIR)/evmJumpTable.mini -c -o $(RUNTIMEDIR)/evmJumpTable.mao
-
-$(RUNTIMEDIR)/evmJumpTable.mini: src/evm/mod.rs 
-	cargo run jumptable
 
 run: runtime
 	cargo run run $(RUNTIME)

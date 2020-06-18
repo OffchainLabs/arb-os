@@ -23,8 +23,6 @@ import func bytestream_getByte(bs: ByteStream) -> option<(ByteStream, uint)>;
 import func bytestream_get64(bs: ByteStream) -> option<(ByteStream, uint)>;
 import func bytestream_getUint(bs: ByteStream) -> option<(ByteStream, uint)>;
 
-import func evm_jumptable_get(slot: uint) -> option<func()>;
-
 import func evmOp_address();
 import func evmOp_balance();
 import func evmOp_call();
