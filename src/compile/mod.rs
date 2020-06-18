@@ -29,7 +29,7 @@ use std::path::Path;
 pub use ast::Type;
 pub use source::Lines;
 
-pub mod ast;
+mod ast;
 mod codegen;
 mod source;
 mod symtable;

@@ -17,9 +17,10 @@
 use crate::compile::{CompileError, CompiledProgram, Type};
 use crate::link::{link, postlink_compile, ImportedFunc, LinkedProgram};
 use crate::mavm::{Instruction, Label, LabelGenerator, Opcode, Value};
-use crate::run::runtime_env::{bytestack_from_bytes, RuntimeEnvironment};
+use crate::run::{bytes_from_bytestack, load_from_file, RuntimeEnvironment};
 use crate::stringtable::StringTable;
 use crate::uint256::Uint256;
+use ethabi::Token;
 use serde::Serialize;
 use std::collections::HashMap;
 use std::convert::TryInto;
@@ -28,7 +29,7 @@ use std::io::{self, Read, Write};
 use std::path::Path;
 use std::usize;
 
-pub mod abi;
+mod abi;
 
 pub fn compile_evm_file(path: &Path, debug: bool) -> Result<Vec<LinkedProgram>, CompileError> {
     match evm_json_from_file(path) {
@@ -79,138 +80,6 @@ impl CompiledEvmContract {
             ]);
         }
         ret
-    }
-
-    pub fn to_output(&self, output: &mut dyn io::Write, format: Option<&str>) {
-        match format {
-            Some("pretty") => {
-                writeln!(output, "address: {}", self.address).unwrap();
-                writeln!(output, "storage: {:?}", self.storage).unwrap();
-                for (idx, insn) in self.code.iter().enumerate() {
-                    writeln!(output, "{:04}:  {}", idx, insn).unwrap();
-                }
-            }
-            None | Some("json") => match serde_json::to_string(self) {
-                Ok(prog_str) => {
-                    writeln!(output, "{}", prog_str).unwrap();
-                }
-                Err(e) => {
-                    writeln!(output, "json serialization error: {:?}", e).unwrap();
-                }
-            },
-            Some("bincode") => match bincode::serialize(self) {
-                Ok(encoded) => {
-                    if let Err(e) = output.write_all(&encoded) {
-                        writeln!(output, "bincode write error: {:?}", e).unwrap();
-                    }
-                }
-                Err(e) => {
-                    writeln!(output, "bincode serialization error: {:?}", e).unwrap();
-                }
-            },
-            Some(weird_value) => {
-                writeln!(output, "invalid format: {}", weird_value).unwrap();
-            }
-        }
-    }
-}
-
-pub fn send_inject_evm_messages_from_file(
-    pathname: &str,
-    rt_env: &mut RuntimeEnvironment,
-) -> Result<(), CompileError> {
-    let path = Path::new(pathname);
-    let display = path.display();
-
-    let mut file = match File::open(&path) {
-        Err(why) => panic!("couldn't open {}: {:?}", display, why),
-        Ok(file) => file,
-    };
-
-    let mut s = String::new();
-    s = match file.read_to_string(&mut s) {
-        Err(why) => panic!("couldn't read {}: {:?}", display, why),
-        Ok(_) => s,
-    };
-
-    let parse_result: Result<serde_json::Value, serde_json::Error> = serde_json::from_str(&s);
-    match parse_result {
-        Ok(evm_json) => {
-            if send_inject_evm_messages(evm_json, rt_env) {
-                Ok(())
-            } else {
-                Err(CompileError::new(
-                    "failed to inject EVM messages".to_string(),
-                    None,
-                ))
-            }
-        }
-        Err(e) => {
-            println!("Error reading in EVM file: {:?}", e);
-            Err(CompileError::new(
-                "error parsing compiled Solidity file".to_string(),
-                None,
-            ))
-        }
-    }
-}
-
-pub fn send_inject_evm_messages(evm_json: serde_json::Value, env: &mut RuntimeEnvironment) -> bool {
-    if let serde_json::Value::Array(contracts) = evm_json {
-        let mut messages_out = Vec::new();
-        for contract in contracts {
-            if let serde_json::Value::Object(items) = contract {
-                let code_str = if let serde_json::Value::String(s) = &items["code"] {
-                    s
-                } else {
-                    return false;
-                };
-                let decoded_insns = hex::decode(&code_str[2..]).unwrap();
-
-                // strip cbor info
-                let cbor_length = u16::from_be_bytes(
-                    decoded_insns[decoded_insns.len() - 2..]
-                        .try_into()
-                        .expect("unexpected u16 parsing error"),
-                );
-                let cbor_length = cbor_length as usize;
-                let decoded_insns = &decoded_insns[..(decoded_insns.len() - cbor_length - 2)];
-
-                let mut storage_map = Value::none();
-                if let serde_json::Value::Object(m) = &items["storage"] {
-                    for (k, v) in m {
-                        if let serde_json::Value::String(s) = v {
-                            storage_map = Value::Tuple(vec![
-                                Value::Int(Uint256::from_string_hex(&k[2..]).unwrap()),
-                                Value::Int(Uint256::from_string_hex(&s[2..]).unwrap()),
-                                storage_map,
-                            ]);
-                        } else {
-                            return false;
-                        }
-                    }
-                }
-
-                let address = Uint256::zero();
-                let seq_num = env.get_and_incr_seq_num(&address);
-                let msg = Value::Tuple(vec![
-                    Value::Int(Uint256::from_usize(7)),
-                    Value::Int(address.clone()),
-                    Value::Tuple(vec![
-                        Value::Int(seq_num),
-                        bytestack_from_bytes(decoded_insns),
-                        storage_map,
-                    ]),
-                ]);
-                messages_out.push(msg);
-            } else {
-                return false;
-            }
-        }
-        env.insert_arb_messages(&messages_out);
-        true
-    } else {
-        false
     }
 }
 
@@ -880,16 +749,16 @@ fn compile_push_insn(data: &[u8], mut code: Vec<Instruction>) -> Vec<Instruction
 }
 
 #[allow(dead_code)]
-fn imported_funcs_for_evm() -> (Vec<ImportedFunc>, StringTable<'static>) {
+fn imported_funcs_for_evm() -> (Vec<ImportedFunc>, StringTable) {
     let mut imp_funcs = Vec::new();
     let mut string_table = StringTable::new();
     for name in EMULATION_FUNCS.iter() {
-        string_table.get(name);
+        string_table.get(name.to_string());
     }
     for (i, name) in EMULATION_FUNCS.iter().enumerate() {
         imp_funcs.push(ImportedFunc::new(
             i,
-            string_table.get(name),
+            string_table.get(name.to_string()),
             &string_table,
             vec![],
             Type::Void,
@@ -942,4 +811,73 @@ pub fn make_evm_jumptable_mini(filepath: &Path) -> Result<(), io::Error> {
     write!(file, "        return Some(evm_jumptable[idx]);\n")?;
     write!(file, "    }}\n}}\n")?;
     Ok(())
+}
+
+pub fn evm_load_add(debug: bool) -> Vec<Value> {
+    use std::convert::TryFrom;
+    let dapp_file_name = "contracts/add/compiled.json";
+    let dapp_abi = match abi::AbiForDapp::new_from_file(dapp_file_name) {
+        Ok(dabi) => dabi,
+        Err(_) => {
+            panic!("failed to load add ABI from file");
+        }
+    };
+    let add_contract = match dapp_abi.get_contract("Add") {
+        Some(contract) => contract,
+        None => {
+            panic!("couldn't find Add contract");
+        }
+    };
+
+    let mut rt_env = RuntimeEnvironment::new();
+    add_contract.insert_upload_message(&mut rt_env);
+    let add_func = match add_contract.get_function("add") {
+        Ok(func) => func,
+        Err(e) => {
+            panic!(
+                "couldn't find add function in Add contract: {:?}",
+                e.to_string()
+            );
+        }
+    };
+    let calldata = add_func
+        .encode_input(&[
+            ethabi::Token::Uint(ethabi::Uint::one()),
+            ethabi::Token::Uint(ethabi::Uint::one()),
+        ])
+        .unwrap();
+    rt_env.insert_txcall_message(add_contract.address.clone(), Uint256::zero(), &calldata);
+
+    let mut machine = load_from_file(Path::new("arbruntime/runtime.mexe"), rt_env);
+
+    let logs = match crate::run::run(&mut machine, vec![], debug) {
+        Ok(logs) => logs,
+        Err(e) => {
+            panic!("run failed: {:?}", e);
+        }
+    };
+
+    assert_eq!(logs.len(), 1);
+    if let Value::Tuple(tup) = &logs[0] {
+        if let Some(result_bytes) = bytes_from_bytestack(tup[2].clone()) {
+            match add_func.decode_output(&result_bytes) {
+                Ok(tokens) => match tokens[0] {
+                    Token::Uint(ui) => {
+                        assert_eq!(ui, ethabi::Uint::try_from(2).unwrap());
+                        logs
+                    }
+                    _ => {
+                        panic!("token was not a uint: {:?}", tokens[0]);
+                    }
+                },
+                Err(e) => {
+                    panic!("error decoding function output: {:?}", e);
+                }
+            }
+        } else {
+            panic!("log element was not a bytestack");
+        }
+    } else {
+        panic!("log item was not a Tuple");
+    }
 }

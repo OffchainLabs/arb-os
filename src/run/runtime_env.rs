@@ -54,6 +54,7 @@ impl RuntimeEnvironment {
         self.next_id = self.next_id.add(&Uint256::one());
     }
 
+    #[cfg(test)]
     pub fn insert_arb_messages(&mut self, msgs: &[Value]) {
         for msg in msgs {
             self.insert_arb_message(msg.clone());

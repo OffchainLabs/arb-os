@@ -294,7 +294,7 @@ pub struct Machine {
     pub runtime_env: RuntimeEnvironment,
 }
 
-impl<'a> Machine {
+impl Machine {
     pub fn new(program: LinkedProgram, env: RuntimeEnvironment) -> Self {
         Machine {
             stack: ValueStack::new(),
@@ -1067,14 +1067,14 @@ impl<'a> Machine {
 
 #[derive(Debug)]
 pub enum StackTrace {
-    Unknown,
+    _Unknown,
     Known(Vec<CodePt>),
 }
 
 impl fmt::Display for StackTrace {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            StackTrace::Unknown => writeln!(f, "[stack trace unknown]"),
+            StackTrace::_Unknown => writeln!(f, "[stack trace unknown]"),
             StackTrace::Known(v) => writeln!(f, "{:?}", v),
         }
     }
