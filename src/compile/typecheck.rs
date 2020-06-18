@@ -415,7 +415,7 @@ fn builtin_func_decls(mut string_table: StringTable) -> (Vec<ImportFuncDecl>, St
     (imps, string_table)
 }
 
-pub fn typecheck_top_level_decls<'a>(
+pub fn typecheck_top_level_decls(
     decls: &[TopLevelDecl],
     checked_funcs: &mut Vec<TypeCheckedFunc>,
     string_table_in: StringTable,
