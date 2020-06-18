@@ -24,11 +24,11 @@ use std::io;
 use std::path::Path;
 use xformcode::make_uninitialized_tuple;
 
-pub use xformcode::{value_from_field_list, TUPLE_SIZE};
+pub use xformcode::{value_from_field_list, TupleTree, TUPLE_SIZE};
 
 mod optimize;
 mod striplabels;
-pub mod xformcode;
+mod xformcode;
 
 #[derive(Serialize, Deserialize)]
 pub struct LinkedProgram {
@@ -71,22 +71,6 @@ impl<'a> LinkedProgram {
                 writeln!(output, "invalid format: {}", weird_value).unwrap();
             }
         }
-    }
-
-    pub fn marshal_as_module(&self) -> Vec<u8> {
-        let mut buf: Vec<u8> = Vec::new();
-        let num = self.code.len();
-        for i in (0..32) {
-            if (i >= 8) {
-                buf.push(0);
-            } else {
-                buf.push(((num >> (8 * (7 - i))) & 0xff) as u8);
-            }
-        }
-        for insn in self.code.iter().rev() {
-            insn.marshal_for_module(&mut buf, self.code.len());
-        }
-        buf
     }
 }
 

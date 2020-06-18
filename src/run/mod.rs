@@ -16,16 +16,15 @@
 
 use crate::link::LinkedProgram;
 use crate::mavm::{CodePt, Value};
-use crate::run::runtime_env::bytestack_from_bytes;
 use emulator::{ExecutionError, Machine, StackTrace};
-use runtime_env::RuntimeEnvironment;
 use std::fs::File;
 use std::io::Read;
 use std::path::Path;
 
-pub mod chain;
+pub use runtime_env::{bytes_from_bytestack, bytestack_from_bytes, RuntimeEnvironment};
+
 mod emulator;
-pub mod runtime_env;
+mod runtime_env;
 
 pub fn run_from_file(
     path: &Path,
@@ -77,111 +76,51 @@ pub fn run(
     }
 }
 
-pub fn run_from_file_with_msgs(
-    path: &Path,
-    in_msgs: Vec<Value>,
-    debug: bool,
-) -> Result<Vec<Value>, ExecutionError> {
-    let display = path.display();
+#[cfg(test)]
+mod tests {
+    use super::*;
 
-    let mut file = match File::open(&path) {
-        Err(why) => panic!("couldn't open {}: {:?}", display, why),
-        Ok(file) => file,
-    };
-
-    let mut s = String::new();
-    s = match file.read_to_string(&mut s) {
-        Err(why) => panic!("couldn't read {}: {:?}", display, why),
-        Ok(_) => s,
-    };
-
-    run_from_string_with_msgs(s, in_msgs, debug)
-}
-
-fn run_from_string_with_msgs(
-    s: String,
-    in_msgs: Vec<Value>,
-    debug: bool,
-) -> Result<Vec<Value>, ExecutionError> {
-    let parse_result: Result<LinkedProgram, serde_json::Error> = serde_json::from_str(&s);
-    let program = match parse_result {
-        Ok(prog) => prog,
-        Err(e) => {
-            println!("json parsing error: {:?}", e);
-            panic!();
+    fn run_with_msgs(
+        prog: LinkedProgram,
+        in_msgs: Vec<Value>,
+        debug: bool,
+    ) -> Result<Vec<Value>, ExecutionError> {
+        let mut env = RuntimeEnvironment::new();
+        env.insert_arb_messages(&in_msgs);
+        let mut machine = Machine::new(prog, env);
+        match run(&mut machine, vec![], debug) {
+            Ok(_) => Ok(machine.runtime_env.get_all_logs()),
+            Err((e, _)) => Err(e),
         }
-    };
-    run_with_msgs(program, in_msgs, debug)
-}
-
-fn run_with_msgs(
-    prog: LinkedProgram,
-    in_msgs: Vec<Value>,
-    debug: bool,
-) -> Result<Vec<Value>, ExecutionError> {
-    let mut env = RuntimeEnvironment::new();
-    env.insert_arb_messages(&in_msgs);
-    let mut machine = Machine::new(prog, env);
-    match run(&mut machine, vec![], debug) {
-        Ok(_) => Ok(machine.runtime_env.get_all_logs()),
-        Err((e, _)) => Err(e),
     }
-}
 
-pub fn module_from_file_path(module_path: &Path) -> Option<Value> {
-    let display = module_path.display();
-
-    let mut file = match File::open(module_path) {
-        Err(why) => panic!("couldn't open {}: {:?}", display, why),
-        Ok(file) => file,
-    };
-
-    let mut s = String::new();
-    s = match file.read_to_string(&mut s) {
-        Err(why) => panic!("couldn't read {}: {:?}", display, why),
-        Ok(_) => s,
-    };
-
-    let parse_result: Result<LinkedProgram, serde_json::Error> = serde_json::from_str(&s);
-    let program = match parse_result {
-        Ok(prog) => prog,
-        Err(e) => {
-            println!("json parsing error: {:?}", e);
-            panic!();
-        }
-    };
-
-    let buf = program.marshal_as_module();
-
-    Some(bytestack_from_bytes(&buf))
-}
-
-#[test]
-fn test_inbox_and_log() {
-    use crate::mavm::{Instruction, Opcode};
-    use crate::uint256::Uint256;
-    let val = Value::Int(Uint256::from_usize(3));
-    let logs = run_with_msgs(
-        LinkedProgram {
-            code: vec![
-                Instruction::from_opcode(Opcode::Inbox, None),
-                Instruction::from_opcode_imm(Opcode::Tget, Value::Int(Uint256::one()), None),
-                Instruction::from_opcode_imm(
-                    Opcode::Tget,
-                    Value::Int(Uint256::from_usize(3)),
-                    None,
-                ),
-                Instruction::from_opcode(Opcode::Log, None),
-                Instruction::from_opcode(Opcode::Inbox, None), // should block, stopping execution
-            ],
-            static_val: Value::none(),
-            imported_funcs: vec![],
-            exported_funcs: vec![],
-        },
-        vec![val.clone()],
-        false,
-    )
-    .unwrap();
-    assert_eq!(logs.len(), 1);
-    assert_eq!(logs[0] == val, true);
+    #[test]
+    fn test_inbox_and_log() {
+        use crate::mavm::{Instruction, Opcode};
+        use crate::uint256::Uint256;
+        let val = Value::Int(Uint256::from_usize(3));
+        let logs = run_with_msgs(
+            LinkedProgram {
+                code: vec![
+                    Instruction::from_opcode(Opcode::Inbox, None),
+                    Instruction::from_opcode_imm(Opcode::Tget, Value::Int(Uint256::one()), None),
+                    Instruction::from_opcode_imm(
+                        Opcode::Tget,
+                        Value::Int(Uint256::from_usize(3)),
+                        None,
+                    ),
+                    Instruction::from_opcode(Opcode::Log, None),
+                    Instruction::from_opcode(Opcode::Inbox, None), // should block, stopping execution
+                ],
+                static_val: Value::none(),
+                imported_funcs: vec![],
+                exported_funcs: vec![],
+            },
+            vec![val.clone()],
+            false,
+        )
+        .unwrap();
+        assert_eq!(logs.len(), 1);
+        assert_eq!(logs[0] == val, true);
+    }
 }

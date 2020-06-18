@@ -705,7 +705,7 @@ impl IfArm {
 
 #[derive(Debug, Clone)]
 pub enum OptionConst {
-    Some(Box<Constant>),
+    _Some(Box<Constant>),
     None(Type),
 }
 
@@ -721,13 +721,13 @@ pub enum Constant {
 impl OptionConst {
     pub(crate) fn type_of(&self) -> Type {
         Type::Option(Box::new(match self {
-            OptionConst::Some(c) => (*c).type_of(),
+            OptionConst::_Some(c) => (*c).type_of(),
             OptionConst::None(t) => t.clone(),
         }))
     }
     pub(crate) fn value(&self) -> Value {
         match self {
-            OptionConst::Some(c) => {
+            OptionConst::_Some(c) => {
                 Value::Tuple(vec![Value::Int(Uint256::one()), c.clone().value()])
             }
             OptionConst::None(_) => Value::Tuple(vec![Value::Int(Uint256::zero())]),
@@ -736,7 +736,9 @@ impl OptionConst {
 
     pub fn resolve_types(&self, type_table: &SymTable<Type>) -> Result<Self, TypeError> {
         match self {
-            OptionConst::Some(bc) => Ok(OptionConst::Some(Box::new(bc.resolve_types(type_table)?))),
+            OptionConst::_Some(bc) => {
+                Ok(OptionConst::_Some(Box::new(bc.resolve_types(type_table)?)))
+            }
             OptionConst::None(t) => Ok(OptionConst::None(t.resolve_types(type_table, None)?)),
         }
     }
@@ -803,13 +805,6 @@ impl Expr {
 
     pub fn new_binary(op: BinaryOp, e1: Expr, e2: Expr, loc: Option<Location>) -> Self {
         Expr::Binary(op, Box::new(e1), Box::new(e2), loc)
-    }
-
-    pub fn is_const(&self) -> bool {
-        match self {
-            Expr::Constant(_, _) => true,
-            _ => false,
-        }
     }
 
     pub fn resolve_types(&self, type_table: &SymTable<Type>) -> Result<Self, TypeError> {
@@ -934,32 +929,6 @@ impl Expr {
             Expr::Try(expr, loc) => Ok(Expr::Try(Box::new(expr.resolve_types(type_table)?), *loc)),
         }
     }
-
-    pub fn get_location(&self) -> Option<Location> {
-        match self {
-            Expr::UnaryOp(_, _, loc) => *loc,
-            Expr::Binary(_, _, _, loc) => *loc,
-            Expr::ShortcutOr(_, _, loc) => *loc,
-            Expr::ShortcutAnd(_, _, loc) => *loc,
-            Expr::VariableRef(_, loc) => *loc,
-            Expr::TupleRef(_, _, loc) => *loc,
-            Expr::DotRef(_, _, loc) => *loc,
-            Expr::Constant(_, loc) => *loc,
-            Expr::OptionInitializer(_, loc) => *loc,
-            Expr::FunctionCall(_, _, loc) => *loc,
-            Expr::ArrayOrMapRef(_, _, loc) => *loc,
-            Expr::StructInitializer(_, loc) => *loc,
-            Expr::Tuple(_, loc) => *loc,
-            Expr::NewArray(_, _, loc) => *loc,
-            Expr::NewFixedArray(_, _, loc) => *loc,
-            Expr::NewMap(_, _, loc) => *loc,
-            Expr::ArrayOrMapMod(_, _, _, loc) => *loc,
-            Expr::StructMod(_, _, _, loc) => *loc,
-            Expr::UnsafeCast(_, _, loc) => *loc,
-            Expr::Asm(_, _, _, loc) => *loc,
-            Expr::Try(_, loc) => *loc,
-        }
-    }
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -997,7 +966,7 @@ pub enum BinaryOp {
     BitwiseAnd,
     BitwiseOr,
     BitwiseXor,
-    LogicalAnd,
+    _LogicalAnd,
     LogicalOr,
     Hash,
 }

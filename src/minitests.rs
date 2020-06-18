@@ -14,13 +14,9 @@
  * limitations under the License.
  */
 
-use crate::evm::abi::AbiForDapp;
 use crate::mavm::Value;
-use crate::run::runtime_env::{bytes_from_bytestack, RuntimeEnvironment};
-use crate::run::{load_from_file, run, run_from_file};
+use crate::run::{run_from_file, RuntimeEnvironment};
 use crate::uint256::Uint256;
-use ethabi::{Token, Uint};
-use std::convert::TryFrom;
 use std::path::Path;
 
 #[test]
@@ -152,7 +148,7 @@ fn test_codeload() {
 
 #[test]
 fn test_evm_load_add() {
-    let logs = evm_load_add(false);
+    let logs = crate::evm::evm_load_add(false);
     assert_eq!(logs.len(), 1);
     if let Value::Tuple(tup) = &logs[0] {
         assert_eq!(tup[1], Value::none());
@@ -160,73 +156,5 @@ fn test_evm_load_add() {
         assert_eq!(tup[3], Value::Int(Uint256::one()));
     } else {
         panic!();
-    }
-}
-
-pub fn evm_load_add(debug: bool) -> Vec<Value> {
-    let dapp_file_name = "contracts/add/compiled.json";
-    let dapp_abi = match AbiForDapp::new_from_file(dapp_file_name) {
-        Ok(dabi) => dabi,
-        Err(_) => {
-            panic!("failed to load add ABI from file");
-        }
-    };
-    let add_contract = match dapp_abi.get_contract("Add") {
-        Some(contract) => contract,
-        None => {
-            panic!("couldn't find Add contract");
-        }
-    };
-
-    let mut rt_env = RuntimeEnvironment::new();
-    add_contract.insert_upload_message(&mut rt_env);
-    let add_func = match add_contract.get_function("add") {
-        Ok(func) => func,
-        Err(e) => {
-            panic!(
-                "couldn't find add function in Add contract: {:?}",
-                e.to_string()
-            );
-        }
-    };
-    let calldata = add_func
-        .encode_input(&[
-            ethabi::Token::Uint(ethabi::Uint::one()),
-            ethabi::Token::Uint(ethabi::Uint::one()),
-        ])
-        .unwrap();
-    rt_env.insert_txcall_message(add_contract.address.clone(), Uint256::zero(), &calldata);
-
-    let mut machine = load_from_file(Path::new("arbruntime/runtime.mexe"), rt_env);
-
-    let logs = match run(&mut machine, vec![], debug) {
-        Ok(logs) => logs,
-        Err(e) => {
-            panic!("run failed: {:?}", e);
-        }
-    };
-
-    assert_eq!(logs.len(), 1);
-    if let Value::Tuple(tup) = &logs[0] {
-        if let Some(result_bytes) = bytes_from_bytestack(tup[2].clone()) {
-            match add_func.decode_output(&result_bytes) {
-                Ok(tokens) => match tokens[0] {
-                    Token::Uint(ui) => {
-                        assert_eq!(ui, Uint::try_from(2).unwrap());
-                        logs
-                    }
-                    _ => {
-                        panic!("token was not a uint: {:?}", tokens[0]);
-                    }
-                },
-                Err(e) => {
-                    panic!("error decoding function output: {:?}", e);
-                }
-            }
-        } else {
-            panic!("log element was not a bytestack");
-        }
-    } else {
-        panic!("log item was not a Tuple");
     }
 }

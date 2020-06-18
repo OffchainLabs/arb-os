@@ -15,7 +15,7 @@
  */
 
 use crate::mavm::Value;
-use crate::run::runtime_env::{bytestack_from_bytes, RuntimeEnvironment};
+use crate::run::{bytestack_from_bytes, RuntimeEnvironment};
 use crate::uint256::Uint256;
 use std::collections::HashMap;
 use std::convert::TryInto;
@@ -151,12 +151,6 @@ impl AbiForDapp {
 
     pub fn get_contract(&self, name: &str) -> Option<&AbiForContract> {
         self.by_name.get(name)
-    }
-
-    pub fn insert_upload_messages(&self, rt_env: &mut RuntimeEnvironment) {
-        for contract in &self.contracts {
-            contract.insert_upload_message(rt_env);
-        }
     }
 }
 

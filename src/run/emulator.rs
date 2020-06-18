@@ -1067,14 +1067,14 @@ impl<'a> Machine {
 
 #[derive(Debug)]
 pub enum StackTrace {
-    Unknown,
+    _Unknown,
     Known(Vec<CodePt>),
 }
 
 impl fmt::Display for StackTrace {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            StackTrace::Unknown => writeln!(f, "[stack trace unknown]"),
+            StackTrace::_Unknown => writeln!(f, "[stack trace unknown]"),
             StackTrace::Known(v) => writeln!(f, "{:?}", v),
         }
     }

@@ -21,10 +21,7 @@ use super::typecheck::{
     TypeCheckedStatement,
 };
 use crate::compile::typecheck::PropertiesList;
-use crate::link::{
-    xformcode::{TupleTree, TUPLE_SIZE},
-    ImportedFunc,
-};
+use crate::link::{ImportedFunc, TupleTree, TUPLE_SIZE};
 use crate::mavm::{Instruction, Label, LabelGenerator, Opcode, Value};
 use crate::pos::Location;
 use crate::stringtable::{StringId, StringTable};
@@ -918,7 +915,7 @@ fn mavm_codegen_expr<'a>(
                 BinaryOp::BitwiseAnd => Opcode::BitwiseAnd,
                 BinaryOp::BitwiseOr => Opcode::BitwiseOr,
                 BinaryOp::BitwiseXor => Opcode::BitwiseXor,
-                BinaryOp::LogicalAnd => Opcode::LogicalAnd,
+                BinaryOp::_LogicalAnd => Opcode::LogicalAnd,
                 BinaryOp::LogicalOr => Opcode::LogicalOr,
                 BinaryOp::Hash => Opcode::Hash2,
             };
