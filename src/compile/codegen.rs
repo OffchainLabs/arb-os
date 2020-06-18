@@ -905,7 +905,7 @@ fn mavm_codegen_expr<'a>(
                 BinaryOp::LessThan => Opcode::LessThan,
                 BinaryOp::GreaterThan => Opcode::GreaterThan,
                 BinaryOp::LessEq => Opcode::GreaterThan, // will negate
-                BinaryOp::GreaterEq => Opcode::SLessThan, // will negate
+                BinaryOp::GreaterEq => Opcode::LessThan, // will negate
                 BinaryOp::SLessThan => Opcode::SLessThan,
                 BinaryOp::SGreaterThan => Opcode::SGreaterThan,
                 BinaryOp::SLessEq => Opcode::SGreaterThan, // will negate
