@@ -25,7 +25,6 @@ import impure func evmCallStack_getCurrentFrameMemoryOrDie() -> ByteArray;
 import impure func evmCallStack_setCurrentFrameMemory(mem: ByteArray) -> bool;
 import impure func evmCallStack_setCurrentFrameStorageCell(addr: address, offset: uint, val: uint) -> bool;
 import impure func evmCallStack_selfDestructCurrentAccount(owner: address);
-import impure func evmCallStack_pop(status: uint, returnData: ByteArray) -> option<EvmCallFrame>;
 import impure func evmCallStack_doCall(
     kind: uint,
     gas: uint,
@@ -36,6 +35,11 @@ import impure func evmCallStack_doCall(
     retOffset: uint,
     retLength: uint,
     resumeCodePoint: func(),
+) -> option<()>;
+import impure func callStack_returnFromCall(
+    success: bool,
+    returnOffset: uint,
+    returnLength: uint
 ) -> option<()>;
 
 import func evmCallFrame_currentAccount(frame: EvmCallFrame) -> Account;
@@ -56,8 +60,6 @@ import func account_getEvmJumpTable(acct: Account) -> option<map<uint, func()>>;
 
 import impure func inbox_currentTimestamp() -> uint;
 import impure func inbox_currentBlockNumber() -> uint;
-
-import func messages_callFinished(status: uint, returndata: ByteArray, logs: EvmLogs);
 
 import func evmlogs_empty() -> EvmLogs;
 
@@ -452,77 +454,13 @@ public func evmOp_staticcall(
 }
 
 public impure func evmOp_revert(memOffset: uint, memNbytes: uint) {
-    if let Some(topFrame) = evmCallStack_currentFrame() {
-        let memory = evmCallFrame_getMemory(topFrame);
-        if let Some(returnData) = bytearray_copy(
-            memory,
-            memOffset,
-            bytearray_new(0, true),
-            0,
-            memNbytes
-        ) {
-            if let Some(newTopFrame) = evmCallStack_pop(0, returnData) {
-                // return control to evm caller
-                if let Some(evmTargetCodept) = evmCallFrame_getResumeCodePoint(newTopFrame) {
-                    // replace the return address on our stack with evmTargetCodept
-                    asm(evmTargetCodept,) {
-                        auxpop
-                        auxpop
-                        swap2
-                        auxpush
-                        auxpush
-                        pop
-                    };
-                    // now return, which will throw control to evmTargetCodept
-                    return;
-                }
-            } else {
-                // top-level call finished
-                messages_callFinished(
-                    0,
-                    returnData,
-                    evmlogs_empty()
-                );  // this should never return
-                panic;
-            }
-        }
-    }
+    let _ = callStack_returnFromCall(true, memOffset, memNbytes);
 
     evm_runtimePanic();
 }
 
 public impure func evmOp_return(memOffset: uint, memNbytes: uint) {
-    if let Some(topFrame) = evmCallStack_currentFrame() {
-        let memory = evmCallFrame_getMemory(topFrame);
-        if let Some(returnData) = bytearray_copy(
-            memory,
-            memOffset,
-            bytearray_new(memNbytes, true),
-            0,
-            memNbytes
-        ) {
-            if let Some(newTopFrame) = evmCallStack_pop(0, returnData) {
-                // copy the relevant state back to the parent frame
-                evm_notYetImplemented(22,);
-                return;
-            } else {
-                // top-level call finished
-                let selfDestructQueue = evmCallFrame_getSelfDestructQueue(topFrame);
-                while ( ! queue_isEmpty(selfDestructQueue)) {
-                    let (q, item,) = queue_get(selfDestructQueue);
-                    selfDestructQueue = q;
-                    let (addr, owner,) = unsafecast<(address, address)>(item);
-                    //BUGBUG: destroy addr, send addr's funds to owner
-                }
-                messages_callFinished(
-                    1,
-                    returnData,
-                    evmCallFrame_getEvmLogs(topFrame),
-                );  // this should never return
-                panic;
-            }
-        }
-    }
+    let _ = callStack_returnFromCall(true, memOffset, memNbytes);
 
     evm_runtimePanic();
 }
