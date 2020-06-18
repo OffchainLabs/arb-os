@@ -186,6 +186,10 @@ Values of type `anytype` do not have any representation that is understood by th
 
 ## Statements
 
+*codeblock*
+
+> The codeblock is executed, any variables declared inside the codeblock will only be accessible inside the codeblock.
+
 `loop` *codeblock*
 
 > An "infinite loop" which executes codeblock repeatedly. The only way to exit the loop is via a `return` statement (or a panic).
