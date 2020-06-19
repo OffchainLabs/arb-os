@@ -404,6 +404,9 @@ impl Machine {
                 println!("Stack contents: {}", self.stack);
                 println!("Aux-stack contents: {}", self.aux_stack);
                 println!("Register contents: {}", self.register);
+                if ! self.stack.is_empty() {
+                    println!("Stack top: {}", self.stack.top().unwrap());
+                }
                 if let Some(code) = self.next_opcode() {
                     println!("Next Opcode: {}", code.opcode);
                     if let Some(imm) = code.immediate {

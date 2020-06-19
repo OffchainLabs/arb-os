@@ -813,40 +813,58 @@ pub fn make_evm_jumptable_mini(filepath: &Path) -> Result<(), io::Error> {
     Ok(())
 }
 
-pub fn evm_load_add(debug: bool) -> Vec<Value> {
-    use std::convert::TryFrom;
-    let dapp_file_name = "contracts/add/compiled.json";
-    let dapp_abi = match abi::AbiForDapp::new_from_file(dapp_file_name) {
+pub fn evm_load_and_call_func(
+    contract_json_file_name: &str,
+    other_contract_names: &[&str],
+    contract_name: &str,
+    function_name: &str,
+    args: &[ethabi::Token],
+    debug: bool,
+) -> Result<Vec<ethabi::Token>, ethabi::Error> {
+    let dapp_abi = match abi::AbiForDapp::new_from_file(contract_json_file_name) {
         Ok(dabi) => dabi,
         Err(_) => {
-            panic!("failed to load add ABI from file");
+            panic!("failed to load dapp ABI from file");
         }
     };
-    let add_contract = match dapp_abi.get_contract("Add") {
-        Some(contract) => contract,
+    let mut all_contracts = Vec::new();
+    for other_contract_name in other_contract_names {
+        match dapp_abi.get_contract(other_contract_name) {
+            Some(contract) => {
+                all_contracts.push(contract);
+            }
+            None => { panic!("couldn't find contract {}", other_contract_name); }
+        }
+    }
+    let this_contract = match dapp_abi.get_contract(contract_name) {
+        Some(contract) => {
+            all_contracts.push(contract);
+            contract
+        },
         None => {
-            panic!("couldn't find Add contract");
+            panic!("couldn't find contract {}", contract_name);
         }
     };
 
     let mut rt_env = RuntimeEnvironment::new();
-    add_contract.insert_upload_message(&mut rt_env);
-    let add_func = match add_contract.get_function("add") {
+    for contract in all_contracts {
+        contract.insert_upload_message(&mut rt_env);
+    }
+
+    let this_func = match this_contract.get_function(function_name) {
         Ok(func) => func,
         Err(e) => {
             panic!(
-                "couldn't find add function in Add contract: {:?}",
+                "couldn't find {} function in {} contract: {:?}",
+                function_name,
+                contract_name,
                 e.to_string()
             );
         }
     };
-    let calldata = add_func
-        .encode_input(&[
-            ethabi::Token::Uint(ethabi::Uint::one()),
-            ethabi::Token::Uint(ethabi::Uint::one()),
-        ])
-        .unwrap();
-    rt_env.insert_txcall_message(add_contract.address.clone(), Uint256::zero(), &calldata);
+
+    let calldata = this_func.encode_input(args).unwrap();
+    rt_env.insert_txcall_message(this_contract.address.clone(), Uint256::zero(), &calldata);
 
     let mut machine = load_from_file(Path::new("arbruntime/runtime.mexe"), rt_env);
 
@@ -860,20 +878,7 @@ pub fn evm_load_add(debug: bool) -> Vec<Value> {
     assert_eq!(logs.len(), 1);
     if let Value::Tuple(tup) = &logs[0] {
         if let Some(result_bytes) = bytes_from_bytestack(tup[2].clone()) {
-            match add_func.decode_output(&result_bytes) {
-                Ok(tokens) => match tokens[0] {
-                    Token::Uint(ui) => {
-                        assert_eq!(ui, ethabi::Uint::try_from(2).unwrap());
-                        logs
-                    }
-                    _ => {
-                        panic!("token was not a uint: {:?}", tokens[0]);
-                    }
-                },
-                Err(e) => {
-                    panic!("error decoding function output: {:?}", e);
-                }
-            }
+            this_func.decode_output(&result_bytes)
         } else {
             panic!("log element was not a bytestack");
         }
@@ -881,3 +886,62 @@ pub fn evm_load_add(debug: bool) -> Vec<Value> {
         panic!("log item was not a Tuple");
     }
 }
+
+pub fn evm_load_add_and_verify(debug: bool) {
+    use std::convert::TryFrom;
+    match evm_load_and_call_func(
+        "contracts/add/compiled.json",
+        vec![].as_ref(),
+        "Add",
+        "add",
+        vec![
+            ethabi::Token::Uint(ethabi::Uint::one()),
+            ethabi::Token::Uint(ethabi::Uint::one()),
+        ].as_ref(),
+        debug
+    ) {
+        Ok(tokens) => {
+            match tokens[0] {
+                Token::Uint(ui) => {
+                    assert_eq!(ui, ethabi::Uint::try_from(2).unwrap());
+                }
+                _ => {
+                    panic!("token was not a uint: {:?}", tokens[0]);
+                }
+            }
+        }
+        Err(e) => {
+            panic!("error loading and calling Add::add: {:?}", e);
+        }
+    }
+}
+
+pub fn evm_load_fib_and_verify(debug: bool) {
+    use std::convert::TryFrom;
+    match evm_load_and_call_func(
+        "contracts/fibonacci/compiled.json",
+        vec![].as_ref(),
+        "Fibonacci",
+        "doFib",
+        vec![
+            ethabi::Token::Uint(ethabi::Uint::try_from(5).unwrap()),
+        ].as_ref(),
+        debug
+    ) {
+        Ok(tokens) => {
+            match tokens[0] {
+                Token::Uint(ui) => {
+                    assert_eq!(ui, ethabi::Uint::try_from(8).unwrap());
+                }
+                _ => {
+                    panic!("token was not a uint: {:?}", tokens[0]);
+                }
+            }
+        }
+        Err(e) => {
+            panic!("error loading and calling Fibonacci::doFib: {:?}", e);
+        }
+    }
+}
+
+

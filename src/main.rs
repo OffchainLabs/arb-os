@@ -241,11 +241,7 @@ fn main() {
     }
 
     if let Some(_) = matches.subcommand_matches("evmdebug") {
-        let logs = evm::evm_load_add(false);
-        println!("=== logs ===");
-        for log in logs {
-            println!("{}", log);
-        }
+        evm::evm_load_fib_and_verify(true);
     }
 }
 

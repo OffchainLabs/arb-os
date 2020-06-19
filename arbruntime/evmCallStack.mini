@@ -246,8 +246,10 @@ public impure func callStack_returnFromCall(
         asm(resumeInfo.codePoint,) { jump };
         panic;  // shouldn't happen -- previous instruction jumped away
     } else {
+        asm(102,) { debugprint };
         // top-level call finished
         if (success) {
+            asm(103,) { debugprint };
             let acctStore = accountStore_set(
                 topFrame.accountStore,
                 topFrame.addr,
@@ -260,15 +262,18 @@ public impure func callStack_returnFromCall(
                 let (victim, owner) = unsafecast<(address, address)>(item);
                 acctStore = accountStore_destroyAndTransferBalance(acctStore, victim, owner);
             }
+            let marshaledReturnData = bytearray_marshalFull(returnData);
+            asm(104,) { debugprint };
             asm(
                 (
                     globalCurrentEthMessage,
                     topFrame.evmLogs,
-                    bytearray_marshalFull(returnData),
+                    marshaledReturnData,
                     true
                 ),
             ) { log } ;
 
+            asm(105,) { debugprint };
             setGlobalAccountStore(acctStore,);
         } else {
            asm(
@@ -281,7 +286,11 @@ public impure func callStack_returnFromCall(
             ) { log } ;
         }
 
+        asm(106,) { debugprint };
+
         // save the global account state and jump back to the main run loop
+
+        emptyAvmStack();
         cleanAvmAuxStackAndCall(mainRunLoop,);  // should never return
         panic;
     }
@@ -330,6 +339,7 @@ impure func cleanAvmAuxStackAndCall(funcToCall: impure func()) {
             auxpush
         };
     }
+    asm(201,) { debugprint };
 
     // discard our callframe, push a fake return address, and jump to funcToCall
     // funcToCall will think somebody called it normally, with an empty auxstack

@@ -328,6 +328,7 @@ public impure func translateEvmCodeSegment(
     } elseif (opcode == 0x5a) { // MSIZE
         return Some((pushValue(9999999999, restOfCode), evmJumpTable));
     } elseif (opcode == 0x5b) { // JUMPDEST
+        asm((99, numBytesRead-1),) { debugprint } ;
         return Some((
             restOfCode,
             evmJumpTable with {
@@ -479,3 +480,13 @@ impure func pushEvmInsnCall(
         evmJumpTable,
     ));
 }
+
+//func push bytesOfExistingInstructions(ba: ByteArray) -> uint {
+//    let stream = bytestream_new(ba);
+//    while ( ! bytestream_atEof(stream)) {
+
+//    }
+
+    // didn't find an improper instruction
+//    return bytearray_size(ba);
+//}
