@@ -557,6 +557,8 @@ pub enum Opcode {
     ErrPush,
     Breakpoint,
     DebugPrint,
+    SetGas,
+    GetGas,
 }
 
 impl MiniProperties for Opcode {

@@ -291,6 +291,7 @@ pub struct Machine {
     static_val: Value,
     register: Value,
     err_codepoint: CodePt,
+    arb_gas_remaining: Uint256,
     pub runtime_env: RuntimeEnvironment,
 }
 
@@ -304,6 +305,7 @@ impl Machine {
             static_val: program.static_val,
             register: Value::none(),
             err_codepoint: CodePt::Null,
+            arb_gas_remaining: Uint256::zero().bitwise_neg(),
             runtime_env: env,
         }
     }
@@ -571,6 +573,13 @@ impl Machine {
             if let Some(insn) = self.code.get_insn(pc) {
                 if let Some(val) = &insn.immediate {
                     self.stack.push(val.clone());
+                }
+                if let Some(gas) = self.next_op_gas() {
+                    if let Some(remaining) = self.arb_gas_remaining.sub(&Uint256::from_u64(gas)) {
+                        self.arb_gas_remaining = remaining;
+                    } else {
+                        return Err(ExecutionError::new("Out of ArbGas", &self.state, None));
+                    }
                 }
                 match insn.opcode {
 					Opcode::Noop => {
@@ -1117,6 +1126,7 @@ impl Machine {
 						self.incr_pc();
 						Ok(true)
 					}
+                    Opcode::GetGas | Opcode::SetGas => unimplemented!(),
 					Opcode::GetLocal |  // these opcodes are for intermediate use in compilation only
 					Opcode::SetLocal |  // they should never appear in fully compiled code
 					Opcode::MakeFrame(_, _) |
