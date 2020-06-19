@@ -308,11 +308,6 @@ impl Machine {
         }
     }
 
-    #[allow(dead_code)]
-    pub fn get_state(&self) -> MachineState {
-        self.state.clone()
-    }
-
     pub fn get_stack_trace(&self) -> StackTrace {
         StackTrace::Known(self.aux_stack.all_codepts())
     }
