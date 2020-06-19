@@ -244,7 +244,7 @@ fn main() -> Result<(), CompileError> {
     }
 
     if let Some(_) = matches.subcommand_matches("evmdebug") {
-        evm::evm_load_fib_and_verify(true);
+        evm::evm_load_fib_and_verify(false);
     }
     Ok(())
 }

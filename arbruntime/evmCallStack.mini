@@ -38,7 +38,7 @@ import func accountStore_destroyAndTransferBalance(
     victim: address,
     recipient: address
 ) -> AccountStore;
-import func account_setStorageCell(acct: Account, offset: uint, value: uint) -> Account;
+import func account_setStorageCell(acct: Account, offset: uint, value: uint) -> option<Account>;
 import func account_getBalance(acct: Account) -> uint;
 import func account_setBalance(acct: Account, bal: uint) -> Account;
 import func account_deductFromEthBalance(account: Account, deduction: uint) -> option<Account>;
@@ -196,7 +196,7 @@ public impure func evmCallStack_doCall(
     panic;
 }
 
-public impure func callStack_returnFromCall(
+public impure func evmCallStack_returnFromCall(
     success: bool,
     returnOffset: uint,
     returnLength: uint
@@ -206,7 +206,9 @@ public impure func callStack_returnFromCall(
     let memory = topFrame.memory;
     let returnData = bytearray_extract(memory, returnOffset, returnLength)?;
     if let Some(newTopFrame) = unsafecast<option<EvmCallFrame>>(topFrame.parent) {
+        asm(201,) { debugprint };
         if (success) {
+            asm(202,) { debugprint };
             topFrame = topFrame with {
                 accountStore: accountStore_set(
                     topFrame.accountStore,
@@ -225,10 +227,13 @@ public impure func callStack_returnFromCall(
                 with { parent: None<any> };
         }
 
+        asm(203,) { debugprint };
         let resumeInfo = newTopFrame.resumeInfo?;
+        asm(204,) { debugprint };
         if (returnLength > resumeInfo.returnDataNbytes) {
              returnLength = resumeInfo.returnDataNbytes;
         }
+        asm(205,) { debugprint };
         let newMemory = bytearray_copy(
             returnData,
             0,
@@ -236,6 +241,7 @@ public impure func callStack_returnFromCall(
             returnOffset,
             returnLength
         )?;
+        asm(206,) { debugprint };
         newTopFrame = newTopFrame with { memory: newMemory };
 
         // ready to return to caller
@@ -276,17 +282,18 @@ public impure func callStack_returnFromCall(
             asm(105,) { debugprint };
             setGlobalAccountStore(acctStore,);
         } else {
+           asm(106,) { debugprint };
            asm(
                 (
                     globalCurrentEthMessage,
                     evmlogs_empty(),  // emit no logs because txcall failed
-                    bytearray_marshalFull((topFrame.returnInfo?).data),
+                    bytearray_marshalFull(returnData),
                     false
                 ),
             ) { log } ;
         }
 
-        asm(106,) { debugprint };
+        asm(107,) { debugprint };
 
         // save the global account state and jump back to the main run loop
 
@@ -448,19 +455,16 @@ public impure func evmCallStack_transferEthFromCurrent(
     }
 }
 
-public impure func evmCallStack_setCurrentFrameStorageCell(offset: uint, value: uint) -> bool {
-    if let Some(topFrame) = globalCallStack {
-        globalCallStack = Some(topFrame with {
-            currentAccount: account_setStorageCell(
-                topFrame.currentAccount,
-                offset,
-                value
-            )
-        });
-        return true;
-    } else {
-        return false;
-    }
+public impure func evmCallStack_setCurrentFrameStorageCell(offset: uint, value: uint) -> option<()> {
+    let topFrame = globalCallStack?;
+    globalCallStack = Some(topFrame with {
+        currentAccount: account_setStorageCell(
+            topFrame.currentAccount,
+            offset,
+            value
+        )?
+    });
+    return Some(());
 }
 
 public impure func evmCallStack_selfDestructCurrentAccount(owner: address) {

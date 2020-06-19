@@ -23,7 +23,7 @@ import type Queue;
 import impure func evmCallStack_currentFrame() -> option<EvmCallFrame>;
 import impure func evmCallStack_getCurrentFrameMemoryOrDie() -> ByteArray;
 import impure func evmCallStack_setCurrentFrameMemory(mem: ByteArray) -> bool;
-import impure func evmCallStack_setCurrentFrameStorageCell(addr: address, offset: uint, val: uint) -> bool;
+import impure func evmCallStack_setCurrentFrameStorageCell(addr: address, offset: uint, val: uint) -> option<()>;
 import impure func evmCallStack_selfDestructCurrentAccount(owner: address);
 import impure func evmCallStack_doCall(
     kind: uint,
@@ -36,7 +36,7 @@ import impure func evmCallStack_doCall(
     retLength: uint,
     resumeCodePoint: func(),
 ) -> option<()>;
-import impure func callStack_returnFromCall(
+import impure func evmCallStack_returnFromCall(
     success: bool,
     returnOffset: uint,
     returnLength: uint
@@ -74,7 +74,7 @@ import func bytearray_copy(from: ByteArray, fromOffset: uint, to: ByteArray, toO
 import func queue_isEmpty(q: Queue) -> bool;
 import func queue_get(q: Queue) -> (Queue, any);
 
-import func keccak256(array: ByteArray, offset: uint, nbytes: uint) -> bytes32;
+import func keccak256(array: ByteArray, offset: uint, nbytes: uint) -> option<bytes32>;
 
 
 public func evmOp_stop() {
@@ -83,7 +83,12 @@ public func evmOp_stop() {
 
 public impure func evmOp_sha3(baseMemAddr: uint, nbytes: uint) -> bytes32 {
     asm(301,) { debugprint };
-    return keccak256(evmCallStack_getCurrentFrameMemoryOrDie(), baseMemAddr, nbytes);
+    if let Some(h) = keccak256(evmCallStack_getCurrentFrameMemoryOrDie(), baseMemAddr, nbytes) {
+        return h;
+    } else {
+        evm_runtimePanic();
+        return bytes32(0);
+    }
 }
 
 public impure func evmOp_address() -> address {
@@ -271,18 +276,18 @@ public impure func evmOp_sload(storageAddr: uint) -> uint {
 
 public impure func evmOp_sstore(storageAddr: uint, value: uint) {
     if let Some(topFrame) = evmCallStack_currentFrame() {
-        if ( ! evmCallStack_setCurrentFrameStorageCell(
+        if let Some(_) = evmCallStack_setCurrentFrameStorageCell(
             account_getAddress(
                 evmCallFrame_currentAccount(topFrame)
             ),
             storageAddr,
             value
-        )) {
-            evm_runtimePanic();
+        ) {
+            return;
         }
-    } else {
-        evm_runtimePanic();
     }
+
+    evm_runtimePanic();
 }
     
 public impure func evmOp_getjumpaddr(evm_pc: uint) -> func() {
@@ -448,13 +453,13 @@ public func evmOp_staticcall(
 }
 
 public impure func evmOp_revert(memOffset: uint, memNbytes: uint) {
-    let _ = callStack_returnFromCall(false, memOffset, memNbytes);
+    let _ = evmCallStack_returnFromCall(false, memOffset, memNbytes);
 
     evm_runtimePanic();
 }
 
 public impure func evmOp_return(memOffset: uint, memNbytes: uint) {
-    let _ = callStack_returnFromCall(true, memOffset, memNbytes);
+    let _ = evmCallStack_returnFromCall(true, memOffset, memNbytes);
 
     evm_runtimePanic();
 }

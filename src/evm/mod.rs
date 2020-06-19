@@ -877,8 +877,13 @@ pub fn evm_load_and_call_func(
 
     assert_eq!(logs.len(), 1);
     if let Value::Tuple(tup) = &logs[0] {
+        println!("first log received: {:#?}", tup);
         if let Some(result_bytes) = bytes_from_bytestack(tup[2].clone()) {
-            this_func.decode_output(&result_bytes)
+            if result_bytes.len() == 0 {
+                Err(ethabi::Error::from("no output received"))
+            } else {
+                this_func.decode_output(&result_bytes)
+            }
         } else {
             panic!("log element was not a bytestack");
         }
