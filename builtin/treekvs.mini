@@ -16,7 +16,7 @@
 
 type TreeKvsTriple = struct {
     reducedKey: uint,
-    key: bytes32,
+    key: any,
     value: any
 }
 
@@ -32,8 +32,8 @@ public func treekvs_new() -> TreeKvs {
     return None<TreeKvsCell>;
 }
 
-public func treekvs_get(kvs: TreeKvs, key: bytes32) -> option<any> {
-    let reducedKey = uint(key);
+public func treekvs_get(kvs: TreeKvs, key: any) -> option<any> {
+    let reducedKey = uint(hash(key));
     loop {
         let cell = kvs?;
         if let Some(triple) = cell.triple {
@@ -46,14 +46,14 @@ public func treekvs_get(kvs: TreeKvs, key: bytes32) -> option<any> {
     }
 }
 
-public func treekvs_hasKey(kvs: TreeKvs, key: bytes32) -> bool {
+public func treekvs_hasKey(kvs: TreeKvs, key: any) -> bool {
     return treekvs_get(kvs, key) != None<any>;
 }
 
-public func treekvs_set(kvs: TreeKvs, key: bytes32, value: any) -> TreeKvs {
+public func treekvs_set(kvs: TreeKvs, key: any, value: any) -> TreeKvs {
     if let Some(newKvs) = treekvs_set2(
         kvs,
-        uint(key),
+        uint(hash(key)),
         key,
         value
     ) {
@@ -66,7 +66,7 @@ public func treekvs_set(kvs: TreeKvs, key: bytes32, value: any) -> TreeKvs {
 func treekvs_set2(
     kvs: TreeKvs,
     reducedKey: uint,
-    key: bytes32,
+    key: any,
     value: any
 ) -> option<TreeKvs> {
     // Returns Some if the structure changed, None if it didn't.
@@ -117,8 +117,8 @@ func treekvs_set2(
     }
 }
 
-public func treekvs_delete(kvs: TreeKvs, key: bytes32) -> TreeKvs {
-    if let Some(newKvs) = treekvs_delete2(kvs, uint(key)) {
+public func treekvs_delete(kvs: TreeKvs, key: any) -> TreeKvs {
+    if let Some(newKvs) = treekvs_delete2(kvs, uint(hash(key))) {
         return newKvs;
     } else {
         return kvs;
@@ -147,7 +147,7 @@ func treekvs_delete2(kvs: TreeKvs, reducedKey: uint) -> option<TreeKvs> {
 
 public func treekvs_forall(
     kvs: TreeKvs,
-    callback: func(bytes32, any, any) -> any,
+    callback: func(any, any, any) -> any,
     state: any
 ) -> any {
     if let Some(cell) = kvs {

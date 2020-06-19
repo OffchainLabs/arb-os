@@ -82,6 +82,7 @@ public func evmOp_stop() {
 }
 
 public impure func evmOp_sha3(baseMemAddr: uint, nbytes: uint) -> bytes32 {
+    asm(301,) { debugprint };
     return keccak256(evmCallStack_getCurrentFrameMemoryOrDie(), baseMemAddr, nbytes);
 }
 
@@ -286,21 +287,14 @@ public impure func evmOp_sstore(storageAddr: uint, value: uint) {
     
 public impure func evmOp_getjumpaddr(evm_pc: uint) -> func() {
     if let Some(topFrame) = evmCallStack_currentFrame() {
-        let theTable = account_getEvmJumpTable(
-            evmCallFrame_currentAccount(topFrame)
-        );
         if let Some(jumpTable) = account_getEvmJumpTable(
             evmCallFrame_currentAccount(topFrame)
         ) {
-            if let Some(codePt) = account_getEvmJumpTable(
-                evmCallFrame_currentAccount(topFrame)
-            ) {
-                if let Some(codept) = jumpTable[evm_pc] {
-                    return codept;
-                } else {
-                    evm_error();   // EVM code tried to jump to a forbidden code address
-                    panic;
-                }
+            if let Some(codept) = jumpTable[evm_pc] {
+                return codept;
+            } else {
+                evm_error();   // EVM code tried to jump to a forbidden code address
+                panic;
             }
         }
     }
@@ -454,7 +448,7 @@ public func evmOp_staticcall(
 }
 
 public impure func evmOp_revert(memOffset: uint, memNbytes: uint) {
-    let _ = callStack_returnFromCall(true, memOffset, memNbytes);
+    let _ = callStack_returnFromCall(false, memOffset, memNbytes);
 
     evm_runtimePanic();
 }
