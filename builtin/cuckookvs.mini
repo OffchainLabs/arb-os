@@ -1,0 +1,203 @@
+//
+// Copyright 2020, Offchain Labs, Inc.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//    http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+//
+
+import func builtin_arrayNew(sz: uint, base_val: any) -> []any;
+import func builtin_arraySwap(a: []any, b: uint, c: any) -> ([]any, any);
+
+type ShtItem = struct {
+	key: bytes32,
+	value: any,
+}
+
+type SimpleHashtable = struct {
+	salt: bytes32,
+	size: uint,
+	contents: []option<ShtItem>,
+}
+
+func simpleHashtable_new(salt: bytes32) -> SimpleHashtable {
+	return struct {
+		salt: salt,
+		size: 8,
+		contents: unsafecast<[]option<ShtItem>>(builtin_arrayNew(8, None<ShtItem>)),
+	};
+}
+
+func simpleHashtable_get(table: SimpleHashtable, key: bytes32) -> option<any> {
+	let salted_key = hash(table.salt, key);
+	let slot = uint(salted_key) % table.size;
+	let item = table.contents[slot]?;
+	if (key == item.key) {
+		return Some(item.value);
+	} else {
+		return None;
+	}
+}
+
+func simpleHashtable_set(table:SimpleHashtable, key: bytes32, val: any) -> SimpleHashtable {
+	let salted_key = hash(table.salt, key);
+	let slot = uint(salted_key) % table.size;
+	let newitem = struct { key: key, value: val, }; 
+	return table with { contents: table.contents with { [slot] = Some(newitem) } };
+}
+
+func simpleHashtable_delete(table: SimpleHashtable, key: bytes32) -> SimpleHashtable {
+	let salted_key = hash(table.salt, key);
+	let slot = uint(salted_key) % table.size;
+	if let Some(item) = table.contents[slot] {
+		if (key == item.key) {
+			return table 
+				with { contents: table.contents 
+					with { [slot] = None<struct { key: bytes32, value: any,}> } };
+		} else {
+			return table;
+		}
+	} else {
+		return table;
+	}
+}
+
+func simpleHashtable_swap(
+	table: SimpleHashtable, 
+	key: bytes32, 
+	val: any
+) -> (SimpleHashtable, option<ShtItem>) {
+	let salted_key = hash(table.salt, key);
+	let sres = unsafecast<([]option<ShtItem>, option<ShtItem>)>(
+		builtin_arraySwap(
+			table.contents, 
+			uint(salted_key) % table.size, 
+			Some(struct {
+				key: key,
+				value: val,
+			})
+		)
+	);
+	return (
+		table with { contents: sres.0 },
+		sres.1,
+	);
+}
+
+func simpleHashtable_forall(
+	table: SimpleHashtable,
+	cb: func(any, any, any) -> any,
+	state: any
+) -> any {
+	let i = 0;
+	while (i < table.size) {
+		if let Some(this) = table.contents[i] {
+			state = cb(this.key, this.value, state);
+		}
+		i = i+1;
+	}
+	return state;
+}
+
+func simpleHashtable_expand(table: SimpleHashtable) -> SimpleHashtable {
+	let newSize = 2*table.size;
+	let newTable = struct {
+		salt: table.salt,
+		size: newSize,
+		contents: unsafecast<[]option<ShtItem>>(builtin_arrayNew(newSize, None<ShtItem>)),
+	};
+	let i = 0;
+	while (i < table.size) {
+		if let Some(oldItem) = table.contents[i] {
+			newTable = simpleHashtable_set(newTable, oldItem.key, oldItem.value);
+		}
+		i = i+1;
+	}
+	return newTable;
+}
+
+type CuckooKvs = [2]SimpleHashtable
+
+public func cuckookvs_new() -> CuckooKvs {
+	return newfixedarray(2, simpleHashtable_new(bytes32(0))) with { [1] = simpleHashtable_new(bytes32(1)) };
+}
+
+public func cuckookvs_get(kvs: CuckooKvs, key: any) -> option<any> {
+	if let Some(val1) = simpleHashtable_get(kvs[0], hash(key)) {
+		return Some(val1);
+	} else {
+		return simpleHashtable_get(kvs[1], hash(key));
+	}
+}
+
+public func cuckookvs_hasKey(kvs: CuckooKvs, key: any) -> bool {
+	if let Some(unused) = cuckookvs_get(kvs, key) {
+		return true;
+	} else {
+		return false;
+	}
+}
+
+public func cuckookvs_set(kvs: CuckooKvs, key: any, value: any) -> CuckooKvs {
+	let which = 0;
+	let retries = 0;
+	let item = struct {
+		key: hash(key),
+		value: value,
+	};
+	while (retries < 5) {
+		let (new_table, maybeRes,) = simpleHashtable_swap(kvs[which], item.key, item.value);
+		kvs = kvs with { [which] = new_table };
+		if let Some(res) = maybeRes {
+			if (res.key == item.key) {
+				return kvs;
+			} else {
+				item = res;
+				which = 1-which;
+				retries = 1+retries;				
+			}
+		} else {
+			return kvs;
+		}
+	}
+	return cuckookvs_set(
+		kvs with { [0] = simpleHashtable_expand(kvs[0]) } 
+	        with { [1] = simpleHashtable_expand(kvs[1]) },
+		item.key,
+		item.value
+	);
+}
+
+public func cuckookvs_delete(kvs: CuckooKvs, key: any) -> CuckooKvs {
+	if let Some(unused) = simpleHashtable_get(kvs[0], hash(key)) {
+		return kvs with { [0] = simpleHashtable_delete(kvs[0], hash(key)) };
+	}
+	if let Some(unused) = simpleHashtable_get(kvs[1], hash(key)){
+		return kvs with { [1] = simpleHashtable_delete(kvs[1], hash(key)) };
+	} 
+	return kvs;
+}
+
+public func cuckookvs_forall(
+	kvs: CuckooKvs,
+	cb: func(any, any, any) -> any,
+	state: any
+) -> any {
+	return simpleHashtable_forall(
+		kvs[1],
+		cb,
+		simpleHashtable_forall(
+			kvs[0],
+			cb,
+			state
+		)
+	);
+}

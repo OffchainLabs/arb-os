@@ -8,7 +8,7 @@ test: all
 evmdebug: all
 	cargo run evmdebug
 
-TESTEXES = $(BUILTINDIR)/kvstest.mexe $(BUILTINDIR)/treekvstest.mexe $(STDDIR)/queuetest.mexe $(BUILTINDIR)/arraytest.mexe $(BUILTINDIR)/globaltest.mexe $(STDDIR)/priorityqtest.mexe $(STDDIR)/bytearraytest.mexe $(STDDIR)/keccaktest.mexe $(BUILTINDIR)/maptest.mexe minitests/codeloadtest.mexe
+TESTEXES = $(BUILTINDIR)/kvstest.mexe $(BUILTINDIR)/treekvstest.mexe $(BUILTINDIR)/cuckookvstest.mexe $(STDDIR)/queuetest.mexe $(BUILTINDIR)/arraytest.mexe $(BUILTINDIR)/globaltest.mexe $(STDDIR)/priorityqtest.mexe $(STDDIR)/bytearraytest.mexe $(STDDIR)/keccaktest.mexe $(BUILTINDIR)/maptest.mexe minitests/codeloadtest.mexe
 BUILTINMAOS = $(BUILTINDIR)/array.mao $(BUILTINDIR)/kvs.mao $(BUILTINDIR)/treekvs.mao
 STDLIBMAOS = $(STDDIR)/bytearray.mao $(STDDIR)/priorityq.mao $(STDDIR)/random.mao $(STDDIR)/queue.mao $(STDDIR)/keccak.mao $(STDDIR)/bytestream.mao $(STDDIR)/stack.mao
 STDLIB = $(STDLIBMAOS)
@@ -20,6 +20,9 @@ $(BUILTINDIR)/kvstest.mexe: $(BUILTINMAOS) $(BUILTINDIR)/kvstest.mini
 
 $(BUILTINDIR)/treekvstest.mexe: $(BUILTINMAOS) $(BUILTINDIR)/treekvstest.mini
 	cargo run compile $(BUILTINDIR)/treekvstest.mini $(BUILTINDIR)/treekvs.mao -o $(BUILTINDIR)/treekvstest.mexe
+
+$(BUILTINDIR)/cuckookvstest.mexe: $(BUILTINMAOS) $(BUILTINDIR)/cuckookvstest.mini
+	cargo run compile $(BUILTINDIR)/cuckookvstest.mini $(BUILTINDIR)/cuckookvs.mao -o $(BUILTINDIR)/cuckookvstest.mexe
 
 $(STDDIR)/queuetest.mexe: $(BUILTINMAOS) $(STDDIR)/queuetest.mini $(STDLIB)
 	cargo run compile $(STDDIR)/queuetest.mini $(STDLIB) -o $(STDDIR)/queuetest.mexe
@@ -74,6 +77,9 @@ $(BUILTINDIR)/kvs.mao: $(BUILTINDIR)/kvs.mini
 
 $(BUILTINDIR)/treekvs.mao: $(BUILTINDIR)/treekvs.mini
 	cargo run compile $(BUILTINDIR)/treekvs.mini -c -o $(BUILTINDIR)/treekvs.mao
+
+$(BUILTINDIR)/cuckookvs.mao: $(BUILTINDIR)/cuckookvs.mini
+	cargo run compile $(BUILTINDIR)/cuckookvs.mini -c -o $(BUILTINDIR)/cuckookvs.mao
 
 RUNTIMEDIR = arbruntime
 RUNTIMEMAOS = $(RUNTIMEDIR)/main.mao $(RUNTIMEDIR)/accounts.mao $(RUNTIMEDIR)/messages.mao $(RUNTIMEDIR)/inbox.mao $(RUNTIMEDIR)/evmCallStack.mao $(RUNTIMEDIR)/evmOps.mao $(RUNTIMEDIR)/codeSegment.mao $(RUNTIMEDIR)/evmlogs.mao
