@@ -561,6 +561,8 @@ impl Machine {
                 Opcode::PushInsnImm => 25,
                 Opcode::OpenInsn => 25,
                 Opcode::DebugPrint => 25,
+                Opcode::GetGas => 0,
+                Opcode::SetGas => 0,
                 _ => return None,
             })
         } else {
@@ -1126,7 +1128,17 @@ impl Machine {
 						self.incr_pc();
 						Ok(true)
 					}
-                    Opcode::GetGas | Opcode::SetGas => unimplemented!(),
+                    Opcode::GetGas => {
+                        self.stack.push(Value::Int(self.arb_gas_remaining.clone()));
+                        self.incr_pc();
+                        Ok(true)
+                    },
+                    Opcode::SetGas => {
+                        let gas = self.stack.pop_uint(&self.state)?;
+                        self.arb_gas_remaining = gas;
+                        self.incr_pc();
+                        Ok(true)
+                    },
 					Opcode::GetLocal |  // these opcodes are for intermediate use in compilation only
 					Opcode::SetLocal |  // they should never appear in fully compiled code
 					Opcode::MakeFrame(_, _) |
