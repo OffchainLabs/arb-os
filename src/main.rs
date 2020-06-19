@@ -16,7 +16,7 @@
 
 #![allow(unused_parens)]
 
-use compile::compile_from_file;
+use compile::{compile_from_file, CompileError};
 use evm::{compile_evm_file, make_evm_jumptable_mini};
 use link::{link, postlink_compile};
 use mavm::Value;
@@ -38,7 +38,7 @@ mod run;
 mod stringtable;
 mod uint256;
 
-fn main() {
+fn main() -> Result<(), CompileError> {
     let matches = App::new("Mini compiler")
         .version("0.1")
         .author("Ed Felten <ed@offchainlabs.com")
@@ -160,6 +160,7 @@ fn main() {
                 }
                 Err(e) => {
                     println!("Compilation error: {:?}", e);
+                    return Err(e);
                 }
             }
         } else {
@@ -172,7 +173,7 @@ fn main() {
                     }
                     Err(e) => {
                         println!("Compilation error: {}", e);
-                        return;
+                        return Err(e);
                     }
                 }
             }
@@ -186,12 +187,13 @@ fn main() {
                         }
                         Err(e) => {
                             println!("Linking error: {}", e);
-                            return;
+                            return Err(e);
                         }
                     }
                 }
                 Err(e) => {
                     println!("Linking error: {}", e);
+                    return Err(e);
                 }
             }
         }
@@ -224,7 +226,8 @@ fn main() {
                 }
             }
             Err(e) => {
-                panic!("Compilation error: {}", e);
+                println!("Compilation error: {}", e);
+                return Err(e);
             }
         }
     }
@@ -243,6 +246,7 @@ fn main() {
     if let Some(_) = matches.subcommand_matches("evmdebug") {
         evm::evm_load_fib_and_verify(true);
     }
+    Ok(())
 }
 
 fn get_output(output_filename: Option<&str>) -> Result<Box<dyn io::Write>, io::Error> {
