@@ -331,7 +331,7 @@ impl Machine {
         } else {
             self.run(Some(stop_pc))
         };
-        println!("ArbGas cost of contract: {}", cost);
+        println!("ArbGas cost of call: {}", cost);
         match &self.state {
             MachineState::Stopped => {
                 Err(ExecutionError::new("execution stopped", &self.state, None))
