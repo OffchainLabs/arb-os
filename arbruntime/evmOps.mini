@@ -23,7 +23,7 @@ import type Queue;
 import impure func evmCallStack_currentFrame() -> option<EvmCallFrame>;
 import impure func evmCallStack_getCurrentFrameMemoryOrDie() -> ByteArray;
 import impure func evmCallStack_setCurrentFrameMemory(mem: ByteArray) -> bool;
-import impure func evmCallStack_setCurrentFrameStorageCell(addr: address, offset: uint, val: uint) -> option<()>;
+import impure func evmCallStack_setCurrentFrameStorageCell(offset: uint, val: uint) -> option<()>;
 import impure func evmCallStack_selfDestructCurrentAccount(owner: address);
 import impure func evmCallStack_doCall(
     kind: uint,
@@ -82,7 +82,7 @@ public func evmOp_stop() {
 }
 
 public impure func evmOp_sha3(baseMemAddr: uint, nbytes: uint) -> bytes32 {
-    asm(301,) { debugprint };
+    // asm(301,) { debugprint };
     if let Some(h) = keccak256(evmCallStack_getCurrentFrameMemoryOrDie(), baseMemAddr, nbytes) {
         return h;
     } else {
@@ -277,9 +277,6 @@ public impure func evmOp_sload(storageAddr: uint) -> uint {
 public impure func evmOp_sstore(storageAddr: uint, value: uint) {
     if let Some(topFrame) = evmCallStack_currentFrame() {
         if let Some(_) = evmCallStack_setCurrentFrameStorageCell(
-            account_getAddress(
-                evmCallFrame_currentAccount(topFrame)
-            ),
             storageAddr,
             value
         ) {
@@ -298,6 +295,7 @@ public impure func evmOp_getjumpaddr(evm_pc: uint) -> func() {
             if let Some(codept) = jumpTable[evm_pc] {
                 return codept;
             } else {
+                asm((777, evm_pc),) { debugprint };
                 evm_error();   // EVM code tried to jump to a forbidden code address
                 panic;
             }
