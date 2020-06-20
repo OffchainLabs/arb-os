@@ -145,8 +145,7 @@ fn test_map() {
     }
 }
 
-//#[test]
-#[allow(dead_code)]
+#[test]
 fn test_keccak() {
     let path = Path::new("stdlib/keccaktest.mexe");
     let res = run_from_file(path, vec![], RuntimeEnvironment::new(), false);
