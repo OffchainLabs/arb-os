@@ -226,9 +226,9 @@ Values of type `anytype` do not have any representation that is understood by th
 
 > if *nameRight* is the Some variant of an option type, a new local variable *nameLeft* is created with the inner value of *nameRight* inside *codeblock*, and *codeblock* is run.  If *nameRight* is the None variant and *elseblock* is present, then *elseblock* is run instead.  *nameRight* must always be an option type.
 
-*funcExpression* ( *argExpression1* , *argExpression2* , ... )
+*expression*
 
-> Function call.  The value of *funcExpression* must be a function reference. (Typically *funcExpression* will just be the name of a function.) The number of *argExpressions* must be consistent with the number of arguments in *funcExpression*'s type, and each *argExpression* must be assignable to the type of the corresponding argument of *funcExpression*.  The function's return type must be `void`.  (Functions returning non-void types are expressions, not statements.)
+> The expression is executed, this is primarily useful when the side effects of *expresssion* are desired, but the either the expression does not return a value or the value is not needed.
 
 *name* = *expression* ;
 
