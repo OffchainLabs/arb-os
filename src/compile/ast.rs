@@ -617,7 +617,9 @@ impl Statement {
                     *loc,
                 ))
             }
-            Statement::Expression(_, _) => unimplemented!(),
+            Statement::Expression(expr, loc) => {
+                Ok(Statement::Expression(expr.resolve_types(type_table)?, *loc))
+            }
             Statement::Let(pat, expr, loc) => Ok(Statement::Let(
                 pat.clone(),
                 expr.resolve_types(type_table)?,

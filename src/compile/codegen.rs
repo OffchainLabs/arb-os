@@ -266,6 +266,7 @@ fn mavm_codegen_statements(
                 global_var_map,
             )
         }
+        TypeCheckedStatement::Expression(_, _) => unimplemented!(),
         TypeCheckedStatement::Let(pat, expr, loc) => match pat {
             TypeCheckedMatchPattern::Simple(name, _) => {
                 let slot_num = num_locals;

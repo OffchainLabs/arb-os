@@ -77,6 +77,7 @@ pub enum TypeCheckedStatement {
         PropertiesList,
         Option<Location>,
     ),
+    Expression(TypeCheckedExpr, Option<Location>),
     Let(TypeCheckedMatchPattern, TypeCheckedExpr, Option<Location>),
     AssignLocal(StringId, TypeCheckedExpr, Option<Location>),
     AssignGlobal(usize, TypeCheckedExpr, Option<Location>),
@@ -105,6 +106,7 @@ impl MiniProperties for TypeCheckedStatement {
             TypeCheckedStatement::FunctionCall(name_expr, args, properties, _) => {
                 name_expr.is_pure() && args.iter().all(|expr| expr.is_pure()) && properties.pure
             }
+            TypeCheckedStatement::Expression(expr, _) => expr.is_pure(),
             TypeCheckedStatement::Let(_, exp, _) => exp.is_pure(),
             TypeCheckedStatement::AssignLocal(_, exp, _) => exp.is_pure(),
             TypeCheckedStatement::AssignGlobal(_, _, _) => false,
@@ -705,7 +707,13 @@ fn typecheck_statement<'a>(
                 ))
             }
         }
-        Statement::Expression(_, _) => unimplemented!(),
+        Statement::Expression(expr, loc) => Ok((
+            TypeCheckedStatement::Expression(
+                typecheck_expr(expr, type_table, global_vars, func_table, return_type)?,
+                *loc,
+            ),
+            vec![],
+        )),
         Statement::Let(pat, expr, loc) => {
             let tc_expr = typecheck_expr(expr, type_table, global_vars, func_table, return_type)?;
             let tce_type = tc_expr.get_type();
