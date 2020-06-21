@@ -233,6 +233,17 @@ fn mavm_codegen_statements(
             )?;
             if expr.get_type() != Type::Void {
                 c.push(Instruction::from_opcode(Opcode::Pop, *loc));
+                if expr.get_type() != Type::Tuple(vec![]) {
+                    println!(
+                    "Warning: expression statement at {} returns value of type {:?}, which is discarded",
+                    if let Some(loc) = loc {
+                        format!("line: {} column: {}", loc.line, loc.column)
+                    } else {
+                        "unknown location".to_string()
+                    },
+                    expr.get_type()
+                );
+                }
             }
             mavm_codegen_statements(
                 rest_of_statements.to_vec(),
