@@ -266,7 +266,31 @@ fn mavm_codegen_statements(
                 global_var_map,
             )
         }
-        TypeCheckedStatement::Expression(_, _) => unimplemented!(),
+        TypeCheckedStatement::Expression(expr, loc) => {
+            let (lg, c) = mavm_codegen_expr(
+                expr,
+                code,
+                &locals,
+                label_gen,
+                string_table,
+                import_func_map,
+                global_var_map,
+                0,
+            )?;
+            if expr.get_type() != Type::Void {
+                c.push(Instruction::from_opcode(Opcode::Pop, *loc));
+            }
+            mavm_codegen_statements(
+                rest_of_statements.to_vec(),
+                c,
+                num_locals,
+                locals,
+                lg,
+                string_table,
+                import_func_map,
+                global_var_map,
+            )
+        }
         TypeCheckedStatement::Let(pat, expr, loc) => match pat {
             TypeCheckedMatchPattern::Simple(name, _) => {
                 let slot_num = num_locals;
