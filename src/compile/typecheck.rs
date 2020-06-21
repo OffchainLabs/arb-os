@@ -705,6 +705,7 @@ fn typecheck_statement<'a>(
                 ))
             }
         }
+        Statement::Expression(_, _) => unimplemented!(),
         Statement::Let(pat, expr, loc) => {
             let tc_expr = typecheck_expr(expr, type_table, global_vars, func_table, return_type)?;
             let tce_type = tc_expr.get_type();

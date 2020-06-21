@@ -579,6 +579,7 @@ pub enum Statement {
     ReturnVoid(Option<Location>),
     Return(Expr, Option<Location>),
     FunctionCall(Expr, Vec<Expr>, Option<Location>),
+    Expression(Expr, Option<Location>),
     Let(MatchPattern, Expr, Option<Location>),
     Assign(StringId, Expr, Option<Location>),
     Loop(Vec<Statement>, Option<Location>),
@@ -616,6 +617,7 @@ impl Statement {
                     *loc,
                 ))
             }
+            Statement::Expression(_, _) => unimplemented!(),
             Statement::Let(pat, expr, loc) => Ok(Statement::Let(
                 pat.clone(),
                 expr.resolve_types(type_table)?,
