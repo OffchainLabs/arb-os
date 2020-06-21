@@ -578,7 +578,6 @@ pub enum Statement {
     Panic(Option<Location>),
     ReturnVoid(Option<Location>),
     Return(Expr, Option<Location>),
-    FunctionCall(Expr, Vec<Expr>, Option<Location>),
     Expression(Expr, Option<Location>),
     Let(MatchPattern, Expr, Option<Location>),
     Assign(StringId, Expr, Option<Location>),
@@ -605,17 +604,6 @@ impl Statement {
             Statement::ReturnVoid(loc) => Ok(Statement::ReturnVoid(*loc)),
             Statement::Return(expr, loc) => {
                 Ok(Statement::Return(expr.resolve_types(type_table)?, *loc))
-            }
-            Statement::FunctionCall(fexpr, args, loc) => {
-                let mut rargs = Vec::new();
-                for arg in args.iter() {
-                    rargs.push(arg.resolve_types(type_table)?);
-                }
-                Ok(Statement::FunctionCall(
-                    fexpr.resolve_types(type_table)?,
-                    rargs,
-                    *loc,
-                ))
             }
             Statement::Expression(expr, loc) => {
                 Ok(Statement::Expression(expr.resolve_types(type_table)?, *loc))
