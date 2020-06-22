@@ -399,7 +399,7 @@ pub fn compile_evm_insn(
             Some((code, label_gen, None))
         }
         0x15 => { // ISZERO
-            code.push(Instruction::from_opcode(Opcode::Not, None));
+            code.push(Instruction::from_opcode(Opcode::IsZero, None));
             Some((code, label_gen, None))
         }
         0x16 => { // AND
@@ -492,7 +492,7 @@ pub fn compile_evm_insn(
         0x57 => {  // JUMPI
             let (not_taken_label, lg) = label_gen.next();
             code.push(Instruction::from_opcode(Opcode::Swap1, None));
-            code.push(Instruction::from_opcode(Opcode::Not, None));
+            code.push(Instruction::from_opcode(Opcode::IsZero, None));
             code.push(Instruction::from_opcode_imm(
                 Opcode::Cjump,
                 Value::Label(not_taken_label),
@@ -813,14 +813,44 @@ pub fn make_evm_jumptable_mini(filepath: &Path) -> Result<(), io::Error> {
     Ok(())
 }
 
+#[derive(Clone)]
+pub struct CallInfo<'a> {
+    function_name: &'a str,
+    args: &'a [ethabi::Token],
+    payment: Uint256,
+}
+
 pub fn evm_load_and_call_func(
     contract_json_file_name: &str,
     other_contract_names: &[&str],
     contract_name: &str,
     function_name: &str,
     args: &[ethabi::Token],
+    payment: Uint256,
     debug: bool,
 ) -> Result<Vec<ethabi::Token>, ethabi::Error> {
+    Ok(evm_load_and_call_funcs(
+        contract_json_file_name,
+        other_contract_names,
+        contract_name,
+        vec![CallInfo {
+            function_name,
+            args,
+            payment,
+        }]
+        .as_ref(),
+        debug,
+    )?[0]
+        .clone())
+}
+
+pub fn evm_load_and_call_funcs(
+    contract_json_file_name: &str,
+    other_contract_names: &[&str],
+    contract_name: &str,
+    call_infos: &[CallInfo],
+    debug: bool,
+) -> Result<Vec<Vec<ethabi::Token>>, ethabi::Error> {
     let dapp_abi = match abi::AbiForDapp::new_from_file(contract_json_file_name) {
         Ok(dabi) => dabi,
         Err(_) => {
@@ -833,14 +863,16 @@ pub fn evm_load_and_call_func(
             Some(contract) => {
                 all_contracts.push(contract);
             }
-            None => { panic!("couldn't find contract {}", other_contract_name); }
+            None => {
+                panic!("couldn't find contract {}", other_contract_name);
+            }
         }
     }
     let this_contract = match dapp_abi.get_contract(contract_name) {
         Some(contract) => {
             all_contracts.push(contract);
             contract
-        },
+        }
         None => {
             panic!("couldn't find contract {}", contract_name);
         }
@@ -851,20 +883,28 @@ pub fn evm_load_and_call_func(
         contract.insert_upload_message(&mut rt_env);
     }
 
-    let this_func = match this_contract.get_function(function_name) {
-        Ok(func) => func,
-        Err(e) => {
-            panic!(
-                "couldn't find {} function in {} contract: {:?}",
-                function_name,
-                contract_name,
-                e.to_string()
-            );
-        }
-    };
+    let mut call_funcs = Vec::new();
+    for call_info in call_infos {
+        let this_func = match this_contract.get_function(call_info.function_name) {
+            Ok(func) => func,
+            Err(e) => {
+                panic!(
+                    "couldn't find {} function in {} contract: {:?}",
+                    call_info.function_name,
+                    contract_name,
+                    e.to_string()
+                );
+            }
+        };
+        call_funcs.push(this_func);
 
-    let calldata = this_func.encode_input(args).unwrap();
-    rt_env.insert_txcall_message(this_contract.address.clone(), Uint256::zero(), &calldata);
+        let calldata = this_func.encode_input(call_info.args).unwrap();
+        rt_env.insert_txcall_message(
+            this_contract.address.clone(),
+            call_info.payment.clone(),
+            &calldata,
+        );
+    }
 
     let mut machine = load_from_file(Path::new("arbruntime/runtime.mexe"), rt_env);
 
@@ -875,21 +915,25 @@ pub fn evm_load_and_call_func(
         }
     };
 
-    assert_eq!(logs.len(), 1);
-    if let Value::Tuple(tup) = &logs[0] {
-        println!("first log received: {:#?}", tup);
-        if let Some(result_bytes) = bytes_from_bytestack(tup[2].clone()) {
-            if result_bytes.len() == 0 {
-                Err(ethabi::Error::from("no output received"))
+    assert_eq!(logs.len(), call_infos.len());
+    let mut ret = Vec::new();
+    for (i, _) in call_infos.iter().enumerate() {
+        if let Value::Tuple(tup) = &logs[i] {
+            println!("log number {} received: {:#?}", i, tup);
+            if let Some(result_bytes) = bytes_from_bytestack(tup[2].clone()) {
+                if result_bytes.len() == 0 {
+                    ret.push(vec![]);
+                } else {
+                    ret.push(call_funcs[i].decode_output(&result_bytes)?);
+                }
             } else {
-                this_func.decode_output(&result_bytes)
+                panic!("log element was not a bytestack");
             }
         } else {
-            panic!("log element was not a bytestack");
+            panic!("log item was not a Tuple");
         }
-    } else {
-        panic!("log item was not a Tuple");
     }
+    Ok(ret)
 }
 
 pub fn evm_load_add_and_verify(debug: bool) {
@@ -902,19 +946,19 @@ pub fn evm_load_add_and_verify(debug: bool) {
         vec![
             ethabi::Token::Uint(ethabi::Uint::one()),
             ethabi::Token::Uint(ethabi::Uint::one()),
-        ].as_ref(),
-        debug
+        ]
+        .as_ref(),
+        Uint256::zero(),
+        debug,
     ) {
-        Ok(tokens) => {
-            match tokens[0] {
-                Token::Uint(ui) => {
-                    assert_eq!(ui, ethabi::Uint::try_from(2).unwrap());
-                }
-                _ => {
-                    panic!("token was not a uint: {:?}", tokens[0]);
-                }
+        Ok(tokens) => match tokens[0] {
+            Token::Uint(ui) => {
+                assert_eq!(ui, ethabi::Uint::try_from(2).unwrap());
             }
-        }
+            _ => {
+                panic!("token was not a uint: {:?}", tokens[0]);
+            }
+        },
         Err(e) => {
             panic!("error loading and calling Add::add: {:?}", e);
         }
@@ -928,25 +972,54 @@ pub fn evm_load_fib_and_verify(debug: bool) {
         vec![].as_ref(),
         "Fibonacci",
         "doFib",
-        vec![
-            ethabi::Token::Uint(ethabi::Uint::try_from(5).unwrap()),
-        ].as_ref(),
-        debug
+        vec![ethabi::Token::Uint(ethabi::Uint::try_from(5).unwrap())].as_ref(),
+        Uint256::zero(),
+        debug,
     ) {
-        Ok(tokens) => {
-            match tokens[0] {
-                Token::Uint(ui) => {
-                    assert_eq!(ui, ethabi::Uint::try_from(8).unwrap());
-                }
-                _ => {
-                    panic!("token was not a uint: {:?}", tokens[0]);
-                }
+        Ok(tokens) => match tokens[0] {
+            Token::Uint(ui) => {
+                assert_eq!(ui, ethabi::Uint::try_from(8).unwrap());
             }
-        }
+            _ => {
+                panic!("token was not a uint: {:?}", tokens[0]);
+            }
+        },
         Err(e) => {
             panic!("error loading and calling Fibonacci::doFib: {:?}", e);
         }
     }
 }
 
-
+pub fn evm_xcontract_call_and_verify(debug: bool) {
+    use std::convert::TryFrom;
+    match evm_load_and_call_funcs(
+        "contracts/fibonacci/compiled.json",
+        vec!["Fibonacci"].as_ref(),
+        "PaymentChannel",
+        vec![
+            CallInfo {
+                function_name: "deposit",
+                args: vec![].as_ref(),
+                payment: Uint256::from_usize(10000),
+            },
+            CallInfo {
+                function_name: "transferFib",
+                args: vec![
+                    ethabi::Token::Address(ethabi::Address::from_low_u64_be(5000)),
+                    ethabi::Token::Uint(ethabi::Uint::try_from(5).unwrap()),
+                ]
+                .as_ref(),
+                payment: Uint256::zero(),
+            },
+        ]
+        .as_ref(),
+        debug,
+    ) {
+        Ok(tokens) => {
+            assert_eq!(tokens.len(), 0);
+        }
+        Err(e) => {
+            panic!("error loading and calling PaymentChannel::deposit: {:?}", e);
+        }
+    }
+}

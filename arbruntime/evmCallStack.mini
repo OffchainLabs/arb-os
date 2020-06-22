@@ -45,6 +45,7 @@ import func account_deductFromEthBalance(account: Account, deduction: uint) -> o
 import func account_getStartCodePoint(account: Account) -> option<func()>;
 
 import func evmlogs_empty() -> EvmLogs;
+import func evmlogs_appendAny(logs: EvmLogs, item: any) -> EvmLogs;
 
 import func bytearray_new(capacity: uint, variableSize: bool) -> ByteArray;
 import func bytearray_marshalFull(ba: ByteArray) -> MarshalledBytes;
@@ -72,6 +73,7 @@ type EvmCallFrame = struct {
     addr: address,
     accountStore: AccountStore,
     currentAccount: Account,
+    callKind: uint,
     calldata: ByteArray,
     callvalue: uint,
     returnInfo: option<ReturnInfo>,
@@ -101,6 +103,7 @@ var globalCallStack: option<EvmCallFrame>;
 var globalCurrentEthMessage: EthBridgeMessage;
 
 public impure func initEvmCallStack(
+    callKind: uint,
     ethMessage: EthBridgeMessage,
     addr: address,
     calldata: ByteArray,
@@ -113,6 +116,7 @@ public impure func initEvmCallStack(
         addr: addr,
         accountStore: globalAS,
         currentAccount: accountStore_get(globalAS, addr),
+        callKind: callKind,
         calldata: calldata,
         callvalue: callvalue,
         returnInfo: None<ReturnInfo>,
@@ -141,6 +145,13 @@ public impure func evmCallStack_doCall(
     //        that state will be contingent on the call succeeding
     // if the call succeeds, we'll copy the call's state into the caller as the new
     //        state, but if call fails we'll discard the state from the caller's frame
+
+    if (kind == 1) {
+        panic;  // callcode not yet implemented
+    }
+    if (kind == 2) {
+        panic;  // delegatecall not yet implemented
+    }
 
     let topFrame = globalCallStack?;
     let callerAddr = topFrame.addr;
@@ -176,6 +187,7 @@ public impure func evmCallStack_doCall(
             balance
         )?,
         currentAccount: callee,
+        callKind: kind,
         calldata: bytearray_extract(topFrame.memory, argsOffset, argsLength)?,
         callvalue: balance,
         returnInfo: None<ReturnInfo>,
@@ -191,6 +203,7 @@ public impure func evmCallStack_doCall(
 
     // jump to the called code's startCodePoint -- this should never return
     let startCodePoint = account_getStartCodePoint(callee)?;
+    asm(701,) { debugprint };
     startCodePoint();
 
     panic;
@@ -207,7 +220,7 @@ public impure func evmCallStack_returnFromCall(
     let returnData = bytearray_extract(memory, returnOffset, returnLength)?;
     if let Some(newTopFrame) = unsafecast<option<EvmCallFrame>>(topFrame.parent) {
         asm(201,) { debugprint };
-        if (success) {
+        if (success && (topFrame.callKind != 3)) {   // if call succeeded, and it's not a staticcall
             asm(202,) { debugprint };
             topFrame = topFrame with {
                 accountStore: accountStore_set(
@@ -249,12 +262,13 @@ public impure func evmCallStack_returnFromCall(
         globalCallStack = Some(newTopFrame);
         emptyAvmStack();
         restoreAvmStack(resumeInfo.stackContents,);
+        asm(success,) { };  // push success onto stack
         asm(resumeInfo.codePoint,) { jump };
         panic;  // shouldn't happen -- previous instruction jumped away
     } else {
         asm(102,) { debugprint };
         // top-level call finished
-        if (success) {
+        if (success && (topFrame.callKind != 3)) {  // call succeeded, and it wasn't a staticcall
             asm(103,) { debugprint };
             let acctStore = accountStore_set(
                 topFrame.accountStore,
@@ -275,7 +289,7 @@ public impure func evmCallStack_returnFromCall(
                     globalCurrentEthMessage,
                     topFrame.evmLogs,
                     marshaledReturnData,
-                    true
+                    success
                 ),
             ) { log } ;
 
@@ -288,7 +302,7 @@ public impure func evmCallStack_returnFromCall(
                     globalCurrentEthMessage,
                     evmlogs_empty(),  // emit no logs because txcall failed
                     bytearray_marshalFull(returnData),
-                    false
+                    success
                 ),
             ) { log } ;
         }
@@ -380,6 +394,10 @@ public impure func evmCallStack_writeCurrentAccount(acct: Account) -> bool {
     }
 }
 
+public impure func evmCallStack_getCurrentFrameReturnData() -> option<ByteArray> {
+    return Some(((globalCallStack?).returnInfo?).data);
+}
+
 public impure func evmCallStack_getAccount(addr: address) -> option<Account> {
     let topFrame = globalCallStack?;
     if (topFrame.addr == addr) {
@@ -464,6 +482,17 @@ public impure func evmCallStack_setCurrentFrameStorageCell(offset: uint, value: 
             value
         )?
     });
+    return Some(());
+}
+
+public impure func evmCallStack_addEvmLogToCurrent(item: any) -> option<()> {
+    let topFrame = globalCallStack?;
+    item = asm(0, item, topFrame.addr) any { tset };
+    globalCallStack = Some(
+        topFrame with {
+            evmLogs: evmlogs_appendAny(topFrame.evmLogs, item)
+        }
+    );
     return Some(());
 }
 

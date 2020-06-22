@@ -605,7 +605,7 @@ fn mavm_codegen_statements(
                 Value::Int(Uint256::from_usize(0)),
                 *loc,
             ));
-            code.push(Instruction::from_opcode(Opcode::Not, *loc));
+            code.push(Instruction::from_opcode(Opcode::IsZero, *loc));
             code.push(Instruction::from_opcode_imm(
                 Opcode::Cjump,
                 Value::Label(after_label),
@@ -758,7 +758,7 @@ fn mavm_codegen_if_arm(
             )?;
             label_gen = lg;
             code = c;
-            code.push(Instruction::from_opcode(Opcode::Not, *loc));
+            code.push(Instruction::from_opcode(Opcode::IsZero, *loc));
             code.push(Instruction::from_opcode_imm(
                 Opcode::Cjump,
                 Value::Label(after_label),
@@ -852,7 +852,7 @@ fn mavm_codegen_expr<'a>(
             let (maybe_opcode, maybe_imm) = match op {
                 UnaryOp::Minus => (Some(Opcode::UnaryMinus), None),
                 UnaryOp::BitwiseNeg => (Some(Opcode::BitwiseNeg), None),
-                UnaryOp::Not => (Some(Opcode::Not), None),
+                UnaryOp::Not => (Some(Opcode::IsZero), None),
                 UnaryOp::Hash => (Some(Opcode::Hash), None),
                 UnaryOp::ToUint => (None, None),
                 UnaryOp::ToInt => (None, None),
@@ -948,7 +948,7 @@ fn mavm_codegen_expr<'a>(
                 | BinaryOp::GreaterEq
                 | BinaryOp::SLessEq
                 | BinaryOp::SGreaterEq => {
-                    code.push(Instruction::from_opcode(Opcode::Not, *loc));
+                    code.push(Instruction::from_opcode(Opcode::IsZero, *loc));
                 }
                 _ => {}
             }
@@ -999,7 +999,7 @@ fn mavm_codegen_expr<'a>(
             )?;
             let (lab, lg) = lg.next();
             c.push(Instruction::from_opcode(Opcode::Dup0, *loc));
-            c.push(Instruction::from_opcode(Opcode::Not, *loc));
+            c.push(Instruction::from_opcode(Opcode::IsZero, *loc));
             c.push(Instruction::from_opcode_imm(
                 Opcode::Cjump,
                 Value::Label(lab),

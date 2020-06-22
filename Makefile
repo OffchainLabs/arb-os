@@ -9,7 +9,7 @@ evmdebug: all
 	cargo run evmdebug
 
 TESTEXES = $(BUILTINDIR)/kvstest.mexe $(BUILTINDIR)/treekvstest.mexe $(BUILTINDIR)/cuckookvstest.mexe $(STDDIR)/queuetest.mexe $(BUILTINDIR)/arraytest.mexe $(BUILTINDIR)/globaltest.mexe $(STDDIR)/priorityqtest.mexe $(STDDIR)/bytearraytest.mexe $(STDDIR)/keccaktest.mexe $(BUILTINDIR)/maptest.mexe minitests/codeloadtest.mexe
-BUILTINMAOS = $(BUILTINDIR)/array.mao $(BUILTINDIR)/kvs.mao $(BUILTINDIR)/treekvs.mao
+BUILTINMAOS = $(BUILTINDIR)/array.mao $(BUILTINDIR)/kvs.mao $(BUILTINDIR)/treekvs.mao $(BUILTINDIR)/cuckookvs.mao
 STDLIBMAOS = $(STDDIR)/bytearray.mao $(STDDIR)/priorityq.mao $(STDDIR)/random.mao $(STDDIR)/queue.mao $(STDDIR)/keccak.mao $(STDDIR)/bytestream.mao $(STDDIR)/stack.mao
 STDLIB = $(STDLIBMAOS)
 

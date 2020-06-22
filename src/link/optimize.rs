@@ -143,14 +143,14 @@ pub fn peephole(code_in: &[Instruction]) -> Vec<Instruction> {
                     }
                 }
                 Instruction {
-                    opcode: Opcode::Not,
+                    opcode: Opcode::IsZero,
                     immediate: None,
                     location: _,
                 } => {
                     let insn2 = code_out[code_out.len() - 2].clone();
                     match insn2 {
                         Instruction {
-                            opcode: Opcode::Not,
+                            opcode: Opcode::IsZero,
                             immediate: imm,
                             location: loc2,
                         } => {

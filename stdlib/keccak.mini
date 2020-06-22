@@ -40,28 +40,28 @@ public impure func keccak256(ba: ByteArray, offset: uint, nbytes: uint) -> optio
     // approach is to build a bytearray to hold this block
     let lastBlock = bytearray_new(136, false);
     lastBlock = bytearray_copy(ba, offset, lastBlock, 0, nbytes)?;
-    asm(302,) { debugprint };
+    // asm(302,) { debugprint };
     if (nbytes == 135) {
         // add one byte of padding
         lastBlock = bytearray_setByte(lastBlock, 135, 0x81)?;
     } else {
         // add padding up to full block
         // take advantage of the fact that lastBlock is already zero-filled
-        asm(303,) { debugprint };
+       // asm(303,) { debugprint };
         lastBlock = bytearray_setByte(
             bytearray_setByte(lastBlock, 135, 0x80)?,
             nbytes,
             0x01
         )?;
-        asm(304,) { debugprint };
+        //asm(304,) { debugprint };
     }
 
-    asm(304,) { debugprint };
+    //asm(305,) { debugprint };
     accumulator = keccak_permutation(
         keccak_xorblock(accumulator, lastBlock, 0)?
     );
 
-    asm(305,) { debugprint };
+    // asm(306,) { debugprint };
     return Some(bytes32(
         (accumulator[0]) + 0x10000000000000000 * (
             (accumulator[1]) + 0x10000000000000000 * (
