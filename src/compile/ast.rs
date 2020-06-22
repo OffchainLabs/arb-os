@@ -782,6 +782,7 @@ pub enum Expr {
     Constant(Constant, Option<Location>),
     OptionInitializer(Box<Expr>, Option<Location>),
     FunctionCall(Box<Expr>, Vec<Expr>, Option<Location>),
+    CodeBlock(Vec<Statement>, Option<Box<Expr>>, Option<Location>),
     ArrayOrMapRef(Box<Expr>, Box<Expr>, Option<Location>),
     StructInitializer(Vec<FieldInitializer>, Option<Location>),
     Tuple(Vec<Expr>, Option<Location>),
@@ -850,6 +851,7 @@ impl Expr {
                     *loc,
                 ))
             }
+            Expr::CodeBlock(_, _, _) => unimplemented!(),
             Expr::ArrayOrMapRef(e1, e2, loc) => Ok(Expr::ArrayOrMapRef(
                 Box::new(e1.resolve_types(type_table)?),
                 Box::new(e2.resolve_types(type_table)?),

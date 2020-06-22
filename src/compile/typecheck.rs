@@ -1103,6 +1103,7 @@ fn typecheck_expr(
                 )),
             }
         }
+        Expr::CodeBlock(_, _, _) => unimplemented!(),
         Expr::ArrayOrMapRef(array, index, loc) => {
             let tc_arr = typecheck_expr(&*array, type_table, global_vars, func_table, return_type)?;
             let tc_idx = typecheck_expr(&*index, type_table, global_vars, func_table, return_type)?;

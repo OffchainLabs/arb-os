@@ -264,6 +264,7 @@ Expr13: Expr = {
 	<lno: @L> "asm" "(" <a:CommaedExprs?> ")" <rt:Type> "{" <body:AsmInsn*> "}" => Expr::Asm(rt, body, a.unwrap_or(vec![]), file_info.location(BytePos::from(lno))),
 	<lno: @L> "struct" "{" <fi: FieldInitializers> "}" => Expr::StructInitializer(fi, file_info.location(BytePos::from(lno))),
 	"(" <e: Expr> ")" => <>,
+	<lno: @L> "{" <cb: Statement*> <e: Expr?> "}:" => Expr::CodeBlock(cb, e.map(|x| Box::new(x)), file_info.location(BytePos::from(lno))),
 	<lno: @L> "(" <c: CommaedExprs?> ")" => Expr::Tuple(c.unwrap_or(vec![]), file_info.location(BytePos::from(lno))),
 	<lno: @L> <i: Ident> => Expr::VariableRef(i, file_info.location(BytePos::from(lno))),
 }
