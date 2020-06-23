@@ -851,7 +851,15 @@ impl Expr {
                     *loc,
                 ))
             }
-            Expr::CodeBlock(_, _, _) => unimplemented!(),
+            Expr::CodeBlock(body, result, loc) => Ok(Expr::CodeBlock(
+                Statement::resolve_types_vec(body.to_vec(), type_table)?,
+                result
+                    .clone()
+                    .map(|exp| exp.resolve_types(type_table))
+                    .transpose()?
+                    .map(|x| Box::new(x)),
+                *loc,
+            )),
             Expr::ArrayOrMapRef(e1, e2, loc) => Ok(Expr::ArrayOrMapRef(
                 Box::new(e1.resolve_types(type_table)?),
                 Box::new(e2.resolve_types(type_table)?),

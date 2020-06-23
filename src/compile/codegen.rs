@@ -1144,6 +1144,7 @@ fn mavm_codegen_expr<'a>(
             c.push(Instruction::from_opcode(Opcode::Label(ret_label), *loc));
             Ok((lg, c))
         }
+        TypeCheckedExpr::CodeBlock(_, _, _) => unimplemented!(),
         TypeCheckedExpr::StructInitializer(fields, _, loc) => {
             let fields_len = fields.len();
             for i in 0..fields_len {
