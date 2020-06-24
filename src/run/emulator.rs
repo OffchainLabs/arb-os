@@ -517,7 +517,7 @@ impl Machine {
                 Opcode::SLessThan => 2,
                 Opcode::SGreaterThan => 2,
                 Opcode::Equal => 2,
-                Opcode::Not => 1,
+                Opcode::IsZero => 1,
                 Opcode::BitwiseAnd => 2,
                 Opcode::BitwiseOr => 2,
                 Opcode::BitwiseXor => 2,
