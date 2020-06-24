@@ -291,6 +291,7 @@ pub struct Machine {
     static_val: Value,
     register: Value,
     err_codepoint: CodePt,
+    arb_gas_remaining: Uint256,
     pub runtime_env: RuntimeEnvironment,
 }
 
@@ -304,13 +305,9 @@ impl Machine {
             static_val: program.static_val,
             register: Value::none(),
             err_codepoint: CodePt::Null,
+            arb_gas_remaining: Uint256::zero().bitwise_neg(),
             runtime_env: env,
         }
-    }
-
-    #[allow(dead_code)]
-    pub fn get_state(&self) -> MachineState {
-        self.state.clone()
     }
 
     pub fn get_stack_trace(&self) -> StackTrace {
@@ -329,11 +326,12 @@ impl Machine {
         }
         self.stack.push(Value::CodePoint(stop_pc));
         self.state = MachineState::Running(func_addr);
-        if debug {
-            self.debug(Some(stop_pc));
+        let cost = if debug {
+            self.debug(Some(stop_pc))
         } else {
-            self.run(Some(stop_pc));
-        }
+            self.run(Some(stop_pc))
+        };
+        println!("ArbGas cost of call: {}", cost);
         match &self.state {
             MachineState::Stopped => {
                 Err(ExecutionError::new("execution stopped", &self.state, None))
@@ -379,12 +377,18 @@ impl Machine {
         }
     }
 
-    pub fn debug(&mut self, stop_pc: Option<CodePt>) {
+    pub fn debug(&mut self, stop_pc: Option<CodePt>) -> u64 {
         println!("Blank line or \"step\" to run one opcode, \"set break\" followed by a \
          line number to resume program until that line, \"show static\" to show the static contents.");
         let mut breakpoint = true;
         let mut break_line = 0;
+        let mut gas_cost = 0;
         while self.state.is_running() {
+            if let Some(gas) = self.next_op_gas() {
+                gas_cost += gas;
+            } else {
+                println!("Warning: next opcode does not have a gas cost")
+            }
             if !breakpoint {
                 if let Some(insn) = self.next_opcode() {
                     if let Some(location) = insn.location {
@@ -454,7 +458,7 @@ impl Machine {
             if let Some(spc) = stop_pc {
                 if let MachineState::Running(pc) = self.state {
                     if pc == spc {
-                        return;
+                        return gas_cost;
                     }
                 }
             }
@@ -462,28 +466,110 @@ impl Machine {
                 self.state = MachineState::Error(e);
             }
         }
+        gas_cost
     }
 
-    pub fn run(&mut self, stop_pc: Option<CodePt>) {
+    pub fn run(&mut self, stop_pc: Option<CodePt>) -> u64 {
+        let mut gas_used = 0;
         while self.state.is_running() {
             if let Some(spc) = stop_pc {
                 if let MachineState::Running(pc) = self.state {
                     if pc == spc {
-                        return;
+                        return gas_used;
                     }
                 }
+            }
+            if let Some(gas) = self.next_op_gas() {
+                gas_used += gas;
+            } else {
+                println!("Warning: next opcode does not have a gas cost");
             }
             match self.run_one(false) {
                 Ok(still_runnable) => {
                     if !still_runnable {
-                        return;
+                        return gas_used;
                     }
                 }
                 Err(e) => {
                     self.state = MachineState::Error(e);
-                    return;
+                    return gas_used;
                 }
             }
+        }
+        gas_used
+    }
+
+    fn next_op_gas(&self) -> Option<u64> {
+        if let MachineState::Running(pc) = self.state {
+            Some(match self.code.get_insn(pc)?.opcode {
+                Opcode::Plus => 3,
+                Opcode::Mul => 3,
+                Opcode::Minus => 3,
+                Opcode::Div => 4,
+                Opcode::Sdiv => 7,
+                Opcode::Mod => 4,
+                Opcode::Smod => 7,
+                Opcode::AddMod => 4,
+                Opcode::MulMod => 4,
+                Opcode::Exp => 25,
+                Opcode::LessThan => 2,
+                Opcode::GreaterThan => 2,
+                Opcode::SLessThan => 2,
+                Opcode::SGreaterThan => 2,
+                Opcode::Equal => 2,
+                Opcode::Not => 1,
+                Opcode::BitwiseAnd => 2,
+                Opcode::BitwiseOr => 2,
+                Opcode::BitwiseXor => 2,
+                Opcode::BitwiseNeg => 1,
+                Opcode::Byte => 4,
+                Opcode::SignExtend => 7,
+                Opcode::NotEqual => 3, // This opcode should be phased out
+                Opcode::Hash => 7,
+                Opcode::Type => 3,
+                Opcode::Hash2 => 8,
+                Opcode::Pop => 1,
+                Opcode::PushStatic => 1,
+                Opcode::Rget => 1,
+                Opcode::Rset => 2,
+                Opcode::Jump => 4,
+                Opcode::Cjump => 4,
+                Opcode::StackEmpty => 2,
+                Opcode::GetPC => 1,
+                Opcode::AuxPush => 1,
+                Opcode::AuxPop => 1,
+                Opcode::AuxStackEmpty => 2,
+                Opcode::Noop => 1,
+                Opcode::ErrPush => 1,
+                Opcode::ErrSet => 1,
+                Opcode::Dup0 => 1,
+                Opcode::Dup1 => 1,
+                Opcode::Dup2 => 1,
+                Opcode::Swap1 => 1,
+                Opcode::Swap2 => 1,
+                Opcode::Tget => 2,
+                Opcode::Tset => 40,
+                Opcode::Tlen => 2,
+                Opcode::Xget => 3,
+                Opcode::Xset => 41,
+                Opcode::Breakpoint => 100,
+                Opcode::Log => 100,
+                Opcode::Send => 100,
+                Opcode::GetTime => 40,
+                Opcode::Inbox => 40,
+                Opcode::Panic => 5,
+                Opcode::Halt => 10,
+                Opcode::ErrCodePoint => 25,
+                Opcode::PushInsn => 25,
+                Opcode::PushInsnImm => 25,
+                Opcode::OpenInsn => 25,
+                Opcode::DebugPrint => 25,
+                Opcode::GetGas => 0,
+                Opcode::SetGas => 0,
+                _ => return None,
+            })
+        } else {
+            None
         }
     }
 
@@ -492,6 +578,13 @@ impl Machine {
             if let Some(insn) = self.code.get_insn(pc) {
                 if let Some(val) = &insn.immediate {
                     self.stack.push(val.clone());
+                }
+                if let Some(gas) = self.next_op_gas() {
+                    if let Some(remaining) = self.arb_gas_remaining.sub(&Uint256::from_u64(gas)) {
+                        self.arb_gas_remaining = remaining;
+                    } else {
+                        return Err(ExecutionError::new("Out of ArbGas", &self.state, None));
+                    }
                 }
                 match insn.opcode {
 					Opcode::Noop => {
@@ -1038,6 +1131,17 @@ impl Machine {
 						self.incr_pc();
 						Ok(true)
 					}
+                    Opcode::GetGas => {
+                        self.stack.push(Value::Int(self.arb_gas_remaining.clone()));
+                        self.incr_pc();
+                        Ok(true)
+                    },
+                    Opcode::SetGas => {
+                        let gas = self.stack.pop_uint(&self.state)?;
+                        self.arb_gas_remaining = gas;
+                        self.incr_pc();
+                        Ok(true)
+                    },
 					Opcode::GetLocal |  // these opcodes are for intermediate use in compilation only
 					Opcode::SetLocal |  // they should never appear in fully compiled code
 					Opcode::MakeFrame(_, _) |

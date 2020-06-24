@@ -557,6 +557,8 @@ pub enum Opcode {
     ErrPush,
     Breakpoint,
     DebugPrint,
+    SetGas,
+    GetGas,
 }
 
 impl MiniProperties for Opcode {
@@ -635,6 +637,8 @@ impl Opcode {
             "pushinsnimm" => Opcode::PushInsnImm,
             "openinsn" => Opcode::OpenInsn,
             "debugprint" => Opcode::DebugPrint,
+            "setgas" => Opcode::SetGas,
+            "getgas" => Opcode::GetGas,
             _ => {
                 panic!("opcode not supported in asm segment: {}", name);
             }
@@ -700,11 +704,12 @@ impl Opcode {
             0x72 => Some(Opcode::Inbox),
             0x73 => Some(Opcode::Panic),
             0x74 => Some(Opcode::Halt),
-            0x75 => Some(Opcode::ErrCodePoint),
-            0x76 => Some(Opcode::PushInsn),
-            0x77 => Some(Opcode::PushInsnImm),
-            //0x78 => Some(Opcode::CloseSegment),
-            0x79 => Some(Opcode::OpenInsn),
+            0x75 => Some(Opcode::SetGas),
+            0x76 => Some(Opcode::GetGas),
+            0x77 => Some(Opcode::ErrCodePoint),
+            0x78 => Some(Opcode::PushInsn),
+            0x79 => Some(Opcode::PushInsnImm),
+            0x7a => Some(Opcode::OpenInsn),
             0x90 => Some(Opcode::DebugPrint),
             _ => None,
         }
@@ -769,11 +774,12 @@ impl Opcode {
             Opcode::Inbox => Some(0x72),
             Opcode::Panic => Some(0x73),
             Opcode::Halt => Some(0x74),
-            Opcode::ErrCodePoint => Some(0x75),
-            Opcode::PushInsn => Some(0x76),
-            Opcode::PushInsnImm => Some(0x77),
-            //Opcode::CloseSegment => Some(0x78),
-            Opcode::OpenInsn => Some(0x79),
+            Opcode::SetGas => Some(0x75),
+            Opcode::GetGas => Some(0x76),
+            Opcode::ErrCodePoint => Some(0x77),
+            Opcode::PushInsn => Some(0x78),
+            Opcode::PushInsnImm => Some(0x79),
+            Opcode::OpenInsn => Some(0x7a),
             Opcode::DebugPrint => Some(0x90),
             _ => None,
         }

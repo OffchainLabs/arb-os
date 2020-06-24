@@ -220,41 +220,31 @@ fn mavm_codegen_statements(
             Ok((label_gen, num_locals, false))
             // no need to append the rest of the statements; they'll never be executed
         }
-        TypeCheckedStatement::FunctionCall(fexpr, args, _, loc) => {
-            let n_args = args.len();
-            let (ret_label, lg) = label_gen.next();
-            label_gen = lg;
-            for i in 0..n_args {
-                let (lg, c) = mavm_codegen_expr(
-                    &args[n_args - 1 - i],
-                    code,
-                    locals,
-                    label_gen,
-                    string_table,
-                    import_func_map,
-                    global_var_map,
-                    i,
-                )?;
-                label_gen = lg;
-                code = c;
-            }
-            code.push(Instruction::from_opcode_imm(
-                Opcode::Noop,
-                Value::Label(ret_label),
-                *loc,
-            ));
+        TypeCheckedStatement::Expression(expr, loc) => {
             let (lg, c) = mavm_codegen_expr(
-                fexpr,
+                expr,
                 code,
-                locals,
+                &locals,
                 label_gen,
                 string_table,
                 import_func_map,
                 global_var_map,
-                n_args,
+                0,
             )?;
-            c.push(Instruction::from_opcode(Opcode::Jump, *loc));
-            c.push(Instruction::from_opcode(Opcode::Label(ret_label), *loc));
+            if expr.get_type() != Type::Void {
+                c.push(Instruction::from_opcode(Opcode::Pop, *loc));
+                if expr.get_type() != Type::Tuple(vec![]) {
+                    println!(
+                    "Warning: expression statement at {} returns value of type {:?}, which is discarded",
+                    if let Some(loc) = loc {
+                        format!("line: {} column: {}", loc.line, loc.column)
+                    } else {
+                        "unknown location".to_string()
+                    },
+                    expr.get_type()
+                );
+                }
+            }
             mavm_codegen_statements(
                 rest_of_statements.to_vec(),
                 c,

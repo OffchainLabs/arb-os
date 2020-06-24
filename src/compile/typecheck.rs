@@ -71,12 +71,7 @@ pub enum TypeCheckedStatement {
     Panic(Option<Location>),
     ReturnVoid(Option<Location>),
     Return(TypeCheckedExpr, Option<Location>),
-    FunctionCall(
-        TypeCheckedExpr,
-        Vec<TypeCheckedExpr>,
-        PropertiesList,
-        Option<Location>,
-    ),
+    Expression(TypeCheckedExpr, Option<Location>),
     Let(TypeCheckedMatchPattern, TypeCheckedExpr, Option<Location>),
     AssignLocal(StringId, TypeCheckedExpr, Option<Location>),
     AssignGlobal(usize, TypeCheckedExpr, Option<Location>),
@@ -102,9 +97,7 @@ impl MiniProperties for TypeCheckedStatement {
             | TypeCheckedStatement::Panic(_)
             | TypeCheckedStatement::ReturnVoid(_) => true,
             TypeCheckedStatement::Return(something, _) => something.is_pure(),
-            TypeCheckedStatement::FunctionCall(name_expr, args, properties, _) => {
-                name_expr.is_pure() && args.iter().all(|expr| expr.is_pure()) && properties.pure
-            }
+            TypeCheckedStatement::Expression(expr, _) => expr.is_pure(),
             TypeCheckedStatement::Let(_, exp, _) => exp.is_pure(),
             TypeCheckedStatement::AssignLocal(_, exp, _) => exp.is_pure(),
             TypeCheckedStatement::AssignGlobal(_, _, _) => false,
@@ -655,56 +648,13 @@ fn typecheck_statement<'a>(
                 ))
             }
         }
-        Statement::FunctionCall(fexpr, args, loc) => {
-            let tc_fexpr = typecheck_expr(fexpr, type_table, global_vars, func_table, return_type)?;
-            if let Type::Func(impure, arg_types, ret_type) = tc_fexpr.get_type() {
-                if *ret_type != Type::Void {
-                    return Err(new_type_error(
-                        "function call statement to non-void function".to_string(),
-                        *loc,
-                    ));
-                }
-                if args.len() == arg_types.len() {
-                    let mut tc_args = Vec::new();
-                    for i in 0..args.len() {
-                        let tc_arg = typecheck_expr(
-                            &args[i],
-                            type_table,
-                            global_vars,
-                            func_table,
-                            return_type,
-                        )?;
-                        tc_args.push(tc_arg);
-                        let resolved_arg_type = arg_types[i].resolve_types(&type_table, *loc)?;
-                        if !resolved_arg_type.assignable(&tc_args[i].get_type()) {
-                            return Err(new_type_error(
-                                "wrong argument type in function call".to_string(),
-                                *loc,
-                            ));
-                        }
-                    }
-                    Ok((
-                        TypeCheckedStatement::FunctionCall(
-                            tc_fexpr,
-                            tc_args,
-                            PropertiesList { pure: !impure },
-                            *loc,
-                        ),
-                        vec![],
-                    ))
-                } else {
-                    Err(new_type_error(
-                        "wrong number of args passed to function".to_string(),
-                        *loc,
-                    ))
-                }
-            } else {
-                Err(new_type_error(
-                    "function call to non-function object".to_string(),
-                    *loc,
-                ))
-            }
-        }
+        Statement::Expression(expr, loc) => Ok((
+            TypeCheckedStatement::Expression(
+                typecheck_expr(expr, type_table, global_vars, func_table, return_type)?,
+                *loc,
+            ),
+            vec![],
+        )),
         Statement::Let(pat, expr, loc) => {
             let tc_expr = typecheck_expr(expr, type_table, global_vars, func_table, return_type)?;
             let tce_type = tc_expr.get_type();
