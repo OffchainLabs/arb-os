@@ -1117,7 +1117,8 @@ fn typecheck_expr(
             let mut output = Vec::new();
             let mut block_bindings = Vec::new();
             for statement in body {
-                let inner_type_table = type_table.push_multi(block_bindings.iter().map(|(k,v)| (*k,v)).collect());
+                let inner_type_table =
+                    type_table.push_multi(block_bindings.iter().map(|(k, v)| (*k, v)).collect());
                 let (statement, bindings) = typecheck_statement(
                     statement,
                     return_type,
@@ -1126,19 +1127,21 @@ fn typecheck_expr(
                     func_table,
                 )?;
                 output.push(statement);
-                for (key,value) in bindings {
-                    block_bindings.push((key,value));
+                for (key, value) in bindings {
+                    block_bindings.push((key, value));
                 }
             }
-            let inner_type_table = type_table.push_multi(block_bindings.iter().map(|(k,v)| (*k,v)).collect());
-            let nonsense =
-                ret_expr
-                    .clone()
-                    .map(|x| typecheck_expr(&*x, &inner_type_table, global_vars, func_table, return_type))
-                    .transpose();
+            let inner_type_table =
+                type_table.push_multi(block_bindings.iter().map(|(k, v)| (*k, v)).collect());
+            let nonsense = ret_expr
+                .clone()
+                .map(|x| {
+                    typecheck_expr(&*x, &inner_type_table, global_vars, func_table, return_type)
+                })
+                .transpose();
             Ok(TypeCheckedExpr::CodeBlock(
-                output,nonsense?
-                    .map(|x| Box::new(x)),
+                output,
+                nonsense?.map(|x| Box::new(x)),
                 *loc,
             ))
         }
