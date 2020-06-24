@@ -701,6 +701,10 @@ public impure func evmOp_selfdestruct(owner: address) {
     evmCallStack_selfDestructCurrentAccount(owner,);
 }
 
+public impure func evmOp_create(value: uint, offset: uint, length: uint) -> address {
+    evm_notYetImplemented(66,);
+}
+
 impure func evm_error() {
     // This should be called when EVM code has generated an EVM error.
     evmOp_revert(0, 0);  // should never return

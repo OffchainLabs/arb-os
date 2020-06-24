@@ -64,6 +64,8 @@ import func evmOp_staticcall();
 import func evmOp_stop();
 import func evmOp_timestamp();
 import func evmOp_txexecgas();
+import func evmOp_create();
+
 
 type AvmCodePoint = func()
 type Segment = struct {
@@ -365,7 +367,7 @@ public impure func translateEvmCodeSegment(
     } elseif (opcode == 0xe3) { // SSIZE
         return pushEvmInsnCall(evmOp_ssize, restOfCode, evmJumpTable);
     } elseif (opcode == 0xf0) {  // CREATE
-        return None<(AvmCodePoint, map<uint, AvmCodePoint>)>;
+        return pushEvmInsnCall(evmOp_create, restOfCode, evmJumpTable);
     } elseif (opcode == 0xf1) { // CALL
         return pushEvmInsnCall(evmOp_call, restOfCode, evmJumpTable);
     } elseif (opcode == 0xf2) { // CALLCODE
