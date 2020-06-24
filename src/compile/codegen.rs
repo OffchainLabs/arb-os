@@ -1163,10 +1163,25 @@ fn mavm_codegen_expr<'a>(
             Ok((lg, c))
         }
         TypeCheckedExpr::CodeBlock(body, ret_expr, loc) => {
-            let (lab_gen,_,_, block_locals) = mavm_codegen_statements(
+            let mut num_locals = 0;
+            let mut next_locals = locals;
+            loop {
+                match next_locals {
+                    CopyingSymTable::Empty => break,
+                    CopyingSymTable::Single(_, _, next) => {
+                        num_locals += 1;
+                        next_locals = next;
+                    }
+                    CopyingSymTable::Multi(table, next) => {
+                        num_locals += table.len();
+                        next_locals = next;
+                    }
+                }
+            }
+            let (lab_gen, _, _, block_locals) = mavm_codegen_statements(
                 body.to_vec(),
                 code,
-                0,
+                num_locals,
                 locals,
                 label_gen,
                 string_table,
@@ -1186,10 +1201,14 @@ fn mavm_codegen_expr<'a>(
                     prepushed_vals,
                 )
             } else {
-                code.push(Instruction::from_opcode_imm(Opcode::Noop,Value::Tuple(vec![]), *loc));
+                code.push(Instruction::from_opcode_imm(
+                    Opcode::Noop,
+                    Value::Tuple(vec![]),
+                    *loc,
+                ));
                 Ok((lab_gen, code))
             }
-        },
+        }
         TypeCheckedExpr::StructInitializer(fields, _, loc) => {
             let fields_len = fields.len();
             for i in 0..fields_len {
