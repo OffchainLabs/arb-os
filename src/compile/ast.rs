@@ -593,7 +593,6 @@ pub enum Statement {
     ),
     Asm(Vec<Instruction>, Vec<Expr>, Option<Location>),
     DebugPrint(Expr, Option<Location>),
-    CodeBlock(Vec<Statement>, Option<Location>),
 }
 
 impl Statement {
@@ -647,10 +646,6 @@ impl Statement {
                 e.clone()
                     .map(|block| block.iter().map(|x| x.resolve_types(type_table)).collect())
                     .transpose()?,
-                *loc,
-            )),
-            Statement::CodeBlock(body, loc) => Ok(Statement::CodeBlock(
-                Statement::resolve_types_vec(body.to_vec(), type_table)?,
                 *loc,
             )),
         }

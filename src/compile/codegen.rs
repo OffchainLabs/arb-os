@@ -705,29 +705,6 @@ fn mavm_codegen_statements(
             )
             .map(|(a, b, c, d)| (a, max(max(b, exp_locals), total_locals), c, d))
         }
-        TypeCheckedStatement::CodeBlock(body, _) => {
-            let (lg, nl, _, _) = mavm_codegen_statements(
-                body.to_vec(),
-                code,
-                num_locals,
-                locals,
-                label_gen,
-                string_table,
-                import_func_map,
-                global_var_map,
-            )?;
-            mavm_codegen_statements(
-                rest_of_statements.to_vec(),
-                code,
-                num_locals,
-                locals,
-                lg,
-                string_table,
-                import_func_map,
-                global_var_map,
-            )
-            .map(|(lab_gen, nu_loc, cont, hm)| (lab_gen, max(nu_loc, nl), cont, hm))
-        }
     }
 }
 
