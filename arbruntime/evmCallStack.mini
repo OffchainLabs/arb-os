@@ -194,7 +194,7 @@ public impure func evmCallStack_doCall(
             calleeAddr,
             balance
         )?;
-    }Y
+    }
     let newTopFrame = struct {
         runningAs: calleeAddr,
         runningCodeFrom: calleeAddr,
