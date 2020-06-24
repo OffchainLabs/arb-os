@@ -155,7 +155,6 @@ public impure func evmCallStack_doCall(
         panic;  // callcode not yet implemented
     }
 
-    asm(601,) { debugprint };
     let topFrame = globalCallStack?;
     let callerAddr = topFrame.runningAs;
     if (callerAddr == calleeAddr) {
@@ -166,7 +165,6 @@ public impure func evmCallStack_doCall(
     // set up the caller's frame
     //    this means (1) saving the runningAsAccount into the accountStore, and
     //               (2) saving the AvmStack and resumeCodePoint so we can resume later
-    asm(699,) { debugprint };
     let stackContents = saveAvmStack();  // must be called as top level statement
     topFrame = topFrame
         with { accountStore: accountStore_set(topFrame.accountStore, callerAddr, caller) }
@@ -217,7 +215,6 @@ public impure func evmCallStack_doCall(
 
     // jump to the called code's startCodePoint -- this should never return
     let startCodePoint = account_getStartCodePoint(callee)?;
-    asm(701,) { debugprint };
     startCodePoint();
 
     panic;
@@ -228,14 +225,11 @@ public impure func evmCallStack_returnFromCall(
     returnOffset: uint,
     returnLength: uint
 ) -> option<()> {
-    asm(101,) { debugprint };
     let topFrame = globalCallStack?;
     let memory = topFrame.memory;
     let returnData = bytearray_extract(memory, returnOffset, returnLength)?;
     if let Some(newTopFrame) = unsafecast<option<EvmCallFrame>>(topFrame.parent) {
-        asm(201,) { debugprint };
         if (success && (topFrame.callKind != 3)) {   // if call succeeded, and it's not a staticcall
-            asm(202,) { debugprint };
             topFrame = topFrame with {
                 accountStore: accountStore_set(
                     topFrame.accountStore,
@@ -254,13 +248,10 @@ public impure func evmCallStack_returnFromCall(
 
         newTopFrame = newTopFrame with { returnInfo: Some(struct{ data: returnData, status: success }) };
 
-        asm(203,) { debugprint };
         let resumeInfo = newTopFrame.resumeInfo?;
-        asm(204,) { debugprint };
         if (returnLength > resumeInfo.returnDataNbytes) {
              returnLength = resumeInfo.returnDataNbytes;
         }
-        asm(205,) { debugprint };
         let newMemory = bytearray_copy(
             returnData,
             0,
@@ -268,7 +259,6 @@ public impure func evmCallStack_returnFromCall(
             returnOffset,
             returnLength
         )?;
-        asm(206,) { debugprint };
         newTopFrame = newTopFrame with { memory: newMemory };
 
         // ready to return to caller
@@ -277,14 +267,11 @@ public impure func evmCallStack_returnFromCall(
         emptyAvmStack();
         restoreAvmStack(resumeInfo.stackContents,);
         asm(success,) { };  // push success onto stack
-        asm(207,) { debugprint };
         asm(resumeInfo.codePoint,) { jump };
         panic;  // shouldn't happen -- previous instruction jumped away
     } else {
-        asm(102,) { debugprint };
         // top-level call finished
         if (success && (topFrame.callKind != 3)) {  // call succeeded, and it wasn't a staticcall
-            asm(103,) { debugprint };
             let acctStore = accountStore_set(
                 topFrame.accountStore,
                 topFrame.runningAs,
@@ -298,7 +285,6 @@ public impure func evmCallStack_returnFromCall(
                 acctStore = accountStore_destroyAndTransferBalance(acctStore, victim, owner);
             }
             let marshaledReturnData = bytearray_marshalFull(returnData);
-            asm(104,) { debugprint };
             asm(
                 (
                     globalCurrentEthMessage,
@@ -308,10 +294,8 @@ public impure func evmCallStack_returnFromCall(
                 ),
             ) { log } ;
 
-            asm(105,) { debugprint };
             setGlobalAccountStore(acctStore,);
         } else {
-           asm(106,) { debugprint };
            asm(
                 (
                     globalCurrentEthMessage,
@@ -322,10 +306,7 @@ public impure func evmCallStack_returnFromCall(
             ) { log } ;
         }
 
-        asm(107,) { debugprint };
-
-        // save the global account state and jump back to the main run loop
-
+        // discard the AVM stack contents and jump back to the main run loop
         emptyAvmStack();
         cleanAvmAuxStackAndCall(mainRunLoop,);  // should never return
         panic;
@@ -375,7 +356,6 @@ impure func cleanAvmAuxStackAndCall(funcToCall: impure func()) {
             auxpush
         };
     }
-    asm(201,) { debugprint };
 
     // discard our callframe, push a fake return address, and jump to funcToCall
     // funcToCall will think somebody called it normally, with an empty auxstack

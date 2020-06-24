@@ -364,7 +364,6 @@ public impure func evmOp_getjumpaddr(evm_pc: uint) -> func() {
             if let Some(codept) = jumpTable[evm_pc] {
                 return codept;
             } else {
-                asm((777, evm_pc),) { debugprint };
                 evm_error();   // EVM code tried to jump to a forbidden code address
                 panic;
             }
@@ -545,7 +544,6 @@ public impure func evmOp_call(
     retOffset: uint,
     retLength: uint
 ) -> bool {
-    asm (501,) { debugprint };
     let resumeCodePoint = asm() func() {  // get return address of our caller
         auxpop
         auxpop
@@ -654,7 +652,6 @@ public impure func evmOp_staticcall(
     retOffset: uint,
     retLength: uint
 ) -> bool {
-    asm(700,) { debugprint };
     let resumeCodePoint = asm() func() {  // get return address of our caller
         auxpop
         auxpop
@@ -718,6 +715,5 @@ func evm_runtimePanic() {
 }
 
 func evm_notYetImplemented(op: uint) {
-    asm((66, op),) { debugprint };
     panic;
 }
