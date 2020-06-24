@@ -177,7 +177,7 @@ fn mavm_codegen_statements(
     string_table: &StringTable,
     import_func_map: &HashMap<StringId, Label>,
     global_var_map: &HashMap<StringId, usize>,
-) -> Result<(LabelGenerator, usize, bool, HashMap<StringId, Type>), CodegenError> {
+) -> Result<(LabelGenerator, usize, bool, HashMap<StringId, usize>), CodegenError> {
     // (label_gen, num_labels, execution_might_continue)
     if statements.is_empty() {
         return Ok((label_gen, num_locals, true, HashMap::new()));
@@ -258,7 +258,7 @@ fn mavm_codegen_statements(
             )
         }
         TypeCheckedStatement::Let(pat, expr, loc) => match pat {
-            TypeCheckedMatchPattern::Simple(name, t) => {
+            TypeCheckedMatchPattern::Simple(name, _) => {
                 let slot_num = num_locals;
                 let (lg, c) = mavm_codegen_expr(
                     expr,
@@ -290,7 +290,7 @@ fn mavm_codegen_statements(
                     global_var_map,
                 )
                 .map(|(lab, loc, cont, mut hm)| {
-                    hm.insert(*name, t.clone());
+                    hm.insert(*name, slot_num);
                     (lab, loc, cont, hm)
                 })
             }
@@ -312,9 +312,9 @@ fn mavm_codegen_statements(
                 let mut binding_types = Vec::new();
                 for (i, sub_pat) in pattern.clone().iter().enumerate() {
                     match sub_pat {
-                        TypeCheckedMatchPattern::Simple(name, t) => {
+                        TypeCheckedMatchPattern::Simple(name, _) => {
                             pairs.insert(*name, local_slot_num_base + i);
-                            binding_types.push((*name, t.clone()));
+                            binding_types.push((*name, local_slot_num_base + i));
                         }
                         TypeCheckedMatchPattern::Tuple(_, _) => {
                             return Err(new_codegen_error(
@@ -1162,7 +1162,34 @@ fn mavm_codegen_expr<'a>(
             c.push(Instruction::from_opcode(Opcode::Label(ret_label), *loc));
             Ok((lg, c))
         }
-        TypeCheckedExpr::CodeBlock(_, _, _) => unimplemented!(),
+        TypeCheckedExpr::CodeBlock(body, ret_expr, loc) => {
+            let (lab_gen,_,_, block_locals) = mavm_codegen_statements(
+                body.to_vec(),
+                code,
+                0,
+                locals,
+                label_gen,
+                string_table,
+                import_func_map,
+                global_var_map,
+            )?;
+            if let Some(ret_expr) = ret_expr {
+                let new_locals = locals.push_multi(block_locals);
+                mavm_codegen_expr(
+                    ret_expr,
+                    code,
+                    &new_locals,
+                    lab_gen,
+                    string_table,
+                    import_func_map,
+                    global_var_map,
+                    prepushed_vals,
+                )
+            } else {
+                code.push(Instruction::from_opcode_imm(Opcode::Noop,Value::Tuple(vec![]), *loc));
+                Ok((lab_gen, code))
+            }
+        },
         TypeCheckedExpr::StructInitializer(fields, _, loc) => {
             let fields_len = fields.len();
             for i in 0..fields_len {
