@@ -244,11 +244,7 @@ fn main() -> Result<(), CompileError> {
     }
 
     if let Some(_) = matches.subcommand_matches("evmdebug") {
-        let logs = evm::evm_load_add(false);
-        println!("=== logs ===");
-        for log in logs {
-            println!("{}", log);
-        }
+        evm::evm_xcontract_call_and_verify(false);
     }
     Ok(())
 }

@@ -290,6 +290,11 @@ public func bytearray_copy(
     return Some(to);
 }
 
+public func bytearray_extract(from: ByteArray, offset: uint, nbytes: uint) -> option<ByteArray> {
+    let to = bytearray_new(nbytes, true);
+    return bytearray_copy(from, offset, to, 0, nbytes);
+}
+
 func bytearray_expandToFit(ba: ByteArray, neededCapacity: uint) -> option<ByteArray> {
     if (ba.size < neededCapacity) {
         if ( ! ba.variableSize) {

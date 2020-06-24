@@ -23,7 +23,7 @@ public func evmlogs_empty() -> EvmLogs {
     return unsafecast<EvmLogs>(());
 }
 
-func evmlogs_appendAny(logs: EvmLogs, item: any) -> EvmLogs {
+public func evmlogs_appendAny(logs: EvmLogs, item: any) -> EvmLogs {
     return struct {
         rest: logs,
         last: item

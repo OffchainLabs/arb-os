@@ -45,7 +45,6 @@ public impure func inbox_init() {
 }
 
 public impure func inbox_get() -> EthBridgeMessage {
-    asm(3,) { debugprint };  //DEBUG
     let inbox = globalInbox;
     while (queue_isEmpty(inbox.queue)) {
         inbox = getFromL1Inbox(inbox);

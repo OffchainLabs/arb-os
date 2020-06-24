@@ -8,15 +8,21 @@ test: all
 evmdebug: all
 	cargo run evmdebug
 
-TESTEXES = $(BUILTINDIR)/kvstest.mexe $(STDDIR)/queuetest.mexe $(BUILTINDIR)/arraytest.mexe $(BUILTINDIR)/globaltest.mexe $(STDDIR)/priorityqtest.mexe $(STDDIR)/bytearraytest.mexe $(STDDIR)/keccaktest.mexe $(BUILTINDIR)/maptest.mexe minitests/codeloadtest.mexe
-BUILTINMAOS = $(BUILTINDIR)/array.mao $(BUILTINDIR)/kvs.mao
-STDLIBMAOS = $(STDDIR)/bytearray.mao $(STDDIR)/priorityq.mao $(STDDIR)/random.mao $(STDDIR)/queue.mao $(STDDIR)/keccak.mao $(STDDIR)/bytestream.mao
+TESTEXES = $(BUILTINDIR)/kvstest.mexe $(BUILTINDIR)/treekvstest.mexe $(BUILTINDIR)/cuckookvstest.mexe $(STDDIR)/queuetest.mexe $(BUILTINDIR)/arraytest.mexe $(BUILTINDIR)/globaltest.mexe $(STDDIR)/priorityqtest.mexe $(STDDIR)/bytearraytest.mexe $(STDDIR)/keccaktest.mexe $(BUILTINDIR)/maptest.mexe minitests/codeloadtest.mexe
+BUILTINMAOS = $(BUILTINDIR)/array.mao $(BUILTINDIR)/kvs.mao $(BUILTINDIR)/treekvs.mao $(BUILTINDIR)/cuckookvs.mao
+STDLIBMAOS = $(STDDIR)/bytearray.mao $(STDDIR)/priorityq.mao $(STDDIR)/random.mao $(STDDIR)/queue.mao $(STDDIR)/keccak.mao $(STDDIR)/bytestream.mao $(STDDIR)/stack.mao
 STDLIB = $(STDLIBMAOS)
 
 all: $(TESTEXES) runtime
 
 $(BUILTINDIR)/kvstest.mexe: $(BUILTINMAOS) $(BUILTINDIR)/kvstest.mini
 	cargo run compile $(BUILTINDIR)/kvstest.mini -o $(BUILTINDIR)/kvstest.mexe
+
+$(BUILTINDIR)/treekvstest.mexe: $(BUILTINMAOS) $(BUILTINDIR)/treekvstest.mini
+	cargo run compile $(BUILTINDIR)/treekvstest.mini $(BUILTINDIR)/treekvs.mao -o $(BUILTINDIR)/treekvstest.mexe
+
+$(BUILTINDIR)/cuckookvstest.mexe: $(BUILTINMAOS) $(BUILTINDIR)/cuckookvstest.mini
+	cargo run compile $(BUILTINDIR)/cuckookvstest.mini $(BUILTINDIR)/cuckookvs.mao -o $(BUILTINDIR)/cuckookvstest.mexe
 
 $(STDDIR)/queuetest.mexe: $(BUILTINMAOS) $(STDDIR)/queuetest.mini $(STDLIB)
 	cargo run compile $(STDDIR)/queuetest.mini $(STDLIB) -o $(STDDIR)/queuetest.mexe
@@ -54,6 +60,9 @@ $(STDDIR)/bytestream.mao: $(BUILTINMAOS) $(STDDIR)/bytestream.mini
 $(STDDIR)/random.mao: $(STDDIR)/random.mini
 	cargo run compile $(STDDIR)/random.mini -c -o $(STDDIR)/random.mao
 
+$(STDDIR)/stack.mao: $(STDDIR)/stack.mini
+	cargo run compile $(STDDIR)/stack.mini -c -o $(STDDIR)/stack.mao
+
 $(STDDIR)/keccak.mao: $(STDDIR)/keccak.mini		
 	cargo run compile $(STDDIR)/keccak.mini -c -o $(STDDIR)/keccak.mao
 
@@ -65,6 +74,12 @@ $(BUILTINDIR)/array.mao: $(BUILTINDIR)/array.mini
 
 $(BUILTINDIR)/kvs.mao: $(BUILTINDIR)/kvs.mini
 	cargo run compile $(BUILTINDIR)/kvs.mini -c -o $(BUILTINDIR)/kvs.mao
+
+$(BUILTINDIR)/treekvs.mao: $(BUILTINDIR)/treekvs.mini
+	cargo run compile $(BUILTINDIR)/treekvs.mini -c -o $(BUILTINDIR)/treekvs.mao
+
+$(BUILTINDIR)/cuckookvs.mao: $(BUILTINDIR)/cuckookvs.mini
+	cargo run compile $(BUILTINDIR)/cuckookvs.mini -c -o $(BUILTINDIR)/cuckookvs.mao
 
 RUNTIMEDIR = arbruntime
 RUNTIMEMAOS = $(RUNTIMEDIR)/main.mao $(RUNTIMEDIR)/accounts.mao $(RUNTIMEDIR)/messages.mao $(RUNTIMEDIR)/inbox.mao $(RUNTIMEDIR)/evmCallStack.mao $(RUNTIMEDIR)/evmOps.mao $(RUNTIMEDIR)/codeSegment.mao $(RUNTIMEDIR)/evmlogs.mao

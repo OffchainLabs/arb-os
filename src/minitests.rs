@@ -48,6 +48,34 @@ fn test_kvstest() {
 }
 
 #[test]
+fn test_treekvstest() {
+    let path = Path::new("builtin/treekvstest.mexe");
+    let res = run_from_file(path, vec![], RuntimeEnvironment::new(), false);
+    match res {
+        Ok(res) => {
+            assert_eq!(res[0], Value::Int(Uint256::zero()));
+        }
+        Err(e) => {
+            panic!("{}\n{}", e.0, e.1);
+        }
+    }
+}
+
+#[test]
+fn test_cuckookvstest() {
+    let path = Path::new("builtin/cuckookvstest.mexe");
+    let res = run_from_file(path, vec![], RuntimeEnvironment::new(), false);
+    match res {
+        Ok(res) => {
+            assert_eq!(res[0], Value::Int(Uint256::zero()));
+        }
+        Err(e) => {
+            panic!("{}\n{}", e.0, e.1);
+        }
+    }
+}
+
+#[test]
 fn test_queuetest() {
     let path = Path::new("stdlib/queuetest.mexe");
     let res = run_from_file(path, vec![], RuntimeEnvironment::new(), false);
@@ -117,8 +145,7 @@ fn test_map() {
     }
 }
 
-//#[test]
-#[allow(dead_code)]
+#[test]
 fn test_keccak() {
     let path = Path::new("stdlib/keccaktest.mexe");
     let res = run_from_file(path, vec![], RuntimeEnvironment::new(), false);
@@ -148,13 +175,10 @@ fn test_codeload() {
 
 #[test]
 fn test_evm_load_add() {
-    let logs = crate::evm::evm_load_add(false);
-    assert_eq!(logs.len(), 1);
-    if let Value::Tuple(tup) = &logs[0] {
-        assert_eq!(tup[1], Value::none());
-        // evm_load_add checked tup[2] for correctness
-        assert_eq!(tup[3], Value::Int(Uint256::one()));
-    } else {
-        panic!();
-    }
+    crate::evm::evm_load_add_and_verify(false);
+}
+
+#[test]
+fn test_evm_load_fib() {
+    crate::evm::evm_load_fib_and_verify(false);
 }

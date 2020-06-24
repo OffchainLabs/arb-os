@@ -21,7 +21,7 @@ import func queue_isEmpty(q: Queue) -> bool;
 import func queue_put(q: Queue, val: any) -> Queue;
 import func queue_get(q: Queue) -> (Queue, any);
 
-func main() {
+impure func main() {
 	asm(tests(),) { log };
 }
 

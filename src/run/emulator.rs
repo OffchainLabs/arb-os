@@ -406,8 +406,11 @@ impl Machine {
                     println!("PC: {:?}", pc);
                 }
                 println!("Stack contents: {}", self.stack);
-                println!("Aux-stack contents: {}", self.aux_stack);
-                println!("Register contents: {}", self.register);
+                // println!("Aux-stack contents: {}", self.aux_stack);
+                // println!("Register contents: {}", self.register);
+                if !self.stack.is_empty() {
+                    println!("Stack top: {}", self.stack.top().unwrap());
+                }
                 if let Some(code) = self.next_opcode() {
                     println!("Next Opcode: {}", code.opcode);
                     if let Some(imm) = code.immediate {
@@ -441,7 +444,7 @@ impl Machine {
                             }
                         }
                         "show static\n" => println!("Static contents: {}", self.static_val),
-                        "run\n" => {
+                        "r\n" | "run\n" => {
                             breakpoint = false;
                             exit = true;
                         }
@@ -514,7 +517,7 @@ impl Machine {
                 Opcode::SLessThan => 2,
                 Opcode::SGreaterThan => 2,
                 Opcode::Equal => 2,
-                Opcode::Not => 1,
+                Opcode::IsZero => 1,
                 Opcode::BitwiseAnd => 2,
                 Opcode::BitwiseOr => 2,
                 Opcode::BitwiseXor => 2,
@@ -760,8 +763,8 @@ impl Machine {
 						self.incr_pc();
 						Ok(true)
 					}
-					Opcode::Not => {
-						let res = if self.stack.pop_bool(&self.state)? { 0 } else { 1 };
+					Opcode::IsZero => {
+						let res = if (self.stack.pop_uint(&self.state)? == Uint256::zero()) { 1 } else { 0 };
 						self.stack.push(Value::Int(Uint256::from_usize(res)));
 						self.incr_pc();
 						Ok(true)

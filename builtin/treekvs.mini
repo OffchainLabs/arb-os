@@ -28,11 +28,11 @@ type TreeKvsCell = struct {
 type TreeKvs = option<TreeKvsCell>
 
 
-public func builtin_kvsNew() -> TreeKvs {
+public func treekvs_new() -> TreeKvs {
     return None<TreeKvsCell>;
 }
 
-public func builtin_kvsGet(kvs: TreeKvs, key: any) -> option<any> {
+public func treekvs_get(kvs: TreeKvs, key: any) -> option<any> {
     let reducedKey = uint(hash(key));
     loop {
         let cell = kvs?;
@@ -46,12 +46,12 @@ public func builtin_kvsGet(kvs: TreeKvs, key: any) -> option<any> {
     }
 }
 
-public func builtin_kvsHasKey(kvs: TreeKvs, key: any) -> bool {
-    return builtin_kvsGet(kvs, key) != None<any>;
+public func treekvs_hasKey(kvs: TreeKvs, key: any) -> bool {
+    return treekvs_get(kvs, key) != None<any>;
 }
 
-public func builtin_kvsSet(kvs: TreeKvs, key: any, value: any) -> TreeKvs {
-    if let Some(newKvs) = builtin_kvsSet2(
+public func treekvs_set(kvs: TreeKvs, key: any, value: any) -> TreeKvs {
+    if let Some(newKvs) = treekvs_set2(
         kvs,
         uint(hash(key)),
         key,
@@ -63,7 +63,7 @@ public func builtin_kvsSet(kvs: TreeKvs, key: any, value: any) -> TreeKvs {
     }
 }
 
-func builtin_kvsSet2(
+func treekvs_set2(
     kvs: TreeKvs,
     reducedKey: uint,
     key: any,
@@ -83,7 +83,7 @@ func builtin_kvsSet2(
             return Some(Some(
                 cell with {
                     children: cell.children with {
-                        [slot] = builtin_kvsSet2(
+                        [slot] = treekvs_set2(
                             unsafecast<TreeKvs>(cell.children[slot]),
                             reducedKey / 8,
                             key,
@@ -117,15 +117,15 @@ func builtin_kvsSet2(
     }
 }
 
-public func builtin_kvsDelete(kvs: TreeKvs, key: any) -> TreeKvs {
-    if let Some(newKvs) = builtin_kvsDelete2(kvs, uint(hash(key))) {
+public func treekvs_delete(kvs: TreeKvs, key: any) -> TreeKvs {
+    if let Some(newKvs) = treekvs_delete2(kvs, uint(hash(key))) {
         return newKvs;
     } else {
         return kvs;
     }
 }
 
-func builtin_kvsDelete2(kvs: TreeKvs, reducedKey: uint) -> option<TreeKvs> {
+func treekvs_delete2(kvs: TreeKvs, reducedKey: uint) -> option<TreeKvs> {
     let cell = kvs?;
     if let Some(triple) = cell.triple {
         if (triple.reducedKey == reducedKey) {
@@ -136,7 +136,7 @@ func builtin_kvsDelete2(kvs: TreeKvs, reducedKey: uint) -> option<TreeKvs> {
     return Some(Some(
         cell with {
             children: cell.children with {
-                [slot] = builtin_kvsDelete2(
+                [slot] = treekvs_delete2(
                     unsafecast<TreeKvs>(cell.children[slot]),
                     reducedKey / 8,
                 )?
@@ -145,7 +145,7 @@ func builtin_kvsDelete2(kvs: TreeKvs, reducedKey: uint) -> option<TreeKvs> {
     ));
 }
 
-public func builtin_kvsForall(
+public func treekvs_forall(
     kvs: TreeKvs,
     callback: func(any, any, any) -> any,
     state: any
@@ -156,7 +156,7 @@ public func builtin_kvsForall(
         }
         let i = 0;
         while (i < 8) {
-            state = builtin_kvsForall(
+            state = treekvs_forall(
                 unsafecast<TreeKvs>(cell.children[i]),
                 callback,
                 state

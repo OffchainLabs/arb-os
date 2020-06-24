@@ -33,7 +33,7 @@ type Account = struct {
 type AccountContractInfo = struct {
     code: ByteArray,
     evmJumpTable: map<uint, func()>,
-    resumeCodePoint: func(),
+    startCodePoint: func(),
     storage: map<uint, uint>,
 }
 
@@ -58,13 +58,17 @@ public func accountStore_get(acctStore: AccountStore, addr: address) -> Account 
     if let Some(acct) = acctStore[addr] {
         return acct;
     } else {
-        return struct {
-            addr: addr,
-            nextSeqNum: 1,
-            ethBalance: 0,
-            contractInfo: None<AccountContractInfo>
-        };
+        return pristineAccount(addr);
     }
+}
+
+public func pristineAccount(addr: address) -> Account {
+    return struct {
+        addr: addr,
+        nextSeqNum: 1,
+        ethBalance: 0,
+        contractInfo: None<AccountContractInfo>
+    };
 }
 
 public func accountStore_set(
@@ -73,6 +77,19 @@ public func accountStore_set(
     acct: Account
 ) -> AccountStore {
     return acctStore with { [addr] = acct };
+}
+
+
+public func accountStore_destroyAndTransferBalance(
+    acctStore: AccountStore,
+    victimAddr: address,
+    recipientAddr: address
+) -> AccountStore {
+    let victim = accountStore_get(acctStore, victimAddr);
+    let recipient = accountStore_get(acctStore, recipientAddr);
+    return acctStore
+        with { [recipientAddr] = account_addBalance(recipient, victim.ethBalance) }
+        with { [victimAddr] = pristineAccount(victimAddr) };
 }
 
 public func account_isEmpty(acct: Account) -> bool {
@@ -100,8 +117,8 @@ public func account_getAddress(account: Account) -> address {
     return account.addr;
 }
 
-public func account_getResumeCodePoint(account: Account) -> option<func()> {
-    return Some((account.contractInfo?).resumeCodePoint);
+public func account_getStartCodePoint(account: Account) -> option<func()> {
+    return Some((account.contractInfo?).startCodePoint);
 }
 
 public func account_getBalance(account: Account) -> uint {
@@ -110,6 +127,10 @@ public func account_getBalance(account: Account) -> uint {
 
 public func account_setBalance(account: Account, balance: uint) -> Account {
     return account with { ethBalance: balance };
+}
+
+public func account_addBalance(account: Account, balance: uint) -> Account {
+    return account with { ethBalance: account.ethBalance + balance };
 }
 
 public func account_getEvmJumpTable(account: Account) -> option<map<uint, func()>> {
