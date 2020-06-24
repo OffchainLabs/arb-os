@@ -154,9 +154,6 @@ public impure func evmCallStack_doCall(
     if (kind == 1) {
         panic;  // callcode not yet implemented
     }
-    if (kind == 2) {
-        panic;  // delegatecall not yet implemented
-    }
 
     asm(601,) { debugprint };
     let topFrame = globalCallStack?;
@@ -185,18 +182,25 @@ public impure func evmCallStack_doCall(
     //     it incorporates the balance transfer from caller to callee
     //          (which is put into the callee frame so it isn't finalized unless the call succeeds)
     let callee = accountStore_get(topFrame.accountStore, calleeAddr);
-    let caller = topFrame.runningAs;
-    let newTopFrame = struct {
-        runningAs: calleeAddr,
-        runningCodeFrom: calleeAddr,
-        accountStore: accountStore_transferEthBalance(
-            topFrame.accountStore,
+    let runningAsAddr = calleeAddr;
+    if (kind == 2) {
+        runningAsAddr = callerAddr;  // delegate call runs as the caller, with callee's code
+    }
+    let updatedAcctStore = topFrame.accountStore;
+    if (kind == 0) {
+        let updatedAcctStore = accountStore_transferEthBalance(
+            updatedAcctStore,
             callerAddr,
             calleeAddr,
             balance
-        )?,
+        )?;
+    }Y
+    let newTopFrame = struct {
+        runningAs: calleeAddr,
+        runningCodeFrom: calleeAddr,
+        accountStore: updatedAcctStore,
         runningAsAccount: callee,
-        caller: caller,
+        caller: topFrame.runningAs,
         callKind: kind,
         calldata: bytearray_extract(topFrame.memory, argsOffset, argsLength)?,
         callvalue: balance,
