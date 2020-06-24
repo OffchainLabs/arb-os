@@ -997,7 +997,7 @@ pub fn evm_xcontract_call_and_verify(debug: bool) {
         vec!["Fibonacci"].as_ref(),
         "PaymentChannel",
         vec![
-            CallInfo {
+           CallInfo {
                 function_name: "deposit",
                 args: vec![].as_ref(),
                 payment: Uint256::from_usize(10000),
@@ -1006,7 +1006,7 @@ pub fn evm_xcontract_call_and_verify(debug: bool) {
                 function_name: "transferFib",
                 args: vec![
                     ethabi::Token::Address(ethabi::Address::from_low_u64_be(5000)),
-                    ethabi::Token::Uint(ethabi::Uint::try_from(5).unwrap()),
+                    ethabi::Token::Uint(ethabi::Uint::try_from(1).unwrap()),
                 ]
                 .as_ref(),
                 payment: Uint256::zero(),
@@ -1016,10 +1016,10 @@ pub fn evm_xcontract_call_and_verify(debug: bool) {
         debug,
     ) {
         Ok(tokens) => {
-            assert_eq!(tokens.len(), 0);
+            assert_eq!(tokens.len(), 2);
         }
         Err(e) => {
-            panic!("error loading and calling PaymentChannel::deposit: {:?}", e);
+            panic!("error loading and calling PaymentChannel::deposit and ::transferFib: {:?}", e);
         }
     }
 }

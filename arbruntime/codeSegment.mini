@@ -168,14 +168,14 @@ public impure func translateEvmCodeSegment(
         let numBytesRead = bytestream_bytesReadSoFar(bs);
         let (restOfCode, evmJumpTable) = translateEvmCodeSegment(bs)?;
             // for debugging
-            //restOfCode = pushInstructionImm(0x90, (42, numBytesRead, opcode), restOfCode);
+            restOfCode = pushInstructionImm(0x90, (42, numBytesRead, opcode), restOfCode);
         return Some((pushValue(imm, restOfCode), evmJumpTable));
     } 
 
     let (restOfCode, evmJumpTable) = translateEvmCodeSegment(bs)?;
     let numBytesRead = bytestream_bytesReadSoFar(bs);
         // for debugging
-        //restOfCode = pushInstructionImm(0x90, (42, numBytesRead, opcode), restOfCode);
+        restOfCode = pushInstructionImm(0x90, (42, numBytesRead, opcode), restOfCode);
     if (opcode == 0x00) { // STOP
         return pushEvmInsnCall(evmOp_stop, restOfCode, evmJumpTable);
     } elseif (opcode == 0x01) { // ADD
