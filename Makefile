@@ -3,7 +3,7 @@ BUILTINDIR = builtin
 STDDIR = stdlib
 
 test: all
-	cargo test
+	cargo test --release
 
 evmdebug: all
 	cargo run evmdebug
