@@ -1116,15 +1116,15 @@ fn typecheck_expr(
             }
             let inner_type_table =
                 type_table.push_multi(block_bindings.iter().map(|(k, v)| (*k, v)).collect());
-            let nonsense = ret_expr
-                .clone()
-                .map(|x| {
-                    typecheck_expr(&*x, &inner_type_table, global_vars, func_table, return_type)
-                })
-                .transpose();
             Ok(TypeCheckedExpr::CodeBlock(
                 output,
-                nonsense?.map(|x| Box::new(x)),
+                ret_expr
+                    .clone()
+                    .map(|x| {
+                        typecheck_expr(&*x, &inner_type_table, global_vars, func_table, return_type)
+                    })
+                    .transpose()?
+                    .map(|x| Box::new(x)),
                 *loc,
             ))
         }
