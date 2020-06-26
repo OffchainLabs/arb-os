@@ -263,7 +263,7 @@ fn main() -> Result<(), CompileError> {
         }
     }
 
-    if let Some(_) = matches.subcommand_matches("evmdebug") {
+    if let Some(matches) = matches.subcommand_matches("evmdebug") {
         let debug = matches.is_present("debug");
         evm::evm_xcontract_call_and_verify(debug);
     }
