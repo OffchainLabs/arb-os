@@ -143,7 +143,16 @@ fn main() -> Result<(), CompileError> {
                         .value_name("output"),
                 ),
         )
-        .subcommand(SubCommand::with_name("evmdebug").about("debug the EVM functionality"))
+        .subcommand(
+            SubCommand::with_name("evmdebug")
+                .about("debug the EVM functionality")
+                .arg(
+                    Arg::with_name("debug")
+                        .help("sets debug mode")
+                        .short("d")
+                        .takes_value(false),
+                ),
+        )
         .get_matches();
 
     if let Some(matches) = matches.subcommand_matches("compile") {
@@ -255,7 +264,8 @@ fn main() -> Result<(), CompileError> {
     }
 
     if let Some(_) = matches.subcommand_matches("evmdebug") {
-        evm::evm_xcontract_call_and_verify(false);
+        let debug = matches.is_present("debug");
+        evm::evm_xcontract_call_and_verify(debug);
     }
     Ok(())
 }
