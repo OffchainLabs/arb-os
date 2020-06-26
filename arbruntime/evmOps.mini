@@ -389,6 +389,7 @@ public impure func evmOp_log0(
     memAddr: uint, 
     nbytes: uint
 ) {
+    asm(999,) { debugprint };
     if let Some(data) = bytearray_extract(
         evmCallStack_getTopFrameMemoryOrDie(),
         memAddr,
@@ -413,6 +414,7 @@ public impure func evmOp_log1(
     nbytes: uint, 
     topic0: uint
 ) {
+    asm(999,) { debugprint };
     if let Some(data) = bytearray_extract(
         evmCallStack_getTopFrameMemoryOrDie(),
         memAddr,
@@ -439,11 +441,13 @@ public impure func evmOp_log2(
     topic0: uint,
     topic1: uint,
 ) {
+    asm(999,) { debugprint };
     if let Some(data) = bytearray_extract(
         evmCallStack_getTopFrameMemoryOrDie(),
         memAddr,
         nbytes
     ) {
+        asm(9991,) { debugprint };
         if (evmCallStack_addEvmLogToCurrent(
             (
                 address(0),  // addEvmLogToCurrent will fill this in
@@ -452,10 +456,12 @@ public impure func evmOp_log2(
                 topic1
             )
         ) == Some(()) ) {
+            asm(9992,) { debugprint };
             return;
         }
     }
 
+    asm(9993,) { debugprint };
     evm_runtimePanic();
     panic;
 }
@@ -467,6 +473,7 @@ public impure func evmOp_log3(
     topic1: uint,
     topic2: uint,
 ) {
+    asm(999,) { debugprint };
     if let Some(data) = bytearray_extract(
         evmCallStack_getTopFrameMemoryOrDie(),
         memAddr,
@@ -497,6 +504,7 @@ public impure func evmOp_log4(
     topic2: uint,
     topic3: uint,
 ) {
+    asm(999,) { debugprint };
     if let Some(data) = bytearray_extract(
         evmCallStack_getTopFrameMemoryOrDie(),
         memAddr,
@@ -702,7 +710,9 @@ public impure func evmOp_selfdestruct(owner: address) {
 }
 
 public impure func evmOp_create(value: uint, offset: uint, length: uint) -> address {
+    asm((27, length),) { debugprint };
     evm_notYetImplemented(66,);
+    panic;
 }
 
 impure func evm_error() {
