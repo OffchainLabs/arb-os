@@ -147,7 +147,11 @@ impl CompiledProgram {
     }
 }
 
-pub fn compile_from_file(path: &Path, debug: bool) -> Result<CompiledProgram, CompileError> {
+pub fn compile_from_file(
+    path: &Path,
+    file_id: usize,
+    debug: bool,
+) -> Result<CompiledProgram, CompileError> {
     let display = path.display();
 
     let mut file = File::open(&path)
@@ -158,19 +162,20 @@ pub fn compile_from_file(path: &Path, debug: bool) -> Result<CompiledProgram, Co
         .map_err(|why| CompileError::new(format!("couldn't read {}: {:?}", display, why), None))?;
     //print!("read-in file:\n{}", s);
 
-    serde_json::from_str(&s).or_else(|_| compile_from_source(s, display, debug))
+    serde_json::from_str(&s).or_else(|_| compile_from_source(s, display, file_id, debug))
 }
 
 pub fn compile_from_source(
     s: String,
     pathname: std::path::Display,
+    file_id: usize,
     debug: bool,
 ) -> Result<CompiledProgram, CompileError> {
     let comment_re = regex::Regex::new(r"//.*").unwrap();
     let s = comment_re.replace_all(&s, "");
     let mut string_table_1 = stringtable::StringTable::new();
     let lines = Lines::new(s.bytes());
-    let res = match DeclsParser::new().parse(&mut string_table_1, &lines, &s) {
+    let res = match DeclsParser::new().parse(&mut string_table_1, &lines, file_id, &s) {
         Ok(r) => r,
         Err(e) => match e {
             lalrpop_util::ParseError::UnrecognizedToken {
@@ -179,7 +184,7 @@ pub fn compile_from_source(
             } => {
                 return Err(CompileError::new(
                     format!("unexpected token: {}, Type: {:?}", &s[offset..end], tok),
-                    Some(lines.location(BytePos::from(offset)).unwrap()),
+                    Some(lines.location(BytePos::from(offset), file_id).unwrap()),
                 ));
             }
             _ => {

@@ -154,25 +154,25 @@ fn main() -> Result<(), CompileError> {
         if matches.is_present("compileonly") {
             let filename = filenames[0];
             let path = Path::new(filename);
-            match compile_from_file(path, debug_mode) {
+            match compile_from_file(path, 0, debug_mode) {
                 Ok(compiled_program) => {
                     compiled_program.to_output(&mut *output, matches.value_of("format"));
                 }
                 Err(e) => {
-                    println!("Compilation error: {:?}", e);
+                    println!("Compilation error: {:?}\nIn file: {}", e, filename);
                     return Err(e);
                 }
             }
         } else {
             let mut compiled_progs = Vec::new();
-            for filename in filenames {
+            for (id, filename) in filenames.into_iter().enumerate() {
                 let path = Path::new(filename);
-                match compile_from_file(path, debug_mode) {
+                match compile_from_file(path, id, debug_mode) {
                     Ok(compiled_program) => {
                         compiled_progs.push(compiled_program);
                     }
                     Err(e) => {
-                        println!("Compilation error: {}", e);
+                        println!("Compilation error: {}\nIn file: {}", e, filename);
                         return Err(e);
                     }
                 }
