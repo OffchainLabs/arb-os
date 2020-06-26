@@ -18,6 +18,7 @@ use super::runtime_env::RuntimeEnvironment;
 use crate::link::LinkedProgram;
 use crate::mavm::{CodePt, Instruction, Opcode, Value};
 use crate::uint256::Uint256;
+use std::collections::HashMap;
 use std::fmt;
 
 #[derive(Debug, Default, Clone)]
@@ -293,6 +294,7 @@ pub struct Machine {
     err_codepoint: CodePt,
     arb_gas_remaining: Uint256,
     pub runtime_env: RuntimeEnvironment,
+    file_name_chart: HashMap<usize, String>,
 }
 
 impl Machine {
@@ -307,6 +309,7 @@ impl Machine {
             err_codepoint: CodePt::Null,
             arb_gas_remaining: Uint256::zero().bitwise_neg(),
             runtime_env: env,
+            file_name_chart: program.file_name_chart,
         }
     }
 
@@ -406,8 +409,8 @@ impl Machine {
                     println!("PC: {:?}", pc);
                 }
                 println!("Stack contents: {}", self.stack);
-                // println!("Aux-stack contents: {}", self.aux_stack);
-                // println!("Register contents: {}", self.register);
+                println!("Aux-stack contents: {}", self.aux_stack);
+                println!("Register contents: {}", self.register);
                 if !self.stack.is_empty() {
                     println!("Stack top: {}", self.stack.top().unwrap());
                 }
@@ -419,7 +422,14 @@ impl Machine {
                     if let Some(location) = code.location {
                         let line = location.line.to_usize();
                         let column = location.column.to_usize();
-                        println!("Origin: (Line: {}, Column: {})", line, column);
+                        if let Some(filename) = self.file_name_chart.get(&location.file_id) {
+                            println!(
+                                "Origin: (Line: {}, Column: {}, File: {})",
+                                line, column, filename
+                            );
+                        } else {
+                            println!("Origin: (Line: {}, Column: {})", line, column);
+                        }
                     }
                 }
                 println!();

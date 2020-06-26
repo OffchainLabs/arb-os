@@ -79,6 +79,7 @@ pub fn run(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::collections::HashMap;
 
     fn run_with_msgs(
         prog: LinkedProgram,
@@ -115,6 +116,7 @@ mod tests {
                 static_val: Value::none(),
                 imported_funcs: vec![],
                 exported_funcs: vec![],
+                file_name_chart: HashMap::new(),
             },
             vec![val.clone()],
             false,
