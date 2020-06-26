@@ -149,10 +149,10 @@ public func makeInitStructures(v: any) -> (map<uint, func()>, map<uint, uint>) {
 public impure func translateEvmCodeSegment(
     bs: ByteStream
 ) -> option<(AvmCodePoint, map<uint, AvmCodePoint>)> {
-    bs = bytestream_truncate(
-        bs,
-        bytesOfKnownInstructions(bs)
-    );
+    //bs = bytestream_truncate(
+    //    bs,
+    //    bytesOfKnownInstructions(bs)
+    //);
 
     if (bytestream_atEof(bs)) {
         return Some((
@@ -387,8 +387,6 @@ public impure func translateEvmCodeSegment(
         return None<(AvmCodePoint, map<uint, AvmCodePoint>)>;
     } elseif (opcode == 0xfa) { // STATICCALL
         return pushEvmInsnCall(evmOp_staticcall, restOfCode, evmJumpTable);
-    } elseif (opcode == 0xfc) { // TXEXECGAS
-        return pushEvmInsnCall(evmOp_txexecgas, restOfCode, evmJumpTable);
     } elseif (opcode == 0xfd) { // REVERT
         return pushEvmInsnCall(evmOp_revert, restOfCode, evmJumpTable);
     } elseif (opcode == 0xfe) { // INVALID
@@ -510,15 +508,14 @@ func bytesOfKnownInstructions(stream: ByteStream) -> uint {
             stream = bs;
             let readSoFar = bytestream_bytesReadSoFar(stream);
             if (! isKnownOpcode(opcode) ) {
-                return readSoFar;
+                return readSoFar-1;
             }
-            let readSoFar = bytestream_bytesReadSoFar(stream);
             if ((opcode >= 0x60) && (opcode <= 0x7f)) {
                 // it's a pushN instruction; unmarshal value and push it
                 if let Some(bs) = bytestream_skipBytes(bs, opcode-0x5f) {
                     stream = bs;
                 } else {
-                    return readSoFar;
+                    return readSoFar-1;
                 }
             }
         }
@@ -535,9 +532,7 @@ func isKnownOpcode(opcode: uint) -> bool {
         || ( (opcode >= 0x30) && (opcode <= 0x45) )
         || ( (opcode >= 0x50) && (opcode <= 0x5b) )
         || ( (opcode >= 0x60) && (opcode <= 0xa4) )
-        || ( (opcode >= 0xb0) && (opcode <= 0xb2) )
         || ( (opcode >= 0xf0) && (opcode <= 0xf5) )
         || (opcode == 0xfa)
-        || (opcode == 0xfd)
-        || (opcode == 0xff);
+        || ( (opcode == 0xfd) && (opcode <= 0xff) );
 }
