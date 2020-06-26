@@ -575,6 +575,8 @@ impl MiniProperties for Opcode {
             | Opcode::ErrCodePoint
             | Opcode::ErrSet
             | Opcode::ErrPush
+            | Opcode::SetGas
+            | Opcode::GetGas
             | Opcode::Jump
             | Opcode::Cjump => false,
             _ => true,
