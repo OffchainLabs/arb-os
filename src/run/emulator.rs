@@ -294,7 +294,7 @@ pub struct Machine {
     err_codepoint: CodePt,
     arb_gas_remaining: Uint256,
     pub runtime_env: RuntimeEnvironment,
-    file_name_chart: HashMap<usize, String>,
+    file_name_chart: HashMap<u64, String>,
 }
 
 impl Machine {

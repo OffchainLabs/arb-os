@@ -174,9 +174,10 @@ fn main() -> Result<(), CompileError> {
             }
         } else {
             let mut compiled_progs = Vec::new();
-            for (id, filename) in filenames.iter().enumerate() {
+            for filename in &filenames {
                 let path = Path::new(filename);
-                match compile_from_file(path, id, debug_mode) {
+                //TODO: use hash for ID
+                match compile_from_file(path, 0, debug_mode) {
                     Ok(compiled_program) => {
                         compiled_progs.push(compiled_program);
                     }
@@ -194,6 +195,7 @@ fn main() -> Result<(), CompileError> {
                         .into_iter()
                         .map(|st| st.to_string())
                         .enumerate()
+                        .map(|(idx, val)| (idx as u64, val))
                         .collect();
                     match postlink_compile(
                         linked_prog,

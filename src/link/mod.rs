@@ -36,7 +36,7 @@ pub struct LinkedProgram {
     pub static_val: Value,
     pub exported_funcs: Vec<ExportedFuncPoint>,
     pub imported_funcs: Vec<ImportedFunc>,
-    pub file_name_chart: HashMap<usize, String>,
+    pub file_name_chart: HashMap<u64, String>,
 }
 
 impl LinkedProgram {
@@ -172,7 +172,7 @@ pub fn postlink_compile(
     program: CompiledProgram,
     is_module: bool,
     evm_pcs: Vec<usize>, // ignored unless we're in a module
-    file_name_chart: HashMap<usize, String>,
+    file_name_chart: HashMap<u64, String>,
     debug: bool,
 ) -> Result<LinkedProgram, CompileError> {
     if debug {
@@ -254,7 +254,7 @@ pub fn add_auto_link_progs(
     let mut progs = progs_in.to_owned();
     for (idx, pathname) in builtin_pathnames.into_iter().enumerate() {
         let path = Path::new(pathname);
-        match compile_from_file(path, usize::MAX - idx, false) {
+        match compile_from_file(path, u64::MAX - idx as u64, false) {
             Ok(compiled_program) => {
                 progs.push((compiled_program, false));
             }

@@ -149,7 +149,7 @@ impl CompiledProgram {
 
 pub fn compile_from_file(
     path: &Path,
-    file_id: usize,
+    file_id: u64,
     debug: bool,
 ) -> Result<CompiledProgram, CompileError> {
     let display = path.display();
@@ -168,7 +168,7 @@ pub fn compile_from_file(
 pub fn compile_from_source(
     s: String,
     pathname: std::path::Display,
-    file_id: usize,
+    file_id: u64,
     debug: bool,
 ) -> Result<CompiledProgram, CompileError> {
     let comment_re = regex::Regex::new(r"//.*").unwrap();

@@ -24,7 +24,7 @@ use crate::mavm::{Value, Instruction, Opcode};
 use crate::uint256::Uint256;
 
 
-grammar(stringtable: &mut StringTable, file_info: &Lines, filename: usize);
+grammar(stringtable: &mut StringTable, file_info: &Lines, filename: u64);
 
 pub Decls: Vec<TopLevelDecl> = {
 	<i:ImportDecl*> <n:NonImportDecl+> => TopLevelDecl::concat_vecs(i, n),
