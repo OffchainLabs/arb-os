@@ -323,7 +323,7 @@ func saveAvmStack() -> Stack {
     return ret;
 }
 
-func emptyAvmStack() {
+public func emptyAvmStack() {
     // discard everything on the AVM stack
     while( ! asm() bool { stackempty } ) {
         let _ = asm() any { };  // pop value from AVM stack
@@ -341,7 +341,7 @@ func restoreAvmStack(savedStack: Stack) {
     }
 }
 
-impure func cleanAvmAuxStackAndCall(funcToCall: impure func()) {
+public impure func cleanAvmAuxStackAndCall(funcToCall: impure func()) {
     // This cleans the AvmAuxStack, then calls funcToCall.
     // funcToCall must never try to return.
 
@@ -365,6 +365,10 @@ impure func cleanAvmAuxStackAndCall(funcToCall: impure func()) {
         [0] swap1  // bogus return address, which funcToCall will save in its callframe but will never use
         jump
     };
+}
+
+public impure func evmCallStack_isEmpty() -> bool {
+    return globalCallStack == None<EvmCallFrame>;
 }
 
 public impure func evmCallStack_topFrame() -> option<EvmCallFrame> {
@@ -497,11 +501,15 @@ public impure func evmCallStack_setTopFrameStorageCell(offset: uint, value: uint
 }
 
 public impure func evmCallStack_addEvmLogToCurrent(item: any) -> option<()> {
+    asm(1001,) { debugprint };
     let topFrame = globalCallStack?;
     item = asm(0, item, topFrame.runningAs) any { tset };
+    asm(1002,) { debugprint };
+    let newLogs = unsafecast<EvmLogs>((topFrame.evmLogs, item));  //DEBUG
+    //let newLogs = evmlogs_appendAny(topFrame.evmLogs, item);
     globalCallStack = Some(
         topFrame with {
-            evmLogs: evmlogs_appendAny(topFrame.evmLogs, item)
+            evmLogs: newLogs
         }
     );
     return Some(());
@@ -562,4 +570,12 @@ public func evmCallFrame_getResumeCodePoint(frame: EvmCallFrame) -> option<func(
 
 public func evmCallFrame_getSelfDestructQueue(frame: EvmCallFrame) -> Queue {
     return frame.selfDestructQueue;
+}
+
+public impure func evmCallStack_callRanOutOfGas() {
+    evmCallStack_returnFromCall(false, 0, 0);
+}
+
+public impure func evmCallStack_callHitError(arbGasRemaining: uint) {
+    evmCallStack_returnFromCall(false, 0, 0);
 }

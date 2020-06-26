@@ -639,6 +639,7 @@ impl Opcode {
             "debugprint" => Opcode::DebugPrint,
             "setgas" => Opcode::SetGas,
             "getgas" => Opcode::GetGas,
+            "errset" => Opcode::ErrSet,
             _ => {
                 panic!("opcode not supported in asm segment: {}", name);
             }
