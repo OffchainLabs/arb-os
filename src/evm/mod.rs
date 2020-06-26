@@ -110,6 +110,7 @@ pub fn compile_from_json(
                     .unwrap(), // BUGBUG--this should handle errors gracefully, not just panic
                     true,
                     compiled_contract.evm_pcs,
+                    HashMap::new(),
                     debug,
                 )
                 .unwrap(); //BUGBUG--this should handle errors gracefully, not just panic

@@ -165,7 +165,7 @@ fn main() -> Result<(), CompileError> {
             }
         } else {
             let mut compiled_progs = Vec::new();
-            for (id, filename) in filenames.into_iter().enumerate() {
+            for (id, filename) in filenames.iter().enumerate() {
                 let path = Path::new(filename);
                 match compile_from_file(path, id, debug_mode) {
                     Ok(compiled_program) => {
@@ -181,7 +181,18 @@ fn main() -> Result<(), CompileError> {
             let is_module = matches.is_present("module");
             match link(&compiled_progs, is_module, Some(Value::none()), typecheck) {
                 Ok(linked_prog) => {
-                    match postlink_compile(linked_prog, is_module, Vec::new(), debug_mode) {
+                    let file_name_chart = filenames
+                        .into_iter()
+                        .map(|st| st.to_string())
+                        .enumerate()
+                        .collect();
+                    match postlink_compile(
+                        linked_prog,
+                        is_module,
+                        Vec::new(),
+                        file_name_chart,
+                        debug_mode,
+                    ) {
                         Ok(completed_program) => {
                             completed_program.to_output(&mut *output, matches.value_of("format"));
                         }

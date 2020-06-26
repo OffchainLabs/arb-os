@@ -36,6 +36,7 @@ pub struct LinkedProgram {
     pub static_val: Value,
     pub exported_funcs: Vec<ExportedFuncPoint>,
     pub imported_funcs: Vec<ImportedFunc>,
+    pub file_name_chart: HashMap<usize, String>,
 }
 
 impl LinkedProgram {
@@ -171,6 +172,7 @@ pub fn postlink_compile(
     program: CompiledProgram,
     is_module: bool,
     evm_pcs: Vec<usize>, // ignored unless we're in a module
+    file_name_chart: HashMap<usize, String>,
     debug: bool,
 ) -> Result<LinkedProgram, CompileError> {
     if debug {
@@ -241,6 +243,7 @@ pub fn postlink_compile(
         } else {
             program.imported_funcs
         },
+        file_name_chart,
     })
 }
 
