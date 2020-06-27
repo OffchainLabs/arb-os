@@ -48,7 +48,7 @@ import func account_getStartCodePoint(acct: Account) -> option<func()>;
 
 import impure func initEvmCallStack(
     callKind: uint,
-    ethMessage: EthBridgeMessage,
+    ethMessage: MessageFromL1,
     addr: address,
     caller: address,
     calldata: ByteArray,
@@ -61,6 +61,9 @@ import func bytearray_unmarshalBytes(mb: MarshalledBytes) -> ByteArray;
 import func bytearray_marshalFull(ba: ByteArray) -> MarshalledBytes;
 
 import func bytestream_new(ba: ByteArray) -> ByteStream;
+import func bytestream_getByte(bs: ByteStream) -> option<(ByteStream, uint)>;
+import func bytestream_getUint(bs: ByteStream) -> option<(ByteStream, uint)>;
+import func bytestream_getRemainingBytes(bs: ByteStream) -> ByteArray;
 
 import func makeInitStructures(v: any) -> (map<uint, func()>, map<uint, uint>);
 import func translateEvmCodeSegment(bs: ByteStream) -> option<(func(), map<uint, func()>)>;
@@ -131,9 +134,9 @@ public impure func handleEthbridgeMessage(ethMsg: EthBridgeMessage) {
             setGlobalAccountStore(
                 accountStore_set(globalAS, arbMsg.sender, updatedAcct),
             );
-            if ( ! handleValidTxMessage(txMsg, ethMsg)) {
-                panic; // for debugging -- call failed
-            }
+//            if ( ! handleValidTxMessage(txMsg, ethMsg)) {
+//                panic; // for debugging -- call failed
+//            }
         } else {
             // sequence number was invalid
             panic; //TODO
@@ -192,6 +195,95 @@ public impure func handleEthbridgeMessage(ethMsg: EthBridgeMessage) {
     // if no case matches, unrecognized message type; ignore it
 }
 
+type MessageFromL1 = struct {
+    blockHash: bytes32,
+    timestamp: uint,
+    blockNumber: uint,
+    sender: address,
+    msgData: MarshalledBytes
+}
+
+public func handleMessageFromL1(msg: MessageFromL1) -> option<()> {
+    let inStream = bytestream_new(bytearray_unmarshalBytes(msg.msgData));
+
+    let (bs, msgType) = bytestream_getByte(inStream)?;
+    inStream = bs;
+
+    if (msgType == 0) {
+        // txcall message
+
+        let (bs, sequenceNum) = bytestream_getUint(inStream)?;
+        inStream = bs;
+        verifyAndIncrSequenceNum(msg.sender, sequenceNum)?;
+
+        return handleValidTxMessage(inStream, msg);
+    } elseif (msgType == 1) {
+        // ethtransfer message
+
+        let (bs, destination) = bytestream_getUint(inStream)?;
+        inStream = bs;
+
+        let (bs, amount) = bytestream_getUint(inStream)?;
+        inStream = bs;
+
+        return None;  // NOT YET IMPLEMENTED
+    } elseif (msgType == 2) {
+        // ERC20 token transfer message
+        return None; // NOT YET IMPLEMENTED
+    } elseif (msgType == 3) {
+        // ERC721 token transfer message
+        return None; // NOT YET IMPLEMENTED
+    } elseif (msgType == 4) {
+        // contract txcall message
+        return None; // NOT YET IMPLEMENTED
+    } elseif (msgType == 5) {
+        // (non-mutating) call message
+        return None; // NOT YET IMPLEMENTED
+    } elseif (msgType == 6) {
+        // this message type is currently unused
+        return None;
+    } elseif (msgType == 7) {
+        // EVM code load message
+        let (bs, contractAddressAsUint) = bytestream_getUint(inStream)?;
+        inStream = bs;
+
+        let (storageMap, bs) = parseStorageMap(bs)?;
+        inStream = bs;
+
+        let codeBytes = bytestream_getRemainingBytes(bs);
+        let (codept, evmJumpTable) = translateEvmCodeSegment(bytestream_new(codeBytes))?;
+        setGlobalAccountStore(
+            accountStore_createAccountFromEvmCode(
+                getGlobalAccountStore(),
+                address(contractAddressAsUint),
+                codeBytes,
+                evmJumpTable,
+                codept,
+                storageMap
+            )?
+        );
+        return Some(());
+    } else {
+        // not a valid message type
+        return None;
+    }
+}
+
+impure func verifyAndIncrSequenceNum(addr: address, seqNum: uint) -> option<()> {
+    let globalAS = getGlobalAccountStore();
+    setGlobalAccountStore(
+        accountStore_set(
+            globalAS,
+            addr,
+            account_checkAndIncrSeqNum(
+                accountStore_get(globalAS, addr),
+                seqNum
+            )?
+        )
+    );
+    return Some(());
+}
+
 func makeStorageMap(storageInfo: StorageInfo) -> map<uint, uint> {
     let ret = newmap<uint, uint>;
     while (null != unsafecast<any>(storageInfo)) {
@@ -201,23 +293,37 @@ func makeStorageMap(storageInfo: StorageInfo) -> map<uint, uint> {
     return ret;
 }
 
-impure func handleValidTxMessage(txMsg: TxMessage, fullMsg: EthBridgeMessage) -> bool {
+func parseStorageMap(bs: ByteStream) -> option<(map<uint, uint>, ByteStream)> {
+    let storageMap = newmap<uint, uint>;
+    loop {
+        let (ubs, more) = bytestream_getByte(bs)?;
+        bs = ubs;
+        if (more == 0) {
+            return Some((storageMap, bs));
+        }
+        let (ubs, offset) = bytestream_getUint(bs)?;
+        bs = ubs;
+        let (ubs, value) = bytestream_getUint(bs)?;
+        bs = ubs;
+        storageMap = storageMap with { [offset] = value };
+    }
+}
+
+impure func handleValidTxMessage(inStream: ByteStream, fullMsg: MessageFromL1) -> option<()> {
+    let (bs, calleeAddressAsUint) = bytestream_getUint(inStream)?;
+    inStream = bs;
+
+    let (bs, value) = bytestream_getUint(inStream)?;
+    inStream = bs;
+
     initEvmCallStack(
         0,    // txcall type
         fullMsg,
-        txMsg.to,
-        fullMsg.message.sender,
-        bytearray_unmarshalBytes(txMsg.data),
-        txMsg.value
-    );
-    if let Some(codeAcct) = evmCallStack_runningCodeFromAccount() {
-        if let Some(codept) = account_getStartCodePoint(codeAcct) {
-            codept();   // should never return
-            panic;
-        } else {
-            return false;
-        }
-    } else {
-        return false;
-    }
+        address(calleeAddressAsUint),
+        fullMsg.sender,
+        bytestream_getRemainingBytes(inStream),
+        value
+    );  // should never return
+
+    return None;
 }

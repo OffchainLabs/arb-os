@@ -112,25 +112,33 @@ public impure func initEvmCallStack(
     calldata: ByteArray,
     callvalue: uint,
 ) {
-    globalCurrentEthMessage = ethMessage;
+    if let Some(entryPoint) = account_getStartCodePoint(
+        accountStore_get(
+            getGlobalAccountStore(),
+            addr
+        )
+    ) {
+        globalCurrentEthMessage = ethMessage;
 
-    let globalAS = getGlobalAccountStore();
-    globalCallStack = Some(struct {
-        runningAs: addr,
-        runningCodeFrom: addr,
-        accountStore: globalAS,
-        runningAsAccount: accountStore_get(globalAS, addr),
-        caller: caller,
-        callKind: callKind,
-        calldata: calldata,
-        callvalue: callvalue,
-        returnInfo: None<ReturnInfo>,
-        memory: bytearray_new(8, true),
-        evmLogs: evmlogs_empty(),
-        selfDestructQueue: queue_new(),
-        resumeInfo: None<ResumeInfo>,
-        parent: None<any>
-    });
+        let globalAS = getGlobalAccountStore();
+        globalCallStack = Some(struct {
+            runningAs: addr,
+            runningCodeFrom: addr,
+            accountStore: globalAS,
+            runningAsAccount: accountStore_get(globalAS, addr),
+            caller: caller,
+            callKind: callKind,
+            calldata: calldata,
+            callvalue: callvalue,
+            returnInfo: None<ReturnInfo>,
+            memory: bytearray_new(8, true),
+            evmLogs: evmlogs_empty(),
+            selfDestructQueue: queue_new(),
+            resumeInfo: None<ResumeInfo>,
+            parent: None<any>
+        });
+        entryPoint();  // should never return
+    }
 }
 
 public impure func evmCallStack_doCall(

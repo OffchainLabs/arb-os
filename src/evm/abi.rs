@@ -14,8 +14,7 @@
  * limitations under the License.
  */
 
-use crate::mavm::Value;
-use crate::run::{bytestack_from_bytes, RuntimeEnvironment};
+use crate::run::RuntimeEnvironment;
 use crate::uint256::Uint256;
 use std::collections::HashMap;
 use std::convert::TryInto;
@@ -34,7 +33,7 @@ pub struct AbiForContract {
     code: Vec<u8>,
     contract: ethabi::Contract,
     pub address: Uint256,
-    storage_map: Value,
+    storage_map: Vec<(Uint256, Uint256)>,
     name: String,
 }
 
@@ -116,15 +115,14 @@ impl AbiForDapp {
                             return Err(ethabi::Error::from("no name key in json"));
                         }
                     };
-                    let mut storage_map = Value::none();
+                    let mut storage_map = Vec::new();
                     if let serde_json::Value::Object(m) = &fields["storage"] {
                         for (k, v) in m {
                             if let serde_json::Value::String(s) = v {
-                                storage_map = Value::Tuple(vec![
-                                    Value::Int(Uint256::from_string_hex(&k[2..]).unwrap()),
-                                    Value::Int(Uint256::from_string_hex(&s[2..]).unwrap()),
-                                    storage_map,
-                                ]);
+                                storage_map.push((
+                                    Uint256::from_string_hex(&k[2..]).unwrap(),
+                                    Uint256::from_string_hex(&s[2..]).unwrap(),
+                                ));
                             } else {
                                 return Err(ethabi::Error::from(
                                     "malformed storage structure in json",
@@ -167,16 +165,17 @@ impl AbiForContract {
         let cbor_length = cbor_length as usize;
         let decoded_insns = &decoded_insns[..(decoded_insns.len() - cbor_length - 2)];
 
-        let msg = Value::Tuple(vec![
-            Value::Int(Uint256::from_usize(7)),
-            Value::Int(Uint256::zero()),
-            Value::Tuple(vec![
-                Value::Int(self.address.clone()),
-                bytestack_from_bytes(decoded_insns),
-                self.storage_map.clone(),
-            ]),
-        ]);
-        rt_env.insert_arb_message(msg);
+        let mut buf = vec![7u8]; // message type 7
+        buf.extend(self.address.to_bytes_be());
+        for (offset, value) in &self.storage_map {
+            buf.push(1u8);
+            buf.extend(offset.to_bytes_be());
+            buf.extend(value.to_bytes_be());
+        }
+        buf.push(0u8);
+        buf.extend(decoded_insns);
+
+        rt_env.insert_eth_message(&buf);
     }
 
     pub fn get_function(&self, name: &str) -> Result<&ethabi::Function, ethabi::Error> {

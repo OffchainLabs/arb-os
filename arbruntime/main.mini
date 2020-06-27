@@ -14,14 +14,14 @@
 // limitations under the License.
 //
 
-import type EthBridgeMessage;
+import type MessageFromL1;
 
 import impure func errorHandler_init();
 import impure func inbox_init();
 import impure func accountStore_init();
 
-import impure func inbox_get() -> EthBridgeMessage;
-import impure func handleEthbridgeMessage(msg: EthBridgeMessage);
+import impure func inbox_get() -> MessageFromL1;
+import impure func handleMessageFromL1(msg: MessageFromL1) -> option<()>;
 
 
 impure func main() {
@@ -35,7 +35,9 @@ impure func main() {
 public impure func mainRunLoop() {
     loop {
         let msg = inbox_get();
-        handleEthbridgeMessage(msg,);
+        if (None<()> == handleMessageFromL1(msg,)) {
+            panic;   //BUGBUG: just used for debugging
+        }
     }
     panic;  // should never be reached
 }

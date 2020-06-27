@@ -14,18 +14,20 @@
 // limitations under the License.
 //
 
-import type ArbMessage;
 import type Queue;
 import func queue_new() -> Queue;
 import func queue_isEmpty(q: Queue) -> bool;
 import func queue_get(q: Queue) -> (Queue, any);
 import func queue_put(q: Queue, val: any) -> Queue;
 
-type EthBridgeMessage = struct {
-    blockNum: uint,
+import type MarshalledBytes;
+
+type MessageFromL1 = struct {
+    blockHash: bytes32,
     timestamp: uint,
-    txId: uint,
-    message: ArbMessage,
+    blockNumber: uint,
+    sender: address,
+    msgData: MarshalledBytes
 }
 
 type Inbox = struct {
@@ -44,16 +46,16 @@ public impure func inbox_init() {
     };
 }
 
-public impure func inbox_get() -> EthBridgeMessage {
+public impure func inbox_get() -> MessageFromL1 {
     let inbox = globalInbox;
     while (queue_isEmpty(inbox.queue)) {
         inbox = getFromL1Inbox(inbox);
     }
     let (updatedQ, ret,) = queue_get(inbox.queue);
-    let ebMsg = unsafecast<EthBridgeMessage>(ret);
+    let ebMsg = unsafecast<MessageFromL1>(ret);
 
-    if (inbox.blockNum < ebMsg.blockNum) {
-        inbox = inbox with { blockNum: ebMsg.blockNum };
+    if (inbox.blockNum < ebMsg.blockNumber) {
+        inbox = inbox with { blockNum: ebMsg.blockNumber };
     }
     if (inbox.timestamp < ebMsg.timestamp) {
         inbox = inbox with { timestamp: ebMsg.timestamp };
