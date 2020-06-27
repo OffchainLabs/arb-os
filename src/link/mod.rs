@@ -413,5 +413,6 @@ pub fn link(
         linked_imports.into_iter().map(|x| x.0).collect(),
         global_num_limit,
         Some(merged_source_file_map),
+        HashMap::new(),
     ))
 }

@@ -21,6 +21,7 @@ use crate::stringtable;
 use lalrpop_util::lalrpop_mod;
 use mini::DeclsParser;
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use std::fmt::Formatter;
 use std::fs::File;
 use std::io::{self, Read};
@@ -47,6 +48,7 @@ pub struct CompiledProgram {
     pub imported_funcs: Vec<ImportedFunc>,
     pub global_num_limit: usize,
     pub source_file_map: Option<SourceFileMap>,
+    pub file_name_chart: HashMap<u64, String>,
 }
 
 impl CompiledProgram {
@@ -56,6 +58,7 @@ impl CompiledProgram {
         imported_funcs: Vec<ImportedFunc>,
         global_num_limit: usize,
         source_file_map: Option<SourceFileMap>,
+        file_name_chart: HashMap<u64, String>,
     ) -> Self {
         CompiledProgram {
             code,
@@ -63,6 +66,7 @@ impl CompiledProgram {
             imported_funcs,
             global_num_limit,
             source_file_map,
+            file_name_chart,
         }
     }
 
@@ -108,6 +112,7 @@ impl CompiledProgram {
                 relocated_imported_funcs,
                 self.global_num_limit + globals_offset,
                 source_file_map,
+                self.file_name_chart,
             ),
             max_func_offset,
         )
@@ -235,6 +240,7 @@ pub fn compile_from_source(
         imported_funcs,
         global_vars.len(),
         Some(SourceFileMap::new(code_out.len(), pathname.to_string())),
+        HashMap::new(),
     ))
 }
 

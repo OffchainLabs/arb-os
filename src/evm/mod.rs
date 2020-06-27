@@ -103,6 +103,7 @@ pub fn compile_from_json(
                             vec![],
                             0,
                             None,
+                            HashMap::new(),
                         )],
                         true,
                         Some(storage_info_struct),

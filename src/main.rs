@@ -171,7 +171,8 @@ fn main() -> Result<(), CompileError> {
             let file_id = file_hasher.finish();
             file_name_chart.insert(file_id, filename.to_string());
             match compile_from_file(path, file_id, debug_mode) {
-                Ok(compiled_program) => {
+                Ok(mut compiled_program) => {
+                    compiled_program.file_name_chart.extend(file_name_chart);
                     compiled_program.to_output(&mut *output, matches.value_of("format"));
                 }
                 Err(e) => {
@@ -189,6 +190,7 @@ fn main() -> Result<(), CompileError> {
                 file_name_chart.insert(file_id, filename.to_string());
                 match compile_from_file(path, file_id, debug_mode) {
                     Ok(compiled_program) => {
+                        file_name_chart.extend(compiled_program.file_name_chart.clone());
                         compiled_progs.push(compiled_program);
                     }
                     Err(e) => {
