@@ -18,8 +18,7 @@ import func emptyAvmStack();
 import impure func cleanAvmAuxStackAndCall(funcToCall: impure func());
 import impure func mainRunLoop();
 import impure func evmCallStack_isEmpty() -> bool;
-import impure func evmCallStack_callRanOutOfGas();
-import impure func evmCallStack_callHitError(gasRemaining: uint);
+import impure func evmCallStack_callHitError();
 
 
 public impure func errorHandler_init() {
@@ -32,31 +31,29 @@ public impure func errorHandler_init() {
 }
 
 func errorHandler() {
-    // If we got here, it's because some AVM instruction raised an Error
+    // If we got here, it's because some AVM instruction hit an Error
     // This could happen for several reasons.
     //   1.  untrusted application code tried to do something erroneous, like dividing by zero
     //   2.  untrusted application code ran out of ArbGas
-    //   3.  an error occurred due to an unknown bug in the runtime
+    //   3.  we hit an unknown bug in the runtime
 
-    // First, make sure we aren't going to run out of ArbGas in this error handler
-    // Note that if the application has left the ArbGas allocation at just barely above zero,
-    //      we could run out of ArbGas before we succeed in protecting ourself from ArbGas underflow.
-    // If that happens, we'll get thrown back to this error handler again, but with ArbGas set to MaxUint256
-    // In other words, it will look like the application ran out of ArbGas just before returning control to us
-    //      so that's not a problem: we will conclude correctly that the application used too much ArbGas.
-    let arbGasRemainingOnEntry = asm() uint { getgas };
-    asm(~0,) { setgas };
+    // Note that if an application hits an error when its ArbGas remaining is just barely above zero,
+    //      we could run out of ArbGas while we're running this handler or cleaning up the application's state.
+    // If that happens, we'll get thrown back to this error handler again, but with ArbGas set to MaxUint256.
+    // When we re-enter this handler, it will look like the application ran out of ArbGas.
+    // That's OK, because the only "harm" done is that the double-error situation of application error plus ArbGas underflow
+    //      gets detected as just an ArbGas underflow.  The effect on the application will be the same either way.
 
     if (evmCallStack_isEmpty()) {
         // Oh no, we must have hit an unexpected error in the runtime.
         // That shouldn't have happened, but we have to make the best of the situation.
-        // So we'll clean up our stacks and jump back to the main runloop.
+        // So we'll reset our ArbGas limit, clean up our stacks, and jump back to the main runloop.
+        asm(~0,) { setgas };
         emptyAvmStack();
         cleanAvmAuxStackAndCall(mainRunLoop);  // this will never return
-    } elseif (arbGasRemainingOnEntry >= asm(2, 255) uint { exp }) {
-        evmCallStack_callRanOutOfGas();  // this will never return
     } else {
-        evmCallStack_callHitError(arbGasRemainingOnEntry);  // this will never return
+        // Application code must have hit an error.
+        evmCallStack_callHitError();  // this will never return
     }
     //NOTREACHED
     panic;

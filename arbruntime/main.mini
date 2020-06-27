@@ -17,6 +17,7 @@
 import type EthBridgeMessage;
 
 import impure func errorHandler_init();
+import impure func gasAccounting_init();
 import impure func inbox_init();
 import impure func accountStore_init();
 
@@ -26,6 +27,7 @@ import impure func handleEthbridgeMessage(msg: EthBridgeMessage);
 
 impure func main() {
     errorHandler_init();
+    gasAccounting_init();
     inbox_init();
     accountStore_init();
     

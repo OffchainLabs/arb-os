@@ -3,7 +3,7 @@ BUILTINDIR = builtin
 STDDIR = stdlib
 
 test: all
-	cargo test
+	cargo test --release
 
 evmdebug: all
 	cargo run evmdebug
@@ -82,7 +82,7 @@ $(BUILTINDIR)/cuckookvs.mao: $(BUILTINDIR)/cuckookvs.mini
 	cargo run compile $(BUILTINDIR)/cuckookvs.mini -c -o $(BUILTINDIR)/cuckookvs.mao
 
 RUNTIMEDIR = arbruntime
-RUNTIMEMAOS = $(RUNTIMEDIR)/main.mao $(RUNTIMEDIR)/accounts.mao $(RUNTIMEDIR)/messages.mao $(RUNTIMEDIR)/inbox.mao $(RUNTIMEDIR)/evmCallStack.mao $(RUNTIMEDIR)/evmOps.mao $(RUNTIMEDIR)/codeSegment.mao $(RUNTIMEDIR)/evmlogs.mao $(RUNTIMEDIR)/errorHandler.mao
+RUNTIMEMAOS = $(RUNTIMEDIR)/main.mao $(RUNTIMEDIR)/accounts.mao $(RUNTIMEDIR)/messages.mao $(RUNTIMEDIR)/inbox.mao $(RUNTIMEDIR)/evmCallStack.mao $(RUNTIMEDIR)/evmOps.mao $(RUNTIMEDIR)/codeSegment.mao $(RUNTIMEDIR)/evmlogs.mao $(RUNTIMEDIR)/errorHandler.mao $(RUNTIMEDIR)/gasAccounting.mao
 RUNTIME = $(RUNTIMEDIR)/runtime.mexe
 
 runtime: $(RUNTIME)
@@ -113,6 +113,9 @@ $(RUNTIMEDIR)/evmlogs.mao: $(RUNTIMEDIR)/evmlogs.mini
 
 $(RUNTIMEDIR)/errorHandler.mao: $(RUNTIMEDIR)/errorHandler.mini
 	cargo run compile $(RUNTIMEDIR)/errorHandler.mini -c -o $(RUNTIMEDIR)/errorHandler.mao
+
+$(RUNTIMEDIR)/gasAccounting.mao: $(RUNTIMEDIR)/gasAccounting.mini
+	cargo run compile $(RUNTIMEDIR)/gasAccounting.mini -c -o $(RUNTIMEDIR)/gasAccounting.mao
 
 $(RUNTIME): $(RUNTIMEMAOS) $(STDLIB) $(BUILTINMAOS)
 	cargo run compile $(RUNTIMEMAOS) $(STDLIB) -o $(RUNTIME)
