@@ -428,7 +428,10 @@ impl Machine {
                                 line, column, filename
                             );
                         } else {
-                            println!("Origin: (Line: {}, Column: {})", line, column);
+                            println!(
+                                "Origin: (Line: {}, Column: {}, Unknown File ID: {})",
+                                line, column, location.file_id
+                            );
                         }
                     }
                 }
