@@ -45,7 +45,7 @@ public impure func gasAccounting_fromAppToRuntime() -> uint {
     if (leftover < asm(2, 255) uint { exp }) {
         return leftover;
     } else {
-        // ArbGasRemaining is close to MaxUint256, so the application must have run out
+        // Based on ArbGasRemaining, we're in the runtime, so the application must have run out of ArbGas
         arbGasUsedByRuntime = arbGasUsedByRuntime + ((~0) - leftover);
         return 0;
     }

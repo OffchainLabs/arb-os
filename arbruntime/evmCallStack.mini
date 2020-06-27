@@ -66,6 +66,9 @@ import func stack_isEmpty(stack: Stack) -> bool;
 import func stack_push(stack: Stack, value: any) -> Stack;
 import func stack_pop(stack: Stack) -> option<(Stack, any)>;
 
+import impure func gasAccounting_fromAppToRuntime() -> uint;
+import impure func gasAccounting_fromRuntimeToApp(gasAllocation: uint);
+
 import impure func mainRunLoop();
 
 
@@ -97,6 +100,7 @@ type ResumeInfo = struct {
     returnDataOffset: uint,
     returnDataNbytes: uint,
     callType: uint,
+    savedGas: uint,
 }
 
 //FIXME:  add OrDie variants of the getters that return options; use in evmOps
@@ -132,6 +136,7 @@ public impure func initEvmCallStack(
         resumeInfo: None<ResumeInfo>,
         parent: None<any>
     });
+    gasAccounting_fromRuntimeToApp(gas);
 }
 
 public impure func evmCallStack_doCall(
@@ -151,6 +156,11 @@ public impure func evmCallStack_doCall(
     //        that state will be contingent on the call succeeding
     // if the call succeeds, we'll copy the call's state into the caller as the new
     //        state, but if call fails we'll discard the state from the caller's frame
+
+    let availableGas = gasAccounting_fromAppToRuntime();
+    if (gas < availableGas) {
+        gas = availableGas;
+    }
 
     if (kind == 1) {
         panic;  // callcode not yet implemented
@@ -175,6 +185,7 @@ public impure func evmCallStack_doCall(
                    returnDataOffset: retOffset,
                    returnDataNbytes: retLength,
                    callType: kind,
+                   savedGas: availableGas-gas,
                }) };
 
     // now create a new callframe for the callee
@@ -216,6 +227,7 @@ public impure func evmCallStack_doCall(
 
     // jump to the called code's startCodePoint -- this should never return
     let startCodePoint = account_getStartCodePoint(callee)?;
+    gasAccounting_fromRuntimeToApp(gas);
     startCodePoint();
 
     panic;
@@ -226,6 +238,7 @@ public impure func evmCallStack_returnFromCall(
     returnOffset: uint,
     returnLength: uint
 ) -> option<()> {
+    let leftoverGas = gasAccounting_fromAppToRuntime();
     let topFrame = globalCallStack?;
     let memory = topFrame.memory;
     let returnData = bytearray_extract(memory, returnOffset, returnLength)?;
@@ -268,6 +281,7 @@ public impure func evmCallStack_returnFromCall(
         emptyAvmStack();
         restoreAvmStack(resumeInfo.stackContents,);
         asm(success,) { };  // push success onto stack
+        gasAccounting_fromRuntimeToApp(leftoverGas + resumeInfo.savedGas);
         asm(resumeInfo.codePoint,) { jump };
         panic;  // shouldn't happen -- previous instruction jumped away
     } else {
