@@ -135,7 +135,7 @@ public impure func initEvmCallStack(
 }
 
 public impure func evmCallStack_doCall(
-    kind: uint,  // currently handle 0 (call),
+    kind: uint,  // currently handle 0 (call), 2 (delegatecall), 3 (staticcall)
     gas: uint,
     calleeAddr: address,
     balance: uint,
@@ -183,7 +183,7 @@ public impure func evmCallStack_doCall(
     let callee = accountStore_get(topFrame.accountStore, calleeAddr);
     let runningAsAddr = calleeAddr;
     if (kind == 2) {
-        runningAsAddr = callerAddr;  // delegate call runs as the caller, with callee's code
+        runningAsAddr = callerAddr;  // delegatecall runs as the caller, with callee's code
     }
     let updatedAcctStore = topFrame.accountStore;
     if (kind == 0) {
