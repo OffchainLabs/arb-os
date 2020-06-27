@@ -307,7 +307,7 @@ public impure func evmCallStack_returnFromCall(
                     marshaledReturnData,
                     success
                 ),
-            ) { log } ;
+            ) { log } ;   //TODO: report gas usage and gas price paid in this log item
 
             setGlobalAccountStore(acctStore,);
         } else {
@@ -318,7 +318,7 @@ public impure func evmCallStack_returnFromCall(
                     bytearray_marshalFull(returnData),
                     success
                 ),
-            ) { log } ;
+            ) { log } ;  //TODO: report gas usage and gas price paid in this log item
         }
 
         // discard the AVM stack contents and jump back to the main run loop
