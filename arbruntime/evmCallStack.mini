@@ -573,10 +573,11 @@ public func evmCallFrame_getSelfDestructQueue(frame: EvmCallFrame) -> Queue {
     return frame.selfDestructQueue;
 }
 
-public impure func evmCallStack_callRanOutOfGas() {
-    evmCallStack_returnFromCall(false, 0, 0);
-}
-
-public impure func evmCallStack_callHitError(arbGasRemaining: uint) {
-    evmCallStack_returnFromCall(false, 0, 0);
+public impure func evmCallStack_callHitError() {
+    if (evmCallStack_returnFromCall(false, 0, 0) == None<()>) {
+        // something has gone seriously wrong
+        // try clearing the evmCallStack then forcing a jump to the error handler
+        globalCallStack = None<EvmCallFrame>;
+        panic;
+    }
 }
