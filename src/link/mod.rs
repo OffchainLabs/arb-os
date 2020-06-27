@@ -18,8 +18,9 @@ use crate::compile::{compile_from_file, CompileError, CompiledProgram, SourceFil
 use crate::mavm::{CodePt, Instruction, Label, Opcode, Value};
 use crate::stringtable::{StringId, StringTable};
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
+use std::collections::hash_map::{DefaultHasher, HashMap};
 use std::fmt::{self, Debug};
+use std::hash::Hasher;
 use std::io;
 use std::path::Path;
 use xformcode::make_uninitialized_tuple;
@@ -172,7 +173,7 @@ pub fn postlink_compile(
     program: CompiledProgram,
     is_module: bool,
     evm_pcs: Vec<usize>, // ignored unless we're in a module
-    file_name_chart: HashMap<u64, String>,
+    mut file_name_chart: HashMap<u64, String>,
     debug: bool,
 ) -> Result<LinkedProgram, CompileError> {
     if debug {
@@ -229,6 +230,8 @@ pub fn postlink_compile(
         }
         println!("============ after full compile/link =============");
     }
+
+    file_name_chart.extend(program.file_name_chart);
 
     Ok(LinkedProgram {
         code: code_final,
@@ -413,6 +416,17 @@ pub fn link(
         linked_imports.into_iter().map(|x| x.0).collect(),
         global_num_limit,
         Some(merged_source_file_map),
-        HashMap::new(),
+        if is_module {
+            HashMap::new()
+        } else {
+            let mut map = HashMap::new();
+            let mut file_hasher = DefaultHasher::new();
+            file_hasher.write("builtin/array.mini".as_bytes());
+            map.insert(file_hasher.finish(), "builtin/array.mini".to_string());
+            let mut file_hasher = DefaultHasher::new();
+            file_hasher.write("builtin/kvs.mini".as_bytes());
+            map.insert(file_hasher.finish(), "builtin/kvs.mini".to_string());
+            map
+        },
     ))
 }
