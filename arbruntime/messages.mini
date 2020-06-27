@@ -52,7 +52,8 @@ import impure func initEvmCallStack(
     addr: address,
     caller: address,
     calldata: ByteArray,
-    callvalue: uint
+    callvalue: uint,
+    gas: uint
 );
 import func evmCallStack_runningCodeFromAccount() -> option<Account>;
 
@@ -96,6 +97,8 @@ type TxMessage = struct {
     seqNumber: uint,
     value: uint,
     data: MarshalledBytes,
+    maxGas: uint,
+    gasPriceBid: uint
 }
 
 type CallMessage = struct {
@@ -208,7 +211,8 @@ impure func handleValidTxMessage(txMsg: TxMessage, fullMsg: EthBridgeMessage) ->
         txMsg.to,
         fullMsg.message.sender,
         bytearray_unmarshalBytes(txMsg.data),
-        txMsg.value
+        txMsg.value,
+        txMsg.maxGas
     );
     if let Some(codeAcct) = evmCallStack_runningCodeFromAccount() {
         if let Some(codept) = account_getStartCodePoint(codeAcct) {

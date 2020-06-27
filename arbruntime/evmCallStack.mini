@@ -111,6 +111,7 @@ public impure func initEvmCallStack(
     caller: address,
     calldata: ByteArray,
     callvalue: uint,
+    gas: uint,
 ) {
     globalCurrentEthMessage = ethMessage;
 

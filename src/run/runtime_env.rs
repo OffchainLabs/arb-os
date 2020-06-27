@@ -67,6 +67,8 @@ impl RuntimeEnvironment {
             Value::Int(self.get_and_incr_seq_num(&to_addr)),
             Value::Int(value),
             bytestack_from_bytes(data),
+            Value::Int(Uint256::from_usize(1000000000000)),
+            Value::Int(Uint256::from_usize(0))
         ]);
         let msg = Value::Tuple(vec![
             Value::Int(Uint256::zero()), // message type 0
