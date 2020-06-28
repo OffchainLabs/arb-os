@@ -20,9 +20,30 @@ public func random_new(seed: bytes32) -> RandomGenerator {
     return seed;
 }
 
+public func random_refresh_seed(rand: RandomGenerator, refresh: bytes32) -> RandomGenerator {
+    return hash(rand, refresh);
+}
+
 public func random_next(rand: RandomGenerator) -> (bytes32, RandomGenerator) {
     return (
         hash(bytes32(0), rand), 
         hash(bytes32(1), rand),
     );
+}
+
+public func randomly_permute_array(
+    rand: RandomGenerator,
+    arr: []any,
+    offset: uint,
+    num: uint
+) -> ([]any, RandomGenerator) {
+    while (num > 1) {
+        let (rb, gen) = random_next(rand);
+        rand = gen;
+        let i = uint(rb) % num;   // This isn't perfectly uniform, but difference is negligible for this use.
+        arr = arr with { [offset+i] = arr[offset+num-1] }
+                  with { [offset+num-1] = arr[offset+i] };
+        num = num-1;
+    }
+    return (arr, rand);
 }
