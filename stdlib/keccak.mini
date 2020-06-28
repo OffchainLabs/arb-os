@@ -125,7 +125,7 @@ public impure func keccak_permutation(s: [25]uint) -> [25]uint {
         }
         i = 0;
         while (i < 5) {
-            let t = bc[(i + 4) % 5] + sha3_rotl64(bc[(i + 1) % 5], 1);
+            let t = bc[(i + 4) % 5] ^ sha3_rotl64(bc[(i + 1) % 5], 1);
             let j = 0;
             while (j < 25) {
                 s = s with { [j+i] = s[j+i]^t };
@@ -231,7 +231,7 @@ impure func initKeccakConstants() {
             with { [21] = 9 }
             with { [22] = 6 }
             with { [23] = 1 },
-    };      
+    };
 }
 
 func flipEndian64(x: uint) -> uint {
