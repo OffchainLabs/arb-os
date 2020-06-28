@@ -73,6 +73,20 @@ impl RuntimeEnvironment {
         self.insert_eth_message(&buf);
     }
 
+    pub fn insert_nonmutating_call_message(
+        &mut self,
+        to_addr: Uint256,
+        max_gas: Uint256,
+        data: &[u8],
+    ) {
+        let mut buf = vec![5u8];
+        buf.extend(to_addr.to_bytes_be());
+        buf.extend(max_gas.to_bytes_be());
+        buf.extend_from_slice(data);
+
+        self.insert_eth_message(&buf);
+    }
+
     pub fn get_and_incr_seq_num(&mut self, addr: &Uint256) -> Uint256 {
         let cur_seq_num = match self.seq_nums.get(&addr) {
             Some(sn) => sn.clone(),

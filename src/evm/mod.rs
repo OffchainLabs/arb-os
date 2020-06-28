@@ -819,6 +819,7 @@ pub struct CallInfo<'a> {
     function_name: &'a str,
     args: &'a [ethabi::Token],
     payment: Uint256,
+    mutating: bool,
 }
 
 #[cfg(test)]
@@ -829,6 +830,7 @@ pub fn evm_load_and_call_func(
     function_name: &str,
     args: &[ethabi::Token],
     payment: Uint256,
+    mutating: bool,
     debug: bool,
 ) -> Result<Vec<ethabi::Token>, ethabi::Error> {
     Ok(evm_load_and_call_funcs(
@@ -839,6 +841,7 @@ pub fn evm_load_and_call_func(
             function_name,
             args,
             payment,
+            mutating
         }]
         .as_ref(),
         debug,
@@ -901,13 +904,21 @@ pub fn evm_load_and_call_funcs(
         call_funcs.push(this_func);
 
         let calldata = this_func.encode_input(call_info.args).unwrap();
-        rt_env.insert_txcall_message(
-            this_contract.address.clone(),
-            call_info.payment.clone(),
-            Uint256::from_usize(1000000000000),
-            Uint256::zero(),
-            &calldata,
-        );
+        if call_info.mutating {
+            rt_env.insert_txcall_message(
+                this_contract.address.clone(),
+                call_info.payment.clone(),
+                Uint256::from_usize(1000000000000),
+                Uint256::zero(),
+                &calldata,
+            );
+        } else {
+            rt_env.insert_nonmutating_call_message(
+                this_contract.address.clone(),
+                Uint256::from_usize(1000000000000),
+                &calldata,
+            );
+        }
     }
 
     let mut machine = load_from_file(Path::new("arbruntime/runtime.mexe"), rt_env);
@@ -940,8 +951,8 @@ pub fn evm_load_and_call_funcs(
     Ok(ret)
 }
 
-#[cfg(test)]
-pub fn evm_load_add_and_verify(debug: bool) {
+å#[cfg(test)]
+pub fn evm_load_add_and_verify(mutating: bool, debug: bool) {
     use std::convert::TryFrom;
     match evm_load_and_call_func(
         "contracts/add/compiled.json",
@@ -954,6 +965,7 @@ pub fn evm_load_add_and_verify(debug: bool) {
         ]
         .as_ref(),
         Uint256::zero(),
+        mutating,
         debug,
     ) {
         Ok(tokens) => match tokens[0] {
@@ -980,6 +992,7 @@ pub fn evm_load_fib_and_verify(debug: bool) {
         "doFib",
         vec![ethabi::Token::Uint(ethabi::Uint::try_from(5).unwrap())].as_ref(),
         Uint256::zero(),
+        true,
         debug,
     ) {
         Ok(tokens) => match tokens[0] {
@@ -1007,6 +1020,7 @@ pub fn evm_xcontract_call_and_verify(debug: bool) {
                 function_name: "deposit",
                 args: vec![].as_ref(),
                 payment: Uint256::from_usize(10000),
+                mutating: true,
             },
             CallInfo {
                 function_name: "transferFib",
@@ -1016,6 +1030,7 @@ pub fn evm_xcontract_call_and_verify(debug: bool) {
                 ]
                 .as_ref(),
                 payment: Uint256::zero(),
+                mutating: true
             },
         ]
         .as_ref(),
