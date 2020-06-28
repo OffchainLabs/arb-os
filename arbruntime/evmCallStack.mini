@@ -481,35 +481,32 @@ public impure func evmCallStack_setTopFrameMemory(mem: ByteArray) -> bool {
 public impure func evmCallStack_transferEthFromCurrent(
     dest: address,
     amount: uint,
-) -> bool {
-    if let Some(topFrame) = globalCallStack {
-        if (topFrame.runningAs == dest) {
-            return false;   // can't do a self-transfer
-        }
-        let curAcct = topFrame.runningAsAccount;
-        let curBalance = account_getBalance(curAcct);
-        if (curBalance < amount) {
-            return false;   // insufficient funds
-        }
-        topFrame = topFrame with {
-            runningAsAccount: account_setBalance(curAcct, curBalance-amount)
-        };
-        let otherAcct = accountStore_get(topFrame.accountStore, dest);
-        topFrame = topFrame with {
-            accountStore: accountStore_set(
-                topFrame.accountStore,
-                dest,
-                account_setBalance(
-                    otherAcct,
-                    account_getBalance(otherAcct) + amount
-                )
-            )
-        };
-        globalCallStack = Some(topFrame);
-        return true;
-    } else {
-        return false;  // no current call frame
+) -> option<()> {
+    let topFrame = globalCallStack?;
+    if (topFrame.runningAs == dest) {
+        return None;   // can't do a self-transfer
     }
+    let curAcct = topFrame.runningAsAccount;
+    let curBalance = account_getBalance(curAcct);
+    if (curBalance < amount) {
+        return None;   // insufficient funds
+    }
+    topFrame = topFrame with {
+        runningAsAccount: account_setBalance(curAcct, curBalance-amount)
+    };
+    let otherAcct = accountStore_get(topFrame.accountStore, dest);
+    topFrame = topFrame with {
+        accountStore: accountStore_set(
+            topFrame.accountStore,
+            dest,
+            account_setBalance(
+                otherAcct,
+                account_getBalance(otherAcct) + amount
+            )
+        )
+    };
+    globalCallStack = Some(topFrame);
+    return Some(());
 }
 
 public impure func evmCallStack_setTopFrameStorageCell(offset: uint, value: uint) -> option<()> {
