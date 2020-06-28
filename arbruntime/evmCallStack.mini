@@ -117,26 +117,35 @@ public impure func initEvmCallStack(
     callvalue: uint,
     gas: uint,
 ) {
-    globalCurrentEthMessage = ethMessage;
+    if let Some(entryPoint) = account_getStartCodePoint(
+        accountStore_get(
+            getGlobalAccountStore(),
+            addr
+        )
+    ) {
+        globalCurrentEthMessage = ethMessage;
 
-    let globalAS = getGlobalAccountStore();
-    globalCallStack = Some(struct {
-        runningAs: addr,
-        runningCodeFrom: addr,
-        accountStore: globalAS,
-        runningAsAccount: accountStore_get(globalAS, addr),
-        caller: caller,
-        callKind: callKind,
-        calldata: calldata,
-        callvalue: callvalue,
-        returnInfo: None<ReturnInfo>,
-        memory: bytearray_new(8, true),
-        evmLogs: evmlogs_empty(),
-        selfDestructQueue: queue_new(),
-        resumeInfo: None<ResumeInfo>,
-        parent: None<any>
-    });
-    gasAccounting_fromRuntimeToApp(gas);
+        let globalAS = getGlobalAccountStore();
+        globalCallStack = Some(struct {
+            runningAs: addr,
+            runningCodeFrom: addr,
+            accountStore: globalAS,
+            runningAsAccount: accountStore_get(globalAS, addr),
+            caller: caller,
+            callKind: callKind,
+            calldata: calldata,
+            callvalue: callvalue,
+            returnInfo: None<ReturnInfo>,
+            memory: bytearray_new(8, true),
+            evmLogs: evmlogs_empty(),
+            selfDestructQueue: queue_new(),
+            resumeInfo: None<ResumeInfo>,
+            parent: None<any>
+        });
+
+        gasAccounting_fromRuntimeToApp(gas);
+        entryPoint();  // should never return
+    }
 }
 
 public impure func evmCallStack_doCall(
@@ -158,7 +167,7 @@ public impure func evmCallStack_doCall(
     //        state, but if call fails we'll discard the state from the caller's frame
 
     let availableGas = gasAccounting_fromAppToRuntime();
-    if (gas < availableGas) {
+    if (gas > availableGas) {
         gas = availableGas;
     }
 
@@ -472,35 +481,32 @@ public impure func evmCallStack_setTopFrameMemory(mem: ByteArray) -> bool {
 public impure func evmCallStack_transferEthFromCurrent(
     dest: address,
     amount: uint,
-) -> bool {
-    if let Some(topFrame) = globalCallStack {
-        if (topFrame.runningAs == dest) {
-            return false;   // can't do a self-transfer
-        }
-        let curAcct = topFrame.runningAsAccount;
-        let curBalance = account_getBalance(curAcct);
-        if (curBalance < amount) {
-            return false;   // insufficient funds
-        }
-        topFrame = topFrame with {
-            runningAsAccount: account_setBalance(curAcct, curBalance-amount)
-        };
-        let otherAcct = accountStore_get(topFrame.accountStore, dest);
-        topFrame = topFrame with {
-            accountStore: accountStore_set(
-                topFrame.accountStore,
-                dest,
-                account_setBalance(
-                    otherAcct,
-                    account_getBalance(otherAcct) + amount
-                )
-            )
-        };
-        globalCallStack = Some(topFrame);
-        return true;
-    } else {
-        return false;  // no current call frame
+) -> option<()> {
+    let topFrame = globalCallStack?;
+    if (topFrame.runningAs == dest) {
+        return None;   // can't do a self-transfer
     }
+    let curAcct = topFrame.runningAsAccount;
+    let curBalance = account_getBalance(curAcct);
+    if (curBalance < amount) {
+        return None;   // insufficient funds
+    }
+    topFrame = topFrame with {
+        runningAsAccount: account_setBalance(curAcct, curBalance-amount)
+    };
+    let otherAcct = accountStore_get(topFrame.accountStore, dest);
+    topFrame = topFrame with {
+        accountStore: accountStore_set(
+            topFrame.accountStore,
+            dest,
+            account_setBalance(
+                otherAcct,
+                account_getBalance(otherAcct) + amount
+            )
+        )
+    };
+    globalCallStack = Some(topFrame);
+    return Some(());
 }
 
 public impure func evmCallStack_setTopFrameStorageCell(offset: uint, value: uint) -> option<()> {

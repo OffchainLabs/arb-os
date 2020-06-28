@@ -93,6 +93,18 @@ impl Uint256 {
         self.val.to_usize()
     }
 
+    pub fn to_bytes_be(&self) -> Vec<u8> {
+        // always returns 32 bytes
+        let raw = self.val.to_bytes_be();
+        if raw.len() < 32 {
+            let mut ret = vec![0u8; 32 - raw.len()];
+            ret.extend(raw);
+            return ret;
+        } else {
+            return raw;
+        }
+    }
+
     pub fn zero() -> Self {
         Uint256 {
             val: BigUint::zero(),
