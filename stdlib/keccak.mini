@@ -155,7 +155,7 @@ public impure func keccak_permutation(s: [25]uint) -> [25]uint {
             }
             i = 0;
             while (i < 5) {
-                t = (~bc[(i + 1) % 5]) & bc[(i + 2) % 5];
+                t = ((~bc[(i + 1) % 5]) & bc[(i + 2) % 5]) & 0xffffffffffffffff;
                 s = s with { [j+i] = s[j+i]^t };
                 i = i+1;
             }
@@ -173,6 +173,7 @@ public impure func keccak_permutation(s: [25]uint) -> [25]uint {
 }
 
 func sha3_rotl64(x: uint, y: uint) -> uint {
+    x = x & 0xffffffffffffffff;
     return (
         (x * (asm(2, y) uint { exp })) |
         (x / (asm(2, 64-y) uint { exp }))
