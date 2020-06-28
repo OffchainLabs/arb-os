@@ -52,7 +52,8 @@ import impure func initEvmCallStack(
     addr: address,
     caller: address,
     calldata: ByteArray,
-    callvalue: uint
+    callvalue: uint,
+    gas: uint
 );
 import func evmCallStack_runningCodeFromAccount() -> option<Account>;
 
@@ -99,6 +100,8 @@ type TxMessage = struct {
     seqNumber: uint,
     value: uint,
     data: MarshalledBytes,
+    maxGas: uint,
+    gasPriceBid: uint
 }
 
 type CallMessage = struct {
@@ -316,13 +319,20 @@ impure func handleValidTxMessage(inStream: ByteStream, fullMsg: MessageFromL1) -
     let (bs, value) = bytestream_getUint(inStream)?;
     inStream = bs;
 
+    let (bs, maxGas) = bytestream_getUint(inStream)?;
+    inStream = bs;
+
+    let (bs, gasPriceBid) = bytestream_getUint(inStream)?;
+    inStream = bs;
+
     initEvmCallStack(
         0,    // txcall type
         fullMsg,
         address(calleeAddressAsUint),
         fullMsg.sender,
         bytestream_getRemainingBytes(inStream),
-        value
+        value,
+        maxGas
     );  // should never return
 
     return None;

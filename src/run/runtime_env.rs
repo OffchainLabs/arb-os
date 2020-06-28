@@ -53,12 +53,21 @@ impl RuntimeEnvironment {
         ]);
     }
 
-    pub fn insert_txcall_message(&mut self, to_addr: Uint256, value: Uint256, data: &[u8]) {
+    pub fn insert_txcall_message(
+        &mut self,
+        to_addr: Uint256,
+        value: Uint256,
+        max_gas: Uint256,
+        gas_price_bid: Uint256,
+        data: &[u8],
+    ) {
         let mut buf = vec![0u8];
         let seq_num = self.get_and_incr_seq_num(&to_addr);
         buf.extend(seq_num.to_bytes_be());
         buf.extend(to_addr.to_bytes_be());
         buf.extend(value.to_bytes_be());
+        buf.extend(max_gas.to_bytes_be());
+        buf.extend(gas_price_bid.to_bytes_be());
         buf.extend_from_slice(data);
 
         self.insert_eth_message(&buf);
