@@ -76,6 +76,7 @@ pub fn run(
     }
 }
 
+/*
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -124,3 +125,4 @@ mod tests {
         assert_eq!(logs[0] == val, true);
     }
 }
+ */

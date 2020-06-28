@@ -334,8 +334,8 @@ public impure func translateEvmCodeSegment(
         return None<(AvmCodePoint, map<uint, AvmCodePoint>)>;
     } elseif (opcode == 0x59) { // MSIZE
         return pushEvmInsnCall(evmOp_msize, restOfCode, evmJumpTable);
-    } elseif (opcode == 0x5a) { // MSIZE
-        return Some((pushValue(9999999999, restOfCode), evmJumpTable));
+    } elseif (opcode == 0x5a) { // GAS
+        return Some((pushInstruction(0x76, restOfCode), evmJumpTable));
     } elseif (opcode == 0x5b) { // JUMPDEST
         return Some((
             restOfCode,

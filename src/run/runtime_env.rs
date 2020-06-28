@@ -40,40 +40,37 @@ impl RuntimeEnvironment {
         }
     }
 
-    pub fn insert_eth_message(&mut self, eth_msg: Value) {
-        self.l1_inbox = Value::Tuple(vec![self.l1_inbox.clone(), eth_msg]);
-    }
-
-    pub fn insert_arb_message(&mut self, msg: Value) {
-        self.insert_eth_message(Value::Tuple(vec![
-            Value::Int(self.current_block_num.clone()),
-            Value::Int(self.current_timestamp.clone()),
-            Value::Int(self.next_id.clone()),
-            msg,
-        ]));
-        self.next_id = self.next_id.add(&Uint256::one());
-    }
-
-    #[cfg(test)]
-    pub fn insert_arb_messages(&mut self, msgs: &[Value]) {
-        for msg in msgs {
-            self.insert_arb_message(msg.clone());
-        }
-    }
-
-    pub fn insert_txcall_message(&mut self, to_addr: Uint256, value: Uint256, data: &[u8]) {
-        let txcall_msg = Value::Tuple(vec![
-            Value::Int(to_addr.clone()),
-            Value::Int(self.get_and_incr_seq_num(&to_addr)),
-            Value::Int(value),
-            bytestack_from_bytes(data),
+    pub fn insert_eth_message(&mut self, msg: &[u8]) {
+        self.l1_inbox = Value::Tuple(vec![
+            self.l1_inbox.clone(),
+            Value::Tuple(vec![
+                Value::Int(Uint256::zero()), // mocked-up blockhash
+                Value::Int(self.current_timestamp.clone()),
+                Value::Int(self.current_block_num.clone()),
+                Value::Int(Uint256::one()), // fake message sender
+                bytestack_from_bytes(msg),
+            ]),
         ]);
-        let msg = Value::Tuple(vec![
-            Value::Int(Uint256::zero()), // message type 0
-            Value::Int(Uint256::zero()), // sent from address 0
-            txcall_msg,
-        ]);
-        self.insert_arb_message(msg);
+    }
+
+    pub fn insert_txcall_message(
+        &mut self,
+        to_addr: Uint256,
+        value: Uint256,
+        max_gas: Uint256,
+        gas_price_bid: Uint256,
+        data: &[u8],
+    ) {
+        let mut buf = vec![0u8];
+        let seq_num = self.get_and_incr_seq_num(&to_addr);
+        buf.extend(seq_num.to_bytes_be());
+        buf.extend(to_addr.to_bytes_be());
+        buf.extend(value.to_bytes_be());
+        buf.extend(max_gas.to_bytes_be());
+        buf.extend(gas_price_bid.to_bytes_be());
+        buf.extend_from_slice(data);
+
+        self.insert_eth_message(&buf);
     }
 
     pub fn get_and_incr_seq_num(&mut self, addr: &Uint256) -> Uint256 {

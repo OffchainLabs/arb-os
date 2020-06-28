@@ -855,8 +855,8 @@ pub fn evm_load_and_call_funcs(
 ) -> Result<Vec<Vec<ethabi::Token>>, ethabi::Error> {
     let dapp_abi = match abi::AbiForDapp::new_from_file(contract_json_file_name) {
         Ok(dabi) => dabi,
-        Err(_) => {
-            panic!("failed to load dapp ABI from file");
+        Err(e) => {
+            panic!("failed to load dapp ABI from file: {:?}", e);
         }
     };
     let mut all_contracts = Vec::new();
@@ -904,6 +904,8 @@ pub fn evm_load_and_call_funcs(
         rt_env.insert_txcall_message(
             this_contract.address.clone(),
             call_info.payment.clone(),
+            Uint256::from_usize(1000000000000),
+            Uint256::zero(),
             &calldata,
         );
     }
@@ -1001,7 +1003,7 @@ pub fn evm_xcontract_call_and_verify(debug: bool) {
         vec!["Fibonacci"].as_ref(),
         "PaymentChannel",
         vec![
-           CallInfo {
+            CallInfo {
                 function_name: "deposit",
                 args: vec![].as_ref(),
                 payment: Uint256::from_usize(10000),
@@ -1023,7 +1025,10 @@ pub fn evm_xcontract_call_and_verify(debug: bool) {
             assert_eq!(tokens.len(), 2);
         }
         Err(e) => {
-            panic!("error loading and calling PaymentChannel::deposit and ::transferFib: {:?}", e);
+            panic!(
+                "error loading and calling PaymentChannel::deposit and ::transferFib: {:?}",
+                e
+            );
         }
     }
 }
