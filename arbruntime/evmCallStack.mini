@@ -167,7 +167,7 @@ public impure func evmCallStack_doCall(
     //        state, but if call fails we'll discard the state from the caller's frame
 
     let availableGas = gasAccounting_fromAppToRuntime();
-    if (gas < availableGas) {
+    if (gas > availableGas) {
         gas = availableGas;
     }
 
