@@ -93,7 +93,7 @@ public func handleMessageFromL1(msg: MessageFromL1) -> option<()> {
         inStream = bs;
         verifyAndIncrSequenceNum(msg.sender, sequenceNum)?;
 
-        return handleValidTxMessage(inStream, msg);
+        return handleValidTxMessage(inStream, msg, true);
     } elseif (msgType == 1) {
         // ethtransfer message
 
@@ -119,11 +119,11 @@ public func handleMessageFromL1(msg: MessageFromL1) -> option<()> {
         // ERC721 token transfer message
         return None; // NOT YET IMPLEMENTED
     } elseif (msgType == 4) {
-        // contract txcall message
-        return None; // NOT YET IMPLEMENTED
+        // contract txcall message (just like normal txcall, with doesn't have sequence number)
+        return handleValidTxMessage(inStream, msg, true);
     } elseif (msgType == 5) {
         // (non-mutating) call message
-        return None; // NOT YET IMPLEMENTED
+        return handleValidTxMessage(inStream, msg, false);
     } elseif (msgType == 6) {
         // this message type is currently unused
         return None;
@@ -185,27 +185,40 @@ func parseStorageMap(bs: ByteStream) -> option<(map<uint, uint>, ByteStream)> {
     }
 }
 
-impure func handleValidTxMessage(inStream: ByteStream, fullMsg: MessageFromL1) -> option<()> {
+impure func handleValidTxMessage(inStream: ByteStream, fullMsg: MessageFromL1, isMutating: bool) -> option<()> {
     let (bs, calleeAddressAsUint) = bytestream_getUint(inStream)?;
     inStream = bs;
 
-    let (bs, value) = bytestream_getUint(inStream)?;
-    inStream = bs;
+    let value = 0;
+    if (isMutating) {
+        let (bs, val) = bytestream_getUint(inStream)?;
+        inStream = bs;
+        value = val;
+    }
 
     let (bs, maxGas) = bytestream_getUint(inStream)?;
     inStream = bs;
 
-    let (bs, gasPriceBid) = bytestream_getUint(inStream)?;
-    inStream = bs;
+    let gasPriceBid = 0;
+    if (isMutating) {
+        let (bs, gpb) = bytestream_getUint(inStream)?;
+        inStream = bs;
+        gasPriceBid = gpb;
+    }
+
+    let callKind = 3;  // staticcall
+    if (isMutating) {
+        callKind = 0;  // call
+    }
 
     initEvmCallStack(
-        0,    // txcall type
+        callKind,
         fullMsg,
         address(calleeAddressAsUint),
         fullMsg.sender,
         bytestream_getRemainingBytes(inStream),
         value,
-        maxGas
+        maxGas,
     );  // should never return
 
     return None;
