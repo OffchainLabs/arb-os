@@ -902,6 +902,8 @@ pub fn evm_load_and_call_funcs(
         rt_env.insert_txcall_message(
             this_contract.address.clone(),
             call_info.payment.clone(),
+            Uint256::from_usize(1000000000000),
+            Uint256::zero(),
             &calldata,
         );
     }
