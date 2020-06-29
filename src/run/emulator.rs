@@ -19,7 +19,7 @@ use crate::link::LinkedProgram;
 use crate::mavm::{CodePt, Instruction, Opcode, Value};
 use crate::pos::Location;
 use crate::uint256::Uint256;
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 use std::fmt;
 
 #[derive(Debug, Default, Clone)]
@@ -284,9 +284,56 @@ impl CodeStore {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct ProfilerData {
-    data: HashMap<Option<Location>, u64>,
+    data: HashMap<String, BTreeMap<(usize, usize), u64>>,
+    unknown_gas: u64,
+}
+
+impl ProfilerData {
+    fn get_mut(
+        &mut self,
+        loc: &Option<Location>,
+        chart: &HashMap<u64, String>,
+    ) -> Option<&mut u64> {
+        if let Some(loc) = loc {
+            let filename = chart.get(&loc.file_id)?;
+            self.data
+                .get_mut(filename)?
+                .get_mut(&(loc.column.to_usize(), loc.line.to_usize()))
+        } else {
+            Some(&mut self.unknown_gas)
+        }
+    }
+    fn insert(
+        &mut self,
+        loc: &Option<Location>,
+        gas: u64,
+        chart: &HashMap<u64, String>,
+    ) -> Option<u64> {
+        if let Some(loc) = loc {
+            let filename = match chart.get(&loc.file_id) {
+                Some(name) => name,
+                None => {
+                    let old_unknown_gas = self.unknown_gas;
+                    self.unknown_gas = gas;
+                    return Some(old_unknown_gas);
+                }
+            };
+            let btree = match self.data.get_mut(filename) {
+                Some(tree) => tree,
+                None => {
+                    self.data.insert(filename.clone(), BTreeMap::new());
+                    self.data.get_mut(filename)?
+                }
+            };
+            btree.insert((loc.line.to_usize(), loc.column.to_usize()), gas)
+        } else {
+            let old_unknown_gas = self.unknown_gas;
+            self.unknown_gas = gas;
+            Some(old_unknown_gas)
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -532,26 +579,26 @@ impl Machine {
 
     pub fn profile_gen(&mut self, args: Vec<Value>) -> ProfilerData {
         self.call_state(CodePt::new_internal(0), args);
-        let mut loc_map = HashMap::new();
+        let mut loc_map = ProfilerData::default();
         while let Some(insn) = self.next_opcode() {
             let loc = insn.location;
-            if let Some(gas_cost) = loc_map.get_mut(&loc) {
+            if let Some(gas_cost) = loc_map.get_mut(&loc, &self.file_name_chart) {
                 *gas_cost += self.next_op_gas().unwrap_or(0);
             } else {
-                loc_map.insert(loc, self.next_op_gas().unwrap_or(0));
+                loc_map.insert(&loc, self.next_op_gas().unwrap_or(0), &self.file_name_chart);
             }
             match self.run_one(false) {
                 Ok(false) => {
-                    return ProfilerData { data: loc_map };
+                    return loc_map;
                 }
                 Err(e) => {
                     self.state = MachineState::Error(e);
-                    return ProfilerData { data: loc_map };
+                    return loc_map;
                 }
                 _ => {}
             }
         }
-        ProfilerData { data: loc_map }
+        loc_map
     }
 
     pub(crate) fn next_op_gas(&self) -> Option<u64> {
