@@ -15,6 +15,7 @@
  */
 
 use crate::compile::{CompileError, CompiledProgram, Type};
+use crate::evm::abi::AbiForContract;
 use crate::link::{link, postlink_compile, ImportedFunc, LinkedProgram};
 use crate::mavm::{Instruction, Label, LabelGenerator, Opcode, Value};
 use crate::run::{bytes_from_bytestack, load_from_file, RuntimeEnvironment};
@@ -841,7 +842,7 @@ pub fn evm_load_and_call_func(
             function_name,
             args,
             payment,
-            mutating
+            mutating,
         }]
         .as_ref(),
         debug,
@@ -856,7 +857,7 @@ pub fn evm_load_and_call_funcs(
     call_infos: &[CallInfo],
     debug: bool,
 ) -> Result<Vec<Vec<ethabi::Token>>, ethabi::Error> {
-    let dapp_abi = match abi::AbiForDapp::new_from_file(contract_json_file_name) {
+    let dapp_abi = match abi::AbiForDappArbCompiled::new_from_file(contract_json_file_name) {
         Ok(dabi) => dabi,
         Err(e) => {
             panic!("failed to load dapp ABI from file: {:?}", e);
@@ -1030,7 +1031,7 @@ pub fn evm_xcontract_call_and_verify(debug: bool) {
                 ]
                 .as_ref(),
                 payment: Uint256::zero(),
-                mutating: true
+                mutating: true,
             },
         ]
         .as_ref(),
@@ -1044,6 +1045,83 @@ pub fn evm_xcontract_call_and_verify(debug: bool) {
                 "error loading and calling PaymentChannel::deposit and ::transferFib: {:?}",
                 e
             );
+        }
+    }
+}
+
+pub fn evm_direct_deploy_add(debug: bool) {
+    let rt_env = RuntimeEnvironment::new();
+    let mut machine = load_from_file(Path::new("arbruntime/runtime.mexe"), rt_env);
+    machine.start_at_zero();
+
+    match AbiForContract::new_from_file("contracts/add/build/contracts/Add.json") {
+        Ok(mut contract) => {
+            let result = contract.deploy(&vec![], &mut machine, debug);
+            if let Some(contract_addr) = result {
+                assert_ne!(contract_addr, Uint256::zero());
+            } else {
+                panic!("deploy failed");
+            }
+        }
+        Err(e) => {
+            panic!("error loading contract: {:?}", e);
+        }
+    }
+}
+
+pub fn evm_direct_deploy_and_call_add(debug: bool) {
+    use std::convert::TryFrom;
+    let rt_env = RuntimeEnvironment::new();
+    let mut machine = load_from_file(Path::new("arbruntime/runtime.mexe"), rt_env);
+    machine.start_at_zero();
+
+    let contract = match AbiForContract::new_from_file("contracts/add/build/contracts/Add.json") {
+        Ok(mut contract) => {
+            let result = contract.deploy(&vec![], &mut machine, debug);
+            if let Some(contract_addr) = result {
+                assert_ne!(contract_addr, Uint256::zero());
+                contract
+            } else {
+                panic!("deploy failed");
+            }
+        }
+        Err(e) => {
+            panic!("error loading contract: {:?}", e);
+        }
+    };
+
+    let result = contract.call_function(
+        "add",
+        vec![
+            ethabi::Token::Uint(ethabi::Uint::one()),
+            ethabi::Token::Uint(ethabi::Uint::one()),
+        ]
+        .as_ref(),
+        &mut machine,
+        Uint256::zero(),
+        true,
+        debug,
+    );
+    match result {
+        Ok(log) => {
+            if let Value::Tuple(tup) = log {
+                assert_eq!(tup[3], Value::Int(Uint256::one()));
+                match bytes_from_bytestack(tup[2].clone()) {
+                    Some(result_bytes) => {
+                        let decoded_result =
+                            contract.get_function("add").unwrap().decode_output(&result_bytes).unwrap();
+                        assert_eq!(decoded_result[0], ethabi::Token::Uint(ethabi::Uint::try_from(2).unwrap()));
+                    }
+                    None => {
+                        panic!("malformed result bytestack");
+                    }
+                }
+            } else {
+                panic!("malformed log return");
+            }
+        }
+        Err(e) => {
+            panic!(e.to_string());
         }
     }
 }

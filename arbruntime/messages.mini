@@ -55,8 +55,19 @@ import impure func initEvmCallStack(
     callvalue: uint,
     gas: uint
 );
+import impure func initEvmCallStackForConstructor(
+    ethMessage: MessageFromL1,
+    addr: address,
+    caller: address,
+    code: ByteArray,
+    evmJumpTable: map<uint, func()>,
+    startPoint: func(),
+    calldata: ByteArray,
+    gas: uint
+);
 import func evmCallStack_runningCodeFromAccount() -> option<Account>;
 
+import func bytearray_new(capacity: uint, autoExpand: bool) -> ByteArray;
 import func bytearray_size(ba: ByteArray) -> uint;
 import func bytearray_unmarshalBytes(mb: MarshalledBytes) -> ByteArray;
 import func bytearray_marshalFull(ba: ByteArray) -> MarshalledBytes;
@@ -80,19 +91,21 @@ type MessageFromL1 = struct {
     msgData: MarshalledBytes
 }
 
-public func handleMessageFromL1(msg: MessageFromL1) -> option<()> {
+public impure func handleMessageFromL1(msg: MessageFromL1) -> option<()> {
+    asm(100,) { debugprint };
     let inStream = bytestream_new(bytearray_unmarshalBytes(msg.msgData));
 
     let (bs, msgType) = bytestream_getByte(inStream)?;
     inStream = bs;
-
+    asm(101,) { debugprint };
     if (msgType == 0) {
         // txcall message
-
+        asm(102,) { debugprint };
         let (bs, sequenceNum) = bytestream_getUint(inStream)?;
+        asm(1021,) { debugprint };
         inStream = bs;
         verifyAndIncrSequenceNum(msg.sender, sequenceNum)?;
-
+        asm(103,) { debugprint };
         return handleValidTxMessage(inStream, msg, true);
     } elseif (msgType == 1) {
         // ethtransfer message
@@ -125,7 +138,26 @@ public func handleMessageFromL1(msg: MessageFromL1) -> option<()> {
         // (non-mutating) call message
         return handleValidTxMessage(inStream, msg, false);
     } elseif (msgType == 6) {
-        // this message type is currently unused
+        // EVM constructor/code upload message
+        let (bs, sequenceNum) = bytestream_getUint(inStream)?;
+        inStream = bs;
+        verifyAndIncrSequenceNum(msg.sender, sequenceNum)?;
+
+        let codeBytes = bytestream_getRemainingBytes(bs);
+        let (codept, evmJumpTable) = translateEvmCodeSegment(bytestream_new(codeBytes))?;
+        let newAddress = address(hash(bytes32(msg.sender), bytes32(sequenceNum)));
+
+        asm(100,) { debugprint };
+        initEvmCallStackForConstructor(
+            msg,
+            newAddress,
+            msg.sender,
+            codeBytes,
+            evmJumpTable,
+            codept,
+            bytearray_new(0, true),   //TODO: pass args to constructor
+            1000000000000,   //TODO: limit gas
+        );  // should never return
         return None;
     } elseif (msgType == 7) {
         // EVM code load message

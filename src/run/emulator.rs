@@ -310,6 +310,11 @@ impl Machine {
         }
     }
 
+    pub fn start_at_zero(&mut self) {
+        self.stack.push_usize(0);
+        self.state = MachineState::Running(CodePt::Internal(0));
+    }
+
     pub fn get_stack_trace(&self) -> StackTrace {
         StackTrace::Known(self.aux_stack.all_codepts())
     }

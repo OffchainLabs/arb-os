@@ -41,7 +41,7 @@ contract PaymentChannel {
 	}
 
 	function transferFib(address dest, uint count) public {
-	    Fibonacci newFib = new Fibonacci();
+	    //Fibonacci newFib = new Fibonacci();
 
 		fib.generateFib(count + 1);
 		uint amount = fib.getFib(count) + balances[address(5)];

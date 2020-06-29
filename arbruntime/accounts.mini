@@ -41,9 +41,7 @@ var globalAccountStore: AccountStore;   // needs to be initialized before use
 
 
 public impure func accountStore_init() {   // This must be called first!
-     if (unsafecast<any>(globalAccountStore) == null) {
-        globalAccountStore = newmap<address, Account>;
-    }   
+    globalAccountStore = newmap<address, Account>;
 }
 
 public impure func getGlobalAccountStore() -> AccountStore {
@@ -284,6 +282,23 @@ public func account_setStorageCell(
             }
         })
     });
+}
+
+public func account_setContractInfo(
+    acct: Account,
+    code: ByteArray,
+    evmJumpTable: map<uint, func()>,
+    startCodePoint: func(),
+    storage: map<uint, uint>
+) -> Account {
+    return acct with { contractInfo: Some(
+        struct {
+            code: code,
+            evmJumpTable: evmJumpTable,
+            startCodePoint: startCodePoint,
+            storage: storage
+        }
+    )};
 }
 
 public func account_getCodeSize(acct: Account) -> uint {

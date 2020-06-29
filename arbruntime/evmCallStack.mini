@@ -20,6 +20,7 @@ import type Account;
 import type EvmLogs;
 import type Queue;
 import type ByteArray;
+import type ByteStream;
 import type MarshalledBytes;
 import type Stack;
 
@@ -42,7 +43,16 @@ import func account_setStorageCell(acct: Account, offset: uint, value: uint) -> 
 import func account_getBalance(acct: Account) -> uint;
 import func account_setBalance(acct: Account, bal: uint) -> Account;
 import func account_deductFromEthBalance(account: Account, deduction: uint) -> option<Account>;
+import func account_getAllStorage(account: Account) -> option<map<uint, uint>>;
 import func account_getStartCodePoint(account: Account) -> option<func()>;
+import func account_setContractInfo(
+    acct: Account,
+    code: ByteArray,
+    evmJumpTable: map<uint, func()>,
+    startCodePoint: func(),
+    storage: map<uint, uint>
+) -> Account;
+import func pristineAccount(addr: address) -> Account;
 
 import func evmlogs_empty() -> EvmLogs;
 import func evmlogs_appendAny(logs: EvmLogs, item: any) -> EvmLogs;
@@ -55,6 +65,7 @@ import func bytearray_copy(
     to: ByteArray,     toOffset: uint,
     nbytes: uint
 ) -> option<ByteArray>;
+import func bytestream_new(ba: ByteArray) -> ByteStream;
 
 import func queue_new() -> Queue;
 import func queue_isEmpty(q: Queue) -> bool;
@@ -68,6 +79,10 @@ import func stack_pop(stack: Stack) -> option<(Stack, any)>;
 
 import impure func gasAccounting_fromAppToRuntime() -> uint;
 import impure func gasAccounting_fromRuntimeToApp(gasAllocation: uint);
+
+import impure func translateEvmCodeSegment(
+    bs: ByteStream
+) -> option<(func(), map<uint, func()>)>;
 
 import impure func mainRunLoop();
 
@@ -146,6 +161,51 @@ public impure func initEvmCallStack(
         gasAccounting_fromRuntimeToApp(gas);
         entryPoint();  // should never return
     }
+}
+
+public impure func initEvmCallStackForConstructor(
+    ethMessage: EthBridgeMessage,
+    addr: address,
+    caller: address,
+    code: ByteArray,
+    evmJumpTable: map<uint, func()>,
+    startPoint: func(),
+    calldata: ByteArray,
+    gas: uint,
+) {
+    globalCurrentEthMessage = ethMessage;
+
+    let acctStore = accountStore_set(
+        getGlobalAccountStore(),
+        addr,
+        account_setContractInfo(
+            pristineAccount(addr),
+            code,
+            evmJumpTable,
+            startPoint,
+            newmap<uint, uint>
+        )
+    );
+
+    globalCallStack = Some(struct {
+        runningAs: addr,
+        runningCodeFrom: addr,
+        accountStore: acctStore,
+        runningAsAccount: accountStore_get(acctStore, addr),
+        caller: caller,
+        callKind: 4,
+        calldata: calldata,
+        callvalue: 0,
+        returnInfo: None<ReturnInfo>,
+        memory: bytearray_new(8, true),
+        evmLogs: evmlogs_empty(),
+        selfDestructQueue: queue_new(),
+        resumeInfo: None<ResumeInfo>,
+        parent: None<any>
+    });
+
+    gasAccounting_fromRuntimeToApp(gas);
+    startPoint();  // should never return
 }
 
 public impure func evmCallStack_doCall(
@@ -296,31 +356,81 @@ public impure func evmCallStack_returnFromCall(
     } else {
         // top-level call finished
         if (success && (topFrame.callKind != 3)) {  // call succeeded, and it wasn't a staticcall
-            let acctStore = accountStore_set(
-                topFrame.accountStore,
-                topFrame.runningAs,
-                topFrame.runningAsAccount
-            );
-            let sdq = topFrame.selfDestructQueue;
-            while( ! queue_isEmpty(sdq) ) {
-                let (q, item) = queue_get(sdq);
-                sdq = q;
-                let (victim, owner) = unsafecast<(address, address)>(item);
-                acctStore = accountStore_destroyAndTransferBalance(acctStore, victim, owner);
-            }
-            let marshaledReturnData = bytearray_marshalFull(returnData);
-            asm(
-                (
-                    globalCurrentEthMessage,
-                    topFrame.evmLogs,
-                    marshaledReturnData,
-                    success
-                ),
-            ) { log } ;   //TODO: report gas usage and gas price paid in this log item
+            if (topFrame.callKind == 4) {
+                if let Some(res) = translateEvmCodeSegment(bytestream_new(returnData)) {
+                    let (entryPoint, evmJumpTable) = res;
+                    let storageMap = newmap<uint, uint>;
+                    if let Some(sm) = account_getAllStorage(
+                        accountStore_get(
+                            topFrame.accountStore,
+                            topFrame.runningCodeFrom
+                        )
+                    ) {
+                        storageMap = sm;
+                    } else {
+                        asm(
+                            (
+                                globalCurrentEthMessage,
+                                0
+                            ),
+                        ) { log };
+                        panic;
+                    }
+                    setGlobalAccountStore(
+                        accountStore_set(
+                            getGlobalAccountStore(),
+                            topFrame.runningCodeFrom,
+                            account_setContractInfo(
+                                pristineAccount(topFrame.runningCodeFrom),
+                                returnData,
+                                evmJumpTable,
+                                entryPoint,
+                                storageMap
+                            )
+                        )
+                    );
+                    asm(
+                        (
+                            globalCurrentEthMessage,
+                            topFrame.runningCodeFrom,
+                            bytearray_marshalFull(returnData)
+                        ),
+                    ) { log };
+                } else {
+                    asm(
+                        (
+                            globalCurrentEthMessage,
+                            0
+                        ),
+                    ) { log };
+                }
+            } else {
+                let acctStore = accountStore_set(
+                    topFrame.accountStore,
+                    topFrame.runningAs,
+                    topFrame.runningAsAccount
+                );
+                let sdq = topFrame.selfDestructQueue;
+                while( ! queue_isEmpty(sdq) ) {
+                    let (q, item) = queue_get(sdq);
+                    sdq = q;
+                    let (victim, owner) = unsafecast<(address, address)>(item);
+                    acctStore = accountStore_destroyAndTransferBalance(acctStore, victim, owner);
+                }
+                let marshaledReturnData = bytearray_marshalFull(returnData);
+                asm(
+                    (
+                        globalCurrentEthMessage,
+                        topFrame.evmLogs,
+                        marshaledReturnData,
+                        success
+                    ),
+                ) { log } ;   //TODO: report gas usage and gas price paid in this log item
 
-            setGlobalAccountStore(acctStore,);
+                setGlobalAccountStore(acctStore,);
+            }
         } else {
-           asm(
+            asm(
                 (
                     globalCurrentEthMessage,
                     evmlogs_empty(),  // emit no logs because txcall failed

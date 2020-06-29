@@ -192,3 +192,13 @@ fn test_evm_load_fib() {
 fn test_crosscontract_calls() {
     crate::evm::evm_xcontract_call_and_verify(false);
 }
+
+#[test]
+fn test_direct_deploy_add() {
+    crate::evm::evm_direct_deploy_add(false);
+}
+
+#[test]
+fn test_direct_deploy_and_call_add() {
+    let log = crate::evm::evm_direct_deploy_and_call_add(false);
+}
