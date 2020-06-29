@@ -832,6 +832,7 @@ pub fn evm_load_and_call_func(
     args: &[ethabi::Token],
     payment: Uint256,
     debug: bool,
+    profile: bool,
 ) -> Result<Vec<ethabi::Token>, ethabi::Error> {
     Ok(evm_load_and_call_funcs(
         contract_json_file_name,
@@ -844,6 +845,7 @@ pub fn evm_load_and_call_func(
         }]
         .as_ref(),
         debug,
+        profile,
     )?[0]
         .clone())
 }
@@ -949,7 +951,7 @@ pub fn evm_load_and_call_funcs(
 }
 
 #[cfg(test)]
-pub fn evm_load_add_and_verify(debug: bool) {
+pub fn evm_load_add_and_verify(debug: bool, profile: bool) {
     use std::convert::TryFrom;
     match evm_load_and_call_func(
         "contracts/add/compiled.json",
@@ -963,6 +965,7 @@ pub fn evm_load_add_and_verify(debug: bool) {
         .as_ref(),
         Uint256::zero(),
         debug,
+        profile,
     ) {
         Ok(tokens) => match tokens[0] {
             Token::Uint(ui) => {
@@ -979,7 +982,7 @@ pub fn evm_load_add_and_verify(debug: bool) {
 }
 
 #[cfg(test)]
-pub fn evm_load_fib_and_verify(debug: bool) {
+pub fn evm_load_fib_and_verify(debug: bool, profile: bool) {
     use std::convert::TryFrom;
     match evm_load_and_call_func(
         "contracts/fibonacci/compiled.json",
@@ -989,6 +992,7 @@ pub fn evm_load_fib_and_verify(debug: bool) {
         vec![ethabi::Token::Uint(ethabi::Uint::try_from(5).unwrap())].as_ref(),
         Uint256::zero(),
         debug,
+        profile,
     ) {
         Ok(tokens) => match tokens[0] {
             Token::Uint(ui) => {

@@ -301,7 +301,7 @@ impl ProfilerData {
             let filename = chart.get(&loc.file_id)?;
             self.data
                 .get_mut(filename)?
-                .get_mut(&(loc.column.to_usize(), loc.line.to_usize()))
+                .get_mut(&(loc.line.to_usize(), loc.column.to_usize()))
         } else {
             Some(&mut self.unknown_gas)
         }
@@ -381,7 +381,7 @@ impl ProfilerData {
                                 continue;
                             }
                             let area_cost: u64 = tree
-                                .range((start_row, 0)..(end_row + 1, 0))
+                                .range((start_row - 1, 0)..(end_row, 0))
                                 .map(|(_, val)| *val)
                                 .sum();
                             println!("ArbGas cost of region: {}", area_cost);
