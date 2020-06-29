@@ -18,7 +18,7 @@ use crate::mavm::Value;
 use crate::uint256::Uint256;
 use std::collections::HashMap;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct RuntimeEnvironment {
     pub l1_inbox: Value,
     pub current_block_num: Uint256,

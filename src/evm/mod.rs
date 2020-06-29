@@ -854,6 +854,7 @@ pub fn evm_load_and_call_funcs(
     contract_name: &str,
     call_infos: &[CallInfo],
     debug: bool,
+    profile: bool,
 ) -> Result<Vec<Vec<ethabi::Token>>, ethabi::Error> {
     let dapp_abi = match abi::AbiForDapp::new_from_file(contract_json_file_name) {
         Ok(dabi) => dabi,
@@ -910,6 +911,13 @@ pub fn evm_load_and_call_funcs(
         );
     }
 
+    if profile {
+        crate::run::profile_gen_from_file(
+            Path::new("arbruntime/runtime.mexe"),
+            vec![],
+            rt_env.clone(),
+        );
+    }
     let mut machine = load_from_file(Path::new("arbruntime/runtime.mexe"), rt_env);
 
     let logs = match crate::run::run(&mut machine, vec![], debug) {
@@ -996,7 +1004,7 @@ pub fn evm_load_fib_and_verify(debug: bool) {
     }
 }
 
-pub fn evm_xcontract_call_and_verify(debug: bool) {
+pub fn evm_xcontract_call_and_verify(debug: bool, profile: bool) {
     use std::convert::TryFrom;
     match evm_load_and_call_funcs(
         "contracts/fibonacci/compiled.json",
@@ -1020,6 +1028,7 @@ pub fn evm_xcontract_call_and_verify(debug: bool) {
         ]
         .as_ref(),
         debug,
+        profile,
     ) {
         Ok(tokens) => {
             assert_eq!(tokens.len(), 2);

@@ -153,6 +153,12 @@ fn main() -> Result<(), CompileError> {
                         .help("sets debug mode")
                         .short("d")
                         .takes_value(false),
+                )
+                .arg(
+                    Arg::with_name("profiler")
+                        .help("sets profiler mode")
+                        .short("p")
+                        .takes_value(false),
                 ),
         )
         .subcommand(
@@ -283,7 +289,8 @@ fn main() -> Result<(), CompileError> {
 
     if let Some(matches) = matches.subcommand_matches("evmdebug") {
         let debug = matches.is_present("debug");
-        evm::evm_xcontract_call_and_verify(debug);
+        let profile = matches.is_present("profiler");
+        evm::evm_xcontract_call_and_verify(debug, profile);
     }
 
     if let Some(matches) = matches.subcommand_matches("profiler") {
