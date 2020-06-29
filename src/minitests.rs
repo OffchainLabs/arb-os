@@ -180,5 +180,5 @@ fn test_evm_load_add() {
 
 #[test]
 fn test_evm_load_fib() {
-    crate::evm::evm_load_fib_and_verify(false, false, false);
+    crate::evm::evm_load_fib_and_verify(false, false);
 }

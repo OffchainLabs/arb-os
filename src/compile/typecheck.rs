@@ -830,19 +830,6 @@ fn typecheck_statement<'a>(
                 vec![(*l, tct)],
             ))
         }
-        StatementKind::CodeBlock(body) => Ok((
-            TypeCheckedStatement::CodeBlock(
-                typecheck_statement_sequence(
-                    body,
-                    return_type,
-                    type_table,
-                    global_vars,
-                    func_table,
-                )?,
-                *loc,
-            ),
-            vec![],
-        )),
     }
 }
 
@@ -1124,7 +1111,8 @@ fn typecheck_expr(
                 let inner_type_table =
                     type_table.push_multi(block_bindings.iter().map(|(k, v)| (*k, v)).collect());
                 let (statement, bindings) = typecheck_statement(
-                    statement,
+                    &statement.kind,
+                    loc,
                     return_type,
                     &inner_type_table,
                     global_vars,

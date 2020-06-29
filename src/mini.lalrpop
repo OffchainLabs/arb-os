@@ -92,7 +92,6 @@ StatementKind: StatementKind = {
 	"panic" ";" => StatementKind::Panic(),
 	"debug" "(" <e: Expr> ")" ";" => StatementKind::DebugPrint(e),
 	"asm" "(" <a:CommaedExprs?> ")" "{" <body:AsmInsn*> "}" ";" => StatementKind::Asm(body, a.unwrap_or(vec![])),
-	<cb: CodeBlock> ";" => StatementKind::CodeBlock(cb),
 	";" => StatementKind::Noop(),
 }
 
@@ -270,7 +269,7 @@ Expr13: Expr = {
 	"(" <e: Expr> ")" => <>,
 	<lno: @L> "{" <cb: Statement*> <e: Expr?> "}" => Expr::CodeBlock(cb, e.map(|x| Box::new(x)), file_info.location(BytePos::from(lno),filename)),
 	<lno: @L> "(" <c: CommaedExprs?> ")" => Expr::Tuple(c.unwrap_or(vec![]), file_info.location(BytePos::from(lno),filename)),
-	<lno: @L> <i: Ident> => Expr::VariableRef(i, file_info.location(BytePos::from(lno))),
+	<lno: @L> <i: Ident> => Expr::VariableRef(i, file_info.location(BytePos::from(lno),filename)),
 }
 
 Const: Constant = {

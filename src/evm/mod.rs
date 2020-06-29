@@ -844,7 +844,7 @@ pub fn evm_load_and_call_func(
             function_name,
             args,
             payment,
-            mutating
+            mutating,
         }]
         .as_ref(),
         debug,
@@ -1044,7 +1044,7 @@ pub fn evm_xcontract_call_and_verify(debug: bool, profile: bool) {
                 ]
                 .as_ref(),
                 payment: Uint256::zero(),
-                mutating: true
+                mutating: true,
             },
         ]
         .as_ref(),

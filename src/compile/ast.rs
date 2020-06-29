@@ -595,15 +595,9 @@ pub enum StatementKind {
     Loop(Vec<Statement>),
     While(Expr, Vec<Statement>),
     If(IfArm),
-    IfLet(
-        StringId,
-        Expr,
-        Vec<Statement>,
-        Option<Vec<Statement>>,
-        Option<Location>,
-    ),
-    Asm(Vec<Instruction>, Vec<Expr>, Option<Location>),
-    DebugPrint(Expr, Option<Location>),
+    IfLet(StringId, Expr, Vec<Statement>, Option<Vec<Statement>>),
+    Asm(Vec<Instruction>, Vec<Expr>),
+    DebugPrint(Expr),
 }
 
 impl Statement {
@@ -674,7 +668,6 @@ impl StatementKind {
                 e.clone()
                     .map(|block| block.iter().map(|x| x.resolve_types(type_table)).collect())
                     .transpose()?,
-                *loc,
             )),
         }
     }
