@@ -17,6 +17,7 @@
 use super::runtime_env::RuntimeEnvironment;
 use crate::link::LinkedProgram;
 use crate::mavm::{CodePt, Instruction, Opcode, Value};
+use crate::pos::Location;
 use crate::uint256::Uint256;
 use std::collections::HashMap;
 use std::fmt;
@@ -283,6 +284,11 @@ impl CodeStore {
     }
 }
 
+#[derive(Debug, Clone)]
+pub struct ProfilerData {
+    data: HashMap<Option<Location>, u64>,
+}
+
 #[derive(Debug)]
 pub struct Machine {
     stack: ValueStack,
@@ -317,18 +323,23 @@ impl Machine {
         StackTrace::Known(self.aux_stack.all_codepts())
     }
 
+    pub fn call_state(&mut self, func_addr: CodePt, args: Vec<Value>) -> CodePt {
+        let stop_pc = CodePt::new_internal(self.code.runtime_segment_size());
+        for i in args.into_iter().rev() {
+            self.stack.push(i);
+        }
+        self.stack.push(Value::CodePoint(stop_pc));
+        self.state = MachineState::Running(func_addr);
+        stop_pc
+    }
+
     pub fn test_call(
         &mut self,
         func_addr: CodePt,
         args: Vec<Value>,
         debug: bool,
     ) -> Result<ValueStack, ExecutionError> {
-        let stop_pc = CodePt::new_internal(self.code.runtime_segment_size());
-        for i in args.iter().rev().cloned() {
-            self.stack.push(i);
-        }
-        self.stack.push(Value::CodePoint(stop_pc));
-        self.state = MachineState::Running(func_addr);
+        let stop_pc = self.call_state(func_addr, args);
         let cost = if debug {
             self.debug(Some(stop_pc))
         } else {
@@ -368,7 +379,7 @@ impl Machine {
         }
     }
 
-    fn next_opcode(&self) -> Option<Instruction> {
+    pub fn next_opcode(&self) -> Option<Instruction> {
         if let MachineState::Running(pc) = self.state {
             if let Some(insn) = self.code.get_insn(pc) {
                 Some(insn.clone())
@@ -475,8 +486,15 @@ impl Machine {
                     }
                 }
             }
-            if let Err(e) = self.run_one(true) {
-                self.state = MachineState::Error(e);
+            match self.run_one(false) {
+                Ok(false) => {
+                    return gas_cost;
+                }
+                Err(e) => {
+                    self.state = MachineState::Error(e);
+                    return gas_cost;
+                }
+                _ => {}
             }
         }
         gas_cost
@@ -512,7 +530,31 @@ impl Machine {
         gas_used
     }
 
-    fn next_op_gas(&self) -> Option<u64> {
+    pub fn profile_gen(&mut self, args: Vec<Value>) -> ProfilerData {
+        self.call_state(CodePt::new_internal(0), args);
+        let mut loc_map = HashMap::new();
+        while let Some(insn) = self.next_opcode() {
+            let loc = insn.location;
+            if let Some(gas_cost) = loc_map.get_mut(&loc) {
+                *gas_cost += self.next_op_gas().unwrap_or(0);
+            } else {
+                loc_map.insert(loc, self.next_op_gas().unwrap_or(0));
+            }
+            match self.run_one(false) {
+                Ok(false) => {
+                    return ProfilerData { data: loc_map };
+                }
+                Err(e) => {
+                    self.state = MachineState::Error(e);
+                    return ProfilerData { data: loc_map };
+                }
+                _ => {}
+            }
+        }
+        ProfilerData { data: loc_map }
+    }
+
+    pub(crate) fn next_op_gas(&self) -> Option<u64> {
         if let MachineState::Running(pc) = self.state {
             Some(match self.code.get_insn(pc)?.opcode {
                 Opcode::Plus => 3,

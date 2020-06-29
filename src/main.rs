@@ -20,7 +20,7 @@ use compile::{compile_from_file, CompileError};
 use evm::{compile_evm_file, make_evm_jumptable_mini};
 use link::{link, postlink_compile};
 use mavm::Value;
-use run::{run_from_file, RuntimeEnvironment};
+use run::{profile_gen_from_file, run_from_file, RuntimeEnvironment};
 use std::collections::{hash_map::DefaultHasher, HashMap};
 use std::fs::File;
 use std::hash::Hasher;
@@ -155,6 +155,16 @@ fn main() -> Result<(), CompileError> {
                         .takes_value(false),
                 ),
         )
+        .subcommand(
+            SubCommand::with_name("profiler")
+                .about("generates info on where arb gas is being used")
+                .arg(
+                    Arg::with_name("INPUT")
+                        .help("sets the file name to run")
+                        .required(true)
+                        .index(1),
+                ),
+        )
         .get_matches();
 
     if let Some(matches) = matches.subcommand_matches("compile") {
@@ -274,6 +284,11 @@ fn main() -> Result<(), CompileError> {
     if let Some(matches) = matches.subcommand_matches("evmdebug") {
         let debug = matches.is_present("debug");
         evm::evm_xcontract_call_and_verify(debug);
+    }
+
+    if let Some(matches) = matches.subcommand_matches("profiler") {
+        let path = matches.value_of("INPUT").unwrap();
+        profile_gen_from_file(path.as_ref(), Vec::new(), RuntimeEnvironment::new());
     }
     Ok(())
 }

@@ -76,6 +76,12 @@ pub fn run(
     }
 }
 
+pub fn profile_gen_from_file(path: &Path, args: Vec<Value>, env: RuntimeEnvironment) {
+    let mut machine = load_from_file(path, env);
+    let profile = machine.profile_gen(args);
+    println!("{:?}", profile);
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
