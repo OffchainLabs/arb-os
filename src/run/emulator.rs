@@ -21,6 +21,7 @@ use crate::pos::Location;
 use crate::uint256::Uint256;
 use std::collections::{BTreeMap, HashMap};
 use std::fmt;
+use std::io::stdin;
 
 #[derive(Debug, Default, Clone)]
 pub struct ValueStack {
@@ -332,6 +333,68 @@ impl ProfilerData {
             let old_unknown_gas = self.unknown_gas;
             self.unknown_gas = gas;
             Some(old_unknown_gas)
+        }
+    }
+    pub fn profiler_session(&self) {
+        let file_gas_costs: Vec<(String, u64)> = self
+            .data
+            .iter()
+            .map(|(name, tree)| (name.clone(), tree.values().sum()))
+            .collect();
+        println!("Per file gas cost usage:");
+        for (filename, gas_cost) in &file_gas_costs {
+            println!("{}: {};", filename, gas_cost);
+        }
+        println!("unknown_file: {}", self.unknown_gas);
+        loop {
+            println!("Enter file to examine");
+            let mut command = String::new();
+            if let Ok(_) = stdin().read_line(&mut command) {
+                let trimmed_command = command.trim_end();
+                match trimmed_command {
+                    "exit" => return,
+                    _ => match self.data.get(trimmed_command) {
+                        Some(tree) => loop {
+                            command.clear();
+                            let res = stdin().read_line(&mut command);
+                            if res.is_err() {
+                                return;
+                            }
+                            if command.trim_end() == "change" {
+                                break;
+                            }
+                            let start_row = match command.trim_end().parse::<usize>() {
+                                Ok(u) => u,
+                                Err(_) => return,
+                            };
+                            command.clear();
+                            let res = stdin().read_line(&mut command);
+                            if res.is_err() {
+                                return;
+                            }
+                            let end_row = match command.trim_end().parse::<usize>() {
+                                Ok(u) => u,
+                                Err(_) => return,
+                            };
+                            if start_row > end_row {
+                                println!("Invalid range");
+                                continue;
+                            }
+                            let area_cost: u64 = tree
+                                .range((start_row, 0)..(end_row + 1, 0))
+                                .map(|(_, val)| *val)
+                                .sum();
+                            println!("ArbGas cost of region: {}", area_cost);
+                        },
+                        None => {
+                            println!("Could not find file");
+                        }
+                    },
+                }
+            } else {
+                println!("Error reading line, aborting");
+                return;
+            }
         }
     }
 }
