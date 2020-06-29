@@ -595,10 +595,15 @@ pub enum StatementKind {
     Loop(Vec<Statement>),
     While(Expr, Vec<Statement>),
     If(IfArm),
-    IfLet(StringId, Expr, Vec<Statement>, Option<Vec<Statement>>),
-    Asm(Vec<Instruction>, Vec<Expr>),
-    DebugPrint(Expr),
-    CodeBlock(Vec<Statement>),
+    IfLet(
+        StringId,
+        Expr,
+        Vec<Statement>,
+        Option<Vec<Statement>>,
+        Option<Location>,
+    ),
+    Asm(Vec<Instruction>, Vec<Expr>, Option<Location>),
+    DebugPrint(Expr, Option<Location>),
 }
 
 impl Statement {
@@ -669,9 +674,7 @@ impl StatementKind {
                 e.clone()
                     .map(|block| block.iter().map(|x| x.resolve_types(type_table)).collect())
                     .transpose()?,
-            )),
-            StatementKind::CodeBlock(body) => Ok(StatementKind::CodeBlock(
-                Statement::resolve_types_vec(body.to_vec(), type_table)?,
+                *loc,
             )),
         }
     }
@@ -791,6 +794,7 @@ pub enum Expr {
     Constant(Constant, Option<Location>),
     OptionInitializer(Box<Expr>, Option<Location>),
     FunctionCall(Box<Expr>, Vec<Expr>, Option<Location>),
+    CodeBlock(Vec<Statement>, Option<Box<Expr>>, Option<Location>),
     ArrayOrMapRef(Box<Expr>, Box<Expr>, Option<Location>),
     StructInitializer(Vec<FieldInitializer>, Option<Location>),
     Tuple(Vec<Expr>, Option<Location>),
@@ -859,6 +863,15 @@ impl Expr {
                     *loc,
                 ))
             }
+            Expr::CodeBlock(body, result, loc) => Ok(Expr::CodeBlock(
+                Statement::resolve_types_vec(body.to_vec(), type_table)?,
+                result
+                    .clone()
+                    .map(|exp| exp.resolve_types(type_table))
+                    .transpose()?
+                    .map(|x| Box::new(x)),
+                *loc,
+            )),
             Expr::ArrayOrMapRef(e1, e2, loc) => Ok(Expr::ArrayOrMapRef(
                 Box::new(e1.resolve_types(type_table)?),
                 Box::new(e2.resolve_types(type_table)?),

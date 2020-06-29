@@ -821,6 +821,7 @@ pub struct CallInfo<'a> {
     function_name: &'a str,
     args: &'a [ethabi::Token],
     payment: Uint256,
+    mutating: bool,
 }
 
 #[cfg(test)]
@@ -831,6 +832,7 @@ pub fn evm_load_and_call_func(
     function_name: &str,
     args: &[ethabi::Token],
     payment: Uint256,
+    mutating: bool,
     debug: bool,
     profile: bool,
 ) -> Result<Vec<ethabi::Token>, ethabi::Error> {
@@ -842,6 +844,7 @@ pub fn evm_load_and_call_func(
             function_name,
             args,
             payment,
+            mutating
         }]
         .as_ref(),
         debug,
@@ -860,8 +863,8 @@ pub fn evm_load_and_call_funcs(
 ) -> Result<Vec<Vec<ethabi::Token>>, ethabi::Error> {
     let dapp_abi = match abi::AbiForDapp::new_from_file(contract_json_file_name) {
         Ok(dabi) => dabi,
-        Err(_) => {
-            panic!("failed to load dapp ABI from file");
+        Err(e) => {
+            panic!("failed to load dapp ABI from file: {:?}", e);
         }
     };
     let mut all_contracts = Vec::new();
@@ -906,11 +909,21 @@ pub fn evm_load_and_call_funcs(
         call_funcs.push(this_func);
 
         let calldata = this_func.encode_input(call_info.args).unwrap();
-        rt_env.insert_txcall_message(
-            this_contract.address.clone(),
-            call_info.payment.clone(),
-            &calldata,
-        );
+        if call_info.mutating {
+            rt_env.insert_txcall_message(
+                this_contract.address.clone(),
+                call_info.payment.clone(),
+                Uint256::from_usize(1000000000000),
+                Uint256::zero(),
+                &calldata,
+            );
+        } else {
+            rt_env.insert_nonmutating_call_message(
+                this_contract.address.clone(),
+                Uint256::from_usize(1000000000000),
+                &calldata,
+            );
+        }
     }
 
     if profile {
@@ -951,7 +964,7 @@ pub fn evm_load_and_call_funcs(
 }
 
 #[cfg(test)]
-pub fn evm_load_add_and_verify(debug: bool, profile: bool) {
+pub fn evm_load_add_and_verify(mutating: bool, debug: bool, profile: bool) {
     use std::convert::TryFrom;
     match evm_load_and_call_func(
         "contracts/add/compiled.json",
@@ -964,6 +977,7 @@ pub fn evm_load_add_and_verify(debug: bool, profile: bool) {
         ]
         .as_ref(),
         Uint256::zero(),
+        mutating,
         debug,
         profile,
     ) {
@@ -991,6 +1005,7 @@ pub fn evm_load_fib_and_verify(debug: bool, profile: bool) {
         "doFib",
         vec![ethabi::Token::Uint(ethabi::Uint::try_from(5).unwrap())].as_ref(),
         Uint256::zero(),
+        true,
         debug,
         profile,
     ) {
@@ -1019,6 +1034,7 @@ pub fn evm_xcontract_call_and_verify(debug: bool, profile: bool) {
                 function_name: "deposit",
                 args: vec![].as_ref(),
                 payment: Uint256::from_usize(10000),
+                mutating: true,
             },
             CallInfo {
                 function_name: "transferFib",
@@ -1028,6 +1044,7 @@ pub fn evm_xcontract_call_and_verify(debug: bool, profile: bool) {
                 ]
                 .as_ref(),
                 payment: Uint256::zero(),
+                mutating: true
             },
         ]
         .as_ref(),

@@ -88,7 +88,6 @@ pub enum TypeCheckedStatement {
     ),
     Asm(Vec<Instruction>, Vec<TypeCheckedExpr>, Option<Location>),
     DebugPrint(TypeCheckedExpr, Option<Location>),
-    CodeBlock(Vec<TypeCheckedStatement>, Option<Location>),
 }
 
 impl MiniProperties for TypeCheckedStatement {
@@ -121,9 +120,6 @@ impl MiniProperties for TypeCheckedStatement {
                     && exprs.iter().all(|expr| expr.is_pure())
             }
             TypeCheckedStatement::DebugPrint(_, _) => true,
-            TypeCheckedStatement::CodeBlock(code, _) => {
-                code.iter().all(|statement| statement.is_pure())
-            }
         }
     }
 }
@@ -188,6 +184,11 @@ pub enum TypeCheckedExpr {
         Vec<TypeCheckedExpr>,
         Type,
         PropertiesList,
+        Option<Location>,
+    ),
+    CodeBlock(
+        Vec<TypeCheckedStatement>,
+        Option<Box<TypeCheckedExpr>>,
         Option<Location>,
     ),
     StructInitializer(Vec<TypeCheckedStructField>, Type, Option<Location>),
@@ -278,6 +279,7 @@ impl MiniProperties for TypeCheckedExpr {
                     && fields_exprs.iter().all(|statement| statement.is_pure())
                     && properties.pure
             }
+            TypeCheckedExpr::CodeBlock(_, _, _) => unimplemented!(),
             TypeCheckedExpr::StructInitializer(fields, _, _) => {
                 fields.iter().all(|field| field.value.is_pure())
             }
@@ -333,6 +335,10 @@ impl TypeCheckedExpr {
             TypeCheckedExpr::DotRef(_, _, t, _) => t.clone(),
             TypeCheckedExpr::Const(_, t, _) => t.clone(),
             TypeCheckedExpr::FunctionCall(_, _, t, _, _) => t.clone(),
+            TypeCheckedExpr::CodeBlock(_, expr, _) => expr
+                .clone()
+                .map(|exp| exp.get_type())
+                .unwrap_or(Type::Tuple(vec![])),
             TypeCheckedExpr::StructInitializer(_, t, _) => t.clone(),
             TypeCheckedExpr::ArrayRef(_, _, t, _) => t.clone(),
             TypeCheckedExpr::FixedArrayRef(_, _, _, t, _) => t.clone(),
@@ -1110,6 +1116,38 @@ fn typecheck_expr(
                     *loc,
                 )),
             }
+        }
+        Expr::CodeBlock(body, ret_expr, loc) => {
+            let mut output = Vec::new();
+            let mut block_bindings = Vec::new();
+            for statement in body {
+                let inner_type_table =
+                    type_table.push_multi(block_bindings.iter().map(|(k, v)| (*k, v)).collect());
+                let (statement, bindings) = typecheck_statement(
+                    statement,
+                    return_type,
+                    &inner_type_table,
+                    global_vars,
+                    func_table,
+                )?;
+                output.push(statement);
+                for (key, value) in bindings {
+                    block_bindings.push((key, value));
+                }
+            }
+            let inner_type_table =
+                type_table.push_multi(block_bindings.iter().map(|(k, v)| (*k, v)).collect());
+            Ok(TypeCheckedExpr::CodeBlock(
+                output,
+                ret_expr
+                    .clone()
+                    .map(|x| {
+                        typecheck_expr(&*x, &inner_type_table, global_vars, func_table, return_type)
+                    })
+                    .transpose()?
+                    .map(|x| Box::new(x)),
+                *loc,
+            ))
         }
         Expr::ArrayOrMapRef(array, index, loc) => {
             let tc_arr = typecheck_expr(&*array, type_table, global_vars, func_table, return_type)?;

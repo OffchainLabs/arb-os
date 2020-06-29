@@ -175,10 +175,10 @@ fn test_codeload() {
 
 #[test]
 fn test_evm_load_add() {
-    crate::evm::evm_load_add_and_verify(false, false);
+    crate::evm::evm_load_add_and_verify(true, false, false);
 }
 
 #[test]
 fn test_evm_load_fib() {
-    crate::evm::evm_load_fib_and_verify(false, false);
+    crate::evm::evm_load_fib_and_verify(false, false, false);
 }
