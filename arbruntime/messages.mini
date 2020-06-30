@@ -80,7 +80,7 @@ type MessageFromL1 = struct {
     msgData: MarshalledBytes
 }
 
-public func handleMessageFromL1(msg: MessageFromL1) -> option<()> {
+public impure func handleMessageFromL1(msg: MessageFromL1) -> option<()> {
     let inStream = bytestream_new(bytearray_unmarshalBytes(msg.msgData));
 
     let (bs, msgType) = bytestream_getByte(inStream)?;
