@@ -40,32 +40,27 @@ public impure func keccak256(ba: ByteArray, offset: uint, nbytes: uint) -> optio
     // approach is to build a bytearray to hold this block
     let lastBlock = bytearray_new(136, false);
     lastBlock = bytearray_copy(ba, offset, lastBlock, 0, nbytes)?;
-    // asm(302,) { debugprint };
     if (nbytes == 135) {
         // add one byte of padding
         lastBlock = bytearray_setByte(lastBlock, 135, 0x81)?;
     } else {
         // add padding up to full block
         // take advantage of the fact that lastBlock is already zero-filled
-       // asm(303,) { debugprint };
         lastBlock = bytearray_setByte(
             bytearray_setByte(lastBlock, 135, 0x80)?,
             nbytes,
             0x01
         )?;
-        //asm(304,) { debugprint };
     }
 
-    //asm(305,) { debugprint };
     accumulator = keccak_permutation(
         keccak_xorblock(accumulator, lastBlock, 0)?
     );
 
-    // asm(306,) { debugprint };
     return Some(bytes32(
-        (accumulator[0]) + 0x10000000000000000 * (
-            (accumulator[1]) + 0x10000000000000000 * (
-                (accumulator[2]) + 0x10000000000000000 * (accumulator[3])
+        flipEndian64(accumulator[3]) + 0x10000000000000000 * (
+            flipEndian64(accumulator[2]) + 0x10000000000000000 * (
+                flipEndian64(accumulator[1]) + 0x10000000000000000 * flipEndian64(accumulator[0])
             )
         )
     ));
@@ -105,6 +100,7 @@ func keccak_xorblock(accumulator: [25]uint, ba: ByteArray, offset: uint) -> opti
 var keccakConstants: struct {
     rndc: [24]uint,
     piln: [24]uint,
+    rotc: [24]uint,
 };
 
 // keccak permutation function
@@ -114,7 +110,6 @@ public impure func keccak_permutation(s: [25]uint) -> [25]uint {
         initKeccakConstants();
     }
     let round = 0;
-    let keccak_rotc = 1;
     while (round < 24) {
         // theta
         let bc = newfixedarray(5, 0);
@@ -139,8 +134,9 @@ public impure func keccak_permutation(s: [25]uint) -> [25]uint {
         i = 0;
         while (i < 24) {
             let j = keccakConstants.piln[i];
+            asm((98, i, j),) { debugprint };
             bc = bc with { [0] = s[j] };
-            s = s with { [j] = sha3_rotl64(t, keccak_rotc) };
+            s = s with { [j] = sha3_rotl64(t, keccakConstants.rotc[i]) };
             t = bc[0];
             i = i+1;
         }
@@ -165,7 +161,6 @@ public impure func keccak_permutation(s: [25]uint) -> [25]uint {
         // iota
         s = s with { [0] = s[0]^keccakConstants.rndc[round] };
 
-        keccak_rotc = (keccak_rotc+round+2) % 64;        
         round = round+1;
     }
 
@@ -180,7 +175,7 @@ func sha3_rotl64(x: uint, y: uint) -> uint {
     ) & 0xffffffffffffffff;
 }
 
-impure func initKeccakConstants() {
+public impure func initKeccakConstants() {
     keccakConstants = struct {
         rndc: newfixedarray(24, 0) 
             with { [0] = 0x0000000000000001 }
@@ -232,6 +227,31 @@ impure func initKeccakConstants() {
             with { [21] = 9 }
             with { [22] = 6 }
             with { [23] = 1 },
+        rotc: newfixedarray(24, 0)
+            with { [0] = 1 }
+            with { [1] = 3 }
+            with { [2] = 6 }
+            with { [3] = 10 }
+            with { [4] = 15 }
+            with { [5] = 21 }
+            with { [6] = 28 }
+            with { [7] = 36 }
+            with { [8] = 45 }
+            with { [9] = 55 }
+            with { [10] = 2 }
+            with { [11] = 14 }
+            with { [12] = 27 }
+            with { [13] = 41 }
+            with { [14] = 56 }
+            with { [15] = 8 }
+            with { [16] = 25 }
+            with { [17] = 43 }
+            with { [18] = 62 }
+            with { [19] = 18 }
+            with { [20] = 39 }
+            with { [21] = 61 }
+            with { [22] = 20 }
+            with { [23] = 44 },
     };
 }
 
