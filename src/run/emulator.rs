@@ -248,8 +248,10 @@ impl CodeStore {
     }
 
     fn create_segment(&mut self) -> CodePt {
-        self.segments
-            .push(vec![Instruction::from_opcode(Opcode::Panic, None)]);
+        self.segments.push(vec![Instruction::from_opcode(
+            Opcode::AVMOpcode(AVMOpcode::Panic),
+            None,
+        )]);
         CodePt::new_in_segment(self.segments.len() - 1, 0)
     }
 
@@ -554,18 +556,18 @@ impl Machine {
                 Opcode::AVMOpcode(AVMOpcode::Xset) => 41,
                 Opcode::AVMOpcode(AVMOpcode::Breakpoint) => 100,
                 Opcode::AVMOpcode(AVMOpcode::Log) => 100,
-                Opcode::Send => 100,
-                Opcode::GetTime => 40,
-                Opcode::Inbox => 40,
-                Opcode::Panic => 5,
-                Opcode::Halt => 10,
+                Opcode::AVMOpcode(AVMOpcode::Send) => 100,
+                Opcode::AVMOpcode(AVMOpcode::GetTime) => 40,
+                Opcode::AVMOpcode(AVMOpcode::Inbox) => 40,
+                Opcode::AVMOpcode(AVMOpcode::Panic) => 5,
+                Opcode::AVMOpcode(AVMOpcode::Halt) => 10,
                 Opcode::ErrCodePoint => 25,
                 Opcode::PushInsn => 25,
                 Opcode::PushInsnImm => 25,
                 Opcode::OpenInsn => 25,
                 Opcode::DebugPrint => 25,
-                Opcode::GetGas => 0,
-                Opcode::SetGas => 0,
+                Opcode::AVMOpcode(AVMOpcode::GetGas) => 0,
+                Opcode::AVMOpcode(AVMOpcode::SetGas) => 0,
                 _ => return None,
             })
         } else {
@@ -591,7 +593,7 @@ impl Machine {
 						self.incr_pc();
 						Ok(true)
 					}
-					Opcode::Panic => Err(ExecutionError::new("panicked", &self.state, None)),
+					Opcode::AVMOpcode(AVMOpcode::Panic) => Err(ExecutionError::new("panicked", &self.state, None)),
 					Opcode::AVMOpcode(AVMOpcode::Jump) => {
 						self.state = MachineState::Running(self.stack.pop_codepoint(&self.state)?);
 						Ok(true)
@@ -1038,10 +1040,10 @@ impl Machine {
 						self.incr_pc();
 						Ok(true)
 					}
-					Opcode::GetTime => {
+					Opcode::AVMOpcode(AVMOpcode::GetTime) => {
 						panic!("GetTime instruction not yet implemented");
 					}
-					Opcode::Inbox => {
+					Opcode::AVMOpcode(AVMOpcode::Inbox) => {
 						let msgs = self.runtime_env.get_inbox();
 						if msgs.is_none() {
 							// machine is blocked, waiting for nonempty inbox
@@ -1059,7 +1061,7 @@ impl Machine {
 						self.incr_pc();
 						Ok(true)
 					}
-					Opcode::Send => {
+					Opcode::AVMOpcode(AVMOpcode::Send) => {
 						panic!("Send instruction not yet implemented");
 					}
 					Opcode::AVMOpcode(AVMOpcode::Log) => {
@@ -1119,7 +1121,7 @@ impl Machine {
 						self.incr_pc();
 						Ok(false)
 					}
-					Opcode::Halt => {
+					Opcode::AVMOpcode(AVMOpcode::Halt) => {
 						self.state = MachineState::Stopped;
 						Ok(false)
 					}
@@ -1131,12 +1133,12 @@ impl Machine {
 						self.incr_pc();
 						Ok(true)
 					}
-                    Opcode::GetGas => {
+                    Opcode::AVMOpcode(AVMOpcode::GetGas) => {
                         self.stack.push(Value::Int(self.arb_gas_remaining.clone()));
                         self.incr_pc();
                         Ok(true)
                     },
-                    Opcode::SetGas => {
+                    Opcode::AVMOpcode(AVMOpcode::SetGas) => {
                         let gas = self.stack.pop_uint(&self.state)?;
                         self.arb_gas_remaining = gas;
                         self.incr_pc();

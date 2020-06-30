@@ -619,7 +619,7 @@ pub fn compile_evm_insn(
         0xfc => evm_emulate(code, label_gen, evm_func_map, "evmOp_txexecgas"), // TXEXECGAS
         0xfd => evm_emulate(code, label_gen, evm_func_map, "evmOp_revert"), // REVERT
         0xfe => { // INVALID  
-            code.push(Instruction::from_opcode(Opcode::Panic, None));
+            code.push(Instruction::from_opcode(Opcode::AVMOpcode(AVMOpcode::Panic), None));
             Some((code, label_gen, None))
         }
         0xff => evm_emulate(code, label_gen, evm_func_map, "evmOp_selfdestruct"), // SELFDESTRUCT

@@ -198,7 +198,10 @@ fn mavm_codegen_statements(
             global_var_map,
         ),
         TypeCheckedStatement::Panic(loc) => {
-            code.push(Instruction::from_opcode(Opcode::Panic, *loc));
+            code.push(Instruction::from_opcode(
+                Opcode::AVMOpcode(AVMOpcode::Panic),
+                *loc,
+            ));
             Ok((label_gen, num_locals, false, HashMap::new()))
             // no need to append the rest of the statements; they'll never be executed
         }
@@ -1407,7 +1410,10 @@ fn mavm_codegen_expr<'a>(
                     Value::Label(cont_label),
                     *loc,
                 ));
-                code.push(Instruction::from_opcode(Opcode::Panic, *loc));
+                code.push(Instruction::from_opcode(
+                    Opcode::AVMOpcode(AVMOpcode::Panic),
+                    *loc,
+                ));
                 code.push(Instruction::from_opcode(Opcode::Label(cont_label), *loc));
             }
             code.push(Instruction::from_opcode(
@@ -1850,7 +1856,10 @@ fn codegen_fixed_array_mod<'a>(
             Value::Label(ok_label),
             location,
         ));
-        code.push(Instruction::from_opcode(Opcode::Panic, location));
+        code.push(Instruction::from_opcode(
+            Opcode::AVMOpcode(AVMOpcode::Panic),
+            location,
+        ));
         code.push(Instruction::from_opcode(Opcode::Label(ok_label), location));
     }
     let exp_locals = max(val_locals, max(arr_locals, idx_locals));

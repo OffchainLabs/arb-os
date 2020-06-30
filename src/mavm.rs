@@ -479,7 +479,6 @@ impl fmt::Display for Value {
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, Eq, PartialEq, Hash)]
 pub enum Opcode {
-    Panic,
     GetLocal,
     SetLocal,
     MakeFrame(usize, usize),
@@ -497,17 +496,11 @@ pub enum Opcode {
     NotEqual,
     LogicalAnd,
     LogicalOr,
-    GetTime,
-    Inbox,
     ErrCodePoint,
     PushInsn,
     PushInsnImm,
     OpenInsn,
-    Halt,
-    Send,
     DebugPrint,
-    SetGas,
-    GetGas,
     AVMOpcode(AVMOpcode),
 }
 
@@ -565,15 +558,22 @@ pub enum AVMOpcode {
     Xset,
     Breakpoint = 0x60,
     Log,
+    Send = 0x70,
+    GetTime,
+    Inbox,
+    Panic,
+    Halt,
+    SetGas,
+    GetGas,
 }
 
 impl MiniProperties for Opcode {
     fn is_pure(&self) -> bool {
         match self {
             Opcode::AVMOpcode(AVMOpcode::Log)
-            | Opcode::Inbox
-            | Opcode::Send
-            | Opcode::GetTime
+            | Opcode::AVMOpcode(AVMOpcode::Inbox)
+            | Opcode::AVMOpcode(AVMOpcode::Send)
+            | Opcode::AVMOpcode(AVMOpcode::GetTime)
             | Opcode::AVMOpcode(AVMOpcode::Rset)
             | Opcode::AVMOpcode(AVMOpcode::Rget)
             | Opcode::PushInsn
@@ -634,8 +634,8 @@ impl Opcode {
             "bitwisexor" => Opcode::AVMOpcode(AVMOpcode::BitwiseXor),
             "logicaland" => Opcode::LogicalAnd,
             "logicalor" => Opcode::LogicalOr,
-            "gettime" => Opcode::GetTime,
-            "inbox" => Opcode::Inbox,
+            "gettime" => Opcode::AVMOpcode(AVMOpcode::GetTime),
+            "inbox" => Opcode::AVMOpcode(AVMOpcode::Inbox),
             "jump" => Opcode::AVMOpcode(AVMOpcode::Jump),
             "log" => Opcode::AVMOpcode(AVMOpcode::Log),
             "errcodept" => Opcode::ErrCodePoint,
@@ -643,8 +643,8 @@ impl Opcode {
             "pushinsnimm" => Opcode::PushInsnImm,
             "openinsn" => Opcode::OpenInsn,
             "debugprint" => Opcode::DebugPrint,
-            "setgas" => Opcode::SetGas,
-            "getgas" => Opcode::GetGas,
+            "setgas" => Opcode::AVMOpcode(AVMOpcode::SetGas),
+            "getgas" => Opcode::AVMOpcode(AVMOpcode::GetGas),
             "errset" => Opcode::AVMOpcode(AVMOpcode::ErrSet),
             _ => {
                 panic!("opcode not supported in asm segment: {}", name);
@@ -706,13 +706,13 @@ impl Opcode {
             0x54 => Some(Opcode::AVMOpcode(AVMOpcode::Xset)),
             0x60 => Some(Opcode::AVMOpcode(AVMOpcode::Breakpoint)),
             0x61 => Some(Opcode::AVMOpcode(AVMOpcode::Log)),
-            0x70 => Some(Opcode::Send),
-            0x71 => Some(Opcode::GetTime),
-            0x72 => Some(Opcode::Inbox),
-            0x73 => Some(Opcode::Panic),
-            0x74 => Some(Opcode::Halt),
-            0x75 => Some(Opcode::SetGas),
-            0x76 => Some(Opcode::GetGas),
+            0x70 => Some(Opcode::AVMOpcode(AVMOpcode::Send)),
+            0x71 => Some(Opcode::AVMOpcode(AVMOpcode::GetTime)),
+            0x72 => Some(Opcode::AVMOpcode(AVMOpcode::Inbox)),
+            0x73 => Some(Opcode::AVMOpcode(AVMOpcode::Panic)),
+            0x74 => Some(Opcode::AVMOpcode(AVMOpcode::Halt)),
+            0x75 => Some(Opcode::AVMOpcode(AVMOpcode::SetGas)),
+            0x76 => Some(Opcode::AVMOpcode(AVMOpcode::GetGas)),
             0x77 => Some(Opcode::ErrCodePoint),
             0x78 => Some(Opcode::PushInsn),
             0x79 => Some(Opcode::PushInsnImm),
@@ -776,13 +776,13 @@ impl Opcode {
             Opcode::AVMOpcode(AVMOpcode::Xset) => Some(0x54),
             Opcode::AVMOpcode(AVMOpcode::Breakpoint) => Some(0x60),
             Opcode::AVMOpcode(AVMOpcode::Log) => Some(0x61),
-            Opcode::Send => Some(0x70),
-            Opcode::GetTime => Some(0x71),
-            Opcode::Inbox => Some(0x72),
-            Opcode::Panic => Some(0x73),
-            Opcode::Halt => Some(0x74),
-            Opcode::SetGas => Some(0x75),
-            Opcode::GetGas => Some(0x76),
+            Opcode::AVMOpcode(AVMOpcode::Send) => Some(0x70),
+            Opcode::AVMOpcode(AVMOpcode::GetTime) => Some(0x71),
+            Opcode::AVMOpcode(AVMOpcode::Inbox) => Some(0x72),
+            Opcode::AVMOpcode(AVMOpcode::Panic) => Some(0x73),
+            Opcode::AVMOpcode(AVMOpcode::Halt) => Some(0x74),
+            Opcode::AVMOpcode(AVMOpcode::SetGas) => Some(0x75),
+            Opcode::AVMOpcode(AVMOpcode::GetGas) => Some(0x76),
             Opcode::ErrCodePoint => Some(0x77),
             Opcode::PushInsn => Some(0x78),
             Opcode::PushInsnImm => Some(0x79),
