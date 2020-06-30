@@ -171,7 +171,7 @@ fn test_evm_load_fib() {
 
 #[test]
 fn test_crosscontract_calls() {
-    crate::evm::evm_xcontract_call_and_verify(false);
+    crate::evm::evm_xcontract_call_and_verify(false, false);
 }
 
 #[test]

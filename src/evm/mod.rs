@@ -929,12 +929,12 @@ pub fn evm_load_and_call_funcs(
 
     if profile {
         crate::run::profile_gen_from_file(
-            Path::new("arb_os/runtime.mexe"),
+            Path::new("arb_os/arbos.mexe"),
             vec![],
             rt_env.clone(),
         );
     }
-    let mut machine = load_from_file(Path::new("arb_os/runtime.mexe"), rt_env);
+    let mut machine = load_from_file(Path::new("arb_os/arbos.mexe"), rt_env);
 
     let logs = match crate::run::run(&mut machine, vec![], debug) {
         Ok(logs) => logs,
