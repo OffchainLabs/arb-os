@@ -20,6 +20,7 @@ use crate::mavm::{Instruction, Label, LabelGenerator, Opcode, Value};
 use crate::run::{bytes_from_bytestack, load_from_file, RuntimeEnvironment};
 use crate::stringtable::StringTable;
 use crate::uint256::Uint256;
+#[cfg(test)]
 use ethabi::Token;
 use serde::Serialize;
 use std::collections::HashMap;
@@ -821,6 +822,7 @@ pub struct CallInfo<'a> {
     mutating: bool,
 }
 
+#[cfg(test)]
 pub fn evm_load_and_call_func(
     contract_json_file_name: &str,
     other_contract_names: &[&str],
@@ -949,6 +951,7 @@ pub fn evm_load_and_call_funcs(
     Ok(ret)
 }
 
+#[cfg(test)]
 pub fn evm_load_add_and_verify(mutating: bool, debug: bool) {
     use std::convert::TryFrom;
     match evm_load_and_call_func(
@@ -979,6 +982,7 @@ pub fn evm_load_add_and_verify(mutating: bool, debug: bool) {
     }
 }
 
+#[cfg(test)]
 pub fn evm_load_fib_and_verify(debug: bool) {
     use std::convert::TryFrom;
     match evm_load_and_call_func(
