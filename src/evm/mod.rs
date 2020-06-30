@@ -16,7 +16,7 @@
 
 use crate::compile::{CompileError, CompiledProgram, Type};
 use crate::link::{link, postlink_compile, ImportedFunc, LinkedProgram};
-use crate::mavm::{Instruction, Label, LabelGenerator, Opcode, Value};
+use crate::mavm::{AVMOpcode, Instruction, Label, LabelGenerator, Opcode, Value};
 use crate::run::{bytes_from_bytestack, load_from_file, RuntimeEnvironment};
 use crate::stringtable::StringTable;
 use crate::uint256::Uint256;
@@ -239,15 +239,15 @@ pub fn compile_evm_insn(
     match evm_insn {
         0x00 => evm_emulate(code, label_gen, evm_func_map, "evmOp_stop"), // STOP
         0x01 => { // ADD
-            code.push(Instruction::from_opcode(Opcode::Plus, None));
+            code.push(Instruction::from_opcode(Opcode::AVMOpcode(AVMOpcode::Plus), None));
             Some((code, label_gen, None))
         }
         0x02 => { // MUL
-            code.push(Instruction::from_opcode(Opcode::Mul, None));
+            code.push(Instruction::from_opcode(Opcode::AVMOpcode(AVMOpcode::Mul), None));
             Some((code, label_gen, None))
         }
         0x03 => { // SUB
-            code.push(Instruction::from_opcode(Opcode::Minus, None));
+            code.push(Instruction::from_opcode(Opcode::AVMOpcode(AVMOpcode::Minus), None));
             Some((code, label_gen, None))
         }
         0x04 => { // DIV
@@ -262,7 +262,7 @@ pub fn compile_evm_insn(
             code.push(Instruction::from_opcode_imm(Opcode::Noop, Value::Int(Uint256::zero()), None));
             code.push(Instruction::from_opcode_imm(Opcode::Jump, Value::Label(end_label), None));
             code.push(Instruction::from_opcode(Opcode::Label(mid_label), None));
-            code.push(Instruction::from_opcode(Opcode::Div, None));
+            code.push(Instruction::from_opcode(Opcode::AVMOpcode(AVMOpcode::Div), None));
             code.push(Instruction::from_opcode(Opcode::Label(end_label), None));
             Some((code, lg, None))
         }
@@ -300,7 +300,7 @@ pub fn compile_evm_insn(
 
             code.push(Instruction::from_opcode(Opcode::Label(mid2_label), None));
             // general case
-            code.push(Instruction::from_opcode(Opcode::Div, None));
+            code.push(Instruction::from_opcode(Opcode::AVMOpcode(AVMOpcode::Div), None));
 
             code.push(Instruction::from_opcode(Opcode::Label(end_label), None));
             Some((code, lg, None))
@@ -317,7 +317,7 @@ pub fn compile_evm_insn(
             code.push(Instruction::from_opcode_imm(Opcode::Noop, Value::Int(Uint256::zero()), None));
             code.push(Instruction::from_opcode_imm(Opcode::Jump, Value::Label(end_label), None));
             code.push(Instruction::from_opcode(Opcode::Label(mid_label), None));
-            code.push(Instruction::from_opcode(Opcode::Mod, None));
+            code.push(Instruction::from_opcode(Opcode::AVMOpcode(AVMOpcode::Mod), None));
             code.push(Instruction::from_opcode(Opcode::Label(end_label), None));
             Some((code, lg, None))
         }
@@ -333,7 +333,7 @@ pub fn compile_evm_insn(
             code.push(Instruction::from_opcode_imm(Opcode::Noop, Value::Int(Uint256::zero()), None));
             code.push(Instruction::from_opcode_imm(Opcode::Jump, Value::Label(end_label), None));
             code.push(Instruction::from_opcode(Opcode::Label(mid_label), None));
-            code.push(Instruction::from_opcode(Opcode::Smod, None));
+            code.push(Instruction::from_opcode(Opcode::AVMOpcode(AVMOpcode::Smod), None));
             code.push(Instruction::from_opcode(Opcode::Label(end_label), None));
             Some((code, lg, None))
         }
@@ -349,7 +349,7 @@ pub fn compile_evm_insn(
             code.push(Instruction::from_opcode_imm(Opcode::Noop, Value::Int(Uint256::zero()), None));
             code.push(Instruction::from_opcode_imm(Opcode::Jump, Value::Label(end_label), None));
             code.push(Instruction::from_opcode(Opcode::Label(mid_label), None));
-            code.push(Instruction::from_opcode(Opcode::AddMod, None));
+            code.push(Instruction::from_opcode(Opcode::AVMOpcode(AVMOpcode::AddMod), None));
             code.push(Instruction::from_opcode(Opcode::Label(end_label), None));
             Some((code, lg, None))
         }
@@ -365,12 +365,12 @@ pub fn compile_evm_insn(
             code.push(Instruction::from_opcode_imm(Opcode::Noop, Value::Int(Uint256::zero()), None));
             code.push(Instruction::from_opcode_imm(Opcode::Jump, Value::Label(end_label), None));
             code.push(Instruction::from_opcode(Opcode::Label(mid_label), None));
-            code.push(Instruction::from_opcode(Opcode::MulMod, None));
+            code.push(Instruction::from_opcode(Opcode::AVMOpcode(AVMOpcode::MulMod), None));
             code.push(Instruction::from_opcode(Opcode::Label(end_label), None));
             Some((code, lg, None))
         }
         0x0a => { // EXP
-            code.push(Instruction::from_opcode(Opcode::Exp, None));
+            code.push(Instruction::from_opcode(Opcode::AVMOpcode(AVMOpcode::Exp), None));
             Some((code, label_gen, None))
         }
         0x0b => { // SIGNEXTEND
@@ -424,22 +424,22 @@ pub fn compile_evm_insn(
         }
         0x1b => { // SHL
             code.push(Instruction::from_opcode(Opcode::Swap1, None));
-            code.push(Instruction::from_opcode_imm(Opcode::Exp, Value::Int(Uint256::from_usize(2)), None));
-            code.push(Instruction::from_opcode(Opcode::Mul, None));
+            code.push(Instruction::from_opcode_imm(Opcode::AVMOpcode(AVMOpcode::Exp), Value::Int(Uint256::from_usize(2)), None));
+            code.push(Instruction::from_opcode(Opcode::AVMOpcode(AVMOpcode::Mul), None));
             Some((code, label_gen, None))
         }
         0x1c => { // SHR
             code.push(Instruction::from_opcode(Opcode::Swap1, None));
-            code.push(Instruction::from_opcode_imm(Opcode::Exp, Value::Int(Uint256::from_usize(2)), None));
+            code.push(Instruction::from_opcode_imm(Opcode::AVMOpcode(AVMOpcode::Exp), Value::Int(Uint256::from_usize(2)), None));
             code.push(Instruction::from_opcode(Opcode::Swap1, None));
-            code.push(Instruction::from_opcode(Opcode::Div, None));
+            code.push(Instruction::from_opcode(Opcode::AVMOpcode(AVMOpcode::Div), None));
             Some((code, label_gen, None))
         }
         0x1d => { // SAR
             code.push(Instruction::from_opcode(Opcode::Swap1, None));
-            code.push(Instruction::from_opcode_imm(Opcode::Exp, Value::Int(Uint256::from_usize(2)), None));
+            code.push(Instruction::from_opcode_imm(Opcode::AVMOpcode(AVMOpcode::Exp), Value::Int(Uint256::from_usize(2)), None));
             code.push(Instruction::from_opcode(Opcode::Swap1, None));
-            code.push(Instruction::from_opcode(Opcode::Sdiv, None));
+            code.push(Instruction::from_opcode(Opcode::AVMOpcode(AVMOpcode::Sdiv), None));
             Some((code, label_gen, None))
         }
         // 0x1e - 0x1f unused
@@ -839,7 +839,7 @@ pub fn evm_load_and_call_func(
             function_name,
             args,
             payment,
-            mutating
+            mutating,
         }]
         .as_ref(),
         debug,
@@ -1026,7 +1026,7 @@ pub fn evm_xcontract_call_and_verify(debug: bool) {
                 ]
                 .as_ref(),
                 payment: Uint256::zero(),
-                mutating: true
+                mutating: true,
             },
         ]
         .as_ref(),

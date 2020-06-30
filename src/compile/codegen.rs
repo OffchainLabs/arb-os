@@ -22,7 +22,7 @@ use super::typecheck::{
 };
 use crate::compile::typecheck::PropertiesList;
 use crate::link::{ImportedFunc, TupleTree, TUPLE_SIZE};
-use crate::mavm::{Instruction, Label, LabelGenerator, Opcode, Value};
+use crate::mavm::{AVMOpcode, Instruction, Label, LabelGenerator, Opcode, Value};
 use crate::pos::Location;
 use crate::stringtable::{StringId, StringTable};
 use crate::uint256::Uint256;
@@ -933,13 +933,13 @@ fn mavm_codegen_expr<'a>(
             label_gen = lg;
             code = c;
             let opcode = match op {
-                BinaryOp::Plus => Opcode::Plus,
-                BinaryOp::Minus => Opcode::Minus,
-                BinaryOp::Times => Opcode::Mul,
-                BinaryOp::Div => Opcode::Div,
-                BinaryOp::Mod => Opcode::Mod,
-                BinaryOp::Sdiv => Opcode::Sdiv,
-                BinaryOp::Smod => Opcode::Smod,
+                BinaryOp::Plus => Opcode::AVMOpcode(AVMOpcode::Plus),
+                BinaryOp::Minus => Opcode::AVMOpcode(AVMOpcode::Minus),
+                BinaryOp::Times => Opcode::AVMOpcode(AVMOpcode::Mul),
+                BinaryOp::Div => Opcode::AVMOpcode(AVMOpcode::Div),
+                BinaryOp::Mod => Opcode::AVMOpcode(AVMOpcode::Mod),
+                BinaryOp::Sdiv => Opcode::AVMOpcode(AVMOpcode::Sdiv),
+                BinaryOp::Smod => Opcode::AVMOpcode(AVMOpcode::Smod),
                 BinaryOp::LessThan => Opcode::LessThan,
                 BinaryOp::GreaterThan => Opcode::GreaterThan,
                 BinaryOp::LessEq => Opcode::GreaterThan, // will negate
@@ -1820,7 +1820,10 @@ fn codegen_fixed_array_mod_2<'a>(
         code_in.push(Instruction::from_opcode(Opcode::AuxPush, location));
         code_in.push(Instruction::from_opcode(Opcode::Dup1, location));
         // stack: idx TUPLE_SIZE idx tupletree val; aux: tupletree
-        code_in.push(Instruction::from_opcode(Opcode::Mod, location));
+        code_in.push(Instruction::from_opcode(
+            Opcode::AVMOpcode(AVMOpcode::Mod),
+            location,
+        ));
         code_in.push(Instruction::from_opcode(Opcode::Dup0, location));
         code_in.push(Instruction::from_opcode(Opcode::AuxPush, location));
         // stack: slot idx tupletree val; aux: slot tupletree
@@ -1830,7 +1833,10 @@ fn codegen_fixed_array_mod_2<'a>(
             tuple_size,
             location,
         ));
-        code_in.push(Instruction::from_opcode(Opcode::Div, location));
+        code_in.push(Instruction::from_opcode(
+            Opcode::AVMOpcode(AVMOpcode::Div),
+            location,
+        ));
         // stack: subidx slot tupletree val; aux: slot tupletree
         code_in.push(Instruction::from_opcode(Opcode::Swap2, location));
         code_in.push(Instruction::from_opcode(Opcode::Swap1, location));

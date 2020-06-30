@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-use crate::mavm::{CodePt, Instruction, Opcode, Value};
+use crate::mavm::{AVMOpcode, CodePt, Instruction, Opcode, Value};
 use crate::pos::Location;
 use crate::uint256::Uint256;
 
@@ -130,7 +130,10 @@ pub fn fix_tuple_size(code_in: &[Instruction], num_globals: usize) -> Vec<Instru
                         tup_size_val.clone(),
                         location,
                     ));
-                    code_out.push(Instruction::from_opcode(Opcode::Mod, location));
+                    code_out.push(Instruction::from_opcode(
+                        Opcode::AVMOpcode(AVMOpcode::Mod),
+                        location,
+                    ));
                     code_out.push(Instruction::from_opcode(Opcode::Swap1, location));
                     // stack: idx slot arr
                     code_out.push(Instruction::from_opcode_imm(
@@ -138,7 +141,10 @@ pub fn fix_tuple_size(code_in: &[Instruction], num_globals: usize) -> Vec<Instru
                         tup_size_val.clone(),
                         location,
                     ));
-                    code_out.push(Instruction::from_opcode(Opcode::Div, location));
+                    code_out.push(Instruction::from_opcode(
+                        Opcode::AVMOpcode(AVMOpcode::Div),
+                        location,
+                    ));
                     // stack: subindex slot arr
                     code_out.push(Instruction::from_opcode(Opcode::Swap2, location));
                     code_out.push(Instruction::from_opcode(Opcode::Swap1, location));

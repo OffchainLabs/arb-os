@@ -16,7 +16,7 @@
 
 use super::runtime_env::RuntimeEnvironment;
 use crate::link::LinkedProgram;
-use crate::mavm::{CodePt, Instruction, Opcode, Value};
+use crate::mavm::{AVMOpcode, CodePt, Instruction, Opcode, Value};
 use crate::uint256::Uint256;
 use std::fmt;
 
@@ -502,16 +502,16 @@ impl Machine {
     fn next_op_gas(&self) -> Option<u64> {
         if let MachineState::Running(pc) = self.state {
             Some(match self.code.get_insn(pc)?.opcode {
-                Opcode::Plus => 3,
-                Opcode::Mul => 3,
-                Opcode::Minus => 3,
-                Opcode::Div => 4,
-                Opcode::Sdiv => 7,
-                Opcode::Mod => 4,
-                Opcode::Smod => 7,
-                Opcode::AddMod => 4,
-                Opcode::MulMod => 4,
-                Opcode::Exp => 25,
+                Opcode::AVMOpcode(AVMOpcode::Plus) => 3,
+                Opcode::AVMOpcode(AVMOpcode::Mul) => 3,
+                Opcode::AVMOpcode(AVMOpcode::Minus) => 3,
+                Opcode::AVMOpcode(AVMOpcode::Div) => 4,
+                Opcode::AVMOpcode(AVMOpcode::Sdiv) => 7,
+                Opcode::AVMOpcode(AVMOpcode::Mod) => 4,
+                Opcode::AVMOpcode(AVMOpcode::Smod) => 7,
+                Opcode::AVMOpcode(AVMOpcode::AddMod) => 4,
+                Opcode::AVMOpcode(AVMOpcode::MulMod) => 4,
+                Opcode::AVMOpcode(AVMOpcode::Exp) => 25,
                 Opcode::LessThan => 2,
                 Opcode::GreaterThan => 2,
                 Opcode::SLessThan => 2,
@@ -800,14 +800,14 @@ impl Machine {
 						self.incr_pc();
 						Ok(true)
 					}
-					Opcode::Plus => {
+					Opcode::AVMOpcode(AVMOpcode::Plus) => {
 						let r1 = self.stack.pop_uint(&self.state)?;
 						let r2 = self.stack.pop_uint(&self.state)?;
 						self.stack.push_uint(r1.add(&r2));
 						self.incr_pc();
 						Ok(true)
 					}
-					Opcode::Minus => {
+					Opcode::AVMOpcode(AVMOpcode::Minus) => {
 						let r1 = self.stack.pop_uint(&self.state)?;
 						let r2 = self.stack.pop_uint(&self.state)?;
 						self.stack.push_uint(r1.sub(&r2)
@@ -815,14 +815,14 @@ impl Machine {
 						self.incr_pc();
 						Ok(true)
 					}
-					Opcode::Mul => {
+					Opcode::AVMOpcode(AVMOpcode::Mul) => {
 						let r1 = self.stack.pop_uint(&self.state)?;
 						let r2 = self.stack.pop_uint(&self.state)?;
 						self.stack.push_uint(r1.mul(&r2));
 						self.incr_pc();
 						Ok(true)
 					}
-					Opcode::Div => {
+					Opcode::AVMOpcode(AVMOpcode::Div) => {
 						let r1 = self.stack.pop_uint(&self.state)?;
 						let r2 = self.stack.pop_uint(&self.state)?;
 						let ores = r1.div(&r2);
@@ -835,7 +835,7 @@ impl Machine {
 							None => Err(ExecutionError::new("divide by zero", &self.state, None))
 						}
 					}
-					Opcode::Mod => {
+					Opcode::AVMOpcode(AVMOpcode::Mod) => {
 						let r1 = self.stack.pop_uint(&self.state)?;
 						let r2 = self.stack.pop_uint(&self.state)?;
 						let ores = r1.modulo(&r2);
@@ -848,7 +848,7 @@ impl Machine {
 							None => Err(ExecutionError::new("modulo by zero", &self.state, None))
 						}
 					}
-					Opcode::Sdiv => {
+					Opcode::AVMOpcode(AVMOpcode::Sdiv) => {
 						let r1 = self.stack.pop_uint(&self.state)?;
 						let r2 = self.stack.pop_uint(&self.state)?;
 						let ores = r1.sdiv(&r2);
@@ -861,7 +861,7 @@ impl Machine {
 							None => Err(ExecutionError::new("divide by zero", &self.state, None))
 						}
 					}
-					Opcode::Smod => {
+					Opcode::AVMOpcode(AVMOpcode::Smod) => {
 						let r1 = self.stack.pop_uint(&self.state)?;
 						let r2 = self.stack.pop_uint(&self.state)?;
 						let ores = r1.smodulo(&r2);
@@ -874,7 +874,7 @@ impl Machine {
 							None => Err(ExecutionError::new("modulo by zero", &self.state, None))
 						}
 					}
-					Opcode::AddMod => {
+					Opcode::AVMOpcode(AVMOpcode::AddMod) => {
 						let r1 = self.stack.pop_uint(&self.state)?;
 						let r2 = self.stack.pop_uint(&self.state)?;
 						let r3 = self.stack.pop_uint(&self.state)?;
@@ -888,7 +888,7 @@ impl Machine {
 							None => Err(ExecutionError::new("modulo by zero", &self.state, None))
 						}
 					}
-					Opcode::MulMod => {
+					Opcode::AVMOpcode(AVMOpcode::MulMod) => {
 						let r1 = self.stack.pop_uint(&self.state)?;
 						let r2 = self.stack.pop_uint(&self.state)?;
 						let r3 = self.stack.pop_uint(&self.state)?;
@@ -902,7 +902,7 @@ impl Machine {
 							None => Err(ExecutionError::new("modulo by zero", &self.state, None))
 						}
 					}
-					Opcode::Exp => {
+					Opcode::AVMOpcode(AVMOpcode::Exp) => {
 						let r1 = self.stack.pop_uint(&self.state)?;
 						let r2 = self.stack.pop_uint(&self.state)?;
 						self.stack.push_uint(r1.exp(&r2));
