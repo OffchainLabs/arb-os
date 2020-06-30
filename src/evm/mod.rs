@@ -103,6 +103,7 @@ pub fn compile_from_json(
                             vec![],
                             0,
                             None,
+                            HashMap::new(),
                         )],
                         true,
                         Some(storage_info_struct),
@@ -111,6 +112,7 @@ pub fn compile_from_json(
                     .unwrap(), // BUGBUG--this should handle errors gracefully, not just panic
                     true,
                     compiled_contract.evm_pcs,
+                    HashMap::new(),
                     debug,
                 )
                 .unwrap(); //BUGBUG--this should handle errors gracefully, not just panic
@@ -832,6 +834,7 @@ pub fn evm_load_and_call_func(
     payment: Uint256,
     mutating: bool,
     debug: bool,
+    profile: bool,
 ) -> Result<Vec<ethabi::Token>, ethabi::Error> {
     Ok(evm_load_and_call_funcs(
         contract_json_file_name,
@@ -841,10 +844,11 @@ pub fn evm_load_and_call_func(
             function_name,
             args,
             payment,
-            mutating
+            mutating,
         }]
         .as_ref(),
         debug,
+        profile,
     )?[0]
         .clone())
 }
@@ -855,6 +859,7 @@ pub fn evm_load_and_call_funcs(
     contract_name: &str,
     call_infos: &[CallInfo],
     debug: bool,
+    profile: bool,
 ) -> Result<Vec<Vec<ethabi::Token>>, ethabi::Error> {
     let dapp_abi = match abi::AbiForDapp::new_from_file(contract_json_file_name) {
         Ok(dabi) => dabi,
@@ -921,6 +926,13 @@ pub fn evm_load_and_call_funcs(
         }
     }
 
+    if profile {
+        crate::run::profile_gen_from_file(
+            Path::new("arbruntime/runtime.mexe"),
+            vec![],
+            rt_env.clone(),
+        );
+    }
     let mut machine = load_from_file(Path::new("arbruntime/runtime.mexe"), rt_env);
 
     let logs = match crate::run::run(&mut machine, vec![], debug) {
@@ -952,7 +964,8 @@ pub fn evm_load_and_call_funcs(
 }
 
 #[cfg(test)]
-pub fn evm_load_add_and_verify(mutating: bool, debug: bool) {
+
+pub fn evm_load_add_and_verify(mutating: bool, debug: bool, profile: bool) {
     use std::convert::TryFrom;
     match evm_load_and_call_func(
         "contracts/add/compiled.json",
@@ -967,6 +980,7 @@ pub fn evm_load_add_and_verify(mutating: bool, debug: bool) {
         Uint256::zero(),
         mutating,
         debug,
+        profile,
     ) {
         Ok(tokens) => match tokens[0] {
             Token::Uint(ui) => {
@@ -983,7 +997,7 @@ pub fn evm_load_add_and_verify(mutating: bool, debug: bool) {
 }
 
 #[cfg(test)]
-pub fn evm_load_fib_and_verify(debug: bool) {
+pub fn evm_load_fib_and_verify(debug: bool, profile: bool) {
     use std::convert::TryFrom;
     match evm_load_and_call_func(
         "contracts/fibonacci/compiled.json",
@@ -994,6 +1008,7 @@ pub fn evm_load_fib_and_verify(debug: bool) {
         Uint256::zero(),
         true,
         debug,
+        profile,
     ) {
         Ok(tokens) => match tokens[0] {
             Token::Uint(ui) => {
@@ -1009,7 +1024,7 @@ pub fn evm_load_fib_and_verify(debug: bool) {
     }
 }
 
-pub fn evm_xcontract_call_and_verify(debug: bool) {
+pub fn evm_xcontract_call_and_verify(debug: bool, profile: bool) {
     use std::convert::TryFrom;
     match evm_load_and_call_funcs(
         "contracts/fibonacci/compiled.json",
@@ -1030,11 +1045,12 @@ pub fn evm_xcontract_call_and_verify(debug: bool) {
                 ]
                 .as_ref(),
                 payment: Uint256::zero(),
-                mutating: true
+                mutating: true,
             },
         ]
         .as_ref(),
         debug,
+        profile,
     ) {
         Ok(tokens) => {
             assert_eq!(tokens.len(), 2);

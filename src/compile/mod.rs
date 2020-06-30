@@ -21,6 +21,7 @@ use crate::stringtable;
 use lalrpop_util::lalrpop_mod;
 use mini::DeclsParser;
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use std::fmt::Formatter;
 use std::fs::File;
 use std::io::{self, Read};
@@ -47,6 +48,7 @@ pub struct CompiledProgram {
     pub imported_funcs: Vec<ImportedFunc>,
     pub global_num_limit: usize,
     pub source_file_map: Option<SourceFileMap>,
+    pub file_name_chart: HashMap<u64, String>,
 }
 
 impl CompiledProgram {
@@ -56,6 +58,7 @@ impl CompiledProgram {
         imported_funcs: Vec<ImportedFunc>,
         global_num_limit: usize,
         source_file_map: Option<SourceFileMap>,
+        file_name_chart: HashMap<u64, String>,
     ) -> Self {
         CompiledProgram {
             code,
@@ -63,6 +66,7 @@ impl CompiledProgram {
             imported_funcs,
             global_num_limit,
             source_file_map,
+            file_name_chart,
         }
     }
 
@@ -108,6 +112,7 @@ impl CompiledProgram {
                 relocated_imported_funcs,
                 self.global_num_limit + globals_offset,
                 source_file_map,
+                self.file_name_chart,
             ),
             max_func_offset,
         )
@@ -147,7 +152,11 @@ impl CompiledProgram {
     }
 }
 
-pub fn compile_from_file(path: &Path, debug: bool) -> Result<CompiledProgram, CompileError> {
+pub fn compile_from_file(
+    path: &Path,
+    file_id: u64,
+    debug: bool,
+) -> Result<CompiledProgram, CompileError> {
     let display = path.display();
 
     let mut file = File::open(&path)
@@ -158,19 +167,20 @@ pub fn compile_from_file(path: &Path, debug: bool) -> Result<CompiledProgram, Co
         .map_err(|why| CompileError::new(format!("couldn't read {}: {:?}", display, why), None))?;
     //print!("read-in file:\n{}", s);
 
-    serde_json::from_str(&s).or_else(|_| compile_from_source(s, display, debug))
+    serde_json::from_str(&s).or_else(|_| compile_from_source(s, display, file_id, debug))
 }
 
 pub fn compile_from_source(
     s: String,
     pathname: std::path::Display,
+    file_id: u64,
     debug: bool,
 ) -> Result<CompiledProgram, CompileError> {
     let comment_re = regex::Regex::new(r"//.*").unwrap();
     let s = comment_re.replace_all(&s, "");
     let mut string_table_1 = stringtable::StringTable::new();
     let lines = Lines::new(s.bytes());
-    let res = match DeclsParser::new().parse(&mut string_table_1, &lines, &s) {
+    let res = match DeclsParser::new().parse(&mut string_table_1, &lines, file_id, &s) {
         Ok(r) => r,
         Err(e) => match e {
             lalrpop_util::ParseError::UnrecognizedToken {
@@ -179,7 +189,7 @@ pub fn compile_from_source(
             } => {
                 return Err(CompileError::new(
                     format!("unexpected token: {}, Type: {:?}", &s[offset..end], tok),
-                    Some(lines.location(BytePos::from(offset)).unwrap()),
+                    Some(lines.location(BytePos::from(offset), file_id).unwrap()),
                 ));
             }
             _ => {
@@ -230,6 +240,7 @@ pub fn compile_from_source(
         imported_funcs,
         global_vars.len(),
         Some(SourceFileMap::new(code_out.len(), pathname.to_string())),
+        HashMap::new(),
     ))
 }
 

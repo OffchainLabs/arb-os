@@ -46,7 +46,7 @@ impl Lines {
     }
 
     /// Returns the line and column location of `byte`
-    pub fn location(&self, byte: BytePos) -> Option<Location> {
+    pub fn location(&self, byte: BytePos, file_id: u64) -> Option<Location> {
         if byte.to_usize() <= self.end {
             let line_index = self.line_number_at_byte(byte);
 
@@ -54,6 +54,7 @@ impl Lines {
                 line: line_index,
                 column: Column::from((byte - line_byte).to_usize()),
                 absolute: byte,
+                file_id,
             })
         } else {
             None
