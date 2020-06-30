@@ -512,21 +512,21 @@ impl Machine {
                 Opcode::AVMOpcode(AVMOpcode::AddMod) => 4,
                 Opcode::AVMOpcode(AVMOpcode::MulMod) => 4,
                 Opcode::AVMOpcode(AVMOpcode::Exp) => 25,
-                Opcode::LessThan => 2,
-                Opcode::GreaterThan => 2,
-                Opcode::SLessThan => 2,
-                Opcode::SGreaterThan => 2,
-                Opcode::Equal => 2,
-                Opcode::IsZero => 1,
-                Opcode::BitwiseAnd => 2,
-                Opcode::BitwiseOr => 2,
-                Opcode::BitwiseXor => 2,
-                Opcode::BitwiseNeg => 1,
-                Opcode::Byte => 4,
-                Opcode::SignExtend => 7,
+                Opcode::AVMOpcode(AVMOpcode::LessThan) => 2,
+                Opcode::AVMOpcode(AVMOpcode::GreaterThan) => 2,
+                Opcode::AVMOpcode(AVMOpcode::SLessThan) => 2,
+                Opcode::AVMOpcode(AVMOpcode::SGreaterThan) => 2,
+                Opcode::AVMOpcode(AVMOpcode::Equal) => 2,
+                Opcode::AVMOpcode(AVMOpcode::IsZero) => 1,
+                Opcode::AVMOpcode(AVMOpcode::BitwiseAnd) => 2,
+                Opcode::AVMOpcode(AVMOpcode::BitwiseOr) => 2,
+                Opcode::AVMOpcode(AVMOpcode::BitwiseXor) => 2,
+                Opcode::AVMOpcode(AVMOpcode::BitwiseNeg) => 1,
+                Opcode::AVMOpcode(AVMOpcode::Byte) => 4,
+                Opcode::AVMOpcode(AVMOpcode::SignExtend) => 7,
                 Opcode::NotEqual => 3, // This opcode should be phased out
-                Opcode::Hash => 7,
-                Opcode::Type => 3,
+                Opcode::AVMOpcode(AVMOpcode::Hash) => 7,
+                Opcode::AVMOpcode(AVMOpcode::Type) => 3,
                 Opcode::Hash2 => 8,
                 Opcode::Pop => 1,
                 Opcode::PushStatic => 1,
@@ -763,7 +763,7 @@ impl Machine {
 						self.incr_pc();
 						Ok(true)
 					}
-					Opcode::IsZero => {
+					Opcode::AVMOpcode(AVMOpcode::IsZero) => {
 						let res = if (self.stack.pop_uint(&self.state)? == Uint256::zero()) { 1 } else { 0 };
 						self.stack.push(Value::Int(Uint256::from_usize(res)));
 						self.incr_pc();
@@ -782,13 +782,13 @@ impl Machine {
 							}
 						}
 					}
-					Opcode::BitwiseNeg => {
+					Opcode::AVMOpcode(AVMOpcode::BitwiseNeg) => {
 						let res = self.stack.pop_uint(&self.state)?.bitwise_neg();
 						self.stack.push_uint(res);
 						self.incr_pc();
 						Ok(true)
 					}
-					Opcode::Hash => {
+					Opcode::AVMOpcode(AVMOpcode::Hash) => {
 						let res = self.stack.pop(&self.state)?.avm_hash();
 						self.stack.push(res);
 						self.incr_pc();
@@ -909,35 +909,35 @@ impl Machine {
 						self.incr_pc();
 						Ok(true)
 					}
-					Opcode::LessThan => {
+					Opcode::AVMOpcode(AVMOpcode::LessThan) => {
 						let r1 = self.stack.pop_uint(&self.state)?;
 						let r2 = self.stack.pop_uint(&self.state)?;
 						self.stack.push_usize(if r1 < r2 { 1 } else { 0 });
 						self.incr_pc();
 						Ok(true)
 					}
-					Opcode::GreaterThan => {
+					Opcode::AVMOpcode(AVMOpcode::GreaterThan) => {
 						let r1 = self.stack.pop_uint(&self.state)?;
 						let r2 = self.stack.pop_uint(&self.state)?;
 						self.stack.push_usize(if r1 > r2 { 1 } else { 0 });
 						self.incr_pc();
 						Ok(true)
 					}
-					Opcode::SLessThan => {
+					Opcode::AVMOpcode(AVMOpcode::SLessThan) => {
 						let r1 = self.stack.pop_uint(&self.state)?;
 						let r2 = self.stack.pop_uint(&self.state)?;
 						self.stack.push_usize(if r1.s_less_than(&r2) { 1 } else { 0 });
 						self.incr_pc();
 						Ok(true)
 					}
-					Opcode::SGreaterThan => {
+					Opcode::AVMOpcode(AVMOpcode::SGreaterThan) => {
 						let r1 = self.stack.pop_uint(&self.state)?;
 						let r2 = self.stack.pop_uint(&self.state)?;
 						self.stack.push_usize(if r2.s_less_than(&r1) { 1 } else { 0 });
 						self.incr_pc();
 						Ok(true)
 					}
-					Opcode::Equal => {
+					Opcode::AVMOpcode(AVMOpcode::Equal) => {
 						let r1 = self.stack.pop(&self.state)?;
 						let r2 = self.stack.pop(&self.state)?;
 						self.stack.push_usize(if r1 == r2 { 1 } else { 0 });
@@ -951,34 +951,34 @@ impl Machine {
 						self.incr_pc();
 						Ok(true)
 					}
-					Opcode::Type => {
+					Opcode::AVMOpcode(AVMOpcode::Type) => {
 						let val = self.stack.pop(&self.state)?;
 						self.stack.push_usize(val.type_insn_result());
 						self.incr_pc();
 						Ok(true)
 					}
-					Opcode::BitwiseAnd => {
+					Opcode::AVMOpcode(AVMOpcode::BitwiseAnd) => {
 						let r1 = self.stack.pop_uint(&self.state)?;
 						let r2 = self.stack.pop_uint(&self.state)?;
 						self.stack.push_uint(r1.bitwise_and(&r2));
 						self.incr_pc();
 						Ok(true)
 					}
-					Opcode::BitwiseOr => {
+					Opcode::AVMOpcode(AVMOpcode::BitwiseOr) => {
 						let r1 = self.stack.pop_uint(&self.state)?;
 						let r2 = self.stack.pop_uint(&self.state)?;
 						self.stack.push_uint(r1.bitwise_or(&r2));
 						self.incr_pc();
 						Ok(true)
 					}
-					Opcode::BitwiseXor => {
+					Opcode::AVMOpcode(AVMOpcode::BitwiseXor) => {
 						let r1 = self.stack.pop_uint(&self.state)?;
 						let r2 = self.stack.pop_uint(&self.state)?;
 						self.stack.push_uint(r1.bitwise_xor(&r2));
 						self.incr_pc();
 						Ok(true)
 					}
-					Opcode::Byte => {
+					Opcode::AVMOpcode(AVMOpcode::Byte) => {
 						let r1 = self.stack.pop_uint(&self.state)?;
 						let r2 = self.stack.pop_uint(&self.state)?;
 						self.stack.push_uint(
@@ -992,7 +992,7 @@ impl Machine {
 						self.incr_pc();
 						Ok(true)
 					}
-					Opcode::SignExtend => {
+					Opcode::AVMOpcode(AVMOpcode::SignExtend) => {
 						let bnum = self.stack.pop_uint(&self.state)?;
 						let x = self.stack.pop_uint(&self.state)?;
 						let out = match bnum.to_usize() {

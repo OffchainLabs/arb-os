@@ -374,52 +374,52 @@ pub fn compile_evm_insn(
             Some((code, label_gen, None))
         }
         0x0b => { // SIGNEXTEND
-            code.push(Instruction::from_opcode(Opcode::SignExtend, None));
+            code.push(Instruction::from_opcode(Opcode::AVMOpcode(AVMOpcode::SignExtend), None));
             Some((code, label_gen, None))
         }
         // 0x0c - 0x0f unused
         0x10 => { // LT
-            code.push(Instruction::from_opcode(Opcode::LessThan, None));
+            code.push(Instruction::from_opcode(Opcode::AVMOpcode(AVMOpcode::LessThan), None));
             Some((code, label_gen, None))
         }
         0x11 => { // GT
-            code.push(Instruction::from_opcode(Opcode::GreaterThan, None));
+            code.push(Instruction::from_opcode(Opcode::AVMOpcode(AVMOpcode::GreaterThan), None));
             Some((code, label_gen, None))
         }
         0x12 => { // SLT
-            code.push(Instruction::from_opcode(Opcode::SLessThan, None));
+            code.push(Instruction::from_opcode(Opcode::AVMOpcode(AVMOpcode::SLessThan), None));
             Some((code, label_gen, None))
         }
         0x13 => { // SGT
-            code.push(Instruction::from_opcode(Opcode::SGreaterThan, None));
+            code.push(Instruction::from_opcode(Opcode::AVMOpcode(AVMOpcode::SGreaterThan), None));
             Some((code, label_gen, None))
         }
         0x14 => { // EQ
-            code.push(Instruction::from_opcode(Opcode::Equal, None));
+            code.push(Instruction::from_opcode(Opcode::AVMOpcode(AVMOpcode::Equal), None));
             Some((code, label_gen, None))
         }
         0x15 => { // ISZERO
-            code.push(Instruction::from_opcode(Opcode::IsZero, None));
+            code.push(Instruction::from_opcode(Opcode::AVMOpcode(AVMOpcode::IsZero), None));
             Some((code, label_gen, None))
         }
         0x16 => { // AND
-            code.push(Instruction::from_opcode(Opcode::BitwiseAnd, None));
+            code.push(Instruction::from_opcode(Opcode::AVMOpcode(AVMOpcode::BitwiseAnd), None));
             Some((code, label_gen, None))
         }
         0x17 => { // OR
-            code.push(Instruction::from_opcode(Opcode::BitwiseOr, None));
+            code.push(Instruction::from_opcode(Opcode::AVMOpcode(AVMOpcode::BitwiseOr), None));
             Some((code, label_gen, None))
         }
         0x18 => { // XOR
-            code.push(Instruction::from_opcode(Opcode::BitwiseXor, None));
+            code.push(Instruction::from_opcode(Opcode::AVMOpcode(AVMOpcode::BitwiseXor), None));
             Some((code, label_gen, None))
         }
         0x19 => { // NOT
-            code.push(Instruction::from_opcode(Opcode::BitwiseNeg, None));
+            code.push(Instruction::from_opcode(Opcode::AVMOpcode(AVMOpcode::BitwiseNeg), None));
             Some((code, label_gen, None))
         }
         0x1a => { // BYTE
-            code.push(Instruction::from_opcode(Opcode::Byte, None));
+            code.push(Instruction::from_opcode(Opcode::AVMOpcode(AVMOpcode::Byte), None));
             Some((code, label_gen, None))
         }
         0x1b => { // SHL
@@ -492,7 +492,7 @@ pub fn compile_evm_insn(
         0x57 => {  // JUMPI
             let (not_taken_label, lg) = label_gen.next();
             code.push(Instruction::from_opcode(Opcode::Swap1, None));
-            code.push(Instruction::from_opcode(Opcode::IsZero, None));
+            code.push(Instruction::from_opcode(Opcode::AVMOpcode(AVMOpcode::IsZero), None));
             code.push(Instruction::from_opcode_imm(
                 Opcode::Cjump,
                 Value::Label(not_taken_label),

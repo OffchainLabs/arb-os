@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-use crate::mavm::{Instruction, Opcode};
+use crate::mavm::{AVMOpcode, Instruction, Opcode};
 
 fn useless_opcodes_layer<'a, I>(iter: I) -> impl Iterator<Item = &'a Instruction>
 where
@@ -143,14 +143,14 @@ pub fn peephole(code_in: &[Instruction]) -> Vec<Instruction> {
                     }
                 }
                 Instruction {
-                    opcode: Opcode::IsZero,
+                    opcode: Opcode::AVMOpcode(AVMOpcode::IsZero),
                     immediate: None,
                     location: _,
                 } => {
                     let insn2 = code_out[code_out.len() - 2].clone();
                     match insn2 {
                         Instruction {
-                            opcode: Opcode::IsZero,
+                            opcode: Opcode::AVMOpcode(AVMOpcode::IsZero),
                             immediate: imm,
                             location: loc2,
                         } => {
@@ -161,7 +161,7 @@ pub fn peephole(code_in: &[Instruction]) -> Vec<Instruction> {
                             }
                         }
                         Instruction {
-                            opcode: Opcode::Equal,
+                            opcode: Opcode::AVMOpcode(AVMOpcode::Equal),
                             immediate: imm,
                             location: loc2,
                         } => {
@@ -176,7 +176,11 @@ pub fn peephole(code_in: &[Instruction]) -> Vec<Instruction> {
                         } => {
                             code_out.pop();
                             code_out.pop();
-                            code_out.push(Instruction::new(Opcode::Equal, imm, loc2));
+                            code_out.push(Instruction::new(
+                                Opcode::AVMOpcode(AVMOpcode::Equal),
+                                imm,
+                                loc2,
+                            ));
                         }
                         _ => {
                             done = true;

@@ -631,7 +631,10 @@ fn mavm_codegen_statements(
                 Value::Int(Uint256::from_usize(0)),
                 *loc,
             ));
-            code.push(Instruction::from_opcode(Opcode::IsZero, *loc));
+            code.push(Instruction::from_opcode(
+                Opcode::AVMOpcode(AVMOpcode::IsZero),
+                *loc,
+            ));
             code.push(Instruction::from_opcode_imm(
                 Opcode::Cjump,
                 Value::Label(after_label),
@@ -767,7 +770,10 @@ fn mavm_codegen_if_arm(
             )?;
             label_gen = lg;
             code = c;
-            code.push(Instruction::from_opcode(Opcode::IsZero, *loc));
+            code.push(Instruction::from_opcode(
+                Opcode::AVMOpcode(AVMOpcode::IsZero),
+                *loc,
+            ));
             code.push(Instruction::from_opcode_imm(
                 Opcode::Cjump,
                 Value::Label(after_label),
@@ -863,9 +869,9 @@ fn mavm_codegen_expr<'a>(
             code = c;
             let (maybe_opcode, maybe_imm) = match op {
                 UnaryOp::Minus => (Some(Opcode::UnaryMinus), None),
-                UnaryOp::BitwiseNeg => (Some(Opcode::BitwiseNeg), None),
-                UnaryOp::Not => (Some(Opcode::IsZero), None),
-                UnaryOp::Hash => (Some(Opcode::Hash), None),
+                UnaryOp::BitwiseNeg => (Some(Opcode::AVMOpcode(AVMOpcode::BitwiseNeg)), None),
+                UnaryOp::Not => (Some(Opcode::AVMOpcode(AVMOpcode::IsZero)), None),
+                UnaryOp::Hash => (Some(Opcode::AVMOpcode(AVMOpcode::Hash)), None),
                 UnaryOp::ToUint => (None, None),
                 UnaryOp::ToInt => (None, None),
                 UnaryOp::ToBytes32 => (None, None),
@@ -874,7 +880,10 @@ fn mavm_codegen_expr<'a>(
                         .exp(&Uint256::from_usize(160))
                         .sub(&Uint256::one())
                         .ok_or(new_codegen_error("Underflow on substraction", *loc))?;
-                    (Some(Opcode::BitwiseAnd), Some(Value::Int(mask)))
+                    (
+                        Some(Opcode::AVMOpcode(AVMOpcode::BitwiseAnd)),
+                        Some(Value::Int(mask)),
+                    )
                 }
                 UnaryOp::Len => (Some(Opcode::TupleGet(3)), Some(Value::Int(Uint256::zero()))),
             };
@@ -940,19 +949,19 @@ fn mavm_codegen_expr<'a>(
                 BinaryOp::Mod => Opcode::AVMOpcode(AVMOpcode::Mod),
                 BinaryOp::Sdiv => Opcode::AVMOpcode(AVMOpcode::Sdiv),
                 BinaryOp::Smod => Opcode::AVMOpcode(AVMOpcode::Smod),
-                BinaryOp::LessThan => Opcode::LessThan,
-                BinaryOp::GreaterThan => Opcode::GreaterThan,
-                BinaryOp::LessEq => Opcode::GreaterThan, // will negate
-                BinaryOp::GreaterEq => Opcode::LessThan, // will negate
-                BinaryOp::SLessThan => Opcode::SLessThan,
-                BinaryOp::SGreaterThan => Opcode::SGreaterThan,
-                BinaryOp::SLessEq => Opcode::SGreaterThan, // will negate
-                BinaryOp::SGreaterEq => Opcode::SLessThan, // will negate
-                BinaryOp::Equal => Opcode::Equal,
+                BinaryOp::LessThan => Opcode::AVMOpcode(AVMOpcode::LessThan),
+                BinaryOp::GreaterThan => Opcode::AVMOpcode(AVMOpcode::GreaterThan),
+                BinaryOp::LessEq => Opcode::AVMOpcode(AVMOpcode::GreaterThan), // will negate
+                BinaryOp::GreaterEq => Opcode::AVMOpcode(AVMOpcode::LessThan), // will negate
+                BinaryOp::SLessThan => Opcode::AVMOpcode(AVMOpcode::SLessThan),
+                BinaryOp::SGreaterThan => Opcode::AVMOpcode(AVMOpcode::SGreaterThan),
+                BinaryOp::SLessEq => Opcode::AVMOpcode(AVMOpcode::SGreaterThan), // will negate
+                BinaryOp::SGreaterEq => Opcode::AVMOpcode(AVMOpcode::SLessThan), // will negate
+                BinaryOp::Equal => Opcode::AVMOpcode(AVMOpcode::Equal),
                 BinaryOp::NotEqual => Opcode::NotEqual,
-                BinaryOp::BitwiseAnd => Opcode::BitwiseAnd,
-                BinaryOp::BitwiseOr => Opcode::BitwiseOr,
-                BinaryOp::BitwiseXor => Opcode::BitwiseXor,
+                BinaryOp::BitwiseAnd => Opcode::AVMOpcode(AVMOpcode::BitwiseAnd),
+                BinaryOp::BitwiseOr => Opcode::AVMOpcode(AVMOpcode::BitwiseOr),
+                BinaryOp::BitwiseXor => Opcode::AVMOpcode(AVMOpcode::BitwiseXor),
                 BinaryOp::_LogicalAnd => Opcode::LogicalAnd,
                 BinaryOp::LogicalOr => Opcode::LogicalOr,
                 BinaryOp::Hash => Opcode::Hash2,
@@ -963,7 +972,10 @@ fn mavm_codegen_expr<'a>(
                 | BinaryOp::GreaterEq
                 | BinaryOp::SLessEq
                 | BinaryOp::SGreaterEq => {
-                    code.push(Instruction::from_opcode(Opcode::IsZero, *loc));
+                    code.push(Instruction::from_opcode(
+                        Opcode::AVMOpcode(AVMOpcode::IsZero),
+                        *loc,
+                    ));
                 }
                 _ => {}
             }
@@ -1021,7 +1033,10 @@ fn mavm_codegen_expr<'a>(
             )?;
             let (lab, lg) = lg.next();
             c.push(Instruction::from_opcode(Opcode::Dup0, *loc));
-            c.push(Instruction::from_opcode(Opcode::IsZero, *loc));
+            c.push(Instruction::from_opcode(
+                Opcode::AVMOpcode(AVMOpcode::IsZero),
+                *loc,
+            ));
             c.push(Instruction::from_opcode_imm(
                 Opcode::Cjump,
                 Value::Label(lab),
@@ -1343,7 +1358,7 @@ fn mavm_codegen_expr<'a>(
                 label_gen = lg;
                 code.push(Instruction::from_opcode(Opcode::Dup0, *loc));
                 code.push(Instruction::from_opcode_imm(
-                    Opcode::GreaterThan,
+                    Opcode::AVMOpcode(AVMOpcode::GreaterThan),
                     Value::Int(Uint256::from_usize(*size)),
                     *loc,
                 ));
@@ -1765,7 +1780,7 @@ fn codegen_fixed_array_mod<'a>(
         label_gen = lg;
         code.push(Instruction::from_opcode(Opcode::Dup0, location));
         code.push(Instruction::from_opcode_imm(
-            Opcode::GreaterThan,
+            Opcode::AVMOpcode(AVMOpcode::GreaterThan),
             Value::Int(Uint256::from_usize(size)),
             location,
         ));
