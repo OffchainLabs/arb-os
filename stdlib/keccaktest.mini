@@ -31,7 +31,7 @@ import func keccak256(ba: ByteArray, offset: uint, nbytes: uint) -> option<bytes
 import impure func keccak_permutation(state: [25]uint) -> [25]uint;
 
 
-func main() {
+impure func main() {
     if let Some(x) = tests() {
 	    asm(x,) { log };
 	} else {
@@ -54,10 +54,22 @@ func tests() -> option<bytes32> {
 		return Some(bytes32(1));
 	}
 
+    ba = bytearray_new(0, true);
+    ba = bytearray_setByte(ba, 0, 0xcc)?;
+    let kecCC = keccak256(ba, 0, 1)?;
+    if (kecCC != bytes32(0xeead6dbfc7340a56caedc044696a168870549a6a7f6f56961e84a54bd9970b8a)) {
+        return Some(bytes32(2));
+    }
+
+    ba = bytearray_new(0, true);
+    ba = bytearray_setByte(ba, 0, 0xcc)?;
+    ba = bytearray_setByte(ba, 1, 0xaa)?;
+    let kecCCAA = keccak256(ba, 0, 2)?;
+    if (kecCCAA != bytes32(0x33f234f4a499894af4036ace8c63b93a0bb7685472d79f3a9808cf95ed7047b4)) {
+        return Some(bytes32(3));
+    }
+
 	return Some(bytes32(0));
-	
-	//^ for the one character: 0x044852b2a670ade5407e78fb2863c51de9fcb96542a07186fe3aeda6bb8a116d;
-	// for empty string: c5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470
 }
 
 func setupFromUnmarshal() -> ByteArray {
