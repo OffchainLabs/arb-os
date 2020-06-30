@@ -16,7 +16,7 @@
 
 use crate::evm::num_runtime_funcs;
 use crate::link::{ExportedFunc, ExportedFuncPoint, ImportedFunc};
-use crate::mavm::{CodePt, Instruction, Label, Opcode, Value};
+use crate::mavm::{AVMOpcode, CodePt, Instruction, Label, Opcode, Value};
 use crate::uint256::Uint256;
 use std::collections::{HashMap, HashSet};
 
@@ -147,7 +147,7 @@ pub fn fix_nonforward_labels(
                             }
                         };
                         code_out.push(Instruction::from_opcode(
-                            Opcode::PushStatic,
+                            Opcode::AVMOpcode(AVMOpcode::PushStatic),
                             insn_in.location,
                         ));
                         code_out.push(Instruction::from_opcode(
@@ -186,7 +186,7 @@ pub fn fix_nonforward_labels(
             Opcode::PushExternal(idx) => {
                 if let Some(val) = &insn.immediate {
                     code_xformed.push(Instruction::from_opcode_imm(
-                        Opcode::Noop,
+                        Opcode::AVMOpcode(AVMOpcode::Noop),
                         val.clone(),
                         insn.location,
                     ));

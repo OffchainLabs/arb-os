@@ -15,7 +15,7 @@
  */
 
 use crate::compile::{compile_from_file, CompileError, CompiledProgram, SourceFileMap, Type};
-use crate::mavm::{CodePt, Instruction, Label, Opcode, Value};
+use crate::mavm::{AVMOpcode, CodePt, Instruction, Label, Opcode, Value};
 use crate::stringtable::{StringId, StringTable};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -326,12 +326,12 @@ pub fn link(
         };
         vec![
             Instruction::from_opcode_imm(Opcode::Swap1, init_immediate, None),
-            Instruction::from_opcode(Opcode::Jump, None),
+            Instruction::from_opcode(Opcode::AVMOpcode(AVMOpcode::Jump), None),
         ]
     } else {
         // not a module, add an instruction that creates space for the globals
         vec![Instruction::from_opcode_imm(
-            Opcode::Rset,
+            Opcode::AVMOpcode(AVMOpcode::Rset),
             make_uninitialized_tuple(global_num_limit),
             None,
         )]

@@ -479,18 +479,11 @@ impl fmt::Display for Value {
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, Eq, PartialEq, Hash)]
 pub enum Opcode {
-    Noop,
     Panic,
     GetLocal,
     SetLocal,
     MakeFrame(usize, usize),
     Label(Label),
-    Jump,
-    Cjump,
-    GetPC,
-    Rget,
-    Rset,
-    PushStatic,
     PushExternal(usize), // push codeptr of external function -- index in imported_funcs
     TupleGet(usize),     // arg is size of anysize_tuple
     TupleSet(usize),     // arg is size of anysize_tuple
@@ -501,11 +494,6 @@ pub enum Opcode {
     Tset,
     Tget,
     Tlen,
-    Pop,
-    StackEmpty,
-    AuxPush,
-    AuxPop,
-    AuxStackEmpty,
     Xget,
     Xset,
     Dup0,
@@ -515,7 +503,6 @@ pub enum Opcode {
     Swap2,
     Return,
     UnaryMinus,
-    Hash2,
     Len,
     NotEqual,
     LogicalAnd,
@@ -529,8 +516,6 @@ pub enum Opcode {
     Halt,
     Send,
     Log,
-    ErrSet,
-    ErrPush,
     Breakpoint,
     DebugPrint,
     SetGas,
@@ -565,6 +550,21 @@ pub enum AVMOpcode {
     SignExtend,
     Hash = 0x20,
     Type,
+    Hash2,
+    Pop = 0x30,
+    PushStatic,
+    Rget,
+    Rset,
+    Jump,
+    Cjump,
+    StackEmpty,
+    GetPC,
+    AuxPush,
+    AuxPop,
+    AuxStackEmpty,
+    Noop,
+    ErrPush,
+    ErrSet,
 }
 
 impl MiniProperties for Opcode {
@@ -574,15 +574,15 @@ impl MiniProperties for Opcode {
             | Opcode::Inbox
             | Opcode::Send
             | Opcode::GetTime
-            | Opcode::Rset
-            | Opcode::Rget
+            | Opcode::AVMOpcode(AVMOpcode::Rset)
+            | Opcode::AVMOpcode(AVMOpcode::Rget)
             | Opcode::PushInsn
             | Opcode::PushInsnImm
             | Opcode::ErrCodePoint
-            | Opcode::ErrSet
-            | Opcode::ErrPush
-            | Opcode::Jump
-            | Opcode::Cjump => false,
+            | Opcode::AVMOpcode(AVMOpcode::ErrSet)
+            | Opcode::AVMOpcode(AVMOpcode::ErrPush)
+            | Opcode::AVMOpcode(AVMOpcode::Jump)
+            | Opcode::AVMOpcode(AVMOpcode::Cjump) => false,
             _ => true,
         }
     }
@@ -591,16 +591,16 @@ impl MiniProperties for Opcode {
 impl Opcode {
     pub fn from_name(name: &str) -> Self {
         match name {
-            "rget" => Opcode::Rget,
-            "rset" => Opcode::Rset,
-            "pushstatic" => Opcode::PushStatic,
+            "rget" => Opcode::AVMOpcode(AVMOpcode::Rget),
+            "rset" => Opcode::AVMOpcode(AVMOpcode::Rset),
+            "pushstatic" => Opcode::AVMOpcode(AVMOpcode::PushStatic),
             "tset" => Opcode::Tset,
             "tget" => Opcode::Tget,
-            "pop" => Opcode::Pop,
-            "stackempty" => Opcode::StackEmpty,
-            "auxpush" => Opcode::AuxPush,
-            "auxpop" => Opcode::AuxPop,
-            "auxstackempty" => Opcode::AuxStackEmpty,
+            "pop" => Opcode::AVMOpcode(AVMOpcode::Pop),
+            "stackempty" => Opcode::AVMOpcode(AVMOpcode::StackEmpty),
+            "auxpush" => Opcode::AVMOpcode(AVMOpcode::AuxPush),
+            "auxpop" => Opcode::AVMOpcode(AVMOpcode::AuxPop),
+            "auxstackempty" => Opcode::AVMOpcode(AVMOpcode::AuxStackEmpty),
             "xget" => Opcode::Xget,
             "xset" => Opcode::Xset,
             "dup0" => Opcode::Dup0,
@@ -611,7 +611,7 @@ impl Opcode {
             "unaryminus" => Opcode::UnaryMinus,
             "bitwiseneg" => Opcode::AVMOpcode(AVMOpcode::BitwiseNeg),
             "hash" => Opcode::AVMOpcode(AVMOpcode::Hash),
-            "hash2" => Opcode::Hash2,
+            "hash2" => Opcode::AVMOpcode(AVMOpcode::Hash2),
             "length" => Opcode::Len,
             "plus" => Opcode::AVMOpcode(AVMOpcode::Plus),
             "minus" => Opcode::AVMOpcode(AVMOpcode::Minus),
@@ -636,7 +636,7 @@ impl Opcode {
             "logicalor" => Opcode::LogicalOr,
             "gettime" => Opcode::GetTime,
             "inbox" => Opcode::Inbox,
-            "jump" => Opcode::Jump,
+            "jump" => Opcode::AVMOpcode(AVMOpcode::Jump),
             "log" => Opcode::Log,
             "errcodept" => Opcode::ErrCodePoint,
             "pushinsn" => Opcode::PushInsn,
@@ -645,7 +645,7 @@ impl Opcode {
             "debugprint" => Opcode::DebugPrint,
             "setgas" => Opcode::SetGas,
             "getgas" => Opcode::GetGas,
-            "errset" => Opcode::ErrSet,
+            "errset" => Opcode::AVMOpcode(AVMOpcode::ErrSet),
             _ => {
                 panic!("opcode not supported in asm segment: {}", name);
             }
@@ -679,21 +679,21 @@ impl Opcode {
             0x1c => Some(Opcode::NotEqual), //BUGBUG: this should be eliminated, doesn't exist in AVM
             0x20 => Some(Opcode::AVMOpcode(AVMOpcode::Hash)),
             0x21 => Some(Opcode::AVMOpcode(AVMOpcode::Type)),
-            0x22 => Some(Opcode::Hash2),
-            0x30 => Some(Opcode::Pop),
-            0x31 => Some(Opcode::PushStatic),
-            0x32 => Some(Opcode::Rget),
-            0x33 => Some(Opcode::Rset),
-            0x34 => Some(Opcode::Jump),
-            0x35 => Some(Opcode::Cjump),
-            0x36 => Some(Opcode::StackEmpty),
-            0x37 => Some(Opcode::GetPC),
-            0x38 => Some(Opcode::AuxPush),
-            0x39 => Some(Opcode::AuxPop),
-            0x3a => Some(Opcode::AuxStackEmpty),
-            0x3b => Some(Opcode::Noop),
-            0x3c => Some(Opcode::ErrPush),
-            0x3d => Some(Opcode::ErrSet),
+            0x22 => Some(Opcode::AVMOpcode(AVMOpcode::Hash2)),
+            0x30 => Some(Opcode::AVMOpcode(AVMOpcode::Pop)),
+            0x31 => Some(Opcode::AVMOpcode(AVMOpcode::PushStatic)),
+            0x32 => Some(Opcode::AVMOpcode(AVMOpcode::Rget)),
+            0x33 => Some(Opcode::AVMOpcode(AVMOpcode::Rset)),
+            0x34 => Some(Opcode::AVMOpcode(AVMOpcode::Jump)),
+            0x35 => Some(Opcode::AVMOpcode(AVMOpcode::Cjump)),
+            0x36 => Some(Opcode::AVMOpcode(AVMOpcode::StackEmpty)),
+            0x37 => Some(Opcode::AVMOpcode(AVMOpcode::GetPC)),
+            0x38 => Some(Opcode::AVMOpcode(AVMOpcode::AuxPush)),
+            0x39 => Some(Opcode::AVMOpcode(AVMOpcode::AuxPop)),
+            0x3a => Some(Opcode::AVMOpcode(AVMOpcode::AuxStackEmpty)),
+            0x3b => Some(Opcode::AVMOpcode(AVMOpcode::Noop)),
+            0x3c => Some(Opcode::AVMOpcode(AVMOpcode::ErrPush)),
+            0x3d => Some(Opcode::AVMOpcode(AVMOpcode::ErrSet)),
             0x40 => Some(Opcode::Dup0),
             0x41 => Some(Opcode::Dup1),
             0x42 => Some(Opcode::Dup2),
@@ -749,21 +749,21 @@ impl Opcode {
             Opcode::NotEqual => Some(0x1c),
             Opcode::AVMOpcode(AVMOpcode::Hash) => Some(0x20),
             Opcode::AVMOpcode(AVMOpcode::Type) => Some(0x21),
-            Opcode::Hash2 => Some(0x22),
-            Opcode::Pop => Some(0x30),
-            Opcode::PushStatic => Some(0x31),
-            Opcode::Rget => Some(0x32),
-            Opcode::Rset => Some(0x33),
-            Opcode::Jump => Some(0x34),
-            Opcode::Cjump => Some(0x35),
-            Opcode::StackEmpty => Some(0x36),
-            Opcode::GetPC => Some(0x37),
-            Opcode::AuxPush => Some(0x38),
-            Opcode::AuxPop => Some(0x39),
-            Opcode::AuxStackEmpty => Some(0x3a),
-            Opcode::Noop => Some(0x3b),
-            Opcode::ErrPush => Some(0x3c),
-            Opcode::ErrSet => Some(0x3d),
+            Opcode::AVMOpcode(AVMOpcode::Hash2) => Some(0x22),
+            Opcode::AVMOpcode(AVMOpcode::Pop) => Some(0x30),
+            Opcode::AVMOpcode(AVMOpcode::PushStatic) => Some(0x31),
+            Opcode::AVMOpcode(AVMOpcode::Rget) => Some(0x32),
+            Opcode::AVMOpcode(AVMOpcode::Rset) => Some(0x33),
+            Opcode::AVMOpcode(AVMOpcode::Jump) => Some(0x34),
+            Opcode::AVMOpcode(AVMOpcode::Cjump) => Some(0x35),
+            Opcode::AVMOpcode(AVMOpcode::StackEmpty) => Some(0x36),
+            Opcode::AVMOpcode(AVMOpcode::GetPC) => Some(0x37),
+            Opcode::AVMOpcode(AVMOpcode::AuxPush) => Some(0x38),
+            Opcode::AVMOpcode(AVMOpcode::AuxPop) => Some(0x39),
+            Opcode::AVMOpcode(AVMOpcode::AuxStackEmpty) => Some(0x3a),
+            Opcode::AVMOpcode(AVMOpcode::Noop) => Some(0x3b),
+            Opcode::AVMOpcode(AVMOpcode::ErrPush) => Some(0x3c),
+            Opcode::AVMOpcode(AVMOpcode::ErrSet) => Some(0x3d),
             Opcode::Dup0 => Some(0x40),
             Opcode::Dup1 => Some(0x41),
             Opcode::Dup2 => Some(0x42),

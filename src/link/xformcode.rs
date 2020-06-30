@@ -29,17 +29,20 @@ pub fn fix_tuple_size(code_in: &[Instruction], num_globals: usize) -> Vec<Instru
         let location = insn.location;
         match insn.opcode {
             Opcode::MakeFrame(nargs, ntotal) => {
-                code_out.push(Instruction::from_opcode(Opcode::AuxPush, location)); // move return address to aux stack
+                code_out.push(Instruction::from_opcode(
+                    Opcode::AVMOpcode(AVMOpcode::AuxPush),
+                    location,
+                )); // move return address to aux stack
                 locals_tree = TupleTree::new(ntotal, true);
                 if let Some(imm) = &insn.immediate {
                     code_out.push(Instruction::from_opcode_imm(
-                        Opcode::Noop,
+                        Opcode::AVMOpcode(AVMOpcode::Noop),
                         imm.clone(),
                         location,
                     ));
                 }
                 code_out.push(Instruction::from_opcode_imm(
-                    Opcode::AuxPush,
+                    Opcode::AVMOpcode(AVMOpcode::AuxPush),
                     TupleTree::make_empty(&locals_tree),
                     location,
                 ));
@@ -98,26 +101,44 @@ pub fn fix_tuple_size(code_in: &[Instruction], num_globals: usize) -> Vec<Instru
                 }
             }
             Opcode::SetGlobalVar(idx) => {
-                code_out.push(Instruction::from_opcode(Opcode::Rget, location));
+                code_out.push(Instruction::from_opcode(
+                    Opcode::AVMOpcode(AVMOpcode::Rget),
+                    location,
+                ));
                 code_out = global_tree.write_code(false, idx, &mut code_out, location);
-                code_out.push(Instruction::from_opcode(Opcode::Rset, location));
+                code_out.push(Instruction::from_opcode(
+                    Opcode::AVMOpcode(AVMOpcode::Rset),
+                    location,
+                ));
             }
             Opcode::GetGlobalVar(idx) => {
-                code_out.push(Instruction::from_opcode(Opcode::Rget, location));
+                code_out.push(Instruction::from_opcode(
+                    Opcode::AVMOpcode(AVMOpcode::Rget),
+                    location,
+                ));
                 code_out = global_tree.read_code(false, idx, &mut code_out, location);
             }
             Opcode::Return => {
                 code_out.push(Instruction::new(
-                    Opcode::AuxPop,
+                    Opcode::AVMOpcode(AVMOpcode::AuxPop),
                     match &insn.immediate {
                         Some(v) => Some(v.clone()),
                         None => None,
                     },
                     location,
                 ));
-                code_out.push(Instruction::from_opcode(Opcode::Pop, location));
-                code_out.push(Instruction::from_opcode(Opcode::AuxPop, location));
-                code_out.push(Instruction::from_opcode(Opcode::Jump, location));
+                code_out.push(Instruction::from_opcode(
+                    Opcode::AVMOpcode(AVMOpcode::Pop),
+                    location,
+                ));
+                code_out.push(Instruction::from_opcode(
+                    Opcode::AVMOpcode(AVMOpcode::AuxPop),
+                    location,
+                ));
+                code_out.push(Instruction::from_opcode(
+                    Opcode::AVMOpcode(AVMOpcode::Jump),
+                    location,
+                ));
             }
             Opcode::UncheckedFixedArrayGet(sz) => {
                 let tup_size_val = Value::Int(Uint256::from_usize(TUPLE_SIZE));
@@ -263,9 +284,15 @@ impl TupleTree {
         match self {
             TupleTree::Single => {
                 if is_local {
-                    code.push(Instruction::from_opcode(Opcode::AuxPop, location));
+                    code.push(Instruction::from_opcode(
+                        Opcode::AVMOpcode(AVMOpcode::AuxPop),
+                        location,
+                    ));
                     code.push(Instruction::from_opcode(Opcode::Dup0, location));
-                    code.push(Instruction::from_opcode(Opcode::AuxPush, location));
+                    code.push(Instruction::from_opcode(
+                        Opcode::AVMOpcode(AVMOpcode::AuxPush),
+                        location,
+                    ));
                     code.to_vec()
                 } else {
                     code.to_vec()
@@ -350,7 +377,10 @@ impl TupleTree {
             }
             panic!("TupleTree::write_code: out-of-bounds write");
         } else {
-            code.push(Instruction::from_opcode(Opcode::Pop, location));
+            code.push(Instruction::from_opcode(
+                Opcode::AVMOpcode(AVMOpcode::Pop),
+                location,
+            ));
             code.to_vec()
         }
     }

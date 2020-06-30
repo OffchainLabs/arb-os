@@ -527,21 +527,21 @@ impl Machine {
                 Opcode::NotEqual => 3, // This opcode should be phased out
                 Opcode::AVMOpcode(AVMOpcode::Hash) => 7,
                 Opcode::AVMOpcode(AVMOpcode::Type) => 3,
-                Opcode::Hash2 => 8,
-                Opcode::Pop => 1,
-                Opcode::PushStatic => 1,
-                Opcode::Rget => 1,
-                Opcode::Rset => 2,
-                Opcode::Jump => 4,
-                Opcode::Cjump => 4,
-                Opcode::StackEmpty => 2,
-                Opcode::GetPC => 1,
-                Opcode::AuxPush => 1,
-                Opcode::AuxPop => 1,
-                Opcode::AuxStackEmpty => 2,
-                Opcode::Noop => 1,
-                Opcode::ErrPush => 1,
-                Opcode::ErrSet => 1,
+                Opcode::AVMOpcode(AVMOpcode::Hash2) => 8,
+                Opcode::AVMOpcode(AVMOpcode::Pop) => 1,
+                Opcode::AVMOpcode(AVMOpcode::PushStatic) => 1,
+                Opcode::AVMOpcode(AVMOpcode::Rget) => 1,
+                Opcode::AVMOpcode(AVMOpcode::Rset) => 2,
+                Opcode::AVMOpcode(AVMOpcode::Jump) => 4,
+                Opcode::AVMOpcode(AVMOpcode::Cjump) => 4,
+                Opcode::AVMOpcode(AVMOpcode::StackEmpty) => 2,
+                Opcode::AVMOpcode(AVMOpcode::GetPC) => 1,
+                Opcode::AVMOpcode(AVMOpcode::AuxPush) => 1,
+                Opcode::AVMOpcode(AVMOpcode::AuxPop) => 1,
+                Opcode::AVMOpcode(AVMOpcode::AuxStackEmpty) => 2,
+                Opcode::AVMOpcode(AVMOpcode::Noop) => 1,
+                Opcode::AVMOpcode(AVMOpcode::ErrPush) => 1,
+                Opcode::AVMOpcode(AVMOpcode::ErrSet) => 1,
                 Opcode::Dup0 => 1,
                 Opcode::Dup1 => 1,
                 Opcode::Dup2 => 1,
@@ -587,16 +587,16 @@ impl Machine {
                     }
                 }
                 match insn.opcode {
-					Opcode::Noop => {
+					Opcode::AVMOpcode(AVMOpcode::Noop) => {
 						self.incr_pc();
 						Ok(true)
 					}
 					Opcode::Panic => Err(ExecutionError::new("panicked", &self.state, None)),
-					Opcode::Jump => {
+					Opcode::AVMOpcode(AVMOpcode::Jump) => {
 						self.state = MachineState::Running(self.stack.pop_codepoint(&self.state)?);
 						Ok(true)
 					}
-					Opcode::Cjump => {
+					Opcode::AVMOpcode(AVMOpcode::Cjump) => {
 						let cp = self.stack.pop_codepoint(&self.state)?;
 						let cond = self.stack.pop_uint(&self.state)?;
 						if cond != Uint256::zero() {
@@ -606,23 +606,23 @@ impl Machine {
 						}
 						Ok(true)
 					}
-					Opcode::GetPC => {
+					Opcode::AVMOpcode(AVMOpcode::GetPC) => {
 						self.stack.push_codepoint(self.get_pc()?);
 						self.incr_pc();
 						Ok(true)
 					}
-					Opcode::Rget => {
+					Opcode::AVMOpcode(AVMOpcode::Rget) => {
 						self.stack.push(self.register.clone());
 						self.incr_pc();
 						Ok(true)
 					}
-					Opcode::Rset => {
+					Opcode::AVMOpcode(AVMOpcode::Rset) => {
 						let val = self.stack.pop(&self.state)?;
 						self.register = val;
 						self.incr_pc();
 						Ok(true)
 					}
-					Opcode::PushStatic => {
+					Opcode::AVMOpcode(AVMOpcode::PushStatic) => {
 						self.stack.push(self.static_val.clone());
 						self.incr_pc();
 						Ok(true)
@@ -661,27 +661,27 @@ impl Machine {
 						self.incr_pc();
 						Ok(true)
 					}
-					Opcode::Pop => {
+					Opcode::AVMOpcode(AVMOpcode::Pop) => {
 						let _ = self.stack.pop(&self.state)?;
 						self.incr_pc();
 						Ok(true)
 					}
-					Opcode::StackEmpty => {
+					Opcode::AVMOpcode(AVMOpcode::StackEmpty) => {
 						self.stack.push_bool(self.stack.is_empty());
 						self.incr_pc();
 						Ok(true)
 					}
-					Opcode::AuxPush => {
+					Opcode::AVMOpcode(AVMOpcode::AuxPush) => {
 						self.aux_stack.push(self.stack.pop(&self.state)?);
 						self.incr_pc();
 						Ok(true)
 					}
-					Opcode::AuxPop => {
+					Opcode::AVMOpcode(AVMOpcode::AuxPop) => {
 						self.stack.push(self.aux_stack.pop(&self.state)?);
 						self.incr_pc();
 						Ok(true)
 					}
-					Opcode::AuxStackEmpty => {
+					Opcode::AVMOpcode(AVMOpcode::AuxStackEmpty) => {
 						self.stack.push_bool(self.aux_stack.is_empty());
 						self.incr_pc();
 						Ok(true)
@@ -1031,7 +1031,7 @@ impl Machine {
 						self.incr_pc();
 						Ok(true)
 					}
-					Opcode::Hash2 => {
+					Opcode::AVMOpcode(AVMOpcode::Hash2) => {
 						let r1 = self.stack.pop(&self.state)?;
 						let r2 = self.stack.pop(&self.state)?;
 						self.stack.push(Value::avm_hash2(&r1, &r2));
@@ -1068,13 +1068,13 @@ impl Machine {
 						self.incr_pc();
 						Ok(true)
 					}
-					Opcode::ErrSet => {
+					Opcode::AVMOpcode(AVMOpcode::ErrSet) => {
 						let cp = self.stack.pop_codepoint(&self.state)?;
 						self.err_codepoint = cp;
 						self.incr_pc();
 						Ok(true)
 					}
-					Opcode::ErrPush => {
+					Opcode::AVMOpcode(AVMOpcode::ErrPush) => {
 						self.stack.push_codepoint(self.err_codepoint);
 						self.incr_pc();
 						Ok(true)
