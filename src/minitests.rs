@@ -48,20 +48,6 @@ fn test_kvstest() {
 }
 
 #[test]
-fn test_treekvstest() {
-    let path = Path::new("builtin/treekvstest.mexe");
-    let res = run_from_file(path, vec![], RuntimeEnvironment::new(), false);
-    match res {
-        Ok(res) => {
-            assert_eq!(res[0], Value::Int(Uint256::zero()));
-        }
-        Err(e) => {
-            panic!("{}\n{}", e.0, e.1);
-        }
-    }
-}
-
-#[test]
 fn test_cuckookvstest() {
     let path = Path::new("builtin/cuckookvstest.mexe");
     let res = run_from_file(path, vec![], RuntimeEnvironment::new(), false);

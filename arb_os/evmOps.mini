@@ -84,8 +84,13 @@ import func queue_get(q: Queue) -> (Queue, any);
 
 import func keccak256(array: ByteArray, offset: uint, nbytes: uint) -> option<bytes32>;
 
+// Any function with a name like evmOp_XXX is designed to implement the XXX instruction in EVM.
+// Compiled EVM code will call that function to implement the XXX instruction.
+// Most of the functions are fairly simple, and access the callframe or similar information.
+
 
 public impure func evmOp_stop() {
+    // return from the current call, with no calldata
     evmOp_return(0, 0);
 }
 
@@ -361,6 +366,8 @@ public impure func evmOp_sstore(storageAddr: uint, value: uint) {
 }
     
 public impure func evmOp_getjumpaddr(evm_pc: uint) -> func() {
+    // This one isn't actually an EVM instruction.
+    // It's a "pseudo-instruction" that translates an EVM jump destination to an AVM codepoint in the compiled code.
     if let Some(topFrame) = evmCallStack_topFrame() {
         if let Some(jumpTable) = account_getEvmJumpTable(
             evmCallFrame_runningCodeFromAccount(topFrame)
@@ -368,7 +375,7 @@ public impure func evmOp_getjumpaddr(evm_pc: uint) -> func() {
             if let Some(codept) = jumpTable[evm_pc] {
                 return codept;
             } else {
-                evm_error();   // EVM code tried to jump to a forbidden code address
+                evm_error();   // EVM code tried to jump to a forbidden EVM jump destination
                 panic;
             }
         }
@@ -393,7 +400,6 @@ public impure func evmOp_log0(
     memAddr: uint, 
     nbytes: uint
 ) {
-    asm(999,) { debugprint };
     if let Some(data) = bytearray_extract(
         evmCallStack_getTopFrameMemoryOrDie(),
         memAddr,
@@ -418,7 +424,6 @@ public impure func evmOp_log1(
     nbytes: uint, 
     topic0: uint
 ) {
-    asm(999,) { debugprint };
     if let Some(data) = bytearray_extract(
         evmCallStack_getTopFrameMemoryOrDie(),
         memAddr,
@@ -445,7 +450,6 @@ public impure func evmOp_log2(
     topic0: uint,
     topic1: uint,
 ) {
-    asm(999,) { debugprint };
     if let Some(data) = bytearray_extract(
         evmCallStack_getTopFrameMemoryOrDie(),
         memAddr,
@@ -477,7 +481,6 @@ public impure func evmOp_log3(
     topic1: uint,
     topic2: uint,
 ) {
-    asm(999,) { debugprint };
     if let Some(data) = bytearray_extract(
         evmCallStack_getTopFrameMemoryOrDie(),
         memAddr,
@@ -508,7 +511,6 @@ public impure func evmOp_log4(
     topic2: uint,
     topic3: uint,
 ) {
-    asm(999,) { debugprint };
     if let Some(data) = bytearray_extract(
         evmCallStack_getTopFrameMemoryOrDie(),
         memAddr,
@@ -556,7 +558,10 @@ public impure func evmOp_call(
     retOffset: uint,
     retLength: uint
 ) -> bool {
-    let resumeCodePoint = asm() func() {  // get return address of our caller
+    // First, get the return address of our caller.
+    // This will be the second-from-top item on the AVM AuxStack.
+    // Get a copy of it, without disturbing anything.
+    let resumeCodePoint = asm() func() {
         auxpop
         auxpop
         dup0
@@ -565,7 +570,10 @@ public impure func evmOp_call(
         auxpush
         auxpush
     };
-    let res = evmCallStack_doCall(  // after call, this will throw control back to our caller
+
+    // Now make the call.
+    // After the call completes, control will be thrown directly back to resumeCodePoint.
+    let res = evmCallStack_doCall(
         0,
         gas,
         callee,
@@ -593,7 +601,8 @@ public impure func evmOp_callcode(
     retOffset: uint,
     retLength: uint
 ) -> bool {
-    let resumeCodePoint = asm() func() {  // get return address of our caller
+    // This is the same as evmOp_call, except for the callKind.
+    let resumeCodePoint = asm() func() {
         auxpop
         auxpop
         dup0
@@ -602,7 +611,7 @@ public impure func evmOp_callcode(
         auxpush
         auxpush
     };
-    let res = evmCallStack_doCall(  // after call, this will throw control back to our caller
+    let res = evmCallStack_doCall(
         1,
         gas,
         callee,
@@ -629,7 +638,8 @@ public impure func evmOp_delegatecall(
     retOffset: uint,
     retLength: uint
 ) -> bool {
-     let resumeCodePoint = asm() func() {  // get return address of our caller
+    // This is the same as evmOp_call, except for the callKind.
+     let resumeCodePoint = asm() func() {
          auxpop
          auxpop
          dup0
@@ -638,7 +648,7 @@ public impure func evmOp_delegatecall(
          auxpush
          auxpush
      };
-     let res = evmCallStack_doCall(  // after call, this will throw control back to our caller
+     let res = evmCallStack_doCall(
          2,
          gas,
          callee,
@@ -664,7 +674,8 @@ public impure func evmOp_staticcall(
     retOffset: uint,
     retLength: uint
 ) -> bool {
-    let resumeCodePoint = asm() func() {  // get return address of our caller
+    // This is the same as evmOp_call, except for the callKind.
+    let resumeCodePoint = asm() func() {
         auxpop
         auxpop
         dup0
@@ -673,7 +684,7 @@ public impure func evmOp_staticcall(
         auxpush
         auxpush
     };
-    let res = evmCallStack_doCall(  // after call, this will throw control back to our caller
+    let res = evmCallStack_doCall(
         3,
         gas,
         callee,
@@ -714,7 +725,6 @@ public impure func evmOp_selfdestruct(owner: address) {
 }
 
 public impure func evmOp_create(value: uint, offset: uint, length: uint) -> address {
-    asm((27, length),) { debugprint };
     evm_notYetImplemented(66,);
     panic;
 }

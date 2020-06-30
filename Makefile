@@ -8,8 +8,8 @@ test: all
 evmdebug: all
 	cargo run evmdebug
 
-TESTEXES = $(BUILTINDIR)/kvstest.mexe $(BUILTINDIR)/treekvstest.mexe $(BUILTINDIR)/cuckookvstest.mexe $(STDDIR)/queuetest.mexe $(BUILTINDIR)/arraytest.mexe $(BUILTINDIR)/globaltest.mexe $(STDDIR)/priorityqtest.mexe $(STDDIR)/bytearraytest.mexe $(STDDIR)/keccaktest.mexe $(BUILTINDIR)/maptest.mexe minitests/codeloadtest.mexe
-BUILTINMAOS = $(BUILTINDIR)/array.mao $(BUILTINDIR)/kvs.mao $(BUILTINDIR)/treekvs.mao $(BUILTINDIR)/cuckookvs.mao
+TESTEXES = $(BUILTINDIR)/kvstest.mexe $(BUILTINDIR)/cuckookvstest.mexe $(STDDIR)/queuetest.mexe $(BUILTINDIR)/arraytest.mexe $(BUILTINDIR)/globaltest.mexe $(STDDIR)/priorityqtest.mexe $(STDDIR)/bytearraytest.mexe $(STDDIR)/keccaktest.mexe $(BUILTINDIR)/maptest.mexe minitests/codeloadtest.mexe
+BUILTINMAOS = $(BUILTINDIR)/array.mao $(BUILTINDIR)/kvs.mao $(BUILTINDIR)/cuckookvs.mao
 STDLIBMAOS = $(STDDIR)/bytearray.mao $(STDDIR)/priorityq.mao $(STDDIR)/random.mao $(STDDIR)/queue.mao $(STDDIR)/keccak.mao $(STDDIR)/bytestream.mao $(STDDIR)/stack.mao
 STDLIB = $(STDLIBMAOS)
 
@@ -17,9 +17,6 @@ all: $(TESTEXES) arbos
 
 $(BUILTINDIR)/kvstest.mexe: $(BUILTINMAOS) $(BUILTINDIR)/kvstest.mini
 	cargo run compile $(BUILTINDIR)/kvstest.mini -o $(BUILTINDIR)/kvstest.mexe
-
-$(BUILTINDIR)/treekvstest.mexe: $(BUILTINMAOS) $(BUILTINDIR)/treekvstest.mini
-	cargo run compile $(BUILTINDIR)/treekvstest.mini $(BUILTINDIR)/treekvs.mao -o $(BUILTINDIR)/treekvstest.mexe
 
 $(BUILTINDIR)/cuckookvstest.mexe: $(BUILTINMAOS) $(BUILTINDIR)/cuckookvstest.mini
 	cargo run compile $(BUILTINDIR)/cuckookvstest.mini $(BUILTINDIR)/cuckookvs.mao -o $(BUILTINDIR)/cuckookvstest.mexe
@@ -74,9 +71,6 @@ $(BUILTINDIR)/array.mao: $(BUILTINDIR)/array.mini
 
 $(BUILTINDIR)/kvs.mao: $(BUILTINDIR)/kvs.mini
 	cargo run compile $(BUILTINDIR)/kvs.mini -c -o $(BUILTINDIR)/kvs.mao
-
-$(BUILTINDIR)/treekvs.mao: $(BUILTINDIR)/treekvs.mini
-	cargo run compile $(BUILTINDIR)/treekvs.mini -c -o $(BUILTINDIR)/treekvs.mao
 
 $(BUILTINDIR)/cuckookvs.mao: $(BUILTINDIR)/cuckookvs.mini
 	cargo run compile $(BUILTINDIR)/cuckookvs.mini -c -o $(BUILTINDIR)/cuckookvs.mao
