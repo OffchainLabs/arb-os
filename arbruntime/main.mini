@@ -17,6 +17,7 @@
 import type MessageFromL1;
 
 import impure func errorHandler_init();
+import impure func initKeccakConstants();
 import impure func gasAccounting_init();
 import impure func inbox_init();
 import impure func accountStore_init();
@@ -27,6 +28,7 @@ import impure func handleMessageFromL1(msg: MessageFromL1) -> option<()>;
 
 impure func main() {
     errorHandler_init();
+    initKeccakConstants();
     gasAccounting_init();
     inbox_init();
     accountStore_init();
