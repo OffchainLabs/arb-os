@@ -24,6 +24,11 @@ use crate::uint256::Uint256;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone)]
+pub struct DebugInfo {
+    pub location: Option<Location>,
+}
+
+#[derive(Debug, Clone)]
 pub enum TopLevelDecl {
     TypeDecl(TypeDecl),
     FuncDecl(FuncDecl),
@@ -573,82 +578,34 @@ impl FuncDecl {
 }
 
 #[derive(Debug, Clone)]
-pub enum Statement {
-    Noop(Option<Location>),
-    Panic(Option<Location>),
-    ReturnVoid(Option<Location>),
-    Return(Expr, Option<Location>),
-    Expression(Expr, Option<Location>),
-    Let(MatchPattern, Expr, Option<Location>),
-    Assign(StringId, Expr, Option<Location>),
-    Loop(Vec<Statement>, Option<Location>),
-    While(Expr, Vec<Statement>, Option<Location>),
+pub struct Statement {
+    pub kind: StatementKind,
+    pub debug_info: DebugInfo,
+}
+
+#[derive(Debug, Clone)]
+pub enum StatementKind {
+    Noop(),
+    Panic(),
+    ReturnVoid(),
+    Return(Expr),
+    Expression(Expr),
+    Let(MatchPattern, Expr),
+    Assign(StringId, Expr),
+    Loop(Vec<Statement>),
+    While(Expr, Vec<Statement>),
     If(IfArm),
-    IfLet(
-        StringId,
-        Expr,
-        Vec<Statement>,
-        Option<Vec<Statement>>,
-        Option<Location>,
-    ),
-    Asm(Vec<Instruction>, Vec<Expr>, Option<Location>),
-    DebugPrint(Expr, Option<Location>),
+    IfLet(StringId, Expr, Vec<Statement>, Option<Vec<Statement>>),
+    Asm(Vec<Instruction>, Vec<Expr>),
+    DebugPrint(Expr),
 }
 
 impl Statement {
     pub fn resolve_types(&self, type_table: &SymTable<Type>) -> Result<Self, TypeError> {
-        match self {
-            Statement::Noop(loc) => Ok(Statement::Noop(*loc)),
-            Statement::Panic(loc) => Ok(Statement::Panic(*loc)),
-            Statement::ReturnVoid(loc) => Ok(Statement::ReturnVoid(*loc)),
-            Statement::Return(expr, loc) => {
-                Ok(Statement::Return(expr.resolve_types(type_table)?, *loc))
-            }
-            Statement::Expression(expr, loc) => {
-                Ok(Statement::Expression(expr.resolve_types(type_table)?, *loc))
-            }
-            Statement::Let(pat, expr, loc) => Ok(Statement::Let(
-                pat.clone(),
-                expr.resolve_types(type_table)?,
-                *loc,
-            )),
-            Statement::Assign(name, expr, loc) => Ok(Statement::Assign(
-                *name,
-                expr.resolve_types(type_table)?,
-                *loc,
-            )),
-            Statement::Loop(body, loc) => Ok(Statement::Loop(
-                Statement::resolve_types_vec(body.to_vec(), type_table)?,
-                *loc,
-            )),
-            Statement::While(c, body, loc) => Ok(Statement::While(
-                c.resolve_types(type_table)?,
-                Statement::resolve_types_vec(body.to_vec(), type_table)?,
-                *loc,
-            )),
-            Statement::If(arms) => Ok(Statement::If(arms.resolve_types(type_table)?)),
-            Statement::Asm(insns, args, loc) => {
-                let mut rargs = Vec::new();
-                for arg in args.iter() {
-                    rargs.push(arg.resolve_types(type_table)?);
-                }
-                Ok(Statement::Asm(insns.to_vec(), rargs, *loc))
-            }
-            Statement::DebugPrint(e, loc) => {
-                Ok(Statement::DebugPrint(e.resolve_types(type_table)?, *loc))
-            }
-            Statement::IfLet(l, r, s, e, loc) => Ok(Statement::IfLet(
-                *l,
-                r.resolve_types(type_table)?,
-                s.iter()
-                    .map(|x| x.resolve_types(type_table))
-                    .collect::<Result<Vec<_>, _>>()?,
-                e.clone()
-                    .map(|block| block.iter().map(|x| x.resolve_types(type_table)).collect())
-                    .transpose()?,
-                *loc,
-            )),
-        }
+        Ok(Self {
+            kind: self.kind.resolve_types(type_table)?,
+            debug_info: self.debug_info.clone(),
+        })
     }
 
     pub fn resolve_types_vec(
@@ -660,6 +617,59 @@ impl Statement {
             vr.push(s.resolve_types(type_table)?);
         }
         Ok(vr)
+    }
+}
+
+impl StatementKind {
+    pub fn resolve_types(&self, type_table: &SymTable<Type>) -> Result<Self, TypeError> {
+        match &self {
+            StatementKind::Noop() => Ok(StatementKind::Noop()),
+            StatementKind::Panic() => Ok(StatementKind::Panic()),
+            StatementKind::ReturnVoid() => Ok(StatementKind::ReturnVoid()),
+            StatementKind::Return(expr) => {
+                Ok(StatementKind::Return(expr.resolve_types(type_table)?))
+            }
+            StatementKind::Expression(expr) => {
+                Ok(StatementKind::Expression(expr.resolve_types(type_table)?))
+            }
+            StatementKind::Let(pat, expr) => Ok(StatementKind::Let(
+                pat.clone(),
+                expr.resolve_types(type_table)?,
+            )),
+            StatementKind::Assign(name, expr) => Ok(StatementKind::Assign(
+                *name,
+                expr.resolve_types(type_table)?,
+            )),
+            StatementKind::Loop(body) => Ok(StatementKind::Loop(Statement::resolve_types_vec(
+                body.to_vec(),
+                type_table,
+            )?)),
+            StatementKind::While(c, body) => Ok(StatementKind::While(
+                c.resolve_types(type_table)?,
+                Statement::resolve_types_vec(body.to_vec(), type_table)?,
+            )),
+            StatementKind::If(arms) => Ok(StatementKind::If(arms.resolve_types(type_table)?)),
+            StatementKind::Asm(insns, args) => {
+                let mut rargs = Vec::new();
+                for arg in args.iter() {
+                    rargs.push(arg.resolve_types(type_table)?);
+                }
+                Ok(StatementKind::Asm(insns.to_vec(), rargs))
+            }
+            StatementKind::DebugPrint(e) => {
+                Ok(StatementKind::DebugPrint(e.resolve_types(type_table)?))
+            }
+            StatementKind::IfLet(l, r, s, e) => Ok(StatementKind::IfLet(
+                *l,
+                r.resolve_types(type_table)?,
+                s.iter()
+                    .map(|x| x.resolve_types(type_table))
+                    .collect::<Result<Vec<_>, _>>()?,
+                e.clone()
+                    .map(|block| block.iter().map(|x| x.resolve_types(type_table)).collect())
+                    .transpose()?,
+            )),
+        }
     }
 }
 

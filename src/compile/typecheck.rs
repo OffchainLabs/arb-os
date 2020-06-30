@@ -15,6 +15,7 @@
  */
 
 use super::symtable::SymTable;
+use crate::compile::ast::StatementKind;
 use crate::compile::{
     ast::{
         BinaryOp, Constant, Expr, FuncArg, FuncDecl, FuncDeclKind, GlobalVarDecl, IfArm,
@@ -590,8 +591,14 @@ fn typecheck_statement_sequence<'a>(
     let first_stat = &statements[0];
     let rest_of_stats = &statements[1..];
 
-    let (tcs, bindings) =
-        typecheck_statement(first_stat, return_type, type_table, global_vars, func_table)?;
+    let (tcs, bindings) = typecheck_statement(
+        &first_stat.kind,
+        &first_stat.debug_info.location,
+        return_type,
+        type_table,
+        global_vars,
+        func_table,
+    )?;
     let mut rest_result = typecheck_statement_sequence_with_bindings(
         rest_of_stats,
         return_type,
@@ -629,17 +636,18 @@ fn typecheck_statement_sequence_with_bindings<'a>(
 }
 
 fn typecheck_statement<'a>(
-    statement: &'a Statement,
+    statement: &'a StatementKind,
+    loc: &Option<Location>,
     return_type: &Type,
     type_table: &'a SymTable<'a, Type>,
     global_vars: &'a HashMap<StringId, (Type, usize)>,
     func_table: &SymTable<Type>,
 ) -> Result<(TypeCheckedStatement, Vec<(StringId, Type)>), TypeError> {
     match statement {
-        Statement::Noop(loc) => Ok((TypeCheckedStatement::Noop(*loc), vec![])),
-        Statement::Panic(loc) => Ok((TypeCheckedStatement::Panic(*loc), vec![])),
-        Statement::ReturnVoid(loc) => Ok((TypeCheckedStatement::ReturnVoid(*loc), vec![])),
-        Statement::Return(expr, loc) => {
+        StatementKind::Noop() => Ok((TypeCheckedStatement::Noop(*loc), vec![])),
+        StatementKind::Panic() => Ok((TypeCheckedStatement::Panic(*loc), vec![])),
+        StatementKind::ReturnVoid() => Ok((TypeCheckedStatement::ReturnVoid(*loc), vec![])),
+        StatementKind::Return(expr) => {
             let tc_expr = typecheck_expr(expr, type_table, global_vars, func_table, return_type)?;
             if return_type.assignable(&tc_expr.get_type()) {
                 Ok((TypeCheckedStatement::Return(tc_expr, *loc), vec![]))
@@ -654,14 +662,14 @@ fn typecheck_statement<'a>(
                 ))
             }
         }
-        Statement::Expression(expr, loc) => Ok((
+        StatementKind::Expression(expr) => Ok((
             TypeCheckedStatement::Expression(
                 typecheck_expr(expr, type_table, global_vars, func_table, return_type)?,
                 *loc,
             ),
             vec![],
         )),
-        Statement::Let(pat, expr, loc) => {
+        StatementKind::Let(pat, expr) => {
             let tc_expr = typecheck_expr(expr, type_table, global_vars, func_table, return_type)?;
             let tce_type = tc_expr.get_type();
             match pat {
@@ -687,7 +695,7 @@ fn typecheck_statement<'a>(
                 }
             }
         }
-        Statement::Assign(name, expr, loc) => {
+        StatementKind::Assign(name, expr) => {
             let tc_expr = typecheck_expr(expr, type_table, global_vars, func_table, return_type)?;
             match type_table.get(*name) {
                 Some(var_type) => {
@@ -724,7 +732,7 @@ fn typecheck_statement<'a>(
                 },
             }
         }
-        Statement::Loop(body, loc) => {
+        StatementKind::Loop(body) => {
             let tc_body = typecheck_statement_sequence(
                 body,
                 return_type,
@@ -734,7 +742,7 @@ fn typecheck_statement<'a>(
             )?;
             Ok((TypeCheckedStatement::Loop(tc_body, *loc), vec![]))
         }
-        Statement::While(cond, body, loc) => {
+        StatementKind::While(cond, body) => {
             let tc_cond = typecheck_expr(cond, type_table, global_vars, func_table, return_type)?;
             match tc_cond.get_type() {
                 Type::Bool => {
@@ -753,7 +761,7 @@ fn typecheck_statement<'a>(
                 )),
             }
         }
-        Statement::If(arm) => Ok((
+        StatementKind::If(arm) => Ok((
             TypeCheckedStatement::If(typecheck_if_arm(
                 arm,
                 return_type,
@@ -763,7 +771,7 @@ fn typecheck_statement<'a>(
             )?),
             vec![],
         )),
-        Statement::Asm(insns, args, loc) => {
+        StatementKind::Asm(insns, args) => {
             let mut tc_args = Vec::new();
             for arg in args {
                 tc_args.push(typecheck_expr(
@@ -779,11 +787,11 @@ fn typecheck_statement<'a>(
                 vec![],
             ))
         }
-        Statement::DebugPrint(e, loc) => {
+        StatementKind::DebugPrint(e) => {
             let tce = typecheck_expr(e, type_table, global_vars, func_table, return_type)?;
             Ok((TypeCheckedStatement::DebugPrint(tce, *loc), vec![]))
         }
-        Statement::IfLet(l, r, s, e, loc) => {
+        StatementKind::IfLet(l, r, s, e) => {
             let tcr = typecheck_expr(r, type_table, global_vars, func_table, return_type)?;
             let tct = match tcr.get_type() {
                 Type::Option(t) => *t,
@@ -1103,7 +1111,8 @@ fn typecheck_expr(
                 let inner_type_table =
                     type_table.push_multi(block_bindings.iter().map(|(k, v)| (*k, v)).collect());
                 let (statement, bindings) = typecheck_statement(
-                    statement,
+                    &statement.kind,
+                    loc,
                     return_type,
                     &inner_type_table,
                     global_vars,

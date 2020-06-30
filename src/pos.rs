@@ -108,6 +108,7 @@ pub struct Location {
     pub line: Line,
     pub column: Column,
     pub absolute: BytePos,
+    pub file_id: u64,
 }
 
 impl Location {
