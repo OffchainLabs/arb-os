@@ -19,6 +19,7 @@ use crate::link::LinkedProgram;
 use crate::mavm::{CodePt, Instruction, Opcode, Value};
 use crate::pos::Location;
 use crate::uint256::Uint256;
+use std::cmp::max;
 use std::collections::{BTreeMap, HashMap};
 use std::fmt;
 use std::io::stdin;
@@ -358,30 +359,38 @@ impl ProfilerData {
                             command.clear();
                             let res = stdin().read_line(&mut command);
                             if res.is_err() {
-                                return;
+                                println!("Error reading line");
+                                continue;
                             }
                             if command.trim_end() == "change" {
                                 break;
                             }
                             let start_row = match command.trim_end().parse::<usize>() {
                                 Ok(u) => u,
-                                Err(_) => return,
+                                Err(_) => {
+                                    println!("Invalid line number");
+                                    continue;
+                                }
                             };
                             command.clear();
                             let res = stdin().read_line(&mut command);
                             if res.is_err() {
-                                return;
+                                println!("Error reading line");
+                                continue;
                             }
                             let end_row = match command.trim_end().parse::<usize>() {
                                 Ok(u) => u,
-                                Err(_) => return,
+                                Err(_) => {
+                                    println!("Invalid line number");
+                                    continue;
+                                }
                             };
                             if start_row > end_row {
                                 println!("Invalid range");
                                 continue;
                             }
                             let area_cost: u64 = tree
-                                .range((start_row - 1, 0)..(end_row, 0))
+                                .range((max(start_row, 1) - 1, 0)..(end_row, 0))
                                 .map(|(_, val)| *val)
                                 .sum();
                             println!("ArbGas cost of region: {}", area_cost);
