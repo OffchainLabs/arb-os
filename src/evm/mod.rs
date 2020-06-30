@@ -922,7 +922,7 @@ pub fn evm_load_and_call_funcs(
         }
     }
 
-    let mut machine = load_from_file(Path::new("arbruntime/runtime.mexe"), rt_env);
+    let mut machine = load_from_file(Path::new("arb_os/arbos.mexe"), rt_env);
 
     let logs = match crate::run::run(&mut machine, vec![], debug) {
         Ok(logs) => logs,
@@ -1051,7 +1051,7 @@ pub fn evm_xcontract_call_and_verify(debug: bool) {
 
 pub fn evm_direct_deploy_add(debug: bool) {
     let rt_env = RuntimeEnvironment::new();
-    let mut machine = load_from_file(Path::new("arbruntime/runtime.mexe"), rt_env);
+    let mut machine = load_from_file(Path::new("arb_os/arbos.mexe"), rt_env);
     machine.start_at_zero();
 
     match AbiForContract::new_from_file("contracts/add/build/contracts/Add.json") {
@@ -1072,7 +1072,7 @@ pub fn evm_direct_deploy_add(debug: bool) {
 pub fn evm_direct_deploy_and_call_add(debug: bool) {
     use std::convert::TryFrom;
     let rt_env = RuntimeEnvironment::new();
-    let mut machine = load_from_file(Path::new("arbruntime/runtime.mexe"), rt_env);
+    let mut machine = load_from_file(Path::new("arb_os/arbos.mexe"), rt_env);
     machine.start_at_zero();
 
     let contract = match AbiForContract::new_from_file("contracts/add/build/contracts/Add.json") {

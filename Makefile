@@ -13,7 +13,7 @@ BUILTINMAOS = $(BUILTINDIR)/array.mao $(BUILTINDIR)/kvs.mao $(BUILTINDIR)/treekv
 STDLIBMAOS = $(STDDIR)/bytearray.mao $(STDDIR)/priorityq.mao $(STDDIR)/random.mao $(STDDIR)/queue.mao $(STDDIR)/keccak.mao $(STDDIR)/bytestream.mao $(STDDIR)/stack.mao
 STDLIB = $(STDLIBMAOS)
 
-all: $(TESTEXES) runtime
+all: $(TESTEXES) arbos
 
 $(BUILTINDIR)/kvstest.mexe: $(BUILTINMAOS) $(BUILTINDIR)/kvstest.mini
 	cargo run compile $(BUILTINDIR)/kvstest.mini -o $(BUILTINDIR)/kvstest.mexe
@@ -81,53 +81,53 @@ $(BUILTINDIR)/treekvs.mao: $(BUILTINDIR)/treekvs.mini
 $(BUILTINDIR)/cuckookvs.mao: $(BUILTINDIR)/cuckookvs.mini
 	cargo run compile $(BUILTINDIR)/cuckookvs.mini -c -o $(BUILTINDIR)/cuckookvs.mao
 
-RUNTIMEDIR = arbruntime
-RUNTIMEMAOS = $(RUNTIMEDIR)/main.mao $(RUNTIMEDIR)/accounts.mao $(RUNTIMEDIR)/messages.mao $(RUNTIMEDIR)/inbox.mao $(RUNTIMEDIR)/evmCallStack.mao $(RUNTIMEDIR)/evmOps.mao $(RUNTIMEDIR)/codeSegment.mao $(RUNTIMEDIR)/evmlogs.mao $(RUNTIMEDIR)/errorHandler.mao $(RUNTIMEDIR)/gasAccounting.mao
-RUNTIME = $(RUNTIMEDIR)/runtime.mexe
+ARBOSDIR = arb_os
+ARBOSAOS = $(ARBOSDIR)/main.mao $(ARBOSDIR)/accounts.mao $(ARBOSDIR)/messages.mao $(ARBOSDIR)/inbox.mao $(ARBOSDIR)/evmCallStack.mao $(ARBOSDIR)/evmOps.mao $(ARBOSDIR)/codeSegment.mao $(ARBOSDIR)/evmlogs.mao $(ARBOSDIR)/errorHandler.mao $(ARBOSDIR)/gasAccounting.mao
+ARBOS = $(ARBOSDIR)/arbos.mexe
 
-runtime: $(RUNTIME)
+arbos: $(ARBOS)
 
-$(RUNTIMEDIR)/accounts.mao: $(RUNTIMEDIR)/accounts.mini
-	cargo run compile $(RUNTIMEDIR)/accounts.mini -c -o $(RUNTIMEDIR)/accounts.mao
+$(ARBOSDIR)/accounts.mao: $(ARBOSDIR)/accounts.mini
+	cargo run compile $(ARBOSDIR)/accounts.mini -c -o $(ARBOSDIR)/accounts.mao
 
-$(RUNTIMEDIR)/messages.mao: $(RUNTIMEDIR)/messages.mini
-	cargo run compile $(RUNTIMEDIR)/messages.mini -c -o $(RUNTIMEDIR)/messages.mao
+$(ARBOSDIR)/messages.mao: $(ARBOSDIR)/messages.mini
+	cargo run compile $(ARBOSDIR)/messages.mini -c -o $(ARBOSDIR)/messages.mao
 
-$(RUNTIMEDIR)/main.mao: $(RUNTIMEDIR)/main.mini
-	cargo run compile $(RUNTIMEDIR)/main.mini -c -o $(RUNTIMEDIR)/main.mao
+$(ARBOSDIR)/main.mao: $(ARBOSDIR)/main.mini
+	cargo run compile $(ARBOSDIR)/main.mini -c -o $(ARBOSDIR)/main.mao
 
-$(RUNTIMEDIR)/inbox.mao: $(RUNTIMEDIR)/inbox.mini
-	cargo run compile $(RUNTIMEDIR)/inbox.mini -c -o $(RUNTIMEDIR)/inbox.mao
+$(ARBOSDIR)/inbox.mao: $(ARBOSDIR)/inbox.mini
+	cargo run compile $(ARBOSDIR)/inbox.mini -c -o $(ARBOSDIR)/inbox.mao
 
-$(RUNTIMEDIR)/evmCallStack.mao: $(RUNTIMEDIR)/evmCallStack.mini
-	cargo run compile $(RUNTIMEDIR)/evmCallStack.mini -c -o $(RUNTIMEDIR)/evmCallStack.mao
+$(ARBOSDIR)/evmCallStack.mao: $(ARBOSDIR)/evmCallStack.mini
+	cargo run compile $(ARBOSDIR)/evmCallStack.mini -c -o $(ARBOSDIR)/evmCallStack.mao
 
-$(RUNTIMEDIR)/evmOps.mao: $(RUNTIMEDIR)/evmOps.mini
-	cargo run compile $(RUNTIMEDIR)/evmOps.mini -c -o $(RUNTIMEDIR)/evmOps.mao
+$(ARBOSDIR)/evmOps.mao: $(ARBOSDIR)/evmOps.mini
+	cargo run compile $(ARBOSDIR)/evmOps.mini -c -o $(ARBOSDIR)/evmOps.mao
 
-$(RUNTIMEDIR)/codeSegment.mao: $(RUNTIMEDIR)/codeSegment.mini
-	cargo run compile $(RUNTIMEDIR)/codeSegment.mini -c -o $(RUNTIMEDIR)/codeSegment.mao
+$(ARBOSDIR)/codeSegment.mao: $(ARBOSDIR)/codeSegment.mini
+	cargo run compile $(ARBOSDIR)/codeSegment.mini -c -o $(ARBOSDIR)/codeSegment.mao
 
-$(RUNTIMEDIR)/evmlogs.mao: $(RUNTIMEDIR)/evmlogs.mini
-	cargo run compile $(RUNTIMEDIR)/evmlogs.mini -c -o $(RUNTIMEDIR)/evmlogs.mao
+$(ARBOSDIR)/evmlogs.mao: $(ARBOSDIR)/evmlogs.mini
+	cargo run compile $(ARBOSDIR)/evmlogs.mini -c -o $(ARBOSDIR)/evmlogs.mao
 
-$(RUNTIMEDIR)/errorHandler.mao: $(RUNTIMEDIR)/errorHandler.mini
-	cargo run compile $(RUNTIMEDIR)/errorHandler.mini -c -o $(RUNTIMEDIR)/errorHandler.mao
+$(ARBOSDIR)/errorHandler.mao: $(ARBOSDIR)/errorHandler.mini
+	cargo run compile $(ARBOSDIR)/errorHandler.mini -c -o $(ARBOSDIR)/errorHandler.mao
 
-$(RUNTIMEDIR)/gasAccounting.mao: $(RUNTIMEDIR)/gasAccounting.mini
-	cargo run compile $(RUNTIMEDIR)/gasAccounting.mini -c -o $(RUNTIMEDIR)/gasAccounting.mao
+$(ARBOSDIR)/gasAccounting.mao: $(ARBOSDIR)/gasAccounting.mini
+	cargo run compile $(ARBOSDIR)/gasAccounting.mini -c -o $(ARBOSDIR)/gasAccounting.mao
 
-$(RUNTIME): $(RUNTIMEMAOS) $(STDLIB) $(BUILTINMAOS)
-	cargo run compile $(RUNTIMEMAOS) $(STDLIB) -o $(RUNTIME)
+$(ARBOS): $(ARBOSAOS) $(STDLIB) $(BUILTINMAOS)
+	cargo run compile $(ARBOSAOS) $(STDLIB) -o $(ARBOS)
 
-runtime.pretty: $(RUNTIMEMAOS) $(STDLIB) $(BUILTINMAOS)
-	cargo run compile $(RUNTIMEMAOS) $(STDLIB) -f pretty >runtime.pretty
+arbos.pretty: $(ARBOSAOS) $(STDLIB) $(BUILTINMAOS)
+	cargo run compile $(ARBOSAOS) $(STDLIB) -f pretty >arbos.pretty
 
-run: runtime
-	cargo run run $(RUNTIME)
+run: arbos
+	cargo run run $(ARBOS)
 
 compiler: 
 	cargo build
 
 clean: 
-	rm -f $(BUILTINMAOS) $(TESTEXES) $(STDLIBMAOS) $(RUNTIMEMAOS) $(RUNTIMEDIR)/*.mexe
+	rm -f $(BUILTINMAOS) $(TESTEXES) $(STDLIBMAOS) $(ARBOSAOS) $(ARBOSDIR)/*.mexe

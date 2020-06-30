@@ -236,7 +236,7 @@ fn main() -> Result<(), CompileError> {
         let filepath = Path::new(if let Some(pathname) = matches.value_of("output") {
             pathname
         } else {
-            "arbruntime/evmJumpTable.mini"
+            "arb_os/evmJumpTable.mini"
         });
         if let Err(e) = make_evm_jumptable_mini(filepath) {
             panic!("I/O error: {}", e);
