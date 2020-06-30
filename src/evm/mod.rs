@@ -964,6 +964,7 @@ pub fn evm_load_and_call_funcs(
 }
 
 #[cfg(test)]
+
 pub fn evm_load_add_and_verify(mutating: bool, debug: bool, profile: bool) {
     use std::convert::TryFrom;
     match evm_load_and_call_func(
