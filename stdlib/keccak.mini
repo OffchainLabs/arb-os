@@ -26,6 +26,16 @@ import func bytearray_copy(src: ByteArray, srcOffset: uint, dest: ByteArray, des
 
 
 public impure func keccak256(ba: ByteArray, offset: uint, nbytes: uint) -> option<bytes32> {
+    if (nbytes == 32) {
+        return Some(hash(bytearray_get256(ba, offset)?));
+    }
+    if (nbytes == 64) {
+        return Some(hash(
+            bytes32(bytearray_get256(ba, offset)?),
+            bytes32(bytearray_get256(ba, offset+32)?)
+        ));
+    }
+
     let accumulator = newfixedarray(25, 0);
     while (nbytes >= 136) {
         // process a full block

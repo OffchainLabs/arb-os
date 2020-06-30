@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+use keccak_hash::keccak;
 use num_bigint::{BigInt, BigUint, Sign, ToBigInt};
 use num_traits::cast::ToPrimitive;
 use num_traits::identities::{One, Zero};
@@ -282,27 +283,17 @@ impl Uint256 {
     }
 
     pub fn avm_hash(&self) -> Self {
-        let bytes_buf = self.val.to_bytes_be();
-        let mut hasher = crypto_hash::Hasher::new(crypto_hash::Algorithm::SHA256);
-        hasher
-            .write_all(&bytes_buf)
-            .expect("Uint256::avm_hash: write to hasher failed");
-        let result_bytes = hasher.finish();
-        Uint256::from_bytes(&result_bytes)
+        let bytes_buf = self.to_bytes_be();
+        let hash_result = keccak(bytes_buf);
+        Uint256::from_bytes(hash_result.as_bytes())
     }
 
     pub fn avm_hash2(v1: &Self, v2: &Self) -> Self {
-        let bytes1 = v1.val.to_bytes_be();
+        let mut bytes1 = v1.val.to_bytes_be();
         let bytes2 = v2.val.to_bytes_be();
-        let mut hasher = crypto_hash::Hasher::new(crypto_hash::Algorithm::SHA256);
-        hasher
-            .write_all(&bytes1)
-            .expect("Uint256::avm_hash2: write to hasher failed");
-        hasher
-            .write_all(&bytes2)
-            .expect("Uint256::avm_hash2: write to hasher failed");
-        let result_bytes = hasher.finish();
-        Uint256::from_bytes(&result_bytes)
+        bytes1.extend(bytes2);
+        let hash_result = keccak(bytes1);
+        Uint256::from_bytes(hash_result.as_bytes())
     }
 }
 

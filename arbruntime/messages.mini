@@ -92,7 +92,6 @@ type MessageFromL1 = struct {
 }
 
 public impure func handleMessageFromL1(msg: MessageFromL1) -> option<()> {
-    asm(100,) { debugprint };
     let inStream = bytestream_new(bytearray_unmarshalBytes(msg.msgData));
 
     let (bs, msgType) = bytestream_getByte(inStream)?;
