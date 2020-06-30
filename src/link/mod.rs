@@ -325,7 +325,7 @@ pub fn link(
             None => Value::none(),
         };
         vec![
-            Instruction::from_opcode_imm(Opcode::Swap1, init_immediate, None),
+            Instruction::from_opcode_imm(Opcode::AVMOpcode(AVMOpcode::Swap1), init_immediate, None),
             Instruction::from_opcode(Opcode::AVMOpcode(AVMOpcode::Jump), None),
         ]
     } else {

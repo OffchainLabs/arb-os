@@ -542,18 +542,18 @@ impl Machine {
                 Opcode::AVMOpcode(AVMOpcode::Noop) => 1,
                 Opcode::AVMOpcode(AVMOpcode::ErrPush) => 1,
                 Opcode::AVMOpcode(AVMOpcode::ErrSet) => 1,
-                Opcode::Dup0 => 1,
-                Opcode::Dup1 => 1,
-                Opcode::Dup2 => 1,
-                Opcode::Swap1 => 1,
-                Opcode::Swap2 => 1,
-                Opcode::Tget => 2,
-                Opcode::Tset => 40,
-                Opcode::Tlen => 2,
-                Opcode::Xget => 3,
-                Opcode::Xset => 41,
-                Opcode::Breakpoint => 100,
-                Opcode::Log => 100,
+                Opcode::AVMOpcode(AVMOpcode::Dup0) => 1,
+                Opcode::AVMOpcode(AVMOpcode::Dup1) => 1,
+                Opcode::AVMOpcode(AVMOpcode::Dup2) => 1,
+                Opcode::AVMOpcode(AVMOpcode::Swap1) => 1,
+                Opcode::AVMOpcode(AVMOpcode::Swap2) => 1,
+                Opcode::AVMOpcode(AVMOpcode::Tget) => 2,
+                Opcode::AVMOpcode(AVMOpcode::Tset) => 40,
+                Opcode::AVMOpcode(AVMOpcode::Tlen) => 2,
+                Opcode::AVMOpcode(AVMOpcode::Xget) => 3,
+                Opcode::AVMOpcode(AVMOpcode::Xset) => 41,
+                Opcode::AVMOpcode(AVMOpcode::Breakpoint) => 100,
+                Opcode::AVMOpcode(AVMOpcode::Log) => 100,
                 Opcode::Send => 100,
                 Opcode::GetTime => 40,
                 Opcode::Inbox => 40,
@@ -627,7 +627,7 @@ impl Machine {
 						self.incr_pc();
 						Ok(true)
 					}
-					Opcode::Tset => {
+					Opcode::AVMOpcode(AVMOpcode::Tset) => {
 						let idx = self.stack.pop_usize(&self.state)?;
 						let tup = self.stack.pop_tuple(&self.state)?;
 						let val = self.stack.pop(&self.state)?;
@@ -644,7 +644,7 @@ impl Machine {
 							Err(ExecutionError::new("index out of bounds in Tset", &self.state, None))
 						}
 					}
-					Opcode::Tget => {
+					Opcode::AVMOpcode(AVMOpcode::Tget) => {
 						let idx = self.stack.pop_usize(&self.state)?;
 						let tup = self.stack.pop_tuple(&self.state)?;
 						if idx < tup.len() {
@@ -655,7 +655,7 @@ impl Machine {
 							Err(ExecutionError::new("index out of bounds in Tget", &self.state, None))
 						}
 					}
-					Opcode::Tlen => {
+					Opcode::AVMOpcode(AVMOpcode::Tlen) => {
 						let tup = self.stack.pop_tuple(&self.state)?;
 						self.stack.push_usize(tup.len());
 						self.incr_pc();
@@ -686,7 +686,7 @@ impl Machine {
 						self.incr_pc();
 						Ok(true)
 					}
-					Opcode::Xget => {
+					Opcode::AVMOpcode(AVMOpcode::Xget) => {
 						let slot_num = self.stack.pop_usize(&self.state)?;
 						let aux_top = match self.aux_stack.top() {
 							Some(top) => top,
@@ -705,7 +705,7 @@ impl Machine {
 							Err(ExecutionError::new("expected tuple on aux stack", &self.state, Some(aux_top)))
 						}
 					}
-					Opcode::Xset => {
+					Opcode::AVMOpcode(AVMOpcode::Xset) => {
 						let slot_num = self.stack.pop_usize(&self.state)?;
 						let tup = self.aux_stack.pop_tuple(&self.state)?;
 						if slot_num < tup.len() {
@@ -718,14 +718,14 @@ impl Machine {
 							Err(ExecutionError::new("tuple access out of bounds", &self.state, None))
 						}
 					}
-					Opcode::Dup0 => {
+					Opcode::AVMOpcode(AVMOpcode::Dup0) => {
 						let top = self.stack.pop(&self.state)?;
 						self.stack.push(top.clone());
 						self.stack.push(top);
 						self.incr_pc();
 						Ok(true)
 					}
-					Opcode::Dup1 => {
+					Opcode::AVMOpcode(AVMOpcode::Dup1) => {
 						let top = self.stack.pop(&self.state)?;
 						let snd = self.stack.pop(&self.state)?;
 						self.stack.push(snd.clone());
@@ -734,7 +734,7 @@ impl Machine {
 						self.incr_pc();
 						Ok(true)
 					}
-					Opcode::Dup2 => {
+					Opcode::AVMOpcode(AVMOpcode::Dup2) => {
 						let top = self.stack.pop(&self.state)?;
 						let snd = self.stack.pop(&self.state)?;
 						let trd = self.stack.pop(&self.state)?;
@@ -745,7 +745,7 @@ impl Machine {
 						self.incr_pc();
 						Ok(true)
 					}
-					Opcode::Swap1 => {
+					Opcode::AVMOpcode(AVMOpcode::Swap1) => {
 						let top = self.stack.pop(&self.state)?;
 						let snd = self.stack.pop(&self.state)?;
 						self.stack.push(top);
@@ -753,7 +753,7 @@ impl Machine {
 						self.incr_pc();
 						Ok(true)
 					}
-					Opcode::Swap2 => {
+					Opcode::AVMOpcode(AVMOpcode::Swap2) => {
 						let top = self.stack.pop(&self.state)?;
 						let snd = self.stack.pop(&self.state)?;
 						let trd = self.stack.pop(&self.state)?;
@@ -1062,7 +1062,7 @@ impl Machine {
 					Opcode::Send => {
 						panic!("Send instruction not yet implemented");
 					}
-					Opcode::Log => {
+					Opcode::AVMOpcode(AVMOpcode::Log) => {
 						let val = self.stack.pop(&self.state)?;
 						self.runtime_env.push_log(val);
 						self.incr_pc();
@@ -1115,7 +1115,7 @@ impl Machine {
 						self.incr_pc();
 						Ok(true)
 					}
-					Opcode::Breakpoint => {
+					Opcode::AVMOpcode(AVMOpcode::Breakpoint) => {
 						self.incr_pc();
 						Ok(false)
 					}

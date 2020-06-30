@@ -255,7 +255,7 @@ pub fn compile_evm_insn(
             // EVM DIV returns zero if denominator is zero
             let (mid_label, lg) = label_gen.next();
             let (end_label, lg) = lg.next();
-            code.push(Instruction::from_opcode(Opcode::Dup1, None));
+            code.push(Instruction::from_opcode(Opcode::AVMOpcode(AVMOpcode::Dup1), None));
             code.push(Instruction::from_opcode_imm(Opcode::AVMOpcode(AVMOpcode::Cjump), Value::Label(mid_label), None));
             code.push(Instruction::from_opcode(Opcode::AVMOpcode(AVMOpcode::Pop), None));
             code.push(Instruction::from_opcode(Opcode::AVMOpcode(AVMOpcode::Pop), None));
@@ -275,7 +275,7 @@ pub fn compile_evm_insn(
             let (mid_label, lg) = label_gen.next();
             let (mid2_label, lg) = lg.next();
             let (end_label, lg) = lg.next();
-            code.push(Instruction::from_opcode(Opcode::Dup1, None));
+            code.push(Instruction::from_opcode(Opcode::AVMOpcode(AVMOpcode::Dup1), None));
             code.push(Instruction::from_opcode_imm(Opcode::AVMOpcode(AVMOpcode::Cjump), Value::Label(mid_label), None));
 
             // case: denominator == 0
@@ -285,15 +285,15 @@ pub fn compile_evm_insn(
             code.push(Instruction::from_opcode_imm(Opcode::AVMOpcode(AVMOpcode::Jump), Value::Label(end_label), None));
 
             code.push(Instruction::from_opcode(Opcode::Label(mid_label), None));
-            code.push(Instruction::from_opcode(Opcode::Dup0, None));
+            code.push(Instruction::from_opcode(Opcode::AVMOpcode(AVMOpcode::Dup0), None));
             code.push(Instruction::from_opcode_imm(Opcode::NotEqual, max_neg_int, None));
             code.push(Instruction::from_opcode_imm(Opcode::AVMOpcode(AVMOpcode::Cjump), Value::Label(mid2_label), None));
-            code.push(Instruction::from_opcode(Opcode::Dup1, None));
+            code.push(Instruction::from_opcode(Opcode::AVMOpcode(AVMOpcode::Dup1), None));
             code.push(Instruction::from_opcode_imm(Opcode::NotEqual, minus_one, None));
             code.push(Instruction::from_opcode_imm(Opcode::AVMOpcode(AVMOpcode::Cjump), Value::Label(mid2_label), None));
 
             // case: numerator == MaxNegInt  &&  denominator == -1
-            code.push(Instruction::from_opcode(Opcode::Swap1, None));
+            code.push(Instruction::from_opcode(Opcode::AVMOpcode(AVMOpcode::Swap1), None));
             code.push(Instruction::from_opcode(Opcode::AVMOpcode(AVMOpcode::Pop), None));
             code.push(Instruction::from_opcode_imm(Opcode::AVMOpcode(AVMOpcode::Jump), Value::Label(end_label), None));
 
@@ -310,7 +310,7 @@ pub fn compile_evm_insn(
             // EVM MOD returns zero if modulus is zero
             let (mid_label, lg) = label_gen.next();
             let (end_label, lg) = lg.next();
-            code.push(Instruction::from_opcode(Opcode::Dup1, None));
+            code.push(Instruction::from_opcode(Opcode::AVMOpcode(AVMOpcode::Dup1), None));
             code.push(Instruction::from_opcode_imm(Opcode::AVMOpcode(AVMOpcode::Cjump), Value::Label(mid_label), None));
             code.push(Instruction::from_opcode(Opcode::AVMOpcode(AVMOpcode::Pop), None));
             code.push(Instruction::from_opcode(Opcode::AVMOpcode(AVMOpcode::Pop), None));
@@ -326,7 +326,7 @@ pub fn compile_evm_insn(
             // EVM SMOD returns zero if modulus is zero
             let (mid_label, lg) = label_gen.next();
             let (end_label, lg) = lg.next();
-            code.push(Instruction::from_opcode(Opcode::Dup1, None));
+            code.push(Instruction::from_opcode(Opcode::AVMOpcode(AVMOpcode::Dup1), None));
             code.push(Instruction::from_opcode_imm(Opcode::AVMOpcode(AVMOpcode::Cjump), Value::Label(mid_label), None));
             code.push(Instruction::from_opcode(Opcode::AVMOpcode(AVMOpcode::Pop), None));
             code.push(Instruction::from_opcode(Opcode::AVMOpcode(AVMOpcode::Pop), None));
@@ -342,7 +342,7 @@ pub fn compile_evm_insn(
             // EVM ADDMOD returns zero if modulus is zero
             let (mid_label, lg) = label_gen.next();
             let (end_label, lg) = lg.next();
-            code.push(Instruction::from_opcode(Opcode::Dup2, None));
+            code.push(Instruction::from_opcode(Opcode::AVMOpcode(AVMOpcode::Dup2), None));
             code.push(Instruction::from_opcode_imm(Opcode::AVMOpcode(AVMOpcode::Cjump), Value::Label(mid_label), None));
             code.push(Instruction::from_opcode(Opcode::AVMOpcode(AVMOpcode::Pop), None));
             code.push(Instruction::from_opcode(Opcode::AVMOpcode(AVMOpcode::Pop), None));
@@ -358,7 +358,7 @@ pub fn compile_evm_insn(
             // EVM MULMOD returns zero if modulus is zero
             let (mid_label, lg) = label_gen.next();
             let (end_label, lg) = lg.next();
-            code.push(Instruction::from_opcode(Opcode::Dup2, None));
+            code.push(Instruction::from_opcode(Opcode::AVMOpcode(AVMOpcode::Dup2), None));
             code.push(Instruction::from_opcode_imm(Opcode::AVMOpcode(AVMOpcode::Cjump), Value::Label(mid_label), None));
             code.push(Instruction::from_opcode(Opcode::AVMOpcode(AVMOpcode::Pop), None));
             code.push(Instruction::from_opcode(Opcode::AVMOpcode(AVMOpcode::Pop), None));
@@ -423,22 +423,22 @@ pub fn compile_evm_insn(
             Some((code, label_gen, None))
         }
         0x1b => { // SHL
-            code.push(Instruction::from_opcode(Opcode::Swap1, None));
+            code.push(Instruction::from_opcode(Opcode::AVMOpcode(AVMOpcode::Swap1), None));
             code.push(Instruction::from_opcode_imm(Opcode::AVMOpcode(AVMOpcode::Exp), Value::Int(Uint256::from_usize(2)), None));
             code.push(Instruction::from_opcode(Opcode::AVMOpcode(AVMOpcode::Mul), None));
             Some((code, label_gen, None))
         }
         0x1c => { // SHR
-            code.push(Instruction::from_opcode(Opcode::Swap1, None));
+            code.push(Instruction::from_opcode(Opcode::AVMOpcode(AVMOpcode::Swap1), None));
             code.push(Instruction::from_opcode_imm(Opcode::AVMOpcode(AVMOpcode::Exp), Value::Int(Uint256::from_usize(2)), None));
-            code.push(Instruction::from_opcode(Opcode::Swap1, None));
+            code.push(Instruction::from_opcode(Opcode::AVMOpcode(AVMOpcode::Swap1), None));
             code.push(Instruction::from_opcode(Opcode::AVMOpcode(AVMOpcode::Div), None));
             Some((code, label_gen, None))
         }
         0x1d => { // SAR
-            code.push(Instruction::from_opcode(Opcode::Swap1, None));
+            code.push(Instruction::from_opcode(Opcode::AVMOpcode(AVMOpcode::Swap1), None));
             code.push(Instruction::from_opcode_imm(Opcode::AVMOpcode(AVMOpcode::Exp), Value::Int(Uint256::from_usize(2)), None));
-            code.push(Instruction::from_opcode(Opcode::Swap1, None));
+            code.push(Instruction::from_opcode(Opcode::AVMOpcode(AVMOpcode::Swap1), None));
             code.push(Instruction::from_opcode(Opcode::AVMOpcode(AVMOpcode::Sdiv), None));
             Some((code, label_gen, None))
         }
@@ -491,7 +491,7 @@ pub fn compile_evm_insn(
         }
         0x57 => {  // JUMPI
             let (not_taken_label, lg) = label_gen.next();
-            code.push(Instruction::from_opcode(Opcode::Swap1, None));
+            code.push(Instruction::from_opcode(Opcode::AVMOpcode(AVMOpcode::Swap1), None));
             code.push(Instruction::from_opcode(Opcode::AVMOpcode(AVMOpcode::IsZero), None));
             code.push(Instruction::from_opcode_imm(
                 Opcode::AVMOpcode(AVMOpcode::Cjump),
@@ -549,15 +549,15 @@ pub fn compile_evm_insn(
         0x7f => { panic!("called evm_compile_insn with push-type instruction"); }
         // DUP instructions follow; note that DUPn on EVM corresponds to dup(n-1) on AVM
         0x80 => { // DUP1  
-            code.push(Instruction::from_opcode(Opcode::Dup0, None));
+            code.push(Instruction::from_opcode(Opcode::AVMOpcode(AVMOpcode::Dup0), None));
             Some((code, label_gen, None))
         }
         0x81 => { // DUP2 
-            code.push(Instruction::from_opcode(Opcode::Dup1, None));
+            code.push(Instruction::from_opcode(Opcode::AVMOpcode(AVMOpcode::Dup1), None));
             Some((code, label_gen, None))
         }
         0x82 => { // DUP3  
-            code.push(Instruction::from_opcode(Opcode::Dup2, None));
+            code.push(Instruction::from_opcode(Opcode::AVMOpcode(AVMOpcode::Dup2), None));
             Some((code, label_gen, None))
         }
         0x83 => Some((gen_dupn(code, 3), label_gen, None)),
@@ -574,11 +574,11 @@ pub fn compile_evm_insn(
         0x8e => Some((gen_dupn(code, 14), label_gen, None)),
         0x8f => Some((gen_dupn(code, 15), label_gen, None)),
         0x90 => { // SWAP1  
-            code.push(Instruction::from_opcode(Opcode::Swap1, None));
+            code.push(Instruction::from_opcode(Opcode::AVMOpcode(AVMOpcode::Swap1), None));
             Some((code, label_gen, None))
         }
         0x91 => { // SWAP2  
-            code.push(Instruction::from_opcode(Opcode::Swap2, None));
+            code.push(Instruction::from_opcode(Opcode::AVMOpcode(AVMOpcode::Swap2), None));
             Some((code, label_gen, None))
         }
         0x92 => Some((gen_swapn(code, 3), label_gen, None)),
@@ -634,27 +634,42 @@ fn gen_dupn(mut code: Vec<Instruction>, n: usize) -> Vec<Instruction> {
             None,
         ));
     }
-    code.push(Instruction::from_opcode(Opcode::Dup2, None));
+    code.push(Instruction::from_opcode(
+        Opcode::AVMOpcode(AVMOpcode::Dup2),
+        None,
+    ));
     for _i in 2..n {
         code.push(Instruction::from_opcode(
             Opcode::AVMOpcode(AVMOpcode::AuxPop),
             None,
         ));
-        code.push(Instruction::from_opcode(Opcode::Swap1, None));
+        code.push(Instruction::from_opcode(
+            Opcode::AVMOpcode(AVMOpcode::Swap1),
+            None,
+        ));
     }
     code
 }
 
 fn gen_swapn(mut code: Vec<Instruction>, n: usize) -> Vec<Instruction> {
     for _i in 2..n {
-        code.push(Instruction::from_opcode(Opcode::Swap1, None));
+        code.push(Instruction::from_opcode(
+            Opcode::AVMOpcode(AVMOpcode::Swap1),
+            None,
+        ));
         code.push(Instruction::from_opcode(
             Opcode::AVMOpcode(AVMOpcode::AuxPush),
             None,
         ));
     }
-    code.push(Instruction::from_opcode(Opcode::Swap2, None));
-    code.push(Instruction::from_opcode(Opcode::Swap1, None));
+    code.push(Instruction::from_opcode(
+        Opcode::AVMOpcode(AVMOpcode::Swap2),
+        None,
+    ));
+    code.push(Instruction::from_opcode(
+        Opcode::AVMOpcode(AVMOpcode::Swap1),
+        None,
+    ));
     for _i in 2..n {
         code.push(Instruction::from_opcode(
             Opcode::AVMOpcode(AVMOpcode::AuxPop),

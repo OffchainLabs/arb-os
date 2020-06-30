@@ -104,13 +104,13 @@ mod tests {
             LinkedProgram {
                 code: vec![
                     Instruction::from_opcode(Opcode::Inbox, None),
-                    Instruction::from_opcode_imm(Opcode::Tget, Value::Int(Uint256::one()), None),
+                    Instruction::from_opcode_imm(Opcode::AVMOpcode(AVMOpcode::Tget), Value::Int(Uint256::one()), None),
                     Instruction::from_opcode_imm(
-                        Opcode::Tget,
+                        Opcode::AVMOpcode(AVMOpcode::Tget),
                         Value::Int(Uint256::from_usize(3)),
                         None,
                     ),
-                    Instruction::from_opcode(Opcode::Log, None),
+                    Instruction::from_opcode(Opcode::AVMOpcode(AVMOpcode::Log), None),
                     Instruction::from_opcode(Opcode::Inbox, None), // should block, stopping execution
                 ],
                 static_val: Value::none(),

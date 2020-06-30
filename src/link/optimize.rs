@@ -40,7 +40,7 @@ pub fn peephole(code_in: &[Instruction]) -> Vec<Instruction> {
                     location: _,
                 } => {
                     if let Instruction {
-                        opcode: Opcode::Dup0,
+                        opcode: Opcode::AVMOpcode(AVMOpcode::Dup0),
                         immediate: None,
                         location: _,
                     } = code_out[code_out.len() - 2]
@@ -104,7 +104,11 @@ pub fn peephole(code_in: &[Instruction]) -> Vec<Instruction> {
                     {
                         code_out.pop();
                         code_out.pop();
-                        code_out.push(Instruction::new(Opcode::Swap1, insn1.immediate, loc1));
+                        code_out.push(Instruction::new(
+                            Opcode::AVMOpcode(AVMOpcode::Swap1),
+                            insn1.immediate,
+                            loc1,
+                        ));
                     } else {
                         done = true;
                     }

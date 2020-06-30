@@ -634,9 +634,12 @@ fn mavm_codegen_statements(
             )?;
             label_gen = lg;
             code = c;
-            code.push(Instruction::from_opcode(Opcode::Dup0, *loc));
+            code.push(Instruction::from_opcode(
+                Opcode::AVMOpcode(AVMOpcode::Dup0),
+                *loc,
+            ));
             code.push(Instruction::from_opcode_imm(
-                Opcode::Tget,
+                Opcode::AVMOpcode(AVMOpcode::Tget),
                 Value::Int(Uint256::from_usize(0)),
                 *loc,
             ));
@@ -650,7 +653,7 @@ fn mavm_codegen_statements(
                 *loc,
             ));
             code.push(Instruction::from_opcode_imm(
-                Opcode::Tget,
+                Opcode::AVMOpcode(AVMOpcode::Tget),
                 Value::Int(Uint256::from_usize(1)),
                 *loc,
             ));
@@ -732,7 +735,10 @@ fn mavm_codegen_tuple_pattern(
     let pat_size = pattern.len();
     for (i, pat) in pattern.iter().enumerate() {
         if i < pat_size - 1 {
-            code.push(Instruction::from_opcode(Opcode::Dup0, loc));
+            code.push(Instruction::from_opcode(
+                Opcode::AVMOpcode(AVMOpcode::Dup0),
+                loc,
+            ));
         }
         match pat {
             TypeCheckedMatchPattern::Simple(_, _) => {
@@ -922,7 +928,7 @@ fn mavm_codegen_expr<'a>(
                 *loc,
             ));
             c.push(Instruction::from_opcode_imm(
-                Opcode::Tset,
+                Opcode::AVMOpcode(AVMOpcode::Tset),
                 Value::Int(Uint256::from_u64(1)),
                 *loc,
             ));
@@ -1010,7 +1016,10 @@ fn mavm_codegen_expr<'a>(
                 prepushed_vals,
             )?;
             let (lab, lg) = lg.next();
-            c.push(Instruction::from_opcode(Opcode::Dup0, *loc));
+            c.push(Instruction::from_opcode(
+                Opcode::AVMOpcode(AVMOpcode::Dup0),
+                *loc,
+            ));
             c.push(Instruction::from_opcode_imm(
                 Opcode::AVMOpcode(AVMOpcode::Cjump),
                 Value::Label(lab),
@@ -1047,7 +1056,10 @@ fn mavm_codegen_expr<'a>(
                 prepushed_vals,
             )?;
             let (lab, lg) = lg.next();
-            c.push(Instruction::from_opcode(Opcode::Dup0, *loc));
+            c.push(Instruction::from_opcode(
+                Opcode::AVMOpcode(AVMOpcode::Dup0),
+                *loc,
+            ));
             c.push(Instruction::from_opcode(
                 Opcode::AVMOpcode(AVMOpcode::IsZero),
                 *loc,
@@ -1381,7 +1393,10 @@ fn mavm_codegen_expr<'a>(
                 //TODO: also skip check if size is larger power of 8
                 let (cont_label, lg) = label_gen.next();
                 label_gen = lg;
-                code.push(Instruction::from_opcode(Opcode::Dup0, *loc));
+                code.push(Instruction::from_opcode(
+                    Opcode::AVMOpcode(AVMOpcode::Dup0),
+                    *loc,
+                ));
                 code.push(Instruction::from_opcode_imm(
                     Opcode::AVMOpcode(AVMOpcode::GreaterThan),
                     Value::Int(Uint256::from_usize(*size)),
@@ -1486,7 +1501,10 @@ fn mavm_codegen_expr<'a>(
                     label_gen = lg;
                     code = c;
                     for _i in 0..7 {
-                        code.push(Instruction::from_opcode(Opcode::Dup0, *loc));
+                        code.push(Instruction::from_opcode(
+                            Opcode::AVMOpcode(AVMOpcode::Dup0),
+                            *loc,
+                        ));
                     }
                     let empty_tuple = vec![Value::Tuple(Vec::new()); 8];
                     code.push(Instruction::from_opcode_imm(
@@ -1496,7 +1514,7 @@ fn mavm_codegen_expr<'a>(
                     ));
                     for i in 0..8 {
                         code.push(Instruction::from_opcode_imm(
-                            Opcode::Tset,
+                            Opcode::AVMOpcode(AVMOpcode::Tset),
                             Value::Int(Uint256::from_usize(i)),
                             *loc,
                         ));
@@ -1514,7 +1532,10 @@ fn mavm_codegen_expr<'a>(
             let mut tuple_size: usize = 8;
             while tuple_size < *sz {
                 for _i in 0..7 {
-                    code.push(Instruction::from_opcode(Opcode::Dup0, *loc));
+                    code.push(Instruction::from_opcode(
+                        Opcode::AVMOpcode(AVMOpcode::Dup0),
+                        *loc,
+                    ));
                 }
                 let empty_tuple = vec![Value::Tuple(Vec::new()); 8];
                 code.push(Instruction::from_opcode_imm(
@@ -1524,7 +1545,7 @@ fn mavm_codegen_expr<'a>(
                 ));
                 for i in 0..8 {
                     code.push(Instruction::from_opcode_imm(
-                        Opcode::Tset,
+                        Opcode::AVMOpcode(AVMOpcode::Tset),
                         Value::Int(Uint256::from_usize(i)),
                         *loc,
                     ));
@@ -1723,9 +1744,12 @@ fn mavm_codegen_expr<'a>(
                 prepushed_vals,
             )?;
             let (extract, label_gen) = label_gen.next();
-            code.push(Instruction::from_opcode(Opcode::Dup0, *loc));
+            code.push(Instruction::from_opcode(
+                Opcode::AVMOpcode(AVMOpcode::Dup0),
+                *loc,
+            ));
             code.push(Instruction::from_opcode_imm(
-                Opcode::Tget,
+                Opcode::AVMOpcode(AVMOpcode::Tget),
                 Value::Int(Uint256::zero()),
                 *loc,
             ));
@@ -1752,7 +1776,7 @@ fn mavm_codegen_expr<'a>(
             code.push(Instruction::from_opcode(Opcode::Return, *loc));
             code.push(Instruction::from_opcode(Opcode::Label(extract), *loc));
             code.push(Instruction::from_opcode_imm(
-                Opcode::Tget,
+                Opcode::AVMOpcode(AVMOpcode::Tget),
                 Value::Int(Uint256::one()),
                 *loc,
             ));
@@ -1812,7 +1836,10 @@ fn codegen_fixed_array_mod<'a>(
         // TODO: safe for if-condition to say size does not equal any power of 8
         let (ok_label, lg) = label_gen.next();
         label_gen = lg;
-        code.push(Instruction::from_opcode(Opcode::Dup0, location));
+        code.push(Instruction::from_opcode(
+            Opcode::AVMOpcode(AVMOpcode::Dup0),
+            location,
+        ));
         code.push(Instruction::from_opcode_imm(
             Opcode::AVMOpcode(AVMOpcode::GreaterThan),
             Value::Int(Uint256::from_usize(size)),
@@ -1856,13 +1883,16 @@ fn codegen_fixed_array_mod_2<'a>(
 ) -> Result<(LabelGenerator, &'a mut Vec<Instruction>, usize), CodegenError> {
     if size <= 8 {
         // stack: idx tuple val
-        code_in.push(Instruction::from_opcode(Opcode::Tset, location));
+        code_in.push(Instruction::from_opcode(
+            Opcode::AVMOpcode(AVMOpcode::Tset),
+            location,
+        ));
         Ok((label_gen_in, code_in, num_locals))
     } else {
         let tuple_size = Value::Int(Uint256::from_usize(TUPLE_SIZE));
         // stack: idx tupletree val
         code_in.push(Instruction::from_opcode_imm(
-            Opcode::Dup2,
+            Opcode::AVMOpcode(AVMOpcode::Dup2),
             tuple_size.clone(),
             location,
         ));
@@ -1870,21 +1900,30 @@ fn codegen_fixed_array_mod_2<'a>(
             Opcode::AVMOpcode(AVMOpcode::AuxPush),
             location,
         ));
-        code_in.push(Instruction::from_opcode(Opcode::Dup1, location));
+        code_in.push(Instruction::from_opcode(
+            Opcode::AVMOpcode(AVMOpcode::Dup1),
+            location,
+        ));
         // stack: idx TUPLE_SIZE idx tupletree val; aux: tupletree
         code_in.push(Instruction::from_opcode(
             Opcode::AVMOpcode(AVMOpcode::Mod),
             location,
         ));
-        code_in.push(Instruction::from_opcode(Opcode::Dup0, location));
+        code_in.push(Instruction::from_opcode(
+            Opcode::AVMOpcode(AVMOpcode::Dup0),
+            location,
+        ));
         code_in.push(Instruction::from_opcode(
             Opcode::AVMOpcode(AVMOpcode::AuxPush),
             location,
         ));
         // stack: slot idx tupletree val; aux: slot tupletree
-        code_in.push(Instruction::from_opcode(Opcode::Swap1, location));
+        code_in.push(Instruction::from_opcode(
+            Opcode::AVMOpcode(AVMOpcode::Swap1),
+            location,
+        ));
         code_in.push(Instruction::from_opcode_imm(
-            Opcode::Swap1,
+            Opcode::AVMOpcode(AVMOpcode::Swap1),
             tuple_size,
             location,
         ));
@@ -1893,11 +1932,23 @@ fn codegen_fixed_array_mod_2<'a>(
             location,
         ));
         // stack: subidx slot tupletree val; aux: slot tupletree
-        code_in.push(Instruction::from_opcode(Opcode::Swap2, location));
-        code_in.push(Instruction::from_opcode(Opcode::Swap1, location));
+        code_in.push(Instruction::from_opcode(
+            Opcode::AVMOpcode(AVMOpcode::Swap2),
+            location,
+        ));
+        code_in.push(Instruction::from_opcode(
+            Opcode::AVMOpcode(AVMOpcode::Swap1),
+            location,
+        ));
         // stack: slot tupletree subidx val; aux: slot tupletree
-        code_in.push(Instruction::from_opcode(Opcode::Tget, location));
-        code_in.push(Instruction::from_opcode(Opcode::Swap1, location));
+        code_in.push(Instruction::from_opcode(
+            Opcode::AVMOpcode(AVMOpcode::Tget),
+            location,
+        ));
+        code_in.push(Instruction::from_opcode(
+            Opcode::AVMOpcode(AVMOpcode::Swap1),
+            location,
+        ));
         // stack: subidx subtupletree val; aux: slot tupletree
 
         let (label_gen, code, inner_locals) = codegen_fixed_array_mod_2(
@@ -1922,9 +1973,15 @@ fn codegen_fixed_array_mod_2<'a>(
             Opcode::AVMOpcode(AVMOpcode::AuxPop),
             location,
         ));
-        code.push(Instruction::from_opcode(Opcode::Swap1, location));
+        code.push(Instruction::from_opcode(
+            Opcode::AVMOpcode(AVMOpcode::Swap1),
+            location,
+        ));
         // stack: slot tupletree newsubtupletree
-        code.push(Instruction::from_opcode(Opcode::Tset, location));
+        code.push(Instruction::from_opcode(
+            Opcode::AVMOpcode(AVMOpcode::Tset),
+            location,
+        ));
 
         Ok((label_gen, code, max(num_locals, inner_locals)))
     }

@@ -38,7 +38,7 @@ pub fn strip_labels(
         }
         // re-do the first instruction in the code, which got a dummy value in link
         code_in[0] = Instruction::from_opcode_imm(
-            Opcode::Swap1,
+            Opcode::AVMOpcode(AVMOpcode::Swap1),
             Value::Tuple(vec![
                 list_val,
                 code_in[0]
