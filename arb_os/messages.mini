@@ -67,6 +67,13 @@ import impure func initEvmCallStackForConstructor(
 );
 import func evmCallStack_runningCodeFromAccount() -> option<Account>;
 
+import func tokens_erc20deposit(
+    tokenAddr: address,
+    payee: address,
+    amount: uint,
+    msg: MessageFromL1
+);
+
 import func bytearray_new(capacity: uint, autoExpand: bool) -> ByteArray;
 import func bytearray_size(ba: ByteArray) -> uint;
 import func bytearray_unmarshalBytes(mb: MarshalledBytes) -> ByteArray;
@@ -122,8 +129,24 @@ public impure func handleMessageFromL1(msg: MessageFromL1) -> option<()> {
         );
         return Some(());
     } elseif (msgType == 2) {
-        // ERC20 token transfer message
-        return None; // NOT YET IMPLEMENTED
+        // ERC20 deposit message
+        let (bs, tokenAddress) = bytestream_getUint(inStream)?;
+        inStream = bs;
+
+        let (bs, payeeAddress) = bytestream_getUint(inStream)?;
+        inStream = bs;
+
+        let (bs, amount) = bytestream_getUint(inStream)?;
+        inStream = bs;
+
+        tokens_erc20deposit(
+            address(tokenAddress),
+            address(payeeAddress),
+            amount,
+            msg
+        );  // should never return
+
+        return None;
     } elseif (msgType == 3) {
         // ERC721 token transfer message
         return None; // NOT YET IMPLEMENTED
