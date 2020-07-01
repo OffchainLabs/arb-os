@@ -26,6 +26,7 @@ type ByteStream = struct {
     contents: ByteArray,
     capacity: uint,
     currentOffset: uint,
+    cache: option<uint>,
 }
 
 public func bytestream_new(contents: ByteArray) -> ByteStream {
@@ -33,6 +34,7 @@ public func bytestream_new(contents: ByteArray) -> ByteStream {
         contents: contents,
         capacity: bytearray_size(contents),
         currentOffset: 0,
+        cache: None<uint>,
     };
 }
 
@@ -52,9 +54,22 @@ public func bytestream_getByte(bs: ByteStream) -> option<(ByteStream, uint)> {
     if (bs.currentOffset >= bs.capacity) {
         return None;
     } else {
+        let cache = 0;
+        let offsetMod32 = bs.currentOffset % 32;
+        if let Some(c) = bs.cache {
+            if (offsetMod32 == 0) {
+                cache = bytearray_get256(bs.contents, bs.currentOffset);
+                bs = bs with { cache: Some(cache) };
+            } else {
+                cache = c;
+            }
+        } else {
+            cache = bytearray_get256(bs.contents, bs.currentOffset & 0x1f);
+            bs = bs with { cache: Some(cache) };
+        }
         return Some((
             bs with { currentOffset: bs.currentOffset+1 },
-            bytearray_getByte(bs.contents, bs.currentOffset)
+            (cache / asm (2, 8*(31-offsetMod32)) uint { exp }) & 0xff
         ));
     }
 }
@@ -64,7 +79,7 @@ public func bytestream_get64(bs: ByteStream) -> option<(ByteStream, uint)> {
         return None;
     } else {
         return Some((
-            bs with { currentOffset: bs.currentOffset+8 },
+            bs with { currentOffset: bs.currentOffset+8 } with { cache: None<uint> },
             bytearray_get64(bs.contents, bs.currentOffset)
         ));
     }
@@ -75,7 +90,7 @@ public func bytestream_getUint(bs: ByteStream) -> option<(ByteStream, uint)> {
         return None;
     } else {
         return Some((
-            bs with { currentOffset: bs.currentOffset+32 },
+            bs with { currentOffset: bs.currentOffset+32 } with { cache: None<uint> },
             bytearray_get256(bs.contents, bs.currentOffset)
         ));
     }
