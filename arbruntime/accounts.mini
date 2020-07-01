@@ -17,8 +17,8 @@
 import type ByteArray;
 
 import func bytearray_size(ba: ByteArray) -> uint;
-import func tokens_getERC20template() -> address;
-import func tokens_getERC721template() -> address;
+import func getErc20address() -> address;
+import func getErc721address() -> address;
 
 
 type AccountStore = map<address, Account>
@@ -180,7 +180,7 @@ public func accountStore_createERC20(
     if (account_isEmpty(accountStore_get(acctStore, addr))) {
         acctStore = accountStore_cloneContract(
             acctStore, 
-            tokens_getERC20template(), 
+            getErc20address(),
             addr
         )?;
         return Some(acctStore);
@@ -197,7 +197,7 @@ public func accountStore_createERC721(
     if (account_isEmpty(accountStore_get(acctStore, addr))) {
         acctStore = accountStore_cloneContract(
             acctStore,
-            tokens_getERC721template(), 
+            getErc721address(),
             addr
         )?;
         return Some(acctStore);
