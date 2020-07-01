@@ -14,16 +14,26 @@
 // limitations under the License.
 //
 
-type block = [8]any
+// This is the implementation of arrays in the Mini language.
+// Array accesses in Mini get compiled into calls to the library.
+// So please consult with the team before changing APIs or semantics of any of this.
 
+// These functions can also be imported and called directly by Mini programs.
+
+// Normal Mini code won't ever "reach inside" an array to disturb the integrity of this
+// data structure. But note that use of unsafe language features could lead to structural
+// damage to the internals of an array, leading to erroneous results or even a panic.
+
+
+type block = [8]any    // this is basically a maximum-size AVM tuple
+
+// An array is represented as a struct which contains a tree of blocks.
+// The block-tree holds the contents of the array.
+// The block-tree is a complete tree, of the minimum height needed to hold the array.
 type array = struct {
-	size: uint,  // This must be the first field--codegen relies on this.
-	topstep: uint,
-	contents: block,
-}
-
-func main() -> any {
-	return builtin_arrayNew(13, null);
+	size: uint,      // number of items in the array
+	topstep: uint,   // number of items in each "top-level" slot in the tree structure
+	contents: block, // top-level of the tree structure
 }
 
 public func builtin_arrayNew(sz: uint, base_val: any) -> array {
@@ -41,7 +51,7 @@ public func builtin_arrayNew(sz: uint, base_val: any) -> array {
 
 public func builtin_arrayGet(arr: array, index: uint) -> any {
 	if (index >= arr.size) {
-		panic;
+		panic;  // out of bounds access
 	}
 	let res = arr.contents;
 	let chunk = arr.topstep;
@@ -54,14 +64,16 @@ public func builtin_arrayGet(arr: array, index: uint) -> any {
 }
 
 public func builtin_arrayGetSafe(arr: array, index: uint) -> option<any> {
+    // Return None if access is out-of-bounds, otherwise return Some(result).
 	if (index >= arr.size) {
 		return None;
 	}
-	return Some(builtin_arrayGet(arr, index));
+	return Some(builtin_arrayGet(arr, index));  // won't panic, because we bounds-checked
 }
 
 public func builtin_arrayGetConsecutive(arr: array, index: uint) -> (any, any) {
-	// get two consecutive items at [index] and [index+1]
+	// Get two consecutive items at [index] and [index+1]
+	// This will be faster than two separate arrayGets, in the common case.
 	if (index+1 >= arr.size) {
 		panic;
 	}
@@ -81,6 +93,7 @@ public func builtin_arrayGetConsecutive(arr: array, index: uint) -> (any, any) {
 }
 
 public func builtin_arrayGetConsecutiveSafe(arr: array, index: uint) -> option<(any, any)> {
+    // Return Non if access is out-of-bounds, otherwise return Some((result, result'))
 	if (index+1 >= arr.size) {
 		return None;
 	}
@@ -101,20 +114,23 @@ public func builtin_arraySetSafe(arr: array, index: uint, value:any) -> option<a
 	return Some(builtin_arraySet(arr, index, value));
 }
 
-func arraySet2(b: block, chunk: uint, index: uint, value: any) -> block {
-	if (1 == chunk) {
+func arraySet2(b: block, chunkSize: uint, index: uint, value: any) -> block {
+	if (1 == chunkSize) {
+	    // at a leaf of the tree
 		return b with {[index] = value};
 	} else {
-		return b with {[index/chunk] = arraySet2(
-			unsafecast<block>(b[index/chunk]), 
-			chunk/8, 
-			index%chunk, 
+	    // at an internal node of the tree
+		return b with {[index/chunkSize] = arraySet2(
+			unsafecast<block>(b[index/chunkSize]),
+			chunkSize / 8,
+			index % chunkSize,
 			value
 		)};
 	}
 }
 
 public func builtin_arraySwap(a: array, index: uint, value: any) -> (array, any) {
+    // Write a new value into a slot of the array, returning the old value that was in that slot
 	if (index >= a.size) {
 		panic;
 	}
@@ -162,6 +178,10 @@ type opClosure = struct {
 }
 
 public func builtin_arrayOp(a: array, index: uint, closure: opClosure) -> (array, any) {
+    // Do a read-modify-write operation on a slot of the array.
+    // closure defines the operation that will be done on the contents.
+    // (newSlotContents, returnValue) = closure.f(closure.val, oldSlotContents)
+    // This function returns (updatedArray, returnValue).
 	if (index >= a.size) {
 		panic;
 	}
@@ -182,10 +202,10 @@ public func builtin_arrayOpSafe(a: array, index: uint, closure: opClosure) -> op
 
 func arrayOp2(b: block, chunk: uint, index: uint, closure: opClosure) -> arraySwapSubResult {
 	if (1 == chunk) {
-		let result = closure.f(closure.val, b[index]);
+		let (newSlotContents, returnValue) = closure.f(closure.val, b[index]);
 		return struct {
-			bloc: b with {[index] = result.0},
-			val: result.1,
+			bloc: b with { [index] = newSlotContents },
+			val: returnValue,
 		};
 	} else {
 		let subIndex = index/chunk;
@@ -204,7 +224,10 @@ public func builtin_arrayOpConsecutive(
 	index: uint, 
 	closure1: opClosure, 
 	closure2: opClosure
-) -> (array, any, any) { 
+) -> (array, any, any) {
+    // This is like builtin_arrayOp, except it operates on two consecutive items in the array.
+    // It takes two closures, and returns the updated array and the two return values.
+
 	//TODO: optimize the case where both items are in the same bottom-level block
 	let (arr1, ret1,) = builtin_arrayOp(a, index, closure1);
 	let (arr2, ret2,) = builtin_arrayOp(arr1, index+1, closure2);
@@ -222,7 +245,11 @@ public func builtin_arrayOpConsecutiveSafe(
 	return Some((arr2, ret1, ret2));
 }
 
-public func array_resize(a: array, newSize: uint, baseVal: any) -> array { 
+public func array_resize(a: array, newSize: uint, baseVal: any) -> array {
+    // Resize an array.
+    // If the new size is larger, copy over all of the old contents, and fill the added elements with baseVal.
+    // If the new size is smaller, copy over all of the old contents that will fit.
+
 	// TODO: make this more efficient by reusing more of the tree-structure of a
 	let minSize = a.size;
 	if (minSize > newSize) {

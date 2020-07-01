@@ -27,11 +27,13 @@ import func bytearray_set64(ba: ByteArray, idx: uint, val: uint) -> option<ByteA
 import func bytearray_get256(ba: ByteArray, offset: uint) -> option<uint>;
 import func bytearray_set256(ba: ByteArray, offset: uint, value: uint) -> option<ByteArray>;
 
+import impure func initKeccakConstants();
 import func keccak256(ba: ByteArray, offset: uint, nbytes: uint) -> option<bytes32>;
 import impure func keccak_permutation(state: [25]uint) -> [25]uint;
 
 
 impure func main() {
+    initKeccakConstants();
     if let Some(x) = tests() {
 	    asm(x,) { log };
 	} else {
