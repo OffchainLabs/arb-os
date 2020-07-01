@@ -271,7 +271,7 @@ public func bytearray_copy(
     to: ByteArray,
     toOffset: uint,
     nbytes: uint,
-) -> option<ByteArray> {   
+) -> option<ByteArray> {
     // TODO: optimize this to exploit alignment and speed up the endgame
     while (nbytes >= 32) {
         let val = bytearray_get256(from, fromOffset)?;

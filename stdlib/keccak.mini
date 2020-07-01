@@ -37,8 +37,10 @@ public impure func keccak256(ba: ByteArray, offset: uint, nbytes: uint) -> optio
     }
 
     let accumulator = newfixedarray(25, 0);
+
+    // Process as many complete 136-byte blocks as we can
     while (nbytes >= 136) {
-        // process a full block
+        // Process one complete block
         accumulator = keccak_permutation(
             keccak_xorblock(accumulator, ba, offset)?
         );
@@ -46,15 +48,16 @@ public impure func keccak256(ba: ByteArray, offset: uint, nbytes: uint) -> optio
         nbytes = nbytes-136;
     }
 
-    // finish the last block, with padding
-    // approach is to build a bytearray to hold this block
+    // Build a bytearray to hold the final block
     let lastBlock = bytearray_new(136, false);
     lastBlock = bytearray_copy(ba, offset, lastBlock, 0, nbytes)?;
+
+    // Add padding to fill the final block
     if (nbytes == 135) {
-        // add one byte of padding
+        // only one byte of padding needed
         lastBlock = bytearray_setByte(lastBlock, 135, 0x81)?;
     } else {
-        // add padding up to full block
+        // padding is 0x01 0x00* 0x80
         // take advantage of the fact that lastBlock is already zero-filled
         lastBlock = bytearray_setByte(
             bytearray_setByte(lastBlock, 135, 0x80)?,
@@ -63,10 +66,12 @@ public impure func keccak256(ba: ByteArray, offset: uint, nbytes: uint) -> optio
         )?;
     }
 
+    // Process the final block
     accumulator = keccak_permutation(
         keccak_xorblock(accumulator, lastBlock, 0)?
     );
 
+    // Extract the return value, with properly adjusted endianness
     return Some(bytes32(
         flipEndian64(accumulator[3]) + 0x10000000000000000 * (
             flipEndian64(accumulator[2]) + 0x10000000000000000 * (
@@ -92,6 +97,7 @@ func keccak_xorblock_save(accumulator: [25]uint, ba: ByteArray, offset: uint) ->
 }
 
 func keccak_xorblock(accumulator: [25]uint, ba: ByteArray, offset: uint) -> option<[25]uint> {
+    // XOR data for a block into the accumulator, with appropriate endianness
     let i = 0;
     while (i < 17) {
         let word = 0;
@@ -107,18 +113,16 @@ func keccak_xorblock(accumulator: [25]uint, ba: ByteArray, offset: uint) -> opti
     return Some(accumulator);
 }
 
+// This must be initialized, by calling initKeccakConstants, before any calls are made to keccak_permutation.
 var keccakConstants: struct {
     rndc: [24]uint,
     piln: [24]uint,
     rotc: [24]uint,
 };
 
-// keccak permutation function
-// input and out are 1600-bit values, broken into 64-bit chunks
+// This is the core keccak256 permutation function
+// argument and result are 1600-bit values, broken into 25 64-bit chunks
 public impure func keccak_permutation(s: [25]uint) -> [25]uint {
-    if (null == unsafecast<any>(keccakConstants)) {
-        initKeccakConstants();
-    }
     let round = 0;
     while (round < 24) {
         // theta

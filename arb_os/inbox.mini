@@ -22,18 +22,20 @@ import func queue_put(q: Queue, val: any) -> Queue;
 
 import type MarshalledBytes;
 
+// This is the structure that the Arbitrum protocol gives us, for each incoming message.
+// It is declared identically in messages.mini
 type MessageFromL1 = struct {
-    blockHash: bytes32,
-    timestamp: uint,
-    blockNumber: uint,
-    sender: address,
-    msgData: MarshalledBytes
+    blockHash: bytes32,       // hash of the L1 block where this message was recorded
+    timestamp: uint,          // timestamp of the L1 block
+    blockNumber: uint,        // block number of the L1 block
+    sender: address,          // address of the sender
+    msgData: MarshalledBytes  // contents of the message, as a marshalled bytearray
 }
 
 type Inbox = struct {
-    queue: Queue,
-    blockNum: uint,
-    timestamp: uint,
+    queue: Queue,     // Queue of messages that haven't yet been retrieved from the inbox
+    blockNum: uint,   // Highest blocknum of messages that we have retrieved from the inbox
+    timestamp: uint,  // Highest timestamp of messages that we have retrieved from the inbox
 }
 
 var globalInbox: Inbox;
@@ -47,6 +49,9 @@ public impure func inbox_init() {
 }
 
 public impure func inbox_get() -> MessageFromL1 {
+    // Get the next message, in order of arrival.
+    // If no messages have arrived, this will block until one arrives.
+
     let inbox = globalInbox;
     while (queue_isEmpty(inbox.queue)) {
         inbox = getFromL1Inbox(inbox);
@@ -54,29 +59,38 @@ public impure func inbox_get() -> MessageFromL1 {
     let (updatedQ, ret,) = queue_get(inbox.queue);
     let ebMsg = unsafecast<MessageFromL1>(ret);
 
+    // We got a message. Update the blocknum and timestamp of inbox, if necessary.
     if (inbox.blockNum < ebMsg.blockNumber) {
         inbox = inbox with { blockNum: ebMsg.blockNumber };
     }
     if (inbox.timestamp < ebMsg.timestamp) {
         inbox = inbox with { timestamp: ebMsg.timestamp };
     }
+
     globalInbox = inbox with { queue: updatedQ };
 
     return ebMsg;
 }
 
+// InboxCell is the structure that the Arbitrum protocol uses to combine multiple messages
+//     when they arrive in the inbox together.
+// This is basically a linked list, but in reverse order (newest message at head of list).
 type InboxCell = struct {
     rest: any,   // really an InboxCell, but language doesn't allow recursive types
     msg: any,
 }
 
 impure func getFromL1Inbox(inbox: Inbox) -> Inbox {
+    // Get one or more messages from the L1 inbox, and append them to the inbox.
+    // If there are no messages available in the L1 inbox, this blocks until one is available.
     let newMsgs = asm(0,) InboxCell { inbox };
     inbox = addInboxToQueue(inbox, newMsgs);
     return inbox;
 }
 
 func addInboxToQueue(inbox: Inbox, newMsgs: InboxCell) -> Inbox {
+    // Unpack messages from an InboxCell list, and append them to an Inbox.
+    // Because the messages are in the linked list in newest-first order, we need to reverse the order.
     if (unsafecast<any>(newMsgs) == null) {
         return inbox;
     } else {
