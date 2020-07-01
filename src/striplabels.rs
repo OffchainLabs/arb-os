@@ -111,7 +111,7 @@ pub fn fix_nonforward_labels(
 								index
 							}
 						};
-						code_out.push(Instruction::from_opcode(Opcode::PushStatic, insn_in.location));
+						code_out.push(Instruction::from_opcode(Opcode::AVMOpcode(AVMOpcode::PushStatic), insn_in.location));
 						code_out.push(Instruction::from_opcode(Opcode::PushExternal(idx), insn_in.location));
 						code_out.push(Instruction::from_opcode(insn_in.opcode, insn_in.location));
 					} else {
@@ -136,7 +136,7 @@ pub fn fix_nonforward_labels(
 		match insn.opcode {
 			Opcode::PushExternal(idx) => {
 				if let Some(val) = &insn.immediate {
-					code_xformed.push(Instruction::from_opcode_imm(Opcode::Noop, val.clone(), insn.location));
+					code_xformed.push(Instruction::from_opcode_imm(Opcode::AVMOpcode(AVMOpcode::Noop), val.clone(), insn.location));
 				}
 				code_xformed.push(Instruction::from_opcode_imm(
 					Opcode::TupleGet(jump_table.len()),

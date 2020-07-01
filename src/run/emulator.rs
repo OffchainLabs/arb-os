@@ -16,7 +16,7 @@
 
 use super::runtime_env::RuntimeEnvironment;
 use crate::link::LinkedProgram;
-use crate::mavm::{CodePt, Instruction, Opcode, Value};
+use crate::mavm::{AVMOpcode, CodePt, Instruction, Opcode, Value};
 use crate::pos::Location;
 use crate::uint256::Uint256;
 use std::cmp::max;
@@ -252,8 +252,10 @@ impl CodeStore {
     }
 
     fn create_segment(&mut self) -> CodePt {
-        self.segments
-            .push(vec![Instruction::from_opcode(Opcode::Panic, None)]);
+        self.segments.push(vec![Instruction::from_opcode(
+            Opcode::AVMOpcode(AVMOpcode::Panic),
+            None,
+        )]);
         CodePt::new_in_segment(self.segments.len() - 1, 0)
     }
 
@@ -681,70 +683,70 @@ impl Machine {
     pub(crate) fn next_op_gas(&self) -> Option<u64> {
         if let MachineState::Running(pc) = self.state {
             Some(match self.code.get_insn(pc)?.opcode {
-                Opcode::Plus => 3,
-                Opcode::Mul => 3,
-                Opcode::Minus => 3,
-                Opcode::Div => 4,
-                Opcode::Sdiv => 7,
-                Opcode::Mod => 4,
-                Opcode::Smod => 7,
-                Opcode::AddMod => 4,
-                Opcode::MulMod => 4,
-                Opcode::Exp => 25,
-                Opcode::LessThan => 2,
-                Opcode::GreaterThan => 2,
-                Opcode::SLessThan => 2,
-                Opcode::SGreaterThan => 2,
-                Opcode::Equal => 2,
-                Opcode::IsZero => 1,
-                Opcode::BitwiseAnd => 2,
-                Opcode::BitwiseOr => 2,
-                Opcode::BitwiseXor => 2,
-                Opcode::BitwiseNeg => 1,
-                Opcode::Byte => 4,
-                Opcode::SignExtend => 7,
+                Opcode::AVMOpcode(AVMOpcode::Plus) => 3,
+                Opcode::AVMOpcode(AVMOpcode::Mul) => 3,
+                Opcode::AVMOpcode(AVMOpcode::Minus) => 3,
+                Opcode::AVMOpcode(AVMOpcode::Div) => 4,
+                Opcode::AVMOpcode(AVMOpcode::Sdiv) => 7,
+                Opcode::AVMOpcode(AVMOpcode::Mod) => 4,
+                Opcode::AVMOpcode(AVMOpcode::Smod) => 7,
+                Opcode::AVMOpcode(AVMOpcode::AddMod) => 4,
+                Opcode::AVMOpcode(AVMOpcode::MulMod) => 4,
+                Opcode::AVMOpcode(AVMOpcode::Exp) => 25,
+                Opcode::AVMOpcode(AVMOpcode::LessThan) => 2,
+                Opcode::AVMOpcode(AVMOpcode::GreaterThan) => 2,
+                Opcode::AVMOpcode(AVMOpcode::SLessThan) => 2,
+                Opcode::AVMOpcode(AVMOpcode::SGreaterThan) => 2,
+                Opcode::AVMOpcode(AVMOpcode::Equal) => 2,
+                Opcode::AVMOpcode(AVMOpcode::IsZero) => 1,
+                Opcode::AVMOpcode(AVMOpcode::BitwiseAnd) => 2,
+                Opcode::AVMOpcode(AVMOpcode::BitwiseOr) => 2,
+                Opcode::AVMOpcode(AVMOpcode::BitwiseXor) => 2,
+                Opcode::AVMOpcode(AVMOpcode::BitwiseNeg) => 1,
+                Opcode::AVMOpcode(AVMOpcode::Byte) => 4,
+                Opcode::AVMOpcode(AVMOpcode::SignExtend) => 7,
                 Opcode::NotEqual => 3, // This opcode should be phased out
-                Opcode::Hash => 7,
-                Opcode::Type => 3,
-                Opcode::Hash2 => 8,
-                Opcode::Pop => 1,
-                Opcode::PushStatic => 1,
-                Opcode::Rget => 1,
-                Opcode::Rset => 2,
-                Opcode::Jump => 4,
-                Opcode::Cjump => 4,
-                Opcode::StackEmpty => 2,
-                Opcode::GetPC => 1,
-                Opcode::AuxPush => 1,
-                Opcode::AuxPop => 1,
-                Opcode::AuxStackEmpty => 2,
-                Opcode::Noop => 1,
-                Opcode::ErrPush => 1,
-                Opcode::ErrSet => 1,
-                Opcode::Dup0 => 1,
-                Opcode::Dup1 => 1,
-                Opcode::Dup2 => 1,
-                Opcode::Swap1 => 1,
-                Opcode::Swap2 => 1,
-                Opcode::Tget => 2,
-                Opcode::Tset => 40,
-                Opcode::Tlen => 2,
-                Opcode::Xget => 3,
-                Opcode::Xset => 41,
-                Opcode::Breakpoint => 100,
-                Opcode::Log => 100,
-                Opcode::Send => 100,
-                Opcode::GetTime => 40,
-                Opcode::Inbox => 40,
-                Opcode::Panic => 5,
-                Opcode::Halt => 10,
+                Opcode::AVMOpcode(AVMOpcode::Hash) => 7,
+                Opcode::AVMOpcode(AVMOpcode::Type) => 3,
+                Opcode::AVMOpcode(AVMOpcode::Hash2) => 8,
+                Opcode::AVMOpcode(AVMOpcode::Pop) => 1,
+                Opcode::AVMOpcode(AVMOpcode::PushStatic) => 1,
+                Opcode::AVMOpcode(AVMOpcode::Rget) => 1,
+                Opcode::AVMOpcode(AVMOpcode::Rset) => 2,
+                Opcode::AVMOpcode(AVMOpcode::Jump) => 4,
+                Opcode::AVMOpcode(AVMOpcode::Cjump) => 4,
+                Opcode::AVMOpcode(AVMOpcode::StackEmpty) => 2,
+                Opcode::AVMOpcode(AVMOpcode::GetPC) => 1,
+                Opcode::AVMOpcode(AVMOpcode::AuxPush) => 1,
+                Opcode::AVMOpcode(AVMOpcode::AuxPop) => 1,
+                Opcode::AVMOpcode(AVMOpcode::AuxStackEmpty) => 2,
+                Opcode::AVMOpcode(AVMOpcode::Noop) => 1,
+                Opcode::AVMOpcode(AVMOpcode::ErrPush) => 1,
+                Opcode::AVMOpcode(AVMOpcode::ErrSet) => 1,
+                Opcode::AVMOpcode(AVMOpcode::Dup0) => 1,
+                Opcode::AVMOpcode(AVMOpcode::Dup1) => 1,
+                Opcode::AVMOpcode(AVMOpcode::Dup2) => 1,
+                Opcode::AVMOpcode(AVMOpcode::Swap1) => 1,
+                Opcode::AVMOpcode(AVMOpcode::Swap2) => 1,
+                Opcode::AVMOpcode(AVMOpcode::Tget) => 2,
+                Opcode::AVMOpcode(AVMOpcode::Tset) => 40,
+                Opcode::AVMOpcode(AVMOpcode::Tlen) => 2,
+                Opcode::AVMOpcode(AVMOpcode::Xget) => 3,
+                Opcode::AVMOpcode(AVMOpcode::Xset) => 41,
+                Opcode::AVMOpcode(AVMOpcode::Breakpoint) => 100,
+                Opcode::AVMOpcode(AVMOpcode::Log) => 100,
+                Opcode::AVMOpcode(AVMOpcode::Send) => 100,
+                Opcode::AVMOpcode(AVMOpcode::GetTime) => 40,
+                Opcode::AVMOpcode(AVMOpcode::Inbox) => 40,
+                Opcode::AVMOpcode(AVMOpcode::Panic) => 5,
+                Opcode::AVMOpcode(AVMOpcode::Halt) => 10,
                 Opcode::ErrCodePoint => 25,
                 Opcode::PushInsn => 25,
                 Opcode::PushInsnImm => 25,
                 Opcode::OpenInsn => 25,
                 Opcode::DebugPrint => 25,
-                Opcode::GetGas => 0,
-                Opcode::SetGas => 0,
+                Opcode::AVMOpcode(AVMOpcode::GetGas) => 0,
+                Opcode::AVMOpcode(AVMOpcode::SetGas) => 0,
                 _ => return None,
             })
         } else {
@@ -766,16 +768,16 @@ impl Machine {
                     }
                 }
                 match insn.opcode {
-					Opcode::Noop => {
+					Opcode::AVMOpcode(AVMOpcode::Noop) => {
 						self.incr_pc();
 						Ok(true)
 					}
-					Opcode::Panic => Err(ExecutionError::new("panicked", &self.state, None)),
-					Opcode::Jump => {
+					Opcode::AVMOpcode(AVMOpcode::Panic) => Err(ExecutionError::new("panicked", &self.state, None)),
+					Opcode::AVMOpcode(AVMOpcode::Jump) => {
 						self.state = MachineState::Running(self.stack.pop_codepoint(&self.state)?);
 						Ok(true)
 					}
-					Opcode::Cjump => {
+					Opcode::AVMOpcode(AVMOpcode::Cjump) => {
 						let cp = self.stack.pop_codepoint(&self.state)?;
 						let cond = self.stack.pop_uint(&self.state)?;
 						if cond != Uint256::zero() {
@@ -785,28 +787,28 @@ impl Machine {
 						}
 						Ok(true)
 					}
-					Opcode::GetPC => {
+					Opcode::AVMOpcode(AVMOpcode::GetPC) => {
 						self.stack.push_codepoint(self.get_pc()?);
 						self.incr_pc();
 						Ok(true)
 					}
-					Opcode::Rget => {
+					Opcode::AVMOpcode(AVMOpcode::Rget) => {
 						self.stack.push(self.register.clone());
 						self.incr_pc();
 						Ok(true)
 					}
-					Opcode::Rset => {
+					Opcode::AVMOpcode(AVMOpcode::Rset) => {
 						let val = self.stack.pop(&self.state)?;
 						self.register = val;
 						self.incr_pc();
 						Ok(true)
 					}
-					Opcode::PushStatic => {
+					Opcode::AVMOpcode(AVMOpcode::PushStatic) => {
 						self.stack.push(self.static_val.clone());
 						self.incr_pc();
 						Ok(true)
 					}
-					Opcode::Tset => {
+					Opcode::AVMOpcode(AVMOpcode::Tset) => {
 						let idx = self.stack.pop_usize(&self.state)?;
 						let tup = self.stack.pop_tuple(&self.state)?;
 						let val = self.stack.pop(&self.state)?;
@@ -823,7 +825,7 @@ impl Machine {
 							Err(ExecutionError::new("index out of bounds in Tset", &self.state, None))
 						}
 					}
-					Opcode::Tget => {
+					Opcode::AVMOpcode(AVMOpcode::Tget) => {
 						let idx = self.stack.pop_usize(&self.state)?;
 						let tup = self.stack.pop_tuple(&self.state)?;
 						if idx < tup.len() {
@@ -834,38 +836,38 @@ impl Machine {
 							Err(ExecutionError::new("index out of bounds in Tget", &self.state, None))
 						}
 					}
-					Opcode::Tlen => {
+					Opcode::AVMOpcode(AVMOpcode::Tlen) => {
 						let tup = self.stack.pop_tuple(&self.state)?;
 						self.stack.push_usize(tup.len());
 						self.incr_pc();
 						Ok(true)
 					}
-					Opcode::Pop => {
+					Opcode::AVMOpcode(AVMOpcode::Pop) => {
 						let _ = self.stack.pop(&self.state)?;
 						self.incr_pc();
 						Ok(true)
 					}
-					Opcode::StackEmpty => {
+					Opcode::AVMOpcode(AVMOpcode::StackEmpty) => {
 						self.stack.push_bool(self.stack.is_empty());
 						self.incr_pc();
 						Ok(true)
 					}
-					Opcode::AuxPush => {
+					Opcode::AVMOpcode(AVMOpcode::AuxPush) => {
 						self.aux_stack.push(self.stack.pop(&self.state)?);
 						self.incr_pc();
 						Ok(true)
 					}
-					Opcode::AuxPop => {
+					Opcode::AVMOpcode(AVMOpcode::AuxPop) => {
 						self.stack.push(self.aux_stack.pop(&self.state)?);
 						self.incr_pc();
 						Ok(true)
 					}
-					Opcode::AuxStackEmpty => {
+					Opcode::AVMOpcode(AVMOpcode::AuxStackEmpty) => {
 						self.stack.push_bool(self.aux_stack.is_empty());
 						self.incr_pc();
 						Ok(true)
 					}
-					Opcode::Xget => {
+					Opcode::AVMOpcode(AVMOpcode::Xget) => {
 						let slot_num = self.stack.pop_usize(&self.state)?;
 						let aux_top = match self.aux_stack.top() {
 							Some(top) => top,
@@ -884,7 +886,7 @@ impl Machine {
 							Err(ExecutionError::new("expected tuple on aux stack", &self.state, Some(aux_top)))
 						}
 					}
-					Opcode::Xset => {
+					Opcode::AVMOpcode(AVMOpcode::Xset) => {
 						let slot_num = self.stack.pop_usize(&self.state)?;
 						let tup = self.aux_stack.pop_tuple(&self.state)?;
 						if slot_num < tup.len() {
@@ -897,14 +899,14 @@ impl Machine {
 							Err(ExecutionError::new("tuple access out of bounds", &self.state, None))
 						}
 					}
-					Opcode::Dup0 => {
+					Opcode::AVMOpcode(AVMOpcode::Dup0) => {
 						let top = self.stack.pop(&self.state)?;
 						self.stack.push(top.clone());
 						self.stack.push(top);
 						self.incr_pc();
 						Ok(true)
 					}
-					Opcode::Dup1 => {
+					Opcode::AVMOpcode(AVMOpcode::Dup1) => {
 						let top = self.stack.pop(&self.state)?;
 						let snd = self.stack.pop(&self.state)?;
 						self.stack.push(snd.clone());
@@ -913,7 +915,7 @@ impl Machine {
 						self.incr_pc();
 						Ok(true)
 					}
-					Opcode::Dup2 => {
+					Opcode::AVMOpcode(AVMOpcode::Dup2) => {
 						let top = self.stack.pop(&self.state)?;
 						let snd = self.stack.pop(&self.state)?;
 						let trd = self.stack.pop(&self.state)?;
@@ -924,7 +926,7 @@ impl Machine {
 						self.incr_pc();
 						Ok(true)
 					}
-					Opcode::Swap1 => {
+					Opcode::AVMOpcode(AVMOpcode::Swap1) => {
 						let top = self.stack.pop(&self.state)?;
 						let snd = self.stack.pop(&self.state)?;
 						self.stack.push(top);
@@ -932,7 +934,7 @@ impl Machine {
 						self.incr_pc();
 						Ok(true)
 					}
-					Opcode::Swap2 => {
+					Opcode::AVMOpcode(AVMOpcode::Swap2) => {
 						let top = self.stack.pop(&self.state)?;
 						let snd = self.stack.pop(&self.state)?;
 						let trd = self.stack.pop(&self.state)?;
@@ -942,7 +944,7 @@ impl Machine {
 						self.incr_pc();
 						Ok(true)
 					}
-					Opcode::IsZero => {
+					Opcode::AVMOpcode(AVMOpcode::IsZero) => {
 						let res = if (self.stack.pop_uint(&self.state)? == Uint256::zero()) { 1 } else { 0 };
 						self.stack.push(Value::Int(Uint256::from_usize(res)));
 						self.incr_pc();
@@ -961,13 +963,13 @@ impl Machine {
 							}
 						}
 					}
-					Opcode::BitwiseNeg => {
+					Opcode::AVMOpcode(AVMOpcode::BitwiseNeg) => {
 						let res = self.stack.pop_uint(&self.state)?.bitwise_neg();
 						self.stack.push_uint(res);
 						self.incr_pc();
 						Ok(true)
 					}
-					Opcode::Hash => {
+					Opcode::AVMOpcode(AVMOpcode::Hash) => {
 						let res = self.stack.pop(&self.state)?.avm_hash();
 						self.stack.push(res);
 						self.incr_pc();
@@ -979,14 +981,14 @@ impl Machine {
 						self.incr_pc();
 						Ok(true)
 					}
-					Opcode::Plus => {
+					Opcode::AVMOpcode(AVMOpcode::Plus) => {
 						let r1 = self.stack.pop_uint(&self.state)?;
 						let r2 = self.stack.pop_uint(&self.state)?;
 						self.stack.push_uint(r1.add(&r2));
 						self.incr_pc();
 						Ok(true)
 					}
-					Opcode::Minus => {
+					Opcode::AVMOpcode(AVMOpcode::Minus) => {
 						let r1 = self.stack.pop_uint(&self.state)?;
 						let r2 = self.stack.pop_uint(&self.state)?;
 						self.stack.push_uint(r1.sub(&r2)
@@ -994,14 +996,14 @@ impl Machine {
 						self.incr_pc();
 						Ok(true)
 					}
-					Opcode::Mul => {
+					Opcode::AVMOpcode(AVMOpcode::Mul) => {
 						let r1 = self.stack.pop_uint(&self.state)?;
 						let r2 = self.stack.pop_uint(&self.state)?;
 						self.stack.push_uint(r1.mul(&r2));
 						self.incr_pc();
 						Ok(true)
 					}
-					Opcode::Div => {
+					Opcode::AVMOpcode(AVMOpcode::Div) => {
 						let r1 = self.stack.pop_uint(&self.state)?;
 						let r2 = self.stack.pop_uint(&self.state)?;
 						let ores = r1.div(&r2);
@@ -1014,7 +1016,7 @@ impl Machine {
 							None => Err(ExecutionError::new("divide by zero", &self.state, None))
 						}
 					}
-					Opcode::Mod => {
+					Opcode::AVMOpcode(AVMOpcode::Mod) => {
 						let r1 = self.stack.pop_uint(&self.state)?;
 						let r2 = self.stack.pop_uint(&self.state)?;
 						let ores = r1.modulo(&r2);
@@ -1027,7 +1029,7 @@ impl Machine {
 							None => Err(ExecutionError::new("modulo by zero", &self.state, None))
 						}
 					}
-					Opcode::Sdiv => {
+					Opcode::AVMOpcode(AVMOpcode::Sdiv) => {
 						let r1 = self.stack.pop_uint(&self.state)?;
 						let r2 = self.stack.pop_uint(&self.state)?;
 						let ores = r1.sdiv(&r2);
@@ -1040,7 +1042,7 @@ impl Machine {
 							None => Err(ExecutionError::new("divide by zero", &self.state, None))
 						}
 					}
-					Opcode::Smod => {
+					Opcode::AVMOpcode(AVMOpcode::Smod) => {
 						let r1 = self.stack.pop_uint(&self.state)?;
 						let r2 = self.stack.pop_uint(&self.state)?;
 						let ores = r1.smodulo(&r2);
@@ -1053,7 +1055,7 @@ impl Machine {
 							None => Err(ExecutionError::new("modulo by zero", &self.state, None))
 						}
 					}
-					Opcode::AddMod => {
+					Opcode::AVMOpcode(AVMOpcode::AddMod) => {
 						let r1 = self.stack.pop_uint(&self.state)?;
 						let r2 = self.stack.pop_uint(&self.state)?;
 						let r3 = self.stack.pop_uint(&self.state)?;
@@ -1067,7 +1069,7 @@ impl Machine {
 							None => Err(ExecutionError::new("modulo by zero", &self.state, None))
 						}
 					}
-					Opcode::MulMod => {
+					Opcode::AVMOpcode(AVMOpcode::MulMod) => {
 						let r1 = self.stack.pop_uint(&self.state)?;
 						let r2 = self.stack.pop_uint(&self.state)?;
 						let r3 = self.stack.pop_uint(&self.state)?;
@@ -1081,42 +1083,42 @@ impl Machine {
 							None => Err(ExecutionError::new("modulo by zero", &self.state, None))
 						}
 					}
-					Opcode::Exp => {
+					Opcode::AVMOpcode(AVMOpcode::Exp) => {
 						let r1 = self.stack.pop_uint(&self.state)?;
 						let r2 = self.stack.pop_uint(&self.state)?;
 						self.stack.push_uint(r1.exp(&r2));
 						self.incr_pc();
 						Ok(true)
 					}
-					Opcode::LessThan => {
+					Opcode::AVMOpcode(AVMOpcode::LessThan) => {
 						let r1 = self.stack.pop_uint(&self.state)?;
 						let r2 = self.stack.pop_uint(&self.state)?;
 						self.stack.push_usize(if r1 < r2 { 1 } else { 0 });
 						self.incr_pc();
 						Ok(true)
 					}
-					Opcode::GreaterThan => {
+					Opcode::AVMOpcode(AVMOpcode::GreaterThan) => {
 						let r1 = self.stack.pop_uint(&self.state)?;
 						let r2 = self.stack.pop_uint(&self.state)?;
 						self.stack.push_usize(if r1 > r2 { 1 } else { 0 });
 						self.incr_pc();
 						Ok(true)
 					}
-					Opcode::SLessThan => {
+					Opcode::AVMOpcode(AVMOpcode::SLessThan) => {
 						let r1 = self.stack.pop_uint(&self.state)?;
 						let r2 = self.stack.pop_uint(&self.state)?;
 						self.stack.push_usize(if r1.s_less_than(&r2) { 1 } else { 0 });
 						self.incr_pc();
 						Ok(true)
 					}
-					Opcode::SGreaterThan => {
+					Opcode::AVMOpcode(AVMOpcode::SGreaterThan) => {
 						let r1 = self.stack.pop_uint(&self.state)?;
 						let r2 = self.stack.pop_uint(&self.state)?;
 						self.stack.push_usize(if r2.s_less_than(&r1) { 1 } else { 0 });
 						self.incr_pc();
 						Ok(true)
 					}
-					Opcode::Equal => {
+					Opcode::AVMOpcode(AVMOpcode::Equal) => {
 						let r1 = self.stack.pop(&self.state)?;
 						let r2 = self.stack.pop(&self.state)?;
 						self.stack.push_usize(if r1 == r2 { 1 } else { 0 });
@@ -1130,34 +1132,34 @@ impl Machine {
 						self.incr_pc();
 						Ok(true)
 					}
-					Opcode::Type => {
+					Opcode::AVMOpcode(AVMOpcode::Type) => {
 						let val = self.stack.pop(&self.state)?;
 						self.stack.push_usize(val.type_insn_result());
 						self.incr_pc();
 						Ok(true)
 					}
-					Opcode::BitwiseAnd => {
+					Opcode::AVMOpcode(AVMOpcode::BitwiseAnd) => {
 						let r1 = self.stack.pop_uint(&self.state)?;
 						let r2 = self.stack.pop_uint(&self.state)?;
 						self.stack.push_uint(r1.bitwise_and(&r2));
 						self.incr_pc();
 						Ok(true)
 					}
-					Opcode::BitwiseOr => {
+					Opcode::AVMOpcode(AVMOpcode::BitwiseOr) => {
 						let r1 = self.stack.pop_uint(&self.state)?;
 						let r2 = self.stack.pop_uint(&self.state)?;
 						self.stack.push_uint(r1.bitwise_or(&r2));
 						self.incr_pc();
 						Ok(true)
 					}
-					Opcode::BitwiseXor => {
+					Opcode::AVMOpcode(AVMOpcode::BitwiseXor) => {
 						let r1 = self.stack.pop_uint(&self.state)?;
 						let r2 = self.stack.pop_uint(&self.state)?;
 						self.stack.push_uint(r1.bitwise_xor(&r2));
 						self.incr_pc();
 						Ok(true)
 					}
-					Opcode::Byte => {
+					Opcode::AVMOpcode(AVMOpcode::Byte) => {
 						let r1 = self.stack.pop_uint(&self.state)?;
 						let r2 = self.stack.pop_uint(&self.state)?;
 						self.stack.push_uint(
@@ -1171,7 +1173,7 @@ impl Machine {
 						self.incr_pc();
 						Ok(true)
 					}
-					Opcode::SignExtend => {
+					Opcode::AVMOpcode(AVMOpcode::SignExtend) => {
 						let bnum = self.stack.pop_uint(&self.state)?;
 						let x = self.stack.pop_uint(&self.state)?;
 						let out = match bnum.to_usize() {
@@ -1210,17 +1212,17 @@ impl Machine {
 						self.incr_pc();
 						Ok(true)
 					}
-					Opcode::Hash2 => {
+					Opcode::AVMOpcode(AVMOpcode::Hash2) => {
 						let r1 = self.stack.pop(&self.state)?;
 						let r2 = self.stack.pop(&self.state)?;
 						self.stack.push(Value::avm_hash2(&r1, &r2));
 						self.incr_pc();
 						Ok(true)
 					}
-					Opcode::GetTime => {
+					Opcode::AVMOpcode(AVMOpcode::GetTime) => {
 						panic!("GetTime instruction not yet implemented");
 					}
-					Opcode::Inbox => {
+					Opcode::AVMOpcode(AVMOpcode::Inbox) => {
 						let msgs = self.runtime_env.get_inbox();
 						if msgs.is_none() {
 							// machine is blocked, waiting for nonempty inbox
@@ -1238,22 +1240,22 @@ impl Machine {
 						self.incr_pc();
 						Ok(true)
 					}
-					Opcode::Send => {
+					Opcode::AVMOpcode(AVMOpcode::Send) => {
 						panic!("Send instruction not yet implemented");
 					}
-					Opcode::Log => {
+					Opcode::AVMOpcode(AVMOpcode::Log) => {
 						let val = self.stack.pop(&self.state)?;
 						self.runtime_env.push_log(val);
 						self.incr_pc();
 						Ok(true)
 					}
-					Opcode::ErrSet => {
+					Opcode::AVMOpcode(AVMOpcode::ErrSet) => {
 						let cp = self.stack.pop_codepoint(&self.state)?;
 						self.err_codepoint = cp;
 						self.incr_pc();
 						Ok(true)
 					}
-					Opcode::ErrPush => {
+					Opcode::AVMOpcode(AVMOpcode::ErrPush) => {
 						self.stack.push_codepoint(self.err_codepoint);
 						self.incr_pc();
 						Ok(true)
@@ -1294,11 +1296,11 @@ impl Machine {
 						self.incr_pc();
 						Ok(true)
 					}
-					Opcode::Breakpoint => {
+					Opcode::AVMOpcode(AVMOpcode::Breakpoint) => {
 						self.incr_pc();
 						Ok(false)
 					}
-					Opcode::Halt => {
+					Opcode::AVMOpcode(AVMOpcode::Halt) => {
 						self.state = MachineState::Stopped;
 						Ok(false)
 					}
@@ -1310,12 +1312,12 @@ impl Machine {
 						self.incr_pc();
 						Ok(true)
 					}
-                    Opcode::GetGas => {
+                    Opcode::AVMOpcode(AVMOpcode::GetGas) => {
                         self.stack.push(Value::Int(self.arb_gas_remaining.clone()));
                         self.incr_pc();
                         Ok(true)
                     },
-                    Opcode::SetGas => {
+                    Opcode::AVMOpcode(AVMOpcode::SetGas) => {
                         let gas = self.stack.pop_uint(&self.state)?;
                         self.arb_gas_remaining = gas;
                         self.incr_pc();
