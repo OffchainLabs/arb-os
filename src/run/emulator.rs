@@ -536,7 +536,7 @@ impl Machine {
                             breakpoint = true;
                         }
                     }
-                    if insn.opcode == Opcode::DebugPrint {
+                    if insn.opcode == Opcode::AVMOpcode(AVMOpcode::DebugPrint) {
                         breakpoint = true;
                     }
                 }
@@ -740,11 +740,11 @@ impl Machine {
                 Opcode::AVMOpcode(AVMOpcode::Inbox) => 40,
                 Opcode::AVMOpcode(AVMOpcode::Panic) => 5,
                 Opcode::AVMOpcode(AVMOpcode::Halt) => 10,
-                Opcode::ErrCodePoint => 25,
-                Opcode::PushInsn => 25,
-                Opcode::PushInsnImm => 25,
-                Opcode::OpenInsn => 25,
-                Opcode::DebugPrint => 25,
+                Opcode::AVMOpcode(AVMOpcode::ErrCodePoint) => 25,
+                Opcode::AVMOpcode(AVMOpcode::PushInsn) => 25,
+                Opcode::AVMOpcode(AVMOpcode::PushInsnImm) => 25,
+                Opcode::AVMOpcode(AVMOpcode::OpenInsn) => 25,
+                Opcode::AVMOpcode(AVMOpcode::DebugPrint) => 25,
                 Opcode::AVMOpcode(AVMOpcode::GetGas) => 0,
                 Opcode::AVMOpcode(AVMOpcode::SetGas) => 0,
                 _ => return None,
@@ -1233,7 +1233,7 @@ impl Machine {
 							Ok(true)
 						}
 					}
-					Opcode::ErrCodePoint => {
+					Opcode::AVMOpcode(AVMOpcode::ErrCodePoint) => {
 						self.stack.push(Value::CodePoint(
 							self.code.create_segment()
 						));
@@ -1260,7 +1260,7 @@ impl Machine {
 						self.incr_pc();
 						Ok(true)
 					}
-					Opcode::PushInsn => {
+					Opcode::AVMOpcode(AVMOpcode::PushInsn)=> {
 						let opcode = self.stack.pop_usize(&self.state)?;
 						let cp = self.stack.pop_codepoint(&self.state)?;
 						let new_cp = self.code.push_insn(opcode, None, cp);
@@ -1272,7 +1272,7 @@ impl Machine {
 							Err(ExecutionError::new("invalid args to PushInsn", &self.state, None))
 						}
 					}
-					Opcode::PushInsnImm => {
+					Opcode::AVMOpcode(AVMOpcode::PushInsnImm) => {
 						let opcode = self.stack.pop_usize(&self.state)?;
 						let imm = self.stack.pop(&self.state)?;
 						let cp = self.stack.pop_codepoint(&self.state)?;
@@ -1285,7 +1285,7 @@ impl Machine {
 							Err(ExecutionError::new("invalid args to PushInsnImm", &self.state, None))
 						}
 					}
-					Opcode::OpenInsn => {
+					Opcode::AVMOpcode(AVMOpcode::OpenInsn) => {
 						let insn = self.code.get_insn(self.stack.pop_codepoint(&self.state)?).unwrap();
 						if let Some(val) = &insn.immediate {
 							self.stack.push(Value::Tuple(vec![val.clone()]));
@@ -1304,7 +1304,7 @@ impl Machine {
 						self.state = MachineState::Stopped;
 						Ok(false)
 					}
-					Opcode::DebugPrint => {
+					Opcode::AVMOpcode(AVMOpcode::DebugPrint) => {
 						let r1 = self.stack.pop(&self.state)?;
 						if debug {
                             println!("debugprint: {}", r1);

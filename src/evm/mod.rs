@@ -955,11 +955,7 @@ pub fn evm_load_and_call_funcs(
     }
 
     if profile {
-        crate::run::profile_gen_from_file(
-            Path::new("arb_os/arbos.mexe"),
-            vec![],
-            rt_env.clone(),
-        );
+        crate::run::profile_gen_from_file(Path::new("arb_os/arbos.mexe"), vec![], rt_env.clone());
     }
     let mut machine = load_from_file(Path::new("arb_os/arbos.mexe"), rt_env);
 
@@ -1151,9 +1147,15 @@ pub fn evm_direct_deploy_and_call_add(debug: bool) {
                 assert_eq!(tup[3], Value::Int(Uint256::one()));
                 match bytes_from_bytestack(tup[2].clone()) {
                     Some(result_bytes) => {
-                        let decoded_result =
-                            contract.get_function("add").unwrap().decode_output(&result_bytes).unwrap();
-                        assert_eq!(decoded_result[0], ethabi::Token::Uint(ethabi::Uint::try_from(2).unwrap()));
+                        let decoded_result = contract
+                            .get_function("add")
+                            .unwrap()
+                            .decode_output(&result_bytes)
+                            .unwrap();
+                        assert_eq!(
+                            decoded_result[0],
+                            ethabi::Token::Uint(ethabi::Uint::try_from(2).unwrap())
+                        );
                     }
                     None => {
                         panic!("malformed result bytestack");

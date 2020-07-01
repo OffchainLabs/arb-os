@@ -497,11 +497,6 @@ pub enum Opcode {
     NotEqual,
     LogicalAnd,
     LogicalOr,
-    ErrCodePoint,
-    PushInsn,
-    PushInsnImm,
-    OpenInsn,
-    DebugPrint,
     AVMOpcode(AVMOpcode),
 }
 
@@ -566,6 +561,11 @@ pub enum AVMOpcode {
     Halt,
     SetGas,
     GetGas,
+    ErrCodePoint,
+    PushInsn,
+    PushInsnImm,
+    OpenInsn,
+    DebugPrint = 0x90,
 }
 
 impl MiniProperties for Opcode {
@@ -577,9 +577,9 @@ impl MiniProperties for Opcode {
             | Opcode::AVMOpcode(AVMOpcode::GetTime)
             | Opcode::AVMOpcode(AVMOpcode::Rset)
             | Opcode::AVMOpcode(AVMOpcode::Rget)
-            | Opcode::PushInsn
-            | Opcode::PushInsnImm
-            | Opcode::ErrCodePoint
+            | Opcode::AVMOpcode(AVMOpcode::PushInsn)
+            | Opcode::AVMOpcode(AVMOpcode::PushInsnImm)
+            | Opcode::AVMOpcode(AVMOpcode::ErrCodePoint)
             | Opcode::AVMOpcode(AVMOpcode::ErrSet)
             | Opcode::AVMOpcode(AVMOpcode::ErrPush)
             | Opcode::AVMOpcode(AVMOpcode::SetGas)
@@ -641,11 +641,11 @@ impl Opcode {
             "inbox" => Opcode::AVMOpcode(AVMOpcode::Inbox),
             "jump" => Opcode::AVMOpcode(AVMOpcode::Jump),
             "log" => Opcode::AVMOpcode(AVMOpcode::Log),
-            "errcodept" => Opcode::ErrCodePoint,
-            "pushinsn" => Opcode::PushInsn,
-            "pushinsnimm" => Opcode::PushInsnImm,
-            "openinsn" => Opcode::OpenInsn,
-            "debugprint" => Opcode::DebugPrint,
+            "errcodept" => Opcode::AVMOpcode(AVMOpcode::ErrCodePoint),
+            "pushinsn" => Opcode::AVMOpcode(AVMOpcode::PushInsn),
+            "pushinsnimm" => Opcode::AVMOpcode(AVMOpcode::PushInsnImm),
+            "openinsn" => Opcode::AVMOpcode(AVMOpcode::OpenInsn),
+            "debugprint" => Opcode::AVMOpcode(AVMOpcode::DebugPrint),
             "setgas" => Opcode::AVMOpcode(AVMOpcode::SetGas),
             "getgas" => Opcode::AVMOpcode(AVMOpcode::GetGas),
             "errset" => Opcode::AVMOpcode(AVMOpcode::ErrSet),
@@ -716,11 +716,11 @@ impl Opcode {
             0x74 => Some(Opcode::AVMOpcode(AVMOpcode::Halt)),
             0x75 => Some(Opcode::AVMOpcode(AVMOpcode::SetGas)),
             0x76 => Some(Opcode::AVMOpcode(AVMOpcode::GetGas)),
-            0x77 => Some(Opcode::ErrCodePoint),
-            0x78 => Some(Opcode::PushInsn),
-            0x79 => Some(Opcode::PushInsnImm),
-            0x7a => Some(Opcode::OpenInsn),
-            0x90 => Some(Opcode::DebugPrint),
+            0x77 => Some(Opcode::AVMOpcode(AVMOpcode::ErrCodePoint)),
+            0x78 => Some(Opcode::AVMOpcode(AVMOpcode::PushInsn)),
+            0x79 => Some(Opcode::AVMOpcode(AVMOpcode::PushInsnImm)),
+            0x7a => Some(Opcode::AVMOpcode(AVMOpcode::OpenInsn)),
+            0x90 => Some(Opcode::AVMOpcode(AVMOpcode::DebugPrint)),
             _ => None,
         }
     }
@@ -786,11 +786,11 @@ impl Opcode {
             Opcode::AVMOpcode(AVMOpcode::Halt) => Some(0x74),
             Opcode::AVMOpcode(AVMOpcode::SetGas) => Some(0x75),
             Opcode::AVMOpcode(AVMOpcode::GetGas) => Some(0x76),
-            Opcode::ErrCodePoint => Some(0x77),
-            Opcode::PushInsn => Some(0x78),
-            Opcode::PushInsnImm => Some(0x79),
-            Opcode::OpenInsn => Some(0x7a),
-            Opcode::DebugPrint => Some(0x90),
+            Opcode::AVMOpcode(AVMOpcode::ErrCodePoint) => Some(0x77),
+            Opcode::AVMOpcode(AVMOpcode::PushInsn) => Some(0x78),
+            Opcode::AVMOpcode(AVMOpcode::PushInsnImm) => Some(0x79),
+            Opcode::AVMOpcode(AVMOpcode::OpenInsn) => Some(0x7a),
+            Opcode::AVMOpcode(AVMOpcode::DebugPrint) => Some(0x90),
             _ => None,
         }
     }

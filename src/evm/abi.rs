@@ -296,7 +296,7 @@ impl AbiForContract {
         }; // handle this deploy message
         let logs = machine.runtime_env.get_all_logs();
 
-        if let Value::Tuple(tup) = &logs[logs.len()-1] {
+        if let Value::Tuple(tup) = &logs[logs.len() - 1] {
             if let Value::Int(ui) = tup[1].clone() {
                 self.address = ui.clone();
                 Some(ui)
