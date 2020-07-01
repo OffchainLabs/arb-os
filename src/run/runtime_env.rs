@@ -61,7 +61,7 @@ impl RuntimeEnvironment {
         gas_price_bid: Uint256,
         data: &[u8],
     ) {
-        let sender_addr = Uint256::one();
+        let sender_addr = Uint256::from_usize(1025);
         let mut buf = vec![0u8];
         let seq_num = self.get_and_incr_seq_num(&sender_addr);
         buf.extend(seq_num.to_bytes_be());
@@ -80,7 +80,7 @@ impl RuntimeEnvironment {
         max_gas: Uint256,
         data: &[u8],
     ) {
-        let sender_addr = Uint256::one();
+        let sender_addr = Uint256::from_usize(1025);
         let mut buf = vec![5u8];
         buf.extend(to_addr.to_bytes_be());
         buf.extend(max_gas.to_bytes_be());
@@ -90,11 +90,26 @@ impl RuntimeEnvironment {
     }
 
     pub fn insert_deploy_contract_message(&mut self, contract_code: &[u8]) {
-        let sender_addr = Uint256::one();
+        let sender_addr = Uint256::from_usize(1025);
         let mut buf = vec![6u8];
         let seq_num = self.get_and_incr_seq_num(&sender_addr);
         buf.extend(seq_num.to_bytes_be());
         buf.extend(contract_code);
+
+        self.insert_eth_message(sender_addr, &buf);
+    }
+
+    pub fn insert_erc20_deposit_message(
+        &mut self,
+        token_addr: Uint256,
+        payee: Uint256,
+        amount: Uint256,
+    ) {
+        let sender_addr = Uint256::from_usize(1025);
+        let mut buf = vec![2u8];
+        buf.extend(token_addr.to_bytes_be());
+        buf.extend(payee.to_bytes_be());
+        buf.extend(amount.to_bytes_be());
 
         self.insert_eth_message(sender_addr, &buf);
     }

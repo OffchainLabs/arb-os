@@ -44,6 +44,7 @@ public func tokens_erc20deposit(
     amount: uint,
     fullMsg: MessageFromL1
 ) {
+    asm(600,) { debugprint };
     let globalAS = getGlobalAccountStore();
     if(account_isEmpty(accountStore_get(globalAS, tokenAddress))) {
         globalAS = accountStore_createERC20(
@@ -52,6 +53,7 @@ public func tokens_erc20deposit(
         );
     }
 
+    asm(601,) { debugprint };
     // encode the calldata for call to adminMint
     let calldata = bytearray_new(0);
     calldata = bytearray_setByte(
@@ -71,9 +73,11 @@ public func tokens_erc20deposit(
         3,
         0xf9
     );
+    asm(6011,) { debugprint };
     calldata = bytearray_set256(calldata, 4, uint(payee));
     calldata = bytearray_set256(calldata, 36, amount);
 
+    asm(602,) { debugprint };
     initEvmCallStack(
         0,               // treat as regular txcall
         fullMsg,

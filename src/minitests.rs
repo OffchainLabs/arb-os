@@ -183,3 +183,8 @@ fn test_direct_deploy_add() {
 fn test_direct_deploy_and_call_add() {
     let log = crate::evm::evm_direct_deploy_and_call_add(false);
 }
+
+#[test]
+fn test_erc20() {
+    crate::evm::mint_erc20_and_get_balance(false);
+}

@@ -27,8 +27,8 @@ use std::hash::Hasher;
 use std::io;
 use std::path::Path;
 
-use clap::{App, Arg, SubCommand};
 use crate::contracttemplates::generate_contract_template_file_or_die;
+use clap::{App, Arg, SubCommand};
 
 mod compile;
 mod contracttemplates;
@@ -174,8 +174,7 @@ fn main() -> Result<(), CompileError> {
                 ),
         )
         .subcommand(
-            SubCommand::with_name("maketemplates")
-                .about("generates code for contract templates"),
+            SubCommand::with_name("maketemplates").about("generates code for contract templates"),
         )
         .get_matches();
 
@@ -296,7 +295,8 @@ fn main() -> Result<(), CompileError> {
     if let Some(matches) = matches.subcommand_matches("evmdebug") {
         let debug = matches.is_present("debug");
         let profile = matches.is_present("profiler");
-        evm::evm_xcontract_call_and_verify(debug, profile);
+        //evm::evm_xcontract_call_and_verify(debug, profile);
+        evm::mint_erc20_and_get_balance(debug);
     }
 
     if let Some(matches) = matches.subcommand_matches("profiler") {

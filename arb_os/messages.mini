@@ -104,6 +104,8 @@ public impure func handleMessageFromL1(msg: MessageFromL1) -> option<()> {
 
     let (bs, msgType) = bytestream_getByte(inStream)?;  // get message type
     inStream = bs;
+
+    asm((0, msgType),) { debugprint };
     if (msgType == 0) {
         // txcall message
         let (bs, sequenceNum) = bytestream_getUint(inStream)?;

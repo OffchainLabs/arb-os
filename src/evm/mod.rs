@@ -928,11 +928,7 @@ pub fn evm_load_and_call_funcs(
     }
 
     if profile {
-        crate::run::profile_gen_from_file(
-            Path::new("arb_os/arbos.mexe"),
-            vec![],
-            rt_env.clone(),
-        );
+        crate::run::profile_gen_from_file(Path::new("arb_os/arbos.mexe"), vec![], rt_env.clone());
     }
     let mut machine = load_from_file(Path::new("arb_os/arbos.mexe"), rt_env);
 
@@ -1124,9 +1120,15 @@ pub fn evm_direct_deploy_and_call_add(debug: bool) {
                 assert_eq!(tup[3], Value::Int(Uint256::one()));
                 match bytes_from_bytestack(tup[2].clone()) {
                     Some(result_bytes) => {
-                        let decoded_result =
-                            contract.get_function("add").unwrap().decode_output(&result_bytes).unwrap();
-                        assert_eq!(decoded_result[0], ethabi::Token::Uint(ethabi::Uint::try_from(2).unwrap()));
+                        let decoded_result = contract
+                            .get_function("add")
+                            .unwrap()
+                            .decode_output(&result_bytes)
+                            .unwrap();
+                        assert_eq!(
+                            decoded_result[0],
+                            ethabi::Token::Uint(ethabi::Uint::try_from(2).unwrap())
+                        );
                     }
                     None => {
                         panic!("malformed result bytestack");
@@ -1140,4 +1142,36 @@ pub fn evm_direct_deploy_and_call_add(debug: bool) {
             panic!(e.to_string());
         }
     }
+}
+
+pub fn mint_erc20_and_get_balance(debug: bool) {
+    let token_addr = Uint256::from_usize(32563);
+    let me = Uint256::from_usize(1025);
+    let million = Uint256::from_usize(1000000);
+
+    let mut rt_env = RuntimeEnvironment::new();
+    rt_env.insert_erc20_deposit_message(token_addr.clone(), me.clone(), million);
+    let mut calldata: Vec<u8> = vec![0x70, 0xa0, 0x82, 0x31]; // code for balanceOf method
+    calldata.extend(me.to_bytes_be());
+    rt_env.insert_txcall_message(
+        token_addr,
+        Uint256::zero(),
+        Uint256::from_usize(1000000000),
+        Uint256::zero(),
+        &calldata,
+    );
+
+    let mut machine = load_from_file(Path::new("arb_os/arbos.mexe"), rt_env);
+    machine.start_at_zero();
+
+    let num_logs_before = machine.runtime_env.get_all_logs().len();
+    let _arbgas_used = if debug {
+        machine.debug(None)
+    } else {
+        machine.run(None)
+    };
+    let logs = machine.runtime_env.get_all_logs();
+    assert_eq!(logs.len(), num_logs_before + 2);
+    println!("first log item: {}", logs[logs.len() - 2]);
+    println!("second log item: {}", logs[logs.len() - 1]);
 }

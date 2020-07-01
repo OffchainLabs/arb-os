@@ -372,8 +372,10 @@ public impure func evmCallStack_returnFromCall(
 
         panic;  // shouldn't happen -- previous instruction jumped away
     } else {
+        asm(200,) { debugprint };
         // top-level call completed; will need to return to external caller
         if (success && (topFrame.callKind != 3)) {  // call succeeded, and it wasn't a staticcall
+            asm(201,) { debugprint };
             if (topFrame.callKind == 4) {
                 // Constructor call was successful, so finish setting up the account.
                 // The constructor's returndata is EVM code for the contract.
