@@ -69,20 +69,20 @@ import impure func inbox_currentBlockNumber() -> uint;
 
 import func evmlogs_empty() -> EvmLogs;
 
-import func bytearray_new(capacity: uint, autoExpand: bool) -> ByteArray;
+import func bytearray_new(capacity: uint) -> ByteArray;
 import func bytearray_size(ba: ByteArray) -> uint;
-import func bytearray_getByte(ba: ByteArray, offset: uint) -> option<uint>;
-import func bytearray_setByte(ba: ByteArray, offset: uint, val: uint) -> option<ByteArray>;
-import func bytearray_get256(ba: ByteArray, offset: uint) -> option<uint>;
-import func bytearray_set256(ba: ByteArray, offset: uint, val: uint) -> option<ByteArray>;
-import func bytearray_extract(ba: ByteArray, offset: uint, nbytes: uint) -> option<ByteArray>;
-import func bytearray_copy(from: ByteArray, fromOffset: uint, to: ByteArray, toOffset: uint, nbytes: uint) -> option<ByteArray>;
+import func bytearray_getByte(ba: ByteArray, offset: uint) -> uint;
+import func bytearray_setByte(ba: ByteArray, offset: uint, val: uint) -> ByteArray;
+import func bytearray_get256(ba: ByteArray, offset: uint) -> uint;
+import func bytearray_set256(ba: ByteArray, offset: uint, val: uint) -> ByteArray;
+import func bytearray_extract(ba: ByteArray, offset: uint, nbytes: uint) -> ByteArray;
+import func bytearray_copy(from: ByteArray, fromOffset: uint, to: ByteArray, toOffset: uint, nbytes: uint) -> ByteArray;
 import func bytearray_marshalFull(from: ByteArray) -> MarshalledBytes;
 
 import func queue_isEmpty(q: Queue) -> bool;
 import func queue_get(q: Queue) -> (Queue, any);
 
-import func keccak256(array: ByteArray, offset: uint, nbytes: uint) -> option<bytes32>;
+import func keccak256(array: ByteArray, offset: uint, nbytes: uint) -> bytes32;
 
 
 public impure func evmOp_stop() {
@@ -90,12 +90,7 @@ public impure func evmOp_stop() {
 }
 
 public impure func evmOp_sha3(baseMemAddr: uint, nbytes: uint) -> bytes32 {
-    if let Some(h) = keccak256(evmCallStack_getTopFrameMemoryOrDie(), baseMemAddr, nbytes) {
-        return h;
-    } else {
-        evm_runtimePanic();
-        return bytes32(0);
-    }
+    return keccak256(evmCallStack_getTopFrameMemoryOrDie(), baseMemAddr, nbytes);
 }
 
 public impure func evmOp_address() -> address {
@@ -147,9 +142,7 @@ public impure func evmOp_callvalue() -> uint {
 
 public impure func evmOp_calldataload(offset: uint) -> uint {
     if let Some(topFrame) = evmCallStack_topFrame() {
-        if let Some(val) = bytearray_get256(evmCallFrame_getCalldata(topFrame), offset) {
-            return val;
-        }
+        return bytearray_get256(evmCallFrame_getCalldata(topFrame), offset);
     }
 
     evm_runtimePanic();
@@ -167,16 +160,15 @@ public impure func evmOp_calldatasize() -> uint {
 
 public impure func evmOp_calldatacopy(memAddr: uint, calldataOffset: uint, nbytes: uint) {
     if let Some(topFrame) = evmCallStack_topFrame() {
-        if let Some(newMemory) = bytearray_copy(
+        let newMemory = bytearray_copy(
             evmCallFrame_getCalldata(topFrame),
             calldataOffset,
             evmCallFrame_getMemory(topFrame),
             memAddr,
             nbytes
-        ) {
-            if (evmCallStack_setTopFrameMemory(newMemory,)) {
-                return;
-            }
+        );
+        if (evmCallStack_setTopFrameMemory(newMemory,)) {
+            return;
         }
     }
 
@@ -197,7 +189,7 @@ public impure func evmOp_codesize() -> uint {
 public impure func evmOp_codecopy(memAddr: uint, codeOffset: uint, nbytes: uint) {
     if let Some(topFrame) = evmCallStack_topFrame() {
         let memory = evmCallFrame_getMemory(topFrame);
-        if let Some(updatedMemory) = bytearray_copy(
+        let updatedMemory = bytearray_copy(
             account_getCode(
                 evmCallFrame_runningCodeFromAccount(topFrame)
             ),
@@ -205,10 +197,9 @@ public impure func evmOp_codecopy(memAddr: uint, codeOffset: uint, nbytes: uint)
             memory,
             memAddr,
             nbytes
-        ) {
-            if (evmCallStack_setTopFrameMemory(updatedMemory,)) {
-                return;
-            }
+        );
+        if (evmCallStack_setTopFrameMemory(updatedMemory,)) {
+            return;
         }
     }
 
@@ -229,7 +220,7 @@ public impure func evmOp_extcodesize(addr: address) -> uint {
 public impure func evmOp_extcodecopy(addr: address, memAddr: uint, codeOffset: uint, nbytes: uint) {
     if let Some(topFrame) = evmCallStack_topFrame() {
         let memory = evmCallFrame_getMemory(topFrame);
-        if let Some(updatedMemory) = bytearray_copy(
+        let updatedMemory = bytearray_copy(
             account_getCode(
                 evmCallFrame_getAccount(topFrame, addr)
             ),
@@ -237,10 +228,9 @@ public impure func evmOp_extcodecopy(addr: address, memAddr: uint, codeOffset: u
             memory,
             memAddr,
             nbytes
-        ) {
-            if (evmCallStack_setTopFrameMemory(updatedMemory,)) {
-                return;
-            }
+        );
+        if (evmCallStack_setTopFrameMemory(updatedMemory,)) {
+            return;
         }
     }
 
@@ -259,16 +249,15 @@ public impure func evmOp_returndatasize() -> uint {
 public impure func evmOp_returndatacopy(memAddr: uint, dataOffset: uint, nbytes: uint) {
     if let Some(returnData) = evmCallStack_getTopFrameReturnData() {
         let memory = evmCallStack_getTopFrameMemoryOrDie();
-        if let Some(updatedMemory) = bytearray_copy(
+        let updatedMemory = bytearray_copy(
             returnData,
             0,
             memory,
             dataOffset,
             nbytes
-        ) {
-            if (evmCallStack_setTopFrameMemory(updatedMemory,)) {
-               return;
-            }
+        );
+        if (evmCallStack_setTopFrameMemory(updatedMemory,)) {
+           return;
         }
     }
 
@@ -285,12 +274,10 @@ public impure func evmOp_number() -> uint {
 
 public impure func evmOp_mload(memAddr: uint) -> uint {
     if let Some(topFrame) = evmCallStack_topFrame() {
-        if let Some(val) = bytearray_get256(
+        return bytearray_get256(
             evmCallFrame_getMemory(topFrame),
             memAddr
-        ) {
-            return val;
-        }
+        );
     }
 
     evm_runtimePanic();
@@ -299,14 +286,13 @@ public impure func evmOp_mload(memAddr: uint) -> uint {
 
 public impure func evmOp_mstore(memAddr: uint, value: uint) {
     if let Some(topFrame) = evmCallStack_topFrame() {
-        if let Some(memory) = bytearray_set256(
+        let memory = bytearray_set256(
             evmCallFrame_getMemory(topFrame),
             memAddr,
             value
-        ) {
-            if (evmCallStack_setTopFrameMemory(memory)) {
-                return;
-            }
+        );
+        if (evmCallStack_setTopFrameMemory(memory)) {
+            return;
         }
     }
 
@@ -315,14 +301,13 @@ public impure func evmOp_mstore(memAddr: uint, value: uint) {
 
 public impure func evmOp_mstore8(memAddr: uint, value:uint) {
     if let Some(topFrame) = evmCallStack_topFrame() {
-        if let Some(memory) = bytearray_setByte(
+        let memory = bytearray_setByte(
             evmCallFrame_getMemory(topFrame),
             memAddr,
             value
-        ) {
-            if (evmCallStack_setTopFrameMemory(memory)) {
-                return;
-            }
+        );
+        if (evmCallStack_setTopFrameMemory(memory)) {
+            return;
         }
     }
 
@@ -389,19 +374,18 @@ public impure func evmOp_log0(
     memAddr: uint, 
     nbytes: uint
 ) {
-    if let Some(data) = bytearray_extract(
+    let data = bytearray_extract(
         evmCallStack_getTopFrameMemoryOrDie(),
         memAddr,
         nbytes
-    ) {
-        if (evmCallStack_addEvmLogToCurrent(
-            (
-                address(0),  // addEvmLogToCurrent will fill this in
-                bytearray_marshalFull(data),
-            )
-        ) == Some(()) ) {
-            return;
-        }
+    );
+    if (evmCallStack_addEvmLogToCurrent(
+        (
+            address(0),  // addEvmLogToCurrent will fill this in
+            bytearray_marshalFull(data),
+        )
+    ) == Some(()) ) {
+        return;
     }
 
     evm_runtimePanic();
@@ -413,20 +397,19 @@ public impure func evmOp_log1(
     nbytes: uint, 
     topic0: uint
 ) {
-    if let Some(data) = bytearray_extract(
+    let data = bytearray_extract(
         evmCallStack_getTopFrameMemoryOrDie(),
         memAddr,
         nbytes
-    ) {
-        if (evmCallStack_addEvmLogToCurrent(
-            (
-                address(0),  // addEvmLogToCurrent will fill this in
-                bytearray_marshalFull(data),
-                topic0
-            )
-        ) == Some(()) ) {
-            return;
-        }
+    );
+    if (evmCallStack_addEvmLogToCurrent(
+        (
+            address(0),  // addEvmLogToCurrent will fill this in
+            bytearray_marshalFull(data),
+            topic0
+        )
+    ) == Some(()) ) {
+        return;
     }
 
     evm_runtimePanic();
@@ -439,21 +422,20 @@ public impure func evmOp_log2(
     topic0: uint,
     topic1: uint,
 ) {
-    if let Some(data) = bytearray_extract(
+    let data = bytearray_extract(
         evmCallStack_getTopFrameMemoryOrDie(),
         memAddr,
         nbytes
-    ) {
-        if (evmCallStack_addEvmLogToCurrent(
-            (
-                address(0),  // addEvmLogToCurrent will fill this in
-                bytearray_marshalFull(data),
-                topic0,
-                topic1
-            )
-        ) == Some(()) ) {
-            return;
-        }
+    );
+    if (evmCallStack_addEvmLogToCurrent(
+        (
+            address(0),  // addEvmLogToCurrent will fill this in
+            bytearray_marshalFull(data),
+            topic0,
+            topic1
+        )
+    ) == Some(()) ) {
+        return;
     }
 
     evm_runtimePanic();
@@ -467,22 +449,21 @@ public impure func evmOp_log3(
     topic1: uint,
     topic2: uint,
 ) {
-    if let Some(data) = bytearray_extract(
+    let data = bytearray_extract(
         evmCallStack_getTopFrameMemoryOrDie(),
         memAddr,
         nbytes
-    ) {
-        if (evmCallStack_addEvmLogToCurrent(
-            (
-                address(0),  // addEvmLogToCurrent will fill this in
-                bytearray_marshalFull(data),
-                topic0,
-                topic1,
-                topic2
-            )
-        ) == Some(()) ) {
-            return;
-        }
+    );
+    if (evmCallStack_addEvmLogToCurrent(
+        (
+            address(0),  // addEvmLogToCurrent will fill this in
+            bytearray_marshalFull(data),
+            topic0,
+            topic1,
+            topic2
+        )
+    ) == Some(()) ) {
+        return;
     }
 
     evm_runtimePanic();
@@ -497,23 +478,22 @@ public impure func evmOp_log4(
     topic2: uint,
     topic3: uint,
 ) {
-    if let Some(data) = bytearray_extract(
+    let data = bytearray_extract(
         evmCallStack_getTopFrameMemoryOrDie(),
         memAddr,
         nbytes
-    ) {
-        if (evmCallStack_addEvmLogToCurrent(
-            (
-                address(0),  // addEvmLogToCurrent will fill this in
-                bytearray_marshalFull(data),
-                topic0,
-                topic1,
-                topic2,
-                topic3
-            )
-        ) == Some(()) ) {
-            return;
-        }
+    );
+    if (evmCallStack_addEvmLogToCurrent(
+        (
+            address(0),  // addEvmLogToCurrent will fill this in
+            bytearray_marshalFull(data),
+            topic0,
+            topic1,
+            topic2,
+            topic3
+        )
+    ) == Some(()) ) {
+        return;
     }
 
     evm_runtimePanic();

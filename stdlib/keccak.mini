@@ -15,32 +15,32 @@
 //
 
 import type ByteArray;
-import func bytearray_new(size: uint, variableSize: bool) -> ByteArray;
-import func bytearray_get256(ba: ByteArray, offset: uint) -> option<uint>;
-import func bytearray_set256(ba: ByteArray, offset: uint, val: uint) -> option<ByteArray>;
-import func bytearray_get64(ba: ByteArray, offset: uint) -> option<uint>;
-import func bytearray_set64(ba: ByteArray, offset: uint, val: uint) -> option<ByteArray>;
-import func bytearray_getByte(ba: ByteArray, offset: uint) -> option<uint>;
-import func bytearray_setByte(ba: ByteArray, offset: uint, val: uint) -> option<ByteArray>;
-import func bytearray_copy(src: ByteArray, srcOffset: uint, dest: ByteArray, destOffset: uint, nbytes: uint) -> option<ByteArray>;
+import func bytearray_new(size: uint) -> ByteArray;
+import func bytearray_get256(ba: ByteArray, offset: uint) -> uint;
+import func bytearray_set256(ba: ByteArray, offset: uint, val: uint) -> ByteArray;
+import func bytearray_get64(ba: ByteArray, offset: uint) -> uint;
+import func bytearray_set64(ba: ByteArray, offset: uint, val: uint) -> ByteArray;
+import func bytearray_getByte(ba: ByteArray, offset: uint) -> uint;
+import func bytearray_setByte(ba: ByteArray, offset: uint, val: uint) -> ByteArray;
+import func bytearray_copy(src: ByteArray, srcOffset: uint, dest: ByteArray, destOffset: uint, nbytes: uint) -> ByteArray;
 
 
-public impure func keccak256(ba: ByteArray, offset: uint, nbytes: uint) -> option<bytes32> {
+public impure func keccak256(ba: ByteArray, offset: uint, nbytes: uint) -> bytes32 {
     if (nbytes == 32) {
-        return Some(hash(bytearray_get256(ba, offset)?));
+        return hash(bytearray_get256(ba, offset));
     }
     if (nbytes == 64) {
-        return Some(hash(
-            bytes32(bytearray_get256(ba, offset)?),
-            bytes32(bytearray_get256(ba, offset+32)?)
-        ));
+        return hash(
+            bytes32(bytearray_get256(ba, offset)),
+            bytes32(bytearray_get256(ba, offset+32))
+        );
     }
 
     let accumulator = newfixedarray(25, 0);
     while (nbytes >= 136) {
         // process a full block
         accumulator = keccak_permutation(
-            keccak_xorblock(accumulator, ba, offset)?
+            keccak_xorblock(accumulator, ba, offset)
         );
         offset = offset+136;
         nbytes = nbytes-136;
@@ -48,38 +48,38 @@ public impure func keccak256(ba: ByteArray, offset: uint, nbytes: uint) -> optio
 
     // finish the last block, with padding
     // approach is to build a bytearray to hold this block
-    let lastBlock = bytearray_new(136, false);
-    lastBlock = bytearray_copy(ba, offset, lastBlock, 0, nbytes)?;
+    let lastBlock = bytearray_new(136);
+    lastBlock = bytearray_copy(ba, offset, lastBlock, 0, nbytes);
     if (nbytes == 135) {
         // add one byte of padding
-        lastBlock = bytearray_setByte(lastBlock, 135, 0x81)?;
+        lastBlock = bytearray_setByte(lastBlock, 135, 0x81);
     } else {
         // add padding up to full block
         // take advantage of the fact that lastBlock is already zero-filled
         lastBlock = bytearray_setByte(
-            bytearray_setByte(lastBlock, 135, 0x80)?,
+            bytearray_setByte(lastBlock, 135, 0x80),
             nbytes,
             0x01
-        )?;
+        );
     }
 
     accumulator = keccak_permutation(
-        keccak_xorblock(accumulator, lastBlock, 0)?
+        keccak_xorblock(accumulator, lastBlock, 0)
     );
 
-    return Some(bytes32(
+    return bytes32(
         flipEndian64(accumulator[3]) + 0x10000000000000000 * (
             flipEndian64(accumulator[2]) + 0x10000000000000000 * (
                 flipEndian64(accumulator[1]) + 0x10000000000000000 * flipEndian64(accumulator[0])
             )
         )
-    ));
+    );
 }
 
-func keccak_xorblock_save(accumulator: [25]uint, ba: ByteArray, offset: uint) -> option<[25]uint> {
+func keccak_xorblock_save(accumulator: [25]uint, ba: ByteArray, offset: uint) -> [25]uint {
     let i = 0;
     while (i < 4) {
-        let word = bytearray_get256(ba, offset+32*i)?;
+        let word = bytearray_get256(ba, offset+32*i);
         let val = accumulator[4*i] & (word & 0xffffffffffffffff);  //DEBUG
         accumulator = accumulator 
             with { [4*i] = accumulator[4*i] ^ flipEndian64(word & 0xffffffffffffffff) }
@@ -88,23 +88,23 @@ func keccak_xorblock_save(accumulator: [25]uint, ba: ByteArray, offset: uint) ->
             with { [4*i+3] = accumulator[4*i+3] ^ flipEndian64((word/0x1000000000000000000000000000000000000000000000000) & 0xffffffffffffffff) };
         i = i+1;
     }
-    return Some(accumulator with { [16] = accumulator[16] ^ flipEndian64(bytearray_get64(ba, offset+128)?) });
+    return accumulator with { [16] = accumulator[16] ^ flipEndian64(bytearray_get64(ba, offset+128)) };
 }
 
-func keccak_xorblock(accumulator: [25]uint, ba: ByteArray, offset: uint) -> option<[25]uint> {
+func keccak_xorblock(accumulator: [25]uint, ba: ByteArray, offset: uint) -> [25]uint {
     let i = 0;
     while (i < 17) {
         let word = 0;
         let j = 0;
         while (j < 8) {
-            word = 256*word + bytearray_getByte(ba, offset + 7-j)?;
+            word = 256*word + bytearray_getByte(ba, offset + 7-j);
             j = j+1;
         }
         accumulator = accumulator with { [i] = accumulator[i] ^ word };
         offset = offset+8;
         i = i+1;
     }
-    return Some(accumulator);
+    return accumulator;
 }
 
 var keccakConstants: struct {

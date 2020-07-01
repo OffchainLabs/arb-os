@@ -17,10 +17,10 @@
 import type ByteArray;
 
 import func bytearray_size(ba: ByteArray) -> uint;
-import func bytearray_getByte(ba: ByteArray, offset: uint) -> option<uint>;
-import func bytearray_get64(ba: ByteArray, offset: uint) -> option<uint>;
-import func bytearray_get256(ba: ByteArray, offset: uint) -> option<uint>;
-import func bytearray_extract(ba: ByteArray, offset: uint, nbytes: uint) -> option<ByteArray>;
+import func bytearray_getByte(ba: ByteArray, offset: uint) -> uint;
+import func bytearray_get64(ba: ByteArray, offset: uint) -> uint;
+import func bytearray_get256(ba: ByteArray, offset: uint) -> uint;
+import func bytearray_extract(ba: ByteArray, offset: uint, nbytes: uint) -> ByteArray;
 
 type ByteStream = struct {
     contents: ByteArray,
@@ -54,7 +54,7 @@ public func bytestream_getByte(bs: ByteStream) -> option<(ByteStream, uint)> {
     } else {
         return Some((
             bs with { currentOffset: bs.currentOffset+1 },
-            bytearray_getByte(bs.contents, bs.currentOffset)?
+            bytearray_getByte(bs.contents, bs.currentOffset)
         ));
     }
 }
@@ -65,7 +65,7 @@ public func bytestream_get64(bs: ByteStream) -> option<(ByteStream, uint)> {
     } else {
         return Some((
             bs with { currentOffset: bs.currentOffset+8 },
-            bytearray_get64(bs.contents, bs.currentOffset)?
+            bytearray_get64(bs.contents, bs.currentOffset)
         ));
     }
 }
@@ -76,19 +76,15 @@ public func bytestream_getUint(bs: ByteStream) -> option<(ByteStream, uint)> {
     } else {
         return Some((
             bs with { currentOffset: bs.currentOffset+32 },
-            bytearray_get256(bs.contents, bs.currentOffset)?
+            bytearray_get256(bs.contents, bs.currentOffset)
         ));
     }
 }
 
 public func bytestream_getRemainingBytes(bs: ByteStream) -> ByteArray {
-    if let Some(ba) = bytearray_extract(
+    return bytearray_extract(
         bs.contents,
         bs.currentOffset,
         bs.capacity - bs.currentOffset
-    ) {
-        return ba;
-    } else {
-        panic;  // should never happen, because we called bytearray_extract with valid args
-    }
+    );
 }

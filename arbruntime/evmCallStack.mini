@@ -47,14 +47,14 @@ import func account_getStartCodePoint(account: Account) -> option<func()>;
 import func evmlogs_empty() -> EvmLogs;
 import func evmlogs_appendAny(logs: EvmLogs, item: any) -> EvmLogs;
 
-import func bytearray_new(capacity: uint, variableSize: bool) -> ByteArray;
+import func bytearray_new(capacity: uint) -> ByteArray;
 import func bytearray_marshalFull(ba: ByteArray) -> MarshalledBytes;
-import func bytearray_extract(ba: ByteArray, offset: uint, nbytes: uint) -> option<ByteArray>;
+import func bytearray_extract(ba: ByteArray, offset: uint, nbytes: uint) -> ByteArray;
 import func bytearray_copy(
     from: ByteArray,   fromOffset: uint,
     to: ByteArray,     toOffset: uint,
     nbytes: uint
-) -> option<ByteArray>;
+) -> ByteArray;
 
 import func queue_new() -> Queue;
 import func queue_isEmpty(q: Queue) -> bool;
@@ -136,7 +136,7 @@ public impure func initEvmCallStack(
             calldata: calldata,
             callvalue: callvalue,
             returnInfo: None<ReturnInfo>,
-            memory: bytearray_new(8, true),
+            memory: bytearray_new(0),
             evmLogs: evmlogs_empty(),
             selfDestructQueue: queue_new(),
             resumeInfo: None<ResumeInfo>,
@@ -221,10 +221,10 @@ public impure func evmCallStack_doCall(
         runningAsAccount: callee,
         caller: topFrame.runningAs,
         callKind: kind,
-        calldata: bytearray_extract(topFrame.memory, argsOffset, argsLength)?,
+        calldata: bytearray_extract(topFrame.memory, argsOffset, argsLength),
         callvalue: balance,
         returnInfo: None<ReturnInfo>,
-        memory: bytearray_new(8, true),
+        memory: bytearray_new(0),
         evmLogs: evmlogs_empty(),
         selfDestructQueue: topFrame.selfDestructQueue,
         resumeInfo: None<ResumeInfo>,
@@ -250,7 +250,7 @@ public impure func evmCallStack_returnFromCall(
     let leftoverGas = gasAccounting_fromAppToRuntime();
     let topFrame = globalCallStack?;
     let memory = topFrame.memory;
-    let returnData = bytearray_extract(memory, returnOffset, returnLength)?;
+    let returnData = bytearray_extract(memory, returnOffset, returnLength);
     if let Some(newTopFrame) = unsafecast<option<EvmCallFrame>>(topFrame.parent) {
         if (success && (topFrame.callKind != 3)) {   // if call succeeded, and it's not a staticcall
             topFrame = topFrame with {
@@ -281,7 +281,7 @@ public impure func evmCallStack_returnFromCall(
             newTopFrame.memory,
             returnOffset,
             returnLength
-        )?;
+        );
         newTopFrame = newTopFrame with { memory: newMemory };
 
         // ready to return to caller
