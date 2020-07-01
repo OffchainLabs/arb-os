@@ -305,7 +305,7 @@ fn main() -> Result<(), CompileError> {
     }
 
     if let Some(_) = matches.subcommand_matches("maketemplates") {
-        let path = Path::new("arbruntime/contractTemplates.mini");
+        let path = Path::new("arb_os/contractTemplates.mini");
         generate_contract_template_file_or_die(path);
     }
 
