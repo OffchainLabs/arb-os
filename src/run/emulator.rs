@@ -17,8 +17,12 @@
 use super::runtime_env::RuntimeEnvironment;
 use crate::link::LinkedProgram;
 use crate::mavm::{AVMOpcode, CodePt, Instruction, Opcode, Value};
+use crate::pos::Location;
 use crate::uint256::Uint256;
+use std::cmp::max;
+use std::collections::{BTreeMap, HashMap};
 use std::fmt;
+use std::io::stdin;
 
 #[derive(Debug, Default, Clone)]
 pub struct ValueStack {
@@ -284,6 +288,128 @@ impl CodeStore {
     }
 }
 
+#[derive(Debug, Clone, Default)]
+pub struct ProfilerData {
+    data: HashMap<String, BTreeMap<(usize, usize), u64>>,
+    unknown_gas: u64,
+}
+
+impl ProfilerData {
+    fn get_mut(
+        &mut self,
+        loc: &Option<Location>,
+        chart: &HashMap<u64, String>,
+    ) -> Option<&mut u64> {
+        if let Some(loc) = loc {
+            let filename = chart.get(&loc.file_id)?;
+            self.data
+                .get_mut(filename)?
+                .get_mut(&(loc.line.to_usize(), loc.column.to_usize()))
+        } else {
+            Some(&mut self.unknown_gas)
+        }
+    }
+    fn insert(
+        &mut self,
+        loc: &Option<Location>,
+        gas: u64,
+        chart: &HashMap<u64, String>,
+    ) -> Option<u64> {
+        if let Some(loc) = loc {
+            let filename = match chart.get(&loc.file_id) {
+                Some(name) => name,
+                None => {
+                    let old_unknown_gas = self.unknown_gas;
+                    self.unknown_gas = gas;
+                    return Some(old_unknown_gas);
+                }
+            };
+            let btree = match self.data.get_mut(filename) {
+                Some(tree) => tree,
+                None => {
+                    self.data.insert(filename.clone(), BTreeMap::new());
+                    self.data.get_mut(filename)?
+                }
+            };
+            btree.insert((loc.line.to_usize(), loc.column.to_usize()), gas)
+        } else {
+            let old_unknown_gas = self.unknown_gas;
+            self.unknown_gas = gas;
+            Some(old_unknown_gas)
+        }
+    }
+    pub fn profiler_session(&self) {
+        let file_gas_costs: Vec<(String, u64)> = self
+            .data
+            .iter()
+            .map(|(name, tree)| (name.clone(), tree.values().sum()))
+            .collect();
+        println!("Per file gas cost usage:");
+        for (filename, gas_cost) in &file_gas_costs {
+            println!("{}: {};", filename, gas_cost);
+        }
+        println!("unknown_file: {}", self.unknown_gas);
+        loop {
+            println!("Enter file to examine");
+            let mut command = String::new();
+            if let Ok(_) = stdin().read_line(&mut command) {
+                let trimmed_command = command.trim_end();
+                match trimmed_command {
+                    "exit" => return,
+                    _ => match self.data.get(trimmed_command) {
+                        Some(tree) => loop {
+                            command.clear();
+                            let res = stdin().read_line(&mut command);
+                            if res.is_err() {
+                                println!("Error reading line");
+                                continue;
+                            }
+                            if command.trim_end() == "change" {
+                                break;
+                            }
+                            let start_row = match command.trim_end().parse::<usize>() {
+                                Ok(u) => u,
+                                Err(_) => {
+                                    println!("Invalid line number");
+                                    continue;
+                                }
+                            };
+                            command.clear();
+                            let res = stdin().read_line(&mut command);
+                            if res.is_err() {
+                                println!("Error reading line");
+                                continue;
+                            }
+                            let end_row = match command.trim_end().parse::<usize>() {
+                                Ok(u) => u,
+                                Err(_) => {
+                                    println!("Invalid line number");
+                                    continue;
+                                }
+                            };
+                            if start_row > end_row {
+                                println!("Invalid range");
+                                continue;
+                            }
+                            let area_cost: u64 = tree
+                                .range((max(start_row, 1) - 1, 0)..(end_row, 0))
+                                .map(|(_, val)| *val)
+                                .sum();
+                            println!("ArbGas cost of region: {}", area_cost);
+                        },
+                        None => {
+                            println!("Could not find file");
+                        }
+                    },
+                }
+            } else {
+                println!("Error reading line, aborting");
+                return;
+            }
+        }
+    }
+}
+
 #[derive(Debug)]
 pub struct Machine {
     stack: ValueStack,
@@ -295,6 +421,7 @@ pub struct Machine {
     err_codepoint: CodePt,
     arb_gas_remaining: Uint256,
     pub runtime_env: RuntimeEnvironment,
+    file_name_chart: HashMap<u64, String>,
 }
 
 impl Machine {
@@ -309,11 +436,27 @@ impl Machine {
             err_codepoint: CodePt::Null,
             arb_gas_remaining: Uint256::zero().bitwise_neg(),
             runtime_env: env,
+            file_name_chart: program.file_name_chart,
         }
+    }
+
+    pub fn start_at_zero(&mut self) {
+        self.stack.push_usize(0);
+        self.state = MachineState::Running(CodePt::Internal(0));
     }
 
     pub fn get_stack_trace(&self) -> StackTrace {
         StackTrace::Known(self.aux_stack.all_codepts())
+    }
+
+    pub fn call_state(&mut self, func_addr: CodePt, args: Vec<Value>) -> CodePt {
+        let stop_pc = CodePt::new_internal(self.code.runtime_segment_size());
+        for i in args.into_iter().rev() {
+            self.stack.push(i);
+        }
+        self.stack.push(Value::CodePoint(stop_pc));
+        self.state = MachineState::Running(func_addr);
+        stop_pc
     }
 
     pub fn test_call(
@@ -322,12 +465,7 @@ impl Machine {
         args: Vec<Value>,
         debug: bool,
     ) -> Result<ValueStack, ExecutionError> {
-        let stop_pc = CodePt::new_internal(self.code.runtime_segment_size());
-        for i in args.iter().rev().cloned() {
-            self.stack.push(i);
-        }
-        self.stack.push(Value::CodePoint(stop_pc));
-        self.state = MachineState::Running(func_addr);
+        let stop_pc = self.call_state(func_addr, args);
         let cost = if debug {
             self.debug(Some(stop_pc))
         } else {
@@ -367,7 +505,7 @@ impl Machine {
         }
     }
 
-    fn next_opcode(&self) -> Option<Instruction> {
+    pub fn next_opcode(&self) -> Option<Instruction> {
         if let MachineState::Running(pc) = self.state {
             if let Some(insn) = self.code.get_insn(pc) {
                 Some(insn.clone())
@@ -408,8 +546,8 @@ impl Machine {
                     println!("PC: {:?}", pc);
                 }
                 println!("Stack contents: {}", self.stack);
-                // println!("Aux-stack contents: {}", self.aux_stack);
-                // println!("Register contents: {}", self.register);
+                println!("Aux-stack contents: {}", self.aux_stack);
+                println!("Register contents: {}", self.register);
                 if !self.stack.is_empty() {
                     println!("Stack top: {}", self.stack.top().unwrap());
                 }
@@ -421,7 +559,17 @@ impl Machine {
                     if let Some(location) = code.location {
                         let line = location.line.to_usize();
                         let column = location.column.to_usize();
-                        println!("Origin: (Line: {}, Column: {})", line, column);
+                        if let Some(filename) = self.file_name_chart.get(&location.file_id) {
+                            println!(
+                                "Origin: (Line: {}, Column: {}, File: {})",
+                                line, column, filename
+                            );
+                        } else {
+                            println!(
+                                "Origin: (Line: {}, Column: {}, Unknown File ID: {})",
+                                line, column, location.file_id
+                            );
+                        }
                     }
                 }
                 println!();
@@ -464,8 +612,15 @@ impl Machine {
                     }
                 }
             }
-            if let Err(e) = self.run_one(true) {
-                self.state = MachineState::Error(e);
+            match self.run_one(false) {
+                Ok(false) => {
+                    return gas_cost;
+                }
+                Err(e) => {
+                    self.state = MachineState::Error(e);
+                    return gas_cost;
+                }
+                _ => {}
             }
         }
         gas_cost
@@ -501,7 +656,31 @@ impl Machine {
         gas_used
     }
 
-    fn next_op_gas(&self) -> Option<u64> {
+    pub fn profile_gen(&mut self, args: Vec<Value>) -> ProfilerData {
+        self.call_state(CodePt::new_internal(0), args);
+        let mut loc_map = ProfilerData::default();
+        while let Some(insn) = self.next_opcode() {
+            let loc = insn.location;
+            if let Some(gas_cost) = loc_map.get_mut(&loc, &self.file_name_chart) {
+                *gas_cost += self.next_op_gas().unwrap_or(0);
+            } else {
+                loc_map.insert(&loc, self.next_op_gas().unwrap_or(0), &self.file_name_chart);
+            }
+            match self.run_one(false) {
+                Ok(false) => {
+                    return loc_map;
+                }
+                Err(e) => {
+                    self.state = MachineState::Error(e);
+                    return loc_map;
+                }
+                _ => {}
+            }
+        }
+        loc_map
+    }
+
+    pub(crate) fn next_op_gas(&self) -> Option<u64> {
         if let MachineState::Running(pc) = self.state {
             Some(match self.code.get_insn(pc)?.opcode {
                 Opcode::AVMOpcode(AVMOpcode::Plus) => 3,

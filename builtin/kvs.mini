@@ -14,18 +14,29 @@
 // limitations under the License.
 //
 
-type TreeKvsTriple = struct {
-    reducedKey: uint,
-    key: any,
-    value: any
+// This implements a key-value store.
+// Uses of the map data structure in Mini compile into calls to this package.
+// So please consult with the team before changing APIs or semantics of any of this.
+
+// These functions can also be imported and called directly by Mini programs.
+
+// Normal Mini code won't ever "reach inside" a map to disturb the integrity of this
+// data structure. But note that use of unsafe language features could lead to structural
+// damage to the internals of a map, leading to erroneous results or even a panic.
+
+
+type TreeKvsTriple = struct {  // This struct stores one item in the KVS.
+    reducedKey: uint,   // hash of the item's key, divided by 8 for each level we descend in the tree
+    key: any,           // item's key
+    value: any          // item's value
 }
 
-type TreeKvsCell = struct {
+type TreeKvsCell = struct {   // The KVS is represented as a tree of these.
     triple: option<TreeKvsTriple>,
-    children: [8]any   // actually [8]TreeKvs but compiler doesn't suppport recursive types
+    children: [8]any    // actually [8]TreeKvs but compiler doesn't support recursive types
 }
 
-type TreeKvs = option<TreeKvsCell>
+type TreeKvs = option<TreeKvsCell>   // will be None if tree is empty
 
 
 public func builtin_kvsNew() -> TreeKvs {
@@ -69,30 +80,52 @@ func builtin_kvsSet2(
     key: any,
     value: any
 ) -> option<TreeKvs> {
-    // Returns Some if the structure changed, None if it didn't.
+    // Update a KVS by setting a key/value pair.
+    // This returns Some(updatedKvs) if the structure changed, None if it didn't.
     if let Some(cell) = kvs {
         if let Some(triple) = cell.triple {
             if (triple.reducedKey == reducedKey) {
+                // Found a cell containing the same key. Update the value.
                 return Some(Some(
                     cell with {
                         triple: Some(triple with { value: value })
                     }
                 ));
-            }
-            let slot = reducedKey % 8;
-            return Some(Some(
-                cell with {
-                    children: cell.children with {
-                        [slot] = builtin_kvsSet2(
-                            unsafecast<TreeKvs>(cell.children[slot]),
-                            reducedKey / 8,
-                            key,
-                            value
-                        )?
+            } else {
+                // Didn't find a match here, descend on level in the tree, recursively.
+                let slot = reducedKey % 8;
+                return Some(Some(
+                    cell with {
+                        children: cell.children with {
+                            [slot] = builtin_kvsSet2(
+                                unsafecast<TreeKvs>(cell.children[slot]),
+                                reducedKey / 8,
+                                key,
+                                value
+                            )?
+                        }
                     }
-                }
-            ));
+                ));
+            }
         } else {
+            // This cell doesn't have a triple, so insert our new item here.
+            // But there might already be an item with the same key lower in the tree,
+            //     so we have to make sure to delete that one first.
+
+            // If there is an item with the same key lower in the tree, delete it.
+            let slot = reducedKey % 8;
+            if let Some(newChild) = builtin_kvsDelete2(
+                unsafecast<TreeKvs>(cell.children[slot]),
+                reducedKey / 8
+            ) {
+                cell = cell with {
+                    children: cell.children with {
+                        [slot] = newChild
+                    }
+                };
+            }
+
+            // Now add the new item
             return Some(Some(
                 cell with {
                     triple: Some(struct {
@@ -104,6 +137,7 @@ func builtin_kvsSet2(
             ));
         }
     } else {
+        // There was nothing here, so allocate an empty cell and add this item to it.
         return Some(Some(
             struct {
                 triple: Some(struct {
@@ -126,12 +160,21 @@ public func builtin_kvsDelete(kvs: TreeKvs, key: any) -> TreeKvs {
 }
 
 func builtin_kvsDelete2(kvs: TreeKvs, reducedKey: uint) -> option<TreeKvs> {
+    // Delete a key.
+    // Returns Some(updatedKvs) is anything changed, None otherwise.
     let cell = kvs?;
     if let Some(triple) = cell.triple {
         if (triple.reducedKey == reducedKey) {
-            return Some(Some(cell with { triple: None<TreeKvsTriple> }));
+            // Found a matching item. Delete it and return.
+            return Some(
+                Some(
+                    cell with { triple: None<TreeKvsTriple> }
+                )
+            );
         }
     }
+
+    // Didn't find a match here, descend the tree recursively.
     let slot = reducedKey % 8;
     return Some(Some(
         cell with {
@@ -148,8 +191,11 @@ func builtin_kvsDelete2(kvs: TreeKvs, reducedKey: uint) -> option<TreeKvs> {
 public func builtin_kvsForall(
     kvs: TreeKvs,
     callback: func(any, any, any) -> any,
-    state: any
+    state: any  // initial value for state
 ) -> any {
+    // Visit every item in the KVS, calling callback on each one.
+    // newState = callback(thisItem.key, thisItem.value, oldState)
+    // Return the final state after visiting all items.
     if let Some(cell) = kvs {
         if let Some(triple) = cell.triple {
             state = callback(triple.key, triple.value, state);

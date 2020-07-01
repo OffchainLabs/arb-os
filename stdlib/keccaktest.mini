@@ -27,11 +27,13 @@ import func bytearray_set64(ba: ByteArray, idx: uint, val: uint) -> option<ByteA
 import func bytearray_get256(ba: ByteArray, offset: uint) -> option<uint>;
 import func bytearray_set256(ba: ByteArray, offset: uint, value: uint) -> option<ByteArray>;
 
-import func keccak256(ba: ByteArray, offset: uint, nbytes: uint) -> bytes32;
+import impure func initKeccakConstants();
+import func keccak256(ba: ByteArray, offset: uint, nbytes: uint) -> option<bytes32>;
 import impure func keccak_permutation(state: [25]uint) -> [25]uint;
 
 
-func main() {
+impure func main() {
+    initKeccakConstants();
     if let Some(x) = tests() {
 	    asm(x,) { log };
 	} else {
@@ -39,24 +41,37 @@ func main() {
 	}
 }
 
-func tests() -> option<uint> {
-    let acc = newfixedarray(25, 0)
-        with { [0] = 1 }
-        with { [16] = 0x8000000000000000 };
-    let accOut = keccak_permutation(acc);
-    return Some(accOut[0]);
+func tests() -> option<bytes32> {
+    //let acc = newfixedarray(25, 0)
+    //    with { [0] = 1 }
+    //    with { [16] = 0x8000000000000000 };
+    //let accOut = keccak_permutation(acc);
+    //return Some(accOut[0]);
 
 	let ba = bytearray_new(0, true);
 	//ba = bytearray_setByte(ba, 0, 0xcc)?;
-	return Some(uint(keccak256(ba, 0, 1)));
-    //if (uint(keccak256(ba, 0, 1)) != 0xc5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470) {
-	//	return 1;
-	//}
+	//return Some(uint(keccak256(ba, 0, 1)));
+	let kecEmpty = keccak256(ba, 0, 0)?;
+    if (kecEmpty != bytes32(0xc5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470)) {
+		return Some(bytes32(1));
+	}
 
-	return Some(0);
-	
-	//^ for the one character: 0x044852b2a670ade5407e78fb2863c51de9fcb96542a07186fe3aeda6bb8a116d;
-	// for empty string: c5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470
+    ba = bytearray_new(0, true);
+    ba = bytearray_setByte(ba, 0, 0xcc)?;
+    let kecCC = keccak256(ba, 0, 1)?;
+    if (kecCC != bytes32(0xeead6dbfc7340a56caedc044696a168870549a6a7f6f56961e84a54bd9970b8a)) {
+        return Some(bytes32(2));
+    }
+
+    ba = bytearray_new(0, true);
+    ba = bytearray_setByte(ba, 0, 0xcc)?;
+    ba = bytearray_setByte(ba, 1, 0xaa)?;
+    let kecCCAA = keccak256(ba, 0, 2)?;
+    if (kecCCAA != bytes32(0x33f234f4a499894af4036ace8c63b93a0bb7685472d79f3a9808cf95ed7047b4)) {
+        return Some(bytes32(3));
+    }
+
+	return Some(bytes32(0));
 }
 
 func setupFromUnmarshal() -> ByteArray {

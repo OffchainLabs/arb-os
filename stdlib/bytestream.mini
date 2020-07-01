@@ -48,6 +48,27 @@ public func bytestream_bytesRemaining(bs: ByteStream) -> uint {
     return bs.capacity - bs.currentOffset;
 }
 
+public func bytestream_skipBytes(bs: ByteStream, nbytes: uint) -> option<ByteStream> {
+    let newOffset = bs.currentOffset + nbytes;
+    if (newOffset <= bs.capacity) {
+        return Some(bs with { currentOffset: newOffset });
+    } else {
+        return None;
+    }
+}
+
+public func bytestream_truncate(bs: ByteStream, size: uint) -> ByteStream {
+    if (size < bs.capacity) {
+        if (size < bs.currentOffset) {
+            return bs with { capacity: bs.currentOffset };
+        } else {
+            return bs with { capacity: size };
+        }
+    } else {
+        return bs;
+    }
+}
+
 public func bytestream_getByte(bs: ByteStream) -> option<(ByteStream, uint)> {
     if (bs.currentOffset >= bs.capacity) {
         return None;

@@ -20,8 +20,10 @@ use compile::{compile_from_file, CompileError};
 use evm::{compile_evm_file, make_evm_jumptable_mini};
 use link::{link, postlink_compile};
 use mavm::Value;
-use run::{run_from_file, RuntimeEnvironment};
+use run::{profile_gen_from_file, run_from_file, RuntimeEnvironment};
+use std::collections::{hash_map::DefaultHasher, HashMap};
 use std::fs::File;
+use std::hash::Hasher;
 use std::io;
 use std::path::Path;
 
@@ -143,7 +145,32 @@ fn main() -> Result<(), CompileError> {
                         .value_name("output"),
                 ),
         )
-        .subcommand(SubCommand::with_name("evmdebug").about("debug the EVM functionality"))
+        .subcommand(
+            SubCommand::with_name("evmdebug")
+                .about("debug the EVM functionality")
+                .arg(
+                    Arg::with_name("debug")
+                        .help("sets debug mode")
+                        .short("d")
+                        .takes_value(false),
+                )
+                .arg(
+                    Arg::with_name("profiler")
+                        .help("sets profiler mode")
+                        .short("p")
+                        .takes_value(false),
+                ),
+        )
+        .subcommand(
+            SubCommand::with_name("profiler")
+                .about("generates info on where arb gas is being used")
+                .arg(
+                    Arg::with_name("INPUT")
+                        .help("sets the file name to run")
+                        .required(true)
+                        .index(1),
+                ),
+        )
         .get_matches();
 
     if let Some(matches) = matches.subcommand_matches("compile") {
@@ -151,28 +178,39 @@ fn main() -> Result<(), CompileError> {
         let typecheck = matches.is_present("typecheck");
         let mut output = get_output(matches.value_of("output")).unwrap();
         let filenames: Vec<_> = matches.values_of("INPUT").unwrap().collect();
+        let mut file_name_chart = HashMap::new();
         if matches.is_present("compileonly") {
             let filename = filenames[0];
             let path = Path::new(filename);
-            match compile_from_file(path, debug_mode) {
-                Ok(compiled_program) => {
+            let mut file_hasher = DefaultHasher::new();
+            file_hasher.write(filename.as_bytes());
+            let file_id = file_hasher.finish();
+            file_name_chart.insert(file_id, filename.to_string());
+            match compile_from_file(path, file_id, debug_mode) {
+                Ok(mut compiled_program) => {
+                    compiled_program.file_name_chart.extend(file_name_chart);
                     compiled_program.to_output(&mut *output, matches.value_of("format"));
                 }
                 Err(e) => {
-                    println!("Compilation error: {:?}", e);
+                    println!("Compilation error: {:?}\nIn file: {}", e, filename);
                     return Err(e);
                 }
             }
         } else {
             let mut compiled_progs = Vec::new();
-            for filename in filenames {
+            for filename in &filenames {
                 let path = Path::new(filename);
-                match compile_from_file(path, debug_mode) {
+                let mut file_hasher = DefaultHasher::new();
+                file_hasher.write(filename.as_bytes());
+                let file_id = file_hasher.finish();
+                file_name_chart.insert(file_id, filename.to_string());
+                match compile_from_file(path, file_id, debug_mode) {
                     Ok(compiled_program) => {
+                        file_name_chart.extend(compiled_program.file_name_chart.clone());
                         compiled_progs.push(compiled_program);
                     }
                     Err(e) => {
-                        println!("Compilation error: {}", e);
+                        println!("Compilation error: {}\nIn file: {}", e, filename);
                         return Err(e);
                     }
                 }
@@ -181,7 +219,13 @@ fn main() -> Result<(), CompileError> {
             let is_module = matches.is_present("module");
             match link(&compiled_progs, is_module, Some(Value::none()), typecheck) {
                 Ok(linked_prog) => {
-                    match postlink_compile(linked_prog, is_module, Vec::new(), debug_mode) {
+                    match postlink_compile(
+                        linked_prog,
+                        is_module,
+                        Vec::new(),
+                        file_name_chart,
+                        debug_mode,
+                    ) {
                         Ok(completed_program) => {
                             completed_program.to_output(&mut *output, matches.value_of("format"));
                         }
@@ -236,15 +280,22 @@ fn main() -> Result<(), CompileError> {
         let filepath = Path::new(if let Some(pathname) = matches.value_of("output") {
             pathname
         } else {
-            "arbruntime/evmJumpTable.mini"
+            "arb_os/evmJumpTable.mini"
         });
         if let Err(e) = make_evm_jumptable_mini(filepath) {
             panic!("I/O error: {}", e);
         }
     }
 
-    if let Some(_) = matches.subcommand_matches("evmdebug") {
-        evm::evm_xcontract_call_and_verify(false);
+    if let Some(matches) = matches.subcommand_matches("evmdebug") {
+        let debug = matches.is_present("debug");
+        let profile = matches.is_present("profiler");
+        evm::evm_xcontract_call_and_verify(debug, profile);
+    }
+
+    if let Some(matches) = matches.subcommand_matches("profiler") {
+        let path = matches.value_of("INPUT").unwrap();
+        profile_gen_from_file(path.as_ref(), Vec::new(), RuntimeEnvironment::new());
     }
     Ok(())
 }

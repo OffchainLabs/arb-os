@@ -16,11 +16,12 @@
 
 use crate::link::LinkedProgram;
 use crate::mavm::{CodePt, Value};
-use emulator::{ExecutionError, Machine, StackTrace};
+use emulator::{ExecutionError, StackTrace};
 use std::fs::File;
 use std::io::Read;
 use std::path::Path;
 
+pub use emulator::Machine;
 pub use runtime_env::{bytes_from_bytestack, bytestack_from_bytes, RuntimeEnvironment};
 
 mod emulator;
@@ -76,10 +77,17 @@ pub fn run(
     }
 }
 
+pub fn profile_gen_from_file(path: &Path, args: Vec<Value>, env: RuntimeEnvironment) {
+    let mut machine = load_from_file(path, env);
+    let profile = machine.profile_gen(args);
+    profile.profiler_session();
+}
+
 /*
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::collections::HashMap;
 
     fn run_with_msgs(
         prog: LinkedProgram,
@@ -116,6 +124,7 @@ mod tests {
                 static_val: Value::none(),
                 imported_funcs: vec![],
                 exported_funcs: vec![],
+                file_name_chart: HashMap::new(),
             },
             vec![val.clone()],
             false,

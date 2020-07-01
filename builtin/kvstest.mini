@@ -95,6 +95,17 @@ func tests() -> uint {
 		return 9;
 	}
 
+    // regression test for bug #73
+    s = builtin_kvsNew();
+    s = builtin_kvsSet(s, 42, 43);
+    s = builtin_kvsSet(s, 55, 56);
+    s = builtin_kvsDelete(s, 42);
+    s = builtin_kvsSet(s, 55, 100);
+    s = builtin_kvsDelete(s, 55);
+    if (builtin_kvsGet(s, 55) != None<any>) {
+        return 10;
+    }
+
 	return 0;
 }
 

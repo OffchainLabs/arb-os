@@ -55,8 +55,19 @@ import impure func initEvmCallStack(
     callvalue: uint,
     gas: uint
 );
+import impure func initEvmCallStackForConstructor(
+    ethMessage: MessageFromL1,
+    addr: address,
+    caller: address,
+    code: ByteArray,
+    evmJumpTable: map<uint, func()>,
+    startPoint: func(),
+    calldata: ByteArray,
+    gas: uint
+);
 import func evmCallStack_runningCodeFromAccount() -> option<Account>;
 
+import func bytearray_new(capacity: uint, autoExpand: bool) -> ByteArray;
 import func bytearray_size(ba: ByteArray) -> uint;
 import func bytearray_unmarshalBytes(mb: MarshalledBytes) -> ByteArray;
 import func bytearray_marshalFull(ba: ByteArray) -> MarshalledBytes;
@@ -66,33 +77,31 @@ import func bytestream_getByte(bs: ByteStream) -> option<(ByteStream, uint)>;
 import func bytestream_getUint(bs: ByteStream) -> option<(ByteStream, uint)>;
 import func bytestream_getRemainingBytes(bs: ByteStream) -> ByteArray;
 
-import func makeInitStructures(v: any) -> (map<uint, func()>, map<uint, uint>);
 import func translateEvmCodeSegment(bs: ByteStream) -> option<(func(), map<uint, func()>)>;
 
-import func cleanUpAndJumpToRunLoop();
 
-
+// This is the structure that the Arbitrum protocol gives us, for each incoming message.
+// It is declared identically in inbox.mini
 type MessageFromL1 = struct {
-    blockHash: bytes32,
-    timestamp: uint,
-    blockNumber: uint,
-    sender: address,
-    msgData: MarshalledBytes
+    blockHash: bytes32,       // hash of the L1 block where this message was recorded
+    timestamp: uint,          // timestamp of the L1 block
+    blockNumber: uint,        // block number of the L1 block
+    sender: address,          // address of the sender
+    msgData: MarshalledBytes  // contents of the message, as a marshalled bytearray
 }
 
-public func handleMessageFromL1(msg: MessageFromL1) -> option<()> {
+public impure func handleMessageFromL1(msg: MessageFromL1) -> option<()> {
+    // Parse an incoming message and do appropriate computations
+
     let inStream = bytestream_new(bytearray_unmarshalBytes(msg.msgData));
 
-    let (bs, msgType) = bytestream_getByte(inStream)?;
+    let (bs, msgType) = bytestream_getByte(inStream)?;  // get message type
     inStream = bs;
-
     if (msgType == 0) {
         // txcall message
-
         let (bs, sequenceNum) = bytestream_getUint(inStream)?;
         inStream = bs;
         verifyAndIncrSequenceNum(msg.sender, sequenceNum)?;
-
         return handleValidTxMessage(inStream, msg, true);
     } elseif (msgType == 1) {
         // ethtransfer message
@@ -119,16 +128,36 @@ public func handleMessageFromL1(msg: MessageFromL1) -> option<()> {
         // ERC721 token transfer message
         return None; // NOT YET IMPLEMENTED
     } elseif (msgType == 4) {
-        // contract txcall message (just like normal txcall, with doesn't have sequence number)
+        // contract txcall message (just like a normal txcall, but this doesn't have a sequence number)
         return handleValidTxMessage(inStream, msg, true);
     } elseif (msgType == 5) {
         // (non-mutating) call message
         return handleValidTxMessage(inStream, msg, false);
     } elseif (msgType == 6) {
-        // this message type is currently unused
+        // EVM constructor/code upload message
+        let (bs, sequenceNum) = bytestream_getUint(inStream)?;
+        inStream = bs;
+        verifyAndIncrSequenceNum(msg.sender, sequenceNum)?;
+
+        let codeBytes = bytestream_getRemainingBytes(bs);
+        let (codept, evmJumpTable) = translateEvmCodeSegment(bytestream_new(codeBytes))?;
+
+        // Generate an address for the new contract.  //TODO: Switch this to use the same method as Ethereum.
+        let newAddress = address(hash(bytes32(msg.sender), bytes32(sequenceNum)));
+
+        initEvmCallStackForConstructor(
+            msg,
+            newAddress,
+            msg.sender,
+            codeBytes,
+            evmJumpTable,
+            codept,
+            bytearray_new(0, true),   // no arguments to the call -- they're packed into the code
+            1000000000000,            //TODO: limit gas used by constructor
+        );  // should never return
         return None;
     } elseif (msgType == 7) {
-        // EVM code load message
+        // EVM code load message -- this is deprecated
         let (bs, contractAddressAsUint) = bytestream_getUint(inStream)?;
         inStream = bs;
 
@@ -155,6 +184,9 @@ public func handleMessageFromL1(msg: MessageFromL1) -> option<()> {
 }
 
 impure func verifyAndIncrSequenceNum(addr: address, seqNum: uint) -> option<()> {
+    // Verify the sequence number on a message.
+    // If it matches, increment the next expected seq num, and return Some(()).
+    // Else, change nothing and return None.
     let globalAS = getGlobalAccountStore();
     setGlobalAccountStore(
         accountStore_set(
@@ -170,6 +202,8 @@ impure func verifyAndIncrSequenceNum(addr: address, seqNum: uint) -> option<()> 
 }
 
 func parseStorageMap(bs: ByteStream) -> option<(map<uint, uint>, ByteStream)> {
+    // Parse the structure used to convey initial storage contents, and initialize a map.
+    // This is used only from a deprecated message type.
     let storageMap = newmap<uint, uint>;
     loop {
         let (ubs, more) = bytestream_getByte(bs)?;
@@ -189,6 +223,7 @@ impure func handleValidTxMessage(inStream: ByteStream, fullMsg: MessageFromL1, i
     let (bs, calleeAddressAsUint) = bytestream_getUint(inStream)?;
     inStream = bs;
 
+    // Get value of Eth payment that accompanies the message.
     let value = 0;
     if (isMutating) {
         let (bs, val) = bytestream_getUint(inStream)?;
@@ -196,9 +231,11 @@ impure func handleValidTxMessage(inStream: ByteStream, fullMsg: MessageFromL1, i
         value = val;
     }
 
+    // Get max ArbGas limit requested by user
     let (bs, maxGas) = bytestream_getUint(inStream)?;
     inStream = bs;
 
+    // Get gas price bid submitted by user
     let gasPriceBid = 0;
     if (isMutating) {
         let (bs, gpb) = bytestream_getUint(inStream)?;
@@ -216,7 +253,7 @@ impure func handleValidTxMessage(inStream: ByteStream, fullMsg: MessageFromL1, i
         fullMsg,
         address(calleeAddressAsUint),
         fullMsg.sender,
-        bytestream_getRemainingBytes(inStream),
+        bytestream_getRemainingBytes(inStream),  // remaining bytes of message passed to contract as calldata
         value,
         maxGas,
     );  // should never return

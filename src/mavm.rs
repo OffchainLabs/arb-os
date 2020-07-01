@@ -582,6 +582,8 @@ impl MiniProperties for Opcode {
             | Opcode::ErrCodePoint
             | Opcode::AVMOpcode(AVMOpcode::ErrSet)
             | Opcode::AVMOpcode(AVMOpcode::ErrPush)
+            | Opcode::AVMOpcode(AVMOpcode::SetGas)
+            | Opcode::AVMOpcode(AVMOpcode::GetGas)
             | Opcode::AVMOpcode(AVMOpcode::Jump)
             | Opcode::AVMOpcode(AVMOpcode::Cjump) => false,
             _ => true,
