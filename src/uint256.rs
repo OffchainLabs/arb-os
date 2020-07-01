@@ -24,7 +24,6 @@ use num_traits::CheckedSub;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::cmp::Ordering;
 use std::fmt;
-use std::io::Write;
 use std::ops::{Add, BitAnd, BitOr, BitXor, Div, Mul, Neg, Rem, Sub};
 
 #[derive(Debug, Clone, PartialEq, Eq, Ord, Hash)]

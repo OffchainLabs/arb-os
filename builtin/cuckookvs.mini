@@ -14,6 +14,11 @@
 // limitations under the License.
 //
 
+
+// This is a key-value store, implemented using cuckoo hashing.
+// It is currently not expected to get much use.
+
+
 import func builtin_arrayNew(sz: uint, base_val: any) -> []any;
 import func builtin_arraySwap(a: []any, b: uint, c: any) -> ([]any, any);
 
