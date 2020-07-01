@@ -82,7 +82,7 @@ $(BUILTINDIR)/cuckookvs.mao: $(BUILTINDIR)/cuckookvs.mini
 	cargo run compile $(BUILTINDIR)/cuckookvs.mini -c -o $(BUILTINDIR)/cuckookvs.mao
 
 RUNTIMEDIR = arbruntime
-RUNTIMEMAOS = $(RUNTIMEDIR)/main.mao $(RUNTIMEDIR)/accounts.mao $(RUNTIMEDIR)/messages.mao $(RUNTIMEDIR)/inbox.mao $(RUNTIMEDIR)/evmCallStack.mao $(RUNTIMEDIR)/evmOps.mao $(RUNTIMEDIR)/codeSegment.mao $(RUNTIMEDIR)/evmlogs.mao $(RUNTIMEDIR)/errorHandler.mao $(RUNTIMEDIR)/gasAccounting.mao
+RUNTIMEMAOS = $(RUNTIMEDIR)/main.mao $(RUNTIMEDIR)/accounts.mao $(RUNTIMEDIR)/messages.mao $(RUNTIMEDIR)/inbox.mao $(RUNTIMEDIR)/evmCallStack.mao $(RUNTIMEDIR)/evmOps.mao $(RUNTIMEDIR)/codeSegment.mao $(RUNTIMEDIR)/evmlogs.mao $(RUNTIMEDIR)/errorHandler.mao $(RUNTIMEDIR)/gasAccounting.mao $(RUNTIMEDIR)/contractTemplates.mao
 RUNTIME = $(RUNTIMEDIR)/runtime.mexe
 
 runtime: $(RUNTIME)
@@ -117,6 +117,12 @@ $(RUNTIMEDIR)/errorHandler.mao: $(RUNTIMEDIR)/errorHandler.mini
 $(RUNTIMEDIR)/gasAccounting.mao: $(RUNTIMEDIR)/gasAccounting.mini
 	cargo run compile $(RUNTIMEDIR)/gasAccounting.mini -c -o $(RUNTIMEDIR)/gasAccounting.mao
 
+$(RUNTIMEDIR)/contractTemplates.mao: $(RUNTIMEDIR)/contractTemplates.mini
+	cargo run compile $(RUNTIMEDIR)/contractTemplates.mini -c -o $(RUNTIMEDIR)/contractTemplates.mao
+
+$(RUNTIMEDIR)/contractTemplates.mini: src/contracttemplates.rs
+	cargo run maketemplates
+
 $(RUNTIME): $(RUNTIMEMAOS) $(STDLIB) $(BUILTINMAOS)
 	cargo run compile $(RUNTIMEMAOS) $(STDLIB) -o $(RUNTIME)
 
@@ -130,4 +136,4 @@ compiler:
 	cargo build
 
 clean: 
-	rm -f $(BUILTINMAOS) $(TESTEXES) $(STDLIBMAOS) $(RUNTIMEMAOS) $(RUNTIMEDIR)/*.mexe
+	rm -f $(BUILTINMAOS) $(TESTEXES) $(STDLIBMAOS) $(RUNTIMEMAOS) $(RUNTIMEDIR)/*.mexe $(RUNTIMEDIR)/contractTemplates.mini

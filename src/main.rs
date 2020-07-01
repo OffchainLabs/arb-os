@@ -28,8 +28,10 @@ use std::io;
 use std::path::Path;
 
 use clap::{App, Arg, SubCommand};
+use crate::contracttemplates::generate_contract_template_file_or_die;
 
 mod compile;
+mod contracttemplates;
 mod evm;
 mod link;
 mod mavm;
@@ -171,6 +173,10 @@ fn main() -> Result<(), CompileError> {
                         .index(1),
                 ),
         )
+        .subcommand(
+            SubCommand::with_name("maketemplates")
+                .about("generates code for contract templates"),
+        )
         .get_matches();
 
     if let Some(matches) = matches.subcommand_matches("compile") {
@@ -297,6 +303,12 @@ fn main() -> Result<(), CompileError> {
         let path = matches.value_of("INPUT").unwrap();
         profile_gen_from_file(path.as_ref(), Vec::new(), RuntimeEnvironment::new());
     }
+
+    if let Some(_) = matches.subcommand_matches("maketemplates") {
+        let path = Path::new("arbruntime/contractTemplates.mini");
+        generate_contract_template_file_or_die(path);
+    }
+
     Ok(())
 }
 
