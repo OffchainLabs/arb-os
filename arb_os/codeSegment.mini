@@ -19,9 +19,11 @@ import type ByteStream;
 import func bytestream_atEof(bs: ByteStream) -> bool;
 import func bytestream_bytesReadSoFar(bs: ByteStream) -> uint;
 import func bytestream_bytesRemaining(bs: ByteStream) -> uint;
+import func bytestream_truncate(bs: ByteStream, nbytes: uint) -> ByteStream;
 import func bytestream_getByte(bs: ByteStream) -> option<(ByteStream, uint)>;
 import func bytestream_get64(bs: ByteStream) -> option<(ByteStream, uint)>;
 import func bytestream_getUint(bs: ByteStream) -> option<(ByteStream, uint)>;
+import func bytestream_skipBytes(bs: ByteStream, nbytes: uint) -> option<ByteStream>;
 
 import func evmOp_address();
 import func evmOp_balance();
@@ -64,99 +66,52 @@ import func evmOp_staticcall();
 import func evmOp_stop();
 import func evmOp_timestamp();
 import func evmOp_txexecgas();
+import func evmOp_create();
 
+
+// An AVM CodePoint, that is, a place that AVM code can jump to, is represented as a func()
 type AvmCodePoint = func()
-type Segment = struct {
-    size: uint,
-    capacity: uint,
-    currentCodePt: AvmCodePoint,
-    codePtMap: map<uint, AvmCodePoint>,
-}
-
-impure func segment_new(capacity: uint) -> Segment {
-    return struct {
-        size: 1,
-        capacity: capacity+1,
-        currentCodePt: asm() AvmCodePoint { errcodept },
-        codePtMap: newmap<uint, AvmCodePoint>,
-    };
-}
-
-impure func segment_addInsn(seg: Segment, opcode: uint, hasImm: bool, imm: any) -> Segment {
-    let sizeIn = seg.size;
-    let curCodePt = seg.currentCodePt;
-    if (hasImm) {
-        curCodePt = asm(opcode, imm, seg.currentCodePt) AvmCodePoint { pushinsnimm };
-    } else {
-        curCodePt = asm(opcode, seg.currentCodePt) AvmCodePoint { pushinsn };
-    }
-    return seg with { currentCodePt: curCodePt }
-               with { size: sizeIn+1 }
-               with { codePtMap: seg.codePtMap with { [sizeIn] = curCodePt } };
-}
 
 impure func pushInstruction(opcode: uint, restOfCode: AvmCodePoint) -> AvmCodePoint {
+    // Push an instruction onto the beginning of a code segment, and return the resulting CodePoint.
     return asm(opcode, restOfCode) AvmCodePoint { pushinsn };
 }
 
 impure func pushInstructionImm(opcode: uint, val: any, restOfCode: AvmCodePoint) -> AvmCodePoint {
+    // Push an instruction (with immediate value) onto the beginning of a code segment, and return the resulting CodePoint.
     return asm(opcode, val, restOfCode) AvmCodePoint { pushinsnimm };
 }
 
 impure func pushValue(val: any, restOfCode: AvmCodePoint) -> AvmCodePoint {
+    // Push a noop (with immediate value) onto the beginning of a code segment, and return the resulting CodePoint.
     return asm(0x3b, val, restOfCode) AvmCodePoint { pushinsnimm };
-}
-
-func segment_close(seg: Segment) -> Segment {
-    // we might eventually have something to do here
-    return seg;
-}
-
-type EvmPcStruct = struct {
-    rest: any,   // actually an EvmPcStruct, but language doesn't allow recursive types
-    evmPc: uint,
-    codePt: func(),
-}
-
-type InitStorageStruct = struct {
-    rest: any,   // actually an InitStorageStruct, but language doesn't allow recursive types
-    offset: uint,
-    val: uint,
-}
-
-public func makeInitStructures(v: any) -> (map<uint, func()>, map<uint, uint>) {
-    let (ve, vs,) = unsafecast<(EvmPcStruct, InitStorageStruct)>(v);
-
-    let jumpTable = newmap<uint, func()>;
-    while(null != unsafecast<any>(ve)) {
-        jumpTable = jumpTable with { [ve.evmPc] = ve.codePt };
-        ve = unsafecast<EvmPcStruct>(ve.rest);
-    }
-
-    let storageMap = newmap<uint, uint>;
-    while(null != unsafecast<any>(vs)) {
-        storageMap = storageMap with { [vs.offset] = vs.val };
-        vs = unsafecast<InitStorageStruct>(vs.rest);
-    }
-
-    return (jumpTable, storageMap,);
 }
 
 public impure func translateEvmCodeSegment(
     bs: ByteStream
 ) -> option<(AvmCodePoint, map<uint, AvmCodePoint>)> {
+    // Given the EVM bytecode for a contract, generate the equivalent AVM code.
+    // If this succeeds, it will return a pair:
+    //       * CodePoint to jump to, to start executing the contract
+    //       * mapping from valid EVM jump destinations to corresponding AVM CodePoints
+    // This operates recursively, building the compiled code from the end back toward the beginning.
+
     if (bytestream_atEof(bs)) {
+        // Base case of the recursion.
+        // Return a minimal code segment that just contains a panic instruction.
+        // The panic prevents execution from "falling off the end" of the resulting segment.
         return Some((
             asm() AvmCodePoint { errcodept }, 
             newmap<uint, AvmCodePoint>
         ));
     }
 
+    // Read in the first opcode in the code.
     let (ubs, opcode) = bytestream_getByte(bs)?;
     bs = ubs;
 
     if ((opcode >= 0x60) && (opcode <= 0x7f)) {
-        // it's a pushN instruction; unmarshal value and push it
+        // it's a pushN instruction; unmarshal the immediate value and push it
         let bytesRemaining = opcode - 0x5f;
         let imm = 0;
         while (bytesRemaining > 0) {
@@ -166,13 +121,21 @@ public impure func translateEvmCodeSegment(
             bytesRemaining = bytesRemaining-1;
         }
         let numBytesRead = bytestream_bytesReadSoFar(bs);
+
+        // Recursively generate code for everything after this instruction.
         let (restOfCode, evmJumpTable) = translateEvmCodeSegment(bs)?;
+
             // for debugging, uncomment this to get a debugprint before each EVM instruction
             // restOfCode = pushInstructionImm(0x90, (42, numBytesRead, opcode), restOfCode);
+
+        // Now prepend the current operation onto the front of the generated code.
         return Some((pushValue(imm, restOfCode), evmJumpTable));
     } 
 
+    // The rest of the instructions are all a single byte. So we'll generate code for the rest of
+    // the program, then prepend whatever is needed to implement the current opcode.
     let (restOfCode, evmJumpTable) = translateEvmCodeSegment(bs)?;
+
     let numBytesRead = bytestream_bytesReadSoFar(bs);
         // for debugging, uncomment this to get a debugprint before each EVM instruction
         // restOfCode = pushInstructionImm(0x90, (42, numBytesRead, opcode), restOfCode);
@@ -205,6 +168,7 @@ public impure func translateEvmCodeSegment(
                         return Some((pushInstruction(opcode, restOfCode), evmJumpTable));
                     } elseif (opcode == 0x1b) { // SHL
                         return Some((
+
                             pushInstructionImm(
                                 0x0a, 2,   // [2] exp
                                 pushInstruction(
@@ -492,6 +456,9 @@ impure func pushEvmInsnDenomCheck(
     restOfCode: AvmCodePoint,
     evmJumpTable: map<uint, AvmCodePoint>
 ) -> option<(AvmCodePoint, map<uint, AvmCodePoint>)> {
+    // Deal with the EVM instructions that can "divide by zero" or the equivalent.
+    // EVM defines these to return zero if the denominator is zero.
+    // So we need to generate a little conditional to handle the special case.
     let doTheOp = pushInstruction(opcode, restOfCode);
     return Some((
         pushInstruction(
@@ -513,6 +480,9 @@ impure func pushDupn(
     n: uint, 
     restOfCode: AvmCodePoint,
 ) -> AvmCodePoint {
+    // Generate code for a dupN pseudo-operation.
+    // AVM supports this only for N <= 2, whereas EVM can ask for larger ones.
+    // Note that N here uses the AVM semantics, which is off-by-one from the EVM semantics.
     if (n == 2) {
         return pushInstruction(0x42, restOfCode);  //dup2
     } else {
@@ -536,6 +506,8 @@ impure func pushSwapn(
     n: uint, 
     restOfCode: AvmCodePoint,
 ) -> AvmCodePoint {
+    // Generate code for a swapN pseudo-operation.
+    // AVM supports this only for N <= 2, whereas EVM can ask for larger ones.
     if (n == 2) {
         return pushInstruction(0x44, restOfCode);  // swap2
     } else {
@@ -563,6 +535,10 @@ impure func pushEvmInsnCall(
     restOfCode: AvmCodePoint,
     evmJumpTable: map<uint, AvmCodePoint>
 ) -> option<(AvmCodePoint, map<uint, AvmCodePoint>)> {
+    // Some EVM instructions compile to a procedure call to some Mini code.
+    // Generate the appropriate procedure call.
+    // Note that the EVM code will already have put the args to the call on the stack,
+    //     and the Mini code will leave return values on the stack.
     return Some((
         pushValue(
             restOfCode,  // push return address
@@ -574,4 +550,16 @@ impure func pushEvmInsnCall(
         ),
         evmJumpTable,
     ));
+}
+
+func isKnownOpcode(opcode: uint) -> bool {  // return true iff opcode is a known EVM opcode
+    return ( (opcode >= 0x00) && (opcode <= 0x0b) )
+        || ( (opcode >= 0x10) && (opcode <= 0x1d) )
+        || (opcode == 0x20)
+        || ( (opcode >= 0x30) && (opcode <= 0x45) )
+        || ( (opcode >= 0x50) && (opcode <= 0x5b) )
+        || ( (opcode >= 0x60) && (opcode <= 0xa4) )
+        || ( (opcode >= 0xf0) && (opcode <= 0xf5) )
+        || (opcode == 0xfa)
+        || ( (opcode == 0xfd) && (opcode <= 0xff) );
 }
