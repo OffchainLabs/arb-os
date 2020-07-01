@@ -15,19 +15,19 @@
 //
 
 import func array_resize(a: []uint, newSize: uint, baseVal: uint) -> []uint;
-import func builtin_arrayGetSafe(a: []uint, index: uint) -> option<uint>;
-import func builtin_arrayGetConsecutiveSafe(a: []uint, index: uint) -> option<(uint, uint)>;
-import func builtin_arrayOpSafe(
+import func builtin_arrayGet(a: []uint, index: uint) -> uint;
+import func builtin_arrayGetConsecutive(a: []uint, index: uint) -> (uint, uint);
+import func builtin_arrayOp(
     a: []uint, 
     index: uint, 
     closure: opClosure
-) -> option<([]uint, uint)>;
-import func builtin_arrayOpConsecutiveSafe(
+) -> ([]uint, uint);
+import func builtin_arrayOpConsecutive(
     a: []uint, 
     index: uint, 
     closure1: opClosure, 
     closure2: opClosure
-    ) -> option<([]uint, uint, uint)>;
+    ) -> ([]uint, uint, uint);
 
 type opClosure = struct {
 	f: func((uint, uint), uint) -> (uint, uint),  // (closure.val, oldVal) -> (newVal, return)
@@ -38,36 +38,23 @@ type ByteArray = struct {
     size: uint,
     capacity: uint, 
     contents: []uint,
-    variableSize: bool,
 }
 
 // bytearray_new makes a new ByteArray
-// if variableSize is true, it will initially have size zero, 
-//                          reads beyond the end will return zero,
-//                          size will expand to fit all writes,
-//                          and the capacity arg is a hint about how big it will get
-// if variableSize is false, capacity is the size of the bytearray, which cannot change
-//                           and accesses beyond the end will panic
-public func bytearray_new(capacity: uint, variableSize: bool) -> ByteArray {
-    if (variableSize) {
-        let roundedUpCapacity = 8*32;
-        while (roundedUpCapacity < capacity) {
-            roundedUpCapacity = 8*roundedUpCapacity;
-        }
-        return struct {
-            size: 0,
-            capacity: roundedUpCapacity,
-            contents: newarray<uint>(roundedUpCapacity/32),
-            variableSize: true,
-        };
-    } else {
-        return struct {
-            size: capacity,
-            capacity: capacity,
-            contents: newarray<uint>((capacity+31)/32),
-            variableSize: false,
-        };
+// it will initially have size zero,
+//        reads beyond the end will return zero,
+//        size will expand to fit all writes,
+//        and the capacity arg is a hint about how big it will get
+public func bytearray_new(capacity: uint) -> ByteArray {
+    let roundedUpCapacity = 8*32;
+    while (roundedUpCapacity < capacity) {
+        roundedUpCapacity = 8*roundedUpCapacity;
     }
+    return struct {
+        size: 0,
+        capacity: roundedUpCapacity,
+        contents: newarray<uint>(roundedUpCapacity/32),
+    };
 }
 
 type MarshalledBytes = struct {
@@ -85,7 +72,7 @@ type MarshalledBytesCell = struct {
 public func bytearray_unmarshalBytes(inBytes: MarshalledBytes) -> ByteArray {
     // unmarshal bytes from the bytestack data structure that we receive from L1
     let nbytes = inBytes.nbytes;
-    let ba = bytearray_new(nbytes, true) with { size: nbytes };
+    let ba = bytearray_new(nbytes) with { size: nbytes };
     let nwords = (nbytes+31)/32;
 
     let words = inBytes.contents;
@@ -121,145 +108,123 @@ public func bytearray_size(ba: ByteArray) -> uint {
 }
 
 // bytearray_getByte reads one byte from a ByteArray
-public func bytearray_getByte(ba: ByteArray, offset: uint) -> option<uint> {
+public func bytearray_getByte(ba: ByteArray, offset: uint) -> uint {
     if (offset >= ba.capacity) {
-        if (ba.variableSize) {
-            return Some(0);
-        } else {
-            return None;
-        }
+        return 0;
     }
-    let slot = builtin_arrayGetSafe(ba.contents, offset/32)?;
+    let slot = ba.contents[offset/32];
     let byteno = 31-(offset%32);
-    return Some((slot / (asm (2, 8*byteno) uint { exp })) & 0xff);
+    return (slot / (asm (2, 8*byteno) uint { exp })) & 0xff;
 }
 
 // bytearray_setbyte writes one byte to a ByteArray, returns the resulting ByteArray
-public func bytearray_setByte(ba: ByteArray, offset: uint, val: uint) -> option<ByteArray> {
+public func bytearray_setByte(ba: ByteArray, offset: uint, val: uint) -> ByteArray {
     if (offset >= ba.capacity) {
-        ba = bytearray_expandToFit(ba, offset+1)?;
+        ba = bytearray_expandToFit(ba, offset+1);
     }
-    if (ba.variableSize && (offset >= ba.size)) {
+    if (offset >= ba.size) {
         ba = ba with { size: offset+1 };
     }
-    let res = builtin_arrayOpSafe(
+    let (newContents, _) = builtin_arrayOp(
         ba.contents, 
         offset/32, 
         struct { f: basb_closure_func, val: (31-(offset%32), val,), }
-    )?;
-    return Some(ba with { contents: res.0 });
+    );
+    return ba with { contents: newContents };
 }
 
 // bytearray_get64 reads a chunk of 8 bytes from a ByteArray 
-public func bytearray_get64(ba: ByteArray, offset: uint) -> option<uint> {
-    if ( (!ba.variableSize) && (offset+8 > ba.size)) {
-        return None;
-    }
+public func bytearray_get64(ba: ByteArray, offset: uint) -> uint {
     let alignment = offset % 32;
     if (alignment <= 24) {
-        let res = builtin_arrayGetSafe(ba.contents, offset/32)?;
-        return Some((res / asm(2, 192-8*alignment) uint { exp }) & 0xffffffffffffffff);
-    } elseif (ba.variableSize) {
-        let res = bytearray_get256(ba, offset)?;
-        return Some(res / 0x1000000000000000000000000000000000000000000000000);
+        let res = ba.contents[offset/32];
+        return (res / asm(2, 192-8*alignment) uint { exp }) & 0xffffffffffffffff;
     } else {
-        let (lowWord, hiWord) = builtin_arrayGetConsecutiveSafe(ba.contents, offset/32)?;
-        let shiftFactor = asm(2, 8*alignment) uint { exp };
-        let invShiftFactor = asm(2, 256-8*alignment) uint { exp };
-        return Some(
-            ((hiWord/invShiftFactor) | (lowWord*shiftFactor))
-                  / 0x1000000000000000000000000000000000000000000000000);
+        let res = bytearray_get256(ba, offset);
+        return res / 0x1000000000000000000000000000000000000000000000000;
     }
 }
 
 // bytearray_set64 writes an 8-byte chunk to a ByteArray, returning the resulting ByteArray
-public func bytearray_set64(ba: ByteArray, offset: uint, value: uint) -> option<ByteArray> {
+public func bytearray_set64(ba: ByteArray, offset: uint, value: uint) -> ByteArray {
     if (offset+8 > ba.size) {
-        ba = bytearray_expandToFit(ba, offset+8)?;
+        ba = bytearray_expandToFit(ba, offset+8);
     }
     let lowWordIndex = offset / 32;
     let alignment = offset % 32;
     if (alignment <= 24) {
-        let res = builtin_arrayOpSafe(
+        let res = builtin_arrayOp(
             ba.contents,
             lowWordIndex,
             struct{ f: bas64_single_closure_func, val: (alignment, value,), }
-        )?;
-        return Some(ba with { contents: res.0 });
+        );
+        return ba with { contents: res.0 };
     } else {
-        let res = builtin_arrayOpConsecutiveSafe(
+        let res = builtin_arrayOpConsecutive(
             ba.contents,
             lowWordIndex,
             struct { f: bas64_low_closure_func, val: (alignment, value,), },
             struct { f: basmulti_hi_closure_func, val: (alignment, value,), }
-        )?;
-        return Some(ba with { contents: res.0 });
+        );
+        return ba with { contents: res.0 };
     }
 }
 
 // bytearray_get256 reads a chunk of 32 bytes from a ByteArray
-public func bytearray_get256(ba: ByteArray, offset: uint) -> option<uint> {
+public func bytearray_get256(ba: ByteArray, offset: uint) -> uint {
     let lowWordIndex = offset / 32;
     let alignment = offset % 32;
     if (alignment == 0) {
         if (offset+32 > ba.capacity) {
-            if (ba.variableSize) {
-                // because capacity is a multiple of 32 in this case, access is entirely beyond size
-                return Some(0);
-            } else {
-                return None;
-            }
+            // because capacity is a multiple of 32 in this case, access is entirely beyond size
+            return 0;
         } 
-        return builtin_arrayGetSafe(ba.contents, lowWordIndex);
+        return ba.contents[lowWordIndex];
     } else {
         let lowWord = 0;  // word from lower-numbered array slot
         let hiWord = 0;   // word from higher-numbered array slot
-        if (ba.variableSize) {
-            if (offset+32 > ba.capacity) {
-                // read contents, but only if they exist; otherwise let xxxWord remain 0
-                let offsetBase = offset & ~0x1f;
-                let offsetBaseDiv32 = offsetBase / 32;
-                if (offsetBase < ba.capacity) {
-                    lowWord = builtin_arrayGetSafe(ba.contents, offsetBaseDiv32)?;
-                    if (offsetBase+32 < ba.capacity) {
-                        hiWord = builtin_arrayGetSafe(ba.contents, 1+offsetBaseDiv32)?;
-                    }
+
+        if (offset+32 > ba.capacity) {
+            // read contents, but only if they exist; otherwise let xxxWord remain 0
+            let offsetBase = offset & ~0x1f;
+            let offsetBaseDiv32 = offsetBase / 32;
+            if (offsetBase < ba.capacity) {
+                lowWord = ba.contents[offsetBaseDiv32];
+                if (offsetBase+32 < ba.capacity) {
+                    hiWord = ba.contents[1+offsetBaseDiv32];
                 }
-            } else {
-                let words = builtin_arrayGetConsecutiveSafe(ba.contents, lowWordIndex)?;
-                lowWord = words.0;
-                hiWord = words.1;
             }
         } else {
-            let words = builtin_arrayGetConsecutiveSafe(ba.contents, lowWordIndex)?;
+            let words = builtin_arrayGetConsecutive(ba.contents, lowWordIndex);
             lowWord = words.0;
             hiWord = words.1;
         }
+
         let shiftFactor = asm(2, 8*alignment) uint { exp };
         let invShiftFactor = asm(2, 256-8*alignment) uint { exp };
-        return Some((hiWord/invShiftFactor) | (lowWord*shiftFactor));
+        return (hiWord/invShiftFactor) | (lowWord*shiftFactor);
     }
 }
 
 // bytearray_set256 writes a 32-byte chunk to a ByteArray, returning the resulting ByteArray
-public func bytearray_set256(ba: ByteArray, offset: uint, value: uint) -> option<ByteArray> {
+public func bytearray_set256(ba: ByteArray, offset: uint, value: uint) -> ByteArray {
     if (offset+32 > ba.size) {
-        ba = bytearray_expandToFit(ba, offset+32)?;
+        ba = bytearray_expandToFit(ba, offset+32);
     }
     let lowWordIndex = offset / 32;
     let alignment = offset % 32;
     if (alignment == 0) {
-        return Some(ba with {
+        return ba with {
             contents: ba.contents with { [lowWordIndex] = value }
-        });
+        };
     } else {
-        let res = builtin_arrayOpConsecutiveSafe(
+        let res = builtin_arrayOpConsecutive(
             ba.contents,
             lowWordIndex,
             struct { f: bas256_low_closure_func, val: (alignment, value,), },
             struct { f: basmulti_hi_closure_func, val: (alignment, value,), }
-        )?;
-        return Some(ba with { contents: res.0 });
+        );
+        return ba with { contents: res.0 };
     }
 }
 
@@ -271,48 +236,45 @@ public func bytearray_copy(
     to: ByteArray,
     toOffset: uint,
     nbytes: uint,
-) -> option<ByteArray> {
+) -> ByteArray {
     // TODO: optimize this to exploit alignment and speed up the endgame
     while (nbytes >= 32) {
-        let val = bytearray_get256(from, fromOffset)?;
-        to = bytearray_set256(to, toOffset, val)?;
+        let val = bytearray_get256(from, fromOffset);
+        to = bytearray_set256(to, toOffset, val);
         fromOffset = 32+fromOffset;
         toOffset = 32+toOffset;
         nbytes = nbytes-32;
     }
     while (nbytes > 0) {
-        let val = bytearray_getByte(from, fromOffset)?;
-        to = bytearray_setByte(to, toOffset, val)?;
+        let val = bytearray_getByte(from, fromOffset);
+        to = bytearray_setByte(to, toOffset, val);
         fromOffset = 1+fromOffset;
         toOffset = 1+toOffset;
         nbytes = nbytes-1;
     }
-    return Some(to);
+    return to;
 }
 
-public func bytearray_extract(from: ByteArray, offset: uint, nbytes: uint) -> option<ByteArray> {
-    let to = bytearray_new(nbytes, true);
+public func bytearray_extract(from: ByteArray, offset: uint, nbytes: uint) -> ByteArray {
+    let to = bytearray_new(nbytes);
     return bytearray_copy(from, offset, to, 0, nbytes);
 }
 
-func bytearray_expandToFit(ba: ByteArray, neededCapacity: uint) -> option<ByteArray> {
+func bytearray_expandToFit(ba: ByteArray, neededCapacity: uint) -> ByteArray {
     if (ba.size < neededCapacity) {
-        if ( ! ba.variableSize) {
-            return None;  // tried to expand a fixed-size array
-        }
         ba = ba with { size: neededCapacity };
         if (ba.capacity < neededCapacity) {
             let newCapacity = ba.capacity*8;
             while (newCapacity < neededCapacity) {
                     newCapacity = 8*newCapacity;
             }
-            return Some(ba with { capacity: newCapacity }
-                           with { contents: array_resize(ba.contents, newCapacity/32, 0) });
+            return ba with { capacity: newCapacity }
+                      with { contents: array_resize(ba.contents, newCapacity/32, 0) };
         } else {
-            return Some(ba);
+            return ba;
         }
     } else {
-        return Some(ba);
+        return ba;
     }
 }
 

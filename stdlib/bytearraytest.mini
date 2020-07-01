@@ -17,15 +17,15 @@
 import type ByteArray;
 import type MarshalledBytes;
 
-import func bytearray_new(size: uint, autoExpand: bool) -> ByteArray;
+import func bytearray_new(size: uint) -> ByteArray;
 import func bytearray_unmarshalBytes(mbytes: MarshalledBytes) -> ByteArray;
 import func bytearray_size(ba: ByteArray) -> uint;
-import func bytearray_getByte(ba: ByteArray, idx: uint) -> option<uint>;
-import func bytearray_setByte(ba: ByteArray, idx: uint, val: uint) -> option<ByteArray>;
-import func bytearray_get64(ba: ByteArray, idx: uint) -> option<uint>;
-import func bytearray_set64(ba: ByteArray, idx: uint, val: uint) -> option<ByteArray>;
-import func bytearray_get256(ba: ByteArray, offset: uint) -> option<uint>;
-import func bytearray_set256(ba: ByteArray, offset: uint, value: uint) -> option<ByteArray>;
+import func bytearray_getByte(ba: ByteArray, idx: uint) -> uint;
+import func bytearray_setByte(ba: ByteArray, idx: uint, val: uint) -> ByteArray;
+import func bytearray_get64(ba: ByteArray, idx: uint) -> uint;
+import func bytearray_set64(ba: ByteArray, idx: uint, val: uint) -> ByteArray;
+import func bytearray_get256(ba: ByteArray, offset: uint) -> uint;
+import func bytearray_set256(ba: ByteArray, offset: uint, value: uint) -> ByteArray;
 
 
 impure func main() {
@@ -33,85 +33,52 @@ impure func main() {
 }
 
 func tests() -> uint {
-	let ba = bytearray_new(33, false);
-	if (bytearray_size(ba) != 33) {
+	let ba = bytearray_new(33);
+	if (bytearray_size(ba) != 0) {
 		return 1;
 	}
 
-	ba = bytearray_new(117, true);
-	if let Some(ba2) = bytearray_setByte(ba, 33, 42) {
-		if (bytearray_getByte(ba2, 33) != Some(42)) {
-			return 2;
-		}
-	} else {
-		return 102;
+	ba = bytearray_new(117);
+	ba = bytearray_setByte(ba, 33, 42);
+    if (bytearray_getByte(ba, 33) != 42) {
+	    return 2;
+    }
+
+	ba = bytearray_new(117);
+	ba = bytearray_setByte(ba, 33, 42);
+    ba = bytearray_setByte(ba, 37, 99);
+    if (bytearray_getByte(ba, 33) != 42) {
+		return 3;
 	}
 
-	ba = bytearray_new(117, false);
-	if let Some(ba2) = bytearray_setByte(ba, 33, 42) {
-		if let Some(ba3) = bytearray_setByte(ba2, 37, 99) {
-		    if (bytearray_getByte(ba3, 33) != Some(42)) {
-		        return 3;
-		    }
-		} else {
-			return 103;
-		}
-	} else {
-		return 103;
+	ba = bytearray_new(117);
+	ba = bytearray_setByte(ba, 37, 42+99*256);
+	ba = bytearray_setByte(ba, 36, 999999999999999999);
+    if (bytearray_getByte(ba, 37) != 42) {
+		return 4;
 	}
 
-	ba = bytearray_new(117, true);
-	if let Some(ba2) = bytearray_setByte(ba, 37, 42+99*256) {
-		if let Some(ba3) = bytearray_setByte(ba2, 36, 999999999999999999) {
-			if (bytearray_getByte(ba3, 37) != Some(42)) {
-				return 4;
-			}
-		} else {
-			return 104;
-		}
-	} else {
-		return 104;
+	ba = bytearray_new(117);
+	ba = bytearray_set256(ba, 64, 7373);
+	if (bytearray_get256(ba, 64) != 7373) {
+		return 5;
 	}
 
-	ba = bytearray_new(117, false);
-	if let Some(ba2) = bytearray_set256(ba, 64, 7373) {
-		if (bytearray_get256(ba2, 64) != Some(7373)) {
-			return 5;
-		}
-	} else {
-		return 105;
+	ba = bytearray_new(117);
+	ba = bytearray_set256(ba, 64, 7373);
+	let res = bytearray_get256(ba, 63);
+	if (res != 7373/256) {
+	    return 60000+res;
 	}
 
-	ba = bytearray_new(117, true);
-	if let Some(ba2) = bytearray_set256(ba, 64, 7373) {
-	    if let Some(res) = bytearray_get256(ba2, 63) {
-	        if (res != 7373/256) {
-	            return 60000+res;
-	        }
-	    } else {
-	        return 106;
-	    }
-	} else {
-		return 106;
-	}
-
-	ba = bytearray_new(117, true);
-	if let Some(ba2) = bytearray_set256(ba, 13, ~0) {
-		if let Some(ba3) = bytearray_set256(ba2, 13+32, 0) {
-			if let Some(ba4) = bytearray_set256(ba3, 13+64, ~0) {
-				if ( (bytearray_get256(ba4, 13) != Some(~0)) 
-					|| (bytearray_get256(ba4, 13+32) != Some(0))
-					|| (bytearray_get256(ba4, 13+64) != Some(~0)) ) {
-					return 7;	
-				}		
-			} else {
-				return 107;
-			}
-		} else {
-			return 107;
-		}
-	} else {
-		return 107;
+	ba = bytearray_new(117);
+	ba = bytearray_set256(ba, 13, ~0);
+	ba = bytearray_set256(ba, 13+32, 0);
+	ba = bytearray_set256(ba, 13+64, ~0);
+	if ( (bytearray_get256(ba, 13) != ~0)
+		|| (bytearray_get256(ba, 13+32) != 0)
+		|| (bytearray_get256(ba, 13+64) != ~0) ) {
+		return 7;
 	}
 
 	let marshalledStruct = unsafecast<MarshalledBytes>((
@@ -127,28 +94,25 @@ func tests() -> uint {
 			0x4041420000000000000000000000000000000000000000000000000000000000,
 		),
 	));
-	ba = bytearray_new(67, false);
+	ba = bytearray_new(67);
 	ba = bytearray_unmarshalBytes(marshalledStruct);
 	let i = 0;
 	while (i < 67) {
 		let b = bytearray_getByte(ba, i);
-		if (b != Some(i)) {
+		if (b != i) {
 			return 100+i;
 		}
 		i = i+1;
 	}
 
 	ba = setupFromUnmarshal();
-	if let Some(res) = bytearray_get64(ba, 3) {
-	    if (res != 0x030405060708090a) {
-		    return 9;
-		}
-	} else {
-	    return 109;
-	}
+	let res = bytearray_get64(ba, 3);
+	if (res != 0x030405060708090a) {
+		return 9;
+    }
 
 	ba = setupFromUnmarshal();
-	if (bytearray_get64(ba, 29) != Some(0x1d1e1f2021222324)) {
+	if (bytearray_get64(ba, 29) != 0x1d1e1f2021222324) {
 		return 10;
 	}
 
@@ -160,13 +124,10 @@ func tests() -> uint {
 	}
 
 	// test for big-endian byte order
-	ba = bytearray_new(32, false);
-	if let Some(ba2) = bytearray_setByte(ba, 31, 1) {
-	    if (bytearray_get256(ba2, 0) != Some(1)) {
-	        return 12;
-	    }
-	} else {
-	    return 1012;
+	ba = bytearray_new(32);
+	ba = bytearray_setByte(ba, 31, 1);
+	if (bytearray_get256(ba, 0) != 1) {
+	    return 12;
 	}
 
 	return 0;

@@ -17,18 +17,18 @@
 import type ByteArray;
 import type MarshalledBytes;
 
-import func bytearray_new(size: uint, autoExpand: bool) -> ByteArray;
+import func bytearray_new(size: uint) -> ByteArray;
 import func bytearray_unmarshalBytes(mbytes: MarshalledBytes) -> ByteArray;
 import func bytearray_size(ba: ByteArray) -> uint;
-import func bytearray_getByte(ba: ByteArray, idx: uint) -> option<uint>;
-import func bytearray_setByte(ba: ByteArray, idx: uint, val: uint) -> option<ByteArray>;
-import func bytearray_get64(ba: ByteArray, idx: uint) -> option<uint>;
-import func bytearray_set64(ba: ByteArray, idx: uint, val: uint) -> option<ByteArray>;
-import func bytearray_get256(ba: ByteArray, offset: uint) -> option<uint>;
-import func bytearray_set256(ba: ByteArray, offset: uint, value: uint) -> option<ByteArray>;
+import func bytearray_getByte(ba: ByteArray, idx: uint) -> uint;
+import func bytearray_setByte(ba: ByteArray, idx: uint, val: uint) -> ByteArray;
+import func bytearray_get64(ba: ByteArray, idx: uint) -> uint;
+import func bytearray_set64(ba: ByteArray, idx: uint, val: uint) -> ByteArray;
+import func bytearray_get256(ba: ByteArray, offset: uint) -> uint;
+import func bytearray_set256(ba: ByteArray, offset: uint, value: uint) -> ByteArray;
 
+import func keccak256(ba: ByteArray, offset: uint, nbytes: uint) -> bytes32;
 import impure func initKeccakConstants();
-import func keccak256(ba: ByteArray, offset: uint, nbytes: uint) -> option<bytes32>;
 import impure func keccak_permutation(state: [25]uint) -> [25]uint;
 
 
@@ -48,25 +48,23 @@ func tests() -> option<bytes32> {
     //let accOut = keccak_permutation(acc);
     //return Some(accOut[0]);
 
-	let ba = bytearray_new(0, true);
-	//ba = bytearray_setByte(ba, 0, 0xcc)?;
-	//return Some(uint(keccak256(ba, 0, 1)));
-	let kecEmpty = keccak256(ba, 0, 0)?;
+	let ba = bytearray_new(0);
+	let kecEmpty = keccak256(ba, 0, 0);
     if (kecEmpty != bytes32(0xc5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470)) {
 		return Some(bytes32(1));
 	}
 
-    ba = bytearray_new(0, true);
-    ba = bytearray_setByte(ba, 0, 0xcc)?;
-    let kecCC = keccak256(ba, 0, 1)?;
+    ba = bytearray_new(0);
+    ba = bytearray_setByte(ba, 0, 0xcc);
+    let kecCC = keccak256(ba, 0, 1);
     if (kecCC != bytes32(0xeead6dbfc7340a56caedc044696a168870549a6a7f6f56961e84a54bd9970b8a)) {
         return Some(bytes32(2));
     }
 
-    ba = bytearray_new(0, true);
-    ba = bytearray_setByte(ba, 0, 0xcc)?;
-    ba = bytearray_setByte(ba, 1, 0xaa)?;
-    let kecCCAA = keccak256(ba, 0, 2)?;
+    ba = bytearray_new(0);
+    ba = bytearray_setByte(ba, 0, 0xcc);
+    ba = bytearray_setByte(ba, 1, 0xaa);
+    let kecCCAA = keccak256(ba, 0, 2);
     if (kecCCAA != bytes32(0x33f234f4a499894af4036ace8c63b93a0bb7685472d79f3a9808cf95ed7047b4)) {
         return Some(bytes32(3));
     }

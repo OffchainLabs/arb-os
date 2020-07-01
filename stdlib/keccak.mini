@@ -15,25 +15,25 @@
 //
 
 import type ByteArray;
-import func bytearray_new(size: uint, variableSize: bool) -> ByteArray;
-import func bytearray_get256(ba: ByteArray, offset: uint) -> option<uint>;
-import func bytearray_set256(ba: ByteArray, offset: uint, val: uint) -> option<ByteArray>;
-import func bytearray_get64(ba: ByteArray, offset: uint) -> option<uint>;
-import func bytearray_set64(ba: ByteArray, offset: uint, val: uint) -> option<ByteArray>;
-import func bytearray_getByte(ba: ByteArray, offset: uint) -> option<uint>;
-import func bytearray_setByte(ba: ByteArray, offset: uint, val: uint) -> option<ByteArray>;
-import func bytearray_copy(src: ByteArray, srcOffset: uint, dest: ByteArray, destOffset: uint, nbytes: uint) -> option<ByteArray>;
+import func bytearray_new(size: uint) -> ByteArray;
+import func bytearray_get256(ba: ByteArray, offset: uint) -> uint;
+import func bytearray_set256(ba: ByteArray, offset: uint, val: uint) -> ByteArray;
+import func bytearray_get64(ba: ByteArray, offset: uint) -> uint;
+import func bytearray_set64(ba: ByteArray, offset: uint, val: uint) -> ByteArray;
+import func bytearray_getByte(ba: ByteArray, offset: uint) -> uint;
+import func bytearray_setByte(ba: ByteArray, offset: uint, val: uint) -> ByteArray;
+import func bytearray_copy(src: ByteArray, srcOffset: uint, dest: ByteArray, destOffset: uint, nbytes: uint) -> ByteArray;
 
 
-public impure func keccak256(ba: ByteArray, offset: uint, nbytes: uint) -> option<bytes32> {
+public impure func keccak256(ba: ByteArray, offset: uint, nbytes: uint) -> bytes32 {
     if (nbytes == 32) {
-        return Some(hash(bytearray_get256(ba, offset)?));
+        return hash(bytearray_get256(ba, offset));
     }
     if (nbytes == 64) {
-        return Some(hash(
-            bytes32(bytearray_get256(ba, offset)?),
-            bytes32(bytearray_get256(ba, offset+32)?)
-        ));
+        return hash(
+            bytes32(bytearray_get256(ba, offset)),
+            bytes32(bytearray_get256(ba, offset+32))
+        );
     }
 
     let accumulator = newfixedarray(25, 0);
@@ -42,49 +42,49 @@ public impure func keccak256(ba: ByteArray, offset: uint, nbytes: uint) -> optio
     while (nbytes >= 136) {
         // Process one complete block
         accumulator = keccak_permutation(
-            keccak_xorblock(accumulator, ba, offset)?
+            keccak_xorblock(accumulator, ba, offset)
         );
         offset = offset+136;
         nbytes = nbytes-136;
     }
 
     // Build a bytearray to hold the final block
-    let lastBlock = bytearray_new(136, false);
-    lastBlock = bytearray_copy(ba, offset, lastBlock, 0, nbytes)?;
+    let lastBlock = bytearray_new(136);
+    lastBlock = bytearray_copy(ba, offset, lastBlock, 0, nbytes);
 
     // Add padding to fill the final block
     if (nbytes == 135) {
         // only one byte of padding needed
-        lastBlock = bytearray_setByte(lastBlock, 135, 0x81)?;
+        lastBlock = bytearray_setByte(lastBlock, 135, 0x81);
     } else {
         // padding is 0x01 0x00* 0x80
         // take advantage of the fact that lastBlock is already zero-filled
         lastBlock = bytearray_setByte(
-            bytearray_setByte(lastBlock, 135, 0x80)?,
+            bytearray_setByte(lastBlock, 135, 0x80),
             nbytes,
             0x01
-        )?;
+        );
     }
 
     // Process the final block
     accumulator = keccak_permutation(
-        keccak_xorblock(accumulator, lastBlock, 0)?
+        keccak_xorblock(accumulator, lastBlock, 0)
     );
 
     // Extract the return value, with properly adjusted endianness
-    return Some(bytes32(
+    return bytes32(
         flipEndian64(accumulator[3]) + 0x10000000000000000 * (
             flipEndian64(accumulator[2]) + 0x10000000000000000 * (
                 flipEndian64(accumulator[1]) + 0x10000000000000000 * flipEndian64(accumulator[0])
             )
         )
-    ));
+    );
 }
 
-func keccak_xorblock_save(accumulator: [25]uint, ba: ByteArray, offset: uint) -> option<[25]uint> {
+func keccak_xorblock_save(accumulator: [25]uint, ba: ByteArray, offset: uint) -> [25]uint {
     let i = 0;
     while (i < 4) {
-        let word = bytearray_get256(ba, offset+32*i)?;
+        let word = bytearray_get256(ba, offset+32*i);
         let val = accumulator[4*i] & (word & 0xffffffffffffffff);  //DEBUG
         accumulator = accumulator 
             with { [4*i] = accumulator[4*i] ^ flipEndian64(word & 0xffffffffffffffff) }
@@ -93,24 +93,24 @@ func keccak_xorblock_save(accumulator: [25]uint, ba: ByteArray, offset: uint) ->
             with { [4*i+3] = accumulator[4*i+3] ^ flipEndian64((word/0x1000000000000000000000000000000000000000000000000) & 0xffffffffffffffff) };
         i = i+1;
     }
-    return Some(accumulator with { [16] = accumulator[16] ^ flipEndian64(bytearray_get64(ba, offset+128)?) });
+    return accumulator with { [16] = accumulator[16] ^ flipEndian64(bytearray_get64(ba, offset+128)) };
 }
 
-func keccak_xorblock(accumulator: [25]uint, ba: ByteArray, offset: uint) -> option<[25]uint> {
+func keccak_xorblock(accumulator: [25]uint, ba: ByteArray, offset: uint) -> [25]uint {
     // XOR data for a block into the accumulator, with appropriate endianness
     let i = 0;
     while (i < 17) {
         let word = 0;
         let j = 0;
         while (j < 8) {
-            word = 256*word + bytearray_getByte(ba, offset + 7-j)?;
+            word = 256*word + bytearray_getByte(ba, offset + 7-j);
             j = j+1;
         }
         accumulator = accumulator with { [i] = accumulator[i] ^ word };
         offset = offset+8;
         i = i+1;
     }
-    return Some(accumulator);
+    return accumulator;
 }
 
 // This must be initialized, by calling initKeccakConstants, before any calls are made to keccak_permutation.
@@ -148,7 +148,6 @@ public impure func keccak_permutation(s: [25]uint) -> [25]uint {
         i = 0;
         while (i < 24) {
             let j = keccakConstants.piln[i];
-            asm((98, i, j),) { debugprint };
             bc = bc with { [0] = s[j] };
             s = s with { [j] = sha3_rotl64(t, keccakConstants.rotc[i]) };
             t = bc[0];
