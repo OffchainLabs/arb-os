@@ -67,7 +67,7 @@ import impure func initEvmCallStackForConstructor(
 );
 import func evmCallStack_runningCodeFromAccount() -> option<Account>;
 
-import func bytearray_new(capacity: uint, autoExpand: bool) -> ByteArray;
+import func bytearray_new(capacity: uint) -> ByteArray;
 import func bytearray_size(ba: ByteArray) -> uint;
 import func bytearray_unmarshalBytes(mb: MarshalledBytes) -> ByteArray;
 import func bytearray_marshalFull(ba: ByteArray) -> MarshalledBytes;
@@ -152,7 +152,7 @@ public impure func handleMessageFromL1(msg: MessageFromL1) -> option<()> {
             codeBytes,
             evmJumpTable,
             codept,
-            bytearray_new(0, true),   // no arguments to the call -- they're packed into the code
+            bytearray_new(0),   // no arguments to the call -- they're packed into the code
             1000000000000,            //TODO: limit gas used by constructor
         );  // should never return
         return None;
