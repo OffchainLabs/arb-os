@@ -14,21 +14,16 @@
 // limitations under the License.
 //
 
-// This structure accumulates the EVM log items emitted by a transaction.
-// It uses the same representation as the Arbitrum protocol, so this structure can be emitted
-//       directly without needing any more encoding.
-
 type EvmLogs = struct {
     rest: any,
     last: any,
 }
 
-public func evmlogs_empty() -> EvmLogs {  // make an empty log-sequence
+public func evmlogs_empty() -> EvmLogs {
     return unsafecast<EvmLogs>(());
 }
 
 public func evmlogs_appendAny(logs: EvmLogs, item: any) -> EvmLogs {
-    // Append an item to the end of a log-sequence, returning the updated log-sequence.
     return struct {
         rest: logs,
         last: item

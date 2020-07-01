@@ -27,26 +27,23 @@ type Account = struct {
     addr: address,
     nextSeqNum: uint,
     ethBalance: uint,
-    contractInfo: option<AccountContractInfo>,  // info on the contract at this address, if there is one
+    contractInfo: option<AccountContractInfo>,
 }
 
 type AccountContractInfo = struct {
     code: ByteArray,
-    evmJumpTable: map<uint, func()>,  // maps each valid EVM jump destination to the corresponding AVM codepoint
+    evmJumpTable: map<uint, func()>,
     startCodePoint: func(),
     storage: map<uint, uint>,
 }
 
-// globalAccountStore is the authoritative source of info on accounts that exist on this chain
-// Note that other accountStores will exist, but these others are all contingent somehow,
-//       in the sense that they will be written to globalAccountStore only if some event occurs.
-// For example, a running transaction will have its own accountStore, which will be written
-//       to globalAccountStore only if the transactions succeeds.
 var globalAccountStore: AccountStore;   // needs to be initialized before use
 
 
 public impure func accountStore_init() {   // This must be called first!
-    globalAccountStore = newmap<address, Account>;
+     if (unsafecast<any>(globalAccountStore) == null) {
+        globalAccountStore = newmap<address, Account>;
+    }   
 }
 
 public impure func getGlobalAccountStore() -> AccountStore {
@@ -61,7 +58,6 @@ public func accountStore_get(acctStore: AccountStore, addr: address) -> Account 
     if let Some(acct) = acctStore[addr] {
         return acct;
     } else {
-        // There is no recorded account at this address, so make a pristine account.
         return pristineAccount(addr);
     }
 }
@@ -89,8 +85,6 @@ public func accountStore_destroyAndTransferBalance(
     victimAddr: address,
     recipientAddr: address
 ) -> AccountStore {
-    // Destroy the account at victimAddr, and give its Eth balance to recipientAddr
-
     let victim = accountStore_get(acctStore, victimAddr);
     let recipient = accountStore_get(acctStore, recipientAddr);
     return acctStore
@@ -106,11 +100,14 @@ public func account_checkAndIncrSeqNum(
     account: Account, 
     seqNumRecvd: uint
 ) -> option<Account> {
-    // if seqNumRecvd has the expected value, increment seqNum in account and return updated account.
-    // else return None
+    // if seqNumRecvd has the expected value, increment seqNum in account and return true
+    // else just return false
     let nextSeq = account.nextSeqNum;
     if (nextSeq == seqNumRecvd) {
-        return Some(account with { nextSeqNum: nextSeq+1 });
+        account = account with {
+            nextSeqNum: nextSeq+1
+        };
+        return Some(account);
     } else {
         return None;
     }
@@ -156,8 +153,6 @@ public func accountStore_createAccountFromEvmCode(
     initCodePt: func(),
     storageMap: map<uint, uint>
 ) -> option<AccountStore> {
-    // Create a new account for a compiled EVM contract.
-    // Return Some(updatedAccountStore), or None if something went wrong.
     let oldAcct = accountStore_get(store, newAddr);
     if (account_isEmpty(oldAcct)) {
         return Some(accountStore_set(
@@ -173,7 +168,6 @@ public func accountStore_createAccountFromEvmCode(
             }
         ));
     } else {
-        // There was already an account at that address, so return failure.
         return None;
     }
 }
@@ -182,8 +176,7 @@ public func accountStore_createERC20(
     acctStore: AccountStore, 
     addr: address
 ) -> option<AccountStore> {
-    // Create a new ERC20 proxy contract at the given address.
-    // Return Some(updatedAccountStore), or None if something went wrong.
+    // returns true iff success
     if (account_isEmpty(accountStore_get(acctStore, addr))) {
         acctStore = accountStore_cloneContract(
             acctStore, 
@@ -192,7 +185,6 @@ public func accountStore_createERC20(
         )?;
         return Some(acctStore);
     } else {
-        // There was already an account at that address, so return failure.
         return None;
     }
 }
@@ -201,8 +193,7 @@ public func accountStore_createERC721(
     acctStore: AccountStore,
     addr: address
 ) -> option<AccountStore> {
-    // Create a new ERC20 proxy contract at the given address.
-    // Return Some(updatedAccountStore), or None if something went wrong.
+    // returns true iff success
     if (account_isEmpty(accountStore_get(acctStore, addr))) {
         acctStore = accountStore_cloneContract(
             acctStore,
@@ -211,7 +202,6 @@ public func accountStore_createERC721(
         )?;
         return Some(acctStore);
     } else {
-        // There was already an account at that address, so return failure.
         return None;
     }
 }
@@ -221,8 +211,6 @@ public func accountStore_cloneContract(
     oldAddr: address, 
     newAddr: address
 ) -> option<AccountStore> {
-    // Clone an existing contract.
-    // Return Some(updatedAccountStore), or None if something went wrong.
     let oldAccount = accountStore_get(acctStore, oldAddr);
     let newAccount = oldAccount
         with { ethBalance: 0 }
@@ -253,14 +241,13 @@ public func account_deductFromEthBalance(account: Account, deduction: uint) -> o
     }
 }
 
+// transfer eth; return None if insufficient funds
 public func accountStore_transferEthBalance(
     acctStore: AccountStore,
     from: address, 
     to: address, 
     amount: uint
 ) -> option<AccountStore> {
-    // Transfer Eth from one account to another.
-    // Return Some(updatedAccountStore), or None if insufficient funds.
     let fromAcct = accountStore_get(acctStore, from);
     if (fromAcct.ethBalance < amount) {
         return None;
@@ -273,18 +260,14 @@ public func accountStore_transferEthBalance(
 }
 
 public func account_getAllStorage(account: Account) -> option<map<uint, uint>> {
-    // Get the full contents of a contract's storage.
-    // Return None if account doesn't have contract storage.
     return Some((account.contractInfo?).storage);
 }
 
 public func account_getStorageCell(account: Account, cell: uint) -> option<uint> {
-    // Get contents of one cell in a contract's storage.
-    // Return None if account doesn't have contract storage.
     if let Some(contents) = (account.contractInfo?).storage[cell] {
         return Some(contents);
     } else {
-        return Some(0);  // uninitialized cell, so its value is deemed to be zero
+        return Some(0);
     }
 }
 
@@ -293,8 +276,6 @@ public func account_setStorageCell(
     cell: uint, 
     value: uint
 ) -> option<Account> {
-    // Set the value of one cell in a contract's storage.
-    // Return None if account doesn't have contract storage.
     let contractInfo = account.contractInfo?;
     return Some(account with {
         contractInfo: Some(contractInfo with {
@@ -305,28 +286,11 @@ public func account_setStorageCell(
     });
 }
 
-public func account_setContractInfo(
-    acct: Account,
-    code: ByteArray,
-    evmJumpTable: map<uint, func()>,
-    startCodePoint: func(),
-    storage: map<uint, uint>
-) -> Account {
-    return acct with { contractInfo: Some(
-        struct {
-            code: code,
-            evmJumpTable: evmJumpTable,
-            startCodePoint: startCodePoint,
-            storage: storage
-        }
-    )};
-}
-
 public func account_getCodeSize(acct: Account) -> uint {
     if let Some(contractInfo) = acct.contractInfo {
         return bytearray_size(contractInfo.code);
     } else {
-        return 0;  // Account has no code, so its codesize is deemed to be zero.
+        return 0;
     }
 }
 

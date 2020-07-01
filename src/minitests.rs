@@ -48,6 +48,20 @@ fn test_kvstest() {
 }
 
 #[test]
+fn test_treekvstest() {
+    let path = Path::new("builtin/treekvstest.mexe");
+    let res = run_from_file(path, vec![], RuntimeEnvironment::new(), false);
+    match res {
+        Ok(res) => {
+            assert_eq!(res[0], Value::Int(Uint256::zero()));
+        }
+        Err(e) => {
+            panic!("{}\n{}", e.0, e.1);
+        }
+    }
+}
+
+#[test]
 fn test_cuckookvstest() {
     let path = Path::new("builtin/cuckookvstest.mexe");
     let res = run_from_file(path, vec![], RuntimeEnvironment::new(), false);
@@ -167,19 +181,4 @@ fn test_evm_load_add() {
 #[test]
 fn test_evm_load_fib() {
     crate::evm::evm_load_fib_and_verify(false, false);
-}
-
-#[test]
-fn test_crosscontract_calls() {
-    crate::evm::evm_xcontract_call_and_verify(false, false);
-}
-
-#[test]
-fn test_direct_deploy_add() {
-    crate::evm::evm_direct_deploy_add(false);
-}
-
-#[test]
-fn test_direct_deploy_and_call_add() {
-    let log = crate::evm::evm_direct_deploy_and_call_add(false);
 }

@@ -40,8 +40,40 @@ public impure func mainRunLoop() {
     loop {
         let msg = inbox_get();
         if (None<()> == handleMessageFromL1(msg,)) {
-            panic;  //DEBUG:  This is for debugging only. In production we will ignore these errors.
+            panic;   //BUGBUG: just used for debugging
         }
     }
     panic;  // should never be reached
+}
+
+public impure func cleanUpAndJumpToRunLoop() {
+    // When this is called, there might be unwanted junk in the stack and auxstack
+    // This function will discard all of that stuff and then jump to mainRunLoop
+
+    // discard everything from the auxstack, except the current callframe (which is on top)
+    // keep the callframe on top of the auxstack (except during asm blocks) because the code generator might use it
+    while ( ! asm() bool { auxpop auxstackempty swap1 auxpush }) {
+        asm() {
+            auxpop
+            auxpop
+            pop
+            auxpush
+        };
+    }
+
+    // discard everything on the stack
+    while ( ! asm() bool { stackempty }) {
+        asm() { pop };
+    }
+
+    // discard our callframe, push a fake return address, and jump to mainRunLoop
+    // mainRunLoop will think somebody called it normally
+    asm(mainRunLoop,) {
+        auxpop
+        pop
+        [0] swap1  // bogus return address, which mainRunLoop will save in its callframe but will never use
+        jump
+    };
+
+    panic; // should never be reached
 }

@@ -40,14 +40,14 @@ impl RuntimeEnvironment {
         }
     }
 
-    pub fn insert_eth_message(&mut self, sender_addr: Uint256, msg: &[u8]) {
+    pub fn insert_eth_message(&mut self, msg: &[u8]) {
         self.l1_inbox = Value::Tuple(vec![
             self.l1_inbox.clone(),
             Value::Tuple(vec![
                 Value::Int(Uint256::zero()), // mocked-up blockhash
                 Value::Int(self.current_timestamp.clone()),
                 Value::Int(self.current_block_num.clone()),
-                Value::Int(sender_addr), // fake message sender
+                Value::Int(Uint256::one()), // fake message sender
                 bytestack_from_bytes(msg),
             ]),
         ]);
@@ -61,9 +61,8 @@ impl RuntimeEnvironment {
         gas_price_bid: Uint256,
         data: &[u8],
     ) {
-        let sender_addr = Uint256::one();
         let mut buf = vec![0u8];
-        let seq_num = self.get_and_incr_seq_num(&sender_addr);
+        let seq_num = self.get_and_incr_seq_num(&to_addr);
         buf.extend(seq_num.to_bytes_be());
         buf.extend(to_addr.to_bytes_be());
         buf.extend(value.to_bytes_be());
@@ -71,7 +70,7 @@ impl RuntimeEnvironment {
         buf.extend(gas_price_bid.to_bytes_be());
         buf.extend_from_slice(data);
 
-        self.insert_eth_message(sender_addr, &buf);
+        self.insert_eth_message(&buf);
     }
 
     pub fn insert_nonmutating_call_message(
@@ -80,23 +79,12 @@ impl RuntimeEnvironment {
         max_gas: Uint256,
         data: &[u8],
     ) {
-        let sender_addr = Uint256::one();
         let mut buf = vec![5u8];
         buf.extend(to_addr.to_bytes_be());
         buf.extend(max_gas.to_bytes_be());
         buf.extend_from_slice(data);
 
-        self.insert_eth_message(sender_addr, &buf);
-    }
-
-    pub fn insert_deploy_contract_message(&mut self, contract_code: &[u8]) {
-        let sender_addr = Uint256::one();
-        let mut buf = vec![6u8];
-        let seq_num = self.get_and_incr_seq_num(&sender_addr);
-        buf.extend(seq_num.to_bytes_be());
-        buf.extend(contract_code);
-
-        self.insert_eth_message(sender_addr, &buf);
+        self.insert_eth_message(&buf);
     }
 
     pub fn get_and_incr_seq_num(&mut self, addr: &Uint256) -> Uint256 {
