@@ -44,6 +44,8 @@ func errorHandler() {
     // That's OK, because the only "harm" done is that the double-error situation of application error plus ArbGas underflow
     //      gets detected as just an ArbGas underflow.  The effect on the application will be the same either way.
 
+    asm(666,) { debugprint };
+
     if (evmCallStack_isEmpty()) {
         // Oh no, we must have hit an unexpected error in the runtime.
         // That shouldn't have happened, but we have to make the best of the situation.

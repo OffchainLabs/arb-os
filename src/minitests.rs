@@ -187,6 +187,14 @@ fn test_direct_deploy_and_call_add() {
     let log = crate::evm::evm_direct_deploy_and_call_add(None, false);
 }
 
+#[test]
+pub fn test_crosscontract_call_with_constructors() {
+    match crate::evm::evm_xcontract_call_with_constructors(None, false, false) {
+        Ok(result) => assert_eq!(result, true),
+        Err(e) => panic!("error {}", e),
+    }
+}
+
 pub fn make_logs_for_all_arbos_tests() {
     crate::evm::evm_load_add_and_verify(
         Some(Path::new("testlogs/evm_load_add_and_verify.aoslog")),

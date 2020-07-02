@@ -1093,6 +1093,74 @@ pub fn evm_xcontract_call_and_verify(log_to: Option<&Path>, debug: bool, profile
     }
 }
 
+pub fn evm_xcontract_call_with_constructors(
+    log_to: Option<&Path>,
+    debug: bool,
+    _profile: bool,
+) -> Result<bool, ethabi::Error> {
+    use std::convert::TryFrom;
+    let rt_env = RuntimeEnvironment::new();
+    let mut machine = load_from_file(Path::new("arb_os/arbos.mexe"), rt_env);
+    machine.start_at_zero();
+
+    let mut fib_contract =
+        AbiForContract::new_from_file("contracts/fibonacci/build/contracts/Fibonacci.json")?;
+    if fib_contract.deploy(&[], &mut machine, debug) == None {
+        panic!("failed to deploy Fibonacci contract");
+    }
+
+    println!("Address of fib contract: {}", fib_contract.address);
+
+    let mut pc_contract =
+        AbiForContract::new_from_file("contracts/fibonacci/build/contracts/PaymentChannel.json")?;
+    if pc_contract.deploy(
+        &[ethabi::Token::Address(ethereum_types::H160::from_slice(
+            &fib_contract.address.to_bytes_be()[12..],
+        ))],
+        &mut machine,
+        debug,
+    ) == None
+    {
+        panic!("failed to deploy PaymentChannel contract");
+    }
+
+    println!("Address of paymentchan contract: {}", pc_contract.address);
+
+    let result = pc_contract.call_function(
+        "deposit",
+        &vec![],
+        &mut machine,
+        Uint256::from_usize(10000),
+        true,
+        debug,
+    )?;
+    if let Value::Tuple(tup) = result {
+        assert_eq!(tup[3], Value::Int(Uint256::one()));
+    }
+
+    let result = pc_contract.call_function(
+        "transferFib",
+        vec![
+            ethabi::Token::Address(ethabi::Address::from_low_u64_be(5000)),
+            ethabi::Token::Uint(ethabi::Uint::try_from(1).unwrap()),
+        ]
+        .as_ref(),
+        &mut machine,
+        Uint256::zero(),
+        true,
+        true,   // DEBUG
+    )?;
+    if let Value::Tuple(tup) = result {
+        assert_eq!(tup[3], Value::Int(Uint256::one()));
+    }
+
+    if let Some(path) = log_to {
+        let _ = machine.runtime_env.recorder.to_file(path).unwrap();
+    }
+
+    Ok(true)
+}
+
 pub fn evm_direct_deploy_add(log_to: Option<&Path>, debug: bool) {
     let rt_env = RuntimeEnvironment::new();
     let mut machine = load_from_file(Path::new("arb_os/arbos.mexe"), rt_env);

@@ -991,8 +991,7 @@ impl Machine {
 					Opcode::AVMOpcode(AVMOpcode::Minus) => {
 						let r1 = self.stack.pop_uint(&self.state)?;
 						let r2 = self.stack.pop_uint(&self.state)?;
-						self.stack.push_uint(r1.sub(&r2)
-							.ok_or(ExecutionError::new("signed integer underflow in subtraction", &self.state, None))?);
+						self.stack.push_uint(r1.unchecked_sub(&r2));
 						self.incr_pc();
 						Ok(true)
 					}

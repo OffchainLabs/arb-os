@@ -135,16 +135,20 @@ public impure func handleMessageFromL1(msg: MessageFromL1) -> option<()> {
         return handleValidTxMessage(inStream, msg, false);
     } elseif (msgType == 6) {
         // EVM constructor/code upload message
+        asm(600,) { debugprint };
         let (bs, sequenceNum) = bytestream_getUint(inStream)?;
         inStream = bs;
         verifyAndIncrSequenceNum(msg.sender, sequenceNum)?;
 
+        asm(601,) { debugprint };
         let codeBytes = bytestream_getRemainingBytes(bs);
         let (codept, evmJumpTable) = translateEvmCodeSegment(bytestream_new(codeBytes))?;
 
+        asm(602,) { debugprint };
         // Generate an address for the new contract.  //TODO: Switch this to use the same method as Ethereum.
         let newAddress = address(hash(bytes32(msg.sender), bytes32(sequenceNum)));
 
+        asm(603,) { debugprint };
         initEvmCallStackForConstructor(
             msg,
             newAddress,
