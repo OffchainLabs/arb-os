@@ -229,6 +229,7 @@ fn bytes_from_bytestack_2(cell: Value, nbytes: usize) -> Option<Vec<u8>> {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RtEnvRecorder {
+    format_version: u64,
     inbox: Value,
     logs: Vec<Value>,
 }
@@ -236,6 +237,7 @@ pub struct RtEnvRecorder {
 impl RtEnvRecorder {
     fn new() -> Self {
         RtEnvRecorder {
+            format_version: 1,
             inbox: Value::none(),
             logs: Vec::new(),
         }

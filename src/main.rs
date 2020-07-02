@@ -33,7 +33,6 @@ mod compile;
 mod evm;
 mod link;
 mod mavm;
-#[cfg(test)]
 mod minitests;
 pub mod pos;
 mod run;
@@ -171,6 +170,9 @@ fn main() -> Result<(), CompileError> {
                         .index(1),
                 ),
         )
+        .subcommand(
+            SubCommand::with_name("maketestlogs").about("generates test logs for all ArbOS tests"),
+        )
         .get_matches();
 
     if let Some(matches) = matches.subcommand_matches("compile") {
@@ -297,6 +299,11 @@ fn main() -> Result<(), CompileError> {
         let path = matches.value_of("INPUT").unwrap();
         profile_gen_from_file(path.as_ref(), Vec::new(), RuntimeEnvironment::new());
     }
+
+    if let Some(_) = matches.subcommand_matches("maketestlogs") {
+        minitests::make_logs_for_all_arbos_tests();
+    }
+
     Ok(())
 }
 
