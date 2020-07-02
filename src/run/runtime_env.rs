@@ -16,7 +16,11 @@
 
 use crate::mavm::Value;
 use crate::uint256::Uint256;
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use std::fs::File;
+use std::io;
+use std::path::Path;
 
 #[derive(Debug, Clone)]
 pub struct RuntimeEnvironment {
@@ -26,6 +30,7 @@ pub struct RuntimeEnvironment {
     pub logs: Vec<Value>,
     pub seq_nums: HashMap<Uint256, Uint256>,
     next_id: Uint256, // used to assign unique (but artificial) txids to messages
+    pub recorder: RtEnvRecorder,
 }
 
 impl RuntimeEnvironment {
@@ -37,20 +42,20 @@ impl RuntimeEnvironment {
             logs: Vec::new(),
             seq_nums: HashMap::new(),
             next_id: Uint256::zero(),
+            recorder: RtEnvRecorder::new(),
         }
     }
 
     pub fn insert_eth_message(&mut self, sender_addr: Uint256, msg: &[u8]) {
-        self.l1_inbox = Value::Tuple(vec![
-            self.l1_inbox.clone(),
-            Value::Tuple(vec![
-                Value::Int(Uint256::zero()), // mocked-up blockhash
-                Value::Int(self.current_timestamp.clone()),
-                Value::Int(self.current_block_num.clone()),
-                Value::Int(sender_addr), // fake message sender
-                bytestack_from_bytes(msg),
-            ]),
+        let l1_msg = Value::Tuple(vec![
+            Value::Int(Uint256::zero()), // mocked-up blockhash
+            Value::Int(self.current_timestamp.clone()),
+            Value::Int(self.current_block_num.clone()),
+            Value::Int(sender_addr), // fake message sender
+            bytestack_from_bytes(msg),
         ]);
+        self.l1_inbox = Value::Tuple(vec![self.l1_inbox.clone(), l1_msg.clone()]);
+        self.recorder.add_msg(l1_msg);
     }
 
     pub fn insert_txcall_message(
@@ -116,7 +121,8 @@ impl RuntimeEnvironment {
     }
 
     pub fn push_log(&mut self, log_item: Value) {
-        self.logs.push(log_item);
+        self.logs.push(log_item.clone());
+        self.recorder.add_log(log_item);
     }
 
     pub fn get_all_logs(&self) -> Vec<Value> {
@@ -218,6 +224,40 @@ fn bytes_from_bytestack_2(cell: Value, nbytes: usize) -> Option<Vec<u8>> {
         } else {
             None
         }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RtEnvRecorder {
+    format_version: u64,
+    inbox: Value,
+    logs: Vec<Value>,
+}
+
+impl RtEnvRecorder {
+    fn new() -> Self {
+        RtEnvRecorder {
+            format_version: 1,
+            inbox: Value::none(),
+            logs: Vec::new(),
+        }
+    }
+
+    fn add_msg(&mut self, msg: Value) {
+        self.inbox = Value::Tuple(vec![self.inbox.clone(), msg])
+    }
+
+    fn add_log(&mut self, log_item: Value) {
+        self.logs.push(log_item);
+    }
+
+    pub fn to_json_string(&self) -> Result<String, serde_json::Error> {
+        serde_json::to_string(self)
+    }
+
+    pub fn to_file(&self, path: &Path) -> Result<(), io::Error> {
+        let mut file = File::create(path).map(|f| Box::new(f) as Box<dyn io::Write>)?;
+        writeln!(file, "{}", self.to_json_string()?)
     }
 }
 
