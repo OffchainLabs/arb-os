@@ -72,7 +72,7 @@ import func tokens_erc20deposit(
     payee: address,
     amount: uint,
     msg: MessageFromL1
-);
+) -> option<()>;
 
 import func bytearray_new(capacity: uint) -> ByteArray;
 import func bytearray_size(ba: ByteArray) -> uint;
@@ -105,7 +105,6 @@ public impure func handleMessageFromL1(msg: MessageFromL1) -> option<()> {
     let (bs, msgType) = bytestream_getByte(inStream)?;  // get message type
     inStream = bs;
 
-    asm((0, msgType),) { debugprint };
     if (msgType == 0) {
         // txcall message
         let (bs, sequenceNum) = bytestream_getUint(inStream)?;
@@ -146,7 +145,7 @@ public impure func handleMessageFromL1(msg: MessageFromL1) -> option<()> {
             address(payeeAddress),
             amount,
             msg
-        );  // should never return
+        )?;  // should never return
 
         return None;
     } elseif (msgType == 3) {
@@ -186,10 +185,10 @@ public impure func handleMessageFromL1(msg: MessageFromL1) -> option<()> {
         let (bs, contractAddressAsUint) = bytestream_getUint(inStream)?;
         inStream = bs;
 
-        let (storageMap, bs) = parseStorageMap(bs)?;
+        let (storageMap, bs) = parseStorageMap(inStream)?;
         inStream = bs;
 
-        let codeBytes = bytestream_getRemainingBytes(bs);
+        let codeBytes = bytestream_getRemainingBytes(inStream);
         let (codept, evmJumpTable) = translateEvmCodeSegment(bytestream_new(codeBytes))?;
         setGlobalAccountStore(
             accountStore_createAccountFromEvmCode(

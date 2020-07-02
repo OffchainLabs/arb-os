@@ -20,8 +20,9 @@ import type ByteArray;
 import type MessageFromL1;
 
 import impure func getGlobalAccountStore() -> AccountStore;
+import impure func setGlobalAccountStore(acctStore: AccountStore);
 import func accountStore_get(acctStore: AccountStore, addr: address) -> Account;
-import func accountStore_createERC20(acctStore: AccountStore, addr: address) -> AccountStore;
+import func accountStore_createERC20(acctStore: AccountStore, addr: address) -> option<AccountStore>;
 import func account_isEmpty(acct: Account) -> bool;
 
 import func bytearray_new(capacityHint: uint) -> ByteArray;
@@ -43,17 +44,16 @@ public func tokens_erc20deposit(
     payee: address,
     amount: uint,
     fullMsg: MessageFromL1
-) {
-    asm(600,) { debugprint };
+) -> option<()> {
     let globalAS = getGlobalAccountStore();
     if(account_isEmpty(accountStore_get(globalAS, tokenAddress))) {
         globalAS = accountStore_createERC20(
             globalAS,
             tokenAddress
-        );
+        )?;
+        setGlobalAccountStore(globalAS);
     }
 
-    asm(601,) { debugprint };
     // encode the calldata for call to adminMint
     let calldata = bytearray_new(0);
     calldata = bytearray_setByte(
@@ -73,11 +73,9 @@ public func tokens_erc20deposit(
         3,
         0xf9
     );
-    asm(6011,) { debugprint };
     calldata = bytearray_set256(calldata, 4, uint(payee));
     calldata = bytearray_set256(calldata, 36, amount);
 
-    asm(602,) { debugprint };
     initEvmCallStack(
         0,               // treat as regular txcall
         fullMsg,
@@ -87,4 +85,6 @@ public func tokens_erc20deposit(
         0,
         1000000000000,  // gas will eventually be charged to the OS
     );  // should never return
+
+    return None;
 }

@@ -115,9 +115,11 @@ public impure func translateEvmCodeSegment(
         let bytesRemaining = opcode - 0x5f;
         let imm = 0;
         while (bytesRemaining > 0) {
-            let (ubs, val) = bytestream_getByte(bs)?;
-            bs = ubs;
-            imm = 256*imm + val;
+            if let Some(res) = bytestream_getByte(bs) {
+                let (ubs, val) = res;
+                bs = ubs;
+                imm = 256*imm + val;
+            }
             bytesRemaining = bytesRemaining-1;
         }
         let numBytesRead = bytestream_bytesReadSoFar(bs);
@@ -126,7 +128,7 @@ public impure func translateEvmCodeSegment(
         let (restOfCode, evmJumpTable) = translateEvmCodeSegment(bs)?;
 
             // for debugging, uncomment this to get a debugprint before each EVM instruction
-            // restOfCode = pushInstructionImm(0x90, (42, numBytesRead, opcode), restOfCode);
+            //restOfCode = pushInstructionImm(0x90, (42, numBytesRead, opcode), restOfCode);
 
         // Now prepend the current operation onto the front of the generated code.
         return Some((pushValue(imm, restOfCode), evmJumpTable));
@@ -138,7 +140,7 @@ public impure func translateEvmCodeSegment(
 
     let numBytesRead = bytestream_bytesReadSoFar(bs);
         // for debugging, uncomment this to get a debugprint before each EVM instruction
-        // restOfCode = pushInstructionImm(0x90, (42, numBytesRead, opcode), restOfCode);
+        //restOfCode = pushInstructionImm(0x90, (42, numBytesRead, opcode), restOfCode);
 
     if (opcode < 0x80) {
         if (opcode < 0x40) {
@@ -446,8 +448,8 @@ public impure func translateEvmCodeSegment(
         }
     }
 
-    // opcode was not found, so return failure
-    return None<(AvmCodePoint, map<uint, AvmCodePoint>)>;
+    // opcode was not found, don't generate any code
+    return Some((restOfCode, evmJumpTable));
 }
 
 impure func pushEvmInsnDenomCheck(

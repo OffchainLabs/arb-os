@@ -1201,4 +1201,14 @@ pub fn mint_erc20_and_get_balance(debug: bool) {
     assert_eq!(logs.len(), num_logs_before + 2);
     println!("first log item: {}", logs[logs.len() - 2]);
     println!("second log item: {}", logs[logs.len() - 1]);
+    if let Value::Tuple(tup) = &logs[logs.len()-2] {
+        assert_eq!(tup[3], Value::Int(Uint256::one()));
+    } else {
+        panic!("first log item was malformed");
+    }
+    if let Value::Tuple(tup) = &logs[logs.len()-1] {
+        assert_eq!(tup[3], Value::Int(Uint256::one()));
+    } else {
+        panic!("second log item was malformed");
+    }
 }
