@@ -161,25 +161,25 @@ fn test_codeload() {
 
 #[test]
 fn test_evm_load_add() {
-    crate::evm::evm_load_add_and_verify(true, false, false);
+    crate::evm::evm_load_add_and_verify(None, true, false, false);
 }
 
 #[test]
 fn test_evm_load_fib() {
-    crate::evm::evm_load_fib_and_verify(false, false);
+    crate::evm::evm_load_fib_and_verify(None, false, false);
 }
 
 #[test]
 fn test_crosscontract_calls() {
-    crate::evm::evm_xcontract_call_and_verify(false, false);
+    crate::evm::evm_xcontract_call_and_verify(None, false, false);
 }
 
 #[test]
 fn test_direct_deploy_add() {
-    crate::evm::evm_direct_deploy_add(false);
+    crate::evm::evm_direct_deploy_add(None, false);
 }
 
 #[test]
 fn test_direct_deploy_and_call_add() {
-    let log = crate::evm::evm_direct_deploy_and_call_add(false);
+    let log = crate::evm::evm_direct_deploy_and_call_add(None, false);
 }

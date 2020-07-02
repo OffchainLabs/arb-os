@@ -860,6 +860,7 @@ pub fn evm_load_and_call_func(
     function_name: &str,
     args: &[ethabi::Token],
     payment: Uint256,
+    log_to: Option<&Path>,
     mutating: bool,
     debug: bool,
     profile: bool,
@@ -875,6 +876,7 @@ pub fn evm_load_and_call_func(
             mutating,
         }]
         .as_ref(),
+        log_to,
         debug,
         profile,
     )?[0]
@@ -886,6 +888,7 @@ pub fn evm_load_and_call_funcs(
     other_contract_names: &[&str],
     contract_name: &str,
     call_infos: &[CallInfo],
+    log_to: Option<&Path>,
     debug: bool,
     profile: bool,
 ) -> Result<Vec<Vec<ethabi::Token>>, ethabi::Error> {
@@ -984,12 +987,16 @@ pub fn evm_load_and_call_funcs(
             panic!("log item was not a Tuple");
         }
     }
+
+    if let Some(path) = log_to {
+        let _ = machine.runtime_env.recorder.to_file(path).unwrap();
+    }
     Ok(ret)
 }
 
 #[cfg(test)]
 
-pub fn evm_load_add_and_verify(mutating: bool, debug: bool, profile: bool) {
+pub fn evm_load_add_and_verify(log_to: Option<&Path>, mutating: bool, debug: bool, profile: bool) {
     use std::convert::TryFrom;
     match evm_load_and_call_func(
         "contracts/add/compiled.json",
@@ -1002,6 +1009,7 @@ pub fn evm_load_add_and_verify(mutating: bool, debug: bool, profile: bool) {
         ]
         .as_ref(),
         Uint256::zero(),
+        log_to,
         mutating,
         debug,
         profile,
@@ -1021,7 +1029,7 @@ pub fn evm_load_add_and_verify(mutating: bool, debug: bool, profile: bool) {
 }
 
 #[cfg(test)]
-pub fn evm_load_fib_and_verify(debug: bool, profile: bool) {
+pub fn evm_load_fib_and_verify(log_to: Option<&Path>, debug: bool, profile: bool) {
     use std::convert::TryFrom;
     match evm_load_and_call_func(
         "contracts/fibonacci/compiled.json",
@@ -1030,6 +1038,7 @@ pub fn evm_load_fib_and_verify(debug: bool, profile: bool) {
         "doFib",
         vec![ethabi::Token::Uint(ethabi::Uint::try_from(5).unwrap())].as_ref(),
         Uint256::zero(),
+        log_to,
         true,
         debug,
         profile,
@@ -1048,7 +1057,7 @@ pub fn evm_load_fib_and_verify(debug: bool, profile: bool) {
     }
 }
 
-pub fn evm_xcontract_call_and_verify(debug: bool, profile: bool) {
+pub fn evm_xcontract_call_and_verify(log_to: Option<&Path>, debug: bool, profile: bool) {
     use std::convert::TryFrom;
     match evm_load_and_call_funcs(
         "contracts/fibonacci/compiled.json",
@@ -1073,6 +1082,7 @@ pub fn evm_xcontract_call_and_verify(debug: bool, profile: bool) {
             },
         ]
         .as_ref(),
+        log_to,
         debug,
         profile,
     ) {
@@ -1088,7 +1098,7 @@ pub fn evm_xcontract_call_and_verify(debug: bool, profile: bool) {
     }
 }
 
-pub fn evm_direct_deploy_add(debug: bool) {
+pub fn evm_direct_deploy_add(log_to: Option<&Path>, debug: bool) {
     let rt_env = RuntimeEnvironment::new();
     let mut machine = load_from_file(Path::new("arb_os/arbos.mexe"), rt_env);
     machine.start_at_zero();
@@ -1106,9 +1116,13 @@ pub fn evm_direct_deploy_add(debug: bool) {
             panic!("error loading contract: {:?}", e);
         }
     }
+
+    if let Some(path) = log_to {
+        let _ = machine.runtime_env.recorder.to_file(path).unwrap();
+    }
 }
 
-pub fn evm_direct_deploy_and_call_add(debug: bool) {
+pub fn evm_direct_deploy_and_call_add(log_to: Option<&Path>, debug: bool) {
     use std::convert::TryFrom;
     let rt_env = RuntimeEnvironment::new();
     let mut machine = load_from_file(Path::new("arb_os/arbos.mexe"), rt_env);
@@ -1168,5 +1182,9 @@ pub fn evm_direct_deploy_and_call_add(debug: bool) {
         Err(e) => {
             panic!(e.to_string());
         }
+    }
+
+    if let Some(path) = log_to {
+        let _ = machine.runtime_env.recorder.to_file(path).unwrap();
     }
 }

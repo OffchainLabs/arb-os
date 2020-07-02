@@ -16,7 +16,11 @@
 
 use crate::mavm::Value;
 use crate::uint256::Uint256;
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use std::fs::File;
+use std::io;
+use std::path::Path;
 
 #[derive(Debug, Clone)]
 pub struct RuntimeEnvironment {
@@ -26,7 +30,7 @@ pub struct RuntimeEnvironment {
     pub logs: Vec<Value>,
     pub seq_nums: HashMap<Uint256, Uint256>,
     next_id: Uint256, // used to assign unique (but artificial) txids to messages
-    recorder: RtEnvRecorder,
+    pub recorder: RtEnvRecorder,
 }
 
 impl RuntimeEnvironment {
@@ -50,10 +54,7 @@ impl RuntimeEnvironment {
             Value::Int(sender_addr), // fake message sender
             bytestack_from_bytes(msg),
         ]);
-        self.l1_inbox = Value::Tuple(vec![
-            self.l1_inbox.clone(),
-            l1_msg.clone(),
-        ]);
+        self.l1_inbox = Value::Tuple(vec![self.l1_inbox.clone(), l1_msg.clone()]);
         self.recorder.add_msg(l1_msg);
     }
 
@@ -226,29 +227,35 @@ fn bytes_from_bytestack_2(cell: Value, nbytes: usize) -> Option<Vec<u8>> {
     }
 }
 
-#[derive(Debug, Clone)]
-struct RtEnvRecorder {
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RtEnvRecorder {
     inbox: Value,
-    logs: Vec<Value>
+    logs: Vec<Value>,
 }
 
 impl RtEnvRecorder {
     fn new() -> Self {
-        RtEnvRecorder{
+        RtEnvRecorder {
             inbox: Value::none(),
             logs: Vec::new(),
         }
     }
 
     fn add_msg(&mut self, msg: Value) {
-        self.inbox = Value::Tuple(vec![
-            self.inbox.clone(),
-            msg,
-        ])
+        self.inbox = Value::Tuple(vec![self.inbox.clone(), msg])
     }
 
     fn add_log(&mut self, log_item: Value) {
         self.logs.push(log_item);
+    }
+
+    pub fn to_json_string(&self) -> Result<String, serde_json::Error> {
+        serde_json::to_string(self)
+    }
+
+    pub fn to_file(&self, path: &Path) -> Result<(), io::Error> {
+        let mut file = File::create(path).map(|f| Box::new(f) as Box<dyn io::Write>)?;
+        writeln!(file, "{}", self.to_json_string()?)
     }
 }
 

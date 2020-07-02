@@ -290,7 +290,7 @@ fn main() -> Result<(), CompileError> {
     if let Some(matches) = matches.subcommand_matches("evmdebug") {
         let debug = matches.is_present("debug");
         let profile = matches.is_present("profiler");
-        evm::evm_xcontract_call_and_verify(debug, profile);
+        evm::evm_xcontract_call_and_verify(None, debug, profile);
     }
 
     if let Some(matches) = matches.subcommand_matches("profiler") {
