@@ -220,4 +220,8 @@ pub fn make_logs_for_all_arbos_tests() {
         Some(Path::new("testlogs/evm_direct_deploy_and_call_add.aoslog")),
         false,
     );
+
+#[test]
+fn test_erc20() {
+    crate::evm::mint_erc20_and_get_balance(false);
 }

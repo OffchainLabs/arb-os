@@ -19,3 +19,5 @@ minitests/*.mao
 minitests/*.mexe
 contracts/add/node_modules/*
 testlogs/*
+arbruntime/contractTemplates.mini
+arb_os/contractTemplates.mini
