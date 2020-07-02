@@ -15,6 +15,7 @@
  */
 
 use crate::compile::{CompileError, CompiledProgram, Type};
+#[cfg(test)]
 use crate::evm::abi::AbiForContract;
 use crate::link::{link, postlink_compile, ImportedFunc, LinkedProgram};
 use crate::mavm::{AVMOpcode, Instruction, Label, LabelGenerator, Opcode, Value};
@@ -1088,6 +1089,7 @@ pub fn evm_xcontract_call_and_verify(debug: bool, profile: bool) {
     }
 }
 
+#[cfg(test)]
 pub fn evm_direct_deploy_add(debug: bool) {
     let rt_env = RuntimeEnvironment::new();
     let mut machine = load_from_file(Path::new("arb_os/arbos.mexe"), rt_env);
@@ -1108,6 +1110,7 @@ pub fn evm_direct_deploy_add(debug: bool) {
     }
 }
 
+#[cfg(test)]
 pub fn evm_direct_deploy_and_call_add(debug: bool) {
     use std::convert::TryFrom;
     let rt_env = RuntimeEnvironment::new();
@@ -1171,6 +1174,7 @@ pub fn evm_direct_deploy_and_call_add(debug: bool) {
     }
 }
 
+#[cfg(test)]
 pub fn mint_erc20_and_get_balance(debug: bool) {
     let token_addr = Uint256::from_usize(32563);
     let me = Uint256::from_usize(1025);
@@ -1201,12 +1205,12 @@ pub fn mint_erc20_and_get_balance(debug: bool) {
     assert_eq!(logs.len(), num_logs_before + 2);
     println!("first log item: {}", logs[logs.len() - 2]);
     println!("second log item: {}", logs[logs.len() - 1]);
-    if let Value::Tuple(tup) = &logs[logs.len()-2] {
+    if let Value::Tuple(tup) = &logs[logs.len() - 2] {
         assert_eq!(tup[3], Value::Int(Uint256::one()));
     } else {
         panic!("first log item was malformed");
     }
-    if let Value::Tuple(tup) = &logs[logs.len()-1] {
+    if let Value::Tuple(tup) = &logs[logs.len() - 1] {
         assert_eq!(tup[3], Value::Int(Uint256::one()));
     } else {
         panic!("second log item was malformed");

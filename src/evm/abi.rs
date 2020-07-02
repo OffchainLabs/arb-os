@@ -14,8 +14,11 @@
  * limitations under the License.
  */
 
+#[cfg(test)]
 use crate::mavm::Value;
-use crate::run::{Machine, RuntimeEnvironment};
+#[cfg(test)]
+use crate::run::Machine;
+use crate::run::RuntimeEnvironment;
 use crate::uint256::Uint256;
 use std::collections::HashMap;
 use std::convert::TryInto;
@@ -193,6 +196,7 @@ pub struct AbiForContract {
 }
 
 impl AbiForContract {
+    #[cfg(test)]
     pub fn new_from_file(filename: &str) -> Result<Self, ethabi::Error> {
         let path = Path::new(filename);
         let mut file = match File::open(path) {
@@ -269,6 +273,7 @@ impl AbiForContract {
         }
     }
 
+    #[cfg(test)]
     pub fn deploy(
         &mut self,
         args: &[ethabi::Token],
@@ -308,10 +313,12 @@ impl AbiForContract {
         }
     }
 
+    #[cfg(test)]
     pub fn get_function(&self, name: &str) -> Result<&ethabi::Function, ethabi::Error> {
         self.contract.function(name)
     }
 
+    #[cfg(test)]
     pub fn call_function(
         &self,
         func_name: &str,
