@@ -607,7 +607,10 @@ fn mavm_codegen_statements(
             )?;
             label_gen = lg;
             code = c;
-            code.push(Instruction::from_opcode(Opcode::DebugPrint, *loc));
+            code.push(Instruction::from_opcode(
+                Opcode::AVMOpcode(AVMOpcode::DebugPrint),
+                *loc,
+            ));
             mavm_codegen_statements(
                 rest_of_statements.to_vec(),
                 code,
