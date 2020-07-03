@@ -67,6 +67,7 @@ import func evmOp_stop();
 import func evmOp_timestamp();
 import func evmOp_txexecgas();
 import func evmOp_create();
+import func evmOp_create2();
 
 
 // An AVM CodePoint, that is, a place that AVM code can jump to, is represented as a func()
@@ -261,9 +262,11 @@ public impure func translateEvmCodeSegment(
                 if (opcode < 0x45) {
                     if (opcode < 0x43) {
                         if (opcode == 0x40) { // BLOCKHASH
-                            return None<(AvmCodePoint, map<uint, AvmCodePoint>)>;
+                            return Some((restOfCode, evmJumpTable));
+                            // return None<(AvmCodePoint, map<uint, AvmCodePoint>)>;
                         } elseif (opcode == 0x41) { // COINBASE
-                            return None<(AvmCodePoint, map<uint, AvmCodePoint>)>;
+                            return Some((pushValue(0, restOfCode), evmJumpTable));
+                            // return None<(AvmCodePoint, map<uint, AvmCodePoint>)>;
                         } elseif (opcode == 0x42) { // TIMESTAMP
                             return pushEvmInsnCall(evmOp_timestamp, restOfCode, evmJumpTable);
                         }
@@ -271,7 +274,8 @@ public impure func translateEvmCodeSegment(
                         if (opcode == 0x43) { // NUMBER
                             return pushEvmInsnCall(evmOp_number, restOfCode, evmJumpTable);
                         } elseif (opcode == 0x44) { // DIFFICULTY
-                            return None<(AvmCodePoint, map<uint, AvmCodePoint>)>;
+                            return Some((pushValue(0, restOfCode), evmJumpTable));
+                            //return None<(AvmCodePoint, map<uint, AvmCodePoint>)>;
                         }
                     }
                 } else {
@@ -334,7 +338,7 @@ public impure func translateEvmCodeSegment(
                     }
                 } else {
                     if (opcode == 0x58) {  // GETPC
-                        return None<(AvmCodePoint, map<uint, AvmCodePoint>)>;
+                        return Some((pushValue(restOfCode, restOfCode), evmJumpTable));
                     } elseif (opcode == 0x59) { // MSIZE
                         return pushEvmInsnCall(evmOp_msize, restOfCode, evmJumpTable);
                     } elseif (opcode == 0x5a) { // GAS
@@ -401,7 +405,7 @@ public impure func translateEvmCodeSegment(
                     }
                 } else {
                     if (opcode == 0xf0) {  // CREATE
-                        return None<(AvmCodePoint, map<uint, AvmCodePoint>)>;
+                        return pushEvmInsnCall(evmOp_create, restOfCode, evmJumpTable);
                     } elseif (opcode == 0xf1) { // CALL
                         return pushEvmInsnCall(evmOp_call, restOfCode, evmJumpTable);
                     } elseif (opcode == 0xf2) { // CALLCODE
@@ -415,7 +419,7 @@ public impure func translateEvmCodeSegment(
                     if (opcode == 0xf4) { // DELEGATECALL
                         return pushEvmInsnCall(evmOp_delegatecall, restOfCode, evmJumpTable);
                     } elseif (opcode == 0xf5) {  // CREATE2
-                        return None<(AvmCodePoint, map<uint, AvmCodePoint>)>;
+                        return pushEvmInsnCall(evmOp_create2, restOfCode, evmJumpTable);
                     } elseif (opcode == 0xfa) { // STATICCALL
                         return pushEvmInsnCall(evmOp_staticcall, restOfCode, evmJumpTable);
                     }
