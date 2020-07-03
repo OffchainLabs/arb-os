@@ -15,8 +15,8 @@ jobs:
     - uses: actions/checkout@v2
     - name: Build
       run: cargo build --verbose
-    - name: Build mini tests
+    - name: Build ArbOS
       run: make clean
-      run: make all
+      run: make arbos
     - name: Run tests
       run: cargo test --verbose
