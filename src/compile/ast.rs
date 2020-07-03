@@ -242,19 +242,19 @@ impl Type {
                 for t in tvec {
                     default_tup.push(t.default_value());
                 }
-                Value::Tuple(default_tup)
+                Value::new_tuple(default_tup)
             }
-            Type::Array(t) => Value::Tuple(vec![
+            Type::Array(t) => Value::new_tuple(vec![
                 Value::Int(Uint256::one()),
                 Value::Int(Uint256::one()),
-                Value::Tuple(vec![t.default_value()]),
+                Value::new_tuple(vec![t.default_value()]),
             ]),
             Type::FixedArray(t, sz) => {
                 let default_val = t.default_value();
-                let mut val = Value::Tuple(vec![default_val; 8]);
+                let mut val = Value::new_tuple(vec![default_val; 8]);
                 let mut chunk_size = 1;
                 while chunk_size * TUPLE_SIZE < *sz {
-                    val = Value::Tuple(vec![val; 8]);
+                    val = Value::new_tuple(vec![val; 8]);
                     chunk_size *= 8;
                 }
                 val
@@ -283,7 +283,7 @@ impl Type {
             Type::Every => {
                 panic!("tried to get default value for the every type");
             }
-            Type::Option(_) => Value::Tuple(vec![Value::Int(Uint256::zero())]),
+            Type::Option(_) => Value::new_tuple(vec![Value::Int(Uint256::zero())]),
         }
     }
 }
@@ -730,9 +730,9 @@ impl OptionConst {
     pub(crate) fn value(&self) -> Value {
         match self {
             OptionConst::_Some(c) => {
-                Value::Tuple(vec![Value::Int(Uint256::one()), c.clone().value()])
+                Value::new_tuple(vec![Value::Int(Uint256::one()), c.clone().value()])
             }
-            OptionConst::None(_) => Value::Tuple(vec![Value::Int(Uint256::zero())]),
+            OptionConst::None(_) => Value::new_tuple(vec![Value::Int(Uint256::zero())]),
         }
     }
 

@@ -26,13 +26,13 @@ use std::io::stdin;
 
 #[derive(Debug, Default, Clone)]
 pub struct ValueStack {
-    contents: Vec<Value>,
+    contents: im::Vector<Value>,
 }
 
 impl ValueStack {
     pub fn new() -> Self {
         ValueStack {
-            contents: Vec::new(),
+            contents: im::Vector::new(),
         }
     }
 
@@ -41,7 +41,7 @@ impl ValueStack {
     }
 
     pub fn push(&mut self, val: Value) {
-        self.contents.push(val);
+        self.contents.push_back(val);
     }
 
     pub fn push_uint(&mut self, val: Uint256) {
@@ -69,7 +69,7 @@ impl ValueStack {
     }
 
     pub fn pop(&mut self, state: &MachineState) -> Result<Value, ExecutionError> {
-        match self.contents.pop() {
+        match self.contents.pop_back() {
             Some(v) => Ok(v),
             None => Err(ExecutionError::new("stack underflow", state, None)),
         }
@@ -130,7 +130,8 @@ impl ValueStack {
     pub fn pop_tuple(&mut self, state: &MachineState) -> Result<Vec<Value>, ExecutionError> {
         let val = self.pop(state)?;
         if let Value::Tuple(v) = val {
-            Ok(v)
+            let vs = &*v;
+            Ok(vs.to_vec())
         } else {
             Err(ExecutionError::new(
                 "expected tuple on stack",
@@ -818,7 +819,7 @@ impl Machine {
 						}
 						if idx < newv.len() {
 							newv[idx] = val;
-							self.stack.push(Value::Tuple(newv));
+							self.stack.push(Value::new_tuple(newv));
 							self.incr_pc();
 							Ok(true)
 						} else {
@@ -892,7 +893,7 @@ impl Machine {
 						if slot_num < tup.len() {
 							let mut new_tup = tup;
 							new_tup[slot_num] = self.stack.pop(&self.state)?;
-							self.aux_stack.push(Value::Tuple(new_tup));
+							self.aux_stack.push(Value::new_tuple(new_tup));
 							self.incr_pc();
 							Ok(true)
 						} else {
@@ -1287,7 +1288,7 @@ impl Machine {
 					Opcode::AVMOpcode(AVMOpcode::OpenInsn) => {
 						let insn = self.code.get_insn(self.stack.pop_codepoint(&self.state)?).unwrap();
 						if let Some(val) = &insn.immediate {
-							self.stack.push(Value::Tuple(vec![val.clone()]));
+							self.stack.push(Value::new_tuple(vec![val.clone()]));
 						} else {
 							self.stack.push(Value::none());
 						}

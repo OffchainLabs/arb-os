@@ -30,7 +30,7 @@ pub fn strip_labels(
     if let Some(evm_pcs) = maybe_evm_pcs {
         let mut list_val = Value::none();
         for evm_pc in evm_pcs {
-            list_val = Value::Tuple(vec![
+            list_val = Value::new_tuple(vec![
                 list_val,
                 Value::Int(Uint256::from_usize(evm_pc)),
                 Value::Label(Label::Evm(evm_pc)),
@@ -39,7 +39,7 @@ pub fn strip_labels(
         // re-do the first instruction in the code, which got a dummy value in link
         code_in[0] = Instruction::from_opcode_imm(
             Opcode::AVMOpcode(AVMOpcode::Swap1),
-            Value::Tuple(vec![
+            Value::new_tuple(vec![
                 list_val,
                 code_in[0]
                     .immediate
