@@ -53,7 +53,8 @@ import impure func initEvmCallStack(
     caller: address,
     calldata: ByteArray,
     callvalue: uint,
-    gas: uint
+    gas: uint,
+    gasPrice: uint
 );
 import impure func initEvmCallStackForConstructor(
     ethMessage: MessageFromL1,
@@ -63,7 +64,8 @@ import impure func initEvmCallStackForConstructor(
     evmJumpTable: map<uint, func()>,
     startPoint: func(),
     calldata: ByteArray,
-    gas: uint
+    gas: uint,
+    gasPrice: uint
 );
 import func evmCallStack_runningCodeFromAccount() -> option<Account>;
 
@@ -268,7 +270,8 @@ impure func handleTxMessage(
             evmJumpTable,
             codept,
             bytearray_new(0),   // no arguments to the call -- they're packed into the code
-            maxGas
+            maxGas,
+            0,  // TODO: calculate real gas price
         );  // should never return
     } else {
         // this is a non-constructor call
@@ -285,6 +288,7 @@ impure func handleTxMessage(
             bytestream_getRemainingBytes(inStream),  // remaining bytes of message passed to contract as calldata
             value,
             maxGas,
+            0,  // TODO: calculate real gas price
         );  // should never return
     }
 

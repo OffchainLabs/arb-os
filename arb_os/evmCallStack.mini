@@ -137,6 +137,7 @@ public impure func initEvmCallStack(
     calldata: ByteArray,
     callvalue: uint,
     gas: uint,
+    gasPrice: uint,
 ) {
     // Set up the call frame for a top-level call, and launch the call's execution.
 
@@ -180,6 +181,7 @@ public impure func initEvmCallStackForConstructor(
     startPoint: func(),
     calldata: ByteArray,
     gas: uint,
+    gasPrice: uint
 ) {
     // Set up the call frame for a top-level constructor call, and launch the call's execution.
     // This is called in the context of a new account.
