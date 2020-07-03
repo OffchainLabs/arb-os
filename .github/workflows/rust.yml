@@ -16,7 +16,6 @@ jobs:
     - name: Build
       run: cargo build --verbose
     - name: Build ArbOS
-      run: make clean
       run: make arbos
     - name: Run tests
       run: cargo test --verbose
