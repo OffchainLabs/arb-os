@@ -184,7 +184,7 @@ fn test_direct_deploy_add() {
 
 #[test]
 fn test_direct_deploy_and_call_add() {
-    let log = crate::evm::evm_direct_deploy_and_call_add(None, false);
+    let _log = crate::evm::evm_direct_deploy_and_call_add(None, false);
 }
 
 #[test]

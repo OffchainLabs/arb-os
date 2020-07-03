@@ -15,7 +15,6 @@
  */
 
 use crate::compile::{CompileError, CompiledProgram, Type};
-#[cfg(test)]
 use crate::evm::abi::AbiForContract;
 use crate::link::{link, postlink_compile, ImportedFunc, LinkedProgram};
 use crate::mavm::{AVMOpcode, Instruction, Label, LabelGenerator, Opcode, Value};

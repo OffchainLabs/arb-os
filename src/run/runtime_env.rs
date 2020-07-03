@@ -94,7 +94,6 @@ impl RuntimeEnvironment {
         self.insert_eth_message(sender_addr, &buf);
     }
 
-    #[cfg(test)]
     pub fn insert_deploy_contract_message(&mut self, contract_code: &[u8]) {
         let sender_addr = Uint256::from_usize(1025);
         let mut buf = vec![6u8];
