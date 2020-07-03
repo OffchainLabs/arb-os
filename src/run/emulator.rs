@@ -440,6 +440,7 @@ impl Machine {
         }
     }
 
+    #[cfg(test)]
     pub fn start_at_zero(&mut self) {
         self.stack.push_usize(0);
         self.state = MachineState::Running(CodePt::Internal(0));

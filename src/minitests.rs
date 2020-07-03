@@ -187,6 +187,11 @@ fn test_direct_deploy_and_call_add() {
     let log = crate::evm::evm_direct_deploy_and_call_add(None, false);
 }
 
+#[test]
+fn test_erc20() {
+    crate::evm::mint_erc20_and_get_balance(false);
+}
+
 pub fn make_logs_for_all_arbos_tests() {
     crate::evm::evm_load_add_and_verify(
         Some(Path::new("testlogs/evm_load_add_and_verify.aoslog")),

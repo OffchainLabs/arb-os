@@ -14,6 +14,10 @@
 // limitations under the License.
 //
 
+import type AccountStore;
+import type MarshalledBytes;
+import type ByteArray;
+import type ByteStream;
 import type MessageFromL1;
 
 import impure func errorHandler_init();
@@ -21,6 +25,27 @@ import impure func initKeccakConstants();
 import impure func gasAccounting_init();
 import impure func inbox_init();
 import impure func accountStore_init();
+import impure func getGlobalAccountStore() -> AccountStore;
+import impure func setGlobalAccountStore(acctStore: AccountStore);
+import func accountStore_createAccountFromEvmCode(
+    store: AccountStore,
+    newAddr: address,
+    code: ByteArray,
+    evmJumpTable: map<uint, func()>,
+    initCodePt: func(),
+    storageMap: map<uint, uint>
+) -> option<AccountStore>;
+import impure func translateEvmCodeSegment(
+    bs: ByteStream
+) -> option<(func(), map<uint, func()>)>;
+import func bytearray_unmarshalBytes(mb: MarshalledBytes) -> ByteArray;
+import func bytestream_new(ba: ByteArray) -> ByteStream;
+import func getErc20code() -> MarshalledBytes;
+import func getErc721code() -> MarshalledBytes;
+import func getErc20address() -> address;
+import func getErc721address() -> address;
+import func getErc20storage() -> map<uint, uint>;
+import func getErc721storage() -> map<uint, uint>;
 
 import impure func inbox_get() -> MessageFromL1;
 import impure func handleMessageFromL1(msg: MessageFromL1) -> option<()>;
@@ -32,6 +57,7 @@ impure func main() {
     gasAccounting_init();
     inbox_init();
     accountStore_init();
+    initializeContractTemplates();
     
     mainRunLoop();
 }
@@ -45,3 +71,37 @@ public impure func mainRunLoop() {
     }
     panic;  // should never be reached
 }
+
+impure func initializeContractTemplates() -> option<()> {
+    let acctStore = getGlobalAccountStore();
+
+    let code = bytearray_unmarshalBytes(getErc20code());
+    let (initCodePt, evmJumpTable) = translateEvmCodeSegment(
+        bytestream_new(code)
+    )?;
+    acctStore = accountStore_createAccountFromEvmCode(
+        acctStore,
+        getErc20address(),
+        code,
+        evmJumpTable,
+        initCodePt,
+        getErc20storage()
+    )?;
+
+    let code = bytearray_unmarshalBytes(getErc721code());
+    let (initCodePt, evmJumpTable) = translateEvmCodeSegment(
+        bytestream_new(code)
+    )?;
+    acctStore = accountStore_createAccountFromEvmCode(
+        acctStore,
+        getErc721address(),
+        code,
+        evmJumpTable,
+        initCodePt,
+        getErc721storage()
+    )?;
+
+    setGlobalAccountStore(acctStore);
+    return Some(());
+}
+

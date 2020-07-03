@@ -81,7 +81,7 @@ $(BUILTINDIR)/cuckookvs.mao: $(BUILTINDIR)/cuckookvs.mini
 	cargo run compile $(BUILTINDIR)/cuckookvs.mini -c -o $(BUILTINDIR)/cuckookvs.mao
 
 ARBOSDIR = arb_os
-ARBOSAOS = $(ARBOSDIR)/main.mao $(ARBOSDIR)/accounts.mao $(ARBOSDIR)/messages.mao $(ARBOSDIR)/inbox.mao $(ARBOSDIR)/evmCallStack.mao $(ARBOSDIR)/evmOps.mao $(ARBOSDIR)/codeSegment.mao $(ARBOSDIR)/evmlogs.mao $(ARBOSDIR)/errorHandler.mao $(ARBOSDIR)/gasAccounting.mao
+ARBOSAOS = $(ARBOSDIR)/main.mao $(ARBOSDIR)/accounts.mao $(ARBOSDIR)/messages.mao $(ARBOSDIR)/inbox.mao $(ARBOSDIR)/evmCallStack.mao $(ARBOSDIR)/evmOps.mao $(ARBOSDIR)/codeSegment.mao $(ARBOSDIR)/evmlogs.mao $(ARBOSDIR)/errorHandler.mao $(ARBOSDIR)/gasAccounting.mao $(ARBOSDIR)/contractTemplates.mao $(ARBOSDIR)/tokens.mao
 ARBOS = $(ARBOSDIR)/arbos.mexe
 
 arbos: $(ARBOS)
@@ -116,6 +116,15 @@ $(ARBOSDIR)/errorHandler.mao: $(ARBOSDIR)/errorHandler.mini
 $(ARBOSDIR)/gasAccounting.mao: $(ARBOSDIR)/gasAccounting.mini
 	cargo run compile $(ARBOSDIR)/gasAccounting.mini -c -o $(ARBOSDIR)/gasAccounting.mao
 
+$(ARBOSDIR)/contractTemplates.mao: $(ARBOSDIR)/contractTemplates.mini
+	cargo run compile $(ARBOSDIR)/contractTemplates.mini -c -o $(ARBOSDIR)/contractTemplates.mao
+
+$(ARBOSDIR)/contractTemplates.mini: src/contracttemplates.rs
+	cargo run maketemplates
+
+$(ARBOSDIR)/tokens.mao: $(ARBOSDIR)/tokens.mini
+	cargo run compile $(ARBOSDIR)/tokens.mini -c -o $(ARBOSDIR)/tokens.mao
+
 $(ARBOS): $(ARBOSAOS) $(STDLIB) $(BUILTINMAOS)
 	cargo run compile $(ARBOSAOS) $(STDLIB) -o $(ARBOS)
 
@@ -129,4 +138,4 @@ compiler:
 	cargo build
 
 clean: 
-	rm -f $(BUILTINMAOS) $(TESTEXES) $(STDLIBMAOS) $(ARBOSAOS) $(ARBOSDIR)/*.mexe
+	rm -f $(BUILTINMAOS) $(TESTEXES) $(STDLIBMAOS) $(ARBOSAOS) $(ARBOSDIR)/*.mexe $(ARBOSDIR)/contractTemplates.mini

@@ -18,4 +18,6 @@ stdlib/*.mexe
 minitests/*.mao
 minitests/*.mexe
 contracts/add/node_modules/*
+arbruntime/contractTemplates.mini
+arb_os/contractTemplates.mini
 testlogs/*
