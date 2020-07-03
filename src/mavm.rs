@@ -570,6 +570,7 @@ pub enum AVMOpcode {
     PushInsn,
     PushInsnImm,
     OpenInsn,
+    Sideload,
     DebugPrint = 0x90,
 }
 
@@ -590,7 +591,8 @@ impl MiniProperties for Opcode {
             | Opcode::AVMOpcode(AVMOpcode::SetGas)
             | Opcode::AVMOpcode(AVMOpcode::GetGas)
             | Opcode::AVMOpcode(AVMOpcode::Jump)
-            | Opcode::AVMOpcode(AVMOpcode::Cjump) => false,
+            | Opcode::AVMOpcode(AVMOpcode::Cjump)
+            | Opcode::AVMOpcode(AVMOpcode::Sideload) => false,
             _ => true,
         }
     }
@@ -654,6 +656,7 @@ impl Opcode {
             "setgas" => Opcode::AVMOpcode(AVMOpcode::SetGas),
             "getgas" => Opcode::AVMOpcode(AVMOpcode::GetGas),
             "errset" => Opcode::AVMOpcode(AVMOpcode::ErrSet),
+            "sideload" => Opcode::AVMOpcode(AVMOpcode::Sideload),
             _ => {
                 panic!("opcode not supported in asm segment: {}", name);
             }
@@ -725,6 +728,7 @@ impl Opcode {
             0x78 => Some(Opcode::AVMOpcode(AVMOpcode::PushInsn)),
             0x79 => Some(Opcode::AVMOpcode(AVMOpcode::PushInsnImm)),
             0x7a => Some(Opcode::AVMOpcode(AVMOpcode::OpenInsn)),
+            0x7b => Some(Opcode::AVMOpcode(AVMOpcode::Sideload)),
             0x90 => Some(Opcode::AVMOpcode(AVMOpcode::DebugPrint)),
             _ => None,
         }
@@ -795,6 +799,7 @@ impl Opcode {
             Opcode::AVMOpcode(AVMOpcode::PushInsn) => Some(0x78),
             Opcode::AVMOpcode(AVMOpcode::PushInsnImm) => Some(0x79),
             Opcode::AVMOpcode(AVMOpcode::OpenInsn) => Some(0x7a),
+            Opcode::AVMOpcode(AVMOpcode::Sideload) => Some(0x7b),
             Opcode::AVMOpcode(AVMOpcode::DebugPrint) => Some(0x90),
             _ => None,
         }
