@@ -35,7 +35,6 @@ mod contracttemplates;
 mod evm;
 mod link;
 mod mavm;
-#[cfg(test)]
 mod minitests;
 pub mod pos;
 mod run;
@@ -176,6 +175,9 @@ fn main() -> Result<(), CompileError> {
         .subcommand(
             SubCommand::with_name("maketemplates").about("generates code for contract templates"),
         )
+        .subcommand(
+            SubCommand::with_name("maketestlogs").about("generates test logs for all ArbOS tests"),
+        )
         .get_matches();
 
     if let Some(matches) = matches.subcommand_matches("compile") {
@@ -295,7 +297,7 @@ fn main() -> Result<(), CompileError> {
     if let Some(matches) = matches.subcommand_matches("evmdebug") {
         let debug = matches.is_present("debug");
         let profile = matches.is_present("profiler");
-        evm::evm_xcontract_call_and_verify(debug, profile);
+        evm::evm_xcontract_call_and_verify(None, debug, profile);
     }
 
     if let Some(matches) = matches.subcommand_matches("profiler") {
@@ -306,6 +308,10 @@ fn main() -> Result<(), CompileError> {
     if let Some(_) = matches.subcommand_matches("maketemplates") {
         let path = Path::new("arb_os/contractTemplates.mini");
         generate_contract_template_file_or_die(path);
+    }
+
+    if let Some(_) = matches.subcommand_matches("maketestlogs") {
+        minitests::make_logs_for_all_arbos_tests();
     }
 
     Ok(())

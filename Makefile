@@ -5,6 +5,11 @@ STDDIR = stdlib
 test: all
 	cargo test --release
 
+testlogs: all
+	rm -rf testlogs
+	mkdir testlogs
+	cargo run --release maketestlogs >/dev/null
+
 evmdebug: all
 	cargo run evmdebug
 
