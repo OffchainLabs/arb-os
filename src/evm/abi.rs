@@ -291,9 +291,9 @@ impl AbiForContract {
         };
 
         machine.runtime_env.insert_txcall_message(
-            Uint256::zero(),
-            Uint256::zero(),
             Uint256::from_usize(1000000000000),
+            Uint256::zero(),
+            Uint256::zero(),
             Uint256::zero(),
             &augmented_code,
         );
@@ -334,27 +334,18 @@ impl AbiForContract {
         args: &[ethabi::Token],
         machine: &mut Machine,
         payment: Uint256,
-        mutating: bool,
         debug: bool,
     ) -> Result<Value, ethabi::Error> {
         let this_function = self.contract.function(func_name)?;
         let calldata = this_function.encode_input(args).unwrap();
 
-        if mutating {
-            machine.runtime_env.insert_txcall_message(
-                self.address.clone(),
-                payment,
-                Uint256::from_usize(1000000000000),
-                Uint256::zero(),
-                &calldata,
-            );
-        } else {
-            machine.runtime_env.insert_nonmutating_call_message(
-                self.address.clone(),
-                Uint256::from_usize(1000000000000),
-                &calldata,
-            );
-        }
+        machine.runtime_env.insert_txcall_message(
+            Uint256::from_usize(1000000000000),
+            Uint256::zero(),
+            self.address.clone(),
+            payment,
+            &calldata,
+        );
 
         let num_logs_before = machine.runtime_env.get_all_logs().len();
         let _arbgas_used = if debug {

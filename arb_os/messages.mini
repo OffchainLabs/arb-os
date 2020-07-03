@@ -227,6 +227,14 @@ impure func handleTxMessage(
     isMutating: bool,
     needsSeqNumCheck: bool,
 ) -> option<()> {
+    // Get max ArbGas limit requested by user
+    let (bs, maxGas) = bytestream_getUint(inStream)?;
+    inStream = bs;
+
+    // Get gas price bid submitted by user
+    let (bs, gasPriceBid) = bytestream_getUint(inStream)?;
+    inStream = bs;
+
     let sequenceNum = 0;
     if (needsSeqNumCheck) {
         let (bs, sn) = bytestream_getUint(inStream)?;
@@ -239,24 +247,8 @@ impure func handleTxMessage(
     inStream = bs;
 
     // Get value of Eth payment that accompanies the message.
-    let value = 0;
-    if (isMutating) {
-        let (bs, val) = bytestream_getUint(inStream)?;
-        inStream = bs;
-        value = val;
-    }
-
-    // Get max ArbGas limit requested by user
-    let (bs, maxGas) = bytestream_getUint(inStream)?;
+    let (bs, value) = bytestream_getUint(inStream)?;
     inStream = bs;
-
-    // Get gas price bid submitted by user
-    let gasPriceBid = 0;
-    if (isMutating) {
-        let (bs, gpb) = bytestream_getUint(inStream)?;
-        inStream = bs;
-        gasPriceBid = gpb;
-    }
 
     if (calleeAddressAsUint == 0) {
         // this is a constructor call
