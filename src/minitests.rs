@@ -195,6 +195,11 @@ pub fn test_crosscontract_call_with_constructors() {
     }
 }
 
+#[test]
+fn test_erc20() {
+    crate::evm::mint_erc20_and_get_balance(false);
+}
+
 pub fn make_logs_for_all_arbos_tests() {
     crate::evm::evm_load_add_and_verify(
         Some(Path::new("testlogs/evm_load_add_and_verify.aoslog")),
@@ -228,7 +233,3 @@ pub fn make_logs_for_all_arbos_tests() {
     );
 }
 
-#[test]
-fn test_erc20() {
-    crate::evm::mint_erc20_and_get_balance(false);
-}
