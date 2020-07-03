@@ -14,9 +14,7 @@
  * limitations under the License.
  */
 
-#[cfg(test)]
 use crate::mavm::Value;
-#[cfg(test)]
 use crate::run::Machine;
 use crate::run::RuntimeEnvironment;
 use crate::uint256::Uint256;
@@ -196,7 +194,6 @@ pub struct AbiForContract {
 }
 
 impl AbiForContract {
-    #[cfg(test)]
     pub fn new_from_file(filename: &str) -> Result<Self, ethabi::Error> {
         let path = Path::new(filename);
         let mut file = match File::open(path) {
@@ -254,6 +251,7 @@ impl AbiForContract {
             };
 
             // strip cbor info at tail end of the code
+            /*
             let cbor_length = u16::from_be_bytes(
                 decoded_insns[decoded_insns.len() - 2..]
                     .try_into()
@@ -261,6 +259,7 @@ impl AbiForContract {
             );
             let cbor_length = cbor_length as usize;
             let decoded_insns = &decoded_insns[..(decoded_insns.len() - cbor_length - 2)];
+             */
 
             Ok(AbiForContract {
                 code_bytes: decoded_insns.to_vec(),
@@ -273,13 +272,13 @@ impl AbiForContract {
         }
     }
 
-    #[cfg(test)]
     pub fn deploy(
         &mut self,
         args: &[ethabi::Token],
         machine: &mut Machine,
         debug: bool,
     ) -> Option<Uint256> {
+        let initial_logs_len = machine.runtime_env.get_all_logs().len();
         let augmented_code = if let Some(constructor) = self.contract.constructor() {
             match constructor.encode_input(self.code_bytes.clone(), args) {
                 Ok(aug_code) => aug_code,
@@ -301,6 +300,14 @@ impl AbiForContract {
         }; // handle this deploy message
         let logs = machine.runtime_env.get_all_logs();
 
+        if logs.len() != initial_logs_len + 1 {
+            println!(
+                "deploy: expected 1 new log item, got {}",
+                logs.len() - initial_logs_len
+            );
+            return None;
+        }
+
         if let Value::Tuple(tup) = &logs[logs.len() - 1] {
             if let Value::Int(ui) = tup[1].clone() {
                 self.address = ui.clone();
@@ -313,12 +320,10 @@ impl AbiForContract {
         }
     }
 
-    #[cfg(test)]
     pub fn get_function(&self, name: &str) -> Result<&ethabi::Function, ethabi::Error> {
         self.contract.function(name)
     }
 
-    #[cfg(test)]
     pub fn call_function(
         &self,
         func_name: &str,
