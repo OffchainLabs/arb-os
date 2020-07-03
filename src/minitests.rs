@@ -221,6 +221,13 @@ pub fn make_logs_for_all_arbos_tests() {
         false,
     );
 
+    let _ = crate::evm::evm_xcontract_call_with_constructors(
+        Some(Path::new("testlogs/evm_xcontract_call_with_constructors.aoslog")),
+        false,
+        false,
+    );
+}
+
 #[test]
 fn test_erc20() {
     crate::evm::mint_erc20_and_get_balance(false);

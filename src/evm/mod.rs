@@ -15,7 +15,6 @@
  */
 
 use crate::compile::{CompileError, CompiledProgram, Type};
-#[cfg(test)]
 use crate::evm::abi::AbiForContract;
 use crate::link::{link, postlink_compile, ImportedFunc, LinkedProgram};
 use crate::mavm::{AVMOpcode, Instruction, Label, LabelGenerator, Opcode, Value};
@@ -1110,8 +1109,6 @@ pub fn evm_xcontract_call_with_constructors(
         panic!("failed to deploy Fibonacci contract");
     }
 
-    println!("Address of fib contract: {}", fib_contract.address);
-
     let mut pc_contract =
         AbiForContract::new_from_file("contracts/fibonacci/build/contracts/PaymentChannel.json")?;
     if pc_contract.deploy(
@@ -1124,8 +1121,6 @@ pub fn evm_xcontract_call_with_constructors(
     {
         panic!("failed to deploy PaymentChannel contract");
     }
-
-    println!("Address of paymentchan contract: {}", pc_contract.address);
 
     let result = pc_contract.call_function(
         "deposit",
@@ -1142,14 +1137,14 @@ pub fn evm_xcontract_call_with_constructors(
     let result = pc_contract.call_function(
         "transferFib",
         vec![
-            ethabi::Token::Address(ethabi::Address::from_low_u64_be(5000)),
+            ethabi::Token::Address(ethabi::Address::from_low_u64_be(1025)),
             ethabi::Token::Uint(ethabi::Uint::try_from(1).unwrap()),
         ]
         .as_ref(),
         &mut machine,
         Uint256::zero(),
         true,
-        true,   // DEBUG
+        debug,
     )?;
     if let Value::Tuple(tup) = result {
         assert_eq!(tup[3], Value::Int(Uint256::one()));

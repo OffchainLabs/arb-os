@@ -14,9 +14,7 @@
  * limitations under the License.
  */
 
-#[cfg(test)]
 use crate::mavm::Value;
-#[cfg(test)]
 use crate::run::Machine;
 use crate::run::RuntimeEnvironment;
 use crate::uint256::Uint256;
@@ -196,7 +194,6 @@ pub struct AbiForContract {
 }
 
 impl AbiForContract {
-    #[cfg(test)]
     pub fn new_from_file(filename: &str) -> Result<Self, ethabi::Error> {
         let path = Path::new(filename);
         let mut file = match File::open(path) {
@@ -275,7 +272,6 @@ impl AbiForContract {
         }
     }
 
-    #[cfg(test)]
     pub fn deploy(
         &mut self,
         args: &[ethabi::Token],
@@ -304,8 +300,11 @@ impl AbiForContract {
         }; // handle this deploy message
         let logs = machine.runtime_env.get_all_logs();
 
-        if logs.len() != initial_logs_len+1 {
-            println!("deploy: expected 1 new log item, got {}", logs.len()-initial_logs_len);
+        if logs.len() != initial_logs_len + 1 {
+            println!(
+                "deploy: expected 1 new log item, got {}",
+                logs.len() - initial_logs_len
+            );
             return None;
         }
 
@@ -321,12 +320,10 @@ impl AbiForContract {
         }
     }
 
-    #[cfg(test)]
     pub fn get_function(&self, name: &str) -> Result<&ethabi::Function, ethabi::Error> {
         self.contract.function(name)
     }
 
-    #[cfg(test)]
     pub fn call_function(
         &self,
         func_name: &str,
@@ -362,10 +359,6 @@ impl AbiForContract {
             machine.run(None)
         };
         let logs = machine.runtime_env.get_all_logs();
-        println!("====");
-        for log in &logs {
-            println!("\n{:?}\n", log);
-        }
         assert_eq!(logs.len(), num_logs_before + 1);
         Ok(logs[logs.len() - 1].clone())
     }

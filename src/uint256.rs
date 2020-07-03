@@ -169,9 +169,10 @@ impl Uint256 {
         Some(Uint256 { val })
     }
 
-    pub fn unchecked_sub(&self, other: &Self) -> Self {  // subtraction mod 2**256
+    pub fn unchecked_sub(&self, other: &Self) -> Self {
+        // subtraction mod 2**256
         if self < other {
-            return other.sub(self).unwrap().unary_minus().unwrap()
+            return other.sub(self).unwrap().unary_minus().unwrap();
         } else {
             self.sub(other).unwrap()
         }

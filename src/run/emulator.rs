@@ -440,7 +440,6 @@ impl Machine {
         }
     }
 
-    #[cfg(test)]
     pub fn start_at_zero(&mut self) {
         self.stack.push_usize(0);
         self.state = MachineState::Running(CodePt::Internal(0));
@@ -547,8 +546,8 @@ impl Machine {
                     println!("PC: {:?}", pc);
                 }
                 println!("Stack contents: {}", self.stack);
-                println!("Aux-stack contents: {}", self.aux_stack);
-                println!("Register contents: {}", self.register);
+                //println!("Aux-stack contents: {}", self.aux_stack);
+                //println!("Register contents: {}", self.register);
                 if !self.stack.is_empty() {
                     println!("Stack top: {}", self.stack.top().unwrap());
                 }
