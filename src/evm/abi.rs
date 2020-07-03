@@ -290,9 +290,13 @@ impl AbiForContract {
             self.code_bytes.clone()
         };
 
-        machine
-            .runtime_env
-            .insert_deploy_contract_message(&augmented_code);
+        machine.runtime_env.insert_txcall_message(
+            Uint256::zero(),
+            Uint256::zero(),
+            Uint256::from_usize(1000000000000),
+            Uint256::zero(),
+            &augmented_code,
+        );
         let _gas_used = if debug {
             machine.debug(None)
         } else {

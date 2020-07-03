@@ -227,9 +227,10 @@ pub fn make_logs_for_all_arbos_tests() {
     );
 
     let _ = crate::evm::evm_xcontract_call_with_constructors(
-        Some(Path::new("testlogs/evm_xcontract_call_with_constructors.aoslog")),
+        Some(Path::new(
+            "testlogs/evm_xcontract_call_with_constructors.aoslog",
+        )),
         false,
         false,
     );
 }
-

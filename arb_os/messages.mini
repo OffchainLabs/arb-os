@@ -107,10 +107,7 @@ public impure func handleMessageFromL1(msg: MessageFromL1) -> option<()> {
 
     if (msgType == 0) {
         // txcall message
-        let (bs, sequenceNum) = bytestream_getUint(inStream)?;
-        inStream = bs;
-        verifyAndIncrSequenceNum(msg.sender, sequenceNum)?;
-        return handleValidTxMessage(inStream, msg, true);
+        return handleTxMessage(inStream, msg, true, true);
     } elseif (msgType == 1) {
         // ethtransfer message
 
@@ -153,39 +150,16 @@ public impure func handleMessageFromL1(msg: MessageFromL1) -> option<()> {
         return None; // NOT YET IMPLEMENTED
     } elseif (msgType == 4) {
         // contract txcall message (just like a normal txcall, but this doesn't have a sequence number)
-        return handleValidTxMessage(inStream, msg, true);
+        return handleTxMessage(inStream, msg, true, false);
     } elseif (msgType == 5) {
         // (non-mutating) call message
-        return handleValidTxMessage(inStream, msg, false);
-    } elseif (msgType == 6) {
-        // EVM constructor/code upload message
-        asm(600,) { debugprint };
-        let (bs, sequenceNum) = bytestream_getUint(inStream)?;
-        inStream = bs;
-        verifyAndIncrSequenceNum(msg.sender, sequenceNum)?;
-
-        asm(601,) { debugprint };
-        let codeBytes = bytestream_getRemainingBytes(bs);
-        let (codept, evmJumpTable) = translateEvmCodeSegment(bytestream_new(codeBytes))?;
-
-        asm(602,) { debugprint };
-        // Generate an address for the new contract.  //TODO: Switch this to use the same method as Ethereum.
-        let newAddress = address(hash(bytes32(msg.sender), bytes32(sequenceNum)));
-
-        asm(603,) { debugprint };
-        initEvmCallStackForConstructor(
-            msg,
-            newAddress,
-            msg.sender,
-            codeBytes,
-            evmJumpTable,
-            codept,
-            bytearray_new(0),   // no arguments to the call -- they're packed into the code
-            1000000000000,            //TODO: limit gas used by constructor
-        );  // should never return
-        return None;
+        return handleTxMessage(inStream, msg, false, false);
+    // msgType 6 is not used
     } elseif (msgType == 7) {
-        // EVM code load message -- this is deprecated
+        // DEPRECATED
+        // EVM code load message
+        // It's better to send a constructor (msgType 0 with destination address 0)
+
         let (bs, contractAddressAsUint) = bytestream_getUint(inStream)?;
         inStream = bs;
 
@@ -247,7 +221,20 @@ func parseStorageMap(bs: ByteStream) -> option<(map<uint, uint>, ByteStream)> {
     }
 }
 
-impure func handleValidTxMessage(inStream: ByteStream, fullMsg: MessageFromL1, isMutating: bool) -> option<()> {
+impure func handleTxMessage(
+    inStream: ByteStream,
+    fullMsg: MessageFromL1,
+    isMutating: bool,
+    needsSeqNumCheck: bool,
+) -> option<()> {
+    let sequenceNum = 0;
+    if (needsSeqNumCheck) {
+        let (bs, sn) = bytestream_getUint(inStream)?;
+        inStream = bs;
+        sequenceNum = sn;
+        verifyAndIncrSequenceNum(fullMsg.sender, sequenceNum)?;
+    }
+
     let (bs, calleeAddressAsUint) = bytestream_getUint(inStream)?;
     inStream = bs;
 
@@ -271,20 +258,43 @@ impure func handleValidTxMessage(inStream: ByteStream, fullMsg: MessageFromL1, i
         gasPriceBid = gpb;
     }
 
-    let callKind = 3;  // staticcall
-    if (isMutating) {
-        callKind = 0;  // call
-    }
+    if (calleeAddressAsUint == 0) {
+        // this is a constructor call
+        if ( ! isMutating) {
+            return None;   // constructor must be mutating
+        }
+        let codeBytes = bytestream_getRemainingBytes(inStream);
+        let (codept, evmJumpTable) = translateEvmCodeSegment(bytestream_new(codeBytes))?;
 
-    initEvmCallStack(
-        callKind,
-        fullMsg,
-        address(calleeAddressAsUint),
-        fullMsg.sender,
-        bytestream_getRemainingBytes(inStream),  // remaining bytes of message passed to contract as calldata
-        value,
-        maxGas,
-    );  // should never return
+        let newAddress = address(hash(bytes32(fullMsg.sender), bytes32(sequenceNum)));
+
+        initEvmCallStackForConstructor(
+            fullMsg,
+            newAddress,
+            fullMsg.sender,
+            codeBytes,
+            evmJumpTable,
+            codept,
+            bytearray_new(0),   // no arguments to the call -- they're packed into the code
+            maxGas
+        );  // should never return
+    } else {
+        // this is a non-constructor call
+        let callKind = 3;  // staticcall
+        if (isMutating) {
+            callKind = 0;  // call
+        }
+
+        initEvmCallStack(
+            callKind,
+            fullMsg,
+            address(calleeAddressAsUint),
+            fullMsg.sender,
+            bytestream_getRemainingBytes(inStream),  // remaining bytes of message passed to contract as calldata
+            value,
+            maxGas,
+        );  // should never return
+    }
 
     return None;
 }
