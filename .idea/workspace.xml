@@ -23,8 +23,9 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="0ec1045c-8109-4aac-8eaa-9c4e0575ccb5" name="Default Changelist" comment="">
-      <change beforePath="$PROJECT_DIR$/builtin/kvs.mini" beforeDir="false" afterPath="$PROJECT_DIR$/builtin/kvs.mini" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/builtin/kvstest.mini" beforeDir="false" afterPath="$PROJECT_DIR$/builtin/kvstest.mini" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/mavm.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/mavm.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/run/emulator.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/run/emulator.rs" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -40,6 +41,20 @@
   <component name="PropertiesComponent">
     <property name="org.rust.cargo.project.model.PROJECT_DISCOVERY" value="true" />
   </component>
+  <component name="RunManager">
+    <configuration name="cargo build" type="CargoCommandRunConfiguration" factoryName="Cargo Command">
+      <option name="channel" value="DEFAULT" />
+      <option name="command" value="build" />
+      <option name="allFeatures" value="false" />
+      <option name="emulateTerminal" value="false" />
+      <option name="backtrace" value="SHORT" />
+      <option name="workingDirectory" value="file://$PROJECT_DIR$" />
+      <envs />
+      <method v="2">
+        <option name="CARGO.BUILD_TASK_PROVIDER" enabled="true" />
+      </method>
+    </configuration>
+  </component>
   <component name="RustProjectSettings">
     <option name="toolchainHomeDirectory" value="$USER_HOME$/.cargo/bin" />
     <option name="version" value="2" />
@@ -49,5 +64,27 @@
   </component>
   <component name="Vcs.Log.Tabs.Properties">
     <option name="oldMeFiltersMigrated" value="true" />
+  </component>
+  <component name="WindowStateProjectService">
+    <state x="1203" y="393" key="#com.intellij.execution.impl.EditConfigurationsDialog" timestamp="1593796371455">
+      <screen x="37" y="23" width="3403" height="1417" />
+    </state>
+    <state x="1203" y="393" key="#com.intellij.execution.impl.EditConfigurationsDialog/37.23.3403.1417@37.23.3403.1417" timestamp="1593796371455" />
+    <state width="1093" height="409" key="GridCell.Tab.0.bottom" timestamp="1593796570596">
+      <screen x="37" y="23" width="3403" height="1417" />
+    </state>
+    <state width="1093" height="409" key="GridCell.Tab.0.bottom/37.23.3403.1417@37.23.3403.1417" timestamp="1593796570596" />
+    <state width="1093" height="409" key="GridCell.Tab.0.center" timestamp="1593796570595">
+      <screen x="37" y="23" width="3403" height="1417" />
+    </state>
+    <state width="1093" height="409" key="GridCell.Tab.0.center/37.23.3403.1417@37.23.3403.1417" timestamp="1593796570595" />
+    <state width="1093" height="409" key="GridCell.Tab.0.left" timestamp="1593796570594">
+      <screen x="37" y="23" width="3403" height="1417" />
+    </state>
+    <state width="1093" height="409" key="GridCell.Tab.0.left/37.23.3403.1417@37.23.3403.1417" timestamp="1593796570594" />
+    <state width="1093" height="409" key="GridCell.Tab.0.right" timestamp="1593796570595">
+      <screen x="37" y="23" width="3403" height="1417" />
+    </state>
+    <state width="1093" height="409" key="GridCell.Tab.0.right/37.23.3403.1417@37.23.3403.1417" timestamp="1593796570595" />
   </component>
 </project>

@@ -1323,6 +1323,11 @@ impl Machine {
                         self.incr_pc();
                         Ok(true)
                     },
+                    Opcode::AVMOpcode(AVMOpcode::Sideload) => {
+                        self.stack.push(Value::none());
+                        self.incr_pc();
+                        Ok(true)
+                    }
 					Opcode::GetLocal |  // these opcodes are for intermediate use in compilation only
 					Opcode::SetLocal |  // they should never appear in fully compiled code
 					Opcode::MakeFrame(_, _) |
