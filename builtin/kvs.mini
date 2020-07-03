@@ -33,7 +33,8 @@ type TreeKvsTriple = struct {  // This struct stores one item in the KVS.
 
 type TreeKvsCell = struct {   // The KVS is represented as a tree of these.
     triple: option<TreeKvsTriple>,
-    children: [8]any    // actually [8]TreeKvs but compiler doesn't support recursive types
+    children: [8]any,    // actually [8]TreeKvs but compiler doesn't support recursive types
+    size: uint
 }
 
 type TreeKvs = option<TreeKvsCell>   // will be None if tree is empty
@@ -62,12 +63,13 @@ public func builtin_kvsHasKey(kvs: TreeKvs, key: any) -> bool {
 }
 
 public func builtin_kvsSet(kvs: TreeKvs, key: any, value: any) -> TreeKvs {
-    if let Some(newKvs) = builtin_kvsSet2(
+    if let Some(res) = builtin_kvsSet2(
         kvs,
         uint(hash(key)),
         key,
         value
     ) {
+        let (newKvs, _) = res;
         return newKvs;
     } else {
         return kvs;
@@ -79,33 +81,37 @@ func builtin_kvsSet2(
     reducedKey: uint,
     key: any,
     value: any
-) -> option<TreeKvs> {
+) -> option<(TreeKvs, int)> {
     // Update a KVS by setting a key/value pair.
-    // This returns Some(updatedKvs) if the structure changed, None if it didn't.
+    // This returns Some((updatedKvs, sizeDiff)) if the structure changed, None if it didn't.
     if let Some(cell) = kvs {
         if let Some(triple) = cell.triple {
             if (triple.reducedKey == reducedKey) {
                 // Found a cell containing the same key. Update the value.
-                return Some(Some(
+                return Some((Some(
                     cell with {
                         triple: Some(triple with { value: value })
                     }
-                ));
+                ), 0s));
             } else {
                 // Didn't find a match here, descend on level in the tree, recursively.
                 let slot = reducedKey % 8;
-                return Some(Some(
+                let oldKid = unsafecast<TreeKvs>(cell.children[slot]);
+                let (newKid, sizeDiff) = builtin_kvsSet2(
+                    oldKid,
+                    reducedKey / 8,
+                    key,
+                    value
+                )?;
+                return Some((Some(
                     cell with {
                         children: cell.children with {
-                            [slot] = builtin_kvsSet2(
-                                unsafecast<TreeKvs>(cell.children[slot]),
-                                reducedKey / 8,
-                                key,
-                                value
-                            )?
+                            [slot] = newKid
                         }
+                    } with {
+                        size: uint(int(cell.size) + sizeDiff)
                     }
-                ));
+                ), sizeDiff));
             }
         } else {
             // This cell doesn't have a triple, so insert our new item here.
@@ -114,10 +120,13 @@ func builtin_kvsSet2(
 
             // If there is an item with the same key lower in the tree, delete it.
             let slot = reducedKey % 8;
-            if let Some(newChild) = builtin_kvsDelete2(
+            let sizeDiff = 1s;
+            if let Some(res) = builtin_kvsDelete2(
                 unsafecast<TreeKvs>(cell.children[slot]),
                 reducedKey / 8
             ) {
+                let (newChild, subSizeDiff) = res;
+                sizeDiff = sizeDiff + subSizeDiff;
                 cell = cell with {
                     children: cell.children with {
                         [slot] = newChild
@@ -126,49 +135,57 @@ func builtin_kvsSet2(
             }
 
             // Now add the new item
-            return Some(Some(
+            return Some((Some(
                 cell with {
                     triple: Some(struct {
                         reducedKey: reducedKey,
                         key: key,
                         value: value
                     })
+                } with {
+                    size: uint(int(cell.size) + sizeDiff)
                 }
-            ));
+            ), sizeDiff));
         }
     } else {
         // There was nothing here, so allocate an empty cell and add this item to it.
-        return Some(Some(
+        return Some((Some(
             struct {
                 triple: Some(struct {
                     reducedKey: reducedKey,
                     key: key,
                     value: value
                 }),
-                children: newfixedarray(8, None<TreeKvsCell>)
+                children: newfixedarray(8, None<TreeKvsCell>),
+                size: 1
             }
-        ));
+        ), 1s));
     }
 }
 
 public func builtin_kvsDelete(kvs: TreeKvs, key: any) -> TreeKvs {
-    if let Some(newKvs) = builtin_kvsDelete2(kvs, uint(hash(key))) {
+    if let Some(res) = builtin_kvsDelete2(kvs, uint(hash(key))) {
+        let (newKvs, _) = res;
         return newKvs;
     } else {
         return kvs;
     }
 }
 
-func builtin_kvsDelete2(kvs: TreeKvs, reducedKey: uint) -> option<TreeKvs> {
+func builtin_kvsDelete2(kvs: TreeKvs, reducedKey: uint) -> option<(TreeKvs, int)> {
     // Delete a key.
-    // Returns Some(updatedKvs) is anything changed, None otherwise.
+    // Returns Some((updatedKvs, sizeDiff)) is anything changed, None otherwise.
     let cell = kvs?;
     if let Some(triple) = cell.triple {
         if (triple.reducedKey == reducedKey) {
             // Found a matching item. Delete it and return.
             return Some(
-                Some(
-                    cell with { triple: None<TreeKvsTriple> }
+                (
+                    Some(
+                        cell with { triple: None<TreeKvsTriple> }
+                             with { size: uint(int(cell.size) - 1s) }
+                    ),
+                    -1s
                 )
             );
         }
@@ -176,16 +193,19 @@ func builtin_kvsDelete2(kvs: TreeKvs, reducedKey: uint) -> option<TreeKvs> {
 
     // Didn't find a match here, descend the tree recursively.
     let slot = reducedKey % 8;
-    return Some(Some(
+    let (newKid, sizeDiff) = builtin_kvsDelete2(
+        unsafecast<TreeKvs>(cell.children[slot]),
+        reducedKey / 8,
+    )?;
+    return Some((Some(
         cell with {
             children: cell.children with {
-                [slot] = builtin_kvsDelete2(
-                    unsafecast<TreeKvs>(cell.children[slot]),
-                    reducedKey / 8,
-                )?
+                [slot] = newKid
             }
+        } with {
+            size: uint(int(cell.size) + sizeDiff)
         }
-    ));
+    ), sizeDiff));
 }
 
 public func builtin_kvsForall(
@@ -212,4 +232,12 @@ public func builtin_kvsForall(
     }
 
     return state;
+}
+
+public func builtin_kvsSize(kvs: TreeKvs) -> uint {
+    if let Some(cell) = kvs {
+        return cell.size;
+    } else {
+        return 0;
+    }
 }
