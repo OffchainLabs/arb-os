@@ -74,7 +74,7 @@ impl CompiledEvmContract {
     fn get_storage_info_struct(&self) -> Value {
         let mut ret = Value::none();
         for (offset, val) in &self.storage {
-            ret = Value::Tuple(vec![
+            ret = Value::new_tuple(vec![
                 ret,
                 Value::Int(offset.clone()),
                 Value::Int(val.clone()),
@@ -971,7 +971,7 @@ pub fn evm_load_and_call_funcs(
     let mut ret = Vec::new();
     for (i, _) in call_infos.iter().enumerate() {
         if let Value::Tuple(tup) = &logs[i] {
-            println!("log number {} received: {:#?}", i, tup);
+            println!("log number {} received: {:#?}", i, *tup);
             if let Some(result_bytes) = bytes_from_bytestack(tup[2].clone()) {
                 if result_bytes.len() == 0 {
                     ret.push(vec![]);

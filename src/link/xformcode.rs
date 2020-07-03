@@ -253,13 +253,13 @@ impl TupleTree {
 
     pub fn make_empty(&self) -> Value {
         match self {
-            TupleTree::Single => Value::Tuple(Vec::new()),
+            TupleTree::Single => Value::new_tuple(Vec::new()),
             TupleTree::Tree(_, v) => {
                 let mut tvec: Vec<Value> = Vec::new();
                 for tt in v.iter() {
                     tvec.push(tt.make_empty());
                 }
-                Value::Tuple(tvec)
+                Value::new_tuple(tvec)
             }
         }
     }
@@ -280,7 +280,7 @@ impl TupleTree {
                     ret.push(subval);
                     vals = new_vals;
                 }
-                (Value::Tuple(ret), vals)
+                (Value::new_tuple(ret), vals)
             }
         }
     }

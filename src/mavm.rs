@@ -23,6 +23,7 @@ use serde::{Deserialize, Serialize};
 use serde_repr::{Deserialize_repr, Serialize_repr};
 use std::collections::HashMap;
 use std::fmt;
+use std::rc::Rc;
 
 #[derive(PartialEq, Eq, Hash, Debug, Clone, Copy, Serialize, Deserialize)]
 pub enum Label {
@@ -320,14 +321,14 @@ impl fmt::Display for CodePt {
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum Value {
     Int(Uint256),
-    Tuple(Vec<Value>),
+    Tuple(Rc<Vec<Value>>),
     CodePoint(CodePt),
     Label(Label),
 }
 
 impl Value {
     pub fn none() -> Self {
-        Value::Tuple(Vec::new())
+        Value::Tuple(Rc::new(vec![]))
     }
 
     pub fn is_none(&self) -> bool {
@@ -336,6 +337,10 @@ impl Value {
         } else {
             false
         }
+    }
+
+    pub fn new_tuple(v: Vec<Value>) -> Self {
+        Value::Tuple(Rc::new(v))
     }
 
     pub fn type_insn_result(&self) -> usize {
@@ -366,7 +371,7 @@ impl Value {
                     let val = v.clone();
                     new_vec.push(val.replace_labels(label_map)?);
                 }
-                Ok(Value::Tuple(new_vec))
+                Ok(Value::new_tuple(new_vec))
             }
         }
     }
@@ -382,15 +387,15 @@ impl Value {
             Value::Tuple(v) => {
                 let mut rel_v = Vec::new();
                 let mut max_func_offset = 0;
-                for val in v {
+                for val in &*v {
                     let (new_val, new_func_offset) =
-                        val.relocate(int_offset, ext_offset, func_offset);
+                        val.clone().relocate(int_offset, ext_offset, func_offset);
                     rel_v.push(new_val);
                     if (max_func_offset < new_func_offset) {
                         max_func_offset = new_func_offset;
                     }
                 }
-                (Value::Tuple(rel_v), max_func_offset)
+                (Value::new_tuple(rel_v), max_func_offset)
             }
             Value::CodePoint(cpt) => (Value::CodePoint(cpt.relocate(int_offset, ext_offset)), 0),
             Value::Label(label) => {
@@ -406,10 +411,10 @@ impl Value {
             Value::Int(_) | Value::CodePoint(_) => self,
             Value::Tuple(v) => {
                 let mut newv = Vec::new();
-                for val in v {
-                    newv.push(val.xlate_labels(label_map));
+                for val in &*v {
+                    newv.push(val.clone().xlate_labels(label_map));
                 }
-                Value::Tuple(newv)
+                Value::new_tuple(newv)
             }
             Value::Label(label) => match label_map.get(&label) {
                 Some(label2) => Value::Label(**label2),
@@ -431,7 +436,7 @@ impl Value {
             Value::Int(ui) => Value::Int(ui.avm_hash()),
             Value::Tuple(v) => {
                 let mut acc = Uint256::zero();
-                for val in v {
+                for val in &*v.clone() {
                     let vhash = val.avm_hash();
                     if let Value::Int(ui) = vhash {
                         acc = Uint256::avm_hash2(&acc, &ui);
@@ -449,7 +454,7 @@ impl Value {
     }
 
     pub fn avm_hash2(v1: &Self, v2: &Self) -> Value {
-        Value::Tuple(vec![v1.clone(), v2.clone()]).avm_hash()
+        Value::new_tuple(vec![v1.clone(), v2.clone()]).avm_hash()
     }
 }
 

@@ -930,7 +930,7 @@ fn mavm_codegen_expr<'a>(
             )?;
             c.push(Instruction::from_opcode_imm(
                 Opcode::AVMOpcode(AVMOpcode::Noop),
-                Value::Tuple(vec![Value::Int(Uint256::from_usize(1)), Value::none()]),
+                Value::new_tuple(vec![Value::Int(Uint256::from_usize(1)), Value::none()]),
                 *loc,
             ));
             c.push(Instruction::from_opcode_imm(
@@ -1265,7 +1265,7 @@ fn mavm_codegen_expr<'a>(
             } else {
                 code.push(Instruction::from_opcode_imm(
                     Opcode::AVMOpcode(AVMOpcode::Noop),
-                    Value::Tuple(vec![]),
+                    Value::new_tuple(vec![]),
                     *loc,
                 ));
                 Ok((lab_gen, code, max(num_locals, nl)))
@@ -1329,7 +1329,7 @@ fn mavm_codegen_expr<'a>(
             let empty_vec = vec![Value::none(); fields_len];
             code.push(Instruction::from_opcode_imm(
                 Opcode::AVMOpcode(AVMOpcode::Noop),
-                Value::Tuple(empty_vec),
+                Value::new_tuple(empty_vec),
                 *loc,
             ));
             for i in 0..fields_len {
@@ -1515,10 +1515,10 @@ fn mavm_codegen_expr<'a>(
                             *loc,
                         ));
                     }
-                    let empty_tuple = vec![Value::Tuple(Vec::new()); 8];
+                    let empty_tuple = vec![Value::new_tuple(Vec::new()); 8];
                     code.push(Instruction::from_opcode_imm(
                         Opcode::AVMOpcode(AVMOpcode::Noop),
-                        Value::Tuple(empty_tuple),
+                        Value::new_tuple(empty_tuple),
                         *loc,
                     ));
                     for i in 0..8 {
@@ -1530,10 +1530,10 @@ fn mavm_codegen_expr<'a>(
                     }
                 }
                 None => {
-                    let empty_tuple = vec![Value::Tuple(Vec::new()); 8];
+                    let empty_tuple = vec![Value::new_tuple(Vec::new()); 8];
                     code.push(Instruction::from_opcode_imm(
                         Opcode::AVMOpcode(AVMOpcode::Noop),
-                        Value::Tuple(empty_tuple),
+                        Value::new_tuple(empty_tuple),
                         *loc,
                     ));
                 }
@@ -1546,10 +1546,10 @@ fn mavm_codegen_expr<'a>(
                         *loc,
                     ));
                 }
-                let empty_tuple = vec![Value::Tuple(Vec::new()); 8];
+                let empty_tuple = vec![Value::new_tuple(Vec::new()); 8];
                 code.push(Instruction::from_opcode_imm(
                     Opcode::AVMOpcode(AVMOpcode::Noop),
-                    Value::Tuple(empty_tuple),
+                    Value::new_tuple(empty_tuple),
                     *loc,
                 ));
                 for i in 0..8 {

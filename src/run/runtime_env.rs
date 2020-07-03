@@ -47,14 +47,14 @@ impl RuntimeEnvironment {
     }
 
     pub fn insert_eth_message(&mut self, sender_addr: Uint256, msg: &[u8]) {
-        let l1_msg = Value::Tuple(vec![
+        let l1_msg = Value::new_tuple(vec![
             Value::Int(Uint256::zero()), // mocked-up blockhash
             Value::Int(self.current_timestamp.clone()),
             Value::Int(self.current_block_num.clone()),
             Value::Int(sender_addr), // fake message sender
             bytestack_from_bytes(msg),
         ]);
-        self.l1_inbox = Value::Tuple(vec![self.l1_inbox.clone(), l1_msg.clone()]);
+        self.l1_inbox = Value::new_tuple(vec![self.l1_inbox.clone(), l1_msg.clone()]);
         self.recorder.add_msg(l1_msg);
     }
 
@@ -147,7 +147,7 @@ impl RuntimeEnvironment {
 }
 
 pub fn bytestack_from_bytes(b: &[u8]) -> Value {
-    Value::Tuple(vec![
+    Value::new_tuple(vec![
         Value::Int(Uint256::from_usize(b.len())),
         bytestack_from_bytes_2(b, Value::none()),
     ])
@@ -158,10 +158,10 @@ fn bytestack_from_bytes_2(b: &[u8], so_far: Value) -> Value {
     if size > 32 {
         bytestack_from_bytes_2(
             &b[32..],
-            Value::Tuple(vec![so_far, bytestack_build_uint(&b[..32])]),
+            Value::new_tuple(vec![so_far, bytestack_build_uint(&b[..32])]),
         )
     } else {
-        Value::Tuple(vec![so_far, bytestack_build_uint(b)])
+        Value::new_tuple(vec![so_far, bytestack_build_uint(b)])
     }
 }
 
@@ -260,7 +260,7 @@ impl RtEnvRecorder {
     }
 
     fn add_msg(&mut self, msg: Value) {
-        self.inbox = Value::Tuple(vec![self.inbox.clone(), msg])
+        self.inbox = Value::new_tuple(vec![self.inbox.clone(), msg])
     }
 
     fn add_log(&mut self, log_item: Value) {
