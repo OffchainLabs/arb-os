@@ -19,30 +19,34 @@ import type Queue;
 import func queue_new() -> Queue;
 import func queue_isEmpty(q: Queue) -> bool;
 import func queue_put(q: Queue, val: any) -> Queue;
-import func queue_get(q: Queue) -> (Queue, any);
+import func queue_get(q: Queue) -> option<(Queue, any)>;
 
 impure func main() {
-	asm(tests(),) { log };
+    if let Some(res) = tests() {
+	    asm(res,) { log };
+	} else {
+	    asm(1000,) { log };
+	}
 }
 
-func tests() -> uint {
+func tests() -> option<uint> {
 	let q = queue_new();
 	if ( ! queue_isEmpty(q)) {
-		return 1;
+		return Some(1);
 	}
 
 	q = queue_new();
 	q = queue_put(q, 42);
 	if (queue_isEmpty(q)) {
-		return 2;
+		return Some(2);
 	} 
 
 	q = queue_new();
 	q = queue_put(q, 42);
 	q = queue_put(q, 97);
-	let pair = queue_get(q);
+	let pair = queue_get(q)?;
 	if (pair.1 != 42) {
-		return 3;
+		return Some(3);
 	}
 
 	q = queue_new();
@@ -53,12 +57,12 @@ func tests() -> uint {
 	}
 	i = 0;
 	while (i < 21) {
-		q = (queue_get(q)).0;
+		q = (queue_get(q)?).0;
 		i = i+1;
 	}
-	if (queue_get(q).1 != 21) {
-		return 4;
+	if ((queue_get(q)?).1 != 21) {
+		return Some(4);
 	}
 
-	return 0;
+	return Some(0);
 }

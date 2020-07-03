@@ -69,7 +69,7 @@ import func bytestream_new(ba: ByteArray) -> ByteStream;
 
 import func queue_new() -> Queue;
 import func queue_isEmpty(q: Queue) -> bool;
-import func queue_get(q: Queue) -> (Queue, any);
+import func queue_get(q: Queue) -> option<(Queue, any)>;
 import func queue_put(q: Queue, val: any) -> Queue;
 
 import func stack_new() -> Stack;
@@ -443,7 +443,7 @@ public impure func evmCallStack_returnFromCall(
                 // Commit the self-destruct events that were requested during the call.
                 let sdq = topFrame.selfDestructQueue;
                 while( ! queue_isEmpty(sdq) ) {
-                    let (q, item) = queue_get(sdq);
+                    let (q, item) = queue_get(sdq)?;
                     sdq = q;
                     let (victim, owner) = unsafecast<(address, address)>(item);
                     acctStore = accountStore_destroyAndTransferBalance(acctStore, victim, owner);

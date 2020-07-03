@@ -17,7 +17,7 @@
 import type Queue;
 import func queue_new() -> Queue;
 import func queue_isEmpty(q: Queue) -> bool;
-import func queue_get(q: Queue) -> (Queue, any);
+import func queue_get(q: Queue) -> option<(Queue, any)>;
 import func queue_put(q: Queue, val: any) -> Queue;
 
 import type MarshalledBytes;
@@ -56,7 +56,7 @@ public impure func inbox_get() -> MessageFromL1 {
     while (queue_isEmpty(inbox.queue)) {
         inbox = getFromL1Inbox(inbox);
     }
-    let (updatedQ, ret,) = queue_get(inbox.queue);
+    let (updatedQ, ret,) = queueGetOrDie(inbox.queue);
     let ebMsg = unsafecast<MessageFromL1>(ret);
 
     // We got a message. Update the blocknum and timestamp of inbox, if necessary.
@@ -70,6 +70,14 @@ public impure func inbox_get() -> MessageFromL1 {
     globalInbox = inbox with { queue: updatedQ };
 
     return ebMsg;
+}
+
+func queueGetOrDie(q: Queue) -> (Queue, any) {
+    if let Some(res) = queue_get(q) {
+        return res;
+    } else {
+        panic;
+    }
 }
 
 // InboxCell is the structure that the Arbitrum protocol uses to combine multiple messages
