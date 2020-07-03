@@ -188,6 +188,14 @@ fn test_direct_deploy_and_call_add() {
 }
 
 #[test]
+pub fn test_crosscontract_call_with_constructors() {
+    match crate::evm::evm_xcontract_call_with_constructors(None, false, false) {
+        Ok(result) => assert_eq!(result, true),
+        Err(e) => panic!("error {}", e),
+    }
+}
+
+#[test]
 fn test_erc20() {
     crate::evm::mint_erc20_and_get_balance(false);
 }
@@ -217,4 +225,11 @@ pub fn make_logs_for_all_arbos_tests() {
         Some(Path::new("testlogs/evm_direct_deploy_and_call_add.aoslog")),
         false,
     );
+
+    let _ = crate::evm::evm_xcontract_call_with_constructors(
+        Some(Path::new("testlogs/evm_xcontract_call_with_constructors.aoslog")),
+        false,
+        false,
+    );
 }
+

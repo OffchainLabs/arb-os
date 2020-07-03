@@ -200,6 +200,7 @@ public impure func initEvmCallStackForConstructor(
             newmap<uint, uint>
         )
     );
+    // don't update globalAccountStore; that happens if/when the constructor commits its results later
 
     globalCallStack = Some(struct {
         runningAs: addr,
@@ -268,7 +269,7 @@ public impure func evmCallStack_doCall(
 
     // now create a new callframe for the callee
     //     it incorporates the balance transfer from caller to callee
-    //          (which is put into the callee frame so it isn't finalized unless the call succeeds)
+    //          (which is put into the callee frame so it isn't committed unless the call succeeds)
     let callee = accountStore_get(topFrame.accountStore, calleeAddr);
     let runningAsAddr = calleeAddr;
     if (kind == 2) {
@@ -287,7 +288,7 @@ public impure func evmCallStack_doCall(
         runningAs: calleeAddr,
         runningCodeFrom: calleeAddr,
         accountStore: updatedAcctStore,
-        runningAsAccount: callee,
+        runningAsAccount: accountStore_get(updatedAcctStore, calleeAddr),
         caller: topFrame.runningAs,
         callKind: kind,
         calldata: bytearray_extract(topFrame.memory, argsOffset, argsLength),
@@ -383,12 +384,7 @@ public impure func evmCallStack_returnFromCall(
 
                     // Use the storage left over by the constructor.
                     let storageMap = newmap<uint, uint>;
-                    if let Some(sm) = account_getAllStorage(
-                        accountStore_get(
-                            topFrame.accountStore,
-                            topFrame.runningCodeFrom
-                        )
-                    ) {
+                    if let Some(sm) = account_getAllStorage(topFrame.runningAsAccount) {
                         storageMap = sm;
                     } else {
                         // Somehow the constructor didn't have storage; report error and panic.

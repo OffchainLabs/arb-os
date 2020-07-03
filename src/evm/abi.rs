@@ -251,6 +251,7 @@ impl AbiForContract {
             };
 
             // strip cbor info at tail end of the code
+            /*
             let cbor_length = u16::from_be_bytes(
                 decoded_insns[decoded_insns.len() - 2..]
                     .try_into()
@@ -258,6 +259,7 @@ impl AbiForContract {
             );
             let cbor_length = cbor_length as usize;
             let decoded_insns = &decoded_insns[..(decoded_insns.len() - cbor_length - 2)];
+             */
 
             Ok(AbiForContract {
                 code_bytes: decoded_insns.to_vec(),
@@ -276,6 +278,7 @@ impl AbiForContract {
         machine: &mut Machine,
         debug: bool,
     ) -> Option<Uint256> {
+        let initial_logs_len = machine.runtime_env.get_all_logs().len();
         let augmented_code = if let Some(constructor) = self.contract.constructor() {
             match constructor.encode_input(self.code_bytes.clone(), args) {
                 Ok(aug_code) => aug_code,
@@ -296,6 +299,14 @@ impl AbiForContract {
             machine.run(None)
         }; // handle this deploy message
         let logs = machine.runtime_env.get_all_logs();
+
+        if logs.len() != initial_logs_len + 1 {
+            println!(
+                "deploy: expected 1 new log item, got {}",
+                logs.len() - initial_logs_len
+            );
+            return None;
+        }
 
         if let Value::Tuple(tup) = &logs[logs.len() - 1] {
             if let Value::Int(ui) = tup[1].clone() {
