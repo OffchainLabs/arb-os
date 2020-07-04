@@ -49,8 +49,7 @@ func errorHandler() {
     if (evmCallStack_isEmpty()) {
         // Oh no, we must have hit an unexpected error in the runtime.
         // That shouldn't have happened, but we have to make the best of the situation.
-        // So we'll reset our ArbGas limit, clean up our stacks, and jump back to the main runloop.
-        asm(~0,) { setgas };
+        // So we'll clean up our stacks, and jump back to the main runloop.
         emptyAvmStack();
         cleanAvmAuxStackAndCall(mainRunLoop);  // this will never return
     } else {

@@ -77,8 +77,10 @@ import func stack_isEmpty(stack: Stack) -> bool;
 import func stack_push(stack: Stack, value: any) -> Stack;
 import func stack_pop(stack: Stack) -> option<(Stack, any)>;
 
-import impure func gasAccounting_fromAppToRuntime() -> uint;
-import impure func gasAccounting_fromRuntimeToApp(gasAllocation: uint);
+import impure func gasAccounting_startTxCharges(maxGas: uint, gasPrice: uint, payer: address) -> option<()>;
+import impure func gasAccounting_endTxCharges() -> option<uint>;
+import impure func gasAccounting_pauseTxCharges() -> uint;
+import impure func gasAccounting_resumeTxCharges(allocation: uint) -> uint;
 
 import impure func translateEvmCodeSegment(
     bs: ByteStream
@@ -167,8 +169,9 @@ public impure func initEvmCallStack(
             parent: None<any>
         });
 
-        gasAccounting_fromRuntimeToApp(gas);
-        entryPoint();  // start executing the call; should never return
+        if (gasAccounting_startTxCharges(gas, gasPrice, caller) != None<()>) {
+            entryPoint();  // start executing the call; should never return
+        }
     }
 }
 
@@ -190,7 +193,7 @@ public impure func initEvmCallStackForConstructor(
 
     globalCurrentEthMessage = ethMessage;
 
-    // Create a new acocunt to run the constructor code.
+    // Create a new account to run the constructor code.
     let acctStore = accountStore_set(
         getGlobalAccountStore(),
         addr,
@@ -221,8 +224,9 @@ public impure func initEvmCallStackForConstructor(
         parent: None<any>
     });
 
-    gasAccounting_fromRuntimeToApp(gas);
-    startPoint();  // start executing the call; should never return
+    if (gasAccounting_startTxCharges(gas, gasPrice, caller) != None<()>) {
+        startPoint();  // start executing the call; should never return
+    }
 }
 
 public impure func evmCallStack_doCall(
@@ -238,7 +242,7 @@ public impure func evmCallStack_doCall(
 ) -> option<()> {
     // Create a new callframe for a subcall, and transfer execution to it.
 
-    let availableGas = gasAccounting_fromAppToRuntime();
+    let availableGas = gasAccounting_pauseTxCharges();
     if (gas > availableGas) {
         gas = availableGas;  // don't give the callee more gas than the caller has
     }
@@ -308,7 +312,7 @@ public impure func evmCallStack_doCall(
 
     // jump to the called code's startCodePoint -- this should never return
     let startCodePoint = account_getStartCodePoint(callee)?;
-    gasAccounting_fromRuntimeToApp(gas);
+    let _ = gasAccounting_resumeTxCharges(gas);
     startCodePoint();
 
     panic;
@@ -321,7 +325,7 @@ public impure func evmCallStack_returnFromCall(
 ) -> option<()> {
     // A call just completed. Commit its effects as appropriate, and return control to its caller.
 
-    let leftoverGas = gasAccounting_fromAppToRuntime();  // amount of gas lent to call that wasn't used
+    let leftoverGas = gasAccounting_pauseTxCharges();  // amount of gas lent to call that wasn't used
 
     let topFrame = globalCallStack?;
     let memory = topFrame.memory;
@@ -370,7 +374,7 @@ public impure func evmCallStack_returnFromCall(
         emptyAvmStack();                             // throw away anything that callee left on the stack
         restoreAvmStack(resumeInfo.stackContents,);  // restore the caller's stack
         asm(success,) { };                           // push return code onto the stack, where caller expects it to be
-        gasAccounting_fromRuntimeToApp(leftoverGas + resumeInfo.savedGas);
+        let _ = gasAccounting_resumeTxCharges(leftoverGas + resumeInfo.savedGas);
         asm(resumeInfo.codePoint,) { jump };         // jump to resume point in caller; this should never return
 
         panic;  // shouldn't happen -- previous instruction jumped away
@@ -480,6 +484,9 @@ public impure func evmCallStack_returnFromCall(
         }
 
         // We're done processing the call results.
+        // First, get a refund for unused gas
+        let _ = gasAccounting_endTxCharges();
+
         // Now discard any AVM stack contents and jump back to the main run loop.
         emptyAvmStack();
         cleanAvmAuxStackAndCall(mainRunLoop,);  // should never return
@@ -746,9 +753,10 @@ public func evmCallFrame_getSelfDestructQueue(frame: EvmCallFrame) -> Queue {
 
 public impure func evmCallStack_callHitError() {
     if (evmCallStack_returnFromCall(false, 0, 0) == None<()>) {
-        // something has gone seriously wrong
-        // try clearing the evmCallStack then forcing a jump to the error handler
+        // something has gone seriously wrong with the evmCallStack
+        // recover by clearing the evmCallStack, refunding unused gas, and jumping back to the error handler
         globalCallStack = None<EvmCallFrame>;
+        let _ = gasAccounting_endTxCharges();
         panic;
     }
 }
