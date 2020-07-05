@@ -207,7 +207,7 @@ impure func switchToChargingOS() -> uint {
 }
 
 // This is the structure that the Arbitrum protocol gives us, for each incoming message.
-// It is declared identically in inbox.mini
+// It is declared identically in inbox.mini and elsewhere
 type MessageFromL1 = struct {
     blockHash: bytes32,       // hash of the L1 block where this message was recorded
     timestamp: uint,          // timestamp of the L1 block
@@ -224,6 +224,10 @@ public impure func getNextMsgFromCongestionAuction() -> (
 ) {
     // For now, the gas auction is a no-op.  It just approves every message at zero gas price.
 
+    if let Some(sideloadedTuple) = trySideload() {
+        return sideloadedTuple;
+    }
+
     let msg = inbox_get();
 
     // get its maxGas amount -- for now, set the limit high, unless caller asked for less
@@ -236,4 +240,29 @@ public impure func getNextMsgFromCongestionAuction() -> (
     }
 
     return (msg, true, maxGas, 0);
+}
+
+// The following function exists to support sideloading.
+// Sideloading is a method used by validators to run non-mutating calls on their
+//     private clones of a chain's state. The sideload instruction is defined to push
+//     an empty tuple () onto the stack, which will cause this procedure to always
+//     return None when executed by an Arbitrum chain.
+// But a validator (or really any "full node" on an Arbitrum chain) wants to be able to
+//     run non-mutating calls on a private clone of the chain, so that it can get
+//     correct results from those non-mutating calls without having to use the more
+//     expensive public protocol. To do this, a validator will make a private clone of the
+//     chain's state, then "sideload" messages asking for the non-mutating calls into the
+//     private clone.
+// So in the private clone only, a validator can cause the sideload instruction to push
+//     onto the stack a pair (message, gasLimit).  This function will then return that
+//     pair, which will cause (the private clone of) the chain to run that call.
+impure func trySideload() -> option<(MessageFromL1, bool, uint, uint)> {
+    let sideloadedVal = asm() any { sideload };
+    if (sideloadedVal == ()) {
+        return None;
+    } else {
+        // don't worry about the unsafecast; this block can't execute on the official chain
+        let (msg, gasLimit) = unsafecast<(MessageFromL1, uint)>(sideloadedVal);
+        return Some((msg, true, gasLimit, 0));
+    }
 }
