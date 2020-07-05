@@ -84,6 +84,7 @@ import func bytearray_marshalFull(ba: ByteArray) -> MarshalledBytes;
 import func bytestream_new(ba: ByteArray) -> ByteStream;
 import func bytestream_getByte(bs: ByteStream) -> option<(ByteStream, uint)>;
 import func bytestream_getUint(bs: ByteStream) -> option<(ByteStream, uint)>;
+import func bytestream_skipBytes(bs: ByteStream, nbytes: uint) -> option<ByteStream>;
 import func bytestream_getRemainingBytes(bs: ByteStream) -> ByteArray;
 
 import func translateEvmCodeSegment(bs: ByteStream) -> option<(func(), map<uint, func()>)>;
@@ -99,7 +100,11 @@ type MessageFromL1 = struct {
     msgData: MarshalledBytes  // contents of the message, as a marshalled bytearray
 }
 
-public impure func handleMessageFromL1(msg: MessageFromL1) -> option<()> {
+public impure func handleMessageFromL1(
+    msg: MessageFromL1,
+    maxGas: uint,
+    gasPrice: uint
+) -> option<()> {
     // Parse an incoming message and do appropriate computations
 
     let inStream = bytestream_new(bytearray_unmarshalBytes(msg.msgData));
@@ -109,7 +114,7 @@ public impure func handleMessageFromL1(msg: MessageFromL1) -> option<()> {
 
     if (msgType == 0) {
         // txcall message
-        return handleTxMessage(inStream, msg, true, true);
+        return handleTxMessage(inStream, msg, true, true, maxGas, gasPrice);
     } elseif (msgType == 1) {
         // ethtransfer message
 
@@ -152,10 +157,10 @@ public impure func handleMessageFromL1(msg: MessageFromL1) -> option<()> {
         return None; // NOT YET IMPLEMENTED
     } elseif (msgType == 4) {
         // contract txcall message (just like a normal txcall, but this doesn't have a sequence number)
-        return handleTxMessage(inStream, msg, true, false);
+        return handleTxMessage(inStream, msg, true, false, maxGas, gasPrice);
     } elseif (msgType == 5) {
         // (non-mutating) call message
-        return handleTxMessage(inStream, msg, false, false);
+        return handleTxMessage(inStream, msg, false, false, maxGas, gasPrice);
     // msgType 6 is not used
     } elseif (msgType == 7) {
         // DEPRECATED
@@ -228,14 +233,11 @@ impure func handleTxMessage(
     fullMsg: MessageFromL1,
     isMutating: bool,
     needsSeqNumCheck: bool,
+    maxGas: uint,
+    gasPrice: uint
 ) -> option<()> {
-    // Get max ArbGas limit requested by user
-    let (bs, maxGas) = bytestream_getUint(inStream)?;
-    inStream = bs;
-
-    // Get gas price bid submitted by user
-    let (bs, gasPriceBid) = bytestream_getUint(inStream)?;
-    inStream = bs;
+    // First, discard the
+    inStream = bytestream_skipBytes(inStream, 64)?;   // skip maxGas and gasPriceBid fields of message
 
     let sequenceNum = 0;
     if (needsSeqNumCheck) {
@@ -269,15 +271,15 @@ impure func handleTxMessage(
             codeBytes,
             evmJumpTable,
             codept,
-            bytearray_new(0),   // no arguments to the call -- they're packed into the code
+            bytearray_new(0),   // no calldata for constructor call -- encoded args are packed into the code
             maxGas,
-            0,  // TODO: calculate real gas price
+            gasPrice
         );  // should never return
     } else {
         // this is a non-constructor call
         let callKind = 3;  // staticcall
         if (isMutating) {
-            callKind = 0;  // call
+            callKind = 0;  // txcall
         }
 
         initEvmCallStack(
@@ -288,7 +290,7 @@ impure func handleTxMessage(
             bytestream_getRemainingBytes(inStream),  // remaining bytes of message passed to contract as calldata
             value,
             maxGas,
-            0,  // TODO: calculate real gas price
+            gasPrice
         );  // should never return
     }
 

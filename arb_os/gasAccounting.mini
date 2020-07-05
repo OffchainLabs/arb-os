@@ -16,6 +16,8 @@
 
 import type AccountStore;
 import type Account;
+import type ByteArray;
+import type MarshalledBytes;
 
 import func getGlobalAccountStore() -> AccountStore;
 import func setGlobalAccountStore(acctStore: AccountStore);
@@ -23,6 +25,12 @@ import func accountStore_get(acctStore: AccountStore, addr: address) -> Account;
 import func accountStore_set(acctStore: AccountStore, addr: address, acct: Account) -> AccountStore;
 import func account_addToEthBalance(acct: Account, amount: uint) -> Account;
 import func account_deductFromEthBalance(acct: Account, amount: uint) -> option<Account>;
+
+import func bytearray_unmarshalBytes(mb: MarshalledBytes) -> ByteArray;
+import func bytearray_getByte(ba: ByteArray, offset: uint) -> uint;
+import func bytearray_get256(ba: ByteArray, offset: uint) -> uint;
+
+import impure func inbox_get() -> MessageFromL1;
 
 
 var gasAccountingInfo: struct {
@@ -198,3 +206,34 @@ impure func switchToChargingOS() -> uint {
     }
 }
 
+// This is the structure that the Arbitrum protocol gives us, for each incoming message.
+// It is declared identically in inbox.mini
+type MessageFromL1 = struct {
+    blockHash: bytes32,       // hash of the L1 block where this message was recorded
+    timestamp: uint,          // timestamp of the L1 block
+    blockNumber: uint,        // block number of the L1 block
+    sender: address,          // address of the sender
+    msgData: MarshalledBytes  // contents of the message, as a marshalled bytearray
+}
+
+public impure func getNextMsgFromCongestionAuction() -> (
+    MessageFromL1,  // a message
+    bool,           // was it approved for execution
+    uint,           // maxGas it's allowed to use
+    uint,           // gas price it will pay
+) {
+    // For now, the gas auction is a no-op.  It just approves every message at zero gas price.
+
+    let msg = inbox_get();
+
+    // get its maxGas amount -- for now, set the limit high, unless caller asked for less
+    let maxGas = 1000000000000;
+    let ba = bytearray_unmarshalBytes(msg.msgData);
+    let msgKind = bytearray_getByte(ba, 0);
+
+    if ((msgKind == 0) || (msgKind > 3)) {
+        maxGas = bytearray_get256(ba, 1);
+    }
+
+    return (msg, true, maxGas, 0);
+}
