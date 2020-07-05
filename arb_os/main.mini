@@ -48,7 +48,17 @@ import func getErc20storage() -> map<uint, uint>;
 import func getErc721storage() -> map<uint, uint>;
 
 import impure func inbox_get() -> MessageFromL1;
-import impure func handleMessageFromL1(msg: MessageFromL1) -> option<()>;
+import impure func getNextMsgFromCongestionAuction() -> (
+    MessageFromL1,  // a message
+    bool,           // was it approved for execution
+    uint,           // maxGas it's allowed to use
+    uint,           // gas price it will pay
+) ;
+import impure func handleMessageFromL1(
+    msg: MessageFromL1,
+    maxGas: uint,
+    gasPrice: uint
+) -> option<()>;
 
 
 impure func main() {
@@ -64,9 +74,11 @@ impure func main() {
 
 public impure func mainRunLoop() {
     loop {
-        let msg = inbox_get();
-        if (None<()> == handleMessageFromL1(msg,)) {
-            panic;  //DEBUG:  This is for debugging only. In production we will ignore these errors.
+        let (msg, approved, maxGas, gasPrice) = getNextMsgFromCongestionAuction();
+        if ( ! approved) {
+            panic;  // not yet implemented
+        } elseif (None<()> == handleMessageFromL1(msg, maxGas, gasPrice)) {
+            panic;  // not yet implemented
         }
     }
     panic;  // should never be reached

@@ -52,14 +52,14 @@ public func boundedQueue_put(q: BoundedQueue, val: any) -> BoundedQueue {
     }
 }
 
-public func boundedQueue_get(q: BoundedQueue) -> (BoundedQueue, any) {
+public func boundedQueue_get(q: BoundedQueue) -> option<(BoundedQueue, any)> {
     if (boundedQueue_isEmpty(q)) {
-        return (q, null,);
+        return None;
     } else {
-        return (
+        return Some((
             q with { nextGet: (q.nextGet+1) % q.capacity },
             q.contents[q.nextGet],
-        );
+        ));
     }
 }
 
@@ -69,9 +69,12 @@ public func boundedQueue_expand(q: BoundedQueue, newSize: uint) -> BoundedQueue 
     }
     let newQ = boundedQueue_new(newSize);
     while ( ! boundedQueue_isEmpty(q) ) {
-        let res = boundedQueue_get(q);
-        q = res.0;
-        newQ = boundedQueue_put(newQ, res.1);
+        if let Some(res) = boundedQueue_get(q) {
+            q = res.0;
+            newQ = boundedQueue_put(newQ, res.1);
+        } else {
+            panic;
+        }
     }
     return newQ;
 }
@@ -97,6 +100,6 @@ public func queue_put(q: Queue, val: any) -> Queue {
     return boundedQueue_put(q, val);
 }
 
-public func queue_get(q: Queue) -> (Queue, any) {
+public func queue_get(q: Queue) -> option<(Queue, any)> {
     return boundedQueue_get(q);
 }

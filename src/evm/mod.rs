@@ -940,10 +940,10 @@ pub fn evm_load_and_call_funcs(
         let calldata = this_func.encode_input(call_info.args).unwrap();
         if call_info.mutating {
             rt_env.insert_txcall_message(
-                this_contract.address.clone(),
-                call_info.payment.clone(),
                 Uint256::from_usize(1000000000000),
                 Uint256::zero(),
+                this_contract.address.clone(),
+                call_info.payment.clone(),
                 &calldata,
             );
         } else {
@@ -1127,7 +1127,6 @@ pub fn evm_xcontract_call_with_constructors(
         &vec![],
         &mut machine,
         Uint256::from_usize(10000),
-        true,
         debug,
     )?;
     if let Value::Tuple(tup) = result {
@@ -1143,7 +1142,6 @@ pub fn evm_xcontract_call_with_constructors(
         .as_ref(),
         &mut machine,
         Uint256::zero(),
-        true,
         debug,
     )?;
     if let Value::Tuple(tup) = result {
@@ -1211,7 +1209,6 @@ pub fn evm_direct_deploy_and_call_add(log_to: Option<&Path>, debug: bool) {
         .as_ref(),
         &mut machine,
         Uint256::zero(),
-        true,
         debug,
     );
     match result {
@@ -1259,9 +1256,9 @@ pub fn mint_erc20_and_get_balance(debug: bool) {
     let mut calldata: Vec<u8> = vec![0x70, 0xa0, 0x82, 0x31]; // code for balanceOf method
     calldata.extend(me.to_bytes_be());
     rt_env.insert_txcall_message(
-        token_addr,
-        Uint256::zero(),
         Uint256::from_usize(1000000000),
+        Uint256::zero(),
+        token_addr,
         Uint256::zero(),
         &calldata,
     );

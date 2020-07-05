@@ -37,6 +37,7 @@ import impure func initEvmCallStack(
     calldata: ByteArray,
     callvalue: uint,
     gas: uint,
+    gasPrice: uint,
 );
 
 public func tokens_erc20deposit(
@@ -84,6 +85,7 @@ public func tokens_erc20deposit(
         calldata,
         0,
         1000000000000,  // gas will eventually be charged to the OS
+        0,              // use gas price zero
     );  // should never return
 
     return None;

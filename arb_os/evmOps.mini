@@ -19,7 +19,6 @@ import type EvmCallFrame;
 import type EvmLogs;
 import type ByteArray;
 import type MarshalledBytes;
-import type Queue;
 
 import impure func evmCallStack_topFrame() -> option<EvmCallFrame>;
 import impure func evmCallStack_oldestCallFrame() -> option<EvmCallFrame>;
@@ -55,7 +54,6 @@ import func evmCallFrame_getResumeCodePoint(frame: EvmCallFrame) -> option<func(
 import func evmCallFrame_getCallvalue(frame: EvmCallFrame) -> uint;
 import func evmCallFrame_getCalldata(frame: EvmCallFrame) -> ByteArray;
 import func evmCallFrame_getEvmLogs(frame: EvmCallFrame) -> EvmLogs;
-import func evmCallFrame_getSelfDestructQueue(frame: EvmCallFrame) -> Queue;
 
 import func account_getAddress(acct: Account) -> address;
 import func account_getCodeSize(acct: Account) -> uint;
@@ -78,9 +76,6 @@ import func bytearray_set256(ba: ByteArray, offset: uint, val: uint) -> ByteArra
 import func bytearray_extract(ba: ByteArray, offset: uint, nbytes: uint) -> ByteArray;
 import func bytearray_copy(from: ByteArray, fromOffset: uint, to: ByteArray, toOffset: uint, nbytes: uint) -> ByteArray;
 import func bytearray_marshalFull(from: ByteArray) -> MarshalledBytes;
-
-import func queue_isEmpty(q: Queue) -> bool;
-import func queue_get(q: Queue) -> (Queue, any);
 
 import func keccak256(array: ByteArray, offset: uint, nbytes: uint) -> bytes32;
 

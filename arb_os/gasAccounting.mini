@@ -14,39 +14,255 @@
 // limitations under the License.
 //
 
-var arbGasUsedByRuntime: uint;   // total ArbGas used by the runtime
+import type AccountStore;
+import type Account;
+import type ByteArray;
+import type MarshalledBytes;
+
+import func getGlobalAccountStore() -> AccountStore;
+import func setGlobalAccountStore(acctStore: AccountStore);
+import func accountStore_get(acctStore: AccountStore, addr: address) -> Account;
+import func accountStore_set(acctStore: AccountStore, addr: address, acct: Account) -> AccountStore;
+import func account_addToEthBalance(acct: Account, amount: uint) -> Account;
+import func account_deductFromEthBalance(acct: Account, amount: uint) -> option<Account>;
+
+import func bytearray_unmarshalBytes(mb: MarshalledBytes) -> ByteArray;
+import func bytearray_getByte(ba: ByteArray, offset: uint) -> uint;
+import func bytearray_get256(ba: ByteArray, offset: uint) -> uint;
+
+import impure func inbox_get() -> MessageFromL1;
+
+
+var gasAccountingInfo: struct {
+    gasUsedByOS: uint,            // amount of gas used by OS that validators haven't yet been compensated for
+    weiCollectedFromTxs: uint,    // amount of currency collected from txs but not yet paid out to validators
+    txState: option<TxGasState>,  // status of currently active tx (if there is one)
+};
+
+type TxGasState = struct {
+    gasInReserve: uint,   // how much gas is being held in reserve
+    originalMax: uint,   // the tx's original maxGas value
+    price: uint,         // price of gas, in wei per unit of gas
+    weiHeldForGas: uint, // amount of currency we're holding to cover the current tx's gas use
+    refundTo: address,   // who gets a refund for unused gas at the end, if there is any
+}
+
 
 public impure func gasAccounting_init() {
-    arbGasUsedByRuntime = 0;
+    gasAccountingInfo = struct {
+        gasUsedByOS: 0,
+        weiCollectedFromTxs: 0,
+        txState: None<TxGasState>,
+    };
 }
 
-// The basic logic here is that we are using the ArbGasRemaining register to track the ArbGas that is being used.
-// When the register is >= 2**255, we are charging usage to the runtime.
-// When the register is < 2**255, we are charging usage to an application (the one on top of the evmCallStack).
+// The currently-running Tx has some amount of gas remaining. That gas can be in two places:
+// *  in the ArbGasRemaining register, if that register is < 2**255
+// *  in reserve
+//
+// The state of the ArbGasRemaining register tells us whether we're currently charging gas to the tx or to the OS.
+// *  If the register is < 2**255, we're charging to the tx
+// *  If the register is >= 2**255, we're charging to the OS
+// Note that if execution in the tx (or a subcall it makes) runs out of gas, this will generate an Error and
+//    set ArbGasRemaining to 2**256 - 1, which correctly puts us into the mode of charging the OS.
+// If there is an Error, the Error handler will call us, to inform us that there might have been an out-of-gas situation.
+//    (It's up to us to figure out whether there actually was an out-of-gas situation, vs some unrelated error.)
+//
+// When a new tx starts, we take enough Eth from it to cover its maxGas.
+// When that tx is done, we give it a refund for any unused gas.
 
+public impure func gasAccounting_startTxCharges(
+    maxGas: uint,
+    gasPrice: uint,
+    payer: address
+) -> option<()> {
+    // Start charging a new Tx for ArbGas usage
+    // The caller should already have verified that the payer has enough funds, but we'll return None if not.
 
-public impure func gasAccounting_fromRuntimeToApp(appAllocation: uint) {
-    // stop charging the runtime for ArbGas usage
-    // start charging the currently running application, with <appAllocation> units allocated for the application
-
-    if (appAllocation >= asm(2, 255) uint { exp }) {
-        appAllocation = asm(2, 255) uint { exp } - 1;
+    if (maxGas >= asm(2, 255) uint { exp }) {
+        maxGas = asm(2, 255) uint { exp } - 1;   // make sure
     }
-    arbGasUsedByRuntime = arbGasUsedByRuntime + ((~0) - asm() uint { getgas });
-    asm(appAllocation,) { setgas };
+
+    // take funds from the payer, enough to pay for maxGas at gasPrice
+    let weiToHold = maxGas * gasPrice;
+    let globalAS = getGlobalAccountStore();
+    setGlobalAccountStore(
+        accountStore_set(
+            globalAS,
+            payer,
+            account_deductFromEthBalance(
+                accountStore_get(globalAS, payer),
+                weiToHold
+            )?   // note: returns None if insufficient balance
+        )
+    );
+
+    gasAccountingInfo = gasAccountingInfo with {
+        gasUsedByOS: gasAccountingInfo.gasUsedByOS + ((~0) - asm() uint { getgas })
+    } with {
+        txState: Some(struct {
+            gasInReserve: 0,
+            originalMax: maxGas,
+            price: gasPrice,
+            weiHeldForGas: weiToHold,
+            refundTo: payer,
+        })
+    };
+
+    asm(maxGas,) { setgas };
+    return Some(());
 }
 
-public impure func gasAccounting_fromAppToRuntime() -> uint {
-    // stop charging the currently running application for ArbGas usage
-    // start charging the runtime for ArbGas usage
-    // return how many units of the application's allocation were unused
-    let leftover = asm() uint { getgas };
-    asm(~0,) { setgas };
-    if (leftover < asm(2, 255) uint { exp }) {
-        return leftover;
+public impure func gasAccounting_endTxCharges() -> option<uint> {
+    // stop charging the current tx for gas
+    // refund any unused gas
+    // return the total amount it used, or None if there isn't a tx active
+
+    // switch over to charging the OS for gas
+    let txState = gasAccountingInfo.txState?;
+    let gasToRefund = txState.gasInReserve + switchToChargingOS();
+
+    // refund the unused gas
+    let refund = gasToRefund * txState.price;
+    let globalAS = getGlobalAccountStore();
+    setGlobalAccountStore(
+        accountStore_set(
+            globalAS,
+            txState.refundTo,
+            account_addToEthBalance(
+                accountStore_get(globalAS, txState.refundTo),
+                refund
+            )
+        )
+    );
+    gasAccountingInfo = gasAccountingInfo with {
+        weiCollectedFromTxs: gasAccountingInfo.weiCollectedFromTxs
+                                + (txState.weiHeldForGas - refund)
+    } with {
+        txState: None<TxGasState>
+    };
+
+    return Some(txState.originalMax - gasToRefund);
+}
+
+public impure func gasAccounting_pauseTxCharges() -> uint {
+    // pause charging the currently running tx
+    // return how many units of the tx's initial maxGas are still unused
+
+    if let Some(txState) = gasAccountingInfo.txState {
+        let gasRemaining = txState.gasInReserve + switchToChargingOS();
+        gasAccountingInfo = gasAccountingInfo with {
+            txState: Some(
+                txState with {
+                    gasInReserve: gasRemaining
+                }
+            )
+        };
+        return gasRemaining;
     } else {
-        // Based on ArbGasRemaining, we're in the runtime, so the application must have run out of ArbGas
-        arbGasUsedByRuntime = arbGasUsedByRuntime + ((~0) - leftover);
+        // oops, someone tried to pause tx charges when there's no active tx
+        // to be safe, report that the tx is completely out of gas
         return 0;
+    }
+}
+
+public impure func gasAccounting_resumeTxCharges(allocationRequested: uint) -> uint {
+    // resume the charging of the tx for gas
+    // allocationRequested is how much of its gas the tx wants to allocate
+    // return how much gas we actually allocated = min(requested, available)
+
+    if let Some(txState) = gasAccountingInfo.txState {
+        if (allocationRequested > txState.gasInReserve) {
+            allocationRequested = txState.gasInReserve;  // can't request more gas than you have
+        }
+        gasAccountingInfo = gasAccountingInfo with {
+            txState: Some(
+                txState with {
+                    gasInReserve: txState.gasInReserve - allocationRequested
+                }
+            )
+        };
+
+        asm(allocationRequested,) { setgas };  // start charging the application
+        return allocationRequested;
+    } else {
+        // something went wrong: tried to resume tx charges when there isn't an active tx
+        // to be safe, report that tx is completely out of gas
+        return 0;
+    }
+}
+
+impure func switchToChargingOS() -> uint {
+    // switch to charging the OS for gas, if we aren't already
+    // return amount of the tx's gas that was left over in ArbGasRemaining
+    let gasRemaining = asm() uint { getgas };
+    if (gasRemaining >= asm(2, 255) uint { exp }) {
+        // we were already charging the OS, tx has nothing remaining
+        return 0;
+    } else {
+        // we were charging the tx; switch to charging the OS and return tx's unused amount from ArbGasRemaining
+        asm(~0,) { setgas };
+        return gasRemaining;
+    }
+}
+
+// This is the structure that the Arbitrum protocol gives us, for each incoming message.
+// It is declared identically in inbox.mini and elsewhere
+type MessageFromL1 = struct {
+    blockHash: bytes32,       // hash of the L1 block where this message was recorded
+    timestamp: uint,          // timestamp of the L1 block
+    blockNumber: uint,        // block number of the L1 block
+    sender: address,          // address of the sender
+    msgData: MarshalledBytes  // contents of the message, as a marshalled bytearray
+}
+
+public impure func getNextMsgFromCongestionAuction() -> (
+    MessageFromL1,  // a message
+    bool,           // was it approved for execution
+    uint,           // maxGas it's allowed to use
+    uint,           // gas price it will pay
+) {
+    // For now, the gas auction is a no-op.  It just approves every message at zero gas price.
+
+    if let Some(sideloadedTuple) = trySideload() {
+        return sideloadedTuple;
+    }
+
+    let msg = inbox_get();
+
+    // get its maxGas amount -- for now, set the limit high, unless caller asked for less
+    let maxGas = 1000000000000;
+    let ba = bytearray_unmarshalBytes(msg.msgData);
+    let msgKind = bytearray_getByte(ba, 0);
+
+    if ((msgKind == 0) || (msgKind > 3)) {
+        maxGas = bytearray_get256(ba, 1);
+    }
+
+    return (msg, true, maxGas, 0);
+}
+
+// The following function exists to support sideloading.
+// Sideloading is a method used by validators to run non-mutating calls on their
+//     private clones of a chain's state. The sideload instruction is defined to push
+//     an empty tuple () onto the stack, which will cause this procedure to always
+//     return None when executed by an Arbitrum chain.
+// But a validator (or really any "full node" on an Arbitrum chain) wants to be able to
+//     run non-mutating calls on a private clone of the chain, so that it can get
+//     correct results from those non-mutating calls without having to use the more
+//     expensive public protocol. To do this, a validator will make a private clone of the
+//     chain's state, then "sideload" messages asking for the non-mutating calls into the
+//     private clone.
+// So in the private clone only, a validator can cause the sideload instruction to push
+//     onto the stack a pair (message, gasLimit).  This function will then return that
+//     pair, which will cause (the private clone of) the chain to run that call.
+impure func trySideload() -> option<(MessageFromL1, bool, uint, uint)> {
+    let sideloadedVal = asm() any { sideload };
+    if (sideloadedVal == ()) {
+        return None;
+    } else {
+        // don't worry about the unsafecast; this block can't execute on the official chain
+        let (msg, gasLimit) = unsafecast<(MessageFromL1, uint)>(sideloadedVal);
+        return Some((msg, true, gasLimit, 0));
     }
 }
