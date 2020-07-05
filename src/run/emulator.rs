@@ -1213,9 +1213,9 @@ impl Machine {
 						Ok(true)
 					}
 					Opcode::AVMOpcode(AVMOpcode::Hash2) => {
-						let r1 = self.stack.pop(&self.state)?;
-						let r2 = self.stack.pop(&self.state)?;
-						self.stack.push(Value::avm_hash2(&r1, &r2));
+						let r1 = self.stack.pop_uint(&self.state)?;
+						let r2 = self.stack.pop_uint(&self.state)?;
+						self.stack.push_uint(Uint256::avm_hash2(&r1, &r2));
 						self.incr_pc();
 						Ok(true)
 					}
