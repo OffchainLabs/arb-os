@@ -1289,32 +1289,32 @@ pub fn mint_erc20_and_get_balance(debug: bool) {
 }
 
 pub fn make_logs_for_all_arbos_tests() {
-    crate::evm::evm_load_add_and_verify(
+    evm_load_add_and_verify(
         Some(Path::new("testlogs/evm_load_add_and_verify.aoslog")),
         true,
         false,
         false,
     );
-    crate::evm::evm_load_fib_and_verify(
+    evm_load_fib_and_verify(
         Some(Path::new("testlogs/evm_load_fib_and_verify.aoslog")),
         false,
         false,
     );
-    crate::evm::evm_xcontract_call_and_verify(
+    evm_xcontract_call_and_verify(
         Some(Path::new("testlogs/evm_xcontract_call_and_verify.aoslog")),
         false,
         false,
     );
-    crate::evm::evm_direct_deploy_add(
+    evm_direct_deploy_add(
         Some(Path::new("testlogs/evm_direct_deploy_add.aoslog")),
         false,
     );
-    let _ = crate::evm::evm_direct_deploy_and_call_add(
+    let _ = evm_direct_deploy_and_call_add(
         Some(Path::new("testlogs/evm_direct_deploy_and_call_add.aoslog")),
         false,
     );
 
-    let _ = crate::evm::evm_xcontract_call_with_constructors(
+    let _ = evm_xcontract_call_with_constructors(
         Some(Path::new(
             "testlogs/evm_xcontract_call_with_constructors.aoslog",
         )),
