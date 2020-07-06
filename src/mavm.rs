@@ -21,9 +21,7 @@ use crate::stringtable::StringId;
 use crate::uint256::Uint256;
 use serde::{Deserialize, Serialize};
 use serde_repr::{Deserialize_repr, Serialize_repr};
-use std::collections::HashMap;
-use std::fmt;
-use std::rc::Rc;
+use std::{collections::HashMap, fmt, rc::Rc};
 
 #[derive(PartialEq, Eq, Hash, Debug, Clone, Copy, Serialize, Deserialize)]
 pub enum Label {
@@ -299,7 +297,7 @@ impl CodePt {
                 &Value::Int(Uint256::from_usize(*sz)),
             ),
             CodePt::InSegment(_, _) => {
-                panic!("avm_hash not yet implemented for in-module codepoints");
+                unimplemented!("avm_hash for in-module codepoints");
             }
             CodePt::Null => Value::Int(Uint256::zero()),
         }

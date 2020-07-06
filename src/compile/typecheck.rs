@@ -14,15 +14,12 @@
  * limitations under the License.
  */
 
-use super::symtable::SymTable;
-use crate::compile::ast::StatementKind;
-use crate::compile::{
-    ast::{
-        BinaryOp, Constant, Expr, FuncArg, FuncDecl, FuncDeclKind, GlobalVarDecl, IfArm,
-        ImportFuncDecl, MatchPattern, Statement, StructField, TopLevelDecl, Type, UnaryOp,
-    },
-    MiniProperties,
+use super::ast::{
+    BinaryOp, Constant, Expr, FuncArg, FuncDecl, FuncDeclKind, GlobalVarDecl, IfArm,
+    ImportFuncDecl, MatchPattern, Statement, StatementKind, StructField, TopLevelDecl, Type,
+    UnaryOp,
 };
+use super::{symtable::SymTable, MiniProperties};
 use crate::link::{ExportedFunc, ImportedFunc};
 use crate::mavm::{Instruction, Label, Value};
 use crate::pos::Location;
@@ -279,7 +276,13 @@ impl MiniProperties for TypeCheckedExpr {
                     && fields_exprs.iter().all(|statement| statement.is_pure())
                     && properties.pure
             }
-            TypeCheckedExpr::CodeBlock(_, _, _) => unimplemented!(),
+            TypeCheckedExpr::CodeBlock(statements, return_expr, _) => {
+                statements.iter().all(|statement| statement.is_pure())
+                    && return_expr
+                        .as_ref()
+                        .map(|expr| expr.is_pure())
+                        .unwrap_or(true)
+            }
             TypeCheckedExpr::StructInitializer(fields, _, _) => {
                 fields.iter().all(|field| field.value.is_pure())
             }
@@ -338,7 +341,7 @@ impl TypeCheckedExpr {
             TypeCheckedExpr::CodeBlock(_, expr, _) => expr
                 .clone()
                 .map(|exp| exp.get_type())
-                .unwrap_or(Type::Tuple(vec![])),
+                .unwrap_or_else(|| Type::Tuple(vec![])),
             TypeCheckedExpr::StructInitializer(_, t, _) => t.clone(),
             TypeCheckedExpr::ArrayRef(_, _, t, _) => t.clone(),
             TypeCheckedExpr::FixedArrayRef(_, _, _, t, _) => t.clone(),
@@ -791,7 +794,7 @@ fn typecheck_statement<'a>(
             let tce = typecheck_expr(e, type_table, global_vars, func_table, return_type)?;
             Ok((TypeCheckedStatement::DebugPrint(tce, *loc), vec![]))
         }
-        StatementKind::IfLet(l, r, s, e) => {
+        StatementKind::IfLet(l, r, if_block, else_block) => {
             let tcr = typecheck_expr(r, type_table, global_vars, func_table, return_type)?;
             let tct = match tcr.get_type() {
                 Type::Option(t) => *t,
@@ -807,14 +810,15 @@ fn typecheck_statement<'a>(
                     *l,
                     tcr,
                     typecheck_statement_sequence_with_bindings(
-                        s,
+                        if_block,
                         return_type,
                         type_table,
                         global_vars,
                         func_table,
-                        &vec![(*l, tct.clone())],
+                        &[(*l, tct.clone())],
                     )?,
-                    e.clone()
+                    else_block
+                        .clone()
                         .map(|block| {
                             typecheck_statement_sequence(
                                 &block,
@@ -1133,7 +1137,7 @@ fn typecheck_expr(
                         typecheck_expr(&*x, &inner_type_table, global_vars, func_table, return_type)
                     })
                     .transpose()?
-                    .map(|x| Box::new(x)),
+                    .map(Box::new),
                 *loc,
             ))
         }

@@ -15,14 +15,9 @@
  */
 
 use crate::mavm::Value;
-use crate::run::Machine;
-use crate::run::RuntimeEnvironment;
+use crate::run::{Machine, RuntimeEnvironment};
 use crate::uint256::Uint256;
-use std::collections::HashMap;
-use std::convert::TryInto;
-use std::fs::File;
-use std::io::Read;
-use std::path::Path;
+use std::{collections::HashMap, convert::TryInto, fs::File, io::Read, path::Path};
 
 #[derive(Clone)]
 pub struct AbiForDappArbCompiled {
@@ -45,7 +40,7 @@ impl AbiForDappArbCompiled {
         for contract in &contracts {
             by_name.insert(contract.name.clone(), contract.clone());
         }
-        AbiForDappArbCompiled { contracts, by_name }.clone()
+        AbiForDappArbCompiled { contracts, by_name }
     }
 
     pub fn new_from_file(filename: &str) -> Result<Self, ethabi::Error> {
@@ -291,7 +286,7 @@ impl AbiForContract {
         };
 
         machine.runtime_env.insert_txcall_message(
-            Uint256::from_usize(1000000000000),
+            Uint256::from_usize(1_000_000_000_000),
             Uint256::zero(),
             Uint256::zero(),
             Uint256::zero(),
@@ -340,7 +335,7 @@ impl AbiForContract {
         let calldata = this_function.encode_input(args).unwrap();
 
         machine.runtime_env.insert_txcall_message(
-            Uint256::from_usize(1000000000000),
+            Uint256::from_usize(1_000_000_000_000),
             Uint256::zero(),
             self.address.clone(),
             payment,

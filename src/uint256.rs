@@ -99,9 +99,9 @@ impl Uint256 {
         if raw.len() < 32 {
             let mut ret = vec![0u8; 32 - raw.len()];
             ret.extend(raw);
-            return ret;
+            ret
         } else {
-            return raw;
+            raw
         }
     }
 
@@ -172,7 +172,7 @@ impl Uint256 {
     pub fn unchecked_sub(&self, other: &Self) -> Self {
         // subtraction mod 2**256
         if self < other {
-            return other.sub(self).unwrap().unary_minus().unwrap();
+            other.sub(self).unwrap().unary_minus().unwrap()
         } else {
             self.sub(other).unwrap()
         }

@@ -14,8 +14,8 @@
  * limitations under the License.
  */
 
+use super::{ExportedFunc, ExportedFuncPoint, ImportedFunc};
 use crate::evm::num_runtime_funcs;
-use crate::link::{ExportedFunc, ExportedFuncPoint, ImportedFunc};
 use crate::mavm::{AVMOpcode, CodePt, Instruction, Label, Opcode, Value};
 use crate::uint256::Uint256;
 use std::collections::{HashMap, HashSet};
