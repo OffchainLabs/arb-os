@@ -14,11 +14,8 @@
  * limitations under the License.
  */
 
-#[cfg(test)]
 use crate::mavm::Value;
-#[cfg(test)]
 use crate::run::{run_from_file, RuntimeEnvironment};
-#[cfg(test)]
 use crate::uint256::Uint256;
 use std::path::Path;
 
@@ -198,39 +195,4 @@ pub fn test_crosscontract_call_with_constructors() {
 #[test]
 fn test_erc20() {
     crate::evm::mint_erc20_and_get_balance(false);
-}
-
-pub fn make_logs_for_all_arbos_tests() {
-    crate::evm::evm_load_add_and_verify(
-        Some(Path::new("testlogs/evm_load_add_and_verify.aoslog")),
-        true,
-        false,
-        false,
-    );
-    crate::evm::evm_load_fib_and_verify(
-        Some(Path::new("testlogs/evm_load_fib_and_verify.aoslog")),
-        false,
-        false,
-    );
-    crate::evm::evm_xcontract_call_and_verify(
-        Some(Path::new("testlogs/evm_xcontract_call_and_verify.aoslog")),
-        false,
-        false,
-    );
-    crate::evm::evm_direct_deploy_add(
-        Some(Path::new("testlogs/evm_direct_deploy_add.aoslog")),
-        false,
-    );
-    let _ = crate::evm::evm_direct_deploy_and_call_add(
-        Some(Path::new("testlogs/evm_direct_deploy_and_call_add.aoslog")),
-        false,
-    );
-
-    let _ = crate::evm::evm_xcontract_call_with_constructors(
-        Some(Path::new(
-            "testlogs/evm_xcontract_call_with_constructors.aoslog",
-        )),
-        false,
-        false,
-    );
 }
