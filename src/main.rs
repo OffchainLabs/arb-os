@@ -35,6 +35,7 @@ mod contracttemplates;
 mod evm;
 mod link;
 mod mavm;
+#[cfg(test)]
 mod minitests;
 pub mod pos;
 mod run;
@@ -306,7 +307,7 @@ fn main() -> Result<(), CompileError> {
     }
 
     if let Some(_) = matches.subcommand_matches("maketestlogs") {
-        minitests::make_logs_for_all_arbos_tests();
+        evm::make_logs_for_all_arbos_tests();
     }
 
     if let Some(_) = matches.subcommand_matches("maketemplates") {
