@@ -297,7 +297,7 @@ impl CodePt {
                 &Value::Int(Uint256::from_usize(*sz)),
             ),
             CodePt::InSegment(_, _) => {
-                panic!("avm_hash not yet implemented for in-module codepoints");
+                unimplemented!("avm_hash for in-module codepoints");
             }
             CodePt::Null => Value::Int(Uint256::zero()),
         }

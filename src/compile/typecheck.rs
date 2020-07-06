@@ -276,7 +276,13 @@ impl MiniProperties for TypeCheckedExpr {
                     && fields_exprs.iter().all(|statement| statement.is_pure())
                     && properties.pure
             }
-            TypeCheckedExpr::CodeBlock(_, _, _) => unimplemented!(),
+            TypeCheckedExpr::CodeBlock(statements, return_expr, _) => {
+                statements.iter().all(|statement| statement.is_pure())
+                    && return_expr
+                        .as_ref()
+                        .map(|expr| expr.is_pure())
+                        .unwrap_or(true)
+            }
             TypeCheckedExpr::StructInitializer(fields, _, _) => {
                 fields.iter().all(|field| field.value.is_pure())
             }

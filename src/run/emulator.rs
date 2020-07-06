@@ -280,7 +280,7 @@ impl CodeStore {
                         //None
                     }
                 } else {
-                    panic!("branching segments not yet implemented");
+                    unimplemented!("branching segments");
                 }
             }
         } else {
@@ -1220,7 +1220,7 @@ impl Machine {
 						Ok(true)
 					}
 					Opcode::AVMOpcode(AVMOpcode::GetTime) => {
-						panic!("GetTime instruction not yet implemented");
+						unimplemented!("GetTime instruction");
 					}
 					Opcode::AVMOpcode(AVMOpcode::Inbox) => {
 						let msgs = self.runtime_env.get_inbox();
@@ -1241,7 +1241,7 @@ impl Machine {
 						Ok(true)
 					}
 					Opcode::AVMOpcode(AVMOpcode::Send) => {
-						panic!("Send instruction not yet implemented");
+						unimplemented!("Send instruction");
 					}
 					Opcode::AVMOpcode(AVMOpcode::Log) => {
 						let val = self.stack.pop(&self.state)?;
