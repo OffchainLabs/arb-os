@@ -30,7 +30,7 @@ public impure func errorHandler_init() {
     asm(pushAndJump,) { errset };
 }
 
-func errorHandler() {
+impure func errorHandler() {
     // If we got here, it's because some AVM instruction hit an Error
     // This could happen for several reasons.
     //   1.  untrusted application code tried to do something erroneous, like dividing by zero

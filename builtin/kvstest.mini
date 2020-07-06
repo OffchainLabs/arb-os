@@ -18,7 +18,7 @@ import func builtin_kvsDelete(kvs: any, key: any) -> any;
 import func builtin_kvsForall(kvs: any, cb: func(any, any, any) -> any, state: any) -> any;
 import func builtin_kvsSize(kvs: any) -> uint;
 
-func main() {
+impure func main() {
 	asm(tests(),) { log };
 }
 

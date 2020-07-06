@@ -696,8 +696,13 @@ public impure func evmOp_selfdestruct(owner: address) {
     evmCallStack_selfDestructCurrentAccount(owner,);
 }
 
-public impure func evmOp_create(value: uint, offset: uint, length: uint) -> address {
+public func evmOp_create(value: uint, offset: uint, length: uint) -> address {
     evm_notYetImplemented(66,);
+    panic;
+}
+
+public func evmOp_create2(value: uint, offset: uint, length: uint, salt: uint) -> address {
+    evm_notYetImplemented(67,);
     panic;
 }
 

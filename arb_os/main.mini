@@ -67,7 +67,9 @@ impure func main() {
     gasAccounting_init();
     inbox_init();
     accountStore_init();
-    initializeContractTemplates();
+    if (initializeContractTemplates() == None<()>) {
+        panic;   // don't try to run without contract templates
+    }
     
     mainRunLoop();
 }

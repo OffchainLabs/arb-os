@@ -69,7 +69,7 @@ import impure func initEvmCallStackForConstructor(
 );
 import func evmCallStack_runningCodeFromAccount() -> option<Account>;
 
-import func tokens_erc20deposit(
+import impure func tokens_erc20deposit(
     tokenAddr: address,
     payee: address,
     amount: uint,

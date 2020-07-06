@@ -40,7 +40,7 @@ import impure func initEvmCallStack(
     gasPrice: uint,
 );
 
-public func tokens_erc20deposit(
+public impure func tokens_erc20deposit(
     tokenAddress: address,
     payee: address,
     amount: uint,
