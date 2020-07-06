@@ -1383,4 +1383,6 @@ pub fn make_logs_for_all_arbos_tests() {
         false,
         false,
     );
+
+    evm_test_arbsys(Some(Path::new("testlogs/evm_test_arbsys.aoslog")), false);
 }
