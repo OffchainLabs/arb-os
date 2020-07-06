@@ -211,7 +211,7 @@ fn main() -> Result<(), CompileError> {
                 let mut file_hasher = DefaultHasher::new();
                 file_hasher.write(filename.as_bytes());
                 let file_id = file_hasher.finish();
-                file_name_chart.insert(file_id, filename.to_string());
+                file_name_chart.insert(file_id, (*filename).to_string());
                 match compile_from_file(path, file_id, debug_mode) {
                     Ok(compiled_program) => {
                         file_name_chart.extend(compiled_program.file_name_chart.clone());
@@ -306,11 +306,11 @@ fn main() -> Result<(), CompileError> {
         profile_gen_from_file(path.as_ref(), Vec::new(), RuntimeEnvironment::new());
     }
 
-    if let Some(_) = matches.subcommand_matches("maketestlogs") {
+    if matches.subcommand_matches("maketestlogs").is_some() {
         evm::make_logs_for_all_arbos_tests();
     }
 
-    if let Some(_) = matches.subcommand_matches("maketemplates") {
+    if matches.subcommand_matches("maketemplates").is_some() {
         let path = Path::new("arb_os/contractTemplates.mini");
         generate_contract_template_file_or_die(path);
     }

@@ -28,9 +28,8 @@ pub fn generate_contract_template_file_or_die(path: &Path) {
         Ok(file) => file,
     };
 
-    match file.write_all(&mini_code_for_templates().freeze()[..]) {
-        Err(why) => panic!("couldn't write to {}: {}", display, why),
-        Ok(_) => {}
+    if let Err(why) = file.write_all(&mini_code_for_templates().freeze()[..]) {
+        panic!("couldn't write to {}: {}", display, why)
     }
 }
 

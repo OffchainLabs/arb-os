@@ -196,4 +196,3 @@ pub fn test_crosscontract_call_with_constructors() {
 fn test_erc20() {
     crate::evm::mint_erc20_and_get_balance(false);
 }
-

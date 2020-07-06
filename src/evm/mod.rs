@@ -59,7 +59,7 @@ fn evm_json_from_file(path: &Path) -> Result<serde_json::Value, serde_json::Erro
         Ok(_) => s,
     };
 
-    return serde_json::from_str(&s);
+    serde_json::from_str(&s)
 }
 
 #[derive(Serialize)]
@@ -783,12 +783,12 @@ fn imported_funcs_for_evm() -> (Vec<ImportedFunc>, StringTable) {
     let mut imp_funcs = Vec::new();
     let mut string_table = StringTable::new();
     for name in EMULATION_FUNCS.iter() {
-        string_table.get(name.to_string());
+        string_table.get((*name).to_string());
     }
     for (i, name) in EMULATION_FUNCS.iter().enumerate() {
         imp_funcs.push(ImportedFunc::new(
             i,
-            string_table.get(name.to_string()),
+            string_table.get((*name).to_string()),
             &string_table,
             vec![],
             Type::Void,
@@ -811,13 +811,13 @@ pub fn make_evm_jumptable_mini(filepath: &Path) -> Result<(), io::Error> {
     for name in EMULATION_FUNCS.iter() {
         writeln!(file, "import func {}();", name)?;
     }
-    writeln!(file, "")?;
+    writeln!(file)?;
     writeln!(
         file,
         "var evm_jumptable: [{}]func();",
         EMULATION_FUNCS.len()
     )?;
-    writeln!(file, "")?;
+    writeln!(file)?;
     writeln!(file, "public func init_evm_jumptable() {{")?;
     writeln!(file, "    evm_jumptable = evm_jumptable")?;
     for (i, name) in EMULATION_FUNCS.iter().enumerate() {
@@ -838,7 +838,7 @@ pub fn make_evm_jumptable_mini(filepath: &Path) -> Result<(), io::Error> {
         "    if (idx >= {}) {{\n        return None<func()>;\n    }} else {{\n",
         EMULATION_FUNCS.len()
     )?;
-    write!(file, "        return Some(evm_jumptable[idx]);\n")?;
+    writeln!(file, "        return Some(evm_jumptable[idx]);")?;
     write!(file, "    }}\n}}\n")?;
     Ok(())
 }
@@ -940,7 +940,7 @@ pub fn evm_load_and_call_funcs(
         let calldata = this_func.encode_input(call_info.args).unwrap();
         if call_info.mutating {
             rt_env.insert_txcall_message(
-                Uint256::from_usize(1000000000000),
+                Uint256::from_usize(1_000_000_000_000),
                 Uint256::zero(),
                 this_contract.address.clone(),
                 call_info.payment.clone(),
@@ -949,7 +949,7 @@ pub fn evm_load_and_call_funcs(
         } else {
             rt_env.insert_nonmutating_call_message(
                 this_contract.address.clone(),
-                Uint256::from_usize(1000000000000),
+                Uint256::from_usize(1_000_000_000_000),
                 &calldata,
             );
         }
@@ -973,7 +973,7 @@ pub fn evm_load_and_call_funcs(
         if let Value::Tuple(tup) = &logs[i] {
             println!("log number {} received: {:#?}", i, *tup);
             if let Some(result_bytes) = bytes_from_bytestack(tup[2].clone()) {
-                if result_bytes.len() == 0 {
+                if result_bytes.is_empty() {
                     ret.push(vec![]);
                 } else {
                     ret.push(call_funcs[i].decode_output(&result_bytes)?);
@@ -987,7 +987,7 @@ pub fn evm_load_and_call_funcs(
     }
 
     if let Some(path) = log_to {
-        let _ = machine.runtime_env.recorder.to_file(path).unwrap();
+        machine.runtime_env.recorder.to_file(path).unwrap();
     }
     Ok(ret)
 }
@@ -1124,7 +1124,7 @@ pub fn evm_xcontract_call_with_constructors(
 
     let result = pc_contract.call_function(
         "deposit",
-        &vec![],
+        &[],
         &mut machine,
         Uint256::from_usize(10000),
         debug,
@@ -1149,7 +1149,7 @@ pub fn evm_xcontract_call_with_constructors(
     }
 
     if let Some(path) = log_to {
-        let _ = machine.runtime_env.recorder.to_file(path).unwrap();
+        machine.runtime_env.recorder.to_file(path).unwrap();
     }
 
     Ok(true)
@@ -1162,7 +1162,7 @@ pub fn evm_direct_deploy_add(log_to: Option<&Path>, debug: bool) {
 
     match AbiForContract::new_from_file("contracts/add/build/contracts/Add.json") {
         Ok(mut contract) => {
-            let result = contract.deploy(&vec![], &mut machine, debug);
+            let result = contract.deploy(&[], &mut machine, debug);
             if let Some(contract_addr) = result {
                 assert_ne!(contract_addr, Uint256::zero());
             } else {
@@ -1175,7 +1175,7 @@ pub fn evm_direct_deploy_add(log_to: Option<&Path>, debug: bool) {
     }
 
     if let Some(path) = log_to {
-        let _ = machine.runtime_env.recorder.to_file(path).unwrap();
+        machine.runtime_env.recorder.to_file(path).unwrap();
     }
 }
 
@@ -1187,7 +1187,7 @@ pub fn evm_direct_deploy_and_call_add(log_to: Option<&Path>, debug: bool) {
 
     let contract = match AbiForContract::new_from_file("contracts/add/build/contracts/Add.json") {
         Ok(mut contract) => {
-            let result = contract.deploy(&vec![], &mut machine, debug);
+            let result = contract.deploy(&[], &mut machine, debug);
             if let Some(contract_addr) = result {
                 assert_ne!(contract_addr, Uint256::zero());
                 contract
@@ -1241,7 +1241,7 @@ pub fn evm_direct_deploy_and_call_add(log_to: Option<&Path>, debug: bool) {
     }
 
     if let Some(path) = log_to {
-        let _ = machine.runtime_env.recorder.to_file(path).unwrap();
+        machine.runtime_env.recorder.to_file(path).unwrap();
     }
 }
 
@@ -1309,7 +1309,7 @@ pub fn make_logs_for_all_arbos_tests() {
         Some(Path::new("testlogs/evm_direct_deploy_add.aoslog")),
         false,
     );
-    let _ = evm_direct_deploy_and_call_add(
+    evm_direct_deploy_and_call_add(
         Some(Path::new("testlogs/evm_direct_deploy_and_call_add.aoslog")),
         false,
     );
@@ -1322,4 +1322,3 @@ pub fn make_logs_for_all_arbos_tests() {
         false,
     );
 }
-

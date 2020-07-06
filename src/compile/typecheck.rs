@@ -338,7 +338,7 @@ impl TypeCheckedExpr {
             TypeCheckedExpr::CodeBlock(_, expr, _) => expr
                 .clone()
                 .map(|exp| exp.get_type())
-                .unwrap_or(Type::Tuple(vec![])),
+                .unwrap_or_else(|| Type::Tuple(vec![])),
             TypeCheckedExpr::StructInitializer(_, t, _) => t.clone(),
             TypeCheckedExpr::ArrayRef(_, _, t, _) => t.clone(),
             TypeCheckedExpr::FixedArrayRef(_, _, _, t, _) => t.clone(),
@@ -791,7 +791,7 @@ fn typecheck_statement<'a>(
             let tce = typecheck_expr(e, type_table, global_vars, func_table, return_type)?;
             Ok((TypeCheckedStatement::DebugPrint(tce, *loc), vec![]))
         }
-        StatementKind::IfLet(l, r, s, e) => {
+        StatementKind::IfLet(l, r, if_block, else_block) => {
             let tcr = typecheck_expr(r, type_table, global_vars, func_table, return_type)?;
             let tct = match tcr.get_type() {
                 Type::Option(t) => *t,
@@ -807,14 +807,15 @@ fn typecheck_statement<'a>(
                     *l,
                     tcr,
                     typecheck_statement_sequence_with_bindings(
-                        s,
+                        if_block,
                         return_type,
                         type_table,
                         global_vars,
                         func_table,
-                        &vec![(*l, tct.clone())],
+                        &[(*l, tct.clone())],
                     )?,
-                    e.clone()
+                    else_block
+                        .clone()
                         .map(|block| {
                             typecheck_statement_sequence(
                                 &block,
@@ -1133,7 +1134,7 @@ fn typecheck_expr(
                         typecheck_expr(&*x, &inner_type_table, global_vars, func_table, return_type)
                     })
                     .transpose()?
-                    .map(|x| Box::new(x)),
+                    .map(Box::new),
                 *loc,
             ))
         }

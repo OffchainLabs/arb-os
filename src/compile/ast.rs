@@ -760,7 +760,7 @@ impl Constant {
         match self {
             Constant::Uint(ui) => Value::Int(ui.clone()),
             Constant::Int(i) => Value::Int(i.clone()),
-            Constant::Bool(b) => Value::Int(Uint256::from_bool(b.clone())),
+            Constant::Bool(b) => Value::Int(Uint256::from_bool(*b)),
             Constant::Option(c) => c.value(),
             Constant::Null => Value::none(),
         }
@@ -862,7 +862,7 @@ impl Expr {
                     .clone()
                     .map(|exp| exp.resolve_types(type_table))
                     .transpose()?
-                    .map(|x| Box::new(x)),
+                    .map(Box::new),
                 *loc,
             )),
             Expr::ArrayOrMapRef(e1, e2, loc) => Ok(Expr::ArrayOrMapRef(

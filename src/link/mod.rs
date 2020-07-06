@@ -421,10 +421,10 @@ pub fn link(
         } else {
             let mut map = HashMap::new();
             let mut file_hasher = DefaultHasher::new();
-            file_hasher.write("builtin/array.mini".as_bytes());
+            file_hasher.write(b"builtin/array.mini");
             map.insert(file_hasher.finish(), "builtin/array.mini".to_string());
             let mut file_hasher = DefaultHasher::new();
-            file_hasher.write("builtin/kvs.mini".as_bytes());
+            file_hasher.write(b"builtin/kvs.mini");
             map.insert(file_hasher.finish(), "builtin/kvs.mini".to_string());
             map
         },

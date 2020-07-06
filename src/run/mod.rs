@@ -63,7 +63,7 @@ fn load_from_string(s: String, env: RuntimeEnvironment) -> Machine {
             panic!();
         }
     };
-    return Machine::new(program, env);
+    Machine::new(program, env)
 }
 
 pub fn run(

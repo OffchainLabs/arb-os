@@ -903,7 +903,7 @@ fn mavm_codegen_expr<'a>(
                     let mask = Uint256::from_usize(2)
                         .exp(&Uint256::from_usize(160))
                         .sub(&Uint256::one())
-                        .ok_or(new_codegen_error("Underflow on substraction", *loc))?;
+                        .ok_or_else(|| new_codegen_error("Underflow on substraction", *loc))?;
                     (
                         Some(Opcode::AVMOpcode(AVMOpcode::BitwiseAnd)),
                         Some(Value::Int(mask)),

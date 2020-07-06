@@ -353,7 +353,7 @@ impl ProfilerData {
         loop {
             println!("Enter file to examine");
             let mut command = String::new();
-            if let Ok(_) = stdin().read_line(&mut command) {
+            if stdin().read_line(&mut command).is_ok() {
                 let trimmed_command = command.trim_end();
                 match trimmed_command {
                     "exit" => return,
@@ -1184,7 +1184,7 @@ impl Machine {
 									let t = 248-ub;
 									let shifted_bit = Uint256::from_usize(2).exp(&Uint256::from_usize(t));
 									let sign_bit = x.bitwise_and(&shifted_bit) != Uint256::zero();
-									let mask = shifted_bit.sub(&Uint256::one()).ok_or(ExecutionError::new("underflow in signextend", &self.state, None))?;
+									let mask = shifted_bit.sub(&Uint256::one()).ok_or_else(|| ExecutionError::new("underflow in signextend", &self.state, None))?;
 									if sign_bit {
 										x.bitwise_and(&mask)
 									} else {

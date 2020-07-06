@@ -117,7 +117,7 @@ impl RuntimeEnvironment {
         };
         self.seq_nums
             .insert(addr.clone(), cur_seq_num.add(&Uint256::one()));
-        cur_seq_num.clone()
+        cur_seq_num
     }
 
     pub fn get_inbox(&mut self) -> Value {
@@ -183,53 +183,50 @@ pub fn bytes_from_bytestack(bs: Value) -> Option<Vec<u8>> {
 fn bytes_from_bytestack_2(cell: Value, nbytes: usize) -> Option<Vec<u8>> {
     if nbytes == 0 {
         Some(vec![])
-    } else {
-        if let Value::Tuple(tup) = cell {
-            assert_eq!((tup.len(), nbytes), (2, nbytes));
-            if let Value::Int(mut int_val) = tup[1].clone() {
-                let _256 = Uint256::from_usize(256);
-                if (nbytes % 32) == 0 {
-                    let mut sub_arr = match bytes_from_bytestack_2(tup[0].clone(), nbytes - 32) {
-                        Some(arr) => arr,
-                        None => {
-                            return None;
-                        }
-                    };
-                    let mut this_arr = vec![0u8; 32];
-                    for i in 0..32 {
-                        let rem = int_val.modulo(&_256).unwrap().to_usize().unwrap(); // safe because denom != 0 and result fits in usize
-                        this_arr[31 - i] = rem as u8;
-                        int_val = int_val.div(&_256).unwrap(); // safe because denom != 0
+    } else if let Value::Tuple(tup) = cell {
+        assert_eq!((tup.len(), nbytes), (2, nbytes));
+        if let Value::Int(mut int_val) = tup[1].clone() {
+            let _256 = Uint256::from_usize(256);
+            if (nbytes % 32) == 0 {
+                let mut sub_arr = match bytes_from_bytestack_2(tup[0].clone(), nbytes - 32) {
+                    Some(arr) => arr,
+                    None => {
+                        return None;
                     }
-                    sub_arr.append(&mut this_arr);
-                    Some(sub_arr)
-                } else {
-                    let mut sub_arr =
-                        match bytes_from_bytestack_2(tup[0].clone(), 32 * (nbytes / 32)) {
-                            Some(arr) => arr,
-                            None => {
-                                return None;
-                            }
-                        };
-                    let this_size = nbytes % 32;
-                    let mut this_arr = vec![0u8; this_size];
-                    for _ in 0..(32 - this_size) {
-                        int_val = int_val.div(&_256).unwrap(); // safe because denom != 0
-                    }
-                    for i in 0..this_size {
-                        let rem = int_val.modulo(&_256).unwrap().to_usize().unwrap(); // safe because denom != 0 and result fits in usize
-                        this_arr[this_size - 1 - i] = rem as u8;
-                        int_val = int_val.div(&_256).unwrap(); // safe because denom != 0
-                    }
-                    sub_arr.append(&mut this_arr);
-                    Some(sub_arr)
+                };
+                let mut this_arr = vec![0u8; 32];
+                for i in 0..32 {
+                    let rem = int_val.modulo(&_256).unwrap().to_usize().unwrap(); // safe because denom != 0 and result fits in usize
+                    this_arr[31 - i] = rem as u8;
+                    int_val = int_val.div(&_256).unwrap(); // safe because denom != 0
                 }
+                sub_arr.append(&mut this_arr);
+                Some(sub_arr)
             } else {
-                None
+                let mut sub_arr = match bytes_from_bytestack_2(tup[0].clone(), 32 * (nbytes / 32)) {
+                    Some(arr) => arr,
+                    None => {
+                        return None;
+                    }
+                };
+                let this_size = nbytes % 32;
+                let mut this_arr = vec![0u8; this_size];
+                for _ in 0..(32 - this_size) {
+                    int_val = int_val.div(&_256).unwrap(); // safe because denom != 0
+                }
+                for i in 0..this_size {
+                    let rem = int_val.modulo(&_256).unwrap().to_usize().unwrap(); // safe because denom != 0 and result fits in usize
+                    this_arr[this_size - 1 - i] = rem as u8;
+                    int_val = int_val.div(&_256).unwrap(); // safe because denom != 0
+                }
+                sub_arr.append(&mut this_arr);
+                Some(sub_arr)
             }
         } else {
             None
         }
+    } else {
+        None
     }
 }
 
