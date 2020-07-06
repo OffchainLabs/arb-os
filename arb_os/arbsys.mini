@@ -1,0 +1,181 @@
+//
+// Copyright 2020, Offchain Labs, Inc.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//    http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+//
+
+import type EvmCallFrame;
+import type Account;
+import type ByteArray;
+
+import impure func evmCallStack_topFrame() -> option<EvmCallFrame>;
+import impure func evmCallStack_setAccount(addr: address, acct: Account) -> bool;
+import impure func evmCallStack_getTopFrameMemoryOrDie() -> ByteArray;
+import impure func evmCallStack_setTopFrameMemory(mem: ByteArray) -> bool;
+import func evmCallFrame_getCalldata(frame: EvmCallFrame) -> ByteArray;
+import func evmCallFrame_getAccount(frame: EvmCallFrame, addr: address) -> Account;
+import func evmCallFrame_runningAsAccount(frame: EvmCallFrame) -> Account;
+
+import impure func evmOp_return(memOffset: uint, memNbytes: uint);
+import impure func evmOp_revert(memOffset: uint, memNbytes: uint);
+
+import func account_getAddress(acct: Account) -> address;
+import func account_getNextSeqNum(account: Account) -> uint;
+import func account_deductFromEthBalance(acct: Account, amount: uint) -> option<Account>;
+
+import func bytearray_size(ba: ByteArray) -> uint;
+import func bytearray_getByte(ba: ByteArray, offset: uint) -> uint;
+import func bytearray_get256(ba: ByteArray, offset: uint) -> uint;
+import func bytearray_set256(ba: ByteArray, offset: uint, value: uint) -> ByteArray;
+
+
+type ArbSysMessage = struct {
+    kind: uint,
+    sender: address,
+    msg: any,
+}
+
+type ArbSysEthTransferMessage = struct {
+    dest: address,
+    amount: uint,
+}
+
+type ArbSysTokenTransferMessage = struct {
+    tokenAddr: address,
+    dest: address,
+    amount: uint,
+}
+
+public impure func arbsys_txcall() {
+    if let Some(topFrame) = evmCallStack_topFrame() {
+        let calldata = evmCallFrame_getCalldata(topFrame);
+        if (bytearray_size(calldata) < 4) {
+            evmOp_revert(0, 0);
+        }
+        let funcCode = getFuncCode(calldata);
+
+        if (funcCode == 0xa1db9782) {
+            arbsys_withdrawErc20(topFrame, calldata);
+        } elseif(funcCode == 0xf3e414f8) {
+            arbsys_withdrawErc721(topFrame, calldata);
+        } elseif(funcCode == 0x1b9a91a4) {
+            arbsys_withdrawEth(topFrame, calldata);
+        } elseif(funcCode == 0x23ca0cd2) {
+            arbsys_getTransactionCount(topFrame, calldata);
+        } elseif(funcCode == 0x474ed9c0) {
+            arbsys_cloneContract(topFrame, calldata);
+        } else {
+            // currentMessageBlock ?
+            // blockUpperBound ?
+            // timestampUpperBound ?
+
+            evmOp_revert(0, 0);
+        }
+    } else {
+        // this shouldn't happen -- should be called in an EVM call
+        panic;
+    }
+}
+
+func getFuncCode(ba: ByteArray) -> uint {
+    return bytearray_getByte(ba, 3) + 256 * (
+        bytearray_getByte(ba, 2) + 256 * (
+            bytearray_getByte(ba, 1) + 256 * bytearray_getByte(ba, 0)
+        )
+    );
+}
+
+impure func arbsys_withdrawErc20(topFrame: EvmCallFrame, calldata: ByteArray) {
+    if (bytearray_size(calldata) != 68) {
+        evmOp_revert(0, 0);
+    }
+    let senderAcct = evmCallFrame_runningAsAccount(topFrame);
+    let senderAddr = account_getAddress(senderAcct);
+    let destAddr = address(bytearray_get256(calldata, 4));
+    let amount = bytearray_get256(calldata, 36);
+
+    let message = struct {
+        kind: 2,
+        sender: senderAddr,
+        msg: struct {
+            tokenAddr: senderAddr,
+            dest: destAddr,
+            amount: amount
+        }
+    };
+    sendMessage(message);
+    evmOp_return(0, 0);
+}
+
+func arbsys_withdrawErc721(topFrame: EvmCallFrame, calldata: ByteArray) {
+    panic;
+}
+
+impure func arbsys_withdrawEth(topFrame: EvmCallFrame, calldata: ByteArray) {
+    if (bytearray_size(calldata) != 68) {
+        evmOp_revert(0, 0);
+    }
+    let senderAcct = evmCallFrame_runningAsAccount(topFrame);
+    let senderAddr = account_getAddress(senderAcct);
+    let destAddr = address(bytearray_get256(calldata, 4));
+    let amount = bytearray_get256(calldata, 36);
+
+    if let Some(updatedAcct) = account_deductFromEthBalance(senderAcct, amount) {
+        if ( ! evmCallStack_setAccount(senderAddr, updatedAcct)) {
+            evmOp_revert(0, 0);
+        }
+        let message = struct {
+            kind: 1,
+            sender: senderAddr,
+            msg: struct {
+                dest: destAddr,
+                amount: amount
+            }
+        };
+        sendMessage(message);
+        evmOp_return(0, 0);
+    } else {
+        // failed, sender didn't have the funds
+        evmOp_revert(0, 0);
+    }
+}
+
+impure func arbsys_getTransactionCount(topFrame: EvmCallFrame, calldata: ByteArray) {
+    if (bytearray_size(calldata) != 36) {
+        evmOp_revert(0, 0);
+    }
+    let addr = address(bytearray_get256(calldata, 4));
+    let seqNum = account_getNextSeqNum(evmCallFrame_getAccount(topFrame, addr));
+    let updatedMem = bytearray_set256(
+         evmCallStack_getTopFrameMemoryOrDie(),
+         0,
+         seqNum
+     );
+    let success = evmCallStack_setTopFrameMemory(
+        updatedMem
+    );
+
+    if (success) {
+        evmOp_return(0, 32);
+    } else {
+        evmOp_revert(0, 0);
+    }
+}
+
+func arbsys_cloneContract(topFrame: EvmCallFrame, calldata: ByteArray) {
+    panic;
+}
+
+func sendMessage(message: any) {
+    panic;
+}

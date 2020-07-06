@@ -44,12 +44,12 @@ import func account_getBalance(acct: Account) -> uint;
 import func account_setBalance(acct: Account, bal: uint) -> Account;
 import func account_deductFromEthBalance(account: Account, deduction: uint) -> option<Account>;
 import func account_getAllStorage(account: Account) -> option<map<uint, uint>>;
-import func account_getStartCodePoint(account: Account) -> option<func()>;
+import func account_getStartCodePoint(account: Account) -> option<impure func()>;
 import func account_setContractInfo(
     acct: Account,
     code: ByteArray,
-    evmJumpTable: map<uint, func()>,
-    startCodePoint: func(),
+    evmJumpTable: map<uint, impure func()>,
+    startCodePoint: impure func(),
     storage: map<uint, uint>
 ) -> Account;
 import func pristineAccount(addr: address) -> Account;
@@ -84,7 +84,7 @@ import impure func gasAccounting_resumeTxCharges(allocation: uint) -> uint;
 
 import impure func translateEvmCodeSegment(
     bs: ByteStream
-) -> option<(func(), map<uint, func()>)>;
+) -> option<(impure func(), map<uint, impure func()>)>;
 
 import impure func mainRunLoop();
 
@@ -142,7 +142,6 @@ public impure func initEvmCallStack(
     gasPrice: uint,
 ) {
     // Set up the call frame for a top-level call, and launch the call's execution.
-
     if let Some(entryPoint) = account_getStartCodePoint(
         accountStore_get(
             getGlobalAccountStore(),
@@ -180,8 +179,8 @@ public impure func initEvmCallStackForConstructor(
     addr: address,
     caller: address,
     code: ByteArray,
-    evmJumpTable: map<uint, func()>,
-    startPoint: func(),
+    evmJumpTable: map<uint, impure func()>,
+    startPoint: impure func(),
     calldata: ByteArray,
     gas: uint,
     gasPrice: uint
@@ -241,7 +240,6 @@ public impure func evmCallStack_doCall(
     resumeCodePoint: func(),  // jump to this to resume the caller
 ) -> option<()> {
     // Create a new callframe for a subcall, and transfer execution to it.
-
     let availableGas = gasAccounting_pauseTxCharges();
     if (gas > availableGas) {
         gas = availableGas;  // don't give the callee more gas than the caller has
@@ -334,24 +332,23 @@ public impure func evmCallStack_returnFromCall(
     if let Some(newTopFrame) = unsafecast<option<EvmCallFrame>>(topFrame.parent) {
         // Returning from a non-top-level call
 
-        if (success && (topFrame.callKind != 3)) {   // if call succeeded, and it's not a staticcall
-            topFrame = topFrame with {   // copy cached account back into callframe's main accountStore
-                accountStore: accountStore_set(
-                    topFrame.accountStore,
-                    topFrame.runningAs,
-                    topFrame.runningAsAccount
-                )
-            };
+        topFrame = topFrame with {   // copy cached account back into callframe's main accountStore
+            accountStore: accountStore_set(
+                topFrame.accountStore,
+                topFrame.runningAs,
+                topFrame.runningAsAccount
+            )
+        };
 
+        if (success && (topFrame.callKind != 3)) {   // if call succeeded, and it's not a staticcall
             // copy relevant data back to parent frame
             newTopFrame = newTopFrame
                 with { accountStore: topFrame.accountStore }
                 with { runningAsAccount: accountStore_get(topFrame.accountStore, newTopFrame.runningAs) }
-                with { evmLogs: topFrame.evmLogs }
-                with { selfDestructQueue: topFrame.selfDestructQueue };
+                with { evmLogs: topFrame.evmLogs };
         }
 
-        // set of returnInfo in caller's frame
+        // set up returnInfo in caller's frame
         newTopFrame = newTopFrame with { returnInfo: Some(struct{ data: returnData, status: success }) };
 
         // copy returndata into caller's memory
@@ -363,7 +360,7 @@ public impure func evmCallStack_returnFromCall(
             returnData,
             0,
             newTopFrame.memory,
-            returnOffset,
+            resumeInfo.returnDataOffset,
             returnLength
         );
         newTopFrame = newTopFrame with { memory: newMemory };

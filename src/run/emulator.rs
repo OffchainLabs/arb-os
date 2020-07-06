@@ -748,6 +748,7 @@ impl Machine {
                 Opcode::AVMOpcode(AVMOpcode::DebugPrint) => 25,
                 Opcode::AVMOpcode(AVMOpcode::GetGas) => 0,
                 Opcode::AVMOpcode(AVMOpcode::SetGas) => 0,
+                Opcode::AVMOpcode(AVMOpcode::Sideload) => 10,
                 _ => return None,
             })
         } else {
