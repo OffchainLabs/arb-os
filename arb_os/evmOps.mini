@@ -60,7 +60,7 @@ import func account_getCodeSize(acct: Account) -> uint;
 import func account_getBalance(acct: Account) -> uint;
 import func account_getCode(acct: Account) -> option<ByteArray>;
 import func account_getStorageCell(acct: Account, offset: uint) -> option<uint>;
-import func account_getEvmJumpTable(acct: Account) -> option<map<uint, func()>>;
+import func account_getEvmJumpTable(acct: Account) -> option<map<uint, impure func()>>;
 
 import impure func inbox_currentTimestamp() -> uint;
 import impure func inbox_currentBlockNumber() -> uint;
@@ -345,7 +345,7 @@ public impure func evmOp_sstore(storageAddr: uint, value: uint) {
     evm_runtimePanic();
 }
     
-public impure func evmOp_getjumpaddr(evm_pc: uint) -> func() {
+public impure func evmOp_getjumpaddr(evm_pc: uint) -> impure func() {
     // This one isn't actually an EVM instruction.
     // It's a "pseudo-instruction" that translates an EVM jump destination to an AVM codepoint in the compiled code.
     if let Some(topFrame) = evmCallStack_topFrame() {

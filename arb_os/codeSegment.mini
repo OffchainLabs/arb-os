@@ -71,7 +71,7 @@ import func evmOp_create2();
 
 
 // An AVM CodePoint, that is, a place that AVM code can jump to, is represented as a func()
-type AvmCodePoint = func()
+type AvmCodePoint = impure func()
 
 impure func pushInstruction(opcode: uint, restOfCode: AvmCodePoint) -> AvmCodePoint {
     // Push an instruction onto the beginning of a code segment, and return the resulting CodePoint.
@@ -129,7 +129,7 @@ public impure func translateEvmCodeSegment(
         let (restOfCode, evmJumpTable) = translateEvmCodeSegment(bs)?;
 
             // for debugging, uncomment this to get a debugprint before each EVM instruction
-            //restOfCode = pushInstructionImm(0x90, (42, numBytesRead, opcode), restOfCode);
+            // restOfCode = pushInstructionImm(0x90, (42, numBytesRead, opcode), restOfCode);
 
         // Now prepend the current operation onto the front of the generated code.
         return Some((pushValue(imm, restOfCode), evmJumpTable));
@@ -141,7 +141,7 @@ public impure func translateEvmCodeSegment(
 
     let numBytesRead = bytestream_bytesReadSoFar(bs);
         // for debugging, uncomment this to get a debugprint before each EVM instruction
-        //restOfCode = pushInstructionImm(0x90, (42, numBytesRead, opcode), restOfCode);
+        // restOfCode = pushInstructionImm(0x90, (42, numBytesRead, opcode), restOfCode);
 
     if (opcode < 0x80) {
         if (opcode < 0x40) {

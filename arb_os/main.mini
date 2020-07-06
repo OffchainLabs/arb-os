@@ -31,13 +31,18 @@ import func accountStore_createAccountFromEvmCode(
     store: AccountStore,
     newAddr: address,
     code: ByteArray,
-    evmJumpTable: map<uint, func()>,
-    initCodePt: func(),
+    evmJumpTable: map<uint, impure func()>,
+    initCodePt: impure func(),
     storageMap: map<uint, uint>
+) -> option<AccountStore>;
+import impure func accountStore_createBuiltinContract(
+    acctStore: AccountStore,
+    addr: address,
+    entryPoint: impure func()
 ) -> option<AccountStore>;
 import impure func translateEvmCodeSegment(
     bs: ByteStream
-) -> option<(func(), map<uint, func()>)>;
+) -> option<(impure func(), map<uint, impure func()>)>;
 import func bytearray_unmarshalBytes(mb: MarshalledBytes) -> ByteArray;
 import func bytestream_new(ba: ByteArray) -> ByteStream;
 import func getErc20code() -> MarshalledBytes;
@@ -59,6 +64,8 @@ import impure func handleMessageFromL1(
     maxGas: uint,
     gasPrice: uint
 ) -> option<()>;
+
+import impure func arbsys_txcall();
 
 
 impure func main() {
@@ -114,6 +121,9 @@ impure func initializeContractTemplates() -> option<()> {
         initCodePt,
         getErc721storage()
     )?;
+
+    // set up ArbSys builtin contract
+    acctStore = accountStore_createBuiltinContract(acctStore, address(100), arbsys_txcall)?;
 
     setGlobalAccountStore(acctStore);
     return Some(());

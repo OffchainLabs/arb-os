@@ -16,7 +16,9 @@
 
 import type ByteArray;
 
+import func bytearray_new(capacity: uint) -> ByteArray;
 import func bytearray_size(ba: ByteArray) -> uint;
+import func bytearray_setByte(ba: ByteArray, offset: uint, value: uint) -> ByteArray;
 import func getErc20address() -> address;
 import func getErc721address() -> address;
 
@@ -32,8 +34,8 @@ type Account = struct {
 
 type AccountContractInfo = struct {
     code: ByteArray,
-    evmJumpTable: map<uint, func()>,  // maps each valid EVM jump destination to the corresponding AVM codepoint
-    startCodePoint: func(),
+    evmJumpTable: map<uint, impure func()>,  // maps each valid EVM jump destination to the corresponding AVM codepoint
+    startCodePoint: impure func(),
     storage: map<uint, uint>,
 }
 
@@ -120,7 +122,7 @@ public func account_getAddress(account: Account) -> address {
     return account.addr;
 }
 
-public func account_getStartCodePoint(account: Account) -> option<func()> {
+public func account_getStartCodePoint(account: Account) -> option<impure func()> {
     return Some((account.contractInfo?).startCodePoint);
 }
 
@@ -136,7 +138,7 @@ public func account_addBalance(account: Account, balance: uint) -> Account {
     return account with { ethBalance: account.ethBalance + balance };
 }
 
-public func account_getEvmJumpTable(account: Account) -> option<map<uint, func()>> {
+public func account_getEvmJumpTable(account: Account) -> option<map<uint, impure func()>> {
     return Some((account.contractInfo?).evmJumpTable);
 }
 
@@ -148,12 +150,16 @@ public func account_fetchAndIncrSeqNum(account: Account) -> (uint, Account) {
     return (ret, account,);
 }
 
+public func account_getNextSeqNum(account: Account) -> uint {
+    return account.nextSeqNum;
+}
+
 public func accountStore_createAccountFromEvmCode(
     store: AccountStore,
     newAddr: address,
     code: ByteArray,
-    evmJumpTable: map<uint, func()>,
-    initCodePt: func(),
+    evmJumpTable: map<uint, impure func()>,
+    initCodePt: impure func(),
     storageMap: map<uint, uint>
 ) -> option<AccountStore> {
     // Create a new account for a compiled EVM contract.
@@ -172,6 +178,38 @@ public func accountStore_createAccountFromEvmCode(
                 })
             }
         ));
+    } else {
+        // There was already an account at that address, so return failure.
+        return None;
+    }
+}
+
+public impure func accountStore_createBuiltinContract(
+    acctStore: AccountStore,
+    addr: address,
+    entryPoint: impure func()
+) -> option<AccountStore> {
+    let oldAcct = accountStore_get(acctStore, addr);
+    if (account_isEmpty(oldAcct)) {
+        // set up fake code for the contract
+        // it must have nonzero size because callers check if size is zero to see if contract exists
+        let fakeCode = bytearray_new(32);
+        fakeCode = bytearray_setByte(fakeCode, 0, 0xfe);
+
+        return Some(
+            accountStore_set(
+                acctStore,
+                addr,
+                oldAcct with {
+                    contractInfo: Some(struct {
+                        code: fakeCode,
+                        evmJumpTable: newmap<uint, impure func()>,
+                        resumeCodePoint: entryPoint,
+                        storage: newmap<uint, uint>
+                    })
+                }
+            )
+        );
     } else {
         // There was already an account at that address, so return failure.
         return None;
@@ -308,8 +346,8 @@ public func account_setStorageCell(
 public func account_setContractInfo(
     acct: Account,
     code: ByteArray,
-    evmJumpTable: map<uint, func()>,
-    startCodePoint: func(),
+    evmJumpTable: map<uint, impure func()>,
+    startCodePoint: impure func(),
     storage: map<uint, uint>
 ) -> Account {
     return acct with { contractInfo: Some(

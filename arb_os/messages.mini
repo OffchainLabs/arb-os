@@ -35,8 +35,8 @@ import func accountStore_createAccountFromEvmCode(
     acctStore: AccountStore,
     newAddr: address,
     evmCode: ByteArray,
-    evmJumpTable: map<uint, func()>,
-    startCodePt: func(),
+    evmJumpTable: map<uint, impure func()>,
+    startCodePt: impure func(),
     storageMap: map<uint, uint>
 ) -> option<AccountStore>;
 import func account_checkAndIncrSeqNum(
@@ -44,7 +44,7 @@ import func account_checkAndIncrSeqNum(
     seqNumRecvd: uint
 ) -> option<Account>;
 
-import func account_getStartCodePoint(acct: Account) -> option<func()>;
+import func account_getStartCodePoint(acct: Account) -> option<impure func()>;
 
 import impure func initEvmCallStack(
     callKind: uint,
@@ -61,8 +61,8 @@ import impure func initEvmCallStackForConstructor(
     addr: address,
     caller: address,
     code: ByteArray,
-    evmJumpTable: map<uint, func()>,
-    startPoint: func(),
+    evmJumpTable: map<uint, impure func()>,
+    startPoint: impure func(),
     calldata: ByteArray,
     gas: uint,
     gasPrice: uint
@@ -87,7 +87,7 @@ import func bytestream_getUint(bs: ByteStream) -> option<(ByteStream, uint)>;
 import func bytestream_skipBytes(bs: ByteStream, nbytes: uint) -> option<ByteStream>;
 import func bytestream_getRemainingBytes(bs: ByteStream) -> ByteArray;
 
-import func translateEvmCodeSegment(bs: ByteStream) -> option<(func(), map<uint, func()>)>;
+import func translateEvmCodeSegment(bs: ByteStream) -> option<(impure func(), map<uint, impure func()>)>;
 
 
 // This is the structure that the Arbitrum protocol gives us, for each incoming message.

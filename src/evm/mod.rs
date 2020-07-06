@@ -1179,6 +1179,68 @@ pub fn evm_direct_deploy_add(log_to: Option<&Path>, debug: bool) {
     }
 }
 
+pub fn evm_test_arbsys(log_to: Option<&Path>, debug: bool) {
+    use std::convert::TryFrom;
+    let rt_env = RuntimeEnvironment::new();
+    let mut machine = load_from_file(Path::new("arb_os/arbos.mexe"), rt_env);
+    machine.start_at_zero();
+
+    let contract = match AbiForContract::new_from_file("contracts/add/build/contracts/Add.json") {
+        Ok(mut contract) => {
+            let result = contract.deploy(&vec![], &mut machine, debug);
+            if let Some(contract_addr) = result {
+                assert_ne!(contract_addr, Uint256::zero());
+                contract
+            } else {
+                panic!("deploy failed");
+            }
+        }
+        Err(e) => {
+            panic!("error loading contract: {:?}", e);
+        }
+    };
+
+    let result = contract.call_function(
+        "getSeqNum",
+        vec![].as_ref(),
+        &mut machine,
+        Uint256::zero(),
+        debug,
+    );
+    match result {
+        Ok(log) => {
+            if let Value::Tuple(tup) = log {
+                assert_eq!(tup[3], Value::Int(Uint256::one()));
+                match bytes_from_bytestack(tup[2].clone()) {
+                    Some(result_bytes) => {
+                        let decoded_result = contract
+                            .get_function("getSeqNum")
+                            .unwrap()
+                            .decode_output(&result_bytes)
+                            .unwrap();
+                        assert_eq!(
+                            decoded_result[0],
+                            ethabi::Token::Uint(ethabi::Uint::try_from(3).unwrap())
+                        );
+                    }
+                    None => {
+                        panic!("malformed result bytestack");
+                    }
+                }
+            } else {
+                panic!("malformed log return");
+            }
+        }
+        Err(e) => {
+            panic!(e.to_string());
+        }
+    }
+
+    if let Some(path) = log_to {
+        let _ = machine.runtime_env.recorder.to_file(path).unwrap();
+    }
+}
+
 pub fn evm_direct_deploy_and_call_add(log_to: Option<&Path>, debug: bool) {
     use std::convert::TryFrom;
     let rt_env = RuntimeEnvironment::new();
