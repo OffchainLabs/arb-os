@@ -15,12 +15,12 @@
  */
 
 use crate::compile::{CompileError, CompiledProgram, Type};
-use crate::evm::abi::AbiForContract;
 use crate::link::{link, postlink_compile, ImportedFunc, LinkedProgram};
 use crate::mavm::{AVMOpcode, Instruction, Label, LabelGenerator, Opcode, Value};
 use crate::run::{bytes_from_bytestack, load_from_file, RuntimeEnvironment};
 use crate::stringtable::StringTable;
 use crate::uint256::Uint256;
+use abi::AbiForContract;
 use ethabi::Token;
 use serde::Serialize;
 use std::collections::HashMap;

@@ -17,9 +17,7 @@
 use crate::mavm::Value;
 use crate::run::bytestack_from_bytes;
 use bytes::{BufMut, BytesMut};
-use std::fs::File;
-use std::io::Write;
-use std::path::Path;
+use std::{fs::File, io::Write, path::Path};
 
 pub fn generate_contract_template_file_or_die(path: &Path) {
     let display = path.display();

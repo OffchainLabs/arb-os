@@ -14,15 +14,12 @@
  * limitations under the License.
  */
 
-use super::symtable::SymTable;
-use crate::compile::ast::StatementKind;
-use crate::compile::{
-    ast::{
-        BinaryOp, Constant, Expr, FuncArg, FuncDecl, FuncDeclKind, GlobalVarDecl, IfArm,
-        ImportFuncDecl, MatchPattern, Statement, StructField, TopLevelDecl, Type, UnaryOp,
-    },
-    MiniProperties,
+use super::ast::{
+    BinaryOp, Constant, Expr, FuncArg, FuncDecl, FuncDeclKind, GlobalVarDecl, IfArm,
+    ImportFuncDecl, MatchPattern, Statement, StatementKind, StructField, TopLevelDecl, Type,
+    UnaryOp,
 };
+use super::{symtable::SymTable, MiniProperties};
 use crate::link::{ExportedFunc, ImportedFunc};
 use crate::mavm::{Instruction, Label, Value};
 use crate::pos::Location;

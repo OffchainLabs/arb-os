@@ -17,6 +17,7 @@
 #![allow(unused_parens)]
 
 use compile::{compile_from_file, CompileError};
+use contracttemplates::generate_contract_template_file_or_die;
 use evm::{compile_evm_file, make_evm_jumptable_mini};
 use link::{link, postlink_compile};
 use mavm::Value;
@@ -27,7 +28,6 @@ use std::hash::Hasher;
 use std::io;
 use std::path::Path;
 
-use crate::contracttemplates::generate_contract_template_file_or_die;
 use clap::{App, Arg, SubCommand};
 
 mod compile;

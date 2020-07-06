@@ -15,14 +15,9 @@
  */
 
 use crate::mavm::Value;
-use crate::run::Machine;
-use crate::run::RuntimeEnvironment;
+use crate::run::{Machine, RuntimeEnvironment};
 use crate::uint256::Uint256;
-use std::collections::HashMap;
-use std::convert::TryInto;
-use std::fs::File;
-use std::io::Read;
-use std::path::Path;
+use std::{collections::HashMap, convert::TryInto, fs::File, io::Read, path::Path};
 
 #[derive(Clone)]
 pub struct AbiForDappArbCompiled {

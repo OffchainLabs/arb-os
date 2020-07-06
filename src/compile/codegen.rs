@@ -17,17 +17,15 @@
 use super::ast::{BinaryOp, FuncArg, GlobalVarDecl, Type, UnaryOp};
 use super::symtable::CopyingSymTable;
 use super::typecheck::{
-    TypeCheckedExpr, TypeCheckedFunc, TypeCheckedIfArm, TypeCheckedMatchPattern,
+    PropertiesList, TypeCheckedExpr, TypeCheckedFunc, TypeCheckedIfArm, TypeCheckedMatchPattern,
     TypeCheckedStatement,
 };
-use crate::compile::typecheck::PropertiesList;
 use crate::link::{ImportedFunc, TupleTree, TUPLE_SIZE};
 use crate::mavm::{AVMOpcode, Instruction, Label, LabelGenerator, Opcode, Value};
 use crate::pos::Location;
 use crate::stringtable::{StringId, StringTable};
 use crate::uint256::Uint256;
-use std::cmp::max;
-use std::collections::HashMap;
+use std::{cmp::max, collections::HashMap};
 
 #[derive(Debug)]
 pub struct CodegenError {

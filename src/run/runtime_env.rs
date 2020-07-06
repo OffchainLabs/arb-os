@@ -17,10 +17,7 @@
 use crate::mavm::Value;
 use crate::uint256::Uint256;
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
-use std::fs::File;
-use std::io;
-use std::path::Path;
+use std::{collections::HashMap, fs::File, io, path::Path};
 
 #[derive(Debug, Clone)]
 pub struct RuntimeEnvironment {
