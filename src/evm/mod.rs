@@ -289,10 +289,12 @@ pub fn compile_evm_insn(
 
             code.push(Instruction::from_opcode(Opcode::Label(mid_label), None));
             code.push(Instruction::from_opcode(Opcode::AVMOpcode(AVMOpcode::Dup0), None));
-            code.push(Instruction::from_opcode_imm(Opcode::NotEqual, max_neg_int, None));
+            code.push(Instruction::from_opcode_imm(Opcode::AVMOpcode(AVMOpcode::Equal), max_neg_int, None));
+            code.push(Instruction::from_opcode(Opcode::AVMOpcode(AVMOpcode::IsZero), None));
             code.push(Instruction::from_opcode_imm(Opcode::AVMOpcode(AVMOpcode::Cjump), Value::Label(mid2_label), None));
             code.push(Instruction::from_opcode(Opcode::AVMOpcode(AVMOpcode::Dup1), None));
-            code.push(Instruction::from_opcode_imm(Opcode::NotEqual, minus_one, None));
+            code.push(Instruction::from_opcode_imm(Opcode::AVMOpcode(AVMOpcode::Equal), minus_one, None));
+            code.push(Instruction::from_opcode(Opcode::AVMOpcode(AVMOpcode::IsZero), None));
             code.push(Instruction::from_opcode_imm(Opcode::AVMOpcode(AVMOpcode::Cjump), Value::Label(mid2_label), None));
 
             // case: numerator == MaxNegInt  &&  denominator == -1

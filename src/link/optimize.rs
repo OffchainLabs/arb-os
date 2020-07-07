@@ -176,28 +176,6 @@ pub fn peephole(code_in: &[Instruction]) -> Vec<Instruction> {
                                 ));
                             }
                         }
-                        Instruction {
-                            opcode: Opcode::AVMOpcode(AVMOpcode::Equal),
-                            immediate: imm,
-                            location: loc2,
-                        } => {
-                            code_out.pop();
-                            code_out.pop();
-                            code_out.push(Instruction::new(Opcode::NotEqual, imm, loc2));
-                        }
-                        Instruction {
-                            opcode: Opcode::NotEqual,
-                            immediate: imm,
-                            location: loc2,
-                        } => {
-                            code_out.pop();
-                            code_out.pop();
-                            code_out.push(Instruction::new(
-                                Opcode::AVMOpcode(AVMOpcode::Equal),
-                                imm,
-                                loc2,
-                            ));
-                        }
                         _ => {
                             done = true;
                         }
