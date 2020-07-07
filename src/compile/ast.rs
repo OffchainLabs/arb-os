@@ -23,11 +23,14 @@ use crate::stringtable::StringId;
 use crate::uint256::Uint256;
 use serde::{Deserialize, Serialize};
 
+///Debugging info serialized into mini executables, currently only contains a location.
 #[derive(Debug, Clone)]
 pub struct DebugInfo {
     pub location: Option<Location>,
 }
 
+///A top level language declaration.  Represents any language construct that can be directly
+/// embedded in a source file, and do not need to be contained in a function or other context.
 #[derive(Debug, Clone)]
 pub enum TopLevelDecl {
     TypeDecl(TypeDecl),
@@ -46,6 +49,7 @@ impl TopLevelDecl {
     }
 }
 
+///Type Declaration, contains the StringId corresponding to the type name, and the underlying Type.
 #[derive(Debug, Clone)]
 pub struct TypeDecl {
     pub name: StringId,
@@ -56,6 +60,7 @@ pub fn new_type_decl(name: StringId, tipe: Type) -> TypeDecl {
     TypeDecl { name, tipe }
 }
 
+///A type in the mini language.
 #[derive(Debug, Clone, Eq, Serialize, Deserialize)]
 pub enum Type {
     Void,
@@ -78,13 +83,8 @@ pub enum Type {
 }
 
 impl Type {
-    pub fn is_void(&self) -> bool {
-        match self {
-            Type::Void => true,
-            _ => false,
-        }
-    }
-
+    ///Returns either a fully specified version of self specified by matching Named types to the
+    /// contents of type_table, or a TypeError if a Named type does not have an associated entry.
     pub fn resolve_types(
         &self,
         type_table: &SymTable<Type>,
@@ -146,6 +146,8 @@ impl Type {
         }
     }
 
+    ///If self is a Struct, and name is the StringID of a field of self, then returns Some(n), where
+    /// n is the index of the field of self whose ID matches name.  Otherwise returns None.
     pub fn get_struct_slot_by_name(&self, name: StringId) -> Option<usize> {
         match self {
             Type::Struct(fields) => {
@@ -160,6 +162,7 @@ impl Type {
         }
     }
 
+    ///Returns true if rhs is a subtype of self, and false otherwise
     pub fn assignable(&self, rhs: &Self) -> bool {
         if *rhs == Type::Every {
             return true;
@@ -229,6 +232,7 @@ impl Type {
         }
     }
 
+    ///Panics if specified type does not have a default value
     pub fn default_value(&self) -> Value {
         match self {
             Type::Void => {
@@ -288,40 +292,25 @@ impl Type {
     }
 }
 
+///Returns true if each type in tvec2 is a subtype of the type in tvec1 at the same index, and tvec1
+/// and tvec2 have the same length.
 pub fn type_vectors_assignable(tvec1: &[Type], tvec2: &[Type]) -> bool {
-    if tvec1.len() != tvec2.len() {
-        return false;
-    }
-    for (i, t1) in tvec1.iter().enumerate() {
-        if !t1.assignable(&tvec2[i]) {
-            return false;
-        }
-    }
-    true
+    tvec1.len() == tvec2.len() && tvec1.iter().zip(tvec2).all(|(t1, t2)| t1.assignable(t2))
 }
 
+///Identical to `type_vectors_assignable`
 pub fn arg_vectors_assignable(tvec1: &[Type], tvec2: &[Type]) -> bool {
-    if tvec1.len() != tvec2.len() {
-        return false;
-    }
-    for (i, t1) in tvec1.iter().enumerate() {
-        if !t1.assignable(&tvec2[i]) {
-            return false;
-        }
-    }
-    true
+    tvec1.len() == tvec2.len() && tvec1.iter().zip(tvec2).all(|(t1, t2)| t1.assignable(t2))
 }
 
+///Identical to `type_vectors_assignable` but using StructField slices as inputs and comparing their
+/// inner types.
 pub fn field_vectors_assignable(tvec1: &[StructField], tvec2: &[StructField]) -> bool {
-    if tvec1.len() != tvec2.len() {
-        return false;
-    }
-    for (i, t1) in tvec1.iter().enumerate() {
-        if !t1.tipe.assignable(&tvec2[i].tipe) {
-            return false;
-        }
-    }
-    true
+    tvec1.len() == tvec2.len()
+        && tvec1
+            .iter()
+            .zip(tvec2)
+            .all(|(t1, t2)| t1.tipe.assignable(&t2.tipe))
 }
 
 impl PartialEq for Type {
@@ -351,30 +340,17 @@ impl PartialEq for Type {
     }
 }
 
+///Returns true if the contents of the slices are equal
 fn type_vectors_equal(v1: &[Type], v2: &[Type]) -> bool {
-    if v1.len() != v2.len() {
-        return false;
-    }
-    for i in 0..v1.len() {
-        if v1[i] != v2[i] {
-            return false;
-        }
-    }
-    true
+    v1 == v2
 }
 
+///Returns true if the contents of the slices are equal
 fn struct_field_vectors_equal(f1: &[StructField], f2: &[StructField]) -> bool {
-    if f1.len() != f2.len() {
-        return false;
-    }
-    for i in 0..f1.len() {
-        if f1[i] != f2[i] {
-            return false;
-        }
-    }
-    true
+    f1 == f2
 }
 
+///Field of a struct, contains field name and underlying type.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct StructField {
     pub name: StringId,
@@ -386,6 +362,8 @@ impl StructField {
         StructField { name, tipe }
     }
 
+    ///Converts partially specified type to fully specified type by converting named types via type
+    /// table.
     pub fn resolve_types(
         &self,
         type_table: &SymTable<Type>,
@@ -399,6 +377,7 @@ impl StructField {
     }
 }
 
+///Argument to a function, contains field name and underlying type.
 #[derive(Debug, Clone)]
 pub struct FuncArg {
     pub name: StringId,
@@ -406,6 +385,8 @@ pub struct FuncArg {
 }
 
 impl FuncArg {
+    ///Returns either a fully specified version of self specified by matching Named types to the
+    /// contents of type_table, or a TypeError if a Named type does not have an associated entry.
     pub fn resolve_types(
         &self,
         type_table: &SymTable<Type>,
@@ -422,6 +403,7 @@ pub fn new_func_arg(name: StringId, tipe: Type) -> FuncArg {
     FuncArg { name, tipe }
 }
 
+///Represents a declaration of a global mini variable.
 #[derive(Debug, Clone)]
 pub struct GlobalVarDecl {
     pub name: StringId,
@@ -438,6 +420,8 @@ impl GlobalVarDecl {
         }
     }
 
+    ///Returns either a fully specified version of self specified by matching Named types to the
+    /// contents of type_table, or a TypeError if a Named type does not have an associated entry.
     pub fn resolve_types(&self, type_table: &SymTable<Type>) -> Result<Self, TypeError> {
         Ok(GlobalVarDecl::new(
             self.name,
@@ -447,6 +431,9 @@ impl GlobalVarDecl {
     }
 }
 
+///Represents an import of a mini function from another source file or external location.
+/// is_impure, arg_types, and ret_type are assumed to correspond to the associated elements of tipe,
+/// this must be upheld by users of this type.
 #[derive(Debug, Clone)]
 pub struct ImportFuncDecl {
     pub name: StringId,
@@ -457,6 +444,7 @@ pub struct ImportFuncDecl {
 }
 
 impl ImportFuncDecl {
+    ///Constructor taking a `Vec` of `FuncArg`s
     pub fn new(name: StringId, is_impure: bool, args: Vec<FuncArg>, ret_type: Type) -> Self {
         let mut arg_types = Vec::new();
         for arg in args.iter() {
@@ -471,6 +459,7 @@ impl ImportFuncDecl {
         }
     }
 
+    ///Identical to new but takes a `Vec` of `Type` instead of a `Vec` of `FuncArg`
     pub fn new_types(
         name: StringId,
         is_impure: bool,
@@ -487,6 +476,7 @@ impl ImportFuncDecl {
     }
 }
 
+///Represents a type imported from another source file or external location.
 #[derive(Clone, Debug)]
 pub struct ImportTypeDecl {
     pub name: StringId,
@@ -502,12 +492,15 @@ impl ImportTypeDecl {
     }
 }
 
+///Represents whether the FuncDecl that contains it is public or private.
 #[derive(Debug, Clone, Copy)]
 pub enum FuncDeclKind {
     Public,
     Private,
 }
 
+///Represents a top level function declaration.  The is_impure, args, and ret_type fields are
+/// assumed to be derived from tipe, and this must be upheld by the user of this type.
 #[derive(Debug, Clone)]
 pub struct FuncDecl {
     pub name: StringId,
@@ -551,6 +544,8 @@ impl FuncDecl {
         }
     }
 
+    ///Returns either a fully specified version of self, specified by matching Named types to the
+    /// contents of type_table, or a TypeError if a Named type does not have an associated entry.
     pub fn resolve_types(
         &self,
         type_table: &SymTable<Type>,
@@ -577,12 +572,14 @@ impl FuncDecl {
     }
 }
 
+///A statement in the mini language with associated `DebugInfo` that has not yet been type checked.
 #[derive(Debug, Clone)]
 pub struct Statement {
     pub kind: StatementKind,
     pub debug_info: DebugInfo,
 }
 
+///A raw statement containing no debug information that has not yet been type checked.
 #[derive(Debug, Clone)]
 pub enum StatementKind {
     Noop(),
@@ -601,6 +598,8 @@ pub enum StatementKind {
 }
 
 impl Statement {
+    ///Returns either a fully specified version of self specified by matching Named types to the
+    /// contents of type_table, or a TypeError if a Named type does not have an associated entry.
     pub fn resolve_types(&self, type_table: &SymTable<Type>) -> Result<Self, TypeError> {
         Ok(Self {
             kind: self.kind.resolve_types(type_table)?,
@@ -608,6 +607,8 @@ impl Statement {
         })
     }
 
+    ///Applies `resolve_types` to each member of v using type_table, and collects the results into a
+    /// `Vec` if all are successful.
     pub fn resolve_types_vec(
         v: Vec<Self>,
         type_table: &SymTable<Type>,
@@ -621,6 +622,8 @@ impl Statement {
 }
 
 impl StatementKind {
+    ///Returns either a fully specified version of self specified by matching Named types to the
+    /// contents of type_table, or a TypeError if a Named type does not have an associated entry.
     pub fn resolve_types(&self, type_table: &SymTable<Type>) -> Result<Self, TypeError> {
         match &self {
             StatementKind::Noop() => Ok(StatementKind::Noop()),
@@ -673,12 +676,15 @@ impl StatementKind {
     }
 }
 
+///Either a single identifier or a tuple of identifiers, used in mini let bindings.
 #[derive(Debug, Clone)]
 pub enum MatchPattern {
     Simple(StringId),
     Tuple(Vec<MatchPattern>),
 }
 
+///Represents an arm of an If-Else chain, is Cond(condition, block, possible_else, location) if it
+/// contains a condition, and Catchall(block, location) if it is an else block.
 #[derive(Debug, Clone)]
 pub enum IfArm {
     Cond(Expr, Vec<Statement>, Option<Box<IfArm>>, Option<Location>),
@@ -686,6 +692,8 @@ pub enum IfArm {
 }
 
 impl IfArm {
+    ///Returns either a fully specified version of self specified by matching Named types to the
+    /// contents of type_table, or a TypeError if a Named type does not have an associated entry.
     pub fn resolve_types(&self, type_table: &SymTable<Type>) -> Result<Self, TypeError> {
         match self {
             IfArm::Cond(cond, body, rest, loc) => Ok(IfArm::Cond(
@@ -705,12 +713,15 @@ impl IfArm {
     }
 }
 
+///Represents a constant mini value of type Option<T> for some type T.
 #[derive(Debug, Clone)]
 pub enum OptionConst {
     _Some(Box<Constant>),
     None(Type),
 }
 
+///Represents a mini constant value. This is different than `Value` as it encodes Options as distinct
+/// from tuples.
 #[derive(Debug, Clone)]
 pub enum Constant {
     Uint(Uint256),
@@ -721,12 +732,15 @@ pub enum Constant {
 }
 
 impl OptionConst {
+    ///Gets the type of the value
     pub(crate) fn type_of(&self) -> Type {
         Type::Option(Box::new(match self {
             OptionConst::_Some(c) => (*c).type_of(),
             OptionConst::None(t) => t.clone(),
         }))
     }
+
+    ///Exracts the value from the Constant
     pub(crate) fn value(&self) -> Value {
         match self {
             OptionConst::_Some(c) => {
@@ -736,6 +750,8 @@ impl OptionConst {
         }
     }
 
+    ///Returns either a fully specified version of self specified by matching Named types to the
+    /// contents of type_table, or a TypeError if a Named type does not have an associated entry.
     pub fn resolve_types(&self, type_table: &SymTable<Type>) -> Result<Self, TypeError> {
         match self {
             OptionConst::_Some(bc) => {
@@ -747,6 +763,7 @@ impl OptionConst {
 }
 
 impl Constant {
+    ///Gets the type of the value
     pub(crate) fn type_of(&self) -> Type {
         match self {
             Constant::Uint(_) => Type::Uint,
@@ -756,6 +773,8 @@ impl Constant {
             Constant::Null => Type::Void,
         }
     }
+
+    ///Exracts the value from the Constant
     pub(crate) fn value(&self) -> Value {
         match self {
             Constant::Uint(ui) => Value::Int(ui.clone()),
@@ -766,6 +785,8 @@ impl Constant {
         }
     }
 
+    ///Returns either a fully specified version of self specified by matching Named types to the
+    /// contents of type_table, or a TypeError if a Named type does not have an associated entry.
     pub fn resolve_types(&self, type_table: &SymTable<Type>) -> Result<Self, TypeError> {
         if let Constant::Option(oc) = self {
             Ok(Constant::Option(oc.resolve_types(type_table)?))
@@ -775,6 +796,7 @@ impl Constant {
     }
 }
 
+///A mini expression that has not yet been type checked.
 #[derive(Debug, Clone)]
 pub enum Expr {
     UnaryOp(UnaryOp, Box<Expr>, Option<Location>),
@@ -802,14 +824,18 @@ pub enum Expr {
 }
 
 impl Expr {
+    ///Returns an expression that applies unary operator op to e.
     pub fn new_unary(op: UnaryOp, e: Expr, loc: Option<Location>) -> Self {
         Expr::UnaryOp(op, Box::new(e), loc)
     }
 
+    ///Returns an expression that applies binary operator op to e1 and e2.
     pub fn new_binary(op: BinaryOp, e1: Expr, e2: Expr, loc: Option<Location>) -> Self {
         Expr::Binary(op, Box::new(e1), Box::new(e2), loc)
     }
 
+    ///Returns either a fully specified version of self specified by matching Named types to the
+    /// contents of type_table, or a TypeError if a Named type does not have an associated entry.
     pub fn resolve_types(&self, type_table: &SymTable<Type>) -> Result<Self, TypeError> {
         match self {
             Expr::UnaryOp(op, be, loc) => Ok(Expr::UnaryOp(
@@ -943,6 +969,7 @@ impl Expr {
     }
 }
 
+///A mini unary operator.
 #[derive(Debug, Clone, Copy)]
 pub enum UnaryOp {
     Minus,
@@ -956,6 +983,7 @@ pub enum UnaryOp {
     ToAddress,
 }
 
+///A mini binary operator.
 #[derive(Debug, Clone, Copy)]
 pub enum BinaryOp {
     Plus,
@@ -983,6 +1011,7 @@ pub enum BinaryOp {
     Hash,
 }
 
+///Used in StructInitializer expressions to map expressions to fields of the struct.
 #[derive(Debug, Clone)]
 pub struct FieldInitializer {
     pub name: StringId,

@@ -1379,7 +1379,7 @@ fn typecheck_expr(
             *loc,
         )),
         Expr::Asm(ret_type, insns, args, loc) => {
-            if ret_type.is_void() {
+            if *ret_type == Type::Void {
                 return Err(new_type_error(
                     "asm expression cannot return void".to_string(),
                     *loc,
