@@ -25,6 +25,7 @@ pub struct RuntimeEnvironment {
     pub current_block_num: Uint256,
     pub current_timestamp: Uint256,
     pub logs: Vec<Value>,
+    pub sends: Vec<Value>,
     pub seq_nums: HashMap<Uint256, Uint256>,
     next_id: Uint256, // used to assign unique (but artificial) txids to messages
     pub recorder: RtEnvRecorder,
@@ -37,6 +38,7 @@ impl RuntimeEnvironment {
             current_block_num: Uint256::zero(),
             current_timestamp: Uint256::zero(),
             logs: Vec::new(),
+            sends: Vec::new(),
             seq_nums: HashMap::new(),
             next_id: Uint256::zero(),
             recorder: RtEnvRecorder::new(),
@@ -130,6 +132,15 @@ impl RuntimeEnvironment {
 
     pub fn get_all_logs(&self) -> Vec<Value> {
         self.logs.clone()
+    }
+
+    pub fn push_send(&mut self, send_item: Value) {
+        self.logs.push(send_item.clone());
+        self.recorder.add_send(send_item);
+    }
+
+    pub fn get_all_sends(&self) -> Vec<Value> {
+        self.sends.clone()
     }
 }
 
@@ -232,6 +243,7 @@ pub struct RtEnvRecorder {
     format_version: u64,
     inbox: Value,
     logs: Vec<Value>,
+    sends: Vec<Value>,
 }
 
 impl RtEnvRecorder {
@@ -240,6 +252,7 @@ impl RtEnvRecorder {
             format_version: 1,
             inbox: Value::none(),
             logs: Vec::new(),
+            sends: Vec::new(),
         }
     }
 
@@ -249,6 +262,10 @@ impl RtEnvRecorder {
 
     fn add_log(&mut self, log_item: Value) {
         self.logs.push(log_item);
+    }
+
+    fn add_send(&mut self, send_item: Value) {
+        self.sends.push(send_item);
     }
 
     pub fn to_json_string(&self) -> Result<String, serde_json::Error> {
