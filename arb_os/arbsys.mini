@@ -22,6 +22,8 @@ import impure func evmCallStack_topFrame() -> option<EvmCallFrame>;
 import impure func evmCallStack_setAccount(addr: address, acct: Account) -> bool;
 import impure func evmCallStack_getTopFrameMemoryOrDie() -> ByteArray;
 import impure func evmCallStack_setTopFrameMemory(mem: ByteArray) -> bool;
+import impure func evmCallStack_cloneContract(addr: address) -> option<address>;
+
 import func evmCallFrame_getCalldata(frame: EvmCallFrame) -> ByteArray;
 import func evmCallFrame_getAccount(frame: EvmCallFrame, addr: address) -> Account;
 import func evmCallFrame_runningAsAccount(frame: EvmCallFrame) -> Account;
@@ -37,6 +39,9 @@ import func bytearray_size(ba: ByteArray) -> uint;
 import func bytearray_getByte(ba: ByteArray, offset: uint) -> uint;
 import func bytearray_get256(ba: ByteArray, offset: uint) -> uint;
 import func bytearray_set256(ba: ByteArray, offset: uint, value: uint) -> ByteArray;
+
+import impure func inbox_currentBlockNumber() -> uint;
+import impure func inbox_currentTimestamp() -> uint;
 
 
 type ArbSysMessage = struct {
@@ -74,11 +79,16 @@ public impure func arbsys_txcall() {
             arbsys_getTransactionCount(topFrame, calldata);
         } elseif(funcCode == 0x474ed9c0) {
             arbsys_cloneContract(topFrame, calldata);
+        } elseif(funcCode == 0x21151d86) {
+            arbsys_currentMessageBlock();
+        } elseif(funcCode == 0x4baa4a24) {
+            // called ArbSys::blockUpperBound; use a function with the same result
+            arbsys_currentMessageBlock();
+        } elseif(funcCode == 0xf5e71ccd) {
+            // called ArbSys::timestampUpperBound; use a function with the same result
+            arbsys_timestampUpperBound();
         } else {
-            // currentMessageBlock ?
-            // blockUpperBound ?
-            // timestampUpperBound ?
-
+            // unrecognized function code
             evmOp_revert(0, 0);
         }
     } else {
@@ -173,9 +183,61 @@ impure func arbsys_getTransactionCount(topFrame: EvmCallFrame, calldata: ByteArr
 }
 
 func arbsys_cloneContract(topFrame: EvmCallFrame, calldata: ByteArray) {
-    panic;
+    if (bytearray_size(calldata) != 36) {
+        evmOp_revert(0, 0);
+    }
+    let oldContractAddr = address(bytearray_get256(calldata, 4));
+    if let Some(newAddr) = evmCallStack_cloneContract(oldContractAddr) {
+        let updatedMem = bytearray_set256(
+            evmCallStack_getTopFrameMemoryOrDie(),
+            0,
+            uint(newAddr)
+        );
+        let success = evmCallStack_setTopFrameMemory(updatedMem);
+        if (success) {
+            evmOp_return(0, 32);
+        } else {
+            evmOp_revert(0, 0);
+        }
+    } else {
+        evmOp_revert(0, 0);
+    }
+}
+
+impure func arbsys_currentMessageBlock() {
+    let updatedMem = bytearray_set256(
+         evmCallStack_getTopFrameMemoryOrDie(),
+         0,
+         inbox_currentBlockNumber()
+     );
+    let success = evmCallStack_setTopFrameMemory(
+        updatedMem
+    );
+
+    if (success) {
+        evmOp_return(0, 32);
+    } else {
+        evmOp_revert(0, 0);
+    }
+}
+
+impure func arbsys_timestampUpperBound() {
+    let updatedMem = bytearray_set256(
+         evmCallStack_getTopFrameMemoryOrDie(),
+         0,
+         inbox_currentTimestamp()
+     );
+    let success = evmCallStack_setTopFrameMemory(
+        updatedMem
+    );
+
+    if (success) {
+        evmOp_return(0, 32);
+    } else {
+        evmOp_revert(0, 0);
+    }
 }
 
 func sendMessage(message: any) {
-    panic;
+    panic; //BUGBUG
 }
