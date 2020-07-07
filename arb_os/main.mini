@@ -23,6 +23,7 @@ import type MessageFromL1;
 import impure func errorHandler_init();
 import impure func initKeccakConstants();
 import impure func gasAccounting_init();
+import impure func evmCallStack_init();
 import impure func inbox_init();
 import impure func accountStore_init();
 import impure func getGlobalAccountStore() -> AccountStore;
@@ -72,6 +73,7 @@ impure func main() {
     errorHandler_init();
     initKeccakConstants();
     gasAccounting_init();
+    evmCallStack_init();
     inbox_init();
     accountStore_init();
     if (initializeContractTemplates() == None<()>) {
