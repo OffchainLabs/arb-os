@@ -646,6 +646,7 @@ impl Opcode {
             "inbox" => Opcode::AVMOpcode(AVMOpcode::Inbox),
             "jump" => Opcode::AVMOpcode(AVMOpcode::Jump),
             "log" => Opcode::AVMOpcode(AVMOpcode::Log),
+            "send" => Opcode::AVMOpcode(AVMOpcode::Send),
             "errcodept" => Opcode::AVMOpcode(AVMOpcode::ErrCodePoint),
             "pushinsn" => Opcode::AVMOpcode(AVMOpcode::PushInsn),
             "pushinsnimm" => Opcode::AVMOpcode(AVMOpcode::PushInsnImm),
