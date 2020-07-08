@@ -182,7 +182,7 @@ pub fn peephole(code_in: &[Instruction]) -> Vec<Instruction> {
                     }
                 }
                 Instruction {
-                    opcode,
+                    opcode: Opcode::AVMOpcode(avm_opcode),
                     immediate: None,
                     location: loc1,
                 } => {
@@ -195,7 +195,11 @@ pub fn peephole(code_in: &[Instruction]) -> Vec<Instruction> {
                     {
                         code_out.pop();
                         code_out.pop();
-                        code_out.push(Instruction::from_opcode_imm(opcode, val.clone(), loc1));
+                        code_out.push(Instruction::from_opcode_imm(
+                            Opcode::AVMOpcode(avm_opcode),
+                            val.clone(),
+                            loc1,
+                        ));
                     } else {
                         done = true;
                     }
