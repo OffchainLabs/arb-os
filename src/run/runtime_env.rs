@@ -109,6 +109,15 @@ impl RuntimeEnvironment {
         self.insert_eth_message(sender_addr, &buf);
     }
 
+    pub fn insert_eth_deposit_message(&mut self, payee: Uint256, amount: Uint256) {
+        let sender_addr = Uint256::from_usize(1025);
+        let mut buf = vec![1u8];
+        buf.extend(payee.to_bytes_be());
+        buf.extend(amount.to_bytes_be());
+
+        self.insert_eth_message(sender_addr, &buf);
+    }
+
     pub fn get_and_incr_seq_num(&mut self, addr: &Uint256) -> Uint256 {
         let cur_seq_num = match self.seq_nums.get(&addr) {
             Some(sn) => sn.clone(),

@@ -20,4 +20,8 @@ contract Add {
         uint256 txCount = ArbSys(address(100)).getTransactionCount(msg.sender);
         return txCount;
     }
+
+    function withdrawMyEth() public {
+	ArbSys(address(100)).withdrawEth(address(1025), 5000);
+    }
 }

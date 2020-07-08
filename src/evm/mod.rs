@@ -1122,18 +1122,20 @@ pub fn evm_xcontract_call_with_constructors(
         panic!("failed to deploy PaymentChannel contract");
     }
 
-    let result = pc_contract.call_function(
+    let (logs, sends) = pc_contract.call_function(
         "deposit",
         &[],
         &mut machine,
         Uint256::from_usize(10000),
         debug,
     )?;
-    if let Value::Tuple(tup) = result {
+    assert_eq!(logs.len(), 1);
+    assert_eq!(sends.len(), 0);
+    if let Value::Tuple(tup) = &logs[0] {
         assert_eq!(tup[3], Value::Int(Uint256::one()));
     }
 
-    let result = pc_contract.call_function(
+    let (logs, sends) = pc_contract.call_function(
         "transferFib",
         vec![
             ethabi::Token::Address(ethabi::Address::from_low_u64_be(1025)),
@@ -1144,7 +1146,9 @@ pub fn evm_xcontract_call_with_constructors(
         Uint256::zero(),
         debug,
     )?;
-    if let Value::Tuple(tup) = result {
+    assert_eq!(logs.len(), 1);
+    assert_eq!(sends.len(), 0);
+    if let Value::Tuple(tup) = &logs[0] {
         assert_eq!(tup[3], Value::Int(Uint256::one()));
     }
 
@@ -1185,6 +1189,10 @@ pub fn evm_test_arbsys(log_to: Option<&Path>, debug: bool) {
     let mut machine = load_from_file(Path::new("arb_os/arbos.mexe"), rt_env);
     machine.start_at_zero();
 
+    machine
+        .runtime_env
+        .insert_eth_deposit_message(Uint256::from_usize(1025), Uint256::from_usize(10000));
+
     let contract = match AbiForContract::new_from_file("contracts/add/build/contracts/Add.json") {
         Ok(mut contract) => {
             let result = contract.deploy(&vec![], &mut machine, debug);
@@ -1208,8 +1216,10 @@ pub fn evm_test_arbsys(log_to: Option<&Path>, debug: bool) {
         debug,
     );
     match result {
-        Ok(log) => {
-            if let Value::Tuple(tup) = log {
+        Ok((logs, sends)) => {
+            assert_eq!(logs.len(), 1);
+            assert_eq!(sends.len(), 0);
+            if let Value::Tuple(tup) = &logs[0] {
                 assert_eq!(tup[3], Value::Int(Uint256::one()));
                 match bytes_from_bytestack(tup[2].clone()) {
                     Some(result_bytes) => {
@@ -1234,6 +1244,23 @@ pub fn evm_test_arbsys(log_to: Option<&Path>, debug: bool) {
         Err(e) => {
             panic!(e.to_string());
         }
+    }
+
+    let result = contract.call_function(
+        "withdrawMyEth",
+        vec![].as_ref(),
+        &mut machine,
+        Uint256::zero(),
+        true,   // debug,
+    );
+    match result {
+        Ok((logs, sends)) => {
+            assert_eq!(logs.len(), 1);
+            panic!("{}", logs[0]);
+            assert_eq!(sends.len(), 1);
+            assert_eq!(sends[0], Value::none());
+        }
+        Err(e) => { panic! (e.to_string()); }
     }
 
     if let Some(path) = log_to {
@@ -1274,8 +1301,10 @@ pub fn evm_direct_deploy_and_call_add(log_to: Option<&Path>, debug: bool) {
         debug,
     );
     match result {
-        Ok(log) => {
-            if let Value::Tuple(tup) = log {
+        Ok((logs, sends)) => {
+            assert_eq!(logs.len(), 1);
+            assert_eq!(sends.len(), 0);
+            if let Value::Tuple(tup) = &logs[0] {
                 assert_eq!(tup[3], Value::Int(Uint256::one()));
                 match bytes_from_bytestack(tup[2].clone()) {
                     Some(result_bytes) => {

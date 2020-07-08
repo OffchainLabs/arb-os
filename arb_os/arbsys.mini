@@ -74,6 +74,7 @@ public impure func arbsys_txcall() {
         } elseif(funcCode == 0xf3e414f8) {
             arbsys_withdrawErc721(topFrame, calldata);
         } elseif(funcCode == 0x1b9a91a4) {
+            asm(1700,) { debugprint };
             arbsys_withdrawEth(topFrame, calldata);
         } elseif(funcCode == 0x23ca0cd2) {
             arbsys_getTransactionCount(topFrame, calldata);
@@ -131,8 +132,8 @@ impure func arbsys_withdrawEth(topFrame: EvmCallFrame, calldata: ByteArray) {
     if (bytearray_size(calldata) != 68) {
         evmOp_revert(0, 0);
     }
-    let senderAcct = evmCallFrame_runningAsAccount(topFrame);
-    let senderAddr = account_getAddress(senderAcct);
+    let senderAddr = getSenderAddress();
+    let senderAcct = evmCallFrame_getAccount(topFrame, senderAddr);
     let destAddr = address(bytearray_get256(calldata, 4));
     let amount = bytearray_get256(calldata, 36);
 
@@ -232,6 +233,11 @@ impure func arbsys_timestampUpperBound() {
     } else {
         evmOp_revert(0, 0);
     }
+}
+
+func getCallerAddress() -> option<address> {
+    let topFrame = evmCallStack_topFrame()?;
+    return Some((topFrame.parent?).runningAs);
 }
 
 func sendMessage(message: any) {

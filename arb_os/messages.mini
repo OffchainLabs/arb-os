@@ -108,7 +108,7 @@ public impure func handleMessageFromL1(
     // Parse an incoming message and do appropriate computations
 
     let inStream = bytestream_new(bytearray_unmarshalBytes(msg.msgData));
-
+asm(10,) { debugprint };
     let (bs, msgType) = bytestream_getByte(inStream)?;  // get message type
     inStream = bs;
 
@@ -116,7 +116,7 @@ public impure func handleMessageFromL1(
         // txcall message
         return handleTxMessage(inStream, msg, true, true, maxGas, gasPrice);
     } elseif (msgType == 1) {
-        // ethtransfer message
+        // ethdeposit message
 
         let (bs, destination) = bytestream_getUint(inStream)?;
         inStream = bs;
@@ -124,13 +124,16 @@ public impure func handleMessageFromL1(
         let (bs, amount) = bytestream_getUint(inStream)?;
         inStream = bs;
 
+        let globalAS = getGlobalAccountStore();
         setGlobalAccountStore(
-            accountStore_transferEthBalance(
-                getGlobalAccountStore(),
-                msg.sender,
+            accountStore_set(
+                globalAS,
                 address(destination),
-                amount
-            )?
+                accountStore_get(
+                    globalAS,
+                    address(destination)
+                )
+            )
         );
         return Some(());
     } elseif (msgType == 2) {
