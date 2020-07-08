@@ -91,7 +91,7 @@ type InboxCell = struct {
 impure func getFromL1Inbox(inbox: Inbox) -> Inbox {
     // Get one or more messages from the L1 inbox, and append them to the inbox.
     // If there are no messages available in the L1 inbox, this blocks until one is available.
-    let newMsgs = asm(0,) InboxCell { inbox };
+    let newMsgs = asm() InboxCell { inbox };
     inbox = addInboxToQueue(inbox, newMsgs);
     return inbox;
 }
