@@ -1054,47 +1054,6 @@ pub fn evm_load_fib_and_verify(log_to: Option<&Path>, debug: bool, profile: bool
     }
 }
 
-pub fn evm_xcontract_call_and_verify(log_to: Option<&Path>, debug: bool, profile: bool) {
-    use std::convert::TryFrom;
-    match evm_load_and_call_funcs(
-        "contracts/fibonacci/compiled.json",
-        vec!["Fibonacci"].as_ref(),
-        "PaymentChannel",
-        vec![
-            CallInfo {
-                function_name: "deposit",
-                args: vec![].as_ref(),
-                payment: Uint256::from_usize(10000),
-                mutating: true,
-            },
-            CallInfo {
-                function_name: "transferFib",
-                args: vec![
-                    ethabi::Token::Address(ethabi::Address::from_low_u64_be(5000)),
-                    ethabi::Token::Uint(ethabi::Uint::try_from(1).unwrap()),
-                ]
-                .as_ref(),
-                payment: Uint256::zero(),
-                mutating: true,
-            },
-        ]
-        .as_ref(),
-        log_to,
-        debug,
-        profile,
-    ) {
-        Ok(tokens) => {
-            assert_eq!(tokens.len(), 2);
-        }
-        Err(e) => {
-            panic!(
-                "error loading and calling PaymentChannel::deposit and ::transferFib: {:?}",
-                e
-            );
-        }
-    }
-}
-
 pub fn evm_xcontract_call_with_constructors(
     log_to: Option<&Path>,
     debug: bool,
@@ -1104,6 +1063,15 @@ pub fn evm_xcontract_call_with_constructors(
     let rt_env = RuntimeEnvironment::new();
     let mut machine = load_from_file(Path::new("arb_os/arbos.mexe"), rt_env);
     machine.start_at_zero();
+
+    machine
+        .runtime_env
+        .insert_eth_deposit_message(Uint256::from_usize(1025), Uint256::from_usize(100000));
+    let _gas_used = if debug {
+        machine.debug(None)
+    } else {
+        machine.run(None)
+    }; // handle this eth deposit message
 
     let mut fib_contract =
         AbiForContract::new_from_file("contracts/fibonacci/build/contracts/Fibonacci.json")?;
@@ -1194,6 +1162,11 @@ pub fn evm_test_arbsys(log_to: Option<&Path>, debug: bool) {
     machine
         .runtime_env
         .insert_eth_deposit_message(Uint256::from_usize(1025), Uint256::from_usize(10000));
+    let _gas_used = if debug {
+        machine.debug(None)
+    } else {
+        machine.run(None)
+    }; // handle this eth deposit message
 
     let contract = match AbiForContract::new_from_file("contracts/add/build/contracts/Add.json") {
         Ok(mut contract) => {
@@ -1252,17 +1225,33 @@ pub fn evm_test_arbsys(log_to: Option<&Path>, debug: bool) {
         "withdrawMyEth",
         vec![].as_ref(),
         &mut machine,
-        Uint256::zero(),
-        true,   // debug,
+        Uint256::from_usize(5000),
+        debug,
     );
     match result {
         Ok((logs, sends)) => {
             assert_eq!(logs.len(), 1);
-            panic!("{}", logs[0]);
+            if let Value::Tuple(tup) = &logs[0] {
+                assert_eq!(tup[3], Value::Int(Uint256::one()));
+            } else {
+                panic!("malformed log");
+            }
             assert_eq!(sends.len(), 1);
-            assert_eq!(sends[0], Value::none());
+            assert_eq!(
+                sends[0],
+                Value::new_tuple(vec![
+                    Value::Int(Uint256::one()),
+                    Value::Int(contract.address),
+                    Value::new_tuple(vec![
+                        Value::Int(Uint256::from_usize(1025)),
+                        Value::Int(Uint256::from_usize(5000)),
+                    ]),
+                ]),
+            )
         }
-        Err(e) => { panic! (e.to_string()); }
+        Err(e) => {
+            panic!(e.to_string());
+        }
     }
 
     if let Some(path) = log_to {
@@ -1393,11 +1382,6 @@ pub fn make_logs_for_all_arbos_tests() {
         false,
         false,
     );
-    evm_xcontract_call_and_verify(
-        Some(Path::new("testlogs/evm_xcontract_call_and_verify.aoslog")),
-        false,
-        false,
-    );
     evm_direct_deploy_add(
         Some(Path::new("testlogs/evm_direct_deploy_add.aoslog")),
         false,
@@ -1414,6 +1398,5 @@ pub fn make_logs_for_all_arbos_tests() {
         false,
         false,
     );
-
     evm_test_arbsys(Some(Path::new("testlogs/evm_test_arbsys.aoslog")), false);
 }

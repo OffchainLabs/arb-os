@@ -21,7 +21,7 @@ contract Add {
         return txCount;
     }
 
-    function withdrawMyEth() public {
+    function withdrawMyEth() public payable {
 	ArbSys(address(100)).withdrawEth(address(1025), 5000);
     }
 }

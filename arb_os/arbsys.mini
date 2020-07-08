@@ -26,7 +26,9 @@ import impure func evmCallStack_cloneContract(addr: address) -> option<address>;
 
 import func evmCallFrame_getCalldata(frame: EvmCallFrame) -> ByteArray;
 import func evmCallFrame_getAccount(frame: EvmCallFrame, addr: address) -> Account;
+import func evmCallFrame_runningAsAddress(frame: EvmCallFrame) -> address;
 import func evmCallFrame_runningAsAccount(frame: EvmCallFrame) -> Account;
+import func evmCallFrame_getParent(frame: EvmCallFrame) -> option<EvmCallFrame>;
 
 import impure func evmOp_return(memOffset: uint, memNbytes: uint);
 import impure func evmOp_revert(memOffset: uint, memNbytes: uint);
@@ -74,7 +76,6 @@ public impure func arbsys_txcall() {
         } elseif(funcCode == 0xf3e414f8) {
             arbsys_withdrawErc721(topFrame, calldata);
         } elseif(funcCode == 0x1b9a91a4) {
-            asm(1700,) { debugprint };
             arbsys_withdrawEth(topFrame, calldata);
         } elseif(funcCode == 0x23ca0cd2) {
             arbsys_getTransactionCount(topFrame, calldata);
@@ -132,29 +133,29 @@ impure func arbsys_withdrawEth(topFrame: EvmCallFrame, calldata: ByteArray) {
     if (bytearray_size(calldata) != 68) {
         evmOp_revert(0, 0);
     }
-    let senderAddr = getSenderAddress();
-    let senderAcct = evmCallFrame_getAccount(topFrame, senderAddr);
-    let destAddr = address(bytearray_get256(calldata, 4));
-    let amount = bytearray_get256(calldata, 36);
+    if let Some(senderAddr) = getCallerAddress() {
+        let senderAcct = evmCallFrame_getAccount(topFrame, senderAddr);
+        let destAddr = address(bytearray_get256(calldata, 4));
+        let amount = bytearray_get256(calldata, 36);
 
-    if let Some(updatedAcct) = account_deductFromEthBalance(senderAcct, amount) {
-        if ( ! evmCallStack_setAccount(senderAddr, updatedAcct)) {
-            evmOp_revert(0, 0);
-        }
-        let message = struct {
-            kind: 1,
-            sender: senderAddr,
-            msg: struct {
-                dest: destAddr,
-                amount: amount
+        if let Some(updatedAcct) = account_deductFromEthBalance(senderAcct, amount) {
+            if ( ! evmCallStack_setAccount(senderAddr, updatedAcct)) {
+                evmOp_revert(0, 0);
             }
-        };
-        sendMessage(message);
-        evmOp_return(0, 0);
-    } else {
-        // failed, sender didn't have the funds
-        evmOp_revert(0, 0);
+            let message = struct {
+                kind: 1,
+                sender: senderAddr,
+                msg: struct {
+                    dest: destAddr,
+                    amount: amount
+                }
+            };
+            sendMessage(message);
+            evmOp_return(0, 0);
+        }
     }
+
+    evmOp_revert(0, 0);
 }
 
 impure func arbsys_getTransactionCount(topFrame: EvmCallFrame, calldata: ByteArray) {
@@ -179,7 +180,7 @@ impure func arbsys_getTransactionCount(topFrame: EvmCallFrame, calldata: ByteArr
     }
 }
 
-func arbsys_cloneContract(topFrame: EvmCallFrame, calldata: ByteArray) {
+impure func arbsys_cloneContract(topFrame: EvmCallFrame, calldata: ByteArray) {
     if (bytearray_size(calldata) != 36) {
         evmOp_revert(0, 0);
     }
@@ -235,11 +236,15 @@ impure func arbsys_timestampUpperBound() {
     }
 }
 
-func getCallerAddress() -> option<address> {
+impure func getCallerAddress() -> option<address> {
     let topFrame = evmCallStack_topFrame()?;
-    return Some((topFrame.parent?).runningAs);
+    return Some(
+        evmCallFrame_runningAsAddress(
+            evmCallFrame_getParent(topFrame)?
+        )
+    );
 }
 
-func sendMessage(message: any) {
+impure func sendMessage(message: any) {
     asm(message,) { send };
 }

@@ -351,6 +351,9 @@ impl AbiForContract {
         };
         let logs = machine.runtime_env.get_all_logs();
         let sends = machine.runtime_env.get_all_sends();
-        Ok((logs[num_logs_before..].to_vec(), sends[num_sends_before..].to_vec()))
+        Ok((
+            logs[num_logs_before..].to_vec(),
+            sends[num_sends_before..].to_vec(),
+        ))
     }
 }

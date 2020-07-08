@@ -160,26 +160,34 @@ public impure func initEvmCallStack(
     ) {
         globalCurrentEthMessage = ethMessage;
 
-        let globalAS = getGlobalAccountStore();
-        globalCallStack = Some(struct {
-            runningAs: addr,
-            runningCodeFrom: addr,
-            accountStore: globalAS,
-            runningAsAccount: accountStore_get(globalAS, addr),
-            caller: caller,
-            callKind: callKind,
-            calldata: calldata,
-            callvalue: callvalue,
-            returnInfo: None<ReturnInfo>,
-            memory: bytearray_new(0),
-            evmLogs: evmlogs_empty(),
-            selfDestructQueue: queue_new(),
-            resumeInfo: None<ResumeInfo>,
-            parent: None<any>
-        });
+        // pay callvalue from caller to the called contract
+        // payment will only be recorded inside the callframe, so it will be discarded if the call reverts
+        if let Some(globalAS) = accountStore_transferEthBalance(
+            getGlobalAccountStore(),
+            caller,
+            addr,
+            callvalue
+        ) {
+            globalCallStack = Some(struct {
+                runningAs: addr,
+                runningCodeFrom: addr,
+                accountStore: globalAS,
+                runningAsAccount: accountStore_get(globalAS, addr),
+                caller: caller,
+                callKind: callKind,
+                calldata: calldata,
+                callvalue: callvalue,
+                returnInfo: None<ReturnInfo>,
+                memory: bytearray_new(0),
+                evmLogs: evmlogs_empty(),
+                selfDestructQueue: queue_new(),
+                resumeInfo: None<ResumeInfo>,
+                parent: None<any>
+            });
 
-        if (gasAccounting_startTxCharges(gas, gasPrice, caller) != None<()>) {
-            entryPoint();  // start executing the call; should never return
+            if (gasAccounting_startTxCharges(gas, gasPrice, caller) != None<()>) {
+                entryPoint();  // start executing the call; should never return
+            }
         }
     }
 }
@@ -739,6 +747,10 @@ public impure func evmCallStack_cloneContract(addr: address) -> option<address> 
     return Some(newAddr);
 }
 
+public func evmCallFrame_runningAsAddress(frame: EvmCallFrame) -> address {
+    return frame.runningAs;
+}
+
 public func evmCallFrame_runningAsAccount(frame: EvmCallFrame) -> Account {
     return frame.runningAsAccount;
 }
@@ -781,6 +793,12 @@ public func evmCallFrame_getResumeCodePoint(frame: EvmCallFrame) -> option<func(
 
 public func evmCallFrame_getSelfDestructQueue(frame: EvmCallFrame) -> Queue {
     return frame.selfDestructQueue;
+}
+
+public func evmCallFrame_getParent(frame: EvmCallFrame) -> option<EvmCallFrame> {
+    return unsafecast<option<EvmCallFrame>>(frame.parent);
+    // unsafecast is safe because underlying type is really EvmCallFrame
+    //    (compiler doesn't know because it doesn't accept recursive types)
 }
 
 public impure func evmCallStack_callHitError() {

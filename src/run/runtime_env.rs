@@ -144,7 +144,7 @@ impl RuntimeEnvironment {
     }
 
     pub fn push_send(&mut self, send_item: Value) {
-        self.logs.push(send_item.clone());
+        self.sends.push(send_item.clone());
         self.recorder.add_send(send_item);
     }
 

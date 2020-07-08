@@ -299,6 +299,10 @@ public func accountStore_transferEthBalance(
 ) -> option<AccountStore> {
     // Transfer Eth from one account to another.
     // Return Some(updatedAccountStore), or None if insufficient funds.
+    if (amount == 0) {
+        return Some(acctStore);
+    }
+
     let fromAcct = accountStore_get(acctStore, from);
     if (fromAcct.ethBalance < amount) {
         return None;
@@ -306,7 +310,7 @@ public func accountStore_transferEthBalance(
     let toAcct = accountStore_get(acctStore, to);
     acctStore = acctStore 
         with { [from] = fromAcct with { ethBalance: fromAcct.ethBalance - amount }}
-        with { [to] = fromAcct with { ethBalance: toAcct.ethBalance + amount }};
+        with { [to] = toAcct with { ethBalance: toAcct.ethBalance + amount }};
     return Some(acctStore);
 }
 
