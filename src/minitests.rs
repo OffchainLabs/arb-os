@@ -160,16 +160,6 @@ fn test_codeload() {
 }
 
 #[test]
-fn test_evm_load_add() {
-    crate::evm::evm_load_add_and_verify(None, true, false, false);
-}
-
-#[test]
-fn test_evm_load_fib() {
-    crate::evm::evm_load_fib_and_verify(None, false, false);
-}
-
-#[test]
 fn test_direct_deploy_add() {
     crate::evm::evm_direct_deploy_add(None, false);
 }

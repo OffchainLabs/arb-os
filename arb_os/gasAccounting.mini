@@ -209,10 +209,11 @@ impure func switchToChargingOS() -> uint {
 // This is the structure that the Arbitrum protocol gives us, for each incoming message.
 // It is declared identically in inbox.mini and elsewhere
 type MessageFromL1 = struct {
-    blockHash: bytes32,       // hash of the L1 block where this message was recorded
-    timestamp: uint,          // timestamp of the L1 block
+    kind: uint,               // type of message
     blockNumber: uint,        // block number of the L1 block
+    timestamp: uint,          // timestamp of the L1 block
     sender: address,          // address of the sender
+    inboxSeqNum: uint,        // sequence number in L1 inbox
     msgData: MarshalledBytes  // contents of the message, as a marshalled bytearray
 }
 
@@ -231,14 +232,11 @@ public impure func getNextMsgFromCongestionAuction() -> (
     let msg = inbox_get();
 
     // get its maxGas amount -- for now, set the limit high, unless caller asked for less
-    let maxGas = 1000000000000;
-    let ba = bytearray_unmarshalBytes(msg.msgData);
-    let msgKind = bytearray_getByte(ba, 0);
-
-    if ((msgKind == 0) || (msgKind > 3)) {
-        maxGas = bytearray_get256(ba, 1);
+    let maxGas = 1000000000;
+    if (msg.kind == 3) {
+        let ba = bytearray_unmarshalBytes(msg.msgData);
+        let maxGas = bytearray_get256(ba, 1);
     }
-
     return (msg, true, maxGas, 0);
 }
 

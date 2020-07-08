@@ -21,7 +21,7 @@ use crate::run::{bytes_from_bytestack, load_from_file, RuntimeEnvironment};
 use crate::stringtable::StringTable;
 use crate::uint256::Uint256;
 use abi::AbiForContract;
-use ethabi::Token;
+//use ethabi::Token;
 use serde::Serialize;
 use std::collections::HashMap;
 use std::convert::TryInto;
@@ -853,6 +853,7 @@ pub struct CallInfo<'a> {
     mutating: bool,
 }
 
+/*
 pub fn evm_load_and_call_func(
     contract_json_file_name: &str,
     other_contract_names: &[&str],
@@ -882,7 +883,9 @@ pub fn evm_load_and_call_func(
     )?[0]
         .clone())
 }
+*/
 
+/*
 pub fn evm_load_and_call_funcs(
     contract_json_file_name: &str,
     other_contract_names: &[&str],
@@ -1053,6 +1056,7 @@ pub fn evm_load_fib_and_verify(log_to: Option<&Path>, debug: bool, profile: bool
         }
     }
 }
+*/
 
 pub fn evm_xcontract_call_with_constructors(
     log_to: Option<&Path>,
@@ -1337,7 +1341,7 @@ pub fn mint_erc20_and_get_balance(debug: bool) {
     rt_env.insert_erc20_deposit_message(token_addr.clone(), me.clone(), million);
     let mut calldata: Vec<u8> = vec![0x70, 0xa0, 0x82, 0x31]; // code for balanceOf method
     calldata.extend(me.to_bytes_be());
-    rt_env.insert_txcall_message(
+    rt_env.insert_tx_message(
         Uint256::from_usize(1000000000),
         Uint256::zero(),
         token_addr,
@@ -1371,6 +1375,7 @@ pub fn mint_erc20_and_get_balance(debug: bool) {
 }
 
 pub fn make_logs_for_all_arbos_tests() {
+    /*
     evm_load_add_and_verify(
         Some(Path::new("testlogs/evm_load_add_and_verify.aoslog")),
         true,
@@ -1382,6 +1387,7 @@ pub fn make_logs_for_all_arbos_tests() {
         false,
         false,
     );
+     */
     evm_direct_deploy_add(
         Some(Path::new("testlogs/evm_direct_deploy_add.aoslog")),
         false,

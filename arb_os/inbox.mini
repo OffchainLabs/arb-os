@@ -25,10 +25,11 @@ import type MarshalledBytes;
 // This is the structure that the Arbitrum protocol gives us, for each incoming message.
 // It is declared identically in messages.mini
 type MessageFromL1 = struct {
-    blockHash: bytes32,       // hash of the L1 block where this message was recorded
-    timestamp: uint,          // timestamp of the L1 block
+    kind: uint,               // type of message
     blockNumber: uint,        // block number of the L1 block
+    timestamp: uint,          // timestamp of the L1 block
     sender: address,          // address of the sender
+    inboxSeqNum: uint,        // sequence number in L1 inbox
     msgData: MarshalledBytes  // contents of the message, as a marshalled bytearray
 }
 

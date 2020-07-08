@@ -43,6 +43,7 @@ import func account_checkAndIncrSeqNum(
     account: Account, 
     seqNumRecvd: uint
 ) -> option<Account>;
+import func account_fetchAndIncrSeqNum(account: Account) -> (uint, Account);
 import func account_addToEthBalance(account: Account, addition: uint) -> Account;
 import func account_getStartCodePoint(acct: Account) -> option<impure func()>;
 
@@ -93,10 +94,11 @@ import func translateEvmCodeSegment(bs: ByteStream) -> option<(impure func(), ma
 // This is the structure that the Arbitrum protocol gives us, for each incoming message.
 // It is declared identically in inbox.mini
 type MessageFromL1 = struct {
-    blockHash: bytes32,       // hash of the L1 block where this message was recorded
-    timestamp: uint,          // timestamp of the L1 block
+    kind: uint,               // type of message
     blockNumber: uint,        // block number of the L1 block
+    timestamp: uint,          // timestamp of the L1 block
     sender: address,          // address of the sender
+    inboxSeqNum: uint,        // sequence number in L1 inbox
     msgData: MarshalledBytes  // contents of the message, as a marshalled bytearray
 }
 
@@ -106,15 +108,9 @@ public impure func handleMessageFromL1(
     gasPrice: uint
 ) -> option<()> {
     // Parse an incoming message and do appropriate computations
-
     let inStream = bytestream_new(bytearray_unmarshalBytes(msg.msgData));
-    let (bs, msgType) = bytestream_getByte(inStream)?;  // get message type
-    inStream = bs;
 
-    if (msgType == 0) {
-        // txcall message
-        return handleTxMessage(inStream, msg, true, true, maxGas, gasPrice);
-    } elseif (msgType == 1) {
+    if (msg.kind == 0) {
         // ethdeposit message
         let (bs, destination) = bytestream_getUint(inStream)?;
         inStream = bs;
@@ -133,7 +129,7 @@ public impure func handleMessageFromL1(
             )
         );
         return Some(());
-    } elseif (msgType == 2) {
+    } elseif (msg.kind == 1) {
         // ERC20 deposit message
         let (bs, tokenAddress) = bytestream_getUint(inStream)?;
         inStream = bs;
@@ -152,40 +148,12 @@ public impure func handleMessageFromL1(
         )?;  // should never return
 
         return None;
-    } elseif (msgType == 3) {
+    } elseif (msg.kind == 2) {
         // ERC721 token transfer message
         return None; // NOT YET IMPLEMENTED
-    } elseif (msgType == 4) {
-        // contract txcall message (just like a normal txcall, but this doesn't have a sequence number)
-        return handleTxMessage(inStream, msg, true, false, maxGas, gasPrice);
-    } elseif (msgType == 5) {
-        // (non-mutating) call message
-        return handleTxMessage(inStream, msg, false, false, maxGas, gasPrice);
-    // msgType 6 is not used
-    } elseif (msgType == 7) {
-        // DEPRECATED
-        // EVM code load message
-        // It's better to send a constructor (msgType 0 with destination address 0)
-
-        let (bs, contractAddressAsUint) = bytestream_getUint(inStream)?;
-        inStream = bs;
-
-        let (storageMap, bs) = parseStorageMap(inStream)?;
-        inStream = bs;
-
-        let codeBytes = bytestream_getRemainingBytes(inStream);
-        let (codept, evmJumpTable) = translateEvmCodeSegment(bytestream_new(codeBytes))?;
-        setGlobalAccountStore(
-            accountStore_createAccountFromEvmCode(
-                getGlobalAccountStore(),
-                address(contractAddressAsUint),
-                codeBytes,
-                evmJumpTable,
-                codept,
-                storageMap
-            )?
-        );
-        return Some(());
+    } elseif (msg.kind == 3) {
+        // L2 message
+        return handleL2Message(inStream, msg, maxGas, gasPrice);
     } else {
         // not a valid message type
         return None;
@@ -210,40 +178,38 @@ impure func verifyAndIncrSequenceNum(addr: address, seqNum: uint) -> option<()> 
     return Some(());
 }
 
-func parseStorageMap(bs: ByteStream) -> option<(map<uint, uint>, ByteStream)> {
-    // Parse the structure used to convey initial storage contents, and initialize a map.
-    // This is used only from a deprecated message type.
-    let storageMap = newmap<uint, uint>;
-    loop {
-        let (ubs, more) = bytestream_getByte(bs)?;
-        bs = ubs;
-        if (more == 0) {
-            return Some((storageMap, bs));
-        }
-        let (ubs, offset) = bytestream_getUint(bs)?;
-        bs = ubs;
-        let (ubs, value) = bytestream_getUint(bs)?;
-        bs = ubs;
-        storageMap = storageMap with { [offset] = value };
-    }
+impure func fetchAndIncrSequenceNum(addr: address) -> uint {
+    // Fetch sequence number, and increment it
+    let globalAS = getGlobalAccountStore();
+    let (ret, updatedAcct) = account_fetchAndIncrSeqNum(
+        accountStore_get(globalAS, addr)
+    );
+    setGlobalAccountStore(
+        accountStore_set(
+            globalAS,
+            addr,
+            updatedAcct
+        )
+    );
+    return ret;
 }
 
-impure func handleTxMessage(
+impure func handleL2Message(
     inStream: ByteStream,
     fullMsg: MessageFromL1,
-    isMutating: bool,
-    needsSeqNumCheck: bool,
     maxGas: uint,
     gasPrice: uint
 ) -> option<()> {
-    // First, discard the
+    let (bs, msgType) = bytestream_getByte(inStream)?;
+    inStream = bs;
+
     inStream = bytestream_skipBytes(inStream, 64)?;   // skip maxGas and gasPriceBid fields of message
 
-    let sequenceNum = 0;
-    if (needsSeqNumCheck) {
-        let (bs, sn) = bytestream_getUint(inStream)?;
+    let sequenceNum = 0;  // impossible value for sequence number
+    if (msgType == 0) {
+        let (bs, seqNum) = bytestream_getUint(inStream)?;
         inStream = bs;
-        sequenceNum = sn;
+        sequenceNum = seqNum;
         verifyAndIncrSequenceNum(fullMsg.sender, sequenceNum)?;
     }
 
@@ -251,17 +217,24 @@ impure func handleTxMessage(
     inStream = bs;
 
     // Get value of Eth payment that accompanies the message.
-    let (bs, value) = bytestream_getUint(inStream)?;
-    inStream = bs;
+    let value = 0;
+    if ( (msgType==0) || (msgType==1) ) {
+        let (bs, val) = bytestream_getUint(inStream)?;
+        inStream = bs;
+        value = val;
+    }
 
     if (calleeAddressAsUint == 0) {
         // this is a constructor call
-        if ( ! isMutating) {
-            return None;   // constructor must be mutating
+        if (msgType == 2) {
+            return None;   // cannot call constructor in non-mutating call
         }
         let codeBytes = bytestream_getRemainingBytes(inStream);
         let (codept, evmJumpTable) = translateEvmCodeSegment(bytestream_new(codeBytes))?;
 
+        if (sequenceNum == 0) {
+            sequenceNum = fetchAndIncrSequenceNum(fullMsg.sender);
+        }
         let newAddress = address(hash(bytes32(fullMsg.sender), bytes32(sequenceNum)));
 
         initEvmCallStackForConstructor(
@@ -277,9 +250,9 @@ impure func handleTxMessage(
         );  // should never return
     } else {
         // this is a non-constructor call
-        let callKind = 3;  // staticcall
-        if (isMutating) {
-            callKind = 0;  // txcall
+        let callKind = 0;
+        if (msgType == 2) {
+            callKind = 3;  // staticcall
         }
 
         initEvmCallStack(
