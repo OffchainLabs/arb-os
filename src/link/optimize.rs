@@ -176,35 +176,13 @@ pub fn peephole(code_in: &[Instruction]) -> Vec<Instruction> {
                                 ));
                             }
                         }
-                        Instruction {
-                            opcode: Opcode::AVMOpcode(AVMOpcode::Equal),
-                            immediate: imm,
-                            location: loc2,
-                        } => {
-                            code_out.pop();
-                            code_out.pop();
-                            code_out.push(Instruction::new(Opcode::NotEqual, imm, loc2));
-                        }
-                        Instruction {
-                            opcode: Opcode::NotEqual,
-                            immediate: imm,
-                            location: loc2,
-                        } => {
-                            code_out.pop();
-                            code_out.pop();
-                            code_out.push(Instruction::new(
-                                Opcode::AVMOpcode(AVMOpcode::Equal),
-                                imm,
-                                loc2,
-                            ));
-                        }
                         _ => {
                             done = true;
                         }
                     }
                 }
                 Instruction {
-                    opcode,
+                    opcode: Opcode::AVMOpcode(avm_opcode),
                     immediate: None,
                     location: loc1,
                 } => {
@@ -217,7 +195,11 @@ pub fn peephole(code_in: &[Instruction]) -> Vec<Instruction> {
                     {
                         code_out.pop();
                         code_out.pop();
-                        code_out.push(Instruction::from_opcode_imm(opcode, val.clone(), loc1));
+                        code_out.push(Instruction::from_opcode_imm(
+                            Opcode::AVMOpcode(avm_opcode),
+                            val.clone(),
+                            loc1,
+                        ));
                     } else {
                         done = true;
                     }

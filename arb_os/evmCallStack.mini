@@ -137,6 +137,10 @@ type ResumeInfo = struct {  // information used to resume a call after a subcall
 var globalCallStack: option<EvmCallFrame>;   // call frame of currently running call, if any
 var globalCurrentEthMessage: MessageFromL1;  // the message that launched the top-level call
 
+public impure func evmCallStack_init() {
+    globalCallStack = None<EvmCallFrame>;
+}
+
 public impure func initEvmCallStack(
     callKind: uint,
     ethMessage: MessageFromL1,

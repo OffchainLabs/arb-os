@@ -69,7 +69,8 @@ pub fn run(
     args: Vec<Value>,
     debug: bool,
 ) -> Result<Vec<Value>, (ExecutionError, StackTrace)> {
-    match machine.test_call(CodePt::new_internal(0), args, debug) {
+    // We use PC 1 here because PC pushes an unwanted value--designed for a different entry ABI
+    match machine.test_call(CodePt::new_internal(1), args, debug) {
         Ok(_stack) => Ok(machine.runtime_env.get_all_logs()),
         Err(e) => Err((e, machine.get_stack_trace())),
     }

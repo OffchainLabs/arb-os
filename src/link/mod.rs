@@ -25,6 +25,7 @@ use std::io;
 use std::path::Path;
 use xformcode::make_uninitialized_tuple;
 
+use crate::uint256::Uint256;
 pub use xformcode::{value_from_field_list, TupleTree, TUPLE_SIZE};
 
 mod optimize;
@@ -284,7 +285,7 @@ pub fn link(
     } else {
         add_auto_link_progs(&progs_in)?
     };
-    let mut insns_so_far: usize = if is_module { 2 } else { 1 }; // leave 1 insn of space at beginning for initialization
+    let mut insns_so_far: usize = 2; // leave 2 insns of space at beginning for initialization
     let mut imports_so_far: usize = 0;
     let mut int_offsets = Vec::new();
     let mut ext_offsets = Vec::new();
@@ -335,12 +336,15 @@ pub fn link(
             Instruction::from_opcode(Opcode::AVMOpcode(AVMOpcode::Jump), None),
         ]
     } else {
-        // not a module, add an instruction that creates space for the globals
-        vec![Instruction::from_opcode_imm(
-            Opcode::AVMOpcode(AVMOpcode::Rset),
-            make_uninitialized_tuple(global_num_limit),
-            None,
-        )]
+        // not a module, add an instruction that creates space for the globals, plus one to push a fake "return address"
+        vec![
+            Instruction::from_opcode_imm(Opcode::AVMOpcode(AVMOpcode::Noop), Value::none(), None),
+            Instruction::from_opcode_imm(
+                Opcode::AVMOpcode(AVMOpcode::Rset),
+                make_uninitialized_tuple(global_num_limit),
+                None,
+            ),
+        ]
     };
 
     let mut linked_exports = Vec::new();
