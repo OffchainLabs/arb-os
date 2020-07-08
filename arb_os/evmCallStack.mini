@@ -39,6 +39,11 @@ import func accountStore_destroyAndTransferBalance(
     victim: address,
     recipient: address
 ) -> AccountStore;
+import func accountStore_cloneContract(
+    acctStore: AccountStore,
+    oldAddr: address,
+    newAddr: address
+) -> option<AccountStore>;
 import func account_setStorageCell(acct: Account, offset: uint, value: uint) -> option<Account>;
 import func account_getBalance(acct: Account) -> uint;
 import func account_setBalance(acct: Account, bal: uint) -> Account;
@@ -52,6 +57,7 @@ import func account_setContractInfo(
     startCodePoint: impure func(),
     storage: map<uint, uint>
 ) -> Account;
+import func account_fetchAndIncrSeqNum(account: Account) -> (uint, Account);
 import func pristineAccount(addr: address) -> Account;
 
 import func evmlogs_empty() -> EvmLogs;
@@ -154,26 +160,34 @@ public impure func initEvmCallStack(
     ) {
         globalCurrentEthMessage = ethMessage;
 
-        let globalAS = getGlobalAccountStore();
-        globalCallStack = Some(struct {
-            runningAs: addr,
-            runningCodeFrom: addr,
-            accountStore: globalAS,
-            runningAsAccount: accountStore_get(globalAS, addr),
-            caller: caller,
-            callKind: callKind,
-            calldata: calldata,
-            callvalue: callvalue,
-            returnInfo: None<ReturnInfo>,
-            memory: bytearray_new(0),
-            evmLogs: evmlogs_empty(),
-            selfDestructQueue: queue_new(),
-            resumeInfo: None<ResumeInfo>,
-            parent: None<any>
-        });
+        // pay callvalue from caller to the called contract
+        // payment will only be recorded inside the callframe, so it will be discarded if the call reverts
+        if let Some(globalAS) = accountStore_transferEthBalance(
+            getGlobalAccountStore(),
+            caller,
+            addr,
+            callvalue
+        ) {
+            globalCallStack = Some(struct {
+                runningAs: addr,
+                runningCodeFrom: addr,
+                accountStore: globalAS,
+                runningAsAccount: accountStore_get(globalAS, addr),
+                caller: caller,
+                callKind: callKind,
+                calldata: calldata,
+                callvalue: callvalue,
+                returnInfo: None<ReturnInfo>,
+                memory: bytearray_new(0),
+                evmLogs: evmlogs_empty(),
+                selfDestructQueue: queue_new(),
+                resumeInfo: None<ResumeInfo>,
+                parent: None<any>
+            });
 
-        if (gasAccounting_startTxCharges(gas, gasPrice, caller) != None<()>) {
-            entryPoint();  // start executing the call; should never return
+            if (gasAccounting_startTxCharges(gas, gasPrice, caller) != None<()>) {
+                entryPoint();  // start executing the call; should never return
+            }
         }
     }
 }
@@ -708,6 +722,35 @@ public impure func evmCallStack_selfDestructCurrentAccount(owner: address) {
     }
 }
 
+public impure func evmCallStack_cloneContract(addr: address) -> option<address> {
+    let (seqNum, acct) = account_fetchAndIncrSeqNum(
+        evmCallStack_getAccount(addr)?
+    );
+    evmCallStack_setAccount(addr, acct);
+
+    let newAddr = address(hash(hash(addr), hash(seqNum)));
+
+    let topFrame = globalCallStack?;
+    let acctStore = topFrame.accountStore;
+    if (addr == topFrame.runningAs) {
+        // we're touching the cached account, so copy it back into the acctStore before cloneContract
+        //     and we'll copy it back out after cloneContract
+        acctStore = accountStore_set(acctStore, topFrame.runningAs, topFrame.runningAsAccount);
+    }
+    acctStore = accountStore_cloneContract(acctStore, addr, newAddr)?;
+    if (addr == topFrame.runningAs) {
+        topFrame = topFrame with { runningAsAccount: accountStore_get(acctStore, topFrame.runningAs) };
+    }
+    topFrame = topFrame with { accountStore: acctStore };
+    globalCallStack = Some(topFrame);
+
+    return Some(newAddr);
+}
+
+public func evmCallFrame_runningAsAddress(frame: EvmCallFrame) -> address {
+    return frame.runningAs;
+}
+
 public func evmCallFrame_runningAsAccount(frame: EvmCallFrame) -> Account {
     return frame.runningAsAccount;
 }
@@ -750,6 +793,12 @@ public func evmCallFrame_getResumeCodePoint(frame: EvmCallFrame) -> option<func(
 
 public func evmCallFrame_getSelfDestructQueue(frame: EvmCallFrame) -> Queue {
     return frame.selfDestructQueue;
+}
+
+public func evmCallFrame_getParent(frame: EvmCallFrame) -> option<EvmCallFrame> {
+    return unsafecast<option<EvmCallFrame>>(frame.parent);
+    // unsafecast is safe because underlying type is really EvmCallFrame
+    //    (compiler doesn't know because it doesn't accept recursive types)
 }
 
 public impure func evmCallStack_callHitError() {

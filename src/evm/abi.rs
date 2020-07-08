@@ -330,7 +330,7 @@ impl AbiForContract {
         machine: &mut Machine,
         payment: Uint256,
         debug: bool,
-    ) -> Result<Value, ethabi::Error> {
+    ) -> Result<(Vec<Value>, Vec<Value>), ethabi::Error> {
         let this_function = self.contract.function(func_name)?;
         let calldata = this_function.encode_input(args).unwrap();
 
@@ -343,13 +343,17 @@ impl AbiForContract {
         );
 
         let num_logs_before = machine.runtime_env.get_all_logs().len();
+        let num_sends_before = machine.runtime_env.get_all_sends().len();
         let _arbgas_used = if debug {
             machine.debug(None)
         } else {
             machine.run(None)
         };
         let logs = machine.runtime_env.get_all_logs();
-        assert_eq!(logs.len(), num_logs_before + 1);
-        Ok(logs[logs.len() - 1].clone())
+        let sends = machine.runtime_env.get_all_sends();
+        Ok((
+            logs[num_logs_before..].to_vec(),
+            sends[num_sends_before..].to_vec(),
+        ))
     }
 }

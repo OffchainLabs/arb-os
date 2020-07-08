@@ -25,7 +25,6 @@ use std::io;
 use std::path::Path;
 use xformcode::make_uninitialized_tuple;
 
-use crate::uint256::Uint256;
 pub use xformcode::{value_from_field_list, TupleTree, TUPLE_SIZE};
 
 mod optimize;

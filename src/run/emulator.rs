@@ -1234,7 +1234,10 @@ impl Machine {
 						Ok(true)
 					}
 					Opcode::AVMOpcode(AVMOpcode::Send) => {
-						unimplemented!("Send instruction");
+                        let val = self.stack.pop(&self.state)?;
+                        self.runtime_env.push_send(val);
+                        self.incr_pc();
+                        Ok(true)
 					}
 					Opcode::AVMOpcode(AVMOpcode::Log) => {
 						let val = self.stack.pop(&self.state)?;
