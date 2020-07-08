@@ -297,8 +297,8 @@ impl Uint256 {
     }
 
     pub fn avm_hash2(v1: &Self, v2: &Self) -> Self {
-        let mut bytes1 = v1.val.to_bytes_be();
-        let bytes2 = v2.val.to_bytes_be();
+        let mut bytes1 = v1.to_bytes_be();
+        let bytes2 = v2.to_bytes_be();
         bytes1.extend(bytes2);
         let hash_result = keccak(bytes1);
         Uint256::from_bytes(hash_result.as_bytes())

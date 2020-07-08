@@ -980,7 +980,7 @@ fn mavm_codegen_expr<'a>(
                 BinaryOp::SLessEq => Opcode::AVMOpcode(AVMOpcode::SGreaterThan), // will negate
                 BinaryOp::SGreaterEq => Opcode::AVMOpcode(AVMOpcode::SLessThan), // will negate
                 BinaryOp::Equal => Opcode::AVMOpcode(AVMOpcode::Equal),
-                BinaryOp::NotEqual => Opcode::NotEqual,
+                BinaryOp::NotEqual => Opcode::AVMOpcode(AVMOpcode::Equal),  // will negate
                 BinaryOp::BitwiseAnd => Opcode::AVMOpcode(AVMOpcode::BitwiseAnd),
                 BinaryOp::BitwiseOr => Opcode::AVMOpcode(AVMOpcode::BitwiseOr),
                 BinaryOp::BitwiseXor => Opcode::AVMOpcode(AVMOpcode::BitwiseXor),
@@ -990,7 +990,8 @@ fn mavm_codegen_expr<'a>(
             };
             code.push(Instruction::from_opcode(opcode, *loc));
             match op {
-                BinaryOp::LessEq
+                BinaryOp::NotEqual
+                | BinaryOp::LessEq
                 | BinaryOp::GreaterEq
                 | BinaryOp::SLessEq
                 | BinaryOp::SGreaterEq => {

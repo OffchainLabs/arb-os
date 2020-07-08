@@ -706,7 +706,6 @@ impl Machine {
                 Opcode::AVMOpcode(AVMOpcode::BitwiseNeg) => 1,
                 Opcode::AVMOpcode(AVMOpcode::Byte) => 4,
                 Opcode::AVMOpcode(AVMOpcode::SignExtend) => 7,
-                Opcode::NotEqual => 3, // This opcode should be phased out
                 Opcode::AVMOpcode(AVMOpcode::Hash) => 7,
                 Opcode::AVMOpcode(AVMOpcode::Type) => 3,
                 Opcode::AVMOpcode(AVMOpcode::Hash2) => 8,
@@ -1123,13 +1122,6 @@ impl Machine {
 						let r1 = self.stack.pop(&self.state)?;
 						let r2 = self.stack.pop(&self.state)?;
 						self.stack.push_usize(if r1 == r2 { 1 } else { 0 });
-						self.incr_pc();
-						Ok(true)
-					}
-					Opcode::NotEqual => {
-						let r1 = self.stack.pop(&self.state)?;
-						let r2 = self.stack.pop(&self.state)?;
-						self.stack.push_usize(if r1 == r2 { 0 } else { 1 });
 						self.incr_pc();
 						Ok(true)
 					}
