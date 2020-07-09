@@ -15,10 +15,11 @@
  */
 
 use crate::mavm::Value;
-use crate::run::{Machine, RuntimeEnvironment};
+use crate::run::{bytes_from_bytestack, Machine};
 use crate::uint256::Uint256;
-use std::{collections::HashMap, convert::TryInto, fs::File, io::Read, path::Path};
+use std::{fs::File, io::Read, path::Path};
 
+/*
 #[derive(Clone)]
 pub struct AbiForDappArbCompiled {
     contracts: Vec<AbiForContractArbCompiled>,
@@ -172,13 +173,14 @@ impl AbiForContractArbCompiled {
         buf.push(0u8);
         buf.extend(decoded_insns);
 
-        rt_env.insert_eth_message(Uint256::one(), &buf);
+        rt_env.insert_l1_message(Uint256::one(), &buf);
     }
 
     pub fn get_function(&self, name: &str) -> Result<&ethabi::Function, ethabi::Error> {
         self.contract.function(name)
     }
 }
+*/
 
 #[derive(Debug, Clone)]
 pub struct AbiForContract {
@@ -285,7 +287,7 @@ impl AbiForContract {
             self.code_bytes.clone()
         };
 
-        machine.runtime_env.insert_txcall_message(
+        machine.runtime_env.insert_tx_message(
             Uint256::from_usize(1_000_000_000_000),
             Uint256::zero(),
             Uint256::zero(),
@@ -308,12 +310,10 @@ impl AbiForContract {
         }
 
         if let Value::Tuple(tup) = &logs[logs.len() - 1] {
-            if let Value::Int(ui) = tup[1].clone() {
-                self.address = ui.clone();
-                Some(ui)
-            } else {
-                None
-            }
+            assert_eq!(tup[1], Value::Int(Uint256::zero()));
+            let buf = bytes_from_bytestack(tup[2].clone())?;
+            self.address = Uint256::from_bytes(&buf);
+            Some(self.address.clone())
         } else {
             None
         }
@@ -334,7 +334,7 @@ impl AbiForContract {
         let this_function = self.contract.function(func_name)?;
         let calldata = this_function.encode_input(args).unwrap();
 
-        machine.runtime_env.insert_txcall_message(
+        machine.runtime_env.insert_tx_message(
             Uint256::from_usize(1_000_000_000_000),
             Uint256::zero(),
             self.address.clone(),

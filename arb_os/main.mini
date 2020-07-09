@@ -19,6 +19,7 @@ import type MarshalledBytes;
 import type ByteArray;
 import type ByteStream;
 import type MessageFromL1;
+import type EvmLogs;
 
 import impure func errorHandler_init();
 import impure func initKeccakConstants();
@@ -64,8 +65,15 @@ import impure func handleMessageFromL1(
     msg: MessageFromL1,
     maxGas: uint,
     gasPrice: uint
-) -> option<()>;
-
+) -> option<()>; // return None if message format error; Some(()) if other error; if no error, never return
+import impure func emitLog(
+    l1message: MessageFromL1,
+    resultCode: uint,
+    maybeReturnData: option<ByteArray>,
+    maybeEvmLogs: option<EvmLogs>,
+    gasUsed: uint,
+    gasPrice: uint,
+);
 import impure func arbsys_txcall();
 
 
@@ -86,13 +94,17 @@ impure func main() {
 public impure func mainRunLoop() {
     loop {
         let (msg, approved, maxGas, gasPrice) = getNextMsgFromCongestionAuction();
-        if ( ! approved) {
-            panic;  // not yet implemented
-        } elseif (None<()> == handleMessageFromL1(msg, maxGas, gasPrice)) {
-            panic;  // not yet implemented
+        if (approved) {
+            if (handleMessageFromL1(msg, maxGas, gasPrice) == None<()>) {
+                // reject for message format error
+                emitLog(msg, 6, None<ByteArray>, None<EvmLogs>, 0, 0);
+            }
+        } else {
+            // reject for congestion error
+            emitLog(msg, 2, None<ByteArray>, None<EvmLogs>, 0, 0);
         }
+        // if we reach here, message has already been rejected and log already sent
     }
-    panic;  // should never be reached
 }
 
 impure func initializeContractTemplates() -> option<()> {

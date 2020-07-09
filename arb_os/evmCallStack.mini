@@ -71,6 +71,7 @@ import func bytearray_copy(
     to: ByteArray,     toOffset: uint,
     nbytes: uint
 ) -> ByteArray;
+import func bytearray_set256(ba: ByteArray, offset: uint, value: uint) -> ByteArray;
 import func bytestream_new(ba: ByteArray) -> ByteStream;
 
 import func queue_new() -> Queue;
@@ -84,7 +85,7 @@ import func stack_push(stack: Stack, value: any) -> Stack;
 import func stack_pop(stack: Stack) -> option<(Stack, any)>;
 
 import impure func gasAccounting_startTxCharges(maxGas: uint, gasPrice: uint, payer: address) -> option<()>;
-import impure func gasAccounting_endTxCharges() -> option<uint>;
+import impure func gasAccounting_endTxCharges() -> option<(uint, uint)>;
 import impure func gasAccounting_pauseTxCharges() -> uint;
 import impure func gasAccounting_resumeTxCharges(allocation: uint) -> uint;
 
@@ -158,36 +159,49 @@ public impure func initEvmCallStack(
             addr
         )
     ) {
-        globalCurrentEthMessage = ethMessage;
+        if (gasAccounting_startTxCharges(gas, gasPrice, caller) != None<()>) {
+            globalCurrentEthMessage = ethMessage;
+            // pay callvalue from caller to the called contract
+            // payment will only be recorded inside the callframe, so it will be discarded if the call reverts
+            if let Some(globalAS) = accountStore_transferEthBalance(
+                getGlobalAccountStore(),
+                caller,
+                addr,
+                callvalue
+            ) {
+                globalCallStack = Some(struct {
+                    runningAs: addr,
+                    runningCodeFrom: addr,
+                    accountStore: globalAS,
+                    runningAsAccount: accountStore_get(globalAS, addr),
+                    caller: caller,
+                    callKind: callKind,
+                    calldata: calldata,
+                    callvalue: callvalue,
+                    returnInfo: None<ReturnInfo>,
+                    memory: bytearray_new(0),
+                    evmLogs: evmlogs_empty(),
+                    selfDestructQueue: queue_new(),
+                    resumeInfo: None<ResumeInfo>,
+                    parent: None<any>
+                });
 
-        // pay callvalue from caller to the called contract
-        // payment will only be recorded inside the callframe, so it will be discarded if the call reverts
-        if let Some(globalAS) = accountStore_transferEthBalance(
-            getGlobalAccountStore(),
-            caller,
-            addr,
-            callvalue
-        ) {
-            globalCallStack = Some(struct {
-                runningAs: addr,
-                runningCodeFrom: addr,
-                accountStore: globalAS,
-                runningAsAccount: accountStore_get(globalAS, addr),
-                caller: caller,
-                callKind: callKind,
-                calldata: calldata,
-                callvalue: callvalue,
-                returnInfo: None<ReturnInfo>,
-                memory: bytearray_new(0),
-                evmLogs: evmlogs_empty(),
-                selfDestructQueue: queue_new(),
-                resumeInfo: None<ResumeInfo>,
-                parent: None<any>
-            });
-
-            if (gasAccounting_startTxCharges(gas, gasPrice, caller) != None<()>) {
                 entryPoint();  // start executing the call; should never return
+            } else {
+                if let Some(res) = gasAccounting_endTxCharges() {
+                    // insufficient balance error
+                    let (gasUsed, gasPrice) = res;
+                    emitLog(ethMessage, 4, None<ByteArray>, None<EvmLogs>, gasUsed, gasPrice);
+                } else {
+                    // unknown error type
+                    emitLog(ethMessage, 255, None<ByteArray>, None<EvmLogs>, 0, 0);
+                }
+                evmCallStack_callHitError();
             }
+        } else {
+            // can't pay for gas error
+            emitLog(ethMessage, 3, None<ByteArray>, None<EvmLogs>, 0, 0);
+            evmCallStack_callHitError();
         }
     }
 }
@@ -395,7 +409,8 @@ public impure func evmCallStack_returnFromCall(
         panic;  // shouldn't happen -- previous instruction jumped away
     } else {
         // top-level call completed; will need to return to external caller
-        if (success && (topFrame.callKind != 3)) {  // call succeeded, and it wasn't a staticcall
+        let (gasUsed, gasPrice) = gasAccounting_endTxCharges()?;
+        if (success) {
             if (topFrame.callKind == 4) {
                 // Constructor call was successful, so finish setting up the account.
                 // The constructor's returndata is EVM code for the contract.
@@ -409,12 +424,14 @@ public impure func evmCallStack_returnFromCall(
                         storageMap = sm;
                     } else {
                         // Somehow the constructor didn't have storage; report error and panic.
-                        asm(
-                            (
-                                globalCurrentEthMessage,
-                                0
-                            ),
-                        ) { log };
+                        emitLog(
+                            globalCurrentEthMessage,
+                            6,
+                            None<ByteArray>,
+                            None<EvmLogs>,
+                            gasUsed,
+                            gasPrice
+                        );
                         panic;
                     }
 
@@ -433,80 +450,119 @@ public impure func evmCallStack_returnFromCall(
                         )
                     );
 
+                    returnData = bytearray_set256(
+                        bytearray_new(0),
+                        0,
+                        uint(topFrame.runningAs)
+                    );
+
                     // Emit log item reporting success
-                    asm(
-                        (
-                            globalCurrentEthMessage,
-                            topFrame.runningCodeFrom,
-                            bytearray_marshalFull(returnData)
-                        ),
-                    ) { log };
+                    emitLog(
+                        globalCurrentEthMessage,
+                        0,
+                        Some(returnData),
+                        Some(topFrame.evmLogs),
+                        gasUsed,
+                        gasPrice
+                    );
                 } else {
                     // Compilation of resulting code failed; report an error.
-                    asm(
-                        (
-                            globalCurrentEthMessage,
-                            0
-                        ),
-                    ) { log };
+                    emitLog(
+                        globalCurrentEthMessage,
+                        1,
+                        None<ByteArray>,
+                        None<EvmLogs>,
+                        gasUsed,
+                        gasPrice
+                    );
                 }
             } else {
-                // It was a successful txcall.
-                // We'll commit the results of the call, and report success to caller.
+                if (topFrame.callKind != 3) {
+                    // It was a successful tx (not a non-mutating call).
+                    // We'll commit the results of the tx
 
-                // Save cached account back to main accountStore
-                let acctStore = accountStore_set(
-                    topFrame.accountStore,
-                    topFrame.runningAs,
-                    topFrame.runningAsAccount
-                );
+                    // Save cached account back to main accountStore
+                    let acctStore = accountStore_set(
+                        topFrame.accountStore,
+                        topFrame.runningAs,
+                        topFrame.runningAsAccount
+                    );
 
-                // Commit the self-destruct events that were requested during the call.
-                let sdq = topFrame.selfDestructQueue;
-                while( ! queue_isEmpty(sdq) ) {
-                    let (q, item) = queue_get(sdq)?;
-                    sdq = q;
-                    let (victim, owner) = unsafecast<(address, address)>(item);
-                    acctStore = accountStore_destroyAndTransferBalance(acctStore, victim, owner);
+                    // Commit the self-destruct events that were requested during the call.
+                    let sdq = topFrame.selfDestructQueue;
+                    while( ! queue_isEmpty(sdq) ) {
+                        let (q, item) = queue_get(sdq)?;
+                        sdq = q;
+                        let (victim, owner) = unsafecast<(address, address)>(item);
+                        acctStore = accountStore_destroyAndTransferBalance(acctStore, victim, owner);
+                    }
+                    // Save results back to the main globalAccountStore
+                    setGlobalAccountStore(acctStore,);
                 }
 
                 // Emit a log item reporting success
-                let marshaledReturnData = bytearray_marshalFull(returnData);
-                asm(
-                    (
-                        globalCurrentEthMessage,
-                        topFrame.evmLogs,
-                        marshaledReturnData,
-                        success
-                    ),
-                ) { log } ;   //TODO: report gas usage and gas price paid in this log item
-
-                // Save results back to the main globalAccountStore
-                setGlobalAccountStore(acctStore,);
+                emitLog(
+                    globalCurrentEthMessage,
+                    0,
+                    Some(returnData),
+                    Some(topFrame.evmLogs),
+                    gasUsed,
+                    gasPrice
+                );
             }
         } else {
-            // The call failed, or it was a staticcall.
-            // Either way, we should not commit the results of the call.
-            // So just report the result.
-            asm(
-                (
-                    globalCurrentEthMessage,
-                    evmlogs_empty(),  // emit no logs because txcall failed
-                    bytearray_marshalFull(returnData),
-                    success
-                ),
-            ) { log } ;  //TODO: report gas usage and gas price paid in this log item
+            // Request failed
+            emitLog(
+                globalCurrentEthMessage,
+                1,
+                None<ByteArray>,
+                None<EvmLogs>,
+                gasUsed,
+                gasPrice
+            );
         }
-
-        // We're done processing the call results.
-        // First, get a refund for unused gas
-        let _ = gasAccounting_endTxCharges();
 
         // Now discard any AVM stack contents and jump back to the main run loop.
         emptyAvmStack();
         cleanAvmAuxStackAndCall(mainRunLoop,);  // should never return
         panic;
     }
+}
+
+// result codes:
+//    0    return (success)
+//    1    tx reverted
+//    2    rejected due to congestion
+//    3    insufficient funds to pay for gas
+//    4    insufficient funds for tx payment
+//    5    bad sequence number
+//    6    message format error
+//    255  unknown error
+public impure func emitLog(
+    l1message: MessageFromL1,
+    resultCode: uint,
+    maybeReturnData: option<ByteArray>,
+    maybeEvmLogs: option<EvmLogs>,
+    gasUsed: uint,
+    gasPrice: uint,
+) {
+    let returnData = bytearray_new(0);
+    if let Some(rd) = maybeReturnData {
+        returnData = rd;
+    }
+    let evmLogs = evmlogs_empty();
+    if let Some(el) = maybeEvmLogs {
+        evmLogs = el;
+    }
+
+    asm((
+        l1message,
+        resultCode,
+        bytearray_marshalFull(returnData),
+        evmLogs,
+        gasUsed,
+        gasPrice
+    ),) { log };
 }
 
 func saveAvmStack() -> Stack {

@@ -26,7 +26,8 @@ pub struct RuntimeEnvironment {
     pub current_timestamp: Uint256,
     pub logs: Vec<Value>,
     pub sends: Vec<Value>,
-    pub seq_nums: HashMap<Uint256, Uint256>,
+    pub next_inbox_seq_num: Uint256,
+    pub caller_seq_nums: HashMap<Uint256, Uint256>,
     next_id: Uint256, // used to assign unique (but artificial) txids to messages
     pub recorder: RtEnvRecorder,
 }
@@ -39,25 +40,32 @@ impl RuntimeEnvironment {
             current_timestamp: Uint256::zero(),
             logs: Vec::new(),
             sends: Vec::new(),
-            seq_nums: HashMap::new(),
+            next_inbox_seq_num: Uint256::zero(),
+            caller_seq_nums: HashMap::new(),
             next_id: Uint256::zero(),
             recorder: RtEnvRecorder::new(),
         }
     }
 
-    pub fn insert_eth_message(&mut self, sender_addr: Uint256, msg: &[u8]) {
+    pub fn insert_l1_message(&mut self, msg_type: u8, sender_addr: Uint256, msg: &[u8]) {
         let l1_msg = Value::new_tuple(vec![
-            Value::Int(Uint256::zero()), // mocked-up blockhash
-            Value::Int(self.current_timestamp.clone()),
+            Value::Int(Uint256::from_usize(msg_type as usize)),
             Value::Int(self.current_block_num.clone()),
-            Value::Int(sender_addr), // fake message sender
+            Value::Int(self.current_timestamp.clone()),
+            Value::Int(sender_addr),
+            Value::Int(self.next_inbox_seq_num.clone()),
             bytestack_from_bytes(msg),
         ]);
+        self.next_inbox_seq_num = self.next_inbox_seq_num.add(&Uint256::one());
         self.l1_inbox = Value::new_tuple(vec![self.l1_inbox.clone(), l1_msg.clone()]);
         self.recorder.add_msg(l1_msg);
     }
 
-    pub fn insert_txcall_message(
+    pub fn insert_l2_message(&mut self, sender_addr: Uint256, msg: &[u8]) {
+        self.insert_l1_message(3, sender_addr, msg);
+    }
+
+    pub fn insert_tx_message(
         &mut self,
         max_gas: Uint256,
         gas_price_bid: Uint256,
@@ -75,22 +83,23 @@ impl RuntimeEnvironment {
         buf.extend(value.to_bytes_be());
         buf.extend_from_slice(data);
 
-        self.insert_eth_message(sender_addr, &buf);
+        self.insert_l2_message(sender_addr, &buf);
     }
 
-    pub fn insert_nonmutating_call_message(
+    pub fn _insert_nonmutating_call_message(
         &mut self,
         to_addr: Uint256,
         max_gas: Uint256,
         data: &[u8],
     ) {
         let sender_addr = Uint256::from_usize(1025);
-        let mut buf = vec![5u8];
-        buf.extend(to_addr.to_bytes_be());
+        let mut buf = vec![2u8];
         buf.extend(max_gas.to_bytes_be());
+        buf.extend(Uint256::zero().to_bytes_be()); // gas price = 0
+        buf.extend(to_addr.to_bytes_be());
         buf.extend_from_slice(data);
 
-        self.insert_eth_message(sender_addr, &buf);
+        self.insert_l2_message(sender_addr, &buf);
     }
 
     #[cfg(test)]
@@ -101,29 +110,27 @@ impl RuntimeEnvironment {
         amount: Uint256,
     ) {
         let sender_addr = Uint256::from_usize(1025);
-        let mut buf = vec![2u8];
-        buf.extend(token_addr.to_bytes_be());
+        let mut buf = token_addr.to_bytes_be();
         buf.extend(payee.to_bytes_be());
         buf.extend(amount.to_bytes_be());
 
-        self.insert_eth_message(sender_addr, &buf);
+        self.insert_l1_message(1, sender_addr, &buf);
     }
 
     pub fn insert_eth_deposit_message(&mut self, payee: Uint256, amount: Uint256) {
         let sender_addr = Uint256::from_usize(1025);
-        let mut buf = vec![1u8];
-        buf.extend(payee.to_bytes_be());
+        let mut buf = payee.to_bytes_be();
         buf.extend(amount.to_bytes_be());
 
-        self.insert_eth_message(sender_addr, &buf);
+        self.insert_l1_message(0, sender_addr, &buf);
     }
 
     pub fn get_and_incr_seq_num(&mut self, addr: &Uint256) -> Uint256 {
-        let cur_seq_num = match self.seq_nums.get(&addr) {
+        let cur_seq_num = match self.caller_seq_nums.get(&addr) {
             Some(sn) => sn.clone(),
             None => Uint256::one(),
         };
-        self.seq_nums
+        self.caller_seq_nums
             .insert(addr.clone(), cur_seq_num.add(&Uint256::one()));
         cur_seq_num
     }

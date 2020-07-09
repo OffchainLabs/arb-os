@@ -17,11 +17,11 @@
 use crate::compile::{CompileError, CompiledProgram, Type};
 use crate::link::{link, postlink_compile, ImportedFunc, LinkedProgram};
 use crate::mavm::{AVMOpcode, Instruction, Label, LabelGenerator, Opcode, Value};
-use crate::run::{bytes_from_bytestack, load_from_file, RuntimeEnvironment};
+use crate::run::{bytes_from_bytestack, bytestack_from_bytes, load_from_file, RuntimeEnvironment};
 use crate::stringtable::StringTable;
 use crate::uint256::Uint256;
 use abi::AbiForContract;
-use ethabi::Token;
+//use ethabi::Token;
 use serde::Serialize;
 use std::collections::HashMap;
 use std::convert::TryInto;
@@ -853,6 +853,7 @@ pub struct CallInfo<'a> {
     mutating: bool,
 }
 
+/*
 pub fn evm_load_and_call_func(
     contract_json_file_name: &str,
     other_contract_names: &[&str],
@@ -882,7 +883,9 @@ pub fn evm_load_and_call_func(
     )?[0]
         .clone())
 }
+*/
 
+/*
 pub fn evm_load_and_call_funcs(
     contract_json_file_name: &str,
     other_contract_names: &[&str],
@@ -1053,6 +1056,7 @@ pub fn evm_load_fib_and_verify(log_to: Option<&Path>, debug: bool, profile: bool
         }
     }
 }
+*/
 
 pub fn evm_xcontract_call_with_constructors(
     log_to: Option<&Path>,
@@ -1102,7 +1106,7 @@ pub fn evm_xcontract_call_with_constructors(
     assert_eq!(logs.len(), 1);
     assert_eq!(sends.len(), 0);
     if let Value::Tuple(tup) = &logs[0] {
-        assert_eq!(tup[3], Value::Int(Uint256::one()));
+        assert_eq!(tup[1], Value::Int(Uint256::zero()));
     }
 
     let (logs, sends) = pc_contract.call_function(
@@ -1119,7 +1123,7 @@ pub fn evm_xcontract_call_with_constructors(
     assert_eq!(logs.len(), 1);
     assert_eq!(sends.len(), 0);
     if let Value::Tuple(tup) = &logs[0] {
-        assert_eq!(tup[3], Value::Int(Uint256::one()));
+        assert_eq!(tup[1], Value::Int(Uint256::zero()));
     }
 
     if let Some(path) = log_to {
@@ -1195,7 +1199,7 @@ pub fn evm_test_arbsys(log_to: Option<&Path>, debug: bool) {
             assert_eq!(logs.len(), 1);
             assert_eq!(sends.len(), 0);
             if let Value::Tuple(tup) = &logs[0] {
-                assert_eq!(tup[3], Value::Int(Uint256::one()));
+                assert_eq!(tup[1], Value::Int(Uint256::zero()));
                 match bytes_from_bytestack(tup[2].clone()) {
                     Some(result_bytes) => {
                         let decoded_result = contract
@@ -1232,20 +1236,19 @@ pub fn evm_test_arbsys(log_to: Option<&Path>, debug: bool) {
         Ok((logs, sends)) => {
             assert_eq!(logs.len(), 1);
             if let Value::Tuple(tup) = &logs[0] {
-                assert_eq!(tup[3], Value::Int(Uint256::one()));
+                assert_eq!(tup[1], Value::Int(Uint256::zero()));
             } else {
                 panic!("malformed log");
             }
             assert_eq!(sends.len(), 1);
+            let mut expected_bytes = Uint256::from_usize(1025).to_bytes_be();
+            expected_bytes.extend(Uint256::from_usize(5000).to_bytes_be());
             assert_eq!(
                 sends[0],
                 Value::new_tuple(vec![
-                    Value::Int(Uint256::one()),
+                    Value::Int(Uint256::zero()),
                     Value::Int(contract.address),
-                    Value::new_tuple(vec![
-                        Value::Int(Uint256::from_usize(1025)),
-                        Value::Int(Uint256::from_usize(5000)),
-                    ]),
+                    bytestack_from_bytes(&expected_bytes),
                 ]),
             )
         }
@@ -1296,7 +1299,7 @@ pub fn evm_direct_deploy_and_call_add(log_to: Option<&Path>, debug: bool) {
             assert_eq!(logs.len(), 1);
             assert_eq!(sends.len(), 0);
             if let Value::Tuple(tup) = &logs[0] {
-                assert_eq!(tup[3], Value::Int(Uint256::one()));
+                assert_eq!(tup[1], Value::Int(Uint256::zero()));
                 match bytes_from_bytestack(tup[2].clone()) {
                     Some(result_bytes) => {
                         let decoded_result = contract
@@ -1337,7 +1340,7 @@ pub fn mint_erc20_and_get_balance(debug: bool) {
     rt_env.insert_erc20_deposit_message(token_addr.clone(), me.clone(), million);
     let mut calldata: Vec<u8> = vec![0x70, 0xa0, 0x82, 0x31]; // code for balanceOf method
     calldata.extend(me.to_bytes_be());
-    rt_env.insert_txcall_message(
+    rt_env.insert_tx_message(
         Uint256::from_usize(1000000000),
         Uint256::zero(),
         token_addr,
@@ -1359,18 +1362,19 @@ pub fn mint_erc20_and_get_balance(debug: bool) {
     println!("first log item: {}", logs[logs.len() - 2]);
     println!("second log item: {}", logs[logs.len() - 1]);
     if let Value::Tuple(tup) = &logs[logs.len() - 2] {
-        assert_eq!(tup[3], Value::Int(Uint256::one()));
+        assert_eq!(tup[1], Value::Int(Uint256::zero()));
     } else {
         panic!("first log item was malformed");
     }
     if let Value::Tuple(tup) = &logs[logs.len() - 1] {
-        assert_eq!(tup[3], Value::Int(Uint256::one()));
+        assert_eq!(tup[1], Value::Int(Uint256::zero()));
     } else {
         panic!("second log item was malformed");
     }
 }
 
 pub fn make_logs_for_all_arbos_tests() {
+    /*
     evm_load_add_and_verify(
         Some(Path::new("testlogs/evm_load_add_and_verify.aoslog")),
         true,
@@ -1382,6 +1386,7 @@ pub fn make_logs_for_all_arbos_tests() {
         false,
         false,
     );
+     */
     evm_direct_deploy_add(
         Some(Path::new("testlogs/evm_direct_deploy_add.aoslog")),
         false,

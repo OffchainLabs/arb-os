@@ -17,6 +17,7 @@
 import type EvmCallFrame;
 import type Account;
 import type ByteArray;
+import type MarshalledBytes;
 
 import impure func evmCallStack_topFrame() -> option<EvmCallFrame>;
 import impure func evmCallStack_setAccount(addr: address, acct: Account) -> bool;
@@ -41,6 +42,8 @@ import func bytearray_size(ba: ByteArray) -> uint;
 import func bytearray_getByte(ba: ByteArray, offset: uint) -> uint;
 import func bytearray_get256(ba: ByteArray, offset: uint) -> uint;
 import func bytearray_set256(ba: ByteArray, offset: uint, value: uint) -> ByteArray;
+import func bytearray_extract(ba: ByteArray, offset: uint, nbytes: uint) -> ByteArray;
+import func bytearray_marshalFull(ba: ByteArray) -> MarshalledBytes;
 
 import impure func inbox_currentBlockNumber() -> uint;
 import impure func inbox_currentTimestamp() -> uint;
@@ -112,16 +115,8 @@ impure func arbsys_withdrawErc20(topFrame: EvmCallFrame, calldata: ByteArray) {
     let destAddr = address(bytearray_get256(calldata, 4));
     let amount = bytearray_get256(calldata, 36);
 
-    let message = struct {
-        kind: 2,
-        sender: senderAddr,
-        msg: struct {
-            tokenAddr: senderAddr,
-            dest: destAddr,
-            amount: amount
-        }
-    };
-    sendMessage(message);
+    let messageData = bytearray_extract(calldata, 4, 64);
+    sendMessage(1, senderAddr, messageData);
     evmOp_return(0, 0);
 }
 
@@ -142,15 +137,8 @@ impure func arbsys_withdrawEth(topFrame: EvmCallFrame, calldata: ByteArray) {
             if ( ! evmCallStack_setAccount(senderAddr, updatedAcct)) {
                 evmOp_revert(0, 0);
             }
-            let message = struct {
-                kind: 1,
-                sender: senderAddr,
-                msg: struct {
-                    dest: destAddr,
-                    amount: amount
-                }
-            };
-            sendMessage(message);
+            let messageData = bytearray_extract(calldata, 4, 64);
+            sendMessage(0, senderAddr, messageData);
             evmOp_return(0, 0);
         }
     }
@@ -245,6 +233,12 @@ impure func getCallerAddress() -> option<address> {
     );
 }
 
-impure func sendMessage(message: any) {
-    asm(message,) { send };
+impure func sendMessage(msgType: uint, sender: address, data: ByteArray) {
+    asm(
+        (
+            msgType,
+            uint(sender),
+            bytearray_marshalFull(data),
+        ),
+    ) { send };
 }
