@@ -1106,7 +1106,7 @@ pub fn evm_xcontract_call_with_constructors(
     assert_eq!(logs.len(), 1);
     assert_eq!(sends.len(), 0);
     if let Value::Tuple(tup) = &logs[0] {
-        assert_eq!(tup[3], Value::Int(Uint256::one()));
+        assert_eq!(tup[1], Value::Int(Uint256::zero()));
     }
 
     let (logs, sends) = pc_contract.call_function(
@@ -1123,7 +1123,7 @@ pub fn evm_xcontract_call_with_constructors(
     assert_eq!(logs.len(), 1);
     assert_eq!(sends.len(), 0);
     if let Value::Tuple(tup) = &logs[0] {
-        assert_eq!(tup[3], Value::Int(Uint256::one()));
+        assert_eq!(tup[1], Value::Int(Uint256::zero()));
     }
 
     if let Some(path) = log_to {
@@ -1199,7 +1199,7 @@ pub fn evm_test_arbsys(log_to: Option<&Path>, debug: bool) {
             assert_eq!(logs.len(), 1);
             assert_eq!(sends.len(), 0);
             if let Value::Tuple(tup) = &logs[0] {
-                assert_eq!(tup[3], Value::Int(Uint256::one()));
+                assert_eq!(tup[1], Value::Int(Uint256::zero()));
                 match bytes_from_bytestack(tup[2].clone()) {
                     Some(result_bytes) => {
                         let decoded_result = contract
@@ -1236,7 +1236,7 @@ pub fn evm_test_arbsys(log_to: Option<&Path>, debug: bool) {
         Ok((logs, sends)) => {
             assert_eq!(logs.len(), 1);
             if let Value::Tuple(tup) = &logs[0] {
-                assert_eq!(tup[3], Value::Int(Uint256::one()));
+                assert_eq!(tup[1], Value::Int(Uint256::zero()));
             } else {
                 panic!("malformed log");
             }
@@ -1300,7 +1300,7 @@ pub fn evm_direct_deploy_and_call_add(log_to: Option<&Path>, debug: bool) {
             assert_eq!(logs.len(), 1);
             assert_eq!(sends.len(), 0);
             if let Value::Tuple(tup) = &logs[0] {
-                assert_eq!(tup[3], Value::Int(Uint256::one()));
+                assert_eq!(tup[1], Value::Int(Uint256::zero()));
                 match bytes_from_bytestack(tup[2].clone()) {
                     Some(result_bytes) => {
                         let decoded_result = contract
@@ -1363,12 +1363,12 @@ pub fn mint_erc20_and_get_balance(debug: bool) {
     println!("first log item: {}", logs[logs.len() - 2]);
     println!("second log item: {}", logs[logs.len() - 1]);
     if let Value::Tuple(tup) = &logs[logs.len() - 2] {
-        assert_eq!(tup[3], Value::Int(Uint256::one()));
+        assert_eq!(tup[1], Value::Int(Uint256::zero()));
     } else {
         panic!("first log item was malformed");
     }
     if let Value::Tuple(tup) = &logs[logs.len() - 1] {
-        assert_eq!(tup[3], Value::Int(Uint256::one()));
+        assert_eq!(tup[1], Value::Int(Uint256::zero()));
     } else {
         panic!("second log item was malformed");
     }

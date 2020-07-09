@@ -15,7 +15,7 @@
  */
 
 use crate::mavm::Value;
-use crate::run::Machine;
+use crate::run::{Machine, bytes_from_bytestack};
 use crate::uint256::Uint256;
 use std::{fs::File, io::Read, path::Path};
 
@@ -310,12 +310,10 @@ impl AbiForContract {
         }
 
         if let Value::Tuple(tup) = &logs[logs.len() - 1] {
-            if let Value::Int(ui) = tup[1].clone() {
-                self.address = ui.clone();
-                Some(ui)
-            } else {
-                None
-            }
+            assert_eq!(tup[1], Value::Int(Uint256::zero()));
+            let buf = bytes_from_bytestack(tup[2].clone())?;
+            self.address = Uint256::from_bytes(&buf);
+            Some(self.address.clone())
         } else {
             None
         }
