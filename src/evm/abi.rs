@@ -15,7 +15,7 @@
  */
 
 use crate::mavm::Value;
-use crate::run::{Machine, bytes_from_bytestack};
+use crate::run::{bytes_from_bytestack, Machine};
 use crate::uint256::Uint256;
 use std::{fs::File, io::Read, path::Path};
 

@@ -17,7 +17,7 @@
 use crate::compile::{CompileError, CompiledProgram, Type};
 use crate::link::{link, postlink_compile, ImportedFunc, LinkedProgram};
 use crate::mavm::{AVMOpcode, Instruction, Label, LabelGenerator, Opcode, Value};
-use crate::run::{bytes_from_bytestack, load_from_file, RuntimeEnvironment};
+use crate::run::{bytes_from_bytestack, bytestack_from_bytes, load_from_file, RuntimeEnvironment};
 use crate::stringtable::StringTable;
 use crate::uint256::Uint256;
 use abi::AbiForContract;
@@ -1241,15 +1241,14 @@ pub fn evm_test_arbsys(log_to: Option<&Path>, debug: bool) {
                 panic!("malformed log");
             }
             assert_eq!(sends.len(), 1);
+            let mut expected_bytes = Uint256::from_usize(1025).to_bytes_be();
+            expected_bytes.extend(Uint256::from_usize(5000).to_bytes_be());
             assert_eq!(
                 sends[0],
                 Value::new_tuple(vec![
-                    Value::Int(Uint256::one()),
+                    Value::Int(Uint256::zero()),
                     Value::Int(contract.address),
-                    Value::new_tuple(vec![
-                        Value::Int(Uint256::from_usize(1025)),
-                        Value::Int(Uint256::from_usize(5000)),
-                    ]),
+                    bytestack_from_bytes(&expected_bytes),
                 ]),
             )
         }
