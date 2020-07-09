@@ -113,7 +113,7 @@ public impure func gasAccounting_startTxCharges(
     return Some(());
 }
 
-public impure func gasAccounting_endTxCharges() -> option<uint> {
+public impure func gasAccounting_endTxCharges() -> option<(uint, uint)> {
     // stop charging the current tx for gas
     // refund any unused gas
     // return the total amount it used, or None if there isn't a tx active
@@ -142,7 +142,7 @@ public impure func gasAccounting_endTxCharges() -> option<uint> {
         txState: None<TxGasState>
     };
 
-    return Some(txState.originalMax - gasToRefund);
+    return Some((txState.originalMax-gasToRefund, txState.price));
 }
 
 public impure func gasAccounting_pauseTxCharges() -> uint {
