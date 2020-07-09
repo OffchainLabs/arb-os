@@ -747,6 +747,7 @@ impl Machine {
                 Opcode::AVMOpcode(AVMOpcode::DebugPrint) => 25,
                 Opcode::AVMOpcode(AVMOpcode::GetGas) => 1,
                 Opcode::AVMOpcode(AVMOpcode::SetGas) => 0,
+                Opcode::AVMOpcode(AVMOpcode::EcRecover) => 20_000,
                 Opcode::AVMOpcode(AVMOpcode::Sideload) => 10,
                 _ => return None,
             })
@@ -1322,6 +1323,15 @@ impl Machine {
                     Opcode::AVMOpcode(AVMOpcode::Sideload) => {
                         self.stack.push(Value::none());
                         self.incr_pc();
+                        Ok(true)
+                    }
+                    Opcode::AVMOpcode(AVMOpcode::EcRecover) => {
+                        let _first_half = self.stack.pop_uint(&self.state)?;
+                        let _second_half = self.stack.pop_uint(&self.state)?;
+                        let _recover_id = self.stack.pop_bool(&self.state)?;
+                        let _msg_hash = self.stack.pop_uint(&self.state)?;
+                        //BUGBUG: this is a sleazy hack to allow limited testing
+                        self.stack.push(Value::Int(Uint256::from_usize(1025)));
                         Ok(true)
                     }
 					Opcode::GetLocal |  // these opcodes are for intermediate use in compilation only

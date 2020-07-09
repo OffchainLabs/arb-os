@@ -117,6 +117,17 @@ public func bytestream_getUint(bs: ByteStream) -> option<(ByteStream, uint)> {
     }
 }
 
+public func bytestream_getN(bs: ByteStream, nbytes: uint) -> option<(ByteStream, ByteArray)> {
+    if (bs.currentOffset + nbytes > bs.capacity) {
+        return None;
+    }
+
+    return Some((
+        bs with { currentOffset: bs.currentOffset + nbytes },
+        bytearray_extract(bs.contents, bs.currentOffset, nbytes)
+    ));
+}
+
 public func bytestream_getRemainingBytes(bs: ByteStream) -> ByteArray {
     return bytearray_extract(
         bs.contents,
