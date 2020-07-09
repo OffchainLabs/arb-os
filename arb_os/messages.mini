@@ -69,6 +69,14 @@ import impure func initEvmCallStackForConstructor(
     gasPrice: uint
 );
 import func evmCallStack_runningCodeFromAccount() -> option<Account>;
+import impure func emitLog(
+    l1message: MessageFromL1,
+    resultCode: uint,
+    maybeReturnData: option<ByteArray>,
+    maybeEvmLogs: option<EvmLogs>,
+    gasUsed: uint,
+    gasPrice: uint,
+);
 
 import impure func tokens_erc20deposit(
     tokenAddr: address,
@@ -106,7 +114,7 @@ public impure func handleMessageFromL1(
     msg: MessageFromL1,
     maxGas: uint,
     gasPrice: uint
-) -> option<()> {
+) -> option<()> {   // return None if message format error; Some(()) if other error; if no error, never return
     // Parse an incoming message and do appropriate computations
     let inStream = bytestream_new(bytearray_unmarshalBytes(msg.msgData));
 
@@ -153,7 +161,8 @@ public impure func handleMessageFromL1(
         return None; // NOT YET IMPLEMENTED
     } elseif (msg.kind == 3) {
         // L2 message
-        return handleL2Message(inStream, msg, maxGas, gasPrice);
+        handleL2Message(inStream, msg, maxGas, gasPrice)?;
+        return Some(());
     } else {
         // not a valid message type
         return None;
@@ -199,18 +208,24 @@ impure func handleL2Message(
     fullMsg: MessageFromL1,
     maxGas: uint,
     gasPrice: uint
-) -> option<()> {
+) -> option<()> {   // return None if message is malformatted; otherwise handle errors and return Some(()); if no error, never return
     let (bs, msgType) = bytestream_getByte(inStream)?;
     inStream = bs;
 
-    inStream = bytestream_skipBytes(inStream, 64)?;   // skip maxGas and gasPriceBid fields of message
+    // skip maxGas and gasPriceBid fields of message
+    inStream = bytestream_skipBytes(inStream, 64)?;
 
     let sequenceNum = 0;  // impossible value for sequence number
     if (msgType == 0) {
-        let (bs, seqNum) = bytestream_getUint(inStream)?;
+        let(bs, sn) = bytestream_getUint(inStream)?;
         inStream = bs;
-        sequenceNum = seqNum;
-        verifyAndIncrSequenceNum(fullMsg.sender, sequenceNum)?;
+        sequenceNum = sn;
+
+        if (verifyAndIncrSequenceNum(fullMsg.sender, sequenceNum) == None<()>) {
+            // bad sequence number error
+            emitLog(fullMsg, 5, None<ByteArray>, None<EvmLogs>, 0, 0);
+            return Some(());
+        }
     }
 
     let (bs, calleeAddressAsUint) = bytestream_getUint(inStream)?;
@@ -227,7 +242,9 @@ impure func handleL2Message(
     if (calleeAddressAsUint == 0) {
         // this is a constructor call
         if (msgType == 2) {
-            return None;   // cannot call constructor in non-mutating call
+            // revert error (tried to call constructor in a non-mutating call)
+            emitLog(fullMsg, 1, None<ByteArray>, None<EvmLogs>, 0, 0);
+            return Some(());
         }
         let codeBytes = bytestream_getRemainingBytes(inStream);
         let (codept, evmJumpTable) = translateEvmCodeSegment(bytestream_new(codeBytes))?;
@@ -267,5 +284,5 @@ impure func handleL2Message(
         );  // should never return
     }
 
-    return None;
+    panic;   // this should never be reached
 }

@@ -159,36 +159,49 @@ public impure func initEvmCallStack(
             addr
         )
     ) {
-        globalCurrentEthMessage = ethMessage;
+        if (gasAccounting_startTxCharges(gas, gasPrice, caller) != None<()>) {
+            globalCurrentEthMessage = ethMessage;
+            // pay callvalue from caller to the called contract
+            // payment will only be recorded inside the callframe, so it will be discarded if the call reverts
+            if let Some(globalAS) = accountStore_transferEthBalance(
+                getGlobalAccountStore(),
+                caller,
+                addr,
+                callvalue
+            ) {
+                globalCallStack = Some(struct {
+                    runningAs: addr,
+                    runningCodeFrom: addr,
+                    accountStore: globalAS,
+                    runningAsAccount: accountStore_get(globalAS, addr),
+                    caller: caller,
+                    callKind: callKind,
+                    calldata: calldata,
+                    callvalue: callvalue,
+                    returnInfo: None<ReturnInfo>,
+                    memory: bytearray_new(0),
+                    evmLogs: evmlogs_empty(),
+                    selfDestructQueue: queue_new(),
+                    resumeInfo: None<ResumeInfo>,
+                    parent: None<any>
+                });
 
-        // pay callvalue from caller to the called contract
-        // payment will only be recorded inside the callframe, so it will be discarded if the call reverts
-        if let Some(globalAS) = accountStore_transferEthBalance(
-            getGlobalAccountStore(),
-            caller,
-            addr,
-            callvalue
-        ) {
-            globalCallStack = Some(struct {
-                runningAs: addr,
-                runningCodeFrom: addr,
-                accountStore: globalAS,
-                runningAsAccount: accountStore_get(globalAS, addr),
-                caller: caller,
-                callKind: callKind,
-                calldata: calldata,
-                callvalue: callvalue,
-                returnInfo: None<ReturnInfo>,
-                memory: bytearray_new(0),
-                evmLogs: evmlogs_empty(),
-                selfDestructQueue: queue_new(),
-                resumeInfo: None<ResumeInfo>,
-                parent: None<any>
-            });
-
-            if (gasAccounting_startTxCharges(gas, gasPrice, caller) != None<()>) {
                 entryPoint();  // start executing the call; should never return
+            } else {
+                if let Some(res) = gasAccounting_endTxCharges() {
+                    // insufficient balance error
+                    let (gasUsed, gasPrice) = res;
+                    emitLog(ethMessage, 4, None<ByteArray>, None<EvmLogs>, gasUsed, gasPrice);
+                } else {
+                    // unknown error type
+                    emitLog(ethMessage, 255, None<ByteArray>, None<EvmLogs>, 0, 0);
+                }
+                evmCallStack_callHitError();
             }
+        } else {
+            // can't pay for gas error
+            emitLog(ethMessage, 3, None<ByteArray>, None<EvmLogs>, 0, 0);
+            evmCallStack_callHitError();
         }
     }
 }
@@ -516,7 +529,16 @@ public impure func evmCallStack_returnFromCall(
     }
 }
 
-func emitLog(
+// result codes:
+//    0    return (success)
+//    1    tx reverted
+//    2    rejected due to congestion
+//    3    insufficient funds to pay for gas
+//    4    insufficient funds for tx payment
+//    5    bad sequence number
+//    6    message format error
+//    255  unknown error
+public impure func emitLog(
     l1message: MessageFromL1,
     resultCode: uint,
     maybeReturnData: option<ByteArray>,
