@@ -237,7 +237,6 @@ public impure func getNextMsgFromCongestionAuction() -> (
 ) {
     // For now, the gas auction is a no-op.  It just approves every message at zero gas price.
 
-asm(10,) { debugprint };
     let msg = unsafecast<MessageFromL1>(());   // value will be re-initialized before use
     loop {
         if let Some(sideloadedTuple) = trySideload() {
@@ -254,7 +253,6 @@ asm(10,) { debugprint };
             msg = inbox_get();
         }
 
-asm(20,) { debugprint };
         if let Some(batch) = messageBatch_tryNew(msg) {
             // it's a batch message, so unpack its components and queue them
             let moreToDo = true;

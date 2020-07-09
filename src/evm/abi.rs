@@ -356,4 +356,27 @@ impl AbiForContract {
             sends[num_sends_before..].to_vec(),
         ))
     }
+
+    pub fn add_function_call_to_batch(
+        &self,
+        batch: &mut Vec<u8>,
+        func_name: &str,
+        args: &[ethabi::Token],
+        machine: &mut Machine,
+        payment: Uint256,
+    ) -> Result<(), ethabi::Error> {
+        let this_function = self.contract.function(func_name)?;
+        let calldata = this_function.encode_input(args).unwrap();
+
+        machine.runtime_env.append_tx_message_to_batch(
+            batch,
+            Uint256::from_usize(1_000_000_000_000),
+            Uint256::zero(),
+            self.address.clone(),
+            payment,
+            &calldata
+        );
+
+        Ok(())
+    }
 }

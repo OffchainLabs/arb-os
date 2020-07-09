@@ -183,6 +183,14 @@ pub fn test_crosscontract_call_with_constructors() {
 }
 
 #[test]
+pub fn test_crosscontract_call_using_batch() {
+    match crate::evm::evm_xcontract_call_using_batch(None, false, false) {
+        Ok(result) => assert_eq!(result, true),
+        Err(e) => panic!("error {}", e),
+    }
+}
+
+#[test]
 fn test_erc20() {
     crate::evm::mint_erc20_and_get_balance(false);
 }

@@ -1328,10 +1328,11 @@ impl Machine {
                     Opcode::AVMOpcode(AVMOpcode::EcRecover) => {
                         let _first_half = self.stack.pop_uint(&self.state)?;
                         let _second_half = self.stack.pop_uint(&self.state)?;
-                        let _recover_id = self.stack.pop_bool(&self.state)?;
+                        let _recover_id = self.stack.pop_uint(&self.state)?;
                         let _msg_hash = self.stack.pop_uint(&self.state)?;
                         //BUGBUG: this is a sleazy hack to allow limited testing
-                        self.stack.push(Value::Int(Uint256::from_usize(1025)));
+                        self.stack.push_uint(Uint256::from_usize(1025));
+                        self.incr_pc();
                         Ok(true)
                     }
 					Opcode::GetLocal |  // these opcodes are for intermediate use in compilation only
