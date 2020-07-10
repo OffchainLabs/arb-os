@@ -528,8 +528,7 @@ pub enum AVMOpcode {
     Breakpoint = 0x60,
     Log,
     Send = 0x70,
-    GetTime,
-    Inbox,
+    Inbox = 0x72,
     Panic,
     Halt,
     SetGas,
@@ -549,7 +548,6 @@ impl MiniProperties for Opcode {
             Opcode::AVMOpcode(AVMOpcode::Log)
             | Opcode::AVMOpcode(AVMOpcode::Inbox)
             | Opcode::AVMOpcode(AVMOpcode::Send)
-            | Opcode::AVMOpcode(AVMOpcode::GetTime)
             | Opcode::AVMOpcode(AVMOpcode::Rset)
             | Opcode::AVMOpcode(AVMOpcode::Rget)
             | Opcode::AVMOpcode(AVMOpcode::PushInsn)
@@ -612,7 +610,6 @@ impl Opcode {
             "bitwisexor" => Opcode::AVMOpcode(AVMOpcode::BitwiseXor),
             "logicaland" => Opcode::LogicalAnd,
             "logicalor" => Opcode::LogicalOr,
-            "gettime" => Opcode::AVMOpcode(AVMOpcode::GetTime),
             "inbox" => Opcode::AVMOpcode(AVMOpcode::Inbox),
             "jump" => Opcode::AVMOpcode(AVMOpcode::Jump),
             "log" => Opcode::AVMOpcode(AVMOpcode::Log),
@@ -687,7 +684,6 @@ impl Opcode {
             0x60 => Some(Opcode::AVMOpcode(AVMOpcode::Breakpoint)),
             0x61 => Some(Opcode::AVMOpcode(AVMOpcode::Log)),
             0x70 => Some(Opcode::AVMOpcode(AVMOpcode::Send)),
-            0x71 => Some(Opcode::AVMOpcode(AVMOpcode::GetTime)),
             0x72 => Some(Opcode::AVMOpcode(AVMOpcode::Inbox)),
             0x73 => Some(Opcode::AVMOpcode(AVMOpcode::Panic)),
             0x74 => Some(Opcode::AVMOpcode(AVMOpcode::Halt)),
@@ -758,7 +754,6 @@ impl Opcode {
             Opcode::AVMOpcode(AVMOpcode::Breakpoint) => Some(0x60),
             Opcode::AVMOpcode(AVMOpcode::Log) => Some(0x61),
             Opcode::AVMOpcode(AVMOpcode::Send) => Some(0x70),
-            Opcode::AVMOpcode(AVMOpcode::GetTime) => Some(0x71),
             Opcode::AVMOpcode(AVMOpcode::Inbox) => Some(0x72),
             Opcode::AVMOpcode(AVMOpcode::Panic) => Some(0x73),
             Opcode::AVMOpcode(AVMOpcode::Halt) => Some(0x74),
