@@ -15,7 +15,6 @@
  */
 
 use crate::compile::MiniProperties;
-use crate::evm::runtime_func_name;
 use crate::pos::Location;
 use crate::stringtable::StringId;
 use crate::uint256::Uint256;
@@ -28,7 +27,6 @@ pub enum Label {
     Func(StringId),
     Anon(usize),
     External(usize), // slot in imported funcs list
-    Runtime(usize),  // function exported by the trusted runtime
     Evm(usize),      // program counter in EVM contract
 }
 
@@ -43,7 +41,6 @@ impl Label {
             Label::Func(sid) => (Label::Func(sid + func_offset), sid + func_offset),
             Label::Anon(pc) => (Label::Anon(pc + int_offset), func_offset),
             Label::External(slot) => (Label::External(slot + ext_offset), func_offset),
-            Label::Runtime(_) => (self, func_offset),
             Label::Evm(_) => (self, func_offset),
         }
     }
@@ -62,9 +59,6 @@ impl Label {
                 &Value::Int(Uint256::from_usize(6)),
                 &Value::Int(Uint256::from_usize(*n)),
             ),
-            Label::Runtime(_) => {
-                panic!("tried to avm_hash a runtime call index");
-            }
             Label::Evm(_) => {
                 panic!("tried to avm_hash an EVM label");
             }
@@ -78,7 +72,6 @@ impl fmt::Display for Label {
             Label::Func(sid) => write!(f, "function_{}", sid),
             Label::Anon(n) => write!(f, "label_{}", n),
             Label::External(slot) => write!(f, "external_{}", slot),
-            Label::Runtime(slot) => write!(f, "{}", runtime_func_name(*slot)),
             Label::Evm(pc) => write!(f, "EvmPC({})", pc),
         }
     }
@@ -221,7 +214,6 @@ impl fmt::Display for Instruction {
 pub enum CodePt {
     Internal(usize),
     External(usize),         // slot in imported funcs list
-    Runtime(usize),          // slot in runtime funcs list
     InSegment(usize, usize), // in code segment, at offset
     Null,                    // initial value of the Error Codepoint register
 }
@@ -233,10 +225,6 @@ impl CodePt {
 
     pub fn new_external(name: StringId) -> Self {
         CodePt::External(name)
-    }
-
-    pub fn new_runtime(slot: usize) -> Self {
-        CodePt::Runtime(slot)
     }
 
     pub fn new_in_segment(seg_num: usize, offset: usize) -> Self {
@@ -254,26 +242,14 @@ impl CodePt {
                 }
             }
             CodePt::External(_) => None,
-            CodePt::Runtime(_) => None,
             CodePt::Null => None,
         }
     }
-
-    /*
-    pub fn pc_if_internal(&self) -> Option<usize> {
-        if let CodePt::Internal(pc) = self {
-            Some(*pc)
-        } else {
-            None
-        }
-    }
-    */
 
     pub fn relocate(self, int_offset: usize, ext_offset: usize) -> Self {
         match self {
             CodePt::Internal(pc) => CodePt::Internal(pc + int_offset),
             CodePt::External(off) => CodePt::External(off + ext_offset),
-            CodePt::Runtime(_) => self,
             CodePt::InSegment(_, _) => {
                 panic!("tried to relocate/link code at runtime");
             }
@@ -292,10 +268,6 @@ impl CodePt {
             CodePt::External(_) => {
                 panic!("tried to avm_hash unlinked codepoint");
             }
-            CodePt::Runtime(sz) => Value::avm_hash2(
-                &Value::Int(Uint256::from_usize(5)),
-                &Value::Int(Uint256::from_usize(*sz)),
-            ),
             CodePt::InSegment(_, _) => {
                 unimplemented!("avm_hash for in-module codepoints");
             }
@@ -309,7 +281,6 @@ impl fmt::Display for CodePt {
         match self {
             CodePt::Internal(pc) => write!(f, "Internal({})", pc),
             CodePt::External(idx) => write!(f, "External({})", idx),
-            CodePt::Runtime(slot) => write!(f, "{}", runtime_func_name(*slot)),
             CodePt::InSegment(seg, offset) => write!(f, "(segment {}, offset {})", seg, offset),
             CodePt::Null => write!(f, "Null"),
         }
