@@ -81,7 +81,7 @@ $(BUILTINDIR)/cuckookvs.mao: $(BUILTINDIR)/cuckookvs.mini
 	cargo run compile $(BUILTINDIR)/cuckookvs.mini -c -o $(BUILTINDIR)/cuckookvs.mao
 
 ARBOSDIR = arb_os
-ARBOSAOS = $(ARBOSDIR)/main.mao $(ARBOSDIR)/accounts.mao $(ARBOSDIR)/messages.mao $(ARBOSDIR)/inbox.mao $(ARBOSDIR)/evmCallStack.mao $(ARBOSDIR)/evmOps.mao $(ARBOSDIR)/codeSegment.mao $(ARBOSDIR)/evmlogs.mao $(ARBOSDIR)/errorHandler.mao $(ARBOSDIR)/gasAccounting.mao $(ARBOSDIR)/contractTemplates.mao $(ARBOSDIR)/tokens.mao $(ARBOSDIR)/arbsys.mao $(ARBOSDIR)/messageBatch.mao
+ARBOSAOS = $(ARBOSDIR)/main.mao $(ARBOSDIR)/accounts.mao $(ARBOSDIR)/messages.mao $(ARBOSDIR)/inbox.mao $(ARBOSDIR)/evmCallStack.mao $(ARBOSDIR)/evmOps.mao $(ARBOSDIR)/codeSegment.mao $(ARBOSDIR)/evmlogs.mao $(ARBOSDIR)/errorHandler.mao $(ARBOSDIR)/gasAccounting.mao $(ARBOSDIR)/contractTemplates.mao $(ARBOSDIR)/tokens.mao $(ARBOSDIR)/arbsys.mao $(ARBOSDIR)/messageBatch.mao $(ARBOSDIR)/chainParameters.mini
 ARBOS = $(ARBOSDIR)/arbos.mexe
 
 arbos: $(ARBOS)
@@ -130,6 +130,9 @@ $(ARBOSDIR)/arbsys.mao: $(ARBOSDIR)/arbsys.mini
 
 $(ARBOSDIR)/messageBatch.mao: $(ARBOSDIR)/messageBatch.mini
 	cargo run compile $(ARBOSDIR)/messageBatch.mini -c -o $(ARBOSDIR)/messageBatch.mao
+
+$(ARBOSDIR)/chainParameters.mao: $(ARBOSDIR)/chainParameters.mini
+	cargo run compile $(ARBOSDIR)/chainParameters.mini -c -o $(ARBOSDIR)/chainParameters.mao
 
 $(ARBOS): $(ARBOSAOS) $(STDLIB) $(BUILTINMAOS)
 	cargo run compile $(ARBOSAOS) $(STDLIB) -o $(ARBOS)
