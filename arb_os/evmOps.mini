@@ -22,6 +22,7 @@ import type MarshalledBytes;
 
 import impure func evmCallStack_topFrame() -> option<EvmCallFrame>;
 import impure func evmCallStack_oldestCallFrame() -> option<EvmCallFrame>;
+import impure func evmCallStack_setAccount(addr: address, acct: Account) -> bool;
 import impure func evmCallStack_getTopFrameReturnData() -> option<ByteArray>;
 import impure func evmCallStack_getTopFrameMemoryOrDie() -> ByteArray;
 import impure func evmCallStack_setTopFrameMemory(mem: ByteArray) -> bool;
@@ -61,6 +62,7 @@ import func account_getBalance(acct: Account) -> uint;
 import func account_getCode(acct: Account) -> option<ByteArray>;
 import func account_getStorageCell(acct: Account, offset: uint) -> option<uint>;
 import func account_getEvmJumpTable(acct: Account) -> option<map<uint, impure func()>>;
+import func account_fetchAndIncrSeqNum(account: Account) -> (uint, Account);
 
 import impure func inbox_currentTimestamp() -> uint;
 import impure func inbox_currentBlockNumber() -> uint;
@@ -697,7 +699,35 @@ public impure func evmOp_selfdestruct(owner: address) {
 }
 
 public func evmOp_create(value: uint, offset: uint, length: uint) -> address {
-    evm_notYetImplemented(66,);
+    if let Some(topFrame) = evmCallStack_topFrame() {
+        let myAcct = evmCallFrame_runningAsAccount(topFrame);
+        let myAddr = account_getAddress(myAcct);
+        let (seqNum, updatedAcct) = account_fetchAndIncrSeqNum(myAcct);
+        if ( ! evmCallStack_setAccount(myAddr, updatedAcct)) {
+            return address(0);
+        }
+        let newAddress = hash(bytes32(myAddr), bytes32(seqNum));
+
+        let constructorSucceeded = evmOp_call(
+            1000000000,  // gas allocation
+            address(0),  // call zero
+            value,
+            offset,
+            length,
+            0,           // don't copy returndata back into caller's memory
+            0,
+        );
+        if (constructorSucceeded) {
+            if let Some(returnData) = evmCallStack_getTopFrameReturnData() {
+                let ret = bytearray_get256(returnData, 0);
+                return address(ret);
+            }
+        }
+
+        return address(0);
+    }
+
+    evm_runtimePanic();
     panic;
 }
 
@@ -709,7 +739,7 @@ public func evmOp_create2(value: uint, offset: uint, length: uint, salt: uint) -
 impure func evm_error() {
     // This should be called when EVM code has generated an EVM error.
     evmOp_revert(0, 0);  // should never return
-    panic;
+
 }
 
 func evm_runtimePanic() {
