@@ -18,7 +18,7 @@
 
 use compile::{compile_from_file, CompileError};
 use contracttemplates::generate_contract_template_file_or_die;
-use evm::{compile_evm_file, make_evm_jumptable_mini};
+use evm::{make_evm_jumptable_mini};
 use link::{link, postlink_compile};
 use mavm::Value;
 use run::{profile_gen_from_file, run_from_file, RuntimeEnvironment};
@@ -110,30 +110,6 @@ fn main() -> Result<(), CompileError> {
                         .help("provide debug output")
                         .short("d")
                         .takes_value(false),
-                ),
-        )
-        .subcommand(
-            SubCommand::with_name("evm")
-                .about("compile an EVM/Truffle file")
-                .arg(
-                    Arg::with_name("INPUT")
-                        .help("sets the file name to compile")
-                        .required(true)
-                        .index(1),
-                )
-                .arg(
-                    Arg::with_name("format")
-                        .help("sets the output format")
-                        .short("f")
-                        .takes_value(true)
-                        .value_name("format"),
-                )
-                .arg(
-                    Arg::with_name("output")
-                        .help("sets the output file name")
-                        .short("o")
-                        .takes_value(true)
-                        .value_name("output"),
                 ),
         )
         .subcommand(
@@ -262,24 +238,6 @@ fn main() -> Result<(), CompileError> {
             }
             Err(e) => {
                 println!("{:?}", e);
-            }
-        }
-    }
-
-    if let Some(matches) = matches.subcommand_matches("evm") {
-        let debug_mode = matches.is_present("debug");
-        let mut output = get_output(matches.value_of("output")).unwrap();
-        let filename = matches.value_of("INPUT").unwrap();
-        let path = Path::new(filename);
-        match compile_evm_file(path, debug_mode) {
-            Ok(compiled_contracts) => {
-                for contract in compiled_contracts {
-                    contract.to_output(&mut *output, matches.value_of("format"));
-                }
-            }
-            Err(e) => {
-                println!("Compilation error: {}", e);
-                return Err(e);
             }
         }
     }
