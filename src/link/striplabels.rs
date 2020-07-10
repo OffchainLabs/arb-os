@@ -15,7 +15,6 @@
  */
 
 use super::{ExportedFunc, ExportedFuncPoint, ImportedFunc};
-use crate::evm::num_runtime_funcs;
 use crate::mavm::{AVMOpcode, CodePt, Instruction, Label, Opcode, Value};
 use crate::uint256::Uint256;
 use std::collections::{HashMap, HashSet};
@@ -51,10 +50,6 @@ pub fn strip_labels(
         );
     }
     let mut label_map = HashMap::new();
-
-    for i in 0..num_runtime_funcs() {
-        label_map.insert(Label::Runtime(i), CodePt::new_runtime(i));
-    }
 
     for imp_func in imported_funcs {
         let new_codept = CodePt::new_external(imp_func.slot_num);

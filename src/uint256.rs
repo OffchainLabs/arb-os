@@ -117,7 +117,7 @@ impl Uint256 {
         }
     }
 
-    pub fn max_neg_int() -> Self {
+    pub fn _max_neg_int() -> Self {
         Uint256::one().exp(&Uint256::from_usize(255))
     }
 
