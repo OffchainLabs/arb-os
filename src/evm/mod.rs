@@ -1068,9 +1068,12 @@ pub fn evm_xcontract_call_with_constructors(
     let mut machine = load_from_file(Path::new("arb_os/arbos.mexe"), rt_env);
     machine.start_at_zero();
 
-    machine
-        .runtime_env
-        .insert_eth_deposit_message(Uint256::from_usize(1025), Uint256::from_usize(100000));
+    let my_addr = Uint256::from_usize(1025);
+    machine.runtime_env.insert_eth_deposit_message(
+        my_addr.clone(),
+        my_addr.clone(),
+        Uint256::from_usize(100000),
+    );
     let _gas_used = if debug {
         machine.debug(None)
     } else {
@@ -1097,6 +1100,7 @@ pub fn evm_xcontract_call_with_constructors(
     }
 
     let (logs, sends) = pc_contract.call_function(
+        my_addr.clone(),
         "deposit",
         &[],
         &mut machine,
@@ -1110,6 +1114,7 @@ pub fn evm_xcontract_call_with_constructors(
     }
 
     let (logs, sends) = pc_contract.call_function(
+        my_addr,
         "transferFib",
         vec![
             ethabi::Token::Address(ethabi::Address::from_low_u64_be(1025)),
@@ -1143,9 +1148,13 @@ pub fn evm_xcontract_call_using_batch(
     let mut machine = load_from_file(Path::new("arb_os/arbos.mexe"), rt_env);
     machine.start_at_zero();
 
-    machine
-        .runtime_env
-        .insert_eth_deposit_message(Uint256::from_usize(1025), Uint256::from_usize(100000));
+    let my_addr = Uint256::from_usize(1025);
+
+    machine.runtime_env.insert_eth_deposit_message(
+        my_addr.clone(),
+        my_addr.clone(),
+        Uint256::from_usize(100000),
+    );
     let _gas_used = if debug {
         machine.debug(None)
     } else {
@@ -1174,6 +1183,7 @@ pub fn evm_xcontract_call_using_batch(
     let mut batch = machine.runtime_env.new_batch();
     pc_contract.add_function_call_to_batch(
         &mut batch,
+        my_addr.clone(),
         "deposit",
         &[],
         &mut machine,
@@ -1181,20 +1191,20 @@ pub fn evm_xcontract_call_using_batch(
     )?;
     pc_contract.add_function_call_to_batch(
         &mut batch,
+        my_addr,
         "transferFib",
         vec![
             ethabi::Token::Address(ethabi::Address::from_low_u64_be(1025)),
             ethabi::Token::Uint(ethabi::Uint::try_from(1).unwrap()),
         ]
-            .as_ref(),
+        .as_ref(),
         &mut machine,
         Uint256::zero(),
     )?;
 
-    machine.runtime_env.insert_batch_message(
-        Uint256::from_usize(1025),
-        &batch,
-    );
+    machine
+        .runtime_env
+        .insert_batch_message(Uint256::from_usize(1025), &batch);
 
     let num_logs_before = machine.runtime_env.get_all_logs().len();
     let num_sends_before = machine.runtime_env.get_all_sends().len();
@@ -1254,9 +1264,12 @@ pub fn evm_test_arbsys(log_to: Option<&Path>, debug: bool) {
     let mut machine = load_from_file(Path::new("arb_os/arbos.mexe"), rt_env);
     machine.start_at_zero();
 
-    machine
-        .runtime_env
-        .insert_eth_deposit_message(Uint256::from_usize(1025), Uint256::from_usize(10000));
+    let my_addr = Uint256::from_usize(1025);
+    machine.runtime_env.insert_eth_deposit_message(
+        my_addr.clone(),
+        my_addr.clone(),
+        Uint256::from_usize(10000),
+    );
     let _gas_used = if debug {
         machine.debug(None)
     } else {
@@ -1279,6 +1292,7 @@ pub fn evm_test_arbsys(log_to: Option<&Path>, debug: bool) {
     };
 
     let result = contract.call_function(
+        my_addr.clone(),
         "getSeqNum",
         vec![].as_ref(),
         &mut machine,
@@ -1317,6 +1331,7 @@ pub fn evm_test_arbsys(log_to: Option<&Path>, debug: bool) {
     }
 
     let result = contract.call_function(
+        my_addr.clone(),
         "withdrawMyEth",
         vec![].as_ref(),
         &mut machine,
@@ -1332,7 +1347,7 @@ pub fn evm_test_arbsys(log_to: Option<&Path>, debug: bool) {
                 panic!("malformed log");
             }
             assert_eq!(sends.len(), 1);
-            let mut expected_bytes = Uint256::from_usize(1025).to_bytes_be();
+            let mut expected_bytes = my_addr.to_bytes_be();
             expected_bytes.extend(Uint256::from_usize(5000).to_bytes_be());
             assert_eq!(
                 sends[0],
@@ -1359,6 +1374,7 @@ pub fn evm_direct_deploy_and_call_add(log_to: Option<&Path>, debug: bool) {
     let mut machine = load_from_file(Path::new("arb_os/arbos.mexe"), rt_env);
     machine.start_at_zero();
 
+    let my_addr = Uint256::from_usize(1025);
     let contract = match AbiForContract::new_from_file("contracts/add/build/contracts/Add.json") {
         Ok(mut contract) => {
             let result = contract.deploy(&[], &mut machine, debug);
@@ -1375,6 +1391,7 @@ pub fn evm_direct_deploy_and_call_add(log_to: Option<&Path>, debug: bool) {
     };
 
     let result = contract.call_function(
+        my_addr,
         "add",
         vec![
             ethabi::Token::Uint(ethabi::Uint::one()),
@@ -1428,10 +1445,11 @@ pub fn mint_erc20_and_get_balance(debug: bool) {
     let million = Uint256::from_usize(1000000);
 
     let mut rt_env = RuntimeEnvironment::new();
-    rt_env.insert_erc20_deposit_message(token_addr.clone(), me.clone(), million);
+    rt_env.insert_erc20_deposit_message(me.clone(), token_addr.clone(), me.clone(), million);
     let mut calldata: Vec<u8> = vec![0x70, 0xa0, 0x82, 0x31]; // code for balanceOf method
     calldata.extend(me.to_bytes_be());
     rt_env.insert_tx_message(
+        me,
         Uint256::from_usize(1000000000),
         Uint256::zero(),
         token_addr,
@@ -1495,9 +1513,7 @@ pub fn make_logs_for_all_arbos_tests() {
         false,
     );
     let _ = evm_xcontract_call_using_batch(
-        Some(Path::new(
-            "testlogs/evm_xcontract_call_using_batch.aoslog",
-        )),
+        Some(Path::new("testlogs/evm_xcontract_call_using_batch.aoslog")),
         false,
         false,
     );
