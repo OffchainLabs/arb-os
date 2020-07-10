@@ -14,6 +14,8 @@
  * limitations under the License.
  */
 
+//!Contains types and utilities for constructing the mini AST
+
 use super::symtable::SymTable;
 use super::typecheck::{new_type_error, TypeError};
 use crate::link::{value_from_field_list, TUPLE_SIZE};
