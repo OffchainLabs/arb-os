@@ -208,10 +208,10 @@ fn bytestack_from_bytes_2(b: &[u8], so_far: Value) -> Value {
     if size > 32 {
         bytestack_from_bytes_2(
             &b[32..],
-            Value::new_tuple(vec![so_far, bytestack_build_uint(&b[..32])]),
+            Value::new_tuple(vec![bytestack_build_uint(&b[..32]), so_far]),
         )
     } else {
-        Value::new_tuple(vec![so_far, bytestack_build_uint(b)])
+        Value::new_tuple(vec![bytestack_build_uint(b), so_far])
     }
 }
 
@@ -245,10 +245,10 @@ fn bytes_from_bytestack_2(cell: Value, nbytes: usize) -> Option<Vec<u8>> {
         Some(vec![])
     } else if let Value::Tuple(tup) = cell {
         assert_eq!((tup.len(), nbytes), (2, nbytes));
-        if let Value::Int(mut int_val) = tup[1].clone() {
+        if let Value::Int(mut int_val) = tup[0].clone() {
             let _256 = Uint256::from_usize(256);
             if (nbytes % 32) == 0 {
-                let mut sub_arr = match bytes_from_bytestack_2(tup[0].clone(), nbytes - 32) {
+                let mut sub_arr = match bytes_from_bytestack_2(tup[1].clone(), nbytes - 32) {
                     Some(arr) => arr,
                     None => {
                         return None;
@@ -263,7 +263,7 @@ fn bytes_from_bytestack_2(cell: Value, nbytes: usize) -> Option<Vec<u8>> {
                 sub_arr.append(&mut this_arr);
                 Some(sub_arr)
             } else {
-                let mut sub_arr = match bytes_from_bytestack_2(tup[0].clone(), 32 * (nbytes / 32)) {
+                let mut sub_arr = match bytes_from_bytestack_2(tup[1].clone(), 32 * (nbytes / 32)) {
                     Some(arr) => arr,
                     None => {
                         return None;
