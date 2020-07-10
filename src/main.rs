@@ -18,7 +18,6 @@
 
 use compile::{compile_from_file, CompileError};
 use contracttemplates::generate_contract_template_file_or_die;
-use evm::{make_evm_jumptable_mini};
 use link::{link, postlink_compile};
 use mavm::Value;
 use run::{profile_gen_from_file, run_from_file, RuntimeEnvironment};
@@ -110,17 +109,6 @@ fn main() -> Result<(), CompileError> {
                         .help("provide debug output")
                         .short("d")
                         .takes_value(false),
-                ),
-        )
-        .subcommand(
-            SubCommand::with_name("jumptable")
-                .about("generate the EVM jumptable")
-                .arg(
-                    Arg::with_name("output")
-                        .help("sets the output file name")
-                        .short("o")
-                        .takes_value(true)
-                        .value_name("output"),
                 ),
         )
         .subcommand(
@@ -239,17 +227,6 @@ fn main() -> Result<(), CompileError> {
             Err(e) => {
                 println!("{:?}", e);
             }
-        }
-    }
-
-    if let Some(matches) = matches.subcommand_matches("jumptable") {
-        let filepath = Path::new(if let Some(pathname) = matches.value_of("output") {
-            pathname
-        } else {
-            "arb_os/evmJumpTable.mini"
-        });
-        if let Err(e) = make_evm_jumptable_mini(filepath) {
-            panic!("I/O error: {}", e);
         }
     }
 
