@@ -18,6 +18,8 @@ import type AccountStore;
 import type Account;
 import type ByteArray;
 import type MarshalledBytes;
+import type MessageBatch;
+import type Queue;
 
 import func getGlobalAccountStore() -> AccountStore;
 import func setGlobalAccountStore(acctStore: AccountStore);
@@ -30,13 +32,22 @@ import func bytearray_unmarshalBytes(mb: MarshalledBytes) -> ByteArray;
 import func bytearray_getByte(ba: ByteArray, offset: uint) -> uint;
 import func bytearray_get256(ba: ByteArray, offset: uint) -> uint;
 
+import func queue_new() -> Queue;
+import func queue_isEmpty(q: Queue) -> bool;
+import func queue_put(q: Queue, item: any) -> Queue;
+import func queue_get(q: Queue) -> option<(Queue, any)>;
+
 import impure func inbox_get() -> MessageFromL1;
+
+import func messageBatch_tryNew(msg: MessageFromL1) -> option<MessageBatch>;
+import func messageBatch_get(batch: MessageBatch) -> option<(MessageFromL1, MessageBatch)>;
 
 
 var gasAccountingInfo: struct {
     gasUsedByOS: uint,            // amount of gas used by OS that validators haven't yet been compensated for
     weiCollectedFromTxs: uint,    // amount of currency collected from txs but not yet paid out to validators
     txState: option<TxGasState>,  // status of currently active tx (if there is one)
+    queuedFromBatch: Queue,       // messages that arrived in a batch and are waiting for be handled
 };
 
 type TxGasState = struct {
@@ -53,6 +64,7 @@ public impure func gasAccounting_init() {
         gasUsedByOS: 0,
         weiCollectedFromTxs: 0,
         txState: None<TxGasState>,
+        queuedFromBatch: queue_new(),
     };
 }
 
@@ -225,19 +237,49 @@ public impure func getNextMsgFromCongestionAuction() -> (
 ) {
     // For now, the gas auction is a no-op.  It just approves every message at zero gas price.
 
-    if let Some(sideloadedTuple) = trySideload() {
-        return sideloadedTuple;
-    }
+    let msg = unsafecast<MessageFromL1>(());   // value will be re-initialized before use
+    loop {
+        if let Some(sideloadedTuple) = trySideload() {
+            return sideloadedTuple;
+        }
 
-    let msg = inbox_get();
+        if let Some(res) = queue_get(gasAccountingInfo.queuedFromBatch) {
+            let (newQ, rawMsg) = res;
+            gasAccountingInfo = gasAccountingInfo with {
+                queuedFromBatch: newQ
+            };
+            msg = unsafecast<MessageFromL1>(rawMsg);
+        } else {
+            msg = inbox_get();
+        }
 
-    // get its maxGas amount -- for now, set the limit high, unless caller asked for less
-    let maxGas = 1000000000;
-    if (msg.kind == 3) {
-        let ba = bytearray_unmarshalBytes(msg.msgData);
-        let maxGas = bytearray_get256(ba, 1);
+        if let Some(batch) = messageBatch_tryNew(msg) {
+            // it's a batch message, so unpack its components and queue them
+            let moreToDo = true;
+            let queue = gasAccountingInfo.queuedFromBatch;
+            while (moreToDo) {
+                if let Some(res) = messageBatch_get(batch) {
+                    let (newMsg, restOfBatch) = res;
+                    queue = queue_put(queue, newMsg);
+                    batch = restOfBatch;
+                } else {
+                    moreToDo = false;
+                }
+            }
+            gasAccountingInfo = gasAccountingInfo with {
+                queuedFromBatch: queue
+            };
+        } else {
+            // it's not a batch, so process it immediately
+            // get its maxGas amount -- for now, set the limit high, unless caller asked for less
+            let maxGas = 1000000000;
+            if (msg.kind == 3) {
+                let ba = bytearray_unmarshalBytes(msg.msgData);
+                let maxGas = bytearray_get256(ba, 1);
+            }
+            return (msg, true, maxGas, 0);
+        }
     }
-    return (msg, true, maxGas, 0);
 }
 
 // The following function exists to support sideloading.
@@ -253,13 +295,15 @@ public impure func getNextMsgFromCongestionAuction() -> (
 //     private clone.
 // So in the private clone only, a validator can cause the sideload instruction to push
 //     onto the stack a pair (message, gasLimit).  This function will then return that
-//     pair, which will cause (the private clone of) the chain to run that call.
+//     pair, which will cause (the private clone of) the chain to run that call, with the
+//     given gasLimit and zero gas price.
 impure func trySideload() -> option<(MessageFromL1, bool, uint, uint)> {
     let sideloadedVal = asm() any { sideload };
     if (sideloadedVal == ()) {
+        // normal case; the official chain will always be in this case
         return None;
     } else {
-        // don't worry about the unsafecast; this block can't execute on the official chain
+        // don't worry about the unsafecast; this can't execute on the official chain
         let (msg, gasLimit) = unsafecast<(MessageFromL1, uint)>(sideloadedVal);
         return Some((msg, true, gasLimit, 0));
     }

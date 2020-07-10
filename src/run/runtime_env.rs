@@ -17,6 +17,7 @@
 use crate::mavm::Value;
 use crate::uint256::Uint256;
 use serde::{Deserialize, Serialize};
+use std::convert::TryInto;
 use std::{collections::HashMap, fs::File, io, path::Path};
 
 #[derive(Debug, Clone)]
@@ -67,13 +68,13 @@ impl RuntimeEnvironment {
 
     pub fn insert_tx_message(
         &mut self,
+        sender_addr: Uint256,
         max_gas: Uint256,
         gas_price_bid: Uint256,
         to_addr: Uint256,
         value: Uint256,
         data: &[u8],
     ) {
-        let sender_addr = Uint256::from_usize(1025);
         let mut buf = vec![0u8];
         let seq_num = self.get_and_incr_seq_num(&sender_addr);
         buf.extend(max_gas.to_bytes_be());
@@ -86,13 +87,44 @@ impl RuntimeEnvironment {
         self.insert_l2_message(sender_addr, &buf);
     }
 
+    pub fn new_batch(&self) -> Vec<u8> {
+        vec![3u8]
+    }
+
+    pub fn append_tx_message_to_batch(
+        &mut self,
+        batch: &mut Vec<u8>,
+        sender_addr: Uint256,
+        max_gas: Uint256,
+        gas_price_bid: Uint256,
+        to_addr: Uint256,
+        value: Uint256,
+        calldata: &[u8],
+    ) {
+        let calldata_size: u64 = calldata.len().try_into().unwrap();
+        let seq_num = self.get_and_incr_seq_num(&sender_addr);
+        batch.extend(&calldata_size.to_be_bytes());
+        batch.extend(vec![0u8]);
+        batch.extend(max_gas.to_bytes_be());
+        batch.extend(gas_price_bid.to_bytes_be());
+        batch.extend(seq_num.to_bytes_be());
+        batch.extend(to_addr.to_bytes_be());
+        batch.extend(value.to_bytes_be());
+        batch.extend_from_slice(calldata);
+        batch.extend(vec![0u8; 65]);
+    }
+
+    pub fn insert_batch_message(&mut self, sender_addr: Uint256, batch: &[u8]) {
+        self.insert_l2_message(sender_addr, batch);
+    }
+
     pub fn _insert_nonmutating_call_message(
         &mut self,
+        sender_addr: Uint256,
         to_addr: Uint256,
         max_gas: Uint256,
         data: &[u8],
     ) {
-        let sender_addr = Uint256::from_usize(1025);
         let mut buf = vec![2u8];
         buf.extend(max_gas.to_bytes_be());
         buf.extend(Uint256::zero().to_bytes_be()); // gas price = 0
@@ -105,11 +137,11 @@ impl RuntimeEnvironment {
     #[cfg(test)]
     pub fn insert_erc20_deposit_message(
         &mut self,
+        sender_addr: Uint256,
         token_addr: Uint256,
         payee: Uint256,
         amount: Uint256,
     ) {
-        let sender_addr = Uint256::from_usize(1025);
         let mut buf = token_addr.to_bytes_be();
         buf.extend(payee.to_bytes_be());
         buf.extend(amount.to_bytes_be());
@@ -117,8 +149,12 @@ impl RuntimeEnvironment {
         self.insert_l1_message(1, sender_addr, &buf);
     }
 
-    pub fn insert_eth_deposit_message(&mut self, payee: Uint256, amount: Uint256) {
-        let sender_addr = Uint256::from_usize(1025);
+    pub fn insert_eth_deposit_message(
+        &mut self,
+        sender_addr: Uint256,
+        payee: Uint256,
+        amount: Uint256,
+    ) {
         let mut buf = payee.to_bytes_be();
         buf.extend(amount.to_bytes_be());
 

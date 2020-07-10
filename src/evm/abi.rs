@@ -287,7 +287,9 @@ impl AbiForContract {
             self.code_bytes.clone()
         };
 
+        let sender_addr = Uint256::from_usize(1025);
         machine.runtime_env.insert_tx_message(
+            sender_addr,
             Uint256::from_usize(1_000_000_000_000),
             Uint256::zero(),
             Uint256::zero(),
@@ -325,6 +327,7 @@ impl AbiForContract {
 
     pub fn call_function(
         &self,
+        sender_addr: Uint256,
         func_name: &str,
         args: &[ethabi::Token],
         machine: &mut Machine,
@@ -335,6 +338,7 @@ impl AbiForContract {
         let calldata = this_function.encode_input(args).unwrap();
 
         machine.runtime_env.insert_tx_message(
+            sender_addr,
             Uint256::from_usize(1_000_000_000_000),
             Uint256::zero(),
             self.address.clone(),
@@ -355,5 +359,30 @@ impl AbiForContract {
             logs[num_logs_before..].to_vec(),
             sends[num_sends_before..].to_vec(),
         ))
+    }
+
+    pub fn add_function_call_to_batch(
+        &self,
+        batch: &mut Vec<u8>,
+        sender_addr: Uint256,
+        func_name: &str,
+        args: &[ethabi::Token],
+        machine: &mut Machine,
+        payment: Uint256,
+    ) -> Result<(), ethabi::Error> {
+        let this_function = self.contract.function(func_name)?;
+        let calldata = this_function.encode_input(args).unwrap();
+
+        machine.runtime_env.append_tx_message_to_batch(
+            batch,
+            sender_addr,
+            Uint256::from_usize(1_000_000_000_000),
+            Uint256::zero(),
+            self.address.clone(),
+            payment,
+            &calldata,
+        );
+
+        Ok(())
     }
 }

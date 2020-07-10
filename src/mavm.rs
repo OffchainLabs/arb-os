@@ -539,6 +539,7 @@ pub enum AVMOpcode {
     PushInsnImm,
     OpenInsn,
     Sideload,
+    EcRecover = 0x80,
     DebugPrint = 0x90,
 }
 
@@ -625,6 +626,7 @@ impl Opcode {
             "getgas" => Opcode::AVMOpcode(AVMOpcode::GetGas),
             "errset" => Opcode::AVMOpcode(AVMOpcode::ErrSet),
             "sideload" => Opcode::AVMOpcode(AVMOpcode::Sideload),
+            "ecrecover" => Opcode::AVMOpcode(AVMOpcode::EcRecover),
             _ => {
                 panic!("opcode not supported in asm segment: {}", name);
             }
@@ -696,6 +698,7 @@ impl Opcode {
             0x79 => Some(Opcode::AVMOpcode(AVMOpcode::PushInsnImm)),
             0x7a => Some(Opcode::AVMOpcode(AVMOpcode::OpenInsn)),
             0x7b => Some(Opcode::AVMOpcode(AVMOpcode::Sideload)),
+            0x80 => Some(Opcode::AVMOpcode(AVMOpcode::EcRecover)),
             0x90 => Some(Opcode::AVMOpcode(AVMOpcode::DebugPrint)),
             _ => None,
         }
@@ -766,6 +769,7 @@ impl Opcode {
             Opcode::AVMOpcode(AVMOpcode::PushInsnImm) => Some(0x79),
             Opcode::AVMOpcode(AVMOpcode::OpenInsn) => Some(0x7a),
             Opcode::AVMOpcode(AVMOpcode::Sideload) => Some(0x7b),
+            Opcode::AVMOpcode(AVMOpcode::EcRecover) => Some(0x80),
             Opcode::AVMOpcode(AVMOpcode::DebugPrint) => Some(0x90),
             _ => None,
         }
