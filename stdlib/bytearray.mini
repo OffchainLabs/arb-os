@@ -63,8 +63,8 @@ type MarshalledBytes = struct {
 }
 
 type MarshalledBytesCell = struct {
-    rest: any,  // really a MarshalledbytesCell, but compiler can't handle recursive types
     first: uint,
+    rest: any,  // really a MarshalledbytesCell, but compiler can't handle recursive types
 }
 
 public func marshalledBytes_firstByte(mb: MarshalledBytes) -> uint {
@@ -118,8 +118,8 @@ public func bytearray_marshalFull(ba: ByteArray) -> MarshalledBytes {
     let i = 0;
     while (i < nwords) {
         words = struct {
-            rest: words,
             first: ba.contents[i],
+            rest: words,
         };
         i = i+1;
     }
