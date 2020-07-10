@@ -52,4 +52,10 @@ contract PaymentChannel {
 
 		emit Transfer(msg.sender, dest, amount);
 	}
+
+	function testCreate() public returns (uint) {
+		Fibonacci newFib = new Fibonacci();
+		newFib.generateFib(3);
+		return newFib.getFib(2);
+	}
 }

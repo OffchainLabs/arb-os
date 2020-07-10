@@ -111,6 +111,67 @@ pub fn evm_xcontract_call_with_constructors(
     Ok(true)
 }
 
+pub fn evm_test_create(
+    log_to: Option<&Path>,
+    debug: bool,
+    _profile: bool,
+) -> Result<bool, ethabi::Error> {
+    let rt_env = RuntimeEnvironment::new();
+    let mut machine = load_from_file(Path::new("arb_os/arbos.mexe"), rt_env);
+    machine.start_at_zero();
+
+    let my_addr = Uint256::from_usize(1025);
+    machine.runtime_env.insert_eth_deposit_message(
+        my_addr.clone(),
+        my_addr.clone(),
+        Uint256::from_usize(100000),
+    );
+    let _gas_used = if debug {
+        machine.debug(None)
+    } else {
+        machine.run(None)
+    }; // handle this eth deposit message
+
+    let mut fib_contract =
+        AbiForContract::new_from_file("contracts/fibonacci/build/contracts/Fibonacci.json")?;
+    if fib_contract.deploy(&[], &mut machine, debug) == None {
+        panic!("failed to deploy Fibonacci contract");
+    }
+
+    let mut pc_contract =
+        AbiForContract::new_from_file("contracts/fibonacci/build/contracts/PaymentChannel.json")?;
+    if pc_contract.deploy(
+        &[ethabi::Token::Address(ethereum_types::H160::from_slice(
+            &fib_contract.address.to_bytes_be()[12..],
+        ))],
+        &mut machine,
+        debug,
+    ) == None
+    {
+        panic!("failed to deploy PaymentChannel contract");
+    }
+
+    let (logs, sends) = pc_contract.call_function(
+        my_addr.clone(),
+        "testCreate",
+        &[],
+        &mut machine,
+        Uint256::zero(),
+        debug,
+    )?;
+    assert_eq!(logs.len(), 1);
+    assert_eq!(sends.len(), 0);
+    if let Value::Tuple(tup) = &logs[0] {
+        assert_eq!(tup[1], Value::Int(Uint256::zero()));
+    }
+
+    if let Some(path) = log_to {
+        machine.runtime_env.recorder.to_file(path).unwrap();
+    }
+
+    Ok(true)
+}
+
 pub fn evm_xcontract_call_using_batch(
     log_to: Option<&Path>,
     debug: bool,
@@ -487,6 +548,11 @@ pub fn make_logs_for_all_arbos_tests() {
     );
     let _ = evm_xcontract_call_using_batch(
         Some(Path::new("testlogs/evm_xcontract_call_using_batch.aoslog")),
+        false,
+        false,
+    );
+    let _ = evm_test_create(
+        Some(Path::new("testlogs/evm_test_create.aoslog")),
         false,
         false,
     );

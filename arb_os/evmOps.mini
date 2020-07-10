@@ -18,11 +18,13 @@ import type Account;
 import type EvmCallFrame;
 import type EvmLogs;
 import type ByteArray;
+import type ByteStream;
 import type MarshalledBytes;
 
 import impure func evmCallStack_topFrame() -> option<EvmCallFrame>;
 import impure func evmCallStack_oldestCallFrame() -> option<EvmCallFrame>;
 import impure func evmCallStack_setAccount(addr: address, acct: Account) -> bool;
+import impure func evmCallStack_getAccount(addr: address) -> option<Account>;
 import impure func evmCallStack_getTopFrameReturnData() -> option<ByteArray>;
 import impure func evmCallStack_getTopFrameMemoryOrDie() -> ByteArray;
 import impure func evmCallStack_setTopFrameMemory(mem: ByteArray) -> bool;
@@ -61,8 +63,17 @@ import func account_getCodeSize(acct: Account) -> uint;
 import func account_getBalance(acct: Account) -> uint;
 import func account_getCode(acct: Account) -> option<ByteArray>;
 import func account_getStorageCell(acct: Account, offset: uint) -> option<uint>;
+import func account_getAllStorage(account: Account) -> option<map<uint, uint>>;
 import func account_getEvmJumpTable(acct: Account) -> option<map<uint, impure func()>>;
 import func account_fetchAndIncrSeqNum(account: Account) -> (uint, Account);
+import func account_setContractInfo(
+    acct: Account,
+    code: ByteArray,
+    evmJumpTable: map<uint, impure func()>,
+    startCodePoint: impure func(),
+    storage: map<uint, uint>
+) -> Account;
+import func pristineAccount(addr: address) -> Account;
 
 import impure func inbox_currentTimestamp() -> uint;
 import impure func inbox_currentBlockNumber() -> uint;
@@ -78,6 +89,9 @@ import func bytearray_set256(ba: ByteArray, offset: uint, val: uint) -> ByteArra
 import func bytearray_extract(ba: ByteArray, offset: uint, nbytes: uint) -> ByteArray;
 import func bytearray_copy(from: ByteArray, fromOffset: uint, to: ByteArray, toOffset: uint, nbytes: uint) -> ByteArray;
 import func bytearray_marshalFull(from: ByteArray) -> MarshalledBytes;
+import func bytestream_new(from: ByteArray) -> ByteStream;
+
+import impure func translateEvmCodeSegment(bs: ByteStream) -> option<(impure func(), map<uint, impure func()>)>;
 
 import func keccak256(array: ByteArray, offset: uint, nbytes: uint) -> bytes32;
 
@@ -698,32 +712,120 @@ public impure func evmOp_selfdestruct(owner: address) {
     evmCallStack_selfDestructCurrentAccount(owner,);
 }
 
-public func evmOp_create(value: uint, offset: uint, length: uint) -> address {
+public impure func evmOp_create(value: uint, offset: uint, length: uint) -> address {
+    asm(60,) { debugprint };
     if let Some(topFrame) = evmCallStack_topFrame() {
+        asm(61,) { debugprint };
+
         let myAcct = evmCallFrame_runningAsAccount(topFrame);
         let myAddr = account_getAddress(myAcct);
         let (seqNum, updatedAcct) = account_fetchAndIncrSeqNum(myAcct);
         if ( ! evmCallStack_setAccount(myAddr, updatedAcct)) {
             return address(0);
         }
-        let newAddress = hash(bytes32(myAddr), bytes32(seqNum));
+        let newAddress = address(hash(bytes32(myAddr), bytes32(seqNum)));
 
-        let constructorSucceeded = evmOp_call(
-            1000000000,  // gas allocation
-            address(0),  // call zero
-            value,
+        let constructorCode = bytearray_extract(
+            evmCallStack_getTopFrameMemoryOrDie(),
             offset,
-            length,
-            0,           // don't copy returndata back into caller's memory
-            0,
+            length
         );
-        if (constructorSucceeded) {
-            if let Some(returnData) = evmCallStack_getTopFrameReturnData() {
-                let ret = bytearray_get256(returnData, 0);
-                return address(ret);
+        if let Some(res) = translateEvmCodeSegment(bytestream_new(constructorCode)) {
+            asm(62,) { debugprint };
+
+            let (startPoint, evmJumpTable) = res;
+
+            // Create a new account to run the constructor code.
+            if (evmCallStack_setAccount(
+                    newAddress,
+                    account_setContractInfo(
+                        pristineAccount(newAddress),
+                        constructorCode,
+                        evmJumpTable,
+                        startPoint,
+                        newmap<uint, uint>
+                    )
+                )
+            ) {
+                asm(63,) { debugprint };
+
+                // Now for the slightly tricky part.
+                // We're going to call the untrusted constructor, which might end up trashing our
+                //    Mini-language callstack (which is stored on the AVM auxstack).
+                // The possibly-trashed callstack includes our local variables and the return address of our caller.
+                // So we need to make a copy of those things on the AVM stack, because the AVM stack
+                //    gets saved and restored across calls to untrusted code.
+                // After the return we'll restore the saved info, and continue.
+
+                // save top two AVM auxstack items onto the AVM stack (our locals, and the return address)
+                asm() {
+                    auxpop
+                    auxpop
+                    dup0
+                    auxpush
+                    dup1
+                    auxpush
+                };
+
+                let constructorSucceeded = false;
+
+                // We can't save the result of this call to a local variable, because we can't (yet) trust
+                //     that our local callframe is in a reasonable state.
+                if (evmOp_call(
+                    1000000000,  // gas allocation
+                    newAddress,
+                    value,
+                    0,           // no calldata passed to constructor
+                    0,
+                    0,           // don't copy returndata back into caller's memory
+                    0,
+                )) {
+                    // Constructor call succeeded.
+                    // Recover our saved information from the stack, put it back onto the auxstack
+                    asm() { auxpush auxpush };
+
+                    constructorSucceeded = true;
+                } else {
+                    // Recover our saved information from the stack, put it back onto the auxstack
+                    asm() { auxpush auxpush };
+                }
+
+                if (constructorSucceeded) {
+                    asm(64,) { debugprint };
+                    if let Some(contractCode) = evmCallStack_getTopFrameReturnData() {
+                        asm((65, contractCode),) { debugprint };
+                        if let Some(res) = translateEvmCodeSegment(bytestream_new(contractCode)) {
+                            asm(66,) { debugprint };
+                            let (startPoint2, evmJumpTable2) = res;
+                            if let Some(oldAcct) = evmCallStack_getAccount(newAddress) {
+                                asm(67,) { debugprint };
+                                let storage = newmap<uint, uint>;
+                                if let Some(st) = account_getAllStorage(oldAcct) {
+                                    storage = st;
+                                }
+                                if (evmCallStack_setAccount(
+                                        newAddress,
+                                        account_setContractInfo(
+                                            oldAcct,
+                                            contractCode,
+                                            evmJumpTable2,
+                                            startPoint2,
+                                            storage
+                                        )
+                                    )
+                                ) {
+                                    asm(68,) { debugprint };
+                                    return newAddress;
+                                }
+                            }
+                        }
+                    }
+                }
             }
         }
 
+        // clean up the state and return failure
+        let _ = evmCallStack_setAccount(newAddress, pristineAccount(newAddress));
         return address(0);
     }
 

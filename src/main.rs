@@ -233,7 +233,8 @@ fn main() -> Result<(), CompileError> {
     if let Some(matches) = matches.subcommand_matches("evmdebug") {
         let debug = matches.is_present("debug");
         let profile = matches.is_present("profiler");
-        let _ = evm::evm_xcontract_call_with_constructors(None, debug, profile);
+        //let _ = evm::evm_xcontract_call_with_constructors(None, debug, profile);
+        let _ = evm::evm_test_create(None, debug, profile);
     }
 
     if let Some(matches) = matches.subcommand_matches("profiler") {
