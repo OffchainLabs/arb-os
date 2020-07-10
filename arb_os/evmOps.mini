@@ -713,10 +713,7 @@ public impure func evmOp_selfdestruct(owner: address) {
 }
 
 public impure func evmOp_create(value: uint, offset: uint, length: uint) -> address {
-    asm(60,) { debugprint };
     if let Some(topFrame) = evmCallStack_topFrame() {
-        asm(61,) { debugprint };
-
         let myAcct = evmCallFrame_runningAsAccount(topFrame);
         let myAddr = account_getAddress(myAcct);
         let (seqNum, updatedAcct) = account_fetchAndIncrSeqNum(myAcct);
@@ -731,8 +728,6 @@ public impure func evmOp_create(value: uint, offset: uint, length: uint) -> addr
             length
         );
         if let Some(res) = translateEvmCodeSegment(bytestream_new(constructorCode)) {
-            asm(62,) { debugprint };
-
             let (startPoint, evmJumpTable) = res;
 
             // Create a new account to run the constructor code.
@@ -747,8 +742,6 @@ public impure func evmOp_create(value: uint, offset: uint, length: uint) -> addr
                     )
                 )
             ) {
-                asm(63,) { debugprint };
-
                 // Now for the slightly tricky part.
                 // We're going to call the untrusted constructor, which might end up trashing our
                 //    Mini-language callstack (which is stored on the AVM auxstack).
@@ -791,14 +784,10 @@ public impure func evmOp_create(value: uint, offset: uint, length: uint) -> addr
                 }
 
                 if (constructorSucceeded) {
-                    asm(64,) { debugprint };
                     if let Some(contractCode) = evmCallStack_getTopFrameReturnData() {
-                        asm((65, contractCode),) { debugprint };
                         if let Some(res) = translateEvmCodeSegment(bytestream_new(contractCode)) {
-                            asm(66,) { debugprint };
                             let (startPoint2, evmJumpTable2) = res;
                             if let Some(oldAcct) = evmCallStack_getAccount(newAddress) {
-                                asm(67,) { debugprint };
                                 let storage = newmap<uint, uint>;
                                 if let Some(st) = account_getAllStorage(oldAcct) {
                                     storage = st;
@@ -814,7 +803,6 @@ public impure func evmOp_create(value: uint, offset: uint, length: uint) -> addr
                                         )
                                     )
                                 ) {
-                                    asm(68,) { debugprint };
                                     return newAddress;
                                 }
                             }

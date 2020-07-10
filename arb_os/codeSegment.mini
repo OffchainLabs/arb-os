@@ -108,12 +108,7 @@ public impure func translateEvmCodeSegment(
     }
 
     // Read in the first opcode in the code.
-    let res = bytestream_getByte(bs);
-    if (unsafecast<any>(res) == None<any>) {
-        asm(901,) { debugprint };
-    }
-    let (ubs, opcode) = res?;
-//    let (ubs, opcode) = bytestream_getByte(bs)?;
+    let (ubs, opcode) = bytestream_getByte(bs)?;
     bs = ubs;
 
     if ((opcode >= 0x60) && (opcode <= 0x7f)) {
@@ -131,12 +126,7 @@ public impure func translateEvmCodeSegment(
         let numBytesRead = bytestream_bytesReadSoFar(bs);
 
         // Recursively generate code for everything after this instruction.
-        let res = translateEvmCodeSegment(bs);
-       if (unsafecast<any>(res) == None<any>) {
-            asm(902,) { debugprint };
-       }
-        let (restOfCode, evmJumpTable) = res?;
-        //let (restOfCode, evmJumpTable) = translateEvmCodeSegment(bs)?;
+        let (restOfCode, evmJumpTable) = translateEvmCodeSegment(bs)?;
 
             // for debugging, uncomment this to get a debugprint before each EVM instruction
             // restOfCode = pushInstructionImm(0x90, (42, numBytesRead, opcode), restOfCode);
@@ -147,12 +137,7 @@ public impure func translateEvmCodeSegment(
 
     // The rest of the instructions are all a single byte. So we'll generate code for the rest of
     // the program, then prepend whatever is needed to implement the current opcode.
-    let res = translateEvmCodeSegment(bs);
-    if (unsafecast<any>(res) == None<any>) {
-        asm(903,) { debugprint };
-    }
-    let (restOfCode, evmJumpTable) = res?;
-    //let (restOfCode, evmJumpTable) = translateEvmCodeSegment(bs)?;
+    let (restOfCode, evmJumpTable) = translateEvmCodeSegment(bs)?;
 
     let numBytesRead = bytestream_bytesReadSoFar(bs);
         // for debugging, uncomment this to get a debugprint before each EVM instruction
