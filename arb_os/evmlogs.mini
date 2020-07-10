@@ -19,8 +19,8 @@
 //       directly without needing any more encoding.
 
 type EvmLogs = struct {
-    rest: any,
     last: any,
+    rest: any,
 }
 
 public func evmlogs_empty() -> EvmLogs {  // make an empty log-sequence
@@ -30,7 +30,7 @@ public func evmlogs_empty() -> EvmLogs {  // make an empty log-sequence
 public func evmlogs_appendAny(logs: EvmLogs, item: any) -> EvmLogs {
     // Append an item to the end of a log-sequence, returning the updated log-sequence.
     return struct {
+        last: item,
         rest: logs,
-        last: item
     };
 }
