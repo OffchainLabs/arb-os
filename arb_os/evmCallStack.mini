@@ -239,7 +239,7 @@ public impure func initEvmCallStackForConstructor(
     );
     if let Some(uas) = accountStore_transferEthBalance(acctStore, caller, addr, value) {
         // don't update globalAccountStore; that happens if/when the constructor commits its results later
-    
+
         globalCallStack = Some(struct {
             runningAs: addr,
             runningCodeFrom: addr,
@@ -789,7 +789,9 @@ public impure func evmCallStack_cloneContract(addr: address) -> option<address> 
     let (seqNum, acct) = account_fetchAndIncrSeqNum(
         evmCallStack_getAccount(addr)?
     );
-    evmCallStack_setAccount(addr, acct);
+    if ( ! evmCallStack_setAccount(addr, acct)) {
+        return None;
+    }
 
     let newAddr = address(hash(hash(addr), hash(seqNum)));
 
