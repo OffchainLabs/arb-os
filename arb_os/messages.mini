@@ -216,7 +216,7 @@ impure func handleL2Message(
     // skip maxGas and gasPriceBid fields of message
     inStream = bytestream_skipBytes(inStream, 64)?;
 
-    let sequenceNum = 0;  // impossible value for sequence number
+    let sequenceNum = (~0);  // impossible value for sequence number
     if (msgType == 0) {
         let(bs, sn) = bytestream_getUint(inStream)?;
         inStream = bs;
@@ -250,7 +250,7 @@ impure func handleL2Message(
         let codeBytes = bytestream_getRemainingBytes(inStream);
         let (codept, evmJumpTable) = translateEvmCodeSegment(bytestream_new(codeBytes))?;
 
-        if (sequenceNum == 0) {
+        if (sequenceNum == (~0)) {
             sequenceNum = fetchAndIncrSequenceNum(fullMsg.sender);
         }
         let newAddress = address(hash(bytes32(fullMsg.sender), bytes32(sequenceNum)));

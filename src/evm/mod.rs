@@ -347,7 +347,7 @@ pub fn evm_test_arbsys(log_to: Option<&Path>, debug: bool) {
                             .unwrap();
                         assert_eq!(
                             decoded_result[0],
-                            ethabi::Token::Uint(ethabi::Uint::try_from(3).unwrap())
+                            ethabi::Token::Uint(ethabi::Uint::try_from(2).unwrap())
                         );
                     }
                     None => {

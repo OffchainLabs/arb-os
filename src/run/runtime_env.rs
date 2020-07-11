@@ -168,7 +168,7 @@ impl RuntimeEnvironment {
     pub fn get_and_incr_seq_num(&mut self, addr: &Uint256) -> Uint256 {
         let cur_seq_num = match self.caller_seq_nums.get(&addr) {
             Some(sn) => sn.clone(),
-            None => Uint256::one(),
+            None => Uint256::zero(),
         };
         self.caller_seq_nums
             .insert(addr.clone(), cur_seq_num.add(&Uint256::one()));
