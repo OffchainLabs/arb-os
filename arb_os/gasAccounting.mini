@@ -229,6 +229,18 @@ type MessageFromL1 = struct {
     msgData: MarshalledBytes  // contents of the message, as a marshalled bytearray
 }
 
+// The next section of code implements the congestion auction. For each tx request, the auction
+//     determines (a) whether to approve the tx for execution, and (b) what gas price the tx will pay.
+// This uses a "pull" interface: the main run loop calls this to get the next message.
+//     This code will in turn call back to the inbox to pull in incoming messages from the L1.
+// Eventually this component will pull in a group of messages from the L1 inbox, run the congestion
+//     auction over them, then enqueue them to be eventually fetched by the main run loop.
+// For now, this approves every message, and charges zero gas price.
+// Note that this component also is responsible for unpacking messages that arrive in a batch
+//     (that is, multiple messages packed together in a single L1 message. When this component
+//     sees a batch, it unbundles the batch, checks the signature on each item in the batch,
+//     "rehydrates" the items with valid signatures into regular messages, and enqueues them.
+
 public impure func getNextMsgFromCongestionAuction() -> (
     MessageFromL1,  // a message
     bool,           // was it approved for execution
