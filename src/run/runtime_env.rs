@@ -153,6 +153,21 @@ impl RuntimeEnvironment {
         self.insert_l1_message(1, sender_addr, &buf);
     }
 
+    #[cfg(test)]
+    pub fn insert_erc721_deposit_message(
+        &mut self,
+        sender_addr: Uint256,
+        token_addr: Uint256,
+        payee: Uint256,
+        amount: Uint256,
+    ) {
+        let mut buf = token_addr.to_bytes_be();
+        buf.extend(payee.to_bytes_be());
+        buf.extend(amount.to_bytes_be());
+
+        self.insert_l1_message(2, sender_addr, &buf);
+    }
+
     pub fn insert_eth_deposit_message(
         &mut self,
         sender_addr: Uint256,

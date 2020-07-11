@@ -23,6 +23,7 @@ import impure func getGlobalAccountStore() -> AccountStore;
 import impure func setGlobalAccountStore(acctStore: AccountStore);
 import func accountStore_get(acctStore: AccountStore, addr: address) -> Account;
 import func accountStore_createERC20(acctStore: AccountStore, addr: address) -> option<AccountStore>;
+import func accountStore_createERC721(acctStore: AccountStore, addr: address) -> option<AccountStore>;
 import func account_isEmpty(acct: Account) -> bool;
 
 import func bytearray_new(capacityHint: uint) -> ByteArray;
@@ -90,3 +91,55 @@ public impure func tokens_erc20deposit(
 
     return None;
 }
+
+public impure func tokens_erc721deposit(
+    tokenAddress: address,
+    payee: address,
+    id: uint,
+    fullMsg: MessageFromL1
+) -> option<()> {
+    let globalAS = getGlobalAccountStore();
+    if(account_isEmpty(accountStore_get(globalAS, tokenAddress))) {
+        globalAS = accountStore_createERC721(
+            globalAS,
+            tokenAddress
+        )?;
+        setGlobalAccountStore(globalAS);
+    }
+
+    // encode the calldata for call to adminMint
+    let calldata = bytearray_new(0);
+    calldata = bytearray_setByte(
+        bytearray_setByte(
+            bytearray_setByte(
+                bytearray_setByte(
+                    calldata,
+                    0,
+                    0xe5,
+                ),
+                1,
+                0x83,
+            ),
+            2,
+            0x06,
+        ),
+        3,
+        0xf9
+    );
+    calldata = bytearray_set256(calldata, 4, uint(payee));
+    calldata = bytearray_set256(calldata, 36, id);
+
+    initEvmCallStack(
+        0,               // treat as regular txcall
+        fullMsg,
+        tokenAddress,
+        address(1),     // special caller address, so contract recognizes call as coming from OS
+        calldata,
+        0,
+        1000000000000,  // gas will eventually be charged to the OS
+        0,              // use gas price zero
+    );  // should never return
+
+    return None;
+}
+
