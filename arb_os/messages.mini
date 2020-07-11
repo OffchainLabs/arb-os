@@ -65,6 +65,7 @@ import impure func initEvmCallStackForConstructor(
     evmJumpTable: map<uint, impure func()>,
     startPoint: impure func(),
     calldata: ByteArray,
+    value: uint,
     gas: uint,
     gasPrice: uint
 );
@@ -262,6 +263,7 @@ impure func handleL2Message(
             evmJumpTable,
             codept,
             bytearray_new(0),   // no calldata for constructor call -- encoded args are packed into the code
+            value,
             maxGas,
             gasPrice
         );  // should never return
