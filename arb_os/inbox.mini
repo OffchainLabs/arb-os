@@ -20,6 +20,8 @@ import func queue_isEmpty(q: Queue) -> bool;
 import func queue_get(q: Queue) -> option<(Queue, any)>;
 import func queue_put(q: Queue, val: any) -> Queue;
 
+import impure func chainParams_gotParamsMessage(sender: address, data: MarshalledBytes);
+
 import type MarshalledBytes;
 
 // This is the structure that the Arbitrum protocol gives us, for each incoming message.
@@ -52,25 +54,32 @@ public impure func inbox_init() {
 public impure func inbox_get() -> MessageFromL1 {
     // Get the next message, in order of arrival.
     // If no messages have arrived, this will block until one arrives.
+    // Put this in a loop so we can special-case the very first "chain parameters" message.
 
-    let inbox = globalInbox;
-    while (queue_isEmpty(inbox.queue)) {
-        inbox = getFromL1Inbox(inbox);
+    loop {
+        let inbox = globalInbox;
+        while (queue_isEmpty(inbox.queue)) {
+            inbox = getFromL1Inbox(inbox);
+        }
+        let (updatedQ, ret,) = queueGetOrDie(inbox.queue);
+        let ebMsg = unsafecast<MessageFromL1>(ret);
+
+        // We got a message. Update the blocknum and timestamp of inbox, if necessary.
+        if (inbox.blockNum < ebMsg.blockNumber) {
+            inbox = inbox with { blockNum: ebMsg.blockNumber };
+        }
+        if (inbox.timestamp < ebMsg.timestamp) {
+            inbox = inbox with { timestamp: ebMsg.timestamp };
+        }
+
+        globalInbox = inbox with { queue: updatedQ };
+
+        if (ebMsg.kind == 4) {
+            chainParams_gotParamsMessage(ebMsg.sender, ebMsg.msgData);
+        } else {
+            return ebMsg;
+        }
     }
-    let (updatedQ, ret,) = queueGetOrDie(inbox.queue);
-    let ebMsg = unsafecast<MessageFromL1>(ret);
-
-    // We got a message. Update the blocknum and timestamp of inbox, if necessary.
-    if (inbox.blockNum < ebMsg.blockNumber) {
-        inbox = inbox with { blockNum: ebMsg.blockNumber };
-    }
-    if (inbox.timestamp < ebMsg.timestamp) {
-        inbox = inbox with { timestamp: ebMsg.timestamp };
-    }
-
-    globalInbox = inbox with { queue: updatedQ };
-
-    return ebMsg;
 }
 
 func queueGetOrDie(q: Queue) -> (Queue, any) {
