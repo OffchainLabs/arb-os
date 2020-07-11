@@ -71,7 +71,7 @@ public func accountStore_get(acctStore: AccountStore, addr: address) -> Account 
 public func pristineAccount(addr: address) -> Account {
     return struct {
         addr: addr,
-        nextSeqNum: 1,
+        nextSeqNum: 0,
         ethBalance: 0,
         contractInfo: None<AccountContractInfo>
     };
@@ -101,7 +101,7 @@ public func accountStore_destroyAndTransferBalance(
 }
 
 public func account_isEmpty(acct: Account) -> bool {
-    return (acct.nextSeqNum == 1) && (acct.ethBalance == 0) && (acct.contractInfo == None<AccountContractInfo>);
+    return (acct.nextSeqNum == 0) && (acct.ethBalance == 0) && (acct.contractInfo == None<AccountContractInfo>);
 }
 
 public func account_checkAndIncrSeqNum(
@@ -264,7 +264,7 @@ public func accountStore_cloneContract(
     let oldAccount = accountStore_get(acctStore, oldAddr);
     let newAccount = oldAccount
         with { ethBalance: 0 }
-        with { nextSeqNum: 1 }
+        with { nextSeqNum: 0 }
         with { contractInfo: Some((oldAccount.contractInfo?) with { storage: newmap<uint, uint> }) };
     return Some(acctStore with { [newAddr] = newAccount });
 }
