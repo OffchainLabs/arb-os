@@ -16,8 +16,11 @@
 
 import type ByteArray;
 import type ByteStream;
+import type MarshalledBytes;
 
 import func bytearray_new(capacity: uint) -> ByteArray;
+import func bytearray_marshalFull(ba: ByteArray) -> MarshalledBytes;
+
 import func bytestream_new(ba: ByteArray) -> ByteStream;
 
 import func rlp_encodeUint(val: uint, ba: ByteArray, offset: uint) -> (ByteArray, uint);
@@ -29,72 +32,19 @@ import func rlp_decodeAddress(bs: ByteStream) -> option<(ByteStream, address)>;
 import func bytesNeededToRepresentUint(val: uint) -> uint;
 
 
-impure func main() {
-    if let Some(res) = tests() {
-	    asm(res,) { log };
-	} else {
-	    asm(1000,) { log };
-	}
-}
-
-func tests() -> option<uint> {
-    if (bytesNeededToRepresentUint(3) != 1) {
-        return Some(1);
-    }
-
-    if (bytesNeededToRepresentUint(257) != 2) {
-        return Some(2);
-    }
-
-    if (bytesNeededToRepresentUint(uint(hash(0))) != 32) {
-        return Some(3);
-    }
-
-    let v = hash(0);
-    if (bytesNeededToRepresentUint(uint(address(v))) != 20) {
-        return Some(uint(address(v)));
-    }
-
+impure func main(ui: uint) {
     let ba = bytearray_new(0);
-    let (uba, nbytes) = rlp_encodeUint(33, ba, 0);
+    let (uba, _) = rlp_encodeUint(ui, ba, 0);
     ba = uba;
-    let (_, val) = rlp_decodeUint(bytestream_new(ba))?;
-    if (val != 33) {
-        return Some(10);
-    }
 
-    let ba = bytearray_new(0);
-    let (uba, nbytes) = rlp_encodeUint(987654321, ba, 0);
-    ba = uba;
-    let (_, val) = rlp_decodeUint(bytestream_new(ba))?;
-    if (val != 987654321) {
-        return Some(11);
+    // decode and verify no difference
+    if let Some(res) = rlp_decodeUint(bytestream_new(ba)) {
+        if (res.1 == ui) {
+            asm(bytearray_marshalFull(ba),) { log };
+        } else {
+            asm(0,) { log };
+        }
+    } else {
+        asm(1,) { log };
     }
-
-    let ba = bytearray_new(0);
-    let (uba, nbytes) = rlp_encodeUint(uint(hash(0)), ba, 0);
-    ba = uba;
-    let (_, val) = rlp_decodeUint(bytestream_new(ba))?;
-    if (val != uint(hash(0))) {
-        return Some(12);
-    }
-
-    let ba = bytearray_new(0);
-    let hash0 = hash(0);
-    let (uba, nbytes) = rlp_encodeAddress(address(hash0), ba, 0);
-    ba = uba;
-    let (_, addr) = rlp_decodeAddress(bytestream_new(ba))?;
-    if (addr != address(hash0)) {
-        return Some(13);
-    }
-
-    // try encoding >20 byte uint, then decoding as address; should fail
-    let ba = bytearray_new(0);
-    let (uba, nbytes) = rlp_encodeUint(uint(hash(0)), ba, 0);
-    ba = uba;
-    if (rlp_decodeAddress(bytestream_new(ba)) != None<(ByteStream, address)>) {
-        return Some(14);
-    }
-
-    return Some(0);
 }
