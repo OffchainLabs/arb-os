@@ -44,6 +44,10 @@ public func rlp_encodeUint(val: uint, ba: ByteArray, offset: uint) -> (ByteArray
     }
 }
 
+public func rlp_encodeAddress(addr: address, ba: ByteArray, offset: uint) -> (ByteArray, uint) {
+    return rlp_encodeUint(uint(addr), ba, offset);
+}
+
 public func rlp_decodeUint(bs: ByteStream) -> option<(ByteStream, uint)> {
     // read an RLP-encoded uint from bs
     // return None if end-of-stream error, or Some((updated_bs, uint_read))
@@ -65,12 +69,21 @@ public func rlp_decodeUint(bs: ByteStream) -> option<(ByteStream, uint)> {
     }
 }
 
-func bytesNeededToRepresentUint(val: uint) -> uint {
+public func rlp_decodeAddress(bs: ByteStream) -> option<(ByteStream, address)> {
+    let (bs, val) = rlp_decodeUint(bs)?;
+    if (bytesNeededToRepresentUint(val) <= 20) {
+        return Some((bs, address(val)));
+    } else {
+        return None;
+    }
+}
+
+public func bytesNeededToRepresentUint(val: uint) -> uint {
     let ret = 0;
     let bytes = 16;
     while (bytes > 0) {
-        let threshold = asm(2, bytes) uint { exp };
-        if (val > threshold) {
+        let threshold = asm(256, bytes) uint { exp };
+        if (val >= threshold) {
             ret = ret + bytes;
             val = val / threshold;
         }
