@@ -73,6 +73,7 @@ import func account_setContractInfo(
     startCodePoint: impure func(),
     storage: map<uint, uint>
 ) -> Account;
+import func account_isEmpty(acct: Account) -> bool;
 import func pristineAccount(addr: address) -> Account;
 
 import impure func inbox_currentTimestamp() -> uint;
@@ -721,109 +722,185 @@ public impure func evmOp_create(value: uint, offset: uint, length: uint) -> addr
             return address(0);
         }
         let newAddress = address(hash(bytes32(myAddr), bytes32(seqNum)));
-
-        let constructorCode = bytearray_extract(
-            evmCallStack_getTopFrameMemoryOrDie(),
-            offset,
-            length
-        );
-        if let Some(res) = translateEvmCodeSegment(bytestream_new(constructorCode)) {
-            let (startPoint, evmJumpTable) = res;
-
-            // Create a new account to run the constructor code.
-            if (evmCallStack_setAccount(
-                    newAddress,
-                    account_setContractInfo(
-                        pristineAccount(newAddress),
-                        constructorCode,
-                        evmJumpTable,
-                        startPoint,
-                        newmap<uint, uint>
-                    )
-                )
-            ) {
-                // Now for the slightly tricky part.
-                // We're going to call the untrusted constructor, which might end up trashing our
-                //    Mini-language callstack (which is stored on the AVM auxstack).
-                // The possibly-trashed callstack includes our local variables and the return address of our caller.
-                // So we need to make a copy of those things on the AVM stack, because the AVM stack
-                //    gets saved and restored across calls to untrusted code.
-                // After the return we'll restore the saved info, and continue.
-
-                // save top two AVM auxstack items onto the AVM stack (our locals, and the return address)
-                asm() {
-                    auxpop
-                    auxpop
-                    dup0
-                    auxpush
-                    dup1
-                    auxpush
-                };
-
-                let constructorSucceeded = false;
-
-                // We can't save the result of this call to a local variable, because we can't (yet) trust
-                //     that our local callframe is in a reasonable state.
-                if (evmOp_call(
-                    1000000000,  // gas allocation
-                    newAddress,
-                    value,
-                    0,           // no calldata passed to constructor
-                    0,
-                    0,           // don't copy returndata back into caller's memory
-                    0,
-                )) {
-                    // Constructor call succeeded.
-                    // Recover our saved information from the stack, put it back onto the auxstack
-                    asm() { auxpush auxpush };
-
-                    constructorSucceeded = true;
-                } else {
-                    // Recover our saved information from the stack, put it back onto the auxstack
-                    asm() { auxpush auxpush };
-                }
-
-                if (constructorSucceeded) {
-                    if let Some(contractCode) = evmCallStack_getTopFrameReturnData() {
-                        if let Some(res) = translateEvmCodeSegment(bytestream_new(contractCode)) {
-                            let (startPoint2, evmJumpTable2) = res;
-                            if let Some(oldAcct) = evmCallStack_getAccount(newAddress) {
-                                let storage = newmap<uint, uint>;
-                                if let Some(st) = account_getAllStorage(oldAcct) {
-                                    storage = st;
-                                }
-                                if (evmCallStack_setAccount(
-                                        newAddress,
-                                        account_setContractInfo(
-                                            oldAcct,
-                                            contractCode,
-                                            evmJumpTable2,
-                                            startPoint2,
-                                            storage
-                                        )
-                                    )
-                                ) {
-                                    return newAddress;
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
-
-        // clean up the state and return failure
-        let _ = evmCallStack_setAccount(newAddress, pristineAccount(newAddress));
-        return address(0);
+        return doCreationOpcode(value, offset, length, newAddress);
     }
 
     evm_runtimePanic();
     panic;
 }
 
-public func evmOp_create2(value: uint, offset: uint, length: uint, salt: uint) -> address {
-    evm_notYetImplemented(67,);
+public impure func evmOp_create2(value: uint, offset: uint, length: uint, salt: uint) -> address {
+    if let Some(topFrame) = evmCallStack_topFrame() {
+        let myAcct = evmCallFrame_runningAsAccount(topFrame);
+        let myAddr = account_getAddress(myAcct);
+        let newAddrBuf = bytearray_new(85);
+        newAddrBuf = bytearray_setByte(newAddrBuf, 0, 0xff);
+        newAddrBuf = bytearray_set256(newAddrBuf, 1, 2048*uint(myAddr));
+        newAddrBuf = bytearray_set256(newAddrBuf, 21, salt);
+        newAddrBuf = bytearray_set256(
+            newAddrBuf,
+            53,
+            uint(keccak256(
+                evmCallFrame_getMemory(topFrame),
+                offset,
+                length
+            ))
+        );
+        let newAddress = address(keccak256(newAddrBuf, 0, 85));
+        return doCreationOpcode(value, offset, length, newAddress);
+    }
+
+    evm_runtimePanic();
     panic;
+}
+
+impure func doCreationOpcode(value: uint, offset: uint, length: uint, newAddress: address) -> address {
+    // make sure there isn't already an account at the given address
+    if let Some(acct) = evmCallStack_getAccount(newAddress) {
+        if ( ! account_isEmpty(acct)) {
+            // there is already an account at that address; return failure
+            return address(0);
+        }
+    } else {
+        // somehow there isn't an EVM callframe
+        evm_runtimePanic();
+        panic;
+    }
+
+    let constructorCode = bytearray_extract(
+        evmCallStack_getTopFrameMemoryOrDie(),
+        offset,
+        length
+    );
+    if let Some(res) = translateEvmCodeSegment(bytestream_new(constructorCode)) {
+        let (startPoint, evmJumpTable) = res;
+
+        // Create a new account to run the constructor code.
+        if (evmCallStack_setAccount(
+                newAddress,
+                account_setContractInfo(
+                    pristineAccount(newAddress),
+                    constructorCode,
+                    evmJumpTable,
+                    startPoint,
+                    newmap<uint, uint>
+                )
+            )
+        ) {
+            // Now for the slightly tricky part.
+            // We're going to call the untrusted constructor, which might end up trashing our
+            //    Mini-language callstack (which is stored on the AVM auxstack).
+            // The possibly-trashed callstack includes our local variables and the return address of our caller.
+            // It also contains the locals and return address of our caller, which we also need to preserve.
+            // We don't need to preserve any more because our caller's caller is translated EVM code,
+            //    which doesn't use the aux stack and isn't trusted to maintain any invariants about it.
+            // We will make a copy of the things we want to preserve, on the AVM stack, because the AVM stack
+            //    gets saved and restored across calls to untrusted code.
+            // After the return we'll restore the saved info, and continue.
+
+            // save top four AVM auxstack items onto the AVM stack (locals and return address of us and our caller)
+            asm(((),(),(),()),) {
+                auxpop
+                swap1
+                auxpop
+                swap1
+                auxpop
+                swap1
+                auxpop
+                swap1
+                dup1
+                auxpush
+                [0] tset
+                dup1
+                auxpush
+                [1] tset
+                dup1
+                auxpush
+                [2] tset
+                dup1
+                auxpush
+                [3] tset
+            };
+
+            let constructorSucceeded = false;
+
+            // We can't save the result of this call to a local variable, because we can't (yet) trust
+            //     that our local callframe is in a reasonable state. So we have to put it in an if.
+            if (evmOp_call(
+                1000000000,  // gas allocation
+                newAddress,
+                value,
+                0,           // no calldata passed to constructor
+                0,
+                0,           // don't copy returndata back into caller's memory
+                0,
+            )) {
+                // Constructor call succeeded.
+                // Recover our saved information from the stack, put it back onto the auxstack
+                asm() {
+                    dup0
+                    [0] tget
+                    auxpush
+                    dup0
+                    [1] tget
+                    auxpush
+                    dup0
+                    [2] tget
+                    auxpush
+                    [3] tget
+                    auxpush
+                };
+
+                constructorSucceeded = true;
+            } else {
+                // Recover our saved information from the stack, put it back onto the auxstack
+                asm() {
+                    dup0
+                    [0] tget
+                    auxpush
+                    dup0
+                    [1] tget
+                    auxpush
+                    dup0
+                    [2] tget
+                    auxpush
+                    [3] tget
+                    auxpush
+                 };
+            }
+
+            if (constructorSucceeded) {
+                if let Some(contractCode) = evmCallStack_getTopFrameReturnData() {
+                    if let Some(res) = translateEvmCodeSegment(bytestream_new(contractCode)) {
+                        let (startPoint2, evmJumpTable2) = res;
+                        if let Some(oldAcct) = evmCallStack_getAccount(newAddress) {
+                            let storage = newmap<uint, uint>;
+                            if let Some(st) = account_getAllStorage(oldAcct) {
+                                storage = st;
+                            }
+                            if (evmCallStack_setAccount(
+                                    newAddress,
+                                    account_setContractInfo(
+                                        oldAcct,
+                                        contractCode,
+                                        evmJumpTable2,
+                                        startPoint2,
+                                        storage
+                                    )
+                                )
+                            ) {
+                                return newAddress;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // clean up the state and return failure
+    let _ = evmCallStack_setAccount(newAddress, pristineAccount(newAddress));
+    return address(0);
 }
 
 impure func evm_error() {
