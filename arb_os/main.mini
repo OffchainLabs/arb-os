@@ -49,10 +49,13 @@ import func bytearray_unmarshalBytes(mb: MarshalledBytes) -> ByteArray;
 import func bytestream_new(ba: ByteArray) -> ByteStream;
 import func getErc20code() -> MarshalledBytes;
 import func getErc721code() -> MarshalledBytes;
+import func getArbInfoCode() -> MarshalledBytes;
 import func getErc20address() -> address;
 import func getErc721address() -> address;
+import func getArbInfoAddress() -> address;
 import func getErc20storage() -> map<uint, uint>;
 import func getErc721storage() -> map<uint, uint>;
+import func getArbInfoStorage() -> map<uint, uint>;
 
 import impure func inbox_get() -> MessageFromL1;
 import impure func getNextMsgFromCongestionAuction() -> (
@@ -134,6 +137,19 @@ impure func initializeContractTemplates() -> option<()> {
         evmJumpTable,
         initCodePt,
         getErc721storage()
+    )?;
+
+    let code = bytearray_unmarshalBytes(getArbInfoCode());
+    let (initCodePt, evmJumpTable) = translateEvmCodeSegment(
+        bytestream_new(code)
+    )?;
+    acctStore = accountStore_createAccountFromEvmCode(
+        acctStore,
+        getArbInfoAddress(),
+        code,
+        evmJumpTable,
+        initCodePt,
+        getArbInfoStorage()
     )?;
 
     // set up ArbSys builtin contract
