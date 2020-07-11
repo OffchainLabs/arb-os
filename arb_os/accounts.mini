@@ -184,7 +184,7 @@ public func accountStore_createAccountFromEvmCode(
     }
 }
 
-public impure func accountStore_createBuiltinContract(
+public func accountStore_createBuiltinContract(
     acctStore: AccountStore,
     addr: address,
     entryPoint: impure func()
