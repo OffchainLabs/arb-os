@@ -515,6 +515,50 @@ pub fn mint_erc20_and_get_balance(debug: bool) {
     }
 }
 
+#[cfg(test)]
+pub fn mint_erc721_and_get_balance(debug: bool) {
+    let token_addr = Uint256::from_usize(32563);
+    let me = Uint256::from_usize(1025);
+    let million = Uint256::from_usize(1000000);
+
+    let mut rt_env = RuntimeEnvironment::new(Uint256::from_usize(1111));
+    rt_env.insert_erc721_deposit_message(me.clone(), token_addr.clone(), me.clone(), million);
+    let mut calldata: Vec<u8> = vec![0x70, 0xa0, 0x82, 0x31]; // code for balanceOf method
+    calldata.extend(me.to_bytes_be());
+    rt_env.insert_tx_message(
+        me,
+        Uint256::from_usize(1000000000),
+        Uint256::zero(),
+        token_addr,
+        Uint256::zero(),
+        &calldata,
+    );
+
+    let mut machine = load_from_file(Path::new("arb_os/arbos.mexe"), rt_env);
+    machine.start_at_zero();
+
+    let num_logs_before = machine.runtime_env.get_all_logs().len();
+    let _arbgas_used = if debug {
+        machine.debug(None)
+    } else {
+        machine.run(None)
+    };
+    let logs = machine.runtime_env.get_all_logs();
+    assert_eq!(logs.len(), num_logs_before + 2);
+    println!("first log item: {}", logs[logs.len() - 2]);
+    println!("second log item: {}", logs[logs.len() - 1]);
+    if let Value::Tuple(tup) = &logs[logs.len() - 2] {
+        assert_eq!(tup[1], Value::Int(Uint256::zero()));
+    } else {
+        panic!("first log item was malformed");
+    }
+    if let Value::Tuple(tup) = &logs[logs.len() - 1] {
+        assert_eq!(tup[1], Value::Int(Uint256::zero()));
+    } else {
+        panic!("second log item was malformed");
+    }
+}
+
 pub fn make_logs_for_all_arbos_tests() {
     /*
     evm_load_add_and_verify(

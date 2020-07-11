@@ -85,6 +85,12 @@ import impure func tokens_erc20deposit(
     amount: uint,
     msg: MessageFromL1
 ) -> option<()>;
+import impure func tokens_erc721deposit(
+    tokenAddr: address,
+    payee: address,
+    id: uint,
+    msg: MessageFromL1
+) -> option<()>;
 
 import func bytearray_new(capacity: uint) -> ByteArray;
 import func bytearray_size(ba: ByteArray) -> uint;
@@ -160,8 +166,24 @@ public impure func handleMessageFromL1(
 
         return None;
     } elseif (msg.kind == 2) {
-        // ERC721 token transfer message
-        return None; // NOT YET IMPLEMENTED
+         // ERC721 deposit message
+         let (bs, tokenAddress) = bytestream_getUint(inStream)?;
+         inStream = bs;
+
+         let (bs, payeeAddress) = bytestream_getUint(inStream)?;
+         inStream = bs;
+
+         let (bs, id) = bytestream_getUint(inStream)?;
+         inStream = bs;
+
+         tokens_erc721deposit(
+             address(tokenAddress),
+             address(payeeAddress),
+             id,
+             msg
+         )?;  // should never return
+
+         return None;
     } elseif (msg.kind == 3) {
         // L2 message
         handleL2Message(inStream, msg, maxGas, gasPrice)?;
