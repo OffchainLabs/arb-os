@@ -146,6 +146,20 @@ fn test_keccak() {
 }
 
 #[test]
+fn test_rlp() {
+    let path = Path::new("stdlib/rlptest.mexe");
+    let res = run_from_file(path, vec![], RuntimeEnvironment::new(), false);
+    match res {
+        Ok(res) => {
+            assert_eq!(res[0], Value::Int(Uint256::zero()));
+        }
+        Err(e) => {
+            panic!("{}\n{}", e.0, e.1);
+        }
+    }
+}
+
+#[test]
 fn test_codeload() {
     let path = Path::new("minitests/codeloadtest.mexe");
     let res = run_from_file(path, vec![], RuntimeEnvironment::new(), false);

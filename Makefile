@@ -13,9 +13,9 @@ testlogs: all
 evmdebug: all
 	cargo run evmdebug
 
-TESTEXES = $(BUILTINDIR)/kvstest.mexe $(BUILTINDIR)/cuckookvstest.mexe $(STDDIR)/queuetest.mexe $(BUILTINDIR)/arraytest.mexe $(BUILTINDIR)/globaltest.mexe $(STDDIR)/priorityqtest.mexe $(STDDIR)/bytearraytest.mexe $(STDDIR)/keccaktest.mexe $(BUILTINDIR)/maptest.mexe minitests/codeloadtest.mexe
+TESTEXES = $(BUILTINDIR)/kvstest.mexe $(BUILTINDIR)/cuckookvstest.mexe $(STDDIR)/queuetest.mexe $(BUILTINDIR)/arraytest.mexe $(BUILTINDIR)/globaltest.mexe $(STDDIR)/priorityqtest.mexe $(STDDIR)/bytearraytest.mexe $(STDDIR)/keccaktest.mexe $(STDDIR)/rlptest.mexe $(BUILTINDIR)/maptest.mexe minitests/codeloadtest.mexe
 BUILTINMAOS = $(BUILTINDIR)/array.mao $(BUILTINDIR)/kvs.mao $(BUILTINDIR)/cuckookvs.mao
-STDLIBMAOS = $(STDDIR)/bytearray.mao $(STDDIR)/priorityq.mao $(STDDIR)/random.mao $(STDDIR)/queue.mao $(STDDIR)/keccak.mao $(STDDIR)/bytestream.mao $(STDDIR)/stack.mao
+STDLIBMAOS = $(STDDIR)/bytearray.mao $(STDDIR)/priorityq.mao $(STDDIR)/random.mao $(STDDIR)/queue.mao $(STDDIR)/keccak.mao $(STDDIR)/bytestream.mao $(STDDIR)/stack.mao $(STDDIR)/rlp.mao
 STDLIB = $(STDLIBMAOS)
 
 all: $(TESTEXES) arbos
@@ -47,6 +47,9 @@ minitests/codeloadtest.mexe: minitests/codeloadtest.mini
 $(STDDIR)/keccaktest.mexe: $(BUILTINMAOS) $(STDDIR)/keccaktest.mini $(STDDIR)/keccak.mao $(STDDIR)/bytearray.mao
 	cargo run compile $(STDDIR)/keccaktest.mini $(STDDIR)/keccak.mao $(STDDIR)/bytearray.mao -o $(STDDIR)/keccaktest.mexe
 
+$(STDDIR)/rlptest.mexe: $(BUILTINMAOS) $(STDDIR)/rlptest.mini $(STDLIB)
+	cargo run compile $(STDDIR)/rlptest.mini $(STDLIB) -o $(STDDIR)/rlptest.mexe
+
 $(STDDIR)/priorityq.mao: $(BUILTINMAOS) $(STDDIR)/priorityq.mini
 	cargo run compile $(STDDIR)/priorityq.mini -c -o $(STDDIR)/priorityq.mao
 
@@ -67,6 +70,9 @@ $(STDDIR)/stack.mao: $(STDDIR)/stack.mini
 
 $(STDDIR)/keccak.mao: $(STDDIR)/keccak.mini		
 	cargo run compile $(STDDIR)/keccak.mini -c -o $(STDDIR)/keccak.mao
+
+$(STDDIR)/rlp.mao: $(STDDIR)/rlp.mini
+	cargo run compile $(STDDIR)/rlp.mini -c -o $(STDDIR)/rlp.mao
 
 $(BUILTINDIR)/maptest.mexe: $(BUILTINMAOS) $(BUILTINDIR)/maptest.mini
 	cargo run compile $(BUILTINDIR)/maptest.mini -o $(BUILTINDIR)/maptest.mexe

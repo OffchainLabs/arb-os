@@ -1,0 +1,53 @@
+//
+// Copyright 2020, Offchain Labs, Inc.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//    http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+//
+
+import type ByteArray;
+import type ByteStream;
+
+import func bytearray_new(capacity: uint) -> ByteArray;
+import func bytestream_new(ba: ByteArray) -> ByteStream;
+
+import func rlp_encodeUint(val: uint, ba: ByteArray, offset: uint) -> (ByteArray, uint);
+import func rlp_decodeUint(bs: ByteStream) -> option<(ByteStream, uint)>;
+
+
+impure func main() {
+    if let Some(res) = tests() {
+	    asm(res,) { log };
+	} else {
+	    asm(1000,) { log };
+	}
+}
+
+func tests() -> option<uint> {
+    let ba = bytearray_new(0);
+    let (uba, nbytes) = rlp_encodeUint(33, ba, 0);
+    ba = uba;
+    let (_, val) = rlp_decodeUint(bytestream_new(ba))?;
+    if (val != 33) {
+        return Some(1);
+    }
+
+    let ba = bytearray_new(0);
+    let (uba, nbytes) = rlp_encodeUint(987654321, ba, 0);
+    ba = uba;
+    let (_, val) = rlp_decodeUint(bytestream_new(ba))?;
+    if (val != 987654321) {
+        return Some(2);
+    }
+
+    return Some(0);
+}
