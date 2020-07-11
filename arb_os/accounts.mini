@@ -71,7 +71,7 @@ public func accountStore_get(acctStore: AccountStore, addr: address) -> Account 
 public func pristineAccount(addr: address) -> Account {
     return struct {
         addr: addr,
-        nextSeqNum: 1,
+        nextSeqNum: 0,
         ethBalance: 0,
         contractInfo: None<AccountContractInfo>
     };
@@ -101,7 +101,7 @@ public func accountStore_destroyAndTransferBalance(
 }
 
 public func account_isEmpty(acct: Account) -> bool {
-    return (acct.nextSeqNum == 1) && (acct.ethBalance == 0) && (acct.contractInfo == None<AccountContractInfo>);
+    return (acct.nextSeqNum == 0) && (acct.ethBalance == 0) && (acct.contractInfo == None<AccountContractInfo>);
 }
 
 public func account_checkAndIncrSeqNum(
@@ -184,7 +184,7 @@ public func accountStore_createAccountFromEvmCode(
     }
 }
 
-public impure func accountStore_createBuiltinContract(
+public func accountStore_createBuiltinContract(
     acctStore: AccountStore,
     addr: address,
     entryPoint: impure func()
@@ -207,6 +207,8 @@ public impure func accountStore_createBuiltinContract(
                         resumeCodePoint: entryPoint,
                         storage: newmap<uint, uint>
                     })
+                } with {
+                    nextSeqNum: 1
                 }
             )
         );
@@ -354,6 +356,11 @@ public func account_setContractInfo(
     startCodePoint: impure func(),
     storage: map<uint, uint>
 ) -> Account {
+    if (acct.nextSeqNum == 0) {
+        // new contract accounts are supposed to start with sequence number = 1; make it so
+        acct = acct with { nextSeqNum: 1 };
+    }
+
     return acct with { contractInfo: Some(
         struct {
             code: code,

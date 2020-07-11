@@ -22,7 +22,12 @@ use std::path::Path;
 #[test]
 fn test_arraytest() {
     let path = Path::new("builtin/arraytest.mexe");
-    let res = run_from_file(path, vec![], RuntimeEnvironment::new(), false);
+    let res = run_from_file(
+        path,
+        vec![],
+        RuntimeEnvironment::new(Uint256::from_usize(1111)),
+        false,
+    );
     match res {
         Ok(res) => {
             assert_eq!(res[0], Value::Int(Uint256::zero()));
@@ -36,7 +41,12 @@ fn test_arraytest() {
 #[test]
 fn test_kvstest() {
     let path = Path::new("builtin/kvstest.mexe");
-    let res = run_from_file(path, vec![], RuntimeEnvironment::new(), false);
+    let res = run_from_file(
+        path,
+        vec![],
+        RuntimeEnvironment::new(Uint256::from_usize(1111)),
+        false,
+    );
     match res {
         Ok(res) => {
             assert_eq!(res[0], Value::Int(Uint256::zero()));
@@ -50,7 +60,12 @@ fn test_kvstest() {
 #[test]
 fn test_cuckookvstest() {
     let path = Path::new("builtin/cuckookvstest.mexe");
-    let res = run_from_file(path, vec![], RuntimeEnvironment::new(), false);
+    let res = run_from_file(
+        path,
+        vec![],
+        RuntimeEnvironment::new(Uint256::from_usize(1111)),
+        false,
+    );
     match res {
         Ok(res) => {
             assert_eq!(res[0], Value::Int(Uint256::zero()));
@@ -64,7 +79,12 @@ fn test_cuckookvstest() {
 #[test]
 fn test_queuetest() {
     let path = Path::new("stdlib/queuetest.mexe");
-    let res = run_from_file(path, vec![], RuntimeEnvironment::new(), false);
+    let res = run_from_file(
+        path,
+        vec![],
+        RuntimeEnvironment::new(Uint256::from_usize(1111)),
+        false,
+    );
     match res {
         Ok(res) => {
             assert_eq!(res[0], Value::Int(Uint256::zero()));
@@ -78,7 +98,12 @@ fn test_queuetest() {
 #[test]
 fn test_globaltest() {
     let path = Path::new("builtin/globaltest.mexe");
-    let res = run_from_file(path, vec![], RuntimeEnvironment::new(), false);
+    let res = run_from_file(
+        path,
+        vec![],
+        RuntimeEnvironment::new(Uint256::from_usize(1111)),
+        false,
+    );
     match res {
         Ok(res) => {
             assert_eq!(res[0], Value::Int(Uint256::zero()));
@@ -92,7 +117,12 @@ fn test_globaltest() {
 #[test]
 fn test_pqtest() {
     let path = Path::new("stdlib/priorityqtest.mexe");
-    let res = run_from_file(path, vec![], RuntimeEnvironment::new(), false);
+    let res = run_from_file(
+        path,
+        vec![],
+        RuntimeEnvironment::new(Uint256::from_usize(1111)),
+        false,
+    );
     match res {
         Ok(res) => {
             assert_eq!(res[0], Value::Int(Uint256::zero()));
@@ -106,7 +136,12 @@ fn test_pqtest() {
 #[test]
 fn test_bytearray() {
     let path = Path::new("stdlib/bytearraytest.mexe");
-    let res = run_from_file(path, vec![], RuntimeEnvironment::new(), false);
+    let res = run_from_file(
+        path,
+        vec![],
+        RuntimeEnvironment::new(Uint256::from_usize(1111)),
+        false,
+    );
     match res {
         Ok(res) => {
             assert_eq!(res[0], Value::Int(Uint256::zero()));
@@ -120,7 +155,12 @@ fn test_bytearray() {
 #[test]
 fn test_map() {
     let path = Path::new("builtin/maptest.mexe");
-    let res = run_from_file(path, vec![], RuntimeEnvironment::new(), false);
+    let res = run_from_file(
+        path,
+        vec![],
+        RuntimeEnvironment::new(Uint256::from_usize(1111)),
+        false,
+    );
     match res {
         Ok(res) => {
             assert_eq!(res[0], Value::Int(Uint256::zero()));
@@ -134,7 +174,12 @@ fn test_map() {
 #[test]
 fn test_keccak() {
     let path = Path::new("stdlib/keccaktest.mexe");
-    let res = run_from_file(path, vec![], RuntimeEnvironment::new(), false);
+    let res = run_from_file(
+        path,
+        vec![],
+        RuntimeEnvironment::new(Uint256::from_usize(1111)),
+        false,
+    );
     match res {
         Ok(res) => {
             assert_eq!(res[0], Value::Int(Uint256::zero()));
@@ -162,7 +207,12 @@ fn test_rlp() {
 #[test]
 fn test_codeload() {
     let path = Path::new("minitests/codeloadtest.mexe");
-    let res = run_from_file(path, vec![], RuntimeEnvironment::new(), false);
+    let res = run_from_file(
+        path,
+        vec![],
+        RuntimeEnvironment::new(Uint256::from_usize(1111)),
+        false,
+    );
     match res {
         Ok(res) => {
             assert_eq!(res[0], Value::Int(Uint256::zero()));

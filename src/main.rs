@@ -27,6 +27,7 @@ use std::hash::Hasher;
 use std::io;
 use std::path::Path;
 
+use crate::uint256::Uint256;
 use clap::{App, Arg, SubCommand};
 
 mod compile;
@@ -219,7 +220,7 @@ fn main() -> Result<(), CompileError> {
         let filename = matches.value_of("INPUT").unwrap();
         let debug = matches.is_present("debug");
         let path = Path::new(filename);
-        let env = RuntimeEnvironment::new();
+        let env = RuntimeEnvironment::new(Uint256::from_usize(1111));
         match run_from_file(path, Vec::new(), env, debug) {
             Ok(logs) => {
                 println!("Logs: {:?}", logs);
@@ -238,7 +239,11 @@ fn main() -> Result<(), CompileError> {
 
     if let Some(matches) = matches.subcommand_matches("profiler") {
         let path = matches.value_of("INPUT").unwrap();
-        profile_gen_from_file(path.as_ref(), Vec::new(), RuntimeEnvironment::new());
+        profile_gen_from_file(
+            path.as_ref(),
+            Vec::new(),
+            RuntimeEnvironment::new(Uint256::from_usize(1111)),
+        );
     }
 
     if matches.subcommand_matches("maketestlogs").is_some() {

@@ -23,6 +23,7 @@ import type EvmLogs;
 
 import impure func errorHandler_init();
 import impure func initKeccakConstants();
+import impure func chainParams_init();
 import impure func gasAccounting_init();
 import impure func evmCallStack_init();
 import impure func inbox_init();
@@ -83,6 +84,7 @@ import impure func arbsys_txcall();
 impure func main() {
     errorHandler_init();
     initKeccakConstants();
+    chainParams_init();
     gasAccounting_init();
     evmCallStack_init();
     inbox_init();

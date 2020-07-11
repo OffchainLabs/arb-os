@@ -22,6 +22,7 @@ use std::{collections::HashMap, fs::File, io, path::Path};
 
 #[derive(Debug, Clone)]
 pub struct RuntimeEnvironment {
+    pub chain_address: Uint256,
     pub l1_inbox: Value,
     pub current_block_num: Uint256,
     pub current_timestamp: Uint256,
@@ -34,8 +35,9 @@ pub struct RuntimeEnvironment {
 }
 
 impl RuntimeEnvironment {
-    pub fn new() -> Self {
-        RuntimeEnvironment {
+    pub fn new(chain_address: Uint256) -> Self {
+        let mut ret = RuntimeEnvironment {
+            chain_address: chain_address.clone(),
             l1_inbox: Value::none(),
             current_block_num: Uint256::zero(),
             current_timestamp: Uint256::zero(),
@@ -45,7 +47,9 @@ impl RuntimeEnvironment {
             caller_seq_nums: HashMap::new(),
             next_id: Uint256::zero(),
             recorder: RtEnvRecorder::new(),
-        }
+        };
+        ret.insert_l1_message(4, chain_address, &[0u8]);
+        ret
     }
 
     pub fn insert_l1_message(&mut self, msg_type: u8, sender_addr: Uint256, msg: &[u8]) {
@@ -164,7 +168,7 @@ impl RuntimeEnvironment {
     pub fn get_and_incr_seq_num(&mut self, addr: &Uint256) -> Uint256 {
         let cur_seq_num = match self.caller_seq_nums.get(&addr) {
             Some(sn) => sn.clone(),
-            None => Uint256::one(),
+            None => Uint256::zero(),
         };
         self.caller_seq_nums
             .insert(addr.clone(), cur_seq_num.add(&Uint256::one()));

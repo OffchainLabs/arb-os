@@ -84,14 +84,6 @@ public impure func arbsys_txcall() {
             arbsys_getTransactionCount(topFrame, calldata);
         } elseif(funcCode == 0x474ed9c0) {
             arbsys_cloneContract(topFrame, calldata);
-        } elseif(funcCode == 0x21151d86) {
-            arbsys_currentMessageBlock();
-        } elseif(funcCode == 0x4baa4a24) {
-            // called ArbSys::blockUpperBound; use a function with the same result
-            arbsys_currentMessageBlock();
-        } elseif(funcCode == 0xf5e71ccd) {
-            // called ArbSys::timestampUpperBound; use a function with the same result
-            arbsys_timestampUpperBound();
         } else {
             // unrecognized function code
             evmOp_revert(0, 0);
@@ -185,40 +177,6 @@ impure func arbsys_cloneContract(topFrame: EvmCallFrame, calldata: ByteArray) {
         } else {
             evmOp_revert(0, 0);
         }
-    } else {
-        evmOp_revert(0, 0);
-    }
-}
-
-impure func arbsys_currentMessageBlock() {
-    let updatedMem = bytearray_set256(
-         evmCallStack_getTopFrameMemoryOrDie(),
-         0,
-         inbox_currentBlockNumber()
-     );
-    let success = evmCallStack_setTopFrameMemory(
-        updatedMem
-    );
-
-    if (success) {
-        evmOp_return(0, 32);
-    } else {
-        evmOp_revert(0, 0);
-    }
-}
-
-impure func arbsys_timestampUpperBound() {
-    let updatedMem = bytearray_set256(
-         evmCallStack_getTopFrameMemoryOrDie(),
-         0,
-         inbox_currentTimestamp()
-     );
-    let success = evmCallStack_setTopFrameMemory(
-        updatedMem
-    );
-
-    if (success) {
-        evmOp_return(0, 32);
     } else {
         evmOp_revert(0, 0);
     }

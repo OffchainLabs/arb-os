@@ -736,7 +736,6 @@ impl Machine {
                 Opcode::AVMOpcode(AVMOpcode::Breakpoint) => 100,
                 Opcode::AVMOpcode(AVMOpcode::Log) => 100,
                 Opcode::AVMOpcode(AVMOpcode::Send) => 100,
-                Opcode::AVMOpcode(AVMOpcode::GetTime) => 40,
                 Opcode::AVMOpcode(AVMOpcode::Inbox) => 40,
                 Opcode::AVMOpcode(AVMOpcode::Panic) => 5,
                 Opcode::AVMOpcode(AVMOpcode::Halt) => 10,
@@ -1212,9 +1211,6 @@ impl Machine {
 						self.stack.push_uint(Uint256::avm_hash2(&r1, &r2));
 						self.incr_pc();
 						Ok(true)
-					}
-					Opcode::AVMOpcode(AVMOpcode::GetTime) => {
-						unimplemented!("GetTime instruction");
 					}
 					Opcode::AVMOpcode(AVMOpcode::Inbox) => {
 						let msgs = self.runtime_env.get_inbox();

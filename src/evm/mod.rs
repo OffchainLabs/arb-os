@@ -22,7 +22,6 @@ use std::path::Path;
 
 mod abi;
 
-
 #[derive(Clone)]
 pub struct CallInfo<'a> {
     function_name: &'a str,
@@ -37,7 +36,7 @@ pub fn evm_xcontract_call_with_constructors(
     _profile: bool,
 ) -> Result<bool, ethabi::Error> {
     use std::convert::TryFrom;
-    let rt_env = RuntimeEnvironment::new();
+    let rt_env = RuntimeEnvironment::new(Uint256::from_usize(1111));
     let mut machine = load_from_file(Path::new("arb_os/arbos.mexe"), rt_env);
     machine.start_at_zero();
 
@@ -116,7 +115,7 @@ pub fn evm_test_create(
     debug: bool,
     _profile: bool,
 ) -> Result<bool, ethabi::Error> {
-    let rt_env = RuntimeEnvironment::new();
+    let rt_env = RuntimeEnvironment::new(Uint256::from_usize(1111));
     let mut machine = load_from_file(Path::new("arb_os/arbos.mexe"), rt_env);
     machine.start_at_zero();
 
@@ -178,7 +177,7 @@ pub fn evm_xcontract_call_using_batch(
     _profile: bool,
 ) -> Result<bool, ethabi::Error> {
     use std::convert::TryFrom;
-    let rt_env = RuntimeEnvironment::new();
+    let rt_env = RuntimeEnvironment::new(Uint256::from_usize(1111));
     let mut machine = load_from_file(Path::new("arb_os/arbos.mexe"), rt_env);
     machine.start_at_zero();
 
@@ -269,7 +268,7 @@ pub fn evm_xcontract_call_using_batch(
 }
 
 pub fn evm_direct_deploy_add(log_to: Option<&Path>, debug: bool) {
-    let rt_env = RuntimeEnvironment::new();
+    let rt_env = RuntimeEnvironment::new(Uint256::from_usize(1111));
     let mut machine = load_from_file(Path::new("arb_os/arbos.mexe"), rt_env);
     machine.start_at_zero();
 
@@ -294,7 +293,7 @@ pub fn evm_direct_deploy_add(log_to: Option<&Path>, debug: bool) {
 
 pub fn evm_test_arbsys(log_to: Option<&Path>, debug: bool) {
     use std::convert::TryFrom;
-    let rt_env = RuntimeEnvironment::new();
+    let rt_env = RuntimeEnvironment::new(Uint256::from_usize(1111));
     let mut machine = load_from_file(Path::new("arb_os/arbos.mexe"), rt_env);
     machine.start_at_zero();
 
@@ -348,7 +347,7 @@ pub fn evm_test_arbsys(log_to: Option<&Path>, debug: bool) {
                             .unwrap();
                         assert_eq!(
                             decoded_result[0],
-                            ethabi::Token::Uint(ethabi::Uint::try_from(3).unwrap())
+                            ethabi::Token::Uint(ethabi::Uint::try_from(2).unwrap())
                         );
                     }
                     None => {
@@ -404,7 +403,7 @@ pub fn evm_test_arbsys(log_to: Option<&Path>, debug: bool) {
 
 pub fn evm_direct_deploy_and_call_add(log_to: Option<&Path>, debug: bool) {
     use std::convert::TryFrom;
-    let rt_env = RuntimeEnvironment::new();
+    let rt_env = RuntimeEnvironment::new(Uint256::from_usize(1111));
     let mut machine = load_from_file(Path::new("arb_os/arbos.mexe"), rt_env);
     machine.start_at_zero();
 
@@ -478,7 +477,7 @@ pub fn mint_erc20_and_get_balance(debug: bool) {
     let me = Uint256::from_usize(1025);
     let million = Uint256::from_usize(1000000);
 
-    let mut rt_env = RuntimeEnvironment::new();
+    let mut rt_env = RuntimeEnvironment::new(Uint256::from_usize(1111));
     rt_env.insert_erc20_deposit_message(me.clone(), token_addr.clone(), me.clone(), million);
     let mut calldata: Vec<u8> = vec![0x70, 0xa0, 0x82, 0x31]; // code for balanceOf method
     calldata.extend(me.to_bytes_be());
