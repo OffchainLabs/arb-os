@@ -105,6 +105,12 @@ impl Uint256 {
         }
     }
 
+    #[cfg(test)]
+    pub fn rlp_encode(&self) -> Vec<u8> {
+        // RLP encode the minimal byte representation of self
+        rlp::encode(&self.val.to_bytes_be())
+    }
+
     pub fn zero() -> Self {
         Uint256 {
             val: BigUint::zero(),

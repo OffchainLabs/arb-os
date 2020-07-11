@@ -1,0 +1,50 @@
+//
+// Copyright 2020, Offchain Labs, Inc.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//    http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+//
+
+import type ByteArray;
+import type ByteStream;
+import type MarshalledBytes;
+
+import func bytearray_new(capacity: uint) -> ByteArray;
+import func bytearray_marshalFull(ba: ByteArray) -> MarshalledBytes;
+
+import func bytestream_new(ba: ByteArray) -> ByteStream;
+
+import func rlp_encodeUint(val: uint, ba: ByteArray, offset: uint) -> (ByteArray, uint);
+import func rlp_encodeAddress(addr: address, ba: ByteArray, offset: uint) -> (ByteArray, uint);
+
+import func rlp_decodeUint(bs: ByteStream) -> option<(ByteStream, uint)>;
+import func rlp_decodeAddress(bs: ByteStream) -> option<(ByteStream, address)>;
+
+import func bytesNeededToRepresentUint(val: uint) -> uint;
+
+
+impure func main(ui: uint) {
+    let ba = bytearray_new(0);
+    let (uba, _) = rlp_encodeUint(ui, ba, 0);
+    ba = uba;
+
+    // decode and verify no difference
+    if let Some(res) = rlp_decodeUint(bytestream_new(ba)) {
+        if (res.1 == ui) {
+            asm(bytearray_marshalFull(ba),) { log };
+        } else {
+            asm(0,) { log };
+        }
+    } else {
+        asm(1,) { log };
+    }
+}
