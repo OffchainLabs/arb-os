@@ -233,10 +233,10 @@ pub fn evm_xcontract_call_using_batch(
     )?;
     pc_contract.add_function_call_to_batch(
         &mut batch,
-        my_addr,
+        my_addr.clone(),
         "transferFib",
         vec![
-            ethabi::Token::Address(ethabi::Address::from_low_u64_be(1025)),
+            ethabi::Token::Address(ethereum_types::H160::from_slice(&my_addr.to_bytes_minimal())),
             ethabi::Token::Uint(ethabi::Uint::try_from(1).unwrap()),
         ]
         .as_ref(),
@@ -257,6 +257,7 @@ pub fn evm_xcontract_call_using_batch(
         machine.run(None)
     };
     let logs = machine.runtime_env.get_all_logs();
+    println!("log[0]: {}", logs[0]);
     let sends = machine.runtime_env.get_all_sends();
     let logs = &logs[num_logs_before..];
     let sends = &sends[num_sends_before..];

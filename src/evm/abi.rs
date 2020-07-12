@@ -382,7 +382,7 @@ impl AbiForContract {
             Uint256::zero(),
             self.address.clone(),
             payment,
-            &calldata,
+            calldata,
             private_key,
         );
 

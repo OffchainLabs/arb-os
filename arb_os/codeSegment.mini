@@ -140,7 +140,7 @@ public impure func translateEvmCodeSegment(
 
     let numBytesRead = bytestream_bytesReadSoFar(bs);
         // for debugging, uncomment this to get a debugprint before each EVM instruction
-        // restOfCode = pushInstructionImm(0x90, (42, numBytesRead, opcode), restOfCode);
+        /// restOfCode = pushInstructionImm(0x90, (42, numBytesRead, opcode), restOfCode);
 
     if (opcode < 0x80) {
         if (opcode < 0x40) {

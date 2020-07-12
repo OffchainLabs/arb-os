@@ -464,6 +464,7 @@ public impure func evmCallStack_returnFromCall(
                         uint(topFrame.runningAs)
                     );
 
+                    asm(4000,) { debugprint };
                     // Emit log item reporting success
                     emitLog(
                         globalCurrentEthMessage,
@@ -509,6 +510,7 @@ public impure func evmCallStack_returnFromCall(
                 }
 
                 // Emit a log item reporting success
+                asm(5000,) { debugprint };
                 emitLog(
                     globalCurrentEthMessage,
                     0,

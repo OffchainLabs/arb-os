@@ -106,7 +106,6 @@ impl Uint256 {
         }
     }
 
-    #[cfg(test)]
     pub fn to_bytes_minimal(&self) -> Vec<u8> {
         self.val.to_bytes_be()
     }

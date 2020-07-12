@@ -20,6 +20,8 @@ use serde::{Deserialize, Serialize};
 use std::convert::TryInto;
 use std::{collections::HashMap, fs::File, io, path::Path};
 use ethers_core::types::PrivateKey;
+use rlp::RlpStream;
+use ethers_core::utils::hash_message;
 
 #[derive(Debug, Clone)]
 pub struct RuntimeEnvironment {
@@ -104,10 +106,11 @@ impl RuntimeEnvironment {
         gas_price_bid: Uint256,
         to_addr: Uint256,
         value: Uint256,
-        calldata: &[u8],
+        calldata: Vec<u8>,
         private_key: PrivateKey,
     ) {
         let calldata_size: u64 = calldata.len().try_into().unwrap();
+        assert_eq!(calldata_size.to_be_bytes().len(), 8);
         let seq_num = self.get_and_incr_seq_num(&sender_addr);
         batch.extend(&calldata_size.to_be_bytes());
         batch.extend(vec![0u8]);
@@ -116,10 +119,28 @@ impl RuntimeEnvironment {
         batch.extend(seq_num.to_bytes_be());
         batch.extend(to_addr.to_bytes_be());
         batch.extend(value.to_bytes_be());
-        batch.extend_from_slice(calldata);
+        batch.extend(calldata.clone());
 
+        let mut stream = RlpStream::new_list(9);
+        stream
+            .append(&seq_num.to_bytes_minimal())
+            .append(&gas_price_bid.to_bytes_minimal())
+            .append(&max_gas.to_bytes_minimal())
+            .append(&to_addr.to_bytes_minimal())
+            .append(&value.to_bytes_minimal())
+            .append(&calldata)
+            .append(&Uint256::zero().to_bytes_minimal())
+            .append(&Uint256::zero().to_bytes_minimal())
+            .append(&self.chain_address.to_bytes_minimal())
+        ;
+        let rlp_bytes = stream.out();
+        println!("Size of RLP encoded info: {}", rlp_bytes.clone().len());
+        println!("RLP encoded info: {:x?}", rlp_bytes.clone());
+        println!("Hash of RLP encoded info: {}", Uint256::from_bytes(hash_message(rlp_bytes.clone()).as_bytes()));
+        let signature = private_key.sign(rlp_bytes);
+        assert_eq!(signature.to_vec().len(), 65);
 
-        batch.extend(vec![0u8; 65]);
+        batch.extend(signature.to_vec());
     }
 
     pub fn insert_batch_message(&mut self, sender_addr: Uint256, batch: &[u8]) {

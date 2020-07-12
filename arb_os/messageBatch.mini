@@ -94,13 +94,17 @@ public func messageBatch_get(batch: MessageBatch) -> option<(MessageFromL1, Mess
         return None;   // sub-message must be of subtype 0
     }
 
+    asm(10,) { debugprint };
     let signer = recoverSigner(extractedL2data, extractedSig)?;
+
+    let marshalledMsgData = bytearray_marshalFull(extractedL2data);
+    asm(11,) { debugprint };
 
     return Some((
         batch.template with {
             sender: signer
         } with {
-            msgData: bytearray_marshalFull(extractedL2data)
+            msgData: marshalledMsgData
         },
         batch with {
             stream: stream
@@ -125,14 +129,18 @@ func recoverSigner(msgData: ByteArray, signature: ByteArray) -> option<address> 
         0,
         uint(chainParams_chainAddress()),  // use chainAddress as the chain ID
     );
+    asm(20,) { debugprint };
+    let rlpHash = keccak256(rlpEncoded, 0, bytearray_size(rlpEncoded));
+    asm(30,) { debugprint };
 
     let signer = asm(
         bytearray_get256(signature, 0),
         bytearray_get256(signature, 32),
-        bytearray_getByte(signature, 64),
-        keccak256(rlpEncoded, 0, bytearray_size(rlpEncoded)),
+        bytearray_getByte(signature, 64) - 27,
+        rlpHash,
     ) address { ecrecover };
 
+    asm(40,) { debugprint };
     if (signer == address(0)) {
         return None;
     } else {
