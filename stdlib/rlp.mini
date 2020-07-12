@@ -17,7 +17,10 @@
 import type ByteArray;
 import type ByteStream;
 
+import func builtin_arrayGetSafe(arr: []any, index: uint) -> option<any>;
+
 import func bytearray_new(capacity: uint) -> ByteArray;
+import func bytearray_size(ba: ByteArray) -> uint;
 import func bytearray_getByte(ba: ByteArray, offset: uint) -> uint;
 import func bytearray_get256(ba: ByteArray, offset: uint) -> uint;
 import func bytearray_setByte(ba: ByteArray, offset: uint, val: uint) -> ByteArray;
@@ -124,6 +127,95 @@ public func rlp_decodeBytes(inStream: ByteStream) -> option<(ByteStream, ByteArr
         i = i+1;
     }
     return copyFromStreamToArray(inStream, result, 0, nbytes);
+}
+
+public func rlp_encodeList(
+    encodedItems: []ByteArray,
+    encItemsOffset: uint,
+    numEncItems: uint,
+    outBytes: ByteArray,
+    outOffset: uint,
+) -> option<(ByteArray, uint)> {
+    let totalSize = 0;
+    let totalWritten = 0;
+    let i = 0;
+    while (i < numEncItems) {
+        let item = unsafecast<ByteArray>(builtin_arrayGetSafe(encodedItems, encItemsOffset+i)?);
+        totalSize = totalSize + bytearray_size(item);
+        i = i+1;
+    }
+
+    if (totalSize <= 55) {
+        outBytes = bytearray_setByte(outBytes, outOffset, 0xc0 + totalSize);
+        outOffset = outOffset+1;
+        totalWritten = 1 + totalSize;
+    } else {
+        let sizeOfSize = bytesNeededToRepresentUint(totalSize);
+        outBytes = bytearray_setByte(outBytes, outOffset, 0xf7 + sizeOfSize);
+        outOffset = outOffset+1;
+        let i = sizeOfSize;
+        while (i > 0) {
+            i = i-1;
+            let b = (totalSize / asm(256, i) uint { exp }) & 0xff;
+            outBytes = bytearray_setByte(outBytes, outOffset, b);
+            outOffset = outOffset+1;
+        }
+        totalWritten = 1 + sizeOfSize + totalSize;
+    }
+
+    let i = 0;
+    while (i < numEncItems) {
+        let item = encodedItems[encItemsOffset+i];  // safe, because we already read this item above
+        let size = bytearray_size(item);
+        outBytes = bytearray_copy(item, 0, outBytes, outOffset, size);
+        outOffset = outOffset + size;
+        i = i+1;
+    }
+
+    return Some((outBytes, totalWritten));
+}
+
+public func rlp_encodeMessageInfo(
+    seqNum: uint,
+    gasPrice: uint,
+    gasLimit: uint,
+    to: address,
+    value: uint,
+    data: ByteArray,
+    v: uint,
+    r: uint,
+    s: uint
+) -> ByteArray {
+    // create an array of ByteArrays; unsafecast is needed as a workaround for issue #120
+    // after #120 is fixed, use this:  let encodedPieces = newarray<ByteArray>(9);
+    let encodedPieces = unsafecast<[]ByteArray>(newarray<any>(9));
+
+    encodedPieces = encodedPieces with {
+        [0] = rlp_encodeUint(seqNum, bytearray_new(0), 0).0
+    } with {
+        [1] = rlp_encodeUint(gasPrice, bytearray_new(0), 0).0
+    } with {
+        [2] = rlp_encodeUint(gasLimit, bytearray_new(0), 0).0
+    } with {
+        [3] = rlp_encodeAddress(to, bytearray_new(0), 0).0
+    } with {
+        [4] = rlp_encodeUint(value, bytearray_new(0), 0).0
+    } with {
+        [5] = rlp_encodeBytes(data, 0, bytearray_size(data), bytearray_new(0), 0).0
+    } with {
+        [6] = rlp_encodeUint(v, bytearray_new(0), 0).0
+    } with {
+        [7] = rlp_encodeUint(r, bytearray_new(0), 0).0
+    } with {
+        [8] = rlp_encodeUint(s, bytearray_new(0), 0).0
+    };
+
+    if let Some(res) = rlp_encodeList(encodedPieces, 0, 9, bytearray_new(0), 0) {
+        return res.0;
+    } else {
+        // This can't happen, because we know encodedPieces is big enough that accesses will be in-bounds
+        panic;
+    }
 }
 
 func copyFromStreamToArray(

@@ -19,6 +19,7 @@ use crate::run::{bytestack_from_bytes, run_from_file, RuntimeEnvironment};
 use crate::uint256::Uint256;
 use std::path::Path;
 use std::convert::TryInto;
+use rlp::RlpStream;
 
 #[test]
 fn test_arraytest() {
@@ -202,6 +203,8 @@ fn test_rlp() {
             .mul(&Uint256::from_usize(19482103))
             .add(&Uint256::from_usize(91));
     }
+    let ui = Uint256::from_usize(4313412);
+    test_rlp_uint(ui.clone(), ui.rlp_encode());
 
     let mut byte_testvecs = vec![
         vec![0u8],
@@ -215,11 +218,31 @@ fn test_rlp() {
     for i in 0u64..2198 {
         new_test_vec.push(((73*i) % 256).try_into().unwrap());
     }
-    byte_testvecs.push(new_test_vec);
+    byte_testvecs.push(new_test_vec.clone());
     for testvec in byte_testvecs {
         let res = rlp::encode(&testvec);
         test_rlp_bytearray(testvec, res);
     }
+
+    let list3_testvecs = vec![
+        (Uint256::zero(), vec![243u8], Uint256::one()),
+        (Uint256::from_usize(9831498), vec![3u8], Uint256::from_usize(4313412)),
+        (Uint256::from_usize(9831498), new_test_vec, Uint256::from_usize(4313412)),
+    ];
+    for testvec in list3_testvecs {
+        let res = encode_list3(testvec.clone());
+        test_rlp_list3(testvec, res);
+    }
+}
+
+#[cfg(test)]
+fn encode_list3(testvec: (Uint256, Vec<u8>, Uint256)) -> Vec<u8> {
+    let mut stream = RlpStream::new_list(3);
+    stream
+        .append(&testvec.0.to_bytes_minimal())
+        .append(&testvec.1)
+        .append(&testvec.2.to_bytes_minimal());
+    stream.out()
 }
 
 #[cfg(test)]
@@ -247,6 +270,32 @@ fn test_rlp_bytearray(input: Vec<u8>, correct_result: Vec<u8>) {
     let res = run_from_file(
         path,
         vec![Value::Int(Uint256::one()), bytestack_from_bytes(&input)],
+        RuntimeEnvironment::new(Uint256::from_usize(1111)),
+        false,
+    );
+    match res {
+        Ok(res) => {
+            assert_eq!(res[0], bytestack_from_bytes(&correct_result));
+        }
+        Err(e) => {
+            panic!("{}\n{}", e.0, e.1);
+        }
+    }
+}
+
+#[cfg(test)]
+fn test_rlp_list3(testvec: (Uint256, Vec<u8>, Uint256), correct_result: Vec<u8>) {
+    let path = Path::new("stdlib/rlptest.mexe");
+    let res = run_from_file(
+        path,
+        vec![
+            Value::Int(Uint256::from_usize(2)),
+            Value::new_tuple(vec![
+                Value::Int(testvec.0),
+                bytestack_from_bytes(&testvec.1),
+                Value::Int(testvec.2),
+            ])
+        ],
         RuntimeEnvironment::new(Uint256::from_usize(1111)),
         false,
     );

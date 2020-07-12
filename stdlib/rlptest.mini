@@ -32,6 +32,13 @@ import func rlp_encodeBytes(
     inBytes: ByteArray, inOffset: uint, nbytes: uint,
     outBytes: ByteArray, outOffset: uint
 ) -> (ByteArray, uint);
+import func rlp_encodeList(
+    encodedItems: []ByteArray,
+    encItemsOffset: uint,
+    numEncItems: uint,
+    outBytes: ByteArray,
+    outOffset: uint,
+) -> option<(ByteArray, uint)>;
 
 import func rlp_decodeUint(bs: ByteStream) -> option<(ByteStream, uint)>;
 import func rlp_decodeAddress(bs: ByteStream) -> option<(ByteStream, address)>;
@@ -78,6 +85,22 @@ impure func main(kind: uint, value: any) {
             }
         } else {
             asm(3,) { log };
+        }
+    } elseif (kind == 2) {
+        let vals = unsafecast<(uint, MarshalledBytes, uint)>(value);
+        let data = bytearray_unmarshalBytes(vals.1);
+        let encodedPieces = unsafecast<[]ByteArray>(newarray<any>(3));  // workaround issue #120
+        encodedPieces = encodedPieces with {
+            [0] = rlp_encodeUint(vals.0, bytearray_new(0), 0).0
+        } with {
+            [1] = rlp_encodeBytes(data, 0, bytearray_size(data), bytearray_new(0), 0).0
+        } with {
+            [2] = rlp_encodeUint(vals.2, bytearray_new(0), 0).0
+        };
+        if let Some(res) = rlp_encodeList(encodedPieces, 0, 3, bytearray_new(0), 0) {
+            asm(bytearray_marshalFull(res.0),) { log };
+        } else {
+            asm(4,) { log };
         }
     }
 }
