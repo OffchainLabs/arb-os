@@ -24,6 +24,8 @@ import type ByteStream;
 import type MarshalledBytes;
 import type Stack;
 
+import impure func errorHandler();
+
 import impure func getGlobalAccountStore() -> AccountStore;
 import impure func setGlobalAccountStore(acctStore: AccountStore);
 import func accountStore_get(store: AccountStore, addr: address) -> Account;
@@ -286,6 +288,7 @@ public impure func evmCallStack_doCall(
     }
 
     if (kind == 1) {
+        errorHandler();  // should never return
         panic;  // callcode call type not yet implemented
     }
 
@@ -353,6 +356,7 @@ public impure func evmCallStack_doCall(
     let _ = gasAccounting_resumeTxCharges(gas);
     startCodePoint();
 
+    errorHandler();
     panic;
 }
 
@@ -414,6 +418,7 @@ public impure func evmCallStack_returnFromCall(
         let _ = gasAccounting_resumeTxCharges(leftoverGas + resumeInfo.savedGas);
         asm(resumeInfo.codePoint,) { jump };         // jump to resume point in caller; this should never return
 
+        errorHandler();
         panic;  // shouldn't happen -- previous instruction jumped away
     } else {
         // top-level call completed; will need to return to external caller
@@ -431,7 +436,7 @@ public impure func evmCallStack_returnFromCall(
                     if let Some(sm) = account_getAllStorage(topFrame.runningAsAccount) {
                         storageMap = sm;
                     } else {
-                        // Somehow the constructor didn't have storage; report error and panic.
+                        // Somehow the constructor didn't have storage; report error and recover.
                         emitLog(
                             globalCurrentEthMessage,
                             6,
@@ -440,6 +445,7 @@ public impure func evmCallStack_returnFromCall(
                             gasUsed,
                             gasPrice
                         );
+                        errorHandler();
                         panic;
                     }
 
@@ -533,6 +539,7 @@ public impure func evmCallStack_returnFromCall(
         // Now discard any AVM stack contents and jump back to the main run loop.
         emptyAvmStack();
         cleanAvmAuxStackAndCall(mainRunLoop,);  // should never return
+        errorHandler();
         panic;
     }
 }
@@ -701,6 +708,7 @@ public impure func evmCallStack_getTopFrameMemoryOrDie() -> ByteArray {
     if let Some(topFrame) = globalCallStack {
         return topFrame.memory;
     } else {
+        errorHandler();
         panic;
     }
 }
@@ -872,6 +880,7 @@ public impure func evmCallStack_callHitError() {
         // recover by clearing the evmCallStack, refunding unused gas, and jumping back to the error handler
         globalCallStack = None<EvmCallFrame>;
         let _ = gasAccounting_endTxCharges();
+        errorHandler();
         panic;
     }
 }
