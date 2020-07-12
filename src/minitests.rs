@@ -15,9 +15,10 @@
  */
 
 use crate::mavm::Value;
-use crate::run::{run_from_file, RuntimeEnvironment, bytestack_from_bytes};
+use crate::run::{bytestack_from_bytes, run_from_file, RuntimeEnvironment};
 use crate::uint256::Uint256;
 use std::path::Path;
+use std::convert::TryInto;
 
 #[test]
 fn test_arraytest() {
@@ -191,24 +192,68 @@ fn test_keccak() {
 }
 
 #[test]
-fn test_rlp_uints() {
+fn test_rlp() {
     let mut ui = Uint256::one();
     for _i in 0..100 {
         test_rlp_uint(ui.clone(), ui.rlp_encode());
-        let ui2 = ui.div(&Uint256::from_usize(2048)).unwrap();  // a valid address
+        let ui2 = ui.div(&Uint256::from_usize(2048)).unwrap(); // a valid address
         test_rlp_uint(ui2.clone(), ui2.rlp_encode());
-        ui = ui.mul(&Uint256::from_usize(19482103)).add(&Uint256::from_usize(91));
+        ui = ui
+            .mul(&Uint256::from_usize(19482103))
+            .add(&Uint256::from_usize(91));
+    }
+
+    let mut byte_testvecs = vec![
+        vec![0u8],
+        vec![13u8],
+        vec![243u8],
+        "Hello".as_bytes().to_vec(),
+        "The quick brown fox jumped over the lazy dog.".as_bytes().to_vec(),
+        vec![77u8; 692],
+    ];
+    let mut new_test_vec: Vec<u8> = Vec::new();
+    for i in 0u64..2198 {
+        new_test_vec.push(((73*i) % 256).try_into().unwrap());
+    }
+    byte_testvecs.push(new_test_vec);
+    for testvec in byte_testvecs {
+        let res = rlp::encode(&testvec);
+        test_rlp_bytearray(testvec, res);
     }
 }
 
 #[cfg(test)]
 fn test_rlp_uint(ui: Uint256, correct_result: Vec<u8>) {
     let path = Path::new("stdlib/rlptest.mexe");
-    let res = run_from_file(path, vec![Value::Int(ui)], RuntimeEnvironment::new(Uint256::from_usize(1111)), false);
+    let res = run_from_file(
+        path,
+        vec![Value::Int(Uint256::zero()), Value::Int(ui)],
+        RuntimeEnvironment::new(Uint256::from_usize(1111)),
+        false,
+    );
     match res {
         Ok(res) => {
             assert_eq!(res[0], bytestack_from_bytes(&correct_result));
-        },
+        }
+        Err(e) => {
+            panic!("{}\n{}", e.0, e.1);
+        }
+    }
+}
+
+#[cfg(test)]
+fn test_rlp_bytearray(input: Vec<u8>, correct_result: Vec<u8>) {
+    let path = Path::new("stdlib/rlptest.mexe");
+    let res = run_from_file(
+        path,
+        vec![Value::Int(Uint256::one()), bytestack_from_bytes(&input)],
+        RuntimeEnvironment::new(Uint256::from_usize(1111)),
+        false,
+    );
+    match res {
+        Ok(res) => {
+            assert_eq!(res[0], bytestack_from_bytes(&correct_result));
+        }
         Err(e) => {
             panic!("{}\n{}", e.0, e.1);
         }

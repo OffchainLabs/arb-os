@@ -18,8 +18,15 @@ import type ByteArray;
 import type ByteStream;
 
 import func bytearray_new(capacity: uint) -> ByteArray;
+import func bytearray_getByte(ba: ByteArray, offset: uint) -> uint;
+import func bytearray_get256(ba: ByteArray, offset: uint) -> uint;
 import func bytearray_setByte(ba: ByteArray, offset: uint, val: uint) -> ByteArray;
+import func bytearray_set256(ba: ByteArray, offset: uint, val: uint) -> ByteArray;
+import func bytearray_copy(from: ByteArray, fromOffset: uint, to: ByteArray, toOffset: uint, nbytes: uint) -> ByteArray;
+
 import func bytestream_getByte(bs: ByteStream) -> option<(ByteStream, uint)>;
+import func bytestream_get256(bs: ByteStream) -> option<(ByteStream, uint)>;
+
 import impure func keccak256(ba: ByteArray, offset: uint, nbytes: uint) -> bytes32;
 
 
@@ -50,6 +57,99 @@ public func rlp_encodeAddress(addr: address, ba: ByteArray, offset: uint) -> (By
     return rlp_encodeUint(uint(addr), ba, offset);
 }
 
+public func rlp_encodeBytes(
+    inBytes: ByteArray, inOffset: uint, nbytes: uint,
+    outBytes: ByteArray, outOffset: uint
+) -> (ByteArray, uint) {
+    if (nbytes == 0) {
+        return (
+            bytearray_setByte(outBytes, outOffset, 0x80),
+            1
+        );
+    }
+
+    let firstByte = bytearray_getByte(inBytes, inOffset);
+    if ( (nbytes == 1) && (firstByte <= 0x7f) ) {
+        return (
+            bytearray_setByte(outBytes, outOffset, firstByte),
+            1
+        );
+    }
+
+    if (nbytes <= 55) {
+        outBytes = bytearray_setByte(outBytes, outOffset, 0x80+nbytes);
+        outOffset = outOffset + 1;
+        return (
+            bytearray_copy(inBytes, inOffset, outBytes, outOffset, nbytes),
+            1+nbytes
+        );
+    };
+
+    let sizeOfSize = bytesNeededToRepresentUint(nbytes);
+    outBytes = bytearray_setByte(outBytes, outOffset, 0xb7+sizeOfSize);
+    outOffset = outOffset + 1;
+
+    let i = sizeOfSize;
+    while (i > 0) {
+        i = i-1;
+        outBytes = bytearray_setByte(outBytes, outOffset, (nbytes / asm(256, i) uint { exp }) & 0xff);
+        outOffset = outOffset + 1;
+    }
+    return (
+        bytearray_copy(inBytes, inOffset, outBytes, outOffset, nbytes),
+        1 + sizeOfSize + nbytes
+    );
+}
+
+public func rlp_decodeBytes(inStream: ByteStream) -> option<(ByteStream, ByteArray)> {
+    let (uis, firstByte) = bytestream_getByte(inStream)?;
+    inStream = uis;
+    let result = bytearray_new(0);
+
+    if (firstByte <= 0x7f) {
+        return Some( (inStream, bytearray_setByte(result, 0, firstByte)) );
+    }
+
+    if (firstByte <= 0xb7) {
+        return copyFromStreamToArray(inStream, result, 0, firstByte - 0x80);
+    }
+
+    let sizeOfSize = firstByte - 0xb7;
+    let i = 0;
+    let nbytes = 0;
+    while (i < sizeOfSize) {
+        let (uis, b) = bytestream_getByte(inStream)?;
+        inStream = uis;
+        nbytes = 256*nbytes + b;
+        i = i+1;
+    }
+    return copyFromStreamToArray(inStream, result, 0, nbytes);
+}
+
+func copyFromStreamToArray(
+    inStream: ByteStream,
+    ba: ByteArray,
+    offset: uint,
+    nbytes: uint
+) -> option<(ByteStream, ByteArray)> {
+    let offset = 0;
+    while (nbytes >= 32) {
+        let (uis, word) = bytestream_get256(inStream)?;
+        inStream = uis;
+        ba = bytearray_set256(ba, offset, word);
+        offset = offset + 32;
+        nbytes = nbytes - 32;
+    }
+    while (nbytes > 0) {
+        let (uis, b) = bytestream_getByte(inStream)?;
+        inStream = uis;
+        ba = bytearray_setByte(ba, offset, b);
+        offset = offset + 1;
+        nbytes = nbytes - 1;
+    }
+    return Some( (inStream, ba) );
+}
+
 public func rlp_encodeAddrUintPair(
     addr: address,
     ui: uint,
@@ -67,7 +167,7 @@ public func rlp_encodeAddrUintPair(
     return (ba, 1+rlpAddrLen+rlpUiLen);
 }
 
-public func keccakOfRlpEncodedAddrUintPair(addr: address, ui: uint) -> bytes32 {
+public impure func keccakOfRlpEncodedAddrUintPair(addr: address, ui: uint) -> bytes32 {
     let ba = bytearray_new(64);
     let (uba, nbytes) = rlp_encodeAddrUintPair(addr, ui, ba, 0);
     return keccak256(uba, 0, nbytes);
