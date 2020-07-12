@@ -186,9 +186,8 @@ public func rlp_encodeMessageInfo(
     r: uint,
     s: uint
 ) -> ByteArray {
-    // create an array of ByteArrays; unsafecast is needed as a workaround for issue #120
+    let encodedPieces = unsafecast<[]ByteArray>(newarray<any>(9));  // workaround for issue #120
     // after #120 is fixed, use this:  let encodedPieces = newarray<ByteArray>(9);
-    let encodedPieces = unsafecast<[]ByteArray>(newarray<any>(9));
 
     encodedPieces = encodedPieces with {
         [0] = rlp_encodeUint(seqNum, bytearray_new(0), 0).0
