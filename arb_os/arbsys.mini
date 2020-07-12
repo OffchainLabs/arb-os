@@ -19,6 +19,8 @@ import type Account;
 import type ByteArray;
 import type MarshalledBytes;
 
+import impure func errorHandler();
+
 import impure func evmCallStack_topFrame() -> option<EvmCallFrame>;
 import impure func evmCallStack_setAccount(addr: address, acct: Account) -> bool;
 import impure func evmCallStack_getTopFrameMemoryOrDie() -> ByteArray;
@@ -89,8 +91,8 @@ public impure func arbsys_txcall() {
             evmOp_revert(0, 0);
         }
     } else {
-        // this shouldn't happen -- should be called in an EVM call
-        panic;
+        // this shouldn't happen -- should always be called in an EVM tx
+        errorHandler();
     }
 }
 
@@ -113,7 +115,8 @@ impure func arbsys_withdrawErc20(topFrame: EvmCallFrame, calldata: ByteArray) {
 }
 
 func arbsys_withdrawErc721(topFrame: EvmCallFrame, calldata: ByteArray) {
-    panic;
+    //BUGBUG: not yet implemented
+    errorHandler();
 }
 
 impure func arbsys_withdrawEth(topFrame: EvmCallFrame, calldata: ByteArray) {
