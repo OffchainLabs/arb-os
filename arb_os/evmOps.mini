@@ -915,7 +915,7 @@ func evm_runtimePanic() {
     // This should be called when something that "shouldn't ever happen" has occurred.
     // It should only be called if something has gone wrong in the trusted code.
     // If untrusted code has encountered an error, that will be handled elsewhere.
-    panic;
+    errorHandler();
 }
 
 func evm_notYetImplemented(op: uint) {

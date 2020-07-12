@@ -24,6 +24,8 @@ import type ByteStream;
 import type MarshalledBytes;
 import type Stack;
 
+import impure func errorHandler();
+
 import impure func getGlobalAccountStore() -> AccountStore;
 import impure func setGlobalAccountStore(acctStore: AccountStore);
 import func accountStore_get(store: AccountStore, addr: address) -> Account;
@@ -153,13 +155,16 @@ public impure func initEvmCallStack(
     gasPrice: uint,
 ) {
     // Set up the call frame for a top-level call, and launch the call's execution.
+    asm(6000,) { debugprint };
     if let Some(entryPoint) = account_getStartCodePoint(
         accountStore_get(
             getGlobalAccountStore(),
             addr
         )
     ) {
+        asm(6001,) { debugprint };
         if (gasAccounting_startTxCharges(gas, gasPrice, caller) != None<()>) {
+            asm(6002,) { debugprint };
             globalCurrentEthMessage = ethMessage;
             // pay callvalue from caller to the called contract
             // payment will only be recorded inside the callframe, so it will be discarded if the call reverts
@@ -169,6 +174,7 @@ public impure func initEvmCallStack(
                 addr,
                 callvalue
             ) {
+                asm(6003,) { debugprint };
                 globalCallStack = Some(struct {
                     runningAs: addr,
                     runningCodeFrom: addr,
@@ -188,11 +194,14 @@ public impure func initEvmCallStack(
 
                 entryPoint();  // start executing the call; should never return
             } else {
+                asm(6004,) { debugprint };
                 if let Some(res) = gasAccounting_endTxCharges() {
+                    asm(6005,) { debugprint };
                     // insufficient balance error
                     let (gasUsed, gasPrice) = res;
                     emitLog(ethMessage, 4, None<ByteArray>, None<EvmLogs>, gasUsed, gasPrice);
                 } else {
+                    asm(6006,) { debugprint };
                     // unknown error type
                     emitLog(ethMessage, 255, None<ByteArray>, None<EvmLogs>, 0, 0);
                 }
@@ -351,7 +360,7 @@ public impure func evmCallStack_doCall(
     // jump to the called code's startCodePoint -- this should never return
     let startCodePoint = account_getStartCodePoint(callee)?;
     let _ = gasAccounting_resumeTxCharges(gas);
-    startCodePoint();
+    startCodePoint();  // should never return
 
     panic;
 }
@@ -440,6 +449,7 @@ public impure func evmCallStack_returnFromCall(
                             gasUsed,
                             gasPrice
                         );
+                        evmCallStack_callHitError();  // should never return
                         panic;
                     }
 
@@ -869,11 +879,15 @@ public func evmCallFrame_getParent(frame: EvmCallFrame) -> option<EvmCallFrame> 
 }
 
 public impure func evmCallStack_callHitError() {
+    asm(9000,) { debugprint };
     if (evmCallStack_returnFromCall(false, 0, 0) == None<()>) {
+        asm(9001,) { debugprint };
         // something has gone seriously wrong with the evmCallStack
         // recover by clearing the evmCallStack, refunding unused gas, and jumping back to the error handler
         globalCallStack = None<EvmCallFrame>;
         let _ = gasAccounting_endTxCharges();
+        errorHandler();  // should never return
         panic;
     }
+    asm(9002,) { debugprint };
 }

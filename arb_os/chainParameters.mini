@@ -39,6 +39,6 @@ public impure func chainParams_chainAddress() -> address {
     if let Some(params) = globalChainParams {
         return params.chainAddress;
     } else {
-        panic;
+        panic;  // should never happen; and if it does, our chain is hosed anyway
     }
 }
