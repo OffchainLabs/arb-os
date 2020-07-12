@@ -23,6 +23,10 @@ use std::cmp::max;
 use std::collections::{BTreeMap, HashMap};
 use std::fmt;
 use std::io::stdin;
+use ethers_core::types::{Signature, H256, PrivateKey, Address};
+use std::convert::TryInto;
+use ethers_core::rand;
+use ethers_core::utils::hash_message;
 
 #[derive(Debug, Default, Clone)]
 pub struct ValueStack {
@@ -1326,8 +1330,8 @@ impl Machine {
                         let _second_half = self.stack.pop_uint(&self.state)?;
                         let _recover_id = self.stack.pop_uint(&self.state)?;
                         let _msg_hash = self.stack.pop_uint(&self.state)?;
-                        //BUGBUG: this is a sleazy hack to allow limited testing
-                        self.stack.push_uint(Uint256::from_usize(1025));
+                        let result = do_ecrecover(_first_half, _second_half, _recover_id, _msg_hash);
+                        self.stack.push_uint(result);
                         self.incr_pc();
                         Ok(true)
                     }
@@ -1359,6 +1363,73 @@ impl Machine {
             ))
         }
     }
+}
+
+fn do_ecrecover(
+    first_half: Uint256,
+    second_half: Uint256,
+    recover_id: Uint256,
+    msg_hash: Uint256,
+) -> Uint256 {
+    let sig = Signature {
+        r: H256(first_half.to_bytes_be()[..32].try_into().unwrap()),
+        s: H256(second_half.to_bytes_be()[..32].try_into().unwrap()),
+        v: if recover_id == Uint256::zero() { 27u64 } else { 28u64 }
+    };
+    let hash_to_check = H256(msg_hash.to_bytes_be()[..32].try_into().unwrap());
+    match sig.recover(hash_to_check) {
+        Ok(addr) => Uint256::from_bytes(&addr.0),
+        Err(_) => Uint256::zero(),
+    }
+}
+
+#[test]
+fn recover_signature_from_message() {
+    let val = Uint256::from_usize(1398180);
+    let message = val.to_bytes_be();
+    let hash_as_uint = val.avm_hash();
+    let hash = H256(hash_as_uint.to_bytes_be()[..32].try_into().unwrap());
+    let key = PrivateKey::new(&mut rand::thread_rng());
+    let address = Address::from(&key);
+
+    // sign a message
+    let signature = key.sign(message.clone());
+
+    let recovered = signature.recover(message.clone()).unwrap();
+    let recovered2 = signature.recover(hash).unwrap();
+
+    // verifies the signature is produced by `address`
+    signature.verify(message, address).unwrap();
+
+    assert_eq!(recovered, address);
+    assert_eq!(recovered2, address);
+}
+
+#[test]
+fn test_ecrecover() {
+    let val = Uint256::from_usize(1398180);
+    let message = val.to_bytes_be();
+    let hash_as_uint = val.avm_hash();
+    let key = PrivateKey::new(&mut rand::thread_rng());
+    let address = Address::from(&key);
+
+    // sign a message
+    let signature = key.sign(message.clone());
+    let sig_bytes = signature.to_vec();
+
+    let recovered_ui = do_ecrecover(
+        Uint256::from_bytes(&sig_bytes[0..32]),
+        Uint256::from_bytes(&sig_bytes[32..64]),
+        if (sig_bytes[64]==27) { Uint256::zero() } else { Uint256::one() },
+        hash_as_uint
+    );
+
+    // verifies the signature is produced by `address`
+    signature.verify(message, address).unwrap();
+
+    let address_bytes = address.as_bytes();
+    let address_ui = Uint256::from_bytes(address_bytes);
+    assert_eq!(recovered_ui, address_ui);
 }
 
 #[derive(Debug)]

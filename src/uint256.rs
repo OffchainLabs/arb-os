@@ -25,6 +25,7 @@ use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::cmp::Ordering;
 use std::fmt;
 use std::ops::{Add, BitAnd, BitOr, BitXor, Div, Mul, Neg, Rem, Sub};
+use ethers_core::utils::hash_message;
 
 #[derive(Debug, Clone, PartialEq, Eq, Ord, Hash)]
 pub struct Uint256 {
@@ -298,7 +299,7 @@ impl Uint256 {
 
     pub fn avm_hash(&self) -> Self {
         let bytes_buf = self.to_bytes_be();
-        let hash_result = keccak(bytes_buf);
+        let hash_result = hash_message(bytes_buf);  // keccak
         Uint256::from_bytes(hash_result.as_bytes())
     }
 
@@ -306,7 +307,7 @@ impl Uint256 {
         let mut bytes1 = v1.to_bytes_be();
         let bytes2 = v2.to_bytes_be();
         bytes1.extend(bytes2);
-        let hash_result = keccak(bytes1);
+        let hash_result = hash_message(bytes1);
         Uint256::from_bytes(hash_result.as_bytes())
     }
 }

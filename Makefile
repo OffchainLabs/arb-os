@@ -14,8 +14,8 @@ testlogs: all
 evmdebug: all
 	$(CARGORUN) evmdebug
 
-TESTEXES = $(BUILTINDIR)/kvstest.mexe $(BUILTINDIR)/cuckookvstest.mexe $(STDDIR)/queuetest.mexe $(BUILTINDIR)/arraytest.mexe $(BUILTINDIR)/globaltest.mexe $(STDDIR)/priorityqtest.mexe $(STDDIR)/bytearraytest.mexe $(STDDIR)/keccaktest.mexe $(STDDIR)/rlptest.mexe $(BUILTINDIR)/maptest.mexe minitests/codeloadtest.mexe
-BUILTINMAOS = $(BUILTINDIR)/array.mao $(BUILTINDIR)/kvs.mao $(BUILTINDIR)/cuckookvs.mao
+TESTEXES = $(BUILTINDIR)/kvstest.mexe $(STDDIR)/queuetest.mexe $(BUILTINDIR)/arraytest.mexe $(BUILTINDIR)/globaltest.mexe $(STDDIR)/priorityqtest.mexe $(STDDIR)/bytearraytest.mexe $(STDDIR)/keccaktest.mexe $(STDDIR)/rlptest.mexe $(BUILTINDIR)/maptest.mexe minitests/codeloadtest.mexe
+BUILTINMAOS = $(BUILTINDIR)/array.mao $(BUILTINDIR)/kvs.mao
 STDLIBMAOS = $(STDDIR)/bytearray.mao $(STDDIR)/priorityq.mao $(STDDIR)/random.mao $(STDDIR)/queue.mao $(STDDIR)/keccak.mao $(STDDIR)/bytestream.mao $(STDDIR)/stack.mao $(STDDIR)/rlp.mao
 STDLIB = $(STDLIBMAOS)
 
@@ -23,9 +23,6 @@ all: $(TESTEXES) arbos
 
 $(BUILTINDIR)/kvstest.mexe: $(BUILTINMAOS) $(BUILTINDIR)/kvstest.mini
 	$(CARGORUN) compile $(BUILTINDIR)/kvstest.mini -o $(BUILTINDIR)/kvstest.mexe
-
-$(BUILTINDIR)/cuckookvstest.mexe: $(BUILTINMAOS) $(BUILTINDIR)/cuckookvstest.mini
-	$(CARGORUN) compile $(BUILTINDIR)/cuckookvstest.mini $(BUILTINDIR)/cuckookvs.mao -o $(BUILTINDIR)/cuckookvstest.mexe
 
 $(STDDIR)/queuetest.mexe: $(BUILTINMAOS) $(STDDIR)/queuetest.mini $(STDLIB)
 	$(CARGORUN) compile $(STDDIR)/queuetest.mini $(STDLIB) -o $(STDDIR)/queuetest.mexe
@@ -83,9 +80,6 @@ $(BUILTINDIR)/array.mao: $(BUILTINDIR)/array.mini
 
 $(BUILTINDIR)/kvs.mao: $(BUILTINDIR)/kvs.mini
 	$(CARGORUN) compile $(BUILTINDIR)/kvs.mini -c -o $(BUILTINDIR)/kvs.mao
-
-$(BUILTINDIR)/cuckookvs.mao: $(BUILTINDIR)/cuckookvs.mini
-	$(CARGORUN) compile $(BUILTINDIR)/cuckookvs.mini -c -o $(BUILTINDIR)/cuckookvs.mao
 
 ARBOSDIR = arb_os
 ARBOSAOS = $(ARBOSDIR)/main.mao $(ARBOSDIR)/accounts.mao $(ARBOSDIR)/messages.mao $(ARBOSDIR)/inbox.mao $(ARBOSDIR)/evmCallStack.mao $(ARBOSDIR)/evmOps.mao $(ARBOSDIR)/codeSegment.mao $(ARBOSDIR)/evmlogs.mao $(ARBOSDIR)/errorHandler.mao $(ARBOSDIR)/gasAccounting.mao $(ARBOSDIR)/contractTemplates.mao $(ARBOSDIR)/tokens.mao $(ARBOSDIR)/arbsys.mao $(ARBOSDIR)/messageBatch.mao $(ARBOSDIR)/chainParameters.mao

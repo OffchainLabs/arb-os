@@ -19,6 +19,7 @@ use crate::uint256::Uint256;
 use serde::{Deserialize, Serialize};
 use std::convert::TryInto;
 use std::{collections::HashMap, fs::File, io, path::Path};
+use ethers_core::types::PrivateKey;
 
 #[derive(Debug, Clone)]
 pub struct RuntimeEnvironment {
@@ -104,6 +105,7 @@ impl RuntimeEnvironment {
         to_addr: Uint256,
         value: Uint256,
         calldata: &[u8],
+        private_key: PrivateKey,
     ) {
         let calldata_size: u64 = calldata.len().try_into().unwrap();
         let seq_num = self.get_and_incr_seq_num(&sender_addr);
@@ -115,6 +117,8 @@ impl RuntimeEnvironment {
         batch.extend(to_addr.to_bytes_be());
         batch.extend(value.to_bytes_be());
         batch.extend_from_slice(calldata);
+
+
         batch.extend(vec![0u8; 65]);
     }
 

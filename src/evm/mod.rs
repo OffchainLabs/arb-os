@@ -19,6 +19,8 @@ use crate::run::{bytes_from_bytestack, bytestack_from_bytes, load_from_file, Run
 use crate::uint256::Uint256;
 use abi::AbiForContract;
 use std::path::Path;
+use ethers_core::types::{PrivateKey, Address};
+use ethers_core::rand;
 
 mod abi;
 
@@ -171,6 +173,12 @@ pub fn evm_test_create(
     Ok(true)
 }
 
+pub fn generate_private_key_and_address() -> (PrivateKey, Uint256) {
+    let key = PrivateKey::new(&mut rand::thread_rng());
+    let address = Uint256::from_bytes(Address::from(&key).as_bytes());
+    (key, address)
+}
+
 pub fn evm_xcontract_call_using_batch(
     log_to: Option<&Path>,
     debug: bool,
@@ -181,7 +189,7 @@ pub fn evm_xcontract_call_using_batch(
     let mut machine = load_from_file(Path::new("arb_os/arbos.mexe"), rt_env);
     machine.start_at_zero();
 
-    let my_addr = Uint256::from_usize(1025);
+    let (private_key, my_addr) = generate_private_key_and_address();
 
     machine.runtime_env.insert_eth_deposit_message(
         my_addr.clone(),
@@ -221,6 +229,7 @@ pub fn evm_xcontract_call_using_batch(
         &[],
         &mut machine,
         Uint256::from_usize(10000),
+        private_key.clone(),
     )?;
     pc_contract.add_function_call_to_batch(
         &mut batch,
@@ -233,6 +242,7 @@ pub fn evm_xcontract_call_using_batch(
         .as_ref(),
         &mut machine,
         Uint256::zero(),
+        private_key,
     )?;
 
     machine
