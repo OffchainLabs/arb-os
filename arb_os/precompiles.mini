@@ -14,7 +14,31 @@
 // limitations under the License.
 //
 
+import type AccountStore;
+
+import getGlobalAccountStore() -> AccountStore;
+import setGlobalAccountStore(acctStore: AccountStore);
+import accountStore_createBuiltinContract(acctStore: AccountStore, address, impure func()) -> option<AccountStore>;
+
+public impure func precompiles_init() -> option<()> {
+    setGlobalAccountStore(
+        accountStore_createBuiltinContract(
+            getGlobalAccountStore(),
+            address(0x01),
+            precompile_0x01,
+        )?;
+    );
+    setGlobalAccountStore(
+        accountStore_createBuiltinContract(
+            getGlobalAccountStore(),
+            address(100),
+            arbsys_txcall,
+        )?;
+    );
+}
+
 public impure func precompile_0x01() {  // ecrecover
+    // don't bother checking the first four bytes of calldata -- this is the only method in the contract
     if let Some(topFrame) = evmCallStack_topFrame() {
         let calldata = evmCallFrame_getCalldata(topFrame);
         if (bytearray_size(calldata) != 4+3*32+1) {
@@ -25,7 +49,11 @@ public impure func precompile_0x01() {  // ecrecover
         let r = bytearray_get(calldata, 37);
         let s = bytearray_get(calldata, 69);
         let addr = asm(r, s, v-27, h) address { ecrecover };
-        // don't bother checking the first four bytes of calldata
+
+        let success = evmCallStack_setTopFrameMemory(
+            bytearray_set256(bytearray_new(0), 0, 32)
+        );
+        evm_return(0, 32);
     } else {
         evm_revert(0, 0);
     }

@@ -28,6 +28,8 @@ import impure func gasAccounting_init();
 import impure func evmCallStack_init();
 import impure func inbox_init();
 import impure func accountStore_init();
+import impure func precompiles_init() -> option<()>;
+
 import impure func getGlobalAccountStore() -> AccountStore;
 import impure func setGlobalAccountStore(acctStore: AccountStore);
 import func accountStore_createAccountFromEvmCode(
@@ -154,8 +156,8 @@ impure func initializeContractTemplates() -> option<()> {
         getArbInfoStorage()
     )?;
 
-    // set up ArbSys builtin contract
-    acctStore = accountStore_createBuiltinContract(acctStore, address(100), arbsys_txcall)?;
+    // set up precompiled contracts
+    precompiles_init();
 
     setGlobalAccountStore(acctStore);
     return Some(());
