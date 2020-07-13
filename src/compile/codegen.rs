@@ -475,7 +475,7 @@ fn mavm_codegen_statements(
             ));
             code.push(Instruction::from_opcode_imm(
                 Opcode::SetLocal,
-                slot_num,
+                slot_num.clone(),
                 *loc,
             ));
             code.push(Instruction::from_opcode_imm(
@@ -510,9 +510,9 @@ fn mavm_codegen_statements(
             )?;
             label_gen = lg;
             code = c;
-            code.push(Instruction::from_opcode_imm(
+            code.push(Instruction::from_opcode_imm(Opcode::GetLocal, slot_num, *loc));
+            code.push(Instruction::from_opcode(
                 Opcode::AVMOpcode(AVMOpcode::Cjump),
-                Value::Label(top_label),
                 *loc,
             ));
             let (lg, nl, more, hm) = mavm_codegen_statements(
