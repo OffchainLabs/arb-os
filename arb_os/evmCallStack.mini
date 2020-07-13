@@ -205,6 +205,51 @@ public impure func initEvmCallStack(
             emitLog(ethMessage, 3, None<ByteArray>, None<EvmLogs>, 0, 0);
             evmCallStack_callHitError();
         }
+    } else {
+        // no contract at this address
+        if (callvalue > 0) {
+            // transfer value to destination address
+            if let Some(globalAS) = accountStore_transferEthBalance(
+                getGlobalAccountStore(),
+                caller,
+                addr,
+                callvalue
+            ) {
+                if let Some(res) = gasAccounting_endTxCharges() {
+                    // insufficient balance error
+                    let (gasUsed, gasPrice) = res;
+                    emitLog(ethMessage, 0, None<ByteArray>, None<EvmLogs>, gasUsed, gasPrice);
+                    emptyAvmStack();
+                    cleanAvmAuxStackAndCall(mainRunLoop,);  // should never return
+                } else {
+                    // unknown error type
+                    emitLog(ethMessage, 255, None<ByteArray>, None<EvmLogs>, 0, 0);
+                    evmCallStack_callHitError();
+               }
+            } else {
+               if let Some(res) = gasAccounting_endTxCharges() {
+                    // insufficient balance error
+                    let (gasUsed, gasPrice) = res;
+                    emitLog(ethMessage, 4, None<ByteArray>, None<EvmLogs>, gasUsed, gasPrice);
+                } else {
+                    // unknown error type
+                    emitLog(ethMessage, 255, None<ByteArray>, None<EvmLogs>, 0, 0);
+                }
+                evmCallStack_callHitError();
+            }
+        } else {
+            if let Some(res) = gasAccounting_endTxCharges() {
+                // insufficient balance error
+                let (gasUsed, gasPrice) = res;
+                emitLog(ethMessage, 0, None<ByteArray>, None<EvmLogs>, gasUsed, gasPrice);
+                emptyAvmStack();
+                cleanAvmAuxStackAndCall(mainRunLoop,);  // should never return
+            } else {
+                // unknown error type
+                emitLog(ethMessage, 255, None<ByteArray>, None<EvmLogs>, 0, 0);
+                evmCallStack_callHitError();
+            }
+        }
     }
 }
 
