@@ -28,6 +28,7 @@ import impure func evmCallStack_setTopFrameMemory(mem: ByteArray) -> bool;
 import impure func evmCallStack_cloneContract(addr: address) -> option<address>;
 
 import func evmCallFrame_getCalldata(frame: EvmCallFrame) -> ByteArray;
+import func evmCallFrame_getCallvalue(frame: EvmCallFrame) -> uint;
 import func evmCallFrame_getAccount(frame: EvmCallFrame, addr: address) -> Account;
 import func evmCallFrame_runningAsAddress(frame: EvmCallFrame) -> address;
 import func evmCallFrame_runningAsAccount(frame: EvmCallFrame) -> Account;
@@ -80,7 +81,7 @@ public impure func arbsys_txcall() {
             arbsys_withdrawErc20(topFrame, calldata);
         } elseif(funcCode == 0xf3e414f8) {
             arbsys_withdrawErc721(topFrame, calldata);
-        } elseif(funcCode == 0x1b9a91a4) {
+        } elseif(funcCode == 0x25e16063) {
             arbsys_withdrawEth(topFrame, calldata);
         } elseif(funcCode == 0x23ca0cd2) {
             arbsys_getTransactionCount(topFrame, calldata);
@@ -120,19 +121,20 @@ func arbsys_withdrawErc721(topFrame: EvmCallFrame, calldata: ByteArray) {
 }
 
 impure func arbsys_withdrawEth(topFrame: EvmCallFrame, calldata: ByteArray) {
-    if (bytearray_size(calldata) != 68) {
+    if (bytearray_size(calldata) != 36) {
         evmOp_revert(0, 0);
     }
     if let Some(senderAddr) = getCallerAddress() {
         let senderAcct = evmCallFrame_getAccount(topFrame, senderAddr);
         let destAddr = address(bytearray_get256(calldata, 4));
-        let amount = bytearray_get256(calldata, 36);
+        let amount = evmCallFrame_getCallvalue(topFrame);
 
         if let Some(updatedAcct) = account_deductFromEthBalance(senderAcct, amount) {
             if ( ! evmCallStack_setAccount(senderAddr, updatedAcct)) {
                 evmOp_revert(0, 0);
             }
-            let messageData = bytearray_extract(calldata, 4, 64);
+            let messageData = bytearray_extract(calldata, 4, 32);
+            messageData = bytearray_set256(messageData, 32, amount);
             sendMessage(0, senderAddr, messageData);
             evmOp_return(0, 0);
         }

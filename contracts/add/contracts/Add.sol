@@ -22,6 +22,6 @@ contract Add {
     }
 
     function withdrawMyEth() public payable {
-	ArbSys(address(100)).withdrawEth(address(1025), 5000);
+	ArbSys(address(100)).withdrawEth.value(msg.value)(address(1025));
     }
 }
