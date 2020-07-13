@@ -1467,7 +1467,7 @@ fn mavm_codegen_expr<'a>(
                 vec![Type::Uint, Type::Any],
                 Box::new(array_type.clone()),
             );
-            let default_val = base_type.default_value();
+            let default_val = base_type.default_value().unwrap_or_else(|_| Value::none());
             let the_expr = TypeCheckedExpr::FunctionCall(
                 Box::new(TypeCheckedExpr::FuncRef(
                     *string_table.get_if_exists("builtin_arrayNew").unwrap(),
