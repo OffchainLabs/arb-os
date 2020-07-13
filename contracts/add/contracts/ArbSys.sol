@@ -11,7 +11,7 @@ interface ArbSys {
     function withdrawERC721(address dest, uint256 id) external;
 
     // Send given amount of Eth to dest with from sender.
-    function withdrawEth(address dest, uint256 amount) external;
+    function withdrawEth(address dest) external payable;
 
     // Return block when current message was posted on-chain
     function currentMessageBlock() external view returns(uint);
