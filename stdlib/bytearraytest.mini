@@ -26,6 +26,9 @@ import func bytearray_get64(ba: ByteArray, idx: uint) -> uint;
 import func bytearray_set64(ba: ByteArray, idx: uint, val: uint) -> ByteArray;
 import func bytearray_get256(ba: ByteArray, offset: uint) -> uint;
 import func bytearray_set256(ba: ByteArray, offset: uint, value: uint) -> ByteArray;
+import func bytearray_marshalFull(ba: ByteArray) -> MarshalledBytes;
+
+import func marshalledBytes_hash(mb: MarshalledBytes) -> bytes32;
 
 
 impure func main() {
@@ -94,6 +97,7 @@ func tests() -> uint {
 			),
 		),
 	));
+
 	ba = bytearray_new(67);
 	ba = bytearray_unmarshalBytes(marshalledStruct);
 	let i = 0;
@@ -129,6 +133,24 @@ func tests() -> uint {
 	if (bytearray_get256(ba, 0) != 1) {
 	    return 12;
 	}
+
+    if (bytes32(0x4fc384a19926e9ff7ec8f2376a0d146dc273031df1db4d133236d209700e4780)
+        != marshalledBytes_hash(bytearray_marshalFull(setupFromUnmarshal()))
+    ) {
+        return 13;
+    }
+
+    if (bytes32(0x6203cb97ced4e35e64eeaddf64d03b68bcb81b5ee3cb0205f7edb755a8a4198)
+            != marshalledBytes_hash(bytearray_marshalFull(bytearray_setByte(bytearray_new(0), 0, 13)))
+    ) {
+        return 14;
+    }
+
+    if (bytes32(0x2286697a7baf78c99024b26bd236a05975a57714bf44a9b7400fe583b31fa274)
+            != marshalledBytes_hash(bytearray_marshalFull(bytearray_set256(bytearray_new(0), 0, 0x6203cb97ced4e35e64eeaddf64d03b68bcb81b5ee3cb0205f7edb755a8a4198)))
+    ) {
+        return 15;
+    }
 
 	return 0;
 }
