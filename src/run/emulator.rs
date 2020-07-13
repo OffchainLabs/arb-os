@@ -14,6 +14,8 @@
  * limitations under the License.
  */
 
+//!Provides utilities for emulation of AVM bytecode.
+
 use super::runtime_env::RuntimeEnvironment;
 use crate::link::LinkedProgram;
 use crate::mavm::{AVMOpcode, CodePt, Instruction, Opcode, Value};
@@ -24,6 +26,7 @@ use std::collections::{BTreeMap, HashMap};
 use std::fmt;
 use std::io::stdin;
 
+///Represents a stack of `Value`s
 #[derive(Debug, Default, Clone)]
 pub struct ValueStack {
     contents: im::Vector<Value>,
@@ -40,26 +43,32 @@ impl ValueStack {
         self.contents.len() == 0
     }
 
+    ///Pushes val to the top of self.
     pub fn push(&mut self, val: Value) {
         self.contents.push_back(val);
     }
 
+    ///Pushes a `Value` created from val to the top of self.
     pub fn push_uint(&mut self, val: Uint256) {
         self.push(Value::Int(val))
     }
 
+    ///Pushes a `Value` created from val to the top of self.
     pub fn push_usize(&mut self, val: usize) {
         self.push_uint(Uint256::from_usize(val));
     }
 
+    ///Pushes a `Value` created from val to the top of self.
     pub fn push_codepoint(&mut self, val: CodePt) {
         self.push(Value::CodePoint(val));
     }
 
+    ///Pushes a `Value` created from val to the top of self.
     pub fn push_bool(&mut self, val: bool) {
         self.push_uint(if val { Uint256::one() } else { Uint256::zero() })
     }
 
+    ///Returns the `Value` on the top of self, or None if self is empty.
     pub fn top(&self) -> Option<Value> {
         if self.is_empty() {
             None
@@ -68,6 +77,8 @@ impl ValueStack {
         }
     }
 
+    ///Pops the top value off the stack and returns it, or if the stack is empty returns an
+    /// `ExecutionError`.
     pub fn pop(&mut self, state: &MachineState) -> Result<Value, ExecutionError> {
         match self.contents.pop_back() {
             Some(v) => Ok(v),
@@ -75,6 +86,8 @@ impl ValueStack {
         }
     }
 
+    ///If the top `Value` on the stack is a code point, pops the value and returns it as a `CodePt`,
+    /// otherwise returns an `ExecutionError`.
     pub fn pop_codepoint(&mut self, state: &MachineState) -> Result<CodePt, ExecutionError> {
         let val = self.pop(state)?;
         if let Value::CodePoint(cp) = val {
@@ -88,6 +101,8 @@ impl ValueStack {
         }
     }
 
+    ///If the top `Value` on the stack is an integer, pops the value and returns it as a `Uint256`,
+    /// otherwise returns an `ExecutionError`.
     pub fn pop_uint(&mut self, state: &MachineState) -> Result<Uint256, ExecutionError> {
         let val = self.pop(state)?;
         if let Value::Int(i) = val {
@@ -101,6 +116,8 @@ impl ValueStack {
         }
     }
 
+    ///If the top `Value` on the stack is not greater than the max usize, pops the value and returns
+    /// it as a `usize`, otherwise returns an `ExecutionError`
     pub fn pop_usize(&mut self, state: &MachineState) -> Result<usize, ExecutionError> {
         let val = self.pop_uint(state)?;
         match val.to_usize() {
@@ -113,6 +130,8 @@ impl ValueStack {
         }
     }
 
+    ///If the top `Value` on the stack is 0 or 1, returns false or true respectively, otherwise
+    /// returns an `ExecutionError`.
     pub fn pop_bool(&mut self, state: &MachineState) -> Result<bool, ExecutionError> {
         let val = self.pop_usize(state);
         match val {
@@ -127,6 +146,8 @@ impl ValueStack {
         }
     }
 
+    ///If the top `Value` on self is a tuple, pops the `Value` and returns the contained values of
+    /// self as a vector. Otherwise returns an `ExecutionError`.
     pub fn pop_tuple(&mut self, state: &MachineState) -> Result<Vec<Value>, ExecutionError> {
         let val = self.pop(state)?;
         if let Value::Tuple(v) = val {
@@ -141,6 +162,8 @@ impl ValueStack {
         }
     }
 
+    ///Returns a list of all CodePoint `Value`s as `CodePt`s, this is used for generating stack
+    /// traces, as all code points on the aux stack represent the start of a call frame.
     pub fn all_codepts(&self) -> Vec<CodePt> {
         self.contents
             .iter()
@@ -165,6 +188,10 @@ impl fmt::Display for ValueStack {
     }
 }
 
+///Represents an error encountered during runtime.
+///
+/// StoppedErr is for errors encountered when the `Machine` is not running, RunningErr is for when
+/// the machine is running, and Wrapped adds additional context to its contained error.
 #[derive(Clone, Debug)]
 pub enum ExecutionError {
     StoppedErr(&'static str),
@@ -195,6 +222,10 @@ impl fmt::Display for ExecutionError {
     }
 }
 
+///Represents the state of the containing `Machine`.
+///
+/// Running is used during execution, Stopped occurs when the program exits normally, and Error
+/// occurs when the `Machine` encounters a runtime error.
 #[derive(Clone, Debug)]
 pub enum MachineState {
     Stopped,
@@ -203,6 +234,7 @@ pub enum MachineState {
 }
 
 impl MachineState {
+    ///Returns true if self is the Running variant.
     pub fn is_running(&self) -> bool {
         if let MachineState::Running(_) = self {
             true
@@ -212,6 +244,7 @@ impl MachineState {
     }
 }
 
+///Holds AVM bytecode in a list of segments, the runtime is held on segment 0.
 #[derive(Debug)]
 struct CodeStore {
     segments: Vec<Vec<Instruction>>,
@@ -232,10 +265,15 @@ impl CodeStore {
         }
     }
 
+    ///Gets the size of the first code segment.
     fn runtime_segment_size(&self) -> usize {
         self.segments[0].len()
     }
 
+    ///Returns the `Instruction` that codept points to, or None if codept points to an invalid
+    /// location.
+    ///
+    /// Panics if codept is not an Internal or InSegment reference.
     fn get_insn(&self, codept: CodePt) -> Option<&Instruction> {
         match codept {
             CodePt::Internal(pc) => self.segments[0].get(pc),
@@ -252,6 +290,8 @@ impl CodeStore {
         }
     }
 
+    ///Creates a new code segment containing a single panic instruction, returns a `CodePt` pointing
+    /// to the start of that segment.
     fn create_segment(&mut self) -> CodePt {
         self.segments.push(vec![Instruction::from_opcode(
             Opcode::AVMOpcode(AVMOpcode::Panic),
@@ -260,6 +300,12 @@ impl CodeStore {
         CodePt::new_in_segment(self.segments.len() - 1, 0)
     }
 
+    ///Appends an instruction with opcode derived from op, and immediate from imm, to the end of the
+    /// code segment pointed to by codept.
+    ///
+    /// The codept argument must point to a code segment, and must point to the end of that segment,
+    /// also op must be the numeric representation of some AVM opcode, if these conditions aren't
+    /// met the function will panic.
     fn push_insn(&mut self, op: usize, imm: Option<Value>, codept: CodePt) -> Option<CodePt> {
         if let CodePt::InSegment(seg_num, old_offset) = codept {
             if seg_num >= self.segments.len() {
@@ -289,6 +335,8 @@ impl CodeStore {
     }
 }
 
+///Records how much gas was used at each source location in a run of a `Machine`. Gas used by any
+/// instructions without an associated location are added to the unknown_gas field.
 #[derive(Debug, Clone, Default)]
 pub struct ProfilerData {
     data: HashMap<String, BTreeMap<(usize, usize), u64>>,
@@ -296,6 +344,10 @@ pub struct ProfilerData {
 }
 
 impl ProfilerData {
+    ///Gets a reference to the gas cost at a given location if it has been recorded, or None
+    /// otherwise.
+    ///
+    /// The chart argument is used to convert the file ID in the location to a filename.
     fn get_mut(
         &mut self,
         loc: &Option<Location>,
@@ -310,6 +362,10 @@ impl ProfilerData {
             Some(&mut self.unknown_gas)
         }
     }
+    ///Inserts gas into the entry corresponding to loc. Returns the previous value at that location
+    /// if it exists.
+    ///
+    /// The chart argument is used to convert the file ID in the location to a filename.
     fn insert(
         &mut self,
         loc: &Option<Location>,
@@ -339,6 +395,11 @@ impl ProfilerData {
             Some(old_unknown_gas)
         }
     }
+
+    ///Starts a profiler session from self.  Allows the user to view the gas cost per file and view
+    /// the gas used over a range of lines.
+    ///
+    /// Use exit to exit the profiler.
     pub fn profiler_session(&self) {
         let file_gas_costs: Vec<(String, u64)> = self
             .data
@@ -411,6 +472,7 @@ impl ProfilerData {
     }
 }
 
+///Represents the state of execution of a AVM program including the code it is compiled from.
 #[derive(Debug)]
 pub struct Machine {
     stack: ValueStack,
@@ -441,15 +503,21 @@ impl Machine {
         }
     }
 
+    ///Pushes 0 to the stack and sets the program counter to the first instruction. Used by the EVM
+    /// compiler.
     pub fn start_at_zero(&mut self) {
         self.stack.push_usize(0);
         self.state = MachineState::Running(CodePt::Internal(0));
     }
 
+    ///Returns a stack trace of the current state of the machine.
     pub fn get_stack_trace(&self) -> StackTrace {
         StackTrace::Known(self.aux_stack.all_codepts())
     }
 
+    ///Sets the state of the machine to call the function at func_addr with args.
+    ///
+    /// Returns the stop location of the program counter, calculated by `runtime_segment_size`.
     pub fn call_state(&mut self, func_addr: CodePt, args: Vec<Value>) -> CodePt {
         let stop_pc = CodePt::new_internal(self.code.runtime_segment_size());
         for i in args.into_iter().rev() {
@@ -460,6 +528,11 @@ impl Machine {
         stop_pc
     }
 
+    ///Calls the function at address func_addr and runs until the program counter advances by the
+    /// result of `runtime_segment_size`, or an error is encountered.
+    ///
+    /// If the machine stops normally, then returns the stack contents, otherwise returns an
+    /// `ExecutionError`
     pub fn test_call(
         &mut self,
         func_addr: CodePt,
@@ -482,6 +555,8 @@ impl Machine {
         }
     }
 
+    ///If the machine is running returns the `CodePt` that represents the current program counter,
+    /// otherwise produces an `ExecutionError`.
     pub fn get_pc(&self) -> Result<CodePt, ExecutionError> {
         if let MachineState::Running(pc) = &self.state {
             Ok(*pc)
@@ -494,6 +569,9 @@ impl Machine {
         }
     }
 
+    ///Increments self's program counter.
+    ///
+    /// Panics if self is not running or the current program counter is an external reference.
     pub fn incr_pc(&mut self) {
         if let MachineState::Running(pc) = &self.state {
             if let Some(new_pc) = pc.incr() {
@@ -506,6 +584,8 @@ impl Machine {
         }
     }
 
+    ///Returns the `Instruction` pointed to by self's program counter if it exists, and None
+    /// otherwise.
     pub fn next_opcode(&self) -> Option<Instruction> {
         if let MachineState::Running(pc) = self.state {
             if let Some(insn) = self.code.get_insn(pc) {
@@ -518,6 +598,10 @@ impl Machine {
         }
     }
 
+    ///Starts the debugger, execution will end when the program counter of self reaches stop_pc, or
+    /// an error state is reached.
+    ///
+    /// Returns the total gas used by the machine.
     pub fn debug(&mut self, stop_pc: Option<CodePt>) -> u64 {
         println!("Blank line or \"step\" to run one opcode, \"set break\" followed by a \
          line number to resume program until that line, \"show static\" to show the static contents.");
@@ -627,6 +711,8 @@ impl Machine {
         gas_cost
     }
 
+    ///Runs self until the program counter reaches stop_pc, an error state is encountered or the
+    /// machine reaches a stopped state for any other reason.  Returns the total gas used by self.
     pub fn run(&mut self, stop_pc: Option<CodePt>) -> u64 {
         let mut gas_used = 0;
         while self.state.is_running() {
@@ -657,6 +743,7 @@ impl Machine {
         gas_used
     }
 
+    ///Generates a `ProfilerData` from a run of self with args from address 0.
     pub fn profile_gen(&mut self, args: Vec<Value>) -> ProfilerData {
         self.call_state(CodePt::new_internal(0), args);
         let mut loc_map = ProfilerData::default();
@@ -681,6 +768,7 @@ impl Machine {
         loc_map
     }
 
+    ///If the opcode has a specified gas cost returns the gas cost, otherwise returns None.
     pub(crate) fn next_op_gas(&self) -> Option<u64> {
         if let MachineState::Running(pc) = self.state {
             Some(match self.code.get_insn(pc)?.opcode {
@@ -756,6 +844,9 @@ impl Machine {
         }
     }
 
+    ///Runs the instruction pointed to by the program counter, returns either a bool indicating
+    /// whether the instruction was blocked if execution does not hit an error state, or an
+    /// `ExecutionError` if an error was encountered.
     pub fn run_one(&mut self, debug: bool) -> Result<bool, ExecutionError> {
         if let MachineState::Running(pc) = self.state {
             if let Some(insn) = self.code.get_insn(pc) {
@@ -1359,6 +1450,7 @@ impl Machine {
     }
 }
 
+///Represents a stack trace, with each CodePt indicating a stack frame, Unknown variant is unused.
 #[derive(Debug)]
 pub enum StackTrace {
     _Unknown,
