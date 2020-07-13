@@ -15,7 +15,7 @@
  */
 
 use crate::mavm::Value;
-use crate::run::{run_from_file, RuntimeEnvironment, bytestack_from_bytes};
+use crate::run::{bytestack_from_bytes, run_from_file, RuntimeEnvironment};
 use crate::uint256::Uint256;
 use std::path::Path;
 
@@ -195,20 +195,27 @@ fn test_rlp_uints() {
     let mut ui = Uint256::one();
     for _i in 0..100 {
         test_rlp_uint(ui.clone(), ui.rlp_encode());
-        let ui2 = ui.div(&Uint256::from_usize(2048)).unwrap();  // a valid address
+        let ui2 = ui.div(&Uint256::from_usize(2048)).unwrap(); // a valid address
         test_rlp_uint(ui2.clone(), ui2.rlp_encode());
-        ui = ui.mul(&Uint256::from_usize(19482103)).add(&Uint256::from_usize(91));
+        ui = ui
+            .mul(&Uint256::from_usize(19482103))
+            .add(&Uint256::from_usize(91));
     }
 }
 
 #[cfg(test)]
 fn test_rlp_uint(ui: Uint256, correct_result: Vec<u8>) {
     let path = Path::new("stdlib/rlptest.mexe");
-    let res = run_from_file(path, vec![Value::Int(ui)], RuntimeEnvironment::new(Uint256::from_usize(1111)), false);
+    let res = run_from_file(
+        path,
+        vec![Value::Int(ui)],
+        RuntimeEnvironment::new(Uint256::from_usize(1111)),
+        false,
+    );
     match res {
         Ok(res) => {
             assert_eq!(res[0], bytestack_from_bytes(&correct_result));
-        },
+        }
         Err(e) => {
             panic!("{}\n{}", e.0, e.1);
         }

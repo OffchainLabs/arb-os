@@ -510,7 +510,11 @@ fn mavm_codegen_statements(
             )?;
             label_gen = lg;
             code = c;
-            code.push(Instruction::from_opcode_imm(Opcode::GetLocal, slot_num, *loc));
+            code.push(Instruction::from_opcode_imm(
+                Opcode::GetLocal,
+                slot_num,
+                *loc,
+            ));
             code.push(Instruction::from_opcode(
                 Opcode::AVMOpcode(AVMOpcode::Cjump),
                 *loc,
