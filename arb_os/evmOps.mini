@@ -529,17 +529,17 @@ public impure func evmOp_log4(
     panic;
 }
 
-public func evmOp_sloadbytes() {
+public impure func evmOp_sloadbytes() {
     // believe this is a non-standard opcode
     evm_notYetImplemented(14,);
 }
 
-public func evmOp_sstorebytes() {
+public impure func evmOp_sstorebytes() {
     // believe this is a non-standard opcode
     evm_notYetImplemented(15,);
 }
 
-public func evmOp_ssize() {
+public impure func evmOp_ssize() {
     // believe this is a non-standard opcode
     evm_notYetImplemented(16,);
 }
@@ -714,7 +714,7 @@ public impure func evmOp_return(memOffset: uint, memNbytes: uint) {
     evm_runtimePanic();
 }
 
-public func evmOp_txexecgas() {
+public impure func evmOp_txexecgas() {
     // believe this is a non-standard opcode
     evm_notYetImplemented(23,);
 }
@@ -919,7 +919,7 @@ impure func evm_error() {
 
 }
 
-func evm_runtimePanic() {
+impure func evm_runtimePanic() {
     // This should be called when something that "shouldn't ever happen" has occurred.
     // It should only be called if something has gone wrong in the trusted code.
     // If untrusted code has encountered an error, that will be handled elsewhere.
@@ -927,7 +927,7 @@ func evm_runtimePanic() {
     panic;
 }
 
-func evm_notYetImplemented(op: uint) {
+impure func evm_notYetImplemented(op: uint) {
     errorHandler();
     panic;
 }

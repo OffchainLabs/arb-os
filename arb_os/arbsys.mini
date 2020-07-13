@@ -115,9 +115,18 @@ impure func arbsys_withdrawErc20(topFrame: EvmCallFrame, calldata: ByteArray) {
     evmOp_return(0, 0);
 }
 
-func arbsys_withdrawErc721(topFrame: EvmCallFrame, calldata: ByteArray) {
-    //BUGBUG: not yet implemented
-    errorHandler();
+impure func arbsys_withdrawErc721(topFrame: EvmCallFrame, calldata: ByteArray) {
+    if (bytearray_size(calldata) != 68) {
+        evmOp_revert(0, 0);
+    }
+    let senderAcct = evmCallFrame_runningAsAccount(topFrame);
+    let senderAddr = account_getAddress(senderAcct);
+    let destAddr = address(bytearray_get256(calldata, 4));
+    let id = bytearray_get256(calldata, 36);
+
+    let messageData = bytearray_extract(calldata, 4, 64);
+    sendMessage(2, senderAddr, messageData);
+    evmOp_return(0, 0);
 }
 
 impure func arbsys_withdrawEth(topFrame: EvmCallFrame, calldata: ByteArray) {
