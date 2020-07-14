@@ -37,7 +37,12 @@ public func rlp_encodeUint(val: uint, ba: ByteArray, offset: uint) -> (ByteArray
     // RLP-encode val, writing the result to ba at offset
     // return (updated_ba, nbytes_written)
 
-    if (val <= 0x7f) {
+    if (val == 0) {
+        return (
+            bytearray_setByte(ba, offset, 0x80),
+            1
+        );
+    } elseif (val <= 0x7f) {
         return (
             bytearray_setByte(ba, offset, val),
             1

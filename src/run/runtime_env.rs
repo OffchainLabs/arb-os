@@ -16,15 +16,12 @@
 
 use crate::mavm::Value;
 use crate::uint256::Uint256;
+use ethers_core::rand::thread_rng;
+use ethers_core::types::{Transaction, TransactionRequest};
+use ethers_signers::{Signer, Wallet};
 use serde::{Deserialize, Serialize};
 use std::convert::TryInto;
 use std::{collections::HashMap, fs::File, io, path::Path};
-use rlp::RlpStream;
-use ethers_core::utils::hash_message;
-use ethers_core::rand::thread_rng;
-use ethers_signers::{Wallet, Signer};
-use ethers_core::types::{TransactionRequest, Transaction};
-
 
 #[derive(Debug, Clone)]
 pub struct RuntimeEnvironment {
@@ -140,8 +137,9 @@ impl RuntimeEnvironment {
             .value(value.to_u256())
             .data(calldata)
             .nonce(seq_num.to_u256());
+        println!("RLP hash = {}", tx_for_signing.sighash(Some(self.chain_id)));
         let tx = wallet.sign_transaction(tx_for_signing).unwrap();
-        let sig_bytes= get_signature_bytes(&tx);
+        let sig_bytes = get_signature_bytes(&tx);
         assert_eq!(sig_bytes.to_vec().len(), 65);
 
         batch.extend(sig_bytes.to_vec());

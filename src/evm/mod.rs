@@ -18,9 +18,8 @@ use crate::mavm::Value;
 use crate::run::{bytes_from_bytestack, bytestack_from_bytes, load_from_file, RuntimeEnvironment};
 use crate::uint256::Uint256;
 use abi::AbiForContract;
+use ethers_core::types::Address;
 use std::path::Path;
-use ethers_core::types::{PrivateKey, Address};
-use ethers_core::rand;
 
 mod abi;
 
@@ -173,12 +172,6 @@ pub fn evm_test_create(
     Ok(true)
 }
 
-pub fn generate_private_key_and_address() -> (PrivateKey, Uint256) {
-    let key = PrivateKey::new(&mut rand::thread_rng());
-    let address = Uint256::from_bytes(Address::from(&key).as_bytes());
-    (key, address)
-}
-
 pub fn evm_xcontract_call_using_batch(
     log_to: Option<&Path>,
     debug: bool,
@@ -241,7 +234,9 @@ pub fn evm_xcontract_call_using_batch(
         my_addr.clone(),
         "transferFib",
         vec![
-            ethabi::Token::Address(ethereum_types::H160::from_slice(&my_addr.to_bytes_minimal())),
+            ethabi::Token::Address(ethereum_types::H160::from_slice(
+                &my_addr.to_bytes_minimal(),
+            )),
             ethabi::Token::Uint(ethabi::Uint::try_from(1).unwrap()),
         ]
         .as_ref(),

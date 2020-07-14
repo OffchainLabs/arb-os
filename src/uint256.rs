@@ -14,7 +14,8 @@
  * limitations under the License.
  */
 
-use keccak_hash::keccak;
+use ethereum_types::{H160, U256};
+use ethers_core::utils::hash_message;
 use num_bigint::{BigInt, BigUint, Sign, ToBigInt};
 use num_traits::cast::ToPrimitive;
 use num_traits::identities::{One, Zero};
@@ -25,8 +26,6 @@ use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::cmp::Ordering;
 use std::fmt;
 use std::ops::{Add, BitAnd, BitOr, BitXor, Div, Mul, Neg, Rem, Sub};
-use ethers_core::utils::hash_message;
-use ethereum_types::{U256, H160};
 
 #[derive(Debug, Clone, PartialEq, Eq, Ord, Hash)]
 pub struct Uint256 {
@@ -122,17 +121,29 @@ impl Uint256 {
     }
 
     pub fn trim_to_u64(&self) -> u64 {
-        self.val.clone().bitand(BigUint::from(0xffffffffffffffffu64)).to_u64().unwrap()
+        self.val
+            .clone()
+            .bitand(BigUint::from(0xffffffffffffffffu64))
+            .to_u64()
+            .unwrap()
     }
 
     pub fn to_bytes_minimal(&self) -> Vec<u8> {
-        self.val.to_bytes_be()
+        if self.is_zero() {
+            vec![]
+        } else {
+            self.val.to_bytes_be()
+        }
     }
 
     #[cfg(test)]
     pub fn rlp_encode(&self) -> Vec<u8> {
         // RLP encode the minimal byte representation of self
-        rlp::encode(&self.to_bytes_minimal())
+        if (self.is_zero()) {
+            vec![0x80u8]
+        } else {
+            rlp::encode(&self.to_bytes_minimal())
+        }
     }
 
     pub fn zero() -> Self {
@@ -322,7 +333,7 @@ impl Uint256 {
 
     pub fn avm_hash(&self) -> Self {
         let bytes_buf = self.to_bytes_be();
-        let hash_result = hash_message(bytes_buf);  // keccak
+        let hash_result = hash_message(bytes_buf); // keccak
         Uint256::from_bytes(hash_result.as_bytes())
     }
 

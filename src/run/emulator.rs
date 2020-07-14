@@ -19,16 +19,16 @@ use crate::link::LinkedProgram;
 use crate::mavm::{AVMOpcode, CodePt, Instruction, Opcode, Value};
 use crate::pos::Location;
 use crate::uint256::Uint256;
-use std::cmp::max;
-use std::collections::{BTreeMap, HashMap};
-use std::fmt;
-use std::io::stdin;
-use ethers_core::types::{Signature, H256, PrivateKey, Address};
-use std::convert::TryInto;
 #[cfg(test)]
 use ethers_core::rand;
 #[cfg(test)]
-use ethers_core::utils::hash_message;
+use ethers_core::types::{Address, PrivateKey};
+use ethers_core::types::{Signature, H256};
+use std::cmp::max;
+use std::collections::{BTreeMap, HashMap};
+use std::convert::TryInto;
+use std::fmt;
+use std::io::stdin;
 
 #[derive(Debug, Default, Clone)]
 pub struct ValueStack {
@@ -1376,7 +1376,11 @@ fn do_ecrecover(
     let sig = Signature {
         r: H256(first_half.to_bytes_be()[..32].try_into().unwrap()),
         s: H256(second_half.to_bytes_be()[..32].try_into().unwrap()),
-        v: if recover_id == Uint256::zero() { 27u64 } else { 28u64 }
+        v: if recover_id == Uint256::zero() {
+            27u64
+        } else {
+            28u64
+        },
     };
     let hash_to_check = H256(msg_hash.to_bytes_be()[..32].try_into().unwrap());
     match sig.recover(hash_to_check) {
@@ -1422,8 +1426,12 @@ fn test_ecrecover() {
     let recovered_ui = do_ecrecover(
         Uint256::from_bytes(&sig_bytes[0..32]),
         Uint256::from_bytes(&sig_bytes[32..64]),
-        if (sig_bytes[64]==27) { Uint256::zero() } else { Uint256::one() },
-        hash_as_uint
+        if (sig_bytes[64] == 27) {
+            Uint256::zero()
+        } else {
+            Uint256::one()
+        },
+        hash_as_uint,
     );
 
     // verifies the signature is produced by `address`

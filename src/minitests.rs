@@ -17,9 +17,9 @@
 use crate::mavm::Value;
 use crate::run::{bytestack_from_bytes, run_from_file, RuntimeEnvironment};
 use crate::uint256::Uint256;
-use std::path::Path;
-use std::convert::TryInto;
 use rlp::RlpStream;
+use std::convert::TryInto;
+use std::path::Path;
 
 #[test]
 fn test_arraytest() {
@@ -192,12 +192,14 @@ fn test_rlp() {
         vec![13u8],
         vec![243u8],
         "Hello".as_bytes().to_vec(),
-        "The quick brown fox jumped over the lazy dog.".as_bytes().to_vec(),
+        "The quick brown fox jumped over the lazy dog."
+            .as_bytes()
+            .to_vec(),
         vec![77u8; 692],
     ];
     let mut new_test_vec: Vec<u8> = Vec::new();
     for i in 0u64..2198 {
-        new_test_vec.push(((73*i) % 256).try_into().unwrap());
+        new_test_vec.push(((73 * i) % 256).try_into().unwrap());
     }
     byte_testvecs.push(new_test_vec.clone());
     for testvec in byte_testvecs {
@@ -207,8 +209,16 @@ fn test_rlp() {
 
     let list3_testvecs = vec![
         (Uint256::zero(), vec![243u8], Uint256::one()),
-        (Uint256::from_usize(9831498), vec![3u8], Uint256::from_usize(4313412)),
-        (Uint256::from_usize(9831498), new_test_vec, Uint256::from_usize(4313412)),
+        (
+            Uint256::from_usize(9831498),
+            vec![3u8],
+            Uint256::from_usize(4313412),
+        ),
+        (
+            Uint256::from_usize(9831498),
+            new_test_vec,
+            Uint256::from_usize(4313412),
+        ),
     ];
     for testvec in list3_testvecs {
         let res = encode_list3(testvec.clone());
@@ -275,7 +285,7 @@ fn test_rlp_list3(testvec: (Uint256, Vec<u8>, Uint256), correct_result: Vec<u8>)
                 Value::Int(testvec.0),
                 bytestack_from_bytes(&testvec.1),
                 Value::Int(testvec.2),
-            ])
+            ]),
         ],
         RuntimeEnvironment::new(Uint256::from_usize(1111)),
         false,

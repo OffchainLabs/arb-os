@@ -17,9 +17,8 @@
 use crate::mavm::Value;
 use crate::run::{bytes_from_bytestack, Machine};
 use crate::uint256::Uint256;
-use std::{fs::File, io::Read, path::Path};
-use ethers_core::types::PrivateKey;
 use ethers_signers::Wallet;
+use std::{fs::File, io::Read, path::Path};
 
 /*
 #[derive(Clone)]
