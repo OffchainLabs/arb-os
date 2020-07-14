@@ -67,6 +67,7 @@ type ArbSysTokenTransferMessage = struct {
 }
 
 public impure func arbsys_txcall() {
+    asm(1300,) { debugprint };
     if let Some(topFrame) = evmCallStack_topFrame() {
         let calldata = evmCallFrame_getCalldata(topFrame);
         if (bytearray_size(calldata) < 4) {
@@ -129,7 +130,8 @@ impure func arbsys_withdrawEth(topFrame: EvmCallFrame, calldata: ByteArray) {
             if ( ! evmCallStack_setAccount(senderAddr, updatedAcct)) {
                 evmOp_revert(0, 0);
             }
-            let messageData = bytearray_extract(calldata, 4, 64);
+            let messageData = bytearray_extract(calldata, 4, 32);
+            messageData = bytearray_set256(messageData, 32, amount);
             sendMessage(0, senderAddr, messageData);
             evmOp_return(0, 0);
         }

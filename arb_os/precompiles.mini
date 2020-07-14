@@ -14,27 +14,43 @@
 // limitations under the License.
 //
 
+import type EvmCallFrame;
 import type AccountStore;
+import type ByteArray;
 
-import getGlobalAccountStore() -> AccountStore;
-import setGlobalAccountStore(acctStore: AccountStore);
-import accountStore_createBuiltinContract(acctStore: AccountStore, address, impure func()) -> option<AccountStore>;
+import impure func evmCallStack_topFrame() -> option<EvmCallFrame>;
+import impure func evmCallStack_setTopFrameMemory(mem: ByteArray) -> bool;
+import func evmCallFrame_getCalldata(frame: EvmCallFrame) -> ByteArray;
 
-public impure func precompiles_init() -> option<()> {
-    setGlobalAccountStore(
-        accountStore_createBuiltinContract(
-            getGlobalAccountStore(),
-            address(0x01),
-            precompile_0x01,
-        )?;
-    );
-    setGlobalAccountStore(
-        accountStore_createBuiltinContract(
-            getGlobalAccountStore(),
-            address(100),
-            arbsys_txcall,
-        )?;
-    );
+import impure func evmOp_return(offset: uint, nbytes: uint);
+import impure func evmOp_revert(offset: uint, nbytes: uint);
+
+import func getGlobalAccountStore() -> AccountStore;
+import func setGlobalAccountStore(acctStore: AccountStore);
+import func accountStore_createBuiltinContract(acctStore: AccountStore, addr: address, entryPoint: impure func()) -> option<AccountStore>;
+
+import func bytearray_new(capacity: uint) -> ByteArray;
+import func bytearray_size(ba: ByteArray) -> uint;
+import func bytearray_getByte(ba: ByteArray, offset: uint) -> uint;
+import func bytearray_get256(ba: ByteArray, offset: uint) -> uint;
+import func bytearray_set256(ba: ByteArray, offset: uint, val: uint) -> ByteArray;
+
+
+import impure func arbsys_txcall();
+
+
+public impure func precompiles_init(acctStore: AccountStore) -> option<AccountStore> {
+    acctStore = accountStore_createBuiltinContract(
+        acctStore,
+        address(0x01),
+        precompile_0x01,
+    )?;
+    acctStore = accountStore_createBuiltinContract(
+        acctStore,
+        address(100),
+        arbsys_txcall,
+    )?;
+    return Some(acctStore);
 }
 
 public impure func precompile_0x01() {  // ecrecover
@@ -42,19 +58,19 @@ public impure func precompile_0x01() {  // ecrecover
     if let Some(topFrame) = evmCallStack_topFrame() {
         let calldata = evmCallFrame_getCalldata(topFrame);
         if (bytearray_size(calldata) != 4+3*32+1) {
-            evm_revert(0, 0);
+            evmOp_revert(0, 0);
         }
         let h = bytearray_get256(calldata, 4);
-        let v = bytearray_get(calldata, 36);
-        let r = bytearray_get(calldata, 37);
-        let s = bytearray_get(calldata, 69);
+        let v = bytearray_getByte(calldata, 36);
+        let r = bytearray_get256(calldata, 37);
+        let s = bytearray_get256(calldata, 69);
         let addr = asm(r, s, v-27, h) address { ecrecover };
 
         let success = evmCallStack_setTopFrameMemory(
             bytearray_set256(bytearray_new(0), 0, 32)
         );
-        evm_return(0, 32);
+        evmOp_return(0, 32);
     } else {
-        evm_revert(0, 0);
+        evmOp_revert(0, 0);
     }
 }

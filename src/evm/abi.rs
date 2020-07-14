@@ -19,6 +19,7 @@ use crate::run::{bytes_from_bytestack, Machine};
 use crate::uint256::Uint256;
 use std::{fs::File, io::Read, path::Path};
 use ethers_core::types::PrivateKey;
+use ethers_signers::Wallet;
 
 /*
 #[derive(Clone)]
@@ -370,7 +371,7 @@ impl AbiForContract {
         args: &[ethabi::Token],
         machine: &mut Machine,
         payment: Uint256,
-        private_key: PrivateKey,
+        wallet: &Wallet,
     ) -> Result<(), ethabi::Error> {
         let this_function = self.contract.function(func_name)?;
         let calldata = this_function.encode_input(args).unwrap();
@@ -383,7 +384,7 @@ impl AbiForContract {
             self.address.clone(),
             payment,
             calldata,
-            private_key,
+            &wallet,
         );
 
         Ok(())

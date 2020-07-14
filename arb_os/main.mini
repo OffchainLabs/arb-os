@@ -28,7 +28,7 @@ import impure func gasAccounting_init();
 import impure func evmCallStack_init();
 import impure func inbox_init();
 import impure func accountStore_init();
-import impure func precompiles_init() -> option<()>;
+import impure func precompiles_init(acctStore: AccountStore) -> option<AccountStore>;
 
 import impure func getGlobalAccountStore() -> AccountStore;
 import impure func setGlobalAccountStore(acctStore: AccountStore);
@@ -157,7 +157,7 @@ impure func initializeContractTemplates() -> option<()> {
     )?;
 
     // set up precompiled contracts
-    precompiles_init();
+    acctStore = precompiles_init(acctStore)?;
 
     setGlobalAccountStore(acctStore);
     return Some(());

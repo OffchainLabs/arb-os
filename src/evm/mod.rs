@@ -186,10 +186,15 @@ pub fn evm_xcontract_call_using_batch(
 ) -> Result<bool, ethabi::Error> {
     use std::convert::TryFrom;
     let rt_env = RuntimeEnvironment::new(Uint256::from_usize(1111));
+
+    let wallet = rt_env.new_wallet();
+    let addr_h160: Address = wallet.private_key().into();
+    let my_addr = Uint256::from_bytes(addr_h160.as_bytes());
+
+    println!("========= my address: {}", my_addr);
+
     let mut machine = load_from_file(Path::new("arb_os/arbos.mexe"), rt_env);
     machine.start_at_zero();
-
-    let (private_key, my_addr) = generate_private_key_and_address();
 
     machine.runtime_env.insert_eth_deposit_message(
         my_addr.clone(),
@@ -229,7 +234,7 @@ pub fn evm_xcontract_call_using_batch(
         &[],
         &mut machine,
         Uint256::from_usize(10000),
-        private_key.clone(),
+        &wallet,
     )?;
     pc_contract.add_function_call_to_batch(
         &mut batch,
@@ -242,7 +247,7 @@ pub fn evm_xcontract_call_using_batch(
         .as_ref(),
         &mut machine,
         Uint256::zero(),
-        private_key,
+        &wallet,
     )?;
 
     machine
@@ -257,7 +262,6 @@ pub fn evm_xcontract_call_using_batch(
         machine.run(None)
     };
     let logs = machine.runtime_env.get_all_logs();
-    println!("log[0]: {}", logs[0]);
     let sends = machine.runtime_env.get_all_sends();
     let logs = &logs[num_logs_before..];
     let sends = &sends[num_sends_before..];
@@ -334,7 +338,6 @@ pub fn evm_test_arbsys(log_to: Option<&Path>, debug: bool) {
             panic!("error loading contract: {:?}", e);
         }
     };
-
     let result = contract.call_function(
         my_addr.clone(),
         "getSeqNum",

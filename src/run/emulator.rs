@@ -25,7 +25,9 @@ use std::fmt;
 use std::io::stdin;
 use ethers_core::types::{Signature, H256, PrivateKey, Address};
 use std::convert::TryInto;
+#[cfg(test)]
 use ethers_core::rand;
+#[cfg(test)]
 use ethers_core::utils::hash_message;
 
 #[derive(Debug, Default, Clone)]

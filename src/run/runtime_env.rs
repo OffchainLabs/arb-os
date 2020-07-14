@@ -19,13 +19,16 @@ use crate::uint256::Uint256;
 use serde::{Deserialize, Serialize};
 use std::convert::TryInto;
 use std::{collections::HashMap, fs::File, io, path::Path};
-use ethers_core::types::PrivateKey;
 use rlp::RlpStream;
 use ethers_core::utils::hash_message;
+use ethers_core::rand::thread_rng;
+use ethers_signers::{Wallet, Signer};
+use ethers_core::types::{TransactionRequest, Transaction};
+
 
 #[derive(Debug, Clone)]
 pub struct RuntimeEnvironment {
-    pub chain_address: Uint256,
+    pub chain_id: u64,
     pub l1_inbox: Value,
     pub current_block_num: Uint256,
     pub current_timestamp: Uint256,
@@ -40,7 +43,7 @@ pub struct RuntimeEnvironment {
 impl RuntimeEnvironment {
     pub fn new(chain_address: Uint256) -> Self {
         let mut ret = RuntimeEnvironment {
-            chain_address: chain_address.clone(),
+            chain_id: chain_address.trim_to_u64(),
             l1_inbox: Value::none(),
             current_block_num: Uint256::zero(),
             current_timestamp: Uint256::zero(),
@@ -53,6 +56,14 @@ impl RuntimeEnvironment {
         };
         ret.insert_l1_message(4, chain_address, &[0u8]);
         ret
+    }
+
+    pub fn new_wallet(&self) -> Wallet {
+        Wallet::new(&mut thread_rng()).set_chain_id(self.get_chain_id())
+    }
+
+    pub fn get_chain_id(&self) -> u64 {
+        self.chain_id
     }
 
     pub fn insert_l1_message(&mut self, msg_type: u8, sender_addr: Uint256, msg: &[u8]) {
@@ -107,7 +118,7 @@ impl RuntimeEnvironment {
         to_addr: Uint256,
         value: Uint256,
         calldata: Vec<u8>,
-        private_key: PrivateKey,
+        wallet: &Wallet,
     ) {
         let calldata_size: u64 = calldata.len().try_into().unwrap();
         assert_eq!(calldata_size.to_be_bytes().len(), 8);
@@ -121,26 +132,19 @@ impl RuntimeEnvironment {
         batch.extend(value.to_bytes_be());
         batch.extend(calldata.clone());
 
-        let mut stream = RlpStream::new_list(9);
-        stream
-            .append(&seq_num.to_bytes_minimal())
-            .append(&gas_price_bid.to_bytes_minimal())
-            .append(&max_gas.to_bytes_minimal())
-            .append(&to_addr.to_bytes_minimal())
-            .append(&value.to_bytes_minimal())
-            .append(&calldata)
-            .append(&Uint256::zero().to_bytes_minimal())
-            .append(&Uint256::zero().to_bytes_minimal())
-            .append(&self.chain_address.to_bytes_minimal())
-        ;
-        let rlp_bytes = stream.out();
-        println!("Size of RLP encoded info: {}", rlp_bytes.clone().len());
-        println!("RLP encoded info: {:x?}", rlp_bytes.clone());
-        println!("Hash of RLP encoded info: {}", Uint256::from_bytes(hash_message(rlp_bytes.clone()).as_bytes()));
-        let signature = private_key.sign(rlp_bytes);
-        assert_eq!(signature.to_vec().len(), 65);
+        let tx_for_signing = TransactionRequest::new()
+            .from(sender_addr.to_h160())
+            .to(to_addr.to_h160())
+            .gas(max_gas.to_u256())
+            .gas_price(gas_price_bid.to_u256())
+            .value(value.to_u256())
+            .data(calldata)
+            .nonce(seq_num.to_u256());
+        let tx = wallet.sign_transaction(tx_for_signing).unwrap();
+        let sig_bytes= get_signature_bytes(&tx);
+        assert_eq!(sig_bytes.to_vec().len(), 65);
 
-        batch.extend(signature.to_vec());
+        batch.extend(sig_bytes.to_vec());
     }
 
     pub fn insert_batch_message(&mut self, sender_addr: Uint256, batch: &[u8]) {
@@ -238,6 +242,13 @@ impl RuntimeEnvironment {
     pub fn get_all_sends(&self) -> Vec<Value> {
         self.sends.clone()
     }
+}
+
+fn get_signature_bytes(tx: &Transaction) -> Vec<u8> {
+    let mut ret = Uint256::from_u256(&tx.r).to_bytes_be();
+    ret.extend(Uint256::from_u256(&tx.s).to_bytes_be());
+    ret.extend(vec![(tx.v.as_u64() & 0xffu64) as u8]);
+    ret
 }
 
 pub fn bytestack_from_bytes(b: &[u8]) -> Value {

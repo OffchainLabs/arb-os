@@ -26,6 +26,7 @@ use std::cmp::Ordering;
 use std::fmt;
 use std::ops::{Add, BitAnd, BitOr, BitXor, Div, Mul, Neg, Rem, Sub};
 use ethers_core::utils::hash_message;
+use ethereum_types::{U256, H160};
 
 #[derive(Debug, Clone, PartialEq, Eq, Ord, Hash)]
 pub struct Uint256 {
@@ -90,6 +91,12 @@ impl Uint256 {
         }
     }
 
+    pub fn from_u256(x: &U256) -> Self {
+        let mut b: Vec<u8> = vec![0u8; 32];
+        x.to_big_endian(&mut b);
+        Uint256::from_bytes(&b)
+    }
+
     pub fn to_usize(&self) -> Option<usize> {
         self.val.to_usize()
     }
@@ -104,6 +111,18 @@ impl Uint256 {
         } else {
             raw
         }
+    }
+
+    pub fn to_h160(&self) -> H160 {
+        H160::from_slice(&self.to_bytes_minimal())
+    }
+
+    pub fn to_u256(&self) -> U256 {
+        U256::from_big_endian(&self.to_bytes_minimal())
+    }
+
+    pub fn trim_to_u64(&self) -> u64 {
+        self.val.clone().bitand(BigUint::from(0xffffffffffffffffu64)).to_u64().unwrap()
     }
 
     pub fn to_bytes_minimal(&self) -> Vec<u8> {
