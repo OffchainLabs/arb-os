@@ -229,61 +229,53 @@ impl Type {
         }
     }
 
-    pub fn default_value(&self) -> Value {
+    pub fn default_value(&self) -> Result<Value, String> {
         match self {
-            Type::Void => {
-                panic!("tried to get default value for void type");
-            }
+            Type::Void => Err("tried to get default value for void type".to_string()),
             Type::Uint | Type::Int | Type::Bytes32 | Type::EthAddress | Type::Bool => {
-                Value::Int(Uint256::zero())
+                Ok(Value::Int(Uint256::zero()))
             }
             Type::Tuple(tvec) => {
                 let mut default_tup = Vec::new();
                 for t in tvec {
-                    default_tup.push(t.default_value());
+                    default_tup.push(t.default_value()?);
                 }
-                Value::new_tuple(default_tup)
+                Ok(Value::new_tuple(default_tup))
             }
-            Type::Array(t) => Value::new_tuple(vec![
+            Type::Array(t) => Ok(Value::new_tuple(vec![
                 Value::Int(Uint256::one()),
                 Value::Int(Uint256::one()),
-                Value::new_tuple(vec![t.default_value()]),
-            ]),
+                Value::new_tuple(vec![t.default_value()?]),
+            ])),
             Type::FixedArray(t, sz) => {
-                let default_val = t.default_value();
+                let default_val = t.default_value()?;
                 let mut val = Value::new_tuple(vec![default_val; 8]);
                 let mut chunk_size = 1;
                 while chunk_size * TUPLE_SIZE < *sz {
                     val = Value::new_tuple(vec![val; 8]);
                     chunk_size *= 8;
                 }
-                val
+                Ok(val)
             }
             Type::Struct(fields) => {
                 let mut vals = Vec::new();
                 for field in fields {
-                    vals.push(field.tipe.default_value());
+                    vals.push(field.tipe.default_value()?);
                 }
-                value_from_field_list(vals)
+                Ok(value_from_field_list(vals))
             }
             Type::Map(_key, _val) => {
                 // an unusable dummy value -- application will panic if it accesses this
-                Value::none()
+                Ok(Value::none())
             }
-            Type::Named(_) => {
-                panic!("tried to get default value for a named type");
-            }
+            Type::Named(_) => Err("tried to get default value for a named type".to_string()),
             Type::Func(_, _, _) => {
-                panic!("tried to get default value for a function type");
+                Err("tried to get default value for a function type".to_string())
             }
-            Type::Imported(_) => {
-                panic!("tried to get default value for an imported type");
-            }
-            Type::Any => Value::none(),
-            Type::Every => {
-                panic!("tried to get default value for the every type");
-            }
-            Type::Option(_) => Value::new_tuple(vec![Value::Int(Uint256::zero())]),
+            Type::Imported(_) => Err("tried to get default value for an imported type".to_string()),
+            Type::Any => Ok(Value::none()),
+            Type::Every => Err("tried to get default value for the every type".to_string()),
+            Type::Option(_) => Ok(Value::new_tuple(vec![Value::Int(Uint256::zero())])),
         }
     }
 }
