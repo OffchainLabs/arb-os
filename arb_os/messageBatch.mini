@@ -83,7 +83,6 @@ public func messageBatch_tryNew(msg: MessageFromL1) -> option<MessageBatch> {
 
 public func messageBatch_get(batch: MessageBatch) -> option<(MessageFromL1, MessageBatch)> {
     // returns next message in the batch (and updated batch), or None if no more messages in batch
-    asm(1,) { debugprint };
     let (stream, calldataLength) = bytestream_get64(batch.stream)?;
 
     let (bs, extractedL2data) = bytestream_getN(stream, 1 + 5*32 + calldataLength)?;
@@ -95,11 +94,9 @@ public func messageBatch_get(batch: MessageBatch) -> option<(MessageFromL1, Mess
         return None;   // sub-message must be of subtype 0
     }
 
-    asm(10,) { debugprint };
     let signer = recoverSigner(extractedL2data, extractedSig)?;
 
     let marshalledMsgData = bytearray_marshalFull(extractedL2data);
-    asm(11,) { debugprint };
 
     return Some((
         batch.template with {
@@ -130,9 +127,7 @@ func recoverSigner(msgData: ByteArray, signature: ByteArray) -> option<address> 
         0,
         0,
     );
-    asm(20,) { debugprint };
     let rlpHash = keccak256(rlpEncoded, 0, bytearray_size(rlpEncoded));
-    asm(30,) { debugprint };
 
     let signer = asm(
         bytearray_get256(signature, 0),
@@ -141,7 +136,6 @@ func recoverSigner(msgData: ByteArray, signature: ByteArray) -> option<address> 
         rlpHash,
     ) address { ecrecover };
 
-    asm(40,) { debugprint };
     if (signer == address(0)) {
         return None;
     } else {

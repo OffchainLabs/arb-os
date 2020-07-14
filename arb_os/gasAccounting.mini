@@ -236,8 +236,6 @@ public impure func getNextMsgFromCongestionAuction() -> (
     uint,           // gas price it will pay
 ) {
     // For now, the gas auction is a no-op.  It just approves every message at zero gas price.
-    asm(200,) { debugprint };
-
     let msg = unsafecast<MessageFromL1>(());   // value will be re-initialized before use
     loop {
         if let Some(sideloadedTuple) = trySideload() {
@@ -267,7 +265,6 @@ public impure func getNextMsgFromCongestionAuction() -> (
                     moreToDo = false;
                 }
             }
-            asm(110,) { debugprint };
             gasAccountingInfo = gasAccountingInfo with {
                 queuedFromBatch: queue
             };
@@ -279,7 +276,6 @@ public impure func getNextMsgFromCongestionAuction() -> (
                 let ba = bytearray_unmarshalBytes(msg.msgData);
                 let maxGas = bytearray_get256(ba, 1);
             }
-            asm(100,) { debugprint };
             return (msg, true, maxGas, 0);
         }
     }

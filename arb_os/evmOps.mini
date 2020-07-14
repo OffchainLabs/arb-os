@@ -230,7 +230,6 @@ public impure func evmOp_codecopy(memAddr: uint, codeOffset: uint, nbytes: uint)
 }
 
 public impure func evmOp_extcodesize(addr: address) -> uint {
-    asm(11000,) { debugprint };
     if let Some(topFrame) = evmCallStack_topFrame() {
         return account_getCodeSize(
             evmCallFrame_getAccount(topFrame, addr)

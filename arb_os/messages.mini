@@ -185,7 +185,6 @@ public impure func handleMessageFromL1(
 
          return None;
     } elseif (msg.kind == 3) {
-        asm(1000,) { debugprint };
         // L2 message
         handleL2Message(inStream, msg, maxGas, gasPrice)?;
         return Some(());
@@ -247,8 +246,6 @@ impure func handleL2Message(
         inStream = bs;
         sequenceNum = sn;
 
-        asm((1010, fullMsg.sender),) { debugprint };
-        asm(fullMsg,) { debugprint };
         if (verifyAndIncrSequenceNum(fullMsg.sender, sequenceNum) == None<()>) {
             // bad sequence number error
             emitLog(fullMsg, 5, None<ByteArray>, None<EvmLogs>, 0, 0);
@@ -302,7 +299,6 @@ impure func handleL2Message(
         }
 
         let remainingCallData = bytestream_getRemainingBytes(inStream); // remaining bytes of message, to be passed to contract as calldata
-        asm(3000,) { debugprint };
         initEvmCallStack(
             callKind,
             fullMsg,

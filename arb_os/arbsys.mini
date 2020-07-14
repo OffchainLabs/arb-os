@@ -67,7 +67,6 @@ type ArbSysTokenTransferMessage = struct {
 }
 
 public impure func arbsys_txcall() {
-    asm(1300,) { debugprint };
     if let Some(topFrame) = evmCallStack_topFrame() {
         let calldata = evmCallFrame_getCalldata(topFrame);
         if (bytearray_size(calldata) < 4) {
