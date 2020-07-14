@@ -205,7 +205,7 @@ impure func getCallerAddress() -> option<address> {
     );
 }
 
-impure func sendMessage(msgType: uint, sender: address, data: ByteArray) {
+public impure func sendMessage(msgType: uint, sender: address, data: ByteArray) {
     asm(
         (
             msgType,

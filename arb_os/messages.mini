@@ -186,7 +186,11 @@ public impure func handleMessageFromL1(
          return None;
     } elseif (msg.kind == 3) {
         // L2 message
-        handleL2Message(inStream, msg, maxGas, gasPrice)?;
+        handleL2Message(inStream, msg, maxGas, gasPrice, false)?;
+        return Some(());
+    // msg.kind == 4 is treated as unrecognized--they should already have been handled elsewhere
+    } elseif (msg.kind == 5) {
+        handleL2Message(inStream, msg, maxGas, gasPrice, true)?;
         return Some(());
     } else {
         // not a valid message type
@@ -232,10 +236,16 @@ impure func handleL2Message(
     inStream: ByteStream,
     fullMsg: MessageFromL1,
     maxGas: uint,
-    gasPrice: uint
+    gasPrice: uint,
+    isBuddyLaunch: bool,
 ) -> option<()> {   // return None if message is malformatted; otherwise handle errors and return Some(()); if no error, never return
     let (bs, msgType) = bytestream_getByte(inStream)?;
     inStream = bs;
+
+    if (isBuddyLaunch && (msgType != 1)) {
+        // buddy launch messages are required to be of "tx from contract" type
+        return None;
+    }
 
     // skip maxGas and gasPriceBid fields of message
     inStream = bytestream_skipBytes(inStream, 64)?;
@@ -274,7 +284,7 @@ impure func handleL2Message(
         let codeBytes = bytestream_getRemainingBytes(inStream);
         let (codept, evmJumpTable) = translateEvmCodeSegment(bytestream_new(codeBytes))?;
 
-        if (sequenceNum == (~0)) {
+        if ( (!isBuddyLaunch) && (sequenceNum == (~0)) ) {
             sequenceNum = fetchAndIncrSequenceNum(fullMsg.sender);
         }
         let newAddress = address(keccakOfRlpEncodedAddrUintPair(fullMsg.sender, sequenceNum));
@@ -292,6 +302,11 @@ impure func handleL2Message(
             gasPrice
         );  // should never return
     } else {
+        if (isBuddyLaunch) {
+            // buddy launch messages must be sent to address zero
+            return None;
+        }
+
         // this is a non-constructor call
         let callKind = 0;
         if (msgType == 2) {

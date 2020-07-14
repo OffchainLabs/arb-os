@@ -97,6 +97,9 @@ import impure func translateEvmCodeSegment(
 
 import impure func mainRunLoop();
 
+import impure func sendMessage(msgType: uint, sender: address, data: ByteArray);
+
+
 // This callframe is used to represent an EVM call in progress.
 // The callframe will have a full copy of the system state, but
 //        that state will be contingent on the call succeeding.
@@ -135,10 +138,19 @@ type ResumeInfo = struct {  // information used to resume a call after a subcall
     savedGas: uint,         // how much of the caller's gas was not lent to the subcall
 }
 
-//FIXME:  add OrDie variants of the getters that return options; use in evmOps
-
 var globalCallStack: option<EvmCallFrame>;   // call frame of currently running call, if any
 var globalCurrentEthMessage: MessageFromL1;  // the message that launched the top-level call
+
+// This is the structure that the Arbitrum protocol gives us, for each incoming message.
+// It is declared identically in inbox.mini and elsewhere
+type MessageFromL1 = struct {
+    kind: uint,               // type of message
+    blockNumber: uint,        // block number of the L1 block
+    timestamp: uint,          // timestamp of the L1 block
+    sender: address,          // address of the sender
+    inboxSeqNum: uint,        // sequence number in L1 inbox
+    msgData: MarshalledBytes  // contents of the message, as a marshalled bytearray
+}
 
 public impure func evmCallStack_init() {
     globalCallStack = None<EvmCallFrame>;
@@ -479,6 +491,11 @@ public impure func evmCallStack_returnFromCall(
                         gasUsed,
                         gasPrice
                     );
+
+                    if (globalCurrentEthMessage.kind == 5) {
+                        // successfully created a buddy contract -- announce that as a message
+                        sendMessage(5, globalCurrentEthMessage.sender, bytearray_new(0));
+                    }
                 } else {
                     // Compilation of resulting code failed; report an error.
                     emitLog(
