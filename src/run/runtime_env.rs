@@ -66,8 +66,12 @@ impl RuntimeEnvironment {
         self.recorder.add_msg(l1_msg);
     }
 
-    pub fn insert_l2_message(&mut self, sender_addr: Uint256, msg: &[u8]) {
-        self.insert_l1_message(3, sender_addr, msg);
+    pub fn insert_l2_message(&mut self, sender_addr: Uint256, msg: &[u8], special_msg_type: Option<u8>) {
+        self.insert_l1_message(
+            if let Some(msg_type) = special_msg_type { msg_type } else { 3 },
+            sender_addr,
+            msg
+        );
     }
 
     pub fn insert_tx_message(
@@ -88,7 +92,25 @@ impl RuntimeEnvironment {
         buf.extend(value.to_bytes_be());
         buf.extend_from_slice(data);
 
-        self.insert_l2_message(sender_addr, &buf);
+        self.insert_l2_message(sender_addr, &buf, None);
+    }
+
+    pub fn insert_buddy_deploy_message(
+        &mut self,
+        sender_addr: Uint256,
+        max_gas: Uint256,
+        gas_price_bid: Uint256,
+        value: Uint256,
+        data: &[u8],
+    ) {
+        let mut buf = vec![1u8];
+        buf.extend(max_gas.to_bytes_be());
+        buf.extend(gas_price_bid.to_bytes_be());
+        buf.extend(Uint256::zero().to_bytes_be());  // destination address 0
+        buf.extend(value.to_bytes_be());
+        buf.extend_from_slice(data);
+
+        self.insert_l2_message(sender_addr, &buf, Some(5));
     }
 
     pub fn new_batch(&self) -> Vec<u8> {
@@ -119,7 +141,7 @@ impl RuntimeEnvironment {
     }
 
     pub fn insert_batch_message(&mut self, sender_addr: Uint256, batch: &[u8]) {
-        self.insert_l2_message(sender_addr, batch);
+        self.insert_l2_message(sender_addr, batch, None);
     }
 
     pub fn _insert_nonmutating_call_message(
@@ -135,7 +157,7 @@ impl RuntimeEnvironment {
         buf.extend(to_addr.to_bytes_be());
         buf.extend_from_slice(data);
 
-        self.insert_l2_message(sender_addr, &buf);
+        self.insert_l2_message(sender_addr, &buf, None);
     }
 
     #[cfg(test)]

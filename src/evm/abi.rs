@@ -273,9 +273,11 @@ impl AbiForContract {
         &mut self,
         args: &[ethabi::Token],
         machine: &mut Machine,
+        deploy_as_buddy: bool,
         debug: bool,
     ) -> Option<Uint256> {
         let initial_logs_len = machine.runtime_env.get_all_logs().len();
+        let initial_sends_len = machine.runtime_env.get_all_sends().len();
         let augmented_code = if let Some(constructor) = self.contract.constructor() {
             match constructor.encode_input(self.code_bytes.clone(), args) {
                 Ok(aug_code) => aug_code,
@@ -288,14 +290,24 @@ impl AbiForContract {
         };
 
         let sender_addr = Uint256::from_usize(1025);
-        machine.runtime_env.insert_tx_message(
-            sender_addr,
-            Uint256::from_usize(1_000_000_000_000),
-            Uint256::zero(),
-            Uint256::zero(),
-            Uint256::zero(),
-            &augmented_code,
-        );
+        if deploy_as_buddy {
+            machine.runtime_env.insert_buddy_deploy_message(
+                sender_addr.clone(),
+                Uint256::from_usize(1_000_000_000_000),
+                Uint256::zero(),
+                Uint256::zero(),
+                &augmented_code,
+            );
+        } else {
+            machine.runtime_env.insert_tx_message(
+                sender_addr.clone(),
+                Uint256::from_usize(1_000_000_000_000),
+                Uint256::zero(),
+                Uint256::zero(),
+                Uint256::zero(),
+                &augmented_code,
+            );
+        }
         let _gas_used = if debug {
             machine.debug(None)
         } else {
@@ -309,6 +321,28 @@ impl AbiForContract {
                 logs.len() - initial_logs_len
             );
             return None;
+        }
+
+        if deploy_as_buddy {
+            let sends = machine.runtime_env.get_all_sends();
+            if sends.len() != initial_sends_len + 1 {
+                println!(
+                    "deploy: expected 1 new send, got {}",
+                    sends.len() - initial_sends_len
+                );
+                return None;
+            }
+            if let Value::Tuple(tup) = &sends[sends.len() - 1] {
+                if (tup[0] != Value::Int(Uint256::from_usize(5))) || (tup[1] != Value::Int(sender_addr)) {
+                    println!(
+                        "deploy: incorrect values in send item"
+                    );
+                    return None;
+                }
+            } else {
+                println!("malformed send item");
+                return None;
+            }
         }
 
         if let Value::Tuple(tup) = &logs[logs.len() - 1] {

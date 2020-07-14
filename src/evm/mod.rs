@@ -54,7 +54,7 @@ pub fn evm_xcontract_call_with_constructors(
 
     let mut fib_contract =
         AbiForContract::new_from_file("contracts/fibonacci/build/contracts/Fibonacci.json")?;
-    if fib_contract.deploy(&[], &mut machine, debug) == None {
+    if fib_contract.deploy(&[], &mut machine, false, debug) == None {
         panic!("failed to deploy Fibonacci contract");
     }
 
@@ -65,6 +65,7 @@ pub fn evm_xcontract_call_with_constructors(
             &fib_contract.address.to_bytes_be()[12..],
         ))],
         &mut machine,
+        false,
         debug,
     ) == None
     {
@@ -133,7 +134,7 @@ pub fn evm_test_create(
 
     let mut fib_contract =
         AbiForContract::new_from_file("contracts/fibonacci/build/contracts/Fibonacci.json")?;
-    if fib_contract.deploy(&[], &mut machine, debug) == None {
+    if fib_contract.deploy(&[], &mut machine,false, debug) == None {
         panic!("failed to deploy Fibonacci contract");
     }
 
@@ -144,6 +145,7 @@ pub fn evm_test_create(
             &fib_contract.address.to_bytes_be()[12..],
         ))],
         &mut machine,
+        false,
         debug,
     ) == None
     {
@@ -196,7 +198,7 @@ pub fn evm_xcontract_call_using_batch(
 
     let mut fib_contract =
         AbiForContract::new_from_file("contracts/fibonacci/build/contracts/Fibonacci.json")?;
-    if fib_contract.deploy(&[], &mut machine, debug) == None {
+    if fib_contract.deploy(&[], &mut machine, false, debug) == None {
         panic!("failed to deploy Fibonacci contract");
     }
 
@@ -207,6 +209,7 @@ pub fn evm_xcontract_call_using_batch(
             &fib_contract.address.to_bytes_be()[12..],
         ))],
         &mut machine,
+        false,
         debug,
     ) == None
     {
@@ -274,7 +277,7 @@ pub fn evm_direct_deploy_add(log_to: Option<&Path>, debug: bool) {
 
     match AbiForContract::new_from_file("contracts/add/build/contracts/Add.json") {
         Ok(mut contract) => {
-            let result = contract.deploy(&[], &mut machine, debug);
+            let result = contract.deploy(&[], &mut machine, false, debug);
             if let Some(contract_addr) = result {
                 assert_ne!(contract_addr, Uint256::zero());
             } else {
@@ -285,6 +288,32 @@ pub fn evm_direct_deploy_add(log_to: Option<&Path>, debug: bool) {
             panic!("error loading contract: {:?}", e);
         }
     }
+
+    if let Some(path) = log_to {
+        machine.runtime_env.recorder.to_file(path).unwrap();
+    }
+}
+
+pub fn evm_deploy_buddy_contract(log_to: Option<&Path>, debug: bool) {
+    let rt_env = RuntimeEnvironment::new(Uint256::from_usize(1111));
+    let mut machine = load_from_file(Path::new("arb_os/arbos.mexe"), rt_env);
+    machine.start_at_zero();
+
+    match AbiForContract::new_from_file("contracts/add/build/contracts/Add.json") {
+        Ok(mut contract) => {
+            let result = contract.deploy(&[], &mut machine, true, debug);
+            if let Some(contract_addr) = result {
+                assert_ne!(contract_addr, Uint256::zero());
+            } else {
+                panic!("deploy failed");
+            }
+        }
+        Err(e) => {
+            panic!("error loading contract: {:?}", e);
+        }
+    }
+
+
 
     if let Some(path) = log_to {
         machine.runtime_env.recorder.to_file(path).unwrap();
@@ -311,7 +340,7 @@ pub fn evm_test_arbsys(log_to: Option<&Path>, debug: bool) {
 
     let contract = match AbiForContract::new_from_file("contracts/add/build/contracts/Add.json") {
         Ok(mut contract) => {
-            let result = contract.deploy(&vec![], &mut machine, debug);
+            let result = contract.deploy(&vec![], &mut machine, false, debug);
             if let Some(contract_addr) = result {
                 assert_ne!(contract_addr, Uint256::zero());
                 contract
@@ -410,7 +439,7 @@ pub fn evm_direct_deploy_and_call_add(log_to: Option<&Path>, debug: bool) {
     let my_addr = Uint256::from_usize(1025);
     let contract = match AbiForContract::new_from_file("contracts/add/build/contracts/Add.json") {
         Ok(mut contract) => {
-            let result = contract.deploy(&[], &mut machine, debug);
+            let result = contract.deploy(&[], &mut machine, false, debug);
             if let Some(contract_addr) = result {
                 assert_ne!(contract_addr, Uint256::zero());
                 contract
