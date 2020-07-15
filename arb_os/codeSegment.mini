@@ -16,6 +16,8 @@
 
 import type ByteStream;
 
+import impure func errorHandler();
+
 import func bytestream_atEof(bs: ByteStream) -> bool;
 import func bytestream_bytesReadSoFar(bs: ByteStream) -> uint;
 import func bytestream_bytesRemaining(bs: ByteStream) -> uint;
@@ -331,7 +333,9 @@ public impure func translateEvmCodeSegment(
                                     evmJumpTable
                                 ));
                             } else {
-                                panic; // should never happen; pushEvmInsnCall always returns Some
+                                // should never happen; pushEvmInsnCall always returns Some
+                                errorHandler();
+                                return None;
                             }
                         }
                     }
