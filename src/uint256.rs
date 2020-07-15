@@ -385,12 +385,3 @@ impl<'de> Deserialize<'de> for Uint256 {
         })
     }
 }
-
-#[test]
-fn test_keccak_vs_messagehash() {
-    let mut extended: Vec<u8> = "\x19Ethereum Signed Message:\n32".as_bytes().to_vec();
-    panic!("{:x?}", extended);
-    let the_string = [0u8;32];
-    extended.extend(&the_string);
-    assert_eq!(hash_message(the_string).as_bytes(), keccak256(&extended));
-}

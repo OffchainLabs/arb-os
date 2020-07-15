@@ -1480,59 +1480,6 @@ fn do_ecrecover(
     }
 }
 
-#[test]
-fn recover_signature_from_message() {
-    let val = Uint256::from_usize(1398180);
-    let message = val.to_bytes_be();
-    let hash_as_uint = val.avm_hash();
-    let hash = H256(hash_as_uint.to_bytes_be()[..32].try_into().unwrap());
-    let key = PrivateKey::new(&mut rand::thread_rng());
-    let address = Address::from(&key);
-
-    // sign a message
-    let signature = key.sign(message.clone());
-
-    let recovered = signature.recover(message.clone()).unwrap();
-    let recovered2 = signature.recover(hash).unwrap();
-
-    // verifies the signature is produced by `address`
-    signature.verify(message, address).unwrap();
-
-    assert_eq!(recovered, address);
-    assert_eq!(recovered2, address);
-}
-
-#[test]
-fn test_ecrecover() {
-    let val = Uint256::from_usize(1398180);
-    let message = val.to_bytes_be();
-    let hash_as_uint = val.avm_hash();
-    let key = PrivateKey::new(&mut rand::thread_rng());
-    let address = Address::from(&key);
-
-    // sign a message
-    let signature = key.sign(message.clone());
-    let sig_bytes = signature.to_vec();
-
-    let recovered_ui = do_ecrecover(
-        Uint256::from_bytes(&sig_bytes[0..32]),
-        Uint256::from_bytes(&sig_bytes[32..64]),
-        if (sig_bytes[64] == 27) {
-            Uint256::zero()
-        } else {
-            Uint256::one()
-        },
-        hash_as_uint,
-    );
-
-    // verifies the signature is produced by `address`
-    signature.verify(message, address).unwrap();
-
-    let address_bytes = address.as_bytes();
-    let address_ui = Uint256::from_bytes(address_bytes);
-    assert_eq!(recovered_ui, address_ui);
-}
-
 ///Represents a stack trace, with each CodePt indicating a stack frame, Unknown variant is unused.
 #[derive(Debug)]
 pub enum StackTrace {
