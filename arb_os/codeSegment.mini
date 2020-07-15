@@ -27,8 +27,10 @@ import func bytestream_get64(bs: ByteStream) -> option<(ByteStream, uint)>;
 import func bytestream_getUint(bs: ByteStream) -> option<(ByteStream, uint)>;
 import func bytestream_skipBytes(bs: ByteStream, nbytes: uint) -> option<ByteStream>;
 
+import func chainParams_chainId();
 import func evmOp_address();
 import func evmOp_balance();
+import func evmOp_selfbalance();
 import func evmOp_call();
 import func evmOp_callcode();
 import func evmOp_calldatacopy();
@@ -283,6 +285,10 @@ public impure func translateEvmCodeSegment(
                 } else {
                     if (opcode == 0x45) { // GASLIMIT
                         return Some((pushValue(10000000000, restOfCode), evmJumpTable));
+                    } elseif (opcode == 0x46) { // CHAINID
+                        return pushEvmInsnCall(chainParams_chainId, restOfCode, evmJumpTable);
+                    } elseif (opcode == 0x47) { // SELFBALANCE
+                        return pushEvmInsnCall(evmOp_selfbalance, restOfCode, evmJumpTable);
                     } elseif (opcode == 0x50) { // POP
                         return Some((pushInstruction(0x30, restOfCode), evmJumpTable)); // pop
                     } elseif (opcode == 0x51) { // MLOAD
