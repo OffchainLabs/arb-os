@@ -133,6 +133,17 @@ public impure func evmOp_balance(addr: address) -> uint {
         return 0;
     }
 }
+
+public impure func evmOp_selfbalance() -> uint {
+    if let Some(topFrame) = evmCallStack_topFrame() {
+        return account_getBalance(
+            evmCallFrame_runningAsAccount(topFrame)
+        );
+    } else {
+        evm_runtimePanic();
+        return 0;
+    }
+}
     
 public impure func evmOp_origin() -> address {
     if let Some(oldie) = evmCallStack_oldestCallFrame() {
