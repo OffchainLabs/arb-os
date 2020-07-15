@@ -20,6 +20,9 @@ import func queue_new() -> Queue;
 import func queue_isEmpty(q: Queue) -> bool;
 import func queue_put(q: Queue, val: any) -> Queue;
 import func queue_get(q: Queue) -> option<(Queue, any)>;
+import func queue_peek(q: Queue) -> option<any>;
+import func queue_discardOneIfNonempty(q: Queue) -> option<Queue>;
+
 
 impure func main() {
     if let Some(res) = tests() {
@@ -62,6 +65,29 @@ func tests() -> option<uint> {
 	}
 	if ((queue_get(q)?).1 != 21) {
 		return Some(4);
+	}
+
+	q = queue_new();
+	q = queue_put(q, 1);
+	q = queue_put(q, 2);
+	let q2 = q;
+	if (queue_peek(q) != Some(unsafecast<any>(1))) {
+	    return Some(5);
+	}
+	if let Some(q) = queue_discardOneIfNonempty(q) {
+	    if (queue_get(q2) != Some((q, unsafecast<any>(1)))) {
+            return Some(6);
+        }
+    } else {
+        return Some(7);
+    }
+
+	q = queue_new();
+	if (queue_peek(q) != None<any>) {
+	    return Some(8);
+	}
+	if (queue_discardOneIfNonempty(q) != None<Queue>) {
+	    return Some(9);
 	}
 
 	return Some(0);

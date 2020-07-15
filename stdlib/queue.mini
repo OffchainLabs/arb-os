@@ -63,6 +63,22 @@ public func boundedQueue_get(q: BoundedQueue) -> option<(BoundedQueue, any)> {
     }
 }
 
+public func boundedQueue_peek(q: BoundedQueue) -> option<any> {
+    if (boundedQueue_isEmpty(q)) {
+        return None;
+    } else {
+        return Some(q.contents[q.nextGet]);
+    }
+}
+
+public func boundedQueue_discardOneIfNonempty(q: BoundedQueue) -> option<BoundedQueue> {
+    if (boundedQueue_isEmpty(q)) {
+        return None;
+    } else {
+        return Some(q with { nextGet: (q.nextGet+1) % q.capacity });
+    }
+}
+
 public func boundedQueue_expand(q: BoundedQueue, newSize: uint) -> BoundedQueue {
     if (newSize <= q.capacity) {
         panic;
@@ -103,3 +119,12 @@ public func queue_put(q: Queue, val: any) -> Queue {
 public func queue_get(q: Queue) -> option<(Queue, any)> {
     return boundedQueue_get(q);
 }
+
+public func queue_peek(q: Queue) -> option<any> {
+    return boundedQueue_peek(q);
+}
+
+public func queue_discardOneIfNonempty(q: Queue) -> option<Queue> {
+    return boundedQueue_discardOneIfNonempty(q);
+}
+
