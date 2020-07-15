@@ -57,13 +57,13 @@ public impure func precompile_0x01() {  // ecrecover
     // don't bother checking the first four bytes of calldata -- this is the only method in the contract
     if let Some(topFrame) = evmCallStack_topFrame() {
         let calldata = evmCallFrame_getCalldata(topFrame);
-        if (bytearray_size(calldata) != 4+3*32+1) {
+        if (bytearray_size(calldata) != 4+4*32) {
             evmOp_revert(0, 0);
         }
         let h = bytearray_get256(calldata, 4);
-        let v = bytearray_getByte(calldata, 36);
-        let r = bytearray_get256(calldata, 37);
-        let s = bytearray_get256(calldata, 69);
+        let v = bytearray_getByte(calldata, 4+32);
+        let r = bytearray_get256(calldata, 4+32*2);
+        let s = bytearray_get256(calldata, 4+32*3);
         let addr = asm(r, s, v-27, h) address { ecrecover };
 
         let success = evmCallStack_setTopFrameMemory(

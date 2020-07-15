@@ -20,6 +20,7 @@ use crate::uint256::Uint256;
 use abi::AbiForContract;
 use ethers_core::types::Address;
 use std::path::Path;
+use ethers_signers::Signer;
 
 mod abi;
 
@@ -181,8 +182,7 @@ pub fn evm_xcontract_call_using_batch(
     let rt_env = RuntimeEnvironment::new(Uint256::from_usize(1111));
 
     let wallet = rt_env.new_wallet();
-    let addr_h160: Address = wallet.private_key().into();
-    let my_addr = Uint256::from_bytes(addr_h160.as_bytes());
+    let my_addr = Uint256::from_bytes(wallet.address().as_bytes());
 
     let mut machine = load_from_file(Path::new("arb_os/arbos.mexe"), rt_env);
     machine.start_at_zero();
