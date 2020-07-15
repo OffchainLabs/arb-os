@@ -42,3 +42,7 @@ public impure func chainParams_chainAddress() -> address {
         panic;  // should never happen; and if it does, our chain is hosed anyway
     }
 }
+
+public impure func chainParams_chainId() -> uint {
+    return uint(chainParams_chainAddress()) & 0xffffffffffff;  // truncate to 48 bits
+}

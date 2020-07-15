@@ -40,7 +40,7 @@ pub struct RuntimeEnvironment {
 impl RuntimeEnvironment {
     pub fn new(chain_address: Uint256) -> Self {
         let mut ret = RuntimeEnvironment {
-            chain_id: chain_address.trim_to_u64(),
+            chain_id: chain_address.trim_to_u64() & 0xffffffffffff,  // truncate to 48 bits
             l1_inbox: Value::none(),
             current_block_num: Uint256::zero(),
             current_timestamp: Uint256::zero(),
