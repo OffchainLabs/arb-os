@@ -16,8 +16,6 @@
 
 import type MarshalledBytes;
 
-import impure func errorHandler();
-
 
 type ChainParams = struct {
     chainAddress: address,
@@ -41,9 +39,7 @@ public impure func chainParams_chainAddress() -> address {
     if let Some(params) = globalChainParams {
         return params.chainAddress;
     } else {
-        // If we get here, the chain never received its initialization message.
-        errorHandler();
-        panic;
+        panic;  // should never happen; and if it does, our chain is hosed anyway
     }
 }
 

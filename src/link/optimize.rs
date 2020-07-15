@@ -14,12 +14,8 @@
  * limitations under the License.
  */
 
-//!Provides functions for modifying a sequence of Instructions to improve performance and lower gas
-//! costs.
-
 use crate::mavm::{AVMOpcode, Instruction, Opcode};
 
-///Removes instructions that have no effect on the output of the program.
 fn useless_opcodes_layer<'a, I>(iter: I) -> impl Iterator<Item = &'a Instruction>
 where
     I: Iterator<Item = &'a Instruction>,
@@ -30,25 +26,6 @@ where
     })
 }
 
-///Takes a slice of `Instruction`s and returns a vector of instructions with certain combinations of
-/// instructions recursively either removed or replaced by simpler instructions.
-///
-/// These combinations are:
-/// * Dup0 and Pop with no immediates, removed
-/// * AuxPop with an immediate followed by AuxPush with no immediate, replaced by Noop with the same
-/// immediate
-/// * Noop with an immediate followed by AuxPush with no immediate, replaced by AuxPush with the
-/// same immediate
-/// * An AuxPush with no immediate followed by an AuxPop with an immediate, replaced by Swap1 with
-/// the same immediate
-/// * An AuxPush with an immediate followed by an AuxPop with no immediate, replaced by Noop with
-/// the same immediate
-///  * A Noop with an immediate followed by an AuxPop with no immediate, replaced by AuxPop with the
-/// same immediate
-/// * IsZero with an immediate followed by IsZero without an immediate, replaced by Noop with the
-/// same immediate
-/// * A Noop with an immediate followed by any instruction without an immediate, replaced by the
-/// second instruction with the immediate from the first.
 pub fn peephole(code_in: &[Instruction]) -> Vec<Instruction> {
     let mut code_out = Vec::new();
 

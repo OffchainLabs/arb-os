@@ -377,14 +377,12 @@ public impure func evmOp_getjumpaddr(evm_pc: uint) -> impure func() {
                 return codept;
             } else {
                 evm_error();   // EVM code tried to jump to a forbidden EVM jump destination
-                errorHandler();
                 panic;
             }
         }
     }
 
     evm_runtimePanic();
-    errorHandler();
     panic;
 }
 
@@ -529,17 +527,17 @@ public impure func evmOp_log4(
     panic;
 }
 
-public impure func evmOp_sloadbytes() {
+public func evmOp_sloadbytes() {
     // believe this is a non-standard opcode
     evm_notYetImplemented(14,);
 }
 
-public impure func evmOp_sstorebytes() {
+public func evmOp_sstorebytes() {
     // believe this is a non-standard opcode
     evm_notYetImplemented(15,);
 }
 
-public impure func evmOp_ssize() {
+public func evmOp_ssize() {
     // believe this is a non-standard opcode
     evm_notYetImplemented(16,);
 }
@@ -583,7 +581,6 @@ public impure func evmOp_call(
         return false;  // couldn't make a call, return failure
     } else {
         // should never get here -- control should have been thrown elsewhere
-        errorHandler();
         panic;
     }
 }
@@ -622,7 +619,6 @@ public impure func evmOp_callcode(
         return false;  // couldn't make a call, return failure
     } else {
         // should never get here -- control should have been thrown elsewhere
-        errorHandler();
         panic;
     }
 }
@@ -660,7 +656,6 @@ public impure func evmOp_delegatecall(
          return false;  // couldn't make a call, return failure
      } else {
          // should never get here -- control should have been thrown elsewhere
-         errorHandler();
          panic;
      }}
 
@@ -697,7 +692,6 @@ public impure func evmOp_staticcall(
         return false;  // couldn't make a call, return failure
     } else {
         // should never get here -- control should have been thrown elsewhere
-        errorHandler();
         panic;
     }
 }
@@ -714,7 +708,7 @@ public impure func evmOp_return(memOffset: uint, memNbytes: uint) {
     evm_runtimePanic();
 }
 
-public impure func evmOp_txexecgas() {
+public func evmOp_txexecgas() {
     // believe this is a non-standard opcode
     evm_notYetImplemented(23,);
 }
@@ -919,15 +913,13 @@ impure func evm_error() {
 
 }
 
-impure func evm_runtimePanic() {
+func evm_runtimePanic() {
     // This should be called when something that "shouldn't ever happen" has occurred.
     // It should only be called if something has gone wrong in the trusted code.
     // If untrusted code has encountered an error, that will be handled elsewhere.
-    errorHandler(); // should never return
-    panic;
+    errorHandler();
 }
 
-impure func evm_notYetImplemented(op: uint) {
-    errorHandler();
+func evm_notYetImplemented(op: uint) {
     panic;
 }

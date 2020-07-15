@@ -14,8 +14,6 @@
  * limitations under the License.
  */
 
-//!Provides functionality for running mavm executables.
-
 use crate::link::LinkedProgram;
 use crate::mavm::{CodePt, Value};
 use emulator::{ExecutionError, StackTrace};
@@ -27,17 +25,6 @@ pub use runtime_env::{bytes_from_bytestack, bytestack_from_bytes, RuntimeEnviron
 mod emulator;
 mod runtime_env;
 
-///Executes the file located at path, or starts the debugger if debug is set to true.
-///
-/// The args argument specifies the arguments to the executable.  These will be placed on the stack
-/// prior to the start of execution and are neither type checked nor checked for having the correct
-/// length.
-///
-/// The env specifies various aspects about the environment such as the inbox messages.  See
-/// `RuntimeEnvironment` for more details.
-///
-/// This function will panic if the specified path cannot be opened or does not contain a valid
-/// mini executable.
 pub fn run_from_file(
     path: &Path,
     args: Vec<Value>,
@@ -48,10 +35,6 @@ pub fn run_from_file(
     run(&mut machine, args, debug)
 }
 
-///Generates a `Machine` from the given path and `RuntimeEnvironment`. See `RuntimeEnvironment` for
-/// more details.
-///
-/// Will panic if the path cannot be opened or doesn't represent a valid mini executable.
 pub fn load_from_file(path: &Path, env: RuntimeEnvironment) -> Machine {
     let display = path.display();
 
@@ -69,10 +52,6 @@ pub fn load_from_file(path: &Path, env: RuntimeEnvironment) -> Machine {
     load_from_string(s, env)
 }
 
-///Interprets s as a mini executable and generates a `Machine` with the specified
-/// `RuntimeEnvironment`.
-///
-/// Will panic if s cannot be interpreted as a mini executable.
 fn load_from_string(s: String, env: RuntimeEnvironment) -> Machine {
     let parse_result: Result<LinkedProgram, serde_json::Error> = serde_json::from_str(&s);
     let program = match parse_result {
@@ -85,7 +64,6 @@ fn load_from_string(s: String, env: RuntimeEnvironment) -> Machine {
     Machine::new(program, env)
 }
 
-///Runs the specified `Machine` from its first codepoint.
 pub fn run(
     machine: &mut Machine,
     args: Vec<Value>,
@@ -98,8 +76,6 @@ pub fn run(
     }
 }
 
-///Interprets path as a mini executable and starts a profiler session with executable arguments args
-/// and `RuntimeEnvironment` env.  See `profiler_session` for more details.
 pub fn profile_gen_from_file(path: &Path, args: Vec<Value>, env: RuntimeEnvironment) {
     let mut machine = load_from_file(path, env);
     let profile = machine.profile_gen(args);

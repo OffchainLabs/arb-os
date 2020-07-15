@@ -14,8 +14,6 @@
  * limitations under the License.
  */
 
-//!Provides types and utilities for linking together compiled mini programs
-
 use crate::compile::{compile_from_file, CompileError, CompiledProgram, SourceFileMap, Type};
 use crate::mavm::{AVMOpcode, CodePt, Instruction, Label, Opcode, Value};
 use crate::stringtable::{StringId, StringTable};
@@ -33,9 +31,6 @@ mod optimize;
 mod striplabels;
 mod xformcode;
 
-///Represents a mini program that has gone through the post-link compilation step.
-///
-/// This is typically constructed via the `postlink_compile` function.
 #[derive(Serialize, Deserialize)]
 pub struct LinkedProgram {
     pub code: Vec<Instruction>,
@@ -46,9 +41,6 @@ pub struct LinkedProgram {
 }
 
 impl LinkedProgram {
-    ///Serializes self to the format specified by the format argument, with a default of json for
-    /// None. The output is written to a dynamically dispatched implementor of `std::io::Write`,
-    /// specified by the output argument.
     pub fn to_output(&self, output: &mut dyn io::Write, format: Option<&str>) {
         match format {
             Some("pretty") => {
@@ -84,7 +76,6 @@ impl LinkedProgram {
     }
 }
 
-///Represents a function imported from another mini program or module.
 #[derive(Clone, Serialize, Deserialize)]
 pub struct ImportedFunc {
     pub name_id: StringId,
@@ -114,8 +105,6 @@ impl ImportedFunc {
         }
     }
 
-    ///Takes self by value and returns self with slot_number increased by ext_offset. Used to assign
-    /// unique slot numbers when linking multiple source files.
     pub fn relocate(mut self, _int_offset: usize, ext_offset: usize) -> Self {
         self.slot_num += ext_offset;
         self
@@ -128,11 +117,6 @@ impl Debug for ImportedFunc {
     }
 }
 
-///Represents a function that is part of the modules public interface.  The label field represents
-/// the start location of the function in the program it is contained in.
-///
-/// This struct differs from `ExportedFuncPoint` because the label field points to a virtual label
-/// rather than an absolute address.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ExportedFunc {
     pub name: String,
@@ -141,10 +125,6 @@ pub struct ExportedFunc {
 }
 
 impl ExportedFunc {
-    ///Takes self by value and returns a tuple. The first field of the tuple is self with internal,
-    /// external, and function references increased by int_offset, ext_offset, and func_offset
-    /// instructions respectively.  The second field is the instruction after the end of self,
-    /// calculated by taking the sum of func_offset and the function length.
     pub fn relocate(
         self,
         int_offset: usize,
@@ -164,11 +144,6 @@ impl ExportedFunc {
     }
 }
 
-///Represents a function that is part of the modules public interface.  The codept field represents
-/// the start location of the function in the program it is contained in.
-///
-/// This struct differs from `ExportedFunc` as its codept field points to an absolute address rather
-/// than a virtual label.
 #[derive(Debug, Serialize, Deserialize)]
 pub struct ExportedFuncPoint {
     pub name: String,
@@ -185,8 +160,6 @@ impl ExportedFunc {
         }
     }
 
-    ///Returns an `ExportedFuncPoint` with the same name and type, and codept field specified by
-    ///the function argument.
     pub fn resolve(&self, codept: CodePt) -> ExportedFuncPoint {
         ExportedFuncPoint {
             name: self.name.clone(),
@@ -196,9 +169,6 @@ impl ExportedFunc {
     }
 }
 
-///Converts a linked `CompiledProgram` into a `LinkedProgram` by fixing non-forward jumps,
-/// converting wide tuples to nested tuples, performing code optimizations, converting the jump
-/// table to a static value, and combining the file name chart with the associated argument.
 pub fn postlink_compile(
     program: CompiledProgram,
     is_module: bool,
@@ -280,9 +250,6 @@ pub fn postlink_compile(
     })
 }
 
-///Takes a slice of tuples of `CompiledProgram`s and `bool`s representing whether the associated
-/// module should be type checked, and returns a vector containing the slice contents with the
-/// auto-linked programs attached if successful, and a `CompileError` otherwise.
 pub fn add_auto_link_progs(
     progs_in: &[(CompiledProgram, bool)],
 ) -> Result<Vec<(CompiledProgram, bool)>, CompileError> {
@@ -302,15 +269,6 @@ pub fn add_auto_link_progs(
     Ok(progs)
 }
 
-///Combines the `CompiledProgram`s in progs_in into a single `CompiledProgram` with offsets adjusted
-/// to avoid collisions and auto-linked programs added.
-///
-/// The init_storage_descriptor argument provides the immediate value for the 2 instruction function
-/// at the start of the module that returns a list of (evm_pc, compiled_pc) correspondences. The
-/// typecheck argument indicates whether the programs should be type checked.
-///
-/// Also prints a warning message to the console if import and export types between modules don't
-/// match.
 pub fn link(
     progs_in: &[CompiledProgram],
     is_module: bool,

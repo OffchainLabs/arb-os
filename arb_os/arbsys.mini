@@ -19,8 +19,6 @@ import type Account;
 import type ByteArray;
 import type MarshalledBytes;
 
-import impure func errorHandler();
-
 import impure func evmCallStack_topFrame() -> option<EvmCallFrame>;
 import impure func evmCallStack_setAccount(addr: address, acct: Account) -> bool;
 import impure func evmCallStack_getTopFrameMemoryOrDie() -> ByteArray;
@@ -28,7 +26,6 @@ import impure func evmCallStack_setTopFrameMemory(mem: ByteArray) -> bool;
 import impure func evmCallStack_cloneContract(addr: address) -> option<address>;
 
 import func evmCallFrame_getCalldata(frame: EvmCallFrame) -> ByteArray;
-import func evmCallFrame_getCallvalue(frame: EvmCallFrame) -> uint;
 import func evmCallFrame_getAccount(frame: EvmCallFrame, addr: address) -> Account;
 import func evmCallFrame_runningAsAddress(frame: EvmCallFrame) -> address;
 import func evmCallFrame_runningAsAccount(frame: EvmCallFrame) -> Account;
@@ -81,7 +78,7 @@ public impure func arbsys_txcall() {
             arbsys_withdrawErc20(topFrame, calldata);
         } elseif(funcCode == 0xf3e414f8) {
             arbsys_withdrawErc721(topFrame, calldata);
-        } elseif(funcCode == 0x25e16063) {
+        } elseif(funcCode == 0x1b9a91a4) {
             arbsys_withdrawEth(topFrame, calldata);
         } elseif(funcCode == 0x23ca0cd2) {
             arbsys_getTransactionCount(topFrame, calldata);
@@ -92,8 +89,8 @@ public impure func arbsys_txcall() {
             evmOp_revert(0, 0);
         }
     } else {
-        // this shouldn't happen -- should always be called in an EVM tx
-        errorHandler();
+        // this shouldn't happen -- should be called in an EVM call
+        panic;
     }
 }
 
@@ -115,28 +112,18 @@ impure func arbsys_withdrawErc20(topFrame: EvmCallFrame, calldata: ByteArray) {
     evmOp_return(0, 0);
 }
 
-impure func arbsys_withdrawErc721(topFrame: EvmCallFrame, calldata: ByteArray) {
-    if (bytearray_size(calldata) != 68) {
-        evmOp_revert(0, 0);
-    }
-    let senderAcct = evmCallFrame_runningAsAccount(topFrame);
-    let senderAddr = account_getAddress(senderAcct);
-    let destAddr = address(bytearray_get256(calldata, 4));
-    let id = bytearray_get256(calldata, 36);
-
-    let messageData = bytearray_extract(calldata, 4, 64);
-    sendMessage(2, senderAddr, messageData);
-    evmOp_return(0, 0);
+func arbsys_withdrawErc721(topFrame: EvmCallFrame, calldata: ByteArray) {
+    panic;
 }
 
 impure func arbsys_withdrawEth(topFrame: EvmCallFrame, calldata: ByteArray) {
-    if (bytearray_size(calldata) != 36) {
+    if (bytearray_size(calldata) != 68) {
         evmOp_revert(0, 0);
     }
     if let Some(senderAddr) = getCallerAddress() {
         let senderAcct = evmCallFrame_getAccount(topFrame, senderAddr);
         let destAddr = address(bytearray_get256(calldata, 4));
-        let amount = evmCallFrame_getCallvalue(topFrame);
+        let amount = bytearray_get256(calldata, 36);
 
         if let Some(updatedAcct) = account_deductFromEthBalance(senderAcct, amount) {
             if ( ! evmCallStack_setAccount(senderAddr, updatedAcct)) {

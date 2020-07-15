@@ -14,8 +14,6 @@
  * limitations under the License.
  */
 
-//!Converts non-type checked ast nodes to type checked versions, and other related utilities.
-
 use super::ast::{
     BinaryOp, Constant, Expr, FuncArg, FuncDecl, FuncDeclKind, GlobalVarDecl, IfArm,
     ImportFuncDecl, MatchPattern, Statement, StatementKind, StructField, TopLevelDecl, Type,
@@ -29,7 +27,6 @@ use crate::stringtable::{StringId, StringTable};
 use crate::uint256::Uint256;
 use std::collections::HashMap;
 
-///An error encountered during typechecking
 #[derive(Debug)]
 pub struct TypeError {
     pub reason: String,
@@ -43,14 +40,11 @@ pub fn new_type_error(msg: String, location: Option<Location>) -> TypeError {
     }
 }
 
-///Keeps track of compiler enforced properties, currently only tracks purity, may be extended to
-/// keep track of potential to throw or other properties.
 #[derive(Debug, Clone)]
 pub struct PropertiesList {
     pub pure: bool,
 }
 
-///A mini function that has been type checked.
 #[derive(Debug)]
 pub struct TypeCheckedFunc {
     pub name: StringId,
@@ -69,7 +63,6 @@ impl MiniProperties for TypeCheckedFunc {
     }
 }
 
-///A mini statement that has been type checked.
 #[derive(Debug, Clone)]
 pub enum TypeCheckedStatement {
     Noop(Option<Location>),
@@ -128,14 +121,12 @@ impl MiniProperties for TypeCheckedStatement {
     }
 }
 
-///A `MatchPattern` that has gone through type checking.
 #[derive(Debug, Clone)]
 pub enum TypeCheckedMatchPattern {
     Simple(StringId, Type),
     Tuple(Vec<TypeCheckedMatchPattern>, Type),
 }
 
-///An `IfArm` that has been type checked.
 #[derive(Debug, Clone)]
 pub enum TypeCheckedIfArm {
     Cond(
@@ -166,7 +157,6 @@ impl MiniProperties for TypeCheckedIfArm {
     }
 }
 
-///A mini expression that has been type checked.
 #[derive(Debug, Clone)]
 pub enum TypeCheckedExpr {
     UnaryOp(UnaryOp, Box<TypeCheckedExpr>, Type, Option<Location>),
@@ -333,7 +323,6 @@ impl MiniProperties for TypeCheckedExpr {
 }
 
 impl TypeCheckedExpr {
-    ///Extracts the type returned from the expression.
     pub fn get_type(&self) -> Type {
         match self {
             TypeCheckedExpr::UnaryOp(_, _, t, _) => t.clone(),
@@ -372,7 +361,6 @@ impl TypeCheckedExpr {
     }
 }
 
-///A `StructField` that has been type checked.
 #[derive(Debug, Clone)]
 pub struct TypeCheckedStructField {
     pub name: StringId,
@@ -385,8 +373,6 @@ impl TypeCheckedStructField {
     }
 }
 
-///Returns a vector of `ImportFuncDecl`s corresponding to the builtins as defined by string_table,
-/// if they are not defined in string_table, they are inserted.
 fn builtin_func_decls(mut string_table: StringTable) -> (Vec<ImportFuncDecl>, StringTable) {
     let imps = vec![
         ImportFuncDecl::new_types(
@@ -441,10 +427,6 @@ fn builtin_func_decls(mut string_table: StringTable) -> (Vec<ImportFuncDecl>, St
     (imps, string_table)
 }
 
-///Converts the `TopLevelDecl`s in decls into corresponding type checked variants.
-///
-///If successful, `ExportedFunc`, `ImportedFunc`, and `GlobalVarDecl` are returned directly, along
-/// with a `StringTable` modified by internal call to `builtin_func_decls`
 pub fn typecheck_top_level_decls(
     decls: &[TopLevelDecl],
     checked_funcs: &mut Vec<TypeCheckedFunc>,
@@ -563,10 +545,6 @@ pub fn typecheck_top_level_decls(
     ))
 }
 
-///If successful, produces a `TypeCheckedFunc` from `FuncDecl` reference fd, according to global
-/// state defined by type_table, global_vars, and func_table.
-///
-/// If not successful the function returns a `TypeError`.
 pub fn typecheck_function<'a>(
     fd: &'a FuncDecl,
     type_table: &'a SymTable<'a, Type>,
@@ -603,17 +581,6 @@ pub fn typecheck_function<'a>(
     }
 }
 
-///If successful, produces a `Vec<TypeCheckedStatement>` corresponding to the items in statements
-/// after type checking has been performed sequentially.  Bindings produced by a statement are
-/// visible to all statements at a higher index, and no previous statements. If not successful, this
-/// function produces a `TypeError`.
-///
-/// This function is not designed to handle additional variable bindings, for example arguments to
-/// functions, for this use case, prefer `typecheck_statement_sequence_with_bindings`.
-///
-///Takes return_type to ensure that `Return` statements produce the correct type, type_table,
-/// global_vars, and func_table should correspond to the types, globals, and functions available
-/// to the statement sequence.
 fn typecheck_statement_sequence<'a>(
     statements: &'a [Statement],
     return_type: &Type,
@@ -647,8 +614,6 @@ fn typecheck_statement_sequence<'a>(
     Ok(rest_result)
 }
 
-///Operates identically to `typecheck_statement_sequence`, except that the pairs in bindings are
-/// added to type_table.
 fn typecheck_statement_sequence_with_bindings<'a>(
     statements: &'a [Statement],
     return_type: &Type,
@@ -673,12 +638,6 @@ fn typecheck_statement_sequence_with_bindings<'a>(
     }
 }
 
-///Performs type checking on statement.
-///
-/// If successful, returns tuple containing a `TypeCheckedStatement` and a `Vec<(StringId, Type)>`
-/// representing the bindings produced by the statement.  Otherwise returns a `TypeError`.
-///
-/// The argument loc provide the correct location to `TypeError` if the function fails.
 fn typecheck_statement<'a>(
     statement: &'a StatementKind,
     loc: &Option<Location>,
@@ -878,13 +837,6 @@ fn typecheck_statement<'a>(
     }
 }
 
-///Type checks a `Vec<MatchPattern>`, representing a tuple match pattern against `Type` rhs_type.
-///
-/// This is used in let bindings, and may have other uses in the future.
-///
-/// If successful this function returns a tuple containing a `TypeCheckedMatchPattern`, and a
-/// `Vec<(StringId, Type)>` representing the bindings produced from this match pattern.  Otherwise
-/// the function returns a `TypeError`
 fn typecheck_patvec(
     rhs_type: Type,
     patterns: Vec<MatchPattern>,
@@ -925,12 +877,6 @@ fn typecheck_patvec(
     }
 }
 
-///Performs type checking on `IfArm` arm, returning a `TypeCheckedIfArm` if successful, and a
-/// `TypeError` otherwise.
-///
-/// This function takes the the return type of the containing function as arm may contain Return
-/// statements.  Also type_table, global_vars, and func_table contain the variables, globals, and
-/// functions available to the arm.
 fn typecheck_if_arm(
     arm: &IfArm,
     return_type: &Type,
@@ -976,13 +922,6 @@ fn typecheck_if_arm(
     }
 }
 
-///Performs type checking on the expression expr.  Returns `TypeCheckedExpr` if successful, and
-/// `TypeError` otherwise.
-///
-/// The arguments type_table, global_vars, and func_table represent the variables, globals, and
-/// functions available to the expression, and return_type represents the return type of the
-/// containing function. This last argument is needed as Try and CodeBlock expressions may return
-/// from the function.
 fn typecheck_expr(
     expr: &Expr,
     type_table: &SymTable<Type>,
@@ -1440,7 +1379,7 @@ fn typecheck_expr(
             *loc,
         )),
         Expr::Asm(ret_type, insns, args, loc) => {
-            if *ret_type == Type::Void {
+            if ret_type.is_void() {
                 return Err(new_type_error(
                     "asm expression cannot return void".to_string(),
                     *loc,
@@ -1486,9 +1425,6 @@ fn typecheck_expr(
     }
 }
 
-///Attempts to apply the `UnaryOp` op, to `TypeCheckedExpr` sub_expr, producing a `TypeCheckedExpr`
-/// if successful, and a `TypeError` otherwise.  The argument loc is used to record the location of
-/// op for use in formatting the `TypeError`.
 fn typecheck_unary_op(
     op: UnaryOp,
     sub_expr: TypeCheckedExpr,
@@ -1690,11 +1626,6 @@ fn typecheck_unary_op(
     }
 }
 
-///Attempts to apply the `BinaryOp` op, to `TypeCheckedExpr`s tcs1 on the left, and tcs2 on the
-/// right.
-///
-/// This produces a `TypeCheckedExpr` if successful, and a `TypeError` otherwise.  The argument loc
-/// is used to record the location of op for use in formatting the `TypeError`.
 fn typecheck_binary_op(
     mut op: BinaryOp,
     mut tcs1: TypeCheckedExpr,
@@ -1962,14 +1893,6 @@ fn typecheck_binary_op(
     }
 }
 
-///Version of `typecheck_binary_op` for when both sub expressions are constant integer types.
-///
-/// This is used internally by `typecheck_binary_op`, so this generally does not need to be called
-/// directly.
-///
-/// The arguments val1, and t1 represent the value of the left subexpression, and its type, and val2
-/// and t2 represent the value and type of the right subexpression, loc is used to format the
-/// `TypeError` in case of failure.
 fn typecheck_binary_op_const(
     op: BinaryOp,
     val1: Uint256,

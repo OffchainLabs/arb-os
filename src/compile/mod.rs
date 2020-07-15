@@ -14,8 +14,6 @@
  * limitations under the License.
  */
 
-//! Contains utilities for compiling mini source code.
-
 use crate::link::{ExportedFunc, ImportedFunc};
 use crate::mavm::Instruction;
 use crate::pos::{BytePos, Location};
@@ -39,16 +37,10 @@ mod symtable;
 mod typecheck;
 lalrpop_mod!(mini);
 
-///Trait that identifies what mini compiler tracked properties a value implementing this trait has.
-///
-///Currently only purity/impurity is tracked, however more properties may be added in the future.
 pub(crate) trait MiniProperties {
-    ///Returns false if the value reads or writes mini global state, and true otherwise.
     fn is_pure(&self) -> bool;
 }
 
-///Represents a mini program that has been compiled and possibly linked, but has not had post-link
-/// compilation steps applied. Is directly serialized to and from .mao files.
 #[derive(Clone, Serialize, Deserialize)]
 pub struct CompiledProgram {
     pub code: Vec<Instruction>,
@@ -78,13 +70,6 @@ impl CompiledProgram {
         }
     }
 
-    ///Takes self by value and returns a tuple. The first value in the tuple is modified version of
-    /// self with internal code references shifted forward by int_offset instructions, external code
-    /// references offset by ext_offset instructions, function references shifted forward by
-    /// func_offset, num_globals modified assuming the first *globals_offset* slots are occupied,
-    /// and source_file_map replacing the existing source_file_map field.
-    ///
-    /// The second value of the tuple is the function offset after applying this operation.
     pub fn relocate(
         self,
         int_offset: usize,
@@ -133,9 +118,6 @@ impl CompiledProgram {
         )
     }
 
-    ///Writes self to output in format "format".  Supported values are: "pretty", "json", or
-    /// "bincode" if None is specified, json is used, and if an invalid format is specified this
-    /// value appended by "invalid format: " will be written instead
     pub fn to_output(&self, output: &mut dyn io::Write, format: Option<&str>) {
         match format {
             Some("pretty") => {
@@ -170,11 +152,6 @@ impl CompiledProgram {
     }
 }
 
-///Returns either a CompiledProgram generated from source code at path, otherwise returns a
-/// CompileError.
-///
-/// The file_id specified will be used as the file_id in locations originating from this source
-/// file, and if debug is set to true, then compiler internal debug information will be printed.
 pub fn compile_from_file(
     path: &Path,
     file_id: u64,
@@ -193,14 +170,6 @@ pub fn compile_from_file(
     serde_json::from_str(&s).or_else(|_| compile_from_source(s, display, file_id, debug))
 }
 
-///Interprets s as mini source code, and returns a CompiledProgram if s represents a valid program,
-/// or a CompileError otherwise.
-///
-/// The pathname field contains the name of the file as used by the
-/// source_file_map field of Compiled program.
-///
-/// The file_id specified will be used as the file_id in locations originating from this source
-/// file, and if debug is set to true, then compiler internal debug information will be printed.
 pub fn compile_from_source(
     s: String,
     pathname: std::path::Display,
@@ -275,7 +244,6 @@ pub fn compile_from_source(
     ))
 }
 
-///Represents any error encountered during compilation.
 #[derive(Debug, Clone)]
 pub struct CompileError {
     description: String,
@@ -302,8 +270,6 @@ impl CompileError {
     }
 }
 
-///Lists the offset of each source file contained by a CompiledProgram in offsets, and the
-/// instruction directly following the last in the CompiledProgram.
 #[derive(Clone, Serialize, Deserialize)]
 pub struct SourceFileMap {
     offsets: Vec<(usize, String)>,
@@ -330,7 +296,6 @@ impl SourceFileMap {
         self.end += size;
     }
 
-    ///Panics if offset is past the end of the SourceFileMap
     pub fn get(&self, offset: usize) -> String {
         for i in 0..(self.offsets.len() - 1) {
             if offset < self.offsets[i + 1].0 {

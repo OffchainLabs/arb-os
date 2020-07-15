@@ -14,8 +14,6 @@
  * limitations under the License.
  */
 
-//!Contains utilities for generating instructions from AST structures.
-
 use super::ast::{BinaryOp, FuncArg, GlobalVarDecl, Type, UnaryOp};
 use super::symtable::CopyingSymTable;
 use super::typecheck::{
@@ -29,7 +27,6 @@ use crate::stringtable::{StringId, StringTable};
 use crate::uint256::Uint256;
 use std::{cmp::max, collections::HashMap};
 
-///Represents any encountered during codegen
 #[derive(Debug)]
 pub struct CodegenError {
     pub reason: &'static str,
@@ -40,14 +37,6 @@ pub fn new_codegen_error(reason: &'static str, location: Option<Location>) -> Co
     CodegenError { reason, location }
 }
 
-///Top level function for code generation, generates code for modules.
-///
-///In this function, funcs represents a list of functions in scope, code_in represents previously
-/// generated code, string_table is used to get builtins, imported_funcs is a list of functions
-/// imported from other modules, and global_vars lists the globals available in the module.
-///
-/// The function returns a mutable reference to the generated code if it is successful, otherwise it
-/// returns a CodegenError.
 pub fn mavm_codegen<'a>(
     funcs: Vec<TypeCheckedFunc>,
     code_in: &'a mut Vec<Instruction>,
@@ -84,15 +73,6 @@ pub fn mavm_codegen<'a>(
     Ok(code)
 }
 
-///This generates code for individual mini functions.
-///
-///In this function, func represents the function to be codegened, code represents previously
-/// generated code, label_gen should point to the next available label ID, string_table is used to
-/// get builtins, imported_func_map is a list of functions imported from other modules, and
-/// global_var_map lists the globals available in the module.
-///
-/// If successful the function returns a tuple containing the state of the label generator after
-/// codegen, and a mutable reference to the generated code, otherwise it returns a CodegenError.
 fn mavm_codegen_func<'a>(
     func: TypeCheckedFunc,
     code: &'a mut Vec<Instruction>,
@@ -150,13 +130,6 @@ fn mavm_codegen_func<'a>(
     Ok((label_gen, code))
 }
 
-///This adds args to locals, and then codegens the statements in statements, using the updated
-/// locals and other function arguments as parameters.
-///
-/// If successful the function returns a tuple containing the updated label generator, maximum
-/// number of locals used so far by this call frame, and a bool that is set to true when the
-/// function may continue past the end of the generated code, otherwise the function returns a
-/// CodegenError.
 fn add_args_to_locals_table(
     locals: CopyingSymTable<'_, usize>,
     args: &[FuncArg],
@@ -196,16 +169,6 @@ fn add_args_to_locals_table(
     }
 }
 
-///Generates code for the provided statements with index 0 generated first. code represents the
-/// code generated previously, num_locals the maximum number of locals used at any point in the call
-/// frame so far, locals is a map of local variables, label_gen points to the next available locals
-/// slot, string_table is used to get builtins, import_func_map associates each imported function
-/// with a label, and global_var_map maps global variable IDs to their slot number.
-///
-/// If successful the function returns a tuple containing the updated label generator, maximum
-/// number of locals used so far by this call frame, a bool that is set to true when the function
-/// may continue past the end of the generated code, and a map of locals available at the end of the
-/// statement sequence, otherwise the function returns a CodegenError.
 fn mavm_codegen_statements(
     statements: Vec<TypeCheckedStatement>, // statements to codegen
     mut code: &mut Vec<Instruction>,       // accumulates the code as it's generated
@@ -771,12 +734,6 @@ fn mavm_codegen_statements(
     }
 }
 
-///Generates code for assigning the contents of a tuple on the top of the stack to a sequential set
-/// of locals.  code represents previously generated code, pattern is a slice of match patterns
-/// corresponding to the structure of the tuple, local_slot_num_base is the slot of the first local
-/// being assigned to, and loc is the location the operation originates from in the source code.
-///
-/// Nothing is returned directly, and the generated code can be accessed through the code reference.
 fn mavm_codegen_tuple_pattern(
     code: &mut Vec<Instruction>,
     pattern: &[TypeCheckedMatchPattern],
@@ -811,12 +768,6 @@ fn mavm_codegen_tuple_pattern(
     }
 }
 
-///Generates code for if arm specified by arm, end_label is the label jumped to when exiting the if
-/// else chain, code is the previously generated code, num_locals is the maximum number of locals
-/// used at any point previously in this call frame, locals is a table of names to variable slot
-/// numbers, label_gen points to the next available local slot, string_table is used to look up
-/// builtins, import_func_map maps IDs to the associated label, and global_var_map maps IDs to
-/// global variables.
 fn mavm_codegen_if_arm(
     arm: &TypeCheckedIfArm,
     end_label: Label,
@@ -916,18 +867,6 @@ fn mavm_codegen_if_arm(
     }
 }
 
-///Generates code for the expression expr.
-///
-/// code represents the previously generated code, num_locals is the maximum number of locals used
-/// at any previous point in the callframe, locals is the table of local variable names to slot
-/// numbers, label_gen points to the first available locals slot, string_table is used to get
-/// builtins, import_func_map maps stringIDs for imported function to their associated labels,
-/// global_var_map maps stringIDs to their associated slot numbers, and prepushed_vals indicates the
-/// number of items on the stack at the start of the call, this is needed for early returns.
-///
-/// If successful this function returns a tuple containing the updated label_gen, a mutable
-/// reference to the generated code, and a usize containing the number of locals used by the
-/// expression, otherwise it returns a CodegenError.
 fn mavm_codegen_expr<'a>(
     expr: &TypeCheckedExpr,
     mut code: &'a mut Vec<Instruction>,
@@ -1858,7 +1797,6 @@ fn mavm_codegen_expr<'a>(
     }
 }
 
-///Used to codegen the FixedArrayMod variant of TypeCheckedExpr.
 fn codegen_fixed_array_mod<'a>(
     arr_expr: &TypeCheckedExpr,
     idx_expr: &TypeCheckedExpr,
@@ -1946,7 +1884,6 @@ fn codegen_fixed_array_mod<'a>(
     .map(|(lg, code, num_locals)| (lg, code, max(num_locals, exp_locals)))
 }
 
-///Used by codegen_fixed_array_mod, you should not call this directly.
 fn codegen_fixed_array_mod_2<'a>(
     val_expr: &TypeCheckedExpr,
     size: usize,
