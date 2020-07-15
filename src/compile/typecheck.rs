@@ -922,7 +922,7 @@ fn typecheck_if_arm(
     }
 }
 
-fn typecheck_expr(
+pub fn typecheck_expr(
     expr: &Expr,
     type_table: &SymTable<Type>,
     global_vars: &HashMap<StringId, (Type, usize)>,

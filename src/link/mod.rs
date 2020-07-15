@@ -23,7 +23,6 @@ use std::fmt::{self, Debug};
 use std::hash::Hasher;
 use std::io;
 use std::path::Path;
-use xformcode::make_uninitialized_tuple;
 
 pub use xformcode::{value_from_field_list, TupleTree, TUPLE_SIZE};
 
@@ -279,6 +278,11 @@ pub fn link(
         .iter()
         .map(|prog| (prog.clone(), typecheck))
         .collect();
+    let globals = progs_in
+        .iter()
+        .map(|(prog, _)| prog.globals.clone())
+        .flatten()
+        .collect::<Vec<_>>();
     let progs = if is_module {
         progs_in.to_vec()
     } else {
@@ -340,7 +344,7 @@ pub fn link(
             Instruction::from_opcode_imm(Opcode::AVMOpcode(AVMOpcode::Noop), Value::none(), None),
             Instruction::from_opcode_imm(
                 Opcode::AVMOpcode(AVMOpcode::Rset),
-                make_uninitialized_tuple(global_num_limit),
+                value_from_field_list(globals.clone()),
                 None,
             ),
         ]
@@ -417,6 +421,7 @@ pub fn link(
         linked_xlated_code,
         linked_exports.into_iter().map(|x| x.0).collect(),
         linked_imports.into_iter().map(|x| x.0).collect(),
+        globals,
         global_num_limit,
         Some(merged_source_file_map),
         if is_module {

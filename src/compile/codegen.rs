@@ -867,7 +867,7 @@ fn mavm_codegen_if_arm(
     }
 }
 
-fn mavm_codegen_expr<'a>(
+pub fn mavm_codegen_expr<'a>(
     expr: &TypeCheckedExpr,
     mut code: &'a mut Vec<Instruction>,
     num_locals: usize,

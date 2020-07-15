@@ -15,8 +15,9 @@
  */
 
 use crate::link::{ExportedFunc, ImportedFunc};
-use crate::mavm::Instruction;
+use crate::mavm::{CodePt, Instruction, Label, LabelGenerator, Value};
 use crate::pos::{BytePos, Location};
+use crate::run::ExecutionError;
 use crate::stringtable;
 use lalrpop_util::lalrpop_mod;
 use mini::DeclsParser;
@@ -27,6 +28,10 @@ use std::fs::File;
 use std::io::{self, Read};
 use std::path::Path;
 
+use crate::compile::codegen::mavm_codegen_expr;
+use crate::compile::symtable::{CopyingSymTable, SymTable};
+use crate::compile::typecheck::typecheck_expr;
+use crate::run::Machine;
 pub use ast::Type;
 pub use source::Lines;
 
@@ -41,11 +46,12 @@ pub(crate) trait MiniProperties {
     fn is_pure(&self) -> bool;
 }
 
-#[derive(Clone, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct CompiledProgram {
     pub code: Vec<Instruction>,
     pub exported_funcs: Vec<ExportedFunc>,
     pub imported_funcs: Vec<ImportedFunc>,
+    pub globals: Vec<Value>,
     pub global_num_limit: usize,
     pub source_file_map: Option<SourceFileMap>,
     pub file_name_chart: HashMap<u64, String>,
@@ -56,6 +62,7 @@ impl CompiledProgram {
         code: Vec<Instruction>,
         exported_funcs: Vec<ExportedFunc>,
         imported_funcs: Vec<ImportedFunc>,
+        globals: Vec<Value>,
         global_num_limit: usize,
         source_file_map: Option<SourceFileMap>,
         file_name_chart: HashMap<u64, String>,
@@ -64,6 +71,7 @@ impl CompiledProgram {
             code,
             exported_funcs,
             imported_funcs,
+            globals,
             global_num_limit,
             source_file_map,
             file_name_chart,
@@ -110,6 +118,7 @@ impl CompiledProgram {
                 relocated_code,
                 relocated_exported_funcs,
                 relocated_imported_funcs,
+                self.globals,
                 self.global_num_limit + globals_offset,
                 source_file_map,
                 self.file_name_chart,
@@ -234,11 +243,52 @@ pub fn compile_from_source(
             println!("{:04}:  {}", idx, insn);
         }
     }
+    let global_num_limit = global_vars.len();
+    let globals = global_vars
+        .iter()
+        .map(|decl| {
+            if let Some(ref expr) = decl.init_expr {
+                let mut import_func_map = HashMap::new();
+                for imp_func in &imported_funcs {
+                    import_func_map.insert(imp_func.name_id, Label::External(imp_func.slot_num));
+                }
+                let tcexpr = typecheck_expr(
+                    expr,
+                    &SymTable::Empty,
+                    &HashMap::new(),
+                    &SymTable::new(),
+                    &decl.tipe,
+                ).map_err(|e| CompileError::new( e.reason,e.location))?;
+                let mut code = vec![];
+                mavm_codegen_expr(
+                    &tcexpr,
+                    &mut code,
+                    0,
+                    &CopyingSymTable::Empty,
+                    LabelGenerator::new(),
+                    &string_table,
+                    &import_func_map,
+                    &HashMap::new(),
+                    0,
+                ).map_err(|e| CompileError::new(format!("Could not generate code for global initializer: \"{}\"",e.reason),e.location))?;
+                let mut machine = Machine::new_code(code, HashMap::new());
+                machine.test_call(CodePt::new_internal(0), Vec::new(), false).map_err(|e| CompileError::new(format!("While executing global initializer expression, encountered error \"{}\"",match e {
+                    ExecutionError::StoppedErr(reason) => reason,
+                    ExecutionError::Wrapped(reason, _) => reason,
+                    ExecutionError::RunningErr(reason,_, _) => reason,
+                }),decl.location))?;
+                machine.stack.top().ok_or_else(|| CompileError::new("Global initializer expression did not return an expression".to_owned(),decl.location))
+            } else {
+                Ok(decl.tipe.default_value().unwrap_or_else(|_| Value::none()))
+            }
+        })
+        .collect::<Result<_,_>>()?;
     Ok(CompiledProgram::new(
         code_out.to_vec(),
         exported_funcs,
         imported_funcs,
-        global_vars.len(),
+        globals,
+        global_num_limit,
         Some(SourceFileMap::new(code_out.len(), pathname.to_string())),
         HashMap::new(),
     ))
@@ -270,7 +320,7 @@ impl CompileError {
     }
 }
 
-#[derive(Clone, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct SourceFileMap {
     offsets: Vec<(usize, String)>,
     end: usize,

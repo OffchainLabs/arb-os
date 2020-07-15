@@ -67,7 +67,8 @@ FuncArg: FuncArg = {
 }
 
 GlobalVarDecl: GlobalVarDecl = {
-	<lno: @L> "var" <i:Ident> ":" <t:Type> ";" => GlobalVarDecl::new(i, t, file_info.location(BytePos::from(lno),filename)),
+	<lno: @L> "var" <i:Ident> ":" <t:Type> ";" => GlobalVarDecl::new(i, t, None, file_info.location(BytePos::from(lno),filename)),
+    <lno: @L> "var" <i:Ident> ":" <t:Type> "=" <e: Expr> ";" => GlobalVarDecl::new(i, t, Some(e), file_info.location(BytePos::from(lno),filename)),
 }
 
 CodeBlock: Vec<Statement> = {

@@ -212,10 +212,6 @@ pub fn jump_table_to_value(jump_table: Vec<CodePt>) -> Value {
     shape.make_value(jump_table_codepoints)
 }
 
-pub fn make_uninitialized_tuple(size: usize) -> Value {
-    TupleTree::new(size, false).make_empty()
-}
-
 #[derive(Debug)]
 pub enum TupleTree {
     Single,

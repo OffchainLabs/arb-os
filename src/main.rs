@@ -165,7 +165,7 @@ fn main() -> Result<(), CompileError> {
                     compiled_program.to_output(&mut *output, matches.value_of("format"));
                 }
                 Err(e) => {
-                    println!("Compilation error: {:?}\nIn file: {}", e, filename);
+                    println!("Compilation error: {}\nIn file: {}", e, filename);
                     return Err(e);
                 }
             }

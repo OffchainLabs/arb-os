@@ -413,7 +413,7 @@ impl ProfilerData {
 
 #[derive(Debug)]
 pub struct Machine {
-    stack: ValueStack,
+    pub stack: ValueStack,
     aux_stack: ValueStack,
     state: MachineState,
     code: CodeStore,
@@ -438,6 +438,21 @@ impl Machine {
             arb_gas_remaining: Uint256::zero().bitwise_neg(),
             runtime_env: env,
             file_name_chart: program.file_name_chart,
+        }
+    }
+
+    pub fn new_code(code: Vec<Instruction>, file_name_chart: HashMap<u64,String>) -> Self {
+        Machine {
+            stack: ValueStack::new(),
+            aux_stack: ValueStack::new(),
+            state: MachineState::Stopped,
+            code: CodeStore::new(code),
+            static_val: Value::none(),
+            register: Value::none(),
+            err_codepoint: CodePt::Null,
+            arb_gas_remaining: Uint256::zero().bitwise_neg(),
+            runtime_env: RuntimeEnvironment::new(Uint256::from_u64(0)),
+            file_name_chart,
         }
     }
 
@@ -547,8 +562,8 @@ impl Machine {
                     println!("PC: {:?}", pc);
                 }
                 println!("Stack contents: {}", self.stack);
-                //println!("Aux-stack contents: {}", self.aux_stack);
-                //println!("Register contents: {}", self.register);
+                println!("Aux-stack contents: {}", self.aux_stack);
+                println!("Register contents: {}", self.register);
                 if !self.stack.is_empty() {
                     println!("Stack top: {}", self.stack.top().unwrap());
                 }

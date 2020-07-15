@@ -419,14 +419,21 @@ pub struct GlobalVarDecl {
     pub name: StringId,
     pub tipe: Type,
     pub location: Option<Location>,
+    pub init_expr: Option<Expr>,
 }
 
 impl GlobalVarDecl {
-    pub fn new(name: StringId, tipe: Type, location: Option<Location>) -> Self {
+    pub fn new(
+        name: StringId,
+        tipe: Type,
+        init_expr: Option<Expr>,
+        location: Option<Location>,
+    ) -> Self {
         GlobalVarDecl {
             name,
             tipe,
             location,
+            init_expr,
         }
     }
 
@@ -434,6 +441,7 @@ impl GlobalVarDecl {
         Ok(GlobalVarDecl::new(
             self.name,
             self.tipe.resolve_types(type_table, self.location)?,
+            self.init_expr.clone(),
             self.location,
         ))
     }
