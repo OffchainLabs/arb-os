@@ -360,10 +360,10 @@ pub fn test_crosscontract_call_using_batch() {
 
 #[test]
 fn test_erc20() {
-    crate::evm::mint_erc20_and_get_balance(false);
+    crate::evm::mint_erc20_and_get_balance(None, false);
 }
 
 #[test]
 fn test_erc721() {
-    crate::evm::mint_erc721_and_get_balance(false);
+    crate::evm::mint_erc721_and_get_balance(None, false);
 }

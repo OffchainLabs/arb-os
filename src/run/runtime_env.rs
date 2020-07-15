@@ -165,7 +165,6 @@ impl RuntimeEnvironment {
         self.insert_l2_message(sender_addr, &buf);
     }
 
-    #[cfg(test)]
     pub fn insert_erc20_deposit_message(
         &mut self,
         sender_addr: Uint256,
@@ -180,7 +179,6 @@ impl RuntimeEnvironment {
         self.insert_l1_message(1, sender_addr, &buf);
     }
 
-    #[cfg(test)]
     pub fn insert_erc721_deposit_message(
         &mut self,
         sender_addr: Uint256,
