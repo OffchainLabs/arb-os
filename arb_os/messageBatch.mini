@@ -111,6 +111,9 @@ public func messageBatch_get(batch: MessageBatch) -> option<(MessageFromL1, Mess
 }
 
 func recoverSigner(msgData: ByteArray, signature: ByteArray) -> option<address> {
+    let messageHashPrefix = 0x19457468657265756d205369676e6564204d6573736167653a0a333200000000;
+    let messageHashPrefixLength = 28;
+
     let maxGas = bytearray_get256(msgData, 1);
     let gasPriceBid = bytearray_get256(msgData, 32+1);
     let sequenceNum = bytearray_get256(msgData, 2*32+1);

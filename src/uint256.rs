@@ -15,7 +15,7 @@
  */
 
 use ethereum_types::{H160, U256};
-use ethers_core::utils::hash_message;
+use ethers_core::utils::{keccak256, hash_message};
 use num_bigint::{BigInt, BigUint, Sign, ToBigInt};
 use num_traits::cast::ToPrimitive;
 use num_traits::identities::{One, Zero};
@@ -333,16 +333,16 @@ impl Uint256 {
 
     pub fn avm_hash(&self) -> Self {
         let bytes_buf = self.to_bytes_be();
-        let hash_result = hash_message(bytes_buf); // keccak
-        Uint256::from_bytes(hash_result.as_bytes())
+        let hash_result = keccak256(&bytes_buf); // keccak
+        Uint256::from_bytes(&hash_result)
     }
 
     pub fn avm_hash2(v1: &Self, v2: &Self) -> Self {
         let mut bytes1 = v1.to_bytes_be();
         let bytes2 = v2.to_bytes_be();
         bytes1.extend(bytes2);
-        let hash_result = hash_message(bytes1);
-        Uint256::from_bytes(hash_result.as_bytes())
+        let hash_result = keccak256(&bytes1);
+        Uint256::from_bytes(&hash_result)
     }
 }
 
@@ -374,22 +374,6 @@ impl Serialize for Uint256 {
     }
 }
 
-/*
-struct Uint256Visitor;
-
-impl<'de> Visitor<'de> for Uint256Visitor {
-    type Value = Uint256;
-
-    fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
-        formatter.write_str("a sequence of bytes")
-    }
-
-    fn visit_bytes<E>(self, v :&[u8]) -> Result<Self::Value, E> where E: de::Error, {
-        Ok(Uint256::from_bytes(v))
-    }
-}
-*/
-
 impl<'de> Deserialize<'de> for Uint256 {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
@@ -400,4 +384,13 @@ impl<'de> Deserialize<'de> for Uint256 {
             val: BigUint::parse_bytes(s.as_bytes(), 16).unwrap(),
         })
     }
+}
+
+#[test]
+fn test_keccak_vs_messagehash() {
+    let mut extended: Vec<u8> = "\x19Ethereum Signed Message:\n32".as_bytes().to_vec();
+    panic!("{:x?}", extended);
+    let the_string = [0u8;32];
+    extended.extend(&the_string);
+    assert_eq!(hash_message(the_string).as_bytes(), keccak256(&extended));
 }
