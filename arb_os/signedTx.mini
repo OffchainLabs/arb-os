@@ -65,11 +65,25 @@ public impure func translateSignedTx(req: MessageFromL1) -> option<MessageFromL1
         0
     );
 
+   let rlpEncoded = rlp_encodeMessageInfo(
+        bytearray_get256(extractedL2data, 2*32),             // sequenceNum,
+        bytearray_get256(extractedL2data, 1*32),             // gasPriceBid
+        bytearray_get256(extractedL2data, 0),                // maxGas
+        address(bytearray_get256(extractedL2data, 3*32)),    // destAddress
+        bytearray_get256(extractedL2data, 4*32),             // payment
+        bytearray_extract(extractedL2data, 5*32+1, preSigSize-(5*32+1)),  // calldata
+        bytearray_getByte(extractedL2data, preSigSize+64),
+        bytearray_get256(extractedL2data, preSigSize),
+        bytearray_get256(extractedL2data, preSigSize+32),
+    );
+
     return Some(
         req with {
             sender: signer
         } with {
             msgData: bytearray_marshalFull(newL2message)
+        } with {
+            inboxSeqNum: uint(keccak256(rlpEncoded, 0, bytearray_size(rlpEncoded)))
         }
     );
 }
