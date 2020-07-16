@@ -31,6 +31,7 @@ import func account_deductFromEthBalance(acct: Account, amount: uint) -> option<
 import func bytearray_unmarshalBytes(mb: MarshalledBytes) -> ByteArray;
 import func bytearray_getByte(ba: ByteArray, offset: uint) -> uint;
 import func bytearray_get256(ba: ByteArray, offset: uint) -> uint;
+import func marshalledBytes_firstByte(mb: MarshalledBytes) -> uint;
 
 import func queue_new() -> Queue;
 import func queue_isEmpty(q: Queue) -> bool;
@@ -42,6 +43,7 @@ import impure func inbox_get() -> MessageFromL1;
 import func messageBatch_tryNew(msg: MessageFromL1) -> option<MessageBatch>;
 import func messageBatch_get(batch: MessageBatch) -> option<(MessageFromL1, MessageBatch)>;
 
+import func translateSignedTx(req: MessageFromL1) -> option<MessageFromL1>;
 
 var gasAccountingInfo: struct {
     gasUsedByOS: uint,            // amount of gas used by OS that validators haven't yet been compensated for
@@ -285,10 +287,22 @@ public impure func getNextMsgFromCongestionAuction() -> (
             // get its maxGas amount -- for now, set the limit high, unless caller asked for less
             let maxGas = 1000000000;
             if (msg.kind == 3) {
-                let ba = bytearray_unmarshalBytes(msg.msgData);
-                let maxGas = bytearray_get256(ba, 1);
+                if (marshalledBytes_firstByte(msg.msgData) == 4) {
+                    // it's a signed tx; verify sig and then process request or discard
+                    if let Some(verifiedMsg) = translateSignedTx(msg) {
+                        let ba = bytearray_unmarshalBytes(verifiedMsg.msgData);
+                        let maxGas = bytearray_get256(ba, 1);
+                        return (verifiedMsg, true, maxGas, 0);
+                    }
+                    // else signature was invalid, ignore msg and execute loop again to get another
+                } else {
+                    let ba = bytearray_unmarshalBytes(msg.msgData);
+                    let maxGas = bytearray_get256(ba, 1);
+                    return (msg, true, maxGas, 0);
+                }
+            } else {
+                return (msg, true, maxGas, 0);
             }
-            return (msg, true, maxGas, 0);
         }
     }
 }
