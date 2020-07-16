@@ -18,7 +18,7 @@ import type AccountStore;
 import type MarshalledBytes;
 import type ByteArray;
 import type ByteStream;
-import type MessageFromL1;
+import type IncomingRequest;
 import type EvmLogs;
 
 import impure func errorHandler_init();
@@ -60,20 +60,20 @@ import func getErc20storage() -> map<uint, uint>;
 import func getErc721storage() -> map<uint, uint>;
 import func getArbInfoStorage() -> map<uint, uint>;
 
-import impure func inbox_get() -> MessageFromL1;
+import impure func inbox_get() -> IncomingRequest;
 import impure func getNextMsgFromCongestionAuction() -> (
-    MessageFromL1,  // a message
+    IncomingRequest,  // a message
     bool,           // was it approved for execution
     uint,           // maxGas it's allowed to use
     uint,           // gas price it will pay
 ) ;
-import impure func handleMessageFromL1(
-    msg: MessageFromL1,
+import impure func handleIncomingRequest(
+    msg: IncomingRequest,
     maxGas: uint,
     gasPrice: uint
 ) -> option<()>; // return None if message format error; Some(()) if other error; if no error, never return
 import impure func emitLog(
-    l1message: MessageFromL1,
+    l1message: IncomingRequest,
     resultCode: uint,
     maybeReturnData: option<ByteArray>,
     maybeEvmLogs: option<EvmLogs>,
@@ -102,7 +102,7 @@ public impure func mainRunLoop() {
     loop {
         let (msg, approved, maxGas, gasPrice) = getNextMsgFromCongestionAuction();
         if (approved) {
-            if (handleMessageFromL1(msg, maxGas, gasPrice) == None<()>) {
+            if (handleIncomingRequest(msg, maxGas, gasPrice) == None<()>) {
                 // reject for message format error
                 emitLog(msg, 6, None<ByteArray>, None<EvmLogs>, 0, 0);
             }

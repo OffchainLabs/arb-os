@@ -37,21 +37,21 @@ import func translateSignedTx(req: MessageFromL1) -> option<MessageFromL1>;
 
 // This is the structure that the Arbitrum protocol gives us, for each incoming message.
 // It is declared identically in inbox.mini and elsewhere
-type MessageFromL1 = struct {
+type IncomingRequest = struct {
     kind: uint,               // type of message
     blockNumber: uint,        // block number of the L1 block
     timestamp: uint,          // timestamp of the L1 block
     sender: address,          // address of the sender
-    inboxSeqNum: uint,        // sequence number in L1 inbox
+    requestId: uint,          // sequence number in L1 inbox
     msgData: MarshalledBytes  // contents of the message, as a marshalled bytearray
 }
 
 type MessageBatch = struct {
-    template: MessageFromL1,
+    template: IncomingRequest,
     stream: ByteStream,
 }
 
-public func messageBatch_tryNew(msg: MessageFromL1) -> option<MessageBatch> {
+public func messageBatch_tryNew(msg: IncomingRequest) -> option<MessageBatch> {
     if ( (msg.kind == 3) && (marshalledBytes_firstByte(msg.msgData) == 3) ) {
         let stream = bytestream_new(bytearray_unmarshalBytes(msg.msgData));
         stream = bytestream_skipBytes(stream, 1)?;
@@ -67,7 +67,7 @@ public func messageBatch_tryNew(msg: MessageFromL1) -> option<MessageBatch> {
     }
 }
 
-public func messageBatch_get(batch: MessageBatch) -> option<(MessageFromL1, MessageBatch)> {
+public func messageBatch_get(batch: MessageBatch) -> option<(IncomingRequest, MessageBatch)> {
     // returns next message in the batch (and updated batch), or None if no more messages in batch
     let (stream, l2MsgLength) = bytestream_get64(batch.stream)?;
     let (bs, extractedL2data) = bytestream_getN(stream, l2MsgLength)?;
