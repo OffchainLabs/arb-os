@@ -21,10 +21,6 @@ use crate::link::LinkedProgram;
 use crate::mavm::{AVMOpcode, CodePt, Instruction, Opcode, Value};
 use crate::pos::Location;
 use crate::uint256::Uint256;
-#[cfg(test)]
-use ethers_core::rand;
-#[cfg(test)]
-use ethers_core::types::{Address, PrivateKey};
 use ethers_core::types::{Signature, H256};
 use std::cmp::max;
 use std::collections::{BTreeMap, HashMap};

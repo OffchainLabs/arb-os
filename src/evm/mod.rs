@@ -18,9 +18,8 @@ use crate::mavm::Value;
 use crate::run::{bytes_from_bytestack, bytestack_from_bytes, load_from_file, RuntimeEnvironment};
 use crate::uint256::Uint256;
 use abi::AbiForContract;
-use ethers_core::types::Address;
-use std::path::Path;
 use ethers_signers::Signer;
+use std::path::Path;
 
 mod abi;
 

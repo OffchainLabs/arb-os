@@ -54,23 +54,24 @@ public impure func precompiles_init(acctStore: AccountStore) -> option<AccountSt
 }
 
 public impure func precompile_0x01() {  // ecrecover
-    // don't bother checking the first four bytes of calldata -- this is the only method in the contract
     if let Some(topFrame) = evmCallStack_topFrame() {
         let calldata = evmCallFrame_getCalldata(topFrame);
-        if (bytearray_size(calldata) != 4+4*32) {
+        if (bytearray_size(calldata) != 4*32) {
             evmOp_revert(0, 0);
         }
-        let h = bytearray_get256(calldata, 4);
-        let v = bytearray_getByte(calldata, 4+32);
-        let r = bytearray_get256(calldata, 4+32*2);
-        let s = bytearray_get256(calldata, 4+32*3);
+        let h = bytearray_get256(calldata, 0);
+        let v = bytearray_getByte(calldata, 32);
+        let r = bytearray_get256(calldata, 2*32);
+        let s = bytearray_get256(calldata, 3*32);
         let addr = asm(r, s, v-27, h) address { ecrecover };
 
         let success = evmCallStack_setTopFrameMemory(
             bytearray_set256(bytearray_new(0), 0, 32)
         );
-        evmOp_return(0, 32);
-    } else {
-        evmOp_revert(0, 0);
+        if (success) {
+            evmOp_return(0, 32);
+        }
     }
+
+    evmOp_revert(0, 0);
 }

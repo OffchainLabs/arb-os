@@ -15,7 +15,7 @@
  */
 
 use ethereum_types::{H160, U256};
-use ethers_core::utils::{hash_message, keccak256};
+use ethers_core::utils::keccak256;
 use num_bigint::{BigInt, BigUint, Sign, ToBigInt};
 use num_traits::cast::ToPrimitive;
 use num_traits::identities::{One, Zero};
