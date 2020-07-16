@@ -14,7 +14,8 @@
  * limitations under the License.
  */
 
-use keccak_hash::keccak;
+use ethereum_types::{H160, U256};
+use ethers_core::utils::keccak256;
 use num_bigint::{BigInt, BigUint, Sign, ToBigInt};
 use num_traits::cast::ToPrimitive;
 use num_traits::identities::{One, Zero};
@@ -89,6 +90,12 @@ impl Uint256 {
         }
     }
 
+    pub fn from_u256(x: &U256) -> Self {
+        let mut b: Vec<u8> = vec![0u8; 32];
+        x.to_big_endian(&mut b);
+        Uint256::from_bytes(&b)
+    }
+
     pub fn to_usize(&self) -> Option<usize> {
         self.val.to_usize()
     }
@@ -105,10 +112,38 @@ impl Uint256 {
         }
     }
 
+    pub fn to_h160(&self) -> H160 {
+        H160::from_slice(&self.to_bytes_minimal())
+    }
+
+    pub fn to_u256(&self) -> U256 {
+        U256::from_big_endian(&self.to_bytes_minimal())
+    }
+
+    pub fn trim_to_u64(&self) -> u64 {
+        self.val
+            .clone()
+            .bitand(BigUint::from(0xffffffffffffffffu64))
+            .to_u64()
+            .unwrap()
+    }
+
+    pub fn to_bytes_minimal(&self) -> Vec<u8> {
+        if self.is_zero() {
+            vec![]
+        } else {
+            self.val.to_bytes_be()
+        }
+    }
+
     #[cfg(test)]
     pub fn rlp_encode(&self) -> Vec<u8> {
         // RLP encode the minimal byte representation of self
-        rlp::encode(&self.val.to_bytes_be())
+        if (self.is_zero()) {
+            vec![0x80u8]
+        } else {
+            rlp::encode(&self.to_bytes_minimal())
+        }
     }
 
     pub fn zero() -> Self {
@@ -298,16 +333,16 @@ impl Uint256 {
 
     pub fn avm_hash(&self) -> Self {
         let bytes_buf = self.to_bytes_be();
-        let hash_result = keccak(bytes_buf);
-        Uint256::from_bytes(hash_result.as_bytes())
+        let hash_result = keccak256(&bytes_buf); // keccak
+        Uint256::from_bytes(&hash_result)
     }
 
     pub fn avm_hash2(v1: &Self, v2: &Self) -> Self {
         let mut bytes1 = v1.to_bytes_be();
         let bytes2 = v2.to_bytes_be();
         bytes1.extend(bytes2);
-        let hash_result = keccak(bytes1);
-        Uint256::from_bytes(hash_result.as_bytes())
+        let hash_result = keccak256(&bytes1);
+        Uint256::from_bytes(&hash_result)
     }
 }
 
@@ -338,22 +373,6 @@ impl Serialize for Uint256 {
         s.serialize(serializer)
     }
 }
-
-/*
-struct Uint256Visitor;
-
-impl<'de> Visitor<'de> for Uint256Visitor {
-    type Value = Uint256;
-
-    fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
-        formatter.write_str("a sequence of bytes")
-    }
-
-    fn visit_bytes<E>(self, v :&[u8]) -> Result<Self::Value, E> where E: de::Error, {
-        Ok(Uint256::from_bytes(v))
-    }
-}
-*/
 
 impl<'de> Deserialize<'de> for Uint256 {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>

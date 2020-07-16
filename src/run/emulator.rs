@@ -21,8 +21,10 @@ use crate::link::LinkedProgram;
 use crate::mavm::{AVMOpcode, CodePt, Instruction, Opcode, Value};
 use crate::pos::Location;
 use crate::uint256::Uint256;
+use ethers_core::types::{Signature, H256};
 use std::cmp::max;
 use std::collections::{BTreeMap, HashMap};
+use std::convert::TryInto;
 use std::fmt;
 use std::io::stdin;
 
@@ -1417,8 +1419,8 @@ impl Machine {
                         let _second_half = self.stack.pop_uint(&self.state)?;
                         let _recover_id = self.stack.pop_uint(&self.state)?;
                         let _msg_hash = self.stack.pop_uint(&self.state)?;
-                        //BUGBUG: this is a sleazy hack to allow limited testing
-                        self.stack.push_uint(Uint256::from_usize(1025));
+                        let result = do_ecrecover(_first_half, _second_half, _recover_id, _msg_hash);
+                        self.stack.push_uint(result);
                         self.incr_pc();
                         Ok(true)
                     }
@@ -1449,6 +1451,28 @@ impl Machine {
                 None,
             ))
         }
+    }
+}
+
+fn do_ecrecover(
+    first_half: Uint256,
+    second_half: Uint256,
+    recover_id: Uint256,
+    msg_hash: Uint256,
+) -> Uint256 {
+    let sig = Signature {
+        r: H256(first_half.to_bytes_be()[..32].try_into().unwrap()),
+        s: H256(second_half.to_bytes_be()[..32].try_into().unwrap()),
+        v: if recover_id == Uint256::zero() {
+            27u64
+        } else {
+            28u64
+        },
+    };
+    let hash_to_check = H256(msg_hash.to_bytes_be()[..32].try_into().unwrap());
+    match sig.recover(hash_to_check) {
+        Ok(addr) => Uint256::from_bytes(&addr.0),
+        Err(_) => Uint256::zero(),
     }
 }
 

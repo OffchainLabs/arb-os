@@ -19,32 +19,88 @@ import type ByteStream;
 import type MarshalledBytes;
 
 import func bytearray_new(capacity: uint) -> ByteArray;
+import func bytearray_size(ba: ByteArray) -> uint;
 import func bytearray_marshalFull(ba: ByteArray) -> MarshalledBytes;
+import func bytearray_unmarshalBytes(mb: MarshalledBytes) -> ByteArray;
+import func bytearray_getByte(ba: ByteArray, offset: uint) -> uint;
 
 import func bytestream_new(ba: ByteArray) -> ByteStream;
 
 import func rlp_encodeUint(val: uint, ba: ByteArray, offset: uint) -> (ByteArray, uint);
 import func rlp_encodeAddress(addr: address, ba: ByteArray, offset: uint) -> (ByteArray, uint);
+import func rlp_encodeBytes(
+    inBytes: ByteArray, inOffset: uint, nbytes: uint,
+    outBytes: ByteArray, outOffset: uint
+) -> (ByteArray, uint);
+import func rlp_encodeList(
+    encodedItems: []ByteArray,
+    encItemsOffset: uint,
+    numEncItems: uint,
+    outBytes: ByteArray,
+    outOffset: uint,
+) -> option<(ByteArray, uint)>;
 
 import func rlp_decodeUint(bs: ByteStream) -> option<(ByteStream, uint)>;
 import func rlp_decodeAddress(bs: ByteStream) -> option<(ByteStream, address)>;
+import func rlp_decodeBytes(inStream: ByteStream) -> option<(ByteStream, ByteArray)>;
 
 import func bytesNeededToRepresentUint(val: uint) -> uint;
 
 
-impure func main(ui: uint) {
-    let ba = bytearray_new(0);
-    let (uba, _) = rlp_encodeUint(ui, ba, 0);
-    ba = uba;
+impure func main(kind: uint, value: any) {
+    if (kind == 0) {
+        let ui = unsafecast<uint>(value);
+        let ba = bytearray_new(0);
+        let (uba, _) = rlp_encodeUint(ui, ba, 0);
+        ba = uba;
 
-    // decode and verify no difference
-    if let Some(res) = rlp_decodeUint(bytestream_new(ba)) {
-        if (res.1 == ui) {
-            asm(bytearray_marshalFull(ba),) { log };
+        // decode and verify no difference
+        if let Some(res) = rlp_decodeUint(bytestream_new(ba)) {
+            if (res.1 == ui) {
+                asm(bytearray_marshalFull(ba),) { log };
+            } else {
+                asm(0,) { log };
+            }
         } else {
-            asm(0,) { log };
+            asm(1,) { log };
         }
-    } else {
-        asm(1,) { log };
+    } elseif (kind == 1) {
+        let mb = unsafecast<MarshalledBytes>(value);
+        let in = bytearray_unmarshalBytes(mb);
+        let encoded = rlp_encodeBytes(
+            in,
+            0,
+            bytearray_size(in),
+            bytearray_new(0),
+            0
+        ).0;
+
+        // decode and verify no difference
+        if let Some(res) = rlp_decodeBytes(bytestream_new(encoded)) {
+            let marshDec = bytearray_marshalFull(res.1);
+            if (marshDec == mb) {
+                asm(bytearray_marshalFull(encoded),) { log };
+            } else {
+                asm( (20, bytearray_marshalFull(encoded)), ) { log };
+            }
+        } else {
+            asm(3,) { log };
+        }
+    } elseif (kind == 2) {
+        let vals = unsafecast<(uint, MarshalledBytes, uint)>(value);
+        let data = bytearray_unmarshalBytes(vals.1);
+        let encodedPieces = unsafecast<[]ByteArray>(newarray<any>(3));  // workaround issue #120
+        encodedPieces = encodedPieces with {
+            [0] = rlp_encodeUint(vals.0, bytearray_new(0), 0).0
+        } with {
+            [1] = rlp_encodeBytes(data, 0, bytearray_size(data), bytearray_new(0), 0).0
+        } with {
+            [2] = rlp_encodeUint(vals.2, bytearray_new(0), 0).0
+        };
+        if let Some(res) = rlp_encodeList(encodedPieces, 0, 3, bytearray_new(0), 0) {
+            asm(bytearray_marshalFull(res.0),) { log };
+        } else {
+            asm(4,) { log };
+        }
     }
 }

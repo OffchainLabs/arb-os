@@ -46,3 +46,7 @@ public impure func chainParams_chainAddress() -> address {
         panic;
     }
 }
+
+public impure func chainParams_chainId() -> uint {
+    return uint(chainParams_chainAddress()) & 0xffffffffffff;  // chainID == low 48 bits of chainAddress
+}
