@@ -103,9 +103,24 @@ public func messageBatch_get(batch: MessageBatch) -> option<(MessageFromL1, Mess
             0
         );
 
+        let rlpForId = rlp_encodeMessageInfo(
+            bytearray_get256(extractedL2data, 2*32),                   // seqNum: uint,
+            bytearray_get256(extractedL2data, 1*32),                   // gasPrice: uint,
+            bytearray_get256(extractedL2data, 0),                      // gasLimit: uint,
+            address(bytearray_get256(extractedL2data, 3*32)),          // to: address,
+            bytearray_get256(extractedL2data, 4*32),                   // value: uint,
+            bytearray_extract(extractedL2data, 5*32, preSigSize-5*32), // data: ByteArray,
+            bytearray_getByte(extractedL2data, preSigSize+64),         // v: uint,
+            bytearray_get256(extractedL2data, preSigSize),             // r: uint,
+            bytearray_get256(extractedL2data, preSigSize+32)           // s: uint
+        );
+        let txId = keccak256(rlpForId, 0, bytearray_size(rlpForId));
+
         return Some((
             batch.template with {
                 sender: signer
+            } with {
+                inboxSeqNum: uint(txId)
             } with {
                 msgData: bytearray_marshalFull(newL2message)
             },
