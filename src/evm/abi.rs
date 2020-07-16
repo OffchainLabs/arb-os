@@ -375,7 +375,7 @@ impl AbiForContract {
         let this_function = self.contract.function(func_name)?;
         let calldata = this_function.encode_input(args).unwrap();
 
-        machine.runtime_env.append_tx_message_to_batch(
+        machine.runtime_env.append_signed_tx_message_to_batch(
             batch,
             sender_addr,
             Uint256::from_usize(1_000_000_000_000),

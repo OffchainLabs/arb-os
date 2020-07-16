@@ -106,7 +106,40 @@ impl RuntimeEnvironment {
         vec![3u8]
     }
 
-    pub fn append_tx_message_to_batch(
+    pub fn make_signed_l2_message(
+        &mut self,
+        sender_addr: Uint256,
+        max_gas: Uint256,
+        gas_price_bid: Uint256,
+        to_addr: Uint256,
+        value: Uint256,
+        calldata: Vec<u8>,
+        wallet: &Wallet,
+    ) -> Vec<u8> {
+        let mut buf = vec![4u8];
+        let seq_num = self.get_and_incr_seq_num(&sender_addr);
+        buf.extend(max_gas.to_bytes_be());
+        buf.extend(gas_price_bid.to_bytes_be());
+        buf.extend(seq_num.to_bytes_be());
+        buf.extend(to_addr.to_bytes_be());
+        buf.extend(value.to_bytes_be());
+        buf.extend(calldata.clone());
+
+        let tx_for_signing = TransactionRequest::new()
+            .from(sender_addr.to_h160())
+            .to(to_addr.to_h160())
+            .gas(max_gas.to_u256())
+            .gas_price(gas_price_bid.to_u256())
+            .value(value.to_u256())
+            .data(calldata)
+            .nonce(seq_num.to_u256());
+        let tx = wallet.sign_transaction(tx_for_signing).unwrap();
+        let sig_bytes = get_signature_bytes(&tx);
+        buf.extend(sig_bytes.to_vec());
+        buf
+    }
+
+    pub fn append_signed_tx_message_to_batch(
         &mut self,
         batch: &mut Vec<u8>,
         sender_addr: Uint256,
@@ -117,32 +150,10 @@ impl RuntimeEnvironment {
         calldata: Vec<u8>,
         wallet: &Wallet,
     ) {
-        let calldata_size: u64 = calldata.len().try_into().unwrap();
-        assert_eq!(calldata_size.to_be_bytes().len(), 8);
-        let seq_num = self.get_and_incr_seq_num(&sender_addr);
-        batch.extend(&calldata_size.to_be_bytes());
-        batch.extend(vec![0u8]);
-        batch.extend(max_gas.to_bytes_be());
-        batch.extend(gas_price_bid.to_bytes_be());
-        batch.extend(seq_num.to_bytes_be());
-        batch.extend(to_addr.to_bytes_be());
-        batch.extend(value.to_bytes_be());
-        batch.extend(calldata.clone());
-
-        let tx_for_signing = TransactionRequest::new()
-            .from(sender_addr.to_h160())
-            .to(to_addr.to_h160())
-            .gas(max_gas.to_u256())
-            .gas_price(gas_price_bid.to_u256())
-            .value(value.to_u256())
-            .data(calldata)
-            .nonce(seq_num.to_u256());
-        println!("RLP hash = {}", tx_for_signing.sighash(Some(self.chain_id)));
-        let tx = wallet.sign_transaction(tx_for_signing).unwrap();
-        let sig_bytes = get_signature_bytes(&tx);
-        assert_eq!(sig_bytes.to_vec().len(), 65);
-
-        batch.extend(sig_bytes.to_vec());
+        let msg = self.make_signed_l2_message(sender_addr, max_gas, gas_price_bid, to_addr, value, calldata, wallet);
+        let msg_size: u64 = msg.len().try_into().unwrap();
+        batch.extend(&msg_size.to_be_bytes());
+        batch.extend(msg);
     }
 
     pub fn insert_batch_message(&mut self, sender_addr: Uint256, batch: &[u8]) {
