@@ -272,8 +272,7 @@ public impure func translateEvmCodeSegment(
                         if (opcode == 0x43) { // NUMBER
                             return pushEvmInsnCall(evmOp_number, restOfCode, evmJumpTable);
                         } elseif (opcode == 0x44) { // DIFFICULTY
-                             return Some((restOfCode, evmJumpTable));
-                            //return None<(AvmCodePoint, map<uint, AvmCodePoint>)>;
+                             return Some((restOfCode, evmJumpTable));  // no-op
                         }
                     }
                 } else {
@@ -338,7 +337,8 @@ public impure func translateEvmCodeSegment(
                     }
                 } else {
                     if (opcode == 0x58) {  // GETPC
-                        return Some((pushValue(bytestream_bytesReadSoFar(bs), restOfCode), evmJumpTable));
+                        // we know the current PC, so we can push it directly as a constant
+                        return Some((pushValue(bytestream_bytesReadSoFar(bs)-1, restOfCode), evmJumpTable));
                     } elseif (opcode == 0x59) { // MSIZE
                         return pushEvmInsnCall(evmOp_msize, restOfCode, evmJumpTable);
                     } elseif (opcode == 0x5a) { // GAS
