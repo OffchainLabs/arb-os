@@ -18,16 +18,36 @@ import type MarshalledBytes;
 import type ByteArray;
 import type ByteStream;
 
+import func bytearray_size(ba: ByteArray) -> uint;
 import func bytearray_getByte(ba: ByteArray, offset: uint) -> uint;
 import func bytearray_get256(ba: ByteArray, offset: uint) -> uint;
 import func bytearray_unmarshalBytes(mb: MarshalledBytes) -> ByteArray;
 import func bytearray_marshalFull(ba: ByteArray) -> MarshalledBytes;
+import func bytearray_extract(ba: ByteArray, offset: uint, nbytes: uint) -> ByteArray;
 import func bytestream_new(ba: ByteArray) -> ByteStream;
 import func bytestream_get64(bs: ByteStream) -> option<(ByteStream, uint)>;
 import func bytestream_getN(bs: ByteStream, nbytes: uint) -> option<(ByteStream, ByteArray)>;
 import func bytestream_skipBytes(bs: ByteStream, nbytes: uint) -> option<ByteStream>;
 import func marshalledBytes_firstByte(mb: MarshalledBytes) -> uint;
 import func marshalledBytes_hash(mb: MarshalledBytes) -> bytes32;
+
+import func rlp_encodeMessageInfo(
+    seqNum: uint,
+    gasPrice: uint,
+    gasLimit: uint,
+    to: address,
+    value: uint,
+    data: ByteArray,
+    v: uint,
+    r: uint,
+    s: uint
+) -> ByteArray;
+
+import impure func chainParams_chainId() -> uint;
+
+import impure func keccak256(ba: ByteArray, offset: uint, nbytes: uint) -> bytes32;
+
+
 
 // This is the structure that the Arbitrum protocol gives us, for each incoming message.
 // It is declared identically in inbox.mini and elsewhere
@@ -62,7 +82,7 @@ public func messageBatch_tryNew(msg: MessageFromL1) -> option<MessageBatch> {
 }
 
 public func messageBatch_get(batch: MessageBatch) -> option<(MessageFromL1, MessageBatch)> {
-    // returns None if no more messages in the batch
+    // returns next message in the batch (and updated batch), or None if no more messages in batch
     let (stream, calldataLength) = bytestream_get64(batch.stream)?;
 
     let (bs, extractedL2data) = bytestream_getN(stream, 1 + 5*32 + calldataLength)?;
@@ -74,15 +94,15 @@ public func messageBatch_get(batch: MessageBatch) -> option<(MessageFromL1, Mess
         return None;   // sub-message must be of subtype 0
     }
 
-    let marshalledL2data = bytearray_marshalFull(extractedL2data);
+    let signer = recoverSigner(extractedL2data, extractedSig)?;
 
-    let signer = recoverSigner(marshalledL2data, extractedSig)?;
+    let marshalledMsgData = bytearray_marshalFull(extractedL2data);
 
     return Some((
         batch.template with {
             sender: signer
         } with {
-            msgData: marshalledL2data
+            msgData: marshalledMsgData
         },
         batch with {
             stream: stream
@@ -90,12 +110,30 @@ public func messageBatch_get(batch: MessageBatch) -> option<(MessageFromL1, Mess
     ));
 }
 
-func recoverSigner(marshalledData: MarshalledBytes, signature: ByteArray) -> option<address> {
+func recoverSigner(msgData: ByteArray, signature: ByteArray) -> option<address> {
+    let maxGas = bytearray_get256(msgData, 1);
+    let gasPriceBid = bytearray_get256(msgData, 32+1);
+    let sequenceNum = bytearray_get256(msgData, 2*32+1);
+    let destAddress = address(bytearray_get256(msgData, 3*32+1));
+    let payment = bytearray_get256(msgData, 4*32+1);
+    let rlpEncoded = rlp_encodeMessageInfo(
+        sequenceNum,
+        gasPriceBid,
+        maxGas,
+        destAddress,
+        payment,
+        bytearray_extract(msgData, 5*32+1, bytearray_size(msgData)-(5*32+1)),
+        chainParams_chainId(),
+        0,
+        0,
+    );
+    let rlpHash = keccak256(rlpEncoded, 0, bytearray_size(rlpEncoded));
+
     let signer = asm(
         bytearray_get256(signature, 0),
         bytearray_get256(signature, 32),
-        bytearray_getByte(signature, 64),
-        marshalledBytes_hash(marshalledData)
+        1-(bytearray_getByte(signature, 64) % 2),
+        rlpHash,
     ) address { ecrecover };
 
     if (signer == address(0)) {

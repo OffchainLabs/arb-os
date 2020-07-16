@@ -248,7 +248,6 @@ public impure func getNextMsgFromCongestionAuction() -> (
     uint,           // gas price it will pay
 ) {
     // For now, the gas auction is a no-op.  It just approves every message at zero gas price.
-
     let msg = unsafecast<MessageFromL1>(());   // value will be re-initialized before use
     loop {
         if let Some(sideloadedTuple) = trySideload() {

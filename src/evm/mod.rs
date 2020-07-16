@@ -18,6 +18,7 @@ use crate::mavm::Value;
 use crate::run::{bytes_from_bytestack, bytestack_from_bytes, load_from_file, RuntimeEnvironment};
 use crate::uint256::Uint256;
 use abi::AbiForContract;
+use ethers_signers::Signer;
 use std::path::Path;
 
 mod abi;
@@ -178,10 +179,12 @@ pub fn evm_xcontract_call_using_batch(
 ) -> Result<bool, ethabi::Error> {
     use std::convert::TryFrom;
     let rt_env = RuntimeEnvironment::new(Uint256::from_usize(1111));
+
+    let wallet = rt_env.new_wallet();
+    let my_addr = Uint256::from_bytes(wallet.address().as_bytes());
+
     let mut machine = load_from_file(Path::new("arb_os/arbos.mexe"), rt_env);
     machine.start_at_zero();
-
-    let my_addr = Uint256::from_usize(1025);
 
     machine.runtime_env.insert_eth_deposit_message(
         my_addr.clone(),
@@ -221,18 +224,22 @@ pub fn evm_xcontract_call_using_batch(
         &[],
         &mut machine,
         Uint256::from_usize(10000),
+        &wallet,
     )?;
     pc_contract.add_function_call_to_batch(
         &mut batch,
-        my_addr,
+        my_addr.clone(),
         "transferFib",
         vec![
-            ethabi::Token::Address(ethabi::Address::from_low_u64_be(1025)),
+            ethabi::Token::Address(ethereum_types::H160::from_slice(
+                &my_addr.to_bytes_minimal(),
+            )),
             ethabi::Token::Uint(ethabi::Uint::try_from(1).unwrap()),
         ]
         .as_ref(),
         &mut machine,
         Uint256::zero(),
+        &wallet,
     )?;
 
     machine
@@ -323,7 +330,6 @@ pub fn evm_test_arbsys(log_to: Option<&Path>, debug: bool) {
             panic!("error loading contract: {:?}", e);
         }
     };
-
     let result = contract.call_function(
         my_addr.clone(),
         "getSeqNum",
@@ -471,8 +477,7 @@ pub fn evm_direct_deploy_and_call_add(log_to: Option<&Path>, debug: bool) {
     }
 }
 
-#[cfg(test)]
-pub fn mint_erc20_and_get_balance(debug: bool) {
+pub fn mint_erc20_and_get_balance(log_to: Option<&Path>, debug: bool) {
     let token_addr = Uint256::from_usize(32563);
     let me = Uint256::from_usize(1025);
     let million = Uint256::from_usize(1000000);
@@ -501,8 +506,6 @@ pub fn mint_erc20_and_get_balance(debug: bool) {
     };
     let logs = machine.runtime_env.get_all_logs();
     assert_eq!(logs.len(), num_logs_before + 2);
-    println!("first log item: {}", logs[logs.len() - 2]);
-    println!("second log item: {}", logs[logs.len() - 1]);
     if let Value::Tuple(tup) = &logs[logs.len() - 2] {
         assert_eq!(tup[1], Value::Int(Uint256::zero()));
     } else {
@@ -513,10 +516,13 @@ pub fn mint_erc20_and_get_balance(debug: bool) {
     } else {
         panic!("second log item was malformed");
     }
+
+    if let Some(path) = log_to {
+        machine.runtime_env.recorder.to_file(path).unwrap();
+    }
 }
 
-#[cfg(test)]
-pub fn mint_erc721_and_get_balance(debug: bool) {
+pub fn mint_erc721_and_get_balance(log_to: Option<&Path>, debug: bool) {
     let token_addr = Uint256::from_usize(32563);
     let me = Uint256::from_usize(1025);
     let million = Uint256::from_usize(1000000);
@@ -545,8 +551,6 @@ pub fn mint_erc721_and_get_balance(debug: bool) {
     };
     let logs = machine.runtime_env.get_all_logs();
     assert_eq!(logs.len(), num_logs_before + 2);
-    println!("first log item: {}", logs[logs.len() - 2]);
-    println!("second log item: {}", logs[logs.len() - 1]);
     if let Value::Tuple(tup) = &logs[logs.len() - 2] {
         assert_eq!(tup[1], Value::Int(Uint256::zero()));
     } else {
@@ -557,22 +561,13 @@ pub fn mint_erc721_and_get_balance(debug: bool) {
     } else {
         panic!("second log item was malformed");
     }
+
+    if let Some(path) = log_to {
+        machine.runtime_env.recorder.to_file(path).unwrap();
+    }
 }
 
 pub fn make_logs_for_all_arbos_tests() {
-    /*
-    evm_load_add_and_verify(
-        Some(Path::new("testlogs/evm_load_add_and_verify.aoslog")),
-        true,
-        false,
-        false,
-    );
-    evm_load_fib_and_verify(
-        Some(Path::new("testlogs/evm_load_fib_and_verify.aoslog")),
-        false,
-        false,
-    );
-     */
     evm_direct_deploy_add(
         Some(Path::new("testlogs/evm_direct_deploy_add.aoslog")),
         false,
@@ -600,4 +595,6 @@ pub fn make_logs_for_all_arbos_tests() {
         false,
     );
     evm_test_arbsys(Some(Path::new("testlogs/evm_test_arbsys.aoslog")), false);
+    mint_erc20_and_get_balance(Some(Path::new("testlogs/erc20_test.aoslog")), false);
+    mint_erc721_and_get_balance(Some(Path::new("testlogs/erc721_test.aoslog")), false);
 }

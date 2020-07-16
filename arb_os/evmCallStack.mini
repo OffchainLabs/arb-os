@@ -354,7 +354,7 @@ public impure func evmCallStack_doCall(
     // jump to the called code's startCodePoint -- this should never return
     let startCodePoint = account_getStartCodePoint(callee)?;
     let _ = gasAccounting_resumeTxCharges(gas);
-    startCodePoint();
+    startCodePoint();  // should never return
 
     errorHandler();
     panic;
@@ -445,7 +445,7 @@ public impure func evmCallStack_returnFromCall(
                             gasUsed,
                             gasPrice
                         );
-                        errorHandler();
+                        evmCallStack_callHitError();  // should never return
                         panic;
                     }
 
@@ -880,7 +880,8 @@ public impure func evmCallStack_callHitError() {
         // recover by clearing the evmCallStack, refunding unused gas, and jumping back to the error handler
         globalCallStack = None<EvmCallFrame>;
         let _ = gasAccounting_endTxCharges();
-        errorHandler();
+
+        errorHandler();  // should never return
         panic;
     }
 }

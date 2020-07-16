@@ -24,7 +24,6 @@ import func bytestream_bytesRemaining(bs: ByteStream) -> uint;
 import func bytestream_truncate(bs: ByteStream, nbytes: uint) -> ByteStream;
 import func bytestream_getByte(bs: ByteStream) -> option<(ByteStream, uint)>;
 import func bytestream_get64(bs: ByteStream) -> option<(ByteStream, uint)>;
-import func bytestream_getUint(bs: ByteStream) -> option<(ByteStream, uint)>;
 import func bytestream_skipBytes(bs: ByteStream, nbytes: uint) -> option<ByteStream>;
 
 import func chainParams_chainId();
