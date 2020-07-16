@@ -49,7 +49,7 @@ import func account_getStartCodePoint(acct: Account) -> option<impure func()>;
 
 import impure func initEvmCallStack(
     callKind: uint,
-    ethMessage: MessageFromL1,
+    ethMessage: IncomingRequest,
     addr: address,
     caller: address,
     calldata: ByteArray,
@@ -58,7 +58,7 @@ import impure func initEvmCallStack(
     gasPrice: uint
 );
 import impure func initEvmCallStackForConstructor(
-    ethMessage: MessageFromL1,
+    ethMessage: IncomingRequest,
     addr: address,
     caller: address,
     code: ByteArray,
@@ -71,7 +71,7 @@ import impure func initEvmCallStackForConstructor(
 );
 import func evmCallStack_runningCodeFromAccount() -> option<Account>;
 import impure func emitLog(
-    l1message: MessageFromL1,
+    l1message: IncomingRequest,
     resultCode: uint,
     maybeReturnData: option<ByteArray>,
     maybeEvmLogs: option<EvmLogs>,
@@ -83,13 +83,13 @@ import impure func tokens_erc20deposit(
     tokenAddr: address,
     payee: address,
     amount: uint,
-    msg: MessageFromL1
+    msg: IncomingRequest
 ) -> option<()>;
 import impure func tokens_erc721deposit(
     tokenAddr: address,
     payee: address,
     id: uint,
-    msg: MessageFromL1
+    msg: IncomingRequest
 ) -> option<()>;
 
 import func bytearray_new(capacity: uint) -> ByteArray;
@@ -110,17 +110,17 @@ import func translateEvmCodeSegment(bs: ByteStream) -> option<(impure func(), ma
 
 // This is the structure that the Arbitrum protocol gives us, for each incoming message.
 // It is declared identically in inbox.mini
-type MessageFromL1 = struct {
+type IncomingRequest = struct {
     kind: uint,               // type of message
     blockNumber: uint,        // block number of the L1 block
     timestamp: uint,          // timestamp of the L1 block
     sender: address,          // address of the sender
-    inboxSeqNum: uint,        // sequence number in L1 inbox
+    requestId: uint,          // sequence number in L1 inbox
     msgData: MarshalledBytes  // contents of the message, as a marshalled bytearray
 }
 
-public impure func handleMessageFromL1(
-    msg: MessageFromL1,
+public impure func handleIncomingRequest(
+    msg: IncomingRequest,
     maxGas: uint,
     gasPrice: uint
 ) -> option<()> {   // return None if message format error; Some(()) if other error; if no error, never return
@@ -230,7 +230,7 @@ impure func fetchAndIncrSequenceNum(addr: address) -> uint {
 
 impure func handleL2Message(
     inStream: ByteStream,
-    fullMsg: MessageFromL1,
+    fullMsg: IncomingRequest,
     maxGas: uint,
     gasPrice: uint
 ) -> option<()> {   // return None if message is malformatted; otherwise handle errors and return Some(()); if no error, never return

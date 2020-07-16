@@ -17,7 +17,7 @@
 import type AccountStore;
 import type Account;
 import type ByteArray;
-import type MessageFromL1;
+import type IncomingRequest;
 
 import impure func getGlobalAccountStore() -> AccountStore;
 import impure func setGlobalAccountStore(acctStore: AccountStore);
@@ -32,7 +32,7 @@ import func bytearray_set256(ba: ByteArray, offset: uint, val: uint) -> ByteArra
 
 import impure func initEvmCallStack(
     callKind: uint,
-    ethMessage: MessageFromL1,
+    ethMessage: IncomingRequest,
     addr: address,
     caller: address,
     calldata: ByteArray,
@@ -45,7 +45,7 @@ public impure func tokens_erc20deposit(
     tokenAddress: address,
     payee: address,
     amount: uint,
-    fullMsg: MessageFromL1
+    fullMsg: IncomingRequest
 ) -> option<()> {
     let globalAS = getGlobalAccountStore();
     if(account_isEmpty(accountStore_get(globalAS, tokenAddress))) {
@@ -96,7 +96,7 @@ public impure func tokens_erc721deposit(
     tokenAddress: address,
     payee: address,
     id: uint,
-    fullMsg: MessageFromL1
+    fullMsg: IncomingRequest
 ) -> option<()> {
     let globalAS = getGlobalAccountStore();
     if(account_isEmpty(accountStore_get(globalAS, tokenAddress))) {
