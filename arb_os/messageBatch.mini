@@ -32,22 +32,7 @@ import func bytestream_skipBytes(bs: ByteStream, nbytes: uint) -> option<ByteStr
 import func marshalledBytes_firstByte(mb: MarshalledBytes) -> uint;
 import func marshalledBytes_hash(mb: MarshalledBytes) -> bytes32;
 
-import func rlp_encodeMessageInfo(
-    seqNum: uint,
-    gasPrice: uint,
-    gasLimit: uint,
-    to: address,
-    value: uint,
-    data: ByteArray,
-    v: uint,
-    r: uint,
-    s: uint
-) -> ByteArray;
-
-import impure func chainParams_chainId() -> uint;
-
-import impure func keccak256(ba: ByteArray, offset: uint, nbytes: uint) -> bytes32;
-
+import func translateSignedTx(req: MessageFromL1) -> option<MessageFromL1>;
 
 
 // This is the structure that the Arbitrum protocol gives us, for each incoming message.
@@ -85,78 +70,15 @@ public func messageBatch_tryNew(msg: MessageFromL1) -> option<MessageBatch> {
 public func messageBatch_get(batch: MessageBatch) -> option<(MessageFromL1, MessageBatch)> {
     // returns next message in the batch (and updated batch), or None if no more messages in batch
     let (stream, l2MsgLength) = bytestream_get64(batch.stream)?;
-
     let (bs, extractedL2data) = bytestream_getN(stream, l2MsgLength)?;
     stream = bs;
 
-    let l2MsgType = bytearray_getByte(extractedL2data, 0);
-    let l2MsgSize = bytearray_size(extractedL2data);
-    if (l2MsgType == 4) {
-        // it's a signed message, recover sender address from signature
-        let preSigSize = l2MsgSize-65;
-        let signer = recoverSigner(extractedL2data, preSigSize)?;
-
-        // turn it into an unsigned message
-        let newL2message = bytearray_setByte(
-            bytearray_extract(extractedL2data, 0, preSigSize),
-            0,
-            0
-        );
-
-        return Some((
-            batch.template with {
-                sender: signer
-            } with {
-                msgData: bytearray_marshalFull(newL2message)
-            },
-            batch with {
-                stream: stream
-            }
-        ));
-    } else {
-        // it's an unsigned message, just return it
-        return Some((
-            batch.template with {
-                msgData: bytearray_marshalFull(extractedL2data)
-            },
-            batch with {
-                stream : stream
-            }
-        ));
-    }
-
-    return None;
-}
-
-func recoverSigner(msgData: ByteArray, preSigSize: uint) -> option<address> {
-    let maxGas = bytearray_get256(msgData, 1);
-    let gasPriceBid = bytearray_get256(msgData, 32+1);
-    let sequenceNum = bytearray_get256(msgData, 2*32+1);
-    let destAddress = address(bytearray_get256(msgData, 3*32+1));
-    let payment = bytearray_get256(msgData, 4*32+1);
-    let rlpEncoded = rlp_encodeMessageInfo(
-        sequenceNum,
-        gasPriceBid,
-        maxGas,
-        destAddress,
-        payment,
-        bytearray_extract(msgData, 5*32+1, preSigSize-(5*32+1)),
-        chainParams_chainId(),
-        0,
-        0,
-    );
-    let rlpHash = keccak256(rlpEncoded, 0, bytearray_size(rlpEncoded));
-
-    let signer = asm(
-        bytearray_get256(msgData, preSigSize),
-        bytearray_get256(msgData, preSigSize+32),
-        1-(bytearray_getByte(msgData, preSigSize+64) % 2),
-        rlpHash,
-    ) address { ecrecover };
-
-    if (signer == address(0)) {
-        return None;
-    } else {
-        return Some(signer);
-    }
+    return Some((
+        batch.template with {
+            msgData: bytearray_marshalFull(extractedL2data)
+        },
+        batch with {
+            stream : stream
+        }
+    ));
 }
