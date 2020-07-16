@@ -43,7 +43,7 @@ import impure func inbox_get() -> IncomingRequest;
 import func messageBatch_tryNew(msg: IncomingRequest) -> option<MessageBatch>;
 import func messageBatch_get(batch: MessageBatch) -> option<(IncomingRequest, MessageBatch)>;
 
-import func translateSignedTx(req: MessageFromL1) -> option<MessageFromL1>;
+import func translateSignedTx(req: IncomingRequest) -> option<IncomingRequest>;
 
 var gasAccountingInfo: struct {
     gasUsedByOS: uint,            // amount of gas used by OS that validators haven't yet been compensated for
