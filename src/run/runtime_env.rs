@@ -115,7 +115,7 @@ impl RuntimeEnvironment {
         value: Uint256,
         calldata: Vec<u8>,
         wallet: &Wallet,
-    ) -> Vec<u8> {
+    ) -> (Vec<u8>, Vec<u8>) {
         let mut buf = vec![4u8];
         let seq_num = self.get_and_incr_seq_num(&sender_addr);
         buf.extend(max_gas.to_bytes_be());
@@ -136,7 +136,7 @@ impl RuntimeEnvironment {
         let tx = wallet.sign_transaction(tx_for_signing).unwrap();
         let sig_bytes = get_signature_bytes(&tx);
         buf.extend(sig_bytes.to_vec());
-        buf
+        (buf, tx.rlp().0)
     }
 
     pub fn append_signed_tx_message_to_batch(
@@ -149,11 +149,12 @@ impl RuntimeEnvironment {
         value: Uint256,
         calldata: Vec<u8>,
         wallet: &Wallet,
-    ) {
-        let msg = self.make_signed_l2_message(sender_addr, max_gas, gas_price_bid, to_addr, value, calldata, wallet);
+    ) -> Vec<u8> {
+        let (msg, tx_id_bytes) = self.make_signed_l2_message(sender_addr, max_gas, gas_price_bid, to_addr, value, calldata, wallet);
         let msg_size: u64 = msg.len().try_into().unwrap();
         batch.extend(&msg_size.to_be_bytes());
         batch.extend(msg);
+        tx_id_bytes
     }
 
     pub fn insert_batch_message(&mut self, sender_addr: Uint256, batch: &[u8]) {

@@ -217,7 +217,7 @@ pub fn evm_xcontract_call_using_batch(
     }
 
     let mut batch = machine.runtime_env.new_batch();
-    pc_contract.add_function_call_to_batch(
+    let tx_id_1 = pc_contract.add_function_call_to_batch(
         &mut batch,
         my_addr.clone(),
         "deposit",
@@ -226,7 +226,7 @@ pub fn evm_xcontract_call_using_batch(
         Uint256::from_usize(10000),
         &wallet,
     )?;
-    pc_contract.add_function_call_to_batch(
+    let tx_id_2 = pc_contract.add_function_call_to_batch(
         &mut batch,
         my_addr.clone(),
         "transferFib",
@@ -262,9 +262,19 @@ pub fn evm_xcontract_call_using_batch(
     assert_eq!(sends.len(), 0);
     if let Value::Tuple(tup) = &logs[0] {
         assert_eq!(tup[1], Value::Int(Uint256::zero()));
+        if let Value::Tuple(subtup) = &tup[0] {
+            assert_eq!(subtup[4], Value::Int(tx_id_1));
+        } else {
+            panic!("malformed log entry");
+        }
     }
     if let Value::Tuple(tup) = &logs[1] {
         assert_eq!(tup[1], Value::Int(Uint256::zero()));
+        if let Value::Tuple(subtup) = &tup[0] {
+            assert_eq!(subtup[4], Value::Int(tx_id_2));
+        } else {
+            panic!("malformed log entry");
+        }
     }
 
     if let Some(path) = log_to {

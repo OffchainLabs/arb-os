@@ -371,11 +371,11 @@ impl AbiForContract {
         machine: &mut Machine,
         payment: Uint256,
         wallet: &Wallet,
-    ) -> Result<(), ethabi::Error> {
+    ) -> Result<Uint256, ethabi::Error> {
         let this_function = self.contract.function(func_name)?;
         let calldata = this_function.encode_input(args).unwrap();
 
-        machine.runtime_env.append_signed_tx_message_to_batch(
+        let tx_id_bytes = machine.runtime_env.append_signed_tx_message_to_batch(
             batch,
             sender_addr,
             Uint256::from_usize(1_000_000_000_000),
@@ -386,6 +386,6 @@ impl AbiForContract {
             &wallet,
         );
 
-        Ok(())
+        Ok((Uint256::from_bytes(&tx_id_bytes)))
     }
 }

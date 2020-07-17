@@ -66,11 +66,11 @@ public impure func translateSignedTx(req: MessageFromL1) -> option<MessageFromL1
     );
 
    let rlpEncoded = rlp_encodeMessageInfo(
-        bytearray_get256(extractedL2data, 2*32),             // sequenceNum,
-        bytearray_get256(extractedL2data, 1*32),             // gasPriceBid
-        bytearray_get256(extractedL2data, 0),                // maxGas
-        address(bytearray_get256(extractedL2data, 3*32)),    // destAddress
-        bytearray_get256(extractedL2data, 4*32),             // payment
+        bytearray_get256(extractedL2data, 2*32+1),             // sequenceNum,
+        bytearray_get256(extractedL2data, 1*32+1),             // gasPriceBid
+        bytearray_get256(extractedL2data, 1),                // maxGas
+        address(bytearray_get256(extractedL2data, 3*32+1)),    // destAddress
+        bytearray_get256(extractedL2data, 4*32+1),             // payment
         bytearray_extract(extractedL2data, 5*32+1, preSigSize-(5*32+1)),  // calldata
         bytearray_getByte(extractedL2data, preSigSize+64),
         bytearray_get256(extractedL2data, preSigSize),
