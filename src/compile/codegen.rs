@@ -27,6 +27,7 @@ use crate::mavm::{AVMOpcode, Instruction, Label, LabelGenerator, Opcode, Value};
 use crate::pos::Location;
 use crate::stringtable::{StringId, StringTable};
 use crate::uint256::Uint256;
+use std::collections::BTreeMap;
 use std::{cmp::max, collections::HashMap};
 
 ///Represents any encountered during codegen
@@ -66,18 +67,23 @@ pub fn mavm_codegen(
 
     let mut label_gen = LabelGenerator::new();
     let mut code = Vec::new();
+    let mut funcs_code = BTreeMap::new();
     for func in funcs {
         if !func.imported {
-            let lg = mavm_codegen_func(
+            let id = func.name;
+            let (lg, code) = mavm_codegen_func(
                 func,
-                &mut code,
                 label_gen,
                 string_table,
                 &import_func_map,
                 &global_var_map,
             )?;
             label_gen = lg;
+            funcs_code.insert(id, code);
         }
+    }
+    for (_id, mut func) in funcs_code {
+        code.append(&mut func)
     }
     Ok(code)
 }
@@ -93,12 +99,12 @@ pub fn mavm_codegen(
 /// codegen, and a mutable reference to the generated code, otherwise it returns a CodegenError.
 fn mavm_codegen_func(
     func: TypeCheckedFunc,
-    code: &mut Vec<Instruction>,
     mut label_gen: LabelGenerator,
     string_table: &StringTable,
     import_func_map: &HashMap<StringId, Label>,
     global_var_map: &HashMap<StringId, usize>,
-) -> Result<LabelGenerator, CodegenError> {
+) -> Result<(LabelGenerator, Vec<Instruction>), CodegenError> {
+    let mut code = vec![];
     let location = func.location;
     code.push(Instruction::from_opcode(
         Opcode::Label(Label::Func(func.name)),
@@ -119,7 +125,7 @@ fn mavm_codegen_func(
         &func.args,
         0,
         func.code,
-        code,
+        &mut code,
         label_gen,
         string_table,
         import_func_map,
@@ -145,7 +151,7 @@ fn mavm_codegen_func(
     code[make_frame_slot] =
         Instruction::from_opcode(Opcode::MakeFrame(num_args, max_num_locals), location);
 
-    Ok(label_gen)
+    Ok((label_gen, code))
 }
 
 ///This adds args to locals, and then codegens the statements in statements, using the updated
