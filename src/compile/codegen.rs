@@ -172,32 +172,22 @@ fn add_args_to_locals_table(
     import_func_map: &HashMap<StringId, Label>,
     global_var_map: &HashMap<StringId, usize>,
 ) -> Result<(LabelGenerator, usize, bool), CodegenError> {
-    if args.is_empty() {
-        mavm_codegen_statements(
-            statements,
-            code,
-            num_locals,
-            &locals,
-            label_gen,
-            string_table,
-            import_func_map,
-            global_var_map,
-        )
-        .map(|(a, b, c, _)| (a, b, c))
-    } else {
-        let new_locals = locals.push_one(args[0].name, num_locals);
-        add_args_to_locals_table(
-            new_locals,
-            &args[1..],
-            num_locals + 1,
-            statements,
-            code,
-            label_gen,
-            string_table,
-            import_func_map,
-            global_var_map,
-        )
+    let mut locals_map = HashMap::new();
+    for (index, arg) in args.iter().enumerate() {
+        locals_map.insert(arg.name, num_locals + index);
     }
+    let new_locals = locals.push_multi(locals_map);
+    mavm_codegen_statements(
+        statements,
+        code,
+        num_locals + args.len(),
+        &new_locals,
+        label_gen,
+        string_table,
+        import_func_map,
+        global_var_map,
+    )
+    .map(|(a, b, c, _)| (a, b, c))
 }
 
 ///Generates code for the provided statements with index 0 generated first. code represents the
