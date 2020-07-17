@@ -48,13 +48,12 @@ pub fn new_codegen_error(reason: &'static str, location: Option<Location>) -> Co
 ///
 /// The function returns a mutable reference to the generated code if it is successful, otherwise it
 /// returns a CodegenError.
-pub fn mavm_codegen<'a>(
+pub fn mavm_codegen(
     funcs: Vec<TypeCheckedFunc>,
-    code_in: &'a mut Vec<Instruction>,
     string_table: &StringTable,
     imported_funcs: &[ImportedFunc],
     global_vars: &[GlobalVarDecl],
-) -> Result<&'a mut Vec<Instruction>, CodegenError> {
+) -> Result<Vec<Instruction>, CodegenError> {
     let mut import_func_map = HashMap::new();
     for imp_func in imported_funcs {
         import_func_map.insert(imp_func.name_id, Label::External(imp_func.slot_num));
@@ -66,19 +65,18 @@ pub fn mavm_codegen<'a>(
     }
 
     let mut label_gen = LabelGenerator::new();
-    let mut code = code_in;
+    let mut code = Vec::new();
     for func in funcs {
         if !func.imported {
-            let (lg, c) = mavm_codegen_func(
+            let lg = mavm_codegen_func(
                 func,
-                code,
+                &mut code,
                 label_gen,
                 string_table,
                 &import_func_map,
                 &global_var_map,
             )?;
             label_gen = lg;
-            code = c;
         }
     }
     Ok(code)
@@ -93,14 +91,14 @@ pub fn mavm_codegen<'a>(
 ///
 /// If successful the function returns a tuple containing the state of the label generator after
 /// codegen, and a mutable reference to the generated code, otherwise it returns a CodegenError.
-fn mavm_codegen_func<'a>(
+fn mavm_codegen_func(
     func: TypeCheckedFunc,
-    code: &'a mut Vec<Instruction>,
+    code: &mut Vec<Instruction>,
     mut label_gen: LabelGenerator,
     string_table: &StringTable,
     import_func_map: &HashMap<StringId, Label>,
     global_var_map: &HashMap<StringId, usize>,
-) -> Result<(LabelGenerator, &'a mut Vec<Instruction>), CodegenError> {
+) -> Result<LabelGenerator, CodegenError> {
     let location = func.location;
     code.push(Instruction::from_opcode(
         Opcode::Label(Label::Func(func.name)),
@@ -147,7 +145,7 @@ fn mavm_codegen_func<'a>(
     code[make_frame_slot] =
         Instruction::from_opcode(Opcode::MakeFrame(num_args, max_num_locals), location);
 
-    Ok((label_gen, code))
+    Ok(label_gen)
 }
 
 ///This adds args to locals, and then codegens the statements in statements, using the updated
