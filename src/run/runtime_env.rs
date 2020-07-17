@@ -18,11 +18,11 @@ use crate::mavm::Value;
 use crate::uint256::Uint256;
 use ethers_core::rand::thread_rng;
 use ethers_core::types::{Transaction, TransactionRequest};
+use ethers_core::utils::keccak256;
 use ethers_signers::{Signer, Wallet};
 use serde::{Deserialize, Serialize};
 use std::convert::TryInto;
 use std::{collections::HashMap, fs::File, io, path::Path};
-use ethers_core::utils::keccak256;
 
 #[derive(Debug, Clone)]
 pub struct RuntimeEnvironment {
@@ -151,7 +151,15 @@ impl RuntimeEnvironment {
         calldata: Vec<u8>,
         wallet: &Wallet,
     ) -> Vec<u8> {
-        let (msg, tx_id_bytes) = self.make_signed_l2_message(sender_addr, max_gas, gas_price_bid, to_addr, value, calldata, wallet);
+        let (msg, tx_id_bytes) = self.make_signed_l2_message(
+            sender_addr,
+            max_gas,
+            gas_price_bid,
+            to_addr,
+            value,
+            calldata,
+            wallet,
+        );
         let msg_size: u64 = msg.len().try_into().unwrap();
         batch.extend(&msg_size.to_be_bytes());
         batch.extend(msg);
