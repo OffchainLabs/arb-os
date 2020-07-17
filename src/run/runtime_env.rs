@@ -22,6 +22,7 @@ use ethers_signers::{Signer, Wallet};
 use serde::{Deserialize, Serialize};
 use std::convert::TryInto;
 use std::{collections::HashMap, fs::File, io, path::Path};
+use ethers_core::utils::keccak256;
 
 #[derive(Debug, Clone)]
 pub struct RuntimeEnvironment {
@@ -136,7 +137,7 @@ impl RuntimeEnvironment {
         let tx = wallet.sign_transaction(tx_for_signing).unwrap();
         let sig_bytes = get_signature_bytes(&tx);
         buf.extend(sig_bytes.to_vec());
-        (buf, tx.rlp().0)
+        (buf, keccak256(&tx.rlp().0).to_vec())
     }
 
     pub fn append_signed_tx_message_to_batch(
@@ -255,7 +256,8 @@ impl RuntimeEnvironment {
 fn get_signature_bytes(tx: &Transaction) -> Vec<u8> {
     let mut ret = Uint256::from_u256(&tx.r).to_bytes_be();
     ret.extend(Uint256::from_u256(&tx.s).to_bytes_be());
-    ret.extend(vec![(tx.v.as_u64() & 0xffu64) as u8]);
+    let reduced_v = 1 - ((tx.v.as_u64()) % 2);
+    ret.extend(vec![reduced_v as u8]);
     ret
 }
 
