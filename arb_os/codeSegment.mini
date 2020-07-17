@@ -161,8 +161,10 @@ public impure func translateEvmCodeSegment(
                             return Some((pushInstruction(0x03, restOfCode), evmJumpTable));
                         }
                     } else {
-                        if ( (opcode >= 0x04) && (opcode <= 0x09) ) { // DIV, MOD, SDIV, SMOD, ADDMOD, MULMOD
-                            return pushEvmInsnDenomCheck(opcode, restOfCode, evmJumpTable);
+                        if ( (opcode >= 0x04) && (opcode <= 0x07) ) { // DIV, MOD, SDIV, SMOD
+                            return pushEvmInsnDenomCheck(opcode, 2, restOfCode, evmJumpTable);
+                        } elseif ( (opcode >= 0x08) && (opcode <= 0x09) ) { // ADDMOD, MULMOD
+                            return pushEvmInsnDenomCheck(opcode, 3, restOfCode, evmJumpTable);
                         } elseif (opcode == 0x0a) { // EXP
                             return Some((pushInstruction(0x0a, restOfCode), evmJumpTable));
                         } elseif (opcode == 0x0b) { // SIGNEXTEND
@@ -466,7 +468,8 @@ public impure func translateEvmCodeSegment(
 }
 
 impure func pushEvmInsnDenomCheck(
-    opcode: uint, 
+    opcode: uint,
+    numStackOperands: uint,
     restOfCode: AvmCodePoint,
     evmJumpTable: map<uint, AvmCodePoint>
 ) -> option<(AvmCodePoint, map<uint, AvmCodePoint>)> {
@@ -480,14 +483,29 @@ impure func pushEvmInsnDenomCheck(
             pushInstructionImm(
                 0x35,  // cjump
                 doTheOp,
-                pushInstruction(
-                    0x73,  // error
-                    doTheOp
+                prependPops(
+                    numStackOperands,
+                    pushValue(
+                        0,
+                        pushInstructionImm(
+                            0x34, // jump
+                            restOfCode,
+                            doTheOp
+                        )
+                    )
                 )
             )
         ),
         evmJumpTable
     ));
+}
+
+impure func prependPops(numPops: uint, restOfCode: AvmCodePoint) -> AvmCodePoint {
+    while (numPops > 0) {
+        restOfCode = pushInstruction(0x30, restOfCode);   // pop instruction
+        numPops = numPops-1;
+    }
+    return restOfCode;
 }
 
 impure func pushDupn(
