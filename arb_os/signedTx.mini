@@ -68,7 +68,7 @@ public impure func translateSignedTx(req: MessageFromL1) -> option<MessageFromL1
     let rlpHash = rlpAndHash(
         extractedL2data,
         preSigSize,
-        bytearray_getByte(extractedL2data, preSigSize+64) + 35 + 2 * chainParams_chainId(),
+        bytearray_getByte(extractedL2data, preSigSize+64) % 2 + 35 + 2 * chainParams_chainId(),
         bytearray_get256(extractedL2data, preSigSize),
         bytearray_get256(extractedL2data, preSigSize+32),
     );
@@ -90,7 +90,7 @@ impure func recoverSigner(msgData: ByteArray, preSigSize: uint) -> option<addres
     let signer = asm(
         bytearray_get256(msgData, preSigSize),
         bytearray_get256(msgData, preSigSize+32),
-        1-(bytearray_getByte(msgData, preSigSize+64) % 2),
+        bytearray_getByte(msgData, preSigSize+64) % 2,
         rlpHash,
     ) address { ecrecover };
 
