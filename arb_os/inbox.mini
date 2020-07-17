@@ -14,11 +14,24 @@
 // limitations under the License.
 //
 
+import type ByteArray;
+import func bytearray_size(ba: ByteArray) -> uint;
+import func bytearray_unmarshalBytes(mb: MarshalledBytes) -> ByteArray;
+import func bytearray_marshalFull(ba: ByteArray) -> MarshalledBytes;
+import func bytearray_get256(ba: ByteArray, offset: uint) -> uint;
+import func bytearray_setByte(ba: ByteArray, offset: uint, value: uint) -> ByteArray;
+import func bytearray_extract(ba: ByteArray, offset: uint, nbytes: uint) -> ByteArray;
+import type MarshalledBytes;
+import func marshalledBytes_firstByte(mb: MarshalledBytes) -> uint;
+
 import type Queue;
 import func queue_new() -> Queue;
 import func queue_isEmpty(q: Queue) -> bool;
 import func queue_get(q: Queue) -> option<(Queue, any)>;
+import func queue_peek(q: Queue) -> option<any>;
 import func queue_put(q: Queue, val: any) -> Queue;
+import func queue_discardOneIfNonempty(q: Queue) -> option<Queue>;
+
 
 import impure func chainParams_gotParamsMessage(sender: address, data: MarshalledBytes);
 
@@ -36,9 +49,10 @@ type IncomingRequest = struct {
 }
 
 type Inbox = struct {
-    queue: Queue,     // Queue of messages that haven't yet been retrieved from the inbox
-    slowLane: option<SlowLaneInfo>,
-    lastBlockNumSeen: uint,  // latest blocknum that has arrived from L1
+    readyQueue: Queue,     // Queue of requests that are ready to execute
+    sequencerInfo: option<SequencerInfo>, // Sequencer info, or None if there isn't one
+    lastBlockNum: uint,    // block number of last message returned by inbox_get
+    lastTimestamp: uint,   // timestamp of last message returned by inbox_get
 }
 
 // If there is a slow lane, the idea is that messages from one address, the "fastLaneOwner",
@@ -47,31 +61,31 @@ type Inbox = struct {
 //     and they're re-tagged with the delayed block time.
 // Messages are guaranteed to be produced by inbox_get in block-number order (after re-tagging).
 
-type SlowLaneInfo = struct {
-    fastLaneOwner: address,
+type SequencerInfo = struct {
+    sequencerAddr: address,
     blocksOfDelay: uint,
-    queue: Queue
+    delayQueue: Queue,
 }
 
 var globalInbox: Inbox;
 
 public impure func inbox_init() {
     globalInbox = struct {
-        queue: queue_new(),
-        slowLane: None<SlowLaneInfo>,
-        blockNum: 0,
-        timestamp: 0,
+        readyQueue: queue_new(),
+        sequencerInfo: None<SequencerInfo>,
+        lastBlockNum: 0,
+        lastTimestamp: 0,
     };
 }
 
-public impure inbox_startSlowLane(fastLaneOwner: address, blocksOfDelay: uint) -> option<()> {
-    if (globalInbox.slowLane == None<SlowLaneInfo>) {
+public impure func inbox_startSequencer(sequencerAddr: address, blocksOfDelay: uint) -> option<()> {
+    if (globalInbox.sequencerInfo == None<SequencerInfo>) {
         globalInbox = globalInbox with {
-            slowLane: struct {
-                fastLaneOwner: fastLaneOwner,
+            sequencerInfo: Some(struct {
+                sequencerAddr: sequencerAddr,
                 blocksOfDelay: blocksOfDelay,
-                queue: queue_new(),
-            }
+                delayQueue: queue_new()
+            })
         };
         return Some(());
     } else {
@@ -80,33 +94,132 @@ public impure inbox_startSlowLane(fastLaneOwner: address, blocksOfDelay: uint) -
 }
 
 public impure func inbox_get() -> IncomingRequest {
-    // Get the next message, in order of arrival.
-    // If no messages have arrived, this will block until one arrives.
-    // Put this in a loop so we can special-case the very first "chain parameters" message.
+    // Get the next message, in order of arrival (possibly modified due to sequencer rules).
+    // If no messages are ready, this will block until one is ready.
 
     loop {
-        let inbox = globalInbox;
-        let msg = None<MessageFromL1>;
-        if (! queue_isEmpty(inbox.queue) {
-
-        } else {
-            if let Some(res) = getFromSlowLane(inbox) {
-
+        if let Some(res) = queue_get(globalInbox.readyQueue) {
+            let (updatedQ, msg) = res;
+            let ebMsg = unsafecast<IncomingRequest>(msg);
+            globalInbox = globalInbox
+                with { readyQueue: updatedQ }
+                with { lastBlockNum: ebMsg.blockNumber }
+                with { lastTimestamp: ebMsg.timestamp };
+            if (ebMsg.kind == 4) {
+                chainParams_gotParamsMessage(ebMsg.sender, ebMsg.msgData);
+            } else {
+                return ebMsg;
             }
         }
-        while (queue_isEmpty(inbox.queue)) {
-            inbox = getFromL1Inbox(inbox);
-        }
-        let (updatedQ, ret,) = queueGetOrDie(inbox.queue);
-        let ebMsg = unsafecast<IncomingRequest>(ret);
-
-        globalInbox = inbox with { queue: updatedQ };
-
-        if (ebMsg.kind == 4) {
-            chainParams_gotParamsMessage(ebMsg.sender, ebMsg.msgData);
+        if let Some(seqInfo) = globalInbox.sequencerInfo {
+            let (uq, useq) = getFromSequencer(globalInbox.readyQueue, seqInfo);
+            globalInbox = globalInbox with {
+                readyQueue: uq
+            } with {
+                sequencerInfo: Some(useq)
+            };
         } else {
-            return ebMsg;
+            let q = globalInbox.readyQueue;
+            while (queue_isEmpty(q)) {
+                q = getFromL1Inbox(q);
+            }
+            globalInbox = globalInbox with { readyQueue: q };
         }
+    }
+}
+
+impure func getFromSequencer(qToFill: Queue, seqInfo: SequencerInfo) -> (Queue, SequencerInfo) {
+    // push one or more messages into qToFill
+    let inQ = getFromL1Inbox(queue_new());
+    while ( ! queue_isEmpty(inQ) ) {
+        let (uq, rawMsg) = queueGetOrDie(inQ);
+        inQ = uq;
+        let inMsg = unsafecast<IncomingRequest>(rawMsg);
+
+        // release messages that have aged out of the delay queue
+        let releasePoint = 0;
+        if (inMsg.blockNumber > seqInfo.blocksOfDelay) {
+            releasePoint = inMsg.blockNumber - seqInfo.blocksOfDelay;
+        }
+        if let Some(res) = releaseFromQueueByBlockNum(
+            seqInfo.delayQueue,
+            qToFill,
+            releasePoint,
+            inMsg.blockNumber,
+            inMsg.timestamp
+        ) {
+            let (uDelayQ, uFillQ) = res;
+            seqInfo = seqInfo with { delayQueue: uDelayQ };
+            qToFill = uFillQ;
+        }
+
+        if (inMsg.sender != seqInfo.sequencerAddr) {
+            // message not from sequencer, put it in delay queue
+            seqInfo = seqInfo with { delayQueue: queue_put(seqInfo.delayQueue, inMsg) };
+        } elseif ( (inMsg.kind == 3) || (marshalledBytes_firstByte(inMsg.msgData) == 5) ) {
+            // sequencer batch message needs special handling
+
+            let ba = bytearray_unmarshalBytes(inMsg.msgData);
+
+            // release any additional delayQueue messages it authorizes
+            let releasePoint = bytearray_get256(ba, 1);
+            if let Some(res) = releaseFromQueueByBlockNum(
+                seqInfo.delayQueue,
+                qToFill,
+                releasePoint,
+                inMsg.blockNumber,
+                inMsg.timestamp
+            ) {
+                let (uSlowQ, uFillQ) = res;
+                seqInfo = seqInfo with { delayQueue: uSlowQ };
+                qToFill = uFillQ;
+            }
+
+            // now morph this into a normal batch message
+            // strip 256 bytes off of fastMsg's L2 data, then set first byte to 3
+            inMsg = inMsg with {
+                msgData: bytearray_marshalFull(
+                    bytearray_setByte(
+                        bytearray_extract(ba, 256, bytearray_size(ba)-256),
+                        0,
+                        3  // typecode for a normal batch message
+                    )
+                )
+            };
+            qToFill = queue_put(qToFill, inMsg);
+        } else {
+            qToFill = queue_put(qToFill, inMsg);
+        }
+    }
+
+    return (qToFill, seqInfo);
+}
+
+func releaseFromQueueByBlockNum(
+    inQueue: Queue,
+    outQueue: Queue,
+    blockNumToRelease: uint,   // release messages this old, or older
+    assignBlockNum: uint,      // assign this block number to released messages
+    assignTimestamp: uint      // assign this timestamp to released messages
+) -> option<(Queue, Queue)> {
+    let anyChange = false;
+    let moreToDo = true;
+    while (moreToDo && !queue_isEmpty(inQueue)) {
+        let nextMsg = unsafecast<IncomingRequest>(queue_peek(inQueue)?);   // won't return None because we know queue is nonempty
+        if (nextMsg.blockNumber <= blockNumToRelease) {
+            anyChange = true;
+            outQueue = queue_put(outQueue, nextMsg);
+            if let Some(inq) = queue_discardOneIfNonempty(inQueue) {
+                inQueue = inq;
+            }
+        } else {
+            moreToDo = false;
+        }
+    }
+    if (anyChange) {
+        return Some((inQueue, outQueue));
+    } else {
+        return None;
     }
 }
 
@@ -126,30 +239,29 @@ type InboxCell = struct {
     msg: any,
 }
 
-impure func getFromL1Inbox(inbox: Inbox) -> Inbox {
-    // Get one or more messages from the L1 inbox, and append them to the inbox.
+impure func getFromL1Inbox(queue: Queue) -> Queue {
+    // Get one or more messages from the L1 inbox, and append them to the queue.
     // If there are no messages available in the L1 inbox, this blocks until one is available.
     let newMsgs = asm() InboxCell { inbox };
-    inbox = addInboxToQueue(inbox, newMsgs);
-    return inbox;
+    queue = addInboxToQueue(queue, newMsgs);
+    return queue;
 }
 
-func addInboxToQueue(inbox: Inbox, newMsgs: InboxCell) -> Inbox {
+func addInboxToQueue(queue: Queue, newMsgs: InboxCell) -> Queue {
     // Unpack messages from an InboxCell list, and append them to an Inbox.
     // Because the messages are in the linked list in newest-first order, we need to reverse the order.
     if (unsafecast<any>(newMsgs) == null) {
-        return inbox;
+        return queue;
     } else {
-        inbox = addInboxToQueue(inbox, unsafecast<InboxCell>(newMsgs.rest));
-        let qp = queue_put(inbox.queue, newMsgs.msg);
-        return inbox with { queue: qp };
+        queue = addInboxToQueue(queue, unsafecast<InboxCell>(newMsgs.rest));
+        return queue_put(queue, newMsgs.msg);
     }
 }
 
-public impure func inbox_currentTimestamp() -> uint {
-    return globalInbox.timestamp;
+public impure func inbox_currentBlockNumber() -> uint {
+    return globalInbox.lastBlockNum;
 }
 
-public impure func inbox_currentBlockNumber() -> uint {
-    return globalInbox.blockNum;
+public impure func inbox_currentTimestamp() -> uint {
+    return globalInbox.lastTimestamp;
 }
