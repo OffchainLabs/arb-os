@@ -120,3 +120,13 @@ func rlpAndHash(msgData: ByteArray, preSigSize: uint, v: uint, r: uint, s: uint)
     );
     return keccak256(rlpEncoded, 0, bytearray_size(rlpEncoded));
 }
+
+public func hashL2messageInfo(l2msgData: ByteArray, chainId: uint, sender: address) -> bytes32 {
+    return hash(
+        bytes32(sender),
+        hash(
+            bytes32(chainId),
+            keccak256(l2msgData, 1, bytearray_size(l2msgData)-1)
+        )
+    );
+}

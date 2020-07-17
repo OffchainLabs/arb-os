@@ -21,6 +21,8 @@ import type MarshalledBytes;
 import type MessageBatch;
 import type Queue;
 
+import func chainParams_chainId() -> uint;
+
 import func getGlobalAccountStore() -> AccountStore;
 import func setGlobalAccountStore(acctStore: AccountStore);
 import func accountStore_get(acctStore: AccountStore, addr: address) -> Account;
@@ -42,6 +44,8 @@ import impure func inbox_get() -> IncomingRequest;
 
 import func messageBatch_tryNew(msg: IncomingRequest) -> option<MessageBatch>;
 import func messageBatch_get(batch: MessageBatch) -> option<(IncomingRequest, MessageBatch)>;
+
+import func hashL2messageInfo(l2msgData: ByteArray, chainId: uint, sender: address) -> bytes32;
 
 import func translateSignedTx(req: IncomingRequest) -> option<IncomingRequest>;
 
@@ -287,7 +291,8 @@ public impure func getNextMsgFromCongestionAuction() -> (
             // get its maxGas amount -- for now, set the limit high, unless caller asked for less
             let maxGas = 1000000000;
             if (msg.kind == 3) {
-                if (marshalledBytes_firstByte(msg.msgData) == 4) {
+                let firstByte = marshalledBytes_firstByte(msg.msgData);
+                if (firstByte == 4) {
                     // it's a signed tx; verify sig and then process request or discard
                     if let Some(verifiedMsg) = translateSignedTx(msg) {
                         let ba = bytearray_unmarshalBytes(verifiedMsg.msgData);
@@ -297,6 +302,16 @@ public impure func getNextMsgFromCongestionAuction() -> (
                     // else signature was invalid, ignore msg and execute loop again to get another
                 } else {
                     let ba = bytearray_unmarshalBytes(msg.msgData);
+                    if (firstByte == 0) {
+                        // it's an unsigned tx; compute unique requestId
+                        msg = msg with {
+                            requestId: uint(hashL2messageInfo(
+                                ba,
+                                chainParams_chainId(),
+                                msg.sender
+                            ))
+                        };
+                    }
                     let maxGas = bytearray_get256(ba, 1);
                     return (msg, true, maxGas, 0);
                 }
