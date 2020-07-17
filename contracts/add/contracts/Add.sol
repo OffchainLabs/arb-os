@@ -24,4 +24,8 @@ contract Add {
     function withdrawMyEth() public payable {
 	ArbSys(address(100)).withdrawEth.value(msg.value)(address(1025));
     }
+
+    function currentBlockNum() public returns (uint) {
+        return block.number;
+    }
 }

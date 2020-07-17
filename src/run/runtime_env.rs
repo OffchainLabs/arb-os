@@ -63,6 +63,44 @@ impl RuntimeEnvironment {
         self.chain_id
     }
 
+    pub fn get_blocknum_timestamp(&self) -> (Uint256, Uint256) {
+        (
+            self.current_block_num.clone(),
+            self.current_timestamp.clone(),
+        )
+    }
+
+    pub fn set_blocknum_timestamp(
+        &mut self,
+        new_blocknum: Uint256,
+        maybe_timestamp: Option<Uint256>, // if None, timestamp will advance 13 seconds for each block
+    ) -> Option<()> {
+        if let Some(tstamp) = maybe_timestamp.clone() {
+            if tstamp <= self.current_timestamp {
+                return None;
+            }
+        }
+        if new_blocknum > self.current_block_num {
+            self.current_timestamp = if let Some(ts) = maybe_timestamp {
+                ts
+            } else {
+                self.current_block_num.add(
+                    &Uint256::from_u64(13)
+                        .mul(&new_blocknum.unchecked_sub(&self.current_block_num)),
+                )
+            };
+            self.current_block_num = new_blocknum;
+            Some(())
+        } else {
+            None
+        }
+    }
+
+    pub fn add_to_blocknum(&mut self, delta: u64) {
+        let _ = self
+            .set_blocknum_timestamp(self.current_block_num.add(&Uint256::from_u64(delta)), None);
+    }
+
     pub fn insert_l1_message(&mut self, msg_type: u8, sender_addr: Uint256, msg: &[u8]) {
         let l1_msg = Value::new_tuple(vec![
             Value::Int(Uint256::from_usize(msg_type as usize)),
@@ -150,7 +188,15 @@ impl RuntimeEnvironment {
         calldata: Vec<u8>,
         wallet: &Wallet,
     ) {
-        let msg = self.make_signed_l2_message(sender_addr, max_gas, gas_price_bid, to_addr, value, calldata, wallet);
+        let msg = self.make_signed_l2_message(
+            sender_addr,
+            max_gas,
+            gas_price_bid,
+            to_addr,
+            value,
+            calldata,
+            wallet,
+        );
         let msg_size: u64 = msg.len().try_into().unwrap();
         batch.extend(&msg_size.to_be_bytes());
         batch.extend(msg);
