@@ -478,8 +478,8 @@ impure func pushEvmInsnDenomCheck(
     // So we need to generate a little conditional to handle the special case.
     let doTheOp = pushInstruction(opcode, restOfCode);
     return Some((
-        pushInstruction(
-            0x41,  // dup1
+        pushDupn(
+            numStackOperands-1,  // dup denominator/modulus to top of stack
             pushInstructionImm(
                 0x35,  // cjump
                 doTheOp,
@@ -515,8 +515,8 @@ impure func pushDupn(
     // Generate code for a dupN pseudo-operation.
     // AVM supports this only for N <= 2, whereas EVM can ask for larger ones.
     // Note that N here uses the AVM semantics, which is off-by-one from the EVM semantics.
-    if (n == 2) {
-        return pushInstruction(0x42, restOfCode);  //dup2
+    if (n <= 2) {
+        return pushInstruction(0x40+n, restOfCode);  //dup_n
     } else {
         return pushInstruction(
             0x38,  // auxpush,
