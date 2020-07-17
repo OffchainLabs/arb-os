@@ -289,7 +289,7 @@ impl AbiForContract {
         };
 
         let sender_addr = Uint256::from_usize(1025);
-        machine.runtime_env.insert_tx_message(
+        let request_id = machine.runtime_env.insert_tx_message(
             sender_addr,
             Uint256::from_usize(1_000_000_000_000),
             Uint256::zero(),
@@ -314,6 +314,12 @@ impl AbiForContract {
 
         if let Value::Tuple(tup) = &logs[logs.len() - 1] {
             assert_eq!(tup[1], Value::Int(Uint256::zero()));
+            if let Value::Tuple(tup2) = &tup[0] {
+                assert_eq!(tup2[4], Value::Int(request_id));
+            } else {
+                println!("Malformed ArbOS log item");
+                return None;
+            }
             let buf = bytes_from_bytestack(tup[2].clone())?;
             self.address = Uint256::from_bytes(&buf);
             Some(self.address.clone())

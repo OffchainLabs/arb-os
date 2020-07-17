@@ -24,6 +24,8 @@ import func bytearray_setByte(ba: ByteArray, offset: uint, val: uint) -> ByteArr
 import func bytearray_extract(ba: ByteArray, offset: uint, nbytes: uint) -> ByteArray;
 import func bytearray_unmarshalBytes(mb: MarshalledBytes) -> ByteArray;
 import func bytearray_marshalFull(ba: ByteArray) -> MarshalledBytes;
+import func marshalledBytes_hash(mb: MarshalledBytes) -> bytes32;
+
 
 import func rlp_encodeMessageInfo(
     seqNum: uint,
@@ -121,12 +123,13 @@ func rlpAndHash(msgData: ByteArray, preSigSize: uint, v: uint, r: uint, s: uint)
     return keccak256(rlpEncoded, 0, bytearray_size(rlpEncoded));
 }
 
-public func hashL2messageInfo(l2msgData: ByteArray, chainId: uint, sender: address) -> bytes32 {
+public func hashL2messageInfo(l2msg: MarshalledBytes, chainId: uint, sender: address) -> bytes32 {
+    asm(300,) { debugprint };
     return hash(
         bytes32(sender),
         hash(
             bytes32(chainId),
-            keccak256(l2msgData, 1, bytearray_size(l2msgData)-1)
+            marshalledBytes_hash(l2msg),
         )
     );
 }

@@ -90,9 +90,9 @@ impl RuntimeEnvironment {
         to_addr: Uint256,
         value: Uint256,
         data: &[u8],
-    ) {
+    ) -> Uint256 {
         let mut buf = vec![0u8];
-        let seq_num = self.get_and_incr_seq_num(&sender_addr);
+        let seq_num = self.get_and_incr_seq_num(&sender_addr.clone());
         buf.extend(max_gas.to_bytes_be());
         buf.extend(gas_price_bid.to_bytes_be());
         buf.extend(seq_num.to_bytes_be());
@@ -100,7 +100,15 @@ impl RuntimeEnvironment {
         buf.extend(value.to_bytes_be());
         buf.extend_from_slice(data);
 
-        self.insert_l2_message(sender_addr, &buf);
+        self.insert_l2_message(sender_addr.clone(), &buf);
+
+        Uint256::avm_hash2(
+            &sender_addr,
+            &Uint256::avm_hash2(
+                &Uint256::from_u64(self.chain_id),
+                &hash_bytestack(bytestack_from_bytes(&buf)).unwrap()
+            )
+        )
     }
 
     pub fn new_batch(&self) -> Vec<u8> {
@@ -300,6 +308,39 @@ fn bytestack_build_uint(b: &[u8]) -> Value {
         }
     }
     Value::Int(ui)
+}
+
+pub fn hash_bytestack(bs: Value) -> Option<Uint256> {
+    if let Value::Tuple(tup) = bs {
+        if let Value::Int(ui) = &tup[0] {
+            let mut acc: Uint256 = ui.clone();
+            let mut pair = &tup[1];
+            while ( ! (*pair == Value::none())) {
+                if let Value::Tuple(tup2) = pair {
+                    if let Value::Int(ui2) = &tup2[0] {
+                        acc = Uint256::avm_hash2(&acc, &ui2);
+                        pair = &tup2[1];
+                    } else {
+                        return None;
+                    }
+                } else {
+                    return None;
+                }
+            }
+            Some(acc)
+        } else {
+            None
+        }
+    } else {
+        None
+    }
+}
+
+#[test]
+fn test_hash_bytestack() {
+    let buf = hex::decode("000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f303132333435363738393a3b3c3d3e3f404142").unwrap();
+    let h = hash_bytestack(bytestack_from_bytes(&buf)).unwrap();
+    assert_eq!(h, Uint256::from_string_hex("4fc384a19926e9ff7ec8f2376a0d146dc273031df1db4d133236d209700e4780").unwrap());
 }
 
 pub fn bytes_from_bytestack(bs: Value) -> Option<Vec<u8>> {

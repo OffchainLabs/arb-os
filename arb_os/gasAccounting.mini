@@ -45,7 +45,7 @@ import impure func inbox_get() -> IncomingRequest;
 import func messageBatch_tryNew(msg: IncomingRequest) -> option<MessageBatch>;
 import func messageBatch_get(batch: MessageBatch) -> option<(IncomingRequest, MessageBatch)>;
 
-import func hashL2messageInfo(l2msgData: ByteArray, chainId: uint, sender: address) -> bytes32;
+import func hashL2messageInfo(l2msg: MarshalledBytes, chainId: uint, sender: address) -> bytes32;
 
 import func translateSignedTx(req: IncomingRequest) -> option<IncomingRequest>;
 
@@ -306,7 +306,7 @@ public impure func getNextMsgFromCongestionAuction() -> (
                         // it's an unsigned tx; compute unique requestId
                         msg = msg with {
                             requestId: uint(hashL2messageInfo(
-                                ba,
+                                msg.msgData,
                                 chainParams_chainId(),
                                 msg.sender
                             ))
