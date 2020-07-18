@@ -124,7 +124,6 @@ func rlpAndHash(msgData: ByteArray, preSigSize: uint, v: uint, r: uint, s: uint)
 }
 
 public func hashL2messageInfo(l2msg: MarshalledBytes, chainId: uint, sender: address) -> bytes32 {
-    asm(300,) { debugprint };
     return hash(
         bytes32(sender),
         hash(
