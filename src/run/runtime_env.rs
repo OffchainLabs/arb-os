@@ -150,7 +150,15 @@ impl RuntimeEnvironment {
         calldata: Vec<u8>,
         wallet: &Wallet,
     ) {
-        let msg = self.make_signed_l2_message(sender_addr, max_gas, gas_price_bid, to_addr, value, calldata, wallet);
+        let msg = self.make_signed_l2_message(
+            sender_addr,
+            max_gas,
+            gas_price_bid,
+            to_addr,
+            value,
+            calldata,
+            wallet,
+        );
         let msg_size: u64 = msg.len().try_into().unwrap();
         batch.extend(&msg_size.to_be_bytes());
         batch.extend(msg);
