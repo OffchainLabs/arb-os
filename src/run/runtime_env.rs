@@ -18,6 +18,7 @@ use crate::mavm::Value;
 use crate::uint256::Uint256;
 use ethers_core::rand::thread_rng;
 use ethers_core::types::{Transaction, TransactionRequest};
+use ethers_core::utils::keccak256;
 use ethers_signers::{Signer, Wallet};
 use serde::{Deserialize, Serialize};
 use std::convert::TryInto;
@@ -89,9 +90,9 @@ impl RuntimeEnvironment {
         to_addr: Uint256,
         value: Uint256,
         data: &[u8],
-    ) {
+    ) -> Uint256 {
         let mut buf = vec![0u8];
-        let seq_num = self.get_and_incr_seq_num(&sender_addr);
+        let seq_num = self.get_and_incr_seq_num(&sender_addr.clone());
         buf.extend(max_gas.to_bytes_be());
         buf.extend(gas_price_bid.to_bytes_be());
         buf.extend(seq_num.to_bytes_be());
@@ -99,7 +100,15 @@ impl RuntimeEnvironment {
         buf.extend(value.to_bytes_be());
         buf.extend_from_slice(data);
 
-        self.insert_l2_message(sender_addr, &buf);
+        self.insert_l2_message(sender_addr.clone(), &buf);
+
+        Uint256::avm_hash2(
+            &sender_addr,
+            &Uint256::avm_hash2(
+                &Uint256::from_u64(self.chain_id),
+                &hash_bytestack(bytestack_from_bytes(&buf)).unwrap(),
+            ),
+        )
     }
 
     pub fn new_batch(&self) -> Vec<u8> {
@@ -115,7 +124,7 @@ impl RuntimeEnvironment {
         value: Uint256,
         calldata: Vec<u8>,
         wallet: &Wallet,
-    ) -> Vec<u8> {
+    ) -> (Vec<u8>, Vec<u8>) {
         let mut buf = vec![4u8];
         let seq_num = self.get_and_incr_seq_num(&sender_addr);
         buf.extend(max_gas.to_bytes_be());
@@ -136,7 +145,7 @@ impl RuntimeEnvironment {
         let tx = wallet.sign_transaction(tx_for_signing).unwrap();
         let sig_bytes = get_signature_bytes(&tx);
         buf.extend(sig_bytes.to_vec());
-        buf
+        (buf, keccak256(&tx.rlp().0).to_vec())
     }
 
     pub fn append_signed_tx_message_to_batch(
@@ -149,8 +158,8 @@ impl RuntimeEnvironment {
         value: Uint256,
         calldata: Vec<u8>,
         wallet: &Wallet,
-    ) {
-        let msg = self.make_signed_l2_message(
+    ) -> Vec<u8> {
+        let (msg, tx_id_bytes) = self.make_signed_l2_message(
             sender_addr,
             max_gas,
             gas_price_bid,
@@ -162,6 +171,7 @@ impl RuntimeEnvironment {
         let msg_size: u64 = msg.len().try_into().unwrap();
         batch.extend(&msg_size.to_be_bytes());
         batch.extend(msg);
+        tx_id_bytes
     }
 
     pub fn insert_batch_message(&mut self, sender_addr: Uint256, batch: &[u8]) {
@@ -262,7 +272,8 @@ impl RuntimeEnvironment {
 fn get_signature_bytes(tx: &Transaction) -> Vec<u8> {
     let mut ret = Uint256::from_u256(&tx.r).to_bytes_be();
     ret.extend(Uint256::from_u256(&tx.s).to_bytes_be());
-    ret.extend(vec![(tx.v.as_u64() & 0xffu64) as u8]);
+    let reduced_v = 1 - ((tx.v.as_u64()) % 2);
+    ret.extend(vec![reduced_v as u8]);
     ret
 }
 
@@ -297,6 +308,45 @@ fn bytestack_build_uint(b: &[u8]) -> Value {
         }
     }
     Value::Int(ui)
+}
+
+pub fn hash_bytestack(bs: Value) -> Option<Uint256> {
+    if let Value::Tuple(tup) = bs {
+        if let Value::Int(ui) = &tup[0] {
+            let mut acc: Uint256 = ui.clone();
+            let mut pair = &tup[1];
+            while (!(*pair == Value::none())) {
+                if let Value::Tuple(tup2) = pair {
+                    if let Value::Int(ui2) = &tup2[0] {
+                        acc = Uint256::avm_hash2(&acc, &ui2);
+                        pair = &tup2[1];
+                    } else {
+                        return None;
+                    }
+                } else {
+                    return None;
+                }
+            }
+            Some(acc)
+        } else {
+            None
+        }
+    } else {
+        None
+    }
+}
+
+#[test]
+fn test_hash_bytestack() {
+    let buf = hex::decode("000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f303132333435363738393a3b3c3d3e3f404142").unwrap();
+    let h = hash_bytestack(bytestack_from_bytes(&buf)).unwrap();
+    assert_eq!(
+        h,
+        Uint256::from_string_hex(
+            "4fc384a19926e9ff7ec8f2376a0d146dc273031df1db4d133236d209700e4780"
+        )
+        .unwrap()
+    );
 }
 
 pub fn bytes_from_bytestack(bs: Value) -> Option<Vec<u8>> {

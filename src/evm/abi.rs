@@ -289,7 +289,7 @@ impl AbiForContract {
         };
 
         let sender_addr = Uint256::from_usize(1025);
-        machine.runtime_env.insert_tx_message(
+        let request_id = machine.runtime_env.insert_tx_message(
             sender_addr,
             Uint256::from_usize(1_000_000_000_000),
             Uint256::zero(),
@@ -314,6 +314,12 @@ impl AbiForContract {
 
         if let Value::Tuple(tup) = &logs[logs.len() - 1] {
             assert_eq!(tup[1], Value::Int(Uint256::zero()));
+            if let Value::Tuple(tup2) = &tup[0] {
+                assert_eq!(tup2[4], Value::Int(request_id));
+            } else {
+                println!("Malformed ArbOS log item");
+                return None;
+            }
             let buf = bytes_from_bytestack(tup[2].clone())?;
             self.address = Uint256::from_bytes(&buf);
             Some(self.address.clone())
@@ -371,11 +377,11 @@ impl AbiForContract {
         machine: &mut Machine,
         payment: Uint256,
         wallet: &Wallet,
-    ) -> Result<(), ethabi::Error> {
+    ) -> Result<Uint256, ethabi::Error> {
         let this_function = self.contract.function(func_name)?;
         let calldata = this_function.encode_input(args).unwrap();
 
-        machine.runtime_env.append_signed_tx_message_to_batch(
+        let tx_id_bytes = machine.runtime_env.append_signed_tx_message_to_batch(
             batch,
             sender_addr,
             Uint256::from_usize(1_000_000_000_000),
@@ -386,6 +392,6 @@ impl AbiForContract {
             &wallet,
         );
 
-        Ok(())
+        Ok((Uint256::from_bytes(&tx_id_bytes)))
     }
 }
