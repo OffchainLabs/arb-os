@@ -205,44 +205,34 @@ fn mavm_codegen_statements(
     code: &mut Vec<Instruction>,           // accumulates the code as it's generated
     mut num_locals: usize,                 // num locals that have been allocated
     locals: &CopyingSymTable<'_, usize>,   // lookup local variable slot number by name
-    label_gen: LabelGenerator,
+    mut label_gen: LabelGenerator,
     string_table: &StringTable,
     import_func_map: &HashMap<StringId, Label>,
     global_var_map: &HashMap<StringId, usize>,
 ) -> Result<(LabelGenerator, usize, bool, HashMap<StringId, usize>), CodegenError> {
-    if statements.is_empty() {
-        return Ok((label_gen, num_locals, true, HashMap::new()));
-    }
-    let (lg, statement_locals, returns, bindings) = mavm_codegen_statement(
-        statements[0].clone(),
-        code,
-        num_locals,
-        locals,
-        label_gen,
-        string_table,
-        import_func_map,
-        global_var_map,
-    )?;
-    num_locals = max(statement_locals, num_locals);
-    if returns {
-        Ok((lg, num_locals, false, bindings))
-    } else {
+    let mut bindings = HashMap::new();
+    for statement in statements {
         let new_locals = locals.push_multi(bindings.clone());
-        let (l, n, con, mut rest_of_bindings) = mavm_codegen_statements(
-            statements[1..].to_vec(),
+        let (lg, statement_locals, returns, statement_bindings) = mavm_codegen_statement(
+            statement,
             code,
             num_locals,
             &new_locals,
-            lg,
+            label_gen,
             string_table,
             import_func_map,
             global_var_map,
         )?;
-        for (id, bind) in bindings {
-            rest_of_bindings.insert(id, bind);
+        label_gen = lg;
+        num_locals = max(statement_locals, num_locals);
+        for (id, bind) in statement_bindings {
+            bindings.insert(id, bind);
         }
-        Ok((l, n, con, rest_of_bindings))
+        if returns {
+            return Ok((label_gen, num_locals, false, bindings));
+        }
     }
+    Ok((label_gen, num_locals, true, bindings))
 }
 
 ///Generates code for the provided statement. code represents the
