@@ -43,12 +43,12 @@ pub fn new_codegen_error(reason: &'static str, location: Option<Location>) -> Co
 
 ///Top level function for code generation, generates code for modules.
 ///
-///In this function, funcs represents a list of functions in scope, code_in represents previously
-/// generated code, string_table is used to get builtins, imported_funcs is a list of functions
-/// imported from other modules, and global_vars lists the globals available in the module.
+///In this function, funcs represents a list of functions in scope, string_table is used to get
+/// builtins, imported_funcs is a list of functions imported from other modules, and global_vars
+/// lists the globals available in the module.
 ///
-/// The function returns a mutable reference to the generated code if it is successful, otherwise it
-/// returns a CodegenError.
+/// The function returns a vector of instructions representing the generated code if it is
+/// successful, otherwise it returns a CodegenError.
 pub fn mavm_codegen(
     funcs: Vec<TypeCheckedFunc>,
     string_table: &StringTable,
@@ -90,13 +90,13 @@ pub fn mavm_codegen(
 
 ///This generates code for individual mini functions.
 ///
-///In this function, func represents the function to be codegened, code represents previously
-/// generated code, label_gen should point to the next available label ID, string_table is used to
-/// get builtins, imported_func_map is a list of functions imported from other modules, and
-/// global_var_map lists the globals available in the module.
+///In this function, func represents the function to be codegened, label_gen should point to the
+/// next available label ID, string_table is used to get builtins, imported_func_map is a list of
+/// functions imported from other modules, and global_var_map lists the globals available in the
+/// module.
 ///
 /// If successful the function returns a tuple containing the state of the label generator after
-/// codegen, and a mutable reference to the generated code, otherwise it returns a CodegenError.
+/// codegen, and a vector of the generated code, otherwise it returns a CodegenError.
 fn mavm_codegen_func(
     func: TypeCheckedFunc,
     mut label_gen: LabelGenerator,
@@ -235,11 +235,11 @@ fn mavm_codegen_statements(
     Ok((label_gen, num_locals, true, bindings))
 }
 
-///Generates code for the provided statement. code represents the
-/// code generated previously, num_locals the maximum number of locals used at any point in the call
-/// frame so far, locals is a map of local variables, label_gen points to the next available locals
-/// slot, string_table is used to get builtins, import_func_map associates each imported function
-/// with a label, and global_var_map maps global variable IDs to their slot number.
+///Generates code for the provided statement. code represents the code generated previously,
+/// num_locals the maximum number of locals used at any point in the call frame so far, locals is a
+/// map of local variables, label_gen points to the next available locals slot, string_table is used
+/// to get builtins, import_func_map associates each imported function with a label, and
+/// global_var_map maps global variable IDs to their slot number.
 ///
 /// If successful the function returns a tuple containing the updated label generator, number of
 /// locals slots used by this statement, a bool that is set to true if the statement causes a
