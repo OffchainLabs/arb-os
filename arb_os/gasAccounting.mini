@@ -290,7 +290,7 @@ public impure func getNextMsgFromCongestionAuction() -> (
             // it's not a batch, so process it immediately
             // get its maxGas amount -- for now, set the limit high, unless caller asked for less
             let maxGas = 1000000000;
-            if (msg.kind == 3) {
+            if ((msg.kind == 3) || (msg.kind == 5)) {  // L2 message or buddy contract deploy
                 let firstByte = marshalledBytes_firstByte(msg.msgData);
                 if (firstByte == 4) {
                     // it's a signed tx; verify sig and then process request or discard
@@ -302,7 +302,7 @@ public impure func getNextMsgFromCongestionAuction() -> (
                     // else signature was invalid, ignore msg and execute loop again to get another
                 } else {
                     let ba = bytearray_unmarshalBytes(msg.msgData);
-                    if (firstByte == 0) {
+                    if ((firstByte == 0) || (firstByte == 1)) {   // tx from user or contract
                         // it's an unsigned tx; compute unique requestId
                         msg = msg with {
                             requestId: uint(hashL2messageInfo(

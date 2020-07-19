@@ -143,7 +143,7 @@ var globalCurrentEthMessage: IncomingRequest;  // the message that launched the 
 
 // This is the structure that the Arbitrum protocol gives us, for each incoming message.
 // It is declared identically in inbox.mini and elsewhere
-type MessageFromL1 = struct {
+type IncomingRequest = struct {
     kind: uint,               // type of message
     blockNumber: uint,        // block number of the L1 block
     timestamp: uint,          // timestamp of the L1 block
