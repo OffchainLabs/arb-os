@@ -44,7 +44,7 @@ import impure func chainParams_chainId() -> uint;
 import impure func keccak256(ba: ByteArray, offset: uint, nbytes: uint) -> bytes32;
 
 
-type MessageFromL1 = struct {
+type IncomingRequest = struct {
     kind: uint,               // type of message
     blockNumber: uint,        // block number of the L1 block
     timestamp: uint,          // timestamp of the L1 block
@@ -53,7 +53,7 @@ type MessageFromL1 = struct {
     msgData: MarshalledBytes  // contents of the message, as a marshalled bytearray
 }
 
-public impure func translateSignedTx(req: MessageFromL1) -> option<MessageFromL1> {
+public impure func translateSignedTx(req: IncomingRequest) -> option<IncomingRequest> {
     let extractedL2data = bytearray_unmarshalBytes(req.msgData);
     let l2MsgSize = bytearray_size(extractedL2data);
 
