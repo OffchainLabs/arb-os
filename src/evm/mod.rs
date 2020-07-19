@@ -633,6 +633,7 @@ pub fn make_logs_for_all_arbos_tests() {
         false,
         false,
     );
+    evm_deploy_buddy_contract(Some(Path::new("testlogs/deploy_buddy_contract.aoslog")), false);
     evm_test_arbsys(Some(Path::new("testlogs/evm_test_arbsys.aoslog")), false);
     mint_erc20_and_get_balance(Some(Path::new("testlogs/erc20_test.aoslog")), false);
     mint_erc721_and_get_balance(Some(Path::new("testlogs/erc721_test.aoslog")), false);
