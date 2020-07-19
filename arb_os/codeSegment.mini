@@ -272,7 +272,7 @@ public impure func translateEvmCodeSegment(
                         if (opcode == 0x43) { // NUMBER
                             return pushEvmInsnCall(evmOp_number, restOfCode, evmJumpTable);
                         } elseif (opcode == 0x44) { // DIFFICULTY
-                             return Some((restOfCode, evmJumpTable));  // no-op
+                             return Some((pushValue(2500000000000000, restOfCode), evmJumpTable));
                         }
                     }
                 } else {
