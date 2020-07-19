@@ -49,7 +49,7 @@ import func account_getStartCodePoint(acct: Account) -> option<impure func()>;
 
 import impure func initEvmCallStack(
     callKind: uint,
-    ethMessage: MessageFromL1,
+    ethMessage: IncomingRequest,
     addr: address,
     caller: address,
     calldata: ByteArray,
@@ -58,7 +58,7 @@ import impure func initEvmCallStack(
     gasPrice: uint
 );
 import impure func initEvmCallStackForConstructor(
-    ethMessage: MessageFromL1,
+    ethMessage: IncomingRequest,
     addr: address,
     caller: address,
     code: ByteArray,
@@ -71,7 +71,7 @@ import impure func initEvmCallStackForConstructor(
 );
 import func evmCallStack_runningCodeFromAccount() -> option<Account>;
 import impure func emitLog(
-    l1message: MessageFromL1,
+    l1message: IncomingRequest,
     resultCode: uint,
     maybeReturnData: option<ByteArray>,
     maybeEvmLogs: option<EvmLogs>,
@@ -83,13 +83,13 @@ import impure func tokens_erc20deposit(
     tokenAddr: address,
     payee: address,
     amount: uint,
-    msg: MessageFromL1
+    msg: IncomingRequest
 ) -> option<()>;
 import impure func tokens_erc721deposit(
     tokenAddr: address,
     payee: address,
     id: uint,
-    msg: MessageFromL1
+    msg: IncomingRequest
 ) -> option<()>;
 
 import func bytearray_new(capacity: uint) -> ByteArray;
@@ -99,7 +99,7 @@ import func bytearray_marshalFull(ba: ByteArray) -> MarshalledBytes;
 
 import func bytestream_new(ba: ByteArray) -> ByteStream;
 import func bytestream_getByte(bs: ByteStream) -> option<(ByteStream, uint)>;
-import func bytestream_getUint(bs: ByteStream) -> option<(ByteStream, uint)>;
+import func bytestream_get256(bs: ByteStream) -> option<(ByteStream, uint)>;
 import func bytestream_skipBytes(bs: ByteStream, nbytes: uint) -> option<ByteStream>;
 import func bytestream_getRemainingBytes(bs: ByteStream) -> ByteArray;
 
@@ -110,17 +110,17 @@ import func translateEvmCodeSegment(bs: ByteStream) -> option<(impure func(), ma
 
 // This is the structure that the Arbitrum protocol gives us, for each incoming message.
 // It is declared identically in inbox.mini
-type MessageFromL1 = struct {
+type IncomingRequest = struct {
     kind: uint,               // type of message
     blockNumber: uint,        // block number of the L1 block
     timestamp: uint,          // timestamp of the L1 block
     sender: address,          // address of the sender
-    inboxSeqNum: uint,        // sequence number in L1 inbox
+    requestId: uint,          // sequence number in L1 inbox
     msgData: MarshalledBytes  // contents of the message, as a marshalled bytearray
 }
 
-public impure func handleMessageFromL1(
-    msg: MessageFromL1,
+public impure func handleIncomingRequest(
+    msg: IncomingRequest,
     maxGas: uint,
     gasPrice: uint
 ) -> option<()> {   // return None if message format error; Some(()) if other error; if no error, never return
@@ -129,10 +129,10 @@ public impure func handleMessageFromL1(
 
     if (msg.kind == 0) {
         // ethdeposit message
-        let (bs, destination) = bytestream_getUint(inStream)?;
+        let (bs, destination) = bytestream_get256(inStream)?;
         inStream = bs;
 
-        let (bs, amount) = bytestream_getUint(inStream)?;
+        let (bs, amount) = bytestream_get256(inStream)?;
         inStream = bs;
 
         let globalAS = getGlobalAccountStore();
@@ -148,13 +148,13 @@ public impure func handleMessageFromL1(
         return Some(());
     } elseif (msg.kind == 1) {
         // ERC20 deposit message
-        let (bs, tokenAddress) = bytestream_getUint(inStream)?;
+        let (bs, tokenAddress) = bytestream_get256(inStream)?;
         inStream = bs;
 
-        let (bs, payeeAddress) = bytestream_getUint(inStream)?;
+        let (bs, payeeAddress) = bytestream_get256(inStream)?;
         inStream = bs;
 
-        let (bs, amount) = bytestream_getUint(inStream)?;
+        let (bs, amount) = bytestream_get256(inStream)?;
         inStream = bs;
 
         tokens_erc20deposit(
@@ -167,13 +167,13 @@ public impure func handleMessageFromL1(
         return None;
     } elseif (msg.kind == 2) {
          // ERC721 deposit message
-         let (bs, tokenAddress) = bytestream_getUint(inStream)?;
+         let (bs, tokenAddress) = bytestream_get256(inStream)?;
          inStream = bs;
 
-         let (bs, payeeAddress) = bytestream_getUint(inStream)?;
+         let (bs, payeeAddress) = bytestream_get256(inStream)?;
          inStream = bs;
 
-         let (bs, id) = bytestream_getUint(inStream)?;
+         let (bs, id) = bytestream_get256(inStream)?;
          inStream = bs;
 
          tokens_erc721deposit(
@@ -234,7 +234,7 @@ impure func fetchAndIncrSequenceNum(addr: address) -> uint {
 
 impure func handleL2Message(
     inStream: ByteStream,
-    fullMsg: MessageFromL1,
+    fullMsg: IncomingRequest,
     maxGas: uint,
     gasPrice: uint,
     isBuddyLaunch: bool,
@@ -252,7 +252,7 @@ impure func handleL2Message(
 
     let sequenceNum = (~0);  // impossible value for sequence number
     if (msgType == 0) {
-        let(bs, sn) = bytestream_getUint(inStream)?;
+        let(bs, sn) = bytestream_get256(inStream)?;
         inStream = bs;
         sequenceNum = sn;
 
@@ -263,13 +263,13 @@ impure func handleL2Message(
         }
     }
 
-    let (bs, calleeAddressAsUint) = bytestream_getUint(inStream)?;
+    let (bs, calleeAddressAsUint) = bytestream_get256(inStream)?;
     inStream = bs;
 
     // Get value of Eth payment that accompanies the message.
     let value = 0;
     if ( (msgType==0) || (msgType==1) ) {
-        let (bs, val) = bytestream_getUint(inStream)?;
+        let (bs, val) = bytestream_get256(inStream)?;
         inStream = bs;
         value = val;
     }
@@ -313,12 +313,13 @@ impure func handleL2Message(
             callKind = 3;  // staticcall
         }
 
+        let remainingCallData = bytestream_getRemainingBytes(inStream); // remaining bytes of message, to be passed to contract as calldata
         initEvmCallStack(
             callKind,
             fullMsg,
             address(calleeAddressAsUint),
             fullMsg.sender,
-            bytestream_getRemainingBytes(inStream),  // remaining bytes of message passed to contract as calldata
+            remainingCallData,
             value,
             maxGas,
             gasPrice

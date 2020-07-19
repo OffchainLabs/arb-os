@@ -14,7 +14,7 @@
 // limitations under the License.
 //
 
-import type MessageFromL1;
+import type IncomingRequest;
 import type AccountStore;
 import type Account;
 import type EvmLogs;
@@ -139,7 +139,7 @@ type ResumeInfo = struct {  // information used to resume a call after a subcall
 }
 
 var globalCallStack: option<EvmCallFrame>;   // call frame of currently running call, if any
-var globalCurrentEthMessage: MessageFromL1;  // the message that launched the top-level call
+var globalCurrentEthMessage: IncomingRequest;  // the message that launched the top-level call
 
 // This is the structure that the Arbitrum protocol gives us, for each incoming message.
 // It is declared identically in inbox.mini and elsewhere
@@ -158,7 +158,7 @@ public impure func evmCallStack_init() {
 
 public impure func initEvmCallStack(
     callKind: uint,
-    ethMessage: MessageFromL1,
+    ethMessage: IncomingRequest,
     addr: address,
     caller: address,
     calldata: ByteArray,
@@ -221,7 +221,7 @@ public impure func initEvmCallStack(
 }
 
 public impure func initEvmCallStackForConstructor(
-    ethMessage: MessageFromL1,
+    ethMessage: IncomingRequest,
     addr: address,
     caller: address,
     code: ByteArray,
@@ -366,7 +366,7 @@ public impure func evmCallStack_doCall(
     // jump to the called code's startCodePoint -- this should never return
     let startCodePoint = account_getStartCodePoint(callee)?;
     let _ = gasAccounting_resumeTxCharges(gas);
-    startCodePoint();
+    startCodePoint();  // should never return
 
     errorHandler();
     panic;
@@ -457,7 +457,7 @@ public impure func evmCallStack_returnFromCall(
                             gasUsed,
                             gasPrice
                         );
-                        errorHandler();
+                        evmCallStack_callHitError();  // should never return
                         panic;
                     }
 
@@ -571,7 +571,7 @@ public impure func evmCallStack_returnFromCall(
 //    6    message format error
 //    255  unknown error
 public impure func emitLog(
-    l1message: MessageFromL1,
+    l1message: IncomingRequest,
     resultCode: uint,
     maybeReturnData: option<ByteArray>,
     maybeEvmLogs: option<EvmLogs>,
@@ -897,7 +897,8 @@ public impure func evmCallStack_callHitError() {
         // recover by clearing the evmCallStack, refunding unused gas, and jumping back to the error handler
         globalCallStack = None<EvmCallFrame>;
         let _ = gasAccounting_endTxCharges();
-        errorHandler();
+
+        errorHandler();  // should never return
         panic;
     }
 }
