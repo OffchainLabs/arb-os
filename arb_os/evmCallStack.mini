@@ -141,8 +141,7 @@ type ResumeInfo = struct {  // information used to resume a call after a subcall
 var globalCallStack: option<EvmCallFrame>;   // call frame of currently running call, if any
 var globalCurrentIncomingRequest: IncomingRequest;  // request that launched the top-level call
 
-// This is the structure that the Arbitrum protocol gives us, for each incoming message.
-// It is declared identically in inbox.mini and elsewhere
+// This struct is declared identically in inbox.mini and elsewhere
 type IncomingRequest = struct {
     kind: uint,               // type of message
     blockNumber: uint,        // block number of the L1 block
