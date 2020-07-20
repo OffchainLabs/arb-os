@@ -68,17 +68,21 @@ type MarshalledBytesCell = struct {
 }
 
 public func marshalledBytes_firstByte(mb: MarshalledBytes) -> uint {
-    let nbytes = mb.nbytes;
-    let contents = mb.contents;
-    if (nbytes < 1) {
-        return 0;
-    }
-    while (nbytes > 32) {
-        contents = unsafecast<MarshalledBytesCell>(contents.rest);
-        nbytes = nbytes-32;
-    }
-    return contents.first / asm(2, 248) uint { exp };
+    return bytearray_getByte(bytearray_unmarshalBytes(mb), 0);
 }
+
+//public func marshalledBytes_firstByte(mb: MarshalledBytes) -> uint {
+//    let nbytes = mb.nbytes;
+//    let contents = mb.contents;
+//    if (nbytes < 1) {
+//        return 0;
+//    }
+//    while (nbytes > 32) {
+//        contents = unsafecast<MarshalledBytesCell>(contents.rest);
+//        nbytes = nbytes-32;
+//    }
+//    return contents.first / asm(2, 248) uint { exp };
+//}
 
 public func marshalledBytes_hash(mb: MarshalledBytes) -> bytes32 {
     // This is an easy-to-compute cryptographic hash of a MarshalledBytes
@@ -162,10 +166,11 @@ public func bytearray_setByte(ba: ByteArray, offset: uint, val: uint) -> ByteArr
 
 // bytearray_get64 reads a chunk of 8 bytes from a ByteArray 
 public func bytearray_get64(ba: ByteArray, offset: uint) -> uint {
+    return bytearray_get256(ba, offset) / 0x1000000000000000000000000000000000000000000000000;
     let alignment = offset % 32;
     if (alignment <= 24) {
         let res = ba.contents[offset/32];
-        return (res / asm(2, 192-8*alignment) uint { exp }) & 0xffffffffffffffff;
+        return (res / asm(256, 24-alignment) uint { exp }) & 0xffffffffffffffff;
     } else {
         let res = bytearray_get256(ba, offset);
         return res / 0x1000000000000000000000000000000000000000000000000;

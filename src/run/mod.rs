@@ -22,7 +22,9 @@ use emulator::{ExecutionError, StackTrace};
 use std::{fs::File, io::Read, path::Path};
 
 pub use emulator::Machine;
-pub use runtime_env::{bytes_from_bytestack, bytestack_from_bytes, RuntimeEnvironment};
+pub use runtime_env::{
+    bytes_from_bytestack, bytestack_from_bytes, RuntimeEnvironment, TxBatch, TxBatchType,
+};
 
 mod emulator;
 mod runtime_env;

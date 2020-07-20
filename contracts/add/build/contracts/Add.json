@@ -92,23 +92,37 @@
       "payable": true,
       "stateMutability": "payable",
       "type": "function"
+    },
+    {
+      "constant": false,
+      "inputs": [],
+      "name": "currentBlockNum",
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ],
+      "payable": false,
+      "stateMutability": "nonpayable",
+      "type": "function"
     }
   ],
-  "metadata": "{\"compiler\":{\"version\":\"0.5.10+commit.5a6ea5b1\"},\"language\":\"Solidity\",\"output\":{\"abi\":[{\"constant\":false,\"inputs\":[],\"name\":\"withdrawMyEth\",\"outputs\":[],\"payable\":true,\"stateMutability\":\"payable\",\"type\":\"function\"},{\"constant\":false,\"inputs\":[],\"name\":\"getSeqNum\",\"outputs\":[{\"name\":\"\",\"type\":\"uint256\"}],\"payable\":false,\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"constant\":true,\"inputs\":[{\"name\":\"x\",\"type\":\"uint256\"},{\"name\":\"y\",\"type\":\"uint256\"}],\"name\":\"add\",\"outputs\":[{\"name\":\"\",\"type\":\"uint256\"}],\"payable\":false,\"stateMutability\":\"pure\",\"type\":\"function\"},{\"constant\":true,\"inputs\":[{\"name\":\"x\",\"type\":\"uint256\"},{\"name\":\"y\",\"type\":\"uint256\"}],\"name\":\"mult\",\"outputs\":[{\"name\":\"\",\"type\":\"uint256\"}],\"payable\":false,\"stateMutability\":\"pure\",\"type\":\"function\"},{\"constant\":true,\"inputs\":[{\"name\":\"x\",\"type\":\"uint256\"},{\"name\":\"y\",\"type\":\"uint256\"}],\"name\":\"pythag\",\"outputs\":[{\"name\":\"\",\"type\":\"uint256\"}],\"payable\":false,\"stateMutability\":\"pure\",\"type\":\"function\"}],\"devdoc\":{\"methods\":{}},\"userdoc\":{\"methods\":{}}},\"settings\":{\"compilationTarget\":{\"/Users/ed/OffchainLabs/mini-compiler/contracts/add/contracts/Add.sol\":\"Add\"},\"evmVersion\":\"petersburg\",\"libraries\":{},\"optimizer\":{\"enabled\":false,\"runs\":200},\"remappings\":[]},\"sources\":{\"/Users/ed/OffchainLabs/mini-compiler/contracts/add/contracts/Add.sol\":{\"keccak256\":\"0xd07a2e4600e43c0077a9b9cba1182d6f56357b1b6df317879291b95212a81443\",\"urls\":[\"bzzr://b73c7a01ff11c69ea9e1bf3be97899dbe6bb9aa6a04804c8819024abe773ae10\",\"dweb:/ipfs/QmTeh6ejodfLL9oTzbzwEsyoEcJBZ5sQ8gTXCv3FTkb14u\"]},\"/Users/ed/OffchainLabs/mini-compiler/contracts/add/contracts/ArbSys.sol\":{\"keccak256\":\"0xc5d5497d149508096739a40149b4ddcf56b2f5f03148ce895416d0a214700c3c\",\"urls\":[\"bzzr://4e296d877325969003d140d0cf89b289a445a2ba0bf8b1293460a1ffbc513938\",\"dweb:/ipfs/QmabJ5NFRLeDdNZw8ksmpajFCX3qA1qBUxE1oXLwUb1AdN\"]}},\"version\":1}",
-  "bytecode": "0x608060405234801561001057600080fd5b50610366806100206000396000f3fe60806040526004361061004a5760003560e01c806349c1cc7b1461004f5780636d15c45714610059578063771602f7146100845780639aa727f6146100dd578063e4156bc514610136575b600080fd5b61005761018f565b005b34801561006557600080fd5b5061006e61022c565b6040518082815260200191505060405180910390f35b34801561009057600080fd5b506100c7600480360360408110156100a757600080fd5b8101908080359060200190929190803590602001909291905050506102f1565b6040518082815260200191505060405180910390f35b3480156100e957600080fd5b506101206004803603604081101561010057600080fd5b8101908080359060200190929190803590602001909291905050506102fe565b6040518082815260200191505060405180910390f35b34801561014257600080fd5b506101796004803603604081101561015957600080fd5b81019080803590602001909291908035906020019092919050505061030b565b6040518082815260200191505060405180910390f35b606473ffffffffffffffffffffffffffffffffffffffff166325e16063346104016040518363ffffffff1660e01b8152600401808273ffffffffffffffffffffffffffffffffffffffff1673ffffffffffffffffffffffffffffffffffffffff1681526020019150506000604051808303818588803b15801561021157600080fd5b505af1158015610225573d6000803e3d6000fd5b5050505050565b600080606473ffffffffffffffffffffffffffffffffffffffff166323ca0cd2336040518263ffffffff1660e01b8152600401808273ffffffffffffffffffffffffffffffffffffffff1673ffffffffffffffffffffffffffffffffffffffff16815260200191505060206040518083038186803b1580156102ad57600080fd5b505afa1580156102c1573d6000803e3d6000fd5b505050506040513d60208110156102d757600080fd5b810190808051906020019092919050505090508091505090565b6000818301905092915050565b6000818302905092915050565b600061032961031a84856102fe565b61032484856102fe565b6102f1565b90509291505056fea265627a7a7230582037de1bb0d1909f5b2b39df47cf9d0bebc5574917fa7bad990d5d01c84063dd0164736f6c634300050a0032",
-  "deployedBytecode": "0x60806040526004361061004a5760003560e01c806349c1cc7b1461004f5780636d15c45714610059578063771602f7146100845780639aa727f6146100dd578063e4156bc514610136575b600080fd5b61005761018f565b005b34801561006557600080fd5b5061006e61022c565b6040518082815260200191505060405180910390f35b34801561009057600080fd5b506100c7600480360360408110156100a757600080fd5b8101908080359060200190929190803590602001909291905050506102f1565b6040518082815260200191505060405180910390f35b3480156100e957600080fd5b506101206004803603604081101561010057600080fd5b8101908080359060200190929190803590602001909291905050506102fe565b6040518082815260200191505060405180910390f35b34801561014257600080fd5b506101796004803603604081101561015957600080fd5b81019080803590602001909291908035906020019092919050505061030b565b6040518082815260200191505060405180910390f35b606473ffffffffffffffffffffffffffffffffffffffff166325e16063346104016040518363ffffffff1660e01b8152600401808273ffffffffffffffffffffffffffffffffffffffff1673ffffffffffffffffffffffffffffffffffffffff1681526020019150506000604051808303818588803b15801561021157600080fd5b505af1158015610225573d6000803e3d6000fd5b5050505050565b600080606473ffffffffffffffffffffffffffffffffffffffff166323ca0cd2336040518263ffffffff1660e01b8152600401808273ffffffffffffffffffffffffffffffffffffffff1673ffffffffffffffffffffffffffffffffffffffff16815260200191505060206040518083038186803b1580156102ad57600080fd5b505afa1580156102c1573d6000803e3d6000fd5b505050506040513d60208110156102d757600080fd5b810190808051906020019092919050505090508091505090565b6000818301905092915050565b6000818302905092915050565b600061032961031a84856102fe565b61032484856102fe565b6102f1565b90509291505056fea265627a7a7230582037de1bb0d1909f5b2b39df47cf9d0bebc5574917fa7bad990d5d01c84063dd0164736f6c634300050a0032",
-  "sourceMap": "59:588:0:-;;;;8:9:-1;5:2;;;30:1;27;20:12;5:2;59:588:0;;;;;;;",
-  "deployedSourceMap": "59:588:0:-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;531:114;;;:::i;:::-;;371:154;;8:9:-1;5:2;;;30:1;27;20:12;5:2;371:154:0;;;:::i;:::-;;;;;;;;;;;;;;;;;;;78:83;;8:9:-1;5:2;;;30:1;27;20:12;5:2;78:83:0;;;;;;13:2:-1;8:3;5:11;2:2;;;29:1;26;19:12;2:2;78:83:0;;;;;;;;;;;;;;;;;;;;;;;;;;:::i;:::-;;;;;;;;;;;;;;;;;;;167:84;;8:9:-1;5:2;;;30:1;27;20:12;5:2;167:84:0;;;;;;13:2:-1;8:3;5:11;2:2;;;29:1;26;19:12;2:2;167:84:0;;;;;;;;;;;;;;;;;;;;;;;;;;:::i;:::-;;;;;;;;;;;;;;;;;;;257:108;;8:9:-1;5:2;;;30:1;27;20:12;5:2;257:108:0;;;;;;13:2:-1;8:3;5:11;2:2;;;29:1;26;19:12;2:2;257:108:0;;;;;;;;;;;;;;;;;;;;;;;;;;:::i;:::-;;;;;;;;;;;;;;;;;;;531:114;589:3;574:32;;;613:9;632:4;574:64;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;8:9:-1;5:2;;;30:1;27;20:12;5:2;574:64:0;;;;8:9:-1;5:2;;;45:16;42:1;39;24:38;77:16;74:1;67:27;5:2;574:64:0;;;;;531:114::o;371:154::-;408:4;424:15;457:3;442:40;;;483:10;442:52;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;8:9:-1;5:2;;;30:1;27;20:12;5:2;442:52:0;;;;8:9:-1;5:2;;;45:16;42:1;39;24:38;77:16;74:1;67:27;5:2;442:52:0;;;;;;;13:2:-1;8:3;5:11;2:2;;;29:1;26;19:12;2:2;442:52:0;;;;;;;;;;;;;;;;424:70;;511:7;504:14;;;371:154;:::o;78:83::-;128:4;153:1;151;:3;144:10;;78:83;;;;:::o;167:84::-;218:4;243:1;241;:3;234:10;;167:84;;;;:::o;257:108::-;310:4;333:25;337:9;342:1;344;337:4;:9::i;:::-;348;353:1;355;348:4;:9::i;:::-;333:3;:25::i;:::-;326:32;;257:108;;;;:::o",
-  "source": "pragma solidity >=0.4.21 <0.7.0;\n\nimport \"./ArbSys.sol\";\n\n\ncontract Add {\n    function add(uint x, uint y) public pure returns (uint) {\n        return x+y;\n    }\n\n    function mult(uint x, uint y) public pure returns (uint) {\n        return x*y;\n    }\n\n    function pythag(uint x, uint y) public pure returns (uint) {\n        return add(mult(x,x), mult(y,y));\n    }\n\n    function getSeqNum() public returns (uint) {\n        uint256 txCount = ArbSys(address(100)).getTransactionCount(msg.sender);\n        return txCount;\n    }\n\n    function withdrawMyEth() public payable {\n\tArbSys(address(100)).withdrawEth.value(msg.value)(address(1025));\n    }\n}\n",
+  "metadata": "{\"compiler\":{\"version\":\"0.5.10+commit.5a6ea5b1\"},\"language\":\"Solidity\",\"output\":{\"abi\":[{\"constant\":false,\"inputs\":[],\"name\":\"withdrawMyEth\",\"outputs\":[],\"payable\":true,\"stateMutability\":\"payable\",\"type\":\"function\"},{\"constant\":false,\"inputs\":[],\"name\":\"getSeqNum\",\"outputs\":[{\"name\":\"\",\"type\":\"uint256\"}],\"payable\":false,\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"constant\":true,\"inputs\":[{\"name\":\"x\",\"type\":\"uint256\"},{\"name\":\"y\",\"type\":\"uint256\"}],\"name\":\"add\",\"outputs\":[{\"name\":\"\",\"type\":\"uint256\"}],\"payable\":false,\"stateMutability\":\"pure\",\"type\":\"function\"},{\"constant\":false,\"inputs\":[],\"name\":\"currentBlockNum\",\"outputs\":[{\"name\":\"\",\"type\":\"uint256\"}],\"payable\":false,\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"constant\":true,\"inputs\":[{\"name\":\"x\",\"type\":\"uint256\"},{\"name\":\"y\",\"type\":\"uint256\"}],\"name\":\"mult\",\"outputs\":[{\"name\":\"\",\"type\":\"uint256\"}],\"payable\":false,\"stateMutability\":\"pure\",\"type\":\"function\"},{\"constant\":true,\"inputs\":[{\"name\":\"x\",\"type\":\"uint256\"},{\"name\":\"y\",\"type\":\"uint256\"}],\"name\":\"pythag\",\"outputs\":[{\"name\":\"\",\"type\":\"uint256\"}],\"payable\":false,\"stateMutability\":\"pure\",\"type\":\"function\"}],\"devdoc\":{\"methods\":{}},\"userdoc\":{\"methods\":{}}},\"settings\":{\"compilationTarget\":{\"/Users/ed/OffchainLabs/mini-compiler/contracts/add/contracts/Add.sol\":\"Add\"},\"evmVersion\":\"petersburg\",\"libraries\":{},\"optimizer\":{\"enabled\":false,\"runs\":200},\"remappings\":[]},\"sources\":{\"/Users/ed/OffchainLabs/mini-compiler/contracts/add/contracts/Add.sol\":{\"keccak256\":\"0xc728c945c3824e34f2eb0fcdb30b38ded2fb62ced6b61dde9f5a1349b8cbedeb\",\"urls\":[\"bzzr://49c7f8736eb159bd962dd68b2c8921c283e8f5108990e0b814e894491328f1fa\",\"dweb:/ipfs/QmNy89ZJZHTYQadLTu6a4t6hj7UMfRnN2PwpCgEU9Ts2wy\"]},\"/Users/ed/OffchainLabs/mini-compiler/contracts/add/contracts/ArbSys.sol\":{\"keccak256\":\"0xc5d5497d149508096739a40149b4ddcf56b2f5f03148ce895416d0a214700c3c\",\"urls\":[\"bzzr://4e296d877325969003d140d0cf89b289a445a2ba0bf8b1293460a1ffbc513938\",\"dweb:/ipfs/QmabJ5NFRLeDdNZw8ksmpajFCX3qA1qBUxE1oXLwUb1AdN\"]}},\"version\":1}",
+  "bytecode": "0x608060405234801561001057600080fd5b506103a4806100206000396000f3fe6080604052600436106100555760003560e01c806349c1cc7b1461005a5780636d15c45714610064578063771602f71461008f5780638505fdd2146100e85780639aa727f614610113578063e4156bc51461016c575b600080fd5b6100626101c5565b005b34801561007057600080fd5b50610079610262565b6040518082815260200191505060405180910390f35b34801561009b57600080fd5b506100d2600480360360408110156100b257600080fd5b810190808035906020019092919080359060200190929190505050610327565b6040518082815260200191505060405180910390f35b3480156100f457600080fd5b506100fd610334565b6040518082815260200191505060405180910390f35b34801561011f57600080fd5b506101566004803603604081101561013657600080fd5b81019080803590602001909291908035906020019092919050505061033c565b6040518082815260200191505060405180910390f35b34801561017857600080fd5b506101af6004803603604081101561018f57600080fd5b810190808035906020019092919080359060200190929190505050610349565b6040518082815260200191505060405180910390f35b606473ffffffffffffffffffffffffffffffffffffffff166325e16063346104016040518363ffffffff1660e01b8152600401808273ffffffffffffffffffffffffffffffffffffffff1673ffffffffffffffffffffffffffffffffffffffff1681526020019150506000604051808303818588803b15801561024757600080fd5b505af115801561025b573d6000803e3d6000fd5b5050505050565b600080606473ffffffffffffffffffffffffffffffffffffffff166323ca0cd2336040518263ffffffff1660e01b8152600401808273ffffffffffffffffffffffffffffffffffffffff1673ffffffffffffffffffffffffffffffffffffffff16815260200191505060206040518083038186803b1580156102e357600080fd5b505afa1580156102f7573d6000803e3d6000fd5b505050506040513d602081101561030d57600080fd5b810190808051906020019092919050505090508091505090565b6000818301905092915050565b600043905090565b6000818302905092915050565b6000610367610358848561033c565b610362848561033c565b610327565b90509291505056fea265627a7a723058207336ee84cff7f8b36fd045e2a1f3bdd43ce826a3b53330a41a9e414d4d416bf664736f6c634300050a0032",
+  "deployedBytecode": "0x6080604052600436106100555760003560e01c806349c1cc7b1461005a5780636d15c45714610064578063771602f71461008f5780638505fdd2146100e85780639aa727f614610113578063e4156bc51461016c575b600080fd5b6100626101c5565b005b34801561007057600080fd5b50610079610262565b6040518082815260200191505060405180910390f35b34801561009b57600080fd5b506100d2600480360360408110156100b257600080fd5b810190808035906020019092919080359060200190929190505050610327565b6040518082815260200191505060405180910390f35b3480156100f457600080fd5b506100fd610334565b6040518082815260200191505060405180910390f35b34801561011f57600080fd5b506101566004803603604081101561013657600080fd5b81019080803590602001909291908035906020019092919050505061033c565b6040518082815260200191505060405180910390f35b34801561017857600080fd5b506101af6004803603604081101561018f57600080fd5b810190808035906020019092919080359060200190929190505050610349565b6040518082815260200191505060405180910390f35b606473ffffffffffffffffffffffffffffffffffffffff166325e16063346104016040518363ffffffff1660e01b8152600401808273ffffffffffffffffffffffffffffffffffffffff1673ffffffffffffffffffffffffffffffffffffffff1681526020019150506000604051808303818588803b15801561024757600080fd5b505af115801561025b573d6000803e3d6000fd5b5050505050565b600080606473ffffffffffffffffffffffffffffffffffffffff166323ca0cd2336040518263ffffffff1660e01b8152600401808273ffffffffffffffffffffffffffffffffffffffff1673ffffffffffffffffffffffffffffffffffffffff16815260200191505060206040518083038186803b1580156102e357600080fd5b505afa1580156102f7573d6000803e3d6000fd5b505050506040513d602081101561030d57600080fd5b810190808051906020019092919050505090508091505090565b6000818301905092915050565b600043905090565b6000818302905092915050565b6000610367610358848561033c565b610362848561033c565b610327565b90509291505056fea265627a7a723058207336ee84cff7f8b36fd045e2a1f3bdd43ce826a3b53330a41a9e414d4d416bf664736f6c634300050a0032",
+  "sourceMap": "59:679:0:-;;;;8:9:-1;5:2;;;30:1;27;20:12;5:2;59:679:0;;;;;;;",
+  "deployedSourceMap": "59:679:0:-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;531:114;;;:::i;:::-;;371:154;;8:9:-1;5:2;;;30:1;27;20:12;5:2;371:154:0;;;:::i;:::-;;;;;;;;;;;;;;;;;;;78:83;;8:9:-1;5:2;;;30:1;27;20:12;5:2;78:83:0;;;;;;13:2:-1;8:3;5:11;2:2;;;29:1;26;19:12;2:2;78:83:0;;;;;;;;;;;;;;;;;;;;;;;;;;:::i;:::-;;;;;;;;;;;;;;;;;;;651:85;;8:9:-1;5:2;;;30:1;27;20:12;5:2;651:85:0;;;:::i;:::-;;;;;;;;;;;;;;;;;;;167:84;;8:9:-1;5:2;;;30:1;27;20:12;5:2;167:84:0;;;;;;13:2:-1;8:3;5:11;2:2;;;29:1;26;19:12;2:2;167:84:0;;;;;;;;;;;;;;;;;;;;;;;;;;:::i;:::-;;;;;;;;;;;;;;;;;;;257:108;;8:9:-1;5:2;;;30:1;27;20:12;5:2;257:108:0;;;;;;13:2:-1;8:3;5:11;2:2;;;29:1;26;19:12;2:2;257:108:0;;;;;;;;;;;;;;;;;;;;;;;;;;:::i;:::-;;;;;;;;;;;;;;;;;;;531:114;589:3;574:32;;;613:9;632:4;574:64;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;8:9:-1;5:2;;;30:1;27;20:12;5:2;574:64:0;;;;8:9:-1;5:2;;;45:16;42:1;39;24:38;77:16;74:1;67:27;5:2;574:64:0;;;;;531:114::o;371:154::-;408:4;424:15;457:3;442:40;;;483:10;442:52;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;8:9:-1;5:2;;;30:1;27;20:12;5:2;442:52:0;;;;8:9:-1;5:2;;;45:16;42:1;39;24:38;77:16;74:1;67:27;5:2;442:52:0;;;;;;;13:2:-1;8:3;5:11;2:2;;;29:1;26;19:12;2:2;442:52:0;;;;;;;;;;;;;;;;424:70;;511:7;504:14;;;371:154;:::o;78:83::-;128:4;153:1;151;:3;144:10;;78:83;;;;:::o;651:85::-;694:4;717:12;710:19;;651:85;:::o;167:84::-;218:4;243:1;241;:3;234:10;;167:84;;;;:::o;257:108::-;310:4;333:25;337:9;342:1;344;337:4;:9::i;:::-;348;353:1;355;348:4;:9::i;:::-;333:3;:25::i;:::-;326:32;;257:108;;;;:::o",
+  "source": "pragma solidity >=0.4.21 <0.7.0;\n\nimport \"./ArbSys.sol\";\n\n\ncontract Add {\n    function add(uint x, uint y) public pure returns (uint) {\n        return x+y;\n    }\n\n    function mult(uint x, uint y) public pure returns (uint) {\n        return x*y;\n    }\n\n    function pythag(uint x, uint y) public pure returns (uint) {\n        return add(mult(x,x), mult(y,y));\n    }\n\n    function getSeqNum() public returns (uint) {\n        uint256 txCount = ArbSys(address(100)).getTransactionCount(msg.sender);\n        return txCount;\n    }\n\n    function withdrawMyEth() public payable {\n\tArbSys(address(100)).withdrawEth.value(msg.value)(address(1025));\n    }\n\n    function currentBlockNum() public returns (uint) {\n        return block.number;\n    }\n}\n",
   "sourcePath": "/Users/ed/OffchainLabs/mini-compiler/contracts/add/contracts/Add.sol",
   "ast": {
     "absolutePath": "/Users/ed/OffchainLabs/mini-compiler/contracts/add/contracts/Add.sol",
     "exportedSymbols": {
       "Add": [
-        91
+        100
       ]
     },
-    "id": 92,
+    "id": 101,
     "nodeType": "SourceUnit",
     "nodes": [
       {
@@ -130,8 +144,8 @@
         "file": "./ArbSys.sol",
         "id": 2,
         "nodeType": "ImportDirective",
-        "scope": 92,
-        "sourceUnit": 148,
+        "scope": 101,
+        "sourceUnit": 157,
         "src": "34:22:0",
         "symbolAliases": [],
         "unitAlias": ""
@@ -142,9 +156,9 @@
         "contractKind": "contract",
         "documentation": null,
         "fullyImplemented": true,
-        "id": 91,
+        "id": 100,
         "linearizedBaseContracts": [
-          91
+          100
         ],
         "name": "Add",
         "nodeType": "ContractDefinition",
@@ -307,7 +321,7 @@
               ],
               "src": "127:6:0"
             },
-            "scope": 91,
+            "scope": 100,
             "src": "78:83:0",
             "stateMutability": "pure",
             "superFunction": null,
@@ -471,7 +485,7 @@
               ],
               "src": "217:6:0"
             },
-            "scope": 91,
+            "scope": 100,
             "src": "167:84:0",
             "stateMutability": "pure",
             "superFunction": null,
@@ -762,7 +776,7 @@
               ],
               "src": "309:6:0"
             },
-            "scope": 91,
+            "scope": 100,
             "src": "257:108:0",
             "stateMutability": "pure",
             "superFunction": null,
@@ -818,7 +832,7 @@
                           "name": "msg",
                           "nodeType": "Identifier",
                           "overloadedDeclarations": [],
-                          "referencedDeclaration": 199,
+                          "referencedDeclaration": 208,
                           "src": "483:3:0",
                           "typeDescriptions": {
                             "typeIdentifier": "t_magic_message",
@@ -918,10 +932,10 @@
                           "name": "ArbSys",
                           "nodeType": "Identifier",
                           "overloadedDeclarations": [],
-                          "referencedDeclaration": 147,
+                          "referencedDeclaration": 156,
                           "src": "442:6:0",
                           "typeDescriptions": {
-                            "typeIdentifier": "t_type$_t_contract$_ArbSys_$147_$",
+                            "typeIdentifier": "t_type$_t_contract$_ArbSys_$156_$",
                             "typeString": "type(contract ArbSys)"
                           }
                         },
@@ -935,7 +949,7 @@
                         "nodeType": "FunctionCall",
                         "src": "442:20:0",
                         "typeDescriptions": {
-                          "typeIdentifier": "t_contract$_ArbSys_$147",
+                          "typeIdentifier": "t_contract$_ArbSys_$156",
                           "typeString": "contract ArbSys"
                         }
                       },
@@ -946,7 +960,7 @@
                       "lValueRequested": false,
                       "memberName": "getTransactionCount",
                       "nodeType": "MemberAccess",
-                      "referencedDeclaration": 139,
+                      "referencedDeclaration": 148,
                       "src": "442:40:0",
                       "typeDescriptions": {
                         "typeIdentifier": "t_function_external_view$_t_address_$returns$_t_uint256_$",
@@ -1037,7 +1051,7 @@
               ],
               "src": "407:6:0"
             },
-            "scope": 91,
+            "scope": 100,
             "src": "371:154:0",
             "stateMutability": "nonpayable",
             "superFunction": null,
@@ -1126,7 +1140,7 @@
                             "name": "msg",
                             "nodeType": "Identifier",
                             "overloadedDeclarations": [],
-                            "referencedDeclaration": 199,
+                            "referencedDeclaration": 208,
                             "src": "613:3:0",
                             "typeDescriptions": {
                               "typeIdentifier": "t_magic_message",
@@ -1228,10 +1242,10 @@
                               "name": "ArbSys",
                               "nodeType": "Identifier",
                               "overloadedDeclarations": [],
-                              "referencedDeclaration": 147,
+                              "referencedDeclaration": 156,
                               "src": "574:6:0",
                               "typeDescriptions": {
-                                "typeIdentifier": "t_type$_t_contract$_ArbSys_$147_$",
+                                "typeIdentifier": "t_type$_t_contract$_ArbSys_$156_$",
                                 "typeString": "type(contract ArbSys)"
                               }
                             },
@@ -1245,7 +1259,7 @@
                             "nodeType": "FunctionCall",
                             "src": "574:20:0",
                             "typeDescriptions": {
-                              "typeIdentifier": "t_contract$_ArbSys_$147",
+                              "typeIdentifier": "t_contract$_ArbSys_$156",
                               "typeString": "contract ArbSys"
                             }
                           },
@@ -1256,7 +1270,7 @@
                           "lValueRequested": false,
                           "memberName": "withdrawEth",
                           "nodeType": "MemberAccess",
-                          "referencedDeclaration": 112,
+                          "referencedDeclaration": 121,
                           "src": "574:32:0",
                           "typeDescriptions": {
                             "typeIdentifier": "t_function_external_payable$_t_address_$returns$__$",
@@ -1330,27 +1344,122 @@
               "parameters": [],
               "src": "571:0:0"
             },
-            "scope": 91,
+            "scope": 100,
             "src": "531:114:0",
             "stateMutability": "payable",
             "superFunction": null,
             "visibility": "public"
+          },
+          {
+            "body": {
+              "id": 98,
+              "nodeType": "Block",
+              "src": "700:36:0",
+              "statements": [
+                {
+                  "expression": {
+                    "argumentTypes": null,
+                    "expression": {
+                      "argumentTypes": null,
+                      "id": 95,
+                      "name": "block",
+                      "nodeType": "Identifier",
+                      "overloadedDeclarations": [],
+                      "referencedDeclaration": 198,
+                      "src": "717:5:0",
+                      "typeDescriptions": {
+                        "typeIdentifier": "t_magic_block",
+                        "typeString": "block"
+                      }
+                    },
+                    "id": 96,
+                    "isConstant": false,
+                    "isLValue": false,
+                    "isPure": false,
+                    "lValueRequested": false,
+                    "memberName": "number",
+                    "nodeType": "MemberAccess",
+                    "referencedDeclaration": null,
+                    "src": "717:12:0",
+                    "typeDescriptions": {
+                      "typeIdentifier": "t_uint256",
+                      "typeString": "uint256"
+                    }
+                  },
+                  "functionReturnParameters": 94,
+                  "id": 97,
+                  "nodeType": "Return",
+                  "src": "710:19:0"
+                }
+              ]
+            },
+            "documentation": null,
+            "id": 99,
+            "implemented": true,
+            "kind": "function",
+            "modifiers": [],
+            "name": "currentBlockNum",
+            "nodeType": "FunctionDefinition",
+            "parameters": {
+              "id": 91,
+              "nodeType": "ParameterList",
+              "parameters": [],
+              "src": "675:2:0"
+            },
+            "returnParameters": {
+              "id": 94,
+              "nodeType": "ParameterList",
+              "parameters": [
+                {
+                  "constant": false,
+                  "id": 93,
+                  "name": "",
+                  "nodeType": "VariableDeclaration",
+                  "scope": 99,
+                  "src": "694:4:0",
+                  "stateVariable": false,
+                  "storageLocation": "default",
+                  "typeDescriptions": {
+                    "typeIdentifier": "t_uint256",
+                    "typeString": "uint256"
+                  },
+                  "typeName": {
+                    "id": 92,
+                    "name": "uint",
+                    "nodeType": "ElementaryTypeName",
+                    "src": "694:4:0",
+                    "typeDescriptions": {
+                      "typeIdentifier": "t_uint256",
+                      "typeString": "uint256"
+                    }
+                  },
+                  "value": null,
+                  "visibility": "internal"
+                }
+              ],
+              "src": "693:6:0"
+            },
+            "scope": 100,
+            "src": "651:85:0",
+            "stateMutability": "nonpayable",
+            "superFunction": null,
+            "visibility": "public"
           }
         ],
-        "scope": 92,
-        "src": "59:588:0"
+        "scope": 101,
+        "src": "59:679:0"
       }
     ],
-    "src": "0:648:0"
+    "src": "0:739:0"
   },
   "legacyAST": {
     "absolutePath": "/Users/ed/OffchainLabs/mini-compiler/contracts/add/contracts/Add.sol",
     "exportedSymbols": {
       "Add": [
-        91
+        100
       ]
     },
-    "id": 92,
+    "id": 101,
     "nodeType": "SourceUnit",
     "nodes": [
       {
@@ -1372,8 +1481,8 @@
         "file": "./ArbSys.sol",
         "id": 2,
         "nodeType": "ImportDirective",
-        "scope": 92,
-        "sourceUnit": 148,
+        "scope": 101,
+        "sourceUnit": 157,
         "src": "34:22:0",
         "symbolAliases": [],
         "unitAlias": ""
@@ -1384,9 +1493,9 @@
         "contractKind": "contract",
         "documentation": null,
         "fullyImplemented": true,
-        "id": 91,
+        "id": 100,
         "linearizedBaseContracts": [
-          91
+          100
         ],
         "name": "Add",
         "nodeType": "ContractDefinition",
@@ -1549,7 +1658,7 @@
               ],
               "src": "127:6:0"
             },
-            "scope": 91,
+            "scope": 100,
             "src": "78:83:0",
             "stateMutability": "pure",
             "superFunction": null,
@@ -1713,7 +1822,7 @@
               ],
               "src": "217:6:0"
             },
-            "scope": 91,
+            "scope": 100,
             "src": "167:84:0",
             "stateMutability": "pure",
             "superFunction": null,
@@ -2004,7 +2113,7 @@
               ],
               "src": "309:6:0"
             },
-            "scope": 91,
+            "scope": 100,
             "src": "257:108:0",
             "stateMutability": "pure",
             "superFunction": null,
@@ -2060,7 +2169,7 @@
                           "name": "msg",
                           "nodeType": "Identifier",
                           "overloadedDeclarations": [],
-                          "referencedDeclaration": 199,
+                          "referencedDeclaration": 208,
                           "src": "483:3:0",
                           "typeDescriptions": {
                             "typeIdentifier": "t_magic_message",
@@ -2160,10 +2269,10 @@
                           "name": "ArbSys",
                           "nodeType": "Identifier",
                           "overloadedDeclarations": [],
-                          "referencedDeclaration": 147,
+                          "referencedDeclaration": 156,
                           "src": "442:6:0",
                           "typeDescriptions": {
-                            "typeIdentifier": "t_type$_t_contract$_ArbSys_$147_$",
+                            "typeIdentifier": "t_type$_t_contract$_ArbSys_$156_$",
                             "typeString": "type(contract ArbSys)"
                           }
                         },
@@ -2177,7 +2286,7 @@
                         "nodeType": "FunctionCall",
                         "src": "442:20:0",
                         "typeDescriptions": {
-                          "typeIdentifier": "t_contract$_ArbSys_$147",
+                          "typeIdentifier": "t_contract$_ArbSys_$156",
                           "typeString": "contract ArbSys"
                         }
                       },
@@ -2188,7 +2297,7 @@
                       "lValueRequested": false,
                       "memberName": "getTransactionCount",
                       "nodeType": "MemberAccess",
-                      "referencedDeclaration": 139,
+                      "referencedDeclaration": 148,
                       "src": "442:40:0",
                       "typeDescriptions": {
                         "typeIdentifier": "t_function_external_view$_t_address_$returns$_t_uint256_$",
@@ -2279,7 +2388,7 @@
               ],
               "src": "407:6:0"
             },
-            "scope": 91,
+            "scope": 100,
             "src": "371:154:0",
             "stateMutability": "nonpayable",
             "superFunction": null,
@@ -2368,7 +2477,7 @@
                             "name": "msg",
                             "nodeType": "Identifier",
                             "overloadedDeclarations": [],
-                            "referencedDeclaration": 199,
+                            "referencedDeclaration": 208,
                             "src": "613:3:0",
                             "typeDescriptions": {
                               "typeIdentifier": "t_magic_message",
@@ -2470,10 +2579,10 @@
                               "name": "ArbSys",
                               "nodeType": "Identifier",
                               "overloadedDeclarations": [],
-                              "referencedDeclaration": 147,
+                              "referencedDeclaration": 156,
                               "src": "574:6:0",
                               "typeDescriptions": {
-                                "typeIdentifier": "t_type$_t_contract$_ArbSys_$147_$",
+                                "typeIdentifier": "t_type$_t_contract$_ArbSys_$156_$",
                                 "typeString": "type(contract ArbSys)"
                               }
                             },
@@ -2487,7 +2596,7 @@
                             "nodeType": "FunctionCall",
                             "src": "574:20:0",
                             "typeDescriptions": {
-                              "typeIdentifier": "t_contract$_ArbSys_$147",
+                              "typeIdentifier": "t_contract$_ArbSys_$156",
                               "typeString": "contract ArbSys"
                             }
                           },
@@ -2498,7 +2607,7 @@
                           "lValueRequested": false,
                           "memberName": "withdrawEth",
                           "nodeType": "MemberAccess",
-                          "referencedDeclaration": 112,
+                          "referencedDeclaration": 121,
                           "src": "574:32:0",
                           "typeDescriptions": {
                             "typeIdentifier": "t_function_external_payable$_t_address_$returns$__$",
@@ -2572,18 +2681,113 @@
               "parameters": [],
               "src": "571:0:0"
             },
-            "scope": 91,
+            "scope": 100,
             "src": "531:114:0",
             "stateMutability": "payable",
             "superFunction": null,
             "visibility": "public"
+          },
+          {
+            "body": {
+              "id": 98,
+              "nodeType": "Block",
+              "src": "700:36:0",
+              "statements": [
+                {
+                  "expression": {
+                    "argumentTypes": null,
+                    "expression": {
+                      "argumentTypes": null,
+                      "id": 95,
+                      "name": "block",
+                      "nodeType": "Identifier",
+                      "overloadedDeclarations": [],
+                      "referencedDeclaration": 198,
+                      "src": "717:5:0",
+                      "typeDescriptions": {
+                        "typeIdentifier": "t_magic_block",
+                        "typeString": "block"
+                      }
+                    },
+                    "id": 96,
+                    "isConstant": false,
+                    "isLValue": false,
+                    "isPure": false,
+                    "lValueRequested": false,
+                    "memberName": "number",
+                    "nodeType": "MemberAccess",
+                    "referencedDeclaration": null,
+                    "src": "717:12:0",
+                    "typeDescriptions": {
+                      "typeIdentifier": "t_uint256",
+                      "typeString": "uint256"
+                    }
+                  },
+                  "functionReturnParameters": 94,
+                  "id": 97,
+                  "nodeType": "Return",
+                  "src": "710:19:0"
+                }
+              ]
+            },
+            "documentation": null,
+            "id": 99,
+            "implemented": true,
+            "kind": "function",
+            "modifiers": [],
+            "name": "currentBlockNum",
+            "nodeType": "FunctionDefinition",
+            "parameters": {
+              "id": 91,
+              "nodeType": "ParameterList",
+              "parameters": [],
+              "src": "675:2:0"
+            },
+            "returnParameters": {
+              "id": 94,
+              "nodeType": "ParameterList",
+              "parameters": [
+                {
+                  "constant": false,
+                  "id": 93,
+                  "name": "",
+                  "nodeType": "VariableDeclaration",
+                  "scope": 99,
+                  "src": "694:4:0",
+                  "stateVariable": false,
+                  "storageLocation": "default",
+                  "typeDescriptions": {
+                    "typeIdentifier": "t_uint256",
+                    "typeString": "uint256"
+                  },
+                  "typeName": {
+                    "id": 92,
+                    "name": "uint",
+                    "nodeType": "ElementaryTypeName",
+                    "src": "694:4:0",
+                    "typeDescriptions": {
+                      "typeIdentifier": "t_uint256",
+                      "typeString": "uint256"
+                    }
+                  },
+                  "value": null,
+                  "visibility": "internal"
+                }
+              ],
+              "src": "693:6:0"
+            },
+            "scope": 100,
+            "src": "651:85:0",
+            "stateMutability": "nonpayable",
+            "superFunction": null,
+            "visibility": "public"
           }
         ],
-        "scope": 92,
-        "src": "59:588:0"
+        "scope": 101,
+        "src": "59:679:0"
       }
     ],
-    "src": "0:648:0"
+    "src": "0:739:0"
   },
   "compiler": {
     "name": "solc",
@@ -2591,7 +2795,7 @@
   },
   "networks": {},
   "schemaVersion": "3.1.0",
-  "updatedAt": "2020-07-15T19:51:49.244Z",
+  "updatedAt": "2020-07-20T11:59:44.207Z",
   "devdoc": {
     "methods": {}
   },

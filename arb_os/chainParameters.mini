@@ -15,12 +15,28 @@
 //
 
 import type MarshalledBytes;
+import type ByteArray;
+import type ByteStream;
+
+import func bytearray_unmarshalBytes(mb: MarshalledBytes) -> ByteArray;
+import func bytearray_get256(ba: ByteArray, offset: uint) -> uint;
+import func bytestream_new(contents: ByteArray) -> ByteStream;
+import func bytestream_skipBytes(bs: ByteStream, nbytes: uint) -> option<ByteStream>;
+import func bytestream_get64(bs: ByteStream) -> option<(ByteStream, uint)>;
+import func bytestream_get256(bs: ByteStream) -> option<(ByteStream, uint)>;
+
+import func inbox_startSequencer(sequencerAddress: uint, blocksOfDelay: uint) -> option<()>;
 
 import impure func errorHandler();
 
 
 type ChainParams = struct {
     chainAddress: address,
+    gracePeriodTicks: uint,
+    arbGasSpeedLimit: uint,
+    maxExecutionStepsPerAssertion: uint,
+    stakeRequirement: uint,
+    chainOwner: address,
 }
 
 var globalChainParams: option<ChainParams>;
@@ -31,9 +47,53 @@ public impure func chainParams_init() {
 
 public impure func chainParams_gotParamsMessage(sender: address, data: MarshalledBytes) {
     if (globalChainParams == None<ChainParams>) {
-        globalChainParams = Some(struct{
-            chainAddress: sender,
-        });
+        let payload = bytearray_unmarshalBytes(data);
+        globalChainParams = Some(
+            struct{
+                chainAddress: sender,
+                gracePeriodTicks: bytearray_get256(payload, 0),
+                arbGasSpeedLimit: bytearray_get256(payload, 32),
+                maxExecutionStepsPerAssertion: bytearray_get256(payload, 2*32),
+                stakeRequirement: bytearray_get256(payload, 3*32),
+                chainOwner: address(bytearray_get256(payload, 4*32))
+            }
+        );
+
+        // now read and process initialization options
+        if let Some(stream) = bytestream_skipBytes(bytestream_new(payload), 5*32) {
+            loop {
+                if let Some(ustr2) = doInitializationOption(stream) {
+                    stream = ustr2;
+                } else {
+                    return;
+                }
+            }
+        }
+    }
+}
+
+func doInitializationOption(stream: ByteStream) -> option<ByteStream> {
+    // process one initialization option
+    // on success, return Some(updated stream)
+    // on end-of-stream, return None
+
+    let (ustr, optionId) = bytestream_get64(stream)?;
+    stream = ustr;
+    let (ustr, numPayloadBytes) = bytestream_get64(stream)?;
+    stream = ustr;
+    if (optionId == 1) {   // option: tx sequencer
+        if (numPayloadBytes != 40) {
+            return None;
+        }
+        let (ustr, sequencerAddress) = bytestream_get256(stream)?;
+        stream = ustr;
+        let (ustr, blocksOfDelay) = bytestream_get64(stream)?;
+        stream = ustr;
+        inbox_startSequencer(sequencerAddress, blocksOfDelay)?;
+        return Some(stream);
+    } else {
+        // unrecognized option, discard it
+        return bytestream_skipBytes(stream, numPayloadBytes);
     }
 }
 

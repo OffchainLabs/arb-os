@@ -220,7 +220,7 @@ fn main() -> Result<(), CompileError> {
         let filename = matches.value_of("INPUT").unwrap();
         let debug = matches.is_present("debug");
         let path = Path::new(filename);
-        let env = RuntimeEnvironment::new(Uint256::from_usize(1111));
+        let env = RuntimeEnvironment::new(Uint256::from_usize(1111), None);
         match run_from_file(path, Vec::new(), env, debug) {
             Ok(logs) => {
                 println!("Logs: {:?}", logs);
@@ -235,7 +235,7 @@ fn main() -> Result<(), CompileError> {
         let debug = matches.is_present("debug");
         let profile = matches.is_present("profiler");
         //let _ = evm::evm_xcontract_call_with_constructors(None, debug, profile);
-        let _ = evm::evm_xcontract_call_using_batch(None, debug, profile);
+        let _ = evm::evm_test_sequencer_support(None, debug);
     }
 
     if let Some(matches) = matches.subcommand_matches("profiler") {
@@ -243,7 +243,7 @@ fn main() -> Result<(), CompileError> {
         profile_gen_from_file(
             path.as_ref(),
             Vec::new(),
-            RuntimeEnvironment::new(Uint256::from_usize(1111)),
+            RuntimeEnvironment::new(Uint256::from_usize(1111), None),
         );
     }
 

@@ -26,20 +26,27 @@ use std::{collections::HashMap, fs::File, io, path::Path};
 
 #[derive(Debug, Clone)]
 pub struct RuntimeEnvironment {
-    pub chain_id: u64,
-    pub l1_inbox: Value,
-    pub current_block_num: Uint256,
-    pub current_timestamp: Uint256,
-    pub logs: Vec<Value>,
-    pub sends: Vec<Value>,
-    pub next_inbox_seq_num: Uint256,
-    pub caller_seq_nums: HashMap<Uint256, Uint256>,
+    chain_id: u64,
+    l1_inbox: Value,
+    current_block_num: Uint256,
+    current_timestamp: Uint256,
+    logs: Vec<Value>,
+    sends: Vec<Value>,
+    next_inbox_seq_num: Uint256,
+    caller_seq_nums: HashMap<Uint256, Uint256>,
     next_id: Uint256, // used to assign unique (but artificial) txids to messages
+    sequencer_info: Option<SequencerInfo>,
     pub recorder: RtEnvRecorder,
 }
 
+#[derive(Debug, Clone)]
+struct SequencerInfo {
+    wallet: Wallet,
+    delay: u64,
+}
+
 impl RuntimeEnvironment {
-    pub fn new(chain_address: Uint256) -> Self {
+    pub fn new(chain_address: Uint256, sequencer_delay: Option<u64>) -> Self {
         let mut ret = RuntimeEnvironment {
             chain_id: chain_address.trim_to_u64() & 0xffffffffffff, // truncate to 48 bits
             l1_inbox: Value::none(),
@@ -50,9 +57,31 @@ impl RuntimeEnvironment {
             next_inbox_seq_num: Uint256::zero(),
             caller_seq_nums: HashMap::new(),
             next_id: Uint256::zero(),
+            sequencer_info: None,
             recorder: RtEnvRecorder::new(),
         };
-        ret.insert_l1_message(4, chain_address, &[0u8]);
+        if let Some(seq_delay) = sequencer_delay {
+            ret.sequencer_info = Some(SequencerInfo {
+                wallet: ret.new_wallet(),
+                delay: seq_delay,
+            });
+        }
+        ret.insert_l1_message(4, chain_address, &ret.init_msg_payload());
+        ret
+    }
+
+    fn init_msg_payload(&self) -> Vec<u8> {
+        let mut ret = Uint256::from_u64(1000 * 60 * 60 * 3).to_bytes_be();
+        ret.extend(Uint256::from_u64(100_000_000).to_bytes_be());
+        ret.extend(Uint256::from_u64(10_000_000_000).to_bytes_be());
+        ret.extend(Uint256::from_u64(1_000_000_000_000_000_000).to_bytes_be()); // 10^-3 ETH in wei
+        ret.extend(Uint256::from_u64(4242).to_bytes_be()); // fictional owner address
+        if let Some(seq_info) = &self.sequencer_info {
+            ret.extend(&1u64.to_be_bytes());
+            ret.extend(&40u64.to_be_bytes());
+            ret.extend(Uint256::from_bytes(seq_info.wallet.address().as_bytes()).to_bytes_be());
+            ret.extend(&seq_info.delay.to_be_bytes());
+        }
         ret
     }
 
@@ -64,6 +93,18 @@ impl RuntimeEnvironment {
         self.chain_id
     }
 
+    pub fn get_sequencer_wallet(&self) -> Option<Wallet> {
+        self.sequencer_info.as_ref().map(|si| si.wallet.clone())
+    }
+
+    pub fn get_sequencer_address(&self) -> Option<Uint256> {
+        self.sequencer_info.as_ref().map(|si| Uint256::from_bytes(si.wallet.address().as_bytes()))
+    }
+
+    pub fn get_sequencer_delay(&self) -> Option<u64> {
+        self.sequencer_info.as_ref().map(|si| si.delay)
+    }
+
     pub fn get_blocknum_timestamp(&self) -> (Uint256, Uint256) {
         (
             self.current_block_num.clone(),
@@ -72,6 +113,14 @@ impl RuntimeEnvironment {
     }
 
     pub fn set_blocknum_timestamp(
+        &mut self,
+        new_blocknum: u64,
+        maybe_timestamp: Option<Uint256>,
+    ) -> Option<()> {
+        self.set_blocknum_timestamp_from_uint256(Uint256::from_u64(new_blocknum), maybe_timestamp)
+    }
+
+    pub fn set_blocknum_timestamp_from_uint256(
         &mut self,
         new_blocknum: Uint256,
         maybe_timestamp: Option<Uint256>, // if None, timestamp will advance 13 seconds for each block
@@ -98,8 +147,10 @@ impl RuntimeEnvironment {
     }
 
     pub fn add_to_blocknum(&mut self, delta: u64) {
-        let _ = self
-            .set_blocknum_timestamp(self.current_block_num.add(&Uint256::from_u64(delta)), None);
+        let _ = self.set_blocknum_timestamp_from_uint256(
+            self.current_block_num.add(&Uint256::from_u64(delta)),
+            None,
+        );
     }
 
     pub fn insert_l1_message(&mut self, msg_type: u8, sender_addr: Uint256, msg: &[u8]) {
@@ -149,9 +200,11 @@ impl RuntimeEnvironment {
         )
     }
 
+    /*
     pub fn new_batch(&self) -> Vec<u8> {
         vec![3u8]
     }
+     */
 
     pub fn make_signed_l2_message(
         &mut self,
@@ -212,8 +265,8 @@ impl RuntimeEnvironment {
         tx_id_bytes
     }
 
-    pub fn insert_batch_message(&mut self, sender_addr: Uint256, batch: &[u8]) {
-        self.insert_l2_message(sender_addr, batch);
+    fn insert_batch_message(&mut self, sender_addr: Uint256, buf: &[u8]) {
+        self.insert_l2_message(sender_addr, buf);
     }
 
     pub fn _insert_nonmutating_call_message(
@@ -304,6 +357,83 @@ impl RuntimeEnvironment {
 
     pub fn get_all_sends(&self) -> Vec<Value> {
         self.sends.clone()
+    }
+}
+
+#[derive(Debug, Clone)]
+pub enum TxBatchType {
+    SequencerBatch,
+    AggregatorBatch(Uint256),
+}
+
+pub struct TxBatch {
+    batch_type: TxBatchType,
+    buf: Vec<u8>,
+    batch_sender: Uint256,
+}
+
+impl TxBatch {
+    pub fn new(batch_type: TxBatchType, rt_env: &RuntimeEnvironment) -> Self {
+        match batch_type.clone() {
+            TxBatchType::SequencerBatch => {
+                let mut buf = vec![5u8];
+                buf.extend(
+                    rt_env
+                        .sequencer_info
+                        .clone()
+                        .unwrap()
+                        .delay
+                        .to_be_bytes()
+                        .to_vec(),
+                );
+                assert_eq!(buf.len(), 9);
+                TxBatch {
+                    batch_type: batch_type,
+                    buf,
+                    batch_sender: Uint256::from_bytes(
+                        rt_env
+                            .sequencer_info
+                            .clone()
+                            .unwrap()
+                            .wallet
+                            .address()
+                            .as_bytes(),
+                    ),
+                }
+            }
+            TxBatchType::AggregatorBatch(batch_sender) => TxBatch {
+                batch_type: batch_type,
+                buf: vec![3u8],
+                batch_sender: batch_sender,
+            },
+        }
+    }
+
+    pub fn append_signed_tx(
+        &mut self,
+        rt_env: &mut RuntimeEnvironment,
+        sender_addr: Uint256,
+        max_gas: Uint256,
+        gas_price_bid: Uint256,
+        to_addr: Uint256,
+        value: Uint256,
+        calldata: Vec<u8>,
+        wallet: &Wallet,
+    ) -> Vec<u8> {
+        rt_env.append_signed_tx_message_to_batch(
+            &mut self.buf,
+            sender_addr,
+            max_gas,
+            gas_price_bid,
+            to_addr,
+            value,
+            calldata,
+            wallet,
+        )
+    }
+
+    pub fn send(&self, rt_env: &mut RuntimeEnvironment) {
+        rt_env.insert_l2_message(self.batch_sender.clone(), &self.buf);
     }
 }
 

@@ -1,4 +1,4 @@
-/*
+mod runtime_env;/*
  * Copyright 2020, Offchain Labs, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -15,9 +15,13 @@
  */
 
 use crate::mavm::Value;
-use crate::run::{bytes_from_bytestack, bytestack_from_bytes, load_from_file, RuntimeEnvironment};
+use crate::run::{
+    bytes_from_bytestack, bytestack_from_bytes, load_from_file, RuntimeEnvironment, TxBatch,
+    TxBatchType,
+};
 use crate::uint256::Uint256;
 use abi::AbiForContract;
+use ethabi::Function;
 use ethers_signers::Signer;
 use std::path::Path;
 
@@ -37,7 +41,7 @@ pub fn evm_xcontract_call_with_constructors(
     _profile: bool,
 ) -> Result<bool, ethabi::Error> {
     use std::convert::TryFrom;
-    let rt_env = RuntimeEnvironment::new(Uint256::from_usize(1111));
+    let rt_env = RuntimeEnvironment::new(Uint256::from_usize(1111), None);
     let mut machine = load_from_file(Path::new("arb_os/arbos.mexe"), rt_env);
     machine.start_at_zero();
 
@@ -116,7 +120,7 @@ pub fn evm_test_create(
     debug: bool,
     _profile: bool,
 ) -> Result<bool, ethabi::Error> {
-    let rt_env = RuntimeEnvironment::new(Uint256::from_usize(1111));
+    let rt_env = RuntimeEnvironment::new(Uint256::from_usize(1111), None);
     let mut machine = load_from_file(Path::new("arb_os/arbos.mexe"), rt_env);
     machine.start_at_zero();
 
@@ -178,7 +182,7 @@ pub fn evm_xcontract_call_using_batch(
     _profile: bool,
 ) -> Result<bool, ethabi::Error> {
     use std::convert::TryFrom;
-    let rt_env = RuntimeEnvironment::new(Uint256::from_usize(1111));
+    let rt_env = RuntimeEnvironment::new(Uint256::from_usize(1111), None);
 
     let wallet = rt_env.new_wallet();
     let my_addr = Uint256::from_bytes(wallet.address().as_bytes());
@@ -216,17 +220,21 @@ pub fn evm_xcontract_call_using_batch(
         panic!("failed to deploy PaymentChannel contract");
     }
 
-    let mut batch = machine.runtime_env.new_batch();
+    let mut batch = TxBatch::new(
+        TxBatchType::AggregatorBatch(Uint256::from_usize(1025)),
+        &machine.runtime_env,
+    );
     let tx_id_1 = pc_contract.add_function_call_to_batch(
+        &mut machine.runtime_env,
         &mut batch,
         my_addr.clone(),
         "deposit",
         &[],
-        &mut machine,
         Uint256::from_usize(10000),
         &wallet,
     )?;
     let tx_id_2 = pc_contract.add_function_call_to_batch(
+        &mut machine.runtime_env,
         &mut batch,
         my_addr.clone(),
         "transferFib",
@@ -237,14 +245,14 @@ pub fn evm_xcontract_call_using_batch(
             ethabi::Token::Uint(ethabi::Uint::try_from(1).unwrap()),
         ]
         .as_ref(),
-        &mut machine,
         Uint256::zero(),
         &wallet,
     )?;
 
-    machine
-        .runtime_env
-        .insert_batch_message(Uint256::from_usize(1025), &batch);
+    batch.send(&mut machine.runtime_env);
+    //machine
+    //    .runtime_env
+    //    .insert_batch_message(Uint256::from_usize(1025), &batch);
 
     let num_logs_before = machine.runtime_env.get_all_logs().len();
     let num_sends_before = machine.runtime_env.get_all_sends().len();
@@ -285,7 +293,7 @@ pub fn evm_xcontract_call_using_batch(
 }
 
 pub fn evm_direct_deploy_add(log_to: Option<&Path>, debug: bool) {
-    let rt_env = RuntimeEnvironment::new(Uint256::from_usize(1111));
+    let rt_env = RuntimeEnvironment::new(Uint256::from_usize(1111), None);
     let mut machine = load_from_file(Path::new("arb_os/arbos.mexe"), rt_env);
     machine.start_at_zero();
 
@@ -310,7 +318,7 @@ pub fn evm_direct_deploy_add(log_to: Option<&Path>, debug: bool) {
 
 pub fn evm_test_arbsys(log_to: Option<&Path>, debug: bool) {
     use std::convert::TryFrom;
-    let rt_env = RuntimeEnvironment::new(Uint256::from_usize(1111));
+    let rt_env = RuntimeEnvironment::new(Uint256::from_usize(1111), None);
     let mut machine = load_from_file(Path::new("arb_os/arbos.mexe"), rt_env);
     machine.start_at_zero();
 
@@ -419,7 +427,7 @@ pub fn evm_test_arbsys(log_to: Option<&Path>, debug: bool) {
 
 pub fn evm_direct_deploy_and_call_add(log_to: Option<&Path>, debug: bool) {
     use std::convert::TryFrom;
-    let rt_env = RuntimeEnvironment::new(Uint256::from_usize(1111));
+    let rt_env = RuntimeEnvironment::new(Uint256::from_usize(1111), None);
     let mut machine = load_from_file(Path::new("arb_os/arbos.mexe"), rt_env);
     machine.start_at_zero();
 
@@ -487,12 +495,156 @@ pub fn evm_direct_deploy_and_call_add(log_to: Option<&Path>, debug: bool) {
     }
 }
 
+pub fn evm_test_sequencer_support(log_to: Option<&Path>, debug: bool) -> Result<(), ethabi::Error> {
+    use std::convert::TryFrom;
+    let rt_env = RuntimeEnvironment::new(Uint256::from_usize(1111), Some(10));
+    let mut machine = load_from_file(Path::new("arb_os/arbos.mexe"), rt_env);
+    machine.start_at_zero();
+    let _ = if debug {
+        machine.debug(None)
+    } else {
+        machine.run(None)
+    };
+
+    let my_addr = Uint256::from_usize(1025);
+    let contract = match AbiForContract::new_from_file("contracts/add/build/contracts/Add.json") {
+        Ok(mut contract) => {
+            let result = contract.deploy(&[], &mut machine, debug);
+            if let Some(contract_addr) = result {
+                assert_ne!(contract_addr, Uint256::zero());
+                contract
+            } else {
+                panic!("deploy failed");
+            }
+        }
+        Err(e) => {
+            panic!("error loading contract: {:?}", e);
+        }
+    };
+
+    let wallet = machine.runtime_env.new_wallet();
+
+    machine.runtime_env.set_blocknum_timestamp(3, None);
+    let mut batch = TxBatch::new(
+        TxBatchType::AggregatorBatch(Uint256::from_usize(1025)),
+        &machine.runtime_env,
+    );
+    let tx_id_1 = contract.add_function_call_to_batch(
+        &mut machine.runtime_env,
+        &mut batch,
+        Uint256::from_bytes(wallet.address().as_bytes()),
+        "currentBlockNum",
+        &[],
+        Uint256::zero(),
+        &wallet,
+    )?;
+    batch.send(&mut machine.runtime_env);
+
+    machine.runtime_env.add_to_blocknum(11);
+    let mut batch = TxBatch::new(TxBatchType::SequencerBatch, &machine.runtime_env);
+    let tx_id_2 = contract.add_function_call_to_batch(
+        &mut machine.runtime_env,
+        &mut batch,
+        Uint256::from_bytes(wallet.address().as_bytes()),
+        "currentBlockNum",
+        &[],
+        Uint256::zero(),
+        &wallet,
+    )?;
+    batch.send(&mut machine.runtime_env);
+
+    // run the machine, and collect logs and sends
+    let num_logs_before = machine.runtime_env.get_all_logs().len();
+    let num_sends_before = machine.runtime_env.get_all_sends().len();
+    let _arbgas_used = if debug {
+        machine.debug(None)
+    } else {
+        machine.run(None)
+    };
+    let logs = machine.runtime_env.get_all_logs();
+    let sends = machine.runtime_env.get_all_sends();
+    let logs = &logs[num_logs_before..];
+    let sends = &sends[num_sends_before..];
+
+    assert_eq!(logs.len(), 2);
+    assert_eq!(sends.len(), 0);
+
+    assert_log_result(
+        &logs[0],
+        None,
+        Some(tx_id_1),
+        Some((
+            contract.get_function("currentBlockNum")?,
+            &Uint256::from_u64(14),
+        )),
+    );
+    assert_log_result(
+        &logs[1],
+        None,
+        Some(tx_id_2),
+        Some((
+            contract.get_function("currentBlockNum")?,
+            &Uint256::from_u64(14),
+        )),
+    );
+
+    // now try some
+    if let Some(path) = log_to {
+        machine.runtime_env.recorder.to_file(path).unwrap();
+    }
+
+    Ok(())
+}
+
+pub fn assert_log_result(
+    log_item: &Value,
+    return_code: Option<u64>,    // None means to assert success (0)
+    request_id: Option<Uint256>, // None means don't check
+    first_return_val: Option<(&Function, &Uint256)>, // None means don't check
+) {
+    if let Value::Tuple(tup) = log_item {
+        // verify return code
+        assert_eq!(
+            tup[1],
+            Value::Int(if let Some(rc) = return_code {
+                Uint256::from_u64(rc)
+            } else {
+                Uint256::zero()
+            })
+        );
+
+        // verify request id
+        if let Some(req_id) = &request_id {
+            if let Value::Tuple(subtup) = &tup[0] {
+                if let Value::Int(ui) = &subtup[4] {
+                    assert_eq!(req_id, ui);
+                } else {
+                    panic!("RequestID in log is not an integer");
+                }
+            } else {
+                panic!("Malformed request info in log");
+            }
+        }
+
+        // verify first return value
+        if let Some((function, expected_val)) = first_return_val {
+            let actual_val = function
+                .decode_output(&bytes_from_bytestack(tup[2].clone()).unwrap())
+                .unwrap();
+            assert_eq!(
+                actual_val[0],
+                ethabi::Token::Uint(ethabi::Uint::from_big_endian(&expected_val.to_bytes_be()))
+            );
+        }
+    }
+}
+
 pub fn mint_erc20_and_get_balance(log_to: Option<&Path>, debug: bool) {
     let token_addr = Uint256::from_usize(32563);
     let me = Uint256::from_usize(1025);
     let million = Uint256::from_usize(1000000);
 
-    let mut rt_env = RuntimeEnvironment::new(Uint256::from_usize(1111));
+    let mut rt_env = RuntimeEnvironment::new(Uint256::from_usize(1111), None);
     rt_env.insert_erc20_deposit_message(me.clone(), token_addr.clone(), me.clone(), million);
     let mut calldata: Vec<u8> = vec![0x70, 0xa0, 0x82, 0x31]; // code for balanceOf method
     calldata.extend(me.to_bytes_be());
@@ -537,7 +689,7 @@ pub fn mint_erc721_and_get_balance(log_to: Option<&Path>, debug: bool) {
     let me = Uint256::from_usize(1025);
     let million = Uint256::from_usize(1000000);
 
-    let mut rt_env = RuntimeEnvironment::new(Uint256::from_usize(1111));
+    let mut rt_env = RuntimeEnvironment::new(Uint256::from_usize(1111), None);
     rt_env.insert_erc721_deposit_message(me.clone(), token_addr.clone(), me.clone(), million);
     let mut calldata: Vec<u8> = vec![0x70, 0xa0, 0x82, 0x31]; // code for balanceOf method
     calldata.extend(me.to_bytes_be());

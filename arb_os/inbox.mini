@@ -18,6 +18,7 @@ import type ByteArray;
 import func bytearray_size(ba: ByteArray) -> uint;
 import func bytearray_unmarshalBytes(mb: MarshalledBytes) -> ByteArray;
 import func bytearray_marshalFull(ba: ByteArray) -> MarshalledBytes;
+import func bytearray_get64(ba: ByteArray, offset: uint) -> uint;
 import func bytearray_get256(ba: ByteArray, offset: uint) -> uint;
 import func bytearray_setByte(ba: ByteArray, offset: uint, value: uint) -> ByteArray;
 import func bytearray_extract(ba: ByteArray, offset: uint, nbytes: uint) -> ByteArray;
@@ -107,30 +108,40 @@ public impure func inbox_get() -> IncomingRequest {
                 with { lastTimestamp: ebMsg.timestamp };
             if (ebMsg.kind == 4) {
                 chainParams_gotParamsMessage(ebMsg.sender, ebMsg.msgData);
+                if let Some(seqInfo) = globalInbox.sequencerInfo {
+                    // We just set up a sequencer.
+                    // Any messages in the readyQueue need to be fed through the sequencer.
+                    let (uq, useq) = getFromSequencer(queue_new(), globalInbox.readyQueue, seqInfo);
+                    globalInbox = globalInbox with {
+                        readyQueue: uq
+                    } with {
+                        sequencerInfo: Some(useq)
+                    };
+                }
             } else {
                 return ebMsg;
             }
-        }
-        if let Some(seqInfo) = globalInbox.sequencerInfo {
-            let (uq, useq) = getFromSequencer(globalInbox.readyQueue, seqInfo);
-            globalInbox = globalInbox with {
-                readyQueue: uq
-            } with {
-                sequencerInfo: Some(useq)
-            };
         } else {
-            let q = globalInbox.readyQueue;
-            while (queue_isEmpty(q)) {
-                q = getFromL1Inbox(q);
+            if let Some(seqInfo) = globalInbox.sequencerInfo {
+                let (uq, useq) = getFromSequencer(globalInbox.readyQueue, getFromL1Inbox(queue_new()), seqInfo);
+                globalInbox = globalInbox with {
+                    readyQueue: uq
+                } with {
+                    sequencerInfo: Some(useq)
+                };
+            } else {
+                let q = globalInbox.readyQueue;
+                while (queue_isEmpty(q)) {
+                    q = getFromL1Inbox(q);
+                }
+                globalInbox = globalInbox with { readyQueue: q };
             }
-            globalInbox = globalInbox with { readyQueue: q };
         }
     }
 }
 
-impure func getFromSequencer(qToFill: Queue, seqInfo: SequencerInfo) -> (Queue, SequencerInfo) {
+impure func getFromSequencer(qToFill: Queue, inQ: Queue, seqInfo: SequencerInfo) -> (Queue, SequencerInfo) {
     // push one or more messages into qToFill
-    let inQ = getFromL1Inbox(queue_new());
     while ( ! queue_isEmpty(inQ) ) {
         let (uq, rawMsg) = queueGetOrDie(inQ);
         inQ = uq;
@@ -156,13 +167,13 @@ impure func getFromSequencer(qToFill: Queue, seqInfo: SequencerInfo) -> (Queue, 
         if (inMsg.sender != seqInfo.sequencerAddr) {
             // message not from sequencer, put it in delay queue
             seqInfo = seqInfo with { delayQueue: queue_put(seqInfo.delayQueue, inMsg) };
-        } elseif ( (inMsg.kind == 3) || (marshalledBytes_firstByte(inMsg.msgData) == 5) ) {
+        } elseif ( (inMsg.kind == 3) && (marshalledBytes_firstByte(inMsg.msgData) == 5) ) {
             // sequencer batch message needs special handling
 
             let ba = bytearray_unmarshalBytes(inMsg.msgData);
 
             // release any additional delayQueue messages it authorizes
-            let releasePoint = bytearray_get256(ba, 1);
+            let releasePoint = bytearray_get64(ba, 1);
             if let Some(res) = releaseFromQueueByBlockNum(
                 seqInfo.delayQueue,
                 qToFill,
@@ -176,11 +187,11 @@ impure func getFromSequencer(qToFill: Queue, seqInfo: SequencerInfo) -> (Queue, 
             }
 
             // now morph this into a normal batch message
-            // strip 256 bytes off of fastMsg's L2 data, then set first byte to 3
+            // strip 64 bytes off of fastMsg's L2 data, then set first byte to 3
             inMsg = inMsg with {
                 msgData: bytearray_marshalFull(
                     bytearray_setByte(
-                        bytearray_extract(ba, 256, bytearray_size(ba)-256),
+                        bytearray_extract(ba, 8, bytearray_size(ba)-8),
                         0,
                         3  // typecode for a normal batch message
                     )
@@ -208,6 +219,11 @@ func releaseFromQueueByBlockNum(
         let nextMsg = unsafecast<IncomingRequest>(queue_peek(inQueue)?);   // won't return None because we know queue is nonempty
         if (nextMsg.blockNumber <= blockNumToRelease) {
             anyChange = true;
+            nextMsg = nextMsg with {
+                blockNumber: assignBlockNum
+            } with {
+                timestamp: assignTimestamp
+            };
             outQueue = queue_put(outQueue, nextMsg);
             if let Some(inq) = queue_discardOneIfNonempty(inQueue) {
                 inQueue = inq;

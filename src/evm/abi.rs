@@ -15,7 +15,7 @@
  */
 
 use crate::mavm::Value;
-use crate::run::{bytes_from_bytestack, Machine};
+use crate::run::{bytes_from_bytestack, Machine, RuntimeEnvironment, TxBatch};
 use crate::uint256::Uint256;
 use ethers_signers::Wallet;
 use std::{fs::File, io::Read, path::Path};
@@ -288,7 +288,7 @@ impl AbiForContract {
             self.code_bytes.clone()
         };
 
-        let sender_addr = Uint256::from_usize(1025);
+        let sender_addr = machine.runtime_env.get_sequencer_address().unwrap_or(Uint256::from_usize(1025));
         let request_id = machine.runtime_env.insert_tx_message(
             sender_addr,
             Uint256::from_usize(1_000_000_000_000),
@@ -370,19 +370,19 @@ impl AbiForContract {
 
     pub fn add_function_call_to_batch(
         &self,
-        batch: &mut Vec<u8>,
+        rt_env: &mut RuntimeEnvironment,
+        batch: &mut TxBatch,
         sender_addr: Uint256,
         func_name: &str,
         args: &[ethabi::Token],
-        machine: &mut Machine,
         payment: Uint256,
         wallet: &Wallet,
     ) -> Result<Uint256, ethabi::Error> {
         let this_function = self.contract.function(func_name)?;
         let calldata = this_function.encode_input(args).unwrap();
 
-        let tx_id_bytes = machine.runtime_env.append_signed_tx_message_to_batch(
-            batch,
+        let tx_id_bytes = batch.append_signed_tx(
+            rt_env,
             sender_addr,
             Uint256::from_usize(1_000_000_000_000),
             Uint256::zero(),
