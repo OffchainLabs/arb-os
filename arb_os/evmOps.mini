@@ -540,21 +540,6 @@ public impure func evmOp_log4(
     panic;
 }
 
-public impure func evmOp_sloadbytes() {
-    // believe this is a non-standard opcode
-    evm_notYetImplemented(14,);
-}
-
-public impure func evmOp_sstorebytes() {
-    // believe this is a non-standard opcode
-    evm_notYetImplemented(15,);
-}
-
-public impure func evmOp_ssize() {
-    // believe this is a non-standard opcode
-    evm_notYetImplemented(16,);
-}
-
 public impure func evmOp_call(
     gas: uint,
     callee: address,
@@ -723,11 +708,6 @@ public impure func evmOp_return(memOffset: uint, memNbytes: uint) {
     let _ = evmCallStack_returnFromCall(true, memOffset, memNbytes);
 
     evm_runtimePanic();
-}
-
-public impure func evmOp_txexecgas() {
-    // believe this is a non-standard opcode
-    evm_notYetImplemented(23,);
 }
 
 public impure func evmOp_selfdestruct(owner: address) {
@@ -938,7 +918,3 @@ impure func evm_runtimePanic() {
     panic;
 }
 
-impure func evm_notYetImplemented(op: uint) {
-    errorHandler();
-    panic;
-}
