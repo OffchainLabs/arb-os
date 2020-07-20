@@ -93,7 +93,7 @@ impl RuntimeEnvironment {
         self.chain_id
     }
 
-    pub fn get_sequencer_wallet(&self) -> Option<Wallet> {
+    pub fn _get_sequencer_wallet(&self) -> Option<Wallet> {
         self.sequencer_info.as_ref().map(|si| si.wallet.clone())
     }
 
@@ -101,11 +101,11 @@ impl RuntimeEnvironment {
         self.sequencer_info.as_ref().map(|si| Uint256::from_bytes(si.wallet.address().as_bytes()))
     }
 
-    pub fn get_sequencer_delay(&self) -> Option<u64> {
+    pub fn _get_sequencer_delay(&self) -> Option<u64> {
         self.sequencer_info.as_ref().map(|si| si.delay)
     }
 
-    pub fn get_blocknum_timestamp(&self) -> (Uint256, Uint256) {
+    pub fn _get_blocknum_timestamp(&self) -> (Uint256, Uint256) {
         (
             self.current_block_num.clone(),
             self.current_timestamp.clone(),
@@ -265,7 +265,7 @@ impl RuntimeEnvironment {
         tx_id_bytes
     }
 
-    fn insert_batch_message(&mut self, sender_addr: Uint256, buf: &[u8]) {
+    fn _insert_batch_message(&mut self, sender_addr: Uint256, buf: &[u8]) {
         self.insert_l2_message(sender_addr, buf);
     }
 
@@ -367,7 +367,7 @@ pub enum TxBatchType {
 }
 
 pub struct TxBatch {
-    batch_type: TxBatchType,
+    _batch_type: TxBatchType,
     buf: Vec<u8>,
     batch_sender: Uint256,
 }
@@ -388,7 +388,7 @@ impl TxBatch {
                 );
                 assert_eq!(buf.len(), 9);
                 TxBatch {
-                    batch_type: batch_type,
+                    _batch_type: batch_type,
                     buf,
                     batch_sender: Uint256::from_bytes(
                         rt_env
@@ -402,7 +402,7 @@ impl TxBatch {
                 }
             }
             TxBatchType::AggregatorBatch(batch_sender) => TxBatch {
-                batch_type: batch_type,
+                _batch_type: batch_type,
                 buf: vec![3u8],
                 batch_sender: batch_sender,
             },

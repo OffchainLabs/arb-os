@@ -496,7 +496,6 @@ pub fn evm_direct_deploy_and_call_add(log_to: Option<&Path>, debug: bool) {
 }
 
 pub fn evm_test_sequencer_support(log_to: Option<&Path>, debug: bool) -> Result<(), ethabi::Error> {
-    use std::convert::TryFrom;
     let rt_env = RuntimeEnvironment::new(Uint256::from_usize(1111), Some(10));
     let mut machine = load_from_file(Path::new("arb_os/arbos.mexe"), rt_env);
     machine.start_at_zero();
@@ -506,7 +505,6 @@ pub fn evm_test_sequencer_support(log_to: Option<&Path>, debug: bool) -> Result<
         machine.run(None)
     };
 
-    let my_addr = Uint256::from_usize(1025);
     let contract = match AbiForContract::new_from_file("contracts/add/build/contracts/Add.json") {
         Ok(mut contract) => {
             let result = contract.deploy(&[], &mut machine, debug);
@@ -756,6 +754,7 @@ pub fn make_logs_for_all_arbos_tests() {
         false,
         false,
     );
+    let _ = evm_test_sequencer_support(Some(Path::new("testlogs/evm_test_sequencer_support")), false);
     evm_test_arbsys(Some(Path::new("testlogs/evm_test_arbsys.aoslog")), false);
     mint_erc20_and_get_balance(Some(Path::new("testlogs/erc20_test.aoslog")), false);
     mint_erc721_and_get_balance(Some(Path::new("testlogs/erc721_test.aoslog")), false);
