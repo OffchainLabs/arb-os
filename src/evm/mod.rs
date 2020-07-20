@@ -1,18 +1,18 @@
-mod runtime_env;/*
- * Copyright 2020, Offchain Labs, Inc.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
+mod runtime_env; /*
+                  * Copyright 2020, Offchain Labs, Inc.
+                  *
+                  * Licensed under the Apache License, Version 2.0 (the "License");
+                  * you may not use this file except in compliance with the License.
+                  * You may obtain a copy of the License at
+                  *
+                  *    http://www.apache.org/licenses/LICENSE-2.0
+                  *
+                  * Unless required by applicable law or agreed to in writing, software
+                  * distributed under the License is distributed on an "AS IS" BASIS,
+                  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+                  * See the License for the specific language governing permissions and
+                  * limitations under the License.
+                  */
 
 use crate::mavm::Value;
 use crate::run::{
@@ -754,7 +754,10 @@ pub fn make_logs_for_all_arbos_tests() {
         false,
         false,
     );
-    let _ = evm_test_sequencer_support(Some(Path::new("testlogs/evm_test_sequencer_support")), false);
+    let _ = evm_test_sequencer_support(
+        Some(Path::new("testlogs/evm_test_sequencer_support")),
+        false,
+    );
     evm_test_arbsys(Some(Path::new("testlogs/evm_test_arbsys.aoslog")), false);
     mint_erc20_and_get_balance(Some(Path::new("testlogs/erc20_test.aoslog")), false);
     mint_erc721_and_get_balance(Some(Path::new("testlogs/erc721_test.aoslog")), false);

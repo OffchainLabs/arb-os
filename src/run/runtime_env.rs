@@ -98,7 +98,9 @@ impl RuntimeEnvironment {
     }
 
     pub fn get_sequencer_address(&self) -> Option<Uint256> {
-        self.sequencer_info.as_ref().map(|si| Uint256::from_bytes(si.wallet.address().as_bytes()))
+        self.sequencer_info
+            .as_ref()
+            .map(|si| Uint256::from_bytes(si.wallet.address().as_bytes()))
     }
 
     pub fn _get_sequencer_delay(&self) -> Option<u64> {

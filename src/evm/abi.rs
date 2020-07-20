@@ -288,7 +288,10 @@ impl AbiForContract {
             self.code_bytes.clone()
         };
 
-        let sender_addr = machine.runtime_env.get_sequencer_address().unwrap_or(Uint256::from_usize(1025));
+        let sender_addr = machine
+            .runtime_env
+            .get_sequencer_address()
+            .unwrap_or(Uint256::from_usize(1025));
         let request_id = machine.runtime_env.insert_tx_message(
             sender_addr,
             Uint256::from_usize(1_000_000_000_000),
