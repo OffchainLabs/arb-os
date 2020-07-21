@@ -87,7 +87,7 @@ import func stack_push(stack: Stack, value: any) -> Stack;
 import func stack_pop(stack: Stack) -> option<(Stack, any)>;
 
 import impure func gasAccounting_startTxCharges(maxGas: uint, gasPrice: uint, payer: address) -> option<()>;
-import impure func gasAccounting_endTxCharges() -> option<(uint, uint)>;
+import impure func gasAccounting_endTxCharges() -> option<GasUsage>;
 import impure func gasAccounting_pauseTxCharges() -> uint;
 import impure func gasAccounting_resumeTxCharges(allocation: uint) -> uint;
 
@@ -96,6 +96,11 @@ import impure func translateEvmCodeSegment(
 ) -> option<(impure func(), map<uint, impure func()>)>;
 
 import impure func mainRunLoop();
+
+type GasUsage = struct {
+    gasUsed: uint,
+    gasPriceWei: uint,
+}
 
 // This callframe is used to represent an EVM call in progress.
 // The callframe will have a full copy of the system state, but
@@ -190,19 +195,18 @@ public impure func initEvmCallStack(
 
                 entryPoint();  // start executing the call; should never return
             } else {
-                if let Some(res) = gasAccounting_endTxCharges() {
+                if let Some(gasUsage) = gasAccounting_endTxCharges() {
                     // insufficient balance error
-                    let (gasUsed, gasPrice) = res;
-                    emitLog(ethMessage, 4, None<ByteArray>, None<EvmLogs>, gasUsed, gasPrice);
+                    emitLog(ethMessage, 4, None<ByteArray>, None<EvmLogs>, Some(gasUsage));
                 } else {
                     // unknown error type
-                    emitLog(ethMessage, 255, None<ByteArray>, None<EvmLogs>, 0, 0);
+                    emitLog(ethMessage, 255, None<ByteArray>, None<EvmLogs>, None<GasUsage>);
                 }
                 evmCallStack_callHitError();
             }
         } else {
             // can't pay for gas error
-            emitLog(ethMessage, 3, None<ByteArray>, None<EvmLogs>, 0, 0);
+            emitLog(ethMessage, 3, None<ByteArray>, None<EvmLogs>, None<GasUsage>);
             evmCallStack_callHitError();
         }
     }
@@ -264,7 +268,7 @@ public impure func initEvmCallStackForConstructor(
         }
     } else {
         // can't pay for gas error
-        emitLog(ethMessage, 3, None<ByteArray>, None<EvmLogs>, 0, 0);
+        emitLog(ethMessage, 3, None<ByteArray>, None<EvmLogs>, None<GasUsage>);
         evmCallStack_callHitError();  // should never return
         panic;
     }
@@ -422,7 +426,7 @@ public impure func evmCallStack_returnFromCall(
         panic;  // shouldn't happen -- previous instruction jumped away
     } else {
         // top-level call completed; will need to return to external caller
-        let (gasUsed, gasPrice) = gasAccounting_endTxCharges()?;
+        let gasUsage = gasAccounting_endTxCharges()?;
         if (success) {
             if (topFrame.callKind == 4) {
                 // Constructor call was successful, so finish setting up the account.
@@ -442,8 +446,7 @@ public impure func evmCallStack_returnFromCall(
                             6,
                             None<ByteArray>,
                             None<EvmLogs>,
-                            gasUsed,
-                            gasPrice
+                            Some(gasUsage)
                         );
                         evmCallStack_callHitError();  // should never return
                         panic;
@@ -476,8 +479,7 @@ public impure func evmCallStack_returnFromCall(
                         0,
                         Some(returnData),
                         Some(topFrame.evmLogs),
-                        gasUsed,
-                        gasPrice
+                        Some(gasUsage)
                     );
                 } else {
                     // Compilation of resulting code failed; report an error.
@@ -486,8 +488,7 @@ public impure func evmCallStack_returnFromCall(
                         1,
                         None<ByteArray>,
                         None<EvmLogs>,
-                        gasUsed,
-                        gasPrice
+                        Some(gasUsage)
                     );
                 }
             } else {
@@ -520,8 +521,7 @@ public impure func evmCallStack_returnFromCall(
                     0,
                     Some(returnData),
                     Some(topFrame.evmLogs),
-                    gasUsed,
-                    gasPrice
+                    Some(gasUsage)
                 );
             }
         } else {
@@ -531,8 +531,7 @@ public impure func evmCallStack_returnFromCall(
                 1,
                 None<ByteArray>,
                 None<EvmLogs>,
-                gasUsed,
-                gasPrice
+                Some(gasUsage)
             );
         }
 
@@ -558,8 +557,7 @@ public impure func emitLog(
     resultCode: uint,
     maybeReturnData: option<ByteArray>,
     maybeEvmLogs: option<EvmLogs>,
-    gasUsed: uint,
-    gasPrice: uint,
+    gasUsage: option<GasUsage>,
 ) {
     let returnData = bytearray_new(0);
     if let Some(rd) = maybeReturnData {
@@ -569,14 +567,20 @@ public impure func emitLog(
     if let Some(el) = maybeEvmLogs {
         evmLogs = el;
     }
+    let realGasUsage = struct {
+        gasUsed: 0,
+        gasPriceWei: 0,
+    };
+    if let Some(gu) = gasUsage {
+        realGasUsage = gu;
+    }
 
     asm((
         l1message,
         resultCode,
         bytearray_marshalFull(returnData),
         evmLogs,
-        gasUsed,
-        gasPrice
+        realGasUsage
     ),) { log };
 }
 

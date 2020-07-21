@@ -64,6 +64,10 @@ type TxGasState = struct {
     refundTo: address,   // who gets a refund for unused gas at the end, if there is any
 }
 
+type GasUsage = struct {
+    gasUsed: uint,
+    gasPriceWei: uint,
+}
 
 public impure func gasAccounting_init() {
     gasAccountingInfo = struct {
@@ -131,7 +135,7 @@ public impure func gasAccounting_startTxCharges(
     return Some(());
 }
 
-public impure func gasAccounting_endTxCharges() -> option<(uint, uint)> {
+public impure func gasAccounting_endTxCharges() -> option<GasUsage> {
     // stop charging the current tx for gas
     // refund any unused gas
     // return the total amount it used, or None if there isn't a tx active
@@ -160,7 +164,12 @@ public impure func gasAccounting_endTxCharges() -> option<(uint, uint)> {
         txState: None<TxGasState>
     };
 
-    return Some((txState.originalMax-gasToRefund, txState.price));
+    return Some(
+        struct {
+            gasUsed: txState.originalMax-gasToRefund,
+            gasPriceWei: txState.price
+        }
+    );
 }
 
 public impure func gasAccounting_pauseTxCharges() -> uint {
