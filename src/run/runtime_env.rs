@@ -255,8 +255,12 @@ impl RuntimeEnvironment {
         self.recorder.add_log(log_item);
     }
 
-    pub fn get_all_logs(&self) -> Vec<Value> {
-        self.logs.clone()
+    pub fn get_all_raw_logs(&self) -> Vec<Value> {
+       self.logs.clone()
+    }
+
+    pub fn get_all_logs(&self) -> Vec<ArbosReceipt> {
+        self.logs.clone().into_iter().map(|log| ArbosReceipt::new(log)).collect()
     }
 
     pub fn push_send(&mut self, send_item: Value) {
@@ -266,6 +270,53 @@ impl RuntimeEnvironment {
 
     pub fn get_all_sends(&self) -> Vec<Value> {
         self.sends.clone()
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct ArbosReceipt {
+    request: Value,
+    return_code: Uint256,
+    return_data: Vec<u8>,
+    evm_logs: Value,
+    gas_used: Uint256,
+    gas_price_wei: Uint256,
+}
+
+impl ArbosReceipt {
+    pub fn new(arbos_log: Value) -> Self {
+        if let Value::Tuple(tup) = arbos_log {
+            if let Value::Tuple(usage_info) = &tup[4] {
+                ArbosReceipt {
+                    request: tup[0].clone(),
+                    return_code: if let Value::Int(ui) = &tup[1] { ui.clone() } else { panic!(); },
+                    return_data: if let Some(d) = bytes_from_bytestack(tup[2].clone()) { d } else { vec![] },
+                    evm_logs: tup[3].clone(),
+                    gas_used: if let Value::Int(ui) = &usage_info[0] { ui.clone() } else { Uint256::zero() },
+                    gas_price_wei: if let Value::Int(ui) = &usage_info[1] { ui.clone() } else { Uint256::zero() },
+                }
+            } else {
+                panic!("Arbog log gas usage field was not a Tuple");
+            }
+        } else {
+            panic!("Arbos log item was not a Tuple");
+        }
+    }
+
+    pub fn get_request(&self) -> Value {
+        self.request.clone()
+    }
+
+    pub fn get_return_code(&self) -> Uint256 {
+        self.return_code.clone()
+    }
+
+    pub fn succeeded(&self) -> bool {
+        self.get_return_code() == Uint256::zero()
+    }
+
+    pub fn get_return_data(&self) -> Vec<u8> {
+        self.return_data.clone()
     }
 }
 
