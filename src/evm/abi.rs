@@ -15,7 +15,7 @@
  */
 
 use crate::mavm::Value;
-use crate::run::{Machine, ArbosReceipt};
+use crate::run::{ArbosReceipt, Machine};
 use crate::uint256::Uint256;
 use ethers_signers::Wallet;
 use std::{fs::File, io::Read, path::Path};
@@ -312,7 +312,7 @@ impl AbiForContract {
             return None;
         }
 
-        let log_item = &logs[logs.len()-1];
+        let log_item = &logs[logs.len() - 1];
         assert!(log_item.succeeded());
         if let Value::Tuple(tup2) = log_item.get_request() {
             assert_eq!(tup2[4], Value::Int(request_id));
