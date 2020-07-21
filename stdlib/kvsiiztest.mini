@@ -1,0 +1,198 @@
+//
+// Copyright 2020, Offchain Labs, Inc.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//    http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+//
+
+import type KvsIIZ;
+
+import func kvsiiz_new() -> KvsIIZ;
+import func kvsiiz_size(s: KvsIIZ) -> uint;
+import func kvsiiz_get(s: KvsIIZ, key: uint) -> uint;
+import func kvsiiz_set(s: KvsIIZ, key: uint, value: uint) -> KvsIIZ;
+import func kvsiiz_delete(s: KvsIIZ, key: uint) -> KvsIIZ;
+import func kvsiiz_forall(
+    s: KvsIIZ,
+    closure: func(uint, uint, any) -> any,
+    state: any
+);
+
+
+impure func main() {
+	asm(tests(),) { log };
+}
+
+func tests() -> uint {
+	let s = kvsiiz_new();
+	if (kvsiiz_get(s, 17) != 0) {
+		return 1;
+	}
+	if (kvsiiz_size(s) != 0) {
+	    return 101;
+	}
+
+	s = kvsiiz_new();
+	s = kvsiiz_set(s, 42, 42);
+	if (kvsiiz_get(s, 42) != 42) {
+		return 2;
+	}
+	if (kvsiiz_size(s) != 1) {
+	    return 102;
+	}
+
+	s = kvsiiz_new();
+	s = kvsiiz_set(s, 42, 43);
+	s = kvsiiz_set(s, 55, 56);
+	s = kvsiiz_set(s, 42, 99);
+	if (kvsiiz_get(s, 42) != 99) {
+		return 3;
+	}
+	if (kvsiiz_size(s) != 2) {
+	    return 103;
+	}
+
+	s = kvsiiz_new();
+	s = kvsiiz_set(s, 42, 43);
+	s = kvsiiz_set(s, 55, 56);
+	s = kvsiiz_set(s, 42, 99);
+	if (kvsiiz_get(s, 55) != 56) {
+		return 4;
+	}
+	if (kvsiiz_size(s) != 2) {
+	    return 104;
+	}
+
+	s = kvsiiz_new();
+	let i = 0;
+	while (i < 41) {
+		s = kvsiiz_set(s, i, 1000+i);
+		i = i+1;
+	}
+	if (kvsiiz_get(s, 17) != 1017) {
+		return 5;
+	}
+	if (kvsiiz_size(s) != 41) {
+	    return 105;
+	}
+
+	s = kvsiiz_new();
+	let i = 0;
+	while (i < 27) {
+		s = kvsiiz_set(s, i, 1000+i);
+		i = i+1;
+	}
+	s = kvsiiz_delete(s, 17);
+	if (kvsiiz_get(s, 17) != 0) {
+		return 6;
+	}
+	if (kvsiiz_size(s) != 26) {
+	    return 106;
+	}
+
+	s = kvsiiz_new();
+	s = kvsiiz_set(s, 42, 43);
+	s = kvsiiz_set(s, 55, 56);
+	s = kvsiiz_set(s, 42, 99);
+	if (kvsiiz_get(s, 42) != 99) {
+		return 7;
+	}
+	if (kvsiiz_size(s) != 2) {
+	    return 107;
+	}
+
+	s = kvsiiz_new();
+	s = kvsiiz_set(s, 42, 43);
+	s = kvsiiz_set(s, 55, 56);
+	s = kvsiiz_set(s, 42, 99);
+	if (kvsiiz_get(s, 3) != 0) {
+		return 8;
+	}
+	if (kvsiiz_size(s) != 2) {
+	    return 108;
+	}
+
+	s = kvsiiz_new();
+	s = kvsiiz_set(s, 42, 43);
+	s = kvsiiz_set(s, 55, 56);
+	s = kvsiiz_set(s, 42, 99);
+	let rawResult = kvsiiz_forall(s, sumForKvsIterator, 0);
+	if (unsafecast<uint>(rawResult) != 155) {
+		return 9;
+	}
+	if (kvsiiz_size(s) != 2) {
+	    return 109;
+	}
+
+    // regression test for bug #73
+    s = kvsiiz_new();
+    s = kvsiiz_set(s, 42, 43);
+    s = kvsiiz_set(s, 55, 56);
+    s = kvsiiz_delete(s, 42);
+    s = kvsiiz_set(s, 55, 100);
+    s = kvsiiz_delete(s, 55);
+    if (kvsiiz_get(s, 55) != 0) {
+        return 10;
+    }
+	if (kvsiiz_size(s) != 0) {
+	    return 110;
+	}
+
+    // test size counting, including reductions for zero
+    s = kvsiiz_new();
+    let i = 0;
+    while (i < 107) {
+        s = kvsiiz_set(s, i, 1000+i);
+        i = i+1;
+    }
+    if (kvsiiz_size(s) != 107) {
+        return 11;
+    }
+    s = kvsiiz_set(s, 55, 0);
+    if (kvsiiz_size(s) != 106) {
+        return 111;
+    }
+    s = kvsiiz_set(s, 3000, 0);
+    if (kvsiiz_size(s) != 106) {
+        return 211;
+    }
+    s = kvsiiz_delete(s, 55);
+    if (kvsiiz_size(s) != 106) {
+        return 311;
+    }
+    s = kvsiiz_delete(s, 77);
+    if (kvsiiz_size(s) != 105) {
+        return 411;
+    }
+
+	return 0;
+}
+
+func isSome(x: option<any>) -> bool {
+	if let Some(unused) = x {
+		return true;
+	} else {
+		return false;
+	}
+}
+
+func getSomeOr(x: option<any>, backupVal: any) -> any {
+	if let Some(val) = x {
+		return val;
+	} else {
+		return backupVal;
+	}
+}
+
+func sumForKvsIterator(key: uint, value: uint, state: any) -> any {
+	return value + unsafecast<uint>(state);
+}

@@ -1,0 +1,175 @@
+//
+// Copyright 2020, Offchain Labs, Inc.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//    http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+//
+
+type KvsIIZ = struct {
+    tree: KvsIIZnode,
+    size: uint,
+}
+
+type KvsIIZnode = [8]any
+
+type KvsIIZcell = struct {
+    key: uint,
+    value: uint,
+}
+
+
+public func kvsiiz_new() -> KvsIIZ {
+    return struct {
+        tree: unsafecast<KvsIIZnode>(0),
+        size: 0,
+    };
+}
+
+public func kvsiiz_size(kvs: KvsIIZ) -> uint {
+    return kvs.size;
+}
+
+public func kvsiiz_get(kvs: KvsIIZ, key: uint) -> uint {
+    let s = kvs.tree;
+    let reductionFactor = 1;
+    loop {
+        if (s == unsafecast<KvsIIZnode>(0)) {
+            return 0;
+        } elseif (asm(s,) uint { length } == 2) {
+            if (key == unsafecast<KvsIIZcell>(s).key) {
+                return unsafecast<KvsIIZcell>(s).value;
+            }
+        } else {
+            s = unsafecast<KvsIIZnode>(s[(key/reductionFactor) & 0x7]);
+            reductionFactor = reductionFactor * 8;
+        }
+    }
+}
+
+type Unwinder = struct {
+    kvs: [8]any,
+    index: uint,
+    next: option<any>,   // really option<Unwinder>, but compiler doesn't do recursive types
+}
+
+public func kvsiiz_set(s: KvsIIZ, key: uint, value: uint) -> KvsIIZ {
+    let (utree, maybeUnwinder, delta) = kvsiiz_set2(s.tree, key, value);
+    loop {
+        if let Some(unwinder) = maybeUnwinder {
+            utree = unwinder.kvs with {
+                [unwinder.index] = utree
+            };
+            maybeUnwinder = unsafecast<option<Unwinder>>(unwinder.next);
+        } else {
+            if (delta != int(0)) {
+                s = s with { size: uint(int(s.size) + delta) };
+            }
+            return s with { tree: utree };
+        }
+    }
+}
+
+public func kvsiiz_set2(s: KvsIIZnode, key: uint, value: uint) -> (KvsIIZnode, option<Unwinder>, int) {
+    let reductionFactor = 1;
+    let unwinder = None<Unwinder>;
+    loop {
+        if (s == unsafecast<KvsIIZnode>(0)) {
+            if (value == 0) {
+                return (s, unwinder, int(0));
+            } else {
+                return (
+                    unsafecast<KvsIIZnode>(
+                        struct {
+                            key: key,
+                            value: value
+                        }
+                    ),
+                    unwinder,
+                    int(1)
+                );
+            }
+        } elseif (asm(s,) uint { length } == 2) {
+            let kid = unsafecast<KvsIIZcell>(s);
+            if (kid.key == key) {
+                if (value == 0) {
+                    return (
+                        unsafecast<KvsIIZnode>(0),
+                        unwinder,
+                        -1s,
+                    );
+                } else {
+                    return (
+                        unsafecast<KvsIIZnode>(kid with { value: value }),
+                        unwinder,
+                        int(0)
+                    );
+                }
+            } else {
+                s = unsafecast<KvsIIZnode>(newfixedarray(8, 0)) with {
+                    [(kid.key/reductionFactor) & 0x7] = kid
+                };
+            }
+        } else {
+            let slot = (key / reductionFactor) & 0x7;
+            unwinder = Some(struct {
+                kvs: s,
+                index: slot,
+                next: unwinder,
+            });
+            s = unsafecast<KvsIIZnode>(s[slot]);
+            reductionFactor = reductionFactor * 8;
+        }
+    }
+}
+
+public func kvsiiz_delete(s: KvsIIZ, key: uint) -> KvsIIZ {
+    return kvsiiz_set(s, key, 0);
+}
+
+public func kvsiiz_forall(
+    s: KvsIIZ,
+    closure: func(uint, uint, any) -> any,
+    state: any
+) -> any {
+    return kvsiiz_forall_tree(s.tree, closure, state);
+}
+
+public func kvsiiz_forall(
+    s: KvsIIZ,
+    closure: func(uint, uint, any) -> any,
+    state: any
+) -> any {
+    return kvsiiz_forall_tree(s.tree, closure, state);
+}
+
+public func kvsiiz_forall_tree(
+    t: KvsIIZnode,
+    closure: func(uint, uint, any) -> any,
+    state: any
+) -> any {
+    if (t == unsafecast<KvsIIZnode>(0)) {
+        return state;
+    } elseif (asm(t,) uint { length } == 2) {
+        return closure(
+            unsafecast<KvsIIZcell>(t).key,
+            unsafecast<KvsIIZcell>(t).value,
+            state
+        );
+   } else {
+        let i = 0;
+        while (i < 8) {
+            state = kvsiiz_forall_tree(unsafecast<KvsIIZnode>(t[i]), closure, state);
+            i = i+1;
+        }
+        return state;
+   }
+}
