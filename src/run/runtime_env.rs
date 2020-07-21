@@ -291,45 +291,49 @@ pub struct ArbosReceipt {
 impl ArbosReceipt {
     pub fn new(arbos_log: Value) -> Self {
         if let Value::Tuple(tup) = arbos_log {
-            if let Value::Tuple(usage_info) = &tup[4] {
-                ArbosReceipt {
-                    request: tup[0].clone(),
-                    request_id: if let Value::Tuple(subtup) = &tup[0] {
-                        if let Value::Int(ui) = &subtup[4] {
+            if let Value::Tuple(return_info) = &tup[1] {
+                if let Value::Tuple(usage_info) = &tup[2] {
+                    ArbosReceipt {
+                        request: tup[0].clone(),
+                        request_id: if let Value::Tuple(subtup) = &tup[0] {
+                            if let Value::Int(ui) = &subtup[4] {
+                                ui.clone()
+                            } else {
+                                panic!()
+                            }
+                        } else {
+                            panic!();
+                        },
+                        return_code: if let Value::Int(ui) = &return_info[0] {
                             ui.clone()
                         } else {
-                            panic!()
-                        }
-                    } else {
-                        panic!();
-                    },
-                    return_code: if let Value::Int(ui) = &tup[1] {
-                        ui.clone()
-                    } else {
-                        panic!();
-                    },
-                    return_data: if let Some(d) = bytes_from_bytestack(tup[2].clone()) {
-                        d
-                    } else {
-                        vec![]
-                    },
-                    evm_logs: tup[3].clone(),
-                    gas_used: if let Value::Int(ui) = &usage_info[0] {
-                        ui.clone()
-                    } else {
-                        Uint256::zero()
-                    },
-                    gas_price_wei: if let Value::Int(ui) = &usage_info[1] {
-                        ui.clone()
-                    } else {
-                        Uint256::zero()
-                    },
+                            panic!();
+                        },
+                        return_data: if let Some(d) = bytes_from_bytestack(return_info[1].clone()) {
+                            d
+                        } else {
+                            vec![]
+                        },
+                        evm_logs: return_info[2].clone(),
+                        gas_used: if let Value::Int(ui) = &usage_info[0] {
+                            ui.clone()
+                        } else {
+                            Uint256::zero()
+                        },
+                        gas_price_wei: if let Value::Int(ui) = &usage_info[1] {
+                            ui.clone()
+                        } else {
+                            Uint256::zero()
+                        },
+                    }
+                } else {
+                    panic!("ArbOS log gas usage field was not a Tuple");
                 }
             } else {
-                panic!("Arbog log gas usage field was not a Tuple");
+                panic!("ArbOS return info field was not a Tuple");
             }
         } else {
-            panic!("Arbos log item was not a Tuple");
+            panic!("ArbOS log item was not a Tuple");
         }
     }
 

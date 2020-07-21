@@ -38,6 +38,12 @@ type GasUsage = struct {
     gasPriceWei: uint,
 }
 
+type TxResultInfo = struct {
+    returnCode: uint,
+    returnData: MarshalledBytes,
+    evmLogs: EvmLogs,
+}
+
 // result codes:
 //    0    return (success)
 //    1    tx reverted
@@ -70,11 +76,14 @@ public impure func emitLog(
         realGasUsage = gu;
     }
 
+    let txResultInfo = struct {
+        returnCode: resultCode,
+        returnData: bytearray_marshalFull(returnData),
+        evmLogs: evmLogs,
+    };
     asm((
         l1message,
-        resultCode,
-        bytearray_marshalFull(returnData),
-        evmLogs,
+        txResultInfo,
         realGasUsage
     ),) { log };
 }
