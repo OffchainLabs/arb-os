@@ -21,6 +21,7 @@ import type EvmLogs;
 import func bytearray_new(capacity: uint) -> ByteArray;
 import func bytearray_marshalFull(ba: ByteArray) -> MarshalledBytes;
 import func evmlogs_empty() -> EvmLogs;
+import func evmlogs_numLogs(logs: EvmLogs) -> uint;
 
 // This is declared identically in messages.mini
 type IncomingRequest = struct {
@@ -42,6 +43,59 @@ type TxResultInfo = struct {
     returnCode: uint,
     returnData: MarshalledBytes,
     evmLogs: EvmLogs,
+    perBlockData: PerBlockReceiptData,
+}
+
+type PerBlockReceiptData = struct {
+    totalGasUsed: uint,
+    numTx: uint,
+    numEvmLogs: uint,
+}
+
+var globalBlockReceiptData: struct {
+    blockNum: uint,
+    data: PerBlockReceiptData
+};
+
+public impure func txReceipts_init() {  // will be called at beginning of main()
+    init_txReceiptsForBlock(0);
+}
+
+impure func init_txReceiptsForBlock(blockNum: uint) {
+    globalBlockReceiptData = struct {
+        blockNum: blockNum,
+        data: struct {
+            totalGasUsed: 0,
+            numTx: 0,
+            numEvmLogs: 0
+        }
+    };
+}
+
+impure func update_txReceiptsForBlock(
+    blockNum: uint,
+    gasUsed: uint,
+    numEvmLogs: uint
+) -> PerBlockReceiptData {
+    if (blockNum > globalBlockReceiptData.blockNum) {
+        init_txReceiptsForBlock(blockNum);
+    }
+
+    // first add in the gas, because returned value is supposed to include it
+    let ret = globalBlockReceiptData.data with {
+        totalGasUsed: gasUsed + globalBlockReceiptData.data.totalGasUsed
+    };
+
+    // now update the accumulated data and write it back
+    globalBlockReceiptData = globalBlockReceiptData with {
+        data: ret with {
+            numTx: ret.numTx + 1
+        } with {
+            numEvmLogs: ret.numEvmLogs + numEvmLogs
+        }
+    };
+
+    return ret;
 }
 
 // result codes:
@@ -84,6 +138,11 @@ public impure func emitLog(
     asm((
         l1message,
         txResultInfo,
-        realGasUsage
+        realGasUsage,
+        update_txReceiptsForBlock(
+            l1message.blockNumber,
+            realGasUsage.gasUsed,
+            evmlogs_numLogs(evmLogs)
+        )
     ),) { log };
 }
