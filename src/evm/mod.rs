@@ -256,18 +256,10 @@ pub fn evm_xcontract_call_using_batch(
     assert_eq!(sends.len(), 0);
 
     assert!(logs[0].succeeded());
-    if let Value::Tuple(subtup) = logs[0].get_request() {
-        assert_eq!(subtup[4], Value::Int(tx_id_1));
-    } else {
-        panic!("malformed log entry");
-    }
+    assert_eq!(logs[0].get_request_id(), tx_id_1);
 
     assert!(logs[1].succeeded());
-    if let Value::Tuple(subtup) = logs[1].get_request() {
-        assert_eq!(subtup[4], Value::Int(tx_id_2));
-    } else {
-        panic!("malformed log entry");
-    }
+    assert_eq!(logs[1].get_request_id(), tx_id_2);
 
     if let Some(path) = log_to {
         machine.runtime_env.recorder.to_file(path).unwrap();
@@ -482,8 +474,8 @@ pub fn mint_erc20_and_get_balance(log_to: Option<&Path>, debug: bool) {
     };
     let logs = machine.runtime_env.get_all_logs();
     assert_eq!(logs.len(), num_logs_before + 2);
-    assert!(logs[logs.len()-2].succeeded());
-    assert!(logs[logs.len()-1].succeeded());
+    assert!(logs[logs.len() - 2].succeeded());
+    assert!(logs[logs.len() - 1].succeeded());
 
     if let Some(path) = log_to {
         machine.runtime_env.recorder.to_file(path).unwrap();
@@ -519,8 +511,8 @@ pub fn mint_erc721_and_get_balance(log_to: Option<&Path>, debug: bool) {
     };
     let logs = machine.runtime_env.get_all_logs();
     assert_eq!(logs.len(), num_logs_before + 2);
-    assert!(logs[logs.len()-2].succeeded());
-    assert!(logs[logs.len()-1].succeeded());
+    assert!(logs[logs.len() - 2].succeeded());
+    assert!(logs[logs.len() - 1].succeeded());
 
     if let Some(path) = log_to {
         machine.runtime_env.recorder.to_file(path).unwrap();
