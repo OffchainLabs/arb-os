@@ -23,6 +23,8 @@ use ethers_signers::{Signer, Wallet};
 use serde::{Deserialize, Serialize};
 use std::convert::TryInto;
 use std::{collections::HashMap, fs::File, io, path::Path};
+use std::io::Read;
+use crate::run::load_from_file;
 
 #[derive(Debug, Clone)]
 pub struct RuntimeEnvironment {
@@ -62,6 +64,10 @@ impl RuntimeEnvironment {
 
     pub fn get_chain_id(&self) -> u64 {
         self.chain_id
+    }
+
+    pub fn insert_full_inbox_contents(&mut self, contents: Value) {
+        self.l1_inbox = contents;
     }
 
     pub fn insert_l1_message(&mut self, msg_type: u8, sender_addr: Uint256, msg: &[u8]) {
@@ -447,6 +453,42 @@ impl RtEnvRecorder {
     pub fn to_file(&self, path: &Path) -> Result<(), io::Error> {
         let mut file = File::create(path).map(|f| Box::new(f) as Box<dyn io::Write>)?;
         writeln!(file, "{}", self.to_json_string()?)
+    }
+
+    pub fn replay_and_compare(&self, debug: bool) -> bool {   // returns true iff result matches
+        let mut rt_env = RuntimeEnvironment::new(Uint256::from_usize(1111));
+        rt_env.insert_full_inbox_contents(self.inbox.clone());
+        let mut machine = load_from_file(Path::new("arb_os/arbos.mexe"), rt_env);
+        machine.start_at_zero();
+        let _arbgas_used = if debug {
+            machine.debug(None)
+        } else {
+            machine.run(None)
+        };
+        if ! (self.logs == machine.runtime_env.recorder.logs) {
+            println!("log mismatch");
+            return false;
+        }
+        if ! (self.sends == machine.runtime_env.recorder.sends) {
+            println!("send mismatch");
+            return false;
+        }
+        return true;
+    }
+}
+
+pub fn replay_from_testlog_file(filename: &str, debug: bool) -> std::io::Result<()> {
+    let mut file = File::open(filename)?;
+    let mut contents = String::new();
+    file.read_to_string(&mut contents)?;
+    let res : Result<RtEnvRecorder, serde_json::error::Error> = serde_json::from_str(&contents);
+    match res {
+        Ok(recorder) => {
+            let success = recorder.replay_and_compare(debug);
+            println!("{}", if success { "success" } else { "mismatch "});
+            Ok(())
+        },
+        Err(e) => panic!("json parsing failed: {}", e),
     }
 }
 
