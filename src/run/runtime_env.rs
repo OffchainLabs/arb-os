@@ -286,17 +286,19 @@ pub struct ArbosReceipt {
     evm_logs: Value,
     gas_used: Uint256,
     gas_price_wei: Uint256,
-    gas_so_far: Uint256,       // gas used so far in L1 block, including this tx
-    index_in_block: Uint256,   // index of this tx in L1 block
-    logs_so_far: Uint256,      // EVM logs emitted so far in L1 block, NOT including this tx
+    gas_so_far: Uint256,     // gas used so far in L1 block, including this tx
+    index_in_block: Uint256, // index of this tx in L1 block
+    logs_so_far: Uint256,    // EVM logs emitted so far in L1 block, NOT including this tx
 }
 
 impl ArbosReceipt {
     pub fn new(arbos_log: Value) -> Self {
         if let Value::Tuple(tup) = arbos_log {
-            let (return_code, return_data, evm_logs) = ArbosReceipt::unpack_return_info(&tup[1]).unwrap();
+            let (return_code, return_data, evm_logs) =
+                ArbosReceipt::unpack_return_info(&tup[1]).unwrap();
             let (gas_used, gas_price_wei) = ArbosReceipt::unpack_gas_info(&tup[2]).unwrap();
-            let (gas_so_far, index_in_block, logs_so_far) = ArbosReceipt::unpack_cumulative_info(&tup[3]).unwrap();
+            let (gas_so_far, index_in_block, logs_so_far) =
+                ArbosReceipt::unpack_cumulative_info(&tup[3]).unwrap();
             ArbosReceipt {
                 request: tup[0].clone(),
                 request_id: if let Value::Tuple(subtup) = &tup[0] {
@@ -339,8 +341,16 @@ impl ArbosReceipt {
     fn unpack_gas_info(val: &Value) -> Option<(Uint256, Uint256)> {
         if let Value::Tuple(tup) = val {
             Some((
-                if let Value::Int(ui) = &tup[0] { ui.clone() } else { return None; },
-                if let Value::Int(ui) = &tup[1] { ui.clone() } else { return None; },
+                if let Value::Int(ui) = &tup[0] {
+                    ui.clone()
+                } else {
+                    return None;
+                },
+                if let Value::Int(ui) = &tup[1] {
+                    ui.clone()
+                } else {
+                    return None;
+                },
             ))
         } else {
             None
@@ -350,9 +360,21 @@ impl ArbosReceipt {
     fn unpack_cumulative_info(val: &Value) -> Option<(Uint256, Uint256, Uint256)> {
         if let Value::Tuple(tup) = val {
             Some((
-                if let Value::Int(ui) = &tup[0] { ui.clone() } else { return None; },
-                if let Value::Int(ui) = &tup[1] { ui.clone() } else { return None; },
-                if let Value::Int(ui) = &tup[2] { ui.clone() } else { return None; },
+                if let Value::Int(ui) = &tup[0] {
+                    ui.clone()
+                } else {
+                    return None;
+                },
+                if let Value::Int(ui) = &tup[1] {
+                    ui.clone()
+                } else {
+                    return None;
+                },
+                if let Value::Int(ui) = &tup[2] {
+                    ui.clone()
+                } else {
+                    return None;
+                },
             ))
         } else {
             None

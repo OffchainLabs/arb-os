@@ -261,7 +261,10 @@ pub fn evm_xcontract_call_using_batch(
 
     assert!(logs[1].succeeded());
     assert_eq!(logs[1].get_request_id(), tx_id_2);
-    assert_eq!(gas_used_so_far_1.add(&logs[1].get_gas_used()), logs[1].get_gas_used_so_far());
+    assert_eq!(
+        gas_used_so_far_1.add(&logs[1].get_gas_used()),
+        logs[1].get_gas_used_so_far()
+    );
 
     if let Some(path) = log_to {
         machine.runtime_env.recorder.to_file(path).unwrap();
