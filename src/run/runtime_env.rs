@@ -302,7 +302,7 @@ pub struct ArbosReceipt {
 impl ArbosReceipt {
     pub fn new(arbos_log: Value) -> Option<Self> {
         if let Value::Tuple(tup) = arbos_log {
-            if ! (tup[0] == Value::Int(Uint256::zero())) {
+            if !(tup[0] == Value::Int(Uint256::zero())) {
                 return None;
             }
             let (return_code, return_data, evm_logs) =
