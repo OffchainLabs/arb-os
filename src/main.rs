@@ -20,7 +20,7 @@ use compile::{compile_from_file, CompileError};
 use contracttemplates::generate_contract_template_file_or_die;
 use link::{link, postlink_compile};
 use mavm::Value;
-use run::{profile_gen_from_file, run_from_file, RuntimeEnvironment, replay_from_testlog_file};
+use run::{profile_gen_from_file, replay_from_testlog_file, run_from_file, RuntimeEnvironment};
 use std::collections::{hash_map::DefaultHasher, HashMap};
 use std::fs::File;
 use std::hash::Hasher;

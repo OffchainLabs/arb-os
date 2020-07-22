@@ -15,6 +15,7 @@
  */
 
 use crate::mavm::Value;
+use crate::run::load_from_file;
 use crate::uint256::Uint256;
 use ethers_core::rand::thread_rng;
 use ethers_core::types::{Transaction, TransactionRequest};
@@ -22,9 +23,8 @@ use ethers_core::utils::keccak256;
 use ethers_signers::{Signer, Wallet};
 use serde::{Deserialize, Serialize};
 use std::convert::TryInto;
-use std::{collections::HashMap, fs::File, io, path::Path};
 use std::io::Read;
-use crate::run::load_from_file;
+use std::{collections::HashMap, fs::File, io, path::Path};
 
 #[derive(Debug, Clone)]
 pub struct RuntimeEnvironment {
@@ -455,7 +455,8 @@ impl RtEnvRecorder {
         writeln!(file, "{}", self.to_json_string()?)
     }
 
-    pub fn replay_and_compare(&self, debug: bool) -> bool {   // returns true iff result matches
+    pub fn replay_and_compare(&self, debug: bool) -> bool {
+        // returns true iff result matches
         let mut rt_env = RuntimeEnvironment::new(Uint256::from_usize(1111));
         rt_env.insert_full_inbox_contents(self.inbox.clone());
         let mut machine = load_from_file(Path::new("arb_os/arbos.mexe"), rt_env);
@@ -465,11 +466,11 @@ impl RtEnvRecorder {
         } else {
             machine.run(None)
         };
-        if ! (self.logs == machine.runtime_env.recorder.logs) {
+        if !(self.logs == machine.runtime_env.recorder.logs) {
             println!("log mismatch");
             return false;
         }
-        if ! (self.sends == machine.runtime_env.recorder.sends) {
+        if !(self.sends == machine.runtime_env.recorder.sends) {
             println!("send mismatch");
             return false;
         }
@@ -493,9 +494,9 @@ pub fn replay_from_testlog_file(filename: &str, debug: bool) -> std::io::Result<
     match res {
         Ok(recorder) => {
             let success = recorder.replay_and_compare(debug);
-            println!("{}", if success { "success" } else { "mismatch "});
+            println!("{}", if success { "success" } else { "mismatch " });
             Ok(())
-        },
+        }
         Err(e) => panic!("json parsing failed: {}", e),
     }
 }
