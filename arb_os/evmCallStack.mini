@@ -98,8 +98,17 @@ import impure func translateEvmCodeSegment(
     bs: ByteStream
 ) -> option<(impure func(), map<uint, impure func()>)>;
 
+import impure func emitLog(
+    l1message: IncomingRequest,
+    resultCode: uint,
+    maybeReturnData: option<ByteArray>,
+    maybeEvmLogs: option<EvmLogs>,
+    gasUsage: option<GasUsage>,
+);
+
 import impure func mainRunLoop();
 
+// This is declared identially in gasAccounting.mini
 type GasUsage = struct {
     gasUsed: uint,
     gasPriceWei: uint,
@@ -544,47 +553,6 @@ public impure func evmCallStack_returnFromCall(
         errorHandler();
         panic;
     }
-}
-
-// result codes:
-//    0    return (success)
-//    1    tx reverted
-//    2    rejected due to congestion
-//    3    insufficient funds to pay for gas
-//    4    insufficient funds for tx payment
-//    5    bad sequence number
-//    6    message format error
-//    255  unknown error
-public impure func emitLog(
-    l1message: IncomingRequest,
-    resultCode: uint,
-    maybeReturnData: option<ByteArray>,
-    maybeEvmLogs: option<EvmLogs>,
-    gasUsage: option<GasUsage>,
-) {
-    let returnData = bytearray_new(0);
-    if let Some(rd) = maybeReturnData {
-        returnData = rd;
-    }
-    let evmLogs = evmlogs_empty();
-    if let Some(el) = maybeEvmLogs {
-        evmLogs = el;
-    }
-    let realGasUsage = struct {
-        gasUsed: 0,
-        gasPriceWei: 0,
-    };
-    if let Some(gu) = gasUsage {
-        realGasUsage = gu;
-    }
-
-    asm((
-        l1message,
-        resultCode,
-        bytearray_marshalFull(returnData),
-        evmLogs,
-        realGasUsage
-    ),) { log };
 }
 
 func saveAvmStack() -> Stack {
