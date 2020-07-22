@@ -467,14 +467,30 @@ impl RtEnvRecorder {
             machine.run(None)
         };
         if !(self.logs == machine.runtime_env.recorder.logs) {
-            println!("log mismatch");
+            print_output_differences("log", self.logs.clone(), machine.runtime_env.recorder.logs);
             return false;
         }
         if !(self.sends == machine.runtime_env.recorder.sends) {
-            println!("send mismatch");
+            print_output_differences("send", self.sends.clone(), machine.runtime_env.recorder.sends);
             return false;
         }
         return true;
+    }
+}
+
+fn print_output_differences(kind: &str, seen: Vec<Value>, expected: Vec<Value>) {
+    if seen.len() != expected.len() {
+        println!("{} mismatch: expected {}, got {}", kind, expected.len(), seen.len());
+        return;
+    } else {
+        for i in 0..(seen.len()) {
+            if ! (seen[i] == expected[i]) {
+                println!("{} {} mismatch:", kind, i);
+                println!("expected: {}", expected[i]);
+                println!("seen: {}", seen[i]);
+                return;
+            }
+        }
     }
 }
 
@@ -483,8 +499,7 @@ pub fn replay_from_testlog_file(filename: &str, debug: bool) -> std::io::Result<
     let mut contents = String::new();
     file.read_to_string(&mut contents)?;
 
-    // need to be tricky about how we deserialize, to avoid serde_json's recursion limit
-    //let res : Result<RtEnvRecorder, serde_json::error::Error> = serde_json::from_str(&contents);
+    // need to be tricky about how we deserialize, to work around serde_json's recursion limit
     let mut deserializer = serde_json::Deserializer::from_str(&contents);
     deserializer.disable_recursion_limit();
     let deserializer = serde_stacker::Deserializer::new(&mut deserializer);
@@ -502,7 +517,16 @@ pub fn replay_from_testlog_file(filename: &str, debug: bool) -> std::io::Result<
 }
 
 #[test]
-fn test_bytestacks() {
+fn logfile_replay_tests() {
+    for entry in std::fs::read_dir(Path::new("./replayTests")).unwrap() {
+        let path = entry.unwrap().path();
+        let name = path.file_name().unwrap();
+        let _ = replay_from_testlog_file(&("./replayTests/".to_owned() + name.to_str().unwrap()), false).unwrap();
+    }
+}
+
+#[test]
+fn test_rust_bytestacks() {
     let before =
         "The quick brown fox jumped over the lazy dog. Lorem ipsum and all that.".as_bytes();
     let bs = bytestack_from_bytes(before);
