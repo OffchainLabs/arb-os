@@ -494,7 +494,7 @@ fn print_output_differences(kind: &str, seen: Vec<Value>, expected: Vec<Value>) 
     }
 }
 
-pub fn replay_from_testlog_file(filename: &str, debug: bool) -> std::io::Result<()> {
+pub fn replay_from_testlog_file(filename: &str, debug: bool) -> std::io::Result<bool> {
     let mut file = File::open(filename)?;
     let mut contents = String::new();
     file.read_to_string(&mut contents)?;
@@ -510,7 +510,7 @@ pub fn replay_from_testlog_file(filename: &str, debug: bool) -> std::io::Result<
         Ok(recorder) => {
             let success = recorder.replay_and_compare(debug);
             println!("{}", if success { "success" } else { "mismatch " });
-            Ok(())
+            Ok(success)
         }
         Err(e) => panic!("json parsing failed: {}", e),
     }
@@ -521,7 +521,7 @@ fn logfile_replay_tests() {
     for entry in std::fs::read_dir(Path::new("./replayTests")).unwrap() {
         let path = entry.unwrap().path();
         let name = path.file_name().unwrap();
-        let _ = replay_from_testlog_file(&("./replayTests/".to_owned() + name.to_str().unwrap()), false).unwrap();
+        assert_eq!(replay_from_testlog_file(&("./replayTests/".to_owned() + name.to_str().unwrap()), false).unwrap(), true);
     }
 }
 
