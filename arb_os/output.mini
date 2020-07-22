@@ -23,6 +23,9 @@ import func bytearray_marshalFull(ba: ByteArray) -> MarshalledBytes;
 import func evmlogs_empty() -> EvmLogs;
 import func evmlogs_numLogs(logs: EvmLogs) -> uint;
 
+import impure func inbox_currentBlockNumber() -> uint;
+
+
 // This is declared identically in messages.mini
 type IncomingRequest = struct {
     kind: uint,               // type of message
@@ -39,16 +42,94 @@ type GasUsage = struct {
     gasPriceWei: uint,
 }
 
+// PerBlockReceiptData is different from OutputStatistics for now; might want to unify
 type PerBlockReceiptData = struct {
     totalGasUsed: uint,
     numTx: uint,
     numEvmLogs: uint,
 }
 
+type OutputStatistics = struct {
+    totalGasUsed: uint,
+    numTx: uint,
+    numEvmLogs: uint,
+    numLogs: uint,
+    numSends: uint,
+}
+
+func outputStats_new() -> OutputStatistics {
+    return struct {
+        totalGasUsed: 0,
+        numTx: 0,
+        numEvmLogs: 0,
+        numLogs: 0,
+        numSends: 0
+    };
+}
+
+func outputStats_allZero(os: OutputStatistics) -> bool {
+    return (os.totalGasUsed + os.numTx + os.numEvmLogs + os.numLogs + os.numSends) == 0;
+}
+
+func outputStats_add(os1: OutputStatistics, os2: OutputStatistics) -> OutputStatistics {
+    return struct {
+        totalGasUsed: os1.totalGasUsed + os2.totalGasUsed,
+        numTx: os1.numTx + os2.numTx,
+        numEvmLogs: os1.numEvmLogs + os2.numEvmLogs,
+        numLogs: os1.numLogs + os2.numLogs,
+        numSends: os1.numSends + os2.numSends,
+    };
+}
+
 var globalBlockReceiptData: struct {
     blockNum: uint,
-    data: PerBlockReceiptData
+    data: PerBlockReceiptData,
+    statsThisBlock: OutputStatistics,
+    statsAllTime: OutputStatistics,
 };
+
+impure func outputStats_updateBlockIfNeeded() {
+    let blockNum = inbox_currentBlockNumber();
+    if (blockNum > globalBlockReceiptData.blockNum) {
+        if ( ! outputStats_allZero(globalBlockReceiptData.statsThisBlock)) {
+            globalBlockReceiptData = globalBlockReceiptData with {
+                statsAllTime: outputStats_add(
+                    globalBlockReceiptData.statsThisBlock,
+                    globalBlockReceiptData.statsAllTime
+                )
+            } with {
+                statsThisBlock: outputStats_new()
+            };
+        }
+        globalBlockReceiptData = globalBlockReceiptData with {
+            blockNum: blockNum
+        };
+    }
+}
+
+impure func outputStats_addTxLog(gasUsed: uint, numEvmLogs: uint) {
+    outputStats_updateBlockIfNeeded();
+    globalBlockReceiptData = globalBlockReceiptData with {
+        statsThisBlock: globalBlockReceiptData.statsThisBlock with {
+            numTx: 1 + globalBlockReceiptData.statsThisBlock.numTx
+        } with {
+            numLogs: 1 + globalBlockReceiptData.statsThisBlock.numLogs
+        } with {
+            totalGasUsed: gasUsed + globalBlockReceiptData.statsThisBlock.totalGasUsed
+        } with {
+            numEvmLogs: numEvmLogs + globalBlockReceiptData.statsThisBlock.numEvmLogs
+        }
+    };
+}
+
+impure func outputStats_addSend() {
+    outputStats_updateBlockIfNeeded();
+    globalBlockReceiptData = globalBlockReceiptData with {
+        statsThisBlock: globalBlockReceiptData.statsThisBlock with {
+            numSends: 1 + globalBlockReceiptData.statsThisBlock.numSends
+        }
+    };
+}
 
 public impure func txReceipts_init() {  // will be called at beginning of main()
     init_txReceiptsForBlock(0);
@@ -61,7 +142,9 @@ impure func init_txReceiptsForBlock(blockNum: uint) {
             totalGasUsed: 0,
             numTx: 0,
             numEvmLogs: 0
-        }
+        },
+        statsThisBlock: outputStats_new(),
+        statsAllTime: outputStats_new(),
     };
 }
 
@@ -70,10 +153,6 @@ impure func update_txReceiptsForBlock(
     gasUsed: uint,
     numEvmLogs: uint
 ) -> PerBlockReceiptData {
-    if (blockNum > globalBlockReceiptData.blockNum) {
-        init_txReceiptsForBlock(blockNum);
-    }
-
     // first add in the gas, because returned value is supposed to include it
     let ret = globalBlockReceiptData.data with {
         totalGasUsed: gasUsed + globalBlockReceiptData.data.totalGasUsed
@@ -107,6 +186,21 @@ public impure func emitLog(
     maybeEvmLogs: option<EvmLogs>,
     gasUsage: option<GasUsage>,
 ) {
+    let realGasUsage = struct {
+        gasUsed: 0,
+        gasPriceWei: 0,
+    };
+    if let Some(gu) = gasUsage {
+        realGasUsage = gu;
+    }
+    let evmLogs = evmlogs_empty();
+    let numEvmLogs = 0;
+    if let Some(el) = maybeEvmLogs {
+        evmLogs = el;
+        numEvmLogs = evmlogs_numLogs(el);
+    }
+    outputStats_addTxLog(realGasUsage.gasUsed, numEvmLogs);
+
     let returnData = bytearray_new(0);
     if let Some(rd) = maybeReturnData {
         returnData = rd;
@@ -114,13 +208,6 @@ public impure func emitLog(
     let evmLogs = evmlogs_empty();
     if let Some(el) = maybeEvmLogs {
         evmLogs = el;
-    }
-    let realGasUsage = struct {
-        gasUsed: 0,
-        gasPriceWei: 0,
-    };
-    if let Some(gu) = gasUsage {
-        realGasUsage = gu;
     }
 
     let txResultInfo = struct {
@@ -136,12 +223,13 @@ public impure func emitLog(
         update_txReceiptsForBlock(
             l1message.blockNumber,
             realGasUsage.gasUsed,
-            evmlogs_numLogs(evmLogs)
+            numEvmLogs,
         )
     ),) { log };
 }
 
 public impure func sendMessage(msgType: uint, sender: address, data: ByteArray) {
+    outputStats_addSend();
     asm(
         (
             msgType,
