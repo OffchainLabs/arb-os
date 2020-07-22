@@ -175,6 +175,12 @@ impure func update_txReceiptsForBlock(
     return ret;
 }
 
+public impure func output_updateTime() {
+    // this should be called if the block number might have advanced
+    // it will push out a block summary log item if that's needed
+    outputStats_updateBlockIfNeeded();
+}
+
 // result codes:
 //    0    return (success)
 //    1    tx reverted
