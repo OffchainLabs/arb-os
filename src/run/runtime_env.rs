@@ -15,6 +15,7 @@
  */
 
 use crate::mavm::Value;
+use crate::run::load_from_file;
 use crate::uint256::Uint256;
 use ethers_core::rand::thread_rng;
 use ethers_core::types::{Transaction, TransactionRequest};
@@ -22,6 +23,7 @@ use ethers_core::utils::keccak256;
 use ethers_signers::{Signer, Wallet};
 use serde::{Deserialize, Serialize};
 use std::convert::TryInto;
+use std::io::Read;
 use std::{collections::HashMap, fs::File, io, path::Path};
 
 #[derive(Debug, Clone)]
@@ -62,6 +64,10 @@ impl RuntimeEnvironment {
 
     pub fn get_chain_id(&self) -> u64 {
         self.chain_id
+    }
+
+    pub fn insert_full_inbox_contents(&mut self, contents: Value) {
+        self.l1_inbox = contents;
     }
 
     pub fn insert_l1_message(&mut self, msg_type: u8, sender_addr: Uint256, msg: &[u8]) {
@@ -598,10 +604,95 @@ impl RtEnvRecorder {
         let mut file = File::create(path).map(|f| Box::new(f) as Box<dyn io::Write>)?;
         writeln!(file, "{}", self.to_json_string()?)
     }
+
+    pub fn replay_and_compare(&self, debug: bool) -> bool {
+        // returns true iff result matches
+        let mut rt_env = RuntimeEnvironment::new(Uint256::from_usize(1111));
+        rt_env.insert_full_inbox_contents(self.inbox.clone());
+        let mut machine = load_from_file(Path::new("arb_os/arbos.mexe"), rt_env);
+        machine.start_at_zero();
+        let _arbgas_used = if debug {
+            machine.debug(None)
+        } else {
+            machine.run(None)
+        };
+        if !(self.logs == machine.runtime_env.recorder.logs) {
+            print_output_differences("log", self.logs.clone(), machine.runtime_env.recorder.logs);
+            return false;
+        }
+        if !(self.sends == machine.runtime_env.recorder.sends) {
+            print_output_differences(
+                "send",
+                self.sends.clone(),
+                machine.runtime_env.recorder.sends,
+            );
+            return false;
+        }
+        return true;
+    }
+}
+
+fn print_output_differences(kind: &str, seen: Vec<Value>, expected: Vec<Value>) {
+    if seen.len() != expected.len() {
+        println!(
+            "{} mismatch: expected {}, got {}",
+            kind,
+            expected.len(),
+            seen.len()
+        );
+        return;
+    } else {
+        for i in 0..(seen.len()) {
+            if !(seen[i] == expected[i]) {
+                println!("{} {} mismatch:", kind, i);
+                println!("expected: {}", expected[i]);
+                println!("seen: {}", seen[i]);
+                return;
+            }
+        }
+    }
+}
+
+pub fn replay_from_testlog_file(filename: &str, debug: bool) -> std::io::Result<bool> {
+    let mut file = File::open(filename)?;
+    let mut contents = String::new();
+    file.read_to_string(&mut contents)?;
+
+    // need to be tricky about how we deserialize, to work around serde_json's recursion limit
+    let mut deserializer = serde_json::Deserializer::from_str(&contents);
+    deserializer.disable_recursion_limit();
+    let deserializer = serde_stacker::Deserializer::new(&mut deserializer);
+    let json_value = serde_json::Value::deserialize(deserializer).unwrap();
+    let res: Result<RtEnvRecorder, serde_json::error::Error> = serde_json::from_value(json_value);
+
+    match res {
+        Ok(recorder) => {
+            let success = recorder.replay_and_compare(debug);
+            println!("{}", if success { "success" } else { "mismatch " });
+            Ok(success)
+        }
+        Err(e) => panic!("json parsing failed: {}", e),
+    }
 }
 
 #[test]
-fn test_bytestacks() {
+fn logfile_replay_tests() {
+    for entry in std::fs::read_dir(Path::new("./replayTests")).unwrap() {
+        let path = entry.unwrap().path();
+        let name = path.file_name().unwrap();
+        assert_eq!(
+            replay_from_testlog_file(
+                &("./replayTests/".to_owned() + name.to_str().unwrap()),
+                false
+            )
+            .unwrap(),
+            true
+        );
+    }
+}
+
+#[test]
+fn test_rust_bytestacks() {
     let before =
         "The quick brown fox jumped over the lazy dog. Lorem ipsum and all that.".as_bytes();
     let bs = bytestack_from_bytes(before);
