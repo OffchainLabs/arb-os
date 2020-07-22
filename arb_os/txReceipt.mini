@@ -33,7 +33,7 @@ type IncomingRequest = struct {
     msgData: MarshalledBytes  // contents of the message, as a marshalled bytearray
 }
 
-// This is declared identially in gasAccounting.mini
+// This is declared identically in gasAccounting.mini
 type GasUsage = struct {
     gasUsed: uint,
     gasPriceWei: uint,
@@ -129,6 +129,7 @@ public impure func emitLog(
         evmLogs: evmLogs,
     };
     asm((
+        0,
         l1message,
         txResultInfo,
         realGasUsage,

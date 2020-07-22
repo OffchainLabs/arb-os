@@ -301,13 +301,13 @@ impl ArbosReceipt {
     pub fn new(arbos_log: Value) -> Self {
         if let Value::Tuple(tup) = arbos_log {
             let (return_code, return_data, evm_logs) =
-                ArbosReceipt::unpack_return_info(&tup[1]).unwrap();
-            let (gas_used, gas_price_wei) = ArbosReceipt::unpack_gas_info(&tup[2]).unwrap();
+                ArbosReceipt::unpack_return_info(&tup[2]).unwrap();
+            let (gas_used, gas_price_wei) = ArbosReceipt::unpack_gas_info(&tup[3]).unwrap();
             let (gas_so_far, index_in_block, logs_so_far) =
-                ArbosReceipt::unpack_cumulative_info(&tup[3]).unwrap();
+                ArbosReceipt::unpack_cumulative_info(&tup[4]).unwrap();
             ArbosReceipt {
-                request: tup[0].clone(),
-                request_id: if let Value::Tuple(subtup) = &tup[0] {
+                request: tup[1].clone(),
+                request_id: if let Value::Tuple(subtup) = &tup[1] {
                     if let Value::Int(ui) = &subtup[4] {
                         ui.clone()
                     } else {
