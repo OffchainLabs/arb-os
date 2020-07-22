@@ -240,14 +240,14 @@ pub fn evm_xcontract_call_using_batch(
         .runtime_env
         .insert_batch_message(Uint256::from_usize(1025), &batch);
 
-    let num_logs_before = machine.runtime_env.get_all_logs().len();
+    let num_logs_before = machine.runtime_env.get_all_receipt_logs().len();
     let num_sends_before = machine.runtime_env.get_all_sends().len();
     let _arbgas_used = if debug {
         machine.debug(None)
     } else {
         machine.run(None)
     };
-    let logs = machine.runtime_env.get_all_logs();
+    let logs = machine.runtime_env.get_all_receipt_logs();
     let sends = machine.runtime_env.get_all_sends();
     let logs = &logs[num_logs_before..];
     let sends = &sends[num_sends_before..];
@@ -471,13 +471,13 @@ pub fn mint_erc20_and_get_balance(log_to: Option<&Path>, debug: bool) {
     let mut machine = load_from_file(Path::new("arb_os/arbos.mexe"), rt_env);
     machine.start_at_zero();
 
-    let num_logs_before = machine.runtime_env.get_all_logs().len();
+    let num_logs_before = machine.runtime_env.get_all_receipt_logs().len();
     let _arbgas_used = if debug {
         machine.debug(None)
     } else {
         machine.run(None)
     };
-    let logs = machine.runtime_env.get_all_logs();
+    let logs = machine.runtime_env.get_all_receipt_logs();
     assert_eq!(logs.len(), num_logs_before + 2);
     assert!(logs[logs.len() - 2].succeeded());
     assert!(logs[logs.len() - 1].succeeded());
@@ -508,13 +508,13 @@ pub fn mint_erc721_and_get_balance(log_to: Option<&Path>, debug: bool) {
     let mut machine = load_from_file(Path::new("arb_os/arbos.mexe"), rt_env);
     machine.start_at_zero();
 
-    let num_logs_before = machine.runtime_env.get_all_logs().len();
+    let num_logs_before = machine.runtime_env.get_all_receipt_logs().len();
     let _arbgas_used = if debug {
         machine.debug(None)
     } else {
         machine.run(None)
     };
-    let logs = machine.runtime_env.get_all_logs();
+    let logs = machine.runtime_env.get_all_receipt_logs();
     assert_eq!(logs.len(), num_logs_before + 2);
     assert!(logs[logs.len() - 2].succeeded());
     assert!(logs[logs.len() - 1].succeeded());

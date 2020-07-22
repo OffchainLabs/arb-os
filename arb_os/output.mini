@@ -89,20 +89,25 @@ var globalBlockReceiptData: struct {
 };
 
 impure func outputStats_updateBlockIfNeeded() {
-    let blockNum = inbox_currentBlockNumber();
-    if (blockNum > globalBlockReceiptData.blockNum) {
+    let oldBlockNum = globalBlockReceiptData.blockNum;
+    let newBlockNum = inbox_currentBlockNumber();
+    if (newBlockNum > oldBlockNum) {
         if ( ! outputStats_allZero(globalBlockReceiptData.statsThisBlock)) {
+            let updatedStats = outputStats_add(
+                globalBlockReceiptData.statsThisBlock,
+                globalBlockReceiptData.statsAllTime
+            );
+            updatedStats = updatedStats with {
+                numLogs: updatedStats.numLogs + 1
+            };
             globalBlockReceiptData = globalBlockReceiptData with {
-                statsAllTime: outputStats_add(
-                    globalBlockReceiptData.statsThisBlock,
-                    globalBlockReceiptData.statsAllTime
-                )
+                statsAllTime: updatedStats
             } with {
                 statsThisBlock: outputStats_new()
             };
         }
         globalBlockReceiptData = globalBlockReceiptData with {
-            blockNum: blockNum
+            blockNum: newBlockNum
         };
     }
 }
@@ -225,6 +230,15 @@ public impure func emitLog(
             realGasUsage.gasUsed,
             numEvmLogs,
         )
+    ),) { log };
+}
+
+impure func emitBlockSummaryLog() {
+    asm((
+        1,
+        globalBlockReceiptData.blockNum,
+        globalBlockReceiptData.statsThisBlock,
+        globalBlockReceiptData.statsAllTime
     ),) { log };
 }
 
