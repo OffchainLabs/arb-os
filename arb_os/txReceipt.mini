@@ -39,13 +39,6 @@ type GasUsage = struct {
     gasPriceWei: uint,
 }
 
-type TxResultInfo = struct {
-    returnCode: uint,
-    returnData: MarshalledBytes,
-    evmLogs: EvmLogs,
-    perBlockData: PerBlockReceiptData,
-}
-
 type PerBlockReceiptData = struct {
     totalGasUsed: uint,
     numTx: uint,
