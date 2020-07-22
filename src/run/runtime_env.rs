@@ -471,7 +471,11 @@ impl RtEnvRecorder {
             return false;
         }
         if !(self.sends == machine.runtime_env.recorder.sends) {
-            print_output_differences("send", self.sends.clone(), machine.runtime_env.recorder.sends);
+            print_output_differences(
+                "send",
+                self.sends.clone(),
+                machine.runtime_env.recorder.sends,
+            );
             return false;
         }
         return true;
@@ -480,11 +484,16 @@ impl RtEnvRecorder {
 
 fn print_output_differences(kind: &str, seen: Vec<Value>, expected: Vec<Value>) {
     if seen.len() != expected.len() {
-        println!("{} mismatch: expected {}, got {}", kind, expected.len(), seen.len());
+        println!(
+            "{} mismatch: expected {}, got {}",
+            kind,
+            expected.len(),
+            seen.len()
+        );
         return;
     } else {
         for i in 0..(seen.len()) {
-            if ! (seen[i] == expected[i]) {
+            if !(seen[i] == expected[i]) {
                 println!("{} {} mismatch:", kind, i);
                 println!("expected: {}", expected[i]);
                 println!("seen: {}", seen[i]);
@@ -521,7 +530,14 @@ fn logfile_replay_tests() {
     for entry in std::fs::read_dir(Path::new("./replayTests")).unwrap() {
         let path = entry.unwrap().path();
         let name = path.file_name().unwrap();
-        assert_eq!(replay_from_testlog_file(&("./replayTests/".to_owned() + name.to_str().unwrap()), false).unwrap(), true);
+        assert_eq!(
+            replay_from_testlog_file(
+                &("./replayTests/".to_owned() + name.to_str().unwrap()),
+                false
+            )
+            .unwrap(),
+            true
+        );
     }
 }
 
