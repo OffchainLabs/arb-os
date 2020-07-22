@@ -82,7 +82,7 @@ $(BUILTINDIR)/kvs.mao: $(BUILTINDIR)/kvs.mini
 	$(CARGORUN) compile $(BUILTINDIR)/kvs.mini -c -o $(BUILTINDIR)/kvs.mao
 
 ARBOSDIR = arb_os
-ARBOSAOS = $(ARBOSDIR)/main.mao $(ARBOSDIR)/accounts.mao $(ARBOSDIR)/messages.mao $(ARBOSDIR)/inbox.mao $(ARBOSDIR)/evmCallStack.mao $(ARBOSDIR)/evmOps.mao $(ARBOSDIR)/codeSegment.mao $(ARBOSDIR)/evmlogs.mao $(ARBOSDIR)/errorHandler.mao $(ARBOSDIR)/gasAccounting.mao $(ARBOSDIR)/contractTemplates.mao $(ARBOSDIR)/tokens.mao $(ARBOSDIR)/arbsys.mao $(ARBOSDIR)/messageBatch.mao $(ARBOSDIR)/chainParameters.mao $(ARBOSDIR)/precompiles.mao $(ARBOSDIR)/signedTx.mao $(ARBOSDIR)/txReceipt.mao
+ARBOSAOS = $(ARBOSDIR)/main.mao $(ARBOSDIR)/accounts.mao $(ARBOSDIR)/messages.mao $(ARBOSDIR)/inbox.mao $(ARBOSDIR)/evmCallStack.mao $(ARBOSDIR)/evmOps.mao $(ARBOSDIR)/codeSegment.mao $(ARBOSDIR)/evmlogs.mao $(ARBOSDIR)/errorHandler.mao $(ARBOSDIR)/gasAccounting.mao $(ARBOSDIR)/contractTemplates.mao $(ARBOSDIR)/tokens.mao $(ARBOSDIR)/arbsys.mao $(ARBOSDIR)/messageBatch.mao $(ARBOSDIR)/chainParameters.mao $(ARBOSDIR)/precompiles.mao $(ARBOSDIR)/signedTx.mao $(ARBOSDIR)/output.mao
 ARBOS = $(ARBOSDIR)/arbos.mexe
 
 arbos: $(ARBOS)
@@ -141,8 +141,8 @@ $(ARBOSDIR)/precompiles.mao: $(ARBOSDIR)/precompiles.mini
 $(ARBOSDIR)/signedTx.mao: $(ARBOSDIR)/signedTx.mini
 	$(CARGORUN) compile $(ARBOSDIR)/signedTx.mini -c -o $(ARBOSDIR)/signedTx.mao
 
-$(ARBOSDIR)/txReceipt.mao: $(ARBOSDIR)/txReceipt.mini
-	$(CARGORUN) compile $(ARBOSDIR)/txReceipt.mini -c -o $(ARBOSDIR)/txReceipt.mao
+$(ARBOSDIR)/output.mao: $(ARBOSDIR)/output.mini
+	$(CARGORUN) compile $(ARBOSDIR)/output.mini -c -o $(ARBOSDIR)/output.mao
 
 $(ARBOS): $(ARBOSAOS) $(STDLIB) $(BUILTINMAOS)
 	$(CARGORUN) compile $(ARBOSAOS) $(STDLIB) -o $(ARBOS)

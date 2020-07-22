@@ -140,3 +140,13 @@ public impure func emitLog(
         )
     ),) { log };
 }
+
+public impure func sendMessage(msgType: uint, sender: address, data: ByteArray) {
+    asm(
+        (
+            msgType,
+            uint(sender),
+            bytearray_marshalFull(data),
+        ),
+    ) { send };
+}
