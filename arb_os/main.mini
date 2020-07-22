@@ -20,6 +20,7 @@ import type ByteArray;
 import type ByteStream;
 import type IncomingRequest;
 import type EvmLogs;
+import type GasUsage;
 
 import impure func errorHandler_init();
 import impure func initKeccakConstants();
@@ -29,6 +30,7 @@ import impure func evmCallStack_init();
 import impure func inbox_init();
 import impure func accountStore_init();
 import impure func precompiles_init(acctStore: AccountStore) -> option<AccountStore>;
+import impure func txReceipts_init();
 
 import impure func getGlobalAccountStore() -> AccountStore;
 import impure func setGlobalAccountStore(acctStore: AccountStore);
@@ -77,8 +79,7 @@ import impure func emitLog(
     resultCode: uint,
     maybeReturnData: option<ByteArray>,
     maybeEvmLogs: option<EvmLogs>,
-    gasUsed: uint,
-    gasPrice: uint,
+    gasUsage: option<GasUsage>,
 );
 import impure func arbsys_txcall();
 
@@ -91,6 +92,7 @@ impure func main() {
     evmCallStack_init();
     inbox_init();
     accountStore_init();
+    txReceipts_init();
     if (initializeContractTemplates() == None<()>) {
         panic;   // don't try to run without contract templates
     }
@@ -104,11 +106,11 @@ public impure func mainRunLoop() {
         if (approved) {
             if (handleIncomingRequest(msg, maxGas, gasPrice) == None<()>) {
                 // reject for message format error
-                emitLog(msg, 6, None<ByteArray>, None<EvmLogs>, 0, 0);
+                emitLog(msg, 6, None<ByteArray>, None<EvmLogs>, None<GasUsage>);
             }
         } else {
             // reject for congestion error
-            emitLog(msg, 2, None<ByteArray>, None<EvmLogs>, 0, 0);
+            emitLog(msg, 2, None<ByteArray>, None<EvmLogs>, None<GasUsage>);
         }
         // if we reach here, message has already been rejected and log already sent
     }

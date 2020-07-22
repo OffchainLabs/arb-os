@@ -23,7 +23,7 @@ use std::{fs::File, io::Read, path::Path};
 
 pub use emulator::Machine;
 pub use runtime_env::{
-    bytes_from_bytestack, bytestack_from_bytes, RuntimeEnvironment, TxBatch, TxBatchType,
+    bytes_from_bytestack, bytestack_from_bytes, ArbosReceipt, RuntimeEnvironment, TxBatch, TxBatchType,
 };
 
 mod emulator;
@@ -95,7 +95,7 @@ pub fn run(
 ) -> Result<Vec<Value>, (ExecutionError, StackTrace)> {
     // We use PC 1 here because PC pushes an unwanted value--designed for a different entry ABI
     match machine.test_call(CodePt::new_internal(1), args, debug) {
-        Ok(_stack) => Ok(machine.runtime_env.get_all_logs()),
+        Ok(_stack) => Ok(machine.runtime_env.get_all_raw_logs()),
         Err(e) => Err((e, machine.get_stack_trace())),
     }
 }
