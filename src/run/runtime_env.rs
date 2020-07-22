@@ -481,7 +481,15 @@ pub fn replay_from_testlog_file(filename: &str, debug: bool) -> std::io::Result<
     let mut file = File::open(filename)?;
     let mut contents = String::new();
     file.read_to_string(&mut contents)?;
-    let res : Result<RtEnvRecorder, serde_json::error::Error> = serde_json::from_str(&contents);
+
+    // need to be tricky about how we deserialize, to avoid serde_json's recursion limit
+    //let res : Result<RtEnvRecorder, serde_json::error::Error> = serde_json::from_str(&contents);
+    let mut deserializer = serde_json::Deserializer::from_str(&contents);
+    deserializer.disable_recursion_limit();
+    let deserializer = serde_stacker::Deserializer::new(&mut deserializer);
+    let json_value = serde_json::Value::deserialize(deserializer).unwrap();
+    let res: Result<RtEnvRecorder, serde_json::error::Error> = serde_json::from_value(json_value);
+
     match res {
         Ok(recorder) => {
             let success = recorder.replay_and_compare(debug);
