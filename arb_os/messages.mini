@@ -20,6 +20,7 @@ import type MarshalledBytes;
 import type AccountStore;
 import type Account;
 import type EvmLogs;
+import type StorageMap;
 
 import impure func getGlobalAccountStore() -> AccountStore;
 import impure func setGlobalAccountStore(acctStore: AccountStore);
@@ -37,7 +38,7 @@ import func accountStore_createAccountFromEvmCode(
     evmCode: ByteArray,
     evmJumpTable: map<uint, impure func()>,
     startCodePt: impure func(),
-    storageMap: map<uint, uint>
+    storageMap: StorageMap
 ) -> option<AccountStore>;
 import func account_checkAndIncrSeqNum(
     account: Account, 

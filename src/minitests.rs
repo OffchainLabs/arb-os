@@ -60,8 +60,8 @@ fn test_kvstest() {
 }
 
 #[test]
-fn test_kvsiiz() {
-    let path = Path::new("stdlib/kvsiiztest.mexe");
+fn test_storage_map() {
+    let path = Path::new("stdlib/storageMapTest.mexe");
     let res = run_from_file(
         path,
         vec![],

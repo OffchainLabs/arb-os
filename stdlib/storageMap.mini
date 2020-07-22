@@ -14,42 +14,44 @@
 // limitations under the License.
 //
 
-type KvsIIZ = struct {
-    tree: KvsIIZnode,
+type StorageMap = struct {
+    tree: StorageMapNode,
     size: uint,
 }
 
-type KvsIIZnode = [8]any
+type StorageMapNode = [8]any
 
-type KvsIIZcell = struct {
+type StorageMapCell = struct {
     key: uint,
     value: uint,
 }
 
 
-public func kvsiiz_new() -> KvsIIZ {
+public func storageMap_new() -> StorageMap {
     return struct {
-        tree: unsafecast<KvsIIZnode>(0),
+        tree: unsafecast<StorageMapNode>(0),
         size: 0,
     };
 }
 
-public func kvsiiz_size(kvs: KvsIIZ) -> uint {
+public func storageMap_size(kvs: StorageMap) -> uint {
     return kvs.size;
 }
 
-public func kvsiiz_get(kvs: KvsIIZ, key: uint) -> uint {
+public func storageMap_get(kvs: StorageMap, key: uint) -> uint {
     let s = kvs.tree;
     let reductionFactor = 1;
     loop {
-        if (s == unsafecast<KvsIIZnode>(0)) {
+        if (s == unsafecast<StorageMapNode>(0)) {
             return 0;
         } elseif (asm(s,) uint { length } == 2) {
-            if (key == unsafecast<KvsIIZcell>(s).key) {
-                return unsafecast<KvsIIZcell>(s).value;
+            if (key == unsafecast<StorageMapCell>(s).key) {
+                return unsafecast<StorageMapCell>(s).value;
+            } else {
+                return 0;
             }
         } else {
-            s = unsafecast<KvsIIZnode>(s[(key/reductionFactor) & 0x7]);
+            s = unsafecast<StorageMapNode>(s[(key/reductionFactor) & 0x7]);
             reductionFactor = reductionFactor * 8;
         }
     }
@@ -61,8 +63,8 @@ type Unwinder = struct {
     next: option<any>,   // really option<Unwinder>, but compiler doesn't do recursive types
 }
 
-public func kvsiiz_set(s: KvsIIZ, key: uint, value: uint) -> KvsIIZ {
-    let (utree, maybeUnwinder, delta) = kvsiiz_set2(s.tree, key, value);
+public func storageMap_set(s: StorageMap, key: uint, value: uint) -> StorageMap {
+    let (utree, maybeUnwinder, delta) = storageMap_set2(s.tree, key, value);
     loop {
         if let Some(unwinder) = maybeUnwinder {
             utree = unwinder.kvs with {
@@ -78,16 +80,16 @@ public func kvsiiz_set(s: KvsIIZ, key: uint, value: uint) -> KvsIIZ {
     }
 }
 
-public func kvsiiz_set2(s: KvsIIZnode, key: uint, value: uint) -> (KvsIIZnode, option<Unwinder>, int) {
+public func storageMap_set2(s: StorageMapNode, key: uint, value: uint) -> (StorageMapNode, option<Unwinder>, int) {
     let reductionFactor = 1;
     let unwinder = None<Unwinder>;
     loop {
-        if (s == unsafecast<KvsIIZnode>(0)) {
+        if (s == unsafecast<StorageMapNode>(0)) {
             if (value == 0) {
                 return (s, unwinder, int(0));
             } else {
                 return (
-                    unsafecast<KvsIIZnode>(
+                    unsafecast<StorageMapNode>(
                         struct {
                             key: key,
                             value: value
@@ -98,23 +100,23 @@ public func kvsiiz_set2(s: KvsIIZnode, key: uint, value: uint) -> (KvsIIZnode, o
                 );
             }
         } elseif (asm(s,) uint { length } == 2) {
-            let kid = unsafecast<KvsIIZcell>(s);
+            let kid = unsafecast<StorageMapCell>(s);
             if (kid.key == key) {
                 if (value == 0) {
                     return (
-                        unsafecast<KvsIIZnode>(0),
+                        unsafecast<StorageMapNode>(0),
                         unwinder,
                         -1s,
                     );
                 } else {
                     return (
-                        unsafecast<KvsIIZnode>(kid with { value: value }),
+                        unsafecast<StorageMapNode>(kid with { value: value }),
                         unwinder,
                         int(0)
                     );
                 }
             } else {
-                s = unsafecast<KvsIIZnode>(newfixedarray(8, 0)) with {
+                s = unsafecast<StorageMapNode>(newfixedarray(8, 0)) with {
                     [(kid.key/reductionFactor) & 0x7] = kid
                 };
             }
@@ -125,49 +127,49 @@ public func kvsiiz_set2(s: KvsIIZnode, key: uint, value: uint) -> (KvsIIZnode, o
                 index: slot,
                 next: unwinder,
             });
-            s = unsafecast<KvsIIZnode>(s[slot]);
+            s = unsafecast<StorageMapNode>(s[slot]);
             reductionFactor = reductionFactor * 8;
         }
     }
 }
 
-public func kvsiiz_delete(s: KvsIIZ, key: uint) -> KvsIIZ {
-    return kvsiiz_set(s, key, 0);
+public func storageMap_delete(s: StorageMap, key: uint) -> StorageMap {
+    return storageMap_set(s, key, 0);
 }
 
-public func kvsiiz_forall(
-    s: KvsIIZ,
+public func storageMap_forall(
+    s: StorageMap,
     closure: func(uint, uint, any) -> any,
     state: any
 ) -> any {
-    return kvsiiz_forall_tree(s.tree, closure, state);
+    return storageMap_forall_tree(s.tree, closure, state);
 }
 
-public func kvsiiz_forall(
-    s: KvsIIZ,
+public func storageMap_forall(
+    s: StorageMap,
     closure: func(uint, uint, any) -> any,
     state: any
 ) -> any {
-    return kvsiiz_forall_tree(s.tree, closure, state);
+    return storageMap_forall_tree(s.tree, closure, state);
 }
 
-public func kvsiiz_forall_tree(
-    t: KvsIIZnode,
+public func storageMap_forall_tree(
+    t: StorageMapNode,
     closure: func(uint, uint, any) -> any,
     state: any
 ) -> any {
-    if (t == unsafecast<KvsIIZnode>(0)) {
+    if (t == unsafecast<StorageMapNode>(0)) {
         return state;
     } elseif (asm(t,) uint { length } == 2) {
         return closure(
-            unsafecast<KvsIIZcell>(t).key,
-            unsafecast<KvsIIZcell>(t).value,
+            unsafecast<StorageMapCell>(t).key,
+            unsafecast<StorageMapCell>(t).value,
             state
         );
    } else {
         let i = 0;
         while (i < 8) {
-            state = kvsiiz_forall_tree(unsafecast<KvsIIZnode>(t[i]), closure, state);
+            state = storageMap_forall_tree(unsafecast<StorageMapNode>(t[i]), closure, state);
             i = i+1;
         }
         return state;

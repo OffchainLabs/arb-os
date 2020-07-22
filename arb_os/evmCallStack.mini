@@ -23,6 +23,7 @@ import type ByteArray;
 import type ByteStream;
 import type MarshalledBytes;
 import type Stack;
+import type StorageMap;
 
 import impure func errorHandler();
 
@@ -50,14 +51,14 @@ import func account_setStorageCell(acct: Account, offset: uint, value: uint) -> 
 import func account_getBalance(acct: Account) -> uint;
 import func account_setBalance(acct: Account, bal: uint) -> Account;
 import func account_deductFromEthBalance(account: Account, deduction: uint) -> option<Account>;
-import func account_getAllStorage(account: Account) -> option<map<uint, uint>>;
+import func account_getAllStorage(account: Account) -> option<StorageMap>;
 import func account_getStartCodePoint(account: Account) -> option<impure func()>;
 import func account_setContractInfo(
     acct: Account,
     code: ByteArray,
     evmJumpTable: map<uint, impure func()>,
     startCodePoint: impure func(),
-    storage: map<uint, uint>
+    storage: StorageMap
 ) -> Account;
 import func account_fetchAndIncrSeqNum(account: Account) -> (uint, Account);
 import func pristineAccount(addr: address) -> Account;
@@ -75,6 +76,8 @@ import func bytearray_copy(
 ) -> ByteArray;
 import func bytearray_set256(ba: ByteArray, offset: uint, value: uint) -> ByteArray;
 import func bytestream_new(ba: ByteArray) -> ByteStream;
+
+import func storageMap_new() -> StorageMap;
 
 import func queue_new() -> Queue;
 import func queue_isEmpty(q: Queue) -> bool;
@@ -240,7 +243,7 @@ public impure func initEvmCallStackForConstructor(
             code,
             evmJumpTable,
             startPoint,
-            newmap<uint, uint>
+            storageMap_new()
         )
     );
     if let Some(uas) = accountStore_transferEthBalance(acctStore, caller, addr, value) {
@@ -436,7 +439,7 @@ public impure func evmCallStack_returnFromCall(
                     let (entryPoint, evmJumpTable) = res;
 
                     // Use the storage left over by the constructor.
-                    let storageMap = newmap<uint, uint>;
+                    let storageMap = storageMap_new();
                     if let Some(sm) = account_getAllStorage(topFrame.runningAsAccount) {
                         storageMap = sm;
                     } else {
