@@ -30,6 +30,7 @@ import impure func evmCallStack_init();
 import impure func inbox_init();
 import impure func accountStore_init();
 import impure func precompiles_init(acctStore: AccountStore) -> option<AccountStore>;
+import impure func txReceipts_init();
 
 import impure func getGlobalAccountStore() -> AccountStore;
 import impure func setGlobalAccountStore(acctStore: AccountStore);
@@ -91,6 +92,7 @@ impure func main() {
     evmCallStack_init();
     inbox_init();
     accountStore_init();
+    txReceipts_init();
     if (initializeContractTemplates() == None<()>) {
         panic;   // don't try to run without contract templates
     }

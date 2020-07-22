@@ -255,8 +255,16 @@ impl RuntimeEnvironment {
         self.recorder.add_log(log_item);
     }
 
-    pub fn get_all_logs(&self) -> Vec<Value> {
+    pub fn get_all_raw_logs(&self) -> Vec<Value> {
         self.logs.clone()
+    }
+
+    pub fn get_all_logs(&self) -> Vec<ArbosReceipt> {
+        self.logs
+            .clone()
+            .into_iter()
+            .map(|log| ArbosReceipt::new(log))
+            .collect()
     }
 
     pub fn push_send(&mut self, send_item: Value) {
@@ -266,6 +274,148 @@ impl RuntimeEnvironment {
 
     pub fn get_all_sends(&self) -> Vec<Value> {
         self.sends.clone()
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct ArbosReceipt {
+    request: Value,
+    request_id: Uint256,
+    return_code: Uint256,
+    return_data: Vec<u8>,
+    evm_logs: Value,
+    gas_used: Uint256,
+    gas_price_wei: Uint256,
+    gas_so_far: Uint256,     // gas used so far in L1 block, including this tx
+    index_in_block: Uint256, // index of this tx in L1 block
+    logs_so_far: Uint256,    // EVM logs emitted so far in L1 block, NOT including this tx
+}
+
+impl ArbosReceipt {
+    pub fn new(arbos_log: Value) -> Self {
+        if let Value::Tuple(tup) = arbos_log {
+            let (return_code, return_data, evm_logs) =
+                ArbosReceipt::unpack_return_info(&tup[1]).unwrap();
+            let (gas_used, gas_price_wei) = ArbosReceipt::unpack_gas_info(&tup[2]).unwrap();
+            let (gas_so_far, index_in_block, logs_so_far) =
+                ArbosReceipt::unpack_cumulative_info(&tup[3]).unwrap();
+            ArbosReceipt {
+                request: tup[0].clone(),
+                request_id: if let Value::Tuple(subtup) = &tup[0] {
+                    if let Value::Int(ui) = &subtup[4] {
+                        ui.clone()
+                    } else {
+                        panic!()
+                    }
+                } else {
+                    panic!();
+                },
+                return_code,
+                return_data,
+                evm_logs,
+                gas_used,
+                gas_price_wei,
+                gas_so_far,
+                index_in_block,
+                logs_so_far,
+            }
+        } else {
+            panic!("ArbOS log item was not a Tuple");
+        }
+    }
+
+    fn unpack_return_info(val: &Value) -> Option<(Uint256, Vec<u8>, Value)> {
+        if let Value::Tuple(tup) = val {
+            let return_code = if let Value::Int(ui) = &tup[0] {
+                ui
+            } else {
+                return None;
+            };
+            let return_data = bytes_from_bytestack(tup[1].clone())?;
+            Some((return_code.clone(), return_data, tup[2].clone()))
+        } else {
+            None
+        }
+    }
+
+    fn unpack_gas_info(val: &Value) -> Option<(Uint256, Uint256)> {
+        if let Value::Tuple(tup) = val {
+            Some((
+                if let Value::Int(ui) = &tup[0] {
+                    ui.clone()
+                } else {
+                    return None;
+                },
+                if let Value::Int(ui) = &tup[1] {
+                    ui.clone()
+                } else {
+                    return None;
+                },
+            ))
+        } else {
+            None
+        }
+    }
+
+    fn unpack_cumulative_info(val: &Value) -> Option<(Uint256, Uint256, Uint256)> {
+        if let Value::Tuple(tup) = val {
+            Some((
+                if let Value::Int(ui) = &tup[0] {
+                    ui.clone()
+                } else {
+                    return None;
+                },
+                if let Value::Int(ui) = &tup[1] {
+                    ui.clone()
+                } else {
+                    return None;
+                },
+                if let Value::Int(ui) = &tup[2] {
+                    ui.clone()
+                } else {
+                    return None;
+                },
+            ))
+        } else {
+            None
+        }
+    }
+
+    pub fn get_request(&self) -> Value {
+        self.request.clone()
+    }
+
+    pub fn get_request_id(&self) -> Uint256 {
+        self.request_id.clone()
+    }
+
+    pub fn _get_block_number(&self) -> Uint256 {
+        if let Value::Tuple(tup) = self.get_request() {
+            if let Value::Int(bn) = &tup[1] {
+                return bn.clone();
+            }
+        }
+        panic!("Malformed request info in tx receipt");
+    }
+
+    pub fn get_return_code(&self) -> Uint256 {
+        self.return_code.clone()
+    }
+
+    pub fn succeeded(&self) -> bool {
+        self.get_return_code() == Uint256::zero()
+    }
+
+    pub fn get_return_data(&self) -> Vec<u8> {
+        self.return_data.clone()
+    }
+
+    pub fn get_gas_used(&self) -> Uint256 {
+        self.gas_used.clone()
+    }
+
+    pub fn get_gas_used_so_far(&self) -> Uint256 {
+        self.gas_so_far.clone()
     }
 }
 
