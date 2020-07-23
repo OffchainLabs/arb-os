@@ -20,6 +20,7 @@ import type EvmLogs;
 import type ByteArray;
 import type ByteStream;
 import type MarshalledBytes;
+import type StorageMap;
 
 import impure func errorHandler();
 
@@ -65,7 +66,7 @@ import func account_getCodeSize(acct: Account) -> uint;
 import func account_getBalance(acct: Account) -> uint;
 import func account_getCode(acct: Account) -> option<ByteArray>;
 import func account_getStorageCell(acct: Account, offset: uint) -> option<uint>;
-import func account_getAllStorage(account: Account) -> option<map<uint, uint>>;
+import func account_getAllStorage(account: Account) -> option<StorageMap>;
 import func account_getEvmJumpTable(acct: Account) -> option<map<uint, impure func()>>;
 import func account_fetchAndIncrSeqNum(account: Account) -> (uint, Account);
 import func account_setContractInfo(
@@ -73,10 +74,12 @@ import func account_setContractInfo(
     code: ByteArray,
     evmJumpTable: map<uint, impure func()>,
     startCodePoint: impure func(),
-    storage: map<uint, uint>
+    storage: StorageMap
 ) -> Account;
 import func account_isEmpty(acct: Account) -> bool;
 import func pristineAccount(addr: address) -> Account;
+
+import func storageMap_new() -> StorageMap;
 
 import impure func inbox_currentTimestamp() -> uint;
 import impure func inbox_currentBlockNumber() -> uint;
@@ -784,7 +787,7 @@ impure func doCreationOpcode(value: uint, offset: uint, length: uint, newAddress
                     constructorCode,
                     evmJumpTable,
                     startPoint,
-                    newmap<uint, uint>
+                    storageMap_new()
                 )
             )
         ) {
@@ -875,7 +878,7 @@ impure func doCreationOpcode(value: uint, offset: uint, length: uint, newAddress
                     if let Some(res) = translateEvmCodeSegment(bytestream_new(contractCode)) {
                         let (startPoint2, evmJumpTable2) = res;
                         if let Some(oldAcct) = evmCallStack_getAccount(newAddress) {
-                            let storage = newmap<uint, uint>;
+                            let storage = storageMap_new();
                             if let Some(st) = account_getAllStorage(oldAcct) {
                                 storage = st;
                             }

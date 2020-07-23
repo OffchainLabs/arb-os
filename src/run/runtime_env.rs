@@ -610,7 +610,7 @@ impl RtEnvRecorder {
         writeln!(file, "{}", self.to_json_string()?)
     }
 
-    pub fn replay_and_compare(&self, debug: bool) -> bool {
+    pub fn replay_and_compare(&self, require_same_gas: bool, debug: bool) -> bool {
         // returns true iff result matches
         let mut rt_env = RuntimeEnvironment::new(Uint256::from_usize(1111));
         rt_env.insert_full_inbox_contents(self.inbox.clone());
@@ -621,7 +621,28 @@ impl RtEnvRecorder {
         } else {
             machine.run(None)
         };
-        if !(self.logs == machine.runtime_env.recorder.logs) {
+        let logs_expected = if require_same_gas {
+            self.logs.clone()
+        } else {
+            self.logs
+                .clone()
+                .into_iter()
+                .map(strip_var_from_log)
+                .collect()
+        };
+        let logs_seen = if require_same_gas {
+            machine.runtime_env.recorder.logs.clone()
+        } else {
+            machine
+                .runtime_env
+                .recorder
+                .logs
+                .clone()
+                .into_iter()
+                .map(strip_var_from_log)
+                .collect()
+        };
+        if !(logs_expected == logs_seen) {
             print_output_differences("log", self.logs.clone(), machine.runtime_env.recorder.logs);
             return false;
         }
@@ -634,6 +655,59 @@ impl RtEnvRecorder {
             return false;
         }
         return true;
+    }
+}
+
+fn strip_var_from_log(log: Value) -> Value {
+    // strip from a log item all info that might legitimately vary as ArbOS evolves (e.g. gas usage)
+    if let Value::Tuple(tup) = log {
+        if let Value::Int(item_type) = tup[0].clone() {
+            if item_type == Uint256::zero() {
+                // Tx receipt log item
+                Value::new_tuple(vec![
+                    tup[0].clone(),
+                    tup[1].clone(),
+                    tup[2].clone(),
+                    // skip tup[3] because it's all about gas usage
+                    zero_item_in_tuple(tup[4].clone(), 0),
+                ])
+            } else if item_type == Uint256::one() {
+                // block summary log item
+                Value::new_tuple(vec![
+                    tup[0].clone(),
+                    tup[1].clone(),
+                    tup[2].clone(),
+                    // skip tup[3] because it's all about gas usage
+                    zero_item_in_tuple(tup[4].clone(), 0),
+                    zero_item_in_tuple(tup[5].clone(), 0),
+                ])
+            } else {
+                panic!("unrecognized log item type {}", item_type);
+            }
+        } else {
+            panic!("log item type is not integer: {}", tup[0]);
+        }
+    } else {
+        panic!("malformed log item");
+    }
+}
+
+fn zero_item_in_tuple(in_val: Value, index: usize) -> Value {
+    if let Value::Tuple(tup) = in_val {
+        Value::new_tuple(
+            tup.iter()
+                .enumerate()
+                .map(|(i, v)| {
+                    if i == index {
+                        Value::Int(Uint256::zero())
+                    } else {
+                        v.clone()
+                    }
+                })
+                .collect(),
+        )
+    } else {
+        panic!("malformed inner tuple in log item");
     }
 }
 
@@ -658,7 +732,11 @@ fn print_output_differences(kind: &str, seen: Vec<Value>, expected: Vec<Value>) 
     }
 }
 
-pub fn replay_from_testlog_file(filename: &str, debug: bool) -> std::io::Result<bool> {
+pub fn replay_from_testlog_file(
+    filename: &str,
+    require_same_gas: bool,
+    debug: bool,
+) -> std::io::Result<bool> {
     let mut file = File::open(filename)?;
     let mut contents = String::new();
     file.read_to_string(&mut contents)?;
@@ -672,7 +750,7 @@ pub fn replay_from_testlog_file(filename: &str, debug: bool) -> std::io::Result<
 
     match res {
         Ok(recorder) => {
-            let success = recorder.replay_and_compare(debug);
+            let success = recorder.replay_and_compare(require_same_gas, debug);
             println!("{}", if success { "success" } else { "mismatch " });
             Ok(success)
         }
@@ -688,6 +766,7 @@ fn logfile_replay_tests() {
         assert_eq!(
             replay_from_testlog_file(
                 &("./replayTests/".to_owned() + name.to_str().unwrap()),
+                false,
                 false
             )
             .unwrap(),

@@ -79,8 +79,6 @@ public impure func translateSignedTx(req: MessageFromL1) -> option<MessageFromL1
         req with {
             sender: signer
         } with {
-            msgData: bytearray_marshalFull(newL2message)
-        } with {
             inboxSeqNum: uint(rlpHash)
         }
     );
