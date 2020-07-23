@@ -23,7 +23,7 @@ use std::{fs::File, io::Read, path::Path};
 
 pub use emulator::Machine;
 pub use runtime_env::{
-    bytes_from_bytestack, bytestack_from_bytes, ArbosReceipt, RuntimeEnvironment, TxBatch, TxBatchType,
+    bytes_from_bytestack, bytestack_from_bytes, replay_from_testlog_file, ArbosReceipt, RuntimeEnvironment, TxBatch, TxBatchType,
 };
 
 mod emulator;
