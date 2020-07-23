@@ -59,6 +59,7 @@ public func storageMap_size(kvs: StorageMap) -> uint {
 }
 
 public func storageMap_get(kvs: StorageMap, key: uint) -> uint {
+    let walkingKey = uint(hash(key));
     let s = kvs.tree;
     let reductionFactor = 1;
     loop {
@@ -74,7 +75,7 @@ public func storageMap_get(kvs: StorageMap, key: uint) -> uint {
             }
         } else {
             // still at an internal node of the tree; walk downward and try again
-            s = unsafecast<StorageMapNode>(s[(key/reductionFactor) & 0x7]);
+            s = unsafecast<StorageMapNode>(s[(walkingKey/reductionFactor) & 0x7]);
             reductionFactor = reductionFactor * 8;
         }
     }
@@ -107,7 +108,12 @@ public func storageMap_set(s: StorageMap, key: uint, value: uint) -> StorageMap 
     }
 }
 
-public func storageMap_set2(s: StorageMapNode, key: uint, value: uint) -> (StorageMapNode, option<Unwinder>, int) {
+public func storageMap_set2(
+    s: StorageMapNode,
+    key: uint,
+    value: uint
+) -> (StorageMapNode, option<Unwinder>, int) {
+    let walkingKey = uint(hash(key));
     let reductionFactor = 1;
     let unwinder = None<Unwinder>;
     loop {
@@ -152,14 +158,14 @@ public func storageMap_set2(s: StorageMapNode, key: uint, value: uint) -> (Stora
                 // create new internal node and push singleton into it
                 // then loop back and try again
                 s = unsafecast<StorageMapNode>(newfixedarray(8, 0)) with {
-                    [(kid.key/reductionFactor) & 0x7] = kid
+                    [(uint(hash(kid.key))/reductionFactor) & 0x7] = kid
                 };
             }
         } else {
             // traversing an internal node
             // update the unwinder so we know what to do on the way back up
             // then move one level down the tree
-            let slot = (key / reductionFactor) & 0x7;
+            let slot = (walkingKey / reductionFactor) & 0x7;
             unwinder = Some(struct {
                 kvs: s,
                 index: slot,
