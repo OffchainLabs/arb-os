@@ -771,7 +771,7 @@ impl RtEnvRecorder {
 
     pub fn replay_and_compare(&self, debug: bool) -> bool {
         // returns true iff result matches
-        let mut rt_env = RuntimeEnvironment::new(Uint256::from_usize(1111));
+        let mut rt_env = RuntimeEnvironment::new(Uint256::from_usize(1111), None);
         rt_env.insert_full_inbox_contents(self.inbox.clone());
         let mut machine = load_from_file(Path::new("arb_os/arbos.mexe"), rt_env);
         machine.start_at_zero();

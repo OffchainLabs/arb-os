@@ -16,8 +16,7 @@ mod runtime_env; /*
 
 use crate::mavm::Value;
 use crate::run::{
-    bytes_from_bytestack, bytestack_from_bytes, load_from_file, RuntimeEnvironment, TxBatch,
-    TxBatchType,
+    bytestack_from_bytes, load_from_file, ArbosReceipt, RuntimeEnvironment, TxBatch, TxBatchType,
 };
 use crate::uint256::Uint256;
 use abi::AbiForContract;
@@ -558,45 +557,33 @@ pub fn evm_test_sequencer_support(log_to: Option<&Path>, debug: bool) -> Result<
 }
 
 pub fn assert_log_result(
-    log_item: &Value,
+    log_item: &ArbosReceipt,
     return_code: Option<u64>,    // None means to assert success (0)
     request_id: Option<Uint256>, // None means don't check
     first_return_val: Option<(&Function, &Uint256)>, // None means don't check
 ) {
-    if let Value::Tuple(tup) = log_item {
-        // verify return code
+    assert_eq!(
+        log_item.get_return_code(),
+        if let Some(rc) = return_code {
+            Uint256::from_u64(rc)
+        } else {
+            Uint256::zero()
+        }
+    );
+
+    if let Some(req_id) = request_id {
+        assert_eq!(log_item.get_request_id(), req_id);
+    }
+
+    // verify first return value
+    if let Some((function, expected_val)) = first_return_val {
+        let actual_val = function
+            .decode_output(&log_item.get_return_data().clone())
+            .unwrap();
         assert_eq!(
-            tup[1],
-            Value::Int(if let Some(rc) = return_code {
-                Uint256::from_u64(rc)
-            } else {
-                Uint256::zero()
-            })
+            actual_val[0],
+            ethabi::Token::Uint(ethabi::Uint::from_big_endian(&expected_val.to_bytes_be()))
         );
-
-        // verify request id
-        if let Some(req_id) = &request_id {
-            if let Value::Tuple(subtup) = &tup[0] {
-                if let Value::Int(ui) = &subtup[4] {
-                    assert_eq!(req_id, ui);
-                } else {
-                    panic!("RequestID in log is not an integer");
-                }
-            } else {
-                panic!("Malformed request info in log");
-            }
-        }
-
-        // verify first return value
-        if let Some((function, expected_val)) = first_return_val {
-            let actual_val = function
-                .decode_output(&bytes_from_bytestack(tup[2].clone()).unwrap())
-                .unwrap();
-            assert_eq!(
-                actual_val[0],
-                ethabi::Token::Uint(ethabi::Uint::from_big_endian(&expected_val.to_bytes_be()))
-            );
-        }
     }
 }
 
