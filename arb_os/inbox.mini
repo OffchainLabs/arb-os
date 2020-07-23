@@ -155,6 +155,7 @@ impure func getFromSequencer(qToFill: Queue, inQ: Queue, seqInfo: SequencerInfo)
         if let Some(res) = releaseFromQueueByBlockNum(
             seqInfo.delayQueue,
             qToFill,
+            seqInfo.blocksOfDelay,
             releasePoint,
             inMsg.blockNumber,
             inMsg.timestamp
@@ -177,6 +178,7 @@ impure func getFromSequencer(qToFill: Queue, inQ: Queue, seqInfo: SequencerInfo)
             if let Some(res) = releaseFromQueueByBlockNum(
                 seqInfo.delayQueue,
                 qToFill,
+                seqInfo.blocksOfDelay,
                 releasePoint,
                 inMsg.blockNumber,
                 inMsg.timestamp
@@ -209,9 +211,10 @@ impure func getFromSequencer(qToFill: Queue, inQ: Queue, seqInfo: SequencerInfo)
 func releaseFromQueueByBlockNum(
     inQueue: Queue,
     outQueue: Queue,
-    blockNumToRelease: uint,   // release messages this old, or older
-    assignBlockNum: uint,      // assign this block number to released messages
-    assignTimestamp: uint      // assign this timestamp to released messages
+    maxDelay: uint,             // maximum blocks of delay to impose on any message
+    blockNumToRelease: uint,    // release messages this old, or older
+    knownBlockNumber: uint,     // most recent known block number
+    knownTimestamp: uint,       // most recent known timestamp
 ) -> option<(Queue, Queue)> {
     let anyChange = false;
     let moreToDo = true;
@@ -219,6 +222,18 @@ func releaseFromQueueByBlockNum(
         let nextMsg = unsafecast<IncomingRequest>(queue_peek(inQueue)?);   // won't return None because we know queue is nonempty
         if (nextMsg.blockNumber <= blockNumToRelease) {
             anyChange = true;
+            let assignBlockNum = knownBlockNumber;
+            let assignTimestamp = knownTimestamp;
+            if (assignBlockNum > (nextMsg.blockNumber + maxDelay)) {
+                assignTimestamp = linearInterpolate(
+                    nextMsg.blockNumber,
+                    nextMsg.timestamp,
+                    knownBlockNumber,
+                    knownTimestamp,
+                    nextMsg.blockNumber+maxDelay
+                );
+                assignBlockNum = nextMsg.blockNumber + maxDelay;
+            }
             nextMsg = nextMsg with {
                 blockNumber: assignBlockNum
             } with {
@@ -236,6 +251,14 @@ func releaseFromQueueByBlockNum(
         return Some((inQueue, outQueue));
     } else {
         return None;
+    }
+}
+
+func linearInterpolate(x1: uint, y1: uint, x2: uint, y2: uint, x: uint) -> uint {
+    if (x1 == x2) {
+        return y1;
+    } else {
+        return y1 + (x-x1)*(y2-y1)/(x2-x1);
     }
 }
 

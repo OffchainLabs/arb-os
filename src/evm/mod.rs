@@ -536,7 +536,7 @@ pub fn evm_test_sequencer_support(log_to: Option<&Path>, debug: bool) -> Result<
         Some(tx_id_1),
         Some((
             contract.get_function("currentBlockNum")?,
-            &Uint256::from_u64(14),
+            &Uint256::from_u64(13),
         )),
     );
     assert_log_result(
@@ -690,7 +690,7 @@ pub fn make_logs_for_all_arbos_tests() {
         false,
     );
     let _ = evm_test_sequencer_support(
-        Some(Path::new("testlogs/evm_test_sequencer_support")),
+        Some(Path::new("testlogs/evm_test_sequencer_support.aoslog")),
         false,
     );
     evm_test_arbsys(Some(Path::new("testlogs/evm_test_arbsys.aoslog")), false);
