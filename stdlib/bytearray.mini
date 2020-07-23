@@ -68,21 +68,17 @@ type MarshalledBytesCell = struct {
 }
 
 public func marshalledBytes_firstByte(mb: MarshalledBytes) -> uint {
-    return bytearray_getByte(bytearray_unmarshalBytes(mb), 0);
+    let nbytes = mb.nbytes;
+    let contents = mb.contents;
+    if (nbytes < 1) {
+        return 0;
+    }
+    while (nbytes > 32) {
+        contents = unsafecast<MarshalledBytesCell>(contents.rest);
+        nbytes = nbytes-32;
+    }
+    return contents.first / asm(2, 248) uint { exp };
 }
-
-//public func marshalledBytes_firstByte(mb: MarshalledBytes) -> uint {
-//    let nbytes = mb.nbytes;
-//    let contents = mb.contents;
-//    if (nbytes < 1) {
-//        return 0;
-//    }
-//    while (nbytes > 32) {
-//        contents = unsafecast<MarshalledBytesCell>(contents.rest);
-//        nbytes = nbytes-32;
-//    }
-//    return contents.first / asm(2, 248) uint { exp };
-//}
 
 public func marshalledBytes_hash(mb: MarshalledBytes) -> bytes32 {
     // This is an easy-to-compute cryptographic hash of a MarshalledBytes
