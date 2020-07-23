@@ -219,16 +219,16 @@ public impure func initEvmCallStack(
             } else {
                 if let Some(gasUsage) = gasAccounting_endTxCharges() {
                     // insufficient balance error
-                    emitLog(ethMessage, 4, None<ByteArray>, None<EvmLogs>, Some(gasUsage));
+                    emitLog(incomingRequest, 4, None<ByteArray>, None<EvmLogs>, Some(gasUsage));
                 } else {
                     // unknown error type
-                    emitLog(ethMessage, 255, None<ByteArray>, None<EvmLogs>, None<GasUsage>);
+                    emitLog(incomingRequest, 255, None<ByteArray>, None<EvmLogs>, None<GasUsage>);
                 }
                 evmCallStack_callHitError();
             }
         } else {
             // can't pay for gas error
-            emitLog(ethMessage, 3, None<ByteArray>, None<EvmLogs>, None<GasUsage>);
+            emitLog(incomingRequest, 3, None<ByteArray>, None<EvmLogs>, None<GasUsage>);
             evmCallStack_callHitError();
         }
     }
@@ -290,7 +290,7 @@ public impure func initEvmCallStackForConstructor(
         }
     } else {
         // can't pay for gas error
-        emitLog(ethMessage, 3, None<ByteArray>, None<EvmLogs>, None<GasUsage>);
+        emitLog(incomingRequest, 3, None<ByteArray>, None<EvmLogs>, None<GasUsage>);
         evmCallStack_callHitError();  // should never return
         panic;
     }
