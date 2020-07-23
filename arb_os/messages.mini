@@ -97,6 +97,7 @@ import func bytearray_new(capacity: uint) -> ByteArray;
 import func bytearray_size(ba: ByteArray) -> uint;
 import func bytearray_unmarshalBytes(mb: MarshalledBytes) -> ByteArray;
 import func bytearray_marshalFull(ba: ByteArray) -> MarshalledBytes;
+import func bytearray_extract(ba: ByteArray, offset: uint, nbytes: uint) -> ByteArray;
 
 import func bytestream_new(ba: ByteArray) -> ByteStream;
 import func bytestream_getByte(bs: ByteStream) -> option<(ByteStream, uint)>;
@@ -242,7 +243,7 @@ impure func handleL2Message(
     inStream = bytestream_skipBytes(inStream, 64)?;
 
     let sequenceNum = (~0);  // impossible value for sequence number
-    if (msgType == 0) {
+    if ((msgType == 0) || (msgType == 4)){
         let(bs, sn) = bytestream_get256(inStream)?;
         inStream = bs;
         sequenceNum = sn;
@@ -259,7 +260,7 @@ impure func handleL2Message(
 
     // Get value of Eth payment that accompanies the message.
     let value = 0;
-    if ( (msgType==0) || (msgType==1) ) {
+    if ( (msgType==0) || (msgType==1) || (msgType==4) ) {
         let (bs, val) = bytestream_get256(inStream)?;
         inStream = bs;
         value = val;
@@ -300,6 +301,14 @@ impure func handleL2Message(
         }
 
         let remainingCallData = bytestream_getRemainingBytes(inStream); // remaining bytes of message, to be passed to contract as calldata
+        if (msgType == 4) {
+            // strip off signature from end of calldata
+            remainingCallData = bytearray_extract(
+                remainingCallData,
+                0,
+                bytearray_size(remainingCallData)-65
+            );
+        }
         initEvmCallStack(
             callKind,
             fullMsg,

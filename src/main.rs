@@ -266,7 +266,7 @@ fn main() -> Result<(), CompileError> {
     if let Some(matches) = matches.subcommand_matches("replay") {
         let path = matches.value_of("INPUT").unwrap();
         let debug = matches.is_present("debug");
-        if let Err(e) = replay_from_testlog_file(path, debug) {
+        if let Err(e) = replay_from_testlog_file(path, true, debug) {
             panic!("Error reading from {}: {}", path, e);
         }
     }
