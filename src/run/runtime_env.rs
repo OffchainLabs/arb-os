@@ -15,6 +15,7 @@
  */
 
 use crate::mavm::Value;
+use crate::run::load_from_file;
 use crate::uint256::Uint256;
 use ethers_core::rand::thread_rng;
 use ethers_core::types::{Transaction, TransactionRequest};
@@ -22,6 +23,7 @@ use ethers_core::utils::keccak256;
 use ethers_signers::{Signer, Wallet};
 use serde::{Deserialize, Serialize};
 use std::convert::TryInto;
+use std::io::Read;
 use std::{collections::HashMap, fs::File, io, path::Path};
 
 #[derive(Debug, Clone)]
@@ -62,6 +64,10 @@ impl RuntimeEnvironment {
 
     pub fn get_chain_id(&self) -> u64 {
         self.chain_id
+    }
+
+    pub fn insert_full_inbox_contents(&mut self, contents: Value) {
+        self.l1_inbox = contents;
     }
 
     pub fn insert_l1_message(&mut self, msg_type: u8, sender_addr: Uint256, msg: &[u8]) {
@@ -285,8 +291,16 @@ impl RuntimeEnvironment {
         self.recorder.add_log(log_item);
     }
 
-    pub fn get_all_logs(&self) -> Vec<Value> {
+    pub fn get_all_raw_logs(&self) -> Vec<Value> {
         self.logs.clone()
+    }
+
+    pub fn get_all_logs(&self) -> Vec<ArbosReceipt> {
+        self.logs
+            .clone()
+            .into_iter()
+            .map(|log| ArbosReceipt::new(log))
+            .collect()
     }
 
     pub fn push_send(&mut self, send_item: Value) {
@@ -296,6 +310,148 @@ impl RuntimeEnvironment {
 
     pub fn get_all_sends(&self) -> Vec<Value> {
         self.sends.clone()
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct ArbosReceipt {
+    request: Value,
+    request_id: Uint256,
+    return_code: Uint256,
+    return_data: Vec<u8>,
+    evm_logs: Value,
+    gas_used: Uint256,
+    gas_price_wei: Uint256,
+    gas_so_far: Uint256,     // gas used so far in L1 block, including this tx
+    index_in_block: Uint256, // index of this tx in L1 block
+    logs_so_far: Uint256,    // EVM logs emitted so far in L1 block, NOT including this tx
+}
+
+impl ArbosReceipt {
+    pub fn new(arbos_log: Value) -> Self {
+        if let Value::Tuple(tup) = arbos_log {
+            let (return_code, return_data, evm_logs) =
+                ArbosReceipt::unpack_return_info(&tup[1]).unwrap();
+            let (gas_used, gas_price_wei) = ArbosReceipt::unpack_gas_info(&tup[2]).unwrap();
+            let (gas_so_far, index_in_block, logs_so_far) =
+                ArbosReceipt::unpack_cumulative_info(&tup[3]).unwrap();
+            ArbosReceipt {
+                request: tup[0].clone(),
+                request_id: if let Value::Tuple(subtup) = &tup[0] {
+                    if let Value::Int(ui) = &subtup[4] {
+                        ui.clone()
+                    } else {
+                        panic!()
+                    }
+                } else {
+                    panic!();
+                },
+                return_code,
+                return_data,
+                evm_logs,
+                gas_used,
+                gas_price_wei,
+                gas_so_far,
+                index_in_block,
+                logs_so_far,
+            }
+        } else {
+            panic!("ArbOS log item was not a Tuple");
+        }
+    }
+
+    fn unpack_return_info(val: &Value) -> Option<(Uint256, Vec<u8>, Value)> {
+        if let Value::Tuple(tup) = val {
+            let return_code = if let Value::Int(ui) = &tup[0] {
+                ui
+            } else {
+                return None;
+            };
+            let return_data = bytes_from_bytestack(tup[1].clone())?;
+            Some((return_code.clone(), return_data, tup[2].clone()))
+        } else {
+            None
+        }
+    }
+
+    fn unpack_gas_info(val: &Value) -> Option<(Uint256, Uint256)> {
+        if let Value::Tuple(tup) = val {
+            Some((
+                if let Value::Int(ui) = &tup[0] {
+                    ui.clone()
+                } else {
+                    return None;
+                },
+                if let Value::Int(ui) = &tup[1] {
+                    ui.clone()
+                } else {
+                    return None;
+                },
+            ))
+        } else {
+            None
+        }
+    }
+
+    fn unpack_cumulative_info(val: &Value) -> Option<(Uint256, Uint256, Uint256)> {
+        if let Value::Tuple(tup) = val {
+            Some((
+                if let Value::Int(ui) = &tup[0] {
+                    ui.clone()
+                } else {
+                    return None;
+                },
+                if let Value::Int(ui) = &tup[1] {
+                    ui.clone()
+                } else {
+                    return None;
+                },
+                if let Value::Int(ui) = &tup[2] {
+                    ui.clone()
+                } else {
+                    return None;
+                },
+            ))
+        } else {
+            None
+        }
+    }
+
+    pub fn get_request(&self) -> Value {
+        self.request.clone()
+    }
+
+    pub fn get_request_id(&self) -> Uint256 {
+        self.request_id.clone()
+    }
+
+    pub fn _get_block_number(&self) -> Uint256 {
+        if let Value::Tuple(tup) = self.get_request() {
+            if let Value::Int(bn) = &tup[1] {
+                return bn.clone();
+            }
+        }
+        panic!("Malformed request info in tx receipt");
+    }
+
+    pub fn get_return_code(&self) -> Uint256 {
+        self.return_code.clone()
+    }
+
+    pub fn succeeded(&self) -> bool {
+        self.get_return_code() == Uint256::zero()
+    }
+
+    pub fn get_return_data(&self) -> Vec<u8> {
+        self.return_data.clone()
+    }
+
+    pub fn get_gas_used(&self) -> Uint256 {
+        self.gas_used.clone()
+    }
+
+    pub fn get_gas_used_so_far(&self) -> Uint256 {
+        self.gas_so_far.clone()
     }
 }
 
@@ -478,10 +634,174 @@ impl RtEnvRecorder {
         let mut file = File::create(path).map(|f| Box::new(f) as Box<dyn io::Write>)?;
         writeln!(file, "{}", self.to_json_string()?)
     }
+
+    pub fn replay_and_compare(&self, require_same_gas: bool, debug: bool) -> bool {
+        // returns true iff result matches
+        let mut rt_env = RuntimeEnvironment::new(Uint256::from_usize(1111));
+        rt_env.insert_full_inbox_contents(self.inbox.clone());
+        let mut machine = load_from_file(Path::new("arb_os/arbos.mexe"), rt_env);
+        machine.start_at_zero();
+        let _arbgas_used = if debug {
+            machine.debug(None)
+        } else {
+            machine.run(None)
+        };
+        let logs_expected = if require_same_gas {
+            self.logs.clone()
+        } else {
+            self.logs
+                .clone()
+                .into_iter()
+                .map(strip_var_from_log)
+                .collect()
+        };
+        let logs_seen = if require_same_gas {
+            machine.runtime_env.recorder.logs.clone()
+        } else {
+            machine
+                .runtime_env
+                .recorder
+                .logs
+                .clone()
+                .into_iter()
+                .map(strip_var_from_log)
+                .collect()
+        };
+        if !(logs_expected == logs_seen) {
+            print_output_differences("log", self.logs.clone(), machine.runtime_env.recorder.logs);
+            return false;
+        }
+        if !(self.sends == machine.runtime_env.recorder.sends) {
+            print_output_differences(
+                "send",
+                self.sends.clone(),
+                machine.runtime_env.recorder.sends,
+            );
+            return false;
+        }
+        return true;
+    }
+}
+
+fn strip_var_from_log(log: Value) -> Value {
+    // strip from a log item all info that might legitimately vary as ArbOS evolves (e.g. gas usage)
+    if let Value::Tuple(tup) = log {
+        if let Value::Int(item_type) = tup[0].clone() {
+            if item_type == Uint256::zero() {
+                // Tx receipt log item
+                Value::new_tuple(vec![
+                    tup[0].clone(),
+                    tup[1].clone(),
+                    tup[2].clone(),
+                    // skip tup[3] because it's all about gas usage
+                    zero_item_in_tuple(tup[4].clone(), 0),
+                ])
+            } else if item_type == Uint256::one() {
+                // block summary log item
+                Value::new_tuple(vec![
+                    tup[0].clone(),
+                    tup[1].clone(),
+                    tup[2].clone(),
+                    // skip tup[3] because it's all about gas usage
+                    zero_item_in_tuple(tup[4].clone(), 0),
+                    zero_item_in_tuple(tup[5].clone(), 0),
+                ])
+            } else {
+                panic!("unrecognized log item type {}", item_type);
+            }
+        } else {
+            panic!("log item type is not integer: {}", tup[0]);
+        }
+    } else {
+        panic!("malformed log item");
+    }
+}
+
+fn zero_item_in_tuple(in_val: Value, index: usize) -> Value {
+    if let Value::Tuple(tup) = in_val {
+        Value::new_tuple(
+            tup.iter()
+                .enumerate()
+                .map(|(i, v)| {
+                    if i == index {
+                        Value::Int(Uint256::zero())
+                    } else {
+                        v.clone()
+                    }
+                })
+                .collect(),
+        )
+    } else {
+        panic!("malformed inner tuple in log item");
+    }
+}
+
+fn print_output_differences(kind: &str, seen: Vec<Value>, expected: Vec<Value>) {
+    if seen.len() != expected.len() {
+        println!(
+            "{} mismatch: expected {}, got {}",
+            kind,
+            expected.len(),
+            seen.len()
+        );
+        return;
+    } else {
+        for i in 0..(seen.len()) {
+            if !(seen[i] == expected[i]) {
+                println!("{} {} mismatch:", kind, i);
+                println!("expected: {}", expected[i]);
+                println!("seen: {}", seen[i]);
+                return;
+            }
+        }
+    }
+}
+
+pub fn replay_from_testlog_file(
+    filename: &str,
+    require_same_gas: bool,
+    debug: bool,
+) -> std::io::Result<bool> {
+    let mut file = File::open(filename)?;
+    let mut contents = String::new();
+    file.read_to_string(&mut contents)?;
+
+    // need to be tricky about how we deserialize, to work around serde_json's recursion limit
+    let mut deserializer = serde_json::Deserializer::from_str(&contents);
+    deserializer.disable_recursion_limit();
+    let deserializer = serde_stacker::Deserializer::new(&mut deserializer);
+    let json_value = serde_json::Value::deserialize(deserializer).unwrap();
+    let res: Result<RtEnvRecorder, serde_json::error::Error> = serde_json::from_value(json_value);
+
+    match res {
+        Ok(recorder) => {
+            let success = recorder.replay_and_compare(require_same_gas, debug);
+            println!("{}", if success { "success" } else { "mismatch " });
+            Ok(success)
+        }
+        Err(e) => panic!("json parsing failed: {}", e),
+    }
 }
 
 #[test]
-fn test_bytestacks() {
+fn logfile_replay_tests() {
+    for entry in std::fs::read_dir(Path::new("./replayTests")).unwrap() {
+        let path = entry.unwrap().path();
+        let name = path.file_name().unwrap();
+        assert_eq!(
+            replay_from_testlog_file(
+                &("./replayTests/".to_owned() + name.to_str().unwrap()),
+                false,
+                false
+            )
+            .unwrap(),
+            true
+        );
+    }
+}
+
+#[test]
+fn test_rust_bytestacks() {
     let before =
         "The quick brown fox jumped over the lazy dog. Lorem ipsum and all that.".as_bytes();
     let bs = bytestack_from_bytes(before);

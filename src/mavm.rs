@@ -589,7 +589,7 @@ impl Opcode {
             "bitwiseneg" => Opcode::AVMOpcode(AVMOpcode::BitwiseNeg),
             "hash" => Opcode::AVMOpcode(AVMOpcode::Hash),
             "hash2" => Opcode::AVMOpcode(AVMOpcode::Hash2),
-            "length" => Opcode::Len,
+            "length" => Opcode::AVMOpcode(AVMOpcode::Tlen),
             "plus" => Opcode::AVMOpcode(AVMOpcode::Plus),
             "minus" => Opcode::AVMOpcode(AVMOpcode::Minus),
             "mul" => Opcode::AVMOpcode(AVMOpcode::Mul),

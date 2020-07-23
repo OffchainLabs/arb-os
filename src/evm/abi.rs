@@ -15,7 +15,7 @@
  */
 
 use crate::mavm::Value;
-use crate::run::{bytes_from_bytestack, Machine};
+use crate::run::{ArbosReceipt, Machine};
 use crate::uint256::Uint256;
 use ethers_signers::Wallet;
 use std::{fs::File, io::Read, path::Path};
@@ -174,20 +174,17 @@ impl AbiForContract {
             }
         }
 
-        if let Value::Tuple(tup) = &logs[logs.len() - 1] {
-            assert_eq!(tup[1], Value::Int(Uint256::zero()));
-            if let Value::Tuple(tup2) = &tup[0] {
-                assert_eq!(tup2[4], Value::Int(request_id));
-            } else {
-                println!("Malformed ArbOS log item");
-                return None;
-            }
-            let buf = bytes_from_bytestack(tup[2].clone())?;
-            self.address = Uint256::from_bytes(&buf);
-            Some(self.address.clone())
+        let log_item = &logs[logs.len() - 1];
+        assert!(log_item.succeeded());
+        if let Value::Tuple(tup2) = log_item.get_request() {
+            assert_eq!(tup2[4], Value::Int(request_id));
         } else {
-            None
+            println!("Malformed ArbOS log item");
+            return None;
         }
+        let buf = log_item.get_return_data();
+        self.address = Uint256::from_bytes(&buf);
+        Some(self.address.clone())
     }
 
     pub fn get_function(&self, name: &str) -> Result<&ethabi::Function, ethabi::Error> {
@@ -202,7 +199,7 @@ impl AbiForContract {
         machine: &mut Machine,
         payment: Uint256,
         debug: bool,
-    ) -> Result<(Vec<Value>, Vec<Value>), ethabi::Error> {
+    ) -> Result<(Vec<ArbosReceipt>, Vec<Value>), ethabi::Error> {
         let this_function = self.contract.function(func_name)?;
         let calldata = this_function.encode_input(args).unwrap();
 
