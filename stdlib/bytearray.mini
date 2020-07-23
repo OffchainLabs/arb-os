@@ -162,7 +162,6 @@ public func bytearray_setByte(ba: ByteArray, offset: uint, val: uint) -> ByteArr
 
 // bytearray_get64 reads a chunk of 8 bytes from a ByteArray 
 public func bytearray_get64(ba: ByteArray, offset: uint) -> uint {
-    return bytearray_get256(ba, offset) / 0x1000000000000000000000000000000000000000000000000;
     let alignment = offset % 32;
     if (alignment <= 24) {
         let res = ba.contents[offset/32];
