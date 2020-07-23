@@ -15,7 +15,7 @@
  */
 
 use crate::mavm::Value;
-use crate::run::{bytes_from_bytestack, bytestack_from_bytes, load_from_file, RuntimeEnvironment};
+use crate::run::{bytestack_from_bytes, load_from_file, RuntimeEnvironment};
 use crate::uint256::Uint256;
 use abi::AbiForContract;
 use ethers_signers::Signer;
@@ -82,9 +82,7 @@ pub fn evm_xcontract_call_with_constructors(
     )?;
     assert_eq!(logs.len(), 1);
     assert_eq!(sends.len(), 0);
-    if let Value::Tuple(tup) = &logs[0] {
-        assert_eq!(tup[1], Value::Int(Uint256::zero()));
-    }
+    assert!(logs[0].succeeded());
 
     let (logs, sends) = pc_contract.call_function(
         my_addr,
@@ -100,9 +98,7 @@ pub fn evm_xcontract_call_with_constructors(
     )?;
     assert_eq!(logs.len(), 1);
     assert_eq!(sends.len(), 0);
-    if let Value::Tuple(tup) = &logs[0] {
-        assert_eq!(tup[1], Value::Int(Uint256::zero()));
-    }
+    assert!(logs[0].succeeded());
 
     if let Some(path) = log_to {
         machine.runtime_env.recorder.to_file(path).unwrap();
@@ -161,9 +157,7 @@ pub fn evm_test_create(
     )?;
     assert_eq!(logs.len(), 1);
     assert_eq!(sends.len(), 0);
-    if let Value::Tuple(tup) = &logs[0] {
-        assert_eq!(tup[1], Value::Int(Uint256::zero()));
-    }
+    assert!(logs[0].succeeded());
 
     if let Some(path) = log_to {
         machine.runtime_env.recorder.to_file(path).unwrap();
@@ -217,7 +211,7 @@ pub fn evm_xcontract_call_using_batch(
     }
 
     let mut batch = machine.runtime_env.new_batch();
-    pc_contract.add_function_call_to_batch(
+    let tx_id_1 = pc_contract.add_function_call_to_batch(
         &mut batch,
         my_addr.clone(),
         "deposit",
@@ -226,7 +220,7 @@ pub fn evm_xcontract_call_using_batch(
         Uint256::from_usize(10000),
         &wallet,
     )?;
-    pc_contract.add_function_call_to_batch(
+    let tx_id_2 = pc_contract.add_function_call_to_batch(
         &mut batch,
         my_addr.clone(),
         "transferFib",
@@ -260,12 +254,17 @@ pub fn evm_xcontract_call_using_batch(
 
     assert_eq!(logs.len(), 2);
     assert_eq!(sends.len(), 0);
-    if let Value::Tuple(tup) = &logs[0] {
-        assert_eq!(tup[1], Value::Int(Uint256::zero()));
-    }
-    if let Value::Tuple(tup) = &logs[1] {
-        assert_eq!(tup[1], Value::Int(Uint256::zero()));
-    }
+
+    assert!(logs[0].succeeded());
+    assert_eq!(logs[0].get_request_id(), tx_id_1);
+    let gas_used_so_far_1 = logs[0].get_gas_used_so_far();
+
+    assert!(logs[1].succeeded());
+    assert_eq!(logs[1].get_request_id(), tx_id_2);
+    assert_eq!(
+        gas_used_so_far_1.add(&logs[1].get_gas_used()),
+        logs[1].get_gas_used_so_far()
+    );
 
     if let Some(path) = log_to {
         machine.runtime_env.recorder.to_file(path).unwrap();
@@ -342,27 +341,16 @@ pub fn evm_test_arbsys(log_to: Option<&Path>, debug: bool) {
         Ok((logs, sends)) => {
             assert_eq!(logs.len(), 1);
             assert_eq!(sends.len(), 0);
-            if let Value::Tuple(tup) = &logs[0] {
-                assert_eq!(tup[1], Value::Int(Uint256::zero()));
-                match bytes_from_bytestack(tup[2].clone()) {
-                    Some(result_bytes) => {
-                        let decoded_result = contract
-                            .get_function("getSeqNum")
-                            .unwrap()
-                            .decode_output(&result_bytes)
-                            .unwrap();
-                        assert_eq!(
-                            decoded_result[0],
-                            ethabi::Token::Uint(ethabi::Uint::try_from(2).unwrap())
-                        );
-                    }
-                    None => {
-                        panic!("malformed result bytestack");
-                    }
-                }
-            } else {
-                panic!("malformed log return");
-            }
+            assert!(logs[0].succeeded());
+            let decoded_result = contract
+                .get_function("getSeqNum")
+                .unwrap()
+                .decode_output(&logs[0].get_return_data())
+                .unwrap();
+            assert_eq!(
+                decoded_result[0],
+                ethabi::Token::Uint(ethabi::Uint::try_from(2).unwrap())
+            );
         }
         Err(e) => {
             panic!(e.to_string());
@@ -380,11 +368,7 @@ pub fn evm_test_arbsys(log_to: Option<&Path>, debug: bool) {
     match result {
         Ok((logs, sends)) => {
             assert_eq!(logs.len(), 1);
-            if let Value::Tuple(tup) = &logs[0] {
-                assert_eq!(tup[1], Value::Int(Uint256::zero()));
-            } else {
-                panic!("malformed log");
-            }
+            assert!(logs[0].succeeded());
             assert_eq!(sends.len(), 1);
             let mut expected_bytes = my_addr.to_bytes_be();
             expected_bytes.extend(Uint256::from_usize(5000).to_bytes_be());
@@ -445,27 +429,16 @@ pub fn evm_direct_deploy_and_call_add(log_to: Option<&Path>, debug: bool) {
         Ok((logs, sends)) => {
             assert_eq!(logs.len(), 1);
             assert_eq!(sends.len(), 0);
-            if let Value::Tuple(tup) = &logs[0] {
-                assert_eq!(tup[1], Value::Int(Uint256::zero()));
-                match bytes_from_bytestack(tup[2].clone()) {
-                    Some(result_bytes) => {
-                        let decoded_result = contract
-                            .get_function("add")
-                            .unwrap()
-                            .decode_output(&result_bytes)
-                            .unwrap();
-                        assert_eq!(
-                            decoded_result[0],
-                            ethabi::Token::Uint(ethabi::Uint::try_from(2).unwrap())
-                        );
-                    }
-                    None => {
-                        panic!("malformed result bytestack");
-                    }
-                }
-            } else {
-                panic!("malformed log return");
-            }
+            assert!(logs[0].succeeded());
+            let decoded_result = contract
+                .get_function("add")
+                .unwrap()
+                .decode_output(&logs[0].get_return_data())
+                .unwrap();
+            assert_eq!(
+                decoded_result[0],
+                ethabi::Token::Uint(ethabi::Uint::try_from(2).unwrap())
+            );
         }
         Err(e) => {
             panic!(e.to_string());
@@ -506,16 +479,8 @@ pub fn mint_erc20_and_get_balance(log_to: Option<&Path>, debug: bool) {
     };
     let logs = machine.runtime_env.get_all_logs();
     assert_eq!(logs.len(), num_logs_before + 2);
-    if let Value::Tuple(tup) = &logs[logs.len() - 2] {
-        assert_eq!(tup[1], Value::Int(Uint256::zero()));
-    } else {
-        panic!("first log item was malformed");
-    }
-    if let Value::Tuple(tup) = &logs[logs.len() - 1] {
-        assert_eq!(tup[1], Value::Int(Uint256::zero()));
-    } else {
-        panic!("second log item was malformed");
-    }
+    assert!(logs[logs.len() - 2].succeeded());
+    assert!(logs[logs.len() - 1].succeeded());
 
     if let Some(path) = log_to {
         machine.runtime_env.recorder.to_file(path).unwrap();
@@ -551,16 +516,8 @@ pub fn mint_erc721_and_get_balance(log_to: Option<&Path>, debug: bool) {
     };
     let logs = machine.runtime_env.get_all_logs();
     assert_eq!(logs.len(), num_logs_before + 2);
-    if let Value::Tuple(tup) = &logs[logs.len() - 2] {
-        assert_eq!(tup[1], Value::Int(Uint256::zero()));
-    } else {
-        panic!("first log item was malformed");
-    }
-    if let Value::Tuple(tup) = &logs[logs.len() - 1] {
-        assert_eq!(tup[1], Value::Int(Uint256::zero()));
-    } else {
-        panic!("second log item was malformed");
-    }
+    assert!(logs[logs.len() - 2].succeeded());
+    assert!(logs[logs.len() - 1].succeeded());
 
     if let Some(path) = log_to {
         machine.runtime_env.recorder.to_file(path).unwrap();

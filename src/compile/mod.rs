@@ -232,7 +232,6 @@ pub fn compile_from_source(
     let (exported_funcs, imported_funcs, global_vars, string_table) =
         typecheck::typecheck_top_level_decls(&res, &mut checked_funcs, string_table_1)
             .map_err(|res3| CompileError::new(res3.reason.to_string(), res3.location))?;
-    let mut code = Vec::new();
     checked_funcs.iter().for_each(|func| {
         let detected_purity = func.is_pure();
         let declared_purity = func.properties.pure;
@@ -249,14 +248,9 @@ pub fn compile_from_source(
         }
     });
 
-    let code_out = codegen::mavm_codegen(
-        checked_funcs,
-        &mut code,
-        &string_table,
-        &imported_funcs,
-        &global_vars,
-    )
-    .map_err(|e| CompileError::new(e.reason.to_string(), e.location))?;
+    let code_out =
+        codegen::mavm_codegen(checked_funcs, &string_table, &imported_funcs, &global_vars)
+            .map_err(|e| CompileError::new(e.reason.to_string(), e.location))?;
     if debug {
         println!("========== after initial codegen ===========");
         println!("Exported: {:?}", exported_funcs);
