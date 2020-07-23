@@ -22,8 +22,9 @@ import func bytearray_new(capacity: uint) -> ByteArray;
 import func bytearray_marshalFull(ba: ByteArray) -> MarshalledBytes;
 import func evmlogs_empty() -> EvmLogs;
 import func evmlogs_numLogs(logs: EvmLogs) -> uint;
-
+import impure func chainParams_speedLimitPerSecond() -> uint;
 import impure func inbox_currentBlockNumber() -> uint;
+import impure func inbox_currentTimestamp() -> uint;
 
 
 // This is declared identically in messages.mini
@@ -83,6 +84,7 @@ func outputStats_add(os1: OutputStatistics, os2: OutputStatistics) -> OutputStat
 
 var globalBlockReceiptData: struct {
     blockNum: uint,
+    timestamp: uint,
     data: PerBlockReceiptData,
     statsThisBlock: OutputStatistics,
     statsAllTime: OutputStatistics,
@@ -104,10 +106,21 @@ impure func outputStats_updateBlockIfNeeded() {
                 statsAllTime: updatedStats
             } with {
                 statsThisBlock: outputStats_new()
+            } with {
+                data: struct {
+                    totalGasUsed: 0,
+                    numTx: 0,
+                    numEvmLogs: 0
+                }
             };
+            emitBlockSummaryLog();
         }
         globalBlockReceiptData = globalBlockReceiptData with {
             blockNum: newBlockNum
+        } with {
+            timestamp: inbox_currentTimestamp()
+        } with {
+            statsThisBlock: outputStats_new()
         };
     }
 }
@@ -137,12 +150,9 @@ impure func outputStats_addSend() {
 }
 
 public impure func txReceipts_init() {  // will be called at beginning of main()
-    init_txReceiptsForBlock(0);
-}
-
-impure func init_txReceiptsForBlock(blockNum: uint) {
     globalBlockReceiptData = struct {
-        blockNum: blockNum,
+        blockNum: 0,
+        timestamp: 0,
         data: struct {
             totalGasUsed: 0,
             numTx: 0,
@@ -240,9 +250,16 @@ public impure func emitLog(
 }
 
 impure func emitBlockSummaryLog() {
+    let gasUsedThisBlock = globalBlockReceiptData.statsThisBlock.totalGasUsed;
+    let gasLimit = 13 * chainParams_speedLimitPerSecond();
+    if (gasLimit < gasUsedThisBlock) {
+        gasLimit = gasUsedThisBlock;
+    }
     asm((
         1,
         globalBlockReceiptData.blockNum,
+        globalBlockReceiptData.timestamp,
+        gasLimit,
         globalBlockReceiptData.statsThisBlock,
         globalBlockReceiptData.statsAllTime
     ),) { log };
