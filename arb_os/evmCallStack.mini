@@ -244,33 +244,33 @@ public impure func initEvmCallStack(
                 setGlobalAccountStore(globalAS);
                 if let Some(gasUsage) = gasAccounting_endTxCharges() {
                     // report success
-                    emitLog(ethMessage, 0, None<ByteArray>, None<EvmLogs>, Some(gasUsage));
+                    emitLog(incomingRequest, 0, None<ByteArray>, None<EvmLogs>, Some(gasUsage));
                     emptyAvmStack();
                     cleanAvmAuxStackAndCall(mainRunLoop,);  // should never return
                 } else {
                     // unknown error type
-                    emitLog(ethMessage, 255, None<ByteArray>, None<EvmLogs>, None<GasUsage>);
+                    emitLog(incomingRequest, 255, None<ByteArray>, None<EvmLogs>, None<GasUsage>);
                     evmCallStack_callHitError();
                }
             } else {
                if let Some(gasUsage) = gasAccounting_endTxCharges() {
                     // insufficient balance error
-                    emitLog(ethMessage, 4, None<ByteArray>, None<EvmLogs>, Some(gasUsage));
+                    emitLog(incomingRequest, 4, None<ByteArray>, None<EvmLogs>, Some(gasUsage));
                 } else {
                     // unknown error type
-                    emitLog(ethMessage, 255, None<ByteArray>, None<EvmLogs>, None<GasUsage>);
+                    emitLog(incomingRequest, 255, None<ByteArray>, None<EvmLogs>, None<GasUsage>);
                 }
                 evmCallStack_callHitError();
             }
         } else {
             if let Some(gasUsage) = gasAccounting_endTxCharges() {
                 // report success (even though tx was a no-op)
-                emitLog(ethMessage, 0, None<ByteArray>, None<EvmLogs>, Some(gasUsage));
+                emitLog(incomingRequest, 0, None<ByteArray>, None<EvmLogs>, Some(gasUsage));
                 emptyAvmStack();
                 cleanAvmAuxStackAndCall(mainRunLoop,);  // should never return
             } else {
                 // unknown error type
-                emitLog(ethMessage, 255, None<ByteArray>, None<EvmLogs>, None<GasUsage>);
+                emitLog(incomingRequest, 255, None<ByteArray>, None<EvmLogs>, None<GasUsage>);
                 evmCallStack_callHitError();
             }
         }
