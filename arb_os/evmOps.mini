@@ -290,9 +290,9 @@ public impure func evmOp_returndatacopy(memAddr: uint, dataOffset: uint, nbytes:
         let memory = evmCallStack_getTopFrameMemoryOrDie();
         let updatedMemory = bytearray_copy(
             returnData,
-            0,
-            memory,
             dataOffset,
+            memory,
+            memAddr,
             nbytes
         );
         if (evmCallStack_setTopFrameMemory(updatedMemory,)) {
