@@ -766,7 +766,8 @@ fn logfile_replay_tests() {
             replay_from_testlog_file(
                 &("./replayTests/".to_owned() + name.to_str().unwrap()),
                 false,
-                false
+                false,
+                false,
             )
             .unwrap(),
             true
