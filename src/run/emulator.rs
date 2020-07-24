@@ -848,7 +848,7 @@ impl Machine {
     ///Runs the instruction pointed to by the program counter, returns either a bool indicating
     /// whether the instruction was blocked if execution does not hit an error state, or an
     /// `ExecutionError` if an error was encountered.
-    pub fn run_one(&mut self, debug: bool) -> Result<bool, ExecutionError> {
+    pub fn run_one(&mut self, _debug: bool) -> Result<bool, ExecutionError> {
         if let MachineState::Running(pc) = self.state {
             if let Some(insn) = self.code.get_insn(pc) {
                 if let Some(val) = &insn.immediate {
@@ -1392,9 +1392,7 @@ impl Machine {
 					}
 					Opcode::AVMOpcode(AVMOpcode::DebugPrint) => {
 						let r1 = self.stack.pop(&self.state)?;
-						if debug {
-                            println!("debugprint: {}", r1);
-                        }
+                        println!("debugprint: {}", r1);
 						self.incr_pc();
 						Ok(true)
 					}

@@ -20,7 +20,7 @@ import type EvmLogs;
 import type ByteArray;
 import type ByteStream;
 import type MarshalledBytes;
-import type StorageMap;
+import type StorageMap
 
 import impure func errorHandler();
 

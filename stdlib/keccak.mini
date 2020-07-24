@@ -26,6 +26,7 @@ import func bytearray_copy(src: ByteArray, srcOffset: uint, dest: ByteArray, des
 
 
 public impure func keccak256(ba: ByteArray, offset: uint, nbytes: uint) -> bytes32 {
+    let origNbytes = nbytes;   // DEBUG
     if (nbytes == 32) {
         return hash(bytearray_get256(ba, offset));
     }
@@ -72,13 +73,15 @@ public impure func keccak256(ba: ByteArray, offset: uint, nbytes: uint) -> bytes
     );
 
     // Extract the return value, with properly adjusted endianness
-    return bytes32(
+    let ret = bytes32(
         flipEndian64(accumulator[3]) + 0x10000000000000000 * (
             flipEndian64(accumulator[2]) + 0x10000000000000000 * (
                 flipEndian64(accumulator[1]) + 0x10000000000000000 * flipEndian64(accumulator[0])
             )
         )
     );
+    asm((137, origNbytes, ret),) { debugprint };
+    return ret;
 }
 
 func keccak_xorblock_save(accumulator: [25]uint, ba: ByteArray, offset: uint) -> [25]uint {
