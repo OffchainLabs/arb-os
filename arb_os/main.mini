@@ -18,8 +18,10 @@ import type AccountStore;
 import type MarshalledBytes;
 import type ByteArray;
 import type ByteStream;
-import type MessageFromL1;
+import type IncomingRequest;
 import type EvmLogs;
+import type GasUsage;
+import type StorageMap;
 
 import impure func errorHandler_init();
 import impure func initKeccakConstants();
@@ -28,6 +30,9 @@ import impure func gasAccounting_init();
 import impure func evmCallStack_init();
 import impure func inbox_init();
 import impure func accountStore_init();
+import impure func precompiles_init(acctStore: AccountStore) -> option<AccountStore>;
+import impure func txReceipts_init();
+
 import impure func getGlobalAccountStore() -> AccountStore;
 import impure func setGlobalAccountStore(acctStore: AccountStore);
 import func accountStore_createAccountFromEvmCode(
@@ -36,7 +41,7 @@ import func accountStore_createAccountFromEvmCode(
     code: ByteArray,
     evmJumpTable: map<uint, impure func()>,
     initCodePt: impure func(),
-    storageMap: map<uint, uint>
+    storageMap: StorageMap
 ) -> option<AccountStore>;
 import impure func accountStore_createBuiltinContract(
     acctStore: AccountStore,
@@ -54,29 +59,28 @@ import func getArbInfoCode() -> MarshalledBytes;
 import func getErc20address() -> address;
 import func getErc721address() -> address;
 import func getArbInfoAddress() -> address;
-import func getErc20storage() -> map<uint, uint>;
-import func getErc721storage() -> map<uint, uint>;
-import func getArbInfoStorage() -> map<uint, uint>;
+import func getErc20storage() -> StorageMap;
+import func getErc721storage() -> StorageMap;
+import func getArbInfoStorage() -> StorageMap;
 
-import impure func inbox_get() -> MessageFromL1;
+import impure func inbox_get() -> IncomingRequest;
 import impure func getNextMsgFromCongestionAuction() -> (
-    MessageFromL1,  // a message
+    IncomingRequest,  // a message
     bool,           // was it approved for execution
     uint,           // maxGas it's allowed to use
     uint,           // gas price it will pay
 ) ;
-import impure func handleMessageFromL1(
-    msg: MessageFromL1,
+import impure func handleIncomingRequest(
+    msg: IncomingRequest,
     maxGas: uint,
     gasPrice: uint
 ) -> option<()>; // return None if message format error; Some(()) if other error; if no error, never return
 import impure func emitLog(
-    l1message: MessageFromL1,
+    l1message: IncomingRequest,
     resultCode: uint,
     maybeReturnData: option<ByteArray>,
     maybeEvmLogs: option<EvmLogs>,
-    gasUsed: uint,
-    gasPrice: uint,
+    gasUsage: option<GasUsage>,
 );
 import impure func arbsys_txcall();
 
@@ -89,6 +93,7 @@ impure func main() {
     evmCallStack_init();
     inbox_init();
     accountStore_init();
+    txReceipts_init();
     if (initializeContractTemplates() == None<()>) {
         panic;   // don't try to run without contract templates
     }
@@ -100,13 +105,13 @@ public impure func mainRunLoop() {
     loop {
         let (msg, approved, maxGas, gasPrice) = getNextMsgFromCongestionAuction();
         if (approved) {
-            if (handleMessageFromL1(msg, maxGas, gasPrice) == None<()>) {
+            if (handleIncomingRequest(msg, maxGas, gasPrice) == None<()>) {
                 // reject for message format error
-                emitLog(msg, 6, None<ByteArray>, None<EvmLogs>, 0, 0);
+                emitLog(msg, 6, None<ByteArray>, None<EvmLogs>, None<GasUsage>);
             }
         } else {
             // reject for congestion error
-            emitLog(msg, 2, None<ByteArray>, None<EvmLogs>, 0, 0);
+            emitLog(msg, 2, None<ByteArray>, None<EvmLogs>, None<GasUsage>);
         }
         // if we reach here, message has already been rejected and log already sent
     }
@@ -154,8 +159,8 @@ impure func initializeContractTemplates() -> option<()> {
         getArbInfoStorage()
     )?;
 
-    // set up ArbSys builtin contract
-    acctStore = accountStore_createBuiltinContract(acctStore, address(100), arbsys_txcall)?;
+    // set up precompiled contracts
+    acctStore = precompiles_init(acctStore)?;
 
     setGlobalAccountStore(acctStore);
     return Some(());

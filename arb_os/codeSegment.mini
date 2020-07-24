@@ -24,11 +24,12 @@ import func bytestream_bytesRemaining(bs: ByteStream) -> uint;
 import func bytestream_truncate(bs: ByteStream, nbytes: uint) -> ByteStream;
 import func bytestream_getByte(bs: ByteStream) -> option<(ByteStream, uint)>;
 import func bytestream_get64(bs: ByteStream) -> option<(ByteStream, uint)>;
-import func bytestream_getUint(bs: ByteStream) -> option<(ByteStream, uint)>;
 import func bytestream_skipBytes(bs: ByteStream, nbytes: uint) -> option<ByteStream>;
 
+import func chainParams_chainId();
 import func evmOp_address();
 import func evmOp_balance();
+import func evmOp_selfbalance();
 import func evmOp_call();
 import func evmOp_callcode();
 import func evmOp_calldatacopy();
@@ -61,13 +62,9 @@ import func evmOp_selfdestruct();
 import func evmOp_sha3();
 import func evmOp_sload();
 import func evmOp_sstore();
-import func evmOp_sloadbytes();
-import func evmOp_sstorebytes();
-import func evmOp_ssize();
 import func evmOp_staticcall();
 import func evmOp_stop();
 import func evmOp_timestamp();
-import func evmOp_txexecgas();
 import func evmOp_create();
 import func evmOp_create2();
 
@@ -276,13 +273,16 @@ public impure func translateEvmCodeSegment(
                         if (opcode == 0x43) { // NUMBER
                             return pushEvmInsnCall(evmOp_number, restOfCode, evmJumpTable);
                         } elseif (opcode == 0x44) { // DIFFICULTY
-                            return Some((pushValue(0, restOfCode), evmJumpTable));
-                            //return None<(AvmCodePoint, map<uint, AvmCodePoint>)>;
+                             return Some((pushValue(2500000000000000, restOfCode), evmJumpTable));
                         }
                     }
                 } else {
                     if (opcode == 0x45) { // GASLIMIT
                         return Some((pushValue(10000000000, restOfCode), evmJumpTable));
+                    } elseif (opcode == 0x46) { // CHAINID
+                        return pushEvmInsnCall(chainParams_chainId, restOfCode, evmJumpTable);
+                    } elseif (opcode == 0x47) { // SELFBALANCE
+                        return pushEvmInsnCall(evmOp_selfbalance, restOfCode, evmJumpTable);
                     } elseif (opcode == 0x50) { // POP
                         return Some((pushInstruction(0x30, restOfCode), evmJumpTable)); // pop
                     } elseif (opcode == 0x51) { // MLOAD
@@ -342,7 +342,8 @@ public impure func translateEvmCodeSegment(
                     }
                 } else {
                     if (opcode == 0x58) {  // GETPC
-                        return Some((pushValue(restOfCode, restOfCode), evmJumpTable));
+                        // we know the current PC, so we can push it directly as a constant
+                        return Some((pushValue(bytestream_bytesReadSoFar(bs)-1, restOfCode), evmJumpTable));
                     } elseif (opcode == 0x59) { // MSIZE
                         return pushEvmInsnCall(evmOp_msize, restOfCode, evmJumpTable);
                     } elseif (opcode == 0x5a) { // GAS
@@ -399,24 +400,14 @@ public impure func translateEvmCodeSegment(
             }
         } else {
             if (opcode < 0xf4) {
-                if (opcode < 0xf0) {
-                    if (opcode == 0xe1) { // SLOADBYTES
-                        return pushEvmInsnCall(evmOp_sloadbytes, restOfCode, evmJumpTable);
-                    } elseif (opcode == 0xe2) { // SSTOREBYTES
-                        return pushEvmInsnCall(evmOp_sstorebytes, restOfCode, evmJumpTable);
-                    } elseif (opcode == 0xe3) { // SSIZE
-                        return pushEvmInsnCall(evmOp_ssize, restOfCode, evmJumpTable);
-                    }
-                } else {
-                    if (opcode == 0xf0) {  // CREATE
-                        return pushEvmInsnCall(evmOp_create, restOfCode, evmJumpTable);
-                    } elseif (opcode == 0xf1) { // CALL
-                        return pushEvmInsnCall(evmOp_call, restOfCode, evmJumpTable);
-                    } elseif (opcode == 0xf2) { // CALLCODE
-                        return pushEvmInsnCall(evmOp_ssize, restOfCode, evmJumpTable);
-                    } elseif (opcode == 0xf3) { // RETURN
-                        return pushEvmInsnCall(evmOp_return, restOfCode, evmJumpTable);
-                    }
+                if (opcode == 0xf0) {  // CREATE
+                    return pushEvmInsnCall(evmOp_create, restOfCode, evmJumpTable);
+                } elseif (opcode == 0xf1) { // CALL
+                    return pushEvmInsnCall(evmOp_call, restOfCode, evmJumpTable);
+                } elseif (opcode == 0xf2) { // CALLCODE
+                    return pushEvmInsnCall(evmOp_callcode, restOfCode, evmJumpTable);
+                } elseif (opcode == 0xf3) { // RETURN
+                    return pushEvmInsnCall(evmOp_return, restOfCode, evmJumpTable);
                 }
             } else {
                 if (opcode < 0xfc) {
@@ -428,9 +419,7 @@ public impure func translateEvmCodeSegment(
                         return pushEvmInsnCall(evmOp_staticcall, restOfCode, evmJumpTable);
                     }
                 } else {
-                    if (opcode == 0xfc) { // TXEXECGAS
-                        return pushEvmInsnCall(evmOp_txexecgas, restOfCode, evmJumpTable);
-                    } elseif (opcode == 0xfd) { // REVERT
+                    if (opcode == 0xfd) { // REVERT
                         return pushEvmInsnCall(evmOp_revert, restOfCode, evmJumpTable);
                     } elseif (opcode == 0xfe) { // INVALID
                         let (doCall, jumpTable) = pushEvmInsnCall(

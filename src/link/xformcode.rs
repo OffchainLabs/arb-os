@@ -14,12 +14,18 @@
  * limitations under the License.
  */
 
+//!Provides utilities for dealing with nested tuples and conversion from large flat tuples to
+//! nested tuples
+
 use crate::mavm::{AVMOpcode, CodePt, Instruction, Opcode, Value};
 use crate::pos::Location;
 use crate::uint256::Uint256;
 
+///The maximum size of an AVM tuple
 pub const TUPLE_SIZE: usize = 8;
 
+///Takes a slice of instructions from a single function scope, and changes tuples of size greater
+/// than TUPLE_SIZE to nested tuples with each subtuple at most TUPLE_SIZE
 pub fn fix_tuple_size(code_in: &[Instruction], num_globals: usize) -> Vec<Instruction> {
     let mut code_out = Vec::new();
     let mut locals_tree = TupleTree::new(1, true);
@@ -203,6 +209,9 @@ pub fn fix_tuple_size(code_in: &[Instruction], num_globals: usize) -> Vec<Instru
     code_out
 }
 
+///Used for generating the static_val for a `LinkedProgram`.
+///
+/// Takes a vector of codepoints, and places them in order into a nested tuple `Value`
 pub fn jump_table_to_value(jump_table: Vec<CodePt>) -> Value {
     let mut jump_table_codepoints = Vec::new();
     for pc in &jump_table {
@@ -212,10 +221,12 @@ pub fn jump_table_to_value(jump_table: Vec<CodePt>) -> Value {
     shape.make_value(jump_table_codepoints)
 }
 
+///Generates a `Value` that is a nested tuple with size total leaf values, all leaf values are null.
 pub fn make_uninitialized_tuple(size: usize) -> Value {
     TupleTree::new(size, false).make_empty()
 }
 
+///
 #[derive(Debug)]
 pub enum TupleTree {
     Single,
@@ -223,6 +234,11 @@ pub enum TupleTree {
 }
 
 impl TupleTree {
+    ///Constructs new `TupleTree` with capacity of size.
+    ///
+    /// The is_local argument indicates whether the `TupleTree` is intended to be used for locals,
+    /// if set to false and size is 1 will return the Single variant, and will return the Tree
+    /// variant otherwise.
     pub fn new(size: usize, is_local: bool) -> TupleTree {
         if (size == 1) && !is_local {
             return TupleTree::Single;
@@ -251,6 +267,7 @@ impl TupleTree {
         TupleTree::Tree(size, v)
     }
 
+    ///Creates a `Value` with the same tree structure as self.
     pub fn make_empty(&self) -> Value {
         match self {
             TupleTree::Single => Value::new_tuple(Vec::new()),
@@ -264,11 +281,17 @@ impl TupleTree {
         }
     }
 
+    ///Create a nested tuple `Value` with structure determined by self, and leaf nodes determined
+    /// left to right by vals.
     fn make_value(&self, vals: Vec<Value>) -> Value {
         let (val, _) = self.make_value_2(vals);
         val
     }
 
+    ///Internal call used by `make_value`.
+    ///
+    /// The returned `Value` is the value constructed from vals, and the returned `Vec<Values>` are
+    /// the unconsumed `Value`s in vals.
     fn make_value_2(&self, vals: Vec<Value>) -> (Value, Vec<Value>) {
         match self {
             TupleTree::Single => (vals[0].clone(), vals[1..].to_vec()),
@@ -285,6 +308,7 @@ impl TupleTree {
         }
     }
 
+    ///Gets the total number of nodes in the `TupleTree`
     fn tsize(&self) -> usize {
         match self {
             TupleTree::Single => 1,
@@ -292,6 +316,11 @@ impl TupleTree {
         }
     }
 
+    ///Generates code for pushing a copy the index-th element of self to the top of the stack.
+    ///
+    /// Argument is_local defines whether locals or globals are being accessed, generated code is
+    /// appended to the code argument and also returned as an owned value, location is used to
+    /// assign a code location for the generated instructions.
     fn read_code(
         &self,
         is_local: bool,
@@ -342,6 +371,11 @@ impl TupleTree {
         }
     }
 
+    ///Generates code for writing to the index_in-th element of self.
+    ///
+    /// Argument is_local defines whether locals or globals are being accessed, generated code is
+    /// appended to the code argument and also returned as an owned value, location is used to
+    /// assign a code location for the generated instructions.
     fn write_code(
         &self,
         is_local: bool,
@@ -424,6 +458,8 @@ impl TupleTree {
     }
 }
 
+///Generates a `TupleTree` of size equal to the length of lis, and fills its leaf nodes with the
+/// `Value`s in lis.
 pub fn value_from_field_list(lis: Vec<Value>) -> Value {
     TupleTree::new(lis.len(), false).make_value(lis)
 }

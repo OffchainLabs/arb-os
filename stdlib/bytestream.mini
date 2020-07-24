@@ -106,7 +106,7 @@ public func bytestream_get64(bs: ByteStream) -> option<(ByteStream, uint)> {
     }
 }
 
-public func bytestream_getUint(bs: ByteStream) -> option<(ByteStream, uint)> {
+public func bytestream_get256(bs: ByteStream) -> option<(ByteStream, uint)> {
     if (bs.currentOffset+32 > bs.capacity) {
         return None;
     } else {

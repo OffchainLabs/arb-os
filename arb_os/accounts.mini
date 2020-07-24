@@ -15,13 +15,16 @@
 //
 
 import type ByteArray;
+import type StorageMap;
 
 import func bytearray_new(capacity: uint) -> ByteArray;
 import func bytearray_size(ba: ByteArray) -> uint;
 import func bytearray_setByte(ba: ByteArray, offset: uint, value: uint) -> ByteArray;
+import func storageMap_new() -> StorageMap;
+import func storageMap_get(sm: StorageMap, index: uint) -> uint;
+import func storageMap_set(sm: StorageMap, index: uint, value: uint) -> StorageMap;
 import func getErc20address() -> address;
 import func getErc721address() -> address;
-
 
 type AccountStore = map<address, Account>
 
@@ -36,7 +39,7 @@ type AccountContractInfo = struct {
     code: ByteArray,
     evmJumpTable: map<uint, impure func()>,  // maps each valid EVM jump destination to the corresponding AVM codepoint
     startCodePoint: impure func(),
-    storage: map<uint, uint>,
+    storage: StorageMap,
 }
 
 // globalAccountStore is the authoritative source of info on accounts that exist on this chain
@@ -160,7 +163,7 @@ public func accountStore_createAccountFromEvmCode(
     code: ByteArray,
     evmJumpTable: map<uint, impure func()>,
     initCodePt: impure func(),
-    storageMap: map<uint, uint>
+    storageMap: StorageMap
 ) -> option<AccountStore> {
     // Create a new account for a compiled EVM contract.
     // Return Some(updatedAccountStore), or None if something went wrong.
@@ -205,7 +208,7 @@ public func accountStore_createBuiltinContract(
                         code: fakeCode,
                         evmJumpTable: newmap<uint, impure func()>,
                         resumeCodePoint: entryPoint,
-                        storage: newmap<uint, uint>
+                        storage: storageMap_new(),
                     })
                 } with {
                     nextSeqNum: 1
@@ -267,7 +270,7 @@ public func accountStore_cloneContract(
     let newAccount = oldAccount
         with { ethBalance: 0 }
         with { nextSeqNum: 1 }
-        with { contractInfo: Some((oldAccount.contractInfo?) with { storage: newmap<uint, uint> }) };
+        with { contractInfo: Some((oldAccount.contractInfo?) with { storage: storageMap_new() }) };
     return Some(acctStore with { [newAddr] = newAccount });
 }
 
@@ -316,7 +319,7 @@ public func accountStore_transferEthBalance(
     return Some(acctStore);
 }
 
-public func account_getAllStorage(account: Account) -> option<map<uint, uint>> {
+public func account_getAllStorage(account: Account) -> option<StorageMap> {
     // Get the full contents of a contract's storage.
     // Return None if account doesn't have contract storage.
     return Some((account.contractInfo?).storage);
@@ -325,11 +328,7 @@ public func account_getAllStorage(account: Account) -> option<map<uint, uint>> {
 public func account_getStorageCell(account: Account, cell: uint) -> option<uint> {
     // Get contents of one cell in a contract's storage.
     // Return None if account doesn't have contract storage.
-    if let Some(contents) = (account.contractInfo?).storage[cell] {
-        return Some(contents);
-    } else {
-        return Some(0);  // uninitialized cell, so its value is deemed to be zero
-    }
+    return Some(storageMap_get((account.contractInfo?).storage, cell));
 }
 
 public func account_setStorageCell(
@@ -342,9 +341,7 @@ public func account_setStorageCell(
     let contractInfo = account.contractInfo?;
     return Some(account with {
         contractInfo: Some(contractInfo with {
-            storage: contractInfo.storage with {
-                [cell] = value
-            }
+            storage: storageMap_set(contractInfo.storage, cell, value)
         })
     });
 }
@@ -354,7 +351,7 @@ public func account_setContractInfo(
     code: ByteArray,
     evmJumpTable: map<uint, impure func()>,
     startCodePoint: impure func(),
-    storage: map<uint, uint>
+    storage: StorageMap
 ) -> Account {
     if (acct.nextSeqNum == 0) {
         // new contract accounts are supposed to start with sequence number = 1; make it so

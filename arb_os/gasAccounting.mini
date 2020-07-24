@@ -21,6 +21,8 @@ import type MarshalledBytes;
 import type MessageBatch;
 import type Queue;
 
+import func chainParams_chainId() -> uint;
+
 import func getGlobalAccountStore() -> AccountStore;
 import func setGlobalAccountStore(acctStore: AccountStore);
 import func accountStore_get(acctStore: AccountStore, addr: address) -> Account;
@@ -31,17 +33,21 @@ import func account_deductFromEthBalance(acct: Account, amount: uint) -> option<
 import func bytearray_unmarshalBytes(mb: MarshalledBytes) -> ByteArray;
 import func bytearray_getByte(ba: ByteArray, offset: uint) -> uint;
 import func bytearray_get256(ba: ByteArray, offset: uint) -> uint;
+import func marshalledBytes_firstByte(mb: MarshalledBytes) -> uint;
 
 import func queue_new() -> Queue;
 import func queue_isEmpty(q: Queue) -> bool;
 import func queue_put(q: Queue, item: any) -> Queue;
 import func queue_get(q: Queue) -> option<(Queue, any)>;
 
-import impure func inbox_get() -> MessageFromL1;
+import impure func inbox_get() -> IncomingRequest;
 
-import func messageBatch_tryNew(msg: MessageFromL1) -> option<MessageBatch>;
-import func messageBatch_get(batch: MessageBatch) -> option<(MessageFromL1, MessageBatch)>;
+import func messageBatch_tryNew(msg: IncomingRequest) -> option<MessageBatch>;
+import func messageBatch_get(batch: MessageBatch) -> option<(IncomingRequest, MessageBatch)>;
 
+import func hashL2messageInfo(l2msg: MarshalledBytes, chainId: uint, sender: address) -> bytes32;
+
+import func translateSignedTx(req: IncomingRequest) -> option<IncomingRequest>;
 
 var gasAccountingInfo: struct {
     gasUsedByOS: uint,            // amount of gas used by OS that validators haven't yet been compensated for
@@ -58,6 +64,10 @@ type TxGasState = struct {
     refundTo: address,   // who gets a refund for unused gas at the end, if there is any
 }
 
+type GasUsage = struct {
+    gasUsed: uint,
+    gasPriceWei: uint,
+}
 
 public impure func gasAccounting_init() {
     gasAccountingInfo = struct {
@@ -125,7 +135,7 @@ public impure func gasAccounting_startTxCharges(
     return Some(());
 }
 
-public impure func gasAccounting_endTxCharges() -> option<(uint, uint)> {
+public impure func gasAccounting_endTxCharges() -> option<GasUsage> {
     // stop charging the current tx for gas
     // refund any unused gas
     // return the total amount it used, or None if there isn't a tx active
@@ -154,7 +164,12 @@ public impure func gasAccounting_endTxCharges() -> option<(uint, uint)> {
         txState: None<TxGasState>
     };
 
-    return Some((txState.originalMax-gasToRefund, txState.price));
+    return Some(
+        struct {
+            gasUsed: txState.originalMax-gasToRefund,
+            gasPriceWei: txState.price
+        }
+    );
 }
 
 public impure func gasAccounting_pauseTxCharges() -> uint {
@@ -220,12 +235,12 @@ impure func switchToChargingOS() -> uint {
 
 // This is the structure that the Arbitrum protocol gives us, for each incoming message.
 // It is declared identically in inbox.mini and elsewhere
-type MessageFromL1 = struct {
+type IncomingRequest = struct {
     kind: uint,               // type of message
     blockNumber: uint,        // block number of the L1 block
     timestamp: uint,          // timestamp of the L1 block
     sender: address,          // address of the sender
-    inboxSeqNum: uint,        // sequence number in L1 inbox
+    requestId: uint,          // sequence number in L1 inbox
     msgData: MarshalledBytes  // contents of the message, as a marshalled bytearray
 }
 
@@ -242,14 +257,13 @@ type MessageFromL1 = struct {
 //     "rehydrates" the items with valid signatures into regular messages, and enqueues them.
 
 public impure func getNextMsgFromCongestionAuction() -> (
-    MessageFromL1,  // a message
+    IncomingRequest,  // a message
     bool,           // was it approved for execution
     uint,           // maxGas it's allowed to use
     uint,           // gas price it will pay
 ) {
     // For now, the gas auction is a no-op.  It just approves every message at zero gas price.
-
-    let msg = unsafecast<MessageFromL1>(());   // value will be re-initialized before use
+    let msg = unsafecast<IncomingRequest>(());   // value will be re-initialized before use
     loop {
         if let Some(sideloadedTuple) = trySideload() {
             return sideloadedTuple;
@@ -260,7 +274,7 @@ public impure func getNextMsgFromCongestionAuction() -> (
             gasAccountingInfo = gasAccountingInfo with {
                 queuedFromBatch: newQ
             };
-            msg = unsafecast<MessageFromL1>(rawMsg);
+            msg = unsafecast<IncomingRequest>(rawMsg);
         } else {
             msg = inbox_get();
         }
@@ -286,10 +300,33 @@ public impure func getNextMsgFromCongestionAuction() -> (
             // get its maxGas amount -- for now, set the limit high, unless caller asked for less
             let maxGas = 1000000000;
             if (msg.kind == 3) {
-                let ba = bytearray_unmarshalBytes(msg.msgData);
-                let maxGas = bytearray_get256(ba, 1);
+                let firstByte = marshalledBytes_firstByte(msg.msgData);
+                if (firstByte == 4) {
+                    // it's a signed tx; verify sig and then process request or discard
+                    if let Some(verifiedMsg) = translateSignedTx(msg) {
+                        let ba = bytearray_unmarshalBytes(verifiedMsg.msgData);
+                        let maxGas = bytearray_get256(ba, 1);
+                        return (verifiedMsg, true, maxGas, 0);
+                    }
+                    // else signature was invalid, ignore msg and execute loop again to get another
+                } else {
+                    let ba = bytearray_unmarshalBytes(msg.msgData);
+                    if (firstByte == 0) {
+                        // it's an unsigned tx; compute unique requestId
+                        msg = msg with {
+                            requestId: uint(hashL2messageInfo(
+                                msg.msgData,
+                                chainParams_chainId(),
+                                msg.sender
+                            ))
+                        };
+                    }
+                    let maxGas = bytearray_get256(ba, 1);
+                    return (msg, true, maxGas, 0);
+                }
+            } else {
+                return (msg, true, maxGas, 0);
             }
-            return (msg, true, maxGas, 0);
         }
     }
 }
@@ -309,14 +346,14 @@ public impure func getNextMsgFromCongestionAuction() -> (
 //     onto the stack a pair (message, gasLimit).  This function will then return that
 //     pair, which will cause (the private clone of) the chain to run that call, with the
 //     given gasLimit and zero gas price.
-impure func trySideload() -> option<(MessageFromL1, bool, uint, uint)> {
+impure func trySideload() -> option<(IncomingRequest, bool, uint, uint)> {
     let sideloadedVal = asm() any { sideload };
     if (sideloadedVal == ()) {
         // normal case; the official chain will always be in this case
         return None;
     } else {
         // don't worry about the unsafecast; this can't execute on the official chain
-        let (msg, gasLimit) = unsafecast<(MessageFromL1, uint)>(sideloadedVal);
+        let (msg, gasLimit) = unsafecast<(IncomingRequest, uint)>(sideloadedVal);
         return Some((msg, true, gasLimit, 0));
     }
 }

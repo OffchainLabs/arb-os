@@ -20,7 +20,7 @@ use compile::{compile_from_file, CompileError};
 use contracttemplates::generate_contract_template_file_or_die;
 use link::{link, postlink_compile};
 use mavm::Value;
-use run::{profile_gen_from_file, run_from_file, RuntimeEnvironment};
+use run::{profile_gen_from_file, replay_from_testlog_file, run_from_file, RuntimeEnvironment};
 use std::collections::{hash_map::DefaultHasher, HashMap};
 use std::fs::File;
 use std::hash::Hasher;
@@ -139,6 +139,22 @@ fn main() -> Result<(), CompileError> {
                 ),
         )
         .subcommand(
+            SubCommand::with_name("replay")
+                .about("replays an execution from a testlogs file")
+                .arg(
+                    Arg::with_name("INPUT")
+                        .help("sets the file name to replay")
+                        .required(true)
+                        .index(1),
+                )
+                .arg(
+                    Arg::with_name("debug")
+                        .help("sets debug mode")
+                        .short("d")
+                        .takes_value(false),
+                ),
+        )
+        .subcommand(
             SubCommand::with_name("maketestlogs").about("generates test logs for all ArbOS tests"),
         )
         .subcommand(
@@ -234,7 +250,8 @@ fn main() -> Result<(), CompileError> {
     if let Some(matches) = matches.subcommand_matches("evmdebug") {
         let debug = matches.is_present("debug");
         let profile = matches.is_present("profiler");
-        let _ = evm::evm_xcontract_call_with_constructors(None, debug, profile);
+        //let _ = evm::evm_xcontract_call_with_constructors(None, debug, profile);
+        let _ = evm::evm_xcontract_call_using_batch(None, debug, profile);
     }
 
     if let Some(matches) = matches.subcommand_matches("profiler") {
@@ -244,6 +261,14 @@ fn main() -> Result<(), CompileError> {
             Vec::new(),
             RuntimeEnvironment::new(Uint256::from_usize(1111)),
         );
+    }
+
+    if let Some(matches) = matches.subcommand_matches("replay") {
+        let path = matches.value_of("INPUT").unwrap();
+        let debug = matches.is_present("debug");
+        if let Err(e) = replay_from_testlog_file(path, true, debug) {
+            panic!("Error reading from {}: {}", path, e);
+        }
     }
 
     if matches.subcommand_matches("maketestlogs").is_some() {

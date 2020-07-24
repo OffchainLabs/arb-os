@@ -18,10 +18,13 @@ import type MarshalledBytes;
 import type ByteArray;
 import type ByteStream;
 
+import func bytearray_size(ba: ByteArray) -> uint;
 import func bytearray_getByte(ba: ByteArray, offset: uint) -> uint;
 import func bytearray_get256(ba: ByteArray, offset: uint) -> uint;
+import func bytearray_setByte(ba: ByteArray, offset: uint, val: uint) -> ByteArray;
 import func bytearray_unmarshalBytes(mb: MarshalledBytes) -> ByteArray;
 import func bytearray_marshalFull(ba: ByteArray) -> MarshalledBytes;
+import func bytearray_extract(ba: ByteArray, offset: uint, nbytes: uint) -> ByteArray;
 import func bytestream_new(ba: ByteArray) -> ByteStream;
 import func bytestream_get64(bs: ByteStream) -> option<(ByteStream, uint)>;
 import func bytestream_getN(bs: ByteStream, nbytes: uint) -> option<(ByteStream, ByteArray)>;
@@ -29,23 +32,26 @@ import func bytestream_skipBytes(bs: ByteStream, nbytes: uint) -> option<ByteStr
 import func marshalledBytes_firstByte(mb: MarshalledBytes) -> uint;
 import func marshalledBytes_hash(mb: MarshalledBytes) -> bytes32;
 
+import func translateSignedTx(req: MessageFromL1) -> option<MessageFromL1>;
+
+
 // This is the structure that the Arbitrum protocol gives us, for each incoming message.
 // It is declared identically in inbox.mini and elsewhere
-type MessageFromL1 = struct {
+type IncomingRequest = struct {
     kind: uint,               // type of message
     blockNumber: uint,        // block number of the L1 block
     timestamp: uint,          // timestamp of the L1 block
     sender: address,          // address of the sender
-    inboxSeqNum: uint,        // sequence number in L1 inbox
+    requestId: uint,          // sequence number in L1 inbox
     msgData: MarshalledBytes  // contents of the message, as a marshalled bytearray
 }
 
 type MessageBatch = struct {
-    template: MessageFromL1,
+    template: IncomingRequest,
     stream: ByteStream,
 }
 
-public func messageBatch_tryNew(msg: MessageFromL1) -> option<MessageBatch> {
+public func messageBatch_tryNew(msg: IncomingRequest) -> option<MessageBatch> {
     if ( (msg.kind == 3) && (marshalledBytes_firstByte(msg.msgData) == 3) ) {
         let stream = bytestream_new(bytearray_unmarshalBytes(msg.msgData));
         stream = bytestream_skipBytes(stream, 1)?;
@@ -61,46 +67,18 @@ public func messageBatch_tryNew(msg: MessageFromL1) -> option<MessageBatch> {
     }
 }
 
-public func messageBatch_get(batch: MessageBatch) -> option<(MessageFromL1, MessageBatch)> {
-    // returns None if no more messages in the batch
-    let (stream, calldataLength) = bytestream_get64(batch.stream)?;
-
-    let (bs, extractedL2data) = bytestream_getN(stream, 1 + 5*32 + calldataLength)?;
+public func messageBatch_get(batch: MessageBatch) -> option<(IncomingRequest, MessageBatch)> {
+    // returns next message in the batch (and updated batch), or None if no more messages in batch
+    let (stream, l2MsgLength) = bytestream_get64(batch.stream)?;
+    let (bs, extractedL2data) = bytestream_getN(stream, l2MsgLength)?;
     stream = bs;
-    let (bs, extractedSig) = bytestream_getN(stream, 65)?;
-    stream = bs;
-
-    if(bytearray_getByte(extractedL2data, 0) != 0) {
-        return None;   // sub-message must be of subtype 0
-    }
-
-    let marshalledL2data = bytearray_marshalFull(extractedL2data);
-
-    let signer = recoverSigner(marshalledL2data, extractedSig)?;
 
     return Some((
         batch.template with {
-            sender: signer
-        } with {
-            msgData: marshalledL2data
+            msgData: bytearray_marshalFull(extractedL2data)
         },
         batch with {
-            stream: stream
+            stream : stream
         }
     ));
-}
-
-func recoverSigner(marshalledData: MarshalledBytes, signature: ByteArray) -> option<address> {
-    let signer = asm(
-        bytearray_get256(signature, 0),
-        bytearray_get256(signature, 32),
-        bytearray_getByte(signature, 64),
-        marshalledBytes_hash(marshalledData)
-    ) address { ecrecover };
-
-    if (signer == address(0)) {
-        return None;
-    } else {
-        return Some(signer);
-    }
 }

@@ -1,0 +1,132 @@
+//
+// Copyright 2020, Offchain Labs, Inc.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//    http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+//
+
+import type ByteArray;
+import type MarshalledBytes;
+
+import func bytearray_size(ba: ByteArray) -> uint;
+import func bytearray_getByte(ba: ByteArray, offset: uint) -> uint;
+import func bytearray_get256(ba: ByteArray, offset: uint) -> uint;
+import func bytearray_setByte(ba: ByteArray, offset: uint, val: uint) -> ByteArray;
+import func bytearray_extract(ba: ByteArray, offset: uint, nbytes: uint) -> ByteArray;
+import func bytearray_unmarshalBytes(mb: MarshalledBytes) -> ByteArray;
+import func bytearray_marshalFull(ba: ByteArray) -> MarshalledBytes;
+import func marshalledBytes_hash(mb: MarshalledBytes) -> bytes32;
+
+
+import func rlp_encodeMessageInfo(
+    seqNum: uint,
+    gasPrice: uint,
+    gasLimit: uint,
+    to: address,
+    value: uint,
+    data: ByteArray,
+    v: uint,
+    r: uint,
+    s: uint
+) -> ByteArray;
+
+import impure func chainParams_chainId() -> uint;
+
+import impure func keccak256(ba: ByteArray, offset: uint, nbytes: uint) -> bytes32;
+
+
+type MessageFromL1 = struct {
+    kind: uint,               // type of message
+    blockNumber: uint,        // block number of the L1 block
+    timestamp: uint,          // timestamp of the L1 block
+    sender: address,          // address of the sender
+    inboxSeqNum: uint,        // sequence number in L1 inbox
+    msgData: MarshalledBytes  // contents of the message, as a marshalled bytearray
+}
+
+public impure func translateSignedTx(req: MessageFromL1) -> option<MessageFromL1> {
+    let extractedL2data = bytearray_unmarshalBytes(req.msgData);
+    let l2MsgSize = bytearray_size(extractedL2data);
+
+    let preSigSize = l2MsgSize-65;
+    let signer = recoverSigner(extractedL2data, preSigSize)?;
+
+    // turn it into an unsigned message
+    let newL2message = bytearray_setByte(
+        bytearray_extract(extractedL2data, 0, preSigSize),
+        0,
+        0
+    );
+
+    let rlpHash = rlpAndHash(
+        extractedL2data,
+        preSigSize,
+        bytearray_getByte(extractedL2data, preSigSize+64) % 2 + 35 + 2 * chainParams_chainId(),
+        bytearray_get256(extractedL2data, preSigSize),
+        bytearray_get256(extractedL2data, preSigSize+32),
+    );
+
+    return Some(
+        req with {
+            sender: signer
+        } with {
+            inboxSeqNum: uint(rlpHash)
+        }
+    );
+}
+
+impure func recoverSigner(msgData: ByteArray, preSigSize: uint) -> option<address> {
+    let rlpHash = rlpAndHash(msgData, preSigSize, chainParams_chainId(), 0, 0);
+
+    let signer = asm(
+        bytearray_get256(msgData, preSigSize),
+        bytearray_get256(msgData, preSigSize+32),
+        bytearray_getByte(msgData, preSigSize+64) % 2,
+        rlpHash,
+    ) address { ecrecover };
+
+    if (signer == address(0)) {
+        return None;
+    } else {
+        return Some(signer);
+    }
+}
+
+func rlpAndHash(msgData: ByteArray, preSigSize: uint, v: uint, r: uint, s: uint) -> bytes32 {
+    let maxGas = bytearray_get256(msgData, 1);
+    let gasPriceBid = bytearray_get256(msgData, 32+1);
+    let sequenceNum = bytearray_get256(msgData, 2*32+1);
+    let destAddress = address(bytearray_get256(msgData, 3*32+1));
+    let payment = bytearray_get256(msgData, 4*32+1);
+    let rlpEncoded = rlp_encodeMessageInfo(
+        sequenceNum,
+        gasPriceBid,
+        maxGas,
+        destAddress,
+        payment,
+        bytearray_extract(msgData, 5*32+1, preSigSize-(5*32+1)),
+        v,
+        r,
+        s
+    );
+    return keccak256(rlpEncoded, 0, bytearray_size(rlpEncoded));
+}
+
+public func hashL2messageInfo(l2msg: MarshalledBytes, chainId: uint, sender: address) -> bytes32 {
+    return hash(
+        bytes32(sender),
+        hash(
+            bytes32(chainId),
+            marshalledBytes_hash(l2msg),
+        )
+    );
+}

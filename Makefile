@@ -14,18 +14,15 @@ testlogs: all
 evmdebug: all
 	$(CARGORUN) evmdebug
 
-TESTEXES = $(BUILTINDIR)/kvstest.mexe $(BUILTINDIR)/cuckookvstest.mexe $(STDDIR)/queuetest.mexe $(BUILTINDIR)/arraytest.mexe $(BUILTINDIR)/globaltest.mexe $(STDDIR)/priorityqtest.mexe $(STDDIR)/bytearraytest.mexe $(STDDIR)/keccaktest.mexe $(STDDIR)/rlptest.mexe $(BUILTINDIR)/maptest.mexe minitests/codeloadtest.mexe
-BUILTINMAOS = $(BUILTINDIR)/array.mao $(BUILTINDIR)/kvs.mao $(BUILTINDIR)/cuckookvs.mao
-STDLIBMAOS = $(STDDIR)/bytearray.mao $(STDDIR)/priorityq.mao $(STDDIR)/random.mao $(STDDIR)/queue.mao $(STDDIR)/keccak.mao $(STDDIR)/bytestream.mao $(STDDIR)/stack.mao $(STDDIR)/rlp.mao
+TESTEXES = $(BUILTINDIR)/kvstest.mexe $(STDDIR)/queuetest.mexe $(BUILTINDIR)/arraytest.mexe $(BUILTINDIR)/globaltest.mexe $(STDDIR)/priorityqtest.mexe $(STDDIR)/bytearraytest.mexe $(STDDIR)/keccaktest.mexe $(STDDIR)/rlptest.mexe $(STDDIR)/storageMapTest.mexe $(BUILTINDIR)/maptest.mexe minitests/codeloadtest.mexe
+BUILTINMAOS = $(BUILTINDIR)/array.mao $(BUILTINDIR)/kvs.mao
+STDLIBMAOS = $(STDDIR)/bytearray.mao $(STDDIR)/priorityq.mao $(STDDIR)/random.mao $(STDDIR)/queue.mao $(STDDIR)/keccak.mao $(STDDIR)/bytestream.mao $(STDDIR)/stack.mao $(STDDIR)/rlp.mao $(STDDIR)/storageMap.mao
 STDLIB = $(STDLIBMAOS)
 
 all: $(TESTEXES) arbos
 
 $(BUILTINDIR)/kvstest.mexe: $(BUILTINMAOS) $(BUILTINDIR)/kvstest.mini
 	$(CARGORUN) compile $(BUILTINDIR)/kvstest.mini -o $(BUILTINDIR)/kvstest.mexe
-
-$(BUILTINDIR)/cuckookvstest.mexe: $(BUILTINMAOS) $(BUILTINDIR)/cuckookvstest.mini
-	$(CARGORUN) compile $(BUILTINDIR)/cuckookvstest.mini $(BUILTINDIR)/cuckookvs.mao -o $(BUILTINDIR)/cuckookvstest.mexe
 
 $(STDDIR)/queuetest.mexe: $(BUILTINMAOS) $(STDDIR)/queuetest.mini $(STDLIB)
 	$(CARGORUN) compile $(STDDIR)/queuetest.mini $(STDLIB) -o $(STDDIR)/queuetest.mexe
@@ -38,6 +35,9 @@ $(BUILTINDIR)/globaltest.mexe: $(BUILTINMAOS) $(BUILTINDIR)/globaltest.mini
 
 $(STDDIR)/priorityqtest.mexe: $(BUILTINMAOS) $(STDDIR)/priorityqtest.mini $(STDLIB)
 	$(CARGORUN) compile $(STDDIR)/priorityqtest.mini $(STDLIB) -o $(STDDIR)/priorityqtest.mexe
+
+$(STDDIR)/storageMapTest.mexe: $(BUILTINMAOS) $(STDDIR)/storageMapTest.mini $(STDLIB)
+	$(CARGORUN) compile $(STDDIR)/storageMapTest.mini $(STDLIB) -o $(STDDIR)/storageMapTest.mexe
 
 $(STDDIR)/bytearraytest.mexe: $(BUILTINMAOS) $(STDDIR)/bytearraytest.mini $(STDLIB)
 	$(CARGORUN) compile $(STDDIR)/bytearraytest.mini $(STDLIB) -o $(STDDIR)/bytearraytest.mexe
@@ -75,6 +75,9 @@ $(STDDIR)/keccak.mao: $(STDDIR)/keccak.mini
 $(STDDIR)/rlp.mao: $(STDDIR)/rlp.mini
 	$(CARGORUN) compile $(STDDIR)/rlp.mini -c -o $(STDDIR)/rlp.mao
 
+$(STDDIR)/storageMap.mao: $(STDDIR)/storageMap.mini
+	$(CARGORUN) compile $(STDDIR)/storageMap.mini -c -o $(STDDIR)/storageMap.mao
+
 $(BUILTINDIR)/maptest.mexe: $(BUILTINMAOS) $(BUILTINDIR)/maptest.mini
 	$(CARGORUN) compile $(BUILTINDIR)/maptest.mini -o $(BUILTINDIR)/maptest.mexe
 
@@ -84,11 +87,8 @@ $(BUILTINDIR)/array.mao: $(BUILTINDIR)/array.mini
 $(BUILTINDIR)/kvs.mao: $(BUILTINDIR)/kvs.mini
 	$(CARGORUN) compile $(BUILTINDIR)/kvs.mini -c -o $(BUILTINDIR)/kvs.mao
 
-$(BUILTINDIR)/cuckookvs.mao: $(BUILTINDIR)/cuckookvs.mini
-	$(CARGORUN) compile $(BUILTINDIR)/cuckookvs.mini -c -o $(BUILTINDIR)/cuckookvs.mao
-
 ARBOSDIR = arb_os
-ARBOSAOS = $(ARBOSDIR)/main.mao $(ARBOSDIR)/accounts.mao $(ARBOSDIR)/messages.mao $(ARBOSDIR)/inbox.mao $(ARBOSDIR)/evmCallStack.mao $(ARBOSDIR)/evmOps.mao $(ARBOSDIR)/codeSegment.mao $(ARBOSDIR)/evmlogs.mao $(ARBOSDIR)/errorHandler.mao $(ARBOSDIR)/gasAccounting.mao $(ARBOSDIR)/contractTemplates.mao $(ARBOSDIR)/tokens.mao $(ARBOSDIR)/arbsys.mao $(ARBOSDIR)/messageBatch.mao $(ARBOSDIR)/chainParameters.mao
+ARBOSAOS = $(ARBOSDIR)/main.mao $(ARBOSDIR)/accounts.mao $(ARBOSDIR)/messages.mao $(ARBOSDIR)/inbox.mao $(ARBOSDIR)/evmCallStack.mao $(ARBOSDIR)/evmOps.mao $(ARBOSDIR)/codeSegment.mao $(ARBOSDIR)/evmlogs.mao $(ARBOSDIR)/errorHandler.mao $(ARBOSDIR)/gasAccounting.mao $(ARBOSDIR)/contractTemplates.mao $(ARBOSDIR)/tokens.mao $(ARBOSDIR)/arbsys.mao $(ARBOSDIR)/messageBatch.mao $(ARBOSDIR)/chainParameters.mao $(ARBOSDIR)/precompiles.mao $(ARBOSDIR)/signedTx.mao $(ARBOSDIR)/txReceipt.mao
 ARBOS = $(ARBOSDIR)/arbos.mexe
 
 arbos: $(ARBOS)
@@ -140,6 +140,15 @@ $(ARBOSDIR)/messageBatch.mao: $(ARBOSDIR)/messageBatch.mini
 
 $(ARBOSDIR)/chainParameters.mao: $(ARBOSDIR)/chainParameters.mini
 	$(CARGORUN) compile $(ARBOSDIR)/chainParameters.mini -c -o $(ARBOSDIR)/chainParameters.mao
+
+$(ARBOSDIR)/precompiles.mao: $(ARBOSDIR)/precompiles.mini
+	$(CARGORUN) compile $(ARBOSDIR)/precompiles.mini -c -o $(ARBOSDIR)/precompiles.mao
+
+$(ARBOSDIR)/signedTx.mao: $(ARBOSDIR)/signedTx.mini
+	$(CARGORUN) compile $(ARBOSDIR)/signedTx.mini -c -o $(ARBOSDIR)/signedTx.mao
+
+$(ARBOSDIR)/txReceipt.mao: $(ARBOSDIR)/txReceipt.mini
+	$(CARGORUN) compile $(ARBOSDIR)/txReceipt.mini -c -o $(ARBOSDIR)/txReceipt.mao
 
 $(ARBOS): $(ARBOSAOS) $(STDLIB) $(BUILTINMAOS)
 	$(CARGORUN) compile $(ARBOSAOS) $(STDLIB) -o $(ARBOS)

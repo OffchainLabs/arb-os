@@ -1,0 +1,141 @@
+//
+// Copyright 2020, Offchain Labs, Inc.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//    http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+//
+
+import type ByteArray;
+import type MarshalledBytes;
+import type EvmLogs;
+
+import func bytearray_new(capacity: uint) -> ByteArray;
+import func bytearray_marshalFull(ba: ByteArray) -> MarshalledBytes;
+import func evmlogs_empty() -> EvmLogs;
+import func evmlogs_numLogs(logs: EvmLogs) -> uint;
+
+// This is declared identically in messages.mini
+type IncomingRequest = struct {
+    kind: uint,               // type of message
+    blockNumber: uint,        // block number of the L1 block
+    timestamp: uint,          // timestamp of the L1 block
+    sender: address,          // address of the sender
+    requestId: uint,          // sequence number in L1 inbox
+    msgData: MarshalledBytes  // contents of the message, as a marshalled bytearray
+}
+
+// This is declared identially in gasAccounting.mini
+type GasUsage = struct {
+    gasUsed: uint,
+    gasPriceWei: uint,
+}
+
+type PerBlockReceiptData = struct {
+    totalGasUsed: uint,
+    numTx: uint,
+    numEvmLogs: uint,
+}
+
+var globalBlockReceiptData: struct {
+    blockNum: uint,
+    data: PerBlockReceiptData
+};
+
+public impure func txReceipts_init() {  // will be called at beginning of main()
+    init_txReceiptsForBlock(0);
+}
+
+impure func init_txReceiptsForBlock(blockNum: uint) {
+    globalBlockReceiptData = struct {
+        blockNum: blockNum,
+        data: struct {
+            totalGasUsed: 0,
+            numTx: 0,
+            numEvmLogs: 0
+        }
+    };
+}
+
+impure func update_txReceiptsForBlock(
+    blockNum: uint,
+    gasUsed: uint,
+    numEvmLogs: uint
+) -> PerBlockReceiptData {
+    if (blockNum > globalBlockReceiptData.blockNum) {
+        init_txReceiptsForBlock(blockNum);
+    }
+
+    // first add in the gas, because returned value is supposed to include it
+    let ret = globalBlockReceiptData.data with {
+        totalGasUsed: gasUsed + globalBlockReceiptData.data.totalGasUsed
+    };
+
+    // now update the accumulated data and write it back
+    globalBlockReceiptData = globalBlockReceiptData with {
+        data: ret with {
+            numTx: ret.numTx + 1
+        } with {
+            numEvmLogs: ret.numEvmLogs + numEvmLogs
+        }
+    };
+
+    return ret;
+}
+
+// result codes:
+//    0    return (success)
+//    1    tx reverted
+//    2    rejected due to congestion
+//    3    insufficient funds to pay for gas
+//    4    insufficient funds for tx payment
+//    5    bad sequence number
+//    6    message format error
+//    255  unknown error
+public impure func emitLog(
+    l1message: IncomingRequest,
+    resultCode: uint,
+    maybeReturnData: option<ByteArray>,
+    maybeEvmLogs: option<EvmLogs>,
+    gasUsage: option<GasUsage>,
+) {
+    let returnData = bytearray_new(0);
+    if let Some(rd) = maybeReturnData {
+        returnData = rd;
+    }
+    let evmLogs = evmlogs_empty();
+    if let Some(el) = maybeEvmLogs {
+        evmLogs = el;
+    }
+    let realGasUsage = struct {
+        gasUsed: 0,
+        gasPriceWei: 0,
+    };
+    if let Some(gu) = gasUsage {
+        realGasUsage = gu;
+    }
+
+    let txResultInfo = struct {
+        returnCode: resultCode,
+        returnData: bytearray_marshalFull(returnData),
+        evmLogs: evmLogs,
+    };
+    asm((
+        l1message,
+        txResultInfo,
+        realGasUsage,
+        update_txReceiptsForBlock(
+            l1message.blockNumber,
+            realGasUsage.gasUsed,
+            evmlogs_numLogs(evmLogs)
+        )
+    ),) { log };
+}
