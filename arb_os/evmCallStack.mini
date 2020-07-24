@@ -253,7 +253,7 @@ public impure func initEvmCallStack(
             }
         } else {
             if let Some(gasUsage) = gasAccounting_endTxCharges() {
-                // insufficient balance error
+                // report success (even though tx was a no-op)
                 emitLog(ethMessage, 0, None<ByteArray>, None<EvmLogs>, Some(gasUsage));
                 emptyAvmStack();
                 cleanAvmAuxStackAndCall(mainRunLoop,);  // should never return
