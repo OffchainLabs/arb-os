@@ -80,7 +80,6 @@ public impure func keccak256(ba: ByteArray, offset: uint, nbytes: uint) -> bytes
             )
         )
     );
-    asm((137, origNbytes, ret),) { debugprint };
     return ret;
 }
 
