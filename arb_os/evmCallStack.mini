@@ -231,6 +231,7 @@ public impure func initEvmCallStack(
                 addr,
                 callvalue
             ) {
+                setGlobalAccountStore(globalAS);
                 if let Some(gasUsage) = gasAccounting_endTxCharges() {
                     // report success
                     emitLog(ethMessage, 0, None<ByteArray>, None<EvmLogs>, Some(gasUsage));
