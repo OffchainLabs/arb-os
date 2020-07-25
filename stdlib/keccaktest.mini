@@ -45,12 +45,6 @@ impure func main() {
 }
 
 func tests() -> option<bytes32> {
-    //let acc = newfixedarray(25, 0)
-    //    with { [0] = 1 }
-    //    with { [16] = 0x8000000000000000 };
-    //let accOut = keccak_permutation(acc);
-    //return Some(accOut[0]);
-
 	let ba = bytearray_new(0);
 	let kecEmpty = keccak256(ba, 0, 0);
     if (kecEmpty != bytes32(0xc5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470)) {
