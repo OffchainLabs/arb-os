@@ -848,7 +848,7 @@ impl Machine {
     ///Runs the instruction pointed to by the program counter, returns either a bool indicating
     /// whether the instruction was blocked if execution does not hit an error state, or an
     /// `ExecutionError` if an error was encountered.
-    pub fn run_one(&mut self, debug: bool) -> Result<bool, ExecutionError> {
+    pub fn run_one(&mut self, _debug: bool) -> Result<bool, ExecutionError> {
         if let MachineState::Running(pc) = self.state {
             if let Some(insn) = self.code.get_insn(pc) {
                 if let Some(val) = &insn.immediate {
@@ -1305,6 +1305,13 @@ impl Machine {
 						self.incr_pc();
 						Ok(true)
 					}
+                    Opcode::AVMOpcode(AVMOpcode::Keccakf) => {
+                        let t1 = self.stack.pop_tuple(&self.state)?;
+                        let t2 = tuple_keccak(t1, &self.state)?;
+                        self.stack.push(Value::new_tuple(t2));
+                        self.incr_pc();
+                        Ok(true)
+                    }
 					Opcode::AVMOpcode(AVMOpcode::Inbox) => {
 						let msgs = self.runtime_env.get_inbox();
 						if msgs.is_none() {
@@ -1392,9 +1399,7 @@ impl Machine {
 					}
 					Opcode::AVMOpcode(AVMOpcode::DebugPrint) => {
 						let r1 = self.stack.pop(&self.state)?;
-						if debug {
-                            println!("debugprint: {}", r1);
-                        }
+                        println!("debugprint: {}", r1);
 						self.incr_pc();
 						Ok(true)
 					}
@@ -1452,6 +1457,49 @@ impl Machine {
             ))
         }
     }
+}
+
+fn tuple_keccak(intup: Vec<Value>, state: &MachineState) -> Result<Vec<Value>, ExecutionError> {
+    let mask64 = Uint256::from_u64(((1 << 32) + 1) * ((1 << 32) - 1));
+    let two_to_64 = mask64.add(&Uint256::one());
+    if intup.len() != 7 {
+        println!("keccakf operand length: {}", intup.len());
+        return Err(ExecutionError::new(
+            "invalid tuple length for keccakf: ",
+            state,
+            None,
+        ));
+    }
+    let mut inuis = vec![];
+    for inelt in intup {
+        inuis.push(if let Value::Int(ui) = inelt {
+            ui
+        } else {
+            return Err(ExecutionError::new(
+                "invalid operand for keccakf",
+                state,
+                None,
+            ));
+        });
+    }
+    let mut outtup = [0u64; 25];
+    for i in 0..25 {
+        outtup[i] = inuis[i / 4].bitwise_and(&mask64).trim_to_u64();
+        inuis[i / 4] = inuis[i / 4].div(&two_to_64).unwrap();   // safe because denom not zero
+    }
+    keccak::f1600(&mut outtup);
+
+    for i in 0..6 {
+        inuis[i] = Uint256::from_u64(outtup[4 * i + 3]);
+        for j in (0..3).rev() {
+            inuis[i] = inuis[i]
+                .mul(&two_to_64)
+                .add(&Uint256::from_u64(outtup[4 * i + j]));
+        }
+    }
+    inuis[6] = Uint256::from_u64(outtup[24]);
+    let ret = inuis.iter().map(|ui| Value::Int(ui.clone())).collect();
+    Ok(ret)
 }
 
 fn do_ecrecover(

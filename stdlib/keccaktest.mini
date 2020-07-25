@@ -26,13 +26,22 @@ import func bytearray_get64(ba: ByteArray, idx: uint) -> uint;
 import func bytearray_set64(ba: ByteArray, idx: uint, val: uint) -> ByteArray;
 import func bytearray_get256(ba: ByteArray, offset: uint) -> uint;
 import func bytearray_set256(ba: ByteArray, offset: uint, value: uint) -> ByteArray;
-
+import func bytearray_copy(
+    from: ByteArray,
+    fromOffset: uint,
+    to: ByteArray,
+    toOffset: uint,
+    nbytes: uint,
+) -> ByteArray;
 import func keccak256(ba: ByteArray, offset: uint, nbytes: uint) -> bytes32;
 import impure func initKeccakConstants();
 import impure func keccak_permutation(state: [25]uint) -> [25]uint;
 
 
 impure func main() {
+ //   asm((0,0,0,0,0,0,0),) { keccakf log };
+ //   return;
+
     initKeccakConstants();
     if let Some(x) = tests() {
 	    asm(x,) { log };
@@ -69,6 +78,31 @@ func tests() -> option<bytes32> {
         return Some(bytes32(3));
     }
 
+    let kec67 = keccak256(setupFromUnmarshal(), 0, 67);
+    if (kec67 != bytes32(0x3dd4c9bc4aa93bb5b8a21a06ecbef5336c378a7b9814a5a3a743406a54a3cc7b)) {
+        return Some(bytes32(4));
+    }
+
+    let kec67 = keccak256(
+        bytearray_copy(setupFromUnmarshal(), 0, bytearray_new(0), 13, 67),
+        13,
+        67
+    );
+    if (kec67 != bytes32(0x3dd4c9bc4aa93bb5b8a21a06ecbef5336c378a7b9814a5a3a743406a54a3cc7b)) {
+        return Some(bytes32(5));
+    }
+
+    let ba = bytearray_new(0);
+    let i = 0;
+    while (i < 5) {
+        ba = bytearray_set256(ba, i*32, 0x000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f);
+        i = i+1;
+    }
+    let kec532 = keccak256(ba, 0, 5*32);
+    if (kec532 != bytes32(0xaa9038072c0559cb6890b2632b172625239a59d6d93c1ef69df62aebfdd2f4e2)) {
+        return Some(bytes32(6));
+    }
+
 	return Some(bytes32(0));
 }
 
@@ -76,14 +110,14 @@ func setupFromUnmarshal() -> ByteArray {
 	let marshalledStruct = unsafecast<MarshalledBytes>((
 		67,
 		(
+            0x4041420000000000000000000000000000000000000000000000000000000000,
 			(
-				(
-					null,
-					0x000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f,
-				),
 				0x202122232425262728292a2b2c2d2e2f303132333435363738393a3b3c3d3e3f,
+				(
+					0x000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f,
+					null,
+				),
 			),
-			0x4041420000000000000000000000000000000000000000000000000000000000,
 		),
 	));
 	return bytearray_unmarshalBytes(marshalledStruct);
