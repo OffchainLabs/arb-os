@@ -24,7 +24,6 @@ import type GasUsage;
 import type StorageMap;
 
 import impure func errorHandler_init();
-import impure func initKeccakConstants();
 import impure func chainParams_init();
 import impure func gasAccounting_init();
 import impure func evmCallStack_init();
@@ -87,7 +86,6 @@ import impure func arbsys_txcall();
 
 impure func main() {
     errorHandler_init();
-    initKeccakConstants();
     chainParams_init();
     gasAccounting_init();
     evmCallStack_init();
