@@ -164,7 +164,8 @@ fn main() -> Result<(), CompileError> {
             SubCommand::with_name("maketestlogs").about("generates test logs for all ArbOS tests"),
         )
         .subcommand(
-            SubCommand::with_name("makebenchmarks").about("generates logs for all ArbOS benchmarks"),
+            SubCommand::with_name("makebenchmarks")
+                .about("generates logs for all ArbOS benchmarks"),
         )
         .subcommand(
             SubCommand::with_name("maketemplates").about("generates code for contract templates"),
