@@ -158,6 +158,9 @@ fn main() -> Result<(), CompileError> {
             SubCommand::with_name("maketestlogs").about("generates test logs for all ArbOS tests"),
         )
         .subcommand(
+            SubCommand::with_name("makebenchmarks").about("generates logs for all ArbOS benchmarks"),
+        )
+        .subcommand(
             SubCommand::with_name("maketemplates").about("generates code for contract templates"),
         )
         .get_matches();
@@ -273,6 +276,10 @@ fn main() -> Result<(), CompileError> {
 
     if matches.subcommand_matches("maketestlogs").is_some() {
         evm::make_logs_for_all_arbos_tests();
+    }
+
+    if matches.subcommand_matches("makebenchmarks").is_some() {
+        evm::benchmarks::make_benchmarks();
     }
 
     if matches.subcommand_matches("maketemplates").is_some() {
