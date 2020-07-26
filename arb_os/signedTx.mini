@@ -41,7 +41,7 @@ import func rlp_encodeMessageInfo(
 
 import impure func chainParams_chainId() -> uint;
 
-import impure func keccak256(ba: ByteArray, offset: uint, nbytes: uint) -> bytes32;
+import func keccak256(ba: ByteArray, offset: uint, nbytes: uint) -> bytes32;
 
 
 type IncomingRequest = struct {
