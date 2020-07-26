@@ -25,8 +25,8 @@ import func bytearray_setByte(ba: ByteArray, offset: uint, val: uint) -> ByteArr
 import func bytearray_copy(src: ByteArray, srcOffset: uint, dest: ByteArray, destOffset: uint, nbytes: uint) -> ByteArray;
 
 
-public impure func keccak256(ba: ByteArray, offset: uint, nbytes: uint) -> bytes32 {
-    let origNbytes = nbytes;   // DEBUG
+
+public func keccak256(ba: ByteArray, offset: uint, nbytes: uint) -> bytes32 {
     if (nbytes == 32) {
         return hash(bytearray_get256(ba, offset));
     }
@@ -37,14 +37,12 @@ public impure func keccak256(ba: ByteArray, offset: uint, nbytes: uint) -> bytes
         );
     }
 
-    let accumulator = newfixedarray(25, 0);
+    let accumulator = unsafecast<[7]uint>((0,0,0,0,0,0,0));
 
     // Process as many complete 136-byte blocks as we can
     while (nbytes >= 136) {
         // Process one complete block
-        accumulator = keccak_permutation(
-            keccak_xorblock(accumulator, ba, offset)
-        );
+        accumulator = asm(keccak_xorblock(accumulator, ba, offset),) [7]uint { keccakf };
         offset = offset+136;
         nbytes = nbytes-136;
     }
@@ -68,206 +66,28 @@ public impure func keccak256(ba: ByteArray, offset: uint, nbytes: uint) -> bytes
     }
 
     // Process the final block
-    accumulator = keccak_permutation(
-        keccak_xorblock(accumulator, lastBlock, 0)
-    );
+    accumulator = asm(keccak_xorblock(accumulator, lastBlock, 0),) [7]uint { keccakf };
 
     // Extract the return value, with properly adjusted endianness
-    let ret = bytes32(
-        flipEndian64(accumulator[3]) + 0x10000000000000000 * (
-            flipEndian64(accumulator[2]) + 0x10000000000000000 * (
-                flipEndian64(accumulator[1]) + 0x10000000000000000 * flipEndian64(accumulator[0])
-            )
-        )
-    );
-    return ret;
+    return bytes32(flipEndian256(accumulator[0]));
 }
 
-func keccak_xorblock_save(accumulator: [25]uint, ba: ByteArray, offset: uint) -> [25]uint {
-    let i = 0;
-    while (i < 4) {
-        let word = bytearray_get256(ba, offset+32*i);
-        let val = accumulator[4*i] & (word & 0xffffffffffffffff);  //DEBUG
-        accumulator = accumulator 
-            with { [4*i] = accumulator[4*i] ^ flipEndian64(word & 0xffffffffffffffff) }
-            with { [4*i+1] = accumulator[4*i+1] ^ flipEndian64((word/0x10000000000000000) & 0xffffffffffffffff) }
-            with { [4*i+2] = accumulator[4*i+2] ^ flipEndian64((word/0x100000000000000000000000000000000) & 0xffffffffffffffff) }
-            with { [4*i+3] = accumulator[4*i+3] ^ flipEndian64((word/0x1000000000000000000000000000000000000000000000000) & 0xffffffffffffffff) };
-        i = i+1;
-    }
-    return accumulator with { [16] = accumulator[16] ^ flipEndian64(bytearray_get64(ba, offset+128)) };
-}
-
-func keccak_xorblock(accumulator: [25]uint, ba: ByteArray, offset: uint) -> [25]uint {
-    // XOR data for a block into the accumulator, with appropriate endianness
-    let i = 0;
-    while (i < 17) {
-        let word = 0;
-        let j = 0;
-        while (j < 8) {
-            word = 256*word + bytearray_getByte(ba, offset + 7-j);
-            j = j+1;
-        }
-        accumulator = accumulator with { [i] = accumulator[i] ^ word };
-        offset = offset+8;
-        i = i+1;
-    }
-    return accumulator;
-}
-
-// This must be initialized, by calling initKeccakConstants, before any calls are made to keccak_permutation.
-var keccakConstants: struct {
-    rndc: [24]uint,
-    piln: [24]uint,
-    rotc: [24]uint,
-};
-
-// This is the core keccak256 permutation function
-// argument and result are 1600-bit values, broken into 25 64-bit chunks
-public impure func keccak_permutation(s: [25]uint) -> [25]uint {
-    let round = 0;
-    while (round < 24) {
-        // theta
-        let bc = newfixedarray(5, 0);
-        let i = 0;
-        while (i < 5) {
-            bc = bc with { [i] = s[i]^s[i+5]^s[i+10]^s[i+15]^s[i+20] };
-            i = i+1;
-        }
-        i = 0;
-        while (i < 5) {
-            let t = bc[(i + 4) % 5] ^ sha3_rotl64(bc[(i + 1) % 5], 1);
-            let j = 0;
-            while (j < 25) {
-                s = s with { [j+i] = s[j+i]^t };
-                j = j+5;
-            }
-            i = i+1;
-        }
-
-        // rho pi
-        let t = s[1];
-        i = 0;
-        while (i < 24) {
-            let j = keccakConstants.piln[i];
-            bc = bc with { [0] = s[j] };
-            s = s with { [j] = sha3_rotl64(t, keccakConstants.rotc[i]) };
-            t = bc[0];
-            i = i+1;
-        }
-
-        // chi
-        let j = 0;
-        while (j < 25) {
-            i = 0;
-            while (i < 5) {
-                bc = bc with { [i] = s[j+i] };
-                i = i+1;
-            }
-            i = 0;
-            while (i < 5) {
-                t = ((~bc[(i + 1) % 5]) & bc[(i + 2) % 5]) & 0xffffffffffffffff;
-                s = s with { [j+i] = s[j+i]^t };
-                i = i+1;
-            }
-            j = j+5;
-        }
-
-        // iota
-        s = s with { [0] = s[0]^keccakConstants.rndc[round] };
-
-        round = round+1;
-    }
-
-    return s;
-}
-
-func sha3_rotl64(x: uint, y: uint) -> uint {
-    x = x & 0xffffffffffffffff;
-    return (
-        (x * (asm(2, y) uint { exp })) |
-        (x / (asm(2, 64-y) uint { exp }))
-    ) & 0xffffffffffffffff;
-}
-
-public impure func initKeccakConstants() {
-    keccakConstants = struct {
-        rndc: newfixedarray(24, 0) 
-            with { [0] = 0x0000000000000001 }
-            with { [1] = 0x0000000000008082 }
-            with { [2] = 0x800000000000808a }
-            with { [3] = 0x8000000080008000 }
-            with { [4] = 0x000000000000808b }
-            with { [5] = 0x0000000080000001 }
-            with { [6] = 0x8000000080008081 }
-            with { [7] = 0x8000000000008009 }
-            with { [8] = 0x000000000000008a }
-            with { [9] = 0x0000000000000088 }
-            with { [10] = 0x0000000080008009 }
-            with { [11] = 0x000000008000000a }
-            with { [12] = 0x000000008000808b }
-            with { [13] = 0x800000000000008b }
-            with { [14] = 0x8000000000008089 }
-            with { [15] = 0x8000000000008003 }
-            with { [16] = 0x8000000000008002 }
-            with { [17] = 0x8000000000000080 }
-            with { [18] = 0x000000000000800a }
-            with { [19] = 0x800000008000000a }
-            with { [20] = 0x8000000080008081 }
-            with { [21] = 0x8000000000008080 }
-            with { [22] = 0x0000000080000001 }
-            with { [23] = 0x8000000080008008 },
-        piln: newfixedarray(24, 0) 
-            with { [0] = 10 }
-            with { [1] = 7 }
-            with { [2] = 11 }
-            with { [3] = 17 }
-            with { [4] = 18 }
-            with { [5] = 3 }
-            with { [6] = 5 }
-            with { [7] = 16 }
-            with { [8] =  8 }
-            with { [9] = 21 } 
-            with { [10] = 24 }
-            with { [11] = 4 }
-            with { [12] = 15 }
-            with { [13] = 23 }
-            with { [14] = 19 }
-            with { [15] = 13 }
-            with { [16] = 12 }
-            with { [17] = 2 }
-            with { [18] = 20 }
-            with { [19] = 14 }
-            with { [20] = 22 }
-            with { [21] = 9 }
-            with { [22] = 6 }
-            with { [23] = 1 },
-        rotc: newfixedarray(24, 0)
-            with { [0] = 1 }
-            with { [1] = 3 }
-            with { [2] = 6 }
-            with { [3] = 10 }
-            with { [4] = 15 }
-            with { [5] = 21 }
-            with { [6] = 28 }
-            with { [7] = 36 }
-            with { [8] = 45 }
-            with { [9] = 55 }
-            with { [10] = 2 }
-            with { [11] = 14 }
-            with { [12] = 27 }
-            with { [13] = 41 }
-            with { [14] = 56 }
-            with { [15] = 8 }
-            with { [16] = 25 }
-            with { [17] = 43 }
-            with { [18] = 62 }
-            with { [19] = 18 }
-            with { [20] = 39 }
-            with { [21] = 61 }
-            with { [22] = 20 }
-            with { [23] = 44 },
+func keccak_xorblock(accumulator: [7]uint, ba: ByteArray, offset: uint) -> [7]uint {
+    return accumulator with {
+        [0] = accumulator[0] ^ flipEndian256(bytearray_get256(ba, offset))
+    } with {
+        [1] = accumulator[1] ^ flipEndian256(bytearray_get256(ba, offset+32))
+    } with {
+        [2] = accumulator[2] ^ flipEndian256(bytearray_get256(ba, offset+32*2))
+    } with {
+        [3] = accumulator[3] ^ flipEndian256(bytearray_get256(ba, offset+32*3))
+    } with {
+        [4] = accumulator[4] ^ flipEndian64(bytearray_get64(ba, offset+32*4))
     };
+}
+
+public func keccak_permutation(s: [7]uint) -> [7]uint {
+    return asm(s,) [7]uint { keccakf };
 }
 
 func flipEndian64(x: uint) -> uint {
@@ -275,4 +95,15 @@ func flipEndian64(x: uint) -> uint {
     x = ((x & 0xffff0000ffff) * 0x10000) | ((x / 0x10000) & 0xffff0000ffff);
     x = ((x & 0xff00ff00ff00ff) * 0x100) | ((x / 0x100) & 0xff00ff00ff00ff);
     return x;
+}
+
+func flipEndian256(x: uint) -> uint {
+    let acc = 0;
+    let i = 0;
+    while (i < 4) {
+        acc = 0x10000000000000000 * acc + flipEndian64(x & 0xffffffffffffffff);
+        x = x / 0x10000000000000000;
+        i = i+1;
+    }
+    return acc;
 }
