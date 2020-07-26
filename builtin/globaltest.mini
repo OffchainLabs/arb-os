@@ -82,6 +82,17 @@ impure func tests() -> uint {
         return 8;
     }
 
+    // regression tests for issue #156
+    if (asm(16, 31) uint { byte } != 16) {
+        return 9;
+    }
+    if (asm(16, 0) uint { byte } != 0) {
+        return 10;
+    }
+    if (asm(65534, 30) uint { byte } != 255) {
+        return 11;
+    }
+
     return struct9test();
 }
 
