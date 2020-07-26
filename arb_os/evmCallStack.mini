@@ -232,37 +232,20 @@ public impure func initEvmCallStack(
                 callvalue
             ) {
                 setGlobalAccountStore(globalAS);
-                if let Some(gasUsage) = gasAccounting_endTxCharges() {
-                    // report success
-                    emitLog(ethMessage, 0, None<ByteArray>, None<EvmLogs>, Some(gasUsage));
-                    emptyAvmStack();
-                    cleanAvmAuxStackAndCall(mainRunLoop,);  // should never return
-                } else {
-                    // unknown error type
-                    emitLog(ethMessage, 255, None<ByteArray>, None<EvmLogs>, None<GasUsage>);
-                    evmCallStack_callHitError();
-               }
-            } else {
-               if let Some(gasUsage) = gasAccounting_endTxCharges() {
-                    // insufficient balance error
-                    emitLog(ethMessage, 4, None<ByteArray>, None<EvmLogs>, Some(gasUsage));
-                } else {
-                    // unknown error type
-                    emitLog(ethMessage, 255, None<ByteArray>, None<EvmLogs>, None<GasUsage>);
-                }
-                evmCallStack_callHitError();
-            }
-        } else {
-            if let Some(gasUsage) = gasAccounting_endTxCharges() {
-                // report success (even though tx was a no-op)
-                emitLog(ethMessage, 0, None<ByteArray>, None<EvmLogs>, Some(gasUsage));
+                // report success
+                emitLog(ethMessage, 0, None<ByteArray>, None<EvmLogs>, None<GasUsage>);
                 emptyAvmStack();
                 cleanAvmAuxStackAndCall(mainRunLoop,);  // should never return
             } else {
-                // unknown error type
-                emitLog(ethMessage, 255, None<ByteArray>, None<EvmLogs>, None<GasUsage>);
+                // insufficient balance error
+                emitLog(ethMessage, 4, None<ByteArray>, None<EvmLogs>, None<GasUsage>);
                 evmCallStack_callHitError();
             }
+        } else {
+            // report success (even though tx was a no-op)
+            emitLog(ethMessage, 0, None<ByteArray>, None<EvmLogs>, None<GasUsage>);
+            emptyAvmStack();
+            cleanAvmAuxStackAndCall(mainRunLoop,);  // should never return
         }
     }
 }
