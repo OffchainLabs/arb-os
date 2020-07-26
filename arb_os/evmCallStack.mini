@@ -584,7 +584,7 @@ public impure func evmCallStack_returnFromCall(
             emitLog(
                 globalCurrentEthMessage,
                 1,
-                None<ByteArray>,
+                Some(returnData),
                 None<EvmLogs>,
                 Some(gasUsage)
             );
