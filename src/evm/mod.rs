@@ -451,7 +451,6 @@ pub fn evm_direct_deploy_and_call_add(log_to: Option<&Path>, debug: bool) {
 }
 
 pub fn evm_payment_to_empty_address(log_to: Option<&Path>, debug: bool) {
-    use std::convert::TryFrom;
     let rt_env = RuntimeEnvironment::new(Uint256::from_usize(1111));
     let mut machine = load_from_file(Path::new("arb_os/arbos.mexe"), rt_env);
     machine.start_at_zero();
@@ -591,6 +590,7 @@ pub fn make_logs_for_all_arbos_tests() {
         false,
     );
     evm_test_arbsys(Some(Path::new("testlogs/evm_test_arbsys.aoslog")), false);
+    evm_payment_to_empty_address(Some(Path::new("testlogs/payment_to_empty_address.aoslog")), false);
     mint_erc20_and_get_balance(Some(Path::new("testlogs/erc20_test.aoslog")), false);
     mint_erc721_and_get_balance(Some(Path::new("testlogs/erc721_test.aoslog")), false);
 }
