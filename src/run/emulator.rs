@@ -487,6 +487,7 @@ pub struct Machine {
     arb_gas_remaining: Uint256,
     pub runtime_env: RuntimeEnvironment,
     file_name_chart: HashMap<u64, String>,
+    total_gas_usage: Uint256,
 }
 
 impl Machine {
@@ -502,6 +503,7 @@ impl Machine {
             arb_gas_remaining: Uint256::zero().bitwise_neg(),
             runtime_env: env,
             file_name_chart: program.file_name_chart,
+            total_gas_usage: Uint256::zero(),
         }
     }
 
@@ -515,6 +517,11 @@ impl Machine {
     ///Returns a stack trace of the current state of the machine.
     pub fn get_stack_trace(&self) -> StackTrace {
         StackTrace::Known(self.aux_stack.all_codepts())
+    }
+
+    ///Returns the value of the ArbGasRemaining register
+    pub fn get_total_gas_usage(&self) -> Uint256 {
+        self.total_gas_usage.clone()
     }
 
     ///Sets the state of the machine to call the function at func_addr with args.
@@ -856,8 +863,10 @@ impl Machine {
                     self.stack.push(val.clone());
                 }
                 if let Some(gas) = self.next_op_gas() {
-                    if let Some(remaining) = self.arb_gas_remaining.sub(&Uint256::from_u64(gas)) {
+                    let gas256 = Uint256::from_u64(gas);
+                    if let Some(remaining) = self.arb_gas_remaining.sub(&gas256) {
                         self.arb_gas_remaining = remaining;
+                        self.total_gas_usage = self.total_gas_usage.add(&gas256);
                     } else {
                         return Err(ExecutionError::new("Out of ArbGas", &self.state, None));
                     }
