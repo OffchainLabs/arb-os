@@ -169,6 +169,10 @@ public func bytearray_get64(ba: ByteArray, offset: uint) -> uint {
     if (offset >= ba.size) {
         return 0;
     }
+    let bytesToTrim = 0;
+    if (offset+8 > ba.size) {
+        bytesToTrim = offset+8 - ba.size;
+    }
     // the access might extend beyond size, but access to the underlying array will be in-bounds
     // on the true side of the if, any overage is within an existing word of the underlying array
     // on the false side of the if, bytearray_get256 will avoid out-of-bounds accesses
@@ -176,10 +180,18 @@ public func bytearray_get64(ba: ByteArray, offset: uint) -> uint {
     let alignment = offset % 32;
     if (alignment <= 24) {
         let res = ba.contents[offset/32];
-        return (res / asm(2, 192-8*alignment) uint { exp }) & 0xffffffffffffffff;
+        let ret = (res / asm(2, 192-8*alignment) uint { exp }) & 0xffffffffffffffff;
+        if (bytesToTrim > 0) {
+            ret = ret & ~((asm(256, bytesToTrim) uint { exp }) - 1);
+        }
+        return ret;
     } else {
         let res = bytearray_get256(ba, offset);
-        return res / 0x1000000000000000000000000000000000000000000000000;
+        let ret = res / 0x1000000000000000000000000000000000000000000000000;
+        if (bytesToTrim > 0) {
+            ret = ret & ~((asm(256, bytesToTrim) uint { exp }) - 1);
+        }
+        return ret;
     }
 }
 
@@ -211,6 +223,10 @@ public func bytearray_set64(ba: ByteArray, offset: uint, value: uint) -> ByteArr
 
 // bytearray_get256 reads a chunk of 32 bytes from a ByteArray
 public func bytearray_get256(ba: ByteArray, offset: uint) -> uint {
+    let bytesToTrim = 0;
+    if (offset+32 > ba.size) {
+        bytesToTrim = offset+32 - ba.size;
+    }
     offset = offset + ba.sliceOffset;
     let lowWordIndex = offset / 32;
     let alignment = offset % 32;
@@ -218,8 +234,12 @@ public func bytearray_get256(ba: ByteArray, offset: uint) -> uint {
         if (offset+32 > ba.arrayCapacityBytes) {
             // because arrayCapacityBytes is a multiple of 32 in this case, access is entirely beyond size
             return 0;
-        } 
-        return ba.contents[lowWordIndex];
+        }
+        let ret = ba.contents[lowWordIndex];
+        if (bytesToTrim > 0) {
+            ret = ret & ~((asm(256, bytesToTrim) uint { exp }) - 1);
+        }
+        return ret;
     } else {
         let lowWord = 0;  // word from lower-numbered array slot
         let hiWord = 0;   // word from higher-numbered array slot
@@ -242,7 +262,11 @@ public func bytearray_get256(ba: ByteArray, offset: uint) -> uint {
 
         let shiftFactor = asm(2, 8*alignment) uint { exp };
         let invShiftFactor = asm(2, 256-8*alignment) uint { exp };
-        return (hiWord/invShiftFactor) | (lowWord*shiftFactor);
+        let ret = (hiWord/invShiftFactor) | (lowWord*shiftFactor);
+        if (bytesToTrim > 0) {
+            ret = ret & ~((asm(256, bytesToTrim) uint { exp }) - 1);
+        }
+        return ret;
     }
 }
 
