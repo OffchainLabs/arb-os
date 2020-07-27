@@ -21,26 +21,27 @@ use ethers_signers::Signer;
 use std::path::Path;
 
 pub fn make_benchmarks() {
-    let benchmarks: Vec<(fn(&Path) -> u64, &str, &str)> = vec![
-        (benchmark_boot, "boot ArbOS", "boot"),
-        (benchmark_erc20_1000, "1000 ERC-20 deposits", "erc20_1000"),
-        (benchmark_add_1000, "1000 null txs", "nulltx_1000"),
+    let benchmarks: Vec<(fn(u64, &Path) -> u64, u64, &str, &str)> = vec![
+        (benchmark_boot, 1, "boot ArbOS", "boot"),
+        (benchmark_erc20, 1000, "1000 ERC-20 deposits", "erc20_1000"),
+        (benchmark_add, 1000, "1000 null txs", "nulltx_1000"),
         (
-            benchmark_add_batched_1000,
-            "1000 signed batched null txs",
-            "nulltx_batch_1000",
+            benchmark_add_batched,
+            500,
+            "500 signed batched null txs",
+            "nulltx_batch_500",
         ),
     ];
 
     for benchmark in benchmarks {
-        let (bm_func, description, filename) = benchmark;
+        let (bm_func, iterations, description, filename) = benchmark;
         let filename = "benchmarks/".to_owned() + filename + ".aoslog";
-        let gas_used = bm_func(Path::new(&filename));
+        let gas_used = bm_func(iterations, Path::new(&filename));
         println!("ArbGas for {}: {}", description, gas_used)
     }
 }
 
-pub fn benchmark_boot(log_to: &Path) -> u64 {
+pub fn benchmark_boot(_iterations: u64, log_to: &Path) -> u64 {
     let rt_env = RuntimeEnvironment::new(Uint256::from_usize(1111));
     let mut machine = load_from_file(Path::new("arb_os/arbos.mexe"), rt_env);
     machine.start_at_zero();
@@ -50,12 +51,12 @@ pub fn benchmark_boot(log_to: &Path) -> u64 {
     gas_used
 }
 
-pub fn benchmark_erc20_1000(log_to: &Path) -> u64 {
+pub fn benchmark_erc20(iterations: u64, log_to: &Path) -> u64 {
     let rt_env = RuntimeEnvironment::new(Uint256::from_usize(1111));
     let mut machine = load_from_file(Path::new("arb_os/arbos.mexe"), rt_env);
     machine.start_at_zero();
 
-    for _ in 0..1000 {
+    for _ in 0..iterations {
         machine.runtime_env.insert_erc20_deposit_message(
             Uint256::from_u64(1025),
             Uint256::from_u64(1026),
@@ -69,7 +70,7 @@ pub fn benchmark_erc20_1000(log_to: &Path) -> u64 {
     gas_used
 }
 
-pub fn benchmark_add_1000(log_to: &Path) -> u64 {
+pub fn benchmark_add(iterations: u64, log_to: &Path) -> u64 {
     let rt_env = RuntimeEnvironment::new(Uint256::from_usize(1111));
     let mut machine = load_from_file(Path::new("arb_os/arbos.mexe"), rt_env);
     machine.start_at_zero();
@@ -90,7 +91,7 @@ pub fn benchmark_add_1000(log_to: &Path) -> u64 {
         }
     };
 
-    for _ in 0..1000 {
+    for _ in 0..iterations {
         let _result = contract
             .call_function(
                 my_addr.clone(),
@@ -111,7 +112,7 @@ pub fn benchmark_add_1000(log_to: &Path) -> u64 {
     machine.get_total_gas_usage().to_u64().unwrap()
 }
 
-pub fn benchmark_add_batched_1000(log_to: &Path) -> u64 {
+pub fn benchmark_add_batched(iterations: u64, log_to: &Path) -> u64 {
     let rt_env = RuntimeEnvironment::new(Uint256::from_usize(1111));
     let mut machine = load_from_file(Path::new("arb_os/arbos.mexe"), rt_env);
     machine.start_at_zero();
@@ -137,7 +138,7 @@ pub fn benchmark_add_batched_1000(log_to: &Path) -> u64 {
 
     let mut batch = machine.runtime_env.new_batch();
 
-    for _ in 0..1000 {
+    for _ in 0..iterations {
         let _tx_id = contract
             .add_function_call_to_batch(
                 &mut batch,
