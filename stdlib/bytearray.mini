@@ -379,11 +379,33 @@ func expandingIntArray_get(arr: ExpandingIntArray, index: uint) -> uint {
 }
 
 func expandingIntArray_getConsecutive(arr: ExpandingIntArray, index: uint) -> (uint, uint) {
-    // TODO: make this more efficient
-    return (
-        expandingIntArray_get(arr, index),
-        expandingIntArray_get(arr, index+1),
-    );
+    let tree = arr.contents;
+    let chunk = arr.chunk;
+
+    while (chunk > 1) {
+        let offset = index % chunk;
+        if ((offset+1) == chunk) {
+            let loSlot = index / chunk;
+            return (
+                ear_get_2(unsafecast<[8]any>(tree[loSlot]), chunk/8, chunk-1),
+                ear_get_2(unsafecast<[8]any>(tree[loSlot+1]), chunk/8, 0)
+            );
+        }
+        tree = unsafecast<[8]any>(tree[index/chunk]);
+        index = offset;
+        chunk = chunk / 8;
+    }
+
+    return (unsafecast<uint>(tree[index]), unsafecast<uint>(tree[index+1]));
+}
+
+func ear_get_2(tree: [8]any, chunk: uint, index: uint) -> uint {
+    while (chunk > 1) {
+        tree = unsafecast<[8]any>(tree[index/chunk]);
+        index = index % chunk;
+        chunk = chunk / 8;
+    }
+    return unsafecast<uint>(tree[index]);
 }
 
 func expandingIntArray_set(arr: ExpandingIntArray, index: uint, value: uint) -> ExpandingIntArray {
