@@ -76,16 +76,20 @@ public func marshalledBytes_hash(mb: MarshalledBytes) -> bytes32 {
 public func bytearray_unmarshalBytes(inBytes: MarshalledBytes) -> ByteArray {
     // unmarshal bytes from the bytestack data structure that we receive from L1
     let nbytes = inBytes.nbytes;
-    let ba = bytearray_new(nbytes);
+    let eia = expandingIntArray_new();
     let nwords = (nbytes+31)/32;
 
     let words = inBytes.contents;
     while (nwords > 0) {
         nwords = nwords-1;
-        ba = bytearray_set256(ba, 32*nwords, words.first);
+        eia = expandingIntArray_set(eia, nwords, words.first);
         words = unsafecast<MarshalledBytesCell>(words.rest);
     }
-    return ba with { size: nbytes };
+    return struct {
+        size: inBytes.nbytes,
+        sliceOffset: 0,
+        contents: eia,
+    };
 }
 
 public func bytearray_marshalFull(ba: ByteArray) -> MarshalledBytes {
@@ -143,7 +147,7 @@ public func bytearray_get64(ba: ByteArray, offset: uint) -> uint {
         }
         return ret;
     } else {
-        let res = bytearray_get256(ba, offset);
+        let res = bytearray_get256(ba, offset-ba.sliceOffset);
         let ret = res / 0x1000000000000000000000000000000000000000000000000;
         if (bytesToTrim > 0) {
             ret = ret & ~((asm(256, bytesToTrim) uint { exp }) - 1);
@@ -154,6 +158,9 @@ public func bytearray_get64(ba: ByteArray, offset: uint) -> uint {
 
 // bytearray_get256 reads a chunk of 32 bytes from a ByteArray
 public func bytearray_get256(ba: ByteArray, offset: uint) -> uint {
+    if (offset >= ba.size) {
+        return 0;
+    }
     let bytesToTrim = 0;
     if (offset+32 > ba.size) {
         bytesToTrim = offset+32 - ba.size;
@@ -441,7 +448,7 @@ func ear_op2(
             closure
         );
         return (
-            tree with { [index] = newSlotContents },
+            tree with { [slot] = newSlotContents },
             retVal,
         );
     }
@@ -463,7 +470,7 @@ func expandingIntArray_grow(arr: ExpandingIntArray) -> ExpandingIntArray {
     let newContents = unsafecast<[8]any>((0,0,0,0,0,0,0,0));
     let newChunk = 1;
     while (newChunk <= arr.chunk) {
-        newContents = unsafecast<[8]any>(newfixedarray(8, newContents));
+        newContents = unsafecast<[8]any>((newContents, newContents, newContents, newContents, newContents, newContents, newContents, newContents));
         newChunk = newChunk * 8;
     }
     newContents = newContents with { [0] = arr.contents };
