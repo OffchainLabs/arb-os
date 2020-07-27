@@ -136,6 +136,7 @@ func tests() -> uint {
 	    return 12;
 	}
 
+    asm(bytearray_marshalFull(setupFromUnmarshal()),) { debugprint };
     if (bytes32(0x4fc384a19926e9ff7ec8f2376a0d146dc273031df1db4d133236d209700e4780)
         != marshalledBytes_hash(bytearray_marshalFull(setupFromUnmarshal()))
     ) {
@@ -159,6 +160,12 @@ func tests() -> uint {
     let ba3 = bytearray_copy(ba, 0, bytearray_new(0), 0, 41);
     if (bytearray_marshalFull(ba2) != bytearray_marshalFull(ba3)) {
         return 16;
+    }
+
+    let ba = bytearray_new(0);
+    let i = 0;
+    while (i < 500) {
+        ba = bytearray_set256(ba, i*32, i);
     }
 
 	return 0;
