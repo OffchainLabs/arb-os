@@ -120,7 +120,7 @@ public func builtin_kvsSet(s: Kvs, key: any, value: any) -> Kvs {
     }
 }
 
-public func kvs_set2(s: KvsNode, key: any, value: option<any>) -> (KvsNode, option<Unwinder>, int) {
+func kvs_set2(s: KvsNode, key: any, value: option<any>) -> (KvsNode, option<Unwinder>, int) {
     let hashedKey = uint(hash(key));
     let reductionFactor = 1;
     let unwinder = None<Unwinder>;
@@ -215,7 +215,7 @@ public func builtin_kvsForall(
     return kvs_forall_tree(s.tree, closure, state);
 }
 
-public func kvs_forall_tree(
+func kvs_forall_tree(
     t: KvsNode,
     closure: func(any, any, any) -> any,
     state: any
