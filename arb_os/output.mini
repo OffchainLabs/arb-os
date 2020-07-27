@@ -95,6 +95,7 @@ impure func outputStats_updateBlockIfNeeded() {
     let newBlockNum = inbox_currentBlockNumber();
     if (newBlockNum > oldBlockNum) {
         if ( ! outputStats_allZero(globalBlockReceiptData.statsThisBlock)) {
+            // add current block (including soon-to-be-issued block summary log) into total stats
             let updatedStats = outputStats_add(
                 globalBlockReceiptData.statsThisBlock,
                 globalBlockReceiptData.statsAllTime
@@ -104,7 +105,12 @@ impure func outputStats_updateBlockIfNeeded() {
             };
             globalBlockReceiptData = globalBlockReceiptData with {
                 statsAllTime: updatedStats
-            } with {
+            };
+
+            emitBlockSummaryLog();
+
+            // now clear current block stats, because we're advancing to a new current block
+            globalBlockReceiptData = globalBlockReceiptData with {
                 statsThisBlock: outputStats_new()
             } with {
                 data: struct {
@@ -112,8 +118,8 @@ impure func outputStats_updateBlockIfNeeded() {
                     numTx: 0,
                     numEvmLogs: 0
                 }
+
             };
-            emitBlockSummaryLog();
         }
         globalBlockReceiptData = globalBlockReceiptData with {
             blockNum: newBlockNum
