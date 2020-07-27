@@ -48,7 +48,6 @@ import func bytesNeededToRepresentUint(val: uint) -> uint;
 
 
 impure func main(kind: uint, value: any) {
-    asm((kind, value),) { debugprint };
     if (kind == 0) {
         let ui = unsafecast<uint>(value);
         let ba = bytearray_new(0);
