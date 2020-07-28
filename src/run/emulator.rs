@@ -1323,6 +1323,25 @@ impl Machine {
                             None => Ok(false)   // machine is blocked, waiting for message
                         }
 					}
+                    Opcode::AVMOpcode(AVMOpcode::InboxPeek) => {
+                        let bn = self.stack.pop_uint(&self.state)?;
+                        match self.runtime_env.peek_at_inbox_head() {
+                            Some(msg) => {
+                                if let Value::Tuple(tup) = msg {
+                                    if let Value::Int(msg_bn) = &tup[1] {
+                                        self.stack.push_bool(bn == msg_bn.clone());
+                                        self.incr_pc();
+                                        Ok(true)
+                                    } else {
+                                        Err(ExecutionError::new("inbox contents not a tuple", &self.state, None))
+                                    }
+                                } else {
+                                    Err(ExecutionError::new("blocknum not an integer", &self.state, None))
+                                }
+                            }
+                            None => Ok(false)   // machine is blocked, waiting for nonempty inbox
+                        }
+                    }
 					Opcode::AVMOpcode(AVMOpcode::ErrCodePoint) => {
 						self.stack.push(Value::CodePoint(
 							self.code.create_segment()
@@ -1485,7 +1504,7 @@ fn tuple_keccak(intup: Vec<Value>, state: &MachineState) -> Result<Vec<Value>, E
     let mut outtup = [0u64; 25];
     for i in 0..25 {
         outtup[i] = inuis[i / 4].bitwise_and(&mask64).trim_to_u64();
-        inuis[i / 4] = inuis[i / 4].div(&two_to_64).unwrap();   // safe because denom not zero
+        inuis[i / 4] = inuis[i / 4].div(&two_to_64).unwrap(); // safe because denom not zero
     }
     keccak::f1600(&mut outtup);
 

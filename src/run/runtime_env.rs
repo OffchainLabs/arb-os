@@ -258,6 +258,14 @@ impl RuntimeEnvironment {
         }
     }
 
+    pub fn peek_at_inbox_head(&mut self) -> Option<Value> {
+        if self.l1_inbox.is_empty() {
+            None
+        } else {
+            Some(self.l1_inbox[0].clone())
+        }
+    }
+
     pub fn push_log(&mut self, log_item: Value) {
         self.logs.push(log_item.clone());
         self.recorder.add_log(log_item);

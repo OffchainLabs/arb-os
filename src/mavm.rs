@@ -529,7 +529,8 @@ pub enum AVMOpcode {
     Breakpoint = 0x60,
     Log,
     Send = 0x70,
-    Inbox = 0x72,
+    InboxPeek,
+    Inbox,
     Panic,
     Halt,
     SetGas,
@@ -548,6 +549,7 @@ impl MiniProperties for Opcode {
         match self {
             Opcode::AVMOpcode(AVMOpcode::Log)
             | Opcode::AVMOpcode(AVMOpcode::Inbox)
+            | Opcode::AVMOpcode(AVMOpcode::InboxPeek)
             | Opcode::AVMOpcode(AVMOpcode::Send)
             | Opcode::AVMOpcode(AVMOpcode::Rset)
             | Opcode::AVMOpcode(AVMOpcode::Rget)
@@ -613,6 +615,7 @@ impl Opcode {
             "logicaland" => Opcode::LogicalAnd,
             "logicalor" => Opcode::LogicalOr,
             "inbox" => Opcode::AVMOpcode(AVMOpcode::Inbox),
+            "inboxpeek" => Opcode::AVMOpcode(AVMOpcode::InboxPeek),
             "jump" => Opcode::AVMOpcode(AVMOpcode::Jump),
             "log" => Opcode::AVMOpcode(AVMOpcode::Log),
             "send" => Opcode::AVMOpcode(AVMOpcode::Send),
@@ -687,6 +690,7 @@ impl Opcode {
             0x60 => Some(Opcode::AVMOpcode(AVMOpcode::Breakpoint)),
             0x61 => Some(Opcode::AVMOpcode(AVMOpcode::Log)),
             0x70 => Some(Opcode::AVMOpcode(AVMOpcode::Send)),
+            0x71 => Some(Opcode::AVMOpcode(AVMOpcode::InboxPeek)),
             0x72 => Some(Opcode::AVMOpcode(AVMOpcode::Inbox)),
             0x73 => Some(Opcode::AVMOpcode(AVMOpcode::Panic)),
             0x74 => Some(Opcode::AVMOpcode(AVMOpcode::Halt)),
@@ -758,6 +762,7 @@ impl Opcode {
             Opcode::AVMOpcode(AVMOpcode::Breakpoint) => Some(0x60),
             Opcode::AVMOpcode(AVMOpcode::Log) => Some(0x61),
             Opcode::AVMOpcode(AVMOpcode::Send) => Some(0x70),
+            Opcode::AVMOpcode(AVMOpcode::InboxPeek) => Some(0x71),
             Opcode::AVMOpcode(AVMOpcode::Inbox) => Some(0x72),
             Opcode::AVMOpcode(AVMOpcode::Panic) => Some(0x73),
             Opcode::AVMOpcode(AVMOpcode::Halt) => Some(0x74),
