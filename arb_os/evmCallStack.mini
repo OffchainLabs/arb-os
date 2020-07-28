@@ -242,37 +242,20 @@ public impure func initEvmCallStack(
                 callvalue
             ) {
                 setGlobalAccountStore(globalAS);
-                if let Some(gasUsage) = gasAccounting_endTxCharges() {
-                    // report success
-                    emitLog(incomingRequest, 0, None<ByteArray>, None<EvmLogs>, Some(gasUsage));
-                    emptyAvmStack();
-                    cleanAvmAuxStackAndCall(mainRunLoop,);  // should never return
-                } else {
-                    // unknown error type
-                    emitLog(incomingRequest, 255, None<ByteArray>, None<EvmLogs>, None<GasUsage>);
-                    evmCallStack_callHitError();
-               }
-            } else {
-               if let Some(gasUsage) = gasAccounting_endTxCharges() {
-                    // insufficient balance error
-                    emitLog(incomingRequest, 4, None<ByteArray>, None<EvmLogs>, Some(gasUsage));
-                } else {
-                    // unknown error type
-                    emitLog(incomingRequest, 255, None<ByteArray>, None<EvmLogs>, None<GasUsage>);
-                }
-                evmCallStack_callHitError();
-            }
-        } else {
-            if let Some(gasUsage) = gasAccounting_endTxCharges() {
-                // report success (even though tx was a no-op)
+                // report success
                 emitLog(incomingRequest, 0, None<ByteArray>, None<EvmLogs>, Some(gasUsage));
                 emptyAvmStack();
                 cleanAvmAuxStackAndCall(mainRunLoop,);  // should never return
             } else {
-                // unknown error type
-                emitLog(incomingRequest, 255, None<ByteArray>, None<EvmLogs>, None<GasUsage>);
+                // insufficient balance error
+                emitLog(incomingRequest, 4, None<ByteArray>, None<EvmLogs>, Some(gasUsage));
                 evmCallStack_callHitError();
             }
+        } else {
+            // report success (even though tx was a no-op)
+            emitLog(incomingRequest, 0, None<ByteArray>, None<EvmLogs>, Some(gasUsage));
+            emptyAvmStack();
+            cleanAvmAuxStackAndCall(mainRunLoop,);  // should never return
         }
     }
 }
@@ -599,7 +582,7 @@ public impure func evmCallStack_returnFromCall(
             emitLog(
                 globalCurrentIncomingRequest,
                 1,
-                None<ByteArray>,
+                Some(returnData),
                 None<EvmLogs>,
                 Some(gasUsage)
             );

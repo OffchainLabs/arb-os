@@ -27,6 +27,8 @@ import func bytearray_set64(ba: ByteArray, idx: uint, val: uint) -> ByteArray;
 import func bytearray_get256(ba: ByteArray, offset: uint) -> uint;
 import func bytearray_set256(ba: ByteArray, offset: uint, value: uint) -> ByteArray;
 import func bytearray_marshalFull(ba: ByteArray) -> MarshalledBytes;
+import func bytearray_extract(ba: ByteArray, offset: uint, nbytes: uint) -> ByteArray;
+import func bytearray_copy(from: ByteArray, fromOffset: uint, to: ByteArray, toOffset: uint, nbytes: uint) -> ByteArray;
 
 import func marshalledBytes_hash(mb: MarshalledBytes) -> bytes32;
 
@@ -150,6 +152,13 @@ func tests() -> uint {
             != marshalledBytes_hash(bytearray_marshalFull(bytearray_set256(bytearray_new(0), 0, 0x6203cb97ced4e35e64eeaddf64d03b68bcb81b5ee3cb0205f7edb755a8a4198)))
     ) {
         return 15;
+    }
+
+    let ba = setupFromUnmarshal();
+    let ba2 = bytearray_extract(ba, 0, 41);
+    let ba3 = bytearray_copy(ba, 0, bytearray_new(0), 0, 41);
+    if (bytearray_marshalFull(ba2) != bytearray_marshalFull(ba3)) {
+        return 16;
     }
 
 	return 0;
