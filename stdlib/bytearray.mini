@@ -408,23 +408,42 @@ func ear_get_2(tree: [8]any, chunk: uint, index: uint) -> uint {
     return unsafecast<uint>(tree[index]);
 }
 
+type Unwinder = struct {
+    tree: [8]any,
+    slot: uint,
+    next: option<any>,  // really option<Unwinder>, but compiler doesn't allow recursive types
+}
+
 func expandingIntArray_set(arr: ExpandingIntArray, index: uint, value: uint) -> ExpandingIntArray {
     while (index >= arr.size) {
         arr = expandingIntArray_grow(arr);
     }
-    return arr with {
-        contents: ear_set2(arr.contents, arr.chunk, index, value)
-    };
-}
 
-func ear_set2(tree: [8]any, chunk: uint, index: uint, value: uint) -> [8]any {
-    if (chunk == 1) {
-        return tree with { [index] = value };
+    let tree = arr.contents;
+    let chunk = arr.chunk;
+    let unwinder = None<Unwinder>;
+    loop {
+        if (chunk == 1) {
+            tree = tree with { [index] = value };
+            loop {
+                if let Some(unw) = unwinder {
+                    tree = unw.tree with { [unw.slot] = tree };
+                    unwinder = unsafecast<option<Unwinder>>(unw.next);
+                } else {
+                    return arr with { contents: tree };
+                }
+            }
+        }
+        let slot = index/chunk;
+        unwinder = Some(struct {
+            tree: tree,
+            slot: slot,
+            next: unwinder,
+        });
+        tree = unsafecast<[8]any>(tree[slot]);
+        index = index % chunk;
+        chunk = chunk / 8;
     }
-    let slot = index/chunk;
-    return tree with {
-        [slot] = ear_set2(unsafecast<[8]any>(tree[slot]), chunk/8, index%chunk, value)
-    };
 }
 
 type opClosureFunc = func(any, uint) -> (uint, any)
@@ -442,6 +461,9 @@ func expandingIntArray_op(
     while (index >= arr.size) {
         arr = expandingIntArray_grow(arr);
     }
+    let tree = arr.contents;
+    let chunk = arr.chunk;
+
     let (tree, retVal) = ear_op2(arr.contents, arr.chunk, index, closure);
     return (
         arr with { contents: tree },
