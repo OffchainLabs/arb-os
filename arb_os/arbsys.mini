@@ -51,6 +51,8 @@ import func bytearray_marshalFull(ba: ByteArray) -> MarshalledBytes;
 import impure func inbox_currentBlockNumber() -> uint;
 import impure func inbox_currentTimestamp() -> uint;
 
+import impure func sendMessage(msgType: uint, sender: address, data: ByteArray);
+
 
 type ArbSysMessage = struct {
     kind: uint,
@@ -203,14 +205,4 @@ impure func getCallerAddress() -> option<address> {
             evmCallFrame_getParent(topFrame)?
         )
     );
-}
-
-impure func sendMessage(msgType: uint, sender: address, data: ByteArray) {
-    asm(
-        (
-            msgType,
-            uint(sender),
-            bytearray_marshalFull(data),
-        ),
-    ) { send };
 }

@@ -41,6 +41,7 @@ import func queue_put(q: Queue, item: any) -> Queue;
 import func queue_get(q: Queue) -> option<(Queue, any)>;
 
 import impure func inbox_get() -> IncomingRequest;
+import impure func output_updateTime();
 
 import func messageBatch_tryNew(msg: IncomingRequest) -> option<MessageBatch>;
 import func messageBatch_get(batch: MessageBatch) -> option<(IncomingRequest, MessageBatch)>;
@@ -301,7 +302,11 @@ public impure func getNextMsgFromCongestionAuction() -> (
             let maxGas = 1000000000;
             if (msg.kind == 3) {
                 let firstByte = marshalledBytes_firstByte(msg.msgData);
-                if (firstByte == 4) {
+                if (firstByte == 6) {
+                    // it's a heartbeat message
+                    // don't do anything, just update the time
+                    output_updateTime();
+                } elseif (firstByte == 4) {
                     // it's a signed tx; verify sig and then process request or discard
                     if let Some(verifiedMsg) = translateSignedTx(msg) {
                         let ba = bytearray_unmarshalBytes(verifiedMsg.msgData);
