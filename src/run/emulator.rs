@@ -1314,15 +1314,14 @@ impl Machine {
                         Ok(true)
                     }
 					Opcode::AVMOpcode(AVMOpcode::Inbox) => {
-						let msgs = self.runtime_env.get_inbox();
-						if msgs.is_none() {
-							// machine is blocked, waiting for nonempty inbox
-							Ok(false)
-						} else {
-							self.stack.push(msgs);
-							self.incr_pc();
-							Ok(true)
-						}
+						match self.runtime_env.get_from_inbox() {
+                            Some(msg) => {
+                                self.stack.push(msg);
+                                self.incr_pc();
+                                Ok(true)
+                            }
+                            None => Ok(false)   // machine is blocked, waiting for message
+                        }
 					}
 					Opcode::AVMOpcode(AVMOpcode::ErrCodePoint) => {
 						self.stack.push(Value::CodePoint(

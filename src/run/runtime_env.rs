@@ -29,7 +29,7 @@ use std::{collections::HashMap, fs::File, io, path::Path};
 #[derive(Debug, Clone)]
 pub struct RuntimeEnvironment {
     pub chain_id: u64,
-    pub l1_inbox: Value,
+    pub l1_inbox: Vec<Value>,
     pub current_block_num: Uint256,
     pub current_timestamp: Uint256,
     pub logs: Vec<Value>,
@@ -44,7 +44,7 @@ impl RuntimeEnvironment {
     pub fn new(chain_address: Uint256) -> Self {
         let mut ret = RuntimeEnvironment {
             chain_id: chain_address.trim_to_u64() & 0xffffffffffff, // truncate to 48 bits
-            l1_inbox: Value::none(),
+            l1_inbox: vec![],
             current_block_num: Uint256::zero(),
             current_timestamp: Uint256::zero(),
             logs: Vec::new(),
@@ -66,7 +66,7 @@ impl RuntimeEnvironment {
         self.chain_id
     }
 
-    pub fn insert_full_inbox_contents(&mut self, contents: Value) {
+    pub fn insert_full_inbox_contents(&mut self, contents: Vec<Value>) {
         self.l1_inbox = contents;
     }
 
@@ -80,7 +80,7 @@ impl RuntimeEnvironment {
             bytestack_from_bytes(msg),
         ]);
         self.next_inbox_seq_num = self.next_inbox_seq_num.add(&Uint256::one());
-        self.l1_inbox = Value::new_tuple(vec![self.l1_inbox.clone(), l1_msg.clone()]);
+        self.l1_inbox.push(l1_msg.clone());
         self.recorder.add_msg(l1_msg);
     }
 
@@ -250,10 +250,12 @@ impl RuntimeEnvironment {
         cur_seq_num
     }
 
-    pub fn get_inbox(&mut self) -> Value {
-        let ret = self.l1_inbox.clone();
-        self.l1_inbox = Value::none();
-        ret
+    pub fn get_from_inbox(&mut self) -> Option<Value> {
+        if self.l1_inbox.is_empty() {
+            None
+        } else {
+            Some(self.l1_inbox.remove(0))
+        }
     }
 
     pub fn push_log(&mut self, log_item: Value) {
@@ -569,7 +571,7 @@ fn bytes_from_bytestack_2(cell: Value, nbytes: usize) -> Option<Vec<u8>> {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RtEnvRecorder {
     format_version: u64,
-    inbox: Value,
+    inbox: Vec<Value>,
     logs: Vec<Value>,
     sends: Vec<Value>,
 }
@@ -578,14 +580,14 @@ impl RtEnvRecorder {
     fn new() -> Self {
         RtEnvRecorder {
             format_version: 1,
-            inbox: Value::none(),
+            inbox: vec![],
             logs: Vec::new(),
             sends: Vec::new(),
         }
     }
 
     fn add_msg(&mut self, msg: Value) {
-        self.inbox = Value::new_tuple(vec![self.inbox.clone(), msg])
+        self.inbox.push(msg);
     }
 
     fn add_log(&mut self, log_item: Value) {

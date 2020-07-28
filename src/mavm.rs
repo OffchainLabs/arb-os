@@ -300,7 +300,7 @@ impl Value {
         Value::Tuple(Rc::new(vec![]))
     }
 
-    pub fn is_none(&self) -> bool {
+    pub fn _is_none(&self) -> bool {
         if let Value::Tuple(v) = self {
             v.is_empty()
         } else {
