@@ -243,17 +243,17 @@ public impure func initEvmCallStack(
             ) {
                 setGlobalAccountStore(globalAS);
                 // report success
-                emitLog(incomingRequest, 0, None<ByteArray>, None<EvmLogs>, Some(gasUsage));
+                emitLog(incomingRequest, 0, None<ByteArray>, None<EvmLogs>, None<GasUsage>);
                 emptyAvmStack();
                 cleanAvmAuxStackAndCall(mainRunLoop,);  // should never return
             } else {
                 // insufficient balance error
-                emitLog(incomingRequest, 4, None<ByteArray>, None<EvmLogs>, Some(gasUsage));
+                emitLog(incomingRequest, 4, None<ByteArray>, None<EvmLogs>, None<GasUsage>);
                 evmCallStack_callHitError();
             }
         } else {
             // report success (even though tx was a no-op)
-            emitLog(incomingRequest, 0, None<ByteArray>, None<EvmLogs>, Some(gasUsage));
+            emitLog(incomingRequest, 0, None<ByteArray>, None<EvmLogs>, None<GasUsage>);
             emptyAvmStack();
             cleanAvmAuxStackAndCall(mainRunLoop,);  // should never return
         }
