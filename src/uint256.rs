@@ -100,6 +100,10 @@ impl Uint256 {
         self.val.to_usize()
     }
 
+    pub fn to_u64(&self) -> Option<u64> {
+        self.val.to_u64()
+    }
+
     pub fn to_bytes_be(&self) -> Vec<u8> {
         // always returns 32 bytes
         let raw = self.val.to_bytes_be();
@@ -113,7 +117,16 @@ impl Uint256 {
     }
 
     pub fn to_h160(&self) -> H160 {
-        H160::from_slice(&self.to_bytes_minimal())
+        H160::from_slice(&{
+            let raw = self.val.to_bytes_be();
+            if raw.len() < 20 {
+                let mut ret = vec![0u8; 20 - raw.len()];
+                ret.extend(raw);
+                ret
+            } else {
+                raw
+            }
+        })
     }
 
     pub fn to_u256(&self) -> U256 {
@@ -155,6 +168,12 @@ impl Uint256 {
     pub fn one() -> Self {
         Uint256 {
             val: BigUint::one(),
+        }
+    }
+
+    pub fn _max_int() -> Self {
+        Uint256 {
+            val: BigUint::new(vec![0xffff_ffff; 8]),
         }
     }
 
