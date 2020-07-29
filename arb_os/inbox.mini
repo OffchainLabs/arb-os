@@ -39,6 +39,7 @@ type Inbox = struct {
     queue: Queue,     // Queue of messages that haven't yet been retrieved from the inbox
     blockNum: uint,   // Highest blocknum of messages that we have retrieved from the inbox
     timestamp: uint,  // Highest timestamp of messages that we have retrieved from the inbox
+    needToPeek: bool, // true iff we should be doing an inboxpeek before inbox instruction
 }
 
 var globalInbox: Inbox;
@@ -48,32 +49,24 @@ public impure func inbox_init() {
         queue: queue_new(),
         blockNum: 0,
         timestamp: 0,
+        needToPeek: false,   // don't peek before the first message
     };
 }
 
 public impure func inbox_get() -> IncomingRequest {
     // Get the next message, in order of arrival.
     // If no messages have arrived, this will block until one arrives.
-    // Put this in a loop so we can special-case the very first "chain parameters" message.
+    // This is a loop because some events don't generate a message that we can return,
+    //       so we keep trying until we find something we can return.
 
     loop {
-        let inbox = globalInbox;
-        while (queue_isEmpty(inbox.queue)) {
-            inbox = getFromL1Inbox(inbox);
+        while (queue_isEmpty(globalInbox.queue)) {
+            globalInbox = getFromL1Inbox(globalInbox);
         }
-        let (updatedQ, ret,) = queueGetOrDie(inbox.queue);
+
+        let (updatedQ, ret,) = queueGetOrDie(globalInbox.queue);
+        globalInbox = globalInbox with { queue: updatedQ };
         let ebMsg = unsafecast<IncomingRequest>(ret);
-
-        // We got a message. Update the blocknum and timestamp of inbox, if necessary.
-        if (inbox.blockNum < ebMsg.blockNumber) {
-            inbox = inbox with { blockNum: ebMsg.blockNumber };
-        }
-        if (inbox.timestamp < ebMsg.timestamp) {
-            inbox = inbox with { timestamp: ebMsg.timestamp };
-        }
-
-        globalInbox = inbox with { queue: updatedQ };
-
         if (ebMsg.kind == 4) {
             chainParams_gotParamsMessage(ebMsg.sender, ebMsg.msgData);
         } else {
@@ -93,8 +86,37 @@ func queueGetOrDie(q: Queue) -> (Queue, any) {
 impure func getFromL1Inbox(inbox: Inbox) -> Inbox {
     // Get a message from the L1 inbox, and append it to the inbox.
     // If there are no messages available in the L1 inbox, this blocks until one is available.
-    let newMsg = asm() any { inbox };
-    return inbox with { queue: queue_put(inbox.queue, newMsg) };
+    if (inbox.needToPeek) {
+        let sameBlockNum = asm(inbox.blockNum,) bool { inboxpeek };
+        if ( ! sameBlockNum) {
+            // peek says we hit end of L1 block, so insert end-of-block message and return
+            return inbox with {
+                queue: queue_put(
+                    inbox.queue,
+                    struct {
+                        kind: 6,   // special kind that is reserved for these synthetic end-of-block messages
+                        blockNumber: inbox.blockNum,
+                        timestamp: inbox.timestamp,
+                        sender: address(0),
+                        requestId: 0,
+                        msgData: unsafecast<MarshalledBytes>(0),
+                    }
+                )
+            } with {
+                needToPeek: false   // don't peek next time, because we already sent end-of-block
+            };
+        }
+    }
+    let newMsg = asm() IncomingRequest { inbox };
+    return inbox with {
+        queue: queue_put(inbox.queue, newMsg)
+    } with {
+        needToPeek: true
+    } with {
+        blockNum: newMsg.blockNumber
+    } with {
+        timestamp: newMsg.timestamp
+    };
 }
 
 public impure func inbox_currentTimestamp() -> uint {

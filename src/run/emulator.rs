@@ -827,6 +827,7 @@ impl Machine {
                 Opcode::AVMOpcode(AVMOpcode::Breakpoint) => 100,
                 Opcode::AVMOpcode(AVMOpcode::Log) => 100,
                 Opcode::AVMOpcode(AVMOpcode::Send) => 100,
+                Opcode::AVMOpcode(AVMOpcode::InboxPeek) => 40,
                 Opcode::AVMOpcode(AVMOpcode::Inbox) => 40,
                 Opcode::AVMOpcode(AVMOpcode::Panic) => 5,
                 Opcode::AVMOpcode(AVMOpcode::Halt) => 10,
@@ -1339,7 +1340,11 @@ impl Machine {
                                     Err(ExecutionError::new("blocknum not an integer", &self.state, None))
                                 }
                             }
-                            None => Ok(false)   // machine is blocked, waiting for nonempty inbox
+                            None => {
+                                // machine is blocked, waiting for nonempty inbox
+                                self.stack.push_uint(bn);   // put stack back the way it was
+                                Ok(false)
+                            }
                         }
                     }
 					Opcode::AVMOpcode(AVMOpcode::ErrCodePoint) => {

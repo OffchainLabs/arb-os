@@ -83,56 +83,45 @@ func outputStats_add(os1: OutputStatistics, os2: OutputStatistics) -> OutputStat
 }
 
 var globalBlockReceiptData: struct {
-    blockNum: uint,
-    timestamp: uint,
     data: PerBlockReceiptData,
     statsThisBlock: OutputStatistics,
     statsAllTime: OutputStatistics,
 };
 
-impure func outputStats_updateBlockIfNeeded() {
-    let oldBlockNum = globalBlockReceiptData.blockNum;
-    let newBlockNum = inbox_currentBlockNumber();
-    if (newBlockNum > oldBlockNum) {
-        if ( ! outputStats_allZero(globalBlockReceiptData.statsThisBlock)) {
-            // add current block (including soon-to-be-issued block summary log) into total stats
-            let updatedStats = outputStats_add(
-                globalBlockReceiptData.statsThisBlock,
-                globalBlockReceiptData.statsAllTime
-            );
-            updatedStats = updatedStats with {
-                numLogs: updatedStats.numLogs + 1
-            };
-            globalBlockReceiptData = globalBlockReceiptData with {
-                statsAllTime: updatedStats
-            };
-
-            emitBlockSummaryLog();
-
-            // now clear current block stats, because we're advancing to a new current block
-            globalBlockReceiptData = globalBlockReceiptData with {
-                statsThisBlock: outputStats_new()
-            } with {
-                data: struct {
-                    totalGasUsed: 0,
-                    numTx: 0,
-                    numEvmLogs: 0
-                }
-
-            };
-        }
+public impure func outputStats_endOfBlock(blockNum: uint, timestamp: uint) {
+    if ( ! outputStats_allZero(globalBlockReceiptData.statsThisBlock)) {
+        // add current block (including soon-to-be-issued block summary log) into total stats
+        let updatedStats = outputStats_add(
+            globalBlockReceiptData.statsThisBlock,
+            globalBlockReceiptData.statsAllTime
+        );
+        updatedStats = updatedStats with {
+            numLogs: updatedStats.numLogs + 1
+        };
         globalBlockReceiptData = globalBlockReceiptData with {
-            blockNum: newBlockNum
-        } with {
-            timestamp: inbox_currentTimestamp()
-        } with {
+            statsAllTime: updatedStats
+        };
+
+        emitBlockSummaryLog(blockNum, timestamp);
+
+        // now clear current block stats, because we're advancing to a new current block
+        globalBlockReceiptData = globalBlockReceiptData with {
             statsThisBlock: outputStats_new()
+        } with {
+            data: struct {
+                totalGasUsed: 0,
+                numTx: 0,
+                numEvmLogs: 0
+            }
+
         };
     }
+    globalBlockReceiptData = globalBlockReceiptData with {
+        statsThisBlock: outputStats_new()
+    };
 }
 
 impure func outputStats_addTxLog(gasUsed: uint, numEvmLogs: uint) {
-    outputStats_updateBlockIfNeeded();
     globalBlockReceiptData = globalBlockReceiptData with {
         statsThisBlock: globalBlockReceiptData.statsThisBlock with {
             numTx: 1 + globalBlockReceiptData.statsThisBlock.numTx
@@ -147,7 +136,6 @@ impure func outputStats_addTxLog(gasUsed: uint, numEvmLogs: uint) {
 }
 
 impure func outputStats_addSend() {
-    outputStats_updateBlockIfNeeded();
     globalBlockReceiptData = globalBlockReceiptData with {
         statsThisBlock: globalBlockReceiptData.statsThisBlock with {
             numSends: 1 + globalBlockReceiptData.statsThisBlock.numSends
@@ -157,8 +145,6 @@ impure func outputStats_addSend() {
 
 public impure func txReceipts_init() {  // will be called at beginning of main()
     globalBlockReceiptData = struct {
-        blockNum: 0,
-        timestamp: 0,
         data: struct {
             totalGasUsed: 0,
             numTx: 0,
@@ -189,12 +175,6 @@ impure func update_txReceiptsForBlock(
     };
 
     return ret;
-}
-
-public impure func output_updateTime() {
-    // this should be called if the block number might have advanced
-    // it will push out a block summary log item if that's needed
-    outputStats_updateBlockIfNeeded();
 }
 
 // result codes:
@@ -255,7 +235,7 @@ public impure func emitLog(
     ),) { log };
 }
 
-impure func emitBlockSummaryLog() {
+impure func emitBlockSummaryLog(blockNum: uint, timestamp: uint) {
     let gasUsedThisBlock = globalBlockReceiptData.statsThisBlock.totalGasUsed;
     let gasLimit = 13 * chainParams_speedLimitPerSecond();
     if (gasLimit < gasUsedThisBlock) {
@@ -263,8 +243,8 @@ impure func emitBlockSummaryLog() {
     }
     asm((
         1,
-        globalBlockReceiptData.blockNum,
-        globalBlockReceiptData.timestamp,
+        blockNum,
+        timestamp,
         gasLimit,
         globalBlockReceiptData.statsThisBlock,
         globalBlockReceiptData.statsAllTime
