@@ -74,17 +74,25 @@ public func marshalledBytes_hash(mb: MarshalledBytes) -> bytes32 {
 // bytearray_unmarshalBytes unmarshals a bytestack object that we got from L1
 //        returns a new bytearray holding the unmarshaled bytes
 public func bytearray_unmarshalBytes(inBytes: MarshalledBytes) -> ByteArray {
-    // unmarshal bytes from the bytestack data structure that we receive from L1
     let nbytes = inBytes.nbytes;
-    let eia = expandingIntArray_new();
     let nwords = (nbytes+31)/32;
-
     let words = inBytes.contents;
+
+    // For efficiency, we'll build an ExpandingIntArray here, then make a ByteArray from it at the end.
+    // We'll also build 8-tuples of 32-byte words, and insert each tuple into the ExpIntArr with a single call.
+    let eia = expandingIntArray_new();
+    let block = unsafecast<[8]any>((0,0,0,0,0,0,0,0));
+
     while (nwords > 0) {
         nwords = nwords-1;
-        eia = expandingIntArray_set(eia, nwords, words.first);
+        block = block with { [nwords & 7] = words.first };
+        if ((nwords & 7) == 0) {
+            eia = expandingIntArray_setN(eia, 8, nwords, block);
+            // it's safe to re-use block after this, because we're going to overwrite all of it
+        }
         words = unsafecast<MarshalledBytesCell>(words.rest);
     }
+
     return struct {
         size: inBytes.nbytes,
         sliceOffset: 0,
@@ -415,16 +423,29 @@ type Unwinder = struct {
 }
 
 func expandingIntArray_set(arr: ExpandingIntArray, index: uint, value: uint) -> ExpandingIntArray {
-    while (index >= arr.size) {
+    return expandingIntArray_setN(arr, 1, index, value);
+}
+
+func expandingIntArray_setN(
+    arr: ExpandingIntArray,
+    inChunk: uint,   // must be a power of 8
+    index: uint,     // must be a multiple of inChunk
+    value: any
+) -> ExpandingIntArray {
+    while ((index+inChunk) > arr.size) {
         arr = expandingIntArray_grow(arr);
     }
 
-    let tree = arr.contents;
+    if ( (inChunk == arr.size) && (index == 0) ) {
+        return arr with { contents: unsafecast<[8]any>(value) };
+    }
+
     let chunk = arr.chunk;
+    let tree = arr.contents;
     let unwinder = None<Unwinder>;
     loop {
-        if (chunk == 1) {
-            tree = tree with { [index] = value };
+        if (chunk <= inChunk) {
+            tree = tree with { [index/chunk] = value };
             loop {
                 if let Some(unw) = unwinder {
                     tree = unw.tree with { [unw.slot] = tree };
