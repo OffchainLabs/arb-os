@@ -1495,7 +1495,7 @@ fn tuple_keccak(intup: Vec<Value>, state: &MachineState) -> Result<Vec<Value>, E
     let mut outtup = [0u64; 25];
     for i in 0..25 {
         outtup[i] = inuis[i / 4].bitwise_and(&mask64).trim_to_u64();
-        inuis[i / 4] = inuis[i / 4].div(&two_to_64).unwrap();   // safe because denom not zero
+        inuis[i / 4] = inuis[i / 4].div(&two_to_64).unwrap(); // safe because denom not zero
     }
     keccak::f1600(&mut outtup);
 
