@@ -23,8 +23,16 @@ use std::path::Path;
 pub fn make_benchmarks() {
     let benchmarks: Vec<(fn(u64, &Path) -> u64, u64, &str, &str)> = vec![
         (benchmark_boot, 1, "boot ArbOS", "boot"),
+        (benchmark_erc20, 100, "100 ERC-20 deposits", "erc20_100"),
         (benchmark_erc20, 1000, "1000 ERC-20 deposits", "erc20_1000"),
+        (benchmark_add, 100, "100 null txs", "nulltx_100"),
         (benchmark_add, 1000, "1000 null txs", "nulltx_1000"),
+        (
+            benchmark_add_batched,
+            100,
+            "100 signed batched null txs",
+            "nulltx_batch_100",
+        ),
         (
             benchmark_add_batched,
             500,
