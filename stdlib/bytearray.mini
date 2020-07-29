@@ -123,6 +123,36 @@ public func bytearray_size(ba: ByteArray) -> uint {
     return ba.size;
 }
 
+public func bytearray_zeroPad(ba: ByteArray, offset: uint, nbytes: uint) -> ByteArray {
+    // pad a bytearray with zeroes at the end
+    // this is allowed to write extra zeroes beyond the requested region
+    // doesn't update size of ByteArray; caller needs to do that
+
+    let starterSize = 32 - (offset % 32);
+    if (starterSize != 32) {
+        ba = ba with {
+            contents: expandingIntArray_maskedSet(
+                ba.contents,
+                offset / 32,
+                0,
+                asm(256, starterSize) uint { exp } - 1,
+            )
+        };
+        if (starterSize >= nbytes) {
+            return ba;
+        }
+        offset = offset + starterSize;
+        nbytes = nbytes - starterSize;
+    }
+
+    while (nbytes > 32) {  // stop with one word left to write, so nbytes doesn't go negative
+        ba = ba with { contents: expandingIntArray_set(ba.contents, offset/32, 0) };
+        offset = offset + 32;
+        nbytes = nbytes - 32;
+    }
+    return ba with { contents: expandingIntArray_set(ba.contents, offset/32, 0) };
+}
+
 // bytearray_getByte reads one byte from a ByteArray
 public func bytearray_getByte(ba: ByteArray, offset: uint) -> uint {
     if (offset >= ba.size) {
@@ -197,6 +227,9 @@ public func bytearray_get256(ba: ByteArray, offset: uint) -> uint {
 // bytearray_setbyte writes one byte to a ByteArray, returns the resulting ByteArray
 public func bytearray_setByte(ba: ByteArray, offset: uint, val: uint) -> ByteArray {
     if (offset >= ba.size) {
+        if (offset > ba.size) {
+            ba = bytearray_zeroPad(ba, ba.size, offset-ba.size);
+        }
         ba = ba with { size: offset+1 };
     }
     offset = offset + ba.sliceOffset;
@@ -213,6 +246,9 @@ public func bytearray_setByte(ba: ByteArray, offset: uint, val: uint) -> ByteArr
 // bytearray_set64 writes an 8-byte chunk to a ByteArray, returning the resulting ByteArray
 public func bytearray_set64(ba: ByteArray, offset: uint, value: uint) -> ByteArray {
     if (offset+8 > ba.size) {
+        if (offset+7 > ba.size) {
+            ba = bytearray_zeroPad(ba, ba.size, offset+7-ba.size);
+        }
         ba = ba with { size: offset+8 };
     }
     offset = offset + ba.sliceOffset;
@@ -247,6 +283,9 @@ public func bytearray_set64(ba: ByteArray, offset: uint, value: uint) -> ByteArr
 // bytearray_set256 writes a 32-byte chunk to a ByteArray, returning the resulting ByteArray
 public func bytearray_set256(ba: ByteArray, offset: uint, value: uint) -> ByteArray {
     if (offset+32 > ba.size) {
+       if (offset+31 > ba.size) {
+            ba = bytearray_zeroPad(ba, ba.size, offset+31-ba.size);
+        }
         ba = ba with { size: offset+32 };
     }
     offset = offset + ba.sliceOffset;
