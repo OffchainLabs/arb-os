@@ -39,6 +39,18 @@ pub fn make_benchmarks() {
             "500 signed batched null txs",
             "nulltx_batch_500",
         ),
+        (
+            benchmark_xcontract_batched,
+            100,
+            "100 signed batched xcontract call txs",
+            "xcontract_batch_100",
+        ),
+        (
+            benchmark_xcontract_batched,
+            500,
+            "500 signed batched xcontract call txs",
+            "xcontract_batch_500",
+        ),
     ];
 
     for benchmark in benchmarks {
@@ -159,6 +171,67 @@ pub fn benchmark_add_batched(iterations: u64, log_to: &Path) -> u64 {
                 .as_ref(),
                 &mut machine,
                 Uint256::zero(),
+                &wallet,
+            )
+            .unwrap();
+    }
+
+    machine
+        .runtime_env
+        .insert_batch_message(Uint256::from_usize(1025), &batch);
+
+    machine.run(None);
+
+    machine.runtime_env.recorder.to_file(log_to).unwrap();
+    machine.get_total_gas_usage().to_u64().unwrap()
+}
+
+pub fn benchmark_xcontract_batched(iterations: u64, log_to: &Path) -> u64 {
+    let rt_env = RuntimeEnvironment::new(Uint256::from_usize(1111));
+    let wallet = rt_env.new_wallet();
+    let my_addr = Uint256::from_bytes(wallet.address().as_bytes());
+    let mut machine = load_from_file(Path::new("arb_os/arbos.mexe"), rt_env);
+    machine.start_at_zero();
+
+    machine.runtime_env.insert_eth_deposit_message(
+        my_addr.clone(),
+        my_addr.clone(),
+        Uint256::from_usize(1000000),
+    );
+    let _ = machine.run(None); // handle this eth deposit message
+
+    let mut fib_contract =
+        AbiForContract::new_from_file("contracts/fibonacci/build/contracts/Fibonacci.json")
+            .unwrap();
+    if fib_contract.deploy(&[], &mut machine, false) == None {
+        panic!("failed to deploy Fibonacci contract");
+    }
+
+    let mut pc_contract =
+        AbiForContract::new_from_file("contracts/fibonacci/build/contracts/PaymentChannel.json")
+            .unwrap();
+    if pc_contract.deploy(
+        &[ethabi::Token::Address(ethereum_types::H160::from_slice(
+            &fib_contract.address.to_bytes_be()[12..],
+        ))],
+        &mut machine,
+        false,
+    ) == None
+    {
+        panic!("failed to deploy PaymentChannel contract");
+    }
+
+    let mut batch = machine.runtime_env.new_batch();
+
+    for _ in 0..iterations {
+        let _tx_id = pc_contract
+            .add_function_call_to_batch(
+                &mut batch,
+                my_addr.clone(),
+                "deposit",
+                &[],
+                &mut machine,
+                Uint256::from_usize(1),
                 &wallet,
             )
             .unwrap();
