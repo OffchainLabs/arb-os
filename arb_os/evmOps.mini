@@ -656,7 +656,9 @@ public impure func evmOp_delegatecall(
          resumeCodePoint
      );
      if (res == None<()>) {
-         return false;  // couldn't make a call, return failure
+         // we must have tried to call a non-existent address
+         // according to Yellow Paper, should return success in this case
+         return true;
      } else {
          // should never get here -- control should have been thrown elsewhere
          errorHandler();
@@ -693,7 +695,9 @@ public impure func evmOp_staticcall(
         resumeCodePoint
     );
     if (res == None<()>) {
-        return false;  // couldn't make a call, return failure
+        // we must have tried to call a non-existent address
+        // according to Yellow Paper, should return success in this case
+        return true;
     } else {
         // should never get here -- control should have been thrown elsewhere
         errorHandler();
