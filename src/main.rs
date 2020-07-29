@@ -152,10 +152,20 @@ fn main() -> Result<(), CompileError> {
                         .help("sets debug mode")
                         .short("d")
                         .takes_value(false),
+                )
+                .arg(
+                    Arg::with_name("profiler")
+                        .help("sets profiler mode")
+                        .short("p")
+                        .takes_value(false),
                 ),
         )
         .subcommand(
             SubCommand::with_name("maketestlogs").about("generates test logs for all ArbOS tests"),
+        )
+        .subcommand(
+            SubCommand::with_name("makebenchmarks")
+                .about("generates logs for all ArbOS benchmarks"),
         )
         .subcommand(
             SubCommand::with_name("maketemplates").about("generates code for contract templates"),
@@ -266,13 +276,19 @@ fn main() -> Result<(), CompileError> {
     if let Some(matches) = matches.subcommand_matches("replay") {
         let path = matches.value_of("INPUT").unwrap();
         let debug = matches.is_present("debug");
-        if let Err(e) = replay_from_testlog_file(path, true, debug) {
+        let profiler = matches.is_present("profiler");
+
+        if let Err(e) = replay_from_testlog_file(path, true, debug, profiler) {
             panic!("Error reading from {}: {}", path, e);
         }
     }
 
     if matches.subcommand_matches("maketestlogs").is_some() {
         evm::make_logs_for_all_arbos_tests();
+    }
+
+    if matches.subcommand_matches("makebenchmarks").is_some() {
+        evm::benchmarks::make_benchmarks();
     }
 
     if matches.subcommand_matches("maketemplates").is_some() {
