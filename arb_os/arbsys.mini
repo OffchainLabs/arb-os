@@ -33,6 +33,7 @@ import func evmCallFrame_getAccount(frame: EvmCallFrame, addr: address) -> Accou
 import func evmCallFrame_runningAsAddress(frame: EvmCallFrame) -> address;
 import func evmCallFrame_runningAsAccount(frame: EvmCallFrame) -> Account;
 import func evmCallFrame_getParent(frame: EvmCallFrame) -> option<EvmCallFrame>;
+import func evmCallFrame_getCaller(frame: EvmCallFrame) -> address;
 
 import impure func evmOp_return(memOffset: uint, memNbytes: uint);
 import impure func evmOp_revert(memOffset: uint, memNbytes: uint);
@@ -78,7 +79,6 @@ public impure func arbsys_txcall() {
             evmOp_revert(0, 0);
         }
         let funcCode = getFuncCode(calldata);
-
         if (funcCode == 0xa1db9782) {
             arbsys_withdrawErc20(topFrame, calldata);
         } elseif(funcCode == 0xf3e414f8) {
@@ -135,20 +135,19 @@ impure func arbsys_withdrawEth(topFrame: EvmCallFrame, calldata: ByteArray) {
     if (bytearray_size(calldata) != 36) {
         evmOp_revert(0, 0);
     }
-    if let Some(senderAddr) = getCallerAddress() {
-        let senderAcct = evmCallFrame_getAccount(topFrame, senderAddr);
-        let destAddr = address(bytearray_get256(calldata, 4));
-        let amount = evmCallFrame_getCallvalue(topFrame);
+    let senderAddr = evmCallFrame_getCaller(topFrame);
+    let senderAcct = evmCallFrame_getAccount(topFrame, senderAddr);
+    let destAddr = address(bytearray_get256(calldata, 4));
+    let amount = evmCallFrame_getCallvalue(topFrame);
 
-        if let Some(updatedAcct) = account_deductFromEthBalance(senderAcct, amount) {
-            if ( ! evmCallStack_setAccount(senderAddr, updatedAcct)) {
-                evmOp_revert(0, 0);
-            }
-            let messageData = bytearray_extract(calldata, 4, 32);
-            messageData = bytearray_set256(messageData, 32, amount);
-            sendMessage(0, senderAddr, messageData);
-            evmOp_return(0, 0);
+    if let Some(updatedAcct) = account_deductFromEthBalance(senderAcct, amount) {
+        if ( ! evmCallStack_setAccount(senderAddr, updatedAcct)) {
+            evmOp_revert(0, 0);
         }
+        let messageData = bytearray_extract(calldata, 4, 32);
+        messageData = bytearray_set256(messageData, 32, amount);
+        sendMessage(0, senderAddr, messageData);
+        evmOp_return(0, 0);
     }
 
     evmOp_revert(0, 0);
@@ -198,11 +197,3 @@ impure func arbsys_cloneContract(topFrame: EvmCallFrame, calldata: ByteArray) {
     }
 }
 
-impure func getCallerAddress() -> option<address> {
-    let topFrame = evmCallStack_topFrame()?;
-    return Some(
-        evmCallFrame_runningAsAddress(
-            evmCallFrame_getParent(topFrame)?
-        )
-    );
-}

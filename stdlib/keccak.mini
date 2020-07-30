@@ -25,6 +25,7 @@ import func bytearray_setByte(ba: ByteArray, offset: uint, val: uint) -> ByteArr
 import func bytearray_copy(src: ByteArray, srcOffset: uint, dest: ByteArray, destOffset: uint, nbytes: uint) -> ByteArray;
 
 
+
 public func keccak256(ba: ByteArray, offset: uint, nbytes: uint) -> bytes32 {
     if (nbytes == 32) {
         return hash(bytearray_get256(ba, offset));
