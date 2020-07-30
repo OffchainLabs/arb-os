@@ -98,7 +98,7 @@ public impure func arbsys_txcall() {
 }
 
 func getFuncCode(ba: ByteArray) -> uint {
-    return bytearray_get256(ba, 0) / (asm(2, 224) uint { exp });
+    return asm(224, bytearray_get256(ba, 0)) uint { shr };
 }
 
 impure func arbsys_withdrawErc20(topFrame: EvmCallFrame, calldata: ByteArray) {
