@@ -164,12 +164,31 @@ public impure func translateEvmCodeSegment(
                         } elseif (opcode == 0x0a) { // EXP
                             return Some((pushInstruction(0x0a, restOfCode), evmJumpTable));
                         } elseif (opcode == 0x0b) { // SIGNEXTEND
-                            return Some((pushInstruction(0x1b, restOfCode), evmJumpTable));  // note diff opcode
+                            return Some((
+                                pushInstruction(
+                                    0x43, // swap1 (args are in different order on AVM vs EVM)
+                                    pushInstruction(
+                                        0x1b, // signextend (different opcode on AVM vs EVM)
+                                        restOfCode
+                                    )
+                                ), evmJumpTable
+                            ));
                         }
                     }
                 } else {
                     if ( (opcode >= 0x10) && (opcode <= 0x1a) ) {
                         return Some((pushInstruction(opcode, restOfCode), evmJumpTable));
+                    } elseif (opcode == 0x1a) { // BYTE
+                        return Some((
+                            pushInstruction(
+                                0x43, // swap1 (args are in different order on AVM vs EVM)
+                                pushInstruction(
+                                    0x1a, // byte
+                                    restOfCode
+                                )
+                            ),
+                            evmJumpTable
+                        ));
                     } elseif (opcode == 0x1b) { // SHL
                         return Some((
                             pushInstructionImm(
