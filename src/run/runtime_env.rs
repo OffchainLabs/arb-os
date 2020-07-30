@@ -615,7 +615,7 @@ impl RtEnvRecorder {
             let _ = machine.debug(None);
         } else if profiler {
             let profile_data = machine.profile_gen(vec![]);
-            profile_data.profiler_session();
+            profile_data.profiler_session(Some(&machine));
         } else {
             let _ = machine.run(None);
         }
