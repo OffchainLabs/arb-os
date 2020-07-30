@@ -384,7 +384,7 @@ public impure func evmCallStack_doCall(
         callvalue: balance,
         returnInfo: None<ReturnInfo>,
         memory: bytearray_new(0),
-        evmLogs: evmlogs_empty(),
+        evmLogs: topFrame.evmLogs,
         selfDestructQueue: topFrame.selfDestructQueue,
         resumeInfo: None<ResumeInfo>,
         parent: Some(topFrame)

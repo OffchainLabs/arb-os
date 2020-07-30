@@ -227,6 +227,7 @@ public impure func evmOp_codecopy(memAddr: uint, codeOffset: uint, nbytes: uint)
         if let Some(code) = account_getCode(
             evmCallFrame_runningCodeFromAccount(topFrame)
         ) {
+            // if this would read beyond end of code, bytearray_copy will zero-fill the rest of the target memory region
             let updatedMemory = bytearray_copy(
                 code,
                 codeOffset,
@@ -260,9 +261,22 @@ public impure func evmOp_extcodecopy(addr: address, memAddr: uint, codeOffset: u
         if let Some(code) = account_getCode(
             evmCallFrame_getAccount(topFrame, addr)
         ) {
+            // if this would read beyond end of code, bytearray_copy will zero-fill the rest of the target memory region
             let updatedMemory = bytearray_copy(
                 code,
                 codeOffset,
+                memory,
+                memAddr,
+                nbytes
+            );
+            if (evmCallStack_setTopFrameMemory(updatedMemory,)) {
+                return;
+            }
+        } else {
+            // code doesn't exist, so zero-fill the target memory region
+            let updatedMemory = bytearray_copy(
+                bytearray_new(0),
+                0,
                 memory,
                 memAddr,
                 nbytes
