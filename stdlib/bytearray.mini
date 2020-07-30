@@ -321,10 +321,6 @@ public func bytearray_copy(
     toOffset: uint,
     nbytes: uint,
 ) -> ByteArray {
-    asm((9999, 0, 1),) { debugprint };
-    asm((9999, 1, nbytes),) { debugprint };
-    asm((9999, 2, nbytes*nbytes),) { debugprint };
-    
     if (toOffset + nbytes >= to.size) {
         while (nbytes > 32) {
             to = bytearray_set256(to, toOffset, bytearray_get256(from, fromOffset));
