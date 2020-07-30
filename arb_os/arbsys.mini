@@ -195,7 +195,7 @@ impure func arbsys_cloneContract(topFrame: EvmCallFrame, calldata: ByteArray) {
     }
 }
 
-impure func sendMessage(msgType: uint, sender: address, data: ByteArray) {
+public impure func sendMessage(msgType: uint, sender: address, data: ByteArray) {
     asm(
         (
             msgType,

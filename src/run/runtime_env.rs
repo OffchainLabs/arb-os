@@ -84,11 +84,20 @@ impl RuntimeEnvironment {
         self.recorder.add_msg(l1_msg);
     }
 
-    pub fn insert_l2_message(&mut self, sender_addr: Uint256, msg: &[u8], special_msg_type: Option<u8>) {
+    pub fn insert_l2_message(
+        &mut self,
+        sender_addr: Uint256,
+        msg: &[u8],
+        special_msg_type: Option<u8>,
+    ) {
         self.insert_l1_message(
-            if let Some(msg_type) = special_msg_type { msg_type } else { 3 },
+            if let Some(msg_type) = special_msg_type {
+                msg_type
+            } else {
+                3
+            },
             sender_addr,
-            msg
+            msg,
         );
     }
 
@@ -132,7 +141,7 @@ impl RuntimeEnvironment {
         let mut buf = vec![1u8];
         buf.extend(max_gas.to_bytes_be());
         buf.extend(gas_price_bid.to_bytes_be());
-        buf.extend(Uint256::zero().to_bytes_be());  // destination address 0
+        buf.extend(Uint256::zero().to_bytes_be()); // destination address 0
         buf.extend(value.to_bytes_be());
         buf.extend_from_slice(data);
 

@@ -20,7 +20,6 @@ use crate::uint256::Uint256;
 use ethers_signers::Wallet;
 use std::{fs::File, io::Read, path::Path};
 
-
 #[derive(Debug, Clone)]
 pub struct AbiForContract {
     code_bytes: Vec<u8>,
@@ -136,7 +135,7 @@ impl AbiForContract {
                 &augmented_code,
             )
         };
-        
+
         let _gas_used = if debug {
             machine.debug(None)
         } else {
@@ -162,10 +161,10 @@ impl AbiForContract {
                 return None;
             }
             if let Value::Tuple(tup) = &sends[sends.len() - 1] {
-                if (tup[0] != Value::Int(Uint256::from_usize(5))) || (tup[1] != Value::Int(sender_addr)) {
-                    println!(
-                        "deploy: incorrect values in send item"
-                    );
+                if (tup[0] != Value::Int(Uint256::from_usize(5)))
+                    || (tup[1] != Value::Int(sender_addr))
+                {
+                    println!("deploy: incorrect values in send item");
                     return None;
                 }
             } else {
