@@ -321,12 +321,16 @@ impl Uint256 {
         if num >= 256 {
             Uint256::zero()
         } else {
-            Uint256{ val: Uint256::trim(&(self.val.clone() << num)).0 }
+            Uint256 {
+                val: Uint256::trim(&(self.val.clone() << num)).0,
+            }
         }
     }
 
     pub fn shift_right(&self, num: usize) -> Self {
-        Uint256{ val: (self.val.clone() >> num) }
+        Uint256 {
+            val: (self.val.clone() >> num),
+        }
     }
 
     pub fn shift_arith(&self, raw_num: usize) -> Self {
@@ -334,9 +338,11 @@ impl Uint256 {
         let num = if raw_num > 256 { 256 } else { raw_num };
         let mut val = (self.val.clone() >> num);
         if need_fill {
-            val = val + (Uint256::max_int().val << (256-num))
+            val = val + (Uint256::max_int().val << (256 - num))
         }
-        Uint256 { val: Uint256::trim(&val).0 }
+        Uint256 {
+            val: Uint256::trim(&val).0,
+        }
     }
 
     pub fn s_less_than(&self, other: &Self) -> bool {
