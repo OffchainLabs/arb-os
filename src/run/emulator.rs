@@ -791,6 +791,7 @@ impl Machine {
                 Opcode::AVMOpcode(AVMOpcode::AddMod) => 4,
                 Opcode::AVMOpcode(AVMOpcode::MulMod) => 4,
                 Opcode::AVMOpcode(AVMOpcode::Exp) => 25,
+                Opcode::AVMOpcode(AVMOpcode::SignExtend) => 7,
                 Opcode::AVMOpcode(AVMOpcode::LessThan) => 2,
                 Opcode::AVMOpcode(AVMOpcode::GreaterThan) => 2,
                 Opcode::AVMOpcode(AVMOpcode::SLessThan) => 2,
@@ -802,7 +803,9 @@ impl Machine {
                 Opcode::AVMOpcode(AVMOpcode::BitwiseXor) => 2,
                 Opcode::AVMOpcode(AVMOpcode::BitwiseNeg) => 1,
                 Opcode::AVMOpcode(AVMOpcode::Byte) => 4,
-                Opcode::AVMOpcode(AVMOpcode::SignExtend) => 7,
+                Opcode::AVMOpcode(AVMOpcode::ShiftLeft) => 4,
+                Opcode::AVMOpcode(AVMOpcode::ShiftRight) => 4,
+                Opcode::AVMOpcode(AVMOpcode::ShiftArith) => 4,
                 Opcode::AVMOpcode(AVMOpcode::Hash) => 7,
                 Opcode::AVMOpcode(AVMOpcode::Type) => 3,
                 Opcode::AVMOpcode(AVMOpcode::Hash2) => 8,
@@ -1193,7 +1196,31 @@ impl Machine {
 						self.incr_pc();
 						Ok(true)
 					}
-					Opcode::AVMOpcode(AVMOpcode::LessThan) => {
+                    Opcode::AVMOpcode(AVMOpcode::SignExtend) => {
+                        let bnum = self.stack.pop_uint(&self.state)?;
+                        let x = self.stack.pop_uint(&self.state)?;
+                        let out = match bnum.to_usize() {
+                            Some(ub) => {
+                                if ub >= 31 {
+                                    x
+                                } else {
+                                    let shifted_bit = Uint256::from_usize(2).exp(&Uint256::from_usize(8*ub+7));
+                                    let sign_bit = x.bitwise_and(&shifted_bit) != Uint256::zero();
+                                    let mask = shifted_bit.mul(&Uint256::from_u64(2)).sub(&Uint256::one()).ok_or_else(|| ExecutionError::new("underflow in signextend", &self.state, None))?;
+                                    if sign_bit {
+                                        x.bitwise_or(&mask.bitwise_neg())
+                                    } else {
+                                        x.bitwise_and(&mask)
+                                    }
+                                }
+                            }
+                            None => x,
+                        };
+                        self.stack.push_uint(out);
+                        self.incr_pc();
+                        Ok(true)
+                    }
+                    Opcode::AVMOpcode(AVMOpcode::LessThan) => {
 						let r1 = self.stack.pop_uint(&self.state)?;
 						let r2 = self.stack.pop_uint(&self.state)?;
 						self.stack.push_usize(if r1 < r2 { 1 } else { 0 });
@@ -1259,9 +1286,9 @@ impl Machine {
 						let r1 = self.stack.pop_uint(&self.state)?;
 						let r2 = self.stack.pop_uint(&self.state)?;
 						self.stack.push_uint(
-							if r2 < Uint256::from_usize(32) {
-								let shift_factor = Uint256::from_u64(256).exp(&Uint256::from_usize(31-r2.to_usize().unwrap()));
-								r1.div(&shift_factor).unwrap().bitwise_and(&Uint256::from_usize(255))
+							if r1 < Uint256::from_usize(32) {
+								let shift_factor = Uint256::from_u64(256).exp(&Uint256::from_usize(31-r1.to_usize().unwrap()));
+								r2.div(&shift_factor).unwrap().bitwise_and(&Uint256::from_usize(255))
 							} else {
 								Uint256::zero()
 							}
@@ -1269,31 +1296,42 @@ impl Machine {
 						self.incr_pc();
 						Ok(true)
 					}
-					Opcode::AVMOpcode(AVMOpcode::SignExtend) => {
-						let bnum = self.stack.pop_uint(&self.state)?;
-						let x = self.stack.pop_uint(&self.state)?;
-						let out = match bnum.to_usize() {
-							Some(ub) => {
-								if ub > 31 {
-									x
-								} else {
-									let t = 248-ub;
-									let shifted_bit = Uint256::from_usize(2).exp(&Uint256::from_usize(t));
-									let sign_bit = x.bitwise_and(&shifted_bit) != Uint256::zero();
-									let mask = shifted_bit.sub(&Uint256::one()).ok_or_else(|| ExecutionError::new("underflow in signextend", &self.state, None))?;
-									if sign_bit {
-										x.bitwise_and(&mask)
-									} else {
-										x.bitwise_or(&mask.bitwise_neg())
-									}
-								}
-							}
-							None => x,
-						};
-						self.stack.push_uint(out);
-						self.incr_pc();
-						Ok(true)
-					}
+                    Opcode::AVMOpcode(AVMOpcode::ShiftLeft) => {
+                        let shift_big = self.stack.pop_uint(&self.state)?;
+                        let value = self.stack.pop_uint(&self.state)?;
+                        let result = if let Some(shift) = shift_big.to_usize() {
+                            value.shift_left(shift)
+                        } else {
+                            Uint256::zero()
+                        };
+                        self.stack.push_uint(result);
+                        self.incr_pc();
+                        Ok(true)
+                    }
+                    Opcode::AVMOpcode(AVMOpcode::ShiftRight) => {
+                        let shift_big = self.stack.pop_uint(&self.state)?;
+                        let value = self.stack.pop_uint(&self.state)?;
+                        let result = if let Some(shift) = shift_big.to_usize() {
+                            value.shift_right(shift)
+                        } else {
+                            Uint256::zero()
+                        };
+                        self.stack.push_uint(result);
+                        self.incr_pc();
+                        Ok(true)
+                    }
+                    Opcode::AVMOpcode(AVMOpcode::ShiftArith) => {
+                        let shift_big = self.stack.pop_uint(&self.state)?;
+                        let value = self.stack.pop_uint(&self.state)?;
+                        let result = if let Some(shift) = shift_big.to_usize() {
+                            value.shift_arith(shift)
+                        } else {
+                            Uint256::zero()
+                        };
+                        self.stack.push_uint(result);
+                        self.incr_pc();
+                        Ok(true)
+                    }
 					Opcode::LogicalAnd => {
 						let r1 = self.stack.pop_bool(&self.state)?;
 						let r2 = self.stack.pop_bool(&self.state)?;
