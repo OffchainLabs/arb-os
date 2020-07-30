@@ -1270,8 +1270,8 @@ impl Machine {
 						Ok(true)
 					}
 					Opcode::AVMOpcode(AVMOpcode::SignExtend) => {
-						let bnum = self.stack.pop_uint(&self.state)?;
-						let x = self.stack.pop_uint(&self.state)?;
+                        let x = self.stack.pop_uint(&self.state)?;
+                        let bnum = self.stack.pop_uint(&self.state)?;
 						let out = match bnum.to_usize() {
 							Some(ub) => {
 								if ub > 31 {
