@@ -402,7 +402,11 @@ impl ProfilerData {
     /// the gas used over a range of lines.
     ///
     /// Use exit to exit the profiler.
-    pub fn profiler_session(&self) {
+    pub fn profiler_session(&self, maybe_machine: Option<&Machine>) {
+        if let Some(mach) = maybe_machine {
+            println!("Counters:");
+            mach.print_counters();
+        }
         let file_gas_costs: Vec<(String, u64)> = self
             .data
             .iter()
@@ -488,6 +492,7 @@ pub struct Machine {
     pub runtime_env: RuntimeEnvironment,
     file_name_chart: HashMap<u64, String>,
     total_gas_usage: Uint256,
+    counter_store: HashMap<u64, u64>,
 }
 
 impl Machine {
@@ -504,6 +509,7 @@ impl Machine {
             runtime_env: env,
             file_name_chart: program.file_name_chart,
             total_gas_usage: Uint256::zero(),
+            counter_store: HashMap::new(),
         }
     }
 
@@ -1409,7 +1415,7 @@ impl Machine {
 					}
 					Opcode::AVMOpcode(AVMOpcode::DebugPrint) => {
 						let r1 = self.stack.pop(&self.state)?;
-                        println!("debugprint: {}", r1);
+                        self.notify_debugprint(r1);
 						self.incr_pc();
 						Ok(true)
 					}
@@ -1465,6 +1471,43 @@ impl Machine {
                 &self.state,
                 None,
             ))
+        }
+    }
+
+    fn notify_debugprint(&mut self, value: Value) {
+        if let Value::Tuple(tup) = value.clone() {
+            if tup.len() == 3 {
+                if let Value::Int(ui0) = &tup[0] {
+                    if let Value::Int(ui1) = &tup[1] {
+                        if let Value::Int(ui2) = &tup[2] {
+                            if ui0.clone() == Uint256::from_u64(9999) {
+                                match ui1.to_u64() {
+                                    Some(i1) => {
+                                        match ui2.to_u64() {
+                                            Some(i2) => {
+                                                self.counter_store.insert(
+                                                    i1,
+                                                    self.counter_store.get(&i1).unwrap_or(&0) + i2
+                                                );
+                                                return;
+                                            }
+                                            _ => {}
+                                        }
+                                    }
+                                    _ => {}
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        println!("debugprint: {}", value);
+    }
+
+    fn print_counters(&self) {
+        for (k,v) in &self.counter_store {
+            println!("{}: \t{}", k, v);
         }
     }
 }
