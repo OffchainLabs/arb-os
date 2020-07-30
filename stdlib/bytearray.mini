@@ -160,7 +160,7 @@ public func bytearray_getByte(ba: ByteArray, offset: uint) -> uint {
     }
     offset = offset + ba.sliceOffset;
     let word = expandingIntArray_get(ba.contents, offset/32);
-    return (word / (asm (256, 31-(offset & 0x1f)) uint { exp })) & 0xff;
+    return asm(word, offset&0x1f) uint { byte };
 }
 
 // bytearray_get64 reads a chunk of 8 bytes from a ByteArray
@@ -321,6 +321,21 @@ public func bytearray_copy(
     toOffset: uint,
     nbytes: uint,
 ) -> ByteArray {
+    asm((9999, 0, 1),) { debugprint };
+    asm((9999, 1, nbytes),) { debugprint };
+    asm((9999, 2, nbytes*nbytes),) { debugprint };
+    
+    if (toOffset + nbytes >= to.size) {
+        while (nbytes > 32) {
+            to = bytearray_set256(to, toOffset, bytearray_get256(from, fromOffset));
+            fromOffset = 32+fromOffset;
+            toOffset = 32+toOffset;
+            nbytes = nbytes-32;
+        }
+        to = bytearray_set256(to, toOffset, bytearray_get256(from, fromOffset));
+        return to with { size: toOffset + nbytes };
+    }
+
     while (nbytes >= 32) {
         let val = bytearray_get256(from, fromOffset);
         to = bytearray_set256(to, toOffset, val);
