@@ -107,3 +107,54 @@ func flipEndian256(x: uint) -> uint {
     }
     return acc;
 }
+
+type Hasher = struct {
+    accumulator: [7]uint,
+    offset: uint,
+}
+
+public func hasher_new() -> Hasher {
+    return struct {
+        accumulator: unsafecast<[7]uint>((0,0,0,0,0,0,0)),
+        offset: 0,
+    };
+}
+
+public func hasher_pushByte(h: Hasher, b: uint) -> Hasher {
+    if (h.offset == 135) {
+        return h with {
+            accumulator: asm(
+                h.accumulator with {
+                    [4] = h.accumulator[4] ^ asm(8*7, b & 0xff) uint { shl }
+                },
+            ) [7]uint { keccakf }
+        } with {
+            offset: 0
+        };
+    } else {
+        let word = h.offset / 32;
+        return h with {
+            accumulator: h.accumulator with {
+                [word] = h.accumulator[word] ^ asm(8*(h.offset&0x1f), b&0xff) uint { shl }
+            }
+        } with {
+            offset: h.offset+1
+        };
+    }
+}
+
+public func hasher_finish(h: Hasher) -> bytes32 {
+    let accum = h.accumulator;
+    let word = h.offset / 32;
+
+    // write the two padding bits (these might both modify the same byte)
+    accum = accum with {
+        [word] = accum[word] ^ asm(8*(h.offset&0x1f), 0x01) uint { shl }
+    };
+    accum = accum with { [4] = accum[4] ^ 0x8000000000000000 };
+
+    return bytes32(flipEndian256(
+        (asm(accum,) [7]uint { keccakf } )[0]
+    ));
+}
+
