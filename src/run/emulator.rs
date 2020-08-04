@@ -487,6 +487,7 @@ pub struct Machine {
     arb_gas_remaining: Uint256,
     pub runtime_env: RuntimeEnvironment,
     file_name_chart: HashMap<u64, String>,
+    total_gas_usage: Uint256,
 }
 
 impl Machine {
@@ -502,6 +503,7 @@ impl Machine {
             arb_gas_remaining: Uint256::zero().bitwise_neg(),
             runtime_env: env,
             file_name_chart: program.file_name_chart,
+            total_gas_usage: Uint256::zero(),
         }
     }
 
@@ -515,6 +517,11 @@ impl Machine {
     ///Returns a stack trace of the current state of the machine.
     pub fn get_stack_trace(&self) -> StackTrace {
         StackTrace::Known(self.aux_stack.all_codepts())
+    }
+
+    ///Returns the value of the ArbGasRemaining register
+    pub fn get_total_gas_usage(&self) -> Uint256 {
+        self.total_gas_usage.clone()
     }
 
     ///Sets the state of the machine to call the function at func_addr with args.
@@ -784,6 +791,7 @@ impl Machine {
                 Opcode::AVMOpcode(AVMOpcode::AddMod) => 4,
                 Opcode::AVMOpcode(AVMOpcode::MulMod) => 4,
                 Opcode::AVMOpcode(AVMOpcode::Exp) => 25,
+                Opcode::AVMOpcode(AVMOpcode::SignExtend) => 7,
                 Opcode::AVMOpcode(AVMOpcode::LessThan) => 2,
                 Opcode::AVMOpcode(AVMOpcode::GreaterThan) => 2,
                 Opcode::AVMOpcode(AVMOpcode::SLessThan) => 2,
@@ -795,7 +803,9 @@ impl Machine {
                 Opcode::AVMOpcode(AVMOpcode::BitwiseXor) => 2,
                 Opcode::AVMOpcode(AVMOpcode::BitwiseNeg) => 1,
                 Opcode::AVMOpcode(AVMOpcode::Byte) => 4,
-                Opcode::AVMOpcode(AVMOpcode::SignExtend) => 7,
+                Opcode::AVMOpcode(AVMOpcode::ShiftLeft) => 4,
+                Opcode::AVMOpcode(AVMOpcode::ShiftRight) => 4,
+                Opcode::AVMOpcode(AVMOpcode::ShiftArith) => 4,
                 Opcode::AVMOpcode(AVMOpcode::Hash) => 7,
                 Opcode::AVMOpcode(AVMOpcode::Type) => 3,
                 Opcode::AVMOpcode(AVMOpcode::Hash2) => 8,
@@ -856,8 +866,10 @@ impl Machine {
                     self.stack.push(val.clone());
                 }
                 if let Some(gas) = self.next_op_gas() {
-                    if let Some(remaining) = self.arb_gas_remaining.sub(&Uint256::from_u64(gas)) {
+                    let gas256 = Uint256::from_u64(gas);
+                    if let Some(remaining) = self.arb_gas_remaining.sub(&gas256) {
                         self.arb_gas_remaining = remaining;
+                        self.total_gas_usage = self.total_gas_usage.add(&gas256);
                     } else {
                         return Err(ExecutionError::new("Out of ArbGas", &self.state, None));
                     }
@@ -1184,7 +1196,31 @@ impl Machine {
 						self.incr_pc();
 						Ok(true)
 					}
-					Opcode::AVMOpcode(AVMOpcode::LessThan) => {
+                    Opcode::AVMOpcode(AVMOpcode::SignExtend) => {
+                        let bnum = self.stack.pop_uint(&self.state)?;
+                        let x = self.stack.pop_uint(&self.state)?;
+                        let out = match bnum.to_usize() {
+                            Some(ub) => {
+                                if ub >= 31 {
+                                    x
+                                } else {
+                                    let shifted_bit = Uint256::from_usize(2).exp(&Uint256::from_usize(8*ub+7));
+                                    let sign_bit = x.bitwise_and(&shifted_bit) != Uint256::zero();
+                                    let mask = shifted_bit.mul(&Uint256::from_u64(2)).sub(&Uint256::one()).ok_or_else(|| ExecutionError::new("underflow in signextend", &self.state, None))?;
+                                    if sign_bit {
+                                        x.bitwise_or(&mask.bitwise_neg())
+                                    } else {
+                                        x.bitwise_and(&mask)
+                                    }
+                                }
+                            }
+                            None => x,
+                        };
+                        self.stack.push_uint(out);
+                        self.incr_pc();
+                        Ok(true)
+                    }
+                    Opcode::AVMOpcode(AVMOpcode::LessThan) => {
 						let r1 = self.stack.pop_uint(&self.state)?;
 						let r2 = self.stack.pop_uint(&self.state)?;
 						self.stack.push_usize(if r1 < r2 { 1 } else { 0 });
@@ -1250,9 +1286,9 @@ impl Machine {
 						let r1 = self.stack.pop_uint(&self.state)?;
 						let r2 = self.stack.pop_uint(&self.state)?;
 						self.stack.push_uint(
-							if r2 < Uint256::from_usize(32) {
-								let shift_factor = Uint256::from_u64(256).exp(&Uint256::from_usize(31-r2.to_usize().unwrap()));
-								r1.div(&shift_factor).unwrap().bitwise_and(&Uint256::from_usize(255))
+							if r1 < Uint256::from_usize(32) {
+								let shift_factor = Uint256::from_u64(256).exp(&Uint256::from_usize(31-r1.to_usize().unwrap()));
+								r2.div(&shift_factor).unwrap().bitwise_and(&Uint256::from_usize(255))
 							} else {
 								Uint256::zero()
 							}
@@ -1260,31 +1296,42 @@ impl Machine {
 						self.incr_pc();
 						Ok(true)
 					}
-					Opcode::AVMOpcode(AVMOpcode::SignExtend) => {
-						let bnum = self.stack.pop_uint(&self.state)?;
-						let x = self.stack.pop_uint(&self.state)?;
-						let out = match bnum.to_usize() {
-							Some(ub) => {
-								if ub > 31 {
-									x
-								} else {
-									let t = 248-ub;
-									let shifted_bit = Uint256::from_usize(2).exp(&Uint256::from_usize(t));
-									let sign_bit = x.bitwise_and(&shifted_bit) != Uint256::zero();
-									let mask = shifted_bit.sub(&Uint256::one()).ok_or_else(|| ExecutionError::new("underflow in signextend", &self.state, None))?;
-									if sign_bit {
-										x.bitwise_and(&mask)
-									} else {
-										x.bitwise_or(&mask.bitwise_neg())
-									}
-								}
-							}
-							None => x,
-						};
-						self.stack.push_uint(out);
-						self.incr_pc();
-						Ok(true)
-					}
+                    Opcode::AVMOpcode(AVMOpcode::ShiftLeft) => {
+                        let shift_big = self.stack.pop_uint(&self.state)?;
+                        let value = self.stack.pop_uint(&self.state)?;
+                        let result = if let Some(shift) = shift_big.to_usize() {
+                            value.shift_left(shift)
+                        } else {
+                            Uint256::zero()
+                        };
+                        self.stack.push_uint(result);
+                        self.incr_pc();
+                        Ok(true)
+                    }
+                    Opcode::AVMOpcode(AVMOpcode::ShiftRight) => {
+                        let shift_big = self.stack.pop_uint(&self.state)?;
+                        let value = self.stack.pop_uint(&self.state)?;
+                        let result = if let Some(shift) = shift_big.to_usize() {
+                            value.shift_right(shift)
+                        } else {
+                            Uint256::zero()
+                        };
+                        self.stack.push_uint(result);
+                        self.incr_pc();
+                        Ok(true)
+                    }
+                    Opcode::AVMOpcode(AVMOpcode::ShiftArith) => {
+                        let shift_big = self.stack.pop_uint(&self.state)?;
+                        let value = self.stack.pop_uint(&self.state)?;
+                        let result = if let Some(shift) = shift_big.to_usize() {
+                            value.shift_arith(shift)
+                        } else {
+                            Uint256::zero()
+                        };
+                        self.stack.push_uint(result);
+                        self.incr_pc();
+                        Ok(true)
+                    }
 					Opcode::LogicalAnd => {
 						let r1 = self.stack.pop_bool(&self.state)?;
 						let r2 = self.stack.pop_bool(&self.state)?;
@@ -1485,7 +1532,7 @@ fn tuple_keccak(intup: Vec<Value>, state: &MachineState) -> Result<Vec<Value>, E
     let mut outtup = [0u64; 25];
     for i in 0..25 {
         outtup[i] = inuis[i / 4].bitwise_and(&mask64).trim_to_u64();
-        inuis[i / 4] = inuis[i / 4].div(&two_to_64).unwrap();   // safe because denom not zero
+        inuis[i / 4] = inuis[i / 4].div(&two_to_64).unwrap(); // safe because denom not zero
     }
     keccak::f1600(&mut outtup);
 

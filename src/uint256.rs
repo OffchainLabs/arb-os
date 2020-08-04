@@ -100,6 +100,10 @@ impl Uint256 {
         self.val.to_usize()
     }
 
+    pub fn to_u64(&self) -> Option<u64> {
+        self.val.to_u64()
+    }
+
     pub fn to_bytes_be(&self) -> Vec<u8> {
         // always returns 32 bytes
         let raw = self.val.to_bytes_be();
@@ -113,7 +117,16 @@ impl Uint256 {
     }
 
     pub fn to_h160(&self) -> H160 {
-        H160::from_slice(&self.to_bytes_minimal())
+        H160::from_slice(&{
+            let raw = self.val.to_bytes_be();
+            if raw.len() < 20 {
+                let mut ret = vec![0u8; 20 - raw.len()];
+                ret.extend(raw);
+                ret
+            } else {
+                raw
+            }
+        })
     }
 
     pub fn to_u256(&self) -> U256 {
@@ -155,6 +168,12 @@ impl Uint256 {
     pub fn one() -> Self {
         Uint256 {
             val: BigUint::one(),
+        }
+    }
+
+    pub fn max_int() -> Self {
+        Uint256 {
+            val: BigUint::new(vec![0xffff_ffff; 8]),
         }
     }
 
@@ -295,6 +314,34 @@ impl Uint256 {
     pub fn exp(&self, other: &Self) -> Self {
         Uint256 {
             val: Uint256::trim(&self.val.pow(&other.val)).0,
+        }
+    }
+
+    pub fn shift_left(&self, num: usize) -> Self {
+        if num >= 256 {
+            Uint256::zero()
+        } else {
+            Uint256 {
+                val: Uint256::trim(&(self.val.clone() << num)).0,
+            }
+        }
+    }
+
+    pub fn shift_right(&self, num: usize) -> Self {
+        Uint256 {
+            val: (self.val.clone() >> num),
+        }
+    }
+
+    pub fn shift_arith(&self, raw_num: usize) -> Self {
+        let need_fill = self.val.bits() == 256;
+        let num = if raw_num > 256 { 256 } else { raw_num };
+        let mut val = (self.val.clone() >> num);
+        if need_fill {
+            val = val + (Uint256::max_int().val << (256 - num))
+        }
+        Uint256 {
+            val: Uint256::trim(&val).0,
         }
     }
 

@@ -22,6 +22,7 @@ use ethers_signers::Signer;
 use std::path::Path;
 
 mod abi;
+pub mod benchmarks;
 
 #[derive(Clone)]
 pub struct CallInfo<'a> {
