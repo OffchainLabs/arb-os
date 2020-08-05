@@ -90,32 +90,11 @@ func queueGetOrDie(q: Queue) -> (Queue, any) {
     }
 }
 
-// InboxCell is the structure that the Arbitrum protocol uses to combine multiple messages
-//     when they arrive in the inbox together.
-// This is basically a linked list, but in reverse order (newest message at head of list).
-type InboxCell = struct {
-    rest: any,   // really an InboxCell, but language doesn't allow recursive types
-    msg: any,
-}
-
 impure func getFromL1Inbox(inbox: Inbox) -> Inbox {
-    // Get one or more messages from the L1 inbox, and append them to the inbox.
+    // Get a message from the L1 inbox, and append it to the inbox.
     // If there are no messages available in the L1 inbox, this blocks until one is available.
-    let newMsgs = asm() InboxCell { inbox };
-    inbox = addInboxToQueue(inbox, newMsgs);
-    return inbox;
-}
-
-func addInboxToQueue(inbox: Inbox, newMsgs: InboxCell) -> Inbox {
-    // Unpack messages from an InboxCell list, and append them to an Inbox.
-    // Because the messages are in the linked list in newest-first order, we need to reverse the order.
-    if (unsafecast<any>(newMsgs) == null) {
-        return inbox;
-    } else {
-        inbox = addInboxToQueue(inbox, unsafecast<InboxCell>(newMsgs.rest));
-        let qp = queue_put(inbox.queue, newMsgs.msg);
-        return inbox with { queue: qp };
-    }
+    let newMsg = asm() any { inbox };
+    return inbox with { queue: queue_put(inbox.queue, newMsg) };
 }
 
 public impure func inbox_currentTimestamp() -> uint {
