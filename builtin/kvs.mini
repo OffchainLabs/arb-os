@@ -25,219 +25,220 @@
 // damage to the internals of a map, leading to erroneous results or even a panic.
 
 
-type TreeKvsTriple = struct {  // This struct stores one item in the KVS.
-    reducedKey: uint,   // hash of the item's key, divided by 8 for each level we descend in the tree
-    key: any,           // item's key
-    value: any          // item's value
+// This is an efficient implementation of a key-value store,
+//       with an implied "default value" of None<any> for uninitialized keys.
+//
+// It's built as an 8-ary trie, using hash(key) as the index for trie-ing.
+// Each "slot" in the trie is either:
+// *  0, which means an empty subtree
+// *  a 2-tuple (key, value), which means that pair is the only item in the subtree
+// *  an 8-tuple, with each entry referencing a subtree
+// To find a key's path down the tree, compute hash(key). Then the low-order 3 bits
+//     gives the branch to take at top-level, the next 3 bits give the branch to take at
+//     the second level, and so on.
+
+// There's a lot of unsafecast and assembly code in here, because of the decision to
+//     have multiple node types that can live in the same slots. This was done because
+//     it's more space-efficient than alternative approaches, which is important when the
+//     structure gets large.
+
+type Kvs = struct {
+    tree: KvsNode,
+    size: uint,
 }
 
-type TreeKvsCell = struct {   // The KVS is represented as a tree of these.
-    triple: option<TreeKvsTriple>,
-    children: [8]any,    // actually [8]TreeKvs but compiler doesn't support recursive types
-    size: uint
+type KvsNode = [8]any
+
+type KvsCell = struct {
+    key: any,
+    value: option<any>,
 }
 
-type TreeKvs = option<TreeKvsCell>   // will be None if tree is empty
 
-
-public func builtin_kvsNew() -> TreeKvs {
-    return None<TreeKvsCell>;
+public func builtin_kvsNew() -> Kvs {
+    return struct {
+        tree: unsafecast<KvsNode>(0),
+        size: 0,
+    };
 }
 
-public func builtin_kvsGet(kvs: TreeKvs, key: any) -> option<any> {
-    let reducedKey = uint(hash(key));
+public func builtin_kvsSize(kvs: Kvs) -> uint {
+    return kvs.size;
+}
+
+public func builtin_kvsGet(kvs: Kvs, key: any) -> option<any> {
+    let hashedKey = uint(hash(key));
+    let s = kvs.tree;
+    let reductionFactor = 1;
     loop {
-        let cell = kvs?;
-        if let Some(triple) = cell.triple {
-            if (reducedKey == triple.reducedKey) {
-                return Some(triple.value);
+        if (s == unsafecast<KvsNode>(0)) {
+            // empty subtree
+            return None;
+        } elseif (asm(s,) uint { length } == 2) {
+            // singleton item
+            if (key == unsafecast<KvsCell>(s).key) {
+                return unsafecast<KvsCell>(s).value;
+            } else {
+                return None;
             }
+        } else {
+            // still at an internal node of the tree; walk downward and try again
+            s = unsafecast<KvsNode>(s[(hashedKey/reductionFactor) & 0x7]);
+            reductionFactor = reductionFactor * 8;
         }
-        kvs = unsafecast<TreeKvs>(cell.children[reducedKey % 8]);
-        reducedKey = reducedKey / 8;
     }
 }
 
-public func builtin_kvsHasKey(kvs: TreeKvs, key: any) -> bool {
+public func builtin_kvsHasKey(kvs: Kvs, key: any) -> bool {
     return builtin_kvsGet(kvs, key) != None<any>;
 }
 
-public func builtin_kvsSet(kvs: TreeKvs, key: any, value: any) -> TreeKvs {
-    if let Some(res) = builtin_kvsSet2(
-        kvs,
-        uint(hash(key)),
-        key,
-        value
-    ) {
-        let (newKvs, _) = res;
-        return newKvs;
-    } else {
-        return kvs;
+// An Unwinder remembers how to reassemble the tree as we traverse back up it.
+// During a set operation, we walk down the tree to the leaf, building an Unwinder as we go.
+// Then we use the Unwinder to guide our traversal back up the tree and the remind us of the
+//      writes we need to do on that upward traversal.
+type Unwinder = struct {
+    kvs: [8]any,
+    index: uint,
+    next: option<any>,   // really option<Unwinder>, but compiler doesn't do recursive types
+}
+
+public func builtin_kvsSet(s: Kvs, key: any, value: any) -> Kvs {
+    let (utree, maybeUnwinder, delta) = kvs_set2(s.tree, key, Some(value));
+    loop {
+        if let Some(unwinder) = maybeUnwinder {
+            utree = unwinder.kvs with {
+                [unwinder.index] = utree
+            };
+            maybeUnwinder = unsafecast<option<Unwinder>>(unwinder.next);
+        } else {
+            if (delta != int(0)) {
+                s = s with { size: uint(int(s.size) + delta) };
+            }
+            return s with { tree: utree };
+        }
     }
 }
 
-func builtin_kvsSet2(
-    kvs: TreeKvs,
-    reducedKey: uint,
-    key: any,
-    value: any
-) -> option<(TreeKvs, int)> {
-    // Update a KVS by setting a key/value pair.
-    // This returns Some((updatedKvs, sizeDiff)) if the structure changed, None if it didn't.
-    if let Some(cell) = kvs {
-        if let Some(triple) = cell.triple {
-            if (triple.reducedKey == reducedKey) {
-                // Found a cell containing the same key. Update the value.
-                return Some((Some(
-                    cell with {
-                        triple: Some(triple with { value: value })
-                    }
-                ), 0s));
+func kvs_set2(s: KvsNode, key: any, value: option<any>) -> (KvsNode, option<Unwinder>, int) {
+    let hashedKey = uint(hash(key));
+    let reductionFactor = 1;
+    let unwinder = None<Unwinder>;
+    loop {
+        if (s == unsafecast<KvsNode>(0)) {
+            if (value == None<any>) {
+                // writing None to an empty slot; do nothing
+                return (s, unwinder, int(0));
             } else {
-                // Didn't find a match here, descend on level in the tree, recursively.
-                let slot = reducedKey % 8;
-                let oldKid = unsafecast<TreeKvs>(cell.children[slot]);
-                let (newKid, sizeDiff) = builtin_kvsSet2(
-                    oldKid,
-                    reducedKey / 8,
-                    key,
-                    value
-                )?;
-                return Some((Some(
-                    cell with {
-                        children: cell.children with {
-                            [slot] = newKid
+                // writing non-zero to empty slot; create a singleton item
+                return (
+                    unsafecast<KvsNode>(
+                        struct {
+                            key: key,
+                            value: value
                         }
-                    } with {
-                        size: uint(int(cell.size) + sizeDiff)
-                    }
-                ), sizeDiff));
+                    ),
+                    unwinder,
+                    int(1)
+                );
             }
-        } else {
-            // This cell doesn't have a triple, so insert our new item here.
-            // But there might already be an item with the same key lower in the tree,
-            //     so we have to make sure to delete that one first.
-
-            // If there is an item with the same key lower in the tree, delete it.
-            let slot = reducedKey % 8;
-            let sizeDiff = 1s;
-            if let Some(res) = builtin_kvsDelete2(
-                unsafecast<TreeKvs>(cell.children[slot]),
-                reducedKey / 8
-            ) {
-                let (newChild, subSizeDiff) = res;
-                sizeDiff = sizeDiff + subSizeDiff;
-                cell = cell with {
-                    children: cell.children with {
-                        [slot] = newChild
-                    }
+        } elseif (asm(s,) uint { length } == 2) {
+            let kid = unsafecast<KvsCell>(s);
+            if (kid.key == key) {
+                // overwriting an existing item with same key
+                if (value == None<any>) {
+                    // delete existing item
+                    return (
+                        unsafecast<KvsNode>(0),
+                        unwinder,
+                        -1s,
+                    );
+                } else {
+                    // update existing item with new value
+                    return (
+                        unsafecast<KvsNode>(kid with { value: value }),
+                        unwinder,
+                        int(0)
+                    );
+                }
+            } else {
+                // already found a singleton here
+                // create new internal node and push singleton into it
+                // then loop back and try again
+                s = unsafecast<KvsNode>(newfixedarray(8, 0)) with {
+                    [(uint(hash(kid.key))/reductionFactor) & 0x7] = kid
                 };
             }
-
-            // Now add the new item
-            return Some((Some(
-                cell with {
-                    triple: Some(struct {
-                        reducedKey: reducedKey,
-                        key: key,
-                        value: value
-                    })
-                } with {
-                    size: uint(int(cell.size) + sizeDiff)
-                }
-            ), sizeDiff));
+        } else {
+            // traversing an internal node
+            // update the unwinder so we know what to do on the way back up
+            // then move one level down the tree
+            let slot = (hashedKey / reductionFactor) & 0x7;
+            unwinder = Some(struct {
+                kvs: s,
+                index: slot,
+                next: unwinder,
+            });
+            s = unsafecast<KvsNode>(s[slot]);
+            reductionFactor = reductionFactor * 8;
         }
-    } else {
-        // There was nothing here, so allocate an empty cell and add this item to it.
-        return Some((Some(
-            struct {
-                triple: Some(struct {
-                    reducedKey: reducedKey,
-                    key: key,
-                    value: value
-                }),
-                children: newfixedarray(8, None<TreeKvsCell>),
-                size: 1
+    }
+}
+
+public func builtin_kvsDelete(s: Kvs, key: uint) -> Kvs {
+    let (utree, maybeUnwinder, delta) = kvs_set2(s.tree, key, None<any>);
+    loop {
+        if let Some(unwinder) = maybeUnwinder {
+            utree = unwinder.kvs with {
+                [unwinder.index] = utree
+            };
+            maybeUnwinder = unsafecast<option<Unwinder>>(unwinder.next);
+        } else {
+            if (delta != int(0)) {
+                s = s with { size: uint(int(s.size) + delta) };
             }
-        ), 1s));
-    }
-}
-
-public func builtin_kvsDelete(kvs: TreeKvs, key: any) -> TreeKvs {
-    if let Some(res) = builtin_kvsDelete2(kvs, uint(hash(key))) {
-        let (newKvs, _) = res;
-        return newKvs;
-    } else {
-        return kvs;
-    }
-}
-
-func builtin_kvsDelete2(kvs: TreeKvs, reducedKey: uint) -> option<(TreeKvs, int)> {
-    // Delete a key.
-    // Returns Some((updatedKvs, sizeDiff)) is anything changed, None otherwise.
-    let cell = kvs?;
-    if let Some(triple) = cell.triple {
-        if (triple.reducedKey == reducedKey) {
-            // Found a matching item. Delete it and return.
-            return Some(
-                (
-                    Some(
-                        cell with { triple: None<TreeKvsTriple> }
-                             with { size: uint(int(cell.size) - 1s) }
-                    ),
-                    -1s
-                )
-            );
+            return s with { tree: utree };
         }
     }
-
-    // Didn't find a match here, descend the tree recursively.
-    let slot = reducedKey % 8;
-    let (newKid, sizeDiff) = builtin_kvsDelete2(
-        unsafecast<TreeKvs>(cell.children[slot]),
-        reducedKey / 8,
-    )?;
-    return Some((Some(
-        cell with {
-            children: cell.children with {
-                [slot] = newKid
-            }
-        } with {
-            size: uint(int(cell.size) + sizeDiff)
-        }
-    ), sizeDiff));
 }
 
+// apply a closure to all items in the storageMap, in sequence
+// for each item (k,v) we'll do:  state <- closure(k, v, state)
+// this will return the state at the end
+// order of traversal is deterministic but weird and subject to change,
+//       so callers are advised not to rely on the ordering
 public func builtin_kvsForall(
-    kvs: TreeKvs,
-    callback: func(any, any, any) -> any,
-    state: any  // initial value for state
+    s: Kvs,
+    closure: func(any, any, any) -> any,
+    state: any
 ) -> any {
-    // Visit every item in the KVS, calling callback on each one.
-    // newState = callback(thisItem.key, thisItem.value, oldState)
-    // Return the final state after visiting all items.
-    if let Some(cell) = kvs {
-        if let Some(triple) = cell.triple {
-            state = callback(triple.key, triple.value, state);
-        }
-        let i = 0;
-        while (i < 8) {
-            state = builtin_kvsForall(
-                unsafecast<TreeKvs>(cell.children[i]),
-                callback,
+    return kvs_forall_tree(s.tree, closure, state);
+}
+
+func kvs_forall_tree(
+    t: KvsNode,
+    closure: func(any, any, any) -> any,
+    state: any
+) -> any {
+    if (t == unsafecast<KvsNode>(0)) {
+        return state;
+    } elseif (asm(t,) uint { length } == 2) {
+        if let Some(val) = unsafecast<KvsCell>(t).value {
+            return closure(
+                unsafecast<KvsCell>(t).key,
+                val,
                 state
             );
+        } else {
+            // structure was corrupted, best to just ignore this cell
+            return state;
+        }
+   } else {
+        let i = 0;
+        while (i < 8) {
+            state = kvs_forall_tree(unsafecast<KvsNode>(t[i]), closure, state);
             i = i+1;
         }
-    }
-
-    return state;
-}
-
-public func builtin_kvsSize(kvs: TreeKvs) -> uint {
-    if let Some(cell) = kvs {
-        return cell.size;
-    } else {
-        return 0;
-    }
+        return state;
+   }
 }

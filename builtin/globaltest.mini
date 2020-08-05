@@ -82,15 +82,59 @@ impure func tests() -> uint {
         return 8;
     }
 
-    // regression tests for issue #156
-    if (asm(16, 31) uint { byte } != 16) {
-        return 9;
-    }
     if (asm(16, 0) uint { byte } != 0) {
         return 10;
     }
-    if (asm(65534, 30) uint { byte } != 255) {
+    if (asm(30, 65534) uint { byte } != 255) {
         return 11;
+    }
+
+    if (asm(31, 0xfe985018496551) uint { byte } != 0x51) {
+        return 12;
+    }
+
+    if (asm(29, 0xfe985018496551) uint { byte } != 0x49) {
+        return 13;
+    }
+
+    if (asm(0, ~0) uint { byte } != 0xff) {
+        return 14;
+    }
+
+    if ((asm(12, 0xbe) uint { shl }) != 0xbe000) {
+        return 15;
+    }
+
+    if (asm(5, 32*581249+17) uint { shr } != 581249) {
+        return 16;
+    }
+
+    if (asm(244, ~0) uint { shr } != 0xfff) {
+        return 17;
+    }
+
+    let testInt = int(0);
+    testInt = testInt - int(16395);
+    let shiftedTestInt = asm(159, testInt) int { shl };
+    let shiftedBack = asm(159, shiftedTestInt) int { sar };
+    if (shiftedBack != testInt) {
+        return 18;
+    }
+
+    if (asm(5, 32*581249+17) uint { sar } != 581249) {
+        return 19;
+    }
+
+    if (asm(1, 0xffff) uint { signextend } != ~0) {
+        return 20;
+    }
+
+    if (asm(2, 0xffff) uint { signextend } != 0xffff) {
+        return 21;
+    }
+
+    if (asm(1, 0x63ff) uint { signextend } != 0x63ff) {
+        return 22;
     }
 
     return struct9test();

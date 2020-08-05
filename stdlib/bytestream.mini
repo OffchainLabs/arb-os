@@ -90,7 +90,7 @@ public func bytestream_getByte(bs: ByteStream) -> option<(ByteStream, uint)> {
         }
         return Some((
             bs with { currentOffset: bs.currentOffset+1 },
-            (cache / asm (2, 8*(31-offsetMod32)) uint { exp }) & 0xff
+            asm(offsetMod32, cache) uint { byte }
         ));
     }
 }
