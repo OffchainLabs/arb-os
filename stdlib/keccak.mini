@@ -143,6 +143,64 @@ public func hasher_pushByte(h: Hasher, b: uint) -> Hasher {
     }
 }
 
+public func hasher_pushN_be(h: Hasher, val: uint, nbytes: uint) -> Hasher {
+    return hasher_pushN_le(h, flipEndian256(val), nbytes);
+}
+
+public func hasher_pushN_le(h: Hasher, val: uint, nbytes: uint) -> Hasher {
+    // push N <= 32 bytes of data into h
+    // data is assumed to be little-endian
+    if (nbytes > 32) {
+        nbytes = 32;
+    } elseif (nbytes < 32) {
+        val = val & (asm(8*nbytes, 1) uint { shl } - 1);
+    }
+    let accum = h.accumulator;
+    let offset = h.offset;
+    loop {  // need to loop because data might cross word/block boundary
+        let word = offset / 32;
+        let align = offset & 0x1f;
+        if ( (align+nbytes <= 8) || ((word < 4) && (align+nbytes <= 32)) ){
+            // can complete our work in a single push
+            accum = accum with {
+                [word] = accum[word] ^ asm(8*align, val) uint { shl }
+            };
+            offset = offset + nbytes;
+            if (offset == 136) {
+                return struct {
+                    accumulator: asm(accum,) [7]uint { keccakf },
+                    offset: 0
+                };
+            } else {
+                return struct {
+                    accumulator: accum,
+                    offset: offset
+                };
+            }
+        } else {
+            // can't push it all because of word/block boundary; do as much as possible
+            if (word == 4) {
+                accum = accum with {
+                    [4] = accum[4] ^ (asm(8*align, val) uint { shl } & 0xffffffffffffffff)
+                };
+                accum = asm(accum,) [7]uint { keccakf };
+                offset = 0;
+                let nb = 8-align;
+                val = asm(8*nb, val) uint { shr };
+                nbytes = nbytes - nb;
+            } else {
+                let acc = accum[word];
+                acc = acc ^ asm(8*align, val) uint { shl };
+                accum = accum with { [word] = acc };
+                let nb = 32-align;
+                offset = offset + nb;
+                val = asm(8*nb, val) uint { shr };
+                nbytes = nbytes - nb;
+            }
+        }
+    }
+}
+
 public func hasher_finish(h: Hasher) -> bytes32 {
     let accum = h.accumulator;
     let word = h.offset / 32;

@@ -37,6 +37,7 @@ import func bytearray_copy(
 import func keccak256(ba: ByteArray, offset: uint, nbytes: uint) -> bytes32;
 import func hasher_new() -> Hasher;
 import func hasher_pushByte(h: Hasher, b: uint) -> Hasher;
+import func hasher_pushN_be(h: Hasher, val: uint, nbytes: uint) -> Hasher;
 import func hasher_finish(h: Hasher) -> bytes32;
 
 
@@ -55,6 +56,7 @@ func tests() -> option<bytes32> {
 		return Some(bytes32(1));
 	}
 	if (! hasherMatches(ba)) { return Some(bytes32(101)); }
+    if (! hasherMatchesByBlocks(ba)) { return Some(bytes32(201)); }
 
     ba = bytearray_new(0);
     ba = bytearray_setByte(ba, 0, 0xcc);
@@ -63,6 +65,7 @@ func tests() -> option<bytes32> {
         return Some(bytes32(2));
     }
 	if (! hasherMatches(ba)) { return Some(bytes32(102)); }
+    if (! hasherMatchesByBlocks(ba)) { return Some(bytes32(202)); }
 
     ba = bytearray_new(0);
     ba = bytearray_setByte(ba, 0, 0xcc);
@@ -72,12 +75,14 @@ func tests() -> option<bytes32> {
         return Some(bytes32(3));
     }
 	if (! hasherMatches(ba)) { return Some(bytes32(103)); }
+    if (! hasherMatchesByBlocks(ba)) { return Some(bytes32(203)); }
 
     let kec67 = keccak256(setupFromUnmarshal(), 0, 67);
     if (kec67 != bytes32(0x3dd4c9bc4aa93bb5b8a21a06ecbef5336c378a7b9814a5a3a743406a54a3cc7b)) {
         return Some(bytes32(4));
     }
 	if (! hasherMatches(setupFromUnmarshal())) { return Some(bytes32(104)); }
+    if (! hasherMatchesByBlocks(ba)) { return Some(bytes32(204)); }
 
     let kec67 = keccak256(
         bytearray_copy(setupFromUnmarshal(), 0, bytearray_new(0), 13, 67),
@@ -99,6 +104,7 @@ func tests() -> option<bytes32> {
         return Some(bytes32(6));
     }
 	if (! hasherMatches(ba)) { return Some(bytes32(106)); }
+    if (! hasherMatchesByBlocks(ba)) { return Some(bytes32(206)); }
 
 	return Some(bytes32(0));
 }
@@ -127,5 +133,23 @@ func hasherMatches(ba: ByteArray) -> bool {
         hasher = hasher_pushByte(hasher, bytearray_getByte(ba, i));
         i = i + 1;
     }
+    return hasher_finish(hasher) == keccak256(ba, 0, bytearray_size(ba));
+}
+
+func hasherMatchesByBlocks(ba: ByteArray) -> bool {
+    let hasher = hasher_new();
+    let offset = 0;
+    let size = bytearray_size(ba);
+    if (size > 27) {
+        // put the hasher into a challenging alignment
+        hasher = hasher_pushN_be(hasher, bytearray_get256(ba, offset), 27);
+        offset = offset + 27;
+    }
+    while (offset+32 < size) {
+        hasher = hasher_pushN_be(hasher, bytearray_get256(ba, offset), 32);
+        offset = offset + 32;
+    }
+    hasher = hasher_pushN_be(hasher, bytearray_get256(ba, offset), size-offset);
+
     return hasher_finish(hasher) == keccak256(ba, 0, bytearray_size(ba));
 }
