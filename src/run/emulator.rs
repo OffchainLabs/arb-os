@@ -417,6 +417,8 @@ impl ProfilerData {
             let mut in_func = false;
             let mut in_callstack = false;
             let mut in_func_gas = 0;
+            let mut current_call: Option<(CodePt, u64)> = None;
+            let mut called: HashMap<CodePt, u64> = HashMap::new();
             let mut start_point = 0;
             let mut call_start = 0;
             for event in events {
@@ -429,6 +431,14 @@ impl ProfilerData {
                                 in_callstack = true;
                                 call_start = *x;
                             }
+                            if let Some((func, start)) = &current_call {
+                                if let Some(entry) = called.get_mut(func) {
+                                    *entry += *x - *start;
+                                } else {
+                                    called.insert(*func, *x - *start);
+                                }
+                            }
+                            current_call = None;
                         } else {
                             panic!("Enter func event found when already in function");
                         }
@@ -448,12 +458,12 @@ impl ProfilerData {
                             } else {
                                 panic!("Function call links to invalid codepoint");
                             };
+                            current_call = Some((*x, end_point));
                             in_func_gas += end_point - start_point;
                         }
                     }
                     ProfilerEvent::Return(x, y) => {
                         if in_func {
-                            //println!("Following called from: {:?}", x);
                             let end_point = if let Some(funcy) = self.stack_tree.get(x) {
                                 if let Some(event) = funcy.get(*y) {
                                     match event {
@@ -481,6 +491,9 @@ impl ProfilerData {
             println!("Func {:?}: {}", func, in_func_gas);
             for (caller, gas) in callers {
                 println!("    Called by {:?}, for {}", caller, gas);
+            }
+            for (called, gas) in called {
+                println!("    Calls {:?}, for {}", called, gas)
             }
         }
         let file_gas_costs: Vec<(String, u64)> = self
