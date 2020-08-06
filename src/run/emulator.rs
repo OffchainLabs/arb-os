@@ -413,15 +413,22 @@ impl ProfilerData {
     pub fn profiler_session(&self) {
         //println!("{:?}", self.stack_tree);
         for (func, events) in &self.stack_tree {
+            let mut callers = HashMap::new();
             let mut in_func = false;
+            let mut in_callstack = false;
             let mut in_func_gas = 0;
             let mut start_point = 0;
+            let mut call_start = 0;
             for event in events {
                 match event {
                     ProfilerEvent::EnterFunc(x) => {
                         if !in_func {
                             in_func = true;
                             start_point = *x;
+                            if !in_callstack {
+                                in_callstack = true;
+                                call_start = *x;
+                            }
                         } else {
                             panic!("Enter func event found when already in function");
                         }
@@ -461,11 +468,20 @@ impl ProfilerData {
                             };
                             in_func = false;
                             in_func_gas += end_point - start_point;
+                            in_callstack = false;
+                            if let Some(entry) = callers.get_mut(x) {
+                                *entry += end_point - call_start;
+                            } else {
+                                callers.insert(*x, end_point - call_start);
+                            }
                         }
                     }
                 }
             }
             println!("Func {:?}: {}", func, in_func_gas);
+            for (caller, gas) in callers {
+                println!("    Called by {:?}, for {}", caller, gas);
+            }
         }
         let file_gas_costs: Vec<(String, u64)> = self
             .data
@@ -872,27 +888,19 @@ impl Machine {
                 Ordering::Less => {
                     let zero_codept = CodePt::new_internal(0);
                     let next_codepoint = stack.last().unwrap_or(&zero_codept);
-                    let mut next_len = loc_map
-                        .stack_tree
-                        .get(next_codepoint)
-                        .map(|something| something.len())
-                        .unwrap_or(0);
-                    if *next_codepoint == current_codepoint {
-                        next_len += 1;
-                    }
-                    let thingy = if let Some(next_info) = loc_map.stack_tree.get_mut(next_codepoint)
-                    {
-                        if *next_codepoint == current_codepoint {
-                            next_info.len() + 1
+                    let next_len =
+                        if let Some(next_info) = loc_map.stack_tree.get_mut(next_codepoint) {
+                            if *next_codepoint == current_codepoint {
+                                next_info.len() + 1
+                            } else {
+                                next_info.len()
+                            }
                         } else {
-                            next_info.len()
-                        }
-                    } else {
-                        loc_map.stack_tree.insert(*next_codepoint, vec![]);
-                        next_len
-                    };
+                            loc_map.stack_tree.insert(*next_codepoint, vec![]);
+                            0
+                        };
                     if let Some(func_info) = loc_map.stack_tree.get_mut(&current_codepoint) {
-                        func_info.push(ProfilerEvent::CallFunc(*next_codepoint, thingy))
+                        func_info.push(ProfilerEvent::CallFunc(*next_codepoint, next_len))
                     } else {
                         panic!("Internal error: calling from an untracked function");
                     }
