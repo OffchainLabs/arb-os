@@ -411,7 +411,6 @@ impl ProfilerData {
     ///
     /// Use exit to exit the profiler.
     pub fn profiler_session(&self) {
-        println!("{:?}", self);
         let file_gas_costs: Vec<(String, u64)> = self
             .data
             .iter()
@@ -765,6 +764,9 @@ impl Machine {
     pub fn profile_gen(&mut self, args: Vec<Value>) -> ProfilerData {
         self.call_state(CodePt::new_internal(0), args);
         let mut loc_map = ProfilerData::default();
+        loc_map
+            .stack_tree
+            .insert(CodePt::new_internal(0), vec![ProfilerEvent::UseGas(0)]);
         let mut stack_len = 0;
         let mut current_codepoint = CodePt::new_internal(0);
         let mut total_gas = 0;
@@ -784,39 +786,43 @@ impl Machine {
             };
             match stack_len.cmp(&stack.len()) {
                 Ordering::Greater => {
+                    let next_len = loc_map
+                        .stack_tree
+                        .get(stack.last().unwrap_or(&CodePt::new_internal(0)))
+                        .map(|something| something.len())
+                        .unwrap_or(0);
                     if let Some(func_info) = loc_map.stack_tree.get_mut(&current_codepoint) {
                         func_info.push(ProfilerEvent::Return(
                             *stack.last().unwrap_or(&CodePt::new_internal(0)),
-                            0,
+                            next_len,
                         ));
                         current_codepoint = *stack.last().unwrap_or(&CodePt::new_internal(0));
                     } else {
                         panic!("Internal error: returned from untracked function");
                     }
-                }
-                Ordering::Equal => {
                     if let Some(func_info) = loc_map.stack_tree.get_mut(&current_codepoint) {
-                        if let Some(ProfilerEvent::UseGas(ref mut val)) = func_info.last_mut() {
-                            *val = total_gas;
-                        } else {
-                            func_info.push(ProfilerEvent::UseGas(total_gas));
-                        }
+                        func_info.push(ProfilerEvent::UseGas(total_gas));
                     } else {
-                        loc_map.stack_tree.insert(
-                            current_codepoint.clone(),
-                            vec![ProfilerEvent::UseGas(total_gas)],
-                        );
+                        loc_map
+                            .stack_tree
+                            .insert(current_codepoint, vec![ProfilerEvent::UseGas(total_gas)]);
                     }
                 }
+                Ordering::Equal => {}
                 Ordering::Less => {
                     let zero_codept = CodePt::new_internal(0);
                     let next_codepoint = stack.last().unwrap_or(&zero_codept);
-                    let thingy =
-                    if let Some(next_info) = loc_map.stack_tree.get_mut(next_codepoint) {
+                    let next_len = loc_map
+                        .stack_tree
+                        .get(next_codepoint)
+                        .map(|something| something.len())
+                        .unwrap_or(0);
+                    let thingy = if let Some(next_info) = loc_map.stack_tree.get_mut(next_codepoint)
+                    {
                         next_info.len()
                     } else {
                         loc_map.stack_tree.insert(*next_codepoint, vec![]);
-                        0
+                        next_len
                     };
                     if let Some(func_info) = loc_map.stack_tree.get_mut(&current_codepoint) {
                         func_info.push(ProfilerEvent::CallFunc(*next_codepoint, thingy))
@@ -824,6 +830,13 @@ impl Machine {
                         panic!("Internal error: calling from an untracked function");
                     }
                     current_codepoint = *next_codepoint;
+                    if let Some(func_info) = loc_map.stack_tree.get_mut(&current_codepoint) {
+                        func_info.push(ProfilerEvent::UseGas(total_gas));
+                    } else {
+                        loc_map
+                            .stack_tree
+                            .insert(current_codepoint, vec![ProfilerEvent::UseGas(total_gas)]);
+                    }
                 }
             }
             stack_len = stack.len();
