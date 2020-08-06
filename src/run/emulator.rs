@@ -528,27 +528,6 @@ impl Machine {
         self.trace_writer = Some(BufWriter::new(File::create(Path::new(filename)).unwrap()));
     }
 
-    ///Returns the current segmentID, PC offset in segment, and opcode
-    pub fn get_seg_offset_opcode(&self, codept: &CodePt) -> Option<(u64, u64, u64)> {
-        match codept {
-            CodePt::Internal(pc) => {
-                Some((
-                    0,
-                    *pc as u64,
-                    666
-                ))
-            }
-            CodePt::InSegment(seg_num, rev_pc) => {
-                Some((
-                    *seg_num as u64,
-                    (self.code.segment_size(*seg_num).unwrap() as u64)-1-(*rev_pc as u64),
-                    666
-                ))
-            }
-            _ => None
-        }
-    }
-
     ///Returns the value of the ArbGasRemaining register
     pub fn get_total_gas_usage(&self) -> Uint256 {
         self.total_gas_usage.clone()
@@ -776,16 +755,33 @@ impl Machine {
                     if let Ok(codept) = cp {
                         if let Some(trace_writer) = &mut self.trace_writer {
                             let res = match codept {
-                                CodePt::Internal(pc) => Some((0, pc as u64, 666)),
+                                CodePt::Internal(pc) => Some((
+                                    0,
+                                    pc as u64,
+                                    self.code
+                                        .get_insn(codept)
+                                        .unwrap()
+                                        .opcode
+                                        .to_number()
+                                        .unwrap(),
+                                )),
                                 CodePt::InSegment(seg_num, rev_pc) => Some((
                                     seg_num as u64,
-                                    (self.code.segment_size(seg_num).unwrap() as u64)-1-(rev_pc as u64),
-                                    666
+                                    (self.code.segment_size(seg_num).unwrap() as u64)
+                                        - 1
+                                        - (rev_pc as u64),
+                                    self.code
+                                        .get_insn(codept)
+                                        .unwrap()
+                                        .opcode
+                                        .to_number()
+                                        .unwrap(),
                                 )),
-                                _ => None
+                                _ => None,
                             };
                             if let Some((seg_num, pc, opcode)) = res {
-                                write!(trace_writer, "{} {} {}\n", seg_num, pc, opcode).expect("failed to write PC trace file");
+                                write!(trace_writer, "{} {} {}\n", seg_num, pc, opcode)
+                                    .expect("failed to write PC trace file");
                             }
                         }
                     }
