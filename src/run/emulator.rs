@@ -47,6 +47,8 @@ impl ValueStack {
         self.contents.len() == 0
     }
 
+    pub fn num_items(&self) -> usize { self.contents.len() }
+
     ///Pushes val to the top of self.
     pub fn push(&mut self, val: Value) {
         self.contents.push_back(val);
@@ -78,6 +80,14 @@ impl ValueStack {
             None
         } else {
             Some(self.contents[self.contents.len() - 1].clone())
+        }
+    }
+
+    pub fn nth(&self, n: usize) -> Option<Value> {
+        if self.num_items() > n {
+            Some(self.contents[self.contents.len()-1-n].clone())
+        } else {
+            None
         }
     }
 
@@ -514,7 +524,7 @@ impl Machine {
     ///Pushes 0 to the stack and sets the program counter to the first instruction. Used by the EVM
     /// compiler.
     pub fn start_at_zero(&mut self) {
-        self.stack.push_usize(0);
+        //self.stack.push_usize(0);
         self.state = MachineState::Running(CodePt::Internal(0));
     }
 
@@ -625,6 +635,7 @@ impl Machine {
          line number to resume program until that line, \"show static\" to show the static contents.");
         let mut breakpoint = true;
         let mut break_line = 0;
+        let mut break_gas_amount = 0u64;
         let mut gas_cost = 0;
         while self.state.is_running() {
             if let Some(gas) = self.next_op_gas() {
@@ -642,6 +653,9 @@ impl Machine {
                     if insn.opcode == Opcode::AVMOpcode(AVMOpcode::DebugPrint) {
                         breakpoint = true;
                     }
+                }
+                if self.total_gas_usage > Uint256::from_u64(break_gas_amount) {
+                    breakpoint = true;
                 }
             }
             if breakpoint {
@@ -689,6 +703,20 @@ impl Machine {
                                 std::io::stdin().read_line(&mut debugger_state).unwrap();
                                 if let Ok(val) = str::parse(&debugger_state.trim()) {
                                     break_line = val;
+                                    exit = true;
+                                    break;
+                                } else {
+                                    println!("Could not parse input as number");
+                                }
+                            }
+                        }
+                        "break at gas\n" => {
+                            breakpoint = false;
+                            loop {
+                                let mut debugger_state = String::new();
+                                std::io::stdin().read_line(&mut debugger_state).unwrap();
+                                if let Ok(val) = str::parse(&debugger_state.trim()) {
+                                    break_gas_amount = val;
                                     exit = true;
                                     break;
                                 } else {
@@ -746,48 +774,65 @@ impl Machine {
             } else {
                 println!("Warning: next opcode does not have a gas cost");
             }
+
             let cp = self.get_pc();
+
+            if let Ok(codept) = cp {
+                if let Some(trace_writer) = &mut self.trace_writer {
+                    let res = match codept {
+                        CodePt::Internal(pc) => Some((
+                            0,
+                            pc as u64,
+                            self.code
+                                .get_insn(codept)
+                                .unwrap()
+                                .opcode
+                                .to_number()
+                                .unwrap(),
+                        )),
+                        CodePt::InSegment(seg_num, rev_pc) => Some((
+                            seg_num as u64,
+                            (self.code.segment_size(seg_num).unwrap() as u64)
+                                - 1
+                                - (rev_pc as u64),
+                            self.code
+                                .get_insn(codept)
+                                .unwrap()
+                                .opcode
+                                .to_number()
+                                .unwrap(),
+                        )),
+                        _ => None,
+                    };
+                    if let Some((seg_num, pc, opcode)) = res {
+                        write!(trace_writer, "{} {} {}", seg_num, pc, opcode)
+                            .expect("failed to write PC trace file");
+                        if ! self.stack.is_empty() {
+                            let val = self.stack.top().unwrap();
+                            if let Value::Int(ui) = val {
+                                write!(trace_writer, " {}", ui.avm_hash()).unwrap();
+                            }
+                            if self.stack.num_items() > 1 {
+                                let val = self.stack.nth(1).unwrap();
+                                if let Value::Int(ui) = val {
+                                    write!(trace_writer, " {}", ui.avm_hash()).unwrap();
+                                }
+                            }
+                        }
+                        write!(trace_writer, "\n").unwrap();
+                    }
+                }
+            }
+
             match self.run_one(false) {
                 Ok(still_runnable) => {
                     if !still_runnable {
                         return gas_used;
                     }
-                    if let Ok(codept) = cp {
-                        if let Some(trace_writer) = &mut self.trace_writer {
-                            let res = match codept {
-                                CodePt::Internal(pc) => Some((
-                                    0,
-                                    pc as u64,
-                                    self.code
-                                        .get_insn(codept)
-                                        .unwrap()
-                                        .opcode
-                                        .to_number()
-                                        .unwrap(),
-                                )),
-                                CodePt::InSegment(seg_num, rev_pc) => Some((
-                                    seg_num as u64,
-                                    (self.code.segment_size(seg_num).unwrap() as u64)
-                                        - 1
-                                        - (rev_pc as u64),
-                                    self.code
-                                        .get_insn(codept)
-                                        .unwrap()
-                                        .opcode
-                                        .to_number()
-                                        .unwrap(),
-                                )),
-                                _ => None,
-                            };
-                            if let Some((seg_num, pc, opcode)) = res {
-                                write!(trace_writer, "{} {} {}\n", seg_num, pc, opcode)
-                                    .expect("failed to write PC trace file");
-                            }
-                        }
-                    }
                 }
                 Err(e) => {
-                    self.state = MachineState::Error(e);
+                    self.state = MachineState::Error(e.clone());
+                    panic!("{}", e);
                     return gas_used;
                 }
             }

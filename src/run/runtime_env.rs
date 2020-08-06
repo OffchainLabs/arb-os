@@ -794,6 +794,7 @@ fn logfile_replay_tests() {
                 false,
                 false,
                 false,
+                None,
             )
             .unwrap(),
             true
