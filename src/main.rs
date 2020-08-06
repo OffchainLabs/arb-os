@@ -158,6 +158,12 @@ fn main() -> Result<(), CompileError> {
                         .help("sets profiler mode")
                         .short("p")
                         .takes_value(false),
+                )
+                .arg(
+                    Arg::with_name("trace")
+                        .help("sets the file to write execution trace to")
+                        .short("t")
+                        .takes_value(true)
                 ),
         )
         .subcommand(
@@ -277,8 +283,9 @@ fn main() -> Result<(), CompileError> {
         let path = matches.value_of("INPUT").unwrap();
         let debug = matches.is_present("debug");
         let profiler = matches.is_present("profiler");
+        let trace_file = matches.value_of("trace");
 
-        if let Err(e) = replay_from_testlog_file(path, true, debug, profiler) {
+        if let Err(e) = replay_from_testlog_file(path, true, debug, profiler, trace_file) {
             panic!("Error reading from {}: {}", path, e);
         }
     }

@@ -26,7 +26,9 @@ use std::cmp::max;
 use std::collections::{BTreeMap, HashMap};
 use std::convert::TryInto;
 use std::fmt;
-use std::io::stdin;
+use std::fs::File;
+use std::io::{stdin, BufWriter, Write};
+use std::path::Path;
 
 ///Represents a stack of `Value`s
 #[derive(Debug, Default, Clone)]
@@ -488,6 +490,7 @@ pub struct Machine {
     pub runtime_env: RuntimeEnvironment,
     file_name_chart: HashMap<u64, String>,
     total_gas_usage: Uint256,
+    trace_writer: Option<BufWriter<File>>,
 }
 
 impl Machine {
@@ -504,6 +507,7 @@ impl Machine {
             runtime_env: env,
             file_name_chart: program.file_name_chart,
             total_gas_usage: Uint256::zero(),
+            trace_writer: None,
         }
     }
 
@@ -517,6 +521,32 @@ impl Machine {
     ///Returns a stack trace of the current state of the machine.
     pub fn get_stack_trace(&self) -> StackTrace {
         StackTrace::Known(self.aux_stack.all_codepts())
+    }
+
+    ///Adds a trace writer to the machine
+    pub fn add_trace_writer(&mut self, filename: &str) {
+        self.trace_writer = Some(BufWriter::new(File::create(Path::new(filename)).unwrap()));
+    }
+
+    ///Returns the current segmentID, PC offset in segment, and opcode
+    pub fn get_seg_offset_opcode(&self, codept: &CodePt) -> Option<(u64, u64, u64)> {
+        match codept {
+            CodePt::Internal(pc) => {
+                Some((
+                    0,
+                    *pc as u64,
+                    666
+                ))
+            }
+            CodePt::InSegment(seg_num, rev_pc) => {
+                Some((
+                    *seg_num as u64,
+                    (self.code.segment_size(*seg_num).unwrap() as u64)-1-(*rev_pc as u64),
+                    666
+                ))
+            }
+            _ => None
+        }
     }
 
     ///Returns the value of the ArbGasRemaining register
@@ -737,10 +767,27 @@ impl Machine {
             } else {
                 println!("Warning: next opcode does not have a gas cost");
             }
+            let cp = self.get_pc();
             match self.run_one(false) {
                 Ok(still_runnable) => {
                     if !still_runnable {
                         return gas_used;
+                    }
+                    if let Ok(codept) = cp {
+                        if let Some(trace_writer) = &mut self.trace_writer {
+                            let res = match codept {
+                                CodePt::Internal(pc) => Some((0, pc as u64, 666)),
+                                CodePt::InSegment(seg_num, rev_pc) => Some((
+                                    seg_num as u64,
+                                    (self.code.segment_size(seg_num).unwrap() as u64)-1-(rev_pc as u64),
+                                    666
+                                )),
+                                _ => None
+                            };
+                            if let Some((seg_num, pc, opcode)) = res {
+                                write!(trace_writer, "{} {} {}\n", seg_num, pc, opcode).expect("failed to write PC trace file");
+                            }
+                        }
                     }
                 }
                 Err(e) => {
