@@ -1356,9 +1356,13 @@ impl Machine {
                                 if ub >= 31 {
                                     x
                                 } else {
-                                    let shifted_bit = Uint256::from_usize(2).exp(&Uint256::from_usize(8*ub+7));
+                                    let shifted_bit =
+                                        Uint256::from_usize(2).exp(&Uint256::from_usize(8*ub+7));
                                     let sign_bit = x.bitwise_and(&shifted_bit) != Uint256::zero();
-                                    let mask = shifted_bit.mul(&Uint256::from_u64(2)).sub(&Uint256::one()).ok_or_else(|| ExecutionError::new("underflow in signextend", &self.state, None))?;
+                                    let mask = shifted_bit
+                                        .mul(&Uint256::from_u64(2)).sub(&Uint256::one())
+                                        .ok_or_else(||
+                                            ExecutionError::new("underflow in signextend", &self.state, None))?;
                                     if sign_bit {
                                         x.bitwise_or(&mask.bitwise_neg())
                                     } else {
@@ -1439,7 +1443,8 @@ impl Machine {
 						let r2 = self.stack.pop_uint(&self.state)?;
 						self.stack.push_uint(
 							if r1 < Uint256::from_usize(32) {
-								let shift_factor = Uint256::from_u64(256).exp(&Uint256::from_usize(31-r1.to_usize().unwrap()));
+								let shift_factor =
+                                    Uint256::from_u64(256).exp(&Uint256::from_usize(31-r1.to_usize().unwrap()));
 								r2.div(&shift_factor).unwrap().bitwise_and(&Uint256::from_usize(255))
 							} else {
 								Uint256::zero()
