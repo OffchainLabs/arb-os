@@ -831,8 +831,7 @@ impl Machine {
                     }
                 }
                 Err(e) => {
-                    self.state = MachineState::Error(e.clone());
-                    panic!("{}", e);
+                    self.state = MachineState::Error(e);
                     return gas_used;
                 }
             }
@@ -933,7 +932,7 @@ impl Machine {
                 Opcode::AVMOpcode(AVMOpcode::PushInsn) => 25,
                 Opcode::AVMOpcode(AVMOpcode::PushInsnImm) => 25,
                 Opcode::AVMOpcode(AVMOpcode::OpenInsn) => 25,
-                Opcode::AVMOpcode(AVMOpcode::DebugPrint) => 25,
+                Opcode::AVMOpcode(AVMOpcode::DebugPrint) => 1,
                 Opcode::AVMOpcode(AVMOpcode::GetGas) => 1,
                 Opcode::AVMOpcode(AVMOpcode::SetGas) => 0,
                 Opcode::AVMOpcode(AVMOpcode::EcRecover) => 20_000,
@@ -949,6 +948,20 @@ impl Machine {
     /// whether the instruction was blocked if execution does not hit an error state, or an
     /// `ExecutionError` if an error was encountered.
     pub fn run_one(&mut self, _debug: bool) -> Result<bool, ExecutionError> {
+        match self.run_one_dont_catch_errors(_debug) {
+            Ok(b) => Ok(b),
+            Err(e) => {
+                if self.err_codepoint == CodePt::Null {
+                    Err(e)
+                } else {
+                    self.state = MachineState::Running(self.err_codepoint);
+                    Ok(true)
+                }
+            }
+        }
+    }
+
+    fn run_one_dont_catch_errors(&mut self, _debug: bool) -> Result<bool, ExecutionError> {
         if let MachineState::Running(pc) = self.state {
             if let Some(insn) = self.code.get_insn(pc) {
                 if let Some(val) = &insn.immediate {
@@ -960,6 +973,7 @@ impl Machine {
                         self.arb_gas_remaining = remaining;
                         self.total_gas_usage = self.total_gas_usage.add(&gas256);
                     } else {
+                        self.arb_gas_remaining = Uint256::max_int();
                         return Err(ExecutionError::new("Out of ArbGas", &self.state, None));
                     }
                 }
