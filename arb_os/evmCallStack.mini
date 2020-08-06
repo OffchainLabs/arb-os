@@ -222,7 +222,7 @@ public impure func initEvmCallStack(
             evmCallStack_callHitError();
         }
     } else {
-        // no contract at this address
+        // no contract at this address, so treat tx as a simple eth transfer
         if (callvalue > 0) {
             // transfer value to destination address
             if let Some(globalAS) = accountStore_transferEthBalance(
@@ -242,7 +242,7 @@ public impure func initEvmCallStack(
                 evmCallStack_callHitError();
             }
         } else {
-            // report success (even though tx was a no-op)
+            // tx is transfer of 0 Eth, so just report success
             emitLog(ethMessage, 0, None<ByteArray>, None<EvmLogs>, None<GasUsage>);
             emptyAvmStack();
             cleanAvmAuxStackAndCall(mainRunLoop,);  // should never return

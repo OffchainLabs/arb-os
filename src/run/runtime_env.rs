@@ -258,6 +258,14 @@ impl RuntimeEnvironment {
         }
     }
 
+    pub fn peek_at_inbox_head(&mut self) -> Option<Value> {
+        if self.l1_inbox.is_empty() {
+            None
+        } else {
+            Some(self.l1_inbox[0].clone())
+        }
+    }
+
     pub fn push_log(&mut self, log_item: Value) {
         self.logs.push(log_item.clone());
         self.recorder.add_log(log_item);
@@ -267,11 +275,13 @@ impl RuntimeEnvironment {
         self.logs.clone()
     }
 
-    pub fn get_all_logs(&self) -> Vec<ArbosReceipt> {
+    pub fn get_all_receipt_logs(&self) -> Vec<ArbosReceipt> {
         self.logs
             .clone()
             .into_iter()
             .map(|log| ArbosReceipt::new(log))
+            .filter(|r| r.is_some())
+            .map(|r| r.unwrap())
             .collect()
     }
 
@@ -300,16 +310,19 @@ pub struct ArbosReceipt {
 }
 
 impl ArbosReceipt {
-    pub fn new(arbos_log: Value) -> Self {
+    pub fn new(arbos_log: Value) -> Option<Self> {
         if let Value::Tuple(tup) = arbos_log {
+            if !(tup[0] == Value::Int(Uint256::zero())) {
+                return None;
+            }
             let (return_code, return_data, evm_logs) =
-                ArbosReceipt::unpack_return_info(&tup[1]).unwrap();
-            let (gas_used, gas_price_wei) = ArbosReceipt::unpack_gas_info(&tup[2]).unwrap();
+                ArbosReceipt::unpack_return_info(&tup[2]).unwrap();
+            let (gas_used, gas_price_wei) = ArbosReceipt::unpack_gas_info(&tup[3]).unwrap();
             let (gas_so_far, index_in_block, logs_so_far) =
-                ArbosReceipt::unpack_cumulative_info(&tup[3]).unwrap();
-            ArbosReceipt {
-                request: tup[0].clone(),
-                request_id: if let Value::Tuple(subtup) = &tup[0] {
+                ArbosReceipt::unpack_cumulative_info(&tup[4]).unwrap();
+            Some(ArbosReceipt {
+                request: tup[1].clone(),
+                request_id: if let Value::Tuple(subtup) = &tup[1] {
                     if let Value::Int(ui) = &subtup[4] {
                         ui.clone()
                     } else {
@@ -326,7 +339,7 @@ impl ArbosReceipt {
                 gas_so_far,
                 index_in_block,
                 logs_so_far,
-            }
+            })
         } else {
             panic!("ArbOS log item was not a Tuple");
         }
