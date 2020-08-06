@@ -884,6 +884,7 @@ impl Machine {
                 Opcode::AVMOpcode(AVMOpcode::Breakpoint) => 100,
                 Opcode::AVMOpcode(AVMOpcode::Log) => 100,
                 Opcode::AVMOpcode(AVMOpcode::Send) => 100,
+                Opcode::AVMOpcode(AVMOpcode::InboxPeek) => 40,
                 Opcode::AVMOpcode(AVMOpcode::Inbox) => 40,
                 Opcode::AVMOpcode(AVMOpcode::Panic) => 5,
                 Opcode::AVMOpcode(AVMOpcode::Halt) => 10,
@@ -1417,6 +1418,29 @@ impl Machine {
                             None => Ok(false)   // machine is blocked, waiting for message
                         }
 					}
+                    Opcode::AVMOpcode(AVMOpcode::InboxPeek) => {
+                        let bn = self.stack.pop_uint(&self.state)?;
+                        match self.runtime_env.peek_at_inbox_head() {
+                            Some(msg) => {
+                                if let Value::Tuple(tup) = msg {
+                                    if let Value::Int(msg_bn) = &tup[1] {
+                                        self.stack.push_bool(bn == msg_bn.clone());
+                                        self.incr_pc();
+                                        Ok(true)
+                                    } else {
+                                        Err(ExecutionError::new("inbox contents not a tuple", &self.state, None))
+                                    }
+                                } else {
+                                    Err(ExecutionError::new("blocknum not an integer", &self.state, None))
+                                }
+                            }
+                            None => {
+                                // machine is blocked, waiting for nonempty inbox
+                                self.stack.push_uint(bn);   // put stack back the way it was
+                                Ok(false)
+                            }
+                        }
+                    }
 					Opcode::AVMOpcode(AVMOpcode::ErrCodePoint) => {
 						self.stack.push(Value::CodePoint(
 							self.code.create_segment()
