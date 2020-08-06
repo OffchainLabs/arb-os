@@ -387,6 +387,9 @@ func expandingIntArray_get(arr: ExpandingIntArray, index: uint) -> uint {
 }
 
 func expandingIntArray_getConsecutive(arr: ExpandingIntArray, index: uint) -> (uint, uint) {
+    if (index+1 >= arr.size) {
+        return (expandingIntArray_get(arr, index), 0);
+    }
     let tree = arr.contents;
     let chunk = arr.chunk;
 
