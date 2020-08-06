@@ -620,7 +620,13 @@ impl RtEnvRecorder {
         writeln!(file, "{}", self.to_json_string()?)
     }
 
-    pub fn replay_and_compare(&self, require_same_gas: bool, debug: bool, profiler: bool, trace_file: Option<&str>) -> bool {
+    pub fn replay_and_compare(
+        &self,
+        require_same_gas: bool,
+        debug: bool,
+        profiler: bool,
+        trace_file: Option<&str>,
+    ) -> bool {
         // returns true iff result matches
         let mut rt_env = RuntimeEnvironment::new(Uint256::from_usize(1111));
         rt_env.insert_full_inbox_contents(self.inbox.clone());
@@ -768,7 +774,8 @@ pub fn replay_from_testlog_file(
 
     match res {
         Ok(recorder) => {
-            let success = recorder.replay_and_compare(require_same_gas, debug, profiler, trace_file);
+            let success =
+                recorder.replay_and_compare(require_same_gas, debug, profiler, trace_file);
             println!("{}", if success { "success" } else { "mismatch " });
             Ok(success)
         }

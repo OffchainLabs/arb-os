@@ -163,7 +163,7 @@ fn main() -> Result<(), CompileError> {
                     Arg::with_name("trace")
                         .help("sets the file to write execution trace to")
                         .short("t")
-                        .takes_value(true)
+                        .takes_value(true),
                 ),
         )
         .subcommand(
