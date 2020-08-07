@@ -44,7 +44,7 @@ import impure func evmCallStack_doCall(
     retOffset: uint,
     retLength: uint,
     resumeCodePoint: func(),
-) -> option<()>;
+) -> option<bool>;
 import impure func evmCallStack_returnFromCall(
     success: bool,
     returnOffset: uint,
@@ -607,12 +607,10 @@ public impure func evmOp_call(
         retLength,
         resumeCodePoint
     );
-    if (res == None<()>) {
-        return false;  // couldn't make a call, return failure
+    if let Some(success) = res {
+        return success;
     } else {
-        // should never get here -- control should have been thrown elsewhere
-        errorHandler();
-        panic;
+        return false;  // weird failure, best to return false
     }
 }
 
@@ -646,12 +644,10 @@ public impure func evmOp_callcode(
         retLength,
         resumeCodePoint
     );
-    if (res == None<()>) {
-        return false;  // couldn't make a call, return failure
+    if let Some(success) = res {
+        return success;
     } else {
-        // should never get here -- control should have been thrown elsewhere
-        errorHandler();
-        panic;
+        return false;  // weird failure, best to return false
     }
 }
 
@@ -684,15 +680,12 @@ public impure func evmOp_delegatecall(
          retLength,
          resumeCodePoint
      );
-     if (res == None<()>) {
-         // we must have tried to call a non-existent address
-         // according to Yellow Paper, should return success in this case
-         return true;
-     } else {
-         // should never get here -- control should have been thrown elsewhere
-         errorHandler();
-         panic;
-     }}
+    if let Some(success) = res {
+        return success;
+    } else {
+        return false;  // weird failure, best to return false
+    }
+}
 
 public impure func evmOp_staticcall(
     gas: uint,
@@ -723,14 +716,10 @@ public impure func evmOp_staticcall(
         retLength,
         resumeCodePoint
     );
-    if (res == None<()>) {
-        // we must have tried to call a non-existent address
-        // according to Yellow Paper, should return success in this case
-        return true;
+    if let Some(success) = res {
+        return success;
     } else {
-        // should never get here -- control should have been thrown elsewhere
-        errorHandler();
-        panic;
+        return false;  // weird failure, best to return false
     }
 }
 
