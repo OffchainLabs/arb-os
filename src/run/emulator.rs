@@ -47,7 +47,9 @@ impl ValueStack {
         self.contents.len() == 0
     }
 
-    pub fn num_items(&self) -> usize { self.contents.len() }
+    pub fn num_items(&self) -> usize {
+        self.contents.len()
+    }
 
     ///Pushes val to the top of self.
     pub fn push(&mut self, val: Value) {
@@ -85,7 +87,7 @@ impl ValueStack {
 
     pub fn nth(&self, n: usize) -> Option<Value> {
         if self.num_items() > n {
-            Some(self.contents[self.contents.len()-1-n].clone())
+            Some(self.contents[self.contents.len() - 1 - n].clone())
         } else {
             None
         }
@@ -524,7 +526,6 @@ impl Machine {
     ///Pushes 0 to the stack and sets the program counter to the first instruction. Used by the EVM
     /// compiler.
     pub fn start_at_zero(&mut self) {
-        //self.stack.push_usize(0);
         self.state = MachineState::Running(CodePt::Internal(0));
     }
 
@@ -792,9 +793,7 @@ impl Machine {
                         )),
                         CodePt::InSegment(seg_num, rev_pc) => Some((
                             seg_num as u64,
-                            (self.code.segment_size(seg_num).unwrap() as u64)
-                                - 1
-                                - (rev_pc as u64),
+                            (self.code.segment_size(seg_num).unwrap() as u64) - 1 - (rev_pc as u64),
                             self.code
                                 .get_insn(codept)
                                 .unwrap()
@@ -807,7 +806,7 @@ impl Machine {
                     if let Some((seg_num, pc, opcode)) = res {
                         write!(trace_writer, "{} {} {}", seg_num, pc, opcode)
                             .expect("failed to write PC trace file");
-                        if ! self.stack.is_empty() {
+                        if !self.stack.is_empty() {
                             let val = self.stack.top().unwrap();
                             if let Value::Int(ui) = val {
                                 write!(trace_writer, " {}", ui.avm_hash()).unwrap();

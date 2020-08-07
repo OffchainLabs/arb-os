@@ -336,9 +336,6 @@ public impure func evmCallStack_doCall(
         }
 
         let callerAddr = topFrame.runningAs;
-        if (callerAddr == calleeAddr) {
-            return None;  // a contract shouldn't use the external call mechanism to call itself
-        }
         let caller = topFrame.runningAsAccount;
 
         // prepare the caller's frame
@@ -364,7 +361,7 @@ public impure func evmCallStack_doCall(
             runningAsAddr = callerAddr;  // delegatecall runs as the caller, with callee's code
         }
         let updatedAcctStore = topFrame.accountStore;
-        if (kind == 0) {  //TODO: verify that txcall is the only one that is supposed to allow payment-with-call
+        if (balance > 0) {
             let updatedAcctStore = accountStore_transferEthBalance(
                 updatedAcctStore,
                 callerAddr,
