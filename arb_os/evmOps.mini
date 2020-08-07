@@ -296,9 +296,11 @@ public impure func evmOp_extcodecopy(addr: address, memAddr: uint, codeOffset: u
 public impure func evmOp_extcodehash(addr: address) -> bytes32 {
     addr = address(uint(addr));     // truncate if necessary
     if let Some(topFrame) = evmCallStack_topFrame() {
-        if let Some(code) = account_getCode(
-            evmCallFrame_getAccount(topFrame, addr)
-        ) {
+        let acct = evmCallFrame_getAccount(topFrame, addr);
+        if (account_isEmpty(acct)) {
+            return bytes32(0);
+        }
+        if let Some(code) = account_getCode(acct) {
             return keccak256(code, 0, bytearray_size(code));
         } else {
             return bytes32(0xc5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470);
