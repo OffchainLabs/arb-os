@@ -190,14 +190,19 @@ public func accountStore_createAccountFromEvmCode(
 public func accountStore_createBuiltinContract(
     acctStore: AccountStore,
     addr: address,
-    entryPoint: impure func()
+    entryPoint: impure func(),
+    isArbitrumStyle: bool,
 ) -> option<AccountStore> {
     let oldAcct = accountStore_get(acctStore, addr);
     if (account_isEmpty(oldAcct)) {
         // set up fake code for the contract
-        // it must have nonzero size because callers check if size is zero to see if contract exists
-        let fakeCode = bytearray_new(32);
-        fakeCode = bytearray_setByte(fakeCode, 0, 0xfe);
+        // if Arbitrum style, must give it nonzero size because callers check if size is zero to see if contract exists
+        // otherwise it's an Ethereum precompile which is specified to have null bytearray as its code
+        let fakeCode = bytearray_new(0);
+        if (isArbitrumStyle) {
+            // fake code is a single EVM INVALID instruction
+            fakeCode = bytearray_setByte(fakeCode, 0, 0xfe);
+        }
 
         return Some(
             accountStore_set(

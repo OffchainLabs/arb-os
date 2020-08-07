@@ -591,7 +591,10 @@ pub fn make_logs_for_all_arbos_tests() {
         false,
     );
     evm_test_arbsys(Some(Path::new("testlogs/evm_test_arbsys.aoslog")), false);
-    evm_payment_to_empty_address(Some(Path::new("testlogs/payment_to_empty_address.aoslog")), false);
+    evm_payment_to_empty_address(
+        Some(Path::new("testlogs/payment_to_empty_address.aoslog")),
+        false,
+    );
     mint_erc20_and_get_balance(Some(Path::new("testlogs/erc20_test.aoslog")), false);
     mint_erc721_and_get_balance(Some(Path::new("testlogs/erc721_test.aoslog")), false);
 }

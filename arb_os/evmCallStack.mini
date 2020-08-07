@@ -152,8 +152,6 @@ type ResumeInfo = struct {  // information used to resume a call after a subcall
     savedGas: uint,         // how much of the caller's gas was not lent to the subcall
 }
 
-//FIXME:  add OrDie variants of the getters that return options; use in evmOps
-
 var globalCallStack: option<EvmCallFrame>;   // call frame of currently running call, if any
 var globalCurrentEthMessage: IncomingRequest;  // the message that launched the top-level call
 
@@ -214,12 +212,12 @@ public impure func initEvmCallStack(
                     // unknown error type
                     emitLog(ethMessage, 255, None<ByteArray>, None<EvmLogs>, None<GasUsage>);
                 }
-                evmCallStack_callHitError();
+                evmCallStack_callHitError(1);
             }
         } else {
             // can't pay for gas error
             emitLog(ethMessage, 3, None<ByteArray>, None<EvmLogs>, None<GasUsage>);
-            evmCallStack_callHitError();
+            evmCallStack_callHitError(2);
         }
     } else {
         // no contract at this address, so treat tx as a simple eth transfer
@@ -239,7 +237,7 @@ public impure func initEvmCallStack(
             } else {
                 // insufficient balance error
                 emitLog(ethMessage, 4, None<ByteArray>, None<EvmLogs>, None<GasUsage>);
-                evmCallStack_callHitError();
+                evmCallStack_callHitError(3);
             }
         } else {
             // tx is transfer of 0 Eth, so just report success
@@ -307,7 +305,7 @@ public impure func initEvmCallStackForConstructor(
     } else {
         // can't pay for gas error
         emitLog(ethMessage, 3, None<ByteArray>, None<EvmLogs>, None<GasUsage>);
-        evmCallStack_callHitError();  // should never return
+        evmCallStack_callHitError(4);  // should never return
         panic;
     }
 }
@@ -322,81 +320,88 @@ public impure func evmCallStack_doCall(
     retOffset: uint,
     retLength: uint,
     resumeCodePoint: func(),  // jump to this to resume the caller
-) -> option<()> {
-    // Create a new callframe for a subcall, and transfer execution to it.
-    let availableGas = gasAccounting_pauseTxCharges();
-    if (gas > availableGas) {
-        gas = availableGas;  // don't give the callee more gas than the caller has
-    }
-
-    if (kind == 1) {
-        errorHandler();  // should never return
-        panic;  // callcode call type not yet implemented
-    }
-
+) -> option<bool> {   // returns Some(success) if succeed/fail, or None on error
     let topFrame = globalCallStack?;
-    let callerAddr = topFrame.runningAs;
-    if (callerAddr == calleeAddr) {
-        return None;  // a contract shouldn't use the external call mechanism to call itself
-    }
-    let caller = topFrame.runningAsAccount;
-
-    // prepare the caller's frame
-    //    this means (1) saving the runningAsAccount into the accountStore, and
-    //               (2) saving the resumeInfo so we can resume later
-    let stackContents = saveAvmStack();  // must be done as a top level statement
-    topFrame = topFrame
-        with { accountStore: accountStore_set(topFrame.accountStore, callerAddr, caller) }
-        with { resumeInfo: Some(struct {
-                   codePoint: resumeCodePoint,
-                   stackContents: stackContents,
-                   returnDataOffset: retOffset,
-                   returnDataNbytes: retLength,
-                   callType: kind,
-                   savedGas: availableGas-gas,
-               }) };
-
-    // now create a new callframe for the callee
-    //     it incorporates the balance transfer from caller to callee
-    //          (which is put into the callee frame so it isn't committed unless the call succeeds)
     let callee = accountStore_get(topFrame.accountStore, calleeAddr);
-    let runningAsAddr = calleeAddr;
-    if (kind == 2) {
-        runningAsAddr = callerAddr;  // delegatecall runs as the caller, with callee's code
-    }
-    let updatedAcctStore = topFrame.accountStore;
-    if (kind == 0) {  //TODO: verify that txcall is the only one that is supposed to allow payment-with-call
-        let updatedAcctStore = accountStore_transferEthBalance(
-            updatedAcctStore,
-            callerAddr,
-            calleeAddr,
-            balance
-        )?;
-    }
-    let newTopFrame = struct {
-        runningAs: calleeAddr,
-        runningCodeFrom: calleeAddr,
-        accountStore: updatedAcctStore,
-        runningAsAccount: accountStore_get(updatedAcctStore, calleeAddr),
-        caller: topFrame.runningAs,
-        callKind: kind,
-        calldata: bytearray_extract(topFrame.memory, argsOffset, argsLength),
-        callvalue: balance,
-        returnInfo: None<ReturnInfo>,
-        memory: bytearray_new(0),
-        evmLogs: topFrame.evmLogs,
-        selfDestructQueue: topFrame.selfDestructQueue,
-        resumeInfo: None<ResumeInfo>,
-        parent: Some(topFrame)
-    };
+    if let Some(startCodePoint) = account_getStartCodePoint(callee) {
+        // Create a new callframe for a subcall, and transfer execution to it.
+        let availableGas = gasAccounting_pauseTxCharges();
+        if (gas > availableGas) {
+            gas = availableGas;  // don't give the callee more gas than the caller has
+        }
 
-    // there were no errors in the setup, so write the result to global storage
-    globalCallStack = Some(newTopFrame);
+        if (kind == 1) {
+            errorHandler();  // should never return
+            panic;  // callcode call type not yet implemented
+        }
 
-    // jump to the called code's startCodePoint -- this should never return
-    let startCodePoint = account_getStartCodePoint(callee)?;
-    let _ = gasAccounting_resumeTxCharges(gas);
-    startCodePoint();  // should never return
+        let callerAddr = topFrame.runningAs;
+        let caller = topFrame.runningAsAccount;
+
+        // prepare the caller's frame
+        //    this means (1) saving the runningAsAccount into the accountStore, and
+        //               (2) saving the resumeInfo so we can resume later
+        let stackContents = saveAvmStack();  // must be done as a top level statement
+        topFrame = topFrame
+            with { accountStore: accountStore_set(topFrame.accountStore, callerAddr, caller) }
+            with { resumeInfo: Some(struct {
+                       codePoint: resumeCodePoint,
+                       stackContents: stackContents,
+                       returnDataOffset: retOffset,
+                       returnDataNbytes: retLength,
+                       callType: kind,
+                       savedGas: availableGas-gas,
+                   }) };
+
+        // now create a new callframe for the callee
+        //     it incorporates the balance transfer from caller to callee
+        //          (which is put into the callee frame so it isn't committed unless the call succeeds)
+        let runningAsAddr = calleeAddr;
+        if (kind == 2) {
+            runningAsAddr = callerAddr;  // delegatecall runs as the caller, with callee's code
+        }
+        let updatedAcctStore = topFrame.accountStore;
+        if (balance > 0) {
+            let updatedAcctStore = accountStore_transferEthBalance(
+                updatedAcctStore,
+                callerAddr,
+                calleeAddr,
+                balance
+            )?;
+        }
+        let newTopFrame = struct {
+            runningAs: calleeAddr,
+            runningCodeFrom: calleeAddr,
+            accountStore: updatedAcctStore,
+            runningAsAccount: accountStore_get(updatedAcctStore, calleeAddr),
+            caller: topFrame.runningAs,
+            callKind: kind,
+            calldata: bytearray_extract(topFrame.memory, argsOffset, argsLength),
+            callvalue: balance,
+            returnInfo: None<ReturnInfo>,
+            memory: bytearray_new(0),
+            evmLogs: topFrame.evmLogs,
+            selfDestructQueue: topFrame.selfDestructQueue,
+            resumeInfo: None<ResumeInfo>,
+            parent: Some(topFrame)
+        };
+
+        // there were no errors in the setup, so write the result to global storage
+        globalCallStack = Some(newTopFrame);
+
+        // jump to the called code's startCodePoint -- this should never return
+        let _ = gasAccounting_resumeTxCharges(gas);
+        startCodePoint();  // should never return
+    } else {
+        // no code at that address, so just do eth transfer
+        if (balance > 0) {
+            return Some(
+                evmCallStack_transferEthFromCurrent(calleeAddr, balance) == Some(())
+            );
+        } else {
+            return Some(true);
+        }
+    }
 
     errorHandler();
     panic;
@@ -486,7 +491,7 @@ public impure func evmCallStack_returnFromCall(
                             None<EvmLogs>,
                             Some(gasUsage)
                         );
-                        evmCallStack_callHitError();  // should never return
+                        evmCallStack_callHitError(5);  // should never return
                         panic;
                     }
 
@@ -875,7 +880,8 @@ public func evmCallFrame_getParent(frame: EvmCallFrame) -> option<EvmCallFrame> 
     //    (compiler doesn't know because it doesn't accept recursive types)
 }
 
-public impure func evmCallStack_callHitError() {
+public impure func evmCallStack_callHitError(errInfo: any) {
+    asm((664, errInfo),) { debugprint };
     if (evmCallStack_returnFromCall(false, 0, 0) == None<()>) {
         // something has gone seriously wrong with the evmCallStack
         // recover by clearing the evmCallStack, refunding unused gas, and jumping back to the error handler

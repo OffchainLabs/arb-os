@@ -42,11 +42,6 @@ import func accountStore_createAccountFromEvmCode(
     initCodePt: impure func(),
     storageMap: StorageMap
 ) -> option<AccountStore>;
-import impure func accountStore_createBuiltinContract(
-    acctStore: AccountStore,
-    addr: address,
-    entryPoint: impure func()
-) -> option<AccountStore>;
 import impure func translateEvmCodeSegment(
     bs: ByteStream
 ) -> option<(impure func(), map<uint, impure func()>)>;
