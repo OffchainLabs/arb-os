@@ -349,8 +349,9 @@ enum ProfilerEvent {
 #[derive(Debug, Clone, Default)]
 pub struct ProfilerData {
     data: HashMap<String, BTreeMap<(usize, usize), u64>>,
-    stack_tree: HashMap<CodePt, Vec<ProfilerEvent>>,
+    stack_tree: HashMap<CodePt, (Vec<ProfilerEvent>, Option<Location>)>,
     unknown_gas: u64,
+    file_name_chart: HashMap<u64, String>,
 }
 
 impl ProfilerData {
@@ -411,14 +412,13 @@ impl ProfilerData {
     ///
     /// Use exit to exit the profiler.
     pub fn profiler_session(&self) {
-        //println!("{:?}", self.stack_tree);
-        for (func, events) in &self.stack_tree {
-            let mut callers = HashMap::new();
+        for (func, (events, location)) in &self.stack_tree {
+            let mut callers: HashMap<CodePt, (u64, Option<Location>)> = HashMap::new();
             let mut in_func = false;
             let mut in_callstack = false;
             let mut in_func_gas = 0;
-            let mut current_call: Option<(CodePt, u64)> = None;
-            let mut called: HashMap<CodePt, u64> = HashMap::new();
+            let mut current_call: Option<(CodePt, (u64, Option<Location>))> = None;
+            let mut called: HashMap<CodePt, (u64, Option<Location>)> = HashMap::new();
             let mut start_point = 0;
             let mut call_start = 0;
             for event in events {
@@ -431,11 +431,11 @@ impl ProfilerData {
                                 in_callstack = true;
                                 call_start = *x;
                             }
-                            if let Some((func, start)) = &current_call {
+                            if let Some((func, (start, loc))) = &current_call {
                                 if let Some(entry) = called.get_mut(func) {
-                                    *entry += *x - *start;
+                                    (*entry).0 += *x - *start;
                                 } else {
-                                    called.insert(*func, *x - *start);
+                                    called.insert(*func, (*x - *start, *loc));
                                 }
                             }
                             current_call = None;
@@ -446,7 +446,7 @@ impl ProfilerData {
                     ProfilerEvent::CallFunc(x, y) => {
                         if in_func {
                             in_func = false;
-                            let end_point = if let Some(funcy) = self.stack_tree.get(x) {
+                            let end_point = if let Some((funcy, _)) = self.stack_tree.get(x) {
                                 if let Some(event) = funcy.get(*y) {
                                     match event {
                                         ProfilerEvent::EnterFunc(x) => *x,
@@ -458,13 +458,19 @@ impl ProfilerData {
                             } else {
                                 panic!("Function call links to invalid codepoint");
                             };
-                            current_call = Some((*x, end_point));
+                            current_call = Some((
+                                *x,
+                                (
+                                    end_point,
+                                    *self.stack_tree.get(x).map(|(_, l)| l).unwrap_or(&None),
+                                ),
+                            ));
                             in_func_gas += end_point - start_point;
                         }
                     }
                     ProfilerEvent::Return(x, y) => {
                         if in_func {
-                            let end_point = if let Some(funcy) = self.stack_tree.get(x) {
+                            let end_point = if let Some((funcy, _)) = self.stack_tree.get(x) {
                                 if let Some(event) = funcy.get(*y) {
                                     match event {
                                         ProfilerEvent::EnterFunc(x) => *x,
@@ -479,21 +485,61 @@ impl ProfilerData {
                             in_func = false;
                             in_func_gas += end_point - start_point;
                             in_callstack = false;
+                            let locy = *self.stack_tree.get(x).map(|(_, l)| l).unwrap_or(&None);
                             if let Some(entry) = callers.get_mut(x) {
-                                *entry += end_point - call_start;
+                                (*entry).0 += end_point - call_start;
                             } else {
-                                callers.insert(*x, end_point - call_start);
+                                callers.insert(*x, (end_point - call_start, locy));
                             }
                         }
                     }
                 }
             }
-            println!("Func {:?}: {}", func, in_func_gas);
-            for (caller, gas) in callers {
-                println!("    Called by {:?}, for {}", caller, gas);
+            if let Some(loc) = location {
+                println!(
+                    "Func ({}, {}, {}): {}",
+                    self.file_name_chart
+                        .get(&loc.file_id)
+                        .unwrap_or(&"unknown file".to_string()),
+                    loc.line,
+                    loc.column,
+                    in_func_gas
+                );
+            } else {
+                println!("Unknown func at {:?}: {}", func, in_func_gas);
             }
-            for (called, gas) in called {
-                println!("    Calls {:?}, for {}", called, gas)
+            for (caller, (gas, location)) in callers {
+                if let Some(loc) = location {
+                    println!(
+                        "    Called by ({}, {}, {}), for {}",
+                        self.file_name_chart
+                            .get(&loc.file_id)
+                            .unwrap_or(&"unknown file".to_string()),
+                        loc.line,
+                        loc.column,
+                        gas
+                    );
+                } else {
+                    println!(
+                        "    Called by unknown function at {:?}, for {}",
+                        caller, gas
+                    );
+                }
+            }
+            for (called, (gas, location)) in called {
+                if let Some(loc) = location {
+                    println!(
+                        "    Calls ({}, {}, {}), for {}",
+                        self.file_name_chart
+                            .get(&loc.file_id)
+                            .unwrap_or(&"unknown file".to_string()),
+                        loc.line,
+                        loc.column,
+                        gas
+                    );
+                } else {
+                    println!("    Calls unknown func at {:?}, for {}", called, gas);
+                }
             }
         }
         let file_gas_costs: Vec<(String, u64)> = self
@@ -849,9 +895,17 @@ impl Machine {
     pub fn profile_gen(&mut self, args: Vec<Value>) -> ProfilerData {
         self.call_state(CodePt::new_internal(0), args);
         let mut loc_map = ProfilerData::default();
-        loc_map
-            .stack_tree
-            .insert(CodePt::new_internal(0), vec![ProfilerEvent::EnterFunc(0)]);
+        loc_map.file_name_chart = self.file_name_chart.clone();
+        loc_map.stack_tree.insert(
+            CodePt::new_internal(0),
+            (
+                vec![ProfilerEvent::EnterFunc(0)],
+                self.code
+                    .get_insn(CodePt::new_internal(0))
+                    .map(|insn| insn.location)
+                    .unwrap_or(None),
+            ),
+        );
         let mut stack_len = 0;
         let mut current_codepoint = CodePt::new_internal(0);
         let mut total_gas = 0;
@@ -874,13 +928,12 @@ impl Machine {
                     let mut next_len = loc_map
                         .stack_tree
                         .get(stack.last().unwrap_or(&CodePt::new_internal(0)))
-                        .map(|something| something.len())
+                        .map(|something| something.0.len())
                         .unwrap_or(0);
                     if *stack.last().unwrap_or(&CodePt::new_internal(0)) == current_codepoint {
                         next_len += 1;
                     }
-
-                    if let Some(func_info) = loc_map.stack_tree.get_mut(&current_codepoint) {
+                    if let Some((func_info, _)) = loc_map.stack_tree.get_mut(&current_codepoint) {
                         func_info.push(ProfilerEvent::Return(
                             *stack.last().unwrap_or(&CodePt::new_internal(0)),
                             next_len,
@@ -889,12 +942,10 @@ impl Machine {
                     } else {
                         panic!("Internal error: returned from untracked function");
                     }
-                    if let Some(func_info) = loc_map.stack_tree.get_mut(&current_codepoint) {
+                    if let Some((func_info, _)) = loc_map.stack_tree.get_mut(&current_codepoint) {
                         func_info.push(ProfilerEvent::EnterFunc(total_gas));
                     } else {
-                        loc_map
-                            .stack_tree
-                            .insert(current_codepoint, vec![ProfilerEvent::EnterFunc(total_gas)]);
+                        panic!("Internal error: returned to untracked function");
                     }
                 }
                 Ordering::Equal => {}
@@ -902,28 +953,35 @@ impl Machine {
                     let zero_codept = CodePt::new_internal(0);
                     let next_codepoint = stack.last().unwrap_or(&zero_codept);
                     let next_len =
-                        if let Some(next_info) = loc_map.stack_tree.get_mut(next_codepoint) {
+                        if let Some((next_info, _)) = loc_map.stack_tree.get_mut(next_codepoint) {
                             if *next_codepoint == current_codepoint {
                                 next_info.len() + 1
                             } else {
                                 next_info.len()
                             }
                         } else {
-                            loc_map.stack_tree.insert(*next_codepoint, vec![]);
+                            loc_map.stack_tree.insert(
+                                *next_codepoint,
+                                (
+                                    vec![],
+                                    self.code
+                                        .get_insn(*next_codepoint)
+                                        .map(|insn| insn.location)
+                                        .unwrap_or(None),
+                                ),
+                            );
                             0
                         };
-                    if let Some(func_info) = loc_map.stack_tree.get_mut(&current_codepoint) {
+                    if let Some((func_info, _)) = loc_map.stack_tree.get_mut(&current_codepoint) {
                         func_info.push(ProfilerEvent::CallFunc(*next_codepoint, next_len))
                     } else {
                         panic!("Internal error: calling from an untracked function");
                     }
                     current_codepoint = *next_codepoint;
-                    if let Some(func_info) = loc_map.stack_tree.get_mut(&current_codepoint) {
+                    if let Some((func_info, _)) = loc_map.stack_tree.get_mut(&current_codepoint) {
                         func_info.push(ProfilerEvent::EnterFunc(total_gas));
                     } else {
-                        loc_map
-                            .stack_tree
-                            .insert(current_codepoint, vec![ProfilerEvent::EnterFunc(total_gas)]);
+                        panic!("Internal error: called function not properly initialized");
                     }
                 }
             }
