@@ -152,8 +152,6 @@ type ResumeInfo = struct {  // information used to resume a call after a subcall
     savedGas: uint,         // how much of the caller's gas was not lent to the subcall
 }
 
-//FIXME:  add OrDie variants of the getters that return options; use in evmOps
-
 var globalCallStack: option<EvmCallFrame>;   // call frame of currently running call, if any
 var globalCurrentEthMessage: IncomingRequest;  // the message that launched the top-level call
 
@@ -214,12 +212,12 @@ public impure func initEvmCallStack(
                     // unknown error type
                     emitLog(ethMessage, 255, None<ByteArray>, None<EvmLogs>, None<GasUsage>);
                 }
-                evmCallStack_callHitError();
+                evmCallStack_callHitError(1);
             }
         } else {
             // can't pay for gas error
             emitLog(ethMessage, 3, None<ByteArray>, None<EvmLogs>, None<GasUsage>);
-            evmCallStack_callHitError();
+            evmCallStack_callHitError(2);
         }
     } else {
         // no contract at this address, so treat tx as a simple eth transfer
@@ -239,7 +237,7 @@ public impure func initEvmCallStack(
             } else {
                 // insufficient balance error
                 emitLog(ethMessage, 4, None<ByteArray>, None<EvmLogs>, None<GasUsage>);
-                evmCallStack_callHitError();
+                evmCallStack_callHitError(3);
             }
         } else {
             // tx is transfer of 0 Eth, so just report success
@@ -307,7 +305,7 @@ public impure func initEvmCallStackForConstructor(
     } else {
         // can't pay for gas error
         emitLog(ethMessage, 3, None<ByteArray>, None<EvmLogs>, None<GasUsage>);
-        evmCallStack_callHitError();  // should never return
+        evmCallStack_callHitError(4);  // should never return
         panic;
     }
 }
@@ -496,7 +494,7 @@ public impure func evmCallStack_returnFromCall(
                             None<EvmLogs>,
                             Some(gasUsage)
                         );
-                        evmCallStack_callHitError();  // should never return
+                        evmCallStack_callHitError(5);  // should never return
                         panic;
                     }
 
@@ -885,7 +883,8 @@ public func evmCallFrame_getParent(frame: EvmCallFrame) -> option<EvmCallFrame> 
     //    (compiler doesn't know because it doesn't accept recursive types)
 }
 
-public impure func evmCallStack_callHitError() {
+public impure func evmCallStack_callHitError(errInfo: any) {
+    asm((664, errInfo),) { debugprint };
     if (evmCallStack_returnFromCall(false, 0, 0) == None<()>) {
         // something has gone seriously wrong with the evmCallStack
         // recover by clearing the evmCallStack, refunding unused gas, and jumping back to the error handler
