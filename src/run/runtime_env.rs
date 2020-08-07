@@ -620,11 +620,20 @@ impl RtEnvRecorder {
         writeln!(file, "{}", self.to_json_string()?)
     }
 
-    pub fn replay_and_compare(&self, require_same_gas: bool, debug: bool, profiler: bool) -> bool {
+    pub fn replay_and_compare(
+        &self,
+        require_same_gas: bool,
+        debug: bool,
+        profiler: bool,
+        trace_file: Option<&str>,
+    ) -> bool {
         // returns true iff result matches
         let mut rt_env = RuntimeEnvironment::new(Uint256::from_usize(1111));
         rt_env.insert_full_inbox_contents(self.inbox.clone());
         let mut machine = load_from_file(Path::new("arb_os/arbos.mexe"), rt_env);
+        if let Some(trace_file_name) = trace_file {
+            machine.add_trace_writer(trace_file_name);
+        }
         machine.start_at_zero();
         if debug {
             let _ = machine.debug(None);
@@ -750,6 +759,7 @@ pub fn replay_from_testlog_file(
     require_same_gas: bool,
     debug: bool,
     profiler: bool,
+    trace_file: Option<&str>,
 ) -> std::io::Result<bool> {
     let mut file = File::open(filename)?;
     let mut contents = String::new();
@@ -764,7 +774,8 @@ pub fn replay_from_testlog_file(
 
     match res {
         Ok(recorder) => {
-            let success = recorder.replay_and_compare(require_same_gas, debug, profiler);
+            let success =
+                recorder.replay_and_compare(require_same_gas, debug, profiler, trace_file);
             println!("{}", if success { "success" } else { "mismatch " });
             Ok(success)
         }
@@ -783,6 +794,7 @@ fn logfile_replay_tests() {
                 false,
                 false,
                 false,
+                None,
             )
             .unwrap(),
             true
