@@ -775,7 +775,7 @@ public impure func evmOp_create2(value: uint, offset: uint, length: uint, salt: 
         let myAddr = account_getAddress(myAcct);
         let newAddrBuf = bytearray_new(85);
         newAddrBuf = bytearray_setByte(newAddrBuf, 0, 0xff);
-        newAddrBuf = bytearray_set256(newAddrBuf, 1, 2048*uint(myAddr));
+        newAddrBuf = bytearray_set256(newAddrBuf, 1, asm(12*8, myAddr) uint { shl });
         newAddrBuf = bytearray_set256(newAddrBuf, 21, salt);
         newAddrBuf = bytearray_set256(
             newAddrBuf,
