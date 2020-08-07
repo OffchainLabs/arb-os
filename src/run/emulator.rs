@@ -26,7 +26,9 @@ use std::cmp::max;
 use std::collections::{BTreeMap, HashMap};
 use std::convert::TryInto;
 use std::fmt;
-use std::io::stdin;
+use std::fs::File;
+use std::io::{stdin, BufWriter, Write};
+use std::path::Path;
 
 ///Represents a stack of `Value`s
 #[derive(Debug, Default, Clone)]
@@ -43,6 +45,10 @@ impl ValueStack {
 
     pub fn is_empty(&self) -> bool {
         self.contents.len() == 0
+    }
+
+    pub fn num_items(&self) -> usize {
+        self.contents.len()
     }
 
     ///Pushes val to the top of self.
@@ -76,6 +82,14 @@ impl ValueStack {
             None
         } else {
             Some(self.contents[self.contents.len() - 1].clone())
+        }
+    }
+
+    pub fn nth(&self, n: usize) -> Option<Value> {
+        if self.num_items() > n {
+            Some(self.contents[self.contents.len() - 1 - n].clone())
+        } else {
+            None
         }
     }
 
@@ -488,6 +502,7 @@ pub struct Machine {
     pub runtime_env: RuntimeEnvironment,
     file_name_chart: HashMap<u64, String>,
     total_gas_usage: Uint256,
+    trace_writer: Option<BufWriter<File>>,
 }
 
 impl Machine {
@@ -504,19 +519,24 @@ impl Machine {
             runtime_env: env,
             file_name_chart: program.file_name_chart,
             total_gas_usage: Uint256::zero(),
+            trace_writer: None,
         }
     }
 
     ///Pushes 0 to the stack and sets the program counter to the first instruction. Used by the EVM
     /// compiler.
     pub fn start_at_zero(&mut self) {
-        self.stack.push_usize(0);
         self.state = MachineState::Running(CodePt::Internal(0));
     }
 
     ///Returns a stack trace of the current state of the machine.
     pub fn get_stack_trace(&self) -> StackTrace {
         StackTrace::Known(self.aux_stack.all_codepts())
+    }
+
+    ///Adds a trace writer to the machine
+    pub fn add_trace_writer(&mut self, filename: &str) {
+        self.trace_writer = Some(BufWriter::new(File::create(Path::new(filename)).unwrap()));
     }
 
     ///Returns the value of the ArbGasRemaining register
@@ -616,6 +636,7 @@ impl Machine {
          line number to resume program until that line, \"show static\" to show the static contents.");
         let mut breakpoint = true;
         let mut break_line = 0;
+        let mut break_gas_amount = 0u64;
         let mut gas_cost = 0;
         while self.state.is_running() {
             if let Some(gas) = self.next_op_gas() {
@@ -633,6 +654,9 @@ impl Machine {
                     if insn.opcode == Opcode::AVMOpcode(AVMOpcode::DebugPrint) {
                         breakpoint = true;
                     }
+                }
+                if self.total_gas_usage > Uint256::from_u64(break_gas_amount) {
+                    breakpoint = true;
                 }
             }
             if breakpoint {
@@ -680,6 +704,20 @@ impl Machine {
                                 std::io::stdin().read_line(&mut debugger_state).unwrap();
                                 if let Ok(val) = str::parse(&debugger_state.trim()) {
                                     break_line = val;
+                                    exit = true;
+                                    break;
+                                } else {
+                                    println!("Could not parse input as number");
+                                }
+                            }
+                        }
+                        "break at gas\n" => {
+                            breakpoint = false;
+                            loop {
+                                let mut debugger_state = String::new();
+                                std::io::stdin().read_line(&mut debugger_state).unwrap();
+                                if let Ok(val) = str::parse(&debugger_state.trim()) {
+                                    break_gas_amount = val;
                                     exit = true;
                                     break;
                                 } else {
@@ -737,6 +775,54 @@ impl Machine {
             } else {
                 println!("Warning: next opcode does not have a gas cost");
             }
+
+            let cp = self.get_pc();
+
+            if let Ok(codept) = cp {
+                if let Some(trace_writer) = &mut self.trace_writer {
+                    let res = match codept {
+                        CodePt::Internal(pc) => Some((
+                            0,
+                            pc as u64,
+                            self.code
+                                .get_insn(codept)
+                                .unwrap()
+                                .opcode
+                                .to_number()
+                                .unwrap(),
+                        )),
+                        CodePt::InSegment(seg_num, rev_pc) => Some((
+                            seg_num as u64,
+                            (self.code.segment_size(seg_num).unwrap() as u64) - 1 - (rev_pc as u64),
+                            self.code
+                                .get_insn(codept)
+                                .unwrap()
+                                .opcode
+                                .to_number()
+                                .unwrap(),
+                        )),
+                        _ => None,
+                    };
+                    if let Some((seg_num, pc, opcode)) = res {
+                        write!(trace_writer, "{} {} {}", seg_num, pc, opcode)
+                            .expect("failed to write PC trace file");
+                        if !self.stack.is_empty() {
+                            let val = self.stack.top().unwrap();
+                            if let Value::Int(ui) = val {
+                                write!(trace_writer, " {}", ui.avm_hash()).unwrap();
+                            }
+                            if self.stack.num_items() > 1 {
+                                let val = self.stack.nth(1).unwrap();
+                                if let Value::Int(ui) = val {
+                                    write!(trace_writer, " {}", ui.avm_hash()).unwrap();
+                                }
+                            }
+                        }
+                        write!(trace_writer, "\n").unwrap();
+                    }
+                }
+            }
+
             match self.run_one(false) {
                 Ok(still_runnable) => {
                     if !still_runnable {
@@ -809,7 +895,7 @@ impl Machine {
                 Opcode::AVMOpcode(AVMOpcode::Hash) => 7,
                 Opcode::AVMOpcode(AVMOpcode::Type) => 3,
                 Opcode::AVMOpcode(AVMOpcode::Hash2) => 8,
-                Opcode::AVMOpcode(AVMOpcode::Keccakf) => 5000,
+                Opcode::AVMOpcode(AVMOpcode::Keccakf) => 600,
                 Opcode::AVMOpcode(AVMOpcode::Pop) => 1,
                 Opcode::AVMOpcode(AVMOpcode::PushStatic) => 1,
                 Opcode::AVMOpcode(AVMOpcode::Rget) => 1,
@@ -837,6 +923,7 @@ impl Machine {
                 Opcode::AVMOpcode(AVMOpcode::Breakpoint) => 100,
                 Opcode::AVMOpcode(AVMOpcode::Log) => 100,
                 Opcode::AVMOpcode(AVMOpcode::Send) => 100,
+                Opcode::AVMOpcode(AVMOpcode::InboxPeek) => 40,
                 Opcode::AVMOpcode(AVMOpcode::Inbox) => 40,
                 Opcode::AVMOpcode(AVMOpcode::Panic) => 5,
                 Opcode::AVMOpcode(AVMOpcode::Halt) => 10,
@@ -844,7 +931,7 @@ impl Machine {
                 Opcode::AVMOpcode(AVMOpcode::PushInsn) => 25,
                 Opcode::AVMOpcode(AVMOpcode::PushInsnImm) => 25,
                 Opcode::AVMOpcode(AVMOpcode::OpenInsn) => 25,
-                Opcode::AVMOpcode(AVMOpcode::DebugPrint) => 25,
+                Opcode::AVMOpcode(AVMOpcode::DebugPrint) => 1,
                 Opcode::AVMOpcode(AVMOpcode::GetGas) => 1,
                 Opcode::AVMOpcode(AVMOpcode::SetGas) => 0,
                 Opcode::AVMOpcode(AVMOpcode::EcRecover) => 20_000,
@@ -860,6 +947,20 @@ impl Machine {
     /// whether the instruction was blocked if execution does not hit an error state, or an
     /// `ExecutionError` if an error was encountered.
     pub fn run_one(&mut self, _debug: bool) -> Result<bool, ExecutionError> {
+        match self.run_one_dont_catch_errors(_debug) {
+            Ok(b) => Ok(b),
+            Err(e) => {
+                if self.err_codepoint == CodePt::Null {
+                    Err(e)
+                } else {
+                    self.state = MachineState::Running(self.err_codepoint);
+                    Ok(true)
+                }
+            }
+        }
+    }
+
+    fn run_one_dont_catch_errors(&mut self, _debug: bool) -> Result<bool, ExecutionError> {
         if let MachineState::Running(pc) = self.state {
             if let Some(insn) = self.code.get_insn(pc) {
                 if let Some(val) = &insn.immediate {
@@ -871,6 +972,7 @@ impl Machine {
                         self.arb_gas_remaining = remaining;
                         self.total_gas_usage = self.total_gas_usage.add(&gas256);
                     } else {
+                        self.arb_gas_remaining = Uint256::max_int();
                         return Err(ExecutionError::new("Out of ArbGas", &self.state, None));
                     }
                 }
@@ -1361,16 +1463,38 @@ impl Machine {
                         Ok(true)
                     }
 					Opcode::AVMOpcode(AVMOpcode::Inbox) => {
-						let msgs = self.runtime_env.get_inbox();
-						if msgs.is_none() {
-							// machine is blocked, waiting for nonempty inbox
-							Ok(false)
-						} else {
-							self.stack.push(msgs);
-							self.incr_pc();
-							Ok(true)
-						}
+						match self.runtime_env.get_from_inbox() {
+                            Some(msg) => {
+                                self.stack.push(msg);
+                                self.incr_pc();
+                                Ok(true)
+                            }
+                            None => Ok(false)   // machine is blocked, waiting for message
+                        }
 					}
+                    Opcode::AVMOpcode(AVMOpcode::InboxPeek) => {
+                        let bn = self.stack.pop_uint(&self.state)?;
+                        match self.runtime_env.peek_at_inbox_head() {
+                            Some(msg) => {
+                                if let Value::Tuple(tup) = msg {
+                                    if let Value::Int(msg_bn) = &tup[1] {
+                                        self.stack.push_bool(bn == msg_bn.clone());
+                                        self.incr_pc();
+                                        Ok(true)
+                                    } else {
+                                        Err(ExecutionError::new("inbox contents not a tuple", &self.state, None))
+                                    }
+                                } else {
+                                    Err(ExecutionError::new("blocknum not an integer", &self.state, None))
+                                }
+                            }
+                            None => {
+                                // machine is blocked, waiting for nonempty inbox
+                                self.stack.push_uint(bn);   // put stack back the way it was
+                                Ok(false)
+                            }
+                        }
+                    }
 					Opcode::AVMOpcode(AVMOpcode::ErrCodePoint) => {
 						self.stack.push(Value::CodePoint(
 							self.code.create_segment()

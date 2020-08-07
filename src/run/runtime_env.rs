@@ -29,7 +29,7 @@ use std::{collections::HashMap, fs::File, io, path::Path};
 #[derive(Debug, Clone)]
 pub struct RuntimeEnvironment {
     pub chain_id: u64,
-    pub l1_inbox: Value,
+    pub l1_inbox: Vec<Value>,
     pub current_block_num: Uint256,
     pub current_timestamp: Uint256,
     pub logs: Vec<Value>,
@@ -44,7 +44,7 @@ impl RuntimeEnvironment {
     pub fn new(chain_address: Uint256) -> Self {
         let mut ret = RuntimeEnvironment {
             chain_id: chain_address.trim_to_u64() & 0xffffffffffff, // truncate to 48 bits
-            l1_inbox: Value::none(),
+            l1_inbox: vec![],
             current_block_num: Uint256::zero(),
             current_timestamp: Uint256::zero(),
             logs: Vec::new(),
@@ -66,7 +66,7 @@ impl RuntimeEnvironment {
         self.chain_id
     }
 
-    pub fn insert_full_inbox_contents(&mut self, contents: Value) {
+    pub fn insert_full_inbox_contents(&mut self, contents: Vec<Value>) {
         self.l1_inbox = contents;
     }
 
@@ -80,7 +80,7 @@ impl RuntimeEnvironment {
             bytestack_from_bytes(msg),
         ]);
         self.next_inbox_seq_num = self.next_inbox_seq_num.add(&Uint256::one());
-        self.l1_inbox = Value::new_tuple(vec![self.l1_inbox.clone(), l1_msg.clone()]);
+        self.l1_inbox.push(l1_msg.clone());
         self.recorder.add_msg(l1_msg);
     }
 
@@ -250,10 +250,20 @@ impl RuntimeEnvironment {
         cur_seq_num
     }
 
-    pub fn get_inbox(&mut self) -> Value {
-        let ret = self.l1_inbox.clone();
-        self.l1_inbox = Value::none();
-        ret
+    pub fn get_from_inbox(&mut self) -> Option<Value> {
+        if self.l1_inbox.is_empty() {
+            None
+        } else {
+            Some(self.l1_inbox.remove(0))
+        }
+    }
+
+    pub fn peek_at_inbox_head(&mut self) -> Option<Value> {
+        if self.l1_inbox.is_empty() {
+            None
+        } else {
+            Some(self.l1_inbox[0].clone())
+        }
     }
 
     pub fn push_log(&mut self, log_item: Value) {
@@ -265,11 +275,13 @@ impl RuntimeEnvironment {
         self.logs.clone()
     }
 
-    pub fn get_all_logs(&self) -> Vec<ArbosReceipt> {
+    pub fn get_all_receipt_logs(&self) -> Vec<ArbosReceipt> {
         self.logs
             .clone()
             .into_iter()
             .map(|log| ArbosReceipt::new(log))
+            .filter(|r| r.is_some())
+            .map(|r| r.unwrap())
             .collect()
     }
 
@@ -298,16 +310,19 @@ pub struct ArbosReceipt {
 }
 
 impl ArbosReceipt {
-    pub fn new(arbos_log: Value) -> Self {
+    pub fn new(arbos_log: Value) -> Option<Self> {
         if let Value::Tuple(tup) = arbos_log {
+            if !(tup[0] == Value::Int(Uint256::zero())) {
+                return None;
+            }
             let (return_code, return_data, evm_logs) =
-                ArbosReceipt::unpack_return_info(&tup[1]).unwrap();
-            let (gas_used, gas_price_wei) = ArbosReceipt::unpack_gas_info(&tup[2]).unwrap();
+                ArbosReceipt::unpack_return_info(&tup[2]).unwrap();
+            let (gas_used, gas_price_wei) = ArbosReceipt::unpack_gas_info(&tup[3]).unwrap();
             let (gas_so_far, index_in_block, logs_so_far) =
-                ArbosReceipt::unpack_cumulative_info(&tup[3]).unwrap();
-            ArbosReceipt {
-                request: tup[0].clone(),
-                request_id: if let Value::Tuple(subtup) = &tup[0] {
+                ArbosReceipt::unpack_cumulative_info(&tup[4]).unwrap();
+            Some(ArbosReceipt {
+                request: tup[1].clone(),
+                request_id: if let Value::Tuple(subtup) = &tup[1] {
                     if let Value::Int(ui) = &subtup[4] {
                         ui.clone()
                     } else {
@@ -324,7 +339,7 @@ impl ArbosReceipt {
                 gas_so_far,
                 index_in_block,
                 logs_so_far,
-            }
+            })
         } else {
             panic!("ArbOS log item was not a Tuple");
         }
@@ -569,7 +584,7 @@ fn bytes_from_bytestack_2(cell: Value, nbytes: usize) -> Option<Vec<u8>> {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RtEnvRecorder {
     format_version: u64,
-    inbox: Value,
+    inbox: Vec<Value>,
     logs: Vec<Value>,
     sends: Vec<Value>,
 }
@@ -578,14 +593,14 @@ impl RtEnvRecorder {
     fn new() -> Self {
         RtEnvRecorder {
             format_version: 1,
-            inbox: Value::none(),
+            inbox: vec![],
             logs: Vec::new(),
             sends: Vec::new(),
         }
     }
 
     fn add_msg(&mut self, msg: Value) {
-        self.inbox = Value::new_tuple(vec![self.inbox.clone(), msg])
+        self.inbox.push(msg);
     }
 
     fn add_log(&mut self, log_item: Value) {
@@ -605,11 +620,20 @@ impl RtEnvRecorder {
         writeln!(file, "{}", self.to_json_string()?)
     }
 
-    pub fn replay_and_compare(&self, require_same_gas: bool, debug: bool, profiler: bool) -> bool {
+    pub fn replay_and_compare(
+        &self,
+        require_same_gas: bool,
+        debug: bool,
+        profiler: bool,
+        trace_file: Option<&str>,
+    ) -> bool {
         // returns true iff result matches
         let mut rt_env = RuntimeEnvironment::new(Uint256::from_usize(1111));
         rt_env.insert_full_inbox_contents(self.inbox.clone());
         let mut machine = load_from_file(Path::new("arb_os/arbos.mexe"), rt_env);
+        if let Some(trace_file_name) = trace_file {
+            machine.add_trace_writer(trace_file_name);
+        }
         machine.start_at_zero();
         if debug {
             let _ = machine.debug(None);
@@ -735,6 +759,7 @@ pub fn replay_from_testlog_file(
     require_same_gas: bool,
     debug: bool,
     profiler: bool,
+    trace_file: Option<&str>,
 ) -> std::io::Result<bool> {
     let mut file = File::open(filename)?;
     let mut contents = String::new();
@@ -749,7 +774,8 @@ pub fn replay_from_testlog_file(
 
     match res {
         Ok(recorder) => {
-            let success = recorder.replay_and_compare(require_same_gas, debug, profiler);
+            let success =
+                recorder.replay_and_compare(require_same_gas, debug, profiler, trace_file);
             println!("{}", if success { "success" } else { "mismatch " });
             Ok(success)
         }
@@ -768,6 +794,7 @@ fn logfile_replay_tests() {
                 false,
                 false,
                 false,
+                None,
             )
             .unwrap(),
             true
