@@ -27,17 +27,7 @@ import func bytearray_marshalFull(ba: ByteArray) -> MarshalledBytes;
 import func marshalledBytes_hash(mb: MarshalledBytes) -> bytes32;
 
 
-import func rlp_encodeAndHashMessageInfo(
-    seqNum: uint,
-    gasPrice: uint,
-    gasLimit: uint,
-    to: address,
-    value: uint,
-    data: ByteArray,
-    v: uint,
-    r: uint,
-    s: uint
-) -> bytes32;
+import func rlp_encodeAndHashMessageInfo(tx: SignedTx) -> bytes32;
 
 import impure func chainParams_chainId() -> uint;
 
@@ -51,6 +41,18 @@ type MessageFromL1 = struct {
     sender: address,          // address of the sender
     inboxSeqNum: uint,        // sequence number in L1 inbox
     msgData: MarshalledBytes  // contents of the message, as a marshalled bytearray
+}
+
+type SignedTx = struct {
+    seqNum: uint,
+    gasPrice: uint,
+    gasLimit: uint,
+    to: address,
+    value: uint,
+    data: ByteArray,
+    v: uint,
+    r: uint,
+    s: uint
 }
 
 public impure func translateSignedTx(req: MessageFromL1) -> option<MessageFromL1> {
@@ -108,15 +110,17 @@ func rlpAndHash(msgData: ByteArray, preSigSize: uint, v: uint, r: uint, s: uint)
     let destAddress = address(bytearray_get256(msgData, 3*32+1));
     let payment = bytearray_get256(msgData, 4*32+1);
     return rlp_encodeAndHashMessageInfo(
-        sequenceNum,
-        gasPriceBid,
-        maxGas,
-        destAddress,
-        payment,
-        bytearray_extract(msgData, 5*32+1, preSigSize-(5*32+1)),
-        v,
-        r,
-        s
+        struct {
+            seqNum: sequenceNum,
+            gasPrice: gasPriceBid,
+            gasLimit: maxGas,
+            to: destAddress,
+            value: payment,
+            data: bytearray_extract(msgData, 5*32+1, preSigSize-(5*32+1)),
+            v: v,
+            r: r,
+            s: s
+        }
     );
 }
 
