@@ -41,6 +41,7 @@ import func queue_put(q: Queue, item: any) -> Queue;
 import func queue_get(q: Queue) -> option<(Queue, any)>;
 
 import impure func inbox_get() -> IncomingRequest;
+import impure func outputStats_endOfBlock(blockNum: uint, timestamp: uint);
 
 import func messageBatch_tryNew(msg: IncomingRequest) -> option<MessageBatch>;
 import func messageBatch_get(batch: MessageBatch) -> option<(IncomingRequest, MessageBatch)>;
@@ -101,8 +102,8 @@ public impure func gasAccounting_startTxCharges(
     // Start charging a new Tx for ArbGas usage
     // The caller should already have verified that the payer has enough funds, but we'll return None if not.
 
-    if (maxGas >= asm(2, 255) uint { exp }) {
-        maxGas = asm(2, 255) uint { exp } - 1;   // make sure
+    if (maxGas >= asm(255, 1) uint { shl }) {
+        maxGas = asm(255, 1) uint { shl } - 1;
     }
 
     // take funds from the payer, enough to pay for maxGas at gasPrice
@@ -223,7 +224,7 @@ impure func switchToChargingOS() -> uint {
     // switch to charging the OS for gas, if we aren't already
     // return amount of the tx's gas that was left over in ArbGasRemaining
     let gasRemaining = asm() uint { getgas };
-    if (gasRemaining >= asm(2, 255) uint { exp }) {
+    if (gasRemaining >= asm(255, 1) uint { shl }) {
         // we were already charging the OS, tx has nothing remaining
         return 0;
     } else {
@@ -299,9 +300,15 @@ public impure func getNextMsgFromCongestionAuction() -> (
             // it's not a batch, so process it immediately
             // get its maxGas amount -- for now, set the limit high, unless caller asked for less
             let maxGas = 1000000000;
-            if ((msg.kind == 3) || (msg.kind == 5)) {  // L2 message or buddy contract deploy
+            if (msg.kind == 6) {
+                // it's an end-of-block message, so just trigger end-of-block processing
+                outputStats_endOfBlock(msg.blockNumber, msg.timestamp);
+            } elseif (msg.kind == 3 || msg.kind == 5) {
+                // it's an L2 message or buddy contract deploy, so switch based on the L2 type
                 let firstByte = marshalledBytes_firstByte(msg.msgData);
-                if (firstByte == 4) {
+                if (firstByte == 6) {
+                    // it's a heartbeat message, don't do anything
+                } elseif (firstByte == 4) {
                     // it's a signed tx; verify sig and then process request or discard
                     if let Some(verifiedMsg) = translateSignedTx(msg) {
                         let ba = bytearray_unmarshalBytes(verifiedMsg.msgData);

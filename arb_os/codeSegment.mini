@@ -42,6 +42,7 @@ import func evmOp_codesize();
 import func evmOp_delegatecall();
 import func evmOp_extcodesize();
 import func evmOp_extcodecopy();
+import func evmOp_extcodehash();
 import func evmOp_getjumpaddr();
 import func evmOp_log0();
 import func evmOp_log1();
@@ -254,6 +255,8 @@ public impure func translateEvmCodeSegment(
                             return pushEvmInsnCall(evmOp_returndatasize, restOfCode, evmJumpTable);
                         } elseif (opcode == 0x3e) { // RETURNDATACOPY
                             return pushEvmInsnCall(evmOp_returndatacopy, restOfCode, evmJumpTable);
+                        } elseif (opcode == 0x3f) { // EXTCODEHASH
+                            return pushEvmInsnCall(evmOp_extcodehash, restOfCode, evmJumpTable);
                         }
                     }
                 }
@@ -447,8 +450,8 @@ public impure func translateEvmCodeSegment(
         }
     }
 
-    // opcode was not found, don't generate any code
-    return Some((restOfCode, evmJumpTable));
+    // opcode was not found, generate AVM error instruction
+    return Some((pushInstruction(0x73, restOfCode), evmJumpTable));
 }
 
 impure func pushEvmInsnDenomCheck(

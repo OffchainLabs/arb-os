@@ -50,3 +50,7 @@ public impure func chainParams_chainAddress() -> address {
 public impure func chainParams_chainId() -> uint {
     return uint(chainParams_chainAddress()) & 0xffffffffffff;  // chainID == low 48 bits of chainAddress
 }
+
+public impure func chainParams_speedLimitPerSecond() -> uint {
+    return 100000000;  //TODO: get this from the initialization message, once we merge the branch that parses it
+}

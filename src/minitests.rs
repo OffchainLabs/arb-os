@@ -383,6 +383,11 @@ pub fn test_crosscontract_call_using_batch() {
 }
 
 #[test]
+fn test_payment_to_empty_address() {
+    crate::evm::evm_payment_to_empty_address(None, false);
+}
+
+#[test]
 fn test_erc20() {
     crate::evm::mint_erc20_and_get_balance(None, false);
 }

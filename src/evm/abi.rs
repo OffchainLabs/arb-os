@@ -103,7 +103,7 @@ impl AbiForContract {
         deploy_as_buddy: bool,
         debug: bool,
     ) -> Option<Uint256> {
-        let initial_logs_len = machine.runtime_env.get_all_logs().len();
+        let initial_logs_len = machine.runtime_env.get_all_receipt_logs().len();
         let initial_sends_len = machine.runtime_env.get_all_sends().len();
         let augmented_code = if let Some(constructor) = self.contract.constructor() {
             match constructor.encode_input(self.code_bytes.clone(), args) {
@@ -141,7 +141,7 @@ impl AbiForContract {
         } else {
             machine.run(None)
         }; // handle this deploy message
-        let logs = machine.runtime_env.get_all_logs();
+        let logs = machine.runtime_env.get_all_receipt_logs();
 
         if logs.len() != initial_logs_len + 1 {
             println!(
@@ -211,14 +211,14 @@ impl AbiForContract {
             &calldata,
         );
 
-        let num_logs_before = machine.runtime_env.get_all_logs().len();
+        let num_logs_before = machine.runtime_env.get_all_receipt_logs().len();
         let num_sends_before = machine.runtime_env.get_all_sends().len();
         let _arbgas_used = if debug {
             machine.debug(None)
         } else {
             machine.run(None)
         };
-        let logs = machine.runtime_env.get_all_logs();
+        let logs = machine.runtime_env.get_all_receipt_logs();
         let sends = machine.runtime_env.get_all_sends();
         Ok((
             logs[num_logs_before..].to_vec(),

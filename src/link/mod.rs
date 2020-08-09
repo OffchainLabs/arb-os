@@ -56,7 +56,7 @@ impl LinkedProgram {
                 writeln!(output, "imported: {:?}", self.imported_funcs).unwrap();
                 writeln!(output, "static: {}", self.static_val).unwrap();
                 for (idx, insn) in self.code.iter().enumerate() {
-                    writeln!(output, "{:04}:  {}", idx, insn).unwrap();
+                    writeln!(output, "{:05}:  {}", idx, insn).unwrap();
                 }
             }
             None | Some("json") => match serde_json::to_string(self) {

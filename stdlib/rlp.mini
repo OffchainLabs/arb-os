@@ -54,7 +54,7 @@ public func rlp_encodeUint(val: uint, ba: ByteArray, offset: uint) -> (ByteArray
         offset = offset + 1;
         while (length > 0) {
             length = length-1;
-            ba = bytearray_setByte(ba, offset, (val / asm(256, length) uint { exp }) & 0xff);
+            ba = bytearray_setByte(ba, offset, (asm(8*length, val) uint { shr }) & 0xff);
             offset = offset+1;
         }
         return (ba, origLen+1);
@@ -100,7 +100,7 @@ public func rlp_encodeBytes(
     let i = sizeOfSize;
     while (i > 0) {
         i = i-1;
-        outBytes = bytearray_setByte(outBytes, outOffset, (nbytes / asm(256, i) uint { exp }) & 0xff);
+        outBytes = bytearray_setByte(outBytes, outOffset, asm(8*i, nbytes) uint { shr } & 0xff);
         outOffset = outOffset + 1;
     }
     return (
@@ -161,7 +161,7 @@ public func rlp_encodeList(
         let i = sizeOfSize;
         while (i > 0) {
             i = i-1;
-            let b = (totalSize / asm(256, i) uint { exp }) & 0xff;
+            let b = asm(8*i, totalSize) uint { shr } & 0xff;
             outBytes = bytearray_setByte(outBytes, outOffset, b);
             outOffset = outOffset+1;
         }
@@ -303,7 +303,7 @@ public func bytesNeededToRepresentUint(val: uint) -> uint {
     let ret = 0;
     let bytes = 16;
     while (bytes > 0) {
-        let threshold = asm(256, bytes) uint { exp };
+        let threshold = asm(8*bytes, 1) uint { shl };
         if (val >= threshold) {
             ret = ret + bytes;
             val = val / threshold;

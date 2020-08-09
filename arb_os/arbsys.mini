@@ -52,6 +52,8 @@ import func bytearray_marshalFull(ba: ByteArray) -> MarshalledBytes;
 import impure func inbox_currentBlockNumber() -> uint;
 import impure func inbox_currentTimestamp() -> uint;
 
+import impure func sendMessage(msgType: uint, sender: address, data: ByteArray);
+
 
 type ArbSysMessage = struct {
     kind: uint,
@@ -98,7 +100,7 @@ public impure func arbsys_txcall() {
 }
 
 func getFuncCode(ba: ByteArray) -> uint {
-    return bytearray_get256(ba, 0) / (asm(2, 224) uint { exp });
+    return asm(224, bytearray_get256(ba, 0)) uint { shr };
 }
 
 impure func arbsys_withdrawErc20(topFrame: EvmCallFrame, calldata: ByteArray) {
@@ -193,14 +195,4 @@ impure func arbsys_cloneContract(topFrame: EvmCallFrame, calldata: ByteArray) {
     } else {
         evmOp_revert(0, 0);
     }
-}
-
-public impure func sendMessage(msgType: uint, sender: address, data: ByteArray) {
-    asm(
-        (
-            msgType,
-            uint(sender),
-            bytearray_marshalFull(data),
-        ),
-    ) { send };
 }

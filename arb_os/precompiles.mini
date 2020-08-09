@@ -27,7 +27,12 @@ import impure func evmOp_revert(offset: uint, nbytes: uint);
 
 import func getGlobalAccountStore() -> AccountStore;
 import func setGlobalAccountStore(acctStore: AccountStore);
-import func accountStore_createBuiltinContract(acctStore: AccountStore, addr: address, entryPoint: impure func()) -> option<AccountStore>;
+import func accountStore_createBuiltinContract(
+    acctStore: AccountStore,
+    addr: address,
+    entryPoint: impure func(),
+    isArbitrumStyle: bool
+) -> option<AccountStore>;
 
 import func bytearray_new(capacity: uint) -> ByteArray;
 import func bytearray_size(ba: ByteArray) -> uint;
@@ -44,11 +49,13 @@ public impure func precompiles_init(acctStore: AccountStore) -> option<AccountSt
         acctStore,
         address(0x01),
         precompile_0x01,
+        false,
     )?;
     acctStore = accountStore_createBuiltinContract(
         acctStore,
         address(100),
         arbsys_txcall,
+        true,
     )?;
     return Some(acctStore);
 }
