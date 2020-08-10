@@ -54,6 +54,8 @@ import func rlp_encodeMessageInfo(
     s: uint
 ) -> ByteArray;
 import func rlp_encodeAndHashMessageInfo(tx: SignedTx) -> bytes32;
+import func rlp_decodeMessageInfo(inStream: ByteStream) -> option<(ByteStream, SignedTx)>;
+
 
 import func rlp_decodeUint(bs: ByteStream) -> option<(ByteStream, uint)>;
 import func rlp_decodeAddress(bs: ByteStream) -> option<(ByteStream, address)>;
@@ -155,6 +157,17 @@ func testRlpHasher() {
         r,
         s
     );
+
+    if let Some(res) = rlp_decodeMessageInfo(bytestream_new(oldBuf)) {
+        let (_, tx) = res;
+        if (keccak256(oldBuf, 0, bytearray_size(oldBuf)) != rlp_encodeAndHashMessageInfo(tx)) {
+            asm(12,) { debugprint };
+            panic;
+        }
+    } else {
+        asm(13,) { debugprint };
+        panic;
+    }
 
     let newWay = rlp_encodeAndHashMessageInfo(
         struct {

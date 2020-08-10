@@ -30,6 +30,7 @@ import func bytearray_copy(from: ByteArray, fromOffset: uint, to: ByteArray, toO
 
 import func bytestream_getByte(bs: ByteStream) -> option<(ByteStream, uint)>;
 import func bytestream_get256(bs: ByteStream) -> option<(ByteStream, uint)>;
+import func bytestream_skipBytes(bs: ByteStream, nbytes: uint) -> option<ByteStream>;
 
 import impure func keccak256(ba: ByteArray, offset: uint, nbytes: uint) -> bytes32;
 import func hasher_new() -> Hasher;
@@ -370,7 +371,39 @@ public func rlp_encodeAndHashMessageInfo(tx: SignedTx) -> bytes32 {
 }
 
 public func rlp_decodeMessageInfo(inStream: ByteStream) -> option<(ByteStream, SignedTx)> {
-    return None;
+    // read and discard the list header info (which we don't need)
+    let (us, firstByte) = bytestream_getByte(inStream)?;
+    inStream = us;
+    if (firstByte > 0xf7) {
+        inStream = bytestream_skipBytes(inStream, firstByte-0xf7)?;
+    }
+
+    let (us, seqNum) = rlp_decodeUint(inStream)?;
+    let (us, gasPrice) = rlp_decodeUint(us)?;
+    let (us, gasLimit) = rlp_decodeUint(us)?;
+    let (us, to) = rlp_decodeAddress(us)?;
+    let (us, value) = rlp_decodeUint(us)?;
+    let (us, data) = rlp_decodeBytes(us)?;
+    let (us, v) = rlp_decodeUint(us)?;
+    let (us, r) = rlp_decodeUint(us)?;
+    let (us, s) = rlp_decodeUint(us)?;
+
+    return Some(
+        (
+            us,
+            struct {
+                seqNum: seqNum,
+                gasPrice: gasPrice,
+                gasLimit: gasLimit,
+                to: to,
+                value: value,
+                data: data,
+                v: v,
+                r: r,
+                s: s,
+            }
+        )
+    );
 }
 
 func copyFromStreamToArray(
