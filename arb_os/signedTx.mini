@@ -56,6 +56,8 @@ type IncomingRequest = struct {
     msgData: MarshalledBytes  // contents of the message, as a marshalled bytearray
 }
 
+// A copy of this struct is defined in stdlib/rlp.mini.
+// The declaration there must remain consistent with the one here.
 type SignedTx = struct {
     seqNum: uint,
     gasPrice: uint,
@@ -79,21 +81,10 @@ public impure func translateSignedTx(req: IncomingRequest) -> option<IncomingReq
     let rlpData = bytearray_unmarshalBytes(req.msgData);
     rlpData = bytearray_extract(rlpData, 1, bytearray_size(rlpData)-1);
     let (_, signedTx) = rlp_decodeMessageInfo(bytestream_new(rlpData))?;
-
-    let extractedL2data = signedTxToBytes(signedTx);
-    let l2MsgSize = bytearray_size(extractedL2data);
-
-    let preSigSize = l2MsgSize-65;
     let signer = recoverSigner(signedTx)?;
-
-    // turn it into an unsigned message
-    let newL2message = bytearray_setByte(
-        bytearray_extract(extractedL2data, 0, preSigSize),
-        0,
-        0
-    );
-
     let rlpHash = keccak256(rlpData, 0, bytearray_size(rlpData));
+
+    let newL2message = signedTxToUnsignedBytes(signedTx);
 
     return Some(
         req with {
@@ -152,19 +143,16 @@ func rlpAndHash(msgData: ByteArray, preSigSize: uint, v: uint, r: uint, s: uint)
     );
 }
 
-func signedTxToBytes(tx: SignedTx) -> ByteArray {
+func signedTxToUnsignedBytes(tx: SignedTx) -> ByteArray {
     let dataSize = bytearray_size(tx.data);
     let ret = bytearray_new(0);
-    ret = bytearray_setByte(ret, 0, 4);  // L2 subtype for signed tx
+    ret = bytearray_setByte(ret, 0, 0);  // L2 subtype for signed tx
     ret = bytearray_set256(ret, 1, tx.gasLimit);
     ret = bytearray_set256(ret, 1+32, tx.gasPrice);
     ret = bytearray_set256(ret, 1+2*32, tx.seqNum);
     ret = bytearray_set256(ret, 1+3*32, uint(tx.to));
     ret = bytearray_set256(ret, 1+4*32, tx.value);
     ret = bytearray_copy(tx.data, 0, ret, 1+5*32, dataSize);
-    ret = bytearray_set256(ret, 1+5*32+dataSize, tx.r);
-    ret = bytearray_set256(ret, 1+6*32+dataSize, tx.s);
-    ret = bytearray_setByte(ret, 1+7*32+dataSize, 1-(tx.v % 2));
     return ret;
 }
 

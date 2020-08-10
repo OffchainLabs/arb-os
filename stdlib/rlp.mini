@@ -39,6 +39,8 @@ import func hasher_pushN_le(h: Hasher, val: uint, nbytes: uint) -> Hasher;
 import func hasher_pushN_be(h: Hasher, val: uint, nbytes: uint) -> Hasher;
 import func hasher_finish(h: Hasher) -> bytes32;
 
+// This is a copy of a struct defined in ArbOS/signedTx.mini.
+// The declaration here must remain consistent with the one there.
 type SignedTx = struct {
     seqNum: uint,
     gasPrice: uint,
