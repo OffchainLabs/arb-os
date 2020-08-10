@@ -15,31 +15,44 @@
 //
 
 import type ByteArray;
+import type ByteStream;
 import type MarshalledBytes;
 
+import func bytearray_new(capacityHint: uint) -> ByteArray;
 import func bytearray_size(ba: ByteArray) -> uint;
 import func bytearray_getByte(ba: ByteArray, offset: uint) -> uint;
 import func bytearray_get256(ba: ByteArray, offset: uint) -> uint;
 import func bytearray_setByte(ba: ByteArray, offset: uint, val: uint) -> ByteArray;
+import func bytearray_set256(ba: ByteArray, offset: uint, val: uint) -> ByteArray;
 import func bytearray_extract(ba: ByteArray, offset: uint, nbytes: uint) -> ByteArray;
 import func bytearray_unmarshalBytes(mb: MarshalledBytes) -> ByteArray;
 import func bytearray_marshalFull(ba: ByteArray) -> MarshalledBytes;
 import func marshalledBytes_hash(mb: MarshalledBytes) -> bytes32;
+import func bytearray_copy(
+    from: ByteArray,
+    fromOffset: uint,
+    to: ByteArray,
+    toOffset: uint,
+    nbytes: uint,
+) -> ByteArray;
 
+import func bytestream_new(ba: ByteArray) -> ByteStream;
+import func bytestream_skipBytes(ba: ByteStream, nbytes: uint) -> option<ByteStream>;
 
 import func rlp_encodeAndHashMessageInfo(tx: SignedTx) -> bytes32;
+import func rlp_decodeMessageInfo(inStream: ByteStream) -> option<(ByteStream, SignedTx)>;
 
 import impure func chainParams_chainId() -> uint;
 
 import func keccak256(ba: ByteArray, offset: uint, nbytes: uint) -> bytes32;
 
 
-type MessageFromL1 = struct {
+type IncomingRequest = struct {
     kind: uint,               // type of message
     blockNumber: uint,        // block number of the L1 block
     timestamp: uint,          // timestamp of the L1 block
     sender: address,          // address of the sender
-    inboxSeqNum: uint,        // sequence number in L1 inbox
+    inboxSeqNum: uint,        // sequence number in L1 inbox, or tx id
     msgData: MarshalledBytes  // contents of the message, as a marshalled bytearray
 }
 
@@ -55,12 +68,26 @@ type SignedTx = struct {
     s: uint
 }
 
-public impure func translateSignedTx(req: MessageFromL1) -> option<MessageFromL1> {
-    let extractedL2data = bytearray_unmarshalBytes(req.msgData);
+public impure func translateSignedTx(req: IncomingRequest) -> option<IncomingRequest> {
+    // Given an IncomingRequest that contains an L2 signed tx message, translate the
+    //    L2 message from the RLP-encoded form it arrived in, into the old format which downstream code expects.
+    // Also, check the signature on the tx, and set:
+    //      - the sender field in the request equal to signer, and
+    //      - the requestID field in the request equal to the Ethereum-compatible tx id,
+    // Return the result, or None if message is malformed or the signature is invalid.
+
+    let rlpData = bytearray_unmarshalBytes(req.msgData);
+    rlpData = bytearray_extract(rlpData, 1, bytearray_size(rlpData)-1);
+    asm(rlpData,) { debugprint };
+    let (_, signedTx) = rlp_decodeMessageInfo(bytestream_new(rlpData))?;
+    asm(signedTx,) { debugprint };
+
+    let extractedL2data = signedTxToBytes(signedTx);
     let l2MsgSize = bytearray_size(extractedL2data);
 
     let preSigSize = l2MsgSize-65;
-    let signer = recoverSigner(extractedL2data, preSigSize)?;
+    let signer = recoverSigner(signedTx)?;
+    asm((99, signer),) { debugprint };
 
     // turn it into an unsigned message
     let newL2message = bytearray_setByte(
@@ -69,31 +96,35 @@ public impure func translateSignedTx(req: MessageFromL1) -> option<MessageFromL1
         0
     );
 
-    let rlpHash = rlpAndHash(
-        extractedL2data,
-        preSigSize,
-        bytearray_getByte(extractedL2data, preSigSize+64) % 2 + 35 + 2 * chainParams_chainId(),
-        bytearray_get256(extractedL2data, preSigSize),
-        bytearray_get256(extractedL2data, preSigSize+32),
-    );
+    let rlpHash = keccak256(rlpData, 0, bytearray_size(rlpData));
 
     return Some(
         req with {
             sender: signer
         } with {
             inboxSeqNum: uint(rlpHash)
+        } with {
+            msgData: bytearray_marshalFull(newL2message)
         }
     );
 }
 
-impure func recoverSigner(msgData: ByteArray, preSigSize: uint) -> option<address> {
-    let rlpHash = rlpAndHash(msgData, preSigSize, chainParams_chainId(), 0, 0);
+impure func recoverSigner(tx: SignedTx) -> option<address> {
+    let rlpHashForSig = rlp_encodeAndHashMessageInfo(
+        tx with {
+            r: 0
+        } with {
+            s: 0
+        } with {
+            v: chainParams_chainId()
+        }
+    );
 
     let signer = asm(
-        bytearray_get256(msgData, preSigSize),
-        bytearray_get256(msgData, preSigSize+32),
-        bytearray_getByte(msgData, preSigSize+64) % 2,
-        rlpHash,
+        tx.r,
+        tx.s,
+        1 - (tx.v % 2),
+        rlpHashForSig,
     ) address { ecrecover };
 
     if (signer == address(0)) {
@@ -124,7 +155,23 @@ func rlpAndHash(msgData: ByteArray, preSigSize: uint, v: uint, r: uint, s: uint)
     );
 }
 
-public func hashL2messageInfo(l2msg: MarshalledBytes, chainId: uint, sender: address) -> bytes32 {
+func signedTxToBytes(tx: SignedTx) -> ByteArray {
+    let dataSize = bytearray_size(tx.data);
+    let ret = bytearray_new(0);
+    ret = bytearray_setByte(ret, 0, 4);  // L2 subtype for signed tx
+    ret = bytearray_set256(ret, 1, tx.gasLimit);
+    ret = bytearray_set256(ret, 1+32, tx.gasPrice);
+    ret = bytearray_set256(ret, 1+2*32, tx.seqNum);
+    ret = bytearray_set256(ret, 1+3*32, uint(tx.to));
+    ret = bytearray_set256(ret, 1+4*32, tx.value);
+    ret = bytearray_copy(tx.data, 0, ret, 1+5*32, dataSize);
+    ret = bytearray_set256(ret, 1+5*32+dataSize, tx.r);
+    ret = bytearray_set256(ret, 1+6*32+dataSize, tx.s);
+    ret = bytearray_setByte(ret, 1+7*32+dataSize, 1-(tx.v % 2));
+    return ret;
+}
+
+public func hashUnsignedL2messageInfo(l2msg: MarshalledBytes, chainId: uint, sender: address) -> bytes32 {
     return hash(
         bytes32(sender),
         hash(
