@@ -78,16 +78,13 @@ public impure func translateSignedTx(req: IncomingRequest) -> option<IncomingReq
 
     let rlpData = bytearray_unmarshalBytes(req.msgData);
     rlpData = bytearray_extract(rlpData, 1, bytearray_size(rlpData)-1);
-    asm(rlpData,) { debugprint };
     let (_, signedTx) = rlp_decodeMessageInfo(bytestream_new(rlpData))?;
-    asm(signedTx,) { debugprint };
 
     let extractedL2data = signedTxToBytes(signedTx);
     let l2MsgSize = bytearray_size(extractedL2data);
 
     let preSigSize = l2MsgSize-65;
     let signer = recoverSigner(signedTx)?;
-    asm((99, signer),) { debugprint };
 
     // turn it into an unsigned message
     let newL2message = bytearray_setByte(
