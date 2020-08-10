@@ -331,7 +331,7 @@ public impure func evmCallStack_doCall(
         }
 
         if (kind == 1) {
-            errorHandler();  // should never return
+            evmCallStack_callHitError(6);
             panic;  // callcode call type not yet implemented
         }
 
@@ -403,7 +403,7 @@ public impure func evmCallStack_doCall(
         }
     }
 
-    errorHandler();
+    evmCallStack_callHitError(7);
     panic;
 }
 
@@ -465,7 +465,7 @@ public impure func evmCallStack_returnFromCall(
         let _ = gasAccounting_resumeTxCharges(leftoverGas + resumeInfo.savedGas);
         asm(resumeInfo.codePoint,) { jump };         // jump to resume point in caller; this should never return
 
-        errorHandler();
+        evmCallStack_callHitError(8);
         panic;  // shouldn't happen -- previous instruction jumped away
     } else {
         // top-level call completed; will need to return to external caller
@@ -581,7 +581,7 @@ public impure func evmCallStack_returnFromCall(
         // Now discard any AVM stack contents and jump back to the main run loop.
         emptyAvmStack();
         cleanAvmAuxStackAndCall(mainRunLoop,);  // should never return
-        errorHandler();
+        evmCallStack_callHitError(9);
         panic;
     }
 }
@@ -714,7 +714,7 @@ public impure func evmCallStack_getTopFrameMemoryOrDie() -> ByteArray {
     if let Some(topFrame) = globalCallStack {
         return topFrame.memory;
     } else {
-        errorHandler();
+        evmCallStack_callHitError(10);
         panic;
     }
 }
