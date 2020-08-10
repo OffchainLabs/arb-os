@@ -90,7 +90,7 @@ impl Uint256 {
         }
     }
 
-    pub fn from_u256(x: &U256) -> Self {
+    pub fn _from_u256(x: &U256) -> Self {
         let mut b: Vec<u8> = vec![0u8; 32];
         x.to_big_endian(&mut b);
         Uint256::from_bytes(&b)

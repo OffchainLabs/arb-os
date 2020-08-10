@@ -18,7 +18,7 @@ use crate::mavm::Value;
 use crate::run::load_from_file;
 use crate::uint256::Uint256;
 use ethers_core::rand::thread_rng;
-use ethers_core::types::{Transaction, TransactionRequest};
+use ethers_core::types::TransactionRequest;
 use ethers_core::utils::keccak256;
 use ethers_signers::{Signer, Wallet};
 use serde::{Deserialize, Serialize};
@@ -131,15 +131,8 @@ impl RuntimeEnvironment {
         calldata: Vec<u8>,
         wallet: &Wallet,
     ) -> (Vec<u8>, Vec<u8>) {
-        let mut buf = vec![4u8];
-        let seq_num = self.get_and_incr_seq_num(&sender_addr);
-        buf.extend(max_gas.to_bytes_be());
-        buf.extend(gas_price_bid.to_bytes_be());
-        buf.extend(seq_num.to_bytes_be());
-        buf.extend(to_addr.to_bytes_be());
-        buf.extend(value.to_bytes_be());
-        buf.extend(calldata.clone());
 
+        let seq_num = self.get_and_incr_seq_num(&sender_addr);
         let tx_for_signing = TransactionRequest::new()
             .from(sender_addr.to_h160())
             .to(to_addr.to_h160())
@@ -149,9 +142,11 @@ impl RuntimeEnvironment {
             .data(calldata)
             .nonce(seq_num.to_u256());
         let tx = wallet.sign_transaction(tx_for_signing).unwrap();
-        let sig_bytes = get_signature_bytes(&tx);
-        buf.extend(sig_bytes.to_vec());
-        (buf, keccak256(&tx.rlp().0).to_vec())
+
+        let rlp_buf = tx.rlp().as_ref().to_vec();
+        let mut buf = vec![4u8];
+        buf.extend(rlp_buf.clone());
+        (buf, keccak256(&rlp_buf).to_vec())
     }
 
     pub fn append_signed_tx_message_to_batch(
@@ -438,14 +433,6 @@ impl ArbosReceipt {
     pub fn get_gas_used_so_far(&self) -> Uint256 {
         self.gas_so_far.clone()
     }
-}
-
-fn get_signature_bytes(tx: &Transaction) -> Vec<u8> {
-    let mut ret = Uint256::from_u256(&tx.r).to_bytes_be();
-    ret.extend(Uint256::from_u256(&tx.s).to_bytes_be());
-    let reduced_v = 1 - ((tx.v.as_u64()) % 2);
-    ret.extend(vec![reduced_v as u8]);
-    ret
 }
 
 pub fn bytestack_from_bytes(b: &[u8]) -> Value {
