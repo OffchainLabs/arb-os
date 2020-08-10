@@ -27,7 +27,7 @@ import func bytearray_marshalFull(ba: ByteArray) -> MarshalledBytes;
 import func marshalledBytes_hash(mb: MarshalledBytes) -> bytes32;
 
 
-import func rlp_encodeMessageInfo(
+import func rlp_encodeAndHashMessageInfo(
     seqNum: uint,
     gasPrice: uint,
     gasLimit: uint,
@@ -37,7 +37,7 @@ import func rlp_encodeMessageInfo(
     v: uint,
     r: uint,
     s: uint
-) -> ByteArray;
+) -> bytes32;
 
 import impure func chainParams_chainId() -> uint;
 
@@ -107,7 +107,7 @@ func rlpAndHash(msgData: ByteArray, preSigSize: uint, v: uint, r: uint, s: uint)
     let sequenceNum = bytearray_get256(msgData, 2*32+1);
     let destAddress = address(bytearray_get256(msgData, 3*32+1));
     let payment = bytearray_get256(msgData, 4*32+1);
-    let rlpEncoded = rlp_encodeMessageInfo(
+    return rlp_encodeAndHashMessageInfo(
         sequenceNum,
         gasPriceBid,
         maxGas,
@@ -118,7 +118,6 @@ func rlpAndHash(msgData: ByteArray, preSigSize: uint, v: uint, r: uint, s: uint)
         r,
         s
     );
-    return keccak256(rlpEncoded, 0, bytearray_size(rlpEncoded));
 }
 
 public func hashL2messageInfo(l2msg: MarshalledBytes, chainId: uint, sender: address) -> bytes32 {
