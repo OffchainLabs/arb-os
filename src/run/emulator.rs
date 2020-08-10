@@ -909,6 +909,7 @@ impl Machine {
         let mut stack_len = 0;
         let mut current_codepoint = CodePt::new_internal(0);
         let mut total_gas = 0;
+        let mut stack = vec![];
         while let Some(insn) = self.next_opcode() {
             let loc = insn.location;
             let next_op_gas = self.next_op_gas().unwrap_or(0);
@@ -918,13 +919,14 @@ impl Machine {
                 loc_map.insert(&loc, next_op_gas, &self.file_name_chart);
             }
             total_gas += next_op_gas;
-            let stack = if let StackTrace::Known(trace) = self.get_stack_trace() {
+            let alt_stack = if let StackTrace::Known(trace) = self.get_stack_trace() {
                 trace
             } else {
                 panic!("Internal error: Unknown stack trace");
             };
             match stack_len.cmp(&stack.len()) {
-                Ordering::Greater => {
+                Ordering::Less => {
+                    stack.pop();
                     let mut next_len = loc_map
                         .stack_tree
                         .get(stack.last().unwrap_or(&CodePt::new_internal(0)))
@@ -949,7 +951,8 @@ impl Machine {
                     }
                 }
                 Ordering::Equal => {}
-                Ordering::Less => {
+                Ordering::Greater => {
+                    stack.push(self.get_pc().unwrap_or(CodePt::new_internal(0)));
                     let zero_codept = CodePt::new_internal(0);
                     let next_codepoint = stack.last().unwrap_or(&zero_codept);
                     let next_len =
@@ -985,7 +988,7 @@ impl Machine {
                     }
                 }
             }
-            stack_len = stack.len();
+            stack_len = alt_stack.len();
             match self.run_one(false) {
                 Ok(false) => {
                     return loc_map;
