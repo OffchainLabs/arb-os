@@ -412,13 +412,14 @@ impl ProfilerData {
     ///
     /// Use exit to exit the profiler.
     pub fn profiler_session(&self) {
+        let mut formatted_data = BTreeMap::new();
         for (func, (events, location)) in &self.stack_tree {
-            let mut callers: HashMap<CodePt, (u64, Option<Location>)> = HashMap::new();
+            let mut callers: BTreeMap<CodePt, (u64, Option<Location>)> = BTreeMap::new();
             let mut in_func = false;
             let mut in_callstack = false;
             let mut in_func_gas = 0;
             let mut current_call: Option<(CodePt, (u64, Option<Location>))> = None;
-            let mut called: HashMap<CodePt, (u64, Option<Location>)> = HashMap::new();
+            let mut called: BTreeMap<CodePt, (u64, Option<Location>)> = BTreeMap::new();
             let mut start_point = 0;
             let mut call_start = 0;
             for event in events {
@@ -495,6 +496,9 @@ impl ProfilerData {
                     }
                 }
             }
+            formatted_data.insert(in_func_gas, (called, callers, func, location));
+        }
+        for (in_func_gas, (called, callers, func, location)) in formatted_data.iter().rev() {
             if let Some(loc) = location {
                 println!(
                     "Func ({}, {}, {}): {}",
