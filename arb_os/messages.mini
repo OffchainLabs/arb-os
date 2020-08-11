@@ -289,7 +289,12 @@ impure func handleL2Message(
         if ( (!isBuddyLaunch) && (sequenceNum == (~0)) ) {
             sequenceNum = fetchAndIncrSequenceNum(fullMsg.sender);
         }
-        let newAddress = address(keccakOfRlpEncodedAddrUintPair(fullMsg.sender, sequenceNum));
+        let newAddress = address(0);  // will modify before using
+        if (isBuddyLaunch) {
+            newAddress = fullMsg.sender;
+        } else {
+            newAddress = address(keccakOfRlpEncodedAddrUintPair(fullMsg.sender, sequenceNum));
+        }
 
         initEvmCallStackForConstructor(
             fullMsg,
