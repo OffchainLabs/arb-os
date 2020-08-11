@@ -38,6 +38,7 @@ pub enum TopLevelDecl {
     TypeDecl(TypeDecl),
     FuncDecl(FuncDecl),
     VarDecl(GlobalVarDecl),
+    UseDecl(Vec<String>, String),
     ImpFuncDecl(ImportFuncDecl),
     ImpTypeDecl(ImportTypeDecl),
 }

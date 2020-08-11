@@ -31,8 +31,20 @@ pub Decls: Vec<TopLevelDecl> = {
 }
 
 ImportDecl: TopLevelDecl = {
+    "use" <mut p: PathDecl> ";" => {
+        let file = p.pop().expect("Internal error: Path vector was empty");
+        TopLevelDecl::UseDecl(p, file)
+    },
 	ImportFuncDecl => TopLevelDecl::ImpFuncDecl(<>),
 	ImportTypeDecl => TopLevelDecl::ImpTypeDecl(<>),	
+}
+
+PathDecl: Vec<String> = {
+    <i: IdentString> <mut folds: ("::" <IdentString>)+> => {
+        let mut output = vec![i];
+        output.append(&mut folds);
+        output
+    },
 }
 
 ImportFuncDecl: ImportFuncDecl = {

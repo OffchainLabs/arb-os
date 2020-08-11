@@ -506,6 +506,7 @@ pub fn typecheck_top_level_decls(
             TopLevelDecl::ImpTypeDecl(itd) => {
                 named_types.insert(itd.name, &itd.tipe);
             }
+            TopLevelDecl::UseDecl(_, _) => unimplemented!(),
         }
     }
 
