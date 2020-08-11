@@ -84,6 +84,21 @@ impl LinkedProgram {
     }
 }
 
+#[derive(Debug)]
+pub struct Import {
+    pub path: Vec<String>,
+    pub name: String,
+}
+
+impl Import {
+    pub fn new(path: Vec<String>, name: String) -> Self {
+        Import {
+            path,
+            name,
+        }
+    }
+}
+
 ///Represents a function imported from another mini program or module.
 #[derive(Clone, Serialize, Deserialize)]
 pub struct ImportedFunc {

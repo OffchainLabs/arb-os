@@ -233,9 +233,10 @@ pub fn compile_from_source(
         },
     };
     let mut checked_funcs = Vec::new();
-    let (exported_funcs, imported_funcs, global_vars, string_table) =
+    let (imports ,exported_funcs, imported_funcs, global_vars, string_table) =
         typecheck::typecheck_top_level_decls(&res, &mut checked_funcs, string_table_1)
             .map_err(|res3| CompileError::new(res3.reason.to_string(), res3.location))?;
+    println!("{:?}", imports);
     checked_funcs.iter().for_each(|func| {
         let detected_purity = func.is_pure();
         let declared_purity = func.properties.pure;

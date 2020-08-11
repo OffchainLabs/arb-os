@@ -22,7 +22,7 @@ use super::ast::{
     UnaryOp,
 };
 use super::{symtable::SymTable, MiniProperties};
-use crate::link::{ExportedFunc, ImportedFunc};
+use crate::link::{ExportedFunc, ImportedFunc, Import};
 use crate::mavm::{Instruction, Label, Value};
 use crate::pos::Location;
 use crate::stringtable::{StringId, StringTable};
@@ -451,6 +451,7 @@ pub fn typecheck_top_level_decls(
     string_table_in: StringTable,
 ) -> Result<
     (
+        Vec<Import>,
         Vec<ExportedFunc>,
         Vec<ImportedFunc>,
         Vec<GlobalVarDecl>,
@@ -458,6 +459,7 @@ pub fn typecheck_top_level_decls(
     ),
     TypeError,
 > {
+    let mut imports = vec![];
     let mut exported_funcs = Vec::new();
     let mut imported_funcs = Vec::new();
     let mut funcs = Vec::new();
@@ -506,7 +508,9 @@ pub fn typecheck_top_level_decls(
             TopLevelDecl::ImpTypeDecl(itd) => {
                 named_types.insert(itd.name, &itd.tipe);
             }
-            TopLevelDecl::UseDecl(_, _) => unimplemented!(),
+            TopLevelDecl::UseDecl(path, filename) => {
+                imports.push(Import::new(path.clone(),filename.clone()));
+            },
         }
     }
 
@@ -557,6 +561,7 @@ pub fn typecheck_top_level_decls(
     }
 
     Ok((
+        imports,
         exported_funcs,
         imported_funcs,
         res_global_vars,
