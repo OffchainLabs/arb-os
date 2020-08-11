@@ -19,7 +19,7 @@
 use crate::link::{ExportedFunc, ImportedFunc};
 use crate::mavm::Instruction;
 use crate::pos::{BytePos, Location};
-use crate::stringtable;
+use crate::stringtable::StringTable;
 use lalrpop_util::lalrpop_mod;
 use mini::DeclsParser;
 use serde::{Deserialize, Serialize};
@@ -29,7 +29,7 @@ use std::fs::File;
 use std::io::{self, Read};
 use std::path::Path;
 
-pub use ast::Type;
+pub use ast::{TopLevelDecl, Type};
 pub use source::Lines;
 
 mod ast;
@@ -197,6 +197,35 @@ pub fn compile_from_file(
     serde_json::from_str(&s).or_else(|_| compile_from_source(s, display, file_id, debug))
 }
 
+///Converts source string `source` into a series of `TopLevelDecl`s, uses identifiers from
+/// `string_table` and records new ones in it as well.  The `file_id` argument is used to construct
+/// file information for the location fields.
+pub fn parse_from_source(
+    source: String,
+    file_id: u64,
+    string_table: &mut StringTable,
+) -> Result<Vec<TopLevelDecl>, CompileError> {
+    let comment_re = regex::Regex::new(r"//.*").unwrap();
+    let source = comment_re.replace_all(&source, "");
+    let lines = Lines::new(source.bytes());
+    DeclsParser::new()
+        .parse(string_table, &lines, file_id, &source)
+        .map_err(|e| match e {
+            lalrpop_util::ParseError::UnrecognizedToken {
+                token: (offset, tok, end),
+                expected: _,
+            } => CompileError::new(
+                format!(
+                    "unexpected token: {}, Type: {:?}",
+                    &source[offset..end],
+                    tok
+                ),
+                Some(lines.location(BytePos::from(offset), file_id).unwrap()),
+            ),
+            _ => CompileError::new(format!("{:?}", e), None),
+        })
+}
+
 ///Interprets s as mini source code, and returns a CompiledProgram if s represents a valid program,
 /// or a CompileError otherwise.
 ///
@@ -211,29 +240,10 @@ pub fn compile_from_source(
     file_id: u64,
     debug: bool,
 ) -> Result<CompiledProgram, CompileError> {
-    let comment_re = regex::Regex::new(r"//.*").unwrap();
-    let s = comment_re.replace_all(&s, "");
-    let mut string_table_1 = stringtable::StringTable::new();
-    let lines = Lines::new(s.bytes());
-    let res = match DeclsParser::new().parse(&mut string_table_1, &lines, file_id, &s) {
-        Ok(r) => r,
-        Err(e) => match e {
-            lalrpop_util::ParseError::UnrecognizedToken {
-                token: (offset, tok, end),
-                expected: _,
-            } => {
-                return Err(CompileError::new(
-                    format!("unexpected token: {}, Type: {:?}", &s[offset..end], tok),
-                    Some(lines.location(BytePos::from(offset), file_id).unwrap()),
-                ));
-            }
-            _ => {
-                return Err(CompileError::new(format!("{:?}", e), None));
-            }
-        },
-    };
+    let mut string_table_1 = StringTable::new();
+    let res = parse_from_source(s, file_id, &mut string_table_1)?;
     let mut checked_funcs = Vec::new();
-    let (imports ,exported_funcs, imported_funcs, global_vars, string_table) =
+    let (imports, exported_funcs, imported_funcs, global_vars, string_table) =
         typecheck::typecheck_top_level_decls(&res, &mut checked_funcs, string_table_1)
             .map_err(|res3| CompileError::new(res3.reason.to_string(), res3.location))?;
     println!("{:?}", imports);

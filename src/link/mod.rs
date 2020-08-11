@@ -92,10 +92,7 @@ pub struct Import {
 
 impl Import {
     pub fn new(path: Vec<String>, name: String) -> Self {
-        Import {
-            path,
-            name,
-        }
+        Import { path, name }
     }
 }
 

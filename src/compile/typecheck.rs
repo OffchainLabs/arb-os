@@ -22,7 +22,7 @@ use super::ast::{
     UnaryOp,
 };
 use super::{symtable::SymTable, MiniProperties};
-use crate::link::{ExportedFunc, ImportedFunc, Import};
+use crate::link::{ExportedFunc, Import, ImportedFunc};
 use crate::mavm::{Instruction, Label, Value};
 use crate::pos::Location;
 use crate::stringtable::{StringId, StringTable};
@@ -509,8 +509,8 @@ pub fn typecheck_top_level_decls(
                 named_types.insert(itd.name, &itd.tipe);
             }
             TopLevelDecl::UseDecl(path, filename) => {
-                imports.push(Import::new(path.clone(),filename.clone()));
-            },
+                imports.push(Import::new(path.clone(), filename.clone()));
+            }
         }
     }
 
