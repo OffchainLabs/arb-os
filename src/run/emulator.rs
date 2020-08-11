@@ -512,7 +512,11 @@ impl ProfilerData {
             } else {
                 println!("Unknown func at {:?}: {}", func, in_func_gas);
             }
-            for (caller, (gas, location)) in callers {
+            let callers: BTreeMap<_, _> = callers
+                .into_iter()
+                .map(|(cpt, (gas, loc))| (gas, (cpt, loc)))
+                .collect();
+            for (gas, (caller, location)) in callers.into_iter().rev() {
                 if let Some(loc) = location {
                     println!(
                         "    Called by ({}, {}, {}), for {}",
@@ -530,7 +534,11 @@ impl ProfilerData {
                     );
                 }
             }
-            for (called, (gas, location)) in called {
+            let called: BTreeMap<_, _> = called
+                .into_iter()
+                .map(|(cpt, (gas, loc))| (gas, (cpt, loc)))
+                .collect();
+            for (gas, (called, location)) in called.into_iter().rev() {
                 if let Some(loc) = location {
                     println!(
                         "    Calls ({}, {}, {}), for {}",
