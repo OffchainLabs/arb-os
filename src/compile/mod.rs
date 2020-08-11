@@ -182,8 +182,12 @@ pub fn compile_from_file(
 ) -> Result<CompiledProgram, CompileError> {
     let display = path.display();
 
-    let mut file = File::open(&path)
-        .map_err(|why| CompileError::new(format!("couldn't open {}: {:?}", display, why), None))?;
+    let mut file = if path.is_dir() {
+        File::open(&path.join("main.mini"))
+    } else {
+        File::open(&path)
+    }
+    .map_err(|why| CompileError::new(format!("couldn't open {}: {:?}", display, why), None))?;
 
     let mut s = String::new();
     file.read_to_string(&mut s)
