@@ -179,22 +179,73 @@ pub fn compile_from_file(
     path: &Path,
     file_id: u64,
     debug: bool,
-) -> Result<CompiledProgram, CompileError> {
+) -> Result<Vec<CompiledProgram>, CompileError> {
     let display = path.display();
 
-    let mut file = if path.is_dir() {
-        File::open(&path.join("main.mini"))
-    } else {
-        File::open(&path)
+    if path.is_dir() {
+        return compile_from_folder(path, file_id);
     }
-    .map_err(|why| CompileError::new(format!("couldn't open {}: {:?}", display, why), None))?;
+
+    let mut file = File::open(&path)
+        .map_err(|why| CompileError::new(format!("couldn't open {}: {:?}", display, why), None))?;
 
     let mut s = String::new();
     file.read_to_string(&mut s)
         .map_err(|why| CompileError::new(format!("couldn't read {}: {:?}", display, why), None))?;
-    //print!("read-in file:\n{}", s);
 
-    serde_json::from_str(&s).or_else(|_| compile_from_source(s, display, file_id, debug))
+    Ok(vec![serde_json::from_str(&s).or_else(|_| {
+        compile_from_source(s, display, file_id, debug)
+    })?])
+}
+
+pub fn compile_from_folder(
+    folder: &Path,
+    file_id: u64,
+) -> Result<Vec<CompiledProgram>, CompileError> {
+    let mut paths = vec!["main".to_owned()];
+    let mut programs = HashMap::new();
+    while let Some(name) = paths.pop() {
+        let name = name + ".mini";
+        let mut file = File::open(folder.join(name.clone())).map_err(|why| {
+            CompileError::new(
+                format!("couldn't open {}::{}: {:?}", folder.display(), name, why),
+                None,
+            )
+        })?;
+
+        let mut source = String::new();
+        file.read_to_string(&mut source).map_err(|why| {
+            CompileError::new(
+                format!("couldn't read {}::{}: {:?}", folder.display(), name, why),
+                None,
+            )
+        })?;
+        let mut string_table = StringTable::new();
+        let res = parse_from_source(source, file_id, &mut string_table)?;
+        let mut checked_funcs = vec![];
+        let (imports, exported_funcs, imported_funcs, global_vars, string_table) =
+            typecheck::typecheck_top_level_decls(&res, &mut checked_funcs, string_table)
+                .map_err(|res3| CompileError::new(res3.reason.to_string(), res3.location))?;
+        paths.append(&mut imports.iter().map(|imp| imp.path[0].clone()).collect());
+        let code_out =
+            codegen::mavm_codegen(checked_funcs, &string_table, &imported_funcs, &global_vars)
+                .map_err(|e| CompileError::new(e.reason.to_string(), e.location))?;
+        programs.insert(
+            name.clone(),
+            CompiledProgram::new(
+                code_out.to_vec(),
+                exported_funcs,
+                imported_funcs,
+                global_vars.len(),
+                Some(SourceFileMap::new(
+                    code_out.len(),
+                    folder.join(name.clone()).display().to_string(),
+                )),
+                HashMap::new(),
+            ),
+        );
+    }
+    Ok(programs.values().cloned().collect())
 }
 
 ///Converts source string `source` into a series of `TopLevelDecl`s, uses identifiers from

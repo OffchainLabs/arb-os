@@ -304,7 +304,9 @@ pub fn add_auto_link_progs(
         let path = Path::new(pathname);
         match compile_from_file(path, u64::MAX - idx as u64, false) {
             Ok(compiled_program) => {
-                progs.push((compiled_program, false));
+                compiled_program
+                    .into_iter()
+                    .for_each(|prog| progs.push((prog, false)));
             }
             Err(e) => {
                 return Err(e);
