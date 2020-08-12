@@ -50,13 +50,7 @@ import func account_getStartCodePoint(acct: Account) -> option<impure func()>;
 
 import impure func initEvmCallStack(
     callKind: uint,
-    ethMessage: IncomingRequest,
-    addr: address,
-    caller: address,
-    calldata: ByteArray,
-    callvalue: uint,
-    gas: uint,
-    gasPrice: uint
+    request: TxRequestData
 );
 import impure func initEvmCallStackForConstructor(
     ethMessage: IncomingRequest,
@@ -230,6 +224,17 @@ impure func fetchAndIncrSequenceNum(addr: address) -> uint {
     return ret;
 }
 
+type TxRequestData = struct {
+    maxGas: uint,
+    gasPrice: uint,
+    seqNum: option<uint>,
+    caller: address,
+    calleeAddr: address,
+    value: uint,
+    calldata: ByteArray,
+    incomingRequest: IncomingRequest,
+}
+
 impure func handleL2Message(
     inStream: ByteStream,
     fullMsg: IncomingRequest,
@@ -311,13 +316,16 @@ impure func handleL2Message(
         }
         initEvmCallStack(
             callKind,
-            fullMsg,
-            address(calleeAddressAsUint),
-            fullMsg.sender,
-            remainingCallData,
-            value,
-            maxGas,
-            gasPrice
+            struct {
+                maxGas: maxGas,
+                gasPrice: gasPrice,
+                seqNum: None<uint>,
+                caller: fullMsg.sender,
+                calleeAddr: address(calleeAddressAsUint),
+                value: value,
+                calldata: remainingCallData,
+                incomingRequest: fullMsg
+            }
         );  // should never return
     }
 

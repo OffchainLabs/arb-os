@@ -159,42 +159,47 @@ public impure func evmCallStack_init() {
     globalCallStack = None<EvmCallFrame>;
 }
 
+type TxRequestData = struct {
+    maxGas: uint,
+    gasPrice: uint,
+    seqNum: option<uint>,
+    caller: address,
+    calleeAddr: address,
+    value: uint,
+    calldata: ByteArray,
+    incomingRequest: IncomingRequest,
+}
+
 public impure func initEvmCallStack(
     callKind: uint,
-    ethMessage: IncomingRequest,
-    addr: address,
-    caller: address,
-    calldata: ByteArray,
-    callvalue: uint,
-    gas: uint,
-    gasPrice: uint,
+    request: TxRequestData,
 ) {
     // Set up the call frame for a top-level call, and launch the call's execution.
     if let Some(entryPoint) = account_getStartCodePoint(
         accountStore_get(
             getGlobalAccountStore(),
-            addr
+            request.calleeAddr
         )
     ) {
-        if (gasAccounting_startTxCharges(gas, gasPrice, caller) != None<()>) {
-            globalCurrentEthMessage = ethMessage;
+        if (gasAccounting_startTxCharges(request.maxGas, request.gasPrice, request.caller) != None<()>) {
+            globalCurrentEthMessage = request.incomingRequest;
             // pay callvalue from caller to the called contract
             // payment will only be recorded inside the callframe, so it will be discarded if the call reverts
             if let Some(globalAS) = accountStore_transferEthBalance(
                 getGlobalAccountStore(),
-                caller,
-                addr,
-                callvalue
+                request.caller,
+                request.calleeAddr,
+                request.value
             ) {
                 globalCallStack = Some(struct {
-                    runningAs: addr,
-                    runningCodeFrom: addr,
+                    runningAs: request.calleeAddr,
+                    runningCodeFrom: request.calleeAddr,
                     accountStore: globalAS,
-                    runningAsAccount: accountStore_get(globalAS, addr),
-                    caller: caller,
+                    runningAsAccount: accountStore_get(globalAS, request.calleeAddr),
+                    caller: request.caller,
                     callKind: callKind,
-                    calldata: calldata,
-                    callvalue: callvalue,
+                    calldata: request.calldata,
+                    callvalue: request.value,
                     returnInfo: None<ReturnInfo>,
                     memory: bytearray_new(0),
                     evmLogs: evmlogs_empty(),
@@ -207,41 +212,41 @@ public impure func initEvmCallStack(
             } else {
                 if let Some(gasUsage) = gasAccounting_endTxCharges() {
                     // insufficient balance error
-                    emitLog(ethMessage, 4, None<ByteArray>, None<EvmLogs>, Some(gasUsage));
+                    emitLog(request.incomingRequest, 4, None<ByteArray>, None<EvmLogs>, Some(gasUsage));
                 } else {
                     // unknown error type
-                    emitLog(ethMessage, 255, None<ByteArray>, None<EvmLogs>, None<GasUsage>);
+                    emitLog(request.incomingRequest, 255, None<ByteArray>, None<EvmLogs>, None<GasUsage>);
                 }
                 evmCallStack_callHitError(1);
             }
         } else {
             // can't pay for gas error
-            emitLog(ethMessage, 3, None<ByteArray>, None<EvmLogs>, None<GasUsage>);
+            emitLog(request.incomingRequest, 3, None<ByteArray>, None<EvmLogs>, None<GasUsage>);
             evmCallStack_callHitError(2);
         }
     } else {
         // no contract at this address, so treat tx as a simple eth transfer
-        if (callvalue > 0) {
+        if (request.value > 0) {
             // transfer value to destination address
             if let Some(globalAS) = accountStore_transferEthBalance(
                 getGlobalAccountStore(),
-                caller,
-                addr,
-                callvalue
+                request.caller,
+                request.calleeAddr,
+                request.value
             ) {
                 setGlobalAccountStore(globalAS);
                 // report success
-                emitLog(ethMessage, 0, None<ByteArray>, None<EvmLogs>, None<GasUsage>);
+                emitLog(request.incomingRequest, 0, None<ByteArray>, None<EvmLogs>, None<GasUsage>);
                 emptyAvmStack();
                 cleanAvmAuxStackAndCall(mainRunLoop,);  // should never return
             } else {
                 // insufficient balance error
-                emitLog(ethMessage, 4, None<ByteArray>, None<EvmLogs>, None<GasUsage>);
+                emitLog(request.incomingRequest, 4, None<ByteArray>, None<EvmLogs>, None<GasUsage>);
                 evmCallStack_callHitError(3);
             }
         } else {
             // tx is transfer of 0 Eth, so just report success
-            emitLog(ethMessage, 0, None<ByteArray>, None<EvmLogs>, None<GasUsage>);
+            emitLog(request.incomingRequest, 0, None<ByteArray>, None<EvmLogs>, None<GasUsage>);
             emptyAvmStack();
             cleanAvmAuxStackAndCall(mainRunLoop,);  // should never return
         }
