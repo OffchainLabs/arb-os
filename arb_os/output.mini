@@ -27,13 +27,14 @@ import impure func inbox_currentBlockNumber() -> uint;
 import impure func inbox_currentTimestamp() -> uint;
 
 
-// This is declared identically in messages.mini
+// This structure defines an incoming request.
+// It is defined identically in inbox.mini and elsewhere.
 type IncomingRequest = struct {
     kind: uint,               // type of message
     blockNumber: uint,        // block number of the L1 block
     timestamp: uint,          // timestamp of the L1 block
     sender: address,          // address of the sender
-    requestId: uint,          // sequence number in L1 inbox
+    requestId: uint,
     msgData: MarshalledBytes  // contents of the message, as a marshalled bytearray
 }
 

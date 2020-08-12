@@ -46,14 +46,15 @@ import impure func chainParams_chainId() -> uint;
 
 import func keccak256(ba: ByteArray, offset: uint, nbytes: uint) -> bytes32;
 
-
+// This structure defines an incoming request.
+// It is defined identically in inbox.mini and elsewhere.
 type IncomingRequest = struct {
     kind: uint,               // type of message
     blockNumber: uint,        // block number of the L1 block
     timestamp: uint,          // timestamp of the L1 block
     sender: address,          // address of the sender
-    inboxSeqNum: uint,        // sequence number in L1 inbox, or tx id
-    msgData: MarshalledBytes  // contents of the message, as a marshalled bytearray
+    requestId: uint,
+    msgData: MarshalledBytes  // kind-specific data, as a marshalled bytearray
 }
 
 // A copy of this struct is defined in stdlib/rlp.mini.
@@ -90,7 +91,7 @@ public impure func translateSignedTx(req: IncomingRequest) -> option<IncomingReq
         req with {
             sender: signer
         } with {
-            inboxSeqNum: uint(rlpHash)
+            requestId: uint(rlpHash)
         } with {
             msgData: bytearray_marshalFull(newL2message)
         }

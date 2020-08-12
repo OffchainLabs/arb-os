@@ -24,15 +24,15 @@ import impure func chainParams_gotParamsMessage(sender: address, data: Marshalle
 
 import type MarshalledBytes;
 
-// This is the structure that the Arbitrum protocol gives us, for each incoming message.
-// It is declared identically in messages.mini
+// This is structure defines an incoming request.
+// It is declared identically in other source code files.
 type IncomingRequest = struct {
     kind: uint,               // type of message
     blockNumber: uint,        // block number of the L1 block
     timestamp: uint,          // timestamp of the L1 block
     sender: address,          // address of the sender
-    requestId: uint,          // sequence number in L1 inbox
-    msgData: MarshalledBytes  // contents of the message, as a marshalled bytearray
+    requestId: uint,
+    msgData: MarshalledBytes  // kind-specific data, as a marshalled bytearray
 }
 
 type Inbox = struct {

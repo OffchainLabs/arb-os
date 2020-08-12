@@ -33,15 +33,15 @@ import func marshalledBytes_firstByte(mb: MarshalledBytes) -> uint;
 import func marshalledBytes_hash(mb: MarshalledBytes) -> bytes32;
 
 
-// This is the structure that the Arbitrum protocol gives us, for each incoming message.
-// It is declared identically in inbox.mini and elsewhere
+// This structure defines an incoming request.
+// It is declared identically in inbox.mini and elsewhere.
 type IncomingRequest = struct {
     kind: uint,               // type of message
     blockNumber: uint,        // block number of the L1 block
     timestamp: uint,          // timestamp of the L1 block
     sender: address,          // address of the sender
-    requestId: uint,          // sequence number in L1 inbox
-    msgData: MarshalledBytes  // contents of the message, as a marshalled bytearray
+    requestId: uint,
+    msgData: MarshalledBytes  // kind-specific data, as a marshalled bytearray
 }
 
 type MessageBatch = struct {
