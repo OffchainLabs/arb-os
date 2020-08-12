@@ -53,16 +53,10 @@ import impure func initEvmCallStack(
     request: TxRequestData
 );
 import impure func initEvmCallStackForConstructor(
-    ethMessage: IncomingRequest,
-    addr: address,
-    caller: address,
     code: ByteArray,
     evmJumpTable: map<uint, impure func()>,
     startPoint: impure func(),
-    calldata: ByteArray,
-    value: uint,
-    gas: uint,
-    gasPrice: uint
+    request: TxRequestData
 );
 import func evmCallStack_runningCodeFromAccount() -> option<Account>;
 import impure func emitLog(
@@ -287,16 +281,19 @@ impure func handleL2Message(
         let newAddress = address(keccakOfRlpEncodedAddrUintPair(fullMsg.sender, sequenceNum));
 
         initEvmCallStackForConstructor(
-            fullMsg,
-            newAddress,
-            fullMsg.sender,
             codeBytes,
             evmJumpTable,
             codept,
-            bytearray_new(0),   // no calldata for constructor call -- encoded args are packed into the code
-            value,
-            maxGas,
-            gasPrice
+            struct {
+                maxGas: maxGas,
+                gasPrice: gasPrice,
+                seqNum: None<uint>,
+                caller: fullMsg.sender,
+                calleeAddr: newAddress,
+                value: value,
+                calldata: bytearray_new(0),     // no calldata for constructor call -- encoded args are packed into the code
+                incomingRequest: fullMsg,
+            }
         );  // should never return
     } else {
         // this is a non-constructor call
