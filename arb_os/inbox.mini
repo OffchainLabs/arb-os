@@ -263,13 +263,7 @@ func translateUnsignedTx(request: IncomingRequest) -> option<TxRequestData> {
             calleeAddr: address(destAddrAsUint),
             value: value,
             calldata: calldata,
-            incomingRequest: request with {
-                requestId: uint(hashUnsignedL2messageInfo(
-                    request.msgData,
-                    chainParams_chainId(),
-                    request.sender
-                ))
-            },
+            incomingRequest: request
         }
     );
 }

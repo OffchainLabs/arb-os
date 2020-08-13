@@ -70,7 +70,7 @@ impl RuntimeEnvironment {
         self.l1_inbox = contents;
     }
 
-    pub fn insert_l1_message(&mut self, msg_type: u8, sender_addr: Uint256, msg: &[u8]) {
+    pub fn insert_l1_message(&mut self, msg_type: u8, sender_addr: Uint256, msg: &[u8]) -> Uint256 {
         let l1_msg = Value::new_tuple(vec![
             Value::Int(Uint256::from_usize(msg_type as usize)),
             Value::Int(self.current_block_num.clone()),
@@ -79,13 +79,15 @@ impl RuntimeEnvironment {
             Value::Int(self.next_inbox_seq_num.clone()),
             bytestack_from_bytes(msg),
         ]);
+        let msg_id = Uint256::avm_hash2(&Uint256::from_u64(self.chain_id), &self.next_inbox_seq_num);
         self.next_inbox_seq_num = self.next_inbox_seq_num.add(&Uint256::one());
         self.l1_inbox.push(l1_msg.clone());
         self.recorder.add_msg(l1_msg);
+        msg_id
     }
 
-    pub fn insert_l2_message(&mut self, sender_addr: Uint256, msg: &[u8]) {
-        self.insert_l1_message(3, sender_addr, msg);
+    pub fn insert_l2_message(&mut self, sender_addr: Uint256, msg: &[u8]) -> Uint256 {
+        self.insert_l1_message(3, sender_addr, msg)
     }
 
     pub fn insert_tx_message(
@@ -106,15 +108,7 @@ impl RuntimeEnvironment {
         buf.extend(value.to_bytes_be());
         buf.extend_from_slice(data);
 
-        self.insert_l2_message(sender_addr.clone(), &buf);
-
-        Uint256::avm_hash2(
-            &sender_addr,
-            &Uint256::avm_hash2(
-                &Uint256::from_u64(self.chain_id),
-                &hash_bytestack(bytestack_from_bytes(&buf)).unwrap(),
-            ),
-        )
+        self.insert_l2_message(sender_addr.clone(), &buf)
     }
 
     pub fn new_batch(&self) -> Vec<u8> {
@@ -131,7 +125,6 @@ impl RuntimeEnvironment {
         calldata: Vec<u8>,
         wallet: &Wallet,
     ) -> (Vec<u8>, Vec<u8>) {
-
         let seq_num = self.get_and_incr_seq_num(&sender_addr);
         let tx_for_signing = TransactionRequest::new()
             .from(sender_addr.to_h160())
@@ -468,6 +461,7 @@ fn bytestack_build_uint(b: &[u8]) -> Value {
     Value::Int(ui)
 }
 
+#[cfg(test)]
 pub fn hash_bytestack(bs: Value) -> Option<Uint256> {
     if let Value::Tuple(tup) = bs {
         if let Value::Int(ui) = &tup[0] {
