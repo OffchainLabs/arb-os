@@ -18,7 +18,6 @@ import type AccountStore;
 import type MarshalledBytes;
 import type ByteArray;
 import type ByteStream;
-import type IncomingRequest;
 import type EvmLogs;
 import type GasUsage;
 import type StorageMap;
@@ -45,6 +44,7 @@ import func accountStore_createAccountFromEvmCode(
 import impure func translateEvmCodeSegment(
     bs: ByteStream
 ) -> option<(impure func(), map<uint, impure func()>)>;
+import func bytearray_new(capacityHint: uint) -> ByteArray;
 import func bytearray_unmarshalBytes(mb: MarshalledBytes) -> ByteArray;
 import func bytestream_new(ba: ByteArray) -> ByteStream;
 import func getErc20code() -> MarshalledBytes;
@@ -64,10 +64,12 @@ import impure func getNextMsgFromCongestionAuction() -> (
     uint,           // maxGas it's allowed to use
     uint,           // gas price it will pay
 ) ;
-import impure func handleIncomingRequest(
+import impure func handleL1Request(
     msg: IncomingRequest,
-    maxGas: uint,
-    gasPrice: uint
+) -> option<()>; // return None if message format error; Some(()) if other error; if no error, never return
+import impure func handleL2Request(
+    inStream: ByteStream,
+    request: TxRequestData
 ) -> option<()>; // return None if message format error; Some(()) if other error; if no error, never return
 import impure func emitLog(
     l1message: IncomingRequest,
@@ -77,6 +79,28 @@ import impure func emitLog(
     gasUsage: option<GasUsage>,
 );
 import impure func arbsys_txcall();
+
+// This structure defines an incoming request.
+// It is declared identically in inbox.mini and elsewhere.
+type IncomingRequest = struct {
+    kind: uint,               // type of message
+    blockNumber: uint,        // block number of the L1 block
+    timestamp: uint,          // timestamp of the L1 block
+    sender: address,          // address of the sender
+    requestId: uint,
+    msgData: MarshalledBytes  // kind-specific data, as a marshalled bytearray
+}
+
+type TxRequestData = struct {
+    maxGas: uint,
+    gasPrice: uint,
+    seqNum: option<uint>,
+    caller: address,
+    calleeAddr: address,
+    value: uint,
+    calldata: ByteArray,
+    incomingRequest: IncomingRequest,
+}
 
 
 impure func main() {
@@ -98,7 +122,24 @@ public impure func mainRunLoop() {
     loop {
         let (msg, approved, maxGas, gasPrice) = getNextMsgFromCongestionAuction();
         if (approved) {
-            if (handleIncomingRequest(msg, maxGas, gasPrice) == None<()>) {
+            if (msg.kind == 3) {
+                if (handleL2Request(
+                        bytestream_new(bytearray_unmarshalBytes(msg.msgData)),
+                        struct {
+                            maxGas: maxGas,
+                            gasPrice: gasPrice,
+                            seqNum: None<uint>,
+                            caller: msg.sender,
+                            calleeAddr: address(0),
+                            value: 0,
+                            calldata: bytearray_new(0),
+                            incomingRequest: msg,
+                        }
+                    ) == None<()>) {
+                    // reject for message format error
+                    emitLog(msg, 6, None<ByteArray>, None<EvmLogs>, None<GasUsage>);
+                }
+            } elseif(handleL1Request(msg) == None<()>) {
                 // reject for message format error
                 emitLog(msg, 6, None<ByteArray>, None<EvmLogs>, None<GasUsage>);
             }

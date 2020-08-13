@@ -109,10 +109,8 @@ type IncomingRequest = struct {
     msgData: MarshalledBytes  // kind-specific data, as a marshalled bytearray
 }
 
-public impure func handleIncomingRequest(
-    msg: IncomingRequest,
-    maxGas: uint,
-    gasPrice: uint
+public impure func handleL1Request(
+    msg: IncomingRequest
 ) -> option<()> {   // return None if message format error; Some(()) if other error; if no error, never return
     // Parse an incoming message and do appropriate computations
     let inStream = bytestream_new(bytearray_unmarshalBytes(msg.msgData));
@@ -174,12 +172,9 @@ public impure func handleIncomingRequest(
          )?;  // should never return
 
          return None;
-    } elseif (msg.kind == 3) {
-        // L2 message
-        handleL2Message(inStream, msg, maxGas, gasPrice)?;
-        return Some(());
     } else {
         // not a valid message type
+        // (This should not have been called if msg.kind == 3.)
         return None;
     }
 }
@@ -229,71 +224,57 @@ type TxRequestData = struct {
     incomingRequest: IncomingRequest,
 }
 
-impure func handleL2Message(
+public impure func handleL2Request(
     inStream: ByteStream,
-    fullMsg: IncomingRequest,
-    maxGas: uint,
-    gasPrice: uint
+    request: TxRequestData
 ) -> option<()> {   // return None if message is malformatted; otherwise handle errors and return Some(()); if no error, never return
     let (bs, msgType) = bytestream_getByte(inStream)?;
-    inStream = bs;
-
     // skip maxGas and gasPriceBid fields of message
-    inStream = bytestream_skipBytes(inStream, 64)?;
+    inStream = bytestream_skipBytes(bs, 64)?;
 
-    let sequenceNum = (~0);  // impossible value for sequence number
     if ((msgType == 0) || (msgType == 4)){
-        let(bs, sn) = bytestream_get256(inStream)?;
+        let(bs, seqNum) = bytestream_get256(inStream)?;
         inStream = bs;
-        sequenceNum = sn;
 
-        if (verifyAndIncrSequenceNum(fullMsg.sender, sequenceNum) == None<()>) {
+        if (verifyAndIncrSequenceNum(request.caller, seqNum) == None<()>) {
             // bad sequence number error
-            emitLog(fullMsg, 5, None<ByteArray>, None<EvmLogs>, 0, 0);
+            emitLog(request.incomingRequest, 5, None<ByteArray>, None<EvmLogs>, 0, 0);
             return Some(());
         }
+        request = request with { seqNum: Some(seqNum) };
     }
 
     let (bs, calleeAddressAsUint) = bytestream_get256(inStream)?;
     inStream = bs;
+    request = request with { calleeAddr: address(calleeAddressAsUint) };
 
     // Get value of Eth payment that accompanies the message.
-    let value = 0;
     if ( (msgType==0) || (msgType==1) || (msgType==4) ) {
         let (bs, val) = bytestream_get256(inStream)?;
         inStream = bs;
-        value = val;
+        request = request with { value: val };
     }
 
     if (calleeAddressAsUint == 0) {
         // this is a constructor call
         if (msgType == 2) {
             // revert error (tried to call constructor in a non-mutating call)
-            emitLog(fullMsg, 1, None<ByteArray>, None<EvmLogs>, 0, 0);
+            emitLog(request.incomingRequest, 1, None<ByteArray>, None<EvmLogs>, 0, 0);
             return Some(());
         }
         let codeBytes = bytestream_getRemainingBytes(inStream);
         let (codept, evmJumpTable) = translateEvmCodeSegment(bytestream_new(codeBytes))?;
 
-        if (sequenceNum == (~0)) {
-            sequenceNum = fetchAndIncrSequenceNum(fullMsg.sender);
+        if (request.seqNum == None<uint>) {
+            request = request with { seqNum: Some(fetchAndIncrSequenceNum(request.caller)) };
         }
-        let newAddress = address(keccakOfRlpEncodedAddrUintPair(fullMsg.sender, sequenceNum));
+        request = request with { calleeAddr: address(keccakOfRlpEncodedAddrUintPair(request.caller, request.seqNum?)) };
 
         initEvmCallStackForConstructor(
             codeBytes,
             evmJumpTable,
             codept,
-            struct {
-                maxGas: maxGas,
-                gasPrice: gasPrice,
-                seqNum: None<uint>,
-                caller: fullMsg.sender,
-                calleeAddr: newAddress,
-                value: value,
-                calldata: bytearray_new(0),     // no calldata for constructor call -- encoded args are packed into the code
-                incomingRequest: fullMsg,
-            }
+            request
         );  // should never return
     } else {
         // this is a non-constructor call
@@ -311,18 +292,10 @@ impure func handleL2Message(
                 bytearray_size(remainingCallData)-65
             );
         }
+        request = request with { calldata: remainingCallData };
         initEvmCallStack(
             callKind,
-            struct {
-                maxGas: maxGas,
-                gasPrice: gasPrice,
-                seqNum: None<uint>,
-                caller: fullMsg.sender,
-                calleeAddr: address(calleeAddressAsUint),
-                value: value,
-                calldata: remainingCallData,
-                incomingRequest: fullMsg
-            }
+            request
         );  // should never return
     }
 
