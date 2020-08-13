@@ -36,19 +36,15 @@ import func bytearray_unmarshalBytes(mb: MarshalledBytes) -> ByteArray;
 import func bytearray_new(capacityHint: uint) -> ByteArray;
 import func bytearray_get256(ba: ByteArray, offset: uint) -> uint;
 
-import func hashUnsignedL2messageInfo(l2msg: MarshalledBytes, chainId: uint, sender: address) -> bytes32;
-import func translateSignedTx(req: IncomingRequest) -> option<IncomingRequest>;
+import type ByteStream;
+import func bytestream_new(ba: ByteArray) -> ByteStream;
+import func bytestream_getByte(bs: ByteStream) -> option<(ByteStream, uint)>;
+import func bytestream_get256(bs: ByteStream) -> option<(ByteStream, uint)>;
+import func bytestream_getRemainingBytes(bs: ByteStream) -> ByteArray;
 
-// This is structure defines an incoming request.
-// It is declared identically in other source code files.
-type IncomingRequest = struct {
-    kind: uint,               // type of message
-    blockNumber: uint,        // block number of the L1 block
-    timestamp: uint,          // timestamp of the L1 block
-    sender: address,          // address of the sender
-    requestId: uint,
-    msgData: MarshalledBytes  // kind-specific data, as a marshalled bytearray
-}
+
+import func hashUnsignedL2messageInfo(l2msg: MarshalledBytes, chainId: uint, sender: address) -> bytes32;
+import func translateSignedTx(req: IncomingRequest) -> option<TxRequestData>;
 
 type Inbox = struct {
     queue: Queue,     // Queue of messages that haven't yet been retrieved from the inbox
@@ -209,59 +205,71 @@ public impure func inbox_getNextUnpackedRequest() -> (
                     // it's a heartbeat message, don't do anything
                 } elseif (firstByte == 4) {
                     // it's a signed tx; verify sig and then process request or discard
-                    if let Some(verifiedMsg) = translateSignedTx(msg) {
-                        let ba = bytearray_unmarshalBytes(verifiedMsg.msgData);
-                        let maxGas = bytearray_get256(ba, 1);
-                        return (
-                            None<IncomingRequest>,
-                            Some(
-                                struct {
-                                    maxGas: maxGas,
-                                    gasPrice: 0,
-                                    seqNum: None<uint>,
-                                    caller: verifiedMsg.sender,
-                                    calleeAddr: address(0),
-                                    value: 0,
-                                    calldata: bytearray_new(0),
-                                    incomingRequest: verifiedMsg,
-                                }
-                            )
-                        );
+                    if let Some(txRequest) = translateSignedTx(msg) {
+                        return (None<IncomingRequest>, Some(txRequest));
                     }
                     // else signature was invalid, ignore msg and execute loop again to get another
                 } else {
-                    let ba = bytearray_unmarshalBytes(msg.msgData);
-                    if (firstByte == 0) {
-                        // it's an unsigned tx; compute unique requestId
-                        msg = msg with {
-                            requestId: uint(hashUnsignedL2messageInfo(
-                                msg.msgData,
-                                chainParams_chainId(),
-                                msg.sender
-                            ))
-                        };
+                    // subtype must be 0, 1, or 2
+                    if let Some(txRequest) = translateUnsignedTx(msg) {
+                        return (None<IncomingRequest>, Some(txRequest));
                     }
-                    let maxGas = bytearray_get256(ba, 1);
-                    return (
-                        None<IncomingRequest>,
-                        Some(
-                            struct {
-                                maxGas: maxGas,
-                                gasPrice: 0,
-                                seqNum: None<uint>,
-                                caller: msg.sender,
-                                calleeAddr: address(0),
-                                value: 0,
-                                calldata: bytearray_new(0),
-                                incomingRequest: msg,
-                            }
-                        )
-                    );
+                    // else request was malformatted, ignore it and execute loop again to get another
                 }
             } else {
                 return (Some(msg), None<TxRequestData>);
             }
         }
     }
+}
+
+func translateUnsignedTx(request: IncomingRequest) -> option<TxRequestData> {
+    let inStream = bytestream_new(bytearray_unmarshalBytes(request.msgData));
+    let (us, subtype) = bytestream_getByte(inStream)?;
+    inStream = us;
+
+    let (us, maxGas) = bytestream_get256(inStream)?;
+    inStream = us;
+
+    let (us, gasPrice) = bytestream_get256(inStream)?;
+    inStream = us;
+
+    let seqNum = None<uint>;
+    if (subtype == 0) {
+        let (us, sn) = bytestream_get256(inStream)?;
+        inStream = us;
+        seqNum = Some(sn);
+    }
+
+    let (us, destAddrAsUint) = bytestream_get256(inStream)?;
+    inStream = us;
+
+    let value = 0;
+    if (subtype != 2) {
+        let (us, val) = bytestream_get256(inStream)?;
+        inStream = us;
+        value = val;
+    }
+
+    let calldata = bytestream_getRemainingBytes(inStream);
+
+    return Some(
+        struct {
+            maxGas: maxGas,
+            gasPrice: gasPrice,
+            seqNum: seqNum,
+            caller: request.sender,
+            calleeAddr: address(destAddrAsUint),
+            value: value,
+            calldata: calldata,
+            incomingRequest: request with {
+                requestId: uint(hashUnsignedL2messageInfo(
+                    request.msgData,
+                    chainParams_chainId(),
+                    request.sender
+                ))
+            },
+        }
+    );
 }
 

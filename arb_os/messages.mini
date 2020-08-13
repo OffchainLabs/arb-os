@@ -228,41 +228,23 @@ public impure func handleL2Request(
     inStream: ByteStream,
     request: TxRequestData
 ) -> option<()> {   // return None if message is malformatted; otherwise handle errors and return Some(()); if no error, never return
-    let (bs, msgType) = bytestream_getByte(inStream)?;
-    // skip maxGas and gasPriceBid fields of message
-    inStream = bytestream_skipBytes(bs, 64)?;
-
-    if ((msgType == 0) || (msgType == 4)){
-        let(bs, seqNum) = bytestream_get256(inStream)?;
-        inStream = bs;
-
-        if (verifyAndIncrSequenceNum(request.caller, seqNum) == None<()>) {
+    if let Some(sequenceNum) = request.seqNum {
+        if (verifyAndIncrSequenceNum(request.caller, sequenceNum) == None<()>) {
             // bad sequence number error
             emitLog(request.incomingRequest, 5, None<ByteArray>, None<EvmLogs>, 0, 0);
             return Some(());
         }
-        request = request with { seqNum: Some(seqNum) };
     }
 
-    let (bs, calleeAddressAsUint) = bytestream_get256(inStream)?;
-    inStream = bs;
-    request = request with { calleeAddr: address(calleeAddressAsUint) };
-
-    // Get value of Eth payment that accompanies the message.
-    if ( (msgType==0) || (msgType==1) || (msgType==4) ) {
-        let (bs, val) = bytestream_get256(inStream)?;
-        inStream = bs;
-        request = request with { value: val };
-    }
-
-    if (calleeAddressAsUint == 0) {
+    if (request.calleeAddr == address(0)) {
         // this is a constructor call
-        if (msgType == 2) {
+        if (request.incomingRequest.kind == 2) {
             // revert error (tried to call constructor in a non-mutating call)
             emitLog(request.incomingRequest, 1, None<ByteArray>, None<EvmLogs>, 0, 0);
             return Some(());
         }
-        let codeBytes = bytestream_getRemainingBytes(inStream);
+        let codeBytes = request.calldata;
+        request = request with { calldata: bytearray_new(0) };
         let (codept, evmJumpTable) = translateEvmCodeSegment(bytestream_new(codeBytes))?;
 
         if (request.seqNum == None<uint>) {
@@ -279,20 +261,10 @@ public impure func handleL2Request(
     } else {
         // this is a non-constructor call
         let callKind = 0;
-        if (msgType == 2) {
+        if (request.incomingRequest.kind == 2) {
             callKind = 3;  // staticcall
         }
 
-        let remainingCallData = bytestream_getRemainingBytes(inStream); // remaining bytes of message, to be passed to contract as calldata
-        if (msgType == 4) {
-            // strip off signature from end of calldata
-            remainingCallData = bytearray_extract(
-                remainingCallData,
-                0,
-                bytearray_size(remainingCallData)-65
-            );
-        }
-        request = request with { calldata: remainingCallData };
         initEvmCallStack(
             callKind,
             request

@@ -57,6 +57,18 @@ type IncomingRequest = struct {
     msgData: MarshalledBytes  // kind-specific data, as a marshalled bytearray
 }
 
+// TxRequestData is declared identically in message.mini and elsewhere.
+type TxRequestData = struct {
+    maxGas: uint,
+    gasPrice: uint,
+    seqNum: option<uint>,
+    caller: address,
+    calleeAddr: address,
+    value: uint,
+    calldata: ByteArray,
+    incomingRequest: IncomingRequest,
+}
+
 // A copy of this struct is defined in stdlib/rlp.mini.
 // The declaration there must remain consistent with the one here.
 type SignedTx = struct {
@@ -71,7 +83,7 @@ type SignedTx = struct {
     s: uint
 }
 
-public impure func translateSignedTx(req: IncomingRequest) -> option<IncomingRequest> {
+public impure func translateSignedTx(req: IncomingRequest) -> option<TxRequestData> {
     // Given an IncomingRequest that contains an L2 signed tx message, translate the
     //    L2 message from the RLP-encoded form it arrived in, into the old format which downstream code expects.
     // Also, check the signature on the tx, and set:
@@ -88,12 +100,19 @@ public impure func translateSignedTx(req: IncomingRequest) -> option<IncomingReq
     let newL2message = signedTxToUnsignedBytes(signedTx);
 
     return Some(
-        req with {
-            sender: signer
-        } with {
-            requestId: uint(rlpHash)
-        } with {
-            msgData: bytearray_marshalFull(newL2message)
+        struct {
+            maxGas: signedTx.gasLimit,
+            gasPrice: signedTx.gasPrice,
+            seqNum: Some(signedTx.seqNum),
+            caller: signer,
+            calleeAddr: signedTx.to,
+            value: signedTx.value,
+            calldata: signedTx.data,
+            incomingRequest: req with {
+                sender: signer
+            } with {
+                requestId: uint(rlpHash)
+            },
         }
     );
 }
