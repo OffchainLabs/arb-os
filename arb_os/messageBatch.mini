@@ -47,6 +47,7 @@ type IncomingRequest = struct {
 type MessageBatch = struct {
     template: IncomingRequest,
     stream: ByteStream,
+    numSoFar: uint,
 }
 
 public func messageBatch_tryNew(msg: IncomingRequest) -> option<MessageBatch> {
@@ -57,6 +58,7 @@ public func messageBatch_tryNew(msg: IncomingRequest) -> option<MessageBatch> {
             struct {
                 template: msg,
                 stream: stream,
+                numSoFar: 0,
             }
         );
     } else {
@@ -74,9 +76,13 @@ public func messageBatch_get(batch: MessageBatch) -> option<(IncomingRequest, Me
     return Some((
         batch.template with {
             msgData: bytearray_marshalFull(extractedL2data)
+        } with {
+            requestId: uint(hash(bytes32(batch.template.requestId), bytes32(batch.numSoFar)))
         },
         batch with {
-            stream : stream
+            stream: stream
+        } with {
+            numSoFar: batch.numSoFar + 1
         }
     ));
 }
