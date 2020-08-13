@@ -59,11 +59,10 @@ import func getArbInfoStorage() -> StorageMap;
 
 import impure func inbox_get() -> IncomingRequest;
 import impure func getNextMsgFromCongestionAuction() -> (
-    IncomingRequest,  // a message
     bool,           // was it approved for execution
-    uint,           // maxGas it's allowed to use
-    uint,           // gas price it will pay
-) ;
+    option<IncomingRequest>,  // if it was an L1 message
+    option<TxRequestData>,    // if it was an L2 tx message
+);
 import impure func handleL1Request(
     msg: IncomingRequest,
 ) -> option<()>; // return None if message format error; Some(()) if other error; if no error, never return
@@ -91,6 +90,7 @@ type IncomingRequest = struct {
     msgData: MarshalledBytes  // kind-specific data, as a marshalled bytearray
 }
 
+// TxRequestData is declared identically in message.mini and elsewhere.
 type TxRequestData = struct {
     maxGas: uint,
     gasPrice: uint,
@@ -120,34 +120,34 @@ impure func main() {
 
 public impure func mainRunLoop() {
     loop {
-        let (msg, approved, maxGas, gasPrice) = getNextMsgFromCongestionAuction();
-        if (approved) {
-            if (msg.kind == 3) {
-                if (handleL2Request(
-                        bytestream_new(bytearray_unmarshalBytes(msg.msgData)),
-                        struct {
-                            maxGas: maxGas,
-                            gasPrice: gasPrice,
-                            seqNum: None<uint>,
-                            caller: msg.sender,
-                            calleeAddr: address(0),
-                            value: 0,
-                            calldata: bytearray_new(0),
-                            incomingRequest: msg,
-                        }
-                    ) == None<()>) {
+        let (approved, maybeL1, maybeL2) = getNextMsgFromCongestionAuction();
+        if let Some(msg) = maybeL1 {
+            if (approved) {
+                if(handleL1Request(msg) == None<()>) {
                     // reject for message format error
                     emitLog(msg, 6, None<ByteArray>, None<EvmLogs>, None<GasUsage>);
                 }
-            } elseif(handleL1Request(msg) == None<()>) {
-                // reject for message format error
-                emitLog(msg, 6, None<ByteArray>, None<EvmLogs>, None<GasUsage>);
+            } else {
+                // reject for congestion error
+                emitLog(msg, 2, None<ByteArray>, None<EvmLogs>, None<GasUsage>);
             }
         } else {
-            // reject for congestion error
-            emitLog(msg, 2, None<ByteArray>, None<EvmLogs>, None<GasUsage>);
+            if let Some(request) = maybeL2 {
+                if (approved) {
+                    if (handleL2Request(
+                        bytestream_new(bytearray_unmarshalBytes(request.incomingRequest.msgData)),
+                        request
+                    ) == None<()>) {
+                        // reject for message format error
+                        emitLog(request.incomingRequest, 6, None<ByteArray>, None<EvmLogs>, None<GasUsage>);
+                    }
+                } else {
+                    // reject for congestion error
+                    emitLog(request.incomingRequest, 2, None<ByteArray>, None<EvmLogs>, None<GasUsage>);
+                }
+            } // else request was not identified as either L1 or L2, which should be impossible
         }
-        // if we reach here, message has already been rejected and log already sent
+        // if we reach here, message has already been handled and log already sent
     }
 }
 
