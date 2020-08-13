@@ -245,7 +245,9 @@ pub fn compile_from_folder(
             ),
         );
     }
-    Ok(programs.values().cloned().collect())
+    let mut output = vec![programs.remove("main.mini").expect("no main")];
+    output.append(&mut programs.values().cloned().collect());
+    Ok(output)
 }
 
 ///Converts source string `source` into a series of `TopLevelDecl`s, uses identifiers from
