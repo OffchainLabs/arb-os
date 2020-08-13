@@ -21,7 +21,7 @@ import func queue_get(q: Queue) -> option<(Queue, any)>;
 import func queue_put(q: Queue, val: any) -> Queue;
 
 import impure func chainParams_gotParamsMessage(sender: address, data: MarshalledBytes);
-import func chainParams_chainId() -> uint;
+import impure func chainParams_chainId() -> uint;
 
 import type MessageBatch;
 import func messageBatch_tryNew(msg: IncomingRequest) -> option<MessageBatch>;
@@ -41,7 +41,6 @@ import func bytestream_new(ba: ByteArray) -> ByteStream;
 import func bytestream_getByte(bs: ByteStream) -> option<(ByteStream, uint)>;
 import func bytestream_get256(bs: ByteStream) -> option<(ByteStream, uint)>;
 import func bytestream_getRemainingBytes(bs: ByteStream) -> ByteArray;
-
 
 import func hashUnsignedL2messageInfo(l2msg: MarshalledBytes, chainId: uint, sender: address) -> bytes32;
 import func translateSignedTx(req: IncomingRequest) -> option<TxRequestData>;
@@ -83,7 +82,9 @@ public impure func inbox_get() -> IncomingRequest {
         if (ebMsg.kind == 4) {
             chainParams_gotParamsMessage(ebMsg.sender, ebMsg.msgData);
         } else {
-            return ebMsg;
+            return ebMsg with {
+                requestId: uint(hash(bytes32(chainParams_chainId()), bytes32(ebMsg.requestId)))
+            };
         }
     }
 }
