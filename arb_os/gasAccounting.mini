@@ -246,14 +246,14 @@ type TxRequestData = struct {
     incomingRequest: IncomingRequest,
 }
 
-// The next section of code implements the congestion auction. For each tx request, the auction
-//     determines (a) whether to approve the tx for execution, and (b) what gas price the tx will pay.
-// This uses a "pull" interface: the main run loop calls this to get the next message.
-//     This code will in turn call back to the inbox to pull in incoming messages from the L1.
-// Eventually this component will pull in a group of messages from the inbox, run the congestion
+// The next section of code implements the congestion auction. For each request, the auction
+//     determines (a) whether to approve the request for execution, and (b) what gas price the request will pay.
+// This uses a "pull" interface: the main run loop calls this to get the next request.
+//     This code will in turn call back to the inbox to pull in incoming requests from the L1.
+// Eventually this component will pull in a group of requests from the inbox, run the congestion
 //     auction over them, then enqueue them to be eventually fetched by the main run loop.
-// For now, this approves every message, and charges zero gas price.
-public impure func getNextMsgFromCongestionAuction() -> (
+// For now, this approves every request, and charges zero gas price.
+public impure func getNextRequestFromCongestionAuction() -> (
     bool,           // was it approved for execution
     option<IncomingRequest>,  // if it was an L1 message
     option<TxRequestData>,    // if it was an L2 tx message

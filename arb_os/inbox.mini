@@ -171,7 +171,6 @@ public impure func inbox_getNextUnpackedRequest() -> (
     option<IncomingRequest>,  // if it was an L1 message
     option<TxRequestData>,    // if it was an L2 tx message
 ) {
-    // For now, the congestion auction is a no-op.  It just approves every message at zero gas price.
     let msg = unsafecast<IncomingRequest>(());   // value will be re-initialized before use
     loop {
         if let Some(res) = queue_get(globalQueueFromBatch) {

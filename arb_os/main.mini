@@ -58,7 +58,7 @@ import func getErc721storage() -> StorageMap;
 import func getArbInfoStorage() -> StorageMap;
 
 import impure func inbox_get() -> IncomingRequest;
-import impure func getNextMsgFromCongestionAuction() -> (
+import impure func getNextRequestFromCongestionAuction() -> (
     bool,           // was it approved for execution
     option<IncomingRequest>,  // if it was an L1 message
     option<TxRequestData>,    // if it was an L2 tx message
@@ -120,7 +120,7 @@ impure func main() {
 
 public impure func mainRunLoop() {
     loop {
-        let (approved, maybeL1, maybeL2) = getNextMsgFromCongestionAuction();
+        let (approved, maybeL1, maybeL2) = getNextRequestFromCongestionAuction();
         if let Some(msg) = maybeL1 {
             if (approved) {
                 if(handleL1Request(msg) == None<()>) {
