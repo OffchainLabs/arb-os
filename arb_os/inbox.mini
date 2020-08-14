@@ -32,6 +32,7 @@ import impure func outputStats_endOfBlock(blockNum: uint, timestamp: uint);
 import type ByteArray;
 import type MarshalledBytes;
 import func marshalledBytes_firstByte(mb: MarshalledBytes) -> uint;
+import func marshalledBytes_hash(mb: MarshalledBytes) -> bytes32;
 import func bytearray_unmarshalBytes(mb: MarshalledBytes) -> ByteArray;
 import func bytearray_new(capacityHint: uint) -> ByteArray;
 import func bytearray_get256(ba: ByteArray, offset: uint) -> uint;
@@ -254,6 +255,17 @@ func translateUnsignedTx(request: IncomingRequest) -> option<TxRequestData> {
 
     let calldata = bytestream_getRemainingBytes(inStream);
 
+    if (subtype == 0) {
+        request = request with {
+            requestId: uint(hash(
+                bytes32(request.sender),
+                hash(
+                    bytes32(chainParams_chainId()),
+                    marshalledBytes_hash(request.msgData)
+                )
+            ))
+        };
+    }
     return Some(
         struct {
             maxGas: maxGas,
