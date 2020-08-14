@@ -79,7 +79,8 @@ impl RuntimeEnvironment {
             Value::Int(self.next_inbox_seq_num.clone()),
             bytestack_from_bytes(msg),
         ]);
-        let msg_id = Uint256::avm_hash2(&Uint256::from_u64(self.chain_id), &self.next_inbox_seq_num);
+        let msg_id =
+            Uint256::avm_hash2(&Uint256::from_u64(self.chain_id), &self.next_inbox_seq_num);
         self.next_inbox_seq_num = self.next_inbox_seq_num.add(&Uint256::one());
         self.l1_inbox.push(l1_msg.clone());
         self.recorder.add_msg(l1_msg);
@@ -87,7 +88,18 @@ impl RuntimeEnvironment {
     }
 
     pub fn insert_l2_message(&mut self, sender_addr: Uint256, msg: &[u8]) -> Uint256 {
-        self.insert_l1_message(3, sender_addr, msg)
+        let default_id = self.insert_l1_message(3, sender_addr.clone(), msg);
+        if msg[0] == 0 {
+            Uint256::avm_hash2(
+                &sender_addr,
+                &Uint256::avm_hash2(
+                    &Uint256::from_u64(self.chain_id),
+                    &hash_bytestack(bytestack_from_bytes(msg)).unwrap(),
+                ),
+            )
+        } else {
+            default_id
+        }
     }
 
     pub fn insert_tx_message(
@@ -461,7 +473,6 @@ fn bytestack_build_uint(b: &[u8]) -> Value {
     Value::Int(ui)
 }
 
-#[cfg(test)]
 pub fn hash_bytestack(bs: Value) -> Option<Uint256> {
     if let Value::Tuple(tup) = bs {
         if let Value::Int(ui) = &tup[0] {
