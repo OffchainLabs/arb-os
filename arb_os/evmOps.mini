@@ -50,6 +50,7 @@ import impure func evmCallStack_returnFromCall(
     returnOffset: uint,
     returnLength: uint
 ) -> option<()>;
+import func evmCallStack_callHitError(reason: uint);
 
 import func evmCallFrame_runningAsAccount(frame: EvmCallFrame) -> Account;
 import func evmCallFrame_runningCodeFromAccount(frame: EvmCallFrame) -> Account;
@@ -426,14 +427,14 @@ public impure func evmOp_getjumpaddr(evm_pc: uint) -> impure func() {
                 return codept;
             } else {
                 evm_error();   // EVM code tried to jump to a forbidden EVM jump destination
-                errorHandler();
+                evmCallStack_callHitError(11);
                 panic;
             }
         }
     }
 
     evm_runtimePanic();
-    errorHandler();
+    evmCallStack_callHitError(12);
     panic;
 }
 
@@ -953,7 +954,7 @@ impure func evm_runtimePanic() {
     // This should be called when something that "shouldn't ever happen" has occurred.
     // It should only be called if something has gone wrong in the trusted code.
     // If untrusted code has encountered an error, that will be handled elsewhere.
-    errorHandler();
+    evmCallStack_callHitError(13);
     panic;
 }
 

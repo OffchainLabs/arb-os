@@ -18,7 +18,7 @@ use crate::mavm::Value;
 use crate::run::load_from_file;
 use crate::uint256::Uint256;
 use ethers_core::rand::thread_rng;
-use ethers_core::types::{Transaction, TransactionRequest};
+use ethers_core::types::TransactionRequest;
 use ethers_core::utils::keccak256;
 use ethers_signers::{Signer, Wallet};
 use serde::{Deserialize, Serialize};
@@ -70,7 +70,7 @@ impl RuntimeEnvironment {
         self.l1_inbox = contents;
     }
 
-    pub fn insert_l1_message(&mut self, msg_type: u8, sender_addr: Uint256, msg: &[u8]) {
+    pub fn insert_l1_message(&mut self, msg_type: u8, sender_addr: Uint256, msg: &[u8]) -> Uint256 {
         let l1_msg = Value::new_tuple(vec![
             Value::Int(Uint256::from_usize(msg_type as usize)),
             Value::Int(self.current_block_num.clone()),
@@ -79,13 +79,27 @@ impl RuntimeEnvironment {
             Value::Int(self.next_inbox_seq_num.clone()),
             bytestack_from_bytes(msg),
         ]);
+        let msg_id =
+            Uint256::avm_hash2(&Uint256::from_u64(self.chain_id), &self.next_inbox_seq_num);
         self.next_inbox_seq_num = self.next_inbox_seq_num.add(&Uint256::one());
         self.l1_inbox.push(l1_msg.clone());
         self.recorder.add_msg(l1_msg);
+        msg_id
     }
 
-    pub fn insert_l2_message(&mut self, sender_addr: Uint256, msg: &[u8]) {
-        self.insert_l1_message(3, sender_addr, msg);
+    pub fn insert_l2_message(&mut self, sender_addr: Uint256, msg: &[u8]) -> Uint256 {
+        let default_id = self.insert_l1_message(3, sender_addr.clone(), msg);
+        if msg[0] == 0 {
+            Uint256::avm_hash2(
+                &sender_addr,
+                &Uint256::avm_hash2(
+                    &Uint256::from_u64(self.chain_id),
+                    &hash_bytestack(bytestack_from_bytes(msg)).unwrap(),
+                ),
+            )
+        } else {
+            default_id
+        }
     }
 
     pub fn insert_tx_message(
@@ -106,15 +120,7 @@ impl RuntimeEnvironment {
         buf.extend(value.to_bytes_be());
         buf.extend_from_slice(data);
 
-        self.insert_l2_message(sender_addr.clone(), &buf);
-
-        Uint256::avm_hash2(
-            &sender_addr,
-            &Uint256::avm_hash2(
-                &Uint256::from_u64(self.chain_id),
-                &hash_bytestack(bytestack_from_bytes(&buf)).unwrap(),
-            ),
-        )
+        self.insert_l2_message(sender_addr.clone(), &buf)
     }
 
     pub fn new_batch(&self) -> Vec<u8> {
@@ -131,15 +137,7 @@ impl RuntimeEnvironment {
         calldata: Vec<u8>,
         wallet: &Wallet,
     ) -> (Vec<u8>, Vec<u8>) {
-        let mut buf = vec![4u8];
         let seq_num = self.get_and_incr_seq_num(&sender_addr);
-        buf.extend(max_gas.to_bytes_be());
-        buf.extend(gas_price_bid.to_bytes_be());
-        buf.extend(seq_num.to_bytes_be());
-        buf.extend(to_addr.to_bytes_be());
-        buf.extend(value.to_bytes_be());
-        buf.extend(calldata.clone());
-
         let tx_for_signing = TransactionRequest::new()
             .from(sender_addr.to_h160())
             .to(to_addr.to_h160())
@@ -149,9 +147,11 @@ impl RuntimeEnvironment {
             .data(calldata)
             .nonce(seq_num.to_u256());
         let tx = wallet.sign_transaction(tx_for_signing).unwrap();
-        let sig_bytes = get_signature_bytes(&tx);
-        buf.extend(sig_bytes.to_vec());
-        (buf, keccak256(&tx.rlp().0).to_vec())
+
+        let rlp_buf = tx.rlp().as_ref().to_vec();
+        let mut buf = vec![4u8];
+        buf.extend(rlp_buf.clone());
+        (buf, keccak256(&rlp_buf).to_vec())
     }
 
     pub fn append_signed_tx_message_to_batch(
@@ -438,14 +438,6 @@ impl ArbosReceipt {
     pub fn get_gas_used_so_far(&self) -> Uint256 {
         self.gas_so_far.clone()
     }
-}
-
-fn get_signature_bytes(tx: &Transaction) -> Vec<u8> {
-    let mut ret = Uint256::from_u256(&tx.r).to_bytes_be();
-    ret.extend(Uint256::from_u256(&tx.s).to_bytes_be());
-    let reduced_v = 1 - ((tx.v.as_u64()) % 2);
-    ret.extend(vec![reduced_v as u8]);
-    ret
 }
 
 pub fn bytestack_from_bytes(b: &[u8]) -> Value {
