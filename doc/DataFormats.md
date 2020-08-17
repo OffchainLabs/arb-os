@@ -263,8 +263,16 @@ There are four outgoing message types.
 * amount, in wei (uint)
 
 **Type 1: ERC20 Withdrawal** has type-specific data of:
+* token address(address encoded as uint), 
+* destination address(address encoded as uint),
+*  amount (uint)
 
 **Type 2: ERC721 Withdrawal** has type-specific data of:
 
-**Type 5: Buddy contract notification** has type-specific data of:
+* token address(address encoded as uint), 
+* destination address(address encoded as uint),
+*  token ID (uint)
+
+**Type 5: Buddy contract notification** has no type-specific data.
+
 
