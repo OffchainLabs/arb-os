@@ -183,17 +183,19 @@ public impure func initEvmCallStack(
         )
     ) {
         if (gasAccounting_startTxCharges(request.maxGas, request.gasPrice, request.caller) != None<()>) {
-            // increment the caller's sequence number, unconditionally
+            // increment the caller's sequence number, if caller has sufficient balance
             let acctStore = getGlobalAccountStore();
-            setGlobalAccountStore(
-                accountStore_set(
-                    acctStore,
-                    request.caller,
-                    account_incrSeqNum(
-                        accountStore_get(acctStore, request.caller)
+            if (account_getBalance(accountStore_get(acctStore, request.caller)) >= request.value) {
+                setGlobalAccountStore(
+                    accountStore_set(
+                        acctStore,
+                        request.caller,
+                        account_incrSeqNum(
+                            accountStore_get(acctStore, request.caller)
+                        )
                     )
-                )
-            );
+                );
+            }
 
             globalCurrentEthMessage = request.incomingRequest;
 
@@ -241,6 +243,21 @@ public impure func initEvmCallStack(
         }
     } else {
         // no contract at this address, so treat tx as a simple eth transfer
+
+        // increment the caller's sequence number, if caller has sufficient balance
+        let acctStore = getGlobalAccountStore();
+        if (account_getBalance(accountStore_get(acctStore, request.caller)) >= request.value) {
+            setGlobalAccountStore(
+                accountStore_set(
+                    acctStore,
+                    request.caller,
+                    account_incrSeqNum(
+                        accountStore_get(acctStore, request.caller)
+                    )
+                )
+            );
+        }
+
         if (request.value > 0) {
             // transfer value to destination address
             if let Some(globalAS) = accountStore_transferEthBalance(
