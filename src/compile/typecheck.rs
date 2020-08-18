@@ -441,6 +441,85 @@ fn builtin_func_decls(mut string_table: StringTable) -> (Vec<ImportFuncDecl>, St
     (imps, string_table)
 }
 
+///Sorts the `TopLevelDecl`s into collections based on their type
+pub fn sort_top_level_decls(
+    decls: &[TopLevelDecl],
+    string_table_in: StringTable,
+) -> (
+    Vec<Import>,
+    Vec<ImportedFunc>,
+    Vec<FuncDecl>,
+    HashMap<usize, Type>,
+    HashMap<usize, Type>,
+    Vec<GlobalVarDecl>,
+    HashMap<usize, (Type, usize)>,
+    StringTable,
+) {
+    let mut imports = vec![];
+    let mut imported_funcs = Vec::new();
+    let mut funcs = Vec::new();
+    let mut named_types = HashMap::new();
+    let mut hm = HashMap::new();
+    let mut global_vars = Vec::new();
+    let mut global_vars_map = HashMap::new();
+
+    let (builtin_fds, string_table) = builtin_func_decls(string_table_in);
+    for fd in builtin_fds.iter() {
+        hm.insert(fd.name, fd.tipe.clone());
+        imported_funcs.push(ImportedFunc::new(
+            imported_funcs.len(),
+            fd.name,
+            &string_table,
+            fd.arg_types.clone(),
+            fd.ret_type.clone(),
+            fd.is_impure,
+        ));
+    }
+    for decl in decls.iter() {
+        match decl {
+            TopLevelDecl::TypeDecl(td) => {
+                named_types.insert(td.name, td.tipe.clone());
+            }
+            TopLevelDecl::FuncDecl(fd) => {
+                funcs.push(fd.clone());
+                hm.insert(fd.name, fd.tipe.clone());
+            }
+            TopLevelDecl::VarDecl(vd) => {
+                let slot_num = global_vars.len();
+                global_vars.push(vd.clone());
+                global_vars_map.insert(vd.name, (vd.tipe.clone(), slot_num));
+            }
+            TopLevelDecl::ImpFuncDecl(fd) => {
+                hm.insert(fd.name, fd.tipe.clone());
+                imported_funcs.push(ImportedFunc::new(
+                    imported_funcs.len(),
+                    fd.name,
+                    &string_table,
+                    fd.arg_types.clone(),
+                    fd.ret_type.clone(),
+                    fd.is_impure,
+                ));
+            }
+            TopLevelDecl::ImpTypeDecl(itd) => {
+                named_types.insert(itd.name, itd.tipe.clone());
+            }
+            TopLevelDecl::UseDecl(path, filename) => {
+                imports.push(Import::new(path.clone(), filename.clone()));
+            }
+        }
+    }
+    (
+        imports,
+        imported_funcs,
+        funcs,
+        named_types,
+        hm,
+        global_vars,
+        global_vars_map,
+        string_table,
+    )
+}
+
 ///Converts the `TopLevelDecl`s in decls into corresponding type checked variants.
 ///
 ///If successful, `ExportedFunc`, `ImportedFunc`, and `GlobalVarDecl` are returned directly, along
@@ -459,64 +538,20 @@ pub fn typecheck_top_level_decls(
     ),
     TypeError,
 > {
-    let mut imports = vec![];
+    let (
+        imports,
+        imported_funcs,
+        funcs,
+        named_types,
+        hm,
+        global_vars,
+        global_vars_map,
+        string_table,
+    ) = sort_top_level_decls(decls, string_table_in.clone());
     let mut exported_funcs = Vec::new();
-    let mut imported_funcs = Vec::new();
-    let mut funcs = Vec::new();
-    let mut named_types = HashMap::new();
-    let mut hm = HashMap::new();
-    let mut global_vars = Vec::new();
-    let mut global_vars_map = HashMap::new();
-
-    let (builtin_fds, string_table) = builtin_func_decls(string_table_in);
-    for fd in builtin_fds.iter() {
-        hm.insert(fd.name, &fd.tipe);
-        imported_funcs.push(ImportedFunc::new(
-            imported_funcs.len(),
-            fd.name,
-            &string_table,
-            fd.arg_types.clone(),
-            fd.ret_type.clone(),
-            fd.is_impure,
-        ));
-    }
-    for decl in decls.iter() {
-        match decl {
-            TopLevelDecl::TypeDecl(td) => {
-                named_types.insert(td.name, &td.tipe);
-            }
-            TopLevelDecl::FuncDecl(fd) => {
-                funcs.push(fd);
-                hm.insert(fd.name, &fd.tipe);
-            }
-            TopLevelDecl::VarDecl(vd) => {
-                let slot_num = global_vars.len();
-                global_vars.push(vd);
-                global_vars_map.insert(vd.name, (vd.tipe.clone(), slot_num));
-            }
-            TopLevelDecl::ImpFuncDecl(fd) => {
-                hm.insert(fd.name, &fd.tipe);
-                imported_funcs.push(ImportedFunc::new(
-                    imported_funcs.len(),
-                    fd.name,
-                    &string_table,
-                    fd.arg_types.clone(),
-                    fd.ret_type.clone(),
-                    fd.is_impure,
-                ));
-            }
-            TopLevelDecl::ImpTypeDecl(itd) => {
-                named_types.insert(itd.name, &itd.tipe);
-            }
-            TopLevelDecl::UseDecl(path, filename) => {
-                imports.push(Import::new(path.clone(), filename.clone()));
-            }
-        }
-    }
 
     let type_table = SymTable::<Type>::new();
-    let type_table = type_table.push_multi(named_types);
-    let type_table = type_table.push_multi(hm.clone());
+    let type_table = type_table.push_multi(named_types.iter().map(|(k, v)| (*k, v)).collect());
 
     let mut resolved_global_vars_map = HashMap::new();
     for (name, (tipe, slot_num)) in global_vars_map {
@@ -524,7 +559,7 @@ pub fn typecheck_top_level_decls(
     }
 
     let func_table = SymTable::<Type>::new();
-    let func_table = func_table.push_multi(hm);
+    let func_table = func_table.push_multi(hm.iter().map(|(k, v)| (*k, v)).collect());
 
     for func in funcs.iter() {
         match func.resolve_types(&type_table, func.location) {
