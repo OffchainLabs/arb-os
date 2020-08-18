@@ -16,7 +16,7 @@
 
 import type ByteStream;
 
-import impure func errorHandler();
+import func evmCallStack_callHitError(reason: uint);
 
 import func bytestream_atEof(bs: ByteStream) -> bool;
 import func bytestream_bytesReadSoFar(bs: ByteStream) -> uint;
@@ -340,7 +340,7 @@ public impure func translateEvmCodeSegment(
                                 ));
                             } else {
                                 // should never happen; pushEvmInsnCall always returns Some
-                                errorHandler();
+                                evmCallStack_callHitError(16);
                                 return None;
                             }
                         }

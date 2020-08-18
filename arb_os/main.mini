@@ -18,7 +18,6 @@ import type AccountStore;
 import type MarshalledBytes;
 import type ByteArray;
 import type ByteStream;
-import type IncomingRequest;
 import type EvmLogs;
 import type GasUsage;
 import type StorageMap;
@@ -45,6 +44,7 @@ import func accountStore_createAccountFromEvmCode(
 import impure func translateEvmCodeSegment(
     bs: ByteStream
 ) -> option<(impure func(), map<uint, impure func()>)>;
+import func bytearray_new(capacityHint: uint) -> ByteArray;
 import func bytearray_unmarshalBytes(mb: MarshalledBytes) -> ByteArray;
 import func bytestream_new(ba: ByteArray) -> ByteStream;
 import func getErc20code() -> MarshalledBytes;
@@ -58,16 +58,17 @@ import func getErc721storage() -> StorageMap;
 import func getArbInfoStorage() -> StorageMap;
 
 import impure func inbox_get() -> IncomingRequest;
-import impure func getNextMsgFromCongestionAuction() -> (
-    IncomingRequest,  // a message
+import impure func getNextRequestFromCongestionAuction() -> (
     bool,           // was it approved for execution
-    uint,           // maxGas it's allowed to use
-    uint,           // gas price it will pay
-) ;
-import impure func handleIncomingRequest(
+    option<IncomingRequest>,  // if it was an L1 message
+    option<TxRequestData>,    // if it was an L2 tx message
+);
+import impure func handleL1Request(
     msg: IncomingRequest,
-    maxGas: uint,
-    gasPrice: uint
+) -> option<()>; // return None if message format error; Some(()) if other error; if no error, never return
+import impure func handleL2Request(
+    inStream: ByteStream,
+    request: TxRequestData
 ) -> option<()>; // return None if message format error; Some(()) if other error; if no error, never return
 import impure func emitLog(
     l1message: IncomingRequest,
@@ -77,6 +78,29 @@ import impure func emitLog(
     gasUsage: option<GasUsage>,
 );
 import impure func arbsys_txcall();
+
+// This structure defines an incoming request.
+// It is declared identically in inbox.mini and elsewhere.
+type IncomingRequest = struct {
+    kind: uint,               // type of message
+    blockNumber: uint,        // block number of the L1 block
+    timestamp: uint,          // timestamp of the L1 block
+    sender: address,          // address of the sender
+    requestId: uint,
+    msgData: MarshalledBytes  // kind-specific data, as a marshalled bytearray
+}
+
+// TxRequestData is declared identically in message.mini and elsewhere.
+type TxRequestData = struct {
+    maxGas: uint,
+    gasPrice: uint,
+    seqNum: option<uint>,
+    caller: address,
+    calleeAddr: address,
+    value: uint,
+    calldata: ByteArray,
+    incomingRequest: IncomingRequest,
+}
 
 
 impure func main() {
@@ -96,17 +120,34 @@ impure func main() {
 
 public impure func mainRunLoop() {
     loop {
-        let (msg, approved, maxGas, gasPrice) = getNextMsgFromCongestionAuction();
-        if (approved) {
-            if (handleIncomingRequest(msg, maxGas, gasPrice) == None<()>) {
-                // reject for message format error
-                emitLog(msg, 6, None<ByteArray>, None<EvmLogs>, None<GasUsage>);
+        let (approved, maybeL1, maybeL2) = getNextRequestFromCongestionAuction();
+        if let Some(msg) = maybeL1 {
+            if (approved) {
+                if(handleL1Request(msg) == None<()>) {
+                    // reject for message format error
+                    emitLog(msg, 6, None<ByteArray>, None<EvmLogs>, None<GasUsage>);
+                }
+            } else {
+                // reject for congestion error
+                emitLog(msg, 2, None<ByteArray>, None<EvmLogs>, None<GasUsage>);
             }
         } else {
-            // reject for congestion error
-            emitLog(msg, 2, None<ByteArray>, None<EvmLogs>, None<GasUsage>);
+            if let Some(request) = maybeL2 {
+                if (approved) {
+                    if (handleL2Request(
+                        bytestream_new(bytearray_unmarshalBytes(request.incomingRequest.msgData)),
+                        request
+                    ) == None<()>) {
+                        // reject for message format error
+                        emitLog(request.incomingRequest, 6, None<ByteArray>, None<EvmLogs>, None<GasUsage>);
+                    }
+                } else {
+                    // reject for congestion error
+                    emitLog(request.incomingRequest, 2, None<ByteArray>, None<EvmLogs>, None<GasUsage>);
+                }
+            } // else request was not identified as either L1 or L2, which should be impossible
         }
-        // if we reach here, message has already been rejected and log already sent
+        // if we reach here, message has already been handled and log already sent
     }
 }
 

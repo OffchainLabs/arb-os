@@ -30,6 +30,7 @@ import func bytearray_copy(from: ByteArray, fromOffset: uint, to: ByteArray, toO
 
 import func bytestream_getByte(bs: ByteStream) -> option<(ByteStream, uint)>;
 import func bytestream_get256(bs: ByteStream) -> option<(ByteStream, uint)>;
+import func bytestream_skipBytes(bs: ByteStream, nbytes: uint) -> option<ByteStream>;
 
 import impure func keccak256(ba: ByteArray, offset: uint, nbytes: uint) -> bytes32;
 import func hasher_new() -> Hasher;
@@ -38,6 +39,19 @@ import func hasher_pushN_le(h: Hasher, val: uint, nbytes: uint) -> Hasher;
 import func hasher_pushN_be(h: Hasher, val: uint, nbytes: uint) -> Hasher;
 import func hasher_finish(h: Hasher) -> bytes32;
 
+// This is a copy of a struct defined in ArbOS/signedTx.mini.
+// The declaration here must remain consistent with the one there.
+type SignedTx = struct {
+    seqNum: uint,
+    gasPrice: uint,
+    gasLimit: uint,
+    to: address,
+    value: uint,
+    data: ByteArray,
+    v: uint,
+    r: uint,
+    s: uint
+}
 
 func rlp_uintSize(val: uint) -> uint {
     if (val <= 0x7f) {
@@ -317,26 +331,16 @@ public func rlp_encodeMessageInfo(
     }
 }
 
-public func rlp_encodeAndHashMessageInfo(
-    seqNum: uint,
-    gasPrice: uint,
-    gasLimit: uint,
-    to: address,
-    value: uint,
-    data: ByteArray,
-    v: uint,
-    r: uint,
-    s: uint
-) -> bytes32 {
-    let contentsSize = rlp_uintSize(seqNum)
-                     + rlp_uintSize(gasPrice)
-                     + rlp_uintSize(gasLimit)
-                     + rlp_addressSize(to)
-                     + rlp_uintSize(value)
-                     + rlp_bytesSize(data, 0, bytearray_size(data))
-                     + rlp_uintSize(v)
-                     + rlp_uintSize(r)
-                     + rlp_uintSize(s);
+public func rlp_encodeAndHashMessageInfo(tx: SignedTx) -> bytes32 {
+    let contentsSize = rlp_uintSize(tx.seqNum)
+                     + rlp_uintSize(tx.gasPrice)
+                     + rlp_uintSize(tx.gasLimit)
+                     + rlp_addressSize(tx.to)
+                     + rlp_uintSize(tx.value)
+                     + rlp_bytesSize(tx.data, 0, bytearray_size(tx.data))
+                     + rlp_uintSize(tx.v)
+                     + rlp_uintSize(tx.r)
+                     + rlp_uintSize(tx.s);
 
     let hasher = hasher_new();
 
@@ -355,17 +359,53 @@ public func rlp_encodeAndHashMessageInfo(
     }
 
     // hash in contents
-    hasher = rlp_hashUint(hasher, seqNum);
-    hasher = rlp_hashUint(hasher, gasPrice);
-    hasher = rlp_hashUint(hasher, gasLimit);
-    hasher = rlp_hashAddress(hasher, to);
-    hasher = rlp_hashUint(hasher, value);
-    hasher = rlp_hashBytes(hasher, data, 0, bytearray_size(data));
-    hasher = rlp_hashUint(hasher, v);
-    hasher = rlp_hashUint(hasher, r);
-    hasher = rlp_hashUint(hasher, s);
+    hasher = rlp_hashUint(hasher, tx.seqNum);
+    hasher = rlp_hashUint(hasher, tx.gasPrice);
+    hasher = rlp_hashUint(hasher, tx.gasLimit);
+    hasher = rlp_hashAddress(hasher, tx.to);
+    hasher = rlp_hashUint(hasher, tx.value);
+    hasher = rlp_hashBytes(hasher, tx.data, 0, bytearray_size(tx.data));
+    hasher = rlp_hashUint(hasher, tx.v);
+    hasher = rlp_hashUint(hasher, tx.r);
+    hasher = rlp_hashUint(hasher, tx.s);
 
     return hasher_finish(hasher);
+}
+
+public func rlp_decodeMessageInfo(inStream: ByteStream) -> option<(ByteStream, SignedTx)> {
+    // read and discard the list header info (which we don't need)
+    let (us, firstByte) = bytestream_getByte(inStream)?;
+    inStream = us;
+    if (firstByte > 0xf7) {
+        inStream = bytestream_skipBytes(inStream, firstByte-0xf7)?;
+    }
+
+    let (us, seqNum) = rlp_decodeUint(inStream)?;
+    let (us, gasPrice) = rlp_decodeUint(us)?;
+    let (us, gasLimit) = rlp_decodeUint(us)?;
+    let (us, to) = rlp_decodeAddress(us)?;
+    let (us, value) = rlp_decodeUint(us)?;
+    let (us, data) = rlp_decodeBytes(us)?;
+    let (us, v) = rlp_decodeUint(us)?;
+    let (us, r) = rlp_decodeUint(us)?;
+    let (us, s) = rlp_decodeUint(us)?;
+
+    return Some(
+        (
+            us,
+            struct {
+                seqNum: seqNum,
+                gasPrice: gasPrice,
+                gasLimit: gasLimit,
+                to: to,
+                value: value,
+                data: data,
+                v: v,
+                r: r,
+                s: s,
+            }
+        )
+    );
 }
 
 func copyFromStreamToArray(
