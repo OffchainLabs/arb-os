@@ -267,11 +267,6 @@ public impure func handleL2Request(
             request
         );  // should never return
     } else {
-        if (isBuddyLaunch) {
-            // buddy launch messages must be sent to address zero
-            return None;
-        }
-
         // this is a non-constructor call
         let callKind = 0;
         if (request.incomingRequest.kind == 2) {

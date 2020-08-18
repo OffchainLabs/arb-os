@@ -195,7 +195,7 @@ public impure func initEvmCallStack(
         )
     ) {
         if (gasAccounting_startTxCharges(request.maxGas, request.gasPrice, request.caller) != None<()>) {
-            globalCurrentEthMessage = request.incomingRequest;
+            globalCurrentIncomingRequest = request.incomingRequest;
 
             // pay callvalue from caller to the called contract
             // payment will only be recorded inside the callframe, so it will be discarded if the call reverts
@@ -278,7 +278,7 @@ public impure func initEvmCallStackForConstructor(
     // The constructor will run, and (if it succeeds) it will return code, which will become the new
     //      code for this new account.
 
-    globalCurrentEthMessage = request.incomingRequest;
+    globalCurrentIncomingRequest = request.incomingRequest;
 
     // Create a new account to run the constructor code.
     let acctStore = accountStore_set(

@@ -88,8 +88,17 @@ impl RuntimeEnvironment {
         msg_id
     }
 
-    pub fn insert_l2_message(&mut self, sender_addr: Uint256, msg: &[u8], is_buddy_deploy: bool) -> Uint256 {
-        let default_id = self.insert_l1_message(if is_buddy_deploy { 5 } else { 3 }, sender_addr.clone(), msg);
+    pub fn insert_l2_message(
+        &mut self,
+        sender_addr: Uint256,
+        msg: &[u8],
+        is_buddy_deploy: bool,
+    ) -> Uint256 {
+        let default_id = self.insert_l1_message(
+            if is_buddy_deploy { 5 } else { 3 },
+            sender_addr.clone(),
+            msg,
+        );
         if msg[0] == 0 {
             Uint256::avm_hash2(
                 &sender_addr,
@@ -200,7 +209,7 @@ impl RuntimeEnvironment {
     }
 
     pub fn insert_batch_message(&mut self, sender_addr: Uint256, batch: &[u8]) {
-        self.insert_l2_message(sender_addr, batch, None);
+        self.insert_l2_message(sender_addr, batch, false);
     }
 
     pub fn _insert_nonmutating_call_message(
@@ -216,7 +225,7 @@ impl RuntimeEnvironment {
         buf.extend(to_addr.to_bytes_be());
         buf.extend_from_slice(data);
 
-        self.insert_l2_message(sender_addr, &buf, None);
+        self.insert_l2_message(sender_addr, &buf, false);
     }
 
     pub fn insert_erc20_deposit_message(
