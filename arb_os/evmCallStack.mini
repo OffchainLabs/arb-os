@@ -210,7 +210,7 @@ public impure func initEvmCallStack(
                 );
             }
 
-            globalCurrentEthMessage = request.incomingRequest;
+            globalCurrentIncomingRequest = request.incomingRequest;
 
             // pay callvalue from caller to the called contract
             // payment will only be recorded inside the callframe, so it will be discarded if the call reverts
