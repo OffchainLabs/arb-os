@@ -153,6 +153,12 @@ public func account_fetchAndIncrSeqNum(account: Account) -> (uint, Account) {
     return (ret, account,);
 }
 
+public func account_incrSeqNum(account: Account) -> Account {
+    return account with {
+        nextSeqNum: account.nextSeqNum + 1
+    };
+}
+
 public func account_getNextSeqNum(account: Account) -> uint {
     return account.nextSeqNum;
 }
