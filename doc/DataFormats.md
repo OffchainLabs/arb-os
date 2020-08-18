@@ -220,7 +220,7 @@ Possible return codes are:
 	6: message format error
 	255: unknown error
 
-EVM logs are formatted as [TODO]
+EVM logs are formatted as an EVM value, as a linked list in reverse order, such as this: (*log3*, (*log2*, (*log1*, (*log0*, () ) ) ) ). In this example there are four EVM log items, with the first one being *log0* and the last being *log3*.  Each EVM log is structured as an AVM tuple *(address, marshalledData, topic0, topic1, ...)*, with as many topics as are present in that particular EVM log item.
 
 ##### Request IDs
 
@@ -241,7 +241,7 @@ For other transactions, the requestID is computed from incoming message contents
 
 It is infeasible to find two distinct requests that will have the same requestID.  This is true because requestIDs are the output of a collision-free hash function, and it is not possible to create two distinct requests that will have the same input to the hash function.  Signed transaction IDs cannot collide with the other types, because the other types' hash preimages both start with a zero byte (because sender address and chainID are zero-filled in the most-significant byte of a big-endian value) and the RLP encoding of a list cannot start with a zero byte.  The other two types cannot have the same hash preimage because subtype-0 messages use a hash output as their second word, which with overwhelming probabilit will be too large to be feasible as the sequence number or batch index that occupies the same position in the default request ID scheme.
 
-##### MarshalledDataHash algorithm
+##### MarshalledData and the MarshalledDataHash algorithm
 
 TODO
 
