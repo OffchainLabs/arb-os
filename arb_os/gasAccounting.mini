@@ -104,6 +104,8 @@ public impure func gasAccounting_startTxCharges(
     // Start charging a new Tx for ArbGas usage
     // The caller should already have verified that the payer has enough funds, but we'll return None if not.
 
+    let _ = switchToChargingOS();   // ignore return value; purpose is to avoid error if already charging a tx
+
     if (maxGas >= asm(255, 1) uint { shl }) {
         maxGas = asm(255, 1) uint { shl } - 1;
     }
