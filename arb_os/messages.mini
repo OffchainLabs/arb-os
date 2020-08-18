@@ -45,6 +45,8 @@ import func account_checkAndIncrSeqNum(
     seqNumRecvd: uint
 ) -> option<Account>;
 import func account_fetchAndIncrSeqNum(account: Account) -> (uint, Account);
+import func account_incrSeqNum(account: Account) -> Account;
+import func account_getNextSeqNum(account: Account) -> uint;
 import func account_addToEthBalance(account: Account, addition: uint) -> Account;
 import func account_getStartCodePoint(acct: Account) -> option<impure func()>;
 
@@ -229,7 +231,9 @@ public impure func handleL2Request(
     request: TxRequestData
 ) -> option<()> {   // return None if message is malformatted; otherwise handle errors and return Some(()); if no error, never return
     if let Some(sequenceNum) = request.seqNum {
-        if (verifyAndIncrSequenceNum(request.caller, sequenceNum) == None<()>) {
+        if (account_getNextSeqNum(
+                accountStore_get(getGlobalAccountStore(), request.caller)
+            ) != sequenceNum) {
             // bad sequence number error
             emitLog(request.incomingRequest, 5, None<ByteArray>, None<EvmLogs>, 0, 0);
             return Some(());
@@ -243,6 +247,19 @@ public impure func handleL2Request(
             emitLog(request.incomingRequest, 1, None<ByteArray>, None<EvmLogs>, 0, 0);
             return Some(());
         }
+
+        // increment the caller's sequence number, unconditionally
+        let acctStore = getGlobalAccountStore();
+        setGlobalAccountStore(
+            accountStore_set(
+                acctStore,
+                request.caller,
+                account_incrSeqNum(
+                    accountStore_get(acctStore, request.caller)
+                )
+            )
+        );
+
         let codeBytes = request.calldata;
         request = request with { calldata: bytearray_new(0) };
         let (codept, evmJumpTable) = translateEvmCodeSegment(bytestream_new(codeBytes))?;
