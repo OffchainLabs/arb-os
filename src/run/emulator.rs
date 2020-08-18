@@ -516,6 +516,7 @@ impl ProfilerData {
                 .into_iter()
                 .map(|(cpt, (gas, loc))| (gas, (cpt, loc)))
                 .collect();
+            let total_callers = callers.iter().map(|x|*x.0).sum::<u64>();
             for (gas, (caller, location)) in callers.into_iter().rev() {
                 if let Some(loc) = location {
                     println!(
@@ -538,6 +539,7 @@ impl ProfilerData {
                 .into_iter()
                 .map(|(cpt, (gas, loc))| (gas, (cpt, loc)))
                 .collect();
+            let total_called = called.iter().map(|x| *x.0).sum::<u64>();
             for (gas, (called, location)) in called.into_iter().rev() {
                 if let Some(loc) = location {
                     println!(
@@ -552,6 +554,9 @@ impl ProfilerData {
                 } else {
                     println!("    Calls unknown func at {:?}, for {}", called, gas);
                 }
+            }
+            if total_callers != total_called + *in_func_gas {
+                println!("Invariant fails: {} {}", total_callers, total_called + *in_func_gas)
             }
         }
         let file_gas_costs: Vec<(String, u64)> = self
