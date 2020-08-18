@@ -61,6 +61,7 @@ import func account_setContractInfo(
     storage: StorageMap
 ) -> Account;
 import func account_fetchAndIncrSeqNum(account: Account) -> (uint, Account);
+import func account_incrSeqNum(account: Account) -> Account;
 import func pristineAccount(addr: address) -> Account;
 
 import func evmlogs_empty() -> EvmLogs;
@@ -195,7 +196,21 @@ public impure func initEvmCallStack(
         )
     ) {
         if (gasAccounting_startTxCharges(request.maxGas, request.gasPrice, request.caller) != None<()>) {
-            globalCurrentIncomingRequest = request.incomingRequest;
+            // increment the caller's sequence number, if caller has sufficient balance
+            let acctStore = getGlobalAccountStore();
+            if (account_getBalance(accountStore_get(acctStore, request.caller)) >= request.value) {
+                setGlobalAccountStore(
+                    accountStore_set(
+                        acctStore,
+                        request.caller,
+                        account_incrSeqNum(
+                            accountStore_get(acctStore, request.caller)
+                        )
+                    )
+                );
+            }
+
+            globalCurrentEthMessage = request.incomingRequest;
 
             // pay callvalue from caller to the called contract
             // payment will only be recorded inside the callframe, so it will be discarded if the call reverts
@@ -205,6 +220,7 @@ public impure func initEvmCallStack(
                 request.calleeAddr,
                 request.value
             ) {
+
                 globalCallStack = Some(struct {
                     runningAs: request.calleeAddr,
                     runningCodeFrom: request.calleeAddr,
@@ -240,6 +256,21 @@ public impure func initEvmCallStack(
         }
     } else {
         // no contract at this address, so treat tx as a simple eth transfer
+
+        // increment the caller's sequence number, if caller has sufficient balance
+        let acctStore = getGlobalAccountStore();
+        if (account_getBalance(accountStore_get(acctStore, request.caller)) >= request.value) {
+            setGlobalAccountStore(
+                accountStore_set(
+                    acctStore,
+                    request.caller,
+                    account_incrSeqNum(
+                        accountStore_get(acctStore, request.caller)
+                    )
+                )
+            );
+        }
+
         if (request.value > 0) {
             // transfer value to destination address
             if let Some(globalAS) = accountStore_transferEthBalance(
