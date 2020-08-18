@@ -16,6 +16,8 @@
 
 import func array_resize(a: []PqItem, newSize: uint, baseVal: any) -> []PqItem;
 
+// a priority queue, with highest priority items returns first
+
 type PqItem = struct {
     priority: uint,
     item: any,
@@ -41,6 +43,14 @@ public func priorityq_isEmpty(pq: PriorityQ) -> bool {
 
 public func priorityq_size(pq: PriorityQ) -> uint {
     return pq.size;
+}
+
+public func priorityq_peek(pq: PriorityQ) -> option<any> {
+    if (priorityq_isEmpty(pq)) {
+        return None;
+    } else {
+        return Some(pq.contents[0].item);
+    }
 }
 
 public func priorityq_get(pq: PriorityQ) -> option<(any, PriorityQ)> {
