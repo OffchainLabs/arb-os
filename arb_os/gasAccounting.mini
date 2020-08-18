@@ -38,13 +38,21 @@ import func queue_isEmpty(q: Queue) -> bool;
 import func queue_put(q: Queue, item: any) -> Queue;
 import func queue_get(q: Queue) -> option<(Queue, any)>;
 
-import func inbox_getNextUnpackedRequest() -> (option<IncomingRequest>, option<TxRequestData>);
+import impure func inbox_getNextUnpackedRequest() -> (option<IncomingRequest>, option<TxRequestData>);
+import impure func inbox_currentTimestamp() -> uint;
 
+
+type ReimbursementRates = struct {
+    weiPerSecond: uint,
+    weiPerArbGas: uint,
+}
 
 var gasAccountingInfo: struct {
-    gasUsedByOS: uint,            // amount of gas used by OS that validators haven't yet been compensated for
+    weiOwedForOverhead: uint,     // amount of currency that needs to be collected to cover overhead
     weiCollectedFromTxs: uint,    // amount of currency collected from txs but not yet paid out to validators
     txState: option<TxGasState>,  // status of currently active tx (if there is one)
+    reimbursementRates: ReimbursementRates,
+    lastTimestamp: option<uint>,  // last timestamp seen in a block
 };
 
 type TxGasState = struct {
@@ -62,9 +70,14 @@ type GasUsage = struct {
 
 public impure func gasAccounting_init() {
     gasAccountingInfo = struct {
-        gasUsedByOS: 0,
+        weiOwedForOverhead: 0,
         weiCollectedFromTxs: 0,
         txState: None<TxGasState>,
+        reimbursementRates: struct {
+            weiPerSecond: 0,
+            weiPerArbGas: 0,
+        },
+        lastTimestamp: None<uint>,
     };
 }
 
@@ -109,8 +122,9 @@ public impure func gasAccounting_startTxCharges(
         )
     );
 
+    let gasUsed = (~0) - asm() uint { getgas };
     gasAccountingInfo = gasAccountingInfo with {
-        gasUsedByOS: gasAccountingInfo.gasUsedByOS + ((~0) - asm() uint { getgas })
+        weiOwedForOverhead: gasAccountingInfo.weiOwedForOverhead + gasUsed * gasAccountingInfo.reimbursementRates.weiPerArbGas
     } with {
         txState: Some(struct {
             gasInReserve: 0,
@@ -153,6 +167,19 @@ public impure func gasAccounting_endTxCharges() -> option<GasUsage> {
     } with {
         txState: None<TxGasState>
     };
+
+    if let Some(timestamp) = gasAccountingInfo.lastTimestamp {
+        let current = inbox_currentTimestamp();
+        if (timestamp < current) {
+            gasAccountingInfo = gasAccountingInfo with {
+                lastTimestamp: Some(current)
+            } with {
+                weiOwedForOverhead: gasAccountingInfo.weiOwedForOverhead + (current-timestamp) * gasAccountingInfo.reimbursementRates.weiPerSecond
+            };
+        }
+    } else {
+        gasAccountingInfo = gasAccountingInfo with { lastTimestamp: Some(inbox_currentTimestamp()) };
+    }
 
     return Some(
         struct {
