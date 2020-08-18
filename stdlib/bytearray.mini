@@ -54,7 +54,7 @@ public func marshalledBytes_firstByte(mb: MarshalledBytes) -> uint {
         contents = unsafecast<MarshalledBytesCell>(contents.rest);
         nbytes = nbytes-32;
     }
-    return contents.first / asm(2, 248) uint { exp };
+    return asm(256-8, contents.first) uint { shr };
 }
 
 public func marshalledBytes_hash(mb: MarshalledBytes) -> bytes32 {
@@ -130,7 +130,7 @@ public func bytearray_getByte(ba: ByteArray, offset: uint) -> uint {
     }
     offset = offset + ba.sliceOffset;
     let word = expandingIntArray_get(ba.contents, offset/32);
-    return (word / (asm (256, 31-(offset & 0x1f)) uint { exp })) & 0xff;
+    return asm(offset & 0x1f, word) uint { byte };
 }
 
 // bytearray_get64 reads a chunk of 8 bytes from a ByteArray
@@ -149,16 +149,16 @@ public func bytearray_get64(ba: ByteArray, offset: uint) -> uint {
     let alignment = offset % 32;
     if (alignment <= 24) {
         let word = expandingIntArray_get(ba.contents, offset/32);
-        let ret = (word / asm(256, 24-alignment) uint { exp }) & 0xffffffffffffffff;
+        let ret = asm(8*(24-alignment), word) uint { shr } & 0xffffffffffffffff;
         if (bytesToTrim > 0) {
-            ret = ret & ~((asm(256, bytesToTrim) uint { exp }) - 1);
+            ret = ret & ~(asm(8*bytesToTrim, 1) uint { shl } - 1);
         }
         return ret;
     } else {
         let res = bytearray_get256(ba, offset-ba.sliceOffset);
         let ret = res / 0x1000000000000000000000000000000000000000000000000;
         if (bytesToTrim > 0) {
-            ret = ret & ~((asm(256, bytesToTrim) uint { exp }) - 1);
+            ret = ret & ~(asm(8*bytesToTrim, 1) uint { shl } - 1);
         }
         return ret;
     }
@@ -179,16 +179,16 @@ public func bytearray_get256(ba: ByteArray, offset: uint) -> uint {
     if (alignment == 0) {
         let ret = expandingIntArray_get(ba.contents, lowWordIndex);
         if (bytesToTrim > 0) {
-            ret = ret & ~((asm(256, bytesToTrim) uint { exp }) - 1);
+            ret = ret & ~(asm(8*bytesToTrim, 1) uint { shl } - 1);
         }
         return ret;
     } else {
         let (lowWord, hiWord) = expandingIntArray_getConsecutive(ba.contents, lowWordIndex);
-        let shiftFactor = asm(256, alignment) uint { exp };
-        let invShiftFactor = asm(256, 32-alignment) uint { exp };
+        let shiftFactor = asm(8*alignment, 1) uint { shl };
+        let invShiftFactor = asm(8*(32-alignment), 1) uint { shl };
         let ret = (hiWord/invShiftFactor) | (lowWord*shiftFactor);
         if (bytesToTrim > 0) {
-            ret = ret & ~((asm(256, bytesToTrim) uint { exp }) - 1);
+            ret = ret & ~(asm(8*bytesToTrim, 1) uint { shl } - 1);
         }
         return ret;
     }
@@ -312,7 +312,7 @@ public func bytearray_extract(from: ByteArray, offset: uint, nbytes: uint) -> By
 
 func basb_closure_func(args: (uint, uint), oldval: uint) -> (uint, uint) { // returns (newval, junk)
     let (subidx, newbval,) = args;
-    let shiftFac = asm (2, 8*subidx) uint { exp };
+    let shiftFac = asm(8*subidx, 1) uint { shl };
     let mask = 0xff * shiftFac;
     let pasteIn = (newbval & 0xff) * shiftFac;
     return (
@@ -323,7 +323,7 @@ func basb_closure_func(args: (uint, uint), oldval: uint) -> (uint, uint) { // re
 
 func bas64_single_closure_func(args: (uint, uint), oldval: uint) -> (uint, uint) { // returns (newval, junk)
     let (subidx, newbval,) = args;
-    let shiftFac = asm (2, 8*subidx) uint { exp };
+    let shiftFac = asm(8*subidx, 1) uint { shl };
     let mask = 0xffffffffffffffff * shiftFac;
     let pasteIn = (newbval & 0xff) * shiftFac;
     return (
@@ -335,7 +335,7 @@ func bas64_single_closure_func(args: (uint, uint), oldval: uint) -> (uint, uint)
 func basmulti_hi_closure_func(args: (uint, uint), oldval: uint) -> (uint, uint) { // returns (newval, junk)
     let (alignment, value,) = args; 
     let revAlignment = 32-alignment;
-    let factor = asm(2, 8*revAlignment) uint { exp };
+    let factor = asm(8*revAlignment, 1) uint { shl };
     let newVal = (value*factor) | (oldval & (factor-1));
     return (newVal, 0,);
 }
@@ -343,8 +343,8 @@ func basmulti_hi_closure_func(args: (uint, uint), oldval: uint) -> (uint, uint) 
 func bas64_low_closure_func(args: (uint, uint), oldval: uint) -> (uint, uint) { // returns (newval, junk)
     let (alignment, value,) = args; 
     let revAlignment = 8-alignment;
-    let factor = asm(2, 8*alignment) uint { exp };
-    let invFactor = asm(2, 8*revAlignment) uint { exp };
+    let factor = asm(8*alignment, 1) uint { shl };
+    let invFactor = asm(8*revAlignment, 1) uint { shl };
     let newVal = (value/factor) | (oldval & (invFactor * ~0));
     return (newVal, 0,);
 }
@@ -352,8 +352,8 @@ func bas64_low_closure_func(args: (uint, uint), oldval: uint) -> (uint, uint) { 
 func bas256_low_closure_func(args: (uint, uint), oldval: uint) -> (uint, uint) { // returns (newval, junk)
     let (alignment, value,) = args; 
     let revAlignment = 32-alignment;
-    let factor = asm(2, 8*alignment) uint { exp };
-    let invFactor = asm(2, 8*revAlignment) uint { exp };
+    let factor = asm(8*alignment, 1) uint { shl };
+    let invFactor = asm(8*revAlignment, 1) uint { shl };
     let newVal = (value/factor) | (oldval & (invFactor * ~0));
     return (newVal, 0,);
 }
@@ -387,6 +387,9 @@ func expandingIntArray_get(arr: ExpandingIntArray, index: uint) -> uint {
 }
 
 func expandingIntArray_getConsecutive(arr: ExpandingIntArray, index: uint) -> (uint, uint) {
+    if (index+1 >= arr.size) {
+        return (expandingIntArray_get(arr, index), 0);
+    }
     let tree = arr.contents;
     let chunk = arr.chunk;
 

@@ -32,23 +32,22 @@ import func bytestream_skipBytes(bs: ByteStream, nbytes: uint) -> option<ByteStr
 import func marshalledBytes_firstByte(mb: MarshalledBytes) -> uint;
 import func marshalledBytes_hash(mb: MarshalledBytes) -> bytes32;
 
-import func translateSignedTx(req: MessageFromL1) -> option<MessageFromL1>;
 
-
-// This is the structure that the Arbitrum protocol gives us, for each incoming message.
-// It is declared identically in inbox.mini and elsewhere
+// This structure defines an incoming request.
+// It is declared identically in inbox.mini and elsewhere.
 type IncomingRequest = struct {
     kind: uint,               // type of message
     blockNumber: uint,        // block number of the L1 block
     timestamp: uint,          // timestamp of the L1 block
     sender: address,          // address of the sender
-    requestId: uint,          // sequence number in L1 inbox
-    msgData: MarshalledBytes  // contents of the message, as a marshalled bytearray
+    requestId: uint,
+    msgData: MarshalledBytes  // kind-specific data, as a marshalled bytearray
 }
 
 type MessageBatch = struct {
     template: IncomingRequest,
     stream: ByteStream,
+    numSoFar: uint,
 }
 
 public func messageBatch_tryNew(msg: IncomingRequest) -> option<MessageBatch> {
@@ -59,6 +58,7 @@ public func messageBatch_tryNew(msg: IncomingRequest) -> option<MessageBatch> {
             struct {
                 template: msg,
                 stream: stream,
+                numSoFar: 0,
             }
         );
     } else {
@@ -76,9 +76,13 @@ public func messageBatch_get(batch: MessageBatch) -> option<(IncomingRequest, Me
     return Some((
         batch.template with {
             msgData: bytearray_marshalFull(extractedL2data)
+        } with {
+            requestId: uint(hash(bytes32(batch.template.requestId), bytes32(batch.numSoFar)))
         },
         batch with {
-            stream : stream
+            stream: stream
+        } with {
+            numSoFar: batch.numSoFar + 1
         }
     ));
 }

@@ -23,8 +23,11 @@ import func bytearray_size(ba: ByteArray) -> uint;
 import func bytearray_marshalFull(ba: ByteArray) -> MarshalledBytes;
 import func bytearray_unmarshalBytes(mb: MarshalledBytes) -> ByteArray;
 import func bytearray_getByte(ba: ByteArray, offset: uint) -> uint;
+import func bytearray_set256(ba: ByteArray, offset: uint, value: uint) -> ByteArray;
 
 import func bytestream_new(ba: ByteArray) -> ByteStream;
+
+import func keccak256(ba: ByteArray, offset: uint, nbytes: uint) -> bytes32;
 
 import func rlp_encodeUint(val: uint, ba: ByteArray, offset: uint) -> (ByteArray, uint);
 import func rlp_encodeAddress(addr: address, ba: ByteArray, offset: uint) -> (ByteArray, uint);
@@ -39,6 +42,20 @@ import func rlp_encodeList(
     outBytes: ByteArray,
     outOffset: uint,
 ) -> option<(ByteArray, uint)>;
+import func rlp_encodeMessageInfo(
+    seqNum: uint,
+    gasPrice: uint,
+    gasLimit: uint,
+    to: address,
+    value: uint,
+    data: ByteArray,
+    v: uint,
+    r: uint,
+    s: uint
+) -> ByteArray;
+import func rlp_encodeAndHashMessageInfo(tx: SignedTx) -> bytes32;
+import func rlp_decodeMessageInfo(inStream: ByteStream) -> option<(ByteStream, SignedTx)>;
+
 
 import func rlp_decodeUint(bs: ByteStream) -> option<(ByteStream, uint)>;
 import func rlp_decodeAddress(bs: ByteStream) -> option<(ByteStream, address)>;
@@ -46,6 +63,17 @@ import func rlp_decodeBytes(inStream: ByteStream) -> option<(ByteStream, ByteArr
 
 import func bytesNeededToRepresentUint(val: uint) -> uint;
 
+type SignedTx = struct {
+    seqNum: uint,
+    gasPrice: uint,
+    gasLimit: uint,
+    to: address,
+    value: uint,
+    data: ByteArray,
+    v: uint,
+    r: uint,
+    s: uint
+}
 
 impure func main(kind: uint, value: any) {
     if (kind == 0) {
@@ -103,4 +131,69 @@ impure func main(kind: uint, value: any) {
             asm(4,) { log };
         }
     }
+
+    testRlpHasher();
+}
+
+func testRlpHasher() {
+    let seqNum = 0;
+    let gasPrice = 31;
+    let gasLimit = uint(hash(0));
+    let to = address(3919850193);
+    let value = uint(hash(gasLimit));
+    let data = randomByteArray();
+    let v = uint(hash(value));
+    let r = uint(hash(v));
+    let s = uint(hash(r));
+
+    let oldBuf = rlp_encodeMessageInfo(
+        seqNum,
+        gasPrice,
+        gasLimit,
+        to,
+        value,
+        data,
+        v,
+        r,
+        s
+    );
+
+    if let Some(res) = rlp_decodeMessageInfo(bytestream_new(oldBuf)) {
+        let (_, tx) = res;
+        if (keccak256(oldBuf, 0, bytearray_size(oldBuf)) != rlp_encodeAndHashMessageInfo(tx)) {
+            asm(12,) { debugprint };
+            panic;
+        }
+    } else {
+        asm(13,) { debugprint };
+        panic;
+    }
+
+    let newWay = rlp_encodeAndHashMessageInfo(
+        struct {
+            seqNum: seqNum,
+            gasPrice: gasPrice,
+            gasLimit: gasLimit,
+            to: to,
+            value: value,
+            data: data,
+            v: v,
+            r: r,
+            s: s
+        }
+    );
+
+    if (keccak256(oldBuf, 0, bytearray_size(oldBuf)) != newWay) {
+        panic;
+    }
+}
+
+func randomByteArray() -> ByteArray {
+    let ret = bytearray_new(0);
+    let i = 0;
+    while (i < 5) {
+        ret = bytearray_set256(ret, 32*i, uint(hash(i+1017)));
+        i = i+1;
+    }
+    return ret;
 }

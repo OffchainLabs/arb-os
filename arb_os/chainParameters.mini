@@ -16,8 +16,7 @@
 
 import type MarshalledBytes;
 
-import impure func errorHandler();
-
+import func evmCallStack_callHitError(reason: uint);
 
 type ChainParams = struct {
     chainAddress: address,
@@ -42,11 +41,15 @@ public impure func chainParams_chainAddress() -> address {
         return params.chainAddress;
     } else {
         // If we get here, the chain never received its initialization message.
-        errorHandler();
+        evmCallStack_callHitError(15);
         panic;
     }
 }
 
 public impure func chainParams_chainId() -> uint {
     return uint(chainParams_chainAddress()) & 0xffffffffffff;  // chainID == low 48 bits of chainAddress
+}
+
+public impure func chainParams_speedLimitPerSecond() -> uint {
+    return 100000000;  //TODO: get this from the initialization message, once we merge the branch that parses it
 }

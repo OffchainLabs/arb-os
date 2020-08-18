@@ -32,14 +32,20 @@ import func bytearray_set256(ba: ByteArray, offset: uint, val: uint) -> ByteArra
 
 import impure func initEvmCallStack(
     callKind: uint,
-    ethMessage: IncomingRequest,
-    addr: address,
-    caller: address,
-    calldata: ByteArray,
-    callvalue: uint,
-    gas: uint,
-    gasPrice: uint,
+    request: TxRequestData
 );
+
+// This is duplicated from messages.mini
+type TxRequestData = struct {
+    maxGas: uint,
+    gasPrice: uint,
+    seqNum: option<uint>,
+    caller: address,
+    calleeAddr: address,
+    value: uint,
+    calldata: ByteArray,
+    incomingRequest: IncomingRequest,
+}
 
 public impure func tokens_erc20deposit(
     tokenAddress: address,
@@ -80,13 +86,16 @@ public impure func tokens_erc20deposit(
 
     initEvmCallStack(
         0,               // treat as regular txcall
-        fullMsg,
-        tokenAddress,
-        address(1),     // special caller address, so contract recognizes call as coming from OS
-        calldata,
-        0,
-        1000000000000,  // gas will eventually be charged to the OS
-        0,              // use gas price zero
+        struct {
+            maxGas: 1000000000000,  // gas will eventually be charged to the OS
+            gasPrice: 0,
+            seqNum: None<uint>,
+            caller: address(1),     // special caller address, so contract recognizes call as coming from OS
+            calleeAddr: tokenAddress,
+            value: 0,
+            calldata: calldata,
+            incomingRequest: fullMsg,
+        }
     );  // should never return
 
     return None;
@@ -131,13 +140,16 @@ public impure func tokens_erc721deposit(
 
     initEvmCallStack(
         0,               // treat as regular txcall
-        fullMsg,
-        tokenAddress,
-        address(1),     // special caller address, so contract recognizes call as coming from OS
-        calldata,
-        0,
-        1000000000000,  // gas will eventually be charged to the OS
-        0,              // use gas price zero
+        struct {
+            maxGas: 1000000000000,  // gas will eventually be charged to the OS
+            gasPrice: 0,
+            seqNum: None<uint>,
+            caller: address(1),     // special caller address, so contract recognizes call as coming from OS
+            calleeAddr: tokenAddress,
+            value: 0,
+            calldata: calldata,
+            incomingRequest: fullMsg,
+        }
     );  // should never return
 
     return None;

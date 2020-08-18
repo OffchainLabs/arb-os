@@ -50,25 +50,13 @@ import func account_getStartCodePoint(acct: Account) -> option<impure func()>;
 
 import impure func initEvmCallStack(
     callKind: uint,
-    ethMessage: IncomingRequest,
-    addr: address,
-    caller: address,
-    calldata: ByteArray,
-    callvalue: uint,
-    gas: uint,
-    gasPrice: uint
+    request: TxRequestData
 );
 import impure func initEvmCallStackForConstructor(
-    ethMessage: IncomingRequest,
-    addr: address,
-    caller: address,
     code: ByteArray,
     evmJumpTable: map<uint, impure func()>,
     startPoint: impure func(),
-    calldata: ByteArray,
-    value: uint,
-    gas: uint,
-    gasPrice: uint
+    request: TxRequestData
 );
 import func evmCallStack_runningCodeFromAccount() -> option<Account>;
 import impure func emitLog(
@@ -110,21 +98,19 @@ import func keccakOfRlpEncodedAddrUintPair(addr: address, ui: uint) -> bytes32;
 import func translateEvmCodeSegment(bs: ByteStream) -> option<(impure func(), map<uint, impure func()>)>;
 
 
-// This is the structure that the Arbitrum protocol gives us, for each incoming message.
-// It is declared identically in inbox.mini
+// This structure defines an incoming request.
+// It is declared identically in inbox.mini and elsewhere.
 type IncomingRequest = struct {
     kind: uint,               // type of message
     blockNumber: uint,        // block number of the L1 block
     timestamp: uint,          // timestamp of the L1 block
     sender: address,          // address of the sender
-    requestId: uint,          // sequence number in L1 inbox
-    msgData: MarshalledBytes  // contents of the message, as a marshalled bytearray
+    requestId: uint,
+    msgData: MarshalledBytes  // kind-specific data, as a marshalled bytearray
 }
 
-public impure func handleIncomingRequest(
-    msg: IncomingRequest,
-    maxGas: uint,
-    gasPrice: uint
+public impure func handleL1Request(
+    msg: IncomingRequest
 ) -> option<()> {   // return None if message format error; Some(()) if other error; if no error, never return
     // Parse an incoming message and do appropriate computations
     let inStream = bytestream_new(bytearray_unmarshalBytes(msg.msgData));
@@ -186,12 +172,9 @@ public impure func handleIncomingRequest(
          )?;  // should never return
 
          return None;
-    } elseif (msg.kind == 3) {
-        // L2 message
-        handleL2Message(inStream, msg, maxGas, gasPrice)?;
-        return Some(());
     } else {
         // not a valid message type
+        // (This should not have been called if msg.kind == 3.)
         return None;
     }
 }
@@ -230,94 +213,61 @@ impure func fetchAndIncrSequenceNum(addr: address) -> uint {
     return ret;
 }
 
-impure func handleL2Message(
-    inStream: ByteStream,
-    fullMsg: IncomingRequest,
+type TxRequestData = struct {
     maxGas: uint,
-    gasPrice: uint
+    gasPrice: uint,
+    seqNum: option<uint>,
+    caller: address,
+    calleeAddr: address,
+    value: uint,
+    calldata: ByteArray,
+    incomingRequest: IncomingRequest,
+}
+
+public impure func handleL2Request(
+    inStream: ByteStream,
+    request: TxRequestData
 ) -> option<()> {   // return None if message is malformatted; otherwise handle errors and return Some(()); if no error, never return
-    let (bs, msgType) = bytestream_getByte(inStream)?;
-    inStream = bs;
-
-    // skip maxGas and gasPriceBid fields of message
-    inStream = bytestream_skipBytes(inStream, 64)?;
-
-    let sequenceNum = (~0);  // impossible value for sequence number
-    if ((msgType == 0) || (msgType == 4)){
-        let(bs, sn) = bytestream_get256(inStream)?;
-        inStream = bs;
-        sequenceNum = sn;
-
-        if (verifyAndIncrSequenceNum(fullMsg.sender, sequenceNum) == None<()>) {
+    if let Some(sequenceNum) = request.seqNum {
+        if (verifyAndIncrSequenceNum(request.caller, sequenceNum) == None<()>) {
             // bad sequence number error
-            emitLog(fullMsg, 5, None<ByteArray>, None<EvmLogs>, 0, 0);
+            emitLog(request.incomingRequest, 5, None<ByteArray>, None<EvmLogs>, 0, 0);
             return Some(());
         }
     }
 
-    let (bs, calleeAddressAsUint) = bytestream_get256(inStream)?;
-    inStream = bs;
-
-    // Get value of Eth payment that accompanies the message.
-    let value = 0;
-    if ( (msgType==0) || (msgType==1) || (msgType==4) ) {
-        let (bs, val) = bytestream_get256(inStream)?;
-        inStream = bs;
-        value = val;
-    }
-
-    if (calleeAddressAsUint == 0) {
+    if (request.calleeAddr == address(0)) {
         // this is a constructor call
-        if (msgType == 2) {
+        if (request.incomingRequest.kind == 2) {
             // revert error (tried to call constructor in a non-mutating call)
-            emitLog(fullMsg, 1, None<ByteArray>, None<EvmLogs>, 0, 0);
+            emitLog(request.incomingRequest, 1, None<ByteArray>, None<EvmLogs>, 0, 0);
             return Some(());
         }
-        let codeBytes = bytestream_getRemainingBytes(inStream);
+        let codeBytes = request.calldata;
+        request = request with { calldata: bytearray_new(0) };
         let (codept, evmJumpTable) = translateEvmCodeSegment(bytestream_new(codeBytes))?;
 
-        if (sequenceNum == (~0)) {
-            sequenceNum = fetchAndIncrSequenceNum(fullMsg.sender);
+        if (request.seqNum == None<uint>) {
+            request = request with { seqNum: Some(fetchAndIncrSequenceNum(request.caller)) };
         }
-        let newAddress = address(keccakOfRlpEncodedAddrUintPair(fullMsg.sender, sequenceNum));
+        request = request with { calleeAddr: address(keccakOfRlpEncodedAddrUintPair(request.caller, request.seqNum?)) };
 
         initEvmCallStackForConstructor(
-            fullMsg,
-            newAddress,
-            fullMsg.sender,
             codeBytes,
             evmJumpTable,
             codept,
-            bytearray_new(0),   // no calldata for constructor call -- encoded args are packed into the code
-            value,
-            maxGas,
-            gasPrice
+            request
         );  // should never return
     } else {
         // this is a non-constructor call
         let callKind = 0;
-        if (msgType == 2) {
+        if (request.incomingRequest.kind == 2) {
             callKind = 3;  // staticcall
         }
 
-        let remainingCallData = bytestream_getRemainingBytes(inStream); // remaining bytes of message, to be passed to contract as calldata
-        if (msgType == 4) {
-            // strip off signature from end of calldata
-            remainingCallData = bytearray_extract(
-                remainingCallData,
-                0,
-                bytearray_size(remainingCallData)-65
-            );
-        }
         initEvmCallStack(
             callKind,
-            fullMsg,
-            address(calleeAddressAsUint),
-            fullMsg.sender,
-            remainingCallData,
-            value,
-            maxGas,
-            gasPrice
+            request
         );  // should never return
     }
 
