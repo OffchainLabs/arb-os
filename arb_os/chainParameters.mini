@@ -14,12 +14,21 @@
 // limitations under the License.
 //
 
+import type ByteArray;
 import type MarshalledBytes;
+
+import func bytearray_unmarshalBytes(mb: MarshalledBytes) -> ByteArray;
+import func bytearray_get256(ba: ByteArray, offset: uint) -> uint;
 
 import func evmCallStack_callHitError(reason: uint);
 
 type ChainParams = struct {
     chainAddress: address,
+    gracePeriodSec: uint,
+    arbGasSpeedLimit: uint,
+    maxExecutionSteps: uint,
+    baseStake: uint,
+    owner: address
 }
 
 var globalChainParams: option<ChainParams>;
@@ -30,8 +39,14 @@ public impure func chainParams_init() {
 
 public impure func chainParams_gotParamsMessage(sender: address, data: MarshalledBytes) {
     if (globalChainParams == None<ChainParams>) {
+        let ba = bytearray_unmarshalBytes(data);
         globalChainParams = Some(struct{
             chainAddress: sender,
+            gracePeriodSec: bytearray_get256(ba, 0) / 1000,
+            arbGasSpeedLimit: bytearray_get256(ba, 32) * 1000,
+            maxExecutionSteps: bytearray_get256(ba, 2*32),
+            baseStake: bytearray_get256(ba, 3*32),
+            owner: address(bytearray_get256(ba, 4*32)),
         });
     }
 }
@@ -51,5 +66,17 @@ public impure func chainParams_chainId() -> uint {
 }
 
 public impure func chainParams_speedLimitPerSecond() -> uint {
-    return 100000000;  //TODO: get this from the initialization message, once we merge the branch that parses it
+    if let Some(params) = globalChainParams {
+        return params.arbGasSpeedLimit;
+    } else {
+        return 100000000;  // reasonable default
+    }
+}
+
+public impure func chainParams_baseStake() -> uint {
+    if let Some(params) = globalChainParams {
+        return params.baseStake;
+    } else {
+        return 0;
+    }
 }

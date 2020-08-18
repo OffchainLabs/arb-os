@@ -54,8 +54,18 @@ impl RuntimeEnvironment {
             next_id: Uint256::zero(),
             recorder: RtEnvRecorder::new(),
         };
-        ret.insert_l1_message(4, chain_address, &[0u8]);
+        ret.insert_l1_message(4, chain_address, &RuntimeEnvironment::get_params_bytes());
         ret
+    }
+
+    fn get_params_bytes() -> Vec<u8> {
+        let mut buf = Vec::new();
+        buf.extend(Uint256::from_u64(3 * 60 * 60 * 1000).to_bytes_be()); // grace period in ticks
+        buf.extend(Uint256::from_u64(100_000_000 / 1000).to_bytes_be()); // arbgas speed limit per tick
+        buf.extend(Uint256::from_u64(10_000_000_000).to_bytes_be()); // max execution steps
+        buf.extend(Uint256::from_u64(1000).to_bytes_be()); // base stake amount in wei
+        buf.extend(Uint256::zero().to_bytes_be()); // owner address
+        buf
     }
 
     pub fn new_wallet(&self) -> Wallet {
