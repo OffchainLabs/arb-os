@@ -290,13 +290,14 @@ impl AbiForContract {
 
         let sender_addr = Uint256::from_usize(1025);
         let request_id = machine.runtime_env.insert_tx_message(
-            sender_addr,
+            sender_addr.clone(),
             Uint256::from_usize(1_000_000_000_000),
             Uint256::zero(),
             Uint256::zero(),
             Uint256::zero(),
             &augmented_code,
         );
+        machine.runtime_env.end_of_block(sender_addr);
         let _gas_used = if debug {
             machine.debug(None)
         } else {
@@ -342,13 +343,14 @@ impl AbiForContract {
         let calldata = this_function.encode_input(args).unwrap();
 
         machine.runtime_env.insert_tx_message(
-            sender_addr,
+            sender_addr.clone(),
             Uint256::from_usize(1_000_000_000_000),
             Uint256::zero(),
             self.address.clone(),
             payment,
             &calldata,
         );
+        machine.runtime_env.end_of_block(sender_addr);
 
         let num_logs_before = machine.runtime_env.get_all_receipt_logs().len();
         let num_sends_before = machine.runtime_env.get_all_sends().len();

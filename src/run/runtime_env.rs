@@ -240,6 +240,16 @@ impl RuntimeEnvironment {
         self.insert_l1_message(0, sender_addr, &buf);
     }
 
+    pub fn insert_heartbeat_message(&mut self, sender_addr: Uint256) {
+        self.insert_l1_message(6, sender_addr, &vec![]);
+    }
+
+    pub fn end_of_block(&mut self, sender_addr: Uint256) {
+        self.current_block_num = self.current_block_num.add(&Uint256::one());
+        self.current_timestamp = self.current_timestamp.add(&Uint256::from_u64(15));
+        self.insert_heartbeat_message(sender_addr);
+    }
+
     pub fn get_and_incr_seq_num(&mut self, addr: &Uint256) -> Uint256 {
         let cur_seq_num = match self.caller_seq_nums.get(&addr) {
             Some(sn) => sn.clone(),

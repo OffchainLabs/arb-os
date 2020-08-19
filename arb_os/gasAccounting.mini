@@ -43,6 +43,8 @@ import impure func inbox_currentTimestamp() -> uint;
 
 import impure func chainParams_speedLimitPerSecond() -> uint;
 
+import impure func outputStats_endOfBlock(blockNum: uint, timestamp: uint);
+
 
 type ReimbursementRates = struct {
     weiPerSecond: uint,
@@ -56,6 +58,7 @@ var gasAccountingInfo: struct {
     reimbursementRates: ReimbursementRates,
     lastTimestamp: option<uint>,  // last timestamp seen in a block
     baseGasPrice: uint,           // current base gas price, in wei
+    congestionQueue: Queue,       // queue of messages selected for execution by the congestion auction
 };
 
 type TxGasState = struct {
@@ -82,6 +85,7 @@ public impure func gasAccounting_init() {
         },
         lastTimestamp: None<uint>,
         baseGasPrice: 0,
+        congestionQueue: queue_new(),
     };
 }
 
@@ -324,6 +328,42 @@ public impure func getNextRequestFromCongestionAuction() -> (
     option<IncomingRequest>,  // if it was an L1 message
     option<TxRequestData>,    // if it was an L2 tx message
 ) {
-    let (maybeRequest, maybeTx) = inbox_getNextUnpackedRequest();
-    return (true, maybeRequest, maybeTx);
+    loop {
+        if (queue_isEmpty(gasAccountingInfo.congestionQueue)) {
+            let q = gasAccountingInfo.congestionQueue;
+            let moreToRead = true;
+            while (moreToRead) {
+                let (maybeRequest, maybeTx) = inbox_getNextUnpackedRequest();
+                if let Some(request) = maybeRequest {
+                    if (request.kind == 6) {
+                        // got to the end of an L1 block, stop queueing after this message
+                        moreToRead = false;
+                    } else {
+                        q = queue_put(q, (maybeRequest, maybeTx));
+                    }
+                } else {
+                    q = queue_put(q, (maybeRequest, maybeTx));
+                }
+            }
+            gasAccountingInfo = gasAccountingInfo with { congestionQueue: q };
+        } else {
+            if let Some(res) = queue_get(gasAccountingInfo.congestionQueue) {
+                let (uq, item) = res;
+                gasAccountingInfo = gasAccountingInfo with { congestionQueue: uq };
+                let (maybeReq, maybeTx) = unsafecast<(option<IncomingRequest>, option<TxRequestData>)>(item);
+                if let Some(request) = maybeReq {
+                    if (request.kind == 6) {
+                        outputStats_endOfBlock(request.blockNumber, request.timestamp);
+                    } else {
+                        return (true, maybeReq, maybeTx);
+                    }
+                } else {
+                    return (true, maybeReq, maybeTx);
+                }
+            }
+            // if we got here, something went very wrong
+            // clear out the queue and keep going
+            gasAccountingInfo = gasAccountingInfo with { congestionQueue: queue_new() };
+        }
+    }
 }

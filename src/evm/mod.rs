@@ -186,6 +186,7 @@ pub fn evm_xcontract_call_using_batch(
         my_addr.clone(),
         Uint256::from_usize(100000),
     );
+    machine.runtime_env.end_of_block(my_addr.clone());
     let _gas_used = if debug {
         machine.debug(None)
     } else {
@@ -240,6 +241,8 @@ pub fn evm_xcontract_call_using_batch(
     machine
         .runtime_env
         .insert_batch_message(Uint256::from_usize(1025), &batch);
+
+    machine.runtime_env.end_of_block(my_addr);
 
     let num_logs_before = machine.runtime_env.get_all_receipt_logs().len();
     let num_sends_before = machine.runtime_env.get_all_sends().len();
@@ -465,13 +468,14 @@ pub fn evm_payment_to_empty_address(log_to: Option<&Path>, debug: bool) {
         Uint256::from_u64(20000),
     );
     let tx_id = machine.runtime_env.insert_tx_message(
-        my_addr,
+        my_addr.clone(),
         Uint256::from_u64(1000000000),
         Uint256::zero(),
         dest_addr,
         Uint256::from_u64(10000),
         &vec![],
     );
+    machine.runtime_env.end_of_block(my_addr);
 
     let _ = if debug {
         machine.debug(None)
@@ -499,13 +503,14 @@ pub fn mint_erc20_and_get_balance(log_to: Option<&Path>, debug: bool) {
     let mut calldata: Vec<u8> = vec![0x70, 0xa0, 0x82, 0x31]; // code for balanceOf method
     calldata.extend(me.to_bytes_be());
     rt_env.insert_tx_message(
-        me,
+        me.clone(),
         Uint256::from_usize(1000000000),
         Uint256::zero(),
         token_addr,
         Uint256::zero(),
         &calldata,
     );
+    rt_env.end_of_block(me);
 
     let mut machine = load_from_file(Path::new("arb_os/arbos.mexe"), rt_env);
     machine.start_at_zero();
@@ -536,13 +541,14 @@ pub fn mint_erc721_and_get_balance(log_to: Option<&Path>, debug: bool) {
     let mut calldata: Vec<u8> = vec![0x70, 0xa0, 0x82, 0x31]; // code for balanceOf method
     calldata.extend(me.to_bytes_be());
     rt_env.insert_tx_message(
-        me,
+        me.clone(),
         Uint256::from_usize(1000000000),
         Uint256::zero(),
         token_addr,
         Uint256::zero(),
         &calldata,
     );
+    rt_env.end_of_block(me);
 
     let mut machine = load_from_file(Path::new("arb_os/arbos.mexe"), rt_env);
     machine.start_at_zero();
