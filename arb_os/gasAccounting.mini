@@ -41,6 +41,8 @@ import func queue_get(q: Queue) -> option<(Queue, any)>;
 import impure func inbox_getNextUnpackedRequest() -> (option<IncomingRequest>, option<TxRequestData>);
 import impure func inbox_currentTimestamp() -> uint;
 
+import impure func chainParams_speedLimitPerSecond() -> uint;
+
 
 type ReimbursementRates = struct {
     weiPerSecond: uint,
@@ -53,6 +55,7 @@ var gasAccountingInfo: struct {
     txState: option<TxGasState>,  // status of currently active tx (if there is one)
     reimbursementRates: ReimbursementRates,
     lastTimestamp: option<uint>,  // last timestamp seen in a block
+    baseGasPrice: uint,           // current base gas price, in wei
 };
 
 type TxGasState = struct {
@@ -78,6 +81,7 @@ public impure func gasAccounting_init() {
             weiPerArbGas: 0,
         },
         lastTimestamp: None<uint>,
+        baseGasPrice: 0,
     };
 }
 
@@ -108,6 +112,31 @@ public impure func gasAccounting_startTxCharges(
 
     if (maxGas >= asm(255, 1) uint { shl }) {
         maxGas = asm(255, 1) uint { shl } - 1;
+    }
+
+    // if needed, advance timestamp and update base gas price
+    if let Some(timestamp) = gasAccountingInfo.lastTimestamp {
+        let current = inbox_currentTimestamp();
+        if (timestamp < current) {
+            let delta = current - timestamp;
+            let overhead = gasAccountingInfo.weiOwedForOverhead + delta * gasAccountingInfo.reimbursementRates.weiPerSecond;
+            let speedLimit = chainParams_speedLimitPerSecond();
+            let base = 0;
+            if (delta > 30) {
+                base = (90 * speedLimit * gasAccountingInfo.baseGasPrice + 30 * overhead) / (120 * speedLimit);
+            } else {
+                base = ((120-delta) * speedLimit * gasAccountingInfo.baseGasPrice + overhead * delta) / (120 * speedLimit);
+            }
+            gasAccountingInfo = gasAccountingInfo with {
+                lastTimestamp: Some(current)
+            } with {
+                weiOwedForOverhead: overhead
+            } with {
+                baseGasPrice: base
+            };
+        }
+    } else {
+        gasAccountingInfo = gasAccountingInfo with { lastTimestamp: Some(inbox_currentTimestamp()) };
     }
 
     // take funds from the payer, enough to pay for maxGas at gasPrice
