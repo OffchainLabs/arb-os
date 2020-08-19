@@ -194,8 +194,8 @@ public impure func gasAccounting_endTxCharges() -> option<GasUsage> {
     );
 
     let overheadPaid = (txState.originalMax-gasToRefund) * (gasAccountingInfo.baseGasPrice-gasAccountingInfo.reimbursementRates.weiPerArbGas);
-    if (overheadPaid > txState.weiOwedForOverhead) {
-        overheadPaid = txState.weiOwedForOverhead;
+    if (overheadPaid > gasAccountingInfo.weiOwedForOverhead) {
+        overheadPaid = gasAccountingInfo.weiOwedForOverhead;
     }
 
     gasAccountingInfo = gasAccountingInfo with {
