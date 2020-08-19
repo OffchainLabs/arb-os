@@ -102,7 +102,7 @@ public impure func gasAccounting_init() {
 
 public impure func gasAccounting_startTxCharges(
     maxGas: uint,
-    gasPrice: uint,
+    gasPriceBid: uint,
     payer: address
 ) -> option<()> {
     // Start charging a new Tx for ArbGas usage
@@ -110,7 +110,7 @@ public impure func gasAccounting_startTxCharges(
 
     let _ = switchToChargingOS();   // ignore return value; purpose is to avoid error if already charging a tx
 
-    if (maxGas >= asm(255, 1) uint { shl }) {
+    if (maxGas >= asm(255, 1) uint { shl }) {  // make sure we're not setting tx gas remaining to invalid value
         maxGas = asm(255, 1) uint { shl } - 1;
     }
 
@@ -123,9 +123,9 @@ public impure func gasAccounting_startTxCharges(
             let speedLimit = chainParams_speedLimitPerSecond();
             let ibase = int(0);
             if (delta > 30) {
-                ibase = (int(90 * speedLimit * gasAccountingInfo.baseGasPrice) + int(30) * overhead) / int(120 * speedLimit);
+                ibase = int(3 * gasAccountingInfo.baseGasPrice / 4) + overhead / int(4 * 120 * speedLimit);
             } else {
-                ibase = (int((120-delta) * speedLimit * gasAccountingInfo.baseGasPrice) + int(delta) * overhead) / int(120 * speedLimit);
+                ibase = int((120-delta) * gasAccountingInfo.baseGasPrice / 120) + int(delta) * overhead / int(120 * 120 * speedLimit);
             }
             let base = gasAccountingInfo.reimbursementRates.weiPerArbGas / 2;
             if (ibase > int(base)) {
@@ -142,6 +142,15 @@ public impure func gasAccounting_startTxCharges(
         }
     } else {
         gasAccountingInfo = gasAccountingInfo with { lastTimestamp: Some(inbox_currentTimestamp()) };
+    }
+
+    // set gas price based on bid and base price
+    let gasPrice = gasAccountingInfo.baseGasPrice;
+    if (gasPriceBid != 0) {
+        if (gasPriceBid < gasPrice) {
+            // caller submitted a gas price bid, and it was too low, so return insufficient funds
+            return None;
+        }
     }
 
     // take funds from the payer, enough to pay for maxGas at gasPrice
@@ -198,6 +207,7 @@ public impure func gasAccounting_endTxCharges() -> option<GasUsage> {
         )
     );
 
+    // figure out how much overhead was paid by the tx (this could be negative, if tx was subsidized)
     let overheadPaid = int(txState.originalMax - gasToRefund) *
                        (int(gasAccountingInfo.baseGasPrice) - int(gasAccountingInfo.reimbursementRates.weiPerArbGas));
 
