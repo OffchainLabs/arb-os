@@ -192,25 +192,20 @@ public impure func gasAccounting_endTxCharges() -> option<GasUsage> {
             )
         )
     );
+
+    let overheadPaid = (txState.originalMax-gasToRefund) * (gasAccountingInfo.baseGasPrice-gasAccountingInfo.reimbursementRates.weiPerArbGas);
+    if (overheadPaid > txState.weiOwedForOverhead) {
+        overheadPaid = txState.weiOwedForOverhead;
+    }
+
     gasAccountingInfo = gasAccountingInfo with {
         weiCollectedFromTxs: gasAccountingInfo.weiCollectedFromTxs
                                 + (txState.weiHeldForGas - refund)
     } with {
+        weiOwedForOverhead: gasAccountingInfo.weiOwedForOverhead - overheadPaid
+    } with {
         txState: None<TxGasState>
     };
-
-    if let Some(timestamp) = gasAccountingInfo.lastTimestamp {
-        let current = inbox_currentTimestamp();
-        if (timestamp < current) {
-            gasAccountingInfo = gasAccountingInfo with {
-                lastTimestamp: Some(current)
-            } with {
-                weiOwedForOverhead: gasAccountingInfo.weiOwedForOverhead + (current-timestamp) * gasAccountingInfo.reimbursementRates.weiPerSecond
-            };
-        }
-    } else {
-        gasAccountingInfo = gasAccountingInfo with { lastTimestamp: Some(inbox_currentTimestamp()) };
-    }
 
     return Some(
         struct {
