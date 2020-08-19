@@ -50,7 +50,7 @@ type ReimbursementRates = struct {
 }
 
 var gasAccountingInfo: struct {
-    weiOwedForOverhead: uint,     // amount of currency that needs to be collected to cover overhead
+    weiOwedForOverhead: int,      // amount of currency that needs to be collected to cover overhead
     weiCollectedFromTxs: uint,    // amount of currency collected from txs but not yet paid out to validators
     txState: option<TxGasState>,  // status of currently active tx (if there is one)
     reimbursementRates: ReimbursementRates,
@@ -73,7 +73,7 @@ type GasUsage = struct {
 
 public impure func gasAccounting_init() {
     gasAccountingInfo = struct {
-        weiOwedForOverhead: 0,
+        weiOwedForOverhead: int(0),
         weiCollectedFromTxs: 0,
         txState: None<TxGasState>,
         reimbursementRates: struct {
@@ -119,14 +119,19 @@ public impure func gasAccounting_startTxCharges(
         let current = inbox_currentTimestamp();
         if (timestamp < current) {
             let delta = current - timestamp;
-            let overhead = gasAccountingInfo.weiOwedForOverhead + delta * gasAccountingInfo.reimbursementRates.weiPerSecond;
+            let overhead = gasAccountingInfo.weiOwedForOverhead + int(delta * gasAccountingInfo.reimbursementRates.weiPerSecond);
             let speedLimit = chainParams_speedLimitPerSecond();
-            let base = 0;
+            let ibase = int(0);
             if (delta > 30) {
-                base = (90 * speedLimit * gasAccountingInfo.baseGasPrice + 30 * overhead) / (120 * speedLimit);
+                ibase = (int(90 * speedLimit * gasAccountingInfo.baseGasPrice) + int(30) * overhead) / int(120 * speedLimit);
             } else {
-                base = ((120-delta) * speedLimit * gasAccountingInfo.baseGasPrice + overhead * delta) / (120 * speedLimit);
+                ibase = (int((120-delta) * speedLimit * gasAccountingInfo.baseGasPrice) + int(delta) * overhead) / int(120 * speedLimit);
             }
+            let base = gasAccountingInfo.reimbursementRates.weiPerArbGas / 2;
+            if (ibase > int(base)) {
+                base = uint(ibase);
+            }
+
             gasAccountingInfo = gasAccountingInfo with {
                 lastTimestamp: Some(current)
             } with {
@@ -155,7 +160,7 @@ public impure func gasAccounting_startTxCharges(
 
     let gasUsed = (~0) - asm() uint { getgas };
     gasAccountingInfo = gasAccountingInfo with {
-        weiOwedForOverhead: gasAccountingInfo.weiOwedForOverhead + gasUsed * gasAccountingInfo.reimbursementRates.weiPerArbGas
+        weiOwedForOverhead: gasAccountingInfo.weiOwedForOverhead + int(gasUsed * gasAccountingInfo.reimbursementRates.weiPerArbGas)
     } with {
         txState: Some(struct {
             gasInReserve: 0,
@@ -193,10 +198,8 @@ public impure func gasAccounting_endTxCharges() -> option<GasUsage> {
         )
     );
 
-    let overheadPaid = (txState.originalMax-gasToRefund) * (gasAccountingInfo.baseGasPrice-gasAccountingInfo.reimbursementRates.weiPerArbGas);
-    if (overheadPaid > gasAccountingInfo.weiOwedForOverhead) {
-        overheadPaid = gasAccountingInfo.weiOwedForOverhead;
-    }
+    let overheadPaid = int(txState.originalMax - gasToRefund) *
+                       (int(gasAccountingInfo.baseGasPrice) - int(gasAccountingInfo.reimbursementRates.weiPerArbGas));
 
     gasAccountingInfo = gasAccountingInfo with {
         weiCollectedFromTxs: gasAccountingInfo.weiCollectedFromTxs
