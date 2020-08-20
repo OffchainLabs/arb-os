@@ -104,6 +104,7 @@ pub struct ImportedFunc {
     pub name: String,
     pub arg_types: Vec<Type>,
     pub ret_type: Type,
+    pub tipe: Type,
     pub is_impure: bool,
 }
 
@@ -120,6 +121,7 @@ impl ImportedFunc {
             name_id,
             slot_num,
             name: string_table.name_from_id(name_id).to_string(),
+            tipe: Type::Func(is_impure, arg_types.clone(), Box::new(ret_type.clone())),
             arg_types,
             ret_type,
             is_impure,

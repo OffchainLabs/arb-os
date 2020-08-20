@@ -450,10 +450,9 @@ pub fn sort_top_level_decls(
     Vec<ImportedFunc>,
     Vec<FuncDecl>,
     HashMap<usize, Type>,
-    HashMap<usize, Type>,
     Vec<GlobalVarDecl>,
-    HashMap<usize, (Type, usize)>,
     StringTable,
+    HashMap<usize, Type>,
 ) {
     let mut imports = vec![];
     let mut imported_funcs = Vec::new();
@@ -461,7 +460,6 @@ pub fn sort_top_level_decls(
     let mut named_types = HashMap::new();
     let mut hm = HashMap::new();
     let mut global_vars = Vec::new();
-    let mut global_vars_map = HashMap::new();
 
     let (builtin_fds, string_table) = builtin_func_decls(string_table_in);
     for fd in builtin_fds.iter() {
@@ -485,9 +483,7 @@ pub fn sort_top_level_decls(
                 hm.insert(fd.name, fd.tipe.clone());
             }
             TopLevelDecl::VarDecl(vd) => {
-                let slot_num = global_vars.len();
                 global_vars.push(vd.clone());
-                global_vars_map.insert(vd.name, (vd.tipe.clone(), slot_num));
             }
             TopLevelDecl::ImpFuncDecl(fd) => {
                 hm.insert(fd.name, fd.tipe.clone());
@@ -513,10 +509,9 @@ pub fn sort_top_level_decls(
         imported_funcs,
         funcs,
         named_types,
-        hm,
         global_vars,
-        global_vars_map,
         string_table,
+        hm,
     )
 }
 
@@ -538,16 +533,14 @@ pub fn typecheck_top_level_decls(
     ),
     TypeError,
 > {
-    let (
-        imports,
-        imported_funcs,
-        funcs,
-        named_types,
-        hm,
-        global_vars,
-        global_vars_map,
-        string_table,
-    ) = sort_top_level_decls(decls, string_table_in.clone());
+    let (imports, imported_funcs, funcs, named_types, global_vars, string_table, hm) =
+        sort_top_level_decls(decls, string_table_in.clone());
+
+    let global_vars_map = global_vars
+        .iter()
+        .enumerate()
+        .map(|(idx, var)| (var.name, (var.tipe.clone(), idx)))
+        .collect::<HashMap<_, _>>();
     let mut exported_funcs = Vec::new();
 
     let type_table = SymTable::<Type>::new();
