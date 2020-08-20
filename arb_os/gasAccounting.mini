@@ -118,36 +118,6 @@ public impure func gasAccounting_startTxCharges(
         maxGas = asm(255, 1) uint { shl } - 1;
     }
 
-    // if needed, advance timestamp and update base gas price
-    if let Some(timestamp) = gasAccountingInfo.lastTimestamp {
-        let current = inbox_currentTimestamp();
-        if (timestamp < current) {
-            let delta = current - timestamp;
-            let overhead = gasAccountingInfo.weiOwedForOverhead + int(delta * gasAccountingInfo.reimbursementRates.weiPerSecond);
-            let speedLimit = chainParams_speedLimitPerSecond();
-            let ibase = int(0);
-            if (delta > 30) {
-                ibase = int(3 * gasAccountingInfo.baseGasPrice / 4) + overhead / int(4 * 120 * speedLimit);
-            } else {
-                ibase = int((120-delta) * gasAccountingInfo.baseGasPrice / 120) + int(delta) * overhead / int(120 * 120 * speedLimit);
-            }
-            let base = gasAccountingInfo.reimbursementRates.weiPerArbGas / 2;
-            if (ibase > int(base)) {
-                base = uint(ibase);
-            }
-
-            gasAccountingInfo = gasAccountingInfo with {
-                lastTimestamp: Some(current)
-            } with {
-                weiOwedForOverhead: overhead
-            } with {
-                baseGasPrice: base
-            };
-        }
-    } else {
-        gasAccountingInfo = gasAccountingInfo with { lastTimestamp: Some(inbox_currentTimestamp()) };
-    }
-
     // set gas price based on bid and base price
     let gasPrice = gasAccountingInfo.baseGasPrice;
     if (gasPriceBid != 0) {
@@ -330,6 +300,37 @@ public impure func getNextRequestFromCongestionAuction() -> (
 ) {
     loop {
         if (queue_isEmpty(gasAccountingInfo.congestionQueue)) {
+            // if needed, advance timestamp and update base gas price
+            if let Some(timestamp) = gasAccountingInfo.lastTimestamp {
+                let current = inbox_currentTimestamp();
+                if (timestamp < current) {
+                    let delta = current - timestamp;
+                    let overhead = gasAccountingInfo.weiOwedForOverhead + int(delta * gasAccountingInfo.reimbursementRates.weiPerSecond);
+                    let speedLimit = chainParams_speedLimitPerSecond();
+                    let ibase = int(0);
+                    if (delta > 30) {
+                        ibase = int(3 * gasAccountingInfo.baseGasPrice / 4) + overhead / int(4 * 120 * speedLimit);
+                    } else {
+                        ibase = int((120-delta) * gasAccountingInfo.baseGasPrice / 120) + int(delta) * overhead / int(120 * 120 * speedLimit);
+                    }
+                    let base = gasAccountingInfo.reimbursementRates.weiPerArbGas / 2;
+                    if (ibase > int(base)) {
+                        base = uint(ibase);
+                    }
+
+                    gasAccountingInfo = gasAccountingInfo with {
+                        lastTimestamp: Some(current)
+                    } with {
+                        weiOwedForOverhead: overhead
+                    } with {
+                        baseGasPrice: base
+                    };
+                }
+            } else {
+                gasAccountingInfo = gasAccountingInfo with { lastTimestamp: Some(inbox_currentTimestamp()) };
+            }
+
+            // read in an L1 block of requests and queue them
             let q = gasAccountingInfo.congestionQueue;
             let moreToRead = true;
             while (moreToRead) {
@@ -353,6 +354,7 @@ public impure func getNextRequestFromCongestionAuction() -> (
                 let (maybeReq, maybeTx) = unsafecast<(option<IncomingRequest>, option<TxRequestData>)>(item);
                 if let Some(request) = maybeReq {
                     if (request.kind == 6) {
+                        // it's an end-of-block message; send the end-of-block log, then discard the message
                         outputStats_endOfBlock(request.blockNumber, request.timestamp);
                     } else {
                         return (true, maybeReq, maybeTx);
