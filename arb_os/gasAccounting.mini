@@ -58,6 +58,7 @@ var gasAccountingInfo: struct {
     reimbursementRates: ReimbursementRates,
     lastTimestamp: option<uint>,  // last timestamp seen in a block
     baseGasPrice: uint,           // current base gas price, in wei
+    gasTank: uint,                // amount of gas available for txs
     congestionQueue: Queue,       // queue of messages selected for execution by the congestion auction
 };
 
@@ -85,6 +86,7 @@ public impure func gasAccounting_init() {
         },
         lastTimestamp: None<uint>,
         baseGasPrice: 0,
+        gasTank: gasTankLimit(),
         congestionQueue: queue_new(),
     };
 }
@@ -142,8 +144,14 @@ public impure func gasAccounting_startTxCharges(
     );
 
     let gasUsed = (~0) - asm() uint { getgas };
+    let usedFromTank = gasUsed;
+    if (usedFromTank > gasAccountingInfo.gasTank) {
+        usedFromTank = gasAccountingInfo.gasTank;
+    }
     gasAccountingInfo = gasAccountingInfo with {
         weiOwedForOverhead: gasAccountingInfo.weiOwedForOverhead + int(gasUsed * gasAccountingInfo.reimbursementRates.weiPerArbGas)
+    } with {
+        gasTank: gasAccountingInfo.gasTank - usedFromTank
     } with {
         txState: Some(struct {
             gasInReserve: 0,
@@ -192,6 +200,8 @@ public impure func gasAccounting_endTxCharges() -> option<GasUsage> {
         weiOwedForOverhead: gasAccountingInfo.weiOwedForOverhead - overheadPaid
     } with {
         txState: None<TxGasState>
+    } with {
+        gasTank: gasAccountingInfo.gasTank + gasToRefund  // won't overflow because we're returning gas we took out before
     };
 
     return Some(
@@ -228,11 +238,23 @@ public impure func gasAccounting_resumeTxCharges(allocationRequested: uint) -> u
     // allocationRequested is how much of its gas the tx wants to allocate
     // return how much gas we actually allocated = min(requested, available)
 
+    let _ = switchToChargingOS();   // ignore return value; purpose is to avoid error if already charging a tx
+
     if let Some(txState) = gasAccountingInfo.txState {
+        let gasUsed = (~0) - asm() uint { getgas };
+        let usedFromTank = gasUsed;
+        if (usedFromTank > gasAccountingInfo.gasTank) {
+            usedFromTank = gasAccountingInfo.gasTank;
+        }
+
         if (allocationRequested > txState.gasInReserve) {
             allocationRequested = txState.gasInReserve;  // can't request more gas than you have
         }
         gasAccountingInfo = gasAccountingInfo with {
+            weiOwedForOverhead: gasAccountingInfo.weiOwedForOverhead + int(gasUsed * gasAccountingInfo.reimbursementRates.weiPerArbGas)
+        } with {
+            gasTank: gasAccountingInfo.gasTank - usedFromTank
+        } with {
             txState: Some(
                 txState with {
                     gasInReserve: txState.gasInReserve - allocationRequested
@@ -305,6 +327,12 @@ public impure func getNextRequestFromCongestionAuction() -> (
                 let current = inbox_currentTimestamp();
                 if (timestamp < current) {
                     let delta = current - timestamp;
+
+                    let updatedTank = gasAccountingInfo.gasTank + delta * chainParams_speedLimitPerSecond();
+                    if (updatedTank > gasTankLimit()) {
+                        updatedTank = gasTankLimit();
+                    }
+
                     let overhead = gasAccountingInfo.weiOwedForOverhead + int(delta * gasAccountingInfo.reimbursementRates.weiPerSecond);
                     let speedLimit = chainParams_speedLimitPerSecond();
                     let ibase = int(0);
@@ -324,6 +352,8 @@ public impure func getNextRequestFromCongestionAuction() -> (
                         weiOwedForOverhead: overhead
                     } with {
                         baseGasPrice: base
+                    } with {
+                        gasTank: updatedTank
                     };
                 }
             } else {
@@ -340,10 +370,27 @@ public impure func getNextRequestFromCongestionAuction() -> (
                         // got to the end of an L1 block, stop queueing after this message
                         moreToRead = false;
                     } else {
+                        if (request.kind == 5) { // other kinds that can exist here all charge 0 gas
+                            let maxGas = bytearray_get256(bytearray_unmarshalBytes(request.msgData), 0);
+                            if (maxGas > gasAccountingInfo.gasTank) {
+                                gasAccountingInfo = gasAccountingInfo with { gasTank: 0 };
+                            } else {
+                                gasAccountingInfo = gasAccountingInfo with { gasTank: gasAccountingInfo.gasTank - maxGas };
+                            }
+                        }
                         q = queue_put(q, (maybeRequest, maybeTx));
                     }
                 } else {
-                    q = queue_put(q, (maybeRequest, maybeTx));
+                    if let Some(tx) = maybeTx {
+                        if (tx.maxGas > gasAccountingInfo.gasTank) {
+                            gasAccountingInfo = gasAccountingInfo with { gasTank: 0 };
+                        } else {
+                            gasAccountingInfo = gasAccountingInfo with { gasTank: gasAccountingInfo.gasTank - tx.maxGas };
+                        }
+                        q = queue_put(q, (maybeRequest, maybeTx));
+                    } else {
+                        // this should never happen; if it does, we don't have a request so loop back and try again
+                    }
                 }
             }
             gasAccountingInfo = gasAccountingInfo with { congestionQueue: q };
@@ -368,4 +415,12 @@ public impure func getNextRequestFromCongestionAuction() -> (
             gasAccountingInfo = gasAccountingInfo with { congestionQueue: queue_new() };
         }
     }
+}
+
+// The "gas tank" holds gas that is available to be allocated to incoming requests.
+// Gas is subtracted from the tank when a request is going to use that gas.
+// Gas is added to the tank when time passes, or when a request returns some unused gas.
+// The gas tank has a maximum capacity, which is returned by the following function.
+impure func gasTankLimit() -> uint {
+    return 120 * chainParams_speedLimitPerSecond();
 }
