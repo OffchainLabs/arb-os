@@ -691,8 +691,8 @@ impl RtEnvRecorder {
         if !(self.sends == machine.runtime_env.recorder.sends) {
             print_output_differences(
                 "send",
-                self.sends.clone(),
                 machine.runtime_env.recorder.sends,
+                self.sends.clone(),
             );
             return false;
         }
