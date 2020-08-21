@@ -75,6 +75,7 @@ import func bytearray_copy(
     to: ByteArray,     toOffset: uint,
     nbytes: uint
 ) -> ByteArray;
+import func bytearray_setByte(ba: ByteArray, offset: uint, value: uint) -> ByteArray;
 import func bytearray_set256(ba: ByteArray, offset: uint, value: uint) -> ByteArray;
 import func bytestream_new(ba: ByteArray) -> ByteStream;
 
@@ -571,7 +572,11 @@ public impure func evmCallStack_returnFromCall(
 
                     if (globalCurrentIncomingRequest.kind == 5) {
                         // successfully created a buddy contract -- announce that as a message
-                        sendMessage(5, globalCurrentIncomingRequest.sender, bytearray_new(0));
+                        sendMessage(
+                            5,
+                            globalCurrentIncomingRequest.sender,
+                            bytearray_setByte(bytearray_new(0), 0, 1)
+                        );
                     }
                 } else {
                     // Compilation of resulting code failed; report an error.
@@ -582,6 +587,14 @@ public impure func evmCallStack_returnFromCall(
                         None<EvmLogs>,
                         Some(gasUsage)
                     );
+                    if (globalCurrentIncomingRequest.kind == 5) {
+                        // failed to create a buddy contract -- announce that as a message
+                        sendMessage(
+                            5,
+                            globalCurrentIncomingRequest.sender,
+                            bytearray_setByte(bytearray_new(0), 0, 0)
+                        );
+                    }
                 }
             } else {
                 if (topFrame.callKind != 3) {
