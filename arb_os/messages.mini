@@ -113,7 +113,7 @@ type IncomingRequest = struct {
 
 public impure func handleL1Request(
     msg: IncomingRequest
-) -> option<()> {   // return None if message format error; Some(()) if other error; if no error, never return
+) -> option<()> {   // return None if error; otherwise return Some(()) or do a tx and never return from here
     // Parse an incoming message and do appropriate computations
     let inStream = bytestream_new(bytearray_unmarshalBytes(msg.msgData));
 
