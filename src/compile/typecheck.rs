@@ -515,14 +515,15 @@ pub fn sort_top_level_decls(
     )
 }
 
-///Converts the `TopLevelDecl`s in decls into corresponding type checked variants.
-///
-///If successful, `ExportedFunc`, `ImportedFunc`, and `GlobalVarDecl` are returned directly, along
-/// with a `StringTable` modified by internal call to `builtin_func_decls`
 pub fn typecheck_top_level_decls(
-    decls: &[TopLevelDecl],
+    imports: Vec<Import>,
+    imported_funcs: Vec<ImportedFunc>,
+    funcs: Vec<FuncDecl>,
+    named_types: HashMap<usize, Type>,
+    global_vars: Vec<GlobalVarDecl>,
+    string_table: StringTable,
+    hm: HashMap<usize, Type>,
     checked_funcs: &mut Vec<TypeCheckedFunc>,
-    string_table_in: StringTable,
 ) -> Result<
     (
         Vec<Import>,
@@ -533,9 +534,6 @@ pub fn typecheck_top_level_decls(
     ),
     TypeError,
 > {
-    let (imports, imported_funcs, funcs, named_types, global_vars, string_table, hm) =
-        sort_top_level_decls(decls, string_table_in.clone());
-
     let global_vars_map = global_vars
         .iter()
         .enumerate()
@@ -595,6 +593,39 @@ pub fn typecheck_top_level_decls(
         res_global_vars,
         string_table,
     ))
+}
+
+///Converts the `TopLevelDecl`s in decls into corresponding type checked variants.
+///
+///If successful, `ExportedFunc`, `ImportedFunc`, and `GlobalVarDecl` are returned directly, along
+/// with a `StringTable` modified by internal call to `builtin_func_decls`
+pub fn sort_and_typecheck_top_level_decls(
+    decls: &[TopLevelDecl],
+    checked_funcs: &mut Vec<TypeCheckedFunc>,
+    string_table_in: StringTable,
+) -> Result<
+    (
+        Vec<Import>,
+        Vec<ExportedFunc>,
+        Vec<ImportedFunc>,
+        Vec<GlobalVarDecl>,
+        StringTable,
+    ),
+    TypeError,
+> {
+    let (imports, imported_funcs, funcs, named_types, global_vars, string_table, hm) =
+        sort_top_level_decls(decls, string_table_in.clone());
+
+    typecheck_top_level_decls(
+        imports,
+        imported_funcs,
+        funcs,
+        named_types,
+        global_vars,
+        string_table,
+        hm,
+        checked_funcs,
+    )
 }
 
 ///If successful, produces a `TypeCheckedFunc` from `FuncDecl` reference fd, according to global

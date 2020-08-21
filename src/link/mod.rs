@@ -84,7 +84,7 @@ impl LinkedProgram {
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct Import {
     pub path: Vec<String>,
     pub name: String,

@@ -222,32 +222,57 @@ pub fn compile_from_folder(
         })?;
         let mut string_table = StringTable::new();
         let res = parse_from_source(source, file_id, &mut string_table)?;
-        let mut checked_funcs = vec![];
-        let (imports, exported_funcs, imported_funcs, global_vars, string_table) =
-            typecheck::typecheck_top_level_decls(&res, &mut checked_funcs, string_table)
-                .map_err(|res3| CompileError::new(res3.reason.to_string(), res3.location))?;
+        let (imports, imported_funcs, funcs, named_types, global_vars, string_table, hm) =
+            typecheck::sort_top_level_decls(&res, string_table);
         paths.append(&mut imports.iter().map(|imp| imp.path[0].clone()).collect());
-        let code_out =
-            codegen::mavm_codegen(checked_funcs, &string_table, &imported_funcs, &global_vars)
-                .map_err(|e| CompileError::new(e.reason.to_string(), e.location))?;
         programs.insert(
             name.clone(),
-            CompiledProgram::new(
-                code_out.to_vec(),
-                exported_funcs,
+            (
+                imports,
                 imported_funcs,
-                global_vars.len(),
-                Some(SourceFileMap::new(
-                    code_out.len(),
-                    folder.join(name.clone()).display().to_string(),
-                )),
-                HashMap::new(),
+                funcs,
+                named_types,
+                global_vars,
+                string_table,
+                hm,
+                name,
             ),
         );
     }
+    let mut progs = vec![];
     let mut output = vec![programs.remove("main.mini").expect("no main")];
     output.append(&mut programs.values().cloned().collect());
-    Ok(output)
+    for (imports, imported_funcs, funcs, named_types, global_vars, string_table, hm, name) in output
+    {
+        let mut checked_funcs = vec![];
+        let (_imports, exported_funcs, imported_funcs, global_vars, string_table) =
+            typecheck::typecheck_top_level_decls(
+                imports,
+                imported_funcs,
+                funcs,
+                named_types,
+                global_vars,
+                string_table,
+                hm,
+                &mut checked_funcs,
+            )
+            .map_err(|res3| CompileError::new(res3.reason.to_string(), res3.location))?;
+        let code_out =
+            codegen::mavm_codegen(checked_funcs, &string_table, &imported_funcs, &global_vars)
+                .map_err(|e| CompileError::new(e.reason.to_string(), e.location))?;
+        progs.push(CompiledProgram::new(
+            code_out.to_vec(),
+            exported_funcs,
+            imported_funcs,
+            global_vars.len(),
+            Some(SourceFileMap::new(
+                code_out.len(),
+                folder.join(name.clone()).display().to_string(),
+            )),
+            HashMap::new(),
+        ))
+    }
+    Ok(progs)
 }
 
 ///Converts source string `source` into a series of `TopLevelDecl`s, uses identifiers from
@@ -297,7 +322,7 @@ pub fn compile_from_source(
     let res = parse_from_source(s, file_id, &mut string_table_1)?;
     let mut checked_funcs = Vec::new();
     let (imports, exported_funcs, imported_funcs, global_vars, string_table) =
-        typecheck::typecheck_top_level_decls(&res, &mut checked_funcs, string_table_1)
+        typecheck::sort_and_typecheck_top_level_decls(&res, &mut checked_funcs, string_table_1)
             .map_err(|res3| CompileError::new(res3.reason.to_string(), res3.location))?;
     println!("{:?}", imports);
     checked_funcs.iter().for_each(|func| {
