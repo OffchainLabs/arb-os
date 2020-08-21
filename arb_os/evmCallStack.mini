@@ -393,7 +393,7 @@ public impure func evmCallStack_doCall(
         }
         let updatedAcctStore = topFrame.accountStore;
         if (balance > 0) {
-            let updatedAcctStore = accountStore_transferEthBalance(
+            updatedAcctStore = accountStore_transferEthBalance(
                 updatedAcctStore,
                 callerAddr,
                 calleeAddr,
@@ -401,10 +401,10 @@ public impure func evmCallStack_doCall(
             )?;
         }
         let newTopFrame = struct {
-            runningAs: calleeAddr,
+            runningAs: runningAsAddr,
             runningCodeFrom: calleeAddr,
             accountStore: updatedAcctStore,
-            runningAsAccount: accountStore_get(updatedAcctStore, calleeAddr),
+            runningAsAccount: accountStore_get(updatedAcctStore, runningAsAddr),
             caller: topFrame.runningAs,
             callKind: kind,
             calldata: bytearray_extract(topFrame.memory, argsOffset, argsLength),
