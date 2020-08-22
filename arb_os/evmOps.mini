@@ -101,7 +101,7 @@ import func bytestream_new(from: ByteArray) -> ByteStream;
 import impure func translateEvmCodeSegment(bs: ByteStream) -> option<(impure func(), map<uint, impure func()>)>;
 
 import func keccak256(array: ByteArray, offset: uint, nbytes: uint) -> bytes32;
-import func keccakOfRlpEncodedAddrUintPair(addr: address, ui: uint) -> bytes32;
+import func keccakOfRlpEncodedUintPair(ui1: uint, ui2: uint) -> bytes32;
 
 
 // Any function with a name like evmOp_XXX is designed to implement the XXX instruction in EVM.
@@ -762,7 +762,7 @@ public impure func evmOp_create(value: uint, offset: uint, length: uint) -> addr
         if ( ! evmCallStack_setAccount(myAddr, updatedAcct)) {
             return address(0);
         }
-        let newAddress = address(keccakOfRlpEncodedAddrUintPair(myAddr, seqNum));
+        let newAddress = address(keccakOfRlpEncodedUintPair(uint(myAddr), seqNum));
         return doCreationOpcode(value, offset, length, newAddress);
     }
 
