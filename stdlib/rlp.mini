@@ -106,15 +106,25 @@ func rlp_hashUint(hasher: Hasher, val: uint) -> Hasher {
 }
 
 func rlp_hashAddress(hasher: Hasher, addr: address) -> Hasher {
+    if (addr == address(0)) {
+        return rlp_hashUint(hasher, 0);
+    }
     let addrBa = bytearray_set256(bytearray_new(0), 0, asm(256-160, uint(addr)) uint { shl });
     return rlp_hashBytes(hasher, addrBa, 0, 20);
 }
 
 func rlp_addressSize(addr: address) -> uint {
-    return 21;
+    if (addr == address(0)) {
+        return 1;
+    } else {
+        return 21;
+    }
 }
 
 public func rlp_encodeAddress(addr: address, ba: ByteArray, offset: uint) -> (ByteArray, uint) {
+    if (addr == address(0)) {
+        return rlp_encodeUint(0, ba, offset);
+    }
     let addrBa = bytearray_set256(bytearray_new(0), 0, asm(256-160, uint(addr)) uint { shl });
     return rlp_encodeBytes(addrBa, 0, 20, ba, offset);
 }
@@ -442,7 +452,8 @@ public func rlp_encodeUintPair(
 ) -> (ByteArray, uint) {
     // Leave one byte of space for the RLP list length indicator
     // It will always fit in one byte because max RLP size of address is 21 bytes, uint is 33,
-    //        and one-byte indicator covers sum-of-lengths <= 55
+    //        and one-byte indicator covers sum-of-lengths <= 55.
+    //        (and the ui1 value will always be cast from an address)
     let (uba, rlpLen1) = rlp_encodeUint(ui1, ba, offset+1);
     ba = uba;
     let (uba, rlpLen2) = rlp_encodeUint(ui2, ba, offset+1+rlpLen1);
