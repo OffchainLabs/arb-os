@@ -197,4 +197,3 @@ impure func arbsys_cloneContract(topFrame: EvmCallFrame, calldata: ByteArray) {
         evmOp_revert(0, 0);
     }
 }
-

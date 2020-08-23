@@ -75,6 +75,7 @@ import func bytearray_copy(
     to: ByteArray,     toOffset: uint,
     nbytes: uint
 ) -> ByteArray;
+import func bytearray_setByte(ba: ByteArray, offset: uint, value: uint) -> ByteArray;
 import func bytearray_set256(ba: ByteArray, offset: uint, value: uint) -> ByteArray;
 import func bytestream_new(ba: ByteArray) -> ByteStream;
 
@@ -108,6 +109,8 @@ import impure func emitLog(
 );
 
 import impure func mainRunLoop();
+
+import impure func sendMessage(msgType: uint, sender: address, data: ByteArray);
 
 // This is declared identically in gasAccounting.mini
 type GasUsage = struct {
@@ -154,11 +157,22 @@ type ResumeInfo = struct {  // information used to resume a call after a subcall
 }
 
 var globalCallStack: option<EvmCallFrame>;   // call frame of currently running call, if any
-var globalCurrentEthMessage: IncomingRequest;  // the message that launched the top-level call
+var globalCurrentIncomingRequest: IncomingRequest;  // request that launched the top-level call
+
+// This struct is declared identically in inbox.mini and elsewhere
+type IncomingRequest = struct {
+    kind: uint,               // type of message
+    blockNumber: uint,        // block number of the L1 block
+    timestamp: uint,          // timestamp of the L1 block
+    sender: address,          // address of the sender
+    inboxSeqNum: uint,        // sequence number in L1 inbox
+    msgData: MarshalledBytes  // contents of the message, as a marshalled bytearray
+}
 
 public impure func evmCallStack_init() {
     globalCallStack = None<EvmCallFrame>;
 }
+
 
 type TxRequestData = struct {
     maxGas: uint,
@@ -197,7 +211,7 @@ public impure func initEvmCallStack(
                 );
             }
 
-            globalCurrentEthMessage = request.incomingRequest;
+            globalCurrentIncomingRequest = request.incomingRequest;
 
             // pay callvalue from caller to the called contract
             // payment will only be recorded inside the callframe, so it will be discarded if the call reverts
@@ -296,7 +310,7 @@ public impure func initEvmCallStackForConstructor(
     // The constructor will run, and (if it succeeds) it will return code, which will become the new
     //      code for this new account.
 
-    globalCurrentEthMessage = request.incomingRequest;
+    globalCurrentIncomingRequest = request.incomingRequest;
 
     // Create a new account to run the constructor code.
     let acctStore = accountStore_set(
@@ -516,7 +530,7 @@ public impure func evmCallStack_returnFromCall(
                     } else {
                         // Somehow the constructor didn't have storage; report error and recover.
                         emitLog(
-                            globalCurrentEthMessage,
+                            globalCurrentIncomingRequest,
                             6,
                             None<ByteArray>,
                             None<EvmLogs>,
@@ -549,21 +563,38 @@ public impure func evmCallStack_returnFromCall(
 
                     // Emit log item reporting success
                     emitLog(
-                        globalCurrentEthMessage,
+                        globalCurrentIncomingRequest,
                         0,
                         Some(returnData),
                         Some(topFrame.evmLogs),
                         Some(gasUsage)
                     );
+
+                    if (globalCurrentIncomingRequest.kind == 5) {
+                        // successfully created a buddy contract -- announce that as a message
+                        sendMessage(
+                            5,
+                            globalCurrentIncomingRequest.sender,
+                            bytearray_setByte(bytearray_new(0), 0, 1)
+                        );
+                    }
                 } else {
                     // Compilation of resulting code failed; report an error.
                     emitLog(
-                        globalCurrentEthMessage,
+                        globalCurrentIncomingRequest,
                         1,
                         None<ByteArray>,
                         None<EvmLogs>,
                         Some(gasUsage)
                     );
+                    if (globalCurrentIncomingRequest.kind == 5) {
+                        // failed to create a buddy contract -- announce that as a message
+                        sendMessage(
+                            5,
+                            globalCurrentIncomingRequest.sender,
+                            bytearray_setByte(bytearray_new(0), 0, 0)
+                        );
+                    }
                 }
             } else {
                 if (topFrame.callKind != 3) {
@@ -591,7 +622,7 @@ public impure func evmCallStack_returnFromCall(
 
                 // Emit a log item reporting success
                 emitLog(
-                    globalCurrentEthMessage,
+                    globalCurrentIncomingRequest,
                     0,
                     Some(returnData),
                     Some(topFrame.evmLogs),
@@ -601,7 +632,7 @@ public impure func evmCallStack_returnFromCall(
         } else {
             // Request failed
             emitLog(
-                globalCurrentEthMessage,
+                globalCurrentIncomingRequest,
                 1,
                 Some(returnData),
                 None<EvmLogs>,
