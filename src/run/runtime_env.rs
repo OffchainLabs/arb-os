@@ -84,11 +84,21 @@ impl RuntimeEnvironment {
         self.next_inbox_seq_num = self.next_inbox_seq_num.add(&Uint256::one());
         self.l1_inbox.push(l1_msg.clone());
         self.recorder.add_msg(l1_msg);
+
         msg_id
     }
 
-    pub fn insert_l2_message(&mut self, sender_addr: Uint256, msg: &[u8]) -> Uint256 {
-        let default_id = self.insert_l1_message(3, sender_addr.clone(), msg);
+    pub fn insert_l2_message(
+        &mut self,
+        sender_addr: Uint256,
+        msg: &[u8],
+        is_buddy_deploy: bool,
+    ) -> Uint256 {
+        let default_id = self.insert_l1_message(
+            if is_buddy_deploy { 5 } else { 3 },
+            sender_addr.clone(),
+            msg,
+        );
         if msg[0] == 0 {
             Uint256::avm_hash2(
                 &sender_addr,
@@ -120,7 +130,25 @@ impl RuntimeEnvironment {
         buf.extend(value.to_bytes_be());
         buf.extend_from_slice(data);
 
-        self.insert_l2_message(sender_addr.clone(), &buf)
+        self.insert_l2_message(sender_addr.clone(), &buf, false)
+    }
+
+    pub fn insert_buddy_deploy_message(
+        &mut self,
+        sender_addr: Uint256,
+        max_gas: Uint256,
+        gas_price_bid: Uint256,
+        value: Uint256,
+        data: &[u8],
+    ) -> Uint256 {
+        let mut buf = vec![1u8];
+        buf.extend(max_gas.to_bytes_be());
+        buf.extend(gas_price_bid.to_bytes_be());
+        buf.extend(Uint256::zero().to_bytes_be()); // destination address 0
+        buf.extend(value.to_bytes_be());
+        buf.extend_from_slice(data);
+
+        self.insert_l2_message(sender_addr.clone(), &buf, true)
     }
 
     pub fn new_batch(&self) -> Vec<u8> {
@@ -181,7 +209,7 @@ impl RuntimeEnvironment {
     }
 
     pub fn insert_batch_message(&mut self, sender_addr: Uint256, batch: &[u8]) {
-        self.insert_l2_message(sender_addr, batch);
+        self.insert_l2_message(sender_addr, batch, false);
     }
 
     pub fn _insert_nonmutating_call_message(
@@ -197,7 +225,7 @@ impl RuntimeEnvironment {
         buf.extend(to_addr.to_bytes_be());
         buf.extend_from_slice(data);
 
-        self.insert_l2_message(sender_addr, &buf);
+        self.insert_l2_message(sender_addr, &buf, false);
     }
 
     pub fn insert_erc20_deposit_message(
@@ -663,8 +691,8 @@ impl RtEnvRecorder {
         if !(self.sends == machine.runtime_env.recorder.sends) {
             print_output_differences(
                 "send",
-                self.sends.clone(),
                 machine.runtime_env.recorder.sends,
+                self.sends.clone(),
             );
             return false;
         }

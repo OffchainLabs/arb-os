@@ -267,7 +267,15 @@ public impure func handleL2Request(
         if (request.seqNum == None<uint>) {
             request = request with { seqNum: Some(fetchAndIncrSequenceNum(request.caller)) };
         }
-        request = request with { calleeAddr: address(keccakOfRlpEncodedAddrUintPair(request.caller, request.seqNum?)) };
+        if (request.incomingRequest.kind == 5) {
+            // it's a buddy contract deployment; hardwire the new contract address
+            request = request with { calleeAddr: request.caller };
+        } else {
+            // ordinary contract deploy; use the standard formula to calculate new contract address
+            request = request with {
+                calleeAddr: address(keccakOfRlpEncodedAddrUintPair(request.caller, request.seqNum?))
+            };
+        }
 
         initEvmCallStackForConstructor(
             codeBytes,
