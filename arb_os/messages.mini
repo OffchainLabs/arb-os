@@ -95,7 +95,7 @@ import func bytestream_get256(bs: ByteStream) -> option<(ByteStream, uint)>;
 import func bytestream_skipBytes(bs: ByteStream, nbytes: uint) -> option<ByteStream>;
 import func bytestream_getRemainingBytes(bs: ByteStream) -> ByteArray;
 
-import func keccakOfRlpEncodedAddrUintPair(addr: address, ui: uint) -> bytes32;
+import func keccakOfRlpEncodedUintPair(ui1: uint, ui2: uint) -> bytes32;
 
 import func translateEvmCodeSegment(bs: ByteStream) -> option<(impure func(), map<uint, impure func()>)>;
 
@@ -113,7 +113,7 @@ type IncomingRequest = struct {
 
 public impure func handleL1Request(
     msg: IncomingRequest
-) -> option<()> {   // return None if message format error; Some(()) if other error; if no error, never return
+) -> option<()> {   // return None if error; otherwise return Some(()) or do a tx and never return from here
     // Parse an incoming message and do appropriate computations
     let inStream = bytestream_new(bytearray_unmarshalBytes(msg.msgData));
 
@@ -263,6 +263,7 @@ public impure func handleL2Request(
         let codeBytes = request.calldata;
         request = request with { calldata: bytearray_new(0) };
         let (codept, evmJumpTable) = translateEvmCodeSegment(bytestream_new(codeBytes))?;
+        let (codept, evmJumpTable) = translateEvmCodeSegment(bytestream_new(codeBytes))?;
 
         if (request.seqNum == None<uint>) {
             request = request with { seqNum: Some(fetchAndIncrSequenceNum(request.caller)) };
@@ -273,7 +274,7 @@ public impure func handleL2Request(
         } else {
             // ordinary contract deploy; use the standard formula to calculate new contract address
             request = request with {
-                calleeAddr: address(keccakOfRlpEncodedAddrUintPair(request.caller, request.seqNum?))
+                calleeAddr: address(keccakOfRlpEncodedUintPair(uint(request.caller), request.seqNum?))
             };
         }
 
