@@ -139,8 +139,10 @@ impure func arbsys_withdrawEth(topFrame: EvmCallFrame, calldata: ByteArray) {
     let destAddr = address(bytearray_get256(calldata, 4));
     let amount = evmCallFrame_getCallvalue(topFrame);
 
-    if let Some(updatedAcct) = account_deductFromEthBalance(senderAcct, amount) {
-        if ( ! evmCallStack_setAccount(senderAddr, updatedAcct)) {
+    let arbSysAddr = evmCallFrame_runningAsAddress(topFrame);
+    let arbSysAccount = evmCallFrame_getAccount(topFrame, arbSysAddr);
+    if let Some(updatedAcct) = account_deductFromEthBalance(arbSysAccount, amount) {
+        if ( ! evmCallStack_setAccount(arbSysAddr, updatedAcct)) {
             evmOp_revert(0, 0);
         }
         let messageData = bytearray_extract(calldata, 4, 32);
