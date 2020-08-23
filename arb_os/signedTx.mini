@@ -46,6 +46,7 @@ import impure func chainParams_chainId() -> uint;
 
 import func keccak256(ba: ByteArray, offset: uint, nbytes: uint) -> bytes32;
 
+
 // This structure defines an incoming request.
 // It is defined identically in inbox.mini and elsewhere.
 type IncomingRequest = struct {

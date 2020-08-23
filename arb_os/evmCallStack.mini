@@ -61,6 +61,7 @@ import func account_setContractInfo(
     storage: StorageMap
 ) -> Account;
 import func account_fetchAndIncrSeqNum(account: Account) -> (uint, Account);
+import func account_incrSeqNum(account: Account) -> Account;
 import func pristineAccount(addr: address) -> Account;
 
 import func evmlogs_empty() -> EvmLogs;
@@ -74,6 +75,7 @@ import func bytearray_copy(
     to: ByteArray,     toOffset: uint,
     nbytes: uint
 ) -> ByteArray;
+import func bytearray_setByte(ba: ByteArray, offset: uint, value: uint) -> ByteArray;
 import func bytearray_set256(ba: ByteArray, offset: uint, value: uint) -> ByteArray;
 import func bytestream_new(ba: ByteArray) -> ByteStream;
 
@@ -108,6 +110,10 @@ import impure func emitLog(
 
 import impure func mainRunLoop();
 
+import impure func sendMessage(msgType: uint, sender: address, data: ByteArray);
+import impure func sendQueuedMessages(queue: Queue);
+
+
 // This is declared identically in gasAccounting.mini
 type GasUsage = struct {
     gasUsed: uint,
@@ -134,6 +140,7 @@ type EvmCallFrame = struct {
     evmLogs: EvmLogs,                   // EVM logs created by this call and its subcalls
     selfDestructQueue: Queue,           // set of self-destruct directives created by this call and its subcalls
     resumeInfo: option<ResumeInfo>,     // if call is suspended, its state will be saved here
+    sendQueue: Queue,                   // queue of messages to be sent if the transaction succeeds
     parent: option<any>,                // call-frame that created this one, or None if this is user call
                       // parent is really an option<EvmCallFrame>, but compiler doesn't allow recursive types
 }
@@ -153,11 +160,22 @@ type ResumeInfo = struct {  // information used to resume a call after a subcall
 }
 
 var globalCallStack: option<EvmCallFrame>;   // call frame of currently running call, if any
-var globalCurrentEthMessage: IncomingRequest;  // the message that launched the top-level call
+var globalCurrentIncomingRequest: IncomingRequest;  // request that launched the top-level call
+
+// This struct is declared identically in inbox.mini and elsewhere
+type IncomingRequest = struct {
+    kind: uint,               // type of message
+    blockNumber: uint,        // block number of the L1 block
+    timestamp: uint,          // timestamp of the L1 block
+    sender: address,          // address of the sender
+    inboxSeqNum: uint,        // sequence number in L1 inbox
+    msgData: MarshalledBytes  // contents of the message, as a marshalled bytearray
+}
 
 public impure func evmCallStack_init() {
     globalCallStack = None<EvmCallFrame>;
 }
+
 
 type TxRequestData = struct {
     maxGas: uint,
@@ -182,7 +200,22 @@ public impure func initEvmCallStack(
         )
     ) {
         if (gasAccounting_startTxCharges(request.maxGas, request.gasPrice, request.caller) != None<()>) {
-            globalCurrentEthMessage = request.incomingRequest;
+            // increment the caller's sequence number, if caller has sufficient balance
+            let acctStore = getGlobalAccountStore();
+            if (account_getBalance(accountStore_get(acctStore, request.caller)) >= request.value) {
+                setGlobalAccountStore(
+                    accountStore_set(
+                        acctStore,
+                        request.caller,
+                        account_incrSeqNum(
+                            accountStore_get(acctStore, request.caller)
+                        )
+                    )
+                );
+            }
+
+            globalCurrentIncomingRequest = request.incomingRequest;
+
             // pay callvalue from caller to the called contract
             // payment will only be recorded inside the callframe, so it will be discarded if the call reverts
             if let Some(globalAS) = accountStore_transferEthBalance(
@@ -191,6 +224,7 @@ public impure func initEvmCallStack(
                 request.calleeAddr,
                 request.value
             ) {
+
                 globalCallStack = Some(struct {
                     runningAs: request.calleeAddr,
                     runningCodeFrom: request.calleeAddr,
@@ -205,6 +239,7 @@ public impure func initEvmCallStack(
                     evmLogs: evmlogs_empty(),
                     selfDestructQueue: queue_new(),
                     resumeInfo: None<ResumeInfo>,
+                    sendQueue: queue_new(),
                     parent: None<any>
                 });
 
@@ -226,6 +261,21 @@ public impure func initEvmCallStack(
         }
     } else {
         // no contract at this address, so treat tx as a simple eth transfer
+
+        // increment the caller's sequence number, if caller has sufficient balance
+        let acctStore = getGlobalAccountStore();
+        if (account_getBalance(accountStore_get(acctStore, request.caller)) >= request.value) {
+            setGlobalAccountStore(
+                accountStore_set(
+                    acctStore,
+                    request.caller,
+                    account_incrSeqNum(
+                        accountStore_get(acctStore, request.caller)
+                    )
+                )
+            );
+        }
+
         if (request.value > 0) {
             // transfer value to destination address
             if let Some(globalAS) = accountStore_transferEthBalance(
@@ -264,7 +314,7 @@ public impure func initEvmCallStackForConstructor(
     // The constructor will run, and (if it succeeds) it will return code, which will become the new
     //      code for this new account.
 
-    globalCurrentEthMessage = request.incomingRequest;
+    globalCurrentIncomingRequest = request.incomingRequest;
 
     // Create a new account to run the constructor code.
     let acctStore = accountStore_set(
@@ -295,6 +345,7 @@ public impure func initEvmCallStackForConstructor(
             evmLogs: evmlogs_empty(),
             selfDestructQueue: queue_new(),
             resumeInfo: None<ResumeInfo>,
+            sendQueue: queue_new(),
             parent: None<any>
         });
 
@@ -361,7 +412,7 @@ public impure func evmCallStack_doCall(
         }
         let updatedAcctStore = topFrame.accountStore;
         if (balance > 0) {
-            let updatedAcctStore = accountStore_transferEthBalance(
+            updatedAcctStore = accountStore_transferEthBalance(
                 updatedAcctStore,
                 callerAddr,
                 calleeAddr,
@@ -369,10 +420,10 @@ public impure func evmCallStack_doCall(
             )?;
         }
         let newTopFrame = struct {
-            runningAs: calleeAddr,
+            runningAs: runningAsAddr,
             runningCodeFrom: calleeAddr,
             accountStore: updatedAcctStore,
-            runningAsAccount: accountStore_get(updatedAcctStore, calleeAddr),
+            runningAsAccount: accountStore_get(updatedAcctStore, runningAsAddr),
             caller: topFrame.runningAs,
             callKind: kind,
             calldata: bytearray_extract(topFrame.memory, argsOffset, argsLength),
@@ -382,6 +433,7 @@ public impure func evmCallStack_doCall(
             evmLogs: topFrame.evmLogs,
             selfDestructQueue: topFrame.selfDestructQueue,
             resumeInfo: None<ResumeInfo>,
+            sendQueue: topFrame.sendQueue,
             parent: Some(topFrame)
         };
 
@@ -435,7 +487,8 @@ public impure func evmCallStack_returnFromCall(
             newTopFrame = newTopFrame
                 with { accountStore: topFrame.accountStore }
                 with { runningAsAccount: accountStore_get(topFrame.accountStore, newTopFrame.runningAs) }
-                with { evmLogs: topFrame.evmLogs };
+                with { evmLogs: topFrame.evmLogs }
+                with { sendQueue: topFrame.sendQueue };
         }
 
         // set up returnInfo in caller's frame
@@ -484,7 +537,7 @@ public impure func evmCallStack_returnFromCall(
                     } else {
                         // Somehow the constructor didn't have storage; report error and recover.
                         emitLog(
-                            globalCurrentEthMessage,
+                            globalCurrentIncomingRequest,
                             6,
                             None<ByteArray>,
                             None<EvmLogs>,
@@ -515,23 +568,43 @@ public impure func evmCallStack_returnFromCall(
                         uint(topFrame.runningAs)
                     );
 
+                    // emit queued sends
+                    sendQueuedMessages(topFrame.sendQueue);
+
                     // Emit log item reporting success
                     emitLog(
-                        globalCurrentEthMessage,
+                        globalCurrentIncomingRequest,
                         0,
                         Some(returnData),
                         Some(topFrame.evmLogs),
                         Some(gasUsage)
                     );
+
+                    if (globalCurrentIncomingRequest.kind == 5) {
+                        // successfully created a buddy contract -- announce that as a message
+                        sendMessage(
+                            5,
+                            globalCurrentIncomingRequest.sender,
+                            bytearray_setByte(bytearray_new(0), 0, 1)
+                        );
+                    }
                 } else {
                     // Compilation of resulting code failed; report an error.
                     emitLog(
-                        globalCurrentEthMessage,
+                        globalCurrentIncomingRequest,
                         1,
                         None<ByteArray>,
                         None<EvmLogs>,
                         Some(gasUsage)
                     );
+                    if (globalCurrentIncomingRequest.kind == 5) {
+                        // failed to create a buddy contract -- announce that as a message
+                        sendMessage(
+                            5,
+                            globalCurrentIncomingRequest.sender,
+                            bytearray_setByte(bytearray_new(0), 0, 0)
+                        );
+                    }
                 }
             } else {
                 if (topFrame.callKind != 3) {
@@ -553,13 +626,17 @@ public impure func evmCallStack_returnFromCall(
                         let (victim, owner) = unsafecast<(address, address)>(item);
                         acctStore = accountStore_destroyAndTransferBalance(acctStore, victim, owner);
                     }
+
+                    // emit queued sends
+                    sendQueuedMessages(topFrame.sendQueue);
+
                     // Save results back to the main globalAccountStore
                     setGlobalAccountStore(acctStore,);
                 }
 
                 // Emit a log item reporting success
                 emitLog(
-                    globalCurrentEthMessage,
+                    globalCurrentIncomingRequest,
                     0,
                     Some(returnData),
                     Some(topFrame.evmLogs),
@@ -569,7 +646,7 @@ public impure func evmCallStack_returnFromCall(
         } else {
             // Request failed
             emitLog(
-                globalCurrentEthMessage,
+                globalCurrentIncomingRequest,
                 1,
                 Some(returnData),
                 None<EvmLogs>,
@@ -725,6 +802,19 @@ public impure func evmCallStack_setTopFrameMemory(mem: ByteArray) -> bool {
     } else {
         return false;
     }
+}
+
+public impure func evmCallStack_queueMessage(msg: any) {
+    if let Some(topFrame) = globalCallStack {
+        globalCallStack = Some(
+            topFrame with {
+                sendQueue: queue_put(topFrame.sendQueue, msg)
+            }
+        );
+        return;
+    }
+
+    evmCallStack_callHitError(14);
 }
 
 public impure func evmCallStack_transferEthFromCurrent(
