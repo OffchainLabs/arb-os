@@ -121,6 +121,14 @@ impure func getFromL1Inbox(inbox: Inbox) -> Inbox {
         }
     }
     let newMsg = asm() IncomingRequest { inbox };
+
+    if (newMsg.blockNumber == 0) {
+        newMsg = newMsg with { blockNumber: inbox.blockNum };
+    }
+    if (newMsg.timestamp == 0) {
+        newMsg = newMsg with { timestamp: inbox.timestamp };
+    }
+
     return inbox with {
         queue: queue_put(inbox.queue, newMsg)
     } with {
@@ -213,6 +221,11 @@ public impure func inbox_getNextUnpackedRequest() -> (
                     }
                     // else request was malformatted, ignore it and execute loop again to get another
                 }
+            } elseif (msg.kind == 5) {
+                if let Some(txRequest) = translateBuddyDeployTx(msg) {
+                    return (None<IncomingRequest>, Some(txRequest));
+                }
+                // else request was malformatted, ignore it and execute loop again to get another
             } else {
                 return (Some(msg), None<TxRequestData>);
             }
@@ -268,6 +281,34 @@ func translateUnsignedTx(request: IncomingRequest) -> option<TxRequestData> {
             seqNum: seqNum,
             caller: request.sender,
             calleeAddr: address(destAddrAsUint),
+            value: value,
+            calldata: calldata,
+            incomingRequest: request
+        }
+    );
+}
+
+func translateBuddyDeployTx(request: IncomingRequest) -> option<TxRequestData> {
+    let inStream = bytestream_new(bytearray_unmarshalBytes(request.msgData));
+
+    let (us, maxGas) = bytestream_get256(inStream)?;
+    inStream = us;
+
+    let (us, gasPrice) = bytestream_get256(inStream)?;
+    inStream = us;
+
+    let (us, value) = bytestream_get256(inStream)?;
+    inStream = us;
+
+    let calldata = bytestream_getRemainingBytes(inStream);
+
+    return Some(
+        struct {
+            maxGas: maxGas,
+            gasPrice: gasPrice,
+            seqNum: None<uint>,
+            caller: request.sender,
+            calleeAddr: address(0),
             value: value,
             calldata: calldata,
             incomingRequest: request
