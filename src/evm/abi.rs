@@ -135,7 +135,7 @@ impl AbiForContract {
                 &augmented_code,
             )
         };
-        machine.runtime_env.end_of_block(sender_addr);
+        machine.runtime_env.end_of_block(sender_addr.clone());
 
         let _gas_used = if debug {
             machine.debug(None)
