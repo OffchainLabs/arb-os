@@ -25,11 +25,13 @@ An incoming message is a 6-tuple:
 * RequestID: 0 for the first message inserted into the inbox; otherwise 1 + the requestID of the previous message inserted into the inbox
 * Type-specific data: (byte array)
 
-The L1 block number and/or L1 timestamp fields can be set to zero. Zero values in these fields will be replaced, by ArbOS, with the value of the same field in the previous message. If there was no previous message, ArbOS will leave these values as zero.
+The L1 block number and/or L1 timestamp fields can be set to zero. Zero values in these fields will be replaced, by ArbOS, with the value of the same field in the previous message. If there was no previous message, ArbOS will leave these values as zero. (Note that the EthBridge will never create messages with zeroed block number or timestamp fields. The treatment of zero block number and timestamp values exists only as a convenience for use in private executions of a chain.)
+
+Each message type is associated with rules, impose by the Arbitrum protocol, regarding which properties the EthBridge must verify before sending a specific message type. These rules are not described here because they are not a part of the data format.
 
 ##### Message type 0: Eth deposit
 
-This message type must be initiated by the EthBridge. It represents a transfer of Eth to  an account on the L2 chain.  
+It represents a transfer of Eth to  an account on the L2 chain.  
 
 Type-specific data: 
 
@@ -38,7 +40,7 @@ Type-specific data:
 
 ##### Message type 1: ERC20 deposit
 
-This message type must be initiated by the EthBridge. It represents a transfer of ERC20 tokens to an account on the L2 chain.  
+It represents a transfer of ERC20 tokens to an account on the L2 chain.  
 
 Type-specific data: 
 
@@ -83,18 +85,7 @@ Each chunk is:
 * option payload length (64-bit uint)
 * option payload
 
-Option ID 1 sets parameters for an optional sequencer. Payload data is:
-
-* sequencer address (address encoded as uint)
-* delay on non-sequencer messages, in blocks (64-bit uint)
-
-Option ID 3 sets parameters for optional validator reimbursement. Payload data is:
-
-* total charge for time, in wei per second (uint)
-* total charge for ArbGas, in wei per ArbGas (uint)
-* total charge for storage, in wei per EVM storage cell (uint)
-* number of invited validators (64-bit uint)
-* addresses of validators (sequence of 160-bit addresses)
+At present, no options are supported.
 
 ##### Message type 5: buddy contract creation
 
@@ -153,6 +144,8 @@ An L2 message consists of:
 
 The L2 messages in a batch will be separated, and treated as if each had arrived separately, in the order in which they appear in the batch.
 
+The enclosed L2 message may not have subtype 5 (sequencer batch).  All other subtypes are allowed.
+
 **Subtype 4: signed tx from user** has subtype-specific data consisting of an RLP-encoded list containing:
 
 * ArbGas limit (RLP-encoded uint)
@@ -169,14 +162,9 @@ Here v, r, and s comprise an EIP-155 compliant ECDSA signature by the transactio
 
 The destination address is encoded consistently with Ethereum: a zero address is encoded as an empty byte array, and any other value is encoded as an array of 20 bytes.  
 
-**Subtype 5: sequencer batch** has subtype-specific data of:
+**Subtype 5** is reserved for future use.
 
-* release block number (64-bit uint)
-* a sequence of one or more items, in the same format as subtype 3
-
-The release block number specifies an L1 block number. The sequencer is directing ArbOS to stop delaying any messages that arrived at or before the specified block number. Those no longer delayed messages, if any, will be processed before the contents of the batch. ArbOS will discard a message of this subtype unless it was sent by the authorized sequencer.
-
-**Subtype 6: heartbeat message** has no subtype-specific data.
+**Subtype 6: heartbeat message** has no subtype-specific data. This message has no effect, except to notify ArbOS that the block number and timestamp in the enclosing L1 message has been reached. ArbOS merely notes the block number and timestamp, then discards the message.
 
 ## Logs
 
