@@ -51,7 +51,7 @@ import func bytearray_marshalFull(ba: ByteArray) -> MarshalledBytes;
 import impure func inbox_currentBlockNumber() -> uint;
 import impure func inbox_currentTimestamp() -> uint;
 
-import impure func sendMessage(msgType: uint, sender: address, data: ByteArray);
+import impure func queueMessageForSend(msgType: uint, sender: address, data: ByteArray);
 
 
 type ArbSysMessage = struct {
@@ -112,7 +112,7 @@ impure func arbsys_withdrawErc20(topFrame: EvmCallFrame, calldata: ByteArray) {
     let amount = bytearray_get256(calldata, 36);
 
     let messageData = bytearray_extract(calldata, 4, 64);
-    sendMessage(1, senderAddr, messageData);
+    queueMessageForSend(1, senderAddr, messageData);
     evmOp_return(0, 0);
 }
 
@@ -126,7 +126,7 @@ impure func arbsys_withdrawErc721(topFrame: EvmCallFrame, calldata: ByteArray) {
     let id = bytearray_get256(calldata, 36);
 
     let messageData = bytearray_extract(calldata, 4, 64);
-    sendMessage(2, senderAddr, messageData);
+    queueMessageForSend(2, senderAddr, messageData);
     evmOp_return(0, 0);
 }
 
@@ -139,13 +139,15 @@ impure func arbsys_withdrawEth(topFrame: EvmCallFrame, calldata: ByteArray) {
     let destAddr = address(bytearray_get256(calldata, 4));
     let amount = evmCallFrame_getCallvalue(topFrame);
 
-    if let Some(updatedAcct) = account_deductFromEthBalance(senderAcct, amount) {
-        if ( ! evmCallStack_setAccount(senderAddr, updatedAcct)) {
+    let arbSysAddr = evmCallFrame_runningAsAddress(topFrame);
+    let arbSysAccount = evmCallFrame_getAccount(topFrame, arbSysAddr);
+    if let Some(updatedAcct) = account_deductFromEthBalance(arbSysAccount, amount) {
+        if ( ! evmCallStack_setAccount(arbSysAddr, updatedAcct)) {
             evmOp_revert(0, 0);
         }
         let messageData = bytearray_extract(calldata, 4, 32);
         messageData = bytearray_set256(messageData, 32, amount);
-        sendMessage(0, senderAddr, messageData);
+        queueMessageForSend(0, senderAddr, messageData);
         evmOp_return(0, 0);
     }
 
@@ -195,4 +197,3 @@ impure func arbsys_cloneContract(topFrame: EvmCallFrame, calldata: ByteArray) {
         evmOp_revert(0, 0);
     }
 }
-

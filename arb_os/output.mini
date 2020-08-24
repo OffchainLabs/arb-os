@@ -16,13 +16,21 @@
 
 import type ByteArray;
 import type MarshalledBytes;
+import type Queue;
 import type EvmLogs;
 
 import func bytearray_new(capacity: uint) -> ByteArray;
 import func bytearray_marshalFull(ba: ByteArray) -> MarshalledBytes;
+
+import func queue_get(queue: Queue) -> option<(Queue, any)>;
+
 import func evmlogs_empty() -> EvmLogs;
 import func evmlogs_numLogs(logs: EvmLogs) -> uint;
+
+import impure func evmCallStack_queueMessage(message: any);
+
 import impure func chainParams_speedLimitPerSecond() -> uint;
+
 import impure func inbox_currentBlockNumber() -> uint;
 import impure func inbox_currentTimestamp() -> uint;
 
@@ -252,13 +260,39 @@ impure func emitBlockSummaryLog(blockNum: uint, timestamp: uint) {
     ),) { log };
 }
 
-public impure func sendMessage(msgType: uint, sender: address, data: ByteArray) {
-    outputStats_addSend();
-    asm(
+public impure func queueMessageForSend(msgType: uint, sender: address, data: ByteArray) {
+    evmCallStack_queueMessage(
         (
             msgType,
             uint(sender),
             bytearray_marshalFull(data),
-        ),
-    ) { send };
+        )
+    );
+}
+
+public impure func sendQueuedMessages(queue: Queue) {
+    loop {
+        if let Some(res) = queue_get(queue) {
+            let (uq, msg) = res;
+            queue = uq;
+            sendPackagedMessage(msg);
+        } else {
+            return;
+        }
+    }
+}
+
+public impure func sendMessage(msgType: uint, sender: address, data: ByteArray) {
+    sendPackagedMessage(
+        (
+            msgType,
+            uint(sender),
+            bytearray_marshalFull(data),
+        )
+    );
+}
+
+func sendPackagedMessage(msg: any) {
+    outputStats_addSend();
+    asm(msg,) { send };
 }
