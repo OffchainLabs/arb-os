@@ -19,11 +19,13 @@ Incoming messages are put into a chain's EthBridge-managed inbox, and received b
 An incoming message is a 6-tuple:
 
 * message type (uint)
-* L1 block number (uint): L1 block number when this message was inserted into the inbox
+* L1 block number (uint): L1 block number when this message was inserted into the inbox 
 * L1 timestamp (uint): timestamp of L1 block when this message was inserted into the inbox
 * Sender (address encoded as uint)
 * RequestID: 0 for the first message inserted into the inbox; otherwise 1 + the requestID of the previous message inserted into the inbox
 * Type-specific data: (byte array)
+
+The L1 block number and/or L1 timestamp fields can be set to zero. Zero values in these fields will be replaced, by ArbOS, with the value of the same field in the previous message. If there was no previous message, ArbOS will leave these values as zero.
 
 ##### Message type 0: Eth deposit
 
@@ -36,7 +38,7 @@ Type-specific data:
 
 ##### Message type 1: ERC20 deposit
 
-This message type must be initiated by the EthBridge. It represents a transfer of ERC20 tokens to  an account on the L2 chain.  
+This message type must be initiated by the EthBridge. It represents a transfer of ERC20 tokens to an account on the L2 chain.  
 
 Type-specific data: 
 
@@ -56,7 +58,7 @@ Type-specific data:
 
 ##### Message type 3: L2 message
 
-This message type is initiated by a client, via a transaction to the EthBridge. Its purpose is to deliver L2 data which the EthBridge does not need to understand. The EthBridge simply passes on the type-specific data uninterpreted. ArbOS will parse and validate the L2 data.
+This message type is initiated by a client, via a transaction to the EthBridge. Its purpose is to deliver to ArbOS an L2 data payload which the EthBridge does not need to understand. The EthBridge simply passes on the type-specific data uninterpreted. ArbOS will parse and validate the L2 data.
 
 Details of L2 message subtypes and formats are listed in a separate section below.
 
@@ -102,14 +104,10 @@ This message type allows an L1 contract to deploy an L2 contract at an L2 addres
 
 Type-specific data:
 
-* 1 (byte)
 * maximum ArbGas to use (uint)
 * ArbGas price bid, in wei (uint)
-* 0 (uint)
 * Eth payment, in wei (uint)
 * constructor code and data, encoded per Ethereum ABI (bytes)
-
-The EthBridge need not check the validity of the type-specific data. That is the responsibility of ArbOS.
 
 ##### Message type 6: reserved
 
@@ -169,12 +167,14 @@ The L2 messages in a batch will be separated, and treated as if each had arrived
 
 Here v, r, and s comprise an EIP-155 compliant ECDSA signature by the transaction's sender, based on the L2 chain's chainID.
 
+The destination address is encoded consistently with Ethereum: a zero address is encoded as an empty byte array, and any other value is encoded as an array of 20 bytes.  
+
 **Subtype 5: sequencer batch** has subtype-specific data of:
 
 * release block number (64-bit uint)
 * a sequence of one or more items, in the same format as subtype 3
 
-The release block number specifies an L1 block number. The sequencer is directing ArbOS to stop delaying any messages that arrived at or before the specified block number. ArbOS will discard a message of this subtype unless it was sent by the authorized sequencer.
+The release block number specifies an L1 block number. The sequencer is directing ArbOS to stop delaying any messages that arrived at or before the specified block number. Those no longer delayed messages, if any, will be processed before the contents of the batch. ArbOS will discard a message of this subtype unless it was sent by the authorized sequencer.
 
 **Subtype 6: heartbeat message** has no subtype-specific data.
 
@@ -237,13 +237,38 @@ For an unsigned transaction that is an L2 message of subtype 0, the requestID is
 				)
 		)
 
-For other transactions, the requestID is computed from incoming message contents as follows.  An incoming message is assigned a requestID of hash(chainID, inboxSeqNum), where inboxSeqNum is the value N such that this is the Nth message that has ever arrived in the chain's inbox.  If the incoming message includes a batch, the K'th item in the batch is assigned a requestID of hash(requestID of batch, index within batch).  If batches are nested, this rule is applied recursively.
+For other transactions, the requestID is computed from incoming message contents as follows.  An incoming message is assigned a requestID of hash(chainID, inboxSeqNum), where inboxSeqNum is the value N such that this is the Nth message that has ever arrived in the chain's inbox.  If the incoming message includes a batch, the K'th item in the batch is assigned a requestID of hash(requestID of batch, K).  If batches are nested, this rule is applied recursively.
 
-It is infeasible to find two distinct requests that will have the same requestID.  This is true because requestIDs are the output of a collision-free hash function, and it is not possible to create two distinct requests that will have the same input to the hash function.  Signed transaction IDs cannot collide with the other types, because the other types' hash preimages both start with a zero byte (because sender address and chainID are zero-filled in the most-significant byte of a big-endian value) and the RLP encoding of a list cannot start with a zero byte.  The other two types cannot have the same hash preimage because subtype-0 messages use a hash output as their second word, which with overwhelming probabilit will be too large to be feasible as the sequence number or batch index that occupies the same position in the default request ID scheme.
+It is infeasible to find two distinct requests that have the same requestID.  This is true because requestIDs are the output of a collision-free hash function, and it is not possible to create two distinct requests that will have the same input to the hash function.  Signed transaction IDs cannot collide with the other types, because the other types' hash preimages both start with a zero byte (because sender address and chainID are zero-filled in the most-significant byte of a big-endian value) and the RLP encoding of a list cannot start with a zero byte.  The other two types cannot have the same hash preimage because subtype-0 messages use a hash output as their second word, which with overwhelming probability will be too large to be feasible as the sequence number or batch index that occupies the same position in the default request ID scheme.
 
 ##### MarshalledData and the MarshalledDataHash algorithm
 
-TODO
+The MarshalledData format is a way to encode an arbitrary-size byte array as a set of nested tuples, in a format easily consumable by an Arbitrum VM.  The MarshalledData representation of a bytearray is the result of this pseudocode:
+
+function marshal(ba: ByteArray) -> MarshalledBytes {
+		let nwords = (ba.size + 31) / 32;
+		let words = ();
+		let i = 0;
+		while (i < nwords) {
+				words = (ba[32*i .. 32*(i+1)], words);  // zero-fill any bytes beyond end of ba
+				i = i + 1;
+		}
+		return (ba.size, words);
+}
+
+(In the above code, *ba[x..y]* extracts bytes *x* through *y-1* inclusive from the byte array *ba*, and converts them in big-endian fashion to an unsigned integer. If *y* is greater than the size of *ba*, any bytes beyond the end of *ba* are implicitly zero-filled.)
+
+The MarshalledDataHash algorithm computes a collision-free hash of a MarshalledData structure.  It is defined by this pseudocode:
+
+function marshalledDataHash(md: MarshalledData) -> uint256 {
+		let (size, contents) = md;
+		let ret = size;
+		while (contents != () ) {
+				ret = hash(ret, contents[0]);
+				contents = contents[1];
+		}
+		return ret;
+}
 
 ## Outgoing messages
 
@@ -257,22 +282,23 @@ An outgoing message consists of:
 
 There are four outgoing message types.
 
-**Type 0: Eth Withdrawal** has type-specific data of:
+**Type 0: Eth Withdrawal** is sent when an Eth withdrawal operation succeeds. It has type-specific data of:
 
 * destination address (address encoded as uint)
 * amount, in wei (uint)
 
-**Type 1: ERC20 Withdrawal** has type-specific data of:
-* token address(address encoded as uint), 
-* destination address(address encoded as uint),
+**Type 1: ERC20 Withdrawal** is sent when an ERC20 withdrawal operation succeeds. It has type-specific data of:
+
+* token address (address encoded as uint), 
+* destination address (address encoded as uint),
 *  amount (uint)
 
-**Type 2: ERC721 Withdrawal** has type-specific data of:
+**Type 2: ERC721 Withdrawal** is sent when an ERC721 withdrawal operation succeeds. It has type-specific data of:
 
-* token address(address encoded as uint), 
-* destination address(address encoded as uint),
+* token address (address encoded as uint), 
+* destination address (address encoded as uint),
 *  token ID (uint)
 
-**Type 5: Buddy contract notification** has no type-specific data.
+**Type 5: Buddy contract notification** is sent when a buddy contract deploy operation has concluded, whether or not the operation succeeded. It has one byte of type-specific data, which is 1 if the buddy contract was successfully created, or 0 otherwise.
 
 
