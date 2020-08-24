@@ -146,7 +146,7 @@ The L2 messages in a batch will be separated, and treated as if each had arrived
 
 The enclosed L2 message may not have subtype 5 (sequencer batch).  All other subtypes are allowed.
 
-**Subtype 4: signed tx from user** has subtype-specific data consisting of an RLP-encoded list containing:
+**Subtype 4: signed tx from user** has subtype-specific data that is identical to the standard Ethereum encoded transaction format. The subtype-specific data consists of an RLP-encoded list containing:
 
 * ArbGas limit (RLP-encoded uint)
 * ArbGas price bid, in wei (RLP-encoded uint)
