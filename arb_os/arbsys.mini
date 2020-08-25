@@ -205,5 +205,11 @@ impure func arbsys_getStorageAt(topFrame: EvmCallFrame, calldata: ByteArray) {
     }
 
     let updatedMem = bytearray_set256(evmCallStack_getTopFrameMemoryOrDie(), 0, ret);
-    evmOp_return(0, 32);
+    let success = evmCallStack_setTopFrameMemory(updatedMem);
+
+    if (success) {
+        evmOp_return(0, 32);
+    } else {
+        evmOp_revert(0, 0);
+    }
 }
