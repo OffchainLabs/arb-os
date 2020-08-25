@@ -1,22 +1,10 @@
 //
-// Copyright 2020, Offchain Labs, Inc.
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//    http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+// Copyright 2020, Offchain Labs, Inc. All rights reserved.
 //
 
 import type ByteStream;
 
-import impure func errorHandler();
+import func evmCallStack_callHitError(reason: uint);
 
 import func bytestream_atEof(bs: ByteStream) -> bool;
 import func bytestream_bytesReadSoFar(bs: ByteStream) -> uint;
@@ -42,6 +30,7 @@ import func evmOp_codesize();
 import func evmOp_delegatecall();
 import func evmOp_extcodesize();
 import func evmOp_extcodecopy();
+import func evmOp_extcodehash();
 import func evmOp_getjumpaddr();
 import func evmOp_log0();
 import func evmOp_log1();
@@ -157,12 +146,14 @@ public impure func translateEvmCodeSegment(
                             return Some((pushInstruction(0x03, restOfCode), evmJumpTable));
                         }
                     } else {
-                        if ( (opcode >= 0x04) && (opcode <= 0x09) ) { // DIV, MOD, SDIV, SMOD, ADDMOD, MULMOD
-                            return pushEvmInsnDenomCheck(opcode, restOfCode, evmJumpTable);
+                        if ( (opcode >= 0x04) && (opcode <= 0x07) ) { // DIV, MOD, SDIV, SMOD
+                            return pushEvmInsnDenomCheck(opcode, 2, restOfCode, evmJumpTable);
+                        } elseif ( (opcode >= 0x08) && (opcode <= 0x09) ) { // ADDMOD, MULMOD
+                            return pushEvmInsnDenomCheck(opcode, 3, restOfCode, evmJumpTable);
                         } elseif (opcode == 0x0a) { // EXP
                             return Some((pushInstruction(0x0a, restOfCode), evmJumpTable));
                         } elseif (opcode == 0x0b) { // SIGNEXTEND
-                            return Some((pushInstruction(0x1b, restOfCode), evmJumpTable));  // note diff opcode
+                            return Some((pushInstruction(0x0b, restOfCode), evmJumpTable));
                         }
                     }
                 } else {
@@ -252,6 +243,8 @@ public impure func translateEvmCodeSegment(
                             return pushEvmInsnCall(evmOp_returndatasize, restOfCode, evmJumpTable);
                         } elseif (opcode == 0x3e) { // RETURNDATACOPY
                             return pushEvmInsnCall(evmOp_returndatacopy, restOfCode, evmJumpTable);
+                        } elseif (opcode == 0x3f) { // EXTCODEHASH
+                            return pushEvmInsnCall(evmOp_extcodehash, restOfCode, evmJumpTable);
                         }
                     }
                 }
@@ -335,7 +328,7 @@ public impure func translateEvmCodeSegment(
                                 ));
                             } else {
                                 // should never happen; pushEvmInsnCall always returns Some
-                                errorHandler();
+                                evmCallStack_callHitError(16);
                                 return None;
                             }
                         }
@@ -445,12 +438,13 @@ public impure func translateEvmCodeSegment(
         }
     }
 
-    // opcode was not found, don't generate any code
-    return Some((restOfCode, evmJumpTable));
+    // opcode was not found, generate AVM error instruction
+    return Some((pushInstruction(0x73, restOfCode), evmJumpTable));
 }
 
 impure func pushEvmInsnDenomCheck(
-    opcode: uint, 
+    opcode: uint,
+    numStackOperands: uint,
     restOfCode: AvmCodePoint,
     evmJumpTable: map<uint, AvmCodePoint>
 ) -> option<(AvmCodePoint, map<uint, AvmCodePoint>)> {
@@ -459,19 +453,34 @@ impure func pushEvmInsnDenomCheck(
     // So we need to generate a little conditional to handle the special case.
     let doTheOp = pushInstruction(opcode, restOfCode);
     return Some((
-        pushInstruction(
-            0x41,  // dup1
+        pushDupn(
+            numStackOperands-1,  // dup denominator/modulus to top of stack
             pushInstructionImm(
                 0x35,  // cjump
                 doTheOp,
-                pushInstruction(
-                    0x73,  // error
-                    doTheOp
+                prependPops(
+                    numStackOperands,
+                    pushValue(
+                        0,
+                        pushInstructionImm(
+                            0x34, // jump
+                            restOfCode,
+                            doTheOp
+                        )
+                    )
                 )
             )
         ),
         evmJumpTable
     ));
+}
+
+impure func prependPops(numPops: uint, restOfCode: AvmCodePoint) -> AvmCodePoint {
+    while (numPops > 0) {
+        restOfCode = pushInstruction(0x30, restOfCode);   // pop instruction
+        numPops = numPops-1;
+    }
+    return restOfCode;
 }
 
 impure func pushDupn(
@@ -481,8 +490,8 @@ impure func pushDupn(
     // Generate code for a dupN pseudo-operation.
     // AVM supports this only for N <= 2, whereas EVM can ask for larger ones.
     // Note that N here uses the AVM semantics, which is off-by-one from the EVM semantics.
-    if (n == 2) {
-        return pushInstruction(0x42, restOfCode);  //dup2
+    if (n <= 2) {
+        return pushInstruction(0x40+n, restOfCode);  //dup_n
     } else {
         return pushInstruction(
             0x38,  // auxpush,

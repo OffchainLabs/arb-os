@@ -1,17 +1,5 @@
 //
-// Copyright 2020, Offchain Labs, Inc.
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//    http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+// Copyright 2020, Offchain Labs, Inc. All rights reserved.
 //
 
 import type ByteArray;
@@ -27,6 +15,8 @@ import func bytearray_set64(ba: ByteArray, idx: uint, val: uint) -> ByteArray;
 import func bytearray_get256(ba: ByteArray, offset: uint) -> uint;
 import func bytearray_set256(ba: ByteArray, offset: uint, value: uint) -> ByteArray;
 import func bytearray_marshalFull(ba: ByteArray) -> MarshalledBytes;
+import func bytearray_extract(ba: ByteArray, offset: uint, nbytes: uint) -> ByteArray;
+import func bytearray_copy(from: ByteArray, fromOffset: uint, to: ByteArray, toOffset: uint, nbytes: uint) -> ByteArray;
 
 import func marshalledBytes_hash(mb: MarshalledBytes) -> bytes32;
 
@@ -150,6 +140,30 @@ func tests() -> uint {
             != marshalledBytes_hash(bytearray_marshalFull(bytearray_set256(bytearray_new(0), 0, 0x6203cb97ced4e35e64eeaddf64d03b68bcb81b5ee3cb0205f7edb755a8a4198)))
     ) {
         return 15;
+    }
+    let ba = setupFromUnmarshal();
+    let ba2 = bytearray_extract(ba, 0, 41);
+    let ba3 = bytearray_copy(ba, 0, bytearray_new(0), 0, 41);
+    let mb2 = bytearray_marshalFull(ba2);
+    let mb3 = bytearray_marshalFull(ba3);
+    if (mb2 != mb3) {
+        return 16;
+    }
+
+    let ba = bytearray_new(0);
+    let i = 0;
+    while (i < 5000) {
+        ba = bytearray_set256(ba, i*32, i);
+        i = i+1;
+    }
+    i = 0;
+    let sum = 0;
+    while (i < 5000) {
+        sum = sum + bytearray_get256(ba, i*32);
+        i = i+1;
+    }
+    if (sum != (2500*4999)) {
+        return 17;
     }
 
 	return 0;

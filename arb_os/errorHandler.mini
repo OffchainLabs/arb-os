@@ -1,24 +1,12 @@
 //
-// Copyright 2020, Offchain Labs, Inc.
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//    http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+// Copyright 2020, Offchain Labs, Inc. All rights reserved.
 //
 
 import func emptyAvmStack();
 import impure func cleanAvmAuxStackAndCall(funcToCall: impure func());
 import impure func mainRunLoop();
 import impure func evmCallStack_isEmpty() -> bool;
-import impure func evmCallStack_callHitError();
+import impure func evmCallStack_callHitError(errInfo: any);
 
 
 public impure func errorHandler_init() {
@@ -44,7 +32,13 @@ public impure func errorHandler() {
     // That's OK, because the only "harm" done is that the double-error situation of application error plus ArbGas underflow
     //      gets detected as just an ArbGas underflow.  The effect on the application will be the same either way.
 
-    asm(666,) { debugprint };
+    if (asm() uint { getgas } > (~0 - 300)) {
+        // application ran out of ArbGas
+        asm(665,) { debugprint };
+    } else {
+        // some other error
+        asm(666,) { debugprint };
+    }
 
     if (evmCallStack_isEmpty()) {
         // Oh no, we must have hit an unexpected error in the runtime.
@@ -54,7 +48,7 @@ public impure func errorHandler() {
         cleanAvmAuxStackAndCall(mainRunLoop);  // this will never return
     } else {
         // Application code must have hit an error.
-        evmCallStack_callHitError();  // this will never return
+        evmCallStack_callHitError(0);  // this will never return
     }
     //NOTREACHED
     panic;

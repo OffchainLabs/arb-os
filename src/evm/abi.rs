@@ -1,17 +1,5 @@
 /*
- * Copyright 2020, Offchain Labs, Inc.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * Copyright 2020, Offchain Labs, Inc. All rights reserved.
  */
 
 use crate::mavm::Value;
@@ -85,17 +73,6 @@ impl AbiForContract {
                 }
             };
 
-            // strip cbor info at tail end of the code
-            /*
-            let cbor_length = u16::from_be_bytes(
-                decoded_insns[decoded_insns.len() - 2..]
-                    .try_into()
-                    .expect("unexpected u16 parsing error"),
-            );
-            let cbor_length = cbor_length as usize;
-            let decoded_insns = &decoded_insns[..(decoded_insns.len() - cbor_length - 2)];
-             */
-
             Ok(AbiForContract {
                 code_bytes: decoded_insns.to_vec(),
                 contract,
@@ -111,9 +88,11 @@ impl AbiForContract {
         &mut self,
         args: &[ethabi::Token],
         machine: &mut Machine,
+        deploy_as_buddy: bool,
         debug: bool,
     ) -> Option<Uint256> {
-        let initial_logs_len = machine.runtime_env.get_all_logs().len();
+        let initial_logs_len = machine.runtime_env.get_all_receipt_logs().len();
+        let initial_sends_len = machine.runtime_env.get_all_sends().len();
         let augmented_code = if let Some(constructor) = self.contract.constructor() {
             match constructor.encode_input(self.code_bytes.clone(), args) {
                 Ok(aug_code) => aug_code,
@@ -129,20 +108,31 @@ impl AbiForContract {
             .runtime_env
             .get_sequencer_address()
             .unwrap_or(Uint256::from_usize(1025));
-        let request_id = machine.runtime_env.insert_tx_message(
-            sender_addr,
-            Uint256::from_usize(1_000_000_000_000),
-            Uint256::zero(),
-            Uint256::zero(),
-            Uint256::zero(),
-            &augmented_code,
-        );
+        let request_id = if deploy_as_buddy {
+            machine.runtime_env.insert_buddy_deploy_message(
+                sender_addr.clone(),
+                Uint256::from_usize(1_000_000_000_000),
+                Uint256::zero(),
+                Uint256::zero(),
+                &augmented_code,
+            )
+        } else {
+            machine.runtime_env.insert_tx_message(
+                sender_addr.clone(),
+                Uint256::from_usize(1_000_000_000_000),
+                Uint256::zero(),
+                Uint256::zero(),
+                Uint256::zero(),
+                &augmented_code,
+            )
+        };
+
         let _gas_used = if debug {
             machine.debug(None)
         } else {
             machine.run(None)
         }; // handle this deploy message
-        let logs = machine.runtime_env.get_all_logs();
+        let logs = machine.runtime_env.get_all_receipt_logs();
 
         if logs.len() != initial_logs_len + 1 {
             println!(
@@ -150,6 +140,28 @@ impl AbiForContract {
                 logs.len() - initial_logs_len
             );
             return None;
+        }
+
+        if deploy_as_buddy {
+            let sends = machine.runtime_env.get_all_sends();
+            if sends.len() != initial_sends_len + 1 {
+                println!(
+                    "deploy: expected 1 new send, got {}",
+                    sends.len() - initial_sends_len
+                );
+                return None;
+            }
+            if let Value::Tuple(tup) = &sends[sends.len() - 1] {
+                if (tup[0] != Value::Int(Uint256::from_usize(5)))
+                    || (tup[1] != Value::Int(sender_addr))
+                {
+                    println!("deploy: incorrect values in send item");
+                    return None;
+                }
+            } else {
+                println!("malformed send item");
+                return None;
+            }
         }
 
         let log_item = &logs[logs.len() - 1];
@@ -190,14 +202,14 @@ impl AbiForContract {
             &calldata,
         );
 
-        let num_logs_before = machine.runtime_env.get_all_logs().len();
+        let num_logs_before = machine.runtime_env.get_all_receipt_logs().len();
         let num_sends_before = machine.runtime_env.get_all_sends().len();
         let _arbgas_used = if debug {
             machine.debug(None)
         } else {
             machine.run(None)
         };
-        let logs = machine.runtime_env.get_all_logs();
+        let logs = machine.runtime_env.get_all_receipt_logs();
         let sends = machine.runtime_env.get_all_sends();
         Ok((
             logs[num_logs_before..].to_vec(),

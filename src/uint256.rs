@@ -1,17 +1,5 @@
 /*
- * Copyright 2020, Offchain Labs, Inc.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * Copyright 2020, Offchain Labs, Inc. All rights reserved.
  */
 
 use ethereum_types::{H160, U256};
@@ -90,7 +78,7 @@ impl Uint256 {
         }
     }
 
-    pub fn from_u256(x: &U256) -> Self {
+    pub fn _from_u256(x: &U256) -> Self {
         let mut b: Vec<u8> = vec![0u8; 32];
         x.to_big_endian(&mut b);
         Uint256::from_bytes(&b)
@@ -98,6 +86,10 @@ impl Uint256 {
 
     pub fn to_usize(&self) -> Option<usize> {
         self.val.to_usize()
+    }
+
+    pub fn to_u64(&self) -> Option<u64> {
+        self.val.to_u64()
     }
 
     pub fn to_bytes_be(&self) -> Vec<u8> {
@@ -113,13 +105,15 @@ impl Uint256 {
     }
 
     pub fn to_h160(&self) -> H160 {
-        let raw = self.to_bytes_minimal();
-        H160::from_slice(&if raw.len() < 20 {
-            let mut ret = vec![0u8; 20 - raw.len()];
-            ret.extend(raw);
-            ret
-        } else {
-            raw
+        H160::from_slice(&{
+            let raw = self.val.to_bytes_be();
+            if raw.len() < 20 {
+                let mut ret = vec![0u8; 20 - raw.len()];
+                ret.extend(raw);
+                ret
+            } else {
+                raw
+            }
         })
     }
 
@@ -162,6 +156,12 @@ impl Uint256 {
     pub fn one() -> Self {
         Uint256 {
             val: BigUint::one(),
+        }
+    }
+
+    pub fn max_int() -> Self {
+        Uint256 {
+            val: BigUint::new(vec![0xffff_ffff; 8]),
         }
     }
 
@@ -302,6 +302,34 @@ impl Uint256 {
     pub fn exp(&self, other: &Self) -> Self {
         Uint256 {
             val: Uint256::trim(&self.val.pow(&other.val)).0,
+        }
+    }
+
+    pub fn shift_left(&self, num: usize) -> Self {
+        if num >= 256 {
+            Uint256::zero()
+        } else {
+            Uint256 {
+                val: Uint256::trim(&(self.val.clone() << num)).0,
+            }
+        }
+    }
+
+    pub fn shift_right(&self, num: usize) -> Self {
+        Uint256 {
+            val: (self.val.clone() >> num),
+        }
+    }
+
+    pub fn shift_arith(&self, raw_num: usize) -> Self {
+        let need_fill = self.val.bits() == 256;
+        let num = if raw_num > 256 { 256 } else { raw_num };
+        let mut val = (self.val.clone() >> num);
+        if need_fill {
+            val = val + (Uint256::max_int().val << (256 - num))
+        }
+        Uint256 {
+            val: Uint256::trim(&val).0,
         }
     }
 

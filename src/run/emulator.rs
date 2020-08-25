@@ -1,17 +1,5 @@
 /*
- * Copyright 2020, Offchain Labs, Inc.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * Copyright 2020, Offchain Labs, Inc. All rights reserved.
  */
 
 //!Provides utilities for emulation of AVM bytecode.
@@ -26,7 +14,9 @@ use std::cmp::max;
 use std::collections::{BTreeMap, HashMap};
 use std::convert::TryInto;
 use std::fmt;
-use std::io::stdin;
+use std::fs::File;
+use std::io::{stdin, BufWriter, Write};
+use std::path::Path;
 
 ///Represents a stack of `Value`s
 #[derive(Debug, Default, Clone)]
@@ -43,6 +33,10 @@ impl ValueStack {
 
     pub fn is_empty(&self) -> bool {
         self.contents.len() == 0
+    }
+
+    pub fn num_items(&self) -> usize {
+        self.contents.len()
     }
 
     ///Pushes val to the top of self.
@@ -76,6 +70,14 @@ impl ValueStack {
             None
         } else {
             Some(self.contents[self.contents.len() - 1].clone())
+        }
+    }
+
+    pub fn nth(&self, n: usize) -> Option<Value> {
+        if self.num_items() > n {
+            Some(self.contents[self.contents.len() - 1 - n].clone())
+        } else {
+            None
         }
     }
 
@@ -487,6 +489,8 @@ pub struct Machine {
     arb_gas_remaining: Uint256,
     pub runtime_env: RuntimeEnvironment,
     file_name_chart: HashMap<u64, String>,
+    total_gas_usage: Uint256,
+    trace_writer: Option<BufWriter<File>>,
 }
 
 impl Machine {
@@ -502,19 +506,30 @@ impl Machine {
             arb_gas_remaining: Uint256::zero().bitwise_neg(),
             runtime_env: env,
             file_name_chart: program.file_name_chart,
+            total_gas_usage: Uint256::zero(),
+            trace_writer: None,
         }
     }
 
     ///Pushes 0 to the stack and sets the program counter to the first instruction. Used by the EVM
     /// compiler.
     pub fn start_at_zero(&mut self) {
-        self.stack.push_usize(0);
         self.state = MachineState::Running(CodePt::Internal(0));
     }
 
     ///Returns a stack trace of the current state of the machine.
     pub fn get_stack_trace(&self) -> StackTrace {
         StackTrace::Known(self.aux_stack.all_codepts())
+    }
+
+    ///Adds a trace writer to the machine
+    pub fn add_trace_writer(&mut self, filename: &str) {
+        self.trace_writer = Some(BufWriter::new(File::create(Path::new(filename)).unwrap()));
+    }
+
+    ///Returns the value of the ArbGasRemaining register
+    pub fn get_total_gas_usage(&self) -> Uint256 {
+        self.total_gas_usage.clone()
     }
 
     ///Sets the state of the machine to call the function at func_addr with args.
@@ -609,6 +624,7 @@ impl Machine {
          line number to resume program until that line, \"show static\" to show the static contents.");
         let mut breakpoint = true;
         let mut break_line = 0;
+        let mut break_gas_amount = 0u64;
         let mut gas_cost = 0;
         while self.state.is_running() {
             if let Some(gas) = self.next_op_gas() {
@@ -626,6 +642,9 @@ impl Machine {
                     if insn.opcode == Opcode::AVMOpcode(AVMOpcode::DebugPrint) {
                         breakpoint = true;
                     }
+                }
+                if self.total_gas_usage > Uint256::from_u64(break_gas_amount) {
+                    breakpoint = true;
                 }
             }
             if breakpoint {
@@ -673,6 +692,20 @@ impl Machine {
                                 std::io::stdin().read_line(&mut debugger_state).unwrap();
                                 if let Ok(val) = str::parse(&debugger_state.trim()) {
                                     break_line = val;
+                                    exit = true;
+                                    break;
+                                } else {
+                                    println!("Could not parse input as number");
+                                }
+                            }
+                        }
+                        "break at gas\n" => {
+                            breakpoint = false;
+                            loop {
+                                let mut debugger_state = String::new();
+                                std::io::stdin().read_line(&mut debugger_state).unwrap();
+                                if let Ok(val) = str::parse(&debugger_state.trim()) {
+                                    break_gas_amount = val;
                                     exit = true;
                                     break;
                                 } else {
@@ -730,6 +763,54 @@ impl Machine {
             } else {
                 println!("Warning: next opcode does not have a gas cost");
             }
+
+            let cp = self.get_pc();
+
+            if let Ok(codept) = cp {
+                if let Some(trace_writer) = &mut self.trace_writer {
+                    let res = match codept {
+                        CodePt::Internal(pc) => Some((
+                            0,
+                            pc as u64,
+                            self.code
+                                .get_insn(codept)
+                                .unwrap()
+                                .opcode
+                                .to_number()
+                                .unwrap(),
+                        )),
+                        CodePt::InSegment(seg_num, rev_pc) => Some((
+                            seg_num as u64,
+                            (self.code.segment_size(seg_num).unwrap() as u64) - 1 - (rev_pc as u64),
+                            self.code
+                                .get_insn(codept)
+                                .unwrap()
+                                .opcode
+                                .to_number()
+                                .unwrap(),
+                        )),
+                        _ => None,
+                    };
+                    if let Some((seg_num, pc, opcode)) = res {
+                        write!(trace_writer, "{} {} {}", seg_num, pc, opcode)
+                            .expect("failed to write PC trace file");
+                        if !self.stack.is_empty() {
+                            let val = self.stack.top().unwrap();
+                            if let Value::Int(ui) = val {
+                                write!(trace_writer, " {}", ui.avm_hash()).unwrap();
+                            }
+                            if self.stack.num_items() > 1 {
+                                let val = self.stack.nth(1).unwrap();
+                                if let Value::Int(ui) = val {
+                                    write!(trace_writer, " {}", ui.avm_hash()).unwrap();
+                                }
+                            }
+                        }
+                        write!(trace_writer, "\n").unwrap();
+                    }
+                }
+            }
+
             match self.run_one(false) {
                 Ok(still_runnable) => {
                     if !still_runnable {
@@ -784,6 +865,7 @@ impl Machine {
                 Opcode::AVMOpcode(AVMOpcode::AddMod) => 4,
                 Opcode::AVMOpcode(AVMOpcode::MulMod) => 4,
                 Opcode::AVMOpcode(AVMOpcode::Exp) => 25,
+                Opcode::AVMOpcode(AVMOpcode::SignExtend) => 7,
                 Opcode::AVMOpcode(AVMOpcode::LessThan) => 2,
                 Opcode::AVMOpcode(AVMOpcode::GreaterThan) => 2,
                 Opcode::AVMOpcode(AVMOpcode::SLessThan) => 2,
@@ -795,10 +877,13 @@ impl Machine {
                 Opcode::AVMOpcode(AVMOpcode::BitwiseXor) => 2,
                 Opcode::AVMOpcode(AVMOpcode::BitwiseNeg) => 1,
                 Opcode::AVMOpcode(AVMOpcode::Byte) => 4,
-                Opcode::AVMOpcode(AVMOpcode::SignExtend) => 7,
+                Opcode::AVMOpcode(AVMOpcode::ShiftLeft) => 4,
+                Opcode::AVMOpcode(AVMOpcode::ShiftRight) => 4,
+                Opcode::AVMOpcode(AVMOpcode::ShiftArith) => 4,
                 Opcode::AVMOpcode(AVMOpcode::Hash) => 7,
                 Opcode::AVMOpcode(AVMOpcode::Type) => 3,
                 Opcode::AVMOpcode(AVMOpcode::Hash2) => 8,
+                Opcode::AVMOpcode(AVMOpcode::Keccakf) => 600,
                 Opcode::AVMOpcode(AVMOpcode::Pop) => 1,
                 Opcode::AVMOpcode(AVMOpcode::PushStatic) => 1,
                 Opcode::AVMOpcode(AVMOpcode::Rget) => 1,
@@ -826,6 +911,7 @@ impl Machine {
                 Opcode::AVMOpcode(AVMOpcode::Breakpoint) => 100,
                 Opcode::AVMOpcode(AVMOpcode::Log) => 100,
                 Opcode::AVMOpcode(AVMOpcode::Send) => 100,
+                Opcode::AVMOpcode(AVMOpcode::InboxPeek) => 40,
                 Opcode::AVMOpcode(AVMOpcode::Inbox) => 40,
                 Opcode::AVMOpcode(AVMOpcode::Panic) => 5,
                 Opcode::AVMOpcode(AVMOpcode::Halt) => 10,
@@ -833,7 +919,7 @@ impl Machine {
                 Opcode::AVMOpcode(AVMOpcode::PushInsn) => 25,
                 Opcode::AVMOpcode(AVMOpcode::PushInsnImm) => 25,
                 Opcode::AVMOpcode(AVMOpcode::OpenInsn) => 25,
-                Opcode::AVMOpcode(AVMOpcode::DebugPrint) => 25,
+                Opcode::AVMOpcode(AVMOpcode::DebugPrint) => 1,
                 Opcode::AVMOpcode(AVMOpcode::GetGas) => 1,
                 Opcode::AVMOpcode(AVMOpcode::SetGas) => 0,
                 Opcode::AVMOpcode(AVMOpcode::EcRecover) => 20_000,
@@ -848,16 +934,33 @@ impl Machine {
     ///Runs the instruction pointed to by the program counter, returns either a bool indicating
     /// whether the instruction was blocked if execution does not hit an error state, or an
     /// `ExecutionError` if an error was encountered.
-    pub fn run_one(&mut self, debug: bool) -> Result<bool, ExecutionError> {
+    pub fn run_one(&mut self, _debug: bool) -> Result<bool, ExecutionError> {
+        match self.run_one_dont_catch_errors(_debug) {
+            Ok(b) => Ok(b),
+            Err(e) => {
+                if self.err_codepoint == CodePt::Null {
+                    Err(e)
+                } else {
+                    self.state = MachineState::Running(self.err_codepoint);
+                    Ok(true)
+                }
+            }
+        }
+    }
+
+    fn run_one_dont_catch_errors(&mut self, _debug: bool) -> Result<bool, ExecutionError> {
         if let MachineState::Running(pc) = self.state {
             if let Some(insn) = self.code.get_insn(pc) {
                 if let Some(val) = &insn.immediate {
                     self.stack.push(val.clone());
                 }
                 if let Some(gas) = self.next_op_gas() {
-                    if let Some(remaining) = self.arb_gas_remaining.sub(&Uint256::from_u64(gas)) {
+                    let gas256 = Uint256::from_u64(gas);
+                    if let Some(remaining) = self.arb_gas_remaining.sub(&gas256) {
                         self.arb_gas_remaining = remaining;
+                        self.total_gas_usage = self.total_gas_usage.add(&gas256);
                     } else {
+                        self.arb_gas_remaining = Uint256::max_int();
                         return Err(ExecutionError::new("Out of ArbGas", &self.state, None));
                     }
                 }
@@ -1183,7 +1286,31 @@ impl Machine {
 						self.incr_pc();
 						Ok(true)
 					}
-					Opcode::AVMOpcode(AVMOpcode::LessThan) => {
+                    Opcode::AVMOpcode(AVMOpcode::SignExtend) => {
+                        let bnum = self.stack.pop_uint(&self.state)?;
+                        let x = self.stack.pop_uint(&self.state)?;
+                        let out = match bnum.to_usize() {
+                            Some(ub) => {
+                                if ub >= 31 {
+                                    x
+                                } else {
+                                    let shifted_bit = Uint256::from_usize(2).exp(&Uint256::from_usize(8*ub+7));
+                                    let sign_bit = x.bitwise_and(&shifted_bit) != Uint256::zero();
+                                    let mask = shifted_bit.mul(&Uint256::from_u64(2)).sub(&Uint256::one()).ok_or_else(|| ExecutionError::new("underflow in signextend", &self.state, None))?;
+                                    if sign_bit {
+                                        x.bitwise_or(&mask.bitwise_neg())
+                                    } else {
+                                        x.bitwise_and(&mask)
+                                    }
+                                }
+                            }
+                            None => x,
+                        };
+                        self.stack.push_uint(out);
+                        self.incr_pc();
+                        Ok(true)
+                    }
+                    Opcode::AVMOpcode(AVMOpcode::LessThan) => {
 						let r1 = self.stack.pop_uint(&self.state)?;
 						let r2 = self.stack.pop_uint(&self.state)?;
 						self.stack.push_usize(if r1 < r2 { 1 } else { 0 });
@@ -1250,7 +1377,7 @@ impl Machine {
 						let r2 = self.stack.pop_uint(&self.state)?;
 						self.stack.push_uint(
 							if r1 < Uint256::from_usize(32) {
-								let shift_factor = Uint256::one().exp(&Uint256::from_usize(8*(31-r1.to_usize().unwrap())));
+								let shift_factor = Uint256::from_u64(256).exp(&Uint256::from_usize(31-r1.to_usize().unwrap()));
 								r2.div(&shift_factor).unwrap().bitwise_and(&Uint256::from_usize(255))
 							} else {
 								Uint256::zero()
@@ -1259,31 +1386,42 @@ impl Machine {
 						self.incr_pc();
 						Ok(true)
 					}
-					Opcode::AVMOpcode(AVMOpcode::SignExtend) => {
-						let bnum = self.stack.pop_uint(&self.state)?;
-						let x = self.stack.pop_uint(&self.state)?;
-						let out = match bnum.to_usize() {
-							Some(ub) => {
-								if ub > 31 {
-									x
-								} else {
-									let t = 248-ub;
-									let shifted_bit = Uint256::from_usize(2).exp(&Uint256::from_usize(t));
-									let sign_bit = x.bitwise_and(&shifted_bit) != Uint256::zero();
-									let mask = shifted_bit.sub(&Uint256::one()).ok_or_else(|| ExecutionError::new("underflow in signextend", &self.state, None))?;
-									if sign_bit {
-										x.bitwise_and(&mask)
-									} else {
-										x.bitwise_or(&mask.bitwise_neg())
-									}
-								}
-							}
-							None => x,
-						};
-						self.stack.push_uint(out);
-						self.incr_pc();
-						Ok(true)
-					}
+                    Opcode::AVMOpcode(AVMOpcode::ShiftLeft) => {
+                        let shift_big = self.stack.pop_uint(&self.state)?;
+                        let value = self.stack.pop_uint(&self.state)?;
+                        let result = if let Some(shift) = shift_big.to_usize() {
+                            value.shift_left(shift)
+                        } else {
+                            Uint256::zero()
+                        };
+                        self.stack.push_uint(result);
+                        self.incr_pc();
+                        Ok(true)
+                    }
+                    Opcode::AVMOpcode(AVMOpcode::ShiftRight) => {
+                        let shift_big = self.stack.pop_uint(&self.state)?;
+                        let value = self.stack.pop_uint(&self.state)?;
+                        let result = if let Some(shift) = shift_big.to_usize() {
+                            value.shift_right(shift)
+                        } else {
+                            Uint256::zero()
+                        };
+                        self.stack.push_uint(result);
+                        self.incr_pc();
+                        Ok(true)
+                    }
+                    Opcode::AVMOpcode(AVMOpcode::ShiftArith) => {
+                        let shift_big = self.stack.pop_uint(&self.state)?;
+                        let value = self.stack.pop_uint(&self.state)?;
+                        let result = if let Some(shift) = shift_big.to_usize() {
+                            value.shift_arith(shift)
+                        } else {
+                            Uint256::zero()
+                        };
+                        self.stack.push_uint(result);
+                        self.incr_pc();
+                        Ok(true)
+                    }
 					Opcode::LogicalAnd => {
 						let r1 = self.stack.pop_bool(&self.state)?;
 						let r2 = self.stack.pop_bool(&self.state)?;
@@ -1305,17 +1443,46 @@ impl Machine {
 						self.incr_pc();
 						Ok(true)
 					}
+                    Opcode::AVMOpcode(AVMOpcode::Keccakf) => {
+                        let t1 = self.stack.pop_tuple(&self.state)?;
+                        let t2 = tuple_keccak(t1, &self.state)?;
+                        self.stack.push(Value::new_tuple(t2));
+                        self.incr_pc();
+                        Ok(true)
+                    }
 					Opcode::AVMOpcode(AVMOpcode::Inbox) => {
-						let msgs = self.runtime_env.get_inbox();
-						if msgs.is_none() {
-							// machine is blocked, waiting for nonempty inbox
-							Ok(false)
-						} else {
-							self.stack.push(msgs);
-							self.incr_pc();
-							Ok(true)
-						}
+						match self.runtime_env.get_from_inbox() {
+                            Some(msg) => {
+                                self.stack.push(msg);
+                                self.incr_pc();
+                                Ok(true)
+                            }
+                            None => Ok(false)   // machine is blocked, waiting for message
+                        }
 					}
+                    Opcode::AVMOpcode(AVMOpcode::InboxPeek) => {
+                        let bn = self.stack.pop_uint(&self.state)?;
+                        match self.runtime_env.peek_at_inbox_head() {
+                            Some(msg) => {
+                                if let Value::Tuple(tup) = msg {
+                                    if let Value::Int(msg_bn) = &tup[1] {
+                                        self.stack.push_bool(bn == msg_bn.clone());
+                                        self.incr_pc();
+                                        Ok(true)
+                                    } else {
+                                        Err(ExecutionError::new("inbox contents not a tuple", &self.state, None))
+                                    }
+                                } else {
+                                    Err(ExecutionError::new("blocknum not an integer", &self.state, None))
+                                }
+                            }
+                            None => {
+                                // machine is blocked, waiting for nonempty inbox
+                                self.stack.push_uint(bn);   // put stack back the way it was
+                                Ok(false)
+                            }
+                        }
+                    }
 					Opcode::AVMOpcode(AVMOpcode::ErrCodePoint) => {
 						self.stack.push(Value::CodePoint(
 							self.code.create_segment()
@@ -1392,9 +1559,7 @@ impl Machine {
 					}
 					Opcode::AVMOpcode(AVMOpcode::DebugPrint) => {
 						let r1 = self.stack.pop(&self.state)?;
-						if debug {
-                            println!("debugprint: {}", r1);
-                        }
+                        println!("debugprint: {}", r1);
 						self.incr_pc();
 						Ok(true)
 					}
@@ -1452,6 +1617,49 @@ impl Machine {
             ))
         }
     }
+}
+
+fn tuple_keccak(intup: Vec<Value>, state: &MachineState) -> Result<Vec<Value>, ExecutionError> {
+    let mask64 = Uint256::from_u64(((1 << 32) + 1) * ((1 << 32) - 1));
+    let two_to_64 = mask64.add(&Uint256::one());
+    if intup.len() != 7 {
+        println!("keccakf operand length: {}", intup.len());
+        return Err(ExecutionError::new(
+            "invalid tuple length for keccakf: ",
+            state,
+            None,
+        ));
+    }
+    let mut inuis = vec![];
+    for inelt in intup {
+        inuis.push(if let Value::Int(ui) = inelt {
+            ui
+        } else {
+            return Err(ExecutionError::new(
+                "invalid operand for keccakf",
+                state,
+                None,
+            ));
+        });
+    }
+    let mut outtup = [0u64; 25];
+    for i in 0..25 {
+        outtup[i] = inuis[i / 4].bitwise_and(&mask64).trim_to_u64();
+        inuis[i / 4] = inuis[i / 4].div(&two_to_64).unwrap(); // safe because denom not zero
+    }
+    keccak::f1600(&mut outtup);
+
+    for i in 0..6 {
+        inuis[i] = Uint256::from_u64(outtup[4 * i + 3]);
+        for j in (0..3).rev() {
+            inuis[i] = inuis[i]
+                .mul(&two_to_64)
+                .add(&Uint256::from_u64(outtup[4 * i + j]));
+        }
+    }
+    inuis[6] = Uint256::from_u64(outtup[24]);
+    let ret = inuis.iter().map(|ui| Value::Int(ui.clone())).collect();
+    Ok(ret)
 }
 
 fn do_ecrecover(

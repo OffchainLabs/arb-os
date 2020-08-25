@@ -1,43 +1,11 @@
 //
-// Copyright 2020, Offchain Labs, Inc.
+// Copyright 2020, Offchain Labs, Inc. All rights reserved.
 //
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//    http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
-//
-
-import func array_resize(a: []uint, newSize: uint, baseVal: uint) -> []uint;
-import func builtin_arrayGet(a: []uint, index: uint) -> uint;
-import func builtin_arrayGetConsecutive(a: []uint, index: uint) -> (uint, uint);
-import func builtin_arrayOp(
-    a: []uint, 
-    index: uint, 
-    closure: opClosure
-) -> ([]uint, uint);
-import func builtin_arrayOpConsecutive(
-    a: []uint, 
-    index: uint, 
-    closure1: opClosure, 
-    closure2: opClosure
-    ) -> ([]uint, uint, uint);
-
-type opClosure = struct {
-	f: func((uint, uint), uint) -> (uint, uint),  // (closure.val, oldVal) -> (newVal, return)
-	val: (uint, uint),
-}
 
 type ByteArray = struct { 
     size: uint,
-    capacity: uint, 
-    contents: []uint,
+    sliceOffset: uint,
+    contents: ExpandingIntArray,
 }
 
 // bytearray_new makes a new ByteArray
@@ -45,15 +13,11 @@ type ByteArray = struct {
 //        reads beyond the end will return zero,
 //        size will expand to fit all writes,
 //        and the capacity arg is a hint about how big it will get
-public func bytearray_new(capacity: uint) -> ByteArray {
-    let roundedUpCapacity = 8*32;
-    while (roundedUpCapacity < capacity) {
-        roundedUpCapacity = 8*roundedUpCapacity;
-    }
+public func bytearray_new(ignored: uint) -> ByteArray {
     return struct {
         size: 0,
-        capacity: roundedUpCapacity,
-        contents: newarray<uint>(roundedUpCapacity/32),
+        sliceOffset: 0,
+        contents: expandingIntArray_new(),
     };
 }
 
@@ -77,7 +41,7 @@ public func marshalledBytes_firstByte(mb: MarshalledBytes) -> uint {
         contents = unsafecast<MarshalledBytesCell>(contents.rest);
         nbytes = nbytes-32;
     }
-    return contents.first / asm(2, 248) uint { exp };
+    return asm(256-8, contents.first) uint { shr };
 }
 
 public func marshalledBytes_hash(mb: MarshalledBytes) -> bytes32 {
@@ -97,18 +61,30 @@ public func marshalledBytes_hash(mb: MarshalledBytes) -> bytes32 {
 // bytearray_unmarshalBytes unmarshals a bytestack object that we got from L1
 //        returns a new bytearray holding the unmarshaled bytes
 public func bytearray_unmarshalBytes(inBytes: MarshalledBytes) -> ByteArray {
-    // unmarshal bytes from the bytestack data structure that we receive from L1
     let nbytes = inBytes.nbytes;
-    let ba = bytearray_new(nbytes) with { size: nbytes };
     let nwords = (nbytes+31)/32;
-
     let words = inBytes.contents;
+
+    // For efficiency, we'll build an ExpandingIntArray here, then make a ByteArray from it at the end.
+    // We'll also build 8-tuples of 32-byte words, and insert each tuple into the ExpIntArr with a single call.
+    let eia = expandingIntArray_new();
+    let block = unsafecast<[8]any>((0,0,0,0,0,0,0,0));
+
     while (nwords > 0) {
         nwords = nwords-1;
-        ba = ba with { contents: ba.contents with { [nwords] = words.first } };
+        block = block with { [nwords & 7] = words.first };
+        if ((nwords & 7) == 0) {
+            eia = expandingIntArray_setN(eia, 8, nwords, block);
+            // it's safe to re-use block after this, because we're going to overwrite all of it
+        }
         words = unsafecast<MarshalledBytesCell>(words.rest);
     }
-    return ba;
+
+    return struct {
+        size: inBytes.nbytes,
+        sliceOffset: 0,
+        contents: eia,
+    };
 }
 
 public func bytearray_marshalFull(ba: ByteArray) -> MarshalledBytes {
@@ -118,7 +94,7 @@ public func bytearray_marshalFull(ba: ByteArray) -> MarshalledBytes {
     let i = 0;
     while (i < nwords) {
         words = struct {
-            first: ba.contents[i],
+            first: bytearray_get256(ba, 32*i),
             rest: words,
         };
         i = i+1;
@@ -136,26 +112,88 @@ public func bytearray_size(ba: ByteArray) -> uint {
 
 // bytearray_getByte reads one byte from a ByteArray
 public func bytearray_getByte(ba: ByteArray, offset: uint) -> uint {
-    if (offset >= ba.capacity) {
+    if (offset >= ba.size) {
         return 0;
     }
-    let slot = ba.contents[offset/32];
-    let byteno = 31-(offset%32);
-    return (slot / (asm (2, 8*byteno) uint { exp })) & 0xff;
+    offset = offset + ba.sliceOffset;
+    let word = expandingIntArray_get(ba.contents, offset/32);
+    return asm(offset & 0x1f, word) uint { byte };
+}
+
+// bytearray_get64 reads a chunk of 8 bytes from a ByteArray
+public func bytearray_get64(ba: ByteArray, offset: uint) -> uint {
+    if (offset >= ba.size) {
+        return 0;
+    }
+    let bytesToTrim = 0;
+    if (offset+8 > ba.size) {
+        bytesToTrim = offset+8 - ba.size;
+    }
+    // the access might extend beyond size, but access to the underlying array will be in-bounds
+    //    on the true side of the if, any overage is within an existing word of the underlying array
+    //    on the false side of the if, bytearray_get256 will avoid out-of-bounds accesses
+    offset = offset + ba.sliceOffset;
+    let alignment = offset % 32;
+    if (alignment <= 24) {
+        let word = expandingIntArray_get(ba.contents, offset/32);
+        let ret = asm(8*(24-alignment), word) uint { shr } & 0xffffffffffffffff;
+        if (bytesToTrim > 0) {
+            ret = ret & ~(asm(8*bytesToTrim, 1) uint { shl } - 1);
+        }
+        return ret;
+    } else {
+        let res = bytearray_get256(ba, offset-ba.sliceOffset);
+        let ret = res / 0x1000000000000000000000000000000000000000000000000;
+        if (bytesToTrim > 0) {
+            ret = ret & ~(asm(8*bytesToTrim, 1) uint { shl } - 1);
+        }
+        return ret;
+    }
+}
+
+// bytearray_get256 reads a chunk of 32 bytes from a ByteArray
+public func bytearray_get256(ba: ByteArray, offset: uint) -> uint {
+    if (offset >= ba.size) {
+        return 0;
+    }
+    let bytesToTrim = 0;
+    if (offset+32 > ba.size) {
+        bytesToTrim = offset+32 - ba.size;
+    }
+    offset = offset + ba.sliceOffset;
+    let lowWordIndex = offset / 32;
+    let alignment = offset % 32;
+    if (alignment == 0) {
+        let ret = expandingIntArray_get(ba.contents, lowWordIndex);
+        if (bytesToTrim > 0) {
+            ret = ret & ~(asm(8*bytesToTrim, 1) uint { shl } - 1);
+        }
+        return ret;
+    } else {
+        let (lowWord, hiWord) = expandingIntArray_getConsecutive(ba.contents, lowWordIndex);
+        let shiftFactor = asm(8*alignment, 1) uint { shl };
+        let invShiftFactor = asm(8*(32-alignment), 1) uint { shl };
+        let ret = (hiWord/invShiftFactor) | (lowWord*shiftFactor);
+        if (bytesToTrim > 0) {
+            ret = ret & ~(asm(8*bytesToTrim, 1) uint { shl } - 1);
+        }
+        return ret;
+    }
 }
 
 // bytearray_setbyte writes one byte to a ByteArray, returns the resulting ByteArray
 public func bytearray_setByte(ba: ByteArray, offset: uint, val: uint) -> ByteArray {
-    if (offset >= ba.capacity) {
-        ba = bytearray_expandToFit(ba, offset+1);
-    }
     if (offset >= ba.size) {
         ba = ba with { size: offset+1 };
     }
-    let (newContents, _) = builtin_arrayOp(
+    offset = offset + ba.sliceOffset;
+    let (newContents, _) = expandingIntArray_op(
         ba.contents, 
         offset/32, 
-        struct { f: basb_closure_func, val: (31-(offset%32), val,), }
+        struct {
+            f: unsafecast<opClosureFunc>(basb_closure_func),
+            val: (31-(offset%32), val,),
+        }
     );
     return ba with { contents: newContents };
 }
@@ -175,83 +213,64 @@ public func bytearray_get64(ba: ByteArray, offset: uint) -> uint {
 // bytearray_set64 writes an 8-byte chunk to a ByteArray, returning the resulting ByteArray
 public func bytearray_set64(ba: ByteArray, offset: uint, value: uint) -> ByteArray {
     if (offset+8 > ba.size) {
-        ba = bytearray_expandToFit(ba, offset+8);
+        ba = ba with { size: offset+8 };
     }
+    offset = offset + ba.sliceOffset;
     let lowWordIndex = offset / 32;
     let alignment = offset % 32;
     if (alignment <= 24) {
-        let res = builtin_arrayOp(
+        let (newContents, _) = expandingIntArray_op(
             ba.contents,
             lowWordIndex,
-            struct{ f: bas64_single_closure_func, val: (alignment, value,), }
-        );
-        return ba with { contents: res.0 };
-    } else {
-        let res = builtin_arrayOpConsecutive(
-            ba.contents,
-            lowWordIndex,
-            struct { f: bas64_low_closure_func, val: (alignment, value,), },
-            struct { f: basmulti_hi_closure_func, val: (alignment, value,), }
-        );
-        return ba with { contents: res.0 };
-    }
-}
-
-// bytearray_get256 reads a chunk of 32 bytes from a ByteArray
-public func bytearray_get256(ba: ByteArray, offset: uint) -> uint {
-    let lowWordIndex = offset / 32;
-    let alignment = offset % 32;
-    if (alignment == 0) {
-        if (offset+32 > ba.capacity) {
-            // because capacity is a multiple of 32 in this case, access is entirely beyond size
-            return 0;
-        } 
-        return ba.contents[lowWordIndex];
-    } else {
-        let lowWord = 0;  // word from lower-numbered array slot
-        let hiWord = 0;   // word from higher-numbered array slot
-
-        if (offset+32 > ba.capacity) {
-            // read contents, but only if they exist; otherwise let xxxWord remain 0
-            let offsetBase = offset & ~0x1f;
-            let offsetBaseDiv32 = offsetBase / 32;
-            if (offsetBase < ba.capacity) {
-                lowWord = ba.contents[offsetBaseDiv32];
-                if (offsetBase+32 < ba.capacity) {
-                    hiWord = ba.contents[1+offsetBaseDiv32];
-                }
+            struct{
+                f: unsafecast<opClosureFunc>(bas64_single_closure_func),
+                val: (alignment, value,),
             }
-        } else {
-            let words = builtin_arrayGetConsecutive(ba.contents, lowWordIndex);
-            lowWord = words.0;
-            hiWord = words.1;
-        }
-
-        let shiftFactor = asm(2, 8*alignment) uint { exp };
-        let invShiftFactor = asm(2, 256-8*alignment) uint { exp };
-        return (hiWord/invShiftFactor) | (lowWord*shiftFactor);
+        );
+        return ba with { contents: newContents };
+    } else {
+        let (newContents, _0, _1) = expandingIntArray_opConsecutive(
+            ba.contents,
+            lowWordIndex,
+            struct {
+                f: unsafecast<opClosureFunc>(bas64_low_closure_func),
+                val: (alignment, value,),
+            },
+            struct {
+                f: unsafecast<opClosureFunc>(basmulti_hi_closure_func),
+                val: (alignment, value,),
+            }
+        );
+        return ba with { contents: newContents };
     }
 }
 
 // bytearray_set256 writes a 32-byte chunk to a ByteArray, returning the resulting ByteArray
 public func bytearray_set256(ba: ByteArray, offset: uint, value: uint) -> ByteArray {
     if (offset+32 > ba.size) {
-        ba = bytearray_expandToFit(ba, offset+32);
+        ba = ba with { size: offset+32 };
     }
+    offset = offset + ba.sliceOffset;
     let lowWordIndex = offset / 32;
     let alignment = offset % 32;
     if (alignment == 0) {
         return ba with {
-            contents: ba.contents with { [lowWordIndex] = value }
+            contents: expandingIntArray_set(ba.contents, lowWordIndex, value)
         };
     } else {
-        let res = builtin_arrayOpConsecutive(
+        let (newContents, _0, _1) = expandingIntArray_opConsecutive(
             ba.contents,
             lowWordIndex,
-            struct { f: bas256_low_closure_func, val: (alignment, value,), },
-            struct { f: basmulti_hi_closure_func, val: (alignment, value,), }
+            struct {
+                f: unsafecast<opClosureFunc>(bas256_low_closure_func),
+                val: (alignment, value,),
+            },
+            struct {
+                f: unsafecast<opClosureFunc>(basmulti_hi_closure_func),
+                val: (alignment, value,),
+            }
         );
-        return ba with { contents: res.0 };
+        return ba with { contents: newContents };
     }
 }
 
@@ -283,31 +302,16 @@ public func bytearray_copy(
 }
 
 public func bytearray_extract(from: ByteArray, offset: uint, nbytes: uint) -> ByteArray {
-    let to = bytearray_new(nbytes);
-    return bytearray_copy(from, offset, to, 0, nbytes);
-}
-
-func bytearray_expandToFit(ba: ByteArray, neededCapacity: uint) -> ByteArray {
-    if (ba.size < neededCapacity) {
-        ba = ba with { size: neededCapacity };
-        if (ba.capacity < neededCapacity) {
-            let newCapacity = ba.capacity*8;
-            while (newCapacity < neededCapacity) {
-                    newCapacity = 8*newCapacity;
-            }
-            return ba with { capacity: newCapacity }
-                      with { contents: array_resize(ba.contents, newCapacity/32, 0) };
-        } else {
-            return ba;
-        }
-    } else {
-        return ba;
-    }
+    return from with {
+        size: nbytes
+    } with {
+        sliceOffset: offset + from.sliceOffset
+    };
 }
 
 func basb_closure_func(args: (uint, uint), oldval: uint) -> (uint, uint) { // returns (newval, junk)
     let (subidx, newbval,) = args;
-    let shiftFac = asm (2, 8*subidx) uint { exp };
+    let shiftFac = asm(8*subidx, 1) uint { shl };
     let mask = 0xff * shiftFac;
     let pasteIn = (newbval & 0xff) * shiftFac;
     return (
@@ -318,7 +322,7 @@ func basb_closure_func(args: (uint, uint), oldval: uint) -> (uint, uint) { // re
 
 func bas64_single_closure_func(args: (uint, uint), oldval: uint) -> (uint, uint) { // returns (newval, junk)
     let (subidx, newbval,) = args;
-    let shiftFac = asm (2, 8*subidx) uint { exp };
+    let shiftFac = asm(8*subidx, 1) uint { shl };
     let mask = 0xffffffffffffffff * shiftFac;
     let pasteIn = (newbval & 0xff) * shiftFac;
     return (
@@ -330,7 +334,7 @@ func bas64_single_closure_func(args: (uint, uint), oldval: uint) -> (uint, uint)
 func basmulti_hi_closure_func(args: (uint, uint), oldval: uint) -> (uint, uint) { // returns (newval, junk)
     let (alignment, value,) = args; 
     let revAlignment = 32-alignment;
-    let factor = asm(2, 8*revAlignment) uint { exp };
+    let factor = asm(8*revAlignment, 1) uint { shl };
     let newVal = (value*factor) | (oldval & (factor-1));
     return (newVal, 0,);
 }
@@ -338,8 +342,8 @@ func basmulti_hi_closure_func(args: (uint, uint), oldval: uint) -> (uint, uint) 
 func bas64_low_closure_func(args: (uint, uint), oldval: uint) -> (uint, uint) { // returns (newval, junk)
     let (alignment, value,) = args; 
     let revAlignment = 8-alignment;
-    let factor = asm(2, 8*alignment) uint { exp };
-    let invFactor = asm(2, 8*revAlignment) uint { exp };
+    let factor = asm(8*alignment, 1) uint { shl };
+    let invFactor = asm(8*revAlignment, 1) uint { shl };
     let newVal = (value/factor) | (oldval & (invFactor * ~0));
     return (newVal, 0,);
 }
@@ -347,8 +351,199 @@ func bas64_low_closure_func(args: (uint, uint), oldval: uint) -> (uint, uint) { 
 func bas256_low_closure_func(args: (uint, uint), oldval: uint) -> (uint, uint) { // returns (newval, junk)
     let (alignment, value,) = args; 
     let revAlignment = 32-alignment;
-    let factor = asm(2, 8*alignment) uint { exp };
-    let invFactor = asm(2, 8*revAlignment) uint { exp };
+    let factor = asm(8*alignment, 1) uint { shl };
+    let invFactor = asm(8*revAlignment, 1) uint { shl };
     let newVal = (value/factor) | (oldval & (invFactor * ~0));
     return (newVal, 0,);
+}
+
+type ExpandingIntArray = struct {
+    size: uint,
+    chunk: uint,
+    contents: [8]any,
+}
+
+func expandingIntArray_new() -> ExpandingIntArray {
+    return struct {
+        size: 8,
+        chunk: 1,
+        contents: unsafecast<[8]any>((0,0,0,0,0,0,0,0)),
+    };
+}
+
+func expandingIntArray_get(arr: ExpandingIntArray, index: uint) -> uint {
+    if (index >= arr.size) {
+        return 0;
+    }
+    let chunk = arr.chunk;
+    let tree = arr.contents;
+    while (chunk > 1) {
+        tree = unsafecast<[8]any>(tree[index / chunk]);
+        index = index % chunk;
+        chunk = chunk / 8;
+    }
+    return unsafecast<uint>(tree[index]);
+}
+
+func expandingIntArray_getConsecutive(arr: ExpandingIntArray, index: uint) -> (uint, uint) {
+    if (index+1 >= arr.size) {
+        return (expandingIntArray_get(arr, index), 0);
+    }
+    let tree = arr.contents;
+    let chunk = arr.chunk;
+
+    while (chunk > 1) {
+        let offset = index % chunk;
+        if ((offset+1) == chunk) {
+            let loSlot = index / chunk;
+            return (
+                ear_get_2(unsafecast<[8]any>(tree[loSlot]), chunk/8, chunk-1),
+                ear_get_2(unsafecast<[8]any>(tree[loSlot+1]), chunk/8, 0)
+            );
+        }
+        tree = unsafecast<[8]any>(tree[index/chunk]);
+        index = offset;
+        chunk = chunk / 8;
+    }
+
+    return (unsafecast<uint>(tree[index]), unsafecast<uint>(tree[index+1]));
+}
+
+func ear_get_2(tree: [8]any, chunk: uint, index: uint) -> uint {
+    while (chunk > 1) {
+        tree = unsafecast<[8]any>(tree[index/chunk]);
+        index = index % chunk;
+        chunk = chunk / 8;
+    }
+    return unsafecast<uint>(tree[index]);
+}
+
+type Unwinder = struct {
+    tree: [8]any,
+    slot: uint,
+    next: option<any>,  // really option<Unwinder>, but compiler doesn't allow recursive types
+}
+
+func expandingIntArray_set(arr: ExpandingIntArray, index: uint, value: uint) -> ExpandingIntArray {
+    return expandingIntArray_setN(arr, 1, index, value);
+}
+
+func expandingIntArray_setN(
+    arr: ExpandingIntArray,
+    inChunk: uint,   // must be a power of 8
+    index: uint,     // must be a multiple of inChunk
+    value: any
+) -> ExpandingIntArray {
+    while ((index+inChunk) > arr.size) {
+        arr = expandingIntArray_grow(arr);
+    }
+
+    if ( (inChunk == arr.size) && (index == 0) ) {
+        return arr with { contents: unsafecast<[8]any>(value) };
+    }
+
+    let chunk = arr.chunk;
+    let tree = arr.contents;
+    let unwinder = None<Unwinder>;
+    loop {
+        if (chunk <= inChunk) {
+            tree = tree with { [index/chunk] = value };
+            loop {
+                if let Some(unw) = unwinder {
+                    tree = unw.tree with { [unw.slot] = tree };
+                    unwinder = unsafecast<option<Unwinder>>(unw.next);
+                } else {
+                    return arr with { contents: tree };
+                }
+            }
+        }
+        let slot = index/chunk;
+        unwinder = Some(struct {
+            tree: tree,
+            slot: slot,
+            next: unwinder,
+        });
+        tree = unsafecast<[8]any>(tree[slot]);
+        index = index % chunk;
+        chunk = chunk / 8;
+    }
+}
+
+type opClosureFunc = func(any, uint) -> (uint, any)
+
+type opClosure = struct {
+	f: opClosureFunc,
+	val: any,
+} // usage: (newSlotContents, returnValue) = closure.f(closure.val, oldSlotContents)
+
+func expandingIntArray_op(
+    arr: ExpandingIntArray,
+    index: uint,
+    closure: opClosure
+) -> (ExpandingIntArray, any) {
+    while (index >= arr.size) {
+        arr = expandingIntArray_grow(arr);
+    }
+    let tree = arr.contents;
+    let chunk = arr.chunk;
+
+    let (tree, retVal) = ear_op2(arr.contents, arr.chunk, index, closure);
+    return (
+        arr with { contents: tree },
+        retVal,
+    );
+}
+
+func ear_op2(
+    tree: [8]any,
+    chunk: uint,
+    index: uint,
+    closure: opClosure
+) -> ([8]any, any) {
+    if (chunk == 1) {
+        let (newSlotContents, retVal) = closure.f(closure.val, unsafecast<uint>(tree[index]));
+        return (
+            tree with { [index] = newSlotContents },
+            retVal,
+        );
+    } else {
+        let slot = index / chunk;
+        let (newSlotContents, retVal) = ear_op2(
+            unsafecast<[8]any>(tree[slot]),
+            chunk/8,
+            index%chunk,
+            closure
+        );
+        return (
+            tree with { [slot] = newSlotContents },
+            retVal,
+        );
+    }
+}
+
+func expandingIntArray_opConsecutive(
+    arr: ExpandingIntArray,
+    index: uint,
+    loClosure: opClosure,
+    hiClosure: opClosure
+) -> (ExpandingIntArray, any, any) {
+    // TODO: make this more efficient
+    let (arr1, val1) = expandingIntArray_op(arr, index, loClosure);
+    let (arr2, val2) = expandingIntArray_op(arr1, index+1, hiClosure);
+    return (arr2, val1, val2);
+}
+
+func expandingIntArray_grow(arr: ExpandingIntArray) -> ExpandingIntArray {
+    let newContents = unsafecast<[8]any>((0,0,0,0,0,0,0,0));
+    let newChunk = 1;
+    while (newChunk <= arr.chunk) {
+        newContents = unsafecast<[8]any>((newContents, newContents, newContents, newContents, newContents, newContents, newContents, newContents));
+        newChunk = newChunk * 8;
+    }
+    newContents = newContents with { [0] = arr.contents };
+    return struct {
+        size: 8*newChunk,
+        chunk: newChunk,
+        contents: newContents,
+    };
 }

@@ -1,17 +1,5 @@
 //
-// Copyright 2020, Offchain Labs, Inc.
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//    http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+// Copyright 2020, Offchain Labs, Inc. All rights reserved.
 //
 
 import type AccountStore;
@@ -21,8 +9,6 @@ import type MarshalledBytes;
 import type MessageBatch;
 import type Queue;
 
-import func chainParams_chainId() -> uint;
-
 import func getGlobalAccountStore() -> AccountStore;
 import func setGlobalAccountStore(acctStore: AccountStore);
 import func accountStore_get(acctStore: AccountStore, addr: address) -> Account;
@@ -30,30 +16,23 @@ import func accountStore_set(acctStore: AccountStore, addr: address, acct: Accou
 import func account_addToEthBalance(acct: Account, amount: uint) -> Account;
 import func account_deductFromEthBalance(acct: Account, amount: uint) -> option<Account>;
 
+import func bytearray_new(capacityHint: uint) -> ByteArray;
 import func bytearray_unmarshalBytes(mb: MarshalledBytes) -> ByteArray;
 import func bytearray_getByte(ba: ByteArray, offset: uint) -> uint;
 import func bytearray_get256(ba: ByteArray, offset: uint) -> uint;
-import func marshalledBytes_firstByte(mb: MarshalledBytes) -> uint;
 
 import func queue_new() -> Queue;
 import func queue_isEmpty(q: Queue) -> bool;
 import func queue_put(q: Queue, item: any) -> Queue;
 import func queue_get(q: Queue) -> option<(Queue, any)>;
 
-import impure func inbox_get() -> IncomingRequest;
+import func inbox_getNextUnpackedRequest() -> (option<IncomingRequest>, option<TxRequestData>);
 
-import func messageBatch_tryNew(msg: IncomingRequest) -> option<MessageBatch>;
-import func messageBatch_get(batch: MessageBatch) -> option<(IncomingRequest, MessageBatch)>;
-
-import func hashL2messageInfo(l2msg: MarshalledBytes, chainId: uint, sender: address) -> bytes32;
-
-import func translateSignedTx(req: IncomingRequest) -> option<IncomingRequest>;
 
 var gasAccountingInfo: struct {
     gasUsedByOS: uint,            // amount of gas used by OS that validators haven't yet been compensated for
     weiCollectedFromTxs: uint,    // amount of currency collected from txs but not yet paid out to validators
     txState: option<TxGasState>,  // status of currently active tx (if there is one)
-    queuedFromBatch: Queue,       // messages that arrived in a batch and are waiting for be handled
 };
 
 type TxGasState = struct {
@@ -74,7 +53,6 @@ public impure func gasAccounting_init() {
         gasUsedByOS: 0,
         weiCollectedFromTxs: 0,
         txState: None<TxGasState>,
-        queuedFromBatch: queue_new(),
     };
 }
 
@@ -101,8 +79,8 @@ public impure func gasAccounting_startTxCharges(
     // Start charging a new Tx for ArbGas usage
     // The caller should already have verified that the payer has enough funds, but we'll return None if not.
 
-    if (maxGas >= asm(2, 255) uint { exp }) {
-        maxGas = asm(2, 255) uint { exp } - 1;   // make sure
+    if (maxGas >= asm(255, 1) uint { shl }) {
+        maxGas = asm(255, 1) uint { shl } - 1;
     }
 
     // take funds from the payer, enough to pay for maxGas at gasPrice
@@ -223,7 +201,7 @@ impure func switchToChargingOS() -> uint {
     // switch to charging the OS for gas, if we aren't already
     // return amount of the tx's gas that was left over in ArbGasRemaining
     let gasRemaining = asm() uint { getgas };
-    if (gasRemaining >= asm(2, 255) uint { exp }) {
+    if (gasRemaining >= asm(255, 1) uint { shl }) {
         // we were already charging the OS, tx has nothing remaining
         return 0;
     } else {
@@ -233,127 +211,41 @@ impure func switchToChargingOS() -> uint {
     }
 }
 
-// This is the structure that the Arbitrum protocol gives us, for each incoming message.
+// This structure describes an incoming request.
 // It is declared identically in inbox.mini and elsewhere
 type IncomingRequest = struct {
     kind: uint,               // type of message
     blockNumber: uint,        // block number of the L1 block
     timestamp: uint,          // timestamp of the L1 block
     sender: address,          // address of the sender
-    requestId: uint,          // sequence number in L1 inbox
-    msgData: MarshalledBytes  // contents of the message, as a marshalled bytearray
+    requestId: uint,
+    msgData: MarshalledBytes  // kind-specific data, as a marshalled bytearray
 }
 
-// The next section of code implements the congestion auction. For each tx request, the auction
-//     determines (a) whether to approve the tx for execution, and (b) what gas price the tx will pay.
-// This uses a "pull" interface: the main run loop calls this to get the next message.
-//     This code will in turn call back to the inbox to pull in incoming messages from the L1.
-// Eventually this component will pull in a group of messages from the L1 inbox, run the congestion
+// TxRequestData is declared identically in message.mini and elsewhere.
+type TxRequestData = struct {
+    maxGas: uint,
+    gasPrice: uint,
+    seqNum: option<uint>,
+    caller: address,
+    calleeAddr: address,
+    value: uint,
+    calldata: ByteArray,
+    incomingRequest: IncomingRequest,
+}
+
+// The next section of code implements the congestion auction. For each request, the auction
+//     determines (a) whether to approve the request for execution, and (b) what gas price the request will pay.
+// This uses a "pull" interface: the main run loop calls this to get the next request.
+//     This code will in turn call back to the inbox to pull in incoming requests from the L1.
+// Eventually this component will pull in a group of requests from the inbox, run the congestion
 //     auction over them, then enqueue them to be eventually fetched by the main run loop.
-// For now, this approves every message, and charges zero gas price.
-// Note that this component also is responsible for unpacking messages that arrive in a batch
-//     (that is, multiple messages packed together in a single L1 message. When this component
-//     sees a batch, it unbundles the batch, checks the signature on each item in the batch,
-//     "rehydrates" the items with valid signatures into regular messages, and enqueues them.
-
-public impure func getNextMsgFromCongestionAuction() -> (
-    IncomingRequest,  // a message
+// For now, this approves every request, and charges zero gas price.
+public impure func getNextRequestFromCongestionAuction() -> (
     bool,           // was it approved for execution
-    uint,           // maxGas it's allowed to use
-    uint,           // gas price it will pay
+    option<IncomingRequest>,  // if it was an L1 message
+    option<TxRequestData>,    // if it was an L2 tx message
 ) {
-    // For now, the gas auction is a no-op.  It just approves every message at zero gas price.
-    let msg = unsafecast<IncomingRequest>(());   // value will be re-initialized before use
-    loop {
-        if let Some(sideloadedTuple) = trySideload() {
-            return sideloadedTuple;
-        }
-
-        if let Some(res) = queue_get(gasAccountingInfo.queuedFromBatch) {
-            let (newQ, rawMsg) = res;
-            gasAccountingInfo = gasAccountingInfo with {
-                queuedFromBatch: newQ
-            };
-            msg = unsafecast<IncomingRequest>(rawMsg);
-        } else {
-            msg = inbox_get();
-        }
-
-        if let Some(batch) = messageBatch_tryNew(msg) {
-            // it's a batch message, so unpack its components and queue them
-            let moreToDo = true;
-            let queue = gasAccountingInfo.queuedFromBatch;
-            while (moreToDo) {
-                if let Some(res) = messageBatch_get(batch) {
-                    let (newMsg, restOfBatch) = res;
-                    queue = queue_put(queue, newMsg);
-                    batch = restOfBatch;
-                } else {
-                    moreToDo = false;
-                }
-            }
-            gasAccountingInfo = gasAccountingInfo with {
-                queuedFromBatch: queue
-            };
-        } else {
-            // it's not a batch, so process it immediately
-            // get its maxGas amount -- for now, set the limit high, unless caller asked for less
-            let maxGas = 1000000000;
-            if (msg.kind == 3) {
-                let firstByte = marshalledBytes_firstByte(msg.msgData);
-                if (firstByte == 4) {
-                    // it's a signed tx; verify sig and then process request or discard
-                    if let Some(verifiedMsg) = translateSignedTx(msg) {
-                        let ba = bytearray_unmarshalBytes(verifiedMsg.msgData);
-                        let maxGas = bytearray_get256(ba, 1);
-                        return (verifiedMsg, true, maxGas, 0);
-                    }
-                    // else signature was invalid, ignore msg and execute loop again to get another
-                } else {
-                    let ba = bytearray_unmarshalBytes(msg.msgData);
-                    if (firstByte == 0) {
-                        // it's an unsigned tx; compute unique requestId
-                        msg = msg with {
-                            requestId: uint(hashL2messageInfo(
-                                msg.msgData,
-                                chainParams_chainId(),
-                                msg.sender
-                            ))
-                        };
-                    }
-                    let maxGas = bytearray_get256(ba, 1);
-                    return (msg, true, maxGas, 0);
-                }
-            } else {
-                return (msg, true, maxGas, 0);
-            }
-        }
-    }
-}
-
-// The following function exists to support sideloading.
-// Sideloading is a method used by validators to run non-mutating calls on their
-//     private clones of a chain's state. The sideload instruction is defined to push
-//     an empty tuple () onto the stack, which will cause this procedure to always
-//     return None when executed by an Arbitrum chain.
-// But a validator (or really any "full node" on an Arbitrum chain) wants to be able to
-//     run non-mutating calls on a private clone of the chain, so that it can get
-//     correct results from those non-mutating calls without having to use the more
-//     expensive public protocol. To do this, a validator will make a private clone of the
-//     chain's state, then "sideload" messages asking for the non-mutating calls into the
-//     private clone.
-// So in the private clone only, a validator can cause the sideload instruction to push
-//     onto the stack a pair (message, gasLimit).  This function will then return that
-//     pair, which will cause (the private clone of) the chain to run that call, with the
-//     given gasLimit and zero gas price.
-impure func trySideload() -> option<(IncomingRequest, bool, uint, uint)> {
-    let sideloadedVal = asm() any { sideload };
-    if (sideloadedVal == ()) {
-        // normal case; the official chain will always be in this case
-        return None;
-    } else {
-        // don't worry about the unsafecast; this can't execute on the official chain
-        let (msg, gasLimit) = unsafecast<(IncomingRequest, uint)>(sideloadedVal);
-        return Some((msg, true, gasLimit, 0));
-    }
+    let (maybeRequest, maybeTx) = inbox_getNextUnpackedRequest();
+    return (true, maybeRequest, maybeTx);
 }

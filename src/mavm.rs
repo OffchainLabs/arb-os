@@ -1,17 +1,5 @@
 /*
- * Copyright 2020, Offchain Labs, Inc.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * Copyright 2020, Offchain Labs, Inc. All rights reserved.
  */
 
 use crate::compile::MiniProperties;
@@ -300,7 +288,7 @@ impl Value {
         Value::Tuple(Rc::new(vec![]))
     }
 
-    pub fn is_none(&self) -> bool {
+    pub fn _is_none(&self) -> bool {
         if let Value::Tuple(v) = self {
             v.is_empty()
         } else {
@@ -486,6 +474,7 @@ pub enum AVMOpcode {
     AddMod,
     MulMod,
     Exp,
+    SignExtend,
     LessThan = 0x10,
     GreaterThan,
     SLessThan,
@@ -497,10 +486,13 @@ pub enum AVMOpcode {
     BitwiseXor,
     BitwiseNeg,
     Byte,
-    SignExtend,
+    ShiftLeft,
+    ShiftRight,
+    ShiftArith,
     Hash = 0x20,
     Type,
     Hash2,
+    Keccakf,
     Pop = 0x30,
     PushStatic,
     Rget,
@@ -528,7 +520,8 @@ pub enum AVMOpcode {
     Breakpoint = 0x60,
     Log,
     Send = 0x70,
-    Inbox = 0x72,
+    InboxPeek,
+    Inbox,
     Panic,
     Halt,
     SetGas,
@@ -547,6 +540,7 @@ impl MiniProperties for Opcode {
         match self {
             Opcode::AVMOpcode(AVMOpcode::Log)
             | Opcode::AVMOpcode(AVMOpcode::Inbox)
+            | Opcode::AVMOpcode(AVMOpcode::InboxPeek)
             | Opcode::AVMOpcode(AVMOpcode::Send)
             | Opcode::AVMOpcode(AVMOpcode::Rset)
             | Opcode::AVMOpcode(AVMOpcode::Rget)
@@ -589,7 +583,8 @@ impl Opcode {
             "bitwiseneg" => Opcode::AVMOpcode(AVMOpcode::BitwiseNeg),
             "hash" => Opcode::AVMOpcode(AVMOpcode::Hash),
             "hash2" => Opcode::AVMOpcode(AVMOpcode::Hash2),
-            "length" => Opcode::Len,
+            "keccakf" => Opcode::AVMOpcode(AVMOpcode::Keccakf),
+            "length" => Opcode::AVMOpcode(AVMOpcode::Tlen),
             "plus" => Opcode::AVMOpcode(AVMOpcode::Plus),
             "minus" => Opcode::AVMOpcode(AVMOpcode::Minus),
             "mul" => Opcode::AVMOpcode(AVMOpcode::Mul),
@@ -605,12 +600,17 @@ impl Opcode {
             "eq" => Opcode::AVMOpcode(AVMOpcode::Equal),
             "iszero" => Opcode::AVMOpcode(AVMOpcode::IsZero),
             "byte" => Opcode::AVMOpcode(AVMOpcode::Byte),
+            "signextend" => Opcode::AVMOpcode(AVMOpcode::SignExtend),
+            "shl" => Opcode::AVMOpcode(AVMOpcode::ShiftLeft),
+            "shr" => Opcode::AVMOpcode(AVMOpcode::ShiftRight),
+            "sar" => Opcode::AVMOpcode(AVMOpcode::ShiftArith),
             "bitwiseand" => Opcode::AVMOpcode(AVMOpcode::BitwiseAnd),
             "bitwiseor" => Opcode::AVMOpcode(AVMOpcode::BitwiseOr),
             "bitwisexor" => Opcode::AVMOpcode(AVMOpcode::BitwiseXor),
             "logicaland" => Opcode::LogicalAnd,
             "logicalor" => Opcode::LogicalOr,
             "inbox" => Opcode::AVMOpcode(AVMOpcode::Inbox),
+            "inboxpeek" => Opcode::AVMOpcode(AVMOpcode::InboxPeek),
             "jump" => Opcode::AVMOpcode(AVMOpcode::Jump),
             "log" => Opcode::AVMOpcode(AVMOpcode::Log),
             "send" => Opcode::AVMOpcode(AVMOpcode::Send),
@@ -642,6 +642,7 @@ impl Opcode {
             0x08 => Some(Opcode::AVMOpcode(AVMOpcode::AddMod)),
             0x09 => Some(Opcode::AVMOpcode(AVMOpcode::MulMod)),
             0x0a => Some(Opcode::AVMOpcode(AVMOpcode::Exp)),
+            0x0b => Some(Opcode::AVMOpcode(AVMOpcode::SignExtend)),
             0x10 => Some(Opcode::AVMOpcode(AVMOpcode::LessThan)),
             0x11 => Some(Opcode::AVMOpcode(AVMOpcode::GreaterThan)),
             0x12 => Some(Opcode::AVMOpcode(AVMOpcode::SLessThan)),
@@ -653,10 +654,10 @@ impl Opcode {
             0x18 => Some(Opcode::AVMOpcode(AVMOpcode::BitwiseXor)),
             0x19 => Some(Opcode::AVMOpcode(AVMOpcode::BitwiseNeg)),
             0x1a => Some(Opcode::AVMOpcode(AVMOpcode::Byte)),
-            0x1b => Some(Opcode::AVMOpcode(AVMOpcode::SignExtend)),
             0x20 => Some(Opcode::AVMOpcode(AVMOpcode::Hash)),
             0x21 => Some(Opcode::AVMOpcode(AVMOpcode::Type)),
             0x22 => Some(Opcode::AVMOpcode(AVMOpcode::Hash2)),
+            0x23 => Some(Opcode::AVMOpcode(AVMOpcode::Keccakf)),
             0x30 => Some(Opcode::AVMOpcode(AVMOpcode::Pop)),
             0x31 => Some(Opcode::AVMOpcode(AVMOpcode::PushStatic)),
             0x32 => Some(Opcode::AVMOpcode(AVMOpcode::Rget)),
@@ -684,6 +685,7 @@ impl Opcode {
             0x60 => Some(Opcode::AVMOpcode(AVMOpcode::Breakpoint)),
             0x61 => Some(Opcode::AVMOpcode(AVMOpcode::Log)),
             0x70 => Some(Opcode::AVMOpcode(AVMOpcode::Send)),
+            0x71 => Some(Opcode::AVMOpcode(AVMOpcode::InboxPeek)),
             0x72 => Some(Opcode::AVMOpcode(AVMOpcode::Inbox)),
             0x73 => Some(Opcode::AVMOpcode(AVMOpcode::Panic)),
             0x74 => Some(Opcode::AVMOpcode(AVMOpcode::Halt)),
@@ -712,6 +714,7 @@ impl Opcode {
             Opcode::AVMOpcode(AVMOpcode::AddMod) => Some(0x08),
             Opcode::AVMOpcode(AVMOpcode::MulMod) => Some(0x09),
             Opcode::AVMOpcode(AVMOpcode::Exp) => Some(0x0a),
+            Opcode::AVMOpcode(AVMOpcode::SignExtend) => Some(0x0b),
             Opcode::AVMOpcode(AVMOpcode::LessThan) => Some(0x10),
             Opcode::AVMOpcode(AVMOpcode::GreaterThan) => Some(0x11),
             Opcode::AVMOpcode(AVMOpcode::SLessThan) => Some(0x012),
@@ -723,10 +726,13 @@ impl Opcode {
             Opcode::AVMOpcode(AVMOpcode::BitwiseXor) => Some(0x18),
             Opcode::AVMOpcode(AVMOpcode::BitwiseNeg) => Some(0x19),
             Opcode::AVMOpcode(AVMOpcode::Byte) => Some(0x1a),
-            Opcode::AVMOpcode(AVMOpcode::SignExtend) => Some(0x1b),
+            Opcode::AVMOpcode(AVMOpcode::ShiftLeft) => Some(0x1b),
+            Opcode::AVMOpcode(AVMOpcode::ShiftRight) => Some(0x1c),
+            Opcode::AVMOpcode(AVMOpcode::ShiftArith) => Some(0x1d),
             Opcode::AVMOpcode(AVMOpcode::Hash) => Some(0x20),
             Opcode::AVMOpcode(AVMOpcode::Type) => Some(0x21),
             Opcode::AVMOpcode(AVMOpcode::Hash2) => Some(0x22),
+            Opcode::AVMOpcode(AVMOpcode::Keccakf) => Some(0x23),
             Opcode::AVMOpcode(AVMOpcode::Pop) => Some(0x30),
             Opcode::AVMOpcode(AVMOpcode::PushStatic) => Some(0x31),
             Opcode::AVMOpcode(AVMOpcode::Rget) => Some(0x32),
@@ -754,6 +760,7 @@ impl Opcode {
             Opcode::AVMOpcode(AVMOpcode::Breakpoint) => Some(0x60),
             Opcode::AVMOpcode(AVMOpcode::Log) => Some(0x61),
             Opcode::AVMOpcode(AVMOpcode::Send) => Some(0x70),
+            Opcode::AVMOpcode(AVMOpcode::InboxPeek) => Some(0x71),
             Opcode::AVMOpcode(AVMOpcode::Inbox) => Some(0x72),
             Opcode::AVMOpcode(AVMOpcode::Panic) => Some(0x73),
             Opcode::AVMOpcode(AVMOpcode::Halt) => Some(0x74),

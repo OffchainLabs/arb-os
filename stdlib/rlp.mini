@@ -1,21 +1,10 @@
 //
-// Copyright 2020, Offchain Labs, Inc.
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//    http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+// Copyright 2020, Offchain Labs, Inc. All rights reserved.
 //
 
 import type ByteArray;
 import type ByteStream;
+import type Hasher;
 
 import func builtin_arrayGetSafe(arr: []any, index: uint) -> option<any>;
 
@@ -29,9 +18,36 @@ import func bytearray_copy(from: ByteArray, fromOffset: uint, to: ByteArray, toO
 
 import func bytestream_getByte(bs: ByteStream) -> option<(ByteStream, uint)>;
 import func bytestream_get256(bs: ByteStream) -> option<(ByteStream, uint)>;
+import func bytestream_skipBytes(bs: ByteStream, nbytes: uint) -> option<ByteStream>;
 
 import impure func keccak256(ba: ByteArray, offset: uint, nbytes: uint) -> bytes32;
+import func hasher_new() -> Hasher;
+import func hasher_pushByte(h: Hasher, b: uint) -> Hasher;
+import func hasher_pushN_le(h: Hasher, val: uint, nbytes: uint) -> Hasher;
+import func hasher_pushN_be(h: Hasher, val: uint, nbytes: uint) -> Hasher;
+import func hasher_finish(h: Hasher) -> bytes32;
 
+// This is a copy of a struct defined in ArbOS/signedTx.mini.
+// The declaration here must remain consistent with the one there.
+type SignedTx = struct {
+    seqNum: uint,
+    gasPrice: uint,
+    gasLimit: uint,
+    to: address,
+    value: uint,
+    data: ByteArray,
+    v: uint,
+    r: uint,
+    s: uint
+}
+
+func rlp_uintSize(val: uint) -> uint {
+    if (val <= 0x7f) {
+        return 1;
+    } else {
+        return 1 + bytesNeededToRepresentUint(val);
+    }
+}
 
 public func rlp_encodeUint(val: uint, ba: ByteArray, offset: uint) -> (ByteArray, uint) {
     // RLP-encode val, writing the result to ba at offset
@@ -54,15 +70,67 @@ public func rlp_encodeUint(val: uint, ba: ByteArray, offset: uint) -> (ByteArray
         offset = offset + 1;
         while (length > 0) {
             length = length-1;
-            ba = bytearray_setByte(ba, offset, (val / asm(256, length) uint { exp }) & 0xff);
+            ba = bytearray_setByte(ba, offset, (asm(8*length, val) uint { shr }) & 0xff);
             offset = offset+1;
         }
         return (ba, origLen+1);
     }
 }
 
+func rlp_hashUint(hasher: Hasher, val: uint) -> Hasher {
+    if (val == 0) {
+        return hasher_pushByte(hasher, 0x80);
+    } elseif (val <= 0x7f) {
+        return hasher_pushByte(hasher, val);
+    } else {
+        let length = bytesNeededToRepresentUint(val);
+        hasher = hasher_pushByte(hasher, 0x80+length);
+        while (length > 0) {
+            length = length-1;
+            hasher = hasher_pushByte(hasher, (asm(8*length, val) uint { shr }) & 0xff);
+        }
+        return hasher;
+    }
+}
+
+func rlp_hashAddress(hasher: Hasher, addr: address) -> Hasher {
+    if (addr == address(0)) {
+        return rlp_hashUint(hasher, 0);
+    }
+    let addrBa = bytearray_set256(bytearray_new(0), 0, asm(256-160, uint(addr)) uint { shl });
+    return rlp_hashBytes(hasher, addrBa, 0, 20);
+}
+
+func rlp_addressSize(addr: address) -> uint {
+    if (addr == address(0)) {
+        return 1;
+    } else {
+        return 21;
+    }
+}
+
 public func rlp_encodeAddress(addr: address, ba: ByteArray, offset: uint) -> (ByteArray, uint) {
-    return rlp_encodeUint(uint(addr), ba, offset);
+    if (addr == address(0)) {
+        return rlp_encodeUint(0, ba, offset);
+    }
+    let addrBa = bytearray_set256(bytearray_new(0), 0, asm(256-160, uint(addr)) uint { shl });
+    return rlp_encodeBytes(addrBa, 0, 20, ba, offset);
+}
+
+func rlp_bytesSize(ba: ByteArray, offset: uint, nbytes: uint) -> uint {
+    if (nbytes == 0) {
+        return 1;
+    } elseif (nbytes == 1) {
+        if (bytearray_getByte(ba, offset) <= 0x7f) {
+            return 1;
+        } else {
+            return 2;
+        }
+    } elseif (nbytes <= 55) {
+        return 1 + nbytes;
+    } else {
+        return 1 + bytesNeededToRepresentUint(nbytes) + nbytes;
+    }
 }
 
 public func rlp_encodeBytes(
@@ -100,13 +168,54 @@ public func rlp_encodeBytes(
     let i = sizeOfSize;
     while (i > 0) {
         i = i-1;
-        outBytes = bytearray_setByte(outBytes, outOffset, (nbytes / asm(256, i) uint { exp }) & 0xff);
+        outBytes = bytearray_setByte(outBytes, outOffset, asm(8*i, nbytes) uint { shr } & 0xff);
         outOffset = outOffset + 1;
     }
     return (
         bytearray_copy(inBytes, inOffset, outBytes, outOffset, nbytes),
         1 + sizeOfSize + nbytes
     );
+}
+
+func rlp_hashBytes(hasher: Hasher, ba: ByteArray, offset: uint, nbytes: uint) -> Hasher {
+    if (nbytes == 0) {
+        return hasher_pushByte(hasher, 0x80);
+    } elseif (nbytes == 1) {
+        let firstByte = bytearray_getByte(ba, offset);
+        if (firstByte <= 0x7f) {
+            return hasher_pushByte(hasher, firstByte);
+        } else {
+            return hasher_pushByte(
+                hasher_pushByte(hasher, 0x81),
+                firstByte
+            );
+        }
+    } elseif (nbytes <= 55) {
+        hasher = hasher_pushByte(hasher, 0x80+nbytes);
+        if (nbytes > 32) {
+            return hasher_pushN_be(
+                hasher_pushN_be(hasher, bytearray_get256(ba, offset), 32),
+                bytearray_get256(ba, offset+32),
+                nbytes-32
+            );
+        } else {
+            return hasher_pushN_be(hasher, bytearray_get256(ba, offset), nbytes);
+        }
+    } else {
+        let sizeOfSize = bytesNeededToRepresentUint(nbytes);
+        hasher = hasher_pushByte(hasher, 0xb7+sizeOfSize);
+        let i = sizeOfSize;
+        while (i > 0) {
+            i = i-1;
+            hasher = hasher_pushByte(hasher, asm(8*i, nbytes) uint { shr } & 0xff);
+        }
+        while (nbytes > 32) {
+            hasher = hasher_pushN_be(hasher, bytearray_get256(ba, offset), 32);
+            offset = offset+32;
+            nbytes = nbytes-32;
+        }
+        return hasher_pushN_be(hasher, bytearray_get256(ba, offset), nbytes);
+    }
 }
 
 public func rlp_decodeBytes(inStream: ByteStream) -> option<(ByteStream, ByteArray)> {
@@ -161,7 +270,7 @@ public func rlp_encodeList(
         let i = sizeOfSize;
         while (i > 0) {
             i = i-1;
-            let b = (totalSize / asm(256, i) uint { exp }) & 0xff;
+            let b = asm(8*i, totalSize) uint { shr } & 0xff;
             outBytes = bytearray_setByte(outBytes, outOffset, b);
             outOffset = outOffset+1;
         }
@@ -222,6 +331,83 @@ public func rlp_encodeMessageInfo(
     }
 }
 
+public func rlp_encodeAndHashMessageInfo(tx: SignedTx) -> bytes32 {
+    let contentsSize = rlp_uintSize(tx.seqNum)
+                     + rlp_uintSize(tx.gasPrice)
+                     + rlp_uintSize(tx.gasLimit)
+                     + rlp_addressSize(tx.to)
+                     + rlp_uintSize(tx.value)
+                     + rlp_bytesSize(tx.data, 0, bytearray_size(tx.data))
+                     + rlp_uintSize(tx.v)
+                     + rlp_uintSize(tx.r)
+                     + rlp_uintSize(tx.s);
+
+    let hasher = hasher_new();
+
+    // hash in list header info
+    if (contentsSize <= 55) {
+        hasher = hasher_pushByte(hasher, 0xc0 + contentsSize);
+    } else {
+        let sizeOfSize = bytesNeededToRepresentUint(contentsSize);
+        hasher = hasher_pushByte(hasher, 0xf7 + sizeOfSize);
+        let i = sizeOfSize;
+        while (i > 0) {
+            i = i-1;
+            let b = asm(8*i, contentsSize) uint { shr } & 0xff;
+            hasher = hasher_pushByte(hasher, b);
+        }
+    }
+
+    // hash in contents
+    hasher = rlp_hashUint(hasher, tx.seqNum);
+    hasher = rlp_hashUint(hasher, tx.gasPrice);
+    hasher = rlp_hashUint(hasher, tx.gasLimit);
+    hasher = rlp_hashAddress(hasher, tx.to);
+    hasher = rlp_hashUint(hasher, tx.value);
+    hasher = rlp_hashBytes(hasher, tx.data, 0, bytearray_size(tx.data));
+    hasher = rlp_hashUint(hasher, tx.v);
+    hasher = rlp_hashUint(hasher, tx.r);
+    hasher = rlp_hashUint(hasher, tx.s);
+
+    return hasher_finish(hasher);
+}
+
+public func rlp_decodeMessageInfo(inStream: ByteStream) -> option<(ByteStream, SignedTx)> {
+    // read and discard the list header info (which we don't need)
+    let (us, firstByte) = bytestream_getByte(inStream)?;
+    inStream = us;
+    if (firstByte > 0xf7) {
+        inStream = bytestream_skipBytes(inStream, firstByte-0xf7)?;
+    }
+
+    let (us, seqNum) = rlp_decodeUint(inStream)?;
+    let (us, gasPrice) = rlp_decodeUint(us)?;
+    let (us, gasLimit) = rlp_decodeUint(us)?;
+    let (us, to) = rlp_decodeAddress(us)?;
+    let (us, value) = rlp_decodeUint(us)?;
+    let (us, data) = rlp_decodeBytes(us)?;
+    let (us, v) = rlp_decodeUint(us)?;
+    let (us, r) = rlp_decodeUint(us)?;
+    let (us, s) = rlp_decodeUint(us)?;
+
+    return Some(
+        (
+            us,
+            struct {
+                seqNum: seqNum,
+                gasPrice: gasPrice,
+                gasLimit: gasLimit,
+                to: to,
+                value: value,
+                data: data,
+                v: v,
+                r: r,
+                s: s,
+            }
+        )
+    );
+}
+
 func copyFromStreamToArray(
     inStream: ByteStream,
     ba: ByteArray,
@@ -246,26 +432,27 @@ func copyFromStreamToArray(
     return Some( (inStream, ba) );
 }
 
-public func rlp_encodeAddrUintPair(
-    addr: address,
-    ui: uint,
+public func rlp_encodeUintPair(
+    ui1: uint,
+    ui2: uint,
     ba: ByteArray,
     offset: uint
 ) -> (ByteArray, uint) {
     // Leave one byte of space for the RLP list length indicator
     // It will always fit in one byte because max RLP size of address is 21 bytes, uint is 33,
-    //        and one-byte indicator covers sum-of-lengths <= 55
-    let (uba, rlpAddrLen) = rlp_encodeAddress(addr, ba, offset+1);
+    //        and one-byte indicator covers sum-of-lengths <= 55.
+    //        (and the ui1 value will always be cast from an address)
+    let (uba, rlpLen1) = rlp_encodeUint(ui1, ba, offset+1);
     ba = uba;
-    let (uba, rlpUiLen) = rlp_encodeUint(ui, ba, offset+1+rlpAddrLen);
+    let (uba, rlpLen2) = rlp_encodeUint(ui2, ba, offset+1+rlpLen1);
     ba = uba;
-    ba = bytearray_setByte(ba, offset, 0xc0+rlpAddrLen+rlpUiLen);
-    return (ba, 1+rlpAddrLen+rlpUiLen);
+    ba = bytearray_setByte(ba, offset, 0xc0+rlpLen1+rlpLen2);
+    return (ba, 1+rlpLen1+rlpLen2);
 }
 
-public impure func keccakOfRlpEncodedAddrUintPair(addr: address, ui: uint) -> bytes32 {
+public impure func keccakOfRlpEncodedUintPair(ui1: uint, ui2: uint) -> bytes32 {
     let ba = bytearray_new(64);
-    let (uba, nbytes) = rlp_encodeAddrUintPair(addr, ui, ba, 0);
+    let (uba, nbytes) = rlp_encodeUintPair(ui1, ui2, ba, 0);
     return keccak256(uba, 0, nbytes);
 }
 
@@ -303,7 +490,7 @@ public func bytesNeededToRepresentUint(val: uint) -> uint {
     let ret = 0;
     let bytes = 16;
     while (bytes > 0) {
-        let threshold = asm(256, bytes) uint { exp };
+        let threshold = asm(8*bytes, 1) uint { shl };
         if (val >= threshold) {
             ret = ret + bytes;
             val = val / threshold;
