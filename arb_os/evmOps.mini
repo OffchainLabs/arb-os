@@ -70,8 +70,8 @@ import func pristineAccount(addr: address) -> Account;
 
 import func storageMap_new() -> StorageMap;
 
-import impure func inbox_currentTimestamp() -> uint;
-import impure func inbox_currentBlockNumber() -> uint;
+import impure func evmCallStack_currentTimestamp() -> uint;
+import impure func evmCallStack_currentBlockNumber() -> uint;
 
 import func evmlogs_empty() -> EvmLogs;
 
@@ -115,8 +115,8 @@ public impure func evmOp_address() -> address {
     return address(0);
 }
 
-public impure func evmOp_balance(addr: address) -> uint {
-    addr = address(uint(addr));  // truncate if necessary
+public impure func evmOp_balance(addrAsUint: uint) -> uint {
+    let addr = address(addrAsUint);  // truncates if necessary
     if let Some(topFrame) = evmCallStack_topFrame() {
         return account_getBalance(
             evmCallFrame_getAccount(topFrame, addr)
@@ -217,7 +217,9 @@ public impure func evmOp_codecopy(memAddr: uint, codeOffset: uint, nbytes: uint)
         if let Some(code) = account_getCode(
             evmCallFrame_runningCodeFromAccount(topFrame)
         ) {
-            // if this would read beyond end of code, bytearray_copy will zero-fill the rest of the target memory region
+            // if this would read beyond end of code,
+            //       bytearray_copy will zero-fill the rest of the target memory region,
+            //       which is the desired behavior
             let updatedMemory = bytearray_copy(
                 code,
                 codeOffset,
@@ -234,8 +236,8 @@ public impure func evmOp_codecopy(memAddr: uint, codeOffset: uint, nbytes: uint)
     evm_runtimePanic();
 }
 
-public impure func evmOp_extcodesize(addr: address) -> uint {
-    addr = address(uint(addr));     // truncate if necessary
+public impure func evmOp_extcodesize(addrAsUint: uint) -> uint {
+    let addr = address(addrAsUint);     // truncates if necessary
     if let Some(topFrame) = evmCallStack_topFrame() {
         return account_getCodeSize(
             evmCallFrame_getAccount(topFrame, addr)
@@ -246,14 +248,16 @@ public impure func evmOp_extcodesize(addr: address) -> uint {
     return 0;
 }
 
-public impure func evmOp_extcodecopy(addr: address, memAddr: uint, codeOffset: uint, nbytes: uint) {
-    addr = address(uint(addr));     // truncate if necessary
+public impure func evmOp_extcodecopy(addrAsUint: uint, memAddr: uint, codeOffset: uint, nbytes: uint) {
+    let addr = address(addrAsUint);     // truncates if necessary
     if let Some(topFrame) = evmCallStack_topFrame() {
         let memory = evmCallFrame_getMemory(topFrame);
         if let Some(code) = account_getCode(
             evmCallFrame_getAccount(topFrame, addr)
         ) {
-            // if this would read beyond end of code, bytearray_copy will zero-fill the rest of the target memory region
+            // if this would read beyond end of code,
+            //       bytearray_copy will zero-fill the rest of the target memory region,
+            //       which is the desired behavior
             let updatedMemory = bytearray_copy(
                 code,
                 codeOffset,
@@ -282,8 +286,8 @@ public impure func evmOp_extcodecopy(addr: address, memAddr: uint, codeOffset: u
     evm_runtimePanic();
 }
 
-public impure func evmOp_extcodehash(addr: address) -> bytes32 {
-    addr = address(uint(addr));     // truncate if necessary
+public impure func evmOp_extcodehash(addrAsUint: uint) -> bytes32 {
+    let addr = address(addrAsUint);     // truncates if necessary
     if let Some(topFrame) = evmCallStack_topFrame() {
         let acct = evmCallFrame_getAccount(topFrame, addr);
         if (account_isEmpty(acct)) {
@@ -312,6 +316,9 @@ public impure func evmOp_returndatasize() -> uint {
 public impure func evmOp_returndatacopy(memAddr: uint, dataOffset: uint, nbytes: uint) {
     if let Some(returnData) = evmCallStack_getTopFrameReturnData() {
         let memory = evmCallStack_getTopFrameMemoryOrDie();
+        // if the returndata is smaller than nbytes,
+        //       this will zero-fill the remainder of the target region,
+        //       which is the desired behavior
         let updatedMemory = bytearray_copy(
             returnData,
             dataOffset,
@@ -328,11 +335,11 @@ public impure func evmOp_returndatacopy(memAddr: uint, dataOffset: uint, nbytes:
 }
 
 public impure func evmOp_timestamp() -> uint {
-    return inbox_currentTimestamp();
+    return evmCallStack_currentTimestamp();
 }
 
 public impure func evmOp_number() -> uint {
-    return inbox_currentBlockNumber();
+    return evmCallStack_currentBlockNumber();
 }
 
 public impure func evmOp_mload(memAddr: uint) -> uint {
@@ -569,13 +576,15 @@ public impure func evmOp_log4(
 
 public impure func evmOp_call(
     gas: uint,
-    callee: address,
+    calleeAsUint: uint,
     balance: uint,
     argsOffset: uint,
     argsLength: uint,
     retOffset: uint,
     retLength: uint
 ) -> bool {
+    let callee = address(calleeAsUint);  // truncates if necessary
+
     // First, get the return address of our caller.
     // This will be the second-from-top item on the AVM AuxStack.
     // Get a copy of it, without disturbing anything.
@@ -611,14 +620,14 @@ public impure func evmOp_call(
 
 public impure func evmOp_callcode(
     gas: uint,
-    callee: address,
+    calleeAsUint: uint,
     balance: uint,
     argsOffset: uint,
     argsLength: uint,
     retOffset: uint,
     retLength: uint
 ) -> bool {
-    callee = address(uint(callee));     // truncate if necessary
+    let callee = address(calleeAsUint);     // truncates if necessary
 
     // This is the same as evmOp_call, except for the callKind.
     let resumeCodePoint = asm() func() {
@@ -650,13 +659,13 @@ public impure func evmOp_callcode(
 
 public impure func evmOp_delegatecall(
     gas: uint,
-    callee: address,
+    calleeAsUint: uint,
     argsOffset: uint,
     argsLength: uint,
     retOffset: uint,
     retLength: uint
 ) -> bool {
-    callee = address(uint(callee));     // truncate if necessary
+    let callee = address(calleeAsUint);     // truncates if necessary
 
     // This is the same as evmOp_call, except for the callKind.
      let resumeCodePoint = asm() func() {
@@ -672,7 +681,7 @@ public impure func evmOp_delegatecall(
          2,
          gas,
          callee,
-         0,  // balance is zero for a delegatecall
+         0,  // balance will be filled in by evmCallStack_doCall
          argsOffset,
          argsLength,
          retOffset,
@@ -688,13 +697,13 @@ public impure func evmOp_delegatecall(
 
 public impure func evmOp_staticcall(
     gas: uint,
-    callee: address,
+    calleeAsUint: uint,
     argsOffset: uint,
     argsLength: uint,
     retOffset: uint,
     retLength: uint
 ) -> bool {
-    callee = address(uint(callee));     // truncate if necessary
+    let callee = address(calleeAsUint);     // truncates if necessary
 
     // This is the same as evmOp_call, except for the callKind.
     let resumeCodePoint = asm() func() {
@@ -736,8 +745,8 @@ public impure func evmOp_return(memOffset: uint, memNbytes: uint) {
     evm_runtimePanic();
 }
 
-public impure func evmOp_selfdestruct(owner: address) {
-    owner = address(uint(owner));     // truncate if necessary
+public impure func evmOp_selfdestruct(ownerAsUint: uint) {
+    let owner = address(ownerAsUint);     // truncates if necessary
 
     evmCallStack_selfDestructCurrentAccount(owner,);
 }
@@ -765,10 +774,10 @@ public impure func evmOp_create2(value: uint, offset: uint, length: uint, salt: 
         let newAddrBuf = bytearray_new(85);
         newAddrBuf = bytearray_setByte(newAddrBuf, 0, 0xff);
         newAddrBuf = bytearray_set256(newAddrBuf, 1, asm(12*8, myAddr) uint { shl });
-        newAddrBuf = bytearray_set256(newAddrBuf, 21, salt);
+        newAddrBuf = bytearray_set256(newAddrBuf, 1+20, salt);
         newAddrBuf = bytearray_set256(
             newAddrBuf,
-            53,
+            1+20+32,
             uint(keccak256(
                 evmCallFrame_getMemory(topFrame),
                 offset,
@@ -817,9 +826,9 @@ impure func doCreationOpcode(value: uint, offset: uint, length: uint, newAddress
             )
         ) {
             // Now for the slightly tricky part.
-            // We're going to call the untrusted constructor, which might end up trashing our
+            // We're going to call the untrusted constructor, which might end up polluting our
             //    Mini-language callstack (which is stored on the AVM auxstack).
-            // The possibly-trashed callstack includes our local variables and the return address of our caller.
+            // The possibly-polluted callstack includes our local variables and our return address.
             // It also contains the locals and return address of our caller, which we also need to preserve.
             // We don't need to preserve any more because our caller's caller is translated EVM code,
             //    which doesn't use the aux stack and isn't trusted to maintain any invariants about it.
@@ -827,7 +836,7 @@ impure func doCreationOpcode(value: uint, offset: uint, length: uint, newAddress
             //    gets saved and restored across calls to untrusted code.
             // After the return we'll restore the saved info, and continue.
 
-            // save top four AVM auxstack items onto the AVM stack (locals and return address of us and our caller)
+            // copy top four AVM auxstack items onto the AVM stack (locals and return address of us and our caller)
             asm(((),(),(),()),) {
                 auxpop
                 swap1
@@ -853,11 +862,12 @@ impure func doCreationOpcode(value: uint, offset: uint, length: uint, newAddress
 
             let constructorSucceeded = false;
 
-            // We can't save the result of this call to a local variable, because we can't (yet) trust
-            //     that our local callframe is in a reasonable state. So we have to put it in an if.
+            // We can't save the result of this call to a local variable, because when the calls returns,
+            //     we can't (yet) trust that our local callframe is in a reasonable state.
+            //     So we have to use an if-statement to capture the return value.
             if (evmOp_call(
                 1000000000,  // gas allocation
-                newAddress,
+                uint(newAddress),
                 value,
                 0,           // no calldata passed to constructor
                 0,

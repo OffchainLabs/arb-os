@@ -19,11 +19,13 @@ public impure func errorHandler_init() {
 }
 
 public impure func errorHandler() {
-    // If we got here, it's because some AVM instruction hit an Error
-    // This could happen for several reasons.
-    //   1.  untrusted application code tried to do something erroneous, like dividing by zero
-    //   2.  untrusted application code ran out of ArbGas
-    //   3.  we hit an unknown bug in the runtime
+    // If we got here, it's because either:
+    // 1.  some AVM instruction hit an Error, which could happen for several reasons
+    //   A.  untrusted application code tried to do something erroneous, like dividing by zero
+    //   B.  untrusted application code ran out of ArbGas
+    //   C.  we hit an unknown bug in the runtime
+    // 2.  some "impossible thing" happened, and ArbOS error handling code decided to jump here
+    // In either case, we want to clean up as best we can, and carry on.
 
     // Note that if an application hits an error when its ArbGas remaining is just barely above zero,
     //      we could run out of ArbGas while we're running this handler or cleaning up the application's state.

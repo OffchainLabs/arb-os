@@ -36,7 +36,7 @@ var gasAccountingInfo: struct {
 };
 
 type TxGasState = struct {
-    gasInReserve: uint,   // how much gas is being held in reserve
+    gasInReserve: uint,  // how much gas is being held in reserve
     originalMax: uint,   // the tx's original maxGas value
     price: uint,         // price of gas, in wei per unit of gas
     weiHeldForGas: uint, // amount of currency we're holding to cover the current tx's gas use

@@ -167,6 +167,8 @@ public func accountStore_createAccountFromEvmCode(
             store,
             newAddr,
             oldAcct with {
+                nextSeqNum: 1
+            } with {
                 contractInfo: Some(struct {
                     code: code,
                     evmJumpTable: evmJumpTable,
@@ -243,7 +245,7 @@ public func accountStore_createERC721(
     acctStore: AccountStore,
     addr: address
 ) -> option<AccountStore> {
-    // Create a new ERC20 proxy contract at the given address.
+    // Create a new ERC721 proxy contract at the given address.
     // Return Some(updatedAccountStore), or None if something went wrong.
     if (account_isEmpty(accountStore_get(acctStore, addr))) {
         acctStore = accountStore_cloneContract(

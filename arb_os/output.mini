@@ -65,7 +65,7 @@ func outputStats_new() -> OutputStatistics {
     };
 }
 
-func outputStats_allZero(os: OutputStatistics) -> bool {
+func outputStats_isAllZero(os: OutputStatistics) -> bool {
     return (os.totalGasUsed + os.numTx + os.numEvmLogs + os.numLogs + os.numSends) == 0;
 }
 
@@ -86,35 +86,32 @@ var globalBlockReceiptData: struct {
 };
 
 public impure func outputStats_endOfBlock(blockNum: uint, timestamp: uint) {
-    if ( ! outputStats_allZero(globalBlockReceiptData.statsThisBlock)) {
+    if ( ! outputStats_isAllZero(globalBlockReceiptData.statsThisBlock)) {
         // add current block (including soon-to-be-issued block summary log) into total stats
         let updatedStats = outputStats_add(
             globalBlockReceiptData.statsThisBlock,
             globalBlockReceiptData.statsAllTime
         );
         updatedStats = updatedStats with {
-            numLogs: updatedStats.numLogs + 1
+            numLogs: updatedStats.numLogs + 1  // +1 for soon-to-be-issued block summary log
         };
         globalBlockReceiptData = globalBlockReceiptData with {
             statsAllTime: updatedStats
         };
 
         emitBlockSummaryLog(blockNum, timestamp);
-
-        // now clear current block stats, because we're advancing to a new current block
-        globalBlockReceiptData = globalBlockReceiptData with {
-            statsThisBlock: outputStats_new()
-        } with {
-            data: struct {
-                totalGasUsed: 0,
-                numTx: 0,
-                numEvmLogs: 0
-            }
-
-        };
     }
+
+    // now clear current block stats, because we're advancing to a new current block
     globalBlockReceiptData = globalBlockReceiptData with {
         statsThisBlock: outputStats_new()
+    } with {
+        data: struct {
+            totalGasUsed: 0,
+            numTx: 0,
+            numEvmLogs: 0
+        }
+
     };
 }
 
@@ -162,7 +159,7 @@ impure func update_txReceiptsForBlock(
         totalGasUsed: gasUsed + globalBlockReceiptData.data.totalGasUsed
     };
 
-    // now update the accumulated data and write it back
+    // now update the accumulated data and write it back, but don't return the updated version
     globalBlockReceiptData = globalBlockReceiptData with {
         data: ret with {
             numTx: ret.numTx + 1
@@ -197,21 +194,19 @@ public impure func emitLog(
     if let Some(gu) = gasUsage {
         realGasUsage = gu;
     }
+
     let evmLogs = evmlogs_empty();
     let numEvmLogs = 0;
     if let Some(el) = maybeEvmLogs {
         evmLogs = el;
         numEvmLogs = evmlogs_numLogs(el);
     }
+
     outputStats_addTxLog(realGasUsage.gasUsed, numEvmLogs);
 
     let returnData = bytearray_new(0);
     if let Some(rd) = maybeReturnData {
         returnData = rd;
-    }
-    let evmLogs = evmlogs_empty();
-    if let Some(el) = maybeEvmLogs {
-        evmLogs = el;
     }
 
     let txResultInfo = struct {
@@ -219,6 +214,7 @@ public impure func emitLog(
         returnData: bytearray_marshalFull(returnData),
         evmLogs: evmLogs,
     };
+
     asm((
         0,
         l1message,
