@@ -109,8 +109,8 @@ type GasUsage = struct {
 }
 
 // This callframe is used to represent an EVM call in progress.
-// The callframe will have a full copy of the system state, but
-//        that state will be contingent on the call succeeding.
+// The callframe will have a full copy of the global AccountStore, but
+//        whether to ultimately adopt this AccountStore version will be contingent on the call succeeding.
 // If the call succeeds, we'll copy the call's state into the caller as the new
 //        state, but if the call fails we'll discard the state from the callframe.
 // (For staticcalls, we will discard state even if the call succeeds, as the EVM spec requires.)
@@ -125,11 +125,11 @@ type EvmCallFrame = struct {
     callvalue: uint,                    // Eth value given to this call by its caller
     returnInfo: option<ReturnInfo>,     // result of last subcall made by this call (if any)
     memory: ByteArray,                  // EVM memory of this call
-    evmLogs: EvmLogs,                   // EVM logs created by this call and its subcalls
-    selfDestructQueue: Queue,           // set of self-destruct directives created by this call and its subcalls
+    evmLogs: EvmLogs,                   // EVM logs, including those created by this call and its subcalls
+    selfDestructQueue: Queue,           // set of self-destruct directives, including those created by this call and its subcalls
     resumeInfo: option<ResumeInfo>,     // if call is suspended, its state will be saved here
-    sendQueue: Queue,                   // queue of messages to be sent if the transaction succeeds
-    parent: option<any>,                // call-frame that created this one, or None if this is user call
+    sendQueue: Queue,                   // outgoing messages, including those created by this call and its subcalls
+    parent: option<any>,                // call-frame that created this one, or None if this is a top-level call
                       // parent is really an option<EvmCallFrame>, but compiler doesn't allow recursive types
 }
 
@@ -142,7 +142,7 @@ type ResumeInfo = struct {  // information used to resume a call after a subcall
     codePoint: func(),      // where to resume execution
     stackContents: Stack,   // saved contents of stack
     returnDataOffset: uint, // where returndata from subcall should be put
-    returnDataNbytes: uint, // max amount of returndata that subcall can provide
+    returnDataNbytes: uint, // max amount of returndata to copy into caller's memory
     callType: uint,         // call type of the subcall
     savedGas: uint,         // how much of the caller's gas was not lent to the subcall
 }
@@ -156,7 +156,7 @@ type IncomingRequest = struct {
     blockNumber: uint,        // block number of the L1 block
     timestamp: uint,          // timestamp of the L1 block
     sender: address,          // address of the sender
-    inboxSeqNum: uint,        // sequence number in L1 inbox
+    requestId: uint,          // unique identifier for this request
     msgData: MarshalledBytes  // contents of the message, as a marshalled bytearray
 }
 
@@ -212,7 +212,6 @@ public impure func initEvmCallStack(
                 request.calleeAddr,
                 request.value
             ) {
-
                 globalCallStack = Some(struct {
                     runningAs: request.calleeAddr,
                     runningCodeFrom: request.calleeAddr,
@@ -339,6 +338,11 @@ public impure func initEvmCallStackForConstructor(
 
         if (gasAccounting_startTxCharges(request.maxGas, request.gasPrice, request.caller) != None<()>) {
             startPoint();  // start executing the call; should never return
+            panic;
+        } else {
+            // can't pay for gas error
+            emitLog(request.incomingRequest, 3, None<ByteArray>, None<EvmLogs>, None<GasUsage>);
+            evmCallStack_callHitError(15);
         }
     } else {
         // can't pay for gas error
@@ -349,7 +353,7 @@ public impure func initEvmCallStackForConstructor(
 }
 
 public impure func evmCallStack_doCall(
-    kind: uint,  // currently handle 0 (call), 2 (delegatecall), 3 (staticcall)
+    kind: uint,  // currently handle 0 (call), 1 (callcode), 2 (delegatecall), 3 (staticcall)
     gas: uint,
     calleeAddr: address,
     balance: uint,
@@ -366,11 +370,6 @@ public impure func evmCallStack_doCall(
         let availableGas = gasAccounting_pauseTxCharges();
         if (gas > availableGas) {
             gas = availableGas;  // don't give the callee more gas than the caller has
-        }
-
-        if (kind == 1) {
-            evmCallStack_callHitError(6);
-            panic;  // callcode call type not yet implemented
         }
 
         let callerAddr = topFrame.runningAs;
@@ -395,8 +394,13 @@ public impure func evmCallStack_doCall(
         //     it incorporates the balance transfer from caller to callee
         //          (which is put into the callee frame so it isn't committed unless the call succeeds)
         let runningAsAddr = calleeAddr;
-        if (kind == 2) {
-            runningAsAddr = callerAddr;  // delegatecall runs as the caller, with callee's code
+        let newCallerAddr = topFrame.runningAs;
+        if ( (kind == 1) || (kind == 2) ) {
+            runningAsAddr = callerAddr;  // callcode and delegatecall run as the caller, with callee's code
+            if (kind == 2) {
+                newCallerAddr = topFrame.caller;  // delegatecall inherits the caller of its parent
+                balance = topFrame.callvalue;
+            }
         }
         let updatedAcctStore = topFrame.accountStore;
         if (balance > 0) {
@@ -406,13 +410,17 @@ public impure func evmCallStack_doCall(
                 calleeAddr,
                 balance
             )?;
+        } elseif (kind == 2) {
+            // delegatecall inherits the callvalue of its parent
+            // but don't do a transfer because it's running as the same account
+            balance = topFrame.callvalue;
         }
         let newTopFrame = struct {
             runningAs: runningAsAddr,
             runningCodeFrom: calleeAddr,
             accountStore: updatedAcctStore,
             runningAsAccount: accountStore_get(updatedAcctStore, runningAsAddr),
-            caller: topFrame.runningAs,
+            caller: newCallerAddr,
             callKind: kind,
             calldata: bytearray_extract(topFrame.memory, argsOffset, argsLength),
             callvalue: balance,
@@ -668,7 +676,7 @@ public func emptyAvmStack() {
 }
 
 func restoreAvmStack(savedStack: Stack) {
-    // restore AVM stack state, from a Stack that was create earlier by saveAvmStack
+    // restore AVM stack state, from a Stack that was created earlier by saveAvmStack
     while( ! stack_isEmpty(savedStack) ) {
         if let Some(res) = stack_pop(savedStack) {
             let (newStack, top) = res;

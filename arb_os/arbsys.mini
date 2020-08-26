@@ -43,23 +43,6 @@ import impure func inbox_currentTimestamp() -> uint;
 import impure func queueMessageForSend(msgType: uint, sender: address, data: ByteArray);
 
 
-type ArbSysMessage = struct {
-    kind: uint,
-    sender: address,
-    msg: any,
-}
-
-type ArbSysEthTransferMessage = struct {
-    dest: address,
-    amount: uint,
-}
-
-type ArbSysTokenTransferMessage = struct {
-    tokenAddr: address,
-    dest: address,
-    amount: uint,
-}
-
 public impure func arbsys_txcall() {
     if let Some(topFrame) = evmCallStack_topFrame() {
         let calldata = evmCallFrame_getCalldata(topFrame);
@@ -156,10 +139,7 @@ impure func arbsys_getTransactionCount(topFrame: EvmCallFrame, calldata: ByteArr
          0,
          seqNum
      );
-    let success = evmCallStack_setTopFrameMemory(
-        updatedMem
-    );
-
+    let success = evmCallStack_setTopFrameMemory(updatedMem);
     if (success) {
         evmOp_return(0, 32);
     } else {
