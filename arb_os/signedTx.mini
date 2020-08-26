@@ -131,27 +131,6 @@ impure func recoverSigner(tx: SignedTx) -> option<address> {
     }
 }
 
-func rlpAndHash(msgData: ByteArray, preSigSize: uint, v: uint, r: uint, s: uint) -> bytes32 {
-    let maxGas = bytearray_get256(msgData, 1);
-    let gasPriceBid = bytearray_get256(msgData, 32+1);
-    let sequenceNum = bytearray_get256(msgData, 2*32+1);
-    let destAddress = address(bytearray_get256(msgData, 3*32+1));
-    let payment = bytearray_get256(msgData, 4*32+1);
-    return rlp_encodeAndHashMessageInfo(
-        struct {
-            seqNum: sequenceNum,
-            gasPrice: gasPriceBid,
-            gasLimit: maxGas,
-            to: destAddress,
-            value: payment,
-            data: bytearray_extract(msgData, 5*32+1, preSigSize-(5*32+1)),
-            v: v,
-            r: r,
-            s: s
-        }
-    );
-}
-
 func signedTxToUnsignedBytes(tx: SignedTx) -> ByteArray {
     let dataSize = bytearray_size(tx.data);
     let ret = bytearray_new(0);

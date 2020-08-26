@@ -160,6 +160,14 @@ type IncomingRequest = struct {
     msgData: MarshalledBytes  // contents of the message, as a marshalled bytearray
 }
 
+public impure func evmCallStack_currentBlockNumber() -> uint {
+    return globalCurrentIncomingRequest.blockNumber;
+}
+
+public impure func evmCallStack_currentTimestamp() -> uint {
+    return globalCurrentIncomingRequest.timestamp;
+}
+
 public impure func evmCallStack_init() {
     globalCallStack = None<EvmCallFrame>;
 }
