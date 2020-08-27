@@ -683,7 +683,7 @@ impl RtEnvRecorder {
                 .collect()
         };
         if !(logs_expected == logs_seen) {
-            print_output_differences("log", self.logs.clone(), machine.runtime_env.recorder.logs);
+            print_output_differences("log",machine.runtime_env.recorder.logs, self.logs.clone());
             return false;
         }
         if !(self.sends == machine.runtime_env.recorder.sends) {
