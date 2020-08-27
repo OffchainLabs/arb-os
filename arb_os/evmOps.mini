@@ -111,7 +111,7 @@ public impure func evmOp_address() -> address {
         return account_getAddress(evmCallFrame_runningAsAccount(topFrame));
     }
 
-    evm_runtimePanic();
+    evm_runtimePanic(0);
     return address(0);
 }
 
@@ -122,7 +122,7 @@ public impure func evmOp_balance(addrAsUint: uint) -> uint {
             evmCallFrame_getAccount(topFrame, addr)
         );
     } else {
-        evm_runtimePanic();
+        evm_runtimePanic(1);
         return 0;
     }
 }
@@ -133,7 +133,7 @@ public impure func evmOp_selfbalance() -> uint {
             evmCallFrame_runningAsAccount(topFrame)
         );
     } else {
-        evm_runtimePanic();
+        evm_runtimePanic(2);
         return 0;
     }
 }
@@ -143,7 +143,7 @@ public impure func evmOp_origin() -> address {
         return account_getAddress(evmCallFrame_runningAsAccount(oldie));
     }
 
-    evm_runtimePanic();
+    evm_runtimePanic(3);
     return address(0);
 }
     
@@ -152,7 +152,7 @@ public impure func evmOp_caller() -> address {
         return evmCallFrame_getCaller(topFrame);
     }
 
-    evm_runtimePanic();
+    evm_runtimePanic(4);
     return address(0);
 }
 
@@ -160,7 +160,7 @@ public impure func evmOp_callvalue() -> uint {
     if let Some(topFrame) = evmCallStack_topFrame() {
         return evmCallFrame_getCallvalue(topFrame);
     } else {
-        evm_runtimePanic();
+        evm_runtimePanic(5);
         return 0;
     }
 }
@@ -170,7 +170,7 @@ public impure func evmOp_calldataload(offset: uint) -> uint {
         return bytearray_get256(evmCallFrame_getCalldata(topFrame), offset);
     }
 
-    evm_runtimePanic();
+    evm_runtimePanic(6);
     return 0;
 }
 
@@ -178,7 +178,7 @@ public impure func evmOp_calldatasize() -> uint {
     if let Some(topFrame) = evmCallStack_topFrame() {
         return bytearray_size(evmCallFrame_getCalldata(topFrame));
     } else {
-        evm_runtimePanic();
+        evm_runtimePanic(7);
         return 0;
     }
 }
@@ -197,7 +197,7 @@ public impure func evmOp_calldatacopy(memAddr: uint, calldataOffset: uint, nbyte
         }
     }
 
-    evm_runtimePanic();
+    evm_runtimePanic(8);
 }
 
 public impure func evmOp_codesize() -> uint {
@@ -206,7 +206,7 @@ public impure func evmOp_codesize() -> uint {
             evmCallFrame_runningCodeFromAccount(topFrame)
         );
     } else {
-        evm_runtimePanic();
+        evm_runtimePanic(9);
         return 0;
     }
 }
@@ -233,7 +233,7 @@ public impure func evmOp_codecopy(memAddr: uint, codeOffset: uint, nbytes: uint)
         }
     }
 
-    evm_runtimePanic();
+    evm_runtimePanic(10);
 }
 
 public impure func evmOp_extcodesize(addrAsUint: uint) -> uint {
@@ -244,7 +244,7 @@ public impure func evmOp_extcodesize(addrAsUint: uint) -> uint {
         );
     }
 
-    evm_runtimePanic();
+    evm_runtimePanic(11);
     return 0;
 }
 
@@ -283,7 +283,7 @@ public impure func evmOp_extcodecopy(addrAsUint: uint, memAddr: uint, codeOffset
         }
     }
 
-    evm_runtimePanic();
+    evm_runtimePanic(12);
 }
 
 public impure func evmOp_extcodehash(addrAsUint: uint) -> bytes32 {
@@ -300,7 +300,7 @@ public impure func evmOp_extcodehash(addrAsUint: uint) -> bytes32 {
         }
     }
 
-    evm_runtimePanic();
+    evm_runtimePanic(13);
     return bytes32(0);
 }
 
@@ -311,7 +311,7 @@ public impure func evmOp_returndatasize() -> uint {
         return 0;
     }
 
-    evm_runtimePanic();
+    evm_runtimePanic(14);
     return 0;
 }
 
@@ -344,7 +344,7 @@ public impure func evmOp_returndatacopy(memAddr: uint, dataOffset: uint, nbytes:
         }
     }
 
-    evm_runtimePanic();
+    evm_runtimePanic(15);
 }
 
 public impure func evmOp_timestamp() -> uint {
@@ -363,7 +363,7 @@ public impure func evmOp_mload(memAddr: uint) -> uint {
         );
     }
 
-    evm_runtimePanic();
+    evm_runtimePanic(16);
     return 0;
 }
 
@@ -379,7 +379,7 @@ public impure func evmOp_mstore(memAddr: uint, value: uint) {
         }
     }
 
-    evm_runtimePanic();
+    evm_runtimePanic(17);
 }
 
 public impure func evmOp_mstore8(memAddr: uint, value:uint) {
@@ -394,7 +394,7 @@ public impure func evmOp_mstore8(memAddr: uint, value:uint) {
         }
     }
 
-    evm_runtimePanic();
+    evm_runtimePanic(18);
 }
     
 public impure func evmOp_sload(storageAddr: uint) -> uint {
@@ -407,7 +407,7 @@ public impure func evmOp_sload(storageAddr: uint) -> uint {
         }
     }
 
-    evm_runtimePanic();
+    evm_runtimePanic(19);
     return 0;
 }
 
@@ -421,7 +421,7 @@ public impure func evmOp_sstore(storageAddr: uint, value: uint) {
         }
     }
 
-    evm_runtimePanic();
+    evm_runtimePanic(20);
 }
     
 public impure func evmOp_getjumpaddr(evm_pc: uint) -> impure func() {
@@ -441,7 +441,7 @@ public impure func evmOp_getjumpaddr(evm_pc: uint) -> impure func() {
         }
     }
 
-    evm_runtimePanic();
+    evm_runtimePanic(21);
     evmCallStack_callHitError(12);
     panic;
 }
@@ -452,7 +452,7 @@ public impure func evmOp_msize() -> uint {
             evmCallFrame_getMemory(topFrame)
         );
     } else {
-        evm_runtimePanic();
+        evm_runtimePanic(22);
         return 0;
     }
 }
@@ -475,7 +475,7 @@ public impure func evmOp_log0(
         return;
     }
 
-    evm_runtimePanic();
+    evm_runtimePanic(23);
     panic;
 }
 
@@ -499,7 +499,7 @@ public impure func evmOp_log1(
         return;
     }
 
-    evm_runtimePanic();
+    evm_runtimePanic(24);
     panic;
 }
 
@@ -525,7 +525,7 @@ public impure func evmOp_log2(
         return;
     }
 
-    evm_runtimePanic();
+    evm_runtimePanic(25);
     panic;
 }
 
@@ -553,7 +553,7 @@ public impure func evmOp_log3(
         return;
     }
 
-    evm_runtimePanic();
+    evm_runtimePanic(26);
     panic;
 }
 
@@ -583,7 +583,7 @@ public impure func evmOp_log4(
         return;
     }
 
-    evm_runtimePanic();
+    evm_runtimePanic(27);
     panic;
 }
 
@@ -749,13 +749,13 @@ public impure func evmOp_staticcall(
 public impure func evmOp_revert(memOffset: uint, memNbytes: uint) {
     let _ = evmCallStack_returnFromCall(false, memOffset, memNbytes);
 
-    evm_runtimePanic();
+    evm_runtimePanic(28);
 }
 
 public impure func evmOp_return(memOffset: uint, memNbytes: uint) {
     let _ = evmCallStack_returnFromCall(true, memOffset, memNbytes);
 
-    evm_runtimePanic();
+    evm_runtimePanic(29);
 }
 
 public impure func evmOp_selfdestruct(ownerAsUint: uint) {
@@ -776,7 +776,7 @@ public impure func evmOp_create(value: uint, offset: uint, length: uint) -> addr
         return doCreationOpcode(value, offset, length, newAddress);
     }
 
-    evm_runtimePanic();
+    evm_runtimePanic(30);
     panic;
 }
 
@@ -801,7 +801,7 @@ public impure func evmOp_create2(value: uint, offset: uint, length: uint, salt: 
         return doCreationOpcode(value, offset, length, newAddress);
     }
 
-    evm_runtimePanic();
+    evm_runtimePanic(31);
     panic;
 }
 
@@ -814,7 +814,7 @@ impure func doCreationOpcode(value: uint, offset: uint, length: uint, newAddress
         }
     } else {
         // somehow there isn't an EVM callframe
-        evm_runtimePanic();
+        evm_runtimePanic(32);
         panic;
     }
 
@@ -961,11 +961,11 @@ impure func evm_error() {
 
 }
 
-impure func evm_runtimePanic() {
+impure func evm_runtimePanic(reasonCode: uint) {
     // This should be called when something that "shouldn't ever happen" has occurred.
     // It should only be called if something has gone wrong in the trusted code.
     // If untrusted code has encountered an error, that will be handled elsewhere.
-    evmCallStack_callHitError(13);
+    evmCallStack_callHitError(1000+reasonCode);
     panic;
 }
 
