@@ -307,6 +307,8 @@ public impure func evmOp_extcodehash(addrAsUint: uint) -> bytes32 {
 public impure func evmOp_returndatasize() -> uint {
     if let Some(returnData) = evmCallStack_getTopFrameReturnData() {
         return bytearray_size(returnData);
+    } else {
+        return 0;
     }
 
     evm_runtimePanic();
@@ -314,14 +316,25 @@ public impure func evmOp_returndatasize() -> uint {
 }
 
 public impure func evmOp_returndatacopy(memAddr: uint, dataOffset: uint, nbytes: uint) {
+    let memory = evmCallStack_getTopFrameMemoryOrDie();
     if let Some(returnData) = evmCallStack_getTopFrameReturnData() {
-        let memory = evmCallStack_getTopFrameMemoryOrDie();
         // if the returndata is smaller than nbytes,
         //       this will zero-fill the remainder of the target region,
         //       which is the desired behavior
         let updatedMemory = bytearray_copy(
             returnData,
             dataOffset,
+            memory,
+            memAddr,
+            nbytes
+        );
+        if (evmCallStack_setTopFrameMemory(updatedMemory,)) {
+           return;
+        }
+    } else {
+        let updatedMemory = bytearray_copy(
+            bytearray_new(0),
+            0,
             memory,
             memAddr,
             nbytes
