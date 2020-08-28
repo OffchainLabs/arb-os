@@ -54,8 +54,7 @@ import impure func emitLog(
     resultCode: uint,
     maybeReturnData: option<ByteArray>,
     maybeEvmLogs: option<EvmLogs>,
-    gasUsed: uint,
-    gasPrice: uint,
+    maybeGasUsage: option<GasUsage>
 );
 
 import impure func tokens_erc20deposit(
@@ -97,6 +96,12 @@ type IncomingRequest = struct {
     sender: address,          // address of the sender
     requestId: uint,
     msgData: MarshalledBytes  // kind-specific data, as a marshalled bytearray
+}
+
+// This is declared identically in gasAccounting.mini
+type GasUsage = struct {
+    gasUsed: uint,
+    gasPriceWei: uint,
 }
 
 public impure func handleL1Request(
@@ -223,7 +228,7 @@ public impure func handleL2Request(
                 accountStore_get(getGlobalAccountStore(), request.caller)
             ) != sequenceNum) {
             // bad sequence number error
-            emitLog(request.incomingRequest, 5, None<ByteArray>, None<EvmLogs>, 0, 0);
+            emitLog(request.incomingRequest, 5, None<ByteArray>, None<EvmLogs>, None<GasUsage>);
             return Some(());
         }
     }
@@ -232,7 +237,7 @@ public impure func handleL2Request(
         // this is a constructor call
         if (request.incomingRequest.kind == 2) {
             // revert error (tried to call constructor in a non-mutating call)
-            emitLog(request.incomingRequest, 1, None<ByteArray>, None<EvmLogs>, 0, 0);
+            emitLog(request.incomingRequest, 1, None<ByteArray>, None<EvmLogs>, None<GasUsage>);
             return Some(());
         }
 

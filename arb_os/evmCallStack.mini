@@ -407,7 +407,6 @@ public impure func evmCallStack_doCall(
             runningAsAddr = callerAddr;  // callcode and delegatecall run as the caller, with callee's code
             if (kind == 2) {
                 newCallerAddr = topFrame.caller;  // delegatecall inherits the caller of its parent
-                balance = topFrame.callvalue;
             }
         }
         let updatedAcctStore = topFrame.accountStore;
