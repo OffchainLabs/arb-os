@@ -16,6 +16,7 @@ type ChainParams = struct {
     arbGasSpeedLimit: uint,   // assumed max speed of nodes tracking this chain's VM
     maxExecutionSteps: uint,  // max number of steps in an assertion
     baseStake: uint,          // base stake of a validator, in wei
+    stakingToken: address,    // ERC-20 token used for staking; or zero if using ETH
     owner: address            // owner of the chain, who has admin privileges (or zero if there is no owner)
 }
 
@@ -34,7 +35,8 @@ public impure func chainParams_gotParamsMessage(sender: address, data: Marshalle
             arbGasSpeedLimit: bytearray_get256(ba, 32) * ticksPerSecond(),
             maxExecutionSteps: bytearray_get256(ba, 2*32),
             baseStake: bytearray_get256(ba, 3*32),
-            owner: address(bytearray_get256(ba, 4*32)),
+            stakingToken: address(bytearray_get256(ba, 4*32)),
+            owner: address(bytearray_get256(ba, 5*32)),
         });
     }
 }
@@ -65,10 +67,10 @@ public impure func chainParams_speedLimitPerSecond() -> uint {
     }
 }
 
-public impure func chainParams_baseStake() -> uint {
+public impure func chainParams_baseStake() -> (address, uint) {
     if let Some(params) = globalChainParams {
-        return params.baseStake;
+        return (params.stakingToken, params.baseStake);
     } else {
-        return 0;
+        return (address(0), 0);
     }
 }
