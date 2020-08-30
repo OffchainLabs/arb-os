@@ -52,6 +52,7 @@ impl RuntimeEnvironment {
         buf.extend(Uint256::from_u64(100_000_000 / 1000).to_bytes_be()); // arbgas speed limit per tick
         buf.extend(Uint256::from_u64(10_000_000_000).to_bytes_be()); // max execution steps
         buf.extend(Uint256::from_u64(1000).to_bytes_be()); // base stake amount in wei
+        buf.extend(Uint256::zero().to_bytes_be()); // staking token address (zero means ETH)
         buf.extend(Uint256::zero().to_bytes_be()); // owner address
         buf
     }

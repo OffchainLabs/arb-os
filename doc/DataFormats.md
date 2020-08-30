@@ -74,6 +74,7 @@ Type-specific data:
 * ArbGas speed limit, in ArbGas per second (uint)
 * maximum number of execution steps allowed in an assertion (uint)
 * minimum stake requirement, in Wei (uint)
+* address of the staking token, or zero if staking in ETH (address encoded as uint)
 * address of the chain's owner (address encoded as uint)
 * option data
 
