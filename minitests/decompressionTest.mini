@@ -2,11 +2,51 @@
 // Copyright 2020, Offchain Labs, Inc. All rights reserved.
 //
 
+import type IndexedAddressTable;
+
+import func addressTable_new() -> IndexedAddressTable;
+import func addressTable_size(iat: IndexedAddressTable) -> uint;
+import func addressTable_getByIndex(iat: IndexedAddressTable, index: uint) -> address;  // returns zero if not in table
+import func addressTable_getByAddress(iat: IndexedAddressTable, addr: address) -> option<uint>;
+import func addressTable_getByAddressAlloc(iat: IndexedAddressTable, addr: address) -> (IndexedAddressTable, uint);
+
 
 impure func main() {
 	asm(tests(),) { log };
 }
 
 func tests() -> uint {
+    let iat = addressTable_new();
+    if (addressTable_size(iat) != 0) {
+        return 1;
+    }
+    if (addressTable_getByIndex(iat, 3) != address(0)) {
+        return 2;
+    }
+    if (addressTable_getByAddress(iat, address(7)) != None<uint>) {
+        return 3;
+    }
+
+    let (uiat, idx) = addressTable_getByAddressAlloc(iat, address(0xdeadbeef));
+    iat = uiat;
+    if (idx != 0) {
+        return 4;
+    }
+    if (addressTable_size(iat) != 1) {
+        return 5;
+    }
+    if (addressTable_getByIndex(iat, 0) != address(0xdeadbeef)) {
+        return 6;
+    }
+    if (addressTable_getByIndex(iat, 1) != address(0)) {
+        return 7;
+    }
+    if (addressTable_getByAddress(iat, address(7)) != None<uint>) {
+        return 8;
+    }
+    if (addressTable_getByAddress(iat, address(0xdeadbeef)) != Some(0)) {
+        return 9;
+    }
+
     return 0;
 }

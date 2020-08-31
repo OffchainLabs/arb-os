@@ -11,38 +11,45 @@ import func expandingIntArray_set(arr: ExpandingIntArray, index: uint, val: uint
 
 type IndexedAddressTable = struct {
     byIndex: ExpandingIntArray,
-    byAddress: map<address, uint>
+    byAddress: map<address, uint>,
+    size: uint
 }
 
-var globalAddressTable: IndexedAddressTable;
-
-public func decompression_init() {
-    globalAddressTable = struct {
+public func addressTable_new() -> IndexedAddressTable {
+    return struct {
         byIndex: expandingIntArray_new(),
-        byAddress: newmap<address, uint>
+        byAddress: newmap<address, uint>,
+        size: 0
     };
 }
 
-public func addressTable_getByIndex(index: uint) -> address {  // returns zero if not in table
-    return address(expandingIntArray_get(globalAddressTable.byIndex, index));
+public func addressTable_size(iat: IndexedAddressTable) -> uint {
+    return iat.size;
 }
 
-public func addressTable_getByAddress(addr: address) -> option<uint> {
-    return globalAddressTable.byAddress[addr];
+public func addressTable_getByIndex(iat: IndexedAddressTable, index: uint) -> address {  // returns zero if not in table
+    return address(expandingIntArray_get(iat.byIndex, index));
 }
 
-public func addressTable_getByAddressAlloc(addr: address) -> uint {
-    if let Some(val) = globalAddressTable.byAddress[addr] {
-        return val;
+public func addressTable_getByAddress(iat: IndexedAddressTable, addr: address) -> option<uint> {
+    return iat.byAddress[addr];
+}
+
+public func addressTable_getByAddressAlloc(iat: IndexedAddressTable, addr: address) -> (IndexedAddressTable, uint) {
+    if let Some(val) = iat.byAddress[addr] {
+        return (iat, val);
     } else {
-        let newIndex = expandingIntArray_size(globalAddressTable.byIndex);
-        globalAddressTable = globalAddressTable with {
-            byIndex: expandingIntArray_set(globalAddressTable.byIndex, newIndex, uint(addr))
-        } with {
-            byAddress: globalAddressTable.byAddress with {
-                [addr] = newIndex
-            }
-        };
-        return newIndex;
+        return (
+            iat with {
+                byIndex: expandingIntArray_set(iat.byIndex, iat.size, uint(addr))
+            } with {
+                byAddress: iat.byAddress with {
+                    [addr] = iat.size
+                }
+            } with {
+                size: 1+iat.size
+            },
+            iat.size
+        );
     }
 }
