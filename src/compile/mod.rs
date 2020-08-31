@@ -23,7 +23,7 @@ use crate::stringtable::StringTable;
 use lalrpop_util::lalrpop_mod;
 use mini::DeclsParser;
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::fmt::Formatter;
 use std::fs::File;
 use std::io::{self, Read};
@@ -204,7 +204,13 @@ pub fn compile_from_folder(
 ) -> Result<Vec<CompiledProgram>, CompileError> {
     let mut paths = vec!["main".to_owned()];
     let mut programs = HashMap::new();
+    let mut seen_paths = HashSet::new();
     while let Some(name) = paths.pop() {
+        if seen_paths.contains(&name) {
+            continue;
+        } else {
+            seen_paths.insert(name.clone());
+        }
         let name = name + ".mini";
         let mut file = File::open(folder.join(name.clone())).map_err(|why| {
             CompileError::new(
