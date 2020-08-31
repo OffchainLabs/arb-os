@@ -48,5 +48,32 @@ func tests() -> uint {
         return 9;
     }
 
+    let (uiat, idx) = addressTable_getByAddressAlloc(iat, address(37));
+    iat = uiat;
+    if (idx != 1) {
+        return 10;
+    }
+   if (addressTable_size(iat) != 2) {
+        return 11;
+    }
+    if (addressTable_getByIndex(iat, 0) != address(0xdeadbeef)) {
+        return 12;
+    }
+    if (addressTable_getByIndex(iat, 1) != address(37)) {
+        return 13;
+    }
+    if (addressTable_getByIndex(iat, 2) != address(0)) {
+        return 14;
+    }
+    if (addressTable_getByAddress(iat, address(7)) != None<uint>) {
+        return 15;
+    }
+    if (addressTable_getByAddress(iat, address(37)) != Some(1)) {
+        return 16;
+    }
+    if (addressTable_getByAddress(iat, address(0xdeadbeef)) != Some(0)) {
+        return 17;
+    }
+
     return 0;
 }
