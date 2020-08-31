@@ -27,7 +27,7 @@ use crate::uint256::Uint256;
 grammar(stringtable: &mut StringTable, file_info: &Lines, filename: u64);
 
 pub Decls: Vec<TopLevelDecl> = {
-	<i:ImportDecl*> <n:NonImportDecl+> => TopLevelDecl::concat_vecs(i, n),
+	<mut i:ImportDecl*> <mut n:NonImportDecl+> => {i.append(&mut n);i},
 }
 
 ImportDecl: TopLevelDecl = {

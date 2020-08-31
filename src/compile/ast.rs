@@ -43,15 +43,6 @@ pub enum TopLevelDecl {
     ImpTypeDecl(ImportTypeDecl),
 }
 
-impl TopLevelDecl {
-    pub fn concat_vecs(a: Vec<Self>, b: Vec<Self>) -> Vec<Self> {
-        let mut aa = a;
-        let mut bb = b;
-        aa.append(&mut bb);
-        aa.to_vec()
-    }
-}
-
 ///Type Declaration, contains the StringId corresponding to the type name, and the underlying Type.
 #[derive(Debug, Clone)]
 pub struct TypeDecl {
