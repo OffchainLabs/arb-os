@@ -1,0 +1,48 @@
+//
+// Copyright 2020, Offchain Labs, Inc. All rights reserved.
+//
+
+import type ExpandingIntArray;
+import func expandingIntArray_new() -> ExpandingIntArray;
+import func expandingIntArray_size(arr: ExpandingIntArray) -> uint;
+import func expandingIntArray_get(arr: ExpandingIntArray, index: uint) -> uint;
+import func expandingIntArray_set(arr: ExpandingIntArray, index: uint, val: uint) -> ExpandingIntArray;
+
+
+type IndexedAddressTable = struct {
+    byIndex: ExpandingIntArray,
+    byAddress: map<address, uint>
+}
+
+var globalAddressTable: IndexedAddressTable;
+
+public func decompression_init() {
+    globalAddressTable = struct {
+        byIndex: expandingIntArray_new(),
+        byAddress: newmap<address, uint>
+    };
+}
+
+public func addressTable_getByIndex(index: uint) -> address {  // returns zero if not in table
+    return address(expandingIntArray_get(globalAddressTable.byIndex, index));
+}
+
+public func addressTable_getByAddress(addr: address) -> option<uint> {
+    return globalAddressTable.byAddress[addr];
+}
+
+public func addressTable_getByAddressAlloc(addr: address) -> uint {
+    if let Some(val) = globalAddressTable.byAddress[addr] {
+        return val;
+    } else {
+        let newIndex = expandingIntArray_size(globalAddressTable.byIndex);
+        globalAddressTable = globalAddressTable with {
+            byIndex: expandingIntArray_set(globalAddressTable.byIndex, newIndex, uint(addr))
+        } with {
+            byAddress: globalAddressTable.byAddress with {
+                [addr] = newIndex
+            }
+        };
+        return newIndex;
+    }
+}
