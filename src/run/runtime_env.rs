@@ -817,6 +817,7 @@ fn logfile_replay_tests() {
     for entry in std::fs::read_dir(Path::new("./replayTests")).unwrap() {
         let path = entry.unwrap().path();
         let name = path.file_name().unwrap();
+        println!("{:?}", name);
         assert_eq!(
             replay_from_testlog_file(
                 &("./replayTests/".to_owned() + name.to_str().unwrap()),
