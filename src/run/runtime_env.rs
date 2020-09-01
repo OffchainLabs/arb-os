@@ -1,17 +1,5 @@
 /*
- * Copyright 2020, Offchain Labs, Inc.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * Copyright 2020, Offchain Labs, Inc. All rights reserved.
  */
 
 use crate::mavm::Value;
@@ -54,8 +42,19 @@ impl RuntimeEnvironment {
             next_id: Uint256::zero(),
             recorder: RtEnvRecorder::new(),
         };
-        ret.insert_l1_message(4, chain_address, &[0u8]);
+        ret.insert_l1_message(4, chain_address, &RuntimeEnvironment::get_params_bytes());
         ret
+    }
+
+    fn get_params_bytes() -> Vec<u8> {
+        let mut buf = Vec::new();
+        buf.extend(Uint256::from_u64(3 * 60 * 60 * 1000).to_bytes_be()); // grace period in ticks
+        buf.extend(Uint256::from_u64(100_000_000 / 1000).to_bytes_be()); // arbgas speed limit per tick
+        buf.extend(Uint256::from_u64(10_000_000_000).to_bytes_be()); // max execution steps
+        buf.extend(Uint256::from_u64(1000).to_bytes_be()); // base stake amount in wei
+        buf.extend(Uint256::zero().to_bytes_be()); // staking token address (zero means ETH)
+        buf.extend(Uint256::zero().to_bytes_be()); // owner address
+        buf
     }
 
     pub fn new_wallet(&self) -> Wallet {
@@ -695,7 +694,7 @@ impl RtEnvRecorder {
                 .collect()
         };
         if !(logs_expected == logs_seen) {
-            print_output_differences("log", self.logs.clone(), machine.runtime_env.recorder.logs);
+            print_output_differences("log",machine.runtime_env.recorder.logs, self.logs.clone());
             return false;
         }
         if !(self.sends == machine.runtime_env.recorder.sends) {
