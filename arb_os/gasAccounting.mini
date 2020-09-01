@@ -398,8 +398,6 @@ public impure func getNextRequestFromCongestionAuction() -> (
                     return (true, maybeReq, maybeTx);
                 }
             }
-            // if we got here, something went very wrong
-            // clear out the queue and keep going
             gasAccountingInfo = gasAccountingInfo with { congestionQueue: queue_new() };
         }
     }
