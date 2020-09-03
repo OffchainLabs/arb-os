@@ -516,7 +516,6 @@ pub fn sort_top_level_decls(
 }
 
 pub fn typecheck_top_level_decls(
-    imports: Vec<Import>,
     imported_funcs: Vec<ImportedFunc>,
     funcs: Vec<FuncDecl>,
     named_types: HashMap<usize, Type>,
@@ -526,7 +525,6 @@ pub fn typecheck_top_level_decls(
     checked_funcs: &mut Vec<TypeCheckedFunc>,
 ) -> Result<
     (
-        Vec<Import>,
         Vec<ExportedFunc>,
         Vec<ImportedFunc>,
         Vec<GlobalVarDecl>,
@@ -587,7 +585,6 @@ pub fn typecheck_top_level_decls(
     }
 
     Ok((
-        imports,
         exported_funcs,
         imported_funcs,
         res_global_vars,
@@ -605,7 +602,6 @@ pub fn sort_and_typecheck_top_level_decls(
     string_table_in: StringTable,
 ) -> Result<
     (
-        Vec<Import>,
         Vec<ExportedFunc>,
         Vec<ImportedFunc>,
         Vec<GlobalVarDecl>,
@@ -613,11 +609,10 @@ pub fn sort_and_typecheck_top_level_decls(
     ),
     TypeError,
 > {
-    let (imports, imported_funcs, funcs, named_types, global_vars, string_table, hm) =
+    let (_imports, imported_funcs, funcs, named_types, global_vars, string_table, hm) =
         sort_top_level_decls(decls, string_table_in.clone());
 
     typecheck_top_level_decls(
-        imports,
         imported_funcs,
         funcs,
         named_types,

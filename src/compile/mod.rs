@@ -204,6 +204,7 @@ pub fn compile_from_folder(
 ) -> Result<Vec<CompiledProgram>, CompileError> {
     let mut paths = vec!["main".to_owned()];
     let mut programs = HashMap::new();
+    let mut import_map = HashMap::new();
     let mut seen_paths = HashSet::new();
     while let Some(name) = paths.pop() {
         if seen_paths.contains(&name) {
@@ -231,10 +232,10 @@ pub fn compile_from_folder(
         let (imports, imported_funcs, funcs, named_types, global_vars, string_table, hm) =
             typecheck::sort_top_level_decls(&res, string_table);
         paths.append(&mut imports.iter().map(|imp| imp.path[0].clone()).collect());
+        import_map.insert(name.clone(), imports);
         programs.insert(
             name.clone(),
             (
-                imports,
                 imported_funcs,
                 funcs,
                 named_types,
@@ -245,15 +246,32 @@ pub fn compile_from_folder(
             ),
         );
     }
+    for (name, imports) in &import_map {
+        for import in imports {
+            let mut named_type = None;
+            if let Some(program) = programs.get_mut(&(import.path[0].clone() + ".mini")) {
+                let index = program.4.get(import.name.clone());
+                named_type = program.2.get(&index).cloned();
+            }
+            let f = programs.get_mut(name).ok_or_else(|| {
+                CompileError::new(
+                    "could not find originating file for import".to_string(),
+                    None,
+                )
+            })?;
+            let index = f.4.get(import.name.clone());
+            if let Some(named_type) = named_type {
+                f.2.insert(index, named_type);
+            }
+        }
+    }
     let mut progs = vec![];
     let mut output = vec![programs.remove("main.mini").expect("no main")];
     output.append(&mut programs.values().cloned().collect());
-    for (imports, imported_funcs, funcs, named_types, global_vars, string_table, hm, name) in output
-    {
+    for (imported_funcs, funcs, named_types, global_vars, string_table, hm, name) in output {
         let mut checked_funcs = vec![];
-        let (_imports, exported_funcs, imported_funcs, global_vars, string_table) =
+        let (exported_funcs, imported_funcs, global_vars, string_table) =
             typecheck::typecheck_top_level_decls(
-                imports,
                 imported_funcs,
                 funcs,
                 named_types,
@@ -327,10 +345,9 @@ pub fn compile_from_source(
     let mut string_table_1 = StringTable::new();
     let res = parse_from_source(s, file_id, &mut string_table_1)?;
     let mut checked_funcs = Vec::new();
-    let (imports, exported_funcs, imported_funcs, global_vars, string_table) =
+    let (exported_funcs, imported_funcs, global_vars, string_table) =
         typecheck::sort_and_typecheck_top_level_decls(&res, &mut checked_funcs, string_table_1)
             .map_err(|res3| CompileError::new(res3.reason.to_string(), res3.location))?;
-    println!("{:?}", imports);
     checked_funcs.iter().for_each(|func| {
         let detected_purity = func.is_pure();
         let declared_purity = func.properties.pure;
