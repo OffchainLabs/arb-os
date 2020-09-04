@@ -8,6 +8,7 @@ import type ByteArray;
 import type MarshalledBytes;
 import type MessageBatch;
 import type Queue;
+import type PriorityQ;
 
 import func getGlobalAccountStore() -> AccountStore;
 import func setGlobalAccountStore(acctStore: AccountStore);
@@ -25,6 +26,11 @@ import func queue_new() -> Queue;
 import func queue_isEmpty(q: Queue) -> bool;
 import func queue_put(q: Queue, item: any) -> Queue;
 import func queue_get(q: Queue) -> option<(Queue, any)>;
+
+import func priorityq_new() -> PriorityQ;
+import func priorityq_isEmpty(pq: PriorityQ) -> bool;
+import func priorityq_get(pq: PriorityQ) -> option<(any, PriorityQ)>;
+import func priorityq_insert(pq: PriorityQ, item: any, priority: uint) -> PriorityQ;
 
 import impure func inbox_getNextUnpackedRequest() -> (option<IncomingRequest>, option<TxRequestData>);
 import impure func inbox_currentTimestamp() -> uint;
@@ -409,4 +415,59 @@ public impure func getNextRequestFromCongestionAuction() -> (
 // The gas tank has a maximum capacity, which is returned by the following function.
 impure func gasTankLimit() -> uint {
     return 120 * chainParams_speedLimitPerSecond();
+}
+
+// congestionAuction takes a queue of (maybeReq, maybeTx, maxGas, gasBid) tuples, and returns
+//    a triple (outQ, totalGas, gasPrice) where outQ is a queue of (isApproved, maybeReq, maybeTx) triples
+func congestionAuction(inQ: Queue, gasAvailable: uint) -> (Queue, uint, uint) {
+    let gasAvailableIn = gasAvailable;
+    let pq = priorityq_new();
+    let maxGasBid = (asm(256-48, 1) uint { shl }) - 1;
+    let numBidders = 0;
+    let gasPrice = 0;
+    while ( !queue_isEmpty(inQ) ){
+        if let Some(res) = queue_get(inQ) {
+            let (uq, item) = res;
+            inQ = uq;
+            let (maybeReq, maybeTx, maxGas, gasBid) = unsafecast<(option<IncomingRequest>, option<TxRequestData>, uint, uint)>(item);
+            if (gasBid > maxGasBid) {
+                gasBid = maxGasBid;
+            }
+            pq = priorityq_insert(pq, (maybeReq, maybeTx, maxGas, gasBid, numBidders), gasBid);
+        }
+        numBidders = numBidders + 1;
+    }
+
+    let pq2 = priorityq_new();   // use this to put items back into original order
+    while ( !priorityq_isEmpty(pq) ) {
+        if let Some(res) = priorityq_get(pq) {
+            let (rawItem, upq) = res;
+            pq = upq;
+            let (maybeReq, maybeTx, maxGas, gasBid, index) = unsafecast<(option<IncomingRequest>, option<TxRequestData>, uint, uint, uint)>(rawItem);
+            if ( (gasAvailable > 0) && (maxGas <= gasAvailable) ) {
+                // auction winner
+                gasAvailable = gasAvailable - maxGas;
+                pq2 = priorityq_insert(pq2, (true, maybeReq, maybeTx), (~0)-index);
+            } else {
+                // auction loser
+                if (gasPrice == 0) {
+                    gasPrice = gasBid;
+                }
+                gasAvailable = 0;
+                pq2 = priorityq_insert(pq2, (false, maybeReq, maybeTx), (~0)-index);
+            }
+        }
+    }
+
+    let retq = queue_new();
+    loop {
+        if let Some(res) = priorityq_get(pq2) {
+            let (rawItem, upq) = res;
+            pq2 = upq;
+            let (item, _) = unsafecast<(any, any)>(rawItem);
+            retq = queue_put(retq, item);
+        } else {
+            return (retq, gasAvailableIn-gasAvailable, gasPrice);
+        }
+    }
 }
