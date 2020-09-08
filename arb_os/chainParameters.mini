@@ -4,9 +4,14 @@
 
 import type ByteArray;
 import type MarshalledBytes;
+import type ByteStream;
 
 import func bytearray_unmarshalBytes(mb: MarshalledBytes) -> ByteArray;
 import func bytearray_get256(ba: ByteArray, offset: uint) -> uint;
+
+import func bytestream_new(ba: ByteArray) -> ByteStream;
+import func bytestream_skipBytes(bs: ByteStream, nbytes: uint) -> option<ByteStream>;
+import func bytestream_get64(bs: ByteStream) -> option<(ByteStream, uint)>;
 
 import func evmCallStack_callHitError(reason: uint);
 
@@ -17,7 +22,8 @@ type ChainParams = struct {
     maxExecutionSteps: uint,  // max number of steps in an assertion
     baseStake: uint,          // base stake of a validator, in wei
     stakingToken: address,    // ERC-20 token used for staking; or zero if using ETH
-    owner: address            // owner of the chain, who has admin privileges (or zero if there is no owner)
+    owner: address,            // owner of the chain, who has admin privileges (or zero if there is no owner)
+    isProChain: bool          // is this an Arbitrum Pro chain?
 }
 
 var globalChainParams: option<ChainParams>;
@@ -37,7 +43,40 @@ public impure func chainParams_gotParamsMessage(sender: address, data: Marshalle
             baseStake: bytearray_get256(ba, 3*32),
             stakingToken: address(bytearray_get256(ba, 4*32)),
             owner: address(bytearray_get256(ba, 5*32)),
+            isProChain: false,
         });
+
+        // now read and process initialization options
+        if let Some(stream) = bytestream_skipBytes(bytestream_new(ba), 5*32) {
+            loop {
+                if let Some(ustr2) = doInitializationOption(stream) {
+                    stream = ustr2;
+                } else {
+                    return;
+                }
+            }
+        }
+    }
+}
+
+impure func doInitializationOption(stream: ByteStream) -> option<ByteStream> {
+    // process one initialization option
+    // on success, return Some(updated stream)
+    // on end-of-stream, return None
+
+    let (ustr, optionId) = bytestream_get64(stream)?;
+    stream = ustr;
+    let (ustr, numPayloadBytes) = bytestream_get64(stream)?;
+    stream = ustr;
+    if (optionId == 0) {   // option: premium chain
+        if (numPayloadBytes != 0) {
+            return None;
+        }
+        globalChainParams = Some(globalChainParams? with { isProChain: true });
+        return Some(stream);
+    } else {
+        // unrecognized option, discard it
+        return bytestream_skipBytes(stream, numPayloadBytes);
     }
 }
 
