@@ -1,0 +1,37 @@
+//
+// Copyright 2020, Offchain Labs, Inc. All rights reserved.
+//
+
+import type ByteArray;
+import type RandomGenerator;
+
+import func bytearray_size(ba: ByteArray) -> uint;
+import func bytearray_getByte(ba: ByteArray, offset: uint) -> uint;
+import func bytearray_get256(ba: ByteArray, offset: uint) -> uint;
+
+import func keccak256(ba: ByteArray, offset: uint, nbytes: uint) -> bytes32;
+
+import func random_new(seed: bytes32) -> RandomGenerator;
+import func random_next(rand: RandomGenerator) -> (bytes32, RandomGenerator);
+import func random_nextMod(rand: RandomGenerator, modulus: uint) -> (uint, RandomGenerator);
+
+
+type BLSSignature = struct {
+    aField: uint,
+    anotherField: uint,
+}
+
+type BLSKey = struct {
+    aField: uint,
+    anotherField: uint,
+}
+
+
+public func bls_verifySignature(
+    numMsgs:   uint,
+    messages:  []ByteArray,
+    keys:      []BLSKey,
+    signature: BLSSignature
+) -> bool {
+    return true;
+}
