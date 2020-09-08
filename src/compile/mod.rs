@@ -28,6 +28,7 @@ use std::fmt::Formatter;
 use std::fs::File;
 use std::io::{self, Read};
 use std::path::Path;
+use symtable::SymTable;
 
 pub use ast::{TopLevelDecl, Type};
 pub use source::Lines;
@@ -246,22 +247,40 @@ pub fn compile_from_folder(
             ),
         );
     }
+    println!("{:?}", programs);
     for (name, imports) in &import_map {
         for import in imports {
+            println!("{}: {:?}", name, import);
             let mut named_type = None;
+            let mut imp_func = None;
             if let Some(program) = programs.get_mut(&(import.path[0].clone() + ".mini")) {
                 let index = program.4.get(import.name.clone());
                 named_type = program.2.get(&index).cloned();
+                let type_table = SymTable::new();
+                let type_table =
+                    type_table.push_multi(program.2.iter().map(|(i, t)| (*i, t)).collect());
+                imp_func = program
+                    .5
+                    .get(&index)
+                    .map(|decl| {
+                        decl.resolve_types(&type_table, None)
+                            .map_err(|e| CompileError::new(format!("Type error: {:?}", e), None))
+                    })
+                    .transpose()?;
+                println!("{:?}", named_type);
             }
-            let f = programs.get_mut(name).ok_or_else(|| {
+            let origin_program = programs.get_mut(name).ok_or_else(|| {
                 CompileError::new(
                     "could not find originating file for import".to_string(),
                     None,
                 )
             })?;
-            let index = f.4.get(import.name.clone());
+            let index = origin_program.4.get(import.name.clone());
             if let Some(named_type) = named_type {
-                f.2.insert(index, named_type);
+                origin_program.2.insert(index, named_type);
+            } else if let Some(imp_func) = imp_func {
+                println!("Inserted: {}, {:?}", index, imp_func);
+                origin_program.5.insert(index, imp_func);
             }
         }
     }
