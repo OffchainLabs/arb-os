@@ -1,26 +1,23 @@
 //
-// Copyright 2020, Offchain Labs, Inc.
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//    http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+// Copyright 2020, Offchain Labs, Inc. All rights reserved.
 //
 
+import type ByteArray;
 import type MarshalledBytes;
 
-import impure func errorHandler();
+import func bytearray_unmarshalBytes(mb: MarshalledBytes) -> ByteArray;
+import func bytearray_get256(ba: ByteArray, offset: uint) -> uint;
 
+import func evmCallStack_callHitError(reason: uint);
 
 type ChainParams = struct {
     chainAddress: address,
+    gracePeriodSec: uint,     // time validators are given to respond to an assertion
+    arbGasSpeedLimit: uint,   // assumed max speed of nodes tracking this chain's VM
+    maxExecutionSteps: uint,  // max number of steps in an assertion
+    baseStake: uint,          // base stake of a validator, in wei
+    stakingToken: address,    // ERC-20 token used for staking; or zero if using ETH
+    owner: address            // owner of the chain, who has admin privileges (or zero if there is no owner)
 }
 
 var globalChainParams: option<ChainParams>;
@@ -31,10 +28,21 @@ public impure func chainParams_init() {
 
 public impure func chainParams_gotParamsMessage(sender: address, data: MarshalledBytes) {
     if (globalChainParams == None<ChainParams>) {
+        let ba = bytearray_unmarshalBytes(data);
         globalChainParams = Some(struct{
             chainAddress: sender,
+            gracePeriodSec: bytearray_get256(ba, 0) / ticksPerSecond(),
+            arbGasSpeedLimit: bytearray_get256(ba, 32) * ticksPerSecond(),
+            maxExecutionSteps: bytearray_get256(ba, 2*32),
+            baseStake: bytearray_get256(ba, 3*32),
+            stakingToken: address(bytearray_get256(ba, 4*32)),
+            owner: address(bytearray_get256(ba, 5*32)),
         });
     }
+}
+
+func ticksPerSecond() -> uint {
+    return 10000/135;   // 1000 ticks = 13.5 seconds
 }
 
 public impure func chainParams_chainAddress() -> address {
@@ -42,11 +50,27 @@ public impure func chainParams_chainAddress() -> address {
         return params.chainAddress;
     } else {
         // If we get here, the chain never received its initialization message.
-        errorHandler();
+        evmCallStack_callHitError(15);
         panic;
     }
 }
 
 public impure func chainParams_chainId() -> uint {
     return uint(chainParams_chainAddress()) & 0xffffffffffff;  // chainID == low 48 bits of chainAddress
+}
+
+public impure func chainParams_speedLimitPerSecond() -> uint {
+    if let Some(params) = globalChainParams {
+        return params.arbGasSpeedLimit;
+    } else {
+        return 100000000;  // reasonable default
+    }
+}
+
+public impure func chainParams_baseStake() -> (address, uint) {
+    if let Some(params) = globalChainParams {
+        return (params.stakingToken, params.baseStake);
+    } else {
+        return (address(0), 0);
+    }
 }
