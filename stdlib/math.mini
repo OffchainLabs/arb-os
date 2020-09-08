@@ -1,0 +1,26 @@
+//
+// Copyright 2020, Offchain Labs, Inc. All rights reserved.
+//
+
+func foo() {
+}
+
+public func math_sqrt(x: uint) -> uint {
+    if (x < 2) {
+        return x;
+    }
+
+    let ret = 1;
+    loop {
+        let next = (ret + (x / ret)) / 2;
+        if (ret == next) {
+            return ret;
+        }
+        ret = next;
+    }
+}
+
+public func math_unused(x: uint, y: uint) -> uint {
+    return x;
+}
+

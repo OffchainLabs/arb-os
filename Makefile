@@ -17,7 +17,7 @@ evmdebug: all
 benchmarks: arbos
 	$(CARGORUN) makebenchmarks
 
-TESTEXES = $(BUILTINDIR)/kvstest.mexe $(STDDIR)/queuetest.mexe $(BUILTINDIR)/arraytest.mexe $(BUILTINDIR)/globaltest.mexe $(STDDIR)/priorityqtest.mexe $(STDDIR)/bytearraytest.mexe $(STDDIR)/keccaktest.mexe $(STDDIR)/rlptest.mexe $(STDDIR)/storageMapTest.mexe $(BUILTINDIR)/maptest.mexe minitests/codeloadtest.mexe
+TESTEXES = $(BUILTINDIR)/kvstest.mexe $(STDDIR)/queuetest.mexe $(BUILTINDIR)/arraytest.mexe $(BUILTINDIR)/globaltest.mexe $(STDDIR)/priorityqtest.mexe $(STDDIR)/bytearraytest.mexe $(STDDIR)/keccaktest.mexe $(STDDIR)/rlptest.mexe $(STDDIR)/storageMapTest.mexe $(BUILTINDIR)/maptest.mexe minitests/codeloadtest.mexe $(STDDIR)/mathtest.mexe
 BUILTINMAOS = $(BUILTINDIR)/array.mao $(BUILTINDIR)/kvs.mao
 STDLIBMAOS = $(STDDIR)/bytearray.mao $(STDDIR)/priorityq.mao $(STDDIR)/random.mao $(STDDIR)/queue.mao $(STDDIR)/keccak.mao $(STDDIR)/bytestream.mao $(STDDIR)/stack.mao $(STDDIR)/rlp.mao $(STDDIR)/storageMap.mao $(STDDIR)/expandingIntArray.mao
 STDLIB = $(STDLIBMAOS)
@@ -54,6 +54,9 @@ $(STDDIR)/keccaktest.mexe: $(BUILTINMAOS) $(STDDIR)/keccaktest.mini $(STDDIR)/ke
 $(STDDIR)/rlptest.mexe: $(BUILTINMAOS) $(STDDIR)/rlptest.mini $(STDLIB)
 	$(CARGORUN) compile $(STDDIR)/rlptest.mini $(STDLIB) -o $(STDDIR)/rlptest.mexe
 
+$(STDDIR)/mathtest.mexe: $(STDDIR)/mathtest.mini $(STDDIR)/math.mao
+	$(CARGORUN) compile $(STDDIR)/mathtest.mini $(STDDIR)/math.mao -o $(STDDIR)/mathtest.mexe
+
 $(STDDIR)/priorityq.mao: $(BUILTINMAOS) $(STDDIR)/priorityq.mini
 	$(CARGORUN) compile $(STDDIR)/priorityq.mini -c -o $(STDDIR)/priorityq.mao
 
@@ -83,6 +86,9 @@ $(STDDIR)/storageMap.mao: $(STDDIR)/storageMap.mini
 
 $(STDDIR)/expandingIntArray.mao: $(STDDIR)/expandingIntArray.mini
 	$(CARGORUN) compile $(STDDIR)/expandingIntArray.mini -c -o $(STDDIR)/expandingIntArray.mao
+
+$(STDDIR)/math.mao: $(STDDIR)/math.mini
+	$(CARGORUN) compile $(STDDIR)/math.mini -c -o $(STDDIR)/math.mao
 
 $(BUILTINDIR)/maptest.mexe: $(BUILTINMAOS) $(BUILTINDIR)/maptest.mini
 	$(CARGORUN) compile $(BUILTINDIR)/maptest.mini -o $(BUILTINDIR)/maptest.mexe

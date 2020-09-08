@@ -1,0 +1,37 @@
+//
+// Copyright 2020, Offchain Labs, Inc. All rights reserved.
+//
+
+import func math_sqrt(x: uint) -> uint;
+
+
+impure func main() {
+    asm(2,) { debugprint };
+    let z = mathtests();
+    asm(3,) { debugprint };
+	asm(z,) { log };
+}
+
+func mathtests() -> uint {
+    asm(1,) { debugprint };
+
+    if (math_sqrt(0) != 0) {
+        return 1;
+    }
+
+    if (math_sqrt(1) != 1) {
+        return 2;
+    }
+
+    if (math_sqrt(713*713) != 713) {
+        return 3;
+    }
+
+    if (math_sqrt(~0) != ( (asm(128, 1) uint { shl }) - 1) ) {
+        return 4;
+    }
+
+    let _ = math_sqrt(57813783160);
+
+    return 0;
+}
