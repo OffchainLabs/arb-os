@@ -1589,7 +1589,22 @@ impl Machine {
                         self.incr_pc();
                         Ok(true)
                     }
-					Opcode::GetLocal |  // these opcodes are for intermediate use in compilation only
+                    Opcode::AVMOpcode(AVMOpcode::NewBuffer) => {
+                        Ok(true)
+                    }
+                    Opcode::AVMOpcode(AVMOpcode::GetBuffer8) => {
+                        Ok(true)
+                    }
+                    Opcode::AVMOpcode(AVMOpcode::SetBuffer8) => {
+                        Ok(true)
+                    }
+                    Opcode::AVMOpcode(AVMOpcode::GetBuffer256) => {
+                        Ok(true)
+                    }
+                    Opcode::AVMOpcode(AVMOpcode::SetBuffer256) => {
+                        Ok(true)
+                    }
+                    Opcode::GetLocal |  // these opcodes are for intermediate use in compilation only
 					Opcode::SetLocal |  // they should never appear in fully compiled code
 					Opcode::MakeFrame(_, _) |
 					Opcode::Label(_) |

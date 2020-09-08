@@ -4,7 +4,7 @@
 
 //!Contains utilities for generating instructions from AST structures.
 
-use super::ast::{BinaryOp, FuncArg, GlobalVarDecl, Type, UnaryOp};
+use super::ast::{BinaryOp, FuncArg, GlobalVarDecl, Type, UnaryOp, TrinaryOp};
 use super::symtable::CopyingSymTable;
 use super::typecheck::{
     PropertiesList, TypeCheckedExpr, TypeCheckedFunc, TypeCheckedIfArm, TypeCheckedMatchPattern,
@@ -844,6 +844,7 @@ fn mavm_codegen_expr<'a>(
             code = c;
             let (maybe_opcode, maybe_imm) = match op {
                 UnaryOp::Minus => (Some(Opcode::UnaryMinus), None),
+                UnaryOp::NewBuffer => (Some(Opcode::AVMOpcode(AVMOpcode::NewBuffer)), None),
                 UnaryOp::BitwiseNeg => (Some(Opcode::AVMOpcode(AVMOpcode::BitwiseNeg)), None),
                 UnaryOp::Not => (Some(Opcode::AVMOpcode(AVMOpcode::IsZero)), None),
                 UnaryOp::Hash => (Some(Opcode::AVMOpcode(AVMOpcode::Hash)), None),
@@ -917,6 +918,8 @@ fn mavm_codegen_expr<'a>(
             label_gen = lg;
             code = c;
             let opcode = match op {
+                BinaryOp::GetBuffer8 => Opcode::AVMOpcode(AVMOpcode::GetBuffer8),
+                BinaryOp::GetBuffer256 => Opcode::AVMOpcode(AVMOpcode::GetBuffer256),
                 BinaryOp::Plus => Opcode::AVMOpcode(AVMOpcode::Plus),
                 BinaryOp::Minus => Opcode::AVMOpcode(AVMOpcode::Minus),
                 BinaryOp::Times => Opcode::AVMOpcode(AVMOpcode::Mul),
@@ -959,6 +962,53 @@ fn mavm_codegen_expr<'a>(
                 label_gen,
                 code,
                 max(num_locals, max(left_locals, right_locals)),
+            ))
+        }
+        TypeCheckedExpr::Trinary(op, tce1, tce2, tce3, _, loc) => {
+            let (lg, c, locals3) = mavm_codegen_expr(
+                tce3,
+                code,
+                num_locals,
+                locals,
+                label_gen,
+                string_table,
+                import_func_map,
+                global_var_map,
+                prepushed_vals,
+            )?;
+            let (lg, c, locals2) = mavm_codegen_expr(
+                tce2,
+                c,
+                num_locals,
+                locals,
+                lg,
+                string_table,
+                import_func_map,
+                global_var_map,
+                prepushed_vals + 1,
+            )?;
+            let (lg, c, locals1) = mavm_codegen_expr(
+                tce1,
+                c,
+                num_locals,
+                locals,
+                lg,
+                string_table,
+                import_func_map,
+                global_var_map,
+                prepushed_vals + 2,
+            )?;
+            label_gen = lg;
+            code = c;
+            let opcode = match op {
+                TrinaryOp::SetBuffer8 => Opcode::AVMOpcode(AVMOpcode::SetBuffer8),
+                TrinaryOp::SetBuffer256 => Opcode::AVMOpcode(AVMOpcode::SetBuffer256),
+            };
+            code.push(Instruction::from_opcode(opcode, *loc));
+            Ok((
+                label_gen,
+                code,
+                max(num_locals, max(locals1, max(locals2, locals3))),
             ))
         }
         TypeCheckedExpr::ShortcutOr(tce1, tce2, loc) => {

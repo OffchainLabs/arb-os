@@ -7,7 +7,7 @@
 use super::ast::{
     BinaryOp, Constant, Expr, FuncArg, FuncDecl, FuncDeclKind, GlobalVarDecl, IfArm,
     ImportFuncDecl, MatchPattern, Statement, StatementKind, StructField, TopLevelDecl, Type,
-    UnaryOp,
+    UnaryOp, TrinaryOp
 };
 use super::{symtable::SymTable, MiniProperties};
 use crate::link::{ExportedFunc, ImportedFunc};
@@ -165,6 +165,14 @@ pub enum TypeCheckedExpr {
         Type,
         Option<Location>,
     ),
+    Trinary(
+        TrinaryOp,
+        Box<TypeCheckedExpr>,
+        Box<TypeCheckedExpr>,
+        Box<TypeCheckedExpr>,
+        Type,
+        Option<Location>,
+    ),
     ShortcutOr(Box<TypeCheckedExpr>, Box<TypeCheckedExpr>, Option<Location>),
     ShortcutAnd(Box<TypeCheckedExpr>, Box<TypeCheckedExpr>, Option<Location>),
     LocalVariableRef(StringId, Type, Option<Location>),
@@ -254,6 +262,7 @@ impl MiniProperties for TypeCheckedExpr {
         match self {
             TypeCheckedExpr::UnaryOp(_, expr, _, _) => expr.is_pure(),
             TypeCheckedExpr::Binary(_, left, right, _, _) => left.is_pure() && right.is_pure(),
+            TypeCheckedExpr::Trinary(_, a, b, c, _, _) => a.is_pure() && b.is_pure() && c.is_pure(),
             TypeCheckedExpr::ShortcutOr(left, right, _) => left.is_pure() && right.is_pure(),
             TypeCheckedExpr::ShortcutAnd(left, right, _) => left.is_pure() && right.is_pure(),
             TypeCheckedExpr::LocalVariableRef(_, _, _) => true,
@@ -326,6 +335,7 @@ impl TypeCheckedExpr {
         match self {
             TypeCheckedExpr::UnaryOp(_, _, t, _) => t.clone(),
             TypeCheckedExpr::Binary(_, _, _, t, _) => t.clone(),
+            TypeCheckedExpr::Trinary(_, _, _, _, t, _) => t.clone(),
             TypeCheckedExpr::ShortcutOr(_, _, _) | TypeCheckedExpr::ShortcutAnd(_, _, _) => {
                 Type::Bool
             }
@@ -988,6 +998,12 @@ fn typecheck_expr(
             let tc_sub2 = typecheck_expr(sub2, type_table, global_vars, func_table, return_type)?;
             typecheck_binary_op(*op, tc_sub1, tc_sub2, *loc)
         }
+        Expr::Trinary(op, sub1, sub2, sub3, loc) => {
+            let tc_sub1 = typecheck_expr(sub1, type_table, global_vars, func_table, return_type)?;
+            let tc_sub2 = typecheck_expr(sub2, type_table, global_vars, func_table, return_type)?;
+            let tc_sub3 = typecheck_expr(sub3, type_table, global_vars, func_table, return_type)?;
+            typecheck_trinary_op(*op, tc_sub1, tc_sub2, tc_sub3, *loc)
+        }
         Expr::ShortcutOr(sub1, sub2, loc) => {
             let tc_sub1 = typecheck_expr(sub1, type_table, global_vars, func_table, return_type)?;
             let tc_sub2 = typecheck_expr(sub2, type_table, global_vars, func_table, return_type)?;
@@ -1506,6 +1522,20 @@ fn typecheck_unary_op(
                 loc,
             )),
         },
+        UnaryOp::NewBuffer => match tc_type {
+            Type::Int | Type::Uint => {
+                    Ok(TypeCheckedExpr::UnaryOp(
+                        UnaryOp::NewBuffer,
+                        Box::new(sub_expr),
+                        Type::Buffer,
+                        loc,
+                    ))
+            }
+            _ => Err(new_type_error(
+                "invalid operand type for unary minus".to_string(),
+                loc,
+            )),
+        },
         UnaryOp::BitwiseNeg => {
             if let TypeCheckedExpr::Const(Value::Int(ui), _, loc) = sub_expr {
                 match tc_type {
@@ -1692,7 +1722,12 @@ fn typecheck_binary_op(
     if let TypeCheckedExpr::Const(Value::Int(val2), t2, _) = tcs2.clone() {
         if let TypeCheckedExpr::Const(Value::Int(val1), t1, _) = tcs1.clone() {
             // both args are constants, so we can do the op at compile time
-            return typecheck_binary_op_const(op, val1, t1, val2, t2, loc);
+            match op {
+                BinaryOp::GetBuffer256 | BinaryOp::GetBuffer8 => {}
+                _ => {
+                    return typecheck_binary_op_const(op, val1, t1, val2, t2, loc);
+                }
+            }
         } else {
             match op {
                 BinaryOp::Plus
@@ -1765,6 +1800,32 @@ fn typecheck_binary_op(
             )),
             _ => Err(new_type_error(
                 "invalid argument types to divide".to_string(),
+                loc,
+            )),
+        },
+        BinaryOp::GetBuffer8 => match (subtype1, subtype2) {
+            (Type::Buffer, Type::Uint) | (Type::Buffer, Type::Int) => Ok(TypeCheckedExpr::Binary(
+                op,
+                Box::new(tcs1),
+                Box::new(tcs2),
+                Type::Uint,
+                loc,
+            )),
+            _ => Err(new_type_error(
+                "invalid argument types to getbuffer8".to_string(),
+                loc,
+            )),
+        },
+        BinaryOp::GetBuffer256 => match (subtype1, subtype2) {
+            (Type::Buffer, Type::Uint) | (Type::Buffer, Type::Int) => Ok(TypeCheckedExpr::Binary(
+                op,
+                Box::new(tcs1),
+                Box::new(tcs2),
+                Type::Uint,
+                loc,
+            )),
+            _ => Err(new_type_error(
+                "invalid argument types to getbuffer256".to_string(),
                 loc,
             )),
         },
@@ -1947,6 +2008,42 @@ fn typecheck_binary_op(
         | BinaryOp::SGreaterEq => {
             panic!("unexpected op in typecheck_binary_op");
         }
+    }
+}
+
+fn typecheck_trinary_op(
+    op: TrinaryOp,
+    tcs1: TypeCheckedExpr,
+    tcs2: TypeCheckedExpr,
+    tcs3: TypeCheckedExpr,
+    loc: Option<Location>,
+) -> Result<TypeCheckedExpr, TypeError> {
+    let subtype1 = tcs1.get_type();
+    let subtype2 = tcs2.get_type();
+    let subtype3 = tcs3.get_type();
+    match op {
+        TrinaryOp::SetBuffer8 | TrinaryOp::SetBuffer256 => match (subtype1, subtype2, subtype3) {
+            (Type::Buffer, Type::Uint, Type::Uint) => Ok(TypeCheckedExpr::Trinary(
+                op,
+                Box::new(tcs1),
+                Box::new(tcs2),
+                Box::new(tcs3),
+                Type::Uint,
+                loc,
+            )),
+            (Type::Buffer, Type::Int, Type::Int) => Ok(TypeCheckedExpr::Trinary(
+                op,
+                Box::new(tcs1),
+                Box::new(tcs2),
+                Box::new(tcs3),
+                Type::Int,
+                loc,
+            )),
+            _ => Err(new_type_error(
+                "invalid argument types to 3-ary op".to_string(),
+                loc,
+            )),
+        },
     }
 }
 
@@ -2157,6 +2254,8 @@ fn typecheck_binary_op_const(
             }
         }
         BinaryOp::Smod
+        | BinaryOp::GetBuffer8
+        | BinaryOp::GetBuffer256
         | BinaryOp::Sdiv
         | BinaryOp::SLessThan
         | BinaryOp::SGreaterThan

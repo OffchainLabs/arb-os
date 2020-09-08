@@ -59,6 +59,7 @@ pub enum Type {
     Bool,
     Bytes32,
     EthAddress,
+    Buffer,
     Tuple(Vec<Type>),
     Array(Box<Type>),
     FixedArray(Box<Type>, usize),
@@ -85,6 +86,7 @@ impl Type {
             | Type::Uint
             | Type::Int
             | Type::Bool
+            | Type::Buffer
             | Type::Bytes32
             | Type::EthAddress
             | Type::Imported(_)
@@ -165,6 +167,7 @@ impl Type {
             | Type::Bool
             | Type::Bytes32
             | Type::EthAddress
+            | Type::Buffer
             | Type::Imported(_)
             | Type::Every => (self == rhs),
             Type::Tuple(tvec) => {
@@ -227,6 +230,9 @@ impl Type {
         match self {
             Type::Void => {
                 panic!("tried to get default value for void type");
+            }
+            Type::Buffer => {
+                panic!("tried to get default value for buffer type");
             }
             Type::Uint | Type::Int | Type::Bytes32 | Type::EthAddress | Type::Bool => {
                 Value::Int(Uint256::zero())
@@ -791,6 +797,7 @@ impl Constant {
 pub enum Expr {
     UnaryOp(UnaryOp, Box<Expr>, Option<Location>),
     Binary(BinaryOp, Box<Expr>, Box<Expr>, Option<Location>),
+    Trinary(TrinaryOp, Box<Expr>, Box<Expr>, Box<Expr>, Option<Location>),
     ShortcutOr(Box<Expr>, Box<Expr>, Option<Location>),
     ShortcutAnd(Box<Expr>, Box<Expr>, Option<Location>),
     VariableRef(StringId, Option<Location>),
@@ -824,6 +831,11 @@ impl Expr {
         Expr::Binary(op, Box::new(e1), Box::new(e2), loc)
     }
 
+    ///Returns an expression that applies 3-ary op to e1, e2 and e3.
+    pub fn new_trinary(op: TrinaryOp, e1: Expr, e2: Expr, e3: Expr, loc: Option<Location>) -> Self {
+        Expr::Trinary(op, Box::new(e1), Box::new(e2), Box::new(e3), loc)
+    }
+
     ///Returns either a fully specified version of self specified by matching Named types to the
     /// contents of type_table, or a TypeError if a Named type does not have an associated entry.
     pub fn resolve_types(&self, type_table: &SymTable<Type>) -> Result<Self, TypeError> {
@@ -837,6 +849,13 @@ impl Expr {
                 *op,
                 Box::new(be1.resolve_types(type_table)?),
                 Box::new(be2.resolve_types(type_table)?),
+                *loc,
+            )),
+            Expr::Trinary(op, be1, be2, be3, loc) => Ok(Expr::Trinary(
+                *op,
+                Box::new(be1.resolve_types(type_table)?),
+                Box::new(be2.resolve_types(type_table)?),
+                Box::new(be3.resolve_types(type_table)?),
                 *loc,
             )),
             Expr::ShortcutOr(be1, be2, loc) => Ok(Expr::ShortcutOr(
@@ -971,6 +990,7 @@ pub enum UnaryOp {
     ToInt,
     ToBytes32,
     ToAddress,
+    NewBuffer,
 }
 
 ///A mini binary operator.
@@ -999,6 +1019,14 @@ pub enum BinaryOp {
     _LogicalAnd,
     LogicalOr,
     Hash,
+    GetBuffer8,
+    GetBuffer256,
+}
+
+#[derive(Debug, Clone, Copy)]
+pub enum TrinaryOp {
+    SetBuffer8,
+    SetBuffer256,
 }
 
 ///Used in StructInitializer expressions to map expressions to fields of the struct.

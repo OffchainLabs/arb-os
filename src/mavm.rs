@@ -533,6 +533,11 @@ pub enum AVMOpcode {
     Sideload,
     EcRecover = 0x80,
     DebugPrint = 0x90,
+    NewBuffer = 0xa0,
+    GetBuffer8,
+    GetBuffer256,
+    SetBuffer8,
+    SetBuffer256,
 }
 
 impl MiniProperties for Opcode {

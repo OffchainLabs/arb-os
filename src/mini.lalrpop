@@ -3,7 +3,7 @@
 //
 
 use crate::compile::ast::{TopLevelDecl, TypeDecl, FuncDecl, GlobalVarDecl, ImportFuncDecl, ImportTypeDecl, Type,
-StructField, FuncArg, Statement, StatementKind, DebugInfo, MatchPattern, IfArm, Expr, BinaryOp, UnaryOp, Constant,
+StructField, FuncArg, Statement, StatementKind, DebugInfo, MatchPattern, IfArm, Expr, TrinaryOp, BinaryOp, UnaryOp, Constant,
 OptionConst, FieldInitializer, new_func_arg, new_type_decl};
 use crate::stringtable::{StringTable, StringId};
 use crate::compile::Lines;
@@ -109,6 +109,7 @@ Type: Type = {
 	"uint" => Type::Uint,
 	"int" => Type::Int,
 	"bool" => Type::Bool,
+	"buffer" => Type::Buffer,
 	"bytes32" => Type::Bytes32,
 	"address" => Type::EthAddress,
 	"struct" "{" <StructFields> "}" => Type::Struct(<>),
@@ -236,6 +237,11 @@ Expr12: Expr = {
 	<lno: @L> "bytes32" "(" <e: Expr> ")" => Expr::new_unary(UnaryOp::ToBytes32, e, file_info.location(BytePos::from(lno),filename)),
 	<lno: @L> "address" "(" <e: Expr> ")" => Expr::new_unary(UnaryOp::ToAddress, e, file_info.location(BytePos::from(lno),filename)),
 	<lno: @L> "newarray" "<" <t:Type> ">" "(" <e:Expr> ")" => Expr::NewArray(Box::new(e), t, file_info.location(BytePos::from(lno),filename)),
+	<lno: @L> "newbuffer" "(" <e: Expr> ")" => Expr::new_unary(UnaryOp::NewBuffer, e, file_info.location(BytePos::from(lno),filename)),
+	<lno: @L> "getbuffer8" "(" <e: Expr> "," <f:Expr> ")" => Expr::new_binary(BinaryOp::GetBuffer8, e, f, file_info.location(BytePos::from(lno),filename)),
+	<lno: @L> "getbuffer256" "(" <e: Expr> "," <f:Expr> ")" => Expr::new_binary(BinaryOp::GetBuffer256, e, f, file_info.location(BytePos::from(lno),filename)),
+	<lno: @L> "setbuffer8" "(" <e: Expr> "," <f:Expr> "," <g:Expr> ")" => Expr::new_trinary(TrinaryOp::SetBuffer8, e, f, g, file_info.location(BytePos::from(lno),filename)),
+	<lno: @L> "setbuffer256" "(" <e: Expr> "," <f:Expr> "," <g:Expr> ")" => Expr::new_trinary(TrinaryOp::SetBuffer256, e, f, g, file_info.location(BytePos::from(lno),filename)),
 	<lno: @L> "newfixedarray" "(" <s:UnsignedInteger> "," <e:Expr> ","? ")" => Expr::NewFixedArray(
 		s.to_usize().unwrap(),
 		Some(Box::new(e)),
