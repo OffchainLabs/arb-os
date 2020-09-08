@@ -3,7 +3,7 @@
  */
 
 use crate::mavm::Value;
-use crate::run::load_from_file;
+use crate::run::{load_from_file, ProfilerMode};
 use crate::uint256::Uint256;
 use ethers_core::rand::thread_rng;
 use ethers_core::types::TransactionRequest;
@@ -643,7 +643,7 @@ impl RtEnvRecorder {
         &self,
         require_same_gas: bool,
         debug: bool,
-        profiler: bool,
+        profiler_mode: ProfilerMode,
         trace_file: Option<&str>,
     ) -> bool {
         // returns true iff result matches
@@ -656,8 +656,8 @@ impl RtEnvRecorder {
         machine.start_at_zero();
         if debug {
             let _ = machine.debug(None);
-        } else if profiler {
-            let profile_data = machine.profile_gen(vec![]);
+        } else if (profiler_mode != ProfilerMode::Never) {
+            let profile_data = machine.profile_gen(vec![], profiler_mode);
             profile_data.profiler_session();
         } else {
             let _ = machine.run(None);
@@ -684,7 +684,7 @@ impl RtEnvRecorder {
                 .collect()
         };
         if !(logs_expected == logs_seen) {
-            print_output_differences("log",machine.runtime_env.recorder.logs, self.logs.clone());
+            print_output_differences("log", machine.runtime_env.recorder.logs, self.logs.clone());
             return false;
         }
         if !(self.sends == machine.runtime_env.recorder.sends) {
@@ -777,7 +777,7 @@ pub fn replay_from_testlog_file(
     filename: &str,
     require_same_gas: bool,
     debug: bool,
-    profiler: bool,
+    profiler_mode: ProfilerMode,
     trace_file: Option<&str>,
 ) -> std::io::Result<bool> {
     let mut file = File::open(filename)?;
@@ -794,7 +794,7 @@ pub fn replay_from_testlog_file(
     match res {
         Ok(recorder) => {
             let success =
-                recorder.replay_and_compare(require_same_gas, debug, profiler, trace_file);
+                recorder.replay_and_compare(require_same_gas, debug, profiler_mode, trace_file);
             println!("{}", if success { "success" } else { "mismatch " });
             Ok(success)
         }
@@ -812,7 +812,7 @@ fn logfile_replay_tests() {
                 &("./replayTests/".to_owned() + name.to_str().unwrap()),
                 false,
                 false,
-                false,
+                ProfilerMode::Never,
                 None,
             )
             .unwrap(),
