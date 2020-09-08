@@ -3,10 +3,14 @@
 //
 
 import type Queue;
+import type QueueStack;
 import func queue_new() -> Queue;
 import func queue_isEmpty(q: Queue) -> bool;
 import func queue_get(q: Queue) -> option<(Queue, any)>;
 import func queue_put(q: Queue, val: any) -> Queue;
+import func queuestack_new() -> QueueStack;
+import func queuestack_push(qs: QueueStack, q: Queue) -> QueueStack;
+import func queuestack_get(qs: QueueStack) -> option<(QueueStack, any)>;
 
 import impure func chainParams_gotParamsMessage(sender: address, data: MarshalledBytes);
 import impure func chainParams_chainId() -> uint;
@@ -34,6 +38,8 @@ import func bytestream_getRemainingBytes(bs: ByteStream) -> ByteArray;
 import func hashUnsignedL2messageInfo(l2msg: MarshalledBytes, chainId: uint, sender: address) -> bytes32;
 import func translateSignedTx(req: IncomingRequest) -> option<TxRequestData>;
 
+import type Decompressor;
+
 type Inbox = struct {
     queue: Queue,     // Queue of messages that haven't yet been retrieved from the inbox
     blockNum: uint,   // Highest blocknum of messages that we have retrieved from the inbox
@@ -42,7 +48,8 @@ type Inbox = struct {
 }
 
 var globalInbox: Inbox;
-var globalQueueFromBatch: Queue;
+var globalQueueFromBatch: QueueStack;
+var globalDecompressor: option<Decompressor>;
 
 public impure func inbox_init() {
     globalInbox = struct {
@@ -51,7 +58,16 @@ public impure func inbox_init() {
         timestamp: 0,
         needToPeek: false,   // don't peek before the first message
     };
-    globalQueueFromBatch = queue_new();
+    globalQueueFromBatch = queuestack_new();
+    globalDecompressor = None<Decompressor>;
+}
+
+public impure func inbox_setDecompressor(decompressor: Decompressor) {
+    globalDecompressor = Some(decompressor);
+}
+
+public impure func inbox_clearDecompressor() {
+    globalDecompressor = None<Decompressor>;
 }
 
 public impure func inbox_get() -> IncomingRequest {
@@ -167,7 +183,7 @@ public impure func inbox_getNextUnpackedRequest() -> (
 ) {
     let msg = unsafecast<IncomingRequest>(());   // value will be re-initialized before use
     loop {
-        if let Some(res) = queue_get(globalQueueFromBatch) {
+        if let Some(res) = queuestack_get(globalQueueFromBatch) {
             let (newQ, rawMsg) = res;
             globalQueueFromBatch = newQ;
             msg = unsafecast<IncomingRequest>(rawMsg);
@@ -178,7 +194,7 @@ public impure func inbox_getNextUnpackedRequest() -> (
         if let Some(batch) = messageBatch_tryNew(msg) {
             // it's a batch message, so unpack its components and queue them
             let moreToDo = true;
-            let queue = globalQueueFromBatch;
+            let queue = queue_new();
             while (moreToDo) {
                 if let Some(res) = messageBatch_get(batch) {
                     let (newMsg, restOfBatch) = res;
@@ -188,7 +204,7 @@ public impure func inbox_getNextUnpackedRequest() -> (
                     moreToDo = false;
                 }
             }
-            globalQueueFromBatch = queue;
+            globalQueueFromBatch = queuestack_push(globalQueueFromBatch, queue);
         } else {
             // it's not a batch, so process it immediately
             // get its maxGas amount -- for now, set the limit high, unless caller asked for less

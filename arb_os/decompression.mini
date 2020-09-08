@@ -2,12 +2,20 @@
 // Copyright 2020, Offchain Labs, Inc. All rights reserved.
 //
 
+import type ByteStream;
+import func bytestream_getByte(bs: ByteStream) -> option<(ByteStream, uint)>;
+import func rlp_decodeUint(bs: ByteStream) -> option<(ByteStream, uint)>;
+
 import type ExpandingIntArray;
 import func expandingIntArray_new() -> ExpandingIntArray;
 import func expandingIntArray_size(arr: ExpandingIntArray) -> uint;
 import func expandingIntArray_get(arr: ExpandingIntArray, index: uint) -> uint;
 import func expandingIntArray_set(arr: ExpandingIntArray, index: uint, val: uint) -> ExpandingIntArray;
 
+import type IncomingRequest;
+import type Queue;
+
+type Decompressor = func(IncomingRequest, ByteStream) -> Queue
 
 type IndexedAddressTable = struct {
     byIndex: ExpandingIntArray,
@@ -52,4 +60,18 @@ public func addressTable_getByAddressAlloc(iat: IndexedAddressTable, addr: addre
             iat.size
         );
     }
+}
+
+public func decompressAddress(
+    bs: ByteStream,
+    iat: IndexedAddressTable
+) -> option<(ByteStream, address)> {
+    let (ustr, index) = rlp_decodeUint(bs)?;
+    return Some((ustr, addressTable_getByIndex(iat, index)));
+}
+
+public func decompressOffsetUint(bs: ByteStream) -> option<(ByteStream, uint)> {
+    let (ustr, base) = rlp_decodeUint(bs)?;
+    let (ustr, sh) = bytestream_getByte(ustr)?;
+    return Some((ustr, asm(sh, base) uint { shl }));
 }

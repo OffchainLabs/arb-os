@@ -9,6 +9,7 @@ import type ByteStream;
 import type EvmLogs;
 import type GasUsage;
 import type StorageMap;
+import type Decompressor;
 
 import impure func errorHandler_init();
 import impure func chainParams_init();
@@ -45,6 +46,7 @@ import func getErc20storage() -> StorageMap;
 import func getErc721storage() -> StorageMap;
 import func getArbInfoStorage() -> StorageMap;
 
+import impure func inbox_setDecompressor(dec: Decompressor);
 import impure func inbox_get() -> IncomingRequest;
 import impure func getNextRequestFromCongestionAuction() -> (
     bool,           // was it approved for execution
@@ -102,7 +104,10 @@ impure func main() {
     if (initializeContractTemplates() == None<()>) {
         panic;   // don't try to run without contract templates
     }
-    
+
+    // initialize any customizations here
+    // inbox_setDecompressor(someDecompressor);
+
     mainRunLoop();
 }
 
