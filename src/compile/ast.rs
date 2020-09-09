@@ -1036,12 +1036,14 @@ pub enum BinaryOp {
     LogicalOr,
     Hash,
     GetBuffer8,
+    GetBuffer64,
     GetBuffer256,
 }
 
 #[derive(Debug, Clone, Copy)]
 pub enum TrinaryOp {
     SetBuffer8,
+    SetBuffer64,
     SetBuffer256,
 }
 

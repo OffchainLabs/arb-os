@@ -2,40 +2,10 @@
 // Copyright 2020, Offchain Labs, Inc. All rights reserved.
 //
 
-import type ExpandingIntArray;
-
-import func expandingIntArray_new() -> ExpandingIntArray;
-import func expandingIntArray_get(arr: ExpandingIntArray, index: uint) -> uint;
-import func expandingIntArray_getConsecutive(arr: ExpandingIntArray, index: uint) -> (uint, uint);
-import func expandingIntArray_set(arr: ExpandingIntArray, index: uint, value: uint) -> ExpandingIntArray;
-import func expandingIntArray_setN(
-    arr: ExpandingIntArray,
-    inChunk: uint,   // must be a power of 8
-    index: uint,     // must be a multiple of inChunk
-    value: any
-) -> ExpandingIntArray;
-import func expandingIntArray_op(
-    arr: ExpandingIntArray,
-    index: uint,
-    closure: opClosure
-) -> (ExpandingIntArray, any);
-import func expandingIntArray_opConsecutive(
-    arr: ExpandingIntArray,
-    index: uint,
-    loClosure: opClosure,
-    hiClosure: opClosure
-) -> (ExpandingIntArray, any, any);
-
-type opClosureFunc = func(any, uint) -> (uint, any)
-type opClosure = struct {
-	f: opClosureFunc,
-	val: any,
-} // usage: (newSlotContents, returnValue) = closure.f(closure.val, oldSlotContents)
-
 type ByteArray = struct { 
     size: uint,
     sliceOffset: uint,
-    contents: ExpandingIntArray,
+    contents: buffer,
 }
 
 // bytearray_new makes a new ByteArray
@@ -47,7 +17,7 @@ public func bytearray_new(ignored: uint) -> ByteArray {
     return struct {
         size: 0,
         sliceOffset: 0,
-        contents: expandingIntArray_new(),
+        contents: newbuffer(0),
     };
 }
 
@@ -97,16 +67,12 @@ public func bytearray_unmarshalBytes(inBytes: MarshalledBytes) -> ByteArray {
 
     // For efficiency, we'll build an ExpandingIntArray here, then make a ByteArray from it at the end.
     // We'll also build 8-tuples of 32-byte words, and insert each tuple into the ExpIntArr with a single call.
-    let eia = expandingIntArray_new();
+    let eia = newbuffer(0);
     let block = unsafecast<[8]any>((0,0,0,0,0,0,0,0));
 
     while (nwords > 0) {
         nwords = nwords-1;
-        block = block with { [nwords & 7] = words.first };
-        if ((nwords & 7) == 0) {
-            eia = expandingIntArray_setN(eia, 8, nwords, block);
-            // it's safe to re-use block after this, because we're going to overwrite all of it
-        }
+        eia = setbuffer256(eia, nwords*32, words.first);
         words = unsafecast<MarshalledBytesCell>(words.rest);
     }
 
@@ -124,7 +90,7 @@ public func bytearray_marshalFull(ba: ByteArray) -> MarshalledBytes {
     let i = 0;
     while (i < nwords) {
         words = struct {
-            first: bytearray_get256(ba, 32*i),
+            first: getbuffer256(ba.contents, 32*i),
             rest: words,
         };
         i = i+1;
@@ -146,8 +112,7 @@ public func bytearray_getByte(ba: ByteArray, offset: uint) -> uint {
         return 0;
     }
     offset = offset + ba.sliceOffset;
-    let word = expandingIntArray_get(ba.contents, offset/32);
-    return asm(offset & 0x1f, word) uint { byte };
+    return getbuffer8(ba.contents, offset);
 }
 
 // bytearray_get64 reads a chunk of 8 bytes from a ByteArray
@@ -155,30 +120,8 @@ public func bytearray_get64(ba: ByteArray, offset: uint) -> uint {
     if (offset >= ba.size) {
         return 0;
     }
-    let bytesToTrim = 0;
-    if (offset+8 > ba.size) {
-        bytesToTrim = offset+8 - ba.size;
-    }
-    // the access might extend beyond size, but access to the underlying array will be in-bounds
-    //    on the true side of the if, any overage is within an existing word of the underlying array
-    //    on the false side of the if, bytearray_get256 will avoid out-of-bounds accesses
     offset = offset + ba.sliceOffset;
-    let alignment = offset % 32;
-    if (alignment <= 24) {
-        let word = expandingIntArray_get(ba.contents, offset/32);
-        let ret = asm(8*(24-alignment), word) uint { shr } & 0xffffffffffffffff;
-        if (bytesToTrim > 0) {
-            ret = ret & ~(asm(8*bytesToTrim, 1) uint { shl } - 1);
-        }
-        return ret;
-    } else {
-        let res = bytearray_get256(ba, offset-ba.sliceOffset);
-        let ret = res / 0x1000000000000000000000000000000000000000000000000;
-        if (bytesToTrim > 0) {
-            ret = ret & ~(asm(8*bytesToTrim, 1) uint { shl } - 1);
-        }
-        return ret;
-    }
+    return getbuffer64(ba.contents, offset);
 }
 
 // bytearray_get256 reads a chunk of 32 bytes from a ByteArray
@@ -186,46 +129,17 @@ public func bytearray_get256(ba: ByteArray, offset: uint) -> uint {
     if (offset >= ba.size) {
         return 0;
     }
-    let bytesToTrim = 0;
-    if (offset+32 > ba.size) {
-        bytesToTrim = offset+32 - ba.size;
-    }
     offset = offset + ba.sliceOffset;
-    let lowWordIndex = offset / 32;
-    let alignment = offset % 32;
-    if (alignment == 0) {
-        let ret = expandingIntArray_get(ba.contents, lowWordIndex);
-        if (bytesToTrim > 0) {
-            ret = ret & ~(asm(8*bytesToTrim, 1) uint { shl } - 1);
-        }
-        return ret;
-    } else {
-        let (lowWord, hiWord) = expandingIntArray_getConsecutive(ba.contents, lowWordIndex);
-        let shiftFactor = asm(8*alignment, 1) uint { shl };
-        let invShiftFactor = asm(8*(32-alignment), 1) uint { shl };
-        let ret = (hiWord/invShiftFactor) | (lowWord*shiftFactor);
-        if (bytesToTrim > 0) {
-            ret = ret & ~(asm(8*bytesToTrim, 1) uint { shl } - 1);
-        }
-        return ret;
-    }
+    return getbuffer256(ba.contents, offset);
 }
 
 // bytearray_setbyte writes one byte to a ByteArray, returns the resulting ByteArray
-public func bytearray_setByte(ba: ByteArray, offset: uint, val: uint) -> ByteArray {
+public func bytearray_setByte(ba: ByteArray, offset: uint, value: uint) -> ByteArray {
     if (offset >= ba.size) {
         ba = ba with { size: offset+1 };
     }
     offset = offset + ba.sliceOffset;
-    let (newContents, _) = expandingIntArray_op(
-        ba.contents, 
-        offset/32, 
-        struct {
-            f: unsafecast<opClosureFunc>(basb_closure_func),
-            val: (31-(offset%32), val,),
-        }
-    );
-    return ba with { contents: newContents };
+    return ba with { contents: setbuffer8(ba.contents, offset, value) };
 }
 
 // bytearray_set64 writes an 8-byte chunk to a ByteArray, returning the resulting ByteArray
@@ -234,33 +148,7 @@ public func bytearray_set64(ba: ByteArray, offset: uint, value: uint) -> ByteArr
         ba = ba with { size: offset+8 };
     }
     offset = offset + ba.sliceOffset;
-    let lowWordIndex = offset / 32;
-    let alignment = offset % 32;
-    if (alignment <= 24) {
-        let (newContents, _) = expandingIntArray_op(
-            ba.contents,
-            lowWordIndex,
-            struct{
-                f: unsafecast<opClosureFunc>(bas64_single_closure_func),
-                val: (alignment, value,),
-            }
-        );
-        return ba with { contents: newContents };
-    } else {
-        let (newContents, _0, _1) = expandingIntArray_opConsecutive(
-            ba.contents,
-            lowWordIndex,
-            struct {
-                f: unsafecast<opClosureFunc>(bas64_low_closure_func),
-                val: (alignment, value,),
-            },
-            struct {
-                f: unsafecast<opClosureFunc>(basmulti_hi_closure_func),
-                val: (alignment, value,),
-            }
-        );
-        return ba with { contents: newContents };
-    }
+    return ba with { contents: setbuffer64(ba.contents, offset, value) };
 }
 
 // bytearray_set256 writes a 32-byte chunk to a ByteArray, returning the resulting ByteArray
@@ -269,27 +157,7 @@ public func bytearray_set256(ba: ByteArray, offset: uint, value: uint) -> ByteAr
         ba = ba with { size: offset+32 };
     }
     offset = offset + ba.sliceOffset;
-    let lowWordIndex = offset / 32;
-    let alignment = offset % 32;
-    if (alignment == 0) {
-        return ba with {
-            contents: expandingIntArray_set(ba.contents, lowWordIndex, value)
-        };
-    } else {
-        let (newContents, _0, _1) = expandingIntArray_opConsecutive(
-            ba.contents,
-            lowWordIndex,
-            struct {
-                f: unsafecast<opClosureFunc>(bas256_low_closure_func),
-                val: (alignment, value,),
-            },
-            struct {
-                f: unsafecast<opClosureFunc>(basmulti_hi_closure_func),
-                val: (alignment, value,),
-            }
-        );
-        return ba with { contents: newContents };
-    }
+    return ba with { contents: setbuffer256(ba.contents, offset, value) };
 }
 
 // bytearray_copy copies bytes from one ByteArray to another, 
@@ -320,57 +188,6 @@ public func bytearray_copy(
 }
 
 public func bytearray_extract(from: ByteArray, offset: uint, nbytes: uint) -> ByteArray {
-    return from with {
-        size: nbytes
-    } with {
-        sliceOffset: offset + from.sliceOffset
-    };
+    return bytearray_copy(from, offset, bytearray_new(0), 0, nbytes);
 }
 
-func basb_closure_func(args: (uint, uint), oldval: uint) -> (uint, uint) { // returns (newval, junk)
-    let (subidx, newbval,) = args;
-    let shiftFac = asm(8*subidx, 1) uint { shl };
-    let mask = 0xff * shiftFac;
-    let pasteIn = (newbval & 0xff) * shiftFac;
-    return (
-        (oldval & ~mask) | pasteIn,
-        0, 
-    );
-}
-
-func bas64_single_closure_func(args: (uint, uint), oldval: uint) -> (uint, uint) { // returns (newval, junk)
-    let (subidx, newbval,) = args;
-    let shiftFac = asm(8*subidx, 1) uint { shl };
-    let mask = 0xffffffffffffffff * shiftFac;
-    let pasteIn = (newbval & 0xff) * shiftFac;
-    return (
-        (oldval & ~mask) | pasteIn,
-        0, 
-    );
-}
-
-func basmulti_hi_closure_func(args: (uint, uint), oldval: uint) -> (uint, uint) { // returns (newval, junk)
-    let (alignment, value,) = args; 
-    let revAlignment = 32-alignment;
-    let factor = asm(8*revAlignment, 1) uint { shl };
-    let newVal = (value*factor) | (oldval & (factor-1));
-    return (newVal, 0,);
-}
-
-func bas64_low_closure_func(args: (uint, uint), oldval: uint) -> (uint, uint) { // returns (newval, junk)
-    let (alignment, value,) = args; 
-    let revAlignment = 8-alignment;
-    let factor = asm(8*alignment, 1) uint { shl };
-    let invFactor = asm(8*revAlignment, 1) uint { shl };
-    let newVal = (value/factor) | (oldval & (invFactor * ~0));
-    return (newVal, 0,);
-}
-
-func bas256_low_closure_func(args: (uint, uint), oldval: uint) -> (uint, uint) { // returns (newval, junk)
-    let (alignment, value,) = args; 
-    let revAlignment = 32-alignment;
-    let factor = asm(8*alignment, 1) uint { shl };
-    let invFactor = asm(8*revAlignment, 1) uint { shl };
-    let newVal = (value/factor) | (oldval & (invFactor * ~0));
-    return (newVal, 0,);
-}

@@ -121,10 +121,10 @@ type EvmCallFrame = struct {
     runningAsAccount: Account,          // cache of accountStore[runningAs]
     caller: address,                    // who called this
     callKind: uint,                     // type of call: 0=call, 2=delegatecall, 3=staticcall, 4=constructor
-    calldata: buffer,                // calldata passed in by our caller
+    calldata: ByteArray,                // calldata passed in by our caller
     callvalue: uint,                    // Eth value given to this call by its caller
     returnInfo: option<ReturnInfo>,     // result of last subcall made by this call (if any)
-    memory: buffer,                  // EVM memory of this call
+    memory: ByteArray,                  // EVM memory of this call
     evmLogs: EvmLogs,                   // EVM logs, including those created by this call and its subcalls
     selfDestructQueue: Queue,           // set of self-destruct directives, including those created by this call and its subcalls
     resumeInfo: option<ResumeInfo>,     // if call is suspended, its state will be saved here
@@ -134,7 +134,7 @@ type EvmCallFrame = struct {
 }
 
 type ReturnInfo = struct {  // information about a call that previously completed
-    data: buffer,
+    data: ByteArray,
     status: bool,
 }
 
@@ -180,7 +180,7 @@ type TxRequestData = struct {
     caller: address,
     calleeAddr: address,
     value: uint,
-    calldata: buffer,
+    calldata: ByteArray,
     incomingRequest: IncomingRequest,
 }
 
@@ -230,7 +230,7 @@ public impure func initEvmCallStack(
                     calldata: request.calldata,
                     callvalue: request.value,
                     returnInfo: None<ReturnInfo>,
-                    memory: newbuffer(0),
+                    memory: bytearray_new(0),
                     evmLogs: evmlogs_empty(),
                     selfDestructQueue: queue_new(),
                     resumeInfo: None<ResumeInfo>,
@@ -336,7 +336,7 @@ public impure func initEvmCallStackForConstructor(
             calldata: request.calldata,
             callvalue: 0,
             returnInfo: None<ReturnInfo>,
-            memory: newbuffer(0),
+            memory: bytearray_new(0),
             evmLogs: evmlogs_empty(),
             selfDestructQueue: queue_new(),
             resumeInfo: None<ResumeInfo>,
@@ -359,15 +359,6 @@ public impure func initEvmCallStackForConstructor(
         panic;
     }
 }
-
-public impure func extractbuffer(
-    memory: buffer,
-    offset: uint,
-    length:      uint,
-    )      ->        buffer {
-    return copybuffer8(memory, offset, newbuffer(0), 0, length);
-}
-
 
 public impure func evmCallStack_doCall(
     kind: uint,  // currently handle 0 (call), 1 (callcode), 2 (delegatecall), 3 (staticcall)
@@ -438,10 +429,10 @@ public impure func evmCallStack_doCall(
             runningAsAccount: accountStore_get(updatedAcctStore, runningAsAddr),
             caller: newCallerAddr,
             callKind: kind,
-            calldata: extractbuffer(topFrame.memory, argsOffset, argsLength),
+            calldata: bytearray_extract(topFrame.memory, argsOffset, argsLength),
             callvalue: balance,
             returnInfo: None<ReturnInfo>,
-            memory: newbuffer(0),
+            memory: bytearray_new(0),
             evmLogs: topFrame.evmLogs,
             selfDestructQueue: topFrame.selfDestructQueue,
             resumeInfo: None<ResumeInfo>,
@@ -481,7 +472,7 @@ public impure func evmCallStack_returnFromCall(
 
     let topFrame = globalCallStack?;
     let memory = topFrame.memory;
-    let returnData = extractbuffer(memory, returnOffset, returnLength);
+    let returnData = bytearray_extract(memory, returnOffset, returnLength);
 
     if let Some(newTopFrame) = unsafecast<option<EvmCallFrame>>(topFrame.parent) {
         // Returning from a non-top-level call
@@ -511,7 +502,7 @@ public impure func evmCallStack_returnFromCall(
         if (returnLength > resumeInfo.returnDataNbytes) {
              returnLength = resumeInfo.returnDataNbytes;
         }
-        let newMemory = copybuffer8(
+        let newMemory = bytearray_copy(
             returnData,
             0,
             newTopFrame.memory,

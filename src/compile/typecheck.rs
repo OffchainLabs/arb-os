@@ -1776,7 +1776,7 @@ fn typecheck_binary_op(
         if let TypeCheckedExpr::Const(Value::Int(val1), t1, _) = tcs1.clone() {
             // both args are constants, so we can do the op at compile time
             match op {
-                BinaryOp::GetBuffer256 | BinaryOp::GetBuffer8 => {}
+                BinaryOp::GetBuffer256 | BinaryOp::GetBuffer64 | BinaryOp::GetBuffer8 => {}
                 _ => {
                     return typecheck_binary_op_const(op, val1, t1, val2, t2, loc);
                 }
@@ -1866,6 +1866,19 @@ fn typecheck_binary_op(
             )),
             _ => Err(new_type_error(
                 "invalid argument types to getbuffer8".to_string(),
+                loc,
+            )),
+        },
+        BinaryOp::GetBuffer64 => match (subtype1, subtype2) {
+            (Type::Buffer, Type::Uint) | (Type::Buffer, Type::Int) => Ok(TypeCheckedExpr::Binary(
+                op,
+                Box::new(tcs1),
+                Box::new(tcs2),
+                Type::Uint,
+                loc,
+            )),
+            _ => Err(new_type_error(
+                "invalid argument types to getbuffer64".to_string(),
                 loc,
             )),
         },
@@ -2075,13 +2088,13 @@ fn typecheck_trinary_op(
     let subtype2 = tcs2.get_type();
     let subtype3 = tcs3.get_type();
     match op {
-        TrinaryOp::SetBuffer8 | TrinaryOp::SetBuffer256 => match (subtype1, subtype2, subtype3) {
+        TrinaryOp::SetBuffer8 | TrinaryOp::SetBuffer64 | TrinaryOp::SetBuffer256 => match (subtype1, subtype2, subtype3) {
             (Type::Buffer, Type::Uint, Type::Uint) => Ok(TypeCheckedExpr::Trinary(
                 op,
                 Box::new(tcs1),
                 Box::new(tcs2),
                 Box::new(tcs3),
-                Type::Uint,
+                Type::Buffer,
                 loc,
             )),
             (Type::Buffer, Type::Int, Type::Int) => Ok(TypeCheckedExpr::Trinary(
@@ -2089,7 +2102,7 @@ fn typecheck_trinary_op(
                 Box::new(tcs1),
                 Box::new(tcs2),
                 Box::new(tcs3),
-                Type::Int,
+                Type::Buffer,
                 loc,
             )),
             _ => Err(new_type_error(
@@ -2308,6 +2321,7 @@ fn typecheck_binary_op_const(
         }
         BinaryOp::Smod
         | BinaryOp::GetBuffer8
+        | BinaryOp::GetBuffer64
         | BinaryOp::GetBuffer256
         | BinaryOp::Sdiv
         | BinaryOp::SLessThan

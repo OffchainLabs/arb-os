@@ -281,6 +281,7 @@ pub enum Value {
     Tuple(Rc<Vec<Value>>),
     CodePoint(CodePt),
     Label(Label),
+    Buffer(Rc<Vec<u8>>),
 }
 
 impl Value {
@@ -300,11 +301,16 @@ impl Value {
         Value::Tuple(Rc::new(v))
     }
 
+    pub fn new_buffer(v: Vec<u8>) -> Self {
+        Value::Buffer(Rc::new(v))
+    }
+
     pub fn type_insn_result(&self) -> usize {
         match self {
             Value::Int(_) => 0,
             Value::CodePoint(_) => 1,
             Value::Tuple(_) => 3,
+            Value::Buffer(_) => 4,
             Value::Label(_) => {
                 panic!("tried to run type instruction on a label");
             }
@@ -315,6 +321,7 @@ impl Value {
         match self {
             Value::Int(_) => Ok(self),
             Value::CodePoint(_) => Ok(self),
+            Value::Buffer(_) => Ok(self),
             Value::Label(label) => {
                 let maybe_pc = label_map.get(&label);
                 match maybe_pc {
@@ -341,6 +348,7 @@ impl Value {
     ) -> (Self, usize) {
         match self {
             Value::Int(_) => (self, 0),
+            Value::Buffer(_) => (self, 0),
             Value::Tuple(v) => {
                 let mut rel_v = Vec::new();
                 let mut max_func_offset = 0;
@@ -365,7 +373,7 @@ impl Value {
 
     pub fn xlate_labels(self, label_map: &HashMap<Label, &Label>) -> Self {
         match self {
-            Value::Int(_) | Value::CodePoint(_) => self,
+            Value::Int(_) | Value::CodePoint(_) | Value::Buffer(_) => self,
             Value::Tuple(v) => {
                 let mut newv = Vec::new();
                 for val in &*v {
@@ -391,6 +399,7 @@ impl Value {
         //BUGBUG: should do same hash as AVM
         match self {
             Value::Int(ui) => Value::Int(ui.avm_hash()),
+            Value::Buffer(_) => Value::Int(Uint256::zero()),
             Value::Tuple(v) => {
                 let mut acc = Uint256::zero();
                 for val in &*v.clone() {
@@ -419,6 +428,7 @@ impl fmt::Display for Value {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             Value::Int(i) => i.fmt(f),
+            Value::Buffer(vec) => write!(f, "Buffer({})", vec.len()),
             Value::CodePoint(pc) => write!(f, "CodePoint({})", pc),
             Value::Label(label) => write!(f, "Label({})", label),
             Value::Tuple(tup) => {
@@ -535,8 +545,10 @@ pub enum AVMOpcode {
     DebugPrint = 0x90,
     NewBuffer = 0xa0,
     GetBuffer8,
+    GetBuffer64,
     GetBuffer256,
     SetBuffer8,
+    SetBuffer64,
     SetBuffer256,
     CopyBuffer8,
 }

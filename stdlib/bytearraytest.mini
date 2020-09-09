@@ -54,7 +54,7 @@ func tests() -> uint {
 	ba = bytearray_new(117);
 	ba = bytearray_set256(ba, 64, 7373);
 	if (bytearray_get256(ba, 64) != 7373) {
-		return 5;
+		return bytearray_get256(ba, 64);
 	}
 
 	ba = bytearray_new(117);
@@ -141,8 +141,11 @@ func tests() -> uint {
     ) {
         return 15;
     }
+
     let ba = setupFromUnmarshal();
     let ba2 = bytearray_extract(ba, 0, 41);
+    // let ba3 = bytearray_extract(ba, 0, 41);
+    // let ba2 = bytearray_copy(ba, 0, bytearray_new(0), 0, 41);
     let ba3 = bytearray_copy(ba, 0, bytearray_new(0), 0, 41);
     let mb2 = bytearray_marshalFull(ba2);
     let mb3 = bytearray_marshalFull(ba3);

@@ -919,6 +919,7 @@ fn mavm_codegen_expr<'a>(
             code = c;
             let opcode = match op {
                 BinaryOp::GetBuffer8 => Opcode::AVMOpcode(AVMOpcode::GetBuffer8),
+                BinaryOp::GetBuffer64 => Opcode::AVMOpcode(AVMOpcode::GetBuffer64),
                 BinaryOp::GetBuffer256 => Opcode::AVMOpcode(AVMOpcode::GetBuffer256),
                 BinaryOp::Plus => Opcode::AVMOpcode(AVMOpcode::Plus),
                 BinaryOp::Minus => Opcode::AVMOpcode(AVMOpcode::Minus),
@@ -1002,6 +1003,7 @@ fn mavm_codegen_expr<'a>(
             code = c;
             let opcode = match op {
                 TrinaryOp::SetBuffer8 => Opcode::AVMOpcode(AVMOpcode::SetBuffer8),
+                TrinaryOp::SetBuffer64 => Opcode::AVMOpcode(AVMOpcode::SetBuffer64),
                 TrinaryOp::SetBuffer256 => Opcode::AVMOpcode(AVMOpcode::SetBuffer256),
             };
             code.push(Instruction::from_opcode(opcode, *loc));
