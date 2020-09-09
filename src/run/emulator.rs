@@ -939,13 +939,13 @@ impl Machine {
                 Opcode::AVMOpcode(AVMOpcode::SetGas) => 0,
                 Opcode::AVMOpcode(AVMOpcode::EcRecover) => 20_000,
                 Opcode::AVMOpcode(AVMOpcode::Sideload) => 10,
-                Opcode::AVMOpcode(AVMOpcode::NewBuffer) => 10,
+                Opcode::AVMOpcode(AVMOpcode::NewBuffer) => 1,
                 Opcode::AVMOpcode(AVMOpcode::GetBuffer8) => 10,
                 Opcode::AVMOpcode(AVMOpcode::GetBuffer64) => 10,
                 Opcode::AVMOpcode(AVMOpcode::GetBuffer256) => 10,
-                Opcode::AVMOpcode(AVMOpcode::SetBuffer8) => 10,
-                Opcode::AVMOpcode(AVMOpcode::SetBuffer64) => 10,
-                Opcode::AVMOpcode(AVMOpcode::SetBuffer256) => 10,
+                Opcode::AVMOpcode(AVMOpcode::SetBuffer8) => 100,
+                Opcode::AVMOpcode(AVMOpcode::SetBuffer64) => 100,
+                Opcode::AVMOpcode(AVMOpcode::SetBuffer256) => 100,
                 _ => return None,
             })
         } else {
