@@ -538,6 +538,7 @@ pub enum AVMOpcode {
     GetBuffer256,
     SetBuffer8,
     SetBuffer256,
+    CopyBuffer8,
 }
 
 impl MiniProperties for Opcode {

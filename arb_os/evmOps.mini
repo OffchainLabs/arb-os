@@ -357,7 +357,7 @@ public impure func evmOp_number() -> uint {
 
 public impure func evmOp_mload(memAddr: uint) -> uint {
     if let Some(topFrame) = evmCallStack_topFrame() {
-        return bytearray_get256(
+        return getbuffer256(
             evmCallFrame_getMemory(topFrame),
             memAddr
         );
@@ -369,7 +369,7 @@ public impure func evmOp_mload(memAddr: uint) -> uint {
 
 public impure func evmOp_mstore(memAddr: uint, value: uint) {
     if let Some(topFrame) = evmCallStack_topFrame() {
-        let memory = bytearray_set256(
+        let memory = setbuffer256(
             evmCallFrame_getMemory(topFrame),
             memAddr,
             value
@@ -384,7 +384,7 @@ public impure func evmOp_mstore(memAddr: uint, value: uint) {
 
 public impure func evmOp_mstore8(memAddr: uint, value:uint) {
     if let Some(topFrame) = evmCallStack_topFrame() {
-        let memory = bytearray_setByte(
+        let memory = setbuffer8(
             evmCallFrame_getMemory(topFrame),
             memAddr,
             value

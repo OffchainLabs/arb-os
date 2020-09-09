@@ -1604,6 +1604,9 @@ impl Machine {
                     Opcode::AVMOpcode(AVMOpcode::SetBuffer256) => {
                         Ok(true)
                     }
+                    Opcode::AVMOpcode(AVMOpcode::CopyBuffer8) => {
+                        Ok(true)
+                    }
                     Opcode::GetLocal |  // these opcodes are for intermediate use in compilation only
 					Opcode::SetLocal |  // they should never appear in fully compiled code
 					Opcode::MakeFrame(_, _) |

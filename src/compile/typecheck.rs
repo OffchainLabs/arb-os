@@ -173,6 +173,7 @@ pub enum TypeCheckedExpr {
         Type,
         Option<Location>,
     ),
+    CopyBuffer8(Box<TypeCheckedExpr>, Box<TypeCheckedExpr>, Box<TypeCheckedExpr>, Box<TypeCheckedExpr>, Box<TypeCheckedExpr>, Option<Location>),
     ShortcutOr(Box<TypeCheckedExpr>, Box<TypeCheckedExpr>, Option<Location>),
     ShortcutAnd(Box<TypeCheckedExpr>, Box<TypeCheckedExpr>, Option<Location>),
     LocalVariableRef(StringId, Type, Option<Location>),
@@ -263,6 +264,7 @@ impl MiniProperties for TypeCheckedExpr {
             TypeCheckedExpr::UnaryOp(_, expr, _, _) => expr.is_pure(),
             TypeCheckedExpr::Binary(_, left, right, _, _) => left.is_pure() && right.is_pure(),
             TypeCheckedExpr::Trinary(_, a, b, c, _, _) => a.is_pure() && b.is_pure() && c.is_pure(),
+            TypeCheckedExpr::CopyBuffer8(a, b, c, d, e, _) => a.is_pure() && b.is_pure() && c.is_pure() && d.is_pure() && e.is_pure(),
             TypeCheckedExpr::ShortcutOr(left, right, _) => left.is_pure() && right.is_pure(),
             TypeCheckedExpr::ShortcutAnd(left, right, _) => left.is_pure() && right.is_pure(),
             TypeCheckedExpr::LocalVariableRef(_, _, _) => true,
@@ -336,6 +338,9 @@ impl TypeCheckedExpr {
             TypeCheckedExpr::UnaryOp(_, _, t, _) => t.clone(),
             TypeCheckedExpr::Binary(_, _, _, t, _) => t.clone(),
             TypeCheckedExpr::Trinary(_, _, _, _, t, _) => t.clone(),
+            TypeCheckedExpr::CopyBuffer8(_, _, _, _, _, _) => {
+                Type::Buffer
+            }
             TypeCheckedExpr::ShortcutOr(_, _, _) | TypeCheckedExpr::ShortcutAnd(_, _, _) => {
                 Type::Bool
             }
@@ -761,8 +766,11 @@ fn typecheck_statement<'a>(
                                 vec![],
                             ))
                         } else {
+                            println!("var  {:?}\n expr {:?}", var_type, &tc_expr.get_type());
                             Err(new_type_error(
-                                "mismatched types in assignment statement".to_string(),
+                                ["mismatched types in global assignment statement".to_string(),
+                                "asd".to_string()
+                                ].join(" "),
                                 *loc,
                             ))
                         }
@@ -1003,6 +1011,51 @@ fn typecheck_expr(
             let tc_sub2 = typecheck_expr(sub2, type_table, global_vars, func_table, return_type)?;
             let tc_sub3 = typecheck_expr(sub3, type_table, global_vars, func_table, return_type)?;
             typecheck_trinary_op(*op, tc_sub1, tc_sub2, tc_sub3, *loc)
+        }
+        Expr::CopyBuffer8(sub1, sub2, sub3, sub4, sub5, loc) => {
+            let tc_sub1 = typecheck_expr(sub1, type_table, global_vars, func_table, return_type)?;
+            let tc_sub2 = typecheck_expr(sub2, type_table, global_vars, func_table, return_type)?;
+            let tc_sub3 = typecheck_expr(sub3, type_table, global_vars, func_table, return_type)?;
+            let tc_sub4 = typecheck_expr(sub4, type_table, global_vars, func_table, return_type)?;
+            let tc_sub5 = typecheck_expr(sub5, type_table, global_vars, func_table, return_type)?;
+            if tc_sub1.get_type() != Type::Buffer {
+                return Err(new_type_error(
+                    "copybuffer8 arg1 is buffer".to_string(),
+                    *loc,
+                ));
+            }
+            if tc_sub2.get_type() != Type::Uint && tc_sub2.get_type() != Type::Int {
+                return Err(new_type_error(
+                    "copybuffer8 arg2 is int".to_string(),
+                    *loc,
+                ));
+            }
+            if tc_sub3.get_type() != Type::Buffer {
+                return Err(new_type_error(
+                    "copybuffer8 arg3 is buffer".to_string(),
+                    *loc,
+                ));
+            }
+            if tc_sub4.get_type() != Type::Uint && tc_sub4.get_type() != Type::Int {
+                return Err(new_type_error(
+                    "copybuffer8 arg4 is int".to_string(),
+                    *loc,
+                ));
+            }
+            if tc_sub5.get_type() != Type::Uint && tc_sub5.get_type() != Type::Int {
+                return Err(new_type_error(
+                    "copybuffer8 arg5 is int".to_string(),
+                    *loc,
+                ));
+            }
+            Ok(TypeCheckedExpr::CopyBuffer8(
+                Box::new(tc_sub1),
+                Box::new(tc_sub2),
+                Box::new(tc_sub3),
+                Box::new(tc_sub4),
+                Box::new(tc_sub5),
+                *loc,
+            ))
         }
         Expr::ShortcutOr(sub1, sub2, loc) => {
             let tc_sub1 = typecheck_expr(sub1, type_table, global_vars, func_table, return_type)?;

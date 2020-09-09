@@ -302,11 +302,17 @@ pub fn arg_vectors_assignable(tvec1: &[Type], tvec2: &[Type]) -> bool {
 ///Identical to `type_vectors_assignable` but using StructField slices as inputs and comparing their
 /// inner types.
 pub fn field_vectors_assignable(tvec1: &[StructField], tvec2: &[StructField]) -> bool {
-    tvec1.len() == tvec2.len()
-        && tvec1
+    let res = tvec1.len() == tvec2.len() && tvec1
             .iter()
             .zip(tvec2)
-            .all(|(t1, t2)| t1.tipe.assignable(&t2.tipe))
+            .all(|(t1, t2)| t1.tipe.assignable(&t2.tipe));
+    if !res {
+        tvec1
+            .iter()
+            .zip(tvec2)
+            .for_each(|(t1, t2)| println!("{:?} {:?} {:?} {:?}", t1.tipe, t2.tipe, t1.tipe.assignable(&t2.tipe), Type::Buffer == Type::Buffer))
+    }
+    return res
 }
 
 impl PartialEq for Type {
@@ -319,6 +325,7 @@ impl PartialEq for Type {
             | (Type::Bytes32, Type::Bytes32)
             | (Type::EthAddress, Type::EthAddress)
             | (Type::Any, Type::Any)
+            | (Type::Buffer, Type::Buffer)
             | (Type::Every, Type::Every) => true,
             (Type::Tuple(v1), Type::Tuple(v2)) => type_vectors_equal(&v1, &v2),
             (Type::Array(a1), Type::Array(a2)) => *a1 == *a2,
@@ -798,6 +805,7 @@ pub enum Expr {
     UnaryOp(UnaryOp, Box<Expr>, Option<Location>),
     Binary(BinaryOp, Box<Expr>, Box<Expr>, Option<Location>),
     Trinary(TrinaryOp, Box<Expr>, Box<Expr>, Box<Expr>, Option<Location>),
+    CopyBuffer8(Box<Expr>, Box<Expr>, Box<Expr>, Box<Expr>, Box<Expr>, Option<Location>),
     ShortcutOr(Box<Expr>, Box<Expr>, Option<Location>),
     ShortcutAnd(Box<Expr>, Box<Expr>, Option<Location>),
     VariableRef(StringId, Option<Location>),
@@ -856,6 +864,14 @@ impl Expr {
                 Box::new(be1.resolve_types(type_table)?),
                 Box::new(be2.resolve_types(type_table)?),
                 Box::new(be3.resolve_types(type_table)?),
+                *loc,
+            )),
+            Expr::CopyBuffer8(be1, be2, be3, be4, be5, loc) => Ok(Expr::CopyBuffer8(
+                Box::new(be1.resolve_types(type_table)?),
+                Box::new(be2.resolve_types(type_table)?),
+                Box::new(be3.resolve_types(type_table)?),
+                Box::new(be4.resolve_types(type_table)?),
+                Box::new(be5.resolve_types(type_table)?),
                 *loc,
             )),
             Expr::ShortcutOr(be1, be2, loc) => Ok(Expr::ShortcutOr(
