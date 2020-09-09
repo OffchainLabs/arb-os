@@ -15,6 +15,9 @@ import func expandingIntArray_set(arr: ExpandingIntArray, index: uint, val: uint
 import type IncomingRequest;
 import type Queue;
 
+import func queue_new() -> Queue;
+
+
 type Decompressor = func(IncomingRequest, ByteStream) -> Queue
 
 type IndexedAddressTable = struct {
@@ -74,4 +77,10 @@ public func decompressOffsetUint(bs: ByteStream) -> option<(ByteStream, uint)> {
     let (ustr, base) = rlp_decodeUint(bs)?;
     let (ustr, sh) = bytestream_getByte(ustr)?;
     return Some((ustr, asm(sh, base) uint { shl }));
+}
+
+// testDecompressor is designed for us in testing only
+//      discards the input
+public func testDecompressor(req: IncomingRequest, stream: ByteStream) -> Queue {
+    return queue_new();
 }

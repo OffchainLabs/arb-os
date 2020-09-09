@@ -162,8 +162,8 @@ $(ARBOSDIR)/decompression.mao: $(ARBOSDIR)/decompression.mini
 $(ARBOS): $(ARBOSAOS) $(STDLIB) $(BUILTINMAOS)
 	$(CARGORUN) compile $(ARBOSAOS) $(STDLIB) -o $(ARBOS)
 
-minitests/decompressionTest.mexe: minitests/decompressionTest.mao $(ARBOSDIR)/decompression.mao $(STDDIR)/expandingIntArray.mao
-	$(CARGORUN) compile minitests/decompressionTest.mao $(ARBOSDIR)/decompression.mao $(STDDIR)/expandingIntArray.mao -o minitests/decompressionTest.mexe
+minitests/decompressionTest.mexe: minitests/decompressionTest.mao $(ARBOSDIR)/decompression.mao $(STDLIB) $(BUILTINMAOS)
+	$(CARGORUN) compile minitests/decompressionTest.mao $(ARBOSDIR)/decompression.mao $(STDLIB) -o minitests/decompressionTest.mexe
 
 minitests/decompressionTest.mao: minitests/decompressionTest.mini
 	$(CARGORUN) compile minitests/decompressionTest.mini -c -o minitests/decompressionTest.mao

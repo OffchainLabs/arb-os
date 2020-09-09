@@ -132,6 +132,12 @@ impl RuntimeEnvironment {
         self.insert_l2_message(sender_addr.clone(), &buf, false)
     }
 
+    pub fn insert_compressed_tx_message(&mut self, sender_addr: Uint256, contents: &[u8]) -> Uint256 {
+        let mut buf = vec![7u8];
+        buf.extend(contents);
+        self.insert_l2_message(sender_addr.clone(), &buf, false)
+    }
+
     pub fn insert_buddy_deploy_message(
         &mut self,
         sender_addr: Uint256,
