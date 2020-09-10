@@ -249,10 +249,9 @@ pub fn compile_from_folder(
     }
     for (name, imports) in &import_map {
         for import in imports {
-            println!("{}: {:?}", name, import);
             let mut named_type = None;
             let mut imp_func = None;
-            let mut desired = None;
+            let mut imp_func_decl = None;
             if let Some(program) = programs.get_mut(&(import.path[0].clone() + ".mini")) {
                 let index = program.4.get(import.name.clone());
                 named_type = program.2.get(&index).cloned();
@@ -267,24 +266,7 @@ pub fn compile_from_folder(
                             .map_err(|e| CompileError::new(format!("Type error: {:?}", e), None))
                     })
                     .transpose()?;
-                let imp_func_decl = program.1.iter().find(|func| func.name == index).cloned();
-                desired = imp_func_decl.clone().map(|imp_func_decl| {
-                    ImportedFunc::new(
-                        0, //must be updated by using information from origin program
-                        0, //must be updated by using information from origin program
-                        &program.4,
-                        imp_func_decl
-                            .clone()
-                            .args
-                            .iter()
-                            .map(|arg| arg.tipe.clone())
-                            .collect(),
-                        imp_func_decl.clone().ret_type,
-                        imp_func_decl.clone().is_impure,
-                    )
-                });
-                println!("{:?}", imp_func_decl);
-                println!("{:?}", named_type);
+                imp_func_decl = program.1.iter().find(|func| func.name == index).cloned();
             }
             let origin_program = programs.get_mut(name).ok_or_else(|| {
                 CompileError::new(
@@ -296,15 +278,20 @@ pub fn compile_from_folder(
             if let Some(named_type) = named_type {
                 origin_program.2.insert(index, named_type);
             } else if let Some(imp_func) = imp_func {
-                println!("Inserted: {}, {:?}", index, imp_func);
                 origin_program.5.insert(index, imp_func);
-                desired = desired.map(|mut des| {
-                    des.slot_num = origin_program.0.len();
-                    des.name_id = index;
-                    des
-                });
-                println!("meet {:?}", desired);
-                origin_program.0.push(desired.unwrap());
+                origin_program.0.push(ImportedFunc::new(
+                    origin_program.0.len(),
+                    index,
+                    &origin_program.4,
+                    imp_func_decl
+                        .clone().unwrap()
+                        .args
+                        .iter()
+                        .map(|arg| arg.tipe.clone())
+                        .collect(),
+                    imp_func_decl.clone().unwrap().ret_type,
+                    imp_func_decl.clone().unwrap().is_impure,
+                ));
             }
         }
     }
@@ -313,7 +300,6 @@ pub fn compile_from_folder(
     output.append(&mut programs.values().cloned().collect());
     for (imported_funcs, funcs, named_types, global_vars, string_table, hm, name) in output {
         let mut checked_funcs = vec![];
-        println!("{}: {:?}", name, imported_funcs);
         let (exported_funcs, imported_funcs, global_vars, string_table) =
             typecheck::typecheck_top_level_decls(
                 imported_funcs,
