@@ -20,6 +20,7 @@ use crate::link::{ExportedFunc, ImportedFunc};
 use crate::mavm::Instruction;
 use crate::pos::{BytePos, Location};
 use crate::stringtable::StringTable;
+use ast::{FuncDecl, GlobalVarDecl};
 use lalrpop_util::lalrpop_mod;
 use mini::DeclsParser;
 use serde::{Deserialize, Serialize};
@@ -46,6 +47,39 @@ lalrpop_mod!(mini);
 pub(crate) trait MiniProperties {
     ///Returns false if the value reads or writes mini global state, and true otherwise.
     fn is_pure(&self) -> bool;
+}
+
+#[derive(Clone)]
+struct Module {
+    imported_funcs: Vec<ImportedFunc>,
+    funcs: Vec<FuncDecl>,
+    named_types: HashMap<usize, Type>,
+    global_vars: Vec<GlobalVarDecl>,
+    string_table: StringTable,
+    hm: HashMap<usize, Type>,
+    name: String,
+}
+
+impl Module {
+    fn new(
+        imported_funcs: Vec<ImportedFunc>,
+        funcs: Vec<FuncDecl>,
+        named_types: HashMap<usize, Type>,
+        global_vars: Vec<GlobalVarDecl>,
+        string_table: StringTable,
+        hm: HashMap<usize, Type>,
+        name: String,
+    ) -> Self {
+        Self {
+            imported_funcs,
+            funcs,
+            named_types,
+            global_vars,
+            string_table,
+            hm,
+            name,
+        }
+    }
 }
 
 ///Represents a mini program that has been compiled and possibly linked, but has not had post-link
@@ -238,7 +272,7 @@ pub fn compile_from_folder(
         import_map.insert(name.clone(), imports);
         programs.insert(
             name.clone(),
-            (
+            Module::new(
                 imported_funcs,
                 funcs,
                 named_types,
@@ -255,20 +289,24 @@ pub fn compile_from_folder(
             let mut imp_func = None;
             let mut imp_func_decl = None;
             if let Some(program) = programs.get_mut(&(import.path[0].clone() + ".mini")) {
-                let index = program.4.get(import.name.clone());
-                named_type = program.2.get(&index).cloned();
+                let index = program.string_table.get(import.name.clone());
+                named_type = program.named_types.get(&index).cloned();
                 let type_table = SymTable::new();
-                let type_table =
-                    type_table.push_multi(program.2.iter().map(|(i, t)| (*i, t)).collect());
+                let type_table = type_table
+                    .push_multi(program.named_types.iter().map(|(i, t)| (*i, t)).collect());
                 imp_func = program
-                    .5
+                    .hm
                     .get(&index)
                     .map(|decl| {
                         decl.resolve_types(&type_table, None)
                             .map_err(|e| CompileError::new(format!("Type error: {:?}", e), None))
                     })
                     .transpose()?;
-                imp_func_decl = program.1.iter().find(|func| func.name == index).cloned();
+                imp_func_decl = program
+                    .funcs
+                    .iter()
+                    .find(|func| func.name == index)
+                    .cloned();
             }
             let origin_program = programs.get_mut(name).ok_or_else(|| {
                 CompileError::new(
@@ -280,22 +318,22 @@ pub fn compile_from_folder(
                     None,
                 )
             })?;
-            let index = origin_program.4.get(import.name.clone());
+            let index = origin_program.string_table.get(import.name.clone());
             if let Some(named_type) = named_type {
-                origin_program.2.insert(index, named_type);
+                origin_program.named_types.insert(index, named_type);
             } else if let Some(imp_func) = imp_func {
-                origin_program.5.insert(index, imp_func);
+                origin_program.hm.insert(index, imp_func);
                 let imp_func_decl = imp_func_decl.ok_or(CompileError::new(
                     format!(
                         "Internal error: Imported function {} has no associated decl",
-                        origin_program.4.name_from_id(index)
+                        origin_program.string_table.name_from_id(index)
                     ),
                     None,
                 ))?;
-                origin_program.0.push(ImportedFunc::new(
-                    origin_program.0.len(),
+                origin_program.imported_funcs.push(ImportedFunc::new(
+                    origin_program.imported_funcs.len(),
                     index,
-                    &origin_program.4,
+                    &origin_program.string_table,
                     imp_func_decl
                         .args
                         .iter()
@@ -316,7 +354,16 @@ pub fn compile_from_folder(
     let mut progs = vec![];
     let mut output = vec![programs.remove("main.mini").expect("no main")];
     output.append(&mut programs.values().cloned().collect());
-    for (imported_funcs, funcs, named_types, global_vars, string_table, hm, name) in output {
+    for Module {
+        imported_funcs,
+        funcs,
+        named_types,
+        global_vars,
+        string_table,
+        hm,
+        name,
+    } in output
+    {
         let mut checked_funcs = vec![];
         let (exported_funcs, imported_funcs, global_vars, string_table) =
             typecheck::typecheck_top_level_decls(
