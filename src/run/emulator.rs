@@ -344,6 +344,7 @@ impl CodeStore {
 #[derive(Debug, Clone, Default)]
 pub struct ProfilerData {
     data: HashMap<String, BTreeMap<(usize, usize), u64>>,
+    instructions: Vec<u64>,
     unknown_gas: u64,
 }
 
@@ -405,16 +406,32 @@ impl ProfilerData {
     ///
     /// Use exit to exit the profiler.
     pub fn profiler_session(&self) {
+        println!("Instructions");
+        let mut total_instructions = 0;
+        for i in 0..256 {
+            let x = self.instructions[i];
+            total_instructions += x;
+            if x != 0 {
+                if let Some(op) = Opcode::from_number(i) {
+                    println!("{}: {}", op.to_name(), x);
+                }
+            }
+        }
+        println!("Total: {}", total_instructions);
         let file_gas_costs: Vec<(String, u64)> = self
             .data
             .iter()
             .map(|(name, tree)| (name.clone(), tree.values().sum()))
             .collect();
+        let mut total = 0;
         println!("Per file gas cost usage:");
         for (filename, gas_cost) in &file_gas_costs {
+            total += gas_cost;
             println!("{}: {};", filename, gas_cost);
         }
         println!("unknown_file: {}", self.unknown_gas);
+        total += self.unknown_gas;
+        println!("Total: {}", total);
         loop {
             println!("Enter file to examine");
             let mut command = String::new();
@@ -830,7 +847,11 @@ impl Machine {
     pub fn profile_gen(&mut self, args: Vec<Value>) -> ProfilerData {
         self.call_state(CodePt::new_internal(0), args);
         let mut loc_map = ProfilerData::default();
+        loc_map.instructions.resize(256, 0);
         while let Some(insn) = self.next_opcode() {
+            if let Some(num) = insn.opcode.to_number() {
+                loc_map.instructions[usize::from(num)] = loc_map.instructions[usize::from(num)] + 1;
+            }
             let loc = insn.location;
             if let Some(gas_cost) = loc_map.get_mut(&loc, &self.file_name_chart) {
                 *gas_cost += self.next_op_gas().unwrap_or(0);
