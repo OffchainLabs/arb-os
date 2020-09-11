@@ -33,11 +33,11 @@ public func sha256hasher_new() -> Sha256Hasher {
 public func sha256hasher_pushByte(h: Sha256Hasher, b: uint) -> Sha256Hasher {
     let word = h.offset / 32;
     let newBuffer = h.buffer with {
-        [word] = h.buffer[word] ^ asm(8*(h.offset&0x1f), b&0xff) uint { shl }
+        [word] = h.buffer[word] ^ asm(248-8*(h.offset % 32), b&0xff) uint { shl }
     };
     if (h.offset >= 63) {
         return h with {
-            accumulator: asm(h.accumulator, newBuffer[0], newBuffer[1]) bytes32 { keccakf }
+            accumulator: asm(h.accumulator, newBuffer[0], newBuffer[1]) bytes32 { sha256f }
         } with {
             buffer: unsafecast<[2]uint>((0,0))
         } with {
@@ -46,7 +46,6 @@ public func sha256hasher_pushByte(h: Sha256Hasher, b: uint) -> Sha256Hasher {
             totalSizeBits: 8 + h.totalSizeBits
         };
     } else {
-        let word = h.offset / 32;
         return h with {
             buffer: newBuffer
         } with {
@@ -59,8 +58,8 @@ public func sha256hasher_pushByte(h: Sha256Hasher, b: uint) -> Sha256Hasher {
 
 public func sha256hasher_finish(h: Sha256Hasher) -> bytes32 {
     // write the first padding byte
-    h = sha256hasher_pushByte(h, 0x01) with {
-        totalSizeBits: h.totalSizeBits - 8   // undo the +8 caused by sha256hasher_pushByte call
+    h = sha256hasher_pushByte(h, 0x80) with {
+        totalSizeBits: h.totalSizeBits   // undo the +8 caused by sha256hasher_pushByte call
     };
 
     // make sure there is space for the 64-bit total length
