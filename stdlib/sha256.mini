@@ -1,0 +1,92 @@
+//
+// Copyright 2020, Offchain Labs, Inc. All rights reserved.
+//
+
+import type ByteArray;
+import func bytearray_new(size: uint) -> ByteArray;
+import func bytearray_size(ba: ByteArray) -> uint;
+import func bytearray_get256(ba: ByteArray, offset: uint) -> uint;
+import func bytearray_set256(ba: ByteArray, offset: uint, val: uint) -> ByteArray;
+import func bytearray_get64(ba: ByteArray, offset: uint) -> uint;
+import func bytearray_set64(ba: ByteArray, offset: uint, val: uint) -> ByteArray;
+import func bytearray_getByte(ba: ByteArray, offset: uint) -> uint;
+import func bytearray_setByte(ba: ByteArray, offset: uint, val: uint) -> ByteArray;
+import func bytearray_copy(src: ByteArray, srcOffset: uint, dest: ByteArray, destOffset: uint, nbytes: uint) -> ByteArray;
+
+
+type Sha256Hasher = struct {
+    accumulator: bytes32,
+    buffer: [2]uint,
+    offset: uint,
+    totalSizeBits: uint,
+}
+
+public func sha256hasher_new() -> Sha256Hasher {
+    return struct {
+        accumulator: bytes32(0x6a09e667bb67ae853c6ef372a54ff53a510e527f9b05688c1f83d9ab5be0cd19),
+        buffer: unsafecast<[2]uint>((0,0)),
+        offset: 0,
+        totalSizeBits: 0,
+    };
+}
+
+public func sha256hasher_pushByte(h: Sha256Hasher, b: uint) -> Sha256Hasher {
+    let word = h.offset / 32;
+    let newBuffer = h.buffer with {
+        [word] = h.buffer[word] ^ asm(8*(h.offset&0x1f), b&0xff) uint { shl }
+    };
+    if (h.offset >= 63) {
+        return h with {
+            accumulator: asm(h.accumulator, newBuffer[0], newBuffer[1]) bytes32 { keccakf }
+        } with {
+            buffer: unsafecast<[2]uint>((0,0))
+        } with {
+            offset: 0
+        } with {
+            totalSizeBits: 8 + h.totalSizeBits
+        };
+    } else {
+        let word = h.offset / 32;
+        return h with {
+            buffer: newBuffer
+        } with {
+            offset: h.offset+1
+        } with {
+            totalSizeBits: 8 + h.totalSizeBits
+        };
+    }
+}
+
+public func sha256hasher_finish(h: Sha256Hasher) -> bytes32 {
+    // write the first padding byte
+    h = sha256hasher_pushByte(h, 0x01) with {
+        totalSizeBits: h.totalSizeBits - 8   // undo the +8 caused by sha256hasher_pushByte call
+    };
+
+    // make sure there is space for the 64-bit total length
+    if (h.offset > 56) {
+        h = h with {
+            accumulator: asm(h.accumulator, h.buffer[0], h.buffer[1]) bytes32 { sha256f }
+        } with {
+            buffer: unsafecast<[2]uint>((0,0))
+        };
+    }
+
+    // insert the total size, and invoke the compression function
+    return asm(
+        h.accumulator,
+        h.buffer[0],
+        h.buffer[1] | (h.totalSizeBits & 0xffffffffffffffff),
+    ) bytes32 { sha256f };
+}
+
+public func sha256_byteArray(ba: ByteArray) -> bytes32 {
+    let hasher = sha256hasher_new();
+    let i = 0;
+    while (i < bytearray_size(ba)) {
+        hasher = sha256hasher_pushByte(hasher, bytearray_getByte(ba, i));
+        i = i+1;
+    }
+    return sha256hasher_finish(hasher);
+}
+

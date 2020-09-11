@@ -84,6 +84,12 @@ impl Uint256 {
         Uint256::from_bytes(&b)
     }
 
+    pub fn from_u32_digits(b: &[u32]) -> Self {
+        let mut val = BigUint::from(0u64);
+        val.assign_from_slice(b);
+        Uint256 { val }
+    }
+
     pub fn to_usize(&self) -> Option<usize> {
         self.val.to_usize()
     }
@@ -135,6 +141,28 @@ impl Uint256 {
         } else {
             self.val.to_bytes_be()
         }
+    }
+
+    pub fn to_u32_digits_be(&self) -> [u32;8] {
+        let mut ret = [0u32;8];
+        let v = self.val.to_u32_digits();
+        for (i,vv) in v.iter().enumerate() {
+            ret[7-i] = *vv;
+        }
+        ret
+    }
+
+    pub fn to_u32_digits_be_2(&self, ui2: &Self) -> [u32; 16] {
+        let mut ret = [0u32;16];
+        let v = self.val.to_u32_digits();
+        for (i,vv) in v.iter().enumerate() {
+            ret[7-i] = *vv;
+        }
+        let v = ui2.val.to_u32_digits();
+        for (i,vv) in v.iter().enumerate() {
+            ret[15-i] = *vv;
+        }
+        ret
     }
 
     #[cfg(test)]
@@ -419,4 +447,10 @@ impl<'de> Deserialize<'de> for Uint256 {
             val: BigUint::parse_bytes(s.as_bytes(), 16).unwrap(),
         })
     }
+}
+
+#[test]
+fn test_uint256_u32_digit_order() {
+    assert_eq!(Uint256::from_u64(1).to_u32_digits_be()[7], 1u32);
+    assert_eq!(Uint256::from_string_hex("6a09e667bb67ae853c6ef372a54ff53a510e527f9b05688c1f83d9ab5be0cd19").unwrap().to_u32_digits_be()[0], 0x6a09e667u32);
 }

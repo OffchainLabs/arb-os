@@ -1,0 +1,53 @@
+//
+// Copyright 2020, Offchain Labs, Inc. All rights reserved.
+//
+
+import type ByteArray;
+import type MarshalledBytes;
+import type Hasher;
+
+import func bytearray_new(size: uint) -> ByteArray;
+import func bytearray_unmarshalBytes(mbytes: MarshalledBytes) -> ByteArray;
+import func bytearray_size(ba: ByteArray) -> uint;
+import func bytearray_getByte(ba: ByteArray, idx: uint) -> uint;
+import func bytearray_setByte(ba: ByteArray, idx: uint, val: uint) -> ByteArray;
+import func bytearray_get64(ba: ByteArray, idx: uint) -> uint;
+import func bytearray_set64(ba: ByteArray, idx: uint, val: uint) -> ByteArray;
+import func bytearray_get256(ba: ByteArray, offset: uint) -> uint;
+import func bytearray_set256(ba: ByteArray, offset: uint, value: uint) -> ByteArray;
+import func bytearray_copy(
+    from: ByteArray,
+    fromOffset: uint,
+    to: ByteArray,
+    toOffset: uint,
+    nbytes: uint,
+) -> ByteArray;
+
+import type Sha256Hasher;
+import func sha256hasher_new() -> Sha256Hasher;
+import func sha256hasher_finish(h: Sha256Hasher) -> bytes32;
+import func sha256_byteArray(ba: ByteArray) -> bytes32;
+
+impure func main() {
+    if let Some(x) = tests() {
+	    asm(x,) { log };
+	} else {
+	    asm(666,) { log };
+	}
+}
+
+func tests() -> option<bytes32> {
+    let h = sha256hasher_new();
+    let sEmpty = sha256hasher_finish(h);
+    if (sEmpty != bytes32(0xe3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855)) {
+		return Some(sEmpty);
+		return Some(bytes32(1));
+	}
+	let ba = bytearray_new(0);
+	let sEmpty = sha256_byteArray(ba);
+    if (sEmpty != bytes32(0xe3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855)) {
+		return Some(bytes32(2));
+	}
+
+	return Some(bytes32(0));
+}
