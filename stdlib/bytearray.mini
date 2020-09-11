@@ -115,6 +115,14 @@ public func bytearray_size(ba: ByteArray) -> uint {
     return ba.size;
 }
 
+public func bytearray_buffer(ba: ByteArray) -> buffer {
+    return ba.contents;
+}
+
+public func bytearray_slice(ba: ByteArray) -> uint {
+    return ba.sliceOffset;
+}
+
 // bytearray_getByte reads one byte from a ByteArray
 public func bytearray_getByte(ba: ByteArray, offset: uint) -> uint {
     if (offset >= ba.size) {
@@ -148,6 +156,15 @@ func make(cont: ByteArray) -> ByteArray {
         sliceOffset: 0,
         contents: cont.contents,
         copy: true,
+    };
+}
+
+public func bytearray_wrap(cont: buffer, size: uint) -> ByteArray {
+    return struct {
+        size: size,
+        sliceOffset: 0,
+        contents: cont,
+        copy: false,
     };
 }
 
@@ -189,7 +206,7 @@ public func bytearray_copy(
     nbytes: uint,
 ) -> ByteArray {
     // TODO: optimize this to exploit alignment and speed up the endgame
-    debug(nbytes);
+    // debug(nbytes);
     while (nbytes >= 32) {
         let val = bytearray_get256(from, fromOffset);
         to = bytearray_set256(to, toOffset, val);

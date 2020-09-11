@@ -1634,12 +1634,12 @@ impl Machine {
                     }
                     Opcode::AVMOpcode(AVMOpcode::NewBuffer) => {
                         let _size = self.stack.pop_uint(&self.state)?;
-                        self.stack.push(Value::new_buffer(vec![0; 200000]));
+                        self.stack.push(Value::new_buffer(vec![0; 256]));
                         self.incr_pc();
                         Ok(true)
                     }
                     Opcode::AVMOpcode(AVMOpcode::GetBuffer8) => {
-                        let mut buf = self.stack.pop_buffer(&self.state)?;
+                        let buf = self.stack.pop_buffer(&self.state)?;
                         let offset = self.stack.pop_usize(&self.state)?;
                         if buf.len() < offset {
                             self.stack.push_usize(0);
@@ -1661,7 +1661,7 @@ impl Machine {
                         Ok(true)
                     }
                     Opcode::AVMOpcode(AVMOpcode::GetBuffer256) => {
-                        let mut buf = self.stack.pop_buffer(&self.state)?;
+                        let buf = self.stack.pop_buffer(&self.state)?;
                         let offset = self.stack.pop_usize(&self.state)?;
                         if buf.len() < offset {
                             self.stack.push_usize(0);
@@ -1679,6 +1679,7 @@ impl Machine {
                         let mut buf = self.stack.pop_buffer(&self.state)?;
                         let offset = self.stack.pop_usize(&self.state)?;
                         let val = self.stack.pop_usize(&self.state)?;
+                        check_size(&mut buf, offset);
                         buf[offset] = u8::try_from(val & 0xff).unwrap();
                         self.stack.push(Value::new_buffer(buf));
                         self.incr_pc();
@@ -1688,6 +1689,7 @@ impl Machine {
                         let mut buf = self.stack.pop_buffer(&self.state)?;
                         let offset = self.stack.pop_usize(&self.state)?;
                         let val = self.stack.pop_uint(&self.state)?;
+                        check_size(&mut buf, offset+7);
                         let bytes = val.to_bytes_be();
                         for i in 0..8 {
                             buf[offset+i] = bytes[i];
@@ -1702,6 +1704,7 @@ impl Machine {
                         let offset = self.stack.pop_usize(&self.state)?;
                         let val = self.stack.pop_uint(&self.state)?;
                         let bytes = val.to_bytes_be();
+                        check_size(&mut buf, offset+31);
                         // println!("setting {:?}", bytes);
                         for i in 0..32 {
                             buf[offset+i] = bytes[i];
@@ -1784,6 +1787,20 @@ fn tuple_keccak(intup: Vec<Value>, state: &MachineState) -> Result<Vec<Value>, E
     inuis[6] = Uint256::from_u64(outtup[24]);
     let ret = inuis.iter().map(|ui| Value::Int(ui.clone())).collect();
     Ok(ret)
+}
+
+fn check_size(buf : &mut Vec<u8>, offset : usize) {
+    if offset >= buf.len() {
+        if offset >= 1024 {
+            buf.resize(200000, 0);
+        } else if offset >= 256 {
+            buf.resize(1024, 0);
+        } else if offset >= 128 {
+            buf.resize(256, 0);
+        } else {
+            buf.resize(130, 0);
+        } 
+    }
 }
 
 fn do_ecrecover(
