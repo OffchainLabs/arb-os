@@ -216,7 +216,7 @@ pub fn compile_from_folder(
         let name = name + ".mini";
         let mut file = File::open(folder.join(name.clone())).map_err(|why| {
             CompileError::new(
-                format!("couldn't open {}::{}: {:?}", folder.display(), name, why),
+                format!("Can not open {}/{}: {:?}", folder.display(), name, why),
                 None,
             )
         })?;
@@ -224,7 +224,7 @@ pub fn compile_from_folder(
         let mut source = String::new();
         file.read_to_string(&mut source).map_err(|why| {
             CompileError::new(
-                format!("couldn't read {}::{}: {:?}", folder.display(), name, why),
+                format!("Can not read {}/{}: {:?}", folder.display(), name, why),
                 None,
             )
         })?;
@@ -272,7 +272,11 @@ pub fn compile_from_folder(
             }
             let origin_program = programs.get_mut(name).ok_or_else(|| {
                 CompileError::new(
-                    "could not find originating file for import".to_string(),
+                    format!(
+                        "Internal error: Can not find originating file for import \"{}::{}\"",
+                        import.path.get(0).cloned().unwrap_or_else(String::new),
+                        import.name
+                    ),
                     None,
                 )
             })?;
