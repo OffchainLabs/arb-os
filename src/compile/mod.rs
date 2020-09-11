@@ -268,7 +268,18 @@ pub fn compile_from_folder(
                 &parse_from_source(source, file_id, &mut string_table)?,
                 string_table,
             );
-        paths.append(&mut imports.iter().map(|imp| imp.path[0].clone()).collect());
+        paths.append(
+            &mut imports
+                .iter()
+                .map(|imp| {
+                    if imp.path[0] == "std" {
+                        format!("../stdlib/{}", imp.path[1])
+                    } else {
+                        imp.path[0].clone()
+                    }
+                })
+                .collect(),
+        );
         import_map.insert(name.clone(), imports);
         programs.insert(
             name.clone(),
@@ -288,7 +299,12 @@ pub fn compile_from_folder(
             let mut named_type = None;
             let mut imp_func = None;
             let mut imp_func_decl = None;
-            if let Some(program) = programs.get_mut(&(import.path[0].clone() + ".mini")) {
+            let import_path = if import.path[0] == "std".to_string() {
+                format!("../stdlib/{}.mini", import.path[1])
+            } else {
+                format!("{}.mini", import.path[0])
+            };
+            if let Some(program) = programs.get_mut(&import_path) {
                 let index = program.string_table.get(import.name.clone());
                 named_type = program.named_types.get(&index).cloned();
                 let type_table = SymTable::new();
