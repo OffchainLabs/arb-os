@@ -274,6 +274,8 @@ pub fn compile_from_folder(
                 .map(|imp| {
                     if imp.path[0] == "std" {
                         format!("../stdlib/{}", imp.path[1])
+                    } else if imp.path[0] == "core" {
+                        format!("../builtin/{}", imp.path[1])
                     } else {
                         imp.path[0].clone()
                     }
@@ -301,6 +303,8 @@ pub fn compile_from_folder(
             let mut imp_func_decl = None;
             let import_path = if import.path[0] == "std".to_string() {
                 format!("../stdlib/{}.mini", import.path[1])
+            } else if import.path[0] == "core" {
+                format!("../builtin/{}.mini", import.path[1])
             } else {
                 format!("{}.mini", import.path[0])
             };
