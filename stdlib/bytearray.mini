@@ -6,6 +6,7 @@ type ByteArray = struct {
     size: uint,
     sliceOffset: uint,
     contents: buffer,
+    copy: bool,
 }
 
 // bytearray_new makes a new ByteArray
@@ -18,6 +19,7 @@ public func bytearray_new(ignored: uint) -> ByteArray {
         size: 0,
         sliceOffset: 0,
         contents: newbuffer(0),
+        copy: false,
     };
 }
 
@@ -80,21 +82,28 @@ public func bytearray_unmarshalBytes(inBytes: MarshalledBytes) -> ByteArray {
         size: inBytes.nbytes,
         sliceOffset: 0,
         contents: eia,
+        copy: false,
     };
 }
 
 public func bytearray_marshalFull(ba: ByteArray) -> MarshalledBytes {
+    if (ba.copy) {
+        ba = bytearray_copy(make(ba), ba.sliceOffset, bytearray_new(0), 0, ba.size);
+    }
     let nbytes = ba.size;
     let nwords = (nbytes+31)/32;
     let words = unsafecast<MarshalledBytesCell>(());
     let i = 0;
+    // debug(true);
     while (i < nwords) {
         words = struct {
             first: getbuffer256(ba.contents, 32*i),
             rest: words,
         };
+        // debug(words.first);
         i = i+1;
     }
+    // debug(false);
     return struct {
         nbytes: nbytes,
         contents: words,
@@ -133,8 +142,18 @@ public func bytearray_get256(ba: ByteArray, offset: uint) -> uint {
     return getbuffer256(ba.contents, offset);
 }
 
+func make(cont: ByteArray) -> ByteArray {
+    return struct {
+        size: cont.size + cont.sliceOffset + 32,
+        sliceOffset: 0,
+        contents: cont.contents,
+        copy: true,
+    };
+}
+
 // bytearray_setbyte writes one byte to a ByteArray, returns the resulting ByteArray
 public func bytearray_setByte(ba: ByteArray, offset: uint, value: uint) -> ByteArray {
+    // if (ba.copy) { ba = bytearray_copy(make(ba), ba.sliceOffset, bytearray_new(0), 0, ba.size); }
     if (offset >= ba.size) {
         ba = ba with { size: offset+1 };
     }
@@ -170,6 +189,7 @@ public func bytearray_copy(
     nbytes: uint,
 ) -> ByteArray {
     // TODO: optimize this to exploit alignment and speed up the endgame
+    debug(nbytes);
     while (nbytes >= 32) {
         let val = bytearray_get256(from, fromOffset);
         to = bytearray_set256(to, toOffset, val);
@@ -188,6 +208,7 @@ public func bytearray_copy(
 }
 
 public func bytearray_extract(from: ByteArray, offset: uint, nbytes: uint) -> ByteArray {
-    return bytearray_copy(from, offset, bytearray_new(0), 0, nbytes);
+    return struct { size: nbytes, sliceOffset: from.sliceOffset + offset, contents: from.contents, copy: true, };
+    // return bytearray_copy(from, offset, bytearray_new(0), 0, nbytes);
 }
 

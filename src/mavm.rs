@@ -714,6 +714,14 @@ impl Opcode {
             Opcode::AVMOpcode(AVMOpcode::ErrSet) => "errset",
             Opcode::AVMOpcode(AVMOpcode::Sideload) => "sideload",
             Opcode::AVMOpcode(AVMOpcode::EcRecover) => "ecrecover",
+            Opcode::AVMOpcode(AVMOpcode::NewBuffer) => "newbuffer",
+            Opcode::AVMOpcode(AVMOpcode::GetBuffer8) => "getbuffer8",
+            Opcode::AVMOpcode(AVMOpcode::GetBuffer64) => "getbuffer64",
+            Opcode::AVMOpcode(AVMOpcode::GetBuffer256) => "getbuffer256",
+            Opcode::AVMOpcode(AVMOpcode::SetBuffer8) => "setbuffer8",
+            Opcode::AVMOpcode(AVMOpcode::SetBuffer64) => "setbuffer64",
+            Opcode::AVMOpcode(AVMOpcode::SetBuffer256) => "setbuffer256",
+            Opcode::AVMOpcode(AVMOpcode::CopyBuffer8) => "copybuffer8",
             _ => "Unknown"
         }
     }
@@ -786,6 +794,14 @@ impl Opcode {
             0x7b => Some(Opcode::AVMOpcode(AVMOpcode::Sideload)),
             0x80 => Some(Opcode::AVMOpcode(AVMOpcode::EcRecover)),
             0x90 => Some(Opcode::AVMOpcode(AVMOpcode::DebugPrint)),
+            0xa0 => Some(Opcode::AVMOpcode(AVMOpcode::NewBuffer)),
+            0xa1 => Some(Opcode::AVMOpcode(AVMOpcode::GetBuffer8)),
+            0xa2 => Some(Opcode::AVMOpcode(AVMOpcode::GetBuffer64)),
+            0xa3 => Some(Opcode::AVMOpcode(AVMOpcode::GetBuffer256)),
+            0xa4 => Some(Opcode::AVMOpcode(AVMOpcode::SetBuffer8)),
+            0xa5 => Some(Opcode::AVMOpcode(AVMOpcode::SetBuffer64)),
+            0xa6 => Some(Opcode::AVMOpcode(AVMOpcode::SetBuffer256)),
+            0xa7 => Some(Opcode::AVMOpcode(AVMOpcode::CopyBuffer8)),
             _ => None,
         }
     }
@@ -861,6 +877,15 @@ impl Opcode {
             Opcode::AVMOpcode(AVMOpcode::Sideload) => Some(0x7b),
             Opcode::AVMOpcode(AVMOpcode::EcRecover) => Some(0x80),
             Opcode::AVMOpcode(AVMOpcode::DebugPrint) => Some(0x90),
+            Opcode::AVMOpcode(AVMOpcode::NewBuffer) => Some(0xa0),
+            Opcode::AVMOpcode(AVMOpcode::GetBuffer8) => Some(0xa1),
+            Opcode::AVMOpcode(AVMOpcode::GetBuffer64) => Some(0xa2),
+            Opcode::AVMOpcode(AVMOpcode::GetBuffer256) => Some(0xa3),
+            Opcode::AVMOpcode(AVMOpcode::SetBuffer8) => Some(0xa4),
+            Opcode::AVMOpcode(AVMOpcode::SetBuffer64) => Some(0xa5),
+            Opcode::AVMOpcode(AVMOpcode::SetBuffer256) => Some(0xa6),
+            Opcode::AVMOpcode(AVMOpcode::CopyBuffer8) => Some(0xa7),
+        
             _ => None,
         }
     }
