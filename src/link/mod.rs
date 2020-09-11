@@ -21,7 +21,6 @@ use crate::mavm::{AVMOpcode, CodePt, Instruction, Label, Opcode, Value};
 use crate::stringtable::{StringId, StringTable};
 use serde::{Deserialize, Serialize};
 use std::collections::hash_map::{DefaultHasher, HashMap};
-use std::fmt::{self, Debug};
 use std::hash::Hasher;
 use std::io;
 use std::path::Path;
@@ -97,7 +96,7 @@ impl Import {
 }
 
 ///Represents a function imported from another mini program or module.
-#[derive(Clone, Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct ImportedFunc {
     pub name_id: StringId,
     pub slot_num: usize,
@@ -133,12 +132,6 @@ impl ImportedFunc {
     pub fn relocate(mut self, _int_offset: usize, ext_offset: usize) -> Self {
         self.slot_num += ext_offset;
         self
-    }
-}
-
-impl Debug for ImportedFunc {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> Result<(), fmt::Error> {
-        write!(f, "ImportedFunc({}, {})", self.slot_num, self.name)
     }
 }
 
