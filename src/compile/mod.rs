@@ -229,9 +229,11 @@ pub fn compile_from_folder(
             )
         })?;
         let mut string_table = StringTable::new();
-        let res = parse_from_source(source, file_id, &mut string_table)?;
         let (imports, imported_funcs, funcs, named_types, global_vars, string_table, hm) =
-            typecheck::sort_top_level_decls(&res, string_table);
+            typecheck::sort_top_level_decls(
+                &parse_from_source(source, file_id, &mut string_table)?,
+                string_table,
+            );
         paths.append(&mut imports.iter().map(|imp| imp.path[0].clone()).collect());
         import_map.insert(name.clone(), imports);
         programs.insert(
@@ -279,19 +281,31 @@ pub fn compile_from_folder(
                 origin_program.2.insert(index, named_type);
             } else if let Some(imp_func) = imp_func {
                 origin_program.5.insert(index, imp_func);
+                let imp_func_decl = imp_func_decl.ok_or(CompileError::new(
+                    format!(
+                        "Internal error: Imported function {} has no associated decl",
+                        origin_program.4.name_from_id(index)
+                    ),
+                    None,
+                ))?;
                 origin_program.0.push(ImportedFunc::new(
                     origin_program.0.len(),
                     index,
                     &origin_program.4,
                     imp_func_decl
-                        .clone().unwrap()
                         .args
                         .iter()
                         .map(|arg| arg.tipe.clone())
                         .collect(),
-                    imp_func_decl.clone().unwrap().ret_type,
-                    imp_func_decl.clone().unwrap().is_impure,
+                    imp_func_decl.ret_type,
+                    imp_func_decl.is_impure,
                 ));
+            } else {
+                println!(
+                    "Warning: import \"{}::{}\" does not correspond to a type or function",
+                    import.path.get(0).cloned().unwrap_or_else(String::new),
+                    import.name
+                );
             }
         }
     }
