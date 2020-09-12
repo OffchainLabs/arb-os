@@ -884,6 +884,7 @@ impl Machine {
                 Opcode::AVMOpcode(AVMOpcode::Type) => 3,
                 Opcode::AVMOpcode(AVMOpcode::Hash2) => 8,
                 Opcode::AVMOpcode(AVMOpcode::Keccakf) => 600,
+                Opcode::AVMOpcode(AVMOpcode::Sha256f) => 600,
                 Opcode::AVMOpcode(AVMOpcode::Pop) => 1,
                 Opcode::AVMOpcode(AVMOpcode::PushStatic) => 1,
                 Opcode::AVMOpcode(AVMOpcode::Rget) => 1,
