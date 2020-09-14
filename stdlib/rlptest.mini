@@ -1,17 +1,5 @@
 //
-// Copyright 2020, Offchain Labs, Inc.
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//    http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+// Copyright 2020, Offchain Labs, Inc. All rights reserved.
 //
 
 import type ByteArray;
@@ -53,7 +41,17 @@ import func rlp_encodeMessageInfo(
     r: uint,
     s: uint
 ) -> ByteArray;
-import func rlp_encodeAndHashMessageInfo(
+import func rlp_encodeAndHashMessageInfo(tx: SignedTx) -> bytes32;
+import func rlp_decodeMessageInfo(inStream: ByteStream) -> option<(ByteStream, SignedTx)>;
+
+
+import func rlp_decodeUint(bs: ByteStream) -> option<(ByteStream, uint)>;
+import func rlp_decodeAddress(bs: ByteStream) -> option<(ByteStream, address)>;
+import func rlp_decodeBytes(inStream: ByteStream) -> option<(ByteStream, ByteArray)>;
+
+import func bytesNeededToRepresentUint(val: uint) -> uint;
+
+type SignedTx = struct {
     seqNum: uint,
     gasPrice: uint,
     gasLimit: uint,
@@ -63,14 +61,7 @@ import func rlp_encodeAndHashMessageInfo(
     v: uint,
     r: uint,
     s: uint
-) -> bytes32;
-
-import func rlp_decodeUint(bs: ByteStream) -> option<(ByteStream, uint)>;
-import func rlp_decodeAddress(bs: ByteStream) -> option<(ByteStream, address)>;
-import func rlp_decodeBytes(inStream: ByteStream) -> option<(ByteStream, ByteArray)>;
-
-import func bytesNeededToRepresentUint(val: uint) -> uint;
-
+}
 
 impure func main(kind: uint, value: any) {
     if (kind == 0) {
@@ -155,16 +146,29 @@ func testRlpHasher() {
         s
     );
 
+    if let Some(res) = rlp_decodeMessageInfo(bytestream_new(oldBuf)) {
+        let (_, tx) = res;
+        if (keccak256(oldBuf, 0, bytearray_size(oldBuf)) != rlp_encodeAndHashMessageInfo(tx)) {
+            asm(12,) { debugprint };
+            panic;
+        }
+    } else {
+        asm(13,) { debugprint };
+        panic;
+    }
+
     let newWay = rlp_encodeAndHashMessageInfo(
-        seqNum,
-        gasPrice,
-        gasLimit,
-        to,
-        value,
-        data,
-        v,
-        r,
-        s
+        struct {
+            seqNum: seqNum,
+            gasPrice: gasPrice,
+            gasLimit: gasLimit,
+            to: to,
+            value: value,
+            data: data,
+            v: v,
+            r: r,
+            s: s
+        }
     );
 
     if (keccak256(oldBuf, 0, bytearray_size(oldBuf)) != newWay) {
