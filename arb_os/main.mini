@@ -14,6 +14,32 @@
 // limitations under the License.
 //
 
+use accounts::foo;
+use arbsys::foo;
+use chainParameters::foo;
+use codeSegment::foo;
+use contractTemplates::foo;
+use errorHandler::foo;
+use evmCallStack::foo;
+use evmLogs::foo;
+use evmOps::foo;
+use gasAccounting::foo;
+use inbox::foo;
+use messageBatch::foo;
+use messages::foo;
+use output::foo;
+use precompiles::foo;
+use signedTx::foo;
+use tokens::foo;
+
+use std::bytearray::foo;
+use std::bytestream::foo;
+use std::keccak::foo;
+use std::queue::foo;
+use std::rlp::foo;
+use std::stack::foo;
+use std::storageMap::foo;
+
 import type AccountStore;
 import type MarshalledBytes;
 import type ByteArray;
