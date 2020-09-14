@@ -1666,10 +1666,7 @@ impl Machine {
                         if buf.len() < offset {
                             self.stack.push_usize(0);
                         } else {
-                            // println!("getting {:?}", &buf[offset..offset+32]);
                             let val = Uint256::from_bytes(&buf[offset..offset+32]);
-                            // let bytes = val.to_bytes_be();
-                            // println!("it became {:?}", bytes);
                             self.stack.push_uint(val);
                         }
                         self.incr_pc();
@@ -1705,7 +1702,6 @@ impl Machine {
                         let val = self.stack.pop_uint(&self.state)?;
                         let bytes = val.to_bytes_be();
                         check_size(&mut buf, offset+31);
-                        // println!("setting {:?}", bytes);
                         for i in 0..32 {
                             buf[offset+i] = bytes[i];
                         }

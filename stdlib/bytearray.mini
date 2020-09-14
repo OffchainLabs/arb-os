@@ -207,21 +207,28 @@ public func bytearray_copy(
 ) -> ByteArray {
     // TODO: optimize this to exploit alignment and speed up the endgame
     // debug(nbytes);
+    if (to.size < toOffset + nbytes) {
+        to = to with { size: toOffset + nbytes };
+    }
+    fromOffset = fromOffset + from.sliceOffset;
+    toOffset = toOffset + to.sliceOffset;
+    let toContents = to.contents;
+    let fromContents = from.contents;
     while (nbytes >= 32) {
-        let val = bytearray_get256(from, fromOffset);
-        to = bytearray_set256(to, toOffset, val);
+        let val = getbuffer256(fromContents, fromOffset);
+        toContents = setbuffer256(toContents, toOffset, val);
         fromOffset = 32+fromOffset;
         toOffset = 32+toOffset;
         nbytes = nbytes-32;
     }
     while (nbytes > 0) {
-        let val = bytearray_getByte(from, fromOffset);
-        to = bytearray_setByte(to, toOffset, val);
+        let val = getbuffer8(fromContents, fromOffset);
+        toContents = setbuffer8(toContents, toOffset, val);
         fromOffset = 1+fromOffset;
         toOffset = 1+toOffset;
         nbytes = nbytes-1;
     }
-    return to;
+    return to with { contents: toContents };
 }
 
 public func bytearray_extract(from: ByteArray, offset: uint, nbytes: uint) -> ByteArray {
