@@ -310,10 +310,15 @@ pub fn compile_from_folder(
             };
             if let Some(program) = programs.get_mut(&import_path) {
                 let index = program.string_table.get(import.name.clone());
-                named_type = program.named_types.get(&index).cloned();
                 let type_table = SymTable::new();
                 let type_table = type_table
                     .push_multi(program.named_types.iter().map(|(i, t)| (*i, t)).collect());
+                named_type = program
+                    .named_types
+                    .get(&index)
+                    .map(|t| t.resolve_types(&type_table, None))
+                    .transpose()
+                    .map_err(|e| CompileError::new(format!("Type error: {:?}", e), None))?;
                 imp_func = program
                     .hm
                     .get(&index)
