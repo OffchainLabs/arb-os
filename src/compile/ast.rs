@@ -56,6 +56,7 @@ pub enum Type {
     FixedArray(Box<Type>, usize),
     Struct(Vec<StructField>),
     Named(StringId),
+    Nominal(Vec<String>, StringId),
     Func(bool, Vec<Type>, Box<Type>),
     Map(Box<Type>, Box<Type>),
     Imported(StringId),
@@ -80,6 +81,7 @@ impl Type {
             | Type::Bytes32
             | Type::EthAddress
             | Type::Imported(_)
+            | Type::Nominal(_, _)
             | Type::Every
             | Type::Any => Ok(self.clone()),
             Type::Tuple(tvec) => {
@@ -145,7 +147,7 @@ impl Type {
     }
 
     ///Returns true if rhs is a subtype of self, and false otherwise
-    pub fn assignable(&self, rhs: &Self) -> bool {
+    pub fn assignable(&self, mut rhs: &Self) -> bool {
         if *rhs == Type::Every {
             return true;
         }
@@ -158,6 +160,7 @@ impl Type {
             | Type::Bytes32
             | Type::EthAddress
             | Type::Imported(_)
+            | Type::Nominal(_, _)
             | Type::Every => (self == rhs),
             Type::Tuple(tvec) => {
                 if let Type::Tuple(tvec2) = rhs {
@@ -265,6 +268,9 @@ impl Type {
             Type::Imported(_) => {
                 panic!("tried to get default value for an imported type");
             }
+            Type::Nominal(_,_) => {
+                panic!("tried to get default value for a nominal type");
+            }
             Type::Any => Value::none(),
             Type::Every => {
                 panic!("tried to get default value for the every type");
@@ -316,6 +322,7 @@ impl PartialEq for Type {
                 (i1 == i2) && type_vectors_equal(&a1, &a2) && (*r1 == *r2)
             }
             (Type::Imported(n1), Type::Imported(n2)) => (n1 == n2),
+            (Type::Nominal(p1, id1), Type::Nominal(p2, id2)) => (p1, id1) == (p2, id2),
             (Type::Option(x), Type::Option(y)) => *x == *y,
             (_, _) => false,
         }
