@@ -22,6 +22,7 @@ use tokens::foo;
 
 use std::bytearray::foo;
 use std::bytestream::foo;
+use std::expandingIntArray::foo;
 use std::keccak::foo;
 use std::queue::foo;
 use std::rlp::foo;
