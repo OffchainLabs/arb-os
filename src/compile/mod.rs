@@ -253,7 +253,7 @@ pub fn compile_from_folder(
         let mut string_table = StringTable::new();
         let (imports, imported_funcs, funcs, named_types, global_vars, string_table, hm) =
             typecheck::sort_top_level_decls(
-                &parse_from_source(source, file_id, &mut string_table)?,
+                &parse_from_source(source, file_id, &["From folder".to_string()], &mut string_table)?,
                 string_table,
             );
         paths.append(
@@ -413,13 +413,14 @@ pub fn compile_from_folder(
 pub fn parse_from_source(
     source: String,
     file_id: u64,
+    file_path: &[String],
     string_table: &mut StringTable,
 ) -> Result<Vec<TopLevelDecl>, CompileError> {
     let comment_re = regex::Regex::new(r"//.*").unwrap();
     let source = comment_re.replace_all(&source, "");
     let lines = Lines::new(source.bytes());
     DeclsParser::new()
-        .parse(string_table, &lines, file_id, &source)
+        .parse(string_table, &lines, file_id, file_path, &source)
         .map_err(|e| match e {
             lalrpop_util::ParseError::UnrecognizedToken {
                 token: (offset, tok, end),
@@ -451,7 +452,7 @@ pub fn compile_from_source(
     debug: bool,
 ) -> Result<CompiledProgram, CompileError> {
     let mut string_table_1 = StringTable::new();
-    let res = parse_from_source(s, file_id, &mut string_table_1)?;
+    let res = parse_from_source(s, file_id, &["Temporary".to_string()], &mut string_table_1)?;
     let mut checked_funcs = Vec::new();
     let (exported_funcs, imported_funcs, global_vars, string_table) =
         typecheck::sort_and_typecheck_top_level_decls(&res, &mut checked_funcs, string_table_1)

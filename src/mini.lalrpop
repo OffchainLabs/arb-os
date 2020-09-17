@@ -12,7 +12,7 @@ use crate::mavm::{Value, Instruction, Opcode};
 use crate::uint256::Uint256;
 
 
-grammar(stringtable: &mut StringTable, file_info: &Lines, filename: u64);
+grammar(stringtable: &mut StringTable, file_info: &Lines, filename: u64, current_path: &[String]);
 
 pub Decls: Vec<TopLevelDecl> = {
 	<mut i:ImportDecl*> <mut n:NonImportDecl+> => {i.append(&mut n);i},
