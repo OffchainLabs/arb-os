@@ -147,7 +147,7 @@ impl Type {
     }
 
     ///Returns true if rhs is a subtype of self, and false otherwise
-    pub fn assignable(&self, mut rhs: &Self) -> bool {
+    pub fn assignable(&self, rhs: &Self) -> bool {
         if *rhs == Type::Every {
             return true;
         }
