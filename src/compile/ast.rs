@@ -161,7 +161,6 @@ impl Type {
             | Type::Bytes32
             | Type::EthAddress
             | Type::Imported(_)
-            | Type::Nominal(_, _)
             | Type::Every => (self == rhs),
             Type::Tuple(tvec) => {
                 if let Type::Tuple(tvec2) = rhs {
@@ -192,6 +191,14 @@ impl Type {
                 }
             }
             Type::Named(_) => (self == rhs),
+            // TODO: This will cause an infinite loop when dealing with recursive types, need new method to identify loops
+            Type::Nominal(path, id) => {
+                self == rhs
+                    || type_tree
+                        .get(&(path.clone(), *id))
+                        .map(|tipe| tipe.assignable(rhs, type_tree))
+                        .unwrap_or(false)
+            }
             Type::Func(is_impure, args, ret) => {
                 if let Type::Func(is_impure2, args2, ret2) = rhs {
                     (*is_impure || !is_impure2)
