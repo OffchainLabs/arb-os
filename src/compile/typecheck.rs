@@ -1299,7 +1299,7 @@ fn typecheck_expr(
                 return_type,
                 type_tree,
             )?;
-            if let Type::Struct(v) = tc_sub.get_type() {
+            if let Type::Struct(v) = tc_sub.get_type().get_representation(type_tree)? {
                 for sf in v.iter() {
                     if *name == sf.name {
                         return Ok(TypeCheckedExpr::DotRef(

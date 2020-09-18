@@ -131,10 +131,19 @@ impl Type {
         }
     }
 
-    pub fn _get_representation(&self, type_tree: &HashMap<(Vec<String>, usize),Type>) -> Result<Self,TypeError> {
+    pub fn get_representation(
+        &self,
+        type_tree: &HashMap<(Vec<String>, usize), Type>,
+    ) -> Result<Self, TypeError> {
         let mut base_type = self.clone();
         while let Type::Nominal(path, id) = base_type.clone() {
-            base_type = type_tree.get(&(path.clone(), id)).cloned().ok_or(new_type_error(format!("No type at {:?}, {}", path, id), None))?;
+            base_type = type_tree
+                .get(&(path.clone(), id))
+                .cloned()
+                .ok_or(new_type_error(
+                    format!("No type at {:?}, {}", path, id),
+                    None,
+                ))?;
         }
         Ok(base_type)
     }
