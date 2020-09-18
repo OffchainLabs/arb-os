@@ -231,13 +231,7 @@ pub fn compile_from_folder(
             let mut named_type = None;
             let mut imp_func = None;
             let mut imp_func_decl = None;
-            let import_path = if import.path[0] == "std".to_string() {
-                format!("../stdlib/{}.mini", import.path[1])
-            } else if import.path[0] == "core" {
-                format!("../builtin/{}.mini", import.path[1])
-            } else {
-                format!("{}.mini", import.path[0])
-            };
+            let import_path = import.path.clone();
             if let Some(program) = programs.get_mut(&import_path) {
                 let index = program.string_table.get(import.name.clone());
                 let type_table = SymTable::new();
@@ -307,7 +301,7 @@ pub fn compile_from_folder(
         }
     }
     let mut progs = vec![];
-    let mut output = vec![programs.remove("main.mini").expect("no main")];
+    let mut output = vec![programs.remove(&vec!["main".to_string()]).expect("no main")];
     output.append(&mut programs.values().cloned().collect());
     for Module {
         imported_funcs,
@@ -354,8 +348,14 @@ pub fn compile_from_folder(
 fn create_program_tree(
     folder: &Path,
     file_id: u64,
-) -> Result<(HashMap<String, Module>, HashMap<String, Vec<Import>>), CompileError> {
-    let mut paths = vec!["main".to_owned()];
+) -> Result<
+    (
+        HashMap<Vec<String>, Module>,
+        HashMap<Vec<String>, Vec<Import>>,
+    ),
+    CompileError,
+> {
+    let mut paths = vec![vec!["main".to_owned()]];
     let mut programs = HashMap::new();
     let mut import_map = HashMap::new();
     let mut seen_paths = HashSet::new();
@@ -365,10 +365,16 @@ fn create_program_tree(
         } else {
             seen_paths.insert(name.clone());
         }
-        let name = name + ".mini";
-        let mut file = File::open(folder.join(name.clone())).map_err(|why| {
+        let path = if name[0] == "std" {
+            format!("../stdlib/{}", name[1])
+        } else if name[0] == "core" {
+            format!("../builtin/{}", name[1])
+        } else {
+            name[0].clone()
+        } + ".mini";
+        let mut file = File::open(folder.join(path.clone())).map_err(|why| {
             CompileError::new(
-                format!("Can not open {}/{}: {:?}", folder.display(), name, why),
+                format!("Can not open {}/{}: {:?}", folder.display(), path, why),
                 None,
             )
         })?;
@@ -376,35 +382,17 @@ fn create_program_tree(
         let mut source = String::new();
         file.read_to_string(&mut source).map_err(|why| {
             CompileError::new(
-                format!("Can not read {}/{}: {:?}", folder.display(), name, why),
+                format!("Can not read {}/{}: {:?}", folder.display(), path, why),
                 None,
             )
         })?;
         let mut string_table = StringTable::new();
         let (imports, imported_funcs, funcs, named_types, global_vars, string_table, hm) =
             typecheck::sort_top_level_decls(
-                &parse_from_source(
-                    source,
-                    file_id,
-                    &["From folder".to_string()],
-                    &mut string_table,
-                )?,
+                &parse_from_source(source, file_id, &name, &mut string_table)?,
                 string_table,
             );
-        paths.append(
-            &mut imports
-                .iter()
-                .map(|imp| {
-                    if imp.path[0] == "std" {
-                        format!("../stdlib/{}", imp.path[1])
-                    } else if imp.path[0] == "core" {
-                        format!("../builtin/{}", imp.path[1])
-                    } else {
-                        imp.path[0].clone()
-                    }
-                })
-                .collect(),
-        );
+        paths.append(&mut imports.iter().map(|imp| imp.path.clone()).collect());
         import_map.insert(name.clone(), imports);
         programs.insert(
             name.clone(),
@@ -415,7 +403,7 @@ fn create_program_tree(
                 global_vars,
                 string_table,
                 hm,
-                name,
+                path,
             ),
         );
     }

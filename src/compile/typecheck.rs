@@ -1155,7 +1155,6 @@ fn typecheck_expr(
                     *loc,
                 ))
             } else {
-                println!("Skipped this error");
                 Err(new_type_error(
                     "struct field access to non-struct value".to_string(),
                     *loc,
