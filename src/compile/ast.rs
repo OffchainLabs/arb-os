@@ -131,6 +131,14 @@ impl Type {
         }
     }
 
+    pub fn _get_representation(&self, type_tree: &HashMap<(Vec<String>, usize),Type>) -> Result<Self,TypeError> {
+        let mut base_type = self.clone();
+        while let Type::Nominal(path, id) = base_type.clone() {
+            base_type = type_tree.get(&(path.clone(), id)).cloned().ok_or(new_type_error(format!("No type at {:?}, {}", path, id), None))?;
+        }
+        Ok(base_type)
+    }
+
     ///If self is a Struct, and name is the StringID of a field of self, then returns Some(n), where
     /// n is the index of the field of self whose ID matches name.  Otherwise returns None.
     pub fn get_struct_slot_by_name(&self, name: StringId) -> Option<usize> {
