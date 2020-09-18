@@ -301,6 +301,8 @@ pub fn compile_from_folder(
         }
     }
     let mut progs = vec![];
+    let type_tree = create_type_tree(&programs);
+    println!("This is the type tree: {:?}", type_tree);
     let mut output = vec![programs.remove(&vec!["main".to_string()]).expect("no main")];
     output.append(&mut programs.values().cloned().collect());
     for Module {
@@ -408,6 +410,22 @@ fn create_program_tree(
         );
     }
     Ok((programs, import_map))
+}
+
+fn create_type_tree(
+    program_tree: &HashMap<Vec<String>, Module>,
+) -> HashMap<(Vec<String>, usize), Type> {
+    program_tree
+        .iter()
+        .map(|(path, program)| {
+            program
+                .named_types
+                .iter()
+                .map(|(id, tipe)| ((path.clone(), *id), tipe.clone()))
+                .collect::<Vec<_>>()
+        })
+        .flatten()
+        .collect()
 }
 
 ///Converts source string `source` into a series of `TopLevelDecl`s, uses identifiers from
