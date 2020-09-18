@@ -172,7 +172,7 @@ pub enum TypeCheckedExpr {
     Variant(Box<TypeCheckedExpr>, Option<Location>),
     FuncRef(usize, Type, Option<Location>),
     TupleRef(Box<TypeCheckedExpr>, Uint256, Type, Option<Location>),
-    DotRef(Box<TypeCheckedExpr>, StringId, Type, Option<Location>),
+    DotRef(Box<TypeCheckedExpr>, StringId, usize, Type, Option<Location>),
     Const(Value, Type, Option<Location>),
     FunctionCall(
         Box<TypeCheckedExpr>,
@@ -267,7 +267,7 @@ impl MiniProperties for TypeCheckedExpr {
                 }
             }
             TypeCheckedExpr::TupleRef(expr, _, _, _) => expr.is_pure(),
-            TypeCheckedExpr::DotRef(expr, _, _, _) => expr.is_pure(),
+            TypeCheckedExpr::DotRef(expr, _, _, _, _) => expr.is_pure(),
             TypeCheckedExpr::Const(_, _, _) => true,
             TypeCheckedExpr::FunctionCall(name_expr, fields_exprs, _, properties, _) => {
                 name_expr.is_pure()
@@ -334,7 +334,7 @@ impl TypeCheckedExpr {
             TypeCheckedExpr::FuncRef(_, t, _) => t.clone(),
             TypeCheckedExpr::TupleRef(_, _, t, _) => t.clone(),
             TypeCheckedExpr::Variant(t, _) => Type::Option(Box::new(t.get_type())),
-            TypeCheckedExpr::DotRef(_, _, t, _) => t.clone(),
+            TypeCheckedExpr::DotRef(_, _, _, t, _) => t.clone(),
             TypeCheckedExpr::Const(_, t, _) => t.clone(),
             TypeCheckedExpr::FunctionCall(_, _, t, _, _) => t.clone(),
             TypeCheckedExpr::CodeBlock(_, expr, _) => expr
@@ -1305,6 +1305,7 @@ fn typecheck_expr(
                         return Ok(TypeCheckedExpr::DotRef(
                             Box::new(tc_sub),
                             *name,
+                            v.len(),
                             sf.tipe.clone(),
                             *loc,
                         ));
