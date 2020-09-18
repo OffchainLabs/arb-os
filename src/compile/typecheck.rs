@@ -511,6 +511,7 @@ pub fn typecheck_top_level_decls(
     string_table: StringTable,
     hm: HashMap<usize, Type>,
     checked_funcs: &mut Vec<TypeCheckedFunc>,
+    type_tree: &HashMap<(Vec<String>, usize), Type>,
 ) -> Result<
     (
         Vec<ExportedFunc>,
@@ -541,7 +542,13 @@ pub fn typecheck_top_level_decls(
     for func in funcs.iter() {
         match func.resolve_types(&type_table, func.location) {
             Ok(f) => {
-                match typecheck_function(&f, &type_table, &resolved_global_vars_map, &func_table) {
+                match typecheck_function(
+                    &f,
+                    &type_table,
+                    &resolved_global_vars_map,
+                    &func_table,
+                    type_tree,
+                ) {
                     Ok(f) => match func.kind {
                         FuncDeclKind::Public => {
                             exported_funcs.push(ExportedFunc::new(
@@ -608,6 +615,7 @@ pub fn sort_and_typecheck_top_level_decls(
         string_table,
         hm,
         checked_funcs,
+        &HashMap::new(),
     )
 }
 
@@ -620,6 +628,7 @@ pub fn typecheck_function<'a>(
     type_table: &'a SymTable<'a, Type>,
     global_vars: &'a HashMap<StringId, (Type, usize)>,
     func_table: &'a SymTable<'a, Type>,
+    type_tree: &HashMap<(Vec<String>, usize), Type>,
 ) -> Result<TypeCheckedFunc, TypeError> {
     match fd.kind {
         FuncDeclKind::Public | FuncDeclKind::Private => {
@@ -634,6 +643,7 @@ pub fn typecheck_function<'a>(
                 &inner_type_table,
                 global_vars,
                 func_table,
+                type_tree,
             )?;
             Ok(TypeCheckedFunc {
                 name: fd.name,
@@ -668,6 +678,7 @@ fn typecheck_statement_sequence<'a>(
     type_table: &'a SymTable<'a, Type>,
     global_vars: &'a HashMap<StringId, (Type, usize)>,
     func_table: &SymTable<Type>,
+    type_tree: &HashMap<(Vec<String>, usize), Type>,
 ) -> Result<Vec<TypeCheckedStatement>, TypeError> {
     if statements.is_empty() {
         return Ok(Vec::new());
@@ -682,6 +693,7 @@ fn typecheck_statement_sequence<'a>(
         type_table,
         global_vars,
         func_table,
+        type_tree,
     )?;
     let mut rest_result = typecheck_statement_sequence_with_bindings(
         rest_of_stats,
@@ -690,6 +702,7 @@ fn typecheck_statement_sequence<'a>(
         global_vars,
         func_table,
         &bindings,
+        type_tree,
     )?;
     rest_result.insert(0, tcs);
     Ok(rest_result)
@@ -704,9 +717,17 @@ fn typecheck_statement_sequence_with_bindings<'a>(
     global_vars: &'a HashMap<StringId, (Type, usize)>,
     func_table: &SymTable<Type>,
     bindings: &[(StringId, Type)],
+    type_tree: &HashMap<(Vec<String>, usize), Type>,
 ) -> Result<Vec<TypeCheckedStatement>, TypeError> {
     if bindings.is_empty() {
-        typecheck_statement_sequence(statements, return_type, type_table, global_vars, func_table)
+        typecheck_statement_sequence(
+            statements,
+            return_type,
+            type_table,
+            global_vars,
+            func_table,
+            type_tree,
+        )
     } else {
         let (sid, tipe) = &bindings[0];
         let inner_type_table = type_table.push_one(*sid, &tipe);
@@ -717,6 +738,7 @@ fn typecheck_statement_sequence_with_bindings<'a>(
             global_vars,
             func_table,
             &bindings[1..],
+            type_tree,
         )
     }
 }
@@ -734,14 +756,22 @@ fn typecheck_statement<'a>(
     type_table: &'a SymTable<'a, Type>,
     global_vars: &'a HashMap<StringId, (Type, usize)>,
     func_table: &SymTable<Type>,
+    type_tree: &HashMap<(Vec<String>, usize), Type>,
 ) -> Result<(TypeCheckedStatement, Vec<(StringId, Type)>), TypeError> {
     match statement {
         StatementKind::Noop() => Ok((TypeCheckedStatement::Noop(*loc), vec![])),
         StatementKind::Panic() => Ok((TypeCheckedStatement::Panic(*loc), vec![])),
         StatementKind::ReturnVoid() => Ok((TypeCheckedStatement::ReturnVoid(*loc), vec![])),
         StatementKind::Return(expr) => {
-            let tc_expr = typecheck_expr(expr, type_table, global_vars, func_table, return_type)?;
-            if return_type.assignable(&tc_expr.get_type()) {
+            let tc_expr = typecheck_expr(
+                expr,
+                type_table,
+                global_vars,
+                func_table,
+                return_type,
+                type_tree,
+            )?;
+            if return_type.assignable(&tc_expr.get_type(), type_tree) {
                 Ok((TypeCheckedStatement::Return(tc_expr, *loc), vec![]))
             } else {
                 Err(new_type_error(
@@ -756,13 +786,27 @@ fn typecheck_statement<'a>(
         }
         StatementKind::Expression(expr) => Ok((
             TypeCheckedStatement::Expression(
-                typecheck_expr(expr, type_table, global_vars, func_table, return_type)?,
+                typecheck_expr(
+                    expr,
+                    type_table,
+                    global_vars,
+                    func_table,
+                    return_type,
+                    type_tree,
+                )?,
                 *loc,
             ),
             vec![],
         )),
         StatementKind::Let(pat, expr) => {
-            let tc_expr = typecheck_expr(expr, type_table, global_vars, func_table, return_type)?;
+            let tc_expr = typecheck_expr(
+                expr,
+                type_table,
+                global_vars,
+                func_table,
+                return_type,
+                type_tree,
+            )?;
             let tce_type = tc_expr.get_type();
             match pat {
                 MatchPattern::Simple(name) => Ok((
@@ -788,10 +832,17 @@ fn typecheck_statement<'a>(
             }
         }
         StatementKind::Assign(name, expr) => {
-            let tc_expr = typecheck_expr(expr, type_table, global_vars, func_table, return_type)?;
+            let tc_expr = typecheck_expr(
+                expr,
+                type_table,
+                global_vars,
+                func_table,
+                return_type,
+                type_tree,
+            )?;
             match type_table.get(*name) {
                 Some(var_type) => {
-                    if var_type.assignable(&tc_expr.get_type()) {
+                    if var_type.assignable(&tc_expr.get_type(), type_tree) {
                         Ok((
                             TypeCheckedStatement::AssignLocal(*name, tc_expr, *loc),
                             vec![],
@@ -805,7 +856,7 @@ fn typecheck_statement<'a>(
                 }
                 None => match global_vars.get(&*name) {
                     Some((var_type, idx)) => {
-                        if var_type.assignable(&tc_expr.get_type()) {
+                        if var_type.assignable(&tc_expr.get_type(), type_tree) {
                             Ok((
                                 TypeCheckedStatement::AssignGlobal(*idx, tc_expr, *loc),
                                 vec![],
@@ -831,11 +882,19 @@ fn typecheck_statement<'a>(
                 type_table,
                 global_vars,
                 func_table,
+                type_tree,
             )?;
             Ok((TypeCheckedStatement::Loop(tc_body, *loc), vec![]))
         }
         StatementKind::While(cond, body) => {
-            let tc_cond = typecheck_expr(cond, type_table, global_vars, func_table, return_type)?;
+            let tc_cond = typecheck_expr(
+                cond,
+                type_table,
+                global_vars,
+                func_table,
+                return_type,
+                type_tree,
+            )?;
             match tc_cond.get_type() {
                 Type::Bool => {
                     let tc_body = typecheck_statement_sequence(
@@ -844,6 +903,7 @@ fn typecheck_statement<'a>(
                         type_table,
                         global_vars,
                         func_table,
+                        type_tree,
                     )?;
                     Ok((TypeCheckedStatement::While(tc_cond, tc_body, *loc), vec![]))
                 }
@@ -860,6 +920,7 @@ fn typecheck_statement<'a>(
                 type_table,
                 global_vars,
                 func_table,
+                type_tree,
             )?),
             vec![],
         )),
@@ -872,6 +933,7 @@ fn typecheck_statement<'a>(
                     global_vars,
                     func_table,
                     return_type,
+                    type_tree,
                 )?);
             }
             Ok((
@@ -880,11 +942,25 @@ fn typecheck_statement<'a>(
             ))
         }
         StatementKind::DebugPrint(e) => {
-            let tce = typecheck_expr(e, type_table, global_vars, func_table, return_type)?;
+            let tce = typecheck_expr(
+                e,
+                type_table,
+                global_vars,
+                func_table,
+                return_type,
+                type_tree,
+            )?;
             Ok((TypeCheckedStatement::DebugPrint(tce, *loc), vec![]))
         }
         StatementKind::IfLet(l, r, if_block, else_block) => {
-            let tcr = typecheck_expr(r, type_table, global_vars, func_table, return_type)?;
+            let tcr = typecheck_expr(
+                r,
+                type_table,
+                global_vars,
+                func_table,
+                return_type,
+                type_tree,
+            )?;
             let tct = match tcr.get_type() {
                 Type::Option(t) => *t,
                 unexpected => {
@@ -905,6 +981,7 @@ fn typecheck_statement<'a>(
                         global_vars,
                         func_table,
                         &[(*l, tct.clone())],
+                        type_tree,
                     )?,
                     else_block
                         .clone()
@@ -915,6 +992,7 @@ fn typecheck_statement<'a>(
                                 type_table,
                                 global_vars,
                                 func_table,
+                                type_tree,
                             )
                         })
                         .transpose()?,
@@ -985,10 +1063,18 @@ fn typecheck_if_arm(
     type_table: &SymTable<Type>,
     global_vars: &HashMap<StringId, (Type, usize)>,
     func_table: &SymTable<Type>,
+    type_tree: &HashMap<(Vec<String>, usize), Type>,
 ) -> Result<TypeCheckedIfArm, TypeError> {
     match arm {
         IfArm::Cond(cond, body, orest, loc) => {
-            let tc_cond = typecheck_expr(cond, type_table, global_vars, func_table, return_type)?;
+            let tc_cond = typecheck_expr(
+                cond,
+                type_table,
+                global_vars,
+                func_table,
+                return_type,
+                type_tree,
+            )?;
             match tc_cond.get_type() {
                 Type::Bool => Ok(TypeCheckedIfArm::Cond(
                     tc_cond,
@@ -998,6 +1084,7 @@ fn typecheck_if_arm(
                         type_table,
                         global_vars,
                         func_table,
+                        type_tree,
                     )?,
                     match orest {
                         Some(rest) => Some(Box::new(typecheck_if_arm(
@@ -1006,6 +1093,7 @@ fn typecheck_if_arm(
                             type_table,
                             global_vars,
                             func_table,
+                            type_tree,
                         )?)),
                         None => None,
                     },
@@ -1018,7 +1106,14 @@ fn typecheck_if_arm(
             }
         }
         IfArm::Catchall(body, loc) => Ok(TypeCheckedIfArm::Catchall(
-            typecheck_statement_sequence(body, return_type, type_table, global_vars, func_table)?,
+            typecheck_statement_sequence(
+                body,
+                return_type,
+                type_table,
+                global_vars,
+                func_table,
+                type_tree,
+            )?,
             *loc,
         )),
     }
@@ -1037,20 +1132,56 @@ fn typecheck_expr(
     global_vars: &HashMap<StringId, (Type, usize)>,
     func_table: &SymTable<Type>,
     return_type: &Type,
+    type_tree: &HashMap<(Vec<String>, usize), Type>,
 ) -> Result<TypeCheckedExpr, TypeError> {
     match expr {
         Expr::UnaryOp(op, subexpr, loc) => {
-            let tc_sub = typecheck_expr(subexpr, type_table, global_vars, func_table, return_type)?;
+            let tc_sub = typecheck_expr(
+                subexpr,
+                type_table,
+                global_vars,
+                func_table,
+                return_type,
+                type_tree,
+            )?;
             typecheck_unary_op(*op, tc_sub, *loc)
         }
         Expr::Binary(op, sub1, sub2, loc) => {
-            let tc_sub1 = typecheck_expr(sub1, type_table, global_vars, func_table, return_type)?;
-            let tc_sub2 = typecheck_expr(sub2, type_table, global_vars, func_table, return_type)?;
+            let tc_sub1 = typecheck_expr(
+                sub1,
+                type_table,
+                global_vars,
+                func_table,
+                return_type,
+                type_tree,
+            )?;
+            let tc_sub2 = typecheck_expr(
+                sub2,
+                type_table,
+                global_vars,
+                func_table,
+                return_type,
+                type_tree,
+            )?;
             typecheck_binary_op(*op, tc_sub1, tc_sub2, *loc)
         }
         Expr::ShortcutOr(sub1, sub2, loc) => {
-            let tc_sub1 = typecheck_expr(sub1, type_table, global_vars, func_table, return_type)?;
-            let tc_sub2 = typecheck_expr(sub2, type_table, global_vars, func_table, return_type)?;
+            let tc_sub1 = typecheck_expr(
+                sub1,
+                type_table,
+                global_vars,
+                func_table,
+                return_type,
+                type_tree,
+            )?;
+            let tc_sub2 = typecheck_expr(
+                sub2,
+                type_table,
+                global_vars,
+                func_table,
+                return_type,
+                type_tree,
+            )?;
             if tc_sub1.get_type() != Type::Bool {
                 return Err(new_type_error(
                     "operands to logical or must be boolean".to_string(),
@@ -1070,8 +1201,22 @@ fn typecheck_expr(
             ))
         }
         Expr::ShortcutAnd(sub1, sub2, loc) => {
-            let tc_sub1 = typecheck_expr(sub1, type_table, global_vars, func_table, return_type)?;
-            let tc_sub2 = typecheck_expr(sub2, type_table, global_vars, func_table, return_type)?;
+            let tc_sub1 = typecheck_expr(
+                sub1,
+                type_table,
+                global_vars,
+                func_table,
+                return_type,
+                type_tree,
+            )?;
+            let tc_sub2 = typecheck_expr(
+                sub2,
+                type_table,
+                global_vars,
+                func_table,
+                return_type,
+                type_tree,
+            )?;
             if tc_sub1.get_type() != Type::Bool {
                 return Err(new_type_error(
                     "operands to logical and must be boolean".to_string(),
@@ -1097,6 +1242,7 @@ fn typecheck_expr(
                 global_vars,
                 func_table,
                 return_type,
+                type_tree,
             )?),
             *loc,
         )),
@@ -1114,7 +1260,14 @@ fn typecheck_expr(
             },
         },
         Expr::TupleRef(tref, idx, loc) => {
-            let tc_sub = typecheck_expr(&*tref, type_table, global_vars, func_table, return_type)?;
+            let tc_sub = typecheck_expr(
+                &*tref,
+                type_table,
+                global_vars,
+                func_table,
+                return_type,
+                type_tree,
+            )?;
             let uidx = idx.to_usize().unwrap();
             if let Type::Tuple(tv) = tc_sub.get_type() {
                 if uidx < tv.len() {
@@ -1138,7 +1291,14 @@ fn typecheck_expr(
             }
         }
         Expr::DotRef(sref, name, loc) => {
-            let tc_sub = typecheck_expr(&*sref, type_table, global_vars, func_table, return_type)?;
+            let tc_sub = typecheck_expr(
+                &*sref,
+                type_table,
+                global_vars,
+                func_table,
+                return_type,
+                type_tree,
+            )?;
             if let Type::Struct(v) = tc_sub.get_type() {
                 for sf in v.iter() {
                     if *name == sf.name {
@@ -1171,7 +1331,14 @@ fn typecheck_expr(
             Constant::Null => TypeCheckedExpr::Const(Value::none(), Type::Any, *loc),
         }),
         Expr::FunctionCall(fexpr, args, loc) => {
-            let tc_fexpr = typecheck_expr(fexpr, type_table, global_vars, func_table, return_type)?;
+            let tc_fexpr = typecheck_expr(
+                fexpr,
+                type_table,
+                global_vars,
+                func_table,
+                return_type,
+                type_tree,
+            )?;
             match tc_fexpr.get_type() {
                 Type::Func(impure, arg_types, ret_type) => {
                     let ret_type = ret_type.resolve_types(type_table, *loc)?;
@@ -1184,11 +1351,12 @@ fn typecheck_expr(
                                 global_vars,
                                 func_table,
                                 return_type,
+                                type_tree,
                             )?;
                             tc_args.push(tc_arg);
                             let resolved_arg_type =
                                 arg_types[i].resolve_types(&type_table, *loc)?;
-                            if !resolved_arg_type.assignable(&tc_args[i].get_type()) {
+                            if !resolved_arg_type.assignable(&tc_args[i].get_type(), type_tree) {
                                 println!("expected {:?}", resolved_arg_type);
                                 println!("actual   {:?}", tc_args[i].get_type());
                                 return Err(new_type_error(
@@ -1230,6 +1398,7 @@ fn typecheck_expr(
                     &inner_type_table,
                     global_vars,
                     func_table,
+                    type_tree,
                 )?;
                 output.push(statement);
                 for (key, value) in bindings {
@@ -1243,7 +1412,14 @@ fn typecheck_expr(
                 ret_expr
                     .clone()
                     .map(|x| {
-                        typecheck_expr(&*x, &inner_type_table, global_vars, func_table, return_type)
+                        typecheck_expr(
+                            &*x,
+                            &inner_type_table,
+                            global_vars,
+                            func_table,
+                            return_type,
+                            type_tree,
+                        )
                     })
                     .transpose()?
                     .map(Box::new),
@@ -1251,8 +1427,22 @@ fn typecheck_expr(
             ))
         }
         Expr::ArrayOrMapRef(array, index, loc) => {
-            let tc_arr = typecheck_expr(&*array, type_table, global_vars, func_table, return_type)?;
-            let tc_idx = typecheck_expr(&*index, type_table, global_vars, func_table, return_type)?;
+            let tc_arr = typecheck_expr(
+                &*array,
+                type_table,
+                global_vars,
+                func_table,
+                return_type,
+                type_tree,
+            )?;
+            let tc_idx = typecheck_expr(
+                &*index,
+                type_table,
+                global_vars,
+                func_table,
+                return_type,
+                type_tree,
+            )?;
             match tc_arr.get_type() {
                 Type::Array(t) => {
                     if tc_idx.get_type() == Type::Uint {
@@ -1310,6 +1500,7 @@ fn typecheck_expr(
                 global_vars,
                 func_table,
                 return_type,
+                type_tree,
             )?),
             tipe.clone(),
             Type::Array(Box::new(tipe.clone())),
@@ -1317,8 +1508,14 @@ fn typecheck_expr(
         )),
         Expr::NewFixedArray(size, maybe_expr, loc) => match maybe_expr {
             Some(expr) => {
-                let tc_expr =
-                    typecheck_expr(expr, type_table, global_vars, func_table, return_type)?;
+                let tc_expr = typecheck_expr(
+                    expr,
+                    type_table,
+                    global_vars,
+                    func_table,
+                    return_type,
+                    type_tree,
+                )?;
                 Ok(TypeCheckedExpr::NewFixedArray(
                     *size,
                     Some(Box::new(tc_expr.clone())),
@@ -1347,6 +1544,7 @@ fn typecheck_expr(
                     global_vars,
                     func_table,
                     return_type,
+                    type_tree,
                 )?;
                 tc_fields.push(TypeCheckedStructField::new(field.name, tc_expr.clone()));
                 tc_fieldtypes.push(StructField::new(field.name, tc_expr.get_type()));
@@ -1361,20 +1559,47 @@ fn typecheck_expr(
             let mut tc_fields = Vec::new();
             let mut types = Vec::new();
             for field in fields {
-                let tc_field =
-                    typecheck_expr(field, type_table, global_vars, func_table, return_type)?;
+                let tc_field = typecheck_expr(
+                    field,
+                    type_table,
+                    global_vars,
+                    func_table,
+                    return_type,
+                    type_tree,
+                )?;
                 types.push(tc_field.get_type().clone());
                 tc_fields.push(tc_field);
             }
             Ok(TypeCheckedExpr::Tuple(tc_fields, Type::Tuple(types), *loc))
         }
         Expr::ArrayOrMapMod(arr, index, val, loc) => {
-            let tc_arr = typecheck_expr(arr, type_table, global_vars, func_table, return_type)?;
-            let tc_index = typecheck_expr(index, type_table, global_vars, func_table, return_type)?;
-            let tc_val = typecheck_expr(val, type_table, global_vars, func_table, return_type)?;
+            let tc_arr = typecheck_expr(
+                arr,
+                type_table,
+                global_vars,
+                func_table,
+                return_type,
+                type_tree,
+            )?;
+            let tc_index = typecheck_expr(
+                index,
+                type_table,
+                global_vars,
+                func_table,
+                return_type,
+                type_tree,
+            )?;
+            let tc_val = typecheck_expr(
+                val,
+                type_table,
+                global_vars,
+                func_table,
+                return_type,
+                type_tree,
+            )?;
             match tc_arr.get_type() {
                 Type::Array(t) => {
-                    if t.assignable(&tc_val.get_type()) {
+                    if t.assignable(&tc_val.get_type(), type_tree) {
                         if tc_index.get_type() != Type::Uint {
                             Err(new_type_error(
                                 "array modifier requires uint index".to_string(),
@@ -1415,7 +1640,7 @@ fn typecheck_expr(
                 }
                 Type::Map(kt, vt) => {
                     if tc_index.get_type() == *kt {
-                        if vt.assignable(&tc_val.get_type()) {
+                        if vt.assignable(&tc_val.get_type(), type_tree) {
                             Ok(TypeCheckedExpr::MapMod(
                                 Box::new(tc_arr),
                                 Box::new(tc_index),
@@ -1443,13 +1668,27 @@ fn typecheck_expr(
             }
         }
         Expr::StructMod(struc, name, val, loc) => {
-            let tc_struc = typecheck_expr(struc, type_table, global_vars, func_table, return_type)?;
-            let tc_val = typecheck_expr(val, type_table, global_vars, func_table, return_type)?;
+            let tc_struc = typecheck_expr(
+                struc,
+                type_table,
+                global_vars,
+                func_table,
+                return_type,
+                type_tree,
+            )?;
+            let tc_val = typecheck_expr(
+                val,
+                type_table,
+                global_vars,
+                func_table,
+                return_type,
+                type_tree,
+            )?;
             let tcs_type = tc_struc.get_type();
             if let Type::Struct(fields) = &tcs_type {
                 match tcs_type.get_struct_slot_by_name(*name) {
                     Some(index) => {
-                        if fields[index].tipe.assignable(&tc_val.get_type()) {
+                        if fields[index].tipe.assignable(&tc_val.get_type(), type_tree) {
                             Ok(TypeCheckedExpr::StructMod(
                                 Box::new(tc_struc),
                                 index,
@@ -1483,6 +1722,7 @@ fn typecheck_expr(
                 global_vars,
                 func_table,
                 return_type,
+                type_tree,
             )?),
             t.clone(),
             *loc,
@@ -1502,6 +1742,7 @@ fn typecheck_expr(
                     global_vars,
                     func_table,
                     return_type,
+                    type_tree,
                 )?);
             }
             Ok(TypeCheckedExpr::Asm(
@@ -1522,7 +1763,14 @@ fn typecheck_expr(
                     ))
                 }
             }
-            let res = typecheck_expr(inner, type_table, global_vars, func_table, return_type)?;
+            let res = typecheck_expr(
+                inner,
+                type_table,
+                global_vars,
+                func_table,
+                return_type,
+                type_tree,
+            )?;
             match res.get_type() {
                 Type::Option(t) => Ok(TypeCheckedExpr::Try(Box::new(res), *t, *loc)),
                 other => Err(new_type_error(

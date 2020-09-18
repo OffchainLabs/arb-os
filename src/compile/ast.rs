@@ -12,6 +12,7 @@ use crate::pos::Location;
 use crate::stringtable::StringId;
 use crate::uint256::Uint256;
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 
 ///Debugging info serialized into mini executables, currently only contains a location.
 #[derive(Debug, Clone)]
@@ -147,7 +148,7 @@ impl Type {
     }
 
     ///Returns true if rhs is a subtype of self, and false otherwise
-    pub fn assignable(&self, rhs: &Self) -> bool {
+    pub fn assignable(&self, rhs: &Self, type_tree: &HashMap<(Vec<String>, usize), Type>) -> bool {
         if *rhs == Type::Every {
             return true;
         }
@@ -164,28 +165,28 @@ impl Type {
             | Type::Every => (self == rhs),
             Type::Tuple(tvec) => {
                 if let Type::Tuple(tvec2) = rhs {
-                    type_vectors_assignable(tvec, tvec2)
+                    type_vectors_assignable(tvec, tvec2, type_tree)
                 } else {
                     false
                 }
             }
             Type::Array(t) => {
                 if let Type::Array(t2) = rhs {
-                    t.assignable(t2)
+                    t.assignable(t2, type_tree)
                 } else {
                     false
                 }
             }
             Type::FixedArray(t, s) => {
                 if let Type::FixedArray(t2, s2) = rhs {
-                    (s == s2) && t.assignable(t2)
+                    (s == s2) && t.assignable(t2, type_tree)
                 } else {
                     false
                 }
             }
             Type::Struct(fields) => {
                 if let Type::Struct(fields2) = rhs {
-                    field_vectors_assignable(fields, fields2)
+                    field_vectors_assignable(fields, fields2, type_tree)
                 } else {
                     false
                 }
@@ -194,22 +195,22 @@ impl Type {
             Type::Func(is_impure, args, ret) => {
                 if let Type::Func(is_impure2, args2, ret2) = rhs {
                     (*is_impure || !is_impure2)
-                        && arg_vectors_assignable(args, args2)
-                        && (ret2.assignable(ret)) // note: rets in reverse order
+                        && arg_vectors_assignable(args, args2, type_tree)
+                        && (ret2.assignable(ret, type_tree)) // note: rets in reverse order
                 } else {
                     false
                 }
             }
             Type::Map(key1, val1) => {
                 if let Type::Map(key2, val2) = rhs {
-                    key1.assignable(key2) && (val1 == val2)
+                    key1.assignable(key2, type_tree) && (val1 == val2)
                 } else {
                     false
                 }
             }
             Type::Option(inner) => {
                 if let Type::Option(inner2) = rhs {
-                    inner.assignable(inner2)
+                    inner.assignable(inner2, type_tree)
                 } else {
                     false
                 }
@@ -282,23 +283,43 @@ impl Type {
 
 ///Returns true if each type in tvec2 is a subtype of the type in tvec1 at the same index, and tvec1
 /// and tvec2 have the same length.
-pub fn type_vectors_assignable(tvec1: &[Type], tvec2: &[Type]) -> bool {
-    tvec1.len() == tvec2.len() && tvec1.iter().zip(tvec2).all(|(t1, t2)| t1.assignable(t2))
-}
-
-///Identical to `type_vectors_assignable`
-pub fn arg_vectors_assignable(tvec1: &[Type], tvec2: &[Type]) -> bool {
-    tvec1.len() == tvec2.len() && tvec1.iter().zip(tvec2).all(|(t1, t2)| t1.assignable(t2))
-}
-
-///Identical to `type_vectors_assignable` but using StructField slices as inputs and comparing their
-/// inner types.
-pub fn field_vectors_assignable(tvec1: &[StructField], tvec2: &[StructField]) -> bool {
+pub fn type_vectors_assignable(
+    tvec1: &[Type],
+    tvec2: &[Type],
+    type_tree: &HashMap<(Vec<String>, usize), Type>,
+) -> bool {
     tvec1.len() == tvec2.len()
         && tvec1
             .iter()
             .zip(tvec2)
-            .all(|(t1, t2)| t1.tipe.assignable(&t2.tipe))
+            .all(|(t1, t2)| t1.assignable(t2, type_tree))
+}
+
+///Identical to `type_vectors_assignable`
+pub fn arg_vectors_assignable(
+    tvec1: &[Type],
+    tvec2: &[Type],
+    type_tree: &HashMap<(Vec<String>, usize), Type>,
+) -> bool {
+    tvec1.len() == tvec2.len()
+        && tvec1
+            .iter()
+            .zip(tvec2)
+            .all(|(t1, t2)| t1.assignable(t2, type_tree))
+}
+
+///Identical to `type_vectors_assignable` but using StructField slices as inputs and comparing their
+/// inner types.
+pub fn field_vectors_assignable(
+    tvec1: &[StructField],
+    tvec2: &[StructField],
+    type_tree: &HashMap<(Vec<String>, usize), Type>,
+) -> bool {
+    tvec1.len() == tvec2.len()
+        && tvec1
+            .iter()
+            .zip(tvec2)
+            .all(|(t1, t2)| t1.tipe.assignable(&t2.tipe, type_tree))
 }
 
 impl PartialEq for Type {

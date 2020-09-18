@@ -325,6 +325,7 @@ pub fn compile_from_folder(
                 string_table,
                 hm,
                 &mut checked_funcs,
+                &type_tree,
             )
             .map_err(|res3| CompileError::new(res3.reason.to_string(), res3.location))?;
         let code_out =
