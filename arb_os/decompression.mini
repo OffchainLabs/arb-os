@@ -2,8 +2,14 @@
 // Copyright 2020, Offchain Labs, Inc. All rights reserved.
 //
 
+import type ByteArray;
+import type MarshalledBytes;
+import func bytearray_new(unused: uint) -> ByteArray;
+import func bytearray_marshalFull(ba: ByteArray) -> MarshalledBytes;
+
 import type ByteStream;
 import func bytestream_getByte(bs: ByteStream) -> option<(ByteStream, uint)>;
+import func bytestream_getRemainingBytes(bs: ByteStream) -> ByteArray;
 import func rlp_decodeUint(bs: ByteStream) -> option<(ByteStream, uint)>;
 
 import type ExpandingIntArray;
@@ -12,11 +18,26 @@ import func expandingIntArray_size(arr: ExpandingIntArray) -> uint;
 import func expandingIntArray_get(arr: ExpandingIntArray, index: uint) -> uint;
 import func expandingIntArray_set(arr: ExpandingIntArray, index: uint, val: uint) -> ExpandingIntArray;
 
-import type IncomingRequest;
 import type Queue;
-
 import func queue_new() -> Queue;
+import func queue_put(q: Queue, item: any) -> Queue;
 
+import type Account;
+import type AccountStore;
+import impure func getGlobalAccountStore() -> AccountStore;
+import func accountStore_get(acctStore: AccountStore, addr: address) -> Account;
+import func account_getNextSeqNum(account: Account) -> uint;
+
+// This structure describes an incoming request.
+// It is declared identically in inbox.mini and elsewhere
+type IncomingRequest = struct {
+    kind: uint,               // type of message
+    blockNumber: uint,        // block number of the L1 block
+    timestamp: uint,          // timestamp of the L1 block
+    sender: address,          // address of the sender
+    requestId: uint,
+    msgData: MarshalledBytes  // kind-specific data, as a marshalled bytearray
+}
 
 type Decompressor = func(IncomingRequest, ByteStream) -> Queue
 
@@ -79,8 +100,87 @@ public func decompressOffsetUint(bs: ByteStream) -> option<(ByteStream, uint)> {
     return Some((ustr, asm(sh, base) uint { shl }));
 }
 
-// testDecompressor is designed for us in testing only
-//      discards the input
+// This is a copy of a struct defined in ArbOS/signedTx.mini.
+// The declaration here must remain consistent with the one there.
+type SignedTx = struct {
+    seqNum: uint,
+    gasPrice: uint,
+    gasLimit: uint,
+    to: address,
+    value: uint,
+    data: ByteArray,
+    v: uint,
+    r: uint,
+    s: uint
+}
+
+impure func decompressSignedTx(
+    stream: ByteStream,
+    iat: IndexedAddressTable,
+) -> option<(ByteStream, SignedTx)> {
+    let (ustr, calldata, gasLimit, hasValue) = decompressCalldata(stream, iat);
+    stream = ustr;
+
+    let (ustr, senderAsUint) = decompressAddress(stream, iat)?;
+    stream = ustr;
+
+    let (ustr, seqNumByte) = bytestream_getByte(stream)?;
+    stream = ustr;
+    let dbSeqNum = account_getNextSeqNum(
+        accountStore_get(
+            getGlobalAccountStore(),
+            address(senderAsUint)
+        )
+    );
+    let seqNum = (dbSeqNum & ~0xff) + seqNumByte;
+    if (seqNum < dbSeqNum) {
+        seqNum = seqNum + 256;
+    }
+
+    let (ustr, toAddr) = decompressAddress(stream, iat)?;
+    stream = ustr;
+
+    let value = 0;
+    if (hasValue) {
+        let (ustr, val) = decompressOffsetUint(stream)?;
+        stream = ustr;
+        value = val;
+    }
+
+    return Some(
+        (
+            stream,
+            struct {
+                seqNum: seqNum,
+                gasPrice: 0,
+                gasLimit: gasLimit,
+                to: toAddr,
+                value: value,
+                data: calldata,
+                v: 0,
+                r: 0,
+                s: 0
+            }
+        )
+    );
+}
+
+func decompressCalldata(stream: ByteStream, iat: IndexedAddressTable) -> (
+    ByteStream,
+    ByteArray,   // decompressed calldata
+    uint,        // gasLimit to use
+    bool         // true iff method is payable
+) {
+    return (stream, bytearray_new(0), 0, false);   // TODO
+}
+
+// testDecompressor is designed for use in testing
+//      passes on the input, verbatim, as an L2 message
 public func testDecompressor(req: IncomingRequest, stream: ByteStream) -> Queue {
-    return queue_new();
+    return queue_put(
+        queue_new(),
+        req with {
+            msgData: bytearray_marshalFull(bytestream_getRemainingBytes(stream))
+        }
+    );
 }
