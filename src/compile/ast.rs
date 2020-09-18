@@ -268,7 +268,7 @@ impl Type {
             Type::Imported(_) => {
                 panic!("tried to get default value for an imported type");
             }
-            Type::Nominal(_,_) => {
+            Type::Nominal(_, _) => {
                 panic!("tried to get default value for a nominal type");
             }
             Type::Any => Value::none(),
