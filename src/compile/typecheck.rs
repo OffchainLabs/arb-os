@@ -1368,7 +1368,7 @@ fn typecheck_expr(
                             tc_args.push(tc_arg);
                             let resolved_arg_type =
                                 arg_types[i].resolve_types(&type_table, *loc)?;
-                            if !resolved_arg_type.assignable(&tc_args[i].get_type(), type_tree) {
+                            if !resolved_arg_type.assignable(&tc_args[i].get_type().get_representation(type_tree)?, type_tree) {
                                 println!("expected {:?}", resolved_arg_type);
                                 println!("actual   {:?}", tc_args[i].get_type());
                                 return Err(new_type_error(
