@@ -172,7 +172,13 @@ pub enum TypeCheckedExpr {
     Variant(Box<TypeCheckedExpr>, Option<Location>),
     FuncRef(usize, Type, Option<Location>),
     TupleRef(Box<TypeCheckedExpr>, Uint256, Type, Option<Location>),
-    DotRef(Box<TypeCheckedExpr>, StringId, usize, Type, Option<Location>),
+    DotRef(
+        Box<TypeCheckedExpr>,
+        StringId,
+        usize,
+        Type,
+        Option<Location>,
+    ),
     Const(Value, Type, Option<Location>),
     FunctionCall(
         Box<TypeCheckedExpr>,
@@ -1302,9 +1308,14 @@ fn typecheck_expr(
             if let Type::Struct(v) = tc_sub.get_type().get_representation(type_tree)? {
                 for sf in v.iter() {
                     if *name == sf.name {
+                        let slot_num = tc_sub
+                            .get_type()
+                            .get_representation(type_tree)?
+                            .get_struct_slot_by_name(*name)
+                            .ok_or(new_type_error("this one".to_string(), None))?;
                         return Ok(TypeCheckedExpr::DotRef(
                             Box::new(tc_sub),
-                            *name,
+                            slot_num,
                             v.len(),
                             sf.tipe.clone(),
                             *loc,
