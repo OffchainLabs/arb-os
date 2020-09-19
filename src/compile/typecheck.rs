@@ -1696,7 +1696,7 @@ fn typecheck_expr(
                 return_type,
                 type_tree,
             )?;
-            let tcs_type = tc_struc.get_type();
+            let tcs_type = tc_struc.get_type().get_representation(type_tree)?;
             if let Type::Struct(fields) = &tcs_type {
                 match tcs_type.get_struct_slot_by_name(*name) {
                     Some(index) => {
