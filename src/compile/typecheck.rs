@@ -1455,7 +1455,7 @@ fn typecheck_expr(
                 return_type,
                 type_tree,
             )?;
-            match tc_arr.get_type() {
+            match tc_arr.get_type().get_representation(type_tree)? {
                 Type::Array(t) => {
                     if tc_idx.get_type() == Type::Uint {
                         Ok(TypeCheckedExpr::ArrayRef(
