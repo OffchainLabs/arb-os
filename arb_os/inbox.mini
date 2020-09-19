@@ -40,8 +40,6 @@ import func bytestream_skipBytes(bs: ByteStream, nbytes: uint) -> option<ByteStr
 import func hashUnsignedL2messageInfo(l2msg: MarshalledBytes, chainId: uint, sender: address) -> bytes32;
 import func translateSignedTx(req: IncomingRequest) -> option<TxRequestData>;
 
-// Decompressor is defined identically in decompression.mini
-type Decompressor = func(IncomingRequest, ByteStream) -> Queue
 
 type Inbox = struct {
     queue: Queue,     // Queue of messages that haven't yet been retrieved from the inbox
@@ -52,7 +50,6 @@ type Inbox = struct {
 
 var globalInbox: Inbox;
 var globalQueueFromBatch: QueueStack;
-var globalDecompressor: option<Decompressor>;
 
 public impure func inbox_init() {
     globalInbox = struct {
@@ -62,15 +59,6 @@ public impure func inbox_init() {
         needToPeek: false,   // don't peek before the first message
     };
     globalQueueFromBatch = queuestack_new();
-    globalDecompressor = None<Decompressor>;
-}
-
-public impure func inbox_setDecompressor(decompressor: Decompressor) {
-    globalDecompressor = Some(decompressor);
-}
-
-public impure func inbox_clearDecompressor() {
-    globalDecompressor = None<Decompressor>;
 }
 
 public impure func inbox_get() -> IncomingRequest {
@@ -227,16 +215,8 @@ public impure func inbox_getNextUnpackedRequest() -> (
                     }
                     // else signature was invalid, ignore msg and execute loop again to get another
                 } elseif (firstByte == 7) {
-                    if let Some(decompressor) = globalDecompressor {
-                        let ba = bytearray_unmarshalBytes(msg.msgData);
-                        if let Some(stream) = bytestream_skipBytes(bytestream_new(ba), 1) {
-                            globalQueueFromBatch = queuestack_push(
-                                globalQueueFromBatch,
-                                decompressor(msg, stream)
-                            );
-                        }
-                    }
-                    // else compressed message sent but no decompressor available; discard message
+                    // it's a single message with compressed headers
+
                 } else {
                     // subtype must be 0, 1, or 2
                     if let Some(txRequest) = translateUnsignedTx(msg) {

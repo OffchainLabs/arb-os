@@ -9,6 +9,7 @@ import func bytearray_marshalFull(ba: ByteArray) -> MarshalledBytes;
 
 import type ByteStream;
 import func bytestream_getByte(bs: ByteStream) -> option<(ByteStream, uint)>;
+import func bytestream_get256(bs: ByteStream) -> option<(ByteStream, uint)>;
 import func bytestream_getRemainingBytes(bs: ByteStream) -> ByteArray;
 import func rlp_decodeUint(bs: ByteStream) -> option<(ByteStream, uint)>;
 
@@ -28,6 +29,9 @@ import impure func getGlobalAccountStore() -> AccountStore;
 import func accountStore_get(acctStore: AccountStore, addr: address) -> Account;
 import func account_getNextSeqNum(account: Account) -> uint;
 
+import func rlp_decodeAddress(bs: ByteStream) -> option<(ByteStream, address)>;
+import func rlp_decodeUint(bs: ByteStream) -> option<(ByteStream, uint)>;
+
 // This structure describes an incoming request.
 // It is declared identically in inbox.mini and elsewhere
 type IncomingRequest = struct {
@@ -39,12 +43,16 @@ type IncomingRequest = struct {
     msgData: MarshalledBytes  // kind-specific data, as a marshalled bytearray
 }
 
-type Decompressor = func(IncomingRequest, ByteStream) -> Queue
-
 type IndexedAddressTable = struct {
     byIndex: ExpandingIntArray,
     byAddress: map<address, uint>,
     size: uint
+}
+
+var globalIndexedAddressTable: IndexedAddressTable;
+
+public impure func decompression_init() {
+    globalIndexedAddressTable = addressTable_new();
 }
 
 public func addressTable_new() -> IndexedAddressTable {
@@ -86,18 +94,44 @@ public func addressTable_getByAddressAlloc(iat: IndexedAddressTable, addr: addre
     }
 }
 
-public func decompressAddress(
-    bs: ByteStream,
-    iat: IndexedAddressTable
+public impure func decompressAddress(
+    stream: ByteStream,
 ) -> option<(ByteStream, address)> {
-    let (ustr, index) = rlp_decodeUint(bs)?;
-    return Some((ustr, addressTable_getByIndex(iat, index)));
+    // Returns None if insufficient data in stream
+    // A compressed address is one of three things:
+    //   * an RLP-encoding of a value 8 bytes in length or shorter, which is interpreted as an index into
+    //           the IndexedAddressTable, or
+    //   * a single byte 0xff followed by an RLP encoding of an address that is 8 bytes in length or shorter, or
+    //   * an RLP-encoding of a value longer than 8 bytes, which is interpreted as an address.
+    // In the last two cases, the address is added to the globalIndexedAddressTable if it is not already there
+
+    let (ustr, firstByte) = bytestream_getByte(stream)?;
+    if (firstByte == 0xff) {
+        let (ustr, addr) = rlp_decodeAddress(ustr)?;
+        let (iat, _) = addressTable_getByAddressAlloc(globalIndexedAddressTable, addr);
+        globalIndexedAddressTable = iat;
+        return Some((ustr, addr));
+    } else {
+        // don't update stream, because we want to re-start from the beginning
+        let (ustr, decodedUint) = rlp_decodeUint(stream)?;
+        if (decodedUint < 0x10000000000000000) {
+            return Some((ustr, addressTable_getByIndex(globalIndexedAddressTable, decodedUint)));
+        } else {
+            let addr = address(decodedUint);
+            let (iat, _) = addressTable_getByAddressAlloc(globalIndexedAddressTable, addr);
+            globalIndexedAddressTable = iat;
+            return Some((ustr, addr));
+        }
+    }
 }
 
-public func decompressOffsetUint(bs: ByteStream) -> option<(ByteStream, uint)> {
+public func decompressTokenAmount(bs: ByteStream) -> option<(ByteStream, uint)> {
     let (ustr, base) = rlp_decodeUint(bs)?;
+    if (base == 0) {
+        return Some((ustr, 0));
+    }
     let (ustr, sh) = bytestream_getByte(ustr)?;
-    return Some((ustr, asm(sh, base) uint { shl }));
+    return Some((ustr, base * asm(sh, 10) uint { exp }));
 }
 
 // This is a copy of a struct defined in ArbOS/signedTx.mini.
@@ -116,20 +150,14 @@ type SignedTx = struct {
 
 impure func decompressSignedTx(
     stream: ByteStream,
-    iat: IndexedAddressTable,
+    sender: address
 ) -> option<(ByteStream, SignedTx)> {
-    let (ustr, calldata, gasLimit, hasValue) = decompressCalldata(stream, iat);
-    stream = ustr;
-
-    let (ustr, senderAsUint) = decompressAddress(stream, iat)?;
-    stream = ustr;
-
     let (ustr, seqNumByte) = bytestream_getByte(stream)?;
     stream = ustr;
     let dbSeqNum = account_getNextSeqNum(
         accountStore_get(
             getGlobalAccountStore(),
-            address(senderAsUint)
+            address(sender)
         )
     );
     let seqNum = (dbSeqNum & ~0xff) + seqNumByte;
@@ -137,15 +165,25 @@ impure func decompressSignedTx(
         seqNum = seqNum + 256;
     }
 
-    let (ustr, toAddr) = decompressAddress(stream, iat)?;
+    let (ustr, gasLimit) = rlp_decodeUint(stream)?;
     stream = ustr;
 
-    let value = 0;
-    if (hasValue) {
-        let (ustr, val) = decompressOffsetUint(stream)?;
-        stream = ustr;
-        value = val;
-    }
+    let (ustr, toAddr) = decompressAddress(stream)?;
+    stream = ustr;
+
+    let (ustr, value) = decompressTokenAmount(stream)?;
+    stream = ustr;
+
+    let (ustr, v) = rlp_decodeUint(stream)?;
+    stream = ustr;
+
+    let (ustr, r) = bytestream_get256(stream)?;
+    stream = ustr;
+
+    let (ustr, s) = bytestream_get256(stream)?;
+    stream = ustr;
+
+    let calldata = bytestream_getRemainingBytes(stream);
 
     return Some(
         (
@@ -157,30 +195,11 @@ impure func decompressSignedTx(
                 to: toAddr,
                 value: value,
                 data: calldata,
-                v: 0,
-                r: 0,
-                s: 0
+                v: v,
+                r: r,
+                s: s
             }
         )
     );
 }
 
-func decompressCalldata(stream: ByteStream, iat: IndexedAddressTable) -> (
-    ByteStream,
-    ByteArray,   // decompressed calldata
-    uint,        // gasLimit to use
-    bool         // true iff method is payable
-) {
-    return (stream, bytearray_new(0), 0, false);   // TODO
-}
-
-// testDecompressor is designed for use in testing
-//      passes on the input, verbatim, as an L2 message
-public func testDecompressor(req: IncomingRequest, stream: ByteStream) -> Queue {
-    return queue_put(
-        queue_new(),
-        req with {
-            msgData: bytearray_marshalFull(bytestream_getRemainingBytes(stream))
-        }
-    );
-}
