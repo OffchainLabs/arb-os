@@ -180,29 +180,29 @@ impl Type {
             | Type::Imported(_)
             | Type::Every => (self == rhs),
             Type::Tuple(tvec) => {
-                if let Type::Tuple(tvec2) = rhs {
-                    type_vectors_assignable(tvec, tvec2, type_tree)
+                if let Ok(Type::Tuple(tvec2)) = rhs.get_representation(type_tree) {
+                    type_vectors_assignable(tvec, &tvec2, type_tree)
                 } else {
                     false
                 }
             }
             Type::Array(t) => {
-                if let Type::Array(t2) = rhs {
-                    t.assignable(t2, type_tree)
+                if let Ok(Type::Array(t2)) = rhs.get_representation(type_tree) {
+                    t.assignable(&t2, type_tree)
                 } else {
                     false
                 }
             }
             Type::FixedArray(t, s) => {
-                if let Type::FixedArray(t2, s2) = rhs {
-                    (s == s2) && t.assignable(t2, type_tree)
+                if let Ok(Type::FixedArray(t2, s2)) = rhs.get_representation(type_tree) {
+                    (*s == s2) && t.assignable(&t2, type_tree)
                 } else {
                     false
                 }
             }
             Type::Struct(fields) => {
-                if let Type::Struct(fields2) = rhs {
-                    field_vectors_assignable(fields, fields2, type_tree)
+                if let Ok(Type::Struct(fields2)) = rhs.get_representation(type_tree) {
+                    field_vectors_assignable(fields, &fields2, type_tree)
                 } else {
                     false
                 }
@@ -233,8 +233,8 @@ impl Type {
                 }
             }
             Type::Option(inner) => {
-                if let Type::Option(inner2) = rhs {
-                    inner.assignable(inner2, type_tree)
+                if let Ok(Type::Option(inner2)) = rhs.get_representation(type_tree) {
+                    inner.assignable(&inner2, type_tree)
                 } else {
                     false
                 }

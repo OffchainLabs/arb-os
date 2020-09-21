@@ -777,14 +777,17 @@ fn typecheck_statement<'a>(
                 return_type,
                 type_tree,
             )?;
-            if return_type.assignable(&tc_expr.get_type(), type_tree) {
+            if return_type.get_representation(type_tree)?.assignable(
+                &tc_expr.get_type().get_representation(type_tree)?,
+                type_tree,
+            ) {
                 Ok((TypeCheckedStatement::Return(tc_expr, *loc), vec![]))
             } else {
                 Err(new_type_error(
                     format!(
                         "return statement has wrong type, expected: \"{:?}\", got: \"{:?}\"",
-                        return_type,
-                        tc_expr.get_type()
+                        return_type.get_representation(type_tree)?,
+                        tc_expr.get_type().get_representation(type_tree)?
                     ),
                     *loc,
                 ))
@@ -848,7 +851,10 @@ fn typecheck_statement<'a>(
             )?;
             match type_table.get(*name) {
                 Some(var_type) => {
-                    if var_type.assignable(&tc_expr.get_type(), type_tree) {
+                    if var_type.get_representation(type_tree)?.assignable(
+                        &tc_expr.get_type().get_representation(type_tree)?,
+                        type_tree,
+                    ) {
                         Ok((
                             TypeCheckedStatement::AssignLocal(*name, tc_expr, *loc),
                             vec![],
@@ -862,7 +868,10 @@ fn typecheck_statement<'a>(
                 }
                 None => match global_vars.get(&*name) {
                     Some((var_type, idx)) => {
-                        if var_type.assignable(&tc_expr.get_type(), type_tree) {
+                        if var_type.assignable(
+                            &tc_expr.get_type().get_representation(type_tree)?,
+                            type_tree,
+                        ) {
                             Ok((
                                 TypeCheckedStatement::AssignGlobal(*idx, tc_expr, *loc),
                                 vec![],
@@ -1351,7 +1360,7 @@ fn typecheck_expr(
                 return_type,
                 type_tree,
             )?;
-            match tc_fexpr.get_type() {
+            match tc_fexpr.get_type().get_representation(type_tree)? {
                 Type::Func(impure, arg_types, ret_type) => {
                     let ret_type = ret_type.resolve_types(type_table, *loc)?;
                     if args.len() == arg_types.len() {
@@ -1368,7 +1377,10 @@ fn typecheck_expr(
                             tc_args.push(tc_arg);
                             let resolved_arg_type =
                                 arg_types[i].resolve_types(&type_table, *loc)?;
-                            if !resolved_arg_type.assignable(&tc_args[i].get_type().get_representation(type_tree)?, type_tree) {
+                            if !resolved_arg_type.assignable(
+                                &tc_args[i].get_type().get_representation(type_tree)?,
+                                type_tree,
+                            ) {
                                 println!("expected {:?}", resolved_arg_type);
                                 println!("actual   {:?}", tc_args[i].get_type());
                                 return Err(new_type_error(
@@ -1609,7 +1621,7 @@ fn typecheck_expr(
                 return_type,
                 type_tree,
             )?;
-            match tc_arr.get_type() {
+            match tc_arr.get_type().get_representation(type_tree)? {
                 Type::Array(t) => {
                     if t.assignable(&tc_val.get_type(), type_tree) {
                         if tc_index.get_type() != Type::Uint {
@@ -2199,7 +2211,10 @@ fn typecheck_binary_op(
                 ))
             } else {
                 Err(new_type_error(
-                    "invalid argument types to equality comparison".to_string(),
+                    format!(
+                        "invalid argument types to equality comparison: {:?} and {:?}",
+                        subtype1, subtype2
+                    ),
                     loc,
                 ))
             }
