@@ -1178,7 +1178,7 @@ fn typecheck_expr(
                 return_type,
                 type_tree,
             )?;
-            typecheck_binary_op(*op, tc_sub1, tc_sub2, *loc)
+            typecheck_binary_op(*op, tc_sub1, tc_sub2, type_tree, *loc)
         }
         Expr::ShortcutOr(sub1, sub2, loc) => {
             let tc_sub1 = typecheck_expr(
@@ -1795,7 +1795,7 @@ fn typecheck_expr(
                 return_type,
                 type_tree,
             )?;
-            match res.get_type() {
+            match res.get_type().get_representation(type_tree)? {
                 Type::Option(t) => Ok(TypeCheckedExpr::Try(Box::new(res), *t, *loc)),
                 other => Err(new_type_error(
                     format!("Try expression requires option type, found \"{:?}\"", other),
@@ -2019,6 +2019,7 @@ fn typecheck_binary_op(
     mut op: BinaryOp,
     mut tcs1: TypeCheckedExpr,
     mut tcs2: TypeCheckedExpr,
+    type_tree: &HashMap<(Vec<String>, usize), Type>,
     loc: Option<Location>,
 ) -> Result<TypeCheckedExpr, TypeError> {
     if let TypeCheckedExpr::Const(Value::Int(val2), t2, _) = tcs2.clone() {
@@ -2057,8 +2058,8 @@ fn typecheck_binary_op(
             }
         }
     }
-    let subtype1 = tcs1.get_type();
-    let subtype2 = tcs2.get_type();
+    let subtype1 = tcs1.get_type().get_representation(type_tree)?;
+    let subtype2 = tcs2.get_type().get_representation(type_tree)?;
     match op {
         BinaryOp::Plus | BinaryOp::Minus | BinaryOp::Times => match (subtype1, subtype2) {
             (Type::Uint, Type::Uint) => Ok(TypeCheckedExpr::Binary(
