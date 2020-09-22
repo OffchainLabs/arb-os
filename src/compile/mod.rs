@@ -201,31 +201,33 @@ impl CompiledProgram {
 pub fn compile_from_file(
     path: &Path,
     file_id: u64,
-    debug: bool,
+    _debug: bool,
 ) -> Result<Vec<CompiledProgram>, CompileError> {
-    let display = path.display();
-
     if path.is_dir() {
-        return compile_from_folder(path, file_id);
+        compile_from_folder(path, "main", file_id)
+    } else if let (Some(parent), Some(file_name)) = (path.parent(), path.file_stem()) {
+        compile_from_folder(
+            parent,
+            file_name.to_str().ok_or_else(|| {
+                CompileError::new(format!("File name {:?} must be UTF-8", file_name), None)
+            })?,
+            file_id,
+        )
+    } else {
+        Err(CompileError::new(
+            format!("Could not parse {} as valid path", path.display()),
+            None,
+        ))
     }
-
-    let mut file = File::open(&path)
-        .map_err(|why| CompileError::new(format!("couldn't open {}: {:?}", display, why), None))?;
-
-    let mut s = String::new();
-    file.read_to_string(&mut s)
-        .map_err(|why| CompileError::new(format!("couldn't read {}: {:?}", display, why), None))?;
-
-    Ok(vec![serde_json::from_str(&s).or_else(|_| {
-        compile_from_source(s, display, file_id, debug)
-    })?])
 }
 
 pub fn compile_from_folder(
     folder: &Path,
+    main: &str,
     file_id: u64,
 ) -> Result<Vec<CompiledProgram>, CompileError> {
-    let (mut programs, import_map) = create_program_tree(folder, file_id)?;
+    // TODO: Add warning about impure functions back
+    let (mut programs, import_map) = create_program_tree(folder, main, file_id)?;
     for (name, imports) in &import_map {
         for import in imports {
             let mut named_type = None;
@@ -303,7 +305,7 @@ pub fn compile_from_folder(
     let mut progs = vec![];
     let type_tree = create_type_tree(&programs);
     println!("This is the type tree: {:?}", type_tree);
-    let mut output = vec![programs.remove(&vec!["main".to_string()]).expect("no main")];
+    let mut output = vec![programs.remove(&vec![main.to_string()]).expect("no main")];
     output.append(&mut programs.values().cloned().collect());
     for Module {
         imported_funcs,
@@ -350,6 +352,7 @@ pub fn compile_from_folder(
 /// of `folder` as source code. Returns a `CompileError` if the contents of `folder` fail to parse.
 fn create_program_tree(
     folder: &Path,
+    main: &str,
     file_id: u64,
 ) -> Result<
     (
@@ -358,7 +361,7 @@ fn create_program_tree(
     ),
     CompileError,
 > {
-    let mut paths = vec![vec!["main".to_owned()]];
+    let mut paths = vec![vec![main.to_owned()]];
     let mut programs = HashMap::new();
     let mut import_map = HashMap::new();
     let mut seen_paths = HashSet::new();
@@ -457,63 +460,6 @@ pub fn parse_from_source(
             ),
             _ => CompileError::new(format!("{:?}", e), None),
         })
-}
-
-///Interprets s as mini source code, and returns a CompiledProgram if s represents a valid program,
-/// or a CompileError otherwise.
-///
-/// The pathname field contains the name of the file as used by the
-/// source_file_map field of Compiled program.
-///
-/// The file_id specified will be used as the file_id in locations originating from this source
-/// file, and if debug is set to true, then compiler internal debug information will be printed.
-pub fn compile_from_source(
-    s: String,
-    pathname: std::path::Display,
-    file_id: u64,
-    debug: bool,
-) -> Result<CompiledProgram, CompileError> {
-    let mut string_table_1 = StringTable::new();
-    let res = parse_from_source(s, file_id, &["Temporary".to_string()], &mut string_table_1)?;
-    let mut checked_funcs = Vec::new();
-    let (exported_funcs, imported_funcs, global_vars, string_table) =
-        typecheck::sort_and_typecheck_top_level_decls(&res, &mut checked_funcs, string_table_1)
-            .map_err(|res3| CompileError::new(res3.reason.to_string(), res3.location))?;
-    checked_funcs.iter().for_each(|func| {
-        let detected_purity = func.is_pure();
-        let declared_purity = func.properties.pure;
-        if !detected_purity && declared_purity {
-            println!(
-                "Warning: func {} is impure but not marked impure",
-                string_table.name_from_id(func.name)
-            )
-        } else if detected_purity && !declared_purity {
-            println!(
-                "Warning: func {} is declared impure but does not contain impure code",
-                string_table.name_from_id(func.name)
-            )
-        }
-    });
-
-    let code_out =
-        codegen::mavm_codegen(checked_funcs, &string_table, &imported_funcs, &global_vars)
-            .map_err(|e| CompileError::new(e.reason.to_string(), e.location))?;
-    if debug {
-        println!("========== after initial codegen ===========");
-        println!("Exported: {:?}", exported_funcs);
-        println!("Imported: {:?}", imported_funcs);
-        for (idx, insn) in code_out.iter().enumerate() {
-            println!("{:04}:  {}", idx, insn);
-        }
-    }
-    Ok(CompiledProgram::new(
-        code_out.to_vec(),
-        exported_funcs,
-        imported_funcs,
-        global_vars.len(),
-        Some(SourceFileMap::new(code_out.len(), pathname.to_string())),
-        HashMap::new(),
-    ))
 }
 
 ///Represents any error encountered during compilation.

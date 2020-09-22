@@ -593,38 +593,6 @@ pub fn typecheck_top_level_decls(
     ))
 }
 
-///Converts the `TopLevelDecl`s in decls into corresponding type checked variants.
-///
-///If successful, `ExportedFunc`, `ImportedFunc`, and `GlobalVarDecl` are returned directly, along
-/// with a `StringTable` modified by internal call to `builtin_func_decls`
-pub fn sort_and_typecheck_top_level_decls(
-    decls: &[TopLevelDecl],
-    checked_funcs: &mut Vec<TypeCheckedFunc>,
-    string_table_in: StringTable,
-) -> Result<
-    (
-        Vec<ExportedFunc>,
-        Vec<ImportedFunc>,
-        Vec<GlobalVarDecl>,
-        StringTable,
-    ),
-    TypeError,
-> {
-    let (_imports, imported_funcs, funcs, named_types, global_vars, string_table, hm) =
-        sort_top_level_decls(decls, string_table_in.clone());
-
-    typecheck_top_level_decls(
-        imported_funcs,
-        funcs,
-        named_types,
-        global_vars,
-        string_table,
-        hm,
-        checked_funcs,
-        &HashMap::new(),
-    )
-}
-
 ///If successful, produces a `TypeCheckedFunc` from `FuncDecl` reference fd, according to global
 /// state defined by type_table, global_vars, and func_table.
 ///
