@@ -165,6 +165,9 @@ impure func decompressSignedTx(
         seqNum = seqNum + 256;
     }
 
+    let (ustr, gasPrice) = rlp_decodeUint(stream)?;
+    stream = ustr;
+
     let (ustr, gasLimit) = rlp_decodeUint(stream)?;
     stream = ustr;
 
@@ -190,7 +193,7 @@ impure func decompressSignedTx(
             stream,
             struct {
                 seqNum: seqNum,
-                gasPrice: 0,
+                gasPrice: gasPrice,
                 gasLimit: gasLimit,
                 to: toAddr,
                 value: value,
