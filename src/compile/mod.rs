@@ -304,7 +304,6 @@ pub fn compile_from_folder(
     }
     let mut progs = vec![];
     let type_tree = create_type_tree(&programs);
-    println!("This is the type tree: {:?}", type_tree);
     let mut output = vec![programs.remove(&vec![main.to_string()]).expect("no main")];
     output.append(&mut programs.values().cloned().collect());
     for Module {
