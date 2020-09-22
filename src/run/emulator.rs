@@ -22,6 +22,7 @@ use crate::mavm::{AVMOpcode, CodePt, Instruction, Opcode, Value};
 use crate::pos::Location;
 use crate::uint256::Uint256;
 use ethers_core::types::{Signature, H256};
+use serde::{Deserialize, Serialize};
 use std::cmp::{max, Ordering};
 use std::collections::{BTreeMap, HashMap};
 use std::convert::TryInto;
@@ -337,7 +338,7 @@ impl CodeStore {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 enum ProfilerEvent {
     EnterFunc(u64),
     CallFunc(CodePt, usize),
@@ -350,6 +351,14 @@ enum ProfilerEvent {
 pub struct ProfilerData {
     data: HashMap<String, BTreeMap<(usize, usize), u64>>,
     stack_tree: HashMap<CodePt, (Vec<ProfilerEvent>, Option<Location>)>,
+    unknown_gas: u64,
+    file_name_chart: HashMap<u64, String>,
+}
+
+#[derive(Serialize, Deserialize)]
+struct JsonProfilerData {
+    data: HashMap<String, HashMap<String, u64>>,
+    stack_tree: HashMap<String, (Vec<ProfilerEvent>, Option<Location>)>,
     unknown_gas: u64,
     file_name_chart: HashMap<u64, String>,
 }
@@ -516,7 +525,7 @@ impl ProfilerData {
                 .into_iter()
                 .map(|(cpt, (gas, loc))| (gas, (cpt, loc)))
                 .collect();
-            let total_callers = callers.iter().map(|x|*x.0).sum::<u64>();
+            let total_callers = callers.iter().map(|x| *x.0).sum::<u64>();
             for (gas, (caller, location)) in callers.into_iter().rev() {
                 if let Some(loc) = location {
                     println!(
@@ -556,7 +565,11 @@ impl ProfilerData {
                 }
             }
             if total_callers != total_called + *in_func_gas {
-                println!("Invariant fails: {} {}", total_callers, total_called + *in_func_gas)
+                println!(
+                    "Invariant fails: {} {}",
+                    total_callers,
+                    total_called + *in_func_gas
+                )
             }
         }
         let file_gas_costs: Vec<(String, u64)> = self
@@ -627,6 +640,38 @@ impl ProfilerData {
                 return;
             }
         }
+    }
+
+    pub fn to_json(&self) {
+        let ProfilerData {
+            data,
+            stack_tree,
+            unknown_gas,
+            file_name_chart,
+        } = self.clone();
+        let data = data
+            .into_iter()
+            .map(|(key, value)| {
+                (
+                    key,
+                    value
+                        .into_iter()
+                        .map(|(key, value)| (format!("{}_{}", key.0, key.1), value))
+                        .collect(),
+                )
+            })
+            .collect();
+        let stack_tree = stack_tree
+            .into_iter()
+            .map(|(key, value)| (format!("{:?}", key), value))
+            .collect();
+        let json = JsonProfilerData {
+            data,
+            stack_tree,
+            unknown_gas,
+            file_name_chart,
+        };
+        println!("{}", serde_json::to_string(&json).unwrap());
     }
 }
 
