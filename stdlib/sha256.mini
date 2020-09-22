@@ -56,6 +56,59 @@ public func sha256hasher_pushByte(h: Sha256Hasher, b: uint) -> Sha256Hasher {
     }
 }
 
+public func sha256hasher_push256(h: Sha256Hasher, val: uint) -> Sha256Hasher {
+    let offset = h.offset;
+    if (offset == 0) {
+        return h with {
+            buffer: h.buffer with { [0] = val }
+        } with {
+            offset: 32
+        } with {
+            totalSizeBits: 256+h.totalSizeBits
+        };
+    } elseif (offset == 32) {
+        return h with {
+            accumulator: asm(h.accumulator, h.buffer[0], val) bytes32 { sha256f }
+        } with {
+            buffer: unsafecast<[2]uint>((0,0))
+        } with {
+            offset: 0
+        } with {
+            totalSizeBits: 256+h.totalSizeBits
+        };
+    } elseif (offset < 32) {
+        return h with {
+            buffer: h.buffer with {
+                [0] = h.buffer[0] | asm(8*offset, val) uint { shr }
+            } with {
+                [1] = h.buffer[1] | asm(8*(32-offset), val) uint { shl }
+            }
+        } with {
+            offset: 32+offset
+        } with {
+            totalSizeBits: 256+h.totalSizeBits
+        };
+    } else {
+        offset = offset-32;
+        return h with {
+            accumulator: asm(
+                h.accumulator,
+                h.buffer[0],
+                h.buffer[1] | asm(8*offset, val) uint { shr }
+            ) bytes32 { sha256f }
+        } with {
+            buffer: unsafecast<[2]uint>((
+                asm(8*(32-offset), val) uint { shl },
+                0
+            ))
+        } with {
+            offset: offset
+        } with {
+            totalSizeBits: 256+h.totalSizeBits
+        };
+    }
+}
+
 public func sha256hasher_finish(h: Sha256Hasher) -> bytes32 {
     // write the first padding byte
     h = sha256hasher_pushByte(h, 0x80) with {
@@ -82,7 +135,12 @@ public func sha256hasher_finish(h: Sha256Hasher) -> bytes32 {
 public func sha256_byteArray(ba: ByteArray) -> bytes32 {
     let hasher = sha256hasher_new();
     let i = 0;
-    while (i < bytearray_size(ba)) {
+    let sz = bytearray_size(ba);
+    while (i+32 < sz) {
+        hasher = sha256hasher_push256(hasher, bytearray_get256(ba, i));
+        i = i+32;
+    }
+    while (i < sz) {
         hasher = sha256hasher_pushByte(hasher, bytearray_getByte(ba, i));
         i = i+1;
     }

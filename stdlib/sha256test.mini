@@ -27,6 +27,8 @@ import type Sha256Hasher;
 import func sha256hasher_new() -> Sha256Hasher;
 import func sha256hasher_finish(h: Sha256Hasher) -> bytes32;
 import func sha256_byteArray(ba: ByteArray) -> bytes32;
+import func sha256hasher_pushByte(h: Sha256Hasher, b: uint) -> Sha256Hasher;
+import func sha256hasher_push256(h: Sha256Hasher, b: uint) -> Sha256Hasher;
 
 impure func main() {
     if let Some(x) = tests() {
@@ -86,7 +88,43 @@ func tests() -> option<bytes32> {
     }
     let s61 = sha256_byteArray(ba);
     if (s61 != bytes32(0x4b5c2783c91ceccb7c839213bcbb6a902d7fe8c2ec866877a51f433ea17f3e85)) {
-        Some(bytes32(13));
+        return Some(bytes32(13));
+    }
+
+    let ba = bytearray_new(0);
+    let i = 0;
+    let h = sha256hasher_new();
+    while (i < 131) {
+        ba = bytearray_setByte(ba, i, i);
+        h = sha256hasher_pushByte(h, i);
+        i = i+1;
+    }
+    let h0 = sha256hasher_finish(h);
+    h = sha256hasher_new();
+    let i = 0;
+    while (i < 4) {
+        h = sha256hasher_push256(h, bytearray_get256(ba, 32*i));
+        i = i+1;
+    }
+    h = sha256hasher_pushByte(h, bytearray_getByte(ba, 128));
+    h = sha256hasher_pushByte(h, bytearray_getByte(ba, 129));
+    h = sha256hasher_pushByte(h, bytearray_getByte(ba, 130));
+    let h1 = sha256hasher_finish(h);
+    if (h0 != h1) {
+        return Some(bytes32(14));
+    }
+    h = sha256hasher_new();
+    h = sha256hasher_pushByte(h, bytearray_getByte(ba, 0));
+    h = sha256hasher_pushByte(h, bytearray_getByte(ba, 1));
+    h = sha256hasher_pushByte(h, bytearray_getByte(ba, 2));
+    i = 0;
+    while (i < 4) {
+        h = sha256hasher_push256(h, bytearray_get256(ba, 32*i+3));
+        i = i+1;
+    }
+    let h2 = sha256hasher_finish(h);
+    if (h0 != h2) {
+        return Some(bytes32(15));
     }
 
 	return Some(bytes32(0));
