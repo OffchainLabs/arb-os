@@ -1494,7 +1494,7 @@ fn typecheck_expr(
                 return_type,
                 type_tree,
             )?),
-            tipe.clone(),
+            tipe.get_representation(type_tree)?,
             Type::Array(Box::new(tipe.clone())),
             *loc,
         )),
