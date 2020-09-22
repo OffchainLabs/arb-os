@@ -516,13 +516,14 @@ pub fn evm_eval_sha256(log_to: Option<&Path>, debug: bool) {
     let my_addr = Uint256::from_u64(1025);
 
     let tx_id = machine.runtime_env.insert_tx_message(
-        my_addr,
+        my_addr.clone(),
         Uint256::from_u64(1000000000),
         Uint256::zero(),
         Uint256::from_u64(2),  // sha256 precompile
         Uint256::from_u64(0),
         &vec![0xCCu8],
     );
+    machine.runtime_env.end_of_block(my_addr);
 
     let _ = if debug {
         machine.debug(None)
