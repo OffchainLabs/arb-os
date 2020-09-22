@@ -197,6 +197,24 @@ fn test_bls() {
             panic!("{}\n{}", e.0, e.1);
         }
     }
+}   
+
+fn test_sha256() {
+    let path = Path::new("stdlib/sha256test.mexe");
+    let res = run_from_file(
+        path,
+        vec![],
+        RuntimeEnvironment::new(Uint256::from_usize(1111)),
+        false,
+    );
+    match res {
+        Ok(res) => {
+            assert_eq!(res[0], Value::Int(Uint256::zero()));
+        }
+        Err(e) => {
+            panic!("{}\n{}", e.0, e.1);
+        }
+    }
 }
 
 #[test]
@@ -349,6 +367,9 @@ fn test_codeload() {
 fn test_direct_deploy_add() {
     crate::evm::evm_direct_deploy_add(None, false);
 }
+
+#[test]
+fn test_sha256_precompile() { crate::evm::evm_eval_sha256(None, false); }
 
 #[test]
 fn test_deploy_buddy_contract() {

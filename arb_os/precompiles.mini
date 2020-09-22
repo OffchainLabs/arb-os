@@ -28,6 +28,7 @@ import func bytearray_getByte(ba: ByteArray, offset: uint) -> uint;
 import func bytearray_get256(ba: ByteArray, offset: uint) -> uint;
 import func bytearray_set256(ba: ByteArray, offset: uint, val: uint) -> ByteArray;
 
+import func sha256_byteArray(ba: ByteArray) -> bytes32;
 
 import impure func arbsys_txcall();
 
@@ -37,6 +38,12 @@ public impure func precompiles_init(acctStore: AccountStore) -> option<AccountSt
         acctStore,
         address(0x01),
         precompile_0x01,
+        false,
+    )?;
+    acctStore = accountStore_createBuiltinContract(
+        acctStore,
+        address(0x02),
+        precompile_0x02,
         false,
     )?;
     acctStore = accountStore_createBuiltinContract(
@@ -80,6 +87,21 @@ public impure func precompile_0x01() {  // ecrecover
 
         let success = evmCallStack_setTopFrameMemory(
             bytearray_set256(bytearray_new(0), 0, uint(addr))
+        );
+        if (success) {
+            evmOp_return(0, 32);
+        }
+    }
+
+    evmOp_revert(0, 0);
+}
+
+public impure func precompile_0x02() {  // sha256
+    if let Some(topFrame) = evmCallStack_topFrame() {
+        let calldata = evmCallFrame_getCalldata(topFrame);
+        let result = sha256_byteArray(calldata);
+        let success = evmCallStack_setTopFrameMemory(
+            bytearray_set256(bytearray_new(0), 0, uint(result))
         );
         if (success) {
             evmOp_return(0, 32);
@@ -190,6 +212,4 @@ public impure func precompile_0x08() { // ecpairing
             }
         }
     }
-
-    evmOp_revert(0, 0);
 }

@@ -886,6 +886,7 @@ impl Machine {
                 Opcode::AVMOpcode(AVMOpcode::Type) => 3,
                 Opcode::AVMOpcode(AVMOpcode::Hash2) => 8,
                 Opcode::AVMOpcode(AVMOpcode::Keccakf) => 600,
+                Opcode::AVMOpcode(AVMOpcode::Sha256f) => 250,
                 Opcode::AVMOpcode(AVMOpcode::Pop) => 1,
                 Opcode::AVMOpcode(AVMOpcode::PushStatic) => 1,
                 Opcode::AVMOpcode(AVMOpcode::Rget) => 1,
@@ -1475,7 +1476,15 @@ impl Machine {
                         self.incr_pc();
                         Ok(true)
                     }
-					Opcode::AVMOpcode(AVMOpcode::Inbox) => {
+                    Opcode::AVMOpcode(AVMOpcode::Sha256f) => {
+                        let t1 = self.stack.pop_uint(&self.state)?;
+                        let t2 = self.stack.pop_uint(&self.state)?;
+                        let t3 = self.stack.pop_uint(&self.state)?;
+                        self.stack.push_uint(sha256_compression(t1, t2, t3));
+                        self.incr_pc();
+                        Ok(true)
+                    }
+                    Opcode::AVMOpcode(AVMOpcode::Inbox) => {
 						match self.runtime_env.get_from_inbox() {
                             Some(msg) => {
                                 self.stack.push(msg);
@@ -1857,6 +1866,15 @@ fn do_ecpairing(mut val: Value) -> Option<bool> {
     }
 
     None
+}
+
+fn sha256_compression(acc: Uint256, buf0: Uint256, buf1: Uint256) -> Uint256 {
+    let mut acc_32 = acc.to_u32_digits_be();
+    let buf_32 = buf0.to_u32_digits_be_2(&buf1);
+    crypto::sha2::sha256_digest_block_u32(&mut acc_32, &buf_32);
+    let acc_32 = &mut acc_32[..];
+    acc_32.reverse();
+    Uint256::from_u32_digits(acc_32)
 }
 
 ///Represents a stack trace, with each CodePt indicating a stack frame, Unknown variant is unused.
