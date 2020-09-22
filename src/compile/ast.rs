@@ -243,6 +243,7 @@ impl Type {
     }
 
     ///Panics if specified type does not have a default value
+    // TODO: have this resolve nominal types
     pub fn default_value(&self) -> Value {
         match self {
             Type::Void => {
