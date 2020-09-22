@@ -199,6 +199,7 @@ fn test_bls() {
     }
 }   
 
+#[test]
 fn test_sha256() {
     let path = Path::new("stdlib/sha256test.mexe");
     let res = run_from_file(
