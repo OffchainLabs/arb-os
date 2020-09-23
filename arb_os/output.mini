@@ -13,6 +13,7 @@ import func bytearray_marshalFull(ba: ByteArray) -> MarshalledBytes;
 import func queue_new() -> Queue;
 import func queue_put(q: Queue, item: any) -> Queue;
 import func queue_get(queue: Queue) -> option<(Queue, any)>;
+import func queue_size(queue: Queue) -> uint;
 
 import func evmlogs_empty() -> EvmLogs;
 import func evmlogs_numLogs(logs: EvmLogs) -> uint;
@@ -86,6 +87,7 @@ var globalBlockReceiptData: struct {
     statsThisBlock: OutputStatistics,
     statsAllTime: OutputStatistics,
     deferredSends: Queue,
+    deferredSendBlockNum: uint,
 };
 
 public impure func outputStats_endOfBlock(blockNum: uint, timestamp: uint) {
@@ -114,8 +116,17 @@ public impure func outputStats_endOfBlock(blockNum: uint, timestamp: uint) {
             numTx: 0,
             numEvmLogs: 0
         }
-
     };
+
+    // do deferred sends, if needed
+    if (blockNum >= globalBlockReceiptData.deferredSendBlockNum) {
+        doDeferredSends(globalBlockReceiptData.deferredSends);
+        globalBlockReceiptData = globalBlockReceiptData with {
+            deferredSends: queue_new()
+        } with {
+            deferredSendBlockNum: 40 + blockNum
+        };
+    }
 }
 
 impure func outputStats_addTxLog(gasUsed: uint, numEvmLogs: uint) {
@@ -150,6 +161,7 @@ public impure func txReceipts_init() {  // will be called at beginning of main()
         statsThisBlock: outputStats_new(),
         statsAllTime: outputStats_new(),
         deferredSends: queue_new(),
+        deferredSendBlockNum: 40,
     };
 }
 
@@ -286,6 +298,32 @@ public impure func presendQueuedMessages(queue: Queue) {
     }
 }
 
-impure func sendPackagedMessage(msg: any) {
-    asm(msg,) { send };
+impure func doDeferredSends(q: Queue) {
+    let sz = queue_size(q);
+    let items = newarray<any>(sz);
+    let i = 0;
+    while (i < sz) {
+        if let Some(res) = queue_get(q) {
+            let (uq, msg) = res;
+            q = uq;
+            items = items with { [i] = msg };
+        } else {
+            items = items with { [i] = () };
+        }
+        i = i+1;
+    }
+
+    asm((sz, merkleHash(items, 0, sz)),) { send };
+}
+
+func merkleHash(arr: []any, offset: uint, num: uint) -> bytes32 {
+    if (num == 1) {
+        return hash(arr[offset]);
+    }
+
+    let splitPoint = 1;
+    while (2*splitPoint < num) {
+        splitPoint = 2*splitPoint;
+    }
+    return hash(merkleHash(arr, offset, splitPoint), merkleHash(arr, offset+splitPoint, num-splitPoint));
 }
