@@ -188,10 +188,10 @@ public impure func precompile_0x08() { // ecpairing
                     (
                         bytearray_get256(calldata, offset),
                         bytearray_get256(calldata, offset+32),
-                        bytearray_get256(calldata, offset+2*32),
                         bytearray_get256(calldata, offset+3*32),
-                        bytearray_get256(calldata, offset+4*32),
-                        bytearray_get256(calldata, offset+5*32)
+                        bytearray_get256(calldata, offset+2*32),
+                        bytearray_get256(calldata, offset+5*32),
+                        bytearray_get256(calldata, offset+4*32)
                     ),
                     acc
                 );
