@@ -98,8 +98,8 @@ import impure func emitLog(
 
 import impure func mainRunLoop();
 
-import impure func sendMessage(msgType: uint, sender: address, data: ByteArray);
-import impure func sendQueuedMessages(queue: Queue);
+import impure func presendMessage(msgType: uint, sender: address, data: ByteArray);
+import impure func presendQueuedMessages(queue: Queue);
 
 
 // This is declared identically in gasAccounting.mini
@@ -572,7 +572,7 @@ public impure func evmCallStack_returnFromCall(
                     );
 
                     // emit queued sends
-                    sendQueuedMessages(topFrame.sendQueue);
+                    presendQueuedMessages(topFrame.sendQueue);
 
                     // Emit log item reporting success
                     emitLog(
@@ -585,7 +585,7 @@ public impure func evmCallStack_returnFromCall(
 
                     if (globalCurrentIncomingRequest.kind == 5) {
                         // successfully created a buddy contract -- announce that as a message
-                        sendMessage(
+                        presendMessage(
                             5,
                             globalCurrentIncomingRequest.sender,
                             bytearray_setByte(bytearray_new(0), 0, 1)
@@ -602,7 +602,7 @@ public impure func evmCallStack_returnFromCall(
                     );
                     if (globalCurrentIncomingRequest.kind == 5) {
                         // failed to create a buddy contract -- announce that as a message
-                        sendMessage(
+                        presendMessage(
                             5,
                             globalCurrentIncomingRequest.sender,
                             bytearray_setByte(bytearray_new(0), 0, 0)
@@ -631,7 +631,7 @@ public impure func evmCallStack_returnFromCall(
                     }
 
                     // emit queued sends
-                    sendQueuedMessages(topFrame.sendQueue);
+                    presendQueuedMessages(topFrame.sendQueue);
 
                     // Save results back to the main globalAccountStore
                     setGlobalAccountStore(acctStore,);

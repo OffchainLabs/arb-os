@@ -92,7 +92,7 @@ impl AbiForContract {
         debug: bool,
     ) -> Option<Uint256> {
         let initial_logs_len = machine.runtime_env.get_all_receipt_logs().len();
-        let initial_sends_len = machine.runtime_env.get_all_sends().len();
+        let initial_sends_len = machine.runtime_env.get_all_intend_to_send_logs().len();
         let augmented_code = if let Some(constructor) = self.contract.constructor() {
             match constructor.encode_input(self.code_bytes.clone(), args) {
                 Ok(aug_code) => aug_code,
@@ -140,7 +140,7 @@ impl AbiForContract {
         }
 
         if deploy_as_buddy {
-            let sends = machine.runtime_env.get_all_sends();
+            let sends = machine.runtime_env.get_all_intend_to_send_logs();
             if sends.len() != initial_sends_len + 1 {
                 println!(
                     "deploy: expected 1 new send, got {}",
@@ -200,14 +200,14 @@ impl AbiForContract {
         );
 
         let num_logs_before = machine.runtime_env.get_all_receipt_logs().len();
-        let num_sends_before = machine.runtime_env.get_all_sends().len();
+        let num_sends_before = machine.runtime_env.get_all_intend_to_send_logs().len();
         let _arbgas_used = if debug {
             machine.debug(None)
         } else {
             machine.run(None)
         };
         let logs = machine.runtime_env.get_all_receipt_logs();
-        let sends = machine.runtime_env.get_all_sends();
+        let sends = machine.runtime_env.get_all_intend_to_send_logs();
         Ok((
             logs[num_logs_before..].to_vec(),
             sends[num_sends_before..].to_vec(),

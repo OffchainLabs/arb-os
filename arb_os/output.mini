@@ -10,6 +10,8 @@ import type EvmLogs;
 import func bytearray_new(capacity: uint) -> ByteArray;
 import func bytearray_marshalFull(ba: ByteArray) -> MarshalledBytes;
 
+import func queue_new() -> Queue;
+import func queue_put(q: Queue, item: any) -> Queue;
 import func queue_get(queue: Queue) -> option<(Queue, any)>;
 
 import func evmlogs_empty() -> EvmLogs;
@@ -83,6 +85,7 @@ var globalBlockReceiptData: struct {
     data: PerBlockReceiptData,
     statsThisBlock: OutputStatistics,
     statsAllTime: OutputStatistics,
+    deferredSends: Queue,
 };
 
 public impure func outputStats_endOfBlock(blockNum: uint, timestamp: uint) {
@@ -146,6 +149,7 @@ public impure func txReceipts_init() {  // will be called at beginning of main()
         },
         statsThisBlock: outputStats_new(),
         statsAllTime: outputStats_new(),
+        deferredSends: queue_new(),
     };
 }
 
@@ -244,6 +248,11 @@ impure func emitBlockSummaryLog(blockNum: uint, timestamp: uint) {
     ),) { log };
 }
 
+impure func emitIntendToSendLog(contents: any) {
+    outputStats_addSend();
+    asm((2, contents),) { log };
+}
+
 public impure func queueMessageForSend(msgType: uint, sender: address, data: ByteArray) {
     evmCallStack_queueMessage(
         (
@@ -254,29 +263,29 @@ public impure func queueMessageForSend(msgType: uint, sender: address, data: Byt
     );
 }
 
-public impure func sendQueuedMessages(queue: Queue) {
+public impure func presendMessage(msgType: uint, sender: address, data: ByteArray) {
+    let contents = (msgType, uint(sender), bytearray_marshalFull(data));
+    emitIntendToSendLog(contents);
+    globalBlockReceiptData = globalBlockReceiptData with {
+        deferredSends: queue_put(globalBlockReceiptData.deferredSends, contents)
+    };
+}
+
+public impure func presendQueuedMessages(queue: Queue) {
     loop {
         if let Some(res) = queue_get(queue) {
             let (uq, msg) = res;
             queue = uq;
-            sendPackagedMessage(msg);
+            emitIntendToSendLog(msg);
+            globalBlockReceiptData = globalBlockReceiptData with {
+                deferredSends: queue_put(globalBlockReceiptData.deferredSends, msg)
+            };
         } else {
             return;
         }
     }
 }
 
-public impure func sendMessage(msgType: uint, sender: address, data: ByteArray) {
-    sendPackagedMessage(
-        (
-            msgType,
-            uint(sender),
-            bytearray_marshalFull(data),
-        )
-    );
-}
-
-func sendPackagedMessage(msg: any) {
-    outputStats_addSend();
+impure func sendPackagedMessage(msg: any) {
     asm(msg,) { send };
 }

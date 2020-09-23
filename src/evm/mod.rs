@@ -233,14 +233,14 @@ pub fn evm_xcontract_call_using_batch(
         .insert_batch_message(Uint256::from_usize(1025), &batch);
 
     let num_logs_before = machine.runtime_env.get_all_receipt_logs().len();
-    let num_sends_before = machine.runtime_env.get_all_sends().len();
+    let num_sends_before = machine.runtime_env.get_all_intend_to_send_logs().len();
     let _arbgas_used = if debug {
         machine.debug(None)
     } else {
         machine.run(None)
     };
     let logs = machine.runtime_env.get_all_receipt_logs();
-    let sends = machine.runtime_env.get_all_sends();
+    let sends = machine.runtime_env.get_all_intend_to_send_logs();
     let logs = &logs[num_logs_before..];
     let sends = &sends[num_sends_before..];
 
