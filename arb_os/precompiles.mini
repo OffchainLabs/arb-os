@@ -2,8 +2,9 @@
 // Copyright 2020, Offchain Labs, Inc. All rights reserved.
 //
 
+use accounts::AccountStore;
+
 import type EvmCallFrame;
-import type AccountStore;
 import type ByteArray;
 
 import impure func evmCallStack_topFrame() -> option<EvmCallFrame>;

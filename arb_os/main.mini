@@ -18,7 +18,7 @@ use inbox::inbox_init;
 use messageBatch::foo;
 use messages::foo;
 use output::foo;
-use precompiles::foo;
+use precompiles::precompiles_init;
 use signedTx::foo;
 use tokens::foo;
 
@@ -32,7 +32,6 @@ use std::rlp::foo;
 use std::stack::foo;
 use std::storageMap::StorageMap;
 
-import impure func precompiles_init(acctStore: AccountStore) -> option<AccountStore>;
 import impure func txReceipts_init();
 
 import impure func getGlobalAccountStore() -> AccountStore;
