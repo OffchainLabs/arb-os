@@ -27,7 +27,10 @@ use tokens::foo;
 
 use std::bytearray::MarshalledBytes;
 use std::bytearray::ByteArray;
+use std::bytearray::bytearray_new;
+use std::bytearray::bytearray_unmarshalBytes;
 use std::bytestream::ByteStream;
+use std::bytestream::bytestream_new;
 use std::expandingIntArray::foo;
 use std::keccak::foo;
 use std::queue::foo;
@@ -35,9 +38,6 @@ use std::rlp::foo;
 use std::stack::foo;
 use std::storageMap::StorageMap;
 
-import func bytearray_new(capacityHint: uint) -> ByteArray;
-import func bytearray_unmarshalBytes(mb: MarshalledBytes) -> ByteArray;
-import func bytestream_new(ba: ByteArray) -> ByteStream;
 import func getErc20code() -> MarshalledBytes;
 import func getErc721code() -> MarshalledBytes;
 import func getArbInfoCode() -> MarshalledBytes;
