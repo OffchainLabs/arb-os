@@ -227,7 +227,11 @@ impl Type {
             }
             Type::Map(key1, val1) => {
                 if let Type::Map(key2, val2) = rhs {
-                    key1.assignable(key2, type_tree) && (val1 == val2)
+                    if let Ok(val2) = val2.get_representation(type_tree) {
+                        key1.assignable(key2, type_tree) && (val1.assignable(&val2, type_tree))
+                    } else {
+                        false
+                    }
                 } else {
                     false
                 }

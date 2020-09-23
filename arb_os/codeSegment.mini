@@ -2,7 +2,7 @@
 // Copyright 2020, Offchain Labs, Inc. All rights reserved.
 //
 
-import type ByteStream;
+use std::bytestream::ByteStream;
 
 import func evmCallStack_callHitError(reason: uint);
 
