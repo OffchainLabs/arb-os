@@ -6,6 +6,7 @@ use accounts::AccountStore;
 use accounts::accountStore_init;
 use accounts::getGlobalAccountStore;
 use accounts::setGlobalAccountStore;
+use accounts::accountStore_createAccountFromEvmCode;
 use arbsys::foo;
 use chainParameters::chainParams_init;
 use codeSegment::foo;
@@ -34,14 +35,6 @@ use std::rlp::foo;
 use std::stack::foo;
 use std::storageMap::StorageMap;
 
-import func accountStore_createAccountFromEvmCode(
-    store: AccountStore,
-    newAddr: address,
-    code: ByteArray,
-    evmJumpTable: map<uint, impure func()>,
-    initCodePt: impure func(),
-    storageMap: StorageMap
-) -> option<AccountStore>;
 import impure func translateEvmCodeSegment(
     bs: ByteStream
 ) -> option<(impure func(), map<uint, impure func()>)>;

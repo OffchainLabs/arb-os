@@ -2,8 +2,8 @@
 // Copyright 2020, Offchain Labs, Inc. All rights reserved.
 //
 
-import type ByteArray;
-import type StorageMap;
+use std::bytearray::ByteArray;
+use std::storageMap::StorageMap;
 
 import func bytearray_new(capacity: uint) -> ByteArray;
 import func bytearray_size(ba: ByteArray) -> uint;
