@@ -2,17 +2,19 @@
 // Copyright 2020, Offchain Labs, Inc. All rights reserved.
 //
 
-use accounts::foo;
+use accounts::AccountStore;
+use accounts::accountStore_init;
 use arbsys::foo;
-use chainParameters::foo;
+use chainParameters::chainParams_init;
 use codeSegment::foo;
 use contractTemplates::foo;
-use errorHandler::foo;
-use evmCallStack::foo;
-use evmLogs::foo;
+use errorHandler::errorHandler_init;
+use evmCallStack::evmCallStack_init;
+use evmLogs::EvmLogs;
 use evmOps::foo;
-use gasAccounting::foo;
-use inbox::foo;
+use gasAccounting::GasUsage;
+use gasAccounting::gasAccounting_init;
+use inbox::inbox_init;
 use messageBatch::foo;
 use messages::foo;
 use output::foo;
@@ -20,29 +22,16 @@ use precompiles::foo;
 use signedTx::foo;
 use tokens::foo;
 
-use std::bytearray::foo;
-use std::bytestream::foo;
+use std::bytearray::MarshalledBytes;
+use std::bytearray::ByteArray;
+use std::bytestream::ByteStream;
 use std::expandingIntArray::foo;
 use std::keccak::foo;
 use std::queue::foo;
 use std::rlp::foo;
 use std::stack::foo;
-use std::storageMap::foo;
+use std::storageMap::StorageMap;
 
-import type AccountStore;
-import type MarshalledBytes;
-import type ByteArray;
-import type ByteStream;
-import type EvmLogs;
-import type GasUsage;
-import type StorageMap;
-
-import impure func errorHandler_init();
-import impure func chainParams_init();
-import impure func gasAccounting_init();
-import impure func evmCallStack_init();
-import impure func inbox_init();
-import impure func accountStore_init();
 import impure func precompiles_init(acctStore: AccountStore) -> option<AccountStore>;
 import impure func txReceipts_init();
 
