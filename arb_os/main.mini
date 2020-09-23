@@ -4,6 +4,8 @@
 
 use accounts::AccountStore;
 use accounts::accountStore_init;
+use accounts::getGlobalAccountStore;
+use accounts::setGlobalAccountStore;
 use arbsys::foo;
 use chainParameters::chainParams_init;
 use codeSegment::foo;
@@ -17,7 +19,7 @@ use gasAccounting::gasAccounting_init;
 use inbox::inbox_init;
 use messageBatch::foo;
 use messages::foo;
-use output::foo;
+use output::txReceipts_init;
 use precompiles::precompiles_init;
 use signedTx::foo;
 use tokens::foo;
@@ -32,10 +34,6 @@ use std::rlp::foo;
 use std::stack::foo;
 use std::storageMap::StorageMap;
 
-import impure func txReceipts_init();
-
-import impure func getGlobalAccountStore() -> AccountStore;
-import impure func setGlobalAccountStore(acctStore: AccountStore);
 import func accountStore_createAccountFromEvmCode(
     store: AccountStore,
     newAddr: address,
