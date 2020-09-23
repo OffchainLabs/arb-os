@@ -1349,8 +1349,14 @@ fn typecheck_expr(
                                 &tc_args[i].get_type().get_representation(type_tree)?,
                                 type_tree,
                             ) {
-                                println!("expected {:?}", resolved_arg_type);
-                                println!("actual   {:?}", tc_args[i].get_type());
+                                println!(
+                                    "expected {:?}",
+                                    resolved_arg_type.get_representation(type_tree)?
+                                );
+                                println!(
+                                    "actual   {:?}",
+                                    tc_args[i].get_type().get_representation(type_tree)?
+                                );
                                 return Err(new_type_error(
                                     "wrong argument type in function call".to_string(),
                                     *loc,
