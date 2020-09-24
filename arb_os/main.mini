@@ -26,6 +26,7 @@ use evmOps::foo;
 use gasAccounting::GasUsage;
 use gasAccounting::gasAccounting_init;
 use inbox::inbox_init;
+use inbox::inbox_get;
 use messageBatch::foo;
 use messages::foo;
 use output::txReceipts_init;
@@ -46,7 +47,6 @@ use std::rlp::foo;
 use std::stack::foo;
 use std::storageMap::StorageMap;
 
-import impure func inbox_get() -> IncomingRequest;
 import impure func getNextRequestFromCongestionAuction() -> (
     bool,           // was it approved for execution
     option<IncomingRequest>,  // if it was an L1 message

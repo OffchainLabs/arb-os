@@ -2,17 +2,17 @@
 // Copyright 2020, Offchain Labs, Inc. All rights reserved.
 //
 
-use std::bytearray::ByteArray;
-use std::storageMap::StorageMap;
+use contractTemplates::getErc20address;
+use contractTemplates::getErc721address;
 
-import func bytearray_new(capacity: uint) -> ByteArray;
-import func bytearray_size(ba: ByteArray) -> uint;
-import func bytearray_setByte(ba: ByteArray, offset: uint, value: uint) -> ByteArray;
-import func storageMap_new() -> StorageMap;
-import func storageMap_get(sm: StorageMap, index: uint) -> uint;
-import func storageMap_set(sm: StorageMap, index: uint, value: uint) -> StorageMap;
-import func getErc20address() -> address;
-import func getErc721address() -> address;
+use std::bytearray::ByteArray;
+use std::bytearray::bytearray_new;
+use std::bytearray::bytearray_size;
+use std::bytearray::bytearray_setByte;
+use std::storageMap::StorageMap;
+use std::storageMap::storageMap_new;
+use std::storageMap::storageMap_get;
+use std::storageMap::storageMap_set;
 
 type AccountStore = map<address, Account>
 
