@@ -132,7 +132,11 @@ impl RuntimeEnvironment {
         self.insert_l2_message(sender_addr.clone(), &buf, false)
     }
 
-    pub fn insert_compressed_tx_message(&mut self, sender_addr: Uint256, contents: &[u8]) -> Uint256 {
+    pub fn insert_compressed_tx_message(
+        &mut self,
+        sender_addr: Uint256,
+        contents: &[u8],
+    ) -> Uint256 {
         let mut buf = vec![7u8];
         buf.extend(contents);
         self.insert_l2_message(sender_addr.clone(), &buf, false)
@@ -690,7 +694,7 @@ impl RtEnvRecorder {
                 .collect()
         };
         if !(logs_expected == logs_seen) {
-            print_output_differences("log",machine.runtime_env.recorder.logs, self.logs.clone());
+            print_output_differences("log", machine.runtime_env.recorder.logs, self.logs.clone());
             return false;
         }
         if !(self.sends == machine.runtime_env.recorder.sends) {

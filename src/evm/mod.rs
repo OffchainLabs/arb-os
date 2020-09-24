@@ -515,7 +515,7 @@ pub fn evm_eval_sha256(log_to: Option<&Path>, debug: bool) {
         my_addr,
         Uint256::from_u64(1000000000),
         Uint256::zero(),
-        Uint256::from_u64(2),  // sha256 precompile
+        Uint256::from_u64(2), // sha256 precompile
         Uint256::from_u64(0),
         &vec![0xCCu8],
     );
@@ -532,7 +532,13 @@ pub fn evm_eval_sha256(log_to: Option<&Path>, debug: bool) {
     assert!(receipts[0].succeeded());
     let return_data = receipts[0].get_return_data();
     let return_uint = Uint256::from_bytes(&return_data);
-    assert_eq!(return_uint, Uint256::from_string_hex("1dd8312636f6a0bf3d21fa2855e63072507453e93a5ced4301b364e91c9d87d6").unwrap());
+    assert_eq!(
+        return_uint,
+        Uint256::from_string_hex(
+            "1dd8312636f6a0bf3d21fa2855e63072507453e93a5ced4301b364e91c9d87d6"
+        )
+        .unwrap()
+    );
 
     if let Some(path) = log_to {
         machine.runtime_env.recorder.to_file(path).unwrap();
