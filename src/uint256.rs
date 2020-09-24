@@ -78,7 +78,7 @@ impl Uint256 {
         }
     }
 
-    pub fn _from_u256(x: &U256) -> Self {
+    pub fn from_u256(x: &U256) -> Self {
         let mut b: Vec<u8> = vec![0u8; 32];
         x.to_big_endian(&mut b);
         Uint256::from_bytes(&b)
@@ -165,7 +165,6 @@ impl Uint256 {
         ret
     }
 
-    #[cfg(test)]
     pub fn rlp_encode(&self) -> Vec<u8> {
         // RLP encode the minimal byte representation of self
         if (self.is_zero()) {

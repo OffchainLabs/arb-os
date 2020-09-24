@@ -36,6 +36,7 @@ import func bytestream_get256(bs: ByteStream) -> option<(ByteStream, uint)>;
 import func bytestream_getRemainingBytes(bs: ByteStream) -> ByteArray;
 import func bytestream_skipBytes(bs: ByteStream, nbytes: uint) -> option<ByteStream>;
 
+import impure func decompressAndVerifyEcdsaSignedTx(ba: ByteArray, req: IncomingRequest) -> option<TxRequestData>;
 
 import func hashUnsignedL2messageInfo(l2msg: MarshalledBytes, chainId: uint, sender: address) -> bytes32;
 import func translateSignedTx(req: IncomingRequest) -> option<TxRequestData>;
@@ -216,7 +217,13 @@ public impure func inbox_getNextUnpackedRequest() -> (
                     // else signature was invalid, ignore msg and execute loop again to get another
                 } elseif (firstByte == 7) {
                     // it's a single message with compressed headers
-
+                    if let Some(txRequest) = decompressAndVerifyEcdsaSignedTx(
+                        bytearray_unmarshalBytes(msg.msgData),
+                        msg
+                    ) {
+                        return (None<IncomingRequest>, Some(txRequest));
+                    }
+                    // else signature was invalid, ignore msg and execute loop again to get another
                 } else {
                     // subtype must be 0, 1, or 2
                     if let Some(txRequest) = translateUnsignedTx(msg) {

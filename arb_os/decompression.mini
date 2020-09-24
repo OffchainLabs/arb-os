@@ -5,11 +5,18 @@
 import type ByteArray;
 import type MarshalledBytes;
 import func bytearray_new(unused: uint) -> ByteArray;
+import func bytearray_size(ba: ByteArray) -> uint;
+import func bytearray_getByte(ba: ByteArray, offset: uint) -> uint;
+import func bytearray_get256(ba: ByteArray, offset: uint) -> uint;
+import func bytearray_extract(ba: ByteArray, offset: uint, nbytes: uint) -> ByteArray;
 import func bytearray_marshalFull(ba: ByteArray) -> MarshalledBytes;
 
 import type ByteStream;
+import func bytestream_new(ba: ByteArray) -> ByteStream;
 import func bytestream_getByte(bs: ByteStream) -> option<(ByteStream, uint)>;
 import func bytestream_get256(bs: ByteStream) -> option<(ByteStream, uint)>;
+import func bytestream_getN(bs: ByteStream, n: uint) -> option<(ByteStream, ByteArray)>;
+import func bytestream_bytesRemaining(bs: ByteStream) -> uint;
 import func bytestream_getRemainingBytes(bs: ByteStream) -> ByteArray;
 import func rlp_decodeUint(bs: ByteStream) -> option<(ByteStream, uint)>;
 
@@ -18,6 +25,8 @@ import func expandingIntArray_new() -> ExpandingIntArray;
 import func expandingIntArray_size(arr: ExpandingIntArray) -> uint;
 import func expandingIntArray_get(arr: ExpandingIntArray, index: uint) -> uint;
 import func expandingIntArray_set(arr: ExpandingIntArray, index: uint, val: uint) -> ExpandingIntArray;
+
+import func keccak256(ba: ByteArray, offset: uint, nbytes: uint) -> bytes32;
 
 import type Queue;
 import func queue_new() -> Queue;
@@ -99,29 +108,24 @@ public impure func decompressAddress(
 ) -> option<(ByteStream, address)> {
     // Returns None if insufficient data in stream
     // A compressed address is one of three things:
-    //   * an RLP-encoding of a value 8 bytes in length or shorter, which is interpreted as an index into
+    //   * a single byte 0x80, which is interpreted as the null address
+    //   * an RLP-encoding of a value 1-19 bytes in length, which is interpreted as an index into
     //           the IndexedAddressTable, or
-    //   * a single byte 0xff followed by an RLP encoding of an address that is 8 bytes in length or shorter, or
-    //   * an RLP-encoding of a value longer than 8 bytes, which is interpreted as an address.
-    // In the last two cases, the address is added to the globalIndexedAddressTable if it is not already there
+    //   * an RLP-encoding of a 20-byte value which is interpreted as an address.
+    // In the last case, the address is added to the globalIndexedAddressTable if it is not already there
 
     let (ustr, firstByte) = bytestream_getByte(stream)?;
-    if (firstByte == 0xff) {
-        let (ustr, addr) = rlp_decodeAddress(ustr)?;
+    if (firstByte == 0x80) {
+        return Some((ustr, address(0)));
+    } elseif (firstByte < 0x80 + 20) {
+        // don't update stream, because we want to re-start from the beginning
+        let (ustr, decodedUint) = rlp_decodeUint(stream)?;
+        return Some((ustr, addressTable_getByIndex(globalIndexedAddressTable, decodedUint)));
+    } else {
+        let (ustr, addr) = rlp_decodeAddress(stream)?;
         let (iat, _) = addressTable_getByAddressAlloc(globalIndexedAddressTable, addr);
         globalIndexedAddressTable = iat;
         return Some((ustr, addr));
-    } else {
-        // don't update stream, because we want to re-start from the beginning
-        let (ustr, decodedUint) = rlp_decodeUint(stream)?;
-        if (decodedUint < 0x10000000000000000) {
-            return Some((ustr, addressTable_getByIndex(globalIndexedAddressTable, decodedUint)));
-        } else {
-            let addr = address(decodedUint);
-            let (iat, _) = addressTable_getByAddressAlloc(globalIndexedAddressTable, addr);
-            globalIndexedAddressTable = iat;
-            return Some((ustr, addr));
-        }
     }
 }
 
@@ -132,6 +136,18 @@ public func decompressTokenAmount(bs: ByteStream) -> option<(ByteStream, uint)> 
     }
     let (ustr, sh) = bytestream_getByte(ustr)?;
     return Some((ustr, base * asm(sh, 10) uint { exp }));
+}
+
+// TxRequestData is declared identically in message.mini and elsewhere.
+type TxRequestData = struct {
+    maxGas: uint,
+    gasPrice: uint,
+    seqNum: option<uint>,
+    caller: address,
+    calleeAddr: address,
+    value: uint,
+    calldata: ByteArray,
+    incomingRequest: IncomingRequest,
 }
 
 // This is a copy of a struct defined in ArbOS/signedTx.mini.
@@ -148,10 +164,43 @@ type SignedTx = struct {
     s: uint
 }
 
-impure func decompressSignedTx(
+public impure func decompressAndVerifyEcdsaSignedTx(
+    ba: ByteArray,
+    originalRequest: IncomingRequest
+) -> option<TxRequestData> {
+    let sz = bytearray_size(ba);
+    if (sz <= 66) {
+        return None;
+    }
+
+    let r = bytearray_get256(ba, sz-65);
+    let s = bytearray_get256(ba, sz-33);
+    let v = bytearray_getByte(ba, sz-1);
+    let body = bytearray_extract(ba, 1, sz-66);
+    let txId = keccak256(body, 0, sz-66);
+    let signer = asm(
+        r,
+        s,
+        1 - (v % 2),
+        txId,
+    ) address { ecrecover };
+    if (signer == address(0)) {
+        return None;
+    }
+
+    originalRequest = originalRequest with {
+        requestId: uint(txId)
+    };
+
+    let (_, tx) = decompressTx(bytestream_new(body), signer, originalRequest)?;
+    return Some(tx);
+}
+
+impure func decompressTx(
     stream: ByteStream,
-    sender: address
-) -> option<(ByteStream, SignedTx)> {
+    sender: address,
+    originalRequest: IncomingRequest,
+) -> option<(ByteStream, TxRequestData)> {
     let (ustr, seqNumByte) = bytestream_getByte(stream)?;
     stream = ustr;
     let dbSeqNum = account_getNextSeqNum(
@@ -177,32 +226,26 @@ impure func decompressSignedTx(
     let (ustr, value) = decompressTokenAmount(stream)?;
     stream = ustr;
 
-    let (ustr, v) = rlp_decodeUint(stream)?;
+    let numBytesLeft = bytestream_bytesRemaining(stream);
+    if (numBytesLeft < 65) {
+        return None;
+    }
+
+    let (ustr, calldata) = bytestream_getN(stream, numBytesLeft-65)?;
     stream = ustr;
 
-    let (ustr, r) = bytestream_get256(stream)?;
-    stream = ustr;
-
-    let (ustr, s) = bytestream_get256(stream)?;
-    stream = ustr;
-
-    let calldata = bytestream_getRemainingBytes(stream);
-
-    return Some(
-        (
-            stream,
-            struct {
-                seqNum: seqNum,
-                gasPrice: gasPrice,
-                gasLimit: gasLimit,
-                to: toAddr,
-                value: value,
-                data: calldata,
-                v: v,
-                r: r,
-                s: s
-            }
-        )
-    );
+    return Some((
+        stream,
+        struct {
+            maxGas: gasLimit,
+            gasPrice: gasPrice,
+            seqNum: Some(seqNum),
+            caller: sender,
+            calleeAddr: toAddr,
+            value: value,
+            calldata: calldata,
+            incomingRequest: originalRequest
+        }
+    ));
 }
 
