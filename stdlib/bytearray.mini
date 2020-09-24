@@ -2,18 +2,13 @@
 // Copyright 2020, Offchain Labs, Inc. All rights reserved.
 //
 
-import type ExpandingIntArray;
+use std::expandingIntArray::ExpandingIntArray;
+use std::expandingIntArray::expandingIntArray_new;
+use std::expandingIntArray::expandingIntArray_get;
+use std::expandingIntArray::expandingIntArray_getConsecutive;
+use std::expandingIntArray::expandingIntArray_set;
+use std::expandingIntArray::expandingIntArray_setN;
 
-import func expandingIntArray_new() -> ExpandingIntArray;
-import func expandingIntArray_get(arr: ExpandingIntArray, index: uint) -> uint;
-import func expandingIntArray_getConsecutive(arr: ExpandingIntArray, index: uint) -> (uint, uint);
-import func expandingIntArray_set(arr: ExpandingIntArray, index: uint, value: uint) -> ExpandingIntArray;
-import func expandingIntArray_setN(
-    arr: ExpandingIntArray,
-    inChunk: uint,   // must be a power of 8
-    index: uint,     // must be a multiple of inChunk
-    value: any
-) -> ExpandingIntArray;
 import func expandingIntArray_op(
     arr: ExpandingIntArray,
     index: uint,
