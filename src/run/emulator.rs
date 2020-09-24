@@ -27,7 +27,8 @@ use std::cmp::{max, Ordering};
 use std::collections::{BTreeMap, HashMap};
 use std::convert::TryInto;
 use std::fmt;
-use std::io::stdin;
+use std::fs::File;
+use std::io::{stdin, Write};
 
 ///Represents a stack of `Value`s
 #[derive(Debug, Default, Clone)]
@@ -352,6 +353,7 @@ pub struct ProfilerData {
     data: HashMap<String, BTreeMap<(usize, usize), u64>>,
     stack_tree: HashMap<CodePt, (Vec<ProfilerEvent>, Option<Location>)>,
     unknown_gas: u64,
+    total_gas: u64,
     file_name_chart: HashMap<u64, String>,
 }
 
@@ -360,6 +362,7 @@ struct JsonProfilerData {
     data: HashMap<String, HashMap<String, u64>>,
     stack_tree: HashMap<String, (Vec<ProfilerEvent>, Option<Location>)>,
     unknown_gas: u64,
+    total_gas: u64,
     file_name_chart: HashMap<u64, String>,
 }
 
@@ -647,6 +650,7 @@ impl ProfilerData {
             data,
             stack_tree,
             unknown_gas,
+            total_gas,
             file_name_chart,
         } = self.clone();
         let data = data
@@ -669,9 +673,12 @@ impl ProfilerData {
             data,
             stack_tree,
             unknown_gas,
+            total_gas,
             file_name_chart,
         };
-        println!("{}", serde_json::to_string(&json).unwrap());
+        let mut f =
+            File::create("profiler_output.json").expect("failed to create profiler output file");
+        let _ = write!(f, "{}", serde_json::to_string(&json).unwrap());
     }
 }
 
@@ -981,6 +988,7 @@ impl Machine {
                 loc_map.insert(&loc, next_op_gas, &self.file_name_chart);
             }
             total_gas += next_op_gas;
+            loc_map.total_gas = total_gas;
             let alt_stack = if let StackTrace::Known(trace) = self.get_stack_trace() {
                 trace
             } else {
