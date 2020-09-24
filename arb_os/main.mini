@@ -10,7 +10,15 @@ use accounts::accountStore_createAccountFromEvmCode;
 use arbsys::foo;
 use chainParameters::chainParams_init;
 use codeSegment::translateEvmCodeSegment;
-use contractTemplates::foo;
+use contractTemplates::getErc20code;
+use contractTemplates::getErc721code;
+use contractTemplates::getArbInfoCode;
+use contractTemplates::getErc20address;
+use contractTemplates::getErc721address;
+use contractTemplates::getArbInfoAddress;
+use contractTemplates::getErc20storage;
+use contractTemplates::getErc721storage;
+use contractTemplates::getArbInfoStorage;
 use errorHandler::errorHandler_init;
 use evmCallStack::evmCallStack_init;
 use evmLogs::EvmLogs;
@@ -37,16 +45,6 @@ use std::queue::foo;
 use std::rlp::foo;
 use std::stack::foo;
 use std::storageMap::StorageMap;
-
-import func getErc20code() -> MarshalledBytes;
-import func getErc721code() -> MarshalledBytes;
-import func getArbInfoCode() -> MarshalledBytes;
-import func getErc20address() -> address;
-import func getErc721address() -> address;
-import func getArbInfoAddress() -> address;
-import func getErc20storage() -> StorageMap;
-import func getErc721storage() -> StorageMap;
-import func getArbInfoStorage() -> StorageMap;
 
 import impure func inbox_get() -> IncomingRequest;
 import impure func getNextRequestFromCongestionAuction() -> (

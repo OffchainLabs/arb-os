@@ -53,7 +53,7 @@ fn mini_code_getter_for_bytes(buf: &mut BytesMut, name: &str, b: &[u8]) {
 fn mini_code_for_templates() -> BytesMut {
     let mut buf = BytesMut::with_capacity(1024);
     buf.put(&b"// DO NOT EDIT -- this is machine-generated code.\n\n"[..]);
-    buf.put(&b"import type MarshalledBytes;\nimport type StorageMap;\n\n"[..]);
+    buf.put(&b"use std::bytearray::MarshalledBytes;\nuse std::storageMap::StorageMap;\n\n"[..]);
     buf.put(&b"import func storageMap_new() -> StorageMap;\n"[..]);
     buf.put(
         &b"import func storageMap_set(s: StorageMap, idx: uint, val: uint) -> StorageMap;\n\n"[..],
