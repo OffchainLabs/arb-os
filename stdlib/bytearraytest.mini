@@ -26,6 +26,15 @@ impure func main() {
 }
 
 func tests() -> uint {
+
+	let buf = newbuffer(123);
+
+	let buf2 = setbuffer8(buf, 0, 12);
+
+	if (getbuffer8(buf, 0) != 0) {
+		return 987;
+	}
+
 	let ba = bytearray_new(33);
 	if (bytearray_size(ba) != 0) {
 		return 1;
@@ -76,16 +85,7 @@ func tests() -> uint {
 
 	let marshalledStruct = unsafecast<MarshalledBytes>((
 		67,
-		(
-			0x4041420000000000000000000000000000000000000000000000000000000000,
-			(
-				0x202122232425262728292a2b2c2d2e2f303132333435363738393a3b3c3d3e3f,
-				(
-					0x000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f,
-					null,
-				),
-			),
-		),
+		\x000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f303132333435363738393a3b3c3d3e3f404142,
 	));
 
 	ba = bytearray_new(67);
@@ -124,21 +124,24 @@ func tests() -> uint {
 	    return 12;
 	}
 
-    if (bytes32(0x4fc384a19926e9ff7ec8f2376a0d146dc273031df1db4d133236d209700e4780)
+    if (bytes32(0x21a420163a4f051975d004ab2f160d2bb44fec97a8301505c9ef1ec99a1d715c)
         != marshalledBytes_hash(bytearray_marshalFull(setupFromUnmarshal()))
     ) {
+		debug(marshalledBytes_hash(bytearray_marshalFull(setupFromUnmarshal())));
         return 13;
     }
 
-    if (bytes32(0x6203cb97ced4e35e64eeaddf64d03b68bcb81b5ee3cb0205f7edb755a8a4198)
+    if (bytes32(0x2a473117046102b148da6fc84500d21adf5b31fd3f2c9673eff80c38d2141fc)
             != marshalledBytes_hash(bytearray_marshalFull(bytearray_setByte(bytearray_new(0), 0, 13)))
     ) {
+		debug(marshalledBytes_hash(bytearray_marshalFull(bytearray_setByte(bytearray_new(0), 0, 13))));
         return 14;
     }
 
-    if (bytes32(0x2286697a7baf78c99024b26bd236a05975a57714bf44a9b7400fe583b31fa274)
+    if (bytes32(0x1f705ba448ea02486d9b0055bd45194470436e933907d311428460b6c3d63077)
             != marshalledBytes_hash(bytearray_marshalFull(bytearray_set256(bytearray_new(0), 0, 0x6203cb97ced4e35e64eeaddf64d03b68bcb81b5ee3cb0205f7edb755a8a4198)))
     ) {
+		debug(marshalledBytes_hash(bytearray_marshalFull(bytearray_set256(bytearray_new(0), 0, 0x6203cb97ced4e35e64eeaddf64d03b68bcb81b5ee3cb0205f7edb755a8a4198))));
         return 15;
     }
 
@@ -175,16 +178,7 @@ func tests() -> uint {
 func setupFromUnmarshal() -> ByteArray {
 	let marshalledStruct = unsafecast<MarshalledBytes>((
 		67,
-		(
-			0x4041420000000000000000000000000000000000000000000000000000000000,
-			(
-				0x202122232425262728292a2b2c2d2e2f303132333435363738393a3b3c3d3e3f,
-				(
-				    0x000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f,
-					null,
-				),
-			),
-		),
+		\x000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f303132333435363738393a3b3c3d3e3f404142,
 	));
 	return bytearray_unmarshalBytes(marshalledStruct);
 }

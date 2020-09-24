@@ -11,6 +11,7 @@ use crate::pos::BytePos;
 use crate::mavm::{Value, Instruction, Opcode};
 use crate::uint256::Uint256;
 
+use hex;
 
 grammar(stringtable: &mut StringTable, file_info: &Lines, filename: u64);
 
@@ -272,6 +273,7 @@ Expr13: Expr = {
 Const: Constant = {
     <u: UnsignedInteger> => Constant::Uint(u),
 	<s: SignedInteger> => Constant::Int(s),
+	<s: BufferLiteral> => Constant::Buffer(s),
 	"None<" <t: Type> ">" => Constant::Option(OptionConst::None(t)),
 	"false" => Constant::Bool(false),
 	"true" => Constant::Bool(true),
@@ -315,6 +317,10 @@ IdentStr: &'input str = {
 
 IdentString: String = {
 	r"[a-zA-Z_][a-zA-Z_01-9]*" => <>.to_string(),
+};
+
+BufferLiteral: Vec<u8> = {
+	r"\\x[0-9a-fA-F]*" => hex::decode((&<>[2..]).to_string()).expect("Bad buffer literal"),
 };
 
 UnsignedInteger: Uint256 = {

@@ -25,12 +25,7 @@ public func bytearray_new(ignored: uint) -> ByteArray {
 
 type MarshalledBytes = struct {
     nbytes: uint,
-    contents: MarshalledBytesCell,
-}
-
-type MarshalledBytesCell = struct {
-    first: uint,
-    rest: any,  // really a MarshalledbytesCell, but compiler can't handle recursive types
+    contents: buffer,
 }
 
 public func marshalledBytes_firstByte(mb: MarshalledBytes) -> uint {
@@ -39,74 +34,30 @@ public func marshalledBytes_firstByte(mb: MarshalledBytes) -> uint {
     if (nbytes < 1) {
         return 0;
     }
-    while (nbytes > 32) {
-        contents = unsafecast<MarshalledBytesCell>(contents.rest);
-        nbytes = nbytes-32;
-    }
-    return asm(256-8, contents.first) uint { shr };
+    return getbuffer8(contents, 0);
 }
 
 public func marshalledBytes_hash(mb: MarshalledBytes) -> bytes32 {
     // This is an easy-to-compute cryptographic hash of a MarshalledBytes
     // It is collision-free, assuming that the underlying hash operation is collision-free.
-
-    let ret = bytes32(mb.nbytes);
-    let x = unsafecast<any>(mb.contents);
-    while(x != ()) {
-        let cell = unsafecast<MarshalledBytesCell>(x);
-        ret = hash(ret, bytes32(cell.first));
-        x = cell.rest;
-    }
-    return ret;
+    return hash(mb);
 }
 
 // bytearray_unmarshalBytes unmarshals a bytestack object that we got from L1
 //        returns a new bytearray holding the unmarshaled bytes
 public func bytearray_unmarshalBytes(inBytes: MarshalledBytes) -> ByteArray {
-    let nbytes = inBytes.nbytes;
-    let nwords = (nbytes+31)/32;
-    let words = inBytes.contents;
-
-    // For efficiency, we'll build an ExpandingIntArray here, then make a ByteArray from it at the end.
-    // We'll also build 8-tuples of 32-byte words, and insert each tuple into the ExpIntArr with a single call.
-    let eia = newbuffer(0);
-    let block = unsafecast<[8]any>((0,0,0,0,0,0,0,0));
-
-    while (nwords > 0) {
-        nwords = nwords-1;
-        eia = setbuffer256(eia, nwords*32, words.first);
-        words = unsafecast<MarshalledBytesCell>(words.rest);
-    }
-
     return struct {
         size: inBytes.nbytes,
         sliceOffset: 0,
-        contents: eia,
+        contents: inBytes.contents,
         copy: false,
     };
 }
 
 public func bytearray_marshalFull(ba: ByteArray) -> MarshalledBytes {
-    if (ba.copy) {
-        ba = bytearray_copy(make(ba), ba.sliceOffset, bytearray_new(0), 0, ba.size);
-    }
-    let nbytes = ba.size;
-    let nwords = (nbytes+31)/32;
-    let words = unsafecast<MarshalledBytesCell>(());
-    let i = 0;
-    // debug(true);
-    while (i < nwords) {
-        words = struct {
-            first: getbuffer256(ba.contents, 32*i),
-            rest: words,
-        };
-        // debug(words.first);
-        i = i+1;
-    }
-    // debug(false);
     return struct {
-        nbytes: nbytes,
-        contents: words,
+        nbytes: ba.size,
+        contents: bytearray_copy(make(ba), ba.sliceOffset, bytearray_new(0), 0, ba.size).contents,
     };
 }
 

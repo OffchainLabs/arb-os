@@ -12,6 +12,7 @@ use crate::pos::Location;
 use crate::stringtable::StringId;
 use crate::uint256::Uint256;
 use serde::{Deserialize, Serialize};
+use std::rc::Rc;
 
 ///Debugging info serialized into mini executables, currently only contains a location.
 #[derive(Debug, Clone)]
@@ -730,6 +731,7 @@ pub enum Constant {
     Uint(Uint256),
     Int(Uint256),
     Bool(bool),
+    Buffer(Vec<u8>),
     Option(OptionConst),
     Null,
 }
@@ -772,6 +774,7 @@ impl Constant {
             Constant::Uint(_) => Type::Uint,
             Constant::Int(_) => Type::Int,
             Constant::Bool(_) => Type::Bool,
+            Constant::Buffer(_) => Type::Buffer,
             Constant::Option(inner) => inner.type_of(),
             Constant::Null => Type::Void,
         }
@@ -783,6 +786,7 @@ impl Constant {
             Constant::Uint(ui) => Value::Int(ui.clone()),
             Constant::Int(i) => Value::Int(i.clone()),
             Constant::Bool(b) => Value::Int(Uint256::from_bool(*b)),
+            Constant::Buffer(b) => Value::Buffer(Rc::new(b.to_vec())),
             Constant::Option(c) => c.value(),
             Constant::Null => Value::none(),
         }

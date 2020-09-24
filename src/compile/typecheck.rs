@@ -16,6 +16,7 @@ use crate::pos::Location;
 use crate::stringtable::{StringId, StringTable};
 use crate::uint256::Uint256;
 use std::collections::HashMap;
+use std::rc::Rc;
 
 ///An error encountered during typechecking
 #[derive(Debug)]
@@ -1173,6 +1174,7 @@ fn typecheck_expr(
         Expr::Constant(constant, loc) => Ok(match constant {
             Constant::Uint(n) => TypeCheckedExpr::Const(Value::Int(n.clone()), Type::Uint, *loc),
             Constant::Int(n) => TypeCheckedExpr::Const(Value::Int(n.clone()), Type::Int, *loc),
+            Constant::Buffer(n) => TypeCheckedExpr::Const(Value::Buffer(Rc::new(n.clone())), Type::Buffer, *loc),
             Constant::Bool(b) => {
                 TypeCheckedExpr::Const(Value::Int(Uint256::from_bool(*b)), Type::Bool, *loc)
             }
