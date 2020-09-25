@@ -247,12 +247,8 @@ func translateUnsignedTx(request: IncomingRequest) -> option<TxRequestData> {
     let (us, destAddrAsUint) = bytestream_get256(inStream)?;
     inStream = us;
 
-    let value = 0;
-    if (subtype != 2) {
-        let (us, val) = bytestream_get256(inStream)?;
-        inStream = us;
-        value = val;
-    }
+    let (us, value) = bytestream_get256(inStream)?;
+    inStream = us;
 
     let calldata = bytestream_getRemainingBytes(inStream);
 
