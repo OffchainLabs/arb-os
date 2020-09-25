@@ -19,6 +19,7 @@ use std::fs::File;
 use std::io::{stdin, BufWriter, Write};
 use std::path::Path;
 use std::rc::Rc;
+use std::cell::RefCell;
 
 ///Represents a stack of `Value`s
 #[derive(Debug, Default, Clone)]
@@ -168,7 +169,7 @@ impl ValueStack {
         }
     }
 
-    pub fn pop_buffer(&mut self, state: &MachineState) -> Result<Rc<Vec<u8>>, ExecutionError> {
+    pub fn pop_buffer(&mut self, state: &MachineState) -> Result<Rc<RefCell<Vec<u8>>>, ExecutionError> {
         let val = self.pop(state)?;
         if let Value::Buffer(v) = val {
             // let vs = &*v;
@@ -1640,7 +1641,8 @@ impl Machine {
                         Ok(true)
                     }
                     Opcode::AVMOpcode(AVMOpcode::GetBuffer8) => {
-                        let buf = self.stack.pop_buffer(&self.state)?;
+                        let cell = self.stack.pop_buffer(&self.state)?;
+                        let buf = cell.borrow();
                         let offset = self.stack.pop_usize(&self.state)?;
                         if buf.len() < offset {
                             self.stack.push_usize(0);
@@ -1651,7 +1653,8 @@ impl Machine {
                         Ok(true)
                     }
                     Opcode::AVMOpcode(AVMOpcode::GetBuffer64) => {
-                        let buf = self.stack.pop_buffer(&self.state)?;
+                        let cell = self.stack.pop_buffer(&self.state)?;
+                        let buf = cell.borrow();
                         let offset = self.stack.pop_usize(&self.state)?;
                         if buf.len() < offset {
                             self.stack.push_usize(0);
@@ -1662,7 +1665,8 @@ impl Machine {
                         Ok(true)
                     }
                     Opcode::AVMOpcode(AVMOpcode::GetBuffer256) => {
-                        let buf = self.stack.pop_buffer(&self.state)?;
+                        let cell = self.stack.pop_buffer(&self.state)?;
+                        let buf = cell.borrow();
                         let offset = self.stack.pop_usize(&self.state)?;
                         if buf.len() < offset {
                             self.stack.push_usize(0);
@@ -1674,7 +1678,7 @@ impl Machine {
                         Ok(true)
                     }
                     Opcode::AVMOpcode(AVMOpcode::SetBuffer8) => {
-                        let mut buf = self.stack.pop_buffer(&self.state)?.to_vec().clone();
+                        let mut buf = self.stack.pop_buffer(&self.state)?.borrow().clone();
                         let offset = self.stack.pop_usize(&self.state)?;
                         let val = self.stack.pop_usize(&self.state)?;
                         check_size(&mut buf, offset);
@@ -1684,7 +1688,7 @@ impl Machine {
                         Ok(true)
                     }
                     Opcode::AVMOpcode(AVMOpcode::SetBuffer64) => {
-                        let mut buf = self.stack.pop_buffer(&self.state)?.to_vec().clone();
+                        let mut buf = self.stack.pop_buffer(&self.state)?.borrow().clone();
                         let offset = self.stack.pop_usize(&self.state)?;
                         let val = self.stack.pop_uint(&self.state)?;
                         check_size(&mut buf, offset+7);
@@ -1697,7 +1701,7 @@ impl Machine {
                         Ok(true)
                     }
                     Opcode::AVMOpcode(AVMOpcode::SetBuffer256) => {
-                        let mut buf = self.stack.pop_buffer(&self.state)?.to_vec().clone();
+                        let mut buf = self.stack.pop_buffer(&self.state)?.borrow().clone();
                         let offset = self.stack.pop_usize(&self.state)?;
                         let val = self.stack.pop_uint(&self.state)?;
                         let bytes = val.to_bytes_be();

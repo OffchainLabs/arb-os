@@ -8,7 +8,7 @@ use crate::stringtable::StringId;
 use crate::uint256::Uint256;
 use serde::{Deserialize, Serialize};
 use serde_repr::{Deserialize_repr, Serialize_repr};
-use std::{collections::HashMap, fmt, rc::Rc};
+use std::{collections::HashMap, fmt, rc::Rc, cell::RefCell};
 
 #[derive(PartialEq, Eq, Hash, Debug, Clone, Copy, Serialize, Deserialize)]
 pub enum Label {
@@ -275,13 +275,13 @@ impl fmt::Display for CodePt {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum Value {
     Int(Uint256),
     Tuple(Rc<Vec<Value>>),
     CodePoint(CodePt),
     Label(Label),
-    Buffer(Rc<Vec<u8>>),
+    Buffer(Rc<RefCell<Vec<u8>>>),
 }
 
 impl Value {
@@ -302,11 +302,7 @@ impl Value {
     }
 
     pub fn new_buffer(v: Vec<u8>) -> Self {
-        Value::Buffer(Rc::new(v))
-    }
-
-    pub fn copy_buffer(v: Rc<Vec<u8>>) -> Self {
-        Value::Buffer(v)
+        Value::Buffer(Rc::new(RefCell::new(v)))
     }
 
     pub fn type_insn_result(&self) -> usize {
@@ -432,7 +428,7 @@ impl fmt::Display for Value {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             Value::Int(i) => i.fmt(f),
-            Value::Buffer(vec) => write!(f, "Buffer({})", vec.len()),
+            Value::Buffer(vec) => write!(f, "Buffer({})", vec.borrow().len()),
             Value::CodePoint(pc) => write!(f, "CodePoint({})", pc),
             Value::Label(label) => write!(f, "Label({})", label),
             Value::Tuple(tup) => {

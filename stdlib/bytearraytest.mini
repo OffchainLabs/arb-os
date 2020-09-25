@@ -27,7 +27,7 @@ impure func main() {
 
 func tests() -> uint {
 
-
+	
 
 	let ba = bytearray_new(33);
 	if (bytearray_size(ba) != 0) {
