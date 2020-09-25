@@ -84,6 +84,14 @@ public impure func decompression_init() {
     globalIndexedAddressTable = addressTable_new();
 }
 
+public impure func getGlobalAddressTable() -> IndexedAddressTable {
+    return globalIndexedAddressTable;
+}
+
+public impure func setGlobalAddressTable(gat: IndexedAddressTable) {
+    globalIndexedAddressTable = gat;
+}
+
 public func addressTable_new() -> IndexedAddressTable {
     return struct {
         byIndex: expandingIntArray_new(),
