@@ -2,6 +2,8 @@
 // Copyright 2020, Offchain Labs, Inc. All rights reserved.
 //
 
+import impure func chainParams_chainId() -> uint;
+
 import type ByteArray;
 import type MarshalledBytes;
 import func bytearray_new(unused: uint) -> ByteArray;
@@ -40,6 +42,10 @@ import func account_getNextSeqNum(account: Account) -> uint;
 
 import func rlp_decodeAddress(bs: ByteStream) -> option<(ByteStream, address)>;
 import func rlp_decodeUint(bs: ByteStream) -> option<(ByteStream, uint)>;
+import func rlp_encodeAndHashMessageInfo(tx: SignedTx) -> bytes32;
+
+
+import impure func recoverSigner(tx: SignedTx) -> option<address>;
 
 // This structure describes an incoming request.
 // It is declared identically in inbox.mini and elsewhere
@@ -50,6 +56,20 @@ type IncomingRequest = struct {
     sender: address,          // address of the sender
     requestId: uint,
     msgData: MarshalledBytes  // kind-specific data, as a marshalled bytearray
+}
+
+// A copy of this struct is defined in stdlib/rlp.mini.
+// The declaration there must remain consistent with the one here.
+type SignedTx = struct {
+    seqNum: uint,
+    gasPrice: uint,
+    gasLimit: uint,
+    to: address,
+    value: uint,
+    data: ByteArray,
+    v: uint,
+    r: uint,
+    s: uint
 }
 
 type IndexedAddressTable = struct {
@@ -177,41 +197,72 @@ public impure func decompressAndVerifyEcdsaSignedTx(
     let s = bytearray_get256(ba, sz-33);
     let v = bytearray_getByte(ba, sz-1);
     let body = bytearray_extract(ba, 1, sz-66);
-    let txId = keccak256(body, 0, sz-66);
-    let signer = asm(
-        r,
-        s,
-        1 - (v % 2),
-        txId,
-    ) address { ecrecover };
-    if (signer == address(0)) {
-        return None;
+
+    let (_, txRequest) = decompressTx(bytestream_new(body), None<address>)?;
+
+    let seqNum = 0;
+    if let Some(sn) = txRequest.seqNum {
+        seqNum = sn;
     }
 
-    originalRequest = originalRequest with {
-        requestId: uint(txId)
+    let tx = struct {
+        seqNum: seqNum,
+        gasPrice: txRequest.gasPrice,
+        gasLimit: txRequest.maxGas,
+        to: txRequest.calleeAddr,
+        value: txRequest.value,
+        data: txRequest.calldata,
+        v: 35 + 2 * chainParams_chainId() + (1 - (v % 2)),
+        r: r,
+        s: s
     };
+    let signer = recoverSigner(tx)?;
 
-    let (_, tx) = decompressTx(bytestream_new(body), signer, originalRequest)?;
-    return Some(tx);
+    return Some(
+        txRequest with {
+            caller: signer
+        } with {
+            incomingRequest: originalRequest with {
+                requestId: uint(rlp_encodeAndHashMessageInfo(tx))
+            }
+        }
+    );
 }
 
 impure func decompressTx(
     stream: ByteStream,
-    sender: address,
-    originalRequest: IncomingRequest,
+    maybeSender: option<address>
 ) -> option<(ByteStream, TxRequestData)> {
-    let (ustr, seqNumByte) = bytestream_getByte(stream)?;
-    stream = ustr;
-    let dbSeqNum = account_getNextSeqNum(
-        accountStore_get(
-            getGlobalAccountStore(),
-            address(sender)
-        )
-    );
-    let seqNum = (dbSeqNum & ~0xff) + seqNumByte;
-    if (seqNum < dbSeqNum) {
-        seqNum = seqNum + 256;
+    // decompress a compressed transaction, reading it from ByteStream
+    // return None if insufficient data in the ByteStream
+    // the TxRequestData we return will have an invalid dummy value in the incomingRequest field,
+    //         and we'll assume the caller will supply that later
+    //
+    // caller will tell us the tx sender if it knows the sender
+    // (knowing the sender lets us compress the sequence number more efficiently)
+    // if we aren't given the sender address, we'll return a dummy value in that slot of the TxRequestData,
+    //         and assume the caller will supply it later
+
+    let sender = address(0);
+    let seqNum = 0;
+    if let Some(senderAddr) = maybeSender {
+        sender = senderAddr;
+        let (ustr, seqNumByte) = bytestream_getByte(stream)?;
+        stream = ustr;
+        let dbSeqNum = account_getNextSeqNum(
+            accountStore_get(
+                getGlobalAccountStore(),
+                address(sender)
+            )
+        );
+        seqNum = (dbSeqNum & ~0xff) | seqNumByte;
+        if (seqNum < dbSeqNum) {
+            seqNum = seqNum + 256;
+        }
+    } else {
+        let (ustr, rawSeqNum) = rlp_decodeUint(stream)?;
+        stream = ustr;
+        seqNum = rawSeqNum;
     }
 
     let (ustr, gasPrice) = rlp_decodeUint(stream)?;
@@ -226,13 +277,7 @@ impure func decompressTx(
     let (ustr, value) = decompressTokenAmount(stream)?;
     stream = ustr;
 
-    let numBytesLeft = bytestream_bytesRemaining(stream);
-    if (numBytesLeft < 65) {
-        return None;
-    }
-
-    let (ustr, calldata) = bytestream_getN(stream, numBytesLeft-65)?;
-    stream = ustr;
+    let calldata = bytestream_getRemainingBytes(stream);
 
     return Some((
         stream,
@@ -244,7 +289,7 @@ impure func decompressTx(
             calleeAddr: toAddr,
             value: value,
             calldata: calldata,
-            incomingRequest: originalRequest
+            incomingRequest: unsafecast<IncomingRequest>(0),  // caller will fill this in
         }
     ));
 }

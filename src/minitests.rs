@@ -366,6 +366,11 @@ fn test_direct_deploy_and_call_add() {
 }
 
 #[test]
+fn test_direct_deploy_and_compressed_call_add() {
+    let _log = crate::evm::evm_direct_deploy_and_compressed_call_add(None, false);
+}
+
+#[test]
 fn test_arbsys() {
     let _log = crate::evm::evm_test_arbsys(None, false);
 }

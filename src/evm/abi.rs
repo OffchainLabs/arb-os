@@ -214,6 +214,47 @@ impl AbiForContract {
         ))
     }
 
+    pub fn call_function_compressed(
+        &self,
+        sender_addr: Uint256,
+        func_name: &str,
+        args: &[ethabi::Token],
+        machine: &mut Machine,
+        payment: Uint256,
+        wallet: &Wallet,
+        debug: bool,
+    ) -> Result<(Vec<ArbosReceipt>, Vec<Value>), ethabi::Error> {
+        let this_function = self.contract.function(func_name)?;
+        let calldata = this_function.encode_input(args).unwrap();
+
+        let (tx_contents, _tx_id_bytes) = machine.runtime_env.make_compressed_and_signed_tx(
+            sender_addr.clone(),
+            Uint256::zero(),
+            Uint256::from_usize(1_000_000_000_000),
+            self.address.clone(),
+            payment,
+            &calldata,
+            wallet,
+        );
+        machine
+            .runtime_env
+            .insert_l2_message(sender_addr, &tx_contents, false);
+
+        let num_logs_before = machine.runtime_env.get_all_receipt_logs().len();
+        let num_sends_before = machine.runtime_env.get_all_sends().len();
+        let _arbgas_used = if debug {
+            machine.debug(None)
+        } else {
+            machine.run(None)
+        };
+        let logs = machine.runtime_env.get_all_receipt_logs();
+        let sends = machine.runtime_env.get_all_sends();
+        Ok((
+            logs[num_logs_before..].to_vec(),
+            sends[num_sends_before..].to_vec(),
+        ))
+    }
+
     pub fn add_function_call_to_batch(
         &self,
         batch: &mut Vec<u8>,

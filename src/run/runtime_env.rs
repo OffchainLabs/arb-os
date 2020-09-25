@@ -183,7 +183,8 @@ impl RuntimeEnvironment {
         (buf, keccak256(&rlp_buf).to_vec())
     }
 
-    pub fn insert_compressed_and_signed_tx(&mut self,
+    pub fn make_compressed_and_signed_tx(
+        &mut self,
         sender: Uint256,
         gas_price: Uint256,
         gas_limit: Uint256,
@@ -191,22 +192,31 @@ impl RuntimeEnvironment {
         value: Uint256,
         calldata: &[u8],
         wallet: &Wallet,
-    ) -> Uint256 {
+    ) -> (Vec<u8>, Vec<u8>) {
+        let mut result = vec![7u8];
         let seq_num = self.get_and_incr_seq_num(&sender);
-        let mut result = vec![7u8, seq_num.to_bytes_be()[31]];
+        result.extend(seq_num.rlp_encode());
         result.extend(gas_price.rlp_encode());
         result.extend(gas_limit.rlp_encode());
-        result.extend(self.compressor.compress_address(to_addr));
-        result.extend(self.compressor.compress_token_amount(value));
+        result.extend(self.compressor.compress_address(to_addr.clone()));
+        result.extend(self.compressor.compress_token_amount(value.clone()));
         result.extend(calldata);
-        let sig = wallet.sign_message(result.clone());
-        let tx_id = keccak256(&result);
-        result.extend(Uint256::from_bytes(sig.r.as_bytes()).to_bytes_be());
-        result.extend(Uint256::from_bytes(sig.s.as_bytes()).to_bytes_be());
-        result.extend(vec![(sig.v & 0xff) as u8]);
 
-        let _ = self.insert_l2_message(sender, &result, false);
-        Uint256::from_bytes(&tx_id)
+        let tx_for_signing = TransactionRequest::new()
+            .from(sender.to_h160())
+            .to(to_addr.to_h160())
+            .gas(gas_limit.to_u256())
+            .gas_price(gas_price.to_u256())
+            .value(value.to_u256())
+            .data(calldata.to_vec())
+            .nonce(seq_num.to_u256());
+        let tx = wallet.sign_transaction(tx_for_signing).unwrap();
+
+        result.extend(Uint256::from_u256(&tx.r).to_bytes_be());
+        result.extend(Uint256::from_u256(&tx.s).to_bytes_be());
+        result.extend(vec![(tx.v.as_u64() & 0xff) as u8]);
+
+        (result, keccak256(tx.rlp().as_ref()).to_vec())
     }
 
     pub fn append_signed_tx_message_to_batch(
@@ -353,12 +363,15 @@ impl RuntimeEnvironment {
 #[derive(Debug, Clone)]
 pub struct TxCompressor {
     address_map: HashMap<Vec<u8>, Vec<u8>>,
-    next_index: u64
+    next_index: u64,
 }
 
 impl TxCompressor {
     pub fn new() -> Self {
-        TxCompressor{ address_map: HashMap::new(), next_index: 0 }
+        TxCompressor {
+            address_map: HashMap::new(),
+            next_index: 0,
+        }
     }
 
     pub fn compress_address(&mut self, addr: Uint256) -> Vec<u8> {
@@ -366,7 +379,10 @@ impl TxCompressor {
             rlp_bytes.clone()
         } else {
             let addr_bytes = addr.to_bytes_be();
-            self.address_map.insert(addr_bytes.clone(), Uint256::from_u64(self.next_index).rlp_encode());
+            self.address_map.insert(
+                addr_bytes.clone(),
+                Uint256::from_u64(self.next_index).rlp_encode(),
+            );
             self.next_index = 1 + self.next_index;
             let mut ret = vec![148u8];
             ret.extend(addr_bytes[12..32].to_vec());
@@ -382,7 +398,7 @@ impl TxCompressor {
             let ten = Uint256::from_u64(10);
             loop {
                 if amt.modulo(&ten).unwrap().is_zero() {
-                    num_zeroes = 1+num_zeroes;
+                    num_zeroes = 1 + num_zeroes;
                     amt = amt.div(&ten).unwrap();
                 } else {
                     let mut result = amt.rlp_encode();
