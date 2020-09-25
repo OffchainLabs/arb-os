@@ -185,7 +185,6 @@ impl RuntimeEnvironment {
 
     pub fn make_compressed_and_signed_tx(
         &mut self,
-        sender: Uint256,
         gas_price: Uint256,
         gas_limit: Uint256,
         to_addr: Uint256,
@@ -193,6 +192,7 @@ impl RuntimeEnvironment {
         calldata: &[u8],
         wallet: &Wallet,
     ) -> (Vec<u8>, Vec<u8>) {
+        let sender = Uint256::from_bytes(wallet.address().as_bytes());
         let mut result = vec![7u8];
         let seq_num = self.get_and_incr_seq_num(&sender);
         result.extend(seq_num.rlp_encode());

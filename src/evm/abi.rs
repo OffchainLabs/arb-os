@@ -228,7 +228,6 @@ impl AbiForContract {
         let calldata = this_function.encode_input(args).unwrap();
 
         let (tx_contents, _tx_id_bytes) = machine.runtime_env.make_compressed_and_signed_tx(
-            sender_addr.clone(),
             Uint256::zero(),
             Uint256::from_usize(1_000_000_000_000),
             self.address.clone(),
