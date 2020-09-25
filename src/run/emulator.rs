@@ -18,6 +18,7 @@ use std::fmt;
 use std::fs::File;
 use std::io::{stdin, BufWriter, Write};
 use std::path::Path;
+use std::rc::Rc;
 
 ///Represents a stack of `Value`s
 #[derive(Debug, Default, Clone)]
@@ -167,11 +168,11 @@ impl ValueStack {
         }
     }
 
-    pub fn pop_buffer(&mut self, state: &MachineState) -> Result<Vec<u8>, ExecutionError> {
+    pub fn pop_buffer(&mut self, state: &MachineState) -> Result<Rc<Vec<u8>>, ExecutionError> {
         let val = self.pop(state)?;
         if let Value::Buffer(v) = val {
-            let vs = &*v;
-            Ok(vs.to_vec())
+            // let vs = &*v;
+            Ok(Rc::clone(&v))
         } else {
             Err(ExecutionError::new(
                 "expected buffer on stack",
@@ -1673,7 +1674,7 @@ impl Machine {
                         Ok(true)
                     }
                     Opcode::AVMOpcode(AVMOpcode::SetBuffer8) => {
-                        let mut buf = self.stack.pop_buffer(&self.state)?;
+                        let mut buf = self.stack.pop_buffer(&self.state)?.to_vec().clone();
                         let offset = self.stack.pop_usize(&self.state)?;
                         let val = self.stack.pop_usize(&self.state)?;
                         check_size(&mut buf, offset);
@@ -1683,7 +1684,7 @@ impl Machine {
                         Ok(true)
                     }
                     Opcode::AVMOpcode(AVMOpcode::SetBuffer64) => {
-                        let mut buf = self.stack.pop_buffer(&self.state)?;
+                        let mut buf = self.stack.pop_buffer(&self.state)?.to_vec().clone();
                         let offset = self.stack.pop_usize(&self.state)?;
                         let val = self.stack.pop_uint(&self.state)?;
                         check_size(&mut buf, offset+7);
@@ -1696,8 +1697,7 @@ impl Machine {
                         Ok(true)
                     }
                     Opcode::AVMOpcode(AVMOpcode::SetBuffer256) => {
-                        // let mut buf = (self.stack.pop_buffer(&self.state)?).clone();
-                        let mut buf = self.stack.pop_buffer(&self.state)?;
+                        let mut buf = self.stack.pop_buffer(&self.state)?.to_vec().clone();
                         let offset = self.stack.pop_usize(&self.state)?;
                         let val = self.stack.pop_uint(&self.state)?;
                         let bytes = val.to_bytes_be();

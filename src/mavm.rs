@@ -305,6 +305,10 @@ impl Value {
         Value::Buffer(Rc::new(v))
     }
 
+    pub fn copy_buffer(v: Rc<Vec<u8>>) -> Self {
+        Value::Buffer(v)
+    }
+
     pub fn type_insn_result(&self) -> usize {
         match self {
             Value::Int(_) => 0,
