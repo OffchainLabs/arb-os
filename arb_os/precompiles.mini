@@ -11,7 +11,7 @@ import impure func evmCallStack_setTopFrameMemory(mem: ByteArray) -> bool;
 import func evmCallFrame_getCalldata(frame: EvmCallFrame) -> ByteArray;
 
 import impure func evmOp_return(offset: uint, nbytes: uint);
-import impure func evmOp_revert(offset: uint, nbytes: uint);
+import impure func evmOp_revert_knownPc(evmPc: uint, offset: uint, nbytes: uint);
 
 import func getGlobalAccountStore() -> AccountStore;
 import func setGlobalAccountStore(acctStore: AccountStore);
@@ -59,7 +59,7 @@ public impure func precompile_0x01() {  // ecrecover
     if let Some(topFrame) = evmCallStack_topFrame() {
         let calldata = evmCallFrame_getCalldata(topFrame);
         if (bytearray_size(calldata) != 4*32) {
-            evmOp_revert(0, 0);
+            evmOp_revert_knownPc(0, 0, 0);
         }
         let h = bytearray_get256(calldata, 0);
         let v = bytearray_get256(calldata, 32);
@@ -75,7 +75,7 @@ public impure func precompile_0x01() {  // ecrecover
         }
     }
 
-    evmOp_revert(0, 0);
+    evmOp_revert_knownPc(0, 0, 0);
 }
 
 public impure func precompile_0x02() {  // sha256
@@ -90,5 +90,5 @@ public impure func precompile_0x02() {  // sha256
         }
     }
 
-    evmOp_revert(0, 0);
+    evmOp_revert_knownPc(0, 0, 0);
 }

@@ -46,7 +46,7 @@ import func evmOp_origin();
 import func evmOp_return();
 import func evmOp_returndatasize();
 import func evmOp_returndatacopy();
-import func evmOp_revert();
+import func evmOp_revert_knownPc();
 import func evmOp_selfdestruct();
 import func evmOp_sha3();
 import func evmOp_sload();
@@ -413,10 +413,11 @@ public impure func translateEvmCodeSegment(
                     }
                 } else {
                     if (opcode == 0xfd) { // REVERT
-                        return pushEvmInsnCall(evmOp_revert, restOfCode, evmJumpTable);
+                        let(revertCall, jumpTable) = pushEvmInsnCall(evmOp_revert_knownPc, restOfCode, evmJumpTable)?;
+                        return Some((pushValue(numBytesRead-1, revertCall), jumpTable));
                     } elseif (opcode == 0xfe) { // INVALID
                         let (doCall, jumpTable) = pushEvmInsnCall(
-                            evmOp_revert,
+                            evmOp_revert_knownPc,
                             restOfCode,
                             evmJumpTable
                         )?;
@@ -425,7 +426,10 @@ public impure func translateEvmCodeSegment(
                                 0,
                                 pushValue(
                                     0,
-                                    doCall
+                                    pushValue(
+                                        numBytesRead-1,
+                                        doCall
+                                    )
                                 )
                             ),
                             jumpTable

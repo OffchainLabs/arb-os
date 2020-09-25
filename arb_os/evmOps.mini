@@ -21,6 +21,7 @@ import impure func evmCallStack_getTopFrameMemoryOrDie() -> ByteArray;
 import impure func evmCallStack_setTopFrameMemory(mem: ByteArray) -> bool;
 import impure func evmCallStack_setTopFrameStorageCell(offset: uint, val: uint) -> option<()>;
 import impure func evmCallStack_addEvmLogToCurrent(log: any) -> option<()>;
+import impure func evmCallStack_runningCodeFromAccount() -> option<Account>;
 import impure func evmCallStack_selfDestructCurrentAccount(owner: address);
 import impure func evmCallStack_doCall(
     kind: uint,
@@ -752,6 +753,18 @@ public impure func evmOp_revert(memOffset: uint, memNbytes: uint) {
     evm_runtimePanic(28);
 }
 
+public impure func evmOp_revert_knownCodePc(codeAddr: address, evmPc: uint, memOffset: uint, memNbytes: uint) {
+    asm((10000, codeAddr, evmPc),) { debugprint };
+}
+
+public impure func evmOp_revert_knownPc(evmPc: uint, memOffset: uint, memNbytes: uint) {
+    let codeAddr = address(0);
+    if let Some(acct) = evmCallStack_runningCodeFromAccount() {
+        codeAddr = account_getAddress(acct);
+    }
+    evmOp_revert_knownCodePc(codeAddr, evmPc, memOffset, memNbytes);
+}
+
 public impure func evmOp_return(memOffset: uint, memNbytes: uint) {
     let _ = evmCallStack_returnFromCall(true, memOffset, memNbytes);
 
@@ -957,7 +970,7 @@ impure func doCreationOpcode(value: uint, offset: uint, length: uint, newAddress
 
 impure func evm_error() {
     // This should be called when EVM code has generated an EVM error.
-    evmOp_revert(0, 0);  // should never return
+    evmOp_revert_knownPc(0xffffffffffffffff, 0, 0);  // should never return
 
 }
 
