@@ -6,6 +6,7 @@ import type EvmCallFrame;
 import type Account;
 import type ByteArray;
 import type MarshalledBytes;
+import type Stack;
 
 import impure func evmCallStack_topFrame() -> option<EvmCallFrame>;
 import impure func evmCallStack_setAccount(addr: address, acct: Account) -> bool;
@@ -37,10 +38,14 @@ import func bytearray_set256(ba: ByteArray, offset: uint, value: uint) -> ByteAr
 import func bytearray_extract(ba: ByteArray, offset: uint, nbytes: uint) -> ByteArray;
 import func bytearray_marshalFull(ba: ByteArray) -> MarshalledBytes;
 
+import func stack_pop(stack: Stack) -> option<(Stack, any)>;
+
 import impure func inbox_currentBlockNumber() -> uint;
 import impure func inbox_currentTimestamp() -> uint;
 
 import impure func queueMessageForSend(msgType: uint, sender: address, data: ByteArray);
+
+import impure func pcTableForCode(code: ByteArray) -> option<Stack>;
 
 
 public impure func arbsys_txcall() {
@@ -62,6 +67,8 @@ public impure func arbsys_txcall() {
             arbsys_cloneContract(topFrame, calldata);
         } elseif(funcCode == 0xa169625f) {
             arbsys_getStorageAt(topFrame, calldata);
+        } elseif(funcCode == 0x3dcfdac7) {
+            arbsys_getPcTable(topFrame, calldata);
         } else {
             // unrecognized function code
             evmOp_revert_knownCodePc(address(100), 0, 0, 0);
@@ -189,6 +196,36 @@ impure func arbsys_getStorageAt(topFrame: EvmCallFrame, calldata: ByteArray) {
 
     if (success) {
         evmOp_return(0, 32);
+    } else {
+        evmOp_revert_knownCodePc(address(100), 0, 0, 0);
+    }
+}
+
+impure func arbsys_getPcTable(topFrame: EvmCallFrame, calldata: ByteArray) {
+    if (bytearray_size(calldata) <= 4) {
+        evmOp_revert_knownCodePc(address(100), 0, 0, 0);
+    }
+    if let Some(pcTable) = pcTableForCode(bytearray_extract(calldata, 4, bytearray_size(calldata)-4)) {
+        let mem = evmCallStack_getTopFrameMemoryOrDie();
+        mem = bytearray_set256(mem, 0, 64);
+        let offset = 64;
+        loop {
+            if let Some(res) = stack_pop(pcTable) {
+                let (upct, item) = res;
+                pcTable = upct;
+                let (evmPc, avmCpHash) = unsafecast<(uint, bytes32)>(item);
+                mem = bytearray_set256(
+                    bytearray_set256(mem, offset, evmPc),
+                    offset+32,
+                    uint(avmCpHash),
+                );
+                offset = offset + 64;
+            } else {
+                // done reading data, finish building returndata then return
+                mem = bytearray_set256(mem, 32, (offset-64)/32);
+                evmOp_return(0, offset);
+            }
+        }
     } else {
         evmOp_revert_knownCodePc(address(100), 0, 0, 0);
     }
