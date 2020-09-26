@@ -9,6 +9,7 @@ import type ByteArray;
 import type ByteStream;
 import type MarshalledBytes;
 import type StorageMap;
+import type Stack;
 
 import impure func errorHandler();
 
@@ -87,7 +88,10 @@ import func bytearray_copy(from: ByteArray, fromOffset: uint, to: ByteArray, toO
 import func bytearray_marshalFull(from: ByteArray) -> MarshalledBytes;
 import func bytestream_new(from: ByteArray) -> ByteStream;
 
-import impure func translateEvmCodeSegment(bs: ByteStream) -> option<(impure func(), map<uint, impure func()>)>;
+import impure func translateEvmCodeSegment(
+    bs: ByteStream,
+    makePcTable: bool
+) -> option<(impure func(), map<uint, impure func()>, Stack)>;
 
 import func keccak256(array: ByteArray, offset: uint, nbytes: uint) -> bytes32;
 import func keccakOfRlpEncodedUintPair(ui1: uint, ui2: uint) -> bytes32;
@@ -836,8 +840,8 @@ impure func doCreationOpcode(value: uint, offset: uint, length: uint, newAddress
         offset,
         length
     );
-    if let Some(res) = translateEvmCodeSegment(bytestream_new(constructorCode)) {
-        let (startPoint, evmJumpTable) = res;
+    if let Some(res) = translateEvmCodeSegment(bytestream_new(constructorCode), false) {
+        let (startPoint, evmJumpTable, _) = res;
 
         // Create a new account to run the constructor code.
         if (evmCallStack_setAccount(
@@ -936,8 +940,8 @@ impure func doCreationOpcode(value: uint, offset: uint, length: uint, newAddress
 
             if (constructorSucceeded) {
                 if let Some(contractCode) = evmCallStack_getTopFrameReturnData() {
-                    if let Some(res) = translateEvmCodeSegment(bytestream_new(contractCode)) {
-                        let (startPoint2, evmJumpTable2) = res;
+                    if let Some(res) = translateEvmCodeSegment(bytestream_new(contractCode), false) {
+                        let (startPoint2, evmJumpTable2, _) = res;
                         if let Some(oldAcct) = evmCallStack_getAccount(newAddress) {
                             let storage = storageMap_new();
                             if let Some(st) = account_getAllStorage(oldAcct) {

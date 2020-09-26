@@ -9,6 +9,7 @@ import type ByteStream;
 import type EvmLogs;
 import type GasUsage;
 import type StorageMap;
+import type Stack;
 
 import impure func errorHandler_init();
 import impure func chainParams_init();
@@ -30,8 +31,9 @@ import func accountStore_createAccountFromEvmCode(
     storageMap: StorageMap
 ) -> option<AccountStore>;
 import impure func translateEvmCodeSegment(
-    bs: ByteStream
-) -> option<(impure func(), map<uint, impure func()>)>;
+    bs: ByteStream,
+    makePcTable: bool
+) -> option<(impure func(), map<uint, impure func()>, Stack)>;
 import func bytearray_new(capacityHint: uint) -> ByteArray;
 import func bytearray_unmarshalBytes(mb: MarshalledBytes) -> ByteArray;
 import func bytestream_new(ba: ByteArray) -> ByteStream;
@@ -143,8 +145,9 @@ impure func initializeContractTemplates() -> option<()> {
     let acctStore = getGlobalAccountStore();
 
     let code = bytearray_unmarshalBytes(getErc20code());
-    let (initCodePt, evmJumpTable) = translateEvmCodeSegment(
-        bytestream_new(code)
+    let (initCodePt, evmJumpTable, _) = translateEvmCodeSegment(
+        bytestream_new(code),
+        false
     )?;
     acctStore = accountStore_createAccountFromEvmCode(
         acctStore,
@@ -156,8 +159,9 @@ impure func initializeContractTemplates() -> option<()> {
     )?;
 
     let code = bytearray_unmarshalBytes(getErc721code());
-    let (initCodePt, evmJumpTable) = translateEvmCodeSegment(
-        bytestream_new(code)
+    let (initCodePt, evmJumpTable, _) = translateEvmCodeSegment(
+        bytestream_new(code),
+        false
     )?;
     acctStore = accountStore_createAccountFromEvmCode(
         acctStore,
@@ -169,8 +173,9 @@ impure func initializeContractTemplates() -> option<()> {
     )?;
 
     let code = bytearray_unmarshalBytes(getArbInfoCode());
-    let (initCodePt, evmJumpTable) = translateEvmCodeSegment(
-        bytestream_new(code)
+    let (initCodePt, evmJumpTable, _) = translateEvmCodeSegment(
+        bytestream_new(code),
+        false
     )?;
     acctStore = accountStore_createAccountFromEvmCode(
         acctStore,

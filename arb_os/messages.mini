@@ -9,6 +9,7 @@ import type AccountStore;
 import type Account;
 import type EvmLogs;
 import type StorageMap;
+import type Stack;
 
 import impure func getGlobalAccountStore() -> AccountStore;
 import impure func setGlobalAccountStore(acctStore: AccountStore);
@@ -84,7 +85,10 @@ import func bytestream_getRemainingBytes(bs: ByteStream) -> ByteArray;
 
 import func keccakOfRlpEncodedUintPair(ui1: uint, ui2: uint) -> bytes32;
 
-import func translateEvmCodeSegment(bs: ByteStream) -> option<(impure func(), map<uint, impure func()>)>;
+import func translateEvmCodeSegment(
+    bs: ByteStream,
+    makePcTable: bool
+) -> option<(impure func(), map<uint, impure func()>, Stack)>;
 
 
 // This structure defines an incoming request.
@@ -255,7 +259,7 @@ public impure func handleL2Request(
 
         let codeBytes = request.calldata;
         request = request with { calldata: bytearray_new(0) };
-        let (codept, evmJumpTable) = translateEvmCodeSegment(bytestream_new(codeBytes))?;
+        let (codept, evmJumpTable, _) = translateEvmCodeSegment(bytestream_new(codeBytes), false)?;
 
         if (request.seqNum == None<uint>) {
             request = request with { seqNum: Some(fetchAndIncrSequenceNum(request.caller)) };

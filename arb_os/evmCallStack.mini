@@ -85,8 +85,9 @@ import impure func gasAccounting_pauseTxCharges() -> uint;
 import impure func gasAccounting_resumeTxCharges(allocation: uint) -> uint;
 
 import impure func translateEvmCodeSegment(
-    bs: ByteStream
-) -> option<(impure func(), map<uint, impure func()>)>;
+    bs: ByteStream,
+    makePcTable: bool
+) -> option<(impure func(), map<uint, impure func()>, Stack)>;
 
 import impure func emitLog(
     l1message: IncomingRequest,
@@ -530,8 +531,8 @@ public impure func evmCallStack_returnFromCall(
                 // Constructor call was successful, so finish setting up the account.
                 // The constructor's returndata is EVM code for the contract.
                 // Compile that EVM code into AVM, and substitute that in as the code for the contract.
-                if let Some(res) = translateEvmCodeSegment(bytestream_new(returnData)) {
-                    let (entryPoint, evmJumpTable) = res;
+                if let Some(res) = translateEvmCodeSegment(bytestream_new(returnData), false) {
+                    let (entryPoint, evmJumpTable, _) = res;
 
                     // Use the storage left over by the constructor.
                     let storageMap = storageMap_new();
