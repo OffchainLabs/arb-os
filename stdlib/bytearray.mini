@@ -170,7 +170,6 @@ public func bytearray_wrap(cont: buffer, size: uint) -> ByteArray {
 
 // bytearray_setbyte writes one byte to a ByteArray, returns the resulting ByteArray
 public func bytearray_setByte(ba: ByteArray, offset: uint, value: uint) -> ByteArray {
-    // if (ba.copy) { ba = bytearray_copy(make(ba), ba.sliceOffset, bytearray_new(0), 0, ba.size); }
     if (offset >= ba.size) {
         ba = ba with { size: offset+1 };
     }

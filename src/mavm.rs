@@ -276,12 +276,87 @@ impl fmt::Display for CodePt {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum Buffer {
+    Leaf(Rc<RefCell<Vec<u8>>>),
+    Node(Rc<RefCell<Vec<Buffer>>>, u8),
+}
+
+fn calc_len(h : u8) -> usize {
+    if h == 0 {
+        return 1024;
+    }
+    return 128*calc_len(h-1);
+}
+
+impl Buffer {
+    pub fn read_byte(&self, offset: usize) -> usize {
+        match self {
+            Buffer::Leaf(cell) => {
+                let buf = cell.borrow();
+                if offset > buf.len() {
+                    return 0;
+                }
+                return buf[offset].into();
+            }
+            Buffer::Node(cell, h) => {
+                let buf = cell.borrow();
+                let len = calc_len(*h);
+                let cell_len = calc_len(h-1);
+                if offset > len {
+                    return 0;
+                }
+                return buf[offset / cell_len].read_byte(offset % cell_len);
+            }
+        }
+    }
+
+    pub fn empty1() -> Self {
+        let mut vec = Vec::new();
+        let empty = Rc::new(RefCell::new(Vec::new()));
+        for _i in 0..128 {
+            vec.push(Buffer::Leaf(Rc::clone(&empty)));
+        }
+        return Buffer::Node(Rc::new(RefCell::new(vec)), 1);
+    }
+
+    pub fn set_byte(&self, offset: usize, v: u8) -> Self {
+        match self {
+            Buffer::Leaf(cell) => {
+                if offset > 1024 {
+                    let mut vec = Vec::new();
+                    vec.push(Buffer::Leaf(cell.clone()));
+                    let empty = Rc::new(RefCell::new(Vec::new()));
+                    for _i in 1..128 {
+                        vec.push(Buffer::Leaf(Rc::clone(&empty)));
+                    }
+                    let buf = Buffer::Node(Rc::new(RefCell::new(vec)), 1);
+                    return buf.set_byte(offset, v);
+                }
+                let mut buf = cell.borrow().clone();
+                if buf.len() < 1024 {
+                    buf.resize(1024, 0);
+                }
+                buf[offset] = v;
+                return Buffer::Leaf(Rc::new(RefCell::new(buf)));
+            },
+            Buffer::Node(cell, h) => {
+                let mut vec = cell.borrow().clone();
+                let cell_len = calc_len(h-1);
+                vec[offset / cell_len] = vec[offset / cell_len].set_byte(offset % cell_len, *h);
+                return Buffer::Node(Rc::new(RefCell::new(vec)), *h);
+            },
+        }
+    }
+
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum Value {
     Int(Uint256),
     Tuple(Rc<Vec<Value>>),
     CodePoint(CodePt),
     Label(Label),
-    Buffer(Rc<RefCell<Vec<u8>>>),
+    Buffer(Buffer),
 }
 
 impl Value {
@@ -302,10 +377,10 @@ impl Value {
     }
 
     pub fn new_buffer(v: Vec<u8>) -> Self {
-        Value::Buffer(Rc::new(RefCell::new(v)))
+        Value::Buffer(Buffer::Leaf(Rc::new(RefCell::new(v))))
     }
 
-    pub fn copy_buffer(v: Rc<RefCell<Vec<u8>>>) -> Self {
+    pub fn copy_buffer(v: Buffer) -> Self {
         Value::Buffer(v)
     }
 
@@ -436,7 +511,8 @@ impl fmt::Display for Value {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             Value::Int(i) => i.fmt(f),
-            Value::Buffer(vec) => write!(f, "Buffer({})", vec.borrow().len()),
+            Value::Buffer(Buffer::Leaf(vec)) => write!(f, "Buffer(Leaf({}))", vec.borrow().len()),
+            Value::Buffer(Buffer::Node(vec,h)) => write!(f, "Buffer(Node({}, {}))", vec.borrow().len(), h),
             Value::CodePoint(pc) => write!(f, "CodePoint({})", pc),
             Value::Label(label) => write!(f, "Label({})", label),
             Value::Tuple(tup) => {

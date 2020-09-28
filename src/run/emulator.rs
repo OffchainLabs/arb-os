@@ -6,7 +6,7 @@
 
 use super::runtime_env::RuntimeEnvironment;
 use crate::link::LinkedProgram;
-use crate::mavm::{AVMOpcode, CodePt, Instruction, Opcode, Value};
+use crate::mavm::{AVMOpcode, CodePt, Instruction, Opcode, Value, Buffer};
 use crate::pos::Location;
 use crate::uint256::Uint256;
 use ethers_core::types::{Signature, H256};
@@ -169,11 +169,11 @@ impl ValueStack {
         }
     }
 
-    pub fn pop_buffer(&mut self, state: &MachineState) -> Result<Rc<RefCell<Vec<u8>>>, ExecutionError> {
+    pub fn pop_buffer(&mut self, state: &MachineState) -> Result<Buffer, ExecutionError> {
         let val = self.pop(state)?;
         if let Value::Buffer(v) = val {
             // let vs = &*v;
-            Ok(Rc::clone(&v))
+            Ok(v.clone())
         } else {
             Err(ExecutionError::new(
                 "expected buffer on stack",
@@ -1641,18 +1641,14 @@ impl Machine {
                         Ok(true)
                     }
                     Opcode::AVMOpcode(AVMOpcode::GetBuffer8) => {
-                        let cell = self.stack.pop_buffer(&self.state)?;
-                        let buf = cell.borrow();
+                        let buf = self.stack.pop_buffer(&self.state)?;
                         let offset = self.stack.pop_usize(&self.state)?;
-                        if buf.len() < offset {
-                            self.stack.push_usize(0);
-                        } else {
-                            self.stack.push_usize(buf[offset].into());
-                        }
+                        self.stack.push_usize(buf.read_byte(offset));
                         self.incr_pc();
                         Ok(true)
                     }
                     Opcode::AVMOpcode(AVMOpcode::GetBuffer64) => {
+                        /*
                         let cell = self.stack.pop_buffer(&self.state)?;
                         let buf = cell.borrow();
                         let offset = self.stack.pop_usize(&self.state)?;
@@ -1660,11 +1656,12 @@ impl Machine {
                             self.stack.push_usize(0);
                         } else {
                             self.stack.push_uint(Uint256::from_bytes(&buf[offset..offset+8]));
-                        }
+                        }*/
                         self.incr_pc();
                         Ok(true)
                     }
                     Opcode::AVMOpcode(AVMOpcode::GetBuffer256) => {
+                        /*
                         let cell = self.stack.pop_buffer(&self.state)?;
                         let buf = cell.borrow();
                         let offset = self.stack.pop_usize(&self.state)?;
@@ -1674,32 +1671,33 @@ impl Machine {
                             let val = Uint256::from_bytes(&buf[offset..offset+32]);
                             self.stack.push_uint(val);
                         }
-                        self.incr_pc();
-                        Ok(true)
-                    }
-                    Opcode::AVMOpcode(AVMOpcode::SetBuffer8) => {
-                        let cell = self.stack.pop_buffer(&self.state)?.borrow();
-                        let mut buf = cell.borrow_mut();
-                        let offset = self.stack.pop_usize(&self.state)?;
-                        let val = self.stack.pop_usize(&self.state)?;
-                        check_size(&mut buf, offset);
-                        buf[offset] = u8::try_from(val & 0xff).unwrap();
-                        self.stack.push(Value::copy_buffer(Rc::new(cell)));
+                        */
                         self.incr_pc();
                         Ok(true)
                     }
                     /*
                     Opcode::AVMOpcode(AVMOpcode::SetBuffer8) => {
-                        let mut buf = self.stack.pop_buffer(&self.state)?.borrow().clone();
+                        let cell = self.stack.pop_buffer(&self.state)?;
+                        let mut buf = cell.borrow_mut();
                         let offset = self.stack.pop_usize(&self.state)?;
                         let val = self.stack.pop_usize(&self.state)?;
                         check_size(&mut buf, offset);
                         buf[offset] = u8::try_from(val & 0xff).unwrap();
-                        self.stack.push(Value::new_buffer(buf));
+                        self.stack.push(Value::copy_buffer(Rc::clone(&cell)));
                         self.incr_pc();
                         Ok(true)
                     }*/
+                    Opcode::AVMOpcode(AVMOpcode::SetBuffer8) => {
+                        let buf = self.stack.pop_buffer(&self.state)?;
+                        let offset = self.stack.pop_usize(&self.state)?;
+                        let val = self.stack.pop_usize(&self.state)?;
+                        let nbuf = buf.set_byte(offset, u8::try_from(val & 0xff).unwrap());
+                        self.stack.push(Value::copy_buffer(nbuf));
+                        self.incr_pc();
+                        Ok(true)
+                    }
                     Opcode::AVMOpcode(AVMOpcode::SetBuffer64) => {
+                        /*
                         let mut buf = self.stack.pop_buffer(&self.state)?.borrow().clone();
                         let offset = self.stack.pop_usize(&self.state)?;
                         let val = self.stack.pop_uint(&self.state)?;
@@ -1709,10 +1707,12 @@ impl Machine {
                             buf[offset+i] = bytes[i];
                         }
                         self.stack.push(Value::new_buffer(buf));
+                        */
                         self.incr_pc();
                         Ok(true)
                     }
                     Opcode::AVMOpcode(AVMOpcode::SetBuffer256) => {
+                        /*
                         let mut buf = self.stack.pop_buffer(&self.state)?.borrow().clone();
                         let offset = self.stack.pop_usize(&self.state)?;
                         let val = self.stack.pop_uint(&self.state)?;
@@ -1722,6 +1722,7 @@ impl Machine {
                             buf[offset+i] = bytes[i];
                         }
                         self.stack.push(Value::new_buffer(buf));
+                        */
                         self.incr_pc();
                         Ok(true)
                     }
