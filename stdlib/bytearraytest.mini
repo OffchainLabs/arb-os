@@ -27,7 +27,12 @@ impure func main() {
 
 func tests() -> uint {
 
-	
+	let buf = newbuffer(123);
+	let buf2 = setbuffer8(buf, 0, 12);
+
+	if (getbuffer8(buf, 0) != 0) {
+		return 987;
+	}	
 
 	let ba = bytearray_new(33);
 	if (bytearray_size(ba) != 0) {

@@ -1678,6 +1678,18 @@ impl Machine {
                         Ok(true)
                     }
                     Opcode::AVMOpcode(AVMOpcode::SetBuffer8) => {
+                        let cell = self.stack.pop_buffer(&self.state)?.borrow();
+                        let mut buf = cell.borrow_mut();
+                        let offset = self.stack.pop_usize(&self.state)?;
+                        let val = self.stack.pop_usize(&self.state)?;
+                        check_size(&mut buf, offset);
+                        buf[offset] = u8::try_from(val & 0xff).unwrap();
+                        self.stack.push(Value::copy_buffer(Rc::new(cell)));
+                        self.incr_pc();
+                        Ok(true)
+                    }
+                    /*
+                    Opcode::AVMOpcode(AVMOpcode::SetBuffer8) => {
                         let mut buf = self.stack.pop_buffer(&self.state)?.borrow().clone();
                         let offset = self.stack.pop_usize(&self.state)?;
                         let val = self.stack.pop_usize(&self.state)?;
@@ -1686,7 +1698,7 @@ impl Machine {
                         self.stack.push(Value::new_buffer(buf));
                         self.incr_pc();
                         Ok(true)
-                    }
+                    }*/
                     Opcode::AVMOpcode(AVMOpcode::SetBuffer64) => {
                         let mut buf = self.stack.pop_buffer(&self.state)?.borrow().clone();
                         let offset = self.stack.pop_usize(&self.state)?;
@@ -1791,7 +1803,10 @@ fn tuple_keccak(intup: Vec<Value>, state: &MachineState) -> Result<Vec<Value>, E
 
 fn check_size(buf : &mut Vec<u8>, offset : usize) {
     if offset >= buf.len() {
-        if offset >= 1024 {
+        println!("resize {} {}", buf.len(), offset);
+        if offset >= 200000 {
+            buf.resize(4*buf.len(), 0);
+        } else if offset >= 1024 {
             buf.resize(200000, 0);
         } else if offset >= 256 {
             buf.resize(1024, 0);

@@ -305,6 +305,14 @@ impl Value {
         Value::Buffer(Rc::new(RefCell::new(v)))
     }
 
+    pub fn copy_buffer(v: Rc<RefCell<Vec<u8>>>) -> Self {
+        Value::Buffer(v)
+    }
+
+/*    pub fn copy_buffer(v: RefCell<Vec<u8>>) -> Self {
+        Value::Buffer(Rc::new(v))
+    }*/
+
     pub fn type_insn_result(&self) -> usize {
         match self {
             Value::Int(_) => 0,
