@@ -18,6 +18,7 @@ import func bytestream_new(ba: ByteArray) -> ByteStream;
 import func bytestream_getByte(bs: ByteStream) -> option<(ByteStream, uint)>;
 import func bytestream_get256(bs: ByteStream) -> option<(ByteStream, uint)>;
 import func bytestream_getN(bs: ByteStream, n: uint) -> option<(ByteStream, ByteArray)>;
+import func bytestream_bytesReadSoFar(bs: ByteStream) -> uint;
 import func bytestream_bytesRemaining(bs: ByteStream) -> uint;
 import func bytestream_getRemainingBytes(bs: ByteStream) -> ByteArray;
 import func rlp_decodeUint(bs: ByteStream) -> option<(ByteStream, uint)>;
@@ -235,6 +236,45 @@ public impure func decompressAndVerifyEcdsaSignedTx(
             }
         }
     );
+}
+
+public impure func decompressAndVerifyBlsSignedTxBatch(
+    ba: ByteArray,
+    originalRequest: IncomingRequest,
+    txQ: Queue,
+) -> option<Queue> {
+    if (bytearray_size(ba) < 2) {
+        return None;
+    }
+    let numTxs = bytearray_getByte(ba, 1);
+    let stream = bytestream_new(bytearray_extract(ba, 2, bytearray_size(ba)-2));
+    let i = 0;
+    while (i < numTxs) {
+        let (ustr, sender) = decompressAddress(stream)?;
+        stream = ustr;
+        let (ustr, tx) = decompressTx(ustr, Some(sender))?;
+
+        let startPos = bytestream_bytesReadSoFar(stream) + 2;
+        let nbytes = bytestream_bytesReadSoFar(ustr) + 2 - startPos;
+        let txHash = keccak256(ba, startPos, nbytes);
+
+        stream = ustr;
+
+        tx = tx with {
+            caller: sender
+        } with {
+            incomingRequest: originalRequest with {
+                requestId: uint(txHash)
+            }
+        };
+        txQ = queue_put(txQ, tx);
+        // TODO: remember necessary info about tx and sender, for later BLS verification step
+        i = i+1;
+    }
+
+    // TODO: read and check check BLS signature
+
+    return Some(txQ);
 }
 
 impure func decompressTx(
