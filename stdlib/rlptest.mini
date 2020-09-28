@@ -2,20 +2,20 @@
 // Copyright 2020, Offchain Labs, Inc. All rights reserved.
 //
 
-import type ByteArray;
-import type ByteStream;
-import type MarshalledBytes;
+use std::bytearray::ByteArray;
+use std::bytestream::ByteStream;
+use std::bytearray::MarshalledBytes;
 
-import func bytearray_new(capacity: uint) -> ByteArray;
-import func bytearray_size(ba: ByteArray) -> uint;
-import func bytearray_marshalFull(ba: ByteArray) -> MarshalledBytes;
-import func bytearray_unmarshalBytes(mb: MarshalledBytes) -> ByteArray;
-import func bytearray_getByte(ba: ByteArray, offset: uint) -> uint;
-import func bytearray_set256(ba: ByteArray, offset: uint, value: uint) -> ByteArray;
+use std::bytearray::bytearray_new;
+use std::bytearray::bytearray_size;
+use std::bytearray::bytearray_marshalFull;
+use std::bytearray::bytearray_unmarshalBytes;
+use std::bytearray::bytearray_getByte;
+use std::bytearray::bytearray_set256;
 
-import func bytestream_new(ba: ByteArray) -> ByteStream;
+use std::bytestream::bytestream_new;
 
-import func keccak256(ba: ByteArray, offset: uint, nbytes: uint) -> bytes32;
+use std::keccak::keccak256;
 
 import func rlp_encodeUint(val: uint, ba: ByteArray, offset: uint) -> (ByteArray, uint);
 import func rlp_encodeAddress(addr: address, ba: ByteArray, offset: uint) -> (ByteArray, uint);
