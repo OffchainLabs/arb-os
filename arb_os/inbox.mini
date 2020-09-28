@@ -251,7 +251,7 @@ public impure func inbox_getNextUnpackedRequest() -> (
                     if let Some(queue) = decompressAndVerifyBlsSignedTxBatch(
                         bytearray_unmarshalBytes(msg.msgData),
                         msg,
-                        queue_new()
+                        globalInputQueue.txQ
                     ) {
                         // push unpacked requests back into the input queue, then go around loop again
                         globalInputQueue = globalInputQueue with {
