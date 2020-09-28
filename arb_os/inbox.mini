@@ -37,6 +37,11 @@ import func bytestream_getRemainingBytes(bs: ByteStream) -> ByteArray;
 import func bytestream_skipBytes(bs: ByteStream, nbytes: uint) -> option<ByteStream>;
 
 import impure func decompressAndVerifyEcdsaSignedTx(ba: ByteArray, req: IncomingRequest) -> option<TxRequestData>;
+import impure func decompressAndVerifyBlsSignedTxBatch(
+    ba: ByteArray,
+    originalRequest: IncomingRequest,
+    txQ: Queue,
+) -> option<Queue>;
 
 import func hashUnsignedL2messageInfo(l2msg: MarshalledBytes, chainId: uint, sender: address) -> bytes32;
 import func translateSignedTx(req: IncomingRequest) -> option<TxRequestData>;
@@ -50,7 +55,10 @@ type Inbox = struct {
 }
 
 var globalInbox: Inbox;
-var globalQueueFromBatch: QueueStack;
+var globalInputQueue: struct {
+    txQ: Queue,
+    batchQ: QueueStack,
+};
 
 public impure func inbox_init() {
     globalInbox = struct {
@@ -59,7 +67,10 @@ public impure func inbox_init() {
         timestamp: 0,
         needToPeek: false,   // don't peek before the first message
     };
-    globalQueueFromBatch = queuestack_new();
+    globalInputQueue = struct {
+        txQ: queue_new(),
+        batchQ: queuestack_new()
+    };
 }
 
 public impure func inbox_get() -> IncomingRequest {
@@ -175,9 +186,18 @@ public impure func inbox_getNextUnpackedRequest() -> (
 ) {
     let msg = unsafecast<IncomingRequest>(());   // value will be re-initialized before use
     loop {
-        if let Some(res) = queuestack_get(globalQueueFromBatch) {
+        if let Some(res) = queue_get(globalInputQueue.txQ) {
+            let (newQ, tx) = res;
+            globalInputQueue = globalInputQueue with {
+                txQ: newQ
+            };
+            return (None<IncomingRequest>, Some(unsafecast<TxRequestData>(tx)));
+        }
+        if let Some(res) = queuestack_get(globalInputQueue.batchQ) {
             let (newQ, rawMsg) = res;
-            globalQueueFromBatch = newQ;
+            globalInputQueue = globalInputQueue with {
+                batchQ: newQ
+            };
             msg = unsafecast<IncomingRequest>(rawMsg);
         } else {
             msg = inbox_get();
@@ -196,7 +216,9 @@ public impure func inbox_getNextUnpackedRequest() -> (
                     moreToDo = false;
                 }
             }
-            globalQueueFromBatch = queuestack_push(globalQueueFromBatch, queue);
+            globalInputQueue = globalInputQueue with {
+                batchQ: queuestack_push(globalInputQueue.batchQ, queue)
+            };
         } else {
             // it's not a batch, so process it immediately
             // get its maxGas amount -- for now, set the limit high, unless caller asked for less
@@ -224,6 +246,19 @@ public impure func inbox_getNextUnpackedRequest() -> (
                         return (None<IncomingRequest>, Some(txRequest));
                     }
                     // else signature was invalid, ignore msg and execute loop again to get another
+                } elseif (firstByte == 8) {
+                    // it's a BLS-signed batch of compressed messages
+                    if let Some(queue) = decompressAndVerifyBlsSignedTxBatch(
+                        bytearray_unmarshalBytes(msg.msgData),
+                        msg,
+                        queue_new()
+                    ) {
+                        // push unpacked requests back into the input queue, then go around loop again
+                        globalInputQueue = globalInputQueue with {
+                            txQ: queue
+                        };
+                    }
+                    // else request was defective, ignore it and execute loop again to get another
                 } else {
                     // subtype must be 0, 1, or 2
                     if let Some(txRequest) = translateUnsignedTx(msg) {
@@ -243,7 +278,7 @@ public impure func inbox_getNextUnpackedRequest() -> (
     }
 }
 
-func translateUnsignedTx(request: IncomingRequest) -> option<TxRequestData> {
+impure func translateUnsignedTx(request: IncomingRequest) -> option<TxRequestData> {
     let inStream = bytestream_new(bytearray_unmarshalBytes(request.msgData));
     let (us, subtype) = bytestream_getByte(inStream)?;
     inStream = us;

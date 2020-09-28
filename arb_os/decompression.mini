@@ -242,7 +242,7 @@ public impure func decompressAndVerifyBlsSignedTxBatch(
     ba: ByteArray,
     originalRequest: IncomingRequest,
     txQ: Queue,
-) -> option<Queue> {
+) -> option<Queue> {  // returns option<Queue of TxRequestData>
     if (bytearray_size(ba) < 2) {
         return None;
     }
@@ -260,6 +260,9 @@ public impure func decompressAndVerifyBlsSignedTxBatch(
 
         stream = ustr;
 
+        originalRequest = originalRequest with {
+            requestId: uint(txHash)
+        };
         tx = tx with {
             caller: sender
         } with {
