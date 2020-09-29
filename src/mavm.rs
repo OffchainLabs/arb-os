@@ -289,14 +289,14 @@ fn calc_len(h : u8) -> usize {
 }
 
 impl Buffer {
-    pub fn read_byte(&self, offset: usize) -> usize {
+    pub fn read_byte(&self, offset: usize) -> u8 {
         match self {
             Buffer::Leaf(cell) => {
                 let buf = cell.borrow();
                 if offset > buf.len() {
                     return 0;
                 }
-                return buf[offset].into();
+                return buf[offset];
             }
             Buffer::Node(cell, h) => {
                 let buf = cell.borrow();
@@ -322,7 +322,7 @@ impl Buffer {
     pub fn set_byte(&self, offset: usize, v: u8) -> Self {
         match self {
             Buffer::Leaf(cell) => {
-                if offset > 1024 {
+                if offset >= 1024 {
                     let mut vec = Vec::new();
                     vec.push(Buffer::Leaf(cell.clone()));
                     let empty = Rc::new(RefCell::new(Vec::new()));
@@ -341,8 +341,11 @@ impl Buffer {
             },
             Buffer::Node(cell, h) => {
                 let mut vec = cell.borrow().clone();
+                if offset >= calc_len(*h) {
+                    panic!("out of range {} {}", offset, calc_len(*h));
+                }
                 let cell_len = calc_len(h-1);
-                vec[offset / cell_len] = vec[offset / cell_len].set_byte(offset % cell_len, *h);
+                vec[offset / cell_len] = vec[offset / cell_len].set_byte(offset % cell_len, v);
                 return Buffer::Node(Rc::new(RefCell::new(vec)), *h);
             },
         }

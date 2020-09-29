@@ -28,9 +28,9 @@ impure func main() {
 func tests() -> uint {
 
 	let buf = newbuffer(123);
-	let buf2 = setbuffer8(buf, 0, 12);
+	let buf2 = setbuffer8(buf, 10000, 12);
 
-	if (getbuffer8(buf, 0) != 0) {
+	if (getbuffer8(buf, 10000) != 0) {
 		return 987;
 	}	
 
@@ -39,10 +39,18 @@ func tests() -> uint {
 		return 1;
 	}
 
+	debug(123);
+
 	ba = bytearray_new(117);
 	ba = bytearray_setByte(ba, 33, 42);
     if (bytearray_getByte(ba, 33) != 42) {
 	    return 2;
+    }
+
+	ba = bytearray_new(117);
+	ba = bytearray_setByte(ba, 33000, 42);
+    if (bytearray_getByte(ba, 33000) != 42) {
+	    return 2001;
     }
 
 	ba = bytearray_new(117);
@@ -96,6 +104,8 @@ func tests() -> uint {
 		),
 	));
 
+	debug(1);
+
 	ba = bytearray_new(67);
 	ba = bytearray_unmarshalBytes(marshalledStruct);
 	let i = 0;
@@ -112,6 +122,8 @@ func tests() -> uint {
 	if (res != 0x030405060708090a) {
 		return 9;
     }
+
+	debug(2);
 
 	ba = setupFromUnmarshal();
 	if (bytearray_get64(ba, 29) != 0x1d1e1f2021222324) {
@@ -131,6 +143,8 @@ func tests() -> uint {
 	if (bytearray_get256(ba, 0) != 1) {
 	    return 12;
 	}
+
+	debug(3);
 
     if (bytes32(0x4fc384a19926e9ff7ec8f2376a0d146dc273031df1db4d133236d209700e4780)
         != marshalledBytes_hash(bytearray_marshalFull(setupFromUnmarshal()))
@@ -161,18 +175,23 @@ func tests() -> uint {
         return 16;
     }
 
+	debug(4);
+
     let ba = bytearray_new(0);
     let i = 0;
     while (i < 5000) {
         ba = bytearray_set256(ba, i*32, i);
         i = i+1;
     }
+	debug(345);
     i = 0;
     let sum = 0;
     while (i < 5000) {
         sum = sum + bytearray_get256(ba, i*32);
         i = i+1;
     }
+	debug(5);
+
     if (sum != (2500*4999)) {
         return 17;
     }

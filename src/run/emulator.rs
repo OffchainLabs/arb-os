@@ -1643,50 +1643,32 @@ impl Machine {
                     Opcode::AVMOpcode(AVMOpcode::GetBuffer8) => {
                         let buf = self.stack.pop_buffer(&self.state)?;
                         let offset = self.stack.pop_usize(&self.state)?;
-                        self.stack.push_usize(buf.read_byte(offset));
+                        self.stack.push_usize(buf.read_byte(offset).into());
                         self.incr_pc();
                         Ok(true)
                     }
                     Opcode::AVMOpcode(AVMOpcode::GetBuffer64) => {
-                        /*
-                        let cell = self.stack.pop_buffer(&self.state)?;
-                        let buf = cell.borrow();
+                        let buf = self.stack.pop_buffer(&self.state)?;
                         let offset = self.stack.pop_usize(&self.state)?;
-                        if buf.len() < offset {
-                            self.stack.push_usize(0);
-                        } else {
-                            self.stack.push_uint(Uint256::from_bytes(&buf[offset..offset+8]));
-                        }*/
+                        let mut res = [0u8; 8];
+                        for i in 0..8 {
+                            res[i] = buf.read_byte(offset+i);
+                        }
+                        self.stack.push_uint(Uint256::from_bytes(&res));
                         self.incr_pc();
                         Ok(true)
                     }
                     Opcode::AVMOpcode(AVMOpcode::GetBuffer256) => {
-                        /*
-                        let cell = self.stack.pop_buffer(&self.state)?;
-                        let buf = cell.borrow();
+                        let buf = self.stack.pop_buffer(&self.state)?;
                         let offset = self.stack.pop_usize(&self.state)?;
-                        if buf.len() < offset {
-                            self.stack.push_usize(0);
-                        } else {
-                            let val = Uint256::from_bytes(&buf[offset..offset+32]);
-                            self.stack.push_uint(val);
+                        let mut res = [0u8; 32];
+                        for i in 0..32 {
+                            res[i] = buf.read_byte(offset+i);
                         }
-                        */
+                        self.stack.push_uint(Uint256::from_bytes(&res));
                         self.incr_pc();
                         Ok(true)
                     }
-                    /*
-                    Opcode::AVMOpcode(AVMOpcode::SetBuffer8) => {
-                        let cell = self.stack.pop_buffer(&self.state)?;
-                        let mut buf = cell.borrow_mut();
-                        let offset = self.stack.pop_usize(&self.state)?;
-                        let val = self.stack.pop_usize(&self.state)?;
-                        check_size(&mut buf, offset);
-                        buf[offset] = u8::try_from(val & 0xff).unwrap();
-                        self.stack.push(Value::copy_buffer(Rc::clone(&cell)));
-                        self.incr_pc();
-                        Ok(true)
-                    }*/
                     Opcode::AVMOpcode(AVMOpcode::SetBuffer8) => {
                         let buf = self.stack.pop_buffer(&self.state)?;
                         let offset = self.stack.pop_usize(&self.state)?;
@@ -1697,32 +1679,28 @@ impl Machine {
                         Ok(true)
                     }
                     Opcode::AVMOpcode(AVMOpcode::SetBuffer64) => {
-                        /*
-                        let mut buf = self.stack.pop_buffer(&self.state)?.borrow().clone();
+                        let buf = self.stack.pop_buffer(&self.state)?;
                         let offset = self.stack.pop_usize(&self.state)?;
                         let val = self.stack.pop_uint(&self.state)?;
-                        check_size(&mut buf, offset+7);
+                        let mut nbuf = buf;
                         let bytes = val.to_bytes_be();
                         for i in 0..8 {
-                            buf[offset+i] = bytes[i];
+                            nbuf = nbuf.set_byte(offset+i, bytes[i]);
                         }
-                        self.stack.push(Value::new_buffer(buf));
-                        */
+                        self.stack.push(Value::copy_buffer(nbuf));
                         self.incr_pc();
                         Ok(true)
                     }
                     Opcode::AVMOpcode(AVMOpcode::SetBuffer256) => {
-                        /*
-                        let mut buf = self.stack.pop_buffer(&self.state)?.borrow().clone();
+                        let buf = self.stack.pop_buffer(&self.state)?;
                         let offset = self.stack.pop_usize(&self.state)?;
                         let val = self.stack.pop_uint(&self.state)?;
+                        let mut nbuf = buf;
                         let bytes = val.to_bytes_be();
-                        check_size(&mut buf, offset+31);
                         for i in 0..32 {
-                            buf[offset+i] = bytes[i];
+                            nbuf = nbuf.set_byte(offset+i, bytes[i]);
                         }
-                        self.stack.push(Value::new_buffer(buf));
-                        */
+                        self.stack.push(Value::copy_buffer(nbuf));
                         self.incr_pc();
                         Ok(true)
                     }
