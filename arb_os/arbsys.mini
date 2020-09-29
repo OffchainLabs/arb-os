@@ -95,6 +95,8 @@ public impure func arbsys_txcall() {
             arbsys_addressTable_compress(topFrame, calldata);
         } elseif(funcCode == 0x1ff548ca) {
             arbsys_registerBlsKey(topFrame, calldata);
+        } elseif(funcCode == 0x647e0e98) {
+            arbsys_getBlsPublicKey(topFrame, calldata);
         } else {
             // unrecognized function code
             evmOp_revert(0, 0);
@@ -340,15 +342,44 @@ impure func arbsys_registerBlsKey(topFrame: EvmCallFrame, calldata: ByteArray) {
     let y1 = bytearray_get256(calldata, 4+32*3);
     let maybeBlsKey = bls_makeKey(x0, x1, y0, y1);
 
-    let acctStore = getGlobalAccountStore();
     let caller = evmCallFrame_getCaller(topFrame);
-    setGlobalAccountStore(
-        accountStore_set(
-            acctStore,
-            caller,
-            account_setBlsKey(accountStore_get(acctStore, caller), maybeBlsKey)
-        )
-    );
+    let acct = evmCallFrame_getAccount(topFrame, caller);
+    if (evmCallStack_setAccount(caller, account_setBlsKey(acct, maybeBlsKey)) {
+        evmOp_return(0, 0);
+    } else {
+        evmOp_revert(0, 0);
+    }
+}
 
-    evmOp_return(0, 0);
+impure func arbsys_getBlsPublicKey(topFrame: EvmCallFrame, calldata: ByteArray) { // (address) -> (uint, uint, uint, uint)
+    if (bytearray_size(calldata) != 36) {
+        evmOp_revert(0, 0);
+    }
+    let addr = address(bytearray_get256(calldata, 4));
+    let maybeBlsKey = account_getBlsKey(evmCallFrame_getAccount(topFrame, addr));
+
+    let mem = evmCallStack_getTopFrameMemoryOrDie();
+    if let Some(blsKey) = maybeBlsKey {
+        mem = bls_marshalPublicKey(blsKey, mem, 0);
+    } else {
+        mem = bytearray_set256(
+            bytearray_set256(
+                bytearray_set256(
+                    bytearray_set256(mem, 0, ~0),
+                    32,
+                    ~0
+                ),
+                2*32,
+                ~0
+            ),
+            3*32,
+            ~0
+        );
+    }
+
+    if (evmCallStack_setTopFrameMemory(mem))
+        evmOp_return(0, 4*32);
+    } else {
+        evmOp_revert(0, 0);
+    }
 }
