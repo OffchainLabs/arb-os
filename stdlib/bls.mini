@@ -22,10 +22,16 @@ type BLSSignature = struct {
 }
 
 type BLSKey = struct {
-    aField: uint,
-    anotherField: uint,
+    x0: uint,
+    x1: uint,
+    y0: uint,
+    y1: uint
 }
 
+
+public func bls_makeKey(x0: uint, x1: uint, y0: uint, y1: uint) -> option<BLSKey> {
+    return Some(struct { x0: x0, x1: x1, y0: y0, y1: y1 });
+}
 
 public func bls_verifySignature(
     numMsgs:   uint,

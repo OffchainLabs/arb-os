@@ -3,10 +3,12 @@
 //
 
 import type EvmCallFrame;
+import type AccountStore;
 import type Account;
 import type ByteArray;
 import type ByteStream;
 import type MarshalledBytes;
+import type BLSKey;
 
 import impure func evmCallStack_topFrame() -> option<EvmCallFrame>;
 import impure func evmCallStack_setAccount(addr: address, acct: Account) -> bool;
@@ -26,10 +28,15 @@ import func evmCallFrame_getCaller(frame: EvmCallFrame) -> address;
 import impure func evmOp_return(memOffset: uint, memNbytes: uint);
 import impure func evmOp_revert(memOffset: uint, memNbytes: uint);
 
+import impure func getGlobalAccountStore() -> AccountStore;
+import impure func setGlobalAccountStore(acctStore: AccountStore);
+import func accountStore_get(acctStore: AccountStore, addr: address) -> Account;
+import func accountStore_set(acctStore: AccountStore, addr: address, acct: Account) -> AccountStore;
 import func account_getAddress(acct: Account) -> address;
 import func account_getNextSeqNum(account: Account) -> uint;
 import func account_getStorageCell(account: Account, cell: uint) -> option<uint>;
 import func account_deductFromEthBalance(acct: Account, amount: uint) -> option<Account>;
+import func account_setBlsKey(account: Account, maybeKey: option<BLSKey>) -> Account;
 
 import func bytearray_new(unused: uint) -> ByteArray;
 import func bytearray_size(ba: ByteArray) -> uint;
@@ -57,6 +64,7 @@ import impure func decompressAddress(stream: ByteStream) -> option<(ByteStream, 
 import func rlp_encodeUint(val: uint, ba: ByteArray, offset: uint) -> (ByteArray, uint);
 import func rlp_encodeAddress(addr: address, ba: ByteArray, offset: uint) -> (ByteArray, uint);
 
+import func bls_makeKey(x0: uint, x1: uint, y0: uint, y1: uint) -> option<BLSKey>;
 
 public impure func arbsys_txcall() {
     if let Some(topFrame) = evmCallStack_topFrame() {
@@ -85,6 +93,8 @@ public impure func arbsys_txcall() {
             arbsys_addressTable_decompress(topFrame, calldata);
         } elseif(funcCode == 0x2a890b98) {
             arbsys_addressTable_compress(topFrame, calldata);
+        } elseif(funcCode == 0x1ff548ca) {
+            arbsys_registerBlsKey(topFrame, calldata);
         } else {
             // unrecognized function code
             evmOp_revert(0, 0);
@@ -317,4 +327,28 @@ impure func arbsys_addressTable_compress(topFrame: EvmCallFrame, calldata: ByteA
     } else {
         evmOp_revert(0, 0);
     }
+}
+
+impure func arbsys_registerBlsKey(topFrame: EvmCallFrame, calldata: ByteArray) {
+    if (bytearray_size(calldata) != 4+32*4) {
+        evmOp_revert(0, 0);
+    }
+
+    let x0 = bytearray_get256(calldata, 4);
+    let x1 = bytearray_get256(calldata, 4+32);
+    let y0 = bytearray_get256(calldata, 4+32*2);
+    let y1 = bytearray_get256(calldata, 4+32*3);
+    let maybeBlsKey = bls_makeKey(x0, x1, y0, y1);
+
+    let acctStore = getGlobalAccountStore();
+    let caller = evmCallFrame_getCaller(topFrame);
+    setGlobalAccountStore(
+        accountStore_set(
+            acctStore,
+            caller,
+            account_setBlsKey(accountStore_get(acctStore, caller), maybeBlsKey)
+        )
+    );
+
+    evmOp_return(0, 0);
 }
