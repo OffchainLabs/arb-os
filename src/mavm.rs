@@ -310,13 +310,25 @@ impl Buffer {
         }
     }
 
-    pub fn empty1() -> Self {
+    fn empty1() -> Rc<RefCell<Vec<Buffer>>> {
         let mut vec = Vec::new();
         let empty = Rc::new(RefCell::new(Vec::new()));
         for _i in 0..128 {
             vec.push(Buffer::Leaf(Rc::clone(&empty)));
         }
-        return Buffer::Node(Rc::new(RefCell::new(vec)), 1);
+        return Rc::new(RefCell::new(vec));
+    }
+
+    fn make_empty(h: u8) -> Rc<RefCell<Vec<Buffer>>> {
+        if h == 1 {
+            return Buffer::empty1();
+        }
+        let mut vec = Vec::new();
+        let empty = Buffer::make_empty(h-1);
+        for _i in 0..128 {
+            vec.push(Buffer::Node(Rc::clone(&empty), h-1));
+        }
+        return Rc::new(RefCell::new(vec));
     }
 
     pub fn set_byte(&self, offset: usize, v: u8) -> Self {
@@ -340,10 +352,17 @@ impl Buffer {
                 return Buffer::Leaf(Rc::new(RefCell::new(buf)));
             },
             Buffer::Node(cell, h) => {
-                let mut vec = cell.borrow().clone();
                 if offset >= calc_len(*h) {
-                    panic!("out of range {} {}", offset, calc_len(*h));
+                    let mut vec = Vec::new();
+                    vec.push(Buffer::Node(cell.clone(), *h));
+                    let empty = Buffer::make_empty(*h);
+                    for _i in 1..128 {
+                        vec.push(Buffer::Node(Rc::clone(&empty), *h));
+                    }
+                    let buf = Buffer::Node(Rc::new(RefCell::new(vec)), *h+1);
+                    return buf.set_byte(offset, v);
                 }
+                let mut vec = cell.borrow().clone();
                 let cell_len = calc_len(h-1);
                 vec[offset / cell_len] = vec[offset / cell_len].set_byte(offset % cell_len, v);
                 return Buffer::Node(Rc::new(RefCell::new(vec)), *h);
