@@ -116,7 +116,11 @@ public func addressTable_getByAddress(iat: IndexedAddressTable, addr: address) -
 public func addressTable_getByAddressAlloc(iat: IndexedAddressTable, addr: address) -> (IndexedAddressTable, uint) {
     if let Some(val) = iat.byAddress[addr] {
         return (iat, val);
+    } elseif (iat.size == (asm(160, 1) uint { shl } - 1)) {
+        // table is full, return failure
+        return (iat, ~0);
     } else {
+        // allocate space in the table
         return (
             iat with {
                 byIndex: expandingIntArray_set(iat.byIndex, iat.size, uint(addr))
