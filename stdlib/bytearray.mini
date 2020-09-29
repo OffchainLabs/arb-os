@@ -175,6 +175,7 @@ public func bytearray_setByte(ba: ByteArray, offset: uint, value: uint) -> ByteA
     }
     offset = offset + ba.sliceOffset;
     return ba with { contents: setbuffer8(ba.contents, offset, value) };
+    // return ba with { contents: ba.contents };
 }
 
 // bytearray_set64 writes an 8-byte chunk to a ByteArray, returning the resulting ByteArray

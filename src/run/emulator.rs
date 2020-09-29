@@ -18,8 +18,6 @@ use std::fmt;
 use std::fs::File;
 use std::io::{stdin, BufWriter, Write};
 use std::path::Path;
-use std::rc::Rc;
-use std::cell::RefCell;
 
 ///Represents a stack of `Value`s
 #[derive(Debug, Default, Clone)]
@@ -1778,23 +1776,6 @@ fn tuple_keccak(intup: Vec<Value>, state: &MachineState) -> Result<Vec<Value>, E
     inuis[6] = Uint256::from_u64(outtup[24]);
     let ret = inuis.iter().map(|ui| Value::Int(ui.clone())).collect();
     Ok(ret)
-}
-
-fn check_size(buf : &mut Vec<u8>, offset : usize) {
-    if offset >= buf.len() {
-        println!("resize {} {}", buf.len(), offset);
-        if offset >= 200000 {
-            buf.resize(4*buf.len(), 0);
-        } else if offset >= 1024 {
-            buf.resize(200000, 0);
-        } else if offset >= 256 {
-            buf.resize(1024, 0);
-        } else if offset >= 128 {
-            buf.resize(256, 0);
-        } else {
-            buf.resize(130, 0);
-        } 
-    }
 }
 
 fn do_ecrecover(
