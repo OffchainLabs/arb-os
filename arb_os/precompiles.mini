@@ -212,4 +212,6 @@ public impure func precompile_0x08() { // ecpairing
             }
         }
     }
+
+    evmOp_revert(0, 0);
 }
