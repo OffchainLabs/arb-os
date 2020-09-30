@@ -115,7 +115,7 @@ public impure func precompile_0x06() {  // ecadd
     if let Some(topFrame) = evmCallStack_topFrame() {
         let calldata = evmCallFrame_getCalldata(topFrame);
         if (bytearray_size(calldata) != 4*32) {
-            evmOp_revert(0, 0);
+            evmOp_revert_knownPc(0, 0, 0);
         }
         let x0 = bytearray_get256(calldata, 0);
         let x1 = bytearray_get256(calldata, 32);
@@ -148,7 +148,7 @@ public impure func precompile_0x07() {  // ecmul
     if let Some(topFrame) = evmCallStack_topFrame() {
         let calldata = evmCallFrame_getCalldata(topFrame);
         if (bytearray_size(calldata) != 3*32) {
-            evmOp_revert(0, 0);
+            evmOp_revert_knownPc(0, 0, 0);
         }
         let x0 = bytearray_get256(calldata, 0);
         let x1 = bytearray_get256(calldata, 32);
