@@ -369,12 +369,12 @@ impl TypeCheckedExpr {
 ///A `StructField` that has been type checked.
 #[derive(Debug, Clone)]
 pub struct TypeCheckedStructField {
-    pub name: StringId,
+    pub name: String,
     pub value: TypeCheckedExpr,
 }
 
 impl TypeCheckedStructField {
-    pub fn new(name: StringId, value: TypeCheckedExpr) -> Self {
+    pub fn new(name: String, value: TypeCheckedExpr) -> Self {
         TypeCheckedStructField { name, value }
     }
 }
@@ -1288,7 +1288,7 @@ fn typecheck_expr(
                         let slot_num = tc_sub
                             .get_type()
                             .get_representation(type_tree)?
-                            .get_struct_slot_by_name(*name)
+                            .get_struct_slot_by_name(name.clone())
                             .ok_or(new_type_error("this one".to_string(), None))?;
                         return Ok(TypeCheckedExpr::DotRef(
                             Box::new(tc_sub),
@@ -1544,8 +1544,8 @@ fn typecheck_expr(
                     return_type,
                     type_tree,
                 )?;
-                tc_fields.push(TypeCheckedStructField::new(field.name, tc_expr.clone()));
-                tc_fieldtypes.push(StructField::new(field.name, tc_expr.get_type()));
+                tc_fields.push(TypeCheckedStructField::new(field.name.clone(), tc_expr.clone()));
+                tc_fieldtypes.push(StructField::new(field.name.clone(), tc_expr.get_type()));
             }
             Ok(TypeCheckedExpr::StructInitializer(
                 tc_fields,
@@ -1684,7 +1684,7 @@ fn typecheck_expr(
             )?;
             let tcs_type = tc_struc.get_type().get_representation(type_tree)?;
             if let Type::Struct(fields) = &tcs_type {
-                match tcs_type.get_struct_slot_by_name(*name) {
+                match tcs_type.get_struct_slot_by_name(name.clone()) {
                     Some(index) => {
                         if fields[index].tipe.assignable(&tc_val.get_type(), type_tree) {
                             Ok(TypeCheckedExpr::StructMod(

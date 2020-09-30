@@ -150,7 +150,7 @@ impl Type {
 
     ///If self is a Struct, and name is the StringID of a field of self, then returns Some(n), where
     /// n is the index of the field of self whose ID matches name.  Otherwise returns None.
-    pub fn get_struct_slot_by_name(&self, name: StringId) -> Option<usize> {
+    pub fn get_struct_slot_by_name(&self, name: String) -> Option<usize> {
         match self {
             Type::Struct(fields) => {
                 for (i, field) in fields.iter().enumerate() {
@@ -392,12 +392,12 @@ fn struct_field_vectors_equal(f1: &[StructField], f2: &[StructField]) -> bool {
 ///Field of a struct, contains field name and underlying type.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct StructField {
-    pub name: StringId,
+    pub name: String,
     pub tipe: Type,
 }
 
 impl StructField {
-    pub fn new(name: StringId, tipe: Type) -> StructField {
+    pub fn new(name: String, tipe: Type) -> StructField {
         StructField { name, tipe }
     }
 
@@ -410,7 +410,7 @@ impl StructField {
     ) -> Result<Self, TypeError> {
         let t = self.tipe.resolve_types(type_table, location)?;
         Ok(StructField {
-            name: self.name,
+            name: self.name.clone(),
             tipe: t,
         })
     }
@@ -844,7 +844,7 @@ pub enum Expr {
     ShortcutAnd(Box<Expr>, Box<Expr>, Option<Location>),
     VariableRef(StringId, Option<Location>),
     TupleRef(Box<Expr>, Uint256, Option<Location>),
-    DotRef(Box<Expr>, StringId, Option<Location>),
+    DotRef(Box<Expr>, String, Option<Location>),
     Constant(Constant, Option<Location>),
     OptionInitializer(Box<Expr>, Option<Location>),
     FunctionCall(Box<Expr>, Vec<Expr>, Option<Location>),
@@ -856,7 +856,7 @@ pub enum Expr {
     NewFixedArray(usize, Option<Box<Expr>>, Option<Location>),
     NewMap(Type, Type, Option<Location>),
     ArrayOrMapMod(Box<Expr>, Box<Expr>, Box<Expr>, Option<Location>),
-    StructMod(Box<Expr>, StringId, Box<Expr>, Option<Location>),
+    StructMod(Box<Expr>, String, Box<Expr>, Option<Location>),
     UnsafeCast(Box<Expr>, Type, Option<Location>),
     Asm(Type, Vec<Instruction>, Vec<Expr>, Option<Location>),
     Try(Box<Expr>, Option<Location>),
@@ -906,7 +906,7 @@ impl Expr {
             )),
             Expr::DotRef(be, name, loc) => Ok(Expr::DotRef(
                 Box::new(be.resolve_types(type_table)?),
-                *name,
+                name.clone(),
                 *loc,
             )),
             Expr::Constant(b, loc) => Ok(Expr::Constant(b.resolve_types(type_table)?, *loc)),
@@ -939,7 +939,7 @@ impl Expr {
                 let mut rfields = Vec::new();
                 for field in fields.iter() {
                     rfields.push(FieldInitializer::new(
-                        field.name,
+                        field.name.clone(),
                         field.value.resolve_types(type_table)?,
                     ));
                 }
@@ -982,7 +982,7 @@ impl Expr {
             )),
             Expr::StructMod(e1, i, e3, loc) => Ok(Expr::StructMod(
                 Box::new(e1.resolve_types(type_table)?),
-                *i,
+                i.clone(),
                 Box::new(e3.resolve_types(type_table)?),
                 *loc,
             )),
@@ -1053,12 +1053,12 @@ pub enum BinaryOp {
 ///Used in StructInitializer expressions to map expressions to fields of the struct.
 #[derive(Debug, Clone)]
 pub struct FieldInitializer {
-    pub name: StringId,
+    pub name: String,
     pub value: Expr,
 }
 
 impl FieldInitializer {
-    pub fn new(name: StringId, value: Expr) -> Self {
+    pub fn new(name: String, value: Expr) -> Self {
         FieldInitializer { name, value }
     }
 }
