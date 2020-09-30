@@ -158,6 +158,7 @@ type TxRequestData = struct {
     calleeAddr: address,
     value: uint,
     calldata: ByteArray,
+    nonMutating: bool,
     incomingRequest: IncomingRequest,
 }
 
@@ -272,6 +273,7 @@ func translateUnsignedTx(request: IncomingRequest) -> option<TxRequestData> {
             calleeAddr: address(destAddrAsUint),
             value: value,
             calldata: calldata,
+            nonMutating: (subtype == 2),
             incomingRequest: request
         }
     );
@@ -300,6 +302,7 @@ func translateBuddyDeployTx(request: IncomingRequest) -> option<TxRequestData> {
             calleeAddr: address(0),
             value: value,
             calldata: calldata,
+            nonMutating: false,
             incomingRequest: request
         }
     );
