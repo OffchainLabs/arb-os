@@ -26,15 +26,15 @@ func main() {
 	while (j < 1) {
 		j = j+1;
 		let i = 0;
-		let ba = bytearray_new(33);
+		let ba = newbuffer(33);
 		while (i < 1024*1024) {
-			ba = bytearray_setByte(ba, i, 123);
-			bytearray_getByte(ba, i);
+			ba = setbuffer8(ba, i, 123);
+			getbuffer8(ba, i);
 			i = i+1;
 		}
 		i = 0;
 		while (i < 1024*1024) {
-			bytearray_getByte(ba, i);
+			getbuffer8(ba, i);
 			i = i+1;
 		}
 	}
