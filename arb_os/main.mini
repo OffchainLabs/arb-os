@@ -87,6 +87,7 @@ type TxRequestData = struct {
     calleeAddr: address,
     value: uint,
     calldata: ByteArray,
+    nonMutating: bool,
     incomingRequest: IncomingRequest,
 }
 
