@@ -285,7 +285,14 @@ pub enum BufferElem {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Buffer {
     elem: BufferElem,
-    hash: Option<Uint256>,
+    hash: Option<Packed>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Packed {
+    hash: Uint256,
+    size: usize, // total size
+    packed: usize, // packed levels
 }
 
 fn calc_len(h : u8) -> usize {
@@ -295,24 +302,30 @@ fn calc_len(h : u8) -> usize {
     return 128*calc_len(h-1);
 }
 
-fn hash_buf(buf: &[u8]) -> Uint256 {
+fn hash_buf(buf: &[u8]) -> Packed {
     if buf.len() == 32 {
-        return Uint256::from_bytes(buf).avm_hash();
+        return normal(Uint256::from_bytes(buf).avm_hash(), 32);
     }
     let len = buf.len();
     let h1 = hash_buf(&buf[0..len/2]);
     let h2 = hash_buf(&buf[len/2+1 .. len]);
-    return Uint256::avm_hash2(&h1, &h2);
+    if unpack(&h2) == zero_hash(buf.len()/2) {
+        return pack(&h1);
+    }
+    return normal(Uint256::avm_hash2(&unpack(&h1), &unpack(&h2)), buf.len());
 }
 
-fn hash_node(buf: &mut [Buffer]) -> Uint256 {
+fn hash_node(buf: &mut [Buffer], sz: usize) -> Packed {
     if buf.len() == 1 {
         return buf[0].hash();
     }
     let len = buf.len();
-    let h1 = hash_node(&mut buf[0..len/2]);
-    let h2 = hash_node(&mut buf[len/2+1 .. len]);
-    return Uint256::avm_hash2(&h1, &h2);
+    let h1 = hash_node(&mut buf[0..len/2], sz/2);
+    let h2 = hash_node(&mut buf[len/2+1 .. len], sz/2);
+    if unpack(&h2) == zero_hash(sz/2) {
+        return pack(&h1);
+    }
+    return normal(Uint256::avm_hash2(&unpack(&h1), &unpack(&h2)), sz);
 }
 
 fn zero_hash(sz: usize) -> Uint256 {
@@ -323,16 +336,51 @@ fn zero_hash(sz: usize) -> Uint256 {
     return Uint256::avm_hash2(&h1, &h1);
 }
 
-fn hash_sparse(idx: &[usize], buf: &[u8], sz: usize) -> Uint256 {
+/*
+static mut ZERO: Vec<Uint256> = Vec::new();
+fn init_zeros() {
+    let mut acc = 32;
+    for _i=0..60 {
+        ZERO.push(acc);
+    }
+}
+*/
+
+fn normal(hash: Uint256, sz: usize) -> Packed {
+    return Packed{size: sz, packed: 0, hash: hash};
+}
+
+fn pack(packed: &Packed) -> Packed {
+    return Packed{size: packed.size, packed: packed.packed+1, hash: packed.hash.clone()}
+}
+
+fn unpack(packed: &Packed) -> Uint256 {
+    let mut res = packed.hash.clone();
+    let mut sz = packed.size;
+    for i in 0..packed.packed {
+        res = Uint256::avm_hash2(&res, &zero_hash(sz));
+        sz = sz*2;
+    }
+    return res;
+}
+
+fn zero_packed(sz: usize) -> Packed {
+    if sz == 32 {
+        return normal(zero_hash(32), 32);
+    }
+    return pack(&zero_packed(sz/2));
+}
+
+fn hash_sparse(idx: &[usize], buf: &[u8], sz: usize) -> Packed {
     if sz == 32 {
         let mut res = [0u8; 32];
         for i in 0..idx.len() {
             res[idx[i]] = buf[i];
         }
-        return Uint256::from_bytes(&res).avm_hash();
+        return normal(Uint256::from_bytes(&res).avm_hash(), 32);
     }
     if idx.len() == 0 {
-        return zero_hash(sz);
+        return zero_packed(sz);
     }
     let pivot = sz/2;
     let mut idx1 = Vec::new();
@@ -350,7 +398,10 @@ fn hash_sparse(idx: &[usize], buf: &[u8], sz: usize) -> Uint256 {
     }
     let h1 = hash_sparse(&idx1, &buf1, sz/2);
     let h2 = hash_sparse(&idx2, &buf2, sz/2);
-    return Uint256::avm_hash2(&h1, &h2);
+    if unpack(&h2) == zero_hash(sz/2) {
+        return pack(&h1);
+    }
+    return normal(Uint256::avm_hash2(&unpack(&h1), &unpack(&h2)), sz);
 }
 
 impl Buffer {
@@ -366,15 +417,15 @@ impl Buffer {
         return Buffer{elem: BufferElem::Sparse(vec, vec2, h), hash: None}
     }
 
-    pub fn hash(&mut self) -> Uint256 {
+    pub fn hash(&mut self) -> Packed {
         match &self.hash {
             None => {
                 let res = match &self.elem {
                     BufferElem::Leaf(cell) => {
                         hash_buf(&cell.borrow())
                     }
-                    BufferElem::Node(cell, _) => {
-                        hash_node(&mut cell.borrow_mut())
+                    BufferElem::Node(cell, h) => {
+                        hash_node(&mut cell.borrow_mut(), calc_len(*h))
                     }
                     BufferElem::Sparse(idx_cell, buf_cell, h) => {
                         hash_sparse(&idx_cell.borrow(), &buf_cell.borrow(), calc_len(*h))
