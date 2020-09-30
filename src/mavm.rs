@@ -533,6 +533,9 @@ pub enum AVMOpcode {
     OpenInsn,
     Sideload,
     EcRecover = 0x80,
+    EcAdd,
+    EcMul,
+    EcPairing,
     DebugPrint = 0x90,
 }
 
@@ -626,6 +629,9 @@ impl Opcode {
             "errset" => Opcode::AVMOpcode(AVMOpcode::ErrSet),
             "sideload" => Opcode::AVMOpcode(AVMOpcode::Sideload),
             "ecrecover" => Opcode::AVMOpcode(AVMOpcode::EcRecover),
+            "ecadd" => Opcode::AVMOpcode(AVMOpcode::EcAdd),
+            "ecmul" => Opcode::AVMOpcode(AVMOpcode::EcMul),
+            "ecpairing" => Opcode::AVMOpcode(AVMOpcode::EcPairing),
             _ => {
                 panic!("opcode not supported in asm segment: {}", name);
             }
@@ -699,6 +705,9 @@ impl Opcode {
             0x7a => Some(Opcode::AVMOpcode(AVMOpcode::OpenInsn)),
             0x7b => Some(Opcode::AVMOpcode(AVMOpcode::Sideload)),
             0x80 => Some(Opcode::AVMOpcode(AVMOpcode::EcRecover)),
+            0x81 => Some(Opcode::AVMOpcode(AVMOpcode::EcAdd)),
+            0x82 => Some(Opcode::AVMOpcode(AVMOpcode::EcMul)),
+            0x83 => Some(Opcode::AVMOpcode(AVMOpcode::EcPairing)),
             0x90 => Some(Opcode::AVMOpcode(AVMOpcode::DebugPrint)),
             _ => None,
         }
@@ -774,6 +783,9 @@ impl Opcode {
             Opcode::AVMOpcode(AVMOpcode::OpenInsn) => Some(0x7a),
             Opcode::AVMOpcode(AVMOpcode::Sideload) => Some(0x7b),
             Opcode::AVMOpcode(AVMOpcode::EcRecover) => Some(0x80),
+            Opcode::AVMOpcode(AVMOpcode::EcAdd) => Some(0x81),
+            Opcode::AVMOpcode(AVMOpcode::EcMul) => Some(0x82),
+            Opcode::AVMOpcode(AVMOpcode::EcPairing) => Some(0x83),
             Opcode::AVMOpcode(AVMOpcode::DebugPrint) => Some(0x90),
             _ => None,
         }
