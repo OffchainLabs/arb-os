@@ -177,6 +177,7 @@ type TxRequestData = struct {
     calleeAddr: address,
     value: uint,
     calldata: ByteArray,
+    nonMutating: bool,
     incomingRequest: IncomingRequest,
 }
 
@@ -341,6 +342,7 @@ impure func decompressTx(
             calleeAddr: toAddr,
             value: value,
             calldata: calldata,
+            nonMutating: false,
             incomingRequest: unsafecast<IncomingRequest>(0),  // caller will fill this in
         }
     ));
