@@ -26,17 +26,9 @@ pub enum TopLevelDecl {
     TypeDecl(TypeDecl),
     FuncDecl(FuncDecl),
     VarDecl(GlobalVarDecl),
+    UseDecl(Vec<String>, String),
     ImpFuncDecl(ImportFuncDecl),
     ImpTypeDecl(ImportTypeDecl),
-}
-
-impl TopLevelDecl {
-    pub fn concat_vecs(a: Vec<Self>, b: Vec<Self>) -> Vec<Self> {
-        let mut aa = a;
-        let mut bb = b;
-        aa.append(&mut bb);
-        aa.to_vec()
-    }
 }
 
 ///Type Declaration, contains the StringId corresponding to the type name, and the underlying Type.

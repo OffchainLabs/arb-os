@@ -48,6 +48,30 @@ public impure func precompiles_init(acctStore: AccountStore) -> option<AccountSt
     )?;
     acctStore = accountStore_createBuiltinContract(
         acctStore,
+        address(0x04),
+        precompile_0x04,
+        false,
+    )?;
+    acctStore = accountStore_createBuiltinContract(
+    	acctStore,
+        address(0x06),
+        precompile_0x06,
+        false,
+    )?;
+    acctStore = accountStore_createBuiltinContract(
+        acctStore,
+        address(0x07),
+        precompile_0x07,
+        false,
+    )?;
+    acctStore = accountStore_createBuiltinContract(
+        acctStore,
+        address(0x08),
+        precompile_0x08,
+        false,
+    )?;
+    acctStore = accountStore_createBuiltinContract(
+        acctStore,
         address(100),
         arbsys_txcall,
         true,
@@ -87,6 +111,123 @@ public impure func precompile_0x02() {  // sha256
         );
         if (success) {
             evmOp_return(0, 32);
+        }
+    }
+
+    evmOp_revert(0, 0);
+}
+
+public impure func precompile_0x04() {  // identity function
+    if let Some(topFrame) = evmCallStack_topFrame() {
+        let calldata = evmCallFrame_getCalldata(topFrame);
+        let success = evmCallStack_setTopFrameMemory(calldata);
+        if (success) {
+            evmOp_return(0, bytearray_size(calldata));
+        }
+    }
+
+    evmOp_revert(0, 0);
+}
+
+public impure func precompile_0x06() {  // ecadd
+    if let Some(topFrame) = evmCallStack_topFrame() {
+        let calldata = evmCallFrame_getCalldata(topFrame);
+        if (bytearray_size(calldata) != 4*32) {
+            evmOp_revert(0, 0);
+        }
+        let x0 = bytearray_get256(calldata, 0);
+        let x1 = bytearray_get256(calldata, 32);
+        let y0 = bytearray_get256(calldata, 2*32);
+        let y1 = bytearray_get256(calldata, 3*32);
+
+        let z0 = asm(x0, x1, y0, y1) uint { ecadd };
+        let z1 = asm() uint { };
+
+        let success = evmCallStack_setTopFrameMemory(
+            bytearray_set256(
+                bytearray_set256(
+                    bytearray_new(0),
+                    0,
+                    z0,
+                ),
+                32,
+                z1,
+            )
+        );
+        if (success) {
+            evmOp_return(0, 64);
+        }
+    }
+
+    evmOp_revert(0, 0);
+}
+
+public impure func precompile_0x07() {  // ecmul
+    if let Some(topFrame) = evmCallStack_topFrame() {
+        let calldata = evmCallFrame_getCalldata(topFrame);
+        if (bytearray_size(calldata) != 3*32) {
+            evmOp_revert(0, 0);
+        }
+        let x0 = bytearray_get256(calldata, 0);
+        let x1 = bytearray_get256(calldata, 32);
+        let n = bytearray_get256(calldata, 2*32);
+
+        let z0 = asm(x0, x1, n) uint { ecmul };
+        let z1 = asm() uint { };
+
+        let success = evmCallStack_setTopFrameMemory(
+            bytearray_set256(
+                bytearray_set256(
+                    bytearray_new(0),
+                    0,
+                    z0,
+                ),
+                32,
+                z1,
+            )
+        );
+        if (success) {
+            evmOp_return(0, 64);
+        }
+    }
+
+    evmOp_revert(0, 0);
+}
+
+public impure func precompile_0x08() { // ecpairing
+    if let Some(topFrame) = evmCallStack_topFrame() {
+        let calldata = evmCallFrame_getCalldata(topFrame);
+        let numPts = bytearray_size(calldata) / (6*32);
+        if ((numPts > 0) && (numPts <= 30)) {
+            let acc = unsafecast<any>(());
+            let offset = 0;
+            while (numPts > 0) {
+                acc = (
+                    (
+                        bytearray_get256(calldata, offset),
+                        bytearray_get256(calldata, offset+32),
+                        bytearray_get256(calldata, offset+3*32),
+                        bytearray_get256(calldata, offset+2*32),
+                        bytearray_get256(calldata, offset+5*32),
+                        bytearray_get256(calldata, offset+4*32)
+                    ),
+                    acc
+                );
+                offset = offset + 6*32;
+                numPts = numPts - 1;
+            }
+
+            let result = asm(acc,) bool { ecpairing };
+            let success = evmCallStack_setTopFrameMemory(
+                bytearray_set256(
+                    bytearray_new(0),
+                    0,
+                    uint(result)
+                )
+            );
+            if (success) {
+                evmOp_return(0, 32);
+            }
         }
     }
 
