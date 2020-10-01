@@ -181,8 +181,10 @@ fn main() -> Result<(), CompileError> {
             file_name_chart.insert(file_id, filename.to_string());
             match compile_from_file(path, file_id, debug_mode) {
                 Ok(mut compiled_program) => {
-                    compiled_program.file_name_chart.extend(file_name_chart);
-                    compiled_program.to_output(&mut *output, matches.value_of("format"));
+                    compiled_program.iter_mut().for_each(|prog| {
+                        prog.file_name_chart.extend(file_name_chart.clone());
+                        prog.to_output(&mut *output, matches.value_of("format"));
+                    });
                 }
                 Err(e) => {
                     println!("Compilation error: {:?}\nIn file: {}", e, filename);
@@ -199,8 +201,10 @@ fn main() -> Result<(), CompileError> {
                 file_name_chart.insert(file_id, (*filename).to_string());
                 match compile_from_file(path, file_id, debug_mode) {
                     Ok(compiled_program) => {
-                        file_name_chart.extend(compiled_program.file_name_chart.clone());
-                        compiled_progs.push(compiled_program);
+                        compiled_program.into_iter().for_each(|prog| {
+                            file_name_chart.extend(prog.file_name_chart.clone());
+                            compiled_progs.push(prog)
+                        });
                     }
                     Err(e) => {
                         println!("Compilation error: {}\nIn file: {}", e, filename);
