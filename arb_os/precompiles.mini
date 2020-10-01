@@ -126,7 +126,7 @@ public impure func precompile_0x04() {  // identity function
         }
     }
 
-    evmOp_revert(0, 0);
+    evmOp_revert_knownPc(0, 0, 0);
 }
 
 public impure func precompile_0x06() {  // ecadd

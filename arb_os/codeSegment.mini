@@ -283,7 +283,8 @@ public impure func translateEvmCodeSegment(
                                     0x30,  // pop
                                     pushValue(0, restOfCode),
                                 ),
-                                evmJumpTable
+                                evmJumpTable,
+                                pcTable,
                             ));
                         } elseif (opcode == 0x41) { // COINBASE
                             return Some((pushValue(0, restOfCode), evmJumpTable, pcTable));
