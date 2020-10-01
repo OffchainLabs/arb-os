@@ -285,7 +285,7 @@ pub enum BufferElem {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Buffer {
     elem: BufferElem,
-    hash: Option<Packed>,
+    hash: RefCell<Option<Packed>>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -357,7 +357,7 @@ fn pack(packed: &Packed) -> Packed {
 fn unpack(packed: &Packed) -> Uint256 {
     let mut res = packed.hash.clone();
     let mut sz = packed.size;
-    for i in 0..packed.packed {
+    for _i in 0..packed.packed {
         res = Uint256::avm_hash2(&res, &zero_hash(sz));
         sz = sz*2;
     }
@@ -406,19 +406,23 @@ fn hash_sparse(idx: &[usize], buf: &[u8], sz: usize) -> Packed {
 
 impl Buffer {
     fn node(vec: Rc<RefCell<Vec<Buffer>>>, h: u8) -> Buffer {
-        return Buffer{elem: BufferElem::Node(vec, h), hash: None}
+        return Buffer{elem: BufferElem::Node(vec, h), hash: RefCell::new(None)}
     }
 
     fn leaf(vec: Rc<RefCell<Vec<u8>>>) -> Buffer {
-        return Buffer{elem: BufferElem::Leaf(vec), hash: None}
+        return Buffer{elem: BufferElem::Leaf(vec), hash: RefCell::new(None)}
     }
 
     fn sparse(vec: Rc<RefCell<Vec<usize>>>, vec2: Rc<RefCell<Vec<u8>>>, h: u8) -> Buffer {
-        return Buffer{elem: BufferElem::Sparse(vec, vec2, h), hash: None}
+        return Buffer{elem: BufferElem::Sparse(vec, vec2, h), hash: RefCell::new(None)}
     }
 
-    pub fn hash(&mut self) -> Packed {
-        match &self.hash {
+    pub fn avm_hash(&self) -> Uint256 {
+        return self.hash().hash;
+    }
+
+    pub fn hash(&self) -> Packed {
+        match self.hash.borrow().clone() {
             None => {
                 let res = match &self.elem {
                     BufferElem::Leaf(cell) => {
@@ -431,7 +435,7 @@ impl Buffer {
                         hash_sparse(&idx_cell.borrow(), &buf_cell.borrow(), calc_len(*h))
                     }
                 };
-                self.hash = Some(res.clone());
+                self.hash.replace(Some(res.clone()));
                 return res;
             }
             Some(x) => x.clone()
@@ -700,7 +704,7 @@ impl Value {
         //BUGBUG: should do same hash as AVM
         match self {
             Value::Int(ui) => Value::Int(ui.avm_hash()),
-            Value::Buffer(_) => Value::Int(Uint256::zero()),
+            Value::Buffer(buf) => Value::Int(buf.avm_hash()),
             Value::Tuple(v) => {
                 let mut acc = Uint256::zero();
                 for val in &*v.clone() {
