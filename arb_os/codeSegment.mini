@@ -278,7 +278,13 @@ public impure func translateEvmCodeSegment(
                 if (opcode < 0x45) {
                     if (opcode < 0x43) {
                         if (opcode == 0x40) { // BLOCKHASH
-                            return Some((restOfCode, evmJumpTable, pcTable));
+                            return Some((
+                                pushInstruction(
+                                    0x30,  // pop
+                                    pushValue(0, restOfCode),
+                                ),
+                                evmJumpTable
+                            ));
                         } elseif (opcode == 0x41) { // COINBASE
                             return Some((pushValue(0, restOfCode), evmJumpTable, pcTable));
                         } elseif (opcode == 0x42) { // TIMESTAMP

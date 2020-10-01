@@ -7,17 +7,19 @@
 use crate::link::{ExportedFunc, ImportedFunc};
 use crate::mavm::Instruction;
 use crate::pos::{BytePos, Location};
-use crate::stringtable;
+use crate::stringtable::StringTable;
+use ast::{FuncDecl, GlobalVarDecl};
 use lalrpop_util::lalrpop_mod;
 use mini::DeclsParser;
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::fmt::Formatter;
 use std::fs::File;
 use std::io::{self, Read};
 use std::path::Path;
+use symtable::SymTable;
 
-pub use ast::Type;
+pub use ast::{TopLevelDecl, Type};
 pub use source::Lines;
 
 mod ast;
@@ -33,6 +35,39 @@ lalrpop_mod!(mini);
 pub(crate) trait MiniProperties {
     ///Returns false if the value reads or writes mini global state, and true otherwise.
     fn is_pure(&self) -> bool;
+}
+
+#[derive(Clone)]
+struct Module {
+    imported_funcs: Vec<ImportedFunc>,
+    funcs: Vec<FuncDecl>,
+    named_types: HashMap<usize, Type>,
+    global_vars: Vec<GlobalVarDecl>,
+    string_table: StringTable,
+    func_table: HashMap<usize, Type>,
+    name: String,
+}
+
+impl Module {
+    fn new(
+        imported_funcs: Vec<ImportedFunc>,
+        funcs: Vec<FuncDecl>,
+        named_types: HashMap<usize, Type>,
+        global_vars: Vec<GlobalVarDecl>,
+        string_table: StringTable,
+        func_table: HashMap<usize, Type>,
+        name: String,
+    ) -> Self {
+        Self {
+            imported_funcs,
+            funcs,
+            named_types,
+            global_vars,
+            string_table,
+            func_table,
+            name,
+        }
+    }
 }
 
 ///Represents a mini program that has been compiled and possibly linked, but has not had post-link
@@ -167,8 +202,12 @@ pub fn compile_from_file(
     path: &Path,
     file_id: u64,
     debug: bool,
-) -> Result<CompiledProgram, CompileError> {
+) -> Result<Vec<CompiledProgram>, CompileError> {
     let display = path.display();
+
+    if path.is_dir() {
+        return compile_from_folder(path, file_id);
+    }
 
     let mut file = File::open(&path)
         .map_err(|why| CompileError::new(format!("couldn't open {}: {:?}", display, why), None))?;
@@ -176,9 +215,225 @@ pub fn compile_from_file(
     let mut s = String::new();
     file.read_to_string(&mut s)
         .map_err(|why| CompileError::new(format!("couldn't read {}: {:?}", display, why), None))?;
-    //print!("read-in file:\n{}", s);
 
-    serde_json::from_str(&s).or_else(|_| compile_from_source(s, display, file_id, debug))
+    Ok(vec![serde_json::from_str(&s).or_else(|_| {
+        compile_from_source(s, display, file_id, debug)
+    })?])
+}
+
+pub fn compile_from_folder(
+    folder: &Path,
+    file_id: u64,
+) -> Result<Vec<CompiledProgram>, CompileError> {
+    let mut paths = vec!["main".to_owned()];
+    let mut programs = HashMap::new();
+    let mut import_map = HashMap::new();
+    let mut seen_paths = HashSet::new();
+    while let Some(name) = paths.pop() {
+        if seen_paths.contains(&name) {
+            continue;
+        } else {
+            seen_paths.insert(name.clone());
+        }
+        let name = name + ".mini";
+        let mut file = File::open(folder.join(name.clone())).map_err(|why| {
+            CompileError::new(
+                format!("Can not open {}/{}: {:?}", folder.display(), name, why),
+                None,
+            )
+        })?;
+
+        let mut source = String::new();
+        file.read_to_string(&mut source).map_err(|why| {
+            CompileError::new(
+                format!("Can not read {}/{}: {:?}", folder.display(), name, why),
+                None,
+            )
+        })?;
+        let mut string_table = StringTable::new();
+        let (imports, imported_funcs, funcs, named_types, global_vars, string_table, hm) =
+            typecheck::sort_top_level_decls(
+                &parse_from_source(source, file_id, &mut string_table)?,
+                string_table,
+            );
+        paths.append(
+            &mut imports
+                .iter()
+                .map(|imp| {
+                    if imp.path[0] == "std" {
+                        format!("../stdlib/{}", imp.path[1])
+                    } else if imp.path[0] == "core" {
+                        format!("../builtin/{}", imp.path[1])
+                    } else {
+                        imp.path[0].clone()
+                    }
+                })
+                .collect(),
+        );
+        import_map.insert(name.clone(), imports);
+        programs.insert(
+            name.clone(),
+            Module::new(
+                imported_funcs,
+                funcs,
+                named_types,
+                global_vars,
+                string_table,
+                hm,
+                name,
+            ),
+        );
+    }
+    for (name, imports) in &import_map {
+        for import in imports {
+            let mut named_type = None;
+            let mut imp_func = None;
+            let mut imp_func_decl = None;
+            let import_path = if import.path[0] == "std".to_string() {
+                format!("../stdlib/{}.mini", import.path[1])
+            } else if import.path[0] == "core" {
+                format!("../builtin/{}.mini", import.path[1])
+            } else {
+                format!("{}.mini", import.path[0])
+            };
+            if let Some(program) = programs.get_mut(&import_path) {
+                let index = program.string_table.get(import.name.clone());
+                let type_table = SymTable::new();
+                let type_table = type_table
+                    .push_multi(program.named_types.iter().map(|(i, t)| (*i, t)).collect());
+                named_type = program
+                    .named_types
+                    .get(&index)
+                    .map(|t| t.resolve_types(&type_table, None))
+                    .transpose()
+                    .map_err(|e| CompileError::new(format!("Type error: {:?}", e), None))?;
+                imp_func = program
+                    .func_table
+                    .get(&index)
+                    .map(|decl| {
+                        decl.resolve_types(&type_table, None)
+                            .map_err(|e| CompileError::new(format!("Type error: {:?}", e), None))
+                    })
+                    .transpose()?;
+                imp_func_decl = program
+                    .funcs
+                    .iter()
+                    .find(|func| func.name == index)
+                    .cloned();
+            }
+            let origin_program = programs.get_mut(name).ok_or_else(|| {
+                CompileError::new(
+                    format!(
+                        "Internal error: Can not find originating file for import \"{}::{}\"",
+                        import.path.get(0).cloned().unwrap_or_else(String::new),
+                        import.name
+                    ),
+                    None,
+                )
+            })?;
+            let index = origin_program.string_table.get(import.name.clone());
+            if let Some(named_type) = named_type {
+                origin_program.named_types.insert(index, named_type);
+            } else if let Some(imp_func) = imp_func {
+                origin_program.func_table.insert(index, imp_func);
+                let imp_func_decl = imp_func_decl.ok_or(CompileError::new(
+                    format!(
+                        "Internal error: Imported function {} has no associated decl",
+                        origin_program.string_table.name_from_id(index)
+                    ),
+                    None,
+                ))?;
+                origin_program.imported_funcs.push(ImportedFunc::new(
+                    origin_program.imported_funcs.len(),
+                    index,
+                    &origin_program.string_table,
+                    imp_func_decl
+                        .args
+                        .iter()
+                        .map(|arg| arg.tipe.clone())
+                        .collect(),
+                    imp_func_decl.ret_type,
+                    imp_func_decl.is_impure,
+                ));
+            } else {
+                println!(
+                    "Warning: import \"{}::{}\" does not correspond to a type or function",
+                    import.path.get(0).cloned().unwrap_or_else(String::new),
+                    import.name
+                );
+            }
+        }
+    }
+    let mut progs = vec![];
+    let mut output = vec![programs.remove("main.mini").expect("no main")];
+    output.append(&mut programs.values().cloned().collect());
+    for Module {
+        imported_funcs,
+        funcs,
+        named_types,
+        global_vars,
+        string_table,
+        func_table: hm,
+        name,
+    } in output
+    {
+        let mut checked_funcs = vec![];
+        let (exported_funcs, imported_funcs, global_vars, string_table) =
+            typecheck::typecheck_top_level_decls(
+                imported_funcs,
+                funcs,
+                named_types,
+                global_vars,
+                string_table,
+                hm,
+                &mut checked_funcs,
+            )
+            .map_err(|res3| CompileError::new(res3.reason.to_string(), res3.location))?;
+        let code_out =
+            codegen::mavm_codegen(checked_funcs, &string_table, &imported_funcs, &global_vars)
+                .map_err(|e| CompileError::new(e.reason.to_string(), e.location))?;
+        progs.push(CompiledProgram::new(
+            code_out.to_vec(),
+            exported_funcs,
+            imported_funcs,
+            global_vars.len(),
+            Some(SourceFileMap::new(
+                code_out.len(),
+                folder.join(name.clone()).display().to_string(),
+            )),
+            HashMap::new(),
+        ))
+    }
+    Ok(progs)
+}
+
+///Converts source string `source` into a series of `TopLevelDecl`s, uses identifiers from
+/// `string_table` and records new ones in it as well.  The `file_id` argument is used to construct
+/// file information for the location fields.
+pub fn parse_from_source(
+    source: String,
+    file_id: u64,
+    string_table: &mut StringTable,
+) -> Result<Vec<TopLevelDecl>, CompileError> {
+    let comment_re = regex::Regex::new(r"//.*").unwrap();
+    let source = comment_re.replace_all(&source, "");
+    let lines = Lines::new(source.bytes());
+    DeclsParser::new()
+        .parse(string_table, &lines, file_id, &source)
+        .map_err(|e| match e {
+            lalrpop_util::ParseError::UnrecognizedToken {
+                token: (offset, tok, end),
+                expected: _,
+            } => CompileError::new(
+                format!(
+                    "unexpected token: {}, Type: {:?}",
+                    &source[offset..end],
+                    tok
+                ),
+                Some(lines.location(BytePos::from(offset), file_id).unwrap()),
+            ),
+            _ => CompileError::new(format!("{:?}", e), None),
+        })
 }
 
 ///Interprets s as mini source code, and returns a CompiledProgram if s represents a valid program,
@@ -195,30 +450,11 @@ pub fn compile_from_source(
     file_id: u64,
     debug: bool,
 ) -> Result<CompiledProgram, CompileError> {
-    let comment_re = regex::Regex::new(r"//.*").unwrap();
-    let s = comment_re.replace_all(&s, "");
-    let mut string_table_1 = stringtable::StringTable::new();
-    let lines = Lines::new(s.bytes());
-    let res = match DeclsParser::new().parse(&mut string_table_1, &lines, file_id, &s) {
-        Ok(r) => r,
-        Err(e) => match e {
-            lalrpop_util::ParseError::UnrecognizedToken {
-                token: (offset, tok, end),
-                expected: _,
-            } => {
-                return Err(CompileError::new(
-                    format!("unexpected token: {}, Type: {:?}", &s[offset..end], tok),
-                    Some(lines.location(BytePos::from(offset), file_id).unwrap()),
-                ));
-            }
-            _ => {
-                return Err(CompileError::new(format!("{:?}", e), None));
-            }
-        },
-    };
+    let mut string_table_1 = StringTable::new();
+    let res = parse_from_source(s, file_id, &mut string_table_1)?;
     let mut checked_funcs = Vec::new();
     let (exported_funcs, imported_funcs, global_vars, string_table) =
-        typecheck::typecheck_top_level_decls(&res, &mut checked_funcs, string_table_1)
+        typecheck::sort_and_typecheck_top_level_decls(&res, &mut checked_funcs, string_table_1)
             .map_err(|res3| CompileError::new(res3.reason.to_string(), res3.location))?;
     checked_funcs.iter().for_each(|func| {
         let detected_purity = func.is_pure();
