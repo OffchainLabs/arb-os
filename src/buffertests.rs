@@ -2,74 +2,31 @@
  * Copyright 2020, Offchain Labs, Inc. All rights reserved.
  */
 
+use crate::uint256::Uint256;
 use crate::mavm::Buffer;
-use merkletree::hash::Algorithm;
-use std::hash::Hasher;
-use crypto::sha3::{Sha3, Sha3Mode};
-use crypto::digest::Digest;
-use bytes::Bytes;
-use merkletree::merkle::MerkleTree;
-use merkletree::store::VecStore;
 
-pub struct KeccakAlgorithm(Sha3);
+use std::convert::TryFrom;
 
-impl KeccakAlgorithm {
-    pub fn new() -> KeccakAlgorithm {
-        KeccakAlgorithm(Sha3::new(Sha3Mode::Keccak256))
+fn hash_buffer(vec: Vec<u8>) -> Uint256 {
+    let mut buf = Buffer::empty0();
+    for i in 0..vec.len() {
+        buf = buf.set_byte(i, vec[i]);
     }
-}
-
-impl Default for KeccakAlgorithm {
-    fn default() -> KeccakAlgorithm {
-        KeccakAlgorithm::new()
-    }
-}
-
-impl Hasher for KeccakAlgorithm {
-    #[inline]
-    fn write(&mut self, msg: &[u8]) {
-        self.0.input(msg)
-    }
-
-    #[inline]
-    fn finish(&self) -> u64 {
-        unimplemented!()
-    }
-}
-
-impl Algorithm<[u8; 32]> for KeccakAlgorithm {
-    #[inline]
-    fn hash(&mut self) -> [u8; 32] {
-        let mut h = [0u8; 32];
-        self.0.result(&mut h);
-        h
-    }
-
-    #[inline]
-    fn reset(&mut self) {
-        self.0.reset();
-    }
-}
-
-fn hash_buffer(buf: Vec<u8>) -> Uint256 {
-    let words = Bytes::from(buf);
-    let t: MerkleTree<[u8; 32], KeccakAlgorithm, VecStore<_>> =
-      MerkleTree::try_from_iter(words.chunks(32).map(|buf| {
-        let mut res = [0u8; 32];
-        for x in 0..buf.len() {
-            res[x] = buf[x]
-        }
-        // Perhaps need to hash once here
-        Ok(res)
-      })).unwrap();
-    return Uint256::from_bytes(&t.root());
+    return buf.avm_hash();
 }
 
 #[test]
 fn test_hash_test() {
-    let buf = [1,2,3,4,5,6,7,8,9,10];
-    println!("hashing: {}", hash_buffer(buf.clone()));
-    panic!("???");
+    let mut buf : Vec<u8> = Vec::new();
+    buf.resize(64, 0);
+    for i in 0..64 {
+        buf[i] = u8::try_from(i).unwrap();
+    }
+    let u1 = Uint256::from_bytes(&buf[0..32]).avm_hash();
+    let u2 = Uint256::from_bytes(&buf[32..64]).avm_hash();
+    if Uint256::avm_hash2(&u1, &u2) != hash_buffer(buf.to_vec()) {
+        panic!("hash mismatch");
+    }
 }
 
 

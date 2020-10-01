@@ -308,7 +308,7 @@ fn hash_buf(buf: &[u8]) -> Packed {
     }
     let len = buf.len();
     let h1 = hash_buf(&buf[0..len/2]);
-    let h2 = hash_buf(&buf[len/2+1 .. len]);
+    let h2 = hash_buf(&buf[len/2 .. len]);
     if unpack(&h2) == zero_hash(buf.len()/2) {
         return pack(&h1);
     }
@@ -321,7 +321,7 @@ fn hash_node(buf: &mut [Buffer], sz: usize) -> Packed {
     }
     let len = buf.len();
     let h1 = hash_node(&mut buf[0..len/2], sz/2);
-    let h2 = hash_node(&mut buf[len/2+1 .. len], sz/2);
+    let h2 = hash_node(&mut buf[len/2 .. len], sz/2);
     if unpack(&h2) == zero_hash(sz/2) {
         return pack(&h1);
     }
@@ -421,7 +421,7 @@ impl Buffer {
         return self.hash().hash;
     }
 
-    pub fn hash(&self) -> Packed {
+    pub fn hash_no_caching(&self) -> Packed {
         match self.hash.borrow().clone() {
             None => {
                 let res = match &self.elem {
@@ -435,11 +435,16 @@ impl Buffer {
                         hash_sparse(&idx_cell.borrow(), &buf_cell.borrow(), calc_len(*h))
                     }
                 };
-                self.hash.replace(Some(res.clone()));
                 return res;
             }
-            Some(x) => x.clone()
-        }
+            Some(x) => return x.clone()
+        };
+    }
+    
+    pub fn hash(&self) -> Packed {
+        let res = self.hash_no_caching();
+        self.hash.replace(Some(res.clone()));
+        return res;
     }
 
     pub fn read_byte(&self, offset: usize) -> u8 {
@@ -473,7 +478,11 @@ impl Buffer {
         }
     }
 
-    fn empty1() -> Rc<RefCell<Vec<Buffer>>> {
+    pub fn empty0() -> Buffer {
+        Buffer::leaf(Rc::new(RefCell::new(Vec::new())))
+    }
+
+    pub fn empty1() -> Rc<RefCell<Vec<Buffer>>> {
         let mut vec = Vec::new();
         let empty = Rc::new(RefCell::new(Vec::new()));
         for _i in 0..128 {
