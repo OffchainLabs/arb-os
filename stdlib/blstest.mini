@@ -1,0 +1,31 @@
+//
+// Copyright 2020, Offchain Labs, Inc. All rights reserved.
+//
+
+import type ByteArray;
+import type BLSKey;
+import type BLSSignature;
+
+import func bls_verifySignature(
+    numMsgs:   uint,
+    messages:  []ByteArray,
+    keys:      []BLSKey,
+    signature: BLSSignature
+) -> bool;
+
+
+impure func main() {
+	asm(tests(),) { log };
+}
+
+func tests() -> uint {
+    if (2+2 != 4) {
+        return 1;
+    }
+
+    if (6*7 != 42) {
+        return 2;
+    }
+
+    return 0;   // passed all tests
+}

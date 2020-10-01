@@ -43,23 +43,6 @@ import impure func inbox_currentTimestamp() -> uint;
 import impure func queueMessageForSend(msgType: uint, sender: address, data: ByteArray);
 
 
-type ArbSysMessage = struct {
-    kind: uint,
-    sender: address,
-    msg: any,
-}
-
-type ArbSysEthTransferMessage = struct {
-    dest: address,
-    amount: uint,
-}
-
-type ArbSysTokenTransferMessage = struct {
-    tokenAddr: address,
-    dest: address,
-    amount: uint,
-}
-
 public impure func arbsys_txcall() {
     if let Some(topFrame) = evmCallStack_topFrame() {
         let calldata = evmCallFrame_getCalldata(topFrame);
@@ -75,8 +58,6 @@ public impure func arbsys_txcall() {
             arbsys_withdrawEth(topFrame, calldata);
         } elseif(funcCode == 0x23ca0cd2) {
             arbsys_getTransactionCount(topFrame, calldata);
-        } elseif(funcCode == 0x474ed9c0) {
-            arbsys_cloneContract(topFrame, calldata);
         } elseif(funcCode == 0xa169625f) {
             arbsys_getStorageAt(topFrame, calldata);
         } else {
@@ -156,34 +137,9 @@ impure func arbsys_getTransactionCount(topFrame: EvmCallFrame, calldata: ByteArr
          0,
          seqNum
      );
-    let success = evmCallStack_setTopFrameMemory(
-        updatedMem
-    );
-
+    let success = evmCallStack_setTopFrameMemory(updatedMem);
     if (success) {
         evmOp_return(0, 32);
-    } else {
-        evmOp_revert(0, 0);
-    }
-}
-
-impure func arbsys_cloneContract(topFrame: EvmCallFrame, calldata: ByteArray) {
-    if (bytearray_size(calldata) != 36) {
-        evmOp_revert(0, 0);
-    }
-    let oldContractAddr = address(bytearray_get256(calldata, 4));
-    if let Some(newAddr) = evmCallStack_cloneContract(oldContractAddr) {
-        let updatedMem = bytearray_set256(
-            evmCallStack_getTopFrameMemoryOrDie(),
-            0,
-            uint(newAddr)
-        );
-        let success = evmCallStack_setTopFrameMemory(updatedMem);
-        if (success) {
-            evmOp_return(0, 32);
-        } else {
-            evmOp_revert(0, 0);
-        }
     } else {
         evmOp_revert(0, 0);
     }
