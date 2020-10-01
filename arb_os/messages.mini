@@ -220,6 +220,7 @@ type TxRequestData = struct {
     calleeAddr: address,
     value: uint,
     calldata: ByteArray,
+    nonMutating: bool,
     incomingRequest: IncomingRequest,
 }
 
@@ -283,7 +284,7 @@ public impure func handleL2Request(
     } else {
         // this is a non-constructor call
         let callKind = 0;
-        if (request.incomingRequest.kind == 2) {
+        if (request.nonMutating) {
             callKind = 3;  // staticcall
         }
 

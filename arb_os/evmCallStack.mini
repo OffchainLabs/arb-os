@@ -182,6 +182,7 @@ type TxRequestData = struct {
     calleeAddr: address,
     value: uint,
     calldata: ByteArray,
+    nonMutating: bool,
     incomingRequest: IncomingRequest,
 }
 
@@ -280,7 +281,10 @@ public impure func initEvmCallStack(
                 request.calleeAddr,
                 request.value
             ) {
-                setGlobalAccountStore(globalAS);
+                if (callKind != 3) {  // commit the transfer, unless it's a static call
+                    setGlobalAccountStore(globalAS);
+                }
+
                 // report success
                 emitLog(request.incomingRequest, 0, None<ByteArray>, None<EvmLogs>, None<GasUsage>);
                 emptyAvmStack();
