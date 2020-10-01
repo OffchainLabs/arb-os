@@ -25,6 +25,8 @@ mod link;
 mod mavm;
 #[cfg(test)]
 mod minitests;
+#[cfg(test)]
+mod buffertests;
 pub mod pos;
 mod run;
 mod stringtable;
