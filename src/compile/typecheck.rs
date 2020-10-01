@@ -446,12 +446,12 @@ pub fn sort_top_level_decls(
     let mut imported_funcs = Vec::new();
     let mut funcs = Vec::new();
     let mut named_types = HashMap::new();
-    let mut hm = HashMap::new();
+    let mut func_table = HashMap::new();
     let mut global_vars = Vec::new();
 
     let (builtin_fds, string_table) = builtin_func_decls(string_table_in);
     for fd in builtin_fds.iter() {
-        hm.insert(fd.name, fd.tipe.clone());
+        func_table.insert(fd.name, fd.tipe.clone());
         imported_funcs.push(ImportedFunc::new(
             imported_funcs.len(),
             fd.name,
@@ -468,13 +468,13 @@ pub fn sort_top_level_decls(
             }
             TopLevelDecl::FuncDecl(fd) => {
                 funcs.push(fd.clone());
-                hm.insert(fd.name, fd.tipe.clone());
+                func_table.insert(fd.name, fd.tipe.clone());
             }
             TopLevelDecl::VarDecl(vd) => {
                 global_vars.push(vd.clone());
             }
             TopLevelDecl::ImpFuncDecl(fd) => {
-                hm.insert(fd.name, fd.tipe.clone());
+                func_table.insert(fd.name, fd.tipe.clone());
                 imported_funcs.push(ImportedFunc::new(
                     imported_funcs.len(),
                     fd.name,
@@ -499,7 +499,7 @@ pub fn sort_top_level_decls(
         named_types,
         global_vars,
         string_table,
-        hm,
+        func_table,
     )
 }
 
@@ -509,7 +509,7 @@ pub fn typecheck_top_level_decls(
     named_types: HashMap<usize, Type>,
     global_vars: Vec<GlobalVarDecl>,
     string_table: StringTable,
-    hm: HashMap<usize, Type>,
+    func_map: HashMap<usize, Type>,
     checked_funcs: &mut Vec<TypeCheckedFunc>,
 ) -> Result<
     (
@@ -536,7 +536,7 @@ pub fn typecheck_top_level_decls(
     }
 
     let func_table = SymTable::<Type>::new();
-    let func_table = func_table.push_multi(hm.iter().map(|(k, v)| (*k, v)).collect());
+    let func_table = func_table.push_multi(func_map.iter().map(|(k, v)| (*k, v)).collect());
 
     for func in funcs.iter() {
         match func.resolve_types(&type_table, func.location) {
