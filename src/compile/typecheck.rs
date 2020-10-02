@@ -1544,7 +1544,10 @@ fn typecheck_expr(
                     return_type,
                     type_tree,
                 )?;
-                tc_fields.push(TypeCheckedStructField::new(field.name.clone(), tc_expr.clone()));
+                tc_fields.push(TypeCheckedStructField::new(
+                    field.name.clone(),
+                    tc_expr.clone(),
+                ));
                 tc_fieldtypes.push(StructField::new(field.name.clone(), tc_expr.get_type()));
             }
             Ok(TypeCheckedExpr::StructInitializer(

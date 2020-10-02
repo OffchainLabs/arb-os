@@ -37,7 +37,7 @@ pub(crate) trait MiniProperties {
     fn is_pure(&self) -> bool;
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 struct Module {
     imported_funcs: Vec<ImportedFunc>,
     funcs: Vec<FuncDecl>,
@@ -203,11 +203,29 @@ pub fn compile_from_file(
     file_id: u64,
     _debug: bool,
 ) -> Result<Vec<CompiledProgram>, CompileError> {
+    let library = path
+        .parent()
+        .map(|par| {
+            par.file_name()
+                .map(|lib| {
+                    let res = lib.to_str();
+                    if res == Some("builtin") {
+                        Some("core")
+                    } else if res == Some("stdlib") {
+                        Some("std")
+                    } else {
+                        None
+                    }
+                })
+                .unwrap_or(None)
+        })
+        .unwrap_or(None);
     if path.is_dir() {
-        compile_from_folder(path, "main", file_id)
+        compile_from_folder(path, library, "main", file_id)
     } else if let (Some(parent), Some(file_name)) = (path.parent(), path.file_stem()) {
         compile_from_folder(
             parent,
+            library,
             file_name.to_str().ok_or_else(|| {
                 CompileError::new(format!("File name {:?} must be UTF-8", file_name), None)
             })?,
@@ -223,11 +241,12 @@ pub fn compile_from_file(
 
 pub fn compile_from_folder(
     folder: &Path,
+    library: Option<&str>,
     main: &str,
     file_id: u64,
 ) -> Result<Vec<CompiledProgram>, CompileError> {
     // TODO: Add warning about impure functions back
-    let (mut programs, import_map) = create_program_tree(folder, main, file_id)?;
+    let (mut programs, import_map) = create_program_tree(folder, library, main, file_id)?;
     for (name, imports) in &import_map {
         for import in imports {
             let mut named_type = None;
@@ -304,7 +323,13 @@ pub fn compile_from_folder(
     }
     let mut progs = vec![];
     let type_tree = create_type_tree(&programs);
-    let mut output = vec![programs.remove(&vec![main.to_string()]).expect("no main")];
+    let mut output = vec![programs
+        .remove(&if let Some(lib) = library {
+            vec![lib.to_string(), main.to_string()]
+        } else {
+            vec![main.to_string()]
+        })
+        .expect("no main")];
     output.append(&mut programs.values().cloned().collect());
     for Module {
         imported_funcs,
@@ -351,6 +376,7 @@ pub fn compile_from_folder(
 /// of `folder` as source code. Returns a `CompileError` if the contents of `folder` fail to parse.
 fn create_program_tree(
     folder: &Path,
+    library: Option<&str>,
     main: &str,
     file_id: u64,
 ) -> Result<
@@ -360,7 +386,11 @@ fn create_program_tree(
     ),
     CompileError,
 > {
-    let mut paths = vec![vec![main.to_owned()]];
+    let mut paths = if let Some(lib) = library {
+        vec![vec![lib.to_owned(), main.to_owned()]]
+    } else {
+        vec![vec![main.to_owned()]]
+    };
     let mut programs = HashMap::new();
     let mut import_map = HashMap::new();
     let mut seen_paths = HashSet::new();
