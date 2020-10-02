@@ -40,7 +40,8 @@ import func account_getStartCodePoint(acct: Account) -> option<impure func()>;
 
 import impure func initEvmCallStack(
     callKind: uint,
-    request: TxRequestData
+    request: TxRequestData,
+    sendOnFailure: option<(uint, address, ByteArray)>,
 );
 import impure func initEvmCallStackForConstructor(
     code: ByteArray,
@@ -286,7 +287,8 @@ public impure func handleL2Request(
 
         initEvmCallStack(
             callKind,
-            request
+            request,
+            None<(uint, address, ByteArray)>,
         );  // should never return
     }
 

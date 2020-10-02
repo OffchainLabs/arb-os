@@ -20,7 +20,8 @@ import func bytearray_set256(ba: ByteArray, offset: uint, val: uint) -> ByteArra
 
 import impure func initEvmCallStack(
     callKind: uint,
-    request: TxRequestData
+    request: TxRequestData,
+    sendOnFailure: option<(uint, address, ByteArray)>,
 );
 
 // This is duplicated from messages.mini
@@ -85,7 +86,20 @@ public impure func tokens_erc20deposit(
             calldata: calldata,
             nonMutating: false,
             incomingRequest: fullMsg,
-        }
+        },
+        Some((
+            1,
+            tokenAddress,
+            bytearray_set256(
+                bytearray_set256(
+                    bytearray_new(0),
+                    0,
+                    uint(payee),
+                ),
+                32,
+                amount,
+            )
+        )),
     );  // should never return
 
     return None;
@@ -140,7 +154,20 @@ public impure func tokens_erc721deposit(
             calldata: calldata,
             nonMutating: false,
             incomingRequest: fullMsg,
-        }
+        },
+        Some((
+            1,
+            tokenAddress,
+            bytearray_set256(
+                bytearray_set256(
+                    bytearray_new(0),
+                    0,
+                    uint(payee),
+                ),
+                32,
+                id
+            )
+        )),
     );  // should never return
 
     return None;

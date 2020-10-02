@@ -191,6 +191,7 @@ type TxRequestData = struct {
 public impure func initEvmCallStack(
     callKind: uint,
     request: TxRequestData,
+    sendOnFailure: option<(uint, address, ByteArray)>,
 ) {
     // Set up the call frame for a top-level call, and launch the call's execution.
     if let Some(entryPoint) = account_getStartCodePoint(
@@ -239,7 +240,7 @@ public impure func initEvmCallStack(
                     selfDestructQueue: queue_new(),
                     resumeInfo: None<ResumeInfo>,
                     sendQueue: queue_new(),
-                    sendOnFailure: None<(uint, address, ByteArray)>,
+                    sendOnFailure: sendOnFailure,
                     parent: None<any>
                 });
 
