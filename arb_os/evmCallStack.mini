@@ -129,6 +129,7 @@ type EvmCallFrame = struct {
     selfDestructQueue: Queue,           // set of self-destruct directives, including those created by this call and its subcalls
     resumeInfo: option<ResumeInfo>,     // if call is suspended, its state will be saved here
     sendQueue: Queue,                   // outgoing messages, including those created by this call and its subcalls
+    sendOnFailure: option<any>,         // message to send if call fails
     parent: option<any>,                // call-frame that created this one, or None if this is a top-level call
                       // parent is really an option<EvmCallFrame>, but compiler doesn't allow recursive types
 }
@@ -236,6 +237,7 @@ public impure func initEvmCallStack(
                     selfDestructQueue: queue_new(),
                     resumeInfo: None<ResumeInfo>,
                     sendQueue: queue_new(),
+                    sendOnFailure: None<any>,
                     parent: None<any>
                 });
 
@@ -345,6 +347,7 @@ public impure func initEvmCallStackForConstructor(
             selfDestructQueue: queue_new(),
             resumeInfo: None<ResumeInfo>,
             sendQueue: queue_new(),
+            sendOnFailure: None<any>,
             parent: None<any>
         });
 
@@ -441,6 +444,7 @@ public impure func evmCallStack_doCall(
             selfDestructQueue: topFrame.selfDestructQueue,
             resumeInfo: None<ResumeInfo>,
             sendQueue: topFrame.sendQueue,
+            sendOnFailure: None<any>,
             parent: Some(topFrame)
         };
 
