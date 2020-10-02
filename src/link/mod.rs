@@ -1,17 +1,5 @@
 /*
- * Copyright 2020, Offchain Labs, Inc.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * Copyright 2020, Offchain Labs, Inc. All rights reserved.
  */
 
 //!Provides types and utilities for linking together compiled mini programs
@@ -21,7 +9,6 @@ use crate::mavm::{AVMOpcode, CodePt, Instruction, Label, Opcode, Value};
 use crate::stringtable::{StringId, StringTable};
 use serde::{Deserialize, Serialize};
 use std::collections::hash_map::{DefaultHasher, HashMap};
-use std::fmt::{self, Debug};
 use std::hash::Hasher;
 use std::io;
 use std::path::Path;
@@ -84,14 +71,27 @@ impl LinkedProgram {
     }
 }
 
+#[derive(Clone, Debug)]
+pub struct Import {
+    pub path: Vec<String>,
+    pub name: String,
+}
+
+impl Import {
+    pub fn new(path: Vec<String>, name: String) -> Self {
+        Import { path, name }
+    }
+}
+
 ///Represents a function imported from another mini program or module.
-#[derive(Clone, Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct ImportedFunc {
     pub name_id: StringId,
     pub slot_num: usize,
     pub name: String,
     pub arg_types: Vec<Type>,
     pub ret_type: Type,
+    pub tipe: Type,
     pub is_impure: bool,
 }
 
@@ -108,6 +108,7 @@ impl ImportedFunc {
             name_id,
             slot_num,
             name: string_table.name_from_id(name_id).to_string(),
+            tipe: Type::Func(is_impure, arg_types.clone(), Box::new(ret_type.clone())),
             arg_types,
             ret_type,
             is_impure,
@@ -119,12 +120,6 @@ impl ImportedFunc {
     pub fn relocate(mut self, _int_offset: usize, ext_offset: usize) -> Self {
         self.slot_num += ext_offset;
         self
-    }
-}
-
-impl Debug for ImportedFunc {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> Result<(), fmt::Error> {
-        write!(f, "ImportedFunc({}, {})", self.slot_num, self.name)
     }
 }
 
@@ -292,7 +287,9 @@ pub fn add_auto_link_progs(
         let path = Path::new(pathname);
         match compile_from_file(path, u64::MAX - idx as u64, false) {
             Ok(compiled_program) => {
-                progs.push((compiled_program, false));
+                compiled_program
+                    .into_iter()
+                    .for_each(|prog| progs.push((prog, false)));
             }
             Err(e) => {
                 return Err(e);

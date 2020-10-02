@@ -1,17 +1,5 @@
 //
-// Copyright 2020, Offchain Labs, Inc.
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//    http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+// Copyright 2020, Offchain Labs, Inc. All rights reserved.
 //
 
 import type AccountStore;
@@ -48,7 +36,7 @@ var gasAccountingInfo: struct {
 };
 
 type TxGasState = struct {
-    gasInReserve: uint,   // how much gas is being held in reserve
+    gasInReserve: uint,  // how much gas is being held in reserve
     originalMax: uint,   // the tx's original maxGas value
     price: uint,         // price of gas, in wei per unit of gas
     weiHeldForGas: uint, // amount of currency we're holding to cover the current tx's gas use
@@ -162,6 +150,26 @@ public impure func gasAccounting_endTxCharges() -> option<GasUsage> {
     );
 }
 
+public impure func gasAccounting_extraGasCharge(numArbGas: uint) {
+    // assess an extra gas charge on the current tx
+    // this lets us charge for things that use up system resources
+    // callers should assess the charge for a thing before they do the thing, because we can
+    //      only take the gas that the user has remaining
+
+    let gasLeft = asm() uint { getgas };
+    if (gasLeft >= asm (1, 255) uint { shl }) {
+        return;   // we're not currently charging a tx, so don't assess a charge
+    }
+
+    if (numArbGas >= gasLeft) {
+        // user can't cover the charge, so we'll take all but 1 of their gas,
+        //      ensuring that they'll get an out-of-gas error
+        numArbGas = gasLeft-1;
+    }
+
+    asm(gasLeft-numArbGas,) { setgas };
+}
+
 public impure func gasAccounting_pauseTxCharges() -> uint {
     // pause charging the currently running tx
     // return how many units of the tx's initial maxGas are still unused
@@ -243,6 +251,7 @@ type TxRequestData = struct {
     calleeAddr: address,
     value: uint,
     calldata: ByteArray,
+    nonMutating: bool,
     incomingRequest: IncomingRequest,
 }
 

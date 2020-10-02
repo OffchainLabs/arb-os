@@ -1,17 +1,5 @@
 /*
- * Copyright 2020, Offchain Labs, Inc.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * Copyright 2020, Offchain Labs, Inc. All rights reserved.
  */
 
 use crate::mavm::Value;
@@ -193,6 +181,44 @@ fn test_keccak() {
 }
 
 #[test]
+fn test_bls() {
+    let path = Path::new("stdlib/blstest.mexe");
+    let res = run_from_file(
+        path,
+        vec![],
+        RuntimeEnvironment::new(Uint256::from_usize(1111)),
+        false,
+    );
+    match res {
+        Ok(res) => {
+            assert_eq!(res[0], Value::Int(Uint256::zero()));
+        }
+        Err(e) => {
+            panic!("{}\n{}", e.0, e.1);
+        }
+    }
+}   
+
+#[test]
+fn test_sha256() {
+    let path = Path::new("stdlib/sha256test.mexe");
+    let res = run_from_file(
+        path,
+        vec![],
+        RuntimeEnvironment::new(Uint256::from_usize(1111)),
+        false,
+    );
+    match res {
+        Ok(res) => {
+            assert_eq!(res[0], Value::Int(Uint256::zero()));
+        }
+        Err(e) => {
+            panic!("{}\n{}", e.0, e.1);
+        }
+    }
+}
+
+#[test]
 fn test_rlp() {
     let mut ui = Uint256::one();
     for _i in 0..100 {
@@ -341,6 +367,14 @@ fn test_codeload() {
 #[test]
 fn test_direct_deploy_add() {
     crate::evm::evm_direct_deploy_add(None, false);
+}
+
+#[test]
+fn test_sha256_precompile() { crate::evm::evm_eval_sha256(None, false); }
+
+#[test]
+fn test_deploy_buddy_contract() {
+    crate::evm::evm_deploy_buddy_contract(None, false);
 }
 
 #[test]

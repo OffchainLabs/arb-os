@@ -1,17 +1,5 @@
 /*
- * Copyright 2020, Offchain Labs, Inc.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * Copyright 2020, Offchain Labs, Inc. All rights reserved.
  */
 
 use crate::mavm::Value;
@@ -54,8 +42,19 @@ impl RuntimeEnvironment {
             next_id: Uint256::zero(),
             recorder: RtEnvRecorder::new(),
         };
-        ret.insert_l1_message(4, chain_address, &[0u8]);
+        ret.insert_l1_message(4, chain_address, &RuntimeEnvironment::get_params_bytes());
         ret
+    }
+
+    fn get_params_bytes() -> Vec<u8> {
+        let mut buf = Vec::new();
+        buf.extend(Uint256::from_u64(3 * 60 * 60 * 1000).to_bytes_be()); // grace period in ticks
+        buf.extend(Uint256::from_u64(100_000_000 / 1000).to_bytes_be()); // arbgas speed limit per tick
+        buf.extend(Uint256::from_u64(10_000_000_000).to_bytes_be()); // max execution steps
+        buf.extend(Uint256::from_u64(1000).to_bytes_be()); // base stake amount in wei
+        buf.extend(Uint256::zero().to_bytes_be()); // staking token address (zero means ETH)
+        buf.extend(Uint256::zero().to_bytes_be()); // owner address
+        buf
     }
 
     pub fn new_wallet(&self) -> Wallet {
@@ -84,11 +83,21 @@ impl RuntimeEnvironment {
         self.next_inbox_seq_num = self.next_inbox_seq_num.add(&Uint256::one());
         self.l1_inbox.push(l1_msg.clone());
         self.recorder.add_msg(l1_msg);
+
         msg_id
     }
 
-    pub fn insert_l2_message(&mut self, sender_addr: Uint256, msg: &[u8]) -> Uint256 {
-        let default_id = self.insert_l1_message(3, sender_addr.clone(), msg);
+    pub fn insert_l2_message(
+        &mut self,
+        sender_addr: Uint256,
+        msg: &[u8],
+        is_buddy_deploy: bool,
+    ) -> Uint256 {
+        let default_id = self.insert_l1_message(
+            if is_buddy_deploy { 5 } else { 3 },
+            sender_addr.clone(),
+            msg,
+        );
         if msg[0] == 0 {
             Uint256::avm_hash2(
                 &sender_addr,
@@ -120,7 +129,25 @@ impl RuntimeEnvironment {
         buf.extend(value.to_bytes_be());
         buf.extend_from_slice(data);
 
-        self.insert_l2_message(sender_addr.clone(), &buf)
+        self.insert_l2_message(sender_addr.clone(), &buf, false)
+    }
+
+    pub fn insert_buddy_deploy_message(
+        &mut self,
+        sender_addr: Uint256,
+        max_gas: Uint256,
+        gas_price_bid: Uint256,
+        value: Uint256,
+        data: &[u8],
+    ) -> Uint256 {
+        let mut buf = vec![1u8];
+        buf.extend(max_gas.to_bytes_be());
+        buf.extend(gas_price_bid.to_bytes_be());
+        buf.extend(Uint256::zero().to_bytes_be()); // destination address 0
+        buf.extend(value.to_bytes_be());
+        buf.extend_from_slice(data);
+
+        self.insert_l2_message(sender_addr.clone(), &buf, true)
     }
 
     pub fn new_batch(&self) -> Vec<u8> {
@@ -181,7 +208,7 @@ impl RuntimeEnvironment {
     }
 
     pub fn insert_batch_message(&mut self, sender_addr: Uint256, batch: &[u8]) {
-        self.insert_l2_message(sender_addr, batch);
+        self.insert_l2_message(sender_addr, batch, false);
     }
 
     pub fn _insert_nonmutating_call_message(
@@ -197,7 +224,7 @@ impl RuntimeEnvironment {
         buf.extend(to_addr.to_bytes_be());
         buf.extend_from_slice(data);
 
-        self.insert_l2_message(sender_addr, &buf);
+        self.insert_l2_message(sender_addr, &buf, false);
     }
 
     pub fn insert_erc20_deposit_message(
@@ -657,14 +684,14 @@ impl RtEnvRecorder {
                 .collect()
         };
         if !(logs_expected == logs_seen) {
-            print_output_differences("log", self.logs.clone(), machine.runtime_env.recorder.logs);
+            print_output_differences("log", machine.runtime_env.recorder.logs, self.logs.clone());
             return false;
         }
         if !(self.sends == machine.runtime_env.recorder.sends) {
             print_output_differences(
                 "send",
-                self.sends.clone(),
                 machine.runtime_env.recorder.sends,
+                self.sends.clone(),
             );
             return false;
         }

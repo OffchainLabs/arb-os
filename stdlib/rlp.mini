@@ -1,17 +1,5 @@
 //
-// Copyright 2020, Offchain Labs, Inc.
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//    http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+// Copyright 2020, Offchain Labs, Inc. All rights reserved.
 //
 
 import type ByteArray;
@@ -106,15 +94,27 @@ func rlp_hashUint(hasher: Hasher, val: uint) -> Hasher {
 }
 
 func rlp_hashAddress(hasher: Hasher, addr: address) -> Hasher {
-    return rlp_hashUint(hasher, uint(addr));
+    if (addr == address(0)) {
+        return rlp_hashUint(hasher, 0);
+    }
+    let addrBa = bytearray_set256(bytearray_new(0), 0, asm(256-160, uint(addr)) uint { shl });
+    return rlp_hashBytes(hasher, addrBa, 0, 20);
 }
 
 func rlp_addressSize(addr: address) -> uint {
-    return rlp_uintSize(uint(addr));
+    if (addr == address(0)) {
+        return 1;
+    } else {
+        return 21;
+    }
 }
 
 public func rlp_encodeAddress(addr: address, ba: ByteArray, offset: uint) -> (ByteArray, uint) {
-    return rlp_encodeUint(uint(addr), ba, offset);
+    if (addr == address(0)) {
+        return rlp_encodeUint(0, ba, offset);
+    }
+    let addrBa = bytearray_set256(bytearray_new(0), 0, asm(256-160, uint(addr)) uint { shl });
+    return rlp_encodeBytes(addrBa, 0, 20, ba, offset);
 }
 
 func rlp_bytesSize(ba: ByteArray, offset: uint, nbytes: uint) -> uint {
@@ -432,26 +432,27 @@ func copyFromStreamToArray(
     return Some( (inStream, ba) );
 }
 
-public func rlp_encodeAddrUintPair(
-    addr: address,
-    ui: uint,
+public func rlp_encodeUintPair(
+    ui1: uint,
+    ui2: uint,
     ba: ByteArray,
     offset: uint
 ) -> (ByteArray, uint) {
     // Leave one byte of space for the RLP list length indicator
     // It will always fit in one byte because max RLP size of address is 21 bytes, uint is 33,
-    //        and one-byte indicator covers sum-of-lengths <= 55
-    let (uba, rlpAddrLen) = rlp_encodeAddress(addr, ba, offset+1);
+    //        and one-byte indicator covers sum-of-lengths <= 55.
+    //        (and the ui1 value will always be cast from an address)
+    let (uba, rlpLen1) = rlp_encodeUint(ui1, ba, offset+1);
     ba = uba;
-    let (uba, rlpUiLen) = rlp_encodeUint(ui, ba, offset+1+rlpAddrLen);
+    let (uba, rlpLen2) = rlp_encodeUint(ui2, ba, offset+1+rlpLen1);
     ba = uba;
-    ba = bytearray_setByte(ba, offset, 0xc0+rlpAddrLen+rlpUiLen);
-    return (ba, 1+rlpAddrLen+rlpUiLen);
+    ba = bytearray_setByte(ba, offset, 0xc0+rlpLen1+rlpLen2);
+    return (ba, 1+rlpLen1+rlpLen2);
 }
 
-public impure func keccakOfRlpEncodedAddrUintPair(addr: address, ui: uint) -> bytes32 {
+public impure func keccakOfRlpEncodedUintPair(ui1: uint, ui2: uint) -> bytes32 {
     let ba = bytearray_new(64);
-    let (uba, nbytes) = rlp_encodeAddrUintPair(addr, ui, ba, 0);
+    let (uba, nbytes) = rlp_encodeUintPair(ui1, ui2, ba, 0);
     return keccak256(uba, 0, nbytes);
 }
 

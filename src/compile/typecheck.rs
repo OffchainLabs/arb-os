@@ -1,17 +1,5 @@
 /*
- * Copyright 2020, Offchain Labs, Inc.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * Copyright 2020, Offchain Labs, Inc. All rights reserved.
  */
 
 //!Converts non-type checked ast nodes to type checked versions, and other related utilities.
@@ -22,7 +10,7 @@ use super::ast::{
     UnaryOp,
 };
 use super::{symtable::SymTable, MiniProperties};
-use crate::link::{ExportedFunc, ImportedFunc};
+use crate::link::{ExportedFunc, Import, ImportedFunc};
 use crate::mavm::{Instruction, Label, Value};
 use crate::pos::Location;
 use crate::stringtable::{StringId, StringTable};
@@ -441,34 +429,29 @@ fn builtin_func_decls(mut string_table: StringTable) -> (Vec<ImportFuncDecl>, St
     (imps, string_table)
 }
 
-///Converts the `TopLevelDecl`s in decls into corresponding type checked variants.
-///
-///If successful, `ExportedFunc`, `ImportedFunc`, and `GlobalVarDecl` are returned directly, along
-/// with a `StringTable` modified by internal call to `builtin_func_decls`
-pub fn typecheck_top_level_decls(
+///Sorts the `TopLevelDecl`s into collections based on their type
+pub fn sort_top_level_decls(
     decls: &[TopLevelDecl],
-    checked_funcs: &mut Vec<TypeCheckedFunc>,
     string_table_in: StringTable,
-) -> Result<
-    (
-        Vec<ExportedFunc>,
-        Vec<ImportedFunc>,
-        Vec<GlobalVarDecl>,
-        StringTable,
-    ),
-    TypeError,
-> {
-    let mut exported_funcs = Vec::new();
+) -> (
+    Vec<Import>,
+    Vec<ImportedFunc>,
+    Vec<FuncDecl>,
+    HashMap<usize, Type>,
+    Vec<GlobalVarDecl>,
+    StringTable,
+    HashMap<usize, Type>,
+) {
+    let mut imports = vec![];
     let mut imported_funcs = Vec::new();
     let mut funcs = Vec::new();
     let mut named_types = HashMap::new();
-    let mut hm = HashMap::new();
+    let mut func_table = HashMap::new();
     let mut global_vars = Vec::new();
-    let mut global_vars_map = HashMap::new();
 
     let (builtin_fds, string_table) = builtin_func_decls(string_table_in);
     for fd in builtin_fds.iter() {
-        hm.insert(fd.name, &fd.tipe);
+        func_table.insert(fd.name, fd.tipe.clone());
         imported_funcs.push(ImportedFunc::new(
             imported_funcs.len(),
             fd.name,
@@ -481,19 +464,17 @@ pub fn typecheck_top_level_decls(
     for decl in decls.iter() {
         match decl {
             TopLevelDecl::TypeDecl(td) => {
-                named_types.insert(td.name, &td.tipe);
+                named_types.insert(td.name, td.tipe.clone());
             }
             TopLevelDecl::FuncDecl(fd) => {
-                funcs.push(fd);
-                hm.insert(fd.name, &fd.tipe);
+                funcs.push(fd.clone());
+                func_table.insert(fd.name, fd.tipe.clone());
             }
             TopLevelDecl::VarDecl(vd) => {
-                let slot_num = global_vars.len();
-                global_vars.push(vd);
-                global_vars_map.insert(vd.name, (vd.tipe.clone(), slot_num));
+                global_vars.push(vd.clone());
             }
             TopLevelDecl::ImpFuncDecl(fd) => {
-                hm.insert(fd.name, &fd.tipe);
+                func_table.insert(fd.name, fd.tipe.clone());
                 imported_funcs.push(ImportedFunc::new(
                     imported_funcs.len(),
                     fd.name,
@@ -504,14 +485,50 @@ pub fn typecheck_top_level_decls(
                 ));
             }
             TopLevelDecl::ImpTypeDecl(itd) => {
-                named_types.insert(itd.name, &itd.tipe);
+                named_types.insert(itd.name, itd.tipe.clone());
+            }
+            TopLevelDecl::UseDecl(path, filename) => {
+                imports.push(Import::new(path.clone(), filename.clone()));
             }
         }
     }
+    (
+        imports,
+        imported_funcs,
+        funcs,
+        named_types,
+        global_vars,
+        string_table,
+        func_table,
+    )
+}
+
+pub fn typecheck_top_level_decls(
+    imported_funcs: Vec<ImportedFunc>,
+    funcs: Vec<FuncDecl>,
+    named_types: HashMap<usize, Type>,
+    global_vars: Vec<GlobalVarDecl>,
+    string_table: StringTable,
+    func_map: HashMap<usize, Type>,
+    checked_funcs: &mut Vec<TypeCheckedFunc>,
+) -> Result<
+    (
+        Vec<ExportedFunc>,
+        Vec<ImportedFunc>,
+        Vec<GlobalVarDecl>,
+        StringTable,
+    ),
+    TypeError,
+> {
+    let global_vars_map = global_vars
+        .iter()
+        .enumerate()
+        .map(|(idx, var)| (var.name, (var.tipe.clone(), idx)))
+        .collect::<HashMap<_, _>>();
+    let mut exported_funcs = Vec::new();
 
     let type_table = SymTable::<Type>::new();
-    let type_table = type_table.push_multi(named_types);
-    let type_table = type_table.push_multi(hm.clone());
+    let type_table = type_table.push_multi(named_types.iter().map(|(k, v)| (*k, v)).collect());
 
     let mut resolved_global_vars_map = HashMap::new();
     for (name, (tipe, slot_num)) in global_vars_map {
@@ -519,7 +536,7 @@ pub fn typecheck_top_level_decls(
     }
 
     let func_table = SymTable::<Type>::new();
-    let func_table = func_table.push_multi(hm);
+    let func_table = func_table.push_multi(func_map.iter().map(|(k, v)| (*k, v)).collect());
 
     for func in funcs.iter() {
         match func.resolve_types(&type_table, func.location) {
@@ -561,6 +578,37 @@ pub fn typecheck_top_level_decls(
         res_global_vars,
         string_table,
     ))
+}
+
+///Converts the `TopLevelDecl`s in decls into corresponding type checked variants.
+///
+///If successful, `ExportedFunc`, `ImportedFunc`, and `GlobalVarDecl` are returned directly, along
+/// with a `StringTable` modified by internal call to `builtin_func_decls`
+pub fn sort_and_typecheck_top_level_decls(
+    decls: &[TopLevelDecl],
+    checked_funcs: &mut Vec<TypeCheckedFunc>,
+    string_table_in: StringTable,
+) -> Result<
+    (
+        Vec<ExportedFunc>,
+        Vec<ImportedFunc>,
+        Vec<GlobalVarDecl>,
+        StringTable,
+    ),
+    TypeError,
+> {
+    let (_imports, imported_funcs, funcs, named_types, global_vars, string_table, hm) =
+        sort_top_level_decls(decls, string_table_in.clone());
+
+    typecheck_top_level_decls(
+        imported_funcs,
+        funcs,
+        named_types,
+        global_vars,
+        string_table,
+        hm,
+        checked_funcs,
+    )
 }
 
 ///If successful, produces a `TypeCheckedFunc` from `FuncDecl` reference fd, according to global

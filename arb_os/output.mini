@@ -1,28 +1,24 @@
 //
-// Copyright 2020, Offchain Labs, Inc.
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//    http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+// Copyright 2020, Offchain Labs, Inc. All rights reserved.
 //
 
 import type ByteArray;
 import type MarshalledBytes;
+import type Queue;
 import type EvmLogs;
 
 import func bytearray_new(capacity: uint) -> ByteArray;
 import func bytearray_marshalFull(ba: ByteArray) -> MarshalledBytes;
+
+import func queue_get(queue: Queue) -> option<(Queue, any)>;
+
 import func evmlogs_empty() -> EvmLogs;
 import func evmlogs_numLogs(logs: EvmLogs) -> uint;
+
+import impure func evmCallStack_queueMessage(message: any);
+
 import impure func chainParams_speedLimitPerSecond() -> uint;
+
 import impure func inbox_currentBlockNumber() -> uint;
 import impure func inbox_currentTimestamp() -> uint;
 
@@ -69,7 +65,7 @@ func outputStats_new() -> OutputStatistics {
     };
 }
 
-func outputStats_allZero(os: OutputStatistics) -> bool {
+func outputStats_isAllZero(os: OutputStatistics) -> bool {
     return (os.totalGasUsed + os.numTx + os.numEvmLogs + os.numLogs + os.numSends) == 0;
 }
 
@@ -90,35 +86,32 @@ var globalBlockReceiptData: struct {
 };
 
 public impure func outputStats_endOfBlock(blockNum: uint, timestamp: uint) {
-    if ( ! outputStats_allZero(globalBlockReceiptData.statsThisBlock)) {
+    if ( ! outputStats_isAllZero(globalBlockReceiptData.statsThisBlock)) {
         // add current block (including soon-to-be-issued block summary log) into total stats
         let updatedStats = outputStats_add(
             globalBlockReceiptData.statsThisBlock,
             globalBlockReceiptData.statsAllTime
         );
         updatedStats = updatedStats with {
-            numLogs: updatedStats.numLogs + 1
+            numLogs: updatedStats.numLogs + 1  // +1 for soon-to-be-issued block summary log
         };
         globalBlockReceiptData = globalBlockReceiptData with {
             statsAllTime: updatedStats
         };
 
         emitBlockSummaryLog(blockNum, timestamp);
-
-        // now clear current block stats, because we're advancing to a new current block
-        globalBlockReceiptData = globalBlockReceiptData with {
-            statsThisBlock: outputStats_new()
-        } with {
-            data: struct {
-                totalGasUsed: 0,
-                numTx: 0,
-                numEvmLogs: 0
-            }
-
-        };
     }
+
+    // now clear current block stats, because we're advancing to a new current block
     globalBlockReceiptData = globalBlockReceiptData with {
         statsThisBlock: outputStats_new()
+    } with {
+        data: struct {
+            totalGasUsed: 0,
+            numTx: 0,
+            numEvmLogs: 0
+        }
+
     };
 }
 
@@ -166,7 +159,7 @@ impure func update_txReceiptsForBlock(
         totalGasUsed: gasUsed + globalBlockReceiptData.data.totalGasUsed
     };
 
-    // now update the accumulated data and write it back
+    // now update the accumulated data and write it back, but don't return the updated version
     globalBlockReceiptData = globalBlockReceiptData with {
         data: ret with {
             numTx: ret.numTx + 1
@@ -201,21 +194,19 @@ public impure func emitLog(
     if let Some(gu) = gasUsage {
         realGasUsage = gu;
     }
+
     let evmLogs = evmlogs_empty();
     let numEvmLogs = 0;
     if let Some(el) = maybeEvmLogs {
         evmLogs = el;
         numEvmLogs = evmlogs_numLogs(el);
     }
+
     outputStats_addTxLog(realGasUsage.gasUsed, numEvmLogs);
 
     let returnData = bytearray_new(0);
     if let Some(rd) = maybeReturnData {
         returnData = rd;
-    }
-    let evmLogs = evmlogs_empty();
-    if let Some(el) = maybeEvmLogs {
-        evmLogs = el;
     }
 
     let txResultInfo = struct {
@@ -223,6 +214,7 @@ public impure func emitLog(
         returnData: bytearray_marshalFull(returnData),
         evmLogs: evmLogs,
     };
+
     asm((
         0,
         l1message,
@@ -252,13 +244,39 @@ impure func emitBlockSummaryLog(blockNum: uint, timestamp: uint) {
     ),) { log };
 }
 
-public impure func sendMessage(msgType: uint, sender: address, data: ByteArray) {
-    outputStats_addSend();
-    asm(
+public impure func queueMessageForSend(msgType: uint, sender: address, data: ByteArray) {
+    evmCallStack_queueMessage(
         (
             msgType,
             uint(sender),
             bytearray_marshalFull(data),
-        ),
-    ) { send };
+        )
+    );
+}
+
+public impure func sendQueuedMessages(queue: Queue) {
+    loop {
+        if let Some(res) = queue_get(queue) {
+            let (uq, msg) = res;
+            queue = uq;
+            sendPackagedMessage(msg);
+        } else {
+            return;
+        }
+    }
+}
+
+public impure func sendMessage(msgType: uint, sender: address, data: ByteArray) {
+    sendPackagedMessage(
+        (
+            msgType,
+            uint(sender),
+            bytearray_marshalFull(data),
+        )
+    );
+}
+
+func sendPackagedMessage(msg: any) {
+    outputStats_addSend();
+    asm(msg,) { send };
 }

@@ -1,17 +1,5 @@
 //
-// Copyright 2020, Offchain Labs, Inc.
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//    http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+// Copyright 2020, Offchain Labs, Inc. All rights reserved.
 //
 
 import type ByteArray;
@@ -46,6 +34,7 @@ import impure func chainParams_chainId() -> uint;
 
 import func keccak256(ba: ByteArray, offset: uint, nbytes: uint) -> bytes32;
 
+
 // This structure defines an incoming request.
 // It is defined identically in inbox.mini and elsewhere.
 type IncomingRequest = struct {
@@ -66,6 +55,7 @@ type TxRequestData = struct {
     calleeAddr: address,
     value: uint,
     calldata: ByteArray,
+    nonMutating: bool,
     incomingRequest: IncomingRequest,
 }
 
@@ -108,6 +98,7 @@ public impure func translateSignedTx(req: IncomingRequest) -> option<TxRequestDa
             calleeAddr: signedTx.to,
             value: signedTx.value,
             calldata: signedTx.data,
+            nonMutating: false,
             incomingRequest: req with {
                 sender: signer
             } with {
@@ -140,27 +131,6 @@ impure func recoverSigner(tx: SignedTx) -> option<address> {
     } else {
         return Some(signer);
     }
-}
-
-func rlpAndHash(msgData: ByteArray, preSigSize: uint, v: uint, r: uint, s: uint) -> bytes32 {
-    let maxGas = bytearray_get256(msgData, 1);
-    let gasPriceBid = bytearray_get256(msgData, 32+1);
-    let sequenceNum = bytearray_get256(msgData, 2*32+1);
-    let destAddress = address(bytearray_get256(msgData, 3*32+1));
-    let payment = bytearray_get256(msgData, 4*32+1);
-    return rlp_encodeAndHashMessageInfo(
-        struct {
-            seqNum: sequenceNum,
-            gasPrice: gasPriceBid,
-            gasLimit: maxGas,
-            to: destAddress,
-            value: payment,
-            data: bytearray_extract(msgData, 5*32+1, preSigSize-(5*32+1)),
-            v: v,
-            r: r,
-            s: s
-        }
-    );
 }
 
 func signedTxToUnsignedBytes(tx: SignedTx) -> ByteArray {

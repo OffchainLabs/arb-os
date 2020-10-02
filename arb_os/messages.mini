@@ -1,17 +1,5 @@
 //
-// Copyright 2020, Offchain Labs, Inc.
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//    http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+// Copyright 2020, Offchain Labs, Inc. All rights reserved.
 //
 
 import type ByteArray;
@@ -66,8 +54,7 @@ import impure func emitLog(
     resultCode: uint,
     maybeReturnData: option<ByteArray>,
     maybeEvmLogs: option<EvmLogs>,
-    gasUsed: uint,
-    gasPrice: uint,
+    maybeGasUsage: option<GasUsage>
 );
 
 import impure func tokens_erc20deposit(
@@ -95,7 +82,7 @@ import func bytestream_get256(bs: ByteStream) -> option<(ByteStream, uint)>;
 import func bytestream_skipBytes(bs: ByteStream, nbytes: uint) -> option<ByteStream>;
 import func bytestream_getRemainingBytes(bs: ByteStream) -> ByteArray;
 
-import func keccakOfRlpEncodedAddrUintPair(addr: address, ui: uint) -> bytes32;
+import func keccakOfRlpEncodedUintPair(ui1: uint, ui2: uint) -> bytes32;
 
 import func translateEvmCodeSegment(bs: ByteStream) -> option<(impure func(), map<uint, impure func()>)>;
 
@@ -111,9 +98,15 @@ type IncomingRequest = struct {
     msgData: MarshalledBytes  // kind-specific data, as a marshalled bytearray
 }
 
+// This is declared identically in gasAccounting.mini
+type GasUsage = struct {
+    gasUsed: uint,
+    gasPriceWei: uint,
+}
+
 public impure func handleL1Request(
     msg: IncomingRequest
-) -> option<()> {   // return None if message format error; Some(()) if other error; if no error, never return
+) -> option<()> {   // return None if error; otherwise return Some(()) or do a tx and never return from here
     // Parse an incoming message and do appropriate computations
     let inStream = bytestream_new(bytearray_unmarshalBytes(msg.msgData));
 
@@ -223,6 +216,7 @@ type TxRequestData = struct {
     calleeAddr: address,
     value: uint,
     calldata: ByteArray,
+    nonMutating: bool,
     incomingRequest: IncomingRequest,
 }
 
@@ -235,7 +229,7 @@ public impure func handleL2Request(
                 accountStore_get(getGlobalAccountStore(), request.caller)
             ) != sequenceNum) {
             // bad sequence number error
-            emitLog(request.incomingRequest, 5, None<ByteArray>, None<EvmLogs>, 0, 0);
+            emitLog(request.incomingRequest, 5, None<ByteArray>, None<EvmLogs>, None<GasUsage>);
             return Some(());
         }
     }
@@ -244,7 +238,7 @@ public impure func handleL2Request(
         // this is a constructor call
         if (request.incomingRequest.kind == 2) {
             // revert error (tried to call constructor in a non-mutating call)
-            emitLog(request.incomingRequest, 1, None<ByteArray>, None<EvmLogs>, 0, 0);
+            emitLog(request.incomingRequest, 1, None<ByteArray>, None<EvmLogs>, None<GasUsage>);
             return Some(());
         }
 
@@ -267,7 +261,15 @@ public impure func handleL2Request(
         if (request.seqNum == None<uint>) {
             request = request with { seqNum: Some(fetchAndIncrSequenceNum(request.caller)) };
         }
-        request = request with { calleeAddr: address(keccakOfRlpEncodedAddrUintPair(request.caller, request.seqNum?)) };
+        if (request.incomingRequest.kind == 5) {
+            // it's a buddy contract deployment; hardwire the new contract address
+            request = request with { calleeAddr: request.caller };
+        } else {
+            // ordinary contract deploy; use the standard formula to calculate new contract address
+            request = request with {
+                calleeAddr: address(keccakOfRlpEncodedUintPair(uint(request.caller), request.seqNum?))
+            };
+        }
 
         initEvmCallStackForConstructor(
             codeBytes,
@@ -278,7 +280,7 @@ public impure func handleL2Request(
     } else {
         // this is a non-constructor call
         let callKind = 0;
-        if (request.incomingRequest.kind == 2) {
+        if (request.nonMutating) {
             callKind = 3;  // staticcall
         }
 

@@ -1,17 +1,5 @@
 //
-// Copyright 2020, Offchain Labs, Inc.
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//    http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+// Copyright 2020, Offchain Labs, Inc. All rights reserved.
 //
 
 import type Queue;
@@ -123,6 +111,14 @@ impure func getFromL1Inbox(inbox: Inbox) -> Inbox {
         }
     }
     let newMsg = asm() IncomingRequest { inbox };
+
+    if (newMsg.blockNumber == 0) {
+        newMsg = newMsg with { blockNumber: inbox.blockNum };
+    }
+    if (newMsg.timestamp == 0) {
+        newMsg = newMsg with { timestamp: inbox.timestamp };
+    }
+
     return inbox with {
         queue: queue_put(inbox.queue, newMsg)
     } with {
@@ -162,6 +158,7 @@ type TxRequestData = struct {
     calleeAddr: address,
     value: uint,
     calldata: ByteArray,
+    nonMutating: bool,
     incomingRequest: IncomingRequest,
 }
 
@@ -218,6 +215,11 @@ public impure func inbox_getNextUnpackedRequest() -> (
                     }
                     // else request was malformatted, ignore it and execute loop again to get another
                 }
+            } elseif (msg.kind == 5) {
+                if let Some(txRequest) = translateBuddyDeployTx(msg) {
+                    return (None<IncomingRequest>, Some(txRequest));
+                }
+                // else request was malformatted, ignore it and execute loop again to get another
             } else {
                 return (Some(msg), None<TxRequestData>);
             }
@@ -246,12 +248,8 @@ func translateUnsignedTx(request: IncomingRequest) -> option<TxRequestData> {
     let (us, destAddrAsUint) = bytestream_get256(inStream)?;
     inStream = us;
 
-    let value = 0;
-    if (subtype != 2) {
-        let (us, val) = bytestream_get256(inStream)?;
-        inStream = us;
-        value = val;
-    }
+    let (us, value) = bytestream_get256(inStream)?;
+    inStream = us;
 
     let calldata = bytestream_getRemainingBytes(inStream);
 
@@ -275,6 +273,36 @@ func translateUnsignedTx(request: IncomingRequest) -> option<TxRequestData> {
             calleeAddr: address(destAddrAsUint),
             value: value,
             calldata: calldata,
+            nonMutating: (subtype == 2),
+            incomingRequest: request
+        }
+    );
+}
+
+func translateBuddyDeployTx(request: IncomingRequest) -> option<TxRequestData> {
+    let inStream = bytestream_new(bytearray_unmarshalBytes(request.msgData));
+
+    let (us, maxGas) = bytestream_get256(inStream)?;
+    inStream = us;
+
+    let (us, gasPrice) = bytestream_get256(inStream)?;
+    inStream = us;
+
+    let (us, value) = bytestream_get256(inStream)?;
+    inStream = us;
+
+    let calldata = bytestream_getRemainingBytes(inStream);
+
+    return Some(
+        struct {
+            maxGas: maxGas,
+            gasPrice: gasPrice,
+            seqNum: None<uint>,
+            caller: request.sender,
+            calleeAddr: address(0),
+            value: value,
+            calldata: calldata,
+            nonMutating: false,
             incomingRequest: request
         }
     );

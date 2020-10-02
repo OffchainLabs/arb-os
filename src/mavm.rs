@@ -1,17 +1,5 @@
 /*
- * Copyright 2020, Offchain Labs, Inc.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * Copyright 2020, Offchain Labs, Inc. All rights reserved.
  */
 
 use crate::compile::MiniProperties;
@@ -505,6 +493,7 @@ pub enum AVMOpcode {
     Type,
     Hash2,
     Keccakf,
+    Sha256f,
     Pop = 0x30,
     PushStatic,
     Rget,
@@ -544,6 +533,9 @@ pub enum AVMOpcode {
     OpenInsn,
     Sideload,
     EcRecover = 0x80,
+    EcAdd,
+    EcMul,
+    EcPairing,
     DebugPrint = 0x90,
 }
 
@@ -596,6 +588,7 @@ impl Opcode {
             "hash" => Opcode::AVMOpcode(AVMOpcode::Hash),
             "hash2" => Opcode::AVMOpcode(AVMOpcode::Hash2),
             "keccakf" => Opcode::AVMOpcode(AVMOpcode::Keccakf),
+            "sha256f" => Opcode::AVMOpcode(AVMOpcode::Sha256f),
             "length" => Opcode::AVMOpcode(AVMOpcode::Tlen),
             "plus" => Opcode::AVMOpcode(AVMOpcode::Plus),
             "minus" => Opcode::AVMOpcode(AVMOpcode::Minus),
@@ -636,6 +629,9 @@ impl Opcode {
             "errset" => Opcode::AVMOpcode(AVMOpcode::ErrSet),
             "sideload" => Opcode::AVMOpcode(AVMOpcode::Sideload),
             "ecrecover" => Opcode::AVMOpcode(AVMOpcode::EcRecover),
+            "ecadd" => Opcode::AVMOpcode(AVMOpcode::EcAdd),
+            "ecmul" => Opcode::AVMOpcode(AVMOpcode::EcMul),
+            "ecpairing" => Opcode::AVMOpcode(AVMOpcode::EcPairing),
             _ => {
                 panic!("opcode not supported in asm segment: {}", name);
             }
@@ -709,6 +705,9 @@ impl Opcode {
             0x7a => Some(Opcode::AVMOpcode(AVMOpcode::OpenInsn)),
             0x7b => Some(Opcode::AVMOpcode(AVMOpcode::Sideload)),
             0x80 => Some(Opcode::AVMOpcode(AVMOpcode::EcRecover)),
+            0x81 => Some(Opcode::AVMOpcode(AVMOpcode::EcAdd)),
+            0x82 => Some(Opcode::AVMOpcode(AVMOpcode::EcMul)),
+            0x83 => Some(Opcode::AVMOpcode(AVMOpcode::EcPairing)),
             0x90 => Some(Opcode::AVMOpcode(AVMOpcode::DebugPrint)),
             _ => None,
         }
@@ -784,6 +783,9 @@ impl Opcode {
             Opcode::AVMOpcode(AVMOpcode::OpenInsn) => Some(0x7a),
             Opcode::AVMOpcode(AVMOpcode::Sideload) => Some(0x7b),
             Opcode::AVMOpcode(AVMOpcode::EcRecover) => Some(0x80),
+            Opcode::AVMOpcode(AVMOpcode::EcAdd) => Some(0x81),
+            Opcode::AVMOpcode(AVMOpcode::EcMul) => Some(0x82),
+            Opcode::AVMOpcode(AVMOpcode::EcPairing) => Some(0x83),
             Opcode::AVMOpcode(AVMOpcode::DebugPrint) => Some(0x90),
             _ => None,
         }
