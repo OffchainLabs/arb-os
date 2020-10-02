@@ -10,7 +10,7 @@ use super::ast::{
     UnaryOp, TrinaryOp
 };
 use super::{symtable::SymTable, MiniProperties};
-use crate::link::{ExportedFunc, ImportedFunc};
+use crate::link::{ExportedFunc, Import, ImportedFunc};
 use crate::mavm::{Instruction, Label, Value};
 use crate::pos::Location;
 use crate::stringtable::{StringId, StringTable};
@@ -173,7 +173,6 @@ pub enum TypeCheckedExpr {
         Type,
         Option<Location>,
     ),
-    CopyBuffer8(Box<TypeCheckedExpr>, Box<TypeCheckedExpr>, Box<TypeCheckedExpr>, Box<TypeCheckedExpr>, Box<TypeCheckedExpr>, Option<Location>),
     ShortcutOr(Box<TypeCheckedExpr>, Box<TypeCheckedExpr>, Option<Location>),
     ShortcutAnd(Box<TypeCheckedExpr>, Box<TypeCheckedExpr>, Option<Location>),
     LocalVariableRef(StringId, Type, Option<Location>),
@@ -264,7 +263,6 @@ impl MiniProperties for TypeCheckedExpr {
             TypeCheckedExpr::UnaryOp(_, expr, _, _) => expr.is_pure(),
             TypeCheckedExpr::Binary(_, left, right, _, _) => left.is_pure() && right.is_pure(),
             TypeCheckedExpr::Trinary(_, a, b, c, _, _) => a.is_pure() && b.is_pure() && c.is_pure(),
-            TypeCheckedExpr::CopyBuffer8(a, b, c, d, e, _) => a.is_pure() && b.is_pure() && c.is_pure() && d.is_pure() && e.is_pure(),
             TypeCheckedExpr::ShortcutOr(left, right, _) => left.is_pure() && right.is_pure(),
             TypeCheckedExpr::ShortcutAnd(left, right, _) => left.is_pure() && right.is_pure(),
             TypeCheckedExpr::LocalVariableRef(_, _, _) => true,
@@ -338,9 +336,6 @@ impl TypeCheckedExpr {
             TypeCheckedExpr::UnaryOp(_, _, t, _) => t.clone(),
             TypeCheckedExpr::Binary(_, _, _, t, _) => t.clone(),
             TypeCheckedExpr::Trinary(_, _, _, _, t, _) => t.clone(),
-            TypeCheckedExpr::CopyBuffer8(_, _, _, _, _, _) => {
-                Type::Buffer
-            }
             TypeCheckedExpr::ShortcutOr(_, _, _) | TypeCheckedExpr::ShortcutAnd(_, _, _) => {
                 Type::Bool
             }
@@ -444,34 +439,29 @@ fn builtin_func_decls(mut string_table: StringTable) -> (Vec<ImportFuncDecl>, St
     (imps, string_table)
 }
 
-///Converts the `TopLevelDecl`s in decls into corresponding type checked variants.
-///
-///If successful, `ExportedFunc`, `ImportedFunc`, and `GlobalVarDecl` are returned directly, along
-/// with a `StringTable` modified by internal call to `builtin_func_decls`
-pub fn typecheck_top_level_decls(
+///Sorts the `TopLevelDecl`s into collections based on their type
+pub fn sort_top_level_decls(
     decls: &[TopLevelDecl],
-    checked_funcs: &mut Vec<TypeCheckedFunc>,
     string_table_in: StringTable,
-) -> Result<
-    (
-        Vec<ExportedFunc>,
-        Vec<ImportedFunc>,
-        Vec<GlobalVarDecl>,
-        StringTable,
-    ),
-    TypeError,
-> {
-    let mut exported_funcs = Vec::new();
+) -> (
+    Vec<Import>,
+    Vec<ImportedFunc>,
+    Vec<FuncDecl>,
+    HashMap<usize, Type>,
+    Vec<GlobalVarDecl>,
+    StringTable,
+    HashMap<usize, Type>,
+) {
+    let mut imports = vec![];
     let mut imported_funcs = Vec::new();
     let mut funcs = Vec::new();
     let mut named_types = HashMap::new();
-    let mut hm = HashMap::new();
+    let mut func_table = HashMap::new();
     let mut global_vars = Vec::new();
-    let mut global_vars_map = HashMap::new();
 
     let (builtin_fds, string_table) = builtin_func_decls(string_table_in);
     for fd in builtin_fds.iter() {
-        hm.insert(fd.name, &fd.tipe);
+        func_table.insert(fd.name, fd.tipe.clone());
         imported_funcs.push(ImportedFunc::new(
             imported_funcs.len(),
             fd.name,
@@ -484,19 +474,17 @@ pub fn typecheck_top_level_decls(
     for decl in decls.iter() {
         match decl {
             TopLevelDecl::TypeDecl(td) => {
-                named_types.insert(td.name, &td.tipe);
+                named_types.insert(td.name, td.tipe.clone());
             }
             TopLevelDecl::FuncDecl(fd) => {
-                funcs.push(fd);
-                hm.insert(fd.name, &fd.tipe);
+                funcs.push(fd.clone());
+                func_table.insert(fd.name, fd.tipe.clone());
             }
             TopLevelDecl::VarDecl(vd) => {
-                let slot_num = global_vars.len();
-                global_vars.push(vd);
-                global_vars_map.insert(vd.name, (vd.tipe.clone(), slot_num));
+                global_vars.push(vd.clone());
             }
             TopLevelDecl::ImpFuncDecl(fd) => {
-                hm.insert(fd.name, &fd.tipe);
+                func_table.insert(fd.name, fd.tipe.clone());
                 imported_funcs.push(ImportedFunc::new(
                     imported_funcs.len(),
                     fd.name,
@@ -507,14 +495,50 @@ pub fn typecheck_top_level_decls(
                 ));
             }
             TopLevelDecl::ImpTypeDecl(itd) => {
-                named_types.insert(itd.name, &itd.tipe);
+                named_types.insert(itd.name, itd.tipe.clone());
+            }
+            TopLevelDecl::UseDecl(path, filename) => {
+                imports.push(Import::new(path.clone(), filename.clone()));
             }
         }
     }
+    (
+        imports,
+        imported_funcs,
+        funcs,
+        named_types,
+        global_vars,
+        string_table,
+        func_table,
+    )
+}
+
+pub fn typecheck_top_level_decls(
+    imported_funcs: Vec<ImportedFunc>,
+    funcs: Vec<FuncDecl>,
+    named_types: HashMap<usize, Type>,
+    global_vars: Vec<GlobalVarDecl>,
+    string_table: StringTable,
+    func_map: HashMap<usize, Type>,
+    checked_funcs: &mut Vec<TypeCheckedFunc>,
+) -> Result<
+    (
+        Vec<ExportedFunc>,
+        Vec<ImportedFunc>,
+        Vec<GlobalVarDecl>,
+        StringTable,
+    ),
+    TypeError,
+> {
+    let global_vars_map = global_vars
+        .iter()
+        .enumerate()
+        .map(|(idx, var)| (var.name, (var.tipe.clone(), idx)))
+        .collect::<HashMap<_, _>>();
+    let mut exported_funcs = Vec::new();
 
     let type_table = SymTable::<Type>::new();
-    let type_table = type_table.push_multi(named_types);
-    let type_table = type_table.push_multi(hm.clone());
+    let type_table = type_table.push_multi(named_types.iter().map(|(k, v)| (*k, v)).collect());
 
     let mut resolved_global_vars_map = HashMap::new();
     for (name, (tipe, slot_num)) in global_vars_map {
@@ -522,7 +546,7 @@ pub fn typecheck_top_level_decls(
     }
 
     let func_table = SymTable::<Type>::new();
-    let func_table = func_table.push_multi(hm);
+    let func_table = func_table.push_multi(func_map.iter().map(|(k, v)| (*k, v)).collect());
 
     for func in funcs.iter() {
         match func.resolve_types(&type_table, func.location) {
@@ -564,6 +588,37 @@ pub fn typecheck_top_level_decls(
         res_global_vars,
         string_table,
     ))
+}
+
+///Converts the `TopLevelDecl`s in decls into corresponding type checked variants.
+///
+///If successful, `ExportedFunc`, `ImportedFunc`, and `GlobalVarDecl` are returned directly, along
+/// with a `StringTable` modified by internal call to `builtin_func_decls`
+pub fn sort_and_typecheck_top_level_decls(
+    decls: &[TopLevelDecl],
+    checked_funcs: &mut Vec<TypeCheckedFunc>,
+    string_table_in: StringTable,
+) -> Result<
+    (
+        Vec<ExportedFunc>,
+        Vec<ImportedFunc>,
+        Vec<GlobalVarDecl>,
+        StringTable,
+    ),
+    TypeError,
+> {
+    let (_imports, imported_funcs, funcs, named_types, global_vars, string_table, hm) =
+        sort_top_level_decls(decls, string_table_in.clone());
+
+    typecheck_top_level_decls(
+        imported_funcs,
+        funcs,
+        named_types,
+        global_vars,
+        string_table,
+        hm,
+        checked_funcs,
+    )
 }
 
 ///If successful, produces a `TypeCheckedFunc` from `FuncDecl` reference fd, according to global
@@ -1011,51 +1066,6 @@ fn typecheck_expr(
             let tc_sub2 = typecheck_expr(sub2, type_table, global_vars, func_table, return_type)?;
             let tc_sub3 = typecheck_expr(sub3, type_table, global_vars, func_table, return_type)?;
             typecheck_trinary_op(*op, tc_sub1, tc_sub2, tc_sub3, *loc)
-        }
-        Expr::CopyBuffer8(sub1, sub2, sub3, sub4, sub5, loc) => {
-            let tc_sub1 = typecheck_expr(sub1, type_table, global_vars, func_table, return_type)?;
-            let tc_sub2 = typecheck_expr(sub2, type_table, global_vars, func_table, return_type)?;
-            let tc_sub3 = typecheck_expr(sub3, type_table, global_vars, func_table, return_type)?;
-            let tc_sub4 = typecheck_expr(sub4, type_table, global_vars, func_table, return_type)?;
-            let tc_sub5 = typecheck_expr(sub5, type_table, global_vars, func_table, return_type)?;
-            if tc_sub1.get_type() != Type::Buffer {
-                return Err(new_type_error(
-                    "copybuffer8 arg1 is buffer".to_string(),
-                    *loc,
-                ));
-            }
-            if tc_sub2.get_type() != Type::Uint && tc_sub2.get_type() != Type::Int {
-                return Err(new_type_error(
-                    "copybuffer8 arg2 is int".to_string(),
-                    *loc,
-                ));
-            }
-            if tc_sub3.get_type() != Type::Buffer {
-                return Err(new_type_error(
-                    "copybuffer8 arg3 is buffer".to_string(),
-                    *loc,
-                ));
-            }
-            if tc_sub4.get_type() != Type::Uint && tc_sub4.get_type() != Type::Int {
-                return Err(new_type_error(
-                    "copybuffer8 arg4 is int".to_string(),
-                    *loc,
-                ));
-            }
-            if tc_sub5.get_type() != Type::Uint && tc_sub5.get_type() != Type::Int {
-                return Err(new_type_error(
-                    "copybuffer8 arg5 is int".to_string(),
-                    *loc,
-                ));
-            }
-            Ok(TypeCheckedExpr::CopyBuffer8(
-                Box::new(tc_sub1),
-                Box::new(tc_sub2),
-                Box::new(tc_sub3),
-                Box::new(tc_sub4),
-                Box::new(tc_sub5),
-                *loc,
-            ))
         }
         Expr::ShortcutOr(sub1, sub2, loc) => {
             let tc_sub1 = typecheck_expr(sub1, type_table, global_vars, func_table, return_type)?;

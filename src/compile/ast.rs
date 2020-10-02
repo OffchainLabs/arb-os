@@ -26,17 +26,9 @@ pub enum TopLevelDecl {
     TypeDecl(TypeDecl),
     FuncDecl(FuncDecl),
     VarDecl(GlobalVarDecl),
+    UseDecl(Vec<String>, String),
     ImpFuncDecl(ImportFuncDecl),
     ImpTypeDecl(ImportTypeDecl),
-}
-
-impl TopLevelDecl {
-    pub fn concat_vecs(a: Vec<Self>, b: Vec<Self>) -> Vec<Self> {
-        let mut aa = a;
-        let mut bb = b;
-        aa.append(&mut bb);
-        aa.to_vec()
-    }
 }
 
 ///Type Declaration, contains the StringId corresponding to the type name, and the underlying Type.
@@ -805,7 +797,6 @@ pub enum Expr {
     UnaryOp(UnaryOp, Box<Expr>, Option<Location>),
     Binary(BinaryOp, Box<Expr>, Box<Expr>, Option<Location>),
     Trinary(TrinaryOp, Box<Expr>, Box<Expr>, Box<Expr>, Option<Location>),
-    CopyBuffer8(Box<Expr>, Box<Expr>, Box<Expr>, Box<Expr>, Box<Expr>, Option<Location>),
     ShortcutOr(Box<Expr>, Box<Expr>, Option<Location>),
     ShortcutAnd(Box<Expr>, Box<Expr>, Option<Location>),
     VariableRef(StringId, Option<Location>),
@@ -864,14 +855,6 @@ impl Expr {
                 Box::new(be1.resolve_types(type_table)?),
                 Box::new(be2.resolve_types(type_table)?),
                 Box::new(be3.resolve_types(type_table)?),
-                *loc,
-            )),
-            Expr::CopyBuffer8(be1, be2, be3, be4, be5, loc) => Ok(Expr::CopyBuffer8(
-                Box::new(be1.resolve_types(type_table)?),
-                Box::new(be2.resolve_types(type_table)?),
-                Box::new(be3.resolve_types(type_table)?),
-                Box::new(be4.resolve_types(type_table)?),
-                Box::new(be5.resolve_types(type_table)?),
                 *loc,
             )),
             Expr::ShortcutOr(be1, be2, loc) => Ok(Expr::ShortcutOr(

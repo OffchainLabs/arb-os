@@ -15,12 +15,24 @@ use crate::uint256::Uint256;
 grammar(stringtable: &mut StringTable, file_info: &Lines, filename: u64);
 
 pub Decls: Vec<TopLevelDecl> = {
-	<i:ImportDecl*> <n:NonImportDecl+> => TopLevelDecl::concat_vecs(i, n),
+	<mut i:ImportDecl*> <mut n:NonImportDecl+> => {i.append(&mut n);i},
 }
 
 ImportDecl: TopLevelDecl = {
+    "use" <mut p: PathDecl> ";" => {
+        let file = p.pop().expect("Internal error: Path vector was empty");
+        TopLevelDecl::UseDecl(p, file)
+    },
 	ImportFuncDecl => TopLevelDecl::ImpFuncDecl(<>),
 	ImportTypeDecl => TopLevelDecl::ImpTypeDecl(<>),	
+}
+
+PathDecl: Vec<String> = {
+    <i: IdentString> <mut folds: ("::" <IdentString>)+> => {
+        let mut output = vec![i];
+        output.append(&mut folds);
+        output
+    },
 }
 
 ImportFuncDecl: ImportFuncDecl = {
@@ -244,7 +256,6 @@ Expr12: Expr = {
 	<lno: @L> "setbuffer8" "(" <e: Expr> "," <f:Expr> "," <g:Expr> ")" => Expr::new_trinary(TrinaryOp::SetBuffer8, e, f, g, file_info.location(BytePos::from(lno),filename)),
 	<lno: @L> "setbuffer64" "(" <e: Expr> "," <f:Expr> "," <g:Expr> ")" => Expr::new_trinary(TrinaryOp::SetBuffer64, e, f, g, file_info.location(BytePos::from(lno),filename)),
 	<lno: @L> "setbuffer256" "(" <e: Expr> "," <f:Expr> "," <g:Expr> ")" => Expr::new_trinary(TrinaryOp::SetBuffer256, e, f, g, file_info.location(BytePos::from(lno),filename)),
-	<lno: @L> "copybuffer8" "(" <e: Expr> "," <f:Expr> "," <g:Expr> "," <h:Expr> "," <i:Expr> ")" => Expr::CopyBuffer8(Box::new(e), Box::new(f), Box::new(g), Box::new(h), Box::new(i), file_info.location(BytePos::from(lno),filename)),
 	<lno: @L> "newfixedarray" "(" <s:UnsignedInteger> "," <e:Expr> ","? ")" => Expr::NewFixedArray(
 		s.to_usize().unwrap(),
 		Some(Box::new(e)),
