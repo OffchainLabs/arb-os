@@ -9,21 +9,12 @@ use std::expandingIntArray::expandingIntArray_getConsecutive;
 use std::expandingIntArray::expandingIntArray_set;
 use std::expandingIntArray::expandingIntArray_setN;
 
-import func expandingIntArray_op(
-    arr: ExpandingIntArray,
-    index: uint,
-    closure: opClosure
-) -> (ExpandingIntArray, any);
-import func expandingIntArray_opConsecutive(
-    arr: ExpandingIntArray,
-    index: uint,
-    loClosure: opClosure,
-    hiClosure: opClosure
-) -> (ExpandingIntArray, any, any);
+use std::expandingIntArray::expandingIntArray_op;
+use std::expandingIntArray::expandingIntArray_opConsecutive;
 
-type opClosureFunc = func(any, uint) -> (uint, any)
+type OpClosureFunc = func(any, uint) -> (uint, any)
 type opClosure = struct {
-	f: opClosureFunc,
+	f: OpClosureFunc,
 	val: any,
 } // usage: (newSlotContents, returnValue) = closure.f(closure.val, oldSlotContents)
 
@@ -216,7 +207,7 @@ public func bytearray_setByte(ba: ByteArray, offset: uint, val: uint) -> ByteArr
         ba.contents, 
         offset/32, 
         struct {
-            f: unsafecast<opClosureFunc>(basb_closure_func),
+            f: unsafecast<OpClosureFunc>(basb_closure_func),
             val: (31-(offset%32), val,),
         }
     );
@@ -236,7 +227,7 @@ public func bytearray_set64(ba: ByteArray, offset: uint, value: uint) -> ByteArr
             ba.contents,
             lowWordIndex,
             struct{
-                f: unsafecast<opClosureFunc>(bas64_single_closure_func),
+                f: unsafecast<OpClosureFunc>(bas64_single_closure_func),
                 val: (alignment, value,),
             }
         );
@@ -246,11 +237,11 @@ public func bytearray_set64(ba: ByteArray, offset: uint, value: uint) -> ByteArr
             ba.contents,
             lowWordIndex,
             struct {
-                f: unsafecast<opClosureFunc>(bas64_low_closure_func),
+                f: unsafecast<OpClosureFunc>(bas64_low_closure_func),
                 val: (alignment, value,),
             },
             struct {
-                f: unsafecast<opClosureFunc>(basmulti_hi_closure_func),
+                f: unsafecast<OpClosureFunc>(basmulti_hi_closure_func),
                 val: (alignment, value,),
             }
         );
@@ -275,11 +266,11 @@ public func bytearray_set256(ba: ByteArray, offset: uint, value: uint) -> ByteAr
             ba.contents,
             lowWordIndex,
             struct {
-                f: unsafecast<opClosureFunc>(bas256_low_closure_func),
+                f: unsafecast<OpClosureFunc>(bas256_low_closure_func),
                 val: (alignment, value,),
             },
             struct {
-                f: unsafecast<opClosureFunc>(basmulti_hi_closure_func),
+                f: unsafecast<OpClosureFunc>(basmulti_hi_closure_func),
                 val: (alignment, value,),
             }
         );

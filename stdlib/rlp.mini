@@ -14,7 +14,7 @@ use std::bytearray::bytearray_getByte;
 use std::bytearray::bytearray_get256;
 use std::bytearray::bytearray_setByte;
 use std::bytearray::bytearray_set256;
-import func bytearray_copy(from: ByteArray, fromOffset: uint, to: ByteArray, toOffset: uint, nbytes: uint) -> ByteArray;
+use std::bytearray::bytearray_copy;
 
 use std::bytestream::bytestream_getByte;
 use std::bytestream::bytestream_get256;
