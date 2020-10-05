@@ -352,7 +352,7 @@ fn pack(packed: &Packed) -> Packed {
 }
 
 fn is_zero_hash(packed: &Packed) -> bool {
-    return packed.hash() == Uint256::zero().avm_hash();
+    return packed.hash == Uint256::zero().avm_hash();
 }
 
 fn unpack(packed: &Packed) -> Uint256 {
