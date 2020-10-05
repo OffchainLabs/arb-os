@@ -312,7 +312,7 @@ fn hash_buf(buf: &[u8]) -> Packed {
     let len = buf.len();
     let h1 = hash_buf(&buf[0..len/2]);
     let h2 = hash_buf(&buf[len/2 .. len]);
-    if unpack(&h2) == zero_hash(buf.len()/2) {
+    if is_zero_hash(&h2) {
         return pack(&h1);
     }
     return normal(Uint256::avm_hash2(&unpack(&h1), &unpack(&h2)), buf.len());
@@ -329,7 +329,7 @@ fn hash_node(buf: &mut [Buffer], sz: usize) -> Packed {
     let len = buf.len();
     let h1 = hash_node(&mut buf[0..len/2], sz/2);
     let h2 = hash_node(&mut buf[len/2 .. len], sz/2);
-    if unpack(&h2) == zero_hash(sz/2) {
+    if is_zero_hash(&h2) {
         return pack(&h1);
     }
     return normal(Uint256::avm_hash2(&unpack(&h1), &unpack(&h2)), sz);
@@ -343,22 +343,16 @@ fn zero_hash(sz: usize) -> Uint256 {
     return Uint256::avm_hash2(&h1, &h1);
 }
 
-/*
-static mut ZERO: Vec<Uint256> = Vec::new();
-fn init_zeros() {
-    let mut acc = 32;
-    for _i=0..60 {
-        ZERO.push(acc);
-    }
-}
-*/
-
 fn normal(hash: Uint256, sz: usize) -> Packed {
     return Packed{size: sz, packed: 0, hash: hash};
 }
 
 fn pack(packed: &Packed) -> Packed {
     return Packed{size: packed.size, packed: packed.packed+1, hash: packed.hash.clone()}
+}
+
+fn is_zero_hash(packed: &Packed) -> bool {
+    return packed.hash() == Uint256::zero().avm_hash();
 }
 
 fn unpack(packed: &Packed) -> Uint256 {
@@ -405,7 +399,7 @@ fn hash_sparse(idx: &[usize], buf: &[u8], sz: usize) -> Packed {
     }
     let h1 = hash_sparse(&idx1, &buf1, sz/2);
     let h2 = hash_sparse(&idx2, &buf2, sz/2);
-    if unpack(&h2) == zero_hash(sz/2) {
+    if is_zero_hash(&h2) {
         return pack(&h1);
     }
     return normal(Uint256::avm_hash2(&unpack(&h1), &unpack(&h2)), sz);
