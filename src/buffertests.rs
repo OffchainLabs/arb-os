@@ -10,10 +10,7 @@ use rand::{thread_rng, Rng};
 
 fn hash_buffer(buf: &[u8], pack: bool) -> Uint256 {
     if buf.len() == 0 {
-        if pack {
-            return zero_hash(32);
-        }
-        return zero_hash(1024);
+        return zero_hash(32);
     }
     if buf.len() == 32 {
         return Uint256::from_bytes(buf).avm_hash();
