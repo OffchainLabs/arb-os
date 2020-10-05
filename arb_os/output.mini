@@ -1,0 +1,282 @@
+//
+// Copyright 2020, Offchain Labs, Inc. All rights reserved.
+//
+
+import type ByteArray;
+import type MarshalledBytes;
+import type Queue;
+import type EvmLogs;
+
+import func bytearray_new(capacity: uint) -> ByteArray;
+import func bytearray_marshalFull(ba: ByteArray) -> MarshalledBytes;
+
+import func queue_get(queue: Queue) -> option<(Queue, any)>;
+
+import func evmlogs_empty() -> EvmLogs;
+import func evmlogs_numLogs(logs: EvmLogs) -> uint;
+
+import impure func evmCallStack_queueMessage(message: any);
+
+import impure func chainParams_speedLimitPerSecond() -> uint;
+
+import impure func inbox_currentBlockNumber() -> uint;
+import impure func inbox_currentTimestamp() -> uint;
+
+
+// This structure defines an incoming request.
+// It is defined identically in inbox.mini and elsewhere.
+type IncomingRequest = struct {
+    kind: uint,               // type of message
+    blockNumber: uint,        // block number of the L1 block
+    timestamp: uint,          // timestamp of the L1 block
+    sender: address,          // address of the sender
+    requestId: uint,
+    msgData: MarshalledBytes  // contents of the message, as a marshalled bytearray
+}
+
+// This is declared identically in gasAccounting.mini
+type GasUsage = struct {
+    gasUsed: uint,
+    gasPriceWei: uint,
+}
+
+// PerBlockReceiptData is different from OutputStatistics for now; might want to unify
+type PerBlockReceiptData = struct {
+    totalGasUsed: uint,
+    numTx: uint,
+    numEvmLogs: uint,
+}
+
+type OutputStatistics = struct {
+    totalGasUsed: uint,
+    numTx: uint,
+    numEvmLogs: uint,
+    numLogs: uint,
+    numSends: uint,
+}
+
+func outputStats_new() -> OutputStatistics {
+    return struct {
+        totalGasUsed: 0,
+        numTx: 0,
+        numEvmLogs: 0,
+        numLogs: 0,
+        numSends: 0
+    };
+}
+
+func outputStats_isAllZero(os: OutputStatistics) -> bool {
+    return (os.totalGasUsed + os.numTx + os.numEvmLogs + os.numLogs + os.numSends) == 0;
+}
+
+func outputStats_add(os1: OutputStatistics, os2: OutputStatistics) -> OutputStatistics {
+    return struct {
+        totalGasUsed: os1.totalGasUsed + os2.totalGasUsed,
+        numTx: os1.numTx + os2.numTx,
+        numEvmLogs: os1.numEvmLogs + os2.numEvmLogs,
+        numLogs: os1.numLogs + os2.numLogs,
+        numSends: os1.numSends + os2.numSends,
+    };
+}
+
+var globalBlockReceiptData: struct {
+    data: PerBlockReceiptData,
+    statsThisBlock: OutputStatistics,
+    statsAllTime: OutputStatistics,
+};
+
+public impure func outputStats_endOfBlock(blockNum: uint, timestamp: uint) {
+    if ( ! outputStats_isAllZero(globalBlockReceiptData.statsThisBlock)) {
+        // add current block (including soon-to-be-issued block summary log) into total stats
+        let updatedStats = outputStats_add(
+            globalBlockReceiptData.statsThisBlock,
+            globalBlockReceiptData.statsAllTime
+        );
+        updatedStats = updatedStats with {
+            numLogs: updatedStats.numLogs + 1  // +1 for soon-to-be-issued block summary log
+        };
+        globalBlockReceiptData = globalBlockReceiptData with {
+            statsAllTime: updatedStats
+        };
+
+        emitBlockSummaryLog(blockNum, timestamp);
+    }
+
+    // now clear current block stats, because we're advancing to a new current block
+    globalBlockReceiptData = globalBlockReceiptData with {
+        statsThisBlock: outputStats_new()
+    } with {
+        data: struct {
+            totalGasUsed: 0,
+            numTx: 0,
+            numEvmLogs: 0
+        }
+
+    };
+}
+
+impure func outputStats_addTxLog(gasUsed: uint, numEvmLogs: uint) {
+    globalBlockReceiptData = globalBlockReceiptData with {
+        statsThisBlock: globalBlockReceiptData.statsThisBlock with {
+            numTx: 1 + globalBlockReceiptData.statsThisBlock.numTx
+        } with {
+            numLogs: 1 + globalBlockReceiptData.statsThisBlock.numLogs
+        } with {
+            totalGasUsed: gasUsed + globalBlockReceiptData.statsThisBlock.totalGasUsed
+        } with {
+            numEvmLogs: numEvmLogs + globalBlockReceiptData.statsThisBlock.numEvmLogs
+        }
+    };
+}
+
+impure func outputStats_addSend() {
+    globalBlockReceiptData = globalBlockReceiptData with {
+        statsThisBlock: globalBlockReceiptData.statsThisBlock with {
+            numSends: 1 + globalBlockReceiptData.statsThisBlock.numSends
+        }
+    };
+}
+
+public impure func txReceipts_init() {  // will be called at beginning of main()
+    globalBlockReceiptData = struct {
+        data: struct {
+            totalGasUsed: 0,
+            numTx: 0,
+            numEvmLogs: 0
+        },
+        statsThisBlock: outputStats_new(),
+        statsAllTime: outputStats_new(),
+    };
+}
+
+impure func update_txReceiptsForBlock(
+    blockNum: uint,
+    gasUsed: uint,
+    numEvmLogs: uint
+) -> PerBlockReceiptData {
+    // first add in the gas, because returned value is supposed to include it
+    let ret = globalBlockReceiptData.data with {
+        totalGasUsed: gasUsed + globalBlockReceiptData.data.totalGasUsed
+    };
+
+    // now update the accumulated data and write it back, but don't return the updated version
+    globalBlockReceiptData = globalBlockReceiptData with {
+        data: ret with {
+            numTx: ret.numTx + 1
+        } with {
+            numEvmLogs: ret.numEvmLogs + numEvmLogs
+        }
+    };
+
+    return ret;
+}
+
+// result codes:
+//    0    return (success)
+//    1    tx reverted
+//    2    rejected due to congestion
+//    3    insufficient funds to pay for gas
+//    4    insufficient funds for tx payment
+//    5    bad sequence number
+//    6    message format error
+//    255  unknown error
+public impure func emitLog(
+    l1message: IncomingRequest,
+    resultCode: uint,
+    maybeReturnData: option<ByteArray>,
+    maybeEvmLogs: option<EvmLogs>,
+    gasUsage: option<GasUsage>,
+) {
+    let realGasUsage = struct {
+        gasUsed: 0,
+        gasPriceWei: 0,
+    };
+    if let Some(gu) = gasUsage {
+        realGasUsage = gu;
+    }
+
+    let evmLogs = evmlogs_empty();
+    let numEvmLogs = 0;
+    if let Some(el) = maybeEvmLogs {
+        evmLogs = el;
+        numEvmLogs = evmlogs_numLogs(el);
+    }
+
+    outputStats_addTxLog(realGasUsage.gasUsed, numEvmLogs);
+
+    let returnData = bytearray_new(0);
+    if let Some(rd) = maybeReturnData {
+        returnData = rd;
+    }
+
+    let txResultInfo = struct {
+        returnCode: resultCode,
+        returnData: bytearray_marshalFull(returnData),
+        evmLogs: evmLogs,
+    };
+
+    asm((
+        0,
+        l1message,
+        txResultInfo,
+        realGasUsage,
+        update_txReceiptsForBlock(
+            l1message.blockNumber,
+            realGasUsage.gasUsed,
+            numEvmLogs,
+        )
+    ),) { log };
+}
+
+impure func emitBlockSummaryLog(blockNum: uint, timestamp: uint) {
+    let gasUsedThisBlock = globalBlockReceiptData.statsThisBlock.totalGasUsed;
+    let gasLimit = 13 * chainParams_speedLimitPerSecond();
+    if (gasLimit < gasUsedThisBlock) {
+        gasLimit = gasUsedThisBlock;
+    }
+    asm((
+        1,
+        blockNum,
+        timestamp,
+        gasLimit,
+        globalBlockReceiptData.statsThisBlock,
+        globalBlockReceiptData.statsAllTime
+    ),) { log };
+}
+
+public impure func queueMessageForSend(msgType: uint, sender: address, data: ByteArray) {
+    evmCallStack_queueMessage(
+        (
+            msgType,
+            uint(sender),
+            bytearray_marshalFull(data),
+        )
+    );
+}
+
+public impure func sendQueuedMessages(queue: Queue) {
+    loop {
+        if let Some(res) = queue_get(queue) {
+            let (uq, msg) = res;
+            queue = uq;
+            sendPackagedMessage(msg);
+        } else {
+            return;
+        }
+    }
+}
+
+public impure func sendMessage(msgType: uint, sender: address, data: ByteArray) {
+    sendPackagedMessage(
+        (
+            msgType,
+            uint(sender),
+            bytearray_marshalFull(data),
+        )
+    );
+}
+
+func sendPackagedMessage(msg: any) {
+    outputStats_addSend();
+    asm(msg,) { send };
+}

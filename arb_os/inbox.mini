@@ -1,17 +1,5 @@
 //
-// Copyright 2020, Offchain Labs, Inc.
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//    http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+// Copyright 2020, Offchain Labs, Inc. All rights reserved.
 //
 
 import type Queue;
@@ -21,63 +9,71 @@ import func queue_get(q: Queue) -> option<(Queue, any)>;
 import func queue_put(q: Queue, val: any) -> Queue;
 
 import impure func chainParams_gotParamsMessage(sender: address, data: MarshalledBytes);
+import impure func chainParams_chainId() -> uint;
 
+import type MessageBatch;
+import func messageBatch_tryNew(msg: IncomingRequest) -> option<MessageBatch>;
+import func messageBatch_get(batch: MessageBatch) -> option<(IncomingRequest, MessageBatch)>;
+
+import impure func outputStats_endOfBlock(blockNum: uint, timestamp: uint);
+
+import type ByteArray;
 import type MarshalledBytes;
+import func marshalledBytes_firstByte(mb: MarshalledBytes) -> uint;
+import func marshalledBytes_hash(mb: MarshalledBytes) -> bytes32;
+import func bytearray_unmarshalBytes(mb: MarshalledBytes) -> ByteArray;
+import func bytearray_new(capacityHint: uint) -> ByteArray;
+import func bytearray_get256(ba: ByteArray, offset: uint) -> uint;
 
-// This is the structure that the Arbitrum protocol gives us, for each incoming message.
-// It is declared identically in messages.mini
-type IncomingRequest = struct {
-    kind: uint,               // type of message
-    blockNumber: uint,        // block number of the L1 block
-    timestamp: uint,          // timestamp of the L1 block
-    sender: address,          // address of the sender
-    requestId: uint,          // sequence number in L1 inbox
-    msgData: MarshalledBytes  // contents of the message, as a marshalled bytearray
-}
+import type ByteStream;
+import func bytestream_new(ba: ByteArray) -> ByteStream;
+import func bytestream_getByte(bs: ByteStream) -> option<(ByteStream, uint)>;
+import func bytestream_get256(bs: ByteStream) -> option<(ByteStream, uint)>;
+import func bytestream_getRemainingBytes(bs: ByteStream) -> ByteArray;
+
+import func hashUnsignedL2messageInfo(l2msg: MarshalledBytes, chainId: uint, sender: address) -> bytes32;
+import func translateSignedTx(req: IncomingRequest) -> option<TxRequestData>;
 
 type Inbox = struct {
     queue: Queue,     // Queue of messages that haven't yet been retrieved from the inbox
     blockNum: uint,   // Highest blocknum of messages that we have retrieved from the inbox
     timestamp: uint,  // Highest timestamp of messages that we have retrieved from the inbox
+    needToPeek: bool, // true iff we should be doing an inboxpeek before inbox instruction
 }
 
 var globalInbox: Inbox;
+var globalQueueFromBatch: Queue;
 
 public impure func inbox_init() {
     globalInbox = struct {
         queue: queue_new(),
         blockNum: 0,
         timestamp: 0,
+        needToPeek: false,   // don't peek before the first message
     };
+    globalQueueFromBatch = queue_new();
 }
 
 public impure func inbox_get() -> IncomingRequest {
     // Get the next message, in order of arrival.
     // If no messages have arrived, this will block until one arrives.
-    // Put this in a loop so we can special-case the very first "chain parameters" message.
+    // This is a loop because some events don't generate a message that we can return,
+    //       so we keep trying until we find something we can return.
 
     loop {
-        let inbox = globalInbox;
-        while (queue_isEmpty(inbox.queue)) {
-            inbox = getFromL1Inbox(inbox);
+        while (queue_isEmpty(globalInbox.queue)) {
+            globalInbox = getFromL1Inbox(globalInbox);
         }
-        let (updatedQ, ret,) = queueGetOrDie(inbox.queue);
+
+        let (updatedQ, ret,) = queueGetOrDie(globalInbox.queue);
+        globalInbox = globalInbox with { queue: updatedQ };
         let ebMsg = unsafecast<IncomingRequest>(ret);
-
-        // We got a message. Update the blocknum and timestamp of inbox, if necessary.
-        if (inbox.blockNum < ebMsg.blockNumber) {
-            inbox = inbox with { blockNum: ebMsg.blockNumber };
-        }
-        if (inbox.timestamp < ebMsg.timestamp) {
-            inbox = inbox with { timestamp: ebMsg.timestamp };
-        }
-
-        globalInbox = inbox with { queue: updatedQ };
-
         if (ebMsg.kind == 4) {
             chainParams_gotParamsMessage(ebMsg.sender, ebMsg.msgData);
         } else {
-            return ebMsg;
+            return ebMsg with {
+                requestId: uint(hash(bytes32(chainParams_chainId()), bytes32(ebMsg.requestId)))
+            };
         }
     }
 }
@@ -90,32 +86,48 @@ func queueGetOrDie(q: Queue) -> (Queue, any) {
     }
 }
 
-// InboxCell is the structure that the Arbitrum protocol uses to combine multiple messages
-//     when they arrive in the inbox together.
-// This is basically a linked list, but in reverse order (newest message at head of list).
-type InboxCell = struct {
-    rest: any,   // really an InboxCell, but language doesn't allow recursive types
-    msg: any,
-}
-
 impure func getFromL1Inbox(inbox: Inbox) -> Inbox {
-    // Get one or more messages from the L1 inbox, and append them to the inbox.
+    // Get a message from the L1 inbox, and append it to the inbox.
     // If there are no messages available in the L1 inbox, this blocks until one is available.
-    let newMsgs = asm() InboxCell { inbox };
-    inbox = addInboxToQueue(inbox, newMsgs);
-    return inbox;
-}
-
-func addInboxToQueue(inbox: Inbox, newMsgs: InboxCell) -> Inbox {
-    // Unpack messages from an InboxCell list, and append them to an Inbox.
-    // Because the messages are in the linked list in newest-first order, we need to reverse the order.
-    if (unsafecast<any>(newMsgs) == null) {
-        return inbox;
-    } else {
-        inbox = addInboxToQueue(inbox, unsafecast<InboxCell>(newMsgs.rest));
-        let qp = queue_put(inbox.queue, newMsgs.msg);
-        return inbox with { queue: qp };
+    if (inbox.needToPeek) {
+        let sameBlockNum = asm(inbox.blockNum,) bool { inboxpeek };
+        if ( ! sameBlockNum) {
+            // peek says we hit end of L1 block, so insert end-of-block message and return
+            return inbox with {
+                queue: queue_put(
+                    inbox.queue,
+                    struct {
+                        kind: 6,   // special kind that is reserved for these synthetic end-of-block messages
+                        blockNumber: inbox.blockNum,
+                        timestamp: inbox.timestamp,
+                        sender: address(0),
+                        requestId: 0,
+                        msgData: unsafecast<MarshalledBytes>(0),
+                    }
+                )
+            } with {
+                needToPeek: false   // don't peek next time, because we already sent end-of-block
+            };
+        }
     }
+    let newMsg = asm() IncomingRequest { inbox };
+
+    if (newMsg.blockNumber == 0) {
+        newMsg = newMsg with { blockNumber: inbox.blockNum };
+    }
+    if (newMsg.timestamp == 0) {
+        newMsg = newMsg with { timestamp: inbox.timestamp };
+    }
+
+    return inbox with {
+        queue: queue_put(inbox.queue, newMsg)
+    } with {
+        needToPeek: true
+    } with {
+        blockNum: newMsg.blockNumber
+    } with {
+        timestamp: newMsg.timestamp
+    };
 }
 
 public impure func inbox_currentTimestamp() -> uint {
@@ -125,3 +137,175 @@ public impure func inbox_currentTimestamp() -> uint {
 public impure func inbox_currentBlockNumber() -> uint {
     return globalInbox.blockNum;
 }
+
+// This structure describes an incoming request.
+// It is declared identically in inbox.mini and elsewhere
+type IncomingRequest = struct {
+    kind: uint,               // type of message
+    blockNumber: uint,        // block number of the L1 block
+    timestamp: uint,          // timestamp of the L1 block
+    sender: address,          // address of the sender
+    requestId: uint,
+    msgData: MarshalledBytes  // kind-specific data, as a marshalled bytearray
+}
+
+// TxRequestData is declared identically in message.mini and elsewhere.
+type TxRequestData = struct {
+    maxGas: uint,
+    gasPrice: uint,
+    seqNum: option<uint>,
+    caller: address,
+    calleeAddr: address,
+    value: uint,
+    calldata: ByteArray,
+    incomingRequest: IncomingRequest,
+}
+
+public impure func inbox_getNextUnpackedRequest() -> (
+    option<IncomingRequest>,  // if it was an L1 message
+    option<TxRequestData>,    // if it was an L2 tx message
+) {
+    let msg = unsafecast<IncomingRequest>(());   // value will be re-initialized before use
+    loop {
+        if let Some(res) = queue_get(globalQueueFromBatch) {
+            let (newQ, rawMsg) = res;
+            globalQueueFromBatch = newQ;
+            msg = unsafecast<IncomingRequest>(rawMsg);
+        } else {
+            msg = inbox_get();
+        }
+
+        if let Some(batch) = messageBatch_tryNew(msg) {
+            // it's a batch message, so unpack its components and queue them
+            let moreToDo = true;
+            let queue = globalQueueFromBatch;
+            while (moreToDo) {
+                if let Some(res) = messageBatch_get(batch) {
+                    let (newMsg, restOfBatch) = res;
+                    queue = queue_put(queue, newMsg);
+                    batch = restOfBatch;
+                } else {
+                    moreToDo = false;
+                }
+            }
+            globalQueueFromBatch = queue;
+        } else {
+            // it's not a batch, so process it immediately
+            // get its maxGas amount -- for now, set the limit high, unless caller asked for less
+            let maxGas = 1000000000;
+            if (msg.kind == 6) {
+                // it's an end-of-block message, so just trigger end-of-block processing
+                outputStats_endOfBlock(msg.blockNumber, msg.timestamp);
+            } elseif (msg.kind == 3) {
+                // it's an L2 message, so switch based on the L2 type
+                let firstByte = marshalledBytes_firstByte(msg.msgData);
+                if (firstByte == 6) {
+                    // it's a heartbeat message, don't do anything
+                } elseif (firstByte == 4) {
+                    // it's a signed tx; verify sig and then process request or discard
+                    if let Some(txRequest) = translateSignedTx(msg) {
+                        return (None<IncomingRequest>, Some(txRequest));
+                    }
+                    // else signature was invalid, ignore msg and execute loop again to get another
+                } else {
+                    // subtype must be 0, 1, or 2
+                    if let Some(txRequest) = translateUnsignedTx(msg) {
+                        return (None<IncomingRequest>, Some(txRequest));
+                    }
+                    // else request was malformatted, ignore it and execute loop again to get another
+                }
+            } elseif (msg.kind == 5) {
+                if let Some(txRequest) = translateBuddyDeployTx(msg) {
+                    return (None<IncomingRequest>, Some(txRequest));
+                }
+                // else request was malformatted, ignore it and execute loop again to get another
+            } else {
+                return (Some(msg), None<TxRequestData>);
+            }
+        }
+    }
+}
+
+func translateUnsignedTx(request: IncomingRequest) -> option<TxRequestData> {
+    let inStream = bytestream_new(bytearray_unmarshalBytes(request.msgData));
+    let (us, subtype) = bytestream_getByte(inStream)?;
+    inStream = us;
+
+    let (us, maxGas) = bytestream_get256(inStream)?;
+    inStream = us;
+
+    let (us, gasPrice) = bytestream_get256(inStream)?;
+    inStream = us;
+
+    let seqNum = None<uint>;
+    if (subtype == 0) {
+        let (us, sn) = bytestream_get256(inStream)?;
+        inStream = us;
+        seqNum = Some(sn);
+    }
+
+    let (us, destAddrAsUint) = bytestream_get256(inStream)?;
+    inStream = us;
+
+    let value = 0;
+    if (subtype != 2) {
+        let (us, val) = bytestream_get256(inStream)?;
+        inStream = us;
+        value = val;
+    }
+
+    let calldata = bytestream_getRemainingBytes(inStream);
+
+    if (subtype == 0) {
+        request = request with {
+            requestId: uint(hash(
+                bytes32(request.sender),
+                hash(
+                    bytes32(chainParams_chainId()),
+                    marshalledBytes_hash(request.msgData)
+                )
+            ))
+        };
+    }
+    return Some(
+        struct {
+            maxGas: maxGas,
+            gasPrice: gasPrice,
+            seqNum: seqNum,
+            caller: request.sender,
+            calleeAddr: address(destAddrAsUint),
+            value: value,
+            calldata: calldata,
+            incomingRequest: request
+        }
+    );
+}
+
+func translateBuddyDeployTx(request: IncomingRequest) -> option<TxRequestData> {
+    let inStream = bytestream_new(bytearray_unmarshalBytes(request.msgData));
+
+    let (us, maxGas) = bytestream_get256(inStream)?;
+    inStream = us;
+
+    let (us, gasPrice) = bytestream_get256(inStream)?;
+    inStream = us;
+
+    let (us, value) = bytestream_get256(inStream)?;
+    inStream = us;
+
+    let calldata = bytestream_getRemainingBytes(inStream);
+
+    return Some(
+        struct {
+            maxGas: maxGas,
+            gasPrice: gasPrice,
+            seqNum: None<uint>,
+            caller: request.sender,
+            calleeAddr: address(0),
+            value: value,
+            calldata: calldata,
+            incomingRequest: request
+        }
+    );
+}
+

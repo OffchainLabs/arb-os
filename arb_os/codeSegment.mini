@@ -1,22 +1,10 @@
 //
-// Copyright 2020, Offchain Labs, Inc.
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//    http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+// Copyright 2020, Offchain Labs, Inc. All rights reserved.
 //
 
 import type ByteStream;
 
-import impure func errorHandler();
+import func evmCallStack_callHitError(reason: uint);
 
 import func bytestream_atEof(bs: ByteStream) -> bool;
 import func bytestream_bytesReadSoFar(bs: ByteStream) -> uint;
@@ -42,6 +30,7 @@ import func evmOp_codesize();
 import func evmOp_delegatecall();
 import func evmOp_extcodesize();
 import func evmOp_extcodecopy();
+import func evmOp_extcodehash();
 import func evmOp_getjumpaddr();
 import func evmOp_log0();
 import func evmOp_log1();
@@ -254,6 +243,8 @@ public impure func translateEvmCodeSegment(
                             return pushEvmInsnCall(evmOp_returndatasize, restOfCode, evmJumpTable);
                         } elseif (opcode == 0x3e) { // RETURNDATACOPY
                             return pushEvmInsnCall(evmOp_returndatacopy, restOfCode, evmJumpTable);
+                        } elseif (opcode == 0x3f) { // EXTCODEHASH
+                            return pushEvmInsnCall(evmOp_extcodehash, restOfCode, evmJumpTable);
                         }
                     }
                 }
@@ -337,7 +328,7 @@ public impure func translateEvmCodeSegment(
                                 ));
                             } else {
                                 // should never happen; pushEvmInsnCall always returns Some
-                                errorHandler();
+                                evmCallStack_callHitError(16);
                                 return None;
                             }
                         }
@@ -447,8 +438,8 @@ public impure func translateEvmCodeSegment(
         }
     }
 
-    // opcode was not found, don't generate any code
-    return Some((restOfCode, evmJumpTable));
+    // opcode was not found, generate AVM error instruction
+    return Some((pushInstruction(0x73, restOfCode), evmJumpTable));
 }
 
 impure func pushEvmInsnDenomCheck(

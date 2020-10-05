@@ -1,17 +1,5 @@
 //
-// Copyright 2020, Offchain Labs, Inc.
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//    http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+// Copyright 2020, Offchain Labs, Inc. All rights reserved.
 //
 
 import type EvmCallFrame;
@@ -19,13 +7,12 @@ import type Account;
 import type ByteArray;
 import type MarshalledBytes;
 
-import impure func errorHandler();
-
 import impure func evmCallStack_topFrame() -> option<EvmCallFrame>;
 import impure func evmCallStack_setAccount(addr: address, acct: Account) -> bool;
 import impure func evmCallStack_getTopFrameMemoryOrDie() -> ByteArray;
 import impure func evmCallStack_setTopFrameMemory(mem: ByteArray) -> bool;
 import impure func evmCallStack_cloneContract(addr: address) -> option<address>;
+import func evmCallStack_callHitError(reason: uint);
 
 import func evmCallFrame_getCalldata(frame: EvmCallFrame) -> ByteArray;
 import func evmCallFrame_getCallvalue(frame: EvmCallFrame) -> uint;
@@ -40,6 +27,7 @@ import impure func evmOp_revert(memOffset: uint, memNbytes: uint);
 
 import func account_getAddress(acct: Account) -> address;
 import func account_getNextSeqNum(account: Account) -> uint;
+import func account_getStorageCell(account: Account, cell: uint) -> option<uint>;
 import func account_deductFromEthBalance(acct: Account, amount: uint) -> option<Account>;
 
 import func bytearray_size(ba: ByteArray) -> uint;
@@ -52,23 +40,8 @@ import func bytearray_marshalFull(ba: ByteArray) -> MarshalledBytes;
 import impure func inbox_currentBlockNumber() -> uint;
 import impure func inbox_currentTimestamp() -> uint;
 
+import impure func queueMessageForSend(msgType: uint, sender: address, data: ByteArray);
 
-type ArbSysMessage = struct {
-    kind: uint,
-    sender: address,
-    msg: any,
-}
-
-type ArbSysEthTransferMessage = struct {
-    dest: address,
-    amount: uint,
-}
-
-type ArbSysTokenTransferMessage = struct {
-    tokenAddr: address,
-    dest: address,
-    amount: uint,
-}
 
 public impure func arbsys_txcall() {
     if let Some(topFrame) = evmCallStack_topFrame() {
@@ -87,18 +60,20 @@ public impure func arbsys_txcall() {
             arbsys_getTransactionCount(topFrame, calldata);
         } elseif(funcCode == 0x474ed9c0) {
             arbsys_cloneContract(topFrame, calldata);
+        } elseif(funcCode == 0xa169625f) {
+            arbsys_getStorageAt(topFrame, calldata);
         } else {
             // unrecognized function code
             evmOp_revert(0, 0);
         }
     } else {
         // this shouldn't happen -- should always be called in an EVM tx
-        errorHandler();
+        evmCallStack_callHitError(14);
     }
 }
 
 func getFuncCode(ba: ByteArray) -> uint {
-    return bytearray_get256(ba, 0) / (asm(2, 224) uint { exp });
+    return asm(224, bytearray_get256(ba, 0)) uint { shr };
 }
 
 impure func arbsys_withdrawErc20(topFrame: EvmCallFrame, calldata: ByteArray) {
@@ -111,7 +86,7 @@ impure func arbsys_withdrawErc20(topFrame: EvmCallFrame, calldata: ByteArray) {
     let amount = bytearray_get256(calldata, 36);
 
     let messageData = bytearray_extract(calldata, 4, 64);
-    sendMessage(1, senderAddr, messageData);
+    queueMessageForSend(1, senderAddr, messageData);
     evmOp_return(0, 0);
 }
 
@@ -125,7 +100,7 @@ impure func arbsys_withdrawErc721(topFrame: EvmCallFrame, calldata: ByteArray) {
     let id = bytearray_get256(calldata, 36);
 
     let messageData = bytearray_extract(calldata, 4, 64);
-    sendMessage(2, senderAddr, messageData);
+    queueMessageForSend(2, senderAddr, messageData);
     evmOp_return(0, 0);
 }
 
@@ -138,13 +113,15 @@ impure func arbsys_withdrawEth(topFrame: EvmCallFrame, calldata: ByteArray) {
     let destAddr = address(bytearray_get256(calldata, 4));
     let amount = evmCallFrame_getCallvalue(topFrame);
 
-    if let Some(updatedAcct) = account_deductFromEthBalance(senderAcct, amount) {
-        if ( ! evmCallStack_setAccount(senderAddr, updatedAcct)) {
+    let arbSysAddr = evmCallFrame_runningAsAddress(topFrame);
+    let arbSysAccount = evmCallFrame_getAccount(topFrame, arbSysAddr);
+    if let Some(updatedAcct) = account_deductFromEthBalance(arbSysAccount, amount) {
+        if ( ! evmCallStack_setAccount(arbSysAddr, updatedAcct)) {
             evmOp_revert(0, 0);
         }
         let messageData = bytearray_extract(calldata, 4, 32);
         messageData = bytearray_set256(messageData, 32, amount);
-        sendMessage(0, senderAddr, messageData);
+        queueMessageForSend(0, senderAddr, messageData);
         evmOp_return(0, 0);
     }
 
@@ -162,10 +139,7 @@ impure func arbsys_getTransactionCount(topFrame: EvmCallFrame, calldata: ByteArr
          0,
          seqNum
      );
-    let success = evmCallStack_setTopFrameMemory(
-        updatedMem
-    );
-
+    let success = evmCallStack_setTopFrameMemory(updatedMem);
     if (success) {
         evmOp_return(0, 32);
     } else {
@@ -195,12 +169,27 @@ impure func arbsys_cloneContract(topFrame: EvmCallFrame, calldata: ByteArray) {
     }
 }
 
-impure func sendMessage(msgType: uint, sender: address, data: ByteArray) {
-    asm(
-        (
-            msgType,
-            uint(sender),
-            bytearray_marshalFull(data),
-        ),
-    ) { send };
+impure func arbsys_getStorageAt(topFrame: EvmCallFrame, calldata: ByteArray) {
+    let senderAddr = evmCallFrame_getCaller(topFrame);
+    if (senderAddr != address(0)) {
+        evmOp_revert(0, 0);
+    }
+
+    let addr = address(bytearray_get256(calldata, 4));
+    let offset = bytearray_get256(calldata, 4+32);
+    let acct = evmCallFrame_getAccount(topFrame, addr);
+
+    let ret = 0;
+    if let Some(val) = account_getStorageCell(acct, offset) {
+        ret = val;
+    }
+
+    let updatedMem = bytearray_set256(evmCallStack_getTopFrameMemoryOrDie(), 0, ret);
+    let success = evmCallStack_setTopFrameMemory(updatedMem);
+
+    if (success) {
+        evmOp_return(0, 32);
+    } else {
+        evmOp_revert(0, 0);
+    }
 }

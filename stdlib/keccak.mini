@@ -1,17 +1,5 @@
 //
-// Copyright 2020, Offchain Labs, Inc.
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//    http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+// Copyright 2020, Offchain Labs, Inc. All rights reserved.
 //
 
 import type ByteArray;
@@ -107,3 +95,112 @@ func flipEndian256(x: uint) -> uint {
     }
     return acc;
 }
+
+type Hasher = struct {
+    accumulator: [7]uint,
+    offset: uint,
+}
+
+public func hasher_new() -> Hasher {
+    return struct {
+        accumulator: unsafecast<[7]uint>((0,0,0,0,0,0,0)),
+        offset: 0,
+    };
+}
+
+public func hasher_pushByte(h: Hasher, b: uint) -> Hasher {
+    if (h.offset == 135) {
+        return h with {
+            accumulator: asm(
+                h.accumulator with {
+                    [4] = h.accumulator[4] ^ asm(8*7, b & 0xff) uint { shl }
+                },
+            ) [7]uint { keccakf }
+        } with {
+            offset: 0
+        };
+    } else {
+        let word = h.offset / 32;
+        return h with {
+            accumulator: h.accumulator with {
+                [word] = h.accumulator[word] ^ asm(8*(h.offset&0x1f), b&0xff) uint { shl }
+            }
+        } with {
+            offset: h.offset+1
+        };
+    }
+}
+
+public func hasher_pushN_be(h: Hasher, val: uint, nbytes: uint) -> Hasher {
+    return hasher_pushN_le(h, flipEndian256(val), nbytes);
+}
+
+public func hasher_pushN_le(h: Hasher, val: uint, nbytes: uint) -> Hasher {
+    // push N <= 32 bytes of data into h
+    // data is assumed to be little-endian
+    if (nbytes > 32) {
+        nbytes = 32;
+    } elseif (nbytes < 32) {
+        val = val & (asm(8*nbytes, 1) uint { shl } - 1);
+    }
+    let accum = h.accumulator;
+    let offset = h.offset;
+    loop {  // need to loop because data might cross word/block boundary
+        let word = offset / 32;
+        let align = offset & 0x1f;
+        if ( (align+nbytes <= 8) || ((word < 4) && (align+nbytes <= 32)) ){
+            // can complete our work in a single push
+            accum = accum with {
+                [word] = accum[word] ^ asm(8*align, val) uint { shl }
+            };
+            offset = offset + nbytes;
+            if (offset == 136) {
+                return struct {
+                    accumulator: asm(accum,) [7]uint { keccakf },
+                    offset: 0
+                };
+            } else {
+                return struct {
+                    accumulator: accum,
+                    offset: offset
+                };
+            }
+        } else {
+            // can't push it all because of word/block boundary; do as much as possible
+            if (word == 4) {
+                accum = accum with {
+                    [4] = accum[4] ^ (asm(8*align, val) uint { shl } & 0xffffffffffffffff)
+                };
+                accum = asm(accum,) [7]uint { keccakf };
+                offset = 0;
+                let nb = 8-align;
+                val = asm(8*nb, val) uint { shr };
+                nbytes = nbytes - nb;
+            } else {
+                let acc = accum[word];
+                acc = acc ^ asm(8*align, val) uint { shl };
+                accum = accum with { [word] = acc };
+                let nb = 32-align;
+                offset = offset + nb;
+                val = asm(8*nb, val) uint { shr };
+                nbytes = nbytes - nb;
+            }
+        }
+    }
+}
+
+public func hasher_finish(h: Hasher) -> bytes32 {
+    let accum = h.accumulator;
+    let word = h.offset / 32;
+
+    // write the two padding bits (these might both modify the same byte)
+    accum = accum with {
+        [word] = accum[word] ^ asm(8*(h.offset&0x1f), 0x01) uint { shl }
+    };
+    accum = accum with { [4] = accum[4] ^ 0x8000000000000000 };
+
+    return bytes32(flipEndian256(
+        (asm(accum,) [7]uint { keccakf } )[0]
+    ));
+}
+
