@@ -2,12 +2,12 @@
 // Copyright 2020, Offchain Labs, Inc. All rights reserved.
 //
 
-import type EvmCallFrame;
-import type Account;
-import type ByteArray;
-import type MarshalledBytes;
+use evmCallStack::EvmCallFrame;
+use accounts::Account;
+use std::bytearray::ByteArray;
+use std::bytearray::MarshalledBytes;
 
-import impure func evmCallStack_topFrame() -> option<EvmCallFrame>;
+use evmCallStack::evmCallStack_topFrame;
 import impure func evmCallStack_setAccount(addr: address, acct: Account) -> bool;
 import impure func evmCallStack_getTopFrameMemoryOrDie() -> ByteArray;
 import impure func evmCallStack_setTopFrameMemory(mem: ByteArray) -> bool;

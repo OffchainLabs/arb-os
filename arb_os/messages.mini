@@ -2,13 +2,13 @@
 // Copyright 2020, Offchain Labs, Inc. All rights reserved.
 //
 
-import type ByteArray;
-import type ByteStream;
-import type MarshalledBytes;
-import type AccountStore;
-import type Account;
-import type EvmLogs;
-import type StorageMap;
+use std::bytearray::ByteArray;
+use std::bytestream::ByteStream;
+use std::bytearray::MarshalledBytes;
+use accounts::AccountStore;
+use accounts::Account;
+use evmlogs::EvmLogs;
+use std::storageMap::StorageMap;
 
 import impure func getGlobalAccountStore() -> AccountStore;
 import impure func setGlobalAccountStore(acctStore: AccountStore);

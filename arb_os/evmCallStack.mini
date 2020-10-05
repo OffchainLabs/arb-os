@@ -2,16 +2,16 @@
 // Copyright 2020, Offchain Labs, Inc. All rights reserved.
 //
 
-import type IncomingRequest;
-import type AccountStore;
-import type Account;
-import type EvmLogs;
-import type Queue;
-import type ByteArray;
-import type ByteStream;
-import type MarshalledBytes;
-import type Stack;
-import type StorageMap;
+use inbox::IncomingRequest;
+use accounts::AccountStore;
+use accounts::Account;
+use evmlogs::EvmLogs;
+use std::queue::Queue;
+use std::bytearray::ByteArray;
+use std::bytestream::ByteStream;
+use std::bytearray::MarshalledBytes;
+use std::stack::Stack;
+use std::storageMap::StorageMap;
 
 import impure func errorHandler();
 

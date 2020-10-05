@@ -2,10 +2,10 @@
 // Copyright 2020, Offchain Labs, Inc. All rights reserved.
 //
 
-import type ByteArray;
-import type MarshalledBytes;
-import type Queue;
-import type EvmLogs;
+use std::bytearray::ByteArray;
+use std::bytearray::MarshalledBytes;
+use std::queue::Queue;
+use evmlogs::EvmLogs;
 
 import func bytearray_new(capacity: uint) -> ByteArray;
 import func bytearray_marshalFull(ba: ByteArray) -> MarshalledBytes;

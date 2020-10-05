@@ -3,9 +3,8 @@
 //
 
 use accounts::AccountStore;
-
-import type EvmCallFrame;
-import type ByteArray;
+use evmCallStack::EvmCallFrame;
+use std::bytearray::ByteArray;
 
 import impure func evmCallStack_topFrame() -> option<EvmCallFrame>;
 import impure func evmCallStack_setTopFrameMemory(mem: ByteArray) -> bool;

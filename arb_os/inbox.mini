@@ -2,7 +2,7 @@
 // Copyright 2020, Offchain Labs, Inc. All rights reserved.
 //
 
-import type Queue;
+use std::queue::Queue;
 import func queue_new() -> Queue;
 import func queue_isEmpty(q: Queue) -> bool;
 import func queue_get(q: Queue) -> option<(Queue, any)>;
@@ -11,21 +11,21 @@ import func queue_put(q: Queue, val: any) -> Queue;
 import impure func chainParams_gotParamsMessage(sender: address, data: MarshalledBytes);
 import impure func chainParams_chainId() -> uint;
 
-import type MessageBatch;
+use messageBatch::MessageBatch;
 import func messageBatch_tryNew(msg: IncomingRequest) -> option<MessageBatch>;
 import func messageBatch_get(batch: MessageBatch) -> option<(IncomingRequest, MessageBatch)>;
 
 import impure func outputStats_endOfBlock(blockNum: uint, timestamp: uint);
 
-import type ByteArray;
-import type MarshalledBytes;
+use std::bytearray::ByteArray;
+use std::bytearray::MarshalledBytes;
 import func marshalledBytes_firstByte(mb: MarshalledBytes) -> uint;
 import func marshalledBytes_hash(mb: MarshalledBytes) -> bytes32;
 import func bytearray_unmarshalBytes(mb: MarshalledBytes) -> ByteArray;
 import func bytearray_new(capacityHint: uint) -> ByteArray;
 import func bytearray_get256(ba: ByteArray, offset: uint) -> uint;
 
-import type ByteStream;
+use std::bytestream::ByteStream;
 import func bytestream_new(ba: ByteArray) -> ByteStream;
 import func bytestream_getByte(bs: ByteStream) -> option<(ByteStream, uint)>;
 import func bytestream_get256(bs: ByteStream) -> option<(ByteStream, uint)>;

@@ -2,10 +2,10 @@
 // Copyright 2020, Offchain Labs, Inc. All rights reserved.
 //
 
-import type AccountStore;
-import type Account;
-import type ByteArray;
-import type IncomingRequest;
+use accounts::AccountStore;
+use accounts::Account;
+use std::bytearray::ByteArray;
+use inbox::IncomingRequest;
 
 import impure func getGlobalAccountStore() -> AccountStore;
 import impure func setGlobalAccountStore(acctStore: AccountStore);

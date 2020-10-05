@@ -2,12 +2,12 @@
 // Copyright 2020, Offchain Labs, Inc. All rights reserved.
 //
 
-import type AccountStore;
-import type Account;
-import type ByteArray;
-import type MarshalledBytes;
-import type MessageBatch;
-import type Queue;
+use accounts::AccountStore;
+use accounts::Account;
+use std::bytearray::ByteArray;
+use std::bytearray::MarshalledBytes;
+use messageBatch::MessageBatch;
+use std::queue::Queue;
 
 import func getGlobalAccountStore() -> AccountStore;
 import func setGlobalAccountStore(acctStore: AccountStore);
