@@ -461,6 +461,7 @@ public func rlp_decodeUint(bs: ByteStream) -> option<(ByteStream, uint)> {
     // return None if end-of-stream error, or Some((updated_bs, uint_read))
     let (ubs, firstByte) = bytestream_getByte(bs)?;
     bs = ubs;
+    asm((41, firstByte),) { debugprint };
     if (firstByte <= 0x7f) {
         return Some((bs, firstByte));
     } else {
@@ -470,6 +471,7 @@ public func rlp_decodeUint(bs: ByteStream) -> option<(ByteStream, uint)> {
         while (i < length) {
             let (ubs, x) = bytestream_getByte(bs)?;
             bs = ubs;
+            asm((42, x),) { debugprint };
             ret = 256*ret + x;
             i = i+1;
         }

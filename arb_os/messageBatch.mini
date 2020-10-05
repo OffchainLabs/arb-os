@@ -20,6 +20,8 @@ import func bytestream_skipBytes(bs: ByteStream, nbytes: uint) -> option<ByteStr
 import func marshalledBytes_firstByte(mb: MarshalledBytes) -> uint;
 import func marshalledBytes_hash(mb: MarshalledBytes) -> bytes32;
 
+import func rlp_decodeUint(bs: ByteStream) -> option<(ByteStream, uint)>;
+
 
 // This structure defines an incoming request.
 // It is declared identically in inbox.mini and elsewhere.
@@ -57,7 +59,8 @@ public func messageBatch_tryNew(msg: IncomingRequest) -> option<MessageBatch> {
 
 public func messageBatch_get(batch: MessageBatch) -> option<(IncomingRequest, MessageBatch)> {
     // returns next message in the batch (and updated batch), or None if no more messages in batch
-    let (stream, l2MsgLength) = bytestream_get64(batch.stream)?;
+    let (stream, l2MsgLength) = rlp_decodeUint(batch.stream)?;
+    asm((33, l2MsgLength),) { debugprint };
     let (bs, extractedL2data) = bytestream_getN(stream, l2MsgLength)?;
     stream = bs;
 

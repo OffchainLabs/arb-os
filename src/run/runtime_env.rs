@@ -240,7 +240,9 @@ impl RuntimeEnvironment {
             wallet,
         );
         let msg_size: u64 = msg.len().try_into().unwrap();
-        batch.extend(&msg_size.to_be_bytes());
+        let rlp_encoded_len = Uint256::from_u64(msg_size).rlp_encode();
+        batch.extend(rlp_encoded_len.clone());
+        println!("batch item size {}, RLP(size).len {}, RLP-encoded: {:?}", msg_size, rlp_encoded_len.len(), rlp_encoded_len);
         batch.extend(msg);
         tx_id_bytes
     }
