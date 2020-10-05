@@ -6,19 +6,19 @@ use std::bytearray::MarshalledBytes;
 use std::bytearray::ByteArray;
 use std::bytestream::ByteStream;
 
-import func bytearray_size(ba: ByteArray) -> uint;
-import func bytearray_getByte(ba: ByteArray, offset: uint) -> uint;
-import func bytearray_get256(ba: ByteArray, offset: uint) -> uint;
-import func bytearray_setByte(ba: ByteArray, offset: uint, val: uint) -> ByteArray;
-import func bytearray_unmarshalBytes(mb: MarshalledBytes) -> ByteArray;
-import func bytearray_marshalFull(ba: ByteArray) -> MarshalledBytes;
-import func bytearray_extract(ba: ByteArray, offset: uint, nbytes: uint) -> ByteArray;
-import func bytestream_new(ba: ByteArray) -> ByteStream;
-import func bytestream_get64(bs: ByteStream) -> option<(ByteStream, uint)>;
-import func bytestream_getN(bs: ByteStream, nbytes: uint) -> option<(ByteStream, ByteArray)>;
-import func bytestream_skipBytes(bs: ByteStream, nbytes: uint) -> option<ByteStream>;
-import func marshalledBytes_firstByte(mb: MarshalledBytes) -> uint;
-import func marshalledBytes_hash(mb: MarshalledBytes) -> bytes32;
+use std::bytearray::bytearray_size;
+use std::bytearray::bytearray_getByte;
+use std::bytearray::bytearray_get256;
+use std::bytearray::bytearray_setByte;
+use std::bytearray::bytearray_unmarshalBytes;
+use std::bytearray::bytearray_marshalFull;
+use std::bytearray::bytearray_extract;
+use std::bytestream::bytestream_new;
+use std::bytestream::bytestream_get64;
+use std::bytestream::bytestream_getN;
+use std::bytestream::bytestream_skipBytes;
+use std::bytearray::marshalledBytes_firstByte;
+use std::bytearray::marshalledBytes_hash;
 
 
 // This structure defines an incoming request.

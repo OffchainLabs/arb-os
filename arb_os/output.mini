@@ -7,20 +7,20 @@ use std::bytearray::MarshalledBytes;
 use std::queue::Queue;
 use evmlogs::EvmLogs;
 
-import func bytearray_new(capacity: uint) -> ByteArray;
-import func bytearray_marshalFull(ba: ByteArray) -> MarshalledBytes;
+use std::bytearray::bytearray_new;
+use std::bytearray::bytearray_marshalFull;
 
-import func queue_get(queue: Queue) -> option<(Queue, any)>;
+use std::queue::queue_get;
 
-import func evmlogs_empty() -> EvmLogs;
-import func evmlogs_numLogs(logs: EvmLogs) -> uint;
+use evmlogs::evmlogs_empty;
+use evmlogs::evmlogs_numLogs;
 
-import impure func evmCallStack_queueMessage(message: any);
+use evmCallStack::evmCallStack_queueMessage;
 
-import impure func chainParams_speedLimitPerSecond() -> uint;
+use chainParameters::chainParams_speedLimitPerSecond;
 
-import impure func inbox_currentBlockNumber() -> uint;
-import impure func inbox_currentTimestamp() -> uint;
+use inbox::inbox_currentBlockNumber;
+use inbox::inbox_currentTimestamp;
 
 
 // This structure defines an incoming request.

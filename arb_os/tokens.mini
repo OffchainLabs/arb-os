@@ -7,21 +7,18 @@ use accounts::Account;
 use std::bytearray::ByteArray;
 use inbox::IncomingRequest;
 
-import impure func getGlobalAccountStore() -> AccountStore;
-import impure func setGlobalAccountStore(acctStore: AccountStore);
-import func accountStore_get(acctStore: AccountStore, addr: address) -> Account;
-import func accountStore_createERC20(acctStore: AccountStore, addr: address) -> option<AccountStore>;
-import func accountStore_createERC721(acctStore: AccountStore, addr: address) -> option<AccountStore>;
-import func account_isEmpty(acct: Account) -> bool;
+use accounts::getGlobalAccountStore;
+use accounts::setGlobalAccountStore;
+use accounts::accountStore_get;
+use accounts::accountStore_createERC20;
+use accounts::accountStore_createERC721;
+use accounts::account_isEmpty;
 
-import func bytearray_new(capacityHint: uint) -> ByteArray;
-import func bytearray_setByte(ba: ByteArray, offset: uint, val: uint) -> ByteArray;
-import func bytearray_set256(ba: ByteArray, offset: uint, val: uint) -> ByteArray;
+use std::bytearray::bytearray_new;
+use std::bytearray::bytearray_setByte;
+use std::bytearray::bytearray_set256;
 
-import impure func initEvmCallStack(
-    callKind: uint,
-    request: TxRequestData
-);
+use evmCallStack::initEvmCallStack;
 
 // This is duplicated from messages.mini
 type TxRequestData = struct {
