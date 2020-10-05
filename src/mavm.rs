@@ -303,6 +303,9 @@ fn calc_len(h : u8) -> usize {
 }
 
 fn hash_buf(buf: &[u8]) -> Packed {
+    if buf.len() == 0 {
+        return zero_packed(1024);
+    }
     if buf.len() == 32 {
         return normal(Uint256::from_bytes(buf).avm_hash(), 32);
     }
@@ -313,6 +316,10 @@ fn hash_buf(buf: &[u8]) -> Packed {
         return pack(&h1);
     }
     return normal(Uint256::avm_hash2(&unpack(&h1), &unpack(&h2)), buf.len());
+}
+
+pub fn hash_buffer(buf: &[u8]) -> Uint256 {
+    return unpack(&hash_buf(buf));
 }
 
 fn hash_node(buf: &mut [Buffer], sz: usize) -> Packed {
@@ -520,7 +527,6 @@ impl Buffer {
         match &self.elem {
             BufferElem::Leaf(cell) => {
                 if offset >= 1024 {
-                    println!("Large leaf");
                     let mut vec = Vec::new();
                     vec.push(Buffer::leaf(cell.clone()));
                     let empty = Rc::new(RefCell::new(Vec::new()));
@@ -541,7 +547,6 @@ impl Buffer {
                 let buf = buf_cell.borrow();
                 let idx = idx_cell.borrow();
                 if idx.len() > 16 {
-                    println!("Unsparse {}", *h);
                     let mut nbuf = Buffer::make_sparse(*h);
                     for i in 0..idx.len() {
                         nbuf = nbuf.set_byte(idx[i], buf[i]);
@@ -558,7 +563,6 @@ impl Buffer {
                 if offset >= calc_len(*h) {
                     let mut vec = Vec::new();
                     vec.push(Buffer::node(cell.clone(), *h));
-                    println!("Extend {} {}", *h, offset);
                     for _i in 1..128 {
                         vec.push(Buffer::sparse(Rc::new(RefCell::new(Vec::new())), Rc::new(RefCell::new(Vec::new())), *h));
                     }
