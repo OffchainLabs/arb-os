@@ -335,7 +335,7 @@ fn hash_node(buf: &mut [Buffer], sz: usize) -> Packed {
     return normal(Uint256::avm_hash2(&unpack(&h1), &unpack(&h2)), sz);
 }
 
-fn zero_hash(sz: usize) -> Uint256 {
+pub fn zero_hash(sz: usize) -> Uint256 {
     if sz == 32 {
         return Uint256::zero().avm_hash();
     }

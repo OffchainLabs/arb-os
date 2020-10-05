@@ -3,10 +3,29 @@
  */
 
 use crate::uint256::Uint256;
-use crate::mavm::{Buffer, hash_buffer};
+use crate::mavm::{Buffer, zero_hash};
 
 use std::convert::TryFrom;
 use rand::{thread_rng, Rng};
+
+fn hash_buffer(buf: &[u8], pack: bool) -> Uint256 {
+    if buf.len() == 0 {
+        if pack {
+            return zero_hash(32);
+        }
+        return zero_hash(1024);
+    }
+    if buf.len() == 32 {
+        return Uint256::from_bytes(buf).avm_hash();
+    }
+    let len = buf.len();
+    let h2 = hash_buffer(&buf[len/2 .. len], false);
+    if h2 == zero_hash(32) && pack {
+        return hash_buffer(&buf[0..len/2], true);
+    }
+    let h1 = hash_buffer(&buf[0..len/2], false);
+    return Uint256::avm_hash2(&h1, &h2);
+}
 
 fn hash_buffer2(vec: Vec<u8>) -> Uint256 {
     let mut buf = Buffer::empty0();
@@ -34,7 +53,7 @@ fn test_hash_test() {
     for i in 0..8*1024 {
         buf[i] = rng.gen();
     }
-    if hash_buffer(&buf) != hash_buffer2(buf.to_vec()) {
+    if hash_buffer(&buf, true) != hash_buffer2(buf.to_vec()) {
         panic!("hash mismatch");
     }
 }
