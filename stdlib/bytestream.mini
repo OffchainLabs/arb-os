@@ -111,7 +111,7 @@ public func bytestream_getN(bs: ByteStream, nbytes: uint) -> option<(ByteStream,
     }
 
     return Some((
-        bs with { currentOffset: bs.currentOffset + nbytes },
+        bs with { currentOffset: bs.currentOffset + nbytes } with { cache: None<uint> },
         bytearray_extract(bs.contents, bs.currentOffset, nbytes)
     ));
 }
