@@ -5,6 +5,7 @@
 import type ByteArray;
 import type StorageMap;
 import type BLSKey;
+import type AggregatorDecompressionState;
 
 import func bytearray_new(capacity: uint) -> ByteArray;
 import func bytearray_size(ba: ByteArray) -> uint;
@@ -23,6 +24,7 @@ type Account = struct {
     nextSeqNum: uint,
     ethBalance: uint,
     contractInfo: option<AccountContractInfo>,  // info on the contract at this address, if there is one
+    aggregatorInfo: option<AggregatorInfo>,     // info on the aggregator using this address, if there is one
 }
 
 type AccountContractInfo = struct {
@@ -30,6 +32,10 @@ type AccountContractInfo = struct {
     evmJumpTable: map<uint, impure func()>,  // maps each valid EVM jump destination to the corresponding AVM codepoint
     startCodePoint: impure func(),
     storage: StorageMap,
+}
+
+type AggregatorInfo = struct {
+    decompressionState: option<AggregatorDecompressionState>,
 }
 
 // globalAccountStore is the authoritative source of info on accounts that exist on this chain
@@ -67,7 +73,8 @@ public func pristineAccount(addr: address) -> Account {
         blsKey: None<BLSKey>,
         nextSeqNum: 0,
         ethBalance: 0,
-        contractInfo: None<AccountContractInfo>
+        contractInfo: None<AccountContractInfo>,
+        aggregatorInfo: None<AggregatorInfo>,
     };
 }
 
@@ -162,6 +169,19 @@ public func account_incrSeqNum(account: Account) -> Account {
 
 public func account_getNextSeqNum(account: Account) -> uint {
     return account.nextSeqNum;
+}
+
+public func account_getAggregatorDecompressionState(account: Account) -> option<AggregatorDecompressionState> {
+    return (account.aggregatorInfo?).decompressionState;
+}
+
+public func account_setAggregatorDecompressionState(
+    account: Account,
+    maybeState: option<AggregatorDecompressionState>,
+) -> Account {
+    return account with {
+        aggregatorInfo: Some(struct { decompressionState: maybeState })
+    };
 }
 
 public func accountStore_createAccountFromEvmCode(

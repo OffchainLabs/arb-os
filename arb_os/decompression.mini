@@ -348,3 +348,63 @@ impure func decompressTx(
     ));
 }
 
+type FunctionTableEntry = struct {
+    shiftedFuncCode: uint,
+    maxGas: uint,
+    payable: bool,
+}
+
+type AggregatorDecompressionState = struct {
+    functionTable: []FunctionTableEntry,
+}
+
+public func parseAggregatorFunctionTable(
+    maybeState: option<AggregatorDecompressionState>,
+    contents: ByteArray
+) -> option<AggregatorDecompressionState> {
+    let stream = bytestream_new(contents);
+    let (ustr, numEntries) = rlp_decodeUint(stream)?;
+    stream = ustr;
+
+    if (numEntries > 1024) {   // hard limit on table size is 1024 entries, currently
+        return None;
+    }
+    let ret = newarray<FunctionTableEntry>(numEntries);
+    let i = 0;
+    while (i < numEntries) {
+        let (ustr, val) = readFourBytesFromStream(stream)?;
+        stream = ustr;
+        let shiftedFuncCode = asm(256-32, val) uint { shl };
+        let (ustr, maxGas) = rlp_decodeUint(stream)?;
+        stream = ustr;
+        let (ustr, payableByte) = bytestream_getByte(stream)?;
+        stream = ustr;
+        ret = ret with {
+            [i] = struct {
+                shiftedFuncCode: shiftedFuncCode,
+                maxGas: maxGas,
+                payable: (payableByte != 0)
+            }
+        };
+        i = i+1;
+    }
+
+    return Some(struct { functionTable: ret });
+}
+
+func readFourBytesFromStream(stream: ByteStream) -> option<(ByteStream, uint)> {
+    let (ustr, firstByte) = bytestream_getByte(stream)?;
+    let (ustr, secondByte) = bytestream_getByte(ustr)?;
+    let (ustr, thirdByte) = bytestream_getByte(ustr)?;
+    let (ustr, fourthByte) = bytestream_getByte(ustr)?;
+
+    return Some((
+        ustr,
+        fourthByte + 256 * (
+            thirdByte + 256 * (
+                secondByte + 256 * firstByte
+            )
+        )
+    ));
+}
+
