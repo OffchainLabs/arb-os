@@ -12,6 +12,13 @@ import func bytearray_getByte(ba: ByteArray, offset: uint) -> uint;
 import func bytearray_get256(ba: ByteArray, offset: uint) -> uint;
 import func bytearray_extract(ba: ByteArray, offset: uint, nbytes: uint) -> ByteArray;
 import func bytearray_marshalFull(ba: ByteArray) -> MarshalledBytes;
+import func bytearray_copy(
+    from: ByteArray,
+    fromOffset: uint,
+    to: ByteArray,
+    toOffset: uint,
+    nbytes: uint,
+) -> ByteArray;
 
 import type ByteStream;
 import func bytestream_new(ba: ByteArray) -> ByteStream;
@@ -209,7 +216,7 @@ public impure func decompressAndVerifyEcdsaSignedTx(
     let v = bytearray_getByte(ba, sz-1);
     let body = bytearray_extract(ba, 1, sz-66);
 
-    let (_, txRequest) = decompressTx(bytestream_new(body), None<address>)?;
+    let (_, txRequest) = decompressTx(bytestream_new(body), None<address>, None<FunctionTable>)?;
 
     let seqNum = 0;
     if let Some(sn) = txRequest.seqNum {
@@ -254,7 +261,7 @@ public impure func decompressAndVerifyBlsSignedTxBatch(
     while (i < numTxs) {
         let (ustr, sender) = decompressAddress(stream)?;
         stream = ustr;
-        let (ustr, tx) = decompressTx(ustr, Some(sender))?;
+        let (ustr, tx) = decompressTx(ustr, Some(sender), None<FunctionTable>)?;
 
         let startPos = bytestream_bytesReadSoFar(stream) + 2;
         let nbytes = bytestream_bytesReadSoFar(ustr) + 2 - startPos;
@@ -284,7 +291,8 @@ public impure func decompressAndVerifyBlsSignedTxBatch(
 
 impure func decompressTx(
     stream: ByteStream,
-    maybeSender: option<address>
+    maybeSender: option<address>,
+    maybeTable: option<FunctionTable>,
 ) -> option<(ByteStream, TxRequestData)> {
     // decompress a compressed transaction, reading it from ByteStream
     // return None if insufficient data in the ByteStream
@@ -295,6 +303,23 @@ impure func decompressTx(
     // (knowing the sender lets us compress the sequence number more efficiently)
     // if we aren't given the sender address, we'll return a dummy value in that slot of the TxRequestData,
     //         and assume the caller will supply it later
+
+    let funcTableEntry = None<FunctionTableEntry>;
+    let (ustr, firstByte) = bytestream_getByte(stream)?;  // peek at first byte of stream
+    if (firstByte == 0xff) {
+        stream = ustr;   // consume the first byte
+    } else {
+        if let Some(funcTable) = maybeTable {
+            // read from beginning of stream (because we haven't set stream = ustr)
+            let (ustr, index) = rlp_decodeUint(stream)?;
+            stream = ustr;
+            if (index < len(funcTable)) {
+                funcTableEntry = Some(funcTable[index]);
+            }
+        } else {
+            stream = ustr;
+        }
+    }
 
     let sender = address(0);
     let seqNum = 0;
@@ -321,16 +346,40 @@ impure func decompressTx(
     let (ustr, gasPrice) = rlp_decodeUint(stream)?;
     stream = ustr;
 
-    let (ustr, gasLimit) = rlp_decodeUint(stream)?;
-    stream = ustr;
+    let gasLimit = 0;
+    if let Some(tableEntry) = funcTableEntry {
+        gasLimit = tableEntry.maxGas;
+    } else {
+        let (ustr, maxGas) = rlp_decodeUint(stream)?;
+        stream = ustr;
+        gasLimit = maxGas;
+    }
 
     let (ustr, toAddr) = decompressAddress(stream)?;
     stream = ustr;
 
-    let (ustr, value) = decompressTokenAmount(stream)?;
-    stream = ustr;
-
-    let calldata = bytestream_getRemainingBytes(stream);
+    let value = 0;
+    let calldata = bytearray_new(0);
+    if let Some(tableEntry) = funcTableEntry {
+        if (tableEntry.payable) {
+            let (ustr, val) = decompressTokenAmount(stream)?;
+            stream = ustr;
+            value = val;
+        }
+        calldata = bytestream_getRemainingBytes(stream);
+        calldata = bytearray_copy(
+            calldata,
+            0,
+            unsafecast<ByteArray>(tableEntry.callDataPrefix),
+            4,
+            bytearray_size(calldata),
+        );
+    } else {
+        let (ustr, val) = decompressTokenAmount(stream)?;
+        stream = ustr;
+        value = val;
+        calldata = bytestream_getRemainingBytes(stream);
+    }
 
     return Some((
         stream,
@@ -349,13 +398,15 @@ impure func decompressTx(
 }
 
 type FunctionTableEntry = struct {
-    shiftedFuncCode: uint,
+    callDataPrefix: any,    // really a ByteArray, but compiler doesn't allow array of imported type
     maxGas: uint,
     payable: bool,
 }
 
+type FunctionTable = []FunctionTableEntry
+
 type AggregatorDecompressionState = struct {
-    functionTable: []FunctionTableEntry,
+    functionTable: FunctionTable,
 }
 
 public func parseAggregatorFunctionTable(
@@ -372,16 +423,15 @@ public func parseAggregatorFunctionTable(
     let ret = newarray<FunctionTableEntry>(numEntries);
     let i = 0;
     while (i < numEntries) {
-        let (ustr, val) = readFourBytesFromStream(stream)?;
+        let (ustr, funcCode) = bytestream_getN(stream, 4)?;
         stream = ustr;
-        let shiftedFuncCode = asm(256-32, val) uint { shl };
         let (ustr, maxGas) = rlp_decodeUint(stream)?;
         stream = ustr;
         let (ustr, payableByte) = bytestream_getByte(stream)?;
         stream = ustr;
         ret = ret with {
             [i] = struct {
-                shiftedFuncCode: shiftedFuncCode,
+                callDataPrefix: funcCode,
                 maxGas: maxGas,
                 payable: (payableByte != 0)
             }
@@ -390,21 +440,5 @@ public func parseAggregatorFunctionTable(
     }
 
     return Some(struct { functionTable: ret });
-}
-
-func readFourBytesFromStream(stream: ByteStream) -> option<(ByteStream, uint)> {
-    let (ustr, firstByte) = bytestream_getByte(stream)?;
-    let (ustr, secondByte) = bytestream_getByte(ustr)?;
-    let (ustr, thirdByte) = bytestream_getByte(ustr)?;
-    let (ustr, fourthByte) = bytestream_getByte(ustr)?;
-
-    return Some((
-        ustr,
-        fourthByte + 256 * (
-            thirdByte + 256 * (
-                secondByte + 256 * firstByte
-            )
-        )
-    ));
 }
 

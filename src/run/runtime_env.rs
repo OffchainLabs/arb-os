@@ -193,7 +193,7 @@ impl RuntimeEnvironment {
         wallet: &Wallet,
     ) -> (Vec<u8>, Vec<u8>) {
         let sender = Uint256::from_bytes(wallet.address().as_bytes());
-        let mut result = vec![7u8];
+        let mut result = vec![7u8, 0xffu8];
         let seq_num = self.get_and_incr_seq_num(&sender);
         result.extend(seq_num.rlp_encode());
         result.extend(gas_price.rlp_encode());
