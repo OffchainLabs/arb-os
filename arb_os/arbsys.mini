@@ -8,39 +8,39 @@ use std::bytearray::ByteArray;
 use std::bytearray::MarshalledBytes;
 
 use evmCallStack::evmCallStack_topFrame;
-import impure func evmCallStack_setAccount(addr: address, acct: Account) -> bool;
-import impure func evmCallStack_getTopFrameMemoryOrDie() -> ByteArray;
-import impure func evmCallStack_setTopFrameMemory(mem: ByteArray) -> bool;
-import impure func evmCallStack_cloneContract(addr: address) -> option<address>;
-import func evmCallStack_callHitError(reason: uint);
+use evmCallStack::evmCallStack_setAccount;
+use evmCallStack::evmCallStack_getTopFrameMemoryOrDie;
+use evmCallStack::evmCallStack_setTopFrameMemory;
+use evmCallStack::evmCallStack_cloneContract;
+use evmCallStack::evmCallStack_callHitError;
 
-import func evmCallFrame_getCalldata(frame: EvmCallFrame) -> ByteArray;
-import func evmCallFrame_getCallvalue(frame: EvmCallFrame) -> uint;
-import func evmCallFrame_getAccount(frame: EvmCallFrame, addr: address) -> Account;
-import func evmCallFrame_runningAsAddress(frame: EvmCallFrame) -> address;
-import func evmCallFrame_runningAsAccount(frame: EvmCallFrame) -> Account;
-import func evmCallFrame_getParent(frame: EvmCallFrame) -> option<EvmCallFrame>;
-import func evmCallFrame_getCaller(frame: EvmCallFrame) -> address;
+use evmCallStack::evmCallFrame_getCalldata;
+use evmCallStack::evmCallFrame_getCallvalue;
+use evmCallStack::evmCallFrame_getAccount;
+use evmCallStack::evmCallFrame_runningAsAddress;
+use evmCallStack::evmCallFrame_runningAsAccount;
+use evmCallStack::evmCallFrame_getParent;
+use evmCallStack::evmCallFrame_getCaller;
 
-import impure func evmOp_return(memOffset: uint, memNbytes: uint);
-import impure func evmOp_revert(memOffset: uint, memNbytes: uint);
+use evmOps::evmOp_return;
+use evmOps::evmOp_revert;
 
-import func account_getAddress(acct: Account) -> address;
-import func account_getNextSeqNum(account: Account) -> uint;
-import func account_getStorageCell(account: Account, cell: uint) -> option<uint>;
-import func account_deductFromEthBalance(acct: Account, amount: uint) -> option<Account>;
+use accounts::account_getAddress;
+use accounts::account_getNextSeqNum;
+use accounts::account_getStorageCell;
+use accounts::account_deductFromEthBalance;
 
-import func bytearray_size(ba: ByteArray) -> uint;
-import func bytearray_getByte(ba: ByteArray, offset: uint) -> uint;
-import func bytearray_get256(ba: ByteArray, offset: uint) -> uint;
-import func bytearray_set256(ba: ByteArray, offset: uint, value: uint) -> ByteArray;
-import func bytearray_extract(ba: ByteArray, offset: uint, nbytes: uint) -> ByteArray;
-import func bytearray_marshalFull(ba: ByteArray) -> MarshalledBytes;
+use std::bytearray::bytearray_size;
+use std::bytearray::bytearray_getByte;
+use std::bytearray::bytearray_get256;
+use std::bytearray::bytearray_set256;
+use std::bytearray::bytearray_extract;
+use std::bytearray::bytearray_marshalFull;
 
-import impure func inbox_currentBlockNumber() -> uint;
-import impure func inbox_currentTimestamp() -> uint;
+use inbox::inbox_currentBlockNumber;
+use inbox::inbox_currentTimestamp;
 
-import impure func queueMessageForSend(msgType: uint, sender: address, data: ByteArray);
+use output::queueMessageForSend;
 
 
 public impure func arbsys_txcall() {

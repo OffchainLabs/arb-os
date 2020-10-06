@@ -10,45 +10,22 @@ use accounts::Account;
 use evmlogs::EvmLogs;
 use std::storageMap::StorageMap;
 
-import impure func getGlobalAccountStore() -> AccountStore;
-import impure func setGlobalAccountStore(acctStore: AccountStore);
-import func accountStore_get(acctStore: AccountStore, addr: address) -> Account;
-import func accountStore_set(acctStore: AccountStore, addr: address, acct: Account) -> AccountStore;
-import func accountStore_transferEthBalance(
-    acctStore: AccountStore,
-    from: address, 
-    to: address, 
-    amount: uint
-) -> option<AccountStore>;
-import func accountStore_createAccountFromEvmCode(
-    acctStore: AccountStore,
-    newAddr: address,
-    evmCode: ByteArray,
-    evmJumpTable: map<uint, impure func()>,
-    startCodePt: impure func(),
-    storageMap: StorageMap
-) -> option<AccountStore>;
-import func account_checkAndIncrSeqNum(
-    account: Account, 
-    seqNumRecvd: uint
-) -> option<Account>;
+use accounts::getGlobalAccountStore;
+use accounts::setGlobalAccountStore;
+use accounts::accountStore_get;
+use accounts::accountStore_set;
+use accounts::accountStore_transferEthBalance;
+use accounts::accountStore_createAccountFromEvmCode;
+use accounts::account_checkAndIncrSeqNum;
 import func account_fetchAndIncrSeqNum(account: Account) -> (uint, Account);
 import func account_incrSeqNum(account: Account) -> Account;
-import func account_getNextSeqNum(account: Account) -> uint;
-import func account_addToEthBalance(account: Account, addition: uint) -> Account;
+use accounts::account_getNextSeqNum;
+use accounts::account_addToEthBalance;
 import func account_getStartCodePoint(acct: Account) -> option<impure func()>;
 
-import impure func initEvmCallStack(
-    callKind: uint,
-    request: TxRequestData
-);
-import impure func initEvmCallStackForConstructor(
-    code: ByteArray,
-    evmJumpTable: map<uint, impure func()>,
-    startPoint: impure func(),
-    request: TxRequestData
-);
-import func evmCallStack_runningCodeFromAccount() -> option<Account>;
+use evmCallStack::initEvmCallStack;
+use evmCallStack::initEvmCallStackForConstructor;
+use evmCallStack::evmCallStack_runningCodeFromAccount;
 import impure func emitLog(
     l1message: IncomingRequest,
     resultCode: uint,
@@ -57,34 +34,24 @@ import impure func emitLog(
     maybeGasUsage: option<GasUsage>
 );
 
-import impure func tokens_erc20deposit(
-    tokenAddr: address,
-    payee: address,
-    amount: uint,
-    msg: IncomingRequest
-) -> option<()>;
-import impure func tokens_erc721deposit(
-    tokenAddr: address,
-    payee: address,
-    id: uint,
-    msg: IncomingRequest
-) -> option<()>;
+use tokens::tokens_erc20deposit;
+use tokens::tokens_erc721deposit;
 
-import func bytearray_new(capacity: uint) -> ByteArray;
-import func bytearray_size(ba: ByteArray) -> uint;
-import func bytearray_unmarshalBytes(mb: MarshalledBytes) -> ByteArray;
-import func bytearray_marshalFull(ba: ByteArray) -> MarshalledBytes;
-import func bytearray_extract(ba: ByteArray, offset: uint, nbytes: uint) -> ByteArray;
+use std::bytearray::bytearray_new;
+use std::bytearray::bytearray_size;
+use std::bytearray::bytearray_unmarshalBytes;
+use std::bytearray::bytearray_marshalFull;
+use std::bytearray::bytearray_extract;
 
-import func bytestream_new(ba: ByteArray) -> ByteStream;
-import func bytestream_getByte(bs: ByteStream) -> option<(ByteStream, uint)>;
-import func bytestream_get256(bs: ByteStream) -> option<(ByteStream, uint)>;
-import func bytestream_skipBytes(bs: ByteStream, nbytes: uint) -> option<ByteStream>;
-import func bytestream_getRemainingBytes(bs: ByteStream) -> ByteArray;
+use std::bytestream::bytestream_new;
+use std::bytestream::bytestream_getByte;
+use std::bytestream::bytestream_get256;
+use std::bytestream::bytestream_skipBytes;
+use std::bytestream::bytestream_getRemainingBytes;
 
-import func keccakOfRlpEncodedUintPair(ui1: uint, ui2: uint) -> bytes32;
+use std::rlp::keccakOfRlpEncodedUintPair;
 
-import func translateEvmCodeSegment(bs: ByteStream) -> option<(impure func(), map<uint, impure func()>)>;
+use codeSegment::translateEvmCodeSegment;
 
 
 // This structure defines an incoming request.
