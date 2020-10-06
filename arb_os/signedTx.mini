@@ -6,33 +6,27 @@ use std::bytearray::ByteArray;
 use std::bytestream::ByteStream;
 use std::bytearray::MarshalledBytes;
 
-import func bytearray_new(capacityHint: uint) -> ByteArray;
-import func bytearray_size(ba: ByteArray) -> uint;
-import func bytearray_getByte(ba: ByteArray, offset: uint) -> uint;
-import func bytearray_get256(ba: ByteArray, offset: uint) -> uint;
-import func bytearray_setByte(ba: ByteArray, offset: uint, val: uint) -> ByteArray;
-import func bytearray_set256(ba: ByteArray, offset: uint, val: uint) -> ByteArray;
-import func bytearray_extract(ba: ByteArray, offset: uint, nbytes: uint) -> ByteArray;
-import func bytearray_unmarshalBytes(mb: MarshalledBytes) -> ByteArray;
-import func bytearray_marshalFull(ba: ByteArray) -> MarshalledBytes;
-import func marshalledBytes_hash(mb: MarshalledBytes) -> bytes32;
-import func bytearray_copy(
-    from: ByteArray,
-    fromOffset: uint,
-    to: ByteArray,
-    toOffset: uint,
-    nbytes: uint,
-) -> ByteArray;
+use std::bytearray::bytearray_new;
+use std::bytearray::bytearray_size;
+use std::bytearray::bytearray_getByte;
+use std::bytearray::bytearray_get256;
+use std::bytearray::bytearray_setByte;
+use std::bytearray::bytearray_set256;
+use std::bytearray::bytearray_extract;
+use std::bytearray::bytearray_unmarshalBytes;
+use std::bytearray::bytearray_marshalFull;
+use std::bytearray::marshalledBytes_hash;
+use std::bytearray::bytearray_copy;
 
-import func bytestream_new(ba: ByteArray) -> ByteStream;
-import func bytestream_skipBytes(ba: ByteStream, nbytes: uint) -> option<ByteStream>;
+use std::bytestream::bytestream_new;
+use std::bytestream::bytestream_skipBytes;
 
-import func rlp_encodeAndHashMessageInfo(tx: SignedTx) -> bytes32;
-import func rlp_decodeMessageInfo(inStream: ByteStream) -> option<(ByteStream, SignedTx)>;
+use std::rlp::rlp_encodeAndHashMessageInfo;
+use std::rlp::rlp_decodeMessageInfo;
 
-import impure func chainParams_chainId() -> uint;
+use chainParameters::chainParams_chainId;
 
-import func keccak256(ba: ByteArray, offset: uint, nbytes: uint) -> bytes32;
+use std::keccak::keccak256;
 
 
 // This structure defines an incoming request.
