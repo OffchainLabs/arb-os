@@ -192,14 +192,22 @@ impl RuntimeEnvironment {
         calldata: &[u8],
         wallet: &Wallet,
     ) -> (Vec<u8>, Vec<u8>) {
+        println!("chain_id = {}", self.chain_id);
         let sender = Uint256::from_bytes(wallet.address().as_bytes());
+        println!("sender = {}", sender);
         let mut result = vec![7u8];
         let seq_num = self.get_and_incr_seq_num(&sender);
+        println!("seqnum = {}", seq_num);
         result.extend(seq_num.rlp_encode());
+        println!("gasprice = {}", gas_price);
         result.extend(gas_price.rlp_encode());
+        println!("gaslimit = {}", gas_limit);
         result.extend(gas_limit.rlp_encode());
+        println!("to_addr = {}", to_addr);
         result.extend(self.compressor.compress_address(to_addr.clone()));
+        println!("callvalue = {}", value);
         result.extend(self.compressor.compress_token_amount(value.clone()));
+        println!("calldata = {:?}", calldata.to_vec());
         result.extend(calldata);
 
         let tx_for_signing = TransactionRequest::new()
@@ -212,10 +220,12 @@ impl RuntimeEnvironment {
             .nonce(seq_num.to_u256());
         let tx = wallet.sign_transaction(tx_for_signing).unwrap();
 
+        println!("signature: r = {}, s = {}, v = {}", tx.r, tx.s, tx.v.as_u64());
         result.extend(Uint256::from_u256(&tx.r).to_bytes_be());
         result.extend(Uint256::from_u256(&tx.s).to_bytes_be());
         result.extend(vec![(tx.v.as_u64() & 0xff) as u8]);
 
+        println!("encoded result = {:?}", result);
         (result, keccak256(tx.rlp().as_ref()).to_vec())
     }
 

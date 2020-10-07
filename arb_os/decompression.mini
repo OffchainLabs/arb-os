@@ -96,8 +96,8 @@ public impure func setGlobalAddressTable(gat: IndexedAddressTable) {
 public func addressTable_new() -> IndexedAddressTable {
     return struct {
         byIndex: expandingIntArray_new(),
-        byAddress: newmap<address, uint>,
-        size: 0
+        byAddress: newmap<address, uint> with { [address(0)] = 0 },
+        size: 1
     };
 }
 
