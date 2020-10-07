@@ -330,7 +330,11 @@ pub fn compile_from_folder(
             vec![main.to_string()]
         })
         .expect("no main")];
-    output.append(&mut programs.values().cloned().collect());
+    output.append(&mut {
+        let mut out: Vec<_> = programs.values().cloned().collect();
+        out.sort_by(|module1, module2| module2.name.cmp(&module1.name));
+        out
+    });
     for Module {
         imported_funcs,
         funcs,
