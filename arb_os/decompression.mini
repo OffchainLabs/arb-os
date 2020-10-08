@@ -235,6 +235,8 @@ public impure func decompressAndVerifyEcdsaSignedTx(
         } with {
             incomingRequest: originalRequest with {
                 requestId: uint(rlp_encodeAndHashMessageInfo(tx))
+            } with {
+                sender: signer
             }
         }
     );
