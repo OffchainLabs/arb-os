@@ -419,6 +419,14 @@ pub fn test_crosscontract_call_using_batch() {
 }
 
 #[test]
+pub fn test_crosscontract_call_using_compressed_batch() {
+    match crate::evm::evm_xcontract_call_using_compressed_batch(None, false, false) {
+        Ok(result) => assert_eq!(result, true),
+        Err(e) => panic!("error {}", e),
+    }
+}
+
+#[test]
 fn test_payment_to_empty_address() {
     crate::evm::evm_payment_to_empty_address(None, false);
 }

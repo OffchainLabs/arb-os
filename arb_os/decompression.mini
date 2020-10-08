@@ -10,7 +10,9 @@ import func bytearray_new(unused: uint) -> ByteArray;
 import func bytearray_size(ba: ByteArray) -> uint;
 import func bytearray_getByte(ba: ByteArray, offset: uint) -> uint;
 import func bytearray_get256(ba: ByteArray, offset: uint) -> uint;
+import func bytearray_setByte(ba: ByteArray, offset: uint, val: uint) -> ByteArray;
 import func bytearray_extract(ba: ByteArray, offset: uint, nbytes: uint) -> ByteArray;
+import func bytearray_copy(from: ByteArray, fromOffset: uint, to: ByteArray, toOffset: uint, nbytes: uint) -> ByteArray;
 import func bytearray_marshalFull(ba: ByteArray) -> MarshalledBytes;
 
 import type ByteStream;
@@ -43,6 +45,17 @@ import func account_getNextSeqNum(account: Account) -> uint;
 
 import func rlp_decodeAddress(bs: ByteStream) -> option<(ByteStream, address)>;
 import func rlp_decodeUint(bs: ByteStream) -> option<(ByteStream, uint)>;
+import func rlp_encodeMessageInfo(
+    seqNum: uint,
+    gasPrice: uint,
+    gasLimit: uint,
+    to: address,
+    value: uint,
+    data: ByteArray,
+    v: uint,
+    r: uint,
+    s: uint
+) -> ByteArray;
 import func rlp_encodeAndHashMessageInfo(tx: SignedTx) -> bytes32;
 
 
@@ -228,15 +241,36 @@ public impure func decompressAndVerifyEcdsaSignedTx(
         s: s
     };
     let signer = recoverSigner(tx)?;
+    let encodedMessage = rlp_encodeMessageInfo(
+        tx.seqNum,
+        tx.gasPrice,
+        tx.gasLimit,
+        tx.to,
+        tx.value,
+        tx.data,
+        tx.v,
+        tx.r,
+        tx.s,
+    );
 
     return Some(
         txRequest with {
             caller: signer
         } with {
             incomingRequest: originalRequest with {
-                requestId: uint(rlp_encodeAndHashMessageInfo(tx))
+                requestId: uint(keccak256(encodedMessage, 0, bytearray_size(encodedMessage)))
             } with {
                 sender: signer
+            } with {
+                msgData: bytearray_marshalFull(
+                    bytearray_copy(
+                        encodedMessage,
+                        0,
+                        bytearray_setByte(bytearray_new(0), 0, 4),
+                        1,
+                        bytearray_size(encodedMessage)
+                    )
+                )
             }
         }
     );

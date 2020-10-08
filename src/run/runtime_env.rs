@@ -183,7 +183,7 @@ impl RuntimeEnvironment {
         (buf, keccak256(&rlp_buf).to_vec())
     }
 
-    pub fn make_compressed_and_signed_tx(
+    pub fn make_compressed_and_signed_l2_message(
         &mut self,
         gas_price: Uint256,
         gas_limit: Uint256,
@@ -247,6 +247,32 @@ impl RuntimeEnvironment {
             to_addr,
             value,
             calldata,
+            wallet,
+        );
+        let msg_size: u64 = msg.len().try_into().unwrap();
+        let rlp_encoded_len = Uint256::from_u64(msg_size).rlp_encode();
+        batch.extend(rlp_encoded_len.clone());
+        println!("batch item size {}, RLP(size).len {}, RLP-encoded: {:?}", msg_size, rlp_encoded_len.len(), rlp_encoded_len);
+        batch.extend(msg);
+        tx_id_bytes
+    }
+
+    pub fn append_compressed_and_signed_tx_message_to_batch(
+        &mut self,
+        batch: &mut Vec<u8>,
+        max_gas: Uint256,
+        gas_price_bid: Uint256,
+        to_addr: Uint256,
+        value: Uint256,
+        calldata: Vec<u8>,
+        wallet: &Wallet,
+    ) -> Vec<u8> {
+        let (msg, tx_id_bytes) = self.make_compressed_and_signed_l2_message(
+            gas_price_bid,
+            max_gas,
+            to_addr,
+            value,
+            &calldata,
             wallet,
         );
         let msg_size: u64 = msg.len().try_into().unwrap();
