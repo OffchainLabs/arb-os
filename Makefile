@@ -7,7 +7,7 @@ TEMPLATES = $(ARBOSDIR)/contractTemplates.mini
 TESTFILES = $(BUILTINDIR)/kvstest.mexe $(STDDIR)/queuetest.mexe $(BUILTINDIR)/arraytest.mexe $(BUILTINDIR)/globaltest.mexe $(STDDIR)/priorityqtest.mexe $(STDDIR)/bytearraytest.mexe $(STDDIR)/keccaktest.mexe $(STDDIR)/rlptest.mexe $(STDDIR)/storageMapTest.mexe $(BUILTINDIR)/maptest.mexe minitests/codeloadtest.mexe
 ARBOS = $(ARBOSDIR)/arbos.mexe
 
-all: $(TEMPLATES) $(TESTFILES) $(ARBOS) test
+all: $(TESTFILES) $(TEMPLATES) $(ARBOS) test
 
 $(ARBOSDIR)/contractTemplates.mini:
 	$(CARGORUN) maketemplates
