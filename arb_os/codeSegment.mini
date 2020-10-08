@@ -4,15 +4,15 @@
 
 use std::bytestream::ByteStream;
 
-import func evmCallStack_callHitError(reason: uint);
+use evmCallStack::evmCallStack_callHitError;
 
-import func bytestream_atEof(bs: ByteStream) -> bool;
-import func bytestream_bytesReadSoFar(bs: ByteStream) -> uint;
-import func bytestream_bytesRemaining(bs: ByteStream) -> uint;
-import func bytestream_truncate(bs: ByteStream, nbytes: uint) -> ByteStream;
-import func bytestream_getByte(bs: ByteStream) -> option<(ByteStream, uint)>;
-import func bytestream_get64(bs: ByteStream) -> option<(ByteStream, uint)>;
-import func bytestream_skipBytes(bs: ByteStream, nbytes: uint) -> option<ByteStream>;
+use std::bytestream::bytestream_atEof;
+use std::bytestream::bytestream_bytesReadSoFar;
+use std::bytestream::bytestream_bytesRemaining;
+use std::bytestream::bytestream_truncate;
+use std::bytestream::bytestream_getByte;
+use std::bytestream::bytestream_get64;
+use std::bytestream::bytestream_skipBytes;
 
 import func chainParams_chainId();
 import func evmOp_address();

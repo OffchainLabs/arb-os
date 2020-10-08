@@ -17,22 +17,16 @@ use accounts::accountStore_set;
 use accounts::accountStore_transferEthBalance;
 use accounts::accountStore_createAccountFromEvmCode;
 use accounts::account_checkAndIncrSeqNum;
-import func account_fetchAndIncrSeqNum(account: Account) -> (uint, Account);
-import func account_incrSeqNum(account: Account) -> Account;
+use accounts::account_fetchAndIncrSeqNum;
+use accounts::account_incrSeqNum;
 use accounts::account_getNextSeqNum;
 use accounts::account_addToEthBalance;
-import func account_getStartCodePoint(acct: Account) -> option<impure func()>;
+use accounts::account_getStartCodePoint;
 
 use evmCallStack::initEvmCallStack;
 use evmCallStack::initEvmCallStackForConstructor;
 use evmCallStack::evmCallStack_runningCodeFromAccount;
-import impure func emitLog(
-    l1message: IncomingRequest,
-    resultCode: uint,
-    maybeReturnData: option<ByteArray>,
-    maybeEvmLogs: option<EvmLogs>,
-    maybeGasUsage: option<GasUsage>
-);
+use output::emitLog;
 
 use tokens::tokens_erc20deposit;
 use tokens::tokens_erc721deposit;
