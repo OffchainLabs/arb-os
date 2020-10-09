@@ -4,7 +4,6 @@
 
 import type ByteArray;
 import type StorageMap;
-import type BLSKey;
 
 import func bytearray_new(capacity: uint) -> ByteArray;
 import func bytearray_size(ba: ByteArray) -> uint;
@@ -19,7 +18,6 @@ type AccountStore = map<address, Account>
 
 type Account = struct {
     addr: address,
-    blsKey: option<BLSKey>,
     nextSeqNum: uint,
     ethBalance: uint,
     contractInfo: option<AccountContractInfo>,  // info on the contract at this address, if there is one
@@ -64,7 +62,6 @@ public func accountStore_get(acctStore: AccountStore, addr: address) -> Account 
 public func pristineAccount(addr: address) -> Account {
     return struct {
         addr: addr,
-        blsKey: None<BLSKey>,
         nextSeqNum: 0,
         ethBalance: 0,
         contractInfo: None<AccountContractInfo>
@@ -114,16 +111,6 @@ public func account_checkAndIncrSeqNum(
 
 public func account_getAddress(account: Account) -> address {
     return account.addr;
-}
-
-public func account_getBlsKey(account: Account) -> option<BLSKey> {
-    return account.blsKey;
-}
-
-public func account_setBlsKey(account: Account, maybeKey: option<BLSKey>) -> Account {
-    return account with {
-        blsKey: maybeKey
-    };
 }
 
 public func account_getStartCodePoint(account: Account) -> option<impure func()> {
