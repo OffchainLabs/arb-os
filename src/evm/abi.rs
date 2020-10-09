@@ -227,14 +227,15 @@ impl AbiForContract {
         let this_function = self.contract.function(func_name)?;
         let calldata = this_function.encode_input(args).unwrap();
 
-        let (tx_contents, _tx_id_bytes) = machine.runtime_env.make_compressed_and_signed_l2_message(
-            Uint256::zero(),
-            Uint256::from_usize(1_000_000_000_000),
-            self.address.clone(),
-            payment,
-            &calldata,
-            wallet,
-        );
+        let (tx_contents, _tx_id_bytes) =
+            machine.runtime_env.make_compressed_and_signed_l2_message(
+                Uint256::zero(),
+                Uint256::from_usize(1_000_000_000_000),
+                self.address.clone(),
+                payment,
+                &calldata,
+                wallet,
+            );
         machine
             .runtime_env
             .insert_l2_message(sender_addr, &tx_contents, false);
@@ -294,15 +295,17 @@ impl AbiForContract {
         let this_function = self.contract.function(func_name)?;
         let calldata = this_function.encode_input(args).unwrap();
 
-        let tx_id_bytes = machine.runtime_env.append_compressed_and_signed_tx_message_to_batch(
-            batch,
-            Uint256::from_usize(1_000_000_000_000),
-            Uint256::zero(),
-            self.address.clone(),
-            payment,
-            calldata,
-            &wallet,
-        );
+        let tx_id_bytes = machine
+            .runtime_env
+            .append_compressed_and_signed_tx_message_to_batch(
+                batch,
+                Uint256::from_usize(1_000_000_000_000),
+                Uint256::zero(),
+                self.address.clone(),
+                payment,
+                calldata,
+                &wallet,
+            );
 
         Ok((Uint256::from_bytes(&tx_id_bytes)))
     }

@@ -197,7 +197,7 @@ fn test_bls() {
             panic!("{}\n{}", e.0, e.1);
         }
     }
-}   
+}
 
 #[test]
 fn test_sha256() {

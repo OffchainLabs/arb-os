@@ -220,7 +220,12 @@ impl RuntimeEnvironment {
             .nonce(seq_num.to_u256());
         let tx = wallet.sign_transaction(tx_for_signing).unwrap();
 
-        println!("signature: r = {}, s = {}, v = {}", tx.r, tx.s, tx.v.as_u64());
+        println!(
+            "signature: r = {}, s = {}, v = {}",
+            tx.r,
+            tx.s,
+            tx.v.as_u64()
+        );
         result.extend(Uint256::from_u256(&tx.r).to_bytes_be());
         result.extend(Uint256::from_u256(&tx.s).to_bytes_be());
         result.extend(vec![(tx.v.as_u64() & 0xff) as u8]);
@@ -252,7 +257,12 @@ impl RuntimeEnvironment {
         let msg_size: u64 = msg.len().try_into().unwrap();
         let rlp_encoded_len = Uint256::from_u64(msg_size).rlp_encode();
         batch.extend(rlp_encoded_len.clone());
-        println!("batch item size {}, RLP(size).len {}, RLP-encoded: {:?}", msg_size, rlp_encoded_len.len(), rlp_encoded_len);
+        println!(
+            "batch item size {}, RLP(size).len {}, RLP-encoded: {:?}",
+            msg_size,
+            rlp_encoded_len.len(),
+            rlp_encoded_len
+        );
         batch.extend(msg);
         tx_id_bytes
     }
@@ -278,7 +288,12 @@ impl RuntimeEnvironment {
         let msg_size: u64 = msg.len().try_into().unwrap();
         let rlp_encoded_len = Uint256::from_u64(msg_size).rlp_encode();
         batch.extend(rlp_encoded_len.clone());
-        println!("batch item size {}, RLP(size).len {}, RLP-encoded: {:?}", msg_size, rlp_encoded_len.len(), rlp_encoded_len);
+        println!(
+            "batch item size {}, RLP(size).len {}, RLP-encoded: {:?}",
+            msg_size,
+            rlp_encoded_len.len(),
+            rlp_encoded_len
+        );
         batch.extend(msg);
         tx_id_bytes
     }

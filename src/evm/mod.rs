@@ -330,7 +330,7 @@ pub fn evm_xcontract_call_using_compressed_batch(
             )),
             ethabi::Token::Uint(ethabi::Uint::try_from(1).unwrap()),
         ]
-            .as_ref(),
+        .as_ref(),
         &mut machine,
         Uint256::zero(),
         &wallet,
@@ -372,7 +372,6 @@ pub fn evm_xcontract_call_using_compressed_batch(
 
     Ok(true)
 }
-
 
 pub fn evm_direct_deploy_add(log_to: Option<&Path>, debug: bool) {
     let rt_env = RuntimeEnvironment::new(Uint256::from_usize(1111));
