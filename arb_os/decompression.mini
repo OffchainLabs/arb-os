@@ -178,7 +178,7 @@ public func decompressTokenAmount(bs: ByteStream) -> option<(ByteStream, uint)> 
         return Some((ustr, 0));
     }
     let (ustr, sh) = bytestream_getByte(ustr)?;
-    return Some((ustr, base * asm(sh, 10) uint { exp }));
+    return Some((ustr, base * asm(10, sh) uint { exp }));
 }
 
 // TxRequestData is declared identically in message.mini and elsewhere.
