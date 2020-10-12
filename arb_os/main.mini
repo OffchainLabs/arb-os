@@ -35,9 +35,11 @@ import type ByteStream;
 import type EvmLogs;
 import type GasUsage;
 import type StorageMap;
+import type Decompressor;
 
 import impure func errorHandler_init();
 import impure func chainParams_init();
+import impure func decompression_init();
 import impure func gasAccounting_init();
 import impure func evmCallStack_init();
 import impure func inbox_init();
@@ -121,6 +123,7 @@ type TxRequestData = struct {
 impure func main() {
     errorHandler_init();
     chainParams_init();
+    decompression_init();
     gasAccounting_init();
     evmCallStack_init();
     inbox_init();
@@ -129,7 +132,9 @@ impure func main() {
     if (initializeContractTemplates() == None<()>) {
         panic;   // don't try to run without contract templates
     }
-    
+
+    // initialize any customizations here
+
     mainRunLoop();
 }
 

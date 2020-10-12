@@ -108,7 +108,7 @@ public impure func translateSignedTx(req: IncomingRequest) -> option<TxRequestDa
     );
 }
 
-impure func recoverSigner(tx: SignedTx) -> option<address> {
+public impure func recoverSigner(tx: SignedTx) -> option<address> {
     let rlpHashForSig = rlp_encodeAndHashMessageInfo(
         tx with {
             r: 0
