@@ -13,6 +13,7 @@ import func getGlobalAccountStore() -> AccountStore;
 import func setGlobalAccountStore(acctStore: AccountStore);
 import func accountStore_get(acctStore: AccountStore, addr: address) -> Account;
 import func accountStore_set(acctStore: AccountStore, addr: address, acct: Account) -> AccountStore;
+import func account_getBalance(acct: Account) -> uint;
 import func account_addToEthBalance(acct: Account, amount: uint) -> Account;
 import func account_deductFromEthBalance(acct: Account, amount: uint) -> option<Account>;
 
@@ -120,8 +121,11 @@ public impure func gasAccounting_startTxCharges(
         )
     );
 
+    let gasUsedByOS = (~0) - asm() uint { getgas };
     gasAccountingInfo = gasAccountingInfo with {
-        gasPool: gasAccountingInfo.gasPool + int((~0) - asm() uint { getgas })
+        gasPool: gasAccountingInfo.gasPool - int(gasUsedByOS)
+    } with {
+        weiOwedToValidators: gasAccountingInfo.weiOwedToValidators + gasUsedByOS * gasAccountingConstants.BaseGasPrice
     } with {
         txState: Some(struct {
             gasInReserve: 0,
@@ -222,8 +226,11 @@ public impure func gasAccounting_resumeTxCharges(allocationRequested: uint) -> u
     if let Some(txState) = gasAccountingInfo.txState {
         let gasRegister = asm() uint { getgas };
         if (gasRegister >= asm(1, 255) uint { shl }) {
+            let gasUsedByOS = (~0) - gasRegister;
             gasAccountingInfo = gasAccountingInfo with {
-                gasPool: gasAccountingInfo.gasPool + int((~0) - gasRegister)
+                gasPool: gasAccountingInfo.gasPool + int(gasUsedByOS)
+            } with {
+                weiOwedToValidators: gasAccountingInfo.weiOwedToValidators + gasUsedByOS * gasAccountingConstants.BaseGasPrice
             };
         }
 
@@ -299,11 +306,11 @@ public impure func getNextRequestFromCongestionAuction() -> (
     option<TxRequestData>,    // if it was an L2 tx message
 ) {
     let (maybeRequest, maybeTx) = inbox_getNextUnpackedRequest();
-    let (isChargeable, blockNum, maxGas, gasBid) = getRequestGasInfo(maybeRequest, maybeTx);
+    let (isChargeable, blockNum, payer, maxGas, gasBid) = getRequestGasInfo(maybeRequest, maybeTx);
 
     if (blockNum > gasAccountingInfo.lastBlockNumSeen) {
         let blocksElapsed = blockNum - gasAccountingInfo.lastBlockNumSeen;
-        let updatedGas = gasAccountingInfo.gasPool + blocksElapsed*gasAccountingConstants.SpeedLimit;
+        let updatedGas = gasAccountingInfo.gasPool + int(blocksElapsed*gasAccountingConstants.SpeedLimit);
         if (updatedGas > gasAccountingConstants.GasPoolMax) {
             updatedGas = gasAccountingConstants.GasPoolMax;
         }
@@ -319,7 +326,7 @@ public impure func getNextRequestFromCongestionAuction() -> (
             weiToPay = gasAccountingInfo.weiOwedToValidators;
         }
         gasAccountingInfo = gasAccountingInfo with {
-            lastBlockNumSeen = blockNum
+            lastBlockNumSeen: blockNum
         } with {
             gasPool: updatedGas
         } with {
@@ -332,7 +339,46 @@ public impure func getNextRequestFromCongestionAuction() -> (
     }
 
     if (isChargeable) {
+        let minGasPrice = gasAccountingConstants.BaseGasPrice + gasAccountingInfo.weiOwedToValidators / uint(gasAccountingConstants.GasPoolMax);
+        if ( (minGasPrice > 0) && (int(maxGas) >= gasAccountingInfo.gasPool) ) {
+            return (false, maybeRequest, maybeTx);
+        }
+        if (gasBid == 0) {
+            gasBid = minGasPrice;
+        }
+
+        if (gasAccountingInfo.gasPool <= int(maxGas)) {
+            return (false, maybeRequest, maybeTx);
+        }
+        let gasPrice = gasAccountingInfo.weiPool / (uint(gasAccountingInfo.gasPool)-maxGas);
+        if (gasPrice < minGasPrice) {
+            gasPrice = minGasPrice;
+        }
+
+        let availableFunds = account_getBalance(accountStore_get(getGlobalAccountStore(), payer));
+        if (availableFunds < gasPrice*maxGas) {
+            return (false, maybeRequest, maybeTx);
+        }
+        if let Some(tx) = maybeTx {
+            return (
+                true,
+                maybeRequest,
+                Some(tx with { gasPrice: gasPrice }),
+            );
+        } else {
+            return (true, maybeRequest, maybeTx);  // shouldn't happen
+        }
     } else {
         return (true, maybeRequest, maybeTx);
     }
+}
+
+func getRequestGasInfo(maybeRequest: option<IncomingRequest>, maybeTx: option<TxRequestData>) -> (bool, uint, address, uint, uint) {
+    if let Some(req) = maybeRequest {
+        return (false, req.blockNumber, req.sender, 0, 0);
+    }
+    if let Some(tx) = maybeTx {
+        return (true, tx.incomingRequest.blockNumber, tx.incomingRequest.sender, tx.maxGas, tx.gasPrice);
+    }
+    return (true, gasAccountingInfo.lastBlockNumSeen, address(~0), 0, 0);  // shouldn't happen
 }
