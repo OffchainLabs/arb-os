@@ -79,6 +79,8 @@ public impure func gasAccounting_startTxCharges(
     // Start charging a new Tx for ArbGas usage
     // The caller should already have verified that the payer has enough funds, but we'll return None if not.
 
+    switchToChargingOS();   // call this in case we're somehow still charging a tx; ignore return value
+
     if (maxGas >= asm(255, 1) uint { shl }) {
         maxGas = asm(255, 1) uint { shl } - 1;
     }
@@ -197,9 +199,17 @@ public impure func gasAccounting_resumeTxCharges(allocationRequested: uint) -> u
     // return how much gas we actually allocated = min(requested, available)
 
     if let Some(txState) = gasAccountingInfo.txState {
+        let gasRegister = asm() uint { getgas };
+        if (gasRegister >= asm(1, 255) uint { shl }) {
+            gasAccountingInfo = gasAccountingInfo with {
+                gasUsedByOS: gasAccountingInfo.gasUsedByOS + ((~0) - gasRegister)
+            }
+        }
+
         if (allocationRequested > txState.gasInReserve) {
             allocationRequested = txState.gasInReserve;  // can't request more gas than you have
         }
+        
         gasAccountingInfo = gasAccountingInfo with {
             txState: Some(
                 txState with {
