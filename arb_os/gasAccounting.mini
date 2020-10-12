@@ -26,13 +26,24 @@ import func queue_isEmpty(q: Queue) -> bool;
 import func queue_put(q: Queue, item: any) -> Queue;
 import func queue_get(q: Queue) -> option<(Queue, any)>;
 
-import func inbox_getNextUnpackedRequest() -> (option<IncomingRequest>, option<TxRequestData>);
+import impure func inbox_getNextUnpackedRequest() -> (option<IncomingRequest>, option<TxRequestData>);
 
 
 var gasAccountingInfo: struct {
-    gasUsedByOS: uint,            // amount of gas used by OS that validators haven't yet been compensated for
+    gasPool: int,                 // amount of gas available for use (note: signed value)
+    weiPool: uint,                // pool of funds collected recently
+    weiOwedToValidators: uint,    // funds that need to be collected to reimburse validators for work already done
     weiCollectedFromTxs: uint,    // amount of currency collected from txs but not yet paid out to validators
+    weiBurned: uint,              // number of wei that have been burned
+    lastBlockNumSeen: uint,       // last L1 block number seen by this module
     txState: option<TxGasState>,  // status of currently active tx (if there is one)
+};
+
+var gasAccountingConstants: struct {
+    SpeedLimit: uint,
+    PoolDepth: uint,
+    GasPoolMax: int,
+    BaseGasPrice: uint,
 };
 
 type TxGasState = struct {
@@ -49,9 +60,19 @@ type GasUsage = struct {
 }
 
 public impure func gasAccounting_init() {
+    gasAccountingConstants = struct {
+        SpeedLimit: 15*100000000,
+        PoolDepth: 20,
+        GasPoolMax: int((15*100000000)*20),
+        BaseGasPrice: 0,
+    };
     gasAccountingInfo = struct {
-        gasUsedByOS: 0,
+        gasPool: gasAccountingConstants.GasPoolMax,
+        weiPool: 0,
+        weiOwedToValidators: 0,
         weiCollectedFromTxs: 0,
+        weiBurned: 0,
+        lastBlockNumSeen: 0,
         txState: None<TxGasState>,
     };
 }
@@ -79,7 +100,7 @@ public impure func gasAccounting_startTxCharges(
     // Start charging a new Tx for ArbGas usage
     // The caller should already have verified that the payer has enough funds, but we'll return None if not.
 
-    switchToChargingOS();   // call this in case we're somehow still charging a tx; ignore return value
+    let _ = switchToChargingOS();   // call this in case we're somehow still charging a tx; ignore return value
 
     if (maxGas >= asm(255, 1) uint { shl }) {
         maxGas = asm(255, 1) uint { shl } - 1;
@@ -100,7 +121,7 @@ public impure func gasAccounting_startTxCharges(
     );
 
     gasAccountingInfo = gasAccountingInfo with {
-        gasUsedByOS: gasAccountingInfo.gasUsedByOS + ((~0) - asm() uint { getgas })
+        gasPool: gasAccountingInfo.gasPool + int((~0) - asm() uint { getgas })
     } with {
         txState: Some(struct {
             gasInReserve: 0,
@@ -202,14 +223,14 @@ public impure func gasAccounting_resumeTxCharges(allocationRequested: uint) -> u
         let gasRegister = asm() uint { getgas };
         if (gasRegister >= asm(1, 255) uint { shl }) {
             gasAccountingInfo = gasAccountingInfo with {
-                gasUsedByOS: gasAccountingInfo.gasUsedByOS + ((~0) - gasRegister)
-            }
+                gasPool: gasAccountingInfo.gasPool + int((~0) - gasRegister)
+            };
         }
 
         if (allocationRequested > txState.gasInReserve) {
             allocationRequested = txState.gasInReserve;  // can't request more gas than you have
         }
-        
+
         gasAccountingInfo = gasAccountingInfo with {
             txState: Some(
                 txState with {
@@ -278,5 +299,40 @@ public impure func getNextRequestFromCongestionAuction() -> (
     option<TxRequestData>,    // if it was an L2 tx message
 ) {
     let (maybeRequest, maybeTx) = inbox_getNextUnpackedRequest();
-    return (true, maybeRequest, maybeTx);
+    let (isChargeable, blockNum, maxGas, gasBid) = getRequestGasInfo(maybeRequest, maybeTx);
+
+    if (blockNum > gasAccountingInfo.lastBlockNumSeen) {
+        let blocksElapsed = blockNum - gasAccountingInfo.lastBlockNumSeen;
+        let updatedGas = gasAccountingInfo.gasPool + blocksElapsed*gasAccountingConstants.SpeedLimit;
+        if (updatedGas > gasAccountingConstants.GasPoolMax) {
+            updatedGas = gasAccountingConstants.GasPoolMax;
+        }
+        let updatedWei = gasAccountingInfo.weiPool;
+        while (blocksElapsed > 0) {
+            let updatedWei = updatedWei*(gasAccountingConstants.PoolDepth-2)/gasAccountingConstants.PoolDepth;
+            blocksElapsed = blocksElapsed-1;
+        }
+        let weiToPay = gasAccountingInfo.weiPool - updatedWei;
+        let weiToBurn = 0;
+        if (weiToPay > gasAccountingInfo.weiOwedToValidators) {
+            weiToBurn = weiToPay - gasAccountingInfo.weiOwedToValidators;
+            weiToPay = gasAccountingInfo.weiOwedToValidators;
+        }
+        gasAccountingInfo = gasAccountingInfo with {
+            lastBlockNumSeen = blockNum
+        } with {
+            gasPool: updatedGas
+        } with {
+            weiPool: updatedWei
+        } with {
+            weiOwedToValidators: gasAccountingInfo.weiOwedToValidators - weiToPay
+        } with {
+            weiBurned: gasAccountingInfo.weiBurned + weiToBurn
+        };
+    }
+
+    if (isChargeable) {
+    } else {
+        return (true, maybeRequest, maybeTx);
+    }
 }
