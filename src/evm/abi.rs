@@ -282,10 +282,10 @@ impl AbiForContract {
         Ok((Uint256::from_bytes(&tx_id_bytes)))
     }
 
+    #[cfg(test)]
     pub fn add_function_call_to_compressed_batch(
         &self,
         batch: &mut Vec<u8>,
-        sender_addr: Uint256,
         func_name: &str,
         args: &[ethabi::Token],
         machine: &mut Machine,

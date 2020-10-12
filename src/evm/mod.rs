@@ -265,6 +265,7 @@ pub fn evm_xcontract_call_using_batch(
     Ok(true)
 }
 
+#[cfg(test)]
 pub fn evm_xcontract_call_using_compressed_batch(
     log_to: Option<&Path>,
     debug: bool,
@@ -313,7 +314,6 @@ pub fn evm_xcontract_call_using_compressed_batch(
     let mut batch = machine.runtime_env.new_batch();
     let tx_id_1 = pc_contract.add_function_call_to_compressed_batch(
         &mut batch,
-        my_addr.clone(),
         "deposit",
         &[],
         &mut machine,
@@ -322,7 +322,6 @@ pub fn evm_xcontract_call_using_compressed_batch(
     )?;
     let tx_id_2 = pc_contract.add_function_call_to_compressed_batch(
         &mut batch,
-        my_addr.clone(),
         "transferFib",
         vec![
             ethabi::Token::Address(ethereum_types::H160::from_slice(

@@ -192,22 +192,14 @@ impl RuntimeEnvironment {
         calldata: &[u8],
         wallet: &Wallet,
     ) -> (Vec<u8>, Vec<u8>) {
-        println!("chain_id = {}", self.chain_id);
         let sender = Uint256::from_bytes(wallet.address().as_bytes());
-        println!("sender = {}", sender);
         let mut result = vec![7u8];
         let seq_num = self.get_and_incr_seq_num(&sender);
-        println!("seqnum = {}", seq_num);
         result.extend(seq_num.rlp_encode());
-        println!("gasprice = {}", gas_price);
         result.extend(gas_price.rlp_encode());
-        println!("gaslimit = {}", gas_limit);
         result.extend(gas_limit.rlp_encode());
-        println!("to_addr = {}", to_addr);
         result.extend(self.compressor.compress_address(to_addr.clone()));
-        println!("callvalue = {}", value);
         result.extend(self.compressor.compress_token_amount(value.clone()));
-        println!("calldata = {:?}", calldata.to_vec());
         result.extend(calldata);
 
         let tx_for_signing = TransactionRequest::new()
@@ -220,17 +212,10 @@ impl RuntimeEnvironment {
             .nonce(seq_num.to_u256());
         let tx = wallet.sign_transaction(tx_for_signing).unwrap();
 
-        println!(
-            "signature: r = {}, s = {}, v = {}",
-            tx.r,
-            tx.s,
-            tx.v.as_u64()
-        );
         result.extend(Uint256::from_u256(&tx.r).to_bytes_be());
         result.extend(Uint256::from_u256(&tx.s).to_bytes_be());
         result.extend(vec![(tx.v.as_u64() & 0xff) as u8]);
 
-        println!("encoded result = {:?}", result);
         (result, keccak256(tx.rlp().as_ref()).to_vec())
     }
 
@@ -267,6 +252,7 @@ impl RuntimeEnvironment {
         tx_id_bytes
     }
 
+    #[cfg(test)]
     pub fn append_compressed_and_signed_tx_message_to_batch(
         &mut self,
         batch: &mut Vec<u8>,
@@ -288,12 +274,6 @@ impl RuntimeEnvironment {
         let msg_size: u64 = msg.len().try_into().unwrap();
         let rlp_encoded_len = Uint256::from_u64(msg_size).rlp_encode();
         batch.extend(rlp_encoded_len.clone());
-        println!(
-            "batch item size {}, RLP(size).len {}, RLP-encoded: {:?}",
-            msg_size,
-            rlp_encoded_len.len(),
-            rlp_encoded_len
-        );
         batch.extend(msg);
         tx_id_bytes
     }
@@ -413,6 +393,10 @@ impl RuntimeEnvironment {
     }
 }
 
+
+// TxCompressor assumes that all client traffic uses it.
+// For example, it assumes nobody else affects ArbOS's address compression table.
+// This is fine for testing but wouldn't work in a less controlled setting.
 #[derive(Debug, Clone)]
 pub struct TxCompressor {
     address_map: HashMap<Vec<u8>, Vec<u8>>,

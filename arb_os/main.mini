@@ -134,7 +134,6 @@ impure func main() {
     }
 
     // initialize any customizations here
-    // inbox_setDecompressor(someDecompressor);
 
     mainRunLoop();
 }
