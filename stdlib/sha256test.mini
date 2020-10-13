@@ -2,6 +2,10 @@
 // Copyright 2020, Offchain Labs, Inc. All rights reserved.
 //
 
+use std::sha256::foo;
+use std::bytearray::foo;
+use std::keccak::foo;
+
 import type ByteArray;
 import type MarshalledBytes;
 import type Hasher;

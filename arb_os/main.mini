@@ -2,6 +2,9 @@
 // Copyright 2020, Offchain Labs, Inc. All rights reserved.
 //
 
+use decompression::foo;
+use std::sha256::foo;
+
 use accounts::AccountStore;
 use accounts::accountStore_init;
 use accounts::getGlobalAccountStore;

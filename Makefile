@@ -4,7 +4,7 @@ BUILTINDIR = builtin
 STDDIR = stdlib
 
 TEMPLATES = $(ARBOSDIR)/contractTemplates.mini
-TESTFILES = $(BUILTINDIR)/kvstest.mexe $(STDDIR)/queuetest.mexe $(BUILTINDIR)/arraytest.mexe $(BUILTINDIR)/globaltest.mexe $(STDDIR)/priorityqtest.mexe $(STDDIR)/bytearraytest.mexe $(STDDIR)/keccaktest.mexe $(STDDIR)/rlptest.mexe $(STDDIR)/storageMapTest.mexe $(BUILTINDIR)/maptest.mexe minitests/codeloadtest.mexe
+TESTFILES = $(BUILTINDIR)/kvstest.mexe $(STDDIR)/queuetest.mexe $(BUILTINDIR)/arraytest.mexe $(BUILTINDIR)/globaltest.mexe $(STDDIR)/priorityqtest.mexe $(STDDIR)/bytearraytest.mexe $(STDDIR)/keccaktest.mexe $(STDDIR)/rlptest.mexe $(STDDIR)/storageMapTest.mexe $(BUILTINDIR)/maptest.mexe $(STDDIR)/sha256test.mexe minitests/codeloadtest.mexe
 ARBOS = $(ARBOSDIR)/arbos.mexe
 
 all: $(TESTFILES) $(TEMPLATES) $(ARBOS) test
@@ -24,14 +24,14 @@ $(BUILTINDIR)/arraytest.mexe: $(BUILTINDIR)/arraytest.mini
 $(BUILTINDIR)/globaltest.mexe: $(BUILTINDIR)/globaltest.mini
 	$(CARGORUN) compile $(BUILTINDIR)/globaltest.mini -o $(BUILTINDIR)/globaltest.mexe
 
-$(STDDIR)/priorityqtest.mexe: $(STDDIR)/priorityqtest.mini $(STDLIB)
-	$(CARGORUN) compile $(STDDIR)/priorityqtest.mini $(STDLIB) -o $(STDDIR)/priorityqtest.mexe
+$(STDDIR)/priorityqtest.mexe: $(STDDIR)/priorityqtest.mini
+	$(CARGORUN) compile $(STDDIR)/priorityqtest.mini -o $(STDDIR)/priorityqtest.mexe
 
-$(STDDIR)/storageMapTest.mexe: $(STDDIR)/storageMapTest.mini $(STDLIB)
-	$(CARGORUN) compile $(STDDIR)/storageMapTest.mini $(STDLIB) -o $(STDDIR)/storageMapTest.mexe
+$(STDDIR)/storageMapTest.mexe: $(STDDIR)/storageMapTest.mini
+	$(CARGORUN) compile $(STDDIR)/storageMapTest.mini -o $(STDDIR)/storageMapTest.mexe
 
-$(STDDIR)/bytearraytest.mexe: $(STDDIR)/bytearraytest.mini $(STDLIB)
-	$(CARGORUN) compile $(STDDIR)/bytearraytest.mini $(STDLIB) -o $(STDDIR)/bytearraytest.mexe
+$(STDDIR)/bytearraytest.mexe: $(STDDIR)/bytearraytest.mini
+	$(CARGORUN) compile $(STDDIR)/bytearraytest.mini -o $(STDDIR)/bytearraytest.mexe
 
 minitests/codeloadtest.mexe: minitests/codeloadtest.mini
 	$(CARGORUN) compile minitests/codeloadtest.mini -o minitests/codeloadtest.mexe
@@ -39,11 +39,11 @@ minitests/codeloadtest.mexe: minitests/codeloadtest.mini
 $(STDDIR)/keccaktest.mexe: $(STDDIR)/keccaktest.mini
 	$(CARGORUN) compile $(STDDIR)/keccaktest.mini $(STDDIR)/keccak.mao $(STDDIR)/bytearray.mao $(STDDIR)/expandingIntArray.mao -o $(STDDIR)/keccaktest.mexe
 
-$(STDDIR)/sha256test.mexe: $(BUILTINMAOS) $(STDDIR)/sha256test.mini $(STDDIR)/sha256.mao $(STDDIR)/bytearray.mao
-	$(CARGORUN) compile $(STDDIR)/sha256test.mini $(STDDIR)/sha256.mao $(STDDIR)/bytearray.mao $(STDDIR)/expandingIntArray.mao -o $(STDDIR)/sha256test.mexe
+$(STDDIR)/sha256test.mexe: $(STDDIR)/sha256test.mini
+	$(CARGORUN) compile $(STDDIR)/sha256test.mini -o $(STDDIR)/sha256test.mexe
 
-$(STDDIR)/rlptest.mexe: $(BUILTINMAOS) $(STDDIR)/rlptest.mini $(STDLIB)
-	$(CARGORUN) compile $(STDDIR)/rlptest.mini $(STDLIB) -o $(STDDIR)/rlptest.mexe
+$(STDDIR)/rlptest.mexe: $(BUILTINMAOS) $(STDDIR)/rlptest.mini
+	$(CARGORUN) compile $(STDDIR)/rlptest.mini -o $(STDDIR)/rlptest.mexe
 
 $(BUILTINDIR)/maptest.mexe: $(BUILTINMAOS) $(BUILTINDIR)/maptest.mini
 	$(CARGORUN) compile $(BUILTINDIR)/maptest.mini -o $(BUILTINDIR)/maptest.mexe
