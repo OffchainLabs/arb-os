@@ -10,6 +10,7 @@ use super::ast::{
     UnaryOp,
 };
 use super::{symtable::SymTable, MiniProperties};
+use crate::compile::ast::TypeTree;
 use crate::link::{ExportedFunc, Import, ImportedFunc};
 use crate::mavm::{Instruction, Label, Value};
 use crate::pos::Location;
@@ -517,7 +518,7 @@ pub fn typecheck_top_level_decls(
     string_table: StringTable,
     hm: HashMap<usize, Type>,
     checked_funcs: &mut Vec<TypeCheckedFunc>,
-    type_tree: &HashMap<(Vec<String>, usize), Type>,
+    type_tree: &TypeTree,
 ) -> Result<
     (
         Vec<ExportedFunc>,
@@ -602,7 +603,7 @@ pub fn typecheck_function<'a>(
     type_table: &'a SymTable<'a, Type>,
     global_vars: &'a HashMap<StringId, (Type, usize)>,
     func_table: &'a SymTable<'a, Type>,
-    type_tree: &HashMap<(Vec<String>, usize), Type>,
+    type_tree: &TypeTree,
 ) -> Result<TypeCheckedFunc, TypeError> {
     match fd.kind {
         FuncDeclKind::Public | FuncDeclKind::Private => {
@@ -652,7 +653,7 @@ fn typecheck_statement_sequence<'a>(
     type_table: &'a SymTable<'a, Type>,
     global_vars: &'a HashMap<StringId, (Type, usize)>,
     func_table: &SymTable<Type>,
-    type_tree: &HashMap<(Vec<String>, usize), Type>,
+    type_tree: &TypeTree,
 ) -> Result<Vec<TypeCheckedStatement>, TypeError> {
     if statements.is_empty() {
         return Ok(Vec::new());
@@ -691,7 +692,7 @@ fn typecheck_statement_sequence_with_bindings<'a>(
     global_vars: &'a HashMap<StringId, (Type, usize)>,
     func_table: &SymTable<Type>,
     bindings: &[(StringId, Type)],
-    type_tree: &HashMap<(Vec<String>, usize), Type>,
+    type_tree: &TypeTree,
 ) -> Result<Vec<TypeCheckedStatement>, TypeError> {
     if bindings.is_empty() {
         typecheck_statement_sequence(
@@ -730,7 +731,7 @@ fn typecheck_statement<'a>(
     type_table: &'a SymTable<'a, Type>,
     global_vars: &'a HashMap<StringId, (Type, usize)>,
     func_table: &SymTable<Type>,
-    type_tree: &HashMap<(Vec<String>, usize), Type>,
+    type_tree: &TypeTree,
 ) -> Result<(TypeCheckedStatement, Vec<(StringId, Type)>), TypeError> {
     match statement {
         StatementKind::Noop() => Ok((TypeCheckedStatement::Noop(*loc), vec![])),
@@ -1046,7 +1047,7 @@ fn typecheck_if_arm(
     type_table: &SymTable<Type>,
     global_vars: &HashMap<StringId, (Type, usize)>,
     func_table: &SymTable<Type>,
-    type_tree: &HashMap<(Vec<String>, usize), Type>,
+    type_tree: &TypeTree,
 ) -> Result<TypeCheckedIfArm, TypeError> {
     match arm {
         IfArm::Cond(cond, body, orest, loc) => {
@@ -1115,7 +1116,7 @@ fn typecheck_expr(
     global_vars: &HashMap<StringId, (Type, usize)>,
     func_table: &SymTable<Type>,
     return_type: &Type,
-    type_tree: &HashMap<(Vec<String>, usize), Type>,
+    type_tree: &TypeTree,
 ) -> Result<TypeCheckedExpr, TypeError> {
     match expr {
         Expr::UnaryOp(op, subexpr, loc) => {
@@ -1996,7 +1997,7 @@ fn typecheck_binary_op(
     mut op: BinaryOp,
     mut tcs1: TypeCheckedExpr,
     mut tcs2: TypeCheckedExpr,
-    type_tree: &HashMap<(Vec<String>, usize), Type>,
+    type_tree: &TypeTree,
     loc: Option<Location>,
 ) -> Result<TypeCheckedExpr, TypeError> {
     if let TypeCheckedExpr::Const(Value::Int(val2), t2, _) = tcs2.clone() {

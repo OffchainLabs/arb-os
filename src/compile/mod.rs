@@ -4,6 +4,7 @@
 
 //! Contains utilities for compiling mini source code.
 
+use crate::compile::ast::TypeTree;
 use crate::link::{ExportedFunc, Import, ImportedFunc};
 use crate::mavm::Instruction;
 use crate::pos::{BytePos, Location};
@@ -449,9 +450,7 @@ fn create_program_tree(
     Ok((programs, import_map))
 }
 
-fn create_type_tree(
-    program_tree: &HashMap<Vec<String>, Module>,
-) -> HashMap<(Vec<String>, usize), Type> {
+fn create_type_tree(program_tree: &HashMap<Vec<String>, Module>) -> TypeTree {
     program_tree
         .iter()
         .map(|(path, program)| {

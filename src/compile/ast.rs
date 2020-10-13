@@ -14,6 +14,8 @@ use crate::uint256::Uint256;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
+pub type TypeTree = HashMap<(Vec<String>, usize), Type>;
+
 ///Debugging info serialized into mini executables, currently only contains a location.
 #[derive(Debug, Clone)]
 pub struct DebugInfo {
@@ -131,10 +133,7 @@ impl Type {
         }
     }
 
-    pub fn get_representation(
-        &self,
-        type_tree: &HashMap<(Vec<String>, usize), Type>,
-    ) -> Result<Self, TypeError> {
+    pub fn get_representation(&self, type_tree: &TypeTree) -> Result<Self, TypeError> {
         let mut base_type = self.clone();
         while let Type::Nominal(path, id) = base_type.clone() {
             base_type = type_tree
@@ -165,7 +164,7 @@ impl Type {
     }
 
     ///Returns true if rhs is a subtype of self, and false otherwise
-    pub fn assignable(&self, rhs: &Self, type_tree: &HashMap<(Vec<String>, usize), Type>) -> bool {
+    pub fn assignable(&self, rhs: &Self, type_tree: &TypeTree) -> bool {
         if *rhs == Type::Every {
             return true;
         }
@@ -312,11 +311,7 @@ impl Type {
 
 ///Returns true if each type in tvec2 is a subtype of the type in tvec1 at the same index, and tvec1
 /// and tvec2 have the same length.
-pub fn type_vectors_assignable(
-    tvec1: &[Type],
-    tvec2: &[Type],
-    type_tree: &HashMap<(Vec<String>, usize), Type>,
-) -> bool {
+pub fn type_vectors_assignable(tvec1: &[Type], tvec2: &[Type], type_tree: &TypeTree) -> bool {
     tvec1.len() == tvec2.len()
         && tvec1
             .iter()
@@ -325,11 +320,7 @@ pub fn type_vectors_assignable(
 }
 
 ///Identical to `type_vectors_assignable`
-pub fn arg_vectors_assignable(
-    tvec1: &[Type],
-    tvec2: &[Type],
-    type_tree: &HashMap<(Vec<String>, usize), Type>,
-) -> bool {
+pub fn arg_vectors_assignable(tvec1: &[Type], tvec2: &[Type], type_tree: &TypeTree) -> bool {
     tvec1.len() == tvec2.len()
         && tvec1
             .iter()
@@ -342,7 +333,7 @@ pub fn arg_vectors_assignable(
 pub fn field_vectors_assignable(
     tvec1: &[StructField],
     tvec2: &[StructField],
-    type_tree: &HashMap<(Vec<String>, usize), Type>,
+    type_tree: &TypeTree,
 ) -> bool {
     tvec1.len() == tvec2.len()
         && tvec1
