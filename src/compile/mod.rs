@@ -45,7 +45,7 @@ struct Module {
     named_types: HashMap<usize, Type>,
     global_vars: Vec<GlobalVarDecl>,
     string_table: StringTable,
-    hm: HashMap<usize, Type>,
+    func_table: HashMap<usize, Type>,
     name: String,
 }
 
@@ -56,7 +56,7 @@ impl Module {
         named_types: HashMap<usize, Type>,
         global_vars: Vec<GlobalVarDecl>,
         string_table: StringTable,
-        hm: HashMap<usize, Type>,
+        func_table: HashMap<usize, Type>,
         name: String,
     ) -> Self {
         Self {
@@ -65,7 +65,7 @@ impl Module {
             named_types,
             global_vars,
             string_table,
-            hm,
+            func_table,
             name,
         }
     }
@@ -266,7 +266,7 @@ pub fn compile_from_folder(
                     .transpose()
                     .map_err(|e| CompileError::new(format!("Type error: {:?}", e), None))?;
                 imp_func = program
-                    .hm
+                    .func_table
                     .get(&index)
                     .map(|decl| {
                         decl.resolve_types(&type_table, None)
@@ -293,7 +293,7 @@ pub fn compile_from_folder(
             if let Some(named_type) = named_type {
                 origin_program.named_types.insert(index, named_type);
             } else if let Some(imp_func) = imp_func {
-                origin_program.hm.insert(index, imp_func);
+                origin_program.func_table.insert(index, imp_func);
                 let imp_func_decl = imp_func_decl.ok_or(CompileError::new(
                     format!(
                         "Internal error: Imported function {} has no associated decl",
@@ -342,7 +342,7 @@ pub fn compile_from_folder(
         named_types,
         global_vars,
         string_table,
-        hm,
+        func_table: hm,
         name,
     } in output
     {

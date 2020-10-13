@@ -9,6 +9,8 @@ use std::bytearray::bytearray_get64;
 use std::bytearray::bytearray_get256;
 use std::bytearray::bytearray_extract;
 
+import func bytearray_new(unused: uint) -> ByteArray;
+
 type ByteStream = struct {
     contents: ByteArray,
     capacity: uint,
@@ -34,7 +36,11 @@ public func bytestream_bytesReadSoFar(bs: ByteStream) -> uint {
 }
 
 public func bytestream_bytesRemaining(bs: ByteStream) -> uint {
-    return bs.capacity - bs.currentOffset;
+    if (bs.currentOffset >= bs.capacity) {
+        return 0;
+    } else {
+        return bs.capacity - bs.currentOffset;
+    }
 }
 
 public func bytestream_skipBytes(bs: ByteStream, nbytes: uint) -> option<ByteStream> {
@@ -110,15 +116,19 @@ public func bytestream_getN(bs: ByteStream, nbytes: uint) -> option<(ByteStream,
     }
 
     return Some((
-        bs with { currentOffset: bs.currentOffset + nbytes },
+        bs with { currentOffset: bs.currentOffset + nbytes } with { cache: None<uint> },
         bytearray_extract(bs.contents, bs.currentOffset, nbytes)
     ));
 }
 
 public func bytestream_getRemainingBytes(bs: ByteStream) -> ByteArray {
-    return bytearray_extract(
-        bs.contents,
-        bs.currentOffset,
-        bs.capacity - bs.currentOffset
-    );
+    if (bs.capacity > bs.currentOffset) {
+        return bytearray_extract(
+            bs.contents,
+            bs.currentOffset,
+            bs.capacity - bs.currentOffset
+        );
+    } else {
+        return bytearray_new(0);
+    }
 }

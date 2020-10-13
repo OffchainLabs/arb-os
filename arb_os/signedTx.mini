@@ -49,6 +49,7 @@ type TxRequestData = struct {
     calleeAddr: address,
     value: uint,
     calldata: ByteArray,
+    nonMutating: bool,
     incomingRequest: IncomingRequest,
 }
 
@@ -91,6 +92,7 @@ public impure func translateSignedTx(req: IncomingRequest) -> option<TxRequestDa
             calleeAddr: signedTx.to,
             value: signedTx.value,
             calldata: signedTx.data,
+            nonMutating: false,
             incomingRequest: req with {
                 sender: signer
             } with {
@@ -100,7 +102,7 @@ public impure func translateSignedTx(req: IncomingRequest) -> option<TxRequestDa
     );
 }
 
-impure func recoverSigner(tx: SignedTx) -> option<address> {
+public impure func recoverSigner(tx: SignedTx) -> option<address> {
     let rlpHashForSig = rlp_encodeAndHashMessageInfo(
         tx with {
             r: 0

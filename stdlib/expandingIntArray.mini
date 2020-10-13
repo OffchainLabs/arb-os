@@ -19,6 +19,10 @@ public func expandingIntArray_new() -> ExpandingIntArray {
     };
 }
 
+public func expandingIntArray_size(arr: ExpandingIntArray) -> uint {
+    return arr.size;
+}
+
 public func expandingIntArray_get(arr: ExpandingIntArray, index: uint) -> uint {
     if (index >= arr.size) {
         return 0;

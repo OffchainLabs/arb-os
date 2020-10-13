@@ -46,7 +46,54 @@ use std::queue::foo;
 use std::rlp::foo;
 use std::stack::foo;
 use std::storageMap::StorageMap;
+use std::storageMap::foo;
 
+import type AccountStore;
+import type MarshalledBytes;
+import type ByteArray;
+import type ByteStream;
+import type EvmLogs;
+import type GasUsage;
+import type StorageMap;
+import type Decompressor;
+
+import impure func errorHandler_init();
+import impure func chainParams_init();
+import impure func decompression_init();
+import impure func gasAccounting_init();
+import impure func evmCallStack_init();
+import impure func inbox_init();
+import impure func accountStore_init();
+import impure func precompiles_init(acctStore: AccountStore) -> option<AccountStore>;
+import impure func txReceipts_init();
+
+import impure func getGlobalAccountStore() -> AccountStore;
+import impure func setGlobalAccountStore(acctStore: AccountStore);
+import func accountStore_createAccountFromEvmCode(
+    store: AccountStore,
+    newAddr: address,
+    code: ByteArray,
+    evmJumpTable: map<uint, impure func()>,
+    initCodePt: impure func(),
+    storageMap: StorageMap
+) -> option<AccountStore>;
+import impure func translateEvmCodeSegment(
+    bs: ByteStream
+) -> option<(impure func(), map<uint, impure func()>)>;
+import func bytearray_new(capacityHint: uint) -> ByteArray;
+import func bytearray_unmarshalBytes(mb: MarshalledBytes) -> ByteArray;
+import func bytestream_new(ba: ByteArray) -> ByteStream;
+import func getErc20code() -> MarshalledBytes;
+import func getErc721code() -> MarshalledBytes;
+import func getArbInfoCode() -> MarshalledBytes;
+import func getErc20address() -> address;
+import func getErc721address() -> address;
+import func getArbInfoAddress() -> address;
+import func getErc20storage() -> StorageMap;
+import func getErc721storage() -> StorageMap;
+import func getArbInfoStorage() -> StorageMap;
+
+import impure func inbox_get() -> IncomingRequest;
 use gasAccounting::getNextRequestFromCongestionAuction;
 use messages::handleL1Request; // return None if message format error; Some(()) if other error; if no error, never return
 use messages::handleL2Request; // return None if message format error; Some(()) if other error; if no error, never return
@@ -73,6 +120,7 @@ type TxRequestData = struct {
     calleeAddr: address,
     value: uint,
     calldata: ByteArray,
+    nonMutating: bool,
     incomingRequest: IncomingRequest,
 }
 
@@ -80,6 +128,7 @@ type TxRequestData = struct {
 impure func main() {
     errorHandler_init();
     chainParams_init();
+    decompression_init();
     gasAccounting_init();
     evmCallStack_init();
     inbox_init();
@@ -88,7 +137,9 @@ impure func main() {
     if (initializeContractTemplates() == None<()>) {
         panic;   // don't try to run without contract templates
     }
-    
+
+    // initialize any customizations here
+
     mainRunLoop();
 }
 

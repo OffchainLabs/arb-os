@@ -7,6 +7,10 @@ use std::queue::queue_new;
 use std::queue::queue_isEmpty;
 use std::queue::queue_get;
 use std::queue::queue_put;
+import type QueueStack;
+import func queuestack_new() -> QueueStack;
+import func queuestack_push(qs: QueueStack, q: Queue) -> QueueStack;
+import func queuestack_get(qs: QueueStack) -> option<(QueueStack, any)>;
 
 use chainParameters::chainParams_gotParamsMessage;
 use chainParameters::chainParams_chainId;
@@ -30,9 +34,13 @@ use std::bytestream::bytestream_new;
 use std::bytestream::bytestream_getByte;
 use std::bytestream::bytestream_get256;
 use std::bytestream::bytestream_getRemainingBytes;
+import func bytestream_skipBytes(bs: ByteStream, nbytes: uint) -> option<ByteStream>;
+
+import impure func decompressAndVerifyEcdsaSignedTx(ba: ByteArray, req: IncomingRequest) -> option<TxRequestData>;
 
 use signedTx::hashUnsignedL2messageInfo;
 use signedTx::translateSignedTx;
+
 
 type Inbox = struct {
     queue: Queue,     // Queue of messages that haven't yet been retrieved from the inbox
@@ -42,7 +50,10 @@ type Inbox = struct {
 }
 
 var globalInbox: Inbox;
-var globalQueueFromBatch: Queue;
+var globalInputQueue: struct {
+    txQ: Queue,
+    batchQ: QueueStack,
+};
 
 public impure func inbox_init() {
     globalInbox = struct {
@@ -51,7 +62,10 @@ public impure func inbox_init() {
         timestamp: 0,
         needToPeek: false,   // don't peek before the first message
     };
-    globalQueueFromBatch = queue_new();
+    globalInputQueue = struct {
+        txQ: queue_new(),
+        batchQ: queuestack_new()
+    };
 }
 
 public impure func inbox_get() -> IncomingRequest {
@@ -158,6 +172,7 @@ type TxRequestData = struct {
     calleeAddr: address,
     value: uint,
     calldata: ByteArray,
+    nonMutating: bool,
     incomingRequest: IncomingRequest,
 }
 
@@ -167,9 +182,18 @@ public impure func inbox_getNextUnpackedRequest() -> (
 ) {
     let msg = unsafecast<IncomingRequest>(());   // value will be re-initialized before use
     loop {
-        if let Some(res) = queue_get(globalQueueFromBatch) {
+        if let Some(res) = queue_get(globalInputQueue.txQ) {
+            let (newQ, tx) = res;
+            globalInputQueue = globalInputQueue with {
+                txQ: newQ
+            };
+            return (None<IncomingRequest>, Some(unsafecast<TxRequestData>(tx)));
+        }
+        if let Some(res) = queuestack_get(globalInputQueue.batchQ) {
             let (newQ, rawMsg) = res;
-            globalQueueFromBatch = newQ;
+            globalInputQueue = globalInputQueue with {
+                batchQ: newQ
+            };
             msg = unsafecast<IncomingRequest>(rawMsg);
         } else {
             msg = inbox_get();
@@ -178,7 +202,7 @@ public impure func inbox_getNextUnpackedRequest() -> (
         if let Some(batch) = messageBatch_tryNew(msg) {
             // it's a batch message, so unpack its components and queue them
             let moreToDo = true;
-            let queue = globalQueueFromBatch;
+            let queue = queue_new();
             while (moreToDo) {
                 if let Some(res) = messageBatch_get(batch) {
                     let (newMsg, restOfBatch) = res;
@@ -188,7 +212,9 @@ public impure func inbox_getNextUnpackedRequest() -> (
                     moreToDo = false;
                 }
             }
-            globalQueueFromBatch = queue;
+            globalInputQueue = globalInputQueue with {
+                batchQ: queuestack_push(globalInputQueue.batchQ, queue)
+            };
         } else {
             // it's not a batch, so process it immediately
             // get its maxGas amount -- for now, set the limit high, unless caller asked for less
@@ -204,6 +230,15 @@ public impure func inbox_getNextUnpackedRequest() -> (
                 } elseif (firstByte == 4) {
                     // it's a signed tx; verify sig and then process request or discard
                     if let Some(txRequest) = translateSignedTx(msg) {
+                        return (None<IncomingRequest>, Some(txRequest));
+                    }
+                    // else signature was invalid, ignore msg and execute loop again to get another
+                } elseif (firstByte == 7) {
+                    // it's a single message with compressed headers
+                    if let Some(txRequest) = decompressAndVerifyEcdsaSignedTx(
+                        bytearray_unmarshalBytes(msg.msgData),
+                        msg
+                    ) {
                         return (None<IncomingRequest>, Some(txRequest));
                     }
                     // else signature was invalid, ignore msg and execute loop again to get another
@@ -226,7 +261,7 @@ public impure func inbox_getNextUnpackedRequest() -> (
     }
 }
 
-func translateUnsignedTx(request: IncomingRequest) -> option<TxRequestData> {
+impure func translateUnsignedTx(request: IncomingRequest) -> option<TxRequestData> {
     let inStream = bytestream_new(bytearray_unmarshalBytes(request.msgData));
     let (us, subtype) = bytestream_getByte(inStream)?;
     inStream = us;
@@ -247,12 +282,8 @@ func translateUnsignedTx(request: IncomingRequest) -> option<TxRequestData> {
     let (us, destAddrAsUint) = bytestream_get256(inStream)?;
     inStream = us;
 
-    let value = 0;
-    if (subtype != 2) {
-        let (us, val) = bytestream_get256(inStream)?;
-        inStream = us;
-        value = val;
-    }
+    let (us, value) = bytestream_get256(inStream)?;
+    inStream = us;
 
     let calldata = bytestream_getRemainingBytes(inStream);
 
@@ -276,6 +307,7 @@ func translateUnsignedTx(request: IncomingRequest) -> option<TxRequestData> {
             calleeAddr: address(destAddrAsUint),
             value: value,
             calldata: calldata,
+            nonMutating: (subtype == 2),
             incomingRequest: request
         }
     );
@@ -304,6 +336,7 @@ func translateBuddyDeployTx(request: IncomingRequest) -> option<TxRequestData> {
             calleeAddr: address(0),
             value: value,
             calldata: calldata,
+            nonMutating: false,
             incomingRequest: request
         }
     );

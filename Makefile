@@ -39,7 +39,10 @@ minitests/codeloadtest.mexe: minitests/codeloadtest.mini
 $(STDDIR)/keccaktest.mexe: $(STDDIR)/keccaktest.mini
 	$(CARGORUN) compile $(STDDIR)/keccaktest.mini $(STDDIR)/keccak.mao $(STDDIR)/bytearray.mao $(STDDIR)/expandingIntArray.mao -o $(STDDIR)/keccaktest.mexe
 
-$(STDDIR)/rlptest.mexe: $(STDDIR)/rlptest.mini $(STDLIB)
+$(STDDIR)/sha256test.mexe: $(BUILTINMAOS) $(STDDIR)/sha256test.mini $(STDDIR)/sha256.mao $(STDDIR)/bytearray.mao
+	$(CARGORUN) compile $(STDDIR)/sha256test.mini $(STDDIR)/sha256.mao $(STDDIR)/bytearray.mao $(STDDIR)/expandingIntArray.mao -o $(STDDIR)/sha256test.mexe
+
+$(STDDIR)/rlptest.mexe: $(BUILTINMAOS) $(STDDIR)/rlptest.mini $(STDLIB)
 	$(CARGORUN) compile $(STDDIR)/rlptest.mini $(STDLIB) -o $(STDDIR)/rlptest.mexe
 
 $(BUILTINDIR)/maptest.mexe: $(BUILTINMAOS) $(BUILTINDIR)/maptest.mini

@@ -29,6 +29,7 @@ type TxRequestData = struct {
     calleeAddr: address,
     value: uint,
     calldata: ByteArray,
+    nonMutating: bool,
     incomingRequest: IncomingRequest,
 }
 
@@ -79,6 +80,7 @@ public impure func tokens_erc20deposit(
             calleeAddr: tokenAddress,
             value: 0,
             calldata: calldata,
+            nonMutating: false,
             incomingRequest: fullMsg,
         }
     );  // should never return
@@ -133,6 +135,7 @@ public impure func tokens_erc721deposit(
             calleeAddr: tokenAddress,
             value: 0,
             calldata: calldata,
+            nonMutating: false,
             incomingRequest: fullMsg,
         }
     );  // should never return
