@@ -41,7 +41,7 @@ import func rlp_encodeMessageInfo(
     r: uint,
     s: uint
 ) -> ByteArray;
-import func rlp_encodeAndHashMessageInfo(tx: SignedTx) -> bytes32;
+import func rlp_encodeAndHashMessageInfoForSignature(tx: SignedTx, eip155v: option<uint>) -> bytes32;
 import func rlp_decodeMessageInfo(inStream: ByteStream) -> option<(ByteStream, SignedTx)>;
 
 
@@ -131,8 +131,8 @@ func testRlpHasher() {
     let value = uint(hash(gasLimit));
     let data = randomByteArray();
     let v = uint(hash(value));
-    let r = uint(hash(v));
-    let s = uint(hash(r));
+    let r = 0;
+    let s = 0;
 
     let oldBuf = rlp_encodeMessageInfo(
         seqNum,
@@ -148,7 +148,7 @@ func testRlpHasher() {
 
     if let Some(res) = rlp_decodeMessageInfo(bytestream_new(oldBuf)) {
         let (_, tx) = res;
-        if (keccak256(oldBuf, 0, bytearray_size(oldBuf)) != rlp_encodeAndHashMessageInfo(tx)) {
+        if (keccak256(oldBuf, 0, bytearray_size(oldBuf)) != rlp_encodeAndHashMessageInfoForSignature(tx, Some(tx.v))) {
             asm(12,) { debugprint };
             panic;
         }
@@ -157,7 +157,7 @@ func testRlpHasher() {
         panic;
     }
 
-    let newWay = rlp_encodeAndHashMessageInfo(
+    let newWay = rlp_encodeAndHashMessageInfoForSignature(
         struct {
             seqNum: seqNum,
             gasPrice: gasPrice,
@@ -168,7 +168,8 @@ func testRlpHasher() {
             v: v,
             r: r,
             s: s
-        }
+        },
+        Some(v)
     );
 
     if (keccak256(oldBuf, 0, bytearray_size(oldBuf)) != newWay) {
