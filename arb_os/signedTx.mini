@@ -27,7 +27,7 @@ import func bytearray_copy(
 import func bytestream_new(ba: ByteArray) -> ByteStream;
 import func bytestream_skipBytes(ba: ByteStream, nbytes: uint) -> option<ByteStream>;
 
-import func rlp_encodeAndHashMessageInfo(tx: SignedTx) -> bytes32;
+import func rlp_encodeAndHashMessageInfoForSignature(tx: SignedTx, eip155v: option<uint>) -> bytes32;
 import func rlp_decodeMessageInfo(inStream: ByteStream) -> option<(ByteStream, SignedTx)>;
 
 import impure func chainParams_chainId() -> uint;
@@ -109,16 +109,12 @@ public impure func translateSignedTx(req: IncomingRequest) -> option<TxRequestDa
 }
 
 public impure func recoverSigner(tx: SignedTx) -> option<address> {
-    let rlpHashForSig = rlp_encodeAndHashMessageInfo(
-        tx with {
-            r: 0
-        } with {
-            s: 0
-        } with {
-            v: chainParams_chainId()
-        }
-    );
-
+    let rlpHashForSig = bytes32(0);
+    if ( (tx.v == 27) || (tx.v == 28) ) {
+        rlpHashForSig = rlp_encodeAndHashMessageInfoForSignature(tx, None<uint>);  // non-EIP155 signature
+    } else {
+        rlpHashForSig = rlp_encodeAndHashMessageInfoForSignature(tx, Some(chainParams_chainId()));  // EIP155 signature
+    }
     let signer = asm(
         tx.r,
         tx.s,

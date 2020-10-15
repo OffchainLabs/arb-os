@@ -361,6 +361,11 @@ fn test_deploy_buddy_contract() {
 }
 
 #[test]
+fn test_non_eip155_signed_tx() {
+    crate::evm::evm_deploy_using_non_eip159_signature(None, false).unwrap();
+}
+
+#[test]
 fn test_direct_deploy_and_call_add() {
     let _log = crate::evm::evm_direct_deploy_and_call_add(None, false);
 }
