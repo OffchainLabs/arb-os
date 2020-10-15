@@ -174,6 +174,14 @@ impl AbiForContract {
         Some(self.address.clone())
     }
 
+    #[cfg(test)]
+    pub fn bind_interface_to_address(&mut self, addr: Uint256) {
+        // assume that self is an interface
+        // bind self to a contract at addr, assuming it implements the interface
+        // after this, self.call_function etc will work as expected
+        self.address = addr;
+    }
+
     pub fn get_function(&self, name: &str) -> Result<&ethabi::Function, ethabi::Error> {
         self.contract.function(name)
     }
