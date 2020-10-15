@@ -79,6 +79,7 @@ import func parseAggregatorFunctionTable(
     data: ByteArray,
 ) -> option<AggregatorDecompressionState>;
 
+
 public impure func arbsys_txcall() {
     if let Some(topFrame) = evmCallStack_topFrame() {
         let calldata = evmCallFrame_getCalldata(topFrame);
@@ -398,3 +399,4 @@ impure func arbsys_uploadFunctionTable(topFrame: EvmCallFrame, calldata: ByteArr
         evmOp_revert(0, 0);
     }
 }
+
