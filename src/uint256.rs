@@ -78,7 +78,7 @@ impl Uint256 {
         }
     }
 
-    pub fn _from_u256(x: &U256) -> Self {
+    pub fn from_u256(x: &U256) -> Self {
         let mut b: Vec<u8> = vec![0u8; 32];
         x.to_big_endian(&mut b);
         Uint256::from_bytes(&b)
@@ -143,29 +143,28 @@ impl Uint256 {
         }
     }
 
-    pub fn to_u32_digits_be(&self) -> [u32;8] {
-        let mut ret = [0u32;8];
+    pub fn to_u32_digits_be(&self) -> [u32; 8] {
+        let mut ret = [0u32; 8];
         let v = self.val.to_u32_digits();
-        for (i,vv) in v.iter().enumerate() {
-            ret[7-i] = *vv;
+        for (i, vv) in v.iter().enumerate() {
+            ret[7 - i] = *vv;
         }
         ret
     }
 
     pub fn to_u32_digits_be_2(&self, ui2: &Self) -> [u32; 16] {
-        let mut ret = [0u32;16];
+        let mut ret = [0u32; 16];
         let v = self.val.to_u32_digits();
-        for (i,vv) in v.iter().enumerate() {
-            ret[7-i] = *vv;
+        for (i, vv) in v.iter().enumerate() {
+            ret[7 - i] = *vv;
         }
         let v = ui2.val.to_u32_digits();
-        for (i,vv) in v.iter().enumerate() {
-            ret[15-i] = *vv;
+        for (i, vv) in v.iter().enumerate() {
+            ret[15 - i] = *vv;
         }
         ret
     }
 
-    #[cfg(test)]
     pub fn rlp_encode(&self) -> Vec<u8> {
         // RLP encode the minimal byte representation of self
         if (self.is_zero()) {
@@ -452,5 +451,12 @@ impl<'de> Deserialize<'de> for Uint256 {
 #[test]
 fn test_uint256_u32_digit_order() {
     assert_eq!(Uint256::from_u64(1).to_u32_digits_be()[7], 1u32);
-    assert_eq!(Uint256::from_string_hex("6a09e667bb67ae853c6ef372a54ff53a510e527f9b05688c1f83d9ab5be0cd19").unwrap().to_u32_digits_be()[0], 0x6a09e667u32);
+    assert_eq!(
+        Uint256::from_string_hex(
+            "6a09e667bb67ae853c6ef372a54ff53a510e527f9b05688c1f83d9ab5be0cd19"
+        )
+        .unwrap()
+        .to_u32_digits_be()[0],
+        0x6a09e667u32
+    );
 }
