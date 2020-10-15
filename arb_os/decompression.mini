@@ -328,3 +328,7 @@ impure func decompressTx(
     ));
 }
 
+func dumbHack() {
+    let x = 4;
+    return;
+}
