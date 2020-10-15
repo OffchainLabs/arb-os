@@ -227,6 +227,9 @@ public impure func decompressAndVerifyEcdsaSignedTx(
         seqNum = sn;
     }
 
+    if (v < 2) {
+        v = 35 + 2 * chainParams_chainId() + (1 - (v % 2));
+    }
     let tx = struct {
         seqNum: seqNum,
         gasPrice: txRequest.gasPrice,
@@ -234,7 +237,7 @@ public impure func decompressAndVerifyEcdsaSignedTx(
         to: txRequest.calleeAddr,
         value: txRequest.value,
         data: txRequest.calldata,
-        v: 35 + 2 * chainParams_chainId() + (1 - (v % 2)),
+        v: v,
         r: r,
         s: s
     };

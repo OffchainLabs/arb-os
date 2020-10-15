@@ -109,7 +109,12 @@ public impure func translateSignedTx(req: IncomingRequest) -> option<TxRequestDa
 }
 
 public impure func recoverSigner(tx: SignedTx) -> option<address> {
-    let rlpHashForSig = rlp_encodeAndHashMessageInfoForSignature(tx, Some(chainParams_chainId()));
+    let rlpHashForSig = bytes32(0);
+    if ( (tx.v == 27) || (tx.v == 28) ) {
+        rlpHashForSig = rlp_encodeAndHashMessageInfoForSignature(tx, None<uint>);  // non-EIP155 signature
+    } else {
+        rlpHashForSig = rlp_encodeAndHashMessageInfoForSignature(tx, Some(chainParams_chainId()));  // EIP155 signature
+    }
     let signer = asm(
         tx.r,
         tx.s,
