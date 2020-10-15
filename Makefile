@@ -19,7 +19,7 @@ benchmarks: arbos
 
 TESTEXES = $(BUILTINDIR)/kvstest.mexe $(STDDIR)/queuetest.mexe $(BUILTINDIR)/arraytest.mexe $(BUILTINDIR)/globaltest.mexe $(STDDIR)/priorityqtest.mexe $(STDDIR)/bytearraytest.mexe $(STDDIR)/keccaktest.mexe $(STDDIR)/sha256test.mexe $(STDDIR)/rlptest.mexe $(STDDIR)/storageMapTest.mexe $(BUILTINDIR)/maptest.mexe minitests/codeloadtest.mexe
 BUILTINMAOS = $(BUILTINDIR)/array.mao $(BUILTINDIR)/kvs.mao
-STDLIBMAOS = $(STDDIR)/bytearray.mao $(STDDIR)/priorityq.mao $(STDDIR)/random.mao $(STDDIR)/queue.mao $(STDDIR)/keccak.mao $(STDDIR)/sha256.mao $(STDDIR)/bytestream.mao $(STDDIR)/stack.mao $(STDDIR)/rlp.mao $(STDDIR)/storageMap.mao $(STDDIR)/expandingIntArray.mao
+STDLIBMAOS = $(STDDIR)/bytearray.mao $(STDDIR)/priorityq.mao $(STDDIR)/random.mao $(STDDIR)/queue.mao $(STDDIR)/keccak.mao $(STDDIR)/sha256.mao $(STDDIR)/bytestream.mao $(STDDIR)/stack.mao $(STDDIR)/rlp.mao $(STDDIR)/storageMap.mao $(STDDIR)/expandingIntArray.mao $(STDDIR)/bls.mao
 STDLIB = $(STDLIBMAOS)
 
 all: $(TESTEXES) arbos
@@ -89,6 +89,9 @@ $(STDDIR)/storageMap.mao: $(STDDIR)/storageMap.mini
 
 $(STDDIR)/expandingIntArray.mao: $(STDDIR)/expandingIntArray.mini
 	$(CARGORUN) compile $(STDDIR)/expandingIntArray.mini -c -o $(STDDIR)/expandingIntArray.mao
+
+$(STDDIR)/bls.mao: $(STDDIR)/bls.mini
+	$(CARGORUN) compile $(STDDIR)/bls.mini -c -o $(STDDIR)/bls.mao
 
 $(BUILTINDIR)/maptest.mexe: $(BUILTINMAOS) $(BUILTINDIR)/maptest.mini
 	$(CARGORUN) compile $(BUILTINDIR)/maptest.mini -o $(BUILTINDIR)/maptest.mexe
