@@ -13,24 +13,21 @@ interface ArbSys {
     // Send given amount of Eth to dest with from sender.
     function withdrawEth(address dest) external payable;
 
-    // Return block when current message was posted on-chain
-    function currentMessageBlock() external view returns(uint);
-
-    // Return timestamp when current message was posted on-chain
-    function currentMessageTimestamp() external view returns(uint);
-
-    // Return upper bound on the on-chain block number
-    function blockUpperBound() external view returns(uint);
-
-    // Return upper bound on the on-chain timestamp
-    function timestampUpperBound() external view returns(uint);
-
     // Return the number of transactions issued by the given external account
     // or the account sequence number of the given contract
     function getTransactionCount(address account) external view returns(uint256);
 
-    // Generate a new contract with the same code as the given contract
-    // This function returns the address of the new contract
-    // This is currently the only way to create new contracts in a compiled rollup instance
-    function cloneContract(address account) external returns(address);
+    function addressTable_lookupAddress(address addr, bool allocIfMissing) external returns(uint);
+
+    function addressTable_lookupIndex(uint index) external returns(address);
+
+    function addressTable_decompress(bytes calldata buf) external returns(address, bool);
+
+    function addressTable_compress(address addr) external returns(bytes memory);
+
+    function registerBlsKey(uint x0, uint x1, uint y0, uint y1) external;
+
+    function getBlsPublicKey(address addr) external returns (uint, uint, uint, uint);
+
+    function uploadFunctionTable(bytes calldata buf) external;
 }

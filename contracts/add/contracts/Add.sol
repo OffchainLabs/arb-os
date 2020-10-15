@@ -16,7 +16,7 @@ contract Add {
         return add(mult(x,x), mult(y,y));
     }
 
-    function getSeqNum() public returns (uint) {
+    function getSeqNum() public view returns (uint) {
         uint256 txCount = ArbSys(address(100)).getTransactionCount(msg.sender);
         return txCount;
     }
