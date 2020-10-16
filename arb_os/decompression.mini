@@ -77,20 +77,6 @@ type IncomingRequest = struct {
     msgData: MarshalledBytes  // kind-specific data, as a marshalled bytearray
 }
 
-// A copy of this struct is defined in stdlib/rlp.mini.
-// The declaration there must remain consistent with the one here.
-type SignedTx = struct {
-    seqNum: uint,
-    gasPrice: uint,
-    gasLimit: uint,
-    to: address,
-    value: uint,
-    data: ByteArray,
-    v: uint,
-    r: uint,
-    s: uint
-}
-
 type IndexedAddressTable = struct {
     byIndex: ExpandingIntArray,
     byAddress: map<address, uint>,
@@ -483,3 +469,9 @@ public func parseAggregatorFunctionTable(
     return Some(struct { functionTable: ret });
 }
 
+//This function is necessary because there is currently bug in the compiler that will occasionally corrupt the last
+//function in a module, so including this function prevents the bug from affecting decompressTx
+func dumbHack() {
+    let x = 4;
+    return;
+}

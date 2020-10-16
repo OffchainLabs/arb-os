@@ -2,13 +2,13 @@
 // Copyright 2020, Offchain Labs, Inc. All rights reserved.
 //
 
-import type PriorityQ;
+use std::priorityq::PriorityQ;
 
-import func priorityq_new() -> PriorityQ;
-import func priorityq_isEmpty(pq: PriorityQ) -> bool;
-import func priorityq_insert(pq: PriorityQ, item: any, priority: uint) -> PriorityQ;
-import func priorityq_get(pq: PriorityQ) -> option<(any, PriorityQ)>;
-import func priorityq_printAsArray(pq: PriorityQ) -> uint;
+use std::priorityq::priorityq_new;
+use std::priorityq::priorityq_isEmpty;
+use std::priorityq::priorityq_insert;
+use std::priorityq::priorityq_get;
+use std::priorityq::priorityq_printAsArray;
 
 
 impure func main() {

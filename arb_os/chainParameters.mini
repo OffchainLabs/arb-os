@@ -2,13 +2,12 @@
 // Copyright 2020, Offchain Labs, Inc. All rights reserved.
 //
 
-import type ByteArray;
-import type MarshalledBytes;
+use evmCallStack::evmCallStack_callHitError;
 
-import func bytearray_unmarshalBytes(mb: MarshalledBytes) -> ByteArray;
-import func bytearray_get256(ba: ByteArray, offset: uint) -> uint;
-
-import func evmCallStack_callHitError(reason: uint);
+use std::bytearray::ByteArray;
+use std::bytearray::MarshalledBytes;
+use std::bytearray::bytearray_unmarshalBytes;
+use std::bytearray::bytearray_get256;
 
 type ChainParams = struct {
     chainAddress: address,
