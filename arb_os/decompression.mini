@@ -328,6 +328,8 @@ impure func decompressTx(
     ));
 }
 
+//This function is necessary because there is currently bug in the compiler that will occasionally corrupt the last
+//function in a module, so including this function prevents the bug from affecting decompressTx
 func dumbHack() {
     let x = 4;
     return;

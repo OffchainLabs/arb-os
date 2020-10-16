@@ -14,6 +14,8 @@ use crate::uint256::Uint256;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
+///This is a map of the types at a given location, with the Vec<String> representing the module path
+///and the usize representing the stringID of the type at that location.
 pub type TypeTree = HashMap<(Vec<String>, usize), Type>;
 
 ///Debugging info serialized into mini executables, currently only contains a location.
