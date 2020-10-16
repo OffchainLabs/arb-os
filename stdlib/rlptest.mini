@@ -2,54 +2,35 @@
 // Copyright 2020, Offchain Labs, Inc. All rights reserved.
 //
 
-import type ByteArray;
-import type ByteStream;
-import type MarshalledBytes;
+use std::bytearray::ByteArray;
+use std::bytestream::ByteStream;
+use std::bytearray::MarshalledBytes;
 
-import func bytearray_new(capacity: uint) -> ByteArray;
-import func bytearray_size(ba: ByteArray) -> uint;
-import func bytearray_marshalFull(ba: ByteArray) -> MarshalledBytes;
-import func bytearray_unmarshalBytes(mb: MarshalledBytes) -> ByteArray;
-import func bytearray_getByte(ba: ByteArray, offset: uint) -> uint;
-import func bytearray_set256(ba: ByteArray, offset: uint, value: uint) -> ByteArray;
+use std::bytearray::bytearray_new;
+use std::bytearray::bytearray_size;
+use std::bytearray::bytearray_marshalFull;
+use std::bytearray::bytearray_unmarshalBytes;
+use std::bytearray::bytearray_getByte;
+use std::bytearray::bytearray_set256;
 
-import func bytestream_new(ba: ByteArray) -> ByteStream;
+use std::bytestream::bytestream_new;
 
-import func keccak256(ba: ByteArray, offset: uint, nbytes: uint) -> bytes32;
+use std::keccak::keccak256;
 
-import func rlp_encodeUint(val: uint, ba: ByteArray, offset: uint) -> (ByteArray, uint);
-import func rlp_encodeAddress(addr: address, ba: ByteArray, offset: uint) -> (ByteArray, uint);
-import func rlp_encodeBytes(
-    inBytes: ByteArray, inOffset: uint, nbytes: uint,
-    outBytes: ByteArray, outOffset: uint
-) -> (ByteArray, uint);
-import func rlp_encodeList(
-    encodedItems: []ByteArray,
-    encItemsOffset: uint,
-    numEncItems: uint,
-    outBytes: ByteArray,
-    outOffset: uint,
-) -> option<(ByteArray, uint)>;
-import func rlp_encodeMessageInfo(
-    seqNum: uint,
-    gasPrice: uint,
-    gasLimit: uint,
-    to: address,
-    value: uint,
-    data: ByteArray,
-    v: uint,
-    r: uint,
-    s: uint
-) -> ByteArray;
-import func rlp_encodeAndHashMessageInfo(tx: SignedTx) -> bytes32;
-import func rlp_decodeMessageInfo(inStream: ByteStream) -> option<(ByteStream, SignedTx)>;
+use std::rlp::rlp_encodeUint;
+use std::rlp::rlp_encodeAddress;
+use std::rlp::rlp_encodeBytes;
+use std::rlp::rlp_encodeList;
+use std::rlp::rlp_encodeMessageInfo;
+use std::rlp::rlp_encodeAndHashMessageInfo;
+use std::rlp::rlp_decodeMessageInfo;
 
 
-import func rlp_decodeUint(bs: ByteStream) -> option<(ByteStream, uint)>;
-import func rlp_decodeAddress(bs: ByteStream) -> option<(ByteStream, address)>;
-import func rlp_decodeBytes(inStream: ByteStream) -> option<(ByteStream, ByteArray)>;
+use std::rlp::rlp_decodeUint;
+use std::rlp::rlp_decodeAddress;
+use std::rlp::rlp_decodeBytes;
 
-import func bytesNeededToRepresentUint(val: uint) -> uint;
+use std::rlp::bytesNeededToRepresentUint;
 
 type SignedTx = struct {
     seqNum: uint,
