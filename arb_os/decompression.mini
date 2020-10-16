@@ -2,80 +2,52 @@
 // Copyright 2020, Offchain Labs, Inc. All rights reserved.
 //
 
-import impure func chainParams_chainId() -> uint;
+use chainParameters::chainParams_chainId;
 
-import type ByteArray;
-import type MarshalledBytes;
-import func bytearray_new(unused: uint) -> ByteArray;
-import func bytearray_size(ba: ByteArray) -> uint;
-import func bytearray_getByte(ba: ByteArray, offset: uint) -> uint;
-import func bytearray_get256(ba: ByteArray, offset: uint) -> uint;
-import func bytearray_setByte(ba: ByteArray, offset: uint, val: uint) -> ByteArray;
-import func bytearray_extract(ba: ByteArray, offset: uint, nbytes: uint) -> ByteArray;
-import func bytearray_copy(from: ByteArray, fromOffset: uint, to: ByteArray, toOffset: uint, nbytes: uint) -> ByteArray;
-import func bytearray_marshalFull(ba: ByteArray) -> MarshalledBytes;
-import func bytearray_copy(
-    from: ByteArray,
-    fromOffset: uint,
-    to: ByteArray,
-    toOffset: uint,
-    nbytes: uint,
-) -> ByteArray;
+use std::bytearray::ByteArray;
+use std::bytearray::bytearray_new;
+use std::bytearray::bytearray_size;
+use std::bytearray::bytearray_getByte;
+use std::bytearray::bytearray_get256;
+use std::bytearray::bytearray_setByte;
+use std::bytearray::bytearray_extract;
+use std::bytearray::bytearray_copy;
+use std::bytearray::bytearray_marshalFull;
 
-import type ByteStream;
-import func bytestream_new(ba: ByteArray) -> ByteStream;
-import func bytestream_getByte(bs: ByteStream) -> option<(ByteStream, uint)>;
-import func bytestream_get256(bs: ByteStream) -> option<(ByteStream, uint)>;
-import func bytestream_getN(bs: ByteStream, n: uint) -> option<(ByteStream, ByteArray)>;
-import func bytestream_bytesReadSoFar(bs: ByteStream) -> uint;
-import func bytestream_bytesRemaining(bs: ByteStream) -> uint;
-import func bytestream_getRemainingBytes(bs: ByteStream) -> ByteArray;
-import func rlp_decodeUint(bs: ByteStream) -> option<(ByteStream, uint)>;
+use std::bytestream::ByteStream;
+use std::bytestream::bytestream_new;
+use std::bytestream::bytestream_getByte;
+use std::bytestream::bytestream_get256;
+use std::bytestream::bytestream_getN;
+use std::bytestream::bytestream_bytesReadSoFar;
+use std::bytestream::bytestream_bytesRemaining;
+use std::bytestream::bytestream_getRemainingBytes;
 
-import type ExpandingIntArray;
-import func expandingIntArray_new() -> ExpandingIntArray;
-import func expandingIntArray_size(arr: ExpandingIntArray) -> uint;
-import func expandingIntArray_get(arr: ExpandingIntArray, index: uint) -> uint;
-import func expandingIntArray_set(arr: ExpandingIntArray, index: uint, val: uint) -> ExpandingIntArray;
+use std::expandingIntArray::ExpandingIntArray;
+use std::expandingIntArray::expandingIntArray_new;
+use std::expandingIntArray::expandingIntArray_size;
+use std::expandingIntArray::expandingIntArray_get;
+use std::expandingIntArray::expandingIntArray_set;
 
-import func keccak256(ba: ByteArray, offset: uint, nbytes: uint) -> bytes32;
+use std::keccak::keccak256;
 
-import type Queue;
-import func queue_new() -> Queue;
-import func queue_put(q: Queue, item: any) -> Queue;
+use std::queue::Queue;
+use std::queue::queue_new;
+use std::queue::queue_put;
 
-import type Account;
-import type AccountStore;
-import impure func getGlobalAccountStore() -> AccountStore;
-import func accountStore_get(acctStore: AccountStore, addr: address) -> Account;
-import func account_getNextSeqNum(account: Account) -> uint;
+use accounts::getGlobalAccountStore;
+use accounts::accountStore_get;
+use accounts::account_getNextSeqNum;
 
-import func rlp_decodeAddress(bs: ByteStream) -> option<(ByteStream, address)>;
-import func rlp_decodeUint(bs: ByteStream) -> option<(ByteStream, uint)>;
-import func rlp_encodeMessageInfo(
-    seqNum: uint,
-    gasPrice: uint,
-    gasLimit: uint,
-    to: address,
-    value: uint,
-    data: ByteArray,
-    v: uint,
-    r: uint,
-    s: uint
-) -> ByteArray;
+use inbox::IncomingRequest;
+use messages::TxRequestData;
 
-import impure func recoverSigner(tx: SignedTx) -> option<address>;
+use std::rlp::rlp_decodeAddress;
+use std::rlp::rlp_decodeUint;
+use std::rlp::rlp_encodeMessageInfo;
 
-// This structure describes an incoming request.
-// It is declared identically in inbox.mini and elsewhere
-type IncomingRequest = struct {
-    kind: uint,               // type of message
-    blockNumber: uint,        // block number of the L1 block
-    timestamp: uint,          // timestamp of the L1 block
-    sender: address,          // address of the sender
-    requestId: uint,
-    msgData: MarshalledBytes  // kind-specific data, as a marshalled bytearray
-}
+use signedTx::SignedTx;
+use signedTx::recoverSigner;
 
 type IndexedAddressTable = struct {
     byIndex: ExpandingIntArray,
@@ -174,33 +146,6 @@ public func decompressTokenAmount(bs: ByteStream) -> option<(ByteStream, uint)> 
     }
     let (ustr, sh) = bytestream_getByte(ustr)?;
     return Some((ustr, base * asm(10, sh) uint { exp }));
-}
-
-// TxRequestData is declared identically in message.mini and elsewhere.
-type TxRequestData = struct {
-    maxGas: uint,
-    gasPrice: uint,
-    seqNum: option<uint>,
-    caller: address,
-    calleeAddr: address,
-    value: uint,
-    calldata: ByteArray,
-    nonMutating: bool,
-    incomingRequest: IncomingRequest,
-}
-
-// This is a copy of a struct defined in ArbOS/signedTx.mini.
-// The declaration here must remain consistent with the one there.
-type SignedTx = struct {
-    seqNum: uint,
-    gasPrice: uint,
-    gasLimit: uint,
-    to: address,
-    value: uint,
-    data: ByteArray,
-    v: uint,
-    r: uint,
-    s: uint
 }
 
 public impure func decompressAndVerifyEcdsaSignedTx(
@@ -340,7 +285,7 @@ impure func decompressTx(
             // read from beginning of stream (because we haven't set stream = ustr)
             let (ustr, index) = rlp_decodeUint(stream)?;
             stream = ustr;
-            if (index < len(funcTable)) {
+            if (index < len(unsafecast<[]FuncTableEntry>(funcTable))) {  // unsafecast is workaround for issue #223
                 funcTableEntry = Some(funcTable[index]);
             }
         } else {

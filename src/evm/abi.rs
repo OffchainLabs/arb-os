@@ -174,7 +174,7 @@ impl AbiForContract {
         Some(self.address.clone())
     }
 
-    pub fn bind_interface_to_address(&mut self, addr: Uint256) {
+    pub fn _bind_interface_to_address(&mut self, addr: Uint256) {
         // assume that self is an interface
         // bind self to a contract at addr, assuming it implements the interface
         // after this, self.call_function etc will work as expected
@@ -318,19 +318,19 @@ impl AbiForContract {
     }
 }
 
-pub struct ArbSys<'a> {
+pub struct _ArbSys<'a> {
     contract_abi: AbiForContract,
     wallet: &'a Wallet,
     my_address: Uint256,
     debug: bool,
 }
 
-impl<'a> ArbSys<'a> {
-    pub fn new(wallet: &'a Wallet, debug: bool) -> Self {
+impl<'a> _ArbSys<'a> {
+    pub fn _new(wallet: &'a Wallet, debug: bool) -> Self {
         let mut contract_abi =
             AbiForContract::new_from_file("contracts/add/build/contracts/ArbSys.json").unwrap();
-        contract_abi.bind_interface_to_address(Uint256::from_u64(100));
-        ArbSys {
+        contract_abi._bind_interface_to_address(Uint256::from_u64(100));
+        _ArbSys {
             contract_abi,
             wallet,
             my_address: Uint256::from_bytes(wallet.address().as_bytes()),
@@ -338,13 +338,13 @@ impl<'a> ArbSys<'a> {
         }
     }
 
-    pub fn withdraw_eth(
+    pub fn _withdraw_eth(
         &self,
         machine: &mut Machine,
         payee_addr: Uint256,
         amount: Uint256,
     ) -> Result<(), ethabi::Error> {
-        let (receipts, sends) = self.contract_abi.call_function_compressed(
+        let (receipts, _sends) = self.contract_abi.call_function_compressed(
             self.my_address.clone(),
             "withdrawEth",
             &[ethabi::Token::Address(ethabi::Address::from(
@@ -367,15 +367,15 @@ impl<'a> ArbSys<'a> {
         }
     }
 
-    pub fn get_transaction_count(
+    pub fn _get_transaction_count(
         &self,
         machine: &mut Machine,
         addr: Uint256,
     ) -> Result<Uint256, ethabi::Error> {
-        self.addr_to_uint_tx("getTransactionCount", machine, addr)
+        self._addr_to_uint_tx("getTransactionCount", machine, addr)
     }
 
-    fn addr_to_uint_tx(
+    fn _addr_to_uint_tx(
         &self,
         func_name: &str,
         machine: &mut Machine,
@@ -410,23 +410,23 @@ impl<'a> ArbSys<'a> {
         }
     }
 
-    pub fn address_table_register(
+    pub fn _address_table_register(
         &self,
         machine: &mut Machine,
         addr: Uint256,
     ) -> Result<Uint256, ethabi::Error> {
-        self.addr_to_uint_tx("addressTable_register", machine, addr)
+        self._addr_to_uint_tx("addressTable_register", machine, addr)
     }
 
-    pub fn address_table_lookup(
+    pub fn _address_table_lookup(
         &self,
         machine: &mut Machine,
         addr: Uint256,
     ) -> Result<Uint256, ethabi::Error> {
-        self.addr_to_uint_tx("addressTable_lookup", machine, addr)
+        self._addr_to_uint_tx("addressTable_lookup", machine, addr)
     }
 
-    pub fn address_table_size(&self, machine: &mut Machine) -> Result<Uint256, ethabi::Error> {
+    pub fn _address_table_size(&self, machine: &mut Machine) -> Result<Uint256, ethabi::Error> {
         let (receipts, sends) = self.contract_abi.call_function_compressed(
             self.my_address.clone(),
             "addressTable_size",
@@ -454,7 +454,7 @@ impl<'a> ArbSys<'a> {
         }
     }
 
-    pub fn address_table_lookup_index(
+    pub fn _address_table_lookup_index(
         &self,
         machine: &mut Machine,
         index: Uint256,
@@ -486,7 +486,7 @@ impl<'a> ArbSys<'a> {
         }
     }
 
-    pub fn address_table_decompress(
+    pub fn _address_table_decompress(
         &self,
         machine: &mut Machine,
         buf: &[u8],
@@ -525,7 +525,7 @@ impl<'a> ArbSys<'a> {
         }
     }
 
-    pub fn address_table_compress(
+    pub fn _address_table_compress(
         &self,
         machine: &mut Machine,
         addr: Uint256,
@@ -557,7 +557,7 @@ impl<'a> ArbSys<'a> {
         }
     }
 
-    pub fn register_bls_key(
+    pub fn _register_bls_key(
         &self,
         machine: &mut Machine,
         addr: Uint256,

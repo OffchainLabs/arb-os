@@ -36,37 +36,27 @@ use std::bytearray::bytearray_get256;
 use std::bytearray::bytearray_set256;
 use std::bytearray::bytearray_extract;
 use std::bytearray::bytearray_marshalFull;
-import func bytearray_new(unused: uint) -> ByteArray;
 
 use inbox::inbox_currentBlockNumber;
 use inbox::inbox_currentTimestamp;
-import func bytestream_new(ba: ByteArray) -> ByteStream;
-import func bytestream_bytesReadSoFar(bs: ByteStream) -> uint;
-
-import impure func inbox_currentBlockNumber() -> uint;
-import impure func inbox_currentTimestamp() -> uint;
 
 use output::queueMessageForSend;
 
-import type IndexedAddressTable;
-import impure func getGlobalAddressTable() -> IndexedAddressTable;
-import impure func setGlobalAddressTable(gat: IndexedAddressTable);
-import func addressTable_size(iat: IndexedAddressTable) -> uint;
-import func addressTable_getByAddressAlloc(iat: IndexedAddressTable, addr: address) -> (IndexedAddressTable, uint);
-import func addressTable_getByAddress(iat: IndexedAddressTable, addr: address) -> option<uint>;
-import func addressTable_getByIndex(iat: IndexedAddressTable, index: uint) -> option<address>;
-import impure func decompressAddress(stream: ByteStream) -> option<(ByteStream, address)>;
+use decompression::getGlobalAddressTable;
+use decompression::setGlobalAddressTable;
+use decompression::addressTable_size;
+use decompression::addressTable_getByAddressAlloc;
+use decompression::addressTable_getByAddress;
+use decompression::addressTable_getByIndex;
+use decompression::decompressAddress;
 
-import func rlp_encodeUint(val: uint, ba: ByteArray, offset: uint) -> (ByteArray, uint);
-import func rlp_encodeAddress(addr: address, ba: ByteArray, offset: uint) -> (ByteArray, uint);
+use std::rlp::rlp_encodeUint;
+use std::rlp::rlp_encodeAddress;
 
-import func bls_makeKey(x0: uint, x1: uint, y0: uint, y1: uint) -> option<BLSKey>;
-import func bls_marshalPublicKey(key: BLSKey, ba: ByteArray, offset: uint) -> ByteArray;
+use std::bls::bls_makeKey;
+use std::bls::bls_marshalPublicKey;
 
-import func parseAggregatorFunctionTable(
-    oldState: option<AggregatorDecompressionState>,
-    data: ByteArray,
-) -> option<AggregatorDecompressionState>;
+use decompression::parseAggregatorFunctionTable;
 
 
 public impure func arbsys_txcall() {
