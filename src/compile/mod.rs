@@ -359,6 +359,21 @@ pub fn compile_from_folder(
                 &type_tree,
             )
             .map_err(|res3| CompileError::new(res3.reason.to_string(), res3.location))?;
+        checked_funcs.iter().for_each(|func| {
+            let detected_purity = func.is_pure();
+            let declared_purity = func.properties.pure;
+            if !detected_purity && declared_purity {
+                println!(
+                    "Warning: func {} is impure but not marked impure",
+                    string_table.name_from_id(func.name)
+                )
+            } else if detected_purity && !declared_purity {
+                println!(
+                    "Warning: func {} is declared impure but does not contain impure code",
+                    string_table.name_from_id(func.name)
+                )
+            }
+        });
         let code_out =
             codegen::mavm_codegen(checked_funcs, &string_table, &imported_funcs, &global_vars)
                 .map_err(|e| CompileError::new(e.reason.to_string(), e.location))?;
