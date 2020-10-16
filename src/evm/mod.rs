@@ -100,7 +100,7 @@ pub fn evm_xcontract_call_with_constructors(
 #[cfg(test)]
 pub fn evm_deploy_using_non_eip159_signature(
     log_to: Option<&Path>,
-    debug: bool
+    debug: bool,
 ) -> Result<bool, ethabi::Error> {
     let rt_env = RuntimeEnvironment::new(Uint256::from_usize(1111));
     let mut machine = load_from_file(Path::new("arb_os/arbos.mexe"), rt_env);
@@ -145,18 +145,14 @@ pub fn evm_deploy_using_non_eip159_signature(
 }
 
 #[cfg(test)]
-pub fn evm_test_arbsys_direct(
-    log_to: Option<&Path>,
-    debug: bool,
-) -> Result<bool, ethabi::Error> {
+pub fn evm_test_arbsys_direct(log_to: Option<&Path>, debug: bool) -> Result<bool, ethabi::Error> {
     let rt_env = RuntimeEnvironment::new(Uint256::from_usize(1111));
     let mut machine = load_from_file(Path::new("arb_os/arbos.mexe"), rt_env);
     machine.start_at_zero();
 
     let my_addr = Uint256::from_u64(1025);
 
-    let mut arbsys =
-        AbiForContract::new_from_file("contracts/add/build/contracts/ArbSys.json")?;
+    let mut arbsys = AbiForContract::new_from_file("contracts/add/build/contracts/ArbSys.json")?;
     arbsys.bind_interface_to_address(Uint256::from_u64(100));
 
     if let Some(path) = log_to {
@@ -166,7 +162,9 @@ pub fn evm_test_arbsys_direct(
     let (logs, sends) = arbsys.call_function(
         my_addr.clone(),
         "getTransactionCount",
-        &[ethabi::Token::Address(ethabi::Address::from_low_u64_be(1025))],
+        &[ethabi::Token::Address(ethabi::Address::from_low_u64_be(
+            1025,
+        ))],
         &mut machine,
         Uint256::zero(),
         debug,
@@ -177,36 +175,34 @@ pub fn evm_test_arbsys_direct(
 
     let (logs, sends) = arbsys.call_function(
         my_addr.clone(),
-        "addressTable_lookupAddress",
-        &[
-            ethabi::Token::Address(ethabi::Address::from_low_u64_be(1717)),
-            ethabi::Token::Bool(true)
-        ],
+        "addressTable_register",
+        &[ethabi::Token::Address(ethabi::Address::from_low_u64_be(
+            1717,
+        ))],
         &mut machine,
         Uint256::zero(),
-        debug
+        debug,
     )?;
     assert_eq!(logs.len(), 1);
     assert_eq!(sends.len(), 0);
     assert!(logs[0].succeeded());
     let first_ret_data = logs[0].get_return_data();
-    let ret_vals = ethabi::decode(
-        &[ethabi::ParamType::Uint(256)],
-        &first_ret_data
-    )?;
+    let ret_vals = ethabi::decode(&[ethabi::ParamType::Uint(256)], &first_ret_data)?;
     assert_eq!(ret_vals.len(), 1);
-    assert_eq!(ret_vals[0], ethabi::Token::Uint(ethereum_types::U256::from(1)));
+    assert_eq!(
+        ret_vals[0],
+        ethabi::Token::Uint(ethereum_types::U256::from(1))
+    );
 
     let (logs, sends) = arbsys.call_function(
         my_addr.clone(),
-        "addressTable_lookupAddress",
-        &[
-            ethabi::Token::Address(ethabi::Address::from_low_u64_be(1717)),
-            ethabi::Token::Bool(true)
-        ],
+        "addressTable_lookup",
+        &[ethabi::Token::Address(ethabi::Address::from_low_u64_be(
+            1717,
+        ))],
         &mut machine,
         Uint256::zero(),
-        debug
+        debug,
     )?;
     assert_eq!(logs.len(), 1);
     assert_eq!(sends.len(), 0);
@@ -225,12 +221,12 @@ pub fn evm_test_arbsys_direct(
     assert_eq!(logs.len(), 1);
     assert_eq!(sends.len(), 0);
     assert!(logs[0].succeeded());
-    let ret_vals = ethabi::decode(
-        &[ethabi::ParamType::Address],
-        &logs[0].get_return_data(),
-    )?;
+    let ret_vals = ethabi::decode(&[ethabi::ParamType::Address], &logs[0].get_return_data())?;
     assert_eq!(ret_vals.len(), 1);
-    assert_eq!(ret_vals[0], ethabi::Token::Address(ethabi::Address::from_low_u64_be(1717)));
+    assert_eq!(
+        ret_vals[0],
+        ethabi::Token::Address(ethabi::Address::from_low_u64_be(1717))
+    );
 
     Ok(true)
 }

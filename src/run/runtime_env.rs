@@ -393,7 +393,6 @@ impl RuntimeEnvironment {
     }
 }
 
-
 // TxCompressor assumes that all client traffic uses it.
 // For example, it assumes nobody else affects ArbOS's address compression table.
 // This is fine for testing but wouldn't work in a less controlled setting.
