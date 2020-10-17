@@ -47,6 +47,16 @@ interface ArbSys {
     function getBlsPublicKey(address addr) external view returns (uint, uint, uint, uint);
 
     // Upload a serialized function table and associate it with the caller's address
-    // Caller will typically be an aggregator
+    // If caller already had a function table, this will overwrite the old oneZZ
+    // Revert if buf is mal-formatted
+    // (Caller will typically be an aggregator)
     function uploadFunctionTable(bytes calldata buf) external;
+
+    // Get the size of addr's function table; revert if addr doesn't have a function table
+    function functionTableSize(address addr) external view returns(uint);
+
+    // Get the entry from addr's function table, at index; revert if addr has no table or index out of bounds
+    // Returns (functionCode, isPayable, gasLimit)
+    function functionTableGet(address addr, uint index) external view returns(uint, bool, uint);
 }
+

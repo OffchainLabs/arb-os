@@ -12,8 +12,8 @@ use std::{fs::File, io::Read, path::Path};
 
 pub use emulator::Machine;
 pub use runtime_env::{
-    bytes_from_bytestack, bytestack_from_bytes, replay_from_testlog_file, ArbosReceipt,
-    RuntimeEnvironment, generic_compress_token_amount
+    bytes_from_bytestack, bytestack_from_bytes, generic_compress_token_amount,
+    replay_from_testlog_file, ArbosReceipt, RuntimeEnvironment,
 };
 
 mod emulator;

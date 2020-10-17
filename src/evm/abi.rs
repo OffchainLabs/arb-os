@@ -3,14 +3,13 @@
  */
 
 use crate::mavm::Value;
-use crate::run::{ArbosReceipt, Machine, generic_compress_token_amount};
+use crate::run::{generic_compress_token_amount, ArbosReceipt, Machine};
 use crate::uint256::Uint256;
+use ethers_core::utils::keccak256;
 #[cfg(test)]
 use ethers_signers::Signer;
 use ethers_signers::Wallet;
 use std::{fs::File, io::Read, path::Path};
-use ethers_core::utils::keccak256;
-
 
 #[derive(Debug, Clone)]
 pub struct AbiForContract {
@@ -326,10 +325,21 @@ impl AbiForContract {
         let long_sig = self.contract.function(func_name)?.signature();
         let short_sig = long_sig.split(":").collect::<Vec<&str>>()[0];
         let long_result = keccak256(short_sig.as_bytes());
-        Ok([long_result[0], long_result[1], long_result[2], long_result[3]])
+        Ok([
+            long_result[0],
+            long_result[1],
+            long_result[2],
+            long_result[3],
+        ])
     }
 
-    pub fn _append_to_compression_func_table(&self, mut buf: Vec<u8>, func_name: &str, is_payable: bool, gas_limit: Uint256) -> Result<(), ethabi::Error> {
+    pub fn _append_to_compression_func_table(
+        &self,
+        mut buf: Vec<u8>,
+        func_name: &str,
+        is_payable: bool,
+        gas_limit: Uint256,
+    ) -> Result<(), ethabi::Error> {
         let ssig = self._short_signature_for_function(func_name)?;
         buf.extend(&ssig);
         buf.extend(&if is_payable { [1u8] } else { [0u8] });
@@ -574,10 +584,8 @@ impl<'a> _ArbSys<'a> {
             return Err(ethabi::Error::from("reverted"));
         }
 
-        let return_vals = ethabi::decode(
-            &[ethabi::ParamType::Bytes],
-            &receipts[0].get_return_data(),
-        )?;
+        let return_vals =
+            ethabi::decode(&[ethabi::ParamType::Bytes], &receipts[0].get_return_data())?;
 
         match &return_vals[0] {
             ethabi::Token::Bytes(buf) => Ok(buf.to_vec()),
@@ -606,13 +614,87 @@ impl<'a> _ArbSys<'a> {
             return Err(ethabi::Error::from("reverted"));
         }
 
-        let return_vals = ethabi::decode(
-            &[ethabi::ParamType::Bytes],
-            &receipts[0].get_return_data(),
-        )?;
+        let return_vals =
+            ethabi::decode(&[ethabi::ParamType::Bytes], &receipts[0].get_return_data())?;
 
         match &return_vals[0] {
             ethabi::Token::Bytes(buf) => Ok(buf.to_vec()),
+            _ => panic!(),
+        }
+    }
+
+    pub fn _upload_function_table(
+        &self,
+        machine: &mut Machine,
+        buf: &[u8],
+    ) -> Result<(), ethabi::Error> {
+        let (receipts, sends) = self.contract_abi.call_function_compressed(
+            self.my_address.clone(),
+            "uploadFunctionTable",
+            &[ethabi::Token::Bytes(buf.to_vec())],
+            machine,
+            Uint256::zero(),
+            self.wallet,
+            self.debug,
+        )?;
+        if (receipts.len() != 1) || (sends.len() != 0) {
+            return Err(ethabi::Error::from("wrong number of receipts or sends"));
+        }
+        if !receipts[0].succeeded() {
+            return Err(ethabi::Error::from("reverted"));
+        }
+
+        Ok(())
+    }
+
+    pub fn _function_table_size(
+        &self,
+        machine: &mut Machine,
+        addr: Uint256,
+    ) -> Result<Uint256, ethabi::Error> {
+        self._addr_to_uint_tx("functionTableSize", machine, addr)
+    }
+
+    pub fn _function_table_get(
+        &self,
+        machine: &mut Machine,
+        addr: Uint256,
+        index: Uint256,
+    ) -> Result<(Uint256, bool, Uint256), ethabi::Error> {
+        let (receipts, sends) = self.contract_abi.call_function_compressed(
+            self.my_address.clone(),
+            "functionTableGet",
+            &[
+                ethabi::Token::Address(addr.to_h160()),
+                ethabi::Token::Uint(index.to_u256()),
+            ],
+            machine,
+            Uint256::zero(),
+            self.wallet,
+            self.debug,
+        )?;
+        if (receipts.len() != 1) || (sends.len() != 0) {
+            return Err(ethabi::Error::from("wrong number of receipts or sends"));
+        }
+        if !receipts[0].succeeded() {
+            return Err(ethabi::Error::from("reverted"));
+        }
+
+        let return_vals = ethabi::decode(
+            &[
+                ethabi::ParamType::Uint(256),
+                ethabi::ParamType::Bool,
+                ethabi::ParamType::Uint(256),
+            ],
+            &receipts[0].get_return_data(),
+        )?;
+
+        match (&return_vals[0], &return_vals[1], &return_vals[2]) {
+            (
+                ethabi::Token::Uint(func_code),
+                ethabi::Token::Bool(is_payable),
+                ethabi::Token::Uint(gas_limit),
+            ) => Ok((Uint256::from_u256(func_code), *is_payable, Uint256::from_u256(gas_limit))),
             _ => panic!(),
         }
     }
