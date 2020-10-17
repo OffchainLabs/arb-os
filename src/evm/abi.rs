@@ -5,7 +5,9 @@
 use crate::mavm::Value;
 use crate::run::{ArbosReceipt, Machine};
 use crate::uint256::Uint256;
-use ethers_signers::{Signer, Wallet};
+#[cfg(test)]
+use ethers_signers::Signer;
+use ethers_signers::Wallet;
 use std::{fs::File, io::Read, path::Path};
 
 #[derive(Debug, Clone)]
@@ -174,7 +176,8 @@ impl AbiForContract {
         Some(self.address.clone())
     }
 
-    pub fn _bind_interface_to_address(&mut self, addr: Uint256) {
+    #[cfg(test)]
+    pub fn bind_interface_to_address(&mut self, addr: Uint256) {
         // assume that self is an interface
         // bind self to a contract at addr, assuming it implements the interface
         // after this, self.call_function etc will work as expected
@@ -326,10 +329,11 @@ pub struct _ArbSys<'a> {
 }
 
 impl<'a> _ArbSys<'a> {
-    pub fn _new(wallet: &'a Wallet, debug: bool) -> Self {
+    #[cfg(test)]
+    pub fn new(wallet: &'a Wallet, debug: bool) -> Self {
         let mut contract_abi =
             AbiForContract::new_from_file("contracts/add/build/contracts/ArbSys.json").unwrap();
-        contract_abi._bind_interface_to_address(Uint256::from_u64(100));
+        contract_abi.bind_interface_to_address(Uint256::from_u64(100));
         _ArbSys {
             contract_abi,
             wallet,

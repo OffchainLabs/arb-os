@@ -23,7 +23,7 @@ use std::bytearray::bytearray_getByte;
 use std::bytearray::bytearray_get256;
 use std::bytearray::bytearray_set256;
 
-import func sha256_byteArray(ba: ByteArray) -> bytes32;
+use std::sha256::sha256_byteArray;
 
 use arbsys::arbsys_txcall;
 

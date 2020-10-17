@@ -2,19 +2,19 @@
 // Copyright 2020, Offchain Labs, Inc. All rights reserved.
 //
 
-import type ByteArray;
-import type RandomGenerator;
+use std::bytearray::ByteArray;
+use std::random::RandomGenerator;
 
-import func bytearray_size(ba: ByteArray) -> uint;
-import func bytearray_getByte(ba: ByteArray, offset: uint) -> uint;
-import func bytearray_get256(ba: ByteArray, offset: uint) -> uint;
-import func bytearray_set256(ba: ByteArray, offset: uint, val: uint) -> ByteArray;
+use std::bytearray::bytearray_size;
+use std::bytearray::bytearray_getByte;
+use std::bytearray::bytearray_get256;
+use std::bytearray::bytearray_set256;
 
-import func keccak256(ba: ByteArray, offset: uint, nbytes: uint) -> bytes32;
+use std::keccak::keccak256;
 
-import func random_new(seed: bytes32) -> RandomGenerator;
-import func random_next(rand: RandomGenerator) -> (bytes32, RandomGenerator);
-import func random_nextMod(rand: RandomGenerator, modulus: uint) -> (uint, RandomGenerator);
+use std::random::random_new;
+use std::random::random_next;
+use std::random::random_nextMod;
 
 
 type BLSSignature = struct {

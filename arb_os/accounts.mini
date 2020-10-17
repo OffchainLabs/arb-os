@@ -9,10 +9,13 @@ use std::bytearray::ByteArray;
 use std::bytearray::bytearray_new;
 use std::bytearray::bytearray_size;
 use std::bytearray::bytearray_setByte;
+use std::bls::BLSKey;
 use std::storageMap::StorageMap;
 use std::storageMap::storageMap_new;
 use std::storageMap::storageMap_get;
 use std::storageMap::storageMap_set;
+
+use decompression::AggregatorDecompressionState;
 
 
 type AccountStore = map<address, Account>

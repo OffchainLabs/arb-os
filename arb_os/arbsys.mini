@@ -29,13 +29,22 @@ use accounts::account_getAddress;
 use accounts::account_getNextSeqNum;
 use accounts::account_getStorageCell;
 use accounts::account_deductFromEthBalance;
+use accounts::account_setBlsKey;
+use accounts::account_getBlsKey;
+use accounts::account_getAggregatorDecompressionState;
+use accounts::account_setAggregatorDecompressionState;
 
+use std::bytearray::bytearray_new;
 use std::bytearray::bytearray_size;
 use std::bytearray::bytearray_getByte;
 use std::bytearray::bytearray_get256;
 use std::bytearray::bytearray_set256;
 use std::bytearray::bytearray_extract;
 use std::bytearray::bytearray_marshalFull;
+use std::bytearray::bytearray_extract;
+
+use std::bytestream::bytestream_new;
+use std::bytestream::bytestream_bytesReadSoFar;
 
 use inbox::inbox_currentBlockNumber;
 use inbox::inbox_currentTimestamp;
