@@ -426,21 +426,25 @@ impl TxCompressor {
         }
     }
 
-    pub fn compress_token_amount(&self, mut amt: Uint256) -> Vec<u8> {
-        if amt.is_zero() {
-            amt.rlp_encode()
-        } else {
-            let mut num_zeroes = 0;
-            let ten = Uint256::from_u64(10);
-            loop {
-                if amt.modulo(&ten).unwrap().is_zero() {
-                    num_zeroes = 1 + num_zeroes;
-                    amt = amt.div(&ten).unwrap();
-                } else {
-                    let mut result = amt.rlp_encode();
-                    result.extend(vec![num_zeroes as u8]);
-                    return result;
-                }
+    pub fn compress_token_amount(&self, amt: Uint256) -> Vec<u8> {
+        generic_compress_token_amount(amt)
+    }
+}
+
+pub fn generic_compress_token_amount(mut amt: Uint256) -> Vec<u8> {
+    if amt.is_zero() {
+        amt.rlp_encode()
+    } else {
+        let mut num_zeroes = 0;
+        let ten = Uint256::from_u64(10);
+        loop {
+            if amt.modulo(&ten).unwrap().is_zero() {
+                num_zeroes = 1 + num_zeroes;
+                amt = amt.div(&ten).unwrap();
+            } else {
+                let mut result = amt.rlp_encode();
+                result.extend(vec![num_zeroes as u8]);
+                return result;
             }
         }
     }

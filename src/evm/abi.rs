@@ -3,12 +3,14 @@
  */
 
 use crate::mavm::Value;
-use crate::run::{ArbosReceipt, Machine};
+use crate::run::{ArbosReceipt, Machine, generic_compress_token_amount};
 use crate::uint256::Uint256;
 #[cfg(test)]
 use ethers_signers::Signer;
 use ethers_signers::Wallet;
 use std::{fs::File, io::Read, path::Path};
+use ethers_core::utils::keccak256;
+
 
 #[derive(Debug, Clone)]
 pub struct AbiForContract {
@@ -319,6 +321,28 @@ impl AbiForContract {
 
         Ok((Uint256::from_bytes(&tx_id_bytes)))
     }
+
+    pub fn _short_signature_for_function(&self, func_name: &str) -> Result<[u8; 4], ethabi::Error> {
+        let long_sig = self.contract.function(func_name)?.signature();
+        let short_sig = long_sig.split(":").collect::<Vec<&str>>()[0];
+        let long_result = keccak256(short_sig.as_bytes());
+        Ok([long_result[0], long_result[1], long_result[2], long_result[3]])
+    }
+
+    pub fn _append_to_compression_func_table(&self, mut buf: Vec<u8>, func_name: &str, is_payable: bool, gas_limit: Uint256) -> Result<(), ethabi::Error> {
+        let ssig = self._short_signature_for_function(func_name)?;
+        buf.extend(&ssig);
+        buf.extend(&if is_payable { [1u8] } else { [0u8] });
+        buf.extend(generic_compress_token_amount(gas_limit));
+        Ok(())
+    }
+}
+
+#[test]
+fn test_function_short_signature_correct() {
+    let abi = AbiForContract::new_from_file("contracts/add/build/contracts/ArbSys.json").unwrap();
+    let sig = abi._short_signature_for_function("withdrawEth").unwrap();
+    assert_eq!(sig, [0x25u8, 0xe1u8, 0x60u8, 0x63u8]);
 }
 
 pub struct _ArbSys<'a> {

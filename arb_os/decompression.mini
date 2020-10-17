@@ -397,9 +397,9 @@ public func parseAggregatorFunctionTable(
     while (i < numEntries) {
         let (ustr, funcCode) = bytestream_getN(stream, 4)?;
         stream = ustr;
-        let (ustr, maxGas) = rlp_decodeUint(stream)?;
-        stream = ustr;
         let (ustr, payableByte) = bytestream_getByte(stream)?;
+        stream = ustr;
+        let (ustr, maxGas) = decompressTokenAmount(stream)?;
         stream = ustr;
         ret = ret with {
             [i] = struct {
