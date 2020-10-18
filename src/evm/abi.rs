@@ -364,7 +364,7 @@ pub struct _ArbSys<'a> {
 
 impl<'a> _ArbSys<'a> {
     #[cfg(test)]
-    pub fn new(wallet: &'a Wallet, debug: bool) -> Self {
+    pub fn _new(wallet: &'a Wallet, debug: bool) -> Self {
         let mut contract_abi =
             AbiForContract::new_from_file("contracts/add/build/contracts/ArbSys.json").unwrap();
         contract_abi.bind_interface_to_address(Uint256::from_u64(100));
@@ -694,7 +694,11 @@ impl<'a> _ArbSys<'a> {
                 ethabi::Token::Uint(func_code),
                 ethabi::Token::Bool(is_payable),
                 ethabi::Token::Uint(gas_limit),
-            ) => Ok((Uint256::from_u256(func_code), *is_payable, Uint256::from_u256(gas_limit))),
+            ) => Ok((
+                Uint256::from_u256(func_code),
+                *is_payable,
+                Uint256::from_u256(gas_limit),
+            )),
             _ => panic!(),
         }
     }
