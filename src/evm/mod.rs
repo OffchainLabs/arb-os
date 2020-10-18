@@ -2,6 +2,8 @@
  * Copyright 2020, Offchain Labs, Inc. All rights reserved.
  */
 
+#[cfg(test)]
+use crate::evm::abi::ArbSys;
 use crate::mavm::Value;
 use crate::run::{bytestack_from_bytes, load_from_file, RuntimeEnvironment};
 use crate::uint256::Uint256;
@@ -150,83 +152,37 @@ pub fn evm_test_arbsys_direct(log_to: Option<&Path>, debug: bool) -> Result<bool
     let mut machine = load_from_file(Path::new("arb_os/arbos.mexe"), rt_env);
     machine.start_at_zero();
 
-    let my_addr = Uint256::from_u64(1025);
+    let wallet = machine.runtime_env.new_wallet();
+    let my_addr = Uint256::from_bytes(wallet.address().as_bytes());
 
-    let mut arbsys = AbiForContract::new_from_file("contracts/add/build/contracts/ArbSys.json")?;
-    arbsys.bind_interface_to_address(Uint256::from_u64(100));
+    let arbsys = ArbSys::new(&wallet, debug);
+
+    let tx_count = arbsys.get_transaction_count(&mut machine, my_addr.clone())?;
+    assert_eq!(tx_count, Uint256::one());
+
+    let addr_table_index = arbsys.address_table_register(&mut machine, my_addr.clone())?;
+    let lookup_result = arbsys.address_table_lookup(&mut machine, my_addr.clone())?;
+    assert_eq!(addr_table_index, lookup_result);
+
+    let recovered_addr = arbsys.address_table_lookup_index(&mut machine, lookup_result)?;
+    assert_eq!(recovered_addr, my_addr);
+
+    let my_addr_compressed = arbsys.address_table_compress(&mut machine, my_addr.clone())?;
+    let (my_addr_decompressed, offset) =
+        arbsys.address_table_decompress(&mut machine, &my_addr_compressed, Uint256::zero())?;
+    assert_eq!(my_addr.clone(), my_addr_decompressed);
+    assert_eq!(offset, Uint256::from_usize(my_addr_compressed.len()));
+
+    let an_addr = Uint256::from_u64(581351734971918347);
+    let an_addr_compressed = arbsys.address_table_compress(&mut machine, an_addr.clone())?;
+    let (an_addr_decompressed, offset) =
+        arbsys.address_table_decompress(&mut machine, &an_addr_compressed, Uint256::zero())?;
+    assert_eq!(an_addr.clone(), an_addr_decompressed);
+    assert_eq!(offset, Uint256::from_usize(an_addr_compressed.len()));
 
     if let Some(path) = log_to {
         machine.runtime_env.recorder.to_file(path).unwrap();
     }
-
-    let (logs, sends) = arbsys.call_function(
-        my_addr.clone(),
-        "getTransactionCount",
-        &[ethabi::Token::Address(ethabi::Address::from_low_u64_be(
-            1025,
-        ))],
-        &mut machine,
-        Uint256::zero(),
-        debug,
-    )?;
-    assert_eq!(logs.len(), 1);
-    assert_eq!(sends.len(), 0);
-    assert!(logs[0].succeeded());
-
-    let (logs, sends) = arbsys.call_function(
-        my_addr.clone(),
-        "addressTable_register",
-        &[ethabi::Token::Address(ethabi::Address::from_low_u64_be(
-            1717,
-        ))],
-        &mut machine,
-        Uint256::zero(),
-        debug,
-    )?;
-    assert_eq!(logs.len(), 1);
-    assert_eq!(sends.len(), 0);
-    assert!(logs[0].succeeded());
-    let first_ret_data = logs[0].get_return_data();
-    let ret_vals = ethabi::decode(&[ethabi::ParamType::Uint(256)], &first_ret_data)?;
-    assert_eq!(ret_vals.len(), 1);
-    assert_eq!(
-        ret_vals[0],
-        ethabi::Token::Uint(ethereum_types::U256::from(1))
-    );
-
-    let (logs, sends) = arbsys.call_function(
-        my_addr.clone(),
-        "addressTable_lookup",
-        &[ethabi::Token::Address(ethabi::Address::from_low_u64_be(
-            1717,
-        ))],
-        &mut machine,
-        Uint256::zero(),
-        debug,
-    )?;
-    assert_eq!(logs.len(), 1);
-    assert_eq!(sends.len(), 0);
-    assert!(logs[0].succeeded());
-    let second_ret_data = logs[0].get_return_data();
-    assert_eq!(first_ret_data, second_ret_data);
-
-    let (logs, sends) = arbsys.call_function(
-        my_addr.clone(),
-        "addressTable_lookupIndex",
-        &[ethabi::Token::Uint(ethereum_types::U256::from(1))],
-        &mut machine,
-        Uint256::zero(),
-        debug,
-    )?;
-    assert_eq!(logs.len(), 1);
-    assert_eq!(sends.len(), 0);
-    assert!(logs[0].succeeded());
-    let ret_vals = ethabi::decode(&[ethabi::ParamType::Address], &logs[0].get_return_data())?;
-    assert_eq!(ret_vals.len(), 1);
-    assert_eq!(
-        ret_vals[0],
-        ethabi::Token::Address(ethabi::Address::from_low_u64_be(1717))
-    );
 
     Ok(true)
 }
