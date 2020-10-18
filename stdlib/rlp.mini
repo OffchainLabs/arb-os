@@ -455,7 +455,7 @@ public func rlp_encodeUintPair(
     return (ba, 1+rlpLen1+rlpLen2);
 }
 
-public impure func keccakOfRlpEncodedUintPair(ui1: uint, ui2: uint) -> bytes32 {
+public func keccakOfRlpEncodedUintPair(ui1: uint, ui2: uint) -> bytes32 {
     let ba = bytearray_new(64);
     let (uba, nbytes) = rlp_encodeUintPair(ui1, ui2, ba, 0);
     return keccak256(uba, 0, nbytes);
