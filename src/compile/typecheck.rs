@@ -1128,7 +1128,7 @@ fn typecheck_expr(
                 return_type,
                 type_tree,
             )?;
-            typecheck_unary_op(*op, tc_sub, *loc)
+            typecheck_unary_op(*op, tc_sub, *loc, type_tree)
         }
         Expr::Binary(op, sub1, sub2, loc) => {
             let tc_sub1 = typecheck_expr(
@@ -1791,8 +1791,9 @@ fn typecheck_unary_op(
     op: UnaryOp,
     sub_expr: TypeCheckedExpr,
     loc: Option<Location>,
+    type_tree: &TypeTree,
 ) -> Result<TypeCheckedExpr, TypeError> {
-    let tc_type = sub_expr.get_type();
+    let tc_type = sub_expr.get_type().get_representation(type_tree)?;
     match op {
         UnaryOp::Minus => match tc_type {
             Type::Int => {
