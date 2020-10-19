@@ -466,20 +466,20 @@ impl<'a> ArbSys<'a> {
         self.addr_to_uint_tx("addressTable_lookup", machine, addr)
     }
 
-    pub fn _address_table_size(&self, machine: &mut Machine) -> Result<Uint256, ethabi::Error> {
-        let (receipts, sends) = self.contract_abi.call_function_compressed(
+    pub fn address_table_size(&self, machine: &mut Machine) -> Result<Uint256, ethabi::Error> {
+        let (receipts, sends) = self.contract_abi.call_function(
             self.my_address.clone(),
             "addressTable_size",
             &[],
             machine,
             Uint256::zero(),
-            self.wallet,
             self.debug,
         )?;
         if (receipts.len() != 1) || (sends.len() != 0) {
             return Err(ethabi::Error::from("wrong number of receipts or sends"));
         }
         if !receipts[0].succeeded() {
+            println!("addressTable_size revert code {}", receipts[0].get_return_code());
             return Err(ethabi::Error::from("reverted"));
         }
 

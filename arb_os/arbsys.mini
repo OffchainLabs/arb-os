@@ -91,7 +91,7 @@ public impure func arbsys_txcall() {
             arbsys_addressTable_lookup(topFrame, calldata);
         } elseif(funcCode == 0x43683c1b) {
             arbsys_addressTable_addressExists(topFrame, calldata);
-        } elseif(funcCode == 0x03092fde) {
+        } elseif(funcCode == 0x03092fdb) {
             arbsys_addressTable_size(topFrame, calldata);
         } elseif(funcCode == 0x4c352200) {
             arbsys_addressTable_lookupIndex(topFrame, calldata);

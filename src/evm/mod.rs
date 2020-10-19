@@ -173,6 +173,11 @@ pub fn evm_test_arbsys_direct(log_to: Option<&Path>, debug: bool) -> Result<bool
     assert_eq!(my_addr.clone(), my_addr_decompressed);
     assert_eq!(offset, Uint256::from_usize(my_addr_compressed.len()));
 
+    assert_eq!(
+        Uint256::from_u64(2),
+        arbsys.address_table_size(&mut machine)?
+    );
+
     let an_addr = Uint256::from_u64(581351734971918347);
     let an_addr_compressed = arbsys.address_table_compress(&mut machine, an_addr.clone())?;
     let (an_addr_decompressed, offset) =

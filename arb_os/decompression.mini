@@ -71,7 +71,7 @@ public impure func setGlobalAddressTable(gat: IndexedAddressTable) {
 
 public func addressTable_new() -> IndexedAddressTable {
     return struct {
-        byIndex: expandingIntArray_new(),
+        byIndex: expandingIntArray_set(expandingIntArray_new(), 0, 0),
         byAddress: newmap<address, uint> with { [address(0)] = 0 },
         size: 1
     };
@@ -133,8 +133,6 @@ public impure func decompressAddress(
         return Some((ustr, addressTable_getByIndex(globalIndexedAddressTable, decodedUint)?));
     } else {
         let (ustr, addr) = rlp_decodeAddress(stream)?;
-        let (iat, _) = addressTable_getByAddressAlloc(globalIndexedAddressTable, addr);
-        globalIndexedAddressTable = iat;
         return Some((ustr, addr));
     }
 }
