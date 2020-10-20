@@ -284,7 +284,7 @@ impure func decompressTx(
             // read from beginning of stream (because we haven't set stream = ustr)
             let (ustr, index) = rlp_decodeUint(stream)?;
             stream = ustr;
-            if (index < len(unsafecast<[]FuncTableEntry>(funcTable))) {  // unsafecast is workaround for issue #223
+            if (index < len(funcTable)) {
                 funcTableEntry = Some(funcTable[index]);
             }
         } else {
@@ -415,12 +415,12 @@ public func parseAggregatorFunctionTable(
 
 public impure func functionTableSize(addr: address) -> option<uint> {
     let funcTable = (account_getAggregatorDecompressionState(evmCallStack_getAccount(addr)?)?).functionTable;
-    return Some(len(unsafecast<[]FunctionTableEntry>(funcTable)));   // unsafecast is workaround for issue #223
+    return Some(funcTable));
 }
 
 public impure func getFromFunctionTable(addr: address, index: uint) -> option<(uint, bool, uint)> {
     let funcTable = (account_getAggregatorDecompressionState(evmCallStack_getAccount(addr)?)?).functionTable;
-    if (index < len(unsafecast<[]FunctionTableEntry>(funcTable))) {    // unsafecast is workaround for issue #223
+    if (index < len(funcTable)) {
         let tableEntry = funcTable[index];
         return Some((
             bytearray_get256(unsafecast<ByteArray>(tableEntry.callDataPrefix), 0),
