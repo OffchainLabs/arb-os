@@ -248,7 +248,6 @@ pub fn compile_from_folder(
     main: &str,
     file_name_chart: &mut HashMap<u64, String>,
 ) -> Result<Vec<CompiledProgram>, CompileError> {
-    // TODO: Add warning about impure functions back
     let (mut programs, import_map) = create_program_tree(folder, library, main, file_name_chart)?;
     for (name, imports) in &import_map {
         for import in imports {
