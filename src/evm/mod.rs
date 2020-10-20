@@ -313,7 +313,7 @@ pub fn evm_xcontract_call_using_batch(
 }
 
 #[cfg(test)]
-pub fn evm_xcontract_call_using_compressed_batch(
+pub fn _evm_xcontract_call_using_compressed_batch(
     log_to: Option<&Path>,
     debug: bool,
     _profile: bool,
@@ -359,7 +359,7 @@ pub fn evm_xcontract_call_using_compressed_batch(
     }
 
     let mut batch = machine.runtime_env.new_batch();
-    let tx_id_1 = pc_contract.add_function_call_to_compressed_batch(
+    let tx_id_1 = pc_contract._add_function_call_to_compressed_batch(
         &mut batch,
         "deposit",
         &[],
@@ -367,7 +367,7 @@ pub fn evm_xcontract_call_using_compressed_batch(
         Uint256::from_usize(10000),
         &wallet,
     )?;
-    let tx_id_2 = pc_contract.add_function_call_to_compressed_batch(
+    let tx_id_2 = pc_contract._add_function_call_to_compressed_batch(
         &mut batch,
         "transferFib",
         vec![

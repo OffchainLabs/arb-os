@@ -2,6 +2,8 @@
 // Copyright 2020, Offchain Labs, Inc. All rights reserved.
 //
 
+use std::bytearray::OpClosureFunc;
+use std::bytearray::opClosure;
 
 type ExpandingIntArray = struct {
     size: uint,
@@ -118,13 +120,6 @@ public func expandingIntArray_setN(
         chunk = chunk / 8;
     }
 }
-
-type opClosureFunc = func(any, uint) -> (uint, any)
-
-type opClosure = struct {
-	f: opClosureFunc,
-	val: any,
-} // usage: (newSlotContents, returnValue) = closure.f(closure.val, oldSlotContents)
 
 public func expandingIntArray_op(
     arr: ExpandingIntArray,
