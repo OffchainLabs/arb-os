@@ -27,7 +27,7 @@ import func bytearray_copy(
 import func bytestream_new(ba: ByteArray) -> ByteStream;
 import func bytestream_skipBytes(ba: ByteStream, nbytes: uint) -> option<ByteStream>;
 
-import func rlp_encodeAndHashMessageInfoForSignature(tx: SignedTx, eip155v: option<uint>) -> bytes32;
+import func rlp_encodeAndHashMessageInfoForSignature(tx: SignedTx, eip155chainId: option<uint>) -> bytes32;
 import func rlp_decodeMessageInfo(inStream: ByteStream) -> option<(ByteStream, SignedTx)>;
 
 import impure func chainParams_chainId() -> uint;
