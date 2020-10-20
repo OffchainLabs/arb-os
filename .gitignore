@@ -22,3 +22,4 @@ testlogs/*
 arb_os/contractTemplates.mini
 .idea
 contracts/add/yarn.lock
+contracts/add/contracts/.ArbSys.sol.swp

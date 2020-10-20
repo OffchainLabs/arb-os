@@ -3,13 +3,13 @@
  */
 
 use crate::evm::abi::ArbSys;
+use crate::evm::abi::FunctionTable;
 use crate::mavm::Value;
 use crate::run::{bytestack_from_bytes, load_from_file, RuntimeEnvironment};
 use crate::uint256::Uint256;
 use abi::AbiForContract;
 use ethers_signers::Signer;
 use std::path::Path;
-use crate::evm::abi::FunctionTable;
 
 mod abi;
 pub mod benchmarks;
@@ -184,6 +184,19 @@ pub fn evm_test_arbsys_direct(log_to: Option<&Path>, debug: bool) -> Result<(), 
     assert_eq!(an_addr.clone(), an_addr_decompressed);
     assert_eq!(offset, Uint256::from_usize(an_addr_compressed.len()));
 
+    let x0 = Uint256::from_u64(17);
+    let x1 = Uint256::from_u64(35);
+    let y0 = Uint256::from_u64(71);
+    let y1 = Uint256::from_u64(143);
+    println!("registering BLS key");
+    arbsys.register_bls_key(&mut machine, x0.clone(), x1.clone(), y0.clone(), y1.clone())?;
+    println!("reading BLS key");
+    let (ox0, ox1, oy0, oy1) = arbsys.get_bls_public_key(&mut machine, my_addr.clone())?;
+    assert_eq!(x0, ox0);
+    assert_eq!(x1, ox1);
+    assert_eq!(y0, oy0);
+    assert_eq!(y1, oy1);
+
     if let Some(path) = log_to {
         machine.runtime_env.recorder.to_file(path).unwrap();
     }
@@ -218,12 +231,18 @@ pub fn evm_test_function_table_access(
     arbsys.upload_function_table(&mut machine, &func_table)?;
 
     println!("Checking size");
-    assert_eq!(arbsys.function_table_size(&mut machine, my_addr.clone())?, Uint256::one());
+    assert_eq!(
+        arbsys.function_table_size(&mut machine, my_addr.clone())?,
+        Uint256::one()
+    );
 
     println!("Getting item");
     let (func_code, is_payable, gas_limit) =
         arbsys.function_table_get(&mut machine, my_addr, Uint256::zero())?;
-    assert_eq!(func_code, Uint256::from_bytes(&gtc_short_sig).shift_left(256-32));
+    assert_eq!(
+        func_code,
+        Uint256::from_bytes(&gtc_short_sig).shift_left(256 - 32)
+    );
     assert_eq!(is_payable, false);
     assert_eq!(gas_limit, Uint256::from_u64(10000000));
 
@@ -935,11 +954,11 @@ pub fn make_logs_for_all_arbos_tests() {
     );
     let _ = evm_test_arbsys_direct(
         Some(Path::new("testlogs/evm_test_arbsys_direct.aoslog")),
-        false
+        false,
     );
     let _ = evm_test_function_table_access(
         Some(Path::new("testlogs/evm_test_function_table_access.aoslog")),
-        false
+        false,
     );
     let _ = evm_xcontract_call_with_constructors(
         Some(Path::new(

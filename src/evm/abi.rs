@@ -338,7 +338,11 @@ impl AbiForContract {
         is_payable: bool,
         gas_limit: Uint256,
     ) -> Result<(), ethabi::Error> {
-        func_table.append(self.short_signature_for_function(func_name)?, is_payable, gas_limit);
+        func_table.append(
+            self.short_signature_for_function(func_name)?,
+            is_payable,
+            gas_limit,
+        );
         Ok(())
     }
 }
@@ -588,18 +592,47 @@ impl<'a> ArbSys<'a> {
         }
     }
 
-    pub fn _register_bls_key(
+    pub fn register_bls_key(
+        &self,
+        machine: &mut Machine,
+        x0: Uint256,
+        x1: Uint256,
+        y0: Uint256,
+        y1: Uint256,
+    ) -> Result<(), ethabi::Error> {
+        let (receipts, sends) = self.contract_abi.call_function(
+            self.my_address.clone(),
+            "registerBlsKey",
+            &[
+                ethabi::Token::Uint(x0.to_u256()),
+                ethabi::Token::Uint(x1.to_u256()),
+                ethabi::Token::Uint(y0.to_u256()),
+                ethabi::Token::Uint(y1.to_u256()),
+            ],
+            machine,
+            Uint256::zero(),
+            self.debug,
+        )?;
+        if (receipts.len() != 1) || (sends.len() != 0) {
+            return Err(ethabi::Error::from("wrong number of receipts or sends"));
+        }
+        if !receipts[0].succeeded() {
+            return Err(ethabi::Error::from("reverted"));
+        }
+        Ok(())
+    }
+
+    pub fn get_bls_public_key(
         &self,
         machine: &mut Machine,
         addr: Uint256,
-    ) -> Result<Vec<u8>, ethabi::Error> {
-        let (receipts, sends) = self.contract_abi.call_function_compressed(
+    ) -> Result<(Uint256, Uint256, Uint256, Uint256), ethabi::Error> {
+        let (receipts, sends) = self.contract_abi.call_function(
             self.my_address.clone(),
-            "addressTable_compress",
+            "getBlsPublicKey",
             &[ethabi::Token::Address(addr.to_h160())],
             machine,
             Uint256::zero(),
-            self.wallet,
             self.debug,
         )?;
         if (receipts.len() != 1) || (sends.len() != 0) {
@@ -609,11 +642,33 @@ impl<'a> ArbSys<'a> {
             return Err(ethabi::Error::from("reverted"));
         }
 
-        let return_vals =
-            ethabi::decode(&[ethabi::ParamType::Bytes], &receipts[0].get_return_data())?;
+        let return_vals = ethabi::decode(
+            &[
+                ethabi::ParamType::Uint(256),
+                ethabi::ParamType::Uint(256),
+                ethabi::ParamType::Uint(256),
+                ethabi::ParamType::Uint(256),
+            ],
+            &receipts[0].get_return_data(),
+        )?;
 
-        match &return_vals[0] {
-            ethabi::Token::Bytes(buf) => Ok(buf.to_vec()),
+        match (
+            &return_vals[0],
+            &return_vals[1],
+            &return_vals[2],
+            &return_vals[3],
+        ) {
+            (
+                ethabi::Token::Uint(ui0),
+                ethabi::Token::Uint(ui1),
+                ethabi::Token::Uint(ui2),
+                ethabi::Token::Uint(ui3),
+            ) => Ok((
+                Uint256::from_u256(ui0),
+                Uint256::from_u256(ui1),
+                Uint256::from_u256(ui2),
+                Uint256::from_u256(ui3),
+            )),
             _ => panic!(),
         }
     }
@@ -671,7 +726,10 @@ impl<'a> ArbSys<'a> {
             return Err(ethabi::Error::from("wrong number of receipts or sends"));
         }
         if !receipts[0].succeeded() {
-            println!("arbsys.function_table_get revert code {}", receipts[0].get_return_code());
+            println!(
+                "arbsys.function_table_get revert code {}",
+                receipts[0].get_return_code()
+            );
             return Err(ethabi::Error::from("reverted"));
         }
 
@@ -711,13 +769,15 @@ pub struct FunctionTable {
 
 impl FunctionTable {
     pub fn new() -> Self {
-        FunctionTable{ contents: vec![] }
+        FunctionTable { contents: vec![] }
     }
 
     pub fn append(&mut self, func_code: [u8; 4], is_payable: bool, gas_limit: Uint256) {
-        self.contents.push(
-            FunctionTableItem{ func_code, is_payable, gas_limit }
-        );
+        self.contents.push(FunctionTableItem {
+            func_code,
+            is_payable,
+            gas_limit,
+        });
     }
 
     pub fn marshal(&self) -> Vec<u8> {
