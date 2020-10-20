@@ -2,7 +2,6 @@
  * Copyright 2020, Offchain Labs, Inc. All rights reserved.
  */
 
-#[cfg(test)]
 use crate::evm::abi::ArbSys;
 use crate::mavm::Value;
 use crate::run::{bytestack_from_bytes, load_from_file, RuntimeEnvironment};
@@ -10,6 +9,7 @@ use crate::uint256::Uint256;
 use abi::AbiForContract;
 use ethers_signers::Signer;
 use std::path::Path;
+use crate::evm::abi::FunctionTable;
 
 mod abi;
 pub mod benchmarks;
@@ -146,8 +146,7 @@ pub fn evm_deploy_using_non_eip159_signature(
     Ok(true)
 }
 
-#[cfg(test)]
-pub fn evm_test_arbsys_direct(log_to: Option<&Path>, debug: bool) -> Result<bool, ethabi::Error> {
+pub fn evm_test_arbsys_direct(log_to: Option<&Path>, debug: bool) -> Result<(), ethabi::Error> {
     let rt_env = RuntimeEnvironment::new(Uint256::from_usize(1111));
     let mut machine = load_from_file(Path::new("arb_os/arbos.mexe"), rt_env);
     machine.start_at_zero();
@@ -167,9 +166,9 @@ pub fn evm_test_arbsys_direct(log_to: Option<&Path>, debug: bool) -> Result<bool
     let recovered_addr = arbsys.address_table_lookup_index(&mut machine, lookup_result)?;
     assert_eq!(recovered_addr, my_addr);
 
-    let my_addr_compressed = arbsys.address_table_compress(&mut machine, my_addr.clone())?;
+    let my_addr_compressed = arbsys._address_table_compress(&mut machine, my_addr.clone())?;
     let (my_addr_decompressed, offset) =
-        arbsys.address_table_decompress(&mut machine, &my_addr_compressed, Uint256::zero())?;
+        arbsys._address_table_decompress(&mut machine, &my_addr_compressed, Uint256::zero())?;
     assert_eq!(my_addr.clone(), my_addr_decompressed);
     assert_eq!(offset, Uint256::from_usize(my_addr_compressed.len()));
 
@@ -179,9 +178,9 @@ pub fn evm_test_arbsys_direct(log_to: Option<&Path>, debug: bool) -> Result<bool
     );
 
     let an_addr = Uint256::from_u64(581351734971918347);
-    let an_addr_compressed = arbsys.address_table_compress(&mut machine, an_addr.clone())?;
+    let an_addr_compressed = arbsys._address_table_compress(&mut machine, an_addr.clone())?;
     let (an_addr_decompressed, offset) =
-        arbsys.address_table_decompress(&mut machine, &an_addr_compressed, Uint256::zero())?;
+        arbsys._address_table_decompress(&mut machine, &an_addr_compressed, Uint256::zero())?;
     assert_eq!(an_addr.clone(), an_addr_decompressed);
     assert_eq!(offset, Uint256::from_usize(an_addr_compressed.len()));
 
@@ -189,7 +188,50 @@ pub fn evm_test_arbsys_direct(log_to: Option<&Path>, debug: bool) -> Result<bool
         machine.runtime_env.recorder.to_file(path).unwrap();
     }
 
-    Ok(true)
+    Ok(())
+}
+
+pub fn evm_test_function_table_access(
+    log_to: Option<&Path>,
+    debug: bool,
+) -> Result<(), ethabi::Error> {
+    let rt_env = RuntimeEnvironment::new(Uint256::from_usize(1111));
+    let mut machine = load_from_file(Path::new("arb_os/arbos.mexe"), rt_env);
+    machine.start_at_zero();
+
+    let wallet = machine.runtime_env.new_wallet();
+    let my_addr = Uint256::from_bytes(wallet.address().as_bytes());
+
+    let arbsys = ArbSys::new(&wallet, debug);
+
+    let gtc_short_sig = arbsys
+        .contract_abi
+        .short_signature_for_function("getTransactionCount")
+        .unwrap();
+    let mut func_table = FunctionTable::new();
+    arbsys.contract_abi.append_to_compression_func_table(
+        &mut func_table,
+        "getTransactionCount",
+        false,
+        Uint256::from_u64(10000000),
+    )?;
+    arbsys.upload_function_table(&mut machine, &func_table)?;
+
+    println!("Checking size");
+    assert_eq!(arbsys.function_table_size(&mut machine, my_addr.clone())?, Uint256::one());
+
+    println!("Getting item");
+    let (func_code, is_payable, gas_limit) =
+        arbsys.function_table_get(&mut machine, my_addr, Uint256::zero())?;
+    assert_eq!(func_code, Uint256::from_bytes(&gtc_short_sig).shift_left(256-32));
+    assert_eq!(is_payable, false);
+    assert_eq!(gas_limit, Uint256::from_u64(10000000));
+
+    if let Some(path) = log_to {
+        machine.runtime_env.recorder.to_file(path).unwrap();
+    }
+
+    Ok(())
 }
 
 pub fn evm_test_create(
@@ -891,7 +933,14 @@ pub fn make_logs_for_all_arbos_tests() {
         Some(Path::new("testlogs/evm_direct_deploy_and_call_add.aoslog")),
         false,
     );
-
+    let _ = evm_test_arbsys_direct(
+        Some(Path::new("testlogs/evm_test_arbsys_direct.aoslog")),
+        false
+    );
+    let _ = evm_test_function_table_access(
+        Some(Path::new("testlogs/evm_test_function_table_access.aoslog")),
+        false
+    );
     let _ = evm_xcontract_call_with_constructors(
         Some(Path::new(
             "testlogs/evm_xcontract_call_with_constructors.aoslog",

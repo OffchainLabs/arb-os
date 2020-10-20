@@ -58,6 +58,9 @@ use decompression::addressTable_getByAddressAlloc;
 use decompression::addressTable_getByAddress;
 use decompression::addressTable_getByIndex;
 use decompression::decompressAddress;
+use decompression::getFromFunctionTable;
+use decompression::functionTableSize;
+use decompression::getFromFunctionTable;
 
 use std::rlp::rlp_encodeUint;
 use std::rlp::rlp_encodeAddress;
@@ -105,6 +108,10 @@ public impure func arbsys_txcall() {
             arbsys_getBlsPublicKey(topFrame, calldata);
         } elseif(funcCode == 0xb7cf9527) {
             arbsys_uploadFunctionTable(topFrame, calldata);
+        } elseif(funcCode == 0x1221C896) {
+            arbsys_functionTableSize(topFrame, calldata);
+        } elseif(funcCode == 0xd6ed0f56) {
+            arbsys_functionTableGet(topFrame, calldata);
         } else {
             // unrecognized function code
             evmOp_revert(0, 0);
@@ -430,6 +437,7 @@ impure func arbsys_uploadFunctionTable(topFrame: EvmCallFrame, calldata: ByteArr
 
     let callerAddr = evmCallFrame_getCaller(topFrame);
     let nbytes = bytearray_get256(calldata, 4+32);
+
     let tableData = bytearray_extract(calldata, 4+2*32, nbytes);
 
     let account = evmCallFrame_getAccount(topFrame, callerAddr);
@@ -445,5 +453,51 @@ impure func arbsys_uploadFunctionTable(topFrame: EvmCallFrame, calldata: ByteArr
     } else {
         evmOp_revert(0, 0);
     }
+}
+
+impure func arbsys_functionTableSize(topFrame: EvmCallFrame, calldata: ByteArray) { // (address) -> uint
+    if (bytearray_size(calldata) != 36) {
+        evmOp_revert(0, 0);
+    }
+
+    if let Some(size) = functionTableSize(address(bytearray_get256(calldata, 4))) {
+        if (evmCallStack_setTopFrameMemory(bytearray_set256(bytearray_new(0), 0, size))) {
+            evmOp_return(0, 32);
+        }
+    }
+
+    evmOp_revert(0, 0);
+}
+
+impure func arbsys_functionTableGet(topFrame: EvmCallFrame, calldata: ByteArray) { // (address, uint) -> (uint, bool, uint)
+    if (bytearray_size(calldata) != 68) {
+        evmOp_revert(0, 0);
+    }
+
+    let addr = address(bytearray_get256(calldata, 4));
+    let index = bytearray_get256(calldata, 36);
+
+    if let Some(res) = getFromFunctionTable(addr, index) {
+        let (funcCode, isPayable, gasLimit) = res;
+        if (evmCallStack_setTopFrameMemory(
+            bytearray_set256(
+                bytearray_set256(
+                    bytearray_set256(
+                        bytearray_new(0),
+                        0,
+                        funcCode
+                    ),
+                    32,
+                    uint(isPayable),
+                ),
+                64,
+                gasLimit,
+            )
+        )) {
+            evmOp_return(0, 96);
+        }
+    }
+
+    evmOp_revert(0, 0);
 }
 

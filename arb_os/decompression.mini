@@ -38,7 +38,8 @@ use std::queue::queue_put;
 use accounts::getGlobalAccountStore;
 use accounts::accountStore_get;
 use accounts::account_getNextSeqNum;
-
+use accounts::account_getAggregatorDecompressionState;
+use evmCallStack::evmCallStack_getAccount;
 use inbox::IncomingRequest;
 use messages::TxRequestData;
 
@@ -397,7 +398,7 @@ public func parseAggregatorFunctionTable(
         stream = ustr;
         let (ustr, payableByte) = bytestream_getByte(stream)?;
         stream = ustr;
-        let (ustr, maxGas) = decompressTokenAmount(stream)?;
+        let (ustr, maxGas) = rlp_decodeUint(stream)?;
         stream = ustr;
         ret = ret with {
             [i] = struct {
@@ -410,6 +411,25 @@ public func parseAggregatorFunctionTable(
     }
 
     return Some(struct { functionTable: ret });
+}
+
+public impure func functionTableSize(addr: address) -> option<uint> {
+    let funcTable = (account_getAggregatorDecompressionState(evmCallStack_getAccount(addr)?)?).functionTable;
+    return Some(len(unsafecast<[]FunctionTableEntry>(funcTable)));   // unsafecast is workaround for issue #223
+}
+
+public impure func getFromFunctionTable(addr: address, index: uint) -> option<(uint, bool, uint)> {
+    let funcTable = (account_getAggregatorDecompressionState(evmCallStack_getAccount(addr)?)?).functionTable;
+    if (index < len(unsafecast<[]FunctionTableEntry>(funcTable))) {    // unsafecast is workaround for issue #223
+        let tableEntry = funcTable[index];
+        return Some((
+            bytearray_get256(unsafecast<ByteArray>(tableEntry.callDataPrefix), 0),
+            tableEntry.payable,
+            tableEntry.maxGas
+        ));
+    }
+
+    return None;
 }
 
 //This function is necessary because there is currently bug in the compiler that will occasionally corrupt the last

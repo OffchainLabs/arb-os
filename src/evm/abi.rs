@@ -3,10 +3,9 @@
  */
 
 use crate::mavm::Value;
-use crate::run::{generic_compress_token_amount, ArbosReceipt, Machine};
+use crate::run::{ArbosReceipt, Machine};
 use crate::uint256::Uint256;
 use ethers_core::utils::keccak256;
-#[cfg(test)]
 use ethers_signers::Signer;
 use ethers_signers::Wallet;
 use std::{fs::File, io::Read, path::Path};
@@ -177,7 +176,6 @@ impl AbiForContract {
         Some(self.address.clone())
     }
 
-    #[cfg(test)]
     pub fn bind_interface_to_address(&mut self, addr: Uint256) {
         // assume that self is an interface
         // bind self to a contract at addr, assuming it implements the interface
@@ -321,7 +319,7 @@ impl AbiForContract {
         Ok((Uint256::from_bytes(&tx_id_bytes)))
     }
 
-    pub fn _short_signature_for_function(&self, func_name: &str) -> Result<[u8; 4], ethabi::Error> {
+    pub fn short_signature_for_function(&self, func_name: &str) -> Result<[u8; 4], ethabi::Error> {
         let long_sig = self.contract.function(func_name)?.signature();
         let short_sig = long_sig.split(":").collect::<Vec<&str>>()[0];
         let long_result = keccak256(short_sig.as_bytes());
@@ -333,17 +331,14 @@ impl AbiForContract {
         ])
     }
 
-    pub fn _append_to_compression_func_table(
+    pub fn append_to_compression_func_table(
         &self,
-        mut buf: Vec<u8>,
+        func_table: &mut FunctionTable,
         func_name: &str,
         is_payable: bool,
         gas_limit: Uint256,
     ) -> Result<(), ethabi::Error> {
-        let ssig = self._short_signature_for_function(func_name)?;
-        buf.extend(&ssig);
-        buf.extend(&if is_payable { [1u8] } else { [0u8] });
-        buf.extend(generic_compress_token_amount(gas_limit));
+        func_table.append(self.short_signature_for_function(func_name)?, is_payable, gas_limit);
         Ok(())
     }
 }
@@ -351,21 +346,18 @@ impl AbiForContract {
 #[test]
 fn test_function_short_signature_correct() {
     let abi = AbiForContract::new_from_file("contracts/add/build/contracts/ArbSys.json").unwrap();
-    let sig = abi._short_signature_for_function("withdrawEth").unwrap();
+    let sig = abi.short_signature_for_function("withdrawEth").unwrap();
     assert_eq!(sig, [0x25u8, 0xe1u8, 0x60u8, 0x63u8]);
 }
 
-#[cfg(test)]
 pub struct ArbSys<'a> {
-    contract_abi: AbiForContract,
+    pub contract_abi: AbiForContract,
     wallet: &'a Wallet,
     my_address: Uint256,
     debug: bool,
 }
 
-#[cfg(test)]
 impl<'a> ArbSys<'a> {
-    #[cfg(test)]
     pub fn new(wallet: &'a Wallet, debug: bool) -> Self {
         let mut contract_abi =
             AbiForContract::new_from_file("contracts/add/build/contracts/ArbSys.json").unwrap();
@@ -479,7 +471,10 @@ impl<'a> ArbSys<'a> {
             return Err(ethabi::Error::from("wrong number of receipts or sends"));
         }
         if !receipts[0].succeeded() {
-            println!("addressTable_size revert code {}", receipts[0].get_return_code());
+            println!(
+                "addressTable_size revert code {}",
+                receipts[0].get_return_code()
+            );
             return Err(ethabi::Error::from("reverted"));
         }
 
@@ -526,7 +521,7 @@ impl<'a> ArbSys<'a> {
         }
     }
 
-    pub fn address_table_decompress(
+    pub fn _address_table_decompress(
         &self,
         machine: &mut Machine,
         buf: &[u8],
@@ -564,7 +559,7 @@ impl<'a> ArbSys<'a> {
         }
     }
 
-    pub fn address_table_compress(
+    pub fn _address_table_compress(
         &self,
         machine: &mut Machine,
         addr: Uint256,
@@ -623,15 +618,15 @@ impl<'a> ArbSys<'a> {
         }
     }
 
-    pub fn _upload_function_table(
+    pub fn upload_function_table(
         &self,
         machine: &mut Machine,
-        buf: &[u8],
+        func_table: &FunctionTable,
     ) -> Result<(), ethabi::Error> {
         let (receipts, sends) = self.contract_abi.call_function_compressed(
             self.my_address.clone(),
             "uploadFunctionTable",
-            &[ethabi::Token::Bytes(buf.to_vec())],
+            &[ethabi::Token::Bytes(func_table.marshal())],
             machine,
             Uint256::zero(),
             self.wallet,
@@ -647,7 +642,7 @@ impl<'a> ArbSys<'a> {
         Ok(())
     }
 
-    pub fn _function_table_size(
+    pub fn function_table_size(
         &self,
         machine: &mut Machine,
         addr: Uint256,
@@ -655,13 +650,13 @@ impl<'a> ArbSys<'a> {
         self.addr_to_uint_tx("functionTableSize", machine, addr)
     }
 
-    pub fn _function_table_get(
+    pub fn function_table_get(
         &self,
         machine: &mut Machine,
         addr: Uint256,
         index: Uint256,
     ) -> Result<(Uint256, bool, Uint256), ethabi::Error> {
-        let (receipts, sends) = self.contract_abi.call_function_compressed(
+        let (receipts, sends) = self.contract_abi.call_function(
             self.my_address.clone(),
             "functionTableGet",
             &[
@@ -670,13 +665,13 @@ impl<'a> ArbSys<'a> {
             ],
             machine,
             Uint256::zero(),
-            self.wallet,
             self.debug,
         )?;
         if (receipts.len() != 1) || (sends.len() != 0) {
             return Err(ethabi::Error::from("wrong number of receipts or sends"));
         }
         if !receipts[0].succeeded() {
+            println!("arbsys.function_table_get revert code {}", receipts[0].get_return_code());
             return Err(ethabi::Error::from("reverted"));
         }
 
@@ -701,5 +696,38 @@ impl<'a> ArbSys<'a> {
             )),
             _ => panic!(),
         }
+    }
+}
+
+struct FunctionTableItem {
+    func_code: [u8; 4],
+    is_payable: bool,
+    gas_limit: Uint256,
+}
+
+pub struct FunctionTable {
+    contents: Vec<FunctionTableItem>,
+}
+
+impl FunctionTable {
+    pub fn new() -> Self {
+        FunctionTable{ contents: vec![] }
+    }
+
+    pub fn append(&mut self, func_code: [u8; 4], is_payable: bool, gas_limit: Uint256) {
+        self.contents.push(
+            FunctionTableItem{ func_code, is_payable, gas_limit }
+        );
+    }
+
+    pub fn marshal(&self) -> Vec<u8> {
+        let mut ret = vec![];
+        ret.extend(Uint256::from_usize(self.contents.len()).rlp_encode());
+        for ti in &self.contents {
+            ret.extend(ti.func_code.to_vec());
+            ret.extend(vec![if ti.is_payable { 1u8 } else { 0u8 }]);
+            ret.extend(ti.gas_limit.rlp_encode());
+        }
+        ret
     }
 }
