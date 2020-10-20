@@ -21,7 +21,7 @@ use std::bytearray::bytearray_copy;
 use std::bytestream::bytestream_new;
 use std::bytestream::bytestream_skipBytes;
 
-use std::rlp::rlp_encodeAndHashMessageInfo;
+use std::rlp::rlp_encodeAndHashMessageInfoForSignature;
 use std::rlp::rlp_decodeMessageInfo;
 
 use chainParameters::chainParams_chainId;
