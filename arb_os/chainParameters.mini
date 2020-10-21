@@ -5,10 +5,16 @@
 
 use evmCallStack::evmCallStack_callHitError;
 
+use std::bytearray::MarshalledBytes;
 use std::bytearray::ByteArray;
 use std::bytearray::MarshalledBytes;
 use std::bytearray::bytearray_unmarshalBytes;
 use std::bytearray::bytearray_get256;
+
+use std::bytestream::ByteStream;
+use std::bytestream::bytestream_new;
+use std::bytestream::bytestream_get64;
+use std::bytestream::bytestream_skipBytes;
 
 
 type ChainParams = struct {
