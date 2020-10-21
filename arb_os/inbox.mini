@@ -7,13 +7,15 @@ use std::queue::queue_new;
 use std::queue::queue_isEmpty;
 use std::queue::queue_get;
 use std::queue::queue_put;
-import type QueueStack;
-import func queuestack_new() -> QueueStack;
-import func queuestack_push(qs: QueueStack, q: Queue) -> QueueStack;
-import func queuestack_get(qs: QueueStack) -> option<(QueueStack, any)>;
+use std::queue::QueueStack;
+use std::queue::queuestack_new;
+use std::queue::queuestack_push;
+use std::queue::queuestack_get;
 
 use chainParameters::chainParams_gotParamsMessage;
 use chainParameters::chainParams_chainId;
+
+use messages::TxRequestData;
 
 use messageBatch::MessageBatch;
 use messageBatch::messageBatch_tryNew;
@@ -34,9 +36,9 @@ use std::bytestream::bytestream_new;
 use std::bytestream::bytestream_getByte;
 use std::bytestream::bytestream_get256;
 use std::bytestream::bytestream_getRemainingBytes;
-import func bytestream_skipBytes(bs: ByteStream, nbytes: uint) -> option<ByteStream>;
+use std::bytestream::bytestream_skipBytes;
 
-import impure func decompressAndVerifyEcdsaSignedTx(ba: ByteArray, req: IncomingRequest) -> option<TxRequestData>;
+use decompression::decompressAndVerifyEcdsaSignedTx;
 
 use signedTx::hashUnsignedL2messageInfo;
 use signedTx::translateSignedTx;
@@ -161,19 +163,6 @@ type IncomingRequest = struct {
     sender: address,          // address of the sender
     requestId: uint,
     msgData: MarshalledBytes  // kind-specific data, as a marshalled bytearray
-}
-
-// TxRequestData is declared identically in message.mini and elsewhere.
-type TxRequestData = struct {
-    maxGas: uint,
-    gasPrice: uint,
-    seqNum: option<uint>,
-    caller: address,
-    calleeAddr: address,
-    value: uint,
-    calldata: ByteArray,
-    nonMutating: bool,
-    incomingRequest: IncomingRequest,
 }
 
 public impure func inbox_getNextUnpackedRequest() -> (
