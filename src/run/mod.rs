@@ -4,7 +4,6 @@
 
 //!Provides functionality for running mavm executables.
 
-extern crate crypto;
 use crate::link::LinkedProgram;
 use crate::mavm::{CodePt, Value};
 use emulator::{ExecutionError, StackTrace};

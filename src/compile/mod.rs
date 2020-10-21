@@ -4,12 +4,11 @@
 
 //! Contains utilities for compiling mini source code.
 
-use crate::compile::ast::TypeTree;
 use crate::link::{ExportedFunc, Import, ImportedFunc};
 use crate::mavm::Instruction;
 use crate::pos::{BytePos, Location};
 use crate::stringtable::StringTable;
-use ast::{FuncDecl, GlobalVarDecl};
+use ast::{FuncDecl, GlobalVarDecl, TypeTree};
 use lalrpop_util::lalrpop_mod;
 use mini::DeclsParser;
 use serde::{Deserialize, Serialize};
