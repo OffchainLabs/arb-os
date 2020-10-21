@@ -97,6 +97,53 @@ pub fn evm_xcontract_call_with_constructors(
     Ok(true)
 }
 
+#[cfg(test)]
+pub fn evm_deploy_using_non_eip159_signature(
+    log_to: Option<&Path>,
+    debug: bool
+) -> Result<bool, ethabi::Error> {
+    let rt_env = RuntimeEnvironment::new(Uint256::from_usize(1111));
+    let mut machine = load_from_file(Path::new("arb_os/arbos.mexe"), rt_env);
+    machine.start_at_zero();
+
+    let num_wei = 21700000000140000u64;
+
+    let my_addr = Uint256::from_usize(1025);
+    machine.runtime_env.insert_eth_deposit_message(
+        my_addr.clone(),
+        Uint256::from_string_hex("9c5a87452d4FAC0cbd53BDCA580b20A45526B3AB").unwrap(),
+        Uint256::from_u64(num_wei),
+    );
+    let _gas_used = if debug {
+        machine.debug(None)
+    } else {
+        machine.run(None)
+    }; // handle this eth deposit message
+
+    // submit a "universal deployer" tx referenced by Discord user Agust1211
+    //     see https://gist.github.com/Agusx1211/de05dabf918d448d315aa018e2572031
+    machine.runtime_env.insert_l2_message(
+        my_addr,
+        &hex::decode("04f9010880852416b84e01830222e08080b8b66080604052348015600f57600080fd5b50609980601d6000396000f3fe60a06020601f369081018290049091028201604052608081815260009260609284918190838280828437600092018290525084519495509392505060208401905034f5604080516001600160a01b0383168152905191935081900360200190a0505000fea26469706673582212205a310755225e3c740b2f013fb6343f4c205e7141fcdf15947f5f0e0e818727fb64736f6c634300060a00331ca01820182018201820182018201820182018201820182018201820182018201820a01820182018201820182018201820182018201820182018201820182018201820").expect("Hex decoding failed"),
+        false,
+    );
+    let _gas_used = if debug {
+        machine.debug(None)
+    } else {
+        machine.run(None)
+    }; // handle this deploy message
+
+    let logs = machine.runtime_env.get_all_receipt_logs();
+    assert_eq!(logs.len(), 1);
+    assert!(logs[0].succeeded());
+
+    if let Some(path) = log_to {
+        machine.runtime_env.recorder.to_file(path).unwrap();
+    }
+
+    Ok(true)
+}
+
 pub fn evm_test_create(
     log_to: Option<&Path>,
     debug: bool,
@@ -215,6 +262,113 @@ pub fn evm_xcontract_call_using_batch(
     let tx_id_2 = pc_contract.add_function_call_to_batch(
         &mut batch,
         my_addr.clone(),
+        "transferFib",
+        vec![
+            ethabi::Token::Address(ethereum_types::H160::from_slice(
+                &my_addr.to_bytes_minimal(),
+            )),
+            ethabi::Token::Uint(ethabi::Uint::try_from(1).unwrap()),
+        ]
+        .as_ref(),
+        &mut machine,
+        Uint256::zero(),
+        &wallet,
+    )?;
+
+    machine
+        .runtime_env
+        .insert_batch_message(Uint256::from_usize(1025), &batch);
+
+    let num_logs_before = machine.runtime_env.get_all_receipt_logs().len();
+    let num_sends_before = machine.runtime_env.get_all_sends().len();
+    let _arbgas_used = if debug {
+        machine.debug(None)
+    } else {
+        machine.run(None)
+    };
+    let logs = machine.runtime_env.get_all_receipt_logs();
+    let sends = machine.runtime_env.get_all_sends();
+    let logs = &logs[num_logs_before..];
+    let sends = &sends[num_sends_before..];
+
+    assert_eq!(logs.len(), 2);
+    assert_eq!(sends.len(), 0);
+
+    assert!(logs[0].succeeded());
+    assert_eq!(logs[0].get_request_id(), tx_id_1);
+    let gas_used_so_far_1 = logs[0].get_gas_used_so_far();
+
+    assert!(logs[1].succeeded());
+    assert_eq!(logs[1].get_request_id(), tx_id_2);
+    assert_eq!(
+        gas_used_so_far_1.add(&logs[1].get_gas_used()),
+        logs[1].get_gas_used_so_far()
+    );
+
+    if let Some(path) = log_to {
+        machine.runtime_env.recorder.to_file(path).unwrap();
+    }
+
+    Ok(true)
+}
+
+#[cfg(test)]
+pub fn _evm_xcontract_call_using_compressed_batch(
+    log_to: Option<&Path>,
+    debug: bool,
+    _profile: bool,
+) -> Result<bool, ethabi::Error> {
+    use std::convert::TryFrom;
+    let rt_env = RuntimeEnvironment::new(Uint256::from_usize(1111));
+
+    let wallet = rt_env.new_wallet();
+    let my_addr = Uint256::from_bytes(wallet.address().as_bytes());
+
+    let mut machine = load_from_file(Path::new("arb_os/arbos.mexe"), rt_env);
+    machine.start_at_zero();
+
+    machine.runtime_env.insert_eth_deposit_message(
+        my_addr.clone(),
+        my_addr.clone(),
+        Uint256::from_usize(100000),
+    );
+    let _gas_used = if debug {
+        machine.debug(None)
+    } else {
+        machine.run(None)
+    }; // handle this eth deposit message
+
+    let mut fib_contract =
+        AbiForContract::new_from_file("contracts/fibonacci/build/contracts/Fibonacci.json")?;
+    if fib_contract.deploy(&[], &mut machine, false, debug) == None {
+        panic!("failed to deploy Fibonacci contract");
+    }
+
+    let mut pc_contract =
+        AbiForContract::new_from_file("contracts/fibonacci/build/contracts/PaymentChannel.json")?;
+    if pc_contract.deploy(
+        &[ethabi::Token::Address(ethereum_types::H160::from_slice(
+            &fib_contract.address.to_bytes_be()[12..],
+        ))],
+        &mut machine,
+        false,
+        debug,
+    ) == None
+    {
+        panic!("failed to deploy PaymentChannel contract");
+    }
+
+    let mut batch = machine.runtime_env.new_batch();
+    let tx_id_1 = pc_contract._add_function_call_to_compressed_batch(
+        &mut batch,
+        "deposit",
+        &[],
+        &mut machine,
+        Uint256::from_usize(10000),
+        &wallet,
+    )?;
+    let tx_id_2 = pc_contract._add_function_call_to_compressed_batch(
+        &mut batch,
         "transferFib",
         vec![
             ethabi::Token::Address(ethereum_types::H160::from_slice(
@@ -466,6 +620,67 @@ pub fn evm_direct_deploy_and_call_add(log_to: Option<&Path>, debug: bool) {
     }
 }
 
+pub fn evm_direct_deploy_and_compressed_call_add(log_to: Option<&Path>, debug: bool) {
+    use std::convert::TryFrom;
+    let rt_env = RuntimeEnvironment::new(Uint256::from_usize(1111));
+    let wallet = rt_env.new_wallet();
+    let mut machine = load_from_file(Path::new("arb_os/arbos.mexe"), rt_env);
+    machine.start_at_zero();
+
+    let my_addr = Uint256::from_bytes(wallet.address().as_bytes());
+    let contract = match AbiForContract::new_from_file("contracts/add/build/contracts/Add.json") {
+        Ok(mut contract) => {
+            let result = contract.deploy(&[], &mut machine, false, debug);
+            if let Some(contract_addr) = result {
+                assert_ne!(contract_addr, Uint256::zero());
+                contract
+            } else {
+                panic!("deploy failed");
+            }
+        }
+        Err(e) => {
+            panic!("error loading contract: {:?}", e);
+        }
+    };
+
+    let result = contract.call_function_compressed(
+        my_addr,
+        "add",
+        vec![
+            ethabi::Token::Uint(ethabi::Uint::one()),
+            ethabi::Token::Uint(ethabi::Uint::one()),
+        ]
+        .as_ref(),
+        &mut machine,
+        Uint256::zero(),
+        &wallet,
+        debug,
+    );
+    match result {
+        Ok((logs, sends)) => {
+            assert_eq!(logs.len(), 1);
+            assert_eq!(sends.len(), 0);
+            assert!(logs[0].succeeded());
+            let decoded_result = contract
+                .get_function("add")
+                .unwrap()
+                .decode_output(&logs[0].get_return_data())
+                .unwrap();
+            assert_eq!(
+                decoded_result[0],
+                ethabi::Token::Uint(ethabi::Uint::try_from(2).unwrap())
+            );
+        }
+        Err(e) => {
+            panic!(e.to_string());
+        }
+    }
+
+    if let Some(path) = log_to {
+        machine.runtime_env.recorder.to_file(path).unwrap();
+    }
+}
+
 pub fn evm_payment_to_empty_address(log_to: Option<&Path>, debug: bool) {
     let rt_env = RuntimeEnvironment::new(Uint256::from_usize(1111));
     let mut machine = load_from_file(Path::new("arb_os/arbos.mexe"), rt_env);
@@ -498,6 +713,47 @@ pub fn evm_payment_to_empty_address(log_to: Option<&Path>, debug: bool) {
     assert_eq!(receipts.len(), 1);
     assert_eq!(receipts[0].get_request_id(), tx_id);
     assert!(receipts[0].succeeded());
+
+    if let Some(path) = log_to {
+        machine.runtime_env.recorder.to_file(path).unwrap();
+    }
+}
+
+pub fn evm_eval_sha256(log_to: Option<&Path>, debug: bool) {
+    let rt_env = RuntimeEnvironment::new(Uint256::from_usize(1111));
+    let mut machine = load_from_file(Path::new("arb_os/arbos.mexe"), rt_env);
+    machine.start_at_zero();
+
+    let my_addr = Uint256::from_u64(1025);
+
+    let tx_id = machine.runtime_env.insert_tx_message(
+        my_addr,
+        Uint256::from_u64(1000000000),
+        Uint256::zero(),
+        Uint256::from_u64(2), // sha256 precompile
+        Uint256::from_u64(0),
+        &vec![0xCCu8],
+    );
+
+    let _ = if debug {
+        machine.debug(None)
+    } else {
+        machine.run(None)
+    };
+
+    let receipts = machine.runtime_env.get_all_receipt_logs();
+    assert_eq!(receipts.len(), 1);
+    assert_eq!(receipts[0].get_request_id(), tx_id);
+    assert!(receipts[0].succeeded());
+    let return_data = receipts[0].get_return_data();
+    let return_uint = Uint256::from_bytes(&return_data);
+    assert_eq!(
+        return_uint,
+        Uint256::from_string_hex(
+            "1dd8312636f6a0bf3d21fa2855e63072507453e93a5ced4301b364e91c9d87d6"
+        )
+        .unwrap()
+    );
 
     if let Some(path) = log_to {
         machine.runtime_env.recorder.to_file(path).unwrap();
@@ -600,6 +856,17 @@ pub fn make_logs_for_all_arbos_tests() {
         false,
         false,
     );
+    /*let _ = evm_xcontract_call_using_compressed_batch(
+        Some(Path::new("testlogs/evm_xcontract_call_using_batch.aoslog")),
+        false,
+        false,
+    );*/
+    evm_direct_deploy_and_compressed_call_add(
+        Some(Path::new(
+            "testlogs/evm_direct_deploy_and_compressed_call_add.aoslog",
+        )),
+        false,
+    );
     let _ = evm_test_create(
         Some(Path::new("testlogs/evm_test_create.aoslog")),
         false,
@@ -610,6 +877,7 @@ pub fn make_logs_for_all_arbos_tests() {
         false,
     );
     evm_test_arbsys(Some(Path::new("testlogs/evm_test_arbsys.aoslog")), false);
+    evm_eval_sha256(Some(Path::new("testlogs/evm_eval_sha256.aoslog")), false);
     evm_payment_to_empty_address(
         Some(Path::new("testlogs/payment_to_empty_address.aoslog")),
         false,

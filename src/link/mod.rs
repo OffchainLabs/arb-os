@@ -9,7 +9,6 @@ use crate::mavm::{AVMOpcode, CodePt, Instruction, Label, Opcode, Value};
 use crate::stringtable::{StringId, StringTable};
 use serde::{Deserialize, Serialize};
 use std::collections::hash_map::{DefaultHasher, HashMap};
-use std::fmt::{self, Debug};
 use std::hash::Hasher;
 use std::io;
 use std::path::Path;
@@ -72,14 +71,27 @@ impl LinkedProgram {
     }
 }
 
+#[derive(Clone, Debug)]
+pub struct Import {
+    pub path: Vec<String>,
+    pub name: String,
+}
+
+impl Import {
+    pub fn new(path: Vec<String>, name: String) -> Self {
+        Import { path, name }
+    }
+}
+
 ///Represents a function imported from another mini program or module.
-#[derive(Clone, Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize, Debug)]
 pub struct ImportedFunc {
     pub name_id: StringId,
     pub slot_num: usize,
     pub name: String,
     pub arg_types: Vec<Type>,
     pub ret_type: Type,
+    pub tipe: Type,
     pub is_impure: bool,
 }
 
@@ -96,6 +108,7 @@ impl ImportedFunc {
             name_id,
             slot_num,
             name: string_table.name_from_id(name_id).to_string(),
+            tipe: Type::Func(is_impure, arg_types.clone(), Box::new(ret_type.clone())),
             arg_types,
             ret_type,
             is_impure,
@@ -107,12 +120,6 @@ impl ImportedFunc {
     pub fn relocate(mut self, _int_offset: usize, ext_offset: usize) -> Self {
         self.slot_num += ext_offset;
         self
-    }
-}
-
-impl Debug for ImportedFunc {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> Result<(), fmt::Error> {
-        write!(f, "ImportedFunc({}, {})", self.slot_num, self.name)
     }
 }
 
@@ -276,11 +283,13 @@ pub fn add_auto_link_progs(
 ) -> Result<Vec<(CompiledProgram, bool)>, CompileError> {
     let builtin_pathnames = vec!["builtin/array.mao", "builtin/kvs.mao"];
     let mut progs = progs_in.to_owned();
-    for (idx, pathname) in builtin_pathnames.into_iter().enumerate() {
+    for pathname in builtin_pathnames.into_iter() {
         let path = Path::new(pathname);
-        match compile_from_file(path, u64::MAX - idx as u64, false) {
+        match compile_from_file(path, &mut HashMap::new(), false) {
             Ok(compiled_program) => {
-                progs.push((compiled_program, false));
+                compiled_program
+                    .into_iter()
+                    .for_each(|prog| progs.push((prog, false)));
             }
             Err(e) => {
                 return Err(e);

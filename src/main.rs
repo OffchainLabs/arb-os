@@ -9,9 +9,8 @@ use contracttemplates::generate_contract_template_file_or_die;
 use link::{link, postlink_compile};
 use mavm::Value;
 use run::{profile_gen_from_file, replay_from_testlog_file, run_from_file, RuntimeEnvironment};
-use std::collections::{hash_map::DefaultHasher, HashMap};
+use std::collections::HashMap;
 use std::fs::File;
-use std::hash::Hasher;
 use std::io;
 use std::path::Path;
 
@@ -175,14 +174,12 @@ fn main() -> Result<(), CompileError> {
         if matches.is_present("compileonly") {
             let filename = filenames[0];
             let path = Path::new(filename);
-            let mut file_hasher = DefaultHasher::new();
-            file_hasher.write(filename.as_bytes());
-            let file_id = file_hasher.finish();
-            file_name_chart.insert(file_id, filename.to_string());
-            match compile_from_file(path, file_id, debug_mode) {
+            match compile_from_file(path, &mut file_name_chart, debug_mode) {
                 Ok(mut compiled_program) => {
-                    compiled_program.file_name_chart.extend(file_name_chart);
-                    compiled_program.to_output(&mut *output, matches.value_of("format"));
+                    compiled_program.iter_mut().for_each(|prog| {
+                        prog.file_name_chart.extend(file_name_chart.clone());
+                        prog.to_output(&mut *output, matches.value_of("format"));
+                    });
                 }
                 Err(e) => {
                     println!("Compilation error: {:?}\nIn file: {}", e, filename);
@@ -193,17 +190,24 @@ fn main() -> Result<(), CompileError> {
             let mut compiled_progs = Vec::new();
             for filename in &filenames {
                 let path = Path::new(filename);
-                let mut file_hasher = DefaultHasher::new();
-                file_hasher.write(filename.as_bytes());
-                let file_id = file_hasher.finish();
-                file_name_chart.insert(file_id, (*filename).to_string());
-                match compile_from_file(path, file_id, debug_mode) {
+                match compile_from_file(path, &mut file_name_chart, debug_mode) {
                     Ok(compiled_program) => {
-                        file_name_chart.extend(compiled_program.file_name_chart.clone());
-                        compiled_progs.push(compiled_program);
+                        compiled_program.into_iter().for_each(|prog| {
+                            file_name_chart.extend(prog.file_name_chart.clone());
+                            compiled_progs.push(prog)
+                        });
                     }
                     Err(e) => {
-                        println!("Compilation error: {}\nIn file: {}", e, filename);
+                        println!(
+                            "Compilation error: {}\nIn file: {}",
+                            e,
+                            e.location
+                                .map(|loc| file_name_chart
+                                    .get(&loc.file_id)
+                                    .unwrap_or(&loc.file_id.to_string())
+                                    .clone())
+                                .unwrap_or("Unknown".to_string())
+                        );
                         return Err(e);
                     }
                 }

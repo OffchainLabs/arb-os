@@ -2,23 +2,23 @@
 // Copyright 2020, Offchain Labs, Inc. All rights reserved.
 //
 
-import type ByteArray;
-import type MarshalledBytes;
+use std::bytearray::ByteArray;
+use std::bytearray::MarshalledBytes;
 
-import func bytearray_new(size: uint) -> ByteArray;
-import func bytearray_unmarshalBytes(mbytes: MarshalledBytes) -> ByteArray;
-import func bytearray_size(ba: ByteArray) -> uint;
-import func bytearray_getByte(ba: ByteArray, idx: uint) -> uint;
-import func bytearray_setByte(ba: ByteArray, idx: uint, val: uint) -> ByteArray;
-import func bytearray_get64(ba: ByteArray, idx: uint) -> uint;
-import func bytearray_set64(ba: ByteArray, idx: uint, val: uint) -> ByteArray;
-import func bytearray_get256(ba: ByteArray, offset: uint) -> uint;
-import func bytearray_set256(ba: ByteArray, offset: uint, value: uint) -> ByteArray;
-import func bytearray_marshalFull(ba: ByteArray) -> MarshalledBytes;
-import func bytearray_extract(ba: ByteArray, offset: uint, nbytes: uint) -> ByteArray;
-import func bytearray_copy(from: ByteArray, fromOffset: uint, to: ByteArray, toOffset: uint, nbytes: uint) -> ByteArray;
+use std::bytearray::bytearray_new;
+use std::bytearray::bytearray_unmarshalBytes;
+use std::bytearray::bytearray_size;
+use std::bytearray::bytearray_getByte;
+use std::bytearray::bytearray_setByte;
+use std::bytearray::bytearray_get64;
+use std::bytearray::bytearray_set64;
+use std::bytearray::bytearray_get256;
+use std::bytearray::bytearray_set256;
+use std::bytearray::bytearray_marshalFull;
+use std::bytearray::bytearray_extract;
+use std::bytearray::bytearray_copy;
 
-import func marshalledBytes_hash(mb: MarshalledBytes) -> bytes32;
+use std::bytearray::marshalledBytes_hash;
 
 
 impure func main() {

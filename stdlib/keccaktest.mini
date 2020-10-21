@@ -2,31 +2,25 @@
 // Copyright 2020, Offchain Labs, Inc. All rights reserved.
 //
 
-import type ByteArray;
-import type MarshalledBytes;
-import type Hasher;
+use std::bytearray::ByteArray;
+use std::bytearray::MarshalledBytes;
+use std::keccak::Hasher;
 
-import func bytearray_new(size: uint) -> ByteArray;
-import func bytearray_unmarshalBytes(mbytes: MarshalledBytes) -> ByteArray;
-import func bytearray_size(ba: ByteArray) -> uint;
-import func bytearray_getByte(ba: ByteArray, idx: uint) -> uint;
-import func bytearray_setByte(ba: ByteArray, idx: uint, val: uint) -> ByteArray;
-import func bytearray_get64(ba: ByteArray, idx: uint) -> uint;
-import func bytearray_set64(ba: ByteArray, idx: uint, val: uint) -> ByteArray;
-import func bytearray_get256(ba: ByteArray, offset: uint) -> uint;
-import func bytearray_set256(ba: ByteArray, offset: uint, value: uint) -> ByteArray;
-import func bytearray_copy(
-    from: ByteArray,
-    fromOffset: uint,
-    to: ByteArray,
-    toOffset: uint,
-    nbytes: uint,
-) -> ByteArray;
-import func keccak256(ba: ByteArray, offset: uint, nbytes: uint) -> bytes32;
-import func hasher_new() -> Hasher;
-import func hasher_pushByte(h: Hasher, b: uint) -> Hasher;
-import func hasher_pushN_be(h: Hasher, val: uint, nbytes: uint) -> Hasher;
-import func hasher_finish(h: Hasher) -> bytes32;
+use std::bytearray::bytearray_new;
+use std::bytearray::bytearray_unmarshalBytes;
+use std::bytearray::bytearray_size;
+use std::bytearray::bytearray_getByte;
+use std::bytearray::bytearray_setByte;
+use std::bytearray::bytearray_get64;
+use std::bytearray::bytearray_set64;
+use std::bytearray::bytearray_get256;
+use std::bytearray::bytearray_set256;
+use std::bytearray::bytearray_copy;
+use std::keccak::keccak256;
+use std::keccak::hasher_new;
+use std::keccak::hasher_pushByte;
+use std::keccak::hasher_pushN_be;
+use std::keccak::hasher_finish;
 
 
 impure func main() {
