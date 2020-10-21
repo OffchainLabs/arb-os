@@ -56,8 +56,6 @@ import func rlp_encodeMessageInfo(
     r: uint,
     s: uint
 ) -> ByteArray;
-import func rlp_encodeAndHashMessageInfo(tx: SignedTx) -> bytes32;
-
 
 import impure func recoverSigner(tx: SignedTx) -> option<address>;
 
@@ -215,6 +213,9 @@ public impure func decompressAndVerifyEcdsaSignedTx(
         seqNum = sn;
     }
 
+    if (v < 2) {
+        v = 35 + 2 * chainParams_chainId() + (1 - (v % 2));
+    }
     let tx = struct {
         seqNum: seqNum,
         gasPrice: txRequest.gasPrice,
@@ -222,7 +223,7 @@ public impure func decompressAndVerifyEcdsaSignedTx(
         to: txRequest.calleeAddr,
         value: txRequest.value,
         data: txRequest.calldata,
-        v: 35 + 2 * chainParams_chainId() + (1 - (v % 2)),
+        v: v,
         r: r,
         s: s
     };

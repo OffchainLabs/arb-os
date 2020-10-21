@@ -214,7 +214,7 @@ impl RuntimeEnvironment {
 
         result.extend(Uint256::from_u256(&tx.r).to_bytes_be());
         result.extend(Uint256::from_u256(&tx.s).to_bytes_be());
-        result.extend(vec![(tx.v.as_u64() & 0xff) as u8]);
+        result.extend(vec![(tx.v.as_u64() % 2) as u8]);
 
         (result, keccak256(tx.rlp().as_ref()).to_vec())
     }

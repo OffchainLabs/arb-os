@@ -23,7 +23,7 @@ use std::bytearray::bytearray_getByte;
 use std::bytearray::bytearray_get256;
 use std::bytearray::bytearray_set256;
 
-import func sha256_byteArray(ba: ByteArray) -> bytes32;
+use std::sha256::sha256_byteArray;
 
 use arbsys::arbsys_txcall;
 
@@ -102,7 +102,8 @@ public impure func precompile_0x02() {  // sha256
         let calldata = evmCallFrame_getCalldata(topFrame);
         let result = sha256_byteArray(calldata);
         let success = evmCallStack_setTopFrameMemory(
-            bytearray_set256(bytearray_new(0), 0, uint(result))
+            bytearray_set256(
+            bytearray_new(0), 0, uint(result))
         );
         if (success) {
             evmOp_return(0, 32);

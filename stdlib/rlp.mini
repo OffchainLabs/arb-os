@@ -331,16 +331,19 @@ public func rlp_encodeMessageInfo(
     }
 }
 
-public func rlp_encodeAndHashMessageInfo(tx: SignedTx) -> bytes32 {
+public func rlp_encodeAndHashMessageInfoForSignature(tx: SignedTx, eip155chainId: option<uint>) -> bytes32 {
     let contentsSize = rlp_uintSize(tx.seqNum)
                      + rlp_uintSize(tx.gasPrice)
                      + rlp_uintSize(tx.gasLimit)
                      + rlp_addressSize(tx.to)
                      + rlp_uintSize(tx.value)
-                     + rlp_bytesSize(tx.data, 0, bytearray_size(tx.data))
-                     + rlp_uintSize(tx.v)
-                     + rlp_uintSize(tx.r)
-                     + rlp_uintSize(tx.s);
+                     + rlp_bytesSize(tx.data, 0, bytearray_size(tx.data));
+    if let Some(chainId) = eip155chainId {
+        contentsSize = contentsSize
+                     + rlp_uintSize(chainId)
+                     + rlp_uintSize(0)
+                     + rlp_uintSize(0);
+    }
 
     let hasher = hasher_new();
 
@@ -365,9 +368,11 @@ public func rlp_encodeAndHashMessageInfo(tx: SignedTx) -> bytes32 {
     hasher = rlp_hashAddress(hasher, tx.to);
     hasher = rlp_hashUint(hasher, tx.value);
     hasher = rlp_hashBytes(hasher, tx.data, 0, bytearray_size(tx.data));
-    hasher = rlp_hashUint(hasher, tx.v);
-    hasher = rlp_hashUint(hasher, tx.r);
-    hasher = rlp_hashUint(hasher, tx.s);
+    if let Some(chainId) = eip155chainId {
+        hasher = rlp_hashUint(hasher, chainId);
+        hasher = rlp_hashUint(hasher, 0);
+        hasher = rlp_hashUint(hasher, 0);
+    }
 
     return hasher_finish(hasher);
 }
