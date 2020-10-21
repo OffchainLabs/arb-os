@@ -48,16 +48,9 @@ use std::rlp::rlp_encodeMessageInfo;
 
 use signedTx::recoverSigner;
 
-// This structure describes an incoming request.
-// It is declared identically in inbox.mini and elsewhere
-type IncomingRequest = struct {
-    kind: uint,               // type of message
-    blockNumber: uint,        // block number of the L1 block
-    timestamp: uint,          // timestamp of the L1 block
-    sender: address,          // address of the sender
-    requestId: uint,
-    msgData: MarshalledBytes  // kind-specific data, as a marshalled bytearray
-}
+use inbox::IncomingRequest;
+use messages::TxRequestData;
+use signedTx::SignedTx;
 
 type IndexedAddressTable = struct {
     byIndex: ExpandingIntArray,
@@ -152,33 +145,6 @@ public func decompressTokenAmount(bs: ByteStream) -> option<(ByteStream, uint)> 
     }
     let (ustr, sh) = bytestream_getByte(ustr)?;
     return Some((ustr, base * asm(10, sh) uint { exp }));
-}
-
-// TxRequestData is declared identically in message.mini and elsewhere.
-type TxRequestData = struct {
-    maxGas: uint,
-    gasPrice: uint,
-    seqNum: option<uint>,
-    caller: address,
-    calleeAddr: address,
-    value: uint,
-    calldata: ByteArray,
-    nonMutating: bool,
-    incomingRequest: IncomingRequest,
-}
-
-// This is a copy of a struct defined in ArbOS/signedTx.mini.
-// The declaration here must remain consistent with the one there.
-type SignedTx = struct {
-    seqNum: uint,
-    gasPrice: uint,
-    gasLimit: uint,
-    to: address,
-    value: uint,
-    data: ByteArray,
-    v: uint,
-    r: uint,
-    s: uint
 }
 
 public impure func decompressAndVerifyEcdsaSignedTx(
