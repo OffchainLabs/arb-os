@@ -70,9 +70,10 @@ impure func doInitializationOption(stream: ByteStream) -> option<ByteStream> {
     stream = ustr;
     let (ustr, numPayloadBytes) = bytestream_get64(stream)?;
     stream = ustr;
-    if (optionId == 0) {   // option: premium chain
+    if (optionId == 0) {   // option: Arbitrum Pro chain
         if (numPayloadBytes != 0) {
-            return None;
+            // unexpected payload size; discard the payload and ignore this option
+            return bytestream_skipBytes(stream, numPayloadBytes);
         }
         globalChainParams = Some(globalChainParams? with { isProChain: true });
         return Some(stream);
@@ -113,5 +114,13 @@ public impure func chainParams_baseStake() -> (address, uint) {
         return (params.stakingToken, params.baseStake);
     } else {
         return (address(0), 0);
+    }
+}
+
+public impure func chainParams_isProChain() -> bool {
+    if let Some(params) = globalChainParams {
+        return params.isProChain;
+    } else {
+        return false;
     }
 }
