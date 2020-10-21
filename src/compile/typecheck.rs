@@ -40,7 +40,7 @@ pub struct PropertiesList {
 }
 
 ///A mini function that has been type checked.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct TypeCheckedFunc {
     pub name: StringId,
     pub args: Vec<FuncArg>,

@@ -20,6 +20,7 @@ use std::hash::{Hash, Hasher};
 use std::io::{self, Read};
 use std::path::Path;
 use symtable::SymTable;
+use typecheck::TypeCheckedFunc;
 
 pub use ast::{TopLevelDecl, Type};
 pub use source::Lines;
@@ -50,6 +51,16 @@ struct Module {
     name: String,
 }
 
+#[derive(Clone, Debug)]
+struct TypeCheckedModule {
+    checked_funcs: Vec<TypeCheckedFunc>,
+    string_table: StringTable,
+    imported_funcs: Vec<ImportedFunc>,
+    exported_funcs: Vec<ExportedFunc>,
+    global_vars: Vec<GlobalVarDecl>,
+    name: String,
+}
+
 impl Module {
     fn new(
         imported_funcs: Vec<ImportedFunc>,
@@ -67,6 +78,26 @@ impl Module {
             global_vars,
             string_table,
             func_table,
+            name,
+        }
+    }
+}
+
+impl TypeCheckedModule {
+    fn new(
+        checked_funcs: Vec<TypeCheckedFunc>,
+        string_table: StringTable,
+        imported_funcs: Vec<ImportedFunc>,
+        exported_funcs: Vec<ExportedFunc>,
+        global_vars: Vec<GlobalVarDecl>,
+        name: String,
+    ) -> Self {
+        Self {
+            checked_funcs,
+            string_table,
+            imported_funcs,
+            exported_funcs,
+            global_vars,
             name,
         }
     }
@@ -322,6 +353,7 @@ pub fn compile_from_folder(
             }
         }
     }
+    let mut typechecked = vec![];
     let mut progs = vec![];
     let type_tree = create_type_tree(&programs);
     let mut output = vec![programs
@@ -374,6 +406,24 @@ pub fn compile_from_folder(
                 )
             }
         });
+        typechecked.push(TypeCheckedModule::new(
+            checked_funcs,
+            string_table,
+            imported_funcs,
+            exported_funcs,
+            global_vars,
+            name,
+        ));
+    }
+    for TypeCheckedModule {
+        checked_funcs,
+        string_table,
+        imported_funcs,
+        exported_funcs,
+        global_vars,
+        name,
+    } in typechecked
+    {
         let code_out =
             codegen::mavm_codegen(checked_funcs, &string_table, &imported_funcs, &global_vars)
                 .map_err(|e| CompileError::new(e.reason.to_string(), e.location))?;
