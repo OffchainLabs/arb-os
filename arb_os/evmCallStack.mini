@@ -75,6 +75,8 @@ use main::mainRunLoop;
 use output::sendMessage;
 use output::sendQueuedMessages;
 
+use inbox::IncomingRequest;
+
 
 // This is declared identically in gasAccounting.mini
 type GasUsage = struct {
@@ -123,16 +125,6 @@ type ResumeInfo = struct {  // information used to resume a call after a subcall
 
 var globalCallStack: option<EvmCallFrame>;   // call frame of currently running call, if any
 var globalCurrentTxRequest: TxRequestData;  // request that launched the top-level call
-
-// This struct is declared identically in inbox.mini and elsewhere
-type IncomingRequest = struct {
-    kind: uint,               // type of message
-    blockNumber: uint,        // block number of the L1 block
-    timestamp: uint,          // timestamp of the L1 block
-    sender: address,          // address of the sender
-    requestId: uint,          // unique identifier for this request
-    msgData: MarshalledBytes  // contents of the message, as a marshalled bytearray
-}
 
 public impure func evmCallStack_currentBlockNumber() -> uint {
     return globalCurrentTxRequest.incomingRequest.blockNumber;

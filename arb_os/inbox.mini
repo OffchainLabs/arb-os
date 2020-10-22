@@ -119,6 +119,11 @@ impure func getFromL1Inbox(inbox: Inbox) -> Inbox {
                         sender: address(0),
                         requestId: 0,
                         msgData: unsafecast<MarshalledBytes>(0),
+                        provenance: struct {   // this won't be used
+                            l1SeqNum: 0,
+                            parentRequestId: 0,
+                            indexInParent: ~0,
+                        },
                     }
                 )
             } with {
@@ -126,7 +131,20 @@ impure func getFromL1Inbox(inbox: Inbox) -> Inbox {
             };
         }
     }
-    let newMsg = asm() IncomingRequest { inbox };
+    let newMsgRaw = asm() IncomingRequestFromInbox { inbox };
+    let newMsg = struct {
+        kind: newMsgRaw.kind,
+        blockNumber: newMsgRaw.blockNumber,
+        timestamp: newMsgRaw.timestamp,
+        sender: newMsgRaw.sender,
+        requestId: newMsgRaw.requestId,
+        msgData: newMsgRaw.msgData,
+        provenance: struct {
+            l1SeqNum: newMsgRaw.requestId,
+            parentRequestId: 0,
+            indexInParent: ~0,
+        },
+    };
 
     if (newMsg.blockNumber == 0) {
         newMsg = newMsg with { blockNumber: inbox.blockNum };
@@ -154,15 +172,29 @@ public impure func inbox_currentBlockNumber() -> uint {
     return globalInbox.blockNum;
 }
 
-// This structure describes an incoming request.
-// It is declared identically in inbox.mini and elsewhere
+type IncomingRequestFromInbox = struct {
+    kind: uint,               // type of message
+    blockNumber: uint,        // block number of the L1 block
+    timestamp: uint,          // timestamp of the L1 block
+    sender: address,          // address of the sender
+    requestId: uint,
+    msgData: MarshalledBytes, // kind-specific data, as a marshalled bytearray
+}
+
 type IncomingRequest = struct {
     kind: uint,               // type of message
     blockNumber: uint,        // block number of the L1 block
     timestamp: uint,          // timestamp of the L1 block
     sender: address,          // address of the sender
     requestId: uint,
-    msgData: MarshalledBytes  // kind-specific data, as a marshalled bytearray
+    msgData: MarshalledBytes, // kind-specific data, as a marshalled bytearray
+    provenance: RequestProvenance,
+}
+
+type RequestProvenance = struct {
+    l1SeqNum: uint,
+    parentRequestId: uint,
+    indexInParent: uint,
 }
 
 public impure func inbox_getNextUnpackedRequest() -> (

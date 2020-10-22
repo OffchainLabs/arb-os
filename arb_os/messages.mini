@@ -47,17 +47,8 @@ use std::rlp::keccakOfRlpEncodedUintPair;
 
 use codeSegment::translateEvmCodeSegment;
 
+use inbox::IncomingRequest;
 
-// This structure defines an incoming request.
-// It is declared identically in inbox.mini and elsewhere.
-type IncomingRequest = struct {
-    kind: uint,               // type of message
-    blockNumber: uint,        // block number of the L1 block
-    timestamp: uint,          // timestamp of the L1 block
-    sender: address,          // address of the sender
-    requestId: uint,
-    msgData: MarshalledBytes  // kind-specific data, as a marshalled bytearray
-}
 
 // This is declared identically in gasAccounting.mini
 type GasUsage = struct {

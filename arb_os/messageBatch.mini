@@ -20,19 +20,10 @@ use std::bytestream::bytestream_skipBytes;
 use std::bytearray::marshalledBytes_firstByte;
 use std::bytearray::marshalledBytes_hash;
 
+use inbox::IncomingRequest;
+
 import func rlp_decodeUint(bs: ByteStream) -> option<(ByteStream, uint)>;
 
-
-// This structure defines an incoming request.
-// It is declared identically in inbox.mini and elsewhere.
-type IncomingRequest = struct {
-    kind: uint,               // type of message
-    blockNumber: uint,        // block number of the L1 block
-    timestamp: uint,          // timestamp of the L1 block
-    sender: address,          // address of the sender
-    requestId: uint,
-    msgData: MarshalledBytes  // kind-specific data, as a marshalled bytearray
-}
 
 type MessageBatch = struct {
     template: IncomingRequest,
@@ -46,7 +37,13 @@ public func messageBatch_tryNew(msg: IncomingRequest) -> option<MessageBatch> {
         stream = bytestream_skipBytes(stream, 1)?;
         return Some(
             struct {
-                template: msg,
+                template: msg with {
+                    provenance: struct {
+                        l1SeqNum: msg.provenance.l1SeqNum,
+                        parentRequestId: msg.requestId,
+                        indexInParent: 0,
+                    }
+                },
                 stream: stream,
                 numSoFar: 0,
             }
@@ -68,6 +65,8 @@ public func messageBatch_get(batch: MessageBatch) -> option<(IncomingRequest, Me
             msgData: bytearray_marshalFull(extractedL2data)
         } with {
             requestId: uint(hash(bytes32(batch.template.requestId), bytes32(batch.numSoFar)))
+        } with {
+            provenance: batch.template.provenance with { indexInParent: batch.numSoFar }
         },
         batch with {
             stream: stream

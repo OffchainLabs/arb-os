@@ -43,16 +43,8 @@ use messages::handleL2Request; // return None if message format error; Some(()) 
 use output::emitTxReceipt;
 use arbsys::arbsys_txcall;
 
-// This structure defines an incoming request.
-// It is declared identically in inbox.mini and elsewhere.
-type IncomingRequest = struct {
-    kind: uint,               // type of message
-    blockNumber: uint,        // block number of the L1 block
-    timestamp: uint,          // timestamp of the L1 block
-    sender: address,          // address of the sender
-    requestId: uint,
-    msgData: MarshalledBytes  // kind-specific data, as a marshalled bytearray
-}
+use inbox::IncomingRequest;
+
 
 // TxRequestData is declared identically in message.mini and elsewhere.
 type TxRequestData = struct {
