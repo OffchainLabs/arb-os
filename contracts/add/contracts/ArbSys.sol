@@ -33,4 +33,9 @@ interface ArbSys {
     // This function returns the address of the new contract
     // This is currently the only way to create new contracts in a compiled rollup instance
     function cloneContract(address account) external returns(address);
+
+    event EthWithdrawal(address destAddr, uint amount);
+    event Erc20Withdrawal(address destAddr, address tokenAddr, uint amount);
+    event Erc721Withdrawal(address destAddr, address tokenAddr, uint id);
 }
+
