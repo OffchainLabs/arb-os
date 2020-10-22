@@ -68,7 +68,7 @@ use gasAccounting::gasAccounting_resumeTxCharges;
 
 use codeSegment::translateEvmCodeSegment;
 
-use output::emitLog;
+use output::emitTxReceipt;
 
 use main::mainRunLoop;
 
@@ -217,16 +217,16 @@ public impure func initEvmCallStack(
             } else {
                 if let Some(gasUsage) = gasAccounting_endTxCharges() {
                     // insufficient balance error
-                    emitLog(request.incomingRequest, 4, None<ByteArray>, None<EvmLogs>, Some(gasUsage));
+                    emitTxReceipt(request.incomingRequest, 4, None<ByteArray>, None<EvmLogs>, Some(gasUsage));
                 } else {
                     // unknown error type
-                    emitLog(request.incomingRequest, 255, None<ByteArray>, None<EvmLogs>, None<GasUsage>);
+                    emitTxReceipt(request.incomingRequest, 255, None<ByteArray>, None<EvmLogs>, None<GasUsage>);
                 }
                 evmCallStack_callHitError(1);
             }
         } else {
             // can't pay for gas error
-            emitLog(request.incomingRequest, 3, None<ByteArray>, None<EvmLogs>, None<GasUsage>);
+            emitTxReceipt(request.incomingRequest, 3, None<ByteArray>, None<EvmLogs>, None<GasUsage>);
             evmCallStack_callHitError(2);
         }
     } else {
@@ -259,17 +259,17 @@ public impure func initEvmCallStack(
                 }
 
                 // report success
-                emitLog(request.incomingRequest, 0, None<ByteArray>, None<EvmLogs>, None<GasUsage>);
+                emitTxReceipt(request.incomingRequest, 0, None<ByteArray>, None<EvmLogs>, None<GasUsage>);
                 emptyAvmStack();
                 cleanAvmAuxStackAndCall(mainRunLoop,);  // should never return
             } else {
                 // insufficient balance error
-                emitLog(request.incomingRequest, 4, None<ByteArray>, None<EvmLogs>, None<GasUsage>);
+                emitTxReceipt(request.incomingRequest, 4, None<ByteArray>, None<EvmLogs>, None<GasUsage>);
                 evmCallStack_callHitError(3);
             }
         } else {
             // tx is transfer of 0 Eth, so just report success
-            emitLog(request.incomingRequest, 0, None<ByteArray>, None<EvmLogs>, None<GasUsage>);
+            emitTxReceipt(request.incomingRequest, 0, None<ByteArray>, None<EvmLogs>, None<GasUsage>);
             emptyAvmStack();
             cleanAvmAuxStackAndCall(mainRunLoop,);  // should never return
         }
@@ -327,12 +327,12 @@ public impure func initEvmCallStackForConstructor(
             panic;
         } else {
             // can't pay for gas error
-            emitLog(request.incomingRequest, 3, None<ByteArray>, None<EvmLogs>, None<GasUsage>);
+            emitTxReceipt(request.incomingRequest, 3, None<ByteArray>, None<EvmLogs>, None<GasUsage>);
             evmCallStack_callHitError(15);
         }
     } else {
         // can't pay for gas error
-        emitLog(request.incomingRequest, 3, None<ByteArray>, None<EvmLogs>, None<GasUsage>);
+        emitTxReceipt(request.incomingRequest, 3, None<ByteArray>, None<EvmLogs>, None<GasUsage>);
         evmCallStack_callHitError(4);  // should never return
         panic;
     }
@@ -517,7 +517,7 @@ public impure func evmCallStack_returnFromCall(
                         storageMap = sm;
                     } else {
                         // Somehow the constructor didn't have storage; report error and recover.
-                        emitLog(
+                        emitTxReceipt(
                             globalCurrentIncomingRequest,
                             6,
                             None<ByteArray>,
@@ -553,7 +553,7 @@ public impure func evmCallStack_returnFromCall(
                     sendQueuedMessages(topFrame.sendQueue);
 
                     // Emit log item reporting success
-                    emitLog(
+                    emitTxReceipt(
                         globalCurrentIncomingRequest,
                         0,
                         Some(returnData),
@@ -571,7 +571,7 @@ public impure func evmCallStack_returnFromCall(
                     }
                 } else {
                     // Compilation of resulting code failed; report an error.
-                    emitLog(
+                    emitTxReceipt(
                         globalCurrentIncomingRequest,
                         1,
                         None<ByteArray>,
@@ -616,7 +616,7 @@ public impure func evmCallStack_returnFromCall(
                 }
 
                 // Emit a log item reporting success
-                emitLog(
+                emitTxReceipt(
                     globalCurrentIncomingRequest,
                     0,
                     Some(returnData),
@@ -626,7 +626,7 @@ public impure func evmCallStack_returnFromCall(
             }
         } else {
             // Request failed
-            emitLog(
+            emitTxReceipt(
                 globalCurrentIncomingRequest,
                 1,
                 Some(returnData),

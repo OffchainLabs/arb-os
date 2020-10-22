@@ -26,7 +26,7 @@ use accounts::account_getStartCodePoint;
 use evmCallStack::initEvmCallStack;
 use evmCallStack::initEvmCallStackForConstructor;
 use evmCallStack::evmCallStack_runningCodeFromAccount;
-use output::emitLog;
+use output::emitTxReceipt;
 
 use tokens::tokens_erc20deposit;
 use tokens::tokens_erc721deposit;
@@ -190,7 +190,7 @@ public impure func handleL2Request(
                 accountStore_get(getGlobalAccountStore(), request.caller)
             ) != sequenceNum) {
             // bad sequence number error
-            emitLog(request.incomingRequest, 5, None<ByteArray>, None<EvmLogs>, None<GasUsage>);
+            emitTxReceipt(request.incomingRequest, 5, None<ByteArray>, None<EvmLogs>, None<GasUsage>);
             return Some(());
         }
     }
@@ -199,7 +199,7 @@ public impure func handleL2Request(
         // this is a constructor call
         if (request.incomingRequest.kind == 2) {
             // revert error (tried to call constructor in a non-mutating call)
-            emitLog(request.incomingRequest, 1, None<ByteArray>, None<EvmLogs>, None<GasUsage>);
+            emitTxReceipt(request.incomingRequest, 1, None<ByteArray>, None<EvmLogs>, None<GasUsage>);
             return Some(());
         }
 

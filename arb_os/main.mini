@@ -40,7 +40,7 @@ use decompression::decompression_init;
 use gasAccounting::getNextRequestFromCongestionAuction;
 use messages::handleL1Request; // return None if message format error; Some(()) if other error; if no error, never return
 use messages::handleL2Request; // return None if message format error; Some(()) if other error; if no error, never return
-use output::emitLog;
+use output::emitTxReceipt;
 use arbsys::arbsys_txcall;
 
 // This structure defines an incoming request.
@@ -93,11 +93,11 @@ public impure func mainRunLoop() {
             if (approved) {
                 if(handleL1Request(msg) == None<()>) {
                     // reject for message format error
-                    emitLog(msg, 6, None<ByteArray>, None<EvmLogs>, None<GasUsage>);
+                    emitTxReceipt(msg, 6, None<ByteArray>, None<EvmLogs>, None<GasUsage>);
                 }
             } else {
                 // reject for congestion error
-                emitLog(msg, 2, None<ByteArray>, None<EvmLogs>, None<GasUsage>);
+                emitTxReceipt(msg, 2, None<ByteArray>, None<EvmLogs>, None<GasUsage>);
             }
         } else {
             if let Some(request) = maybeL2 {
@@ -107,11 +107,11 @@ public impure func mainRunLoop() {
                         request
                     ) == None<()>) {
                         // reject for message format error
-                        emitLog(request.incomingRequest, 6, None<ByteArray>, None<EvmLogs>, None<GasUsage>);
+                        emitTxReceipt(request.incomingRequest, 6, None<ByteArray>, None<EvmLogs>, None<GasUsage>);
                     }
                 } else {
                     // reject for congestion error
-                    emitLog(request.incomingRequest, 2, None<ByteArray>, None<EvmLogs>, None<GasUsage>);
+                    emitTxReceipt(request.incomingRequest, 2, None<ByteArray>, None<EvmLogs>, None<GasUsage>);
                 }
             } // else request was not identified as either L1 or L2, which should be impossible
         }
