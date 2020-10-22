@@ -100,7 +100,7 @@ pub fn evm_xcontract_call_with_constructors(
 #[cfg(test)]
 pub fn evm_deploy_using_non_eip159_signature(
     log_to: Option<&Path>,
-    debug: bool
+    debug: bool,
 ) -> Result<bool, ethabi::Error> {
     let rt_env = RuntimeEnvironment::new(Uint256::from_usize(1111));
     let mut machine = load_from_file(Path::new("arb_os/arbos.mexe"), rt_env);
