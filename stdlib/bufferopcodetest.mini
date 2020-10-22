@@ -1,0 +1,10 @@
+//
+// Copyright 2020, Offchain Labs, Inc. All rights reserved.
+//
+
+
+func main() {
+	let ba = newbuffer(33);
+	setbuffer8(ba, 0, getbuffer8(ba, 0)+1);
+}
+
