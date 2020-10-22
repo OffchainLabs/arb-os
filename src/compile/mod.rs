@@ -101,6 +101,14 @@ impl TypeCheckedModule {
             name,
         }
     }
+    fn inline(&mut self) {
+        let mut new_funcs = self.checked_funcs.clone();
+        for f in &mut new_funcs {
+            for s in &mut f.code {
+                s.inline(&self.checked_funcs);
+            }
+        }
+    }
 }
 
 ///Represents a mini program that has been compiled and possibly linked, but has not had post-link
@@ -415,6 +423,7 @@ pub fn compile_from_folder(
             name,
         ));
     }
+    typechecked.iter_mut().for_each(|module| module.inline());
     for TypeCheckedModule {
         checked_funcs,
         string_table,
