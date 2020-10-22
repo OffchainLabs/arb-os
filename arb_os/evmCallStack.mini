@@ -302,6 +302,7 @@ public impure func initEvmCallStackForConstructor(
         )
     );
     if let Some(uas) = accountStore_transferEthBalance(acctStore, request.caller, request.calleeAddr, request.value) {
+        acctStore = uas;
         // don't update globalAccountStore; that happens if/when the constructor commits its results later
 
         globalCallStack = Some(struct {
