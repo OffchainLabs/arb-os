@@ -91,3 +91,39 @@ public func queue_put(q: Queue, val: any) -> Queue {
 public func queue_get(q: Queue) -> option<(Queue, any)> {
     return boundedQueue_get(q);
 }
+
+type QueueStack = option<any>
+type QueueStackCell = struct {
+    head: Queue,
+    rest: QueueStack,
+}
+
+public func queuestack_new() -> QueueStack {
+    return None<any>;
+}
+
+public func queuestack_push(qs: QueueStack, q: Queue) -> QueueStack {
+    return Some(
+        unsafecast<any>(
+            struct {
+                head: q,
+                rest: qs,
+            }
+        )
+    );
+}
+
+public func queuestack_get(qs: QueueStack) -> option<(QueueStack, any)> {
+    loop {
+        let cell = unsafecast<QueueStackCell>(qs?);
+        if let Some(res) = queue_get(cell.head) {
+            let (uq, item) = res;
+            return Some((
+                queuestack_push(cell.rest, uq),
+                item
+            ));
+        } else {
+            qs = cell.rest;
+        }
+    }
+}

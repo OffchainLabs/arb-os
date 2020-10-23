@@ -2,48 +2,69 @@
 // Copyright 2020, Offchain Labs, Inc. All rights reserved.
 //
 
-import type EvmCallFrame;
-import type Account;
-import type ByteArray;
-import type MarshalledBytes;
-import type Stack;
+use evmCallStack::EvmCallFrame;
+use accounts::Account;
+use std::bytearray::ByteArray;
+use std::bytearray::MarshalledBytes;
+import type AccountStore;
+import type ByteStream;
 
-import impure func evmCallStack_topFrame() -> option<EvmCallFrame>;
-import impure func evmCallStack_setAccount(addr: address, acct: Account) -> bool;
-import impure func evmCallStack_getTopFrameMemoryOrDie() -> ByteArray;
-import impure func evmCallStack_setTopFrameMemory(mem: ByteArray) -> bool;
-import impure func evmCallStack_cloneContract(addr: address) -> option<address>;
-import func evmCallStack_callHitError(reason: uint);
+use evmCallStack::evmCallStack_topFrame;
+use evmCallStack::evmCallStack_setAccount;
+use evmCallStack::evmCallStack_getTopFrameMemoryOrDie;
+use evmCallStack::evmCallStack_setTopFrameMemory;
+use evmCallStack::evmCallStack_cloneContract;
+use evmCallStack::evmCallStack_callHitError;
 
-import func evmCallFrame_getCalldata(frame: EvmCallFrame) -> ByteArray;
-import func evmCallFrame_getCallvalue(frame: EvmCallFrame) -> uint;
-import func evmCallFrame_getAccount(frame: EvmCallFrame, addr: address) -> Account;
-import func evmCallFrame_runningAsAddress(frame: EvmCallFrame) -> address;
-import func evmCallFrame_runningAsAccount(frame: EvmCallFrame) -> Account;
-import func evmCallFrame_getParent(frame: EvmCallFrame) -> option<EvmCallFrame>;
-import func evmCallFrame_getCaller(frame: EvmCallFrame) -> address;
+use evmCallStack::evmCallFrame_getCalldata;
+use evmCallStack::evmCallFrame_getCallvalue;
+use evmCallStack::evmCallFrame_getAccount;
+use evmCallStack::evmCallFrame_runningAsAddress;
+use evmCallStack::evmCallFrame_runningAsAccount;
+use evmCallStack::evmCallFrame_getParent;
+use evmCallStack::evmCallFrame_getCaller;
 
-import impure func evmOp_return(memOffset: uint, memNbytes: uint);
-import impure func evmOp_revert_knownCodePc(codeAddr: address, evmPc: uint, memOffset: uint, memNbytes: uint);
+use evmOps::evmOp_return;
+use evmOps::evmOp_revert;
 
-import func account_getAddress(acct: Account) -> address;
-import func account_getNextSeqNum(account: Account) -> uint;
-import func account_getStorageCell(account: Account, cell: uint) -> option<uint>;
-import func account_deductFromEthBalance(acct: Account, amount: uint) -> option<Account>;
+use accounts::account_getAddress;
+use accounts::account_getNextSeqNum;
+use accounts::account_getStorageCell;
+use accounts::account_deductFromEthBalance;
+import impure func getGlobalAccountStore() -> AccountStore;
+import impure func setGlobalAccountStore(acctStore: AccountStore);
+import func accountStore_get(acctStore: AccountStore, addr: address) -> Account;
+import func accountStore_set(acctStore: AccountStore, addr: address, acct: Account) -> AccountStore;
 
-import func bytearray_size(ba: ByteArray) -> uint;
-import func bytearray_getByte(ba: ByteArray, offset: uint) -> uint;
-import func bytearray_get256(ba: ByteArray, offset: uint) -> uint;
-import func bytearray_set256(ba: ByteArray, offset: uint, value: uint) -> ByteArray;
-import func bytearray_extract(ba: ByteArray, offset: uint, nbytes: uint) -> ByteArray;
-import func bytearray_marshalFull(ba: ByteArray) -> MarshalledBytes;
+use std::bytearray::bytearray_size;
+use std::bytearray::bytearray_getByte;
+use std::bytearray::bytearray_get256;
+use std::bytearray::bytearray_set256;
+use std::bytearray::bytearray_extract;
+use std::bytearray::bytearray_marshalFull;
+import func bytearray_new(unused: uint) -> ByteArray;
+
+use inbox::inbox_currentBlockNumber;
+use inbox::inbox_currentTimestamp;
+import func bytestream_new(ba: ByteArray) -> ByteStream;
 
 import func stack_pop(stack: Stack) -> option<(Stack, any)>;
 
 import impure func inbox_currentBlockNumber() -> uint;
 import impure func inbox_currentTimestamp() -> uint;
 
-import impure func queueMessageForSend(msgType: uint, sender: address, data: ByteArray);
+use output::queueMessageForSend;
+
+import type IndexedAddressTable;
+import impure func getGlobalAddressTable() -> IndexedAddressTable;
+import impure func setGlobalAddressTable(gat: IndexedAddressTable);
+import func addressTable_getByAddressAlloc(iat: IndexedAddressTable, addr: address) -> (IndexedAddressTable, uint);
+import func addressTable_getByAddress(iat: IndexedAddressTable, addr: address) -> option<uint>;
+import func addressTable_getByIndex(iat: IndexedAddressTable, index: uint) -> address;  // returns zero if not in table
+import impure func decompressAddress(stream: ByteStream) -> option<(ByteStream, address)>;
+
+import func rlp_encodeUint(val: uint, ba: ByteArray, offset: uint) -> (ByteArray, uint);
+import func rlp_encodeAddress(addr: address, ba: ByteArray, offset: uint) -> (ByteArray, uint);
 
 import impure func pcTableForCode(code: ByteArray) -> option<Stack>;
 
@@ -67,6 +88,14 @@ public impure func arbsys_txcall() {
             arbsys_getStorageAt(topFrame, calldata);
         } elseif(funcCode == 0x3dcfdac7) {
             arbsys_getPcTable(topFrame, calldata);
+        } elseif(funcCode == 0x3b199c19) {
+            arbsys_addressTable_lookupAddress(topFrame, calldata);
+        } elseif(funcCode == 0x4c352200) {
+            arbsys_addressTable_lookupIndex(topFrame, calldata);
+        } elseif(funcCode == 0x9bebbd33) {
+            arbsys_addressTable_decompress(topFrame, calldata);
+        } elseif(funcCode == 0x2a890b98) {
+            arbsys_addressTable_compress(topFrame, calldata);
         } else {
             // unrecognized function code
             evmOp_revert_knownCodePc(address(100), 0, 0, 0);
@@ -204,5 +233,107 @@ impure func arbsys_getPcTable(topFrame: EvmCallFrame, calldata: ByteArray) {
         }
     } else {
         evmOp_revert_knownCodePc(address(100), 0, 0, 0);
+    }
+}
+
+impure func arbsys_addressTable_lookupAddress(topFrame: EvmCallFrame, calldata: ByteArray) {  //(address, bool) -> uint
+// if bool is true, and address not already in table, this allocates space in the table
+// if bool is false, and address not already in table, this just returns MAXUINT
+    if (bytearray_size(calldata) != 68) {
+        evmOp_revert(0, 0);
+    }
+    let addr = address(bytearray_get256(calldata, 4));
+    let flag = (bytearray_get256(calldata, 4+32) != 0);
+    let addrTable = getGlobalAddressTable();
+    let index = 0;
+    if (flag) {
+        let (atab, idx) = addressTable_getByAddressAlloc(addrTable, addr);
+        setGlobalAddressTable(atab);
+        index = idx;
+    } else {
+        if let Some(idx) = addressTable_getByAddress(addrTable, addr) {
+            index = idx;
+        } else {
+            index = ~0;
+        }
+    }
+
+    let success = evmCallStack_setTopFrameMemory(bytearray_set256(evmCallStack_getTopFrameMemoryOrDie(), 0, index));
+    if (success) {
+        evmOp_return(0, 32);
+    } else {
+        evmOp_revert(0, 0);
+    }
+}
+
+impure func arbsys_addressTable_lookupIndex(topFrame: EvmCallFrame, calldata: ByteArray) {  // (uint) -> address
+    if (bytearray_size(calldata) != 36) {
+        evmOp_revert(0, 0);
+    }
+    let index = bytearray_get256(calldata, 4);
+    let addrTable = getGlobalAddressTable();
+    let addr = addressTable_getByIndex(addrTable, index);
+
+    let success = evmCallStack_setTopFrameMemory(bytearray_set256(evmCallStack_getTopFrameMemoryOrDie(), 0, uint(addr)));
+    if (success) {
+        evmOp_return(0, 32);
+    } else {
+        evmOp_revert(0, 0);
+    }
+}
+
+impure func arbsys_addressTable_decompress(topFrame: EvmCallFrame, calldata: ByteArray) {  // (bytes) -> (address, bool)
+    if (bytearray_size(calldata) < 68) {
+        evmOp_revert(0, 0);
+    }
+    let bytesLen = bytearray_get256(calldata, 36);
+    if let Some(res) = decompressAddress(bytestream_new(bytearray_extract(calldata, 68, bytesLen))) {
+        let (_, addr) = res;
+        let success = evmCallStack_setTopFrameMemory(bytearray_set256(evmCallStack_getTopFrameMemoryOrDie(), 0, uint(addr)));
+        if (success) {
+            evmOp_return(0, 32);
+        } else {
+            evmOp_revert(0, 0);
+        }
+    } else {
+        // input was too short
+        evmOp_revert(0, 0);
+    }
+}
+
+impure func arbsys_addressTable_compress(topFrame: EvmCallFrame, calldata: ByteArray) { // (address) -> bytes
+    if (bytearray_size(calldata) != 36) {
+        evmOp_revert(0, 0);
+    }
+    let addr = address(bytearray_get256(calldata, 4));
+    let compressedData = bytearray_new(0);
+    let compressedDataLen = 0;
+    if let Some(index) = addressTable_getByAddress(getGlobalAddressTable(), addr) {
+        let (ba, sz) = rlp_encodeUint(index, compressedData, 0);
+        compressedData = ba;
+        compressedDataLen = sz;
+    } else {
+        let (ba, sz) = rlp_encodeAddress(addr, compressedData, 0);
+        compressedData = ba;
+        compressedDataLen = sz;
+    }
+    let mem = bytearray_set256(
+        bytearray_set256(
+            bytearray_set256(
+                evmCallStack_getTopFrameMemoryOrDie(),
+                0,
+                64
+            ),
+            32,
+            compressedDataLen
+        ),
+        64,
+        bytearray_get256(compressedData, 0)
+    );
+
+    if (evmCallStack_setTopFrameMemory(mem)) {
+        evmOp_return(0, 96);
+    } else {
+        evmOp_revert(0, 0);
     }
 }

@@ -2,13 +2,20 @@
 // Copyright 2020, Offchain Labs, Inc. All rights reserved.
 //
 
-import type ByteArray;
-import type MarshalledBytes;
 
-import func bytearray_unmarshalBytes(mb: MarshalledBytes) -> ByteArray;
-import func bytearray_get256(ba: ByteArray, offset: uint) -> uint;
+use evmCallStack::evmCallStack_callHitError;
 
-import func evmCallStack_callHitError(reason: uint);
+use std::bytearray::MarshalledBytes;
+use std::bytearray::ByteArray;
+use std::bytearray::MarshalledBytes;
+use std::bytearray::bytearray_unmarshalBytes;
+use std::bytearray::bytearray_get256;
+
+use std::bytestream::ByteStream;
+use std::bytestream::bytestream_new;
+use std::bytestream::bytestream_get64;
+use std::bytestream::bytestream_skipBytes;
+
 
 type ChainParams = struct {
     chainAddress: address,
@@ -17,7 +24,8 @@ type ChainParams = struct {
     maxExecutionSteps: uint,  // max number of steps in an assertion
     baseStake: uint,          // base stake of a validator, in wei
     stakingToken: address,    // ERC-20 token used for staking; or zero if using ETH
-    owner: address            // owner of the chain, who has admin privileges (or zero if there is no owner)
+    owner: address,            // owner of the chain, who has admin privileges (or zero if there is no owner)
+    isProChain: bool          // is this an Arbitrum Pro chain?
 }
 
 var globalChainParams: option<ChainParams>;
@@ -37,7 +45,41 @@ public impure func chainParams_gotParamsMessage(sender: address, data: Marshalle
             baseStake: bytearray_get256(ba, 3*32),
             stakingToken: address(bytearray_get256(ba, 4*32)),
             owner: address(bytearray_get256(ba, 5*32)),
+            isProChain: false,
         });
+
+        // now read and process initialization options
+        if let Some(stream) = bytestream_skipBytes(bytestream_new(ba), 5*32) {
+            loop {
+                if let Some(ustr2) = doInitializationOption(stream) {
+                    stream = ustr2;
+                } else {
+                    return;
+                }
+            }
+        }
+    }
+}
+
+impure func doInitializationOption(stream: ByteStream) -> option<ByteStream> {
+    // process one initialization option
+    // on success, return Some(updated stream)
+    // on end-of-stream, return None
+
+    let (ustr, optionId) = bytestream_get64(stream)?;
+    stream = ustr;
+    let (ustr, numPayloadBytes) = bytestream_get64(stream)?;
+    stream = ustr;
+    if (optionId == 0) {   // option: Arbitrum Pro chain
+        if (numPayloadBytes != 0) {
+            // unexpected payload size; discard the payload and ignore this option
+            return bytestream_skipBytes(stream, numPayloadBytes);
+        }
+        globalChainParams = Some(globalChainParams? with { isProChain: true });
+        return Some(stream);
+    } else {
+        // unrecognized option, discard it
+        return bytestream_skipBytes(stream, numPayloadBytes);
     }
 }
 
@@ -72,5 +114,13 @@ public impure func chainParams_baseStake() -> (address, uint) {
         return (params.stakingToken, params.baseStake);
     } else {
         return (address(0), 0);
+    }
+}
+
+public impure func chainParams_isProChain() -> bool {
+    if let Some(params) = globalChainParams {
+        return params.isProChain;
+    } else {
+        return false;
     }
 }

@@ -2,22 +2,22 @@
 // Copyright 2020, Offchain Labs, Inc. All rights reserved.
 //
 
-import type IncomingRequest;
-import type AccountStore;
-import type Account;
-import type EvmLogs;
-import type Queue;
-import type ByteArray;
-import type ByteStream;
-import type MarshalledBytes;
-import type Stack;
-import type StorageMap;
+use inbox::IncomingRequest;
+use accounts::AccountStore;
+use accounts::Account;
+use evmlogs::EvmLogs;
+use std::queue::Queue;
+use std::bytearray::ByteArray;
+use std::bytestream::ByteStream;
+use std::bytearray::MarshalledBytes;
+use std::stack::Stack;
+use std::storageMap::StorageMap;
 
-import impure func errorHandler();
+use errorHandler::errorHandler;
 
-import impure func getGlobalAccountStore() -> AccountStore;
-import impure func setGlobalAccountStore(acctStore: AccountStore);
-import func accountStore_get(store: AccountStore, addr: address) -> Account;
+use accounts::getGlobalAccountStore;
+use accounts::setGlobalAccountStore;
+use accounts::accountStore_get;
 import func accountStore_set(store: AccountStore, addr: address, acct: Account) -> AccountStore;
 import func accountStore_transferEthBalance(
     acctStore: AccountStore,
@@ -25,82 +25,56 @@ import func accountStore_transferEthBalance(
     to: address,
     amount: uint
 ) -> option<AccountStore>;
-import func accountStore_destroyAndTransferBalance(
-    acctStore: AccountStore,
-    victim: address,
-    recipient: address
-) -> AccountStore;
-import func accountStore_cloneContract(
-    acctStore: AccountStore,
-    oldAddr: address,
-    newAddr: address
-) -> option<AccountStore>;
-import func account_setStorageCell(acct: Account, offset: uint, value: uint) -> option<Account>;
-import func account_getBalance(acct: Account) -> uint;
-import func account_setBalance(acct: Account, bal: uint) -> Account;
-import func account_deductFromEthBalance(account: Account, deduction: uint) -> option<Account>;
-import func account_getAllStorage(account: Account) -> option<StorageMap>;
-import func account_getStartCodePoint(account: Account) -> option<impure func()>;
-import func account_setContractInfo(
-    acct: Account,
-    code: ByteArray,
-    evmJumpTable: map<uint, impure func()>,
-    startCodePoint: impure func(),
-    storage: StorageMap
-) -> Account;
-import func account_fetchAndIncrSeqNum(account: Account) -> (uint, Account);
-import func account_incrSeqNum(account: Account) -> Account;
-import func pristineAccount(addr: address) -> Account;
 
-import func evmlogs_empty() -> EvmLogs;
-import func evmlogs_appendAny(logs: EvmLogs, item: any) -> EvmLogs;
+use accounts::accountStore_destroyAndTransferBalance;
+use accounts::accountStore_cloneContract;
+use accounts::account_setStorageCell;
+use accounts::account_getBalance;
+use accounts::account_setBalance;
+use accounts::account_deductFromEthBalance;
+use accounts::account_getAllStorage;
+use accounts::account_getStartCodePoint;
+use accounts::account_setContractInfo;
+use accounts::account_fetchAndIncrSeqNum;
+use accounts::account_incrSeqNum;
+use accounts::pristineAccount;
 
-import func bytearray_new(capacity: uint) -> ByteArray;
-import func bytearray_marshalFull(ba: ByteArray) -> MarshalledBytes;
-import func bytearray_extract(ba: ByteArray, offset: uint, nbytes: uint) -> ByteArray;
-import func bytearray_copy(
-    from: ByteArray,   fromOffset: uint,
-    to: ByteArray,     toOffset: uint,
-    nbytes: uint
-) -> ByteArray;
-import func bytearray_setByte(ba: ByteArray, offset: uint, value: uint) -> ByteArray;
-import func bytearray_set256(ba: ByteArray, offset: uint, value: uint) -> ByteArray;
-import func bytestream_new(ba: ByteArray) -> ByteStream;
+use evmlogs::evmlogs_empty;
+use evmlogs::evmlogs_appendAny;
 
-import func storageMap_new() -> StorageMap;
+use std::bytearray::bytearray_new;
+use std::bytearray::bytearray_marshalFull;
+use std::bytearray::bytearray_extract;
+use std::bytearray::bytearray_copy;
+use std::bytearray::bytearray_setByte;
+use std::bytearray::bytearray_set256;
+use std::bytestream::bytestream_new;
 
-import func queue_new() -> Queue;
-import func queue_isEmpty(q: Queue) -> bool;
-import func queue_get(q: Queue) -> option<(Queue, any)>;
-import func queue_put(q: Queue, val: any) -> Queue;
+use std::storageMap::storageMap_new;
 
-import func stack_new() -> Stack;
-import func stack_isEmpty(stack: Stack) -> bool;
-import func stack_push(stack: Stack, value: any) -> Stack;
-import func stack_pop(stack: Stack) -> option<(Stack, any)>;
+use std::queue::queue_new;
+use std::queue::queue_isEmpty;
+use std::queue::queue_get;
+use std::queue::queue_put;
 
-import impure func gasAccounting_startTxCharges(maxGas: uint, gasPrice: uint, payer: address) -> option<()>;
-import impure func gasAccounting_endTxCharges() -> option<GasUsage>;
-import impure func gasAccounting_pauseTxCharges() -> uint;
-import impure func gasAccounting_resumeTxCharges(allocation: uint) -> uint;
+use std::stack::stack_new;
+use std::stack::stack_isEmpty;
+use std::stack::stack_push;
+use std::stack::stack_pop;
 
-import impure func translateEvmCodeSegment(
-    bs: ByteStream,
-    makePcTable: bool
-) -> option<(impure func(), map<uint, impure func()>, Stack)>;
+use gasAccounting::gasAccounting_startTxCharges;
+use gasAccounting::gasAccounting_endTxCharges;
+use gasAccounting::gasAccounting_pauseTxCharges;
+use gasAccounting::gasAccounting_resumeTxCharges;
 
-import impure func emitLog(
-    l1message: IncomingRequest,
-    resultCode: uint,
-    maybeReturnData: option<ByteArray>,
-    maybeEvmLogs: option<EvmLogs>,
-    gasUsage: option<GasUsage>,
-);
+use codeSegment::translateEvmCodeSegment;
 
-import impure func mainRunLoop();
+use output::emitLog;
 
-import impure func sendMessage(msgType: uint, sender: address, data: ByteArray);
-import impure func sendQueuedMessages(queue: Queue);
+use main::mainRunLoop;
+
+use output::sendMessage;
+use output::sendQueuedMessages;
 
 
 // This is declared identically in gasAccounting.mini

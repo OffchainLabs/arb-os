@@ -2,35 +2,30 @@
 // Copyright 2020, Offchain Labs, Inc. All rights reserved.
 //
 
-import type EvmCallFrame;
-import type AccountStore;
-import type ByteArray;
+use accounts::AccountStore;
+use evmCallStack::EvmCallFrame;
+use std::bytearray::ByteArray;
 
-import impure func evmCallStack_topFrame() -> option<EvmCallFrame>;
-import impure func evmCallStack_setTopFrameMemory(mem: ByteArray) -> bool;
-import func evmCallFrame_getCalldata(frame: EvmCallFrame) -> ByteArray;
+use evmCallStack::evmCallStack_topFrame;
+use evmCallStack::evmCallStack_setTopFrameMemory;
+use evmCallStack::evmCallFrame_getCalldata;
 
-import impure func evmOp_return(offset: uint, nbytes: uint);
-import impure func evmOp_revert_knownPc(evmPc: uint, offset: uint, nbytes: uint);
+use evmOps::evmOp_return;
+use evmOps::evmOp_revert;
 
-import func getGlobalAccountStore() -> AccountStore;
-import func setGlobalAccountStore(acctStore: AccountStore);
-import func accountStore_createBuiltinContract(
-    acctStore: AccountStore,
-    addr: address,
-    entryPoint: impure func(),
-    isArbitrumStyle: bool
-) -> option<AccountStore>;
+use accounts::getGlobalAccountStore;
+use accounts::setGlobalAccountStore;
+use accounts::accountStore_createBuiltinContract;
 
-import func bytearray_new(capacity: uint) -> ByteArray;
-import func bytearray_size(ba: ByteArray) -> uint;
-import func bytearray_getByte(ba: ByteArray, offset: uint) -> uint;
-import func bytearray_get256(ba: ByteArray, offset: uint) -> uint;
-import func bytearray_set256(ba: ByteArray, offset: uint, val: uint) -> ByteArray;
+use std::bytearray::bytearray_new;
+use std::bytearray::bytearray_size;
+use std::bytearray::bytearray_getByte;
+use std::bytearray::bytearray_get256;
+use std::bytearray::bytearray_set256;
 
-import func sha256_byteArray(ba: ByteArray) -> bytes32;
+use std::sha256::sha256_byteArray;
 
-import impure func arbsys_txcall();
+use arbsys::arbsys_txcall;
 
 
 public impure func precompiles_init(acctStore: AccountStore) -> option<AccountStore> {
@@ -107,7 +102,8 @@ public impure func precompile_0x02() {  // sha256
         let calldata = evmCallFrame_getCalldata(topFrame);
         let result = sha256_byteArray(calldata);
         let success = evmCallStack_setTopFrameMemory(
-            bytearray_set256(bytearray_new(0), 0, uint(result))
+            bytearray_set256(
+            bytearray_new(0), 0, uint(result))
         );
         if (success) {
             evmOp_return(0, 32);

@@ -26,6 +26,7 @@ pub struct RuntimeEnvironment {
     pub caller_seq_nums: HashMap<Uint256, Uint256>,
     next_id: Uint256, // used to assign unique (but artificial) txids to messages
     pub recorder: RtEnvRecorder,
+    compressor: TxCompressor,
 }
 
 impl RuntimeEnvironment {
@@ -41,6 +42,7 @@ impl RuntimeEnvironment {
             caller_seq_nums: HashMap::new(),
             next_id: Uint256::zero(),
             recorder: RtEnvRecorder::new(),
+            compressor: TxCompressor::new(),
         };
         ret.insert_l1_message(4, chain_address, &RuntimeEnvironment::get_params_bytes());
         ret
@@ -181,6 +183,42 @@ impl RuntimeEnvironment {
         (buf, keccak256(&rlp_buf).to_vec())
     }
 
+    pub fn make_compressed_and_signed_l2_message(
+        &mut self,
+        gas_price: Uint256,
+        gas_limit: Uint256,
+        to_addr: Uint256,
+        value: Uint256,
+        calldata: &[u8],
+        wallet: &Wallet,
+    ) -> (Vec<u8>, Vec<u8>) {
+        let sender = Uint256::from_bytes(wallet.address().as_bytes());
+        let mut result = vec![7u8];
+        let seq_num = self.get_and_incr_seq_num(&sender);
+        result.extend(seq_num.rlp_encode());
+        result.extend(gas_price.rlp_encode());
+        result.extend(gas_limit.rlp_encode());
+        result.extend(self.compressor.compress_address(to_addr.clone()));
+        result.extend(self.compressor.compress_token_amount(value.clone()));
+        result.extend(calldata);
+
+        let tx_for_signing = TransactionRequest::new()
+            .from(sender.to_h160())
+            .to(to_addr.to_h160())
+            .gas(gas_limit.to_u256())
+            .gas_price(gas_price.to_u256())
+            .value(value.to_u256())
+            .data(calldata.to_vec())
+            .nonce(seq_num.to_u256());
+        let tx = wallet.sign_transaction(tx_for_signing).unwrap();
+
+        result.extend(Uint256::from_u256(&tx.r).to_bytes_be());
+        result.extend(Uint256::from_u256(&tx.s).to_bytes_be());
+        result.extend(vec![(tx.v.as_u64() % 2) as u8]);
+
+        (result, keccak256(tx.rlp().as_ref()).to_vec())
+    }
+
     pub fn append_signed_tx_message_to_batch(
         &mut self,
         batch: &mut Vec<u8>,
@@ -202,7 +240,40 @@ impl RuntimeEnvironment {
             wallet,
         );
         let msg_size: u64 = msg.len().try_into().unwrap();
-        batch.extend(&msg_size.to_be_bytes());
+        let rlp_encoded_len = Uint256::from_u64(msg_size).rlp_encode();
+        batch.extend(rlp_encoded_len.clone());
+        println!(
+            "batch item size {}, RLP(size).len {}, RLP-encoded: {:?}",
+            msg_size,
+            rlp_encoded_len.len(),
+            rlp_encoded_len
+        );
+        batch.extend(msg);
+        tx_id_bytes
+    }
+
+    #[cfg(test)]
+    pub fn _append_compressed_and_signed_tx_message_to_batch(
+        &mut self,
+        batch: &mut Vec<u8>,
+        max_gas: Uint256,
+        gas_price_bid: Uint256,
+        to_addr: Uint256,
+        value: Uint256,
+        calldata: Vec<u8>,
+        wallet: &Wallet,
+    ) -> Vec<u8> {
+        let (msg, tx_id_bytes) = self.make_compressed_and_signed_l2_message(
+            gas_price_bid,
+            max_gas,
+            to_addr,
+            value,
+            &calldata,
+            wallet,
+        );
+        let msg_size: u64 = msg.len().try_into().unwrap();
+        let rlp_encoded_len = Uint256::from_u64(msg_size).rlp_encode();
+        batch.extend(rlp_encoded_len.clone());
         batch.extend(msg);
         tx_id_bytes
     }
@@ -319,6 +390,59 @@ impl RuntimeEnvironment {
 
     pub fn get_all_sends(&self) -> Vec<Value> {
         self.sends.clone()
+    }
+}
+
+// TxCompressor assumes that all client traffic uses it.
+// For example, it assumes nobody else affects ArbOS's address compression table.
+// This is fine for testing but wouldn't work in a less controlled setting.
+#[derive(Debug, Clone)]
+pub struct TxCompressor {
+    address_map: HashMap<Vec<u8>, Vec<u8>>,
+    next_index: u64,
+}
+
+impl TxCompressor {
+    pub fn new() -> Self {
+        TxCompressor {
+            address_map: HashMap::new(),
+            next_index: 0,
+        }
+    }
+
+    pub fn compress_address(&mut self, addr: Uint256) -> Vec<u8> {
+        if let Some(rlp_bytes) = self.address_map.get(&addr.to_bytes_be()) {
+            rlp_bytes.clone()
+        } else {
+            let addr_bytes = addr.to_bytes_be();
+            self.address_map.insert(
+                addr_bytes.clone(),
+                Uint256::from_u64(self.next_index).rlp_encode(),
+            );
+            self.next_index = 1 + self.next_index;
+            let mut ret = vec![148u8];
+            ret.extend(addr_bytes[12..32].to_vec());
+            ret
+        }
+    }
+
+    pub fn compress_token_amount(&self, mut amt: Uint256) -> Vec<u8> {
+        if amt.is_zero() {
+            amt.rlp_encode()
+        } else {
+            let mut num_zeroes = 0;
+            let ten = Uint256::from_u64(10);
+            loop {
+                if amt.modulo(&ten).unwrap().is_zero() {
+                    num_zeroes = 1 + num_zeroes;
+                    amt = amt.div(&ten).unwrap();
+                } else {
+                    let mut result = amt.rlp_encode();
+                    result.extend(vec![num_zeroes as u8]);
+                    return result;
+                }
+            }
+        }
     }
 }
 
