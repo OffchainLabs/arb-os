@@ -70,6 +70,7 @@ use gasAccounting::gasAccounting_resumeTxCharges;
 use codeSegment::translateEvmCodeSegment;
 
 use output::emitLog;
+use output::queueMessageForSend;
 
 use main::mainRunLoop;
 
