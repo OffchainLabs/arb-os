@@ -2,37 +2,45 @@
 // Copyright 2020, Offchain Labs, Inc. All rights reserved.
 //
 
-import type Queue;
-import func queue_new() -> Queue;
-import func queue_isEmpty(q: Queue) -> bool;
-import func queue_get(q: Queue) -> option<(Queue, any)>;
-import func queue_put(q: Queue, val: any) -> Queue;
+use std::queue::Queue;
+use std::queue::queue_new;
+use std::queue::queue_isEmpty;
+use std::queue::queue_get;
+use std::queue::queue_put;
+import type QueueStack;
+import func queuestack_new() -> QueueStack;
+import func queuestack_push(qs: QueueStack, q: Queue) -> QueueStack;
+import func queuestack_get(qs: QueueStack) -> option<(QueueStack, any)>;
 
-import impure func chainParams_gotParamsMessage(sender: address, data: MarshalledBytes);
-import impure func chainParams_chainId() -> uint;
+use chainParameters::chainParams_gotParamsMessage;
+use chainParameters::chainParams_chainId;
 
-import type MessageBatch;
-import func messageBatch_tryNew(msg: IncomingRequest) -> option<MessageBatch>;
-import func messageBatch_get(batch: MessageBatch) -> option<(IncomingRequest, MessageBatch)>;
+use messageBatch::MessageBatch;
+use messageBatch::messageBatch_tryNew;
+use messageBatch::messageBatch_get;
 
-import impure func outputStats_endOfBlock(blockNum: uint, timestamp: uint);
+use output::outputStats_endOfBlock;
 
-import type ByteArray;
-import type MarshalledBytes;
-import func marshalledBytes_firstByte(mb: MarshalledBytes) -> uint;
-import func marshalledBytes_hash(mb: MarshalledBytes) -> bytes32;
-import func bytearray_unmarshalBytes(mb: MarshalledBytes) -> ByteArray;
-import func bytearray_new(capacityHint: uint) -> ByteArray;
-import func bytearray_get256(ba: ByteArray, offset: uint) -> uint;
+use std::bytearray::ByteArray;
+use std::bytearray::MarshalledBytes;
+use std::bytearray::marshalledBytes_firstByte;
+use std::bytearray::marshalledBytes_hash;
+use std::bytearray::bytearray_unmarshalBytes;
+use std::bytearray::bytearray_new;
+use std::bytearray::bytearray_get256;
 
-import type ByteStream;
-import func bytestream_new(ba: ByteArray) -> ByteStream;
-import func bytestream_getByte(bs: ByteStream) -> option<(ByteStream, uint)>;
-import func bytestream_get256(bs: ByteStream) -> option<(ByteStream, uint)>;
-import func bytestream_getRemainingBytes(bs: ByteStream) -> ByteArray;
+use std::bytestream::ByteStream;
+use std::bytestream::bytestream_new;
+use std::bytestream::bytestream_getByte;
+use std::bytestream::bytestream_get256;
+use std::bytestream::bytestream_getRemainingBytes;
+import func bytestream_skipBytes(bs: ByteStream, nbytes: uint) -> option<ByteStream>;
 
-import func hashUnsignedL2messageInfo(l2msg: MarshalledBytes, chainId: uint, sender: address) -> bytes32;
-import func translateSignedTx(req: IncomingRequest) -> option<TxRequestData>;
+import impure func decompressAndVerifyEcdsaSignedTx(ba: ByteArray, req: IncomingRequest) -> option<TxRequestData>;
+
+use signedTx::hashUnsignedL2messageInfo;
+use signedTx::translateSignedTx;
+
 
 type Inbox = struct {
     queue: Queue,     // Queue of messages that haven't yet been retrieved from the inbox
@@ -42,7 +50,10 @@ type Inbox = struct {
 }
 
 var globalInbox: Inbox;
-var globalQueueFromBatch: Queue;
+var globalInputQueue: struct {
+    txQ: Queue,
+    batchQ: QueueStack,
+};
 
 public impure func inbox_init() {
     globalInbox = struct {
@@ -51,7 +62,10 @@ public impure func inbox_init() {
         timestamp: 0,
         needToPeek: false,   // don't peek before the first message
     };
-    globalQueueFromBatch = queue_new();
+    globalInputQueue = struct {
+        txQ: queue_new(),
+        batchQ: queuestack_new()
+    };
 }
 
 public impure func inbox_get() -> IncomingRequest {
@@ -168,9 +182,18 @@ public impure func inbox_getNextUnpackedRequest() -> (
 ) {
     let msg = unsafecast<IncomingRequest>(());   // value will be re-initialized before use
     loop {
-        if let Some(res) = queue_get(globalQueueFromBatch) {
+        if let Some(res) = queue_get(globalInputQueue.txQ) {
+            let (newQ, tx) = res;
+            globalInputQueue = globalInputQueue with {
+                txQ: newQ
+            };
+            return (None<IncomingRequest>, Some(unsafecast<TxRequestData>(tx)));
+        }
+        if let Some(res) = queuestack_get(globalInputQueue.batchQ) {
             let (newQ, rawMsg) = res;
-            globalQueueFromBatch = newQ;
+            globalInputQueue = globalInputQueue with {
+                batchQ: newQ
+            };
             msg = unsafecast<IncomingRequest>(rawMsg);
         } else {
             msg = inbox_get();
@@ -179,7 +202,7 @@ public impure func inbox_getNextUnpackedRequest() -> (
         if let Some(batch) = messageBatch_tryNew(msg) {
             // it's a batch message, so unpack its components and queue them
             let moreToDo = true;
-            let queue = globalQueueFromBatch;
+            let queue = queue_new();
             while (moreToDo) {
                 if let Some(res) = messageBatch_get(batch) {
                     let (newMsg, restOfBatch) = res;
@@ -189,7 +212,9 @@ public impure func inbox_getNextUnpackedRequest() -> (
                     moreToDo = false;
                 }
             }
-            globalQueueFromBatch = queue;
+            globalInputQueue = globalInputQueue with {
+                batchQ: queuestack_push(globalInputQueue.batchQ, queue)
+            };
         } else {
             // it's not a batch, so process it immediately
             // get its maxGas amount -- for now, set the limit high, unless caller asked for less
@@ -205,6 +230,15 @@ public impure func inbox_getNextUnpackedRequest() -> (
                 } elseif (firstByte == 4) {
                     // it's a signed tx; verify sig and then process request or discard
                     if let Some(txRequest) = translateSignedTx(msg) {
+                        return (None<IncomingRequest>, Some(txRequest));
+                    }
+                    // else signature was invalid, ignore msg and execute loop again to get another
+                } elseif (firstByte == 7) {
+                    // it's a single message with compressed headers
+                    if let Some(txRequest) = decompressAndVerifyEcdsaSignedTx(
+                        bytearray_unmarshalBytes(msg.msgData),
+                        msg
+                    ) {
                         return (None<IncomingRequest>, Some(txRequest));
                     }
                     // else signature was invalid, ignore msg and execute loop again to get another
@@ -227,7 +261,7 @@ public impure func inbox_getNextUnpackedRequest() -> (
     }
 }
 
-func translateUnsignedTx(request: IncomingRequest) -> option<TxRequestData> {
+impure func translateUnsignedTx(request: IncomingRequest) -> option<TxRequestData> {
     let inStream = bytestream_new(bytearray_unmarshalBytes(request.msgData));
     let (us, subtype) = bytestream_getByte(inStream)?;
     inStream = us;

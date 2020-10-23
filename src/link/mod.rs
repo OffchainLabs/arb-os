@@ -283,9 +283,9 @@ pub fn add_auto_link_progs(
 ) -> Result<Vec<(CompiledProgram, bool)>, CompileError> {
     let builtin_pathnames = vec!["builtin/array.mao", "builtin/kvs.mao"];
     let mut progs = progs_in.to_owned();
-    for (idx, pathname) in builtin_pathnames.into_iter().enumerate() {
+    for pathname in builtin_pathnames.into_iter() {
         let path = Path::new(pathname);
-        match compile_from_file(path, u64::MAX - idx as u64, false) {
+        match compile_from_file(path, &mut HashMap::new(), false) {
             Ok(compiled_program) => {
                 compiled_program
                     .into_iter()
