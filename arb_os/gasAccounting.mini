@@ -13,6 +13,7 @@ use accounts::getGlobalAccountStore;
 use accounts::setGlobalAccountStore;
 use accounts::accountStore_get;
 use accounts::accountStore_set;
+use accounts::account_getBalance;
 use accounts::account_addToEthBalance;
 use accounts::account_deductFromEthBalance;
 
