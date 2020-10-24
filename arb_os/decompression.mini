@@ -415,7 +415,7 @@ public func parseAggregatorFunctionTable(
 
 public impure func functionTableSize(addr: address) -> option<uint> {
     let funcTable = (account_getAggregatorDecompressionState(evmCallStack_getAccount(addr)?)?).functionTable;
-    return Some(funcTable));
+    return Some(len(funcTable));
 }
 
 public impure func getFromFunctionTable(addr: address, index: uint) -> option<(uint, bool, uint)> {
