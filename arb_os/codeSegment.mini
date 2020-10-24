@@ -2,10 +2,12 @@
 // Copyright 2020, Offchain Labs, Inc. All rights reserved.
 //
 
+use std::stack::Stack;
 use std::bytestream::ByteStream;
 
 use evmCallStack::evmCallStack_callHitError;
 
+use std::bytestream::bytestream_new;
 use std::bytestream::bytestream_atEof;
 use std::bytestream::bytestream_bytesReadSoFar;
 use std::bytestream::bytestream_bytesRemaining;

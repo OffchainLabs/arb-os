@@ -532,10 +532,10 @@ public impure func evmCallStack_returnFromCall(
                     // Update the global account store
                     setGlobalAccountStore(
                         accountStore_set(
-                            getGlobalAccountStore(),
-                            topFrame.runningCodeFrom,
+                            topFrame.accountStore,
+                            topFrame.runningAs,
                             account_setContractInfo(
-                                pristineAccount(topFrame.runningCodeFrom),
+                                topFrame.runningAsAccount,
                                 returnData,
                                 evmJumpTable,
                                 entryPoint,

@@ -25,6 +25,7 @@ use evmCallStack::evmCallStack_selfDestructCurrentAccount;
 use evmCallStack::evmCallStack_doCall;
 use evmCallStack::evmCallStack_returnFromCall;
 use evmCallStack::evmCallStack_callHitError;
+use evmCallStack::evmCallStack_runningCodeFromAccount;
 
 use evmCallStack::evmCallFrame_runningAsAccount;
 use evmCallStack::evmCallFrame_runningCodeFromAccount;
