@@ -27,8 +27,10 @@ use std::bytearray::ByteArray;
 use std::bytearray::MarshalledBytes;
 use std::bytearray::marshalledBytes_firstByte;
 use std::bytearray::marshalledBytes_hash;
+use std::bytearray::bytearray_marshalFull;
 use std::bytearray::bytearray_unmarshalBytes;
 use std::bytearray::bytearray_new;
+use std::bytearray::bytearray_getByte;
 use std::bytearray::bytearray_get256;
 
 use std::bytestream::ByteStream;
@@ -118,7 +120,7 @@ impure func getFromL1Inbox(inbox: Inbox) -> Inbox {
                         timestamp: inbox.timestamp,
                         sender: address(0),
                         requestId: 0,
-                        msgData: unsafecast<MarshalledBytes>(0),
+                        msgData: bytearray_new(0),
                         provenance: struct {   // this won't be used
                             l1SeqNum: 0,
                             parentRequestId: 0,
@@ -138,7 +140,7 @@ impure func getFromL1Inbox(inbox: Inbox) -> Inbox {
         timestamp: newMsgRaw.timestamp,
         sender: newMsgRaw.sender,
         requestId: newMsgRaw.requestId,
-        msgData: newMsgRaw.msgData,
+        msgData: bytearray_unmarshalBytes(newMsgRaw.msgData),
         provenance: struct {
             l1SeqNum: newMsgRaw.requestId,
             parentRequestId: 0,
@@ -187,7 +189,7 @@ type IncomingRequest = struct {
     timestamp: uint,          // timestamp of the L1 block
     sender: address,          // address of the sender
     requestId: uint,
-    msgData: MarshalledBytes, // kind-specific data, as a marshalled bytearray
+    msgData: ByteArray,       // kind-specific data
     provenance: RequestProvenance,
 }
 
@@ -245,7 +247,7 @@ public impure func inbox_getNextUnpackedRequest() -> (
                 outputStats_endOfBlock(msg.blockNumber, msg.timestamp);
             } elseif (msg.kind == 3) {
                 // it's an L2 message, so switch based on the L2 type
-                let firstByte = marshalledBytes_firstByte(msg.msgData);
+                let firstByte = bytearray_getByte(msg.msgData, 0);
                 if (firstByte == 6) {
                     // it's a heartbeat message, don't do anything
                 } elseif (firstByte == 4) {
@@ -256,10 +258,7 @@ public impure func inbox_getNextUnpackedRequest() -> (
                     // else signature was invalid, ignore msg and execute loop again to get another
                 } elseif (firstByte == 7) {
                     // it's a single message with compressed headers
-                    if let Some(txRequest) = decompressAndVerifyEcdsaSignedTx(
-                        bytearray_unmarshalBytes(msg.msgData),
-                        msg
-                    ) {
+                    if let Some(txRequest) = decompressAndVerifyEcdsaSignedTx(msg.msgData, msg) {
                         return (None<IncomingRequest>, Some(txRequest));
                     }
                     // else signature was invalid, ignore msg and execute loop again to get another
@@ -283,7 +282,7 @@ public impure func inbox_getNextUnpackedRequest() -> (
 }
 
 impure func translateUnsignedTx(request: IncomingRequest) -> option<TxRequestData> {
-    let inStream = bytestream_new(bytearray_unmarshalBytes(request.msgData));
+    let inStream = bytestream_new(request.msgData);
     let (us, subtype) = bytestream_getByte(inStream)?;
     inStream = us;
 
@@ -312,10 +311,7 @@ impure func translateUnsignedTx(request: IncomingRequest) -> option<TxRequestDat
         request = request with {
             requestId: uint(hash(
                 bytes32(request.sender),
-                hash(
-                    bytes32(chainParams_chainId()),
-                    marshalledBytes_hash(request.msgData)
-                )
+                hash(bytes32(chainParams_chainId()), marshalledBytes_hash(bytearray_marshalFull(request.msgData)))
             ))
         };
     }
@@ -335,7 +331,7 @@ impure func translateUnsignedTx(request: IncomingRequest) -> option<TxRequestDat
 }
 
 func translateBuddyDeployTx(request: IncomingRequest) -> option<TxRequestData> {
-    let inStream = bytestream_new(bytearray_unmarshalBytes(request.msgData));
+    let inStream = bytestream_new(request.msgData);
 
     let (us, maxGas) = bytestream_get256(inStream)?;
     inStream = us;

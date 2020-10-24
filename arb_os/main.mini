@@ -95,7 +95,7 @@ public impure func mainRunLoop() {
             if let Some(request) = maybeL2 {
                 if (approved) {
                     if (handleL2Request(
-                        bytestream_new(bytearray_unmarshalBytes(request.incomingRequest.msgData)),
+                        bytestream_new(request.incomingRequest.msgData),
                         request
                     ) == None<()>) {
                         // reject for message format error

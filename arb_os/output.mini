@@ -207,7 +207,9 @@ public impure func emitTxReceipt(
 
     asm((
         0,
-        l1message,
+        l1message with {
+            msgData: unsafecast<ByteArray>(bytearray_marshalFull(l1message.msgData))  // because caller expects marshalled bytes
+        },
         txResultInfo,
         realGasUsage,
         update_txReceiptsForBlock(

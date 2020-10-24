@@ -32,8 +32,8 @@ type MessageBatch = struct {
 }
 
 public func messageBatch_tryNew(msg: IncomingRequest) -> option<MessageBatch> {
-    if ( (msg.kind == 3) && (marshalledBytes_firstByte(msg.msgData) == 3) ) {
-        let stream = bytestream_new(bytearray_unmarshalBytes(msg.msgData));
+    if ( (msg.kind == 3) && (bytearray_getByte(msg.msgData, 0) == 3) ) {
+        let stream = bytestream_new(msg.msgData);
         stream = bytestream_skipBytes(stream, 1)?;
         return Some(
             struct {
@@ -62,7 +62,7 @@ public func messageBatch_get(batch: MessageBatch) -> option<(IncomingRequest, Me
 
     return Some((
         batch.template with {
-            msgData: bytearray_marshalFull(extractedL2data)
+            msgData: extractedL2data
         } with {
             requestId: uint(hash(bytes32(batch.template.requestId), bytes32(batch.numSoFar)))
         } with {

@@ -60,7 +60,7 @@ public impure func handleL1Request(
     msg: IncomingRequest
 ) -> option<()> {   // return None if error; otherwise return Some(()) or do a tx and never return from here
     // Parse an incoming message and do appropriate computations
-    let inStream = bytestream_new(bytearray_unmarshalBytes(msg.msgData));
+    let inStream = bytestream_new(msg.msgData);
 
     if (msg.kind == 0) {
         // ethdeposit message

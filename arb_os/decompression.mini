@@ -204,14 +204,12 @@ public impure func decompressAndVerifyEcdsaSignedTx(
             } with {
                 sender: signer
             } with {
-                msgData: bytearray_marshalFull(
-                    bytearray_copy(
-                        encodedMessage,
-                        0,
-                        bytearray_setByte(bytearray_new(0), 0, 4),
-                        1,
-                        bytearray_size(encodedMessage)
-                    )
+                msgData: bytearray_copy(
+                    encodedMessage,
+                    0,
+                    bytearray_setByte(bytearray_new(0), 0, 4),
+                    1,
+                    bytearray_size(encodedMessage)
                 )
             }
         }
