@@ -1103,12 +1103,7 @@ fn mavm_codegen_expr<'a>(
             ));
             Ok((lg, c, max(num_locals, exp_locals)))
         }
-        TypeCheckedExpr::DotRef(tce, name, _, loc) => {
-            let tce_type = tce.get_type();
-            let struct_size = match tce_type.clone() {
-                Type::Struct(fields) => fields.len(),
-                _ => panic!("type-checking bug: struct lookup in non-struct type"),
-            };
+        TypeCheckedExpr::DotRef(tce, slot_num, s_size, _, loc) => {
             let (lg, c, exp_locals) = mavm_codegen_expr(
                 tce,
                 code,
@@ -1122,20 +1117,12 @@ fn mavm_codegen_expr<'a>(
             )?;
             label_gen = lg;
             code = c;
-            match tce_type.get_struct_slot_by_name(*name) {
-                Some(slot_num) => {
-                    code.push(Instruction::from_opcode_imm(
-                        Opcode::TupleGet(struct_size),
-                        Value::Int(Uint256::from_usize(slot_num)),
-                        *loc,
-                    ));
-                    Ok((label_gen, code, max(num_locals, exp_locals)))
-                }
-                None => Err(new_codegen_error(
-                    "tried to get non-existent struct field",
-                    *loc,
-                )),
-            }
+            code.push(Instruction::from_opcode_imm(
+                Opcode::TupleGet(*s_size),
+                Value::Int(Uint256::from_usize(*slot_num)),
+                *loc,
+            ));
+            Ok((label_gen, code, max(num_locals, exp_locals)))
         }
         TypeCheckedExpr::Const(val, _, loc) => {
             code.push(Instruction::from_opcode_imm(

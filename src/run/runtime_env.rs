@@ -214,7 +214,7 @@ impl RuntimeEnvironment {
 
         result.extend(Uint256::from_u256(&tx.r).to_bytes_be());
         result.extend(Uint256::from_u256(&tx.s).to_bytes_be());
-        result.extend(vec![(tx.v.as_u64() & 0xff) as u8]);
+        result.extend(vec![(tx.v.as_u64() % 2) as u8]);
 
         (result, keccak256(tx.rlp().as_ref()).to_vec())
     }
@@ -253,7 +253,7 @@ impl RuntimeEnvironment {
     }
 
     #[cfg(test)]
-    pub fn append_compressed_and_signed_tx_message_to_batch(
+    pub fn _append_compressed_and_signed_tx_message_to_batch(
         &mut self,
         batch: &mut Vec<u8>,
         max_gas: Uint256,
@@ -392,7 +392,6 @@ impl RuntimeEnvironment {
         self.sends.clone()
     }
 }
-
 
 // TxCompressor assumes that all client traffic uses it.
 // For example, it assumes nobody else affects ArbOS's address compression table.

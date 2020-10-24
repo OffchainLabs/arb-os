@@ -283,7 +283,7 @@ impl AbiForContract {
     }
 
     #[cfg(test)]
-    pub fn add_function_call_to_compressed_batch(
+    pub fn _add_function_call_to_compressed_batch(
         &self,
         batch: &mut Vec<u8>,
         func_name: &str,
@@ -297,7 +297,7 @@ impl AbiForContract {
 
         let tx_id_bytes = machine
             .runtime_env
-            .append_compressed_and_signed_tx_message_to_batch(
+            ._append_compressed_and_signed_tx_message_to_batch(
                 batch,
                 Uint256::from_usize(1_000_000_000_000),
                 Uint256::zero(),

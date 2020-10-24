@@ -2,44 +2,44 @@
 // Copyright 2020, Offchain Labs, Inc. All rights reserved.
 //
 
-import type Queue;
+use std::queue::Queue;
+use std::queue::queue_new;
+use std::queue::queue_isEmpty;
+use std::queue::queue_get;
+use std::queue::queue_put;
 import type QueueStack;
-import func queue_new() -> Queue;
-import func queue_isEmpty(q: Queue) -> bool;
-import func queue_get(q: Queue) -> option<(Queue, any)>;
-import func queue_put(q: Queue, val: any) -> Queue;
 import func queuestack_new() -> QueueStack;
 import func queuestack_push(qs: QueueStack, q: Queue) -> QueueStack;
 import func queuestack_get(qs: QueueStack) -> option<(QueueStack, any)>;
 
-import impure func chainParams_gotParamsMessage(sender: address, data: MarshalledBytes);
-import impure func chainParams_chainId() -> uint;
+use chainParameters::chainParams_gotParamsMessage;
+use chainParameters::chainParams_chainId;
 
-import type MessageBatch;
-import func messageBatch_tryNew(msg: IncomingRequest) -> option<MessageBatch>;
-import func messageBatch_get(batch: MessageBatch) -> option<(IncomingRequest, MessageBatch)>;
+use messageBatch::MessageBatch;
+use messageBatch::messageBatch_tryNew;
+use messageBatch::messageBatch_get;
 
-import impure func outputStats_endOfBlock(blockNum: uint, timestamp: uint);
+use output::outputStats_endOfBlock;
 
-import type ByteArray;
-import type MarshalledBytes;
-import func marshalledBytes_firstByte(mb: MarshalledBytes) -> uint;
-import func marshalledBytes_hash(mb: MarshalledBytes) -> bytes32;
-import func bytearray_unmarshalBytes(mb: MarshalledBytes) -> ByteArray;
-import func bytearray_new(capacityHint: uint) -> ByteArray;
-import func bytearray_get256(ba: ByteArray, offset: uint) -> uint;
+use std::bytearray::ByteArray;
+use std::bytearray::MarshalledBytes;
+use std::bytearray::marshalledBytes_firstByte;
+use std::bytearray::marshalledBytes_hash;
+use std::bytearray::bytearray_unmarshalBytes;
+use std::bytearray::bytearray_new;
+use std::bytearray::bytearray_get256;
 
-import type ByteStream;
-import func bytestream_new(ba: ByteArray) -> ByteStream;
-import func bytestream_getByte(bs: ByteStream) -> option<(ByteStream, uint)>;
-import func bytestream_get256(bs: ByteStream) -> option<(ByteStream, uint)>;
-import func bytestream_getRemainingBytes(bs: ByteStream) -> ByteArray;
+use std::bytestream::ByteStream;
+use std::bytestream::bytestream_new;
+use std::bytestream::bytestream_getByte;
+use std::bytestream::bytestream_get256;
+use std::bytestream::bytestream_getRemainingBytes;
 import func bytestream_skipBytes(bs: ByteStream, nbytes: uint) -> option<ByteStream>;
 
 import impure func decompressAndVerifyEcdsaSignedTx(ba: ByteArray, req: IncomingRequest) -> option<TxRequestData>;
 
-import func hashUnsignedL2messageInfo(l2msg: MarshalledBytes, chainId: uint, sender: address) -> bytes32;
-import func translateSignedTx(req: IncomingRequest) -> option<TxRequestData>;
+use signedTx::hashUnsignedL2messageInfo;
+use signedTx::translateSignedTx;
 
 
 type Inbox = struct {

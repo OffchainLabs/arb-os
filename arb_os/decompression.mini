@@ -56,8 +56,6 @@ import func rlp_encodeMessageInfo(
     r: uint,
     s: uint
 ) -> ByteArray;
-import func rlp_encodeAndHashMessageInfo(tx: SignedTx) -> bytes32;
-
 
 import impure func recoverSigner(tx: SignedTx) -> option<address>;
 
@@ -70,20 +68,6 @@ type IncomingRequest = struct {
     sender: address,          // address of the sender
     requestId: uint,
     msgData: MarshalledBytes  // kind-specific data, as a marshalled bytearray
-}
-
-// A copy of this struct is defined in stdlib/rlp.mini.
-// The declaration there must remain consistent with the one here.
-type SignedTx = struct {
-    seqNum: uint,
-    gasPrice: uint,
-    gasLimit: uint,
-    to: address,
-    value: uint,
-    data: ByteArray,
-    v: uint,
-    r: uint,
-    s: uint
 }
 
 type IndexedAddressTable = struct {
@@ -229,6 +213,9 @@ public impure func decompressAndVerifyEcdsaSignedTx(
         seqNum = sn;
     }
 
+    if (v < 2) {
+        v = 35 + 2 * chainParams_chainId() + (1 - (v % 2));
+    }
     let tx = struct {
         seqNum: seqNum,
         gasPrice: txRequest.gasPrice,
@@ -236,7 +223,7 @@ public impure func decompressAndVerifyEcdsaSignedTx(
         to: txRequest.calleeAddr,
         value: txRequest.value,
         data: txRequest.calldata,
-        v: 35 + 2 * chainParams_chainId() + (1 - (v % 2)),
+        v: v,
         r: r,
         s: s
     };
@@ -342,3 +329,9 @@ impure func decompressTx(
     ));
 }
 
+//This function is necessary because there is currently bug in the compiler that will occasionally corrupt the last
+//function in a module, so including this function prevents the bug from affecting decompressTx
+func dumbHack() {
+    let x = 4;
+    return;
+}
