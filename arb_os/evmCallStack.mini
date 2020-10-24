@@ -356,7 +356,10 @@ public impure func evmCallStack_doCall(
         // Create a new callframe for a subcall, and transfer execution to it.
         let availableGas = gasAccounting_pauseTxCharges();
         if (balance > 0) {
-            gas = gas + 2300;  // per the yellow paper, pass an extra 2300 gas to the callee if non-zero balance transfer
+            // Add a stipend, charged to the caller, if non-zero value is transferred.
+            // This is needed because Ethereum provides a stipend, and some code depends on that.
+            // The size of our stipend was chosen experimentally, to make sure a null call is safe.
+            gas = gas + 5000;
         }
         if (gas > availableGas) {
             gas = availableGas;  // don't give the callee more gas than the caller has
