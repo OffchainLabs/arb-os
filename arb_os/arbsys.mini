@@ -114,8 +114,19 @@ impure func arbsys_withdrawErc20(topFrame: EvmCallFrame, calldata: ByteArray) {
     let destAddr = address(bytearray_get256(calldata, 4));
     let amount = bytearray_get256(calldata, 36);
 
-    let messageData = bytearray_extract(calldata, 4, 64);
-    queueMessageForSend(1, senderAddr, messageData);
+    queueMessageForSend(
+        1,
+        senderAddr,
+        bytearray_set256(
+            bytearray_set256(
+                bytearray_set256(bytearray_new(0), 0, uint(senderAddr)),
+                32,
+                uint(destAddr),
+            ),
+            64,
+            amount
+        ),
+    );
     if (evmCallStack_addEvmLogToCurrent(
         (
             address(100),  // addEvmLogToCurrent will fill this in
@@ -140,8 +151,19 @@ impure func arbsys_withdrawErc721(topFrame: EvmCallFrame, calldata: ByteArray) {
     let destAddr = address(bytearray_get256(calldata, 4));
     let id = bytearray_get256(calldata, 36);
 
-    let messageData = bytearray_extract(calldata, 4, 64);
-    queueMessageForSend(2, senderAddr, messageData);
+    queueMessageForSend(
+        2,
+        senderAddr,
+        bytearray_set256(
+            bytearray_set256(
+                bytearray_set256(bytearray_new(0), 0, uint(senderAddr)),
+                32,
+                uint(destAddr),
+            ),
+            64,
+            id
+        ),
+    );
     if (evmCallStack_addEvmLogToCurrent(
         (
             address(100),  // addEvmLogToCurrent will fill this in
