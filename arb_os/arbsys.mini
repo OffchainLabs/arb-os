@@ -145,10 +145,11 @@ impure func arbsys_withdrawErc721(topFrame: EvmCallFrame, calldata: ByteArray) {
     if (evmCallStack_addEvmLogToCurrent(
         (
             address(100),  // addEvmLogToCurrent will fill this in
-            bytearray_marshalFull(bytearray_set256(bytearray_new(0), 0, id)),
+            bytearray_marshalFull(bytearray_new(0)),
             0xefb6491629e398677590acbb4f49f56c5266e28d7ad0fd117a7251ff1e1d52d4, // Erc721Withdrawal(address,address,uint256)
             uint(destAddr),
             uint(senderAddr),
+            id,
         )
     ) == Some(())) {
         evmOp_return(0, 0);

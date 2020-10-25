@@ -36,6 +36,6 @@ interface ArbSys {
 
     event EthWithdrawal(address indexed destAddr, uint amount);
     event Erc20Withdrawal(address indexed destAddr, address indexed tokenAddr, uint amount);
-    event Erc721Withdrawal(address indexed destAddr, address indexed tokenAddr, uint id);
+    event Erc721Withdrawal(address indexed destAddr, address indexed tokenAddr, uint indexed id);
 }
 
