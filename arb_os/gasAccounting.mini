@@ -27,6 +27,7 @@ use std::queue::queue_isEmpty;
 use std::queue::queue_put;
 use std::queue::queue_get;
 
+use chainParameters::chainParams_speedLimitPerSecond;
 use inbox::inbox_getNextUnpackedRequest;
 
 
@@ -62,12 +63,13 @@ type GasUsage = struct {
 }
 
 public impure func gasAccounting_init() {
+    let speedLimit = chainParams_speedLimitPerSecond();
     gasAccountingConstants = struct {
-        SpeedLimit: 15*100000000,
+        SpeedLimit: 27*speedLimit/2,     // speed limit per block, assuming 13.5 seconds per block
         PoolDepth: 20,
-        GasPoolMax: int((15*100000000)*20),
+        GasPoolMax: int((27*speedLimit/2)*20),
         BaseGasPrice: 0,
-        TxGasLimit: (15*100000000)*20/2,
+        TxGasLimit: (27*speedLimit/2)*20/2,
     };
     gasAccountingInfo = struct {
         gasPool: gasAccountingConstants.GasPoolMax,
@@ -376,6 +378,10 @@ public impure func getNextRequestFromCongestionAuction() -> (
     } else {
         return (true, maybeRequest, maybeTx);
     }
+}
+
+public func getGasLimitConstant() -> uint {
+    return gasAccountingConstants.TxGasLimit;
 }
 
 func getRequestGasInfo(maybeRequest: option<IncomingRequest>, maybeTx: option<TxRequestData>) -> (bool, uint, address, uint, uint) {
