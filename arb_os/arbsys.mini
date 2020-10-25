@@ -115,7 +115,7 @@ impure func arbsys_withdrawErc20(topFrame: EvmCallFrame, calldata: ByteArray) {
 
     queueMessageForSend(
         1,
-        address(100),
+        address(0),
         bytearray_set256(
             bytearray_set256(
                 bytearray_set256(bytearray_new(0), 0, uint(tokenAddr)),
@@ -151,7 +151,7 @@ impure func arbsys_withdrawErc721(topFrame: EvmCallFrame, calldata: ByteArray) {
 
     queueMessageForSend(
         2,
-        address(100),
+        address(0),
         bytearray_set256(
             bytearray_set256(
                 bytearray_set256(bytearray_new(0), 0, uint(tokenAddr)),
