@@ -109,17 +109,16 @@ impure func arbsys_withdrawErc20(topFrame: EvmCallFrame, calldata: ByteArray) {
     if (bytearray_size(calldata) != 68) {
         evmOp_revert(0, 0);
     }
-    let senderAcct = evmCallFrame_runningAsAccount(topFrame);
-    let senderAddr = account_getAddress(senderAcct);
+    let tokenAddr = evmCallFrame_getCaller(topFrame);
     let destAddr = address(bytearray_get256(calldata, 4));
     let amount = bytearray_get256(calldata, 36);
 
     queueMessageForSend(
         1,
-        senderAddr,
+        address(100),
         bytearray_set256(
             bytearray_set256(
-                bytearray_set256(bytearray_new(0), 0, uint(senderAddr)),
+                bytearray_set256(bytearray_new(0), 0, uint(tokenAddr)),
                 32,
                 uint(destAddr),
             ),
@@ -133,7 +132,7 @@ impure func arbsys_withdrawErc20(topFrame: EvmCallFrame, calldata: ByteArray) {
             bytearray_marshalFull(bytearray_set256(bytearray_new(0), 0, amount)),
             0x2fbb3e8dc2807d6a61feb98fc2120153f77b2c0d25ef6272e1756935dd62c847, // ERC20Withdrawal(address,address,uint256)
             uint(destAddr),
-            uint(senderAddr),
+            uint(tokenAddr),
         )
     ) == Some(())) {
         evmOp_return(0, 0);
@@ -146,17 +145,16 @@ impure func arbsys_withdrawErc721(topFrame: EvmCallFrame, calldata: ByteArray) {
     if (bytearray_size(calldata) != 68) {
         evmOp_revert(0, 0);
     }
-    let senderAcct = evmCallFrame_runningAsAccount(topFrame);
-    let senderAddr = account_getAddress(senderAcct);
+    let tokenAddr = evmCallFrame_getCaller(topFrame);
     let destAddr = address(bytearray_get256(calldata, 4));
     let id = bytearray_get256(calldata, 36);
 
     queueMessageForSend(
         2,
-        senderAddr,
+        address(100),
         bytearray_set256(
             bytearray_set256(
-                bytearray_set256(bytearray_new(0), 0, uint(senderAddr)),
+                bytearray_set256(bytearray_new(0), 0, uint(tokenAddr)),
                 32,
                 uint(destAddr),
             ),
@@ -170,7 +168,7 @@ impure func arbsys_withdrawErc721(topFrame: EvmCallFrame, calldata: ByteArray) {
             bytearray_marshalFull(bytearray_new(0)),
             0xdce1abc7607cf83c96953308072c045ec35d02fbf5777e7d0ec8b102cd89ff81, // ERC721Withdrawal(address,address,uint256)
             uint(destAddr),
-            uint(senderAddr),
+            uint(tokenAddr),
             id,
         )
     ) == Some(())) {
@@ -185,7 +183,6 @@ impure func arbsys_withdrawEth(topFrame: EvmCallFrame, calldata: ByteArray) {
         evmOp_revert(0, 0);
     }
     let senderAddr = evmCallFrame_getCaller(topFrame);
-    let senderAcct = evmCallFrame_getAccount(topFrame, senderAddr);
     let destAddr = address(bytearray_get256(calldata, 4));
     let amount = evmCallFrame_getCallvalue(topFrame);
 
