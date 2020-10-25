@@ -35,7 +35,7 @@ interface ArbSys {
     function cloneContract(address account) external returns(address);
 
     event EthWithdrawal(address indexed destAddr, uint amount);
-    event Erc20Withdrawal(address indexed destAddr, address indexed tokenAddr, uint amount);
-    event Erc721Withdrawal(address indexed destAddr, address indexed tokenAddr, uint indexed id);
+    event ERC20Withdrawal(address indexed destAddr, address indexed tokenAddr, uint amount);
+    event ERC721Withdrawal(address indexed destAddr, address indexed tokenAddr, uint indexed id);
 }
 

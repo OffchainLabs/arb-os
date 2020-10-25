@@ -120,7 +120,7 @@ impure func arbsys_withdrawErc20(topFrame: EvmCallFrame, calldata: ByteArray) {
         (
             address(100),  // addEvmLogToCurrent will fill this in
             bytearray_marshalFull(bytearray_set256(bytearray_new(0), 0, amount)),
-            0x1ba8ee6862bcdb02b78ff2fbed4d3ddf03a83aaf046e65df3e586478dd78dd1c, // Erc20Withdrawal(address,address,uint256)
+            0x2fbb3e8dc2807d6a61feb98fc2120153f77b2c0d25ef6272e1756935dd62c847, // ERC20Withdrawal(address,address,uint256)
             uint(destAddr),
             uint(senderAddr),
         )
@@ -146,7 +146,7 @@ impure func arbsys_withdrawErc721(topFrame: EvmCallFrame, calldata: ByteArray) {
         (
             address(100),  // addEvmLogToCurrent will fill this in
             bytearray_marshalFull(bytearray_new(0)),
-            0xefb6491629e398677590acbb4f49f56c5266e28d7ad0fd117a7251ff1e1d52d4, // Erc721Withdrawal(address,address,uint256)
+            0xdce1abc7607cf83c96953308072c045ec35d02fbf5777e7d0ec8b102cd89ff81, // ERC721Withdrawal(address,address,uint256)
             uint(destAddr),
             uint(senderAddr),
             id,
