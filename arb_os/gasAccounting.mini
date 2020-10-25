@@ -39,6 +39,7 @@ var gasAccountingInfo: struct {
     weiBurned: uint,              // number of wei that have been burned
     lastBlockNumSeen: uint,       // last L1 block number seen by this module
     txState: option<TxGasState>,  // status of currently active tx (if there is one)
+    payValidatorFundsTo: option<address>,   // where to pay validator funds; if None, funds should be burned
 };
 
 var gasAccountingConstants: struct {
@@ -79,6 +80,7 @@ public impure func gasAccounting_init() {
         weiBurned: 0,
         lastBlockNumSeen: 0,
         txState: None<TxGasState>,
+        payValidatorFundsTo: None<address>,
     };
 }
 
@@ -273,6 +275,25 @@ impure func switchToChargingOS() -> uint {
     }
 }
 
+impure func payOutFundsToValidators() {  // this should only be called when not in a tx
+    if let Some(validatorsAddr) = gasAccountingInfo.payValidatorFundsTo {
+        if (gasAccountingInfo.weiCollectedFromTxs > 0) {
+            let globalAcctStore = getGlobalAccountStore();
+            setGlobalAccountStore(
+                accountStore_set(
+                    globalAcctStore,
+                    validatorsAddr,
+                    account_addToEthBalance(
+                        accountStore_get(globalAcctStore, validatorsAddr),
+                        gasAccountingInfo.weiCollectedFromTxs,
+                    ),
+                )
+            );
+            gasAccountingInfo = gasAccountingInfo with { weiCollectedFromTxs: 0 };
+        }
+    }
+}
+
 // This structure describes an incoming request.
 // It is declared identically in inbox.mini and elsewhere
 type IncomingRequest = struct {
@@ -313,6 +334,8 @@ public impure func getNextRequestFromCongestionAuction() -> (
     let (isChargeable, blockNum, payer, maxGas, gasBid) = getRequestGasInfo(maybeRequest, maybeTx);
 
     if (blockNum > gasAccountingInfo.lastBlockNumSeen) {
+        payOutFundsToValidators();
+
         let blocksElapsed = blockNum - gasAccountingInfo.lastBlockNumSeen;
         let updatedGas = gasAccountingInfo.gasPool + int(blocksElapsed*gasAccountingConstants.SpeedLimit);
         if (updatedGas > gasAccountingConstants.GasPoolMax) {
@@ -380,11 +403,11 @@ public impure func getNextRequestFromCongestionAuction() -> (
     }
 }
 
-public func getGasLimitConstant() -> uint {
+public impure func getGasLimitConstant() -> uint {
     return gasAccountingConstants.TxGasLimit;
 }
 
-func getRequestGasInfo(maybeRequest: option<IncomingRequest>, maybeTx: option<TxRequestData>) -> (bool, uint, address, uint, uint) {
+impure func getRequestGasInfo(maybeRequest: option<IncomingRequest>, maybeTx: option<TxRequestData>) -> (bool, uint, address, uint, uint) {
     if let Some(req) = maybeRequest {
         return (false, req.blockNumber, req.sender, 0, 0);
     }
