@@ -119,14 +119,16 @@ impure func arbsys_withdrawErc20(topFrame: EvmCallFrame, calldata: ByteArray) {
     if (evmCallStack_addEvmLogToCurrent(
         (
             address(100),  // addEvmLogToCurrent will fill this in
-            bytearray_set256(
+            bytearray_marshalFull(
                 bytearray_set256(
-                    bytearray_set256(bytearray_new(0), 0, uint(destAddr)),
-                    32,
-                    uint(senderAddr),
-                ),
-                64,
-                amount
+                    bytearray_set256(
+                        bytearray_set256(bytearray_new(0), 0, uint(destAddr)),
+                        32,
+                        uint(senderAddr),
+                    ),
+                    64,
+                    amount
+                )
             ),
             0x1ba8ee6862bcdb02b78ff2fbed4d3ddf03a83aaf046e65df3e586478dd78dd1c // Erc20Withdrawal(address,address,uint256)
         )
@@ -151,14 +153,16 @@ impure func arbsys_withdrawErc721(topFrame: EvmCallFrame, calldata: ByteArray) {
     if (evmCallStack_addEvmLogToCurrent(
         (
             address(100),  // addEvmLogToCurrent will fill this in
-            bytearray_set256(
+            bytearray_marshalFull(
                 bytearray_set256(
-                    bytearray_set256(bytearray_new(0), 0, uint(destAddr)),
-                    32,
-                    uint(senderAddr),
-                ),
-                64,
-                id
+                    bytearray_set256(
+                        bytearray_set256(bytearray_new(0), 0, uint(destAddr)),
+                        32,
+                        uint(senderAddr),
+                    ),
+                    64,
+                    id
+                )
             ),
             0xefb6491629e398677590acbb4f49f56c5266e28d7ad0fd117a7251ff1e1d52d4 // Erc721Withdrawal(address,address,uint256)
         )
@@ -190,7 +194,7 @@ impure func arbsys_withdrawEth(topFrame: EvmCallFrame, calldata: ByteArray) {
         if (evmCallStack_addEvmLogToCurrent(
             (
                 address(100),  // addEvmLogToCurrent will fill this in
-                messageData,
+                bytearray_marshalFull(messageData),
                 0xc32d3c7eb0f275cbb5b72b3d3c688269430f30e5b9bb36980396edd9101c615c // EthWithdrawal(address,uint256)
             )
         ) == Some(())) {
