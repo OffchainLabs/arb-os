@@ -99,6 +99,7 @@ type EvmCallFrame = struct {
     callvalue: uint,                    // Eth value given to this call by its caller
     returnInfo: option<ReturnInfo>,     // result of last subcall made by this call (if any)
     memory: ByteArray,                  // EVM memory of this call
+    revertOnStorageWrite: bool,         // if true, revert if the EVM code tries to write to storage
     evmLogs: EvmLogs,                   // EVM logs, including those created by this call and its subcalls
     selfDestructQueue: Queue,           // set of self-destruct directives, including those created by this call and its subcalls
     resumeInfo: option<ResumeInfo>,     // if call is suspended, its state will be saved here
@@ -206,6 +207,7 @@ public impure func initEvmCallStack(
                     callvalue: request.value,
                     returnInfo: None<ReturnInfo>,
                     memory: bytearray_new(0),
+                    revertOnStorageWrite: false,
                     evmLogs: evmlogs_empty(),
                     selfDestructQueue: queue_new(),
                     resumeInfo: None<ResumeInfo>,
@@ -316,6 +318,7 @@ public impure func initEvmCallStackForConstructor(
             callvalue: 0,
             returnInfo: None<ReturnInfo>,
             memory: bytearray_new(0),
+            revertOnStorageWrite: false,
             evmLogs: evmlogs_empty(),
             selfDestructQueue: queue_new(),
             resumeInfo: None<ResumeInfo>,
@@ -418,6 +421,10 @@ public impure func evmCallStack_doCall(
             callvalue: balance,
             returnInfo: None<ReturnInfo>,
             memory: bytearray_new(0),
+            revertOnStorageWrite: // disallow storage write if gas provided < EVM gas cost of storage write
+                                  topFrame.revertOnStorageWrite
+                                  || (gas < 5000)
+                                  || ((balance > 0) && (gas < 7700)),
             evmLogs: topFrame.evmLogs,
             selfDestructQueue: topFrame.selfDestructQueue,
             resumeInfo: None<ResumeInfo>,
@@ -937,6 +944,10 @@ public func evmCallFrame_getCallvalue(frame: EvmCallFrame) -> uint {
 
 public func evmCallFrame_getCalldata(frame: EvmCallFrame) -> ByteArray {
     return frame.calldata;
+}
+
+public func evmCallFrame_shouldRevertOnStorageWrite(frame: EvmCallFrame) -> bool {
+    return frame.revertOnStorageWrite;
 }
 
 public func evmCallFrame_getEvmLogs(frame: EvmCallFrame) -> EvmLogs {
