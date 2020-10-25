@@ -45,6 +45,7 @@ var gasAccountingConstants: struct {
     PoolDepth: uint,
     GasPoolMax: int,
     BaseGasPrice: uint,
+    TxGasLimit: uint,
 };
 
 type TxGasState = struct {
@@ -66,6 +67,7 @@ public impure func gasAccounting_init() {
         PoolDepth: 20,
         GasPoolMax: int((15*100000000)*20),
         BaseGasPrice: 0,
+        TxGasLimit: (15*100000000)*20/2,
     };
     gasAccountingInfo = struct {
         gasPool: gasAccountingConstants.GasPoolMax,
@@ -347,6 +349,9 @@ public impure func getNextRequestFromCongestionAuction() -> (
             gasBid = minGasPrice;
         }
 
+        if (maxGas > gasAccountingConstants.TxGasLimit) {
+            maxGas = gasAccountingConstants.TxGasLimit;
+        }
         if (gasAccountingInfo.gasPool <= int(maxGas)) {
             return (false, maybeRequest, maybeTx);
         }
