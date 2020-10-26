@@ -17,6 +17,8 @@ use std::bytestream::bytestream_get64;
 use std::bytestream::bytestream_get256;
 use std::bytestream::bytestream_skipBytes;
 
+use gasAccounting::gasAccounting_postInitMessage;
+
 
 type ChainParams = struct {
     chainAddress: address,
@@ -62,6 +64,8 @@ public impure func chainParams_gotParamsMessage(sender: address, data: Marshalle
             }
         }
     }
+
+    gasAccounting_postInitMessage();
 }
 
 impure func doInitializationOption(stream: ByteStream) -> option<ByteStream> {

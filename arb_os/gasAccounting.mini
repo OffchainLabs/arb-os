@@ -66,8 +66,8 @@ type GasUsage = struct {
 }
 
 public impure func gasAccounting_init() {
-    let millisecondsPerBlock = chainParams_millisecondsPerBlock();
-    let speedLimitPerSecond = chainParams_speedLimitPerSecond();
+    let millisecondsPerBlock = 13500;     // default, until chain gets its initialization message
+    let speedLimitPerSecond = 100000000;  // default, until chain gets its initialization message
     let maxBacklogSeconds = 60;
     if (maxBacklogSeconds < 4 * millisecondsPerBlock / 1000) {
         maxBacklogSeconds = 4 * millisecondsPerBlock / 1000;
@@ -90,6 +90,24 @@ public impure func gasAccounting_init() {
         txState: None<TxGasState>,
         payValidatorFundsTo: None<address>,
     };
+}
+
+public impure func gasAccounting_postInitMessage() {
+    let millisecondsPerBlock = chainParams_millisecondsPerBlock();
+    let speedLimitPerSecond = chainParams_speedLimitPerSecond();
+    let maxBacklogSeconds = 60;
+    if (maxBacklogSeconds < 4 * millisecondsPerBlock / 1000) {
+        maxBacklogSeconds = 4 * millisecondsPerBlock / 1000;
+    }
+    gasAccountingConstants = struct {
+        SpeedLimitPerBlock: millisecondsPerBlock * speedLimitPerSecond / 1000,
+        GasPoolMax: int(speedLimitPerSecond * maxBacklogSeconds),
+        BaseGasPrice: 0,
+        TxGasLimit: speedLimitPerSecond * maxBacklogSeconds / 2,
+        DeflatorNumerator: 1000 * maxBacklogSeconds - 2 * millisecondsPerBlock,  // won't underflow because we checked above
+        DeflatorDenominator: 1000 * maxBacklogSeconds,
+    };
+    gasAccountingInfo = gasAccountingInfo with { gasPool: gasAccountingConstants.GasPoolMax };
 }
 
 public impure func gasAccounting_summaryToPublish() -> any {
