@@ -61,6 +61,7 @@ use std::stack::stack_isEmpty;
 use std::stack::stack_push;
 use std::stack::stack_pop;
 
+use gasAccounting::GasUsage;
 use gasAccounting::gasAccounting_startTxCharges;
 use gasAccounting::gasAccounting_endTxCharges;
 use gasAccounting::gasAccounting_pauseTxCharges;
@@ -75,12 +76,6 @@ use main::mainRunLoop;
 use output::sendMessage;
 use output::sendQueuedMessages;
 
-
-// This is declared identically in gasAccounting.mini
-type GasUsage = struct {
-    gasUsed: uint,
-    gasPriceWei: uint,
-}
 
 // This callframe is used to represent an EVM call in progress.
 // The callframe will have a full copy of the global AccountStore, but

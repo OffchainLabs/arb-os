@@ -22,6 +22,7 @@ use chainParameters::chainParams_speedLimitPerSecond;
 use inbox::inbox_currentBlockNumber;
 use inbox::inbox_currentTimestamp;
 
+use gasAccounting::GasUsage;
 use gasAccounting::gasAccounting_summaryToPublish;
 
 
@@ -34,12 +35,6 @@ type IncomingRequest = struct {
     sender: address,          // address of the sender
     requestId: uint,
     msgData: MarshalledBytes  // contents of the message, as a marshalled bytearray
-}
-
-// This is declared identically in gasAccounting.mini
-type GasUsage = struct {
-    gasUsed: uint,
-    gasPriceWei: uint,
 }
 
 // PerBlockReceiptData is different from OutputStatistics for now; might want to unify

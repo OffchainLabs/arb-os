@@ -26,6 +26,9 @@ use accounts::account_getStartCodePoint;
 use evmCallStack::initEvmCallStack;
 use evmCallStack::initEvmCallStackForConstructor;
 use evmCallStack::evmCallStack_runningCodeFromAccount;
+
+use gasAccounting::GasUsage;
+
 use output::emitLog;
 
 use tokens::tokens_erc20deposit;
@@ -59,11 +62,6 @@ type IncomingRequest = struct {
     msgData: MarshalledBytes  // kind-specific data, as a marshalled bytearray
 }
 
-// This is declared identically in gasAccounting.mini
-type GasUsage = struct {
-    gasUsed: uint,
-    gasPriceWei: uint,
-}
 
 public impure func handleL1Request(
     msg: IncomingRequest
