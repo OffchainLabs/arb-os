@@ -43,11 +43,12 @@ var gasAccountingInfo: struct {
 };
 
 var gasAccountingConstants: struct {
-    SpeedLimit: uint,
-    PoolDepth: uint,
+    SpeedLimitPerBlock: uint,
     GasPoolMax: int,
     BaseGasPrice: uint,
     TxGasLimit: uint,
+    DeflatorNumerator: uint,
+    DeflatorDenominator: uint,
 };
 
 type TxGasState = struct {
@@ -64,13 +65,19 @@ type GasUsage = struct {
 }
 
 public impure func gasAccounting_init() {
-    let speedLimit = chainParams_speedLimitPerSecond();
+    let secondsPerBlock = 13;
+    let speedLimitPerSecond = chainParams_speedLimitPerSecond();
+    let maxBacklogSeconds = 60;
+    if (maxBacklogSeconds < 4*secondsPerBlock) {
+        maxBacklogSeconds = 4 * secondsPerBlock;
+    }
     gasAccountingConstants = struct {
-        SpeedLimit: 27*speedLimit/2,     // speed limit per block, assuming 13.5 seconds per block
-        PoolDepth: 20,
-        GasPoolMax: int((27*speedLimit/2)*20),
+        SpeedLimitPerBlock: secondsPerBlock * speedLimitPerSecond,
+        GasPoolMax: int(speedLimitPerSecond * maxBacklogSeconds),
         BaseGasPrice: 0,
-        TxGasLimit: (27*speedLimit/2)*20/2,
+        TxGasLimit: speedLimitPerSecond * maxBacklogSeconds / 2,
+        DeflatorNumerator: maxBacklogSeconds - 2 * secondsPerBlock,  // won't underflow because we checked above
+        DeflatorDenominator: maxBacklogSeconds,
     };
     gasAccountingInfo = struct {
         gasPool: gasAccountingConstants.GasPoolMax,
@@ -337,13 +344,13 @@ public impure func getNextRequestFromCongestionAuction() -> (
         payOutFundsToValidators();
 
         let blocksElapsed = blockNum - gasAccountingInfo.lastBlockNumSeen;
-        let updatedGas = gasAccountingInfo.gasPool + int(blocksElapsed*gasAccountingConstants.SpeedLimit);
+        let updatedGas = gasAccountingInfo.gasPool + int(blocksElapsed*gasAccountingConstants.SpeedLimitPerBlock);
         if (updatedGas > gasAccountingConstants.GasPoolMax) {
             updatedGas = gasAccountingConstants.GasPoolMax;
         }
         let updatedWei = gasAccountingInfo.weiPool;
         while (blocksElapsed > 0) {
-            let updatedWei = updatedWei*(gasAccountingConstants.PoolDepth-2)/gasAccountingConstants.PoolDepth;
+            let updatedWei = updatedWei * gasAccountingConstants.DeflatorNumerator / gasAccountingConstants.DeflatorDenominator;
             blocksElapsed = blocksElapsed-1;
         }
         let weiToPay = gasAccountingInfo.weiPool - updatedWei;
