@@ -27,6 +27,7 @@ use std::queue::queue_isEmpty;
 use std::queue::queue_put;
 use std::queue::queue_get;
 
+use chainParameters::chainParams_millisecondsPerBlock;
 use chainParameters::chainParams_speedLimitPerSecond;
 use inbox::inbox_getNextUnpackedRequest;
 
@@ -65,19 +66,19 @@ type GasUsage = struct {
 }
 
 public impure func gasAccounting_init() {
-    let secondsPerBlock = 13;
+    let millisecondsPerBlock = chainParams_millisecondsPerBlock();
     let speedLimitPerSecond = chainParams_speedLimitPerSecond();
     let maxBacklogSeconds = 60;
-    if (maxBacklogSeconds < 4*secondsPerBlock) {
-        maxBacklogSeconds = 4 * secondsPerBlock;
+    if (maxBacklogSeconds < 4 * millisecondsPerBlock / 1000) {
+        maxBacklogSeconds = 4 * millisecondsPerBlock / 1000;
     }
     gasAccountingConstants = struct {
-        SpeedLimitPerBlock: secondsPerBlock * speedLimitPerSecond,
+        SpeedLimitPerBlock: millisecondsPerBlock * speedLimitPerSecond / 1000,
         GasPoolMax: int(speedLimitPerSecond * maxBacklogSeconds),
         BaseGasPrice: 0,
         TxGasLimit: speedLimitPerSecond * maxBacklogSeconds / 2,
-        DeflatorNumerator: maxBacklogSeconds - 2 * secondsPerBlock,  // won't underflow because we checked above
-        DeflatorDenominator: maxBacklogSeconds,
+        DeflatorNumerator: 1000 * maxBacklogSeconds - 2 * millisecondsPerBlock,  // won't underflow because we checked above
+        DeflatorDenominator: 1000 * maxBacklogSeconds,
     };
     gasAccountingInfo = struct {
         gasPool: gasAccountingConstants.GasPoolMax,
@@ -89,6 +90,22 @@ public impure func gasAccounting_init() {
         txState: None<TxGasState>,
         payValidatorFundsTo: None<address>,
     };
+}
+
+public impure func gasAccounting_specialCharge(payer: address, amount: uint) -> option<()> {
+    // this must be called outside of a tx
+
+    let globalAcctStore = getGlobalAccountStore();
+    let payerAcct = accountStore_get(globalAcctStore, payer);
+    setGlobalAccountStore(
+        accountStore_set(
+            globalAcctStore,
+            payer,
+            account_deductFromEthBalance(payerAcct, amount)?,
+        )
+    );
+    gasAccountingInfo = gasAccountingInfo with { weiCollectedFromTxs: gasAccountingInfo.weiCollectedFromTxs + amount };
+    return Some(());
 }
 
 // The currently-running Tx has some amount of gas remaining. That gas can be in two places:
