@@ -22,6 +22,8 @@ use chainParameters::chainParams_speedLimitPerSecond;
 use inbox::inbox_currentBlockNumber;
 use inbox::inbox_currentTimestamp;
 
+use gasAccounting::gasAccounting_summaryToPublish;
+
 
 // This structure defines an incoming request.
 // It is defined identically in inbox.mini and elsewhere.
@@ -240,7 +242,8 @@ impure func emitBlockSummaryLog(blockNum: uint, timestamp: uint) {
         timestamp,
         gasLimit,
         globalBlockReceiptData.statsThisBlock,
-        globalBlockReceiptData.statsAllTime
+        globalBlockReceiptData.statsAllTime,
+        gasAccounting_summaryToPublish(),
     ),) { log };
 }
 

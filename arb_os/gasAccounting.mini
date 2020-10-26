@@ -92,6 +92,20 @@ public impure func gasAccounting_init() {
     };
 }
 
+public impure func gasAccounting_summaryToPublish() -> any {
+    let payoutAddress = address(0);
+    if let Some(paddr) = gasAccountingInfo.payValidatorFundsTo {
+        payoutAddress = paddr;
+    }
+    return (
+        gasAccountingInfo.gasPool,
+        gasAccountingInfo.weiPool,
+        gasAccountingInfo.weiOwedToValidators,
+        gasAccountingInfo.weiCollectedFromTxs,
+        payoutAddress,
+    );
+}
+
 public impure func gasAccounting_specialCharge(payer: address, amount: uint) -> option<()> {
     // this must be called outside of a tx
 
