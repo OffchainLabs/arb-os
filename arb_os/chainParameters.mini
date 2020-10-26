@@ -34,22 +34,21 @@ public impure func chainParams_init() {
     globalChainParams = None<ChainParams>;
 }
 
-public impure func chainParams_gotParamsMessage(sender: address, data: MarshalledBytes) {
+public impure func chainParams_gotParamsMessage(sender: address, data: ByteArray) {
     if (globalChainParams == None<ChainParams>) {
-        let ba = bytearray_unmarshalBytes(data);
         globalChainParams = Some(struct{
             chainAddress: sender,
-            gracePeriodSec: bytearray_get256(ba, 0) / ticksPerSecond(),
-            arbGasSpeedLimit: bytearray_get256(ba, 32) * ticksPerSecond(),
-            maxExecutionSteps: bytearray_get256(ba, 2*32),
-            baseStake: bytearray_get256(ba, 3*32),
-            stakingToken: address(bytearray_get256(ba, 4*32)),
-            owner: address(bytearray_get256(ba, 5*32)),
+            gracePeriodSec: bytearray_get256(data, 0) / ticksPerSecond(),
+            arbGasSpeedLimit: bytearray_get256(data, 32) * ticksPerSecond(),
+            maxExecutionSteps: bytearray_get256(data, 2*32),
+            baseStake: bytearray_get256(data, 3*32),
+            stakingToken: address(bytearray_get256(data, 4*32)),
+            owner: address(bytearray_get256(data, 5*32)),
             isProChain: false,
         });
 
         // now read and process initialization options
-        if let Some(stream) = bytestream_skipBytes(bytestream_new(ba), 5*32) {
+        if let Some(stream) = bytestream_skipBytes(bytestream_new(data), 5*32) {
             loop {
                 if let Some(ustr2) = doInitializationOption(stream) {
                     stream = ustr2;
