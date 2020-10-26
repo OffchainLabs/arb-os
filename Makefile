@@ -60,7 +60,7 @@ run:
 test:
 	cargo test --release
 
-testlogs: all
+testlogs: $(TEMPLATES) $(ARBOS)
 	rm -rf testlogs
 	mkdir testlogs
 	$(CARGORUN) make-test-logs >/dev/null
