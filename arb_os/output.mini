@@ -276,7 +276,7 @@ public impure func sendMessage(msgType: uint, sender: address, data: ByteArray) 
     );
 }
 
-func sendPackagedMessage(msg: any) {
+impure func sendPackagedMessage(msg: any) {
     outputStats_addSend();
     asm(msg,) { send };
 }

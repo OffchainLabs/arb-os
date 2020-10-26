@@ -99,6 +99,7 @@ type EvmCallFrame = struct {
     callvalue: uint,                    // Eth value given to this call by its caller
     returnInfo: option<ReturnInfo>,     // result of last subcall made by this call (if any)
     memory: ByteArray,                  // EVM memory of this call
+    revertOnStorageWrite: bool,         // if true, revert if the EVM code tries to write to storage
     evmLogs: EvmLogs,                   // EVM logs, including those created by this call and its subcalls
     selfDestructQueue: Queue,           // set of self-destruct directives, including those created by this call and its subcalls
     resumeInfo: option<ResumeInfo>,     // if call is suspended, its state will be saved here
@@ -206,6 +207,7 @@ public impure func initEvmCallStack(
                     callvalue: request.value,
                     returnInfo: None<ReturnInfo>,
                     memory: bytearray_new(0),
+                    revertOnStorageWrite: false,
                     evmLogs: evmlogs_empty(),
                     selfDestructQueue: queue_new(),
                     resumeInfo: None<ResumeInfo>,
@@ -302,6 +304,7 @@ public impure func initEvmCallStackForConstructor(
         )
     );
     if let Some(uas) = accountStore_transferEthBalance(acctStore, request.caller, request.calleeAddr, request.value) {
+        acctStore = uas;
         // don't update globalAccountStore; that happens if/when the constructor commits its results later
 
         globalCallStack = Some(struct {
@@ -315,6 +318,7 @@ public impure func initEvmCallStackForConstructor(
             callvalue: 0,
             returnInfo: None<ReturnInfo>,
             memory: bytearray_new(0),
+            revertOnStorageWrite: false,
             evmLogs: evmlogs_empty(),
             selfDestructQueue: queue_new(),
             resumeInfo: None<ResumeInfo>,
@@ -354,6 +358,12 @@ public impure func evmCallStack_doCall(
     if let Some(startCodePoint) = account_getStartCodePoint(callee) {
         // Create a new callframe for a subcall, and transfer execution to it.
         let availableGas = gasAccounting_pauseTxCharges();
+        if (balance > 0) {
+            // Add a stipend, charged to the caller, if non-zero value is transferred.
+            // This is needed because Ethereum provides a stipend, and some code depends on that.
+            // The size of our stipend was chosen experimentally, to make sure a null call is safe.
+            gas = gas + 5000;
+        }
         if (gas > availableGas) {
             gas = availableGas;  // don't give the callee more gas than the caller has
         }
@@ -411,6 +421,10 @@ public impure func evmCallStack_doCall(
             callvalue: balance,
             returnInfo: None<ReturnInfo>,
             memory: bytearray_new(0),
+            revertOnStorageWrite: // disallow storage write if gas provided < EVM gas cost of storage write
+                                  topFrame.revertOnStorageWrite
+                                  || (gas < 5000)
+                                  || ((balance > 0) && (gas < 7700)),
             evmLogs: topFrame.evmLogs,
             selfDestructQueue: topFrame.selfDestructQueue,
             resumeInfo: None<ResumeInfo>,
@@ -531,10 +545,10 @@ public impure func evmCallStack_returnFromCall(
                     // Update the global account store
                     setGlobalAccountStore(
                         accountStore_set(
-                            getGlobalAccountStore(),
-                            topFrame.runningCodeFrom,
+                            topFrame.accountStore,
+                            topFrame.runningAs,
                             account_setContractInfo(
-                                pristineAccount(topFrame.runningCodeFrom),
+                                topFrame.runningAsAccount,
                                 returnData,
                                 evmJumpTable,
                                 entryPoint,
@@ -930,6 +944,10 @@ public func evmCallFrame_getCallvalue(frame: EvmCallFrame) -> uint {
 
 public func evmCallFrame_getCalldata(frame: EvmCallFrame) -> ByteArray {
     return frame.calldata;
+}
+
+public func evmCallFrame_shouldRevertOnStorageWrite(frame: EvmCallFrame) -> bool {
+    return frame.revertOnStorageWrite;
 }
 
 public func evmCallFrame_getEvmLogs(frame: EvmCallFrame) -> EvmLogs {
