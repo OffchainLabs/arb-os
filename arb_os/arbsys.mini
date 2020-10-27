@@ -6,6 +6,7 @@ use evmCallStack::EvmCallFrame;
 use accounts::Account;
 use std::bytearray::ByteArray;
 use std::bytearray::MarshalledBytes;
+use std::stack::Stack;
 import type AccountStore;
 import type ByteStream;
 
@@ -27,6 +28,7 @@ use evmCallStack::evmCallFrame_getCaller;
 
 use evmOps::evmOp_return;
 use evmOps::evmOp_revert;
+use evmOps::evmOp_revert_knownCodePc;
 
 use accounts::account_getAddress;
 use accounts::account_getNextSeqNum;
@@ -143,13 +145,13 @@ impure func arbsys_withdrawErc20(topFrame: EvmCallFrame, calldata: ByteArray) {
     ) == Some(())) {
         evmOp_return(0, 0);
     } else {
-        evmOp_revert(0, 0);
+        evmOp_revert_knownCodePc(address(100), 1, 0, 0);
     }
 }
 
 impure func arbsys_withdrawErc721(topFrame: EvmCallFrame, calldata: ByteArray) {
     if (bytearray_size(calldata) != 68) {
-        evmOp_revert_knownCodePc(address(100), 0, 0, 0);
+        evmOp_revert_knownCodePc(address(100), 10, 0, 0);
     }
     let tokenAddr = evmCallFrame_getCaller(topFrame);
     let destAddr = address(bytearray_get256(calldata, 4));
@@ -180,13 +182,13 @@ impure func arbsys_withdrawErc721(topFrame: EvmCallFrame, calldata: ByteArray) {
     ) == Some(())) {
         evmOp_return(0, 0);
     } else {
-        evmOp_revert(0, 0);
+        evmOp_revert_knownCodePc(address(100), 11, 0, 0);
     }
 }
 
 impure func arbsys_withdrawEth(topFrame: EvmCallFrame, calldata: ByteArray) {
     if (bytearray_size(calldata) != 36) {
-        evmOp_revert_knownCodePc(address(100), 0, 0, 0);
+        evmOp_revert_knownCodePc(address(100), 20, 0, 0);
     }
     let senderAddr = evmCallFrame_getCaller(topFrame);
     let destAddr = address(bytearray_get256(calldata, 4));
@@ -213,12 +215,12 @@ impure func arbsys_withdrawEth(topFrame: EvmCallFrame, calldata: ByteArray) {
         }
     }
 
-    evmOp_revert_knownCodePc(address(100), 0, 0, 0);
+    evmOp_revert_knownCodePc(address(100), 21, 0, 0);
 }
 
 impure func arbsys_getTransactionCount(topFrame: EvmCallFrame, calldata: ByteArray) {
     if (bytearray_size(calldata) != 36) {
-        evmOp_revert_knownCodePc(address(100), 0, 0, 0);
+        evmOp_revert_knownCodePc(address(100), 30, 0, 0);
     }
     let addr = address(bytearray_get256(calldata, 4));
     let seqNum = account_getNextSeqNum(evmCallFrame_getAccount(topFrame, addr));
@@ -231,14 +233,14 @@ impure func arbsys_getTransactionCount(topFrame: EvmCallFrame, calldata: ByteArr
     if (success) {
         evmOp_return(0, 32);
     } else {
-        evmOp_revert_knownCodePc(address(100), 0, 0, 0);
+        evmOp_revert_knownCodePc(address(100), 31, 0, 0);
     }
 }
 
 impure func arbsys_getStorageAt(topFrame: EvmCallFrame, calldata: ByteArray) {
     let senderAddr = evmCallFrame_getCaller(topFrame);
     if (senderAddr != address(0)) {
-        evmOp_revert_knownCodePc(address(100), 0, 0, 0);
+        evmOp_revert_knownCodePc(address(100), 40, 0, 0);
     }
 
     let addr = address(bytearray_get256(calldata, 4));
@@ -256,13 +258,13 @@ impure func arbsys_getStorageAt(topFrame: EvmCallFrame, calldata: ByteArray) {
     if (success) {
         evmOp_return(0, 32);
     } else {
-        evmOp_revert_knownCodePc(address(100), 0, 0, 0);
+        evmOp_revert_knownCodePc(address(100), 41, 0, 0);
     }
 }
 
 impure func arbsys_getPcTable(topFrame: EvmCallFrame, calldata: ByteArray) {
     if (bytearray_size(calldata) <= 4) {
-        evmOp_revert_knownCodePc(address(100), 0, 0, 0);
+        evmOp_revert_knownCodePc(address(100), 50, 0, 0);
     }
     if let Some(pcTable) = pcTableForCode(bytearray_extract(calldata, 4, bytearray_size(calldata)-4)) {
         let mem = evmCallStack_getTopFrameMemoryOrDie();
@@ -286,7 +288,7 @@ impure func arbsys_getPcTable(topFrame: EvmCallFrame, calldata: ByteArray) {
             }
         }
     } else {
-        evmOp_revert_knownCodePc(address(100), 0, 0, 0);
+        evmOp_revert_knownCodePc(address(100), 51, 0, 0);
     }
 }
 
@@ -294,7 +296,7 @@ impure func arbsys_addressTable_lookupAddress(topFrame: EvmCallFrame, calldata: 
 // if bool is true, and address not already in table, this allocates space in the table
 // if bool is false, and address not already in table, this just returns MAXUINT
     if (bytearray_size(calldata) != 68) {
-        evmOp_revert(0, 0);
+        evmOp_revert_knownCodePc(address(100), 60, 0, 0);
     }
     let addr = address(bytearray_get256(calldata, 4));
     let flag = (bytearray_get256(calldata, 4+32) != 0);
@@ -316,13 +318,13 @@ impure func arbsys_addressTable_lookupAddress(topFrame: EvmCallFrame, calldata: 
     if (success) {
         evmOp_return(0, 32);
     } else {
-        evmOp_revert(0, 0);
+        evmOp_revert_knownCodePc(address(100), 61, 0, 0);
     }
 }
 
 impure func arbsys_addressTable_lookupIndex(topFrame: EvmCallFrame, calldata: ByteArray) {  // (uint) -> address
     if (bytearray_size(calldata) != 36) {
-        evmOp_revert(0, 0);
+        evmOp_revert_knownCodePc(address(100), 70, 0, 0);
     }
     let index = bytearray_get256(calldata, 4);
     let addrTable = getGlobalAddressTable();
@@ -332,13 +334,13 @@ impure func arbsys_addressTable_lookupIndex(topFrame: EvmCallFrame, calldata: By
     if (success) {
         evmOp_return(0, 32);
     } else {
-        evmOp_revert(0, 0);
+        evmOp_revert_knownCodePc(address(100), 71, 0, 0);
     }
 }
 
 impure func arbsys_addressTable_decompress(topFrame: EvmCallFrame, calldata: ByteArray) {  // (bytes) -> (address, bool)
     if (bytearray_size(calldata) < 68) {
-        evmOp_revert(0, 0);
+        evmOp_revert_knownCodePc(address(100), 80, 0, 0);
     }
     let bytesLen = bytearray_get256(calldata, 36);
     if let Some(res) = decompressAddress(bytestream_new(bytearray_extract(calldata, 68, bytesLen))) {
@@ -351,13 +353,13 @@ impure func arbsys_addressTable_decompress(topFrame: EvmCallFrame, calldata: Byt
         }
     } else {
         // input was too short
-        evmOp_revert(0, 0);
+        evmOp_revert_knownCodePc(address(100), 81, 0, 0);
     }
 }
 
 impure func arbsys_addressTable_compress(topFrame: EvmCallFrame, calldata: ByteArray) { // (address) -> bytes
     if (bytearray_size(calldata) != 36) {
-        evmOp_revert(0, 0);
+        evmOp_revert_knownCodePc(address(100), 90, 0, 0);
     }
     let addr = address(bytearray_get256(calldata, 4));
     let compressedData = bytearray_new(0);
@@ -388,6 +390,6 @@ impure func arbsys_addressTable_compress(topFrame: EvmCallFrame, calldata: ByteA
     if (evmCallStack_setTopFrameMemory(mem)) {
         evmOp_return(0, 96);
     } else {
-        evmOp_revert(0, 0);
+        evmOp_revert_knownCodePc(address(100), 91, 0, 0);
     }
 }

@@ -743,6 +743,7 @@ public impure func evmOp_revert(memOffset: uint, memNbytes: uint) {
 
 public impure func evmOp_revert_knownCodePc(codeAddr: address, evmPc: uint, memOffset: uint, memNbytes: uint) {
     asm((10000, codeAddr, evmPc),) { debugprint };
+    evmOp_revert(memOffset, memNbytes);
 }
 
 public impure func evmOp_revert_knownPc(evmPc: uint, memOffset: uint, memNbytes: uint) {
