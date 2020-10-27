@@ -27,10 +27,11 @@ pub struct RuntimeEnvironment {
     next_id: Uint256, // used to assign unique (but artificial) txids to messages
     pub recorder: RtEnvRecorder,
     compressor: TxCompressor,
+    charging_policy: Option<(Uint256, Uint256)>,
 }
 
 impl RuntimeEnvironment {
-    pub fn new(chain_address: Uint256) -> Self {
+    pub fn new(chain_address: Uint256, charging_policy: Option<(Uint256, Uint256)>) -> Self {
         let mut ret = RuntimeEnvironment {
             chain_id: chain_address.trim_to_u64() & 0xffffffffffff, // truncate to 48 bits
             l1_inbox: vec![],
@@ -43,12 +44,13 @@ impl RuntimeEnvironment {
             next_id: Uint256::zero(),
             recorder: RtEnvRecorder::new(),
             compressor: TxCompressor::new(),
+            charging_policy,
         };
-        ret.insert_l1_message(4, chain_address, &RuntimeEnvironment::get_params_bytes());
+        ret.insert_l1_message(4, chain_address, &ret.get_params_bytes());
         ret
     }
 
-    fn get_params_bytes() -> Vec<u8> {
+    fn get_params_bytes(&self) -> Vec<u8> {
         let mut buf = Vec::new();
         buf.extend(Uint256::from_u64(3 * 60 * 60 * 1000).to_bytes_be()); // grace period in ticks
         buf.extend(Uint256::from_u64(100_000_000 / 1000).to_bytes_be()); // arbgas speed limit per tick
@@ -56,6 +58,14 @@ impl RuntimeEnvironment {
         buf.extend(Uint256::from_u64(1000).to_bytes_be()); // base stake amount in wei
         buf.extend(Uint256::zero().to_bytes_be()); // staking token address (zero means ETH)
         buf.extend(Uint256::zero().to_bytes_be()); // owner address
+
+        if let Some((base_gas_price, pay_fees_to)) = self.charging_policy.clone() {
+            buf.extend(&[0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 2u8]);   // option ID = 2
+            buf.extend(&[0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 64u8]);  // option payload size = 64 bytes
+            buf.extend(base_gas_price.to_bytes_be());
+            buf.extend(pay_fees_to.to_bytes_be());
+        }
+
         buf
     }
 
@@ -771,7 +781,7 @@ impl RtEnvRecorder {
         trace_file: Option<&str>,
     ) -> bool {
         // returns true iff result matches
-        let mut rt_env = RuntimeEnvironment::new(Uint256::from_usize(1111));
+        let mut rt_env = RuntimeEnvironment::new(Uint256::from_usize(1111), None);
         rt_env.insert_full_inbox_contents(self.inbox.clone());
         let mut machine = load_from_file(Path::new("arb_os/arbos.mexe"), rt_env);
         if let Some(trace_file_name) = trace_file {

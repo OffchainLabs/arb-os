@@ -38,7 +38,7 @@ pub fn make_benchmarks() {
 }
 
 pub fn benchmark_boot(_iterations: u64, log_to: &Path) -> u64 {
-    let rt_env = RuntimeEnvironment::new(Uint256::from_usize(1111));
+    let rt_env = RuntimeEnvironment::new(Uint256::from_usize(1111), None);
     let mut machine = load_from_file(Path::new("arb_os/arbos.mexe"), rt_env);
     machine.start_at_zero();
 
@@ -48,7 +48,7 @@ pub fn benchmark_boot(_iterations: u64, log_to: &Path) -> u64 {
 }
 
 pub fn benchmark_erc20(iterations: u64, log_to: &Path) -> u64 {
-    let rt_env = RuntimeEnvironment::new(Uint256::from_usize(1111));
+    let rt_env = RuntimeEnvironment::new(Uint256::from_usize(1111), None);
     let mut machine = load_from_file(Path::new("arb_os/arbos.mexe"), rt_env);
     machine.start_at_zero();
 
@@ -67,7 +67,7 @@ pub fn benchmark_erc20(iterations: u64, log_to: &Path) -> u64 {
 }
 
 pub fn benchmark_add(iterations: u64, log_to: &Path) -> u64 {
-    let rt_env = RuntimeEnvironment::new(Uint256::from_usize(1111));
+    let rt_env = RuntimeEnvironment::new(Uint256::from_usize(1111), None);
     let mut machine = load_from_file(Path::new("arb_os/arbos.mexe"), rt_env);
     machine.start_at_zero();
 
@@ -109,7 +109,7 @@ pub fn benchmark_add(iterations: u64, log_to: &Path) -> u64 {
 }
 
 pub fn benchmark_add_batched(iterations: u64, log_to: &Path) -> u64 {
-    let rt_env = RuntimeEnvironment::new(Uint256::from_usize(1111));
+    let rt_env = RuntimeEnvironment::new(Uint256::from_usize(1111), None);
     let mut machine = load_from_file(Path::new("arb_os/arbos.mexe"), rt_env);
     machine.start_at_zero();
 

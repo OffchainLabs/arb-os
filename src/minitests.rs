@@ -15,7 +15,7 @@ fn test_arraytest() {
     let res = run_from_file(
         path,
         vec![],
-        RuntimeEnvironment::new(Uint256::from_usize(1111)),
+        RuntimeEnvironment::new(Uint256::from_usize(1111), None),
         false,
     );
     match res {
@@ -34,7 +34,7 @@ fn test_kvstest() {
     let res = run_from_file(
         path,
         vec![],
-        RuntimeEnvironment::new(Uint256::from_usize(1111)),
+        RuntimeEnvironment::new(Uint256::from_usize(1111), None),
         false,
     );
     match res {
@@ -53,7 +53,7 @@ fn test_storage_map() {
     let res = run_from_file(
         path,
         vec![],
-        RuntimeEnvironment::new(Uint256::from_usize(1111)),
+        RuntimeEnvironment::new(Uint256::from_usize(1111), None),
         false,
     );
     match res {
@@ -72,7 +72,7 @@ fn test_queuetest() {
     let res = run_from_file(
         path,
         vec![],
-        RuntimeEnvironment::new(Uint256::from_usize(1111)),
+        RuntimeEnvironment::new(Uint256::from_usize(1111), None),
         false,
     );
     match res {
@@ -91,7 +91,7 @@ fn test_globaltest() {
     let res = run_from_file(
         path,
         vec![],
-        RuntimeEnvironment::new(Uint256::from_usize(1111)),
+        RuntimeEnvironment::new(Uint256::from_usize(1111), None),
         false,
     );
     match res {
@@ -110,7 +110,7 @@ fn test_pqtest() {
     let res = run_from_file(
         path,
         vec![],
-        RuntimeEnvironment::new(Uint256::from_usize(1111)),
+        RuntimeEnvironment::new(Uint256::from_usize(1111), None),
         false,
     );
     match res {
@@ -129,7 +129,7 @@ fn test_bytearray() {
     let res = run_from_file(
         path,
         vec![],
-        RuntimeEnvironment::new(Uint256::from_usize(1111)),
+        RuntimeEnvironment::new(Uint256::from_usize(1111), None),
         false,
     );
     match res {
@@ -148,7 +148,7 @@ fn test_map() {
     let res = run_from_file(
         path,
         vec![],
-        RuntimeEnvironment::new(Uint256::from_usize(1111)),
+        RuntimeEnvironment::new(Uint256::from_usize(1111), None),
         false,
     );
     match res {
@@ -167,7 +167,7 @@ fn test_keccak() {
     let res = run_from_file(
         path,
         vec![],
-        RuntimeEnvironment::new(Uint256::from_usize(1111)),
+        RuntimeEnvironment::new(Uint256::from_usize(1111), None),
         false,
     );
     match res {
@@ -186,7 +186,7 @@ fn test_sha256() {
     let res = run_from_file(
         path,
         vec![],
-        RuntimeEnvironment::new(Uint256::from_usize(1111)),
+        RuntimeEnvironment::new(Uint256::from_usize(1111), None),
         false,
     );
     match res {
@@ -268,7 +268,7 @@ fn test_rlp_uint(ui: Uint256, correct_result: Vec<u8>) {
     let res = run_from_file(
         path,
         vec![Value::Int(Uint256::zero()), Value::Int(ui)],
-        RuntimeEnvironment::new(Uint256::from_usize(1111)),
+        RuntimeEnvironment::new(Uint256::from_usize(1111), None),
         false,
     );
     match res {
@@ -287,7 +287,7 @@ fn test_rlp_bytearray(input: Vec<u8>, correct_result: Vec<u8>) {
     let res = run_from_file(
         path,
         vec![Value::Int(Uint256::one()), bytestack_from_bytes(&input)],
-        RuntimeEnvironment::new(Uint256::from_usize(1111)),
+        RuntimeEnvironment::new(Uint256::from_usize(1111), None),
         false,
     );
     match res {
@@ -313,7 +313,7 @@ fn test_rlp_list3(testvec: (Uint256, Vec<u8>, Uint256), correct_result: Vec<u8>)
                 Value::Int(testvec.2),
             ]),
         ],
-        RuntimeEnvironment::new(Uint256::from_usize(1111)),
+        RuntimeEnvironment::new(Uint256::from_usize(1111), None),
         false,
     );
     match res {
@@ -332,7 +332,7 @@ fn test_codeload() {
     let res = run_from_file(
         path,
         vec![],
-        RuntimeEnvironment::new(Uint256::from_usize(1111)),
+        RuntimeEnvironment::new(Uint256::from_usize(1111), None),
         false,
     );
     match res {
