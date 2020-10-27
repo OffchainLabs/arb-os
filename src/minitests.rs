@@ -376,6 +376,11 @@ fn test_direct_deploy_and_compressed_call_add() {
 }
 
 #[test]
+fn test_payment_in_constructor() {
+    crate::evm::evm_test_payment_in_constructor(None, false);
+}
+
+#[test]
 fn test_arbsys() {
     let _log = crate::evm::evm_test_arbsys(None, false);
 }

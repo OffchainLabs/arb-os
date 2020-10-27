@@ -26,6 +26,7 @@ use std::queue::queue_isEmpty;
 use std::queue::queue_put;
 use std::queue::queue_get;
 
+use inbox::IncomingRequest;
 use inbox::inbox_getNextUnpackedRequest;
 
 
@@ -229,17 +230,6 @@ impure func switchToChargingOS() -> uint {
         asm(~0,) { setgas };
         return gasRemaining;
     }
-}
-
-// This structure describes an incoming request.
-// It is declared identically in inbox.mini and elsewhere
-type IncomingRequest = struct {
-    kind: uint,               // type of message
-    blockNumber: uint,        // block number of the L1 block
-    timestamp: uint,          // timestamp of the L1 block
-    sender: address,          // address of the sender
-    requestId: uint,
-    msgData: MarshalledBytes  // kind-specific data, as a marshalled bytearray
 }
 
 // TxRequestData is declared identically in message.mini and elsewhere.

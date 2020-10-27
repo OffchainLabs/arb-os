@@ -16,12 +16,16 @@ contract Add {
         return add(mult(x,x), mult(y,y));
     }
 
-    function getSeqNum() public returns (uint) {
+    function getSeqNum() public view returns (uint) {
         uint256 txCount = ArbSys(address(100)).getTransactionCount(msg.sender);
         return txCount;
     }
 
     function withdrawMyEth() public payable {
 	ArbSys(address(100)).withdrawEth.value(msg.value)(address(1025));
+    }
+
+    function withdraw5000() public {
+	ArbSys(address(100)).withdrawEth.value(5000)(address(1025));
     }
 }

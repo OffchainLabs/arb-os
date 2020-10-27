@@ -455,9 +455,17 @@ pub struct ArbosReceipt {
     evm_logs: Value,
     gas_used: Uint256,
     gas_price_wei: Uint256,
+    pub provenance: ArbosRequestProvenance,
     gas_so_far: Uint256,     // gas used so far in L1 block, including this tx
     index_in_block: Uint256, // index of this tx in L1 block
     logs_so_far: Uint256,    // EVM logs emitted so far in L1 block, NOT including this tx
+}
+
+#[derive(Clone, Debug)]
+pub struct ArbosRequestProvenance {
+    l1_sequence_num: Uint256,
+    parent_request_id: Option<Uint256>,
+    index_in_parent: Option<Uint256>,
 }
 
 impl ArbosReceipt {
@@ -487,6 +495,39 @@ impl ArbosReceipt {
                 evm_logs,
                 gas_used,
                 gas_price_wei,
+                provenance: if let Value::Tuple(stup) = &tup[1] {
+                    if let Value::Tuple(subtup) = &stup[6] {
+                        ArbosRequestProvenance {
+                            l1_sequence_num: if let Value::Int(ui) = &subtup[0] {
+                                ui.clone()
+                            } else {
+                                panic!();
+                            },
+                            parent_request_id: if let Value::Int(ui) = &subtup[1] {
+                                if ui.is_zero() {
+                                    Some(ui.clone())
+                                } else {
+                                    None
+                                }
+                            } else {
+                                panic!();
+                            },
+                            index_in_parent: if let Value::Int(ui) = &subtup[2] {
+                                if ui.is_zero() {
+                                    Some(ui.clone())
+                                } else {
+                                    None
+                                }
+                            } else {
+                                panic!();
+                            },
+                        }
+                    } else {
+                        panic!();
+                    }
+                } else {
+                    panic!();
+                },
                 gas_so_far,
                 index_in_block,
                 logs_so_far,
