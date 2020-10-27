@@ -12,6 +12,7 @@ use ethers_signers::{Signer, Wallet};
 use serde::{Deserialize, Serialize};
 use std::convert::TryInto;
 use std::io::Read;
+use std::rc::Rc;
 use std::{collections::HashMap, fs::File, io, path::Path};
 
 #[derive(Debug, Clone)]
@@ -60,8 +61,8 @@ impl RuntimeEnvironment {
         buf.extend(Uint256::zero().to_bytes_be()); // owner address
 
         if let Some((base_gas_price, pay_fees_to)) = self.charging_policy.clone() {
-            buf.extend(&[0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 2u8]);   // option ID = 2
-            buf.extend(&[0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 64u8]);  // option payload size = 64 bytes
+            buf.extend(&[0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 2u8]); // option ID = 2
+            buf.extend(&[0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 64u8]); // option payload size = 64 bytes
             buf.extend(base_gas_price.to_bytes_be());
             buf.extend(pay_fees_to.to_bytes_be());
         }
@@ -393,6 +394,16 @@ impl RuntimeEnvironment {
             .collect()
     }
 
+    pub fn get_all_block_summary_logs(&self) -> Vec<ArbosBlockSummaryLog> {
+        self.logs
+            .clone()
+            .into_iter()
+            .map(|log| ArbosBlockSummaryLog::new(log))
+            .filter(|r| r.is_some())
+            .map(|r| r.unwrap())
+            .collect()
+    }
+
     pub fn push_send(&mut self, send_item: Value) {
         self.sends.push(send_item.clone());
         self.recorder.add_send(send_item);
@@ -598,6 +609,65 @@ impl ArbosReceipt {
 
     pub fn get_gas_used_so_far(&self) -> Uint256 {
         self.gas_so_far.clone()
+    }
+}
+
+pub struct ArbosBlockSummaryLog {
+    block_num: Uint256,
+    timestamp: Uint256,
+    gas_limit: Uint256,
+    stats_this_block: Rc<Vec<Value>>,
+    stats_all_time: Rc<Vec<Value>>,
+    gas_summary: Rc<Vec<Value>>,
+}
+
+impl ArbosBlockSummaryLog {
+    pub fn new(arbos_log: Value) -> Option<Self> {
+        if let Value::Tuple(tup) = arbos_log {
+            if tup[0] != Value::Int(Uint256::one()) {
+                return None;
+            }
+            let block_num = if let Value::Int(bn) = &tup[1] {
+                bn
+            } else {
+                return None;
+            };
+            let timestamp = if let Value::Int(ts) = &tup[2] {
+                ts
+            } else {
+                return None;
+            };
+            let gas_limit = if let Value::Int(gl) = &tup[3] {
+                gl
+            } else {
+                return None;
+            };
+            let stats_this_block = if let Value::Tuple(t2) = &tup[4] {
+                t2
+            } else {
+                return None;
+            };
+            let stats_all_time = if let Value::Tuple(t2) = &tup[5] {
+                t2
+            } else {
+                return None;
+            };
+            let gas_summary = if let Value::Tuple(t2) = &tup[6] {
+                t2
+            } else {
+                return None;
+            };
+            Some(ArbosBlockSummaryLog {
+                block_num: block_num.clone(),
+                timestamp: timestamp.clone(),
+                gas_limit: gas_limit.clone(),
+                stats_this_block: stats_this_block.clone(),
+                stats_all_time: stats_all_time.clone(),
+                gas_summary: gas_summary.clone(),
+            })
+        } else {
+            None
+        }
     }
 }
 
