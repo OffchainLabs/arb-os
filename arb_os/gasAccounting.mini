@@ -55,7 +55,7 @@ var gasAccountingConstants: struct {
 type TxGasState = struct {
     gasInReserve: uint,  // how much gas is being held in reserve
     originalMax: uint,   // the tx's original maxGas value
-    price: uint,         // price of gas, in wei per unit of gas
+    price: uint,         // price of gas for this tx, in wei per unit of gas
     weiHeldForGas: uint, // amount of currency we're holding to cover the current tx's gas use
     refundTo: address,   // who gets a refund for unused gas at the end, if there is any
 }
@@ -73,7 +73,7 @@ public impure func gasAccounting_init() {
         maxBacklogSeconds = 4 * millisecondsPerBlock / 1000;
     }
     gasAccountingConstants = struct {
-        SpeedLimitPerBlock: millisecondsPerBlock * speedLimitPerSecond / 1000,
+        SpeedLimitPerBlock: speedLimitPerSecond * millisecondsPerBlock / 1000,
         GasPoolMax: int(speedLimitPerSecond * maxBacklogSeconds),
         BaseGasPrice: 0,
         TxGasLimit: speedLimitPerSecond * maxBacklogSeconds / 2,
@@ -115,7 +115,17 @@ public impure func gasAccounting_summaryToPublish() -> any {
     if let Some(paddr) = gasAccountingInfo.payValidatorFundsTo {
         payoutAddress = paddr;
     }
+
+    let minGasPrice = gasAccountingConstants.BaseGasPrice + gasAccountingInfo.weiOwedToValidators / uint(gasAccountingConstants.GasPoolMax);
+    let gasPriceEstimate = gasAccountingInfo.weiPool;
+    if (gasAccountingInfo.gasPool + gasAccountingConstants.SpeedLimitPerBlock > 0) {
+        gasPriceEstimate = gasAccountingInfo.weiPool / (gasAccountingInfo.gasPool + gasAccountingConstants.SpeedLimitPerBlock);
+    }
+    if (gasPriceEstimate < minGasPrice) {
+        gasPriceEstimate = minGasPrice;
+    }
     return (
+        gasAccountingInfo.gasPriceEstimate,
         gasAccountingInfo.gasPool,
         gasAccountingInfo.weiPool,
         gasAccountingInfo.weiOwedToValidators,
@@ -125,7 +135,10 @@ public impure func gasAccounting_summaryToPublish() -> any {
 }
 
 public impure func gasAccounting_specialCharge(payer: address, amount: uint) -> option<()> {
-    // this must be called outside of a tx
+    if ( ! evmCallStack_isEmpty() ) {
+        // This must be called outside of a tx.
+        return None;
+    }
 
     let globalAcctStore = getGlobalAccountStore();
     let payerAcct = accountStore_get(globalAcctStore, payer);
@@ -165,8 +178,8 @@ public impure func gasAccounting_startTxCharges(
 
     let _ = switchToChargingOS();   // call this in case we're somehow still charging a tx; ignore return value
 
-    if (maxGas >= asm(255, 1) uint { shl }) {
-        maxGas = asm(255, 1) uint { shl } - 1;
+    if (maxGas > gasAccountingConstants.TxGasLimit) {
+        maxGas = gasAccountingConstants.TxGasLimit;
     }
 
     // take funds from the payer, enough to pay for maxGas at gasPrice
@@ -225,8 +238,9 @@ public impure func gasAccounting_endTxCharges() -> option<GasUsage> {
         )
     );
     gasAccountingInfo = gasAccountingInfo with {
-        weiCollectedFromTxs: gasAccountingInfo.weiCollectedFromTxs
-                                + (txState.weiHeldForGas - refund)
+        gasPool: gasAccountingInfo.gasPool - (txState.originalMax - gasToRefund)
+    } with {
+        weiCollectedFromTxs: gasAccountingInfo.weiCollectedFromTxs + (txState.weiHeldForGas - refund)
     } with {
         txState: None<TxGasState>
     };
@@ -290,7 +304,7 @@ public impure func gasAccounting_resumeTxCharges(allocationRequested: uint) -> u
         if (gasRegister >= asm(1, 255) uint { shl }) {
             let gasUsedByOS = (~0) - gasRegister;
             gasAccountingInfo = gasAccountingInfo with {
-                gasPool: gasAccountingInfo.gasPool + int(gasUsedByOS)
+                gasPool: gasAccountingInfo.gasPool - int(gasUsedByOS)
             } with {
                 weiOwedToValidators: gasAccountingInfo.weiOwedToValidators + gasUsedByOS * gasAccountingConstants.BaseGasPrice
             };
@@ -332,8 +346,8 @@ impure func switchToChargingOS() -> uint {
 }
 
 impure func payOutFundsToValidators() {  // this should only be called when not in a tx
-    if let Some(validatorsAddr) = gasAccountingInfo.payValidatorFundsTo {
-        if (gasAccountingInfo.weiCollectedFromTxs > 0) {
+    if (gasAccountingInfo.weiCollectedFromTxs > 0) {
+        if let Some(validatorsAddr) = gasAccountingInfo.payValidatorFundsTo {
             let globalAcctStore = getGlobalAccountStore();
             setGlobalAccountStore(
                 accountStore_set(
@@ -382,7 +396,7 @@ type TxRequestData = struct {
 //     auction over them, then enqueue them to be eventually fetched by the main run loop.
 // For now, this approves every request, and charges zero gas price.
 public impure func getNextRequestFromCongestionAuction() -> (
-    bool,           // was it approved for execution
+    bool,                     // was it approved for execution
     option<IncomingRequest>,  // if it was an L1 message
     option<TxRequestData>,    // if it was an L2 tx message
 ) {
@@ -427,7 +441,7 @@ public impure func getNextRequestFromCongestionAuction() -> (
             return (false, maybeRequest, maybeTx);
         }
         if (gasBid == 0) {
-            gasBid = minGasPrice;
+            gasBid = minGasPrice;  // treat a zero bid as equivalent to bidding the min gas price
         }
 
         if (maxGas > gasAccountingConstants.TxGasLimit) {
