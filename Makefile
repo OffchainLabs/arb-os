@@ -10,7 +10,7 @@ ARBOS = $(ARBOSDIR)/arbos.mexe
 all: $(TESTFILES) $(TEMPLATES) $(ARBOS) test
 
 $(ARBOSDIR)/contractTemplates.mini:
-	$(CARGORUN) maketemplates
+	$(CARGORUN) make-templates
 
 $(BUILTINDIR)/kvstest.mexe: $(BUILTINDIR)/kvstest.mini
 	$(CARGORUN) compile $(BUILTINDIR)/kvstest.mini -o $(BUILTINDIR)/kvstest.mexe
@@ -57,16 +57,16 @@ run:
 test:
 	cargo test --release
 
-testlogs: all
+testlogs: $(TEMPLATES) $(ARBOS)
 	rm -rf testlogs
 	mkdir testlogs
-	$(CARGORUN) maketestlogs >/dev/null
+	$(CARGORUN) make-test-logs >/dev/null
 
 evmdebug: all
-	$(CARGORUN) evmdebug
+	$(CARGORUN) evm-debug
 
-benchmarks: arbos
-	$(CARGORUN) makebenchmarks
+benchmarks: $(TEMPLATES) $(ARBOS)
+	$(CARGORUN) make-benchmarks
 
 clean:
 	rm -f $(BUILTINDIR)/*.mexe $(STDDIR)/*.mexe $(ARBOSDIR)/*.mexe minitests/*.mexe $(ARBOSDIR)/contractTemplates.mini
