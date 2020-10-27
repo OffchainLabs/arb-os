@@ -51,7 +51,6 @@ use evmOps::evmOp_origin;
 use evmOps::evmOp_return;
 use evmOps::evmOp_returndatasize;
 use evmOps::evmOp_returndatacopy;
-use evmOps::evmOp_revert;
 use evmOps::evmOp_revert_knownPc;
 use evmOps::evmOp_selfdestruct;
 use evmOps::evmOp_sha3;
@@ -514,9 +513,7 @@ public impure func translateEvmCodeSegment(
                         return pushEvmInsnCall(opWrapper6UintRetBool(evmOp_staticcall), restOfCode, evmJumpTable, pcTable);
                     }
                 } else {
-                    if (opcode == 0xfd) { // REVERT
-                        return pushEvmInsnCall(opWrapper2Uint(evmOp_revert), restOfCode, evmJumpTable, pcTable);
-                    } elseif (opcode == 0xfe) { // INVALID
+                    if ( (opcode == 0xfd) || (opcode == 0xfe) ) { // REVERT or INVALID
                         let (doCall, jumpTable, uPcTable) = pushEvmInsnCall(
                             opWrapper3Uint(evmOp_revert_knownPc),
                             restOfCode,
