@@ -90,6 +90,7 @@ impl AbiForContract {
         &mut self,
         args: &[ethabi::Token],
         machine: &mut Machine,
+        payment: Uint256,
         deploy_as_buddy: bool,
         debug: bool,
     ) -> Option<Uint256> {
@@ -112,7 +113,7 @@ impl AbiForContract {
                 sender_addr.clone(),
                 Uint256::from_usize(1_000_000_000_000),
                 Uint256::zero(),
-                Uint256::zero(),
+                payment,
                 &augmented_code,
             )
         } else {
@@ -121,7 +122,7 @@ impl AbiForContract {
                 Uint256::from_usize(1_000_000_000_000),
                 Uint256::zero(),
                 Uint256::zero(),
-                Uint256::zero(),
+                payment,
                 &augmented_code,
             )
         };

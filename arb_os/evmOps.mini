@@ -25,6 +25,7 @@ use evmCallStack::evmCallStack_selfDestructCurrentAccount;
 use evmCallStack::evmCallStack_doCall;
 use evmCallStack::evmCallStack_returnFromCall;
 use evmCallStack::evmCallStack_callHitError;
+use evmCallStack::evmCallStack_runningCodeFromAccount;
 
 use evmCallStack::evmCallFrame_runningAsAccount;
 use evmCallStack::evmCallFrame_runningCodeFromAccount;
@@ -35,6 +36,7 @@ use evmCallStack::evmCallFrame_getResumeCodePoint;
 use evmCallStack::evmCallFrame_getCallvalue;
 use evmCallStack::evmCallFrame_getCalldata;
 use evmCallStack::evmCallFrame_getEvmLogs;
+use evmCallStack::evmCallFrame_shouldRevertOnStorageWrite;
 
 use accounts::account_getAddress;
 use accounts::account_getCodeSize;
@@ -393,11 +395,18 @@ public impure func evmOp_sload(storageAddr: uint) -> uint {
 
 public impure func evmOp_sstore(storageAddr: uint, value: uint) {
     if let Some(topFrame) = evmCallStack_topFrame() {
-        if let Some(_) = evmCallStack_setTopFrameStorageCell(
-            storageAddr,
-            value
-        ) {
-            return;
+        if (evmCallFrame_shouldRevertOnStorageWrite(topFrame)) {
+            // the currently running code was given a gas amount that wouldn't allow a storage write on EVM
+            // for compatibility with EVM code that uses gas limit to prevent writes, we cause out-of-gas error here
+            asm(1,) { setgas };
+            asm(1,1) uint { plus };  // will get an out-of-gas error on this instruction
+        } else {
+            if let Some(_) = evmCallStack_setTopFrameStorageCell(
+                storageAddr,
+                value
+            ) {
+                return;
+            }
         }
     }
 

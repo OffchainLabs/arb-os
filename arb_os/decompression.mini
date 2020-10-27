@@ -5,6 +5,7 @@
 use chainParameters::chainParams_chainId;
 
 use std::bytearray::ByteArray;
+use std::bytearray::MarshalledBytes;
 use std::bytearray::bytearray_new;
 use std::bytearray::bytearray_size;
 use std::bytearray::bytearray_getByte;
@@ -35,6 +36,8 @@ use std::queue::Queue;
 use std::queue::queue_new;
 use std::queue::queue_put;
 
+use accounts::Account;
+use accounts::AccountStore;
 use accounts::getGlobalAccountStore;
 use accounts::accountStore_get;
 use accounts::account_getNextSeqNum;
@@ -49,6 +52,10 @@ use std::rlp::rlp_encodeMessageInfo;
 
 use signedTx::SignedTx;
 use signedTx::recoverSigner;
+
+use inbox::IncomingRequest;
+use messages::TxRequestData;
+
 
 type IndexedAddressTable = struct {
     byIndex: ExpandingIntArray,
@@ -204,14 +211,12 @@ public impure func decompressAndVerifyEcdsaSignedTx(
             } with {
                 sender: signer
             } with {
-                msgData: bytearray_marshalFull(
-                    bytearray_copy(
-                        encodedMessage,
-                        0,
-                        bytearray_setByte(bytearray_new(0), 0, 4),
-                        1,
-                        bytearray_size(encodedMessage)
-                    )
+                msgData: bytearray_copy(
+                    encodedMessage,
+                    0,
+                    bytearray_setByte(bytearray_new(0), 0, 4),
+                    1,
+                    bytearray_size(encodedMessage)
                 )
             }
         }
