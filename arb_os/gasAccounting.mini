@@ -17,6 +17,8 @@ use accounts::account_getBalance;
 use accounts::account_addToEthBalance;
 use accounts::account_deductFromEthBalance;
 
+use evmCallStack::evmCallStack_isEmpty;
+
 use std::bytearray::bytearray_new;
 use std::bytearray::bytearray_unmarshalBytes;
 use std::bytearray::bytearray_getByte;
@@ -40,7 +42,7 @@ var gasAccountingInfo: struct {
     weiBurned: uint,              // number of wei that have been burned
     lastBlockNumSeen: uint,       // last L1 block number seen by this module
     txState: option<TxGasState>,  // status of currently active tx (if there is one)
-    payValidatorFundsTo: option<address>,   // where to pay validator funds; if None, funds should be burned
+    payFeesTo: option<address>,   // where to pay validator fees; if None, funds should be burned
 };
 
 var gasAccountingConstants: struct {
@@ -88,7 +90,16 @@ public impure func gasAccounting_init() {
         weiBurned: 0,
         lastBlockNumSeen: 0,
         txState: None<TxGasState>,
-        payValidatorFundsTo: None<address>,
+        payFeesTo: None<address>,
+    };
+}
+
+public impure func gasAccounting_setFeeParams(baseGasPrice: uint, feeRecipient: address) {
+    gasAccountingConstants = gasAccountingConstants with {
+        BaseGasPrice: baseGasPrice
+    };
+    gasAccountingInfo = gasAccountingInfo with {
+        payFeesTo: Some(feeRecipient)
     };
 }
 
@@ -112,20 +123,20 @@ public impure func gasAccounting_postInitMessage() {
 
 public impure func gasAccounting_summaryToPublish() -> any {
     let payoutAddress = address(0);
-    if let Some(paddr) = gasAccountingInfo.payValidatorFundsTo {
+    if let Some(paddr) = gasAccountingInfo.payFeesTo {
         payoutAddress = paddr;
     }
 
     let minGasPrice = gasAccountingConstants.BaseGasPrice + gasAccountingInfo.weiOwedToValidators / uint(gasAccountingConstants.GasPoolMax);
     let gasPriceEstimate = gasAccountingInfo.weiPool;
-    if (gasAccountingInfo.gasPool + gasAccountingConstants.SpeedLimitPerBlock > 0) {
-        gasPriceEstimate = gasAccountingInfo.weiPool / (gasAccountingInfo.gasPool + gasAccountingConstants.SpeedLimitPerBlock);
+    if (gasAccountingInfo.gasPool + int(gasAccountingConstants.SpeedLimitPerBlock) > int(0)) {
+        gasPriceEstimate = gasAccountingInfo.weiPool / uint(gasAccountingInfo.gasPool + int(gasAccountingConstants.SpeedLimitPerBlock));
     }
     if (gasPriceEstimate < minGasPrice) {
         gasPriceEstimate = minGasPrice;
     }
     return (
-        gasAccountingInfo.gasPriceEstimate,
+        gasPriceEstimate,
         gasAccountingInfo.gasPool,
         gasAccountingInfo.weiPool,
         gasAccountingInfo.weiOwedToValidators,
@@ -238,7 +249,7 @@ public impure func gasAccounting_endTxCharges() -> option<GasUsage> {
         )
     );
     gasAccountingInfo = gasAccountingInfo with {
-        gasPool: gasAccountingInfo.gasPool - (txState.originalMax - gasToRefund)
+        gasPool: gasAccountingInfo.gasPool - int(txState.originalMax - gasToRefund)
     } with {
         weiCollectedFromTxs: gasAccountingInfo.weiCollectedFromTxs + (txState.weiHeldForGas - refund)
     } with {
@@ -347,7 +358,7 @@ impure func switchToChargingOS() -> uint {
 
 impure func payOutFundsToValidators() {  // this should only be called when not in a tx
     if (gasAccountingInfo.weiCollectedFromTxs > 0) {
-        if let Some(validatorsAddr) = gasAccountingInfo.payValidatorFundsTo {
+        if let Some(validatorsAddr) = gasAccountingInfo.payFeesTo {
             let globalAcctStore = getGlobalAccountStore();
             setGlobalAccountStore(
                 accountStore_set(

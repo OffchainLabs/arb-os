@@ -17,6 +17,7 @@ use std::bytestream::bytestream_get64;
 use std::bytestream::bytestream_get256;
 use std::bytestream::bytestream_skipBytes;
 
+use gasAccounting::gasAccounting_setFeeParams;
 use gasAccounting::gasAccounting_postInitMessage;
 
 
@@ -87,6 +88,11 @@ impure func doInitializationOption(stream: ByteStream) -> option<ByteStream> {
     } elseif (optionId == 1) {   // option: set seconds per block
         let (ustr, secsPerBlock) = bytestream_get256(stream)?;
         globalChainParams = Some(globalChainParams? with { millisecondsPerBlock: 1000*secsPerBlock });
+        return Some(ustr);
+    } elseif (optionId == 2) {   // option: set gas charging parameters
+        let (ustr, baseGasPrice) = bytestream_get256(stream)?;
+        let (ustr, gasFeeRecipientAsUint) = bytestream_get256(ustr)?;
+        gasAccounting_setFeeParams(baseGasPrice, address(gasFeeRecipientAsUint));
         return Some(ustr);
     } else {
         // unrecognized option, discard it
