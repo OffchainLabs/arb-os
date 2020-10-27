@@ -12,6 +12,7 @@ use evmCallStack::evmCallFrame_getCalldata;
 
 use evmOps::evmOp_return;
 use evmOps::evmOp_revert;
+use evmOps::evmOp_revert_knownPc;
 
 use accounts::getGlobalAccountStore;
 use accounts::setGlobalAccountStore;
