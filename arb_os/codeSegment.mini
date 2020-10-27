@@ -3,6 +3,7 @@
 //
 
 use std::stack::Stack;
+use std::bytearray::ByteArray;
 use std::bytestream::ByteStream;
 
 use evmCallStack::evmCallStack_callHitError;
@@ -15,6 +16,8 @@ use std::bytestream::bytestream_truncate;
 use std::bytestream::bytestream_getByte;
 use std::bytestream::bytestream_get64;
 use std::bytestream::bytestream_skipBytes;
+use std::stack::stack_new;
+use std::stack::stack_push;
 
 use chainParameters::chainParams_chainId;
 use evmOps::evmOp_address;
