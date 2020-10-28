@@ -508,25 +508,13 @@ impure func arbsys_getBlsPublicKey(topFrame: EvmCallFrame, calldata: ByteArray) 
     if let Some(blsKey) = maybeBlsKey {
         mem = bls_marshalPublicKey(blsKey, mem, 0);
     } else {
-        mem = bytearray_set256(
-            bytearray_set256(
-                bytearray_set256(
-                    bytearray_set256(mem, 0, ~0),
-                    32,
-                    ~0
-                ),
-                2*32,
-                ~0
-            ),
-            3*32,
-            ~0
-        );
+        evmOp_revert_knownCodePc(address(100), 101, 0, 0);
     }
 
     if (evmCallStack_setTopFrameMemory(mem)) {
         evmOp_return(0, 4*32);
     } else {
-        evmOp_revert_knownCodePc(address(100), 181, 0, 0);
+        evmOp_revert_knownCodePc(address(100), 182, 0, 0);
     }
 }
 
