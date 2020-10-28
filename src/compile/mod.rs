@@ -105,9 +105,10 @@ impl TypeCheckedModule {
         let mut new_funcs = self.checked_funcs.clone();
         for f in &mut new_funcs {
             for s in &mut f.code {
-                s.inline(&self.checked_funcs);
+                s.inline(&self.checked_funcs, &self.string_table);
             }
         }
+        self.checked_funcs = new_funcs;
     }
 }
 
@@ -243,6 +244,7 @@ pub fn compile_from_file(
     path: &Path,
     file_name_chart: &mut HashMap<u64, String>,
     _debug: bool,
+    inline: bool,
 ) -> Result<Vec<CompiledProgram>, CompileError> {
     let library = path
         .parent()
@@ -262,7 +264,7 @@ pub fn compile_from_file(
         })
         .unwrap_or(None);
     if path.is_dir() {
-        compile_from_folder(path, library, "main", file_name_chart)
+        compile_from_folder(path, library, "main", file_name_chart, inline)
     } else if let (Some(parent), Some(file_name)) = (path.parent(), path.file_stem()) {
         compile_from_folder(
             parent,
@@ -271,6 +273,7 @@ pub fn compile_from_file(
                 CompileError::new(format!("File name {:?} must be UTF-8", file_name), None)
             })?,
             file_name_chart,
+            inline,
         )
     } else {
         Err(CompileError::new(
@@ -285,6 +288,7 @@ pub fn compile_from_folder(
     library: Option<&str>,
     main: &str,
     file_name_chart: &mut HashMap<u64, String>,
+    inline: bool,
 ) -> Result<Vec<CompiledProgram>, CompileError> {
     let (mut programs, import_map) = create_program_tree(folder, library, main, file_name_chart)?;
     for (name, imports) in &import_map {
@@ -423,7 +427,9 @@ pub fn compile_from_folder(
             name,
         ));
     }
-    typechecked.iter_mut().for_each(|module| module.inline());
+    if inline {
+        typechecked.iter_mut().for_each(|module| module.inline());
+    }
     for TypeCheckedModule {
         checked_funcs,
         string_table,

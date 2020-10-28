@@ -118,35 +118,41 @@ impl MiniProperties for TypeCheckedStatement {
 }
 
 impl TypeCheckedStatement {
-    pub fn inline(&mut self, funcs: &Vec<TypeCheckedFunc>) {
+    pub fn inline(&mut self, funcs: &Vec<TypeCheckedFunc>, string_table: &StringTable) {
         match self {
             TypeCheckedStatement::Noop(_)
             | TypeCheckedStatement::Panic(_)
             | TypeCheckedStatement::ReturnVoid(_) => {}
-            TypeCheckedStatement::Return(exp, _) => exp.inline(funcs),
-            TypeCheckedStatement::Expression(exp, _) => exp.inline(funcs),
-            TypeCheckedStatement::Let(_, exp, _) => exp.inline(funcs),
-            TypeCheckedStatement::AssignLocal(_, exp, _) => exp.inline(funcs),
-            TypeCheckedStatement::AssignGlobal(_, exp, _) => exp.inline(funcs),
-            TypeCheckedStatement::Loop(stats, _) => {
-                stats.iter_mut().for_each(|stat| stat.inline(funcs))
-            }
+            TypeCheckedStatement::Return(exp, _) => exp.inline(funcs, string_table),
+            TypeCheckedStatement::Expression(exp, _) => exp.inline(funcs, string_table),
+            TypeCheckedStatement::Let(_, exp, _) => exp.inline(funcs, string_table),
+            TypeCheckedStatement::AssignLocal(_, exp, _) => exp.inline(funcs, string_table),
+            TypeCheckedStatement::AssignGlobal(_, exp, _) => exp.inline(funcs, string_table),
+            TypeCheckedStatement::Loop(stats, _) => stats
+                .iter_mut()
+                .for_each(|stat| stat.inline(funcs, string_table)),
             TypeCheckedStatement::While(exp, stats, _) => {
-                exp.inline(funcs);
-                stats.iter_mut().for_each(|stat| stat.inline(funcs))
+                exp.inline(funcs, string_table);
+                stats
+                    .iter_mut()
+                    .for_each(|stat| stat.inline(funcs, string_table))
             }
-            TypeCheckedStatement::If(arm) => arm.inline(funcs),
+            TypeCheckedStatement::If(arm) => arm.inline(funcs, string_table),
             TypeCheckedStatement::IfLet(_, exp, stats, ostats, _) => {
-                exp.inline(funcs);
-                stats.iter_mut().for_each(|stat| stat.inline(funcs));
+                exp.inline(funcs, string_table);
+                stats
+                    .iter_mut()
+                    .for_each(|stat| stat.inline(funcs, string_table));
                 if let Some(stats) = ostats {
-                    stats.iter_mut().for_each(|stat| stat.inline(funcs))
+                    stats
+                        .iter_mut()
+                        .for_each(|stat| stat.inline(funcs, string_table))
                 }
             }
-            TypeCheckedStatement::Asm(_, exps, _) => {
-                exps.iter_mut().for_each(|exp| exp.inline(funcs))
-            }
-            TypeCheckedStatement::DebugPrint(exp, _) => exp.inline(funcs),
+            TypeCheckedStatement::Asm(_, exps, _) => exps
+                .iter_mut()
+                .for_each(|exp| exp.inline(funcs, string_table)),
+            TypeCheckedStatement::DebugPrint(exp, _) => exp.inline(funcs, string_table),
         }
     }
 }
@@ -190,18 +196,20 @@ impl MiniProperties for TypeCheckedIfArm {
 }
 
 impl TypeCheckedIfArm {
-    fn inline(&mut self, funcs: &Vec<TypeCheckedFunc>) {
+    fn inline(&mut self, funcs: &Vec<TypeCheckedFunc>, string_table: &StringTable) {
         match self {
             TypeCheckedIfArm::Cond(exp, stats, oarm, _) => {
-                exp.inline(funcs);
-                stats.iter_mut().for_each(|stat| stat.inline(funcs));
+                exp.inline(funcs, string_table);
+                stats
+                    .iter_mut()
+                    .for_each(|stat| stat.inline(funcs, string_table));
                 if let Some(arm) = oarm {
-                    arm.inline(funcs)
+                    arm.inline(funcs, string_table)
                 }
             }
-            TypeCheckedIfArm::Catchall(stats, _) => {
-                stats.iter_mut().for_each(|stat| stat.inline(funcs))
-            }
+            TypeCheckedIfArm::Catchall(stats, _) => stats
+                .iter_mut()
+                .for_each(|stat| stat.inline(funcs, string_table)),
         }
     }
 }
@@ -416,82 +424,110 @@ impl TypeCheckedExpr {
             TypeCheckedExpr::Try(_, t, _) => t.clone(),
         }
     }
-    fn inline(&mut self, funcs: &Vec<TypeCheckedFunc>) {
+    fn inline(&mut self, funcs: &Vec<TypeCheckedFunc>, string_table: &StringTable) {
         match self {
             TypeCheckedExpr::LocalVariableRef(_, _, _)
             | TypeCheckedExpr::GlobalVariableRef(_, _, _)
             | TypeCheckedExpr::FuncRef(_, _, _)
             | TypeCheckedExpr::Const(_, _, _)
             | TypeCheckedExpr::NewMap(_, _) => {}
-            TypeCheckedExpr::UnaryOp(_, exp, _, _) => exp.inline(funcs),
+            TypeCheckedExpr::UnaryOp(_, exp, _, _) => exp.inline(funcs, string_table),
             TypeCheckedExpr::Binary(_, lexp, rexp, _, _) => {
-                lexp.inline(funcs);
-                rexp.inline(funcs)
+                lexp.inline(funcs, string_table);
+                rexp.inline(funcs, string_table)
             }
             TypeCheckedExpr::ShortcutOr(lexp, rexp, _) => {
-                lexp.inline(funcs);
-                rexp.inline(funcs)
+                lexp.inline(funcs, string_table);
+                rexp.inline(funcs, string_table)
             }
             TypeCheckedExpr::ShortcutAnd(lexp, rexp, _) => {
-                lexp.inline(funcs);
-                rexp.inline(funcs)
+                lexp.inline(funcs, string_table);
+                rexp.inline(funcs, string_table)
             }
-            TypeCheckedExpr::Variant(exp, _) => exp.inline(funcs),
-            TypeCheckedExpr::TupleRef(exp, _, _, _) => exp.inline(funcs),
-            TypeCheckedExpr::DotRef(exp, _, _, _, _) => exp.inline(funcs),
-            TypeCheckedExpr::FunctionCall(_, _, _, _, _) => println!("TO INLINE: {:?}", self),
+            TypeCheckedExpr::Variant(exp, _) => exp.inline(funcs, string_table),
+            TypeCheckedExpr::TupleRef(exp, _, _, _) => exp.inline(funcs, string_table),
+            TypeCheckedExpr::DotRef(exp, _, _, _, _) => exp.inline(funcs, string_table),
+            TypeCheckedExpr::FunctionCall(name_exp, arg_exps, _, _, loc) => match &**name_exp {
+                TypeCheckedExpr::FuncRef(id, _, _) => {
+                    let found_func = funcs.iter().find(|func| func.name == *id);
+                    if let Some(func) = found_func {
+                        println!("{:?}", func);
+                        let mut code: Vec<_> = arg_exps
+                            .iter()
+                            .zip(func.args.iter())
+                            .map(|(arg, otherarg)| {
+                                TypeCheckedStatement::Let(
+                                    TypeCheckedMatchPattern::Simple(
+                                        otherarg.name,
+                                        otherarg.tipe.clone(),
+                                    ),
+                                    arg.clone(),
+                                    None,
+                                )
+                            })
+                            .collect();
+                        code.append(&mut func.code.clone());
+                        *self = TypeCheckedExpr::CodeBlock(code, None, loc.clone());
+                    }
+                }
+                _ => {}
+            },
             TypeCheckedExpr::CodeBlock(stats, oexpr, _) => {
-                stats.iter_mut().for_each(|stat| stat.inline(funcs));
+                stats
+                    .iter_mut()
+                    .for_each(|stat| stat.inline(funcs, string_table));
                 if let Some(expr) = oexpr {
-                    expr.inline(funcs)
+                    expr.inline(funcs, string_table)
                 }
             }
-            TypeCheckedExpr::StructInitializer(fields, _, _) => {
-                fields.iter_mut().for_each(|field| field.inline(funcs))
-            }
+            TypeCheckedExpr::StructInitializer(fields, _, _) => fields
+                .iter_mut()
+                .for_each(|field| field.inline(funcs, string_table)),
             TypeCheckedExpr::ArrayRef(exp1, exp2, _, _) => {
-                exp1.inline(funcs);
-                exp2.inline(funcs);
+                exp1.inline(funcs, string_table);
+                exp2.inline(funcs, string_table);
             }
             TypeCheckedExpr::FixedArrayRef(exp1, exp2, _, _, _) => {
-                exp1.inline(funcs);
-                exp2.inline(funcs);
+                exp1.inline(funcs, string_table);
+                exp2.inline(funcs, string_table);
             }
             TypeCheckedExpr::MapRef(exp1, exp2, _, _) => {
-                exp1.inline(funcs);
-                exp2.inline(funcs);
+                exp1.inline(funcs, string_table);
+                exp2.inline(funcs, string_table);
             }
-            TypeCheckedExpr::Tuple(exps, _, _) => exps.iter_mut().for_each(|exp| exp.inline(funcs)),
-            TypeCheckedExpr::NewArray(exp, _, _, _) => exp.inline(funcs),
+            TypeCheckedExpr::Tuple(exps, _, _) => exps
+                .iter_mut()
+                .for_each(|exp| exp.inline(funcs, string_table)),
+            TypeCheckedExpr::NewArray(exp, _, _, _) => exp.inline(funcs, string_table),
             TypeCheckedExpr::NewFixedArray(_, oexp, _, _) => {
                 if let Some(exp) = oexp {
-                    exp.inline(funcs)
+                    exp.inline(funcs, string_table)
                 }
             }
             TypeCheckedExpr::ArrayMod(exp1, exp2, exp3, _, _) => {
-                exp1.inline(funcs);
-                exp2.inline(funcs);
-                exp3.inline(funcs)
+                exp1.inline(funcs, string_table);
+                exp2.inline(funcs, string_table);
+                exp3.inline(funcs, string_table)
             }
             TypeCheckedExpr::FixedArrayMod(exp1, exp2, exp3, _, _, _) => {
-                exp1.inline(funcs);
-                exp2.inline(funcs);
-                exp3.inline(funcs)
+                exp1.inline(funcs, string_table);
+                exp2.inline(funcs, string_table);
+                exp3.inline(funcs, string_table)
             }
             TypeCheckedExpr::MapMod(exp1, exp2, exp3, _, _) => {
-                exp1.inline(funcs);
-                exp2.inline(funcs);
-                exp3.inline(funcs)
+                exp1.inline(funcs, string_table);
+                exp2.inline(funcs, string_table);
+                exp3.inline(funcs, string_table)
             }
             TypeCheckedExpr::StructMod(exp1, _, exp2, _, _) => {
-                exp1.inline(funcs);
-                exp2.inline(funcs)
+                exp1.inline(funcs, string_table);
+                exp2.inline(funcs, string_table)
             }
-            TypeCheckedExpr::Cast(exp, _, _) => exp.inline(funcs),
-            TypeCheckedExpr::Asm(_, _, exps, _) => {
-                exps.iter_mut().for_each(|exp| exp.inline(funcs))
-            }
-            TypeCheckedExpr::Try(exp, _, _) => exp.inline(funcs),
+            TypeCheckedExpr::Cast(exp, _, _) => exp.inline(funcs, string_table),
+            TypeCheckedExpr::Asm(_, _, exps, _) => exps
+                .iter_mut()
+                .for_each(|exp| exp.inline(funcs, string_table)),
+            TypeCheckedExpr::Try(exp, _, _) => exp.inline(funcs, string_table),
         }
     }
 }
@@ -507,8 +543,8 @@ impl TypeCheckedStructField {
     pub fn new(name: String, value: TypeCheckedExpr) -> Self {
         TypeCheckedStructField { name, value }
     }
-    fn inline(&mut self, funcs: &Vec<TypeCheckedFunc>) {
-        self.value.inline(funcs)
+    fn inline(&mut self, funcs: &Vec<TypeCheckedFunc>, string_table: &StringTable) {
+        self.value.inline(funcs, string_table)
     }
 }
 
