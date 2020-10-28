@@ -12,6 +12,7 @@ use evmCallStack::evmCallFrame_getCalldata;
 
 use evmOps::evmOp_return;
 use evmOps::evmOp_revert;
+use evmOps::evmOp_revert_knownPc;
 
 use accounts::getGlobalAccountStore;
 use accounts::setGlobalAccountStore;
@@ -78,7 +79,7 @@ public impure func precompile_0x01() {  // ecrecover
     if let Some(topFrame) = evmCallStack_topFrame() {
         let calldata = evmCallFrame_getCalldata(topFrame);
         if (bytearray_size(calldata) != 4*32) {
-            evmOp_revert(0, 0);
+            evmOp_revert_knownPc(0, 0, 0);
         }
         let h = bytearray_get256(calldata, 0);
         let v = bytearray_get256(calldata, 32);
@@ -94,7 +95,7 @@ public impure func precompile_0x01() {  // ecrecover
         }
     }
 
-    evmOp_revert(0, 0);
+    evmOp_revert_knownPc(0, 0, 0);
 }
 
 public impure func precompile_0x02() {  // sha256
@@ -110,7 +111,7 @@ public impure func precompile_0x02() {  // sha256
         }
     }
 
-    evmOp_revert(0, 0);
+    evmOp_revert_knownPc(0, 0, 0);
 }
 
 public impure func precompile_0x04() {  // identity function
@@ -122,14 +123,14 @@ public impure func precompile_0x04() {  // identity function
         }
     }
 
-    evmOp_revert(0, 0);
+    evmOp_revert_knownPc(0, 0, 0);
 }
 
 public impure func precompile_0x06() {  // ecadd
     if let Some(topFrame) = evmCallStack_topFrame() {
         let calldata = evmCallFrame_getCalldata(topFrame);
         if (bytearray_size(calldata) != 4*32) {
-            evmOp_revert(0, 0);
+            evmOp_revert_knownPc(0, 0, 0);
         }
         let x0 = bytearray_get256(calldata, 0);
         let x1 = bytearray_get256(calldata, 32);
@@ -155,14 +156,14 @@ public impure func precompile_0x06() {  // ecadd
         }
     }
 
-    evmOp_revert(0, 0);
+    evmOp_revert_knownPc(0, 0, 0);
 }
 
 public impure func precompile_0x07() {  // ecmul
     if let Some(topFrame) = evmCallStack_topFrame() {
         let calldata = evmCallFrame_getCalldata(topFrame);
         if (bytearray_size(calldata) != 3*32) {
-            evmOp_revert(0, 0);
+            evmOp_revert_knownPc(0, 0, 0);
         }
         let x0 = bytearray_get256(calldata, 0);
         let x1 = bytearray_get256(calldata, 32);
@@ -187,7 +188,7 @@ public impure func precompile_0x07() {  // ecmul
         }
     }
 
-    evmOp_revert(0, 0);
+    evmOp_revert_knownPc(0, 0, 0);
 }
 
 public impure func precompile_0x08() { // ecpairing
@@ -227,5 +228,5 @@ public impure func precompile_0x08() { // ecpairing
         }
     }
 
-    evmOp_revert(0, 0);
+    evmOp_revert_knownPc(0, 0, 0);
 }
