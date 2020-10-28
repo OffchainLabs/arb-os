@@ -394,11 +394,11 @@ impl RuntimeEnvironment {
             .collect()
     }
 
-    pub fn get_all_block_summary_logs(&self) -> Vec<ArbosBlockSummaryLog> {
+    pub fn _get_all_block_summary_logs(&self) -> Vec<_ArbosBlockSummaryLog> {
         self.logs
             .clone()
             .into_iter()
-            .map(|log| ArbosBlockSummaryLog::new(log))
+            .map(|log| _ArbosBlockSummaryLog::_new(log))
             .filter(|r| r.is_some())
             .map(|r| r.unwrap())
             .collect()
@@ -612,7 +612,7 @@ impl ArbosReceipt {
     }
 }
 
-pub struct ArbosBlockSummaryLog {
+pub struct _ArbosBlockSummaryLog {
     block_num: Uint256,
     timestamp: Uint256,
     gas_limit: Uint256,
@@ -621,8 +621,8 @@ pub struct ArbosBlockSummaryLog {
     gas_summary: Rc<Vec<Value>>,
 }
 
-impl ArbosBlockSummaryLog {
-    pub fn new(arbos_log: Value) -> Option<Self> {
+impl _ArbosBlockSummaryLog {
+    pub fn _new(arbos_log: Value) -> Option<Self> {
         if let Value::Tuple(tup) = arbos_log {
             if tup[0] != Value::Int(Uint256::one()) {
                 return None;
@@ -657,7 +657,7 @@ impl ArbosBlockSummaryLog {
             } else {
                 return None;
             };
-            Some(ArbosBlockSummaryLog {
+            Some(_ArbosBlockSummaryLog {
                 block_num: block_num.clone(),
                 timestamp: timestamp.clone(),
                 gas_limit: gas_limit.clone(),
