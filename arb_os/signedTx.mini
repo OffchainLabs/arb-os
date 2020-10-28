@@ -28,17 +28,8 @@ use chainParameters::chainParams_chainId;
 
 use std::keccak::keccak256;
 
+use inbox::IncomingRequest;
 
-// This structure defines an incoming request.
-// It is defined identically in inbox.mini and elsewhere.
-type IncomingRequest = struct {
-    kind: uint,               // type of message
-    blockNumber: uint,        // block number of the L1 block
-    timestamp: uint,          // timestamp of the L1 block
-    sender: address,          // address of the sender
-    requestId: uint,
-    msgData: MarshalledBytes  // kind-specific data, as a marshalled bytearray
-}
 
 // TxRequestData is declared identically in message.mini and elsewhere.
 type TxRequestData = struct {
@@ -75,8 +66,7 @@ public impure func translateSignedTx(req: IncomingRequest) -> option<TxRequestDa
     //      - the requestID field in the request equal to the Ethereum-compatible tx id,
     // Return the result, or None if message is malformed or the signature is invalid.
 
-    let rlpData = bytearray_unmarshalBytes(req.msgData);
-    rlpData = bytearray_extract(rlpData, 1, bytearray_size(rlpData)-1);
+    let rlpData = bytearray_extract(req.msgData, 1, bytearray_size(req.msgData)-1);
     let (_, signedTx) = rlp_decodeMessageInfo(bytestream_new(rlpData))?;
     let signer = recoverSigner(signedTx)?;
     let rlpHash = keccak256(rlpData, 0, bytearray_size(rlpData));

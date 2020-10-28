@@ -39,9 +39,8 @@ public impure func chainParams_init() {
     globalChainParams = None<ChainParams>;
 }
 
-public impure func chainParams_gotParamsMessage(sender: address, data: MarshalledBytes) {
+public impure func chainParams_gotParamsMessage(sender: address, data: ByteArray) {
     if (globalChainParams == None<ChainParams>) {
-        let ba = bytearray_unmarshalBytes(data);
         globalChainParams = Some(struct{
             chainAddress: sender,
             gracePeriodBlocks: bytearray_get256(ba, 0) / 1000,   // divide because grace period sent in ticks
@@ -55,7 +54,7 @@ public impure func chainParams_gotParamsMessage(sender: address, data: Marshalle
         });
 
         // now read and process initialization options
-        if let Some(stream) = bytestream_skipBytes(bytestream_new(ba), 5*32) {
+        if let Some(stream) = bytestream_skipBytes(bytestream_new(data), 5*32) {
             loop {
                 if let Some(ustr2) = doInitializationOption(stream) {
                     stream = ustr2;

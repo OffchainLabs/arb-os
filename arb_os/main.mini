@@ -2,6 +2,7 @@
 // Copyright 2020, Offchain Labs, Inc. All rights reserved.
 //
 
+
 use accounts::AccountStore;
 use accounts::accountStore_init;
 use accounts::getGlobalAccountStore;
@@ -40,19 +41,11 @@ use decompression::decompression_init;
 use gasAccounting::getNextRequestFromCongestionAuction;
 use messages::handleL1Request; // return None if message format error; Some(()) if other error; if no error, never return
 use messages::handleL2Request; // return None if message format error; Some(()) if other error; if no error, never return
-use output::emitLog;
+use output::emitTxReceipt;
 use arbsys::arbsys_txcall;
 
-// This structure defines an incoming request.
-// It is declared identically in inbox.mini and elsewhere.
-type IncomingRequest = struct {
-    kind: uint,               // type of message
-    blockNumber: uint,        // block number of the L1 block
-    timestamp: uint,          // timestamp of the L1 block
-    sender: address,          // address of the sender
-    requestId: uint,
-    msgData: MarshalledBytes  // kind-specific data, as a marshalled bytearray
-}
+use inbox::IncomingRequest;
+
 
 // TxRequestData is declared identically in message.mini and elsewhere.
 type TxRequestData = struct {
@@ -93,25 +86,25 @@ public impure func mainRunLoop() {
             if (approved) {
                 if(handleL1Request(msg) == None<()>) {
                     // reject for message format error
-                    emitLog(msg, 6, None<ByteArray>, None<EvmLogs>, None<GasUsage>);
+                    emitTxReceipt(msg, 6, None<ByteArray>, None<EvmLogs>, None<GasUsage>);
                 }
             } else {
                 // reject for congestion error
-                emitLog(msg, 2, None<ByteArray>, None<EvmLogs>, None<GasUsage>);
+                emitTxReceipt(msg, 2, None<ByteArray>, None<EvmLogs>, None<GasUsage>);
             }
         } else {
             if let Some(request) = maybeL2 {
                 if (approved) {
                     if (handleL2Request(
-                        bytestream_new(bytearray_unmarshalBytes(request.incomingRequest.msgData)),
+                        bytestream_new(request.incomingRequest.msgData),
                         request
                     ) == None<()>) {
                         // reject for message format error
-                        emitLog(request.incomingRequest, 6, None<ByteArray>, None<EvmLogs>, None<GasUsage>);
+                        emitTxReceipt(request.incomingRequest, 6, None<ByteArray>, None<EvmLogs>, None<GasUsage>);
                     }
                 } else {
                     // reject for congestion error
-                    emitLog(request.incomingRequest, 2, None<ByteArray>, None<EvmLogs>, None<GasUsage>);
+                    emitTxReceipt(request.incomingRequest, 2, None<ByteArray>, None<EvmLogs>, None<GasUsage>);
                 }
             } // else request was not identified as either L1 or L2, which should be impossible
         }
@@ -123,8 +116,9 @@ impure func initializeContractTemplates() -> option<()> {
     let acctStore = getGlobalAccountStore();
 
     let code = bytearray_unmarshalBytes(getErc20code());
-    let (initCodePt, evmJumpTable) = translateEvmCodeSegment(
-        bytestream_new(code)
+    let (initCodePt, evmJumpTable, _) = translateEvmCodeSegment(
+        bytestream_new(code),
+        false
     )?;
     acctStore = accountStore_createAccountFromEvmCode(
         acctStore,
@@ -136,8 +130,9 @@ impure func initializeContractTemplates() -> option<()> {
     )?;
 
     let code = bytearray_unmarshalBytes(getErc721code());
-    let (initCodePt, evmJumpTable) = translateEvmCodeSegment(
-        bytestream_new(code)
+    let (initCodePt, evmJumpTable, _) = translateEvmCodeSegment(
+        bytestream_new(code),
+        false
     )?;
     acctStore = accountStore_createAccountFromEvmCode(
         acctStore,
@@ -149,8 +144,9 @@ impure func initializeContractTemplates() -> option<()> {
     )?;
 
     let code = bytearray_unmarshalBytes(getArbInfoCode());
-    let (initCodePt, evmJumpTable) = translateEvmCodeSegment(
-        bytestream_new(code)
+    let (initCodePt, evmJumpTable, _) = translateEvmCodeSegment(
+        bytestream_new(code),
+        false
     )?;
     acctStore = accountStore_createAccountFromEvmCode(
         acctStore,

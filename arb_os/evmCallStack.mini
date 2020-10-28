@@ -25,6 +25,7 @@ import func accountStore_transferEthBalance(
     to: address,
     amount: uint
 ) -> option<AccountStore>;
+
 use accounts::accountStore_destroyAndTransferBalance;
 use accounts::accountStore_cloneContract;
 use accounts::account_setStorageCell;
@@ -69,12 +70,14 @@ use gasAccounting::gasAccounting_resumeTxCharges;
 
 use codeSegment::translateEvmCodeSegment;
 
-use output::emitLog;
+use output::emitTxReceipt;
 
 use main::mainRunLoop;
 
 use output::sendMessage;
 use output::sendQueuedMessages;
+
+use inbox::IncomingRequest;
 
 
 // This callframe is used to represent an EVM call in progress.
@@ -94,6 +97,7 @@ type EvmCallFrame = struct {
     callvalue: uint,                    // Eth value given to this call by its caller
     returnInfo: option<ReturnInfo>,     // result of last subcall made by this call (if any)
     memory: ByteArray,                  // EVM memory of this call
+    revertOnStorageWrite: bool,         // if true, revert if the EVM code tries to write to storage
     evmLogs: EvmLogs,                   // EVM logs, including those created by this call and its subcalls
     selfDestructQueue: Queue,           // set of self-destruct directives, including those created by this call and its subcalls
     resumeInfo: option<ResumeInfo>,     // if call is suspended, its state will be saved here
@@ -117,24 +121,14 @@ type ResumeInfo = struct {  // information used to resume a call after a subcall
 }
 
 var globalCallStack: option<EvmCallFrame>;   // call frame of currently running call, if any
-var globalCurrentIncomingRequest: IncomingRequest;  // request that launched the top-level call
-
-// This struct is declared identically in inbox.mini and elsewhere
-type IncomingRequest = struct {
-    kind: uint,               // type of message
-    blockNumber: uint,        // block number of the L1 block
-    timestamp: uint,          // timestamp of the L1 block
-    sender: address,          // address of the sender
-    requestId: uint,          // unique identifier for this request
-    msgData: MarshalledBytes  // contents of the message, as a marshalled bytearray
-}
+var globalCurrentTxRequest: TxRequestData;  // request that launched the top-level call
 
 public impure func evmCallStack_currentBlockNumber() -> uint {
-    return globalCurrentIncomingRequest.blockNumber;
+    return globalCurrentTxRequest.incomingRequest.blockNumber;
 }
 
 public impure func evmCallStack_currentTimestamp() -> uint {
-    return globalCurrentIncomingRequest.timestamp;
+    return globalCurrentTxRequest.incomingRequest.timestamp;
 }
 
 public impure func evmCallStack_init() {
@@ -180,7 +174,7 @@ public impure func initEvmCallStack(
                 );
             }
 
-            globalCurrentIncomingRequest = request.incomingRequest;
+            globalCurrentTxRequest = request;
 
             // pay callvalue from caller to the called contract
             // payment will only be recorded inside the callframe, so it will be discarded if the call reverts
@@ -201,6 +195,7 @@ public impure func initEvmCallStack(
                     callvalue: request.value,
                     returnInfo: None<ReturnInfo>,
                     memory: bytearray_new(0),
+                    revertOnStorageWrite: false,
                     evmLogs: evmlogs_empty(),
                     selfDestructQueue: queue_new(),
                     resumeInfo: None<ResumeInfo>,
@@ -212,16 +207,16 @@ public impure func initEvmCallStack(
             } else {
                 if let Some(gasUsage) = gasAccounting_endTxCharges() {
                     // insufficient balance error
-                    emitLog(request.incomingRequest, 4, None<ByteArray>, None<EvmLogs>, Some(gasUsage));
+                    emitTxReceipt(request.incomingRequest, 4, None<ByteArray>, None<EvmLogs>, Some(gasUsage));
                 } else {
                     // unknown error type
-                    emitLog(request.incomingRequest, 255, None<ByteArray>, None<EvmLogs>, None<GasUsage>);
+                    emitTxReceipt(request.incomingRequest, 255, None<ByteArray>, None<EvmLogs>, None<GasUsage>);
                 }
                 evmCallStack_callHitError(1);
             }
         } else {
             // can't pay for gas error
-            emitLog(request.incomingRequest, 3, None<ByteArray>, None<EvmLogs>, None<GasUsage>);
+            emitTxReceipt(request.incomingRequest, 3, None<ByteArray>, None<EvmLogs>, None<GasUsage>);
             evmCallStack_callHitError(2);
         }
     } else {
@@ -254,17 +249,17 @@ public impure func initEvmCallStack(
                 }
 
                 // report success
-                emitLog(request.incomingRequest, 0, None<ByteArray>, None<EvmLogs>, None<GasUsage>);
+                emitTxReceipt(request.incomingRequest, 0, None<ByteArray>, None<EvmLogs>, None<GasUsage>);
                 emptyAvmStack();
                 cleanAvmAuxStackAndCall(mainRunLoop,);  // should never return
             } else {
                 // insufficient balance error
-                emitLog(request.incomingRequest, 4, None<ByteArray>, None<EvmLogs>, None<GasUsage>);
+                emitTxReceipt(request.incomingRequest, 4, None<ByteArray>, None<EvmLogs>, None<GasUsage>);
                 evmCallStack_callHitError(3);
             }
         } else {
             // tx is transfer of 0 Eth, so just report success
-            emitLog(request.incomingRequest, 0, None<ByteArray>, None<EvmLogs>, None<GasUsage>);
+            emitTxReceipt(request.incomingRequest, 0, None<ByteArray>, None<EvmLogs>, None<GasUsage>);
             emptyAvmStack();
             cleanAvmAuxStackAndCall(mainRunLoop,);  // should never return
         }
@@ -282,7 +277,7 @@ public impure func initEvmCallStackForConstructor(
     // The constructor will run, and (if it succeeds) it will return code, which will become the new
     //      code for this new account.
 
-    globalCurrentIncomingRequest = request.incomingRequest;
+    globalCurrentTxRequest = request;
 
     // Create a new account to run the constructor code.
     let acctStore = accountStore_set(
@@ -297,6 +292,7 @@ public impure func initEvmCallStackForConstructor(
         )
     );
     if let Some(uas) = accountStore_transferEthBalance(acctStore, request.caller, request.calleeAddr, request.value) {
+        acctStore = uas;
         // don't update globalAccountStore; that happens if/when the constructor commits its results later
 
         globalCallStack = Some(struct {
@@ -310,6 +306,7 @@ public impure func initEvmCallStackForConstructor(
             callvalue: 0,
             returnInfo: None<ReturnInfo>,
             memory: bytearray_new(0),
+            revertOnStorageWrite: false,
             evmLogs: evmlogs_empty(),
             selfDestructQueue: queue_new(),
             resumeInfo: None<ResumeInfo>,
@@ -322,12 +319,12 @@ public impure func initEvmCallStackForConstructor(
             panic;
         } else {
             // can't pay for gas error
-            emitLog(request.incomingRequest, 3, None<ByteArray>, None<EvmLogs>, None<GasUsage>);
+            emitTxReceipt(request.incomingRequest, 3, None<ByteArray>, None<EvmLogs>, None<GasUsage>);
             evmCallStack_callHitError(15);
         }
     } else {
         // can't pay for gas error
-        emitLog(request.incomingRequest, 3, None<ByteArray>, None<EvmLogs>, None<GasUsage>);
+        emitTxReceipt(request.incomingRequest, 3, None<ByteArray>, None<EvmLogs>, None<GasUsage>);
         evmCallStack_callHitError(4);  // should never return
         panic;
     }
@@ -349,6 +346,12 @@ public impure func evmCallStack_doCall(
     if let Some(startCodePoint) = account_getStartCodePoint(callee) {
         // Create a new callframe for a subcall, and transfer execution to it.
         let availableGas = gasAccounting_pauseTxCharges();
+        if (balance > 0) {
+            // Add a stipend, charged to the caller, if non-zero value is transferred.
+            // This is needed because Ethereum provides a stipend, and some code depends on that.
+            // The size of our stipend was chosen experimentally, to make sure a null call is safe.
+            gas = gas + 5000;
+        }
         if (gas > availableGas) {
             gas = availableGas;  // don't give the callee more gas than the caller has
         }
@@ -406,6 +409,10 @@ public impure func evmCallStack_doCall(
             callvalue: balance,
             returnInfo: None<ReturnInfo>,
             memory: bytearray_new(0),
+            revertOnStorageWrite: // disallow storage write if gas provided < EVM gas cost of storage write
+                                  topFrame.revertOnStorageWrite
+                                  || (gas < 5000)
+                                  || ((balance > 0) && (gas < 7700)),
             evmLogs: topFrame.evmLogs,
             selfDestructQueue: topFrame.selfDestructQueue,
             resumeInfo: None<ResumeInfo>,
@@ -503,8 +510,8 @@ public impure func evmCallStack_returnFromCall(
                 // Constructor call was successful, so finish setting up the account.
                 // The constructor's returndata is EVM code for the contract.
                 // Compile that EVM code into AVM, and substitute that in as the code for the contract.
-                if let Some(res) = translateEvmCodeSegment(bytestream_new(returnData)) {
-                    let (entryPoint, evmJumpTable) = res;
+                if let Some(res) = translateEvmCodeSegment(bytestream_new(returnData), false) {
+                    let (entryPoint, evmJumpTable, _) = res;
 
                     // Use the storage left over by the constructor.
                     let storageMap = storageMap_new();
@@ -512,8 +519,8 @@ public impure func evmCallStack_returnFromCall(
                         storageMap = sm;
                     } else {
                         // Somehow the constructor didn't have storage; report error and recover.
-                        emitLog(
-                            globalCurrentIncomingRequest,
+                        emitTxReceipt(
+                            globalCurrentTxRequest.incomingRequest,
                             6,
                             None<ByteArray>,
                             None<EvmLogs>,
@@ -526,10 +533,10 @@ public impure func evmCallStack_returnFromCall(
                     // Update the global account store
                     setGlobalAccountStore(
                         accountStore_set(
-                            getGlobalAccountStore(),
-                            topFrame.runningCodeFrom,
+                            topFrame.accountStore,
+                            topFrame.runningAs,
                             account_setContractInfo(
-                                pristineAccount(topFrame.runningCodeFrom),
+                                topFrame.runningAsAccount,
                                 returnData,
                                 evmJumpTable,
                                 entryPoint,
@@ -548,36 +555,36 @@ public impure func evmCallStack_returnFromCall(
                     sendQueuedMessages(topFrame.sendQueue);
 
                     // Emit log item reporting success
-                    emitLog(
-                        globalCurrentIncomingRequest,
+                    emitTxReceipt(
+                        globalCurrentTxRequest.incomingRequest,
                         0,
                         Some(returnData),
                         Some(topFrame.evmLogs),
                         Some(gasUsage)
                     );
 
-                    if (globalCurrentIncomingRequest.kind == 5) {
+                    if (globalCurrentTxRequest.incomingRequest.kind == 5) {
                         // successfully created a buddy contract -- announce that as a message
                         sendMessage(
                             5,
-                            globalCurrentIncomingRequest.sender,
+                            globalCurrentTxRequest.incomingRequest.sender,
                             bytearray_setByte(bytearray_new(0), 0, 1)
                         );
                     }
                 } else {
                     // Compilation of resulting code failed; report an error.
-                    emitLog(
-                        globalCurrentIncomingRequest,
+                    emitTxReceipt(
+                        globalCurrentTxRequest.incomingRequest,
                         1,
                         None<ByteArray>,
                         None<EvmLogs>,
                         Some(gasUsage)
                     );
-                    if (globalCurrentIncomingRequest.kind == 5) {
+                    if (globalCurrentTxRequest.incomingRequest.kind == 5) {
                         // failed to create a buddy contract -- announce that as a message
                         sendMessage(
                             5,
-                            globalCurrentIncomingRequest.sender,
+                            globalCurrentTxRequest.incomingRequest.sender,
                             bytearray_setByte(bytearray_new(0), 0, 0)
                         );
                     }
@@ -611,8 +618,8 @@ public impure func evmCallStack_returnFromCall(
                 }
 
                 // Emit a log item reporting success
-                emitLog(
-                    globalCurrentIncomingRequest,
+                emitTxReceipt(
+                    globalCurrentTxRequest.incomingRequest,
                     0,
                     Some(returnData),
                     Some(topFrame.evmLogs),
@@ -621,8 +628,8 @@ public impure func evmCallStack_returnFromCall(
             }
         } else {
             // Request failed
-            emitLog(
-                globalCurrentIncomingRequest,
+            emitTxReceipt(
+                globalCurrentTxRequest.incomingRequest,
                 1,
                 Some(returnData),
                 None<EvmLogs>,
@@ -979,6 +986,10 @@ public func evmCallFrame_getCallvalue(frame: EvmCallFrame) -> uint {
 
 public func evmCallFrame_getCalldata(frame: EvmCallFrame) -> ByteArray {
     return frame.calldata;
+}
+
+public func evmCallFrame_shouldRevertOnStorageWrite(frame: EvmCallFrame) -> bool {
+    return frame.revertOnStorageWrite;
 }
 
 public func evmCallFrame_getEvmLogs(frame: EvmCallFrame) -> EvmLogs {
