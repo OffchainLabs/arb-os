@@ -169,6 +169,7 @@ impure func update_txReceiptsForBlock(
 //    4    insufficient funds for tx payment
 //    5    bad sequence number
 //    6    message format error
+//    7    tried to deploy at address that is already in use
 //    255  unknown error
 public impure func emitTxReceipt(
     l1message: IncomingRequest,
