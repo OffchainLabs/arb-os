@@ -529,17 +529,22 @@ impure func arbsys_uploadFunctionTable(topFrame: EvmCallFrame, calldata: ByteArr
     let tableData = bytearray_extract(calldata, 4+2*32, nbytes);
 
     let account = evmCallFrame_getAccount(topFrame, callerAddr);
-    account = account_setAggregatorDecompressionState(
-        account,
-        parseAggregatorFunctionTable(
-            account_getAggregatorDecompressionState(account),
-            tableData,
-        ),
-    );
+    if let Some(funcTable) = parseAggregatorFunctionTable(
+        account_getAggregatorDecompressionState(account),
+        tableData,
+    ) {
+        account = account_setAggregatorDecompressionState(
+            account,
+            Some(funcTable)
+        );
+    } else {
+        evmOp_revert_knownCodePc(address(100), 191, 0, 0);
+    }
+
     if (evmCallStack_setAccount(callerAddr, account)) {
         evmOp_return(0, 0);
     } else {
-        evmOp_revert_knownCodePc(address(100), 191, 0, 0);
+        evmOp_revert_knownCodePc(address(100), 192, 0, 0);
     }
 }
 
