@@ -399,7 +399,7 @@ public impure func evmOp_sstore(storageAddr: uint, value: uint) {
             // the currently running code was given a gas amount that wouldn't allow a storage write on EVM
             // for compatibility with EVM code that uses gas limit to prevent writes, we cause out-of-gas error here
             asm(1,) { setgas };
-            asm(1,1) uint { plus };  // will get an out-of-gas error on this instruction
+            let _ = asm(1,1) uint { plus };  // will get an out-of-gas error on this instruction
         } else {
             if let Some(_) = evmCallStack_setTopFrameStorageCell(
                 storageAddr,

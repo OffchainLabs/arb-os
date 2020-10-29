@@ -41,16 +41,21 @@ use accounts::AccountStore;
 use accounts::getGlobalAccountStore;
 use accounts::accountStore_get;
 use accounts::account_getNextSeqNum;
+use accounts::account_getAggregatorDecompressionState;
+use evmCallStack::evmCallStack_getAccount;
+use inbox::IncomingRequest;
+use messages::TxRequestData;
 
 use std::rlp::rlp_decodeAddress;
 use std::rlp::rlp_decodeUint;
 use std::rlp::rlp_encodeMessageInfo;
 
+use signedTx::SignedTx;
 use signedTx::recoverSigner;
 
 use inbox::IncomingRequest;
 use messages::TxRequestData;
-use signedTx::SignedTx;
+
 
 type IndexedAddressTable = struct {
     byIndex: ExpandingIntArray,
@@ -74,7 +79,7 @@ public impure func setGlobalAddressTable(gat: IndexedAddressTable) {
 
 public func addressTable_new() -> IndexedAddressTable {
     return struct {
-        byIndex: expandingIntArray_new(),
+        byIndex: expandingIntArray_set(expandingIntArray_new(), 0, 0),
         byAddress: newmap<address, uint> with { [address(0)] = 0 },
         size: 1
     };
@@ -84,8 +89,12 @@ public func addressTable_size(iat: IndexedAddressTable) -> uint {
     return iat.size;
 }
 
-public func addressTable_getByIndex(iat: IndexedAddressTable, index: uint) -> address {  // returns zero if not in table
-    return address(expandingIntArray_get(iat.byIndex, index));
+public func addressTable_getByIndex(iat: IndexedAddressTable, index: uint) -> option<address> {  // returns zero if not in table
+    if (index >= iat.size) {
+        return None;
+    } else {
+        return Some(address(expandingIntArray_get(iat.byIndex, index)));
+    }
 }
 
 public func addressTable_getByAddress(iat: IndexedAddressTable, addr: address) -> option<uint> {
@@ -129,11 +138,9 @@ public impure func decompressAddress(
     } elseif (firstByte < 0x80 + 20) {
         // don't update stream, because we want to re-start from the beginning
         let (ustr, decodedUint) = rlp_decodeUint(stream)?;
-        return Some((ustr, addressTable_getByIndex(globalIndexedAddressTable, decodedUint)));
+        return Some((ustr, addressTable_getByIndex(globalIndexedAddressTable, decodedUint)?));
     } else {
         let (ustr, addr) = rlp_decodeAddress(stream)?;
-        let (iat, _) = addressTable_getByAddressAlloc(globalIndexedAddressTable, addr);
-        globalIndexedAddressTable = iat;
         return Some((ustr, addr));
     }
 }
@@ -161,7 +168,7 @@ public impure func decompressAndVerifyEcdsaSignedTx(
     let v = bytearray_getByte(ba, sz-1);
     let body = bytearray_extract(ba, 1, sz-66);
 
-    let (_, txRequest) = decompressTx(bytestream_new(body), None<address>)?;
+    let (_, txRequest) = decompressTx(bytestream_new(body), None<address>, None<FunctionTable>)?;
 
     let seqNum = 0;
     if let Some(sn) = txRequest.seqNum {
@@ -218,7 +225,8 @@ public impure func decompressAndVerifyEcdsaSignedTx(
 
 impure func decompressTx(
     stream: ByteStream,
-    maybeSender: option<address>
+    maybeSender: option<address>,
+    maybeTable: option<FunctionTable>,
 ) -> option<(ByteStream, TxRequestData)> {
     // decompress a compressed transaction, reading it from ByteStream
     // return None if insufficient data in the ByteStream
@@ -229,6 +237,25 @@ impure func decompressTx(
     // (knowing the sender lets us compress the sequence number more efficiently)
     // if we aren't given the sender address, we'll return a dummy value in that slot of the TxRequestData,
     //         and assume the caller will supply it later
+
+    let funcTableEntry = None<FunctionTableEntry>;
+    let (ustr, firstByte) = bytestream_getByte(stream)?;  // peek at first byte of stream
+    if (firstByte == 0xff) {
+        stream = ustr;   // consume the first byte
+    } else {
+        return None;     // this feature isn't fully tested, so disable it for now
+        
+        if let Some(funcTable) = maybeTable {
+            // read from beginning of stream (because we haven't set stream = ustr)
+            let (ustr, index) = rlp_decodeUint(stream)?;
+            stream = ustr;
+            if (index < len(funcTable)) {
+                funcTableEntry = Some(funcTable[index]);
+            }
+        } else {
+            stream = ustr;
+        }
+    }
 
     let sender = address(0);
     let seqNum = 0;
@@ -255,16 +282,40 @@ impure func decompressTx(
     let (ustr, gasPrice) = rlp_decodeUint(stream)?;
     stream = ustr;
 
-    let (ustr, gasLimit) = rlp_decodeUint(stream)?;
-    stream = ustr;
+    let gasLimit = 0;
+    if let Some(tableEntry) = funcTableEntry {
+        gasLimit = tableEntry.maxGas;
+    } else {
+        let (ustr, maxGas) = rlp_decodeUint(stream)?;
+        stream = ustr;
+        gasLimit = maxGas;
+    }
 
     let (ustr, toAddr) = decompressAddress(stream)?;
     stream = ustr;
 
-    let (ustr, value) = decompressTokenAmount(stream)?;
-    stream = ustr;
-
-    let calldata = bytestream_getRemainingBytes(stream);
+    let value = 0;
+    let calldata = bytearray_new(0);
+    if let Some(tableEntry) = funcTableEntry {
+        if (tableEntry.payable) {
+            let (ustr, val) = decompressTokenAmount(stream)?;
+            stream = ustr;
+            value = val;
+        }
+        calldata = bytestream_getRemainingBytes(stream);
+        calldata = bytearray_copy(
+            calldata,
+            0,
+            unsafecast<ByteArray>(tableEntry.callDataPrefix),
+            4,
+            bytearray_size(calldata),
+        );
+    } else {
+        let (ustr, val) = decompressTokenAmount(stream)?;
+        stream = ustr;
+        value = val;
+        calldata = bytestream_getRemainingBytes(stream);
+    }
 
     return Some((
         stream,
@@ -280,6 +331,70 @@ impure func decompressTx(
             incomingRequest: unsafecast<IncomingRequest>(0),  // caller will fill this in
         }
     ));
+}
+
+type FunctionTableEntry = struct {
+    callDataPrefix: any,    // really a ByteArray, but compiler doesn't allow array of imported type
+    maxGas: uint,
+    payable: bool,
+}
+
+type FunctionTable = []FunctionTableEntry
+
+type AggregatorDecompressionState = struct {
+    functionTable: FunctionTable,
+}
+
+public func parseAggregatorFunctionTable(
+    maybeState: option<AggregatorDecompressionState>,
+    contents: ByteArray
+) -> option<AggregatorDecompressionState> {
+    let stream = bytestream_new(contents);
+    let (ustr, numEntries) = rlp_decodeUint(stream)?;
+    stream = ustr;
+
+    if (numEntries > 1024) {   // hard limit on table size is 1024 entries, currently
+        return None;
+    }
+    let ret = newarray<FunctionTableEntry>(numEntries);
+    let i = 0;
+    while (i < numEntries) {
+        let (ustr, funcCode) = bytestream_getN(stream, 4)?;
+        stream = ustr;
+        let (ustr, payableByte) = bytestream_getByte(stream)?;
+        stream = ustr;
+        let (ustr, maxGas) = rlp_decodeUint(stream)?;
+        stream = ustr;
+        ret = ret with {
+            [i] = struct {
+                callDataPrefix: funcCode,
+                maxGas: maxGas,
+                payable: (payableByte != 0)
+            }
+        };
+        i = i+1;
+    }
+
+    return Some(struct { functionTable: ret });
+}
+
+public impure func functionTableSize(addr: address) -> option<uint> {
+    let funcTable = (account_getAggregatorDecompressionState(evmCallStack_getAccount(addr)?)?).functionTable;
+    return Some(len(funcTable));
+}
+
+public impure func getFromFunctionTable(addr: address, index: uint) -> option<(uint, bool, uint)> {
+    let funcTable = (account_getAggregatorDecompressionState(evmCallStack_getAccount(addr)?)?).functionTable;
+    if (index < len(funcTable)) {
+        let tableEntry = funcTable[index];
+        return Some((
+            bytearray_get256(unsafecast<ByteArray>(tableEntry.callDataPrefix), 0),
+            tableEntry.payable,
+            tableEntry.maxGas
+        ));
+    }
+
+    return None;
 }
 
 //This function is necessary because there is currently bug in the compiler that will occasionally corrupt the last

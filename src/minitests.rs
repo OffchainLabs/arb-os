@@ -386,6 +386,16 @@ fn test_arbsys() {
 }
 
 #[test]
+fn test_arbsys_direct() {
+    crate::evm::evm_test_arbsys_direct(None, false).unwrap();
+}
+
+#[test]
+fn test_function_table_access() {
+    crate::evm::evm_test_function_table_access(None, false).unwrap();
+}
+
+#[test]
 pub fn test_crosscontract_call_with_constructors() {
     match crate::evm::evm_xcontract_call_with_constructors(None, false, false) {
         Ok(result) => assert_eq!(result, true),
