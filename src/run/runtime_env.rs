@@ -193,7 +193,7 @@ impl RuntimeEnvironment {
         wallet: &Wallet,
     ) -> (Vec<u8>, Vec<u8>) {
         let sender = Uint256::from_bytes(wallet.address().as_bytes());
-        let mut result = vec![7u8];
+        let mut result = vec![7u8, 0xffu8];
         let seq_num = self.get_and_incr_seq_num(&sender);
         result.extend(seq_num.rlp_encode());
         result.extend(gas_price.rlp_encode());
@@ -426,21 +426,25 @@ impl TxCompressor {
         }
     }
 
-    pub fn compress_token_amount(&self, mut amt: Uint256) -> Vec<u8> {
-        if amt.is_zero() {
-            amt.rlp_encode()
-        } else {
-            let mut num_zeroes = 0;
-            let ten = Uint256::from_u64(10);
-            loop {
-                if amt.modulo(&ten).unwrap().is_zero() {
-                    num_zeroes = 1 + num_zeroes;
-                    amt = amt.div(&ten).unwrap();
-                } else {
-                    let mut result = amt.rlp_encode();
-                    result.extend(vec![num_zeroes as u8]);
-                    return result;
-                }
+    pub fn compress_token_amount(&self, amt: Uint256) -> Vec<u8> {
+        generic_compress_token_amount(amt)
+    }
+}
+
+pub fn generic_compress_token_amount(mut amt: Uint256) -> Vec<u8> {
+    if amt.is_zero() {
+        amt.rlp_encode()
+    } else {
+        let mut num_zeroes = 0;
+        let ten = Uint256::from_u64(10);
+        loop {
+            if amt.modulo(&ten).unwrap().is_zero() {
+                num_zeroes = 1 + num_zeroes;
+                amt = amt.div(&ten).unwrap();
+            } else {
+                let mut result = amt.rlp_encode();
+                result.extend(vec![num_zeroes as u8]);
+                return result;
             }
         }
     }
@@ -455,9 +459,17 @@ pub struct ArbosReceipt {
     evm_logs: Value,
     gas_used: Uint256,
     gas_price_wei: Uint256,
+    pub provenance: ArbosRequestProvenance,
     gas_so_far: Uint256,     // gas used so far in L1 block, including this tx
     index_in_block: Uint256, // index of this tx in L1 block
     logs_so_far: Uint256,    // EVM logs emitted so far in L1 block, NOT including this tx
+}
+
+#[derive(Clone, Debug)]
+pub struct ArbosRequestProvenance {
+    l1_sequence_num: Uint256,
+    parent_request_id: Option<Uint256>,
+    index_in_parent: Option<Uint256>,
 }
 
 impl ArbosReceipt {
@@ -487,6 +499,39 @@ impl ArbosReceipt {
                 evm_logs,
                 gas_used,
                 gas_price_wei,
+                provenance: if let Value::Tuple(stup) = &tup[1] {
+                    if let Value::Tuple(subtup) = &stup[6] {
+                        ArbosRequestProvenance {
+                            l1_sequence_num: if let Value::Int(ui) = &subtup[0] {
+                                ui.clone()
+                            } else {
+                                panic!();
+                            },
+                            parent_request_id: if let Value::Int(ui) = &subtup[1] {
+                                if ui.is_zero() {
+                                    Some(ui.clone())
+                                } else {
+                                    None
+                                }
+                            } else {
+                                panic!();
+                            },
+                            index_in_parent: if let Value::Int(ui) = &subtup[2] {
+                                if ui.is_zero() {
+                                    Some(ui.clone())
+                                } else {
+                                    None
+                                }
+                            } else {
+                                panic!();
+                            },
+                        }
+                    } else {
+                        panic!();
+                    }
+                } else {
+                    panic!();
+                },
                 gas_so_far,
                 index_in_block,
                 logs_so_far,

@@ -19,20 +19,10 @@ use evmCallStack::evmCallStack_queueMessage;
 
 use chainParameters::chainParams_speedLimitPerSecond;
 
+use inbox::IncomingRequest;
 use inbox::inbox_currentBlockNumber;
 use inbox::inbox_currentTimestamp;
 
-
-// This structure defines an incoming request.
-// It is defined identically in inbox.mini and elsewhere.
-type IncomingRequest = struct {
-    kind: uint,               // type of message
-    blockNumber: uint,        // block number of the L1 block
-    timestamp: uint,          // timestamp of the L1 block
-    sender: address,          // address of the sender
-    requestId: uint,
-    msgData: MarshalledBytes  // contents of the message, as a marshalled bytearray
-}
 
 // This is declared identically in gasAccounting.mini
 type GasUsage = struct {
@@ -180,7 +170,7 @@ impure func update_txReceiptsForBlock(
 //    5    bad sequence number
 //    6    message format error
 //    255  unknown error
-public impure func emitLog(
+public impure func emitTxReceipt(
     l1message: IncomingRequest,
     resultCode: uint,
     maybeReturnData: option<ByteArray>,
@@ -217,7 +207,9 @@ public impure func emitLog(
 
     asm((
         0,
-        l1message,
+        l1message with {
+            msgData: unsafecast<ByteArray>(bytearray_marshalFull(l1message.msgData))  // because caller expects marshalled bytes
+        },
         txResultInfo,
         realGasUsage,
         update_txReceiptsForBlock(
@@ -276,7 +268,7 @@ public impure func sendMessage(msgType: uint, sender: address, data: ByteArray) 
     );
 }
 
-func sendPackagedMessage(msg: any) {
+impure func sendPackagedMessage(msg: any) {
     outputStats_addSend();
     asm(msg,) { send };
 }
