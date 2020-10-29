@@ -243,6 +243,8 @@ impure func decompressTx(
     if (firstByte == 0xff) {
         stream = ustr;   // consume the first byte
     } else {
+        return None;     // this feature isn't fully tested, so disable it for now
+        
         if let Some(funcTable) = maybeTable {
             // read from beginning of stream (because we haven't set stream = ustr)
             let (ustr, index) = rlp_decodeUint(stream)?;
