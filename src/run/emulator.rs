@@ -18,6 +18,8 @@ use std::fs::File;
 use std::io::{stdin, BufWriter, Write};
 use std::path::Path;
 
+const MAX_PAIRING_SIZE: u64 = 30;
+
 ///Represents a stack of `Value`s
 #[derive(Debug, Default, Clone)]
 pub struct ValueStack {
@@ -1145,6 +1147,7 @@ impl Machine {
                 Opcode::AVMOpcode(AVMOpcode::Type) => 3,
                 Opcode::AVMOpcode(AVMOpcode::Hash2) => 8,
                 Opcode::AVMOpcode(AVMOpcode::Keccakf) => 600,
+                Opcode::AVMOpcode(AVMOpcode::Sha256f) => 250,
                 Opcode::AVMOpcode(AVMOpcode::Pop) => 1,
                 Opcode::AVMOpcode(AVMOpcode::PushStatic) => 1,
                 Opcode::AVMOpcode(AVMOpcode::Rget) => 1,
@@ -1184,11 +1187,34 @@ impl Machine {
                 Opcode::AVMOpcode(AVMOpcode::GetGas) => 1,
                 Opcode::AVMOpcode(AVMOpcode::SetGas) => 0,
                 Opcode::AVMOpcode(AVMOpcode::EcRecover) => 20_000,
+                Opcode::AVMOpcode(AVMOpcode::EcAdd) => 3500,
+                Opcode::AVMOpcode(AVMOpcode::EcMul) => 82_000,
+                Opcode::AVMOpcode(AVMOpcode::EcPairing) => self.gas_for_pairing(),
                 Opcode::AVMOpcode(AVMOpcode::Sideload) => 10,
                 _ => return None,
             })
         } else {
             None
+        }
+    }
+
+    fn gas_for_pairing(&self) -> u64 {
+        if let Some(val) = self.stack.contents.get(0) {
+            let mut v = val;
+            for i in 0..MAX_PAIRING_SIZE {
+                if let Value::Tuple(tup) = v {
+                    if tup.len() != 2 {
+                        return 1000 + i * 500_000;
+                    } else {
+                        v = &tup[1];
+                    }
+                } else {
+                    return 1000 + i * 500_000;
+                }
+            }
+            1000 + MAX_PAIRING_SIZE * 500_000
+        } else {
+            1000
         }
     }
 
@@ -1716,7 +1742,15 @@ impl Machine {
                         self.incr_pc();
                         Ok(true)
                     }
-					Opcode::AVMOpcode(AVMOpcode::Inbox) => {
+                    Opcode::AVMOpcode(AVMOpcode::Sha256f) => {
+                        let t1 = self.stack.pop_uint(&self.state)?;
+                        let t2 = self.stack.pop_uint(&self.state)?;
+                        let t3 = self.stack.pop_uint(&self.state)?;
+                        self.stack.push_uint(sha256_compression(t1, t2, t3));
+                        self.incr_pc();
+                        Ok(true)
+                    }
+                    Opcode::AVMOpcode(AVMOpcode::Inbox) => {
 						match self.runtime_env.get_from_inbox() {
                             Some(msg) => {
                                 self.stack.push(msg);
@@ -1846,14 +1880,46 @@ impl Machine {
                         Ok(true)
                     }
                     Opcode::AVMOpcode(AVMOpcode::EcRecover) => {
-                        let _first_half = self.stack.pop_uint(&self.state)?;
-                        let _second_half = self.stack.pop_uint(&self.state)?;
-                        let _recover_id = self.stack.pop_uint(&self.state)?;
-                        let _msg_hash = self.stack.pop_uint(&self.state)?;
-                        let result = do_ecrecover(_first_half, _second_half, _recover_id, _msg_hash);
+                        let first_half = self.stack.pop_uint(&self.state)?;
+                        let second_half = self.stack.pop_uint(&self.state)?;
+                        let recover_id = self.stack.pop_uint(&self.state)?;
+                        let msg_hash = self.stack.pop_uint(&self.state)?;
+                        let result = do_ecrecover(first_half, second_half, recover_id, msg_hash);
                         self.stack.push_uint(result);
                         self.incr_pc();
                         Ok(true)
+                    }
+                    Opcode::AVMOpcode(AVMOpcode::EcAdd) => {
+                        let x0 = self.stack.pop_uint(&self.state)?;
+                        let x1 = self.stack.pop_uint(&self.state)?;
+                        let y0 = self.stack.pop_uint(&self.state)?;
+                        let y1 = self.stack.pop_uint(&self.state)?;
+                        let (z0, z1) = do_ecadd(x0, x1, y0, y1);
+                        self.stack.push_uint(z1);
+                        self.stack.push_uint(z0);
+                        self.incr_pc();
+                        Ok(true)
+                    }
+                    Opcode::AVMOpcode(AVMOpcode::EcMul) => {
+                        let x0 = self.stack.pop_uint(&self.state)?;
+                        let x1 = self.stack.pop_uint(&self.state)?;
+                        let n = self.stack.pop_uint(&self.state)?;
+                        let (z0, z1) = do_ecmul(x0, x1, n);
+                        self.stack.push_uint(z1);
+                        self.stack.push_uint(z0);
+                        self.incr_pc();
+                        Ok(true)
+                    }
+                    Opcode::AVMOpcode(AVMOpcode::EcPairing) => {
+                        let x = self.stack.pop(&self.state)?;
+                        if let Some(result) = do_ecpairing(x) {
+                            self.stack.push_bool(result);
+                            self.incr_pc();
+                            Ok(true)
+                        } else {
+                            Err(ExecutionError::new("invalid operand to EcPairing instruction", &self.state, None))
+                        }
+
                     }
 					Opcode::GetLocal |  // these opcodes are for intermediate use in compilation only
 					Opcode::SetLocal |  // they should never appear in fully compiled code
@@ -1948,6 +2014,133 @@ fn do_ecrecover(
         Ok(addr) => Uint256::from_bytes(&addr.0),
         Err(_) => Uint256::zero(),
     }
+}
+
+fn do_ecadd(x0: Uint256, x1: Uint256, y0: Uint256, y1: Uint256) -> (Uint256, Uint256) {
+    use bn::{AffineG1, Fq, Group, G1};
+
+    let px = Fq::from_slice(&x0.to_bytes_be()).unwrap();
+    let py = Fq::from_slice(&x1.to_bytes_be()).unwrap();
+    let qx = Fq::from_slice(&y0.to_bytes_be()).unwrap();
+    let qy = Fq::from_slice(&y1.to_bytes_be()).unwrap();
+
+    let p = if px == Fq::zero() && py == Fq::zero() {
+        G1::zero()
+    } else {
+        AffineG1::new(px, py).unwrap().into()
+    };
+    let q = if qx == Fq::zero() && qy == Fq::zero() {
+        G1::zero()
+    } else {
+        AffineG1::new(qx, qy).unwrap().into()
+    };
+
+    if let Some(ret) = AffineG1::from_jacobian(p + q) {
+        let mut out_buf_0 = vec![0u8; 32];
+        ret.x().to_big_endian(&mut out_buf_0).unwrap();
+        let mut out_buf_1 = vec![0u8; 32];
+        ret.y().to_big_endian(&mut out_buf_1).unwrap();
+        (
+            Uint256::from_bytes(&out_buf_0),
+            Uint256::from_bytes(&out_buf_1),
+        )
+    } else {
+        (Uint256::zero(), Uint256::zero())
+    }
+}
+
+fn do_ecmul(x0: Uint256, x1: Uint256, nui: Uint256) -> (Uint256, Uint256) {
+    use bn::{AffineG1, Fq, Fr, Group, G1};
+
+    let px = Fq::from_slice(&x0.to_bytes_be()).unwrap();
+    let py = Fq::from_slice(&x1.to_bytes_be()).unwrap();
+    let n = Fr::from_slice(&nui.to_bytes_be()).unwrap();
+
+    let p = if px == Fq::zero() && py == Fq::zero() {
+        G1::zero()
+    } else {
+        AffineG1::new(px, py).unwrap().into()
+    };
+
+    if let Some(ret) = AffineG1::from_jacobian(p * n) {
+        let mut out_buf_0 = vec![0u8; 32];
+        ret.x().to_big_endian(&mut out_buf_0).unwrap();
+        let mut out_buf_1 = vec![0u8; 32];
+        ret.y().to_big_endian(&mut out_buf_1).unwrap();
+        (
+            Uint256::from_bytes(&out_buf_0),
+            Uint256::from_bytes(&out_buf_1),
+        )
+    } else {
+        (Uint256::zero(), Uint256::zero())
+    }
+}
+
+fn do_ecpairing(mut val: Value) -> Option<bool> {
+    use bn::{pairing, AffineG1, AffineG2, Fq, Fq2, Group, Gt, G1, G2};
+
+    let mut acc = Gt::one();
+    for _i in 0..MAX_PAIRING_SIZE {
+        if let Value::Tuple(tup) = val {
+            if tup.len() == 0 {
+                return Some(acc == Gt::one());
+            } else if tup.len() == 2 {
+                val = tup[0].clone();
+                if let Value::Tuple(pts_tup) = &tup[1] {
+                    if pts_tup.len() == 6 {
+                        let mut uis: Vec<Uint256> = Vec::new();
+                        for j in 0..6 {
+                            if let Value::Int(ui) = &pts_tup[j] {
+                                uis.push(ui.clone());
+                            } else {
+                                return None;
+                            }
+                        }
+                        let ax = Fq::from_slice(&uis[0].to_bytes_be()).unwrap();
+                        let ay = Fq::from_slice(&uis[1].to_bytes_be()).unwrap();
+                        let ba = Fq2::new(
+                            Fq::from_slice(&uis[2].to_bytes_be()).unwrap(),
+                            Fq::from_slice(&uis[3].to_bytes_be()).unwrap(),
+                        );
+                        let bb = Fq2::new(
+                            Fq::from_slice(&uis[4].to_bytes_be()).unwrap(),
+                            Fq::from_slice(&uis[5].to_bytes_be()).unwrap(),
+                        );
+                        let b = if ba.is_zero() && bb.is_zero() {
+                            G2::zero()
+                        } else {
+                            AffineG2::new(ba, bb).unwrap().into()
+                        };
+                        let a = if ax.is_zero() && ay.is_zero() {
+                            G1::zero()
+                        } else {
+                            AffineG1::new(ax, ay).unwrap().into()
+                        };
+                        acc = acc * pairing(a, b);
+                    } else {
+                        return None;
+                    }
+                } else {
+                    return None;
+                }
+            } else {
+                return None;
+            }
+        } else {
+            return None;
+        }
+    }
+
+    None
+}
+
+fn sha256_compression(acc: Uint256, buf0: Uint256, buf1: Uint256) -> Uint256 {
+    let mut acc_32 = acc.to_u32_digits_be();
+    let buf_32 = buf0.to_u32_digits_be_2(&buf1);
+    crypto::sha2::sha256_digest_block_u32(&mut acc_32, &buf_32);
+    let acc_32 = &mut acc_32[..];
+    acc_32.reverse();
+    Uint256::from_u32_digits(acc_32)
 }
 
 ///Represents a stack trace, with each CodePt indicating a stack frame, Unknown variant is unused.

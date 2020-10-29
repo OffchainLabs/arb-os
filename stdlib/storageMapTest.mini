@@ -2,18 +2,14 @@
 // Copyright 2020, Offchain Labs, Inc. All rights reserved.
 //
 
-import type StorageMap;
+use std::storageMap::StorageMap;
 
-import func storageMap_new() -> StorageMap;
-import func storageMap_size(s: StorageMap) -> uint;
-import func storageMap_get(s: StorageMap, key: uint) -> uint;
-import func storageMap_set(s: StorageMap, key: uint, value: uint) -> StorageMap;
-import func storageMap_delete(s: StorageMap, key: uint) -> StorageMap;
-import func storageMap_forall(
-    s: StorageMap,
-    closure: func(uint, uint, any) -> any,
-    state: any
-);
+use std::storageMap::storageMap_new;
+use std::storageMap::storageMap_size;
+use std::storageMap::storageMap_get;
+use std::storageMap::storageMap_set;
+use std::storageMap::storageMap_delete;
+use std::storageMap::storageMap_forall;
 
 
 impure func main() {

@@ -1,0 +1,120 @@
+//
+// Copyright 2020, Offchain Labs, Inc. All rights reserved.
+//
+
+use std::bytearray::bytearray_new;
+use std::bytearray::bytearray_unmarshalBytes;
+use std::bytearray::bytearray_size;
+use std::bytearray::bytearray_getByte;
+use std::bytearray::bytearray_setByte;
+use std::bytearray::bytearray_get64;
+use std::bytearray::bytearray_set64;
+use std::bytearray::bytearray_get256;
+use std::bytearray::bytearray_set256;
+use std::bytearray::bytearray_copy;
+
+use std::sha256::sha256hasher_new;
+use std::sha256::sha256hasher_finish;
+use std::sha256::sha256_byteArray;
+use std::sha256::sha256hasher_pushByte;
+use std::sha256::sha256hasher_push256;
+
+impure func main() {
+    if let Some(x) = tests() {
+	    asm(x,) { log };
+	} else {
+	    asm(666,) { log };
+	}
+}
+
+func tests() -> option<bytes32> {
+    let x = asm(0x6a09e667bb67ae853c6ef372a54ff53a510e527f9b05688c1f83d9ab5be0cd19, 0, 0) bytes32 { sha256f };
+    if (x != bytes32(0xDA5698BE17B9B46962335799779FBECA8CE5D491C0D26243BAFEF9EA1837A9D8)) {
+        return Some(bytes32(1));
+    }
+
+    let x = asm(
+        0x6a09e667bb67ae853c6ef372a54ff53a510e527f9b05688c1f83d9ab5be0cd19,
+        0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF,
+        0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF
+    ) bytes32 { sha256f };
+    if (x != bytes32(0xEF0C748DF4DA50A8D6C43C013EDC3CE76C9D9FA9A1458ADE56EB86C0A64492D2)) {
+        return Some(bytes32(2));
+    }
+
+    let x = asm(
+        0x6a09e667bb67ae853c6ef372a54ff53a510e527f9b05688c1f83d9ab5be0cd19,
+        0x243F6A8885A308D313198A2E03707344A4093822299F31D0082EFA98EC4E6C89,
+        0x452821E638D01377BE5466CF34E90C6CC0AC29B7C97C50DD3f84D5B5b5470917
+    ) bytes32 { sha256f };
+    if (x != bytes32(0xCF0AE4EB67D38FFEB94068984B22ABDE4E92BC548D14585E48DCA8882D7B09CE)) {
+        return Some(bytes32(3));
+    }
+
+    let h = sha256hasher_new();
+    let sEmpty = sha256hasher_finish(h);
+    if (sEmpty != bytes32(0xe3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855)) {
+		return Some(bytes32(10));
+	}
+	let ba = bytearray_new(0);
+	let sEmpty = sha256_byteArray(ba);
+    if (sEmpty != bytes32(0xe3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855)) {
+		return Some(bytes32(11));
+	}
+
+    let ba = bytearray_new(0);
+    ba = bytearray_setByte(ba, 0, 0xcc);
+    let sCc = sha256_byteArray(ba);
+    if (sCc != bytes32(0x1dd8312636f6a0bf3d21fa2855e63072507453e93a5ced4301b364e91c9d87d6)) {
+        return Some(bytes32(12));
+    }
+
+    let ba = bytearray_new(0);
+    let i = 0;
+    while(i < 61) {
+        ba = bytearray_setByte(ba, i, i);
+        i = i+1;
+    }
+    let s61 = sha256_byteArray(ba);
+    if (s61 != bytes32(0x4b5c2783c91ceccb7c839213bcbb6a902d7fe8c2ec866877a51f433ea17f3e85)) {
+        return Some(bytes32(13));
+    }
+
+    let ba = bytearray_new(0);
+    let i = 0;
+    let h = sha256hasher_new();
+    while (i < 131) {
+        ba = bytearray_setByte(ba, i, i);
+        h = sha256hasher_pushByte(h, i);
+        i = i+1;
+    }
+    let h0 = sha256hasher_finish(h);
+    h = sha256hasher_new();
+    let i = 0;
+    while (i < 4) {
+        h = sha256hasher_push256(h, bytearray_get256(ba, 32*i));
+        i = i+1;
+    }
+    h = sha256hasher_pushByte(h, bytearray_getByte(ba, 128));
+    h = sha256hasher_pushByte(h, bytearray_getByte(ba, 129));
+    h = sha256hasher_pushByte(h, bytearray_getByte(ba, 130));
+    let h1 = sha256hasher_finish(h);
+    if (h0 != h1) {
+        return Some(bytes32(14));
+    }
+    h = sha256hasher_new();
+    h = sha256hasher_pushByte(h, bytearray_getByte(ba, 0));
+    h = sha256hasher_pushByte(h, bytearray_getByte(ba, 1));
+    h = sha256hasher_pushByte(h, bytearray_getByte(ba, 2));
+    i = 0;
+    while (i < 4) {
+        h = sha256hasher_push256(h, bytearray_get256(ba, 32*i+3));
+        i = i+1;
+    }
+    let h2 = sha256hasher_finish(h);
+    if (h0 != h2) {
+        return Some(bytes32(15));
+    }
+
+	return Some(bytes32(0));
+}

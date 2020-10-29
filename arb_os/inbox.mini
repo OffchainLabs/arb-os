@@ -2,37 +2,49 @@
 // Copyright 2020, Offchain Labs, Inc. All rights reserved.
 //
 
-import type Queue;
-import func queue_new() -> Queue;
-import func queue_isEmpty(q: Queue) -> bool;
-import func queue_get(q: Queue) -> option<(Queue, any)>;
-import func queue_put(q: Queue, val: any) -> Queue;
+use std::queue::Queue;
+use std::queue::queue_new;
+use std::queue::queue_isEmpty;
+use std::queue::queue_get;
+use std::queue::queue_put;
+use std::queue::QueueStack;
+use std::queue::queuestack_new;
+use std::queue::queuestack_push;
+use std::queue::queuestack_get;
 
-import impure func chainParams_gotParamsMessage(sender: address, data: MarshalledBytes);
-import impure func chainParams_chainId() -> uint;
+use chainParameters::chainParams_gotParamsMessage;
+use chainParameters::chainParams_chainId;
 
-import type MessageBatch;
-import func messageBatch_tryNew(msg: IncomingRequest) -> option<MessageBatch>;
-import func messageBatch_get(batch: MessageBatch) -> option<(IncomingRequest, MessageBatch)>;
+use messages::TxRequestData;
 
-import impure func outputStats_endOfBlock(blockNum: uint, timestamp: uint);
+use messageBatch::MessageBatch;
+use messageBatch::messageBatch_tryNew;
+use messageBatch::messageBatch_get;
 
-import type ByteArray;
-import type MarshalledBytes;
-import func marshalledBytes_firstByte(mb: MarshalledBytes) -> uint;
-import func marshalledBytes_hash(mb: MarshalledBytes) -> bytes32;
-import func bytearray_unmarshalBytes(mb: MarshalledBytes) -> ByteArray;
-import func bytearray_new(capacityHint: uint) -> ByteArray;
-import func bytearray_get256(ba: ByteArray, offset: uint) -> uint;
+use output::outputStats_endOfBlock;
 
-import type ByteStream;
-import func bytestream_new(ba: ByteArray) -> ByteStream;
-import func bytestream_getByte(bs: ByteStream) -> option<(ByteStream, uint)>;
-import func bytestream_get256(bs: ByteStream) -> option<(ByteStream, uint)>;
-import func bytestream_getRemainingBytes(bs: ByteStream) -> ByteArray;
+use std::bytearray::ByteArray;
+use std::bytearray::MarshalledBytes;
+use std::bytearray::marshalledBytes_firstByte;
+use std::bytearray::marshalledBytes_hash;
+use std::bytearray::bytearray_marshalFull;
+use std::bytearray::bytearray_unmarshalBytes;
+use std::bytearray::bytearray_new;
+use std::bytearray::bytearray_getByte;
+use std::bytearray::bytearray_get256;
 
-import func hashUnsignedL2messageInfo(l2msg: MarshalledBytes, chainId: uint, sender: address) -> bytes32;
-import func translateSignedTx(req: IncomingRequest) -> option<TxRequestData>;
+use std::bytestream::ByteStream;
+use std::bytestream::bytestream_new;
+use std::bytestream::bytestream_getByte;
+use std::bytestream::bytestream_get256;
+use std::bytestream::bytestream_getRemainingBytes;
+use std::bytestream::bytestream_skipBytes;
+
+use decompression::decompressAndVerifyEcdsaSignedTx;
+
+use signedTx::hashUnsignedL2messageInfo;
+use signedTx::translateSignedTx;
+
 
 type Inbox = struct {
     queue: Queue,     // Queue of messages that haven't yet been retrieved from the inbox
@@ -42,7 +54,10 @@ type Inbox = struct {
 }
 
 var globalInbox: Inbox;
-var globalQueueFromBatch: Queue;
+var globalInputQueue: struct {
+    txQ: Queue,
+    batchQ: QueueStack,
+};
 
 public impure func inbox_init() {
     globalInbox = struct {
@@ -51,7 +66,10 @@ public impure func inbox_init() {
         timestamp: 0,
         needToPeek: false,   // don't peek before the first message
     };
-    globalQueueFromBatch = queue_new();
+    globalInputQueue = struct {
+        txQ: queue_new(),
+        batchQ: queuestack_new()
+    };
 }
 
 public impure func inbox_get() -> IncomingRequest {
@@ -102,7 +120,12 @@ impure func getFromL1Inbox(inbox: Inbox) -> Inbox {
                         timestamp: inbox.timestamp,
                         sender: address(0),
                         requestId: 0,
-                        msgData: unsafecast<MarshalledBytes>(0),
+                        msgData: bytearray_new(0),
+                        provenance: struct {   // this won't be used
+                            l1SeqNum: 0,
+                            parentRequestId: 0,
+                            indexInParent: ~0,
+                        },
                     }
                 )
             } with {
@@ -110,7 +133,20 @@ impure func getFromL1Inbox(inbox: Inbox) -> Inbox {
             };
         }
     }
-    let newMsg = asm() IncomingRequest { inbox };
+    let newMsgRaw = asm() IncomingRequestFromInbox { inbox };
+    let newMsg = struct {
+        kind: newMsgRaw.kind,
+        blockNumber: newMsgRaw.blockNumber,
+        timestamp: newMsgRaw.timestamp,
+        sender: newMsgRaw.sender,
+        requestId: newMsgRaw.requestId,
+        msgData: bytearray_unmarshalBytes(newMsgRaw.msgData),
+        provenance: struct {
+            l1SeqNum: newMsgRaw.requestId,
+            parentRequestId: 0,
+            indexInParent: ~0,
+        },
+    };
 
     if (newMsg.blockNumber == 0) {
         newMsg = newMsg with { blockNumber: inbox.blockNum };
@@ -138,27 +174,29 @@ public impure func inbox_currentBlockNumber() -> uint {
     return globalInbox.blockNum;
 }
 
-// This structure describes an incoming request.
-// It is declared identically in inbox.mini and elsewhere
+type IncomingRequestFromInbox = struct {
+    kind: uint,               // type of message
+    blockNumber: uint,        // block number of the L1 block
+    timestamp: uint,          // timestamp of the L1 block
+    sender: address,          // address of the sender
+    requestId: uint,
+    msgData: MarshalledBytes, // kind-specific data, as a marshalled bytearray
+}
+
 type IncomingRequest = struct {
     kind: uint,               // type of message
     blockNumber: uint,        // block number of the L1 block
     timestamp: uint,          // timestamp of the L1 block
     sender: address,          // address of the sender
     requestId: uint,
-    msgData: MarshalledBytes  // kind-specific data, as a marshalled bytearray
+    msgData: ByteArray,       // kind-specific data
+    provenance: RequestProvenance,
 }
 
-// TxRequestData is declared identically in message.mini and elsewhere.
-type TxRequestData = struct {
-    maxGas: uint,
-    gasPrice: uint,
-    seqNum: option<uint>,
-    caller: address,
-    calleeAddr: address,
-    value: uint,
-    calldata: ByteArray,
-    incomingRequest: IncomingRequest,
+type RequestProvenance = struct {
+    l1SeqNum: uint,
+    parentRequestId: uint,
+    indexInParent: uint,
 }
 
 public impure func inbox_getNextUnpackedRequest() -> (
@@ -167,9 +205,18 @@ public impure func inbox_getNextUnpackedRequest() -> (
 ) {
     let msg = unsafecast<IncomingRequest>(());   // value will be re-initialized before use
     loop {
-        if let Some(res) = queue_get(globalQueueFromBatch) {
+        if let Some(res) = queue_get(globalInputQueue.txQ) {
+            let (newQ, tx) = res;
+            globalInputQueue = globalInputQueue with {
+                txQ: newQ
+            };
+            return (None<IncomingRequest>, Some(unsafecast<TxRequestData>(tx)));
+        }
+        if let Some(res) = queuestack_get(globalInputQueue.batchQ) {
             let (newQ, rawMsg) = res;
-            globalQueueFromBatch = newQ;
+            globalInputQueue = globalInputQueue with {
+                batchQ: newQ
+            };
             msg = unsafecast<IncomingRequest>(rawMsg);
         } else {
             msg = inbox_get();
@@ -178,7 +225,7 @@ public impure func inbox_getNextUnpackedRequest() -> (
         if let Some(batch) = messageBatch_tryNew(msg) {
             // it's a batch message, so unpack its components and queue them
             let moreToDo = true;
-            let queue = globalQueueFromBatch;
+            let queue = queue_new();
             while (moreToDo) {
                 if let Some(res) = messageBatch_get(batch) {
                     let (newMsg, restOfBatch) = res;
@@ -188,7 +235,9 @@ public impure func inbox_getNextUnpackedRequest() -> (
                     moreToDo = false;
                 }
             }
-            globalQueueFromBatch = queue;
+            globalInputQueue = globalInputQueue with {
+                batchQ: queuestack_push(globalInputQueue.batchQ, queue)
+            };
         } else {
             // it's not a batch, so process it immediately
             // get its maxGas amount -- for now, set the limit high, unless caller asked for less
@@ -198,12 +247,18 @@ public impure func inbox_getNextUnpackedRequest() -> (
                 outputStats_endOfBlock(msg.blockNumber, msg.timestamp);
             } elseif (msg.kind == 3) {
                 // it's an L2 message, so switch based on the L2 type
-                let firstByte = marshalledBytes_firstByte(msg.msgData);
+                let firstByte = bytearray_getByte(msg.msgData, 0);
                 if (firstByte == 6) {
                     // it's a heartbeat message, don't do anything
                 } elseif (firstByte == 4) {
                     // it's a signed tx; verify sig and then process request or discard
                     if let Some(txRequest) = translateSignedTx(msg) {
+                        return (None<IncomingRequest>, Some(txRequest));
+                    }
+                    // else signature was invalid, ignore msg and execute loop again to get another
+                } elseif (firstByte == 7) {
+                    // it's a single message with compressed headers
+                    if let Some(txRequest) = decompressAndVerifyEcdsaSignedTx(msg.msgData, msg) {
                         return (None<IncomingRequest>, Some(txRequest));
                     }
                     // else signature was invalid, ignore msg and execute loop again to get another
@@ -226,8 +281,8 @@ public impure func inbox_getNextUnpackedRequest() -> (
     }
 }
 
-func translateUnsignedTx(request: IncomingRequest) -> option<TxRequestData> {
-    let inStream = bytestream_new(bytearray_unmarshalBytes(request.msgData));
+impure func translateUnsignedTx(request: IncomingRequest) -> option<TxRequestData> {
+    let inStream = bytestream_new(request.msgData);
     let (us, subtype) = bytestream_getByte(inStream)?;
     inStream = us;
 
@@ -247,12 +302,8 @@ func translateUnsignedTx(request: IncomingRequest) -> option<TxRequestData> {
     let (us, destAddrAsUint) = bytestream_get256(inStream)?;
     inStream = us;
 
-    let value = 0;
-    if (subtype != 2) {
-        let (us, val) = bytestream_get256(inStream)?;
-        inStream = us;
-        value = val;
-    }
+    let (us, value) = bytestream_get256(inStream)?;
+    inStream = us;
 
     let calldata = bytestream_getRemainingBytes(inStream);
 
@@ -260,10 +311,7 @@ func translateUnsignedTx(request: IncomingRequest) -> option<TxRequestData> {
         request = request with {
             requestId: uint(hash(
                 bytes32(request.sender),
-                hash(
-                    bytes32(chainParams_chainId()),
-                    marshalledBytes_hash(request.msgData)
-                )
+                hash(bytes32(chainParams_chainId()), marshalledBytes_hash(bytearray_marshalFull(request.msgData)))
             ))
         };
     }
@@ -276,13 +324,14 @@ func translateUnsignedTx(request: IncomingRequest) -> option<TxRequestData> {
             calleeAddr: address(destAddrAsUint),
             value: value,
             calldata: calldata,
+            nonMutating: (subtype == 2),
             incomingRequest: request
         }
     );
 }
 
 func translateBuddyDeployTx(request: IncomingRequest) -> option<TxRequestData> {
-    let inStream = bytestream_new(bytearray_unmarshalBytes(request.msgData));
+    let inStream = bytestream_new(request.msgData);
 
     let (us, maxGas) = bytestream_get256(inStream)?;
     inStream = us;
@@ -304,6 +353,7 @@ func translateBuddyDeployTx(request: IncomingRequest) -> option<TxRequestData> {
             calleeAddr: address(0),
             value: value,
             calldata: calldata,
+            nonMutating: false,
             incomingRequest: request
         }
     );

@@ -12,15 +12,27 @@ use crate::mavm::{Value, Instruction, Opcode};
 use crate::uint256::Uint256;
 
 
-grammar(stringtable: &mut StringTable, file_info: &Lines, filename: u64);
+grammar(stringtable: &mut StringTable, file_info: &Lines, filename: u64, current_path: &[String]);
 
 pub Decls: Vec<TopLevelDecl> = {
-	<i:ImportDecl*> <n:NonImportDecl+> => TopLevelDecl::concat_vecs(i, n),
+	<mut i:ImportDecl*> <mut n:NonImportDecl+> => {i.append(&mut n);i},
 }
 
 ImportDecl: TopLevelDecl = {
+    "use" <mut p: PathDecl> ";" => {
+        let file = p.pop().expect("Internal error: Path vector was empty");
+        TopLevelDecl::UseDecl(p, file)
+    },
 	ImportFuncDecl => TopLevelDecl::ImpFuncDecl(<>),
 	ImportTypeDecl => TopLevelDecl::ImpTypeDecl(<>),	
+}
+
+PathDecl: Vec<String> = {
+    <i: IdentString> <mut folds: ("::" <IdentString>)+> => {
+        let mut output = vec![i];
+        output.append(&mut folds);
+        output
+    },
 }
 
 ImportFuncDecl: ImportFuncDecl = {
@@ -102,7 +114,7 @@ StructFields: Vec<StructField> = {
 }
 
 StructField: StructField = {
-	<Ident> ":" <Type> => StructField::new(<>),
+	<i: Ident> ":" <t: Type> => StructField::new(stringtable.name_from_id(i).to_string(), t),
 }
 
 Type: Type = {
@@ -122,7 +134,7 @@ Type: Type = {
 	<i: "impure"?> "func" <a: CommaedTypesInParens> <r: ("->" <Type>)?> => Type::Func(i.is_some(), a, Box::new(r.unwrap_or(Type::Void))),
 	"any" => Type::Any,
 	"option<" <t1:Type> ">" => Type::Option(Box::new(t1)),
-	Ident => Type::Named(<>),
+	Ident => Type::Nominal(current_path.to_owned(), <>),
 };
 
 CommaedTypesInParens: Vec<Type> = {
@@ -148,7 +160,7 @@ Expr: Expr = {
 		Box::new(v),
 		file_info.location(BytePos::from(lno),filename),
 	),
-	<lno: @L> <t: Expr> "with" "{" <i:Ident> ":" <e: Expr> "}" => Expr::StructMod(Box::new(t), i, Box::new(e), file_info.location(BytePos::from(lno),filename)),
+	<lno: @L> <t: Expr> "with" "{" <i:Ident> ":" <e: Expr> "}" => Expr::StructMod(Box::new(t), stringtable.name_from_id(i).to_string(), Box::new(e), file_info.location(BytePos::from(lno),filename)),
 	Expr1,
 }
 
@@ -222,7 +234,7 @@ Expr11: Expr = {
 	<lno: @L> <f: Expr11> "(" <e: Expr> ")" => Expr::FunctionCall(Box::new(f), vec![e], file_info.location(BytePos::from(lno),filename)),
 	<lno: @L> <f: Expr11> "(" <c: CommaedExprs?> ")" => Expr::FunctionCall(Box::new(f), c.unwrap_or(vec![]), file_info.location(BytePos::from(lno),filename)),
 	<lno: @L> <e1:Expr11> "[" <e2:Expr> "]" => Expr::ArrayOrMapRef(Box::new(e1), Box::new(e2), file_info.location(BytePos::from(lno),filename)),
-	<lno: @L> <e:Expr11> "." <i:Ident> => Expr::DotRef(Box::new(e), i, file_info.location(BytePos::from(lno),filename)),
+	<lno: @L> <e:Expr11> "." <i:Ident> => Expr::DotRef(Box::new(e), stringtable.name_from_id(i).to_string(), file_info.location(BytePos::from(lno),filename)),
 	<lno: @L> <e:Expr11> "." <u:UnsignedInteger> => Expr::TupleRef(Box::new(e), u, file_info.location(BytePos::from(lno),filename)),
 	Expr12,
 }
@@ -274,7 +286,7 @@ FieldInitializers: Vec<FieldInitializer> = {
 }
 
 FieldInitializer: FieldInitializer = {
-	<Ident> ":" <Expr> => FieldInitializer::new(<>),
+	<i: Ident> ":" <e: Expr> => FieldInitializer::new(stringtable.name_from_id(i).to_string(), e),
 }
 
 CommaedExprs: Vec<Expr> = {

@@ -2,31 +2,32 @@
 // Copyright 2020, Offchain Labs, Inc. All rights reserved.
 //
 
-import type AccountStore;
-import type Account;
-import type ByteArray;
-import type MarshalledBytes;
-import type MessageBatch;
-import type Queue;
+use accounts::AccountStore;
+use accounts::Account;
+use std::bytearray::ByteArray;
+use std::bytearray::MarshalledBytes;
+use messageBatch::MessageBatch;
+use std::queue::Queue;
 
-import func getGlobalAccountStore() -> AccountStore;
-import func setGlobalAccountStore(acctStore: AccountStore);
-import func accountStore_get(acctStore: AccountStore, addr: address) -> Account;
-import func accountStore_set(acctStore: AccountStore, addr: address, acct: Account) -> AccountStore;
-import func account_addToEthBalance(acct: Account, amount: uint) -> Account;
-import func account_deductFromEthBalance(acct: Account, amount: uint) -> option<Account>;
+use accounts::getGlobalAccountStore;
+use accounts::setGlobalAccountStore;
+use accounts::accountStore_get;
+use accounts::accountStore_set;
+use accounts::account_addToEthBalance;
+use accounts::account_deductFromEthBalance;
 
-import func bytearray_new(capacityHint: uint) -> ByteArray;
-import func bytearray_unmarshalBytes(mb: MarshalledBytes) -> ByteArray;
-import func bytearray_getByte(ba: ByteArray, offset: uint) -> uint;
-import func bytearray_get256(ba: ByteArray, offset: uint) -> uint;
+use std::bytearray::bytearray_new;
+use std::bytearray::bytearray_unmarshalBytes;
+use std::bytearray::bytearray_getByte;
+use std::bytearray::bytearray_get256;
 
-import func queue_new() -> Queue;
-import func queue_isEmpty(q: Queue) -> bool;
-import func queue_put(q: Queue, item: any) -> Queue;
-import func queue_get(q: Queue) -> option<(Queue, any)>;
+use std::queue::queue_new;
+use std::queue::queue_isEmpty;
+use std::queue::queue_put;
+use std::queue::queue_get;
 
-import func inbox_getNextUnpackedRequest() -> (option<IncomingRequest>, option<TxRequestData>);
+use inbox::IncomingRequest;
+use inbox::inbox_getNextUnpackedRequest;
 
 
 var gasAccountingInfo: struct {
@@ -150,6 +151,26 @@ public impure func gasAccounting_endTxCharges() -> option<GasUsage> {
     );
 }
 
+public impure func gasAccounting_extraGasCharge(numArbGas: uint) {
+    // assess an extra gas charge on the current tx
+    // this lets us charge for things that use up system resources
+    // callers should assess the charge for a thing before they do the thing, because we can
+    //      only take the gas that the user has remaining
+
+    let gasLeft = asm() uint { getgas };
+    if (gasLeft >= asm (1, 255) uint { shl }) {
+        return;   // we're not currently charging a tx, so don't assess a charge
+    }
+
+    if (numArbGas >= gasLeft) {
+        // user can't cover the charge, so we'll take all but 1 of their gas,
+        //      ensuring that they'll get an out-of-gas error
+        numArbGas = gasLeft-1;
+    }
+
+    asm(gasLeft-numArbGas,) { setgas };
+}
+
 public impure func gasAccounting_pauseTxCharges() -> uint {
     // pause charging the currently running tx
     // return how many units of the tx's initial maxGas are still unused
@@ -211,17 +232,6 @@ impure func switchToChargingOS() -> uint {
     }
 }
 
-// This structure describes an incoming request.
-// It is declared identically in inbox.mini and elsewhere
-type IncomingRequest = struct {
-    kind: uint,               // type of message
-    blockNumber: uint,        // block number of the L1 block
-    timestamp: uint,          // timestamp of the L1 block
-    sender: address,          // address of the sender
-    requestId: uint,
-    msgData: MarshalledBytes  // kind-specific data, as a marshalled bytearray
-}
-
 // TxRequestData is declared identically in message.mini and elsewhere.
 type TxRequestData = struct {
     maxGas: uint,
@@ -231,6 +241,7 @@ type TxRequestData = struct {
     calleeAddr: address,
     value: uint,
     calldata: ByteArray,
+    nonMutating: bool,
     incomingRequest: IncomingRequest,
 }
 
