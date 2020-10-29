@@ -15,6 +15,7 @@ use std::hash::Hasher;
 use std::io;
 use std::path::Path;
 
+use crate::run::ProfilerMode;
 use crate::uint256::Uint256;
 use clap::{App, Arg, SubCommand};
 
@@ -124,6 +125,11 @@ fn main() -> Result<(), CompileError> {
                         .help("sets the file name to run")
                         .required(true)
                         .index(1),
+                )
+                .arg(
+                    Arg::with_name("mode")
+                        .help("sets the profiler mode (postboot or always)")
+                        .required(false),
                 ),
         )
         .subcommand(
@@ -260,10 +266,12 @@ fn main() -> Result<(), CompileError> {
 
     if let Some(matches) = matches.subcommand_matches("profiler") {
         let path = matches.value_of("INPUT").unwrap();
+        let mode = matches.value_of("mode").unwrap();
         profile_gen_from_file(
             path.as_ref(),
             Vec::new(),
             RuntimeEnvironment::new(Uint256::from_usize(1111)),
+            if mode == "always" { ProfilerMode::Always } else { ProfilerMode::PostBoot },
         );
     }
 
@@ -273,7 +281,17 @@ fn main() -> Result<(), CompileError> {
         let profiler = matches.is_present("profiler");
         let trace_file = matches.value_of("trace");
 
-        if let Err(e) = replay_from_testlog_file(path, true, debug, profiler, trace_file) {
+        if let Err(e) = replay_from_testlog_file(
+            path,
+            true,
+            debug,
+            if profiler {
+                ProfilerMode::PostBoot
+            } else {
+                ProfilerMode::Never
+            },
+            trace_file,
+        ) {
             panic!("Error reading from {}: {}", path, e);
         }
     }
