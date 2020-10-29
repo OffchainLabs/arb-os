@@ -5,10 +5,12 @@
 //!Provides utilities for emulation of AVM bytecode.
 
 use super::runtime_env::RuntimeEnvironment;
+use crate::compile::CompileError;
 use crate::link::LinkedProgram;
 use crate::mavm::{AVMOpcode, CodePt, Instruction, Opcode, Value};
 use crate::pos::Location;
 use crate::uint256::Uint256;
+use clap::Clap;
 use ethers_core::types::{Signature, H256};
 use std::cmp::{max, Ordering};
 use std::collections::{BTreeMap, HashMap};
@@ -17,6 +19,7 @@ use std::fmt;
 use std::fs::File;
 use std::io::{stdin, BufWriter, Write};
 use std::path::Path;
+use std::str::FromStr;
 
 const MAX_PAIRING_SIZE: u64 = 30;
 
@@ -638,11 +641,24 @@ impl ProfilerData {
     }
 }
 
-#[derive(PartialEq)]
+#[derive(PartialEq, Debug, Clap)]
 pub enum ProfilerMode {
     Never,
     PostBoot,
     Always,
+}
+
+impl FromStr for ProfilerMode {
+    type Err = CompileError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match &(s.to_lowercase())[..] {
+            "never" => Ok(ProfilerMode::Never),
+            "always" => Ok(ProfilerMode::Always),
+            "post" => Ok(ProfilerMode::PostBoot),
+            _ => Err(CompileError::new("Invalid profiler mode".to_string(), None)),
+        }
+    }
 }
 
 ///Represents the state of execution of a AVM program including the code it is compiled from.
@@ -1015,7 +1031,11 @@ impl Machine {
         let mut current_codepoint = CodePt::new_internal(0);
         let mut total_gas = 0;
         let mut stack = vec![];
-        let mut profile_enabled = if mode == ProfilerMode::Always { true } else { false };
+        let mut profile_enabled = if mode == ProfilerMode::Always {
+            true
+        } else {
+            false
+        };
         while let Some(insn) = self.next_opcode() {
             if insn.opcode == Opcode::AVMOpcode(AVMOpcode::Inbox) {
                 profile_enabled = true;
@@ -1045,7 +1065,8 @@ impl Machine {
                         if *stack.last().unwrap_or(&CodePt::new_internal(0)) == current_codepoint {
                             next_len += 1;
                         }
-                        if let Some((func_info, _)) = loc_map.stack_tree.get_mut(&current_codepoint) {
+                        if let Some((func_info, _)) = loc_map.stack_tree.get_mut(&current_codepoint)
+                        {
                             func_info.push(ProfilerEvent::Return(
                                 *stack.last().unwrap_or(&CodePt::new_internal(0)),
                                 next_len,
@@ -1054,7 +1075,8 @@ impl Machine {
                         } else {
                             panic!("Internal error: returned from untracked function");
                         }
-                        if let Some((func_info, _)) = loc_map.stack_tree.get_mut(&current_codepoint) {
+                        if let Some((func_info, _)) = loc_map.stack_tree.get_mut(&current_codepoint)
+                        {
                             func_info.push(ProfilerEvent::EnterFunc(total_gas));
                         } else {
                             panic!("Internal error: returned to untracked function");
@@ -1065,33 +1087,36 @@ impl Machine {
                         stack.push(self.get_pc().unwrap_or(CodePt::new_internal(0)));
                         let zero_codept = CodePt::new_internal(0);
                         let next_codepoint = stack.last().unwrap_or(&zero_codept);
-                        let next_len =
-                            if let Some((next_info, _)) = loc_map.stack_tree.get_mut(next_codepoint) {
-                                if *next_codepoint == current_codepoint {
-                                    next_info.len() + 1
-                                } else {
-                                    next_info.len()
-                                }
+                        let next_len = if let Some((next_info, _)) =
+                            loc_map.stack_tree.get_mut(next_codepoint)
+                        {
+                            if *next_codepoint == current_codepoint {
+                                next_info.len() + 1
                             } else {
-                                loc_map.stack_tree.insert(
-                                    *next_codepoint,
-                                    (
-                                        vec![],
-                                        self.code
-                                            .get_insn(*next_codepoint)
-                                            .map(|insn| insn.location)
-                                            .unwrap_or(None),
-                                    ),
-                                );
-                                0
-                            };
-                        if let Some((func_info, _)) = loc_map.stack_tree.get_mut(&current_codepoint) {
+                                next_info.len()
+                            }
+                        } else {
+                            loc_map.stack_tree.insert(
+                                *next_codepoint,
+                                (
+                                    vec![],
+                                    self.code
+                                        .get_insn(*next_codepoint)
+                                        .map(|insn| insn.location)
+                                        .unwrap_or(None),
+                                ),
+                            );
+                            0
+                        };
+                        if let Some((func_info, _)) = loc_map.stack_tree.get_mut(&current_codepoint)
+                        {
                             func_info.push(ProfilerEvent::CallFunc(*next_codepoint, next_len))
                         } else {
                             panic!("Internal error: calling from an untracked function");
                         }
                         current_codepoint = *next_codepoint;
-                        if let Some((func_info, _)) = loc_map.stack_tree.get_mut(&current_codepoint) {
+                        if let Some((func_info, _)) = loc_map.stack_tree.get_mut(&current_codepoint)
+                        {
                             func_info.push(ProfilerEvent::EnterFunc(total_gas));
                         } else {
                             panic!("Internal error: called function not properly initialized");
