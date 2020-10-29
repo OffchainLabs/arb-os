@@ -10,7 +10,7 @@ use crate::mavm::{CodePt, Value};
 use emulator::{ExecutionError, StackTrace};
 use std::{fs::File, io::Read, path::Path};
 
-pub use emulator::Machine;
+pub use emulator::{Machine, ProfilerMode};
 pub use runtime_env::{
     bytes_from_bytestack, bytestack_from_bytes, generic_compress_token_amount,
     replay_from_testlog_file, ArbosReceipt, RuntimeEnvironment,
@@ -92,9 +92,14 @@ pub fn run(
 
 ///Interprets path as a mini executable and starts a profiler session with executable arguments args
 /// and `RuntimeEnvironment` env.  See `profiler_session` for more details.
-pub fn profile_gen_from_file(path: &Path, args: Vec<Value>, env: RuntimeEnvironment) {
+pub fn profile_gen_from_file(
+    path: &Path,
+    args: Vec<Value>,
+    env: RuntimeEnvironment,
+    mode: ProfilerMode,
+) {
     let mut machine = load_from_file(path, env);
-    let profile = machine.profile_gen(args);
+    let profile = machine.profile_gen(args, mode);
     profile.profiler_session();
 }
 
