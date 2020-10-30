@@ -3,7 +3,7 @@
  */
 
 use crate::mavm::Value;
-use crate::run::load_from_file;
+use crate::run::{load_from_file, ProfilerMode};
 use crate::uint256::Uint256;
 use ethers_core::rand::thread_rng;
 use ethers_core::types::TransactionRequest;
@@ -204,7 +204,7 @@ impl RuntimeEnvironment {
         wallet: &Wallet,
     ) -> (Vec<u8>, Vec<u8>) {
         let sender = Uint256::from_bytes(wallet.address().as_bytes());
-        let mut result = vec![7u8];
+        let mut result = vec![7u8, 0xffu8];
         let seq_num = self.get_and_incr_seq_num(&sender);
         result.extend(seq_num.rlp_encode());
         result.extend(gas_price.rlp_encode());
@@ -447,21 +447,25 @@ impl TxCompressor {
         }
     }
 
-    pub fn compress_token_amount(&self, mut amt: Uint256) -> Vec<u8> {
-        if amt.is_zero() {
-            amt.rlp_encode()
-        } else {
-            let mut num_zeroes = 0;
-            let ten = Uint256::from_u64(10);
-            loop {
-                if amt.modulo(&ten).unwrap().is_zero() {
-                    num_zeroes = 1 + num_zeroes;
-                    amt = amt.div(&ten).unwrap();
-                } else {
-                    let mut result = amt.rlp_encode();
-                    result.extend(vec![num_zeroes as u8]);
-                    return result;
-                }
+    pub fn compress_token_amount(&self, amt: Uint256) -> Vec<u8> {
+        generic_compress_token_amount(amt)
+    }
+}
+
+pub fn generic_compress_token_amount(mut amt: Uint256) -> Vec<u8> {
+    if amt.is_zero() {
+        amt.rlp_encode()
+    } else {
+        let mut num_zeroes = 0;
+        let ten = Uint256::from_u64(10);
+        loop {
+            if amt.modulo(&ten).unwrap().is_zero() {
+                num_zeroes = 1 + num_zeroes;
+                amt = amt.div(&ten).unwrap();
+            } else {
+                let mut result = amt.rlp_encode();
+                result.extend(vec![num_zeroes as u8]);
+                return result;
             }
         }
     }
@@ -888,7 +892,7 @@ impl RtEnvRecorder {
         &self,
         require_same_gas: bool,
         debug: bool,
-        profiler: bool,
+        profiler_mode: ProfilerMode,
         trace_file: Option<&str>,
     ) -> bool {
         // returns true iff result matches
@@ -901,8 +905,8 @@ impl RtEnvRecorder {
         machine.start_at_zero();
         if debug {
             let _ = machine.debug(None);
-        } else if profiler {
-            let profile_data = machine.profile_gen(vec![]);
+        } else if (profiler_mode != ProfilerMode::Never) {
+            let profile_data = machine.profile_gen(vec![], profiler_mode);
             profile_data.profiler_session();
         } else {
             let _ = machine.run(None);
@@ -1022,7 +1026,7 @@ pub fn replay_from_testlog_file(
     filename: &str,
     require_same_gas: bool,
     debug: bool,
-    profiler: bool,
+    profiler_mode: ProfilerMode,
     trace_file: Option<&str>,
 ) -> std::io::Result<bool> {
     let mut file = File::open(filename)?;
@@ -1039,7 +1043,7 @@ pub fn replay_from_testlog_file(
     match res {
         Ok(recorder) => {
             let success =
-                recorder.replay_and_compare(require_same_gas, debug, profiler, trace_file);
+                recorder.replay_and_compare(require_same_gas, debug, profiler_mode, trace_file);
             println!("{}", if success { "success" } else { "mismatch " });
             Ok(success)
         }
@@ -1057,7 +1061,7 @@ fn logfile_replay_tests() {
                 &("./replayTests/".to_owned() + name.to_str().unwrap()),
                 false,
                 false,
-                false,
+                ProfilerMode::Never,
                 None,
             )
             .unwrap(),

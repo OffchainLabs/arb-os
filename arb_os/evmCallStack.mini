@@ -349,8 +349,8 @@ public impure func evmCallStack_doCall(
         if (balance > 0) {
             // Add a stipend, charged to the caller, if non-zero value is transferred.
             // This is needed because Ethereum provides a stipend, and some code depends on that.
-            // The size of our stipend was chosen experimentally, to make sure a null call is safe.
-            gas = gas + 5000;
+            // The size of our stipend was chosen experimentally, to make sure a call that will run on Ethereum will run here.
+            gas = gas + 20000;
         }
         if (gas > availableGas) {
             gas = availableGas;  // don't give the callee more gas than the caller has
