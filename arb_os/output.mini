@@ -267,6 +267,8 @@ public impure func sendMessage(msgType: uint, sender: address, data: ByteArray) 
     );
 }
 
+func workaroundForCompilerBug() { }  // This is needed to work around a compiler bug; otherwise sendMessage can crash.
+
 impure func sendPackagedMessage(msg: any) {
     outputStats_addSend();
     asm(msg,) { send };
