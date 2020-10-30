@@ -43,13 +43,13 @@ public impure func chainParams_gotParamsMessage(sender: address, data: ByteArray
     if (globalChainParams == None<ChainParams>) {
         globalChainParams = Some(struct{
             chainAddress: sender,
-            gracePeriodBlocks: bytearray_get256(ba, 0) / 1000,   // divide because grace period sent in ticks
-            arbGasSpeedLimitPerBlock: bytearray_get256(ba, 32),
+            gracePeriodBlocks: bytearray_get256(data, 0) / 1000,   // divide because grace period sent in ticks
+            arbGasSpeedLimitPerBlock: bytearray_get256(data, 32),
             millisecondsPerBlock: 13500,
-            maxExecutionSteps: bytearray_get256(ba, 2*32),
-            baseStake: bytearray_get256(ba, 3*32),
-            stakingToken: address(bytearray_get256(ba, 4*32)),
-            owner: address(bytearray_get256(ba, 5*32)),
+            maxExecutionSteps: bytearray_get256(data, 2*32),
+            baseStake: bytearray_get256(data, 3*32),
+            stakingToken: address(bytearray_get256(data, 4*32)),
+            owner: address(bytearray_get256(data, 5*32)),
             isProChain: false,
         });
 

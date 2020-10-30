@@ -29,7 +29,6 @@ use evmCallStack::evmCallStack_runningCodeFromAccount;
 
 use gasAccounting::GasUsage;
 
-use output::emitLog;
 use output::emitTxReceipt;
 
 use tokens::tokens_erc20deposit;
