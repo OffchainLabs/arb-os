@@ -93,7 +93,7 @@ impl AbiForContract {
         payment: Uint256,
         deploy_as_buddy: bool,
         debug: bool,
-    ) -> Option<Uint256> {
+    ) -> Result<Uint256, Option<ArbosReceipt>> {
         let initial_logs_len = machine.runtime_env.get_all_receipt_logs().len();
         let initial_sends_len = machine.runtime_env.get_all_sends().len();
         let augmented_code = if let Some(constructor) = self.contract.constructor() {
@@ -111,7 +111,7 @@ impl AbiForContract {
         let request_id = if deploy_as_buddy {
             machine.runtime_env.insert_buddy_deploy_message(
                 sender_addr.clone(),
-                Uint256::from_usize(1_000_000_000_000),
+                Uint256::from_usize(1_000_000_000),
                 Uint256::zero(),
                 payment,
                 &augmented_code,
@@ -119,7 +119,7 @@ impl AbiForContract {
         } else {
             machine.runtime_env.insert_tx_message(
                 sender_addr.clone(),
-                Uint256::from_usize(1_000_000_000_000),
+                Uint256::from_usize(1_000_000_000),
                 Uint256::zero(),
                 Uint256::zero(),
                 payment,
@@ -139,7 +139,7 @@ impl AbiForContract {
                 "deploy: expected 1 new log item, got {}",
                 logs.len() - initial_logs_len
             );
-            return None;
+            return Err(None);
         }
 
         if deploy_as_buddy {
@@ -149,32 +149,34 @@ impl AbiForContract {
                     "deploy: expected 1 new send, got {}",
                     sends.len() - initial_sends_len
                 );
-                return None;
+                return Err(None);
             }
             if let Value::Tuple(tup) = &sends[sends.len() - 1] {
                 if (tup[0] != Value::Int(Uint256::from_usize(5)))
                     || (tup[1] != Value::Int(sender_addr))
                 {
                     println!("deploy: incorrect values in send item");
-                    return None;
+                    return Err(None);
                 }
             } else {
                 println!("malformed send item");
-                return None;
+                return Err(None);
             }
         }
 
         let log_item = &logs[logs.len() - 1];
-        assert!(log_item.succeeded());
+        if ! log_item.succeeded() {
+            return Err(Some(log_item.clone()));
+        }
         if let Value::Tuple(tup2) = log_item.get_request() {
             assert_eq!(tup2[4], Value::Int(request_id));
         } else {
             println!("Malformed ArbOS log item");
-            return None;
+            return Err(None);
         }
         let buf = log_item.get_return_data();
         self.address = Uint256::from_bytes(&buf);
-        Some(self.address.clone())
+        Ok(self.address.clone())
     }
 
     pub fn bind_interface_to_address(&mut self, addr: Uint256) {

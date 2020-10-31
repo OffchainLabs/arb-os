@@ -37,11 +37,10 @@ use inbox::inbox_getNextUnpackedRequest;
 
 
 var gasAccountingInfo: struct {
-    gasPool: int,                 // amount of gas available for use (note: signed value)
+    gasPool: int,                 // amount of gas available for use (note: signed value; if negative, we have overused gas)
     weiPool: uint,                // pool of funds collected recently
-    weiOwedToValidators: uint,    // funds that need to be collected to reimburse validators for work already done
+    shortfall: int,               // funds needed to reimburse validators for overhead incurred, minus burned funds
     weiCollectedFromTxs: uint,    // amount of currency collected from txs but not yet paid out to validators
-    weiBurned: uint,              // number of wei that have been burned
     lastBlockNumSeen: uint,       // last L1 block number seen by this module
     txState: option<TxGasState>,  // status of currently active tx (if there is one)
     payFeesTo: option<address>,   // where to pay validator fees; if None, funds should be burned
@@ -87,9 +86,8 @@ public impure func gasAccounting_init() {
     gasAccountingInfo = struct {
         gasPool: gasAccountingConstants.GasPoolMax,
         weiPool: 0,
-        weiOwedToValidators: 0,
+        shortfall: int(0),
         weiCollectedFromTxs: 0,
-        weiBurned: 0,
         lastBlockNumSeen: 0,
         txState: None<TxGasState>,
         payFeesTo: None<address>,
@@ -100,9 +98,15 @@ public impure func gasAccounting_setFeeParams(baseGasPrice: uint, feeRecipient: 
     gasAccountingConstants = gasAccountingConstants with {
         BaseGasPrice: baseGasPrice
     };
-    gasAccountingInfo = gasAccountingInfo with {
-        payFeesTo: Some(feeRecipient)
-    };
+    if (feeRecipient == address(0)) {
+        gasAccountingInfo = gasAccountingInfo with {
+            payFeesTo: None<address>
+        };
+    } else {
+        gasAccountingInfo = gasAccountingInfo with {
+            payFeesTo: Some(feeRecipient)
+        };
+    }
 }
 
 public impure func gasAccounting_postInitMessage() {
@@ -129,7 +133,10 @@ public impure func gasAccounting_summaryToPublish() -> any {
         payoutAddress = paddr;
     }
 
-    let minGasPrice = gasAccountingConstants.BaseGasPrice + gasAccountingInfo.weiOwedToValidators / uint(gasAccountingConstants.GasPoolMax);
+    let minGasPrice = gasAccountingConstants.BaseGasPrice;
+    if (gasAccountingInfo.shortfall > int(0)) {
+        minGasPrice = minGasPrice + uint(gasAccountingInfo.shortfall) / uint(gasAccountingConstants.GasPoolMax);
+    }
     let gasPriceEstimate = gasAccountingInfo.weiPool;
     if (gasAccountingInfo.gasPool + int(gasAccountingConstants.SpeedLimitPerBlock) > int(0)) {
         gasPriceEstimate = gasAccountingInfo.weiPool / uint(gasAccountingInfo.gasPool + int(gasAccountingConstants.SpeedLimitPerBlock));
@@ -141,7 +148,7 @@ public impure func gasAccounting_summaryToPublish() -> any {
         gasPriceEstimate,
         gasAccountingInfo.gasPool,
         gasAccountingInfo.weiPool,
-        gasAccountingInfo.weiOwedToValidators,
+        gasAccountingInfo.shortfall,
         gasAccountingInfo.weiCollectedFromTxs,
         payoutAddress,
     );
@@ -164,6 +171,12 @@ public impure func gasAccounting_specialCharge(payer: address, amount: uint) -> 
     );
     gasAccountingInfo = gasAccountingInfo with { weiCollectedFromTxs: gasAccountingInfo.weiCollectedFromTxs + amount };
     return Some(());
+}
+
+public impure func recycleBurnedFunds(amount: uint) {
+    gasAccountingInfo = gasAccountingInfo with {
+        shortfall: gasAccountingInfo.shortfall - int(amount)
+    };
 }
 
 // The currently-running Tx has some amount of gas remaining. That gas can be in two places:
@@ -213,7 +226,7 @@ public impure func gasAccounting_startTxCharges(
     gasAccountingInfo = gasAccountingInfo with {
         gasPool: gasAccountingInfo.gasPool - int(gasUsedByOS)
     } with {
-        weiOwedToValidators: gasAccountingInfo.weiOwedToValidators + gasUsedByOS * gasAccountingConstants.BaseGasPrice
+        shortfall: gasAccountingInfo.shortfall + int(gasUsedByOS * gasAccountingConstants.BaseGasPrice)
     } with {
         txState: Some(struct {
             gasInReserve: 0,
@@ -319,7 +332,7 @@ public impure func gasAccounting_resumeTxCharges(allocationRequested: uint) -> u
             gasAccountingInfo = gasAccountingInfo with {
                 gasPool: gasAccountingInfo.gasPool - int(gasUsedByOS)
             } with {
-                weiOwedToValidators: gasAccountingInfo.weiOwedToValidators + gasUsedByOS * gasAccountingConstants.BaseGasPrice
+                shortfall: gasAccountingInfo.shortfall + int(gasUsedByOS * gasAccountingConstants.BaseGasPrice)
             };
         }
 
@@ -418,12 +431,17 @@ public impure func getNextRequestFromCongestionAuction() -> (
             let updatedWei = updatedWei * gasAccountingConstants.DeflatorNumerator / gasAccountingConstants.DeflatorDenominator;
             blocksElapsed = blocksElapsed-1;
         }
-        let weiToPay = gasAccountingInfo.weiPool - updatedWei;
-        let weiToBurn = 0;
-        if (weiToPay > gasAccountingInfo.weiOwedToValidators) {
-            weiToBurn = weiToPay - gasAccountingInfo.weiOwedToValidators;
-            weiToPay = gasAccountingInfo.weiOwedToValidators;
+        let weiCollected = gasAccountingInfo.weiPool - updatedWei;
+        if (int(weiCollected) <= gasAccountingInfo.shortfall) {
+            gasAccountingInfo = gasAccountingInfo with {
+                weiCollectedFromTxs: gasAccountingInfo.weiCollectedFromTxs + weiCollected
+            };
+        } elseif(gasAccountingInfo.shortfall >= int(0)) {
+            gasAccountingInfo = gasAccountingInfo with {
+                weiCollectedFromTxs: gasAccountingInfo.weiCollectedFromTxs + uint(gasAccountingInfo.shortfall)
+            };
         }
+
         gasAccountingInfo = gasAccountingInfo with {
             lastBlockNumSeen: blockNum
         } with {
@@ -431,30 +449,34 @@ public impure func getNextRequestFromCongestionAuction() -> (
         } with {
             weiPool: updatedWei
         } with {
-            weiOwedToValidators: gasAccountingInfo.weiOwedToValidators - weiToPay
-        } with {
-            weiBurned: gasAccountingInfo.weiBurned + weiToBurn
+            shortfall: gasAccountingInfo.shortfall - int(weiCollected)
         };
     }
 
     if (isChargeable) {
-        let minGasPrice = gasAccountingConstants.BaseGasPrice + gasAccountingInfo.weiOwedToValidators / uint(gasAccountingConstants.GasPoolMax);
-        if ( (minGasPrice > 0) && (int(maxGas) >= gasAccountingInfo.gasPool) ) {
-            return (false, maybeRequest, maybeTx);
-        }
-        if (gasBid == 0) {
-            gasBid = minGasPrice;  // treat a zero bid as equivalent to bidding the min gas price
+        let minGasPrice = gasAccountingConstants.BaseGasPrice;
+        if (gasAccountingInfo.shortfall > int(0)) {
+            minGasPrice = minGasPrice + uint(gasAccountingInfo.shortfall) / uint(gasAccountingConstants.GasPoolMax);
         }
 
         if (maxGas > gasAccountingConstants.TxGasLimit) {
             maxGas = gasAccountingConstants.TxGasLimit;
         }
+
+        if ( (minGasPrice > 0) && (int(maxGas) >= gasAccountingInfo.gasPool) ) {
+            return (false, maybeRequest, maybeTx);
+        }
+
         if (gasAccountingInfo.gasPool <= int(maxGas)) {
             return (false, maybeRequest, maybeTx);
         }
         let gasPrice = gasAccountingInfo.weiPool / (uint(gasAccountingInfo.gasPool)-maxGas);
         if (gasPrice < minGasPrice) {
             gasPrice = minGasPrice;
+        }
+
+        if (gasBid == 0) {
+            gasBid = minGasPrice;  // treat a zero bid as equivalent to bidding the min gas price
         }
 
         let availableFunds = account_getBalance(accountStore_get(getGlobalAccountStore(), payer));

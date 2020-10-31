@@ -663,7 +663,7 @@ pub struct _ArbosBlockSummaryLog {
     pub gas_limit: Uint256,
     stats_this_block: Rc<Vec<Value>>,
     stats_all_time: Rc<Vec<Value>>,
-    gas_summary: BlockGasAccountingSummary,
+    gas_summary: _BlockGasAccountingSummary,
 }
 
 impl _ArbosBlockSummaryLog {
@@ -708,7 +708,7 @@ impl _ArbosBlockSummaryLog {
                 gas_limit: gas_limit.clone(),
                 stats_this_block: stats_this_block.clone(),
                 stats_all_time: stats_all_time.clone(),
-                gas_summary: BlockGasAccountingSummary::new(gas_summary.to_vec()),
+                gas_summary: _BlockGasAccountingSummary::_new(gas_summary.to_vec()),
             })
         } else {
             None
@@ -716,22 +716,22 @@ impl _ArbosBlockSummaryLog {
     }
 }
 
-pub struct BlockGasAccountingSummary {
+pub struct _BlockGasAccountingSummary {
     gas_price_estimate: Uint256,
     gas_pool: Uint256,
     wei_pool: Uint256,
-    wei_owed_to_validators: Uint256,
+    wei_shortfall: Uint256,
     wei_collected_from_txs: Uint256,
     payout_address: Uint256,
 }
 
-impl BlockGasAccountingSummary {
-    pub fn new(tup: Vec<Value>) -> Self {
-        BlockGasAccountingSummary {
+impl _BlockGasAccountingSummary {
+    pub fn _new(tup: Vec<Value>) -> Self {
+        _BlockGasAccountingSummary {
             gas_price_estimate: if let Value::Int(ui) = &tup[0] { ui.clone() } else { panic!(); },
             gas_pool: if let Value::Int(ui) = &tup[1] { ui.clone() } else { panic!(); },
             wei_pool: if let Value::Int(ui) = &tup[2] { ui.clone() } else { panic!(); },
-            wei_owed_to_validators: if let Value::Int(ui) = &tup[3] { ui.clone() } else { panic!(); },
+            wei_shortfall: if let Value::Int(ui) = &tup[3] { ui.clone() } else { panic!(); },
             wei_collected_from_txs: if let Value::Int(ui) = &tup[4] { ui.clone() } else { panic!(); },
             payout_address: if let Value::Int(ui) = &tup[5] { ui.clone() } else { panic!(); },
         }

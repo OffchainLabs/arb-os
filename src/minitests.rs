@@ -404,6 +404,22 @@ pub fn test_crosscontract_call_with_constructors() {
 }
 
 #[test]
+pub fn test_gas_charging_underfunded() {
+    match crate::evm::_evm_run_with_gas_charging(None, Some((Uint256::_from_gwei(1000000), Uint256::zero())), false, false) {
+        Ok(result) => assert_eq!(result, false),
+        Err(e) => panic!("error {}", e),
+    }
+}
+
+#[test]
+pub fn test_gas_charging_fully_funded() {
+    match crate::evm::_evm_run_with_gas_charging(None, Some((Uint256::one(), Uint256::zero())), false, false) {
+        Ok(result) => assert_eq!(result, true),
+        Err(e) => panic!("error {}", e),
+    }
+}
+
+#[test]
 pub fn test_create_opcode() {
     match crate::evm::evm_test_create(None, false, false) {
         Ok(result) => assert_eq!(result, true),
