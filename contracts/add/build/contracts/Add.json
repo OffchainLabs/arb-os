@@ -103,9 +103,9 @@
       "type": "function"
     }
   ],
-  "metadata": "{\"compiler\":{\"version\":\"0.5.10+commit.5a6ea5b1\"},\"language\":\"Solidity\",\"output\":{\"abi\":[{\"constant\":false,\"inputs\":[],\"name\":\"withdraw5000\",\"outputs\":[],\"payable\":false,\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"constant\":false,\"inputs\":[],\"name\":\"withdrawMyEth\",\"outputs\":[],\"payable\":true,\"stateMutability\":\"payable\",\"type\":\"function\"},{\"constant\":true,\"inputs\":[],\"name\":\"getSeqNum\",\"outputs\":[{\"name\":\"\",\"type\":\"uint256\"}],\"payable\":false,\"stateMutability\":\"view\",\"type\":\"function\"},{\"constant\":true,\"inputs\":[{\"name\":\"x\",\"type\":\"uint256\"},{\"name\":\"y\",\"type\":\"uint256\"}],\"name\":\"add\",\"outputs\":[{\"name\":\"\",\"type\":\"uint256\"}],\"payable\":false,\"stateMutability\":\"pure\",\"type\":\"function\"},{\"constant\":true,\"inputs\":[{\"name\":\"x\",\"type\":\"uint256\"},{\"name\":\"y\",\"type\":\"uint256\"}],\"name\":\"mult\",\"outputs\":[{\"name\":\"\",\"type\":\"uint256\"}],\"payable\":false,\"stateMutability\":\"pure\",\"type\":\"function\"},{\"constant\":true,\"inputs\":[{\"name\":\"x\",\"type\":\"uint256\"},{\"name\":\"y\",\"type\":\"uint256\"}],\"name\":\"pythag\",\"outputs\":[{\"name\":\"\",\"type\":\"uint256\"}],\"payable\":false,\"stateMutability\":\"pure\",\"type\":\"function\"}],\"devdoc\":{\"methods\":{}},\"userdoc\":{\"methods\":{}}},\"settings\":{\"compilationTarget\":{\"/Users/ed/OffchainLabs/arb-os/contracts/add/contracts/Add.sol\":\"Add\"},\"evmVersion\":\"petersburg\",\"libraries\":{},\"optimizer\":{\"enabled\":false,\"runs\":200},\"remappings\":[]},\"sources\":{\"/Users/ed/OffchainLabs/arb-os/contracts/add/contracts/Add.sol\":{\"keccak256\":\"0xfe66f009f8c157f1999afce8fee8462bf3be2d59812e01ba68021acd702192f5\",\"urls\":[\"bzzr://61097fc51729798f3203a8e671b845499a29ab73f8f66eb5797ebaeaac0de6fc\",\"dweb:/ipfs/QmaPtm9dJcTF9r4tuAAranznpoEZXBRn31MjpizR3nz5sZ\"]},\"/Users/ed/OffchainLabs/arb-os/contracts/add/contracts/ArbSys.sol\":{\"keccak256\":\"0xab4c7554738238345b6ec99110129ac5a9c574a6162c6c5dbfee486e877a4723\",\"urls\":[\"bzzr://ed53a09d86b7b7159cd0fab0ab2e3c4c5f525cd90a0913e93184a9c1ee00c67b\",\"dweb:/ipfs/QmdzCaVZTA3Rbtm1dyaYF3BV5hCudZhYqqyx4aU73Qar1Q\"]}},\"version\":1}",
-  "bytecode": "0x608060405234801561001057600080fd5b50610427806100206000396000f3fe6080604052600436106100555760003560e01c806325b21b2e1461005a57806349c1cc7b146100715780636d15c4571461007b578063771602f7146100a65780639aa727f6146100ff578063e4156bc514610158575b600080fd5b34801561006657600080fd5b5061006f6101b1565b005b610079610250565b005b34801561008757600080fd5b506100906102ed565b6040518082815260200191505060405180910390f35b3480156100b257600080fd5b506100e9600480360360408110156100c957600080fd5b8101908080359060200190929190803590602001909291905050506103b2565b6040518082815260200191505060405180910390f35b34801561010b57600080fd5b506101426004803603604081101561012257600080fd5b8101908080359060200190929190803590602001909291905050506103bf565b6040518082815260200191505060405180910390f35b34801561016457600080fd5b5061019b6004803603604081101561017b57600080fd5b8101908080359060200190929190803590602001909291905050506103cc565b6040518082815260200191505060405180910390f35b606473ffffffffffffffffffffffffffffffffffffffff166325e160636113886104016040518363ffffffff1660e01b8152600401808273ffffffffffffffffffffffffffffffffffffffff1673ffffffffffffffffffffffffffffffffffffffff1681526020019150506000604051808303818588803b15801561023557600080fd5b505af1158015610249573d6000803e3d6000fd5b5050505050565b606473ffffffffffffffffffffffffffffffffffffffff166325e16063346104016040518363ffffffff1660e01b8152600401808273ffffffffffffffffffffffffffffffffffffffff1673ffffffffffffffffffffffffffffffffffffffff1681526020019150506000604051808303818588803b1580156102d257600080fd5b505af11580156102e6573d6000803e3d6000fd5b5050505050565b600080606473ffffffffffffffffffffffffffffffffffffffff166323ca0cd2336040518263ffffffff1660e01b8152600401808273ffffffffffffffffffffffffffffffffffffffff1673ffffffffffffffffffffffffffffffffffffffff16815260200191505060206040518083038186803b15801561036e57600080fd5b505afa158015610382573d6000803e3d6000fd5b505050506040513d602081101561039857600080fd5b810190808051906020019092919050505090508091505090565b6000818301905092915050565b6000818302905092915050565b60006103ea6103db84856103bf565b6103e584856103bf565b6103b2565b90509291505056fea265627a7a72305820a1848dbbccdfa25c64a8b949762e9c90598207e81d87445d15183bbc7e658f8464736f6c634300050a0032",
-  "deployedBytecode": "0x6080604052600436106100555760003560e01c806325b21b2e1461005a57806349c1cc7b146100715780636d15c4571461007b578063771602f7146100a65780639aa727f6146100ff578063e4156bc514610158575b600080fd5b34801561006657600080fd5b5061006f6101b1565b005b610079610250565b005b34801561008757600080fd5b506100906102ed565b6040518082815260200191505060405180910390f35b3480156100b257600080fd5b506100e9600480360360408110156100c957600080fd5b8101908080359060200190929190803590602001909291905050506103b2565b6040518082815260200191505060405180910390f35b34801561010b57600080fd5b506101426004803603604081101561012257600080fd5b8101908080359060200190929190803590602001909291905050506103bf565b6040518082815260200191505060405180910390f35b34801561016457600080fd5b5061019b6004803603604081101561017b57600080fd5b8101908080359060200190929190803590602001909291905050506103cc565b6040518082815260200191505060405180910390f35b606473ffffffffffffffffffffffffffffffffffffffff166325e160636113886104016040518363ffffffff1660e01b8152600401808273ffffffffffffffffffffffffffffffffffffffff1673ffffffffffffffffffffffffffffffffffffffff1681526020019150506000604051808303818588803b15801561023557600080fd5b505af1158015610249573d6000803e3d6000fd5b5050505050565b606473ffffffffffffffffffffffffffffffffffffffff166325e16063346104016040518363ffffffff1660e01b8152600401808273ffffffffffffffffffffffffffffffffffffffff1673ffffffffffffffffffffffffffffffffffffffff1681526020019150506000604051808303818588803b1580156102d257600080fd5b505af11580156102e6573d6000803e3d6000fd5b5050505050565b600080606473ffffffffffffffffffffffffffffffffffffffff166323ca0cd2336040518263ffffffff1660e01b8152600401808273ffffffffffffffffffffffffffffffffffffffff1673ffffffffffffffffffffffffffffffffffffffff16815260200191505060206040518083038186803b15801561036e57600080fd5b505afa158015610382573d6000803e3d6000fd5b505050506040513d602081101561039857600080fd5b810190808051906020019092919050505090508091505090565b6000818301905092915050565b6000818302905092915050565b60006103ea6103db84856103bf565b6103e584856103bf565b6103b2565b90509291505056fea265627a7a72305820a1848dbbccdfa25c64a8b949762e9c90598207e81d87445d15183bbc7e658f8464736f6c634300050a0032",
+  "metadata": "{\"compiler\":{\"version\":\"0.5.10+commit.5a6ea5b1\"},\"language\":\"Solidity\",\"output\":{\"abi\":[{\"constant\":false,\"inputs\":[],\"name\":\"withdraw5000\",\"outputs\":[],\"payable\":false,\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"constant\":false,\"inputs\":[],\"name\":\"withdrawMyEth\",\"outputs\":[],\"payable\":true,\"stateMutability\":\"payable\",\"type\":\"function\"},{\"constant\":true,\"inputs\":[],\"name\":\"getSeqNum\",\"outputs\":[{\"name\":\"\",\"type\":\"uint256\"}],\"payable\":false,\"stateMutability\":\"view\",\"type\":\"function\"},{\"constant\":true,\"inputs\":[{\"name\":\"x\",\"type\":\"uint256\"},{\"name\":\"y\",\"type\":\"uint256\"}],\"name\":\"add\",\"outputs\":[{\"name\":\"\",\"type\":\"uint256\"}],\"payable\":false,\"stateMutability\":\"pure\",\"type\":\"function\"},{\"constant\":true,\"inputs\":[{\"name\":\"x\",\"type\":\"uint256\"},{\"name\":\"y\",\"type\":\"uint256\"}],\"name\":\"mult\",\"outputs\":[{\"name\":\"\",\"type\":\"uint256\"}],\"payable\":false,\"stateMutability\":\"pure\",\"type\":\"function\"},{\"constant\":true,\"inputs\":[{\"name\":\"x\",\"type\":\"uint256\"},{\"name\":\"y\",\"type\":\"uint256\"}],\"name\":\"pythag\",\"outputs\":[{\"name\":\"\",\"type\":\"uint256\"}],\"payable\":false,\"stateMutability\":\"pure\",\"type\":\"function\"}],\"devdoc\":{\"methods\":{}},\"userdoc\":{\"methods\":{}}},\"settings\":{\"compilationTarget\":{\"/Users/ed/OffchainLabs/arb-os/contracts/add/contracts/Add.sol\":\"Add\"},\"evmVersion\":\"petersburg\",\"libraries\":{},\"optimizer\":{\"enabled\":false,\"runs\":200},\"remappings\":[]},\"sources\":{\"/Users/ed/OffchainLabs/arb-os/contracts/add/contracts/Add.sol\":{\"keccak256\":\"0xfe66f009f8c157f1999afce8fee8462bf3be2d59812e01ba68021acd702192f5\",\"urls\":[\"bzzr://61097fc51729798f3203a8e671b845499a29ab73f8f66eb5797ebaeaac0de6fc\",\"dweb:/ipfs/QmaPtm9dJcTF9r4tuAAranznpoEZXBRn31MjpizR3nz5sZ\"]},\"/Users/ed/OffchainLabs/arb-os/contracts/add/contracts/ArbSys.sol\":{\"keccak256\":\"0x6f152ff41a5f777123bfc0985aa44d8b0b750f6056593e57ed780e4428f52455\",\"urls\":[\"bzzr://651ba82c10c173642ac659a29ea434592d0d27b46d49a2397fa66fabf69412b2\",\"dweb:/ipfs/Qmdn99ZKzwfudCSFtCdMJPtjiRkCR4Sm9Zneqj2JTdBhkH\"]}},\"version\":1}",
+  "bytecode": "0x608060405234801561001057600080fd5b50610427806100206000396000f3fe6080604052600436106100555760003560e01c806325b21b2e1461005a57806349c1cc7b146100715780636d15c4571461007b578063771602f7146100a65780639aa727f6146100ff578063e4156bc514610158575b600080fd5b34801561006657600080fd5b5061006f6101b1565b005b610079610250565b005b34801561008757600080fd5b506100906102ed565b6040518082815260200191505060405180910390f35b3480156100b257600080fd5b506100e9600480360360408110156100c957600080fd5b8101908080359060200190929190803590602001909291905050506103b2565b6040518082815260200191505060405180910390f35b34801561010b57600080fd5b506101426004803603604081101561012257600080fd5b8101908080359060200190929190803590602001909291905050506103bf565b6040518082815260200191505060405180910390f35b34801561016457600080fd5b5061019b6004803603604081101561017b57600080fd5b8101908080359060200190929190803590602001909291905050506103cc565b6040518082815260200191505060405180910390f35b606473ffffffffffffffffffffffffffffffffffffffff166325e160636113886104016040518363ffffffff1660e01b8152600401808273ffffffffffffffffffffffffffffffffffffffff1673ffffffffffffffffffffffffffffffffffffffff1681526020019150506000604051808303818588803b15801561023557600080fd5b505af1158015610249573d6000803e3d6000fd5b5050505050565b606473ffffffffffffffffffffffffffffffffffffffff166325e16063346104016040518363ffffffff1660e01b8152600401808273ffffffffffffffffffffffffffffffffffffffff1673ffffffffffffffffffffffffffffffffffffffff1681526020019150506000604051808303818588803b1580156102d257600080fd5b505af11580156102e6573d6000803e3d6000fd5b5050505050565b600080606473ffffffffffffffffffffffffffffffffffffffff166323ca0cd2336040518263ffffffff1660e01b8152600401808273ffffffffffffffffffffffffffffffffffffffff1673ffffffffffffffffffffffffffffffffffffffff16815260200191505060206040518083038186803b15801561036e57600080fd5b505afa158015610382573d6000803e3d6000fd5b505050506040513d602081101561039857600080fd5b810190808051906020019092919050505090508091505090565b6000818301905092915050565b6000818302905092915050565b60006103ea6103db84856103bf565b6103e584856103bf565b6103b2565b90509291505056fea265627a7a72305820a18d35f9dfd0fecdb72b2d8cd2aa4c0a109d84b3bbad80d55ec8fefffda4fd4664736f6c634300050a0032",
+  "deployedBytecode": "0x6080604052600436106100555760003560e01c806325b21b2e1461005a57806349c1cc7b146100715780636d15c4571461007b578063771602f7146100a65780639aa727f6146100ff578063e4156bc514610158575b600080fd5b34801561006657600080fd5b5061006f6101b1565b005b610079610250565b005b34801561008757600080fd5b506100906102ed565b6040518082815260200191505060405180910390f35b3480156100b257600080fd5b506100e9600480360360408110156100c957600080fd5b8101908080359060200190929190803590602001909291905050506103b2565b6040518082815260200191505060405180910390f35b34801561010b57600080fd5b506101426004803603604081101561012257600080fd5b8101908080359060200190929190803590602001909291905050506103bf565b6040518082815260200191505060405180910390f35b34801561016457600080fd5b5061019b6004803603604081101561017b57600080fd5b8101908080359060200190929190803590602001909291905050506103cc565b6040518082815260200191505060405180910390f35b606473ffffffffffffffffffffffffffffffffffffffff166325e160636113886104016040518363ffffffff1660e01b8152600401808273ffffffffffffffffffffffffffffffffffffffff1673ffffffffffffffffffffffffffffffffffffffff1681526020019150506000604051808303818588803b15801561023557600080fd5b505af1158015610249573d6000803e3d6000fd5b5050505050565b606473ffffffffffffffffffffffffffffffffffffffff166325e16063346104016040518363ffffffff1660e01b8152600401808273ffffffffffffffffffffffffffffffffffffffff1673ffffffffffffffffffffffffffffffffffffffff1681526020019150506000604051808303818588803b1580156102d257600080fd5b505af11580156102e6573d6000803e3d6000fd5b5050505050565b600080606473ffffffffffffffffffffffffffffffffffffffff166323ca0cd2336040518263ffffffff1660e01b8152600401808273ffffffffffffffffffffffffffffffffffffffff1673ffffffffffffffffffffffffffffffffffffffff16815260200191505060206040518083038186803b15801561036e57600080fd5b505afa158015610382573d6000803e3d6000fd5b505050506040513d602081101561039857600080fd5b810190808051906020019092919050505090508091505090565b6000818301905092915050565b6000818302905092915050565b60006103ea6103db84856103bf565b6103e584856103bf565b6103b2565b90509291505056fea265627a7a72305820a18d35f9dfd0fecdb72b2d8cd2aa4c0a109d84b3bbad80d55ec8fefffda4fd4664736f6c634300050a0032",
   "sourceMap": "59:699:0:-;;;;8:9:-1;5:2;;;30:1;27;20:12;5:2;59:699:0;;;;;;;",
   "deployedSourceMap": "59:699:0:-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;656:100;;8:9:-1;5:2;;;30:1;27;20:12;5:2;656:100:0;;;:::i;:::-;;536:114;;;:::i;:::-;;371:159;;8:9:-1;5:2;;;30:1;27;20:12;5:2;371:159:0;;;:::i;:::-;;;;;;;;;;;;;;;;;;;78:83;;8:9:-1;5:2;;;30:1;27;20:12;5:2;78:83:0;;;;;;13:2:-1;8:3;5:11;2:2;;;29:1;26;19:12;2:2;78:83:0;;;;;;;;;;;;;;;;;;;;;;;;;;:::i;:::-;;;;;;;;;;;;;;;;;;;167:84;;8:9:-1;5:2;;;30:1;27;20:12;5:2;167:84:0;;;;;;13:2:-1;8:3;5:11;2:2;;;29:1;26;19:12;2:2;167:84:0;;;;;;;;;;;;;;;;;;;;;;;;;;:::i;:::-;;;;;;;;;;;;;;;;;;;257:108;;8:9:-1;5:2;;;30:1;27;20:12;5:2;257:108:0;;;;;;13:2:-1;8:3;5:11;2:2;;;29:1;26;19:12;2:2;257:108:0;;;;;;;;;;;;;;;;;;;;;;;;;;:::i;:::-;;;;;;;;;;;;;;;;;;;656:100;705:3;690:32;;;729:4;743;690:59;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;8:9:-1;5:2;;;30:1;27;20:12;5:2;690:59:0;;;;8:9:-1;5:2;;;45:16;42:1;39;24:38;77:16;74:1;67:27;5:2;690:59:0;;;;;656:100::o;536:114::-;594:3;579:32;;;618:9;637:4;579:64;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;8:9:-1;5:2;;;30:1;27;20:12;5:2;579:64:0;;;;8:9:-1;5:2;;;45:16;42:1;39;24:38;77:16;74:1;67:27;5:2;579:64:0;;;;;536:114::o;371:159::-;413:4;429:15;462:3;447:40;;;488:10;447:52;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;8:9:-1;5:2;;;30:1;27;20:12;5:2;447:52:0;;;;8:9:-1;5:2;;;45:16;42:1;39;24:38;77:16;74:1;67:27;5:2;447:52:0;;;;;;;13:2:-1;8:3;5:11;2:2;;;29:1;26;19:12;2:2;447:52:0;;;;;;;;;;;;;;;;429:70;;516:7;509:14;;;371:159;:::o;78:83::-;128:4;153:1;151;:3;144:10;;78:83;;;;:::o;167:84::-;218:4;243:1;241;:3;234:10;;167:84;;;;:::o;257:108::-;310:4;333:25;337:9;342:1;344;337:4;:9::i;:::-;348;353:1;355;348:4;:9::i;:::-;333:3;:25::i;:::-;326:32;;257:108;;;;:::o",
   "source": "pragma solidity >=0.4.21 <0.7.0;\n\nimport \"./ArbSys.sol\";\n\n\ncontract Add {\n    function add(uint x, uint y) public pure returns (uint) {\n        return x+y;\n    }\n\n    function mult(uint x, uint y) public pure returns (uint) {\n        return x*y;\n    }\n\n    function pythag(uint x, uint y) public pure returns (uint) {\n        return add(mult(x,x), mult(y,y));\n    }\n\n    function getSeqNum() public view returns (uint) {\n        uint256 txCount = ArbSys(address(100)).getTransactionCount(msg.sender);\n        return txCount;\n    }\n\n    function withdrawMyEth() public payable {\n\tArbSys(address(100)).withdrawEth.value(msg.value)(address(1025));\n    }\n\n    function withdraw5000() public {\n\tArbSys(address(100)).withdrawEth.value(5000)(address(1025));\n    }\n}\n",
@@ -140,7 +140,7 @@
         "id": 2,
         "nodeType": "ImportDirective",
         "scope": 110,
-        "sourceUnit": 268,
+        "sourceUnit": 264,
         "src": "34:22:0",
         "symbolAliases": [],
         "unitAlias": ""
@@ -827,7 +827,7 @@
                           "name": "msg",
                           "nodeType": "Identifier",
                           "overloadedDeclarations": [],
-                          "referencedDeclaration": 319,
+                          "referencedDeclaration": 315,
                           "src": "488:3:0",
                           "typeDescriptions": {
                             "typeIdentifier": "t_magic_message",
@@ -927,10 +927,10 @@
                           "name": "ArbSys",
                           "nodeType": "Identifier",
                           "overloadedDeclarations": [],
-                          "referencedDeclaration": 267,
+                          "referencedDeclaration": 263,
                           "src": "447:6:0",
                           "typeDescriptions": {
-                            "typeIdentifier": "t_type$_t_contract$_ArbSys_$267_$",
+                            "typeIdentifier": "t_type$_t_contract$_ArbSys_$263_$",
                             "typeString": "type(contract ArbSys)"
                           }
                         },
@@ -944,7 +944,7 @@
                         "nodeType": "FunctionCall",
                         "src": "447:20:0",
                         "typeDescriptions": {
-                          "typeIdentifier": "t_contract$_ArbSys_$267",
+                          "typeIdentifier": "t_contract$_ArbSys_$263",
                           "typeString": "contract ArbSys"
                         }
                       },
@@ -955,7 +955,7 @@
                       "lValueRequested": false,
                       "memberName": "getTransactionCount",
                       "nodeType": "MemberAccess",
-                      "referencedDeclaration": 137,
+                      "referencedDeclaration": 191,
                       "src": "447:40:0",
                       "typeDescriptions": {
                         "typeIdentifier": "t_function_external_view$_t_address_$returns$_t_uint256_$",
@@ -1135,7 +1135,7 @@
                             "name": "msg",
                             "nodeType": "Identifier",
                             "overloadedDeclarations": [],
-                            "referencedDeclaration": 319,
+                            "referencedDeclaration": 315,
                             "src": "618:3:0",
                             "typeDescriptions": {
                               "typeIdentifier": "t_magic_message",
@@ -1237,10 +1237,10 @@
                               "name": "ArbSys",
                               "nodeType": "Identifier",
                               "overloadedDeclarations": [],
-                              "referencedDeclaration": 267,
+                              "referencedDeclaration": 263,
                               "src": "579:6:0",
                               "typeDescriptions": {
-                                "typeIdentifier": "t_type$_t_contract$_ArbSys_$267_$",
+                                "typeIdentifier": "t_type$_t_contract$_ArbSys_$263_$",
                                 "typeString": "type(contract ArbSys)"
                               }
                             },
@@ -1254,7 +1254,7 @@
                             "nodeType": "FunctionCall",
                             "src": "579:20:0",
                             "typeDescriptions": {
-                              "typeIdentifier": "t_contract$_ArbSys_$267",
+                              "typeIdentifier": "t_contract$_ArbSys_$263",
                               "typeString": "contract ArbSys"
                             }
                           },
@@ -1265,7 +1265,7 @@
                           "lValueRequested": false,
                           "memberName": "withdrawEth",
                           "nodeType": "MemberAccess",
-                          "referencedDeclaration": 130,
+                          "referencedDeclaration": 184,
                           "src": "579:32:0",
                           "typeDescriptions": {
                             "typeIdentifier": "t_function_external_payable$_t_address_$returns$__$",
@@ -1519,10 +1519,10 @@
                               "name": "ArbSys",
                               "nodeType": "Identifier",
                               "overloadedDeclarations": [],
-                              "referencedDeclaration": 267,
+                              "referencedDeclaration": 263,
                               "src": "690:6:0",
                               "typeDescriptions": {
-                                "typeIdentifier": "t_type$_t_contract$_ArbSys_$267_$",
+                                "typeIdentifier": "t_type$_t_contract$_ArbSys_$263_$",
                                 "typeString": "type(contract ArbSys)"
                               }
                             },
@@ -1536,7 +1536,7 @@
                             "nodeType": "FunctionCall",
                             "src": "690:20:0",
                             "typeDescriptions": {
-                              "typeIdentifier": "t_contract$_ArbSys_$267",
+                              "typeIdentifier": "t_contract$_ArbSys_$263",
                               "typeString": "contract ArbSys"
                             }
                           },
@@ -1547,7 +1547,7 @@
                           "lValueRequested": false,
                           "memberName": "withdrawEth",
                           "nodeType": "MemberAccess",
-                          "referencedDeclaration": 130,
+                          "referencedDeclaration": 184,
                           "src": "690:32:0",
                           "typeDescriptions": {
                             "typeIdentifier": "t_function_external_payable$_t_address_$returns$__$",
@@ -1664,7 +1664,7 @@
         "id": 2,
         "nodeType": "ImportDirective",
         "scope": 110,
-        "sourceUnit": 268,
+        "sourceUnit": 264,
         "src": "34:22:0",
         "symbolAliases": [],
         "unitAlias": ""
@@ -2351,7 +2351,7 @@
                           "name": "msg",
                           "nodeType": "Identifier",
                           "overloadedDeclarations": [],
-                          "referencedDeclaration": 319,
+                          "referencedDeclaration": 315,
                           "src": "488:3:0",
                           "typeDescriptions": {
                             "typeIdentifier": "t_magic_message",
@@ -2451,10 +2451,10 @@
                           "name": "ArbSys",
                           "nodeType": "Identifier",
                           "overloadedDeclarations": [],
-                          "referencedDeclaration": 267,
+                          "referencedDeclaration": 263,
                           "src": "447:6:0",
                           "typeDescriptions": {
-                            "typeIdentifier": "t_type$_t_contract$_ArbSys_$267_$",
+                            "typeIdentifier": "t_type$_t_contract$_ArbSys_$263_$",
                             "typeString": "type(contract ArbSys)"
                           }
                         },
@@ -2468,7 +2468,7 @@
                         "nodeType": "FunctionCall",
                         "src": "447:20:0",
                         "typeDescriptions": {
-                          "typeIdentifier": "t_contract$_ArbSys_$267",
+                          "typeIdentifier": "t_contract$_ArbSys_$263",
                           "typeString": "contract ArbSys"
                         }
                       },
@@ -2479,7 +2479,7 @@
                       "lValueRequested": false,
                       "memberName": "getTransactionCount",
                       "nodeType": "MemberAccess",
-                      "referencedDeclaration": 137,
+                      "referencedDeclaration": 191,
                       "src": "447:40:0",
                       "typeDescriptions": {
                         "typeIdentifier": "t_function_external_view$_t_address_$returns$_t_uint256_$",
@@ -2659,7 +2659,7 @@
                             "name": "msg",
                             "nodeType": "Identifier",
                             "overloadedDeclarations": [],
-                            "referencedDeclaration": 319,
+                            "referencedDeclaration": 315,
                             "src": "618:3:0",
                             "typeDescriptions": {
                               "typeIdentifier": "t_magic_message",
@@ -2761,10 +2761,10 @@
                               "name": "ArbSys",
                               "nodeType": "Identifier",
                               "overloadedDeclarations": [],
-                              "referencedDeclaration": 267,
+                              "referencedDeclaration": 263,
                               "src": "579:6:0",
                               "typeDescriptions": {
-                                "typeIdentifier": "t_type$_t_contract$_ArbSys_$267_$",
+                                "typeIdentifier": "t_type$_t_contract$_ArbSys_$263_$",
                                 "typeString": "type(contract ArbSys)"
                               }
                             },
@@ -2778,7 +2778,7 @@
                             "nodeType": "FunctionCall",
                             "src": "579:20:0",
                             "typeDescriptions": {
-                              "typeIdentifier": "t_contract$_ArbSys_$267",
+                              "typeIdentifier": "t_contract$_ArbSys_$263",
                               "typeString": "contract ArbSys"
                             }
                           },
@@ -2789,7 +2789,7 @@
                           "lValueRequested": false,
                           "memberName": "withdrawEth",
                           "nodeType": "MemberAccess",
-                          "referencedDeclaration": 130,
+                          "referencedDeclaration": 184,
                           "src": "579:32:0",
                           "typeDescriptions": {
                             "typeIdentifier": "t_function_external_payable$_t_address_$returns$__$",
@@ -3043,10 +3043,10 @@
                               "name": "ArbSys",
                               "nodeType": "Identifier",
                               "overloadedDeclarations": [],
-                              "referencedDeclaration": 267,
+                              "referencedDeclaration": 263,
                               "src": "690:6:0",
                               "typeDescriptions": {
-                                "typeIdentifier": "t_type$_t_contract$_ArbSys_$267_$",
+                                "typeIdentifier": "t_type$_t_contract$_ArbSys_$263_$",
                                 "typeString": "type(contract ArbSys)"
                               }
                             },
@@ -3060,7 +3060,7 @@
                             "nodeType": "FunctionCall",
                             "src": "690:20:0",
                             "typeDescriptions": {
-                              "typeIdentifier": "t_contract$_ArbSys_$267",
+                              "typeIdentifier": "t_contract$_ArbSys_$263",
                               "typeString": "contract ArbSys"
                             }
                           },
@@ -3071,7 +3071,7 @@
                           "lValueRequested": false,
                           "memberName": "withdrawEth",
                           "nodeType": "MemberAccess",
-                          "referencedDeclaration": 130,
+                          "referencedDeclaration": 184,
                           "src": "690:32:0",
                           "typeDescriptions": {
                             "typeIdentifier": "t_function_external_payable$_t_address_$returns$__$",
@@ -3164,7 +3164,7 @@
   },
   "networks": {},
   "schemaVersion": "3.3.1",
-  "updatedAt": "2020-10-27T17:49:19.400Z",
+  "updatedAt": "2020-10-31T16:38:34.514Z",
   "devdoc": {
     "methods": {}
   },
