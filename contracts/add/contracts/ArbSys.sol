@@ -17,19 +17,6 @@ interface ArbSys {
     // or the account sequence number of the given contract
     function getTransactionCount(address account) external view returns(uint256);
 
-    // Upload a serialized function table and associate it with the caller's address
-    // If caller already had a function table, this will overwrite the old one
-    // Revert if buf is mal-formatted
-    // (Caller will typically be an aggregator)
-    function uploadFunctionTable(bytes calldata buf) external;
-
-    // Get the size of addr's function table; revert if addr doesn't have a function table
-    function functionTableSize(address addr) external view returns(uint);
-
-    // Get the entry from addr's function table, at index; revert if addr has no table or index out of bounds
-    // Returns (functionCode, isPayable, gasLimit)
-    function functionTableGet(address addr, uint index) external view returns(uint, bool, uint);
-
     event EthWithdrawal(address indexed destAddr, uint amount);
     event ERC20Withdrawal(address indexed destAddr, address indexed tokenAddr, uint amount);
     event ERC721Withdrawal(address indexed destAddr, address indexed tokenAddr, uint indexed id);

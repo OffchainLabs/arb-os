@@ -103,12 +103,6 @@ public impure func arbsys_txcall() {
             arbsys_getStorageAt(topFrame, calldata);
         } elseif(funcCode == 0x3dcfdac7) {
             arbsys_getPcTable(topFrame, calldata);
-        } elseif(funcCode == 0xb7cf9527) {
-            arbsys_uploadFunctionTable(topFrame, calldata);
-        } elseif(funcCode == 0x1221C896) {
-            arbsys_functionTableSize(topFrame, calldata);
-        } elseif(funcCode == 0xd6ed0f56) {
-            arbsys_functionTableGet(topFrame, calldata);
         } else {
             // unrecognized function code
             evmOp_revert_knownCodePc(address(100), 1, 0, 0);
@@ -165,6 +159,29 @@ public impure func arbBLS_txcall() {
         } else {
             // unrecognized function code
             evmOp_revert_knownCodePc(address(103), 1, 0, 0);
+        }
+    } else {
+        // this shouldn't happen -- should always be called in an EVM tx
+        evmCallStack_callHitError(18);
+    }
+}
+
+public impure func arbFunctionTable_txcall() {
+    if let Some(topFrame) = evmCallStack_topFrame() {
+        let calldata = evmCallFrame_getCalldata(topFrame);
+        if (bytearray_size(calldata) < 4) {
+            evmOp_revert_knownCodePc(address(104), 0, 0, 0);
+        }
+        let funcCode = getFuncCode(calldata);
+        if (funcCode == 0xce2ae159) {
+            arbFunctionTable_upload(topFrame, calldata);
+        } elseif(funcCode == 0x88987068) {
+            arbFunctionTable_size(topFrame, calldata);
+        } elseif(funcCode == 0xb464631b) {
+            arbFunctionTable_get(topFrame, calldata);
+        } else {
+            // unrecognized function code
+            evmOp_revert_knownCodePc(address(104), 1, 0, 0);
         }
     } else {
         // this shouldn't happen -- should always be called in an EVM tx
@@ -551,7 +568,7 @@ impure func arbBLS_getPublicKey(topFrame: EvmCallFrame, calldata: ByteArray) { /
     }
 }
 
-impure func arbsys_uploadFunctionTable(topFrame: EvmCallFrame, calldata: ByteArray) { // (bytes)
+impure func arbFunctionTable_upload(topFrame: EvmCallFrame, calldata: ByteArray) { // (bytes)
     if (bytearray_size(calldata) < (4+2*32)) {
         evmOp_revert_knownCodePc(address(100), 190, 0, 0);
     }
@@ -581,7 +598,7 @@ impure func arbsys_uploadFunctionTable(topFrame: EvmCallFrame, calldata: ByteArr
     }
 }
 
-impure func arbsys_functionTableSize(topFrame: EvmCallFrame, calldata: ByteArray) { // (address) -> uint
+impure func arbFunctionTable_size(topFrame: EvmCallFrame, calldata: ByteArray) { // (address) -> uint
     if (bytearray_size(calldata) != 36) {
         evmOp_revert_knownCodePc(address(100), 200, 0, 0);
     }
@@ -595,7 +612,7 @@ impure func arbsys_functionTableSize(topFrame: EvmCallFrame, calldata: ByteArray
         evmOp_revert_knownCodePc(address(100), 201, 0, 0);
 }
 
-impure func arbsys_functionTableGet(topFrame: EvmCallFrame, calldata: ByteArray) { // (address, uint) -> (uint, bool, uint)
+impure func arbFunctionTable_get(topFrame: EvmCallFrame, calldata: ByteArray) { // (address, uint) -> (uint, bool, uint)
     if (bytearray_size(calldata) != 68) {
         evmOp_revert_knownCodePc(address(100), 210, 0, 0);
     }

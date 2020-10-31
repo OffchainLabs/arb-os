@@ -2,7 +2,7 @@
  * Copyright 2020, Offchain Labs, Inc. All rights reserved.
  */
 
-use crate::evm::abi::{ArbSys, ArbAddressTable, ArbBLS};
+use crate::evm::abi::{ArbSys, ArbAddressTable, ArbBLS, ArbFunctionTable};
 use crate::evm::abi::FunctionTable;
 use crate::mavm::Value;
 use crate::run::{bytestack_from_bytes, load_from_file, RuntimeEnvironment};
@@ -219,6 +219,7 @@ pub fn evm_test_function_table_access(
     let my_addr = Uint256::from_bytes(wallet.address().as_bytes());
 
     let arbsys = ArbSys::new(&wallet, debug);
+    let arb_function_table = ArbFunctionTable::new(&wallet, debug);
 
     let gtc_short_sig = arbsys
         .contract_abi
@@ -231,17 +232,17 @@ pub fn evm_test_function_table_access(
         false,
         Uint256::from_u64(10000000),
     )?;
-    arbsys.upload_function_table(&mut machine, &func_table)?;
+    arb_function_table.upload(&mut machine, &func_table)?;
 
     println!("Checking size");
     assert_eq!(
-        arbsys.function_table_size(&mut machine, my_addr.clone())?,
+        arb_function_table.size(&mut machine, my_addr.clone())?,
         Uint256::one()
     );
 
     println!("Getting item");
     let (func_code, is_payable, gas_limit) =
-        arbsys.function_table_get(&mut machine, my_addr, Uint256::zero())?;
+        arb_function_table.get(&mut machine, my_addr, Uint256::zero())?;
     assert_eq!(
         func_code,
         Uint256::from_bytes(&gtc_short_sig).shift_left(256 - 32)
