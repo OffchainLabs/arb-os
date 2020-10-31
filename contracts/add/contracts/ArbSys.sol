@@ -17,12 +17,6 @@ interface ArbSys {
     // or the account sequence number of the given contract
     function getTransactionCount(address account) external view returns(uint256);
 
-    // Associate a BLS public key with the caller's address
-    function registerBlsKey(uint x0, uint x1, uint y0, uint y1) external;
-
-    // Get the BLS public key associated with an address (revert if there isn't one)
-    function getBlsPublicKey(address addr) external view returns (uint, uint, uint, uint);
-
     // Upload a serialized function table and associate it with the caller's address
     // If caller already had a function table, this will overwrite the old one
     // Revert if buf is mal-formatted

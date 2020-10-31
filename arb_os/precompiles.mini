@@ -28,6 +28,7 @@ use std::sha256::sha256_byteArray;
 
 use arbsys::arbsys_txcall;
 use arbsys::arbAddressTable_txcall;
+use arbsys::arbBLS_txcall;
 
 
 public impure func precompiles_init(acctStore: AccountStore) -> option<AccountStore> {
@@ -77,6 +78,12 @@ public impure func precompiles_init(acctStore: AccountStore) -> option<AccountSt
         acctStore,
         address(102),
         arbAddressTable_txcall,
+        true,
+    )?;
+    acctStore = accountStore_createBuiltinContract(
+        acctStore,
+        address(103),
+        arbBLS_txcall,
         true,
     )?;
     return Some(acctStore);

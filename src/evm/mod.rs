@@ -2,7 +2,7 @@
  * Copyright 2020, Offchain Labs, Inc. All rights reserved.
  */
 
-use crate::evm::abi::{ArbSys, ArbAddressTable};
+use crate::evm::abi::{ArbSys, ArbAddressTable, ArbBLS};
 use crate::evm::abi::FunctionTable;
 use crate::mavm::Value;
 use crate::run::{bytestack_from_bytes, load_from_file, RuntimeEnvironment};
@@ -157,6 +157,7 @@ pub fn evm_test_arbsys_direct(log_to: Option<&Path>, debug: bool) -> Result<(), 
 
     let arbsys = ArbSys::new(&wallet, debug);
     let arb_address_table = ArbAddressTable::new(&wallet, debug);
+    let arb_bls = ArbBLS::new(&wallet, debug);
 
     let tx_count = arbsys.get_transaction_count(&mut machine, my_addr.clone())?;
     assert_eq!(tx_count, Uint256::one());
@@ -191,9 +192,9 @@ pub fn evm_test_arbsys_direct(log_to: Option<&Path>, debug: bool) -> Result<(), 
     let y0 = Uint256::from_u64(71);
     let y1 = Uint256::from_u64(143);
     println!("registering BLS key");
-    arbsys.register_bls_key(&mut machine, x0.clone(), x1.clone(), y0.clone(), y1.clone())?;
+    arb_bls.register(&mut machine, x0.clone(), x1.clone(), y0.clone(), y1.clone())?;
     println!("reading BLS key");
-    let (ox0, ox1, oy0, oy1) = arbsys.get_bls_public_key(&mut machine, my_addr.clone())?;
+    let (ox0, ox1, oy0, oy1) = arb_bls.get_public_key(&mut machine, my_addr.clone())?;
     assert_eq!(x0, ox0);
     assert_eq!(x1, ox1);
     assert_eq!(y0, oy0);

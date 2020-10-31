@@ -103,10 +103,6 @@ public impure func arbsys_txcall() {
             arbsys_getStorageAt(topFrame, calldata);
         } elseif(funcCode == 0x3dcfdac7) {
             arbsys_getPcTable(topFrame, calldata);
-        } elseif(funcCode == 0x1ff548ca) {
-            arbsys_registerBlsKey(topFrame, calldata);
-        } elseif(funcCode == 0x647e0e98) {
-            arbsys_getBlsPublicKey(topFrame, calldata);
         } elseif(funcCode == 0xb7cf9527) {
             arbsys_uploadFunctionTable(topFrame, calldata);
         } elseif(funcCode == 0x1221C896) {
@@ -152,6 +148,27 @@ public impure func arbAddressTable_txcall() {
     } else {
         // this shouldn't happen -- should always be called in an EVM tx
         evmCallStack_callHitError(17);
+    }
+}
+
+public impure func arbBLS_txcall() {
+    if let Some(topFrame) = evmCallStack_topFrame() {
+        let calldata = evmCallFrame_getCalldata(topFrame);
+        if (bytearray_size(calldata) < 4) {
+            evmOp_revert_knownCodePc(address(103), 0, 0, 0);
+        }
+        let funcCode = getFuncCode(calldata);
+        if (funcCode == 0x375a7c7f) {
+            arbBLS_register(topFrame, calldata);
+        } elseif(funcCode == 0x857cdbb8) {
+            arbBLS_getPublicKey(topFrame, calldata);
+        } else {
+            // unrecognized function code
+            evmOp_revert_knownCodePc(address(103), 1, 0, 0);
+        }
+    } else {
+        // this shouldn't happen -- should always be called in an EVM tx
+        evmCallStack_callHitError(18);
     }
 }
 
@@ -493,7 +510,7 @@ impure func arbAddressTable_compress(topFrame: EvmCallFrame, calldata: ByteArray
     }
 }
 
-impure func arbsys_registerBlsKey(topFrame: EvmCallFrame, calldata: ByteArray) {
+impure func arbBLS_register(topFrame: EvmCallFrame, calldata: ByteArray) {
     if (bytearray_size(calldata) != 4+32*4) {
         evmOp_revert_knownCodePc(address(100), 170, 0, 0);
     }
@@ -513,7 +530,7 @@ impure func arbsys_registerBlsKey(topFrame: EvmCallFrame, calldata: ByteArray) {
     }
 }
 
-impure func arbsys_getBlsPublicKey(topFrame: EvmCallFrame, calldata: ByteArray) { // (address) -> (uint, uint, uint, uint)
+impure func arbBLS_getPublicKey(topFrame: EvmCallFrame, calldata: ByteArray) { // (address) -> (uint, uint, uint, uint)
     if (bytearray_size(calldata) != 36) {
         evmOp_revert_knownCodePc(address(100), 180, 0, 0);
     }
