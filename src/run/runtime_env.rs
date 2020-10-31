@@ -728,12 +728,36 @@ pub struct _BlockGasAccountingSummary {
 impl _BlockGasAccountingSummary {
     pub fn _new(tup: Vec<Value>) -> Self {
         _BlockGasAccountingSummary {
-            gas_price_estimate: if let Value::Int(ui) = &tup[0] { ui.clone() } else { panic!(); },
-            gas_pool: if let Value::Int(ui) = &tup[1] { ui.clone() } else { panic!(); },
-            wei_pool: if let Value::Int(ui) = &tup[2] { ui.clone() } else { panic!(); },
-            wei_shortfall: if let Value::Int(ui) = &tup[3] { ui.clone() } else { panic!(); },
-            wei_collected_from_txs: if let Value::Int(ui) = &tup[4] { ui.clone() } else { panic!(); },
-            payout_address: if let Value::Int(ui) = &tup[5] { ui.clone() } else { panic!(); },
+            gas_price_estimate: if let Value::Int(ui) = &tup[0] {
+                ui.clone()
+            } else {
+                panic!();
+            },
+            gas_pool: if let Value::Int(ui) = &tup[1] {
+                ui.clone()
+            } else {
+                panic!();
+            },
+            wei_pool: if let Value::Int(ui) = &tup[2] {
+                ui.clone()
+            } else {
+                panic!();
+            },
+            wei_shortfall: if let Value::Int(ui) = &tup[3] {
+                ui.clone()
+            } else {
+                panic!();
+            },
+            wei_collected_from_txs: if let Value::Int(ui) = &tup[4] {
+                ui.clone()
+            } else {
+                panic!();
+            },
+            payout_address: if let Value::Int(ui) = &tup[5] {
+                ui.clone()
+            } else {
+                panic!();
+            },
         }
     }
 }

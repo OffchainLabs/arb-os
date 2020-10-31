@@ -165,7 +165,7 @@ impl AbiForContract {
         }
 
         let log_item = &logs[logs.len() - 1];
-        if ! log_item.succeeded() {
+        if !log_item.succeeded() {
             return Err(Some(log_item.clone()));
         }
         if let Value::Tuple(tup2) = log_item.get_request() {

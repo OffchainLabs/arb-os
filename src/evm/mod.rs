@@ -60,8 +60,7 @@ pub fn evm_xcontract_call_with_constructors(
         Uint256::zero(),
         false,
         debug,
-    )
-    {
+    ) {
         panic!("failed to deploy PaymentChannel contract");
     }
 
@@ -105,7 +104,8 @@ pub fn _evm_run_with_gas_charging(
     charging_policy: Option<(Uint256, Uint256)>,
     debug: bool,
     _profile: bool,
-) -> Result<bool, ethabi::Error> {  // returns Ok(true) if success, Ok(false) if insufficient gas money, Err otherwise
+) -> Result<bool, ethabi::Error> {
+    // returns Ok(true) if success, Ok(false) if insufficient gas money, Err otherwise
     use std::convert::TryFrom;
     let rt_env = RuntimeEnvironment::new(Uint256::from_usize(1111), charging_policy);
     let mut machine = load_from_file(Path::new("arb_os/arbos.mexe"), rt_env);
@@ -148,8 +148,7 @@ pub fn _evm_run_with_gas_charging(
         Uint256::zero(),
         false,
         debug,
-    )
-    {
+    ) {
         if receipt.unwrap().get_return_code() == Uint256::from_u64(2) {
             return Ok(false);
         } else {
@@ -176,7 +175,7 @@ pub fn _evm_run_with_gas_charging(
             ethabi::Token::Address(ethabi::Address::from_low_u64_be(1025)),
             ethabi::Token::Uint(ethabi::Uint::try_from(1).unwrap()),
         ]
-            .as_ref(),
+        .as_ref(),
         &mut machine,
         Uint256::zero(),
         debug,
@@ -383,8 +382,7 @@ pub fn evm_test_create(
         Uint256::zero(),
         false,
         debug,
-    )
-    {
+    ) {
         panic!("failed to deploy PaymentChannel contract");
     }
 
@@ -448,8 +446,7 @@ pub fn evm_xcontract_call_using_batch(
         Uint256::zero(),
         false,
         debug,
-    )
-    {
+    ) {
         panic!("failed to deploy PaymentChannel contract");
     }
 
@@ -558,8 +555,7 @@ pub fn _evm_xcontract_call_using_compressed_batch(
         Uint256::zero(),
         false,
         debug,
-    )
-    {
+    ) {
         panic!("failed to deploy PaymentChannel contract");
     }
 
