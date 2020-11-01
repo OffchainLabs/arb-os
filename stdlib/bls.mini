@@ -1,13 +1,17 @@
 //
 // Copyright 2020, Offchain Labs, Inc. All rights reserved.
-//
+// 
+// ported from https://github.com/thehubbleproject/RedditHubble/blob/master/contracts/libs/BLS.sol
 
 import type ByteArray;
 import type RandomGenerator;
 
+import func bytearray_new(size: uint) -> ByteArray;
 import func bytearray_size(ba: ByteArray) -> uint;
 import func bytearray_getByte(ba: ByteArray, offset: uint) -> uint;
 import func bytearray_get256(ba: ByteArray, offset: uint) -> uint;
+import func bytearray_setByte(ba: ByteArray, offset: uint, val: uint)-> ByteArray; 
+import func bytearray_set256(ba: ByteArray, offset: uint, val: uint) -> ByteArray;
 
 import func keccak256(ba: ByteArray, offset: uint, nbytes: uint) -> bytes32;
 
@@ -15,23 +19,1073 @@ import func random_new(seed: bytes32) -> RandomGenerator;
 import func random_next(rand: RandomGenerator) -> (bytes32, RandomGenerator);
 import func random_nextMod(rand: RandomGenerator, modulus: uint) -> (uint, RandomGenerator);
 
+import func keccak256(ba: ByteArray, offset: uint, nbytes: uint) -> bytes32;
+import func sha256_byteArray(ba: ByteArray) -> bytes32;
+
+
+    // Field order
+    var N: uint;
+
+    // Negated genarator of G2
+    var nG2x1: uint;
+    var nG2x0: uint;
+    var nG2y1: uint;
+    var nG2y0: uint;
+
+    // sqrt(-3)
+    var z0: uint;
+
+    // (sqrt(-3) - 1)  / 2
+    var z1: uint;
+
+    var T24: uint;
+    var MASK24: uint;
+
+
+
+ type BLSHashedMessage = struct {
+    x: uint,
+    y: uint,
+}
+
 
 type BLSSignature = struct {
-    aField: uint,
-    anotherField: uint,
+    x: uint,
+    y: uint,
 }
 
 type BLSKey = struct {
-    aField: uint,
-    anotherField: uint,
+    x0: uint,
+    y0: uint,
+    x1: uint,
+    y1: uint,
+}
+
+public impure func bls_initialize() 
+{
+	N = 21888242871839275222246405745257275088696311157297823662689037894645226208583;
+	nG2x1 = 11559732032986387107991004021392285783925812861821192530917403151452391805634;
+    nG2x0 = 10857046999023057135944570762232829481370756359578518086990519993285655852781;
+    nG2y1 = 17805874995975841540914202342111839520379459829704422454583296818431106115052;
+    nG2y0 = 13392588948715843804641432497768002650278120570034223513918757245338268106653;
+    z0 = 0x0000000000000000b3c4d79d41a91759a9e4c7e359b6b89eaec68e62effffffd;
+    z1 = 0x000000000000000059e26bcea0d48bacd4f263f1acdb5c4f5763473177fffffe;
+
+    T24 = 0x1000000000000000000000000000000000000000000000000;
+    MASK24 = 0xffffffffffffffffffffffffffffffffffffffffffffffff;
+}
+
+public func bls_verifySingleSig(
+    message:  ByteArray,
+    key:      BLSKey,
+    signature: BLSSignature
+) -> bool {
+    return true;
+}
+
+
+
+
+public func bls_hashToG1(
+    message:  ByteArray,
+) -> [2]uint {
+    let msgHash = keccak256(message, 0, 32);
+    let x = uint(msgHash) % N;
+    let y = asm( x , x , N) uint { mulmod };
+    y = asm( y , x , N) uint { mulmod };
+    y = asm( y , 3 , N) uint { addmod };
+
+    return newfixedarray (2,0);
 }
 
 
 public func bls_verifySignature(
     numMsgs:   uint,
-    messages:  []ByteArray,
+    messages:  []BLSHashedMessage,
     keys:      []BLSKey,
     signature: BLSSignature
 ) -> bool {
-    return true;
+	let size = len(keys);
+	if (numMsgs == 0 || numMsgs > 32 || numMsgs != len(messages) || numMsgs != len(keys)) {
+		panic;
+	}
+
+
+	let acc = unsafecast<any>(());
+	acc = (
+                    (
+                        signature.x,  // THIS IS EVM ORDER; CHECK AVM ORDER
+                        signature.y,
+                        nG2x1,
+                        nG2x0,
+                        nG2y1,
+                        nG2y0
+                    ),
+                    acc
+                );
+
+
+	let i = 0;
+
+    while (i < numMsgs) {
+                acc = (
+                    (
+                        messages[i].x,  // THIS IS EVM ORDER; CHECK AVM ORDER
+                        messages[i].y,
+                        keys[i].x1,
+                        keys[i].x0,
+                        keys[i].y1,
+                        keys[i].y0
+                    ),
+                    acc
+                );
+                i = i + 1;
+            }
+
+    let result = asm(acc,) bool { ecpairing }; // TODO Catch AVM ERROR
+
+
+    return result;
+
 }
+
+  // public for testing
+  public func hashToPoint(
+  	domain: 	bytes32,
+  	message:	ByteArray
+  	)
+        ->BLSHashedMessage
+    {
+        let u = hashToField(domain, message);
+        let p0 = mapToPoint(u[0]);
+        let p1 = mapToPoint(u[1]);
+
+     //  let x = asm(p0[0], p1[0], p0[1], p1[1]) uint { ecadd }; // check order
+       // let y = asm() uint { };
+
+      //  asm(x,) { debugprint };
+
+
+
+        // AVM error checking
+
+return unsafecast<BLSHashedMessage>((0,0));
+
+        //return unsafecast<BLSHashedMessage>((x,y));
+
+
+    }
+
+
+
+func mapToPoint(
+        _x:	uint
+        )
+        -> [2]uint
+    {
+
+
+    if(_x >= N) {
+    	panic;
+    }
+     
+    let x = _x;
+
+    let sqrtX = sqrt(x);
+
+
+    let a0 = asm(x, x, N) uint { mulmod };
+
+
+    a0 = asm(a0, 4, N) uint { addmod };
+
+    let a1 = asm(x, z0, N) uint { mulmod };
+    let a2 = asm(a1, a0, N) uint { mulmod };
+	a2 = inverse(a2);
+
+    a1 = asm(a1, a1, N) uint { mulmod };
+    a1 = asm(a1, a2, N) uint { mulmod };
+
+     // x1
+
+    a1 = asm(x, a1, N) uint { mulmod };
+
+    x = asm(z1, N - a1, N) uint { addmod };
+
+    // check curve
+
+    a1 = asm(x, x, N) uint { mulmod };
+    a1 = asm(a1, x, N) uint { mulmod };
+    a1 = asm(a1, 3, N) uint { addmod };
+
+
+    let sqrtA1 = sqrt(a1);
+
+    if let Some(sqa1) = sqrtA1 {
+    	if (sqrtX != None<uint>) {
+
+    	   let err2 = 0x2222222222222;
+
+             asm(err2,) { debugprint };
+
+    	return unsafecast<[2]uint>((x,a1));
+
+    	} else {
+    	     let err1 = 0x111111111111111;
+
+             asm(err1,) { debugprint };
+    		a1 = N - sqa1;
+    	}
+    }
+
+
+    // x2
+    x = asm(x, 1, N) uint { addmod };
+    x = N - x;
+
+
+    // check curve
+    a1 = asm(x, x, N) uint { mulmod };
+    a1 = asm(a1, x, N) uint { mulmod };
+    a1 = asm(a1, 3, N) uint { addmod };
+
+
+    sqrtA1 = sqrt(a1);
+    if let Some(sqa1) = sqrtA1 {
+    	if (sqrtX != None<uint>) {
+
+    	    	     let err3 = 0x3333333333333;
+
+             asm(err3,) { debugprint };
+
+    	return unsafecast<[2]uint>((x,a1));
+
+    	} else {
+    	    	     let err4 = 0x4444444444444;
+
+             asm(err4,) { debugprint };
+    		a1 = N - sqa1;
+    	}
+    }
+
+    // x3
+    x = asm(a0, a0, N) uint { mulmod };
+    x = asm(x, x, N) uint { mulmod };
+    x = asm(x, a2, N) uint { mulmod };
+    x = asm(x, a2, N) uint { mulmod };
+    x = asm(x, 1, N) uint { addmod };
+
+    // must be on curve
+    a1 = asm(x, x, N) uint { mulmod };
+    a1 = asm(a1, x, N) uint { mulmod };
+    a1 = asm(a1, 3, N) uint { addmod };
+
+
+    sqrtA1 = sqrt(a1);
+
+
+     if let Some(squa1) = sqrtA1 {
+    	if (sqrtX == None<uint>) {
+
+    	    	     let err5 = 0x55555555555;
+
+             asm(err5,) { debugprint };
+
+         a1 = N - squa1;
+        } else {
+
+            	     let err6 = 0x666666666;
+
+             asm(err6,) { debugprint };
+          a1 = squa1;
+        }
+
+     } else {
+     	let foo = 0x9999999999999999;
+      asm(foo,) { debugprint };
+    	panic; // BLS: bad ft mapping implementation
+     }
+
+         	     let err7 = 0x7777777777777;
+
+             asm(err7,) { debugprint };
+
+    return unsafecast<[2]uint>((x,a1));
+    }
+
+
+
+func sqrt(
+	xx:    uint
+	) ->option<uint> {
+        let x = modexp_c191_3f52(xx);
+
+        let square = asm(x, x, N) uint { mulmod };
+        if(square == xx) {
+        	return Some(x);
+        } else {
+        	return None;
+        }
+    }
+
+
+ func inverse(
+ 	a:	uint 
+ 	)
+ 	-> uint {
+        return modexp_3064_fd54(a);
+    }
+
+
+    // public for testing
+ public func hashToField( 
+    	domain:		bytes32,
+    	messages:	ByteArray)
+        -> [2]uint
+    {
+
+      let _msg = expandMsgTo96(domain, messages);
+      let temp1 = bytearray_get256(_msg,0);
+            asm(temp1,) { debugprint };
+      let u1 = asm(64, temp1) uint { shr };
+
+      temp1 = bytearray_get256(_msg,16);
+      let u0 = asm(temp1, MASK24) uint { bitwiseand };
+      temp1 =  asm(u1, T24, N) uint { mulmod };
+      let a0 = asm(temp1, u0, N) uint { addmod };
+      temp1 = bytearray_get256(_msg,40);
+      let u1 = asm(temp1, MASK24) uint { bitwiseand };
+      temp1 = bytearray_get256(_msg,64);
+      u0 = asm(temp1, MASK24) uint { bitwiseand };
+      temp1 =  asm(u1, T24, N) uint { mulmod };
+      let a1 = asm(temp1, u0, N) uint { addmod };
+
+    return unsafecast<[2]uint>((a0,a1));
+    }
+       
+
+public func expandMsgTo96(
+	domain:		bytes32,
+	message:	ByteArray)
+        -> ByteArray
+    {
+        let out = bytearray_new(96);
+
+        let t0 = bytearray_size(message);
+        let msg0 = bytearray_new(64 + t0 + 32 + 4);
+
+        let off = 64;
+        let z = 0;
+
+        while(z < t0) {
+        	msg0 = bytearray_setByte(msg0,z+off,bytearray_getByte(message,z));
+        	z = z + 1;
+        }
+
+         off = off + t0;
+
+
+        msg0 = bytearray_setByte(msg0,off,0);
+        off = off + 1;
+        msg0 = bytearray_setByte(msg0,off,96);
+        off = off + 1;
+        msg0 = bytearray_setByte(msg0,off,0);
+        off = off + 1;
+        msg0 = bytearray_set256(msg0,off,uint(domain));
+        off = off + 32;
+        msg0 = bytearray_setByte(msg0,off,32);
+
+
+        let b0 = sha256_byteArray(msg0);
+
+
+        msg0 = bytearray_new(32 + 1 + 32 + 1);
+        off = 0;
+        msg0 = bytearray_set256(msg0,off,uint(b0));  
+        off = off + 32;
+        msg0 = bytearray_setByte(msg0,off,1);
+        off = off + 1;
+        msg0 = bytearray_set256(msg0,off,uint(domain)); 
+        off = off + 32;
+        msg0 = bytearray_setByte(msg0,off,32);
+
+        let bi = sha256_byteArray(msg0);
+
+        out = bytearray_set256(out,0,uint(bi)); 
+
+
+        let t = b0 ^ bi;
+
+        off = 0;
+        msg0 = bytearray_set256(msg0,off,uint(t));  
+        off = off + 32;
+        msg0 = bytearray_setByte(msg0,off,2);
+        off = off + 1;
+        msg0 = bytearray_set256(msg0,off,uint(domain));  
+        off = off + 32;
+        msg0 = bytearray_setByte(msg0,off,32);
+
+
+
+        bi = sha256_byteArray(msg0);
+
+
+        out = bytearray_set256(out,32,uint(bi)); 
+
+
+        let t = b0 ^ bi;
+
+        off = 0;
+        msg0 = bytearray_set256(msg0,off,uint(t));  
+        off = off + 32;
+        msg0 = bytearray_setByte(msg0,off,3);
+        off = off + 1;
+        msg0 = bytearray_set256(msg0,off,uint(domain));
+        off = off + 32;
+        msg0 = bytearray_setByte(msg0,off,32);
+
+
+        bi = sha256_byteArray(msg0);
+
+        out = bytearray_set256(out,64,uint(bi));
+
+        return out;
+    }    
+
+
+func modexp_3064_fd54(
+    t2:    uint
+    ) 
+    -> uint {
+
+     let n = 0x30644e72e131a029b85045b68181585d97816a916871ca8d3c208c16d87cfd47;
+
+     let t0 = asm(t2, t2, n) uint { mulmod };
+     let t5 = asm(t0, t2, n) uint { mulmod };
+     let t1 = asm(t5, t0, n) uint { mulmod };
+     let t3 = asm(t5, t5, n) uint { mulmod };
+     let t8 = asm(t1, t0, n) uint { mulmod };
+     let t4 = asm(t3, t5, n) uint { mulmod };
+     let t6 = asm(t3, t1, n) uint { mulmod };
+     t0 = asm(t3, t3, n) uint { mulmod };
+     let t7 = asm(t8, t3, n) uint { mulmod };
+     t3 = asm(t4, t3, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t5, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t2, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t2, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t8, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t8, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t2, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t8, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t2, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t5, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t7, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t1, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t5, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t8, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t1, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t2, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t6, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t7, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t1, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t5, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t1, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t5, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t6, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t6, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t1, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t8, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t6, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t1, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t4, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t6, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t2, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t8, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t8, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t1, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t2, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t7, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t3, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t2, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t2, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t5, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t6, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t5, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t5, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t3, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t4, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t3, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t1, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t2, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t1, n) uint { mulmod };
+      
+     return t0;
+}
+
+func modexp_c191_3f52(
+    t6:    uint
+    ) 
+    -> uint {
+            
+    let n = 0x30644e72e131a029b85045b68181585d97816a916871ca8d3c208c16d87cfd47;
+    let t0 = asm(t6, t6, n) uint { mulmod };
+    let t4 = asm(t0, t6, n) uint { mulmod };
+    let t2 = asm(t4, t0, n) uint { mulmod };
+    let t3 = asm(t4, t4, n) uint { mulmod };
+    let t8 = asm(t2, t0, n) uint { mulmod };
+    let t1 = asm(t3, t4, n) uint { mulmod };
+    let t5 = asm(t3, t2, n) uint { mulmod };
+    t0 = asm(t3, t3, n) uint { mulmod };
+    let t7 = asm(t8, t3, n) uint { mulmod };
+     t3 = asm(t1, t3, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t4, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t6, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t6, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t8, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t8, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t6, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t8, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t6, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t4, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t7, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t2, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t4, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t8, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t2, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t6, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t5, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t7, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t2, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t4, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t2, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t4, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t5, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t5, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t2, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t8, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t5, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t2, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t1, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t5, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t6, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t8, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t8, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t2, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t6, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t7, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t3, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t6, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t6, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t4, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t5, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t4, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t4, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t3, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t1, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t3, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t2, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+     t0 = asm(t0, t1, n) uint { mulmod };
+     t0 = asm(t0, t0, n) uint { mulmod };
+
+     return t0;
+}
+
+
+

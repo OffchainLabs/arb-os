@@ -5,6 +5,19 @@
 import type ByteArray;
 import type BLSKey;
 import type BLSSignature;
+import type BLSHashedMessage;
+
+import func bytearray_new(size: uint) -> ByteArray;
+import func bytearray_size(ba: ByteArray) -> uint;
+import func bytearray_getByte(ba: ByteArray, offset: uint) -> uint;
+import func bytearray_get256(ba: ByteArray, offset: uint) -> uint;
+import func bytearray_setByte(ba: ByteArray, offset: uint, val: uint)-> ByteArray; 
+import func bytearray_set256(ba: ByteArray, offset: uint, val: uint) -> ByteArray;
+import func hashToField(
+        domain:     bytes32,
+        messages:   ByteArray)
+        -> [2]uint;
+
 
 import func bls_verifySignature(
     numMsgs:   uint,
@@ -12,6 +25,20 @@ import func bls_verifySignature(
     keys:      []BLSKey,
     signature: BLSSignature
 ) -> bool;
+
+import func expandMsgTo96(
+    domain:     bytes32,
+    message:    ByteArray)
+        -> ByteArray;
+
+
+import func hashToPoint(
+    domain:     bytes32,
+    message:    ByteArray
+    )
+        ->BLSHashedMessage;
+
+import func bls_initialize();
 
 
 impure func main() {
@@ -26,6 +53,33 @@ func tests() -> uint {
     if (6*7 != 42) {
         return 2;
     }
+
+    bls_initialize();
+
+    //let message = bytearray_new(1);
+    //message = bytearray_setByte(message,0,0x02);
+    //message = bytearray_setByte(message,1,0xe9);
+    //message = bytearray_setByte(message,2,0x52);
+    //message = bytearray_setByte(message,3,0xcd);
+
+    //let domain = bytes32(0xe290d51bc9150c2a28da4a57b3222edd019b96df4eca341c409e0eecf0ca43f0);
+    //let res = expandMsgTo96(domain, message);
+    //let first = bytearray_get256(res,0);
+    //asm(res,) { debugprint };
+    //if(first != 0) {
+    //    return 3;
+    //}
+
+let  domain = bytes32(0x787878);
+let message = bytearray_new(3);
+message = bytearray_setByte(message,0,0x61);
+message = bytearray_setByte(message,1,0x62);
+message = bytearray_setByte(message,2,0x63);
+let res = hashToPoint(domain,message);
+asm(res,) { debugprint };
+
+return 4;
+ 
 
     return 0;   // passed all tests
 }
