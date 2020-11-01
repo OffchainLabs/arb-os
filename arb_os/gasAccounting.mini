@@ -39,8 +39,9 @@ use inbox::inbox_getNextUnpackedRequest;
 var gasAccountingInfo: struct {
     gasPool: int,                 // amount of gas available for use (note: signed value; if negative, we have overused gas)
     weiPool: uint,                // pool of funds collected recently
-    shortfall: int,               // funds needed to reimburse validators for overhead incurred, minus burned funds
-    weiCollectedFromTxs: uint,    // amount of currency collected from txs but not yet paid out to validators
+    weiOwedToValidators: uint,    // wei owed for work done but not yet collected
+    weiAvailable: uint,           // wei immediately available to pay validators
+    totalPaidToValidators: uint,  // total number of wei paid to validators over all time
     lastBlockNumSeen: uint,       // last L1 block number seen by this module
     txState: option<TxGasState>,  // status of currently active tx (if there is one)
     payFeesTo: option<address>,   // where to pay validator fees; if None, funds should be burned
@@ -51,8 +52,6 @@ var gasAccountingConstants: struct {
     GasPoolMax: int,
     BaseGasPrice: uint,
     TxGasLimit: uint,
-    DeflatorNumerator: uint,
-    DeflatorDenominator: uint,
 };
 
 type TxGasState = struct {
@@ -80,14 +79,13 @@ public impure func gasAccounting_init() {
         GasPoolMax: int(speedLimitPerSecond * maxBacklogSeconds),
         BaseGasPrice: 0,
         TxGasLimit: speedLimitPerSecond * maxBacklogSeconds / 2,
-        DeflatorNumerator: 1000 * maxBacklogSeconds - 2 * millisecondsPerBlock,  // won't underflow because we checked above
-        DeflatorDenominator: 1000 * maxBacklogSeconds,
     };
     gasAccountingInfo = struct {
         gasPool: gasAccountingConstants.GasPoolMax,
         weiPool: 0,
-        shortfall: int(0),
-        weiCollectedFromTxs: 0,
+        weiOwedToValidators: 0,
+        weiAvailable: 0,
+        totalPaidToValidators: 0,
         lastBlockNumSeen: 0,
         txState: None<TxGasState>,
         payFeesTo: None<address>,
@@ -121,8 +119,6 @@ public impure func gasAccounting_postInitMessage() {
         GasPoolMax: int(speedLimitPerSecond * maxBacklogSeconds),
         BaseGasPrice: 0,
         TxGasLimit: speedLimitPerSecond * maxBacklogSeconds / 2,
-        DeflatorNumerator: 1000 * maxBacklogSeconds - 2 * millisecondsPerBlock,  // won't underflow because we checked above
-        DeflatorDenominator: 1000 * maxBacklogSeconds,
     };
     gasAccountingInfo = gasAccountingInfo with { gasPool: gasAccountingConstants.GasPoolMax };
 }
@@ -134,8 +130,9 @@ public impure func gasAccounting_summaryToPublish() -> any {
     }
 
     let minGasPrice = gasAccountingConstants.BaseGasPrice;
-    if (gasAccountingInfo.shortfall > int(0)) {
-        minGasPrice = minGasPrice + uint(gasAccountingInfo.shortfall) / uint(gasAccountingConstants.GasPoolMax);
+    let shortfall = int(gasAccountingInfo.weiOwedToValidators) - int(gasAccountingInfo.weiAvailable);
+    if (shortfall > int(0)) {
+        minGasPrice = minGasPrice + uint(shortfall) / uint(gasAccountingConstants.GasPoolMax);
     }
     let gasPriceEstimate = gasAccountingInfo.weiPool;
     if (gasAccountingInfo.gasPool + int(gasAccountingConstants.SpeedLimitPerBlock) > int(0)) {
@@ -148,8 +145,8 @@ public impure func gasAccounting_summaryToPublish() -> any {
         gasPriceEstimate,
         gasAccountingInfo.gasPool,
         gasAccountingInfo.weiPool,
-        gasAccountingInfo.shortfall,
-        gasAccountingInfo.weiCollectedFromTxs,
+        shortfall,
+        gasAccountingInfo.totalPaidToValidators,
         payoutAddress,
     );
 }
@@ -169,13 +166,13 @@ public impure func gasAccounting_specialCharge(payer: address, amount: uint) -> 
             account_deductFromEthBalance(payerAcct, amount)?,
         )
     );
-    gasAccountingInfo = gasAccountingInfo with { weiCollectedFromTxs: gasAccountingInfo.weiCollectedFromTxs + amount };
+    payOutFundsToValidators(amount);
     return Some(());
 }
 
 public impure func recycleBurnedFunds(amount: uint) {
     gasAccountingInfo = gasAccountingInfo with {
-        shortfall: gasAccountingInfo.shortfall - int(amount)
+        weiAvailable: gasAccountingInfo.weiAvailable + amount
     };
 }
 
@@ -226,7 +223,7 @@ public impure func gasAccounting_startTxCharges(
     gasAccountingInfo = gasAccountingInfo with {
         gasPool: gasAccountingInfo.gasPool - int(gasUsedByOS)
     } with {
-        shortfall: gasAccountingInfo.shortfall + int(gasUsedByOS * gasAccountingConstants.BaseGasPrice)
+        weiOwedToValidators: gasAccountingInfo.weiOwedToValidators + gasUsedByOS * gasAccountingConstants.BaseGasPrice
     } with {
         txState: Some(struct {
             gasInReserve: 0,
@@ -266,7 +263,10 @@ public impure func gasAccounting_endTxCharges() -> option<GasUsage> {
     gasAccountingInfo = gasAccountingInfo with {
         gasPool: gasAccountingInfo.gasPool - int(txState.originalMax - gasToRefund)
     } with {
-        weiCollectedFromTxs: gasAccountingInfo.weiCollectedFromTxs + (txState.weiHeldForGas - refund)
+        weiPool: gasAccountingInfo.weiPool + (txState.weiHeldForGas - refund)
+    } with {
+        weiOwedToValidators: gasAccountingInfo.weiOwedToValidators
+                             + gasAccountingConstants.BaseGasPrice * (txState.originalMax - gasToRefund)
     } with {
         txState: None<TxGasState>
     };
@@ -332,7 +332,8 @@ public impure func gasAccounting_resumeTxCharges(allocationRequested: uint) -> u
             gasAccountingInfo = gasAccountingInfo with {
                 gasPool: gasAccountingInfo.gasPool - int(gasUsedByOS)
             } with {
-                shortfall: gasAccountingInfo.shortfall + int(gasUsedByOS * gasAccountingConstants.BaseGasPrice)
+                weiOwedToValidators: gasAccountingInfo.weiOwedToValidators
+                                     + gasUsedByOS * gasAccountingConstants.BaseGasPrice
             };
         }
 
@@ -371,22 +372,22 @@ impure func switchToChargingOS() -> uint {
     }
 }
 
-impure func payOutFundsToValidators() {  // this should only be called when not in a tx
-    if (gasAccountingInfo.weiCollectedFromTxs > 0) {
-        if let Some(validatorsAddr) = gasAccountingInfo.payFeesTo {
-            let globalAcctStore = getGlobalAccountStore();
-            setGlobalAccountStore(
-                accountStore_set(
-                    globalAcctStore,
-                    validatorsAddr,
-                    account_addToEthBalance(
-                        accountStore_get(globalAcctStore, validatorsAddr),
-                        gasAccountingInfo.weiCollectedFromTxs,
-                    ),
-                )
-            );
-            gasAccountingInfo = gasAccountingInfo with { weiCollectedFromTxs: 0 };
-        }
+impure func payOutFundsToValidators(amount: uint) {  // this should only be called when not in a tx
+    if let Some(validatorsAddr) = gasAccountingInfo.payFeesTo {
+        let globalAcctStore = getGlobalAccountStore();
+        setGlobalAccountStore(
+            accountStore_set(
+                globalAcctStore,
+                validatorsAddr,
+                account_addToEthBalance(
+                    accountStore_get(globalAcctStore, validatorsAddr),
+                    amount,
+                ),
+            )
+        );
+        gasAccountingInfo = gasAccountingInfo with {
+            totalPaidToValidators: gasAccountingInfo.totalPaidToValidators + amount
+        };
     }
 }
 
@@ -419,8 +420,6 @@ public impure func getNextRequestFromCongestionAuction() -> (
     let (isChargeable, blockNum, payer, maxGas, gasBid) = getRequestGasInfo(maybeRequest, maybeTx);
 
     if (blockNum > gasAccountingInfo.lastBlockNumSeen) {
-        payOutFundsToValidators();
-
         let blocksElapsed = blockNum - gasAccountingInfo.lastBlockNumSeen;
         let updatedGas = gasAccountingInfo.gasPool + int(blocksElapsed*gasAccountingConstants.SpeedLimitPerBlock);
         if (updatedGas > gasAccountingConstants.GasPoolMax) {
@@ -428,19 +427,16 @@ public impure func getNextRequestFromCongestionAuction() -> (
         }
         let updatedWei = gasAccountingInfo.weiPool;
         while (blocksElapsed > 0) {
-            let updatedWei = updatedWei * gasAccountingConstants.DeflatorNumerator / gasAccountingConstants.DeflatorDenominator;
+            let updatedWei = (4 * updatedWei) / 5;
             blocksElapsed = blocksElapsed-1;
         }
-        let weiCollected = gasAccountingInfo.weiPool - updatedWei;
-        if (int(weiCollected) <= gasAccountingInfo.shortfall) {
-            gasAccountingInfo = gasAccountingInfo with {
-                weiCollectedFromTxs: gasAccountingInfo.weiCollectedFromTxs + weiCollected
-            };
-        } elseif(gasAccountingInfo.shortfall >= int(0)) {
-            gasAccountingInfo = gasAccountingInfo with {
-                weiCollectedFromTxs: gasAccountingInfo.weiCollectedFromTxs + uint(gasAccountingInfo.shortfall)
-            };
+        let weiAvailable = gasAccountingInfo.weiAvailable + (gasAccountingInfo.weiPool - updatedWei);
+        let weiToPay = weiAvailable;
+        if (weiToPay > gasAccountingInfo.weiOwedToValidators) {
+            weiToPay = gasAccountingInfo.weiOwedToValidators;
         }
+
+        payOutFundsToValidators(weiToPay);
 
         gasAccountingInfo = gasAccountingInfo with {
             lastBlockNumSeen: blockNum
@@ -449,14 +445,17 @@ public impure func getNextRequestFromCongestionAuction() -> (
         } with {
             weiPool: updatedWei
         } with {
-            shortfall: gasAccountingInfo.shortfall - int(weiCollected)
+            weiAvailable: gasAccountingInfo.weiAvailable - weiToPay
+        } with {
+            weiOwedToValidators: gasAccountingInfo.weiOwedToValidators - weiToPay
         };
     }
 
     if (isChargeable) {
         let minGasPrice = gasAccountingConstants.BaseGasPrice;
-        if (gasAccountingInfo.shortfall > int(0)) {
-            minGasPrice = minGasPrice + uint(gasAccountingInfo.shortfall) / uint(gasAccountingConstants.GasPoolMax);
+        let shortfall = int(gasAccountingInfo.weiOwedToValidators) - int(gasAccountingInfo.weiAvailable);
+        if (shortfall > int(0)) {
+            minGasPrice = minGasPrice + uint(shortfall) / uint(gasAccountingConstants.GasPoolMax);
         }
 
         if (maxGas > gasAccountingConstants.TxGasLimit) {
@@ -470,6 +469,7 @@ public impure func getNextRequestFromCongestionAuction() -> (
         if (gasAccountingInfo.gasPool <= int(maxGas)) {
             return (false, maybeRequest, maybeTx);
         }
+
         let gasPrice = gasAccountingInfo.weiPool / (uint(gasAccountingInfo.gasPool)-maxGas);
         if (gasPrice < minGasPrice) {
             gasPrice = minGasPrice;

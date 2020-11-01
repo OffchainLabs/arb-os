@@ -721,7 +721,7 @@ pub struct _BlockGasAccountingSummary {
     gas_pool: Uint256,
     wei_pool: Uint256,
     wei_shortfall: Uint256,
-    wei_collected_from_txs: Uint256,
+    total_wei_paid_to_validators: Uint256,
     payout_address: Uint256,
 }
 
@@ -748,7 +748,7 @@ impl _BlockGasAccountingSummary {
             } else {
                 panic!();
             },
-            wei_collected_from_txs: if let Value::Int(ui) = &tup[4] {
+            total_wei_paid_to_validators: if let Value::Int(ui) = &tup[4] {
                 ui.clone()
             } else {
                 panic!();
