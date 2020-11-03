@@ -297,9 +297,10 @@ pub struct Packed {
 
 fn calc_len(h: u8) -> usize {
     if h == 0 {
-        return 1024;
+        1024
+    } else {
+        128 * calc_len(h - 1)
     }
-    return 128 * calc_len(h - 1);
 }
 
 fn hash_buf(buf: &[u8]) -> Packed {
@@ -315,11 +316,11 @@ fn hash_buf(buf: &[u8]) -> Packed {
     if is_zero_hash(&h2) {
         return pack(&h1);
     }
-    return normal(Uint256::avm_hash2(&unpack(&h1), &unpack(&h2)), buf.len());
+    normal(Uint256::avm_hash2(&unpack(&h1), &unpack(&h2)), buf.len())
 }
 
 pub fn hash_buffer(buf: &[u8]) -> Uint256 {
-    return unpack(&hash_buf(buf));
+    unpack(&hash_buf(buf))
 }
 
 fn hash_node(buf: &mut [Buffer], sz: usize) -> Packed {
@@ -330,9 +331,10 @@ fn hash_node(buf: &mut [Buffer], sz: usize) -> Packed {
     let h1 = hash_node(&mut buf[0..len / 2], sz / 2);
     let h2 = hash_node(&mut buf[len / 2..len], sz / 2);
     if is_zero_hash(&h2) {
-        return pack(&h1);
+        pack(&h1)
+    } else {
+        normal(Uint256::avm_hash2(&unpack(&h1), &unpack(&h2)), sz)
     }
-    return normal(Uint256::avm_hash2(&unpack(&h1), &unpack(&h2)), sz);
 }
 
 pub fn zero_hash(sz: usize) -> Uint256 {
@@ -340,27 +342,27 @@ pub fn zero_hash(sz: usize) -> Uint256 {
         return Uint256::zero().avm_hash();
     }
     let h1 = zero_hash(sz / 2);
-    return Uint256::avm_hash2(&h1, &h1);
+    Uint256::avm_hash2(&h1, &h1)
 }
 
 fn normal(hash: Uint256, sz: usize) -> Packed {
-    return Packed {
+    Packed {
         size: sz,
         packed: 0,
         hash: hash,
-    };
+    }
 }
 
 fn pack(packed: &Packed) -> Packed {
-    return Packed {
+    Packed {
         size: packed.size,
         packed: packed.packed + 1,
         hash: packed.hash.clone(),
-    };
+    }
 }
 
 fn is_zero_hash(packed: &Packed) -> bool {
-    return packed.hash == Uint256::zero().avm_hash();
+    packed.hash == Uint256::zero().avm_hash()
 }
 
 fn unpack(packed: &Packed) -> Uint256 {
@@ -370,14 +372,15 @@ fn unpack(packed: &Packed) -> Uint256 {
         res = Uint256::avm_hash2(&res, &zero_hash(sz));
         sz = sz * 2;
     }
-    return res;
+    res
 }
 
 fn zero_packed(sz: usize) -> Packed {
     if sz == 32 {
-        return normal(zero_hash(32), 32);
+        normal(zero_hash(32), 32)
+    } else {
+        pack(&zero_packed(sz / 2))
     }
-    return pack(&zero_packed(sz / 2));
 }
 
 fn hash_sparse(idx: &[usize], buf: &[u8], sz: usize) -> Packed {
@@ -408,35 +411,36 @@ fn hash_sparse(idx: &[usize], buf: &[u8], sz: usize) -> Packed {
     let h1 = hash_sparse(&idx1, &buf1, sz / 2);
     let h2 = hash_sparse(&idx2, &buf2, sz / 2);
     if is_zero_hash(&h2) {
-        return pack(&h1);
+        pack(&h1)
+    } else {
+        normal(Uint256::avm_hash2(&unpack(&h1), &unpack(&h2)), sz)
     }
-    return normal(Uint256::avm_hash2(&unpack(&h1), &unpack(&h2)), sz);
 }
 
 impl Buffer {
     fn node(vec: Rc<Vec<Buffer>>, h: u8) -> Buffer {
-        return Buffer {
+        Buffer {
             elem: BufferElem::Node(vec, h),
             hash: RefCell::new(None),
-        };
+        }
     }
 
     fn leaf(vec: Rc<Vec<u8>>) -> Buffer {
-        return Buffer {
+        Buffer {
             elem: BufferElem::Leaf(vec),
             hash: RefCell::new(None),
-        };
+        }
     }
 
     fn sparse(vec: Rc<Vec<usize>>, vec2: Rc<Vec<u8>>, h: u8) -> Buffer {
-        return Buffer {
+        Buffer {
             elem: BufferElem::Sparse(vec, vec2, h),
             hash: RefCell::new(None),
-        };
+        }
     }
 
     pub fn avm_hash(&self) -> Uint256 {
-        return self.hash().hash;
+        self.hash().hash
     }
 
     pub fn hash_no_caching(&self) -> Packed {
@@ -458,16 +462,17 @@ impl Buffer {
     pub fn hash(&self) -> Packed {
         let res = self.hash_no_caching();
         self.hash.replace(Some(res.clone()));
-        return res;
+        res
     }
 
     pub fn read_byte(&self, offset: usize) -> u8 {
         match &self.elem {
             BufferElem::Leaf(buf) => {
                 if offset > buf.len() {
-                    return 0;
+                    0
+                } else {
+                    buf[offset]
                 }
-                return buf[offset];
             }
             BufferElem::Sparse(idx, buf, _) => {
                 for i in 0..idx.len() {
@@ -475,15 +480,16 @@ impl Buffer {
                         return buf[offset];
                     }
                 }
-                return 0;
+                0
             }
             BufferElem::Node(buf, h) => {
                 let len = calc_len(*h);
                 let cell_len = calc_len(*h - 1);
                 if offset > len {
-                    return 0;
+                    0
+                } else {
+                    buf[offset / cell_len].read_byte(offset % cell_len)
                 }
-                return buf[offset / cell_len].read_byte(offset % cell_len);
             }
         }
     }
@@ -498,7 +504,7 @@ impl Buffer {
         for _i in 0..128 {
             vec.push(Buffer::leaf(Rc::clone(&empty)));
         }
-        return Rc::new(vec);
+        Rc::new(vec)
     }
 
     fn make_empty(h: u8) -> Rc<Vec<Buffer>> {
@@ -510,7 +516,7 @@ impl Buffer {
         for _i in 0..128 {
             vec.push(Buffer::node(Rc::clone(&empty), h - 1));
         }
-        return Rc::new(vec);
+        Rc::new(vec)
     }
 
     // Make for level, lower levels are sparse
@@ -523,7 +529,7 @@ impl Buffer {
         for _i in 0..128 {
             vec.push(empty.clone());
         }
-        return Buffer::node(Rc::new(vec), h);
+        Buffer::node(Rc::new(vec), h)
     }
 
     pub fn set_byte(&self, offset: usize, v: u8) -> Self {
@@ -544,7 +550,7 @@ impl Buffer {
                     buf.resize(1024, 0);
                 }
                 buf[offset] = v;
-                return Buffer::leaf(Rc::new(buf));
+                Buffer::leaf(Rc::new(buf))
             }
             BufferElem::Sparse(idx, buf, h) => {
                 if idx.len() > 16 {
@@ -558,7 +564,7 @@ impl Buffer {
                 let mut nbuf = buf.to_vec().clone();
                 nidx.push(offset);
                 nbuf.push(v);
-                return Buffer::sparse(Rc::new(nidx), Rc::new(nbuf), *h);
+                Buffer::sparse(Rc::new(nidx), Rc::new(nbuf), *h)
             }
             BufferElem::Node(cell, h) => {
                 if offset >= calc_len(*h) {
@@ -579,7 +585,7 @@ impl Buffer {
                 let mut vec = cell.to_vec().clone();
                 let cell_len = calc_len(*h - 1);
                 vec[offset / cell_len] = vec[offset / cell_len].set_byte(offset % cell_len, v);
-                return Buffer::node(Rc::new(vec), *h);
+                Buffer::node(Rc::new(vec), *h)
             }
         }
     }
@@ -618,10 +624,6 @@ impl Value {
     pub fn copy_buffer(v: Buffer) -> Self {
         Value::Buffer(v)
     }
-
-    /*    pub fn copy_buffer(v: RefCell<Vec<u8>>) -> Self {
-        Value::Buffer(Rc::new(v))
-    }*/
 
     pub fn type_insn_result(&self) -> usize {
         match self {

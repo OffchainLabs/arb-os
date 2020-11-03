@@ -224,7 +224,7 @@ impl Type {
                 panic!("tried to get default value for void type");
             }
             Type::Buffer => {
-                panic!("tried to get default value for buffer type");
+                Value::new_buffer(vec![0u8])
             }
             Type::Uint | Type::Int | Type::Bytes32 | Type::EthAddress | Type::Bool => {
                 Value::Int(Uint256::zero())

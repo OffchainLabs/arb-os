@@ -821,13 +821,7 @@ fn typecheck_statement<'a>(
                                 vec![],
                             ))
                         } else {
-                            println!("var  {:?}\n expr {:?}", var_type, &tc_expr.get_type());
-                            Err(new_type_error(
-                                [
-                                    "mismatched types in global assignment statement".to_string(),
-                                    "asd".to_string(),
-                                ]
-                                .join(" "),
+                            Err(new_type_error(format!("mismatched types in global assignment statement {:?} {:?}", var_type, &tc_expr.get_type()),
                                 *loc,
                             ))
                         }
@@ -1595,7 +1589,7 @@ fn typecheck_unary_op(
                 loc,
             )),
             _ => Err(new_type_error(
-                "invalid operand type for unary minus".to_string(),
+                "invalid operand type for newbuffer".to_string(),
                 loc,
             )),
         },
