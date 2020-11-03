@@ -430,7 +430,7 @@ impl ProfilerData {
             total_instructions += x;
             if x != 0 {
                 if let Some(op) = Opcode::from_number(i) {
-                    println!("{}: {}", op.to_name(), x);
+                    println!("{}: {}", op, x);
                 }
             }
         }

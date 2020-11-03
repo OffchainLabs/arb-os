@@ -1239,7 +1239,7 @@ impl fmt::Display for Opcode {
         match self {
             Opcode::MakeFrame(s1, s2) => write!(f, "MakeFrame({}, {})", s1, s2),
             Opcode::Label(label) => label.fmt(f),
-            _ => write!(f, "{:?}", self),
+            _ => write!(f, "{}", self.to_name()),
         }
     }
 }
