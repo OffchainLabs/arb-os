@@ -821,7 +821,12 @@ fn typecheck_statement<'a>(
                                 vec![],
                             ))
                         } else {
-                            Err(new_type_error(format!("mismatched types in global assignment statement {:?} {:?}", var_type, &tc_expr.get_type()),
+                            Err(new_type_error(
+                                format!(
+                                    "mismatched types in global assignment statement {:?} {:?}",
+                                    var_type,
+                                    &tc_expr.get_type()
+                                ),
                                 *loc,
                             ))
                         }
