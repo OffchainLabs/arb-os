@@ -18,6 +18,8 @@ use std::path::Path;
 use crate::uint256::Uint256;
 use clap::{App, Arg, SubCommand};
 
+#[cfg(test)]
+mod buffertests;
 mod compile;
 mod contracttemplates;
 mod evm;
@@ -25,8 +27,6 @@ mod link;
 mod mavm;
 #[cfg(test)]
 mod minitests;
-#[cfg(test)]
-mod buffertests;
 pub mod pos;
 mod run;
 mod stringtable;

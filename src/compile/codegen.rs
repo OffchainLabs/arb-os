@@ -4,7 +4,7 @@
 
 //!Contains utilities for generating instructions from AST structures.
 
-use super::ast::{BinaryOp, FuncArg, GlobalVarDecl, Type, UnaryOp, TrinaryOp};
+use super::ast::{BinaryOp, FuncArg, GlobalVarDecl, TrinaryOp, Type, UnaryOp};
 use super::symtable::CopyingSymTable;
 use super::typecheck::{
     PropertiesList, TypeCheckedExpr, TypeCheckedFunc, TypeCheckedIfArm, TypeCheckedMatchPattern,

@@ -6,8 +6,8 @@
 
 use super::ast::{
     BinaryOp, Constant, Expr, FuncArg, FuncDecl, FuncDeclKind, GlobalVarDecl, IfArm,
-    ImportFuncDecl, MatchPattern, Statement, StatementKind, StructField, TopLevelDecl, Type,
-    UnaryOp, TrinaryOp
+    ImportFuncDecl, MatchPattern, Statement, StatementKind, StructField, TopLevelDecl, TrinaryOp,
+    Type, UnaryOp,
 };
 use super::{symtable::SymTable, MiniProperties};
 use crate::link::{ExportedFunc, Import, ImportedFunc};
@@ -823,9 +823,11 @@ fn typecheck_statement<'a>(
                         } else {
                             println!("var  {:?}\n expr {:?}", var_type, &tc_expr.get_type());
                             Err(new_type_error(
-                                ["mismatched types in global assignment statement".to_string(),
-                                "asd".to_string()
-                                ].join(" "),
+                                [
+                                    "mismatched types in global assignment statement".to_string(),
+                                    "asd".to_string(),
+                                ]
+                                .join(" "),
                                 *loc,
                             ))
                         }
@@ -1586,14 +1588,12 @@ fn typecheck_unary_op(
             )),
         },
         UnaryOp::NewBuffer => match tc_type {
-            Type::Int | Type::Uint => {
-                    Ok(TypeCheckedExpr::UnaryOp(
-                        UnaryOp::NewBuffer,
-                        Box::new(sub_expr),
-                        Type::Buffer,
-                        loc,
-                    ))
-            }
+            Type::Int | Type::Uint => Ok(TypeCheckedExpr::UnaryOp(
+                UnaryOp::NewBuffer,
+                Box::new(sub_expr),
+                Type::Buffer,
+                loc,
+            )),
             _ => Err(new_type_error(
                 "invalid operand type for unary minus".to_string(),
                 loc,
@@ -1866,45 +1866,39 @@ fn typecheck_binary_op(
                 loc,
             )),
         },
-        BinaryOp::GetBuffer8 => match (subtype1, subtype2) {
-            (Type::Buffer, Type::Uint) | (Type::Buffer, Type::Int) => Ok(TypeCheckedExpr::Binary(
-                op,
-                Box::new(tcs1),
-                Box::new(tcs2),
-                Type::Uint,
-                loc,
-            )),
-            _ => Err(new_type_error(
-                "invalid argument types to getbuffer8".to_string(),
-                loc,
-            )),
-        },
-        BinaryOp::GetBuffer64 => match (subtype1, subtype2) {
-            (Type::Buffer, Type::Uint) | (Type::Buffer, Type::Int) => Ok(TypeCheckedExpr::Binary(
-                op,
-                Box::new(tcs1),
-                Box::new(tcs2),
-                Type::Uint,
-                loc,
-            )),
-            _ => Err(new_type_error(
-                "invalid argument types to getbuffer64".to_string(),
-                loc,
-            )),
-        },
-        BinaryOp::GetBuffer256 => match (subtype1, subtype2) {
-            (Type::Buffer, Type::Uint) | (Type::Buffer, Type::Int) => Ok(TypeCheckedExpr::Binary(
-                op,
-                Box::new(tcs1),
-                Box::new(tcs2),
-                Type::Uint,
-                loc,
-            )),
-            _ => Err(new_type_error(
-                "invalid argument types to getbuffer256".to_string(),
-                loc,
-            )),
-        },
+        BinaryOp::GetBuffer8 => {
+            match (subtype1, subtype2) {
+                (Type::Buffer, Type::Uint) | (Type::Buffer, Type::Int) => Ok(
+                    TypeCheckedExpr::Binary(op, Box::new(tcs1), Box::new(tcs2), Type::Uint, loc),
+                ),
+                _ => Err(new_type_error(
+                    "invalid argument types to getbuffer8".to_string(),
+                    loc,
+                )),
+            }
+        }
+        BinaryOp::GetBuffer64 => {
+            match (subtype1, subtype2) {
+                (Type::Buffer, Type::Uint) | (Type::Buffer, Type::Int) => Ok(
+                    TypeCheckedExpr::Binary(op, Box::new(tcs1), Box::new(tcs2), Type::Uint, loc),
+                ),
+                _ => Err(new_type_error(
+                    "invalid argument types to getbuffer64".to_string(),
+                    loc,
+                )),
+            }
+        }
+        BinaryOp::GetBuffer256 => {
+            match (subtype1, subtype2) {
+                (Type::Buffer, Type::Uint) | (Type::Buffer, Type::Int) => Ok(
+                    TypeCheckedExpr::Binary(op, Box::new(tcs1), Box::new(tcs2), Type::Uint, loc),
+                ),
+                _ => Err(new_type_error(
+                    "invalid argument types to getbuffer256".to_string(),
+                    loc,
+                )),
+            }
+        }
         BinaryOp::Mod => match (subtype1, subtype2) {
             (Type::Uint, Type::Uint) => Ok(TypeCheckedExpr::Binary(
                 op,
@@ -2098,28 +2092,30 @@ fn typecheck_trinary_op(
     let subtype2 = tcs2.get_type();
     let subtype3 = tcs3.get_type();
     match op {
-        TrinaryOp::SetBuffer8 | TrinaryOp::SetBuffer64 | TrinaryOp::SetBuffer256 => match (subtype1, subtype2, subtype3) {
-            (Type::Buffer, Type::Uint, Type::Uint) => Ok(TypeCheckedExpr::Trinary(
-                op,
-                Box::new(tcs1),
-                Box::new(tcs2),
-                Box::new(tcs3),
-                Type::Buffer,
-                loc,
-            )),
-            (Type::Buffer, Type::Int, Type::Int) => Ok(TypeCheckedExpr::Trinary(
-                op,
-                Box::new(tcs1),
-                Box::new(tcs2),
-                Box::new(tcs3),
-                Type::Buffer,
-                loc,
-            )),
-            _ => Err(new_type_error(
-                "invalid argument types to 3-ary op".to_string(),
-                loc,
-            )),
-        },
+        TrinaryOp::SetBuffer8 | TrinaryOp::SetBuffer64 | TrinaryOp::SetBuffer256 => {
+            match (subtype1, subtype2, subtype3) {
+                (Type::Buffer, Type::Uint, Type::Uint) => Ok(TypeCheckedExpr::Trinary(
+                    op,
+                    Box::new(tcs1),
+                    Box::new(tcs2),
+                    Box::new(tcs3),
+                    Type::Buffer,
+                    loc,
+                )),
+                (Type::Buffer, Type::Int, Type::Int) => Ok(TypeCheckedExpr::Trinary(
+                    op,
+                    Box::new(tcs1),
+                    Box::new(tcs2),
+                    Box::new(tcs3),
+                    Type::Buffer,
+                    loc,
+                )),
+                _ => Err(new_type_error(
+                    "invalid argument types to 3-ary op".to_string(),
+                    loc,
+                )),
+            }
+        }
     }
 }
 

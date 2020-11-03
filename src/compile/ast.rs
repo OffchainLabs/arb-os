@@ -294,17 +294,23 @@ pub fn arg_vectors_assignable(tvec1: &[Type], tvec2: &[Type]) -> bool {
 ///Identical to `type_vectors_assignable` but using StructField slices as inputs and comparing their
 /// inner types.
 pub fn field_vectors_assignable(tvec1: &[StructField], tvec2: &[StructField]) -> bool {
-    let res = tvec1.len() == tvec2.len() && tvec1
+    let res = tvec1.len() == tvec2.len()
+        && tvec1
             .iter()
             .zip(tvec2)
             .all(|(t1, t2)| t1.tipe.assignable(&t2.tipe));
     if !res {
-        tvec1
-            .iter()
-            .zip(tvec2)
-            .for_each(|(t1, t2)| println!("{:?} {:?} {:?} {:?}", t1.tipe, t2.tipe, t1.tipe.assignable(&t2.tipe), Type::Buffer == Type::Buffer))
+        tvec1.iter().zip(tvec2).for_each(|(t1, t2)| {
+            println!(
+                "{:?} {:?} {:?} {:?}",
+                t1.tipe,
+                t2.tipe,
+                t1.tipe.assignable(&t2.tipe),
+                Type::Buffer == Type::Buffer
+            )
+        })
     }
-    return res
+    return res;
 }
 
 impl PartialEq for Type {

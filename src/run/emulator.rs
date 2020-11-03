@@ -6,14 +6,14 @@
 
 use super::runtime_env::RuntimeEnvironment;
 use crate::link::LinkedProgram;
-use crate::mavm::{AVMOpcode, CodePt, Instruction, Opcode, Value, Buffer};
+use crate::mavm::{AVMOpcode, Buffer, CodePt, Instruction, Opcode, Value};
 use crate::pos::Location;
 use crate::uint256::Uint256;
 use ethers_core::types::{Signature, H256};
 use std::cmp::max;
 use std::collections::{BTreeMap, HashMap};
-use std::convert::TryInto;
 use std::convert::TryFrom;
+use std::convert::TryInto;
 use std::fmt;
 use std::fs::File;
 use std::io::{stdin, BufWriter, Write};
