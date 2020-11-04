@@ -107,7 +107,7 @@ func testRlpHasher() {
     let seqNum = 0;
     let gasPrice = 31;
     let gasLimit = uint(hash(0));
-    let to = address(3919850193);
+    let to = Some(address(3919850193));
     let value = uint(hash(gasLimit));
     let data = randomByteArray();
     let v = uint(hash(value));

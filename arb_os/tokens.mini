@@ -26,7 +26,7 @@ type TxRequestData = struct {
     gasPrice: uint,
     seqNum: option<uint>,
     caller: address,
-    calleeAddr: address,
+    calleeAddr: option<address>,
     value: uint,
     calldata: ByteArray,
     nonMutating: bool,
@@ -77,7 +77,7 @@ public impure func tokens_erc20deposit(
             gasPrice: 0,
             seqNum: None<uint>,
             caller: address(1),     // special caller address, so contract recognizes call as coming from OS
-            calleeAddr: tokenAddress,
+            calleeAddr: Some(tokenAddress),
             value: 0,
             calldata: calldata,
             nonMutating: false,
@@ -132,7 +132,7 @@ public impure func tokens_erc721deposit(
             gasPrice: 0,
             seqNum: None<uint>,
             caller: address(1),     // special caller address, so contract recognizes call as coming from OS
-            calleeAddr: tokenAddress,
+            calleeAddr: Some(tokenAddress),
             value: 0,
             calldata: calldata,
             nonMutating: false,

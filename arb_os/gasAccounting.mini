@@ -238,7 +238,7 @@ type TxRequestData = struct {
     gasPrice: uint,
     seqNum: option<uint>,
     caller: address,
-    calleeAddr: address,
+    calleeAddr: option<address>,
     value: uint,
     calldata: ByteArray,
     nonMutating: bool,

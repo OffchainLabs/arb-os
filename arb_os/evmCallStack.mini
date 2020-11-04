@@ -146,7 +146,7 @@ type TxRequestData = struct {
     gasPrice: uint,
     seqNum: option<uint>,
     caller: address,
-    calleeAddr: address,
+    calleeAddr: option<address>,
     value: uint,
     calldata: ByteArray,
     nonMutating: bool,
@@ -158,13 +158,76 @@ public impure func initEvmCallStack(
     request: TxRequestData,
 ) {
     // Set up the call frame for a top-level call, and launch the call's execution.
-    if let Some(entryPoint) = account_getStartCodePoint(
-        accountStore_get(
-            getGlobalAccountStore(),
-            request.calleeAddr
-        )
-    ) {
-        if (gasAccounting_startTxCharges(request.maxGas, request.gasPrice, request.caller) != None<()>) {
+    if let Some(calleeAddr) = request.calleeAddr {
+        if let Some(entryPoint) = account_getStartCodePoint(
+            accountStore_get(
+                getGlobalAccountStore(),
+                calleeAddr
+            )
+        ) {
+            if (gasAccounting_startTxCharges(request.maxGas, request.gasPrice, request.caller) != None<()>) {
+                // increment the caller's sequence number, if caller has sufficient balance
+                let acctStore = getGlobalAccountStore();
+                if (account_getBalance(accountStore_get(acctStore, request.caller)) >= request.value) {
+                    setGlobalAccountStore(
+                        accountStore_set(
+                            acctStore,
+                            request.caller,
+                            account_incrSeqNum(
+                                accountStore_get(acctStore, request.caller)
+                            )
+                        )
+                    );
+                }
+
+                globalCurrentTxRequest = request;
+
+                // pay callvalue from caller to the called contract
+                // payment will only be recorded inside the callframe, so it will be discarded if the call reverts
+                if let Some(globalAS) = accountStore_transferEthBalance(
+                    getGlobalAccountStore(),
+                    request.caller,
+                    calleeAddr,
+                    request.value
+                ) {
+                    globalCallStack = Some(struct {
+                        runningAs: calleeAddr,
+                        runningCodeFrom: calleeAddr,
+                        accountStore: globalAS,
+                        runningAsAccount: accountStore_get(globalAS, calleeAddr),
+                        caller: request.caller,
+                        callKind: callKind,
+                        calldata: request.calldata,
+                        callvalue: request.value,
+                        returnInfo: None<ReturnInfo>,
+                        memory: bytearray_new(0),
+                        revertOnStorageWrite: false,
+                        evmLogs: evmlogs_empty(),
+                        selfDestructQueue: queue_new(),
+                        resumeInfo: None<ResumeInfo>,
+                        sendQueue: queue_new(),
+                        parent: None<any>
+                    });
+
+                    entryPoint();  // start executing the call; should never return
+                } else {
+                    if let Some(gasUsage) = gasAccounting_endTxCharges() {
+                        // insufficient balance error
+                        emitTxReceipt(request.incomingRequest, 4, None<ByteArray>, None<EvmLogs>, Some(gasUsage));
+                    } else {
+                        // unknown error type
+                        emitTxReceipt(request.incomingRequest, 255, None<ByteArray>, None<EvmLogs>, None<GasUsage>);
+                    }
+                    evmCallStack_callHitError(1);
+                }
+            } else {
+                // can't pay for gas error
+                emitTxReceipt(request.incomingRequest, 3, None<ByteArray>, None<EvmLogs>, None<GasUsage>);
+                evmCallStack_callHitError(2);
+            }
+        } else {
+            // no contract at this address, so treat tx as a simple eth transfer
+
             // increment the caller's sequence number, if caller has sufficient balance
             let acctStore = getGlobalAccountStore();
             if (account_getBalance(accountStore_get(acctStore, request.caller)) >= request.value) {
@@ -179,95 +242,40 @@ public impure func initEvmCallStack(
                 );
             }
 
-            globalCurrentTxRequest = request;
-
-            // pay callvalue from caller to the called contract
-            // payment will only be recorded inside the callframe, so it will be discarded if the call reverts
-            if let Some(globalAS) = accountStore_transferEthBalance(
-                getGlobalAccountStore(),
-                request.caller,
-                request.calleeAddr,
-                request.value
-            ) {
-                globalCallStack = Some(struct {
-                    runningAs: request.calleeAddr,
-                    runningCodeFrom: request.calleeAddr,
-                    accountStore: globalAS,
-                    runningAsAccount: accountStore_get(globalAS, request.calleeAddr),
-                    caller: request.caller,
-                    callKind: callKind,
-                    calldata: request.calldata,
-                    callvalue: request.value,
-                    returnInfo: None<ReturnInfo>,
-                    memory: bytearray_new(0),
-                    revertOnStorageWrite: false,
-                    evmLogs: evmlogs_empty(),
-                    selfDestructQueue: queue_new(),
-                    resumeInfo: None<ResumeInfo>,
-                    sendQueue: queue_new(),
-                    parent: None<any>
-                });
-
-                entryPoint();  // start executing the call; should never return
-            } else {
-                if let Some(gasUsage) = gasAccounting_endTxCharges() {
-                    // insufficient balance error
-                    emitTxReceipt(request.incomingRequest, 4, None<ByteArray>, None<EvmLogs>, Some(gasUsage));
-                } else {
-                    // unknown error type
-                    emitTxReceipt(request.incomingRequest, 255, None<ByteArray>, None<EvmLogs>, None<GasUsage>);
-                }
-                evmCallStack_callHitError(1);
-            }
-        } else {
-            // can't pay for gas error
-            emitTxReceipt(request.incomingRequest, 3, None<ByteArray>, None<EvmLogs>, None<GasUsage>);
-            evmCallStack_callHitError(2);
-        }
-    } else {
-        // no contract at this address, so treat tx as a simple eth transfer
-
-        // increment the caller's sequence number, if caller has sufficient balance
-        let acctStore = getGlobalAccountStore();
-        if (account_getBalance(accountStore_get(acctStore, request.caller)) >= request.value) {
-            setGlobalAccountStore(
-                accountStore_set(
-                    acctStore,
+            if (request.value > 0) {
+                // transfer value to destination address
+                if let Some(globalAS) = accountStore_transferEthBalance(
+                    getGlobalAccountStore(),
                     request.caller,
-                    account_incrSeqNum(
-                        accountStore_get(acctStore, request.caller)
-                    )
-                )
-            );
-        }
+                    calleeAddr,
+                    request.value
+                ) {
+                    if (callKind != 3) {  // commit the transfer, unless it's a static call
+                        setGlobalAccountStore(globalAS);
+                    }
 
-        if (request.value > 0) {
-            // transfer value to destination address
-            if let Some(globalAS) = accountStore_transferEthBalance(
-                getGlobalAccountStore(),
-                request.caller,
-                request.calleeAddr,
-                request.value
-            ) {
-                if (callKind != 3) {  // commit the transfer, unless it's a static call
-                    setGlobalAccountStore(globalAS);
+                    // report success
+                    emitTxReceipt(request.incomingRequest, 0, None<ByteArray>, None<EvmLogs>, None<GasUsage>);
+                    emptyAvmStack();
+                    cleanAvmAuxStackAndCall(mainRunLoop,);  // should never return
+                } else {
+                    // insufficient balance error
+                    emitTxReceipt(request.incomingRequest, 4, None<ByteArray>, None<EvmLogs>, None<GasUsage>);
+                    evmCallStack_callHitError(3);
                 }
-
-                // report success
+            } else {
+                // tx is transfer of 0 Eth, so just report success
                 emitTxReceipt(request.incomingRequest, 0, None<ByteArray>, None<EvmLogs>, None<GasUsage>);
                 emptyAvmStack();
                 cleanAvmAuxStackAndCall(mainRunLoop,);  // should never return
-            } else {
-                // insufficient balance error
-                emitTxReceipt(request.incomingRequest, 4, None<ByteArray>, None<EvmLogs>, None<GasUsage>);
-                evmCallStack_callHitError(3);
             }
-        } else {
-            // tx is transfer of 0 Eth, so just report success
-            emitTxReceipt(request.incomingRequest, 0, None<ByteArray>, None<EvmLogs>, None<GasUsage>);
-            emptyAvmStack();
-            cleanAvmAuxStackAndCall(mainRunLoop,);  // should never return
         }
+    } else {
+        // this shouldn't happen: tx is being treated as non-constructor even though calleeAddr is None
+        // report unknown error
+        emitTxReceipt(request.incomingRequest, 255, None<ByteArray>, None<EvmLogs>, None<GasUsage>);
+        evmCallStack_callHitError(17);
+
     }
 }
 
@@ -282,56 +290,63 @@ public impure func initEvmCallStackForConstructor(
     // The constructor will run, and (if it succeeds) it will return code, which will become the new
     //      code for this new account.
 
-    globalCurrentTxRequest = request;
+    if let Some(calleeAddr) = request.calleeAddr {
+        globalCurrentTxRequest = request;
 
-    // Create a new account to run the constructor code.
-    let acctStore = accountStore_set(
-        getGlobalAccountStore(),
-        request.calleeAddr,
-        account_setContractInfo(
-            pristineAccount(request.calleeAddr),
-            code,
-            evmJumpTable,
-            startPoint,
-            storageMap_new()
-        )
-    );
-    if let Some(uas) = accountStore_transferEthBalance(acctStore, request.caller, request.calleeAddr, request.value) {
-        acctStore = uas;
-        // don't update globalAccountStore; that happens if/when the constructor commits its results later
+        // Create a new account to run the constructor code.
+        let acctStore = accountStore_set(
+            getGlobalAccountStore(),
+            calleeAddr,
+            account_setContractInfo(
+                pristineAccount(calleeAddr),
+                code,
+                evmJumpTable,
+                startPoint,
+                storageMap_new()
+            )
+        );
+        if let Some(uas) = accountStore_transferEthBalance(acctStore, request.caller, calleeAddr, request.value) {
+            acctStore = uas;
+            // don't update globalAccountStore; that happens if/when the constructor commits its results later
 
-        globalCallStack = Some(struct {
-            runningAs: request.calleeAddr,
-            runningCodeFrom: request.calleeAddr,
-            accountStore: acctStore,
-            runningAsAccount: accountStore_get(acctStore, request.calleeAddr),
-            caller: request.caller,
-            callKind: 4,
-            calldata: request.calldata,
-            callvalue: 0,
-            returnInfo: None<ReturnInfo>,
-            memory: bytearray_new(0),
-            revertOnStorageWrite: false,
-            evmLogs: evmlogs_empty(),
-            selfDestructQueue: queue_new(),
-            resumeInfo: None<ResumeInfo>,
-            sendQueue: queue_new(),
-            parent: None<any>
-        });
+            globalCallStack = Some(struct {
+                runningAs: calleeAddr,
+                runningCodeFrom: calleeAddr,
+                accountStore: acctStore,
+                runningAsAccount: accountStore_get(acctStore, calleeAddr),
+                caller: request.caller,
+                callKind: 4,
+                calldata: request.calldata,
+                callvalue: 0,
+                returnInfo: None<ReturnInfo>,
+                memory: bytearray_new(0),
+                revertOnStorageWrite: false,
+                evmLogs: evmlogs_empty(),
+                selfDestructQueue: queue_new(),
+                resumeInfo: None<ResumeInfo>,
+                sendQueue: queue_new(),
+                parent: None<any>
+            });
 
-        if (gasAccounting_startTxCharges(request.maxGas, request.gasPrice, request.caller) != None<()>) {
-            startPoint();  // start executing the call; should never return
-            panic;
+            if (gasAccounting_startTxCharges(request.maxGas, request.gasPrice, request.caller) != None<()>) {
+                startPoint();  // start executing the call; should never return
+                panic;
+            } else {
+                // can't pay for gas error
+                emitTxReceipt(request.incomingRequest, 3, None<ByteArray>, None<EvmLogs>, None<GasUsage>);
+                evmCallStack_callHitError(17);
+            }
         } else {
             // can't pay for gas error
             emitTxReceipt(request.incomingRequest, 3, None<ByteArray>, None<EvmLogs>, None<GasUsage>);
-            evmCallStack_callHitError(15);
+            evmCallStack_callHitError(4);  // should never return
+            panic;
         }
     } else {
-        // can't pay for gas error
-        emitTxReceipt(request.incomingRequest, 3, None<ByteArray>, None<EvmLogs>, None<GasUsage>);
-        evmCallStack_callHitError(4);  // should never return
-        panic;
+        // this shouldn't happen: calleeAddr field wasn't filled in with address of constructed contract
+        // report unknown error
+        emitTxReceipt(request.incomingRequest, 255, None<ByteArray>, None<EvmLogs>, None<GasUsage>);
+        evmCallStack_callHitError(18);
     }
 }
 

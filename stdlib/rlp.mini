@@ -33,7 +33,7 @@ type SignedTx = struct {
     seqNum: uint,
     gasPrice: uint,
     gasLimit: uint,
-    to: address,
+    to: option<address>,
     value: uint,
     data: ByteArray,
     v: uint,
@@ -93,28 +93,30 @@ func rlp_hashUint(hasher: Hasher, val: uint) -> Hasher {
     }
 }
 
-func rlp_hashAddress(hasher: Hasher, addr: address) -> Hasher {
-    if (addr == address(0)) {
+func rlp_hashAddress(hasher: Hasher, maybeAddr: option<address>) -> Hasher {
+    if let Some(addr) = maybeAddr {
+        let addrBa = bytearray_set256(bytearray_new(0), 0, asm(256-160, uint(addr)) uint { shl });
+        return rlp_hashBytes(hasher, addrBa, 0, 20);
+    } else {
         return rlp_hashUint(hasher, 0);
     }
-    let addrBa = bytearray_set256(bytearray_new(0), 0, asm(256-160, uint(addr)) uint { shl });
-    return rlp_hashBytes(hasher, addrBa, 0, 20);
 }
 
-func rlp_addressSize(addr: address) -> uint {
-    if (addr == address(0)) {
+func rlp_addressSize(addr: option<address>) -> uint {
+    if (addr == None<address>) {
         return 1;
     } else {
         return 21;
     }
 }
 
-public func rlp_encodeAddress(addr: address, ba: ByteArray, offset: uint) -> (ByteArray, uint) {
-    if (addr == address(0)) {
-        return rlp_encodeUint(0, ba, offset);
+public func rlp_encodeAddress(maybeAddr: option<address>, ba: ByteArray, offset: uint) -> (ByteArray, uint) {
+    if let Some(addr) = maybeAddr {
+        let addrBa = bytearray_set256(bytearray_new(0), 0, asm(256-160, uint(addr)) uint { shl });
+        return rlp_encodeBytes(addrBa, 0, 20, ba, offset);
+    } else {
+        return (bytearray_setByte(ba, offset, 0x80), 1);
     }
-    let addrBa = bytearray_set256(bytearray_new(0), 0, asm(256-160, uint(addr)) uint { shl });
-    return rlp_encodeBytes(addrBa, 0, 20, ba, offset);
 }
 
 func rlp_bytesSize(ba: ByteArray, offset: uint, nbytes: uint) -> uint {
@@ -293,7 +295,7 @@ public func rlp_encodeMessageInfo(
     seqNum: uint,
     gasPrice: uint,
     gasLimit: uint,
-    to: address,
+    to: option<address>,
     value: uint,
     data: ByteArray,
     v: uint,
@@ -482,12 +484,18 @@ public func rlp_decodeUint(bs: ByteStream) -> option<(ByteStream, uint)> {
     }
 }
 
-public func rlp_decodeAddress(bs: ByteStream) -> option<(ByteStream, address)> {
-    let (bs, val) = rlp_decodeUint(bs)?;
-    if (bytesNeededToRepresentUint(val) <= 20) {
-        return Some((bs, address(val)));
+public func rlp_decodeAddress(bs: ByteStream) -> option<(ByteStream, option<address>)> {
+    let (ubs, firstByte) = bytestream_getByte(bs)?;
+    if (firstByte == 0x80) {
+        return Some((ubs, None<address>));
     } else {
-        return None;
+        // use initial state of stream
+        let (bs, val) = rlp_decodeUint(bs)?;
+        if (bytesNeededToRepresentUint(val) <= 20) {
+            return Some((bs, Some(address(val))));
+        } else {
+            return None;
+        }
     }
 }
 

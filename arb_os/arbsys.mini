@@ -416,14 +416,18 @@ impure func arbsys_addressTable_decompress(topFrame: EvmCallFrame, calldata: Byt
     }
     let stream = bytestream_new(bytearray_extract(calldata, 100+offset, bytesLen-offset));
     if let Some(res) = decompressAddress(stream) {
-        let (ustr, addr) = res;
+        let (ustr, maybeAddr) = res;
         stream = ustr;
+        let addrToUse = address(0);
+        if let Some(addr) = maybeAddr {
+            addrToUse = addr;
+        }
         if (evmCallStack_setTopFrameMemory(
             bytearray_set256(
                 bytearray_set256(
                     evmCallStack_getTopFrameMemoryOrDie(),
                     0,
-                    uint(addr)
+                    uint(addrToUse)
                 ),
                 32,
                 offset + bytestream_bytesReadSoFar(stream),
@@ -452,7 +456,7 @@ impure func arbsys_addressTable_compress(topFrame: EvmCallFrame, calldata: ByteA
         compressedData = ba;
         compressedDataLen = sz;
     } else {
-        let (ba, sz) = rlp_encodeAddress(addr, compressedData, 0);
+        let (ba, sz) = rlp_encodeAddress(Some(addr), compressedData, 0);
         compressedData = ba;
         compressedDataLen = sz;
     }

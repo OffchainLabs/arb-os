@@ -37,7 +37,7 @@ type TxRequestData = struct {
     gasPrice: uint,
     seqNum: option<uint>,
     caller: address,
-    calleeAddr: address,
+    calleeAddr: option<address>,
     value: uint,
     calldata: ByteArray,
     nonMutating: bool,
@@ -50,7 +50,7 @@ type SignedTx = struct {
     seqNum: uint,
     gasPrice: uint,
     gasLimit: uint,
-    to: address,
+    to: option<address>,
     value: uint,
     data: ByteArray,
     v: uint,
@@ -71,7 +71,7 @@ public impure func translateSignedTx(req: IncomingRequest) -> option<TxRequestDa
     let signer = recoverSigner(signedTx)?;
     let rlpHash = keccak256(rlpData, 0, bytearray_size(rlpData));
 
-    let newL2message = signedTxToUnsignedBytes(signedTx);
+    //let newL2message = signedTxToUnsignedBytes(signedTx);
 
     return Some(
         struct {
@@ -113,18 +113,18 @@ public impure func recoverSigner(tx: SignedTx) -> option<address> {
     }
 }
 
-func signedTxToUnsignedBytes(tx: SignedTx) -> ByteArray {
-    let dataSize = bytearray_size(tx.data);
-    let ret = bytearray_new(0);
-    ret = bytearray_setByte(ret, 0, 0);  // L2 subtype for signed tx
-    ret = bytearray_set256(ret, 1, tx.gasLimit);
-    ret = bytearray_set256(ret, 1+32, tx.gasPrice);
-    ret = bytearray_set256(ret, 1+2*32, tx.seqNum);
-    ret = bytearray_set256(ret, 1+3*32, uint(tx.to));
-    ret = bytearray_set256(ret, 1+4*32, tx.value);
-    ret = bytearray_copy(tx.data, 0, ret, 1+5*32, dataSize);
-    return ret;
-}
+//func signedTxToUnsignedBytes(tx: SignedTx) -> ByteArray {
+//    let dataSize = bytearray_size(tx.data);
+//    let ret = bytearray_new(0);
+//    ret = bytearray_setByte(ret, 0, 0);  // L2 subtype for signed tx
+//    ret = bytearray_set256(ret, 1, tx.gasLimit);
+//    ret = bytearray_set256(ret, 1+32, tx.gasPrice);
+//    ret = bytearray_set256(ret, 1+2*32, tx.seqNum);
+ //   ret = bytearray_set256(ret, 1+3*32, uint(tx.to));
+//    ret = bytearray_set256(ret, 1+4*32, tx.value);
+ //   ret = bytearray_copy(tx.data, 0, ret, 1+5*32, dataSize);
+//    return ret;
+//}
 
 public func hashUnsignedL2messageInfo(l2msg: MarshalledBytes, chainId: uint, sender: address) -> bytes32 {
     return hash(

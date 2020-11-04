@@ -123,7 +123,7 @@ public func addressTable_getByAddressAlloc(iat: IndexedAddressTable, addr: addre
 
 public impure func decompressAddress(
     stream: ByteStream,
-) -> option<(ByteStream, address)> {
+) -> option<(ByteStream, option<address>)> {
     // Returns None if insufficient data in stream
     // A compressed address is one of three things:
     //   * a single byte 0x80, which is interpreted as the null address
@@ -134,11 +134,11 @@ public impure func decompressAddress(
 
     let (ustr, firstByte) = bytestream_getByte(stream)?;
     if (firstByte == 0x80) {
-        return Some((ustr, address(0)));
+        return Some((ustr, None<address>));
     } elseif (firstByte < 0x80 + 20) {
         // don't update stream, because we want to re-start from the beginning
         let (ustr, decodedUint) = rlp_decodeUint(stream)?;
-        return Some((ustr, addressTable_getByIndex(globalIndexedAddressTable, decodedUint)?));
+        return Some((ustr, Some(addressTable_getByIndex(globalIndexedAddressTable, decodedUint)?)));
     } else {
         let (ustr, addr) = rlp_decodeAddress(stream)?;
         return Some((ustr, addr));
