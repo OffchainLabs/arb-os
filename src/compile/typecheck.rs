@@ -451,7 +451,6 @@ impl TypeCheckedExpr {
                 TypeCheckedExpr::FuncRef(id, _, _) => {
                     let found_func = funcs.iter().find(|func| func.name == *id);
                     if let Some(func) = found_func {
-                        println!("{:?}", func);
                         let mut code: Vec<_> = arg_exps
                             .iter()
                             .zip(func.args.iter())
@@ -467,7 +466,16 @@ impl TypeCheckedExpr {
                             })
                             .collect();
                         code.append(&mut func.code.clone());
-                        *self = TypeCheckedExpr::CodeBlock(code, None, loc.clone());
+                        let last = code.pop();
+                        let block_exp = if let Some(TypeCheckedStatement::Return(exp, _)) = last {
+                            Some(Box::new(exp))
+                        } else {
+                            if let Some(statement) = last {
+                                code.push(statement);
+                            }
+                            None
+                        };
+                        *self = TypeCheckedExpr::CodeBlock(code, block_exp, loc.clone());
                     }
                 }
                 _ => {}
