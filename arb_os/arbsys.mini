@@ -594,3 +594,7 @@ impure func arbsys_functionTableGet(topFrame: EvmCallFrame, calldata: ByteArray)
     evmOp_revert_knownCodePc(address(100), 211, 0, 0);
 }
 
+func dummyAtEnd() {
+    asm((666,666),) { debugprint };
+}
+

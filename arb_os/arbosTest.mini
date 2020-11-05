@@ -1,0 +1,66 @@
+//
+// Copyright 2020, Offchain Labs, Inc. All rights reserved.
+//
+
+use std::bytearray::ByteArray;
+use std::bytearray::bytearray_size;
+use std::bytearray::bytearray_new;
+use std::bytearray::bytearray_extract;
+use std::bytearray::bytearray_get256;
+use std::bytearray::bytearray_set256;
+
+use evmOps::evmOp_return;
+use evmOps::evmOp_revert_knownCodePc;
+
+use evmCallStack::EvmCallFrame;
+use evmCallStack::evmCallStack_callHitError;
+use evmCallStack::evmCallStack_topFrame;
+use evmCallStack::evmCallFrame_getCalldata;
+use evmCallStack::evmCallStack_setTopFrameMemory;
+
+
+public impure func arbosTest_txcall() {
+    if let Some(topFrame) = evmCallStack_topFrame() {
+        let calldata = evmCallFrame_getCalldata(topFrame);
+        if (bytearray_size(calldata) < 4) {
+            evmOp_revert_knownCodePc(address(105), 0, 0, 0);
+        }
+        let funcCode = getFuncCode(calldata);
+        if (funcCode == 0x3a276523) {
+            arbosTest_run(topFrame, calldata);
+        } else {
+            // unrecognized function code
+            evmOp_revert_knownCodePc(address(105), 1, 0, 0);
+        }
+    } else {
+        // this shouldn't happen -- should always be called in an EVM tx
+        evmCallStack_callHitError(19);
+    }
+}
+
+func getFuncCode(ba: ByteArray) -> uint {
+    return asm(224, bytearray_get256(ba, 0)) uint { shr };
+}
+
+impure func arbosTest_run(topFrame: EvmCallFrame, calldata: ByteArray) { // (bytes) -> bytes
+    if (bytearray_size(calldata) <= 68) {
+        evmOp_revert_knownCodePc(address(105), 10, 0, 0);
+    }
+    let nbytes = bytearray_get256(calldata, 36);
+    let code = bytearray_extract(calldata, 68, nbytes);
+
+    let mem = bytearray_set256(
+        bytearray_set256(
+            bytearray_new(0),
+            0,
+            64
+        ),
+        32,
+        0  // size of buffer
+    );
+    if (evmCallStack_setTopFrameMemory(mem)) {
+        evmOp_return(0, 64);
+    } else {
+        evmOp_revert_knownCodePc(address(105), 11, 0, 0);
+    }
+}
