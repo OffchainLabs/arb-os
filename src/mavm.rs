@@ -453,10 +453,10 @@ impl Buffer {
                         hash_sparse(&idx_cell.to_vec(), &buf_cell.to_vec(), calc_len(*h))
                     }
                 };
-                return res;
+                res
             }
-            Some(x) => return x.clone(),
-        };
+            Some(x) => x.clone(),
+        }
     }
 
     pub fn hash(&self) -> Packed {
