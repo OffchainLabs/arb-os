@@ -20,7 +20,7 @@ use std::hash::{Hash, Hasher};
 use std::io::{self, Read};
 use std::path::Path;
 use symtable::SymTable;
-use typecheck::{AbstractSyntaxTree, TypeCheckedFunc};
+use typecheck::{AbstractSyntaxTree, TypeCheckedFunc, TypeCheckedNode};
 
 pub use ast::{TopLevelDecl, Type};
 pub use source::Lines;
@@ -283,6 +283,14 @@ pub fn compile_from_file(
     }
 }
 
+fn print_node(node: &mut TypeCheckedNode, state: &mut usize) {
+    for _ in 0..*state {
+        print!(" ");
+    }
+    println!("{:?}", node);
+    *state += 4;
+}
+
 pub fn compile_from_folder(
     folder: &Path,
     library: Option<&str>,
@@ -429,7 +437,7 @@ pub fn compile_from_folder(
     }
     for module in &mut typechecked {
         for func in &mut module.checked_funcs {
-            func.recursive_apply(0);
+            func.recursive_apply(print_node, &mut 0);
         }
     }
     if inline {
