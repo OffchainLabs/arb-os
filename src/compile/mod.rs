@@ -20,7 +20,7 @@ use std::hash::{Hash, Hasher};
 use std::io::{self, Read};
 use std::path::Path;
 use symtable::SymTable;
-use typecheck::TypeCheckedFunc;
+use typecheck::{AbstractSyntaxTree, TypeCheckedFunc};
 
 pub use ast::{TopLevelDecl, Type};
 pub use source::Lines;
@@ -426,6 +426,11 @@ pub fn compile_from_folder(
             global_vars,
             name,
         ));
+    }
+    for module in &mut typechecked {
+        for func in &mut module.checked_funcs {
+            func.recursive_apply(0);
+        }
     }
     if inline {
         typechecked.iter_mut().for_each(|module| module.inline());

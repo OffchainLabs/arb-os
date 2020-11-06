@@ -18,6 +18,41 @@ use crate::stringtable::{StringId, StringTable};
 use crate::uint256::Uint256;
 use std::collections::HashMap;
 
+pub trait AbstractSyntaxTree {
+    fn child_nodes(&mut self) -> Vec<TypeCheckedNode> {
+        vec![]
+    }
+    fn recursive_apply(&mut self, indent: usize) {
+        let mut children = self.child_nodes();
+        for child in &mut children {
+            for _ in 0..indent {
+                print!(" ");
+            }
+            println!("{:?}", child);
+            child.recursive_apply(indent + 4);
+        }
+    }
+}
+
+#[derive(Debug)]
+pub enum TypeCheckedNode<'a> {
+    Statement(&'a mut TypeCheckedStatement),
+    Expression(&'a mut TypeCheckedExpr),
+    IfArm(&'a mut TypeCheckedIfArm),
+    StructField(&'a mut TypeCheckedStructField),
+}
+
+impl<'a> AbstractSyntaxTree for TypeCheckedNode<'a> {
+    fn child_nodes(&mut self) -> Vec<TypeCheckedNode> {
+        match self {
+            TypeCheckedNode::Statement(stat) => stat.child_nodes(),
+            TypeCheckedNode::Expression(exp) => exp.child_nodes(),
+            TypeCheckedNode::IfArm(arm) => arm.child_nodes(),
+            TypeCheckedNode::StructField(field) => field.child_nodes(),
+        }
+    }
+}
+
 ///An error encountered during typechecking
 #[derive(Debug)]
 pub struct TypeError {
@@ -50,6 +85,15 @@ pub struct TypeCheckedFunc {
     pub imported: bool,
     pub location: Option<Location>,
     pub properties: PropertiesList,
+}
+
+impl AbstractSyntaxTree for TypeCheckedFunc {
+    fn child_nodes(&mut self) -> Vec<TypeCheckedNode> {
+        self.code
+            .iter_mut()
+            .map(|stat| TypeCheckedNode::Statement(stat))
+            .collect()
+    }
 }
 
 impl MiniProperties for TypeCheckedFunc {
@@ -117,6 +161,55 @@ impl MiniProperties for TypeCheckedStatement {
     }
 }
 
+impl AbstractSyntaxTree for TypeCheckedStatement {
+    fn child_nodes(&mut self) -> Vec<TypeCheckedNode> {
+        match self {
+            TypeCheckedStatement::Noop(_)
+            | TypeCheckedStatement::Panic(_)
+            | TypeCheckedStatement::ReturnVoid(_) => vec![],
+            TypeCheckedStatement::Return(exp, _)
+            | TypeCheckedStatement::Expression(exp, _)
+            | TypeCheckedStatement::Let(_, exp, _)
+            | TypeCheckedStatement::AssignLocal(_, exp, _)
+            | TypeCheckedStatement::AssignGlobal(_, exp, _)
+            | TypeCheckedStatement::DebugPrint(exp, _) => vec![TypeCheckedNode::Expression(exp)],
+            TypeCheckedStatement::Loop(stats, _) => stats
+                .iter_mut()
+                .map(|stat| TypeCheckedNode::Statement(stat))
+                .collect(),
+            TypeCheckedStatement::While(exp, stats, _) => vec![TypeCheckedNode::Expression(exp)]
+                .into_iter()
+                .chain(
+                    stats
+                        .iter_mut()
+                        .map(|stat| TypeCheckedNode::Statement(stat)),
+                )
+                .collect(),
+            TypeCheckedStatement::If(arm) => vec![TypeCheckedNode::IfArm(arm)],
+            TypeCheckedStatement::IfLet(_, exp, stats, ostats, _) => {
+                vec![TypeCheckedNode::Expression(exp)]
+                    .into_iter()
+                    .chain(
+                        stats
+                            .iter_mut()
+                            .map(|stat| TypeCheckedNode::Statement(stat)),
+                    )
+                    .chain(
+                        ostats
+                            .iter_mut()
+                            .flatten()
+                            .map(|stat| TypeCheckedNode::Statement(stat)),
+                    )
+                    .collect()
+            }
+            TypeCheckedStatement::Asm(_, exps, _) => exps
+                .iter_mut()
+                .map(|exp| TypeCheckedNode::Expression(exp))
+                .collect(),
+        }
+    }
+}
+
 impl TypeCheckedStatement {
     pub fn inline(&mut self, funcs: &Vec<TypeCheckedFunc>, string_table: &StringTable) {
         match self {
@@ -174,6 +267,28 @@ pub enum TypeCheckedIfArm {
         Option<Location>,
     ),
     Catchall(Vec<TypeCheckedStatement>, Option<Location>),
+}
+
+impl AbstractSyntaxTree for TypeCheckedIfArm {
+    fn child_nodes(&mut self) -> Vec<TypeCheckedNode> {
+        match self {
+            TypeCheckedIfArm::Cond(exp, stats, alt_stats, _) => {
+                vec![TypeCheckedNode::Expression(exp)]
+                    .into_iter()
+                    .chain(
+                        stats
+                            .iter_mut()
+                            .map(|stat| TypeCheckedNode::Statement(stat)),
+                    )
+                    .chain(alt_stats.iter_mut().map(|arm| TypeCheckedNode::IfArm(arm)))
+                    .collect()
+            }
+            TypeCheckedIfArm::Catchall(stats, _) => stats
+                .iter_mut()
+                .map(|stat| TypeCheckedNode::Statement(stat))
+                .collect(),
+        }
+    }
 }
 
 impl MiniProperties for TypeCheckedIfArm {
@@ -386,6 +501,73 @@ impl MiniProperties for TypeCheckedExpr {
     }
 }
 
+impl AbstractSyntaxTree for TypeCheckedExpr {
+    fn child_nodes(&mut self) -> Vec<TypeCheckedNode> {
+        match self {
+            TypeCheckedExpr::LocalVariableRef(_, _, _)
+            | TypeCheckedExpr::GlobalVariableRef(_, _, _)
+            | TypeCheckedExpr::FuncRef(_, _, _)
+            | TypeCheckedExpr::Const(_, _, _)
+            | TypeCheckedExpr::NewMap(_, _) => vec![],
+            TypeCheckedExpr::UnaryOp(_, exp, _, _)
+            | TypeCheckedExpr::Variant(exp, _)
+            | TypeCheckedExpr::TupleRef(exp, _, _, _)
+            | TypeCheckedExpr::DotRef(exp, _, _, _, _)
+            | TypeCheckedExpr::NewArray(exp, _, _, _)
+            | TypeCheckedExpr::Cast(exp, _, _)
+            | TypeCheckedExpr::Try(exp, _, _) => vec![TypeCheckedNode::Expression(exp)],
+            TypeCheckedExpr::Binary(_, lexp, rexp, _, _)
+            | TypeCheckedExpr::ShortcutOr(lexp, rexp, _)
+            | TypeCheckedExpr::ShortcutAnd(lexp, rexp, _)
+            | TypeCheckedExpr::ArrayRef(lexp, rexp, _, _)
+            | TypeCheckedExpr::FixedArrayRef(lexp, rexp, _, _, _)
+            | TypeCheckedExpr::MapRef(lexp, rexp, _, _)
+            | TypeCheckedExpr::StructMod(lexp, _, rexp, _, _) => vec![
+                TypeCheckedNode::Expression(lexp),
+                TypeCheckedNode::Expression(rexp),
+            ],
+            TypeCheckedExpr::FunctionCall(name_exp, arg_exps, _, _, _) => {
+                vec![TypeCheckedNode::Expression(name_exp)]
+                    .into_iter()
+                    .chain(
+                        arg_exps
+                            .iter_mut()
+                            .map(|exp| TypeCheckedNode::Expression(exp)),
+                    )
+                    .collect()
+            }
+            TypeCheckedExpr::CodeBlock(stats, oexpr, _) => oexpr
+                .iter_mut()
+                .map(|exp| TypeCheckedNode::Expression(exp))
+                .chain(
+                    stats
+                        .iter_mut()
+                        .map(|stat| TypeCheckedNode::Statement(stat)),
+                )
+                .collect(),
+            TypeCheckedExpr::StructInitializer(fields, _, _) => fields
+                .iter_mut()
+                .map(|field| TypeCheckedNode::StructField(field))
+                .collect(),
+            TypeCheckedExpr::Tuple(exps, _, _) | TypeCheckedExpr::Asm(_, _, exps, _) => exps
+                .iter_mut()
+                .map(|exp| TypeCheckedNode::Expression(exp))
+                .collect(),
+            TypeCheckedExpr::NewFixedArray(_, oexp, _, _) => oexp
+                .into_iter()
+                .map(|exp| TypeCheckedNode::Expression(exp))
+                .collect(),
+            TypeCheckedExpr::ArrayMod(exp1, exp2, exp3, _, _)
+            | TypeCheckedExpr::FixedArrayMod(exp1, exp2, exp3, _, _, _)
+            | TypeCheckedExpr::MapMod(exp1, exp2, exp3, _, _) => vec![
+                TypeCheckedNode::Expression(exp1),
+                TypeCheckedNode::Expression(exp2),
+                TypeCheckedNode::Expression(exp3),
+            ],
+        }
+    }
+}
+
 impl TypeCheckedExpr {
     ///Extracts the type returned from the expression.
     pub fn get_type(&self) -> Type {
@@ -545,6 +727,12 @@ impl TypeCheckedExpr {
 pub struct TypeCheckedStructField {
     pub name: String,
     pub value: TypeCheckedExpr,
+}
+
+impl AbstractSyntaxTree for TypeCheckedStructField {
+    fn child_nodes(&mut self) -> Vec<TypeCheckedNode> {
+        self.value.child_nodes()
+    }
 }
 
 impl TypeCheckedStructField {
