@@ -22,16 +22,16 @@ pub trait AbstractSyntaxTree {
     fn child_nodes(&mut self) -> Vec<TypeCheckedNode> {
         vec![]
     }
-    fn recursive_apply<F, S>(&mut self, func: F, state: &mut S)
+    fn recursive_apply<F, S, MS>(&mut self, func: F, state: &S, mut_state: &mut MS)
     where
-        F: Fn(&mut TypeCheckedNode, &mut S) + Copy,
-        S: Clone,
+        F: Fn(&mut TypeCheckedNode, &S, &mut MS) + Copy,
+        MS: Clone,
     {
         let mut children = self.child_nodes();
         for child in &mut children {
-            let mut child_state = (*state).clone();
-            func(child, &mut child_state);
-            child.recursive_apply(func, &mut child_state);
+            let mut child_state = (*mut_state).clone();
+            func(child, state, &mut child_state);
+            child.recursive_apply(func, state, &mut child_state);
         }
     }
 }

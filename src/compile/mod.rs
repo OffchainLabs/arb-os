@@ -283,12 +283,12 @@ pub fn compile_from_file(
     }
 }
 
-fn print_node(node: &mut TypeCheckedNode, state: &mut usize) {
-    for _ in 0..*state {
-        print!(" ");
+fn print_node(node: &mut TypeCheckedNode, state: &String, mut_state: &mut usize) {
+    for _ in 0..*mut_state {
+        print!("{}", state);
     }
     println!("{:?}", node);
-    *state += 4;
+    *mut_state += 1;
 }
 
 pub fn compile_from_folder(
@@ -437,7 +437,7 @@ pub fn compile_from_folder(
     }
     for module in &mut typechecked {
         for func in &mut module.checked_funcs {
-            func.recursive_apply(print_node, &mut 0);
+            func.recursive_apply(print_node, &"    ".to_string(), &mut 0);
         }
     }
     if inline {
