@@ -24,14 +24,16 @@ pub trait AbstractSyntaxTree {
     }
     fn recursive_apply<F, S, MS>(&mut self, func: F, state: &S, mut_state: &mut MS)
     where
-        F: Fn(&mut TypeCheckedNode, &S, &mut MS) + Copy,
+        F: Fn(&mut TypeCheckedNode, &S, &mut MS) -> bool + Copy,
         MS: Clone,
     {
         let mut children = self.child_nodes();
         for child in &mut children {
             let mut child_state = (*mut_state).clone();
-            func(child, state, &mut child_state);
-            child.recursive_apply(func, state, &mut child_state);
+            let recurse = func(child, state, &mut child_state);
+            if recurse {
+                child.recursive_apply(func, state, &mut child_state);
+            }
         }
     }
 }

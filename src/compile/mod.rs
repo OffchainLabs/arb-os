@@ -283,12 +283,13 @@ pub fn compile_from_file(
     }
 }
 
-fn print_node(node: &mut TypeCheckedNode, state: &String, mut_state: &mut usize) {
+fn print_node(node: &mut TypeCheckedNode, state: &String, mut_state: &mut usize) -> bool {
     for _ in 0..*mut_state {
         print!("{}", state);
     }
     println!("{:?}", node);
     *mut_state += 1;
+    true
 }
 
 pub fn compile_from_folder(
