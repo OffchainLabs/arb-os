@@ -8,7 +8,22 @@ use std::bytearray::bytearray_new;
 use std::bytearray::bytearray_extract;
 use std::bytearray::bytearray_get256;
 use std::bytearray::bytearray_set256;
+use std::bytearray::bytearray_copy;
 
+use std::bytestream::bytestream_new;
+
+use std::storageMap::storageMap_new;
+use std::storageMap::storageMap_serialize;
+
+use accounts::getGlobalAccountStore;
+use accounts::setGlobalAccountStore;
+use accounts::accountStore_get;
+use accounts::accountStore_createAccountFromEvmCode;
+use accounts::account_getAllStorage;
+
+use codeSegment::translateEvmCodeSegment;
+
+use evmOps::evmOp_callAndReturn;
 use evmOps::evmOp_return;
 use evmOps::evmOp_revert_knownCodePc;
 
@@ -17,6 +32,8 @@ use evmCallStack::evmCallStack_callHitError;
 use evmCallStack::evmCallStack_topFrame;
 use evmCallStack::evmCallFrame_getCalldata;
 use evmCallStack::evmCallStack_setTopFrameMemory;
+use evmCallStack::evmCallStack_getAccount;
+use evmCallStack::evmCallStack_setAccount;
 
 
 public impure func arbosTest_txcall() {
@@ -47,20 +64,69 @@ impure func arbosTest_run(topFrame: EvmCallFrame, calldata: ByteArray) { // (byt
         evmOp_revert_knownCodePc(address(105), 10, 0, 0);
     }
     let nbytes = bytearray_get256(calldata, 36);
+    asm((0, nbytes),) { debugprint };
     let code = bytearray_extract(calldata, 68, nbytes);
+    let addr = address(0x7e6e3943dc0ce1267a954cb2139232658c14a7e3);  // keccak256("arbosTest account for testing")
 
-    let mem = bytearray_set256(
-        bytearray_set256(
-            bytearray_new(0),
-            0,
-            64
-        ),
-        32,
-        0  // size of buffer
-    );
-    if (evmCallStack_setTopFrameMemory(mem)) {
-        evmOp_return(0, 64);
+    asm(1,) { debugprint };
+    if let Some(res) = translateEvmCodeSegment(bytestream_new(code), false) {
+        asm(2,) { debugprint };
+        let (entryPoint, evmJumpTable, pcTable) = res;
+        if let Some(acctStore) = accountStore_createAccountFromEvmCode(
+            getGlobalAccountStore(),
+            addr,
+            code,
+            evmJumpTable,
+            entryPoint,
+            storageMap_new()
+        ) {
+            asm(3,) { debugprint };
+            let res = evmCallStack_setAccount(addr, accountStore_get(acctStore, addr));
+            if ( ! res ) {
+                evmOp_revert_knownCodePc(address(105), 11, 0, 0);
+            }
+
+            asm(4,) { debugprint };
+
+            let success = evmOp_callAndReturn(
+                100000000,
+                addr,
+                0,
+                0,
+                0,
+                0,
+                0,
+            );
+
+            if let Some(acct) = evmCallStack_getAccount(addr) {
+                if let Some(storage) = account_getAllStorage(acct) {
+                    let serializedStorage = storageMap_serialize(storage);
+                    let serializedSize = bytearray_size(serializedStorage);
+                    let mem = bytearray_set256(
+                        bytearray_set256(
+                            bytearray_new(0),
+                            0,
+                            64
+                        ),
+                        32,
+                        serializedSize,
+                    );
+                    mem = bytearray_copy(serializedStorage, 0, mem, 64, serializedSize);
+                    if (evmCallStack_setTopFrameMemory(mem)) {
+                        evmOp_return(0, 64+serializedSize);
+                    } else {
+                        evmOp_revert_knownCodePc(address(105), 12, 0, 0);
+                    }
+                } else {
+                    evmOp_revert_knownCodePc(address(105), 13, 0, 0);
+                }
+            } else {
+                evmOp_revert_knownCodePc(address(105), 14, 0, 0);
+            }
+        } else {
+            evmOp_revert_knownCodePc(address(105), 15, 0, 0);
+        }
     } else {
-        evmOp_revert_knownCodePc(address(105), 11, 0, 0);
+        evmOp_revert_knownCodePc(address(105), 16, 0, 0);
     }
 }

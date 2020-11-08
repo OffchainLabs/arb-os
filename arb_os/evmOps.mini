@@ -8,6 +8,7 @@ use evmlogs::EvmLogs;
 use std::bytearray::ByteArray;
 use std::bytestream::ByteStream;
 use std::bytearray::MarshalledBytes;
+use std::stack::Stack;
 use std::storageMap::StorageMap;
 
 use errorHandler::errorHandler;
@@ -26,6 +27,7 @@ use evmCallStack::evmCallStack_doCall;
 use evmCallStack::evmCallStack_returnFromCall;
 use evmCallStack::evmCallStack_callHitError;
 use evmCallStack::evmCallStack_runningCodeFromAccount;
+use evmCallStack::snapshotAuxStack;
 
 use evmCallStack::evmCallFrame_runningAsAccount;
 use evmCallStack::evmCallFrame_runningCodeFromAccount;
@@ -67,6 +69,8 @@ use std::bytearray::bytearray_extract;
 use std::bytearray::bytearray_copy;
 use std::bytearray::bytearray_marshalFull;
 use std::bytestream::bytestream_new;
+
+use std::stack::stack_pop;
 
 use codeSegment::translateEvmCodeSegment;
 
@@ -576,6 +580,67 @@ public impure func evmOp_log4(
     panic;
 }
 
+public impure func evmOp_callAndReturn(
+    gas: uint,
+    callee: address,
+    balance: uint,
+    argsOffset: uint,
+    argsLength: uint,
+    retOffset: uint,
+    retLength: uint
+) -> bool {
+    let savedAuxStack = snapshotAuxStack();
+
+    // remove top two items from saved aux stack, so we get our caller's aux stack state
+    if let Some(res) = stack_pop(savedAuxStack) {
+        let (ustack, _) = res;
+        savedAuxStack = ustack;
+    } else {
+        evmCallStack_callHitError(22);  // shouldn't ever return
+    }
+    if let Some(res) = stack_pop(savedAuxStack) {
+        let (ustack, _) = res;
+        savedAuxStack = ustack;
+    } else {
+        evmCallStack_callHitError(23);  // shouldn't ever return
+    }
+
+    // First, get the return address of our caller.
+    // This will be the second-from-top item on the AVM AuxStack.
+    // Get a copy of it, without disturbing anything.
+    let resumeCodePoint = asm() func() {
+        auxpop
+        auxpop
+        dup0
+        swap2
+        swap1
+        auxpush
+        auxpush
+    };
+
+    // Now make the call.
+    // After the call completes, control will be thrown directly back to resumeCodePoint.
+    asm(101,) { debugprint };
+    let res = evmCallStack_doCall(
+        0,
+        gas,
+        callee,
+        balance,
+        argsOffset,
+        argsLength,
+        retOffset,
+        retLength,
+        resumeCodePoint,
+        Some(savedAuxStack),
+    );
+    asm(102,) { debugprint };
+    if let Some(success) = res {
+        return success;
+    } else {
+        return false;  // weird failure, best to return false
+    }
+}
+
 public impure func evmOp_call(
     gas: uint,
     calleeAsUint: uint,
@@ -602,6 +667,7 @@ public impure func evmOp_call(
 
     // Now make the call.
     // After the call completes, control will be thrown directly back to resumeCodePoint.
+    asm(101,) { debugprint };
     let res = evmCallStack_doCall(
         0,
         gas,
@@ -611,8 +677,10 @@ public impure func evmOp_call(
         argsLength,
         retOffset,
         retLength,
-        resumeCodePoint
+        resumeCodePoint,
+        None<Stack>,
     );
+    asm(102,) { debugprint };
     if let Some(success) = res {
         return success;
     } else {
@@ -650,7 +718,8 @@ public impure func evmOp_callcode(
         argsLength,
         retOffset,
         retLength,
-        resumeCodePoint
+        resumeCodePoint,
+        None<Stack>,
     );
     if let Some(success) = res {
         return success;
@@ -688,7 +757,8 @@ public impure func evmOp_delegatecall(
          argsLength,
          retOffset,
          retLength,
-         resumeCodePoint
+         resumeCodePoint,
+         None<Stack>,
      );
     if let Some(success) = res {
         return success;
@@ -726,7 +796,8 @@ public impure func evmOp_staticcall(
         argsLength,
         retOffset,
         retLength,
-        resumeCodePoint
+        resumeCodePoint,
+        None<Stack>,
     );
     if let Some(success) = res {
         return success;
@@ -755,7 +826,9 @@ public impure func evmOp_revert_knownPc(evmPc: uint, memOffset: uint, memNbytes:
 }
 
 public impure func evmOp_return(memOffset: uint, memNbytes: uint) {
+    asm(201,) { debugprint };
     let _ = evmCallStack_returnFromCall(true, memOffset, memNbytes);
+    asm(202,) { debugprint };
 
     evm_runtimePanic(29);
 }

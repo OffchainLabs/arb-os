@@ -21,6 +21,12 @@
 //     it's more space-efficient than alternative approaches, which is important when the
 //     structure gets large--which it will do for some EVM contracts.
 
+use std::bytearray::ByteArray;
+use std::bytearray::bytearray_new;
+use std::bytearray::bytearray_size;
+use std::bytearray::bytearray_set256;
+
+
 type StorageMap = struct {
     tree: StorageMapNode,
     size: uint,
@@ -196,4 +202,22 @@ public func storageMap_forall_tree(
         }
         return state;
    }
+}
+
+public func storageMap_serialize(s: StorageMap) -> ByteArray {
+    return unsafecast<ByteArray>(storageMap_forall(s, smSerHelper, bytearray_new(0)));
+}
+
+func smSerHelper(index: uint, value: uint, state: any) -> any {
+    let ba = unsafecast<ByteArray>(state);
+    let sz = bytearray_size(ba);
+    return bytearray_set256(
+        bytearray_set256(
+            ba,
+            sz,
+            index,
+        ),
+        sz+32,
+        value,
+    );
 }

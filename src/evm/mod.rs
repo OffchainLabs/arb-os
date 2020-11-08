@@ -2,8 +2,7 @@
  * Copyright 2020, Offchain Labs, Inc. All rights reserved.
  */
 
-use crate::evm::abi::ArbSys;
-use crate::evm::abi::FunctionTable;
+use crate::evm::abi::{ArbSys, ArbosTest, FunctionTable};
 use crate::mavm::Value;
 use crate::run::{bytestack_from_bytes, load_from_file, RuntimeEnvironment};
 use crate::uint256::Uint256;
@@ -246,6 +245,30 @@ pub fn evm_test_function_table_access(
     );
     assert_eq!(is_payable, false);
     assert_eq!(gas_limit, Uint256::from_u64(10000000));
+
+    if let Some(path) = log_to {
+        machine.runtime_env.recorder.to_file(path).unwrap();
+    }
+
+    Ok(())
+}
+
+pub fn _basic_evm_add_test(
+    log_to: Option<&Path>,
+    debug: bool,
+) -> Result<(), ethabi::Error> {
+    let rt_env = RuntimeEnvironment::new(Uint256::from_usize(1111));
+    let mut machine = load_from_file(Path::new("arb_os/arbos.mexe"), rt_env);
+    machine.start_at_zero();
+
+    let wallet = machine.runtime_env.new_wallet();
+    let my_addr = Uint256::from_bytes(wallet.address().as_bytes());
+
+    let arbos_test = ArbosTest::new(&wallet, debug);
+
+    let code = hex::decode("7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff0160005500").unwrap();
+    let result = arbos_test.run(&mut machine, code)?;
+    assert_eq!(result, vec![0u8]);
 
     if let Some(path) = log_to {
         machine.runtime_env.recorder.to_file(path).unwrap();

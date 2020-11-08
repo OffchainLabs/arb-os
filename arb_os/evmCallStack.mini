@@ -116,13 +116,14 @@ type ReturnInfo = struct {  // information about a call that previously complete
     status: bool,
 }
 
-type ResumeInfo = struct {  // information used to resume a call after a subcall returns
-    codePoint: func(),      // where to resume execution
-    stackContents: Stack,   // saved contents of stack
-    returnDataOffset: uint, // where returndata from subcall should be put
-    returnDataNbytes: uint, // max amount of returndata to copy into caller's memory
-    callType: uint,         // call type of the subcall
-    savedGas: uint,         // how much of the caller's gas was not lent to the subcall
+type ResumeInfo = struct {            // information used to resume a call after a subcall returns
+    codePoint: func(),                // where to resume execution
+    stackContents: Stack,             // saved contents of stack
+    auxStackContents: option<Stack>,  // saved contents of aux stack; None means to clear the auxstack on resume
+    returnDataOffset: uint,           // where returndata from subcall should be put
+    returnDataNbytes: uint,           // max amount of returndata to copy into caller's memory
+    callType: uint,                   // call type of the subcall
+    savedGas: uint,                   // how much of the caller's gas was not lent to the subcall
 }
 
 var globalCallStack: option<EvmCallFrame>;   // call frame of currently running call, if any
@@ -344,7 +345,8 @@ public impure func evmCallStack_doCall(
     argsLength: uint,
     retOffset: uint,
     retLength: uint,
-    resumeCodePoint: func(),  // jump to this to resume the caller
+    resumeCodePoint: func(),         // jump to this to resume the caller
+    resumeAuxStack: option<Stack>,   // aux stack contents to restore on resume, if any
 ) -> option<bool> {   // returns Some(success) if succeed/fail, or None on error
     let topFrame = globalCallStack?;
     let callee = accountStore_get(topFrame.accountStore, calleeAddr);
@@ -373,6 +375,7 @@ public impure func evmCallStack_doCall(
             with { resumeInfo: Some(struct {
                        codePoint: resumeCodePoint,
                        stackContents: stackContents,
+                       auxStackContents: resumeAuxStack,
                        returnDataOffset: retOffset,
                        returnDataNbytes: retLength,
                        callType: kind,
@@ -417,7 +420,7 @@ public impure func evmCallStack_doCall(
             revertOnStorageWrite: // disallow storage write if gas provided < EVM gas cost of storage write
                                   topFrame.revertOnStorageWrite
                                   || (gas < 5000)
-                                  || ((balance > 0) && (gas < 7700)),
+                                  || ((balance > 0) && (gas < 17700)),
             evmLogs: topFrame.evmLogs,
             selfDestructQueue: topFrame.selfDestructQueue,
             resumeInfo: None<ResumeInfo>,
@@ -460,6 +463,7 @@ public impure func evmCallStack_returnFromCall(
     let returnData = bytearray_extract(memory, returnOffset, returnLength);
 
     if let Some(newTopFrame) = unsafecast<option<EvmCallFrame>>(topFrame.parent) {
+        asm(301,) { debugprint };
         // Returning from a non-top-level call
 
         topFrame = topFrame with {   // copy cached account back into callframe's main accountStore
@@ -469,6 +473,7 @@ public impure func evmCallStack_returnFromCall(
                 topFrame.runningAsAccount
             )
         };
+        asm(302,) { debugprint };
 
         if (success && (topFrame.callKind != 3)) {   // if call succeeded, and it's not a staticcall
             // copy relevant data back to parent frame
@@ -478,6 +483,7 @@ public impure func evmCallStack_returnFromCall(
                 with { evmLogs: topFrame.evmLogs }
                 with { sendQueue: topFrame.sendQueue };
         }
+        asm(303,) { debugprint };
 
         // set up returnInfo in caller's frame
         newTopFrame = newTopFrame with { returnInfo: Some(struct{ data: returnData, status: success }) };
@@ -495,6 +501,7 @@ public impure func evmCallStack_returnFromCall(
             returnLength
         );
         newTopFrame = newTopFrame with { memory: newMemory };
+        asm(304,) { debugprint };
 
         // ready to return to caller
         // save updated EVM callstack state; restore caller's stack; jump to resume address
@@ -502,8 +509,11 @@ public impure func evmCallStack_returnFromCall(
         emptyAvmStack();                             // throw away anything that callee left on the stack
         restoreAvmStack(resumeInfo.stackContents,);  // restore the caller's stack
         asm(success,) { };                           // push return code onto the stack, where caller expects it to be
+        asm(305,) { debugprint };
         let _ = gasAccounting_resumeTxCharges(leftoverGas + resumeInfo.savedGas);
+        asm(306,) { debugprint };
         asm(resumeInfo.codePoint,) { jump };         // jump to resume point in caller; this should never return
+        asm(307,) { debugprint };
 
         evmCallStack_callHitError(8);
         panic;  // shouldn't happen -- previous instruction jumped away
@@ -678,8 +688,64 @@ func restoreAvmStack(savedStack: Stack) {
     }
 }
 
+public impure func snapshotAuxStack() -> Stack {
+    // Save a copy everything from the auxstack, except the current callframe (which is on top).
+    // Keep the callframe on top of the auxstack (except during asm blocks)
+    //       in case the code generator wants to use the callframe
+    let ret = stack_new();
+    while ( ! asm() bool { auxpop auxstackempty swap1 auxpush }) {
+        ret = stack_push(
+            ret,
+            asm() any {
+                auxpop
+                auxpop
+                swap1
+                auxpush
+            }
+        );
+    }
+
+    // Now restore everything that we popped from the aux stack, so the aux stack ends up where it started.
+    let savedAuxStack = ret;
+    while( ! stack_isEmpty(savedAuxStack)) {
+        if let Some(res) = stack_pop(savedAuxStack) {
+            let (ustack, val) = res;
+            savedAuxStack = ustack;
+            asm(val,) {
+                auxpop
+                swap1
+                auxpush
+                auxpush
+            };
+        } else {
+            // can't happen, because we just verified that stack isn't empty
+            evmCallStack_callHitError(19);  // shouldn't ever return
+        }
+    }
+
+    // discard the top two items from the saved aux stack, because they belong to this function
+    if let Some(res) = stack_pop(ret) {
+        let (ustack, _) = res;
+        ret = ustack;
+    } else {
+        evmCallStack_callHitError(20);  // shouldn't ever return
+    }
+    if let Some(res) = stack_pop(ret) {
+        let (ustack, _) = res;
+        ret = ustack;
+    } else {
+        evmCallStack_callHitError(21);  // shouldn't ever return
+    }
+
+    return ret;
+}
+
 public impure func cleanAvmAuxStackAndCall(funcToCall: impure func()) {
-    // This cleans the AvmAuxStack, then calls funcToCall.
+    restoreAuxStackAndCall(funcToCall, None<Stack>);
+}
+
+public impure func restoreAuxStackAndCall(funcToCall: impure func(), maybeSavedAuxStack: option<Stack>) {
+    // This restores a saved version of the AvmAuxStack, then calls funcToCall.
     // funcToCall must never try to return.
 
     // Discard everything from the auxstack, except the current callframe (which is on top).
@@ -694,8 +760,28 @@ public impure func cleanAvmAuxStackAndCall(funcToCall: impure func()) {
         };
     }
 
+    if let Some(savedAuxStack) = maybeSavedAuxStack {
+        // Restore the saved AuxStack, leaving only the current callframe on top.
+        // Keep the callframe on top of the auxstack (except during asm blocks)
+        while( ! stack_isEmpty(savedAuxStack)) {
+            if let Some(res) = stack_pop(savedAuxStack) {
+                let (ustack, val) = res;
+                savedAuxStack = ustack;
+                asm(val,) {
+                    auxpop
+                    swap1
+                    auxpush
+                    auxpush
+                };
+            } else {
+                // can't happen, because we just verified that stack isn't empty
+                evmCallStack_callHitError(19);  // shouldn't ever return
+            }
+        }
+    }
+
     // Discard our callframe, push a fake return address, and jump to funcToCall
-    // funcToCall will think somebody called it normally, with an empty auxstack
+    // funcToCall will think somebody called it normally, with the restored auxstack
     asm(funcToCall,) {
         auxpop
         pop
