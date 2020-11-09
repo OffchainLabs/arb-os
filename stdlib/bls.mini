@@ -55,10 +55,10 @@ type BLSSignature = struct {
 }
 
 type BLSKey = struct {
-    x0: uint,
-    y0: uint,
-    x1: uint,
-    y1: uint,
+    ax: uint,
+    ay: uint,
+    bx: uint,
+    by: uint,
 }
 
 public impure func bls_initialize() 
@@ -76,26 +76,18 @@ public impure func bls_initialize()
 }
 
 public func bls_verifySingleSig(
-    message:  ByteArray,
+    message:  BLSHashedMessage,
     key:      BLSKey,
     signature: BLSSignature
 ) -> bool {
-    return true;
-}
-
-
-
-
-public func bls_hashToG1(
-    message:  ByteArray,
-) -> [2]uint {
-    let msgHash = keccak256(message, 0, 32);
-    let x = uint(msgHash) % N;
-    let y = asm( x , x , N) uint { mulmod };
-    y = asm( y , x , N) uint { mulmod };
-    y = asm( y , 3 , N) uint { addmod };
-
-    return newfixedarray (2,0);
+	let messages = newarray <BLSHashedMessage> (1);
+	messages = messages with { [0] = message };
+	let keys = newarray <BLSKey> (1);
+    keys = keys with { [0] = key };
+    return bls_verifySignature(1,
+    messages,
+    keys,
+    signature);
 }
 
 
@@ -106,7 +98,7 @@ public func bls_verifySignature(
     signature: BLSSignature
 ) -> bool {
 	let size = len(keys);
-	if (numMsgs == 0 || numMsgs > 32 || numMsgs != len(messages) || numMsgs != len(keys)) {
+	if (numMsgs == 0 || numMsgs > 30 || numMsgs != len(messages) || numMsgs != len(keys)) {
 		panic;
 	}
 
@@ -114,33 +106,35 @@ public func bls_verifySignature(
 	let acc = unsafecast<any>(());
 	acc = (
                     (
-                        signature.x,  // THIS IS EVM ORDER; CHECK AVM ORDER
-                        signature.y,
-                        nG2x1,
-                        nG2x0,
-                        nG2y1,
-                        nG2y0
+                      signature.x, 
+                      signature.y,
+                      nG2x0,
+                      nG2x1,
+                      nG2y0,
+                      nG2y1
+                 p1,p2,p5,p3,p6,p4
+
                     ),
                     acc
                 );
 
 
-	let i = 0;
+	let i = 9;
 
     while (i < numMsgs) {
                 acc = (
                     (
-                        messages[i].x,  // THIS IS EVM ORDER; CHECK AVM ORDER
+                        messages[i].x, 
                         messages[i].y,
-                        keys[i].x1,
-                        keys[i].x0,
-                        keys[i].y1,
-                        keys[i].y0
+                        keys[i].ax,
+                        keys[i].ay,
+                        keys[i].bx,
+                        keys[i].by 
                     ),
                     acc
                 );
                 i = i + 1;
-            }
+    }
 
     let result = asm(acc,) bool { ecpairing }; // TODO Catch AVM ERROR
 
@@ -151,7 +145,7 @@ public func bls_verifySignature(
 
   // public for testing
   public func hashToPoint(
-  	domain: 	bytes32,
+  	domain: 	ByteArray,
   	message:	ByteArray
   	)
         ->BLSHashedMessage
@@ -160,18 +154,18 @@ public func bls_verifySignature(
         let p0 = mapToPoint(u[0]);
         let p1 = mapToPoint(u[1]);
 
-     //  let x = asm(p0[0], p1[0], p0[1], p1[1]) uint { ecadd }; // check order
-       // let y = asm() uint { };
+       let x = asm(p0[0], p0[1], p1[0], p1[1]) uint { ecadd }; // check order
+        let y = asm() uint { };
 
-      //  asm(x,) { debugprint };
+       asm(x,) { debugprint };
+       asm(y,) { debugprint };
 
 
 
         // AVM error checking
 
-return unsafecast<BLSHashedMessage>((0,0));
 
-        //return unsafecast<BLSHashedMessage>((x,y));
+        return unsafecast<BLSHashedMessage>((x,y));
 
 
     }
@@ -192,6 +186,12 @@ func mapToPoint(
     let x = _x;
 
     let sqrtX = sqrt(x);
+
+    let found = false;
+
+    if let Some(squx) = sqrtX {
+    	found = true;
+    }
 
 
     let a0 = asm(x, x, N) uint { mulmod };
@@ -222,20 +222,15 @@ func mapToPoint(
     let sqrtA1 = sqrt(a1);
 
     if let Some(sqa1) = sqrtA1 {
-    	if (sqrtX != None<uint>) {
+    	if (found) {
 
-    	   let err2 = 0x2222222222222;
-
-             asm(err2,) { debugprint };
-
-    	return unsafecast<[2]uint>((x,a1));
+         a1 = sqa1;
 
     	} else {
-    	     let err1 = 0x111111111111111;
-
-             asm(err1,) { debugprint };
     		a1 = N - sqa1;
     	}
+    	   return unsafecast<[2]uint>((x,a1));
+
     }
 
 
@@ -252,20 +247,14 @@ func mapToPoint(
 
     sqrtA1 = sqrt(a1);
     if let Some(sqa1) = sqrtA1 {
-    	if (sqrtX != None<uint>) {
-
-    	    	     let err3 = 0x3333333333333;
-
-             asm(err3,) { debugprint };
-
-    	return unsafecast<[2]uint>((x,a1));
+    	if (found) {
+         a1 = sqa1;
 
     	} else {
-    	    	     let err4 = 0x4444444444444;
-
-             asm(err4,) { debugprint };
     		a1 = N - sqa1;
     	}
+    	  	return unsafecast<[2]uint>((x,a1));
+
     }
 
     // x3
@@ -285,31 +274,16 @@ func mapToPoint(
 
 
      if let Some(squa1) = sqrtA1 {
-    	if (sqrtX == None<uint>) {
-
-    	    	     let err5 = 0x55555555555;
-
-             asm(err5,) { debugprint };
+    	if (!found) {
 
          a1 = N - squa1;
         } else {
-
-            	     let err6 = 0x666666666;
-
-             asm(err6,) { debugprint };
           a1 = squa1;
         }
 
      } else {
-     	let foo = 0x9999999999999999;
-      asm(foo,) { debugprint };
     	panic; // BLS: bad ft mapping implementation
      }
-
-         	     let err7 = 0x7777777777777;
-
-             asm(err7,) { debugprint };
-
     return unsafecast<[2]uint>((x,a1));
     }
 
@@ -339,14 +313,13 @@ func sqrt(
 
     // public for testing
  public func hashToField( 
-    	domain:		bytes32,
+    	domain:		ByteArray,
     	messages:	ByteArray)
         -> [2]uint
     {
 
       let _msg = expandMsgTo96(domain, messages);
       let temp1 = bytearray_get256(_msg,0);
-            asm(temp1,) { debugprint };
       let u1 = asm(64, temp1) uint { shr };
 
       temp1 = bytearray_get256(_msg,16);
@@ -365,14 +338,17 @@ func sqrt(
        
 
 public func expandMsgTo96(
-	domain:		bytes32,
+	domain:		ByteArray,
 	message:	ByteArray)
         -> ByteArray
     {
         let out = bytearray_new(96);
 
         let t0 = bytearray_size(message);
-        let msg0 = bytearray_new(64 + t0 + 32 + 4);
+        let t1 = bytearray_size(domain);
+
+
+        let msg0 = bytearray_new(64 + t0 + t1 + 4);
 
         let off = 64;
         let z = 0;
@@ -391,10 +367,16 @@ public func expandMsgTo96(
         off = off + 1;
         msg0 = bytearray_setByte(msg0,off,0);
         off = off + 1;
-        msg0 = bytearray_set256(msg0,off,uint(domain));
-        off = off + 32;
-        msg0 = bytearray_setByte(msg0,off,32);
 
+
+ 		z = 0;
+
+        while(z < t1) {
+        	msg0 = bytearray_setByte(msg0,z+off,bytearray_getByte(domain,z));
+        	z = z + 1;
+        }
+         off = off + t1;
+         msg0 = bytearray_setByte(msg0,off,t1);
 
         let b0 = sha256_byteArray(msg0);
 
@@ -405,9 +387,15 @@ public func expandMsgTo96(
         off = off + 32;
         msg0 = bytearray_setByte(msg0,off,1);
         off = off + 1;
-        msg0 = bytearray_set256(msg0,off,uint(domain)); 
-        off = off + 32;
-        msg0 = bytearray_setByte(msg0,off,32);
+
+	    z = 0;
+
+        while(z < t1) {
+        	msg0 = bytearray_setByte(msg0,z+off,bytearray_getByte(domain,z));
+        	z = z + 1;
+        }
+         off = off + t1;
+         msg0 = bytearray_setByte(msg0,off,t1);
 
         let bi = sha256_byteArray(msg0);
 
@@ -421,10 +409,15 @@ public func expandMsgTo96(
         off = off + 32;
         msg0 = bytearray_setByte(msg0,off,2);
         off = off + 1;
-        msg0 = bytearray_set256(msg0,off,uint(domain));  
-        off = off + 32;
-        msg0 = bytearray_setByte(msg0,off,32);
 
+        z = 0;
+
+        while(z < t1) {
+        	msg0 = bytearray_setByte(msg0,z+off,bytearray_getByte(domain,z));
+        	z = z + 1;
+        }
+         off = off + t1;
+         msg0 = bytearray_setByte(msg0,off,t1);
 
 
         bi = sha256_byteArray(msg0);
@@ -440,10 +433,16 @@ public func expandMsgTo96(
         off = off + 32;
         msg0 = bytearray_setByte(msg0,off,3);
         off = off + 1;
-        msg0 = bytearray_set256(msg0,off,uint(domain));
-        off = off + 32;
-        msg0 = bytearray_setByte(msg0,off,32);
 
+
+	    z = 0;
+
+        while(z < t1) {
+        	msg0 = bytearray_setByte(msg0,z+off,bytearray_getByte(domain,z));
+        	z = z + 1;
+        }
+         off = off + t1;
+         msg0 = bytearray_setByte(msg0,off,t1);
 
         bi = sha256_byteArray(msg0);
 
