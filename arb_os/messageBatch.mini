@@ -2,35 +2,28 @@
 // Copyright 2020, Offchain Labs, Inc. All rights reserved.
 //
 
-import type MarshalledBytes;
-import type ByteArray;
-import type ByteStream;
+use std::bytearray::MarshalledBytes;
+use std::bytearray::ByteArray;
+use std::bytestream::ByteStream;
 
-import func bytearray_size(ba: ByteArray) -> uint;
-import func bytearray_getByte(ba: ByteArray, offset: uint) -> uint;
-import func bytearray_get256(ba: ByteArray, offset: uint) -> uint;
-import func bytearray_setByte(ba: ByteArray, offset: uint, val: uint) -> ByteArray;
-import func bytearray_unmarshalBytes(mb: MarshalledBytes) -> ByteArray;
-import func bytearray_marshalFull(ba: ByteArray) -> MarshalledBytes;
-import func bytearray_extract(ba: ByteArray, offset: uint, nbytes: uint) -> ByteArray;
-import func bytestream_new(ba: ByteArray) -> ByteStream;
-import func bytestream_get64(bs: ByteStream) -> option<(ByteStream, uint)>;
-import func bytestream_getN(bs: ByteStream, nbytes: uint) -> option<(ByteStream, ByteArray)>;
-import func bytestream_skipBytes(bs: ByteStream, nbytes: uint) -> option<ByteStream>;
-import func marshalledBytes_firstByte(mb: MarshalledBytes) -> uint;
-import func marshalledBytes_hash(mb: MarshalledBytes) -> bytes32;
+use std::bytearray::bytearray_size;
+use std::bytearray::bytearray_getByte;
+use std::bytearray::bytearray_get256;
+use std::bytearray::bytearray_setByte;
+use std::bytearray::bytearray_unmarshalBytes;
+use std::bytearray::bytearray_marshalFull;
+use std::bytearray::bytearray_extract;
+use std::bytestream::bytestream_new;
+use std::bytestream::bytestream_get64;
+use std::bytestream::bytestream_getN;
+use std::bytestream::bytestream_skipBytes;
+use std::bytearray::marshalledBytes_firstByte;
+use std::bytearray::marshalledBytes_hash;
 
+use inbox::IncomingRequest;
 
-// This structure defines an incoming request.
-// It is declared identically in inbox.mini and elsewhere.
-type IncomingRequest = struct {
-    kind: uint,               // type of message
-    blockNumber: uint,        // block number of the L1 block
-    timestamp: uint,          // timestamp of the L1 block
-    sender: address,          // address of the sender
-    requestId: uint,
-    msgData: MarshalledBytes  // kind-specific data, as a marshalled bytearray
-}
+import func rlp_decodeUint(bs: ByteStream) -> option<(ByteStream, uint)>;
+
 
 type MessageBatch = struct {
     template: IncomingRequest,
@@ -39,12 +32,18 @@ type MessageBatch = struct {
 }
 
 public func messageBatch_tryNew(msg: IncomingRequest) -> option<MessageBatch> {
-    if ( (msg.kind == 3) && (marshalledBytes_firstByte(msg.msgData) == 3) ) {
-        let stream = bytestream_new(bytearray_unmarshalBytes(msg.msgData));
+    if ( (msg.kind == 3) && (bytearray_getByte(msg.msgData, 0) == 3) ) {
+        let stream = bytestream_new(msg.msgData);
         stream = bytestream_skipBytes(stream, 1)?;
         return Some(
             struct {
-                template: msg,
+                template: msg with {
+                    provenance: struct {
+                        l1SeqNum: msg.provenance.l1SeqNum,
+                        parentRequestId: msg.requestId,
+                        indexInParent: 0,
+                    }
+                },
                 stream: stream,
                 numSoFar: 0,
             }
@@ -57,15 +56,17 @@ public func messageBatch_tryNew(msg: IncomingRequest) -> option<MessageBatch> {
 
 public func messageBatch_get(batch: MessageBatch) -> option<(IncomingRequest, MessageBatch)> {
     // returns next message in the batch (and updated batch), or None if no more messages in batch
-    let (stream, l2MsgLength) = bytestream_get64(batch.stream)?;
+    let (stream, l2MsgLength) = rlp_decodeUint(batch.stream)?;
     let (bs, extractedL2data) = bytestream_getN(stream, l2MsgLength)?;
     stream = bs;
 
     return Some((
         batch.template with {
-            msgData: bytearray_marshalFull(extractedL2data)
+            msgData: extractedL2data
         } with {
             requestId: uint(hash(bytes32(batch.template.requestId), bytes32(batch.numSoFar)))
+        } with {
+            provenance: batch.template.provenance with { indexInParent: batch.numSoFar }
         },
         batch with {
             stream: stream

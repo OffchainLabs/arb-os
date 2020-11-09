@@ -181,25 +181,6 @@ fn test_keccak() {
 }
 
 #[test]
-fn test_bls() {
-    let path = Path::new("stdlib/blstest.mexe");
-    let res = run_from_file(
-        path,
-        vec![],
-        RuntimeEnvironment::new(Uint256::from_usize(1111)),
-        false,
-    );
-    match res {
-        Ok(res) => {
-            assert_eq!(res[0], Value::Int(Uint256::zero()));
-        }
-        Err(e) => {
-            panic!("{}\n{}", e.0, e.1);
-        }
-    }
-}   
-
-#[test]
 fn test_sha256() {
     let path = Path::new("stdlib/sha256test.mexe");
     let res = run_from_file(
@@ -370,11 +351,18 @@ fn test_direct_deploy_add() {
 }
 
 #[test]
-fn test_sha256_precompile() { crate::evm::evm_eval_sha256(None, false); }
+fn test_sha256_precompile() {
+    crate::evm::evm_eval_sha256(None, false);
+}
 
 #[test]
 fn test_deploy_buddy_contract() {
     crate::evm::evm_deploy_buddy_contract(None, false);
+}
+
+#[test]
+fn test_non_eip155_signed_tx() {
+    crate::evm::evm_deploy_using_non_eip159_signature(None, false).unwrap();
 }
 
 #[test]
@@ -383,8 +371,28 @@ fn test_direct_deploy_and_call_add() {
 }
 
 #[test]
+fn test_direct_deploy_and_compressed_call_add() {
+    let _log = crate::evm::evm_direct_deploy_and_compressed_call_add(None, false);
+}
+
+#[test]
+fn test_payment_in_constructor() {
+    crate::evm::evm_test_payment_in_constructor(None, false);
+}
+
+#[test]
 fn test_arbsys() {
     let _log = crate::evm::evm_test_arbsys(None, false);
+}
+
+#[test]
+fn test_arbsys_direct() {
+    crate::evm::evm_test_arbsys_direct(None, false).unwrap();
+}
+
+#[test]
+fn test_function_table_access() {
+    crate::evm::evm_test_function_table_access(None, false).unwrap();
 }
 
 #[test]
@@ -406,6 +414,13 @@ pub fn test_create_opcode() {
 #[test]
 pub fn test_crosscontract_call_using_batch() {
     match crate::evm::evm_xcontract_call_using_batch(None, false, false) {
+        Ok(result) => assert_eq!(result, true),
+        Err(e) => panic!("error {}", e),
+    }
+}
+
+pub fn _test_crosscontract_call_using_compressed_batch() {
+    match crate::evm::_evm_xcontract_call_using_compressed_batch(None, false, false) {
         Ok(result) => assert_eq!(result, true),
         Err(e) => panic!("error {}", e),
     }

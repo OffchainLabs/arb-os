@@ -2,25 +2,31 @@
 // Copyright 2020, Offchain Labs, Inc. All rights reserved.
 //
 
-import type ByteArray;
-import type StorageMap;
+use contractTemplates::getErc20address;
+use contractTemplates::getErc721address;
 
-import func bytearray_new(capacity: uint) -> ByteArray;
-import func bytearray_size(ba: ByteArray) -> uint;
-import func bytearray_setByte(ba: ByteArray, offset: uint, value: uint) -> ByteArray;
-import func storageMap_new() -> StorageMap;
-import func storageMap_get(sm: StorageMap, index: uint) -> uint;
-import func storageMap_set(sm: StorageMap, index: uint, value: uint) -> StorageMap;
-import func getErc20address() -> address;
-import func getErc721address() -> address;
+use std::bytearray::ByteArray;
+use std::bytearray::bytearray_new;
+use std::bytearray::bytearray_size;
+use std::bytearray::bytearray_setByte;
+use std::bls::BLSKey;
+use std::storageMap::StorageMap;
+use std::storageMap::storageMap_new;
+use std::storageMap::storageMap_get;
+use std::storageMap::storageMap_set;
+
+use decompression::AggregatorDecompressionState;
+
 
 type AccountStore = map<address, Account>
 
 type Account = struct {
     addr: address,
+    blsKey: option<BLSKey>,
     nextSeqNum: uint,
     ethBalance: uint,
     contractInfo: option<AccountContractInfo>,  // info on the contract at this address, if there is one
+    aggregatorInfo: option<AggregatorInfo>,     // info on the aggregator using this address, if there is one
 }
 
 type AccountContractInfo = struct {
@@ -28,6 +34,10 @@ type AccountContractInfo = struct {
     evmJumpTable: map<uint, impure func()>,  // maps each valid EVM jump destination to the corresponding AVM codepoint
     startCodePoint: impure func(),
     storage: StorageMap,
+}
+
+type AggregatorInfo = struct {
+    decompressionState: option<AggregatorDecompressionState>,
 }
 
 // globalAccountStore is the authoritative source of info on accounts that exist on this chain
@@ -62,9 +72,11 @@ public func accountStore_get(acctStore: AccountStore, addr: address) -> Account 
 public func pristineAccount(addr: address) -> Account {
     return struct {
         addr: addr,
+        blsKey: None<BLSKey>,
         nextSeqNum: 0,
         ethBalance: 0,
-        contractInfo: None<AccountContractInfo>
+        contractInfo: None<AccountContractInfo>,
+        aggregatorInfo: None<AggregatorInfo>,
     };
 }
 
@@ -113,6 +125,16 @@ public func account_getAddress(account: Account) -> address {
     return account.addr;
 }
 
+public func account_getBlsKey(account: Account) -> option<BLSKey> {
+    return account.blsKey;
+}
+
+public func account_setBlsKey(account: Account, maybeKey: option<BLSKey>) -> Account {
+    return account with {
+        blsKey: maybeKey
+    };
+}
+
 public func account_getStartCodePoint(account: Account) -> option<impure func()> {
     return Some((account.contractInfo?).startCodePoint);
 }
@@ -149,6 +171,19 @@ public func account_incrSeqNum(account: Account) -> Account {
 
 public func account_getNextSeqNum(account: Account) -> uint {
     return account.nextSeqNum;
+}
+
+public func account_getAggregatorDecompressionState(account: Account) -> option<AggregatorDecompressionState> {
+    return (account.aggregatorInfo?).decompressionState;
+}
+
+public func account_setAggregatorDecompressionState(
+    account: Account,
+    maybeState: option<AggregatorDecompressionState>,
+) -> Account {
+    return account with {
+        aggregatorInfo: Some(struct { decompressionState: maybeState })
+    };
 }
 
 public func accountStore_createAccountFromEvmCode(

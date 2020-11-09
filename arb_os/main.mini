@@ -2,98 +2,59 @@
 // Copyright 2020, Offchain Labs, Inc. All rights reserved.
 //
 
-import type AccountStore;
-import type MarshalledBytes;
-import type ByteArray;
-import type ByteStream;
-import type EvmLogs;
-import type GasUsage;
-import type StorageMap;
 
-import impure func errorHandler_init();
-import impure func chainParams_init();
-import impure func gasAccounting_init();
-import impure func evmCallStack_init();
-import impure func inbox_init();
-import impure func accountStore_init();
-import impure func precompiles_init(acctStore: AccountStore) -> option<AccountStore>;
-import impure func txReceipts_init();
+use accounts::AccountStore;
+use accounts::accountStore_init;
+use accounts::getGlobalAccountStore;
+use accounts::setGlobalAccountStore;
+use accounts::accountStore_createAccountFromEvmCode;
+use chainParameters::chainParams_init;
+use codeSegment::translateEvmCodeSegment;
+use contractTemplates::getErc20code;
+use contractTemplates::getErc721code;
+use contractTemplates::getArbInfoCode;
+use contractTemplates::getErc20address;
+use contractTemplates::getErc721address;
+use contractTemplates::getArbInfoAddress;
+use contractTemplates::getErc20storage;
+use contractTemplates::getErc721storage;
+use contractTemplates::getArbInfoStorage;
+use decompression::decompression_init;
+use errorHandler::errorHandler_init;
+use evmCallStack::evmCallStack_init;
+use evmLogs::EvmLogs;
+use gasAccounting::GasUsage;
+use gasAccounting::gasAccounting_init;
+use inbox::inbox_init;
+use inbox::inbox_get;
+use messages::TxRequestData;
 
-import impure func getGlobalAccountStore() -> AccountStore;
-import impure func setGlobalAccountStore(acctStore: AccountStore);
-import func accountStore_createAccountFromEvmCode(
-    store: AccountStore,
-    newAddr: address,
-    code: ByteArray,
-    evmJumpTable: map<uint, impure func()>,
-    initCodePt: impure func(),
-    storageMap: StorageMap
-) -> option<AccountStore>;
-import impure func translateEvmCodeSegment(
-    bs: ByteStream
-) -> option<(impure func(), map<uint, impure func()>)>;
-import func bytearray_new(capacityHint: uint) -> ByteArray;
-import func bytearray_unmarshalBytes(mb: MarshalledBytes) -> ByteArray;
-import func bytestream_new(ba: ByteArray) -> ByteStream;
-import func getErc20code() -> MarshalledBytes;
-import func getErc721code() -> MarshalledBytes;
-import func getArbInfoCode() -> MarshalledBytes;
-import func getErc20address() -> address;
-import func getErc721address() -> address;
-import func getArbInfoAddress() -> address;
-import func getErc20storage() -> StorageMap;
-import func getErc721storage() -> StorageMap;
-import func getArbInfoStorage() -> StorageMap;
+use output::txReceipts_init;
+use precompiles::precompiles_init;
 
-import impure func inbox_get() -> IncomingRequest;
-import impure func getNextRequestFromCongestionAuction() -> (
-    bool,           // was it approved for execution
-    option<IncomingRequest>,  // if it was an L1 message
-    option<TxRequestData>,    // if it was an L2 tx message
-);
-import impure func handleL1Request(
-    msg: IncomingRequest,
-) -> option<()>; // return None if message format error; Some(()) if other error; if no error, never return
-import impure func handleL2Request(
-    inStream: ByteStream,
-    request: TxRequestData
-) -> option<()>; // return None if message format error; Some(()) if other error; if no error, never return
-import impure func emitLog(
-    l1message: IncomingRequest,
-    resultCode: uint,
-    maybeReturnData: option<ByteArray>,
-    maybeEvmLogs: option<EvmLogs>,
-    gasUsage: option<GasUsage>,
-);
-import impure func arbsys_txcall();
+use std::bytearray::MarshalledBytes;
+use std::bytearray::ByteArray;
+use std::bytearray::bytearray_new;
+use std::bytearray::bytearray_unmarshalBytes;
+use std::bytestream::ByteStream;
+use std::bytestream::bytestream_new;
+use std::storageMap::StorageMap;
 
-// This structure defines an incoming request.
-// It is declared identically in inbox.mini and elsewhere.
-type IncomingRequest = struct {
-    kind: uint,               // type of message
-    blockNumber: uint,        // block number of the L1 block
-    timestamp: uint,          // timestamp of the L1 block
-    sender: address,          // address of the sender
-    requestId: uint,
-    msgData: MarshalledBytes  // kind-specific data, as a marshalled bytearray
-}
 
-// TxRequestData is declared identically in message.mini and elsewhere.
-type TxRequestData = struct {
-    maxGas: uint,
-    gasPrice: uint,
-    seqNum: option<uint>,
-    caller: address,
-    calleeAddr: address,
-    value: uint,
-    calldata: ByteArray,
-    incomingRequest: IncomingRequest,
-}
+use decompression::decompression_init;
+use gasAccounting::getNextRequestFromCongestionAuction;
+use messages::handleL1Request; // return None if message format error; Some(()) if other error; if no error, never return
+use messages::handleL2Request; // return None if message format error; Some(()) if other error; if no error, never return
+use output::emitTxReceipt;
+use arbsys::arbsys_txcall;
+
+use inbox::IncomingRequest;
 
 
 impure func main() {
     errorHandler_init();
     chainParams_init();
+    decompression_init();
     gasAccounting_init();
     evmCallStack_init();
     inbox_init();
@@ -102,7 +63,9 @@ impure func main() {
     if (initializeContractTemplates() == None<()>) {
         panic;   // don't try to run without contract templates
     }
-    
+
+    // initialize any customizations here
+
     mainRunLoop();
 }
 
@@ -113,25 +76,25 @@ public impure func mainRunLoop() {
             if (approved) {
                 if(handleL1Request(msg) == None<()>) {
                     // reject for message format error
-                    emitLog(msg, 6, None<ByteArray>, None<EvmLogs>, None<GasUsage>);
+                    emitTxReceipt(msg, 6, None<ByteArray>, None<EvmLogs>, None<GasUsage>);
                 }
             } else {
                 // reject for congestion error
-                emitLog(msg, 2, None<ByteArray>, None<EvmLogs>, None<GasUsage>);
+                emitTxReceipt(msg, 2, None<ByteArray>, None<EvmLogs>, None<GasUsage>);
             }
         } else {
             if let Some(request) = maybeL2 {
                 if (approved) {
                     if (handleL2Request(
-                        bytestream_new(bytearray_unmarshalBytes(request.incomingRequest.msgData)),
+                        bytestream_new(request.incomingRequest.msgData),
                         request
                     ) == None<()>) {
                         // reject for message format error
-                        emitLog(request.incomingRequest, 6, None<ByteArray>, None<EvmLogs>, None<GasUsage>);
+                        emitTxReceipt(request.incomingRequest, 6, None<ByteArray>, None<EvmLogs>, None<GasUsage>);
                     }
                 } else {
                     // reject for congestion error
-                    emitLog(request.incomingRequest, 2, None<ByteArray>, None<EvmLogs>, None<GasUsage>);
+                    emitTxReceipt(request.incomingRequest, 2, None<ByteArray>, None<EvmLogs>, None<GasUsage>);
                 }
             } // else request was not identified as either L1 or L2, which should be impossible
         }
@@ -143,8 +106,9 @@ impure func initializeContractTemplates() -> option<()> {
     let acctStore = getGlobalAccountStore();
 
     let code = bytearray_unmarshalBytes(getErc20code());
-    let (initCodePt, evmJumpTable) = translateEvmCodeSegment(
-        bytestream_new(code)
+    let (initCodePt, evmJumpTable, _) = translateEvmCodeSegment(
+        bytestream_new(code),
+        false
     )?;
     acctStore = accountStore_createAccountFromEvmCode(
         acctStore,
@@ -156,8 +120,9 @@ impure func initializeContractTemplates() -> option<()> {
     )?;
 
     let code = bytearray_unmarshalBytes(getErc721code());
-    let (initCodePt, evmJumpTable) = translateEvmCodeSegment(
-        bytestream_new(code)
+    let (initCodePt, evmJumpTable, _) = translateEvmCodeSegment(
+        bytestream_new(code),
+        false
     )?;
     acctStore = accountStore_createAccountFromEvmCode(
         acctStore,
@@ -169,8 +134,9 @@ impure func initializeContractTemplates() -> option<()> {
     )?;
 
     let code = bytearray_unmarshalBytes(getArbInfoCode());
-    let (initCodePt, evmJumpTable) = translateEvmCodeSegment(
-        bytestream_new(code)
+    let (initCodePt, evmJumpTable, _) = translateEvmCodeSegment(
+        bytestream_new(code),
+        false
     )?;
     acctStore = accountStore_createAccountFromEvmCode(
         acctStore,
