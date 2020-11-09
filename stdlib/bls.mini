@@ -105,6 +105,7 @@ public func bls_verifySignature(
 
 	let acc = unsafecast<any>(());
 	acc = (
+                    acc,
                     (
                       signature.x, 
                       signature.y,
@@ -114,7 +115,6 @@ public func bls_verifySignature(
                       nG2y1
 
                     ),
-                    acc
                 );
 
 
@@ -122,6 +122,7 @@ public func bls_verifySignature(
 
     while (i < numMsgs) {
                 acc = (
+                    acc,
                     (
                         messages[i].x, 
                         messages[i].y,
@@ -130,7 +131,6 @@ public func bls_verifySignature(
                         keys[i].bx,
                         keys[i].by 
                     ),
-                    acc
                 );
                 i = i + 1;
     }
