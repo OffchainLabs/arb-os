@@ -88,7 +88,8 @@ impure func arbosTest_run(topFrame: EvmCallFrame, calldata: ByteArray) { // (byt
 
             asm(4,) { debugprint };
 
-            let success = evmOp_callAndReturn(
+            let success = false;
+            if (evmOp_callAndReturn(
                 100000000,
                 addr,
                 0,
@@ -96,12 +97,20 @@ impure func arbosTest_run(topFrame: EvmCallFrame, calldata: ByteArray) { // (byt
                 0,
                 0,
                 0,
-            );
+            //);
+            )) {
+                asm(5,) { debugprint };
+                //success = true;
+            } else {
+                asm(6,) { debugprint };
+            }
+            //asm((7, asm() any { auxpop dup0 auxpush }),) { debugprint };
 
             if let Some(acct) = evmCallStack_getAccount(addr) {
                 if let Some(storage) = account_getAllStorage(acct) {
                     let serializedStorage = storageMap_serialize(storage);
                     let serializedSize = bytearray_size(serializedStorage);
+                    asm((99, serializedSize, serializedStorage),) { debugprint };
                     let mem = bytearray_set256(
                         bytearray_set256(
                             bytearray_new(0),
@@ -112,8 +121,11 @@ impure func arbosTest_run(topFrame: EvmCallFrame, calldata: ByteArray) { // (byt
                         serializedSize,
                     );
                     mem = bytearray_copy(serializedStorage, 0, mem, 64, serializedSize);
-                    if (evmCallStack_setTopFrameMemory(mem)) {
-                        evmOp_return(0, 64+serializedSize);
+                    if (evmCallStack_setTopFrameMemory(serializedStorage)) {
+                    //if (evmCallStack_setTopFrameMemory(mem)) {
+                        asm(999,) { debugprint };
+                        //evmOp_return(0, 64+serializedSize);
+                        evmOp_return(0, serializedSize);
                     } else {
                         evmOp_revert_knownCodePc(address(105), 12, 0, 0);
                     }

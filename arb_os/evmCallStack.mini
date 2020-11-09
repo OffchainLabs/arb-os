@@ -61,6 +61,7 @@ use std::stack::stack_new;
 use std::stack::stack_isEmpty;
 use std::stack::stack_push;
 use std::stack::stack_pop;
+use std::stack::stack_discardDeepestItems;
 
 use gasAccounting::gasAccounting_startTxCharges;
 use gasAccounting::gasAccounting_endTxCharges;
@@ -257,7 +258,7 @@ public impure func initEvmCallStack(
                 // report success
                 emitTxReceipt(request.incomingRequest, 0, None<ByteArray>, None<EvmLogs>, None<GasUsage>);
                 emptyAvmStack();
-                cleanAvmAuxStackAndCall(mainRunLoop,);  // should never return
+                cleanAvmAuxStackAndCall(mainRunLoop, true);  // should never return
             } else {
                 // insufficient balance error
                 emitTxReceipt(request.incomingRequest, 4, None<ByteArray>, None<EvmLogs>, None<GasUsage>);
@@ -267,7 +268,7 @@ public impure func initEvmCallStack(
             // tx is transfer of 0 Eth, so just report success
             emitTxReceipt(request.incomingRequest, 0, None<ByteArray>, None<EvmLogs>, None<GasUsage>);
             emptyAvmStack();
-            cleanAvmAuxStackAndCall(mainRunLoop,);  // should never return
+            cleanAvmAuxStackAndCall(mainRunLoop, true);  // should never return
         }
     }
 }
@@ -512,7 +513,8 @@ public impure func evmCallStack_returnFromCall(
         asm(305,) { debugprint };
         let _ = gasAccounting_resumeTxCharges(leftoverGas + resumeInfo.savedGas);
         asm(306,) { debugprint };
-        asm(resumeInfo.codePoint,) { jump };         // jump to resume point in caller; this should never return
+        restoreAuxStackAndCall(resumeInfo.codePoint, resumeInfo.auxStackContents, false);
+        //asm(resumeInfo.codePoint,) { jump };         // jump to resume point in caller; this should never return
         asm(307,) { debugprint };
 
         evmCallStack_callHitError(8);
@@ -654,7 +656,7 @@ public impure func evmCallStack_returnFromCall(
 
         // Now discard any AVM stack contents and jump back to the main run loop.
         emptyAvmStack();
-        cleanAvmAuxStackAndCall(mainRunLoop,);  // should never return
+        restoreAuxStackAndCall(mainRunLoop, None<Stack>, true);  // should never return
         evmCallStack_callHitError(9);
         panic;
     }
@@ -723,28 +725,19 @@ public impure func snapshotAuxStack() -> Stack {
         }
     }
 
-    // discard the top two items from the saved aux stack, because they belong to this function
-    if let Some(res) = stack_pop(ret) {
-        let (ustack, _) = res;
-        ret = ustack;
-    } else {
-        evmCallStack_callHitError(20);  // shouldn't ever return
-    }
-    if let Some(res) = stack_pop(ret) {
-        let (ustack, _) = res;
-        ret = ustack;
-    } else {
-        evmCallStack_callHitError(21);  // shouldn't ever return
-    }
-
-    return ret;
+    // discard the first item saved to the saved aux stack, because it belongs to this function
+    return stack_discardDeepestItems(ret, 1);
 }
 
-public impure func cleanAvmAuxStackAndCall(funcToCall: impure func()) {
-    restoreAuxStackAndCall(funcToCall, None<Stack>);
+public impure func cleanAvmAuxStackAndCall(funcToCall: impure func(), pushFakeReturnAddress: bool) {
+    restoreAuxStackAndCall(funcToCall, None<Stack>, pushFakeReturnAddress);
 }
 
-public impure func restoreAuxStackAndCall(funcToCall: impure func(), maybeSavedAuxStack: option<Stack>) {
+public impure func restoreAuxStackAndCall(
+    funcToCall: impure func(),
+    maybeSavedAuxStack: option<Stack>,
+    pushFakeReturnAddress: bool
+) {
     // This restores a saved version of the AvmAuxStack, then calls funcToCall.
     // funcToCall must never try to return.
 
@@ -782,12 +775,20 @@ public impure func restoreAuxStackAndCall(funcToCall: impure func(), maybeSavedA
 
     // Discard our callframe, push a fake return address, and jump to funcToCall
     // funcToCall will think somebody called it normally, with the restored auxstack
-    asm(funcToCall,) {
-        auxpop
-        pop
-        [0] swap1  // bogus return address, which funcToCall will save in its callframe but will never use
-        jump
-    };
+    if (pushFakeReturnAddress) {
+        asm(funcToCall,) {
+            auxpop
+            pop
+            [0] swap1  // bogus return address, which funcToCall will save in its callframe but will never use
+            jump
+        };
+    } else {
+        asm(funcToCall,) {
+            auxpop
+            pop
+            jump
+        };
+    }
 }
 
 public impure func evmCallStack_isEmpty() -> bool {

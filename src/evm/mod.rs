@@ -2,7 +2,7 @@
  * Copyright 2020, Offchain Labs, Inc. All rights reserved.
  */
 
-use crate::evm::abi::{ArbSys, ArbosTest, FunctionTable};
+use crate::evm::abi::{ArbSys, _ArbosTest, FunctionTable};
 use crate::mavm::Value;
 use crate::run::{bytestack_from_bytes, load_from_file, RuntimeEnvironment};
 use crate::uint256::Uint256;
@@ -262,13 +262,15 @@ pub fn _basic_evm_add_test(
     machine.start_at_zero();
 
     let wallet = machine.runtime_env.new_wallet();
-    let my_addr = Uint256::from_bytes(wallet.address().as_bytes());
 
-    let arbos_test = ArbosTest::new(&wallet, debug);
+    let arbos_test = _ArbosTest::_new(&wallet, debug);
 
     let code = hex::decode("7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff0160005500").unwrap();
-    let result = arbos_test.run(&mut machine, code)?;
-    assert_eq!(result, vec![0u8]);
+    let result = arbos_test._run(&mut machine, code)?;
+    let mut right_answer = vec![0u8; 32];
+    right_answer.extend(vec![255u8; 31]);
+    right_answer.extend(vec![254u8]);
+    assert_eq!(result, right_answer);
 
     if let Some(path) = log_to {
         machine.runtime_env.recorder.to_file(path).unwrap();

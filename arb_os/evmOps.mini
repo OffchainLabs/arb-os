@@ -71,6 +71,8 @@ use std::bytearray::bytearray_marshalFull;
 use std::bytestream::bytestream_new;
 
 use std::stack::stack_pop;
+use std::stack::stack_isEmpty;
+use std::stack::stack_discardDeepestItems;
 
 use codeSegment::translateEvmCodeSegment;
 
@@ -591,19 +593,8 @@ public impure func evmOp_callAndReturn(
 ) -> bool {
     let savedAuxStack = snapshotAuxStack();
 
-    // remove top two items from saved aux stack, so we get our caller's aux stack state
-    if let Some(res) = stack_pop(savedAuxStack) {
-        let (ustack, _) = res;
-        savedAuxStack = ustack;
-    } else {
-        evmCallStack_callHitError(22);  // shouldn't ever return
-    }
-    if let Some(res) = stack_pop(savedAuxStack) {
-        let (ustack, _) = res;
-        savedAuxStack = ustack;
-    } else {
-        evmCallStack_callHitError(23);  // shouldn't ever return
-    }
+    // remove first two items from saved aux stack, so we get our caller's aux stack state
+    savedAuxStack = stack_discardDeepestItems(savedAuxStack, 2);
 
     // First, get the return address of our caller.
     // This will be the second-from-top item on the AVM AuxStack.
