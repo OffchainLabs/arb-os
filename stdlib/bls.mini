@@ -112,14 +112,13 @@ public func bls_verifySignature(
                       nG2x1,
                       nG2y0,
                       nG2y1
-                 p1,p2,p5,p3,p6,p4
 
                     ),
                     acc
                 );
 
 
-	let i = 9;
+	let i = 0;
 
     while (i < numMsgs) {
                 acc = (
