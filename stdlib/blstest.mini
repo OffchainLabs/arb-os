@@ -2,49 +2,24 @@
 // Copyright 2020, Offchain Labs, Inc. All rights reserved.
 //
 
-import type ByteArray;
-import type BLSKey;
-import type BLSSignature;
-import type BLSHashedMessage;
+use std::bytearray::ByteArray;
+use std::bls::BLSKey;
+use std::bls::BLSSignature;
+use std::bls::BLSHashedMessage;
 
-import func bytearray_new(size: uint) -> ByteArray;
-import func bytearray_size(ba: ByteArray) -> uint;
-import func bytearray_getByte(ba: ByteArray, offset: uint) -> uint;
-import func bytearray_get256(ba: ByteArray, offset: uint) -> uint;
-import func bytearray_setByte(ba: ByteArray, offset: uint, val: uint)-> ByteArray; 
-import func bytearray_set256(ba: ByteArray, offset: uint, val: uint) -> ByteArray;
-import func hashToField(
-        domain:     ByteArray,
-        messages:   ByteArray)
-        -> [2]uint;
+use std::bytearray::bytearray_new;
+use std::bytearray::bytearray_size;
+use std::bytearray::bytearray_getByte;
+use std::bytearray::bytearray_get256;
+use std::bytearray::bytearray_setByte;
+use std::bytearray::bytearray_set256;
 
-
-import func bls_verifySignature(
-    numMsgs:   uint,
-    messages:  []ByteArray,
-    keys:      []BLSKey,
-    signature: BLSSignature
-) -> bool;
-
-import func expandMsgTo96(
-    domain:     ByteArray,
-    message:    ByteArray)
-        -> ByteArray;
-
-
-import func hashToPoint(
-    domain:     ByteArray,
-    message:    ByteArray
-    )
-        ->BLSHashedMessage;
-
-import func bls_initialize();
-
-import func bls_verifySingleSig(
-    message:  BLSHashedMessage,
-    key:      BLSKey,
-    signature: BLSSignature
-) -> bool;
+use std::bls::hashToField;
+use std::bls::bls_verifySignature;
+use std::bls::expandMsgTo96;
+use std::bls::hashToPoint;
+use std::bls::bls_initialize;
+use std::bls::bls_verifySingleSig;
 
 
 impure func main() {

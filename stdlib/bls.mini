@@ -6,8 +6,10 @@
 use std::bytearray::ByteArray;
 use std::random::RandomGenerator;
 
+use std::bytearray::bytearray_new;
 use std::bytearray::bytearray_size;
 use std::bytearray::bytearray_getByte;
+use std::bytearray::bytearray_setByte;
 use std::bytearray::bytearray_get256;
 use std::bytearray::bytearray_set256;
 
@@ -17,8 +19,8 @@ use std::random::random_new;
 use std::random::random_next;
 use std::random::random_nextMod;
 
-import func keccak256(ba: ByteArray, offset: uint, nbytes: uint) -> bytes32;
-import func sha256_byteArray(ba: ByteArray) -> bytes32;
+use std::keccak::keccak256;
+use std::sha256::sha256_byteArray;
 
 
     // Field order
@@ -99,16 +101,16 @@ public func bls_marshalPublicKey(key: BLSKey, ba: ByteArray, offset: uint) -> By
                 bytearray_set256(
                     ba,
                     offset,
-                    key.x0
+                    key.ax
                 ),
                 offset+32,
-                key.x1
+                key.ay
             ),
             offset+2*32,
-            key.y0
+            key.bx
         ),
         offset+3*32,
-        key.y1
+        key.by
     );
 }
 
