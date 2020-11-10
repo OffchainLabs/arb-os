@@ -20,7 +20,7 @@ use std::hash::{Hash, Hasher};
 use std::io::{self, Read};
 use std::path::Path;
 use symtable::SymTable;
-use typecheck::{AbstractSyntaxTree, TypeCheckedFunc, TypeCheckedNode};
+use typecheck::{TypeCheckedFunc, TypeCheckedNode};
 
 pub use ast::{TopLevelDecl, Type};
 pub use source::Lines;
@@ -104,9 +104,7 @@ impl TypeCheckedModule {
     fn inline(&mut self) {
         let mut new_funcs = self.checked_funcs.clone();
         for f in &mut new_funcs {
-            for s in &mut f.code {
-                s.inline(&self.checked_funcs, &self.string_table);
-            }
+            f.inline(&self.checked_funcs, &self.string_table)
         }
         self.checked_funcs = new_funcs;
     }
@@ -283,7 +281,7 @@ pub fn compile_from_file(
     }
 }
 
-fn print_node(node: &mut TypeCheckedNode, state: &String, mut_state: &mut usize) -> bool {
+fn _print_node(node: &mut TypeCheckedNode, state: &String, mut_state: &mut usize) -> bool {
     for _ in 0..*mut_state {
         print!("{}", state);
     }
@@ -437,8 +435,8 @@ pub fn compile_from_folder(
         ));
     }
     for module in &mut typechecked {
-        for func in &mut module.checked_funcs {
-            func.recursive_apply(print_node, &"    ".to_string(), &mut 0);
+        for _func in &mut module.checked_funcs {
+            //func.recursive_apply(print_node, &"    ".to_string(), &mut 0);
         }
     }
     if inline {
