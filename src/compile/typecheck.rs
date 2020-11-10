@@ -612,37 +612,6 @@ impl TypeCheckedExpr {
             TypeCheckedExpr::Try(_, t, _) => t.clone(),
         }
     }
-    /*                TypeCheckedExpr::FuncRef(id, _, _) => {
-        let found_func = funcs.iter().find(|func| func.name == *id);
-        if let Some(func) = found_func {
-            let mut code: Vec<_> = arg_exps
-                .iter()
-                .zip(func.args.iter())
-                .map(|(arg, otherarg)| {
-                    TypeCheckedStatement::Let(
-                        TypeCheckedMatchPattern::Simple(
-                            otherarg.name,
-                            otherarg.tipe.clone(),
-                        ),
-                        arg.clone(),
-                        None,
-                    )
-                })
-                .collect();
-            code.append(&mut func.code.clone());
-            let last = code.pop();
-            let block_exp = if let Some(TypeCheckedStatement::Return(exp, _)) = last {
-                Some(Box::new(exp))
-            } else {
-                if let Some(statement) = last {
-                    code.push(statement);
-                }
-                None
-            };
-            *self = TypeCheckedExpr::CodeBlock(code, block_exp, loc.clone());
-        }
-    }
-    _ => {}*/
 }
 
 ///A `StructField` that has been type checked.
