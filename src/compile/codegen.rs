@@ -174,6 +174,7 @@ fn add_args_to_locals_table(
         string_table,
         import_func_map,
         global_var_map,
+        0,
     )
     .map(|(a, b, c, _)| (a, b, c))
 }
@@ -197,6 +198,7 @@ fn mavm_codegen_statements(
     string_table: &StringTable,
     import_func_map: &HashMap<StringId, Label>,
     global_var_map: &HashMap<StringId, usize>,
+    prepushed_vals: usize,
 ) -> Result<(LabelGenerator, usize, bool, HashMap<StringId, usize>), CodegenError> {
     let mut bindings = HashMap::new();
     for statement in statements {
@@ -210,6 +212,7 @@ fn mavm_codegen_statements(
             string_table,
             import_func_map,
             global_var_map,
+            prepushed_vals,
         )?;
         label_gen = lg;
         num_locals = max(statement_locals, num_locals);
@@ -242,6 +245,7 @@ fn mavm_codegen_statement(
     string_table: &StringTable,
     import_func_map: &HashMap<StringId, Label>,
     global_var_map: &HashMap<StringId, usize>,
+    prepushed_vals: usize,
 ) -> Result<(LabelGenerator, usize, bool, HashMap<StringId, usize>), CodegenError> {
     match &statement {
         TypeCheckedStatement::Noop(_) => Ok((label_gen, 0, false, HashMap::new())),
@@ -266,8 +270,24 @@ fn mavm_codegen_statement(
                 string_table,
                 import_func_map,
                 global_var_map,
-                0,
+                prepushed_vals,
             )?;
+            if prepushed_vals > 0 {
+                c.push(Instruction::from_opcode(
+                    Opcode::AVMOpcode(AVMOpcode::AuxPush),
+                    *loc,
+                ));
+                for _ in 0..prepushed_vals {
+                    c.push(Instruction::from_opcode(
+                        Opcode::AVMOpcode(AVMOpcode::Pop),
+                        *loc,
+                    ));
+                }
+                c.push(Instruction::from_opcode(
+                    Opcode::AVMOpcode(AVMOpcode::AuxPop),
+                    *loc,
+                ));
+            }
             c.push(Instruction::from_opcode(Opcode::Return, *loc));
             Ok((lg, exp_locals, true, HashMap::new()))
         }
@@ -281,7 +301,7 @@ fn mavm_codegen_statement(
                 string_table,
                 import_func_map,
                 global_var_map,
-                0,
+                prepushed_vals,
             )?;
             if expr.get_type() != Type::Void {
                 c.push(Instruction::from_opcode(
@@ -314,7 +334,7 @@ fn mavm_codegen_statement(
                     string_table,
                     import_func_map,
                     global_var_map,
-                    0,
+                    prepushed_vals,
                 )?;
                 let mut bindings = HashMap::new();
                 bindings.insert(*name, slot_num);
@@ -339,7 +359,7 @@ fn mavm_codegen_statement(
                     string_table,
                     import_func_map,
                     global_var_map,
-                    0,
+                    prepushed_vals,
                 )?;
                 label_gen = lg;
                 code = c;
@@ -379,7 +399,7 @@ fn mavm_codegen_statement(
                 string_table,
                 import_func_map,
                 global_var_map,
-                0,
+                prepushed_vals,
             )?;
             label_gen = lg;
             code = c;
@@ -400,7 +420,7 @@ fn mavm_codegen_statement(
                 string_table,
                 import_func_map,
                 global_var_map,
-                0,
+                prepushed_vals,
             )?;
             c.push(Instruction::from_opcode(Opcode::SetGlobalVar(*idx), *loc));
             Ok((lg, exp_locals, false, HashMap::new()))
@@ -430,6 +450,7 @@ fn mavm_codegen_statement(
                 string_table,
                 import_func_map,
                 global_var_map,
+                prepushed_vals,
             )?;
             label_gen = lg;
             num_locals = nl;
@@ -475,6 +496,7 @@ fn mavm_codegen_statement(
                 string_table,
                 import_func_map,
                 global_var_map,
+                prepushed_vals,
             )?;
             label_gen = lg;
             num_locals = nl;
@@ -488,7 +510,7 @@ fn mavm_codegen_statement(
                 string_table,
                 import_func_map,
                 global_var_map,
-                0,
+                prepushed_vals,
             )?;
             label_gen = lg;
             code = c;
@@ -520,6 +542,7 @@ fn mavm_codegen_statement(
                 string_table,
                 import_func_map,
                 global_var_map,
+                prepushed_vals,
             )?;
             Ok((lg, nl1, !might_continue, HashMap::new()))
         }
@@ -536,7 +559,7 @@ fn mavm_codegen_statement(
                     string_table,
                     import_func_map,
                     global_var_map,
-                    i,
+                    prepushed_vals + i,
                 )?;
                 exp_locals = max(exp_locals, e_locals);
                 label_gen = lg;
@@ -557,7 +580,7 @@ fn mavm_codegen_statement(
                 string_table,
                 import_func_map,
                 global_var_map,
-                0,
+                prepushed_vals,
             )?;
             label_gen = lg;
             code = c;
@@ -580,7 +603,7 @@ fn mavm_codegen_statement(
                 string_table,
                 import_func_map,
                 global_var_map,
-                0,
+                prepushed_vals,
             )?;
             label_gen = lg;
             code = c;
@@ -621,6 +644,7 @@ fn mavm_codegen_statement(
                 string_table,
                 import_func_map,
                 global_var_map,
+                prepushed_vals,
             )?;
             total_locals = max(total_locals, exp_locals);
 
@@ -645,6 +669,7 @@ fn mavm_codegen_statement(
                     string_table,
                     import_func_map,
                     global_var_map,
+                    prepushed_vals,
                 )?;
                 can_continue |= else_can_continue;
                 total_locals = max(total_locals, else_locals);
@@ -715,6 +740,7 @@ fn mavm_codegen_if_arm(
     string_table: &StringTable,
     import_func_map: &HashMap<StringId, Label>,
     global_var_map: &HashMap<StringId, usize>,
+    prepushed_vals: usize,
 ) -> Result<(LabelGenerator, usize, bool), CodegenError> {
     // (label_gen, num_labels, execution_might_continue)
     match arm {
@@ -729,7 +755,7 @@ fn mavm_codegen_if_arm(
                 string_table,
                 import_func_map,
                 global_var_map,
-                0,
+                prepushed_vals,
             )?;
             label_gen = lg;
             code = c;
@@ -751,6 +777,7 @@ fn mavm_codegen_if_arm(
                 string_table,
                 import_func_map,
                 global_var_map,
+                prepushed_vals,
             )?;
             label_gen = lg;
             if might_continue_here {
@@ -774,6 +801,7 @@ fn mavm_codegen_if_arm(
                         string_table,
                         import_func_map,
                         global_var_map,
+                        prepushed_vals,
                     )?;
                     Ok((
                         lg,
@@ -797,6 +825,7 @@ fn mavm_codegen_if_arm(
                 string_table,
                 import_func_map,
                 global_var_map,
+                prepushed_vals,
             )?;
             code.push(Instruction::from_opcode(Opcode::Label(end_label), *loc));
             Ok((lg, nl, might_continue))
@@ -1186,6 +1215,7 @@ fn mavm_codegen_expr<'a>(
                 string_table,
                 import_func_map,
                 global_var_map,
+                prepushed_vals,
             )?;
             if let Some(ret_expr) = ret_expr {
                 let new_locals = locals.push_multi(block_locals);
