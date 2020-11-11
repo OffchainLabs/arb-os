@@ -90,6 +90,7 @@ enum Args {
     MakeTestLogs,
     MakeBenchmarks,
     MakeTemplates,
+    EvmTests,
 }
 
 fn main() -> Result<(), CompileError> {
@@ -226,6 +227,11 @@ fn main() -> Result<(), CompileError> {
         Args::MakeTemplates => {
             let path = Path::new("arb_os/contractTemplates.mini");
             generate_contract_template_file_or_die(path);
+        }
+
+        Args::EvmTests => {
+            let path = Path::new("evm-tests/VMTests/vmArithmeticTest");
+            let _ = evm::evmtest::run_evm_tests(path).unwrap();
         }
     }
 

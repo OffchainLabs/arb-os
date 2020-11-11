@@ -464,7 +464,6 @@ public impure func evmCallStack_returnFromCall(
     let returnData = bytearray_extract(memory, returnOffset, returnLength);
 
     if let Some(newTopFrame) = unsafecast<option<EvmCallFrame>>(topFrame.parent) {
-        asm(301,) { debugprint };
         // Returning from a non-top-level call
 
         topFrame = topFrame with {   // copy cached account back into callframe's main accountStore
@@ -474,7 +473,6 @@ public impure func evmCallStack_returnFromCall(
                 topFrame.runningAsAccount
             )
         };
-        asm(302,) { debugprint };
 
         if (success && (topFrame.callKind != 3)) {   // if call succeeded, and it's not a staticcall
             // copy relevant data back to parent frame
@@ -484,7 +482,6 @@ public impure func evmCallStack_returnFromCall(
                 with { evmLogs: topFrame.evmLogs }
                 with { sendQueue: topFrame.sendQueue };
         }
-        asm(303,) { debugprint };
 
         // set up returnInfo in caller's frame
         newTopFrame = newTopFrame with { returnInfo: Some(struct{ data: returnData, status: success }) };
@@ -502,7 +499,6 @@ public impure func evmCallStack_returnFromCall(
             returnLength
         );
         newTopFrame = newTopFrame with { memory: newMemory };
-        asm(304,) { debugprint };
 
         // ready to return to caller
         // save updated EVM callstack state; restore caller's stack; jump to resume address
@@ -510,12 +506,9 @@ public impure func evmCallStack_returnFromCall(
         emptyAvmStack();                             // throw away anything that callee left on the stack
         restoreAvmStack(resumeInfo.stackContents,);  // restore the caller's stack
         asm(success,) { };                           // push return code onto the stack, where caller expects it to be
-        asm(305,) { debugprint };
         let _ = gasAccounting_resumeTxCharges(leftoverGas + resumeInfo.savedGas);
-        asm(306,) { debugprint };
         restoreAuxStackAndCall(resumeInfo.codePoint, resumeInfo.auxStackContents, false);
         //asm(resumeInfo.codePoint,) { jump };         // jump to resume point in caller; this should never return
-        asm(307,) { debugprint };
 
         evmCallStack_callHitError(8);
         panic;  // shouldn't happen -- previous instruction jumped away

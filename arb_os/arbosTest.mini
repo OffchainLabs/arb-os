@@ -64,13 +64,10 @@ impure func arbosTest_run(topFrame: EvmCallFrame, calldata: ByteArray) { // (byt
         evmOp_revert_knownCodePc(address(105), 10, 0, 0);
     }
     let nbytes = bytearray_get256(calldata, 36);
-    asm((0, nbytes),) { debugprint };
     let code = bytearray_extract(calldata, 68, nbytes);
     let addr = address(0x7e6e3943dc0ce1267a954cb2139232658c14a7e3);  // keccak256("arbosTest account for testing")
 
-    asm(1,) { debugprint };
     if let Some(res) = translateEvmCodeSegment(bytestream_new(code), false) {
-        asm(2,) { debugprint };
         let (entryPoint, evmJumpTable, pcTable) = res;
         if let Some(acctStore) = accountStore_createAccountFromEvmCode(
             getGlobalAccountStore(),
@@ -80,13 +77,10 @@ impure func arbosTest_run(topFrame: EvmCallFrame, calldata: ByteArray) { // (byt
             entryPoint,
             storageMap_new()
         ) {
-            asm(3,) { debugprint };
             let res = evmCallStack_setAccount(addr, accountStore_get(acctStore, addr));
             if ( ! res ) {
                 evmOp_revert_knownCodePc(address(105), 11, 0, 0);
             }
-
-            asm(4,) { debugprint };
 
             let success = false;
             if (evmOp_callAndReturn(
@@ -97,20 +91,14 @@ impure func arbosTest_run(topFrame: EvmCallFrame, calldata: ByteArray) { // (byt
                 0,
                 0,
                 0,
-            //);
             )) {
-                asm(5,) { debugprint };
-                //success = true;
-            } else {
-                asm(6,) { debugprint };
+                success = true;
             }
-            //asm((7, asm() any { auxpop dup0 auxpush }),) { debugprint };
 
             if let Some(acct) = evmCallStack_getAccount(addr) {
                 if let Some(storage) = account_getAllStorage(acct) {
                     let serializedStorage = storageMap_serialize(storage);
                     let serializedSize = bytearray_size(serializedStorage);
-                    asm((99, serializedSize, serializedStorage),) { debugprint };
                     let mem = bytearray_set256(
                         bytearray_set256(
                             bytearray_new(0),
@@ -122,9 +110,6 @@ impure func arbosTest_run(topFrame: EvmCallFrame, calldata: ByteArray) { // (byt
                     );
                     mem = bytearray_copy(serializedStorage, 0, mem, 64, serializedSize);
                     if (evmCallStack_setTopFrameMemory(serializedStorage)) {
-                    //if (evmCallStack_setTopFrameMemory(mem)) {
-                        asm(999,) { debugprint };
-                        //evmOp_return(0, 64+serializedSize);
                         evmOp_return(0, serializedSize);
                     } else {
                         evmOp_revert_knownCodePc(address(105), 12, 0, 0);

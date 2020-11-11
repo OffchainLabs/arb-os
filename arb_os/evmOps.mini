@@ -611,7 +611,6 @@ public impure func evmOp_callAndReturn(
 
     // Now make the call.
     // After the call completes, control will be thrown directly back to resumeCodePoint.
-    asm(101,) { debugprint };
     let res = evmCallStack_doCall(
         0,
         gas,
@@ -624,7 +623,6 @@ public impure func evmOp_callAndReturn(
         resumeCodePoint,
         Some(savedAuxStack),
     );
-    asm(102,) { debugprint };
     if let Some(success) = res {
         return success;
     } else {
@@ -658,7 +656,6 @@ public impure func evmOp_call(
 
     // Now make the call.
     // After the call completes, control will be thrown directly back to resumeCodePoint.
-    asm(101,) { debugprint };
     let res = evmCallStack_doCall(
         0,
         gas,
@@ -671,7 +668,6 @@ public impure func evmOp_call(
         resumeCodePoint,
         None<Stack>,
     );
-    asm(102,) { debugprint };
     if let Some(success) = res {
         return success;
     } else {
@@ -817,9 +813,7 @@ public impure func evmOp_revert_knownPc(evmPc: uint, memOffset: uint, memNbytes:
 }
 
 public impure func evmOp_return(memOffset: uint, memNbytes: uint) {
-    asm(201,) { debugprint };
     let _ = evmCallStack_returnFromCall(true, memOffset, memNbytes);
-    asm(202,) { debugprint };
 
     evm_runtimePanic(29);
 }

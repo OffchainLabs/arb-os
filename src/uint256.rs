@@ -7,13 +7,12 @@ use ethers_core::utils::keccak256;
 use num_bigint::{BigInt, BigUint, Sign, ToBigInt};
 use num_traits::cast::ToPrimitive;
 use num_traits::identities::{One, Zero};
-use num_traits::pow::Pow;
 use num_traits::sign::Signed;
 use num_traits::CheckedSub;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::cmp::Ordering;
 use std::fmt;
-use std::ops::{Add, BitAnd, BitOr, BitXor, Div, Mul, Neg, Rem, Sub};
+use std::ops::{Add, BitAnd, BitOr, BitXor, Div, Mul, Neg, Rem, Shl, Sub};
 
 #[derive(Debug, Clone, PartialEq, Eq, Ord, Hash)]
 pub struct Uint256 {
@@ -328,7 +327,7 @@ impl Uint256 {
 
     pub fn exp(&self, other: &Self) -> Self {
         Uint256 {
-            val: Uint256::trim(&self.val.pow(&other.val)).0,
+            val: self.val.modpow(&other.val, &BigUint::one().shl(256)),
         }
     }
 
