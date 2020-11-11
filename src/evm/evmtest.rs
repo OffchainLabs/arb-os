@@ -43,7 +43,8 @@ fn run_one_test(json: serde_json::Value, path: &Path) -> bool {
                 for(_, spec) in postmap {
                     let code_str: String = spec["code"].to_string();
                     let code_str = &code_str[3..(code_str.len()-1)];
-                    let code = hex::decode(code_str.clone()).unwrap();
+                    let mut code = hex::decode(code_str.clone()).unwrap();
+                    code.extend(&[0u8]);  // append final STOP instruction, which is missing in some test cases
                     let storage_expected = &spec["storage"];
                     let storage_actual = run_code(&code);
                     return compare_storage(storage_expected, storage_actual);
