@@ -236,16 +236,23 @@ fn main() -> Result<(), CompileError> {
         }
 
         Args::EvmTests(options) => {
-            let path = Path::new("evm-tests/VMTests/vmArithmeticTest");
-            let _ = evm::evmtest::run_evm_tests(
-                path,
-                if options.savelogs {
-                    Some(Path::new("evm-test-logs/"))
-                } else {
-                    None
-                },
-            )
-            .unwrap();
+            for path_name in [
+                "evm-tests/VMTests/vmArithmeticTest",
+                "evm-tests/VMTests/vmPushDupSwapTest",
+            ]
+            .iter()
+            {
+                let path = Path::new(path_name);
+                let _ = evm::evmtest::run_evm_tests(
+                    path,
+                    if options.savelogs {
+                        Some(Path::new("evm-test-logs/"))
+                    } else {
+                        None
+                    },
+                )
+                .unwrap();
+            }
         }
     }
 
