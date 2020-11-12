@@ -81,6 +81,12 @@ struct Profiler {
 }
 
 #[derive(Clap, Debug)]
+struct EvmTests {
+    #[clap(short, long)]
+    savelogs: bool,
+}
+
+#[derive(Clap, Debug)]
 enum Args {
     Compile(CompileStruct),
     Run(RunStruct),
@@ -90,7 +96,7 @@ enum Args {
     MakeTestLogs,
     MakeBenchmarks,
     MakeTemplates,
-    EvmTests,
+    EvmTests(EvmTests),
 }
 
 fn main() -> Result<(), CompileError> {
@@ -229,9 +235,17 @@ fn main() -> Result<(), CompileError> {
             generate_contract_template_file_or_die(path);
         }
 
-        Args::EvmTests => {
+        Args::EvmTests(options) => {
             let path = Path::new("evm-tests/VMTests/vmArithmeticTest");
-            let _ = evm::evmtest::run_evm_tests(path, None).unwrap();
+            let _ = evm::evmtest::run_evm_tests(
+                path,
+                if options.savelogs {
+                    Some(Path::new("evm-test-logs/"))
+                } else {
+                    None
+                },
+            )
+            .unwrap();
         }
     }
 
