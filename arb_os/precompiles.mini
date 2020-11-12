@@ -70,16 +70,29 @@ public impure func precompiles_init(acctStore: AccountStore) -> option<AccountSt
     acctStore = accountStore_createBuiltinContract(
         acctStore,
         address(100),
-        arbsys_txcall,
+        makeTrampoline(arbsys_txcall),
         true,
     )?;
     acctStore = accountStore_createBuiltinContract(
         acctStore,
         address(105),
-        arbosTest_txcall,
+        makeTrampoline(arbosTest_txcall),
         true,
     )?;
     return Some(acctStore);
+}
+
+impure func makeTrampoline(txcallFunc: impure func()) -> impure func() {
+    // make a small code snippet that function-calls to txcallFunc (with a dummy return address)
+    return asm(
+        0x3b,
+        0,
+        asm(
+            0x34,
+            txcallFunc,
+            asm() func() { errcodept }
+        ) func() { pushinsnimm }
+    ) func() { pushinsnimm };
 }
 
 public impure func precompile_0x01() {  // ecrecover
