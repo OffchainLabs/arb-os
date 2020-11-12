@@ -34,6 +34,7 @@ use evmCallStack::evmCallFrame_getCalldata;
 use evmCallStack::evmCallStack_setTopFrameMemory;
 use evmCallStack::evmCallStack_getAccount;
 use evmCallStack::evmCallStack_setAccount;
+use evmCallStack::evmCallFrame_getCaller;
 
 
 public impure func arbosTest_txcall() {
@@ -60,8 +61,14 @@ func getFuncCode(ba: ByteArray) -> uint {
 }
 
 impure func arbosTest_run(topFrame: EvmCallFrame, calldata: ByteArray) { // (bytes, bytes) -> bytes
-    if (bytearray_size(calldata) <= 68) {
+    // Verify that this has been called by address zero.
+    // This ensures that this method will always revert in production, but is still usable in testing.
+    if (evmCallFrame_getCaller(topFrame) != address(0)) {
         evmOp_revert_knownCodePc(address(105), 10, 0, 0);
+    }
+
+    if (bytearray_size(calldata) <= 68) {
+        evmOp_revert_knownCodePc(address(105), 11, 0, 0);
     }
     let nbytesCode = bytearray_get256(calldata, 4+2*32);
     let code = bytearray_extract(calldata, 4+3*32, nbytesCode);
@@ -83,11 +90,11 @@ impure func arbosTest_run(topFrame: EvmCallFrame, calldata: ByteArray) { // (byt
         ) {
             let res = evmCallStack_setAccount(addr, accountStore_get(acctStore, addr));
             if ( ! res ) {
-                evmOp_revert_knownCodePc(address(105), 11, 0, 0);
+                evmOp_revert_knownCodePc(address(105), 12, 0, 0);
             }
 
             if ( ! evmCallStack_setTopFrameMemory(data)) {
-                evmOp_revert_knownCodePc(address(105), 12, 0, 0);
+                evmOp_revert_knownCodePc(address(105), 13, 0, 0);
             }
 
             let success = false;
@@ -121,18 +128,18 @@ impure func arbosTest_run(topFrame: EvmCallFrame, calldata: ByteArray) { // (byt
                     if (evmCallStack_setTopFrameMemory(serializedStorage)) {
                         evmOp_return(0, serializedSize);
                     } else {
-                        evmOp_revert_knownCodePc(address(105), 13, 0, 0);
+                        evmOp_revert_knownCodePc(address(105), 14, 0, 0);
                     }
                 } else {
-                    evmOp_revert_knownCodePc(address(105), 14, 0, 0);
+                    evmOp_revert_knownCodePc(address(105), 15, 0, 0);
                 }
             } else {
-                evmOp_revert_knownCodePc(address(105), 15, 0, 0);
+                evmOp_revert_knownCodePc(address(105), 16, 0, 0);
             }
         } else {
-            evmOp_revert_knownCodePc(address(105), 16, 0, 0);
+            evmOp_revert_knownCodePc(address(105), 17, 0, 0);
         }
     } else {
-        evmOp_revert_knownCodePc(address(105), 17, 0, 0);
+        evmOp_revert_knownCodePc(address(105), 18, 0, 0);
     }
 }

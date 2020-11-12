@@ -758,34 +758,32 @@ impl<'a> ArbSys<'a> {
     }
 }
 
-pub struct _ArbosTest<'a> {
+pub struct ArbosTest {
     pub contract_abi: AbiForContract,
-    _wallet: &'a Wallet,
-    my_address: Uint256,
     debug: bool,
 }
 
-impl<'a> _ArbosTest<'a> {
-    pub fn _new(wallet: &'a Wallet, debug: bool) -> Self {
+impl ArbosTest {
+    pub fn new(debug: bool) -> Self {
         let mut contract_abi =
             AbiForContract::new_from_file("contracts/add/build/contracts/ArbosTest.json").unwrap();
         contract_abi.bind_interface_to_address(Uint256::from_u64(105));
-        _ArbosTest {
+        ArbosTest {
             contract_abi,
-            _wallet: wallet,
-            my_address: Uint256::from_bytes(wallet.address().as_bytes()),
             debug,
         }
     }
 
-    pub fn _run(&self, machine: &mut Machine, code: Vec<u8>, data: Vec<u8>) -> Result<Vec<u8>, ethabi::Error> {
+    pub fn run(
+        &self,
+        machine: &mut Machine,
+        code: Vec<u8>,
+        data: Vec<u8>,
+    ) -> Result<Vec<u8>, ethabi::Error> {
         let (receipts, sends) = self.contract_abi.call_function(
-            self.my_address.clone(),
+            Uint256::zero(), // send from address zero
             "run",
-            &[
-                ethabi::Token::Bytes(code),
-                ethabi::Token::Bytes(data),
-            ],
+            &[ethabi::Token::Bytes(code), ethabi::Token::Bytes(data)],
             machine,
             Uint256::zero(),
             self.debug,

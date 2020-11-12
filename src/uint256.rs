@@ -202,7 +202,6 @@ impl Uint256 {
     pub fn unary_minus(&self) -> Option<Self> {
         if self.val == BigUint::new(vec![0, 0, 0, 0, 0, 0, 0, 0x8000_0000]) {
             Some(self.clone())
-            //None
         } else {
             Some(self.bitwise_neg().add(&Uint256::one()))
         }
