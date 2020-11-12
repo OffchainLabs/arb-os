@@ -273,7 +273,7 @@ public impure func evmOp_extcodehash(addrAsUint: uint) -> bytes32 {
     let addr = address(addrAsUint);     // truncates if necessary
     if let Some(topFrame) = evmCallStack_topFrame() {
         let acct = evmCallFrame_getAccount(topFrame, addr);
-        if (account_isEmpty(acct)) {
+        if (! account_hasContract(acct)) {
             return bytes32(0);
         }
         if let Some(code) = account_getCode(acct) {

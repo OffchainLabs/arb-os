@@ -199,9 +199,9 @@ public func accountStore_createAccountFromEvmCode(
     storageMap: StorageMap
 ) -> option<AccountStore> {
     // Create a new account for a compiled EVM contract.
-    // Return Some(updatedAccountStore), or None if something went wrong.
+    // Returns Some(updatedAccountStore), or None if something went wrong.
     let oldAcct = accountStore_get(store, newAddr);
-    if (account_isEmpty(oldAcct)) {
+    if ( ! account_hasContract(oldAcct)) {
         return Some(accountStore_set(
             store,
             newAddr,
