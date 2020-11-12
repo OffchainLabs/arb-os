@@ -239,6 +239,7 @@ fn main() -> Result<(), CompileError> {
             for path_name in [
                 "evm-tests/VMTests/vmArithmeticTest",
                 "evm-tests/VMTests/vmPushDupSwapTest",
+                "evm-tests/VMTests/vmBitwiseLogicOperation",
             ]
             .iter()
             {
