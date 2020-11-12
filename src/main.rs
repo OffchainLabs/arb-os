@@ -237,9 +237,10 @@ fn main() -> Result<(), CompileError> {
 
         Args::EvmTests(options) => {
             for path_name in [
-                "evm-tests/VMTests/vmArithmeticTest",
-                "evm-tests/VMTests/vmPushDupSwapTest",
-                "evm-tests/VMTests/vmBitwiseLogicOperation",
+                //"evm-tests/VMTests/vmArithmeticTest",
+                //"evm-tests/VMTests/vmPushDupSwapTest",
+                //"evm-tests/VMTests/vmBitwiseLogicOperation",
+                "evm-tests/VMTests/vmIOandFlowOperations",
             ]
             .iter()
             {
