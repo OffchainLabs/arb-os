@@ -168,8 +168,8 @@ public func storageMap_delete(s: StorageMap, key: uint) -> StorageMap {
     return storageMap_set(s, key, 0);
 }
 
-// apply a closure to all items in the storageMap, in sequence
-// for each item (k,v) we'll do:  state <- closure(k, v, state)
+// apply a closure to all non-zero items in the storageMap, in sequence
+// for each item (k,v) such that v!=0 we'll do:  state <- closure(k, v, state)
 // this will return the state at the end
 // order of traversal is deterministic but weird and subject to change,
 //       so callers are advised not to rely on the ordering
