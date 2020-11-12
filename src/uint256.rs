@@ -12,7 +12,7 @@ use num_traits::CheckedSub;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::cmp::Ordering;
 use std::fmt;
-use std::ops::{Add, BitAnd, BitOr, BitXor, Div, Mul, Neg, Rem, Shl, Sub};
+use std::ops::{Add, BitAnd, BitOr, BitXor, Div, Mul, Rem, Shl, Sub};
 
 #[derive(Debug, Clone, PartialEq, Eq, Ord, Hash)]
 pub struct Uint256 {
@@ -200,13 +200,11 @@ impl Uint256 {
     }
 
     pub fn unary_minus(&self) -> Option<Self> {
-        let s = self.to_signed();
-        if s == BigInt::new(Sign::Minus, vec![0, 0, 0, 0, 0, 0, 0, 0x8000_0000]) {
-            None
+        if self.val == BigUint::new(vec![0, 0, 0, 0, 0, 0, 0, 0x8000_0000]) {
+            Some(self.clone())
+            //None
         } else {
-            Some(Uint256 {
-                val: Uint256::bigint_to_biguint(s.neg()),
-            })
+            Some(self.bitwise_neg().add(&Uint256::one()))
         }
     }
 
@@ -378,7 +376,7 @@ impl Uint256 {
         } else {
             let unshifted = self.val.to_bigint().unwrap();
             let shift = BigInt::new(Sign::Plus, vec![0, 0, 0, 0, 0, 0, 0, 0, 1]);
-            shift.sub(unshifted)
+            unshifted.sub(shift)
         }
     }
 

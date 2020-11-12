@@ -231,7 +231,7 @@ fn main() -> Result<(), CompileError> {
 
         Args::EvmTests => {
             let path = Path::new("evm-tests/VMTests/vmArithmeticTest");
-            let _ = evm::evmtest::run_evm_tests(path).unwrap();
+            let _ = evm::evmtest::run_evm_tests(path, None).unwrap();
         }
     }
 

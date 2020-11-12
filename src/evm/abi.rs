@@ -760,7 +760,7 @@ impl<'a> ArbSys<'a> {
 
 pub struct _ArbosTest<'a> {
     pub contract_abi: AbiForContract,
-    wallet: &'a Wallet,
+    _wallet: &'a Wallet,
     my_address: Uint256,
     debug: bool,
 }
@@ -772,18 +772,19 @@ impl<'a> _ArbosTest<'a> {
         contract_abi.bind_interface_to_address(Uint256::from_u64(105));
         _ArbosTest {
             contract_abi,
-            wallet,
+            _wallet: wallet,
             my_address: Uint256::from_bytes(wallet.address().as_bytes()),
             debug,
         }
     }
 
-    pub fn _run(&self, machine: &mut Machine, code: Vec<u8>) -> Result<Vec<u8>, ethabi::Error> {
+    pub fn _run(&self, machine: &mut Machine, code: Vec<u8>, data: Vec<u8>) -> Result<Vec<u8>, ethabi::Error> {
         let (receipts, sends) = self.contract_abi.call_function(
             self.my_address.clone(),
             "run",
             &[
                 ethabi::Token::Bytes(code),
+                ethabi::Token::Bytes(data),
             ],
             machine,
             Uint256::zero(),
@@ -801,14 +802,6 @@ impl<'a> _ArbosTest<'a> {
         }
 
         Ok(receipts[0].get_return_data())
-            /*
-        let return_vals = ethabi::decode(&[ethabi::ParamType::Bytes], &receipts[0].get_return_data())?;
-
-        match &return_vals[0] {
-            ethabi::Token::Bytes(v) => Ok(v.to_vec()),
-            _ => Err(ethabi::Error::from("invalid return type")),
-        }
-        */
     }
 }
 

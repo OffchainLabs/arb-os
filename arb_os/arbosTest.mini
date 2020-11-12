@@ -43,7 +43,7 @@ public impure func arbosTest_txcall() {
             evmOp_revert_knownCodePc(address(105), 0, 0, 0);
         }
         let funcCode = getFuncCode(calldata);
-        if (funcCode == 0x3a276523) {
+        if (funcCode == 0x29b9e6a5) {
             arbosTest_run(topFrame, calldata);
         } else {
             // unrecognized function code
@@ -59,12 +59,16 @@ func getFuncCode(ba: ByteArray) -> uint {
     return asm(224, bytearray_get256(ba, 0)) uint { shr };
 }
 
-impure func arbosTest_run(topFrame: EvmCallFrame, calldata: ByteArray) { // (bytes) -> bytes
+impure func arbosTest_run(topFrame: EvmCallFrame, calldata: ByteArray) { // (bytes, bytes) -> bytes
     if (bytearray_size(calldata) <= 68) {
         evmOp_revert_knownCodePc(address(105), 10, 0, 0);
     }
-    let nbytes = bytearray_get256(calldata, 36);
-    let code = bytearray_extract(calldata, 68, nbytes);
+    let nbytesCode = bytearray_get256(calldata, 4+2*32);
+    let code = bytearray_extract(calldata, 4+3*32, nbytesCode);
+    let dataOffset = 4 + 3*32 + 32*((nbytesCode+31)/32);
+    let nbytesData = bytearray_get256(calldata, dataOffset);
+
+    let data = bytearray_extract(calldata, dataOffset+32, nbytesData);
     let addr = address(0x7e6e3943dc0ce1267a954cb2139232658c14a7e3);  // keccak256("arbosTest account for testing")
 
     if let Some(res) = translateEvmCodeSegment(bytestream_new(code), false) {
@@ -82,15 +86,20 @@ impure func arbosTest_run(topFrame: EvmCallFrame, calldata: ByteArray) { // (byt
                 evmOp_revert_knownCodePc(address(105), 11, 0, 0);
             }
 
+            if ( ! evmCallStack_setTopFrameMemory(data)) {
+                evmOp_revert_knownCodePc(address(105), 12, 0, 0);
+            }
+
             let success = false;
             if (evmOp_callAndReturn(
                 100000000,
                 addr,
                 0,
                 0,
+                nbytesData,
                 0,
                 0,
-                0,
+
             )) {
                 success = true;
             }
@@ -112,18 +121,18 @@ impure func arbosTest_run(topFrame: EvmCallFrame, calldata: ByteArray) { // (byt
                     if (evmCallStack_setTopFrameMemory(serializedStorage)) {
                         evmOp_return(0, serializedSize);
                     } else {
-                        evmOp_revert_knownCodePc(address(105), 12, 0, 0);
+                        evmOp_revert_knownCodePc(address(105), 13, 0, 0);
                     }
                 } else {
-                    evmOp_revert_knownCodePc(address(105), 13, 0, 0);
+                    evmOp_revert_knownCodePc(address(105), 14, 0, 0);
                 }
             } else {
-                evmOp_revert_knownCodePc(address(105), 14, 0, 0);
+                evmOp_revert_knownCodePc(address(105), 15, 0, 0);
             }
         } else {
-            evmOp_revert_knownCodePc(address(105), 15, 0, 0);
+            evmOp_revert_knownCodePc(address(105), 16, 0, 0);
         }
     } else {
-        evmOp_revert_knownCodePc(address(105), 16, 0, 0);
+        evmOp_revert_knownCodePc(address(105), 17, 0, 0);
     }
 }
