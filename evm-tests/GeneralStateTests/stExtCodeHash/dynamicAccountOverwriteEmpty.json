@@ -1,0 +1,90 @@
+{
+    "dynamicAccountOverwriteEmpty" : {
+        "_info" : {
+            "comment" : "EXTCODEHASH of empty account, then CREATE or CREATE2 over it, EXTCODEHASH again. This should check that code hash cache is correctly updated during the transaction.",
+            "filling-rpc-server" : "evm version 1.9.23-unstable-0efc69a9-20201022",
+            "filling-tool-version" : "retesteth-0.0.9-berlin+commit.2f30f0ea.Linux.g++",
+            "lllcversion" : "Version: 0.5.14-develop.2020.6.22+commit.9189ad7a.Linux.g++",
+            "source" : "src/GeneralStateTestsFiller/stExtCodeHash/dynamicAccountOverwriteEmptyFiller.yml",
+            "sourceHash" : "0381ce70827584b7e48570324ac2d4443a41335e5cb3cc1b27d9f07732f3fcd2"
+        },
+        "env" : {
+            "currentCoinbase" : "0x2adc25665018aa1fe0e6bc666dac8fc2697ff9ba",
+            "currentDifficulty" : "0x020000",
+            "currentGasLimit" : "0x0f4240",
+            "currentNumber" : "0x01",
+            "currentTimestamp" : "0x03e8",
+            "previousHash" : "0x5e20a0453cecd065ea59c37ac63e079ee08998b6045136a8ce6635c7912ec0b6"
+        },
+        "post" : {
+            "Berlin" : [
+                {
+                    "indexes" : {
+                        "data" : 0,
+                        "gas" : 0,
+                        "value" : 0
+                    },
+                    "hash" : "0xbad63f6b8af303975f466d02583fce1b011505b874156e9d3a16f13d9221cb77",
+                    "logs" : "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347"
+                }
+            ],
+            "Istanbul" : [
+                {
+                    "indexes" : {
+                        "data" : 0,
+                        "gas" : 0,
+                        "value" : 0
+                    },
+                    "hash" : "0x2fd356a195d7e6f657b956b458760adf1533eb4b5fd94cbf8134b7065a560017",
+                    "logs" : "0x1dcc4de8dec75d7aab85b567b6ccd41ad312451b948a7413f0a142fd40d49347"
+                }
+            ]
+        },
+        "pre" : {
+            "0x095e7baea6a6c7c4c2dfeb977efac326af552d87" : {
+                "balance" : "0x0de0b6b3a7640000",
+                "code" : "0x73c5691dc90d9fd2a2e9a5fa5bd28bf77ffd60aa783f60005573c5691dc90d9fd2a2e9a5fa5bd28bf77ffd60aa783b60015560206000600073c5691dc90d9fd2a2e9a5fa5bd28bf77ffd60aa783c6000516002556000600060006000600073c5691dc90d9fd2a2e9a5fa5bd28bf77ffd60aa7861c350f26003556000603d8061010a60003960006000f5600a5573c5691dc90d9fd2a2e9a5fa5bd28bf77ffd60aa783f60045573c5691dc90d9fd2a2e9a5fa5bd28bf77ffd60aa783b60055560206000600073c5691dc90d9fd2a2e9a5fa5bd28bf77ffd60aa783c6000516006556000600060006000600073c5691dc90d9fd2a2e9a5fa5bd28bf77ffd60aa7861c350f26007550000fe73dddddddd000000000000000000000000000000003b6000526000516000602073dddddddd000000000000000000000000000000003c6000516020f300",
+                "nonce" : "0x00",
+                "storage" : {
+                }
+            },
+            "0xa94f5374fce5edbc8e2a8697c15331677e6ebf0b" : {
+                "balance" : "0x0de0b6b3a7640000",
+                "code" : "0x00",
+                "nonce" : "0x00",
+                "storage" : {
+                }
+            },
+            "0xc5691dc90d9fd2a2e9a5fa5bd28bf77ffd60aa78" : {
+                "balance" : "0x00",
+                "code" : "0x",
+                "nonce" : "0x00",
+                "storage" : {
+                    "0x01" : "0x01"
+                }
+            },
+            "0xdddddddd00000000000000000000000000000000" : {
+                "balance" : "0x0de0b6b3a7640000",
+                "code" : "0x600b60505500",
+                "nonce" : "0x00",
+                "storage" : {
+                }
+            }
+        },
+        "transaction" : {
+            "data" : [
+                "0x"
+            ],
+            "gasLimit" : [
+                "0x061a80"
+            ],
+            "gasPrice" : "0x01",
+            "nonce" : "0x00",
+            "secretKey" : "0x45a915e4d060149eb4365960e6a7a45f334393093061116b197e3240065ff2d8",
+            "to" : "0x095e7baea6a6c7c4c2dfeb977efac326af552d87",
+            "value" : [
+                "0x01"
+            ]
+        }
+    }
+}
