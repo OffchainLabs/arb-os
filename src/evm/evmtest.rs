@@ -47,29 +47,19 @@ fn run_one_test(
 ) -> bool {
     if let serde_json::Value::Object(omap) = json {
         for (_, v) in omap {
-            let post: &serde_json::Value = &v["post"];
-            let data_str: String = v["exec"]["data"].to_string();
-            if let serde_json::Value::Object(postmap) = post {
-                for (_, spec) in postmap {
-                    let code_str: String = spec["code"].to_string();
-                    let code_str = &code_str[3..(code_str.len() - 1)];
-                    let mut code = hex::decode(code_str.clone()).unwrap();
-                    code.extend(&[0u8]); // append final STOP instruction, which is missing in some test cases
-                    let data_str = &data_str[3..(data_str.len() - 1)];
-                    let data = hex::decode(data_str).unwrap();
-                    let storage_expected = &spec["storage"];
-                    let storage_actual = run_code(&code, &data, logfiles_path, raw_filename);
-                    return compare_storage(storage_expected, storage_actual);
-                }
+            let addr_str = &v["exec"]["address"].to_string();
+            let addr_str = &addr_str[1..(addr_str.len() - 1)];
+            let mut code = bytevec_from_jval(&v["pre"][addr_str]["code"].to_string());
+            code.extend(&[0u8]);
+            let data = bytevec_from_jval(&v["exec"]["data"].to_string());
+            let pre_storage = storage_from_jval(v["pre"][addr_str]["storage"].clone());
+            let storage_actual = run_code(&code, &data, pre_storage, logfiles_path, raw_filename);
+
+            if v["post"] == serde_json::Value::Null {
+                return storage_actual.len() == 0;
             } else {
-                // no post state exists -- call should fail
-                let code_str = v["exec"]["code"].to_string();
-                let code_str = &code_str[3..(code_str.len() - 1)];
-                let mut code = hex::decode(code_str.clone()).unwrap();
-                code.extend(&[0u8]);
-                let data_str = &data_str[3..(data_str.len() - 1)];
-                let data = hex::decode(data_str).unwrap();
-                return run_code(&code, &data, logfiles_path, raw_filename).len() == 0;
+                let storage_expected = storage_from_jval(v["post"][addr_str]["storage"].clone());
+                return compare_storage(&storage_expected, &storage_actual);
             }
         }
     }
@@ -77,9 +67,35 @@ fn run_one_test(
     false
 }
 
+fn bytevec_from_jval(s: &str) -> Vec<u8> {
+    hex::decode(&s[3..(s.len() - 1)]).unwrap()
+}
+
+fn uint256_from_jval(s: &str) -> Uint256 {
+    Uint256::from_bytes(&bytevec_from_jval(s))
+}
+
+fn storage_from_jval(jval: serde_json::Value) -> HashMap<Uint256, Uint256> {
+    let mut ret = HashMap::new();
+    if jval != serde_json::Value::Null {
+        if let serde_json::Value::Object(omap) = jval {
+            for (k, v) in omap {
+                let k_ui = Uint256::from_bytes(&hex::decode(&k[2..]).unwrap());
+                let v_ui = uint256_from_jval(&v.to_string());
+                ret.insert(k_ui, v_ui);
+            }
+        } else {
+            println!("{}", jval);
+            panic!("can't parse incoming storage");
+        }
+    }
+    ret
+}
+
 fn run_code(
     code: &[u8],
     data: &[u8],
+    _pre_storage: HashMap<Uint256, Uint256>,
     logfiles_path: Option<&Path>,
     raw_filename: &str,
 ) -> HashMap<Uint256, Uint256> {
@@ -90,7 +106,7 @@ fn run_code(
     let arbos_test = ArbosTest::new(false);
 
     let result = arbos_test
-        .run(&mut machine, code.to_vec(), data.to_vec())
+        .run(&mut machine, code.to_vec(), data.to_vec(), vec![])   //TODO: serialize pre_storage
         .unwrap();
 
     if let Some(logs_path) = logfiles_path {
@@ -114,7 +130,50 @@ fn run_code(
     ret
 }
 
-fn compare_storage(expected: &serde_json::Value, actual: HashMap<Uint256, Uint256>) -> bool {
+fn compare_storage(
+    expected: &HashMap<Uint256, Uint256>,
+    actual: &HashMap<Uint256, Uint256>,
+) -> bool {
+    let zero = Uint256::zero();
+    for (k, v) in expected {
+        if !v.is_zero() {
+            if actual.get(k) != Some(v) {
+                println!(
+                    "storage mismatch at {}: expected {}, got {}",
+                    k,
+                    v,
+                    if let Some(vv) = actual.get(k) {
+                        vv
+                    } else {
+                        &zero
+                    }
+                );
+                return false;
+            }
+        }
+    }
+    for (k, v) in actual {
+        if !v.is_zero() {
+            if expected.get(k) != Some(v) {
+                println!(
+                    "storage mismatch at {}: expected {}, got {}",
+                    k,
+                    if let Some(vv) = expected.get(k) {
+                        vv
+                    } else {
+                        &zero
+                    },
+                    v
+                );
+                return false;
+            }
+        }
+    }
+
+    true
+}
+
+fn _compare_storage_save(expected: &serde_json::Value, actual: HashMap<Uint256, Uint256>) -> bool {
     if let serde_json::Value::Object(map) = expected {
         let mut all_ks = HashSet::new();
         for (k, v) in map {

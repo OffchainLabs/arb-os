@@ -779,11 +779,16 @@ impl ArbosTest {
         machine: &mut Machine,
         code: Vec<u8>,
         data: Vec<u8>,
+        serialized_init_storage: Vec<u8>,
     ) -> Result<Vec<u8>, ethabi::Error> {
         let (receipts, sends) = self.contract_abi.call_function(
             Uint256::zero(), // send from address zero
             "run",
-            &[ethabi::Token::Bytes(code), ethabi::Token::Bytes(data)],
+            &[
+                ethabi::Token::Bytes(code),
+                ethabi::Token::Bytes(data),
+                ethabi::Token::Bytes(serialized_init_storage),
+            ],
             machine,
             Uint256::zero(),
             self.debug,

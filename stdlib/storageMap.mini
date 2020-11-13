@@ -26,6 +26,10 @@ use std::bytearray::bytearray_new;
 use std::bytearray::bytearray_size;
 use std::bytearray::bytearray_set256;
 
+use std::bytestream::bytestream_new;
+use std::bytestream::bytestream_atEof;
+use std::bytestream::bytestream_get256;
+
 
 type StorageMap = struct {
     tree: StorageMapNode,
@@ -75,7 +79,7 @@ public func storageMap_get(kvs: StorageMap, key: uint) -> uint {
 
 // An Unwinder remembers how to reassemble the tree as we traverse back up it.
 // During a set operation, we walk down the tree to the leaf, building an Unwinder as we go.
-// Then we use the Unwinder to guide our traversal back up the tree and the remind us of the
+// Then we use the Unwinder to guide our traversal back up the tree and to remind us of the
 //      writes we need to do on that upward traversal.
 type Unwinder = struct {
     kvs: [8]any,
@@ -206,6 +210,18 @@ public func storageMap_forall_tree(
 
 public func storageMap_serialize(s: StorageMap) -> ByteArray {
     return unsafecast<ByteArray>(storageMap_forall(s, smSerHelper, bytearray_new(0)));
+}
+
+public func storageMap_deserialize(ba: ByteArray) -> option<StorageMap> {
+    let stream = bytestream_new(ba);
+    let ret = storageMap_new();
+    while (! bytestream_atEof(stream)) {
+        let (ustr, k) = bytestream_get256(stream)?;
+        let (ustr, v) = bytestream_get256(ustr)?;
+        stream = ustr;
+        ret = storageMap_set(ret, k, v);
+    }
+    return Some(ret);
 }
 
 func smSerHelper(index: uint, value: uint, state: any) -> any {

@@ -11,6 +11,10 @@
         {
           "name": "innerCalldata",
           "type": "bytes"
+        },
+        {
+          "name": "initStorage",
+          "type": "bytes"
         }
       ],
       "name": "run",
@@ -25,21 +29,21 @@
       "type": "function"
     }
   ],
-  "metadata": "{\"compiler\":{\"version\":\"0.5.10+commit.5a6ea5b1\"},\"language\":\"Solidity\",\"output\":{\"abi\":[{\"constant\":false,\"inputs\":[{\"name\":\"code\",\"type\":\"bytes\"},{\"name\":\"innerCalldata\",\"type\":\"bytes\"}],\"name\":\"run\",\"outputs\":[{\"name\":\"\",\"type\":\"bytes\"}],\"payable\":false,\"stateMutability\":\"nonpayable\",\"type\":\"function\"}],\"devdoc\":{\"methods\":{}},\"userdoc\":{\"methods\":{}}},\"settings\":{\"compilationTarget\":{\"/Users/ed/OffchainLabs/arb-os/contracts/add/contracts/ArbosTest.sol\":\"ArbosTest\"},\"evmVersion\":\"petersburg\",\"libraries\":{},\"optimizer\":{\"enabled\":false,\"runs\":200},\"remappings\":[]},\"sources\":{\"/Users/ed/OffchainLabs/arb-os/contracts/add/contracts/ArbosTest.sol\":{\"keccak256\":\"0xda4c2a1dca246146712d191aef8b9c989ee095789aa6d499f8a96a696a060500\",\"urls\":[\"bzzr://5afa9c3abc5adaa202497837f811ecf42b9c143fff0f8094fc00d874e1cdb930\",\"dweb:/ipfs/QmQJwB4qUM53x3JbVJbmP4BmBH9K6xWwL3TsXFh9b66ncz\"]}},\"version\":1}",
+  "metadata": "{\"compiler\":{\"version\":\"0.5.10+commit.5a6ea5b1\"},\"language\":\"Solidity\",\"output\":{\"abi\":[{\"constant\":false,\"inputs\":[{\"name\":\"code\",\"type\":\"bytes\"},{\"name\":\"innerCalldata\",\"type\":\"bytes\"},{\"name\":\"initStorage\",\"type\":\"bytes\"}],\"name\":\"run\",\"outputs\":[{\"name\":\"\",\"type\":\"bytes\"}],\"payable\":false,\"stateMutability\":\"nonpayable\",\"type\":\"function\"}],\"devdoc\":{\"methods\":{}},\"userdoc\":{\"methods\":{}}},\"settings\":{\"compilationTarget\":{\"/Users/ed/OffchainLabs/arb-os/contracts/add/contracts/ArbosTest.sol\":\"ArbosTest\"},\"evmVersion\":\"petersburg\",\"libraries\":{},\"optimizer\":{\"enabled\":false,\"runs\":200},\"remappings\":[]},\"sources\":{\"/Users/ed/OffchainLabs/arb-os/contracts/add/contracts/ArbosTest.sol\":{\"keccak256\":\"0x7d9891316d61763640ad032a4ab51977b42c1573ea5151d36877c7a39399f8dd\",\"urls\":[\"bzzr://929a2ef938f0e03eda55d8dcec91a7d7f4ea657e9955a84ef1e5d9efe284b186\",\"dweb:/ipfs/QmTmSEd1yySdffQqpdzdMPZAhgUPt9jVJDmK2q6snBv42m\"]}},\"version\":1}",
   "bytecode": "0x",
   "deployedBytecode": "0x",
   "sourceMap": "",
   "deployedSourceMap": "",
-  "source": "pragma solidity >=0.4.21 <0.7.0;\n\ninterface ArbosTest {\n    function run(bytes calldata code, bytes calldata innerCalldata) external returns(bytes memory); \n}\n\n\n\n\n\n",
+  "source": "pragma solidity >=0.4.21 <0.7.0;\n\ninterface ArbosTest {\n    function run(bytes calldata code, bytes calldata innerCalldata, bytes calldata initStorage) external returns(bytes memory); \n}\n\n\n\n\n\n",
   "sourcePath": "/Users/ed/OffchainLabs/arb-os/contracts/add/contracts/ArbosTest.sol",
   "ast": {
     "absolutePath": "/Users/ed/OffchainLabs/arb-os/contracts/add/contracts/ArbosTest.sol",
     "exportedSymbols": {
       "ArbosTest": [
-        279
+        281
       ]
     },
-    "id": 280,
+    "id": 282,
     "nodeType": "SourceUnit",
     "nodes": [
       {
@@ -62,9 +66,9 @@
         "contractKind": "interface",
         "documentation": null,
         "fullyImplemented": false,
-        "id": 279,
+        "id": 281,
         "linearizedBaseContracts": [
-          279
+          281
         ],
         "name": "ArbosTest",
         "nodeType": "ContractDefinition",
@@ -72,14 +76,14 @@
           {
             "body": null,
             "documentation": null,
-            "id": 278,
+            "id": 280,
             "implemented": false,
             "kind": "function",
             "modifiers": [],
             "name": "run",
             "nodeType": "FunctionDefinition",
             "parameters": {
-              "id": 274,
+              "id": 276,
               "nodeType": "ParameterList",
               "parameters": [
                 {
@@ -87,7 +91,7 @@
                   "id": 271,
                   "name": "code",
                   "nodeType": "VariableDeclaration",
-                  "scope": 278,
+                  "scope": 280,
                   "src": "73:19:2",
                   "stateVariable": false,
                   "storageLocation": "calldata",
@@ -113,7 +117,7 @@
                   "id": 273,
                   "name": "innerCalldata",
                   "nodeType": "VariableDeclaration",
-                  "scope": 278,
+                  "scope": 280,
                   "src": "94:28:2",
                   "stateVariable": false,
                   "storageLocation": "calldata",
@@ -133,32 +137,25 @@
                   },
                   "value": null,
                   "visibility": "internal"
-                }
-              ],
-              "src": "72:51:2"
-            },
-            "returnParameters": {
-              "id": 277,
-              "nodeType": "ParameterList",
-              "parameters": [
+                },
                 {
                   "constant": false,
-                  "id": 276,
-                  "name": "",
+                  "id": 275,
+                  "name": "initStorage",
                   "nodeType": "VariableDeclaration",
-                  "scope": 278,
-                  "src": "141:12:2",
+                  "scope": 280,
+                  "src": "124:26:2",
                   "stateVariable": false,
-                  "storageLocation": "memory",
+                  "storageLocation": "calldata",
                   "typeDescriptions": {
-                    "typeIdentifier": "t_bytes_memory_ptr",
+                    "typeIdentifier": "t_bytes_calldata_ptr",
                     "typeString": "bytes"
                   },
                   "typeName": {
-                    "id": 275,
+                    "id": 274,
                     "name": "bytes",
                     "nodeType": "ElementaryTypeName",
-                    "src": "141:5:2",
+                    "src": "124:5:2",
                     "typeDescriptions": {
                       "typeIdentifier": "t_bytes_storage_ptr",
                       "typeString": "bytes"
@@ -168,29 +165,62 @@
                   "visibility": "internal"
                 }
               ],
-              "src": "140:14:2"
+              "src": "72:79:2"
             },
-            "scope": 279,
-            "src": "60:95:2",
+            "returnParameters": {
+              "id": 279,
+              "nodeType": "ParameterList",
+              "parameters": [
+                {
+                  "constant": false,
+                  "id": 278,
+                  "name": "",
+                  "nodeType": "VariableDeclaration",
+                  "scope": 280,
+                  "src": "169:12:2",
+                  "stateVariable": false,
+                  "storageLocation": "memory",
+                  "typeDescriptions": {
+                    "typeIdentifier": "t_bytes_memory_ptr",
+                    "typeString": "bytes"
+                  },
+                  "typeName": {
+                    "id": 277,
+                    "name": "bytes",
+                    "nodeType": "ElementaryTypeName",
+                    "src": "169:5:2",
+                    "typeDescriptions": {
+                      "typeIdentifier": "t_bytes_storage_ptr",
+                      "typeString": "bytes"
+                    }
+                  },
+                  "value": null,
+                  "visibility": "internal"
+                }
+              ],
+              "src": "168:14:2"
+            },
+            "scope": 281,
+            "src": "60:123:2",
             "stateMutability": "nonpayable",
             "superFunction": null,
             "visibility": "external"
           }
         ],
-        "scope": 280,
-        "src": "34:124:2"
+        "scope": 282,
+        "src": "34:152:2"
       }
     ],
-    "src": "0:164:2"
+    "src": "0:192:2"
   },
   "legacyAST": {
     "absolutePath": "/Users/ed/OffchainLabs/arb-os/contracts/add/contracts/ArbosTest.sol",
     "exportedSymbols": {
       "ArbosTest": [
-        279
+        281
       ]
     },
-    "id": 280,
+    "id": 282,
     "nodeType": "SourceUnit",
     "nodes": [
       {
@@ -213,9 +243,9 @@
         "contractKind": "interface",
         "documentation": null,
         "fullyImplemented": false,
-        "id": 279,
+        "id": 281,
         "linearizedBaseContracts": [
-          279
+          281
         ],
         "name": "ArbosTest",
         "nodeType": "ContractDefinition",
@@ -223,14 +253,14 @@
           {
             "body": null,
             "documentation": null,
-            "id": 278,
+            "id": 280,
             "implemented": false,
             "kind": "function",
             "modifiers": [],
             "name": "run",
             "nodeType": "FunctionDefinition",
             "parameters": {
-              "id": 274,
+              "id": 276,
               "nodeType": "ParameterList",
               "parameters": [
                 {
@@ -238,7 +268,7 @@
                   "id": 271,
                   "name": "code",
                   "nodeType": "VariableDeclaration",
-                  "scope": 278,
+                  "scope": 280,
                   "src": "73:19:2",
                   "stateVariable": false,
                   "storageLocation": "calldata",
@@ -264,7 +294,7 @@
                   "id": 273,
                   "name": "innerCalldata",
                   "nodeType": "VariableDeclaration",
-                  "scope": 278,
+                  "scope": 280,
                   "src": "94:28:2",
                   "stateVariable": false,
                   "storageLocation": "calldata",
@@ -284,32 +314,25 @@
                   },
                   "value": null,
                   "visibility": "internal"
-                }
-              ],
-              "src": "72:51:2"
-            },
-            "returnParameters": {
-              "id": 277,
-              "nodeType": "ParameterList",
-              "parameters": [
+                },
                 {
                   "constant": false,
-                  "id": 276,
-                  "name": "",
+                  "id": 275,
+                  "name": "initStorage",
                   "nodeType": "VariableDeclaration",
-                  "scope": 278,
-                  "src": "141:12:2",
+                  "scope": 280,
+                  "src": "124:26:2",
                   "stateVariable": false,
-                  "storageLocation": "memory",
+                  "storageLocation": "calldata",
                   "typeDescriptions": {
-                    "typeIdentifier": "t_bytes_memory_ptr",
+                    "typeIdentifier": "t_bytes_calldata_ptr",
                     "typeString": "bytes"
                   },
                   "typeName": {
-                    "id": 275,
+                    "id": 274,
                     "name": "bytes",
                     "nodeType": "ElementaryTypeName",
-                    "src": "141:5:2",
+                    "src": "124:5:2",
                     "typeDescriptions": {
                       "typeIdentifier": "t_bytes_storage_ptr",
                       "typeString": "bytes"
@@ -319,20 +342,53 @@
                   "visibility": "internal"
                 }
               ],
-              "src": "140:14:2"
+              "src": "72:79:2"
             },
-            "scope": 279,
-            "src": "60:95:2",
+            "returnParameters": {
+              "id": 279,
+              "nodeType": "ParameterList",
+              "parameters": [
+                {
+                  "constant": false,
+                  "id": 278,
+                  "name": "",
+                  "nodeType": "VariableDeclaration",
+                  "scope": 280,
+                  "src": "169:12:2",
+                  "stateVariable": false,
+                  "storageLocation": "memory",
+                  "typeDescriptions": {
+                    "typeIdentifier": "t_bytes_memory_ptr",
+                    "typeString": "bytes"
+                  },
+                  "typeName": {
+                    "id": 277,
+                    "name": "bytes",
+                    "nodeType": "ElementaryTypeName",
+                    "src": "169:5:2",
+                    "typeDescriptions": {
+                      "typeIdentifier": "t_bytes_storage_ptr",
+                      "typeString": "bytes"
+                    }
+                  },
+                  "value": null,
+                  "visibility": "internal"
+                }
+              ],
+              "src": "168:14:2"
+            },
+            "scope": 281,
+            "src": "60:123:2",
             "stateMutability": "nonpayable",
             "superFunction": null,
             "visibility": "external"
           }
         ],
-        "scope": 280,
-        "src": "34:124:2"
+        "scope": 282,
+        "src": "34:152:2"
       }
     ],
-    "src": "0:164:2"
+    "src": "0:192:2"
   },
   "compiler": {
     "name": "solc",
@@ -340,7 +396,7 @@
   },
   "networks": {},
   "schemaVersion": "3.3.1",
-  "updatedAt": "2020-11-11T13:01:23.756Z",
+  "updatedAt": "2020-11-13T12:59:10.146Z",
   "devdoc": {
     "methods": {}
   },
