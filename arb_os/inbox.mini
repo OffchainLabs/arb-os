@@ -6,6 +6,7 @@ use std::queue::Queue;
 use std::queue::queue_new;
 use std::queue::queue_isEmpty;
 use std::queue::queue_get;
+use std::queue::queue_getOrDie;
 use std::queue::queue_put;
 use std::queue::QueueStack;
 use std::queue::queuestack_new;
@@ -55,6 +56,7 @@ type Inbox = struct {
 }
 
 type SequencerState = struct {
+    sequencerAddr: address,
     delayBlocks: uint,
     delayQueue: Queue,
     lastBlockNumSeen: uint,
@@ -78,6 +80,31 @@ public impure func inbox_init() {
     globalInputQueue = struct {
         txQ: queue_new(),
         batchQ: queuestack_new()
+    };
+}
+
+public impure func inbox_addSequencer(addr: address, delayBlocks: uint) {
+    // deliver messages from old sequencer, if any (shouldn't be needed, but doing it just to be extra cautious)
+    if let Some(oldSeq) = globalInbox.sequencer {
+        let oldq = oldSeq.delayQueue;
+        while( ! queue_isEmpty(oldq) ){
+            let (uq, rawMsg) = queue_getOrDie(oldq);
+            oldq = uq;
+            globalInbox = globalInbox with {
+                queue: queue_put(globalInbox.queue, unsafecast<IncomingRequest>(rawMsg))
+            };
+        }
+    }
+
+    // set up the new sequencer
+    globalInbox = globalInbox with {
+        sequencer: Some(struct {
+            sequencerAddr: addr,
+            delayBlocks: delayBlocks,
+            delayQueue: queue_new(),
+            lastBlockNumSeen: globalInbox.blockNum,
+            lastTimestampSeen: globalInbox.timestamp,
+        })
     };
 }
 
@@ -115,7 +142,8 @@ func queueGetOrDie(q: Queue) -> (Queue, any) {
     if let Some(res) = queue_get(q) {
         return res;
     } else {
-        panic;
+        // shouldn't ever happen
+        return (q, ());
     }
 }
 
@@ -129,25 +157,14 @@ impure func getFromL1Inbox(inbox: Inbox) -> Inbox {
             return inbox with {
                 queue: queue_put(
                     inbox.queue,
-                    struct {
-                        kind: 6,   // special kind that is reserved for these synthetic end-of-block messages
-                        blockNumber: inbox.blockNum,
-                        timestamp: inbox.timestamp,
-                        sender: address(0),
-                        requestId: 0,
-                        msgData: bytearray_new(0),
-                        provenance: struct {   // this won't be used
-                            l1SeqNum: 0,
-                            parentRequestId: 0,
-                            indexInParent: ~0,
-                        },
-                    }
+                    endOfBlockMessage(inbox.blockNum, inbox.timestamp),
                 )
             } with {
                 needToPeek: false   // don't peek next time, because we already sent end-of-block
             };
         }
     }
+
     let newMsgRaw = asm() IncomingRequestFromInbox { inbox };
     let newMsg = struct {
         kind: newMsgRaw.kind,
@@ -163,11 +180,69 @@ impure func getFromL1Inbox(inbox: Inbox) -> Inbox {
         },
     };
 
-    if (newMsg.blockNumber == 0) {
-        newMsg = newMsg with { blockNumber: inbox.blockNum };
-    }
-    if (newMsg.timestamp == 0) {
-        newMsg = newMsg with { timestamp: inbox.timestamp };
+    if let Some(seqInfo) = inbox.sequencer {
+        if (newMsg.blockNumber == 0) {
+            newMsg = newMsg with { blockNumber: seqInfo.lastBlockNumSeen };
+        }
+        if (newMsg.timestamp == 0) {
+            newMsg = newMsg with { timestamp: seqInfo.lastTimestampSeen };
+        }
+
+        let isSequencerMsg = (newMsg.kind == 3) || (bytearray_getByte(newMsg.msgData, 0) == 5);
+        let releaseBlockNum = 0;
+        if (newMsg.blockNumber > seqInfo.delayBlocks) {
+            releaseBlockNum = seqInfo.delayBlocks - newMsg.blockNumber;
+        }
+
+        if (isSequencerMsg) {
+            // get low byte of blockNum authorized for release, and reconstruct that blockNum
+            let msgRelease = (newMsg.blockNumber & ~0xff) + bytearray_getByte(newMsg.msgData, 1);
+            if ( (msgRelease > newMsg.blockNumber) && (msgRelease >= 256) ) {
+                msgRelease = msgRelease - 256;
+            }
+            if (msgRelease > releaseBlockNum) {
+                releaseBlockNum = msgRelease;
+            }
+        }
+
+        let (uSeqInfo, uInboxQ) = releaseDelayedRequests(
+            seqInfo,
+            inbox.queue,
+            newMsg.blockNumber,
+            newMsg.timestamp,
+            releaseBlockNum,
+        );
+        seqInfo = uSeqInfo;
+        inbox = inbox with {
+            queue: uInboxQ
+        } with {
+            sequencer: Some(seqInfo with {
+                lastBlockNumSeen: newMsg.blockNumber
+            } with {
+                lastTimestampSeen: newMsg.timestamp
+            })
+        } with {
+            needToPeek: true
+        };
+
+        if (isSequencerMsg) {
+            return inbox with {
+                queue: queue_put(inbox.queue, newMsg)
+            };
+        } else {
+            return inbox with {
+                sequencer: Some(seqInfo with {
+                    delayQueue: queue_put(seqInfo.delayQueue, newMsg)
+                })
+            };
+        }
+    } else {
+        if (newMsg.blockNumber == 0) {
+            newMsg = newMsg with { blockNumber: inbox.blockNum };
+        }
+        if (newMsg.timestamp == 0) {
+            newMsg = newMsg with { timestamp: inbox.timestamp };
+        }
     }
 
     return inbox with {
@@ -176,6 +251,71 @@ impure func getFromL1Inbox(inbox: Inbox) -> Inbox {
         needToPeek: true
     };
 }
+
+func endOfBlockMessage(blockNum: uint, timestamp: uint) -> IncomingRequest {
+    return struct {
+        kind: 6,
+        blockNumber: blockNum,
+        timestamp: timestamp,
+        sender: address(0),
+        requestId: 0,
+        msgData: bytearray_new(0),
+        provenance: struct {
+            l1SeqNum: 0,
+            parentRequestId: 0,
+            indexInParent: ~0,
+        },
+    };
+}
+
+func releaseDelayedRequests(
+    seqInfo: SequencerState,
+    inQ: Queue,
+    blockNum: uint,
+    timestamp: uint,
+    releaseBlockNum: uint,
+) -> (SequencerState, Queue) {
+    loop {
+        if let Some(res) = queue_get(seqInfo.delayQueue) {
+            let (udq, rawMsg) = res;
+            let msg = unsafecast<IncomingRequest>(rawMsg);
+            if (msg.blockNumber <= releaseBlockNum) {
+                seqInfo = seqInfo with { delayQueue: udq };
+                if (msg.blockNumber + releaseBlockNum < blockNum) {
+                    inQ = queue_put(
+                        inQ,
+                        msg with {
+                            blockNumber: msg.blockNumber + releaseBlockNum
+                        } with {
+                            timestamp: uint(linearInterpolate(
+                                msg.blockNumber,
+                                msg.timestamp,
+                                blockNum,
+                                timestamp,
+                                msg.blockNumber + releaseBlockNum,
+                            ))
+                        }
+                    );
+                } else {
+                    inQ = queue_put(
+                        inQ,
+                        msg with {
+                            blockNumber: blockNum
+                        } with {
+                            timestamp: timestamp
+                        }
+                    );
+                }
+            } else {
+                return (seqInfo, inQ);
+            }
+        } else {
+            return (seqInfo, inQ);
+        }
+    }
+    return (seqInfo, inQ);   //TODO
+}
+
 
 public impure func inbox_currentTimestamp() -> uint {
     return globalInbox.timestamp;
