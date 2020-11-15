@@ -51,6 +51,14 @@ type Inbox = struct {
     blockNum: uint,   // Highest blocknum of messages that we have retrieved from the inbox
     timestamp: uint,  // Highest timestamp of messages that we have retrieved from the inbox
     needToPeek: bool, // true iff we should be doing an inboxpeek before inbox instruction
+    sequencer: option<SequencerState>,
+}
+
+type SequencerState = struct {
+    delayBlocks: uint,
+    delayQueue: Queue,
+    lastBlockNumSeen: uint,
+    lastTimestampSeen: uint,
 }
 
 var globalInbox: Inbox;
@@ -65,6 +73,7 @@ public impure func inbox_init() {
         blockNum: 0,
         timestamp: 0,
         needToPeek: false,   // don't peek before the first message
+        sequencer: None<SequencerState>,
     };
     globalInputQueue = struct {
         txQ: queue_new(),
@@ -84,8 +93,14 @@ public impure func inbox_get() -> IncomingRequest {
         }
 
         let (updatedQ, ret,) = queueGetOrDie(globalInbox.queue);
-        globalInbox = globalInbox with { queue: updatedQ };
         let ebMsg = unsafecast<IncomingRequest>(ret);
+        globalInbox = globalInbox with {
+            queue: updatedQ
+        } with {
+            blockNum: ebMsg.blockNumber
+        } with {
+            timestamp: ebMsg.timestamp
+        };
         if (ebMsg.kind == 4) {
             chainParams_gotParamsMessage(ebMsg.sender, ebMsg.msgData);
         } else {
@@ -159,10 +174,6 @@ impure func getFromL1Inbox(inbox: Inbox) -> Inbox {
         queue: queue_put(inbox.queue, newMsg)
     } with {
         needToPeek: true
-    } with {
-        blockNum: newMsg.blockNumber
-    } with {
-        timestamp: newMsg.timestamp
     };
 }
 
@@ -357,5 +368,13 @@ func translateBuddyDeployTx(request: IncomingRequest) -> option<TxRequestData> {
             incomingRequest: request
         }
     );
+}
+
+func linearInterpolate(x0: uint, y0: uint, x1: uint, y1: uint, x: uint) -> int {
+    if (x0 == x1) {
+        return int(y0);
+    } else {
+        return int(y0) + (int(x)-int(x0))*(int(y1)-int(y0))/(int(x1)-int(x0));
+    }
 }
 
