@@ -97,6 +97,9 @@ public impure func inbox_addSequencer(addr: address, delayBlocks: uint) {
     }
 
     // set up the new sequencer
+    if (delayBlocks > 128*256) {
+        delayBlocks = 128*256;
+    }
     globalInbox = globalInbox with {
         sequencer: Some(struct {
             sequencerAddr: addr,
@@ -196,11 +199,12 @@ impure func getFromL1Inbox(inbox: Inbox) -> Inbox {
 
         if (isSequencerMsg) {
             // get low byte of blockNum authorized for release, and reconstruct that blockNum
-            let msgRelease = (newMsg.blockNumber & ~0xff) + bytearray_getByte(newMsg.msgData, 1);
-            if ( (msgRelease > newMsg.blockNumber) && (msgRelease >= 256) ) {
-                msgRelease = msgRelease - 256;
+            let msgRelease = (newMsg.blockNumber & ~0xff)
+                             + asm (256-16, bytearray_get256(newMsg.msgData, 1)) uint { shr };
+            if ( (msgRelease > newMsg.blockNumber) && (msgRelease >= 256*256) ) {
+                msgRelease = msgRelease - 256*256;
             }
-            if (msgRelease > releaseBlockNum) {
+            if (releaseBlockNum < msgRelease) {
                 releaseBlockNum = msgRelease;
             }
         }
@@ -243,13 +247,13 @@ impure func getFromL1Inbox(inbox: Inbox) -> Inbox {
         if (newMsg.timestamp == 0) {
             newMsg = newMsg with { timestamp: inbox.timestamp };
         }
-    }
 
-    return inbox with {
-        queue: queue_put(inbox.queue, newMsg)
-    } with {
-        needToPeek: true
-    };
+        return inbox with {
+            queue: queue_put(inbox.queue, newMsg)
+        } with {
+            needToPeek: true
+        };
+    }
 }
 
 func endOfBlockMessage(blockNum: uint, timestamp: uint) -> IncomingRequest {

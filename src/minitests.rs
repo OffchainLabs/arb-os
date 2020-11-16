@@ -419,6 +419,14 @@ pub fn test_crosscontract_call_using_batch() {
     }
 }
 
+#[test]
+pub fn test_crosscontract_call_using_sequencer_batch() {
+    match crate::evm::_evm_xcontract_call_using_sequencer_batch(None, false, false) {
+        Ok(result) => assert_eq!(result, true),
+        Err(e) => panic!("error {}", e),
+    }
+}
+
 pub fn _test_crosscontract_call_using_compressed_batch() {
     match crate::evm::_evm_xcontract_call_using_compressed_batch(None, false, false) {
         Ok(result) => assert_eq!(result, true),

@@ -32,9 +32,25 @@ type MessageBatch = struct {
 }
 
 public func messageBatch_tryNew(msg: IncomingRequest) -> option<MessageBatch> {
-    if ( (msg.kind == 3) && (bytearray_getByte(msg.msgData, 0) == 3) ) {
+    if ( (msg.kind == 3) && (bytearray_getByte(msg.msgData, 0) == 3) ) {  // message batch
         let stream = bytestream_new(msg.msgData);
         stream = bytestream_skipBytes(stream, 1)?;
+        return Some(
+            struct {
+                template: msg with {
+                    provenance: struct {
+                        l1SeqNum: msg.provenance.l1SeqNum,
+                        parentRequestId: msg.requestId,
+                        indexInParent: 0,
+                    }
+                },
+                stream: stream,
+                numSoFar: 0,
+            }
+        );
+    } elseif ( (msg.kind == 3) && (bytearray_getByte(msg.msgData, 0) == 5) ) {  // sequencer batch
+        let stream = bytestream_new(msg.msgData);
+        stream = bytestream_skipBytes(stream, 3)?;
         return Some(
             struct {
                 template: msg with {

@@ -31,6 +31,10 @@ pub struct RuntimeEnvironment {
 
 impl RuntimeEnvironment {
     pub fn new(chain_address: Uint256) -> Self {
+        RuntimeEnvironment::new_options(chain_address, None)
+    }
+
+    pub fn new_options(chain_address: Uint256, sequencer_info: Option<(Uint256, Uint256)>) -> Self {
         let mut ret = RuntimeEnvironment {
             chain_id: chain_address.trim_to_u64() & 0xffffffffffff, // truncate to 48 bits
             l1_inbox: vec![],
@@ -44,11 +48,15 @@ impl RuntimeEnvironment {
             recorder: RtEnvRecorder::new(),
             compressor: TxCompressor::new(),
         };
-        ret.insert_l1_message(4, chain_address, &RuntimeEnvironment::get_params_bytes());
+        ret.insert_l1_message(
+            4,
+            chain_address,
+            &RuntimeEnvironment::get_params_bytes(sequencer_info),
+        );
         ret
     }
 
-    fn get_params_bytes() -> Vec<u8> {
+    fn get_params_bytes(sequencer_info: Option<(Uint256, Uint256)>) -> Vec<u8> {
         let mut buf = Vec::new();
         buf.extend(Uint256::from_u64(3 * 60 * 60 * 1000).to_bytes_be()); // grace period in ticks
         buf.extend(Uint256::from_u64(100_000_000 / 1000).to_bytes_be()); // arbgas speed limit per tick
@@ -56,6 +64,14 @@ impl RuntimeEnvironment {
         buf.extend(Uint256::from_u64(1000).to_bytes_be()); // base stake amount in wei
         buf.extend(Uint256::zero().to_bytes_be()); // staking token address (zero means ETH)
         buf.extend(Uint256::zero().to_bytes_be()); // owner address
+
+        if let Some((seq_addr, delay_blocks)) = sequencer_info {
+            buf.extend(&[0u8; 8]);
+            buf.extend(&64u64.to_be_bytes());
+            buf.extend(seq_addr.to_bytes_be());
+            buf.extend(delay_blocks.to_bytes_be());
+        }
+
         buf
     }
 
@@ -156,6 +172,18 @@ impl RuntimeEnvironment {
         vec![3u8]
     }
 
+    pub fn _new_sequencer_batch(&self, delay: Option<Uint256>) -> Vec<u8> {
+        let release_block_num = if self.current_block_num < Uint256::from_u64(65536) {
+            Uint256::zero()
+        } else {
+            self.current_block_num
+                .sub(&delay.unwrap_or(Uint256::from_u64(20)))
+                .unwrap()
+        };
+        let low_order = release_block_num.trim_to_u64() & 0xffff;
+        vec![5u8, (low_order >> 8) as u8, (low_order & 0xff) as u8]
+    }
+
     pub fn make_signed_l2_message(
         &mut self,
         sender_addr: Uint256,
@@ -252,7 +280,6 @@ impl RuntimeEnvironment {
         tx_id_bytes
     }
 
-    #[cfg(test)]
     pub fn _append_compressed_and_signed_tx_message_to_batch(
         &mut self,
         batch: &mut Vec<u8>,
