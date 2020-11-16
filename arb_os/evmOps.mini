@@ -74,10 +74,83 @@ use std::keccak::keccak256;
 use std::rlp::keccakOfRlpEncodedUintPair;
 
 
+var evmOpJumpTable: [43]impure func();
+var evmOpInverseTable: map<impure func(), uint>;
+
+public impure func evmOps_init() {
+    evmOpJumpTable = unsafecast<[43]impure func()>(newfixedarray(43));
+    evmOpInverseTable = newmap<impure func(), uint>;
+    let i = 0;
+    i = evmOps_init_makeOne(i, unsafecast<impure func()>(evmOp_stop));
+    i = evmOps_init_makeOne(i, unsafecast<impure func()>(evmOp_sha3));
+    i = evmOps_init_makeOne(i, unsafecast<impure func()>(evmOp_address));
+    i = evmOps_init_makeOne(i, unsafecast<impure func()>(evmOp_balance));
+    i = evmOps_init_makeOne(i, unsafecast<impure func()>(evmOp_selfbalance));
+    i = evmOps_init_makeOne(i, unsafecast<impure func()>(evmOp_origin));
+    i = evmOps_init_makeOne(i, unsafecast<impure func()>(evmOp_caller));
+    i = evmOps_init_makeOne(i, unsafecast<impure func()>(evmOp_callvalue));
+    i = evmOps_init_makeOne(i, unsafecast<impure func()>(evmOp_calldataload));
+    i = evmOps_init_makeOne(i, unsafecast<impure func()>(evmOp_calldatasize));
+    i = evmOps_init_makeOne(i, unsafecast<impure func()>(evmOp_calldatacopy));
+    i = evmOps_init_makeOne(i, unsafecast<impure func()>(evmOp_codesize));
+    i = evmOps_init_makeOne(i, unsafecast<impure func()>(evmOp_codecopy));
+    i = evmOps_init_makeOne(i, unsafecast<impure func()>(evmOp_extcodesize));
+    i = evmOps_init_makeOne(i, unsafecast<impure func()>(evmOp_extcodecopy));
+    i = evmOps_init_makeOne(i, unsafecast<impure func()>(evmOp_extcodehash));
+    i = evmOps_init_makeOne(i, unsafecast<impure func()>(evmOp_returndatasize));
+    i = evmOps_init_makeOne(i, unsafecast<impure func()>(evmOp_returndatacopy));
+    i = evmOps_init_makeOne(i, unsafecast<impure func()>(evmOp_timestamp));
+    i = evmOps_init_makeOne(i, unsafecast<impure func()>(evmOp_number));
+    i = evmOps_init_makeOne(i, unsafecast<impure func()>(evmOp_msize));
+    i = evmOps_init_makeOne(i, unsafecast<impure func()>(evmOp_mload));
+    i = evmOps_init_makeOne(i, unsafecast<impure func()>(evmOp_mstore));
+    i = evmOps_init_makeOne(i, unsafecast<impure func()>(evmOp_mstore8));
+    i = evmOps_init_makeOne(i, unsafecast<impure func()>(evmOp_sload));
+    i = evmOps_init_makeOne(i, unsafecast<impure func()>(evmOp_sstore));
+    i = evmOps_init_makeOne(i, unsafecast<impure func()>(evmOp_getjumpaddr));
+    i = evmOps_init_makeOne(i, unsafecast<impure func()>(evmOp_msize));
+    i = evmOps_init_makeOne(i, unsafecast<impure func()>(evmOp_log0));
+    i = evmOps_init_makeOne(i, unsafecast<impure func()>(evmOp_log1));
+    i = evmOps_init_makeOne(i, unsafecast<impure func()>(evmOp_log2));
+    i = evmOps_init_makeOne(i, unsafecast<impure func()>(evmOp_log3));
+    i = evmOps_init_makeOne(i, unsafecast<impure func()>(evmOp_log4));
+    i = evmOps_init_makeOne(i, unsafecast<impure func()>(evmOp_call));
+    i = evmOps_init_makeOne(i, unsafecast<impure func()>(evmOp_callcode));
+    i = evmOps_init_makeOne(i, unsafecast<impure func()>(evmOp_delegatecall));
+    i = evmOps_init_makeOne(i, unsafecast<impure func()>(evmOp_staticcall));
+    i = evmOps_init_makeOne(i, unsafecast<impure func()>(evmOp_revert));
+    i = evmOps_init_makeOne(i, unsafecast<impure func()>(evmOp_revert_knownPc));
+    i = evmOps_init_makeOne(i, unsafecast<impure func()>(evmOp_return));
+    i = evmOps_init_makeOne(i, unsafecast<impure func()>(evmOp_selfdestruct));
+    i = evmOps_init_makeOne(i, unsafecast<impure func()>(evmOp_create));
+    i = evmOps_init_makeOne(i, unsafecast<impure func()>(evmOp_create2));
+}
+
+impure func evmOps_init_makeOne(i: uint, f: impure func()) -> uint {
+    evmOpJumpTable = evmOpJumpTable with { [i] = f };
+    evmOpInverseTable = evmOpInverseTable with { [f] = i };
+    return i+1;
+}
+
+public impure func evmOps_indexForFunction(f: impure func()) -> option<uint> {
+    return evmOpInverseTable[f];
+}
+
+public impure func evmOps_trampoline(index: uint) {
+    asm(evmOpJumpTable[index],) {
+        auxpop pop   // discard this function's call frame
+        auxpop
+        swap1
+        // stack holds: funcPtr returnAddr
+        jump
+    };
+    asm(998,) { debugprint };
+}
+
+
 // Any function with a name like evmOp_XXX is designed to implement the XXX instruction in EVM.
 // Compiled EVM code will call that function to implement the XXX instruction.
 // Most of the functions are fairly simple, and access the callframe or similar information.
-
 
 public impure func evmOp_stop() {
     // return from the current call, with no calldata

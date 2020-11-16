@@ -20,6 +20,10 @@ use std::stack::stack_new;
 use std::stack::stack_push;
 
 use chainParameters::chainParams_chainId;
+
+use evmOps::evmOps_indexForFunction;
+use evmOps::evmOps_trampoline;
+
 use evmOps::evmOp_address;
 use evmOps::evmOp_balance;
 use evmOps::evmOp_selfbalance;
@@ -653,18 +657,26 @@ impure func pushEvmInsnCall(
     // Generate the appropriate procedure call.
     // Note that the EVM code will already have put the args to the call on the stack,
     //     and the Mini code will leave return values on the stack.
-    return Some((
-        pushValue(
-            restOfCode,  // push return address
-            pushInstructionImm(
-                0x34, // jump
-                evmOp,
-                restOfCode
-            )
-        ),
-        evmJumpTable,
-        pcTable,
-    ));
+    if let Some(funcIndex) = evmOps_indexForFunction(evmOp) {
+        return Some((
+            pushValue(
+                funcIndex,
+                pushValue(
+                    restOfCode,   // return address
+                    pushInstructionImm(
+                        0x34, // jump
+                        evmOps_trampoline,
+                        restOfCode
+                    )
+                )
+            ),
+            evmJumpTable,
+            pcTable,
+        ));
+    } else {
+        asm(999,) { debugprint };
+        panic;
+    }
 }
 
 func isKnownOpcode(opcode: uint) -> bool {  // return true iff opcode is a known EVM opcode

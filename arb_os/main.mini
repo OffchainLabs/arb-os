@@ -22,6 +22,7 @@ use contractTemplates::getArbInfoStorage;
 use decompression::decompression_init;
 use errorHandler::errorHandler_init;
 use evmCallStack::evmCallStack_init;
+use evmOps::evmOps_init;
 use evmLogs::EvmLogs;
 use gasAccounting::GasUsage;
 use gasAccounting::gasAccounting_init;
@@ -57,12 +58,15 @@ impure func main() {
     decompression_init();
     gasAccounting_init();
     evmCallStack_init();
+    evmOps_init();
     inbox_init();
     accountStore_init();
     txReceipts_init();
     if (initializeContractTemplates() == None<()>) {
         panic;   // don't try to run without contract templates
     }
+
+    asm(1,) { debugprint };
 
     // initialize any customizations here
 
