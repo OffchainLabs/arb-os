@@ -19,6 +19,8 @@ use std::bytestream::bytestream_skipBytes;
 use std::stack::stack_new;
 use std::stack::stack_push;
 
+use std::rlp::rlp_decodeUint;
+
 use chainParameters::chainParams_chainId;
 
 use evmOps::evmOps_indexForFunction;
@@ -689,4 +691,120 @@ func isKnownOpcode(opcode: uint) -> bool {  // return true iff opcode is a known
         || ( (opcode >= 0xf0) && (opcode <= 0xf5) )
         || (opcode == 0xfa)
         || ( (opcode == 0xfd) && (opcode <= 0xff) );
+}
+
+public impure func unmarshalAvmCode(stream: ByteStream) -> option<AvmCodePoint> {
+    let code = asm() AvmCodePoint { errcodept };
+    let codeMap = newmap<uint, AvmCodePoint> with { [0] = code };
+    let numInsns = 1;
+    while( ! bytestream_atEof(stream) ) {
+        let (ustr, insn) = bytestream_getByte(stream)?;
+        stream = ustr;
+        let (ustr, hasImm) = bytestream_getByte(stream)?;
+        stream = ustr;
+        if (hasImm == 0) {
+            code = pushInstruction(insn, code);
+        } else {
+            let (ustr, val) = unmarshalValue(stream, codeMap)?;
+            stream = ustr;
+            code = pushInstructionImm(insn, val, code);
+        }
+        codeMap = codeMap with { [numInsns] = code };
+        numInsns = numInsns+1;
+    }
+
+    return Some(code);
+}
+
+func unmarshalValue(stream: ByteStream, codeMap: map<uint, AvmCodePoint>) -> option<(ByteStream, any)> {
+    let (ustr, kind) = bytestream_getByte(stream)?;
+    stream = ustr;
+    if (kind == 0) {  // integer
+        let (ustr, val) = rlp_decodeUint(stream)?;
+        return Some((ustr, val));
+    } elseif (kind == 1) { // codepoint
+        let (ustr, idx) = rlp_decodeUint(stream)?;
+        if let Some(codePt) = codeMap[idx] {
+            return Some((ustr, codePt));
+        } else {
+            return None;
+        }
+    } elseif (kind == 0) {   // 0-tuple
+        return Some((stream, ()));
+    } elseif (kind == 1) {   // 1-tuple
+        let (ustr, x) = unmarshalValue(stream, codeMap)?;
+        return Some((ustr, (x,)));
+    } elseif (kind == 2) {   // 2-tuple
+        let val = unsafecast<[2]any>((0,0));
+        let i = 0;
+        while (i < 2) {
+            let (ustr, x) = unmarshalValue(stream, codeMap)?;
+            stream = ustr;
+            val = val with { [i] = x };
+            i = i+1;
+        }
+        return Some((stream, val));
+    } elseif (kind == 3) {   // 3-tuple
+        let val = unsafecast<[3]any>((0,0,0));
+        let i = 0;
+        while (i < 3) {
+            let (ustr, x) = unmarshalValue(stream, codeMap)?;
+            stream = ustr;
+            val = val with { [i] = x };
+            i = i+1;
+        }
+        return Some((stream, val));
+    } elseif (kind == 4) {   // 4-tuple
+        let val = unsafecast<[4]any>((0,0,0,0));
+        let i = 0;
+        while (i < 4) {
+            let (ustr, x) = unmarshalValue(stream, codeMap)?;
+            stream = ustr;
+            val = val with { [i] = x };
+            i = i+1;
+        }
+        return Some((stream, val));
+    } elseif (kind == 5) {   // 5-tuple
+        let val = unsafecast<[5]any>((0,0,0,0,0));
+        let i = 0;
+        while (i < 5) {
+            let (ustr, x) = unmarshalValue(stream, codeMap)?;
+            stream = ustr;
+            val = val with { [i] = x };
+            i = i+1;
+        }
+        return Some((stream, val));
+    } elseif (kind == 6) {   // 6-tuple
+        let val = unsafecast<[6]any>((0,0,0,0,0,0));
+        let i = 0;
+        while (i < 6) {
+            let (ustr, x) = unmarshalValue(stream, codeMap)?;
+            stream = ustr;
+            val = val with { [i] = x };
+            i = i+1;
+        }
+        return Some((stream, val));
+    } elseif (kind == 7) {   // 7-tuple
+        let val = unsafecast<[7]any>((0,0,0,0,0,0,0));
+        let i = 0;
+        while (i < 7) {
+            let (ustr, x) = unmarshalValue(stream, codeMap)?;
+            stream = ustr;
+            val = val with { [i] = x };
+            i = i+1;
+        }
+        return Some((stream, val));
+    } elseif (kind == 8) {   // 8-tuple
+        let val = unsafecast<[8]any>((0,0,0,0,0,0,0,0));
+        let i = 0;
+        while (i < 8) {
+            let (ustr, x) = unmarshalValue(stream, codeMap)?;
+            stream = ustr;
+            val = val with { [i] = x };
+            i = i+1;
+        }
+        return Some((stream, val));
+    } else {
+        return None;
+    }
 }
