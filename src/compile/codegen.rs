@@ -291,6 +291,7 @@ fn mavm_codegen_statement(
             c.push(Instruction::from_opcode(Opcode::Return, *loc));
             Ok((lg, exp_locals, true, HashMap::new()))
         }
+        TypeCheckedStatement::Break(_, _, _) => unimplemented!(),
         TypeCheckedStatement::Expression(expr, loc) => {
             let (lg, c, exp_locals) = mavm_codegen_expr(
                 expr,

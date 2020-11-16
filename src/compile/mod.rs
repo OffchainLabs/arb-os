@@ -454,6 +454,7 @@ pub fn compile_from_folder(
         let code_out =
             codegen::mavm_codegen(checked_funcs, &string_table, &imported_funcs, &global_vars)
                 .map_err(|e| CompileError::new(e.reason.to_string(), e.location))?;
+        println!("{:?}", code_out);
         progs.push(CompiledProgram::new(
             code_out.to_vec(),
             exported_funcs,

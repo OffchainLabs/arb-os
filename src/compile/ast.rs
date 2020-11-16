@@ -618,6 +618,7 @@ pub enum StatementKind {
     Panic(),
     ReturnVoid(),
     Return(Expr),
+    Break(Option<Expr>, Option<String>),
     Expression(Expr),
     Let(MatchPattern, Expr),
     Assign(StringId, Expr),
@@ -664,6 +665,12 @@ impl StatementKind {
             StatementKind::Return(expr) => {
                 Ok(StatementKind::Return(expr.resolve_types(type_table)?))
             }
+            StatementKind::Break(ret, scope) => Ok(StatementKind::Break(
+                ret.clone()
+                    .map(|exp| exp.resolve_types(type_table))
+                    .transpose()?,
+                scope.clone(),
+            )),
             StatementKind::Expression(expr) => {
                 Ok(StatementKind::Expression(expr.resolve_types(type_table)?))
             }
