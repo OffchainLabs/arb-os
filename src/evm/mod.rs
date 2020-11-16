@@ -447,6 +447,7 @@ pub fn _evm_xcontract_call_using_sequencer_batch(
         my_addr.clone(),
         Uint256::from_usize(100000),
     );
+    machine.runtime_env._advance_time(Uint256::from_u64(30), Uint256::from_u64(30*13), true);
     let _gas_used = if debug {
         machine.debug(None)
     } else {

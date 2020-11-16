@@ -38,8 +38,8 @@ impl RuntimeEnvironment {
         let mut ret = RuntimeEnvironment {
             chain_id: chain_address.trim_to_u64() & 0xffffffffffff, // truncate to 48 bits
             l1_inbox: vec![],
-            current_block_num: Uint256::zero(),
-            current_timestamp: Uint256::zero(),
+            current_block_num: Uint256::from_u64(1000),
+            current_timestamp: Uint256::from_u64(13500),
             logs: Vec::new(),
             sends: Vec::new(),
             next_inbox_seq_num: Uint256::zero(),
@@ -73,6 +73,14 @@ impl RuntimeEnvironment {
         }
 
         buf
+    }
+
+    pub fn _advance_time(&mut self, delta_blocks: Uint256, delta_timestamp: Uint256, send_heartbeat_message: bool) {
+        self.current_block_num = self.current_block_num.add(&delta_blocks);
+        self.current_timestamp = self.current_timestamp.add(&delta_timestamp);
+        if send_heartbeat_message {
+            self.insert_l2_message(Uint256::zero(), &[6u8], false);
+        }
     }
 
     pub fn new_wallet(&self) -> Wallet {
