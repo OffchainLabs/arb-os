@@ -75,7 +75,12 @@ impl RuntimeEnvironment {
         buf
     }
 
-    pub fn _advance_time(&mut self, delta_blocks: Uint256, delta_timestamp: Uint256, send_heartbeat_message: bool) {
+    pub fn _advance_time(
+        &mut self,
+        delta_blocks: Uint256,
+        delta_timestamp: Uint256,
+        send_heartbeat_message: bool,
+    ) {
         self.current_block_num = self.current_block_num.add(&delta_blocks);
         self.current_timestamp = self.current_timestamp.add(&delta_timestamp);
         if send_heartbeat_message {

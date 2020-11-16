@@ -91,6 +91,7 @@ impl AbiForContract {
         args: &[ethabi::Token],
         machine: &mut Machine,
         payment: Uint256,
+        advance_time: Option<Uint256>,
         deploy_as_buddy: bool,
         debug: bool,
     ) -> Option<Uint256> {
@@ -126,6 +127,14 @@ impl AbiForContract {
                 &augmented_code,
             )
         };
+
+        if let Some(delta_blocks) = advance_time {
+            machine.runtime_env._advance_time(
+                delta_blocks.clone(),
+                delta_blocks.mul(&Uint256::from_u64(13)),
+                true,
+            );
+        }
 
         let _gas_used = if debug {
             machine.debug(None)

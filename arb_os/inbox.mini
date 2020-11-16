@@ -191,7 +191,9 @@ impure func getFromL1Inbox(inbox: Inbox) -> Inbox {
             newMsg = newMsg with { timestamp: seqInfo.lastTimestampSeen };
         }
 
-        let isSequencerMsg = (newMsg.kind == 3) || (bytearray_getByte(newMsg.msgData, 0) == 5);
+        let isSequencerMsg = (newMsg.kind == 3)
+                             && (bytearray_getByte(newMsg.msgData, 0) == 5)
+                             && (newMsg.sender == seqInfo.sequencerAddr);
         let releaseBlockNum = 0;
         if (newMsg.blockNumber > seqInfo.delayBlocks) {
             releaseBlockNum = seqInfo.delayBlocks - newMsg.blockNumber;
