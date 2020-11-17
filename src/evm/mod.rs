@@ -157,27 +157,37 @@ pub fn evm_test_arbsys_direct(log_to: Option<&Path>, debug: bool) -> Result<(), 
 
     let arbsys = ArbSys::new(&wallet, debug);
 
-    let tx_count = arbsys.get_transaction_count(&mut machine, my_addr.clone())?;
-    assert_eq!(tx_count, Uint256::one());
+    //println!("A");
+    //let version = arbsys._arbos_version(&mut machine)?;
+    //assert_eq!(version, Uint256::zero());
 
+    println!("B");
+    let tx_count = arbsys.get_transaction_count(&mut machine, my_addr.clone())?;
+    assert_eq!(tx_count, Uint256::from_u64(1));
+
+    println!("C");
     let addr_table_index = arbsys.address_table_register(&mut machine, my_addr.clone())?;
     let lookup_result = arbsys.address_table_lookup(&mut machine, my_addr.clone())?;
     assert_eq!(addr_table_index, lookup_result);
 
+    println!("D");
     let recovered_addr = arbsys.address_table_lookup_index(&mut machine, lookup_result)?;
     assert_eq!(recovered_addr, my_addr);
 
+    println!("E");
     let my_addr_compressed = arbsys._address_table_compress(&mut machine, my_addr.clone())?;
     let (my_addr_decompressed, offset) =
         arbsys._address_table_decompress(&mut machine, &my_addr_compressed, Uint256::zero())?;
     assert_eq!(my_addr.clone(), my_addr_decompressed);
     assert_eq!(offset, Uint256::from_usize(my_addr_compressed.len()));
 
+    println!("F");
     assert_eq!(
         Uint256::from_u64(2),
         arbsys.address_table_size(&mut machine)?
     );
 
+    println!("G");
     let an_addr = Uint256::from_u64(581351734971918347);
     let an_addr_compressed = arbsys._address_table_compress(&mut machine, an_addr.clone())?;
     let (an_addr_decompressed, offset) =
@@ -185,6 +195,7 @@ pub fn evm_test_arbsys_direct(log_to: Option<&Path>, debug: bool) -> Result<(), 
     assert_eq!(an_addr.clone(), an_addr_decompressed);
     assert_eq!(offset, Uint256::from_usize(an_addr_compressed.len()));
 
+    println!("H");
     let x0 = Uint256::from_u64(17);
     let x1 = Uint256::from_u64(35);
     let y0 = Uint256::from_u64(71);
@@ -198,6 +209,7 @@ pub fn evm_test_arbsys_direct(log_to: Option<&Path>, debug: bool) -> Result<(), 
     assert_eq!(y0, oy0);
     assert_eq!(y1, oy1);
 
+    println!("I");
     if let Some(path) = log_to {
         machine.runtime_env.recorder.to_file(path).unwrap();
     }

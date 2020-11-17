@@ -375,6 +375,38 @@ impl<'a> ArbSys<'a> {
         }
     }
 
+    pub fn _arbos_version(
+        &self,
+        machine: &mut Machine,
+    ) -> Result<Uint256, ethabi::Error> {
+        let (receipts, _sends) = self.contract_abi.call_function_compressed(
+            self.my_address.clone(),
+            "arbOSVersion",
+            &[],
+            machine,
+            Uint256::zero(),
+            self.wallet,
+            self.debug,
+        )?;
+
+        if (receipts.len() != 1) {
+            return Err(ethabi::Error::from("wrong number of receipts"));
+        }
+
+        if receipts[0].succeeded() {
+            let return_vals = ethabi::decode(
+                &[ethabi::ParamType::Uint(256)],
+                &receipts[0].get_return_data(),
+            )?;
+            match return_vals[0] {
+                ethabi::Token::Uint(ui) => Ok(Uint256::from_u256(&ui)),
+                _ => panic!(),
+            }
+        } else {
+            Err(ethabi::Error::from("reverted"))
+        }
+    }
+
     pub fn _withdraw_eth(
         &self,
         machine: &mut Machine,

@@ -676,7 +676,6 @@ impure func pushEvmInsnCall(
             pcTable,
         ));
     } else {
-        asm(999,) { debugprint };
         panic;
     }
 }

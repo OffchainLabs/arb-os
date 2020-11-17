@@ -91,7 +91,9 @@ public impure func arbsys_txcall() {
             evmOp_revert_knownCodePc(address(100), 0, 0, 0);
         }
         let funcCode = getFuncCode(calldata);
-        if (funcCode == 0xa1db9782) {
+        if (funcCode == 0x051038F2) {
+            arbsys_arbOSVersion(topFrame, calldata);
+        } elseif (funcCode == 0xa1db9782) {
             arbsys_withdrawErc20(topFrame, calldata);
         } elseif(funcCode == 0xf3e414f8) {
             arbsys_withdrawErc721(topFrame, calldata);
@@ -141,6 +143,21 @@ public impure func arbsys_txcall() {
 
 func getFuncCode(ba: ByteArray) -> uint {
     return asm(224, bytearray_get256(ba, 0)) uint { shr };
+}
+
+public func arbosVersion() -> uint {
+    return 0;
+}
+
+impure func arbsys_arbOSVersion(topFrame: EvmCallFrame, calldata: ByteArray) {  // () -> uint
+    if (bytearray_size(calldata) != 4) {
+        evmOp_revert_knownCodePc(address(100), 5, 0, 0);
+    }
+    if (evmCallStack_setTopFrameMemory(bytearray_set256(bytearray_new(0), 0, arbosVersion()))) {
+        evmOp_return(0, 32);
+    } else {
+        evmOp_revert_knownCodePc(address(100), 6, 0, 0);
+    }
 }
 
 impure func arbsys_withdrawErc20(topFrame: EvmCallFrame, calldata: ByteArray) { // (address token, uint amount) -> nil

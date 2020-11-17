@@ -144,7 +144,6 @@ public impure func evmOps_trampoline(index: uint) {
         // stack holds: funcPtr returnAddr
         jump
     };
-    asm(998,) { debugprint };
 }
 
 
