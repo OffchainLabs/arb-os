@@ -21,11 +21,11 @@ use std::{cmp::max, collections::HashMap};
 ///Represents any encountered during codegen
 #[derive(Debug)]
 pub struct CodegenError {
-    pub reason: &'static str,
+    pub reason: String,
     pub location: Option<Location>,
 }
 
-pub fn new_codegen_error(reason: &'static str, location: Option<Location>) -> CodegenError {
+pub fn new_codegen_error(reason: String, location: Option<Location>) -> CodegenError {
     CodegenError { reason, location }
 }
 
@@ -128,7 +128,7 @@ fn mavm_codegen_func(
             }
             _ => {
                 return Err(new_codegen_error(
-                    "apparent path to end of function without return",
+                    "apparent path to end of function without return".to_string(),
                     location,
                 ));
             }
@@ -390,7 +390,7 @@ fn mavm_codegen_statement(
                         }
                         TypeCheckedMatchPattern::Tuple(_, _) => {
                             return Err(new_codegen_error(
-                                "nested pattern not supported in pattern-match let",
+                                "nested pattern not supported in pattern-match let".to_string(),
                                 *loc,
                             ));
                         }
@@ -405,7 +405,12 @@ fn mavm_codegen_statement(
         TypeCheckedStatement::AssignLocal(name, expr, loc) => {
             let slot_num = match locals.get(*name) {
                 Some(slot) => slot,
-                None => return Err(new_codegen_error("assigned to non-existent variable", *loc)),
+                None => {
+                    return Err(new_codegen_error(
+                        "assigned to non-existent variable".to_string(),
+                        *loc,
+                    ))
+                }
             };
             let (lg, c, exp_locals) = mavm_codegen_expr(
                 expr,
@@ -922,7 +927,9 @@ fn mavm_codegen_expr<'a>(
                     let mask = Uint256::from_usize(2)
                         .exp(&Uint256::from_usize(160))
                         .sub(&Uint256::one())
-                        .ok_or_else(|| new_codegen_error("Underflow on substraction", *loc))?;
+                        .ok_or_else(|| {
+                            new_codegen_error("Underflow on subtraction".to_string(), *loc)
+                        })?;
                     (
                         Some(Opcode::AVMOpcode(AVMOpcode::BitwiseAnd)),
                         Some(Value::Int(mask)),
@@ -1132,7 +1139,7 @@ fn mavm_codegen_expr<'a>(
             None => {
                 println!("local: {:?}", *name);
                 Err(new_codegen_error(
-                    "tried to access non-existent local variable",
+                    "tried to access non-existent local variable".to_string(),
                     *loc,
                 ))
             }
