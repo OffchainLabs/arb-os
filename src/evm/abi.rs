@@ -531,13 +531,12 @@ impl<'a> ArbSys<'a> {
         machine: &mut Machine,
         index: Uint256,
     ) -> Result<Uint256, ethabi::Error> {
-        let (receipts, sends) = self.contract_abi.call_function_compressed(
+        let (receipts, sends) = self.contract_abi.call_function(
             self.my_address.clone(),
             "addressTable_lookupIndex",
             &[ethabi::Token::Uint(ethabi::Uint::from(index.to_u256()))],
             machine,
             Uint256::zero(),
-            self.wallet,
             self.debug,
         )?;
         if (receipts.len() != 1) || (sends.len() != 0) {
