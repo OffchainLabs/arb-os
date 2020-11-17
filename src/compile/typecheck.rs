@@ -111,7 +111,6 @@ fn inline(
     state: &(&Vec<TypeCheckedFunc>, &StringTable),
     _mut_state: &mut (),
 ) -> bool {
-    println!("{:?}", to_do);
     if let TypeCheckedNode::Expression(exp) = to_do {
         if let TypeCheckedExpr::FunctionCall(name, args, _, _, _) = exp {
             let (code, block_exp) = if let TypeCheckedExpr::FuncRef(id, _, _) = **name {
