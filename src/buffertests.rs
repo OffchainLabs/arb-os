@@ -5,7 +5,7 @@
 use crate::mavm::{zero_hash, Buffer};
 use crate::uint256::Uint256;
 
-use rand::{thread_rng, Rng};
+use rand::Rng;
 use std::convert::TryFrom;
 
 fn hash_buffer(buf: &[u8], pack: bool) -> Uint256 {
@@ -26,8 +26,8 @@ fn hash_buffer(buf: &[u8], pack: bool) -> Uint256 {
 
 fn hash_buffer2(vec: Vec<u8>) -> Uint256 {
     let mut buf = Buffer::empty0();
-    for i in 0..vec.len() {
-        buf = buf.set_byte(i, vec[i]);
+    for (i, &el) in vec.iter().enumerate() {
+        buf = buf.set_byte(i, el);
     }
     buf.avm_hash()
 }

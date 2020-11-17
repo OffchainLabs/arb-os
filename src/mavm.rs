@@ -386,8 +386,8 @@ fn zero_packed(sz: usize) -> Packed {
 fn hash_sparse(idx: &[usize], buf: &[u8], sz: usize) -> Packed {
     if sz == 32 {
         let mut res = [0u8; 32];
-        for i in 0..idx.len() {
-            res[idx[i]] = buf[i];
+        for (i, &el) in idx.iter().enumerate() {
+            res[el] = buf[i];
         }
         return normal(Uint256::from_bytes(&res).avm_hash(), 32);
     }
@@ -399,12 +399,12 @@ fn hash_sparse(idx: &[usize], buf: &[u8], sz: usize) -> Packed {
     let mut buf1 = Vec::new();
     let mut idx2 = Vec::new();
     let mut buf2 = Vec::new();
-    for i in 0..idx.len() {
+    for (i, &el) in idx.iter().enumerate() {
         if idx[i] < pivot {
-            idx1.push(idx[i]);
+            idx1.push(el);
             buf1.push(buf[i]);
         } else {
-            idx2.push(idx[i] - pivot);
+            idx2.push(el - pivot);
             buf2.push(buf[i]);
         }
     }
@@ -475,8 +475,8 @@ impl Buffer {
                 }
             }
             BufferElem::Sparse(idx, buf, _) => {
-                for i in 0..idx.len() {
-                    if idx[i] == offset {
+                for &el in idx.iter() {
+                    if el == offset {
                         return buf[offset];
                     }
                 }
@@ -555,8 +555,8 @@ impl Buffer {
             BufferElem::Sparse(idx, buf, h) => {
                 if idx.len() > 16 {
                     let mut nbuf = Buffer::make_sparse(*h);
-                    for i in 0..idx.len() {
-                        nbuf = nbuf.set_byte(idx[i], buf[i]);
+                    for (i, &el) in idx.iter().enumerate() {
+                        nbuf = nbuf.set_byte(el, buf[i]);
                     }
                     return nbuf.set_byte(offset, v);
                 }
