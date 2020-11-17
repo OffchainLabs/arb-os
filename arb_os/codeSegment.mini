@@ -693,12 +693,15 @@ func isKnownOpcode(opcode: uint) -> bool {  // return true iff opcode is a known
         || ( (opcode == 0xfd) && (opcode <= 0xff) );
 }
 
-public impure func unmarshalAvmCode(stream: ByteStream) -> option<AvmCodePoint> {
+public impure func unmarshalAvmCode(stream: ByteStream, isTrustedCode: bool) -> option<AvmCodePoint> {
     let code = asm() AvmCodePoint { errcodept };
     let codeMap = newmap<uint, AvmCodePoint> with { [0] = code };
     let numInsns = 1;
     while( ! bytestream_atEof(stream) ) {
         let (ustr, insn) = bytestream_getByte(stream)?;
+        if ( (!isTrustedCode) && (!isSafeInstruction(insn)) ) {
+            return None;
+        }
         stream = ustr;
         let (ustr, hasImm) = bytestream_getByte(stream)?;
         stream = ustr;
@@ -716,6 +719,12 @@ public impure func unmarshalAvmCode(stream: ByteStream) -> option<AvmCodePoint> 
     return Some(code);
 }
 
+func isSafeInstruction(insn: uint) -> bool {
+    return (insn != 0x34)                      // rset
+        && (insn != 0x3d)                      // errset
+        && ((insn < 0x60) || (insn > 0x7f));   // various unsafe instructions
+}
+
 func unmarshalValue(stream: ByteStream, codeMap: map<uint, AvmCodePoint>) -> option<(ByteStream, any)> {
     let (ustr, kind) = bytestream_getByte(stream)?;
     stream = ustr;
@@ -729,12 +738,12 @@ func unmarshalValue(stream: ByteStream, codeMap: map<uint, AvmCodePoint>) -> opt
         } else {
             return None;
         }
-    } elseif (kind == 0) {   // 0-tuple
+    } elseif (kind == 10) {   // 0-tuple
         return Some((stream, ()));
-    } elseif (kind == 1) {   // 1-tuple
+    } elseif (kind == 11) {   // 1-tuple
         let (ustr, x) = unmarshalValue(stream, codeMap)?;
         return Some((ustr, (x,)));
-    } elseif (kind == 2) {   // 2-tuple
+    } elseif (kind == 12) {   // 2-tuple
         let val = unsafecast<[2]any>((0,0));
         let i = 0;
         while (i < 2) {
@@ -744,7 +753,7 @@ func unmarshalValue(stream: ByteStream, codeMap: map<uint, AvmCodePoint>) -> opt
             i = i+1;
         }
         return Some((stream, val));
-    } elseif (kind == 3) {   // 3-tuple
+    } elseif (kind == 13) {   // 3-tuple
         let val = unsafecast<[3]any>((0,0,0));
         let i = 0;
         while (i < 3) {
@@ -754,7 +763,7 @@ func unmarshalValue(stream: ByteStream, codeMap: map<uint, AvmCodePoint>) -> opt
             i = i+1;
         }
         return Some((stream, val));
-    } elseif (kind == 4) {   // 4-tuple
+    } elseif (kind == 14) {   // 4-tuple
         let val = unsafecast<[4]any>((0,0,0,0));
         let i = 0;
         while (i < 4) {
@@ -764,7 +773,7 @@ func unmarshalValue(stream: ByteStream, codeMap: map<uint, AvmCodePoint>) -> opt
             i = i+1;
         }
         return Some((stream, val));
-    } elseif (kind == 5) {   // 5-tuple
+    } elseif (kind == 15) {   // 5-tuple
         let val = unsafecast<[5]any>((0,0,0,0,0));
         let i = 0;
         while (i < 5) {
@@ -774,7 +783,7 @@ func unmarshalValue(stream: ByteStream, codeMap: map<uint, AvmCodePoint>) -> opt
             i = i+1;
         }
         return Some((stream, val));
-    } elseif (kind == 6) {   // 6-tuple
+    } elseif (kind == 16) {   // 6-tuple
         let val = unsafecast<[6]any>((0,0,0,0,0,0));
         let i = 0;
         while (i < 6) {
@@ -784,7 +793,7 @@ func unmarshalValue(stream: ByteStream, codeMap: map<uint, AvmCodePoint>) -> opt
             i = i+1;
         }
         return Some((stream, val));
-    } elseif (kind == 7) {   // 7-tuple
+    } elseif (kind == 17) {   // 7-tuple
         let val = unsafecast<[7]any>((0,0,0,0,0,0,0));
         let i = 0;
         while (i < 7) {
@@ -794,7 +803,7 @@ func unmarshalValue(stream: ByteStream, codeMap: map<uint, AvmCodePoint>) -> opt
             i = i+1;
         }
         return Some((stream, val));
-    } elseif (kind == 8) {   // 8-tuple
+    } elseif (kind == 18) {   // 8-tuple
         let val = unsafecast<[8]any>((0,0,0,0,0,0,0,0));
         let i = 0;
         while (i < 8) {
