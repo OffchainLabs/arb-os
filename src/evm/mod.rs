@@ -459,6 +459,7 @@ pub fn _evm_xcontract_call_using_sequencer_batch(
         machine.run(None)
     }; // handle this eth deposit message
 
+    println!("A");
     let mut fib_contract =
         AbiForContract::new_from_file("contracts/fibonacci/build/contracts/Fibonacci.json")?;
     if fib_contract.deploy(
@@ -472,6 +473,7 @@ pub fn _evm_xcontract_call_using_sequencer_batch(
     {
         panic!("failed to deploy Fibonacci contract");
     }
+    println!("B");
 
     let mut pc_contract =
         AbiForContract::new_from_file("contracts/fibonacci/build/contracts/PaymentChannel.json")?;

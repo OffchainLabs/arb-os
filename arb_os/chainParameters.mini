@@ -76,7 +76,7 @@ impure func doInitializationOption(stream: ByteStream) -> option<ByteStream> {
             return bytestream_skipBytes(stream, numPayloadBytes);
         }
         let (ustr, sequencerAddrAsUint) = bytestream_get256(stream)?;
-        let (ustr, delayBlocks) = bytestream_get256(stream)?;
+        let (ustr, delayBlocks) = bytestream_get256(ustr)?;
         inbox_addSequencer(address(sequencerAddrAsUint), delayBlocks);
         return Some(ustr);
     } else {

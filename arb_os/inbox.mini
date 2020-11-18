@@ -48,10 +48,10 @@ use signedTx::translateSignedTx;
 
 
 type Inbox = struct {
-    queue: Queue,     // Queue of messages that haven't yet been retrieved from the inbox
-    blockNum: uint,   // Highest blocknum of messages that we have retrieved from the inbox
-    timestamp: uint,  // Highest timestamp of messages that we have retrieved from the inbox
-    needToPeek: bool, // true iff we should be doing an inboxpeek before inbox instruction
+    queue: Queue,                 // Queue of messages that haven't yet been retrieved from the inbox
+    blockNum: uint,              // Highest blocknum of messages that we have retrieved from the inbox
+    timestamp: uint,             // Highest timestamp of messages that we have retrieved from the inbox
+    seenMsgAtThisBlockNum: bool, // true iff we have seen a message at this block number
     sequencer: option<SequencerState>,
 }
 
@@ -74,7 +74,7 @@ public impure func inbox_init() {
         queue: queue_new(),
         blockNum: 0,
         timestamp: 0,
-        needToPeek: false,   // don't peek before the first message
+        seenMsgAtThisBlockNum: false,
         sequencer: None<SequencerState>,
     };
     globalInputQueue = struct {
@@ -124,13 +124,16 @@ public impure func inbox_get() -> IncomingRequest {
 
         let (updatedQ, ret,) = queueGetOrDie(globalInbox.queue);
         let ebMsg = unsafecast<IncomingRequest>(ret);
-        globalInbox = globalInbox with {
-            queue: updatedQ
-        } with {
-            blockNum: ebMsg.blockNumber
-        } with {
-            timestamp: ebMsg.timestamp
-        };
+        globalInbox = globalInbox with { queue: updatedQ };
+        if (ebMsg.blockNumber >= globalInbox.blockNum) {
+            globalInbox = globalInbox with {
+                blockNum: ebMsg.blockNumber
+            } with {
+                timestamp: ebMsg.timestamp
+            } with {
+                seenMsgAtThisBlockNum: true
+            };
+        }
         if (ebMsg.kind == 4) {
             chainParams_gotParamsMessage(ebMsg.sender, ebMsg.msgData);
         } else {
@@ -153,7 +156,7 @@ func queueGetOrDie(q: Queue) -> (Queue, any) {
 impure func getFromL1Inbox(inbox: Inbox) -> Inbox {
     // Get a message from the L1 inbox, and append it to the inbox.
     // If there are no messages available in the L1 inbox, this blocks until one is available.
-    if (inbox.needToPeek) {
+    if (inbox.seenMsgAtThisBlockNum) {
         let sameBlockNum = asm(inbox.blockNum,) bool { inboxpeek };
         if ( ! sameBlockNum) {
             // peek says we hit end of L1 block, so insert end-of-block message and return
@@ -163,7 +166,9 @@ impure func getFromL1Inbox(inbox: Inbox) -> Inbox {
                     endOfBlockMessage(inbox.blockNum, inbox.timestamp),
                 )
             } with {
-                needToPeek: false   // don't peek next time, because we already sent end-of-block
+                blockNum: inbox.blockNum+1
+            } with {
+                seenMsgAtThisBlockNum: false
             };
         }
     }
@@ -196,14 +201,14 @@ impure func getFromL1Inbox(inbox: Inbox) -> Inbox {
                              && (newMsg.sender == seqInfo.sequencerAddr);
         let releaseBlockNum = 0;
         if (newMsg.blockNumber > seqInfo.delayBlocks) {
-            releaseBlockNum = seqInfo.delayBlocks - newMsg.blockNumber;
+            releaseBlockNum = newMsg.blockNumber - seqInfo.delayBlocks;
         }
 
         if (isSequencerMsg) {
-            // get low byte of blockNum authorized for release, and reconstruct that blockNum
-            let msgRelease = (newMsg.blockNumber & ~0xff)
+            // get low-order two bytes of blockNum authorized for release, and reconstruct that blockNum
+            let msgRelease = (newMsg.blockNumber & ~0xffff)
                              + asm (256-16, bytearray_get256(newMsg.msgData, 1)) uint { shr };
-            if ( (msgRelease > newMsg.blockNumber) && (msgRelease >= 256*256) ) {
+            if ( (msgRelease >= newMsg.blockNumber) && (msgRelease >= 256*256) ) {
                 msgRelease = msgRelease - 256*256;
             }
             if (releaseBlockNum < msgRelease) {
@@ -221,24 +226,26 @@ impure func getFromL1Inbox(inbox: Inbox) -> Inbox {
         seqInfo = uSeqInfo;
         inbox = inbox with {
             queue: uInboxQ
-        } with {
-            sequencer: Some(seqInfo with {
-                lastBlockNumSeen: newMsg.blockNumber
-            } with {
-                lastTimestampSeen: newMsg.timestamp
-            })
-        } with {
-            needToPeek: true
         };
 
         if (isSequencerMsg) {
             return inbox with {
                 queue: queue_put(inbox.queue, newMsg)
+           } with {
+                sequencer: Some(seqInfo with {
+                    lastBlockNumSeen: newMsg.blockNumber
+                } with {
+                    lastTimestampSeen: newMsg.timestamp
+                })
             };
         } else {
             return inbox with {
                 sequencer: Some(seqInfo with {
                     delayQueue: queue_put(seqInfo.delayQueue, newMsg)
+                } with {
+                    lastBlockNumSeen: newMsg.blockNumber
+                } with {
+                    lastTimestampSeen: newMsg.timestamp
                 })
             };
         }
@@ -252,8 +259,6 @@ impure func getFromL1Inbox(inbox: Inbox) -> Inbox {
 
         return inbox with {
             queue: queue_put(inbox.queue, newMsg)
-        } with {
-            needToPeek: true
         };
     }
 }
@@ -287,7 +292,7 @@ func releaseDelayedRequests(
             let msg = unsafecast<IncomingRequest>(rawMsg);
             if (msg.blockNumber <= releaseBlockNum) {
                 seqInfo = seqInfo with { delayQueue: udq };
-                if (msg.blockNumber + releaseBlockNum < blockNum) {
+                if (msg.blockNumber + seqInfo.delayBlocks < blockNum) {
                     inQ = queue_put(
                         inQ,
                         msg with {
@@ -298,7 +303,7 @@ func releaseDelayedRequests(
                                 msg.timestamp,
                                 blockNum,
                                 timestamp,
-                                msg.blockNumber + releaseBlockNum,
+                                msg.blockNumber + seqInfo.delayBlocks,
                             ))
                         }
                     );
@@ -319,7 +324,6 @@ func releaseDelayedRequests(
             return (seqInfo, inQ);
         }
     }
-    return (seqInfo, inQ);   //TODO
 }
 
 
