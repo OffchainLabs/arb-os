@@ -16,6 +16,8 @@ use std::storageMap::storageMap_size;
 use std::storageMap::storageMap_get;
 use std::storageMap::storageMap_set;
 
+use aggregators::AggregatorState;
+use aggregators::aggregatorState_new;
 use decompression::AggregatorDecompressionState;
 
 
@@ -27,7 +29,7 @@ type Account = struct {
     nextSeqNum: uint,
     ethBalance: uint,
     contractInfo: option<AccountContractInfo>,  // info on the contract at this address, if there is one
-    aggregatorInfo: option<AggregatorInfo>,     // info on the aggregator using this address, if there is one
+    aggregatorInfo: option<AggregatorState>,    // info on the aggregator using this address, if there is one
 }
 
 type AccountContractInfo = struct {
@@ -37,9 +39,6 @@ type AccountContractInfo = struct {
     storage: StorageMap,
 }
 
-type AggregatorInfo = struct {
-    decompressionState: option<AggregatorDecompressionState>,
-}
 
 // globalAccountStore is the authoritative source of info on accounts that exist on this chain
 // Note that other accountStores will exist, but these others are all contingent somehow,
@@ -77,7 +76,7 @@ public func pristineAccount(addr: address) -> Account {
         nextSeqNum: 0,
         ethBalance: 0,
         contractInfo: None<AccountContractInfo>,
-        aggregatorInfo: None<AggregatorInfo>,
+        aggregatorInfo: None<AggregatorState>,
     };
 }
 
@@ -178,13 +177,24 @@ public func account_getAggregatorDecompressionState(account: Account) -> option<
     return (account.aggregatorInfo?).decompressionState;
 }
 
+public func account_setAggregatorState(
+    account: Account,
+    maybeState: option<AggregatorState>,
+) -> Account {
+    return account with {
+        aggregatorInfo: maybeState
+    };
+}
+
 public func account_setAggregatorDecompressionState(
     account: Account,
     maybeState: option<AggregatorDecompressionState>,
 ) -> Account {
-    return account with {
-        aggregatorInfo: Some(struct { decompressionState: maybeState })
-    };
+    if let Some(astate) = account.aggregatorInfo {
+        return account_setAggregatorState(account, Some(astate with { decompressionState: maybeState }));
+    } else {
+        return account_setAggregatorState(account, Some(aggregatorState_new(account.addr, maybeState)));
+    }
 }
 
 public func accountStore_createAccountFromEvmCode(

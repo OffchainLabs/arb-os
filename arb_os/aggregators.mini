@@ -1,0 +1,52 @@
+//
+// Copyright 2020, Offchain Labs, Inc. All rights reserved.
+//
+
+use decompression::AggregatorDecompressionState;
+
+
+type AggregatorState = struct {
+    addr: address,
+    decompressionState: option<AggregatorDecompressionState>,
+    chargingState: option<AggregatorChargingState>,
+}
+
+type AggregatorChargingState = struct {
+    currency: address,      // currency for collecting aggregator fees; zero means ETH
+    collectedFunds: uint,   // funds collected for aggregator but not yet paid out
+    clients: map<address, ClientAggregatorChargingInfo>,
+}
+
+type ClientAggregatorChargingInfo = struct {
+    addr: address,
+    depositedFunds: uint,
+    maxFeePerByte: uint,
+}
+
+public func aggregatorState_new(addr: address, decompressionState: option<AggregatorDecompressionState>) -> AggregatorState {
+    return struct {
+        addr: addr,
+        decompressionState: decompressionState,
+        chargingState: None<AggregatorChargingState>,
+    };
+}
+
+public func aggregator_initCharging(state: AggregatorState, currency: address) -> option<AggregatorState> {
+    if (state.chargingState == None<AggregatorChargingState>) {
+        return Some(state with {
+            chargingState: Some(struct {
+                currency: currency,
+                collectedFunds: 0,
+                clients: newmap<address, ClientAggregatorChargingInfo>,
+            })
+        });
+    } else {
+        return None;   // already initialized
+    }
+}
+
+public func
+
+
+
+
