@@ -914,7 +914,7 @@ fn typecheck_statement_sequence<'a>(
     global_vars: &'a HashMap<StringId, (Type, usize)>,
     func_table: &SymTable<Type>,
     type_tree: &TypeTree,
-    scopes: &mut Vec<(String, Type)>,
+    scopes: &mut Vec<(String, Option<Type>)>,
 ) -> Result<Vec<TypeCheckedStatement>, TypeError> {
     if statements.is_empty() {
         return Ok(Vec::new());
@@ -956,7 +956,7 @@ fn typecheck_statement_sequence_with_bindings<'a>(
     func_table: &SymTable<Type>,
     bindings: &[(StringId, Type)],
     type_tree: &TypeTree,
-    scopes: &mut Vec<(String, Type)>,
+    scopes: &mut Vec<(String, Option<Type>)>,
 ) -> Result<Vec<TypeCheckedStatement>, TypeError> {
     if bindings.is_empty() {
         typecheck_statement_sequence(
@@ -998,7 +998,7 @@ fn typecheck_statement<'a>(
     global_vars: &'a HashMap<StringId, (Type, usize)>,
     func_table: &SymTable<Type>,
     type_tree: &TypeTree,
-    scopes: &mut Vec<(String, Type)>,
+    scopes: &mut Vec<(String, Option<Type>)>,
 ) -> Result<(TypeCheckedStatement, Vec<(StringId, Type)>), TypeError> {
     match statement {
         StatementKind::Noop() => Ok((TypeCheckedStatement::Noop(*loc), vec![])),
@@ -1032,18 +1032,6 @@ fn typecheck_statement<'a>(
         }
         StatementKind::Break(exp, scope) => Ok((
             {
-                let tipe = if let Some((_, t)) = scope
-                    .clone()
-                    .map(|inner| scopes.iter().rev().find(|(s, _)| inner == *s).cloned())
-                    .unwrap_or_else(|| scopes.last().cloned())
-                {
-                    t
-                } else {
-                    return Err(new_type_error(
-                        "No valid scope to break from".to_string(),
-                        *loc,
-                    ));
-                };
                 let te = exp
                     .clone()
                     .map(|expr| {
@@ -1058,23 +1046,53 @@ fn typecheck_statement<'a>(
                         )
                     })
                     .transpose()?;
-                if te
-                    .clone()
-                    .map(|te| te.get_type())
-                    .unwrap_or(Type::Tuple(vec![]))
-                    == tipe
-                {
-                    TypeCheckedStatement::Break(te, "_".to_string(), *loc)
-                } else {
-                    return Err(new_type_error(
-                        format!(
-                            "mismatched types in break statement expected {:?}, got {:?}",
-                            te.map(|te| te.get_type()).unwrap_or(Type::Tuple(vec![])),
-                            tipe
-                        ),
-                        *loc,
-                    ));
+                let key = scope.clone().unwrap_or("_".to_string());
+                let (_name, tipe) = scopes
+                    .iter_mut()
+                    .rev()
+                    .find(|(s, _)| key == *s)
+                    .ok_or_else(|| {
+                        new_type_error("No valid scope to break from".to_string(), *loc)
+                    })?;
+                if let Some(t) = tipe {
+                    if *t
+                        != te
+                            .clone()
+                            .map(|te| te.get_type())
+                            .unwrap_or(Type::Tuple(vec![]))
+                    {
+                        return Err(new_type_error(
+                            format!(
+                                "mismatched types in break statement expected {:?}, got {:?}",
+                                te.map(|te| te.get_type()).unwrap_or(Type::Tuple(vec![])),
+                                tipe
+                            ),
+                            *loc,
+                        ));
+                    } else {
+                        *t = te
+                            .clone()
+                            .map(|te| te.get_type())
+                            .unwrap_or(Type::Tuple(vec![]));
+                    }
                 }
+                TypeCheckedStatement::Break(
+                    exp.clone()
+                        .map(|expr| {
+                            typecheck_expr(
+                                &expr,
+                                type_table,
+                                global_vars,
+                                func_table,
+                                return_type,
+                                type_tree,
+                                scopes,
+                            )
+                        })
+                        .transpose()?,
+                    scope.clone().unwrap_or("_".to_string()),
+                    *loc,
+                )
             },
             vec![],
         )),
@@ -1179,7 +1197,7 @@ fn typecheck_statement<'a>(
             }
         }
         StatementKind::Loop(body) => {
-            scopes.push(("_".to_string(), Type::Tuple(vec![])));
+            scopes.push(("_".to_string(), Some(Type::Tuple(vec![]))));
             let tc_body = typecheck_statement_sequence(
                 body,
                 return_type,
@@ -1378,7 +1396,7 @@ fn typecheck_if_arm(
     global_vars: &HashMap<StringId, (Type, usize)>,
     func_table: &SymTable<Type>,
     type_tree: &TypeTree,
-    scopes: &mut Vec<(String, Type)>,
+    scopes: &mut Vec<(String, Option<Type>)>,
 ) -> Result<TypeCheckedIfArm, TypeError> {
     match arm {
         IfArm::Cond(cond, body, orest, loc) => {
@@ -1452,7 +1470,7 @@ fn typecheck_expr(
     func_table: &SymTable<Type>,
     return_type: &Type,
     type_tree: &TypeTree,
-    scopes: &mut Vec<(String, Type)>,
+    scopes: &mut Vec<(String, Option<Type>)>,
 ) -> Result<TypeCheckedExpr, TypeError> {
     match expr {
         Expr::UnaryOp(op, subexpr, loc) => {
@@ -1735,6 +1753,7 @@ fn typecheck_expr(
         Expr::CodeBlock(body, ret_expr, loc) => {
             let mut output = Vec::new();
             let mut block_bindings = Vec::new();
+            scopes.push(("_".to_string(), None));
             for statement in body {
                 let inner_type_table =
                     type_table.push_multi(block_bindings.iter().map(|(k, v)| (*k, v)).collect());

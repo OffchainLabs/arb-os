@@ -200,7 +200,7 @@ fn mavm_codegen_statements(
     import_func_map: &HashMap<StringId, Label>,
     global_var_map: &HashMap<StringId, usize>,
     prepushed_vals: usize,
-    scopes: &mut Vec<(String, Label)>,
+    scopes: &mut Vec<(String, Label, Option<Type>)>,
 ) -> Result<(LabelGenerator, usize, bool, HashMap<StringId, usize>), CodegenError> {
     let mut bindings = HashMap::new();
     for statement in statements {
@@ -249,7 +249,7 @@ fn mavm_codegen_statement(
     import_func_map: &HashMap<StringId, Label>,
     global_var_map: &HashMap<StringId, usize>,
     prepushed_vals: usize,
-    scopes: &mut Vec<(String, Label)>,
+    scopes: &mut Vec<(String, Label, Option<Type>)>,
 ) -> Result<(LabelGenerator, usize, bool, HashMap<StringId, usize>), CodegenError> {
     match &statement {
         TypeCheckedStatement::Noop(_) => Ok((label_gen, 0, false, HashMap::new())),
@@ -296,14 +296,57 @@ fn mavm_codegen_statement(
             c.push(Instruction::from_opcode(Opcode::Return, *loc));
             Ok((lg, exp_locals, true, HashMap::new()))
         }
-        TypeCheckedStatement::Break(_oexpr, scope_id, loc) => {
-            let lab = scopes.iter().rev().find(|(s, _)| scope_id == s);
+        TypeCheckedStatement::Break(oexpr, scope_id, loc) => {
+            let mut inner_scopes = (*scopes).clone();
+            let (_scope_name, lab, t) = scopes
+                .iter_mut()
+                .rev()
+                .find(|(s, _, _)| scope_id == s)
+                .ok_or_else(|| {
+                    new_codegen_error(format!("could not find scope {}", scope_id), *loc)
+                })?;
+            if let Some(tipe) = t {
+                if *tipe
+                    != oexpr
+                        .clone()
+                        .map(|exp| exp.get_type())
+                        .unwrap_or(Type::Tuple(vec![]))
+                {
+                    return Err(new_codegen_error(
+                        "Types did not match in break statement".to_string(),
+                        *loc,
+                    ));
+                }
+            } else {
+                *t = Some(
+                    oexpr
+                        .clone()
+                        .map(|exp| exp.get_type())
+                        .unwrap_or(Type::Tuple(vec![])),
+                );
+            }
+            let (lg, code, num_locals) = if let Some(expr) = oexpr {
+                mavm_codegen_expr(
+                    expr,
+                    code,
+                    num_locals,
+                    locals,
+                    label_gen,
+                    string_table,
+                    import_func_map,
+                    global_var_map,
+                    prepushed_vals,
+                    &mut inner_scopes,
+                )?
+            } else {
+                (label_gen, code, prepushed_vals)
+            };
             code.push(Instruction::from_opcode_imm(
                 Opcode::AVMOpcode(AVMOpcode::Jump),
-                Value::Label(lab.unwrap().1),
+                Value::Label(*lab),
                 *loc,
             ));
-            Ok((label_gen, num_locals, true, HashMap::new()))
+            Ok((lg, num_locals, true, HashMap::new()))
         }
         TypeCheckedStatement::Expression(expr, loc) => {
             let (lg, c, exp_locals) = mavm_codegen_expr(
@@ -454,7 +497,7 @@ fn mavm_codegen_statement(
             num_locals += 1;
             let (top_label, lgtop) = label_gen.next();
             let (bottom_label, lg) = lgtop.next();
-            scopes.push(("_".to_string(), bottom_label));
+            scopes.push(("_".to_string(), bottom_label, Some(Type::Tuple(vec![]))));
             label_gen = lg;
             code.push(Instruction::from_opcode_imm(
                 Opcode::AVMOpcode(AVMOpcode::Noop),
@@ -778,7 +821,7 @@ fn mavm_codegen_if_arm(
     import_func_map: &HashMap<StringId, Label>,
     global_var_map: &HashMap<StringId, usize>,
     prepushed_vals: usize,
-    scopes: &mut Vec<(String, Label)>,
+    scopes: &mut Vec<(String, Label, Option<Type>)>,
 ) -> Result<(LabelGenerator, usize, bool), CodegenError> {
     // (label_gen, num_labels, execution_might_continue)
     match arm {
@@ -897,7 +940,7 @@ fn mavm_codegen_expr<'a>(
     import_func_map: &HashMap<StringId, Label>,
     global_var_map: &HashMap<StringId, usize>,
     prepushed_vals: usize,
-    scopes: &mut Vec<(String, Label)>,
+    scopes: &mut Vec<(String, Label, Option<Type>)>,
 ) -> Result<(LabelGenerator, &'a mut Vec<Instruction>, usize), CodegenError> {
     match expr {
         TypeCheckedExpr::UnaryOp(op, tce, _, loc) => {
@@ -1263,12 +1306,14 @@ fn mavm_codegen_expr<'a>(
             Ok((lg, c, max(num_locals, max(fexpr_locals, args_locals))))
         }
         TypeCheckedExpr::CodeBlock(body, ret_expr, loc) => {
+            let (bottom_label, lg) = label_gen.next();
+            scopes.push(("_".to_string(), bottom_label, None));
             let (lab_gen, nl, _cont, block_locals) = mavm_codegen_statements(
                 body.to_vec(),
                 code,
                 num_locals,
                 locals,
-                label_gen,
+                lg,
                 string_table,
                 import_func_map,
                 global_var_map,
@@ -1277,7 +1322,7 @@ fn mavm_codegen_expr<'a>(
             )?;
             if let Some(ret_expr) = ret_expr {
                 let new_locals = locals.push_multi(block_locals);
-                mavm_codegen_expr(
+                let (lg, code, prepushed_vals_expr) = mavm_codegen_expr(
                     ret_expr,
                     code,
                     num_locals,
@@ -1289,13 +1334,17 @@ fn mavm_codegen_expr<'a>(
                     prepushed_vals,
                     scopes,
                 )
-                .map(|(lg, code, exp_locals)| (lg, code, max(num_locals, max(exp_locals, nl))))
+                .map(|(lg, code, exp_locals)| (lg, code, max(num_locals, max(exp_locals, nl))))?;
+                code.push(Instruction::from_opcode(Opcode::Label(bottom_label), *loc));
+                let _scope = scopes.pop();
+                Ok((lg, code, prepushed_vals_expr))
             } else {
                 code.push(Instruction::from_opcode_imm(
                     Opcode::AVMOpcode(AVMOpcode::Noop),
                     Value::new_tuple(vec![]),
                     *loc,
                 ));
+                code.push(Instruction::from_opcode(Opcode::Label(bottom_label), *loc));
                 Ok((lab_gen, code, max(num_locals, nl)))
             }
         }
@@ -1855,7 +1904,7 @@ fn codegen_fixed_array_mod<'a>(
     import_func_map: &HashMap<StringId, Label>,
     global_var_map: &HashMap<StringId, usize>,
     location: Option<Location>,
-    scopes: &mut Vec<(String, Label)>,
+    scopes: &mut Vec<(String, Label, Option<Type>)>,
 ) -> Result<(LabelGenerator, &'a mut Vec<Instruction>, usize), CodegenError> {
     let (label_gen, code, val_locals) = mavm_codegen_expr(
         val_expr,
