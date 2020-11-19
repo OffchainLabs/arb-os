@@ -90,8 +90,9 @@ impure func doInitializationOption(stream: ByteStream) -> option<ByteStream> {
         return Some(ustr);
     } elseif (optionId == 2) {   // option: set gas charging parameters
         let (ustr, baseGasPrice) = bytestream_get256(stream)?;
+        let (ustr, storageCharge) = bytestream_get256(ustr)?;
         let (ustr, gasFeeRecipientAsUint) = bytestream_get256(ustr)?;
-        gasAccounting_setFeeParams(baseGasPrice, address(gasFeeRecipientAsUint));
+        gasAccounting_setFeeParams(baseGasPrice, storageCharge, address(gasFeeRecipientAsUint));
         return Some(ustr);
     } else {
         // unrecognized option, discard it

@@ -28,11 +28,11 @@ pub struct RuntimeEnvironment {
     next_id: Uint256, // used to assign unique (but artificial) txids to messages
     pub recorder: RtEnvRecorder,
     compressor: TxCompressor,
-    charging_policy: Option<(Uint256, Uint256)>,
+    charging_policy: Option<(Uint256, Uint256, Uint256)>,
 }
 
 impl RuntimeEnvironment {
-    pub fn new(chain_address: Uint256, charging_policy: Option<(Uint256, Uint256)>) -> Self {
+    pub fn new(chain_address: Uint256, charging_policy: Option<(Uint256, Uint256, Uint256)>) -> Self {
         let mut ret = RuntimeEnvironment {
             chain_id: chain_address.trim_to_u64() & 0xffffffffffff, // truncate to 48 bits
             l1_inbox: vec![],
@@ -60,10 +60,11 @@ impl RuntimeEnvironment {
         buf.extend(Uint256::zero().to_bytes_be()); // staking token address (zero means ETH)
         buf.extend(Uint256::zero().to_bytes_be()); // owner address
 
-        if let Some((base_gas_price, pay_fees_to)) = self.charging_policy.clone() {
+        if let Some((base_gas_price, storage_charge, pay_fees_to)) = self.charging_policy.clone() {
             buf.extend(&[0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 2u8]); // option ID = 2
             buf.extend(&[0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 64u8]); // option payload size = 64 bytes
             buf.extend(base_gas_price.to_bytes_be());
+            buf.extend(storage_charge.to_bytes_be());
             buf.extend(pay_fees_to.to_bytes_be());
         }
 

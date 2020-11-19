@@ -101,7 +101,7 @@ pub fn evm_xcontract_call_with_constructors(
 
 pub fn _evm_run_with_gas_charging(
     log_to: Option<&Path>,
-    charging_policy: Option<(Uint256, Uint256)>,
+    charging_policy: Option<(Uint256, Uint256, Uint256)>,
     debug: bool,
     _profile: bool,
 ) -> Result<bool, ethabi::Error> {

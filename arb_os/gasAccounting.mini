@@ -52,6 +52,7 @@ var gasAccountingConstants: struct {
     GasPoolMax: int,
     BaseGasPrice: uint,
     TxGasLimit: uint,
+    StorageCharge: uint,   // cost of adding one unit of storage, in wei
 };
 
 type TxGasState = struct {
@@ -79,6 +80,7 @@ public impure func gasAccounting_init() {
         GasPoolMax: int(speedLimitPerSecond * maxBacklogSeconds),
         BaseGasPrice: 0,
         TxGasLimit: speedLimitPerSecond * maxBacklogSeconds / 2,
+        StorageCharge: 0,
     };
     gasAccountingInfo = struct {
         gasPool: gasAccountingConstants.GasPoolMax,
@@ -92,9 +94,11 @@ public impure func gasAccounting_init() {
     };
 }
 
-public impure func gasAccounting_setFeeParams(baseGasPrice: uint, feeRecipient: address) {
+public impure func gasAccounting_setFeeParams(baseGasPrice: uint, storageCharge: uint, feeRecipient: address) {
     gasAccountingConstants = gasAccountingConstants with {
         BaseGasPrice: baseGasPrice
+    } with {
+        StorageCharge: storageCharge
     };
     if (feeRecipient == address(0)) {
         gasAccountingInfo = gasAccountingInfo with {
@@ -119,6 +123,7 @@ public impure func gasAccounting_postInitMessage() {
         GasPoolMax: int(speedLimitPerSecond * maxBacklogSeconds),
         BaseGasPrice: 0,
         TxGasLimit: speedLimitPerSecond * maxBacklogSeconds / 2,
+        StorageCharge: 0,
     };
     gasAccountingInfo = gasAccountingInfo with { gasPool: gasAccountingConstants.GasPoolMax };
 }
@@ -238,10 +243,15 @@ public impure func gasAccounting_startTxCharges(
     return Some(());
 }
 
-public impure func gasAccounting_endTxCharges() -> option<GasUsage> {
+public impure func gasAccounting_endTxCharges(storageDelta: int) -> option<GasUsage> {
     // stop charging the current tx for gas
     // refund any unused gas
     // return the total amount it used, or None if there isn't a tx active
+
+    // charge the tx for storage it allocated (minus storage freed); for now, no refund if tx reduced total storage
+    if (storageDelta > int(0)) {
+        gasAccounting_chargeForStorage(uint(storageDelta));
+    }
 
     // switch over to charging the OS for gas
     let txState = gasAccountingInfo.txState?;
@@ -284,6 +294,7 @@ public impure func gasAccounting_extraGasCharge(numArbGas: uint) {
     // this lets us charge for things that use up system resources
     // callers should assess the charge for a thing before they do the thing, because we can
     //      only take the gas that the user has remaining
+    // it's okay to assess the charge after doing the thing, if the cost of the thing will be eliminated on revert
 
     let gasLeft = asm() uint { getgas };
     if (gasLeft >= asm (1, 255) uint { shl }) {
@@ -297,6 +308,12 @@ public impure func gasAccounting_extraGasCharge(numArbGas: uint) {
     }
 
     asm(gasLeft-numArbGas,) { setgas };
+}
+
+public impure func gasAccounting_chargeForStorage(numStorageUnits: uint) {
+    if let Some(txState) = gasAccountingInfo.txState {
+        gasAccounting_extraGasCharge(numStorageUnits * gasAccountingConstants.StorageCharge / txState.price);
+    }
 }
 
 public impure func gasAccounting_pauseTxCharges() -> uint {
