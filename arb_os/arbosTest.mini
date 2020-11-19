@@ -40,16 +40,19 @@ use evmCallStack::evmCallFrame_getCaller;
 
 public impure func arbosTest_txcall() {
     if let Some(topFrame) = evmCallStack_topFrame() {
+        if (topFrame.caller != address(0)) {
+            evmOp_revert_knownCodePc(address(105), 0, 0, 0);
+        }
         let calldata = evmCallFrame_getCalldata(topFrame);
         if (bytearray_size(calldata) < 4) {
-            evmOp_revert_knownCodePc(address(105), 0, 0, 0);
+            evmOp_revert_knownCodePc(address(105), 1, 0, 0);
         }
         let funcCode = getFuncCode(calldata);
         if (funcCode == 0x265b63aa) {
             arbosTest_run(topFrame, calldata);
         } else {
             // unrecognized function code
-            evmOp_revert_knownCodePc(address(105), 1, 0, 0);
+            evmOp_revert_knownCodePc(address(105), 2, 0, 0);
         }
     } else {
         // this shouldn't happen -- should always be called in an EVM tx
