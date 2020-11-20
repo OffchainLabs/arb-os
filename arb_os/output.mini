@@ -73,6 +73,7 @@ var globalBlockReceiptData: struct {
     data: PerBlockReceiptData,
     statsThisBlock: OutputStatistics,
     statsAllTime: OutputStatistics,
+    lastBlockNum: uint,
 };
 
 public impure func outputStats_endOfBlock(blockNum: uint, timestamp: uint) {
@@ -85,11 +86,14 @@ public impure func outputStats_endOfBlock(blockNum: uint, timestamp: uint) {
         updatedStats = updatedStats with {
             numLogs: updatedStats.numLogs + 1  // +1 for soon-to-be-issued block summary log
         };
+
+        emitBlockSummaryLog(blockNum, timestamp, globalBlockReceiptData.lastBlockNum);
+
         globalBlockReceiptData = globalBlockReceiptData with {
             statsAllTime: updatedStats
+        } with {
+            lastBlockNum: blockNum
         };
-
-        emitBlockSummaryLog(blockNum, timestamp);
     }
 
     // now clear current block stats, because we're advancing to a new current block
@@ -101,7 +105,6 @@ public impure func outputStats_endOfBlock(blockNum: uint, timestamp: uint) {
             numTx: 0,
             numEvmLogs: 0
         }
-
     };
 }
 
@@ -136,6 +139,7 @@ public impure func txReceipts_init() {  // will be called at beginning of main()
         },
         statsThisBlock: outputStats_new(),
         statsAllTime: outputStats_new(),
+        lastBlockNum: ~0,
     };
 }
 
@@ -220,7 +224,7 @@ public impure func emitTxReceipt(
     ),) { log };
 }
 
-impure func emitBlockSummaryLog(blockNum: uint, timestamp: uint) {
+impure func emitBlockSummaryLog(blockNum: uint, timestamp: uint, prevBlockNum: uint) {
     let gasUsedThisBlock = globalBlockReceiptData.statsThisBlock.totalGasUsed;
     let gasLimit = 13 * chainParams_speedLimitPerSecond();
     if (gasLimit < gasUsedThisBlock) {
@@ -232,7 +236,8 @@ impure func emitBlockSummaryLog(blockNum: uint, timestamp: uint) {
         timestamp,
         gasLimit,
         globalBlockReceiptData.statsThisBlock,
-        globalBlockReceiptData.statsAllTime
+        globalBlockReceiptData.statsAllTime,
+        prevBlockNum
     ),) { log };
 }
 
