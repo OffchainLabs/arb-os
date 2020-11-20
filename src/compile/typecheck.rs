@@ -149,7 +149,7 @@ fn inline(
                 println!("fail 2");
                 (vec![], None)
             };
-            **exp = TypeCheckedExpr::CodeBlock(code, block_exp, None);
+            **exp = TypeCheckedExpr::CodeBlock(code, block_exp, Some("_inline".to_string()), None);
             println!("changed to: {:?}", exp);
             false
         } else {
@@ -377,6 +377,7 @@ pub enum TypeCheckedExpr {
     CodeBlock(
         Vec<TypeCheckedStatement>,
         Option<Box<TypeCheckedExpr>>,
+        Option<String>,
         Option<Location>,
     ),
     StructInitializer(Vec<TypeCheckedStructField>, Type, Option<Location>),
@@ -467,7 +468,7 @@ impl MiniProperties for TypeCheckedExpr {
                     && fields_exprs.iter().all(|statement| statement.is_pure())
                     && properties.pure
             }
-            TypeCheckedExpr::CodeBlock(statements, return_expr, _) => {
+            TypeCheckedExpr::CodeBlock(statements, return_expr, _, _) => {
                 statements.iter().all(|statement| statement.is_pure())
                     && return_expr
                         .as_ref()
@@ -548,7 +549,7 @@ impl AbstractSyntaxTree for TypeCheckedExpr {
                     )
                     .collect()
             }
-            TypeCheckedExpr::CodeBlock(stats, oexpr, _) => oexpr
+            TypeCheckedExpr::CodeBlock(stats, oexpr, _, _) => oexpr
                 .iter_mut()
                 .map(|exp| TypeCheckedNode::Expression(exp))
                 .chain(
@@ -597,7 +598,7 @@ impl TypeCheckedExpr {
             TypeCheckedExpr::DotRef(_, _, _, t, _) => t.clone(),
             TypeCheckedExpr::Const(_, t, _) => t.clone(),
             TypeCheckedExpr::FunctionCall(_, _, t, _, _) => t.clone(),
-            TypeCheckedExpr::CodeBlock(_, expr, _) => expr
+            TypeCheckedExpr::CodeBlock(_, expr, _, _) => expr
                 .clone()
                 .map(|exp| exp.get_type())
                 .unwrap_or_else(|| Type::Tuple(vec![])),
@@ -1791,6 +1792,7 @@ fn typecheck_expr(
                     })
                     .transpose()?
                     .map(Box::new),
+                None,
                 *loc,
             ))
         }

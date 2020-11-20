@@ -1305,9 +1305,13 @@ fn mavm_codegen_expr<'a>(
             c.push(Instruction::from_opcode(Opcode::Label(ret_label), *loc));
             Ok((lg, c, max(num_locals, max(fexpr_locals, args_locals))))
         }
-        TypeCheckedExpr::CodeBlock(body, ret_expr, loc) => {
+        TypeCheckedExpr::CodeBlock(body, ret_expr, scope_name, loc) => {
             let (bottom_label, lg) = label_gen.next();
-            scopes.push(("_".to_string(), bottom_label, None));
+            scopes.push((
+                scope_name.clone().unwrap_or("_".to_string()),
+                bottom_label,
+                None,
+            ));
             let (lab_gen, nl, _cont, block_locals) = mavm_codegen_statements(
                 body.to_vec(),
                 code,
