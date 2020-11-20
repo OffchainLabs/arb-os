@@ -106,9 +106,9 @@ impl MiniProperties for TypeCheckedFunc {
     }
 }
 
-fn strip_returns(to_strip: &mut TypeCheckedNode, _state: &(), _mut_state: &mut()) -> bool {
+fn strip_returns(to_strip: &mut TypeCheckedNode, _state: &(), _mut_state: &mut ()) -> bool {
     if let TypeCheckedNode::Statement(stat) = to_strip {
-        if let TypeCheckedStatement::Return(exp,loc) = stat {
+        if let TypeCheckedStatement::Return(exp, loc) = stat {
             **stat = TypeCheckedStatement::Break(Some(exp.clone()), "_inline".to_string(), *loc);
         } else if let TypeCheckedStatement::ReturnVoid(loc) = stat {
             **stat = TypeCheckedStatement::Break(None, "_inline".to_string(), *loc);
