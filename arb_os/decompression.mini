@@ -2,6 +2,7 @@
 // Copyright 2020, Offchain Labs, Inc. All rights reserved.
 //
 
+use aggregators::AggregatorDecompressionState;
 use chainParameters::chainParams_chainId;
 
 use std::bytearray::ByteArray;
@@ -340,10 +341,6 @@ type FunctionTableEntry = struct {
 }
 
 type FunctionTable = []FunctionTableEntry
-
-type AggregatorDecompressionState = struct {
-    functionTable: FunctionTable,
-}
 
 public func parseAggregatorFunctionTable(
     maybeState: option<AggregatorDecompressionState>,

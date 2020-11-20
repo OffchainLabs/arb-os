@@ -2,50 +2,82 @@
 // Copyright 2020, Offchain Labs, Inc. All rights reserved.
 //
 
-use decompression::AggregatorDecompressionState;
+use accounts::account_getAggregatorState;
+use accounts::account_setAggregatorState;
+use decompression::FunctionTable;
+use evmCallStack::EvmCallFrame;
+use evmCallStack::evmCallStack_topFrame;
+use evmCallStack::evmCallStack_setAccount;
+use evmCallStack::evmCallFrame_getAccount;
+use evmCallStack::evmCallFrame_getCalldata;
+use evmCallStack::evmCallFrame_getCaller;
+use evmCallStack::evmCallStack_callHitError;
+use evmOps::evmOp_return;
+use evmOps::evmOp_revert_knownCodePc;
+
+use std::bytearray::ByteArray;
+use std::bytearray::bytearray_size;
+use std::bytearray::bytearray_get256;
 
 
 type AggregatorState = struct {
     addr: address,
     decompressionState: option<AggregatorDecompressionState>,
-    chargingState: option<AggregatorChargingState>,
+    feePerByte: uint,
+    clientMaxFees: map<address, uint>,
 }
 
-type AggregatorChargingState = struct {
-    currency: address,      // currency for collecting aggregator fees; zero means ETH
-    collectedFunds: uint,   // funds collected for aggregator but not yet paid out
-    clients: map<address, ClientAggregatorChargingInfo>,
+type AggregatorDecompressionState = struct {
+    functionTable: FunctionTable,
 }
 
-type ClientAggregatorChargingInfo = struct {
-    addr: address,
-    depositedFunds: uint,
-    maxFeePerByte: uint,
-}
 
-public func aggregatorState_new(addr: address, decompressionState: option<AggregatorDecompressionState>) -> AggregatorState {
-    return struct {
-        addr: addr,
-        decompressionState: decompressionState,
-        chargingState: None<AggregatorChargingState>,
-    };
-}
+public impure func arbAggregator_txcall() {
+    if let Some(topFrame) = evmCallStack_topFrame() {
+        let calldata = evmCallFrame_getCalldata(topFrame);
+        if (bytearray_size(calldata) < 4) {
+            evmOp_revert_knownCodePc(address(106), 0, 0, 0);
+        }
+        let funcCode = asm(224, bytearray_get256(calldata, 0)) uint { shr };
 
-public func aggregator_initCharging(state: AggregatorState, currency: address) -> option<AggregatorState> {
-    if (state.chargingState == None<AggregatorChargingState>) {
-        return Some(state with {
-            chargingState: Some(struct {
-                currency: currency,
-                collectedFunds: 0,
-                clients: newmap<address, ClientAggregatorChargingInfo>,
-            })
-        });
+        if (funcCode == 0xef7e87cb) {
+            arbAggregator_registerAsAggregator(topFrame, calldata);
+        } else {
+            // unrecognized function code
+            evmOp_revert_knownCodePc(address(106), 1, 0, 0);
+        }
     } else {
-        return None;   // already initialized
+        // this shouldn't happen -- should always be called in an EVM tx
+        evmCallStack_callHitError(19);
     }
 }
 
-public func
+public impure func arbAggregator_registerAsAggregator(topFrame: EvmCallFrame, calldata: ByteArray) { // (uint)
+    if (bytearray_size(calldata) != 36) {
+        evmOp_revert_knownCodePc(address(106), 10, 0, 0);
+    }
+    let senderAddr = evmCallFrame_getCaller(topFrame);
+    let feePerByte = bytearray_get256(calldata, 4);
+    let account = evmCallFrame_getAccount(topFrame, senderAddr);
+    if let Some(_) = account_getAggregatorState(account) {
+        evmOp_revert_knownCodePc(address(106), 11, 0, 0);
+    }
+    account = account_setAggregatorState(
+        account,
+        Some(struct {
+            addr: senderAddr,
+            decompressionState: None<AggregatorDecompressionState>,
+            feePerByte: feePerByte,
+            clientMaxFees: newmap<address, uint>,
+        })
+    );
+    if (evmCallStack_setAccount(senderAddr, account)) {
+        evmOp_return(0, 0);
+    } else {
+        evmOp_revert_knownCodePc(address(106), 12, 0, 0);
+    }
+}
+
 
 
 

@@ -139,7 +139,7 @@ public impure func arbsys_txcall() {
     }
 }
 
-func getFuncCode(ba: ByteArray) -> uint {
+public func getFuncCode(ba: ByteArray) -> uint {
     return asm(224, bytearray_get256(ba, 0)) uint { shr };
 }
 
@@ -533,18 +533,22 @@ impure func arbsys_uploadFunctionTable(topFrame: EvmCallFrame, calldata: ByteArr
         account_getAggregatorDecompressionState(account),
         tableData,
     ) {
-        account = account_setAggregatorDecompressionState(
+        if let Some(acct) = account_setAggregatorDecompressionState(
             account,
             Some(funcTable)
-        );
+        ) {
+            account = acct;
+        } else {
+            evmOp_revert_knownCodePc(address(100), 191, 0, 0);
+        };
     } else {
-        evmOp_revert_knownCodePc(address(100), 191, 0, 0);
+        evmOp_revert_knownCodePc(address(100), 192, 0, 0);
     }
 
     if (evmCallStack_setAccount(callerAddr, account)) {
         evmOp_return(0, 0);
     } else {
-        evmOp_revert_knownCodePc(address(100), 192, 0, 0);
+        evmOp_revert_knownCodePc(address(100), 193, 0, 0);
     }
 }
 

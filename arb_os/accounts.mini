@@ -17,8 +17,7 @@ use std::storageMap::storageMap_get;
 use std::storageMap::storageMap_set;
 
 use aggregators::AggregatorState;
-use aggregators::aggregatorState_new;
-use decompression::AggregatorDecompressionState;
+use aggregators::AggregatorDecompressionState;
 
 
 type AccountStore = map<address, Account>
@@ -174,7 +173,11 @@ public func account_getNextSeqNum(account: Account) -> uint {
 }
 
 public func account_getAggregatorDecompressionState(account: Account) -> option<AggregatorDecompressionState> {
-    return (account.aggregatorInfo?).decompressionState;
+    return (account_getAggregatorState(account)?).decompressionState;
+}
+
+public func account_getAggregatorState(account: Account) -> option<AggregatorState> {
+    return account.aggregatorInfo;
 }
 
 public func account_setAggregatorState(
@@ -189,12 +192,15 @@ public func account_setAggregatorState(
 public func account_setAggregatorDecompressionState(
     account: Account,
     maybeState: option<AggregatorDecompressionState>,
-) -> Account {
-    if let Some(astate) = account.aggregatorInfo {
-        return account_setAggregatorState(account, Some(astate with { decompressionState: maybeState }));
-    } else {
-        return account_setAggregatorState(account, Some(aggregatorState_new(account.addr, maybeState)));
-    }
+) -> option<Account> {
+    return Some(
+        account_setAggregatorState(
+            account,
+            Some(account_getAggregatorState(account)? with {
+                decompressionState: maybeState
+            }),
+        )
+    );
 }
 
 public func accountStore_createAccountFromEvmCode(

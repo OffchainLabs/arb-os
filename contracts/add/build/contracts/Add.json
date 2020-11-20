@@ -140,7 +140,7 @@
         "id": 2,
         "nodeType": "ImportDirective",
         "scope": 110,
-        "sourceUnit": 268,
+        "sourceUnit": 338,
         "src": "34:22:0",
         "symbolAliases": [],
         "unitAlias": ""
@@ -827,7 +827,7 @@
                           "name": "msg",
                           "nodeType": "Identifier",
                           "overloadedDeclarations": [],
-                          "referencedDeclaration": 319,
+                          "referencedDeclaration": 389,
                           "src": "488:3:0",
                           "typeDescriptions": {
                             "typeIdentifier": "t_magic_message",
@@ -927,10 +927,10 @@
                           "name": "ArbSys",
                           "nodeType": "Identifier",
                           "overloadedDeclarations": [],
-                          "referencedDeclaration": 267,
+                          "referencedDeclaration": 337,
                           "src": "447:6:0",
                           "typeDescriptions": {
-                            "typeIdentifier": "t_type$_t_contract$_ArbSys_$267_$",
+                            "typeIdentifier": "t_type$_t_contract$_ArbSys_$337_$",
                             "typeString": "type(contract ArbSys)"
                           }
                         },
@@ -944,7 +944,7 @@
                         "nodeType": "FunctionCall",
                         "src": "447:20:0",
                         "typeDescriptions": {
-                          "typeIdentifier": "t_contract$_ArbSys_$267",
+                          "typeIdentifier": "t_contract$_ArbSys_$337",
                           "typeString": "contract ArbSys"
                         }
                       },
@@ -955,7 +955,7 @@
                       "lValueRequested": false,
                       "memberName": "getTransactionCount",
                       "nodeType": "MemberAccess",
-                      "referencedDeclaration": 137,
+                      "referencedDeclaration": 207,
                       "src": "447:40:0",
                       "typeDescriptions": {
                         "typeIdentifier": "t_function_external_view$_t_address_$returns$_t_uint256_$",
@@ -1135,7 +1135,7 @@
                             "name": "msg",
                             "nodeType": "Identifier",
                             "overloadedDeclarations": [],
-                            "referencedDeclaration": 319,
+                            "referencedDeclaration": 389,
                             "src": "618:3:0",
                             "typeDescriptions": {
                               "typeIdentifier": "t_magic_message",
@@ -1237,10 +1237,10 @@
                               "name": "ArbSys",
                               "nodeType": "Identifier",
                               "overloadedDeclarations": [],
-                              "referencedDeclaration": 267,
+                              "referencedDeclaration": 337,
                               "src": "579:6:0",
                               "typeDescriptions": {
-                                "typeIdentifier": "t_type$_t_contract$_ArbSys_$267_$",
+                                "typeIdentifier": "t_type$_t_contract$_ArbSys_$337_$",
                                 "typeString": "type(contract ArbSys)"
                               }
                             },
@@ -1254,7 +1254,7 @@
                             "nodeType": "FunctionCall",
                             "src": "579:20:0",
                             "typeDescriptions": {
-                              "typeIdentifier": "t_contract$_ArbSys_$267",
+                              "typeIdentifier": "t_contract$_ArbSys_$337",
                               "typeString": "contract ArbSys"
                             }
                           },
@@ -1265,7 +1265,7 @@
                           "lValueRequested": false,
                           "memberName": "withdrawEth",
                           "nodeType": "MemberAccess",
-                          "referencedDeclaration": 130,
+                          "referencedDeclaration": 200,
                           "src": "579:32:0",
                           "typeDescriptions": {
                             "typeIdentifier": "t_function_external_payable$_t_address_$returns$__$",
@@ -1519,10 +1519,10 @@
                               "name": "ArbSys",
                               "nodeType": "Identifier",
                               "overloadedDeclarations": [],
-                              "referencedDeclaration": 267,
+                              "referencedDeclaration": 337,
                               "src": "690:6:0",
                               "typeDescriptions": {
-                                "typeIdentifier": "t_type$_t_contract$_ArbSys_$267_$",
+                                "typeIdentifier": "t_type$_t_contract$_ArbSys_$337_$",
                                 "typeString": "type(contract ArbSys)"
                               }
                             },
@@ -1536,7 +1536,7 @@
                             "nodeType": "FunctionCall",
                             "src": "690:20:0",
                             "typeDescriptions": {
-                              "typeIdentifier": "t_contract$_ArbSys_$267",
+                              "typeIdentifier": "t_contract$_ArbSys_$337",
                               "typeString": "contract ArbSys"
                             }
                           },
@@ -1547,7 +1547,7 @@
                           "lValueRequested": false,
                           "memberName": "withdrawEth",
                           "nodeType": "MemberAccess",
-                          "referencedDeclaration": 130,
+                          "referencedDeclaration": 200,
                           "src": "690:32:0",
                           "typeDescriptions": {
                             "typeIdentifier": "t_function_external_payable$_t_address_$returns$__$",
@@ -1664,7 +1664,7 @@
         "id": 2,
         "nodeType": "ImportDirective",
         "scope": 110,
-        "sourceUnit": 268,
+        "sourceUnit": 338,
         "src": "34:22:0",
         "symbolAliases": [],
         "unitAlias": ""
@@ -2351,7 +2351,7 @@
                           "name": "msg",
                           "nodeType": "Identifier",
                           "overloadedDeclarations": [],
-                          "referencedDeclaration": 319,
+                          "referencedDeclaration": 389,
                           "src": "488:3:0",
                           "typeDescriptions": {
                             "typeIdentifier": "t_magic_message",
@@ -2451,10 +2451,10 @@
                           "name": "ArbSys",
                           "nodeType": "Identifier",
                           "overloadedDeclarations": [],
-                          "referencedDeclaration": 267,
+                          "referencedDeclaration": 337,
                           "src": "447:6:0",
                           "typeDescriptions": {
-                            "typeIdentifier": "t_type$_t_contract$_ArbSys_$267_$",
+                            "typeIdentifier": "t_type$_t_contract$_ArbSys_$337_$",
                             "typeString": "type(contract ArbSys)"
                           }
                         },
@@ -2468,7 +2468,7 @@
                         "nodeType": "FunctionCall",
                         "src": "447:20:0",
                         "typeDescriptions": {
-                          "typeIdentifier": "t_contract$_ArbSys_$267",
+                          "typeIdentifier": "t_contract$_ArbSys_$337",
                           "typeString": "contract ArbSys"
                         }
                       },
@@ -2479,7 +2479,7 @@
                       "lValueRequested": false,
                       "memberName": "getTransactionCount",
                       "nodeType": "MemberAccess",
-                      "referencedDeclaration": 137,
+                      "referencedDeclaration": 207,
                       "src": "447:40:0",
                       "typeDescriptions": {
                         "typeIdentifier": "t_function_external_view$_t_address_$returns$_t_uint256_$",
@@ -2659,7 +2659,7 @@
                             "name": "msg",
                             "nodeType": "Identifier",
                             "overloadedDeclarations": [],
-                            "referencedDeclaration": 319,
+                            "referencedDeclaration": 389,
                             "src": "618:3:0",
                             "typeDescriptions": {
                               "typeIdentifier": "t_magic_message",
@@ -2761,10 +2761,10 @@
                               "name": "ArbSys",
                               "nodeType": "Identifier",
                               "overloadedDeclarations": [],
-                              "referencedDeclaration": 267,
+                              "referencedDeclaration": 337,
                               "src": "579:6:0",
                               "typeDescriptions": {
-                                "typeIdentifier": "t_type$_t_contract$_ArbSys_$267_$",
+                                "typeIdentifier": "t_type$_t_contract$_ArbSys_$337_$",
                                 "typeString": "type(contract ArbSys)"
                               }
                             },
@@ -2778,7 +2778,7 @@
                             "nodeType": "FunctionCall",
                             "src": "579:20:0",
                             "typeDescriptions": {
-                              "typeIdentifier": "t_contract$_ArbSys_$267",
+                              "typeIdentifier": "t_contract$_ArbSys_$337",
                               "typeString": "contract ArbSys"
                             }
                           },
@@ -2789,7 +2789,7 @@
                           "lValueRequested": false,
                           "memberName": "withdrawEth",
                           "nodeType": "MemberAccess",
-                          "referencedDeclaration": 130,
+                          "referencedDeclaration": 200,
                           "src": "579:32:0",
                           "typeDescriptions": {
                             "typeIdentifier": "t_function_external_payable$_t_address_$returns$__$",
@@ -3043,10 +3043,10 @@
                               "name": "ArbSys",
                               "nodeType": "Identifier",
                               "overloadedDeclarations": [],
-                              "referencedDeclaration": 267,
+                              "referencedDeclaration": 337,
                               "src": "690:6:0",
                               "typeDescriptions": {
-                                "typeIdentifier": "t_type$_t_contract$_ArbSys_$267_$",
+                                "typeIdentifier": "t_type$_t_contract$_ArbSys_$337_$",
                                 "typeString": "type(contract ArbSys)"
                               }
                             },
@@ -3060,7 +3060,7 @@
                             "nodeType": "FunctionCall",
                             "src": "690:20:0",
                             "typeDescriptions": {
-                              "typeIdentifier": "t_contract$_ArbSys_$267",
+                              "typeIdentifier": "t_contract$_ArbSys_$337",
                               "typeString": "contract ArbSys"
                             }
                           },
@@ -3071,7 +3071,7 @@
                           "lValueRequested": false,
                           "memberName": "withdrawEth",
                           "nodeType": "MemberAccess",
-                          "referencedDeclaration": 130,
+                          "referencedDeclaration": 200,
                           "src": "690:32:0",
                           "typeDescriptions": {
                             "typeIdentifier": "t_function_external_payable$_t_address_$returns$__$",
@@ -3164,7 +3164,7 @@
   },
   "networks": {},
   "schemaVersion": "3.3.1",
-  "updatedAt": "2020-10-27T17:49:19.400Z",
+  "updatedAt": "2020-11-20T13:50:12.429Z",
   "devdoc": {
     "methods": {}
   },
