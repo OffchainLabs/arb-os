@@ -106,6 +106,17 @@ impl MiniProperties for TypeCheckedFunc {
     }
 }
 
+fn strip_returns(to_strip: &mut TypeCheckedNode, _state: &(), _mut_state: &mut()) -> bool {
+    if let TypeCheckedNode::Statement(stat) = to_strip {
+        if let TypeCheckedStatement::Return(exp,loc) = stat {
+            **stat = TypeCheckedStatement::Break(Some(exp.clone()), "_inline".to_string(), *loc);
+        } else if let TypeCheckedStatement::ReturnVoid(loc) = stat {
+            **stat = TypeCheckedStatement::Break(None, "_inline".to_string(), *loc);
+        }
+    }
+    true
+}
+
 fn inline(
     to_do: &mut TypeCheckedNode,
     state: &(&Vec<TypeCheckedFunc>, &StringTable),
@@ -113,7 +124,7 @@ fn inline(
 ) -> bool {
     if let TypeCheckedNode::Expression(exp) = to_do {
         if let TypeCheckedExpr::FunctionCall(name, args, _, _, _) = exp {
-            let (code, block_exp) = if let TypeCheckedExpr::FuncRef(id, _, _) = **name {
+            let (mut code, block_exp) = if let TypeCheckedExpr::FuncRef(id, _, _) = **name {
                 let found_func = state.0.iter().find(|func| func.name == id);
                 if let Some(func) = found_func {
                     let mut code: Vec<_> = args
@@ -149,8 +160,10 @@ fn inline(
                 println!("fail 2");
                 (vec![], None)
             };
+            for statement in code.iter_mut().rev() {
+                statement.recursive_apply(strip_returns, &(), &mut ())
+            }
             **exp = TypeCheckedExpr::CodeBlock(code, block_exp, Some("_inline".to_string()), None);
-            println!("changed to: {:?}", exp);
             false
         } else {
             true
