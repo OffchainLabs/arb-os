@@ -760,6 +760,247 @@ impl<'a> ArbSys<'a> {
     }
 }
 
+pub struct ArbAggregator<'a> {
+    pub contract_abi: AbiForContract,
+    _wallet: &'a Wallet,
+    my_address: Uint256,
+    debug: bool,
+}
+
+impl<'a> ArbAggregator<'a> {
+    pub fn new(wallet: &'a Wallet, debug: bool) -> Self {
+        let mut contract_abi =
+            AbiForContract::new_from_file("contracts/add/build/contracts/ArbAggregator.json").unwrap();
+        contract_abi.bind_interface_to_address(Uint256::from_u64(106));
+        ArbAggregator {
+            contract_abi,
+            _wallet: wallet,
+            my_address: Uint256::from_bytes(wallet.address().as_bytes()),
+            debug,
+        }
+    }
+
+    pub fn register_as_aggregator(
+        &self,
+        machine: &mut Machine,
+        fee_per_byte: Uint256,
+    ) -> Result<(), ethabi::Error> {
+        let (receipts, sends) = self.contract_abi.call_function(
+            self.my_address.clone(),
+            "registerAsAggregator",
+            &[
+                ethabi::Token::Uint(fee_per_byte.to_u256()),
+            ],
+            machine,
+            Uint256::zero(),
+            self.debug,
+        )?;
+        if (receipts.len() != 1) || (sends.len() != 0) {
+            return Err(ethabi::Error::from("wrong number of receipts or sends"));
+        }
+        if receipts[0].succeeded() {
+            Ok(())
+        } else {
+            println!(
+                "arb_aggregator.register_as_aggregator revert code {}",
+                receipts[0].get_return_code()
+            );
+            Err(ethabi::Error::from("reverted"))
+        }
+    }
+
+    pub fn _set_aggregator_fee(
+        &self,
+        machine: &mut Machine,
+        fee_per_byte: Uint256,
+    ) -> Result<(), ethabi::Error> {
+        let (receipts, sends) = self.contract_abi.call_function(
+            self.my_address.clone(),
+            "setAggregatorFee",
+            &[
+                ethabi::Token::Uint(fee_per_byte.to_u256()),
+            ],
+            machine,
+            Uint256::zero(),
+            self.debug,
+        )?;
+        if (receipts.len() != 1) || (sends.len() != 0) {
+            return Err(ethabi::Error::from("wrong number of receipts or sends"));
+        }
+        if receipts[0].succeeded() {
+            Ok(())
+        } else {
+            println!(
+                "arb_aggregator.set_aggregator_fee revert code {}",
+                receipts[0].get_return_code()
+            );
+            Err(ethabi::Error::from("reverted"))
+        }
+    }
+
+    pub fn _get_aggregator_fee(
+        &self,
+        machine: &mut Machine,
+        addr: Uint256,
+    ) -> Result<Uint256, ethabi::Error> {
+        let (receipts, sends) = self.contract_abi.call_function(
+            self.my_address.clone(),
+            "setAggregatorFee",
+            &[
+                ethabi::Token::Address(addr.to_h160()),
+            ],
+            machine,
+            Uint256::zero(),
+            self.debug,
+        )?;
+        if (receipts.len() != 1) || (sends.len() != 0) {
+            return Err(ethabi::Error::from("wrong number of receipts or sends"));
+        }
+        if !receipts[0].succeeded() {
+            println!(
+                "arb_aggregator.set_aggregator_fee revert code {}",
+                receipts[0].get_return_code()
+            );
+            return Err(ethabi::Error::from("reverted"));
+        }
+
+        let return_vals = ethabi::decode(
+            &[ethabi::ParamType::Uint(256)],
+            &receipts[0].get_return_data(),
+        )?;
+
+        match &return_vals[0] {
+            ethabi::Token::Uint(fee) => Ok(Uint256::from_u256(fee)),
+            _ => panic!(),
+        }
+    }
+
+    pub fn _withdraw_as_aggregator(
+        &self,
+        machine: &mut Machine,
+    ) -> Result<(), ethabi::Error> {
+        let (receipts, sends) = self.contract_abi.call_function(
+            self.my_address.clone(),
+            "withdrawAsAggregator",
+            &[],
+            machine,
+            Uint256::zero(),
+            self.debug,
+        )?;
+        if (receipts.len() != 1) || (sends.len() != 0) {
+            return Err(ethabi::Error::from("wrong number of receipts or sends"));
+        }
+        if receipts[0].succeeded() {
+            Ok(())
+        } else {
+            println!(
+                "arb_aggregator.withdraw_as_aggregator revert code {}",
+                receipts[0].get_return_code()
+            );
+            Err(ethabi::Error::from("reverted"))
+        }
+    }
+
+    pub fn _register_as_client(
+        &self,
+        machine: &mut Machine,
+        aggregator_addr: Uint256,
+        max_price: Uint256,
+    ) -> Result<(), ethabi::Error> {
+        let (receipts, sends) = self.contract_abi.call_function(
+            self.my_address.clone(),
+            "registerAsClient",
+            &[
+                    ethabi::Token::Uint(aggregator_addr.to_u256()),
+                    ethabi::Token::Uint(max_price.to_u256()),
+            ],
+            machine,
+            Uint256::zero(),
+            self.debug,
+        )?;
+        if (receipts.len() != 1) || (sends.len() != 0) {
+            return Err(ethabi::Error::from("wrong number of receipts or sends"));
+        }
+        if receipts[0].succeeded() {
+            Ok(())
+        } else {
+            println!(
+                "arb_aggregator.register_as_client revert code {}",
+                receipts[0].get_return_code()
+            );
+            Err(ethabi::Error::from("reverted"))
+        }
+    }
+
+    pub fn _get_client_info(
+        &self,
+        machine: &mut Machine,
+        client_addr: Uint256,
+        aggregator_addr: Uint256,
+    ) -> Result<(bool, Uint256, Uint256), ethabi::Error> {
+        let (receipts, sends) = self.contract_abi.call_function(
+            self.my_address.clone(),
+            "getClientInfo",
+            &[
+                ethabi::Token::Uint(client_addr.to_u256()),
+                ethabi::Token::Uint(aggregator_addr.to_u256()),
+            ],
+            machine,
+            Uint256::zero(),
+            self.debug,
+        )?;
+        if (receipts.len() != 1) || (sends.len() != 0) {
+            return Err(ethabi::Error::from("wrong number of receipts or sends"));
+        }
+        if !receipts[0].succeeded() {
+            println!(
+                "arb_aggregator.get_client_info revert code {}",
+                receipts[0].get_return_code()
+            );
+            return Err(ethabi::Error::from("reverted"));
+        }
+
+        let return_vals = ethabi::decode(
+            &[ethabi::ParamType::Bool, ethabi::ParamType::Uint(256), ethabi::ParamType::Uint(256)],
+            &receipts[0].get_return_data(),
+        )?;
+
+        match (&return_vals[0], &return_vals[1], &return_vals[2]) {
+            (ethabi::Token::Bool(b), ethabi::Token::Uint(u1), ethabi::Token::Uint(u2)) =>
+                Ok((*b, Uint256::from_u256(u1), Uint256::from_u256(u2))),
+            _ => panic!(),
+        }
+    }
+
+    pub fn _withdraw_as_client(
+        &self,
+        machine: &mut Machine,
+        aggregator_addr: Uint256,
+    ) -> Result<(), ethabi::Error> {
+        let (receipts, sends) = self.contract_abi.call_function(
+            self.my_address.clone(),
+            "withdrawAsClient",
+            &[ethabi::Token::Uint(aggregator_addr.to_u256())],
+            machine,
+            Uint256::zero(),
+            self.debug,
+        )?;
+        if (receipts.len() != 1) || (sends.len() != 0) {
+            return Err(ethabi::Error::from("wrong number of receipts or sends"));
+        }
+        if receipts[0].succeeded() {
+            Ok(())
+        } else {
+            println!(
+                "arb_aggregator.withdraw_as_client revert code {}",
+                receipts[0].get_return_code()
+            );
+            Err(ethabi::Error::from("reverted"))
+        }
+    }
+}
+
+
 struct FunctionTableItem {
     func_code: [u8; 4],
     is_payable: bool,

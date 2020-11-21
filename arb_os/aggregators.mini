@@ -11,13 +11,19 @@ use evmCallStack::evmCallStack_setAccount;
 use evmCallStack::evmCallFrame_getAccount;
 use evmCallStack::evmCallFrame_getCalldata;
 use evmCallStack::evmCallFrame_getCaller;
+use evmCallStack::evmCallStack_setTopFrameMemory;
 use evmCallStack::evmCallStack_callHitError;
 use evmOps::evmOp_return;
 use evmOps::evmOp_revert_knownCodePc;
 
+use core::kvs::Kvs;
+use core::kvs::builtin_kvsDelete;
+
 use std::bytearray::ByteArray;
+use std::bytearray::bytearray_new;
 use std::bytearray::bytearray_size;
 use std::bytearray::bytearray_get256;
+use std::bytearray::bytearray_set256;
 
 
 type AggregatorState = struct {
@@ -42,6 +48,18 @@ public impure func arbAggregator_txcall() {
 
         if (funcCode == 0xef7e87cb) {
             arbAggregator_registerAsAggregator(topFrame, calldata);
+        } elseif (funcCode == 0x355466c8) {
+            arbAggregator_setAggregatorFee(topFrame, calldata);
+        } elseif (funcCode == 0x07dd40a4) {
+            arbAggregator_getAggregatorFee(topFrame, calldata);
+        } elseif (funcCode == 0x077970850) {
+            arbAggregator_withdrawAsAggregator(topFrame, calldata);
+       } elseif (funcCode == 0x8e9d96ac) {
+            arbAggregator_registerAsClient(topFrame, calldata);
+       } elseif (funcCode == 0x253ed2e2) {
+            arbAggregator_getClientInfo(topFrame, calldata);
+        } elseif (funcCode == 0xdda5bb27) {
+            arbAggregator_withdrawAsClient(topFrame, calldata);
         } else {
             // unrecognized function code
             evmOp_revert_knownCodePc(address(106), 1, 0, 0);
@@ -78,7 +96,146 @@ public impure func arbAggregator_registerAsAggregator(topFrame: EvmCallFrame, ca
     }
 }
 
+public impure func arbAggregator_setAggregatorFee(topFrame: EvmCallFrame, calldata: ByteArray) { // (uint)
+    if (bytearray_size(calldata) != 36) {
+        evmOp_revert_knownCodePc(address(106), 20, 0, 0);
+    }
+    let senderAddr = evmCallFrame_getCaller(topFrame);
+    let feePerByte = bytearray_get256(calldata, 4);
+    let account = evmCallFrame_getAccount(topFrame, senderAddr);
+    if let Some(astate) = account_getAggregatorState(account) {
+        account = account_setAggregatorState(
+            account,
+            Some(astate with { feePerByte: feePerByte }),
+        );
+        if (evmCallStack_setAccount(senderAddr, account)) {
+            evmOp_return(0, 0);
+        } else {
+            evmOp_revert_knownCodePc(address(106), 21, 0, 0);
+        }
+    } else {
+        evmOp_revert_knownCodePc(address(106), 22, 0, 0);
+    }
+}
 
+public impure func arbAggregator_getAggregatorFee(topFrame: EvmCallFrame, calldata: ByteArray) { // (address) -> uint
+    if (bytearray_size(calldata) != 36) {
+        evmOp_revert_knownCodePc(address(106), 30, 0, 0);
+    }
+    let aggregator = address(bytearray_get256(calldata, 4));
+    let account = evmCallFrame_getAccount(topFrame, aggregator);
+    if let Some(astate) = account_getAggregatorState(account) {
+        let mem = bytearray_set256(bytearray_new(0), 0, astate.feePerByte);
+        if (evmCallStack_setTopFrameMemory(mem)) {
+            evmOp_return(0, 32);
+        } else {
+            evmOp_revert_knownCodePc(address(106), 31, 0, 0);
+        }
+    } else {
+        evmOp_revert_knownCodePc(address(106), 32, 0, 0);
+    }
+}
+
+public impure func arbAggregator_withdrawAsAggregator(topFrame: EvmCallFrame, calldata: ByteArray) { // ()
+    if (bytearray_size(calldata) != 4) {
+        evmOp_revert_knownCodePc(address(106), 40, 0, 0);
+    }
+    let senderAddr = evmCallFrame_getCaller(topFrame);
+    let account = evmCallFrame_getAccount(topFrame, senderAddr);
+    if let Some(astate) = account_getAggregatorState(account) {
+        account = account_setAggregatorState(account, None<AggregatorState>);
+        if (evmCallStack_setAccount(senderAddr, account)) {
+            evmOp_return(0, 0);
+        } else {
+            evmOp_revert_knownCodePc(address(106), 41, 0, 0);
+        }
+    } else {
+        evmOp_revert_knownCodePc(address(106), 42, 0, 0);
+    }
+}
+
+public impure func arbAggregator_registerAsClient(topFrame: EvmCallFrame, calldata: ByteArray) { // (address, uint)
+    if (bytearray_size(calldata) != 68) {
+        evmOp_revert_knownCodePc(address(106), 50, 0, 0);
+    }
+    let senderAddr = evmCallFrame_getCaller(topFrame);
+    let aggregatorAddr = address(bytearray_get256(calldata, 4));
+    let maxFee = bytearray_get256(calldata, 36);
+    let account = evmCallFrame_getAccount(topFrame, aggregatorAddr);
+    if let Some(astate) = account_getAggregatorState(account) {
+        astate = astate with {
+            clientMaxFees: astate.clientMaxFees with { [senderAddr] = maxFee }
+        };
+        account = account_setAggregatorState(account, Some(astate));
+        if (evmCallStack_setAccount(aggregatorAddr, account)) {
+            evmOp_return(0, 0);
+        } else {
+            evmOp_revert_knownCodePc(address(106), 51, 0, 0);
+        }
+    } else {
+        evmOp_revert_knownCodePc(address(106), 52, 0, 0);
+    }
+}
+
+public impure func arbAggregator_getClientInfo(topFrame: EvmCallFrame, calldata: ByteArray) { // (address, address) -> (bool, uint, uint)
+    if (bytearray_size(calldata) != 68) {
+        evmOp_revert_knownCodePc(address(106), 60, 0, 0);
+    }
+    let clientAddr = address(bytearray_get256(calldata, 4));
+    let aggregatorAddr = address(bytearray_get256(calldata, 36));
+    let account = evmCallFrame_getAccount(topFrame, aggregatorAddr);
+
+    let mem = bytearray_new(0);   // unless modified, represents (false, 0, 0)
+
+    if let Some(astate) = account_getAggregatorState(account) {
+        if let Some(clientMaxFee) = astate.clientMaxFees[clientAddr] {
+            mem = bytearray_set256(
+                bytearray_set256(
+                    bytearray_set256(mem, 0, 1),
+                    32,
+                    clientMaxFee
+                ),
+                64,
+                astate.feePerByte
+            );
+        }
+    }
+
+    if (evmCallStack_setTopFrameMemory(mem)) {
+        evmOp_return(0, 3*32);
+    } else {
+        evmOp_revert_knownCodePc(address(106), 61, 0, 0);
+    }
+}
+
+public impure func arbAggregator_withdrawAsClient(topFrame: EvmCallFrame, calldata: ByteArray) { // (address)
+    if (bytearray_size(calldata) != 36) {
+        evmOp_revert_knownCodePc(address(106), 70, 0, 0);
+    }
+    let clientAddr = evmCallFrame_getCaller(topFrame);
+    let aggregatorAddr = address(bytearray_get256(calldata, 4));
+    let account = evmCallFrame_getAccount(topFrame, aggregatorAddr);
+    if let Some(astate) = account_getAggregatorState(account) {
+        if (astate.clientMaxFees[clientAddr] == None<uint>) {
+            evmOp_revert_knownCodePc(address(106), 71, 0, 0);
+        }
+        account = account_setAggregatorState(
+            account,
+            Some(astate with {
+                clientMaxFees: unsafecast<map<address, uint>>(
+                    builtin_kvsDelete(unsafecast<Kvs>(astate.clientMaxFees), uint(clientAddr))
+                )
+            })
+        );
+        if (evmCallStack_setAccount(aggregatorAddr, account)) {
+            evmOp_return(0, 0);
+        } else {
+            evmOp_revert_knownCodePc(address(106), 72, 0, 0);
+        }
+    } else {
+        evmOp_revert_knownCodePc(address(106), 73, 0, 0);
+    }
+}
 
 
 

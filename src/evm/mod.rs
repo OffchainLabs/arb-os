@@ -2,7 +2,7 @@
  * Copyright 2020, Offchain Labs, Inc. All rights reserved.
  */
 
-use crate::evm::abi::ArbSys;
+use crate::evm::abi::{ArbSys, ArbAggregator};
 use crate::evm::abi::FunctionTable;
 use crate::mavm::Value;
 use crate::run::{bytestack_from_bytes, load_from_file, RuntimeEnvironment};
@@ -308,6 +308,7 @@ pub fn evm_test_function_table_access(
     let my_addr = Uint256::from_bytes(wallet.address().as_bytes());
 
     let arbsys = ArbSys::new(&wallet, debug);
+    let arb_aggregator = ArbAggregator::new(&wallet, debug);
 
     let gtc_short_sig = arbsys
         .contract_abi
@@ -320,6 +321,7 @@ pub fn evm_test_function_table_access(
         false,
         Uint256::from_u64(10000000),
     )?;
+    arb_aggregator.register_as_aggregator(&mut machine, Uint256::zero())?;
     arbsys.upload_function_table(&mut machine, &func_table)?;
 
     println!("Checking size");
