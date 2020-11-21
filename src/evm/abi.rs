@@ -770,7 +770,8 @@ pub struct ArbAggregator<'a> {
 impl<'a> ArbAggregator<'a> {
     pub fn new(wallet: &'a Wallet, debug: bool) -> Self {
         let mut contract_abi =
-            AbiForContract::new_from_file("contracts/add/build/contracts/ArbAggregator.json").unwrap();
+            AbiForContract::new_from_file("contracts/add/build/contracts/ArbAggregator.json")
+                .unwrap();
         contract_abi.bind_interface_to_address(Uint256::from_u64(106));
         ArbAggregator {
             contract_abi,
@@ -788,9 +789,7 @@ impl<'a> ArbAggregator<'a> {
         let (receipts, sends) = self.contract_abi.call_function(
             self.my_address.clone(),
             "registerAsAggregator",
-            &[
-                ethabi::Token::Uint(fee_per_byte.to_u256()),
-            ],
+            &[ethabi::Token::Uint(fee_per_byte.to_u256())],
             machine,
             Uint256::zero(),
             self.debug,
@@ -817,9 +816,7 @@ impl<'a> ArbAggregator<'a> {
         let (receipts, sends) = self.contract_abi.call_function(
             self.my_address.clone(),
             "setAggregatorFee",
-            &[
-                ethabi::Token::Uint(fee_per_byte.to_u256()),
-            ],
+            &[ethabi::Token::Uint(fee_per_byte.to_u256())],
             machine,
             Uint256::zero(),
             self.debug,
@@ -846,9 +843,7 @@ impl<'a> ArbAggregator<'a> {
         let (receipts, sends) = self.contract_abi.call_function(
             self.my_address.clone(),
             "setAggregatorFee",
-            &[
-                ethabi::Token::Address(addr.to_h160()),
-            ],
+            &[ethabi::Token::Address(addr.to_h160())],
             machine,
             Uint256::zero(),
             self.debug,
@@ -875,10 +870,7 @@ impl<'a> ArbAggregator<'a> {
         }
     }
 
-    pub fn _withdraw_as_aggregator(
-        &self,
-        machine: &mut Machine,
-    ) -> Result<(), ethabi::Error> {
+    pub fn _withdraw_as_aggregator(&self, machine: &mut Machine) -> Result<(), ethabi::Error> {
         let (receipts, sends) = self.contract_abi.call_function(
             self.my_address.clone(),
             "withdrawAsAggregator",
@@ -911,8 +903,8 @@ impl<'a> ArbAggregator<'a> {
             self.my_address.clone(),
             "registerAsClient",
             &[
-                    ethabi::Token::Uint(aggregator_addr.to_u256()),
-                    ethabi::Token::Uint(max_price.to_u256()),
+                ethabi::Token::Uint(aggregator_addr.to_u256()),
+                ethabi::Token::Uint(max_price.to_u256()),
             ],
             machine,
             Uint256::zero(),
@@ -961,13 +953,18 @@ impl<'a> ArbAggregator<'a> {
         }
 
         let return_vals = ethabi::decode(
-            &[ethabi::ParamType::Bool, ethabi::ParamType::Uint(256), ethabi::ParamType::Uint(256)],
+            &[
+                ethabi::ParamType::Bool,
+                ethabi::ParamType::Uint(256),
+                ethabi::ParamType::Uint(256),
+            ],
             &receipts[0].get_return_data(),
         )?;
 
         match (&return_vals[0], &return_vals[1], &return_vals[2]) {
-            (ethabi::Token::Bool(b), ethabi::Token::Uint(u1), ethabi::Token::Uint(u2)) =>
-                Ok((*b, Uint256::from_u256(u1), Uint256::from_u256(u2))),
+            (ethabi::Token::Bool(b), ethabi::Token::Uint(u1), ethabi::Token::Uint(u2)) => {
+                Ok((*b, Uint256::from_u256(u1), Uint256::from_u256(u2)))
+            }
             _ => panic!(),
         }
     }
@@ -999,7 +996,6 @@ impl<'a> ArbAggregator<'a> {
         }
     }
 }
-
 
 struct FunctionTableItem {
     func_code: [u8; 4],

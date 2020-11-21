@@ -2,8 +2,8 @@
  * Copyright 2020, Offchain Labs, Inc. All rights reserved.
  */
 
-use crate::evm::abi::{ArbSys, ArbAggregator};
 use crate::evm::abi::FunctionTable;
+use crate::evm::abi::{ArbAggregator, ArbSys};
 use crate::mavm::Value;
 use crate::run::{bytestack_from_bytes, load_from_file, RuntimeEnvironment};
 use crate::uint256::Uint256;

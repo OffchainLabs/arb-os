@@ -32,7 +32,10 @@ pub struct RuntimeEnvironment {
 }
 
 impl RuntimeEnvironment {
-    pub fn new(chain_address: Uint256, charging_policy: Option<(Uint256, Uint256, Uint256)>) -> Self {
+    pub fn new(
+        chain_address: Uint256,
+        charging_policy: Option<(Uint256, Uint256, Uint256)>,
+    ) -> Self {
         let mut ret = RuntimeEnvironment {
             chain_id: chain_address.trim_to_u64() & 0xffffffffffff, // truncate to 48 bits
             l1_inbox: vec![],
