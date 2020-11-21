@@ -20,6 +20,7 @@ use std::bytearray::bytearray_copy;
 
 use std::bytestream::bytestream_new;
 use std::bytestream::bytestream_skipBytes;
+use std::bytestream::bytestream_bytesReadSoFar;
 
 use std::rlp::rlp_encodeAndHashMessageInfoForSignature;
 use std::rlp::rlp_decodeMessageInfo;
@@ -42,6 +43,7 @@ type TxRequestData = struct {
     calldata: ByteArray,
     nonMutating: bool,
     incomingRequest: IncomingRequest,
+    calldataUsed: uint,
 }
 
 // A copy of this struct is defined in stdlib/rlp.mini.
@@ -67,7 +69,8 @@ public impure func translateSignedTx(req: IncomingRequest) -> option<TxRequestDa
     // Return the result, or None if message is malformed or the signature is invalid.
 
     let rlpData = bytearray_extract(req.msgData, 1, bytearray_size(req.msgData)-1);
-    let (_, signedTx) = rlp_decodeMessageInfo(bytestream_new(rlpData))?;
+    let (ustr, signedTx) = rlp_decodeMessageInfo(bytestream_new(rlpData))?;
+    let calldataUsed = bytestream_bytesReadSoFar(ustr);
     let signer = recoverSigner(signedTx)?;
     let rlpHash = keccak256(rlpData, 0, bytearray_size(rlpData));
 
@@ -88,6 +91,7 @@ public impure func translateSignedTx(req: IncomingRequest) -> option<TxRequestDa
             } with {
                 requestId: uint(rlpHash)
             },
+            calldataUsed: calldataUsed,
         }
     );
 }

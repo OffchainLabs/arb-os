@@ -419,6 +419,7 @@ type TxRequestData = struct {
     calldata: ByteArray,
     nonMutating: bool,
     incomingRequest: IncomingRequest,
+    calldataUsed: uint,
 }
 
 // The next section of code implements the congestion auction. For each request, the auction

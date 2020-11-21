@@ -239,6 +239,8 @@ impure func decompressTx(
     // if we aren't given the sender address, we'll return a dummy value in that slot of the TxRequestData,
     //         and assume the caller will supply it later
 
+    let startOffsetInStream = bytestream_bytesReadSoFar(stream);
+
     let funcTableEntry = None<FunctionTableEntry>;
     let (ustr, firstByte) = bytestream_getByte(stream)?;  // peek at first byte of stream
     if (firstByte == 0xff) {
@@ -330,6 +332,7 @@ impure func decompressTx(
             calldata: calldata,
             nonMutating: false,
             incomingRequest: unsafecast<IncomingRequest>(0),  // caller will fill this in
+            calldataUsed: bytestream_bytesReadSoFar(stream) - startOffsetInStream,
         }
     ));
 }

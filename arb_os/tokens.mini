@@ -31,6 +31,7 @@ type TxRequestData = struct {
     calldata: ByteArray,
     nonMutating: bool,
     incomingRequest: IncomingRequest,
+    calldataUsed: uint,
 }
 
 public impure func tokens_erc20deposit(
@@ -82,6 +83,7 @@ public impure func tokens_erc20deposit(
             calldata: calldata,
             nonMutating: false,
             incomingRequest: fullMsg,
+            calldataUsed: 0,
         }
     );  // should never return
 
@@ -137,6 +139,7 @@ public impure func tokens_erc721deposit(
             calldata: calldata,
             nonMutating: false,
             incomingRequest: fullMsg,
+            calldataUsed: 0,
         }
     );  // should never return
 

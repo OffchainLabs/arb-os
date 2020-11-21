@@ -148,6 +148,7 @@ type TxRequestData = struct {
     calldata: ByteArray,
     nonMutating: bool,
     incomingRequest: IncomingRequest,
+    calldataUsed: uint,
 }
 
 public impure func initEvmCallStack(
