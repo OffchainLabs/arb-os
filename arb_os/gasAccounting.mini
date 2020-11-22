@@ -16,6 +16,7 @@ use accounts::accountStore_set;
 use accounts::account_getBalance;
 use accounts::account_addToEthBalance;
 use accounts::account_deductFromEthBalance;
+use accounts::account_getAggregatorState;
 
 use evmCallStack::evmCallStack_isEmpty;
 
@@ -240,6 +241,43 @@ public impure func gasAccounting_startTxCharges(
             refundTo: payer,
         })
     };
+
+    // now charge some gas to pay the aggregator, if needed
+    // this gas will be added back to the global pool, because it doesn't represent validator resources used
+    if ((originalSender != address(0)) && (calldataBytes > 0)) {
+        if let Some(aggInfo) = account_getAggregatorState(accountStore_get(getGlobalAccountStore(), originalSender)) {
+            if (aggInfo.feePerByte > 0) {
+                if let Some(clntMaxFee) = aggInfo.clientMaxFees[payer] {
+                    if (clntMaxFee < aggInfo.feePerByte) {
+                        return None;   // revert transaction; client does not accept the aggregator's calldata fee
+                    }
+                    let gasToTake = aggInfo.feePerByte * calldataBytes / gasPrice;
+                    if (gasToTake >= maxGas) {
+                        return None;  // transaction doesn't have enough gas to pay aggregator fee
+                    }
+                    maxGas = maxGas - gasToTake;
+                    let weiToTake = gasToTake * gasPrice;
+                    if let Some(txState) = gasAccountingInfo.txState {
+                        gasAccountingInfo = gasAccountingInfo with {
+                            txState: Some(txState with { weiHeldForGas: txState.weiHeldForGas - weiToTake })
+                        } with {
+                            gasPool: gasAccountingInfo.gasPool + int(gasToTake)
+                        };
+                        let globalAS = getGlobalAccountStore();
+                        setGlobalAccountStore(
+                            accountStore_set(
+                                globalAS,
+                                payer,
+                                account_addToEthBalance(accountStore_get(globalAS, payer), weiToTake),
+                            )
+                        );
+                    } else {
+                        return None;  // should never happen
+                    }
+                }
+            }
+        }
+    }
 
     asm(maxGas,) { setgas };
 
