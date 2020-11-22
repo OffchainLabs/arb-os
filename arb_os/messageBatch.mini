@@ -38,10 +38,10 @@ public func messageBatch_tryNew(msg: IncomingRequest) -> option<MessageBatch> {
         return Some(
             struct {
                 template: msg with {
-                    provenance: struct {
-                        l1SeqNum: msg.provenance.l1SeqNum,
-                        parentRequestId: msg.requestId,
-                        indexInParent: 0,
+                    provenance: msg.provenance with {
+                        parentRequestId: msg.requestId
+                    } with {
+                        indexInParent: 0
                     }
                 },
                 stream: stream,

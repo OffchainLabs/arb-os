@@ -126,6 +126,7 @@ impure func getFromL1Inbox(inbox: Inbox) -> Inbox {
                             l1SeqNum: 0,
                             parentRequestId: 0,
                             indexInParent: ~0,
+                            originalSender: address(0),
                         },
                     }
                 )
@@ -146,6 +147,7 @@ impure func getFromL1Inbox(inbox: Inbox) -> Inbox {
             l1SeqNum: newMsgRaw.requestId,
             parentRequestId: 0,
             indexInParent: ~0,
+            originalSender: newMsgRaw.sender,
         },
     };
 
@@ -198,6 +200,7 @@ type RequestProvenance = struct {
     l1SeqNum: uint,
     parentRequestId: uint,
     indexInParent: uint,
+    originalSender: address,
 }
 
 public impure func inbox_getNextUnpackedRequest() -> (
@@ -325,7 +328,7 @@ impure func translateUnsignedTx(request: IncomingRequest) -> option<TxRequestDat
             calldata: calldata,
             nonMutating: (subtype == 2),
             incomingRequest: request,
-            calldataUsed: bytearray_size(request.msgData),
+            calldataBytes: bytearray_size(request.msgData),
         }
     );
 }
@@ -355,7 +358,7 @@ func translateBuddyDeployTx(request: IncomingRequest) -> option<TxRequestData> {
             calldata: calldata,
             nonMutating: false,
             incomingRequest: request,
-            calldataUsed: bytearray_size(request.msgData),
+            calldatabytes: bytearray_size(request.msgData),
         }
     );
 }

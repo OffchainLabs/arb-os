@@ -169,7 +169,12 @@ public impure func decompressAndVerifyEcdsaSignedTx(
     let v = bytearray_getByte(ba, sz-1);
     let body = bytearray_extract(ba, 1, sz-66);
 
-    let (_, txRequest) = decompressTx(bytestream_new(body), None<address>, None<FunctionTable>)?;
+    let (_, txRequest) = decompressTx(
+        bytestream_new(body),
+        None<address>,
+        None<FunctionTable>,
+        originalRequest.provenance.originalSender,
+    )?;
 
     let seqNum = 0;
     if let Some(sn) = txRequest.seqNum {
@@ -228,6 +233,7 @@ impure func decompressTx(
     stream: ByteStream,
     maybeSender: option<address>,
     maybeTable: option<FunctionTable>,
+    aggregator: address,
 ) -> option<(ByteStream, TxRequestData)> {
     // decompress a compressed transaction, reading it from ByteStream
     // return None if insufficient data in the ByteStream
@@ -332,7 +338,7 @@ impure func decompressTx(
             calldata: calldata,
             nonMutating: false,
             incomingRequest: unsafecast<IncomingRequest>(0),  // caller will fill this in
-            calldataUsed: bytestream_bytesReadSoFar(stream) - startOffsetInStream,
+            calldataBytes: bytestream_bytesReadSoFar(stream) - startOffsetInStream,
         }
     ));
 }

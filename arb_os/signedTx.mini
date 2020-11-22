@@ -43,7 +43,7 @@ type TxRequestData = struct {
     calldata: ByteArray,
     nonMutating: bool,
     incomingRequest: IncomingRequest,
-    calldataUsed: uint,
+    calldataBytes: uint,
 }
 
 // A copy of this struct is defined in stdlib/rlp.mini.
@@ -91,7 +91,7 @@ public impure func translateSignedTx(req: IncomingRequest) -> option<TxRequestDa
             } with {
                 requestId: uint(rlpHash)
             },
-            calldataUsed: calldataUsed,
+            calldataBytes: calldataUsed,
         }
     );
 }

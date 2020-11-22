@@ -199,7 +199,9 @@ public impure func recycleBurnedFunds(amount: uint) {
 public impure func gasAccounting_startTxCharges(
     maxGas: uint,
     gasPrice: uint,
-    payer: address
+    payer: address,
+    originalSender: address,  //TODO: use this
+    calldataBytes: uint,
 ) -> option<()> {
     // Start charging a new Tx for ArbGas usage
     // The caller should already have verified that the payer has enough funds, but we'll return None if not.
@@ -240,6 +242,7 @@ public impure func gasAccounting_startTxCharges(
     };
 
     asm(maxGas,) { setgas };
+
     return Some(());
 }
 
@@ -419,8 +422,9 @@ type TxRequestData = struct {
     calldata: ByteArray,
     nonMutating: bool,
     incomingRequest: IncomingRequest,
-    calldataUsed: uint,
+    calldataBytes: uint,
 }
+
 
 // The next section of code implements the congestion auction. For each request, the auction
 //     determines (a) whether to approve the request for execution, and (b) what gas price the request will pay.

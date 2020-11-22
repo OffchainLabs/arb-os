@@ -148,7 +148,7 @@ type TxRequestData = struct {
     calldata: ByteArray,
     nonMutating: bool,
     incomingRequest: IncomingRequest,
-    calldataUsed: uint,
+    calldataBytes: uint,
 }
 
 public impure func initEvmCallStack(
@@ -162,7 +162,13 @@ public impure func initEvmCallStack(
             request.calleeAddr
         )
     ) {
-        if (gasAccounting_startTxCharges(request.maxGas, request.gasPrice, request.caller) != None<()>) {
+        if (gasAccounting_startTxCharges(
+            request.maxGas,
+            request.gasPrice,
+            request.caller,
+            request.incomingRequest.provenance.originalSender,
+            request.calldataBytes,
+        ) != None<()>) {
             // increment the caller's sequence number, if caller has sufficient balance
             let acctStore = getGlobalAccountStore();
             if (account_getBalance(accountStore_get(acctStore, request.caller)) >= request.value) {
@@ -319,7 +325,13 @@ public impure func initEvmCallStackForConstructor(
             parent: None<any>
         });
 
-        if (gasAccounting_startTxCharges(request.maxGas, request.gasPrice, request.caller) != None<()>) {
+        if (gasAccounting_startTxCharges(
+            request.maxGas,
+            request.gasPrice,
+            request.caller,
+            request.incomingRequest.provenance.originalSender,
+            request.calldataBytes,
+        ) != None<()>) {
             startPoint();  // start executing the call; should never return
             panic;
         } else {

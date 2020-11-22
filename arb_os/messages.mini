@@ -168,7 +168,7 @@ type TxRequestData = struct {
     calldata: ByteArray,
     nonMutating: bool,
     incomingRequest: IncomingRequest,
-    calldataUsed: uint,
+    calldataBytes: uint,
 }
 
 public impure func handleL2Request(
