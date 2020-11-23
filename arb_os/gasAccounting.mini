@@ -242,10 +242,12 @@ public impure func gasAccounting_startTxCharges(
         })
     };
 
-    // now charge some gas to pay the aggregator, if needed
-    // this gas will be added back to the global pool, because it doesn't represent validator resources used
-    if ((originalSender != address(0)) && (calldataBytes > 0)) {
-        if let Some(aggInfo) = account_getAggregatorState(accountStore_get(getGlobalAccountStore(), originalSender)) {
+    // Now charge some ArbGas to pay the aggregator, if needed.
+    // This ArbGas is added back to the global pool, because it doesn't represent validator computation.
+    // The funds are paid out to the aggregator, and deducted from the client's ArbGas deposit.
+    if ((gasPrice > 0) && (originalSender != address(0)) && (calldataBytes > 0)) {
+        let globalAS = getGlobalAccountStore();
+        if let Some(aggInfo) = account_getAggregatorState(accountStore_get(globalAS, originalSender)) {
             if (aggInfo.feePerByte > 0) {
                 if let Some(clntMaxFee) = aggInfo.clientMaxFees[payer] {
                     if (clntMaxFee < aggInfo.feePerByte) {
@@ -263,7 +265,6 @@ public impure func gasAccounting_startTxCharges(
                         } with {
                             gasPool: gasAccountingInfo.gasPool + int(gasToTake)
                         };
-                        let globalAS = getGlobalAccountStore();
                         setGlobalAccountStore(
                             accountStore_set(
                                 globalAS,
@@ -274,6 +275,8 @@ public impure func gasAccounting_startTxCharges(
                     } else {
                         return None;  // should never happen
                     }
+                } else {
+                    return None;   // revert transaction; client is not registered with the aggregator
                 }
             }
         }
@@ -330,12 +333,12 @@ public impure func gasAccounting_endTxCharges(storageDelta: int) -> option<GasUs
     );
 }
 
-public impure func gasAccounting_extraGasCharge(numArbGas: uint) {
-    // assess an extra gas charge on the current tx
-    // this lets us charge for things that use up system resources
-    // callers should assess the charge for a thing before they do the thing, because we can
+public impure func gasAccounting_extraGasCharge(numArbGas: uint, isValidatorComputation: bool) {
+    // Assess an extra gas charge on the current tx, paid to the validators.
+    // This lets us charge for things that use up system resources
+    // Callers should assess the charge for a thing before they do the thing, because we can
     //      only take the gas that the user has remaining
-    // it's okay to assess the charge after doing the thing, if the cost of the thing will be eliminated on revert
+    // It's okay to assess the charge after doing the thing, if the cost of the thing will be eliminated on revert
 
     let gasLeft = asm() uint { getgas };
     if (gasLeft >= asm (1, 255) uint { shl }) {
@@ -348,12 +351,19 @@ public impure func gasAccounting_extraGasCharge(numArbGas: uint) {
         numArbGas = gasLeft-1;
     }
 
+    if (!isValidatorComputation) {
+        // add the gas back into the gas pool, because it doesn't represent validator computation
+        gasAccountingInfo = gasAccountingInfo with { gasPool: gasAccountingInfo.gasPool + int(numArbGas) };
+    }
+
     asm(gasLeft-numArbGas,) { setgas };
 }
 
 public impure func gasAccounting_chargeForStorage(numStorageUnits: uint) {
     if let Some(txState) = gasAccountingInfo.txState {
-        gasAccounting_extraGasCharge(numStorageUnits * gasAccountingConstants.StorageCharge / txState.price);
+        if (txState.price > 0) {
+            gasAccounting_extraGasCharge(numStorageUnits * gasAccountingConstants.StorageCharge / txState.price, false);
+        }
     }
 }
 
