@@ -1780,6 +1780,7 @@ fn mavm_codegen_expr<'a>(
             import_func_map,
             global_var_map,
             *loc,
+            prepushed_vals,
             scopes,
             file_name_chart,
         ),
@@ -1974,6 +1975,7 @@ fn codegen_fixed_array_mod<'a>(
     import_func_map: &HashMap<StringId, Label>,
     global_var_map: &HashMap<StringId, usize>,
     location: Option<Location>,
+    prepushed_vals: usize,
     scopes: &mut Vec<(String, Label, Option<Type>)>,
     file_name_chart: &mut HashMap<u64, String>,
 ) -> Result<(LabelGenerator, &'a mut Vec<Instruction>, usize), CodegenError> {
@@ -1986,7 +1988,7 @@ fn codegen_fixed_array_mod<'a>(
         string_table,
         import_func_map,
         global_var_map,
-        0,
+        prepushed_vals,
         scopes,
         file_name_chart,
     )?;
@@ -1999,7 +2001,7 @@ fn codegen_fixed_array_mod<'a>(
         string_table,
         import_func_map,
         global_var_map,
-        1,
+        prepushed_vals + 1,
         scopes,
         file_name_chart,
     )?;
@@ -2012,7 +2014,7 @@ fn codegen_fixed_array_mod<'a>(
         string_table,
         import_func_map,
         global_var_map,
-        2,
+        prepushed_vals + 2,
         scopes,
         file_name_chart,
     )?;
