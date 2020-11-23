@@ -351,6 +351,7 @@ fn mavm_codegen_statement(
                     global_var_map,
                     prepushed_vals,
                     &mut inner_scopes,
+                    file_name_chart,
                 )?
             } else {
                 (label_gen, code, prepushed_vals)
