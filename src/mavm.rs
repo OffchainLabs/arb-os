@@ -262,6 +262,14 @@ impl CodePt {
             CodePt::Null => Value::Int(Uint256::zero()),
         }
     }
+
+    pub fn hash_to_bytes(&self) -> Vec<u8> {
+        if let Value::Int(ui) = self.avm_hash() {
+            ui.to_bytes_be()
+        } else {
+            panic!();
+        }
+    }
 }
 
 impl fmt::Display for CodePt {
@@ -384,6 +392,14 @@ impl Value {
         match self {
             Value::Int(i) => i.to_usize(),
             _ => None,
+        }
+    }
+
+    pub fn hash_to_bytes(&self) -> Vec<u8> {
+        if let Value::Int(ui) = self.avm_hash() {
+            ui.to_bytes_be()
+        } else {
+            panic!();
         }
     }
 
@@ -532,6 +548,7 @@ pub enum AVMOpcode {
     PushInsnImm,
     OpenInsn,
     Sideload,
+    VmHash,
     EcRecover = 0x80,
     EcAdd,
     EcMul,
@@ -557,7 +574,8 @@ impl MiniProperties for Opcode {
             | Opcode::AVMOpcode(AVMOpcode::GetGas)
             | Opcode::AVMOpcode(AVMOpcode::Jump)
             | Opcode::AVMOpcode(AVMOpcode::Cjump)
-            | Opcode::AVMOpcode(AVMOpcode::Sideload) => false,
+            | Opcode::AVMOpcode(AVMOpcode::Sideload)
+            | Opcode::AVMOpcode(AVMOpcode::VmHash) => false,
             _ => true,
         }
     }
@@ -628,6 +646,7 @@ impl Opcode {
             "getgas" => Opcode::AVMOpcode(AVMOpcode::GetGas),
             "errset" => Opcode::AVMOpcode(AVMOpcode::ErrSet),
             "sideload" => Opcode::AVMOpcode(AVMOpcode::Sideload),
+            "vmhash" => Opcode::AVMOpcode(AVMOpcode::VmHash),
             "ecrecover" => Opcode::AVMOpcode(AVMOpcode::EcRecover),
             "ecadd" => Opcode::AVMOpcode(AVMOpcode::EcAdd),
             "ecmul" => Opcode::AVMOpcode(AVMOpcode::EcMul),
@@ -704,6 +723,7 @@ impl Opcode {
             0x79 => Some(Opcode::AVMOpcode(AVMOpcode::PushInsnImm)),
             0x7a => Some(Opcode::AVMOpcode(AVMOpcode::OpenInsn)),
             0x7b => Some(Opcode::AVMOpcode(AVMOpcode::Sideload)),
+            0x7c => Some(Opcode::AVMOpcode(AVMOpcode::VmHash)),
             0x80 => Some(Opcode::AVMOpcode(AVMOpcode::EcRecover)),
             0x81 => Some(Opcode::AVMOpcode(AVMOpcode::EcAdd)),
             0x82 => Some(Opcode::AVMOpcode(AVMOpcode::EcMul)),
@@ -782,6 +802,7 @@ impl Opcode {
             Opcode::AVMOpcode(AVMOpcode::PushInsnImm) => Some(0x79),
             Opcode::AVMOpcode(AVMOpcode::OpenInsn) => Some(0x7a),
             Opcode::AVMOpcode(AVMOpcode::Sideload) => Some(0x7b),
+            Opcode::AVMOpcode(AVMOpcode::VmHash) => Some(0x7c),
             Opcode::AVMOpcode(AVMOpcode::EcRecover) => Some(0x80),
             Opcode::AVMOpcode(AVMOpcode::EcAdd) => Some(0x81),
             Opcode::AVMOpcode(AVMOpcode::EcMul) => Some(0x82),

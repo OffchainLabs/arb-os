@@ -19,7 +19,10 @@ use std::fmt;
 use std::fs::File;
 use std::io::{stdin, BufWriter, Write};
 use std::path::Path;
+use std::rc::Rc;
 use std::str::FromStr;
+use ethers_core::utils::keccak256;
+
 
 const MAX_PAIRING_SIZE: u64 = 30;
 
@@ -184,6 +187,14 @@ impl ValueStack {
                 }
             })
             .collect()
+    }
+
+    pub fn hash_to_bytes(&self) -> Vec<u8> {
+        let mut ret = Value::none();
+        for val in self.contents.iter().rev() {
+            ret = Value::Tuple(Rc::new(vec![val.clone(), ret]));
+        }
+        ret.hash_to_bytes()
     }
 }
 
@@ -693,6 +704,24 @@ impl Machine {
             file_name_chart: program.file_name_chart,
             total_gas_usage: Uint256::zero(),
             trace_writer: None,
+        }
+    }
+
+    pub fn hash(&self) -> Uint256 {
+        match self.state {
+            MachineState::Stopped => Uint256::zero(),
+            MachineState::Error(_) => Uint256::one(),
+            MachineState::Running(codept) => {
+                let mut buf = codept.hash_to_bytes();
+                buf.extend(self.stack.hash_to_bytes());
+                buf.extend(self.aux_stack.hash_to_bytes());
+                buf.extend(self.register.hash_to_bytes());
+                buf.extend(self.static_val.hash_to_bytes());
+                buf.extend(self.arb_gas_remaining.to_bytes_be());
+                buf.extend(self.err_codepoint.hash_to_bytes());
+                buf.extend(Value::none().hash_to_bytes());
+                Uint256::from_bytes(&keccak256(&buf))
+            }
         }
     }
 
@@ -1216,6 +1245,7 @@ impl Machine {
                 Opcode::AVMOpcode(AVMOpcode::EcMul) => 82_000,
                 Opcode::AVMOpcode(AVMOpcode::EcPairing) => self.gas_for_pairing(),
                 Opcode::AVMOpcode(AVMOpcode::Sideload) => 10,
+                Opcode::AVMOpcode(AVMOpcode::VmHash) => 0,
                 _ => return None,
             })
         } else {
@@ -1901,6 +1931,11 @@ impl Machine {
                     },
                     Opcode::AVMOpcode(AVMOpcode::Sideload) => {
                         self.stack.push(Value::none());
+                        self.incr_pc();
+                        Ok(true)
+                    }
+                    Opcode::AVMOpcode(AVMOpcode::VmHash) => {
+                        self.stack.push_uint(self.hash());
                         self.incr_pc();
                         Ok(true)
                     }
