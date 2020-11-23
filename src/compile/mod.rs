@@ -434,11 +434,11 @@ pub fn compile_from_folder(
             name,
         ));
     }
-    for module in &mut typechecked {
+    /*for module in &mut typechecked {
         for _func in &mut module.checked_funcs {
-            //func.recursive_apply(print_node, &"    ".to_string(), &mut 0);
+            func.recursive_apply(print_node, &"    ".to_string(), &mut 0);
         }
-    }
+    }*/
     if inline {
         typechecked.iter_mut().for_each(|module| module.inline());
     }
