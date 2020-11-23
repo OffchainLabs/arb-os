@@ -23,6 +23,7 @@ use std::bytearray::bytearray_size;
 use std::bytearray::bytearray_getByte;
 use std::bytearray::bytearray_get256;
 use std::bytearray::bytearray_set256;
+use std::bytearray::bytearray_extract;
 
 use std::sha256::sha256_byteArray;
 
@@ -143,7 +144,7 @@ public impure func precompile_0x05() {  // modexp
         let base = bytearray_extract(calldata, 96, baseLen);
         let exp = bytearray_extract(calldata, 96+baseLen, expLen);
         let mod = bytearray_extract(calldata, 96+baseLen+expLen, modLen);
-        
+
         //TODO
     }
 
