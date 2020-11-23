@@ -1714,6 +1714,9 @@ impl Machine {
                     Opcode::AVMOpcode(AVMOpcode::GetBuffer64) => {
                         let buf = self.stack.pop_buffer(&self.state)?;
                         let offset = self.stack.pop_usize(&self.state)?;
+                        if offset + 7 < offset {
+                            return Err(ExecutionError::new("buffer overflow", &self.state, Some(Value::Int(Uint256::from_usize(offset)))))
+                        }
                         let mut res = [0u8; 8];
                         for i in 0..8 {
                             res[i] = buf.read_byte(offset+i);
@@ -1725,6 +1728,9 @@ impl Machine {
                     Opcode::AVMOpcode(AVMOpcode::GetBuffer256) => {
                         let buf = self.stack.pop_buffer(&self.state)?;
                         let offset = self.stack.pop_usize(&self.state)?;
+                        if offset + 31 < offset {
+                            return Err(ExecutionError::new("buffer overflow", &self.state, Some(Value::Int(Uint256::from_usize(offset)))))
+                        }
                         let mut res = [0u8; 32];
                         for i in 0..32 {
                             res[i] = buf.read_byte(offset+i);
@@ -1745,6 +1751,9 @@ impl Machine {
                     Opcode::AVMOpcode(AVMOpcode::SetBuffer64) => {
                         let buf = self.stack.pop_buffer(&self.state)?;
                         let offset = self.stack.pop_usize(&self.state)?;
+                        if offset + 7 < offset {
+                            return Err(ExecutionError::new("buffer overflow", &self.state, Some(Value::Int(Uint256::from_usize(offset)))))
+                        }
                         let val = self.stack.pop_uint(&self.state)?;
                         let mut nbuf = buf;
                         let bytes = val.to_bytes_be();
@@ -1758,6 +1767,9 @@ impl Machine {
                     Opcode::AVMOpcode(AVMOpcode::SetBuffer256) => {
                         let buf = self.stack.pop_buffer(&self.state)?;
                         let offset = self.stack.pop_usize(&self.state)?;
+                        if offset + 31 < offset {
+                            return Err(ExecutionError::new("buffer overflow", &self.state, Some(Value::Int(Uint256::from_usize(offset)))))
+                        }
                         let val = self.stack.pop_uint(&self.state)?;
                         let mut nbuf = buf;
                         let bytes = val.to_bytes_be();
