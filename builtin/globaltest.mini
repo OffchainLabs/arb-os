@@ -125,6 +125,11 @@ impure func tests() -> uint {
         return 22;
     }
 
+    let vmHash = asm() bytes32 { vmhash };
+    if (vmHash == asm() bytes32 { vmhash }) {  // should be different because we're on a different instruction
+        return 23;
+    }
+
     return struct9test();
 }
 
