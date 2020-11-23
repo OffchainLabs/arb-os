@@ -49,6 +49,12 @@ public impure func precompiles_init(acctStore: AccountStore) -> option<AccountSt
         false,
     )?;
     acctStore = accountStore_createBuiltinContract(
+            acctStore,
+            address(0x05),
+            precompile_0x05,
+            false,
+        )?;
+    acctStore = accountStore_createBuiltinContract(
     	acctStore,
         address(0x06),
         precompile_0x06,
@@ -121,6 +127,24 @@ public impure func precompile_0x04() {  // identity function
         if (success) {
             evmOp_return(0, bytearray_size(calldata));
         }
+    }
+
+    evmOp_revert_knownPc(0, 0, 0);
+}
+
+public impure func precompile_0x05() {  // modexp
+    if let Some(topFrame) = evmCallStack_topFrame() {
+        let calldata = evmCallFrame_getCalldata(topFrame);
+
+        let baseLen = bytearray_get256(calldata, 0);
+        let expLen = bytearray_get256(calldata, 0);
+        let modLen = bytearray_get256(calldata, 0);
+
+        let base = bytearray_extract(calldata, 96, baseLen);
+        let exp = bytearray_extract(calldata, 96+baseLen, expLen);
+        let mod = bytearray_extract(calldata, 96+baseLen+expLen, modLen);
+        
+        //TODO
     }
 
     evmOp_revert_knownPc(0, 0, 0);
