@@ -1,0 +1,63 @@
+//
+// Copyright 2020, Offchain Labs, Inc. All rights reserved.
+//
+
+use std::bytearray::ByteArray;
+use std::random::RandomGenerator;
+
+use std::bytearray::bytearray_size;
+use std::bytearray::bytearray_getByte;
+use std::bytearray::bytearray_get256;
+use std::bytearray::bytearray_set256;
+
+use std::keccak::keccak256;
+
+use std::random::random_new;
+use std::random::random_next;
+use std::random::random_nextMod;
+
+
+type BLSSignature = struct {
+    aField: uint,
+    anotherField: uint,
+}
+
+type BLSKey = struct {
+    x0: uint,
+    x1: uint,
+    y0: uint,
+    y1: uint
+}
+
+public func bls_makeKey(x0: uint, x1: uint, y0: uint, y1: uint) -> option<BLSKey> {
+    return Some(struct { x0: x0, x1: x1, y0: y0, y1: y1 });
+}
+
+public func bls_marshalPublicKey(key: BLSKey, ba: ByteArray, offset: uint) -> ByteArray {
+    return bytearray_set256(
+        bytearray_set256(
+            bytearray_set256(
+                bytearray_set256(
+                    ba,
+                    offset,
+                    key.x0
+                ),
+                offset+32,
+                key.x1
+            ),
+            offset+2*32,
+            key.y0
+        ),
+        offset+3*32,
+        key.y1
+    );
+}
+
+public func bls_verifySignature(
+    numMsgs:   uint,
+    messages:  []ByteArray,
+    keys:      []BLSKey,
+    signature: BLSSignature
+) -> bool {
+    return true;
+}

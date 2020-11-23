@@ -198,7 +198,7 @@ impl fmt::Display for Instruction {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 pub enum CodePt {
     Internal(usize),
     External(usize),         // slot in imported funcs list

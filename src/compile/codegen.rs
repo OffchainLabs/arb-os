@@ -42,6 +42,7 @@ pub fn mavm_codegen(
     string_table: &StringTable,
     imported_funcs: &[ImportedFunc],
     global_vars: &[GlobalVarDecl],
+    file_name_chart: &mut HashMap<u64, String>,
 ) -> Result<Vec<Instruction>, CodegenError> {
     let mut import_func_map = HashMap::new();
     for imp_func in imported_funcs {
@@ -64,6 +65,7 @@ pub fn mavm_codegen(
                 string_table,
                 &import_func_map,
                 &global_var_map,
+                file_name_chart,
             )?;
             label_gen = lg;
             funcs_code.insert(id, function_code);
@@ -91,6 +93,7 @@ fn mavm_codegen_func(
     string_table: &StringTable,
     import_func_map: &HashMap<StringId, Label>,
     global_var_map: &HashMap<StringId, usize>,
+    file_name_chart: &mut HashMap<u64, String>,
 ) -> Result<(LabelGenerator, Vec<Instruction>), CodegenError> {
     let mut code = vec![];
     let location = func.location;
@@ -118,6 +121,7 @@ fn mavm_codegen_func(
         string_table,
         import_func_map,
         global_var_map,
+        file_name_chart,
     )?;
     label_gen = lg;
 
@@ -159,6 +163,7 @@ fn add_args_to_locals_table(
     string_table: &StringTable,
     import_func_map: &HashMap<StringId, Label>,
     global_var_map: &HashMap<StringId, usize>,
+    file_name_chart: &mut HashMap<u64, String>,
 ) -> Result<(LabelGenerator, usize, bool), CodegenError> {
     let mut locals_map = HashMap::new();
     for (index, arg) in args.iter().enumerate() {
@@ -176,6 +181,7 @@ fn add_args_to_locals_table(
         global_var_map,
         0,
         &mut vec![],
+        file_name_chart,
     )
     .map(|(a, b, c, _)| (a, b, c))
 }
@@ -201,6 +207,7 @@ fn mavm_codegen_statements(
     global_var_map: &HashMap<StringId, usize>,
     prepushed_vals: usize,
     scopes: &mut Vec<(String, Label, Option<Type>)>,
+    file_name_chart: &mut HashMap<u64, String>,
 ) -> Result<(LabelGenerator, usize, bool, HashMap<StringId, usize>), CodegenError> {
     let mut bindings = HashMap::new();
     for statement in statements {
@@ -216,6 +223,7 @@ fn mavm_codegen_statements(
             global_var_map,
             prepushed_vals,
             scopes,
+            file_name_chart,
         )?;
         label_gen = lg;
         num_locals = max(statement_locals, num_locals);
@@ -250,6 +258,7 @@ fn mavm_codegen_statement(
     global_var_map: &HashMap<StringId, usize>,
     prepushed_vals: usize,
     scopes: &mut Vec<(String, Label, Option<Type>)>,
+    file_name_chart: &mut HashMap<u64, String>,
 ) -> Result<(LabelGenerator, usize, bool, HashMap<StringId, usize>), CodegenError> {
     match &statement {
         TypeCheckedStatement::Noop(_) => Ok((label_gen, 0, false, HashMap::new())),
@@ -276,6 +285,7 @@ fn mavm_codegen_statement(
                 global_var_map,
                 prepushed_vals,
                 scopes,
+                file_name_chart,
             )?;
             if prepushed_vals > 0 {
                 c.push(Instruction::from_opcode(
@@ -364,6 +374,7 @@ fn mavm_codegen_statement(
                 global_var_map,
                 prepushed_vals,
                 scopes,
+                file_name_chart,
             )?;
             if expr.get_type() != Type::Void {
                 c.push(Instruction::from_opcode(
@@ -372,9 +383,9 @@ fn mavm_codegen_statement(
                 ));
                 if expr.get_type() != Type::Tuple(vec![]) {
                     println!(
-                        "Warning: expression statement at {} returns value of type {:?}, which is discarded",
+                        "Warning: expression statement in {} returns value of type {:?}, which is discarded",
                         if let Some(loc) = loc {
-                            format!("line: {} column: {}", loc.line, loc.column)
+                            format!("{} at line: {} column: {}", file_name_chart.get(&loc.file_id).unwrap_or(&"Unknown".to_string()), loc.line, loc.column)
                         } else {
                             "unknown location".to_string()
                         },
@@ -398,6 +409,7 @@ fn mavm_codegen_statement(
                     global_var_map,
                     prepushed_vals,
                     scopes,
+                    file_name_chart,
                 )?;
                 let mut bindings = HashMap::new();
                 bindings.insert(*name, slot_num);
@@ -424,6 +436,7 @@ fn mavm_codegen_statement(
                     global_var_map,
                     prepushed_vals,
                     scopes,
+                    file_name_chart,
                 )?;
                 label_gen = lg;
                 code = c;
@@ -470,6 +483,7 @@ fn mavm_codegen_statement(
                 global_var_map,
                 prepushed_vals,
                 scopes,
+                file_name_chart,
             )?;
             label_gen = lg;
             code = c;
@@ -492,6 +506,7 @@ fn mavm_codegen_statement(
                 global_var_map,
                 prepushed_vals,
                 scopes,
+                file_name_chart,
             )?;
             c.push(Instruction::from_opcode(Opcode::SetGlobalVar(*idx), *loc));
             Ok((lg, exp_locals, false, HashMap::new()))
@@ -525,6 +540,7 @@ fn mavm_codegen_statement(
                 global_var_map,
                 prepushed_vals,
                 scopes,
+                file_name_chart,
             )?;
             scopes.pop();
             label_gen = lg;
@@ -574,6 +590,7 @@ fn mavm_codegen_statement(
                 global_var_map,
                 prepushed_vals,
                 scopes,
+                file_name_chart,
             )?;
             label_gen = lg;
             num_locals = nl;
@@ -589,6 +606,7 @@ fn mavm_codegen_statement(
                 global_var_map,
                 prepushed_vals,
                 scopes,
+                file_name_chart,
             )?;
             label_gen = lg;
             code = c;
@@ -622,6 +640,7 @@ fn mavm_codegen_statement(
                 global_var_map,
                 prepushed_vals,
                 scopes,
+                file_name_chart,
             )?;
             Ok((lg, nl1, !might_continue, HashMap::new()))
         }
@@ -640,6 +659,7 @@ fn mavm_codegen_statement(
                     global_var_map,
                     prepushed_vals + i,
                     scopes,
+                    file_name_chart,
                 )?;
                 exp_locals = max(exp_locals, e_locals);
                 label_gen = lg;
@@ -662,6 +682,7 @@ fn mavm_codegen_statement(
                 global_var_map,
                 prepushed_vals,
                 scopes,
+                file_name_chart,
             )?;
             label_gen = lg;
             code = c;
@@ -686,6 +707,7 @@ fn mavm_codegen_statement(
                 global_var_map,
                 prepushed_vals,
                 scopes,
+                file_name_chart,
             )?;
             label_gen = lg;
             code = c;
@@ -728,6 +750,7 @@ fn mavm_codegen_statement(
                 global_var_map,
                 prepushed_vals,
                 scopes,
+                file_name_chart,
             )?;
             total_locals = max(total_locals, exp_locals);
 
@@ -754,6 +777,7 @@ fn mavm_codegen_statement(
                     global_var_map,
                     prepushed_vals,
                     scopes,
+                    file_name_chart,
                 )?;
                 can_continue |= else_can_continue;
                 total_locals = max(total_locals, else_locals);
@@ -826,6 +850,7 @@ fn mavm_codegen_if_arm(
     global_var_map: &HashMap<StringId, usize>,
     prepushed_vals: usize,
     scopes: &mut Vec<(String, Label, Option<Type>)>,
+    file_name_chart: &mut HashMap<u64, String>,
 ) -> Result<(LabelGenerator, usize, bool), CodegenError> {
     // (label_gen, num_labels, execution_might_continue)
     match arm {
@@ -842,6 +867,7 @@ fn mavm_codegen_if_arm(
                 global_var_map,
                 prepushed_vals,
                 scopes,
+                file_name_chart,
             )?;
             label_gen = lg;
             code = c;
@@ -865,6 +891,7 @@ fn mavm_codegen_if_arm(
                 global_var_map,
                 prepushed_vals,
                 scopes,
+                file_name_chart,
             )?;
             label_gen = lg;
             if might_continue_here {
@@ -890,6 +917,7 @@ fn mavm_codegen_if_arm(
                         global_var_map,
                         prepushed_vals,
                         scopes,
+                        file_name_chart,
                     )?;
                     Ok((
                         lg,
@@ -915,6 +943,7 @@ fn mavm_codegen_if_arm(
                 global_var_map,
                 prepushed_vals,
                 scopes,
+                file_name_chart,
             )?;
             code.push(Instruction::from_opcode(Opcode::Label(end_label), *loc));
             Ok((lg, nl, might_continue))
@@ -945,6 +974,7 @@ fn mavm_codegen_expr<'a>(
     global_var_map: &HashMap<StringId, usize>,
     prepushed_vals: usize,
     scopes: &mut Vec<(String, Label, Option<Type>)>,
+    file_name_chart: &mut HashMap<u64, String>,
 ) -> Result<(LabelGenerator, &'a mut Vec<Instruction>, usize), CodegenError> {
     match expr {
         TypeCheckedExpr::UnaryOp(op, tce, _, loc) => {
@@ -959,6 +989,7 @@ fn mavm_codegen_expr<'a>(
                 global_var_map,
                 prepushed_vals,
                 scopes,
+                file_name_chart,
             )?;
             label_gen = lg;
             code = c;
@@ -1001,6 +1032,7 @@ fn mavm_codegen_expr<'a>(
                 global_var_map,
                 prepushed_vals,
                 scopes,
+                file_name_chart,
             )?;
             c.push(Instruction::from_opcode_imm(
                 Opcode::AVMOpcode(AVMOpcode::Noop),
@@ -1026,6 +1058,7 @@ fn mavm_codegen_expr<'a>(
                 global_var_map,
                 prepushed_vals,
                 scopes,
+                file_name_chart,
             )?;
             let (lg, c, right_locals) = mavm_codegen_expr(
                 tce1,
@@ -1038,6 +1071,7 @@ fn mavm_codegen_expr<'a>(
                 global_var_map,
                 prepushed_vals + 1,
                 scopes,
+                file_name_chart,
             )?;
             label_gen = lg;
             code = c;
@@ -1098,6 +1132,7 @@ fn mavm_codegen_expr<'a>(
                 global_var_map,
                 prepushed_vals,
                 scopes,
+                file_name_chart,
             )?;
             let (lab, lg) = lg.next();
             c.push(Instruction::from_opcode(
@@ -1124,6 +1159,7 @@ fn mavm_codegen_expr<'a>(
                 global_var_map,
                 prepushed_vals,
                 scopes,
+                file_name_chart,
             )?;
             c.push(Instruction::from_opcode(Opcode::Label(lab), *loc));
             Ok((lg, c, max(num_locals, max(left_locals, right_locals))))
@@ -1140,6 +1176,7 @@ fn mavm_codegen_expr<'a>(
                 global_var_map,
                 prepushed_vals,
                 scopes,
+                file_name_chart,
             )?;
             let (lab, lg) = lg.next();
             c.push(Instruction::from_opcode(
@@ -1170,6 +1207,7 @@ fn mavm_codegen_expr<'a>(
                 global_var_map,
                 prepushed_vals,
                 scopes,
+                file_name_chart,
             )?;
             c.push(Instruction::from_opcode(Opcode::Label(lab), *loc));
             Ok((lg, c, max(num_locals, max(left_locals, right_locals))))
@@ -1225,6 +1263,7 @@ fn mavm_codegen_expr<'a>(
                 global_var_map,
                 prepushed_vals,
                 scopes,
+                file_name_chart,
             )?;
             c.push(Instruction::from_opcode_imm(
                 Opcode::TupleGet(tuple_size),
@@ -1245,6 +1284,7 @@ fn mavm_codegen_expr<'a>(
                 global_var_map,
                 prepushed_vals,
                 scopes,
+                file_name_chart,
             )?;
             label_gen = lg;
             code = c;
@@ -1280,6 +1320,7 @@ fn mavm_codegen_expr<'a>(
                     global_var_map,
                     prepushed_vals + i,
                     scopes,
+                    file_name_chart,
                 )?;
                 args_locals = max(args_locals, arg_locals);
                 label_gen = lg;
@@ -1301,6 +1342,7 @@ fn mavm_codegen_expr<'a>(
                 global_var_map,
                 prepushed_vals + n_args + 1,
                 scopes,
+                file_name_chart,
             )?;
             c.push(Instruction::from_opcode(
                 Opcode::AVMOpcode(AVMOpcode::Jump),
@@ -1327,6 +1369,7 @@ fn mavm_codegen_expr<'a>(
                 global_var_map,
                 prepushed_vals,
                 scopes,
+                file_name_chart,
             )?;
             if let Some(ret_expr) = ret_expr {
                 let new_locals = locals.push_multi(block_locals);
@@ -1341,6 +1384,7 @@ fn mavm_codegen_expr<'a>(
                     global_var_map,
                     prepushed_vals,
                     scopes,
+                    file_name_chart,
                 )
                 .map(|(lg, code, exp_locals)| (lg, code, max(num_locals, max(exp_locals, nl))))?;
                 code.push(Instruction::from_opcode(Opcode::Label(bottom_label), *loc));
@@ -1372,6 +1416,7 @@ fn mavm_codegen_expr<'a>(
                     global_var_map,
                     prepushed_vals + i,
                     scopes,
+                    file_name_chart,
                 )?;
                 struct_locals = max(struct_locals, field_locals);
                 label_gen = lg;
@@ -1408,6 +1453,7 @@ fn mavm_codegen_expr<'a>(
                     global_var_map,
                     prepushed_vals + i,
                     scopes,
+                    file_name_chart,
                 )?;
                 tuple_locals = max(field_locals, tuple_locals);
                 label_gen = lg;
@@ -1456,6 +1502,7 @@ fn mavm_codegen_expr<'a>(
                 global_var_map,
                 prepushed_vals,
                 scopes,
+                file_name_chart,
             )
         }
         TypeCheckedExpr::FixedArrayRef(expr1, expr2, size, _, loc) => {
@@ -1470,6 +1517,7 @@ fn mavm_codegen_expr<'a>(
                 global_var_map,
                 prepushed_vals,
                 scopes,
+                file_name_chart,
             )?;
             let (lg, c, exp2_locals) = mavm_codegen_expr(
                 expr2,
@@ -1482,6 +1530,7 @@ fn mavm_codegen_expr<'a>(
                 global_var_map,
                 prepushed_vals + 1,
                 scopes,
+                file_name_chart,
             )?;
             label_gen = lg;
             code = c;
@@ -1547,6 +1596,7 @@ fn mavm_codegen_expr<'a>(
                 global_var_map,
                 prepushed_vals,
                 scopes,
+                file_name_chart,
             )
         }
         TypeCheckedExpr::NewArray(sz_expr, base_type, array_type, loc) => {
@@ -1581,6 +1631,7 @@ fn mavm_codegen_expr<'a>(
                 global_var_map,
                 prepushed_vals,
                 scopes,
+                file_name_chart,
             )
         }
         TypeCheckedExpr::NewFixedArray(sz, bo_expr, _, loc) => {
@@ -1598,6 +1649,7 @@ fn mavm_codegen_expr<'a>(
                         global_var_map,
                         prepushed_vals,
                         scopes,
+                        file_name_chart,
                     )?;
                     expr_locals = some_locals;
                     label_gen = lg;
@@ -1680,6 +1732,7 @@ fn mavm_codegen_expr<'a>(
                 global_var_map,
                 prepushed_vals,
                 scopes,
+                file_name_chart,
             )
         }
         TypeCheckedExpr::ArrayMod(arr, index, val, _, loc) => {
@@ -1710,6 +1763,7 @@ fn mavm_codegen_expr<'a>(
                 global_var_map,
                 prepushed_vals,
                 scopes,
+                file_name_chart,
             )
         }
         TypeCheckedExpr::FixedArrayMod(arr, index, val, size, _, loc) => codegen_fixed_array_mod(
@@ -1726,6 +1780,7 @@ fn mavm_codegen_expr<'a>(
             global_var_map,
             *loc,
             scopes,
+            file_name_chart,
         ),
         TypeCheckedExpr::MapMod(map_expr, key_expr, val_expr, _, loc) => {
             let call_type = Type::Func(
@@ -1759,6 +1814,7 @@ fn mavm_codegen_expr<'a>(
                 global_var_map,
                 prepushed_vals,
                 scopes,
+                file_name_chart,
             )
         }
         TypeCheckedExpr::StructMod(struc, index, val, t, loc) => {
@@ -1773,6 +1829,7 @@ fn mavm_codegen_expr<'a>(
                 global_var_map,
                 prepushed_vals,
                 scopes,
+                file_name_chart,
             )?;
             let (lg, c, struc_locals) = mavm_codegen_expr(
                 struc,
@@ -1785,6 +1842,7 @@ fn mavm_codegen_expr<'a>(
                 global_var_map,
                 prepushed_vals + 1,
                 scopes,
+                file_name_chart,
             )?;
             label_gen = lg;
             code = c;
@@ -1815,6 +1873,7 @@ fn mavm_codegen_expr<'a>(
             global_var_map,
             prepushed_vals,
             scopes,
+            file_name_chart,
         ),
         TypeCheckedExpr::Asm(_, insns, args, _) => {
             let n_args = args.len();
@@ -1831,6 +1890,7 @@ fn mavm_codegen_expr<'a>(
                     global_var_map,
                     prepushed_vals + i,
                     scopes,
+                    file_name_chart,
                 )?;
                 args_locals = max(args_locals, arg_locals);
                 label_gen = lg;
@@ -1853,6 +1913,7 @@ fn mavm_codegen_expr<'a>(
                 global_var_map,
                 prepushed_vals,
                 scopes,
+                file_name_chart,
             )?;
             let (extract, label_gen) = label_gen.next();
             code.push(Instruction::from_opcode(
@@ -1913,6 +1974,7 @@ fn codegen_fixed_array_mod<'a>(
     global_var_map: &HashMap<StringId, usize>,
     location: Option<Location>,
     scopes: &mut Vec<(String, Label, Option<Type>)>,
+    file_name_chart: &mut HashMap<u64, String>,
 ) -> Result<(LabelGenerator, &'a mut Vec<Instruction>, usize), CodegenError> {
     let (label_gen, code, val_locals) = mavm_codegen_expr(
         val_expr,
@@ -1925,6 +1987,7 @@ fn codegen_fixed_array_mod<'a>(
         global_var_map,
         0,
         scopes,
+        file_name_chart,
     )?;
     let (label_gen, code, arr_locals) = mavm_codegen_expr(
         arr_expr,
@@ -1937,6 +2000,7 @@ fn codegen_fixed_array_mod<'a>(
         global_var_map,
         1,
         scopes,
+        file_name_chart,
     )?;
     let (mut label_gen, code, idx_locals) = mavm_codegen_expr(
         idx_expr,
@@ -1949,6 +2013,7 @@ fn codegen_fixed_array_mod<'a>(
         global_var_map,
         2,
         scopes,
+        file_name_chart,
     )?;
     if size != 8 {
         // TODO: safe for if-condition to say size does not equal any power of 8

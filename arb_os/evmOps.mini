@@ -399,7 +399,7 @@ public impure func evmOp_sstore(storageAddr: uint, value: uint) {
             // the currently running code was given a gas amount that wouldn't allow a storage write on EVM
             // for compatibility with EVM code that uses gas limit to prevent writes, we cause out-of-gas error here
             asm(1,) { setgas };
-            asm(1,1) uint { plus };  // will get an out-of-gas error on this instruction
+            let _ = asm(1,1) uint { plus };  // will get an out-of-gas error on this instruction
         } else {
             if let Some(_) = evmCallStack_setTopFrameStorageCell(
                 storageAddr,
@@ -741,6 +741,19 @@ public impure func evmOp_revert(memOffset: uint, memNbytes: uint) {
     evm_runtimePanic(28);
 }
 
+public impure func evmOp_revert_knownCodePc(codeAddr: address, evmPc: uint, memOffset: uint, memNbytes: uint) {
+    asm((10000, codeAddr, evmPc),) { debugprint };
+    evmOp_revert(memOffset, memNbytes);
+}
+
+public impure func evmOp_revert_knownPc(evmPc: uint, memOffset: uint, memNbytes: uint) {
+    let codeAddr = address(0);
+    if let Some(acct) = evmCallStack_runningCodeFromAccount() {
+        codeAddr = account_getAddress(acct);
+    }
+    evmOp_revert_knownCodePc(codeAddr, evmPc, memOffset, memNbytes);
+}
+
 public impure func evmOp_return(memOffset: uint, memNbytes: uint) {
     let _ = evmCallStack_returnFromCall(true, memOffset, memNbytes);
 
@@ -812,8 +825,8 @@ impure func doCreationOpcode(value: uint, offset: uint, length: uint, newAddress
         offset,
         length
     );
-    if let Some(res) = translateEvmCodeSegment(bytestream_new(constructorCode)) {
-        let (startPoint, evmJumpTable) = res;
+    if let Some(res) = translateEvmCodeSegment(bytestream_new(constructorCode), false) {
+        let (startPoint, evmJumpTable, _) = res;
 
         // Create a new account to run the constructor code.
         if (evmCallStack_setAccount(
@@ -912,8 +925,8 @@ impure func doCreationOpcode(value: uint, offset: uint, length: uint, newAddress
 
             if (constructorSucceeded) {
                 if let Some(contractCode) = evmCallStack_getTopFrameReturnData() {
-                    if let Some(res) = translateEvmCodeSegment(bytestream_new(contractCode)) {
-                        let (startPoint2, evmJumpTable2) = res;
+                    if let Some(res) = translateEvmCodeSegment(bytestream_new(contractCode), false) {
+                        let (startPoint2, evmJumpTable2, _) = res;
                         if let Some(oldAcct) = evmCallStack_getAccount(newAddress) {
                             let storage = storageMap_new();
                             if let Some(st) = account_getAllStorage(oldAcct) {
@@ -946,7 +959,7 @@ impure func doCreationOpcode(value: uint, offset: uint, length: uint, newAddress
 
 impure func evm_error() {
     // This should be called when EVM code has generated an EVM error.
-    evmOp_revert(0, 0);  // should never return
+    evmOp_revert_knownPc(0xffffffffffffffff, 0, 0);  // should never return
 
 }
 

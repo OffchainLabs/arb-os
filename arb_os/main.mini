@@ -2,6 +2,7 @@
 // Copyright 2020, Offchain Labs, Inc. All rights reserved.
 //
 
+
 use accounts::AccountStore;
 use accounts::accountStore_init;
 use accounts::getGlobalAccountStore;
@@ -18,6 +19,7 @@ use contractTemplates::getArbInfoAddress;
 use contractTemplates::getErc20storage;
 use contractTemplates::getErc721storage;
 use contractTemplates::getArbInfoStorage;
+use decompression::decompression_init;
 use errorHandler::errorHandler_init;
 use evmCallStack::evmCallStack_init;
 use evmLogs::EvmLogs;
@@ -25,6 +27,8 @@ use gasAccounting::GasUsage;
 use gasAccounting::gasAccounting_init;
 use inbox::inbox_init;
 use inbox::inbox_get;
+use messages::TxRequestData;
+
 use output::txReceipts_init;
 use precompiles::precompiles_init;
 
@@ -36,6 +40,7 @@ use std::bytestream::ByteStream;
 use std::bytestream::bytestream_new;
 use std::storageMap::StorageMap;
 
+
 use decompression::decompression_init;
 use gasAccounting::getNextRequestFromCongestionAuction;
 use messages::handleL1Request; // return None if message format error; Some(()) if other error; if no error, never return
@@ -44,20 +49,6 @@ use output::emitTxReceipt;
 use arbsys::arbsys_txcall;
 
 use inbox::IncomingRequest;
-
-
-// TxRequestData is declared identically in message.mini and elsewhere.
-type TxRequestData = struct {
-    maxGas: uint,
-    gasPrice: uint,
-    seqNum: option<uint>,
-    caller: address,
-    calleeAddr: address,
-    value: uint,
-    calldata: ByteArray,
-    nonMutating: bool,
-    incomingRequest: IncomingRequest,
-}
 
 
 impure func main() {
@@ -115,8 +106,9 @@ impure func initializeContractTemplates() -> option<()> {
     let acctStore = getGlobalAccountStore();
 
     let code = bytearray_unmarshalBytes(getErc20code());
-    let (initCodePt, evmJumpTable) = translateEvmCodeSegment(
-        bytestream_new(code)
+    let (initCodePt, evmJumpTable, _) = translateEvmCodeSegment(
+        bytestream_new(code),
+        false
     )?;
     acctStore = accountStore_createAccountFromEvmCode(
         acctStore,
@@ -128,8 +120,9 @@ impure func initializeContractTemplates() -> option<()> {
     )?;
 
     let code = bytearray_unmarshalBytes(getErc721code());
-    let (initCodePt, evmJumpTable) = translateEvmCodeSegment(
-        bytestream_new(code)
+    let (initCodePt, evmJumpTable, _) = translateEvmCodeSegment(
+        bytestream_new(code),
+        false
     )?;
     acctStore = accountStore_createAccountFromEvmCode(
         acctStore,
@@ -141,8 +134,9 @@ impure func initializeContractTemplates() -> option<()> {
     )?;
 
     let code = bytearray_unmarshalBytes(getArbInfoCode());
-    let (initCodePt, evmJumpTable) = translateEvmCodeSegment(
-        bytestream_new(code)
+    let (initCodePt, evmJumpTable, _) = translateEvmCodeSegment(
+        bytestream_new(code),
+        false
     )?;
     acctStore = accountStore_createAccountFromEvmCode(
         acctStore,

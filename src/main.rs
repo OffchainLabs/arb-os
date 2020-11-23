@@ -14,6 +14,7 @@ use std::fs::File;
 use std::io;
 use std::path::Path;
 
+use crate::run::ProfilerMode;
 use crate::uint256::Uint256;
 use clap::Clap;
 
@@ -70,14 +71,16 @@ struct Replay {
     #[clap(short, long)]
     debug: bool,
     #[clap(short, long)]
-    profiler: bool,
+    profiler: ProfilerMode,
     #[clap(short, long)]
     trace: Option<String>,
 }
 
 #[derive(Clap, Debug)]
-struct Input {
+struct Profiler {
     input: String,
+    #[clap(short, long)]
+    mode: ProfilerMode,
 }
 
 #[derive(Clap, Debug)]
@@ -85,7 +88,7 @@ enum Args {
     Compile(CompileStruct),
     Run(RunStruct),
     EvmDebug(EvmDebug),
-    Profiler(Input),
+    Profiler(Profiler),
     Replay(Replay),
     MakeTestLogs,
     MakeBenchmarks,
@@ -195,11 +198,12 @@ fn main() -> Result<(), CompileError> {
         }
 
         Args::Profiler(path) => {
-            let path = path.input;
+            let input = path.input;
             profile_gen_from_file(
-                path.as_ref(),
+                input.as_ref(),
                 Vec::new(),
                 RuntimeEnvironment::new(Uint256::from_usize(1111)),
+                path.mode,
             );
         }
 
