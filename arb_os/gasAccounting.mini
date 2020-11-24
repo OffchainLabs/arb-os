@@ -80,8 +80,8 @@ public impure func gasAccounting_startTxCharges(
     // Start charging a new Tx for ArbGas usage
     // The caller should already have verified that the payer has enough funds, but we'll return None if not.
 
-    if (maxGas >= asm(255, 1) uint { shl }) {
-        maxGas = asm(255, 1) uint { shl } - 1;
+    if (maxGas >= asm(255, 1) uint { shl } / 1000) {
+        maxGas = (asm(255, 1) uint { shl } / 1000) - 1;
     }
 
     // take funds from the payer, enough to pay for maxGas at gasPrice
@@ -110,7 +110,7 @@ public impure func gasAccounting_startTxCharges(
         })
     };
 
-    asm(maxGas,) { setgas };
+    asm(1000*maxGas,) { setgas };
     return Some(());
 }
 
@@ -157,18 +157,19 @@ public impure func gasAccounting_extraGasCharge(numArbGas: uint) {
     // callers should assess the charge for a thing before they do the thing, because we can
     //      only take the gas that the user has remaining
 
-    let gasLeft = asm() uint { getgas };
-    if (gasLeft >= asm (1, 255) uint { shl }) {
+    let gasLeftMillis = asm() uint { getgas };
+    if (gasLeftMillis >= asm (1, 255) uint { shl }) {
         return;   // we're not currently charging a tx, so don't assess a charge
     }
+    let numArbGasMillis = numArbGas * 1000;
 
-    if (numArbGas >= gasLeft) {
+    if (numArbGasMillis >= gasLeftMillis) {
         // user can't cover the charge, so we'll take all but 1 of their gas,
         //      ensuring that they'll get an out-of-gas error
-        numArbGas = gasLeft-1;
+        numArbGasMillis = gasLeftMillis-1;
     }
 
-    asm(gasLeft-numArbGas,) { setgas };
+    asm(gasLeftMillis-numArbGasMillis,) { setgas };
 }
 
 public impure func gasAccounting_pauseTxCharges() -> uint {
@@ -209,7 +210,7 @@ public impure func gasAccounting_resumeTxCharges(allocationRequested: uint) -> u
             )
         };
 
-        asm(allocationRequested,) { setgas };  // start charging the application
+        asm(allocationRequested*1000,) { setgas };  // start charging the application
         return allocationRequested;
     } else {
         // something went wrong: tried to resume tx charges when there isn't an active tx
@@ -221,14 +222,14 @@ public impure func gasAccounting_resumeTxCharges(allocationRequested: uint) -> u
 impure func switchToChargingOS() -> uint {
     // switch to charging the OS for gas, if we aren't already
     // return amount of the tx's gas that was left over in ArbGasRemaining
-    let gasRemaining = asm() uint { getgas };
-    if (gasRemaining >= asm(255, 1) uint { shl }) {
+    let gasRemainingMillis = asm() uint { getgas };
+    if (gasRemainingMillis >= asm(255, 1) uint { shl }) {
         // we were already charging the OS, tx has nothing remaining
         return 0;
     } else {
         // we were charging the tx; switch to charging the OS and return tx's unused amount from ArbGasRemaining
         asm(~0,) { setgas };
-        return gasRemaining;
+        return gasRemainingMillis/1000;
     }
 }
 

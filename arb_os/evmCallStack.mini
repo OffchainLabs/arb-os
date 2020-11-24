@@ -355,7 +355,7 @@ public impure func evmCallStack_doCall(
             // Add a stipend, charged to the caller, if non-zero value is transferred.
             // This is needed because Ethereum provides a stipend, and some code depends on that.
             // The size of our stipend was chosen experimentally, to make sure a call that will run on Ethereum will run here.
-            gas = gas + 20000;
+            gas = gas + 20;
         }
         if (gas > availableGas) {
             gas = availableGas;  // don't give the callee more gas than the caller has
@@ -414,10 +414,9 @@ public impure func evmCallStack_doCall(
             callvalue: balance,
             returnInfo: None<ReturnInfo>,
             memory: bytearray_new(0),
-            revertOnStorageWrite: // disallow storage write if gas provided < EVM gas cost of storage write
+            revertOnStorageWrite: // disallow storage write if this is a transfer funded entirely by the subsidy
                                   topFrame.revertOnStorageWrite
-                                  || (gas < 5000)
-                                  || ((balance > 0) && (gas < 7700)),
+                                  || ((balance > 0) && (gas <= 20)),
             evmLogs: topFrame.evmLogs,
             selfDestructQueue: topFrame.selfDestructQueue,
             resumeInfo: None<ResumeInfo>,

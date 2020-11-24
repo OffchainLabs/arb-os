@@ -73,7 +73,7 @@ public impure func tokens_erc20deposit(
     initEvmCallStack(
         0,               // treat as regular txcall
         struct {
-            maxGas: 1000000000000,  // gas will eventually be charged to the OS
+            maxGas: 1000000000,  // gas will eventually be charged to the OS
             gasPrice: 0,
             seqNum: None<uint>,
             caller: address(1),     // special caller address, so contract recognizes call as coming from OS
@@ -128,7 +128,7 @@ public impure func tokens_erc721deposit(
     initEvmCallStack(
         0,               // treat as regular txcall
         struct {
-            maxGas: 1000000000000,  // gas will eventually be charged to the OS
+            maxGas: 1000000000,  // gas will eventually be charged to the OS
             gasPrice: 0,
             seqNum: None<uint>,
             caller: address(1),     // special caller address, so contract recognizes call as coming from OS

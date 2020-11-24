@@ -881,7 +881,7 @@ impure func doCreationOpcode(value: uint, offset: uint, length: uint, newAddress
             //     we can't (yet) trust that our local callframe is in a reasonable state.
             //     So we have to use an if-statement to capture the return value.
             if (evmOp_call(
-                1000000000,  // gas allocation
+                1000000,  // gas allocation
                 uint(newAddress),
                 value,
                 0,           // no calldata passed to constructor
