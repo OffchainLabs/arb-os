@@ -18,6 +18,45 @@ use crate::stringtable::{StringId, StringTable};
 use crate::uint256::Uint256;
 use std::collections::HashMap;
 
+pub trait AbstractSyntaxTree {
+    fn child_nodes(&mut self) -> Vec<TypeCheckedNode> {
+        vec![]
+    }
+    fn recursive_apply<F, S, MS>(&mut self, func: F, state: &S, mut_state: &mut MS)
+    where
+        F: Fn(&mut TypeCheckedNode, &S, &mut MS) -> bool + Copy,
+        MS: Clone,
+    {
+        let mut children = self.child_nodes();
+        for child in &mut children {
+            let mut child_state = (*mut_state).clone();
+            let recurse = func(child, state, &mut child_state);
+            if recurse {
+                child.recursive_apply(func, state, &mut child_state);
+            }
+        }
+    }
+}
+
+#[derive(Debug)]
+pub enum TypeCheckedNode<'a> {
+    Statement(&'a mut TypeCheckedStatement),
+    Expression(&'a mut TypeCheckedExpr),
+    IfArm(&'a mut TypeCheckedIfArm),
+    StructField(&'a mut TypeCheckedStructField),
+}
+
+impl<'a> AbstractSyntaxTree for TypeCheckedNode<'a> {
+    fn child_nodes(&mut self) -> Vec<TypeCheckedNode> {
+        match self {
+            TypeCheckedNode::Statement(stat) => stat.child_nodes(),
+            TypeCheckedNode::Expression(exp) => exp.child_nodes(),
+            TypeCheckedNode::IfArm(arm) => arm.child_nodes(),
+            TypeCheckedNode::StructField(field) => field.child_nodes(),
+        }
+    }
+}
+
 ///An error encountered during typechecking
 #[derive(Debug)]
 pub struct TypeError {
@@ -40,7 +79,7 @@ pub struct PropertiesList {
 }
 
 ///A mini function that has been type checked.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct TypeCheckedFunc {
     pub name: StringId,
     pub args: Vec<FuncArg>,
@@ -52,9 +91,91 @@ pub struct TypeCheckedFunc {
     pub properties: PropertiesList,
 }
 
+impl AbstractSyntaxTree for TypeCheckedFunc {
+    fn child_nodes(&mut self) -> Vec<TypeCheckedNode> {
+        self.code
+            .iter_mut()
+            .map(|stat| TypeCheckedNode::Statement(stat))
+            .collect()
+    }
+}
+
 impl MiniProperties for TypeCheckedFunc {
     fn is_pure(&self) -> bool {
         self.code.iter().all(|statement| statement.is_pure())
+    }
+}
+
+fn strip_returns(to_strip: &mut TypeCheckedNode, _state: &(), _mut_state: &mut ()) -> bool {
+    if let TypeCheckedNode::Statement(stat) = to_strip {
+        if let TypeCheckedStatement::Return(exp, loc) = stat {
+            **stat = TypeCheckedStatement::Break(Some(exp.clone()), "_inline".to_string(), *loc);
+        } else if let TypeCheckedStatement::ReturnVoid(loc) = stat {
+            **stat = TypeCheckedStatement::Break(None, "_inline".to_string(), *loc);
+        }
+    }
+    true
+}
+
+fn inline(
+    to_do: &mut TypeCheckedNode,
+    state: &(&Vec<TypeCheckedFunc>, &StringTable),
+    _mut_state: &mut (),
+) -> bool {
+    if let TypeCheckedNode::Expression(exp) = to_do {
+        if let TypeCheckedExpr::FunctionCall(name, args, _, _, _) = exp {
+            let (mut code, block_exp) = if let TypeCheckedExpr::FuncRef(id, _, _) = **name {
+                let found_func = state.0.iter().find(|func| func.name == id);
+                if let Some(func) = found_func {
+                    let mut code: Vec<_> = args
+                        .iter()
+                        .zip(func.args.iter())
+                        .map(|(arg, otherarg)| {
+                            TypeCheckedStatement::Let(
+                                TypeCheckedMatchPattern::Simple(
+                                    otherarg.name,
+                                    otherarg.tipe.clone(),
+                                ),
+                                arg.clone(),
+                                None,
+                            )
+                        })
+                        .collect();
+                    code.append(&mut func.code.clone());
+                    let last = code.pop();
+                    let block_exp = if let Some(TypeCheckedStatement::Return(exp, _)) = last {
+                        Some(Box::new(exp))
+                    } else {
+                        if let Some(statement) = last {
+                            code.push(statement);
+                        }
+                        None
+                    };
+                    (code, block_exp)
+                } else {
+                    println!("fail 1");
+                    (vec![], None)
+                }
+            } else {
+                println!("fail 2");
+                (vec![], None)
+            };
+            for statement in code.iter_mut().rev() {
+                statement.recursive_apply(strip_returns, &(), &mut ())
+            }
+            **exp = TypeCheckedExpr::CodeBlock(code, block_exp, Some("_inline".to_string()), None);
+            false
+        } else {
+            true
+        }
+    } else {
+        true
+    }
+}
+
+impl TypeCheckedFunc {
+    pub fn inline(&mut self, funcs: &Vec<TypeCheckedFunc>, string_table: &StringTable) {
+        self.recursive_apply(inline, &(funcs, string_table), &mut ());
     }
 }
 
@@ -65,6 +186,7 @@ pub enum TypeCheckedStatement {
     Panic(Option<Location>),
     ReturnVoid(Option<Location>),
     Return(TypeCheckedExpr, Option<Location>),
+    Break(Option<TypeCheckedExpr>, String, Option<Location>),
     Expression(TypeCheckedExpr, Option<Location>),
     Let(TypeCheckedMatchPattern, TypeCheckedExpr, Option<Location>),
     AssignLocal(StringId, TypeCheckedExpr, Option<Location>),
@@ -90,6 +212,9 @@ impl MiniProperties for TypeCheckedStatement {
             | TypeCheckedStatement::Panic(_)
             | TypeCheckedStatement::ReturnVoid(_) => true,
             TypeCheckedStatement::Return(something, _) => something.is_pure(),
+            TypeCheckedStatement::Break(exp, _, _) => {
+                exp.clone().map(|exp| exp.is_pure()).unwrap_or(true)
+            }
             TypeCheckedStatement::Expression(expr, _) => expr.is_pure(),
             TypeCheckedStatement::Let(_, exp, _) => exp.is_pure(),
             TypeCheckedStatement::AssignLocal(_, exp, _) => exp.is_pure(),
@@ -117,6 +242,58 @@ impl MiniProperties for TypeCheckedStatement {
     }
 }
 
+impl AbstractSyntaxTree for TypeCheckedStatement {
+    fn child_nodes(&mut self) -> Vec<TypeCheckedNode> {
+        match self {
+            TypeCheckedStatement::Noop(_)
+            | TypeCheckedStatement::Panic(_)
+            | TypeCheckedStatement::ReturnVoid(_) => vec![],
+            TypeCheckedStatement::Return(exp, _)
+            | TypeCheckedStatement::Expression(exp, _)
+            | TypeCheckedStatement::Let(_, exp, _)
+            | TypeCheckedStatement::AssignLocal(_, exp, _)
+            | TypeCheckedStatement::AssignGlobal(_, exp, _)
+            | TypeCheckedStatement::DebugPrint(exp, _) => vec![TypeCheckedNode::Expression(exp)],
+            TypeCheckedStatement::Loop(stats, _) => stats
+                .iter_mut()
+                .map(|stat| TypeCheckedNode::Statement(stat))
+                .collect(),
+            TypeCheckedStatement::While(exp, stats, _) => vec![TypeCheckedNode::Expression(exp)]
+                .into_iter()
+                .chain(
+                    stats
+                        .iter_mut()
+                        .map(|stat| TypeCheckedNode::Statement(stat)),
+                )
+                .collect(),
+            TypeCheckedStatement::If(arm) => vec![TypeCheckedNode::IfArm(arm)],
+            TypeCheckedStatement::IfLet(_, exp, stats, ostats, _) => {
+                vec![TypeCheckedNode::Expression(exp)]
+                    .into_iter()
+                    .chain(
+                        stats
+                            .iter_mut()
+                            .map(|stat| TypeCheckedNode::Statement(stat)),
+                    )
+                    .chain(
+                        ostats
+                            .iter_mut()
+                            .flatten()
+                            .map(|stat| TypeCheckedNode::Statement(stat)),
+                    )
+                    .collect()
+            }
+            TypeCheckedStatement::Asm(_, exps, _) => exps
+                .iter_mut()
+                .map(|exp| TypeCheckedNode::Expression(exp))
+                .collect(),
+            TypeCheckedStatement::Break(oexp, _, _) => {
+                oexp.iter_mut().flat_map(|exp| exp.child_nodes()).collect()
+            }
+        }
+    }
+}
+
 ///A `MatchPattern` that has gone through type checking.
 #[derive(Debug, Clone)]
 pub enum TypeCheckedMatchPattern {
@@ -134,6 +311,28 @@ pub enum TypeCheckedIfArm {
         Option<Location>,
     ),
     Catchall(Vec<TypeCheckedStatement>, Option<Location>),
+}
+
+impl AbstractSyntaxTree for TypeCheckedIfArm {
+    fn child_nodes(&mut self) -> Vec<TypeCheckedNode> {
+        match self {
+            TypeCheckedIfArm::Cond(exp, stats, alt_stats, _) => {
+                vec![TypeCheckedNode::Expression(exp)]
+                    .into_iter()
+                    .chain(
+                        stats
+                            .iter_mut()
+                            .map(|stat| TypeCheckedNode::Statement(stat)),
+                    )
+                    .chain(alt_stats.iter_mut().map(|arm| TypeCheckedNode::IfArm(arm)))
+                    .collect()
+            }
+            TypeCheckedIfArm::Catchall(stats, _) => stats
+                .iter_mut()
+                .map(|stat| TypeCheckedNode::Statement(stat))
+                .collect(),
+        }
+    }
 }
 
 impl MiniProperties for TypeCheckedIfArm {
@@ -191,6 +390,7 @@ pub enum TypeCheckedExpr {
     CodeBlock(
         Vec<TypeCheckedStatement>,
         Option<Box<TypeCheckedExpr>>,
+        Option<String>,
         Option<Location>,
     ),
     StructInitializer(Vec<TypeCheckedStructField>, Type, Option<Location>),
@@ -281,7 +481,7 @@ impl MiniProperties for TypeCheckedExpr {
                     && fields_exprs.iter().all(|statement| statement.is_pure())
                     && properties.pure
             }
-            TypeCheckedExpr::CodeBlock(statements, return_expr, _) => {
+            TypeCheckedExpr::CodeBlock(statements, return_expr, _, _) => {
                 statements.iter().all(|statement| statement.is_pure())
                     && return_expr
                         .as_ref()
@@ -327,6 +527,73 @@ impl MiniProperties for TypeCheckedExpr {
     }
 }
 
+impl AbstractSyntaxTree for TypeCheckedExpr {
+    fn child_nodes(&mut self) -> Vec<TypeCheckedNode> {
+        match self {
+            TypeCheckedExpr::LocalVariableRef(_, _, _)
+            | TypeCheckedExpr::GlobalVariableRef(_, _, _)
+            | TypeCheckedExpr::FuncRef(_, _, _)
+            | TypeCheckedExpr::Const(_, _, _)
+            | TypeCheckedExpr::NewMap(_, _) => vec![],
+            TypeCheckedExpr::UnaryOp(_, exp, _, _)
+            | TypeCheckedExpr::Variant(exp, _)
+            | TypeCheckedExpr::TupleRef(exp, _, _, _)
+            | TypeCheckedExpr::DotRef(exp, _, _, _, _)
+            | TypeCheckedExpr::NewArray(exp, _, _, _)
+            | TypeCheckedExpr::Cast(exp, _, _)
+            | TypeCheckedExpr::Try(exp, _, _) => vec![TypeCheckedNode::Expression(exp)],
+            TypeCheckedExpr::Binary(_, lexp, rexp, _, _)
+            | TypeCheckedExpr::ShortcutOr(lexp, rexp, _)
+            | TypeCheckedExpr::ShortcutAnd(lexp, rexp, _)
+            | TypeCheckedExpr::ArrayRef(lexp, rexp, _, _)
+            | TypeCheckedExpr::FixedArrayRef(lexp, rexp, _, _, _)
+            | TypeCheckedExpr::MapRef(lexp, rexp, _, _)
+            | TypeCheckedExpr::StructMod(lexp, _, rexp, _, _) => vec![
+                TypeCheckedNode::Expression(lexp),
+                TypeCheckedNode::Expression(rexp),
+            ],
+            TypeCheckedExpr::FunctionCall(name_exp, arg_exps, _, _, _) => {
+                vec![TypeCheckedNode::Expression(name_exp)]
+                    .into_iter()
+                    .chain(
+                        arg_exps
+                            .iter_mut()
+                            .map(|exp| TypeCheckedNode::Expression(exp)),
+                    )
+                    .collect()
+            }
+            TypeCheckedExpr::CodeBlock(stats, oexpr, _, _) => oexpr
+                .iter_mut()
+                .map(|exp| TypeCheckedNode::Expression(exp))
+                .chain(
+                    stats
+                        .iter_mut()
+                        .map(|stat| TypeCheckedNode::Statement(stat)),
+                )
+                .collect(),
+            TypeCheckedExpr::StructInitializer(fields, _, _) => fields
+                .iter_mut()
+                .map(|field| TypeCheckedNode::StructField(field))
+                .collect(),
+            TypeCheckedExpr::Tuple(exps, _, _) | TypeCheckedExpr::Asm(_, _, exps, _) => exps
+                .iter_mut()
+                .map(|exp| TypeCheckedNode::Expression(exp))
+                .collect(),
+            TypeCheckedExpr::NewFixedArray(_, oexp, _, _) => oexp
+                .into_iter()
+                .map(|exp| TypeCheckedNode::Expression(exp))
+                .collect(),
+            TypeCheckedExpr::ArrayMod(exp1, exp2, exp3, _, _)
+            | TypeCheckedExpr::FixedArrayMod(exp1, exp2, exp3, _, _, _)
+            | TypeCheckedExpr::MapMod(exp1, exp2, exp3, _, _) => vec![
+                TypeCheckedNode::Expression(exp1),
+                TypeCheckedNode::Expression(exp2),
+                TypeCheckedNode::Expression(exp3),
+            ],
+        }
+    }
+}
+
 impl TypeCheckedExpr {
     ///Extracts the type returned from the expression.
     pub fn get_type(&self) -> Type {
@@ -344,7 +611,7 @@ impl TypeCheckedExpr {
             TypeCheckedExpr::DotRef(_, _, _, t, _) => t.clone(),
             TypeCheckedExpr::Const(_, t, _) => t.clone(),
             TypeCheckedExpr::FunctionCall(_, _, t, _, _) => t.clone(),
-            TypeCheckedExpr::CodeBlock(_, expr, _) => expr
+            TypeCheckedExpr::CodeBlock(_, expr, _, _) => expr
                 .clone()
                 .map(|exp| exp.get_type())
                 .unwrap_or_else(|| Type::Tuple(vec![])),
@@ -372,6 +639,12 @@ impl TypeCheckedExpr {
 pub struct TypeCheckedStructField {
     pub name: String,
     pub value: TypeCheckedExpr,
+}
+
+impl AbstractSyntaxTree for TypeCheckedStructField {
+    fn child_nodes(&mut self) -> Vec<TypeCheckedNode> {
+        self.value.child_nodes()
+    }
 }
 
 impl TypeCheckedStructField {
@@ -619,6 +892,7 @@ pub fn typecheck_function<'a>(
                 global_vars,
                 func_table,
                 type_tree,
+                &mut vec![],
             )?;
             Ok(TypeCheckedFunc {
                 name: fd.name,
@@ -654,6 +928,7 @@ fn typecheck_statement_sequence<'a>(
     global_vars: &'a HashMap<StringId, (Type, usize)>,
     func_table: &SymTable<Type>,
     type_tree: &TypeTree,
+    scopes: &mut Vec<(String, Option<Type>)>,
 ) -> Result<Vec<TypeCheckedStatement>, TypeError> {
     if statements.is_empty() {
         return Ok(Vec::new());
@@ -669,6 +944,7 @@ fn typecheck_statement_sequence<'a>(
         global_vars,
         func_table,
         type_tree,
+        scopes,
     )?;
     let mut rest_result = typecheck_statement_sequence_with_bindings(
         rest_of_stats,
@@ -678,6 +954,7 @@ fn typecheck_statement_sequence<'a>(
         func_table,
         &bindings,
         type_tree,
+        scopes,
     )?;
     rest_result.insert(0, tcs);
     Ok(rest_result)
@@ -693,6 +970,7 @@ fn typecheck_statement_sequence_with_bindings<'a>(
     func_table: &SymTable<Type>,
     bindings: &[(StringId, Type)],
     type_tree: &TypeTree,
+    scopes: &mut Vec<(String, Option<Type>)>,
 ) -> Result<Vec<TypeCheckedStatement>, TypeError> {
     if bindings.is_empty() {
         typecheck_statement_sequence(
@@ -702,6 +980,7 @@ fn typecheck_statement_sequence_with_bindings<'a>(
             global_vars,
             func_table,
             type_tree,
+            scopes,
         )
     } else {
         let (sid, tipe) = &bindings[0];
@@ -714,6 +993,7 @@ fn typecheck_statement_sequence_with_bindings<'a>(
             func_table,
             &bindings[1..],
             type_tree,
+            scopes,
         )
     }
 }
@@ -732,6 +1012,7 @@ fn typecheck_statement<'a>(
     global_vars: &'a HashMap<StringId, (Type, usize)>,
     func_table: &SymTable<Type>,
     type_tree: &TypeTree,
+    scopes: &mut Vec<(String, Option<Type>)>,
 ) -> Result<(TypeCheckedStatement, Vec<(StringId, Type)>), TypeError> {
     match statement {
         StatementKind::Noop() => Ok((TypeCheckedStatement::Noop(*loc), vec![])),
@@ -745,6 +1026,7 @@ fn typecheck_statement<'a>(
                 func_table,
                 return_type,
                 type_tree,
+                scopes,
             )?;
             if return_type.get_representation(type_tree)?.assignable(
                 &tc_expr.get_type().get_representation(type_tree)?,
@@ -762,6 +1044,72 @@ fn typecheck_statement<'a>(
                 ))
             }
         }
+        StatementKind::Break(exp, scope) => Ok((
+            {
+                let te = exp
+                    .clone()
+                    .map(|expr| {
+                        typecheck_expr(
+                            &expr,
+                            type_table,
+                            global_vars,
+                            func_table,
+                            return_type,
+                            type_tree,
+                            scopes,
+                        )
+                    })
+                    .transpose()?;
+                let key = scope.clone().unwrap_or("_".to_string());
+                let (_name, tipe) = scopes
+                    .iter_mut()
+                    .rev()
+                    .find(|(s, _)| key == *s)
+                    .ok_or_else(|| {
+                        new_type_error("No valid scope to break from".to_string(), *loc)
+                    })?;
+                if let Some(t) = tipe {
+                    if *t
+                        != te
+                            .clone()
+                            .map(|te| te.get_type())
+                            .unwrap_or(Type::Tuple(vec![]))
+                    {
+                        return Err(new_type_error(
+                            format!(
+                                "mismatched types in break statement expected {:?}, got {:?}",
+                                te.map(|te| te.get_type()).unwrap_or(Type::Tuple(vec![])),
+                                tipe
+                            ),
+                            *loc,
+                        ));
+                    } else {
+                        *t = te
+                            .clone()
+                            .map(|te| te.get_type())
+                            .unwrap_or(Type::Tuple(vec![]));
+                    }
+                }
+                TypeCheckedStatement::Break(
+                    exp.clone()
+                        .map(|expr| {
+                            typecheck_expr(
+                                &expr,
+                                type_table,
+                                global_vars,
+                                func_table,
+                                return_type,
+                                type_tree,
+                                scopes,
+                            )
+                        })
+                        .transpose()?,
+                    scope.clone().unwrap_or("_".to_string()),
+                    *loc,
+                )
+            },
+            vec![],
+        )),
         StatementKind::Expression(expr) => Ok((
             TypeCheckedStatement::Expression(
                 typecheck_expr(
@@ -771,6 +1119,7 @@ fn typecheck_statement<'a>(
                     func_table,
                     return_type,
                     type_tree,
+                    scopes,
                 )?,
                 *loc,
             ),
@@ -784,6 +1133,7 @@ fn typecheck_statement<'a>(
                 func_table,
                 return_type,
                 type_tree,
+                scopes,
             )?;
             let tce_type = tc_expr.get_type();
             match pat {
@@ -817,6 +1167,7 @@ fn typecheck_statement<'a>(
                 func_table,
                 return_type,
                 type_tree,
+                scopes,
             )?;
             match type_table.get(*name) {
                 Some(var_type) => {
@@ -860,6 +1211,7 @@ fn typecheck_statement<'a>(
             }
         }
         StatementKind::Loop(body) => {
+            scopes.push(("_".to_string(), Some(Type::Tuple(vec![]))));
             let tc_body = typecheck_statement_sequence(
                 body,
                 return_type,
@@ -867,7 +1219,9 @@ fn typecheck_statement<'a>(
                 global_vars,
                 func_table,
                 type_tree,
+                scopes,
             )?;
+            scopes.pop();
             Ok((TypeCheckedStatement::Loop(tc_body, *loc), vec![]))
         }
         StatementKind::While(cond, body) => {
@@ -878,6 +1232,7 @@ fn typecheck_statement<'a>(
                 func_table,
                 return_type,
                 type_tree,
+                scopes,
             )?;
             match tc_cond.get_type() {
                 Type::Bool => {
@@ -888,6 +1243,7 @@ fn typecheck_statement<'a>(
                         global_vars,
                         func_table,
                         type_tree,
+                        scopes,
                     )?;
                     Ok((TypeCheckedStatement::While(tc_cond, tc_body, *loc), vec![]))
                 }
@@ -905,6 +1261,7 @@ fn typecheck_statement<'a>(
                 global_vars,
                 func_table,
                 type_tree,
+                scopes,
             )?),
             vec![],
         )),
@@ -918,6 +1275,7 @@ fn typecheck_statement<'a>(
                     func_table,
                     return_type,
                     type_tree,
+                    scopes,
                 )?);
             }
             Ok((
@@ -933,6 +1291,7 @@ fn typecheck_statement<'a>(
                 func_table,
                 return_type,
                 type_tree,
+                scopes,
             )?;
             Ok((TypeCheckedStatement::DebugPrint(tce, *loc), vec![]))
         }
@@ -944,6 +1303,7 @@ fn typecheck_statement<'a>(
                 func_table,
                 return_type,
                 type_tree,
+                scopes,
             )?;
             let tct = match tcr.get_type() {
                 Type::Option(t) => *t,
@@ -966,6 +1326,7 @@ fn typecheck_statement<'a>(
                         func_table,
                         &[(*l, tct.clone())],
                         type_tree,
+                        scopes,
                     )?,
                     else_block
                         .clone()
@@ -977,6 +1338,7 @@ fn typecheck_statement<'a>(
                                 global_vars,
                                 func_table,
                                 type_tree,
+                                scopes,
                             )
                         })
                         .transpose()?,
@@ -1048,6 +1410,7 @@ fn typecheck_if_arm(
     global_vars: &HashMap<StringId, (Type, usize)>,
     func_table: &SymTable<Type>,
     type_tree: &TypeTree,
+    scopes: &mut Vec<(String, Option<Type>)>,
 ) -> Result<TypeCheckedIfArm, TypeError> {
     match arm {
         IfArm::Cond(cond, body, orest, loc) => {
@@ -1058,6 +1421,7 @@ fn typecheck_if_arm(
                 func_table,
                 return_type,
                 type_tree,
+                scopes,
             )?;
             match tc_cond.get_type() {
                 Type::Bool => Ok(TypeCheckedIfArm::Cond(
@@ -1069,6 +1433,7 @@ fn typecheck_if_arm(
                         global_vars,
                         func_table,
                         type_tree,
+                        scopes,
                     )?,
                     match orest {
                         Some(rest) => Some(Box::new(typecheck_if_arm(
@@ -1078,6 +1443,7 @@ fn typecheck_if_arm(
                             global_vars,
                             func_table,
                             type_tree,
+                            scopes,
                         )?)),
                         None => None,
                     },
@@ -1097,6 +1463,7 @@ fn typecheck_if_arm(
                 global_vars,
                 func_table,
                 type_tree,
+                scopes,
             )?,
             *loc,
         )),
@@ -1117,6 +1484,7 @@ fn typecheck_expr(
     func_table: &SymTable<Type>,
     return_type: &Type,
     type_tree: &TypeTree,
+    scopes: &mut Vec<(String, Option<Type>)>,
 ) -> Result<TypeCheckedExpr, TypeError> {
     match expr {
         Expr::UnaryOp(op, subexpr, loc) => {
@@ -1127,6 +1495,7 @@ fn typecheck_expr(
                 func_table,
                 return_type,
                 type_tree,
+                scopes,
             )?;
             typecheck_unary_op(*op, tc_sub, *loc, type_tree)
         }
@@ -1138,6 +1507,7 @@ fn typecheck_expr(
                 func_table,
                 return_type,
                 type_tree,
+                scopes,
             )?;
             let tc_sub2 = typecheck_expr(
                 sub2,
@@ -1146,6 +1516,7 @@ fn typecheck_expr(
                 func_table,
                 return_type,
                 type_tree,
+                scopes,
             )?;
             typecheck_binary_op(*op, tc_sub1, tc_sub2, type_tree, *loc)
         }
@@ -1157,6 +1528,7 @@ fn typecheck_expr(
                 func_table,
                 return_type,
                 type_tree,
+                scopes,
             )?;
             let tc_sub2 = typecheck_expr(
                 sub2,
@@ -1165,6 +1537,7 @@ fn typecheck_expr(
                 func_table,
                 return_type,
                 type_tree,
+                scopes,
             )?;
             if tc_sub1.get_type() != Type::Bool {
                 return Err(new_type_error(
@@ -1192,6 +1565,7 @@ fn typecheck_expr(
                 func_table,
                 return_type,
                 type_tree,
+                scopes,
             )?;
             let tc_sub2 = typecheck_expr(
                 sub2,
@@ -1200,6 +1574,7 @@ fn typecheck_expr(
                 func_table,
                 return_type,
                 type_tree,
+                scopes,
             )?;
             if tc_sub1.get_type() != Type::Bool {
                 return Err(new_type_error(
@@ -1227,6 +1602,7 @@ fn typecheck_expr(
                 func_table,
                 return_type,
                 type_tree,
+                scopes,
             )?),
             *loc,
         )),
@@ -1251,6 +1627,7 @@ fn typecheck_expr(
                 func_table,
                 return_type,
                 type_tree,
+                scopes,
             )?;
             let uidx = idx.to_usize().unwrap();
             if let Type::Tuple(tv) = tc_sub.get_type() {
@@ -1282,6 +1659,7 @@ fn typecheck_expr(
                 func_table,
                 return_type,
                 type_tree,
+                scopes,
             )?;
             if let Type::Struct(v) = tc_sub.get_type().get_representation(type_tree)? {
                 for sf in v.iter() {
@@ -1328,6 +1706,7 @@ fn typecheck_expr(
                 func_table,
                 return_type,
                 type_tree,
+                scopes,
             )?;
             match tc_fexpr.get_type().get_representation(type_tree)? {
                 Type::Func(impure, arg_types, ret_type) => {
@@ -1342,6 +1721,7 @@ fn typecheck_expr(
                                 func_table,
                                 return_type,
                                 type_tree,
+                                scopes,
                             )?;
                             tc_args.push(tc_arg);
                             let resolved_arg_type =
@@ -1387,6 +1767,7 @@ fn typecheck_expr(
         Expr::CodeBlock(body, ret_expr, loc) => {
             let mut output = Vec::new();
             let mut block_bindings = Vec::new();
+            scopes.push(("_".to_string(), None));
             for statement in body {
                 let inner_type_table =
                     type_table.push_multi(block_bindings.iter().map(|(k, v)| (*k, v)).collect());
@@ -1398,6 +1779,7 @@ fn typecheck_expr(
                     global_vars,
                     func_table,
                     type_tree,
+                    scopes,
                 )?;
                 output.push(statement);
                 for (key, value) in bindings {
@@ -1418,10 +1800,12 @@ fn typecheck_expr(
                             func_table,
                             return_type,
                             type_tree,
+                            scopes,
                         )
                     })
                     .transpose()?
                     .map(Box::new),
+                None,
                 *loc,
             ))
         }
@@ -1433,6 +1817,7 @@ fn typecheck_expr(
                 func_table,
                 return_type,
                 type_tree,
+                scopes,
             )?;
             let tc_idx = typecheck_expr(
                 &*index,
@@ -1441,6 +1826,7 @@ fn typecheck_expr(
                 func_table,
                 return_type,
                 type_tree,
+                scopes,
             )?;
             match tc_arr.get_type().get_representation(type_tree)? {
                 Type::Array(t) => {
@@ -1500,6 +1886,7 @@ fn typecheck_expr(
                 func_table,
                 return_type,
                 type_tree,
+                scopes,
             )?),
             tipe.get_representation(type_tree)?,
             Type::Array(Box::new(tipe.clone())),
@@ -1514,6 +1901,7 @@ fn typecheck_expr(
                     func_table,
                     return_type,
                     type_tree,
+                    scopes,
                 )?;
                 Ok(TypeCheckedExpr::NewFixedArray(
                     *size,
@@ -1544,6 +1932,7 @@ fn typecheck_expr(
                     func_table,
                     return_type,
                     type_tree,
+                    scopes,
                 )?;
                 tc_fields.push(TypeCheckedStructField::new(
                     field.name.clone(),
@@ -1568,6 +1957,7 @@ fn typecheck_expr(
                     func_table,
                     return_type,
                     type_tree,
+                    scopes,
                 )?;
                 types.push(tc_field.get_type().clone());
                 tc_fields.push(tc_field);
@@ -1582,6 +1972,7 @@ fn typecheck_expr(
                 func_table,
                 return_type,
                 type_tree,
+                scopes,
             )?;
             let tc_index = typecheck_expr(
                 index,
@@ -1590,6 +1981,7 @@ fn typecheck_expr(
                 func_table,
                 return_type,
                 type_tree,
+                scopes,
             )?;
             let tc_val = typecheck_expr(
                 val,
@@ -1598,6 +1990,7 @@ fn typecheck_expr(
                 func_table,
                 return_type,
                 type_tree,
+                scopes,
             )?;
             match tc_arr.get_type().get_representation(type_tree)? {
                 Type::Array(t) => {
@@ -1677,6 +2070,7 @@ fn typecheck_expr(
                 func_table,
                 return_type,
                 type_tree,
+                scopes,
             )?;
             let tc_val = typecheck_expr(
                 val,
@@ -1685,6 +2079,7 @@ fn typecheck_expr(
                 func_table,
                 return_type,
                 type_tree,
+                scopes,
             )?;
             let tcs_type = tc_struc.get_type().get_representation(type_tree)?;
             if let Type::Struct(fields) = &tcs_type {
@@ -1725,6 +2120,7 @@ fn typecheck_expr(
                 func_table,
                 return_type,
                 type_tree,
+                scopes,
             )?),
             t.clone(),
             *loc,
@@ -1745,6 +2141,7 @@ fn typecheck_expr(
                     func_table,
                     return_type,
                     type_tree,
+                    scopes,
                 )?);
             }
             Ok(TypeCheckedExpr::Asm(
@@ -1772,6 +2169,7 @@ fn typecheck_expr(
                 func_table,
                 return_type,
                 type_tree,
+                scopes,
             )?;
             match res.get_type().get_representation(type_tree)? {
                 Type::Option(t) => Ok(TypeCheckedExpr::Try(Box::new(res), *t, *loc)),

@@ -89,6 +89,7 @@ StatementKind: StatementKind = {
 	"return" <e: Expr> ";" => StatementKind::Return(e),
 	"return" ";" => StatementKind::ReturnVoid(),
 	<lno: @L> "return" "None" ";" => StatementKind::Return(Expr::Constant(Constant::Option(OptionConst::None(Type::Every)),file_info.location(BytePos::from(lno),filename))),
+	"break" <e: Expr?> ";" => StatementKind::Break(e,None),
 	"panic" ";" => StatementKind::Panic(),
 	"debug" "(" <e: Expr> ")" ";" => StatementKind::DebugPrint(e),
 	"asm" "(" <a:CommaedExprs?> ")" "{" <body:AsmInsn*> "}" ";" => StatementKind::Asm(body, a.unwrap_or(vec![])),
