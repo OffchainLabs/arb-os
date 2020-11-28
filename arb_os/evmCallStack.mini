@@ -210,7 +210,9 @@ public impure func initEvmCallStack(
                     parent: None<any>
                 });
 
-                entryPoint();  // start executing the call; should never return
+                emptyAvmStack();
+                asm(entryPoint,) { jump };
+                // entryPoint();  // start executing the call; should never return
             } else {
                 if let Some(gasUsage) = gasAccounting_endTxCharges() {
                     // insufficient balance error

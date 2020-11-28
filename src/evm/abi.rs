@@ -774,37 +774,132 @@ impl ArbosTest {
         }
     }
 
-    pub fn run(
+    pub fn install_account_and_call(
         &self,
         machine: &mut Machine,
+        addr: Uint256,
+        balance: Uint256,
+        nonce: Uint256,
         code: Vec<u8>,
-        data: Vec<u8>,
-        serialized_init_storage: Vec<u8>,
+        storage: Vec<u8>,
+        calldata: Vec<u8>,
     ) -> Result<Vec<u8>, ethabi::Error> {
+        self.install_account(machine, addr.clone(), balance.clone(), nonce.clone(), Some(code), Some(storage))?;
+        self.call(machine, addr.clone(), calldata, balance)?;
+        self.get_marshalled_storage(machine, addr)
+    }
+
+    pub fn install_account(
+        &self,
+        machine: &mut Machine,
+        addr: Uint256,
+        balance: Uint256,
+        nonce: Uint256,
+        code: Option<Vec<u8>>,
+        storage: Option<Vec<u8>>,
+    ) -> Result<(), ethabi::Error> {
         let (receipts, sends) = self.contract_abi.call_function(
             Uint256::zero(), // send from address zero
-            "run",
+            "installAccount",
             &[
-                ethabi::Token::Bytes(code),
-                ethabi::Token::Bytes(data),
-                ethabi::Token::Bytes(serialized_init_storage),
+                ethabi::Token::Address(addr.to_h160()),
+                ethabi::Token::Bool((code == None) || (storage == None)),
+                ethabi::Token::Uint(balance.to_u256()),
+                ethabi::Token::Uint(nonce.to_u256()),
+                ethabi::Token::Bytes(code.unwrap_or(vec![])),
+                ethabi::Token::Bytes(storage.unwrap_or(vec![])),
             ],
             machine,
             Uint256::zero(),
             self.debug,
         )?;
+
         if (receipts.len() != 1) || (sends.len() != 0) {
-            return Err(ethabi::Error::from("wrong number of receipts or sends"));
-        }
-        if !receipts[0].succeeded() {
+            Err(ethabi::Error::from("wrong number of receipts or sends"))
+        } else if receipts[0].succeeded() {
+            Ok(())
+        } else {
             println!(
                 "arbosTest.run revert code {}",
                 receipts[0].get_return_code()
             );
+            Err(ethabi::Error::from("reverted"))
+        }
+    }
+
+    pub fn call(
+        &self,
+        machine: &mut Machine,
+        callee_addr: Uint256,
+        calldata: Vec<u8>,
+        callvalue: Uint256,
+    ) -> Result<Vec<u8>, ethabi::Error> {
+        machine
+            .runtime_env
+            .insert_eth_deposit_message(Uint256::zero(), Uint256::zero(), callvalue.clone());
+        let _tx_id = machine.runtime_env.insert_tx_message(
+            Uint256::zero(),
+            Uint256::from_usize(1000000000),
+            Uint256::zero(),
+            callee_addr,
+            callvalue,
+            &calldata,
+        );
+        let num_logs_before = machine.runtime_env.get_all_receipt_logs().len();
+        let num_sends_before = machine.runtime_env.get_all_sends().len();
+        let _arbgas_used = if self.debug {
+            machine.debug(None)
+        } else {
+            machine.run(None)
+        };
+        let logs = machine.runtime_env.get_all_receipt_logs();
+        let sends = machine.runtime_env.get_all_sends();
+
+        if (logs.len() != num_logs_before + 1) || (sends.len() != num_sends_before) {
+            return Err(ethabi::Error::from("wrong number of receipts or sends"));
+        }
+        if !logs[num_logs_before].succeeded() {
+            println!(
+                "arbosTest.run revert code {}",
+                logs[num_logs_before].get_return_code()
+            );
             return Err(ethabi::Error::from("reverted"));
         }
 
-        Ok(receipts[0].get_return_data())
+        Ok(logs[num_logs_before].get_return_data())
+    }
+
+    pub fn get_marshalled_storage(&self, machine: &mut Machine, addr: Uint256) -> Result<Vec<u8>, ethabi::Error> {
+        let (receipts, sends) = self.contract_abi.call_function(
+            Uint256::zero(), // send from address zero
+            "getMarshalledStorage",
+            &[ethabi::Token::Address(addr.to_h160())],
+            machine,
+            Uint256::zero(),
+            self.debug,
+        )?;
+
+        if (receipts.len() != 1) || (sends.len() != 0) {
+            Err(ethabi::Error::from("wrong number of receipts or sends"))
+        } else if receipts[0].succeeded() {
+            return Ok(receipts[0].get_return_data());
+
+            println!("returndata: {:?}", &receipts[0].get_return_data());
+            let return_vals = ethabi::decode(
+                &[ethabi::ParamType::Bytes],
+                &receipts[0].get_return_data(),
+            )?;
+            match &return_vals[0] {
+                ethabi::Token::Bytes(b) => { println!("b: {:?}", b); Ok(b.to_vec()) }
+                _ => Err(ethabi::Error::from("return type error")),
+            }
+        } else {
+            println!(
+                "arbosTest.run revert code {}",
+                receipts[0].get_return_code()
+            );
+            Err(ethabi::Error::from("reverted"))
+        }
     }
 }
 

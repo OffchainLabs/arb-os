@@ -68,7 +68,7 @@ testlogs: $(TEMPLATES) $(ARBOS)
 evmdebug: all
 	$(CARGORUN) evm-debug
 
-benchmarks: $(TEMPLATES) $(ARBOS)
+benchmark: $(TEMPLATES) $(ARBOS)
 	$(CARGORUN) make-benchmarks
 
 clean:

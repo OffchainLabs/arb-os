@@ -822,6 +822,7 @@ public impure func evmOp_selfdestruct(ownerAsUint: uint) {
     let owner = address(ownerAsUint);     // truncates if necessary
 
     evmCallStack_selfDestructCurrentAccount(owner,);
+    evmOp_return(0, 0);
 }
 
 public impure func evmOp_create(value: uint, offset: uint, length: uint) -> address {

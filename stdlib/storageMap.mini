@@ -217,7 +217,8 @@ public func storageMap_deserialize(ba: ByteArray) -> option<StorageMap> {
     let ret = storageMap_new();
     while (! bytestream_atEof(stream)) {
         let (ustr, k) = bytestream_get256(stream)?;
-        let (ustr, v) = bytestream_get256(ustr)?;
+        stream = ustr;
+        let (ustr, v) = bytestream_get256(stream)?;
         stream = ustr;
         ret = storageMap_set(ret, k, v);
     }

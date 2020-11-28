@@ -167,13 +167,13 @@ public impure func translateEvmCodeSegment(
 
     if (bytestream_atEof(bs)) {
         // Base case of the recursion.
-        // Return a minimal code segment that just contains a panic instruction.
-        // The panic prevents execution from "falling off the end" of the resulting segment.
-        return Some((
-            asm() AvmCodePoint { errcodept }, 
+        // Return a minimal code segment that just contains an EVM STOP instruction followed by a panic instruction.
+        return pushEvmInsnCall(
+            opWrapperVoid(evmOp_stop),
+            asm() AvmCodePoint { errcodept },
             newmap<uint, AvmCodePoint>,
-            stack_new(),
-        ));
+            stack_new()
+        );
     }
 
     // Read in the first opcode in the code.

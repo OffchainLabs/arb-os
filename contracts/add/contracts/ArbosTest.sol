@@ -1,7 +1,9 @@
 pragma solidity >=0.4.21 <0.7.0;
 
 interface ArbosTest {
-    function run(bytes calldata code, bytes calldata innerCalldata, bytes calldata initStorage) external returns(bytes memory); 
+    function installAccount(address addr, bool isEOA, uint balance, uint nonce, bytes calldata code, bytes calldata initStorage) external; 
+
+    function getMarshalledStorage(address addr) external view returns(bytes memory);
 }
 
 

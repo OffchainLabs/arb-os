@@ -5,7 +5,7 @@
 use crate::evm::abi::ArbosTest;
 use crate::run::{load_from_file, RuntimeEnvironment};
 use crate::uint256::Uint256;
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::io;
 use std::path::Path;
 
@@ -41,7 +41,7 @@ pub fn run_evm_tests(dir_path: &Path, logfiles_path: Option<&Path>) -> io::Resul
 
 fn run_one_test(
     json: serde_json::Value,
-    _path: &Path,
+    path: &Path,
     logfiles_path: Option<&Path>,
     raw_filename: &str,
 ) -> bool {
@@ -53,13 +53,37 @@ fn run_one_test(
             code.extend(&[0u8]);
             let data = bytevec_from_jval(&v["exec"]["data"].to_string());
             let pre_storage = storage_from_jval(v["pre"][addr_str]["storage"].clone());
-            let storage_actual = run_code(&code, &data, pre_storage, logfiles_path, raw_filename);
+            let callvalue = match &v["exec"]["value"] {
+                serde_json::Value::Null => Uint256::zero(),
+                v => uint256_from_jval(&v.to_string()),
+            };
+            let result = run_code(
+                uint256_from_jval(addr_str),
+                Uint256::one(),
+                &code,
+                &data,
+                pre_storage,
+                callvalue,
+                logfiles_path,
+                raw_filename,
+            );
 
             if v["post"] == serde_json::Value::Null {
-                return storage_actual.len() == 0;
+                return result == None;
             } else {
-                let storage_expected = storage_from_jval(v["post"][addr_str]["storage"].clone());
-                return compare_storage(&storage_expected, &storage_actual);
+                match result {
+                    Some(storage_actual) => {
+                        let storage_expected =
+                            storage_from_jval(v["post"][addr_str]["storage"].clone());
+                        return compare_storage(&storage_expected, &storage_actual);
+                    }
+                    None => {
+                        println!("Unexpected None returned in {:?}", path);
+                    }
+                }
+                //let storage_actual = result.unwrap();
+                //let storage_expected = storage_from_jval(v["post"][addr_str]["storage"].clone());
+                //return compare_storage(&storage_expected, &storage_actual);
             }
         }
     }
@@ -93,39 +117,60 @@ fn storage_from_jval(jval: serde_json::Value) -> HashMap<Uint256, Uint256> {
 }
 
 fn run_code(
+    addr: Uint256,
+    nonce: Uint256,
     code: &[u8],
     data: &[u8],
-    _pre_storage: HashMap<Uint256, Uint256>,
+    pre_storage: HashMap<Uint256, Uint256>,
+    callvalue: Uint256,
     logfiles_path: Option<&Path>,
     raw_filename: &str,
-) -> HashMap<Uint256, Uint256> {
+) -> Option<HashMap<Uint256, Uint256>> {
     let rt_env = RuntimeEnvironment::new(Uint256::from_usize(1111));
     let mut machine = load_from_file(Path::new("arb_os/arbos.mexe"), rt_env);
     machine.start_at_zero();
 
     let arbos_test = ArbosTest::new(false);
 
-    let result = arbos_test
-        .run(&mut machine, code.to_vec(), data.to_vec(), vec![])   //TODO: serialize pre_storage
-        .unwrap();
+    match arbos_test.install_account_and_call(
+        &mut machine,
+        addr,
+        callvalue,
+        nonce,
+        code.to_vec(),
+        serialize_storage(pre_storage),
+        data.to_vec(),
+    ) {
+        Ok(result) => {
+            if let Some(logs_path) = logfiles_path {
+                let logfile_name = raw_filename.replace("/", "_").replace("_json", ".aoslog");
+                let this_log_path = [logs_path.to_str().unwrap(), &logfile_name].concat();
+                machine
+                    .runtime_env
+                    .recorder
+                    .to_file(Path::new(&this_log_path))
+                    .unwrap();
+            }
 
-    if let Some(logs_path) = logfiles_path {
-        let logfile_name = raw_filename.replace("/", "_").replace("_json", ".aoslog");
-        let this_log_path = [logs_path.to_str().unwrap(), &logfile_name].concat();
-        machine
-            .runtime_env
-            .recorder
-            .to_file(Path::new(&this_log_path))
-            .unwrap();
+            let mut ret = HashMap::new();
+            let mut offset = 0;
+            while offset < result.len() {
+                let k = Uint256::from_bytes(&result[offset..offset + 32]);
+                let v = Uint256::from_bytes(&result[offset + 32..offset + 64]);
+                ret.insert(k, v);
+                offset = offset + 64;
+            }
+            Some(ret)
+        }
+        Err(_) => None,
     }
+}
 
-    let mut ret = HashMap::new();
-    let mut offset = 0;
-    while offset < result.len() {
-        let k = Uint256::from_bytes(&result[offset..offset + 32]);
-        let v = Uint256::from_bytes(&result[offset + 32..offset + 64]);
-        ret.insert(k, v);
-        offset = offset + 64;
+fn serialize_storage(st: HashMap<Uint256, Uint256>) -> Vec<u8> {
+    let mut ret: Vec<u8> = vec![];
+    for (k, v) in st {
+        ret.extend(k.to_bytes_be());
+        ret.extend(v.to_bytes_be());
     }
     ret
 }
@@ -171,48 +216,4 @@ fn compare_storage(
     }
 
     true
-}
-
-fn _compare_storage_save(expected: &serde_json::Value, actual: HashMap<Uint256, Uint256>) -> bool {
-    if let serde_json::Value::Object(map) = expected {
-        let mut all_ks = HashSet::new();
-        for (k, v) in map {
-            let k = hex::decode(&k[2..]).unwrap();
-            let k_ui = Uint256::from_bytes(&k);
-            all_ks.insert(k_ui.clone());
-            if let serde_json::Value::String(vs) = v {
-                let v = hex::decode(&vs[2..]).unwrap();
-                if actual.get(&k_ui).unwrap_or(&Uint256::zero()) != &Uint256::from_bytes(&v) {
-                    if let Some(act) = actual.get(&Uint256::from_bytes(&k)) {
-                        println!(
-                            "-- storage[{}] = {}, should be {}",
-                            k_ui,
-                            act,
-                            Uint256::from_bytes(&v)
-                        );
-                    } else {
-                        println!(
-                            "-- storage[{}] = 0, should be {}",
-                            k_ui,
-                            Uint256::from_bytes(&v)
-                        );
-                    }
-                    return false;
-                }
-            } else {
-                println!("fail2");
-                return false;
-            }
-        }
-        for (k, v) in actual {
-            if (!v.is_zero()) && (!all_ks.contains(&k)) {
-                println!("-- storage[{}] = {}, should be 0", k, v);
-                return false;
-            }
-        }
-        true
-    } else {
-        println!("fail3");
-        false
-    }
 }

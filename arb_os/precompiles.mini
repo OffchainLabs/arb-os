@@ -34,37 +34,37 @@ public impure func precompiles_init(acctStore: AccountStore) -> option<AccountSt
     acctStore = accountStore_createBuiltinContract(
         acctStore,
         address(0x01),
-        precompile_0x01,
+        makeTrampoline(precompile_0x01),
         false,
     )?;
     acctStore = accountStore_createBuiltinContract(
         acctStore,
         address(0x02),
-        precompile_0x02,
+        makeTrampoline(precompile_0x02),
         false,
     )?;
     acctStore = accountStore_createBuiltinContract(
         acctStore,
         address(0x04),
-        precompile_0x04,
+        makeTrampoline(precompile_0x04),
         false,
     )?;
     acctStore = accountStore_createBuiltinContract(
     	acctStore,
         address(0x06),
-        precompile_0x06,
+        makeTrampoline(precompile_0x06),
         false,
     )?;
     acctStore = accountStore_createBuiltinContract(
         acctStore,
         address(0x07),
-        precompile_0x07,
+        makeTrampoline(precompile_0x07),
         false,
     )?;
     acctStore = accountStore_createBuiltinContract(
         acctStore,
         address(0x08),
-        precompile_0x08,
+        makeTrampoline(precompile_0x08),
         false,
     )?;
     acctStore = accountStore_createBuiltinContract(
