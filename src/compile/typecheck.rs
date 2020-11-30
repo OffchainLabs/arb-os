@@ -10,7 +10,7 @@ use super::ast::{
     UnaryOp,
 };
 use super::{symtable::SymTable, MiniProperties};
-use crate::compile::ast::{ExprKind, TypeTree};
+use crate::compile::ast::{DebugInfo, ExprKind, TypeTree};
 use crate::link::{ExportedFunc, Import, ImportedFunc};
 use crate::mavm::{Instruction, Label, Value};
 use crate::pos::Location;
@@ -108,10 +108,10 @@ impl MiniProperties for TypeCheckedFunc {
 
 fn strip_returns(to_strip: &mut TypeCheckedNode, _state: &(), _mut_state: &mut ()) -> bool {
     if let TypeCheckedNode::Statement(stat) = to_strip {
-        if let TypeCheckedStatement::Return(exp, loc) = stat {
-            **stat = TypeCheckedStatement::Break(Some(exp.clone()), "_inline".to_string(), *loc);
-        } else if let TypeCheckedStatement::ReturnVoid(loc) = stat {
-            **stat = TypeCheckedStatement::Break(None, "_inline".to_string(), *loc);
+        if let TypeCheckedStatementKind::Return(exp) = &mut stat.kind {
+            stat.kind = TypeCheckedStatementKind::Break(Some(exp.clone()), "_inline".to_string());
+        } else if let TypeCheckedStatementKind::ReturnVoid() = &mut stat.kind {
+            stat.kind = TypeCheckedStatementKind::Break(None, "_inline".to_string());
         }
     }
     true
@@ -130,20 +130,24 @@ fn inline(
                     let mut code: Vec<_> = args
                         .iter()
                         .zip(func.args.iter())
-                        .map(|(arg, otherarg)| {
-                            TypeCheckedStatement::Let(
+                        .map(|(arg, otherarg)| TypeCheckedStatement {
+                            kind: TypeCheckedStatementKind::Let(
                                 TypeCheckedMatchPattern::Simple(
                                     otherarg.name,
                                     otherarg.tipe.clone(),
                                 ),
                                 arg.clone(),
-                                None,
-                            )
+                            ),
+                            debug_info: DebugInfo { location: None },
                         })
                         .collect();
                     code.append(&mut func.code.clone());
                     let last = code.pop();
-                    let block_exp = if let Some(TypeCheckedStatement::Return(exp, _)) = last {
+                    let block_exp = if let Some(TypeCheckedStatement {
+                        kind: TypeCheckedStatementKind::Return(exp),
+                        debug_info: _,
+                    }) = last
+                    {
                         Some(Box::new(exp))
                     } else {
                         if let Some(statement) = last {
@@ -181,50 +185,58 @@ impl TypeCheckedFunc {
 
 ///A mini statement that has been type checked.
 #[derive(Debug, Clone)]
-pub enum TypeCheckedStatement {
-    Noop(Option<Location>),
-    Panic(Option<Location>),
-    ReturnVoid(Option<Location>),
-    Return(TypeCheckedExpr, Option<Location>),
-    Break(Option<TypeCheckedExpr>, String, Option<Location>),
-    Expression(TypeCheckedExpr, Option<Location>),
-    Let(TypeCheckedMatchPattern, TypeCheckedExpr, Option<Location>),
-    AssignLocal(StringId, TypeCheckedExpr, Option<Location>),
-    AssignGlobal(usize, TypeCheckedExpr, Option<Location>),
-    Loop(Vec<TypeCheckedStatement>, Option<Location>),
-    While(TypeCheckedExpr, Vec<TypeCheckedStatement>, Option<Location>),
+pub struct TypeCheckedStatement {
+    pub kind: TypeCheckedStatementKind,
+    pub debug_info: DebugInfo,
+}
+
+///A mini statement that has been type checked.
+#[derive(Debug, Clone)]
+pub enum TypeCheckedStatementKind {
+    Noop(),
+    Panic(),
+    ReturnVoid(),
+    Return(TypeCheckedExpr),
+    Break(Option<TypeCheckedExpr>, String),
+    Expression(TypeCheckedExpr),
+    Let(TypeCheckedMatchPattern, TypeCheckedExpr),
+    AssignLocal(StringId, TypeCheckedExpr),
+    AssignGlobal(usize, TypeCheckedExpr),
+    Loop(Vec<TypeCheckedStatement>),
+    While(TypeCheckedExpr, Vec<TypeCheckedStatement>),
     If(TypeCheckedIfArm),
     IfLet(
         StringId,
         TypeCheckedExpr,
         Vec<TypeCheckedStatement>,
         Option<Vec<TypeCheckedStatement>>,
-        Option<Location>,
     ),
-    Asm(Vec<Instruction>, Vec<TypeCheckedExpr>, Option<Location>),
-    DebugPrint(TypeCheckedExpr, Option<Location>),
+    Asm(Vec<Instruction>, Vec<TypeCheckedExpr>),
+    DebugPrint(TypeCheckedExpr),
 }
 
 impl MiniProperties for TypeCheckedStatement {
     fn is_pure(&self) -> bool {
-        match self {
-            TypeCheckedStatement::Noop(_)
-            | TypeCheckedStatement::Panic(_)
-            | TypeCheckedStatement::ReturnVoid(_) => true,
-            TypeCheckedStatement::Return(something, _) => something.is_pure(),
-            TypeCheckedStatement::Break(exp, _, _) => {
+        match &self.kind {
+            TypeCheckedStatementKind::Noop()
+            | TypeCheckedStatementKind::Panic()
+            | TypeCheckedStatementKind::ReturnVoid() => true,
+            TypeCheckedStatementKind::Return(something) => something.is_pure(),
+            TypeCheckedStatementKind::Break(exp, _) => {
                 exp.clone().map(|exp| exp.is_pure()).unwrap_or(true)
             }
-            TypeCheckedStatement::Expression(expr, _) => expr.is_pure(),
-            TypeCheckedStatement::Let(_, exp, _) => exp.is_pure(),
-            TypeCheckedStatement::AssignLocal(_, exp, _) => exp.is_pure(),
-            TypeCheckedStatement::AssignGlobal(_, _, _) => false,
-            TypeCheckedStatement::Loop(code, _) => code.iter().all(|statement| statement.is_pure()),
-            TypeCheckedStatement::While(exp, block, _) => {
+            TypeCheckedStatementKind::Expression(expr) => expr.is_pure(),
+            TypeCheckedStatementKind::Let(_, exp) => exp.is_pure(),
+            TypeCheckedStatementKind::AssignLocal(_, exp) => exp.is_pure(),
+            TypeCheckedStatementKind::AssignGlobal(_, _) => false,
+            TypeCheckedStatementKind::Loop(code) => {
+                code.iter().all(|statement| statement.is_pure())
+            }
+            TypeCheckedStatementKind::While(exp, block) => {
                 exp.is_pure() && block.iter().all(|statement| statement.is_pure())
             }
-            TypeCheckedStatement::If(if_arm) => if_arm.is_pure(),
-            TypeCheckedStatement::IfLet(_, expr, block, eblock, _) => {
+            TypeCheckedStatementKind::If(if_arm) => if_arm.is_pure(),
+            TypeCheckedStatementKind::IfLet(_, expr, block, eblock) => {
                 expr.is_pure()
                     && block.iter().all(|statement| statement.is_pure())
                     && eblock
@@ -233,32 +245,32 @@ impl MiniProperties for TypeCheckedStatement {
                         .map(|statements| statements.iter().all(|statement| statement.is_pure()))
                         .unwrap_or(true)
             }
-            TypeCheckedStatement::Asm(instrs, exprs, _) => {
+            TypeCheckedStatementKind::Asm(instrs, exprs) => {
                 instrs.iter().all(|instr| instr.is_pure())
                     && exprs.iter().all(|expr| expr.is_pure())
             }
-            TypeCheckedStatement::DebugPrint(_, _) => true,
+            TypeCheckedStatementKind::DebugPrint(_) => true,
         }
     }
 }
 
 impl AbstractSyntaxTree for TypeCheckedStatement {
     fn child_nodes(&mut self) -> Vec<TypeCheckedNode> {
-        match self {
-            TypeCheckedStatement::Noop(_)
-            | TypeCheckedStatement::Panic(_)
-            | TypeCheckedStatement::ReturnVoid(_) => vec![],
-            TypeCheckedStatement::Return(exp, _)
-            | TypeCheckedStatement::Expression(exp, _)
-            | TypeCheckedStatement::Let(_, exp, _)
-            | TypeCheckedStatement::AssignLocal(_, exp, _)
-            | TypeCheckedStatement::AssignGlobal(_, exp, _)
-            | TypeCheckedStatement::DebugPrint(exp, _) => vec![TypeCheckedNode::Expression(exp)],
-            TypeCheckedStatement::Loop(stats, _) => stats
+        match &mut self.kind {
+            TypeCheckedStatementKind::Noop()
+            | TypeCheckedStatementKind::Panic()
+            | TypeCheckedStatementKind::ReturnVoid() => vec![],
+            TypeCheckedStatementKind::Return(exp)
+            | TypeCheckedStatementKind::Expression(exp)
+            | TypeCheckedStatementKind::Let(_, exp)
+            | TypeCheckedStatementKind::AssignLocal(_, exp)
+            | TypeCheckedStatementKind::AssignGlobal(_, exp)
+            | TypeCheckedStatementKind::DebugPrint(exp) => vec![TypeCheckedNode::Expression(exp)],
+            TypeCheckedStatementKind::Loop(stats) => stats
                 .iter_mut()
                 .map(|stat| TypeCheckedNode::Statement(stat))
                 .collect(),
-            TypeCheckedStatement::While(exp, stats, _) => vec![TypeCheckedNode::Expression(exp)]
+            TypeCheckedStatementKind::While(exp, stats) => vec![TypeCheckedNode::Expression(exp)]
                 .into_iter()
                 .chain(
                     stats
@@ -266,8 +278,8 @@ impl AbstractSyntaxTree for TypeCheckedStatement {
                         .map(|stat| TypeCheckedNode::Statement(stat)),
                 )
                 .collect(),
-            TypeCheckedStatement::If(arm) => vec![TypeCheckedNode::IfArm(arm)],
-            TypeCheckedStatement::IfLet(_, exp, stats, ostats, _) => {
+            TypeCheckedStatementKind::If(arm) => vec![TypeCheckedNode::IfArm(arm)],
+            TypeCheckedStatementKind::IfLet(_, exp, stats, ostats) => {
                 vec![TypeCheckedNode::Expression(exp)]
                     .into_iter()
                     .chain(
@@ -283,11 +295,11 @@ impl AbstractSyntaxTree for TypeCheckedStatement {
                     )
                     .collect()
             }
-            TypeCheckedStatement::Asm(_, exps, _) => exps
+            TypeCheckedStatementKind::Asm(_, exps) => exps
                 .iter_mut()
                 .map(|exp| TypeCheckedNode::Expression(exp))
                 .collect(),
-            TypeCheckedStatement::Break(oexp, _, _) => {
+            TypeCheckedStatementKind::Break(oexp, _) => {
                 oexp.iter_mut().flat_map(|exp| exp.child_nodes()).collect()
             }
         }
@@ -1014,10 +1026,10 @@ fn typecheck_statement<'a>(
     type_tree: &TypeTree,
     scopes: &mut Vec<(String, Option<Type>)>,
 ) -> Result<(TypeCheckedStatement, Vec<(StringId, Type)>), TypeError> {
-    match statement {
-        StatementKind::Noop() => Ok((TypeCheckedStatement::Noop(*loc), vec![])),
-        StatementKind::Panic() => Ok((TypeCheckedStatement::Panic(*loc), vec![])),
-        StatementKind::ReturnVoid() => Ok((TypeCheckedStatement::ReturnVoid(*loc), vec![])),
+    let (stat, binds) = match statement {
+        StatementKind::Noop() => Ok((TypeCheckedStatementKind::Noop(), vec![])),
+        StatementKind::Panic() => Ok((TypeCheckedStatementKind::Panic(), vec![])),
+        StatementKind::ReturnVoid() => Ok((TypeCheckedStatementKind::ReturnVoid(), vec![])),
         StatementKind::Return(expr) => {
             let tc_expr = typecheck_expr(
                 expr,
@@ -1032,7 +1044,7 @@ fn typecheck_statement<'a>(
                 &tc_expr.get_type().get_representation(type_tree)?,
                 type_tree,
             ) {
-                Ok((TypeCheckedStatement::Return(tc_expr, *loc), vec![]))
+                Ok((TypeCheckedStatementKind::Return(tc_expr), vec![]))
             } else {
                 Err(new_type_error(
                     format!(
@@ -1090,7 +1102,7 @@ fn typecheck_statement<'a>(
                             .unwrap_or(Type::Tuple(vec![]));
                     }
                 }
-                TypeCheckedStatement::Break(
+                TypeCheckedStatementKind::Break(
                     exp.clone()
                         .map(|expr| {
                             typecheck_expr(
@@ -1105,24 +1117,20 @@ fn typecheck_statement<'a>(
                         })
                         .transpose()?,
                     scope.clone().unwrap_or("_".to_string()),
-                    *loc,
                 )
             },
             vec![],
         )),
         StatementKind::Expression(expr) => Ok((
-            TypeCheckedStatement::Expression(
-                typecheck_expr(
-                    expr,
-                    type_table,
-                    global_vars,
-                    func_table,
-                    return_type,
-                    type_tree,
-                    scopes,
-                )?,
-                *loc,
-            ),
+            TypeCheckedStatementKind::Expression(typecheck_expr(
+                expr,
+                type_table,
+                global_vars,
+                func_table,
+                return_type,
+                type_tree,
+                scopes,
+            )?),
             vec![],
         )),
         StatementKind::Let(pat, expr) => {
@@ -1138,10 +1146,9 @@ fn typecheck_statement<'a>(
             let tce_type = tc_expr.get_type();
             match pat {
                 MatchPattern::Simple(name) => Ok((
-                    TypeCheckedStatement::Let(
+                    TypeCheckedStatementKind::Let(
                         TypeCheckedMatchPattern::Simple(*name, tce_type.clone()),
                         tc_expr,
-                        *loc,
                     ),
                     vec![(*name, tce_type)],
                 )),
@@ -1149,10 +1156,9 @@ fn typecheck_statement<'a>(
                     let (tc_pats, bindings) =
                         typecheck_patvec(tce_type.clone(), pats.to_vec(), *loc)?;
                     Ok((
-                        TypeCheckedStatement::Let(
+                        TypeCheckedStatementKind::Let(
                             TypeCheckedMatchPattern::Tuple(tc_pats, tce_type),
                             tc_expr,
-                            *loc,
                         ),
                         bindings,
                     ))
@@ -1176,7 +1182,7 @@ fn typecheck_statement<'a>(
                         type_tree,
                     ) {
                         Ok((
-                            TypeCheckedStatement::AssignLocal(*name, tc_expr, *loc),
+                            TypeCheckedStatementKind::AssignLocal(*name, tc_expr),
                             vec![],
                         ))
                     } else {
@@ -1193,7 +1199,7 @@ fn typecheck_statement<'a>(
                             type_tree,
                         ) {
                             Ok((
-                                TypeCheckedStatement::AssignGlobal(*idx, tc_expr, *loc),
+                                TypeCheckedStatementKind::AssignGlobal(*idx, tc_expr),
                                 vec![],
                             ))
                         } else {
@@ -1222,7 +1228,7 @@ fn typecheck_statement<'a>(
                 scopes,
             )?;
             scopes.pop();
-            Ok((TypeCheckedStatement::Loop(tc_body, *loc), vec![]))
+            Ok((TypeCheckedStatementKind::Loop(tc_body), vec![]))
         }
         StatementKind::While(cond, body) => {
             let tc_cond = typecheck_expr(
@@ -1245,7 +1251,7 @@ fn typecheck_statement<'a>(
                         type_tree,
                         scopes,
                     )?;
-                    Ok((TypeCheckedStatement::While(tc_cond, tc_body, *loc), vec![]))
+                    Ok((TypeCheckedStatementKind::While(tc_cond, tc_body), vec![]))
                 }
                 _ => Err(new_type_error(
                     "while condition is not bool".to_string(),
@@ -1254,7 +1260,7 @@ fn typecheck_statement<'a>(
             }
         }
         StatementKind::If(arm) => Ok((
-            TypeCheckedStatement::If(typecheck_if_arm(
+            TypeCheckedStatementKind::If(typecheck_if_arm(
                 arm,
                 return_type,
                 type_table,
@@ -1279,7 +1285,7 @@ fn typecheck_statement<'a>(
                 )?);
             }
             Ok((
-                TypeCheckedStatement::Asm(insns.to_vec(), tc_args, *loc),
+                TypeCheckedStatementKind::Asm(insns.to_vec(), tc_args),
                 vec![],
             ))
         }
@@ -1293,7 +1299,7 @@ fn typecheck_statement<'a>(
                 type_tree,
                 scopes,
             )?;
-            Ok((TypeCheckedStatement::DebugPrint(tce, *loc), vec![]))
+            Ok((TypeCheckedStatementKind::DebugPrint(tce), vec![]))
         }
         StatementKind::IfLet(l, r, if_block, else_block) => {
             let tcr = typecheck_expr(
@@ -1315,7 +1321,7 @@ fn typecheck_statement<'a>(
                 }
             };
             Ok((
-                TypeCheckedStatement::IfLet(
+                TypeCheckedStatementKind::IfLet(
                     *l,
                     tcr,
                     typecheck_statement_sequence_with_bindings(
@@ -1342,12 +1348,18 @@ fn typecheck_statement<'a>(
                             )
                         })
                         .transpose()?,
-                    *loc,
                 ),
                 vec![(*l, tct)],
             ))
         }
-    }
+    }?;
+    Ok((
+        TypeCheckedStatement {
+            kind: stat,
+            debug_info: DebugInfo { location: *loc },
+        },
+        binds,
+    ))
 }
 
 ///Type checks a `Vec<MatchPattern>`, representing a tuple match pattern against `Type` rhs_type.
