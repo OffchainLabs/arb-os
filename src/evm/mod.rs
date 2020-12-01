@@ -262,7 +262,7 @@ pub fn _basic_evm_add_test(log_to: Option<&Path>, debug: bool) -> Result<(), eth
     let arbos_test = ArbosTest::new(debug);
 
     let code = hex::decode("7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff0160005500").unwrap();
-    let result = arbos_test.install_account_and_call(
+    let result = arbos_test._install_account_and_call(
         &mut machine,
         Uint256::from_u64(89629813089426890),
         Uint256::zero(),

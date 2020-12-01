@@ -387,9 +387,10 @@ public func account_setContractInfo(
     code: ByteArray,
     evmJumpTable: map<uint, impure func()>,
     startCodePoint: impure func(),
-    storage: StorageMap
+    storage: StorageMap,
+    forceNonce: bool
 ) -> Account {
-    if (acct.nextSeqNum == 0) {
+    if (forceNonce && (acct.nextSeqNum == 0)) {
         // new contract accounts are supposed to start with sequence number = 1; make it so
         acct = acct with { nextSeqNum: 1 };
     }

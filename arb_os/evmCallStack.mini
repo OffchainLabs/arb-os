@@ -297,7 +297,8 @@ public impure func initEvmCallStackForConstructor(
             code,
             evmJumpTable,
             startPoint,
-            storageMap_new()
+            storageMap_new(),
+            true,
         )
     );
     if let Some(uas) = accountStore_transferEthBalance(acctStore, request.caller, request.calleeAddr, request.value) {
@@ -552,7 +553,8 @@ public impure func evmCallStack_returnFromCall(
                                 returnData,
                                 evmJumpTable,
                                 entryPoint,
-                                storageMap
+                                storageMap,
+                                true,
                             )
                         )
                     );

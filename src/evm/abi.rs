@@ -774,7 +774,7 @@ impl ArbosTest {
         }
     }
 
-    pub fn install_account_and_call(
+    pub fn _install_account_and_call(
         &self,
         machine: &mut Machine,
         addr: Uint256,
@@ -784,9 +784,16 @@ impl ArbosTest {
         storage: Vec<u8>,
         calldata: Vec<u8>,
     ) -> Result<Vec<u8>, ethabi::Error> {
-        self.install_account(machine, addr.clone(), balance.clone(), nonce.clone(), Some(code), Some(storage))?;
-        self.call(machine, addr.clone(), calldata, balance)?;
-        self.get_marshalled_storage(machine, addr)
+        self.install_account(
+            machine,
+            addr.clone(),
+            balance.clone(),
+            nonce.clone(),
+            Some(code),
+            Some(storage),
+        )?;
+        self.call(machine, Uint256::zero(), addr.clone(), calldata, balance)?;
+        self._get_marshalled_storage(machine, addr)
     }
 
     pub fn install_account(
@@ -830,15 +837,18 @@ impl ArbosTest {
     pub fn call(
         &self,
         machine: &mut Machine,
+        caller_addr: Uint256,
         callee_addr: Uint256,
         calldata: Vec<u8>,
         callvalue: Uint256,
     ) -> Result<Vec<u8>, ethabi::Error> {
-        machine
-            .runtime_env
-            .insert_eth_deposit_message(Uint256::zero(), Uint256::zero(), callvalue.clone());
-        let _tx_id = machine.runtime_env.insert_tx_message(
+        machine.runtime_env.insert_eth_deposit_message(
             Uint256::zero(),
+            caller_addr.clone(),
+            callvalue.clone(),
+        );
+        let _tx_id = machine.runtime_env.insert_tx_message(
+            caller_addr,
             Uint256::from_usize(1000000000),
             Uint256::zero(),
             callee_addr,
@@ -869,7 +879,42 @@ impl ArbosTest {
         Ok(logs[num_logs_before].get_return_data())
     }
 
-    pub fn get_marshalled_storage(&self, machine: &mut Machine, addr: Uint256) -> Result<Vec<u8>, ethabi::Error> {
+    pub fn get_account_info(
+        &self,
+        machine: &mut Machine,
+        addr: Uint256,
+    ) -> Result<(Uint256, Uint256, Vec<u8>), ethabi::Error> {
+        let (receipts, sends) = self.contract_abi.call_function(
+            Uint256::zero(), // send from address zero
+            "getAccountInfo",
+            &[ethabi::Token::Address(addr.to_h160())],
+            machine,
+            Uint256::zero(),
+            self.debug,
+        )?;
+        if (receipts.len() != 1) || (sends.len() != 0) {
+            Err(ethabi::Error::from("wrong number of receipts or sends"))
+        } else if receipts[0].succeeded() {
+            let return_data = receipts[0].get_return_data();
+            Ok((
+                Uint256::from_bytes(&return_data[0..32]),
+                Uint256::from_bytes(&return_data[32..64]),
+                return_data[64..].to_vec(),
+            ))
+        } else {
+            println!(
+                "arbosTest.run revert code {}",
+                receipts[0].get_return_code()
+            );
+            Err(ethabi::Error::from("reverted"))
+        }
+    }
+
+    pub fn _get_marshalled_storage(
+        &self,
+        machine: &mut Machine,
+        addr: Uint256,
+    ) -> Result<Vec<u8>, ethabi::Error> {
         let (receipts, sends) = self.contract_abi.call_function(
             Uint256::zero(), // send from address zero
             "getMarshalledStorage",
@@ -883,16 +928,6 @@ impl ArbosTest {
             Err(ethabi::Error::from("wrong number of receipts or sends"))
         } else if receipts[0].succeeded() {
             return Ok(receipts[0].get_return_data());
-
-            println!("returndata: {:?}", &receipts[0].get_return_data());
-            let return_vals = ethabi::decode(
-                &[ethabi::ParamType::Bytes],
-                &receipts[0].get_return_data(),
-            )?;
-            match &return_vals[0] {
-                ethabi::Token::Bytes(b) => { println!("b: {:?}", b); Ok(b.to_vec()) }
-                _ => Err(ethabi::Error::from("return type error")),
-            }
         } else {
             println!(
                 "arbosTest.run revert code {}",

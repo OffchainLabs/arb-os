@@ -31,11 +31,23 @@ pub struct RuntimeEnvironment {
 
 impl RuntimeEnvironment {
     pub fn new(chain_address: Uint256) -> Self {
+        RuntimeEnvironment::new_with_blocknum_timestamp(
+            chain_address,
+            Uint256::from_u64(100_000),
+            Uint256::from_u64(10_000_000),
+        )
+    }
+
+    pub fn new_with_blocknum_timestamp(
+        chain_address: Uint256,
+        blocknum: Uint256,
+        timestamp: Uint256,
+    ) -> Self {
         let mut ret = RuntimeEnvironment {
             chain_id: chain_address.trim_to_u64() & 0xffffffffffff, // truncate to 48 bits
             l1_inbox: vec![],
-            current_block_num: Uint256::from_u64(100_000),
-            current_timestamp: Uint256::from_u64(10_000_000),
+            current_block_num: blocknum,
+            current_timestamp: timestamp,
             logs: Vec::new(),
             sends: Vec::new(),
             next_inbox_seq_num: Uint256::zero(),

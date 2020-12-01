@@ -19,6 +19,8 @@ use std::storageMap::storageMap_deserialize;
 use accounts::pristineAccount;
 use accounts::account_setContractInfo;
 use accounts::account_getAllStorage;
+use accounts::account_getNextSeqNum;
+use accounts::account_getEthBalance;
 
 use codeSegment::translateEvmCodeSegment;
 
@@ -49,6 +51,8 @@ public impure func arbosTest_txcall() {
             arbosTest_installAccount(topFrame, calldata);
         } elseif (funcCode == 0xd56aa31f) {
             arbosTest_getMarshalledStorage(topFrame, calldata);
+        } elseif (funcCode == 0x7b510fe8) {
+            arbosTest_getAccountInfo(topFrame, calldata);
         } else {
             // unrecognized function code
             evmOp_revert_knownCodePc(address(105), 2, 0, 0);
@@ -100,6 +104,7 @@ impure func arbosTest_installAccount(topFrame: EvmCallFrame, calldata: ByteArray
                     evmJumpTable,
                     startCodePoint,
                     initStorage,
+                    false,
                 );
             } else {
                 evmOp_revert_knownCodePc(address(105), 12, 0, 0);
@@ -136,15 +141,41 @@ impure func arbosTest_getMarshalledStorage(topFrame: EvmCallFrame, calldata: Byt
             msSize
         );
         mem = bytearray_copy(marshalledStorage, 0, mem, 64, msSize);
-        //if (evmCallStack_setTopFrameMemory(mem)) {
-        //    evmOp_return(0, 64 + msSize);
         if (evmCallStack_setTopFrameMemory(marshalledStorage)) {
             evmOp_return(0, msSize);
         } else {
             evmOp_revert_knownCodePc(address(105), 22, 0, 0);
         }
     } else {
-        evmOp_revert_knownCodePc(address(105), 23, 0, 0);
+        evmOp_return(0, 0);  // tests expect a report of empty storage if there is no storage
     }
 }
 
+impure func arbosTest_getAccountInfo(topFrame: EvmCallFrame, calldata: ByteArray) { // (address) -> bytes
+    // Return the balance, nonce, and marshalled storage for the contract at addr. Revert if no contract at that address.
+    if (evmCallFrame_getCaller(topFrame) != address(0)) {
+        evmOp_revert_knownCodePc(address(105), 20, 0, 0);
+    }
+
+    if (bytearray_size(calldata) != 36) {
+        evmOp_revert_knownCodePc(address(105), 21, 0, 0);
+    }
+
+    let addr = address(bytearray_get256(calldata, 4));
+    let acct = evmCallFrame_getAccount(topFrame, addr);
+    let mem = bytearray_set256(
+        bytearray_set256(bytearray_new(0), 0, account_getEthBalance(acct)),
+        32,
+        account_getNextSeqNum(acct),
+    );
+    if let Some(storage) = account_getAllStorage(acct) {
+        let marshalledStorage = storageMap_serialize(storage);
+        let msSize = bytearray_size(marshalledStorage);
+        mem = bytearray_copy(marshalledStorage, 0, mem, 64, msSize);
+    }
+    if (evmCallStack_setTopFrameMemory(mem)) {
+        evmOp_return(0, bytearray_size(mem));
+    } else {
+        evmOp_revert_knownCodePc(address(105), 22, 0, 0);
+    }
+}

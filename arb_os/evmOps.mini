@@ -443,9 +443,7 @@ public impure func evmOp_getjumpaddr(evm_pc: uint) -> impure func() {
 
 public impure func evmOp_msize() -> uint {
     if let Some(topFrame) = evmCallStack_topFrame() {
-        return bytearray_size(
-            evmCallFrame_getMemory(topFrame)
-        );
+        return 32*((bytearray_size(evmCallFrame_getMemory(topFrame))+31)/32);
     } else {
         evm_runtimePanic(22);
         return 0;
@@ -895,7 +893,8 @@ impure func doCreationOpcode(value: uint, offset: uint, length: uint, newAddress
                     constructorCode,
                     evmJumpTable,
                     startPoint,
-                    storageMap_new()
+                    storageMap_new(),
+                    true,
                 )
             )
         ) {
@@ -998,7 +997,8 @@ impure func doCreationOpcode(value: uint, offset: uint, length: uint, newAddress
                                         contractCode,
                                         evmJumpTable2,
                                         startPoint2,
-                                        storage
+                                        storage,
+                                        true,
                                     )
                                 )
                             ) {
