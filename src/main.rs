@@ -243,6 +243,10 @@ fn main() -> Result<(), CompileError> {
                 "evm-tests/VMTests/vmPushDupSwapTest",
                 "evm-tests/VMTests/vmBitwiseLogicOperation",
                 "evm-tests/VMTests/vmIOandFlowOperations",
+                "evm-tests/VMTests/vmSha3Test",
+                "evm-tests/VMTests/vmRandomTest",
+                "evm-tests/VMTests/vmSystemOperations",
+
             ]
             .iter()
             {
