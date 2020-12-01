@@ -287,7 +287,11 @@ public func bytearray_copy(
     toOffset: uint,
     nbytes: uint,
 ) -> ByteArray {
-    // TODO: optimize this to exploit alignment and speed up the endgame
+    // for now, make this a no-op if the to or from side would overflow 256-bit uint offset
+    if ((toOffset+nbytes < toOffset) || (fromOffset+nbytes < fromOffset)) {
+        return to;
+    }
+
     while (nbytes >= 32) {
         let val = bytearray_get256(from, fromOffset);
         to = bytearray_set256(to, toOffset, val);

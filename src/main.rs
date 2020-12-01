@@ -246,7 +246,7 @@ fn main() -> Result<(), CompileError> {
                 "evm-tests/VMTests/vmSha3Test",
                 "evm-tests/VMTests/vmRandomTest",
                 "evm-tests/VMTests/vmSystemOperations",
-
+                "evm-tests/VMTests/vmEnvironmentalInfo",
             ]
             .iter()
             {

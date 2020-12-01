@@ -810,7 +810,7 @@ impl ArbosTest {
             "installAccount",
             &[
                 ethabi::Token::Address(addr.to_h160()),
-                ethabi::Token::Bool((code == None) || (storage == None)),
+                ethabi::Token::Bool((code == None) && (storage == None)),
                 ethabi::Token::Uint(balance.to_u256()),
                 ethabi::Token::Uint(nonce.to_u256()),
                 ethabi::Token::Bytes(code.unwrap_or(vec![])),
@@ -826,10 +826,6 @@ impl ArbosTest {
         } else if receipts[0].succeeded() {
             Ok(())
         } else {
-            println!(
-                "arbosTest.run revert code {}",
-                receipts[0].get_return_code()
-            );
             Err(ethabi::Error::from("reverted"))
         }
     }

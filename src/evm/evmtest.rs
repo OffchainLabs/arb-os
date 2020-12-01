@@ -22,7 +22,13 @@ pub fn run_evm_tests(dir_path: &Path, logfiles_path: Option<&Path>) -> io::Resul
                 .expect("Something went wrong reading the file");
             let json: serde_json::Value =
                 serde_json::from_str(&contents).expect("JSON was not well-formatted");
-            if !path.ends_with("gas0.json") && !path.ends_with("gas1.json") {  // ignore tests that rely on detailed Eth gas accounting
+            if !path.ends_with("gas0.json")
+                && !path.ends_with("gas1.json")
+                && !path.ends_with("origin.json")
+                && !path.ends_with("gasprice.json")
+                && !path.ends_with("push32AndSuicide.json")
+            {
+                // ignore tests that rely on detailed Eth gas accounting
                 let result = run_one_test(json, &path, logfiles_path, path.to_str().unwrap());
                 match result {
                     Ok(()) => {
@@ -80,17 +86,19 @@ fn run_one_test(
             let addr_str = &v["exec"]["address"].to_string();
             let addr_str = &addr_str[1..(addr_str.len() - 1)];
             let data = bytevec_from_jval(&v["exec"]["data"].to_string(), true);
-            let _callvalue = match &v["exec"]["value"] {
+            let callvalue = match &v["exec"]["value"] {
                 serde_json::Value::Null => Uint256::zero(),
                 v => uint256_from_jval(&v.to_string(), true),
             };
+            let caller_addr = uint256_from_jval(&v["exec"]["caller"].to_string(), true);
+            let callee_addr = uint256_from_jval(addr_str, false);
             let _result = do_call(
                 &arbos_test,
                 &mut machine,
-                uint256_from_jval(&v["exec"]["caller"].to_string(), true),
-                uint256_from_jval(addr_str, false),
+                caller_addr.clone(),
+                callee_addr.clone(),
                 &data,
-                Uint256::zero(), //callvalue,
+                callvalue.clone(),
                 logfiles_path,
                 raw_filename,
             );
@@ -110,17 +118,27 @@ fn run_one_test(
                         let storage = storage_from_jval(adata["storage"].clone());
                         let (actual_balance, actual_nonce, actual_storage) =
                             arbos_test.get_account_info(&mut machine, addr.clone())?;
-                        if actual_balance != balance {
+                        let expected_balance = if addr == callee_addr {
+                            balance.add(&callvalue)
+                        } else {
+                            balance
+                        };
+                        let expected_nonce = if addr == caller_addr {
+                            nonce.add(&Uint256::one())
+                        } else {
+                            nonce
+                        };
+                        if actual_balance != expected_balance {
                             return Err(ethabi::Error::from(format!(
                                 "address {} balance: expected {}, got {}",
                                 addr.clone(),
-                                balance,
+                                expected_balance,
                                 actual_balance,
                             )));
-                        } else if actual_nonce != nonce {
+                        } else if actual_nonce != expected_nonce {
                             return Err(ethabi::Error::from(format!(
                                 "address {} nonce: expected {}, got {}",
-                                addr, nonce, actual_nonce,
+                                addr, expected_nonce, actual_nonce,
                             )));
                         } else if !compare_storage(&storage, &deserialize_storage(actual_storage)) {
                             return Err(ethabi::Error::from(format!(
@@ -194,7 +212,13 @@ fn do_call(
     logfiles_path: Option<&Path>,
     raw_filename: &str,
 ) -> Result<(), ethabi::Error> {
-    match arbos_test.call(machine, caller_addr, callee_addr, calldata.to_vec(), callvalue) {
+    match arbos_test.call(
+        machine,
+        caller_addr,
+        callee_addr,
+        calldata.to_vec(),
+        callvalue,
+    ) {
         Ok(_result) => {
             if let Some(logs_path) = logfiles_path {
                 let logfile_name = raw_filename.replace("/", "_").replace("_json", ".aoslog");
