@@ -10,7 +10,8 @@ use super::typecheck::{
     PropertiesList, TypeCheckedExpr, TypeCheckedFunc, TypeCheckedIfArm, TypeCheckedMatchPattern,
     TypeCheckedStatement,
 };
-use crate::compile::typecheck::TypeCheckedStatementKind;
+use crate::compile::ast::DebugInfo;
+use crate::compile::typecheck::{TypeCheckedExprKind, TypeCheckedStatementKind};
 use crate::link::{ImportedFunc, TupleTree, TUPLE_SIZE};
 use crate::mavm::{AVMOpcode, Instruction, Label, LabelGenerator, Opcode, Value};
 use crate::pos::Location;
@@ -979,8 +980,9 @@ fn mavm_codegen_expr<'a>(
     scopes: &mut Vec<(String, Label, Option<Type>)>,
     file_name_chart: &mut HashMap<u64, String>,
 ) -> Result<(LabelGenerator, &'a mut Vec<Instruction>, usize), CodegenError> {
-    match expr {
-        TypeCheckedExpr::UnaryOp(op, tce, _, loc) => {
+    let loc = expr.debug_info.location;
+    match &expr.kind {
+        TypeCheckedExprKind::UnaryOp(op, tce, _) => {
             let (lg, c, exp_locals) = mavm_codegen_expr(
                 tce,
                 code,
@@ -1009,7 +1011,7 @@ fn mavm_codegen_expr<'a>(
                         .exp(&Uint256::from_usize(160))
                         .sub(&Uint256::one())
                         .ok_or_else(|| {
-                            new_codegen_error("Underflow on subtraction".to_string(), *loc)
+                            new_codegen_error("Underflow on subtraction".to_string(), loc)
                         })?;
                     (
                         Some(Opcode::AVMOpcode(AVMOpcode::BitwiseAnd)),
@@ -1019,11 +1021,11 @@ fn mavm_codegen_expr<'a>(
                 UnaryOp::Len => (Some(Opcode::TupleGet(3)), Some(Value::Int(Uint256::zero()))),
             };
             if let Some(opcode) = maybe_opcode {
-                code.push(Instruction::new(opcode, maybe_imm, *loc));
+                code.push(Instruction::new(opcode, maybe_imm, loc));
             }
             Ok((label_gen, code, max(num_locals, exp_locals)))
         }
-        TypeCheckedExpr::Variant(inner, loc) => {
+        TypeCheckedExprKind::Variant(inner) => {
             let (lg, c, exp_locals) = mavm_codegen_expr(
                 inner,
                 code,
@@ -1040,16 +1042,16 @@ fn mavm_codegen_expr<'a>(
             c.push(Instruction::from_opcode_imm(
                 Opcode::AVMOpcode(AVMOpcode::Noop),
                 Value::new_tuple(vec![Value::Int(Uint256::from_usize(1)), Value::none()]),
-                *loc,
+                loc,
             ));
             c.push(Instruction::from_opcode_imm(
                 Opcode::AVMOpcode(AVMOpcode::Tset),
                 Value::Int(Uint256::from_u64(1)),
-                *loc,
+                loc,
             ));
             Ok((lg, c, max(num_locals, exp_locals)))
         }
-        TypeCheckedExpr::Binary(op, tce1, tce2, _, loc) => {
+        TypeCheckedExprKind::Binary(op, tce1, tce2, _) => {
             let (lg, c, left_locals) = mavm_codegen_expr(
                 tce2,
                 code,
@@ -1103,7 +1105,7 @@ fn mavm_codegen_expr<'a>(
                 BinaryOp::LogicalOr => Opcode::LogicalOr,
                 BinaryOp::Hash => Opcode::AVMOpcode(AVMOpcode::Hash2),
             };
-            code.push(Instruction::from_opcode(opcode, *loc));
+            code.push(Instruction::from_opcode(opcode, loc));
             match op {
                 BinaryOp::NotEqual
                 | BinaryOp::LessEq
@@ -1112,7 +1114,7 @@ fn mavm_codegen_expr<'a>(
                 | BinaryOp::SGreaterEq => {
                     code.push(Instruction::from_opcode(
                         Opcode::AVMOpcode(AVMOpcode::IsZero),
-                        *loc,
+                        loc,
                     ));
                 }
                 _ => {}
@@ -1123,7 +1125,7 @@ fn mavm_codegen_expr<'a>(
                 max(num_locals, max(left_locals, right_locals)),
             ))
         }
-        TypeCheckedExpr::ShortcutOr(tce1, tce2, loc) => {
+        TypeCheckedExprKind::ShortcutOr(tce1, tce2) => {
             let (lg, c, left_locals) = mavm_codegen_expr(
                 tce1,
                 code,
@@ -1140,16 +1142,16 @@ fn mavm_codegen_expr<'a>(
             let (lab, lg) = lg.next();
             c.push(Instruction::from_opcode(
                 Opcode::AVMOpcode(AVMOpcode::Dup0),
-                *loc,
+                loc,
             ));
             c.push(Instruction::from_opcode_imm(
                 Opcode::AVMOpcode(AVMOpcode::Cjump),
                 Value::Label(lab),
-                *loc,
+                loc,
             ));
             c.push(Instruction::from_opcode(
                 Opcode::AVMOpcode(AVMOpcode::Pop),
-                *loc,
+                loc,
             ));
             let (lg, c, right_locals) = mavm_codegen_expr(
                 tce2,
@@ -1164,10 +1166,10 @@ fn mavm_codegen_expr<'a>(
                 scopes,
                 file_name_chart,
             )?;
-            c.push(Instruction::from_opcode(Opcode::Label(lab), *loc));
+            c.push(Instruction::from_opcode(Opcode::Label(lab), loc));
             Ok((lg, c, max(num_locals, max(left_locals, right_locals))))
         }
-        TypeCheckedExpr::ShortcutAnd(tce1, tce2, loc) => {
+        TypeCheckedExprKind::ShortcutAnd(tce1, tce2) => {
             let (lg, c, left_locals) = mavm_codegen_expr(
                 tce1,
                 code,
@@ -1184,20 +1186,20 @@ fn mavm_codegen_expr<'a>(
             let (lab, lg) = lg.next();
             c.push(Instruction::from_opcode(
                 Opcode::AVMOpcode(AVMOpcode::Dup0),
-                *loc,
+                loc,
             ));
             c.push(Instruction::from_opcode(
                 Opcode::AVMOpcode(AVMOpcode::IsZero),
-                *loc,
+                loc,
             ));
             c.push(Instruction::from_opcode_imm(
                 Opcode::AVMOpcode(AVMOpcode::Cjump),
                 Value::Label(lab),
-                *loc,
+                loc,
             ));
             c.push(Instruction::from_opcode(
                 Opcode::AVMOpcode(AVMOpcode::Pop),
-                *loc,
+                loc,
             ));
             let (lg, c, right_locals) = mavm_codegen_expr(
                 tce2,
@@ -1212,15 +1214,15 @@ fn mavm_codegen_expr<'a>(
                 scopes,
                 file_name_chart,
             )?;
-            c.push(Instruction::from_opcode(Opcode::Label(lab), *loc));
+            c.push(Instruction::from_opcode(Opcode::Label(lab), loc));
             Ok((lg, c, max(num_locals, max(left_locals, right_locals))))
         }
-        TypeCheckedExpr::LocalVariableRef(name, _, loc) => match locals.get(*name) {
+        TypeCheckedExprKind::LocalVariableRef(name, _) => match locals.get(*name) {
             Some(n) => {
                 code.push(Instruction::from_opcode_imm(
                     Opcode::GetLocal,
                     Value::Int(Uint256::from_usize(n)),
-                    *loc,
+                    loc,
                 ));
                 Ok((label_gen, code, num_locals))
             }
@@ -1228,15 +1230,15 @@ fn mavm_codegen_expr<'a>(
                 println!("local: {:?}", *name);
                 Err(new_codegen_error(
                     "tried to access non-existent local variable".to_string(),
-                    *loc,
+                    loc,
                 ))
             }
         },
-        TypeCheckedExpr::GlobalVariableRef(idx, _, loc) => {
-            code.push(Instruction::from_opcode(Opcode::GetGlobalVar(*idx), *loc));
+        TypeCheckedExprKind::GlobalVariableRef(idx, _) => {
+            code.push(Instruction::from_opcode(Opcode::GetGlobalVar(*idx), loc));
             Ok((label_gen, code, num_locals))
         }
-        TypeCheckedExpr::FuncRef(name, _, loc) => {
+        TypeCheckedExprKind::FuncRef(name, _) => {
             let the_label = match import_func_map.get(name) {
                 Some(label) => *label,
                 None => Label::Func(*name),
@@ -1244,11 +1246,11 @@ fn mavm_codegen_expr<'a>(
             code.push(Instruction::from_opcode_imm(
                 Opcode::AVMOpcode(AVMOpcode::Noop),
                 Value::Label(the_label),
-                *loc,
+                loc,
             ));
             Ok((label_gen, code, num_locals))
         }
-        TypeCheckedExpr::TupleRef(tce, idx, _, loc) => {
+        TypeCheckedExprKind::TupleRef(tce, idx, _) => {
             let tce_type = tce.get_type();
             let tuple_size = if let Type::Tuple(fields) = tce_type {
                 fields.len()
@@ -1271,11 +1273,11 @@ fn mavm_codegen_expr<'a>(
             c.push(Instruction::from_opcode_imm(
                 Opcode::TupleGet(tuple_size),
                 Value::Int(idx.clone()),
-                *loc,
+                loc,
             ));
             Ok((lg, c, max(num_locals, exp_locals)))
         }
-        TypeCheckedExpr::DotRef(tce, slot_num, s_size, _, loc) => {
+        TypeCheckedExprKind::DotRef(tce, slot_num, s_size, _) => {
             let (lg, c, exp_locals) = mavm_codegen_expr(
                 tce,
                 code,
@@ -1294,19 +1296,19 @@ fn mavm_codegen_expr<'a>(
             code.push(Instruction::from_opcode_imm(
                 Opcode::TupleGet(*s_size),
                 Value::Int(Uint256::from_usize(*slot_num)),
-                *loc,
+                loc,
             ));
             Ok((label_gen, code, max(num_locals, exp_locals)))
         }
-        TypeCheckedExpr::Const(val, _, loc) => {
+        TypeCheckedExprKind::Const(val, _) => {
             code.push(Instruction::from_opcode_imm(
                 Opcode::AVMOpcode(AVMOpcode::Noop),
                 val.clone(),
-                *loc,
+                loc,
             ));
             Ok((label_gen, code, num_locals))
         }
-        TypeCheckedExpr::FunctionCall(fexpr, args, _, _, loc) => {
+        TypeCheckedExprKind::FunctionCall(fexpr, args, _, _) => {
             let n_args = args.len();
             let (ret_label, lg) = label_gen.next();
             label_gen = lg;
@@ -1332,7 +1334,7 @@ fn mavm_codegen_expr<'a>(
             code.push(Instruction::from_opcode_imm(
                 Opcode::AVMOpcode(AVMOpcode::Noop),
                 Value::Label(ret_label),
-                *loc,
+                loc,
             ));
             let (lg, c, fexpr_locals) = mavm_codegen_expr(
                 fexpr,
@@ -1349,12 +1351,12 @@ fn mavm_codegen_expr<'a>(
             )?;
             c.push(Instruction::from_opcode(
                 Opcode::AVMOpcode(AVMOpcode::Jump),
-                *loc,
+                loc,
             ));
-            c.push(Instruction::from_opcode(Opcode::Label(ret_label), *loc));
+            c.push(Instruction::from_opcode(Opcode::Label(ret_label), loc));
             Ok((lg, c, max(num_locals, max(fexpr_locals, args_locals))))
         }
-        TypeCheckedExpr::CodeBlock(body, ret_expr, scope_name, loc) => {
+        TypeCheckedExprKind::CodeBlock(body, ret_expr, scope_name) => {
             let (bottom_label, lg) = label_gen.next();
             scopes.push((
                 scope_name.clone().unwrap_or("_".to_string()),
@@ -1390,20 +1392,20 @@ fn mavm_codegen_expr<'a>(
                     file_name_chart,
                 )
                 .map(|(lg, code, exp_locals)| (lg, code, max(num_locals, max(exp_locals, nl))))?;
-                code.push(Instruction::from_opcode(Opcode::Label(bottom_label), *loc));
+                code.push(Instruction::from_opcode(Opcode::Label(bottom_label), loc));
                 let _scope = scopes.pop();
                 Ok((lg, code, prepushed_vals_expr))
             } else {
                 code.push(Instruction::from_opcode_imm(
                     Opcode::AVMOpcode(AVMOpcode::Noop),
                     Value::new_tuple(vec![]),
-                    *loc,
+                    loc,
                 ));
-                code.push(Instruction::from_opcode(Opcode::Label(bottom_label), *loc));
+                code.push(Instruction::from_opcode(Opcode::Label(bottom_label), loc));
                 Ok((lab_gen, code, max(num_locals, nl)))
             }
         }
-        TypeCheckedExpr::StructInitializer(fields, _, loc) => {
+        TypeCheckedExprKind::StructInitializer(fields, _) => {
             let fields_len = fields.len();
             let mut struct_locals = 0;
             for i in 0..fields_len {
@@ -1429,18 +1431,18 @@ fn mavm_codegen_expr<'a>(
             code.push(Instruction::from_opcode_imm(
                 Opcode::AVMOpcode(AVMOpcode::Noop),
                 empty_vec,
-                *loc,
+                loc,
             ));
             for i in 0..fields_len {
                 code.push(Instruction::from_opcode_imm(
                     Opcode::TupleSet(fields_len),
                     Value::Int(Uint256::from_usize(i)),
-                    *loc,
+                    loc,
                 ));
             }
             Ok((label_gen, code, max(num_locals, struct_locals)))
         }
-        TypeCheckedExpr::Tuple(fields, _, loc) => {
+        TypeCheckedExprKind::Tuple(fields, _) => {
             let fields_len = fields.len();
             let mut tuple_locals = 0;
             for i in 0..fields_len {
@@ -1466,34 +1468,38 @@ fn mavm_codegen_expr<'a>(
             code.push(Instruction::from_opcode_imm(
                 Opcode::AVMOpcode(AVMOpcode::Noop),
                 Value::new_tuple(empty_vec),
-                *loc,
+                loc,
             ));
             for i in 0..fields_len {
                 code.push(Instruction::from_opcode_imm(
                     Opcode::TupleSet(fields_len),
                     Value::Int(Uint256::from_usize(i)),
-                    *loc,
+                    loc,
                 ));
             }
             Ok((label_gen, code, max(num_locals, tuple_locals)))
         }
-        TypeCheckedExpr::ArrayRef(expr1, expr2, t, loc) => {
+        TypeCheckedExprKind::ArrayRef(expr1, expr2, t) => {
             let call_type = Type::Func(
                 false,
                 vec![Type::Array(Box::new(Type::Any)), Type::Uint],
                 Box::new(t.clone()),
             );
-            let the_expr = TypeCheckedExpr::FunctionCall(
-                Box::new(TypeCheckedExpr::FuncRef(
-                    *string_table.get_if_exists("builtin_arrayGet").unwrap(),
-                    call_type.clone(),
-                    *loc,
-                )),
-                vec![*expr1.clone(), *expr2.clone()],
-                call_type,
-                PropertiesList { pure: true },
-                *loc,
-            );
+            let the_expr = TypeCheckedExpr {
+                kind: TypeCheckedExprKind::FunctionCall(
+                    Box::new(TypeCheckedExpr {
+                        kind: TypeCheckedExprKind::FuncRef(
+                            *string_table.get_if_exists("builtin_arrayGet").unwrap(),
+                            call_type.clone(),
+                        ),
+                        debug_info: DebugInfo { location: loc },
+                    }),
+                    vec![*expr1.clone(), *expr2.clone()],
+                    call_type,
+                    PropertiesList { pure: true },
+                ),
+                debug_info: DebugInfo { location: loc },
+            };
             mavm_codegen_expr(
                 &the_expr,
                 code,
@@ -1508,7 +1514,7 @@ fn mavm_codegen_expr<'a>(
                 file_name_chart,
             )
         }
-        TypeCheckedExpr::FixedArrayRef(expr1, expr2, size, _, loc) => {
+        TypeCheckedExprKind::FixedArrayRef(expr1, expr2, size, _) => {
             let (lg, c, exp1_locals) = mavm_codegen_expr(
                 expr1,
                 code,
@@ -1543,27 +1549,27 @@ fn mavm_codegen_expr<'a>(
                 label_gen = lg;
                 code.push(Instruction::from_opcode(
                     Opcode::AVMOpcode(AVMOpcode::Dup0),
-                    *loc,
+                    loc,
                 ));
                 code.push(Instruction::from_opcode_imm(
                     Opcode::AVMOpcode(AVMOpcode::GreaterThan),
                     Value::Int(Uint256::from_usize(*size)),
-                    *loc,
+                    loc,
                 ));
                 code.push(Instruction::from_opcode_imm(
                     Opcode::AVMOpcode(AVMOpcode::Cjump),
                     Value::Label(cont_label),
-                    *loc,
+                    loc,
                 ));
                 code.push(Instruction::from_opcode(
                     Opcode::AVMOpcode(AVMOpcode::Panic),
-                    *loc,
+                    loc,
                 ));
-                code.push(Instruction::from_opcode(Opcode::Label(cont_label), *loc));
+                code.push(Instruction::from_opcode(Opcode::Label(cont_label), loc));
             }
             code.push(Instruction::from_opcode(
                 Opcode::UncheckedFixedArrayGet(*size),
-                *loc,
+                loc,
             ));
             Ok((
                 label_gen,
@@ -1571,23 +1577,27 @@ fn mavm_codegen_expr<'a>(
                 max(num_locals, max(exp1_locals, exp2_locals)),
             ))
         }
-        TypeCheckedExpr::MapRef(map_expr, key_expr, _, loc) => {
+        TypeCheckedExprKind::MapRef(map_expr, key_expr, _) => {
             let call_type = Type::Func(
                 false,
                 vec![Type::Any, Type::Any],
                 Box::new(Type::Option(Box::new(Type::Any))),
             );
-            let the_expr = TypeCheckedExpr::FunctionCall(
-                Box::new(TypeCheckedExpr::FuncRef(
-                    *string_table.get_if_exists("builtin_kvsGet").unwrap(),
-                    call_type.clone(),
-                    *loc,
-                )),
-                vec![*map_expr.clone(), *key_expr.clone()],
-                call_type,
-                PropertiesList { pure: true },
-                *loc,
-            );
+            let the_expr = TypeCheckedExpr {
+                kind: TypeCheckedExprKind::FunctionCall(
+                    Box::new(TypeCheckedExpr {
+                        kind: TypeCheckedExprKind::FuncRef(
+                            *string_table.get_if_exists("builtin_kvsGet").unwrap(),
+                            call_type.clone(),
+                        ),
+                        debug_info: DebugInfo { location: loc },
+                    }),
+                    vec![*map_expr.clone(), *key_expr.clone()],
+                    call_type,
+                    PropertiesList { pure: true },
+                ),
+                debug_info: DebugInfo { location: loc },
+            };
             mavm_codegen_expr(
                 &the_expr,
                 code,
@@ -1602,27 +1612,34 @@ fn mavm_codegen_expr<'a>(
                 file_name_chart,
             )
         }
-        TypeCheckedExpr::NewArray(sz_expr, base_type, array_type, loc) => {
+        TypeCheckedExprKind::NewArray(sz_expr, base_type, array_type) => {
             let call_type = Type::Func(
                 false,
                 vec![Type::Uint, Type::Any],
                 Box::new(array_type.clone()),
             );
             let default_val = base_type.default_value();
-            let the_expr = TypeCheckedExpr::FunctionCall(
-                Box::new(TypeCheckedExpr::FuncRef(
-                    *string_table.get_if_exists("builtin_arrayNew").unwrap(),
-                    call_type.clone(),
-                    *loc,
-                )),
-                vec![
-                    *sz_expr.clone(),
-                    TypeCheckedExpr::Const(default_val, Type::Any, *loc),
-                ],
-                call_type,
-                PropertiesList { pure: true },
-                *loc,
-            );
+            let the_expr = TypeCheckedExpr {
+                kind: TypeCheckedExprKind::FunctionCall(
+                    Box::new(TypeCheckedExpr {
+                        kind: TypeCheckedExprKind::FuncRef(
+                            *string_table.get_if_exists("builtin_arrayNew").unwrap(),
+                            call_type.clone(),
+                        ),
+                        debug_info: DebugInfo { location: loc },
+                    }),
+                    vec![
+                        *sz_expr.clone(),
+                        TypeCheckedExpr {
+                            kind: TypeCheckedExprKind::Const(default_val, Type::Any),
+                            debug_info: DebugInfo { location: loc },
+                        },
+                    ],
+                    call_type,
+                    PropertiesList { pure: true },
+                ),
+                debug_info: DebugInfo { location: loc },
+            };
             mavm_codegen_expr(
                 &the_expr,
                 code,
@@ -1637,7 +1654,7 @@ fn mavm_codegen_expr<'a>(
                 file_name_chart,
             )
         }
-        TypeCheckedExpr::NewFixedArray(sz, bo_expr, _, loc) => {
+        TypeCheckedExprKind::NewFixedArray(sz, bo_expr, _) => {
             let mut expr_locals = 0;
             match bo_expr {
                 Some(expr) => {
@@ -1660,20 +1677,20 @@ fn mavm_codegen_expr<'a>(
                     for _i in 0..7 {
                         code.push(Instruction::from_opcode(
                             Opcode::AVMOpcode(AVMOpcode::Dup0),
-                            *loc,
+                            loc,
                         ));
                     }
                     let empty_tuple = vec![Value::new_tuple(Vec::new()); 8];
                     code.push(Instruction::from_opcode_imm(
                         Opcode::AVMOpcode(AVMOpcode::Noop),
                         Value::new_tuple(empty_tuple),
-                        *loc,
+                        loc,
                     ));
                     for i in 0..8 {
                         code.push(Instruction::from_opcode_imm(
                             Opcode::AVMOpcode(AVMOpcode::Tset),
                             Value::Int(Uint256::from_usize(i)),
-                            *loc,
+                            loc,
                         ));
                     }
                 }
@@ -1682,7 +1699,7 @@ fn mavm_codegen_expr<'a>(
                     code.push(Instruction::from_opcode_imm(
                         Opcode::AVMOpcode(AVMOpcode::Noop),
                         Value::new_tuple(empty_tuple),
-                        *loc,
+                        loc,
                     ));
                 }
             }
@@ -1691,39 +1708,43 @@ fn mavm_codegen_expr<'a>(
                 for _i in 0..7 {
                     code.push(Instruction::from_opcode(
                         Opcode::AVMOpcode(AVMOpcode::Dup0),
-                        *loc,
+                        loc,
                     ));
                 }
                 let empty_tuple = vec![Value::new_tuple(Vec::new()); 8];
                 code.push(Instruction::from_opcode_imm(
                     Opcode::AVMOpcode(AVMOpcode::Noop),
                     Value::new_tuple(empty_tuple),
-                    *loc,
+                    loc,
                 ));
                 for i in 0..8 {
                     code.push(Instruction::from_opcode_imm(
                         Opcode::AVMOpcode(AVMOpcode::Tset),
                         Value::Int(Uint256::from_usize(i)),
-                        *loc,
+                        loc,
                     ));
                 }
                 tuple_size *= 8;
             }
             Ok((label_gen, code, max(num_locals, expr_locals)))
         }
-        TypeCheckedExpr::NewMap(_, loc) => {
+        TypeCheckedExprKind::NewMap(_) => {
             let call_type = Type::Func(false, vec![], Box::new(Type::Any));
-            let the_expr = TypeCheckedExpr::FunctionCall(
-                Box::new(TypeCheckedExpr::FuncRef(
-                    *string_table.get_if_exists("builtin_kvsNew").unwrap(),
-                    call_type.clone(),
-                    *loc,
-                )),
-                vec![],
-                call_type,
-                PropertiesList { pure: true },
-                *loc,
-            );
+            let the_expr = TypeCheckedExpr {
+                kind: TypeCheckedExprKind::FunctionCall(
+                    Box::new(TypeCheckedExpr {
+                        kind: TypeCheckedExprKind::FuncRef(
+                            *string_table.get_if_exists("builtin_kvsNew").unwrap(),
+                            call_type.clone(),
+                        ),
+                        debug_info: DebugInfo { location: loc },
+                    }),
+                    vec![],
+                    call_type,
+                    PropertiesList { pure: true },
+                ),
+                debug_info: DebugInfo { location: loc },
+            };
             mavm_codegen_expr(
                 &the_expr,
                 code,
@@ -1738,23 +1759,27 @@ fn mavm_codegen_expr<'a>(
                 file_name_chart,
             )
         }
-        TypeCheckedExpr::ArrayMod(arr, index, val, _, loc) => {
+        TypeCheckedExprKind::ArrayMod(arr, index, val, _) => {
             let call_type = Type::Func(
                 false,
                 vec![arr.get_type(), index.get_type(), val.get_type()],
                 Box::new(arr.get_type()),
             );
-            let the_expr = TypeCheckedExpr::FunctionCall(
-                Box::new(TypeCheckedExpr::FuncRef(
-                    *string_table.get_if_exists("builtin_arraySet").unwrap(),
-                    call_type.clone(),
-                    *loc,
-                )),
-                vec![*arr.clone(), *index.clone(), *val.clone()],
-                call_type,
-                PropertiesList { pure: true },
-                *loc,
-            );
+            let the_expr = TypeCheckedExpr {
+                kind: TypeCheckedExprKind::FunctionCall(
+                    Box::new(TypeCheckedExpr {
+                        kind: TypeCheckedExprKind::FuncRef(
+                            *string_table.get_if_exists("builtin_arraySet").unwrap(),
+                            call_type.clone(),
+                        ),
+                        debug_info: DebugInfo { location: loc },
+                    }),
+                    vec![*arr.clone(), *index.clone(), *val.clone()],
+                    call_type,
+                    PropertiesList { pure: true },
+                ),
+                debug_info: DebugInfo { location: loc },
+            };
             mavm_codegen_expr(
                 &the_expr,
                 code,
@@ -1769,7 +1794,7 @@ fn mavm_codegen_expr<'a>(
                 file_name_chart,
             )
         }
-        TypeCheckedExpr::FixedArrayMod(arr, index, val, size, _, loc) => codegen_fixed_array_mod(
+        TypeCheckedExprKind::FixedArrayMod(arr, index, val, size, _) => codegen_fixed_array_mod(
             arr,
             index,
             val,
@@ -1781,12 +1806,12 @@ fn mavm_codegen_expr<'a>(
             string_table,
             import_func_map,
             global_var_map,
-            *loc,
+            loc,
             prepushed_vals,
             scopes,
             file_name_chart,
         ),
-        TypeCheckedExpr::MapMod(map_expr, key_expr, val_expr, _, loc) => {
+        TypeCheckedExprKind::MapMod(map_expr, key_expr, val_expr, _) => {
             let call_type = Type::Func(
                 false,
                 vec![
@@ -1796,17 +1821,21 @@ fn mavm_codegen_expr<'a>(
                 ],
                 Box::new(map_expr.get_type()),
             );
-            let the_expr = TypeCheckedExpr::FunctionCall(
-                Box::new(TypeCheckedExpr::FuncRef(
-                    *string_table.get_if_exists("builtin_kvsSet").unwrap(),
-                    call_type.clone(),
-                    *loc,
-                )),
-                vec![*map_expr.clone(), *key_expr.clone(), *val_expr.clone()],
-                call_type,
-                PropertiesList { pure: true },
-                *loc,
-            );
+            let the_expr = TypeCheckedExpr {
+                kind: TypeCheckedExprKind::FunctionCall(
+                    Box::new(TypeCheckedExpr {
+                        kind: TypeCheckedExprKind::FuncRef(
+                            *string_table.get_if_exists("builtin_kvsSet").unwrap(),
+                            call_type.clone(),
+                        ),
+                        debug_info: DebugInfo { location: loc },
+                    }),
+                    vec![*map_expr.clone(), *key_expr.clone(), *val_expr.clone()],
+                    call_type,
+                    PropertiesList { pure: true },
+                ),
+                debug_info: DebugInfo { location: loc },
+            };
             mavm_codegen_expr(
                 &the_expr,
                 code,
@@ -1821,7 +1850,7 @@ fn mavm_codegen_expr<'a>(
                 file_name_chart,
             )
         }
-        TypeCheckedExpr::StructMod(struc, index, val, t, loc) => {
+        TypeCheckedExprKind::StructMod(struc, index, val, t) => {
             let (lg, c, val_locals) = mavm_codegen_expr(
                 val,
                 code,
@@ -1855,7 +1884,7 @@ fn mavm_codegen_expr<'a>(
                 code.push(Instruction::from_opcode_imm(
                     Opcode::TupleSet(struct_len),
                     Value::Int(Uint256::from_usize(*index)),
-                    *loc,
+                    loc,
                 ));
             } else {
                 panic!("impossible value in TypeCheckedExpr::StructMod");
@@ -1866,7 +1895,7 @@ fn mavm_codegen_expr<'a>(
                 max(num_locals, max(val_locals, struc_locals)),
             ))
         }
-        TypeCheckedExpr::Cast(expr, _, _) => mavm_codegen_expr(
+        TypeCheckedExprKind::Cast(expr, _) => mavm_codegen_expr(
             expr,
             code,
             num_locals,
@@ -1879,7 +1908,7 @@ fn mavm_codegen_expr<'a>(
             scopes,
             file_name_chart,
         ),
-        TypeCheckedExpr::Asm(_, insns, args, _) => {
+        TypeCheckedExprKind::Asm(_, insns, args) => {
             let n_args = args.len();
             let mut args_locals = 0;
             for i in 0..n_args {
@@ -1905,7 +1934,7 @@ fn mavm_codegen_expr<'a>(
             }
             Ok((label_gen, code, max(num_locals, args_locals)))
         }
-        TypeCheckedExpr::Try(exp, _, loc) => {
+        TypeCheckedExprKind::Try(exp, _) => {
             let (label_gen, code, exp_locals) = mavm_codegen_expr(
                 exp,
                 code,
@@ -1922,41 +1951,41 @@ fn mavm_codegen_expr<'a>(
             let (extract, label_gen) = label_gen.next();
             code.push(Instruction::from_opcode(
                 Opcode::AVMOpcode(AVMOpcode::Dup0),
-                *loc,
+                loc,
             ));
             code.push(Instruction::from_opcode_imm(
                 Opcode::AVMOpcode(AVMOpcode::Tget),
                 Value::Int(Uint256::zero()),
-                *loc,
+                loc,
             ));
             code.push(Instruction::from_opcode_imm(
                 Opcode::AVMOpcode(AVMOpcode::Cjump),
                 Value::Label(extract),
-                *loc,
+                loc,
             ));
             // We use the auxstack here to temporarily store the return value while we clear the temp values on the stack
             if prepushed_vals > 0 {
                 code.push(Instruction::from_opcode(
                     Opcode::AVMOpcode(AVMOpcode::AuxPush),
-                    *loc,
+                    loc,
                 ));
                 for _ in 0..prepushed_vals {
                     code.push(Instruction::from_opcode(
                         Opcode::AVMOpcode(AVMOpcode::Pop),
-                        *loc,
+                        loc,
                     ));
                 }
                 code.push(Instruction::from_opcode(
                     Opcode::AVMOpcode(AVMOpcode::AuxPop),
-                    *loc,
+                    loc,
                 ));
             }
-            code.push(Instruction::from_opcode(Opcode::Return, *loc));
-            code.push(Instruction::from_opcode(Opcode::Label(extract), *loc));
+            code.push(Instruction::from_opcode(Opcode::Return, loc));
+            code.push(Instruction::from_opcode(Opcode::Label(extract), loc));
             code.push(Instruction::from_opcode_imm(
                 Opcode::AVMOpcode(AVMOpcode::Tget),
                 Value::Int(Uint256::one()),
-                *loc,
+                loc,
             ));
             Ok((label_gen, code, max(num_locals, exp_locals)))
         }
