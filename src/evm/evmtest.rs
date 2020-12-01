@@ -9,7 +9,7 @@ use std::collections::HashMap;
 use std::io;
 use std::path::Path;
 
-pub fn run_evm_tests(dir_path: &Path, logfiles_path: Option<&Path>) -> io::Result<()> {
+pub fn run_evm_tests(dir_path: &Path, logfiles_path: Option<&Path>) -> io::Result<(u64, u64)> {
     let mut num_success = 0;
     let mut num_fail = 0;
     for entry in dir_path.read_dir()? {
@@ -37,8 +37,7 @@ pub fn run_evm_tests(dir_path: &Path, logfiles_path: Option<&Path>) -> io::Resul
             }
         }
     }
-    println!("{} successes, {} failures", num_success, num_fail);
-    Ok(())
+    Ok((num_success, num_fail))
 }
 
 fn run_one_test(

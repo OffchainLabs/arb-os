@@ -60,6 +60,9 @@ run:
 test:
 	cargo test --release
 
+evmtest: $(ARBOS)
+	cargo run --release -- evm-tests
+
 testlogs: $(TEMPLATES) $(ARBOS)
 	rm -rf testlogs
 	mkdir testlogs

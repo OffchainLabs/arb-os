@@ -236,6 +236,8 @@ fn main() -> Result<(), CompileError> {
         }
 
         Args::EvmTests(options) => {
+            let mut num_successes = 0u64;
+            let mut num_failures = 0u64;
             for path_name in [
                 "evm-tests/VMTests/vmArithmeticTest",
                 "evm-tests/VMTests/vmPushDupSwapTest",
@@ -245,7 +247,7 @@ fn main() -> Result<(), CompileError> {
             .iter()
             {
                 let path = Path::new(path_name);
-                let _ = evm::evmtest::run_evm_tests(
+                let (ns, nf) = evm::evmtest::run_evm_tests(
                     path,
                     if options.savelogs {
                         Some(Path::new("evm-test-logs/"))
@@ -254,7 +256,10 @@ fn main() -> Result<(), CompileError> {
                     },
                 )
                 .unwrap();
+                num_successes = num_successes + ns;
+                num_failures = num_failures + nf;
             }
+            println!("{} successes, {} failures", num_successes, num_failures);
         }
     }
 
