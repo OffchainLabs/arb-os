@@ -19,9 +19,15 @@ use std::collections::HashMap;
 pub type TypeTree = HashMap<(Vec<String>, usize), Type>;
 
 ///Debugging info serialized into mini executables, currently only contains a location.
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Default)]
 pub struct DebugInfo {
     pub location: Option<Location>,
+}
+
+impl From<Option<Location>> for DebugInfo {
+    fn from(location: Option<Location>) -> Self {
+        DebugInfo { location }
+    }
 }
 
 ///A top level language declaration.  Represents any language construct that can be directly
@@ -873,7 +879,7 @@ impl Expr {
     pub fn new_unary(op: UnaryOp, e: Expr, loc: Option<Location>) -> Self {
         Self {
             kind: ExprKind::UnaryOp(op, Box::new(e)),
-            debug_info: DebugInfo { location: loc },
+            debug_info: DebugInfo::from(loc),
         }
     }
 
@@ -881,7 +887,7 @@ impl Expr {
     pub fn new_binary(op: BinaryOp, e1: Expr, e2: Expr, loc: Option<Location>) -> Self {
         Self {
             kind: ExprKind::Binary(op, Box::new(e1), Box::new(e2)),
-            debug_info: DebugInfo { location: loc },
+            debug_info: DebugInfo::from(loc),
         }
     }
 

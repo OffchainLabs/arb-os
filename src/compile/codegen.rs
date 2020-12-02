@@ -1492,13 +1492,13 @@ fn mavm_codegen_expr<'a>(
                             *string_table.get_if_exists("builtin_arrayGet").unwrap(),
                             call_type.clone(),
                         ),
-                        debug_info: DebugInfo { location: loc },
+                        debug_info: DebugInfo::from(loc),
                     }),
                     vec![*expr1.clone(), *expr2.clone()],
                     call_type,
                     PropertiesList { pure: true },
                 ),
-                debug_info: DebugInfo { location: loc },
+                debug_info: DebugInfo::from(loc),
             };
             mavm_codegen_expr(
                 &the_expr,
@@ -1590,13 +1590,13 @@ fn mavm_codegen_expr<'a>(
                             *string_table.get_if_exists("builtin_kvsGet").unwrap(),
                             call_type.clone(),
                         ),
-                        debug_info: DebugInfo { location: loc },
+                        debug_info: DebugInfo::from(loc),
                     }),
                     vec![*map_expr.clone(), *key_expr.clone()],
                     call_type,
                     PropertiesList { pure: true },
                 ),
-                debug_info: DebugInfo { location: loc },
+                debug_info: DebugInfo::from(loc),
             };
             mavm_codegen_expr(
                 &the_expr,
@@ -1626,19 +1626,19 @@ fn mavm_codegen_expr<'a>(
                             *string_table.get_if_exists("builtin_arrayNew").unwrap(),
                             call_type.clone(),
                         ),
-                        debug_info: DebugInfo { location: loc },
+                        debug_info: DebugInfo::from(loc),
                     }),
                     vec![
                         *sz_expr.clone(),
                         TypeCheckedExpr {
                             kind: TypeCheckedExprKind::Const(default_val, Type::Any),
-                            debug_info: DebugInfo { location: loc },
+                            debug_info: DebugInfo::from(loc),
                         },
                     ],
                     call_type,
                     PropertiesList { pure: true },
                 ),
-                debug_info: DebugInfo { location: loc },
+                debug_info: DebugInfo::from(loc),
             };
             mavm_codegen_expr(
                 &the_expr,
@@ -1737,13 +1737,13 @@ fn mavm_codegen_expr<'a>(
                             *string_table.get_if_exists("builtin_kvsNew").unwrap(),
                             call_type.clone(),
                         ),
-                        debug_info: DebugInfo { location: loc },
+                        debug_info: DebugInfo::from(loc),
                     }),
                     vec![],
                     call_type,
                     PropertiesList { pure: true },
                 ),
-                debug_info: DebugInfo { location: loc },
+                debug_info: DebugInfo::from(loc),
             };
             mavm_codegen_expr(
                 &the_expr,
@@ -1772,13 +1772,13 @@ fn mavm_codegen_expr<'a>(
                             *string_table.get_if_exists("builtin_arraySet").unwrap(),
                             call_type.clone(),
                         ),
-                        debug_info: DebugInfo { location: loc },
+                        debug_info: DebugInfo::from(loc),
                     }),
                     vec![*arr.clone(), *index.clone(), *val.clone()],
                     call_type,
                     PropertiesList { pure: true },
                 ),
-                debug_info: DebugInfo { location: loc },
+                debug_info: DebugInfo::from(loc),
             };
             mavm_codegen_expr(
                 &the_expr,
@@ -1828,13 +1828,13 @@ fn mavm_codegen_expr<'a>(
                             *string_table.get_if_exists("builtin_kvsSet").unwrap(),
                             call_type.clone(),
                         ),
-                        debug_info: DebugInfo { location: loc },
+                        debug_info: DebugInfo::from(loc),
                     }),
                     vec![*map_expr.clone(), *key_expr.clone(), *val_expr.clone()],
                     call_type,
                     PropertiesList { pure: true },
                 ),
-                debug_info: DebugInfo { location: loc },
+                debug_info: DebugInfo::from(loc),
             };
             mavm_codegen_expr(
                 &the_expr,

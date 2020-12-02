@@ -146,7 +146,7 @@ fn inline(
                                 ),
                                 arg.clone(),
                             ),
-                            debug_info: DebugInfo { location: None },
+                            debug_info: DebugInfo::from(None),
                         })
                         .collect();
                     code.append(&mut func.code.clone());
@@ -1326,7 +1326,7 @@ fn typecheck_statement<'a>(
     Ok((
         TypeCheckedStatement {
             kind: stat,
-            debug_info: DebugInfo { location: *loc },
+            debug_info: DebugInfo::from(*loc),
         },
         binds,
     ))
@@ -1661,7 +1661,7 @@ fn typecheck_expr(
                                     v.len(),
                                     sf.tipe.clone(),
                                 ),
-                                debug_info: DebugInfo { location: loc },
+                                debug_info: DebugInfo::from(loc),
                             });
                         }
                     }
@@ -2152,7 +2152,7 @@ fn typecheck_expr(
                 }
             }
         }?,
-        debug_info: DebugInfo { location: loc },
+        debug_info: DebugInfo::from(loc),
     })
 }
 
