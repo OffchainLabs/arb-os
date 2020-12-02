@@ -732,8 +732,8 @@ pub enum MatchPattern {
 /// contains a condition, and Catchall(block, location) if it is an else block.
 #[derive(Debug, Clone)]
 pub enum IfArm {
-    Cond(Expr, Vec<Statement>, Option<Box<IfArm>>, Option<Location>),
-    Catchall(Vec<Statement>, Option<Location>),
+    Cond(Expr, Vec<Statement>, Option<Box<IfArm>>, DebugInfo),
+    Catchall(Vec<Statement>, DebugInfo),
 }
 
 impl IfArm {

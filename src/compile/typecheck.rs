@@ -328,9 +328,9 @@ pub enum TypeCheckedIfArm {
         TypeCheckedExpr,
         Vec<TypeCheckedStatement>,
         Option<Box<TypeCheckedIfArm>>,
-        Option<Location>,
+        DebugInfo,
     ),
-    Catchall(Vec<TypeCheckedStatement>, Option<Location>),
+    Catchall(Vec<TypeCheckedStatement>, DebugInfo),
 }
 
 impl AbstractSyntaxTree for TypeCheckedIfArm {
@@ -1395,7 +1395,8 @@ fn typecheck_if_arm(
     scopes: &mut Vec<(String, Option<Type>)>,
 ) -> Result<TypeCheckedIfArm, TypeError> {
     match arm {
-        IfArm::Cond(cond, body, orest, loc) => {
+        IfArm::Cond(cond, body, orest, debug_info) => {
+            let loc = debug_info.location;
             let tc_cond = typecheck_expr(
                 cond,
                 type_table,
@@ -1429,11 +1430,11 @@ fn typecheck_if_arm(
                         )?)),
                         None => None,
                     },
-                    *loc,
+                    debug_info.clone(),
                 )),
                 _ => Err(new_type_error(
                     "if condition must be boolean".to_string(),
-                    *loc,
+                    loc,
                 )),
             }
         }

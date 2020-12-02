@@ -858,7 +858,8 @@ fn mavm_codegen_if_arm(
 ) -> Result<(LabelGenerator, usize, bool), CodegenError> {
     // (label_gen, num_labels, execution_might_continue)
     match arm {
-        TypeCheckedIfArm::Cond(cond, body, orest, loc) => {
+        TypeCheckedIfArm::Cond(cond, body, orest, debug_info) => {
+            let loc = debug_info.location;
             let (after_label, lg) = label_gen.next();
             let (lg, c, cond_locals) = mavm_codegen_expr(
                 cond,
@@ -877,12 +878,12 @@ fn mavm_codegen_if_arm(
             code = c;
             code.push(Instruction::from_opcode(
                 Opcode::AVMOpcode(AVMOpcode::IsZero),
-                *loc,
+                loc,
             ));
             code.push(Instruction::from_opcode_imm(
                 Opcode::AVMOpcode(AVMOpcode::Cjump),
                 Value::Label(after_label),
-                *loc,
+                loc,
             ));
             let (lg, nl1, might_continue_here, _) = mavm_codegen_statements(
                 body.to_vec(),
@@ -902,10 +903,10 @@ fn mavm_codegen_if_arm(
                 code.push(Instruction::from_opcode_imm(
                     Opcode::AVMOpcode(AVMOpcode::Jump),
                     Value::Label(end_label),
-                    *loc,
+                    loc,
                 ));
             }
-            code.push(Instruction::from_opcode(Opcode::Label(after_label), *loc));
+            code.push(Instruction::from_opcode(Opcode::Label(after_label), loc));
             let nl1 = max(nl1, cond_locals);
             match orest {
                 Some(inner_arm) => {
@@ -930,12 +931,13 @@ fn mavm_codegen_if_arm(
                     ))
                 }
                 None => {
-                    code.push(Instruction::from_opcode(Opcode::Label(end_label), *loc));
+                    code.push(Instruction::from_opcode(Opcode::Label(end_label), loc));
                     Ok((label_gen, nl1, true))
                 }
             }
         }
-        TypeCheckedIfArm::Catchall(body, loc) => {
+        TypeCheckedIfArm::Catchall(body, debug_info) => {
+            let loc = debug_info.location;
             let (lg, nl, might_continue, _) = mavm_codegen_statements(
                 body.to_vec(),
                 code,
@@ -949,7 +951,7 @@ fn mavm_codegen_if_arm(
                 scopes,
                 file_name_chart,
             )?;
-            code.push(Instruction::from_opcode(Opcode::Label(end_label), *loc));
+            code.push(Instruction::from_opcode(Opcode::Label(end_label), loc));
             Ok((lg, nl, might_continue))
         }
     }
