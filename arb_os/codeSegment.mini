@@ -522,14 +522,8 @@ public impure func translateEvmCodeSegment(
                         )?;
                         return Some((
                             pushValue(
-                                0,
-                                pushValue(
-                                    0,
-                                    pushValue(
-                                        numBytesRead-1,
-                                        doCall
-                                    )
-                                )
+                                numBytesRead-1,
+                                doCall
                             ),
                             jumpTable,
                             uPcTable,
