@@ -48,7 +48,7 @@ use signedTx::translateSignedTx;
 
 
 type Inbox = struct {
-    queue: Queue,                 // Queue of messages that haven't yet been retrieved from the inbox
+    queue: Queue,                // Queue of messages that haven't yet been retrieved from the inbox
     blockNum: uint,              // Highest blocknum of messages that we have retrieved from the inbox
     timestamp: uint,             // Highest timestamp of messages that we have retrieved from the inbox
     seenMsgAtThisBlockNum: bool, // true iff we have seen a message at this block number
@@ -58,9 +58,12 @@ type Inbox = struct {
 type SequencerState = struct {
     sequencerAddr: address,
     delayBlocks: uint,
+    delayTime: uint,
     delayQueue: Queue,
-    lastBlockNumSeen: uint,
-    lastTimestampSeen: uint,
+    lastBlockNumSeen: uint,      // Highest actual blocknum of message we have seen
+    lastTimestampSeen: uint,     // Highest actual timestamp of message we have seen
+    lastBlockNumReleased: uint,  // Highest blocknum we have released to inbox queue
+    lastTimestampReleased: uint, // Highest timestamp we have released to inbox queue
 }
 
 var globalInbox: Inbox;
@@ -83,15 +86,20 @@ public impure func inbox_init() {
     };
 }
 
-public impure func inbox_addSequencer(addr: address, delayBlocks: uint) {
+public impure func inbox_addSequencer(addr: address, delayBlocks: uint, delayTime: uint) {
     // deliver messages from old sequencer, if any (shouldn't be needed, but doing it just to be extra cautious)
+    let bnum = globalInbox.blockNum;
+    let ts = globalInbox.timestamp;
     if let Some(oldSeq) = globalInbox.sequencer {
+        bnum = oldSeq.lastBlockNumSeen;
+        ts = oldSeq.lastTimestampSeen;
         let oldq = oldSeq.delayQueue;
         while( ! queue_isEmpty(oldq) ){
             let (uq, rawMsg) = queue_getOrDie(oldq);
             oldq = uq;
+            let msg = unsafecast<IncomingRequest>(rawMsg);
             globalInbox = globalInbox with {
-                queue: queue_put(globalInbox.queue, unsafecast<IncomingRequest>(rawMsg))
+                queue: queue_put(globalInbox.queue, msg)
             };
         }
     }
@@ -100,13 +108,19 @@ public impure func inbox_addSequencer(addr: address, delayBlocks: uint) {
     if (delayBlocks > 128*256) {
         delayBlocks = 128*256;
     }
+    if (delayTime > 128*256*30) {
+        delayTime = 128*256*30;
+    }
     globalInbox = globalInbox with {
         sequencer: Some(struct {
             sequencerAddr: addr,
             delayBlocks: delayBlocks,
+            delayTime: delayTime,
             delayQueue: queue_new(),
-            lastBlockNumSeen: globalInbox.blockNum,
-            lastTimestampSeen: globalInbox.timestamp,
+            lastBlockNumSeen: bnum,
+            lastTimestampSeen: ts,
+            lastBlockNumReleased: bnum,
+            lastTimestampReleased: ts,
         })
     };
 }
@@ -119,21 +133,38 @@ public impure func inbox_get() -> IncomingRequest {
 
     loop {
         while (queue_isEmpty(globalInbox.queue)) {
-            globalInbox = getFromL1Inbox(globalInbox);
+            if let Some(seqInfo) = globalInbox.sequencer {
+                globalInbox = getFromL1InboxSequencer(globalInbox, seqInfo);
+            } else {
+                globalInbox = getFromL1Inbox(globalInbox);
+            }
         }
 
-        let (updatedQ, ret,) = queueGetOrDie(globalInbox.queue);
-        let ebMsg = unsafecast<IncomingRequest>(ret);
+        let (updatedQ, rawMsg,) = queueGetOrDie(globalInbox.queue);
         globalInbox = globalInbox with { queue: updatedQ };
-        if (ebMsg.blockNumber >= globalInbox.blockNum) {
-            globalInbox = globalInbox with {
-                blockNum: ebMsg.blockNumber
-            } with {
-                timestamp: ebMsg.timestamp
-            } with {
-                seenMsgAtThisBlockNum: true
-            };
+        let ebMsg = unsafecast<IncomingRequest>(rawMsg);
+        if (ebMsg.blockNumber > globalInbox.blockNum) {
+            if ((globalInbox.sequencer != None<SequencerState>) && globalInbox.seenMsgAtThisBlockNum) {
+                let eobMsg = endOfBlockMessage(globalInbox.blockNum, globalInbox.timestamp);
+                globalInbox = globalInbox with {
+                    blockNum: ebMsg.blockNumber
+                } with {
+                    timestamp: ebMsg.timestamp
+                } with {
+                    seenMsgAtThisBlockNum: false
+                };
+                return eobMsg;
+            } else {
+                globalInbox = globalInbox with {
+                    blockNum: ebMsg.blockNumber
+                } with {
+                    timestamp: ebMsg.timestamp
+                } with {
+                    seenMsgAtThisBlockNum: true
+                };
+            }
         }
+
         if (ebMsg.kind == 4) {
             chainParams_gotParamsMessage(ebMsg.sender, ebMsg.msgData);
         } else {
@@ -154,7 +185,7 @@ func queueGetOrDie(q: Queue) -> (Queue, any) {
 }
 
 impure func getFromL1Inbox(inbox: Inbox) -> Inbox {
-    // Get a message from the L1 inbox, and append it to the inbox.
+    // Get a message from the L1 inbox, and append it to the inbox (assuming no sequencer).
     // If there are no messages available in the L1 inbox, this blocks until one is available.
     if (inbox.seenMsgAtThisBlockNum) {
         let sameBlockNum = asm(inbox.blockNum,) bool { inboxpeek };
@@ -188,77 +219,129 @@ impure func getFromL1Inbox(inbox: Inbox) -> Inbox {
         },
     };
 
-    if let Some(seqInfo) = inbox.sequencer {
-        if (newMsg.blockNumber == 0) {
-            newMsg = newMsg with { blockNumber: seqInfo.lastBlockNumSeen };
-        }
-        if (newMsg.timestamp == 0) {
-            newMsg = newMsg with { timestamp: seqInfo.lastTimestampSeen };
-        }
+    if (newMsg.blockNumber == 0) {
+        newMsg = newMsg with { blockNumber: inbox.blockNum };
+    }
+    if (newMsg.timestamp == 0) {
+        newMsg = newMsg with { timestamp: inbox.timestamp };
+    }
 
-        let isSequencerMsg = (newMsg.kind == 3)
-                             && (bytearray_getByte(newMsg.msgData, 0) == 5)
-                             && (newMsg.sender == seqInfo.sequencerAddr);
-        let releaseBlockNum = 0;
-        if (newMsg.blockNumber > seqInfo.delayBlocks) {
-            releaseBlockNum = newMsg.blockNumber - seqInfo.delayBlocks;
-        }
+    return inbox with {
+        queue: queue_put(inbox.queue, newMsg)
+    };
+}
 
-        if (isSequencerMsg) {
-            // get low-order two bytes of blockNum authorized for release, and reconstruct that blockNum
-            let msgRelease = (newMsg.blockNumber & ~0xffff)
-                             + asm (256-16, bytearray_get256(newMsg.msgData, 1)) uint { shr };
-            if ( (msgRelease >= newMsg.blockNumber) && (msgRelease >= 256*256) ) {
-                msgRelease = msgRelease - 256*256;
-            }
-            if (releaseBlockNum < msgRelease) {
-                releaseBlockNum = msgRelease;
-            }
-        }
+impure func getFromL1InboxSequencer(inbox: Inbox, seq: SequencerState) -> Inbox {
+    let newMsgRaw = asm() IncomingRequestFromInbox { inbox };
+    let newMsg = struct {
+        kind: newMsgRaw.kind,
+        blockNumber: newMsgRaw.blockNumber,
+        timestamp: newMsgRaw.timestamp,
+        sender: newMsgRaw.sender,
+        requestId: newMsgRaw.requestId,
+        msgData: bytearray_unmarshalBytes(newMsgRaw.msgData),
+        provenance: struct {
+            l1SeqNum: newMsgRaw.requestId,
+            parentRequestId: 0,
+            indexInParent: ~0,
+        },
+    };
 
-        let (uSeqInfo, uInboxQ) = releaseDelayedRequests(
-            seqInfo,
-            inbox.queue,
-            newMsg.blockNumber,
-            newMsg.timestamp,
-            releaseBlockNum,
-        );
-        seqInfo = uSeqInfo;
-        inbox = inbox with {
-            queue: uInboxQ
-        };
-
-        if (isSequencerMsg) {
-            return inbox with {
-                queue: queue_put(inbox.queue, newMsg)
-           } with {
-                sequencer: Some(seqInfo with {
-                    lastBlockNumSeen: newMsg.blockNumber
-                } with {
-                    lastTimestampSeen: newMsg.timestamp
-                })
-            };
-        } else {
-            return inbox with {
-                sequencer: Some(seqInfo with {
-                    delayQueue: queue_put(seqInfo.delayQueue, newMsg)
-                } with {
-                    lastBlockNumSeen: newMsg.blockNumber
-                } with {
-                    lastTimestampSeen: newMsg.timestamp
-                })
-            };
-        }
+    let blockNum = newMsg.blockNumber;
+    if (blockNum == 0) {
+        blockNum = seq.lastBlockNumSeen;
     } else {
-        if (newMsg.blockNumber == 0) {
-            newMsg = newMsg with { blockNumber: inbox.blockNum };
+        seq = seq with { lastBlockNumSeen: blockNum };
+    }
+    let timestamp = newMsg.timestamp;
+    if (timestamp == 0) {
+        timestamp = seq.lastBlockNumSeen;
+    } else {
+        seq = seq with { lastTimestampSeen: timestamp };
+    }
+
+    let isSequencerMsg = (newMsg.kind == 3)
+                         && (bytearray_getByte(newMsg.msgData, 0) == 5)
+                         && (newMsg.sender == seq.sequencerAddr);
+    if (isSequencerMsg) {
+        // get low-order two bytes of blockNum assigned to this message, and reconstruct that blockNum
+        let bnum = (blockNum & ~0xffff)
+                         + asm (256-16, bytearray_get256(newMsg.msgData, 1)) uint { shr };
+        if ((bnum <= blockNum) || (bnum < 256*256)) {
+            blockNum = bnum;
+        } else {
+            blockNum = bnum-256*256;
         }
-        if (newMsg.timestamp == 0) {
-            newMsg = newMsg with { timestamp: inbox.timestamp };
+        // get low-order three bytes of timestamp assigned to this message, and reconstruct that timestamp
+        let ts = (timestamp & ~0xffffff)
+                        + asm (256-24, bytearray_get256(newMsg.msgData, 3)) uint { shr };
+        if ((ts <= timestamp) || (ts < 256*256*256)) {
+            timestamp = ts;
+        } else {
+            timestamp = ts - 256*256*256;
+        }
+
+        if (blockNum+seq.delayBlocks < seq.lastBlockNumSeen) {
+            blockNum = seq.lastBlockNumSeen - seq.delayBlocks;
+        }
+        if (timestamp+seq.delayTime < seq.lastTimestampSeen) {
+            timestamp = seq.lastTimestampSeen - seq.delayTime;
+        }
+
+        let (uSeq, uInboxQ) = releaseDelayedRequests(
+            seq,
+            inbox.queue,
+            blockNum,
+            timestamp,
+        );
+        seq = uSeq;
+        inbox = inbox with { queue: uInboxQ };
+
+        if (blockNum < seq.lastBlockNumReleased) {
+            blockNum = seq.lastBlockNumReleased;
+        }
+        if (timestamp < seq.lastTimestampReleased) {
+            timestamp = seq.lastTimestampReleased;
         }
 
         return inbox with {
-            queue: queue_put(inbox.queue, newMsg)
+            queue: queue_put(inbox.queue, newMsg with { blockNumber: blockNum } with { timestamp: timestamp })
+        } with {
+            sequencer: Some(
+                seq with {
+                    lastBlockNumReleased: blockNum
+                } with {
+                    lastTimestampReleased: timestamp
+                }
+            )
+        };
+    } else {
+        if ((blockNum >= seq.delayBlocks) && (timestamp >= seq.delayTime)) {
+            let (uSeq, uInboxQ) = releaseDelayedRequests(
+                seq,
+                inbox.queue,
+                blockNum - seq.delayBlocks,
+                timestamp - seq.delayTime,
+            );
+            seq = uSeq;
+            inbox = inbox with { queue: uInboxQ };
+        }
+
+        return inbox with {
+            sequencer: Some(seq with {
+                delayQueue: queue_put(
+                    seq.delayQueue,
+                    newMsg with {
+                        blockNumber: blockNum
+                    } with {
+                        timestamp: timestamp
+                    }
+                )
+            } with {
+                lastBlockNumSeen: blockNum
+            } with {
+                lastTimestampSeen: timestamp
+            })
         };
     }
 }
@@ -284,39 +367,20 @@ func releaseDelayedRequests(
     inQ: Queue,
     blockNum: uint,
     timestamp: uint,
-    releaseBlockNum: uint,
 ) -> (SequencerState, Queue) {
     loop {
         if let Some(res) = queue_get(seqInfo.delayQueue) {
             let (udq, rawMsg) = res;
             let msg = unsafecast<IncomingRequest>(rawMsg);
-            if (msg.blockNumber <= releaseBlockNum) {
-                seqInfo = seqInfo with { delayQueue: udq };
-                if (msg.blockNumber + seqInfo.delayBlocks < blockNum) {
-                    inQ = queue_put(
-                        inQ,
-                        msg with {
-                            blockNumber: msg.blockNumber + releaseBlockNum
-                        } with {
-                            timestamp: uint(linearInterpolate(
-                                msg.blockNumber,
-                                msg.timestamp,
-                                blockNum,
-                                timestamp,
-                                msg.blockNumber + seqInfo.delayBlocks,
-                            ))
-                        }
-                    );
-                } else {
-                    inQ = queue_put(
-                        inQ,
-                        msg with {
-                            blockNumber: blockNum
-                        } with {
-                            timestamp: timestamp
-                        }
-                    );
-                }
+            if ((msg.blockNumber <= blockNum) || (msg.timestamp <= timestamp)) {
+                seqInfo = seqInfo with {
+                    delayQueue: udq
+                } with {
+                    lastBlockNumReleased: msg.blockNumber
+                } with {
+                    lastTimestampReleased: msg.timestamp
+                };
+                inQ = queue_put(inQ, msg);
             } else {
                 return (seqInfo, inQ);
             }

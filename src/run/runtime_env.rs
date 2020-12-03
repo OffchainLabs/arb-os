@@ -34,7 +34,10 @@ impl RuntimeEnvironment {
         RuntimeEnvironment::new_options(chain_address, None)
     }
 
-    pub fn new_options(chain_address: Uint256, sequencer_info: Option<(Uint256, Uint256)>) -> Self {
+    pub fn new_options(
+        chain_address: Uint256,
+        sequencer_info: Option<(Uint256, Uint256, Uint256)>,
+    ) -> Self {
         let mut ret = RuntimeEnvironment {
             chain_id: chain_address.trim_to_u64() & 0xffffffffffff, // truncate to 48 bits
             l1_inbox: vec![],
@@ -56,7 +59,7 @@ impl RuntimeEnvironment {
         ret
     }
 
-    fn get_params_bytes(sequencer_info: Option<(Uint256, Uint256)>) -> Vec<u8> {
+    fn get_params_bytes(sequencer_info: Option<(Uint256, Uint256, Uint256)>) -> Vec<u8> {
         let mut buf = Vec::new();
         buf.extend(Uint256::from_u64(3 * 60 * 60 * 1000).to_bytes_be()); // grace period in ticks
         buf.extend(Uint256::from_u64(100_000_000 / 1000).to_bytes_be()); // arbgas speed limit per tick
@@ -65,11 +68,12 @@ impl RuntimeEnvironment {
         buf.extend(Uint256::zero().to_bytes_be()); // staking token address (zero means ETH)
         buf.extend(Uint256::zero().to_bytes_be()); // owner address
 
-        if let Some((seq_addr, delay_blocks)) = sequencer_info {
+        if let Some((seq_addr, delay_blocks, delay_time)) = sequencer_info {
             buf.extend(&[0u8; 8]);
             buf.extend(&64u64.to_be_bytes());
             buf.extend(seq_addr.to_bytes_be());
             buf.extend(delay_blocks.to_bytes_be());
+            buf.extend(delay_time.to_bytes_be());
         }
 
         buf
@@ -185,16 +189,30 @@ impl RuntimeEnvironment {
         vec![3u8]
     }
 
-    pub fn _new_sequencer_batch(&self, delay: Option<Uint256>) -> Vec<u8> {
-        let release_block_num = if self.current_block_num < Uint256::from_u64(65536) {
-            Uint256::zero()
+    pub fn _new_sequencer_batch(&self, delay: Option<(Uint256, Uint256)>) -> Vec<u8> {
+        let (delay_blocks, delay_seconds) = delay.unwrap_or((Uint256::zero(), Uint256::zero()));
+        let (release_block_num, release_timestamp) = if (self.current_block_num
+            <= delay_blocks) || (self.current_timestamp <= delay_seconds)
+        {
+            (Uint256::zero(), Uint256::zero())
         } else {
-            self.current_block_num
-                .sub(&delay.unwrap_or(Uint256::from_u64(20)))
-                .unwrap()
+            (
+                self.current_block_num.sub(&delay_blocks).unwrap(),
+                self.current_timestamp.sub(&delay_seconds).unwrap(),
+            )
         };
-        let low_order = release_block_num.trim_to_u64() & 0xffff;
-        vec![5u8, (low_order >> 8) as u8, (low_order & 0xff) as u8]
+        let low_order_bnum = release_block_num.trim_to_u64() & 0xffff;
+        let low_order_ts = release_timestamp.trim_to_u64() & 0xffffff;
+        let ret = vec![
+            5u8,
+            (low_order_bnum >> 8) as u8,
+            (low_order_bnum & 0xff) as u8,
+            (low_order_ts >> 16) as u8,
+            ((low_order_ts >> 8) & 0xff) as u8,
+            (low_order_ts & 0xff) as u8,
+
+        ];
+        ret
     }
 
     pub fn make_signed_l2_message(

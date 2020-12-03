@@ -50,7 +50,7 @@ public func messageBatch_tryNew(msg: IncomingRequest) -> option<MessageBatch> {
         );
     } elseif ( (msg.kind == 3) && (bytearray_getByte(msg.msgData, 0) == 5) ) {  // sequencer batch
         let stream = bytestream_new(msg.msgData);
-        stream = bytestream_skipBytes(stream, 3)?;
+        stream = bytestream_skipBytes(stream, 6)?;
         return Some(
             struct {
                 template: msg with {

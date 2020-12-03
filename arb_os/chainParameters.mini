@@ -49,7 +49,7 @@ public impure func chainParams_gotParamsMessage(sender: address, data: ByteArray
         });
 
         // now read and process initialization options
-        if let Some(stream) = bytestream_skipBytes(bytestream_new(data), 5*32) {
+        if let Some(stream) = bytestream_skipBytes(bytestream_new(data), 6*32) {
             loop {
                 if let Some(ustr2) = doInitializationOption(stream) {
                     stream = ustr2;
@@ -71,13 +71,14 @@ impure func doInitializationOption(stream: ByteStream) -> option<ByteStream> {
     let (ustr, numPayloadBytes) = bytestream_get64(stream)?;
     stream = ustr;
     if (optionId == 0) {   // option: sequencer
-        if (numPayloadBytes != 64) {
+        if (numPayloadBytes != 3*32) {
             // unexpected payload size; discard the payload and ignore this option
             return bytestream_skipBytes(stream, numPayloadBytes);
         }
         let (ustr, sequencerAddrAsUint) = bytestream_get256(stream)?;
         let (ustr, delayBlocks) = bytestream_get256(ustr)?;
-        inbox_addSequencer(address(sequencerAddrAsUint), delayBlocks);
+        let (ustr, delayTime) = bytestream_get256(ustr)?;
+        inbox_addSequencer(address(sequencerAddrAsUint), delayBlocks, delayTime);
         return Some(ustr);
     } else {
         // unrecognized option, discard it
