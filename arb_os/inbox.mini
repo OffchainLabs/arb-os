@@ -228,6 +228,12 @@ impure func getFromL1Inbox(inbox: Inbox) -> Inbox {
 
     return inbox with {
         queue: queue_put(inbox.queue, newMsg)
+    } with {
+        blockNum: newMsg.blockNumber
+    } with {
+        timestamp: newMsg.timestamp
+    } with {
+        seenMsgAtThisBlockNum: true
     };
 }
 
