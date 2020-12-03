@@ -748,6 +748,9 @@ impl Machine {
             self.run(Some(stop_pc))
         };
         println!("ArbGas cost of call: {}", cost);
+        if let Some(ret_val) = self.stack.top() {
+            println!("Stack top: {:?}", ret_val);
+        }
         match &self.state {
             MachineState::Stopped => {
                 Err(ExecutionError::new("execution stopped", &self.state, None))
