@@ -451,9 +451,14 @@ pub fn compile_from_folder(
         name,
     } in typechecked
     {
-        let code_out =
-            codegen::mavm_codegen(checked_funcs, &string_table, &imported_funcs, &global_vars, file_name_chart)
-                .map_err(|e| CompileError::new(e.reason.to_string(), e.location))?;
+        let code_out = codegen::mavm_codegen(
+            checked_funcs,
+            &string_table,
+            &imported_funcs,
+            &global_vars,
+            file_name_chart,
+        )
+        .map_err(|e| CompileError::new(e.reason.to_string(), e.location))?;
         progs.push(CompiledProgram::new(
             code_out.to_vec(),
             exported_funcs,
