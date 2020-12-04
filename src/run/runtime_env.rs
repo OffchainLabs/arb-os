@@ -70,7 +70,7 @@ impl RuntimeEnvironment {
 
         if let Some((seq_addr, delay_blocks, delay_time)) = sequencer_info {
             buf.extend(&[0u8; 8]);
-            buf.extend(&64u64.to_be_bytes());
+            buf.extend(&96u64.to_be_bytes());
             buf.extend(seq_addr.to_bytes_be());
             buf.extend(delay_blocks.to_bytes_be());
             buf.extend(delay_time.to_bytes_be());
@@ -190,7 +190,7 @@ impl RuntimeEnvironment {
     }
 
     pub fn _new_sequencer_batch(&self, delay: Option<(Uint256, Uint256)>) -> Vec<u8> {
-        let (delay_blocks, delay_seconds) = delay.unwrap_or((Uint256::zero(), Uint256::zero()));
+        let (delay_blocks, delay_seconds) = delay.unwrap_or((Uint256::one(), Uint256::one()));
         let (release_block_num, release_timestamp) = if (self.current_block_num
             <= delay_blocks) || (self.current_timestamp <= delay_seconds)
         {
@@ -301,12 +301,6 @@ impl RuntimeEnvironment {
         let msg_size: u64 = msg.len().try_into().unwrap();
         let rlp_encoded_len = Uint256::from_u64(msg_size).rlp_encode();
         batch.extend(rlp_encoded_len.clone());
-        println!(
-            "batch item size {}, RLP(size).len {}, RLP-encoded: {:?}",
-            msg_size,
-            rlp_encoded_len.len(),
-            rlp_encoded_len
-        );
         batch.extend(msg);
         tx_id_bytes
     }
