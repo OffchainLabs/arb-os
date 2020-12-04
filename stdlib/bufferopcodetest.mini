@@ -16,4 +16,6 @@ func main() {
 	let bc = newbuffer(33);
 	let bc = setbuffer64(bc, 100, 1234567891011121314);
 	getbuffer64(bc, 100);
+	let ba = setbuffer8(ba, 1234567891011121314, 100);
+	getbuffer8(ba, 1234567891011121314);
 }
