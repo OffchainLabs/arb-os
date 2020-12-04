@@ -45,6 +45,9 @@ struct CompileStruct {
     format: Option<String>,
     #[clap(short, long)]
     module: bool,
+    //Inlining is currently disabled
+    //#[clap(short, long)]
+    //inline: bool,
 }
 
 #[derive(Clap, Debug)]
@@ -112,7 +115,7 @@ fn main() -> Result<(), CompileError> {
             if compile.compile_only {
                 let filename = &filenames[0];
                 let path = Path::new(filename);
-                match compile_from_file(path, &mut file_name_chart, debug_mode) {
+                match compile_from_file(path, &mut file_name_chart, debug_mode, false) {
                     Ok(mut compiled_program) => {
                         compiled_program.iter_mut().for_each(|prog| {
                             prog.file_name_chart.extend(file_name_chart.clone());
@@ -128,7 +131,7 @@ fn main() -> Result<(), CompileError> {
                 let mut compiled_progs = Vec::new();
                 for filename in &filenames {
                     let path = Path::new(filename);
-                    match compile_from_file(path, &mut file_name_chart, debug_mode) {
+                    match compile_from_file(path, &mut file_name_chart, debug_mode, false) {
                         Ok(compiled_program) => {
                             compiled_program.into_iter().for_each(|prog| {
                                 file_name_chart.extend(prog.file_name_chart.clone());

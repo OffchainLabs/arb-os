@@ -62,41 +62,47 @@ impure func main(kind: uint, value: any) {
         }
     } elseif (kind == 1) {
         let mb = unsafecast<MarshalledBytes>(value);
-        let in = bytearray_unmarshalBytes(mb);
-        let encoded = rlp_encodeBytes(
-            in,
-            0,
-            bytearray_size(in),
-            bytearray_new(0),
-            0
-        ).0;
+        if let Some(in) = bytearray_unmarshalBytes(mb) {
+            let encoded = rlp_encodeBytes(
+                in,
+                0,
+                bytearray_size(in),
+                bytearray_new(0),
+                0
+            ).0;
 
-        // decode and verify no difference
-        if let Some(res) = rlp_decodeBytes(bytestream_new(encoded)) {
-            let marshDec = bytearray_marshalFull(res.1);
-            if (marshDec == mb) {
-                asm(bytearray_marshalFull(encoded),) { log };
+            // decode and verify no difference
+            if let Some(res) = rlp_decodeBytes(bytestream_new(encoded)) {
+                let marshDec = bytearray_marshalFull(res.1);
+                if (marshDec == mb) {
+                    asm(bytearray_marshalFull(encoded),) { log };
+                } else {
+                    asm( (20, bytearray_marshalFull(encoded)), ) { log };
+                }
             } else {
-                asm( (20, bytearray_marshalFull(encoded)), ) { log };
+                asm(3,) { log };
             }
         } else {
-            asm(3,) { log };
+            panic;
         }
     } elseif (kind == 2) {
         let vals = unsafecast<(uint, MarshalledBytes, uint)>(value);
-        let data = bytearray_unmarshalBytes(vals.1);
-        let encodedPieces = unsafecast<[]ByteArray>(newarray<any>(3));  // workaround issue #120
-        encodedPieces = encodedPieces with {
-            [0] = rlp_encodeUint(vals.0, bytearray_new(0), 0).0
-        } with {
-            [1] = rlp_encodeBytes(data, 0, bytearray_size(data), bytearray_new(0), 0).0
-        } with {
-            [2] = rlp_encodeUint(vals.2, bytearray_new(0), 0).0
-        };
-        if let Some(res) = rlp_encodeList(encodedPieces, 0, 3, bytearray_new(0), 0) {
-            asm(bytearray_marshalFull(res.0),) { log };
+        if let Some(data) = bytearray_unmarshalBytes(vals.1) {
+            let encodedPieces = unsafecast<[]ByteArray>(newarray<any>(3));  // workaround issue #120
+            encodedPieces = encodedPieces with {
+                [0] = rlp_encodeUint(vals.0, bytearray_new(0), 0).0
+            } with {
+                [1] = rlp_encodeBytes(data, 0, bytearray_size(data), bytearray_new(0), 0).0
+            } with {
+                [2] = rlp_encodeUint(vals.2, bytearray_new(0), 0).0
+            };
+            if let Some(res) = rlp_encodeList(encodedPieces, 0, 3, bytearray_new(0), 0) {
+                asm(bytearray_marshalFull(res.0),) { log };
+            } else {
+                asm(4,) { log };
+            }
         } else {
-            asm(4,) { log };
+            panic;
         }
     }
 
