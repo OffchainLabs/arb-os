@@ -41,8 +41,8 @@ impl RuntimeEnvironment {
         let mut ret = RuntimeEnvironment {
             chain_id: chain_address.trim_to_u64() & 0xffffffffffff, // truncate to 48 bits
             l1_inbox: vec![],
-            current_block_num: Uint256::from_u64(1000),
-            current_timestamp: Uint256::from_u64(13500),
+            current_block_num: Uint256::from_u64(100_000),
+            current_timestamp: Uint256::from_u64(1_350_000),
             logs: Vec::new(),
             sends: Vec::new(),
             next_inbox_seq_num: Uint256::zero(),
