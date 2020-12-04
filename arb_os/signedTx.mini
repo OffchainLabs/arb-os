@@ -13,7 +13,6 @@ use std::bytearray::bytearray_get256;
 use std::bytearray::bytearray_setByte;
 use std::bytearray::bytearray_set256;
 use std::bytearray::bytearray_extract;
-use std::bytearray::bytearray_unmarshalBytes;
 use std::bytearray::bytearray_marshalFull;
 use std::bytearray::marshalledBytes_hash;
 use std::bytearray::bytearray_copy;

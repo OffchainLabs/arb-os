@@ -33,7 +33,6 @@ use tokens::tokens_erc721deposit;
 
 use std::bytearray::bytearray_new;
 use std::bytearray::bytearray_size;
-use std::bytearray::bytearray_unmarshalBytes;
 use std::bytearray::bytearray_marshalFull;
 use std::bytearray::bytearray_extract;
 
