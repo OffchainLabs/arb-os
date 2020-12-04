@@ -105,7 +105,7 @@ public impure func mainRunLoop() {
 impure func initializeContractTemplates() -> option<()> {
     let acctStore = getGlobalAccountStore();
 
-    let code = bytearray_unmarshalBytes(getErc20code());
+    let code = bytearray_unmarshalBytes(getErc20code())?;
     let (initCodePt, evmJumpTable, _) = translateEvmCodeSegment(
         bytestream_new(code),
         false
@@ -119,7 +119,7 @@ impure func initializeContractTemplates() -> option<()> {
         getErc20storage()
     )?;
 
-    let code = bytearray_unmarshalBytes(getErc721code());
+    let code = bytearray_unmarshalBytes(getErc721code())?;
     let (initCodePt, evmJumpTable, _) = translateEvmCodeSegment(
         bytestream_new(code),
         false
@@ -133,7 +133,7 @@ impure func initializeContractTemplates() -> option<()> {
         getErc721storage()
     )?;
 
-    let code = bytearray_unmarshalBytes(getArbInfoCode());
+    let code = bytearray_unmarshalBytes(getArbInfoCode())?;
     let (initCodePt, evmJumpTable, _) = translateEvmCodeSegment(
         bytestream_new(code),
         false
