@@ -22,11 +22,29 @@ pub type TypeTree = HashMap<(Vec<String>, usize), Type>;
 #[derive(Debug, Clone, Copy, Default)]
 pub struct DebugInfo {
     pub location: Option<Location>,
+    pub attributes: Attributes,
+}
+
+#[derive(Debug, Clone, Copy, Default)]
+pub struct Attributes {
+    pub breakpoint: bool,
+}
+
+impl DebugInfo {
+    pub fn new(location: Option<Location>, attributes: Attributes) -> Self {
+        DebugInfo {
+            location,
+            attributes,
+        }
+    }
 }
 
 impl From<Option<Location>> for DebugInfo {
     fn from(location: Option<Location>) -> Self {
-        DebugInfo { location }
+        DebugInfo {
+            location,
+            attributes: Attributes::default(),
+        }
     }
 }
 

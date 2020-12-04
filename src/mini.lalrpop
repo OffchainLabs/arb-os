@@ -3,7 +3,7 @@
 //
 
 use crate::compile::ast::{TopLevelDecl, TypeDecl, FuncDecl, GlobalVarDecl, ImportFuncDecl, ImportTypeDecl, Type,
-StructField, FuncArg, Statement, StatementKind, DebugInfo, MatchPattern, IfArm, Expr, ExprKind, BinaryOp, UnaryOp, Constant,
+StructField, FuncArg, Statement, StatementKind, DebugInfo, Attributes, MatchPattern, IfArm, Expr, ExprKind, BinaryOp, UnaryOp, Constant,
 OptionConst, FieldInitializer, new_func_arg, new_type_decl};
 use crate::stringtable::{StringTable, StringId};
 use crate::compile::Lines;
@@ -75,7 +75,16 @@ CodeBlock: Vec<Statement> = {
 }
 
 Statement: Statement = {
-	<lno: @L> <kind:StatementKind> => Statement {kind, debug_info: DebugInfo::from(file_info.location(BytePos::from(lno), filename))},
+	<lno: @L> <attribs: ("#[" <Attributes> "]")?> <kind:StatementKind> => Statement {kind, debug_info: DebugInfo::new(file_info.location(BytePos::from(lno), filename), attribs.unwrap_or_default())},
+}
+
+Attributes: Attributes = {
+   <names: (<IdentString> ",")*> => {let mut attribs = Attributes::default(); for name in names {
+       match name.as_ref() {
+           "breakpoint" => attribs.breakpoint = true,
+           _ => {}
+       }
+   }; attribs},
 }
 
 StatementKind: StatementKind = {
