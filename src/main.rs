@@ -239,14 +239,15 @@ fn main() -> Result<(), CompileError> {
             let mut num_successes = 0u64;
             let mut num_failures = 0u64;
             for path_name in [
-                "evm-tests/VMTests/vmArithmeticTest",
-                "evm-tests/VMTests/vmPushDupSwapTest",
-                "evm-tests/VMTests/vmBitwiseLogicOperation",
-                "evm-tests/VMTests/vmIOandFlowOperations",
-                "evm-tests/VMTests/vmSha3Test",
-                "evm-tests/VMTests/vmRandomTest",
-                "evm-tests/VMTests/vmSystemOperations",
-                "evm-tests/VMTests/vmEnvironmentalInfo",
+                //"evm-tests/VMTests/vmArithmeticTest",
+                //"evm-tests/VMTests/vmPushDupSwapTest",
+                //"evm-tests/VMTests/vmBitwiseLogicOperation",
+                //"evm-tests/VMTests/vmIOandFlowOperations",
+                //"evm-tests/VMTests/vmSha3Test",
+                //"evm-tests/VMTests/vmRandomTest",
+                //"evm-tests/VMTests/vmSystemOperations",
+                //"evm-tests/VMTests/vmEnvironmentalInfo",
+                "evm-tests/VMTests/vmLogTest",
             ]
             .iter()
             {

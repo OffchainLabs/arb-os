@@ -462,7 +462,7 @@ pub struct ArbosReceipt {
     request_id: Uint256,
     return_code: Uint256,
     return_data: Vec<u8>,
-    evm_logs: Value,
+    evm_logs: Vec<EvmLog>,
     gas_used: Uint256,
     gas_price_wei: Uint256,
     pub provenance: ArbosRequestProvenance,
@@ -502,7 +502,7 @@ impl ArbosReceipt {
                 },
                 return_code,
                 return_data,
-                evm_logs,
+                evm_logs: EvmLog::new_vec(evm_logs),
                 gas_used,
                 gas_price_wei,
                 provenance: if let Value::Tuple(stup) = &tup[1] {
@@ -633,12 +633,52 @@ impl ArbosReceipt {
         self.return_data.clone()
     }
 
+    pub fn get_evm_logs(&self) -> Vec<EvmLog> { self.evm_logs.clone() }
+
     pub fn get_gas_used(&self) -> Uint256 {
         self.gas_used.clone()
     }
 
     pub fn get_gas_used_so_far(&self) -> Uint256 {
         self.gas_so_far.clone()
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct EvmLog {
+    addr: Uint256,
+    data: Vec<u8>,
+    vals: Vec<Uint256>,
+}
+
+impl EvmLog {
+    pub fn new(val: Value) -> Self {
+        println!("EvmLog::new {}", val);
+        if let Value::Tuple(tup) = val {
+            EvmLog {
+                addr: if let Value::Int(ui) = &tup[0] { ui.clone() } else { panic!() },
+                data: bytes_from_bytestack(tup[1].clone()).unwrap(),
+                vals: tup[2..].iter().map(|v| if let Value::Int(ui) = v { ui.clone() } else { panic!() }).collect(),
+            }
+        } else {
+            panic!("invalid EVM log format");
+        }
+    }
+
+    pub fn new_vec(val: Value) -> Vec<Self> {
+        println!("EvmLog::new_vec {}", val);
+        if let Value::Tuple(tup) = val {
+            if tup.len() == 0 {
+                vec![]
+            } else {
+                let mut rest = EvmLog::new_vec(tup[1].clone());
+                let last = EvmLog::new(tup[0].clone());
+                rest.push(last);
+                rest
+            }
+        } else {
+            panic!()
+        }
     }
 }
 
@@ -715,6 +755,7 @@ fn test_hash_bytestack() {
 }
 
 pub fn bytes_from_bytestack(bs: Value) -> Option<Vec<u8>> {
+    println!("bytes_from_bytestack {}", bs);
     if let Value::Tuple(tup) = bs {
         if let Value::Int(ui) = &tup[0] {
             if let Some(nbytes) = ui.to_usize() {
