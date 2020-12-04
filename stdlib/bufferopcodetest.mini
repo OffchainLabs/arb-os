@@ -8,6 +8,12 @@ func main() {
 	let ba = setbuffer8(ba, 0, getbuffer8(ba, 0)+1);
 	let ba = setbuffer8(ba, 100, 123);
 	getbuffer256(ba, 100);
-	let ba = setbuffer256(ba, 100, 12345678910111213);
+	let ba = setbuffer256(ba, 1000, 1234567891011121315161718);
+	let ba = setbuffer256(ba, 1000, 0);
+	let bb = newbuffer(33);
+	let bb = setbuffer8(bb, 100, 123);
+	let bb = setbuffer8(bb, 100, 0);
+	let bc = newbuffer(33);
+	let bc = setbuffer64(bc, 100, 1234567891011121314);
+	getbuffer64(bc, 100);
 }
-
