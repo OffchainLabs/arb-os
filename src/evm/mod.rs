@@ -2,7 +2,7 @@
  * Copyright 2020, Offchain Labs, Inc. All rights reserved.
  */
 
-use crate::evm::abi::ArbSys;
+use crate::evm::abi::{ArbSys, _ArbOwner};
 use crate::evm::abi::FunctionTable;
 use crate::mavm::Value;
 use crate::run::{bytestack_from_bytes, load_from_file, RuntimeEnvironment};
@@ -207,6 +207,35 @@ pub fn evm_test_arbsys_direct(log_to: Option<&Path>, debug: bool) -> Result<(), 
 
     Ok(())
 }
+
+pub fn _evm_test_arbowner(log_to: Option<&Path>, debug: bool) -> Result<(), ethabi::Error> {
+    let rt_env = RuntimeEnvironment::new(Uint256::from_usize(1111));
+    let mut machine = load_from_file(Path::new("arb_os/arbos.mexe"), rt_env);
+    machine.start_at_zero();
+
+    let wallet = machine.runtime_env.new_wallet();
+    let my_addr = Uint256::from_bytes(wallet.address().as_bytes());
+
+    let arbowner = _ArbOwner::_new(&wallet, debug);
+
+    arbowner._give_ownership(&mut machine, my_addr, Some(Uint256::zero()))?;
+
+    arbowner._start_arbos_upgrade(&mut machine)?;
+
+    let mcode = vec![0x90u8, 1u8, 0u8, 42u8];   // debugprint(42)
+    arbowner._continue_arbos_upgrade(&mut machine, mcode)?;
+
+    arbowner._finish_arbos_upgrade(&mut machine)?;
+
+    // panic!("Deliberate panic so output is displayed");  // uncomment this to see output from this test
+
+    if let Some(path) = log_to {
+        machine.runtime_env.recorder.to_file(path).unwrap();
+    }
+
+    Ok(())
+}
+
 
 pub fn evm_test_function_table_access(
     log_to: Option<&Path>,

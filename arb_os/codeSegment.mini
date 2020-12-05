@@ -692,13 +692,32 @@ func isKnownOpcode(opcode: uint) -> bool {  // return true iff opcode is a known
         || ( (opcode == 0xfd) && (opcode <= 0xff) );
 }
 
-public impure func unmarshalAvmCode(stream: ByteStream, isTrustedCode: bool) -> option<AvmCodePoint> {
+type AvmCodeBuilder = struct {
+    requireSafe: bool,
+    code: AvmCodePoint,
+    size: uint,
+    codeMap: map<uint, AvmCodePoint>,
+}
+
+public impure func avmCodeBuilder_new(requireSafe: bool) -> AvmCodeBuilder {
     let code = asm() AvmCodePoint { errcodept };
-    let codeMap = newmap<uint, AvmCodePoint> with { [0] = code };
-    let numInsns = 1;
+    return struct {
+        requireSafe: requireSafe,
+        code: code,
+        size: 1,
+        codeMap: newmap<uint, AvmCodePoint> with { [0] = code },
+    };
+}
+
+public impure func avmCodeBuilder_append(builder: AvmCodeBuilder, stream: ByteStream) -> option<AvmCodeBuilder> {
+    let requireSafe = builder.requireSafe;
+    let code = builder.code;
+    let size = builder.size;
+    let codeMap = builder.codeMap;
+
     while( ! bytestream_atEof(stream) ) {
         let (ustr, insn) = bytestream_getByte(stream)?;
-        if ( (!isTrustedCode) && (!isSafeInstruction(insn)) ) {
+        if ( requireSafe && !isSafeInstruction(insn) ) {
             return None;
         }
         stream = ustr;
@@ -711,11 +730,20 @@ public impure func unmarshalAvmCode(stream: ByteStream, isTrustedCode: bool) -> 
             stream = ustr;
             code = pushInstructionImm(insn, val, code);
         }
-        codeMap = codeMap with { [numInsns] = code };
-        numInsns = numInsns+1;
+        codeMap = codeMap with { [size] = code };
+        size = size+1;
     }
 
-    return Some(code);
+    return Some(struct {
+        requireSafe: requireSafe,
+        code: code,
+        size: size,
+        codeMap: codeMap,
+    });
+}
+
+public func avmCodeBuilder_finish(builder: AvmCodeBuilder) -> AvmCodePoint {
+    return builder.code;
 }
 
 func isSafeInstruction(insn: uint) -> bool {

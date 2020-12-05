@@ -5,6 +5,11 @@
 use chainParameters::chainParams_getOwner;
 use chainParameters::chainParams_setOwner;
 
+use codeSegment::AvmCodeBuilder;
+use codeSegment::avmCodeBuilder_new;
+use codeSegment::avmCodeBuilder_append;
+use codeSegment::avmCodeBuilder_finish;
+
 use evmCallStack::EvmCallFrame;
 use evmCallStack::evmCallStack_topFrame;
 use evmCallStack::evmCallStack_callHitError;
@@ -17,21 +22,41 @@ use evmOps::evmOp_revert_knownCodePc;
 use std::bytearray::ByteArray;
 use std::bytearray::bytearray_size;
 use std::bytearray::bytearray_get256;
+use std::bytearray::bytearray_extract;
 
+use std::bytestream::bytestream_new;
+
+
+var upgradeInProgress: option<AvmCodeBuilder>;
+
+public impure func arbowner_init() {
+    upgradeInProgress = None<AvmCodeBuilder>;
+}
 
 public impure func arbowner_txcall() {
-    asm(107,) { debugprint };
     if let Some(topFrame) = evmCallStack_topFrame() {
-        let calldata = evmCallFrame_getCalldata(topFrame);
-        if (bytearray_size(calldata) < 4) {
+        // make sure the caller is the chain's owner
+        if (Some(evmCallFrame_getCaller(topFrame)) != chainParams_getOwner()) {
             evmOp_revert_knownCodePc(address(107), 0, 0, 0);
         }
+
+        let calldata = evmCallFrame_getCalldata(topFrame);
+        if (bytearray_size(calldata) < 4) {
+            evmOp_revert_knownCodePc(address(107), 1, 0, 0);
+        }
         let funcCode = asm(224, bytearray_get256(calldata, 0)) uint { shr };
-        if (funcCode == 0x803e3ce8) {
+        if (funcCode == 0xe3a0a148) {
             arbowner_giveOwnership(topFrame, calldata);
+        } elseif (funcCode == 0x6d92b8e4) {
+            arbowner_startArbosUpgrade(topFrame, calldata);
+        } elseif (funcCode == 0x0b766fec) {
+            arbowner_continueArbosUpgrade(topFrame, calldata);
+        } elseif (funcCode == 0xe380002e) {
+           arbowner_finishArbosUpgrade(topFrame, calldata);
         } else {
             // unrecognized function code
-            evmOp_revert_knownCodePc(address(107), 1, 0, 0);
+            panic;
+            evmOp_revert_knownCodePc(address(107), 2, 0, 0);
         }
     } else {
         // this shouldn't happen -- should always be called in an EVM tx
@@ -43,11 +68,47 @@ impure func arbowner_giveOwnership(topFrame: EvmCallFrame, calldata: ByteArray) 
     if (bytearray_size(calldata) != 36) {
         evmOp_revert_knownCodePc(address(107), 10, 0, 0);
     }
-    if (Some(evmCallFrame_getCaller(topFrame)) != chainParams_getOwner()) {
-        evmOp_revert_knownCodePc(address(107), 11, 0, 0);
-    }
     chainParams_setOwner(address(bytearray_get256(calldata, 4)));
     evmOp_return(0, 0);
 }
+
+impure func arbowner_startArbosUpgrade(topFrame: EvmCallFrame, calldata: ByteArray) { // ()
+    if (bytearray_size(calldata) != 4) {
+        evmOp_revert_knownCodePc(address(107), 20, 0, 0);
+    }
+    upgradeInProgress = Some(avmCodeBuilder_new(false));
+    evmOp_return(0, 0);
+}
+
+impure func arbowner_continueArbosUpgrade(topFrame: EvmCallFrame, calldata: ByteArray) { // (bytes)
+    if (bytearray_size(calldata) < 68) {
+        evmOp_revert_knownCodePc(address(107), 30, 0, 0);
+    }
+    if let Some(upgrade) = upgradeInProgress {
+        let nbytes = bytearray_get256(calldata, 36);
+        let marshalledCode = bytearray_extract(calldata, 68, nbytes);
+        if let Some(updated) = avmCodeBuilder_append(upgrade, bytestream_new(marshalledCode)) {
+            upgradeInProgress = Some(updated);
+            evmOp_return(0, 0);
+        } else {
+            evmOp_revert_knownCodePc(address(107), 33, 0, 0);
+        }
+    } else {
+        evmOp_revert_knownCodePc(address(107), 33, 0, 0);
+    }
+}
+
+impure func arbowner_finishArbosUpgrade(topFrame: EvmCallFrame, calldata: ByteArray) { // ()
+    if (bytearray_size(calldata) != 4) {
+        evmOp_revert_knownCodePc(address(107), 40, 0, 0);
+    }
+    if let Some(upgrade) = upgradeInProgress {
+        asm(avmCodeBuilder_finish(upgrade), 0) { jump };  // jump to the new code
+    } else {
+        evmOp_revert_knownCodePc(address(107), 42, 0, 0);
+    }
+}
+
+
 
 

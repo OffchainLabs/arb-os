@@ -73,12 +73,12 @@ public impure func precompiles_init(acctStore: AccountStore) -> option<AccountSt
         arbsys_txcall,
         true,
     )?;
-    //acctStore = accountStore_createBuiltinContract(
-    //    acctStore,
-    //    address(107),
-    //    arbowner_txcall,
-    //    true,
-    //)?;
+    acctStore = accountStore_createBuiltinContract(
+        acctStore,
+        address(107),
+        arbowner_txcall,
+        true,
+    )?;
     return Some(acctStore);
 }
 

@@ -2,7 +2,7 @@
 // Copyright 2020, Offchain Labs, Inc. All rights reserved.
 //
 
-
+use arbowner::arbowner_init;
 use evmCallStack::evmCallStack_callHitError;
 
 use std::bytearray::MarshalledBytes;
@@ -24,7 +24,7 @@ type ChainParams = struct {
     maxExecutionSteps: uint,  // max number of steps in an assertion
     baseStake: uint,          // base stake of a validator, in wei
     stakingToken: address,    // ERC-20 token used for staking; or zero if using ETH
-    owner: address,            // owner of the chain, who has admin privileges (or zero if there is no owner)
+    owner: address,           // owner of the chain, who has admin privileges (or zero if there is no owner)
     isProChain: bool          // is this an Arbitrum Pro chain?
 }
 
@@ -36,6 +36,8 @@ public impure func chainParams_init() {
 
 public impure func chainParams_gotParamsMessage(sender: address, data: ByteArray) {
     if (globalChainParams == None<ChainParams>) {
+        arbowner_init();
+
         globalChainParams = Some(struct{
             chainAddress: sender,
             gracePeriodSec: bytearray_get256(data, 0) / ticksPerSecond(),
