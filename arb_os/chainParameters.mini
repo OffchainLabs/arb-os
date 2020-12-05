@@ -123,3 +123,17 @@ public impure func chainParams_isProChain() -> bool {
         return false;
     }
 }
+
+public impure func chainParams_getOwner() -> option<address> {
+    if let Some(params) = globalChainParams {
+        return Some(params.owner);
+    } else {
+        return None;
+    }
+}
+
+public impure func chainParams_setOwner(newOwner: address) {
+    if let Some(params) = globalChainParams {
+        globalChainParams = Some(params with { owner: newOwner });
+    }
+}

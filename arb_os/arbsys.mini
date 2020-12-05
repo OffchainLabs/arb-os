@@ -146,6 +146,7 @@ func getFuncCode(ba: ByteArray) -> uint {
 }
 
 public func arbosVersion() -> uint {
+    asm(101,) { debugprint };
     return 0;
 }
 
@@ -153,7 +154,10 @@ impure func arbsys_arbOSVersion(topFrame: EvmCallFrame, calldata: ByteArray) {  
     if (bytearray_size(calldata) != 4) {
         evmOp_revert_knownCodePc(address(100), 5, 0, 0);
     }
-    if (evmCallStack_setTopFrameMemory(bytearray_set256(bytearray_new(0), 0, arbosVersion()))) {
+    asm(100,) { debugprint };
+    let version = arbosVersion();
+    asm(102,) { debugprint };
+    if (evmCallStack_setTopFrameMemory(bytearray_set256(bytearray_new(0), 0, version))) {
         evmOp_return(0, 32);
     } else {
         evmOp_revert_knownCodePc(address(100), 6, 0, 0);
