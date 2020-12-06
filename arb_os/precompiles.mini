@@ -25,6 +25,7 @@ use std::bytearray::bytearray_get256;
 use std::bytearray::bytearray_set256;
 
 use std::sha256::sha256_byteArray;
+use std::ripemd160::ripemd160_byteArray;
 
 use arbsys::arbsys_txcall;
 
@@ -44,8 +45,8 @@ public impure func precompiles_init(acctStore: AccountStore) -> option<AccountSt
     )?;
     acctStore = accountStore_createBuiltinContract(
         acctStore,
-        address(0x02),
-        precompile_0x02,
+        address(0x03),
+        precompile_0x03,
         false,
     )?;
     acctStore = accountStore_createBuiltinContract(
