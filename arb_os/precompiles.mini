@@ -50,11 +50,11 @@ public impure func precompiles_init(acctStore: AccountStore) -> option<AccountSt
         false,
     )?;
     acctStore = accountStore_createBuiltinContract(
-            acctStore,
-            address(0x05),
-            precompile_0x05,
-            false,
-        )?;
+        acctStore,
+        address(0x05),
+        precompile_0x05,
+        false,
+    )?;
     acctStore = accountStore_createBuiltinContract(
     	acctStore,
         address(0x06),
@@ -145,10 +145,51 @@ public impure func precompile_0x05() {  // modexp
         let exp = bytearray_extract(calldata, 96+baseLen, expLen);
         let mod = bytearray_extract(calldata, 96+baseLen+expLen, modLen);
 
-        //TODO
+        let evmGasCost = modexpGasCost(baseLen, expLen, modLen, bytearray_get256(exp, 0));
+        if (evmGasCost > 500000) {
+            evmOp_revert_knownPc(0, 0, 0);
+        }
+
+        let marshalledMem = asm(bytearray_marshalFull(calldata),) MarshalledBytes { modexp };
+        let mem = bytearray_unmarshalBytes(marshalledMem);
+        if (evmCallStack_setTopFrameMemory(mem)) {
+            evmOp_return(0, modLen);
+        } else {
+            evmOp_revert_knownPc(1, 0, 0);
+        }
     }
 
-    evmOp_revert_knownPc(0, 0, 0);
+    evmOp_revert_knownPc(2, 0, 0);
+}
+
+func modexpGasCost(b: uint, e: uint, m: uint, eFirst: uint) -> uint {
+    let x = m;
+    if (b > x) {  x = b;  }
+    if (x <= 64) {
+        x = x*x;
+    } elseif(x <= 1024) {
+        x = (x*x/4) + 96*x - 3072;
+    } else {
+        x = (x*x/16) + 480*x - 199680;
+    }
+
+    let efac = log2floor(eFirst);
+    if (e > 32) {
+        efac = efac + 8*(e-32);
+    } elseif (efac < 1) {
+        efac = 1;
+    }
+
+    return x * efac / 20;
+}
+
+func log2floor(x: uint) -> uint {
+    let ret = 0;
+    while(x > 1) {
+        x = x / 2;
+        ret = ret + 1;
+    }
+    return ret;
 }
 
 public impure func precompile_0x06() {  // ecadd
