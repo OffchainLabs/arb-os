@@ -23,7 +23,7 @@ type Ripemd160Hasher = struct {
 
 public func ripemd160hasher_new() -> Ripemd160Hasher {
     return struct {
-        accumulator: bytes32(0x67452301EFCDAB8998BADCFE10325476C3D2E1F),
+        accumulator: bytes32(0x67452301EFCDAB8998BADCFE10325476C3D2E1F0),
         buffer: unsafecast<[2]uint>((0,0)),
         offset: 0,
         totalSizeBytes: 0,
