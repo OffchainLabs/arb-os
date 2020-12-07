@@ -18,12 +18,17 @@ use accounts::getGlobalAccountStore;
 use accounts::setGlobalAccountStore;
 use accounts::accountStore_createBuiltinContract;
 
+use std::biguint::biguint_fromBytes;
+use std::biguint::biguint_modexp;
+use std::biguint::biguint_toBytes;
+
 use std::bytearray::bytearray_new;
 use std::bytearray::bytearray_size;
 use std::bytearray::bytearray_getByte;
 use std::bytearray::bytearray_get256;
 use std::bytearray::bytearray_set256;
 use std::bytearray::bytearray_extract;
+use std::bytearray::bytearray_copy;
 
 use std::sha256::sha256_byteArray;
 
@@ -145,17 +150,34 @@ public impure func precompile_0x05() {  // modexp
         let exp = bytearray_extract(calldata, 96+baseLen, expLen);
         let mod = bytearray_extract(calldata, 96+baseLen+expLen, modLen);
 
-        let evmGasCost = modexpGasCost(baseLen, expLen, modLen, bytearray_get256(exp, 0));
-        if (evmGasCost > 500000) {
-            evmOp_revert_knownPc(0, 0, 0);
-        }
-
-        let marshalledMem = asm(bytearray_marshalFull(calldata),) MarshalledBytes { modexp };
-        let mem = bytearray_unmarshalBytes(marshalledMem);
-        if (evmCallStack_setTopFrameMemory(mem)) {
-            evmOp_return(0, modLen);
+        if let Some(result) = biguint_modexp(
+            biguint_fromBytes(base),
+            biguint_fromBytes(exp),
+            biguint_fromBytes(mod),
+        ) {
+            let mem = biguint_toBytes(result);
+            let memSize = bytearray_size(mem);
+            if (memSize < modLen) {
+                mem = bytearray_copy(   // pad result with leading zeroes up to size of modLen
+                    mem,
+                    0,
+                    bytearray_new(0),
+                    modLen-memSize,
+                    memSize
+                );
+            }
+            if (evmCallStack_setTopFrameMemory(mem)) {
+                evmOp_return(0, modLen);
+            } else {
+                evmOp_revert_knownPc(0, 0, 0);
+            }
         } else {
-            evmOp_revert_knownPc(1, 0, 0);
+            // modulus was zero, so we return zero
+            if (evmCallStack_setTopFrameMemory(bytearray_new(0))) {
+                evmOp_return(0, modLen);
+            } else {
+                evmOp_revert_knownPc(1, 0, 0);
+            }
         }
     }
 
