@@ -379,7 +379,7 @@ impl Uint256 {
         } else {
             let unshifted = self.val.to_bigint().unwrap();
             let shift = BigInt::new(Sign::Plus, vec![0, 0, 0, 0, 0, 0, 0, 0, 1]);
-            shift.sub(unshifted)
+            unshifted.sub(shift)
         }
     }
 
