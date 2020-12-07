@@ -308,8 +308,8 @@ CommaedExprs: Vec<Expr> = {
 }
 
 AsmInsn: Instruction = {
-	<lno: @L> <o: AsmOpcode> => Instruction::from_opcode(o, file_info.location(BytePos::from(lno),filename)),
-	<lno: @L> "[" <v:AsmVal> "]" <o:AsmOpcode> => Instruction::from_opcode_imm(o, v, file_info.location(BytePos::from(lno),filename)),
+	<lno: @L> <o: AsmOpcode> => Instruction::from_opcode(o, DebugInfo::from(file_info.location(BytePos::from(lno),filename))),
+	<lno: @L> "[" <v:AsmVal> "]" <o:AsmOpcode> => Instruction::from_opcode_imm(o, v, DebugInfo::from(file_info.location(BytePos::from(lno),filename))),
 }
 
 AsmOpcode: Opcode = {

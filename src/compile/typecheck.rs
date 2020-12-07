@@ -87,7 +87,7 @@ pub struct TypeCheckedFunc {
     pub code: Vec<TypeCheckedStatement>,
     pub tipe: Type,
     pub imported: bool,
-    pub location: Option<Location>,
+    pub debug_info: DebugInfo,
     pub properties: PropertiesList,
 }
 
@@ -883,7 +883,7 @@ pub fn typecheck_function<'a>(
                 code: tc_stats,
                 tipe: fd.tipe.clone(),
                 imported: false,
-                location: fd.location,
+                debug_info: DebugInfo::from(fd.location),
                 properties: PropertiesList {
                     pure: !fd.is_impure,
                 },

@@ -5,7 +5,7 @@
 //!Provides utilities for emulation of AVM bytecode.
 
 use super::runtime_env::RuntimeEnvironment;
-use crate::compile::CompileError;
+use crate::compile::{CompileError, DebugInfo};
 use crate::link::LinkedProgram;
 use crate::mavm::{AVMOpcode, CodePt, Instruction, Opcode, Value};
 use crate::pos::Location;
@@ -304,7 +304,7 @@ impl CodeStore {
     fn create_segment(&mut self) -> CodePt {
         self.segments.push(vec![Instruction::from_opcode(
             Opcode::AVMOpcode(AVMOpcode::Panic),
-            None,
+            DebugInfo::default(),
         )]);
         CodePt::new_in_segment(self.segments.len() - 1, 0)
     }
@@ -324,7 +324,7 @@ impl CodeStore {
                 let segment = &mut self.segments[seg_num];
                 if old_offset == segment.len() - 1 {
                     if let Some(opcode) = Opcode::from_number(op) {
-                        segment.push(Instruction::new(opcode, imm, None));
+                        segment.push(Instruction::new(opcode, imm, DebugInfo::default()));
                         Some(CodePt::new_in_segment(seg_num, old_offset + 1))
                     } else {
                         panic!(
@@ -822,7 +822,7 @@ impl Machine {
             }
             if !breakpoint {
                 if let Some(insn) = self.next_opcode() {
-                    if let Some(location) = insn.location {
+                    if let Some(location) = insn.debug_info.location {
                         if location.line() == break_line {
                             breakpoint = true;
                         }
@@ -850,7 +850,7 @@ impl Machine {
                     if let Some(imm) = code.immediate {
                         println!("Immediate: {}", imm);
                     }
-                    if let Some(location) = code.location {
+                    if let Some(location) = code.debug_info.location {
                         let line = location.line.to_usize();
                         let column = location.column.to_usize();
                         if let Some(filename) = self.file_name_chart.get(&location.file_id) {
@@ -1026,7 +1026,7 @@ impl Machine {
                 vec![ProfilerEvent::EnterFunc(0)],
                 self.code
                     .get_insn(CodePt::new_internal(0))
-                    .map(|insn| insn.location)
+                    .map(|insn| insn.debug_info.location)
                     .unwrap_or(None),
             ),
         );
@@ -1044,7 +1044,7 @@ impl Machine {
                 profile_enabled = true;
             }
             if profile_enabled {
-                let loc = insn.location;
+                let loc = insn.debug_info.location;
                 let next_op_gas = self.next_op_gas().unwrap_or(0);
                 if let Some(gas_cost) = loc_map.get_mut(&loc, &self.file_name_chart) {
                     *gas_cost += next_op_gas;
@@ -1105,7 +1105,7 @@ impl Machine {
                                     vec![],
                                     self.code
                                         .get_insn(*next_codepoint)
-                                        .map(|insn| insn.location)
+                                        .map(|insn| insn.debug_info.location)
                                         .unwrap_or(None),
                                 ),
                             );

@@ -19,13 +19,13 @@ use std::collections::HashMap;
 pub type TypeTree = HashMap<(Vec<String>, usize), Type>;
 
 ///Debugging info serialized into mini executables, currently only contains a location.
-#[derive(Debug, Clone, Copy, Default)]
+#[derive(Debug, Clone, Copy, Default, Serialize, Deserialize)]
 pub struct DebugInfo {
     pub location: Option<Location>,
     pub attributes: Attributes,
 }
 
-#[derive(Debug, Clone, Copy, Default)]
+#[derive(Debug, Clone, Copy, Default, Serialize, Deserialize)]
 pub struct Attributes {
     pub breakpoint: bool,
 }
