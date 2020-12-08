@@ -475,6 +475,19 @@ public func biguint_divmod(x: []uint, y: []uint) -> option<([]uint, []uint)> {
 }
 
 public func biguint_mod(x: []uint, y: []uint) -> option<[]uint> {
+    let (quot, rem) = biguint_divmod(x, y)?;
+    let x2 = biguint_add(biguint_mul(quot, y), rem);
+    if (!biguint_equal(x, x2)) {
+        asm(2121,) { debugprint };
+        asm(x,) { debugprint };
+        asm(y,) { debugprint };
+        asm(quot,) { debugprint };
+        asm(rem,) { debugprint };
+        asm(x2,) { debugprint };
+        panic;
+    }
+    return Some(rem);
+
     if (biguint_isZero(y)) {
         return None;
     } elseif (biguint_compare(x, y) < int(0)) {
