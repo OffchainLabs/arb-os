@@ -143,19 +143,29 @@ public impure func precompile_0x05() {  // modexp
         let calldata = evmCallFrame_getCalldata(topFrame);
 
         let baseLen = bytearray_get256(calldata, 0);
-        let expLen = bytearray_get256(calldata, 0);
-        let modLen = bytearray_get256(calldata, 0);
+        let expLen = bytearray_get256(calldata, 32);
+        let modLen = bytearray_get256(calldata, 64);
+
+        asm((1, baseLen, expLen, modLen),) { debugprint };
 
         let base = bytearray_extract(calldata, 96, baseLen);
         let exp = bytearray_extract(calldata, 96+baseLen, expLen);
         let mod = bytearray_extract(calldata, 96+baseLen+expLen, modLen);
+        asm((
+            2,
+            biguint_fromBytes(base),
+            biguint_fromBytes(exp),
+            biguint_fromBytes(mod),
+        ),) { debugprint };
 
         if let Some(result) = biguint_modexp(
             biguint_fromBytes(base),
             biguint_fromBytes(exp),
             biguint_fromBytes(mod),
         ) {
+            asm((3,result),) { debugprint };
             let mem = biguint_toBytes(result);
+            asm((4,mem, bytearray_getByte(mem, 0)),) { debugprint };
             let memSize = bytearray_size(mem);
             if (memSize < modLen) {
                 mem = bytearray_copy(   // pad result with leading zeroes up to size of modLen
@@ -166,12 +176,14 @@ public impure func precompile_0x05() {  // modexp
                     memSize
                 );
             }
+            asm((5,mem, bytearray_getByte(mem, 0)),) { debugprint };
             if (evmCallStack_setTopFrameMemory(mem)) {
                 evmOp_return(0, modLen);
             } else {
                 evmOp_revert_knownPc(0, 0, 0);
             }
         } else {
+            asm(4,) { debugprint };
             // modulus was zero, so we return zero
             if (evmCallStack_setTopFrameMemory(bytearray_new(0))) {
                 evmOp_return(0, modLen);

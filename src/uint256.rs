@@ -328,7 +328,7 @@ impl Uint256 {
 
     pub fn exp(&self, other: &Self) -> Self {
         Uint256 {
-            val: Uint256::trim(&self.val.pow(&other.val)).0,
+            val: Uint256::trim(&self.val.clone().pow(&other.val)).0,
         }
     }
 

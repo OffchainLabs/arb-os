@@ -20,6 +20,7 @@ use std::random::random_new;
 
 
 impure func main() {
+    asm(1000*1000*1000,) { setgas };
 	asm(tests(),) { log };
 }
 
@@ -31,7 +32,7 @@ func tests() -> uint {
     }
 
     let i = 0;
-    while(i < 3*256) {
+    while(i < 100) {
         let (res, ugen) = doTests(gen);
         gen = ugen;
         if (res != 0) {    return 100*i + res;    }
