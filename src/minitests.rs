@@ -531,13 +531,16 @@ fn test_precompile5_big() {
     let my_addr = Uint256::from_usize(1025);
 
     let mut rng = rand::thread_rng();
-    let b: BigUint = rng.gen_biguint(128);
-    let e: BigUint = rng.gen_biguint(128);
-    let m: BigUint = rng.gen_biguint(160);
+    let b: BigUint = rng.gen_biguint(80);
+    let e: BigUint = rng.gen_biguint(3);
+    let m: BigUint = rng.gen_biguint(88);
     println!("client side values: {} {} {}", b.clone(), e.clone(), m.clone());
     match test_call_to_precompile5(&mut machine, &my_addr, b.clone(), e.clone(), m.clone()) {
-        Ok(bi) => {
-            assert_eq!(bi, b.modpow(&e, &m));
+        Ok(actual) => {
+            let expected = b.modpow(&e, &m);
+            println!("actual   {}", actual);
+            println!("expected {}", expected);
+            assert_eq!(actual, expected);
         }
         Err(e) => {
             panic!("{}", e);

@@ -6,9 +6,12 @@ use std::biguint::biguint_add;
 use std::biguint::biguint_compare;
 use std::biguint::biguint_divmod;
 use std::biguint::biguint_equal;
+use std::biguint::biguint_fromUint;
 use std::biguint::biguint_isZero;
 use std::biguint::biguint_marshal;
 use std::biguint::biguint_mod;
+use std::biguint::biguint_modmul;
+use std::biguint::biguint_modexp;
 use std::biguint::biguint_mul;
 use std::biguint::biguint_random;
 use std::biguint::biguint_square;
@@ -122,6 +125,26 @@ func doTests(gen: RandomGenerator) -> (uint, RandomGenerator) {
 
     if (!biguint_equal(biguint_mul(x,x), biguint_square(x))) {
         return (17, gen);
+    }
+
+    if let Some(x2m) = biguint_modmul(x, x, y) {
+        if let Some(x4m) = biguint_modmul(x2m, x2m, y) {
+            if let Some(x5m) = biguint_modmul(x4m, x, y) {
+                if let Some(r) = biguint_modexp(x, biguint_fromUint(5), y) {
+                    if (biguint_compare(x5m, r) != int(0)) {
+                        return (18, gen);
+                    }
+                } else {
+                    return (19, gen);
+                }
+            } else {
+                return (20, gen);
+            }
+        } else {
+            return (21, gen);
+        }
+    } else {
+        return (22, gen);
     }
 
     return (0, gen);
