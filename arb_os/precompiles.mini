@@ -167,7 +167,9 @@ public impure func precompile_0x05() {  // modexp
             let mem = biguint_toBytes(result);
             asm((4,mem, bytearray_getByte(mem, 0)),) { debugprint };
             let memSize = bytearray_size(mem);
-            if (memSize < modLen) {
+            if (memSize > modLen) {
+                mem = bytearray_extract(mem, memSize-modLen, modLen);
+            } elseif (memSize < modLen) {
                 mem = bytearray_copy(   // pad result with leading zeroes up to size of modLen
                     mem,
                     0,

@@ -110,7 +110,11 @@ public func biguint_toBytes(x: []uint) -> ByteArray {
         ret = bytearray_set256(ret, 10*((ndigits-1)-digit), asm(256-80, x[digit]) uint { shl });
     }
 
-    ret = bytearray_extract(ret, 10-(nbytes%10), nbytes);
+    if ((nbytes%10) == 0) {
+        ret = bytearray_extract(ret, 0, nbytes);
+    } else {
+        ret = bytearray_extract(ret, 10-(nbytes%10), nbytes);
+    }
     return ret;
 }
 
@@ -288,12 +292,12 @@ public func biguint_add(x: []uint, y: []uint) -> []uint {
     let carry = 0;
     let i = 0;
     while(i < xSize) {
-        let res = x[i] + carry;
+        carry = x[i] + carry;
         if (i < ySize) {
-            res = res + y[i];
+            carry = carry + y[i];
         }
-        carry = divDigit(res);
-        ret = ret with { [i] = modDigit(res) };
+        ret = ret with { [i] = modDigit(carry) };
+        carry = divDigit(carry);
         i = i + 1;
     }
 
@@ -305,7 +309,7 @@ public func biguint_subtract(x: []uint, y: []uint) -> option<[]uint> {
     if (comp < int(0)) {
         return None;
     } elseif(comp == int(0)) {
-        return Some(newarray<uint>(1) with { [0] = 0 });
+        return Some(biguint_zero());
     } else {
         let resSize = realSize(x);
         let ySize = realSize(y);
@@ -321,7 +325,7 @@ public func biguint_subtract(x: []uint, y: []uint) -> option<[]uint> {
                 ret = ret with { [i] = uint(t) };
                 carry = int(0);
             } else {
-                ret = ret with { [i] = uint(t)+0x100000000000000000000 };
+                ret = ret with { [i] = uint(t)+mulDigit(1) };
                 carry = -int(1);
             }
             i = i+1;
@@ -331,23 +335,23 @@ public func biguint_subtract(x: []uint, y: []uint) -> option<[]uint> {
 }
 
 public func biguint_mul(x: []uint, y: []uint) -> []uint {
-    let xSize = realSize(x);
-    let ySize = realSize(y);
+    let n = realSize(x)-1;
+    let t = realSize(y)-1;
 
-    let ret = newarray<uint>(xSize+ySize);
+    let ret = newarray<uint>(n+t+2);
 
     let i = 0;
-    while(i < ySize) {
+    while(i <= t) {
         let carry = 0;
         let j = 0;
         let uv = 0;
-        while(j < xSize) {
+        while(j <= n) {
             uv = ret[i+j] + x[j]*y[i] + carry;
             carry = divDigit(uv);
             ret = ret with { [i+j] = modDigit(uv) };
             j = j+1;
         }
-        ret = ret with { [i+xSize] = carry };
+        ret = ret with { [i+n+1] = carry };
         i = i+1;
     }
 
@@ -422,12 +426,6 @@ public func biguint_divmod(x: []uint, y: []uint) -> option<([]uint, []uint)> {
         q = q with { [sizeDiff] = 1 + q[sizeDiff] };
         if let Some(diff) = biguint_subtract(x, ybnt) {
             x = diff;
-            n = realSize(x)-1;
-            if (n >= t) {
-                sizeDiff = n-t;
-            } else {
-                return Some((q, biguint_shiftRight(x, shiftBits)));  // because x must be smaller than y now
-            };
         } else {
             panic;
         }
@@ -487,7 +485,7 @@ public func biguint_mod(x: []uint, y: []uint) -> option<[]uint> {
 
     let z = y[realSize(y)-1];
     let shiftBits = 0;
-    while(z < 0x80000000000000000000) {
+    while(z < mulDigit(1)/2) {
         z = z+z;
         shiftBits = shiftBits+1;
     }
@@ -502,12 +500,6 @@ public func biguint_mod(x: []uint, y: []uint) -> option<[]uint> {
     while(biguint_compare(x, ybnt) >= int(0)) {
         if let Some(diff) = biguint_subtract(x, ybnt) {
             x = diff;
-            n = realSize(x)-1;
-            if (n >= t) {
-                sizeDiff = n-t;
-            } else {
-                return Some(biguint_shiftRight(x, shiftBits));  // because x must be smaller than y now
-            };
         } else {
             panic;
         }
@@ -546,6 +538,7 @@ public func biguint_mod(x: []uint, y: []uint) -> option<[]uint> {
                 panic;
             }
         }
+        if (x[i] != 0) { panic; }
         i = i-1;
     }
     return Some(biguint_shiftRight(x, shiftBits));
