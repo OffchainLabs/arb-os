@@ -3,7 +3,7 @@
 //
 
 use crate::compile::ast::{TopLevelDecl, TypeDecl, FuncDecl, GlobalVarDecl, ImportFuncDecl, ImportTypeDecl, Type,
-StructField, FuncArg, Statement, StatementKind, DebugInfo, MatchPattern, IfArm, Expr, BinaryOp, UnaryOp, Constant,
+StructField, FuncArg, Statement, StatementKind, DebugInfo, MatchPattern, IfArm, Expr, ExprKind, BinaryOp, UnaryOp, Constant,
 OptionConst, FieldInitializer, new_func_arg, new_type_decl};
 use crate::stringtable::{StringTable, StringId};
 use crate::compile::Lines;
@@ -75,20 +75,21 @@ CodeBlock: Vec<Statement> = {
 }
 
 Statement: Statement = {
-	<lno: @L> <kind:StatementKind> => Statement {kind, debug_info: DebugInfo { location: file_info.location(BytePos::from(lno), filename)}},
+	<lno: @L> <kind:StatementKind> => Statement {kind, debug_info: DebugInfo::from(file_info.location(BytePos::from(lno), filename))},
 }
 
 StatementKind: StatementKind = {
 	"while" "(" <e: Expr> ")" <cb: CodeBlock> => StatementKind::While(e, cb),
 	"loop" <cb: CodeBlock> => StatementKind::Loop(cb),
 	"if" "let" "Some(" <l: Ident> ")" "=" <r:Expr> <t: CodeBlock> <e: ("else" <CodeBlock>)?> => StatementKind::IfLet(l,r,t,e),
-	<lno: @L> "if" "(" <c: Expr> ")" <t: CodeBlock> <r: IfArm?> => StatementKind::If(IfArm::Cond(c, t, r.map(|m|Box::new(m)), file_info.location(BytePos::from(lno),filename))),
+	<lno: @L> "if" "(" <c: Expr> ")" <t: CodeBlock> <r: IfArm?> => StatementKind::If(IfArm::Cond(c, t, r.map(|m|Box::new(m)), DebugInfo::from(file_info.location(BytePos::from(lno),filename)))),
 	"let" <p: MatchPattern> "=" <e: Expr> ";" => StatementKind::Let(p, e),
 	<e: Expr> ";" => StatementKind::Expression(e),
 	<i: Ident> "=" <e: Expr> ";" => StatementKind::Assign(i, e),
 	"return" <e: Expr> ";" => StatementKind::Return(e),
 	"return" ";" => StatementKind::ReturnVoid(),
-	<lno: @L> "return" "None" ";" => StatementKind::Return(Expr::Constant(Constant::Option(OptionConst::None(Type::Every)),file_info.location(BytePos::from(lno),filename))),
+	<lno: @L> "return" "None" ";" => StatementKind::Return(Expr{ kind: ExprKind::Constant(Constant::Option(OptionConst::None(Type::Every))), debug_info: DebugInfo::from(file_info.location(BytePos::from(lno), filename))}),
+	"break" <e: Expr?> ";" => StatementKind::Break(e,None),
 	"panic" ";" => StatementKind::Panic(),
 	"debug" "(" <e: Expr> ")" ";" => StatementKind::DebugPrint(e),
 	"asm" "(" <a:CommaedExprs?> ")" "{" <body:AsmInsn*> "}" ";" => StatementKind::Asm(body, a.unwrap_or(vec![])),
@@ -105,8 +106,8 @@ CommaedMatchPatterns: Vec<MatchPattern> = {
 }
 
 IfArm: IfArm = {
-	<lno: @L> "else" <cb: CodeBlock> => IfArm::Catchall(cb, file_info.location(BytePos::from(lno), filename)),
-	<lno: @L> "elseif" "(" <c: Expr> ")" <cb: CodeBlock> <r: IfArm?> => IfArm::Cond(c, cb, r.map(|m| Box::new(m)), file_info.location(BytePos::from(lno),filename)),
+	<lno: @L> "else" <cb: CodeBlock> => IfArm::Catchall(cb, DebugInfo::from(file_info.location(BytePos::from(lno), filename))),
+	<lno: @L> "elseif" "(" <c: Expr> ")" <cb: CodeBlock> <r: IfArm?> => IfArm::Cond(c, cb, r.map(|m| Box::new(m)), DebugInfo::from(file_info.location(BytePos::from(lno),filename))),
 }
 
 StructFields: Vec<StructField> = {
@@ -154,23 +155,22 @@ Ident: StringId = {
 };
 
 Expr: Expr = {
-	<lno: @L> <t:Expr> "with" "{" "[" <i:Expr> "]" "=" <v:Expr> "}" => Expr::ArrayOrMapMod(
+	<lno: @L> <t:Expr> "with" "{" "[" <i:Expr> "]" "=" <v:Expr> "}" => Expr { kind: ExprKind::ArrayOrMapMod(
 		Box::new(t), 
 		Box::new(i), 
-		Box::new(v),
-		file_info.location(BytePos::from(lno),filename),
-	),
-	<lno: @L> <t: Expr> "with" "{" <i:Ident> ":" <e: Expr> "}" => Expr::StructMod(Box::new(t), stringtable.name_from_id(i).to_string(), Box::new(e), file_info.location(BytePos::from(lno),filename)),
+		Box::new(v),),
+		debug_info: DebugInfo::from(file_info.location(BytePos::from(lno), filename))},
+	<lno: @L> <t: Expr> "with" "{" <i:Ident> ":" <e: Expr> "}" => Expr { kind: ExprKind::StructMod(Box::new(t), stringtable.name_from_id(i).to_string(), Box::new(e)), debug_info: DebugInfo::from(file_info.location(BytePos::from(lno), filename))},
 	Expr1,
 }
 
 Expr1: Expr = {
-	<lno: @L> <l:Expr1> "||" <r:Expr2> => Expr::ShortcutOr(Box::new(l), Box::new(r), file_info.location(BytePos::from(lno),filename)),
+	<lno: @L> <l:Expr1> "||" <r:Expr2> => Expr { kind: ExprKind::ShortcutOr(Box::new(l), Box::new(r)), debug_info: DebugInfo::from(file_info.location(BytePos::from(lno), filename))},
 	Expr2,
 };
 
 Expr2: Expr = {
-	<lno: @L> <l:Expr2> "&&" <r:Expr3> => Expr::ShortcutAnd(Box::new(l), Box::new(r), file_info.location(BytePos::from(lno),filename)),
+	<lno: @L> <l:Expr2> "&&" <r:Expr3> => Expr { kind: ExprKind::ShortcutAnd(Box::new(l), Box::new(r)), debug_info: DebugInfo::from(file_info.location(BytePos::from(lno), filename))},
 	Expr3,
 };
 
@@ -217,7 +217,7 @@ Expr8: Expr = {
 };
 
 Expr9: Expr = {
-	<lno: @L> <e: Expr9> "?" => Expr::Try(Box::new(e), file_info.location(BytePos::from(lno),filename)),
+	<lno: @L> <e: Expr9> "?" => Expr { kind: ExprKind::Try(Box::new(e)), debug_info: DebugInfo::from(file_info.location(BytePos::from(lno), filename))},
 	Expr10,
 }
 
@@ -229,13 +229,13 @@ Expr10: Expr = {
 };
 
 Expr11: Expr = {
-	<lno: @L> <c: Const> => Expr::Constant(c, file_info.location(BytePos::from(lno),filename)),
-	<lno: @L> "Some(" <e: Expr> ")" => Expr::OptionInitializer(Box::new(e), file_info.location(BytePos::from(lno),filename)),
-	<lno: @L> <f: Expr11> "(" <e: Expr> ")" => Expr::FunctionCall(Box::new(f), vec![e], file_info.location(BytePos::from(lno),filename)),
-	<lno: @L> <f: Expr11> "(" <c: CommaedExprs?> ")" => Expr::FunctionCall(Box::new(f), c.unwrap_or(vec![]), file_info.location(BytePos::from(lno),filename)),
-	<lno: @L> <e1:Expr11> "[" <e2:Expr> "]" => Expr::ArrayOrMapRef(Box::new(e1), Box::new(e2), file_info.location(BytePos::from(lno),filename)),
-	<lno: @L> <e:Expr11> "." <i:Ident> => Expr::DotRef(Box::new(e), stringtable.name_from_id(i).to_string(), file_info.location(BytePos::from(lno),filename)),
-	<lno: @L> <e:Expr11> "." <u:UnsignedInteger> => Expr::TupleRef(Box::new(e), u, file_info.location(BytePos::from(lno),filename)),
+	<lno: @L> <c: Const> => Expr { kind: ExprKind::Constant(c), debug_info: DebugInfo::from(file_info.location(BytePos::from(lno), filename))},
+	<lno: @L> "Some(" <e: Expr> ")" => Expr { kind: ExprKind::OptionInitializer(Box::new(e)), debug_info: DebugInfo::from(file_info.location(BytePos::from(lno), filename))},
+	<lno: @L> <f: Expr11> "(" <e: Expr> ")" => Expr { kind: ExprKind::FunctionCall(Box::new(f), vec![e]), debug_info: DebugInfo::from(file_info.location(BytePos::from(lno), filename))},
+	<lno: @L> <f: Expr11> "(" <c: CommaedExprs?> ")" => Expr { kind: ExprKind::FunctionCall(Box::new(f), c.unwrap_or(vec![])), debug_info: DebugInfo::from(file_info.location(BytePos::from(lno), filename))},
+	<lno: @L> <e1:Expr11> "[" <e2:Expr> "]" => Expr { kind: ExprKind::ArrayOrMapRef(Box::new(e1), Box::new(e2)), debug_info: DebugInfo::from(file_info.location(BytePos::from(lno), filename))},
+	<lno: @L> <e:Expr11> "." <i:Ident> => Expr { kind: ExprKind::DotRef(Box::new(e), stringtable.name_from_id(i).to_string()), debug_info: DebugInfo::from(file_info.location(BytePos::from(lno), filename))},
+	<lno: @L> <e:Expr11> "." <u:UnsignedInteger> => Expr { kind: ExprKind::TupleRef(Box::new(e), u), debug_info: DebugInfo::from(file_info.location(BytePos::from(lno), filename))},
 	Expr12,
 }
 
@@ -247,29 +247,29 @@ Expr12: Expr = {
 	<lno: @L> "int" "(" <e: Expr> ")" => Expr::new_unary(UnaryOp::ToInt, e, file_info.location(BytePos::from(lno),filename)),
 	<lno: @L> "bytes32" "(" <e: Expr> ")" => Expr::new_unary(UnaryOp::ToBytes32, e, file_info.location(BytePos::from(lno),filename)),
 	<lno: @L> "address" "(" <e: Expr> ")" => Expr::new_unary(UnaryOp::ToAddress, e, file_info.location(BytePos::from(lno),filename)),
-	<lno: @L> "newarray" "<" <t:Type> ">" "(" <e:Expr> ")" => Expr::NewArray(Box::new(e), t, file_info.location(BytePos::from(lno),filename)),
-	<lno: @L> "newfixedarray" "(" <s:UnsignedInteger> "," <e:Expr> ","? ")" => Expr::NewFixedArray(
+	<lno: @L> "newarray" "<" <t:Type> ">" "(" <e:Expr> ")" => Expr { kind: ExprKind::NewArray(Box::new(e), t), debug_info: DebugInfo::from(file_info.location(BytePos::from(lno), filename))},
+	<lno: @L> "newfixedarray" "(" <s:UnsignedInteger> "," <e:Expr> ","? ")" => Expr { kind: ExprKind::NewFixedArray(
 		s.to_usize().unwrap(),
-		Some(Box::new(e)),
-		file_info.location(BytePos::from(lno),filename),
-	),
-	<lno: @L> "newfixedarray" "(" <s:UnsignedInteger> ")" => Expr::NewFixedArray(
+		Some(Box::new(e))),
+		debug_info: DebugInfo::from(file_info.location(BytePos::from(lno), filename))
+	},
+	<lno: @L> "newfixedarray" "(" <s:UnsignedInteger> ")" => Expr { kind: ExprKind::NewFixedArray(
 		s.to_usize().unwrap(),
-		None,
-		file_info.location(BytePos::from(lno),filename),
-	),
-	<lno: @L> "newmap" "<" <k:Type> "," <v:Type> ","? ">" => Expr::NewMap(k, v, file_info.location(BytePos::from(lno),filename)),
-	<lno: @L> "unsafecast" "<" <t:Type> ">" "(" <e:Expr> ")" => Expr::UnsafeCast(Box::new(e), t, file_info.location(BytePos::from(lno),filename)),
+		None),
+		debug_info: DebugInfo::from(file_info.location(BytePos::from(lno), filename)),
+	},
+	<lno: @L> "newmap" "<" <k:Type> "," <v:Type> ","? ">" => Expr { kind: ExprKind::NewMap(k, v), debug_info: DebugInfo::from(file_info.location(BytePos::from(lno), filename))},
+	<lno: @L> "unsafecast" "<" <t:Type> ">" "(" <e:Expr> ")" => Expr { kind: ExprKind::UnsafeCast(Box::new(e), t), debug_info: DebugInfo::from(file_info.location(BytePos::from(lno), filename))},
 	Expr13,
 }
 
 Expr13: Expr = {
-	<lno: @L> "asm" "(" <a:CommaedExprs?> ")" <rt:Type> "{" <body:AsmInsn*> "}" => Expr::Asm(rt, body, a.unwrap_or(vec![]), file_info.location(BytePos::from(lno),filename)),
-	<lno: @L> "struct" "{" <fi: FieldInitializers> "}" => Expr::StructInitializer(fi, file_info.location(BytePos::from(lno),filename)),
+	<lno: @L> "asm" "(" <a:CommaedExprs?> ")" <rt:Type> "{" <body:AsmInsn*> "}" => Expr { kind: ExprKind::Asm(rt, body, a.unwrap_or(vec![])), debug_info: DebugInfo::from(file_info.location(BytePos::from(lno), filename))},
+	<lno: @L> "struct" "{" <fi: FieldInitializers> "}" => Expr { kind: ExprKind::StructInitializer(fi), debug_info: DebugInfo::from(file_info.location(BytePos::from(lno), filename))},
 	"(" <e: Expr> ")" => <>,
-	<lno: @L> "{" <cb: Statement*> <e: Expr?> "}" => Expr::CodeBlock(cb, e.map(|x| Box::new(x)), file_info.location(BytePos::from(lno),filename)),
-	<lno: @L> "(" <c: CommaedExprs?> ")" => Expr::Tuple(c.unwrap_or(vec![]), file_info.location(BytePos::from(lno),filename)),
-	<lno: @L> <i: Ident> => Expr::VariableRef(i, file_info.location(BytePos::from(lno),filename)),
+	<lno: @L> "{" <cb: Statement*> <e: Expr?> "}" => Expr { kind: ExprKind::CodeBlock(cb, e.map(|x| Box::new(x))), debug_info: DebugInfo::from(file_info.location(BytePos::from(lno), filename))},
+	<lno: @L> "(" <c: CommaedExprs?> ")" => Expr { kind: ExprKind::Tuple(c.unwrap_or(vec![])), debug_info: DebugInfo::from(file_info.location(BytePos::from(lno), filename))},
+	<lno: @L> <i: Ident> => Expr { kind: ExprKind::VariableRef(i), debug_info: DebugInfo::from(file_info.location(BytePos::from(lno), filename))},
 }
 
 Const: Constant = {
