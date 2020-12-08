@@ -146,7 +146,7 @@ fn inline(
                                 ),
                                 arg.clone(),
                             ),
-                            debug_info: DebugInfo::from(None),
+                            debug_info: DebugInfo::default(),
                         })
                         .collect();
                     code.append(&mut func.code.clone());
@@ -919,8 +919,7 @@ fn typecheck_statement_sequence<'a>(
     let rest_of_stats = &statements[1..];
 
     let (tcs, bindings) = typecheck_statement(
-        &first_stat.kind,
-        &first_stat.debug_info.location,
+        &first_stat,
         return_type,
         type_table,
         global_vars,
@@ -987,8 +986,7 @@ fn typecheck_statement_sequence_with_bindings<'a>(
 ///
 /// The argument loc provide the correct location to `TypeError` if the function fails.
 fn typecheck_statement<'a>(
-    statement: &'a StatementKind,
-    loc: &Option<Location>,
+    statement: &'a Statement,
     return_type: &Type,
     type_table: &'a SymTable<'a, Type>,
     global_vars: &'a HashMap<StringId, (Type, usize)>,
@@ -996,7 +994,9 @@ fn typecheck_statement<'a>(
     type_tree: &TypeTree,
     scopes: &mut Vec<(String, Option<Type>)>,
 ) -> Result<(TypeCheckedStatement, Vec<(StringId, Type)>), TypeError> {
-    let (stat, binds) = match statement {
+    let kind = &statement.kind;
+    let debug_info = statement.debug_info;
+    let (stat, binds) = match kind {
         StatementKind::Noop() => Ok((TypeCheckedStatementKind::Noop(), vec![])),
         StatementKind::Panic() => Ok((TypeCheckedStatementKind::Panic(), vec![])),
         StatementKind::ReturnVoid() => Ok((TypeCheckedStatementKind::ReturnVoid(), vec![])),
@@ -1022,7 +1022,7 @@ fn typecheck_statement<'a>(
                         return_type.get_representation(type_tree)?,
                         tc_expr.get_type().get_representation(type_tree)?
                     ),
-                    *loc,
+                    debug_info.location,
                 ))
             }
         }
@@ -1048,7 +1048,10 @@ fn typecheck_statement<'a>(
                     .rev()
                     .find(|(s, _)| key == *s)
                     .ok_or_else(|| {
-                        new_type_error("No valid scope to break from".to_string(), *loc)
+                        new_type_error(
+                            "No valid scope to break from".to_string(),
+                            debug_info.location,
+                        )
                     })?;
                 if let Some(t) = tipe {
                     if *t
@@ -1063,7 +1066,7 @@ fn typecheck_statement<'a>(
                                 te.map(|te| te.get_type()).unwrap_or(Type::Tuple(vec![])),
                                 tipe
                             ),
-                            *loc,
+                            debug_info.location,
                         ));
                     } else {
                         *t = te
@@ -1124,7 +1127,7 @@ fn typecheck_statement<'a>(
                 )),
                 MatchPattern::Tuple(pats) => {
                     let (tc_pats, bindings) =
-                        typecheck_patvec(tce_type.clone(), pats.to_vec(), *loc)?;
+                        typecheck_patvec(tce_type.clone(), pats.to_vec(), debug_info.location)?;
                     Ok((
                         TypeCheckedStatementKind::Let(
                             TypeCheckedMatchPattern::Tuple(tc_pats, tce_type),
@@ -1158,7 +1161,7 @@ fn typecheck_statement<'a>(
                     } else {
                         Err(new_type_error(
                             "mismatched types in assignment statement".to_string(),
-                            *loc,
+                            debug_info.location,
                         ))
                     }
                 }
@@ -1175,13 +1178,13 @@ fn typecheck_statement<'a>(
                         } else {
                             Err(new_type_error(
                                 "mismatched types in assignment statement".to_string(),
-                                *loc,
+                                debug_info.location,
                             ))
                         }
                     }
                     None => Err(new_type_error(
                         "assignment to non-existent variable".to_string(),
-                        *loc,
+                        debug_info.location,
                     )),
                 },
             }
@@ -1225,7 +1228,7 @@ fn typecheck_statement<'a>(
                 }
                 _ => Err(new_type_error(
                     "while condition is not bool".to_string(),
-                    *loc,
+                    debug_info.location,
                 )),
             }
         }
@@ -1286,7 +1289,7 @@ fn typecheck_statement<'a>(
                 unexpected => {
                     return Err(new_type_error(
                         format!("Expected option type got: {:?}", unexpected),
-                        *loc,
+                        debug_info.location,
                     ))
                 }
             };
@@ -1326,7 +1329,7 @@ fn typecheck_statement<'a>(
     Ok((
         TypeCheckedStatement {
             kind: stat,
-            debug_info: DebugInfo::from(*loc),
+            debug_info,
         },
         binds,
     ))
@@ -1469,7 +1472,8 @@ fn typecheck_expr(
     type_tree: &TypeTree,
     scopes: &mut Vec<(String, Option<Type>)>,
 ) -> Result<TypeCheckedExpr, TypeError> {
-    let loc = expr.debug_info.location;
+    let debug_info = expr.debug_info;
+    let loc = debug_info.location;
     Ok(TypeCheckedExpr {
         kind: match &expr.kind {
             ExprKind::UnaryOp(op, subexpr) => {
@@ -1662,7 +1666,7 @@ fn typecheck_expr(
                                     v.len(),
                                     sf.tipe.clone(),
                                 ),
-                                debug_info: DebugInfo::from(loc),
+                                debug_info,
                             });
                         }
                     }
@@ -1759,8 +1763,7 @@ fn typecheck_expr(
                     let inner_type_table = type_table
                         .push_multi(block_bindings.iter().map(|(k, v)| (*k, v)).collect());
                     let (statement, bindings) = typecheck_statement(
-                        &statement.kind,
-                        &loc,
+                        &statement,
                         return_type,
                         &inner_type_table,
                         global_vars,
@@ -2153,7 +2156,7 @@ fn typecheck_expr(
                 }
             }
         }?,
-        debug_info: DebugInfo::from(loc),
+        debug_info,
     })
 }
 
