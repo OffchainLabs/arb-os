@@ -520,16 +520,13 @@ public impure func translateEvmCodeSegment(
                             evmJumpTable,
                             pcTable,
                         )?;
+                        if (opcode == 0xfe) {  // INVALID
+                            doCall = pushValue(0, pushValue(0, doCall));  // treat as equivalent to revert(0,0)
+                        }
                         return Some((
                             pushValue(
-                                0,
-                                pushValue(
-                                    0,
-                                    pushValue(
-                                        numBytesRead-1,
-                                        doCall
-                                    )
-                                )
+                                numBytesRead-1,
+                                doCall
                             ),
                             jumpTable,
                             uPcTable,
