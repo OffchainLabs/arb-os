@@ -4,12 +4,11 @@
 
 //! Contains utilities for compiling mini source code.
 
-use crate::compile::ast::TypeTree;
 use crate::link::{ExportedFunc, Import, ImportedFunc};
 use crate::mavm::Instruction;
 use crate::pos::{BytePos, Location};
 use crate::stringtable::StringTable;
-use ast::{FuncDecl, GlobalVarDecl};
+use ast::{FuncDecl, GlobalVarDecl, TypeTree};
 use lalrpop_util::lalrpop_mod;
 use mini::DeclsParser;
 use serde::{Deserialize, Serialize};
@@ -21,8 +20,9 @@ use std::hash::{Hash, Hasher};
 use std::io::{self, Read};
 use std::path::Path;
 use symtable::SymTable;
+use typecheck::{TypeCheckedFunc, TypeCheckedNode};
 
-pub use ast::{TopLevelDecl, Type};
+pub use ast::{DebugInfo, TopLevelDecl, Type};
 pub use source::Lines;
 
 mod ast;
@@ -51,6 +51,16 @@ struct Module {
     name: String,
 }
 
+#[derive(Clone, Debug)]
+struct TypeCheckedModule {
+    checked_funcs: Vec<TypeCheckedFunc>,
+    string_table: StringTable,
+    imported_funcs: Vec<ImportedFunc>,
+    exported_funcs: Vec<ExportedFunc>,
+    global_vars: Vec<GlobalVarDecl>,
+    name: String,
+}
+
 impl Module {
     fn new(
         imported_funcs: Vec<ImportedFunc>,
@@ -70,6 +80,33 @@ impl Module {
             func_table,
             name,
         }
+    }
+}
+
+impl TypeCheckedModule {
+    fn new(
+        checked_funcs: Vec<TypeCheckedFunc>,
+        string_table: StringTable,
+        imported_funcs: Vec<ImportedFunc>,
+        exported_funcs: Vec<ExportedFunc>,
+        global_vars: Vec<GlobalVarDecl>,
+        name: String,
+    ) -> Self {
+        Self {
+            checked_funcs,
+            string_table,
+            imported_funcs,
+            exported_funcs,
+            global_vars,
+            name,
+        }
+    }
+    fn inline(&mut self) {
+        let mut new_funcs = self.checked_funcs.clone();
+        for f in &mut new_funcs {
+            f.inline(&self.checked_funcs, &self.string_table)
+        }
+        self.checked_funcs = new_funcs;
     }
 }
 
@@ -205,6 +242,7 @@ pub fn compile_from_file(
     path: &Path,
     file_name_chart: &mut HashMap<u64, String>,
     _debug: bool,
+    inline: bool,
 ) -> Result<Vec<CompiledProgram>, CompileError> {
     let library = path
         .parent()
@@ -224,7 +262,7 @@ pub fn compile_from_file(
         })
         .unwrap_or(None);
     if path.is_dir() {
-        compile_from_folder(path, library, "main", file_name_chart)
+        compile_from_folder(path, library, "main", file_name_chart, inline)
     } else if let (Some(parent), Some(file_name)) = (path.parent(), path.file_stem()) {
         compile_from_folder(
             parent,
@@ -233,6 +271,7 @@ pub fn compile_from_file(
                 CompileError::new(format!("File name {:?} must be UTF-8", file_name), None)
             })?,
             file_name_chart,
+            inline,
         )
     } else {
         Err(CompileError::new(
@@ -242,13 +281,22 @@ pub fn compile_from_file(
     }
 }
 
+fn _print_node(node: &mut TypeCheckedNode, state: &String, mut_state: &mut usize) -> bool {
+    for _ in 0..*mut_state {
+        print!("{}", state);
+    }
+    println!("{:?}", node);
+    *mut_state += 1;
+    true
+}
+
 pub fn compile_from_folder(
     folder: &Path,
     library: Option<&str>,
     main: &str,
     file_name_chart: &mut HashMap<u64, String>,
+    inline: bool,
 ) -> Result<Vec<CompiledProgram>, CompileError> {
-    // TODO: Add warning about impure functions back
     let (mut programs, import_map) = create_program_tree(folder, library, main, file_name_chart)?;
     for (name, imports) in &import_map {
         for import in imports {
@@ -324,6 +372,7 @@ pub fn compile_from_folder(
             }
         }
     }
+    let mut typechecked = vec![];
     let mut progs = vec![];
     let type_tree = create_type_tree(&programs);
     let mut output = vec![programs
@@ -376,6 +425,32 @@ pub fn compile_from_folder(
                 )
             }
         });
+        typechecked.push(TypeCheckedModule::new(
+            checked_funcs,
+            string_table,
+            imported_funcs,
+            exported_funcs,
+            global_vars,
+            name,
+        ));
+    }
+    /*for module in &mut typechecked {
+        for _func in &mut module.checked_funcs {
+            func.recursive_apply(print_node, &"    ".to_string(), &mut 0);
+        }
+    }*/
+    if inline {
+        typechecked.iter_mut().for_each(|module| module.inline());
+    }
+    for TypeCheckedModule {
+        checked_funcs,
+        string_table,
+        imported_funcs,
+        exported_funcs,
+        global_vars,
+        name,
+    } in typechecked
+    {
         let code_out = codegen::mavm_codegen(
             checked_funcs,
             &string_table,

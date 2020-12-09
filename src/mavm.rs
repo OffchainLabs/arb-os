@@ -2,8 +2,7 @@
  * Copyright 2020, Offchain Labs, Inc. All rights reserved.
  */
 
-use crate::compile::MiniProperties;
-use crate::pos::Location;
+use crate::compile::{DebugInfo, MiniProperties};
 use crate::stringtable::StringId;
 use crate::uint256::Uint256;
 use serde::{Deserialize, Serialize};
@@ -89,7 +88,7 @@ impl LabelGenerator {
 pub struct Instruction {
     pub opcode: Opcode,
     pub immediate: Option<Value>,
-    pub location: Option<Location>,
+    pub debug_info: DebugInfo,
 }
 
 impl MiniProperties for Instruction {
@@ -99,20 +98,20 @@ impl MiniProperties for Instruction {
 }
 
 impl Instruction {
-    pub fn new(opcode: Opcode, immediate: Option<Value>, location: Option<Location>) -> Self {
+    pub fn new(opcode: Opcode, immediate: Option<Value>, debug_info: DebugInfo) -> Self {
         Instruction {
             opcode,
             immediate,
-            location,
+            debug_info,
         }
     }
 
-    pub fn from_opcode(opcode: Opcode, location: Option<Location>) -> Self {
-        Instruction::new(opcode, None, location)
+    pub fn from_opcode(opcode: Opcode, debug_info: DebugInfo) -> Self {
+        Instruction::new(opcode, None, debug_info)
     }
 
-    pub fn from_opcode_imm(opcode: Opcode, immediate: Value, location: Option<Location>) -> Self {
-        Instruction::new(opcode, Some(immediate), location)
+    pub fn from_opcode_imm(opcode: Opcode, immediate: Value, debug_info: DebugInfo) -> Self {
+        Instruction::new(opcode, Some(immediate), debug_info)
     }
 
     pub fn get_label(&self) -> Option<&Label> {
@@ -127,7 +126,7 @@ impl Instruction {
             Some(val) => Ok(Instruction::from_opcode_imm(
                 self.opcode,
                 val.replace_labels(label_map)?,
-                self.location,
+                self.debug_info,
             )),
             None => Ok(self),
         }
@@ -166,7 +165,7 @@ impl Instruction {
             None => None,
         };
         (
-            Instruction::new(opcode, imm, self.location),
+            Instruction::new(opcode, imm, self.debug_info),
             max_func_offset,
         )
     }
@@ -176,7 +175,7 @@ impl Instruction {
             Some(val) => Instruction::from_opcode_imm(
                 self.opcode,
                 val.xlate_labels(xlate_map),
-                self.location,
+                self.debug_info,
             ),
             None => self,
         }
@@ -186,11 +185,11 @@ impl Instruction {
 impl fmt::Display for Instruction {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match &self.immediate {
-            Some(v) => match self.location {
+            Some(v) => match self.debug_info.location {
                 Some(loc) => write!(f, "[{}] {}\t\t{}", v, self.opcode, loc),
                 None => write!(f, "[{}] {}\t\t[no location]", v, self.opcode),
             },
-            None => match self.location {
+            None => match self.debug_info.location {
                 Some(loc) => write!(f, "{}\t\t{}", self.opcode, loc),
                 None => write!(f, "{}", self.opcode),
             },
