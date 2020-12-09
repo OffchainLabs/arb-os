@@ -2,7 +2,7 @@
  * Copyright 2020, Offchain Labs, Inc. All rights reserved.
  */
 
-use crate::evm::abi::ArbSys;
+use crate::evm::abi::{ArbSys, ArbAddressTable, ArbBLS, ArbFunctionTable};
 use crate::evm::abi::FunctionTable;
 use crate::mavm::Value;
 use crate::run::{bytestack_from_bytes, load_from_file, RuntimeEnvironment};
@@ -156,32 +156,34 @@ pub fn evm_test_arbsys_direct(log_to: Option<&Path>, debug: bool) -> Result<(), 
     let my_addr = Uint256::from_bytes(wallet.address().as_bytes());
 
     let arbsys = ArbSys::new(&wallet, debug);
+    let arb_address_table = ArbAddressTable::new(&wallet, debug);
+    let arb_bls = ArbBLS::new(&wallet, debug);
 
     let tx_count = arbsys.get_transaction_count(&mut machine, my_addr.clone())?;
     assert_eq!(tx_count, Uint256::one());
 
-    let addr_table_index = arbsys.address_table_register(&mut machine, my_addr.clone())?;
-    let lookup_result = arbsys.address_table_lookup(&mut machine, my_addr.clone())?;
+    let addr_table_index = arb_address_table.register(&mut machine, my_addr.clone())?;
+    let lookup_result = arb_address_table.lookup(&mut machine, my_addr.clone())?;
     assert_eq!(addr_table_index, lookup_result);
 
-    let recovered_addr = arbsys.address_table_lookup_index(&mut machine, lookup_result)?;
+    let recovered_addr = arb_address_table.lookup_index(&mut machine, lookup_result)?;
     assert_eq!(recovered_addr, my_addr);
 
-    let my_addr_compressed = arbsys._address_table_compress(&mut machine, my_addr.clone())?;
+    let my_addr_compressed = arb_address_table.compress(&mut machine, my_addr.clone())?;
     let (my_addr_decompressed, offset) =
-        arbsys._address_table_decompress(&mut machine, &my_addr_compressed, Uint256::zero())?;
+        arb_address_table.decompress(&mut machine, &my_addr_compressed, Uint256::zero())?;
     assert_eq!(my_addr.clone(), my_addr_decompressed);
     assert_eq!(offset, Uint256::from_usize(my_addr_compressed.len()));
 
     assert_eq!(
         Uint256::from_u64(2),
-        arbsys.address_table_size(&mut machine)?
+        arb_address_table.size(&mut machine)?
     );
 
     let an_addr = Uint256::from_u64(581351734971918347);
-    let an_addr_compressed = arbsys._address_table_compress(&mut machine, an_addr.clone())?;
+    let an_addr_compressed = arb_address_table.compress(&mut machine, an_addr.clone())?;
     let (an_addr_decompressed, offset) =
-        arbsys._address_table_decompress(&mut machine, &an_addr_compressed, Uint256::zero())?;
+        arb_address_table.decompress(&mut machine, &an_addr_compressed, Uint256::zero())?;
     assert_eq!(an_addr.clone(), an_addr_decompressed);
     assert_eq!(offset, Uint256::from_usize(an_addr_compressed.len()));
 
@@ -190,9 +192,9 @@ pub fn evm_test_arbsys_direct(log_to: Option<&Path>, debug: bool) -> Result<(), 
     let y0 = Uint256::from_u64(71);
     let y1 = Uint256::from_u64(143);
     println!("registering BLS key");
-    arbsys.register_bls_key(&mut machine, x0.clone(), x1.clone(), y0.clone(), y1.clone())?;
+    arb_bls.register(&mut machine, x0.clone(), x1.clone(), y0.clone(), y1.clone())?;
     println!("reading BLS key");
-    let (ox0, ox1, oy0, oy1) = arbsys.get_bls_public_key(&mut machine, my_addr.clone())?;
+    let (ox0, ox1, oy0, oy1) = arb_bls.get_public_key(&mut machine, my_addr.clone())?;
     assert_eq!(x0, ox0);
     assert_eq!(x1, ox1);
     assert_eq!(y0, oy0);
@@ -217,6 +219,7 @@ pub fn evm_test_function_table_access(
     let my_addr = Uint256::from_bytes(wallet.address().as_bytes());
 
     let arbsys = ArbSys::new(&wallet, debug);
+    let arb_function_table = ArbFunctionTable::new(&wallet, debug);
 
     let gtc_short_sig = arbsys
         .contract_abi
@@ -229,17 +232,17 @@ pub fn evm_test_function_table_access(
         false,
         Uint256::from_u64(10000000),
     )?;
-    arbsys.upload_function_table(&mut machine, &func_table)?;
+    arb_function_table.upload(&mut machine, &func_table)?;
 
     println!("Checking size");
     assert_eq!(
-        arbsys.function_table_size(&mut machine, my_addr.clone())?,
+        arb_function_table.size(&mut machine, my_addr.clone())?,
         Uint256::one()
     );
 
     println!("Getting item");
     let (func_code, is_payable, gas_limit) =
-        arbsys.function_table_get(&mut machine, my_addr, Uint256::zero())?;
+        arb_function_table.get(&mut machine, my_addr, Uint256::zero())?;
     assert_eq!(
         func_code,
         Uint256::from_bytes(&gtc_short_sig).shift_left(256 - 32)
