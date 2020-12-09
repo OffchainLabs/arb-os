@@ -22,7 +22,7 @@ use std::path::Path;
 use symtable::SymTable;
 use typecheck::{TypeCheckedFunc, TypeCheckedNode};
 
-pub use ast::{TopLevelDecl, Type};
+pub use ast::{DebugInfo, TopLevelDecl, Type};
 pub use source::Lines;
 
 mod ast;
