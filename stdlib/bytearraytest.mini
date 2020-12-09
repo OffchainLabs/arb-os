@@ -89,15 +89,18 @@ func tests() -> uint {
 	));
 
 	ba = bytearray_new(67);
-	ba = bytearray_unmarshalBytes(marshalledStruct);
-	let i = 0;
-	while (i < 67) {
-		let b = bytearray_getByte(ba, i);
-		if (b != i) {
-			return 100+i;
-		}
-		i = i+1;
-	}
+	if let Some(ba2) = bytearray_unmarshalBytes(marshalledStruct) {
+        let i = 0;
+        while (i < 67) {
+            let b = bytearray_getByte(ba2, i);
+            if (b != i) {
+                return 100+i;
+            }
+            i = i+1;
+        }
+    } else {
+        return 8;
+    }
 
 	ba = setupFromUnmarshal();
 	let res = bytearray_get64(ba, 3);
@@ -183,5 +186,9 @@ func setupFromUnmarshal() -> ByteArray {
 			),
 		),
 	));
-	return bytearray_unmarshalBytes(marshalledStruct);
+	if let Some(ba) = bytearray_unmarshalBytes(marshalledStruct) {
+	    return ba;
+	} else {
+	    panic;
+	}
 }
