@@ -101,34 +101,8 @@ public impure func arbsys_txcall() {
             arbsys_getTransactionCount(topFrame, calldata);
         } elseif(funcCode == 0xa169625f) {
             arbsys_getStorageAt(topFrame, calldata);
-        } elseif(funcCode == 0xaca1dc65) {
-            arbsys_addressTable_register(topFrame, calldata);
-        } elseif(funcCode == 0x8ee24222) {
-            arbsys_addressTable_lookup(topFrame, calldata);
-        } elseif(funcCode == 0x43683c1b) {
-            arbsys_addressTable_addressExists(topFrame, calldata);
-        } elseif(funcCode == 0x03092fdb) {
-            arbsys_addressTable_size(topFrame, calldata);
         } elseif(funcCode == 0x3dcfdac7) {
             arbsys_getPcTable(topFrame, calldata);
-        } elseif(funcCode == 0x8ee24222) {
-            arbsys_addressTable_lookup(topFrame, calldata);
-        } elseif(funcCode == 0x4c352200) {
-            arbsys_addressTable_lookupIndex(topFrame, calldata);
-        } elseif(funcCode == 0xbe05f2b9) {
-            arbsys_addressTable_decompress(topFrame, calldata);
-        } elseif(funcCode == 0x2a890b98) {
-            arbsys_addressTable_compress(topFrame, calldata);
-        } elseif(funcCode == 0x1ff548ca) {
-            arbsys_registerBlsKey(topFrame, calldata);
-        } elseif(funcCode == 0x647e0e98) {
-            arbsys_getBlsPublicKey(topFrame, calldata);
-        } elseif(funcCode == 0xb7cf9527) {
-            arbsys_uploadFunctionTable(topFrame, calldata);
-        } elseif(funcCode == 0x1221C896) {
-            arbsys_functionTableSize(topFrame, calldata);
-        } elseif(funcCode == 0xd6ed0f56) {
-            arbsys_functionTableGet(topFrame, calldata);
         } else {
             // unrecognized function code
             evmOp_revert_knownCodePc(address(100), 1, 0, 0);
@@ -136,6 +110,82 @@ public impure func arbsys_txcall() {
     } else {
         // this shouldn't happen -- should always be called in an EVM tx
         evmCallStack_callHitError(21);
+    }
+}
+
+public impure func arbAddressTable_txcall() {
+    if let Some(topFrame) = evmCallStack_topFrame() {
+        let calldata = evmCallFrame_getCalldata(topFrame);
+        if (bytearray_size(calldata) < 4) {
+            evmOp_revert_knownCodePc(address(102), 0, 0, 0);
+        }
+        let funcCode = getFuncCode(calldata);
+
+        if(funcCode == 0x4420e486) {
+            arbAddressTable_register(topFrame, calldata);
+        } elseif(funcCode == 0xd4b6b5da) {
+            arbAddressTable_lookup(topFrame, calldata);
+        } elseif(funcCode == 0xa5025222) {
+            arbAddressTable_addressExists(topFrame, calldata);
+        } elseif(funcCode == 0x949d225d) {
+            arbAddressTable_size(topFrame, calldata);
+        } elseif(funcCode == 0x8a186788) {
+            arbAddressTable_lookupIndex(topFrame, calldata);
+        } elseif(funcCode == 0x31862ada) {
+            arbAddressTable_decompress(topFrame, calldata);
+        } elseif(funcCode == 0xf6a455a2) {
+            arbAddressTable_compress(topFrame, calldata);
+        } else {
+            // unrecognized function code
+            evmOp_revert_knownCodePc(address(102), 1, 0, 0);
+        }
+    } else {
+        // this shouldn't happen -- should always be called in an EVM tx
+        evmCallStack_callHitError(17);
+    }
+}
+
+public impure func arbBLS_txcall() {
+    if let Some(topFrame) = evmCallStack_topFrame() {
+        let calldata = evmCallFrame_getCalldata(topFrame);
+        if (bytearray_size(calldata) < 4) {
+            evmOp_revert_knownCodePc(address(103), 0, 0, 0);
+        }
+        let funcCode = getFuncCode(calldata);
+        if (funcCode == 0x375a7c7f) {
+            arbBLS_register(topFrame, calldata);
+        } elseif(funcCode == 0x857cdbb8) {
+            arbBLS_getPublicKey(topFrame, calldata);
+        } else {
+            // unrecognized function code
+            evmOp_revert_knownCodePc(address(103), 1, 0, 0);
+        }
+    } else {
+        // this shouldn't happen -- should always be called in an EVM tx
+        evmCallStack_callHitError(18);
+    }
+}
+
+public impure func arbFunctionTable_txcall() {
+    if let Some(topFrame) = evmCallStack_topFrame() {
+        let calldata = evmCallFrame_getCalldata(topFrame);
+        if (bytearray_size(calldata) < 4) {
+            evmOp_revert_knownCodePc(address(104), 0, 0, 0);
+        }
+        let funcCode = getFuncCode(calldata);
+        if (funcCode == 0xce2ae159) {
+            arbFunctionTable_upload(topFrame, calldata);
+        } elseif(funcCode == 0x88987068) {
+            arbFunctionTable_size(topFrame, calldata);
+        } elseif(funcCode == 0xb464631b) {
+            arbFunctionTable_get(topFrame, calldata);
+        } else {
+            // unrecognized function code
+            evmOp_revert_knownCodePc(address(104), 1, 0, 0);
+        }
+    } else {
+        // this shouldn't happen -- should always be called in an EVM tx
+        evmCallStack_callHitError(18);
     }
 }
 
@@ -322,11 +372,11 @@ impure func arbsys_getPcTable(topFrame: EvmCallFrame, calldata: ByteArray) {
     }
 }
 
-impure func arbsys_addressTable_register(topFrame: EvmCallFrame, calldata: ByteArray) { // (address addr) -> uint
+impure func arbAddressTable_register(topFrame: EvmCallFrame, calldata: ByteArray) { // (address addr) -> uint
 // return the index of addr in the address table
 // if addr isn't in the table already, add it to the table and return its new index
     if (bytearray_size(calldata) != 36) {
-        evmOp_revert_knownCodePc(address(100), 110, 0, 0);
+        evmOp_revert_knownCodePc(address(102), 110, 0, 0);
     }
     let addr = address(bytearray_get256(calldata, 4));
     let (atab, idx) = addressTable_getByAddressAlloc(getGlobalAddressTable(), addr);
@@ -334,31 +384,31 @@ impure func arbsys_addressTable_register(topFrame: EvmCallFrame, calldata: ByteA
     if (evmCallStack_setTopFrameMemory(bytearray_set256(evmCallStack_getTopFrameMemoryOrDie(), 0, idx))) {
         evmOp_return(0, 32);
     } else {
-        evmOp_revert_knownCodePc(address(100), 111, 0, 0);
+        evmOp_revert_knownCodePc(address(102), 111, 0, 0);
     }
 }
 
-impure func arbsys_addressTable_lookup(topFrame: EvmCallFrame, calldata: ByteArray) {  // (address addr) -> uint
+impure func arbAddressTable_lookup(topFrame: EvmCallFrame, calldata: ByteArray) {  // (address addr) -> uint
 // return the index of addr in the address table; revert if it's not in the table
     if (bytearray_size(calldata) != 36) {
-        evmOp_revert_knownCodePc(address(100), 120, 0, 0);
+        evmOp_revert_knownCodePc(address(102), 120, 0, 0);
     }
     let addr = address(bytearray_get256(calldata, 4));
     if let Some(idx) = addressTable_getByAddress(getGlobalAddressTable(), addr) {
         if (evmCallStack_setTopFrameMemory(bytearray_set256(evmCallStack_getTopFrameMemoryOrDie(), 0, idx))) {
             evmOp_return(0, 32);
         } else {
-            evmOp_revert_knownCodePc(address(100), 121, 0, 0);
+            evmOp_revert_knownCodePc(address(102), 121, 0, 0);
         }
     } else {
-        evmOp_revert_knownCodePc(address(100), 122, 0, 0);
+        evmOp_revert_knownCodePc(address(102), 122, 0, 0);
     }
 }
 
-impure func arbsys_addressTable_addressExists(topFrame: EvmCallFrame, calldata: ByteArray) { // (address addr) -> bool
+impure func arbAddressTable_addressExists(topFrame: EvmCallFrame, calldata: ByteArray) { // (address addr) -> bool
 // return true iff addr is in the address table
     if (bytearray_size(calldata) != 36) {
-        evmOp_revert_knownCodePc(address(100), 130, 0, 0);
+        evmOp_revert_knownCodePc(address(102), 130, 0, 0);
     }
     let addr = address(bytearray_get256(calldata, 4));
     let inTable = 0;
@@ -369,50 +419,50 @@ impure func arbsys_addressTable_addressExists(topFrame: EvmCallFrame, calldata: 
     if (evmCallStack_setTopFrameMemory(bytearray_set256(evmCallStack_getTopFrameMemoryOrDie(), 0, inTable))) {
         evmOp_return(0, 32);
     } else {
-        evmOp_revert_knownCodePc(address(100), 131, 0, 0);
+        evmOp_revert_knownCodePc(address(102), 131, 0, 0);
     }
 }
 
-impure func arbsys_addressTable_size(topFrame: EvmCallFrame, calldata: ByteArray) { // () -> uint
+impure func arbAddressTable_size(topFrame: EvmCallFrame, calldata: ByteArray) { // () -> uint
 // return the number of items in the address table
     if (bytearray_size(calldata) != 4) {
-        evmOp_revert_knownCodePc(address(100), 140, 0, 0);
+        evmOp_revert_knownCodePc(address(102), 140, 0, 0);
     }
     let size = addressTable_size(getGlobalAddressTable());
     if (evmCallStack_setTopFrameMemory(bytearray_set256(evmCallStack_getTopFrameMemoryOrDie(), 0, size))) {
         evmOp_return(0, 32);
     } else {
-        evmOp_revert_knownCodePc(address(100), 141, 0, 0);
+        evmOp_revert_knownCodePc(address(102), 141, 0, 0);
     }
 }
 
-impure func arbsys_addressTable_lookupIndex(topFrame: EvmCallFrame, calldata: ByteArray) {  // (uint index) -> address
+impure func arbAddressTable_lookupIndex(topFrame: EvmCallFrame, calldata: ByteArray) {  // (uint index) -> address
 // return the address at slot index in the address table, or revert if index is beyond the end of the table
     if (bytearray_size(calldata) != 36) {
-        evmOp_revert_knownCodePc(address(100), 150, 0, 0);
+        evmOp_revert_knownCodePc(address(102), 150, 0, 0);
     }
     let index = bytearray_get256(calldata, 4);
     if let Some(addr) = addressTable_getByIndex(getGlobalAddressTable(), index) {
         if (evmCallStack_setTopFrameMemory(bytearray_set256(evmCallStack_getTopFrameMemoryOrDie(), 0, uint(addr)))) {
             evmOp_return(0, 32);
         } else {
-            evmOp_revert_knownCodePc(address(100), 151, 0, 0);
+            evmOp_revert_knownCodePc(address(102), 151, 0, 0);
         }
     } else {
-        evmOp_revert_knownCodePc(address(100), 152, 0, 0);
+        evmOp_revert_knownCodePc(address(102), 152, 0, 0);
     }
 }
 
-impure func arbsys_addressTable_decompress(topFrame: EvmCallFrame, calldata: ByteArray) {  // (bytes buf, uint offset) -> (address, uint)
+impure func arbAddressTable_decompress(topFrame: EvmCallFrame, calldata: ByteArray) {  // (bytes buf, uint offset) -> (address, uint)
     // read a compressed address from buf at offset, return (resulting address, updated offset)
     // revert if buf is too short
     if (bytearray_size(calldata) < 4+4*32) {
-        evmOp_revert_knownCodePc(address(100), 160, 0, 0);
+        evmOp_revert_knownCodePc(address(102), 160, 0, 0);
     }
     let offset = bytearray_get256(calldata, 36);
     let bytesLen = bytearray_get256(calldata, 68);
     if (offset >= bytesLen) {
-        evmOp_revert_knownCodePc(address(100), 161, 0, 0);  // buffer is too short
+        evmOp_revert_knownCodePc(address(102), 161, 0, 0);  // buffer is too short
     }
     let stream = bytestream_new(bytearray_extract(calldata, 100+offset, bytesLen-offset));
     if let Some(res) = decompressAddress(stream) {
@@ -431,18 +481,18 @@ impure func arbsys_addressTable_decompress(topFrame: EvmCallFrame, calldata: Byt
         )) {
             evmOp_return(0, 64);
         } else {
-            evmOp_revert_knownCodePc(address(100), 162, 0, 0);
+            evmOp_revert_knownCodePc(address(102), 162, 0, 0);
         }
     } else {
         // input was too short
-        evmOp_revert_knownCodePc(address(100), 163, 0, 0);
+        evmOp_revert_knownCodePc(address(102), 163, 0, 0);
     }
 }
 
-impure func arbsys_addressTable_compress(topFrame: EvmCallFrame, calldata: ByteArray) { // (address addr) -> bytes
+impure func arbAddressTable_compress(topFrame: EvmCallFrame, calldata: ByteArray) { // (address addr) -> bytes
 // compress addr, based on the current address table contents, and return the resulting buffer
     if (bytearray_size(calldata) != 36) {
-        evmOp_revert_knownCodePc(address(100), 100, 0, 0);
+        evmOp_revert_knownCodePc(address(102), 100, 0, 0);
     }
     let addr = address(bytearray_get256(calldata, 4));
     let compressedData = bytearray_new(0);
@@ -473,13 +523,13 @@ impure func arbsys_addressTable_compress(topFrame: EvmCallFrame, calldata: ByteA
     if (evmCallStack_setTopFrameMemory(mem)) {
         evmOp_return(0, 96);
     } else {
-        evmOp_revert_knownCodePc(address(100), 101, 0, 0);
+        evmOp_revert_knownCodePc(address(102), 101, 0, 0);
     }
 }
 
-impure func arbsys_registerBlsKey(topFrame: EvmCallFrame, calldata: ByteArray) {
+impure func arbBLS_register(topFrame: EvmCallFrame, calldata: ByteArray) {
     if (bytearray_size(calldata) != 4+32*4) {
-        evmOp_revert_knownCodePc(address(100), 170, 0, 0);
+        evmOp_revert_knownCodePc(address(103), 170, 0, 0);
     }
 
     let x0 = bytearray_get256(calldata, 4);
@@ -493,13 +543,13 @@ impure func arbsys_registerBlsKey(topFrame: EvmCallFrame, calldata: ByteArray) {
     if (evmCallStack_setAccount(caller, account_setBlsKey(acct, maybeBlsKey))) {
         evmOp_return(0, 0);
     } else {
-        evmOp_revert_knownCodePc(address(100), 171, 0, 0);
+        evmOp_revert_knownCodePc(address(103), 171, 0, 0);
     }
 }
 
-impure func arbsys_getBlsPublicKey(topFrame: EvmCallFrame, calldata: ByteArray) { // (address) -> (uint, uint, uint, uint)
+impure func arbBLS_getPublicKey(topFrame: EvmCallFrame, calldata: ByteArray) { // (address) -> (uint, uint, uint, uint)
     if (bytearray_size(calldata) != 36) {
-        evmOp_revert_knownCodePc(address(100), 180, 0, 0);
+        evmOp_revert_knownCodePc(address(103), 180, 0, 0);
     }
     let addr = address(bytearray_get256(calldata, 4));
     let maybeBlsKey = account_getBlsKey(evmCallFrame_getAccount(topFrame, addr));
@@ -508,19 +558,19 @@ impure func arbsys_getBlsPublicKey(topFrame: EvmCallFrame, calldata: ByteArray) 
     if let Some(blsKey) = maybeBlsKey {
         mem = bls_marshalPublicKey(blsKey, mem, 0);
     } else {
-        evmOp_revert_knownCodePc(address(100), 101, 0, 0);
+        evmOp_revert_knownCodePc(address(103), 101, 0, 0);
     }
 
     if (evmCallStack_setTopFrameMemory(mem)) {
         evmOp_return(0, 4*32);
     } else {
-        evmOp_revert_knownCodePc(address(100), 182, 0, 0);
+        evmOp_revert_knownCodePc(address(103), 182, 0, 0);
     }
 }
 
-impure func arbsys_uploadFunctionTable(topFrame: EvmCallFrame, calldata: ByteArray) { // (bytes)
+impure func arbFunctionTable_upload(topFrame: EvmCallFrame, calldata: ByteArray) { // (bytes)
     if (bytearray_size(calldata) < (4+2*32)) {
-        evmOp_revert_knownCodePc(address(100), 190, 0, 0);
+        evmOp_revert_knownCodePc(address(104), 190, 0, 0);
     }
 
     let callerAddr = evmCallFrame_getCaller(topFrame);
@@ -538,19 +588,19 @@ impure func arbsys_uploadFunctionTable(topFrame: EvmCallFrame, calldata: ByteArr
             Some(funcTable)
         );
     } else {
-        evmOp_revert_knownCodePc(address(100), 191, 0, 0);
+        evmOp_revert_knownCodePc(address(104), 191, 0, 0);
     }
 
     if (evmCallStack_setAccount(callerAddr, account)) {
         evmOp_return(0, 0);
     } else {
-        evmOp_revert_knownCodePc(address(100), 192, 0, 0);
+        evmOp_revert_knownCodePc(address(104), 192, 0, 0);
     }
 }
 
-impure func arbsys_functionTableSize(topFrame: EvmCallFrame, calldata: ByteArray) { // (address) -> uint
+impure func arbFunctionTable_size(topFrame: EvmCallFrame, calldata: ByteArray) { // (address) -> uint
     if (bytearray_size(calldata) != 36) {
-        evmOp_revert_knownCodePc(address(100), 200, 0, 0);
+        evmOp_revert_knownCodePc(address(104), 200, 0, 0);
     }
 
     if let Some(size) = functionTableSize(address(bytearray_get256(calldata, 4))) {
@@ -559,12 +609,12 @@ impure func arbsys_functionTableSize(topFrame: EvmCallFrame, calldata: ByteArray
         }
     }
 
-        evmOp_revert_knownCodePc(address(100), 201, 0, 0);
+        evmOp_revert_knownCodePc(address(104), 201, 0, 0);
 }
 
-impure func arbsys_functionTableGet(topFrame: EvmCallFrame, calldata: ByteArray) { // (address, uint) -> (uint, bool, uint)
+impure func arbFunctionTable_get(topFrame: EvmCallFrame, calldata: ByteArray) { // (address, uint) -> (uint, bool, uint)
     if (bytearray_size(calldata) != 68) {
-        evmOp_revert_knownCodePc(address(100), 210, 0, 0);
+        evmOp_revert_knownCodePc(address(104), 210, 0, 0);
     }
 
     let addr = address(bytearray_get256(calldata, 4));
@@ -591,7 +641,7 @@ impure func arbsys_functionTableGet(topFrame: EvmCallFrame, calldata: ByteArray)
         }
     }
 
-    evmOp_revert_knownCodePc(address(100), 211, 0, 0);
+    evmOp_revert_knownCodePc(address(104), 211, 0, 0);
 }
 
 func dummyAtEnd() {

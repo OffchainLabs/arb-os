@@ -107,6 +107,10 @@ public func account_isEmpty(acct: Account) -> bool {
     return (acct.nextSeqNum == 0) && (acct.ethBalance == 0) && (acct.contractInfo == None<AccountContractInfo>);
 }
 
+public func account_hasContract(acct: Account) -> bool {
+    return acct.contractInfo != None<AccountContractInfo>;
+}
+
 public func account_checkAndIncrSeqNum(
     account: Account, 
     seqNumRecvd: uint
@@ -195,9 +199,9 @@ public func accountStore_createAccountFromEvmCode(
     storageMap: StorageMap
 ) -> option<AccountStore> {
     // Create a new account for a compiled EVM contract.
-    // Return Some(updatedAccountStore), or None if something went wrong.
+    // Returns Some(updatedAccountStore), or None if something went wrong.
     let oldAcct = accountStore_get(store, newAddr);
-    if (account_isEmpty(oldAcct)) {
+    if ( ! account_hasContract(oldAcct)) {
         return Some(accountStore_set(
             store,
             newAddr,

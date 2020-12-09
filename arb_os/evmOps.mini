@@ -50,6 +50,7 @@ use accounts::account_getEvmJumpTable;
 use accounts::account_fetchAndIncrSeqNum;
 use accounts::account_setContractInfo;
 use accounts::account_isEmpty;
+use accounts::account_hasContract;
 use accounts::pristineAccount;
 
 use std::storageMap::storageMap_new;
@@ -278,7 +279,7 @@ public impure func evmOp_extcodehash(addrAsUint: uint) -> bytes32 {
     let addr = address(addrAsUint);     // truncates if necessary
     if let Some(topFrame) = evmCallStack_topFrame() {
         let acct = evmCallFrame_getAccount(topFrame, addr);
-        if (account_isEmpty(acct)) {
+        if (! account_isEmpty(acct)) {
             return bytes32(0);
         }
         if let Some(code) = account_getCode(acct) {
@@ -867,8 +868,8 @@ public impure func evmOp_create2(value: uint, offset: uint, length: uint, salt: 
 impure func doCreationOpcode(value: uint, offset: uint, length: uint, newAddress: address) -> address {
     // make sure there isn't already an account at the given address
     if let Some(acct) = evmCallStack_getAccount(newAddress) {
-        if ( ! account_isEmpty(acct)) {
-            // there is already an account at that address; return failure
+        if (account_hasContract(acct)) {
+            // there is already a contract at that address; return failure
             return address(0);
         }
     } else {
