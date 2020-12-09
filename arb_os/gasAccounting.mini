@@ -17,7 +17,6 @@ use accounts::account_addToEthBalance;
 use accounts::account_deductFromEthBalance;
 
 use std::bytearray::bytearray_new;
-use std::bytearray::bytearray_unmarshalBytes;
 use std::bytearray::bytearray_getByte;
 use std::bytearray::bytearray_get256;
 

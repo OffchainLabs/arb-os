@@ -105,7 +105,11 @@ func setupFromUnmarshal() -> ByteArray {
 			),
 		),
 	));
-	return bytearray_unmarshalBytes(marshalledStruct);
+	if let Some(ba) = bytearray_unmarshalBytes(marshalledStruct) {
+	    return ba;
+	} else {
+	    panic;
+	}
 }
 
 func hasherMatches(ba: ByteArray) -> bool {
