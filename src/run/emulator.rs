@@ -814,6 +814,8 @@ impl Machine {
         let mut break_line = 0;
         let mut break_gas_amount = 0u64;
         let mut gas_cost = 0;
+        let mut show_aux = false;
+        let mut show_reg = false;
         while self.state.is_running() {
             if let Some(gas) = self.next_op_gas() {
                 gas_cost += gas;
@@ -831,7 +833,9 @@ impl Machine {
                         }
                     }
                 }
-                if self.total_gas_usage > Uint256::from_u64(break_gas_amount) && break_gas_amount > 0 {
+                if self.total_gas_usage > Uint256::from_u64(break_gas_amount)
+                    && break_gas_amount > 0
+                {
                     breakpoint = true;
                 }
             }
@@ -840,8 +844,12 @@ impl Machine {
                     println!("PC: {:?}", pc);
                 }
                 println!("Stack contents: {}", self.stack);
-                //println!("Aux-stack contents: {}", self.aux_stack);
-                //println!("Register contents: {}", self.register);
+                if show_aux {
+                    println!("Aux-stack contents: {}", self.aux_stack);
+                }
+                if show_reg {
+                    println!("Register contents: {}", self.register);
+                }
                 if !self.stack.is_empty() {
                     println!("Stack top: {}", self.stack.top().unwrap());
                 }
@@ -908,6 +916,12 @@ impl Machine {
                         "r\n" | "run\n" => {
                             breakpoint = false;
                             exit = true;
+                        }
+                        "toggle aux\n" => {
+                            show_aux = !show_aux;
+                        }
+                        "toggle reg\n" => {
+                            show_reg = !show_reg;
                         }
                         _ => println!("invalid input"),
                     }
