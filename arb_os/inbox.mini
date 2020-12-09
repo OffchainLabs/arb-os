@@ -244,19 +244,24 @@ impure func getFromL1Inbox(inbox: Inbox) -> Inbox {
 
 impure func getFromL1InboxSequencer(inbox: Inbox, seq: SequencerState) -> Inbox {
     let newMsgRaw = asm() IncomingRequestFromInbox { inbox };
-    let newMsg = struct {
-        kind: newMsgRaw.kind,
-        blockNumber: newMsgRaw.blockNumber,
-        timestamp: newMsgRaw.timestamp,
-        sender: newMsgRaw.sender,
-        requestId: newMsgRaw.requestId,
-        msgData: bytearray_unmarshalBytes(newMsgRaw.msgData),
-        provenance: struct {
-            l1SeqNum: newMsgRaw.requestId,
-            parentRequestId: 0,
-            indexInParent: ~0,
-        },
-    };
+    let newMsg = unsafecast<IncomingRequest>(0);
+    if let Some(msgData) = bytearray_unmarshalBytes(newMsgRaw.msgData) {
+        newMsg = struct {
+            kind: newMsgRaw.kind,
+            blockNumber: newMsgRaw.blockNumber,
+            timestamp: newMsgRaw.timestamp,
+            sender: newMsgRaw.sender,
+            requestId: newMsgRaw.requestId,
+            msgData: msgData,
+            provenance: struct {
+                l1SeqNum: newMsgRaw.requestId,
+                parentRequestId: 0,
+                indexInParent: ~0,
+            },
+        };
+    } else {
+        return inbox;
+    }
 
     let blockNum = newMsg.blockNumber;
     if (blockNum == 0) {
