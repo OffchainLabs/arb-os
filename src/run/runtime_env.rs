@@ -633,7 +633,7 @@ impl ArbosReceipt {
         self.return_data.clone()
     }
 
-    pub fn get_evm_logs(&self) -> Vec<EvmLog> { self.evm_logs.clone() }
+    pub fn _get_evm_logs(&self) -> Vec<EvmLog> { self.evm_logs.clone() }
 
     pub fn get_gas_used(&self) -> Uint256 {
         self.gas_used.clone()
@@ -653,7 +653,6 @@ pub struct EvmLog {
 
 impl EvmLog {
     pub fn new(val: Value) -> Self {
-        println!("EvmLog::new {}", val);
         if let Value::Tuple(tup) = val {
             EvmLog {
                 addr: if let Value::Int(ui) = &tup[0] { ui.clone() } else { panic!() },
@@ -666,7 +665,6 @@ impl EvmLog {
     }
 
     pub fn new_vec(val: Value) -> Vec<Self> {
-        println!("EvmLog::new_vec {}", val);
         if let Value::Tuple(tup) = val {
             if tup.len() == 0 {
                 vec![]
@@ -755,7 +753,6 @@ fn test_hash_bytestack() {
 }
 
 pub fn bytes_from_bytestack(bs: Value) -> Option<Vec<u8>> {
-    println!("bytes_from_bytestack {}", bs);
     if let Value::Tuple(tup) = bs {
         if let Value::Int(ui) = &tup[0] {
             if let Some(nbytes) = ui.to_usize() {

@@ -85,19 +85,19 @@ public impure func precompiles_init(acctStore: AccountStore) -> option<AccountSt
     acctStore = accountStore_createBuiltinContract(
         acctStore,
         address(102),
-        arbAddressTable_txcall,
+        makeTrampoline(arbAddressTable_txcall),
         true,
     )?;
     acctStore = accountStore_createBuiltinContract(
         acctStore,
         address(103),
-        arbBLS_txcall,
+        makeTrampoline(arbBLS_txcall),
         true,
     )?;
     acctStore = accountStore_createBuiltinContract(
         acctStore,
         address(104),
-        arbFunctionTable_txcall,
+        makeTrampoline(arbFunctionTable_txcall),
         true,
     )?;
     return Some(acctStore);

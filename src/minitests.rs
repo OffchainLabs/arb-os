@@ -400,6 +400,7 @@ fn test_evm_add_code() {
     crate::evm::_basic_evm_add_test(None, false).unwrap();
 }
 
+#[test]
 fn test_same_address_deploy() {
     crate::evm::_evm_test_same_address_deploy(None, false);
 }
