@@ -92,7 +92,7 @@ impl AbiForContract {
         machine: &mut Machine,
         payment: Uint256,
         advance_time: Option<Uint256>,
-        deploy_as_buddy: bool,
+        address_for_buddy: Option<Uint256>,
         debug: bool,
     ) -> Option<Uint256> {
         let initial_logs_len = machine.runtime_env.get_all_receipt_logs().len();
@@ -108,24 +108,23 @@ impl AbiForContract {
             self.code_bytes.clone()
         };
 
-        let sender_addr = Uint256::from_usize(1025);
-        let request_id = if deploy_as_buddy {
-            machine.runtime_env.insert_buddy_deploy_message(
-                sender_addr.clone(),
+        let (request_id, sender_addr) = if let Some(buddy_addr) = address_for_buddy.clone() {
+            (machine.runtime_env.insert_buddy_deploy_message(
+                buddy_addr.clone(),
                 Uint256::from_usize(1_000_000_000_000),
                 Uint256::zero(),
                 payment,
                 &augmented_code,
-            )
+            ), buddy_addr)
         } else {
-            machine.runtime_env.insert_tx_message(
-                sender_addr.clone(),
+            (machine.runtime_env.insert_tx_message(
+                Uint256::from_u64(1025),
                 Uint256::from_usize(1_000_000_000_000),
                 Uint256::zero(),
                 Uint256::zero(),
                 payment,
                 &augmented_code,
-            )
+            ), Uint256::from_u64(1025))
         };
 
         if let Some(delta_blocks) = advance_time {
@@ -151,7 +150,7 @@ impl AbiForContract {
             return None;
         }
 
-        if deploy_as_buddy {
+        if address_for_buddy.is_some() {
             let sends = machine.runtime_env.get_all_sends();
             if sends.len() != initial_sends_len + 1 {
                 println!(
@@ -365,7 +364,7 @@ fn test_function_short_signature_correct() {
 
 pub struct ArbSys<'a> {
     pub contract_abi: AbiForContract,
-    wallet: &'a Wallet,
+    _wallet: &'a Wallet,
     my_address: Uint256,
     debug: bool,
 }
@@ -377,7 +376,7 @@ impl<'a> ArbSys<'a> {
         contract_abi.bind_interface_to_address(Uint256::from_u64(100));
         ArbSys {
             contract_abi,
-            wallet,
+            _wallet: wallet,
             my_address: Uint256::from_bytes(wallet.address().as_bytes()),
             debug,
         }
@@ -397,7 +396,7 @@ impl<'a> ArbSys<'a> {
             ))],
             machine,
             amount,
-            self.wallet,
+            self._wallet,
             self.debug,
         )?;
 
@@ -454,27 +453,83 @@ impl<'a> ArbSys<'a> {
             _ => panic!(),
         }
     }
+}
 
-    pub fn address_table_register(
+pub struct ArbAddressTable<'a> {
+    pub contract_abi: AbiForContract,
+    wallet: &'a Wallet,
+    my_address: Uint256,
+    debug: bool,
+}
+
+impl<'a> ArbAddressTable<'a> {
+    pub fn new(wallet: &'a Wallet, debug: bool) -> Self {
+        let mut contract_abi =
+            AbiForContract::new_from_file("contracts/add/build/contracts/ArbAddressTable.json").unwrap();
+        contract_abi.bind_interface_to_address(Uint256::from_u64(102));
+        ArbAddressTable {
+            contract_abi,
+            wallet,
+            my_address: Uint256::from_bytes(wallet.address().as_bytes()),
+            debug,
+        }
+    }
+
+    fn addr_to_uint_tx(
         &self,
+        func_name: &str,
         machine: &mut Machine,
         addr: Uint256,
     ) -> Result<Uint256, ethabi::Error> {
-        self.addr_to_uint_tx("addressTable_register", machine, addr)
-    }
-
-    pub fn address_table_lookup(
-        &self,
-        machine: &mut Machine,
-        addr: Uint256,
-    ) -> Result<Uint256, ethabi::Error> {
-        self.addr_to_uint_tx("addressTable_lookup", machine, addr)
-    }
-
-    pub fn address_table_size(&self, machine: &mut Machine) -> Result<Uint256, ethabi::Error> {
         let (receipts, sends) = self.contract_abi.call_function(
             self.my_address.clone(),
-            "addressTable_size",
+            func_name,
+            &[ethabi::Token::Address(ethabi::Address::from(
+                addr.to_h160(),
+            ))],
+            machine,
+            Uint256::zero(),
+            self.debug,
+        )?;
+        if (receipts.len() != 1) || (sends.len() != 0) {
+            return Err(ethabi::Error::from("wrong number of receipts or sends"));
+        }
+        if !receipts[0].succeeded() {
+            println!("ArbOS return code: {}", receipts[0].get_return_code());
+            return Err(ethabi::Error::from("reverted"));
+        }
+
+        let return_vals = ethabi::decode(
+            &[ethabi::ParamType::Uint(256)],
+            &receipts[0].get_return_data(),
+        )?;
+
+        match return_vals[0] {
+            ethabi::Token::Uint(ui) => Ok(Uint256::from_u256(&ui)),
+            _ => panic!(),
+        }
+    }
+
+    pub fn register(
+        &self,
+        machine: &mut Machine,
+        addr: Uint256,
+    ) -> Result<Uint256, ethabi::Error> {
+        self.addr_to_uint_tx("register", machine, addr)
+    }
+
+    pub fn lookup(
+        &self,
+        machine: &mut Machine,
+        addr: Uint256,
+    ) -> Result<Uint256, ethabi::Error> {
+        self.addr_to_uint_tx("lookup", machine, addr)
+    }
+
+    pub fn size(&self, machine: &mut Machine) -> Result<Uint256, ethabi::Error> {
+        let (receipts, sends) = self.contract_abi.call_function(
+            self.my_address.clone(),
+            "size",
             &[],
             machine,
             Uint256::zero(),
@@ -502,14 +557,14 @@ impl<'a> ArbSys<'a> {
         }
     }
 
-    pub fn address_table_lookup_index(
+    pub fn lookup_index(
         &self,
         machine: &mut Machine,
         index: Uint256,
     ) -> Result<Uint256, ethabi::Error> {
         let (receipts, sends) = self.contract_abi.call_function_compressed(
             self.my_address.clone(),
-            "addressTable_lookupIndex",
+            "lookupIndex",
             &[ethabi::Token::Uint(ethabi::Uint::from(index.to_u256()))],
             machine,
             Uint256::zero(),
@@ -534,7 +589,7 @@ impl<'a> ArbSys<'a> {
         }
     }
 
-    pub fn _address_table_decompress(
+    pub fn decompress(
         &self,
         machine: &mut Machine,
         buf: &[u8],
@@ -542,7 +597,7 @@ impl<'a> ArbSys<'a> {
     ) -> Result<(Uint256, Uint256), ethabi::Error> {
         let (receipts, sends) = self.contract_abi.call_function(
             self.my_address.clone(),
-            "addressTable_decompress",
+            "decompress",
             &[
                 ethabi::Token::Bytes(buf.to_vec()),
                 ethabi::Token::Uint(offset.to_u256()),
@@ -572,14 +627,14 @@ impl<'a> ArbSys<'a> {
         }
     }
 
-    pub fn _address_table_compress(
+    pub fn compress(
         &self,
         machine: &mut Machine,
         addr: Uint256,
     ) -> Result<Vec<u8>, ethabi::Error> {
         let (receipts, sends) = self.contract_abi.call_function(
             self.my_address.clone(),
-            "addressTable_compress",
+            "compress",
             &[ethabi::Token::Address(addr.to_h160())],
             machine,
             Uint256::zero(),
@@ -600,8 +655,29 @@ impl<'a> ArbSys<'a> {
             _ => panic!(),
         }
     }
+}
 
-    pub fn register_bls_key(
+pub struct ArbBLS<'a> {
+    pub contract_abi: AbiForContract,
+    _wallet: &'a Wallet,
+    my_address: Uint256,
+    debug: bool,
+}
+
+impl<'a> ArbBLS<'a> {
+    pub fn new(wallet: &'a Wallet, debug: bool) -> Self {
+        let mut contract_abi =
+            AbiForContract::new_from_file("contracts/add/build/contracts/ArbBLS.json").unwrap();
+        contract_abi.bind_interface_to_address(Uint256::from_u64(103));
+        ArbBLS {
+            contract_abi,
+            _wallet: wallet,
+            my_address: Uint256::from_bytes(wallet.address().as_bytes()),
+            debug,
+        }
+    }
+
+    pub fn register(
         &self,
         machine: &mut Machine,
         x0: Uint256,
@@ -611,7 +687,7 @@ impl<'a> ArbSys<'a> {
     ) -> Result<(), ethabi::Error> {
         let (receipts, sends) = self.contract_abi.call_function(
             self.my_address.clone(),
-            "registerBlsKey",
+            "register",
             &[
                 ethabi::Token::Uint(x0.to_u256()),
                 ethabi::Token::Uint(x1.to_u256()),
@@ -631,14 +707,14 @@ impl<'a> ArbSys<'a> {
         Ok(())
     }
 
-    pub fn get_bls_public_key(
+    pub fn get_public_key(
         &self,
         machine: &mut Machine,
         addr: Uint256,
     ) -> Result<(Uint256, Uint256, Uint256, Uint256), ethabi::Error> {
         let (receipts, sends) = self.contract_abi.call_function(
             self.my_address.clone(),
-            "getBlsPublicKey",
+            "getPublicKey",
             &[ethabi::Token::Address(addr.to_h160())],
             machine,
             Uint256::zero(),
@@ -681,15 +757,36 @@ impl<'a> ArbSys<'a> {
             _ => panic!(),
         }
     }
+}
 
-    pub fn upload_function_table(
+pub struct ArbFunctionTable<'a> {
+    pub contract_abi: AbiForContract,
+    wallet: &'a Wallet,
+    my_address: Uint256,
+    debug: bool,
+}
+
+impl<'a> ArbFunctionTable<'a> {
+    pub fn new(wallet: &'a Wallet, debug: bool) -> Self {
+        let mut contract_abi =
+            AbiForContract::new_from_file("contracts/add/build/contracts/ArbFunctionTable.json").unwrap();
+        contract_abi.bind_interface_to_address(Uint256::from_u64(104));
+        ArbFunctionTable {
+            contract_abi,
+            wallet,
+            my_address: Uint256::from_bytes(wallet.address().as_bytes()),
+            debug,
+        }
+    }
+
+    pub fn upload(
         &self,
         machine: &mut Machine,
         func_table: &FunctionTable,
     ) -> Result<(), ethabi::Error> {
         let (receipts, sends) = self.contract_abi.call_function_compressed(
             self.my_address.clone(),
-            "uploadFunctionTable",
+            "upload",
             &[ethabi::Token::Bytes(func_table.marshal())],
             machine,
             Uint256::zero(),
@@ -706,15 +803,15 @@ impl<'a> ArbSys<'a> {
         Ok(())
     }
 
-    pub fn function_table_size(
+    pub fn size(
         &self,
         machine: &mut Machine,
         addr: Uint256,
     ) -> Result<Uint256, ethabi::Error> {
-        self.addr_to_uint_tx("functionTableSize", machine, addr)
+        self.addr_to_uint_tx("size", machine, addr)
     }
 
-    pub fn function_table_get(
+    pub fn get(
         &self,
         machine: &mut Machine,
         addr: Uint256,
@@ -722,7 +819,7 @@ impl<'a> ArbSys<'a> {
     ) -> Result<(Uint256, bool, Uint256), ethabi::Error> {
         let (receipts, sends) = self.contract_abi.call_function(
             self.my_address.clone(),
-            "functionTableGet",
+            "get",
             &[
                 ethabi::Token::Address(addr.to_h160()),
                 ethabi::Token::Uint(index.to_u256()),
@@ -761,6 +858,41 @@ impl<'a> ArbSys<'a> {
                 *is_payable,
                 Uint256::from_u256(gas_limit),
             )),
+            _ => panic!(),
+        }
+    }
+
+    fn addr_to_uint_tx(
+        &self,
+        func_name: &str,
+        machine: &mut Machine,
+        addr: Uint256,
+    ) -> Result<Uint256, ethabi::Error> {
+        let (receipts, sends) = self.contract_abi.call_function(
+            self.my_address.clone(),
+            func_name,
+            &[ethabi::Token::Address(ethabi::Address::from(
+                addr.to_h160(),
+            ))],
+            machine,
+            Uint256::zero(),
+            self.debug,
+        )?;
+        if (receipts.len() != 1) || (sends.len() != 0) {
+            return Err(ethabi::Error::from("wrong number of receipts or sends"));
+        }
+        if !receipts[0].succeeded() {
+            println!("ArbOS return code: {}", receipts[0].get_return_code());
+            return Err(ethabi::Error::from("reverted"));
+        }
+
+        let return_vals = ethabi::decode(
+            &[ethabi::ParamType::Uint(256)],
+            &receipts[0].get_return_data(),
+        )?;
+
+        match return_vals[0] {
+            ethabi::Token::Uint(ui) => Ok(Uint256::from_u256(&ui)),
             _ => panic!(),
         }
     }

@@ -10,7 +10,6 @@ use std::bytearray::bytearray_size;
 use std::bytearray::bytearray_getByte;
 use std::bytearray::bytearray_get256;
 use std::bytearray::bytearray_setByte;
-use std::bytearray::bytearray_unmarshalBytes;
 use std::bytearray::bytearray_marshalFull;
 use std::bytearray::bytearray_extract;
 use std::bytestream::bytestream_new;

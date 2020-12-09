@@ -10,7 +10,6 @@ use inbox::inbox_addSequencer;
 use std::bytearray::MarshalledBytes;
 use std::bytearray::ByteArray;
 use std::bytearray::MarshalledBytes;
-use std::bytearray::bytearray_unmarshalBytes;
 use std::bytearray::bytearray_get256;
 
 use std::bytestream::ByteStream;
@@ -95,7 +94,7 @@ public impure func chainParams_chainAddress() -> address {
         return params.chainAddress;
     } else {
         // If we get here, the chain never received its initialization message.
-        evmCallStack_callHitError(15);
+        evmCallStack_callHitError(20);
         panic;
     }
 }
