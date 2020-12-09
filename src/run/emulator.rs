@@ -822,16 +822,16 @@ impl Machine {
             }
             if !breakpoint {
                 if let Some(insn) = self.next_opcode() {
+                    if insn.debug_info.attributes.breakpoint {
+                        breakpoint = true;
+                    }
                     if let Some(location) = insn.debug_info.location {
                         if location.line() == break_line {
                             breakpoint = true;
                         }
                     }
-                    if insn.opcode == Opcode::AVMOpcode(AVMOpcode::DebugPrint) {
-                        breakpoint = true;
-                    }
                 }
-                if self.total_gas_usage > Uint256::from_u64(break_gas_amount) {
+                if self.total_gas_usage > Uint256::from_u64(break_gas_amount) && break_gas_amount > 0 {
                     breakpoint = true;
                 }
             }
@@ -846,6 +846,9 @@ impl Machine {
                     println!("Stack top: {}", self.stack.top().unwrap());
                 }
                 if let Some(code) = self.next_opcode() {
+                    if code.debug_info.attributes.breakpoint {
+                        println!("We hit a breakpoint!");
+                    }
                     println!("Next Opcode: {}", code.opcode);
                     if let Some(imm) = code.immediate {
                         println!("Immediate: {}", imm);
