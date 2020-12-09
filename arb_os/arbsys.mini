@@ -109,7 +109,7 @@ public impure func arbsys_txcall() {
         }
     } else {
         // this shouldn't happen -- should always be called in an EVM tx
-        evmCallStack_callHitError(14);
+        evmCallStack_callHitError(21);
     }
 }
 

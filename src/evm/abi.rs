@@ -91,7 +91,7 @@ impl AbiForContract {
         args: &[ethabi::Token],
         machine: &mut Machine,
         payment: Uint256,
-        deploy_as_buddy: bool,
+        address_for_buddy: Option<Uint256>,
         debug: bool,
     ) -> Option<Uint256> {
         let initial_logs_len = machine.runtime_env.get_all_receipt_logs().len();
@@ -107,24 +107,23 @@ impl AbiForContract {
             self.code_bytes.clone()
         };
 
-        let sender_addr = Uint256::from_usize(1025);
-        let request_id = if deploy_as_buddy {
-            machine.runtime_env.insert_buddy_deploy_message(
-                sender_addr.clone(),
+        let (request_id, sender_addr) = if let Some(buddy_addr) = address_for_buddy.clone() {
+            (machine.runtime_env.insert_buddy_deploy_message(
+                buddy_addr.clone(),
                 Uint256::from_usize(1_000_000_000_000),
                 Uint256::zero(),
                 payment,
                 &augmented_code,
-            )
+            ), buddy_addr)
         } else {
-            machine.runtime_env.insert_tx_message(
-                sender_addr.clone(),
+            (machine.runtime_env.insert_tx_message(
+                Uint256::from_u64(1025),
                 Uint256::from_usize(1_000_000_000_000),
                 Uint256::zero(),
                 Uint256::zero(),
                 payment,
                 &augmented_code,
-            )
+            ), Uint256::from_u64(1025))
         };
 
         let _gas_used = if debug {
@@ -142,7 +141,7 @@ impl AbiForContract {
             return None;
         }
 
-        if deploy_as_buddy {
+        if address_for_buddy.is_some() {
             let sends = machine.runtime_env.get_all_sends();
             if sends.len() != initial_sends_len + 1 {
                 println!(
