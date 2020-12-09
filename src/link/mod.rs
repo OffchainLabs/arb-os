@@ -285,7 +285,7 @@ pub fn add_auto_link_progs(
     let mut progs = progs_in.to_owned();
     for pathname in builtin_pathnames.into_iter() {
         let path = Path::new(pathname);
-        match compile_from_file(path, &mut HashMap::new(), false) {
+        match compile_from_file(path, &mut HashMap::new(), false, false) {
             Ok(compiled_program) => {
                 compiled_program
                     .into_iter()

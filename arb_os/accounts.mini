@@ -107,6 +107,10 @@ public func account_isEmpty(acct: Account) -> bool {
     return (acct.nextSeqNum == 0) && (acct.ethBalance == 0) && (acct.contractInfo == None<AccountContractInfo>);
 }
 
+public func account_isContract(acct: Account) -> bool {
+    return (acct.contractInfo != None<AccountContractInfo>);
+}
+
 public func account_checkAndIncrSeqNum(
     account: Account, 
     seqNumRecvd: uint
