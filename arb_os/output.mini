@@ -87,11 +87,12 @@ public impure func outputStats_endOfBlock(blockNum: uint, timestamp: uint) {
             numLogs: updatedStats.numLogs + 1  // +1 for soon-to-be-issued block summary log
         };
 
+        globalBlockReceiptData = globalBlockReceiptData with {
+            statsAllTime: updatedStats
+        }
         emitBlockSummaryLog(blockNum, timestamp, globalBlockReceiptData.lastBlockNum);
 
         globalBlockReceiptData = globalBlockReceiptData with {
-            statsAllTime: updatedStats
-        } with {
             lastBlockNum: blockNum
         };
     }
