@@ -126,36 +126,42 @@ impure func getFromL1Inbox(inbox: Inbox) -> Inbox {
         }
     }
     let newMsgRaw = asm() IncomingRequestFromInbox { inbox };
-    let newMsg = struct {
-        kind: newMsgRaw.kind,
-        blockNumber: newMsgRaw.blockNumber,
-        timestamp: newMsgRaw.timestamp,
-        sender: newMsgRaw.sender,
-        requestId: newMsgRaw.requestId,
-        msgData: bytearray_unmarshalBytes(newMsgRaw.msgData),
-        provenance: struct {
-            l1SeqNum: newMsgRaw.requestId,
-            parentRequestId: 0,
-            indexInParent: ~0,
-        },
-    };
+    if let Some(msgData) = bytearray_unmarshalBytes(newMsgRaw.msgData) {
+        let newMsg = struct {
+            kind: newMsgRaw.kind,
+            blockNumber: newMsgRaw.blockNumber,
+            timestamp: newMsgRaw.timestamp,
+            sender: newMsgRaw.sender,
+            requestId: newMsgRaw.requestId,
+            msgData: msgData,
+            provenance: struct {
+                l1SeqNum: newMsgRaw.requestId,
+                parentRequestId: 0,
+                indexInParent: ~0,
+            },
+        };
 
-    if (newMsg.blockNumber == 0) {
-        newMsg = newMsg with { blockNumber: inbox.blockNum };
-    }
-    if (newMsg.timestamp == 0) {
-        newMsg = newMsg with { timestamp: inbox.timestamp };
-    }
+        if (newMsg.blockNumber == 0) {
+            newMsg = newMsg with { blockNumber: inbox.blockNum };
+        }
+        if (newMsg.timestamp == 0) {
+            newMsg = newMsg with { timestamp: inbox.timestamp };
+        }
 
-    return inbox with {
-        queue: incomingRequestQueue_put(inbox.queue, newMsg)
-    } with {
-        needToPeek: true
-    } with {
-        blockNum: newMsg.blockNumber
-    } with {
-        timestamp: newMsg.timestamp
-    };
+
+        return inbox with {
+            queue: incomingRequestQueue_put(inbox.queue, newMsg)
+        } with {
+            needToPeek: true
+        } with {
+            blockNum: newMsg.blockNumber
+        } with {
+            timestamp: newMsg.timestamp
+        };
+    } else {
+        // message was malformatted; ignore it and return; caller will call this function again
+        return inbox;
+    }
 }
 
 public impure func inbox_currentTimestamp() -> uint {
