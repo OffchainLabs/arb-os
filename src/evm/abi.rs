@@ -384,7 +384,7 @@ impl<'a> ArbSys<'a> {
             &[],
             machine,
             Uint256::zero(),
-            self.wallet,
+            self._wallet,
             self.debug,
         )?;
 
@@ -481,7 +481,7 @@ impl<'a> ArbSys<'a> {
 
 pub struct ArbAddressTable<'a> {
     pub contract_abi: AbiForContract,
-    wallet: &'a Wallet,
+    _wallet: &'a Wallet,
     my_address: Uint256,
     debug: bool,
 }
@@ -493,7 +493,7 @@ impl<'a> ArbAddressTable<'a> {
         contract_abi.bind_interface_to_address(Uint256::from_u64(102));
         ArbAddressTable {
             contract_abi,
-            wallet,
+            _wallet: wallet,
             my_address: Uint256::from_bytes(wallet.address().as_bytes()),
             debug,
         }
