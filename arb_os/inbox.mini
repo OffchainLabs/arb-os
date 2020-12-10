@@ -59,7 +59,7 @@ type SequencerState = struct {
     sequencerAddr: address,
     delayBlocks: uint,
     delayTime: uint,
-    delayQueue: Queue,
+    delayQueue: IncomingRequestQueue,
     lastBlockNumSeen: uint,      // Highest actual blocknum of message we have seen
     lastTimestampSeen: uint,     // Highest actual timestamp of message we have seen
     lastBlockNumReleased: uint,  // Highest blocknum we have released to inbox queue
@@ -94,12 +94,12 @@ public impure func inbox_addSequencer(addr: address, delayBlocks: uint, delayTim
         bnum = oldSeq.lastBlockNumSeen;
         ts = oldSeq.lastTimestampSeen;
         let oldq = oldSeq.delayQueue;
-        while( ! queue_isEmpty(oldq) ){
-            let (uq, rawMsg) = queue_getOrDie(oldq);
+        while( ! incomingRequestQueue_isEmpty(oldq) ){
+            let (uq, rawMsg) = incomingRequestQueue_getOrDie(oldq);
             oldq = uq;
             let msg = unsafecast<IncomingRequest>(rawMsg);
             globalInbox = globalInbox with {
-                queue: queue_put(globalInbox.queue, msg)
+                queue: incomingRequestQueue_put(globalInbox.queue, msg)
             };
         }
     }
@@ -116,7 +116,7 @@ public impure func inbox_addSequencer(addr: address, delayBlocks: uint, delayTim
             sequencerAddr: addr,
             delayBlocks: delayBlocks,
             delayTime: delayTime,
-            delayQueue: queue_new(),
+            delayQueue: incomingRequestQueue_new(),
             lastBlockNumSeen: bnum,
             lastTimestampSeen: ts,
             lastBlockNumReleased: bnum,
@@ -314,7 +314,10 @@ impure func getFromL1InboxSequencer(inbox: Inbox, seq: SequencerState) -> Inbox 
         }
 
         return inbox with {
-            queue: queue_put(inbox.queue, newMsg with { blockNumber: blockNum } with { timestamp: timestamp })
+            queue: incomingRequestQueue_put(
+                inbox.queue,
+                newMsg with { blockNumber: blockNum } with { timestamp: timestamp }
+            )
         } with {
             sequencer: Some(
                 seq with {
@@ -338,7 +341,7 @@ impure func getFromL1InboxSequencer(inbox: Inbox, seq: SequencerState) -> Inbox 
 
         return inbox with {
             sequencer: Some(seq with {
-                delayQueue: queue_put(
+                delayQueue: incomingRequestQueue_put(
                     seq.delayQueue,
                     newMsg with {
                         blockNumber: blockNum
@@ -373,12 +376,12 @@ func endOfBlockMessage(blockNum: uint, timestamp: uint) -> IncomingRequest {
 
 func releaseDelayedRequests(
     seqInfo: SequencerState,
-    inQ: Queue,
+    inQ: IncomingRequestQueue,
     blockNum: uint,
     timestamp: uint,
-) -> (SequencerState, Queue) {
+) -> (SequencerState, IncomingRequestQueue) {
     loop {
-        if let Some(res) = queue_get(seqInfo.delayQueue) {
+        if let Some(res) = incomingRequestQueue_get(seqInfo.delayQueue) {
             let (udq, rawMsg) = res;
             let msg = unsafecast<IncomingRequest>(rawMsg);
             if ((msg.blockNumber <= blockNum) || (msg.timestamp <= timestamp)) {
@@ -389,7 +392,7 @@ func releaseDelayedRequests(
                 } with {
                     lastTimestampReleased: msg.timestamp
                 };
-                inQ = queue_put(inQ, msg);
+                inQ = incomingRequestQueue_put(inQ, msg);
             } else {
                 return (seqInfo, inQ);
             }

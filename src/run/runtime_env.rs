@@ -191,8 +191,8 @@ impl RuntimeEnvironment {
 
     pub fn _new_sequencer_batch(&self, delay: Option<(Uint256, Uint256)>) -> Vec<u8> {
         let (delay_blocks, delay_seconds) = delay.unwrap_or((Uint256::one(), Uint256::one()));
-        let (release_block_num, release_timestamp) = if (self.current_block_num
-            <= delay_blocks) || (self.current_timestamp <= delay_seconds)
+        let (release_block_num, release_timestamp) = if (self.current_block_num <= delay_blocks)
+            || (self.current_timestamp <= delay_seconds)
         {
             (Uint256::zero(), Uint256::zero())
         } else {
@@ -210,7 +210,6 @@ impl RuntimeEnvironment {
             (low_order_ts >> 16) as u8,
             ((low_order_ts >> 8) & 0xff) as u8,
             (low_order_ts & 0xff) as u8,
-
         ];
         ret
     }
