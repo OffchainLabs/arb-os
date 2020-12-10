@@ -18,7 +18,7 @@ use accounts::accountStore_transferEthBalance;
 use accounts::accountStore_createAccountFromEvmCode;
 use accounts::account_checkAndIncrSeqNum;
 use accounts::account_fetchAndIncrSeqNum;
-use accounts::account_isContract;
+use accounts::account_hasContract;
 
 use accounts::account_incrSeqNum;
 use accounts::account_getNextSeqNum;
@@ -224,7 +224,7 @@ public impure func handleL2Request(
             };
         }
 
-        if (account_isContract(accountStore_get(getGlobalAccountStore(), request.calleeAddr))) {
+        if (account_hasContract(accountStore_get(getGlobalAccountStore(), request.calleeAddr))) {
             // there's already an account at that address, revert the call
             emitTxReceipt(request.incomingRequest, 7, None<ByteArray>, None<EvmLogs>, None<GasUsage>);
             return Some(());

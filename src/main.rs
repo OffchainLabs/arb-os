@@ -9,7 +9,7 @@ use contracttemplates::generate_contract_template_file_or_die;
 use link::{link, postlink_compile};
 use mavm::Value;
 use run::{profile_gen_from_file, replay_from_testlog_file, run_from_file, RuntimeEnvironment};
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 use std::fs::File;
 use std::io;
 use std::path::Path;
@@ -104,7 +104,7 @@ fn main() -> Result<(), CompileError> {
             let typecheck = compile.typecheck;
             let mut output = get_output(compile.output.as_deref()).unwrap();
             let filenames: Vec<_> = compile.input.clone();
-            let mut file_name_chart = HashMap::new();
+            let mut file_name_chart = BTreeMap::new();
             if compile.compile_only {
                 let filename = &filenames[0];
                 let path = Path::new(filename);

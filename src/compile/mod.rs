@@ -13,7 +13,7 @@ use lalrpop_util::lalrpop_mod;
 use mini::DeclsParser;
 use serde::{Deserialize, Serialize};
 use std::collections::hash_map::DefaultHasher;
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeMap, HashMap, HashSet};
 use std::fmt::Formatter;
 use std::fs::File;
 use std::hash::{Hash, Hasher};
@@ -22,7 +22,7 @@ use std::path::Path;
 use symtable::SymTable;
 use typecheck::{TypeCheckedFunc, TypeCheckedNode};
 
-pub use ast::{TopLevelDecl, Type};
+pub use ast::{DebugInfo, TopLevelDecl, Type};
 pub use source::Lines;
 
 mod ast;
@@ -240,7 +240,7 @@ impl CompiledProgram {
 /// file, and if debug is set to true, then compiler internal debug information will be printed.
 pub fn compile_from_file(
     path: &Path,
-    file_name_chart: &mut HashMap<u64, String>,
+    file_name_chart: &mut BTreeMap<u64, String>,
     _debug: bool,
     inline: bool,
 ) -> Result<Vec<CompiledProgram>, CompileError> {
@@ -294,7 +294,7 @@ pub fn compile_from_folder(
     folder: &Path,
     library: Option<&str>,
     main: &str,
-    file_name_chart: &mut HashMap<u64, String>,
+    file_name_chart: &mut BTreeMap<u64, String>,
     inline: bool,
 ) -> Result<Vec<CompiledProgram>, CompileError> {
     let (mut programs, import_map) = create_program_tree(folder, library, main, file_name_chart)?;
@@ -492,7 +492,7 @@ fn create_program_tree(
     folder: &Path,
     library: Option<&str>,
     main: &str,
-    file_name_chart: &mut HashMap<u64, String>,
+    file_name_chart: &mut BTreeMap<u64, String>,
 ) -> Result<
     (
         HashMap<Vec<String>, Module>,

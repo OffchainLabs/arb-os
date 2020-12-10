@@ -109,22 +109,28 @@ impl AbiForContract {
         };
 
         let (request_id, sender_addr) = if let Some(buddy_addr) = address_for_buddy.clone() {
-            (machine.runtime_env.insert_buddy_deploy_message(
-                buddy_addr.clone(),
-                Uint256::from_usize(1_000_000_000_000),
-                Uint256::zero(),
-                payment,
-                &augmented_code,
-            ), buddy_addr)
+            (
+                machine.runtime_env.insert_buddy_deploy_message(
+                    buddy_addr.clone(),
+                    Uint256::from_usize(1_000_000_000_000),
+                    Uint256::zero(),
+                    payment,
+                    &augmented_code,
+                ),
+                buddy_addr,
+            )
         } else {
-            (machine.runtime_env.insert_tx_message(
+            (
+                machine.runtime_env.insert_tx_message(
+                    Uint256::from_u64(1025),
+                    Uint256::from_usize(1_000_000_000_000),
+                    Uint256::zero(),
+                    Uint256::zero(),
+                    payment,
+                    &augmented_code,
+                ),
                 Uint256::from_u64(1025),
-                Uint256::from_usize(1_000_000_000_000),
-                Uint256::zero(),
-                Uint256::zero(),
-                payment,
-                &augmented_code,
-            ), Uint256::from_u64(1025))
+            )
         };
 
         if let Some(delta_blocks) = advance_time {
@@ -465,7 +471,8 @@ pub struct ArbAddressTable<'a> {
 impl<'a> ArbAddressTable<'a> {
     pub fn new(wallet: &'a Wallet, debug: bool) -> Self {
         let mut contract_abi =
-            AbiForContract::new_from_file("contracts/add/build/contracts/ArbAddressTable.json").unwrap();
+            AbiForContract::new_from_file("contracts/add/build/contracts/ArbAddressTable.json")
+                .unwrap();
         contract_abi.bind_interface_to_address(Uint256::from_u64(102));
         ArbAddressTable {
             contract_abi,
@@ -510,19 +517,11 @@ impl<'a> ArbAddressTable<'a> {
         }
     }
 
-    pub fn register(
-        &self,
-        machine: &mut Machine,
-        addr: Uint256,
-    ) -> Result<Uint256, ethabi::Error> {
+    pub fn register(&self, machine: &mut Machine, addr: Uint256) -> Result<Uint256, ethabi::Error> {
         self.addr_to_uint_tx("register", machine, addr)
     }
 
-    pub fn lookup(
-        &self,
-        machine: &mut Machine,
-        addr: Uint256,
-    ) -> Result<Uint256, ethabi::Error> {
+    pub fn lookup(&self, machine: &mut Machine, addr: Uint256) -> Result<Uint256, ethabi::Error> {
         self.addr_to_uint_tx("lookup", machine, addr)
     }
 
@@ -627,11 +626,7 @@ impl<'a> ArbAddressTable<'a> {
         }
     }
 
-    pub fn compress(
-        &self,
-        machine: &mut Machine,
-        addr: Uint256,
-    ) -> Result<Vec<u8>, ethabi::Error> {
+    pub fn compress(&self, machine: &mut Machine, addr: Uint256) -> Result<Vec<u8>, ethabi::Error> {
         let (receipts, sends) = self.contract_abi.call_function(
             self.my_address.clone(),
             "compress",
@@ -769,7 +764,8 @@ pub struct ArbFunctionTable<'a> {
 impl<'a> ArbFunctionTable<'a> {
     pub fn new(wallet: &'a Wallet, debug: bool) -> Self {
         let mut contract_abi =
-            AbiForContract::new_from_file("contracts/add/build/contracts/ArbFunctionTable.json").unwrap();
+            AbiForContract::new_from_file("contracts/add/build/contracts/ArbFunctionTable.json")
+                .unwrap();
         contract_abi.bind_interface_to_address(Uint256::from_u64(104));
         ArbFunctionTable {
             contract_abi,
@@ -803,11 +799,7 @@ impl<'a> ArbFunctionTable<'a> {
         Ok(())
     }
 
-    pub fn size(
-        &self,
-        machine: &mut Machine,
-        addr: Uint256,
-    ) -> Result<Uint256, ethabi::Error> {
+    pub fn size(&self, machine: &mut Machine, addr: Uint256) -> Result<Uint256, ethabi::Error> {
         self.addr_to_uint_tx("size", machine, addr)
     }
 
