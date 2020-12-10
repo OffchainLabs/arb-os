@@ -4,7 +4,9 @@
 
 //!Provides types and utilities for linking together compiled mini programs
 
-use crate::compile::{compile_from_file, CompileError, CompiledProgram, SourceFileMap, Type};
+use crate::compile::{
+    compile_from_file, CompileError, CompiledProgram, DebugInfo, SourceFileMap, Type,
+};
 use crate::mavm::{AVMOpcode, CodePt, Instruction, Label, Opcode, Value};
 use crate::stringtable::{StringId, StringTable};
 use serde::{Deserialize, Serialize};
@@ -370,17 +372,25 @@ pub fn link(
             None => Value::none(),
         };
         vec![
-            Instruction::from_opcode_imm(Opcode::AVMOpcode(AVMOpcode::Swap1), init_immediate, None),
-            Instruction::from_opcode(Opcode::AVMOpcode(AVMOpcode::Jump), None),
+            Instruction::from_opcode_imm(
+                Opcode::AVMOpcode(AVMOpcode::Swap1),
+                init_immediate,
+                DebugInfo::default(),
+            ),
+            Instruction::from_opcode(Opcode::AVMOpcode(AVMOpcode::Jump), DebugInfo::default()),
         ]
     } else {
         // not a module, add an instruction that creates space for the globals, plus one to push a fake "return address"
         vec![
-            Instruction::from_opcode_imm(Opcode::AVMOpcode(AVMOpcode::Noop), Value::none(), None),
+            Instruction::from_opcode_imm(
+                Opcode::AVMOpcode(AVMOpcode::Noop),
+                Value::none(),
+                DebugInfo::default(),
+            ),
             Instruction::from_opcode_imm(
                 Opcode::AVMOpcode(AVMOpcode::Rset),
                 make_uninitialized_tuple(global_num_limit),
-                None,
+                DebugInfo::default(),
             ),
         ]
     };
