@@ -5,7 +5,7 @@
 //!Provides utilities for emulation of AVM bytecode.
 
 use super::runtime_env::RuntimeEnvironment;
-use crate::compile::CompileError;
+use crate::compile::{CompileError, DebugInfo};
 use crate::link::LinkedProgram;
 use crate::mavm::{AVMOpcode, CodePt, Instruction, Opcode, Value};
 use crate::pos::Location;
@@ -304,7 +304,7 @@ impl CodeStore {
     fn create_segment(&mut self) -> CodePt {
         self.segments.push(vec![Instruction::from_opcode(
             Opcode::AVMOpcode(AVMOpcode::Panic),
-            None,
+            DebugInfo::default(),
         )]);
         CodePt::new_in_segment(self.segments.len() - 1, 0)
     }
@@ -324,7 +324,7 @@ impl CodeStore {
                 let segment = &mut self.segments[seg_num];
                 if old_offset == segment.len() - 1 {
                     if let Some(opcode) = Opcode::from_number(op) {
-                        segment.push(Instruction::new(opcode, imm, None));
+                        segment.push(Instruction::new(opcode, imm, DebugInfo::default()));
                         Some(CodePt::new_in_segment(seg_num, old_offset + 1))
                     } else {
                         panic!(
@@ -748,6 +748,9 @@ impl Machine {
             self.run(Some(stop_pc))
         };
         println!("ArbGas cost of call: {}", cost);
+        if let Some(ret_val) = self.stack.top() {
+            println!("Stack top: {:?}", ret_val);
+        }
         match &self.state {
             MachineState::Stopped => {
                 Err(ExecutionError::new("execution stopped", &self.state, None))
@@ -811,6 +814,8 @@ impl Machine {
         let mut break_line = 0;
         let mut break_gas_amount = 0u64;
         let mut gas_cost = 0;
+        let mut show_aux = false;
+        let mut show_reg = false;
         while self.state.is_running() {
             if let Some(gas) = self.next_op_gas() {
                 gas_cost += gas;
@@ -819,16 +824,18 @@ impl Machine {
             }
             if !breakpoint {
                 if let Some(insn) = self.next_opcode() {
-                    if let Some(location) = insn.location {
+                    if insn.debug_info.attributes.breakpoint {
+                        breakpoint = true;
+                    }
+                    if let Some(location) = insn.debug_info.location {
                         if location.line() == break_line {
                             breakpoint = true;
                         }
                     }
-                    if insn.opcode == Opcode::AVMOpcode(AVMOpcode::DebugPrint) {
-                        breakpoint = true;
-                    }
                 }
-                if self.total_gas_usage > Uint256::from_u64(break_gas_amount) {
+                if self.total_gas_usage > Uint256::from_u64(break_gas_amount)
+                    && break_gas_amount > 0
+                {
                     breakpoint = true;
                 }
             }
@@ -837,17 +844,24 @@ impl Machine {
                     println!("PC: {:?}", pc);
                 }
                 println!("Stack contents: {}", self.stack);
-                //println!("Aux-stack contents: {}", self.aux_stack);
-                //println!("Register contents: {}", self.register);
+                if show_aux {
+                    println!("Aux-stack contents: {}", self.aux_stack);
+                }
+                if show_reg {
+                    println!("Register contents: {}", self.register);
+                }
                 if !self.stack.is_empty() {
                     println!("Stack top: {}", self.stack.top().unwrap());
                 }
                 if let Some(code) = self.next_opcode() {
+                    if code.debug_info.attributes.breakpoint {
+                        println!("We hit a breakpoint!");
+                    }
                     println!("Next Opcode: {}", code.opcode);
                     if let Some(imm) = code.immediate {
                         println!("Immediate: {}", imm);
                     }
-                    if let Some(location) = code.location {
+                    if let Some(location) = code.debug_info.location {
                         let line = location.line.to_usize();
                         let column = location.column.to_usize();
                         if let Some(filename) = self.file_name_chart.get(&location.file_id) {
@@ -902,6 +916,12 @@ impl Machine {
                         "r\n" | "run\n" => {
                             breakpoint = false;
                             exit = true;
+                        }
+                        "toggle aux\n" => {
+                            show_aux = !show_aux;
+                        }
+                        "toggle reg\n" => {
+                            show_reg = !show_reg;
                         }
                         _ => println!("invalid input"),
                     }
@@ -1023,7 +1043,7 @@ impl Machine {
                 vec![ProfilerEvent::EnterFunc(0)],
                 self.code
                     .get_insn(CodePt::new_internal(0))
-                    .map(|insn| insn.location)
+                    .map(|insn| insn.debug_info.location)
                     .unwrap_or(None),
             ),
         );
@@ -1041,7 +1061,7 @@ impl Machine {
                 profile_enabled = true;
             }
             if profile_enabled {
-                let loc = insn.location;
+                let loc = insn.debug_info.location;
                 let next_op_gas = self.next_op_gas().unwrap_or(0);
                 if let Some(gas_cost) = loc_map.get_mut(&loc, &self.file_name_chart) {
                     *gas_cost += next_op_gas;
@@ -1102,7 +1122,7 @@ impl Machine {
                                     vec![],
                                     self.code
                                         .get_insn(*next_codepoint)
-                                        .map(|insn| insn.location)
+                                        .map(|insn| insn.debug_info.location)
                                         .unwrap_or(None),
                                 ),
                             );
