@@ -328,7 +328,7 @@ public func bytearray_extract(from: ByteArray, offset: uint, nbytes: uint) -> By
         return bytearray_new(0);
     }
     if ((nbytes >= 0x100000000000000000000000000000000) || (offset+nbytes >= 0x100000000000000000000000000000000)) {
-        nbytes = 0x100000000000000000000000000000000 - offset;
+        return bytearray_new(0);
     }
     return from with {
         size: nbytes
