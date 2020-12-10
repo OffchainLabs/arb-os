@@ -2,8 +2,8 @@
  * Copyright 2020, Offchain Labs, Inc. All rights reserved.
  */
 
-use crate::evm::abi::{ArbSys, ArbAddressTable, ArbBLS, ArbFunctionTable};
 use crate::evm::abi::FunctionTable;
+use crate::evm::abi::{ArbAddressTable, ArbBLS, ArbFunctionTable, ArbSys};
 use crate::mavm::Value;
 use crate::run::{bytestack_from_bytes, load_from_file, RuntimeEnvironment};
 use crate::uint256::Uint256;
@@ -100,6 +100,74 @@ pub fn evm_xcontract_call_with_constructors(
     Ok(true)
 }
 
+pub fn _evm_tx_with_deposit(
+    log_to: Option<&Path>,
+    debug: bool,
+    _profile: bool,
+) -> Result<bool, ethabi::Error> {
+    use std::convert::TryFrom;
+    let rt_env = RuntimeEnvironment::new(Uint256::from_usize(1111));
+    let mut machine = load_from_file(Path::new("arb_os/arbos.mexe"), rt_env);
+    machine.start_at_zero();
+
+    let my_addr = Uint256::from_usize(1025);
+
+    let mut fib_contract =
+        AbiForContract::new_from_file("contracts/fibonacci/build/contracts/Fibonacci.json")?;
+    if fib_contract.deploy(&[], &mut machine, Uint256::zero(), None, debug) == None {
+        panic!("failed to deploy Fibonacci contract");
+    }
+
+    let mut pc_contract =
+        AbiForContract::new_from_file("contracts/fibonacci/build/contracts/PaymentChannel.json")?;
+    if pc_contract.deploy(
+        &[ethabi::Token::Address(ethereum_types::H160::from_slice(
+            &fib_contract.address.to_bytes_be()[12..],
+        ))],
+        &mut machine,
+        Uint256::zero(),
+        None,
+        debug,
+    ) == None
+    {
+        panic!("failed to deploy PaymentChannel contract");
+    }
+
+    let (logs, sends) = pc_contract._call_function_with_deposit(
+        my_addr.clone(),
+        "deposit",
+        &[],
+        &mut machine,
+        Uint256::from_usize(10000),
+        debug,
+    )?;
+    assert_eq!(logs.len(), 1);
+    assert_eq!(sends.len(), 0);
+    assert!(logs[0].succeeded());
+
+    let (logs, sends) = pc_contract.call_function(
+        my_addr,
+        "transferFib",
+        vec![
+            ethabi::Token::Address(ethabi::Address::from_low_u64_be(1025)),
+            ethabi::Token::Uint(ethabi::Uint::try_from(1).unwrap()),
+        ]
+            .as_ref(),
+        &mut machine,
+        Uint256::zero(),
+        debug,
+    )?;
+    assert_eq!(logs.len(), 1);
+    assert_eq!(sends.len(), 0);
+    assert!(logs[0].succeeded());
+
+    if let Some(path) = log_to {
+        machine.runtime_env.recorder.to_file(path).unwrap();
+    }
+
+    Ok(true)
+}
+
 #[cfg(test)]
 pub fn evm_deploy_using_non_eip159_signature(
     log_to: Option<&Path>,
@@ -175,10 +243,7 @@ pub fn evm_test_arbsys_direct(log_to: Option<&Path>, debug: bool) -> Result<(), 
     assert_eq!(my_addr.clone(), my_addr_decompressed);
     assert_eq!(offset, Uint256::from_usize(my_addr_compressed.len()));
 
-    assert_eq!(
-        Uint256::from_u64(2),
-        arb_address_table.size(&mut machine)?
-    );
+    assert_eq!(Uint256::from_u64(2), arb_address_table.size(&mut machine)?);
 
     let an_addr = Uint256::from_u64(581351734971918347);
     let an_addr_compressed = arb_address_table.compress(&mut machine, an_addr.clone())?;
@@ -566,7 +631,13 @@ pub fn evm_deploy_buddy_contract(log_to: Option<&Path>, debug: bool) {
 
     match AbiForContract::new_from_file("contracts/add/build/contracts/Add.json") {
         Ok(mut contract) => {
-            let result = contract.deploy(&[], &mut machine, Uint256::zero(), Some(Uint256::from_u64(1025)), debug);
+            let result = contract.deploy(
+                &[],
+                &mut machine,
+                Uint256::zero(),
+                Some(Uint256::from_u64(1025)),
+                debug,
+            );
             if let Some(contract_addr) = result {
                 assert_ne!(contract_addr, Uint256::zero());
             } else {
@@ -603,13 +674,8 @@ pub fn evm_test_payment_in_constructor(log_to: Option<&Path>, debug: bool) {
 
     let contract = match AbiForContract::new_from_file("contracts/add/build/contracts/Add.json") {
         Ok(mut contract) => {
-            let result = contract.deploy(
-                &vec![],
-                &mut machine,
-                Uint256::from_u64(10000),
-                None,
-                debug,
-            );
+            let result =
+                contract.deploy(&vec![], &mut machine, Uint256::from_u64(10000), None, debug);
             if let Some(contract_addr) = result {
                 assert_ne!(contract_addr, Uint256::zero());
                 contract
@@ -816,24 +882,31 @@ pub fn _evm_test_same_address_deploy(log_to: Option<&Path>, debug: bool) {
     machine.start_at_zero();
 
     let my_addr = Uint256::from_usize(1025);
-    let (contract, orig_contract_addr) = match AbiForContract::new_from_file("contracts/add/build/contracts/Add.json") {
-        Ok(mut contract) => {
-            let result = contract.deploy(&[], &mut machine, Uint256::zero(), None, debug);
-            if let Some(contract_addr) = result {
-                assert_ne!(contract_addr, Uint256::zero());
-                (contract, contract_addr)
-            } else {
-                panic!("deploy failed");
+    let (contract, orig_contract_addr) =
+        match AbiForContract::new_from_file("contracts/add/build/contracts/Add.json") {
+            Ok(mut contract) => {
+                let result = contract.deploy(&[], &mut machine, Uint256::zero(), None, debug);
+                if let Some(contract_addr) = result {
+                    assert_ne!(contract_addr, Uint256::zero());
+                    (contract, contract_addr)
+                } else {
+                    panic!("deploy failed");
+                }
             }
-        }
-        Err(e) => {
-            panic!("error loading contract: {:?}", e);
-        }
-    };
+            Err(e) => {
+                panic!("error loading contract: {:?}", e);
+            }
+        };
 
     match AbiForContract::new_from_file("contracts/add/build/contracts/Add.json") {
         Ok(mut new_contract) => {
-            let result = new_contract.deploy(&[], &mut machine, Uint256::zero(), Some(orig_contract_addr), debug);
+            let result = new_contract.deploy(
+                &[],
+                &mut machine,
+                Uint256::zero(),
+                Some(orig_contract_addr),
+                debug,
+            );
             assert_eq!(result, None);
         }
         Err(e) => {
@@ -848,7 +921,7 @@ pub fn _evm_test_same_address_deploy(log_to: Option<&Path>, debug: bool) {
             ethabi::Token::Uint(ethabi::Uint::one()),
             ethabi::Token::Uint(ethabi::Uint::one()),
         ]
-            .as_ref(),
+        .as_ref(),
         &mut machine,
         Uint256::zero(),
         debug,
@@ -959,6 +1032,7 @@ pub fn evm_payment_to_empty_address(log_to: Option<&Path>, debug: bool) {
         dest_addr,
         Uint256::from_u64(10000),
         &vec![],
+        false,
     );
 
     let _ = if debug {
@@ -991,6 +1065,7 @@ pub fn evm_eval_sha256(log_to: Option<&Path>, debug: bool) {
         Uint256::from_u64(2), // sha256 precompile
         Uint256::from_u64(0),
         &vec![0xCCu8],
+        false,
     );
 
     let _ = if debug {
@@ -1034,6 +1109,7 @@ pub fn mint_erc20_and_get_balance(log_to: Option<&Path>, debug: bool) {
         token_addr,
         Uint256::zero(),
         &calldata,
+        false,
     );
 
     let mut machine = load_from_file(Path::new("arb_os/arbos.mexe"), rt_env);
@@ -1071,6 +1147,7 @@ pub fn mint_erc721_and_get_balance(log_to: Option<&Path>, debug: bool) {
         token_addr,
         Uint256::zero(),
         &calldata,
+        false,
     );
 
     let mut machine = load_from_file(Path::new("arb_os/arbos.mexe"), rt_env);
