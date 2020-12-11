@@ -31,11 +31,23 @@ pub struct RuntimeEnvironment {
 
 impl RuntimeEnvironment {
     pub fn new(chain_address: Uint256) -> Self {
+        RuntimeEnvironment::new_with_blocknum_timestamp(
+            chain_address,
+            Uint256::from_u64(100_000),
+            Uint256::from_u64(10_000_000),
+        )
+    }
+
+    pub fn new_with_blocknum_timestamp(
+        chain_address: Uint256,
+        blocknum: Uint256,
+        timestamp: Uint256,
+    ) -> Self {
         let mut ret = RuntimeEnvironment {
             chain_id: chain_address.trim_to_u64() & 0xffffffffffff, // truncate to 48 bits
             l1_inbox: vec![],
-            current_block_num: Uint256::zero(),
-            current_timestamp: Uint256::zero(),
+            current_block_num: blocknum,
+            current_timestamp: timestamp,
             logs: Vec::new(),
             sends: Vec::new(),
             next_inbox_seq_num: Uint256::zero(),
@@ -265,12 +277,6 @@ impl RuntimeEnvironment {
         let msg_size: u64 = msg.len().try_into().unwrap();
         let rlp_encoded_len = Uint256::from_u64(msg_size).rlp_encode();
         batch.extend(rlp_encoded_len.clone());
-        println!(
-            "batch item size {}, RLP(size).len {}, RLP-encoded: {:?}",
-            msg_size,
-            rlp_encoded_len.len(),
-            rlp_encoded_len
-        );
         batch.extend(msg);
         tx_id_bytes
     }
@@ -479,7 +485,7 @@ pub struct ArbosReceipt {
     request_id: Uint256,
     return_code: Uint256,
     return_data: Vec<u8>,
-    evm_logs: Value,
+    evm_logs: Vec<EvmLog>,
     gas_used: Uint256,
     gas_price_wei: Uint256,
     pub provenance: ArbosRequestProvenance,
@@ -519,7 +525,7 @@ impl ArbosReceipt {
                 },
                 return_code,
                 return_data,
-                evm_logs,
+                evm_logs: EvmLog::new_vec(evm_logs),
                 gas_used,
                 gas_price_wei,
                 provenance: if let Value::Tuple(stup) = &tup[1] {
@@ -650,12 +656,50 @@ impl ArbosReceipt {
         self.return_data.clone()
     }
 
+    pub fn _get_evm_logs(&self) -> Vec<EvmLog> { self.evm_logs.clone() }
+
     pub fn get_gas_used(&self) -> Uint256 {
         self.gas_used.clone()
     }
 
     pub fn get_gas_used_so_far(&self) -> Uint256 {
         self.gas_so_far.clone()
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct EvmLog {
+    addr: Uint256,
+    data: Vec<u8>,
+    vals: Vec<Uint256>,
+}
+
+impl EvmLog {
+    pub fn new(val: Value) -> Self {
+        if let Value::Tuple(tup) = val {
+            EvmLog {
+                addr: if let Value::Int(ui) = &tup[0] { ui.clone() } else { panic!() },
+                data: bytes_from_bytestack(tup[1].clone()).unwrap(),
+                vals: tup[2..].iter().map(|v| if let Value::Int(ui) = v { ui.clone() } else { panic!() }).collect(),
+            }
+        } else {
+            panic!("invalid EVM log format");
+        }
+    }
+
+    pub fn new_vec(val: Value) -> Vec<Self> {
+        if let Value::Tuple(tup) = val {
+            if tup.len() == 0 {
+                vec![]
+            } else {
+                let mut rest = EvmLog::new_vec(tup[1].clone());
+                let last = EvmLog::new(tup[0].clone());
+                rest.push(last);
+                rest
+            }
+        } else {
+            panic!()
+        }
     }
 }
 
