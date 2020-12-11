@@ -29,7 +29,7 @@ fn hash_buffer2(vec: Vec<u8>) -> Uint256 {
     for (i, &el) in vec.iter().enumerate() {
         buf = buf.set_byte(i, el);
     }
-    buf.avm_hash()
+    buf.hash().hash
 }
 
 #[test]

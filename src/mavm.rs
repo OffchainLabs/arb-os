@@ -290,7 +290,7 @@ pub struct Buffer {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Packed {
-    hash: Uint256,
+    pub hash: Uint256,
     size: usize,   // total size
     packed: usize, // packed levels
 }
@@ -440,7 +440,7 @@ impl Buffer {
     }
 
     pub fn avm_hash(&self) -> Uint256 {
-        self.hash().hash
+        Uint256::avm_hash2(&Uint256::from_u64(123), &self.hash().hash)
     }
 
     pub fn hash_no_caching(&self) -> Packed {
