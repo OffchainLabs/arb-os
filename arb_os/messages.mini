@@ -18,6 +18,8 @@ use accounts::accountStore_transferEthBalance;
 use accounts::accountStore_createAccountFromEvmCode;
 use accounts::account_checkAndIncrSeqNum;
 use accounts::account_fetchAndIncrSeqNum;
+use accounts::account_hasContract;
+
 use accounts::account_incrSeqNum;
 use accounts::account_getNextSeqNum;
 use accounts::account_addToEthBalance;
@@ -36,7 +38,6 @@ use tokens::tokens_erc721deposit;
 
 use std::bytearray::bytearray_new;
 use std::bytearray::bytearray_size;
-use std::bytearray::bytearray_unmarshalBytes;
 use std::bytearray::bytearray_marshalFull;
 use std::bytearray::bytearray_extract;
 
@@ -221,12 +222,18 @@ public impure func handleL2Request(
             };
         }
 
-        initEvmCallStackForConstructor(
-            codeBytes,
-            evmJumpTable,
-            codept,
-            request
-        );  // should never return
+        if (account_hasContract(accountStore_get(getGlobalAccountStore(), request.calleeAddr))) {
+            // there's already an account at that address, revert the call
+            emitTxReceipt(request.incomingRequest, 7, None<ByteArray>, None<EvmLogs>, None<GasUsage>);
+            return Some(());
+        } else {
+            initEvmCallStackForConstructor(
+                codeBytes,
+                evmJumpTable,
+                codept,
+                request
+            );  // should never return
+        }
     } else {
         // this is a non-constructor call
         let callKind = 0;

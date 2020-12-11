@@ -27,52 +27,93 @@ use std::bytearray::bytearray_set256;
 use std::sha256::sha256_byteArray;
 
 use arbsys::arbsys_txcall;
+use arbosTest::arbosTest_txcall;
+use arbsys::arbAddressTable_txcall;
+use arbsys::arbBLS_txcall;
+use arbsys::arbFunctionTable_txcall;
 
 
 public impure func precompiles_init(acctStore: AccountStore) -> option<AccountStore> {
     acctStore = accountStore_createBuiltinContract(
         acctStore,
         address(0x01),
-        precompile_0x01,
+        makeTrampoline(precompile_0x01),
         false,
     )?;
     acctStore = accountStore_createBuiltinContract(
         acctStore,
         address(0x02),
-        precompile_0x02,
+        makeTrampoline(precompile_0x02),
         false,
     )?;
     acctStore = accountStore_createBuiltinContract(
         acctStore,
         address(0x04),
-        precompile_0x04,
+        makeTrampoline(precompile_0x04),
         false,
     )?;
     acctStore = accountStore_createBuiltinContract(
     	acctStore,
         address(0x06),
-        precompile_0x06,
+        makeTrampoline(precompile_0x06),
         false,
     )?;
     acctStore = accountStore_createBuiltinContract(
         acctStore,
         address(0x07),
-        precompile_0x07,
+        makeTrampoline(precompile_0x07),
         false,
     )?;
     acctStore = accountStore_createBuiltinContract(
         acctStore,
         address(0x08),
-        precompile_0x08,
+        makeTrampoline(precompile_0x08),
         false,
     )?;
     acctStore = accountStore_createBuiltinContract(
         acctStore,
         address(100),
-        arbsys_txcall,
+        makeTrampoline(arbsys_txcall),
+        true,
+    )?;
+    acctStore = accountStore_createBuiltinContract(
+        acctStore,
+        address(105),
+        makeTrampoline(arbosTest_txcall),
+        true,
+    )?;
+    acctStore = accountStore_createBuiltinContract(
+        acctStore,
+        address(102),
+        makeTrampoline(arbAddressTable_txcall),
+        true,
+    )?;
+    acctStore = accountStore_createBuiltinContract(
+        acctStore,
+        address(103),
+        makeTrampoline(arbBLS_txcall),
+        true,
+    )?;
+    acctStore = accountStore_createBuiltinContract(
+        acctStore,
+        address(104),
+        makeTrampoline(arbFunctionTable_txcall),
         true,
     )?;
     return Some(acctStore);
+}
+
+impure func makeTrampoline(txcallFunc: impure func()) -> impure func() {
+    // make a small code snippet that function-calls to txcallFunc (with a dummy return address)
+    return asm(
+        0x3b,
+        0,
+        asm(
+            0x34,
+            txcallFunc,
+            asm() func() { errcodept }
+        ) func() { pushinsnimm }
+    ) func() { pushinsnimm };
 }
 
 public impure func precompile_0x01() {  // ecrecover

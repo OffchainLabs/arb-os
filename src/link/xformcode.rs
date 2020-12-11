@@ -5,8 +5,8 @@
 //!Provides utilities for dealing with nested tuples and conversion from large flat tuples to
 //! nested tuples
 
+use crate::compile::DebugInfo;
 use crate::mavm::{AVMOpcode, CodePt, Instruction, Opcode, Value};
-use crate::pos::Location;
 use crate::uint256::Uint256;
 
 ///The maximum size of an AVM tuple
@@ -20,28 +20,28 @@ pub fn fix_tuple_size(code_in: &[Instruction], num_globals: usize) -> Vec<Instru
     let global_tree = TupleTree::new(num_globals, false);
 
     for insn in code_in.iter() {
-        let location = insn.location;
+        let debug_info = insn.debug_info;
         match insn.opcode {
             Opcode::MakeFrame(nargs, ntotal) => {
                 code_out.push(Instruction::from_opcode(
                     Opcode::AVMOpcode(AVMOpcode::AuxPush),
-                    location,
+                    debug_info,
                 )); // move return address to aux stack
                 locals_tree = TupleTree::new(ntotal, true);
                 if let Some(imm) = &insn.immediate {
                     code_out.push(Instruction::from_opcode_imm(
                         Opcode::AVMOpcode(AVMOpcode::Noop),
                         imm.clone(),
-                        location,
+                        debug_info,
                     ));
                 }
                 code_out.push(Instruction::from_opcode_imm(
                     Opcode::AVMOpcode(AVMOpcode::AuxPush),
                     TupleTree::make_empty(&locals_tree),
-                    location,
+                    debug_info,
                 ));
                 for lnum in 0..nargs {
-                    code_out = locals_tree.write_code(true, lnum, &mut code_out, location);
+                    code_out = locals_tree.write_code(true, lnum, &mut code_out, debug_info);
                 }
             }
             Opcode::TupleGet(size) => {
@@ -49,7 +49,7 @@ pub fn fix_tuple_size(code_in: &[Instruction], num_globals: usize) -> Vec<Instru
                 if let Some(index) = &insn.immediate {
                     match index.to_usize() {
                         Some(iu) => {
-                            code_out = ttree.read_code(false, iu, &mut code_out, location);
+                            code_out = ttree.read_code(false, iu, &mut code_out, debug_info);
                         }
                         None => panic!("fix_tuple_size: index too large"),
                     }
@@ -62,7 +62,7 @@ pub fn fix_tuple_size(code_in: &[Instruction], num_globals: usize) -> Vec<Instru
                 if let Some(index) = &insn.immediate {
                     match index.to_usize() {
                         Some(iu) => {
-                            code_out = ttree.write_code(false, iu, &mut code_out, location);
+                            code_out = ttree.write_code(false, iu, &mut code_out, debug_info);
                         }
                         None => panic!("fix_tuple_size: TupleSet index too large"),
                     }
@@ -74,7 +74,7 @@ pub fn fix_tuple_size(code_in: &[Instruction], num_globals: usize) -> Vec<Instru
                 if let Some(index) = &insn.immediate {
                     match index.to_usize() {
                         Some(iu) => {
-                            code_out = locals_tree.write_code(true, iu, &mut code_out, location);
+                            code_out = locals_tree.write_code(true, iu, &mut code_out, debug_info);
                         }
                         None => panic!("fix_tuple_size: index too large"),
                     }
@@ -86,7 +86,7 @@ pub fn fix_tuple_size(code_in: &[Instruction], num_globals: usize) -> Vec<Instru
                 if let Some(index) = &insn.immediate {
                     match index.to_usize() {
                         Some(iu) => {
-                            code_out = locals_tree.read_code(true, iu, &mut code_out, location);
+                            code_out = locals_tree.read_code(true, iu, &mut code_out, debug_info);
                         }
                         None => panic!("fix_tuple_size: index too large"),
                     }
@@ -97,20 +97,20 @@ pub fn fix_tuple_size(code_in: &[Instruction], num_globals: usize) -> Vec<Instru
             Opcode::SetGlobalVar(idx) => {
                 code_out.push(Instruction::from_opcode(
                     Opcode::AVMOpcode(AVMOpcode::Rget),
-                    location,
+                    debug_info,
                 ));
-                code_out = global_tree.write_code(false, idx, &mut code_out, location);
+                code_out = global_tree.write_code(false, idx, &mut code_out, debug_info);
                 code_out.push(Instruction::from_opcode(
                     Opcode::AVMOpcode(AVMOpcode::Rset),
-                    location,
+                    debug_info,
                 ));
             }
             Opcode::GetGlobalVar(idx) => {
                 code_out.push(Instruction::from_opcode(
                     Opcode::AVMOpcode(AVMOpcode::Rget),
-                    location,
+                    debug_info,
                 ));
-                code_out = global_tree.read_code(false, idx, &mut code_out, location);
+                code_out = global_tree.read_code(false, idx, &mut code_out, debug_info);
             }
             Opcode::Return => {
                 code_out.push(Instruction::new(
@@ -119,19 +119,19 @@ pub fn fix_tuple_size(code_in: &[Instruction], num_globals: usize) -> Vec<Instru
                         Some(v) => Some(v.clone()),
                         None => None,
                     },
-                    location,
+                    debug_info,
                 ));
                 code_out.push(Instruction::from_opcode(
                     Opcode::AVMOpcode(AVMOpcode::Pop),
-                    location,
+                    debug_info,
                 ));
                 code_out.push(Instruction::from_opcode(
                     Opcode::AVMOpcode(AVMOpcode::AuxPop),
-                    location,
+                    debug_info,
                 ));
                 code_out.push(Instruction::from_opcode(
                     Opcode::AVMOpcode(AVMOpcode::Jump),
-                    location,
+                    debug_info,
                 ));
             }
             Opcode::UncheckedFixedArrayGet(sz) => {
@@ -143,50 +143,50 @@ pub fn fix_tuple_size(code_in: &[Instruction], num_globals: usize) -> Vec<Instru
                     code_out.push(Instruction::from_opcode_imm(
                         Opcode::AVMOpcode(AVMOpcode::Dup1),
                         tup_size_val.clone(),
-                        location,
+                        debug_info,
                     ));
                     code_out.push(Instruction::from_opcode(
                         Opcode::AVMOpcode(AVMOpcode::Mod),
-                        location,
+                        debug_info,
                     ));
                     code_out.push(Instruction::from_opcode(
                         Opcode::AVMOpcode(AVMOpcode::Swap1),
-                        location,
+                        debug_info,
                     ));
                     // stack: idx slot arr
                     code_out.push(Instruction::from_opcode_imm(
                         Opcode::AVMOpcode(AVMOpcode::Swap1),
                         tup_size_val.clone(),
-                        location,
+                        debug_info,
                     ));
                     code_out.push(Instruction::from_opcode(
                         Opcode::AVMOpcode(AVMOpcode::Div),
-                        location,
+                        debug_info,
                     ));
                     // stack: subindex slot arr
                     code_out.push(Instruction::from_opcode(
                         Opcode::AVMOpcode(AVMOpcode::Swap2),
-                        location,
+                        debug_info,
                     ));
                     code_out.push(Instruction::from_opcode(
                         Opcode::AVMOpcode(AVMOpcode::Swap1),
-                        location,
+                        debug_info,
                     ));
                     // stack: slot arr subindex
                     code_out.push(Instruction::from_opcode(
                         Opcode::AVMOpcode(AVMOpcode::Tget),
-                        location,
+                        debug_info,
                     ));
                     code_out.push(Instruction::from_opcode(
                         Opcode::AVMOpcode(AVMOpcode::Swap1),
-                        location,
+                        debug_info,
                     ));
                     // stack: subindex subarr
                     remaining_size = (remaining_size + (TUPLE_SIZE - 1)) / TUPLE_SIZE;
                 }
                 code_out.push(Instruction::from_opcode(
                     Opcode::AVMOpcode(AVMOpcode::Tget),
-                    location,
+                    debug_info,
                 ));
             }
             _ => {
@@ -314,22 +314,22 @@ impl TupleTree {
         is_local: bool,
         index: usize,
         code: &mut Vec<Instruction>,
-        location: Option<Location>,
+        debug_info: DebugInfo,
     ) -> Vec<Instruction> {
         match self {
             TupleTree::Single => {
                 if is_local {
                     code.push(Instruction::from_opcode(
                         Opcode::AVMOpcode(AVMOpcode::AuxPop),
-                        location,
+                        debug_info,
                     ));
                     code.push(Instruction::from_opcode(
                         Opcode::AVMOpcode(AVMOpcode::Dup0),
-                        location,
+                        debug_info,
                     ));
                     code.push(Instruction::from_opcode(
                         Opcode::AVMOpcode(AVMOpcode::AuxPush),
-                        location,
+                        debug_info,
                     ));
                     code.to_vec()
                 } else {
@@ -347,9 +347,9 @@ impl TupleTree {
                                 Opcode::AVMOpcode(AVMOpcode::Tget)
                             },
                             Value::Int(Uint256::from_usize(slot)),
-                            location,
+                            debug_info,
                         ));
-                        return subtree.read_code(false, index, code, location);
+                        return subtree.read_code(false, index, code, debug_info);
                     } else {
                         index -= subtree.tsize();
                     }
@@ -369,7 +369,7 @@ impl TupleTree {
         is_local: bool,
         index_in: usize,
         code: &mut Vec<Instruction>,
-        location: Option<Location>,
+        debug_info: DebugInfo,
     ) -> Vec<Instruction> {
         if let TupleTree::Tree(_, v) = self {
             let mut index = index_in;
@@ -384,7 +384,7 @@ impl TupleTree {
                                     Opcode::AVMOpcode(AVMOpcode::Tset)
                                 },
                                 Value::Int(Uint256::from_usize(slot)),
-                                location,
+                                debug_info,
                             ));
                             return code.to_vec();
                         }
@@ -393,39 +393,39 @@ impl TupleTree {
                                 code.push(Instruction::from_opcode_imm(
                                     Opcode::AVMOpcode(AVMOpcode::Xget),
                                     Value::Int(Uint256::from_usize(slot)),
-                                    location,
+                                    debug_info,
                                 ));
                             } else {
                                 code.push(Instruction::from_opcode(
                                     Opcode::AVMOpcode(AVMOpcode::Swap1),
-                                    location,
+                                    debug_info,
                                 ));
                                 code.push(Instruction::from_opcode(
                                     Opcode::AVMOpcode(AVMOpcode::Dup1),
-                                    location,
+                                    debug_info,
                                 ));
                                 code.push(Instruction::from_opcode_imm(
                                     Opcode::AVMOpcode(AVMOpcode::Tget),
                                     Value::Int(Uint256::from_usize(slot)),
-                                    location,
+                                    debug_info,
                                 ));
                             }
-                            let mut new_code = subtree.write_code(false, index, code, location);
+                            let mut new_code = subtree.write_code(false, index, code, debug_info);
                             if is_local {
                                 new_code.push(Instruction::from_opcode_imm(
                                     Opcode::AVMOpcode(AVMOpcode::Xset),
                                     Value::Int(Uint256::from_usize(slot)),
-                                    location,
+                                    debug_info,
                                 ));
                             } else {
                                 new_code.push(Instruction::from_opcode(
                                     Opcode::AVMOpcode(AVMOpcode::Swap1),
-                                    location,
+                                    debug_info,
                                 ));
                                 new_code.push(Instruction::from_opcode_imm(
                                     Opcode::AVMOpcode(AVMOpcode::Tset),
                                     Value::Int(Uint256::from_usize(slot)),
-                                    location,
+                                    debug_info,
                                 ));
                             }
                             return new_code;
@@ -439,7 +439,7 @@ impl TupleTree {
         } else {
             code.push(Instruction::from_opcode(
                 Opcode::AVMOpcode(AVMOpcode::Pop),
-                location,
+                debug_info,
             ));
             code.to_vec()
         }

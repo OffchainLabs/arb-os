@@ -9,7 +9,7 @@ use contracttemplates::generate_contract_template_file_or_die;
 use link::{link, postlink_compile};
 use mavm::Value;
 use run::{profile_gen_from_file, replay_from_testlog_file, run_from_file, RuntimeEnvironment};
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 use std::fs::File;
 use std::io;
 use std::path::Path;
@@ -45,6 +45,9 @@ struct CompileStruct {
     format: Option<String>,
     #[clap(short, long)]
     module: bool,
+    //Inlining is currently disabled
+    //#[clap(short, long)]
+    //inline: bool,
 }
 
 #[derive(Clap, Debug)]
@@ -81,6 +84,12 @@ struct Profiler {
 }
 
 #[derive(Clap, Debug)]
+struct EvmTests {
+    #[clap(short, long)]
+    savelogs: bool,
+}
+
+#[derive(Clap, Debug)]
 enum Args {
     Compile(CompileStruct),
     Run(RunStruct),
@@ -90,6 +99,7 @@ enum Args {
     MakeTestLogs,
     MakeBenchmarks,
     MakeTemplates,
+    EvmTests(EvmTests),
 }
 
 fn main() -> Result<(), CompileError> {
@@ -101,11 +111,11 @@ fn main() -> Result<(), CompileError> {
             let typecheck = compile.typecheck;
             let mut output = get_output(compile.output.as_deref()).unwrap();
             let filenames: Vec<_> = compile.input.clone();
-            let mut file_name_chart = HashMap::new();
+            let mut file_name_chart = BTreeMap::new();
             if compile.compile_only {
                 let filename = &filenames[0];
                 let path = Path::new(filename);
-                match compile_from_file(path, &mut file_name_chart, debug_mode) {
+                match compile_from_file(path, &mut file_name_chart, debug_mode, false) {
                     Ok(mut compiled_program) => {
                         compiled_program.iter_mut().for_each(|prog| {
                             prog.file_name_chart.extend(file_name_chart.clone());
@@ -121,7 +131,7 @@ fn main() -> Result<(), CompileError> {
                 let mut compiled_progs = Vec::new();
                 for filename in &filenames {
                     let path = Path::new(filename);
-                    match compile_from_file(path, &mut file_name_chart, debug_mode) {
+                    match compile_from_file(path, &mut file_name_chart, debug_mode, false) {
                         Ok(compiled_program) => {
                             compiled_program.into_iter().for_each(|prog| {
                                 file_name_chart.extend(prog.file_name_chart.clone());
@@ -226,6 +236,38 @@ fn main() -> Result<(), CompileError> {
         Args::MakeTemplates => {
             let path = Path::new("arb_os/contractTemplates.mini");
             generate_contract_template_file_or_die(path);
+        }
+
+        Args::EvmTests(options) => {
+            let mut num_successes = 0u64;
+            let mut num_failures = 0u64;
+            for path_name in [
+                "evm-tests/tests/VMTests/vmArithmeticTest",
+                "evm-tests/tests/VMTests/vmPushDupSwapTest",
+                "evm-tests/tests/VMTests/vmBitwiseLogicOperation",
+                "evm-tests/tests/VMTests/vmIOandFlowOperations",
+                "evm-tests/tests/VMTests/vmSha3Test",
+                "evm-tests/tests/VMTests/vmRandomTest",
+                "evm-tests/tests/VMTests/vmSystemOperations",
+                "evm-tests/tests/VMTests/vmEnvironmentalInfo",
+                "evm-tests/tests/VMTests/vmLogTest",
+            ]
+            .iter()
+            {
+                let path = Path::new(path_name);
+                let (ns, nf) = evm::evmtest::run_evm_tests(
+                    path,
+                    if options.savelogs {
+                        Some(Path::new("evm-test-logs/"))
+                    } else {
+                        None
+                    },
+                )
+                .unwrap();
+                num_successes = num_successes + ns;
+                num_failures = num_failures + nf;
+            }
+            println!("{} successes, {} failures", num_successes, num_failures);
         }
     }
 

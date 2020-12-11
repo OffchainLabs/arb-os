@@ -396,6 +396,16 @@ fn test_function_table_access() {
 }
 
 #[test]
+fn test_evm_add_code() {
+    crate::evm::_basic_evm_add_test(None, false).unwrap();
+}
+
+#[test]
+fn test_same_address_deploy() {
+    crate::evm::_evm_test_same_address_deploy(None, false);
+}
+
+#[test]
 pub fn test_crosscontract_call_with_constructors() {
     match crate::evm::evm_xcontract_call_with_constructors(None, false, false) {
         Ok(result) => assert_eq!(result, true),
