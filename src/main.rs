@@ -84,6 +84,12 @@ struct Profiler {
 }
 
 #[derive(Clap, Debug)]
+struct EvmTests {
+    #[clap(short, long)]
+    savelogs: bool,
+}
+
+#[derive(Clap, Debug)]
 enum Args {
     Compile(CompileStruct),
     Run(RunStruct),
@@ -93,6 +99,7 @@ enum Args {
     MakeTestLogs,
     MakeBenchmarks,
     MakeTemplates,
+    EvmTests(EvmTests),
 }
 
 fn main() -> Result<(), CompileError> {
@@ -229,6 +236,38 @@ fn main() -> Result<(), CompileError> {
         Args::MakeTemplates => {
             let path = Path::new("arb_os/contractTemplates.mini");
             generate_contract_template_file_or_die(path);
+        }
+
+        Args::EvmTests(options) => {
+            let mut num_successes = 0u64;
+            let mut num_failures = 0u64;
+            for path_name in [
+                "evm-tests/tests/VMTests/vmArithmeticTest",
+                "evm-tests/tests/VMTests/vmPushDupSwapTest",
+                "evm-tests/tests/VMTests/vmBitwiseLogicOperation",
+                "evm-tests/tests/VMTests/vmIOandFlowOperations",
+                "evm-tests/tests/VMTests/vmSha3Test",
+                "evm-tests/tests/VMTests/vmRandomTest",
+                "evm-tests/tests/VMTests/vmSystemOperations",
+                "evm-tests/tests/VMTests/vmEnvironmentalInfo",
+                "evm-tests/tests/VMTests/vmLogTest",
+            ]
+            .iter()
+            {
+                let path = Path::new(path_name);
+                let (ns, nf) = evm::evmtest::run_evm_tests(
+                    path,
+                    if options.savelogs {
+                        Some(Path::new("evm-test-logs/"))
+                    } else {
+                        None
+                    },
+                )
+                .unwrap();
+                num_successes = num_successes + ns;
+                num_failures = num_failures + nf;
+            }
+            println!("{} successes, {} failures", num_successes, num_failures);
         }
     }
 
