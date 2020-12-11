@@ -1013,6 +1013,7 @@ impl ArbosTest {
             callee_addr,
             callvalue,
             &calldata,
+            false,
         );
         let num_logs_before = machine.runtime_env.get_all_receipt_logs().len();
         let num_sends_before = machine.runtime_env.get_all_sends().len();
