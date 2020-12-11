@@ -942,6 +942,7 @@ impl<'a> _ArbOwner<'a> {
         let (receipts, _sends) = self.contract_abi.call_function(
             old_owner.unwrap_or(self.my_address.clone()),
             "giveOwnership",
+            &[ethabi::Token::Address(new_owner.to_h160())],
             machine,
             Uint256::zero(),
             self.debug,

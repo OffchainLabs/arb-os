@@ -2,7 +2,7 @@
  * Copyright 2020, Offchain Labs, Inc. All rights reserved.
  */
 
-use crate::evm::abi::{ArbSys, ArbAddressTable, ArbBLS, ArbFunctionTable, ArbosTest;_ArbOwner};
+use crate::evm::abi::{ArbSys, ArbAddressTable, ArbBLS, ArbFunctionTable, ArbosTest, _ArbOwner};
 use crate::evm::abi::FunctionTable;
 use crate::mavm::Value;
 use crate::run::{bytestack_from_bytes, load_from_file, RuntimeEnvironment};
