@@ -48,7 +48,7 @@ pub fn evm_xcontract_call_with_constructors(
 
     let mut fib_contract =
         AbiForContract::new_from_file("contracts/fibonacci/build/contracts/Fibonacci.json")?;
-    if let Err(_) = fib_contract.deploy(&[], &mut machine, Uint256::zero(), None, debug) == None {
+    if let Err(_) = fib_contract.deploy(&[], &mut machine, Uint256::zero(), None, debug) {
         panic!("failed to deploy Fibonacci contract");
     }
 
@@ -132,7 +132,7 @@ pub fn _evm_run_with_gas_charging(
 
     let mut fib_contract =
         AbiForContract::new_from_file("contracts/fibonacci/build/contracts/Fibonacci.json")?;
-    if let Err(receipt) = fib_contract.deploy(&[], &mut machine, Uint256::zero(), false, debug) {
+    if let Err(receipt) = fib_contract.deploy(&[], &mut machine, Uint256::zero(), None, debug) {
         if receipt.unwrap().get_return_code() == Uint256::from_u64(2) {
             return Ok(false);
         } else {
@@ -148,7 +148,7 @@ pub fn _evm_run_with_gas_charging(
         ))],
         &mut machine,
         Uint256::zero(),
-        false,
+        None,
         debug,
     ) {
         if receipt.unwrap().get_return_code() == Uint256::from_u64(2) {
@@ -348,7 +348,7 @@ pub fn evm_test_function_table_access(
 }
 
 pub fn _basic_evm_add_test(log_to: Option<&Path>, debug: bool) -> Result<(), ethabi::Error> {
-    let rt_env = RuntimeEnvironment::new(Uint256::from_usize(1111));
+    let rt_env = RuntimeEnvironment::new(Uint256::from_usize(1111), None);
     let mut machine = load_from_file(Path::new("arb_os/arbos.mexe"), rt_env);
     machine.start_at_zero();
 
@@ -399,7 +399,7 @@ pub fn evm_test_create(
 
     let mut fib_contract =
         AbiForContract::new_from_file("contracts/fibonacci/build/contracts/Fibonacci.json")?;
-    if let Err(_) = fib_contract.deploy(&[], &mut machine, Uint256::zero(), None, debug) == None {
+    if let Err(_) = fib_contract.deploy(&[], &mut machine, Uint256::zero(), None, debug) {
         panic!("failed to deploy Fibonacci contract");
     }
 
@@ -463,7 +463,7 @@ pub fn evm_xcontract_call_using_batch(
 
     let mut fib_contract =
         AbiForContract::new_from_file("contracts/fibonacci/build/contracts/Fibonacci.json")?;
-    if let Err(_) = fib_contract.deploy(&[], &mut machine, Uint256::zero(), None, debug) == None {
+    if let Err(_) = fib_contract.deploy(&[], &mut machine, Uint256::zero(), None, debug) {
         panic!("failed to deploy Fibonacci contract");
     }
 
@@ -544,7 +544,6 @@ pub fn evm_xcontract_call_using_batch(
     Ok(true)
 }
 
-#[cfg(test)]
 pub fn _evm_xcontract_call_using_compressed_batch(
     log_to: Option<&Path>,
     debug: bool,
@@ -572,7 +571,7 @@ pub fn _evm_xcontract_call_using_compressed_batch(
 
     let mut fib_contract =
         AbiForContract::new_from_file("contracts/fibonacci/build/contracts/Fibonacci.json")?;
-    if let Err(_) = fib_contract.deploy(&[], &mut machine, Uint256::zero(), None, debug) == None {
+    if let Err(_) = fib_contract.deploy(&[], &mut machine, Uint256::zero(), None, debug) {
         panic!("failed to deploy Fibonacci contract");
     }
 
@@ -659,7 +658,7 @@ pub fn evm_direct_deploy_add(log_to: Option<&Path>, debug: bool) {
     match AbiForContract::new_from_file("contracts/add/build/contracts/Add.json") {
         Ok(mut contract) => {
             let result = contract.deploy(&[], &mut machine, Uint256::zero(), None, debug);
-            if let Some(contract_addr) = result {
+            if let Ok(contract_addr) = result {
                 assert_ne!(contract_addr, Uint256::zero());
             } else {
                 panic!("deploy failed");
@@ -689,7 +688,7 @@ pub fn evm_deploy_buddy_contract(log_to: Option<&Path>, debug: bool) {
                 Some(Uint256::from_u64(1025)),
                 debug,
             );
-            if let Some(contract_addr) = result {
+            if let Ok(contract_addr) = result {
                 assert_ne!(contract_addr, Uint256::zero());
             } else {
                 panic!("deploy failed");
@@ -705,8 +704,7 @@ pub fn evm_deploy_buddy_contract(log_to: Option<&Path>, debug: bool) {
     }
 }
 
-#[cfg(test)]
-pub fn evm_test_payment_in_constructor(log_to: Option<&Path>, debug: bool) {
+pub fn _evm_test_payment_in_constructor(log_to: Option<&Path>, debug: bool) {
     let rt_env = RuntimeEnvironment::new(Uint256::from_usize(1111), None);
     let mut machine = load_from_file(Path::new("arb_os/arbos.mexe"), rt_env);
     machine.start_at_zero();
@@ -727,7 +725,7 @@ pub fn evm_test_payment_in_constructor(log_to: Option<&Path>, debug: bool) {
         Ok(mut contract) => {
             let result =
                 contract.deploy(&vec![], &mut machine, Uint256::from_u64(10000), None, debug);
-            if let Some(contract_addr) = result {
+            if let Ok(contract_addr) = result {
                 assert_ne!(contract_addr, Uint256::zero());
                 contract
             } else {
@@ -794,7 +792,7 @@ pub fn evm_test_arbsys(log_to: Option<&Path>, debug: bool) {
     let contract = match AbiForContract::new_from_file("contracts/add/build/contracts/Add.json") {
         Ok(mut contract) => {
             let result = contract.deploy(&vec![], &mut machine, Uint256::zero(), None, debug);
-            if let Some(contract_addr) = result {
+            if let Ok(contract_addr) = result {
                 assert_ne!(contract_addr, Uint256::zero());
                 contract
             } else {
@@ -877,7 +875,7 @@ pub fn evm_direct_deploy_and_call_add(log_to: Option<&Path>, debug: bool) {
     let contract = match AbiForContract::new_from_file("contracts/add/build/contracts/Add.json") {
         Ok(mut contract) => {
             let result = contract.deploy(&[], &mut machine, Uint256::zero(), None, debug);
-            if let Some(contract_addr) = result {
+            if let Ok(contract_addr) = result {
                 assert_ne!(contract_addr, Uint256::zero());
                 contract
             } else {
@@ -928,7 +926,7 @@ pub fn evm_direct_deploy_and_call_add(log_to: Option<&Path>, debug: bool) {
 
 pub fn _evm_test_same_address_deploy(log_to: Option<&Path>, debug: bool) {
     use std::convert::TryFrom;
-    let rt_env = RuntimeEnvironment::new(Uint256::from_usize(1111));
+    let rt_env = RuntimeEnvironment::new(Uint256::from_usize(1111), None);
     let mut machine = load_from_file(Path::new("arb_os/arbos.mexe"), rt_env);
     machine.start_at_zero();
 
@@ -937,7 +935,7 @@ pub fn _evm_test_same_address_deploy(log_to: Option<&Path>, debug: bool) {
         match AbiForContract::new_from_file("contracts/add/build/contracts/Add.json") {
             Ok(mut contract) => {
                 let result = contract.deploy(&[], &mut machine, Uint256::zero(), None, debug);
-                if let Some(contract_addr) = result {
+                if let Ok(contract_addr) = result {
                     assert_ne!(contract_addr, Uint256::zero());
                     (contract, contract_addr)
                 } else {
@@ -958,7 +956,9 @@ pub fn _evm_test_same_address_deploy(log_to: Option<&Path>, debug: bool) {
                 Some(orig_contract_addr),
                 debug,
             );
-            assert_eq!(result, None);
+            if let Ok(_) = result {
+                panic!("allowed second deploy at same address");
+            }
         }
         Err(e) => {
             panic!("error loading contract: {:?}", e);
@@ -1014,7 +1014,7 @@ pub fn evm_direct_deploy_and_compressed_call_add(log_to: Option<&Path>, debug: b
         Ok(mut contract) => {
 
             let result = contract.deploy(&[], &mut machine, Uint256::zero(), None, debug);
-            if let Some(contract_addr) = result {
+            if let Ok(contract_addr) = result {
                 assert_ne!(contract_addr, Uint256::zero());
                 contract
             } else {

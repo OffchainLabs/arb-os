@@ -272,7 +272,6 @@ impl RuntimeEnvironment {
         tx_id_bytes
     }
 
-    #[cfg(test)]
     pub fn _append_compressed_and_signed_tx_message_to_batch(
         &mut self,
         batch: &mut Vec<u8>,

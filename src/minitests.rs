@@ -377,7 +377,7 @@ fn test_direct_deploy_and_compressed_call_add() {
 
 #[test]
 fn test_payment_in_constructor() {
-    crate::evm::evm_test_payment_in_constructor(None, false);
+    crate::evm::_evm_test_payment_in_constructor(None, false);
 }
 
 #[test]
