@@ -1699,8 +1699,8 @@ impl Machine {
 
                     }
                     Opcode::AVMOpcode(AVMOpcode::NewBuffer) => {
-                        let _size = self.stack.pop_uint(&self.state)?;
-                        self.stack.push(Value::new_buffer(vec![0; 256]));
+                        // self.stack.push(Value::new_buffer(vec![0; 256]));
+                        self.stack.push(Value::new_buffer(vec![]));
                         self.incr_pc();
                         Ok(true)
                     }

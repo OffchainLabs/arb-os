@@ -157,6 +157,7 @@ impl MiniProperties for TypeCheckedIfArm {
 ///A mini expression that has been type checked.
 #[derive(Debug, Clone)]
 pub enum TypeCheckedExpr {
+    NewBuffer(Option<Location>),
     UnaryOp(UnaryOp, Box<TypeCheckedExpr>, Type, Option<Location>),
     Binary(
         BinaryOp,
@@ -265,6 +266,7 @@ impl MiniProperties for TypeCheckedExpr {
             TypeCheckedExpr::Trinary(_, a, b, c, _, _) => a.is_pure() && b.is_pure() && c.is_pure(),
             TypeCheckedExpr::ShortcutOr(left, right, _) => left.is_pure() && right.is_pure(),
             TypeCheckedExpr::ShortcutAnd(left, right, _) => left.is_pure() && right.is_pure(),
+            TypeCheckedExpr::NewBuffer(_) => true,
             TypeCheckedExpr::LocalVariableRef(_, _, _) => true,
             TypeCheckedExpr::GlobalVariableRef(_, _, _) => false,
             TypeCheckedExpr::Variant(expr, _) => expr.is_pure(),
@@ -333,6 +335,7 @@ impl TypeCheckedExpr {
     ///Extracts the type returned from the expression.
     pub fn get_type(&self) -> Type {
         match self {
+            TypeCheckedExpr::NewBuffer(_) => Type::Buffer,
             TypeCheckedExpr::UnaryOp(_, _, t, _) => t.clone(),
             TypeCheckedExpr::Binary(_, _, _, t, _) => t.clone(),
             TypeCheckedExpr::Trinary(_, _, _, _, t, _) => t.clone(),
@@ -1053,6 +1056,7 @@ fn typecheck_expr(
     return_type: &Type,
 ) -> Result<TypeCheckedExpr, TypeError> {
     match expr {
+        Expr::NewBuffer(loc) =>  Ok(TypeCheckedExpr::NewBuffer(*loc)),
         Expr::UnaryOp(op, subexpr, loc) => {
             let tc_sub = typecheck_expr(subexpr, type_table, global_vars, func_table, return_type)?;
             typecheck_unary_op(*op, tc_sub, *loc)
@@ -1583,18 +1587,6 @@ fn typecheck_unary_op(
             }
             _ => Err(new_type_error(
                 "invalid operand type for unary minus".to_string(),
-                loc,
-            )),
-        },
-        UnaryOp::NewBuffer => match tc_type {
-            Type::Int | Type::Uint => Ok(TypeCheckedExpr::UnaryOp(
-                UnaryOp::NewBuffer,
-                Box::new(sub_expr),
-                Type::Buffer,
-                loc,
-            )),
-            _ => Err(new_type_error(
-                "invalid operand type for newbuffer".to_string(),
                 loc,
             )),
         },

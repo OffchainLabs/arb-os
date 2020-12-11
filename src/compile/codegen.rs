@@ -828,6 +828,11 @@ fn mavm_codegen_expr<'a>(
     prepushed_vals: usize,
 ) -> Result<(LabelGenerator, &'a mut Vec<Instruction>, usize), CodegenError> {
     match expr {
+        TypeCheckedExpr::NewBuffer(loc) => {
+            let opcode = Opcode::AVMOpcode(AVMOpcode::NewBuffer);
+            code.push(Instruction::new(opcode, None, *loc));
+            Ok((label_gen, code, num_locals))
+        }
         TypeCheckedExpr::UnaryOp(op, tce, _, loc) => {
             let (lg, c, exp_locals) = mavm_codegen_expr(
                 tce,
@@ -844,7 +849,6 @@ fn mavm_codegen_expr<'a>(
             code = c;
             let (maybe_opcode, maybe_imm) = match op {
                 UnaryOp::Minus => (Some(Opcode::UnaryMinus), None),
-                UnaryOp::NewBuffer => (Some(Opcode::AVMOpcode(AVMOpcode::NewBuffer)), None),
                 UnaryOp::BitwiseNeg => (Some(Opcode::AVMOpcode(AVMOpcode::BitwiseNeg)), None),
                 UnaryOp::Not => (Some(Opcode::AVMOpcode(AVMOpcode::IsZero)), None),
                 UnaryOp::Hash => (Some(Opcode::AVMOpcode(AVMOpcode::Hash)), None),

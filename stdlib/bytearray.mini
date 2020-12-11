@@ -18,7 +18,7 @@ public func bytearray_new(ignored: uint) -> ByteArray {
     return struct {
         size: 0,
         sliceOffset: 0,
-        contents: newbuffer(0),
+        contents: newbuffer(),
         copy: false,
     };
 }
@@ -69,7 +69,7 @@ public func bytearray_unmarshalBytes(inBytes: MarshalledBytes) -> ByteArray {
 
     // For efficiency, we'll build an ExpandingIntArray here, then make a ByteArray from it at the end.
     // We'll also build 8-tuples of 32-byte words, and insert each tuple into the ExpIntArr with a single call.
-    let eia = newbuffer(0);
+    let eia = newbuffer();
     let block = unsafecast<[8]any>((0,0,0,0,0,0,0,0));
 
     while (nwords > 0) {

@@ -821,6 +821,7 @@ pub enum Expr {
     UnsafeCast(Box<Expr>, Type, Option<Location>),
     Asm(Type, Vec<Instruction>, Vec<Expr>, Option<Location>),
     Try(Box<Expr>, Option<Location>),
+    NewBuffer(Option<Location>),
 }
 
 impl Expr {
@@ -883,6 +884,7 @@ impl Expr {
                 *loc,
             )),
             Expr::Constant(b, loc) => Ok(Expr::Constant(b.resolve_types(type_table)?, *loc)),
+            Expr::NewBuffer(loc) => Ok(Expr::NewBuffer(*loc)),
             Expr::FunctionCall(fexpr, args, loc) => {
                 let mut rargs = Vec::new();
                 for arg in args.iter() {
@@ -993,7 +995,6 @@ pub enum UnaryOp {
     ToInt,
     ToBytes32,
     ToAddress,
-    NewBuffer,
 }
 
 ///A mini binary operator.
