@@ -127,6 +127,7 @@ impl AbiForContract {
                     Uint256::zero(),
                     payment,
                     &augmented_code,
+                    false,
                 ),
                 Uint256::from_u64(1025),
             )
@@ -212,6 +213,44 @@ impl AbiForContract {
             self.address.clone(),
             payment,
             &calldata,
+            false,
+        );
+
+        let num_logs_before = machine.runtime_env.get_all_receipt_logs().len();
+        let num_sends_before = machine.runtime_env.get_all_sends().len();
+        let _arbgas_used = if debug {
+            machine.debug(None)
+        } else {
+            machine.run(None)
+        };
+        let logs = machine.runtime_env.get_all_receipt_logs();
+        let sends = machine.runtime_env.get_all_sends();
+        Ok((
+            logs[num_logs_before..].to_vec(),
+            sends[num_sends_before..].to_vec(),
+        ))
+    }
+
+    pub fn _call_function_with_deposit(
+        &self,
+        sender_addr: Uint256,
+        func_name: &str,
+        args: &[ethabi::Token],
+        machine: &mut Machine,
+        payment: Uint256,
+        debug: bool,
+    ) -> Result<(Vec<ArbosReceipt>, Vec<Value>), ethabi::Error> {
+        let this_function = self.contract.function(func_name)?;
+        let calldata = this_function.encode_input(args).unwrap();
+
+        machine.runtime_env.insert_tx_message(
+            sender_addr,
+            Uint256::from_usize(1_000_000_000_000),
+            Uint256::zero(),
+            self.address.clone(),
+            payment,
+            &calldata,
+            true,
         );
 
         let num_logs_before = machine.runtime_env.get_all_receipt_logs().len();
@@ -974,6 +1013,7 @@ impl ArbosTest {
             callee_addr,
             callvalue,
             &calldata,
+            false,
         );
         let num_logs_before = machine.runtime_env.get_all_receipt_logs().len();
         let num_sends_before = machine.runtime_env.get_all_sends().len();
