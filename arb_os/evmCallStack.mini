@@ -511,7 +511,6 @@ public impure func evmCallStack_returnFromCall(
         asm(success,) { };                           // push return code onto the stack, where caller expects it to be
         let _ = gasAccounting_resumeTxCharges(leftoverGas + resumeInfo.savedGas);
         restoreAuxStackAndCall(resumeInfo.codePoint, resumeInfo.auxStackContents, false);
-        //asm(resumeInfo.codePoint,) { jump };         // jump to resume point in caller; this should never return
 
         evmCallStack_callHitError(8);
         panic;  // shouldn't happen -- previous instruction jumped away
