@@ -176,7 +176,9 @@ func evmInstructionStack_pop(s: EvmInstructionStack) -> option<(EvmInstructionSt
     return Some((us, unsafecast<EvmInstruction>(item)));
 }
 
-func parseEvmCodeSegment(bs: ByteStream) -> option<EvmInstructionStack> {
+var unreachableMask: uint;
+
+impure func parseEvmCodeSegment(bs: ByteStream) -> option<EvmInstructionStack> {
     let stack = evmInstructionStack_new();
     let evmPc = 0;
     let reachable = true;
@@ -220,11 +222,23 @@ func parseEvmCodeSegment(bs: ByteStream) -> option<EvmInstructionStack> {
                     evmPc = evmPc + 1;
                 }
             }
-            if (unreachableAfterOpcode(opcode)) {    reachable = false;    }
+            if ((unreachableMask & asm(opcode, 1) uint { shl }) != 0) {    reachable = false;    }
         } else {
             return Some(stack);
         }
     }
+}
+
+public impure func codeSegment_init() {
+    let mask = 0;
+    let opcode = 0;
+    while (opcode < 256) {
+        if (unreachableAfterOpcode(opcode)) {
+            mask = mask | asm(opcode, 1) uint { shl };
+        }
+        opcode = opcode + 1;
+    }
+    unreachableMask = mask;
 }
 
 func unreachableAfterOpcode(opcode: uint) -> bool {
