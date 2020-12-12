@@ -253,10 +253,10 @@ impl CodePt {
                 &Value::Int(Uint256::from_usize(*sz)),
             ),
             CodePt::External(_) => {
-                panic!("tried to avm_hash unlinked codepoint");
+                Value::Int(Uint256::zero())   // never gets called when it matters
             }
             CodePt::InSegment(_, _) => {
-                unimplemented!("avm_hash for in-module codepoints");
+                Value::Int(Uint256::zero())   // never gets called when it matters
             }
             CodePt::Null => Value::Int(Uint256::zero()),
         }
@@ -277,18 +277,18 @@ impl fmt::Display for CodePt {
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum Value {
     Int(Uint256),
-    Tuple(Rc<Vec<Value>>),
+    Tuple(Rc<Vec<Value>>, Uint256),
     CodePoint(CodePt),
     Label(Label),
 }
 
 impl Value {
     pub fn none() -> Self {
-        Value::Tuple(Rc::new(vec![]))
+        Value::Tuple(Rc::new(vec![]), Uint256::zero())
     }
 
     pub fn _is_none(&self) -> bool {
-        if let Value::Tuple(v) = self {
+        if let Value::Tuple(v, _) = self {
             v.is_empty()
         } else {
             false
@@ -296,14 +296,22 @@ impl Value {
     }
 
     pub fn new_tuple(v: Vec<Value>) -> Self {
-        Value::Tuple(Rc::new(v))
+        let mut acc = Uint256::zero();
+        for val in &v {
+            if let Value::Int(ui) = val.avm_hash() {
+                acc = Uint256::avm_hash2(&acc, &ui);
+            } else {
+                panic!("Invalid value type from hash");
+            }
+        }
+        Value::Tuple(Rc::new(v), acc)
     }
 
     pub fn type_insn_result(&self) -> usize {
         match self {
             Value::Int(_) => 0,
             Value::CodePoint(_) => 1,
-            Value::Tuple(_) => 3,
+            Value::Tuple(_, _) => 3,
             Value::Label(_) => {
                 panic!("tried to run type instruction on a label");
             }
@@ -321,7 +329,7 @@ impl Value {
                     None => Err(label),
                 }
             }
-            Value::Tuple(tup) => {
+            Value::Tuple(tup, _) => {
                 let mut new_vec = Vec::new();
                 for v in tup.iter() {
                     let val = v.clone();
@@ -340,7 +348,7 @@ impl Value {
     ) -> (Self, usize) {
         match self {
             Value::Int(_) => (self, 0),
-            Value::Tuple(v) => {
+            Value::Tuple(v, _) => {
                 let mut rel_v = Vec::new();
                 let mut max_func_offset = 0;
                 for val in &*v {
@@ -365,7 +373,7 @@ impl Value {
     pub fn xlate_labels(self, label_map: &HashMap<Label, &Label>) -> Self {
         match self {
             Value::Int(_) | Value::CodePoint(_) => self,
-            Value::Tuple(v) => {
+            Value::Tuple(v, _) => {
                 let mut newv = Vec::new();
                 for val in &*v {
                     newv.push(val.clone().xlate_labels(label_map));
@@ -390,18 +398,7 @@ impl Value {
         //BUGBUG: should do same hash as AVM
         match self {
             Value::Int(ui) => Value::Int(ui.avm_hash()),
-            Value::Tuple(v) => {
-                let mut acc = Uint256::zero();
-                for val in &*v.clone() {
-                    let vhash = val.avm_hash();
-                    if let Value::Int(ui) = vhash {
-                        acc = Uint256::avm_hash2(&acc, &ui);
-                    } else {
-                        panic!("avm_hash returned wrong datatype")
-                    }
-                }
-                Value::Int(acc)
-            }
+            Value::Tuple(_, h) => Value::Int(h.clone()),
             Value::CodePoint(cp) => Value::avm_hash2(&Value::Int(Uint256::one()), &cp.avm_hash()),
             Value::Label(label) => {
                 Value::avm_hash2(&Value::Int(Uint256::from_usize(2)), &label.avm_hash())
@@ -420,7 +417,7 @@ impl fmt::Display for Value {
             Value::Int(i) => i.fmt(f),
             Value::CodePoint(pc) => write!(f, "CodePoint({})", pc),
             Value::Label(label) => write!(f, "Label({})", label),
-            Value::Tuple(tup) => {
+            Value::Tuple(tup, _) => {
                 if tup.is_empty() {
                     write!(f, "_")
                 } else {

@@ -480,7 +480,7 @@ pub struct ArbosRequestProvenance {
 
 impl ArbosReceipt {
     pub fn new(arbos_log: Value) -> Option<Self> {
-        if let Value::Tuple(tup) = arbos_log {
+        if let Value::Tuple(tup, _) = arbos_log {
             if !(tup[0] == Value::Int(Uint256::zero())) {
                 return None;
             }
@@ -491,7 +491,7 @@ impl ArbosReceipt {
                 ArbosReceipt::unpack_cumulative_info(&tup[4]).unwrap();
             Some(ArbosReceipt {
                 request: tup[1].clone(),
-                request_id: if let Value::Tuple(subtup) = &tup[1] {
+                request_id: if let Value::Tuple(subtup, _) = &tup[1] {
                     if let Value::Int(ui) = &subtup[4] {
                         ui.clone()
                     } else {
@@ -505,8 +505,8 @@ impl ArbosReceipt {
                 evm_logs: EvmLog::new_vec(evm_logs),
                 gas_used,
                 gas_price_wei,
-                provenance: if let Value::Tuple(stup) = &tup[1] {
-                    if let Value::Tuple(subtup) = &stup[6] {
+                provenance: if let Value::Tuple(stup, _) = &tup[1] {
+                    if let Value::Tuple(subtup, _) = &stup[6] {
                         ArbosRequestProvenance {
                             l1_sequence_num: if let Value::Int(ui) = &subtup[0] {
                                 ui.clone()
@@ -548,7 +548,7 @@ impl ArbosReceipt {
     }
 
     fn unpack_return_info(val: &Value) -> Option<(Uint256, Vec<u8>, Value)> {
-        if let Value::Tuple(tup) = val {
+        if let Value::Tuple(tup, _) = val {
             let return_code = if let Value::Int(ui) = &tup[0] {
                 ui
             } else {
@@ -562,7 +562,7 @@ impl ArbosReceipt {
     }
 
     fn unpack_gas_info(val: &Value) -> Option<(Uint256, Uint256)> {
-        if let Value::Tuple(tup) = val {
+        if let Value::Tuple(tup, _) = val {
             Some((
                 if let Value::Int(ui) = &tup[0] {
                     ui.clone()
@@ -581,7 +581,7 @@ impl ArbosReceipt {
     }
 
     fn unpack_cumulative_info(val: &Value) -> Option<(Uint256, Uint256, Uint256)> {
-        if let Value::Tuple(tup) = val {
+        if let Value::Tuple(tup, _) = val {
             Some((
                 if let Value::Int(ui) = &tup[0] {
                     ui.clone()
@@ -613,7 +613,7 @@ impl ArbosReceipt {
     }
 
     pub fn _get_block_number(&self) -> Uint256 {
-        if let Value::Tuple(tup) = self.get_request() {
+        if let Value::Tuple(tup, _) = self.get_request() {
             if let Value::Int(bn) = &tup[1] {
                 return bn.clone();
             }
@@ -653,7 +653,7 @@ pub struct EvmLog {
 
 impl EvmLog {
     pub fn new(val: Value) -> Self {
-        if let Value::Tuple(tup) = val {
+        if let Value::Tuple(tup, _) = val {
             EvmLog {
                 addr: if let Value::Int(ui) = &tup[0] { ui.clone() } else { panic!() },
                 data: bytes_from_bytestack(tup[1].clone()).unwrap(),
@@ -665,7 +665,7 @@ impl EvmLog {
     }
 
     pub fn new_vec(val: Value) -> Vec<Self> {
-        if let Value::Tuple(tup) = val {
+        if let Value::Tuple(tup, _) = val {
             if tup.len() == 0 {
                 vec![]
             } else {
@@ -714,12 +714,12 @@ fn bytestack_build_uint(b: &[u8]) -> Value {
 }
 
 pub fn hash_bytestack(bs: Value) -> Option<Uint256> {
-    if let Value::Tuple(tup) = bs {
+    if let Value::Tuple(tup, _) = bs {
         if let Value::Int(ui) = &tup[0] {
             let mut acc: Uint256 = ui.clone();
             let mut pair = &tup[1];
             while (!(*pair == Value::none())) {
-                if let Value::Tuple(tup2) = pair {
+                if let Value::Tuple(tup2, _) = pair {
                     if let Value::Int(ui2) = &tup2[0] {
                         acc = Uint256::avm_hash2(&acc, &ui2);
                         pair = &tup2[1];
@@ -753,7 +753,7 @@ fn test_hash_bytestack() {
 }
 
 pub fn bytes_from_bytestack(bs: Value) -> Option<Vec<u8>> {
-    if let Value::Tuple(tup) = bs {
+    if let Value::Tuple(tup, _) = bs {
         if let Value::Int(ui) = &tup[0] {
             if let Some(nbytes) = ui.to_usize() {
                 return bytes_from_bytestack_2(tup[1].clone(), nbytes);
@@ -766,7 +766,7 @@ pub fn bytes_from_bytestack(bs: Value) -> Option<Vec<u8>> {
 fn bytes_from_bytestack_2(cell: Value, nbytes: usize) -> Option<Vec<u8>> {
     if nbytes == 0 {
         Some(vec![])
-    } else if let Value::Tuple(tup) = cell {
+    } else if let Value::Tuple(tup, _) = cell {
         assert_eq!((tup.len(), nbytes), (2, nbytes));
         if let Value::Int(mut int_val) = tup[0].clone() {
             let _256 = Uint256::from_usize(256);
@@ -914,7 +914,7 @@ impl RtEnvRecorder {
 
 fn strip_var_from_log(log: Value) -> Value {
     // strip from a log item all info that might legitimately vary as ArbOS evolves (e.g. gas usage)
-    if let Value::Tuple(tup) = log {
+    if let Value::Tuple(tup, _) = log {
         if let Value::Int(item_type) = tup[0].clone() {
             if item_type == Uint256::zero() {
                 // Tx receipt log item
@@ -947,7 +947,7 @@ fn strip_var_from_log(log: Value) -> Value {
 }
 
 fn zero_item_in_tuple(in_val: Value, index: usize) -> Value {
-    if let Value::Tuple(tup) = in_val {
+    if let Value::Tuple(tup, _) = in_val {
         Value::new_tuple(
             tup.iter()
                 .enumerate()

@@ -24,7 +24,7 @@ fn mini_code_for_avm_value(buf: &mut BytesMut, val: Value) {
         Value::Int(ui) => {
             buf.extend(ui.to_string().as_bytes());
         }
-        Value::Tuple(tup) => {
+        Value::Tuple(tup, _) => {
             buf.put_u8(b'(');
             for t in &*tup {
                 mini_code_for_avm_value(buf, t.clone());

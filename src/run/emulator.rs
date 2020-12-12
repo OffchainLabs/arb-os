@@ -159,7 +159,7 @@ impl ValueStack {
     /// self as a vector. Otherwise returns an `ExecutionError`.
     pub fn pop_tuple(&mut self, state: &MachineState) -> Result<Vec<Value>, ExecutionError> {
         let val = self.pop(state)?;
-        if let Value::Tuple(v) = val {
+        if let Value::Tuple(v, _) = val {
             let vs = &*v;
             Ok(vs.to_vec())
         } else {
@@ -1247,7 +1247,7 @@ impl Machine {
         if let Some(val) = self.stack.contents.get(0) {
             let mut v = val;
             for i in 0..MAX_PAIRING_SIZE {
-                if let Value::Tuple(tup) = v {
+                if let Value::Tuple(tup, _) = v {
                     if tup.len() != 2 {
                         return 1000 + i * 500_000;
                     } else {
@@ -1402,7 +1402,7 @@ impl Machine {
 							Some(top) => top,
 							None => { return Err(ExecutionError::new("aux stack underflow", &self.state, None)); }
 						};
-						if let Value::Tuple(v) = aux_top {
+						if let Value::Tuple(v, _) = aux_top {
 							match v.get(slot_num) {
 								Some(val) => {
 									self.stack.push(val.clone());
@@ -1809,7 +1809,7 @@ impl Machine {
                         let bn = self.stack.pop_uint(&self.state)?;
                         match self.runtime_env.peek_at_inbox_head() {
                             Some(msg) => {
-                                if let Value::Tuple(tup) = msg {
+                                if let Value::Tuple(tup, _) = msg {
                                     if let Value::Int(msg_bn) = &tup[1] {
                                         self.stack.push_bool(bn == msg_bn.clone());
                                         self.incr_pc();
@@ -2126,12 +2126,12 @@ fn do_ecpairing(mut val: Value) -> Option<bool> {
 
     let mut acc = Gt::one();
     for _i in 0..MAX_PAIRING_SIZE {
-        if let Value::Tuple(tup) = val {
+        if let Value::Tuple(tup, _) = val {
             if tup.len() == 0 {
                 return Some(acc == Gt::one());
             } else if tup.len() == 2 {
                 val = tup[0].clone();
-                if let Value::Tuple(pts_tup) = &tup[1] {
+                if let Value::Tuple(pts_tup, _) = &tup[1] {
                     if pts_tup.len() == 6 {
                         let mut uis: Vec<Uint256> = Vec::new();
                         for j in 0..6 {

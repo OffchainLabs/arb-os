@@ -158,6 +158,64 @@ public impure func translateEvmCodeSegment(
     bs: ByteStream,
     makePcTable: bool,
 ) -> option<(AvmCodePoint, map<uint, AvmCodePoint>, Stack)> {
+    return translateEvmCodeSegment_old(bs, makePcTable);
+}
+
+type EvmInstruction = struct {
+    opcode: uint,
+    data: option<uint>,
+    pc: uint,
+}
+
+func parseEvmCodeSegment(bs: ByteStream) -> option<Stack> {
+    let stack = stack_new();
+    let evmPc = 0;
+    loop {
+        if let Some(res) = bytestream_getByte(bs) {
+            let (ubs, opcode) = res;
+            bs = ubs;
+            if ((opcode >= 0x60) && (opcode <= 0x7f)) {
+                // it's a pushN instruction; unmarshal the immediate value and push it
+                let bytesRemaining = opcode - 0x5f;
+                let imm = 0;
+                while (bytesRemaining > 0) {
+                    if let Some(res) = bytestream_getByte(bs) {
+                        let (ubs, val) = res;
+                        bs = ubs;
+                        imm = 256*imm + val;
+                    }
+                    bytesRemaining = bytesRemaining-1;
+                }
+                stack = stack_push(
+                    stack,
+                    struct {
+                        opcode: opcode,
+                        data: Some(imm),
+                        pc: evmPc,
+                    }
+                );
+                evmPc = evmPc + (opcode - 0x5f) + 1;
+            } else {
+                stack = stack_push(
+                    stack,
+                    struct {
+                        opcode: opcode,
+                        data: None<uint>,
+                        pc: evmPc,
+                    }
+                );
+                evmPc = evmPc + 1;
+            }
+        } else {
+            return Some(stack);
+        }
+    }
+}
+
+public impure func translateEvmCodeSegment_old(
+    bs: ByteStream,
+    makePcTable: bool,
+) -> option<(AvmCodePoint, map<uint, AvmCodePoint>, Stack)> {
     // Given the EVM bytecode for a contract, generate the equivalent AVM code.
     // If this succeeds, it will return a triple:
     //       * CodePoint to jump to, to start executing the contract
