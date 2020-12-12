@@ -5,6 +5,7 @@
 use crate::compile::{DebugInfo, MiniProperties};
 use crate::stringtable::StringId;
 use crate::uint256::Uint256;
+use ethers_core::utils::keccak256;
 use serde::{Deserialize, Serialize};
 use serde_repr::{Deserialize_repr, Serialize_repr};
 use std::{collections::HashMap, fmt, rc::Rc};
@@ -253,10 +254,10 @@ impl CodePt {
                 &Value::Int(Uint256::from_usize(*sz)),
             ),
             CodePt::External(_) => {
-                Value::Int(Uint256::zero())   // never gets called when it matters
+                Value::Int(Uint256::zero()) // never gets called when it matters
             }
             CodePt::InSegment(_, _) => {
-                Value::Int(Uint256::zero())   // never gets called when it matters
+                Value::Int(Uint256::zero()) // never gets called when it matters
             }
             CodePt::Null => Value::Int(Uint256::zero()),
         }
@@ -407,7 +408,17 @@ impl Value {
     }
 
     pub fn avm_hash2(v1: &Self, v2: &Self) -> Value {
-        Value::new_tuple(vec![v1.clone(), v2.clone()]).avm_hash()
+        if let Value::Int(ui) = v1 {
+            if let Value::Int(ui2) = v2 {
+                let mut buf = ui.to_bytes_be();
+                buf.extend(ui2.to_bytes_be());
+                Value::Int(Uint256::from_bytes(&keccak256(&buf)))
+            } else {
+                panic!();
+            }
+        } else {
+            panic!();
+        }
     }
 }
 
