@@ -176,49 +176,71 @@ func evmInstructionStack_pop(s: EvmInstructionStack) -> option<(EvmInstructionSt
     return Some((us, unsafecast<EvmInstruction>(item)));
 }
 
-impure func parseEvmCodeSegment(bs: ByteStream) -> option<EvmInstructionStack> {
+func parseEvmCodeSegment(bs: ByteStream) -> option<EvmInstructionStack> {
     let stack = evmInstructionStack_new();
     let evmPc = 0;
+    let reachable = true;
     loop {
         if let Some(res) = bytestream_getByte(bs) {
             let (ubs, opcode) = res;
             bs = ubs;
-            if ((opcode >= 0x60) && (opcode <= 0x7f)) {
-                // it's a pushN instruction; unmarshal the immediate value and push it
-                let bytesRemaining = opcode - 0x5f;
-                let imm = 0;
-                while (bytesRemaining > 0) {
-                    if let Some(res) = bytestream_getByte(bs) {
-                        let (ubs, val) = res;
-                        bs = ubs;
-                        imm = 256*imm + val;
+            if (opcode == 0x5b) {    reachable = true;    }
+
+            if (reachable) {
+                if ((opcode >= 0x60) && (opcode <= 0x7f)) {
+                    // it's a pushN instruction; unmarshal the immediate value and push it
+                    let bytesRemaining = opcode - 0x5f;
+                    let imm = 0;
+                    while (bytesRemaining > 0) {
+                        if let Some(res) = bytestream_getByte(bs) {
+                            let (ubs, val) = res;
+                            bs = ubs;
+                            imm = 256*imm + val;
+                        }
+                        bytesRemaining = bytesRemaining-1;
                     }
-                    bytesRemaining = bytesRemaining-1;
+                    stack = evmInstructionStack_push(
+                        stack,
+                        struct {
+                            opcode: opcode,
+                            data: Some(imm),
+                            pc: evmPc,
+                        }
+                    );
+                    evmPc = evmPc + (opcode - 0x5f) + 1;
+                } else {
+                    stack = evmInstructionStack_push(
+                        stack,
+                        struct {
+                            opcode: opcode,
+                            data: None<uint>,
+                            pc: evmPc,
+                        }
+                    );
+                    evmPc = evmPc + 1;
                 }
-                stack = evmInstructionStack_push(
-                    stack,
-                    struct {
-                        opcode: opcode,
-                        data: Some(imm),
-                        pc: evmPc,
-                    }
-                );
-                evmPc = evmPc + (opcode - 0x5f) + 1;
-            } else {
-                stack = evmInstructionStack_push(
-                    stack,
-                    struct {
-                        opcode: opcode,
-                        data: None<uint>,
-                        pc: evmPc,
-                    }
-                );
-                evmPc = evmPc + 1;
             }
+            if (unreachableAfterOpcode(opcode)) {    reachable = false;    }
         } else {
             return Some(stack);
         }
     }
+}
+
+func unreachableAfterOpcode(opcode: uint) -> bool {
+    return (opcode == 0x00)   // STOP
+        || ((opcode >= 0x0c) && (opcode <= 0x0f))  // invalid
+        || (opcode == 0x1e)  // invalid
+        || (opcode == 0x1f)  // invalid
+        || ((opcode >= 0x21) && (opcode <= 0x2f)) // invalid
+        || ((opcode >= 0x46) && (opcode <= 0x4f)) // invalid
+        || (opcode == 0x56)  // JUMP
+        || ((opcode >= 0x5c) && (opcode <= 0x5f)) // invalid
+        || ((opcode >= 0xa5) && (opcode <= 0xef)) // invalid
+        || (opcode == 0xf3)  // RETURN
+        || (opcode == 0xfd)  // REVERT
+        || (opcode == 0xfe)  // INVALID
+        || (opcode == 0xff); // SELFDESTRUCT
 }
 
 impure func generateCodeForEvmSegment(
