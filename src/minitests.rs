@@ -419,6 +419,14 @@ pub fn test_crosscontract_call_with_constructors() {
 }
 
 #[test]
+pub fn test_tx_with_deposit() {
+    match crate::evm::_evm_tx_with_deposit(None, false, false) {
+        Ok(result) => assert_eq!(result, true),
+        Err(e) => panic!("error {}", e),
+    }
+}
+
+#[test]
 pub fn test_create_opcode() {
     match crate::evm::evm_test_create(None, false, false) {
         Ok(result) => assert_eq!(result, true),
