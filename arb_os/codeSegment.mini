@@ -188,19 +188,19 @@ impure func parseEvmCodeSegment(bs: ByteStream) -> option<EvmInstructionStack> {
             bs = ubs;
             if (opcode == 0x5b) {    reachable = true;    }
 
-            if (reachable) {
-                if ((opcode >= 0x60) && (opcode <= 0x7f)) {
-                    // it's a pushN instruction; unmarshal the immediate value and push it
-                    let bytesRemaining = opcode - 0x5f;
-                    let imm = 0;
-                    while (bytesRemaining > 0) {
-                        if let Some(res) = bytestream_getByte(bs) {
-                            let (ubs, val) = res;
-                            bs = ubs;
-                            imm = 256*imm + val;
-                        }
-                        bytesRemaining = bytesRemaining-1;
+            if ((opcode >= 0x60) && (opcode <= 0x7f)) {
+                // it's a pushN instruction; unmarshal the immediate value and push it
+                let bytesRemaining = opcode - 0x5f;
+                let imm = 0;
+                while (bytesRemaining > 0) {
+                    if let Some(res) = bytestream_getByte(bs) {
+                        let (ubs, val) = res;
+                        bs = ubs;
+                        imm = 256*imm + val;
                     }
+                    bytesRemaining = bytesRemaining-1;
+                }
+                if (reachable) {
                     stack = evmInstructionStack_push(
                         stack,
                         struct {
@@ -209,8 +209,10 @@ impure func parseEvmCodeSegment(bs: ByteStream) -> option<EvmInstructionStack> {
                             pc: evmPc,
                         }
                     );
-                    evmPc = evmPc + (opcode - 0x5f) + 1;
-                } else {
+                }
+                evmPc = evmPc + (opcode - 0x5f) + 1;
+            } else {
+                if (reachable) {
                     stack = evmInstructionStack_push(
                         stack,
                         struct {
@@ -219,8 +221,8 @@ impure func parseEvmCodeSegment(bs: ByteStream) -> option<EvmInstructionStack> {
                             pc: evmPc,
                         }
                     );
-                    evmPc = evmPc + 1;
                 }
+                evmPc = evmPc + 1;
             }
             if ((unreachableMask & asm(opcode, 1) uint { shl }) != 0) {    reachable = false;    }
         } else {
