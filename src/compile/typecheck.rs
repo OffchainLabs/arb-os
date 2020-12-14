@@ -1056,7 +1056,7 @@ fn typecheck_expr(
     return_type: &Type,
 ) -> Result<TypeCheckedExpr, TypeError> {
     match expr {
-        Expr::NewBuffer(loc) =>  Ok(TypeCheckedExpr::NewBuffer(*loc)),
+        Expr::NewBuffer(loc) => Ok(TypeCheckedExpr::NewBuffer(*loc)),
         Expr::UnaryOp(op, subexpr, loc) => {
             let tc_sub = typecheck_expr(subexpr, type_table, global_vars, func_table, return_type)?;
             typecheck_unary_op(*op, tc_sub, *loc)
@@ -1857,39 +1857,45 @@ fn typecheck_binary_op(
                 loc,
             )),
         },
-        BinaryOp::GetBuffer8 => {
-            match (subtype1, subtype2) {
-                (Type::Buffer, Type::Uint) | (Type::Buffer, Type::Int) => Ok(
-                    TypeCheckedExpr::Binary(op, Box::new(tcs1), Box::new(tcs2), Type::Uint, loc),
-                ),
-                _ => Err(new_type_error(
-                    "invalid argument types to getbuffer8".to_string(),
-                    loc,
-                )),
-            }
-        }
-        BinaryOp::GetBuffer64 => {
-            match (subtype1, subtype2) {
-                (Type::Buffer, Type::Uint) | (Type::Buffer, Type::Int) => Ok(
-                    TypeCheckedExpr::Binary(op, Box::new(tcs1), Box::new(tcs2), Type::Uint, loc),
-                ),
-                _ => Err(new_type_error(
-                    "invalid argument types to getbuffer64".to_string(),
-                    loc,
-                )),
-            }
-        }
-        BinaryOp::GetBuffer256 => {
-            match (subtype1, subtype2) {
-                (Type::Buffer, Type::Uint) | (Type::Buffer, Type::Int) => Ok(
-                    TypeCheckedExpr::Binary(op, Box::new(tcs1), Box::new(tcs2), Type::Uint, loc),
-                ),
-                _ => Err(new_type_error(
-                    "invalid argument types to getbuffer256".to_string(),
-                    loc,
-                )),
-            }
-        }
+        BinaryOp::GetBuffer8 => match (subtype1, subtype2) {
+            (Type::Uint, Type::Buffer) => Ok(TypeCheckedExpr::Binary(
+                op,
+                Box::new(tcs1),
+                Box::new(tcs2),
+                Type::Uint,
+                loc,
+            )),
+            _ => Err(new_type_error(
+                "invalid argument types to getbuffer8".to_string(),
+                loc,
+            )),
+        },
+        BinaryOp::GetBuffer64 => match (subtype1, subtype2) {
+            (Type::Uint, Type::Buffer) => Ok(TypeCheckedExpr::Binary(
+                op,
+                Box::new(tcs1),
+                Box::new(tcs2),
+                Type::Uint,
+                loc,
+            )),
+            _ => Err(new_type_error(
+                "invalid argument types to getbuffer64".to_string(),
+                loc,
+            )),
+        },
+        BinaryOp::GetBuffer256 => match (subtype1, subtype2) {
+            (Type::Uint, Type::Buffer) => Ok(TypeCheckedExpr::Binary(
+                op,
+                Box::new(tcs1),
+                Box::new(tcs2),
+                Type::Uint,
+                loc,
+            )),
+            _ => Err(new_type_error(
+                "invalid argument types to getbuffer256".to_string(),
+                loc,
+            )),
+        },
         BinaryOp::Mod => match (subtype1, subtype2) {
             (Type::Uint, Type::Uint) => Ok(TypeCheckedExpr::Binary(
                 op,
@@ -2085,15 +2091,7 @@ fn typecheck_trinary_op(
     match op {
         TrinaryOp::SetBuffer8 | TrinaryOp::SetBuffer64 | TrinaryOp::SetBuffer256 => {
             match (subtype1, subtype2, subtype3) {
-                (Type::Buffer, Type::Uint, Type::Uint) => Ok(TypeCheckedExpr::Trinary(
-                    op,
-                    Box::new(tcs1),
-                    Box::new(tcs2),
-                    Box::new(tcs3),
-                    Type::Buffer,
-                    loc,
-                )),
-                (Type::Buffer, Type::Int, Type::Int) => Ok(TypeCheckedExpr::Trinary(
+                (Type::Uint, Type::Uint, Type::Buffer) => Ok(TypeCheckedExpr::Trinary(
                     op,
                     Box::new(tcs1),
                     Box::new(tcs2),
