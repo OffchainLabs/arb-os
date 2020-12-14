@@ -102,6 +102,74 @@ pub fn evm_xcontract_call_with_constructors(
     Ok(true)
 }
 
+pub fn _evm_tx_with_deposit(
+    log_to: Option<&Path>,
+    debug: bool,
+    _profile: bool,
+) -> Result<bool, ethabi::Error> {
+    use std::convert::TryFrom;
+    let rt_env = RuntimeEnvironment::new(Uint256::from_usize(1111));
+    let mut machine = load_from_file(Path::new("arb_os/arbos.mexe"), rt_env);
+    machine.start_at_zero();
+
+    let my_addr = Uint256::from_usize(1025);
+
+    let mut fib_contract =
+        AbiForContract::new_from_file("contracts/fibonacci/build/contracts/Fibonacci.json")?;
+    if fib_contract.deploy(&[], &mut machine, Uint256::zero(), None, debug) == None {
+        panic!("failed to deploy Fibonacci contract");
+    }
+
+    let mut pc_contract =
+        AbiForContract::new_from_file("contracts/fibonacci/build/contracts/PaymentChannel.json")?;
+    if pc_contract.deploy(
+        &[ethabi::Token::Address(ethereum_types::H160::from_slice(
+            &fib_contract.address.to_bytes_be()[12..],
+        ))],
+        &mut machine,
+        Uint256::zero(),
+        None,
+        debug,
+    ) == None
+    {
+        panic!("failed to deploy PaymentChannel contract");
+    }
+
+    let (logs, sends) = pc_contract._call_function_with_deposit(
+        my_addr.clone(),
+        "deposit",
+        &[],
+        &mut machine,
+        Uint256::from_usize(10000),
+        debug,
+    )?;
+    assert_eq!(logs.len(), 1);
+    assert_eq!(sends.len(), 0);
+    assert!(logs[0].succeeded());
+
+    let (logs, sends) = pc_contract.call_function(
+        my_addr,
+        "transferFib",
+        vec![
+            ethabi::Token::Address(ethabi::Address::from_low_u64_be(1025)),
+            ethabi::Token::Uint(ethabi::Uint::try_from(1).unwrap()),
+        ]
+            .as_ref(),
+        &mut machine,
+        Uint256::zero(),
+        debug,
+    )?;
+    assert_eq!(logs.len(), 1);
+    assert_eq!(sends.len(), 0);
+    assert!(logs[0].succeeded());
+
+    if let Some(path) = log_to {
+        machine.runtime_env.recorder.to_file(path).unwrap();
+    }
+
+    Ok(true)
+}
+
 #[cfg(test)]
 pub fn evm_deploy_using_non_eip159_signature(
     log_to: Option<&Path>,
@@ -995,6 +1063,7 @@ pub fn evm_payment_to_empty_address(log_to: Option<&Path>, debug: bool) {
         dest_addr,
         Uint256::from_u64(10000),
         &vec![],
+        false,
     );
 
     let _ = if debug {
@@ -1027,6 +1096,7 @@ pub fn evm_eval_sha256(log_to: Option<&Path>, debug: bool) {
         Uint256::from_u64(2), // sha256 precompile
         Uint256::from_u64(0),
         &vec![0xCCu8],
+        false,
     );
 
     let _ = if debug {
@@ -1070,6 +1140,7 @@ pub fn mint_erc20_and_get_balance(log_to: Option<&Path>, debug: bool) {
         token_addr,
         Uint256::zero(),
         &calldata,
+        false,
     );
 
     let mut machine = load_from_file(Path::new("arb_os/arbos.mexe"), rt_env);
@@ -1107,6 +1178,7 @@ pub fn mint_erc721_and_get_balance(log_to: Option<&Path>, debug: bool) {
         token_addr,
         Uint256::zero(),
         &calldata,
+        false,
     );
 
     let mut machine = load_from_file(Path::new("arb_os/arbos.mexe"), rt_env);
