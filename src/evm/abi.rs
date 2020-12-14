@@ -156,7 +156,7 @@ impl AbiForContract {
                 );
                 return None;
             }
-            if let Value::Tuple(tup, _) = &sends[sends.len() - 1] {
+            if let Value::Tuple(tup) = &sends[sends.len() - 1] {
                 if (tup[0] != Value::Int(Uint256::from_usize(5)))
                     || (tup[1] != Value::Int(sender_addr))
                 {
@@ -171,7 +171,7 @@ impl AbiForContract {
 
         let log_item = &logs[logs.len() - 1];
         assert!(log_item.succeeded());
-        if let Value::Tuple(tup2, _) = log_item.get_request() {
+        if let Value::Tuple(tup2) = log_item.get_request() {
             assert_eq!(tup2[4], Value::Int(request_id));
         } else {
             println!("Malformed ArbOS log item");
