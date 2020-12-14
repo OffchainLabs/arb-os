@@ -1,0 +1,70 @@
+//
+// Copyright 2020, Offchain Labs, Inc. All rights reserved.
+//
+
+type FixedPoint = struct {
+    val: uint,
+    shiftFactor: uint,
+}
+
+public func fixedPoint_new(val: uint, shiftFactor: uint) -> FixedPoint {
+    return struct {
+        val: val,
+        shiftFactor: shiftFactor,
+    };
+}
+
+public func fixedPoint_fromUintMatch(x: uint, fp: FixedPoint) -> FixedPoint {
+    return fp with { val: x * fp.shiftFactor };
+}
+
+public func fixedPoint_equal(x: FixedPoint, y: FixedPoint) -> bool {
+    return (x.val == y.val) && (x.shiftFactor == y.shiftFactor);
+}
+
+public func fixedPoint_compare(x: FixedPoint, y: FixedPoint) -> option<int> {
+    if (x.shiftFactor != y.shiftFactor) {    return None;    }
+    if (x.val > y.val) {    return Some(int(1));    }
+    elseif(x.val == y.val) {    return Some(int(0));    }
+    else {    return Some(-int(1));    }
+}
+
+public func fixedPoint_add(x: FixedPoint, y: FixedPoint) -> option<FixedPoint> {
+    if (x.shiftFactor == y.shiftFactor) {
+        return Some(x with { val: x.val + y.val });
+    } else {
+        return None;
+    }
+}
+
+public func fixedPoint_sub(x: FixedPoint, y: FixedPoint) -> option<FixedPoint> {
+    if (x.shiftFactor == y.shiftFactor) {
+        return Some(x with { val: x.val - y.val });
+    } else {
+        return None;
+    }
+}
+
+public func fixedPoint_mul(x: FixedPoint, y: FixedPoint) -> option<FixedPoint> {
+    if (x.shiftFactor == y.shiftFactor) {
+        return Some(x with { val: (x.val * y.val) / x.shiftFactor });
+    } else {
+        return None;
+    }
+}
+
+public func fixedPoint_div(x: FixedPoint, y: FixedPoint) -> option<FixedPoint> {
+    if (x.shiftFactor == y.shiftFactor) {
+        return Some(x with { val: (x.val * x.shiftFactor) / y.val });
+    } else {
+        return None;
+    }
+}
+
+public func fixedPoint_integerPart(x: FixedPoint) -> uint {
+    return x.val / x.shiftFactor;
+}
+
+public func fixedPoint_fractionalPart(x: FixedPoint) -> FixedPoint {
+    return x with { val: x.val % x.shiftFactor };
+}
