@@ -309,35 +309,11 @@ impure func generateCodeForEvmSegment(
                             if ( (opcode >= 0x10) && (opcode <= 0x1a) ) {
                                 code = pushInstruction(opcode, code);
                             } elseif (opcode == 0x1b) { // SHL
-                                code = pushInstructionImm(
-                                    0x0a, 2,   // [2] exp
-                                    pushInstruction(
-                                        0x02, // mul
-                                        code
-                                    )
-                                );
+                                code = pushInstruction(0x1b, code);
                             } elseif (opcode == 0x1c) { // SHR
-                                code = pushInstructionImm(
-                                    0x0a, 2,   // [2] exp
-                                    pushInstruction(
-                                        0x43, // swap1
-                                        pushInstruction(
-                                            0x04, // div
-                                            code
-                                        )
-                                    )
-                                );
-                            } elseif (opcode == 0x1d) { // SHA
-                                code = pushInstructionImm(
-                                    0x0a, 2,   // [2] exp
-                                    pushInstruction(
-                                        0x43, // swap1
-                                        pushInstruction(
-                                            0x05, // sdiv
-                                            code
-                                        )
-                                    )
-                                );
+                                code = pushInstruction(0x1c, code);
+                            } elseif (opcode == 0x1d) { // SAR
+                                code = pushInstruction(0x1d, code);
                             } else {
                                 invalidInstruction = true;
                             }
