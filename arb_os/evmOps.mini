@@ -2,94 +2,83 @@
 // Copyright 2020, Offchain Labs, Inc. All rights reserved.
 //
 
-import type Account;
-import type EvmCallFrame;
-import type EvmLogs;
-import type ByteArray;
-import type ByteStream;
-import type MarshalledBytes;
-import type StorageMap;
+use accounts::Account;
+use evmCallStack::EvmCallFrame;
+use evmLogs::EvmLogs;
+use std::bytearray::ByteArray;
+use std::bytestream::ByteStream;
+use std::bytearray::MarshalledBytes;
+use std::stack::Stack;
+use std::storageMap::StorageMap;
 
-import impure func errorHandler();
+use errorHandler::errorHandler;
 
-import impure func evmCallStack_topFrame() -> option<EvmCallFrame>;
-import impure func evmCallStack_oldestCallFrame() -> option<EvmCallFrame>;
-import impure func evmCallStack_setAccount(addr: address, acct: Account) -> bool;
-import impure func evmCallStack_getAccount(addr: address) -> option<Account>;
-import impure func evmCallStack_getTopFrameReturnData() -> option<ByteArray>;
-import impure func evmCallStack_getTopFrameMemoryOrDie() -> ByteArray;
-import impure func evmCallStack_setTopFrameMemory(mem: ByteArray) -> bool;
-import impure func evmCallStack_setTopFrameStorageCell(offset: uint, val: uint) -> option<()>;
-import impure func evmCallStack_addEvmLogToCurrent(log: any) -> option<()>;
-import impure func evmCallStack_selfDestructCurrentAccount(owner: address);
-import impure func evmCallStack_doCall(
-    kind: uint,
-    gas: uint,
-    calleeAddr: address,
-    balance: uint,
-    argsOffset: uint,
-    argsLength: uint,
-    retOffset: uint,
-    retLength: uint,
-    resumeCodePoint: func(),
-) -> option<bool>;
-import impure func evmCallStack_returnFromCall(
-    success: bool,
-    returnOffset: uint,
-    returnLength: uint
-) -> option<()>;
-import func evmCallStack_callHitError(reason: uint);
+use evmCallStack::evmCallStack_topFrame;
+use evmCallStack::evmCallStack_oldestCallFrame;
+use evmCallStack::evmCallStack_setAccount;
+use evmCallStack::evmCallStack_getAccount;
+use evmCallStack::evmCallStack_getTopFrameReturnData;
+use evmCallStack::evmCallStack_getTopFrameMemoryOrDie;
+use evmCallStack::evmCallStack_setTopFrameMemory;
+use evmCallStack::evmCallStack_setTopFrameStorageCell;
+use evmCallStack::evmCallStack_addEvmLogToCurrent;
+use evmCallStack::evmCallStack_selfDestructCurrentAccount;
+use evmCallStack::evmCallStack_doCall;
+use evmCallStack::evmCallStack_returnFromCall;
+use evmCallStack::evmCallStack_callHitError;
+use evmCallStack::evmCallStack_runningCodeFromAccount;
+use evmCallStack::snapshotAuxStack;
 
-import func evmCallFrame_runningAsAccount(frame: EvmCallFrame) -> Account;
-import func evmCallFrame_runningCodeFromAccount(frame: EvmCallFrame) -> Account;
-import func evmCallFrame_getAccount(frame: EvmCallFrame, addr: address) -> Account;
-import func evmCallFrame_getCaller(frame: EvmCallFrame) -> address;
-import func evmCallFrame_getMemory(frame: EvmCallFrame) -> ByteArray;
-import func evmCallFrame_getResumeCodePoint(frame: EvmCallFrame) -> option<func()>;
-import func evmCallFrame_getCallvalue(frame: EvmCallFrame) -> uint;
-import func evmCallFrame_getCalldata(frame: EvmCallFrame) -> ByteArray;
-import func evmCallFrame_getEvmLogs(frame: EvmCallFrame) -> EvmLogs;
+use evmCallStack::evmCallFrame_runningAsAccount;
+use evmCallStack::evmCallFrame_runningCodeFromAccount;
+use evmCallStack::evmCallFrame_getAccount;
+use evmCallStack::evmCallFrame_getCaller;
+use evmCallStack::evmCallFrame_getMemory;
+use evmCallStack::evmCallFrame_getResumeCodePoint;
+use evmCallStack::evmCallFrame_getCallvalue;
+use evmCallStack::evmCallFrame_getCalldata;
+use evmCallStack::evmCallFrame_getEvmLogs;
+use evmCallStack::evmCallFrame_shouldRevertOnStorageWrite;
 
-import func account_getAddress(acct: Account) -> address;
-import func account_getCodeSize(acct: Account) -> uint;
-import func account_getBalance(acct: Account) -> uint;
-import func account_getCode(acct: Account) -> option<ByteArray>;
-import func account_getStorageCell(acct: Account, offset: uint) -> option<uint>;
-import func account_getAllStorage(account: Account) -> option<StorageMap>;
-import func account_getEvmJumpTable(acct: Account) -> option<map<uint, impure func()>>;
-import func account_fetchAndIncrSeqNum(account: Account) -> (uint, Account);
-import func account_setContractInfo(
-    acct: Account,
-    code: ByteArray,
-    evmJumpTable: map<uint, impure func()>,
-    startCodePoint: impure func(),
-    storage: StorageMap
-) -> Account;
-import func account_isEmpty(acct: Account) -> bool;
-import func pristineAccount(addr: address) -> Account;
+use accounts::account_getAddress;
+use accounts::account_getCodeSize;
+use accounts::account_getBalance;
+use accounts::account_getCode;
+use accounts::account_getStorageCell;
+use accounts::account_getAllStorage;
+use accounts::account_getEvmJumpTable;
+use accounts::account_fetchAndIncrSeqNum;
+use accounts::account_setContractInfo;
+use accounts::account_isEmpty;
+use accounts::account_hasContract;
+use accounts::pristineAccount;
 
-import func storageMap_new() -> StorageMap;
+use std::storageMap::storageMap_new;
 
-import impure func evmCallStack_currentTimestamp() -> uint;
-import impure func evmCallStack_currentBlockNumber() -> uint;
+use evmCallStack::evmCallStack_currentTimestamp;
+use evmCallStack::evmCallStack_currentBlockNumber;
 
-import func evmlogs_empty() -> EvmLogs;
+use evmLogs::evmlogs_empty;
 
-import func bytearray_new(capacity: uint) -> ByteArray;
-import func bytearray_size(ba: ByteArray) -> uint;
-import func bytearray_getByte(ba: ByteArray, offset: uint) -> uint;
-import func bytearray_setByte(ba: ByteArray, offset: uint, val: uint) -> ByteArray;
-import func bytearray_get256(ba: ByteArray, offset: uint) -> uint;
-import func bytearray_set256(ba: ByteArray, offset: uint, val: uint) -> ByteArray;
-import func bytearray_extract(ba: ByteArray, offset: uint, nbytes: uint) -> ByteArray;
-import func bytearray_copy(from: ByteArray, fromOffset: uint, to: ByteArray, toOffset: uint, nbytes: uint) -> ByteArray;
-import func bytearray_marshalFull(from: ByteArray) -> MarshalledBytes;
-import func bytestream_new(from: ByteArray) -> ByteStream;
+use std::bytearray::bytearray_new;
+use std::bytearray::bytearray_size;
+use std::bytearray::bytearray_getByte;
+use std::bytearray::bytearray_setByte;
+use std::bytearray::bytearray_get256;
+use std::bytearray::bytearray_set256;
+use std::bytearray::bytearray_extract;
+use std::bytearray::bytearray_copy;
+use std::bytearray::bytearray_marshalFull;
+use std::bytestream::bytestream_new;
 
-import impure func translateEvmCodeSegment(bs: ByteStream) -> option<(impure func(), map<uint, impure func()>)>;
+use std::stack::stack_pop;
+use std::stack::stack_isEmpty;
+use std::stack::stack_discardDeepestItems;
 
-import func keccak256(array: ByteArray, offset: uint, nbytes: uint) -> bytes32;
-import func keccakOfRlpEncodedUintPair(ui1: uint, ui2: uint) -> bytes32;
+use codeSegment::translateEvmCodeSegment;
+
+use std::keccak::keccak256;
+use std::rlp::keccakOfRlpEncodedUintPair;
 
 
 // Any function with a name like evmOp_XXX is designed to implement the XXX instruction in EVM.
@@ -290,7 +279,7 @@ public impure func evmOp_extcodehash(addrAsUint: uint) -> bytes32 {
     let addr = address(addrAsUint);     // truncates if necessary
     if let Some(topFrame) = evmCallStack_topFrame() {
         let acct = evmCallFrame_getAccount(topFrame, addr);
-        if (account_isEmpty(acct)) {
+        if (! account_isEmpty(acct)) {
             return bytes32(0);
         }
         if let Some(code) = account_getCode(acct) {
@@ -413,11 +402,18 @@ public impure func evmOp_sload(storageAddr: uint) -> uint {
 
 public impure func evmOp_sstore(storageAddr: uint, value: uint) {
     if let Some(topFrame) = evmCallStack_topFrame() {
-        if let Some(_) = evmCallStack_setTopFrameStorageCell(
-            storageAddr,
-            value
-        ) {
-            return;
+        if (evmCallFrame_shouldRevertOnStorageWrite(topFrame)) {
+            // the currently running code was given a gas amount that wouldn't allow a storage write on EVM
+            // for compatibility with EVM code that uses gas limit to prevent writes, we cause out-of-gas error here
+            asm(1,) { setgas };
+            let _ = asm(1,1) uint { plus };  // will get an out-of-gas error on this instruction
+        } else {
+            if let Some(_) = evmCallStack_setTopFrameStorageCell(
+                storageAddr,
+                value
+            ) {
+                return;
+            }
         }
     }
 
@@ -448,9 +444,7 @@ public impure func evmOp_getjumpaddr(evm_pc: uint) -> impure func() {
 
 public impure func evmOp_msize() -> uint {
     if let Some(topFrame) = evmCallStack_topFrame() {
-        return bytearray_size(
-            evmCallFrame_getMemory(topFrame)
-        );
+        return 32*((bytearray_size(evmCallFrame_getMemory(topFrame))+31)/32);
     } else {
         evm_runtimePanic(22);
         return 0;
@@ -587,6 +581,54 @@ public impure func evmOp_log4(
     panic;
 }
 
+public impure func evmOp_callAndReturn(
+    gas: uint,
+    callee: address,
+    balance: uint,
+    argsOffset: uint,
+    argsLength: uint,
+    retOffset: uint,
+    retLength: uint
+) -> bool {
+    let savedAuxStack = snapshotAuxStack();
+
+    // remove first two items from saved aux stack, so we get our caller's aux stack state
+    savedAuxStack = stack_discardDeepestItems(savedAuxStack, 2);
+
+    // First, get the return address of our caller.
+    // This will be the second-from-top item on the AVM AuxStack.
+    // Get a copy of it, without disturbing anything.
+    let resumeCodePoint = asm() func() {
+        auxpop
+        auxpop
+        dup0
+        swap2
+        swap1
+        auxpush
+        auxpush
+    };
+
+    // Now make the call.
+    // After the call completes, control will be thrown directly back to resumeCodePoint.
+    let res = evmCallStack_doCall(
+        0,
+        gas,
+        callee,
+        balance,
+        argsOffset,
+        argsLength,
+        retOffset,
+        retLength,
+        resumeCodePoint,
+        Some(savedAuxStack),
+    );
+    if let Some(success) = res {
+        return success;
+    } else {
+        return false;  // weird failure, best to return false
+    }
+}
+
 public impure func evmOp_call(
     gas: uint,
     calleeAsUint: uint,
@@ -622,7 +664,8 @@ public impure func evmOp_call(
         argsLength,
         retOffset,
         retLength,
-        resumeCodePoint
+        resumeCodePoint,
+        None<Stack>,
     );
     if let Some(success) = res {
         return success;
@@ -661,7 +704,8 @@ public impure func evmOp_callcode(
         argsLength,
         retOffset,
         retLength,
-        resumeCodePoint
+        resumeCodePoint,
+        None<Stack>,
     );
     if let Some(success) = res {
         return success;
@@ -699,7 +743,8 @@ public impure func evmOp_delegatecall(
          argsLength,
          retOffset,
          retLength,
-         resumeCodePoint
+         resumeCodePoint,
+         None<Stack>,
      );
     if let Some(success) = res {
         return success;
@@ -737,7 +782,8 @@ public impure func evmOp_staticcall(
         argsLength,
         retOffset,
         retLength,
-        resumeCodePoint
+        resumeCodePoint,
+        None<Stack>,
     );
     if let Some(success) = res {
         return success;
@@ -752,6 +798,19 @@ public impure func evmOp_revert(memOffset: uint, memNbytes: uint) {
     evm_runtimePanic(28);
 }
 
+public impure func evmOp_revert_knownCodePc(codeAddr: address, evmPc: uint, memOffset: uint, memNbytes: uint) {
+    asm((10000, codeAddr, evmPc),) { debugprint };
+    evmOp_revert(memOffset, memNbytes);
+}
+
+public impure func evmOp_revert_knownPc(evmPc: uint, memOffset: uint, memNbytes: uint) {
+    let codeAddr = address(0);
+    if let Some(acct) = evmCallStack_runningCodeFromAccount() {
+        codeAddr = account_getAddress(acct);
+    }
+    evmOp_revert_knownCodePc(codeAddr, evmPc, memOffset, memNbytes);
+}
+
 public impure func evmOp_return(memOffset: uint, memNbytes: uint) {
     let _ = evmCallStack_returnFromCall(true, memOffset, memNbytes);
 
@@ -762,6 +821,7 @@ public impure func evmOp_selfdestruct(ownerAsUint: uint) {
     let owner = address(ownerAsUint);     // truncates if necessary
 
     evmCallStack_selfDestructCurrentAccount(owner,);
+    evmOp_return(0, 0);
 }
 
 public impure func evmOp_create(value: uint, offset: uint, length: uint) -> address {
@@ -808,8 +868,8 @@ public impure func evmOp_create2(value: uint, offset: uint, length: uint, salt: 
 impure func doCreationOpcode(value: uint, offset: uint, length: uint, newAddress: address) -> address {
     // make sure there isn't already an account at the given address
     if let Some(acct) = evmCallStack_getAccount(newAddress) {
-        if ( ! account_isEmpty(acct)) {
-            // there is already an account at that address; return failure
+        if (account_hasContract(acct)) {
+            // there is already a contract at that address; return failure
             return address(0);
         }
     } else {
@@ -823,8 +883,8 @@ impure func doCreationOpcode(value: uint, offset: uint, length: uint, newAddress
         offset,
         length
     );
-    if let Some(res) = translateEvmCodeSegment(bytestream_new(constructorCode)) {
-        let (startPoint, evmJumpTable) = res;
+    if let Some(res) = translateEvmCodeSegment(bytestream_new(constructorCode), false) {
+        let (startPoint, evmJumpTable, _) = res;
 
         // Create a new account to run the constructor code.
         if (evmCallStack_setAccount(
@@ -834,7 +894,8 @@ impure func doCreationOpcode(value: uint, offset: uint, length: uint, newAddress
                     constructorCode,
                     evmJumpTable,
                     startPoint,
-                    storageMap_new()
+                    storageMap_new(),
+                    true,
                 )
             )
         ) {
@@ -923,8 +984,8 @@ impure func doCreationOpcode(value: uint, offset: uint, length: uint, newAddress
 
             if (constructorSucceeded) {
                 if let Some(contractCode) = evmCallStack_getTopFrameReturnData() {
-                    if let Some(res) = translateEvmCodeSegment(bytestream_new(contractCode)) {
-                        let (startPoint2, evmJumpTable2) = res;
+                    if let Some(res) = translateEvmCodeSegment(bytestream_new(contractCode), false) {
+                        let (startPoint2, evmJumpTable2, _) = res;
                         if let Some(oldAcct) = evmCallStack_getAccount(newAddress) {
                             let storage = storageMap_new();
                             if let Some(st) = account_getAllStorage(oldAcct) {
@@ -937,7 +998,8 @@ impure func doCreationOpcode(value: uint, offset: uint, length: uint, newAddress
                                         contractCode,
                                         evmJumpTable2,
                                         startPoint2,
-                                        storage
+                                        storage,
+                                        true,
                                     )
                                 )
                             ) {
@@ -957,7 +1019,7 @@ impure func doCreationOpcode(value: uint, offset: uint, length: uint, newAddress
 
 impure func evm_error() {
     // This should be called when EVM code has generated an EVM error.
-    evmOp_revert(0, 0);  // should never return
+    evmOp_revert_knownPc(0xffffffffffffffff, 0, 0);  // should never return
 
 }
 

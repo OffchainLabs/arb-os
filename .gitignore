@@ -21,3 +21,7 @@ contracts/add/node_modules/*
 testlogs/*
 arb_os/contractTemplates.mini
 .idea
+contracts/add/yarn.lock
+contracts/add/contracts/.ArbSys.sol.swp
+evm-tests/.travis.yml
+evm-test-logs/*

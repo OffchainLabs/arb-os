@@ -2,7 +2,12 @@
 // Copyright 2020, Offchain Labs, Inc. All rights reserved.
 //
 
-import type ByteArray;
+use std::bytearray::ByteArray;
+use std::bytearray::bytearray_size;
+use std::bytearray::bytearray_getByte;
+use std::bytearray::bytearray_get64;
+use std::bytearray::bytearray_get256;
+use std::bytearray::bytearray_extract;
 
 import func bytearray_new(unused: uint) -> ByteArray;
 import func bytearray_size(ba: ByteArray) -> uint;

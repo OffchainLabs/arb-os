@@ -2,88 +2,125 @@
 // Copyright 2020, Offchain Labs, Inc. All rights reserved.
 //
 
-import type EvmCallFrame;
-import type AccountStore;
-import type ByteArray;
+use accounts::AccountStore;
+use evmCallStack::EvmCallFrame;
+use std::bytearray::ByteArray;
 
-import impure func evmCallStack_topFrame() -> option<EvmCallFrame>;
-import impure func evmCallStack_setTopFrameMemory(mem: ByteArray) -> bool;
-import func evmCallFrame_getCalldata(frame: EvmCallFrame) -> ByteArray;
+use evmCallStack::evmCallStack_topFrame;
+use evmCallStack::evmCallStack_setTopFrameMemory;
+use evmCallStack::evmCallFrame_getCalldata;
 
-import impure func evmOp_return(offset: uint, nbytes: uint);
-import impure func evmOp_revert(offset: uint, nbytes: uint);
+use evmOps::evmOp_return;
+use evmOps::evmOp_revert;
+use evmOps::evmOp_revert_knownPc;
 
-import func getGlobalAccountStore() -> AccountStore;
-import func setGlobalAccountStore(acctStore: AccountStore);
-import func accountStore_createBuiltinContract(
-    acctStore: AccountStore,
-    addr: address,
-    entryPoint: impure func(),
-    isArbitrumStyle: bool
-) -> option<AccountStore>;
+use accounts::getGlobalAccountStore;
+use accounts::setGlobalAccountStore;
+use accounts::accountStore_createBuiltinContract;
 
-import func bytearray_new(capacity: uint) -> ByteArray;
-import func bytearray_size(ba: ByteArray) -> uint;
-import func bytearray_getByte(ba: ByteArray, offset: uint) -> uint;
-import func bytearray_get256(ba: ByteArray, offset: uint) -> uint;
-import func bytearray_set256(ba: ByteArray, offset: uint, val: uint) -> ByteArray;
+use std::bytearray::bytearray_new;
+use std::bytearray::bytearray_size;
+use std::bytearray::bytearray_getByte;
+use std::bytearray::bytearray_get256;
+use std::bytearray::bytearray_set256;
 
-import func sha256_byteArray(ba: ByteArray) -> bytes32;
+use std::sha256::sha256_byteArray;
 
-import impure func arbsys_txcall();
+use arbsys::arbsys_txcall;
+use arbosTest::arbosTest_txcall;
+use arbsys::arbAddressTable_txcall;
+use arbsys::arbBLS_txcall;
+use arbsys::arbFunctionTable_txcall;
 
 
 public impure func precompiles_init(acctStore: AccountStore) -> option<AccountStore> {
     acctStore = accountStore_createBuiltinContract(
         acctStore,
         address(0x01),
-        precompile_0x01,
+        makeTrampoline(precompile_0x01),
         false,
     )?;
     acctStore = accountStore_createBuiltinContract(
         acctStore,
         address(0x02),
-        precompile_0x02,
+        makeTrampoline(precompile_0x02),
         false,
     )?;
     acctStore = accountStore_createBuiltinContract(
         acctStore,
         address(0x04),
-        precompile_0x04,
+        makeTrampoline(precompile_0x04),
         false,
     )?;
     acctStore = accountStore_createBuiltinContract(
     	acctStore,
         address(0x06),
-        precompile_0x06,
+        makeTrampoline(precompile_0x06),
         false,
     )?;
     acctStore = accountStore_createBuiltinContract(
         acctStore,
         address(0x07),
-        precompile_0x07,
+        makeTrampoline(precompile_0x07),
         false,
     )?;
     acctStore = accountStore_createBuiltinContract(
         acctStore,
         address(0x08),
-        precompile_0x08,
+        makeTrampoline(precompile_0x08),
         false,
     )?;
     acctStore = accountStore_createBuiltinContract(
         acctStore,
         address(100),
-        arbsys_txcall,
+        makeTrampoline(arbsys_txcall),
+        true,
+    )?;
+    acctStore = accountStore_createBuiltinContract(
+        acctStore,
+        address(105),
+        makeTrampoline(arbosTest_txcall),
+        true,
+    )?;
+    acctStore = accountStore_createBuiltinContract(
+        acctStore,
+        address(102),
+        makeTrampoline(arbAddressTable_txcall),
+        true,
+    )?;
+    acctStore = accountStore_createBuiltinContract(
+        acctStore,
+        address(103),
+        makeTrampoline(arbBLS_txcall),
+        true,
+    )?;
+    acctStore = accountStore_createBuiltinContract(
+        acctStore,
+        address(104),
+        makeTrampoline(arbFunctionTable_txcall),
         true,
     )?;
     return Some(acctStore);
+}
+
+impure func makeTrampoline(txcallFunc: impure func()) -> impure func() {
+    // make a small code snippet that function-calls to txcallFunc (with a dummy return address)
+    return asm(
+        0x3b,
+        0,
+        asm(
+            0x34,
+            txcallFunc,
+            asm() func() { errcodept }
+        ) func() { pushinsnimm }
+    ) func() { pushinsnimm };
 }
 
 public impure func precompile_0x01() {  // ecrecover
     if let Some(topFrame) = evmCallStack_topFrame() {
         let calldata = evmCallFrame_getCalldata(topFrame);
         if (bytearray_size(calldata) != 4*32) {
-            evmOp_revert(0, 0);
+            evmOp_revert_knownPc(0, 0, 0);
         }
         let h = bytearray_get256(calldata, 0);
         let v = bytearray_get256(calldata, 32);
@@ -99,7 +136,7 @@ public impure func precompile_0x01() {  // ecrecover
         }
     }
 
-    evmOp_revert(0, 0);
+    evmOp_revert_knownPc(0, 0, 0);
 }
 
 public impure func precompile_0x02() {  // sha256
@@ -107,14 +144,15 @@ public impure func precompile_0x02() {  // sha256
         let calldata = evmCallFrame_getCalldata(topFrame);
         let result = sha256_byteArray(calldata);
         let success = evmCallStack_setTopFrameMemory(
-            bytearray_set256(bytearray_new(0), 0, uint(result))
+            bytearray_set256(
+            bytearray_new(0), 0, uint(result))
         );
         if (success) {
             evmOp_return(0, 32);
         }
     }
 
-    evmOp_revert(0, 0);
+    evmOp_revert_knownPc(0, 0, 0);
 }
 
 public impure func precompile_0x04() {  // identity function
@@ -126,14 +164,14 @@ public impure func precompile_0x04() {  // identity function
         }
     }
 
-    evmOp_revert(0, 0);
+    evmOp_revert_knownPc(0, 0, 0);
 }
 
 public impure func precompile_0x06() {  // ecadd
     if let Some(topFrame) = evmCallStack_topFrame() {
         let calldata = evmCallFrame_getCalldata(topFrame);
         if (bytearray_size(calldata) != 4*32) {
-            evmOp_revert(0, 0);
+            evmOp_revert_knownPc(0, 0, 0);
         }
         let x0 = bytearray_get256(calldata, 0);
         let x1 = bytearray_get256(calldata, 32);
@@ -159,14 +197,14 @@ public impure func precompile_0x06() {  // ecadd
         }
     }
 
-    evmOp_revert(0, 0);
+    evmOp_revert_knownPc(0, 0, 0);
 }
 
 public impure func precompile_0x07() {  // ecmul
     if let Some(topFrame) = evmCallStack_topFrame() {
         let calldata = evmCallFrame_getCalldata(topFrame);
         if (bytearray_size(calldata) != 3*32) {
-            evmOp_revert(0, 0);
+            evmOp_revert_knownPc(0, 0, 0);
         }
         let x0 = bytearray_get256(calldata, 0);
         let x1 = bytearray_get256(calldata, 32);
@@ -191,7 +229,7 @@ public impure func precompile_0x07() {  // ecmul
         }
     }
 
-    evmOp_revert(0, 0);
+    evmOp_revert_knownPc(0, 0, 0);
 }
 
 public impure func precompile_0x08() { // ecpairing
@@ -231,5 +269,5 @@ public impure func precompile_0x08() { // ecpairing
         }
     }
 
-    evmOp_revert(0, 0);
+    evmOp_revert_knownPc(0, 0, 0);
 }

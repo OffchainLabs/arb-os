@@ -5,6 +5,7 @@
 //!Provides utilities used in the `postlink_compile` function
 
 use super::{ExportedFunc, ExportedFuncPoint, ImportedFunc};
+use crate::compile::DebugInfo;
 use crate::mavm::{AVMOpcode, CodePt, Instruction, Label, Opcode, Value};
 use crate::uint256::Uint256;
 use std::collections::{HashMap, HashSet};
@@ -42,7 +43,7 @@ pub fn strip_labels(
                     .expect("module did not have storage immediate")
                     .clone(),
             ]),
-            None,
+            DebugInfo::default(),
         );
     }
     let mut label_map = HashMap::new();
@@ -144,18 +145,18 @@ pub fn fix_nonforward_labels(
                         };
                         code_out.push(Instruction::from_opcode(
                             Opcode::AVMOpcode(AVMOpcode::PushStatic),
-                            insn_in.location,
+                            insn_in.debug_info,
                         ));
                         code_out.push(Instruction::from_opcode(
                             Opcode::PushExternal(idx),
-                            insn_in.location,
+                            insn_in.debug_info,
                         ));
-                        code_out.push(Instruction::from_opcode(insn_in.opcode, insn_in.location));
+                        code_out.push(Instruction::from_opcode(insn_in.opcode, insn_in.debug_info));
                     } else {
                         code_out.push(Instruction::from_opcode_imm(
                             insn_in.opcode,
                             val,
-                            insn_in.location,
+                            insn_in.debug_info,
                         ));
                     }
                 }
@@ -163,12 +164,12 @@ pub fn fix_nonforward_labels(
                     code_out.push(Instruction::from_opcode_imm(
                         insn_in.opcode,
                         val,
-                        insn_in.location,
+                        insn_in.debug_info,
                     ));
                 }
             },
             None => {
-                code_out.push(Instruction::from_opcode(insn_in.opcode, insn_in.location));
+                code_out.push(Instruction::from_opcode(insn_in.opcode, insn_in.debug_info));
             }
         }
         if let Opcode::Label(label) = insn_in.opcode {
@@ -184,13 +185,13 @@ pub fn fix_nonforward_labels(
                     code_xformed.push(Instruction::from_opcode_imm(
                         Opcode::AVMOpcode(AVMOpcode::Noop),
                         val.clone(),
-                        insn.location,
+                        insn.debug_info,
                     ));
                 }
                 code_xformed.push(Instruction::from_opcode_imm(
                     Opcode::TupleGet(jump_table.len()),
                     Value::Int(Uint256::from_usize(idx)),
-                    insn.location,
+                    insn.debug_info,
                 ));
             }
             _ => {

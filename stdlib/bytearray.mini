@@ -2,6 +2,12 @@
 // Copyright 2020, Offchain Labs, Inc. All rights reserved.
 //
 
+type OpClosureFunc = func(any, uint) -> (uint, any)
+type opClosure = struct {
+	f: OpClosureFunc,
+	val: any,
+} // usage: (newSlotContents, returnValue) = closure.f(closure.val, oldSlotContents)
+
 type ByteArray = struct { 
     size: uint,
     sliceOffset: uint,
@@ -12,7 +18,7 @@ type ByteArray = struct {
 // bytearray_new makes a new ByteArray
 // it will initially have size zero,
 //        reads beyond the end will return zero,
-//        size will expand to fit all writes,
+//        size will expand to fit all writes (but max size is 2**64 bytes),
 //        and the capacity arg is a hint about how big it will get
 public func bytearray_new(ignored: uint) -> ByteArray {
     return struct {
@@ -61,9 +67,12 @@ public func marshalledBytes_hash(mb: MarshalledBytes) -> bytes32 {
 }
 
 // bytearray_unmarshalBytes unmarshals a bytestack object that we got from L1
-//        returns a new bytearray holding the unmarshaled bytes
-public func bytearray_unmarshalBytes(inBytes: MarshalledBytes) -> ByteArray {
+//        returns a new bytearray holding the unmarshaled bytes, or None if unmarshalled array would be too large
+public func bytearray_unmarshalBytes(inBytes: MarshalledBytes) -> option<ByteArray> {
     let nbytes = inBytes.nbytes;
+    if (nbytes > 0x100000000000000000000000000000000) {
+        return None;
+    }
     let nwords = (nbytes+31)/32;
     let words = inBytes.contents;
 
@@ -77,12 +86,12 @@ public func bytearray_unmarshalBytes(inBytes: MarshalledBytes) -> ByteArray {
         words = unsafecast<MarshalledBytesCell>(words.rest);
     }
 
-    return struct {
+    return Some(struct {
         size: inBytes.nbytes,
         sliceOffset: 0,
         contents: eia,
         copy: false,
-    };
+    });
 }
 
 public func bytearray_marshalFull(ba: ByteArray) -> MarshalledBytes {
@@ -169,7 +178,12 @@ public func bytearray_wrap(cont: buffer, size: uint) -> ByteArray {
 
 // bytearray_setbyte writes one byte to a ByteArray, returns the resulting ByteArray
 public func bytearray_setByte(ba: ByteArray, offset: uint, value: uint) -> ByteArray {
-    if (offset >= ba.size) { ba = ba with { size: offset+1 }; }
+    if (offset >= ba.size) {
+        if (offset >= 0x100000000000000000000000000000000) {
+            return ba;    // ignore out-of-bounds write
+        }
+        ba = ba with { size: offset+1 };
+    }
     offset = offset + ba.sliceOffset;
     return ba with { contents: setbuffer8(ba.contents, offset, value) };
     // return ba with { contents: ba.contents };
@@ -177,6 +191,9 @@ public func bytearray_setByte(ba: ByteArray, offset: uint, value: uint) -> ByteA
 
 // bytearray_set64 writes an 8-byte chunk to a ByteArray, returning the resulting ByteArray
 public func bytearray_set64(ba: ByteArray, offset: uint, value: uint) -> ByteArray {
+    if (offset >= 0x100000000000000000000000000000000-7) {
+        return ba;    // ignore out-of-bounds write
+    }
     if (offset+8 > ba.size) {
         ba = ba with { size: offset+8 };
     }
@@ -186,6 +203,9 @@ public func bytearray_set64(ba: ByteArray, offset: uint, value: uint) -> ByteArr
 
 // bytearray_set256 writes a 32-byte chunk to a ByteArray, returning the resulting ByteArray
 public func bytearray_set256(ba: ByteArray, offset: uint, value: uint) -> ByteArray {
+    if (offset >= 0x100000000000000000000000000000000-31) {
+        return ba;    // ignore out-of-bounds write
+    }
     if (offset+32 > ba.size) {
         ba = ba with { size: offset+32 };
     }
@@ -202,6 +222,12 @@ public func bytearray_copy(
     toOffset: uint,
     nbytes: uint,
 ) -> ByteArray {
+    if ((fromOffset >= 0x100000000000000000000000000000000)
+        || (toOffset >= 0x100000000000000000000000000000000)
+        || (nbytes >= 0x100000000000000000000000000000000) ) {
+        return to;  // ignore out-of-bounds parameters
+    }
+
     // TODO: optimize this to exploit alignment and speed up the endgame
     // debug(nbytes);
     if (to.size < toOffset + nbytes) {
@@ -229,8 +255,19 @@ public func bytearray_copy(
 }
 
 public func bytearray_extract(from: ByteArray, offset: uint, nbytes: uint) -> ByteArray {
-    return struct { size: nbytes, sliceOffset: from.sliceOffset + offset, contents: from.contents, copy: true, };
-    // return bytearray_copy(from, offset, bytearray_new(0), 0, nbytes);
+    if (offset >= 0x100000000000000000000000000000000) {
+        return bytearray_new(0);
+    }
+    if ((nbytes >= 0x100000000000000000000000000000000) || (offset+nbytes >= 0x100000000000000000000000000000000)) {
+        return bytearray_new(0);
+    }
+    return from with {
+        size: nbytes
+    } with {
+        sliceOffset: offset + from.sliceOffset
+    } with {
+        copy: true
+    };
 }
 
 

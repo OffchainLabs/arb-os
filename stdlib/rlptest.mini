@@ -2,54 +2,34 @@
 // Copyright 2020, Offchain Labs, Inc. All rights reserved.
 //
 
-import type ByteArray;
-import type ByteStream;
-import type MarshalledBytes;
+use std::bytearray::ByteArray;
+use std::bytestream::ByteStream;
+use std::bytearray::MarshalledBytes;
 
-import func bytearray_new(capacity: uint) -> ByteArray;
-import func bytearray_size(ba: ByteArray) -> uint;
-import func bytearray_marshalFull(ba: ByteArray) -> MarshalledBytes;
-import func bytearray_unmarshalBytes(mb: MarshalledBytes) -> ByteArray;
-import func bytearray_getByte(ba: ByteArray, offset: uint) -> uint;
-import func bytearray_set256(ba: ByteArray, offset: uint, value: uint) -> ByteArray;
+use std::bytearray::bytearray_new;
+use std::bytearray::bytearray_size;
+use std::bytearray::bytearray_marshalFull;
+use std::bytearray::bytearray_unmarshalBytes;
+use std::bytearray::bytearray_getByte;
+use std::bytearray::bytearray_set256;
 
-import func bytestream_new(ba: ByteArray) -> ByteStream;
+use std::bytestream::bytestream_new;
 
-import func keccak256(ba: ByteArray, offset: uint, nbytes: uint) -> bytes32;
+use std::keccak::keccak256;
 
-import func rlp_encodeUint(val: uint, ba: ByteArray, offset: uint) -> (ByteArray, uint);
-import func rlp_encodeAddress(addr: address, ba: ByteArray, offset: uint) -> (ByteArray, uint);
-import func rlp_encodeBytes(
-    inBytes: ByteArray, inOffset: uint, nbytes: uint,
-    outBytes: ByteArray, outOffset: uint
-) -> (ByteArray, uint);
-import func rlp_encodeList(
-    encodedItems: []ByteArray,
-    encItemsOffset: uint,
-    numEncItems: uint,
-    outBytes: ByteArray,
-    outOffset: uint,
-) -> option<(ByteArray, uint)>;
-import func rlp_encodeMessageInfo(
-    seqNum: uint,
-    gasPrice: uint,
-    gasLimit: uint,
-    to: address,
-    value: uint,
-    data: ByteArray,
-    v: uint,
-    r: uint,
-    s: uint
-) -> ByteArray;
-import func rlp_encodeAndHashMessageInfo(tx: SignedTx) -> bytes32;
-import func rlp_decodeMessageInfo(inStream: ByteStream) -> option<(ByteStream, SignedTx)>;
+use std::rlp::rlp_encodeUint;
+use std::rlp::rlp_encodeAddress;
+use std::rlp::rlp_encodeBytes;
+use std::rlp::rlp_encodeList;
+use std::rlp::rlp_encodeMessageInfo;
+use std::rlp::rlp_encodeAndHashMessageInfoForSignature;
+use std::rlp::rlp_decodeMessageInfo;
 
+use std::rlp::rlp_decodeUint;
+use std::rlp::rlp_decodeAddress;
+use std::rlp::rlp_decodeBytes;
 
-import func rlp_decodeUint(bs: ByteStream) -> option<(ByteStream, uint)>;
-import func rlp_decodeAddress(bs: ByteStream) -> option<(ByteStream, address)>;
-import func rlp_decodeBytes(inStream: ByteStream) -> option<(ByteStream, ByteArray)>;
-
-import func bytesNeededToRepresentUint(val: uint) -> uint;
+use std::rlp::bytesNeededToRepresentUint;
 
 type SignedTx = struct {
     seqNum: uint,
@@ -82,41 +62,47 @@ impure func main(kind: uint, value: any) {
         }
     } elseif (kind == 1) {
         let mb = unsafecast<MarshalledBytes>(value);
-        let in = bytearray_unmarshalBytes(mb);
-        let encoded = rlp_encodeBytes(
-            in,
-            0,
-            bytearray_size(in),
-            bytearray_new(0),
-            0
-        ).0;
+        if let Some(in) = bytearray_unmarshalBytes(mb) {
+            let encoded = rlp_encodeBytes(
+                in,
+                0,
+                bytearray_size(in),
+                bytearray_new(0),
+                0
+            ).0;
 
-        // decode and verify no difference
-        if let Some(res) = rlp_decodeBytes(bytestream_new(encoded)) {
-            let marshDec = bytearray_marshalFull(res.1);
-            if (marshDec == mb) {
-                asm(bytearray_marshalFull(encoded),) { log };
+            // decode and verify no difference
+            if let Some(res) = rlp_decodeBytes(bytestream_new(encoded)) {
+                let marshDec = bytearray_marshalFull(res.1);
+                if (marshDec == mb) {
+                    asm(bytearray_marshalFull(encoded),) { log };
+                } else {
+                    asm( (20, bytearray_marshalFull(encoded)), ) { log };
+                }
             } else {
-                asm( (20, bytearray_marshalFull(encoded)), ) { log };
+                asm(3,) { log };
             }
         } else {
-            asm(3,) { log };
+            panic;
         }
     } elseif (kind == 2) {
         let vals = unsafecast<(uint, MarshalledBytes, uint)>(value);
-        let data = bytearray_unmarshalBytes(vals.1);
-        let encodedPieces = unsafecast<[]ByteArray>(newarray<any>(3));  // workaround issue #120
-        encodedPieces = encodedPieces with {
-            [0] = rlp_encodeUint(vals.0, bytearray_new(0), 0).0
-        } with {
-            [1] = rlp_encodeBytes(data, 0, bytearray_size(data), bytearray_new(0), 0).0
-        } with {
-            [2] = rlp_encodeUint(vals.2, bytearray_new(0), 0).0
-        };
-        if let Some(res) = rlp_encodeList(encodedPieces, 0, 3, bytearray_new(0), 0) {
-            asm(bytearray_marshalFull(res.0),) { log };
+        if let Some(data) = bytearray_unmarshalBytes(vals.1) {
+            let encodedPieces = unsafecast<[]ByteArray>(newarray<any>(3));  // workaround issue #120
+            encodedPieces = encodedPieces with {
+                [0] = rlp_encodeUint(vals.0, bytearray_new(0), 0).0
+            } with {
+                [1] = rlp_encodeBytes(data, 0, bytearray_size(data), bytearray_new(0), 0).0
+            } with {
+                [2] = rlp_encodeUint(vals.2, bytearray_new(0), 0).0
+            };
+            if let Some(res) = rlp_encodeList(encodedPieces, 0, 3, bytearray_new(0), 0) {
+                asm(bytearray_marshalFull(res.0),) { log };
+            } else {
+                asm(4,) { log };
+            }
         } else {
-            asm(4,) { log };
+            panic;
         }
     }
 
@@ -131,8 +117,8 @@ func testRlpHasher() {
     let value = uint(hash(gasLimit));
     let data = randomByteArray();
     let v = uint(hash(value));
-    let r = uint(hash(v));
-    let s = uint(hash(r));
+    let r = 0;
+    let s = 0;
 
     let oldBuf = rlp_encodeMessageInfo(
         seqNum,
@@ -148,7 +134,7 @@ func testRlpHasher() {
 
     if let Some(res) = rlp_decodeMessageInfo(bytestream_new(oldBuf)) {
         let (_, tx) = res;
-        if (keccak256(oldBuf, 0, bytearray_size(oldBuf)) != rlp_encodeAndHashMessageInfo(tx)) {
+        if (keccak256(oldBuf, 0, bytearray_size(oldBuf)) != rlp_encodeAndHashMessageInfoForSignature(tx, Some(tx.v))) {
             asm(12,) { debugprint };
             panic;
         }
@@ -157,7 +143,7 @@ func testRlpHasher() {
         panic;
     }
 
-    let newWay = rlp_encodeAndHashMessageInfo(
+    let newWay = rlp_encodeAndHashMessageInfoForSignature(
         struct {
             seqNum: seqNum,
             gasPrice: gasPrice,
@@ -168,7 +154,8 @@ func testRlpHasher() {
             v: v,
             r: r,
             s: s
-        }
+        },
+        Some(v)
     );
 
     if (keccak256(oldBuf, 0, bytearray_size(oldBuf)) != newWay) {

@@ -5,12 +5,14 @@
 //!Provides utilities for emulation of AVM bytecode.
 
 use super::runtime_env::RuntimeEnvironment;
+use crate::compile::{CompileError, DebugInfo};
 use crate::link::LinkedProgram;
 use crate::mavm::{AVMOpcode, Buffer, CodePt, Instruction, Opcode, Value};
 use crate::pos::Location;
 use crate::uint256::Uint256;
+use clap::Clap;
 use ethers_core::types::{Signature, H256};
-use std::cmp::max;
+use std::cmp::{max, Ordering};
 use std::collections::{BTreeMap, HashMap};
 use std::convert::TryFrom;
 use std::convert::TryInto;
@@ -18,6 +20,7 @@ use std::fmt;
 use std::fs::File;
 use std::io::{stdin, BufWriter, Write};
 use std::path::Path;
+use std::str::FromStr;
 
 const MAX_PAIRING_SIZE: u64 = 30;
 
@@ -316,7 +319,7 @@ impl CodeStore {
     fn create_segment(&mut self) -> CodePt {
         self.segments.push(vec![Instruction::from_opcode(
             Opcode::AVMOpcode(AVMOpcode::Panic),
-            None,
+            DebugInfo::default(),
         )]);
         CodePt::new_in_segment(self.segments.len() - 1, 0)
     }
@@ -336,7 +339,7 @@ impl CodeStore {
                 let segment = &mut self.segments[seg_num];
                 if old_offset == segment.len() - 1 {
                     if let Some(opcode) = Opcode::from_number(op) {
-                        segment.push(Instruction::new(opcode, imm, None));
+                        segment.push(Instruction::new(opcode, imm, DebugInfo::default()));
                         Some(CodePt::new_in_segment(seg_num, old_offset + 1))
                     } else {
                         panic!(
@@ -356,13 +359,22 @@ impl CodeStore {
     }
 }
 
+#[derive(Debug, Clone)]
+enum ProfilerEvent {
+    EnterFunc(u64),
+    CallFunc(CodePt, usize),
+    Return(CodePt, usize),
+}
+
 ///Records how much gas was used at each source location in a run of a `Machine`. Gas used by any
 /// instructions without an associated location are added to the unknown_gas field.
 #[derive(Debug, Clone, Default)]
 pub struct ProfilerData {
     data: HashMap<String, BTreeMap<(usize, usize), u64>>,
     instructions: Vec<u64>,
+    stack_tree: HashMap<CodePt, (Vec<ProfilerEvent>, Option<Location>)>,
     unknown_gas: u64,
+    file_name_chart: BTreeMap<u64, String>,
 }
 
 impl ProfilerData {
@@ -373,7 +385,7 @@ impl ProfilerData {
     fn get_mut(
         &mut self,
         loc: &Option<Location>,
-        chart: &HashMap<u64, String>,
+        chart: &BTreeMap<u64, String>,
     ) -> Option<&mut u64> {
         if let Some(loc) = loc {
             let filename = chart.get(&loc.file_id)?;
@@ -392,7 +404,7 @@ impl ProfilerData {
         &mut self,
         loc: &Option<Location>,
         gas: u64,
-        chart: &HashMap<u64, String>,
+        chart: &BTreeMap<u64, String>,
     ) -> Option<u64> {
         if let Some(loc) = loc {
             let filename = match chart.get(&loc.file_id) {
@@ -435,6 +447,157 @@ impl ProfilerData {
             }
         }
         println!("Total: {}", total_instructions);
+        let mut formatted_data = BTreeMap::new();
+        for (func, (events, location)) in &self.stack_tree {
+            let mut callers: BTreeMap<CodePt, (u64, Option<Location>)> = BTreeMap::new();
+            let mut in_func = false;
+            let mut in_callstack = false;
+            let mut in_func_gas = 0;
+            let mut current_call: Option<(CodePt, (u64, Option<Location>))> = None;
+            let mut called: BTreeMap<CodePt, (u64, Option<Location>)> = BTreeMap::new();
+            let mut start_point = 0;
+            let mut call_start = 0;
+            for event in events {
+                match event {
+                    ProfilerEvent::EnterFunc(x) => {
+                        if !in_func {
+                            in_func = true;
+                            start_point = *x;
+                            if !in_callstack {
+                                in_callstack = true;
+                                call_start = *x;
+                            }
+                            if let Some((func, (start, loc))) = &current_call {
+                                if let Some(entry) = called.get_mut(func) {
+                                    (*entry).0 += *x - *start;
+                                } else {
+                                    called.insert(*func, (*x - *start, *loc));
+                                }
+                            }
+                            current_call = None;
+                        } else {
+                            panic!("Enter func event found when already in function");
+                        }
+                    }
+                    ProfilerEvent::CallFunc(x, y) => {
+                        if in_func {
+                            in_func = false;
+                            let end_point = if let Some((funcy, _)) = self.stack_tree.get(x) {
+                                if let Some(event) = funcy.get(*y) {
+                                    match event {
+                                        ProfilerEvent::EnterFunc(x) => *x,
+                                        _ => panic!("Invalid event linked on function call"),
+                                    }
+                                } else {
+                                    panic!("Linked event from function call out of bounds");
+                                }
+                            } else {
+                                panic!("Function call links to invalid codepoint");
+                            };
+                            current_call = Some((
+                                *x,
+                                (
+                                    end_point,
+                                    *self.stack_tree.get(x).map(|(_, l)| l).unwrap_or(&None),
+                                ),
+                            ));
+                            in_func_gas += end_point - start_point;
+                        }
+                    }
+                    ProfilerEvent::Return(x, y) => {
+                        if in_func {
+                            let end_point = if let Some((funcy, _)) = self.stack_tree.get(x) {
+                                if let Some(event) = funcy.get(*y) {
+                                    match event {
+                                        ProfilerEvent::EnterFunc(x) => *x,
+                                        _ => panic!("Invalid event linked on return"),
+                                    }
+                                } else {
+                                    panic!("Linked event from function call out of bounds");
+                                }
+                            } else {
+                                panic!("Return links to invalid codepoint");
+                            };
+                            in_func = false;
+                            in_func_gas += end_point - start_point;
+                            in_callstack = false;
+                            let locy = *self.stack_tree.get(x).map(|(_, l)| l).unwrap_or(&None);
+                            if let Some(entry) = callers.get_mut(x) {
+                                (*entry).0 += end_point - call_start;
+                            } else {
+                                callers.insert(*x, (end_point - call_start, locy));
+                            }
+                        }
+                    }
+                }
+            }
+            formatted_data.insert(in_func_gas, (called, callers, func, location));
+        }
+        for (in_func_gas, (called, callers, func, location)) in formatted_data.iter().rev() {
+            if let Some(loc) = location {
+                println!(
+                    "Func ({}, {}, {}): {}",
+                    self.file_name_chart
+                        .get(&loc.file_id)
+                        .unwrap_or(&"unknown file".to_string()),
+                    loc.line,
+                    loc.column,
+                    in_func_gas
+                );
+            } else {
+                println!("Unknown func at {:?}: {}", func, in_func_gas);
+            }
+            let callers: BTreeMap<_, _> = callers
+                .into_iter()
+                .map(|(cpt, (gas, loc))| (gas, (cpt, loc)))
+                .collect();
+            let total_callers = callers.iter().map(|x| *x.0).sum::<u64>();
+            for (gas, (caller, location)) in callers.into_iter().rev() {
+                if let Some(loc) = location {
+                    println!(
+                        "    Called by ({}, {}, {}), for {}",
+                        self.file_name_chart
+                            .get(&loc.file_id)
+                            .unwrap_or(&"unknown file".to_string()),
+                        loc.line,
+                        loc.column,
+                        gas
+                    );
+                } else {
+                    println!(
+                        "    Called by unknown function at {:?}, for {}",
+                        caller, gas
+                    );
+                }
+            }
+            let called: BTreeMap<_, _> = called
+                .into_iter()
+                .map(|(cpt, (gas, loc))| (gas, (cpt, loc)))
+                .collect();
+            let total_called = called.iter().map(|x| *x.0).sum::<u64>();
+            for (gas, (called, location)) in called.into_iter().rev() {
+                if let Some(loc) = location {
+                    println!(
+                        "    Calls ({}, {}, {}), for {}",
+                        self.file_name_chart
+                            .get(&loc.file_id)
+                            .unwrap_or(&"unknown file".to_string()),
+                        loc.line,
+                        loc.column,
+                        gas
+                    );
+                } else {
+                    println!("    Calls unknown func at {:?}, for {}", called, gas);
+                }
+            }
+            if total_callers != total_called + *in_func_gas {
+                println!(
+                    "Invariant fails: {} {}",
+                    total_callers,
+                    total_called + *in_func_gas
+                )
+            }
+        }
         let file_gas_costs: Vec<(String, u64)> = self
             .data
             .iter()
@@ -510,6 +673,26 @@ impl ProfilerData {
     }
 }
 
+#[derive(PartialEq, Debug, Clap)]
+pub enum ProfilerMode {
+    Never,
+    PostBoot,
+    Always,
+}
+
+impl FromStr for ProfilerMode {
+    type Err = CompileError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match &(s.to_lowercase())[..] {
+            "never" => Ok(ProfilerMode::Never),
+            "always" => Ok(ProfilerMode::Always),
+            "post" => Ok(ProfilerMode::PostBoot),
+            _ => Err(CompileError::new("Invalid profiler mode".to_string(), None)),
+        }
+    }
+}
+
 ///Represents the state of execution of a AVM program including the code it is compiled from.
 #[derive(Debug)]
 pub struct Machine {
@@ -522,7 +705,7 @@ pub struct Machine {
     err_codepoint: CodePt,
     arb_gas_remaining: Uint256,
     pub runtime_env: RuntimeEnvironment,
-    file_name_chart: HashMap<u64, String>,
+    file_name_chart: BTreeMap<u64, String>,
     total_gas_usage: Uint256,
     trace_writer: Option<BufWriter<File>>,
 }
@@ -597,6 +780,9 @@ impl Machine {
             self.run(Some(stop_pc))
         };
         println!("ArbGas cost of call: {}", cost);
+        if let Some(ret_val) = self.stack.top() {
+            println!("Stack top: {:?}", ret_val);
+        }
         match &self.state {
             MachineState::Stopped => {
                 Err(ExecutionError::new("execution stopped", &self.state, None))
@@ -660,6 +846,8 @@ impl Machine {
         let mut break_line = 0;
         let mut break_gas_amount = 0u64;
         let mut gas_cost = 0;
+        let mut show_aux = false;
+        let mut show_reg = false;
         while self.state.is_running() {
             if let Some(gas) = self.next_op_gas() {
                 gas_cost += gas;
@@ -668,16 +856,18 @@ impl Machine {
             }
             if !breakpoint {
                 if let Some(insn) = self.next_opcode() {
-                    if let Some(location) = insn.location {
+                    if insn.debug_info.attributes.breakpoint {
+                        breakpoint = true;
+                    }
+                    if let Some(location) = insn.debug_info.location {
                         if location.line() == break_line {
                             breakpoint = true;
                         }
                     }
-                    if insn.opcode == Opcode::AVMOpcode(AVMOpcode::DebugPrint) {
-                        breakpoint = true;
-                    }
                 }
-                if self.total_gas_usage > Uint256::from_u64(break_gas_amount) {
+                if self.total_gas_usage > Uint256::from_u64(break_gas_amount)
+                    && break_gas_amount > 0
+                {
                     breakpoint = true;
                 }
             }
@@ -686,17 +876,24 @@ impl Machine {
                     println!("PC: {:?}", pc);
                 }
                 println!("Stack contents: {}", self.stack);
-                //println!("Aux-stack contents: {}", self.aux_stack);
-                //println!("Register contents: {}", self.register);
+                if show_aux {
+                    println!("Aux-stack contents: {}", self.aux_stack);
+                }
+                if show_reg {
+                    println!("Register contents: {}", self.register);
+                }
                 if !self.stack.is_empty() {
                     println!("Stack top: {}", self.stack.top().unwrap());
                 }
                 if let Some(code) = self.next_opcode() {
+                    if code.debug_info.attributes.breakpoint {
+                        println!("We hit a breakpoint!");
+                    }
                     println!("Next Opcode: {}", code.opcode);
                     if let Some(imm) = code.immediate {
                         println!("Immediate: {}", imm);
                     }
-                    if let Some(location) = code.location {
+                    if let Some(location) = code.debug_info.location {
                         let line = location.line.to_usize();
                         let column = location.column.to_usize();
                         if let Some(filename) = self.file_name_chart.get(&location.file_id) {
@@ -751,6 +948,12 @@ impl Machine {
                         "r\n" | "run\n" => {
                             breakpoint = false;
                             exit = true;
+                        }
+                        "toggle aux\n" => {
+                            show_aux = !show_aux;
+                        }
+                        "toggle reg\n" => {
+                            show_reg = !show_reg;
                         }
                         _ => println!("invalid input"),
                     }
@@ -861,19 +1064,118 @@ impl Machine {
     }
 
     ///Generates a `ProfilerData` from a run of self with args from address 0.
-    pub fn profile_gen(&mut self, args: Vec<Value>) -> ProfilerData {
+    pub fn profile_gen(&mut self, args: Vec<Value>, mode: ProfilerMode) -> ProfilerData {
+        assert!(mode != ProfilerMode::Never);
         self.call_state(CodePt::new_internal(0), args);
         let mut loc_map = ProfilerData::default();
-        loc_map.instructions.resize(256, 0);
+        loc_map.file_name_chart = self.file_name_chart.clone();
+        loc_map.stack_tree.insert(
+            CodePt::new_internal(0),
+            (
+                vec![ProfilerEvent::EnterFunc(0)],
+                self.code
+                    .get_insn(CodePt::new_internal(0))
+                    .map(|insn| insn.debug_info.location)
+                    .unwrap_or(None),
+            ),
+        );
+        let mut stack_len = 0;
+        let mut current_codepoint = CodePt::new_internal(0);
+        let mut total_gas = 0;
+        let mut stack = vec![];
+        let mut profile_enabled = if mode == ProfilerMode::Always {
+            true
+        } else {
+            false
+        };
         while let Some(insn) = self.next_opcode() {
-            if let Some(num) = insn.opcode.to_number() {
-                loc_map.instructions[usize::from(num)] = loc_map.instructions[usize::from(num)] + 1;
+            if insn.opcode == Opcode::AVMOpcode(AVMOpcode::Inbox) {
+                profile_enabled = true;
             }
-            let loc = insn.location;
-            if let Some(gas_cost) = loc_map.get_mut(&loc, &self.file_name_chart) {
-                *gas_cost += self.next_op_gas().unwrap_or(0);
-            } else {
-                loc_map.insert(&loc, self.next_op_gas().unwrap_or(0), &self.file_name_chart);
+            if profile_enabled {
+                let loc = insn.debug_info.location;
+                let next_op_gas = self.next_op_gas().unwrap_or(0);
+                if let Some(gas_cost) = loc_map.get_mut(&loc, &self.file_name_chart) {
+                    *gas_cost += next_op_gas;
+                } else {
+                    loc_map.insert(&loc, next_op_gas, &self.file_name_chart);
+                }
+                total_gas += next_op_gas;
+                let alt_stack = if let StackTrace::Known(trace) = self.get_stack_trace() {
+                    trace
+                } else {
+                    panic!("Internal error: Unknown stack trace");
+                };
+                match stack_len.cmp(&stack.len()) {
+                    Ordering::Less => {
+                        stack.pop();
+                        let mut next_len = loc_map
+                            .stack_tree
+                            .get(stack.last().unwrap_or(&CodePt::new_internal(0)))
+                            .map(|something| something.0.len())
+                            .unwrap_or(0);
+                        if *stack.last().unwrap_or(&CodePt::new_internal(0)) == current_codepoint {
+                            next_len += 1;
+                        }
+                        if let Some((func_info, _)) = loc_map.stack_tree.get_mut(&current_codepoint)
+                        {
+                            func_info.push(ProfilerEvent::Return(
+                                *stack.last().unwrap_or(&CodePt::new_internal(0)),
+                                next_len,
+                            ));
+                            current_codepoint = *stack.last().unwrap_or(&CodePt::new_internal(0));
+                        } else {
+                            panic!("Internal error: returned from untracked function");
+                        }
+                        if let Some((func_info, _)) = loc_map.stack_tree.get_mut(&current_codepoint)
+                        {
+                            func_info.push(ProfilerEvent::EnterFunc(total_gas));
+                        } else {
+                            panic!("Internal error: returned to untracked function");
+                        }
+                    }
+                    Ordering::Equal => {}
+                    Ordering::Greater => {
+                        stack.push(self.get_pc().unwrap_or(CodePt::new_internal(0)));
+                        let zero_codept = CodePt::new_internal(0);
+                        let next_codepoint = stack.last().unwrap_or(&zero_codept);
+                        let next_len = if let Some((next_info, _)) =
+                            loc_map.stack_tree.get_mut(next_codepoint)
+                        {
+                            if *next_codepoint == current_codepoint {
+                                next_info.len() + 1
+                            } else {
+                                next_info.len()
+                            }
+                        } else {
+                            loc_map.stack_tree.insert(
+                                *next_codepoint,
+                                (
+                                    vec![],
+                                    self.code
+                                        .get_insn(*next_codepoint)
+                                        .map(|insn| insn.debug_info.location)
+                                        .unwrap_or(None),
+                                ),
+                            );
+                            0
+                        };
+                        if let Some((func_info, _)) = loc_map.stack_tree.get_mut(&current_codepoint)
+                        {
+                            func_info.push(ProfilerEvent::CallFunc(*next_codepoint, next_len))
+                        } else {
+                            panic!("Internal error: calling from an untracked function");
+                        }
+                        current_codepoint = *next_codepoint;
+                        if let Some((func_info, _)) = loc_map.stack_tree.get_mut(&current_codepoint)
+                        {
+                            func_info.push(ProfilerEvent::EnterFunc(total_gas));
+                        } else {
+                            panic!("Internal error: called function not properly initialized");
+                        }
+                    }
+                }
+                stack_len = alt_stack.len();
             }
             match self.run_one(false) {
                 Ok(false) => {
@@ -1363,9 +1665,13 @@ impl Machine {
                                 if ub >= 31 {
                                     x
                                 } else {
-                                    let shifted_bit = Uint256::from_usize(2).exp(&Uint256::from_usize(8*ub+7));
+                                    let shifted_bit =
+                                        Uint256::from_usize(2).exp(&Uint256::from_usize(8*ub+7));
                                     let sign_bit = x.bitwise_and(&shifted_bit) != Uint256::zero();
-                                    let mask = shifted_bit.mul(&Uint256::from_u64(2)).sub(&Uint256::one()).ok_or_else(|| ExecutionError::new("underflow in signextend", &self.state, None))?;
+                                    let mask = shifted_bit
+                                        .mul(&Uint256::from_u64(2)).sub(&Uint256::one())
+                                        .ok_or_else(||
+                                            ExecutionError::new("underflow in signextend", &self.state, None))?;
                                     if sign_bit {
                                         x.bitwise_or(&mask.bitwise_neg())
                                     } else {
@@ -1446,7 +1752,8 @@ impl Machine {
 						let r2 = self.stack.pop_uint(&self.state)?;
 						self.stack.push_uint(
 							if r1 < Uint256::from_usize(32) {
-								let shift_factor = Uint256::from_u64(256).exp(&Uint256::from_usize(31-r1.to_usize().unwrap()));
+								let shift_factor =
+                                    Uint256::from_u64(256).exp(&Uint256::from_usize(31-r1.to_usize().unwrap()));
 								r2.div(&shift_factor).unwrap().bitwise_and(&Uint256::from_usize(255))
 							} else {
 								Uint256::zero()

@@ -2,11 +2,11 @@
 // Copyright 2020, Offchain Labs, Inc. All rights reserved.
 //
 
-import func emptyAvmStack();
-import impure func cleanAvmAuxStackAndCall(funcToCall: impure func());
-import impure func mainRunLoop();
-import impure func evmCallStack_isEmpty() -> bool;
-import impure func evmCallStack_callHitError(errInfo: any);
+use evmCallStack::emptyAvmStack;
+use evmCallStack::cleanAvmAuxStackAndCall;
+use main::mainRunLoop;
+use evmCallStack::evmCallStack_isEmpty;
+use evmCallStack::evmCallStack_callHitError;
 
 
 public impure func errorHandler_init() {
@@ -47,7 +47,7 @@ public impure func errorHandler() {
         // That shouldn't have happened, but we have to make the best of the situation.
         // So we'll clean up our stacks, and jump back to the main runloop.
         emptyAvmStack();
-        cleanAvmAuxStackAndCall(mainRunLoop);  // this will never return
+        cleanAvmAuxStackAndCall(mainRunLoop, true);  // this will never return
     } else {
         // Application code must have hit an error.
         evmCallStack_callHitError(0);  // this will never return

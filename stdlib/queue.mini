@@ -115,19 +115,15 @@ public func queuestack_push(qs: QueueStack, q: Queue) -> QueueStack {
 
 public func queuestack_get(qs: QueueStack) -> option<(QueueStack, any)> {
     loop {
-        if let Some(rawCell) = qs {
-            let cell = unsafecast<QueueStackCell>(rawCell);
-            if let Some(res) = queue_get(cell.head) {
-                let (uq, item) = res;
-                return Some((
-                    queuestack_push(cell.rest, uq),
-                    item
-                ));
-            } else {
-                qs = cell.rest;
-            }
+        let cell = unsafecast<QueueStackCell>(qs?);
+        if let Some(res) = queue_get(cell.head) {
+            let (uq, item) = res;
+            return Some((
+                queuestack_push(cell.rest, uq),
+                item
+            ));
         } else {
-            return None;
+            qs = cell.rest;
         }
     }
 }

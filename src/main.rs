@@ -9,14 +9,14 @@ use contracttemplates::generate_contract_template_file_or_die;
 use link::{link, postlink_compile};
 use mavm::Value;
 use run::{profile_gen_from_file, replay_from_testlog_file, run_from_file, RuntimeEnvironment};
-use std::collections::{hash_map::DefaultHasher, HashMap};
+use std::collections::BTreeMap;
 use std::fs::File;
-use std::hash::Hasher;
 use std::io;
 use std::path::Path;
 
+use crate::run::ProfilerMode;
 use crate::uint256::Uint256;
-use clap::{App, Arg, SubCommand};
+use clap::Clap;
 
 #[cfg(test)]
 mod buffertests;
@@ -32,269 +32,245 @@ mod run;
 mod stringtable;
 mod uint256;
 
-fn main() -> Result<(), CompileError> {
-    let matches = App::new("Mini compiler")
-        .version("0.1")
-        .author("Ed Felten <ed@offchainlabs.com")
-        .about("compiles the Mini language")
-        .subcommand(
-            SubCommand::with_name("compile")
-                .about("compile a source file")
-                .arg(
-                    Arg::with_name("INPUT")
-                        .help("sets the file name to compile")
-                        .required(true)
-                        .multiple(true)
-                        .index(1),
-                )
-                .arg(
-                    Arg::with_name("output")
-                        .help("sets the output file name")
-                        .short("o")
-                        .takes_value(true)
-                        .value_name("output"),
-                )
-                .arg(
-                    Arg::with_name("format")
-                        .help("sets the output format")
-                        .short("f")
-                        .takes_value(true)
-                        .value_name("format"),
-                )
-                .arg(
-                    Arg::with_name("compileonly")
-                        .help("compile only not link")
-                        .short("c")
-                        .takes_value(false),
-                )
-                .arg(
-                    Arg::with_name("module")
-                        .help("compile as loadable module")
-                        .short("m")
-                        .takes_value(false),
-                )
-                .arg(
-                    Arg::with_name("debug")
-                        .help("provide debug output")
-                        .short("d")
-                        .takes_value(false),
-                )
-                .arg(
-                    Arg::with_name("typecheck")
-                        .help("typechecks imported functions")
-                        .short("t")
-                        .takes_value(false),
-                ),
-        )
-        .subcommand(
-            SubCommand::with_name("run")
-                .about("run a compiled source file")
-                .arg(
-                    Arg::with_name("INPUT")
-                        .help("sets the file name to run")
-                        .required(true)
-                        .index(1),
-                )
-                .arg(
-                    Arg::with_name("debug")
-                        .help("provide debug output")
-                        .short("d")
-                        .takes_value(false),
-                ),
-        )
-        .subcommand(
-            SubCommand::with_name("evmdebug")
-                .about("debug the EVM functionality")
-                .arg(
-                    Arg::with_name("debug")
-                        .help("sets debug mode")
-                        .short("d")
-                        .takes_value(false),
-                )
-                .arg(
-                    Arg::with_name("profiler")
-                        .help("sets profiler mode")
-                        .short("p")
-                        .takes_value(false),
-                ),
-        )
-        .subcommand(
-            SubCommand::with_name("profiler")
-                .about("generates info on where arb gas is being used")
-                .arg(
-                    Arg::with_name("INPUT")
-                        .help("sets the file name to run")
-                        .required(true)
-                        .index(1),
-                ),
-        )
-        .subcommand(
-            SubCommand::with_name("replay")
-                .about("replays an execution from a testlogs file")
-                .arg(
-                    Arg::with_name("INPUT")
-                        .help("sets the file name to replay")
-                        .required(true)
-                        .index(1),
-                )
-                .arg(
-                    Arg::with_name("debug")
-                        .help("sets debug mode")
-                        .short("d")
-                        .takes_value(false),
-                )
-                .arg(
-                    Arg::with_name("profiler")
-                        .help("sets profiler mode")
-                        .short("p")
-                        .takes_value(false),
-                )
-                .arg(
-                    Arg::with_name("trace")
-                        .help("sets the file to write execution trace to")
-                        .short("t")
-                        .takes_value(true),
-                ),
-        )
-        .subcommand(
-            SubCommand::with_name("maketestlogs").about("generates test logs for all ArbOS tests"),
-        )
-        .subcommand(
-            SubCommand::with_name("makebenchmarks")
-                .about("generates logs for all ArbOS benchmarks"),
-        )
-        .subcommand(
-            SubCommand::with_name("maketemplates").about("generates code for contract templates"),
-        )
-        .get_matches();
+#[derive(Clap, Debug)]
+struct CompileStruct {
+    input: Vec<String>,
+    #[clap(short, long)]
+    debug_mode: bool,
+    #[clap(short, long)]
+    typecheck: bool,
+    #[clap(short, long)]
+    output: Option<String>,
+    #[clap(short, long)]
+    compile_only: bool,
+    #[clap(short, long)]
+    format: Option<String>,
+    #[clap(short, long)]
+    module: bool,
+    //Inlining is currently disabled
+    //#[clap(short, long)]
+    //inline: bool,
+}
 
-    if let Some(matches) = matches.subcommand_matches("compile") {
-        let debug_mode = matches.is_present("debug");
-        let typecheck = matches.is_present("typecheck");
-        let mut output = get_output(matches.value_of("output")).unwrap();
-        let filenames: Vec<_> = matches.values_of("INPUT").unwrap().collect();
-        let mut file_name_chart = HashMap::new();
-        if matches.is_present("compileonly") {
-            let filename = filenames[0];
-            let path = Path::new(filename);
-            let mut file_hasher = DefaultHasher::new();
-            file_hasher.write(filename.as_bytes());
-            let file_id = file_hasher.finish();
-            file_name_chart.insert(file_id, filename.to_string());
-            match compile_from_file(path, file_id, debug_mode) {
-                Ok(mut compiled_program) => {
-                    compiled_program.iter_mut().for_each(|prog| {
-                        prog.file_name_chart.extend(file_name_chart.clone());
-                        prog.to_output(&mut *output, matches.value_of("format"));
-                    });
-                }
-                Err(e) => {
-                    println!("Compilation error: {:?}\nIn file: {}", e, filename);
-                    return Err(e);
-                }
-            }
-        } else {
-            let mut compiled_progs = Vec::new();
-            for filename in &filenames {
+#[derive(Clap, Debug)]
+struct RunStruct {
+    input: String,
+    #[clap(short, long)]
+    debug: bool,
+}
+
+#[derive(Clap, Debug)]
+struct EvmDebug {
+    #[clap(short, long)]
+    debug: bool,
+    #[clap(short, long)]
+    profiler: bool,
+}
+
+#[derive(Clap, Debug)]
+struct Replay {
+    input: String,
+    #[clap(short, long)]
+    debug: bool,
+    #[clap(short, long)]
+    profiler: ProfilerMode,
+    #[clap(short, long)]
+    trace: Option<String>,
+}
+
+#[derive(Clap, Debug)]
+struct Profiler {
+    input: String,
+    #[clap(short, long)]
+    mode: ProfilerMode,
+}
+
+#[derive(Clap, Debug)]
+struct EvmTests {
+    #[clap(short, long)]
+    savelogs: bool,
+}
+
+#[derive(Clap, Debug)]
+enum Args {
+    Compile(CompileStruct),
+    Run(RunStruct),
+    EvmDebug(EvmDebug),
+    Profiler(Profiler),
+    Replay(Replay),
+    MakeTestLogs,
+    MakeBenchmarks,
+    MakeTemplates,
+    EvmTests(EvmTests),
+}
+
+fn main() -> Result<(), CompileError> {
+    let matches = Args::parse();
+
+    match matches {
+        Args::Compile(compile) => {
+            let debug_mode = compile.debug_mode;
+            let typecheck = compile.typecheck;
+            let mut output = get_output(compile.output.as_deref()).unwrap();
+            let filenames: Vec<_> = compile.input.clone();
+            let mut file_name_chart = BTreeMap::new();
+            if compile.compile_only {
+                let filename = &filenames[0];
                 let path = Path::new(filename);
-                let mut file_hasher = DefaultHasher::new();
-                file_hasher.write(filename.as_bytes());
-                let file_id = file_hasher.finish();
-                file_name_chart.insert(file_id, (*filename).to_string());
-                match compile_from_file(path, file_id, debug_mode) {
-                    Ok(compiled_program) => {
-                        compiled_program.into_iter().for_each(|prog| {
-                            file_name_chart.extend(prog.file_name_chart.clone());
-                            compiled_progs.push(prog)
+                match compile_from_file(path, &mut file_name_chart, debug_mode, false) {
+                    Ok(mut compiled_program) => {
+                        compiled_program.iter_mut().for_each(|prog| {
+                            prog.file_name_chart.extend(file_name_chart.clone());
+                            prog.to_output(&mut *output, compile.format.as_deref());
                         });
                     }
                     Err(e) => {
-                        println!("Compilation error: {}\nIn file: {}", e, filename);
+                        println!("Compilation error: {:?}\nIn file: {}", e, filename);
                         return Err(e);
                     }
                 }
-            }
-
-            let is_module = matches.is_present("module");
-            match link(&compiled_progs, is_module, Some(Value::none()), typecheck) {
-                Ok(linked_prog) => {
-                    match postlink_compile(
-                        linked_prog,
-                        is_module,
-                        Vec::new(),
-                        file_name_chart,
-                        debug_mode,
-                    ) {
-                        Ok(completed_program) => {
-                            completed_program.to_output(&mut *output, matches.value_of("format"));
+            } else {
+                let mut compiled_progs = Vec::new();
+                for filename in &filenames {
+                    let path = Path::new(filename);
+                    match compile_from_file(path, &mut file_name_chart, debug_mode, false) {
+                        Ok(compiled_program) => {
+                            compiled_program.into_iter().for_each(|prog| {
+                                file_name_chart.extend(prog.file_name_chart.clone());
+                                compiled_progs.push(prog)
+                            });
                         }
                         Err(e) => {
-                            println!("Linking error: {}", e);
+                            println!(
+                                "Compilation error: {}\nIn file: {}",
+                                e,
+                                e.location
+                                    .map(|loc| file_name_chart
+                                        .get(&loc.file_id)
+                                        .unwrap_or(&loc.file_id.to_string())
+                                        .clone())
+                                    .unwrap_or("Unknown".to_string())
+                            );
                             return Err(e);
                         }
                     }
                 }
-                Err(e) => {
-                    println!("Linking error: {}", e);
-                    return Err(e);
+
+                let is_module = compile.module;
+                match link(&compiled_progs, is_module, Some(Value::none()), typecheck) {
+                    Ok(linked_prog) => {
+                        match postlink_compile(
+                            linked_prog,
+                            is_module,
+                            Vec::new(),
+                            file_name_chart,
+                            debug_mode,
+                        ) {
+                            Ok(completed_program) => {
+                                completed_program
+                                    .to_output(&mut *output, compile.format.as_deref());
+                            }
+                            Err(e) => {
+                                println!("Linking error: {}", e);
+                                return Err(e);
+                            }
+                        }
+                    }
+                    Err(e) => {
+                        println!("Linking error: {}", e);
+                        return Err(e);
+                    }
                 }
             }
         }
-    }
 
-    if let Some(matches) = matches.subcommand_matches("run") {
-        let filename = matches.value_of("INPUT").unwrap();
-        let debug = matches.is_present("debug");
-        let path = Path::new(filename);
-        let env = RuntimeEnvironment::new(Uint256::from_usize(1111));
-        match run_from_file(path, Vec::new(), env, debug) {
-            Ok(logs) => {
-                println!("Logs: {:?}", logs);
-            }
-            Err(e) => {
-                println!("{:?}", e);
+        Args::Run(run) => {
+            let filename = run.input;
+            let debug = run.debug;
+            let path = Path::new(&filename);
+            let env = RuntimeEnvironment::new(Uint256::from_usize(1111));
+            match run_from_file(path, Vec::new(), env, debug) {
+                Ok(logs) => {
+                    println!("Logs: {:?}", logs);
+                }
+                Err(e) => {
+                    println!("{:?}", e);
+                }
             }
         }
-    }
 
-    if let Some(matches) = matches.subcommand_matches("evmdebug") {
-        let debug = matches.is_present("debug");
-        let profile = matches.is_present("profiler");
-        //let _ = evm::evm_xcontract_call_with_constructors(None, debug, profile);
-        let _ = evm::evm_xcontract_call_using_batch(None, debug, profile);
-    }
-
-    if let Some(matches) = matches.subcommand_matches("profiler") {
-        let path = matches.value_of("INPUT").unwrap();
-        profile_gen_from_file(
-            path.as_ref(),
-            Vec::new(),
-            RuntimeEnvironment::new(Uint256::from_usize(1111)),
-        );
-    }
-
-    if let Some(matches) = matches.subcommand_matches("replay") {
-        let path = matches.value_of("INPUT").unwrap();
-        let debug = matches.is_present("debug");
-        let profiler = matches.is_present("profiler");
-        let trace_file = matches.value_of("trace");
-
-        if let Err(e) = replay_from_testlog_file(path, true, debug, profiler, trace_file) {
-            panic!("Error reading from {}: {}", path, e);
+        Args::EvmDebug(evm_debug) => {
+            let debug = evm_debug.debug;
+            let profile = evm_debug.profiler;
+            //let _ = evm::evm_xcontract_call_with_constructors(None, debug, profile);
+            let _ = evm::evm_xcontract_call_using_batch(None, debug, profile);
         }
-    }
 
-    if matches.subcommand_matches("maketestlogs").is_some() {
-        evm::make_logs_for_all_arbos_tests();
-    }
+        Args::Profiler(path) => {
+            let input = path.input;
+            profile_gen_from_file(
+                input.as_ref(),
+                Vec::new(),
+                RuntimeEnvironment::new(Uint256::from_usize(1111)),
+                path.mode,
+            );
+        }
 
-    if matches.subcommand_matches("makebenchmarks").is_some() {
-        evm::benchmarks::make_benchmarks();
-    }
+        Args::Replay(replay) => {
+            let path = replay.input.as_str();
+            let debug = replay.debug;
+            let profiler = replay.profiler;
+            let trace_file = replay.trace.as_deref();
 
-    if matches.subcommand_matches("maketemplates").is_some() {
-        let path = Path::new("arb_os/contractTemplates.mini");
-        generate_contract_template_file_or_die(path);
+            if let Err(e) = replay_from_testlog_file(path, true, debug, profiler, trace_file) {
+                panic!("Error reading from {}: {}", path, e);
+            }
+        }
+
+        Args::MakeTestLogs => {
+            evm::make_logs_for_all_arbos_tests();
+        }
+
+        Args::MakeBenchmarks => {
+            evm::benchmarks::make_benchmarks();
+        }
+
+        Args::MakeTemplates => {
+            let path = Path::new("arb_os/contractTemplates.mini");
+            generate_contract_template_file_or_die(path);
+        }
+
+        Args::EvmTests(options) => {
+            let mut num_successes = 0u64;
+            let mut num_failures = 0u64;
+            for path_name in [
+                "evm-tests/tests/VMTests/vmArithmeticTest",
+                "evm-tests/tests/VMTests/vmPushDupSwapTest",
+                "evm-tests/tests/VMTests/vmBitwiseLogicOperation",
+                "evm-tests/tests/VMTests/vmIOandFlowOperations",
+                "evm-tests/tests/VMTests/vmSha3Test",
+                "evm-tests/tests/VMTests/vmRandomTest",
+                "evm-tests/tests/VMTests/vmSystemOperations",
+                "evm-tests/tests/VMTests/vmEnvironmentalInfo",
+                "evm-tests/tests/VMTests/vmLogTest",
+            ]
+            .iter()
+            {
+                let path = Path::new(path_name);
+                let (ns, nf) = evm::evmtest::run_evm_tests(
+                    path,
+                    if options.savelogs {
+                        Some(Path::new("evm-test-logs/"))
+                    } else {
+                        None
+                    },
+                )
+                .unwrap();
+                num_successes = num_successes + ns;
+                num_failures = num_failures + nf;
+            }
+            println!("{} successes, {} failures", num_successes, num_failures);
+        }
     }
 
     Ok(())
