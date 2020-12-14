@@ -40,7 +40,7 @@ pub(crate) trait MiniProperties {
     fn is_pure(&self) -> bool;
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 struct Module {
     imported_funcs: Vec<ImportedFunc>,
     funcs: Vec<FuncDecl>,

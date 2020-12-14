@@ -633,7 +633,9 @@ impl ArbosReceipt {
         self.return_data.clone()
     }
 
-    pub fn _get_evm_logs(&self) -> Vec<EvmLog> { self.evm_logs.clone() }
+    pub fn _get_evm_logs(&self) -> Vec<EvmLog> {
+        self.evm_logs.clone()
+    }
 
     pub fn get_gas_used(&self) -> Uint256 {
         self.gas_used.clone()
@@ -655,9 +657,22 @@ impl EvmLog {
     pub fn new(val: Value) -> Self {
         if let Value::Tuple(tup) = val {
             EvmLog {
-                addr: if let Value::Int(ui) = &tup[0] { ui.clone() } else { panic!() },
+                addr: if let Value::Int(ui) = &tup[0] {
+                    ui.clone()
+                } else {
+                    panic!()
+                },
                 data: bytes_from_bytestack(tup[1].clone()).unwrap(),
-                vals: tup[2..].iter().map(|v| if let Value::Int(ui) = v { ui.clone() } else { panic!() }).collect(),
+                vals: tup[2..]
+                    .iter()
+                    .map(|v| {
+                        if let Value::Int(ui) = v {
+                            ui.clone()
+                        } else {
+                            panic!()
+                        }
+                    })
+                    .collect(),
             }
         } else {
             panic!("invalid EVM log format");

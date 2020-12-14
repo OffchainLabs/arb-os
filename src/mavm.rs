@@ -84,7 +84,7 @@ impl LabelGenerator {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct Instruction {
     pub opcode: Opcode,
     pub immediate: Option<Value>,

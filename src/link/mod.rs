@@ -87,7 +87,7 @@ impl Import {
 }
 
 ///Represents a function imported from another mini program or module.
-#[derive(Clone, Serialize, Deserialize, Debug)]
+#[derive(Clone, Serialize, Deserialize, Debug, PartialEq, Eq)]
 pub struct ImportedFunc {
     pub name_id: StringId,
     pub slot_num: usize,
