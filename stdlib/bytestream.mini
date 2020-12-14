@@ -4,7 +4,7 @@
 
 import type ByteArray;
 
-import func bytearray_new(size: uint) -> ByteArray;
+import func bytearray_new(unused: uint) -> ByteArray;
 import func bytearray_size(ba: ByteArray) -> uint;
 import func bytearray_slice(ba: ByteArray) -> uint;
 import func bytearray_buffer(ba: ByteArray) -> buffer;
@@ -40,7 +40,11 @@ public func bytestream_bytesReadSoFar(bs: ByteStream) -> uint {
 }
 
 public func bytestream_bytesRemaining(bs: ByteStream) -> uint {
-    return bs.capacity - bs.currentOffset;
+    if (bs.currentOffset >= bs.capacity) {
+        return 0;
+    } else {
+        return bs.capacity - bs.currentOffset;
+    }
 }
 
 public func bytestream_skipBytes(bs: ByteStream, nbytes: uint) -> option<ByteStream> {
@@ -109,5 +113,10 @@ public func bytestream_getN(bs: ByteStream, nbytes: uint) -> option<(ByteStream,
 }
 
 public func bytestream_getRemainingBytes(bs: ByteStream) -> ByteArray {
-    return bytearray_wrap_slice(bs.buf, bs.currentOffset + bs.slice, bs.capacity - bs.currentOffset);
+    if (bs.capacity > bs.currentOffset) {
+        return bytearray_wrap_slice(bs.buf, bs.currentOffset + bs.slice, bs.capacity - bs.currentOffset);
+        // return bytearray_extract( bs.contents, bs.currentOffset, bs.capacity - bs.currentOffset );
+    } else {
+        return bytearray_new(0);
+    }
 }
