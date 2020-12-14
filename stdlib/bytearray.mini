@@ -67,7 +67,6 @@ public func bytearray_unmarshalBytes(inBytes: MarshalledBytes) -> ByteArray {
     let nwords = (nbytes+31)/32;
     let words = inBytes.contents;
 
-    // For efficiency, we'll build an ExpandingIntArray here, then make a ByteArray from it at the end.
     // We'll also build 8-tuples of 32-byte words, and insert each tuple into the ExpIntArr with a single call.
     let eia = newbuffer();
     let block = unsafecast<[8]any>((0,0,0,0,0,0,0,0));
@@ -232,5 +231,15 @@ public func bytearray_copy(
 public func bytearray_extract(from: ByteArray, offset: uint, nbytes: uint) -> ByteArray {
     return struct { size: nbytes, sliceOffset: from.sliceOffset + offset, contents: from.contents, copy: true, };
     // return bytearray_copy(from, offset, bytearray_new(0), 0, nbytes);
+}
+
+
+public func bytearray_wrap_slice(cont: buffer, offset: uint, size: uint) -> ByteArray {
+    return struct {
+        size: size,
+        sliceOffset: offset,
+        contents: cont,
+        copy: true,
+    };
 }
 

@@ -12,10 +12,10 @@ import func bytearray_getByte(ba: ByteArray, offset: uint) -> uint;
 import func bytearray_get64(ba: ByteArray, offset: uint) -> uint;
 import func bytearray_get256(ba: ByteArray, offset: uint) -> uint;
 import func bytearray_extract(ba: ByteArray, offset: uint, nbytes: uint) -> ByteArray;
+import func bytearray_wrap_slice(ba: buffer, offset: uint, nbytes: uint) -> ByteArray;
 import func bytearray_copy(from: ByteArray, fromOffset: uint, to: ByteArray, toOffset: uint, nbytes: uint) -> ByteArray;
 
 type ByteStream = struct {
-    contents: ByteArray,
     buf: buffer,
     capacity: uint,
     slice: uint,
@@ -23,9 +23,7 @@ type ByteStream = struct {
 }
 
 public func bytestream_new(contents: ByteArray) -> ByteStream {
-    // let res = bytearray_copy(contents, 0, bytearray_new(0), 0, bytearray_size(contents));
     return struct {
-        contents: contents,
         buf: bytearray_buffer(contents),
         capacity: bytearray_size(contents),
         slice: bytearray_slice(contents),
@@ -106,14 +104,10 @@ public func bytestream_getN(bs: ByteStream, nbytes: uint) -> option<(ByteStream,
 
     return Some((
         bs with { currentOffset: bs.currentOffset + nbytes },
-        bytearray_extract(bs.contents, bs.currentOffset, nbytes)
+        bytearray_wrap_slice(bs.buf, bs.currentOffset + bs.slice, nbytes)
     ));
 }
 
 public func bytestream_getRemainingBytes(bs: ByteStream) -> ByteArray {
-    return bytearray_extract(
-        bs.contents,
-        bs.currentOffset,
-        bs.capacity - bs.currentOffset
-    );
+    return bytearray_wrap_slice(bs.buf, bs.currentOffset + bs.slice, bs.capacity - bs.currentOffset);
 }
