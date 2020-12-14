@@ -291,7 +291,7 @@ pub struct Buffer {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Packed {
     pub hash: Uint256,
-    size: usize,   // total size
+    size: u8,      // total size
     packed: usize, // packed levels
 }
 
@@ -303,12 +303,28 @@ fn calc_len(h: u8) -> usize {
     }
 }
 
+fn calc_height(h: u8) -> u8 {
+    if h == 0 {
+        10
+    } else {
+        7 + calc_height(h - 1)
+    }
+}
+
+pub fn needed_height(offset: usize) -> u8 {
+    if offset <= 1 {
+        1
+    } else {
+        1 + needed_height(offset / 2)
+    }
+}
+
 fn hash_buf(buf: &[u8]) -> Packed {
     if buf.len() == 0 {
-        return zero_packed(1024);
+        return zero_packed(10);
     }
     if buf.len() == 32 {
-        return normal(Uint256::from_bytes(buf).avm_hash(), 32);
+        return normal(Uint256::from_bytes(buf).avm_hash(), 5);
     }
     let len = buf.len();
     let h1 = hash_buf(&buf[0..len / 2]);
@@ -316,20 +332,20 @@ fn hash_buf(buf: &[u8]) -> Packed {
     if is_zero_hash(&h2) {
         return pack(&h1);
     }
-    normal(Uint256::avm_hash2(&unpack(&h1), &unpack(&h2)), buf.len())
+    normal(Uint256::avm_hash2(&unpack(&h1), &unpack(&h2)), h1.size + 1)
 }
 
 pub fn hash_buffer(buf: &[u8]) -> Uint256 {
     unpack(&hash_buf(buf))
 }
 
-fn hash_node(buf: &mut [Buffer], sz: usize) -> Packed {
+fn hash_node(buf: &mut [Buffer], sz: u8) -> Packed {
     if buf.len() == 1 {
         return buf[0].hash();
     }
     let len = buf.len();
-    let h1 = hash_node(&mut buf[0..len / 2], sz / 2);
-    let h2 = hash_node(&mut buf[len / 2..len], sz / 2);
+    let h1 = hash_node(&mut buf[0..len / 2], sz - 1);
+    let h2 = hash_node(&mut buf[len / 2..len], sz - 1);
     if is_zero_hash(&h2) {
         pack(&h1)
     } else {
@@ -337,15 +353,15 @@ fn hash_node(buf: &mut [Buffer], sz: usize) -> Packed {
     }
 }
 
-pub fn zero_hash(sz: usize) -> Uint256 {
-    if sz == 32 {
+pub fn zero_hash(sz: u8) -> Uint256 {
+    if sz == 5 {
         return Uint256::zero().avm_hash();
     }
-    let h1 = zero_hash(sz / 2);
+    let h1 = zero_hash(sz - 1);
     Uint256::avm_hash2(&h1, &h1)
 }
 
-fn normal(hash: Uint256, sz: usize) -> Packed {
+fn normal(hash: Uint256, sz: u8) -> Packed {
     Packed {
         size: sz,
         packed: 0,
@@ -370,31 +386,31 @@ fn unpack(packed: &Packed) -> Uint256 {
     let mut sz = packed.size;
     for _i in 0..packed.packed {
         res = Uint256::avm_hash2(&res, &zero_hash(sz));
-        sz = sz * 2;
+        sz = sz + 1;
     }
     res
 }
 
-fn zero_packed(sz: usize) -> Packed {
-    if sz == 32 {
-        normal(zero_hash(32), 32)
+fn zero_packed(sz: u8) -> Packed {
+    if sz == 5 {
+        normal(zero_hash(5), 5)
     } else {
-        pack(&zero_packed(sz / 2))
+        pack(&zero_packed(sz - 1))
     }
 }
 
-fn hash_sparse(idx: &[usize], buf: &[u8], sz: usize) -> Packed {
-    if sz == 32 {
+fn hash_sparse(idx: &[usize], buf: &[u8], sz: u8) -> Packed {
+    if sz == 5 {
         let mut res = [0u8; 32];
         for (i, &el) in idx.iter().enumerate() {
             res[el] = buf[i];
         }
-        return normal(Uint256::from_bytes(&res).avm_hash(), 32);
+        return normal(Uint256::from_bytes(&res).avm_hash(), 5);
     }
     if idx.len() == 0 {
         return zero_packed(sz);
     }
-    let pivot = sz / 2;
+    let pivot = 1 << (sz - 1);
     let mut idx1 = Vec::new();
     let mut buf1 = Vec::new();
     let mut idx2 = Vec::new();
@@ -408,8 +424,8 @@ fn hash_sparse(idx: &[usize], buf: &[u8], sz: usize) -> Packed {
             buf2.push(buf[i]);
         }
     }
-    let h1 = hash_sparse(&idx1, &buf1, sz / 2);
-    let h2 = hash_sparse(&idx2, &buf2, sz / 2);
+    let h1 = hash_sparse(&idx1, &buf1, sz - 1);
+    let h2 = hash_sparse(&idx2, &buf2, sz - 1);
     if is_zero_hash(&h2) {
         pack(&h1)
     } else {
@@ -448,9 +464,9 @@ impl Buffer {
             None => {
                 let res = match &self.elem {
                     BufferElem::Leaf(cell) => hash_buf(&cell.to_vec()),
-                    BufferElem::Node(cell, h) => hash_node(&mut cell.to_vec(), calc_len(*h)),
+                    BufferElem::Node(cell, h) => hash_node(&mut cell.to_vec(), calc_height(*h)),
                     BufferElem::Sparse(idx_cell, buf_cell, h) => {
-                        hash_sparse(&idx_cell.to_vec(), &buf_cell.to_vec(), calc_len(*h))
+                        hash_sparse(&idx_cell.to_vec(), &buf_cell.to_vec(), calc_height(*h))
                     }
                 };
                 res
@@ -466,26 +482,28 @@ impl Buffer {
     }
 
     pub fn read_byte(&self, offset: usize) -> u8 {
+        // println!("read byte {}", offset);
         match &self.elem {
             BufferElem::Leaf(buf) => {
-                if offset > buf.len() {
+                if offset >= buf.len() {
                     0
                 } else {
                     buf[offset]
                 }
             }
             BufferElem::Sparse(idx, buf, _) => {
-                for &el in idx.iter() {
+                for (i, &el) in idx.iter().enumerate() {
                     if el == offset {
-                        return buf[offset];
+                        return buf[i];
                     }
                 }
                 0
             }
             BufferElem::Node(buf, h) => {
-                let len = calc_len(*h);
+                let len = calc_height(*h);
                 let cell_len = calc_len(*h - 1);
-                if offset > len {
+                // println!("read node {} {}", offset, offset/cell_len);
+                if needed_height(offset) > len {
                     0
                 } else {
                     buf[offset / cell_len].read_byte(offset % cell_len)
@@ -533,6 +551,7 @@ impl Buffer {
     }
 
     pub fn set_byte(&self, offset: usize, v: u8) -> Self {
+        // println!("set byte {}", offset);
         match &self.elem {
             BufferElem::Leaf(cell) => {
                 if offset >= 1024 {
@@ -560,6 +579,7 @@ impl Buffer {
                     }
                     return nbuf.set_byte(offset, v);
                 }
+                // println!("set sparse {} {}", offset, h);
                 let mut nidx = idx.to_vec().clone();
                 let mut nbuf = buf.to_vec().clone();
                 nidx.push(offset);
@@ -567,7 +587,7 @@ impl Buffer {
                 Buffer::sparse(Rc::new(nidx), Rc::new(nbuf), *h)
             }
             BufferElem::Node(cell, h) => {
-                if offset >= calc_len(*h) {
+                if needed_height(offset) > calc_height(*h) {
                     let mut vec = Vec::new();
                     vec.push(Buffer::node(cell.clone(), *h));
                     for _i in 1..128 {
@@ -584,6 +604,7 @@ impl Buffer {
                 }
                 let mut vec = cell.to_vec().clone();
                 let cell_len = calc_len(*h - 1);
+                // println!("set node {} {} {} needed {} calc {}", offset, h, offset/cell_len, needed_height(offset), calc_height(*h));
                 vec[offset / cell_len] = vec[offset / cell_len].set_byte(offset % cell_len, v);
                 Buffer::node(Rc::new(vec), *h)
             }
