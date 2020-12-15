@@ -37,10 +37,11 @@ use inbox::inbox_getNextUnpackedRequest;
 
 var gasAccountingInfo: struct {
     gasPool: int,                 // amount of gas available for use (note: signed value; if negative, we have overused gas)
-    weiPool: uint,                // pool of funds collected recently
-    weiOwedToValidators: uint,    // wei owed for work done but not yet collected
-    weiAvailable: uint,           // wei immediately available to pay validators
+    reserve: uint,                // pool of funds available to pay validators
+    owedToValidators: uint,       // wei owed for work done but not yet collected
     totalPaidToValidators: uint,  // total number of wei paid to validators over all time
+    currentGasPrice: uint,        // gas price for this block
+    gasLeftForThisBlock: uint,    // amount of gas left for this block
     lastBlockNumSeen: uint,       // last L1 block number seen by this module
     txState: option<TxGasState>,  // status of currently active tx (if there is one)
     payFeesTo: option<address>,   // where to pay validator fees; if None, funds should be burned
@@ -51,7 +52,7 @@ var gasAccountingConstants: struct {
     GasPoolMax: int,
     BaseGasPrice: uint,
     TxGasLimit: uint,
-    StorageCharge: uint,   // cost of adding one unit of storage, in wei
+    StorageCharge: uint,   // cost of adding one unit of storage, in ArbGas
 };
 
 type TxGasState = struct {
@@ -83,10 +84,11 @@ public impure func gasAccounting_init() {
     };
     gasAccountingInfo = struct {
         gasPool: gasAccountingConstants.GasPoolMax,
-        weiPool: 0,
-        weiOwedToValidators: 0,
-        weiAvailable: 0,
+        reserve: 0,
+        owedToValidators: 0,
         totalPaidToValidators: 0,
+        currentGasPrice: 0,
+        gasLeftForThisBlock: 0,
         lastBlockNumSeen: 0,
         txState: None<TxGasState>,
         payFeesTo: None<address>,
@@ -113,15 +115,12 @@ public impure func gasAccounting_setFeeParams(baseGasPrice: uint, storageCharge:
 public impure func gasAccounting_postInitMessage() {
     let millisecondsPerBlock = chainParams_millisecondsPerBlock();
     let speedLimitPerSecond = chainParams_speedLimitPerSecond();
-    let maxBacklogSeconds = 60;
-    if (maxBacklogSeconds < 4 * millisecondsPerBlock / 1000) {
-        maxBacklogSeconds = 4 * millisecondsPerBlock / 1000;
-    }
+    let speedLimitPerBlock = millisecondsPerBlock * speedLimitPerSecond / 1000;
     gasAccountingConstants = struct {
-        SpeedLimitPerBlock: millisecondsPerBlock * speedLimitPerSecond / 1000,
-        GasPoolMax: int(speedLimitPerSecond * maxBacklogSeconds),
+        SpeedLimitPerBlock: speedLimitPerBlock,
+        GasPoolMax: int(5 * speedLimitPerBlock),
         BaseGasPrice: 0,
-        TxGasLimit: speedLimitPerSecond * maxBacklogSeconds / 2,
+        TxGasLimit: 2 * speedLimitPerBlock,
         StorageCharge: 0,
     };
     gasAccountingInfo = gasAccountingInfo with { gasPool: gasAccountingConstants.GasPoolMax };
@@ -133,23 +132,10 @@ public impure func gasAccounting_summaryToPublish() -> any {
         payoutAddress = paddr;
     }
 
-    let minGasPrice = gasAccountingConstants.BaseGasPrice;
-    let shortfall = int(gasAccountingInfo.weiOwedToValidators) - int(gasAccountingInfo.weiAvailable);
-    if (shortfall > int(0)) {
-        minGasPrice = minGasPrice + uint(shortfall) / uint(gasAccountingConstants.GasPoolMax);
-    }
-    let gasPriceEstimate = gasAccountingInfo.weiPool;
-    if (gasAccountingInfo.gasPool + int(gasAccountingConstants.SpeedLimitPerBlock) > int(0)) {
-        gasPriceEstimate = gasAccountingInfo.weiPool / uint(gasAccountingInfo.gasPool + int(gasAccountingConstants.SpeedLimitPerBlock));
-    }
-    if (gasPriceEstimate < minGasPrice) {
-        gasPriceEstimate = minGasPrice;
-    }
     return (
-        gasPriceEstimate,
+        gasAccountingInfo.currentGasPrice,
         gasAccountingInfo.gasPool,
-        gasAccountingInfo.weiPool,
-        shortfall,
+        int(gasAccountingInfo.reserve) - int(gasAccountingInfo.owedToValidators),
         gasAccountingInfo.totalPaidToValidators,
         payoutAddress,
     );
@@ -170,13 +156,13 @@ public impure func gasAccounting_specialCharge(payer: address, amount: uint) -> 
             account_deductFromEthBalance(payerAcct, amount)?,
         )
     );
-    payOutFundsToValidators(amount);
+    gasAccountingInfo = gasAccountingInfo with { owedToValidators: gasAccountingInfo.owedToValidators + amount };
     return Some(());
 }
 
 public impure func recycleBurnedFunds(amount: uint) {
     gasAccountingInfo = gasAccountingInfo with {
-        weiAvailable: gasAccountingInfo.weiAvailable + amount
+        reserve: gasAccountingInfo.reserve + amount
     };
 }
 
@@ -227,7 +213,7 @@ public impure func gasAccounting_startTxCharges(
     gasAccountingInfo = gasAccountingInfo with {
         gasPool: gasAccountingInfo.gasPool - int(gasUsedByOS)
     } with {
-        weiOwedToValidators: gasAccountingInfo.weiOwedToValidators + gasUsedByOS * gasAccountingConstants.BaseGasPrice
+        owedToValidators: gasAccountingInfo.owedToValidators + gasUsedByOS * gasAccountingConstants.BaseGasPrice
     } with {
         txState: Some(struct {
             gasInReserve: 0,
@@ -272,9 +258,11 @@ public impure func gasAccounting_endTxCharges(storageDelta: int) -> option<GasUs
     gasAccountingInfo = gasAccountingInfo with {
         gasPool: gasAccountingInfo.gasPool - int(txState.originalMax - gasToRefund)
     } with {
-        weiPool: gasAccountingInfo.weiPool + (txState.weiHeldForGas - refund)
+        gasLeftForThisBlock: gasAccountingInfo.gasLeftForThisBlock + gasToRefund - txState.originalMax
     } with {
-        weiOwedToValidators: gasAccountingInfo.weiOwedToValidators
+        reserve: gasAccountingInfo.reserve + (txState.weiHeldForGas - refund)
+    } with {
+        owedToValidators: gasAccountingInfo.owedToValidators
                              + gasAccountingConstants.BaseGasPrice * (txState.originalMax - gasToRefund)
     } with {
         txState: None<TxGasState>
@@ -311,7 +299,7 @@ public impure func gasAccounting_extraGasCharge(numArbGas: uint) {
 
 public impure func gasAccounting_chargeForStorage(numStorageUnits: uint) {
     if let Some(txState) = gasAccountingInfo.txState {
-        gasAccounting_extraGasCharge(numStorageUnits * gasAccountingConstants.StorageCharge / txState.price);
+        gasAccounting_extraGasCharge(numStorageUnits * gasAccountingConstants.StorageCharge);
     }
 }
 
@@ -348,7 +336,7 @@ public impure func gasAccounting_resumeTxCharges(allocationRequested: uint) -> u
             gasAccountingInfo = gasAccountingInfo with {
                 gasPool: gasAccountingInfo.gasPool - int(gasUsedByOS)
             } with {
-                weiOwedToValidators: gasAccountingInfo.weiOwedToValidators
+                owedToValidators: gasAccountingInfo.owedToValidators
                                      + gasUsedByOS * gasAccountingConstants.BaseGasPrice
             };
         }
@@ -388,8 +376,12 @@ impure func switchToChargingOS() -> uint {
     }
 }
 
-impure func payOutFundsToValidators(amount: uint) {  // this should only be called when not in a tx
+impure func payOutFundsToValidators() {  // this should only be called when not in a tx
     if let Some(validatorsAddr) = gasAccountingInfo.payFeesTo {
+        let amountToPay = gasAccountingInfo.owedToValidators;
+        if (amountToPay > gasAccountingInfo.reserve) {
+            amountToPay = gasAccountingInfo.reserve;
+        }
         let globalAcctStore = getGlobalAccountStore();
         setGlobalAccountStore(
             accountStore_set(
@@ -397,12 +389,16 @@ impure func payOutFundsToValidators(amount: uint) {  // this should only be call
                 validatorsAddr,
                 account_addToEthBalance(
                     accountStore_get(globalAcctStore, validatorsAddr),
-                    amount,
+                    amountToPay,
                 ),
             )
         );
         gasAccountingInfo = gasAccountingInfo with {
-            totalPaidToValidators: gasAccountingInfo.totalPaidToValidators + amount
+            owedToValidators: gasAccountingInfo.owedToValidators - amountToPay
+        } with {
+            reserve: gasAccountingInfo.reserve - amountToPay
+        } with {
+            totalPaidToValidators: gasAccountingInfo.totalPaidToValidators + amountToPay
         };
     }
 }
@@ -436,74 +432,65 @@ public impure func getNextRequestFromCongestionAuction() -> (
     let (isChargeable, blockNum, payer, maxGas, gasBid) = getRequestGasInfo(maybeRequest, maybeTx);
 
     if (blockNum > gasAccountingInfo.lastBlockNumSeen) {
+        // it's the first tx of a new block
+
+        payOutFundsToValidators();
+
+        // determine gas pool, gas price, and gas limit for the new block
         let blocksElapsed = blockNum - gasAccountingInfo.lastBlockNumSeen;
-        let updatedGas = gasAccountingInfo.gasPool + int(blocksElapsed*gasAccountingConstants.SpeedLimitPerBlock);
-        if (updatedGas > gasAccountingConstants.GasPoolMax) {
-            updatedGas = gasAccountingConstants.GasPoolMax;
-        }
-        let updatedWei = gasAccountingInfo.weiPool;
-        while (blocksElapsed > 0) {
-            let updatedWei = (4 * updatedWei) / 5;
+        let price = gasAccountingInfo.currentGasPrice;
+        let gasPool = int(gasAccountingInfo.gasPool);
+        let speedLimit = gasAccountingConstants.SpeedLimitPerBlock;
+        while((blocksElapsed > 0) && (   (gasAccountingInfo.gasPool < gasAccountingConstants.GasPoolMax)
+                                      || (gasAccountingInfo.currentGasPrice > gasAccountingConstants.BaseGasPrice) )) {
             blocksElapsed = blocksElapsed-1;
-        }
-        let weiAvailable = gasAccountingInfo.weiAvailable + (gasAccountingInfo.weiPool - updatedWei);
-        let weiToPay = weiAvailable;
-        if (weiToPay > gasAccountingInfo.weiOwedToValidators) {
-            weiToPay = gasAccountingInfo.weiOwedToValidators;
-        }
+            gasPool = gasPool + int(speedLimit);
+            if (gasPool > gasAccountingConstants.GasPoolMax) {
+                gasPool = gasAccountingConstants.GasPoolMax;
+            }
 
-        payOutFundsToValidators(weiToPay);
-
+            let maxtc = gasPool;
+            if (maxtc < int(speedLimit)) {
+                maxtc = int(speedLimit);
+            }
+            price = price * (19 * speedLimit - uint(maxtc)) / (16 * speedLimit);
+            if (price < gasAccountingConstants.BaseGasPrice) {
+                price = gasAccountingConstants.BaseGasPrice;
+            }
+        }
+        let gasAvailable = 0;
+        if (gasAccountingInfo.gasPool > int(0)) {
+            gasAvailable = 3 * uint(gasAccountingInfo.gasPool) / 4;
+        }
         gasAccountingInfo = gasAccountingInfo with {
+            gasPool: gasPool
+        } with {
+            currentGasPrice: price
+        } with {
+            gasLeftForThisBlock: gasAvailable
+        } with {
             lastBlockNumSeen: blockNum
-        } with {
-            gasPool: updatedGas
-        } with {
-            weiPool: updatedWei
-        } with {
-            weiAvailable: gasAccountingInfo.weiAvailable - weiToPay
-        } with {
-            weiOwedToValidators: gasAccountingInfo.weiOwedToValidators - weiToPay
         };
     }
 
-    if (isChargeable) {
-        let minGasPrice = gasAccountingConstants.BaseGasPrice;
-        let shortfall = int(gasAccountingInfo.weiOwedToValidators) - int(gasAccountingInfo.weiAvailable);
-        if (shortfall > int(0)) {
-            minGasPrice = minGasPrice + uint(shortfall) / uint(gasAccountingConstants.GasPoolMax);
-        }
-
-        if (maxGas > gasAccountingConstants.TxGasLimit) {
-            maxGas = gasAccountingConstants.TxGasLimit;
-        }
-
-        if ( (minGasPrice > 0) && (int(maxGas) >= gasAccountingInfo.gasPool) ) {
-            return (false, maybeRequest, maybeTx);
-        }
-
-        if (gasAccountingInfo.gasPool <= int(maxGas)) {
-            return (false, maybeRequest, maybeTx);
-        }
-
-        let gasPrice = gasAccountingInfo.weiPool / (uint(gasAccountingInfo.gasPool)-maxGas);
-        if (gasPrice < minGasPrice) {
-            gasPrice = minGasPrice;
-        }
-
-        if (gasBid == 0) {
-            gasBid = minGasPrice;  // treat a zero bid as equivalent to bidding the min gas price
-        }
-
-        let availableFunds = account_getBalance(accountStore_get(getGlobalAccountStore(), payer));
-        if (availableFunds < gasPrice*maxGas) {
-            return (false, maybeRequest, maybeTx);
-        }
+    asm(100,) { debugprint };
+    if (isChargeable && (gasAccountingInfo.currentGasPrice > 0)) {
+        asm(101,) { debugprint };
         if let Some(tx) = maybeTx {
+            asm(102,) { debugprint };
+            let txGasLimit = tx.maxGas * tx.gasPrice / gasAccountingInfo.currentGasPrice;
+            if (txGasLimit > gasAccountingInfo.gasLeftForThisBlock) {
+                txGasLimit = gasAccountingInfo.gasLeftForThisBlock;
+            }
             return (
                 true,
                 maybeRequest,
-                Some(tx with { gasPrice: gasPrice }),
+                Some(tx with {
+                        maxGas: txGasLimit
+                    } with {
+                        gasPrice: gasAccountingInfo.currentGasPrice
+                    }
+                )
             );
         } else {
             return (true, maybeRequest, maybeTx);  // shouldn't happen
