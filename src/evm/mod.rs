@@ -133,7 +133,7 @@ pub fn _evm_run_with_gas_charging(
     let mut fib_contract =
         AbiForContract::new_from_file("contracts/fibonacci/build/contracts/Fibonacci.json")?;
     if let Err(receipt) = fib_contract.deploy(&[], &mut machine, Uint256::zero(), None, debug) {
-        if receipt.unwrap().get_return_code() == Uint256::from_u64(2) {
+        if receipt.unwrap().get_return_code() == Uint256::from_u64(3) {
             return Ok(false);
         } else {
             panic!("unexpected failure deploying Fibonacci contract");
@@ -151,7 +151,7 @@ pub fn _evm_run_with_gas_charging(
         None,
         debug,
     ) {
-        if receipt.unwrap().get_return_code() == Uint256::from_u64(2) {
+        if receipt.unwrap().get_return_code() == Uint256::from_u64(3) {
             return Ok(false);
         } else {
             panic!("unexpected failure deploying Fibonacci contract");
@@ -168,7 +168,13 @@ pub fn _evm_run_with_gas_charging(
     )?;
     assert_eq!(logs.len(), 1);
     assert_eq!(sends.len(), 0);
-    assert!(logs[0].succeeded());
+    if ! logs[0].succeeded() {
+        if logs[0].get_return_code() == Uint256::from_u64(3) {
+            return Ok(false);
+        } else {
+            panic!();
+        }
+    }
 
     let (logs, sends) = pc_contract.call_function(
         my_addr,
@@ -184,7 +190,13 @@ pub fn _evm_run_with_gas_charging(
     )?;
     assert_eq!(logs.len(), 1);
     assert_eq!(sends.len(), 0);
-    assert!(logs[0].succeeded());
+    if ! logs[0].succeeded() {
+        if logs[0].get_return_code() == Uint256::from_u64(3) {
+            return Ok(false);
+        } else {
+            panic!();
+        }
+    }
 
     if let Some(path) = log_to {
         machine.runtime_env.recorder.to_file(path).unwrap();
