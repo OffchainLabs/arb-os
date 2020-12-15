@@ -2,9 +2,8 @@
  * Copyright 2020, Offchain Labs, Inc. All rights reserved.
  */
 
-use crate::evm::abi::ArbosTest;
+use crate::evm::abi::{ArbSys, ArbAddressTable, ArbBLS, ArbFunctionTable, ArbosTest, _ArbOwner};
 use crate::evm::abi::FunctionTable;
-use crate::evm::abi::{ArbAddressTable, ArbBLS, ArbFunctionTable, ArbSys};
 use crate::mavm::Value;
 use crate::run::{bytestack_from_bytes, load_from_file, RuntimeEnvironment};
 use crate::uint256::Uint256;
@@ -229,8 +228,11 @@ pub fn evm_test_arbsys_direct(log_to: Option<&Path>, debug: bool) -> Result<(), 
     let arb_address_table = ArbAddressTable::new(&wallet, debug);
     let arb_bls = ArbBLS::new(&wallet, debug);
 
+    let version = arbsys._arbos_version(&mut machine)?;
+    assert_eq!(version, Uint256::zero());
+
     let tx_count = arbsys.get_transaction_count(&mut machine, my_addr.clone())?;
-    assert_eq!(tx_count, Uint256::one());
+    assert_eq!(tx_count, Uint256::from_u64(2));
 
     let addr_table_index = arb_address_table.register(&mut machine, my_addr.clone())?;
     let lookup_result = arb_address_table.lookup(&mut machine, my_addr.clone())?;
@@ -273,6 +275,35 @@ pub fn evm_test_arbsys_direct(log_to: Option<&Path>, debug: bool) -> Result<(), 
 
     Ok(())
 }
+
+pub fn _evm_test_arbowner(log_to: Option<&Path>, debug: bool) -> Result<(), ethabi::Error> {
+    let rt_env = RuntimeEnvironment::new(Uint256::from_usize(1111));
+    let mut machine = load_from_file(Path::new("arb_os/arbos.mexe"), rt_env);
+    machine.start_at_zero();
+
+    let wallet = machine.runtime_env.new_wallet();
+    let my_addr = Uint256::from_bytes(wallet.address().as_bytes());
+
+    let arbowner = _ArbOwner::_new(&wallet, debug);
+
+    arbowner._give_ownership(&mut machine, my_addr, Some(Uint256::zero()))?;
+
+    arbowner._start_arbos_upgrade(&mut machine)?;
+
+    let mcode = vec![0x90u8, 1u8, 0u8, 42u8];   // debugprint(42)
+    arbowner._continue_arbos_upgrade(&mut machine, mcode)?;
+
+    arbowner._finish_arbos_upgrade(&mut machine)?;
+
+    // panic!("Deliberate panic so output is displayed");  // uncomment this to see output from this test
+
+    if let Some(path) = log_to {
+        machine.runtime_env.recorder.to_file(path).unwrap();
+    }
+
+    Ok(())
+}
+
 
 pub fn evm_test_function_table_access(
     log_to: Option<&Path>,

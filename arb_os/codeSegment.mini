@@ -20,7 +20,12 @@ use std::stack::stack_new;
 use std::stack::stack_push;
 use std::stack::stack_pop;
 
+use std::rlp::rlp_decodeUint;
+
 use chainParameters::chainParams_chainId;
+
+use evmOps::evmOps_trampoline;
+
 use evmOps::evmOp_address;
 use evmOps::evmOp_balance;
 use evmOps::evmOp_selfbalance;
@@ -63,77 +68,54 @@ use evmOps::evmOp_timestamp;
 use evmOps::evmOp_create;
 use evmOps::evmOp_create2;
 
+const opNum_stop = 0;
+const opNum_sha3 = 1;
+const opNum_address = 2;
+const opNum_balance = 3;
+const opNum_selfbalance = 4;
+const opNum_origin = 5;
+const opNum_caller = 6;
+const opNum_callvalue = 7;
+const opNum_calldataload = 8;
+const opNum_calldatasize = 9;
+const opNum_calldatacopy = 10;
+const opNum_codesize = 11;
+const opNum_codecopy = 12;
+const opNum_extcodesize = 13;
+const opNum_extcodecopy = 14;
+const opNum_extcodehash = 15;
+const opNum_returndatasize = 16;
+const opNum_returndatacopy = 17;
+const opNum_timestamp = 18;
+const opNum_number = 19;
+const opNum_msize = 20;
+const opNum_mload = 21;
+const opNum_mstore = 22;
+const opNum_mstore8 = 23;
+const opNum_sload = 24;
+const opNum_sstore = 25;
+const opNum_getjumpaddr = 26;
+const opNum_msize = 27;
+const opNum_log0 = 28;
+const opNum_log1 = 29;
+const opNum_log2 = 30;
+const opNum_log3 = 31;
+const opNum_log4 = 32;
+const opNum_call = 33;
+const opNum_callcode = 34;
+const opNum_delegatecall = 35;
+const opNum_staticcall = 36;
+const opNum_revert = 37;
+const opNum_revert_knownPc = 38;
+const opNum_return = 39;
+const opNum_selfdestruct = 40;
+const opNum_create = 41;
+const opNum_create2 = 42;
+const opNum_chainId = 43;
+
 
 // An AVM CodePoint, that is, a place that AVM code can jump to, is represented as a func()
 type AvmCodePoint = impure func()
-
-func opWrapperVoid(f: impure func()) -> func() {
-    return unsafecast<func()>(f);
-}
-
-func opWrapperRetAddress(f: impure func() -> address) -> func() {
-    return unsafecast<func()>(f);
-}
-
-func opWrapperRetUint(f: impure func() -> uint) -> func() {
-    return unsafecast<func()>(f);
-}
-
-func opWrapperUint(f: impure func(uint)) -> func() {
-    return unsafecast<func()>(f);
-}
-
-func opWrapperUintRetBytes(f: impure func(uint) -> bytes32) -> func() {
-    return unsafecast<func()>(f);
-}
-
-func opWrapperUintRetFunc(f: impure func(uint) -> func()) -> func() {
-    return unsafecast<func()>(f);
-}
-
-func opWrapperUintRetUint(f: impure func(uint) -> uint) -> func() {
-    return unsafecast<func()>(f);
-}
-
-func opWrapper2Uint(f: impure func(uint, uint)) -> func() {
-    return unsafecast<func()>(f);
-}
-
-func opWrapper2UintRetBytes(f: impure func(uint, uint) -> bytes32) -> func() {
-    return unsafecast<func()>(f);
-}
-
-func opWrapper3Uint(f: impure func(uint, uint, uint)) -> func() {
-    return unsafecast<func()>(f);
-}
-
-func opWrapper3UintRetAddress(f: impure func(uint, uint, uint) -> address) -> func() {
-    return unsafecast<func()>(f);
-}
-
-func opWrapper4Uint(f: impure func(uint, uint, uint, uint)) -> func() {
-    return unsafecast<func()>(f);
-}
-
-func opWrapper4UintRetAddress(f: impure func(uint, uint, uint, uint) -> address) -> func() {
-    return unsafecast<func()>(f);
-}
-
-func opWrapper5Uint(f: impure func(uint, uint, uint, uint, uint)) -> func() {
-    return unsafecast<func()>(f);
-}
-
-func opWrapper6Uint(f: impure func(uint, uint, uint, uint, uint, uint)) -> func() {
-    return unsafecast<func()>(f);
-}
-
-func opWrapper6UintRetBool(f: impure func(uint, uint, uint, uint, uint, uint) -> bool) -> func() {
-    return unsafecast<func()>(f);
-}
-
-func opWrapper7UintRetBool(f: impure func(uint, uint, uint, uint, uint, uint, uint) -> bool) -> func() {
-    return unsafecast<func()>(f);
-}
 
 impure func pushInstruction(opcode: uint, restOfCode: AvmCodePoint) -> AvmCodePoint {
     // Push an instruction onto the beginning of a code segment, and return the resulting CodePoint.
@@ -264,7 +246,7 @@ impure func generateCodeForEvmSegment(
     makePcTable: bool,
 ) -> (AvmCodePoint, map<uint, AvmCodePoint>, Stack) {
     let code = pushEvmInsnCall(
-        opWrapperVoid(evmOp_stop),
+        constval(opNum_stop),
         asm() AvmCodePoint { errcodept },
     );
     let evmJumpTable = newmap<uint, AvmCodePoint>;
@@ -282,7 +264,7 @@ impure func generateCodeForEvmSegment(
                         if (opcode < 0x10) {
                             if (opcode < 0x04) {
                                 if (opcode == 0x00) { // STOP
-                                    code = pushEvmInsnCall(opWrapperVoid(evmOp_stop), code);
+                                    code = pushEvmInsnCall(constval(opNum_stop), code);
                                 } elseif (opcode == 0x01) { // ADD
                                     code = pushInstruction(0x01, code);
                                 } elseif (opcode == 0x02) { // MUL
@@ -322,25 +304,25 @@ impure func generateCodeForEvmSegment(
                         if (opcode < 0x37 ) {
                             if (opcode < 0x33) {
                                 if (opcode == 0x20) { // SHA3
-                                    code = pushEvmInsnCall(opWrapper2UintRetBytes(evmOp_sha3), code);
+                                    code = pushEvmInsnCall(constval(opNum_sha3), code);
                                 } elseif (opcode == 0x30) { // ADDRESS
-                                    code = pushEvmInsnCall(opWrapperRetAddress(evmOp_address), code);
+                                    code = pushEvmInsnCall(constval(opNum_address), code);
                                 } elseif (opcode == 0x31) { // BALANCE
-                                    code = pushEvmInsnCall(opWrapperUintRetUint(evmOp_balance), code);
+                                    code = pushEvmInsnCall(constval(opNum_balance), code);
                                 } elseif (opcode == 0x32) { // ORIGIN
-                                    code = pushEvmInsnCall(opWrapperRetAddress(evmOp_origin), code);
+                                    code = pushEvmInsnCall(constval(opNum_origin), code);
                                 } else {
                                     invalidInstruction = true;
                                 }
                             } else {
                                 if (opcode == 0x33) { // CALLER
-                                    code = pushEvmInsnCall(opWrapperRetAddress(evmOp_caller), code);
+                                    code = pushEvmInsnCall(constval(opNum_caller), code);
                                 } elseif (opcode == 0x34) { // CALLVALUE
-                                    code = pushEvmInsnCall(opWrapperRetUint(evmOp_callvalue), code);
+                                    code = pushEvmInsnCall(constval(opNum_callvalue), code);
                                 } elseif (opcode == 0x35) { // CALLDATALOAD
-                                    code = pushEvmInsnCall(opWrapperUintRetUint(evmOp_calldataload), code);
+                                    code = pushEvmInsnCall(constval(opNum_calldataload), code);
                                 } elseif (opcode == 0x36) { // CALLDATASIZE
-                                    code = pushEvmInsnCall(opWrapperRetUint(evmOp_calldatasize), code);
+                                    code = pushEvmInsnCall(constval(opNum_calldatasize), code);
                                 } else {
                                     invalidInstruction = true;
                                 }
@@ -348,11 +330,11 @@ impure func generateCodeForEvmSegment(
                         } else {
                             if (opcode < 0x3b) {
                                 if (opcode == 0x37) { // CALLDATACOPY
-                                    code = pushEvmInsnCall(opWrapper3Uint(evmOp_calldatacopy), code);
+                                    code = pushEvmInsnCall(constval(opNum_calldatacopy), code);
                                 } elseif (opcode == 0x38) { // CODESIZE
-                                    code = pushEvmInsnCall(opWrapperRetUint(evmOp_codesize), code);
+                                    code = pushEvmInsnCall(constval(opNum_codesize), code);
                                 } elseif (opcode == 0x39) { // CODECOPY
-                                    code = pushEvmInsnCall(opWrapper3Uint(evmOp_codecopy), code);
+                                    code = pushEvmInsnCall(constval(opNum_codecopy), code);
                                 } elseif (opcode == 0x3a) { // GASPRICE
                                     code = pushValue(1, code);
                                 } else {
@@ -360,15 +342,15 @@ impure func generateCodeForEvmSegment(
                                 }
                             } else {
                                 if (opcode == 0x3b) { // EXTCODESIZE
-                                    code = pushEvmInsnCall(opWrapperUintRetUint(evmOp_extcodesize), code);
+                                    code = pushEvmInsnCall(constval(opNum_extcodesize), code);
                                 } elseif (opcode == 0x3c) { // EXTCODECOPY
-                                    code = pushEvmInsnCall(opWrapper4Uint(evmOp_extcodecopy), code);
+                                    code = pushEvmInsnCall(constval(opNum_extcodecopy), code);
                                 } elseif (opcode == 0x3d) { // RETURNDATASIZE
-                                    code = pushEvmInsnCall(opWrapperRetUint(evmOp_returndatasize), code);
+                                    code = pushEvmInsnCall(constval(opNum_returndatasize), code);
                                 } elseif (opcode == 0x3e) { // RETURNDATACOPY
-                                    code = pushEvmInsnCall(opWrapper3Uint(evmOp_returndatacopy), code);
+                                    code = pushEvmInsnCall(constval(opNum_returndatacopy), code);
                                 } elseif (opcode == 0x3f) { // EXTCODEHASH
-                                    code = pushEvmInsnCall(opWrapperUintRetBytes(evmOp_extcodehash), code);
+                                    code = pushEvmInsnCall(constval(opNum_extcodehash), code);
                                 } else {
                                     invalidInstruction = true;
                                 }
@@ -387,13 +369,13 @@ impure func generateCodeForEvmSegment(
                                 } elseif (opcode == 0x41) { // COINBASE
                                     code = pushValue(0, code);
                                 } elseif (opcode == 0x42) { // TIMESTAMP
-                                    code = pushEvmInsnCall(opWrapperRetUint(evmOp_timestamp), code);
+                                    code = pushEvmInsnCall(constval(opNum_timestamp), code);
                                 } else {
                                     invalidInstruction = true;
                                 }
                             } else {
                                 if (opcode == 0x43) { // NUMBER
-                                    code = pushEvmInsnCall(opWrapperRetUint(evmOp_number), code);
+                                    code = pushEvmInsnCall(constval(opNum_number), code);
                                 } elseif (opcode == 0x44) { // DIFFICULTY
                                      code = pushValue(2500000000000000, code);
                                 } else {
@@ -404,15 +386,15 @@ impure func generateCodeForEvmSegment(
                             if (opcode == 0x45) { // GASLIMIT
                                 code = pushValue(10000000000, code);
                             } elseif (opcode == 0x46) { // CHAINID
-                                code = pushEvmInsnCall(opWrapperRetUint(chainParams_chainId), code);
+                                code = pushEvmInsnCall(constval(opNum_chainId), code);
                             } elseif (opcode == 0x47) { // SELFBALANCE
-                                code = pushEvmInsnCall(opWrapperRetUint(evmOp_selfbalance), code);
+                                code = pushEvmInsnCall(constval(opNum_selfbalance), code);
                             } elseif (opcode == 0x50) { // POP
                                 code = pushInstruction(0x30, code); // pop
                             } elseif (opcode == 0x51) { // MLOAD
-                                code = pushEvmInsnCall(opWrapperUintRetUint(evmOp_mload), code);
+                                code = pushEvmInsnCall(constval(opNum_mload), code);
                             } elseif (opcode == 0x52) { // MSTORE
-                                code = pushEvmInsnCall(opWrapper2Uint(evmOp_mstore), code);
+                                code = pushEvmInsnCall(constval(opNum_mstore), code);
                             } else {
                                 invalidInstruction = true;
                             }
@@ -421,23 +403,23 @@ impure func generateCodeForEvmSegment(
                         if (opcode < 0x58) {
                             if (opcode < 0x56) {
                                 if (opcode == 0x53) { // MSTORE8
-                                    code = pushEvmInsnCall(opWrapper2Uint(evmOp_mstore8), code);
+                                    code = pushEvmInsnCall(constval(opNum_mstore8), code);
                                 } elseif (opcode == 0x54) { // SLOAD
-                                    code = pushEvmInsnCall(opWrapperUintRetUint(evmOp_sload), code);
+                                    code = pushEvmInsnCall(constval(opNum_sload), code);
                                 } elseif (opcode == 0x55) { // SSTORE
-                                    code = pushEvmInsnCall(opWrapper2Uint(evmOp_sstore), code);
+                                    code = pushEvmInsnCall(constval(opNum_sstore), code);
                                 } else {
                                     invalidInstruction = true;
                                 }
                             } else {
                                 if (opcode == 0x56) { // JUMP
                                     code = pushEvmInsnCall(
-                                        opWrapperUintRetFunc(evmOp_getjumpaddr),
+                                        constval(opNum_getjumpaddr),
                                         pushInstruction(0x34, code), // jump
                                     );
                                 } elseif (opcode == 0x57) { // JUMPI
                                     let doJump = pushEvmInsnCall(
-                                        opWrapperUintRetFunc(evmOp_getjumpaddr),
+                                        constval(opNum_getjumpaddr),
                                         pushInstruction(0x34, code), // jump
                                     );
                                     code = pushInstruction(
@@ -463,7 +445,7 @@ impure func generateCodeForEvmSegment(
                             if (opcode == 0x58) {  // GETPC
                                 code = pushValue(insn.pc, code);
                             } elseif (opcode == 0x59) { // MSIZE
-                                code = pushEvmInsnCall(opWrapperRetUint(evmOp_msize), code);
+                                code = pushEvmInsnCall(constval(opNum_msize), code);
                             } elseif (opcode == 0x5a) { // GAS
                                 code = pushInstruction(0x76, code);
                             } elseif (opcode == 0x5b) { // JUMPDEST
@@ -511,19 +493,19 @@ impure func generateCodeForEvmSegment(
                     } else {
                         if (opcode < 0xa3) {
                             if (opcode == 0xa0) { // LOG0
-                                code = pushEvmInsnCall(opWrapper2Uint(evmOp_log0), code);
+                                code = pushEvmInsnCall(constval(opNum_log0), code);
                             } elseif (opcode == 0xa1) { // LOG1
-                                code = pushEvmInsnCall(opWrapper3Uint(evmOp_log1), code);
+                                code = pushEvmInsnCall(constval(opNum_log1), code);
                             } elseif (opcode == 0xa2) { // LOG2
-                                code = pushEvmInsnCall(opWrapper4Uint(evmOp_log2), code);
+                                code = pushEvmInsnCall(constval(opNum_log2), code);
                             } else {
                                 invalidInstruction = true;
                             }
                         } else {
                             if (opcode == 0xa3) { // LOG3
-                                code = pushEvmInsnCall(opWrapper5Uint(evmOp_log3), code);
+                                code = pushEvmInsnCall(constval(opNum_log3), code);
                             } elseif (opcode == 0xa4) { // LOG0
-                                code = pushEvmInsnCall(opWrapper6Uint(evmOp_log4), code);
+                                code = pushEvmInsnCall(constval(opNum_log4), code);
                             } else {
                                 invalidInstruction = true;
                             }
@@ -532,22 +514,22 @@ impure func generateCodeForEvmSegment(
                 } else {
                     if (opcode < 0xf4) {
                         if (opcode == 0xf0) {  // CREATE
-                            code = pushEvmInsnCall(opWrapper3UintRetAddress(evmOp_create), code);
+                            code = pushEvmInsnCall(constval(opNum_create), code);
                         } elseif (opcode == 0xf1) { // CALL
-                            code = pushEvmInsnCall(opWrapper7UintRetBool(evmOp_call), code);
+                            code = pushEvmInsnCall(constval(opNum_call), code);
                         } elseif (opcode == 0xf2) { // CALLCODE
-                            code = pushEvmInsnCall(opWrapper7UintRetBool(evmOp_callcode), code);
+                            code = pushEvmInsnCall(constval(opNum_callcode), code);
                         } elseif (opcode == 0xf3) { // RETURN
-                            code = pushEvmInsnCall(opWrapper2Uint(evmOp_return), code);
+                            code = pushEvmInsnCall(constval(opNum_return), code);
                         }
                     } else {
                         if (opcode < 0xfc) {
                             if (opcode == 0xf4) { // DELEGATECALL
-                                code = pushEvmInsnCall(opWrapper6UintRetBool(evmOp_delegatecall), code);
+                                code = pushEvmInsnCall(constval(opNum_delegatecall), code);
                             } elseif (opcode == 0xf5) {  // CREATE2
-                                code = pushEvmInsnCall(opWrapper4UintRetAddress(evmOp_create2), code);
+                                code = pushEvmInsnCall(constval(opNum_create2), code);
                             } elseif (opcode == 0xfa) { // STATICCALL
-                                code = pushEvmInsnCall(opWrapper6UintRetBool(evmOp_staticcall), code);
+                                code = pushEvmInsnCall(constval(opNum_staticcall), code);
                             } else {
                                 invalidInstruction = true;
                             }
@@ -555,10 +537,10 @@ impure func generateCodeForEvmSegment(
                             if (opcode == 0xfd) { // REVERT
                                 code = pushValue(
                                     insn.pc,
-                                    pushEvmInsnCall(opWrapper3Uint(evmOp_revert_knownPc), code)
+                                    pushEvmInsnCall(constval(opNum_revert_knownPc), code)
                                 );
                             } elseif (opcode == 0xff) { // SELFDESTRUCT
-                                code = pushEvmInsnCall(opWrapperUint(evmOp_selfdestruct), code);
+                                code = pushEvmInsnCall(constval(opNum_selfdestruct), code);
                             } else {
                                 invalidInstruction = true;
                             }
@@ -573,7 +555,7 @@ impure func generateCodeForEvmSegment(
                         0,
                         pushValue(
                             insn.pc,
-                            pushEvmInsnCall(opWrapper3Uint(evmOp_revert_knownPc), code)
+                            pushEvmInsnCall(constval(opNum_revert_knownPc), code)
                         )
                     )
                 );
@@ -685,18 +667,21 @@ impure func pushSwapn(
     }
 }
 
-impure func pushEvmInsnCall(evmOp: func(), code: AvmCodePoint) -> AvmCodePoint {
+impure func pushEvmInsnCall(evmOpNum: uint, code: AvmCodePoint) -> AvmCodePoint {
     // Some EVM instructions compile to a procedure call to some Mini code.
     // Generate the appropriate procedure call.
     // Note that the EVM code will already have put the args to the call on the stack,
     //     and the Mini code will leave return values on the stack.
     return pushValue(
-        code,  // push return address
-        pushInstructionImm(
-            0x34, // jump
-            evmOp,
-            code
-        )
+        evmOpNum,
+        pushValue(
+            code,
+            pushInstructionImm(
+                0x34,
+                evmOps_trampoline,
+                code,
+            ),
+        ),
     );
 }
 
@@ -710,4 +695,157 @@ func isKnownOpcode(opcode: uint) -> bool {  // return true iff opcode is a known
         || ( (opcode >= 0xf0) && (opcode <= 0xf5) )
         || (opcode == 0xfa)
         || ( (opcode == 0xfd) && (opcode <= 0xff) );
+}
+
+type AvmCodeBuilder = struct {
+    requireSafe: bool,
+    code: AvmCodePoint,
+    size: uint,
+    codeMap: map<uint, AvmCodePoint>,
+}
+
+public impure func avmCodeBuilder_new(requireSafe: bool) -> AvmCodeBuilder {
+    let code = asm() AvmCodePoint { errcodept };
+    return struct {
+        requireSafe: requireSafe,
+        code: code,
+        size: 1,
+        codeMap: newmap<uint, AvmCodePoint> with { [0] = code },
+    };
+}
+
+public impure func avmCodeBuilder_append(builder: AvmCodeBuilder, stream: ByteStream) -> option<AvmCodeBuilder> {
+    let requireSafe = builder.requireSafe;
+    let code = builder.code;
+    let size = builder.size;
+    let codeMap = builder.codeMap;
+
+    while( ! bytestream_atEof(stream) ) {
+        let (ustr, insn) = bytestream_getByte(stream)?;
+        if ( requireSafe && !isSafeInstruction(insn) ) {
+            return None;
+        }
+        stream = ustr;
+        let (ustr, hasImm) = bytestream_getByte(stream)?;
+        stream = ustr;
+        if (hasImm == 0) {
+            code = pushInstruction(insn, code);
+        } else {
+            let (ustr, val) = unmarshalValue(stream, codeMap)?;
+            stream = ustr;
+            code = pushInstructionImm(insn, val, code);
+        }
+        codeMap = codeMap with { [size] = code };
+        size = size+1;
+    }
+
+    return Some(struct {
+        requireSafe: requireSafe,
+        code: code,
+        size: size,
+        codeMap: codeMap,
+    });
+}
+
+public func avmCodeBuilder_finish(builder: AvmCodeBuilder) -> AvmCodePoint {
+    return builder.code;
+}
+
+func isSafeInstruction(insn: uint) -> bool {
+    return (insn != 0x34)                      // rset
+        && (insn != 0x3d)                      // errset
+        && ((insn < 0x60) || (insn > 0x7f));   // various unsafe instructions
+}
+
+func unmarshalValue(stream: ByteStream, codeMap: map<uint, AvmCodePoint>) -> option<(ByteStream, any)> {
+    let (ustr, kind) = bytestream_getByte(stream)?;
+    stream = ustr;
+    if (kind == 0) {  // integer
+        let (ustr, val) = rlp_decodeUint(stream)?;
+        return Some((ustr, val));
+    } elseif (kind == 1) { // codepoint
+        let (ustr, idx) = rlp_decodeUint(stream)?;
+        if let Some(codePt) = codeMap[idx] {
+            return Some((ustr, codePt));
+        } else {
+            return None;
+        }
+    } elseif (kind == 10) {   // 0-tuple
+        return Some((stream, ()));
+    } elseif (kind == 11) {   // 1-tuple
+        let (ustr, x) = unmarshalValue(stream, codeMap)?;
+        return Some((ustr, (x,)));
+    } elseif (kind == 12) {   // 2-tuple
+        let val = unsafecast<[2]any>((0,0));
+        let i = 0;
+        while (i < 2) {
+            let (ustr, x) = unmarshalValue(stream, codeMap)?;
+            stream = ustr;
+            val = val with { [i] = x };
+            i = i+1;
+        }
+        return Some((stream, val));
+    } elseif (kind == 13) {   // 3-tuple
+        let val = unsafecast<[3]any>((0,0,0));
+        let i = 0;
+        while (i < 3) {
+            let (ustr, x) = unmarshalValue(stream, codeMap)?;
+            stream = ustr;
+            val = val with { [i] = x };
+            i = i+1;
+        }
+        return Some((stream, val));
+    } elseif (kind == 14) {   // 4-tuple
+        let val = unsafecast<[4]any>((0,0,0,0));
+        let i = 0;
+        while (i < 4) {
+            let (ustr, x) = unmarshalValue(stream, codeMap)?;
+            stream = ustr;
+            val = val with { [i] = x };
+            i = i+1;
+        }
+        return Some((stream, val));
+    } elseif (kind == 15) {   // 5-tuple
+        let val = unsafecast<[5]any>((0,0,0,0,0));
+        let i = 0;
+        while (i < 5) {
+            let (ustr, x) = unmarshalValue(stream, codeMap)?;
+            stream = ustr;
+            val = val with { [i] = x };
+            i = i+1;
+        }
+        return Some((stream, val));
+    } elseif (kind == 16) {   // 6-tuple
+        let val = unsafecast<[6]any>((0,0,0,0,0,0));
+        let i = 0;
+        while (i < 6) {
+            let (ustr, x) = unmarshalValue(stream, codeMap)?;
+            stream = ustr;
+            val = val with { [i] = x };
+            i = i+1;
+        }
+        return Some((stream, val));
+    } elseif (kind == 17) {   // 7-tuple
+        let val = unsafecast<[7]any>((0,0,0,0,0,0,0));
+        let i = 0;
+        while (i < 7) {
+            let (ustr, x) = unmarshalValue(stream, codeMap)?;
+            stream = ustr;
+            val = val with { [i] = x };
+            i = i+1;
+        }
+        return Some((stream, val));
+    } elseif (kind == 18) {   // 8-tuple
+        let val = unsafecast<[8]any>((0,0,0,0,0,0,0,0));
+        let i = 0;
+        while (i < 8) {
+            let (ustr, x) = unmarshalValue(stream, codeMap)?;
+            stream = ustr;
+            val = val with { [i] = x };
+            i = i+1;
+        }
+        return Some((stream, val));
+    } else {
+        return None;
+    }
 }

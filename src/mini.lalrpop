@@ -10,9 +10,11 @@ use crate::compile::Lines;
 use crate::pos::BytePos;
 use crate::mavm::{Value, Instruction, Opcode};
 use crate::uint256::Uint256;
+use std::collections::HashMap;
+use lalrpop_util::ParseError;
 
 
-grammar(stringtable: &mut StringTable, file_info: &Lines, filename: u64, current_path: &[String]);
+grammar(stringtable: &mut StringTable, file_info: &Lines, filename: u64, current_path: &[String], constants: &mut HashMap<String, Uint256>);
 
 pub Decls: Vec<TopLevelDecl> = {
 	<mut i:ImportDecl*> <mut n:NonImportDecl+> => {i.append(&mut n);i},
@@ -23,6 +25,7 @@ ImportDecl: TopLevelDecl = {
         let file = p.pop().expect("Internal error: Path vector was empty");
         TopLevelDecl::UseDecl(p, file)
     },
+    <d: ImportDecl> "const" <n: IdentString> "=" <u: UnsignedInteger> ";" => { constants.insert(n, u);  d },
 	ImportFuncDecl => TopLevelDecl::ImpFuncDecl(<>),
 	ImportTypeDecl => TopLevelDecl::ImpTypeDecl(<>),	
 }
@@ -332,7 +335,20 @@ IdentString: String = {
 UnsignedInteger: Uint256 = {
 	"0" => Uint256::from_usize(0),
 	r"[1-9][0-9]*" => Uint256::from_string(<>).unwrap(),
-	r"0x[0-9a-fA-F]+" => Uint256::from_string_hex(&<>[2..]).unwrap()
+	r"0x[0-9a-fA-F]+" => Uint256::from_string_hex(&<>[2..]).unwrap(),
+    <ConstVal> => <>,
+}
+
+ConstVal: Uint256 = {
+    "constval" "(" <IdentString> ")" =>?  {
+        match constants.get(&<>) {
+            Some(i) => Ok(i.clone()),
+            None => {
+                println!("Unrecognized constant name: {}", <>);
+                Err(ParseError::User { error: "unrecognized constant name" })
+            }
+        }
+    }
 }
 
 SignedInteger: Uint256 = {
