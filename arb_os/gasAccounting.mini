@@ -101,15 +101,16 @@ public impure func gasAccounting_setFeeParams(baseGasPrice: uint, storageCharge:
     } with {
         StorageCharge: storageCharge
     };
-    if (feeRecipient == address(0)) {
-        gasAccountingInfo = gasAccountingInfo with {
-            payFeesTo: None<address>
-        };
-    } else {
-        gasAccountingInfo = gasAccountingInfo with {
-            payFeesTo: Some(feeRecipient)
-        };
+    let recipient = None<address>;
+    if (feeRecipient != address(0)) {
+        recipient = Some(feeRecipient);
     }
+
+    gasAccountingInfo = gasAccountingInfo with {
+        payFeesTo: recipient
+    } with {
+        currentGasPrice: baseGasPrice
+    };
 }
 
 public impure func gasAccounting_postInitMessage() {
@@ -473,12 +474,11 @@ public impure func getNextRequestFromCongestionAuction() -> (
         };
     }
 
-    asm(100,) { debugprint };
     if (isChargeable && (gasAccountingInfo.currentGasPrice > 0)) {
-        asm(101,) { debugprint };
         if let Some(tx) = maybeTx {
-            asm(102,) { debugprint };
-            let txGasLimit = tx.maxGas * tx.gasPrice / gasAccountingInfo.currentGasPrice;
+            let txGasPrice = gasAccountingInfo.currentGasPrice;
+            if (txGasPrice < tx.gasPrice) {    txGasPrice = tx.gasPrice;    }
+            let txGasLimit = tx.maxGas * txGasPrice / gasAccountingInfo.currentGasPrice;
             if (txGasLimit > gasAccountingInfo.gasLeftForThisBlock) {
                 txGasLimit = gasAccountingInfo.gasLeftForThisBlock;
             }
