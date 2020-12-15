@@ -590,7 +590,7 @@ pub fn parse_from_source(
     let source = comment_re.replace_all(&source, "");
     let lines = Lines::new(source.bytes());
     DeclsParser::new()
-        .parse(string_table, &lines, file_id, file_path, &source)
+        .parse(string_table, &lines, file_id, file_path, &mut HashMap::new(), &source)
         .map_err(|e| match e {
             lalrpop_util::ParseError::UnrecognizedToken {
                 token: (offset, tok, end),
