@@ -18,6 +18,7 @@ use std::bytestream::bytestream_get64;
 use std::bytestream::bytestream_skipBytes;
 use std::stack::stack_new;
 use std::stack::stack_push;
+use std::stack::stack_pop;
 
 use chainParameters::chainParams_chainId;
 use evmOps::evmOp_address;
@@ -154,261 +155,292 @@ public impure func pcTableForCode(code: ByteArray) -> option<Stack> {
     return Some(stack_push(pcTable, (0, code)));
 }
 
-public impure func translateEvmCodeSegment(
-    bs: ByteStream,
-    makePcTable: bool,
-) -> option<(AvmCodePoint, map<uint, AvmCodePoint>, Stack)> {
-    // Given the EVM bytecode for a contract, generate the equivalent AVM code.
-    // If this succeeds, it will return a triple:
-    //       * CodePoint to jump to, to start executing the contract
-    //       * mapping from valid EVM jump destinations to corresponding AVM CodePoints
-    //       * if makePcTable is true, a Stack of (EVM PC, hash(AVM codepoint)) pairs; otherwise an empty stack
-    // This operates recursively, building the compiled code from the end back toward the beginning.
+type EvmInstruction = struct {
+    opcode: uint,
+    data: option<uint>,
+    pc: uint,
+}
 
-    if (bytestream_atEof(bs)) {
-        // Base case of the recursion.
-        // Return a minimal code segment that just contains an EVM STOP instruction followed by a panic instruction.
-        return pushEvmInsnCall(
-            opWrapperVoid(evmOp_stop),
-            asm() AvmCodePoint { errcodept },
-            newmap<uint, AvmCodePoint>,
-            stack_new()
-        );
-    }
+type EvmInstructionStack = Stack
 
-    // Read in the first opcode in the code.
-    let (ubs, opcode) = bytestream_getByte(bs)?;
-    bs = ubs;
+func evmInstructionStack_new() -> EvmInstructionStack {
+    return stack_new();
+}
 
-    if ((opcode >= 0x60) && (opcode <= 0x7f)) {
-        // it's a pushN instruction; unmarshal the immediate value and push it
-        let bytesRemaining = opcode - 0x5f;
-        let imm = 0;
-        while (bytesRemaining > 0) {
-            if let Some(res) = bytestream_getByte(bs) {
-                let (ubs, val) = res;
-                bs = ubs;
-                imm = 256*imm + val;
-            }
-            bytesRemaining = bytesRemaining-1;
-        }
-        let numBytesRead = bytestream_bytesReadSoFar(bs);
+func evmInstructionStack_push(s: EvmInstructionStack, insn: EvmInstruction) -> EvmInstructionStack {
+    return stack_push(s, insn);
+}
 
-        // Recursively generate code for everything after this instruction.
-        let (restOfCode, evmJumpTable, pcTable) = translateEvmCodeSegment(bs, makePcTable)?;
-        if (makePcTable) {
-            pcTable = stack_push(pcTable, (numBytesRead, hash(restOfCode)));
-        }
+func evmInstructionStack_pop(s: EvmInstructionStack) -> option<(EvmInstructionStack, EvmInstruction)> {
+    let (us, item) = stack_pop(s)?;
+    return Some((us, unsafecast<EvmInstruction>(item)));
+}
 
-            // for debugging, uncomment this to get a debugprint before each EVM instruction
-            // restOfCode = pushInstructionImm(0x90, (42, numBytesRead, opcode), restOfCode);
+var unreachableMask: uint;
 
-        // Now prepend the current operation onto the front of the generated code.
-        return Some((pushValue(imm, restOfCode), evmJumpTable, pcTable));
-    } 
+impure func parseEvmCodeSegment(bs: ByteStream) -> option<EvmInstructionStack> {
+    let stack = evmInstructionStack_new();
+    let evmPc = 0;
+    let reachable = true;
+    loop {
+        if let Some(res) = bytestream_getByte(bs) {
+            let (ubs, opcode) = res;
+            bs = ubs;
+            if (opcode == 0x5b) {    reachable = true;    }
 
-    // The rest of the instructions are all a single byte. So we'll generate code for the rest of
-    // the program, then prepend whatever is needed to implement the current opcode.
-    let (restOfCode, evmJumpTable, pcTable) = translateEvmCodeSegment(bs, makePcTable)?;
-
-    let numBytesRead = bytestream_bytesReadSoFar(bs);
-
-    if (makePcTable) {
-        pcTable = stack_push(pcTable, (numBytesRead, hash(restOfCode)));
-    }
-
-        // for debugging, uncomment this to get a debugprint before each EVM instruction
-        // restOfCode = pushInstructionImm(0x90, (42, numBytesRead, opcode), restOfCode);
-
-    if (opcode < 0x80) {
-        if (opcode < 0x40) {
-            if (opcode < 0x20) {
-                if (opcode < 0x10) {
-                    if (opcode < 0x04) {
-                        if (opcode == 0x00) { // STOP
-                            return pushEvmInsnCall(opWrapperVoid(evmOp_stop), restOfCode, evmJumpTable, pcTable);
-                        } elseif (opcode == 0x01) { // ADD
-                            return Some((pushInstruction(0x01, restOfCode), evmJumpTable, pcTable));
-                        } elseif (opcode == 0x02) { // MUL
-                            return Some((pushInstruction(0x02, restOfCode), evmJumpTable, pcTable));
-                        } elseif (opcode == 0x03) { // SUB
-                            return Some((pushInstruction(0x03, restOfCode), evmJumpTable, pcTable));
-                        }
-                    } else {
-                        if ( (opcode >= 0x04) && (opcode <= 0x07) ) { // DIV, MOD, SDIV, SMOD
-                            return pushEvmInsnDenomCheck(opcode, 2, restOfCode, evmJumpTable, pcTable);
-                        } elseif ( (opcode >= 0x08) && (opcode <= 0x09) ) { // ADDMOD, MULMOD
-                            return pushEvmInsnDenomCheck(opcode, 3, restOfCode, evmJumpTable, pcTable);
-                        } elseif (opcode == 0x0a) { // EXP
-                            return Some((pushInstruction(0x0a, restOfCode), evmJumpTable, pcTable));
-                        } elseif (opcode == 0x0b) { // SIGNEXTEND
-                            return Some((pushInstruction(0x0b, restOfCode), evmJumpTable, pcTable));
-                        }
+            if ((opcode >= 0x60) && (opcode <= 0x7f)) {
+                // it's a pushN instruction; unmarshal the immediate value and push it
+                let bytesRemaining = opcode - 0x5f;
+                let imm = 0;
+                while (bytesRemaining > 0) {
+                    if let Some(res) = bytestream_getByte(bs) {
+                        let (ubs, val) = res;
+                        bs = ubs;
+                        imm = 256*imm + val;
                     }
-                } else {
-                    if ( (opcode >= 0x10) && (opcode <= 0x1a) ) {
-                        return Some((pushInstruction(opcode, restOfCode), evmJumpTable, pcTable));
-                    } elseif (opcode == 0x1b) { // SHL
-                        return Some((
-                            pushInstructionImm(
-                                0x0a, 2,   // [2] exp
-                                pushInstruction(
-                                    0x02, // mul
-                                    restOfCode
-                                )
-                            ),
-                            evmJumpTable,
-                            pcTable,
-                        ));
-                    } elseif (opcode == 0x1c) { // SHR
-                        return Some((
-                            pushInstructionImm(
-                                0x0a, 2,   // [2] exp
-                                pushInstruction(
-                                    0x43, // swap1
-                                    pushInstruction(
-                                        0x04, // div
-                                        restOfCode
-                                    )
-                                )
-                            ),
-                            evmJumpTable,
-                            pcTable,
-                        ));
-                    } elseif (opcode == 0x1d) { // SHA
-                        return Some((
-                            pushInstructionImm(
-                                0x0a, 2,   // [2] exp
-                                pushInstruction(
-                                    0x43, // swap1
-                                    pushInstruction(
-                                        0x05, // sdiv
-                                        restOfCode
-                                    )
-                                )
-                            ),
-                            evmJumpTable,
-                            pcTable,
-                        ));
-                    }
+                    bytesRemaining = bytesRemaining-1;
                 }
+                if (reachable) {
+                    stack = evmInstructionStack_push(
+                        stack,
+                        struct {
+                            opcode: opcode,
+                            data: Some(imm),
+                            pc: evmPc,
+                        }
+                    );
+                }
+                evmPc = evmPc + (opcode - 0x5f) + 1;
             } else {
-                if (opcode < 0x37 ) {
-                    if (opcode < 0x33) {
-                        if (opcode == 0x20) { // SHA3
-                            return pushEvmInsnCall(opWrapper2UintRetBytes(evmOp_sha3), restOfCode, evmJumpTable, pcTable);
-                        } elseif (opcode == 0x30) { // ADDRESS
-                            return pushEvmInsnCall(opWrapperRetAddress(evmOp_address), restOfCode, evmJumpTable, pcTable);
-                        } elseif (opcode == 0x31) { // BALANCE
-                            return pushEvmInsnCall(opWrapperUintRetUint(evmOp_balance), restOfCode, evmJumpTable, pcTable);
-                        } elseif (opcode == 0x32) { // ORIGIN
-                            return pushEvmInsnCall(opWrapperRetAddress(evmOp_origin), restOfCode, evmJumpTable, pcTable);
+                if (reachable) {
+                    stack = evmInstructionStack_push(
+                        stack,
+                        struct {
+                            opcode: opcode,
+                            data: None<uint>,
+                            pc: evmPc,
                         }
-                    } else {
-                        if (opcode == 0x33) { // CALLER
-                            return pushEvmInsnCall(opWrapperRetAddress(evmOp_caller), restOfCode, evmJumpTable, pcTable);
-                        } elseif (opcode == 0x34) { // CALLVALUE
-                            return pushEvmInsnCall(opWrapperRetUint(evmOp_callvalue), restOfCode, evmJumpTable, pcTable);
-                        } elseif (opcode == 0x35) { // CALLDATALOAD
-                            return pushEvmInsnCall(opWrapperUintRetUint(evmOp_calldataload), restOfCode, evmJumpTable, pcTable);
-                        } elseif (opcode == 0x36) { // CALLDATASIZE
-                            return pushEvmInsnCall(opWrapperRetUint(evmOp_calldatasize), restOfCode, evmJumpTable, pcTable);
-                        }
-                    }
-                } else {
-                    if (opcode < 0x3b) {
-                        if (opcode == 0x37) { // CALLDATACOPY
-                            return pushEvmInsnCall(opWrapper3Uint(evmOp_calldatacopy), restOfCode, evmJumpTable, pcTable);
-                        } elseif (opcode == 0x38) { // CODESIZE
-                            return pushEvmInsnCall(opWrapperRetUint(evmOp_codesize), restOfCode, evmJumpTable, pcTable);
-                        } elseif (opcode == 0x39) { // CODECOPY
-                            return pushEvmInsnCall(opWrapper3Uint(evmOp_codecopy), restOfCode, evmJumpTable, pcTable);
-                        } elseif (opcode == 0x3a) { // GASPRICE
-                            return Some((pushValue(1, restOfCode), evmJumpTable, pcTable));
-                        }
-                    } else {
-                        if (opcode == 0x3b) { // EXTCODESIZE
-                            return pushEvmInsnCall(opWrapperUintRetUint(evmOp_extcodesize), restOfCode, evmJumpTable, pcTable);
-                        } elseif (opcode == 0x3c) { // EXTCODECOPY
-                            return pushEvmInsnCall(opWrapper4Uint(evmOp_extcodecopy), restOfCode, evmJumpTable, pcTable);
-                        } elseif (opcode == 0x3d) { // RETURNDATASIZE
-                            return pushEvmInsnCall(opWrapperRetUint(evmOp_returndatasize), restOfCode, evmJumpTable, pcTable);
-                        } elseif (opcode == 0x3e) { // RETURNDATACOPY
-                            return pushEvmInsnCall(opWrapper3Uint(evmOp_returndatacopy), restOfCode, evmJumpTable, pcTable);
-                        } elseif (opcode == 0x3f) { // EXTCODEHASH
-                            return pushEvmInsnCall(opWrapperUintRetBytes(evmOp_extcodehash), restOfCode, evmJumpTable, pcTable);
-                        }
-                    }
+                    );
                 }
+                evmPc = evmPc + 1;
             }
+            if ((unreachableMask & asm(opcode, 1) uint { shl }) != 0) {    reachable = false;    }
         } else {
-            if (opcode < 0x53) {
-                if (opcode < 0x45) {
-                    if (opcode < 0x43) {
-                        if (opcode == 0x40) { // BLOCKHASH
-                            return Some((
-                                pushInstruction(
-                                    0x30,  // pop
-                                    pushValue(0, restOfCode),
-                                ),
-                                evmJumpTable,
-                                pcTable,
-                            ));
-                        } elseif (opcode == 0x41) { // COINBASE
-                            return Some((pushValue(0, restOfCode), evmJumpTable, pcTable));
-                        } elseif (opcode == 0x42) { // TIMESTAMP
-                            return pushEvmInsnCall(opWrapperRetUint(evmOp_timestamp), restOfCode, evmJumpTable, pcTable);
+            return Some(stack);
+        }
+    }
+}
+
+public impure func codeSegment_init() {
+    let mask = 0;
+    let opcode = 0;
+    while (opcode < 256) {
+        if (unreachableAfterOpcode(opcode)) {
+            mask = mask | asm(opcode, 1) uint { shl };
+        }
+        opcode = opcode + 1;
+    }
+    unreachableMask = mask;
+}
+
+func unreachableAfterOpcode(opcode: uint) -> bool {
+    return (opcode == 0x00)   // STOP
+        || ((opcode >= 0x0c) && (opcode <= 0x0f))  // invalid
+        || (opcode == 0x1e)  // invalid
+        || (opcode == 0x1f)  // invalid
+        || ((opcode >= 0x21) && (opcode <= 0x2f)) // invalid
+        || ((opcode >= 0x46) && (opcode <= 0x4f)) // invalid
+        || (opcode == 0x56)  // JUMP
+        || ((opcode >= 0x5c) && (opcode <= 0x5f)) // invalid
+        || ((opcode >= 0xa5) && (opcode <= 0xef)) // invalid
+        || (opcode == 0xf3)  // RETURN
+        || (opcode == 0xfd)  // REVERT
+        || (opcode == 0xfe)  // INVALID
+        || (opcode == 0xff); // SELFDESTRUCT
+}
+
+impure func generateCodeForEvmSegment(
+    insns: EvmInstructionStack,
+    makePcTable: bool,
+) -> (AvmCodePoint, map<uint, AvmCodePoint>, Stack) {
+    let code = pushEvmInsnCall(
+        opWrapperVoid(evmOp_stop),
+        asm() AvmCodePoint { errcodept },
+    );
+    let evmJumpTable = newmap<uint, AvmCodePoint>;
+    let pcTable = stack_new();
+
+    loop {
+        if let Some(res) = evmInstructionStack_pop(insns) {
+            let invalidInstruction = false;
+            let (uinsns, insn) = res;
+            insns = uinsns;
+            let opcode = insn.opcode;
+            if (opcode < 0x80) {
+                if (opcode < 0x40) {
+                    if (opcode < 0x20) {
+                        if (opcode < 0x10) {
+                            if (opcode < 0x04) {
+                                if (opcode == 0x00) { // STOP
+                                    code = pushEvmInsnCall(opWrapperVoid(evmOp_stop), code);
+                                } elseif (opcode == 0x01) { // ADD
+                                    code = pushInstruction(0x01, code);
+                                } elseif (opcode == 0x02) { // MUL
+                                    code = pushInstruction(0x02, code);
+                                } elseif (opcode == 0x03) { // SUB
+                                    code = pushInstruction(0x03, code);
+                                } else {
+                                    invalidInstruction = true;
+                                }
+                            } else {
+                                if ( (opcode >= 0x04) && (opcode <= 0x07) ) { // DIV, MOD, SDIV, SMOD
+                                    code = pushEvmInsnDenomCheck(opcode, 2, code);
+                                } elseif ( (opcode >= 0x08) && (opcode <= 0x09) ) { // ADDMOD, MULMOD
+                                    code = pushEvmInsnDenomCheck(opcode, 3, code);
+                                } elseif (opcode == 0x0a) { // EXP
+                                    code = pushInstruction(0x0a, code);
+                                } elseif (opcode == 0x0b) { // SIGNEXTEND
+                                    code = pushInstruction(0x0b, code);
+                                } else {
+                                    invalidInstruction = true;
+                                }
+                            }
+                        } else {
+                            if ( (opcode >= 0x10) && (opcode <= 0x1a) ) {
+                                code = pushInstruction(opcode, code);
+                            } elseif (opcode == 0x1b) { // SHL
+                                code = pushInstruction(0x1b, code);
+                            } elseif (opcode == 0x1c) { // SHR
+                                code = pushInstruction(0x1c, code);
+                            } elseif (opcode == 0x1d) { // SAR
+                                code = pushInstruction(0x1d, code);
+                            } else {
+                                invalidInstruction = true;
+                            }
                         }
                     } else {
-                        if (opcode == 0x43) { // NUMBER
-                            return pushEvmInsnCall(opWrapperRetUint(evmOp_number), restOfCode, evmJumpTable, pcTable);
-                        } elseif (opcode == 0x44) { // DIFFICULTY
-                             return Some((pushValue(2500000000000000, restOfCode), evmJumpTable, pcTable));
+                        if (opcode < 0x37 ) {
+                            if (opcode < 0x33) {
+                                if (opcode == 0x20) { // SHA3
+                                    code = pushEvmInsnCall(opWrapper2UintRetBytes(evmOp_sha3), code);
+                                } elseif (opcode == 0x30) { // ADDRESS
+                                    code = pushEvmInsnCall(opWrapperRetAddress(evmOp_address), code);
+                                } elseif (opcode == 0x31) { // BALANCE
+                                    code = pushEvmInsnCall(opWrapperUintRetUint(evmOp_balance), code);
+                                } elseif (opcode == 0x32) { // ORIGIN
+                                    code = pushEvmInsnCall(opWrapperRetAddress(evmOp_origin), code);
+                                } else {
+                                    invalidInstruction = true;
+                                }
+                            } else {
+                                if (opcode == 0x33) { // CALLER
+                                    code = pushEvmInsnCall(opWrapperRetAddress(evmOp_caller), code);
+                                } elseif (opcode == 0x34) { // CALLVALUE
+                                    code = pushEvmInsnCall(opWrapperRetUint(evmOp_callvalue), code);
+                                } elseif (opcode == 0x35) { // CALLDATALOAD
+                                    code = pushEvmInsnCall(opWrapperUintRetUint(evmOp_calldataload), code);
+                                } elseif (opcode == 0x36) { // CALLDATASIZE
+                                    code = pushEvmInsnCall(opWrapperRetUint(evmOp_calldatasize), code);
+                                } else {
+                                    invalidInstruction = true;
+                                }
+                            }
+                        } else {
+                            if (opcode < 0x3b) {
+                                if (opcode == 0x37) { // CALLDATACOPY
+                                    code = pushEvmInsnCall(opWrapper3Uint(evmOp_calldatacopy), code);
+                                } elseif (opcode == 0x38) { // CODESIZE
+                                    code = pushEvmInsnCall(opWrapperRetUint(evmOp_codesize), code);
+                                } elseif (opcode == 0x39) { // CODECOPY
+                                    code = pushEvmInsnCall(opWrapper3Uint(evmOp_codecopy), code);
+                                } elseif (opcode == 0x3a) { // GASPRICE
+                                    code = pushValue(1, code);
+                                } else {
+                                    invalidInstruction = true;
+                                }
+                            } else {
+                                if (opcode == 0x3b) { // EXTCODESIZE
+                                    code = pushEvmInsnCall(opWrapperUintRetUint(evmOp_extcodesize), code);
+                                } elseif (opcode == 0x3c) { // EXTCODECOPY
+                                    code = pushEvmInsnCall(opWrapper4Uint(evmOp_extcodecopy), code);
+                                } elseif (opcode == 0x3d) { // RETURNDATASIZE
+                                    code = pushEvmInsnCall(opWrapperRetUint(evmOp_returndatasize), code);
+                                } elseif (opcode == 0x3e) { // RETURNDATACOPY
+                                    code = pushEvmInsnCall(opWrapper3Uint(evmOp_returndatacopy), code);
+                                } elseif (opcode == 0x3f) { // EXTCODEHASH
+                                    code = pushEvmInsnCall(opWrapperUintRetBytes(evmOp_extcodehash), code);
+                                } else {
+                                    invalidInstruction = true;
+                                }
+                            }
                         }
                     }
                 } else {
-                    if (opcode == 0x45) { // GASLIMIT
-                        return Some((pushValue(10000000000, restOfCode), evmJumpTable, pcTable));
-                    } elseif (opcode == 0x46) { // CHAINID
-                        return pushEvmInsnCall(opWrapperRetUint(chainParams_chainId), restOfCode, evmJumpTable, pcTable);
-                    } elseif (opcode == 0x47) { // SELFBALANCE
-                        return pushEvmInsnCall(opWrapperRetUint(evmOp_selfbalance), restOfCode, evmJumpTable, pcTable);
-                    } elseif (opcode == 0x50) { // POP
-                        return Some((pushInstruction(0x30, restOfCode), evmJumpTable, pcTable)); // pop
-                    } elseif (opcode == 0x51) { // MLOAD
-                        return pushEvmInsnCall(opWrapperUintRetUint(evmOp_mload), restOfCode, evmJumpTable, pcTable);
-                    } elseif (opcode == 0x52) { // MSTORE
-                        return pushEvmInsnCall(opWrapper2Uint(evmOp_mstore), restOfCode, evmJumpTable, pcTable);
-                    }
-                }
-            } else {
-                if (opcode < 0x58) {
-                    if (opcode < 0x56) {
-                        if (opcode == 0x53) { // MSTORE8
-                            return pushEvmInsnCall(opWrapper2Uint(evmOp_mstore8), restOfCode, evmJumpTable, pcTable);
-                        } elseif (opcode == 0x54) { // SLOAD
-                            return pushEvmInsnCall(opWrapperUintRetUint(evmOp_sload), restOfCode, evmJumpTable, pcTable);
-                        } elseif (opcode == 0x55) { // SSTORE
-                            return pushEvmInsnCall(opWrapper2Uint(evmOp_sstore), restOfCode, evmJumpTable, pcTable);
+                    if (opcode < 0x53) {
+                        if (opcode < 0x45) {
+                            if (opcode < 0x43) {
+                                if (opcode == 0x40) { // BLOCKHASH
+                                    code = pushInstruction(
+                                        0x30,  // pop
+                                        pushValue(0, code),
+                                    );
+                                } elseif (opcode == 0x41) { // COINBASE
+                                    code = pushValue(0, code);
+                                } elseif (opcode == 0x42) { // TIMESTAMP
+                                    code = pushEvmInsnCall(opWrapperRetUint(evmOp_timestamp), code);
+                                } else {
+                                    invalidInstruction = true;
+                                }
+                            } else {
+                                if (opcode == 0x43) { // NUMBER
+                                    code = pushEvmInsnCall(opWrapperRetUint(evmOp_number), code);
+                                } elseif (opcode == 0x44) { // DIFFICULTY
+                                     code = pushValue(2500000000000000, code);
+                                } else {
+                                    invalidInstruction = true;
+                                }
+                            }
+                        } else {
+                            if (opcode == 0x45) { // GASLIMIT
+                                code = pushValue(10000000000, code);
+                            } elseif (opcode == 0x46) { // CHAINID
+                                code = pushEvmInsnCall(opWrapperRetUint(chainParams_chainId), code);
+                            } elseif (opcode == 0x47) { // SELFBALANCE
+                                code = pushEvmInsnCall(opWrapperRetUint(evmOp_selfbalance), code);
+                            } elseif (opcode == 0x50) { // POP
+                                code = pushInstruction(0x30, code); // pop
+                            } elseif (opcode == 0x51) { // MLOAD
+                                code = pushEvmInsnCall(opWrapperUintRetUint(evmOp_mload), code);
+                            } elseif (opcode == 0x52) { // MSTORE
+                                code = pushEvmInsnCall(opWrapper2Uint(evmOp_mstore), code);
+                            } else {
+                                invalidInstruction = true;
+                            }
                         }
-                    } else {
-                        if (opcode == 0x56) { // JUMP
-                            return pushEvmInsnCall(
-                                opWrapperUintRetFunc(evmOp_getjumpaddr),
-                                pushInstruction(0x34, restOfCode), // jump
-                                evmJumpTable,
-                                pcTable
-                            );
-                        } elseif (opcode == 0x57) { // JUMPI
-                            if let Some(res) = pushEvmInsnCall(
-                                opWrapperUintRetFunc(evmOp_getjumpaddr),
-                                pushInstruction(0x34, restOfCode), // jump
-                                evmJumpTable,
-                                pcTable,
-                            ) {
-                                let (doJump, jumpTable, pcTab) = res;
-                                return Some((
-                                    pushInstruction(
+                    } elseif (opcode < 0x60) {
+                        if (opcode < 0x58) {
+                            if (opcode < 0x56) {
+                                if (opcode == 0x53) { // MSTORE8
+                                    code = pushEvmInsnCall(opWrapper2Uint(evmOp_mstore8), code);
+                                } elseif (opcode == 0x54) { // SLOAD
+                                    code = pushEvmInsnCall(opWrapperUintRetUint(evmOp_sload), code);
+                                } elseif (opcode == 0x55) { // SSTORE
+                                    code = pushEvmInsnCall(opWrapper2Uint(evmOp_sstore), code);
+                                } else {
+                                    invalidInstruction = true;
+                                }
+                            } else {
+                                if (opcode == 0x56) { // JUMP
+                                    code = pushEvmInsnCall(
+                                        opWrapperUintRetFunc(evmOp_getjumpaddr),
+                                        pushInstruction(0x34, code), // jump
+                                    );
+                                } elseif (opcode == 0x57) { // JUMPI
+                                    let doJump = pushEvmInsnCall(
+                                        opWrapperUintRetFunc(evmOp_getjumpaddr),
+                                        pushInstruction(0x34, code), // jump
+                                    );
+                                    code = pushInstruction(
                                         0x43,  // swap1
                                         pushInstructionImm(
                                             0x35, // cjump
@@ -417,165 +449,178 @@ public impure func translateEvmCodeSegment(
                                                 0x30, // pop
                                                 pushInstructionImm(
                                                     0x34,  // jump
-                                                    restOfCode,
+                                                    code,
                                                     doJump,
                                                 )
                                             )
                                         )
-                                    ),
-                                    jumpTable,
-                                    pcTab,
-                                ));
+                                    );
+                                } else {
+                                    invalidInstruction = true;
+                                }
+                            }
+                        } else {
+                            if (opcode == 0x58) {  // GETPC
+                                code = pushValue(insn.pc, code);
+                            } elseif (opcode == 0x59) { // MSIZE
+                                code = pushEvmInsnCall(opWrapperRetUint(evmOp_msize), code);
+                            } elseif (opcode == 0x5a) { // GAS
+                                code = pushInstruction(0x76, code);
+                            } elseif (opcode == 0x5b) { // JUMPDEST
+                                evmJumpTable = evmJumpTable with { [insn.pc] = code };
                             } else {
-                                // should never happen; pushEvmInsnCall always returns Some
-                                evmCallStack_callHitError(16);
-                                return None;
+                                invalidInstruction = true;
+                            }
+                        }
+                    } else {
+                        // it's an EVM pushN instruction
+                        if let Some(val) = insn.data {
+                            code = pushValue(val, code);
+                        } else {
+                            // should never happen
+                            evmCallStack_callHitError(23);
+                        }
+                    }
+                }
+            } else {
+                if (opcode < 0xe1) {
+                    if (opcode < 0xa0) {
+                        if (opcode < 0x90) {
+                            if (opcode == 0x80) {  // DUP1 -- note that DUPn in EVM corresponds to DUP(n-1) in AvmCodePoint
+                                code = pushInstruction(0x40, code);  // dup0
+                            } elseif (opcode == 0x81) {  // DUP2
+                                code = pushInstruction(0x41, code);  // dup1
+                            } elseif (opcode == 0x82) {  // DUP3
+                                code = pushInstruction(0x42, code);  // DUP2
+                            } elseif ( (opcode >= 0x83) && (opcode <= 0x8f) ) {
+                                code = pushDupn(opcode-0x80, code);
+                            } else {
+                                invalidInstruction = true;
+                            }
+                        } else {
+                            if (opcode == 0x90) {  // SWAP1
+                                code = pushInstruction(0x43, code);  // swap1
+                            } elseif (opcode == 0x91) {  // SWAP2
+                                code = pushInstruction(0x44, code);  // swap2
+                            } elseif ( (opcode >= 0x92) && (opcode <= 0x9f) ) {
+                                code = pushSwapn(opcode-0x8f, code);
+                            } else {
+                                invalidInstruction = true;
+                            }
+                        }
+                    } else {
+                        if (opcode < 0xa3) {
+                            if (opcode == 0xa0) { // LOG0
+                                code = pushEvmInsnCall(opWrapper2Uint(evmOp_log0), code);
+                            } elseif (opcode == 0xa1) { // LOG1
+                                code = pushEvmInsnCall(opWrapper3Uint(evmOp_log1), code);
+                            } elseif (opcode == 0xa2) { // LOG2
+                                code = pushEvmInsnCall(opWrapper4Uint(evmOp_log2), code);
+                            } else {
+                                invalidInstruction = true;
+                            }
+                        } else {
+                            if (opcode == 0xa3) { // LOG3
+                                code = pushEvmInsnCall(opWrapper5Uint(evmOp_log3), code);
+                            } elseif (opcode == 0xa4) { // LOG0
+                                code = pushEvmInsnCall(opWrapper6Uint(evmOp_log4), code);
+                            } else {
+                                invalidInstruction = true;
                             }
                         }
                     }
                 } else {
-                    if (opcode == 0x58) {  // GETPC
-                        // we know the current PC, so we can push it directly as a constant
-                        return Some((pushValue(bytestream_bytesReadSoFar(bs)-1, restOfCode), evmJumpTable, pcTable));
-                    } elseif (opcode == 0x59) { // MSIZE
-                        return pushEvmInsnCall(opWrapperRetUint(evmOp_msize), restOfCode, evmJumpTable, pcTable);
-                    } elseif (opcode == 0x5a) { // GAS
-                        return Some((pushInstruction(0x76, restOfCode), evmJumpTable, pcTable));
-                    } elseif (opcode == 0x5b) { // JUMPDEST
-                        return Some((
-                            restOfCode,
-                            evmJumpTable with {
-                                [numBytesRead-1] = restOfCode
-                            },
-                            pcTable
-                        ));
+                    if (opcode < 0xf4) {
+                        if (opcode == 0xf0) {  // CREATE
+                            code = pushEvmInsnCall(opWrapper3UintRetAddress(evmOp_create), code);
+                        } elseif (opcode == 0xf1) { // CALL
+                            code = pushEvmInsnCall(opWrapper7UintRetBool(evmOp_call), code);
+                        } elseif (opcode == 0xf2) { // CALLCODE
+                            code = pushEvmInsnCall(opWrapper7UintRetBool(evmOp_callcode), code);
+                        } elseif (opcode == 0xf3) { // RETURN
+                            code = pushEvmInsnCall(opWrapper2Uint(evmOp_return), code);
+                        }
+                    } else {
+                        if (opcode < 0xfc) {
+                            if (opcode == 0xf4) { // DELEGATECALL
+                                code = pushEvmInsnCall(opWrapper6UintRetBool(evmOp_delegatecall), code);
+                            } elseif (opcode == 0xf5) {  // CREATE2
+                                code = pushEvmInsnCall(opWrapper4UintRetAddress(evmOp_create2), code);
+                            } elseif (opcode == 0xfa) { // STATICCALL
+                                code = pushEvmInsnCall(opWrapper6UintRetBool(evmOp_staticcall), code);
+                            } else {
+                                invalidInstruction = true;
+                            }
+                        } else {
+                            if (opcode == 0xfd) { // REVERT
+                                code = pushValue(
+                                    insn.pc,
+                                    pushEvmInsnCall(opWrapper3Uint(evmOp_revert_knownPc), code)
+                                );
+                            } elseif (opcode == 0xff) { // SELFDESTRUCT
+                                code = pushEvmInsnCall(opWrapperUint(evmOp_selfdestruct), code);
+                            } else {
+                                invalidInstruction = true;
+                            }
+                        }
                     }
                 }
             }
-        }
-    } else {
-        if (opcode < 0xe1) {
-            if (opcode < 0xa0) {
-                if (opcode < 0x90) {
-                    if (opcode == 0x80) {  // DUP1 -- note that DUPn in EVM corresponds to DUP(n-1) in AvmCodePoint
-                        return Some((pushInstruction(0x40, restOfCode), evmJumpTable, pcTable));  // dup0
-                    } elseif (opcode == 0x81) {  // DUP2
-                        return Some((pushInstruction(0x41, restOfCode), evmJumpTable, pcTable));  // dup1
-                    } elseif (opcode == 0x82) {  // DUP3
-                        return Some((pushInstruction(0x42, restOfCode), evmJumpTable, pcTable));  // DUP2
-                    } elseif ( (opcode >= 0x83) && (opcode <= 0x8f) ) {
-                        return Some((pushDupn(opcode-0x80, restOfCode), evmJumpTable, pcTable));
-                    }
-                } else {
-                    if (opcode == 0x90) {  // SWAP1
-                        return Some((pushInstruction(0x43, restOfCode), evmJumpTable, pcTable));  // swap1
-                    } elseif (opcode == 0x91) {  // SWAP2
-                        return Some((pushInstruction(0x44, restOfCode), evmJumpTable, pcTable));  // swap2
-                    } elseif ( (opcode >= 0x92) && (opcode <= 0x9f) ) {
-                        return Some((pushSwapn(opcode-0x8f, restOfCode), evmJumpTable, pcTable));
-                    }
-                }
-            } else {
-                if (opcode < 0xa3) {
-                    if (opcode == 0xa0) { // LOG0
-                        return pushEvmInsnCall(opWrapper2Uint(evmOp_log0), restOfCode, evmJumpTable, pcTable);
-                    } elseif (opcode == 0xa1) { // LOG1
-                        return pushEvmInsnCall(opWrapper3Uint(evmOp_log1), restOfCode, evmJumpTable, pcTable);
-                    } elseif (opcode == 0xa2) { // LOG2
-                        return pushEvmInsnCall(opWrapper4Uint(evmOp_log2), restOfCode, evmJumpTable, pcTable);
-                    }
-                } else {
-                    if (opcode == 0xa3) { // LOG3
-                        return pushEvmInsnCall(opWrapper5Uint(evmOp_log3), restOfCode, evmJumpTable, pcTable);
-                    } elseif (opcode == 0xa4) { // LOG0
-                        return pushEvmInsnCall(opWrapper6Uint(evmOp_log4), restOfCode, evmJumpTable, pcTable);
-                    }
-                }
+            if (invalidInstruction) {
+                code = pushValue(
+                    0,
+                    pushValue(
+                        0,
+                        pushValue(
+                            insn.pc,
+                            pushEvmInsnCall(opWrapper3Uint(evmOp_revert_knownPc), code)
+                        )
+                    )
+                );
+            }
+            if (makePcTable) {
+                pcTable = stack_push(pcTable, (insn.pc, hash(code)));
             }
         } else {
-            if (opcode < 0xf4) {
-                if (opcode == 0xf0) {  // CREATE
-                    return pushEvmInsnCall(opWrapper3UintRetAddress(evmOp_create), restOfCode, evmJumpTable, pcTable);
-                } elseif (opcode == 0xf1) { // CALL
-                    return pushEvmInsnCall(opWrapper7UintRetBool(evmOp_call), restOfCode, evmJumpTable, pcTable);
-                } elseif (opcode == 0xf2) { // CALLCODE
-                    return pushEvmInsnCall(opWrapper7UintRetBool(evmOp_callcode), restOfCode, evmJumpTable, pcTable);
-                } elseif (opcode == 0xf3) { // RETURN
-                    return pushEvmInsnCall(opWrapper2Uint(evmOp_return), restOfCode, evmJumpTable, pcTable);
-                }
-            } else {
-                if (opcode < 0xfc) {
-                    if (opcode == 0xf4) { // DELEGATECALL
-                        return pushEvmInsnCall(opWrapper6UintRetBool(evmOp_delegatecall), restOfCode, evmJumpTable, pcTable);
-                    } elseif (opcode == 0xf5) {  // CREATE2
-                        return pushEvmInsnCall(opWrapper4UintRetAddress(evmOp_create2), restOfCode, evmJumpTable, pcTable);
-                    } elseif (opcode == 0xfa) { // STATICCALL
-                        return pushEvmInsnCall(opWrapper6UintRetBool(evmOp_staticcall), restOfCode, evmJumpTable, pcTable);
-                    }
-                } else {
-                    if ( (opcode == 0xfd) || (opcode == 0xfe) ) { // REVERT or INVALID
-                        let (doCall, jumpTable, uPcTable) = pushEvmInsnCall(
-                            opWrapper3Uint(evmOp_revert_knownPc),
-                            restOfCode,
-                            evmJumpTable,
-                            pcTable,
-                        )?;
-                        if (opcode == 0xfe) {  // INVALID
-                            doCall = pushValue(0, pushValue(0, doCall));  // treat as equivalent to revert(0,0)
-                        }
-                        return Some((
-                            pushValue(
-                                numBytesRead-1,
-                                doCall
-                            ),
-                            jumpTable,
-                            uPcTable,
-                        ));
-                    } elseif (opcode == 0xff) { // SELFDESTRUCT
-                        return pushEvmInsnCall(opWrapperUint(evmOp_selfdestruct), restOfCode, evmJumpTable, pcTable);
-                    }
-                }
-            }
+            return (code, evmJumpTable, pcTable);
         }
     }
+}
 
-    // opcode was not found, generate AVM error instruction
-    return Some((pushInstruction(0x73, restOfCode), evmJumpTable, pcTable));
+public impure func translateEvmCodeSegment(
+    bs: ByteStream,
+    makePcTable: bool,
+) -> option<(AvmCodePoint, map<uint, AvmCodePoint>, Stack)> {
+    return Some(generateCodeForEvmSegment(parseEvmCodeSegment(bs)?, makePcTable));
 }
 
 impure func pushEvmInsnDenomCheck(
     opcode: uint,
     numStackOperands: uint,
     restOfCode: AvmCodePoint,
-    evmJumpTable: map<uint, AvmCodePoint>,
-    pcTable: Stack,
-) -> option<(AvmCodePoint, map<uint, AvmCodePoint>, Stack)> {
+) -> AvmCodePoint {
     // Deal with the EVM instructions that can "divide by zero" or the equivalent.
     // EVM defines these to return zero if the denominator is zero.
     // So we need to generate a little conditional to handle the special case.
     let doTheOp = pushInstruction(opcode, restOfCode);
-    return Some((
-        pushDupn(
-            numStackOperands-1,  // dup denominator/modulus to top of stack
-            pushInstructionImm(
-                0x35,  // cjump
-                doTheOp,
-                prependPops(
-                    numStackOperands,
-                    pushValue(
-                        0,
-                        pushInstructionImm(
-                            0x34, // jump
-                            restOfCode,
-                            doTheOp
-                        )
+    return pushDupn(
+        numStackOperands-1,  // dup denominator/modulus to top of stack
+        pushInstructionImm(
+            0x35,  // cjump
+            doTheOp,
+            prependPops(
+                numStackOperands,
+                pushValue(
+                    0,
+                    pushInstructionImm(
+                        0x34, // jump
+                        restOfCode,
+                        doTheOp
                     )
                 )
             )
-        ),
-        evmJumpTable,
-        pcTable,
-    ));
+        )
+    );
 }
 
 impure func prependPops(numPops: uint, restOfCode: AvmCodePoint) -> AvmCodePoint {
@@ -640,28 +685,19 @@ impure func pushSwapn(
     }
 }
 
-impure func pushEvmInsnCall(
-    evmOp: func(), 
-    restOfCode: AvmCodePoint,
-    evmJumpTable: map<uint, AvmCodePoint>,
-    pcTable: Stack,
-) -> option<(AvmCodePoint, map<uint, AvmCodePoint>, Stack)> {
+impure func pushEvmInsnCall(evmOp: func(), code: AvmCodePoint) -> AvmCodePoint {
     // Some EVM instructions compile to a procedure call to some Mini code.
     // Generate the appropriate procedure call.
     // Note that the EVM code will already have put the args to the call on the stack,
     //     and the Mini code will leave return values on the stack.
-    return Some((
-        pushValue(
-            restOfCode,  // push return address
-            pushInstructionImm(
-                0x34, // jump
-                evmOp,
-                restOfCode
-            )
-        ),
-        evmJumpTable,
-        pcTable,
-    ));
+    return pushValue(
+        code,  // push return address
+        pushInstructionImm(
+            0x34, // jump
+            evmOp,
+            code
+        )
+    );
 }
 
 func isKnownOpcode(opcode: uint) -> bool {  // return true iff opcode is a known EVM opcode
