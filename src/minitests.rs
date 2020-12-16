@@ -375,6 +375,11 @@ fn test_sha256_precompile() {
 }
 
 #[test]
+fn test_ripemd160_precompile() {
+    crate::evm::_evm_eval_ripemd160(None, false);
+}
+
+#[test]
 fn test_deploy_buddy_contract() {
     crate::evm::evm_deploy_buddy_contract(None, false);
 }
