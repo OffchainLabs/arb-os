@@ -410,13 +410,36 @@ fn test_arbsys_direct() {
 }
 
 #[test]
+fn test_arbowner() {
+    crate::evm::_evm_test_arbowner(None, false).unwrap();
+}
+
+#[test]
 fn test_function_table_access() {
     crate::evm::evm_test_function_table_access(None, false).unwrap();
 }
 
 #[test]
+fn test_evm_add_code() {
+    crate::evm::_basic_evm_add_test(None, false).unwrap();
+}
+
+#[test]
+fn test_same_address_deploy() {
+    crate::evm::_evm_test_same_address_deploy(None, false);
+}
+
+#[test]
 pub fn test_crosscontract_call_with_constructors() {
     match crate::evm::evm_xcontract_call_with_constructors(None, false, false) {
+        Ok(result) => assert_eq!(result, true),
+        Err(e) => panic!("error {}", e),
+    }
+}
+
+#[test]
+pub fn test_tx_with_deposit() {
+    match crate::evm::_evm_tx_with_deposit(None, false, false) {
         Ok(result) => assert_eq!(result, true),
         Err(e) => panic!("error {}", e),
     }
