@@ -13,6 +13,8 @@ use std::bytearray::bytearray_getByte;
 use std::bytearray::bytearray_setByte;
 use std::bytearray::bytearray_copy;
 
+use std::keccak::flipEndian64;
+
 
 type Ripemd160Hasher = struct {
     accumulator: bytes32,
@@ -128,7 +130,7 @@ public func ripemd160hasher_finish(h: Ripemd160Hasher) -> bytes32 {
     return asm(
         h.accumulator,
         h.buffer[0],
-        h.buffer[1] | (h.totalSizeBytes & 0xffffffffffffffff),  //TODO: check endianness
+        h.buffer[1] | flipEndian64(8*h.totalSizeBytes),  //TODO: check endianness
     ) bytes32 { ripemd160f };
 }
 

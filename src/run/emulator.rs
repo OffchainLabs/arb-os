@@ -9,6 +9,7 @@ use crate::compile::{CompileError, DebugInfo};
 use crate::link::LinkedProgram;
 use crate::mavm::{AVMOpcode, CodePt, Instruction, Opcode, Value};
 use crate::pos::Location;
+use crate::run::ripemd160port;
 use crate::uint256::Uint256;
 use clap::Clap;
 use ethers_core::types::{Signature, H256};
@@ -1193,7 +1194,7 @@ impl Machine {
                 Opcode::AVMOpcode(AVMOpcode::Hash2) => 8,
                 Opcode::AVMOpcode(AVMOpcode::Keccakf) => 600,
                 Opcode::AVMOpcode(AVMOpcode::Sha256f) => 250,
-                Opcode::AVMOpcode(AVMOpcode::Ripemd160f) => 250,  //TODO: measure and update this
+                Opcode::AVMOpcode(AVMOpcode::Ripemd160f) => 250, //TODO: measure and update this
                 Opcode::AVMOpcode(AVMOpcode::Pop) => 1,
                 Opcode::AVMOpcode(AVMOpcode::PushStatic) => 1,
                 Opcode::AVMOpcode(AVMOpcode::Rget) => 1,
@@ -2198,13 +2199,33 @@ fn sha256_compression(acc: Uint256, buf0: Uint256, buf1: Uint256) -> Uint256 {
 }
 
 fn ripemd160_compression(acc: Uint256, buf0: Uint256, buf1: Uint256) -> Uint256 {
-//BUGBUG: right now this is just a copy of sha256f
-    let mut acc_32 = acc.to_u32_digits_be();
-    let buf_32 = buf0.to_u32_digits_be_2(&buf1);
-    crypto::sha2::sha256_digest_block_u32(&mut acc_32, &buf_32);
-    let acc_32 = &mut acc_32[..];
-    acc_32.reverse();
-    Uint256::from_u32_digits(acc_32)
+    let words = acc.to_u32_digits_be();
+    let mut acc_buf = [words[3], words[4], words[5], words[6], words[7]];
+    let mut buf = buf0.to_bytes_be();
+    buf.extend(buf1.to_bytes_be());
+
+    println!("before {:?}", acc_buf);
+    println!("buf    {:?}", buf);
+    ripemd160port::process_msg_block(&mut acc_buf, &buf);
+    println!("after  {:?}", acc_buf);
+
+    println!("reversed {:?}", reverse32(acc_buf[0]));
+
+    Uint256::from_u32_digits(&[
+        reverse32(acc_buf[4]),
+        reverse32(acc_buf[3]),
+        reverse32(acc_buf[2]),
+        reverse32(acc_buf[1]),
+        reverse32(acc_buf[0]),
+        0u32,
+        0u32,
+        0u32,
+    ])
+}
+
+fn reverse32(x: u32) -> u32 {
+    let mid = (x >> 16) | (x << 16);
+    ((mid & 0x00ff00ff) << 8) | ((mid & 0xff00ff00) >> 8)
 }
 
 ///Represents a stack trace, with each CodePt indicating a stack frame, Unknown variant is unused.

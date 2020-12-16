@@ -17,6 +17,7 @@ pub use runtime_env::{
 
 mod emulator;
 mod runtime_env;
+mod ripemd160port;
 
 ///Executes the file located at path, or starts the debugger if debug is set to true.
 ///
