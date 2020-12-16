@@ -717,7 +717,7 @@ public impure func evmOp_call(
     // Now make the call.
     // After the call completes, control will be thrown directly back to resumeCodePoint.
     let res = evmCallStack_doCall(
-        0,
+        const::EVMCallType_call,
         gas,
         callee,
         balance,
@@ -757,7 +757,7 @@ public impure func evmOp_callcode(
         auxpush
     };
     let res = evmCallStack_doCall(
-        1,
+        const::EVMCallType_callcode,
         gas,
         callee,
         balance,
@@ -796,7 +796,7 @@ public impure func evmOp_delegatecall(
          auxpush
      };
      let res = evmCallStack_doCall(
-         2,
+         const::EVMCallType_delegatecall,
          gas,
          callee,
          0,  // balance will be filled in by evmCallStack_doCall
@@ -835,7 +835,7 @@ public impure func evmOp_staticcall(
         auxpush
     };
     let res = evmCallStack_doCall(
-        3,
+        const::EVMCallType_staticcall,
         gas,
         callee,
         0,  // balance is zero for a staticcall

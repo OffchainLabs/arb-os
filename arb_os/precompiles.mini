@@ -113,10 +113,10 @@ public impure func precompiles_init(acctStore: AccountStore) -> option<AccountSt
 impure func makeTrampoline(txcallFunc: impure func()) -> impure func() {
     // make a small code snippet that function-calls to txcallFunc (with a dummy return address)
     return asm(
-        0x3b,
+        const::AVM_nop,
         0,
         asm(
-            0x34,
+            const::AVM_jump,
             txcallFunc,
             asm() func() { errcodept }
         ) func() { pushinsnimm }
