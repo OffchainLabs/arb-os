@@ -22,7 +22,7 @@ use contractTemplates::getArbInfoStorage;
 use decompression::decompression_init;
 use errorHandler::errorHandler_init;
 use evmCallStack::evmCallStack_init;
-use evmLogs::EvmLogs;
+use evmlogs::EvmLogs;
 use gasAccounting::GasUsage;
 use gasAccounting::gasAccounting_init;
 use inbox::inbox_init;
