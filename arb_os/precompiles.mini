@@ -51,7 +51,7 @@ public impure func precompiles_init(acctStore: AccountStore) -> option<AccountSt
     acctStore = accountStore_createBuiltinContract(
         acctStore,
         address(0x03),
-        precompile_0x03,
+        makeTrampoline(precompile_0x03),
         false,
     )?;
     acctStore = accountStore_createBuiltinContract(
@@ -174,8 +174,7 @@ public impure func precompile_0x03() {  // ripemd160
         let calldata = evmCallFrame_getCalldata(topFrame);
         let result = ripemd160_byteArray(calldata);
         let success = evmCallStack_setTopFrameMemory(
-            bytearray_set256(
-            bytearray_new(0), 0, uint(result))
+            bytearray_set256(bytearray_new(0), 0, uint(result))
         );
         if (success) {
             evmOp_return(0, 32);
