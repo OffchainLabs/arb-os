@@ -359,7 +359,7 @@ pub fn link(
         );
         global_num_limit = relocated_prog.global_num_limit;
         relocated_progs.push((relocated_prog, *typecheck));
-        func_offset = new_func_offset;
+        func_offset = new_func_offset + 1;
     }
 
     // Initialize globals or allow jump table retrieval
