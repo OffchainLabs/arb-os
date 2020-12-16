@@ -1,17 +1,7 @@
 use core::convert::TryInto;
-use ripemd160::digest::generic_array::typenum::U64;
-use ripemd160::digest::generic_array::GenericArray;
 
 pub const DIGEST_BUF_LEN: usize = 5;
 pub const WORK_BUF_LEN: usize = 16;
-
-pub const H0: [u32; DIGEST_BUF_LEN] = [
-    0x6745_2301,
-    0xefcd_ab89,
-    0x98ba_dcfe,
-    0x1032_5476,
-    0xc3d2_e1f0,
-];
 
 //type Block = GenericArray<u8, U64>;
 type Block = Vec<u8>;
