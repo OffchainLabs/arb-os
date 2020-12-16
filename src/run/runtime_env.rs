@@ -6,6 +6,7 @@ use crate::mavm::Value;
 use crate::run::{load_from_file, ProfilerMode};
 use crate::uint256::Uint256;
 use ethers_core::rand::rngs::StdRng;
+use ethers_core::rand::SeedableRng;
 use ethers_core::types::TransactionRequest;
 use ethers_core::utils::keccak256;
 use ethers_signers::{Signer, Wallet};
@@ -13,7 +14,6 @@ use serde::{Deserialize, Serialize};
 use std::convert::TryInto;
 use std::io::Read;
 use std::{collections::HashMap, fs::File, io, path::Path};
-use ethers_core::rand::SeedableRng;
 
 #[derive(Debug, Clone)]
 pub struct RuntimeEnvironment {
@@ -658,7 +658,9 @@ impl ArbosReceipt {
         self.return_data.clone()
     }
 
-    pub fn _get_evm_logs(&self) -> Vec<EvmLog> { self.evm_logs.clone() }
+    pub fn _get_evm_logs(&self) -> Vec<EvmLog> {
+        self.evm_logs.clone()
+    }
 
     pub fn get_gas_used(&self) -> Uint256 {
         self.gas_used.clone()
@@ -680,9 +682,22 @@ impl EvmLog {
     pub fn new(val: Value) -> Self {
         if let Value::Tuple(tup) = val {
             EvmLog {
-                addr: if let Value::Int(ui) = &tup[0] { ui.clone() } else { panic!() },
+                addr: if let Value::Int(ui) = &tup[0] {
+                    ui.clone()
+                } else {
+                    panic!()
+                },
                 data: bytes_from_bytestack(tup[1].clone()).unwrap(),
-                vals: tup[2..].iter().map(|v| if let Value::Int(ui) = v { ui.clone() } else { panic!() }).collect(),
+                vals: tup[2..]
+                    .iter()
+                    .map(|v| {
+                        if let Value::Int(ui) = v {
+                            ui.clone()
+                        } else {
+                            panic!()
+                        }
+                    })
+                    .collect(),
             }
         } else {
             panic!("invalid EVM log format");

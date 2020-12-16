@@ -451,7 +451,9 @@ impl MiniProperties for TypeCheckedExpr {
         match &self.kind {
             TypeCheckedExprKind::UnaryOp(_, expr, _) => expr.is_pure(),
             TypeCheckedExprKind::Binary(_, left, right, _) => left.is_pure() && right.is_pure(),
-            TypeCheckedExprKind::Trinary(_, a, b, c, _) => a.is_pure() && b.is_pure() && c.is_pure(),
+            TypeCheckedExprKind::Trinary(_, a, b, c, _) => {
+                a.is_pure() && b.is_pure() && c.is_pure()
+            }
             TypeCheckedExprKind::ShortcutOr(left, right) => left.is_pure() && right.is_pure(),
             TypeCheckedExprKind::ShortcutAnd(left, right) => left.is_pure() && right.is_pure(),
             TypeCheckedExprKind::LocalVariableRef(_, _) => true,
@@ -2631,32 +2633,34 @@ fn typecheck_binary_op(
                 ))
             }
         }
-        BinaryOp::BitwiseAnd | BinaryOp::BitwiseOr | BinaryOp::BitwiseXor | BinaryOp::ShiftLeft | BinaryOp::ShiftRight => {
-            match (subtype1, subtype2) {
-                (Type::Uint, Type::Uint) => Ok(TypeCheckedExprKind::Binary(
-                    op,
-                    Box::new(tcs1),
-                    Box::new(tcs2),
-                    Type::Uint,
-                )),
-                (Type::Int, Type::Int) => Ok(TypeCheckedExprKind::Binary(
-                    op,
-                    Box::new(tcs1),
-                    Box::new(tcs2),
-                    Type::Int,
-                )),
-                (Type::Bytes32, Type::Bytes32) => Ok(TypeCheckedExprKind::Binary(
-                    op,
-                    Box::new(tcs1),
-                    Box::new(tcs2),
-                    Type::Bytes32,
-                )),
-                _ => Err(new_type_error(
-                    "invalid argument types to binary bitwise operator".to_string(),
-                    loc,
-                )),
-            }
-        }
+        BinaryOp::BitwiseAnd
+        | BinaryOp::BitwiseOr
+        | BinaryOp::BitwiseXor
+        | BinaryOp::ShiftLeft
+        | BinaryOp::ShiftRight => match (subtype1, subtype2) {
+            (Type::Uint, Type::Uint) => Ok(TypeCheckedExprKind::Binary(
+                op,
+                Box::new(tcs1),
+                Box::new(tcs2),
+                Type::Uint,
+            )),
+            (Type::Int, Type::Int) => Ok(TypeCheckedExprKind::Binary(
+                op,
+                Box::new(tcs1),
+                Box::new(tcs2),
+                Type::Int,
+            )),
+            (Type::Bytes32, Type::Bytes32) => Ok(TypeCheckedExprKind::Binary(
+                op,
+                Box::new(tcs1),
+                Box::new(tcs2),
+                Type::Bytes32,
+            )),
+            _ => Err(new_type_error(
+                "invalid argument types to binary bitwise operator".to_string(),
+                loc,
+            )),
+        },
         BinaryOp::_LogicalAnd | BinaryOp::LogicalOr => match (subtype1, subtype2) {
             (Type::Bool, Type::Bool) => Ok(TypeCheckedExprKind::Binary(
                 op,

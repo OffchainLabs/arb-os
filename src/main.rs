@@ -242,10 +242,9 @@ fn main() -> Result<(), CompileError> {
         }
 
         Args::EvmTests(options) => {
-            if options.input.len() == 0 {
-                let mut num_successes = 0u64;
-                let mut num_failures = 0u64;
-                for path_name in [
+            let mut paths = options.input;
+            if paths.len() == 0 {
+                paths = [
                     "evm-tests/tests/VMTests/vmArithmeticTest",
                     "evm-tests/tests/VMTests/vmPushDupSwapTest",
                     "evm-tests/tests/VMTests/vmBitwiseLogicOperation",
@@ -257,40 +256,26 @@ fn main() -> Result<(), CompileError> {
                     "evm-tests/tests/VMTests/vmLogTest",
                 ]
                 .iter()
-                {
-                    let path = Path::new(path_name);
-                    let (ns, nf) = evm::evmtest::run_evm_tests(
-                        path,
-                        if options.savelogs {
-                            Some(Path::new("evm-test-logs/"))
-                        } else {
-                            None
-                        },
-                    )
-                    .unwrap();
-                    num_successes = num_successes + ns;
-                    num_failures = num_failures + nf;
-                }
-                println!("{} successes, {} failures", num_successes, num_failures);
-            } else {
-                let mut num_successes = 0u64;
-                let mut num_failures = 0u64;
-                for path_name in options.input.iter() {
-                    let path = Path::new(path_name);
-                    let (ns, nf) = evm::evmtest::run_evm_tests(
-                        path,
-                        if options.savelogs {
-                            Some(Path::new("evm-test-logs/"))
-                        } else {
-                            None
-                        },
-                    )
-                    .unwrap();
-                    num_successes = num_successes + ns;
-                    num_failures = num_failures + nf;
-                }
-                println!("{} successes, {} failures", num_successes, num_failures);
+                .map(|a| a.to_string())
+                .collect()
             }
+            let mut num_successes = 0u64;
+            let mut num_failures = 0u64;
+            for path_name in paths.iter() {
+                let path = Path::new(path_name);
+                let (ns, nf) = evm::evmtest::run_evm_tests(
+                    path,
+                    if options.savelogs {
+                        Some(Path::new("evm-test-logs/"))
+                    } else {
+                        None
+                    },
+                )
+                .unwrap();
+                num_successes = num_successes + ns;
+                num_failures = num_failures + nf;
+            }
+            println!("{} successes, {} failures", num_successes, num_failures);
         }
     }
 

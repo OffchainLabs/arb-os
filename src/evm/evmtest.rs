@@ -15,11 +15,13 @@ pub fn run_evm_tests(path: &Path, logfiles_path: Option<&Path>) -> io::Result<(u
     if path.is_dir() {
         for entry in path.read_dir()? {
             let entry = entry?;
-            run_evm_tests(&entry.path(), logfiles_path)?;
+            let (ns, nf) = run_evm_tests(&entry.path(), logfiles_path)?;
+            num_success = num_success + ns;
+            num_fail = num_fail + nf;
         }
     } else {
-        let contents = std::fs::read_to_string(path.clone())
-            .expect("Something went wrong reading the file");
+        let contents =
+            std::fs::read_to_string(path.clone()).expect("Something went wrong reading the file");
         let json: serde_json::Value =
             serde_json::from_str(&contents).expect("JSON was not well-formatted");
         if !path.ends_with("gas0.json")

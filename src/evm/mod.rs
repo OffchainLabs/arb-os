@@ -154,7 +154,7 @@ pub fn _evm_tx_with_deposit(
             ethabi::Token::Address(ethabi::Address::from_low_u64_be(1025)),
             ethabi::Token::Uint(ethabi::Uint::try_from(1).unwrap()),
         ]
-            .as_ref(),
+        .as_ref(),
         &mut machine,
         Uint256::zero(),
         debug,
