@@ -27,6 +27,7 @@ use std::queue::queue_new;
 use std::queue::queue_isEmpty;
 use std::queue::queue_put;
 use std::queue::queue_get;
+use std::queue::queue_getOrDie;
 
 use chainParameters::chainParams_millisecondsPerBlock;
 use chainParameters::chainParams_speedLimitPerSecond;
@@ -45,6 +46,7 @@ var gasAccountingInfo: struct {
     lastBlockNumSeen: uint,       // last L1 block number seen by this module
     txState: option<TxGasState>,  // status of currently active tx (if there is one)
     payFeesTo: option<address>,   // where to pay validator fees; if None, funds should be burned
+    overheadTracker: OverheadTracker,
 };
 
 var gasAccountingConstants: struct {
@@ -92,6 +94,7 @@ public impure func gasAccounting_init() {
         lastBlockNumSeen: 0,
         txState: None<TxGasState>,
         payFeesTo: None<address>,
+        overheadTracker: overheadTracker_new(5, 0),
     };
 }
 
@@ -157,8 +160,18 @@ public impure func gasAccounting_specialCharge(payer: address, amount: uint) -> 
             account_deductFromEthBalance(payerAcct, amount)?,
         )
     );
-    gasAccountingInfo = gasAccountingInfo with { owedToValidators: gasAccountingInfo.owedToValidators + amount };
+    gasAccountingInfo = gasAccountingInfo with {
+        owedToValidators: gasAccountingInfo.owedToValidators + amount
+    } with {
+        reserve: gasAccountingInfo.reserve + amount
+    };
     return Some(());
+}
+
+impure func addDelayedOverhead(amount: uint) {
+    gasAccountingInfo = gasAccountingInfo with {
+        overheadTracker: overheadTracker_add(gasAccountingInfo.overheadTracker, amount)
+    };
 }
 
 public impure func recycleBurnedFunds(amount: uint) {
@@ -211,11 +224,9 @@ public impure func gasAccounting_startTxCharges(
     );
 
     let gasUsedByOS = (~0) - asm() uint { getgas };
+
+    addDelayedOverhead(gasUsedByOS);
     gasAccountingInfo = gasAccountingInfo with {
-        gasPool: gasAccountingInfo.gasPool - int(gasUsedByOS)
-    } with {
-        owedToValidators: gasAccountingInfo.owedToValidators + gasUsedByOS * gasAccountingConstants.BaseGasPrice
-    } with {
         txState: Some(struct {
             gasInReserve: 0,
             originalMax: maxGas,
@@ -333,13 +344,7 @@ public impure func gasAccounting_resumeTxCharges(allocationRequested: uint) -> u
     if let Some(txState) = gasAccountingInfo.txState {
         let gasRegister = asm() uint { getgas };
         if (gasRegister >= asm(1, 255) uint { shl }) {
-            let gasUsedByOS = (~0) - gasRegister;
-            gasAccountingInfo = gasAccountingInfo with {
-                gasPool: gasAccountingInfo.gasPool - int(gasUsedByOS)
-            } with {
-                owedToValidators: gasAccountingInfo.owedToValidators
-                                     + gasUsedByOS * gasAccountingConstants.BaseGasPrice
-            };
+            addDelayedOverhead((~0) - gasRegister);
         }
 
         if (allocationRequested > txState.gasInReserve) {
@@ -434,6 +439,14 @@ public impure func getNextRequestFromCongestionAuction() -> (
 
     if (blockNum > gasAccountingInfo.lastBlockNumSeen) {
         // it's the first tx of a new block
+        let (uot, delayedGas) = overheadTracker_advanceToBlock(gasAccountingInfo.overheadTracker, blockNum);
+        gasAccountingInfo = gasAccountingInfo with {
+            overheadTracker: uot
+        } with {
+            owedToValidators: gasAccountingInfo.owedToValidators + delayedGas * gasAccountingConstants.BaseGasPrice
+        } with {
+            gasPool: gasAccountingInfo.gasPool - int(delayedGas)
+        };
 
         payOutFundsToValidators();
 
@@ -512,4 +525,79 @@ impure func getRequestGasInfo(maybeRequest: option<IncomingRequest>, maybeTx: op
         return (true, tx.incomingRequest.blockNumber, tx.incomingRequest.sender, tx.maxGas, tx.gasPrice);
     }
     return (true, gasAccountingInfo.lastBlockNumSeen, address(~0), 0, 0);  // shouldn't happen
+}
+
+// Overhead tracking functionality follows
+// This keeps track of all of the overhead costs, but delays their effect by a fixed period of blocks
+// The delay exists to ensure that aggregators can ignore the short-term affects of overhead, thereby allowing
+//     them to run speculatively for a little while without having overhead differences affect gas pricing.
+
+type OverheadTracker = struct {
+    current: uint,
+    delayBlocks: uint,
+    blockNum: uint,
+    delayed: Queue,
+}
+
+func overheadTracker_new(delayBlocks: uint, blockNum: uint) -> OverheadTracker {
+    let q = queue_new();
+    let i = 0;
+    while (i < delayBlocks) {
+        q = queue_put(q, 0);
+        i = i+1;
+    }
+    return struct {
+        current: 0,
+        delayBlocks: delayBlocks,
+        blockNum: blockNum,
+        delayed: q
+    };
+}
+
+func overheadTracker_changeDelay(ot: OverheadTracker, newDelayBlocks: uint) -> (OverheadTracker, uint) {
+    let gas = 0;
+    while(ot.delayBlocks < newDelayBlocks) {
+        ot = ot with {
+            delayBlocks: ot.delayBlocks + 1
+        } with {
+            delayed: queue_put(ot.delayed, 0)
+        };
+    }
+    while(ot.delayBlocks > newDelayBlocks) {
+        let (q, g) = queue_getOrDie(ot.delayed);
+        gas = gas + unsafecast<uint>(g);
+        ot = ot with {
+            delayBlocks: ot.delayBlocks - 1
+        } with {
+            delayed: q
+        };
+    }
+    return (ot, gas);
+}
+
+func overheadTracker_add(ot: OverheadTracker, gas: uint) -> OverheadTracker {
+    return ot with { current: ot.current + gas };
+}
+
+func overheadTracker_advanceToBlock(ot: OverheadTracker, bnum: uint) -> (OverheadTracker, uint) {
+    if (bnum > ot.blockNum + ot.delayBlocks) {
+        let (uot, gas) = overheadTracker_advanceToBlock(ot, ot.blockNum + ot.delayBlocks);
+
+        // now queue is full of zeroes, so we can jump to the end
+        return (uot with { blockNum: bnum }, gas);
+    }
+
+    let gas = 0;
+    while(ot.blockNum < bnum) {
+        let (q, g) = queue_getOrDie(queue_put(ot.delayed, ot.current));
+        gas = gas + unsafecast<uint>(g);
+        ot = ot with {
+            delayed: q
+        } with {
+            current: 0
+        } with {
+            blockNum: ot.blockNum + 1
+        };
+    }
+    return (ot, gas);
 }
