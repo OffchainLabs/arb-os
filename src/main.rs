@@ -87,6 +87,7 @@ struct Profiler {
 
 #[derive(Clap, Debug)]
 struct EvmTests {
+    input: Vec<String>,
     #[clap(short, long)]
     savelogs: bool,
 }
@@ -241,35 +242,55 @@ fn main() -> Result<(), CompileError> {
         }
 
         Args::EvmTests(options) => {
-            let mut num_successes = 0u64;
-            let mut num_failures = 0u64;
-            for path_name in [
-                "evm-tests/tests/VMTests/vmArithmeticTest",
-                "evm-tests/tests/VMTests/vmPushDupSwapTest",
-                "evm-tests/tests/VMTests/vmBitwiseLogicOperation",
-                "evm-tests/tests/VMTests/vmIOandFlowOperations",
-                "evm-tests/tests/VMTests/vmSha3Test",
-                "evm-tests/tests/VMTests/vmRandomTest",
-                "evm-tests/tests/VMTests/vmSystemOperations",
-                "evm-tests/tests/VMTests/vmEnvironmentalInfo",
-                "evm-tests/tests/VMTests/vmLogTest",
-            ]
-            .iter()
-            {
-                let path = Path::new(path_name);
-                let (ns, nf) = evm::evmtest::run_evm_tests(
-                    path,
-                    if options.savelogs {
-                        Some(Path::new("evm-test-logs/"))
-                    } else {
-                        None
-                    },
-                )
-                .unwrap();
-                num_successes = num_successes + ns;
-                num_failures = num_failures + nf;
+            if options.input.len() == 0 {
+                let mut num_successes = 0u64;
+                let mut num_failures = 0u64;
+                for path_name in [
+                    "evm-tests/tests/VMTests/vmArithmeticTest",
+                    "evm-tests/tests/VMTests/vmPushDupSwapTest",
+                    "evm-tests/tests/VMTests/vmBitwiseLogicOperation",
+                    "evm-tests/tests/VMTests/vmIOandFlowOperations",
+                    "evm-tests/tests/VMTests/vmSha3Test",
+                    "evm-tests/tests/VMTests/vmRandomTest",
+                    "evm-tests/tests/VMTests/vmSystemOperations",
+                    "evm-tests/tests/VMTests/vmEnvironmentalInfo",
+                    "evm-tests/tests/VMTests/vmLogTest",
+                ]
+                .iter()
+                {
+                    let path = Path::new(path_name);
+                    let (ns, nf) = evm::evmtest::run_evm_tests(
+                        path,
+                        if options.savelogs {
+                            Some(Path::new("evm-test-logs/"))
+                        } else {
+                            None
+                        },
+                    )
+                    .unwrap();
+                    num_successes = num_successes + ns;
+                    num_failures = num_failures + nf;
+                }
+                println!("{} successes, {} failures", num_successes, num_failures);
+            } else {
+                let mut num_successes = 0u64;
+                let mut num_failures = 0u64;
+                for path_name in options.input.iter() {
+                    let path = Path::new(path_name);
+                    let (ns, nf) = evm::evmtest::run_evm_tests(
+                        path,
+                        if options.savelogs {
+                            Some(Path::new("evm-test-logs/"))
+                        } else {
+                            None
+                        },
+                    )
+                    .unwrap();
+                    num_successes = num_successes + ns;
+                    num_failures = num_failures + nf;
+                }
+                println!("{} successes, {} failures", num_successes, num_failures);
             }
-            println!("{} successes, {} failures", num_successes, num_failures);
         }
     }
 

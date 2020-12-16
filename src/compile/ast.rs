@@ -1101,6 +1101,8 @@ pub enum BinaryOp {
     BitwiseAnd,
     BitwiseOr,
     BitwiseXor,
+    ShiftLeft,
+    ShiftRight,
     _LogicalAnd,
     LogicalOr,
     Hash,

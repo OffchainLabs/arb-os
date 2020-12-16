@@ -99,6 +99,8 @@ public func bytestream_get256(bs: ByteStream) -> option<(ByteStream, uint)> {
     if (bs.currentOffset+32 > bs.capacity) {
         return None;
     } else {
+        // let res = getbuffer256(bs.buf, bs.currentOffset+bs.slice);
+        // debug((3333, bs.currentOffset));
         return Some((
             bs with { currentOffset: bs.currentOffset+32 },
             getbuffer256(bs.buf, bs.currentOffset+bs.slice)

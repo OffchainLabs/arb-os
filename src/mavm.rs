@@ -334,6 +334,7 @@ fn hash_buf(buf: &[u8]) -> Packed {
     normal(Uint256::avm_hash2(&unpack(&h1), &unpack(&h2)), h1.size + 1)
 }
 
+#[allow(dead_code)]
 pub fn hash_buffer(buf: &[u8]) -> Uint256 {
     unpack(&hash_buf(buf))
 }
@@ -511,10 +512,12 @@ impl Buffer {
         }
     }
 
+    #[allow(dead_code)]
     pub fn empty0() -> Buffer {
         Buffer::leaf(Rc::new(Vec::new()))
     }
 
+    #[allow(dead_code)]
     pub fn empty1() -> Rc<Vec<Buffer>> {
         let mut vec = Vec::new();
         let empty = Rc::new(Vec::new());
@@ -524,6 +527,7 @@ impl Buffer {
         Rc::new(vec)
     }
 
+    #[allow(dead_code)]
     fn make_empty(h: u8) -> Rc<Vec<Buffer>> {
         if h == 1 {
             return Buffer::empty1();

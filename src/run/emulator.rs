@@ -14,7 +14,6 @@ use clap::Clap;
 use ethers_core::types::{Signature, H256};
 use std::cmp::{max, Ordering};
 use std::collections::{BTreeMap, HashMap};
-use std::convert::TryFrom;
 use std::convert::TryInto;
 use std::fmt;
 use std::fs::File;
@@ -2048,9 +2047,10 @@ impl Machine {
                     }
                     Opcode::AVMOpcode(AVMOpcode::SetBuffer8) => {
                         let offset = self.stack.pop_usize(&self.state)?;
-                        let val = self.stack.pop_usize(&self.state)?;
+                        let val = self.stack.pop_uint(&self.state)?;
                         let buf = self.stack.pop_buffer(&self.state)?;
-                        let nbuf = buf.set_byte(offset, u8::try_from(val & 0xff).unwrap());
+                        let bytes = val.to_bytes_be();
+                        let nbuf = buf.set_byte(offset, bytes[31]);
                         self.stack.push(Value::copy_buffer(nbuf));
                         self.incr_pc();
                         Ok(true)

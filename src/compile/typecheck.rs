@@ -2631,7 +2631,7 @@ fn typecheck_binary_op(
                 ))
             }
         }
-        BinaryOp::BitwiseAnd | BinaryOp::BitwiseOr | BinaryOp::BitwiseXor => {
+        BinaryOp::BitwiseAnd | BinaryOp::BitwiseOr | BinaryOp::BitwiseXor | BinaryOp::ShiftLeft | BinaryOp::ShiftRight => {
             match (subtype1, subtype2) {
                 (Type::Uint, Type::Uint) => Ok(TypeCheckedExprKind::Binary(
                     op,
@@ -2853,6 +2853,8 @@ fn typecheck_binary_op_const(
         | BinaryOp::NotEqual
         | BinaryOp::BitwiseAnd
         | BinaryOp::BitwiseOr
+        | BinaryOp::ShiftLeft
+        | BinaryOp::ShiftRight
         | BinaryOp::BitwiseXor
         | BinaryOp::Hash => {
             if t1 == t2 {

@@ -5,7 +5,7 @@
 use crate::mavm::Value;
 use crate::run::{load_from_file, ProfilerMode};
 use crate::uint256::Uint256;
-use ethers_core::rand::thread_rng;
+use ethers_core::rand::rngs::StdRng;
 use ethers_core::types::TransactionRequest;
 use ethers_core::utils::keccak256;
 use ethers_signers::{Signer, Wallet};
@@ -13,6 +13,7 @@ use serde::{Deserialize, Serialize};
 use std::convert::TryInto;
 use std::io::Read;
 use std::{collections::HashMap, fs::File, io, path::Path};
+use ethers_core::rand::SeedableRng;
 
 #[derive(Debug, Clone)]
 pub struct RuntimeEnvironment {
@@ -72,7 +73,8 @@ impl RuntimeEnvironment {
     }
 
     pub fn new_wallet(&self) -> Wallet {
-        Wallet::new(&mut thread_rng()).set_chain_id(self.get_chain_id())
+        let mut r = StdRng::seed_from_u64(42);
+        Wallet::new(&mut r).set_chain_id(self.get_chain_id())
     }
 
     pub fn get_chain_id(&self) -> u64 {

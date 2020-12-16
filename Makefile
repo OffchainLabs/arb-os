@@ -63,8 +63,11 @@ $(ARBOSDIR)/arbos.mexe: $(ARBOSDIR) $(STDDIR) $(BUILTINDIR)
 run:
 	cargo run --release -- run "arb_os/arbos.mexe"
 
-test:
-	cargo test --release
+arbos: $(TEMPLATES) $(ARBOS)
+
+test: $(ARBOS)
+	cargo test --release 
+	#test_function -- --nocapture
 
 evmtest: $(ARBOS)
 	$(CARGORUN) evm-tests
