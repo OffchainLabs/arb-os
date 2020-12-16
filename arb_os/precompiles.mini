@@ -73,37 +73,37 @@ public impure func precompiles_init(acctStore: AccountStore) -> option<AccountSt
     )?;
     acctStore = accountStore_createBuiltinContract(
         acctStore,
-        address(100),
+        address(const::Address_ArbSys),
         makeTrampoline(arbsys_txcall),
         true,
     )?;
     acctStore = accountStore_createBuiltinContract(
         acctStore,
-        address(105),
+        address(const::Address_ArbosTest),
         makeTrampoline(arbosTest_txcall),
         true,
     )?;
     acctStore = accountStore_createBuiltinContract(
         acctStore,
-        address(102),
+        address(const::Address_ArbAddressTable),
         makeTrampoline(arbAddressTable_txcall),
         true,
     )?;
     acctStore = accountStore_createBuiltinContract(
         acctStore,
-        address(103),
+        address(const::Address_ArbBLS),
         makeTrampoline(arbBLS_txcall),
         true,
     )?;
     acctStore = accountStore_createBuiltinContract(
         acctStore,
-        address(104),
+        address(const::Address_ArbFunctionTable),
         makeTrampoline(arbFunctionTable_txcall),
         true,
     )?;
     acctStore = accountStore_createBuiltinContract(
         acctStore,
-        address(107),
+        address(const::Address_ArbOwner),
         makeTrampoline(arbowner_txcall),
         true,
     )?;

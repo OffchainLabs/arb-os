@@ -81,104 +81,55 @@ use codeSegment::translateEvmCodeSegment;
 use std::keccak::keccak256;
 use std::rlp::keccakOfRlpEncodedUintPair;
 
-const opNum_stop = 0;
-const opNum_sha3 = 1;
-const opNum_address = 2;
-const opNum_balance = 3;
-const opNum_selfbalance = 4;
-const opNum_origin = 5;
-const opNum_caller = 6;
-const opNum_callvalue = 7;
-const opNum_calldataload = 8;
-const opNum_calldatasize = 9;
-const opNum_calldatacopy = 10;
-const opNum_codesize = 11;
-const opNum_codecopy = 12;
-const opNum_extcodesize = 13;
-const opNum_extcodecopy = 14;
-const opNum_extcodehash = 15;
-const opNum_returndatasize = 16;
-const opNum_returndatacopy = 17;
-const opNum_timestamp = 18;
-const opNum_number = 19;
-const opNum_msize = 20;
-const opNum_mload = 21;
-const opNum_mstore = 22;
-const opNum_mstore8 = 23;
-const opNum_sload = 24;
-const opNum_sstore = 25;
-const opNum_getjumpaddr = 26;
-const opNum_msize = 27;
-const opNum_log0 = 28;
-const opNum_log1 = 29;
-const opNum_log2 = 30;
-const opNum_log3 = 31;
-const opNum_log4 = 32;
-const opNum_call = 33;
-const opNum_callcode = 34;
-const opNum_delegatecall = 35;
-const opNum_staticcall = 36;
-const opNum_revert = 37;
-const opNum_revert_knownPc = 38;
-const opNum_return = 39;
-const opNum_selfdestruct = 40;
-const opNum_create = 41;
-const opNum_create2 = 42;
-const opNum_chainId = 43;
-const num_opNums = 44;
 
-var evmOpJumpTable: [constval(num_opNums)]impure func();
+var evmOpJumpTable: [const::NumEvmOps]impure func();
 
 public impure func evmOps_init() {
-    evmOpJumpTable = unsafecast<[constval(num_opNums)]impure func()>(newfixedarray(constval(num_opNums)));
-    evmOps_init_makeOne(constval(opNum_stop), unsafecast<impure func()>(evmOp_stop));
-    evmOps_init_makeOne(constval(opNum_sha3), unsafecast<impure func()>(evmOp_sha3));
-    evmOps_init_makeOne(constval(opNum_address), unsafecast<impure func()>(evmOp_address));
-    evmOps_init_makeOne(constval(opNum_balance), unsafecast<impure func()>(evmOp_balance));
-    evmOps_init_makeOne(constval(opNum_selfbalance), unsafecast<impure func()>(evmOp_selfbalance));
-    evmOps_init_makeOne(constval(opNum_origin), unsafecast<impure func()>(evmOp_origin));
-    evmOps_init_makeOne(constval(opNum_caller), unsafecast<impure func()>(evmOp_caller));
-    evmOps_init_makeOne(constval(opNum_callvalue), unsafecast<impure func()>(evmOp_callvalue));
-    evmOps_init_makeOne(constval(opNum_calldataload), unsafecast<impure func()>(evmOp_calldataload));
-    evmOps_init_makeOne(constval(opNum_calldatasize), unsafecast<impure func()>(evmOp_calldatasize));
-    evmOps_init_makeOne(constval(opNum_calldatacopy), unsafecast<impure func()>(evmOp_calldatacopy));
-    evmOps_init_makeOne(constval(opNum_codesize), unsafecast<impure func()>(evmOp_codesize));
-    evmOps_init_makeOne(constval(opNum_codecopy), unsafecast<impure func()>(evmOp_codecopy));
-    evmOps_init_makeOne(constval(opNum_extcodesize), unsafecast<impure func()>(evmOp_extcodesize));
-    evmOps_init_makeOne(constval(opNum_extcodecopy), unsafecast<impure func()>(evmOp_extcodecopy));
-    evmOps_init_makeOne(constval(opNum_extcodehash), unsafecast<impure func()>(evmOp_extcodehash));
-    evmOps_init_makeOne(constval(opNum_returndatasize), unsafecast<impure func()>(evmOp_returndatasize));
-    evmOps_init_makeOne(constval(opNum_returndatacopy), unsafecast<impure func()>(evmOp_returndatacopy));
-    evmOps_init_makeOne(constval(opNum_timestamp), unsafecast<impure func()>(evmOp_timestamp));
-    evmOps_init_makeOne(constval(opNum_number), unsafecast<impure func()>(evmOp_number));
-    evmOps_init_makeOne(constval(opNum_msize), unsafecast<impure func()>(evmOp_msize));
-    evmOps_init_makeOne(constval(opNum_mload), unsafecast<impure func()>(evmOp_mload));
-    evmOps_init_makeOne(constval(opNum_mstore), unsafecast<impure func()>(evmOp_mstore));
-    evmOps_init_makeOne(constval(opNum_mstore8), unsafecast<impure func()>(evmOp_mstore8));
-    evmOps_init_makeOne(constval(opNum_sload), unsafecast<impure func()>(evmOp_sload));
-    evmOps_init_makeOne(constval(opNum_sstore), unsafecast<impure func()>(evmOp_sstore));
-    evmOps_init_makeOne(constval(opNum_getjumpaddr), unsafecast<impure func()>(evmOp_getjumpaddr));
-    evmOps_init_makeOne(constval(opNum_msize), unsafecast<impure func()>(evmOp_msize));
-    evmOps_init_makeOne(constval(opNum_log0), unsafecast<impure func()>(evmOp_log0));
-    evmOps_init_makeOne(constval(opNum_log1), unsafecast<impure func()>(evmOp_log1));
-    evmOps_init_makeOne(constval(opNum_log2), unsafecast<impure func()>(evmOp_log2));
-    evmOps_init_makeOne(constval(opNum_log3), unsafecast<impure func()>(evmOp_log3));
-    evmOps_init_makeOne(constval(opNum_log4), unsafecast<impure func()>(evmOp_log4));
-    evmOps_init_makeOne(constval(opNum_call), unsafecast<impure func()>(evmOp_call));
-    evmOps_init_makeOne(constval(opNum_callcode), unsafecast<impure func()>(evmOp_callcode));
-    evmOps_init_makeOne(constval(opNum_delegatecall), unsafecast<impure func()>(evmOp_delegatecall));
-    evmOps_init_makeOne(constval(opNum_staticcall), unsafecast<impure func()>(evmOp_staticcall));
-    evmOps_init_makeOne(constval(opNum_revert), unsafecast<impure func()>(evmOp_revert));
-    evmOps_init_makeOne(constval(opNum_revert_knownPc), unsafecast<impure func()>(evmOp_revert_knownPc));
-    evmOps_init_makeOne(constval(opNum_return), unsafecast<impure func()>(evmOp_return));
-    evmOps_init_makeOne(constval(opNum_selfdestruct), unsafecast<impure func()>(evmOp_selfdestruct));
-    evmOps_init_makeOne(constval(opNum_create), unsafecast<impure func()>(evmOp_create));
-    evmOps_init_makeOne(constval(opNum_create2), unsafecast<impure func()>(evmOp_create2));
-    evmOps_init_makeOne(constval(opNum_chainId), unsafecast<impure func()>(chainParams_chainId));
-}
-
-impure func evmOps_init_makeOne(i: uint, f: impure func()) {
-    evmOpJumpTable = evmOpJumpTable with { [i] = f };
+    evmOpJumpTable = unsafecast<[const::NumEvmOps]impure func()>(newfixedarray(const::NumEvmOps))
+        with  { [const::EvmOp_stop] = unsafecast<impure func()>(evmOp_stop) }
+        with  { [const::EvmOp_sha3] = unsafecast<impure func()>(evmOp_sha3) }
+        with  { [const::EvmOp_address] = unsafecast<impure func()>(evmOp_address) }
+        with  { [const::EvmOp_balance] = unsafecast<impure func()>(evmOp_balance) }
+        with  { [const::EvmOp_selfbalance] = unsafecast<impure func()>(evmOp_selfbalance) }
+        with  { [const::EvmOp_origin] = unsafecast<impure func()>(evmOp_origin) }
+        with  { [const::EvmOp_caller] = unsafecast<impure func()>(evmOp_caller) }
+        with  { [const::EvmOp_callvalue] = unsafecast<impure func()>(evmOp_callvalue) }
+        with  { [const::EvmOp_calldataload] = unsafecast<impure func()>(evmOp_calldataload) }
+        with  { [const::EvmOp_calldatasize] = unsafecast<impure func()>(evmOp_calldatasize) }
+        with  { [const::EvmOp_calldatacopy] = unsafecast<impure func()>(evmOp_calldatacopy) }
+        with  { [const::EvmOp_codesize] = unsafecast<impure func()>(evmOp_codesize) }
+        with  { [const::EvmOp_codecopy] = unsafecast<impure func()>(evmOp_codecopy) }
+        with  { [const::EvmOp_extcodesize] = unsafecast<impure func()>(evmOp_extcodesize) }
+        with  { [const::EvmOp_extcodecopy] = unsafecast<impure func()>(evmOp_extcodecopy) }
+        with  { [const::EvmOp_extcodehash] = unsafecast<impure func()>(evmOp_extcodehash) }
+        with  { [const::EvmOp_returndatasize] = unsafecast<impure func()>(evmOp_returndatasize) }
+        with  { [const::EvmOp_returndatacopy] = unsafecast<impure func()>(evmOp_returndatacopy) }
+        with  { [const::EvmOp_timestamp] = unsafecast<impure func()>(evmOp_timestamp) }
+        with  { [const::EvmOp_number] = unsafecast<impure func()>(evmOp_number) }
+        with  { [const::EvmOp_msize] = unsafecast<impure func()>(evmOp_msize) }
+        with  { [const::EvmOp_mload] = unsafecast<impure func()>(evmOp_mload) }
+        with  { [const::EvmOp_mstore] = unsafecast<impure func()>(evmOp_mstore) }
+        with  { [const::EvmOp_mstore8] = unsafecast<impure func()>(evmOp_mstore8) }
+        with  { [const::EvmOp_sload] = unsafecast<impure func()>(evmOp_sload) }
+        with  { [const::EvmOp_sstore] = unsafecast<impure func()>(evmOp_sstore) }
+        with  { [const::EvmOp_getjumpaddr] = unsafecast<impure func()>(evmOp_getjumpaddr) }
+        with  { [const::EvmOp_msize] = unsafecast<impure func()>(evmOp_msize) }
+        with  { [const::EvmOp_log0] = unsafecast<impure func()>(evmOp_log0) }
+        with  { [const::EvmOp_log1] = unsafecast<impure func()>(evmOp_log1) }
+        with  { [const::EvmOp_log2] = unsafecast<impure func()>(evmOp_log2) }
+        with  { [const::EvmOp_log3] = unsafecast<impure func()>(evmOp_log3) }
+        with  { [const::EvmOp_log4] = unsafecast<impure func()>(evmOp_log4) }
+        with  { [const::EvmOp_call] = unsafecast<impure func()>(evmOp_call) }
+        with  { [const::EvmOp_callcode] = unsafecast<impure func()>(evmOp_callcode) }
+        with  { [const::EvmOp_delegatecall] = unsafecast<impure func()>(evmOp_delegatecall) }
+        with  { [const::EvmOp_staticcall] = unsafecast<impure func()>(evmOp_staticcall) }
+        with  { [const::EvmOp_revert] = unsafecast<impure func()>(evmOp_revert) }
+        with  { [const::EvmOp_revert_knownPc] = unsafecast<impure func()>(evmOp_revert_knownPc) }
+        with  { [const::EvmOp_return] = unsafecast<impure func()>(evmOp_return) }
+        with  { [const::EvmOp_selfdestruct] = unsafecast<impure func()>(evmOp_selfdestruct) }
+        with  { [const::EvmOp_create] = unsafecast<impure func()>(evmOp_create) }
+        with  { [const::EvmOp_create2] = unsafecast<impure func()>(evmOp_create2) }
+        with  { [const::EvmOp_chainId] = unsafecast<impure func()>(chainParams_chainId) };
 }
 
 public impure func evmOps_trampoline(index: uint) {
