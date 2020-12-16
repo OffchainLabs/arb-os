@@ -32,10 +32,15 @@ pub struct RuntimeEnvironment {
 
 impl RuntimeEnvironment {
     pub fn new(chain_address: Uint256) -> Self {
+        RuntimeEnvironment::new_with_owner(chain_address, None)
+    }
+
+    pub fn new_with_owner(chain_address: Uint256, owner: Option<Uint256>) -> Self {
         RuntimeEnvironment::new_with_blocknum_timestamp(
             chain_address,
             Uint256::from_u64(100_000),
             Uint256::from_u64(10_000_000),
+            owner,
         )
     }
 
@@ -43,6 +48,7 @@ impl RuntimeEnvironment {
         chain_address: Uint256,
         blocknum: Uint256,
         timestamp: Uint256,
+        owner: Option<Uint256>,
     ) -> Self {
         let mut ret = RuntimeEnvironment {
             chain_id: chain_address.trim_to_u64() & 0xffffffffffff, // truncate to 48 bits
@@ -57,18 +63,19 @@ impl RuntimeEnvironment {
             recorder: RtEnvRecorder::new(),
             compressor: TxCompressor::new(),
         };
-        ret.insert_l1_message(4, chain_address, &RuntimeEnvironment::get_params_bytes());
+        ret.insert_l1_message(4, chain_address, &RuntimeEnvironment::get_params_bytes(owner));
         ret
     }
 
-    fn get_params_bytes() -> Vec<u8> {
+
+    fn get_params_bytes(owner: Option<Uint256>) -> Vec<u8> {
         let mut buf = Vec::new();
         buf.extend(Uint256::from_u64(3 * 60 * 60 * 1000).to_bytes_be()); // grace period in ticks
         buf.extend(Uint256::from_u64(100_000_000 / 1000).to_bytes_be()); // arbgas speed limit per tick
         buf.extend(Uint256::from_u64(10_000_000_000).to_bytes_be()); // max execution steps
         buf.extend(Uint256::from_u64(1000).to_bytes_be()); // base stake amount in wei
         buf.extend(Uint256::zero().to_bytes_be()); // staking token address (zero means ETH)
-        buf.extend(Uint256::zero().to_bytes_be()); // owner address
+        buf.extend(owner.unwrap_or(Uint256::zero()).to_bytes_be()); // owner address
         buf
     }
 

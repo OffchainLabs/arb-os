@@ -419,6 +419,38 @@ impl<'a> ArbSys<'a> {
         }
     }
 
+    pub fn _arbos_version(
+        &self,
+        machine: &mut Machine,
+    ) -> Result<Uint256, ethabi::Error> {
+        let (receipts, _sends) = self.contract_abi.call_function_compressed(
+            self.my_address.clone(),
+            "arbOSVersion",
+            &[],
+            machine,
+            Uint256::zero(),
+            self._wallet,
+            self.debug,
+        )?;
+
+        if (receipts.len() != 1) {
+            return Err(ethabi::Error::from("wrong number of receipts"));
+        }
+
+        if receipts[0].succeeded() {
+            let return_vals = ethabi::decode(
+                &[ethabi::ParamType::Uint(256)],
+                &receipts[0].get_return_data(),
+            )?;
+            match return_vals[0] {
+                ethabi::Token::Uint(ui) => Ok(Uint256::from_u256(&ui)),
+                _ => panic!(),
+            }
+        } else {
+            Err(ethabi::Error::from("reverted"))
+        }
+    }
+
     pub fn _withdraw_eth(
         &self,
         machine: &mut Machine,
@@ -494,7 +526,7 @@ impl<'a> ArbSys<'a> {
 
 pub struct ArbAddressTable<'a> {
     pub contract_abi: AbiForContract,
-    wallet: &'a Wallet,
+    _wallet: &'a Wallet,
     my_address: Uint256,
     debug: bool,
 }
@@ -507,7 +539,7 @@ impl<'a> ArbAddressTable<'a> {
         contract_abi.bind_interface_to_address(Uint256::from_u64(102));
         ArbAddressTable {
             contract_abi,
-            wallet,
+            _wallet: wallet,
             my_address: Uint256::from_bytes(wallet.address().as_bytes()),
             debug,
         }
@@ -592,13 +624,12 @@ impl<'a> ArbAddressTable<'a> {
         machine: &mut Machine,
         index: Uint256,
     ) -> Result<Uint256, ethabi::Error> {
-        let (receipts, sends) = self.contract_abi.call_function_compressed(
+        let (receipts, sends) = self.contract_abi.call_function(
             self.my_address.clone(),
             "lookupIndex",
             &[ethabi::Token::Uint(ethabi::Uint::from(index.to_u256()))],
             machine,
             Uint256::zero(),
-            self.wallet,
             self.debug,
         )?;
         if (receipts.len() != 1) || (sends.len() != 0) {
@@ -921,6 +952,127 @@ impl<'a> ArbFunctionTable<'a> {
     }
 }
 
+pub struct _ArbOwner<'a> {
+    pub contract_abi: AbiForContract,
+    wallet: &'a Wallet,
+    my_address: Uint256,
+    debug: bool,
+}
+
+impl<'a> _ArbOwner<'a> {
+    pub fn _new(wallet: &'a Wallet, debug: bool) -> Self {
+        let mut contract_abi =
+            AbiForContract::new_from_file("contracts/add/build/contracts/ArbOwner.json").unwrap();
+        contract_abi.bind_interface_to_address(Uint256::from_u64(107));
+        _ArbOwner {
+            contract_abi,
+            wallet,
+            my_address: Uint256::from_bytes(wallet.address().as_bytes()),
+            debug,
+        }
+    }
+
+    pub fn _give_ownership(
+        &self,
+        machine: &mut Machine,
+        new_owner: Uint256,
+        old_owner: Option<Uint256>,
+    ) -> Result<(), ethabi::Error> {
+        let (receipts, _sends) = self.contract_abi.call_function(
+            old_owner.unwrap_or(self.my_address.clone()),
+            "giveOwnership",
+            &[ethabi::Token::Address(new_owner.to_h160())],
+            machine,
+            Uint256::zero(),
+            self.debug,
+        )?;
+
+       if receipts.len() != 1 {
+            return Err(ethabi::Error::from("wrong number of receipts"));
+        }
+
+        if receipts[0].succeeded() {
+            Ok(())
+        } else {
+            Err(ethabi::Error::from("reverted"))
+        }
+    }
+
+    pub fn _start_arbos_upgrade(
+        &self,
+        machine: &mut Machine,
+    ) -> Result<(), ethabi::Error> {
+        let (receipts, _sends) = self.contract_abi.call_function_compressed(
+            self.my_address.clone(),
+            "startArbosUpgrade",
+            &[],
+            machine,
+            Uint256::zero(),
+            self.wallet,
+            self.debug,
+        )?;
+
+        if receipts.len() != 1 {
+            return Err(ethabi::Error::from("wrong number of receipts"));
+        }
+
+        if receipts[0].succeeded() {
+            Ok(())
+        } else {
+            Err(ethabi::Error::from("reverted"))
+        }
+    }
+
+    pub fn _continue_arbos_upgrade(
+        &self,
+        machine: &mut Machine,
+        marshalled_code: Vec<u8>,
+    ) -> Result<(), ethabi::Error> {
+        let (receipts, _sends) = self.contract_abi.call_function(
+            self.my_address.clone(),
+            "continueArbosUpgrade",
+            &[ethabi::Token::Bytes(marshalled_code)],
+            machine,
+            Uint256::zero(),
+            self.debug,
+        )?;
+
+        if receipts.len() != 1 {
+            return Err(ethabi::Error::from("wrong number of receipts"));
+        }
+
+        if receipts[0].succeeded() {
+            Ok(())
+        } else {
+           Err(ethabi::Error::from("reverted"))
+        }
+    }
+
+    pub fn _finish_arbos_upgrade(
+        &self,
+        machine: &mut Machine,
+    ) -> Result<(), ethabi::Error> {
+        let (receipts, _sends) = self.contract_abi.call_function(
+            self.my_address.clone(),
+            "finishArbosUpgrade",
+            &[],
+            machine,
+            Uint256::zero(),
+            self.debug,
+        )?;
+
+        if receipts.len() != 1 {
+            return Err(ethabi::Error::from("wrong number of receipts"));
+        }
+
+        if receipts[0].succeeded() {
+            Err(ethabi::Error::from("should have reverted but actually succeeded"))
+        } else {
+            Ok(())
+        }
+    }
+}
+
 pub struct ArbosTest {
     pub contract_abi: AbiForContract,
     debug: bool,
@@ -1052,6 +1204,7 @@ impl ArbosTest {
             Uint256::zero(),
             self.debug,
         )?;
+
         if (receipts.len() != 1) || (sends.len() != 0) {
             Err(ethabi::Error::from("wrong number of receipts or sends"))
         } else if receipts[0].succeeded() {

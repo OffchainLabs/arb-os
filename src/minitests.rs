@@ -391,6 +391,11 @@ fn test_arbsys_direct() {
 }
 
 #[test]
+fn test_arbowner() {
+    crate::evm::_evm_test_arbowner(None, false).unwrap();
+}
+
+#[test]
 fn test_function_table_access() {
     crate::evm::evm_test_function_table_access(None, false).unwrap();
 }

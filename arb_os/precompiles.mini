@@ -27,6 +27,7 @@ use std::bytearray::bytearray_set256;
 use std::sha256::sha256_byteArray;
 
 use arbsys::arbsys_txcall;
+use arbowner::arbowner_txcall;
 use arbosTest::arbosTest_txcall;
 use arbsys::arbAddressTable_txcall;
 use arbsys::arbBLS_txcall;
@@ -98,6 +99,12 @@ public impure func precompiles_init(acctStore: AccountStore) -> option<AccountSt
         acctStore,
         address(104),
         makeTrampoline(arbFunctionTable_txcall),
+        true,
+    )?;
+    acctStore = accountStore_createBuiltinContract(
+        acctStore,
+        address(107),
+        makeTrampoline(arbowner_txcall),
         true,
     )?;
     return Some(acctStore);
