@@ -62,7 +62,7 @@ public impure func precompiles_init(acctStore: AccountStore) -> option<AccountSt
     acctStore = accountStore_createBuiltinContract(
         acctStore,
         address(0x05),
-        precompile_0x05,
+        makeTrampoline(precompile_0x05),
         false,
     )?;
     acctStore = accountStore_createBuiltinContract(
