@@ -73,37 +73,37 @@ public impure func precompiles_init(acctStore: AccountStore) -> option<AccountSt
     )?;
     acctStore = accountStore_createBuiltinContract(
         acctStore,
-        address(100),
+        address(const::Address_ArbSys),
         makeTrampoline(arbsys_txcall),
         true,
     )?;
     acctStore = accountStore_createBuiltinContract(
         acctStore,
-        address(105),
+        address(const::Address_ArbosTest),
         makeTrampoline(arbosTest_txcall),
         true,
     )?;
     acctStore = accountStore_createBuiltinContract(
         acctStore,
-        address(102),
+        address(const::Address_ArbAddressTable),
         makeTrampoline(arbAddressTable_txcall),
         true,
     )?;
     acctStore = accountStore_createBuiltinContract(
         acctStore,
-        address(103),
+        address(const::Address_ArbBLS),
         makeTrampoline(arbBLS_txcall),
         true,
     )?;
     acctStore = accountStore_createBuiltinContract(
         acctStore,
-        address(104),
+        address(const::Address_ArbFunctionTable),
         makeTrampoline(arbFunctionTable_txcall),
         true,
     )?;
     acctStore = accountStore_createBuiltinContract(
         acctStore,
-        address(107),
+        address(const::Address_ArbOwner),
         makeTrampoline(arbowner_txcall),
         true,
     )?;
@@ -113,10 +113,10 @@ public impure func precompiles_init(acctStore: AccountStore) -> option<AccountSt
 impure func makeTrampoline(txcallFunc: impure func()) -> impure func() {
     // make a small code snippet that function-calls to txcallFunc (with a dummy return address)
     return asm(
-        0x3b,
+        const::AVM_nop,
         0,
         asm(
-            0x34,
+            const::AVM_jump,
             txcallFunc,
             asm() func() { errcodept }
         ) func() { pushinsnimm }

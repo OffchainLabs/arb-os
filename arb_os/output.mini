@@ -164,16 +164,6 @@ impure func update_txReceiptsForBlock(
     return ret;
 }
 
-// result codes:
-//    0    return (success)
-//    1    tx reverted
-//    2    rejected due to congestion
-//    3    insufficient funds to pay for gas
-//    4    insufficient funds for tx payment
-//    5    bad sequence number
-//    6    message format error
-//    7    tried to deploy at address that is already in use
-//    255  unknown error
 public impure func emitTxReceipt(
     l1message: IncomingRequest,
     resultCode: uint,
@@ -210,7 +200,7 @@ public impure func emitTxReceipt(
     };
 
     asm((
-        0,
+        const::LogType_txReceipt,
         l1message with {
             msgData: unsafecast<ByteArray>(bytearray_marshalFull(l1message.msgData))  // because caller expects marshalled bytes
         },
@@ -231,7 +221,7 @@ impure func emitBlockSummaryLog(blockNum: uint, timestamp: uint, prevBlockNum: u
         gasLimit = gasUsedThisBlock;
     }
     asm((
-        1,
+        const::LogType_blockSummary,
         blockNum,
         timestamp,
         gasLimit,
