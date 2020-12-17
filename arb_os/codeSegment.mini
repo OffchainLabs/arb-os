@@ -313,22 +313,6 @@ impure func generateCodeForEvmSegment(
                             }
                         }
                     }
-                } elseif (opcode < 0x53) {
-                    if (opcode == 0x45) {    // GASLIMIT
-                        code = pushValue(getGasLimitConstant(), code);
-                    } elseif (opcode == 0x46) { // CHAINID
-                        code = pushEvmInsnCall(constval(opNum_chainId), code);
-                    } elseif (opcode == 0x47) { // SELFBALANCE
-                        code = pushEvmInsnCall(constval(opNum_selfbalance), code);
-                    } elseif (opcode == 0x50) { // POP
-                        code = pushInstruction(0x30, code); // pop
-                    } elseif (opcode == 0x51) { // MLOAD
-                        code = pushEvmInsnCall(constval(opNum_mload), code);
-                    } elseif (opcode == 0x52) { // MSTORE
-                        code = pushEvmInsnCall(constval(opNum_mstore), code);
-                    } else {
-                        invalidInstruction = true;
-                    }
                 } else {
                     if (opcode < 0x53) {
                         if (opcode < 0x45) {
@@ -356,7 +340,7 @@ impure func generateCodeForEvmSegment(
                             }
                         } else {
                             if (opcode == 0x45) { // GASLIMIT
-                                code = pushValue(10000000000, code);
+                                code = pushValue(getGasLimitConstant(), code);
                             } elseif (opcode == 0x46) { // CHAINID
                                 code = pushEvmInsnCall(const::EvmOp_chainId, code);
                             } elseif (opcode == 0x47) { // SELFBALANCE
