@@ -5,6 +5,7 @@
 use crate::compile::{DebugInfo, MiniProperties};
 use crate::stringtable::StringId;
 use crate::uint256::Uint256;
+use ethers_core::utils::keccak256;
 use serde::{Deserialize, Serialize};
 use serde_repr::{Deserialize_repr, Serialize_repr};
 use std::{collections::HashMap, fmt, rc::Rc};
@@ -253,10 +254,10 @@ impl CodePt {
                 &Value::Int(Uint256::from_usize(*sz)),
             ),
             CodePt::External(_) => {
-                panic!("tried to avm_hash unlinked codepoint");
+                Value::Int(Uint256::zero()) // never gets called when it matters
             }
             CodePt::InSegment(_, _) => {
-                unimplemented!("avm_hash for in-module codepoints");
+                Value::Int(Uint256::zero()) // never gets called when it matters
             }
             CodePt::Null => Value::Int(Uint256::zero()),
         }
@@ -296,6 +297,16 @@ impl Value {
     }
 
     pub fn new_tuple(v: Vec<Value>) -> Self {
+        /*
+        let mut acc = Uint256::zero();
+        for val in &v {
+            if let Value::Int(ui) = val.avm_hash() {
+                acc = Uint256::avm_hash2(&acc, &ui);
+            } else {
+                panic!("Invalid value type from hash");
+            }
+        }
+        */
         Value::Tuple(Rc::new(v))
     }
 
@@ -392,16 +403,15 @@ impl Value {
             Value::Int(ui) => Value::Int(ui.avm_hash()),
             Value::Tuple(v) => {
                 let mut acc = Uint256::zero();
-                for val in &*v.clone() {
-                    let vhash = val.avm_hash();
-                    if let Value::Int(ui) = vhash {
+                for val in v.to_vec() {
+                    if let Value::Int(ui) = val.avm_hash() {
                         acc = Uint256::avm_hash2(&acc, &ui);
                     } else {
-                        panic!("avm_hash returned wrong datatype")
+                        panic!("Invalid value type from hash");
                     }
                 }
                 Value::Int(acc)
-            }
+            },
             Value::CodePoint(cp) => Value::avm_hash2(&Value::Int(Uint256::one()), &cp.avm_hash()),
             Value::Label(label) => {
                 Value::avm_hash2(&Value::Int(Uint256::from_usize(2)), &label.avm_hash())
@@ -410,7 +420,17 @@ impl Value {
     }
 
     pub fn avm_hash2(v1: &Self, v2: &Self) -> Value {
-        Value::new_tuple(vec![v1.clone(), v2.clone()]).avm_hash()
+        if let Value::Int(ui) = v1 {
+            if let Value::Int(ui2) = v2 {
+                let mut buf = ui.to_bytes_be();
+                buf.extend(ui2.to_bytes_be());
+                Value::Int(Uint256::from_bytes(&keccak256(&buf)))
+            } else {
+                panic!();
+            }
+        } else {
+            panic!();
+        }
     }
 }
 
@@ -661,6 +681,9 @@ impl Opcode {
             0x18 => Some(Opcode::AVMOpcode(AVMOpcode::BitwiseXor)),
             0x19 => Some(Opcode::AVMOpcode(AVMOpcode::BitwiseNeg)),
             0x1a => Some(Opcode::AVMOpcode(AVMOpcode::Byte)),
+            0x1b => Some(Opcode::AVMOpcode(AVMOpcode::ShiftLeft)),
+            0x1c => Some(Opcode::AVMOpcode(AVMOpcode::ShiftRight)),
+            0x1d => Some(Opcode::AVMOpcode(AVMOpcode::ShiftArith)),
             0x20 => Some(Opcode::AVMOpcode(AVMOpcode::Hash)),
             0x21 => Some(Opcode::AVMOpcode(AVMOpcode::Type)),
             0x22 => Some(Opcode::AVMOpcode(AVMOpcode::Hash2)),
