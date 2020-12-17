@@ -9,6 +9,7 @@ use accounts::getGlobalAccountStore;
 use accounts::setGlobalAccountStore;
 use accounts::accountStore_createAccountFromEvmCode;
 use chainParameters::chainParams_init;
+use codeSegment::codeSegment_init;
 use codeSegment::translateEvmCodeSegment;
 use contractTemplates::getErc20code;
 use contractTemplates::getErc721code;
@@ -22,6 +23,7 @@ use contractTemplates::getArbInfoStorage;
 use decompression::decompression_init;
 use errorHandler::errorHandler_init;
 use evmCallStack::evmCallStack_init;
+use evmOps::evmOps_init;
 use evmLogs::EvmLogs;
 use gasAccounting::GasUsage;
 use gasAccounting::gasAccounting_init;
@@ -53,10 +55,12 @@ use inbox::IncomingRequest;
 
 impure func main() {
     errorHandler_init();
+    codeSegment_init();
     chainParams_init();
     decompression_init();
     gasAccounting_init();
     evmCallStack_init();
+    evmOps_init();
     inbox_init();
     accountStore_init();
     txReceipts_init();
@@ -105,7 +109,7 @@ public impure func mainRunLoop() {
 impure func initializeContractTemplates() -> option<()> {
     let acctStore = getGlobalAccountStore();
 
-    let code = bytearray_unmarshalBytes(getErc20code());
+    let code = bytearray_unmarshalBytes(getErc20code())?;
     let (initCodePt, evmJumpTable, _) = translateEvmCodeSegment(
         bytestream_new(code),
         false
@@ -119,7 +123,7 @@ impure func initializeContractTemplates() -> option<()> {
         getErc20storage()
     )?;
 
-    let code = bytearray_unmarshalBytes(getErc721code());
+    let code = bytearray_unmarshalBytes(getErc721code())?;
     let (initCodePt, evmJumpTable, _) = translateEvmCodeSegment(
         bytestream_new(code),
         false
@@ -133,7 +137,7 @@ impure func initializeContractTemplates() -> option<()> {
         getErc721storage()
     )?;
 
-    let code = bytearray_unmarshalBytes(getArbInfoCode());
+    let code = bytearray_unmarshalBytes(getArbInfoCode())?;
     let (initCodePt, evmJumpTable, _) = translateEvmCodeSegment(
         bytestream_new(code),
         false

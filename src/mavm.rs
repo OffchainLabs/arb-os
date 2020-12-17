@@ -2,10 +2,10 @@
  * Copyright 2020, Offchain Labs, Inc. All rights reserved.
  */
 
-use crate::compile::MiniProperties;
-use crate::pos::Location;
+use crate::compile::{DebugInfo, MiniProperties};
 use crate::stringtable::StringId;
 use crate::uint256::Uint256;
+use ethers_core::utils::keccak256;
 use serde::{Deserialize, Serialize};
 use serde_repr::{Deserialize_repr, Serialize_repr};
 use std::{collections::HashMap, fmt, rc::Rc};
@@ -89,7 +89,7 @@ impl LabelGenerator {
 pub struct Instruction {
     pub opcode: Opcode,
     pub immediate: Option<Value>,
-    pub location: Option<Location>,
+    pub debug_info: DebugInfo,
 }
 
 impl MiniProperties for Instruction {
@@ -99,20 +99,20 @@ impl MiniProperties for Instruction {
 }
 
 impl Instruction {
-    pub fn new(opcode: Opcode, immediate: Option<Value>, location: Option<Location>) -> Self {
+    pub fn new(opcode: Opcode, immediate: Option<Value>, debug_info: DebugInfo) -> Self {
         Instruction {
             opcode,
             immediate,
-            location,
+            debug_info,
         }
     }
 
-    pub fn from_opcode(opcode: Opcode, location: Option<Location>) -> Self {
-        Instruction::new(opcode, None, location)
+    pub fn from_opcode(opcode: Opcode, debug_info: DebugInfo) -> Self {
+        Instruction::new(opcode, None, debug_info)
     }
 
-    pub fn from_opcode_imm(opcode: Opcode, immediate: Value, location: Option<Location>) -> Self {
-        Instruction::new(opcode, Some(immediate), location)
+    pub fn from_opcode_imm(opcode: Opcode, immediate: Value, debug_info: DebugInfo) -> Self {
+        Instruction::new(opcode, Some(immediate), debug_info)
     }
 
     pub fn get_label(&self) -> Option<&Label> {
@@ -127,7 +127,7 @@ impl Instruction {
             Some(val) => Ok(Instruction::from_opcode_imm(
                 self.opcode,
                 val.replace_labels(label_map)?,
-                self.location,
+                self.debug_info,
             )),
             None => Ok(self),
         }
@@ -166,7 +166,7 @@ impl Instruction {
             None => None,
         };
         (
-            Instruction::new(opcode, imm, self.location),
+            Instruction::new(opcode, imm, self.debug_info),
             max_func_offset,
         )
     }
@@ -176,7 +176,7 @@ impl Instruction {
             Some(val) => Instruction::from_opcode_imm(
                 self.opcode,
                 val.xlate_labels(xlate_map),
-                self.location,
+                self.debug_info,
             ),
             None => self,
         }
@@ -186,11 +186,11 @@ impl Instruction {
 impl fmt::Display for Instruction {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match &self.immediate {
-            Some(v) => match self.location {
+            Some(v) => match self.debug_info.location {
                 Some(loc) => write!(f, "[{}] {}\t\t{}", v, self.opcode, loc),
                 None => write!(f, "[{}] {}\t\t[no location]", v, self.opcode),
             },
-            None => match self.location {
+            None => match self.debug_info.location {
                 Some(loc) => write!(f, "{}\t\t{}", self.opcode, loc),
                 None => write!(f, "{}", self.opcode),
             },
@@ -254,10 +254,10 @@ impl CodePt {
                 &Value::Int(Uint256::from_usize(*sz)),
             ),
             CodePt::External(_) => {
-                panic!("tried to avm_hash unlinked codepoint");
+                Value::Int(Uint256::zero()) // never gets called when it matters
             }
             CodePt::InSegment(_, _) => {
-                unimplemented!("avm_hash for in-module codepoints");
+                Value::Int(Uint256::zero()) // never gets called when it matters
             }
             CodePt::Null => Value::Int(Uint256::zero()),
         }
@@ -297,6 +297,16 @@ impl Value {
     }
 
     pub fn new_tuple(v: Vec<Value>) -> Self {
+        /*
+        let mut acc = Uint256::zero();
+        for val in &v {
+            if let Value::Int(ui) = val.avm_hash() {
+                acc = Uint256::avm_hash2(&acc, &ui);
+            } else {
+                panic!("Invalid value type from hash");
+            }
+        }
+        */
         Value::Tuple(Rc::new(v))
     }
 
@@ -393,16 +403,15 @@ impl Value {
             Value::Int(ui) => Value::Int(ui.avm_hash()),
             Value::Tuple(v) => {
                 let mut acc = Uint256::zero();
-                for val in &*v.clone() {
-                    let vhash = val.avm_hash();
-                    if let Value::Int(ui) = vhash {
+                for val in v.to_vec() {
+                    if let Value::Int(ui) = val.avm_hash() {
                         acc = Uint256::avm_hash2(&acc, &ui);
                     } else {
-                        panic!("avm_hash returned wrong datatype")
+                        panic!("Invalid value type from hash");
                     }
                 }
                 Value::Int(acc)
-            }
+            },
             Value::CodePoint(cp) => Value::avm_hash2(&Value::Int(Uint256::one()), &cp.avm_hash()),
             Value::Label(label) => {
                 Value::avm_hash2(&Value::Int(Uint256::from_usize(2)), &label.avm_hash())
@@ -411,7 +420,17 @@ impl Value {
     }
 
     pub fn avm_hash2(v1: &Self, v2: &Self) -> Value {
-        Value::new_tuple(vec![v1.clone(), v2.clone()]).avm_hash()
+        if let Value::Int(ui) = v1 {
+            if let Value::Int(ui2) = v2 {
+                let mut buf = ui.to_bytes_be();
+                buf.extend(ui2.to_bytes_be());
+                Value::Int(Uint256::from_bytes(&keccak256(&buf)))
+            } else {
+                panic!();
+            }
+        } else {
+            panic!();
+        }
     }
 }
 
@@ -662,6 +681,9 @@ impl Opcode {
             0x18 => Some(Opcode::AVMOpcode(AVMOpcode::BitwiseXor)),
             0x19 => Some(Opcode::AVMOpcode(AVMOpcode::BitwiseNeg)),
             0x1a => Some(Opcode::AVMOpcode(AVMOpcode::Byte)),
+            0x1b => Some(Opcode::AVMOpcode(AVMOpcode::ShiftLeft)),
+            0x1c => Some(Opcode::AVMOpcode(AVMOpcode::ShiftRight)),
+            0x1d => Some(Opcode::AVMOpcode(AVMOpcode::ShiftArith)),
             0x20 => Some(Opcode::AVMOpcode(AVMOpcode::Hash)),
             0x21 => Some(Opcode::AVMOpcode(AVMOpcode::Type)),
             0x22 => Some(Opcode::AVMOpcode(AVMOpcode::Hash2)),

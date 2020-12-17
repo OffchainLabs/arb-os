@@ -7,13 +7,12 @@ use ethers_core::utils::keccak256;
 use num_bigint::{BigInt, BigUint, Sign, ToBigInt};
 use num_traits::cast::ToPrimitive;
 use num_traits::identities::{One, Zero};
-use num_traits::pow::Pow;
 use num_traits::sign::Signed;
 use num_traits::CheckedSub;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::cmp::Ordering;
 use std::fmt;
-use std::ops::{Add, BitAnd, BitOr, BitXor, Div, Mul, Neg, Rem, Sub};
+use std::ops::{Add, BitAnd, BitOr, BitXor, Div, Mul, Rem, Shl, Sub};
 
 #[derive(Debug, Clone, PartialEq, Eq, Ord, Hash)]
 pub struct Uint256 {
@@ -201,13 +200,10 @@ impl Uint256 {
     }
 
     pub fn unary_minus(&self) -> Option<Self> {
-        let s = self.to_signed();
-        if s == BigInt::new(Sign::Minus, vec![0, 0, 0, 0, 0, 0, 0, 0x8000_0000]) {
-            None
+        if self.val == BigUint::new(vec![0, 0, 0, 0, 0, 0, 0, 0x8000_0000]) {
+            Some(self.clone())
         } else {
-            Some(Uint256 {
-                val: Uint256::bigint_to_biguint(s.neg()),
-            })
+            Some(self.bitwise_neg().add(&Uint256::one()))
         }
     }
 

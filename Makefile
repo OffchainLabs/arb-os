@@ -63,6 +63,14 @@ run:
 test:
 	cargo test --release
 
+evmtest: $(ARBOS)
+	$(CARGORUN) evm-tests
+
+evmtestlogs: $(ARBOS)
+	rm -rf evm-test-logs
+	mkdir evm-test-logs
+	$(CARGORUN) evm-tests --savelogs
+
 testlogs: $(TEMPLATES) $(ARBOS)
 	rm -rf testlogs
 	mkdir testlogs
@@ -71,7 +79,7 @@ testlogs: $(TEMPLATES) $(ARBOS)
 evmdebug: all
 	$(CARGORUN) evm-debug
 
-benchmarks: $(TEMPLATES) $(ARBOS)
+benchmark: $(TEMPLATES) $(ARBOS)
 	$(CARGORUN) make-benchmarks
 
 clean:

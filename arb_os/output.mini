@@ -73,6 +73,7 @@ var globalBlockReceiptData: struct {
     data: PerBlockReceiptData,
     statsThisBlock: OutputStatistics,
     statsAllTime: OutputStatistics,
+    lastBlockNum: uint,
 };
 
 public impure func outputStats_endOfBlock(blockNum: uint, timestamp: uint) {
@@ -85,11 +86,15 @@ public impure func outputStats_endOfBlock(blockNum: uint, timestamp: uint) {
         updatedStats = updatedStats with {
             numLogs: updatedStats.numLogs + 1  // +1 for soon-to-be-issued block summary log
         };
+
         globalBlockReceiptData = globalBlockReceiptData with {
             statsAllTime: updatedStats
         };
+        emitBlockSummaryLog(blockNum, timestamp, globalBlockReceiptData.lastBlockNum);
 
-        emitBlockSummaryLog(blockNum, timestamp);
+        globalBlockReceiptData = globalBlockReceiptData with {
+            lastBlockNum: blockNum
+        };
     }
 
     // now clear current block stats, because we're advancing to a new current block
@@ -101,7 +106,6 @@ public impure func outputStats_endOfBlock(blockNum: uint, timestamp: uint) {
             numTx: 0,
             numEvmLogs: 0
         }
-
     };
 }
 
@@ -136,6 +140,7 @@ public impure func txReceipts_init() {  // will be called at beginning of main()
         },
         statsThisBlock: outputStats_new(),
         statsAllTime: outputStats_new(),
+        lastBlockNum: ~0,
     };
 }
 
@@ -169,6 +174,7 @@ impure func update_txReceiptsForBlock(
 //    4    insufficient funds for tx payment
 //    5    bad sequence number
 //    6    message format error
+//    7    tried to deploy at address that is already in use
 //    255  unknown error
 public impure func emitTxReceipt(
     l1message: IncomingRequest,
@@ -220,7 +226,7 @@ public impure func emitTxReceipt(
     ),) { log };
 }
 
-impure func emitBlockSummaryLog(blockNum: uint, timestamp: uint) {
+impure func emitBlockSummaryLog(blockNum: uint, timestamp: uint, prevBlockNum: uint) {
     let gasUsedThisBlock = globalBlockReceiptData.statsThisBlock.totalGasUsed;
     let gasLimit = 13 * chainParams_speedLimitPerSecond();
     if (gasLimit < gasUsedThisBlock) {
@@ -232,7 +238,8 @@ impure func emitBlockSummaryLog(blockNum: uint, timestamp: uint) {
         timestamp,
         gasLimit,
         globalBlockReceiptData.statsThisBlock,
-        globalBlockReceiptData.statsAllTime
+        globalBlockReceiptData.statsAllTime,
+        prevBlockNum
     ),) { log };
 }
 
