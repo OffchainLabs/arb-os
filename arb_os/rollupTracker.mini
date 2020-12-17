@@ -1,0 +1,207 @@
+//
+// Copyright 2020, Offchain Labs, Inc. All rights reserved.
+//
+
+use std::queue::Queue;
+use std::queue::queue_new;
+use std::queue::queue_put;
+use std::queue::queue_get;
+use std::queue::queue_getOrDie;
+use std::queue::queue_nth;
+use std::queue::queue_set_nth;
+
+var globalRollupTracker: RollupTracker;
+
+type RollupNode = struct {
+    heightL2: uint,
+    prev: option<uint>,
+    heightL1: uint,
+    deadlineL1: uint,
+    activeValidator: address,
+    perNodeCharge: uint,
+    validatorEquity: uint,
+}
+
+type RollupTracker = struct {
+    nodes: RollupSlidingWindow,
+    latestConfirmed: uint,
+    firstUnresolved: uint,
+}
+
+public impure func rollupTracker_init() {
+    let genesisNode = struct {
+        heightL2: 0,
+        prev: None<uint>,
+        heightL1: 0,
+        deadlineL1: 1,
+        activeValidator: address(0),
+        perNodeCharge: 1000000000,   // set initial charge to 1 gwei; TODO make this a per-chain parameter
+        validatorEquity: 0,
+    };
+    globalRollupTracker = struct {
+        nodes: rsw_new(genesisNode),
+        latestConfirmed: 0,
+        firstUnresolved: 1,
+    };
+}
+
+public impure func rollupTracker_get(heightL2: uint) -> option<RollupNode> {
+    return rsw_get(globalRollupTracker.nodes, heightL2);
+}
+
+public impure func rollupTracker_confirmNode(heightL2: uint) -> option<()> {
+    if (heightL2 != globalRollupTracker.firstUnresolved) {    return None;    }
+
+    let nodes = globalRollupTracker.nodes;
+    while(rsw_getNextOut(nodes) < heightL2) {
+        nodes = rsw_dropOne(nodes)?;
+    }
+
+    globalRollupTracker = globalRollupTracker with {
+        latestConfirmed: heightL2
+    } with {
+        firstUnresolved: heightL2 + 1
+    } with {
+        nodes: nodes
+    };
+
+    return Some(());
+}
+
+public impure func rollupTracker_rejectNode(heightL2: uint) -> option<()> {
+    if (heightL2 != globalRollupTracker.firstUnresolved) {    return None;    }
+
+    globalRollupTracker = globalRollupTracker with {
+        nodes: rsw_dropOne(globalRollupTracker.nodes)?
+    } with {
+        firstUnresolved: globalRollupTracker.firstUnresolved + 1
+    };
+    return Some(());
+}
+
+public impure func rollupTracker_claimNode(heightL2: uint, claimTimeL1: uint, claimant: address) -> option<()> {
+    let node = rsw_get(globalRollupTracker.nodes, heightL2)?;
+    if (claimTimeL1 > node.deadlineL1) {
+        return None;
+    }
+
+    let prevNode = rsw_get(globalRollupTracker.nodes, node.prev?)?;
+    if (claimant != prevNode.activeValidator) {
+        return None;
+    }
+
+    globalRollupTracker = globalRollupTracker with {
+        nodes: rsw_set(
+            globalRollupTracker.nodes,
+            heightL2,
+            node with {
+                activeValidator: claimant
+            },
+        )?
+    };
+
+    return Some(());
+}
+
+public impure func rollupTracker_addNode(
+    heightL2: uint,
+    prev: uint,
+    heightL1: uint,
+    deadlineL1: uint,
+    asserter: address,
+) -> option<()> {
+    let prevNode = rsw_get(globalRollupTracker.nodes, prev)?;
+    globalRollupTracker = globalRollupTracker with {
+        nodes: rsw_append(
+            globalRollupTracker.nodes,
+            struct {
+                heightL2: heightL2,
+                prev: Some(prev),
+                heightL1: heightL1,
+                deadlineL1: deadlineL1,
+                activeValidator: asserter,
+                perNodeCharge: prevNode.perNodeCharge,   // TODO: adjust this dynamically
+                validatorEquity: prevNode.validatorEquity + prevNode.perNodeCharge,
+            }
+        )?
+    };
+    return Some(());
+}
+
+type RollupSlidingWindow = struct {
+    contents: Queue,
+    nextOut: uint,
+    nextIn: uint,
+}
+
+func rsw_new(genesisNode: RollupNode) -> RollupSlidingWindow {
+    return struct {
+        contents: queue_put(queue_new(), genesisNode),
+        nextOut: 0,
+        nextIn: 1,
+    };
+}
+
+func rsw_getNextIn(rsw: RollupSlidingWindow) -> uint {
+    return rsw.nextIn;
+}
+
+func rsw_getNextOut(rsw: RollupSlidingWindow) -> uint {
+    return rsw.nextOut;
+}
+
+func rsw_getNumNodes(rsw: RollupSlidingWindow) -> uint {
+    return rsw.nextIn - rsw.nextOut;
+}
+
+func rsw_confirmIndex(rsw: RollupSlidingWindow, index: uint) -> option<()> {
+    if ((index >= rsw.nextOut) && (index < rsw.nextIn)) {
+        return Some(());
+    } else {
+        return None;
+    }
+}
+
+func rsw_get(rsw: RollupSlidingWindow, index: uint) -> option<RollupNode> {
+    if ((index < rsw.nextOut) || (index >= rsw.nextIn)) {
+        return None;
+    }
+    return unsafecast<option<RollupNode>>(queue_nth(rsw.contents, (rsw.nextIn-1) - index));  // correctly returns None if subtraction underflows
+}
+
+func rsw_set(rsw: RollupSlidingWindow, index: uint, node: RollupNode) -> option<RollupSlidingWindow> {
+    return Some(
+        rsw with {
+            contents: queue_set_nth(
+                rsw.contents,
+                (rsw.nextIn-1) - index,  // if underflow, queue_set_nth returns None, so this func correctly returns None
+                node,
+            )?
+        }
+    );
+}
+
+func rsw_append(rsw: RollupSlidingWindow, node: RollupNode) -> option<RollupSlidingWindow> {
+    if (node.heightL2 != rsw.nextIn) {
+        return None;
+    }
+
+    return Some(
+        rsw with {
+            contents: queue_put(rsw.contents, node)
+        } with {
+            nextIn: rsw.nextIn + 1
+        }
+    );
+}
+
+func rsw_dropOne(rsw: RollupSlidingWindow) -> option<RollupSlidingWindow> {
+    let (uq, _) = queue_get(rsw.contents)?;
+    return Some(
+        rsw with {
+            contents: uq
+        } with {
+            nextOut: rsw.nextOut + 1
+        }
+    );
+}
