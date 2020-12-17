@@ -70,7 +70,6 @@ public func biguint_fromUint(x: uint) -> []uint {
     let i = 0;
     while(x > 0) {
         ret = ret with { [i] = modDigit(x) };
-        ret = ret with { [i] = modDigit(x) };
         x = divDigit(x);
         i = i+1;
     }
