@@ -50,10 +50,8 @@ func doTests(gen: RandomGenerator) -> (uint, RandomGenerator) {
     gen = ugen;
     let (x, ugen) = biguint_random(6, gen);
     gen = ugen;
-    asm(biguint_marshal(x),) { debugprint };
     let (y, ugen) = biguint_random(4, gen);
     gen = ugen;
-    asm(biguint_marshal(y),) { debugprint };
     if (biguint_compare(x, y) != int(1)) {
         return (2, gen);
     }
@@ -68,12 +66,10 @@ func doTests(gen: RandomGenerator) -> (uint, RandomGenerator) {
     }
 
     let z = biguint_add(x,y);
-    asm(biguint_marshal(z),) { debugprint };
     if (biguint_compare(z, x) != int(1)) {
         return (6, gen);
     }
     if let Some(diff) = biguint_subtract(biguint_add(x, y), y) {
-        asm(diff,) { debugprint };
         if (!biguint_equal(diff, x)) {
             return (7, gen);
         }

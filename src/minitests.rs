@@ -534,7 +534,6 @@ fn test_precompile5_big() {
     let b: BigUint = rng.gen_biguint(128);
     let e: BigUint = rng.gen_biguint(32);
     let m: BigUint = rng.gen_biguint(128);
-    println!("client side values: {} {} {}", b.clone(), e.clone(), m.clone());
     match test_call_to_precompile5(&mut machine, &my_addr, b.clone(), e.clone(), m.clone()) {
         Ok(actual) => {
             let expected = b.modpow(&e, &m);

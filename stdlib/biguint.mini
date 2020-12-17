@@ -82,18 +82,18 @@ public func biguint_fromBytes(ba: ByteArray) -> []uint {
     let nwords = (nbytes+9) / 10;
     let ret = newarray<uint>(nwords);
 
-    let i = 0;
-    let acc = 0;
-    while(i < nbytes) {
-        acc = acc*256 + bytearray_getByte(ba, i);
-        if ((i % 10) == 9) {
-            ret = ret with { [(nwords-1) - (i/10)] = acc };
-            acc = 0;
+    let w = 0;
+    while(w < nwords) {
+        let acc = 0;
+        let bytesInThisWord = nbytes - 10*w;
+        if (bytesInThisWord > 10) {    bytesInThisWord = 10;    }
+        let i = 0;
+        while(i < bytesInThisWord) {
+            acc = acc * 256 + bytearray_getByte(ba, nbytes - 10*w - (bytesInThisWord-i));
+            i = i+1;
         }
-        i = i+1;
-    }
-    if (acc != 0) {
-        ret = ret with { [(nwords-1) - (i/10)] = acc };
+        ret = ret with { [w] = acc };
+        w = w+1;
     }
 
     return ret;
@@ -475,19 +475,6 @@ public func biguint_divmod(x: []uint, y: []uint) -> option<([]uint, []uint)> {
 }
 
 public func biguint_mod(x: []uint, y: []uint) -> option<[]uint> {
-    let (quot, rem) = biguint_divmod(x, y)?;
-    let x2 = biguint_add(biguint_mul(quot, y), rem);
-    if (!biguint_equal(x, x2)) {
-        asm(2121,) { debugprint };
-        asm(x,) { debugprint };
-        asm(y,) { debugprint };
-        asm(quot,) { debugprint };
-        asm(rem,) { debugprint };
-        asm(x2,) { debugprint };
-        panic;
-    }
-    return Some(rem);
-
     if (biguint_isZero(y)) {
         return None;
     } elseif (biguint_compare(x, y) < int(0)) {
@@ -608,6 +595,5 @@ public func biguint_modexp(x: []uint, e: []uint, m: []uint) -> option<[]uint> {
             ret = biguint_modmul(ret, x, m)?;
         }
     }
-
     return Some(ret);
 }
