@@ -358,32 +358,30 @@ impure func generateCodeForEvmSegment(
                             }
                         }
                     }
-                } else {
-                    if (opcode == 0x45) { // GASLIMIT
-                        return Some((pushValue(getGasLimitConstant(), restOfCode), evmJumpTable, pcTable));
+                } elseif (opcode < 0x53) {
+                    if (opcode == 0x45) {    // GASLIMIT
+                        code = pushValue(getGasLimitConstant(), code);
                     } elseif (opcode == 0x46) { // CHAINID
-                        return pushEvmInsnCall(constval(opNum_chainId), restOfCode, evmJumpTable, pcTable);
+                        code = pushEvmInsnCall(constval(opNum_chainId), code);
                     } elseif (opcode == 0x47) { // SELFBALANCE
-                        return pushEvmInsnCall(constval(opNum_selfbalance), restOfCode, evmJumpTable, pcTable);
+                        code = pushEvmInsnCall(constval(opNum_selfbalance), code);
                     } elseif (opcode == 0x50) { // POP
-                        return Some((pushInstruction(0x30, restOfCode), evmJumpTable, pcTable)); // pop
+                        code = pushInstruction(0x30, code); // pop
                     } elseif (opcode == 0x51) { // MLOAD
-                        return pushEvmInsnCall(constval(opNum_mload), restOfCode, evmJumpTable, pcTable);
+                        code = pushEvmInsnCall(constval(opNum_mload), code);
                     } elseif (opcode == 0x52) { // MSTORE
-                        return pushEvmInsnCall(constval(opNum_mstore), restOfCode, evmJumpTable, pcTable);
+                        code = pushEvmInsnCall(constval(opNum_mstore), code);
                     } else {
                         invalidInstruction = true;
                     }
-                }
-            } else {
-                if (opcode < 0x58) {
+                } else {
                     if (opcode < 0x56) {
                         if (opcode == 0x53) { // MSTORE8
-                            return pushEvmInsnCall(constval(opNum_mstore8), restOfCode, evmJumpTable, pcTable);
+                            code = pushEvmInsnCall(constval(opNum_mstore8), code);
                         } elseif (opcode == 0x54) { // SLOAD
-                            return pushEvmInsnCall(constval(opNum_sload), restOfCode, evmJumpTable, pcTable);
+                            code = pushEvmInsnCall(constval(opNum_sload), code);
                         } elseif (opcode == 0x55) { // SSTORE
-                            return pushEvmInsnCall(constval(opNum_sstore), restOfCode, evmJumpTable, pcTable);
+                            code = pushEvmInsnCall(constval(opNum_sstore), code);
                         } else {
                             invalidInstruction = true;
                         }

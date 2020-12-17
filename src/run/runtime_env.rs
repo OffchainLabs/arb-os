@@ -38,14 +38,16 @@ impl RuntimeEnvironment {
             Uint256::from_u64(100_000),
             Uint256::from_u64(10_000_000),
             charging_policy,
+            None,
         )
     }
 
-    pub fn new_with_owner(chain_address: Uint256, owner: Option<Uint256>) -> Self {
+    pub fn _new_with_owner(chain_address: Uint256, owner: Option<Uint256>) -> Self {
         RuntimeEnvironment::new_with_blocknum_timestamp(
             chain_address,
             Uint256::from_u64(100_000),
             Uint256::from_u64(10_000_000),
+            None,
             owner,
         )
     }
@@ -54,6 +56,7 @@ impl RuntimeEnvironment {
         chain_address: Uint256,
         blocknum: Uint256,
         timestamp: Uint256,
+        charging_policy: Option<(Uint256, Uint256, Uint256)>,
         owner: Option<Uint256>,
     ) -> Self {
         let mut ret = RuntimeEnvironment {
@@ -70,18 +73,18 @@ impl RuntimeEnvironment {
             compressor: TxCompressor::new(),
             charging_policy,
         };
-        ret.insert_l1_message(4, chain_address, &ret.get_params_bytes());
+        ret.insert_l1_message(4, chain_address, &ret.get_params_bytes(owner));
         ret
     }
 
-    fn get_params_bytes(owner: Option<Uint256>) -> Vec<u8> {
+    fn get_params_bytes(&self, owner: Option<Uint256>) -> Vec<u8> {
         let mut buf = Vec::new();
         buf.extend(Uint256::from_u64(3 * 60 * 60 * 1000).to_bytes_be()); // grace period in ticks
         buf.extend(Uint256::from_u64(100_000_000 / 1000).to_bytes_be()); // arbgas speed limit per tick
         buf.extend(Uint256::from_u64(10_000_000_000).to_bytes_be()); // max execution steps
         buf.extend(Uint256::from_u64(1000).to_bytes_be()); // base stake amount in wei
         buf.extend(Uint256::zero().to_bytes_be()); // staking token address (zero means ETH)
-        buf.extend(owner.unwrap_or(Uint256::zero()).to_bytes_be()); // owner address
+        buf.extend(owner.clone().unwrap_or(Uint256::zero()).to_bytes_be()); // owner address
 
         if let Some((base_gas_price, storage_charge, pay_fees_to)) = self.charging_policy.clone() {
             buf.extend(&[0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 2u8]); // option ID = 2

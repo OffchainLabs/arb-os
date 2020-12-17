@@ -179,11 +179,16 @@ pub fn _evm_run_with_gas_charging(
     let (logs, sends) = pc_contract.call_function(
         my_addr,
         "transferFib",
-        vec![
+        &[
             ethabi::Token::Address(ethabi::Address::from_low_u64_be(1025)),
             ethabi::Token::Uint(ethabi::Uint::try_from(1).unwrap()),
-        ]
-        .as_ref(),
+        ],
+        &mut machine,
+        Uint256::zero(),
+        debug,
+    )?;
+    assert_eq!(logs.len(), 1);
+    assert_eq!(sends.len(), 0);
 
    if ! logs[0].succeeded() {
         if logs[0].get_return_code() == Uint256::from_u64(3) {
@@ -206,7 +211,7 @@ pub fn _evm_tx_with_deposit(
     _profile: bool,
 ) -> Result<bool, ethabi::Error> {
     use std::convert::TryFrom;
-    let rt_env = RuntimeEnvironment::new(Uint256::from_usize(1111));
+    let rt_env = RuntimeEnvironment::new(Uint256::from_usize(1111), None);
     let mut machine = load_from_file(Path::new("arb_os/arbos.mexe"), rt_env);
     machine.start_at_zero();
 
@@ -214,7 +219,7 @@ pub fn _evm_tx_with_deposit(
 
     let mut fib_contract =
         AbiForContract::new_from_file("contracts/fibonacci/build/contracts/Fibonacci.json")?;
-    if fib_contract.deploy(&[], &mut machine, Uint256::zero(), None, debug) == None {
+    if fib_contract.deploy(&[], &mut machine, Uint256::zero(), None, debug).is_err() {
         panic!("failed to deploy Fibonacci contract");
     }
 
@@ -229,7 +234,7 @@ pub fn _evm_tx_with_deposit(
         Uint256::zero(),
         None,
         debug,
-    ) == None
+    ).is_err()
     {
         panic!("failed to deploy PaymentChannel contract");
     }
@@ -379,7 +384,7 @@ pub fn evm_test_arbsys_direct(log_to: Option<&Path>, debug: bool) -> Result<(), 
 }
 
 pub fn _evm_test_arbowner(log_to: Option<&Path>, debug: bool) -> Result<(), ethabi::Error> {
-    let rt_env = RuntimeEnvironment::new(Uint256::from_usize(1111));
+    let rt_env = RuntimeEnvironment::new(Uint256::from_usize(1111), None);
     let mut machine = load_from_file(Path::new("arb_os/arbos.mexe"), rt_env);
     machine.start_at_zero();
 

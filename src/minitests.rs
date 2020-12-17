@@ -444,6 +444,7 @@ pub fn test_gas_charging_fully_funded() {
     }
 }
 
+#[test]
 pub fn test_tx_with_deposit() {
     match crate::evm::_evm_tx_with_deposit(None, false, false) {
         Ok(result) => assert_eq!(result, true),
