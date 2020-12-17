@@ -9,6 +9,7 @@ use accounts::getGlobalAccountStore;
 use accounts::setGlobalAccountStore;
 use accounts::accountStore_createAccountFromEvmCode;
 use chainParameters::chainParams_init;
+use codeSegment::codeSegment_init;
 use codeSegment::translateEvmCodeSegment;
 use contractTemplates::getErc20code;
 use contractTemplates::getErc721code;
@@ -22,6 +23,7 @@ use contractTemplates::getArbInfoStorage;
 use decompression::decompression_init;
 use errorHandler::errorHandler_init;
 use evmCallStack::evmCallStack_init;
+use evmOps::evmOps_init;
 use evmLogs::EvmLogs;
 use gasAccounting::GasUsage;
 use gasAccounting::gasAccounting_init;
@@ -53,10 +55,12 @@ use inbox::IncomingRequest;
 
 impure func main() {
     errorHandler_init();
+    codeSegment_init();
     chainParams_init();
     decompression_init();
     gasAccounting_init();
     evmCallStack_init();
+    evmOps_init();
     inbox_init();
     accountStore_init();
     txReceipts_init();

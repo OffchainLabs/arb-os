@@ -391,6 +391,11 @@ fn test_arbsys_direct() {
 }
 
 #[test]
+fn test_arbowner() {
+    crate::evm::_evm_test_arbowner(None, false).unwrap();
+}
+
+#[test]
 fn test_function_table_access() {
     crate::evm::evm_test_function_table_access(None, false).unwrap();
 }
@@ -434,6 +439,13 @@ pub fn test_gas_charging_fully_funded() {
         false,
         false,
     ) {
+        Ok(result) => assert_eq!(result, true),
+        Err(e) => panic!("error {}", e),
+    }
+}
+
+pub fn test_tx_with_deposit() {
+    match crate::evm::_evm_tx_with_deposit(None, false, false) {
         Ok(result) => assert_eq!(result, true),
         Err(e) => panic!("error {}", e),
     }
