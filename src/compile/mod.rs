@@ -40,7 +40,7 @@ pub(crate) trait MiniProperties {
     fn is_pure(&self) -> bool;
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 struct Module {
     imported_funcs: Vec<ImportedFunc>,
     funcs: Vec<FuncDecl>,
@@ -300,22 +300,21 @@ pub fn compile_from_folder(
     let (mut programs, import_map) = create_program_tree(folder, library, main, file_name_chart)?;
     for (name, imports) in &import_map {
         for import in imports {
-            let mut named_type = None;
-            let mut imp_func = None;
-            let mut imp_func_decl = None;
             let import_path = import.path.clone();
-            if let Some(program) = programs.get_mut(&import_path) {
+            let (named_type, imp_func, imp_func_decl) = if let Some(program) =
+                programs.get_mut(&import_path)
+            {
                 let index = program.string_table.get(import.name.clone());
                 let type_table = SymTable::new();
                 let type_table = type_table
                     .push_multi(program.named_types.iter().map(|(i, t)| (*i, t)).collect());
-                named_type = program
+                let named_type = program
                     .named_types
                     .get(&index)
                     .map(|t| t.resolve_types(&type_table, None))
                     .transpose()
                     .map_err(|e| CompileError::new(format!("Type error: {:?}", e), None))?;
-                imp_func = program
+                let imp_func = program
                     .func_table
                     .get(&index)
                     .map(|decl| {
@@ -323,12 +322,22 @@ pub fn compile_from_folder(
                             .map_err(|e| CompileError::new(format!("Type error: {:?}", e), None))
                     })
                     .transpose()?;
-                imp_func_decl = program
+                let imp_func_decl = program
                     .funcs
                     .iter()
                     .find(|func| func.name == index)
                     .cloned();
-            }
+                (named_type, imp_func, imp_func_decl)
+            } else {
+                return Err(CompileError::new(
+                    format!(
+                        "Internal error: Can not find target file for import \"{}::{}\"",
+                        import.path.get(0).cloned().unwrap_or_else(String::new),
+                        import.name
+                    ),
+                    None,
+                ));
+            };
             let origin_program = programs.get_mut(name).ok_or_else(|| {
                 CompileError::new(
                     format!(
