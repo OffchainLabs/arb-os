@@ -11,7 +11,7 @@ use abi::AbiForContract;
 use ethers_signers::Signer;
 use std::path::Path;
 
-mod abi;
+pub mod abi;
 pub mod benchmarks;
 pub mod evmtest;
 

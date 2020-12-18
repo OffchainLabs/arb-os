@@ -47,13 +47,12 @@ impure func processEventOrError(stream: ByteStream) -> option<()> {
         return rollupTracker_confirmNode(heightL2);
     } elseif (eventType == const::ProtoEvent_newStake) {
         let (us, heightL2) = bytestream_get256(stream)?;
-        let (us, stakerUint) = bytestream_get256(stream)?;
+        let (us, stakerUint) = bytestream_get256(us)?;
         let (us, stakeTimeL1) = bytestream_get256(us)?;
-        return rollupTracker_newStake(heightL2, stakeTimeL1, address(stakerUint));
+        return rollupTracker_newStake(heightL2, address(stakerUint), stakeTimeL1);
     } elseif (eventType == const::ProtoEvent_claimNode) {
         let (us, heightL2) = bytestream_get256(stream)?;
         let (us, claimerUint) = bytestream_get256(us)?;
-        asm((1, heightL2, claimerUint),) { debugprint };
         return rollupTracker_claimNode(heightL2, address(claimerUint));
     } elseif (eventType == const::ProtoEvent_debug) {
         _debug();
@@ -96,7 +95,7 @@ public impure func rollupTracker_init() {
         nodes: rsw_new(genesisNode),
         latestConfirmed: 0,
         firstUnresolved: 1,
-        minimumPayment: 1000000000,   // set to 1 gwei; TODO make this a per-chain parameter
+        minimumPayment: 1000000000/20,   // set to 1 gwei; TODO make this a per-chain parameter
     };
 }
 
@@ -137,7 +136,7 @@ public impure func rollupTracker_rejectNode(heightL2: uint) -> option<()> {
     return Some(());
 }
 
-public impure func rollupTracker_newStake(heightL2: uint, stakeTimeL1: uint, staker: address) -> option<()> {
+public impure func rollupTracker_newStake(heightL2: uint, staker: address, stakeTimeL1: uint) -> option<()> {
     let node = rsw_get(globalRollupTracker.nodes, heightL2)?;
     if (stakeTimeL1 > node.deadlineL1) {
         return None;
@@ -179,7 +178,7 @@ public impure func rollupTracker_addNode(
                 heightL1: heightL1,
                 deadlineL1: deadlineL1,
                 activeValidator: asserter,
-                perNodeCharge: prevNode.perNodeCharge,   // TODO: adjust this dynamically
+                perNodeCharge: prevNode.perNodeCharge * 11 / 10,
                 validatorEquity: prevNode.validatorEquity + prevNode.perNodeCharge - payment,
                 payment: payment,
             }
@@ -189,17 +188,11 @@ public impure func rollupTracker_addNode(
 }
 
 public impure func rollupTracker_claimNode(heightL2: uint, claimer: address) -> option<()> {
-    asm(100,) { debugprint };
     let nodes = globalRollupTracker.nodes;
-    asm(1000,) { debugprint };
     let _ = rsw_verifyIsLeaf(nodes, heightL2)?;
-    asm(101,) { debugprint };
     let node = rsw_get(globalRollupTracker.nodes, heightL2)?;
-    asm(102,) { debugprint };
     if (node.payment > globalRollupTracker.minimumPayment) {
-        asm(103,) { debugprint };
         if (claimer != node.activeValidator) {
-            asm(104,) { debugprint };
             setGlobalAccountStore(
                 accountStore_transferEthBalance(
                     getGlobalAccountStore(),
@@ -209,7 +202,6 @@ public impure func rollupTracker_claimNode(heightL2: uint, claimer: address) -> 
                 )?
             );
         }
-        asm(105,) { debugprint };
         globalRollupTracker = globalRollupTracker with {
             nodes: rsw_set(
                 globalRollupTracker.nodes,
@@ -221,10 +213,8 @@ public impure func rollupTracker_claimNode(heightL2: uint, claimer: address) -> 
                 }
             )?
         };
-        asm(106,) { debugprint };
         return Some(());
     } else {
-        asm(107,) { debugprint };
         return None;
     }
 }
@@ -256,8 +246,6 @@ func rsw_getNumNodes(rsw: RollupSlidingWindow) -> uint {
 }
 
 func rsw_confirmIndex(rsw: RollupSlidingWindow, index: uint) -> option<()> {
-    asm(300,) { debugprint };
-    asm((300, rsw),) { debugprint };
     if ((index >= rsw.nextOut) && (index < rsw.nextIn)) {
         return Some(());
     } else {
@@ -277,7 +265,7 @@ func rsw_set(rsw: RollupSlidingWindow, index: uint, node: RollupNode) -> option<
         rsw with {
             contents: queue_set_nth(
                 rsw.contents,
-                (rsw.nextIn-1) - index,  // if underflow, queue_set_nth returns None, so this func correctly returns None
+                index-rsw.nextOut,  // if underflow, queue_set_nth returns None, so this func correctly returns None
                 node,
             )?
         }
@@ -310,11 +298,7 @@ func rsw_dropOne(rsw: RollupSlidingWindow) -> option<RollupSlidingWindow> {
 }
 
 func rsw_verifyIsLeaf(rsw: RollupSlidingWindow, heightL2: uint) -> option<()> {
-    asm(400,) { debugprint };
-    asm((401, heightL2),) { debugprint };
-    asm((402, rsw),) { debugprint };
     let _ = rsw_confirmIndex(rsw, heightL2)?;
-    asm(403,) { debugprint };
 
     let i = heightL2 + 1;
     while (i < rsw.nextIn) {

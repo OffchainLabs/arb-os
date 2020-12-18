@@ -109,6 +109,13 @@ impl RuntimeEnvironment {
         self.chain_id
     }
 
+    pub fn _advance_time(&mut self, delta_blocks: &Uint256, delta_seconds: Option<&Uint256>) {
+        self.current_block_num = self.current_block_num.add(delta_blocks);
+        self.current_timestamp = self
+            .current_timestamp
+            .add(delta_seconds.unwrap_or(&Uint256::from_u64(13).mul(delta_blocks)));
+    }
+
     pub fn insert_full_inbox_contents(&mut self, contents: Vec<Value>) {
         self.l1_inbox = contents;
     }

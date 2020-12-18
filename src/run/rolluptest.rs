@@ -2,6 +2,7 @@
  * Copyright 2020, Offchain Labs, Inc. All rights reserved.
  */
 
+use crate::evm::abi::_ArbInfo;
 use crate::run::{load_from_file, runtime_env::RuntimeEnvironment};
 use crate::uint256::Uint256;
 use std::path::Path;
@@ -95,12 +96,65 @@ pub fn _test_rollup_tracker() {
         my_addr.clone(),
     );
 
-    _insert_rollup_debug(&mut machine.runtime_env);
+    _insert_claim_node(&mut machine.runtime_env, &Uint256::from_u64(2), &claimer);
 
-    _insert_claim_node(&mut machine.runtime_env, &Uint256::from_u64(1), &claimer);
+    _insert_create_node(
+        &mut machine.runtime_env,
+        &Uint256::from_u64(3),
+        &Uint256::one(),
+        None,
+        &Uint256::from_u64(10),
+        my_addr.clone(),
+    );
+
+    _insert_create_node(
+        &mut machine.runtime_env,
+        &Uint256::from_u64(4),
+        &Uint256::from_u64(2),
+        None,
+        &Uint256::from_u64(10),
+        my_addr.clone(),
+    );
+
+    _insert_new_stake(
+        &mut machine.runtime_env,
+        &Uint256::from_u64(4),
+        &claimer,
+        None,
+    );
 
     _insert_rollup_debug(&mut machine.runtime_env);
+    println!("_");
+    let _ = machine.run(None);
+
+    println!("A");
+    _insert_confirm_node(&mut machine.runtime_env, &Uint256::zero());
+    _insert_confirm_node(&mut machine.runtime_env, &Uint256::one());
+    _insert_confirm_node(&mut machine.runtime_env, &Uint256::from_u64(2));
+    _insert_reject_node(&mut machine.runtime_env, &Uint256::from_u64(3));
+    _insert_confirm_node(&mut machine.runtime_env, &Uint256::from_u64(4));
+
+    println!("B");
+    machine
+        .runtime_env
+        ._advance_time(&Uint256::from_u64(100), None);
+
+    println!("C");
+    _insert_create_node(
+        &mut machine.runtime_env,
+        &Uint256::from_u64(5),
+        &Uint256::from_u64(4),
+        None,
+        &Uint256::from_u64(10),
+        my_addr.clone(),
+    );
+    println!("D");
 
     let _ = machine.run(None);
-    panic!();
+    println!("E");
+
+    let arb_info = _ArbInfo::_new(false);
+    let bal = arb_info._get_balance(&mut machine, &my_addr).unwrap();
+    println!("{}", bal);
+    assert_eq!(bal, Uint256::from_u64(50000000));
 }

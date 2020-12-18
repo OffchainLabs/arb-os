@@ -1,0 +1,473 @@
+{
+  "contractName": "ArbInfo",
+  "abi": [
+    {
+      "constant": true,
+      "inputs": [
+        {
+          "name": "account",
+          "type": "address"
+        }
+      ],
+      "name": "getBalance",
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256"
+        }
+      ],
+      "payable": false,
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "constant": true,
+      "inputs": [
+        {
+          "name": "account",
+          "type": "address"
+        }
+      ],
+      "name": "getCode",
+      "outputs": [
+        {
+          "name": "",
+          "type": "bytes"
+        }
+      ],
+      "payable": false,
+      "stateMutability": "view",
+      "type": "function"
+    }
+  ],
+  "metadata": "{\"compiler\":{\"version\":\"0.5.10+commit.5a6ea5b1\"},\"language\":\"Solidity\",\"output\":{\"abi\":[{\"constant\":true,\"inputs\":[{\"name\":\"account\",\"type\":\"address\"}],\"name\":\"getCode\",\"outputs\":[{\"name\":\"\",\"type\":\"bytes\"}],\"payable\":false,\"stateMutability\":\"view\",\"type\":\"function\"},{\"constant\":true,\"inputs\":[{\"name\":\"account\",\"type\":\"address\"}],\"name\":\"getBalance\",\"outputs\":[{\"name\":\"\",\"type\":\"uint256\"}],\"payable\":false,\"stateMutability\":\"view\",\"type\":\"function\"}],\"devdoc\":{\"methods\":{}},\"userdoc\":{\"methods\":{}}},\"settings\":{\"compilationTarget\":{\"/Users/ed/OffchainLabs/arb-os/contracts/add/contracts/ArbInfo.sol\":\"ArbInfo\"},\"evmVersion\":\"petersburg\",\"libraries\":{},\"optimizer\":{\"enabled\":false,\"runs\":200},\"remappings\":[]},\"sources\":{\"/Users/ed/OffchainLabs/arb-os/contracts/add/contracts/ArbInfo.sol\":{\"keccak256\":\"0x645bd2b1d5c04e099ba5f5d91c9d7486719ebc3b7b3cd462f441bda53cc959fe\",\"urls\":[\"bzzr://a3c389a395ec5b06473bc0610cf19bb0ddab6f743b6b44ba8a88f758d9c2c711\",\"dweb:/ipfs/QmbDBVtHsrXSb8aPrQD5x7C2NaruiEGAaA1BsjUxHPb2HF\"]}},\"version\":1}",
+  "bytecode": "0x",
+  "deployedBytecode": "0x",
+  "sourceMap": "",
+  "deployedSourceMap": "",
+  "source": "/*\n * Copyright 2020, Offchain Labs, Inc.\n *\n * Licensed under the Apache License, Version 2.0 (the \"License\");\n * you may not use this file except in compliance with the License.\n * You may obtain a copy of the License at\n *\n *    http://www.apache.org/licenses/LICENSE-2.0\n *\n * Unless required by applicable law or agreed to in writing, software\n * distributed under the License is distributed on an \"AS IS\" BASIS,\n * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.\n * See the License for the specific language governing permissions and\n * limitations under the License.\n */\n\npragma solidity ^0.5.0;\n\ninterface ArbInfo {\n    function getBalance(address account) external view returns (uint256);\n\n    function getCode(address account) external view returns (bytes memory);\n}\n\n",
+  "sourcePath": "/Users/ed/OffchainLabs/arb-os/contracts/add/contracts/ArbInfo.sol",
+  "ast": {
+    "absolutePath": "/Users/ed/OffchainLabs/arb-os/contracts/add/contracts/ArbInfo.sol",
+    "exportedSymbols": {
+      "ArbInfo": [
+        235
+      ]
+    },
+    "id": 236,
+    "nodeType": "SourceUnit",
+    "nodes": [
+      {
+        "id": 220,
+        "literals": [
+          "solidity",
+          "^",
+          "0.5",
+          ".0"
+        ],
+        "nodeType": "PragmaDirective",
+        "src": "604:23:4"
+      },
+      {
+        "baseContracts": [],
+        "contractDependencies": [],
+        "contractKind": "interface",
+        "documentation": null,
+        "fullyImplemented": false,
+        "id": 235,
+        "linearizedBaseContracts": [
+          235
+        ],
+        "name": "ArbInfo",
+        "nodeType": "ContractDefinition",
+        "nodes": [
+          {
+            "body": null,
+            "documentation": null,
+            "id": 227,
+            "implemented": false,
+            "kind": "function",
+            "modifiers": [],
+            "name": "getBalance",
+            "nodeType": "FunctionDefinition",
+            "parameters": {
+              "id": 223,
+              "nodeType": "ParameterList",
+              "parameters": [
+                {
+                  "constant": false,
+                  "id": 222,
+                  "name": "account",
+                  "nodeType": "VariableDeclaration",
+                  "scope": 227,
+                  "src": "673:15:4",
+                  "stateVariable": false,
+                  "storageLocation": "default",
+                  "typeDescriptions": {
+                    "typeIdentifier": "t_address",
+                    "typeString": "address"
+                  },
+                  "typeName": {
+                    "id": 221,
+                    "name": "address",
+                    "nodeType": "ElementaryTypeName",
+                    "src": "673:7:4",
+                    "stateMutability": "nonpayable",
+                    "typeDescriptions": {
+                      "typeIdentifier": "t_address",
+                      "typeString": "address"
+                    }
+                  },
+                  "value": null,
+                  "visibility": "internal"
+                }
+              ],
+              "src": "672:17:4"
+            },
+            "returnParameters": {
+              "id": 226,
+              "nodeType": "ParameterList",
+              "parameters": [
+                {
+                  "constant": false,
+                  "id": 225,
+                  "name": "",
+                  "nodeType": "VariableDeclaration",
+                  "scope": 227,
+                  "src": "713:7:4",
+                  "stateVariable": false,
+                  "storageLocation": "default",
+                  "typeDescriptions": {
+                    "typeIdentifier": "t_uint256",
+                    "typeString": "uint256"
+                  },
+                  "typeName": {
+                    "id": 224,
+                    "name": "uint256",
+                    "nodeType": "ElementaryTypeName",
+                    "src": "713:7:4",
+                    "typeDescriptions": {
+                      "typeIdentifier": "t_uint256",
+                      "typeString": "uint256"
+                    }
+                  },
+                  "value": null,
+                  "visibility": "internal"
+                }
+              ],
+              "src": "712:9:4"
+            },
+            "scope": 235,
+            "src": "653:69:4",
+            "stateMutability": "view",
+            "superFunction": null,
+            "visibility": "external"
+          },
+          {
+            "body": null,
+            "documentation": null,
+            "id": 234,
+            "implemented": false,
+            "kind": "function",
+            "modifiers": [],
+            "name": "getCode",
+            "nodeType": "FunctionDefinition",
+            "parameters": {
+              "id": 230,
+              "nodeType": "ParameterList",
+              "parameters": [
+                {
+                  "constant": false,
+                  "id": 229,
+                  "name": "account",
+                  "nodeType": "VariableDeclaration",
+                  "scope": 234,
+                  "src": "745:15:4",
+                  "stateVariable": false,
+                  "storageLocation": "default",
+                  "typeDescriptions": {
+                    "typeIdentifier": "t_address",
+                    "typeString": "address"
+                  },
+                  "typeName": {
+                    "id": 228,
+                    "name": "address",
+                    "nodeType": "ElementaryTypeName",
+                    "src": "745:7:4",
+                    "stateMutability": "nonpayable",
+                    "typeDescriptions": {
+                      "typeIdentifier": "t_address",
+                      "typeString": "address"
+                    }
+                  },
+                  "value": null,
+                  "visibility": "internal"
+                }
+              ],
+              "src": "744:17:4"
+            },
+            "returnParameters": {
+              "id": 233,
+              "nodeType": "ParameterList",
+              "parameters": [
+                {
+                  "constant": false,
+                  "id": 232,
+                  "name": "",
+                  "nodeType": "VariableDeclaration",
+                  "scope": 234,
+                  "src": "785:12:4",
+                  "stateVariable": false,
+                  "storageLocation": "memory",
+                  "typeDescriptions": {
+                    "typeIdentifier": "t_bytes_memory_ptr",
+                    "typeString": "bytes"
+                  },
+                  "typeName": {
+                    "id": 231,
+                    "name": "bytes",
+                    "nodeType": "ElementaryTypeName",
+                    "src": "785:5:4",
+                    "typeDescriptions": {
+                      "typeIdentifier": "t_bytes_storage_ptr",
+                      "typeString": "bytes"
+                    }
+                  },
+                  "value": null,
+                  "visibility": "internal"
+                }
+              ],
+              "src": "784:14:4"
+            },
+            "scope": 235,
+            "src": "728:71:4",
+            "stateMutability": "view",
+            "superFunction": null,
+            "visibility": "external"
+          }
+        ],
+        "scope": 236,
+        "src": "629:172:4"
+      }
+    ],
+    "src": "604:199:4"
+  },
+  "legacyAST": {
+    "absolutePath": "/Users/ed/OffchainLabs/arb-os/contracts/add/contracts/ArbInfo.sol",
+    "exportedSymbols": {
+      "ArbInfo": [
+        235
+      ]
+    },
+    "id": 236,
+    "nodeType": "SourceUnit",
+    "nodes": [
+      {
+        "id": 220,
+        "literals": [
+          "solidity",
+          "^",
+          "0.5",
+          ".0"
+        ],
+        "nodeType": "PragmaDirective",
+        "src": "604:23:4"
+      },
+      {
+        "baseContracts": [],
+        "contractDependencies": [],
+        "contractKind": "interface",
+        "documentation": null,
+        "fullyImplemented": false,
+        "id": 235,
+        "linearizedBaseContracts": [
+          235
+        ],
+        "name": "ArbInfo",
+        "nodeType": "ContractDefinition",
+        "nodes": [
+          {
+            "body": null,
+            "documentation": null,
+            "id": 227,
+            "implemented": false,
+            "kind": "function",
+            "modifiers": [],
+            "name": "getBalance",
+            "nodeType": "FunctionDefinition",
+            "parameters": {
+              "id": 223,
+              "nodeType": "ParameterList",
+              "parameters": [
+                {
+                  "constant": false,
+                  "id": 222,
+                  "name": "account",
+                  "nodeType": "VariableDeclaration",
+                  "scope": 227,
+                  "src": "673:15:4",
+                  "stateVariable": false,
+                  "storageLocation": "default",
+                  "typeDescriptions": {
+                    "typeIdentifier": "t_address",
+                    "typeString": "address"
+                  },
+                  "typeName": {
+                    "id": 221,
+                    "name": "address",
+                    "nodeType": "ElementaryTypeName",
+                    "src": "673:7:4",
+                    "stateMutability": "nonpayable",
+                    "typeDescriptions": {
+                      "typeIdentifier": "t_address",
+                      "typeString": "address"
+                    }
+                  },
+                  "value": null,
+                  "visibility": "internal"
+                }
+              ],
+              "src": "672:17:4"
+            },
+            "returnParameters": {
+              "id": 226,
+              "nodeType": "ParameterList",
+              "parameters": [
+                {
+                  "constant": false,
+                  "id": 225,
+                  "name": "",
+                  "nodeType": "VariableDeclaration",
+                  "scope": 227,
+                  "src": "713:7:4",
+                  "stateVariable": false,
+                  "storageLocation": "default",
+                  "typeDescriptions": {
+                    "typeIdentifier": "t_uint256",
+                    "typeString": "uint256"
+                  },
+                  "typeName": {
+                    "id": 224,
+                    "name": "uint256",
+                    "nodeType": "ElementaryTypeName",
+                    "src": "713:7:4",
+                    "typeDescriptions": {
+                      "typeIdentifier": "t_uint256",
+                      "typeString": "uint256"
+                    }
+                  },
+                  "value": null,
+                  "visibility": "internal"
+                }
+              ],
+              "src": "712:9:4"
+            },
+            "scope": 235,
+            "src": "653:69:4",
+            "stateMutability": "view",
+            "superFunction": null,
+            "visibility": "external"
+          },
+          {
+            "body": null,
+            "documentation": null,
+            "id": 234,
+            "implemented": false,
+            "kind": "function",
+            "modifiers": [],
+            "name": "getCode",
+            "nodeType": "FunctionDefinition",
+            "parameters": {
+              "id": 230,
+              "nodeType": "ParameterList",
+              "parameters": [
+                {
+                  "constant": false,
+                  "id": 229,
+                  "name": "account",
+                  "nodeType": "VariableDeclaration",
+                  "scope": 234,
+                  "src": "745:15:4",
+                  "stateVariable": false,
+                  "storageLocation": "default",
+                  "typeDescriptions": {
+                    "typeIdentifier": "t_address",
+                    "typeString": "address"
+                  },
+                  "typeName": {
+                    "id": 228,
+                    "name": "address",
+                    "nodeType": "ElementaryTypeName",
+                    "src": "745:7:4",
+                    "stateMutability": "nonpayable",
+                    "typeDescriptions": {
+                      "typeIdentifier": "t_address",
+                      "typeString": "address"
+                    }
+                  },
+                  "value": null,
+                  "visibility": "internal"
+                }
+              ],
+              "src": "744:17:4"
+            },
+            "returnParameters": {
+              "id": 233,
+              "nodeType": "ParameterList",
+              "parameters": [
+                {
+                  "constant": false,
+                  "id": 232,
+                  "name": "",
+                  "nodeType": "VariableDeclaration",
+                  "scope": 234,
+                  "src": "785:12:4",
+                  "stateVariable": false,
+                  "storageLocation": "memory",
+                  "typeDescriptions": {
+                    "typeIdentifier": "t_bytes_memory_ptr",
+                    "typeString": "bytes"
+                  },
+                  "typeName": {
+                    "id": 231,
+                    "name": "bytes",
+                    "nodeType": "ElementaryTypeName",
+                    "src": "785:5:4",
+                    "typeDescriptions": {
+                      "typeIdentifier": "t_bytes_storage_ptr",
+                      "typeString": "bytes"
+                    }
+                  },
+                  "value": null,
+                  "visibility": "internal"
+                }
+              ],
+              "src": "784:14:4"
+            },
+            "scope": 235,
+            "src": "728:71:4",
+            "stateMutability": "view",
+            "superFunction": null,
+            "visibility": "external"
+          }
+        ],
+        "scope": 236,
+        "src": "629:172:4"
+      }
+    ],
+    "src": "604:199:4"
+  },
+  "compiler": {
+    "name": "solc",
+    "version": "0.5.10+commit.5a6ea5b1.Emscripten.clang"
+  },
+  "networks": {},
+  "schemaVersion": "3.3.1",
+  "updatedAt": "2020-12-18T21:05:53.576Z",
+  "devdoc": {
+    "methods": {}
+  },
+  "userdoc": {
+    "methods": {}
+  }
+}
