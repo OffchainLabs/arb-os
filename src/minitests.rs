@@ -489,3 +489,8 @@ fn test_erc20() {
 fn test_erc721() {
     crate::evm::mint_erc721_and_get_balance(None, false);
 }
+
+#[test]
+fn test_rollup_tracker() {
+    crate::run::rolluptest::_test_rollup_tracker();
+}

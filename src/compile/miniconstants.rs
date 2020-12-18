@@ -146,6 +146,7 @@ pub fn init_constant_table() -> HashMap<String, Uint256> {
         ("L1MessageType_buddyDeploy", 5),
         ("L1MessageType_endOfBlock", 6),
         ("L1MessageType_L2FundedByL1", 7),
+        ("L1MessageType_rollupProtocolEvent", 8),
 
         // L2 message types
         ("L2MessageType_unsignedEOATx", 0),
@@ -156,6 +157,13 @@ pub fn init_constant_table() -> HashMap<String, Uint256> {
         ("L2MessageType_sequencerBatch", 5),
         ("L2MessageType_heartbeat", 6),
         ("L2MessageType_signedCompressedTx", 7),
+
+        // rollup protocol event types
+        ("ProtoEvent_createNode", 0),
+        ("ProtoEvent_confirmNode", 1),
+        ("ProtoEvent_rejectNode", 2),
+        ("ProtoEvent_newStake", 3),
+        ("ProtoEvent_debug", 255),
 
         // tx result codes
         ("TxResultCode_success", 0),

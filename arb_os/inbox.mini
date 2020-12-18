@@ -29,6 +29,8 @@ use messageBatch::messageBatch_get;
 
 use output::outputStats_endOfBlock;
 
+use rollupTracker::rollupTracker_processEvent;
+
 use std::bytearray::ByteArray;
 use std::bytearray::MarshalledBytes;
 use std::bytearray::marshalledBytes_firstByte;
@@ -313,6 +315,11 @@ public impure func inbox_getNextUnpackedRequest() -> (
                     return (None<IncomingRequest>, Some(txRequest));
                 }
                 // else request was malformatted, ignore it and execute loop again to get another
+            } elseif (msg.kind == const::L1MessageType_rollupProtocolEvent) {
+                if (msg.sender == address(0)) {
+                    rollupTracker_processEvent(msg.msgData);
+                }
+                // else request was forged or malformatted, ignore it and execute loop again to get another
             } else {
                 return (Some(msg), None<TxRequestData>);
             }
