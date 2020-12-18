@@ -53,6 +53,13 @@ pub fn _insert_new_stake(
     rt_env.insert_l1_message(8u8, Uint256::zero(), &buf);
 }
 
+pub fn _insert_claim_node(rt_env: &mut RuntimeEnvironment, height_l2: &Uint256, claimer: &Uint256) {
+    let mut buf = vec![4u8];
+    buf.extend(height_l2.to_bytes_be());
+    buf.extend(claimer.to_bytes_be());
+    rt_env.insert_l1_message(8u8, Uint256::zero(), &buf);
+}
+
 pub fn _insert_rollup_debug(rt_env: &mut RuntimeEnvironment) {
     rt_env.insert_l1_message(8u8, Uint256::zero(), &[255u8]);
 }
@@ -63,6 +70,14 @@ pub fn _test_rollup_tracker() {
     machine.start_at_zero();
 
     let my_addr = Uint256::from_u64(11025);
+    let claimer = Uint256::from_u64(4242);
+
+    machine.runtime_env.insert_eth_deposit_message(
+        claimer.clone(),
+        claimer.clone(),
+        Uint256::_from_eth(1),
+    );
+
     _insert_create_node(
         &mut machine.runtime_env,
         &Uint256::one(),
@@ -79,6 +94,10 @@ pub fn _test_rollup_tracker() {
         &Uint256::from_u64(10),
         my_addr.clone(),
     );
+
+    _insert_rollup_debug(&mut machine.runtime_env);
+
+    _insert_claim_node(&mut machine.runtime_env, &Uint256::from_u64(1), &claimer);
 
     _insert_rollup_debug(&mut machine.runtime_env);
 

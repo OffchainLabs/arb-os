@@ -676,3 +676,11 @@ func sdp_closure(k: any, v: any, state: any) -> any {
 
     return (sd, num, denom);
 }
+
+public impure func recordOverheadDebt(payee: address, amount: uint) {
+    gasAccountingInfo = gasAccountingInfo with {
+        overheadTracker: overheadTracker_add(gasAccountingInfo.overheadTracker, amount)
+    } with {
+        specialDebts: specialDebts_add(gasAccountingInfo.specialDebts, payee, amount)
+    };
+}

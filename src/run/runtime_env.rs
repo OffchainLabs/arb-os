@@ -32,7 +32,10 @@ pub struct RuntimeEnvironment {
 }
 
 impl RuntimeEnvironment {
-    pub fn new(chain_address: Uint256, charging_policy: Option<(Uint256, Uint256, Uint256)>) -> Self {
+    pub fn new(
+        chain_address: Uint256,
+        charging_policy: Option<(Uint256, Uint256, Uint256)>,
+    ) -> Self {
         RuntimeEnvironment::new_with_blocknum_timestamp(
             chain_address,
             Uint256::from_u64(100_000),
