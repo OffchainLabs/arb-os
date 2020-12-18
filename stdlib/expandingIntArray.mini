@@ -73,7 +73,7 @@ func ear_get_2(tree: [8]any, chunk: uint, index: uint) -> uint {
 type Unwinder = struct {
     tree: [8]any,
     slot: uint,
-    next: option<any>,  // really option<Unwinder>, but compiler doesn't allow recursive types
+    next: option<Unwinder>,
 }
 
 public func expandingIntArray_set(arr: ExpandingIntArray, index: uint, value: uint) -> ExpandingIntArray {

@@ -88,7 +88,7 @@ public func builtin_kvsHasKey(kvs: Kvs, key: any) -> bool {
 type Unwinder = struct {
     kvs: [8]any,
     index: uint,
-    next: option<any>,   // really option<Unwinder>, but compiler doesn't do recursive types
+    next: option<Unwinder>,
 }
 
 public func builtin_kvsSet(s: Kvs, key: any, value: any) -> Kvs {

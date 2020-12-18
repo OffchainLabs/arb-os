@@ -84,7 +84,7 @@ public func storageMap_get(kvs: StorageMap, key: uint) -> uint {
 type Unwinder = struct {
     kvs: [8]any,
     index: uint,
-    next: option<any>,   // really option<Unwinder>, but compiler doesn't do recursive types
+    next: option<Unwinder>,
 }
 
 public func storageMap_set(s: StorageMap, key: uint, value: uint) -> StorageMap {

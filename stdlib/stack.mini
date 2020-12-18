@@ -7,7 +7,7 @@ type Stack = option<StackCell>
 type StackCell = struct {
     top: [8]any,
     num: uint,
-    rest: option<any>   // really option<StackCell>, but compiler doesn't support recursive types
+    rest: option<StackCell>
 }
 
 
