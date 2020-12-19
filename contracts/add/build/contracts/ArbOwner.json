@@ -18,6 +18,15 @@
     {
       "constant": false,
       "inputs": [],
+      "name": "addToReserveFunds",
+      "outputs": [],
+      "payable": true,
+      "stateMutability": "payable",
+      "type": "function"
+    },
+    {
+      "constant": false,
+      "inputs": [],
       "name": "startArbosUpgrade",
       "outputs": [],
       "payable": false,
@@ -48,21 +57,21 @@
       "type": "function"
     }
   ],
-  "metadata": "{\"compiler\":{\"version\":\"0.5.10+commit.5a6ea5b1\"},\"language\":\"Solidity\",\"output\":{\"abi\":[{\"constant\":false,\"inputs\":[{\"name\":\"marshalledCode\",\"type\":\"bytes\"}],\"name\":\"continueArbosUpgrade\",\"outputs\":[],\"payable\":false,\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"constant\":false,\"inputs\":[],\"name\":\"startArbosUpgrade\",\"outputs\":[],\"payable\":false,\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"constant\":false,\"inputs\":[],\"name\":\"finishArbosUpgrade\",\"outputs\":[],\"payable\":false,\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"constant\":false,\"inputs\":[{\"name\":\"newOwnerAddr\",\"type\":\"address\"}],\"name\":\"giveOwnership\",\"outputs\":[],\"payable\":false,\"stateMutability\":\"nonpayable\",\"type\":\"function\"}],\"devdoc\":{\"methods\":{}},\"userdoc\":{\"methods\":{}}},\"settings\":{\"compilationTarget\":{\"/Users/ed/OffchainLabs/arb-os/contracts/add/contracts/ArbOwner.sol\":\"ArbOwner\"},\"evmVersion\":\"petersburg\",\"libraries\":{},\"optimizer\":{\"enabled\":false,\"runs\":200},\"remappings\":[]},\"sources\":{\"/Users/ed/OffchainLabs/arb-os/contracts/add/contracts/ArbOwner.sol\":{\"keccak256\":\"0x962a5571f584ebcb3892629bd7e5212ff497d1761d32b031d67dcd7309561226\",\"urls\":[\"bzzr://a731e0388c0b55b0f92d014d02a2f5edfbf5bd11927476f7af9398b1541c696c\",\"dweb:/ipfs/QmTy5NyvKfm6va5QMDwj6pQPnQvU5rbfzXrU3uNGqTCJmq\"]}},\"version\":1}",
+  "metadata": "{\"compiler\":{\"version\":\"0.5.10+commit.5a6ea5b1\"},\"language\":\"Solidity\",\"output\":{\"abi\":[{\"constant\":false,\"inputs\":[{\"name\":\"marshalledCode\",\"type\":\"bytes\"}],\"name\":\"continueArbosUpgrade\",\"outputs\":[],\"payable\":false,\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"constant\":false,\"inputs\":[],\"name\":\"startArbosUpgrade\",\"outputs\":[],\"payable\":false,\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"constant\":false,\"inputs\":[],\"name\":\"addToReserveFunds\",\"outputs\":[],\"payable\":true,\"stateMutability\":\"payable\",\"type\":\"function\"},{\"constant\":false,\"inputs\":[],\"name\":\"finishArbosUpgrade\",\"outputs\":[],\"payable\":false,\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"constant\":false,\"inputs\":[{\"name\":\"newOwnerAddr\",\"type\":\"address\"}],\"name\":\"giveOwnership\",\"outputs\":[],\"payable\":false,\"stateMutability\":\"nonpayable\",\"type\":\"function\"}],\"devdoc\":{\"methods\":{}},\"userdoc\":{\"methods\":{}}},\"settings\":{\"compilationTarget\":{\"/Users/ed/OffchainLabs/arb-os/contracts/add/contracts/ArbOwner.sol\":\"ArbOwner\"},\"evmVersion\":\"petersburg\",\"libraries\":{},\"optimizer\":{\"enabled\":false,\"runs\":200},\"remappings\":[]},\"sources\":{\"/Users/ed/OffchainLabs/arb-os/contracts/add/contracts/ArbOwner.sol\":{\"keccak256\":\"0x674530d9f98086811e7a9200f7b1b53a745af37b00619f747777f4c0c910c443\",\"urls\":[\"bzzr://e065c67c96f2e0a6ce8bee4a7b747660a19339193dd0d09835a5a8dd912fcd59\",\"dweb:/ipfs/QmW2mdKvxZp9or5aaHLzsDbAzMFUF6svKY2Mpkgv1CfM2e\"]}},\"version\":1}",
   "bytecode": "0x",
   "deployedBytecode": "0x",
   "sourceMap": "",
   "deployedSourceMap": "",
-  "source": "pragma solidity >=0.4.21 <0.7.0;\n\ninterface ArbOwner {\n    // Support actions that can be taken by the chain's owner.\n    // All methods will revert, unless the caller is the chain's owner.\n\n    function giveOwnership(address newOwnerAddr) external;\n\n    // To upgrade ArbOS, the ower calls startArbosUpgrade, then calls continueArbosUpgrade one or more times to upload \n    // the code to be installed as the upgrade, then calls finishArbosUpgrade to complete the upgrade and start executing the new code.\n    function startArbosUpgrade() external;\n    function continueArbosUpgrade(bytes calldata marshalledCode) external;\n    function finishArbosUpgrade() external;\n}\n\n",
+  "source": "pragma solidity >=0.4.21 <0.7.0;\n\ninterface ArbOwner {\n    // Support actions that can be taken by the chain's owner.\n    // All methods will revert, unless the caller is the chain's owner.\n\n    function giveOwnership(address newOwnerAddr) external;\n\n    function addToReserveFunds() external payable;\n\n    // To upgrade ArbOS, the owner calls startArbosUpgrade, then calls continueArbosUpgrade one or more times to upload \n    // the code to be installed as the upgrade, then calls finishArbosUpgrade to complete the upgrade and start executing the new code.\n    function startArbosUpgrade() external;\n    function continueArbosUpgrade(bytes calldata marshalledCode) external;\n    function finishArbosUpgrade() external;\n}\n\n",
   "sourcePath": "/Users/ed/OffchainLabs/arb-os/contracts/add/contracts/ArbOwner.sol",
   "ast": {
     "absolutePath": "/Users/ed/OffchainLabs/arb-os/contracts/add/contracts/ArbOwner.sol",
     "exportedSymbols": {
       "ArbOwner": [
-        273
+        276
       ]
     },
-    "id": 274,
+    "id": 277,
     "nodeType": "SourceUnit",
     "nodes": [
       {
@@ -85,9 +94,9 @@
         "contractKind": "interface",
         "documentation": null,
         "fullyImplemented": false,
-        "id": 273,
+        "id": 276,
         "linearizedBaseContracts": [
-          273
+          276
         ],
         "name": "ArbOwner",
         "nodeType": "ContractDefinition",
@@ -141,7 +150,7 @@
               "parameters": [],
               "src": "248:0:5"
             },
-            "scope": 273,
+            "scope": 276,
             "src": "195:54:5",
             "stateMutability": "nonpayable",
             "superFunction": null,
@@ -154,76 +163,49 @@
             "implemented": false,
             "kind": "function",
             "modifiers": [],
-            "name": "startArbosUpgrade",
+            "name": "addToReserveFunds",
             "nodeType": "FunctionDefinition",
             "parameters": {
               "id": 262,
               "nodeType": "ParameterList",
               "parameters": [],
-              "src": "537:2:5"
+              "src": "281:2:5"
             },
             "returnParameters": {
               "id": 263,
               "nodeType": "ParameterList",
               "parameters": [],
-              "src": "548:0:5"
+              "src": "300:0:5"
             },
-            "scope": 273,
-            "src": "511:38:5",
-            "stateMutability": "nonpayable",
+            "scope": 276,
+            "src": "255:46:5",
+            "stateMutability": "payable",
             "superFunction": null,
             "visibility": "external"
           },
           {
             "body": null,
             "documentation": null,
-            "id": 269,
+            "id": 267,
             "implemented": false,
             "kind": "function",
             "modifiers": [],
-            "name": "continueArbosUpgrade",
+            "name": "startArbosUpgrade",
             "nodeType": "FunctionDefinition",
             "parameters": {
-              "id": 267,
-              "nodeType": "ParameterList",
-              "parameters": [
-                {
-                  "constant": false,
-                  "id": 266,
-                  "name": "marshalledCode",
-                  "nodeType": "VariableDeclaration",
-                  "scope": 269,
-                  "src": "584:29:5",
-                  "stateVariable": false,
-                  "storageLocation": "calldata",
-                  "typeDescriptions": {
-                    "typeIdentifier": "t_bytes_calldata_ptr",
-                    "typeString": "bytes"
-                  },
-                  "typeName": {
-                    "id": 265,
-                    "name": "bytes",
-                    "nodeType": "ElementaryTypeName",
-                    "src": "584:5:5",
-                    "typeDescriptions": {
-                      "typeIdentifier": "t_bytes_storage_ptr",
-                      "typeString": "bytes"
-                    }
-                  },
-                  "value": null,
-                  "visibility": "internal"
-                }
-              ],
-              "src": "583:31:5"
-            },
-            "returnParameters": {
-              "id": 268,
+              "id": 265,
               "nodeType": "ParameterList",
               "parameters": [],
-              "src": "623:0:5"
+              "src": "590:2:5"
             },
-            "scope": 273,
-            "src": "554:70:5",
+            "returnParameters": {
+              "id": 266,
+              "nodeType": "ParameterList",
+              "parameters": [],
+              "src": "601:0:5"
+            },
+            "scope": 276,
+            "src": "564:38:5",
             "stateMutability": "nonpayable",
             "superFunction": null,
             "visibility": "external"
@@ -235,41 +217,95 @@
             "implemented": false,
             "kind": "function",
             "modifiers": [],
-            "name": "finishArbosUpgrade",
+            "name": "continueArbosUpgrade",
             "nodeType": "FunctionDefinition",
             "parameters": {
               "id": 270,
               "nodeType": "ParameterList",
-              "parameters": [],
-              "src": "656:2:5"
+              "parameters": [
+                {
+                  "constant": false,
+                  "id": 269,
+                  "name": "marshalledCode",
+                  "nodeType": "VariableDeclaration",
+                  "scope": 272,
+                  "src": "637:29:5",
+                  "stateVariable": false,
+                  "storageLocation": "calldata",
+                  "typeDescriptions": {
+                    "typeIdentifier": "t_bytes_calldata_ptr",
+                    "typeString": "bytes"
+                  },
+                  "typeName": {
+                    "id": 268,
+                    "name": "bytes",
+                    "nodeType": "ElementaryTypeName",
+                    "src": "637:5:5",
+                    "typeDescriptions": {
+                      "typeIdentifier": "t_bytes_storage_ptr",
+                      "typeString": "bytes"
+                    }
+                  },
+                  "value": null,
+                  "visibility": "internal"
+                }
+              ],
+              "src": "636:31:5"
             },
             "returnParameters": {
               "id": 271,
               "nodeType": "ParameterList",
               "parameters": [],
-              "src": "667:0:5"
+              "src": "676:0:5"
             },
-            "scope": 273,
-            "src": "629:39:5",
+            "scope": 276,
+            "src": "607:70:5",
+            "stateMutability": "nonpayable",
+            "superFunction": null,
+            "visibility": "external"
+          },
+          {
+            "body": null,
+            "documentation": null,
+            "id": 275,
+            "implemented": false,
+            "kind": "function",
+            "modifiers": [],
+            "name": "finishArbosUpgrade",
+            "nodeType": "FunctionDefinition",
+            "parameters": {
+              "id": 273,
+              "nodeType": "ParameterList",
+              "parameters": [],
+              "src": "709:2:5"
+            },
+            "returnParameters": {
+              "id": 274,
+              "nodeType": "ParameterList",
+              "parameters": [],
+              "src": "720:0:5"
+            },
+            "scope": 276,
+            "src": "682:39:5",
             "stateMutability": "nonpayable",
             "superFunction": null,
             "visibility": "external"
           }
         ],
-        "scope": 274,
-        "src": "34:636:5"
+        "scope": 277,
+        "src": "34:689:5"
       }
     ],
-    "src": "0:672:5"
+    "src": "0:725:5"
   },
   "legacyAST": {
     "absolutePath": "/Users/ed/OffchainLabs/arb-os/contracts/add/contracts/ArbOwner.sol",
     "exportedSymbols": {
       "ArbOwner": [
-        273
+        276
       ]
     },
-    "id": 274,
+    "id": 277,
     "nodeType": "SourceUnit",
     "nodes": [
       {
@@ -292,9 +328,9 @@
         "contractKind": "interface",
         "documentation": null,
         "fullyImplemented": false,
-        "id": 273,
+        "id": 276,
         "linearizedBaseContracts": [
-          273
+          276
         ],
         "name": "ArbOwner",
         "nodeType": "ContractDefinition",
@@ -348,7 +384,7 @@
               "parameters": [],
               "src": "248:0:5"
             },
-            "scope": 273,
+            "scope": 276,
             "src": "195:54:5",
             "stateMutability": "nonpayable",
             "superFunction": null,
@@ -361,76 +397,49 @@
             "implemented": false,
             "kind": "function",
             "modifiers": [],
-            "name": "startArbosUpgrade",
+            "name": "addToReserveFunds",
             "nodeType": "FunctionDefinition",
             "parameters": {
               "id": 262,
               "nodeType": "ParameterList",
               "parameters": [],
-              "src": "537:2:5"
+              "src": "281:2:5"
             },
             "returnParameters": {
               "id": 263,
               "nodeType": "ParameterList",
               "parameters": [],
-              "src": "548:0:5"
+              "src": "300:0:5"
             },
-            "scope": 273,
-            "src": "511:38:5",
-            "stateMutability": "nonpayable",
+            "scope": 276,
+            "src": "255:46:5",
+            "stateMutability": "payable",
             "superFunction": null,
             "visibility": "external"
           },
           {
             "body": null,
             "documentation": null,
-            "id": 269,
+            "id": 267,
             "implemented": false,
             "kind": "function",
             "modifiers": [],
-            "name": "continueArbosUpgrade",
+            "name": "startArbosUpgrade",
             "nodeType": "FunctionDefinition",
             "parameters": {
-              "id": 267,
-              "nodeType": "ParameterList",
-              "parameters": [
-                {
-                  "constant": false,
-                  "id": 266,
-                  "name": "marshalledCode",
-                  "nodeType": "VariableDeclaration",
-                  "scope": 269,
-                  "src": "584:29:5",
-                  "stateVariable": false,
-                  "storageLocation": "calldata",
-                  "typeDescriptions": {
-                    "typeIdentifier": "t_bytes_calldata_ptr",
-                    "typeString": "bytes"
-                  },
-                  "typeName": {
-                    "id": 265,
-                    "name": "bytes",
-                    "nodeType": "ElementaryTypeName",
-                    "src": "584:5:5",
-                    "typeDescriptions": {
-                      "typeIdentifier": "t_bytes_storage_ptr",
-                      "typeString": "bytes"
-                    }
-                  },
-                  "value": null,
-                  "visibility": "internal"
-                }
-              ],
-              "src": "583:31:5"
-            },
-            "returnParameters": {
-              "id": 268,
+              "id": 265,
               "nodeType": "ParameterList",
               "parameters": [],
-              "src": "623:0:5"
+              "src": "590:2:5"
             },
-            "scope": 273,
-            "src": "554:70:5",
+            "returnParameters": {
+              "id": 266,
+              "nodeType": "ParameterList",
+              "parameters": [],
+              "src": "601:0:5"
+            },
+            "scope": 276,
+            "src": "564:38:5",
             "stateMutability": "nonpayable",
             "superFunction": null,
             "visibility": "external"
@@ -442,32 +451,86 @@
             "implemented": false,
             "kind": "function",
             "modifiers": [],
-            "name": "finishArbosUpgrade",
+            "name": "continueArbosUpgrade",
             "nodeType": "FunctionDefinition",
             "parameters": {
               "id": 270,
               "nodeType": "ParameterList",
-              "parameters": [],
-              "src": "656:2:5"
+              "parameters": [
+                {
+                  "constant": false,
+                  "id": 269,
+                  "name": "marshalledCode",
+                  "nodeType": "VariableDeclaration",
+                  "scope": 272,
+                  "src": "637:29:5",
+                  "stateVariable": false,
+                  "storageLocation": "calldata",
+                  "typeDescriptions": {
+                    "typeIdentifier": "t_bytes_calldata_ptr",
+                    "typeString": "bytes"
+                  },
+                  "typeName": {
+                    "id": 268,
+                    "name": "bytes",
+                    "nodeType": "ElementaryTypeName",
+                    "src": "637:5:5",
+                    "typeDescriptions": {
+                      "typeIdentifier": "t_bytes_storage_ptr",
+                      "typeString": "bytes"
+                    }
+                  },
+                  "value": null,
+                  "visibility": "internal"
+                }
+              ],
+              "src": "636:31:5"
             },
             "returnParameters": {
               "id": 271,
               "nodeType": "ParameterList",
               "parameters": [],
-              "src": "667:0:5"
+              "src": "676:0:5"
             },
-            "scope": 273,
-            "src": "629:39:5",
+            "scope": 276,
+            "src": "607:70:5",
+            "stateMutability": "nonpayable",
+            "superFunction": null,
+            "visibility": "external"
+          },
+          {
+            "body": null,
+            "documentation": null,
+            "id": 275,
+            "implemented": false,
+            "kind": "function",
+            "modifiers": [],
+            "name": "finishArbosUpgrade",
+            "nodeType": "FunctionDefinition",
+            "parameters": {
+              "id": 273,
+              "nodeType": "ParameterList",
+              "parameters": [],
+              "src": "709:2:5"
+            },
+            "returnParameters": {
+              "id": 274,
+              "nodeType": "ParameterList",
+              "parameters": [],
+              "src": "720:0:5"
+            },
+            "scope": 276,
+            "src": "682:39:5",
             "stateMutability": "nonpayable",
             "superFunction": null,
             "visibility": "external"
           }
         ],
-        "scope": 274,
-        "src": "34:636:5"
+        "scope": 277,
+        "src": "34:689:5"
       }
     ],
-    "src": "0:672:5"
+    "src": "0:725:5"
   },
   "compiler": {
     "name": "solc",
@@ -475,7 +538,7 @@
   },
   "networks": {},
   "schemaVersion": "3.3.1",
-  "updatedAt": "2020-12-18T21:03:51.450Z",
+  "updatedAt": "2020-12-19T12:41:10.570Z",
   "devdoc": {
     "methods": {}
   },

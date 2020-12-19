@@ -150,6 +150,12 @@ public impure func gasAccounting_summaryToPublish() -> any {
     );
 }
 
+public impure func gasAccounting_addToReserveFunds(amount: uint) {
+    gasAccountingInfo = gasAccountingInfo with {
+        reserve: gasAccountingInfo.reserve + amount
+    };
+}
+
 public impure func gasAccounting_specialCharge(payer: address, amount: uint) -> option<()> {
     if ( ! evmCallStack_isEmpty() ) {
         // This must be called outside of a tx.
@@ -654,13 +660,13 @@ func specialDebts_pay(sd: SpecialDebts, fundsAvail: uint) -> (SpecialDebts, uint
     }
 
     let (usd, _, _) = unsafecast<(SpecialDebts, uint, uint)>(
-        builtin_kvsForall(unsafecast<Kvs>(sd), sdp_closure, (sd, num, denom))
+        builtin_kvsForall(unsafecast<Kvs>(sd.toWhom), sdp_closure, (sd, num, denom))
     );
 
     return (usd, usd.totalPaidOut-sd.totalPaidOut);
 }
 
-func sdp_closure(k: any, v: any, state: any) -> any {
+impure func sdp_closure(k: any, v: any, state: any) -> any {
     let addr = unsafecast<address>(k);
     let currentDebt = unsafecast<uint>(v);
     let (sd, num, denom) = unsafecast<(SpecialDebts, uint, uint)>(state);
@@ -673,6 +679,15 @@ func sdp_closure(k: any, v: any, state: any) -> any {
     } with {
         totalPaidOut: sd.totalPaidOut + amountToPay
     };
+
+    let globalAS = getGlobalAccountStore();
+    setGlobalAccountStore(
+        accountStore_set(
+            globalAS,
+            addr,
+            account_addToEthBalance(accountStore_get(globalAS, addr), amountToPay)
+        )
+    );
 
     return (sd, num, denom);
 }

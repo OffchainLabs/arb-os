@@ -44,7 +44,7 @@ impure func processEventOrError(stream: ByteStream) -> option<()> {
         return rollupTracker_confirmNode(heightL2);
     } elseif (eventType == const::ProtoEvent_rejectNode) {
         let (us, heightL2) = bytestream_get256(stream)?;
-        return rollupTracker_confirmNode(heightL2);
+        return rollupTracker_rejectNode(heightL2);
     } elseif (eventType == const::ProtoEvent_newStake) {
         let (us, heightL2) = bytestream_get256(stream)?;
         let (us, stakerUint) = bytestream_get256(us)?;

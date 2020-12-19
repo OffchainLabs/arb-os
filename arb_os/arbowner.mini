@@ -15,9 +15,12 @@ use evmCallStack::evmCallStack_topFrame;
 use evmCallStack::evmCallStack_callHitError;
 use evmCallStack::evmCallFrame_getCalldata;
 use evmCallStack::evmCallFrame_getCaller;
+use evmCallStack::evmCallFrame_getCallvalue;
 
 use evmOps::evmOp_return;
 use evmOps::evmOp_revert_knownCodePc;
+
+use gasAccounting::gasAccounting_addToReserveFunds;
 
 use std::bytearray::ByteArray;
 use std::bytearray::bytearray_size;
@@ -47,6 +50,8 @@ public impure func arbowner_txcall() {
         let funcCode = asm(224, bytearray_get256(calldata, 0)) uint { shr };
         if (funcCode == 0xe3a0a148) {
             arbowner_giveOwnership(topFrame, calldata);
+        } elseif (funcCode == 0xc3bf429d) {
+            arbowner_addToReserveFunds(topFrame, calldata);
         } elseif (funcCode == 0x6d92b8e4) {
             arbowner_startArbosUpgrade(topFrame, calldata);
         } elseif (funcCode == 0x0b766fec) {
@@ -55,7 +60,6 @@ public impure func arbowner_txcall() {
            arbowner_finishArbosUpgrade(topFrame, calldata);
         } else {
             // unrecognized function code
-            panic;
             evmOp_revert_knownCodePc(address(const::Address_ArbOwner), 2, 0, 0);
         }
     } else {
@@ -69,6 +73,17 @@ impure func arbowner_giveOwnership(topFrame: EvmCallFrame, calldata: ByteArray) 
         evmOp_revert_knownCodePc(address(const::Address_ArbOwner), 10, 0, 0);
     }
     chainParams_setOwner(address(bytearray_get256(calldata, 4)));
+    evmOp_return(0, 0);
+}
+
+impure func arbowner_addToReserveFunds(topFrame: EvmCallFrame, calldata: ByteArray) { // () payable
+    if (bytearray_size(calldata) != 4) {
+        evmOp_revert_knownCodePc(address(const::Address_ArbOwner), 50, 0, 0);
+    }
+    let callvalue = evmCallFrame_getCallvalue(topFrame);
+    if (callvalue > 0) {
+        gasAccounting_addToReserveFunds(callvalue);
+    }
     evmOp_return(0, 0);
 }
 

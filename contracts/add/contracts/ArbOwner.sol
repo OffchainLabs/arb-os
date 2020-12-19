@@ -6,7 +6,9 @@ interface ArbOwner {
 
     function giveOwnership(address newOwnerAddr) external;
 
-    // To upgrade ArbOS, the ower calls startArbosUpgrade, then calls continueArbosUpgrade one or more times to upload 
+    function addToReserveFunds() external payable;
+
+    // To upgrade ArbOS, the owner calls startArbosUpgrade, then calls continueArbosUpgrade one or more times to upload 
     // the code to be installed as the upgrade, then calls finishArbosUpgrade to complete the upgrade and start executing the new code.
     function startArbosUpgrade() external;
     function continueArbosUpgrade(bytes calldata marshalledCode) external;

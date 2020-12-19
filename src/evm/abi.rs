@@ -1045,6 +1045,31 @@ impl<'a> _ArbOwner<'a> {
         }
     }
 
+    pub fn _add_to_reserve_funds(
+        &self,
+        machine: &mut Machine,
+        amount: Uint256,
+    ) -> Result<(), ethabi::Error> {
+        let (receipts, _sends) = self.contract_abi.call_function(
+            self.my_address.clone(),
+            "addToReserveFunds",
+            &[],
+            machine,
+            amount,
+            self.debug,
+        )?;
+
+        if receipts.len() != 1 {
+            return Err(ethabi::Error::from("wrong number of receipts"));
+        }
+
+        if receipts[0].succeeded() {
+            Ok(())
+        } else {
+            Err(ethabi::Error::from("reverted"))
+        }
+    }
+
     pub fn _start_arbos_upgrade(&self, machine: &mut Machine) -> Result<(), ethabi::Error> {
         let (receipts, _sends) = self.contract_abi.call_function_compressed(
             self.my_address.clone(),

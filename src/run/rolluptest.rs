@@ -2,10 +2,11 @@
  * Copyright 2020, Offchain Labs, Inc. All rights reserved.
  */
 
-use crate::evm::abi::_ArbInfo;
+use crate::evm::abi::{_ArbInfo, _ArbOwner};
 use crate::run::{load_from_file, runtime_env::RuntimeEnvironment};
 use crate::uint256::Uint256;
 use std::path::Path;
+use ethers_signers::Signer;
 
 pub fn _insert_create_node(
     rt_env: &mut RuntimeEnvironment,
@@ -66,18 +67,30 @@ pub fn _insert_rollup_debug(rt_env: &mut RuntimeEnvironment) {
 }
 
 pub fn _test_rollup_tracker() {
-    let rt_env = RuntimeEnvironment::new(Uint256::from_usize(1111), None);
+    let rt_env = RuntimeEnvironment::_new_with_owner(Uint256::from_usize(1111), None);
     let mut machine = load_from_file(Path::new("arb_os/arbos.mexe"), rt_env);
     machine.start_at_zero();
+
+    let wallet = machine.runtime_env.new_wallet();
+    let owner = Uint256::from_bytes(wallet.address().as_bytes());
+    let arbowner = _ArbOwner::_new(&wallet, false);
+    arbowner._give_ownership(&mut machine, owner.clone(), Some(Uint256::zero())).unwrap();
 
     let my_addr = Uint256::from_u64(11025);
     let claimer = Uint256::from_u64(4242);
 
     machine.runtime_env.insert_eth_deposit_message(
+        owner.clone(),
+        owner.clone(),
+        Uint256::_from_eth(1),
+    );
+    machine.runtime_env.insert_eth_deposit_message(
         claimer.clone(),
         claimer.clone(),
         Uint256::_from_eth(1),
     );
+
+    arbowner._add_to_reserve_funds(&mut machine, Uint256::_from_eth(1)).unwrap();
 
     _insert_create_node(
         &mut machine.runtime_env,
@@ -153,8 +166,15 @@ pub fn _test_rollup_tracker() {
     let _ = machine.run(None);
     println!("E");
 
+    let my_payments = 50000000u64;
+    let claimer_payments = 76250000u64 + 157875000u64;
+    let transfer_fee = 1947500000u64;
+    let one_eth = 1_000_000_000_000_000_000u64;
+
     let arb_info = _ArbInfo::_new(false);
     let bal = arb_info._get_balance(&mut machine, &my_addr).unwrap();
-    println!("{}", bal);
-    assert_eq!(bal, Uint256::from_u64(50000000));
+    assert_eq!(bal, Uint256::from_u64(my_payments + transfer_fee));
+
+    let bal = arb_info._get_balance(&mut machine, &claimer).unwrap();
+    assert_eq!(bal, Uint256::from_u64(one_eth + claimer_payments - transfer_fee));
 }
