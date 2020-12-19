@@ -19,6 +19,7 @@ use accounts::accountStore_set;
 use accounts::account_getBalance;
 use accounts::account_addToEthBalance;
 use accounts::account_deductFromEthBalance;
+use accounts::accountStore_transferEthBalance;
 
 use evmCallStack::evmCallStack_isEmpty;
 
@@ -507,6 +508,25 @@ public impure func getNextRequestFromCongestionAuction() -> (
 
     if (isChargeable && (gasAccountingInfo.currentGasPrice > 0)) {
         if let Some(tx) = maybeTx {
+            if let Some(aggInfo) = tx.incomingRequest.aggregator {
+                // user must pay L1 gas to the aggregator
+                let calldataL1Gas = 16 * aggInfo.calldataBytes;
+                if (calldataL1Gas > tx.maxGas) {
+                    return (false, maybeRequest, maybeTx);
+                }
+                let gasPaymentL1 = calldataL1Gas * tx.gasPrice;
+                if let Some(globalAS) = accountStore_transferEthBalance(
+                    getGlobalAccountStore(),
+                    tx.caller,
+                    aggInfo.aggregator,
+                    gasPaymentL1,
+                ) {
+                    setGlobalAccountStore(globalAS);
+                } else {
+                    return (false, maybeRequest, maybeTx);
+                }
+                tx = tx with { maxGas: tx.maxGas - calldataL1Gas };
+            }
             let txGasPrice = gasAccountingInfo.currentGasPrice;
             if (txGasPrice < tx.gasPrice) {    txGasPrice = tx.gasPrice;    }
             let txGasLimit = tx.maxGas * txGasPrice / gasAccountingInfo.currentGasPrice;
