@@ -648,7 +648,7 @@ func specialDebts_add(sd: SpecialDebts, payee: address, amount: uint) -> Special
     };
 }
 
-func specialDebts_pay(sd: SpecialDebts, fundsAvail: uint) -> (SpecialDebts, uint) {
+impure func specialDebts_pay(sd: SpecialDebts, fundsAvail: uint) -> (SpecialDebts, uint) {
     // pay up to fundsAvail to parties who are owed
     // return (updatedSpecialDebts, amountActuallyPaid)
 
@@ -692,10 +692,8 @@ impure func sdp_closure(k: any, v: any, state: any) -> any {
     return (sd, num, denom);
 }
 
-public impure func recordOverheadDebt(payee: address, amount: uint) {
+public impure func recordSpecialDebt(payee: address, amount: uint) {
     gasAccountingInfo = gasAccountingInfo with {
-        overheadTracker: overheadTracker_add(gasAccountingInfo.overheadTracker, amount)
-    } with {
         specialDebts: specialDebts_add(gasAccountingInfo.specialDebts, payee, amount)
     };
 }

@@ -6,7 +6,7 @@ use accounts::getGlobalAccountStore;
 use accounts::setGlobalAccountStore;
 use accounts::accountStore_transferEthBalance;
 
-use gasAccounting::recordOverheadDebt;
+use gasAccounting::recordSpecialDebt;
 
 use std::bytearray::ByteArray;
 use std::bytestream::ByteStream;
@@ -120,7 +120,7 @@ public impure func rollupTracker_confirmNode(heightL2: uint) -> option<()> {
         nodes: nodes
     };
 
-    recordOverheadDebt(node.activeValidator, node.payment);
+    recordSpecialDebt(node.activeValidator, node.payment);
 
     return Some(());
 }
