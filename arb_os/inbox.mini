@@ -126,6 +126,7 @@ impure func getFromL1Inbox(inbox: Inbox) -> Inbox {
                             parentRequestId: 0,
                             indexInParent: ~0,
                         },
+                        aggregator: None<AggregatorInfo>,
                     }
                 )
             } with {
@@ -147,6 +148,7 @@ impure func getFromL1Inbox(inbox: Inbox) -> Inbox {
                 parentRequestId: 0,
                 indexInParent: ~0,
             },
+            aggregator: None<AggregatorInfo>,
         };
 
         if (newMsg.blockNumber == 0) {
@@ -197,12 +199,18 @@ type IncomingRequest = struct {
     requestId: uint,
     msgData: ByteArray,       // kind-specific data
     provenance: RequestProvenance,
+    aggregator: option<AggregatorInfo>,
 }
 
 type RequestProvenance = struct {
     l1SeqNum: uint,
     parentRequestId: uint,
     indexInParent: uint,
+}
+
+type AggregatorInfo = struct {
+    aggregator: address,
+    calldataBytes: uint,
 }
 
 public impure func inbox_getNextUnpackedRequest() -> (
