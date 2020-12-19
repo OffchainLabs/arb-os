@@ -87,7 +87,7 @@ impl Import {
 }
 
 ///Represents a function imported from another mini program or module.
-#[derive(Clone, Serialize, Deserialize, Debug)]
+#[derive(Clone, Serialize, Deserialize, Debug, PartialEq, Eq)]
 pub struct ImportedFunc {
     pub name_id: StringId,
     pub slot_num: usize,
@@ -232,22 +232,13 @@ pub fn postlink_compile(
             println!("{:04}:  {}", idx, insn);
         }
     }
-    let (code_final, jump_table_final, exported_funcs_final) = match striplabels::strip_labels(
+    let (code_final, jump_table_final, exported_funcs_final) = striplabels::strip_labels(
         code_4,
         &jump_table,
         &program.exported_funcs,
         &program.imported_funcs,
         if is_module { Some(evm_pcs) } else { None },
-    ) {
-        Ok(tup) => tup,
-        Err(label) => {
-            println!("missing label {:?}", label);
-            return Err(CompileError::new(
-                "reference to non-existent function".to_string(),
-                None,
-            ));
-        }
-    };
+    )?;
     let jump_table_value = xformcode::jump_table_to_value(jump_table_final);
 
     if debug {
@@ -359,7 +350,7 @@ pub fn link(
         );
         global_num_limit = relocated_prog.global_num_limit;
         relocated_progs.push((relocated_prog, *typecheck));
-        func_offset = new_func_offset;
+        func_offset = new_func_offset + 1;
     }
 
     // Initialize globals or allow jump table retrieval

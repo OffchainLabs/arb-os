@@ -19,13 +19,13 @@ use std::collections::HashMap;
 pub type TypeTree = HashMap<(Vec<String>, usize), Type>;
 
 ///Debugging info serialized into mini executables, currently only contains a location.
-#[derive(Debug, Clone, Copy, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Default, Serialize, Deserialize, PartialEq, Eq)]
 pub struct DebugInfo {
     pub location: Option<Location>,
     pub attributes: Attributes,
 }
 
-#[derive(Debug, Clone, Copy, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Default, Serialize, Deserialize, PartialEq, Eq)]
 pub struct Attributes {
     pub breakpoint: bool,
 }
@@ -434,7 +434,7 @@ impl StructField {
 }
 
 ///Argument to a function, contains field name and underlying type.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct FuncArg {
     pub name: StringId,
     pub tipe: Type,
@@ -460,7 +460,7 @@ pub fn new_func_arg(name: StringId, tipe: Type) -> FuncArg {
 }
 
 ///Represents a declaration of a global mini variable.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct GlobalVarDecl {
     pub name: StringId,
     pub tipe: Type,
@@ -549,7 +549,7 @@ impl ImportTypeDecl {
 }
 
 ///Represents whether the FuncDecl that contains it is public or private.
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 pub enum FuncDeclKind {
     Public,
     Private,
@@ -557,7 +557,7 @@ pub enum FuncDeclKind {
 
 ///Represents a top level function declaration.  The is_impure, args, and ret_type fields are
 /// assumed to be derived from tipe, and this must be upheld by the user of this type.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct FuncDecl {
     pub name: StringId,
     pub is_impure: bool,
@@ -629,14 +629,14 @@ impl FuncDecl {
 }
 
 ///A statement in the mini language with associated `DebugInfo` that has not yet been type checked.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct Statement {
     pub kind: StatementKind,
     pub debug_info: DebugInfo,
 }
 
 ///A raw statement containing no debug information that has not yet been type checked.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub enum StatementKind {
     Noop(),
     Panic(),
@@ -740,7 +740,7 @@ impl StatementKind {
 }
 
 ///Either a single identifier or a tuple of identifiers, used in mini let bindings.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub enum MatchPattern {
     Simple(StringId),
     Tuple(Vec<MatchPattern>),
@@ -748,7 +748,7 @@ pub enum MatchPattern {
 
 ///Represents an arm of an If-Else chain, is Cond(condition, block, possible_else, location) if it
 /// contains a condition, and Catchall(block, location) if it is an else block.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub enum IfArm {
     Cond(Expr, Vec<Statement>, Option<Box<IfArm>>, DebugInfo),
     Catchall(Vec<Statement>, DebugInfo),
@@ -777,7 +777,7 @@ impl IfArm {
 }
 
 ///Represents a constant mini value of type Option<T> for some type T.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub enum OptionConst {
     _Some(Box<Constant>),
     None(Type),
@@ -785,7 +785,7 @@ pub enum OptionConst {
 
 ///Represents a mini constant value. This is different than `Value` as it encodes Options as distinct
 /// from tuples.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub enum Constant {
     Uint(Uint256),
     Int(Uint256),
@@ -859,14 +859,14 @@ impl Constant {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct Expr {
     pub kind: ExprKind,
     pub debug_info: DebugInfo,
 }
 
 ///A mini expression that has not yet been type checked.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub enum ExprKind {
     UnaryOp(UnaryOp, Box<Expr>),
     Binary(BinaryOp, Box<Expr>, Box<Expr>),
@@ -1043,7 +1043,7 @@ impl ExprKind {
 }
 
 ///A mini unary operator.
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 pub enum UnaryOp {
     Minus,
     BitwiseNeg,
@@ -1057,7 +1057,7 @@ pub enum UnaryOp {
 }
 
 ///A mini binary operator.
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 pub enum BinaryOp {
     Plus,
     Minus,
@@ -1085,7 +1085,7 @@ pub enum BinaryOp {
 }
 
 ///Used in StructInitializer expressions to map expressions to fields of the struct.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct FieldInitializer {
     pub name: String,
     pub value: Expr,
