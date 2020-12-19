@@ -2,11 +2,12 @@
  * Copyright 2020, Offchain Labs, Inc. All rights reserved.
  */
 
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
 pub type StringId = usize;
 
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug, Default, Serialize, Deserialize, PartialEq, Eq)]
 pub struct StringTable {
     next_id: StringId,
     table: HashMap<String, StringId>,

@@ -5,7 +5,7 @@
 //!Provides utilities used in the `postlink_compile` function
 
 use super::{ExportedFunc, ExportedFuncPoint, ImportedFunc};
-use crate::compile::DebugInfo;
+use crate::compile::{CompileError, DebugInfo};
 use crate::mavm::{AVMOpcode, CodePt, Instruction, Label, Opcode, Value};
 use crate::uint256::Uint256;
 use std::collections::{HashMap, HashSet};
@@ -22,7 +22,7 @@ pub fn strip_labels(
     exported_funcs: &[ExportedFunc],
     imported_funcs: &[ImportedFunc],
     maybe_evm_pcs: Option<Vec<usize>>, // will be Some iff this is a module
-) -> Result<(Vec<Instruction>, Vec<CodePt>, Vec<ExportedFuncPoint>), Label> {
+) -> Result<(Vec<Instruction>, Vec<CodePt>, Vec<ExportedFuncPoint>), CompileError> {
     if let Some(evm_pcs) = maybe_evm_pcs {
         let mut list_val = Value::none();
         for evm_pc in evm_pcs {
@@ -58,7 +58,16 @@ pub fn strip_labels(
     for insn in &code_in {
         match insn.get_label() {
             Some(label) => {
-                label_map.insert(*label, CodePt::new_internal(after_count));
+                let old_value = label_map.insert(*label, CodePt::new_internal(after_count));
+                if let Some(CodePt::Internal(x)) = old_value {
+                    return Err(CompileError::new(
+                        format!(
+                            "Internal error: Duplicate instance of internal label {:?}",
+                            x
+                        ),
+                        insn.debug_info.location,
+                    ));
+                }
             }
             None => {
                 after_count += 1;
@@ -72,7 +81,12 @@ pub fn strip_labels(
             Some(_) => {}
             None => {
                 let insn_in = insn.clone();
-                code_out.push(insn_in.replace_labels(&label_map)?);
+                code_out.push(insn_in.replace_labels(&label_map)
+                    .map_err(|lab| CompileError::new(
+                        format!("Couldn't find a definition for label {:?} contained in instruction {:?}, most likely reference to non-existent frunction", lab, insn),
+                        insn.debug_info.location)
+                    )?
+                );
             }
         }
     }
@@ -84,7 +98,13 @@ pub fn strip_labels(
                 jump_table_out.push(*index);
             }
             None => {
-                panic!("strip_labels: lookup failed for jump table item");
+                return Err(CompileError::new(
+                    format!(
+                        "strip_labels: lookup failed for jump table item: {:?}",
+                        jt_item
+                    ),
+                    None,
+                ));
             }
         }
     }
@@ -96,7 +116,10 @@ pub fn strip_labels(
                 exported_funcs_out.push(exp_func.resolve(*index));
             }
             None => {
-                panic!("strip_labels: lookup failed for exported func");
+                return Err(CompileError::new(
+                    format!("strip_labels: lookup failed for exported func"),
+                    None,
+                ));
             }
         }
     }
