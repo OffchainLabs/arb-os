@@ -24,7 +24,6 @@ pub fn run_evm_tests(dir_path: &Path, logfiles_path: Option<&Path>) -> io::Resul
                 serde_json::from_str(&contents).expect("JSON was not well-formatted");
             if !path.ends_with("gas0.json")
                 && !path.ends_with("gas1.json")
-                && !path.ends_with("origin.json")
                 && !path.ends_with("gasprice.json")
                 && !path.ends_with("push32AndSuicide.json")
             {
