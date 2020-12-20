@@ -181,9 +181,11 @@ pub fn init_constant_table() -> HashMap<String, Uint256> {
         // outgoing message types
         ("SendType_buddyContractResult", 5),
         // fee customizability
-        ("PayNetFeesToDefault", 0),
-        ("NetFeeMaxRate1", 0),
-        ("NetFeeMaxRate2", 0),
+        ("NetFee_defaultRecipient", 0),
+        ("NetFee_defaultRate1Num", 0),
+        ("NetFee_defaultRate1Denom", 10000),
+        ("NetFee_defaultRate2Num", 0),
+        ("NetFee_defaultRate2Denom", 10000),
         // misc
     ] {
         ret.insert(s.to_string(), Uint256::from_u64(*i));

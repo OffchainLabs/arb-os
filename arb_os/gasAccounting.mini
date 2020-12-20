@@ -27,6 +27,12 @@ use std::bytearray::bytearray_new;
 use std::bytearray::bytearray_getByte;
 use std::bytearray::bytearray_get256;
 
+use std::fixedpoint::FixedPoint;
+use std::fixedpoint::fixedPoint_new;
+use std::fixedpoint::fixedPoint_zero;
+use std::fixedpoint::fixedPoint_mulByUint;
+use std::fixedpoint::fixedPoint_integerPart;
+
 use std::queue::queue_new;
 use std::queue::queue_isEmpty;
 use std::queue::queue_put;
@@ -52,7 +58,7 @@ var gasAccountingInfo: struct {
     lastBlockNumSeen: uint,       // last L1 block number seen by this module
     txState: option<TxGasState>,  // status of currently active tx (if there is one)
     payValFeesTo: option<address>, // where to pay validator fees; if None, funds should be burned
-    payNetFeesTo: option<address>, // where to pay network fees; if None, funds should be burned
+    netFeeInfo: option<NetFeeInfo>,
     overheadTracker: OverheadTracker,
 };
 
@@ -70,6 +76,12 @@ type TxGasState = struct {
     price: uint,         // price of gas for this tx, in wei per unit of gas
     weiHeldForGas: uint, // amount of currency we're holding to cover the current tx's gas use
     refundTo: address,   // who gets a refund for unused gas at the end, if there is any
+}
+
+type NetFeeInfo = struct {
+    payTo: address,
+    rate1: FixedPoint,
+    rate2: FixedPoint,
 }
 
 type GasUsage = struct {
@@ -91,9 +103,15 @@ public impure func gasAccounting_init() {
         TxGasLimit: speedLimitPerSecond * maxBacklogSeconds / 2,
         StorageCharge: 0,
     };
-    let payNetFeesTo = None<address>;
-    if (const::PayNetFeesToDefault != 0) {
-        payNetFeesTo = Some(address(const::PayNetFeesToDefault));
+    let netFeeInfo = None<NetFeeInfo>;
+    if (const::NetFee_defaultRecipient != 0) {
+        netFeeInfo = Some(
+            struct {
+                payTo: address(const::NetFee_defaultRecipient),
+                rate1: fixedPoint_new(const::NetFee_defaultRate1Num, const::NetFee_defaultRate1Denom),
+                rate2: fixedPoint_new(const::NetFee_defaultRate2Num, const::NetFee_defaultRate2Denom),
+            }
+        );
     }
 
     gasAccountingInfo = struct {
@@ -108,7 +126,7 @@ public impure func gasAccounting_init() {
         lastBlockNumSeen: 0,
         txState: None<TxGasState>,
         payValFeesTo: None<address>,
-        payNetFeesTo: payNetFeesTo,
+        netFeeInfo: netFeeInfo,
         overheadTracker: overheadTracker_new(5, 0),
     };
 }
@@ -478,14 +496,14 @@ public impure func getNextRequestFromCongestionAuction() -> (
         };
         payOutFundsToValidators();
         if (gasAccountingInfo.reserve > 0) {
-            if let Some(netFeeRecipient) = gasAccountingInfo.payNetFeesTo {
-                let amt = gasAccountingInfo.reserve/100;
+            if let Some(netFeeInfo) = gasAccountingInfo.netFeeInfo {
+                let amt = fixedPoint_integerPart(fixedPoint_mulByUint(netFeeInfo.rate2, gasAccountingInfo.reserve));
                 let globalAS = getGlobalAccountStore();
                 setGlobalAccountStore(
                     accountStore_set(
                         globalAS,
-                        netFeeRecipient,
-                        account_addToEthBalance(accountStore_get(globalAS, netFeeRecipient), amt),
+                        netFeeInfo.payTo,
+                        account_addToEthBalance(accountStore_get(globalAS, netFeeInfo.payTo), amt),
                     ),
                 );
                 gasAccountingInfo = gasAccountingInfo with { reserve: gasAccountingInfo.reserve - amt };
@@ -553,12 +571,12 @@ public impure func getNextRequestFromCongestionAuction() -> (
                 }
                 let gasPaymentL1 = calldataL1Gas * tx.gasPrice;
                 let netFeeL1 = 0;
-                if let Some(netFeeRecipient) = gasAccountingInfo.payNetFeesTo {
-                    netFeeL1 = gasPaymentL1/20;
+                if let Some(netFeeInfo) = gasAccountingInfo.netFeeInfo {
+                    netFeeL1 = fixedPoint_integerPart(fixedPoint_mulByUint(netFeeInfo.rate1, gasPaymentL1));
                     if let Some(globalAS) = accountStore_transferEthBalance(
                         getGlobalAccountStore(),
                         tx.caller,
-                        netFeeRecipient,
+                        netFeeInfo.payTo,
                         netFeeL1,
                     ) {
                         setGlobalAccountStore(globalAS);
