@@ -19,13 +19,14 @@ public func fixedPoint_fromUintMatch(x: uint, fp: FixedPoint) -> FixedPoint {
 }
 
 public func fixedPoint_equal(x: FixedPoint, y: FixedPoint) -> bool {
-    return (x.val == y.val) && (x.shiftFactor == y.shiftFactor);
+    return (x.val * y.shiftFactor) == (y.val * x.shiftFactor);
 }
 
 public func fixedPoint_compare(x: FixedPoint, y: FixedPoint) -> option<int> {
-    if (x.shiftFactor != y.shiftFactor) {    return None;    }
-    if (x.val > y.val) {    return Some(int(1));    }
-    elseif(x.val == y.val) {    return Some(int(0));    }
+    let xProd = x.val * y.shiftFactor;
+    let yProd = y.val * x.shiftFactor;
+    if (xProd > yProd) {    return Some(int(1));    }
+    elseif(xProd == yProd) {    return Some(int(0));    }
     else {    return Some(-int(1));    }
 }
 
