@@ -348,6 +348,15 @@ ConstVal: Uint256 = {
                 Err(ParseError::User { error: "unrecognized constant name" })
             }
         }
+    },
+    "const" "::" <IdentString> =>? {
+        match constants.get(&<>) {
+            Some(i) => Ok(i.clone()),
+            None => {
+                println!("Unrecognized constant name: {}", <>);
+                Err(ParseError::User { error: "unrecognized constant name" })
+            }
+        }
     }
 }
 

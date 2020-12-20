@@ -98,7 +98,13 @@ public impure func mainRunLoop() {
                     }
                 } else {
                     // reject for congestion error
-                    emitTxReceipt(request.incomingRequest, 2, None<ByteArray>, None<EvmLogs>, None<GasUsage>);
+                    emitTxReceipt(
+                        request.incomingRequest,
+                        const::TxResultCode_congestion,
+                        None<ByteArray>,
+                        None<EvmLogs>,
+                        None<GasUsage>
+                    );
                 }
             } // else request was not identified as either L1 or L2, which should be impossible
         }
