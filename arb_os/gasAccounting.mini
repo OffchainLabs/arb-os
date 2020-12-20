@@ -46,6 +46,7 @@ var gasAccountingInfo: struct {
     owedToValidators: uint,       // wei owed for work done but not yet collected
     totalPaidToValidators: uint,  // total number of wei paid to validators over all time
     specialDebts: SpecialDebts,   // other debts, e.g. to active validators
+    gasSurcharge: uint,           // gas surcharge to cover unpaid overhead
     currentGasPrice: uint,        // gas price for this block
     gasLeftForThisBlock: uint,    // amount of gas left for this block
     lastBlockNumSeen: uint,       // last L1 block number seen by this module
@@ -95,6 +96,7 @@ public impure func gasAccounting_init() {
         owedToValidators: 0,
         totalPaidToValidators: 0,
         specialDebts: specialDebts_new(),
+        gasSurcharge: 0,
         currentGasPrice: 0,
         gasLeftForThisBlock: 0,
         lastBlockNumSeen: 0,
@@ -469,6 +471,16 @@ public impure func getNextRequestFromCongestionAuction() -> (
         };
         payOutFundsToValidators();
 
+        // figure out the gas surcharge for the next block
+        let deficit = (int(gasAccountingInfo.owedToValidators) - int(gasAccountingInfo.reserve));
+        let surchargeBase = int(gasAccountingInfo.gasSurcharge) + deficit / int(gasAccountingConstants.SpeedLimitPerBlock);
+        if (surchargeBase < int(0)) {
+            surchargeBase = int(0);
+        }
+        gasAccountingInfo = gasAccountingInfo with {
+            gasSurcharge: uint(surchargeBase) / 20
+        };
+
         // determine gas pool, gas price, and gas limit for the new block
         let blocksElapsed = blockNum - gasAccountingInfo.lastBlockNumSeen;
         let price = gasAccountingInfo.currentGasPrice;
@@ -491,6 +503,10 @@ public impure func getNextRequestFromCongestionAuction() -> (
                 price = gasAccountingConstants.BaseGasPrice;
             }
         }
+        if (price < gasAccountingConstants.BaseGasPrice + gasAccountingInfo.gasSurcharge) {
+            price = gasAccountingConstants.BaseGasPrice + gasAccountingInfo.gasSurcharge;
+        }
+        
         let gasAvailable = 0;
         if (gasAccountingInfo.gasPool > int(0)) {
             gasAvailable = 3 * uint(gasAccountingInfo.gasPool) / 4;
@@ -588,7 +604,7 @@ func overheadTracker_new(delayBlocks: uint, blockNum: uint) -> OverheadTracker {
         current: 0,
         delayBlocks: delayBlocks,
         blockNum: blockNum,
-        delayed: q
+        delayed: q,
     };
 }
 
@@ -637,6 +653,7 @@ func overheadTracker_advanceToBlock(ot: OverheadTracker, bnum: uint) -> (Overhea
             blockNum: ot.blockNum + 1
         };
     }
+
     return (ot, gas);
 }
 
