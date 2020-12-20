@@ -7,9 +7,13 @@ use evmCallStack::cleanAvmAuxStackAndCall;
 use main::mainRunLoop;
 use evmCallStack::evmCallStack_isEmpty;
 use evmCallStack::evmCallStack_callHitError;
+use evmCallStack::evmCallStack_stackInfo;
 
+var inErrorHandler: bool;
 
 public impure func errorHandler_init() {
+    inErrorHandler = false;
+
     // set up the default error handler
     // this is a small code stub that calls errorHandler
     let stub = asm() func() { errcodept };
@@ -34,12 +38,20 @@ public impure func errorHandler() {
     // That's OK, because the only "harm" done is that the double-error situation of application error plus ArbGas underflow
     //      gets detected as just an ArbGas underflow.  The effect on the application will be the same either way.
 
-    if (asm() uint { getgas } > (~0 - 300)) {
-        // application ran out of ArbGas
-        asm(665,) { debugprint };
-    } else {
-        // some other error
+
+    if (inErrorHandler) {
         asm(666,) { debugprint };
+    } else {
+        inErrorHandler = true;
+        if (asm() uint { getgas } > (~0 - 500)) {
+            // application ran out of ArbGas
+            let (txid, addrs, parentAddrs) = evmCallStack_stackInfo();
+            asm((665, txid, addrs, parentAddrs),) { debugprint };
+        } else {
+            // some other error
+            let (txid, addrs, parentAddrs) = evmCallStack_stackInfo();
+            asm((666, txid, addrs, parentAddrs),) { debugprint };
+        }
     }
 
     if (evmCallStack_isEmpty()) {
@@ -47,9 +59,11 @@ public impure func errorHandler() {
         // That shouldn't have happened, but we have to make the best of the situation.
         // So we'll clean up our stacks, and jump back to the main runloop.
         emptyAvmStack();
+        inErrorHandler = false;
         cleanAvmAuxStackAndCall(mainRunLoop, true);  // this will never return
     } else {
         // Application code must have hit an error.
+        inErrorHandler = false;
         evmCallStack_callHitError(0);  // this will never return
     }
     //NOTREACHED
