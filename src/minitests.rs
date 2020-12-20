@@ -200,6 +200,25 @@ fn test_sha256() {
 }
 
 #[test]
+fn test_fixedpoint() {
+    let path = Path::new("stdlib/fixedpointtest.mexe");
+    let res = run_from_file(
+        path,
+        vec![],
+        RuntimeEnvironment::new(Uint256::from_usize(1111)),
+        false,
+    );
+    match res {
+        Ok(res) => {
+            assert_eq!(res[0], Value::Int(Uint256::zero()));
+        }
+        Err(e) => {
+            panic!("{}\n{}", e.0, e.1);
+        }
+    }
+}
+
+#[test]
 fn test_rlp() {
     let mut ui = Uint256::one();
     for _i in 0..100 {
