@@ -180,6 +180,10 @@ pub fn init_constant_table() -> HashMap<String, Uint256> {
         ("LogType_blockSummary", 1),
         // outgoing message types
         ("SendType_buddyContractResult", 5),
+        // fee customizability
+        ("PayNetFeesToDefault", 0),
+        ("NetFeeMaxRate1", 0),
+        ("NetFeeMaxRate2", 0),
         // misc
     ] {
         ret.insert(s.to_string(), Uint256::from_u64(*i));
