@@ -373,6 +373,7 @@ public func biguint_shortMul(x: []uint, y: uint) -> []uint {
 }
 
 public func biguint_square(x: []uint) -> []uint {
+    // based on Algorithm 14.16, page 597, Handbook of Applied Cryptography, http://cacr.uwaterloo.ca/hac/about/chap14.pdf
     let t = realSize(x);
     let ret = newarray<uint>(2*t);
 
@@ -397,6 +398,7 @@ public func biguint_square(x: []uint) -> []uint {
 }
 
 public func biguint_divmod(x: []uint, y: []uint) -> option<([]uint, []uint)> {
+    // based on Algorithm 14.20, page 598, Handbook of Applied Cryptography, http://cacr.uwaterloo.ca/hac/about/chap14.pdf
     if (biguint_isZero(y)) {
         return None;
     } elseif (biguint_compare(x, y) < int(0)) {
@@ -474,6 +476,7 @@ public func biguint_divmod(x: []uint, y: []uint) -> option<([]uint, []uint)> {
 }
 
 public func biguint_mod(x: []uint, y: []uint) -> option<[]uint> {
+    // same as the divmod algorithm above, except we don't keep track of the quotient
     if (biguint_isZero(y)) {
         return None;
     } elseif (biguint_compare(x, y) < int(0)) {
