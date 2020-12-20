@@ -226,7 +226,8 @@ public impure func initEvmCallStack(
                 } else {
                     // unknown error type
                     emitTxReceipt(
-                        request.incomingRequest, const::TxResultCode_unknownFailure,
+                        request.incomingRequest,
+                        const::TxResultCode_unknownFailure,
                         None<ByteArray>,
                         None<EvmLogs>,
                         None<GasUsage>
