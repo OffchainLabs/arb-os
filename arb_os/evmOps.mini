@@ -190,7 +190,7 @@ public impure func evmOp_selfbalance() -> uint {
     
 public impure func evmOp_origin() -> address {
     if let Some(oldie) = evmCallStack_oldestCallFrame() {
-        return account_getAddress(evmCallFrame_runningAsAccount(oldie));
+        return evmCallFrame_getCaller(oldie);
     }
 
     evm_runtimePanic(3);
