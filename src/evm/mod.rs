@@ -2,6 +2,7 @@
  * Copyright 2020, Offchain Labs, Inc. All rights reserved.
  */
 
+use crate::compile::miniconstants::init_constant_table;
 use crate::evm::abi::FunctionTable;
 use crate::evm::abi::{ArbAddressTable, ArbBLS, ArbFunctionTable, ArbSys, ArbosTest, _ArbOwner};
 use crate::mavm::Value;
@@ -407,7 +408,81 @@ pub fn _evm_test_arbowner(log_to: Option<&Path>, debug: bool) -> Result<(), etha
 
     arbowner._finish_arbos_upgrade(&mut machine)?;
 
-    // panic!("Deliberate panic so output is displayed");  // uncomment this to see output from this test
+    if let Some(path) = log_to {
+        machine.runtime_env.recorder.to_file(path).unwrap();
+    }
+
+    Ok(())
+}
+
+pub fn _evm_test_rate_control(log_to: Option<&Path>, debug: bool) -> Result<(), ethabi::Error> {
+    let rt_env = RuntimeEnvironment::new(Uint256::from_usize(1111), None);
+    let mut machine = load_from_file(Path::new("arb_os/arbos.mexe"), rt_env);
+    machine.start_at_zero();
+
+    let wallet = machine.runtime_env.new_wallet();
+    let my_addr = Uint256::from_bytes(wallet.address().as_bytes());
+    let arbowner = _ArbOwner::_new(&wallet, debug);
+
+    arbowner._give_ownership(&mut machine, my_addr, Some(Uint256::zero()))?;
+
+    let const_table = init_constant_table();
+
+    let (num1, denom1, num2, denom2) = arbowner._get_fee_rates(&mut machine)?;
+    assert_eq!(&num1, const_table.get("NetFee_defaultRate1Num").unwrap());
+    assert_eq!(
+        &denom1,
+        const_table.get("NetFee_defaultRate1Denom").unwrap()
+    );
+    assert_eq!(&num2, const_table.get("NetFee_defaultRate2Num").unwrap());
+    assert_eq!(
+        &denom2,
+        const_table.get("NetFee_defaultRate2Denom").unwrap()
+    );
+
+    let (max_num1, max_denom1, max_num2, max_denom2) = arbowner._get_fee_maxes(&mut machine)?;
+    assert_eq!(&max_num1, const_table.get("NetFee_maxRate1Num").unwrap());
+    assert_eq!(
+        &max_denom1,
+        const_table.get("NetFee_maxRate1Denom").unwrap()
+    );
+    assert_eq!(&max_num2, const_table.get("NetFee_maxRate2Num").unwrap());
+    assert_eq!(
+        &max_denom2,
+        const_table.get("NetFee_maxRate2Denom").unwrap()
+    );
+
+    assert!(arbowner
+        ._set_fee_rates(
+            &mut machine,
+            max_num1.add(&Uint256::one()),
+            max_denom1.clone(),
+            max_num2.clone(),
+            max_denom2.clone(),
+        )
+        .is_err());
+
+    arbowner._set_fee_rates(
+        &mut machine,
+        max_num1.clone(),
+        max_denom1.add(&Uint256::one()),
+        max_num2.clone(),
+        max_denom2.clone(),
+    )?;
+
+    arbowner._set_fee_maxes(
+        &mut machine,
+        max_num1.clone(),
+        max_denom1.add(&Uint256::from_u64(13)),
+        max_num2.clone(),
+        max_denom2.clone(),
+    )?;
+
+    let (num1, denom1, num2, denom2) = arbowner._get_fee_rates(&mut machine)?;
+    assert_eq!(num1, max_num1);
+    assert_eq!(denom1, max_denom1.add(&Uint256::from_u64(13)));
+    assert_eq!(num2, max_num2);
+    assert_eq!(denom2, max_denom2);
 
     if let Some(path) = log_to {
         machine.runtime_env.recorder.to_file(path).unwrap();

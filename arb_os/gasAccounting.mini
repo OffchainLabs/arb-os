@@ -681,11 +681,23 @@ public impure func gasAccounting_setFeeMaxes(num1: uint, denom1: uint, num2: uin
     if (fixedPoint_compare(max2, current.maxRate2)? > int(0)) {
         return None;
     }
+    let rate1 = current.rate1;
+    if (fixedPoint_compare(rate1, max1)? > int(0)) {
+        rate1 = max1;
+    }
+    let rate2 = current.rate2;
+    if (fixedPoint_compare(rate2, max2)? > int(0)) {
+        rate2 = max2;
+    }
     gasAccountingInfo = gasAccountingInfo with {
         netFeeInfo: Some(current with {
             maxRate1: max1
         } with {
             maxRate2: max2
+        } with {
+            rate1: rate1
+        } with {
+            rate2: rate2
         })
     };
     return Some(());

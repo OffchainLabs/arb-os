@@ -415,6 +415,11 @@ fn test_arbowner() {
 }
 
 #[test]
+fn test_rate_control() {
+    crate::evm::_evm_test_rate_control(None, false).unwrap();
+}
+
+#[test]
 fn test_function_table_access() {
     crate::evm::evm_test_function_table_access(None, false).unwrap();
 }
