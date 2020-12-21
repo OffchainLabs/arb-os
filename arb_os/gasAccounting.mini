@@ -29,7 +29,10 @@ use std::bytearray::bytearray_get256;
 
 use std::fixedpoint::FixedPoint;
 use std::fixedpoint::fixedPoint_new;
+use std::fixedpoint::fixedPoint_getNum;
+use std::fixedPoint::fixedPoint_getDenom;
 use std::fixedpoint::fixedPoint_zero;
+use std::fixedpoint::fixedPoint_compare;
 use std::fixedpoint::fixedPoint_mulByUint;
 use std::fixedpoint::fixedPoint_integerPart;
 
@@ -622,6 +625,36 @@ public impure func getNextRequestFromCongestionAuction() -> (
 
 public impure func getGasLimitConstant() -> uint {
     return gasAccountingConstants.TxGasLimit;
+}
+
+public impure func gasAccounting_getFeeRates() -> option<(uint, uint, uint, uint)> {
+    let feeInfo = gasAccountingInfo.netFeeInfo?;
+    return Some((
+        fixedPoint_getNum(feeInfo.rate1),
+        fixedPoint_getDenom(feeInfo.rate1),
+        fixedPoint_getNum(feeInfo.rate2),
+        fixedPoint_getDenom(feeInfo.rate2),
+    ));
+}
+
+public impure func gasAccounting_setFeeRates(num1: uint, denom1: uint, num2: uint, denom2: uint) -> option<()> {
+    let current = gasAccountingInfo.netFeeInfo?;
+    let rate1 = fixedPoint_new(num1, denom1);
+    let rate2 = fixedPoint_new(num2, denom2);
+    if (fixedPoint_compare(rate1, current.rate1)? > int(0)) {
+        return None;
+    }
+    if (fixedPoint_compare(rate2, current.rate2)? > int(0)) {
+        return None;
+    }
+    gasAccountingInfo = gasAccountingInfo with {
+        netFeeInfo: Some(current with {
+            rate1: rate1
+        } with {
+            rate2: rate2
+        })
+    };
+    return Some(());
 }
 
 impure func getRequestGasInfo(maybeRequest: option<IncomingRequest>, maybeTx: option<TxRequestData>) -> (bool, uint, address, uint, uint) {

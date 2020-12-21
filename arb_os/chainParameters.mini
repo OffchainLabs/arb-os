@@ -29,7 +29,6 @@ type ChainParams = struct {
     baseStake: uint,                 // base stake of a validator, in wei
     stakingToken: address,           // ERC-20 token used for staking; or zero if using ETH
     owner: address,                  // owner of the chain, who has admin privileges (or zero if there is no owner)
-    isProChain: bool                 // is this an Arbitrum Pro chain?
 }
 
 var globalChainParams: option<ChainParams>;
@@ -51,7 +50,6 @@ public impure func chainParams_gotParamsMessage(sender: address, data: ByteArray
             baseStake: bytearray_get256(data, 3*32),
             stakingToken: address(bytearray_get256(data, 4*32)),
             owner: address(bytearray_get256(data, 5*32)),
-            isProChain: false,
         });
 
         // now read and process initialization options
@@ -78,18 +76,18 @@ impure func doInitializationOption(stream: ByteStream) -> option<ByteStream> {
     stream = ustr;
     let (ustr, numPayloadBytes) = bytestream_get64(stream)?;
     stream = ustr;
-    if (optionId == 0) {   // option: Arbitrum Pro chain
+    if (optionId == 0) {   // reserved for future use
         if (numPayloadBytes != 0) {
             // unexpected payload size; discard the payload and ignore this option
             return bytestream_skipBytes(stream, numPayloadBytes);
+        } else {
+            return Some(stream);
         }
-        globalChainParams = Some(globalChainParams? with { isProChain: true });
-        return Some(stream);
-    } elseif (optionId == 1) {   // option: set seconds per block
+    } elseif (optionId == const::InitOption_setSecondsPerBlock) {
         let (ustr, secsPerBlock) = bytestream_get256(stream)?;
         globalChainParams = Some(globalChainParams? with { millisecondsPerBlock: 1000*secsPerBlock });
         return Some(ustr);
-    } elseif (optionId == 2) {   // option: set gas charging parameters
+    } elseif (optionId == const::InitOption_setChargingParams) {
         let (ustr, baseGasPrice) = bytestream_get256(stream)?;
         let (ustr, storageCharge) = bytestream_get256(ustr)?;
         let (ustr, gasFeeRecipientAsUint) = bytestream_get256(ustr)?;
@@ -136,14 +134,6 @@ public impure func chainParams_baseStake() -> (address, uint) {
         return (params.stakingToken, params.baseStake);
     } else {
         return (address(0), 0);
-    }
-}
-
-public impure func chainParams_isProChain() -> bool {
-    if let Some(params) = globalChainParams {
-        return params.isProChain;
-    } else {
-        return false;
     }
 }
 

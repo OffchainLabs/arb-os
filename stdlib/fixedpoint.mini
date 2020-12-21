@@ -18,8 +18,20 @@ public func fixedPoint_zero() -> FixedPoint {
     return fixedPoint_new(0, 1);
 }
 
+public func fixedPoint_isZero(x: FixedPoint) -> bool {
+    return x.val == 0;
+}
+
 public func fixedPoint_fromUintMatch(x: uint, fp: FixedPoint) -> FixedPoint {
     return fp with { val: x * fp.shiftFactor };
+}
+
+public func fixedPoint_getNum(x: FixedPoint) -> uint {
+    return x.val;
+}
+
+public func fixedPoint_getDenom(x: FixedPoint) -> uint {
+    return x.shiftFactor;
 }
 
 public func fixedPoint_equal(x: FixedPoint, y: FixedPoint) -> bool {

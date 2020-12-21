@@ -16,15 +16,20 @@ use evmCallStack::evmCallStack_callHitError;
 use evmCallStack::evmCallFrame_getCalldata;
 use evmCallStack::evmCallFrame_getCaller;
 use evmCallStack::evmCallFrame_getCallvalue;
+use evmCallStack::evmCallStack_setTopFrameMemory;
 
 use evmOps::evmOp_return;
 use evmOps::evmOp_revert_knownCodePc;
 
 use gasAccounting::gasAccounting_addToReserveFunds;
+use gasAccounting::gasAccounting_getFeeRates;
+use gasAccounting::gasAccounting_setFeeRates;
 
 use std::bytearray::ByteArray;
+use std::bytearray::bytearray_new;
 use std::bytearray::bytearray_size;
 use std::bytearray::bytearray_get256;
+use std::bytearray::bytearray_set256;
 use std::bytearray::bytearray_extract;
 
 use std::bytestream::bytestream_new;
@@ -54,6 +59,8 @@ public impure func arbowner_txcall() {
             arbowner_addToReserveFunds(topFrame, calldata);
         } elseif (funcCode == 0x6d92b8e4) {
             arbowner_startArbosUpgrade(topFrame, calldata);
+        } elseif (funcCode == 0x30d2361e) {
+            arbowner_setFeeRates(topFrame, calldata);
         } elseif (funcCode == 0x0b766fec) {
             arbowner_continueArbosUpgrade(topFrame, calldata);
         } elseif (funcCode == 0xe380002e) {
@@ -85,6 +92,55 @@ impure func arbowner_addToReserveFunds(topFrame: EvmCallFrame, calldata: ByteArr
         gasAccounting_addToReserveFunds(callvalue);
     }
     evmOp_return(0, 0);
+}
+
+impure func arbowner_getFeeRates(topFrame: EvmCallFrame, calldata: ByteArray) { // () -> (uint, uint, uint, uint)
+    if (bytearray_size(calldata) != 4) {
+        evmOp_revert_knownCodePc(address(const::Address_ArbOwner), 60, 0, 0);
+    }
+
+    if let Some(res) = gasAccounting_getFeeRates() {
+        let (num1, denom1, num2, denom2) = res;
+        let mem = bytearray_set256(
+            bytearray_set256(
+                bytearray_set256(
+                    bytearray_set256(
+                        bytearray_new(0),
+                        0,
+                        num1,
+                    ),
+                    32,
+                    denom1,
+                ),
+                64,
+                num2,
+            ),
+            96,
+            denom2,
+        );
+        if (evmCallStack_setTopFrameMemory(mem)) {
+            evmOp_return(0, 4*32);
+        } else {
+            evmOp_revert_knownCodePc(address(const::Address_ArbOwner), 61, 0, 0);
+        }
+    } else {
+        evmOp_revert_knownCodePc(address(const::Address_ArbOwner), 62, 0, 0);
+    }
+}
+
+impure func arbowner_setFeeRates(topFrame: EvmCallFrame, calldata: ByteArray) { // (uint, uint, uint, uint)
+    if (bytearray_size(calldata) != 4+4*32) {
+        evmOp_revert_knownCodePc(address(const::Address_ArbOwner), 70, 0, 0);
+    }
+    let num1 = bytearray_get256(calldata, 4);
+    let denom1 = bytearray_get256(calldata, 4+32);
+    let num2 = bytearray_get256(calldata, 4+2*32);
+    let denom2 = bytearray_get256(calldata, 4+3*32);
+    if let Some(_) = gasAccounting_setFeeRates(num1, denom1, num2, denom2) {
+        evmOp_return(0,0);
+    } else {
+        evmOp_revert_knownCodePc(address(const::Address_ArbOwner), 71, 0, 0);
+    }
 }
 
 impure func arbowner_startArbosUpgrade(topFrame: EvmCallFrame, calldata: ByteArray) { // ()

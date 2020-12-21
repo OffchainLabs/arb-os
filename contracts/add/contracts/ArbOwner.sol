@@ -8,6 +8,11 @@ interface ArbOwner {
 
     function addToReserveFunds() external payable;
 
+    function getFeeRates() external returns (uint, uint, uint, uint);
+    function setFeeRates(uint num1, uint denom1, uint num2, uint denom2) external;
+    function getFeeMaxes() external returns (uint, uint, uint, uint);
+    function setFeeMaxes(uint num1, uint denom1, uint num2, uint denom2) external;
+
     // To upgrade ArbOS, the owner calls startArbosUpgrade, then calls continueArbosUpgrade one or more times to upload 
     // the code to be installed as the upgrade, then calls finishArbosUpgrade to complete the upgrade and start executing the new code.
     function startArbosUpgrade() external;
