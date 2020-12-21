@@ -484,6 +484,13 @@ pub fn _evm_test_rate_control(log_to: Option<&Path>, debug: bool) -> Result<(), 
     assert_eq!(num2, max_num2);
     assert_eq!(denom2, max_denom2);
 
+    let recipient = arbowner._get_fee_recipient(&mut machine)?;
+    assert_eq!(&recipient, const_table.get("NetFee_defaultRecipient").unwrap());
+    let new_recipient = recipient.add(&Uint256::one());
+    arbowner._set_fee_recipient(&mut machine, new_recipient.clone())?;
+    let updated_recipient = arbowner._get_fee_recipient(&mut machine)?;
+    assert_eq!(new_recipient, updated_recipient);
+
     if let Some(path) = log_to {
         machine.runtime_env.recorder.to_file(path).unwrap();
     }

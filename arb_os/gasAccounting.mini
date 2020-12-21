@@ -631,6 +631,19 @@ public impure func getGasLimitConstant() -> uint {
     return gasAccountingConstants.TxGasLimit;
 }
 
+public impure func gasAccounting_getFeeRecipient() -> option<address> {
+    return Some((gasAccountingInfo.netFeeInfo?).payTo);
+}
+
+public impure func gasAccounting_setFeeRecipient(recipient: address) -> option<()> {
+    gasAccountingInfo = gasAccountingInfo with {
+        netFeeInfo: Some(
+            (gasAccountingInfo.netFeeInfo?) with { payTo: recipient }
+        )
+    };
+    return Some(());
+}
+
 public impure func gasAccounting_getFeeRates() -> option<(uint, uint, uint, uint)> {
     let feeInfo = gasAccountingInfo.netFeeInfo?;
     return Some((
