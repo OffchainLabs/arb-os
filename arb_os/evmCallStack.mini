@@ -465,7 +465,7 @@ public impure func evmCallStack_returnFromCall(
     let memory = topFrame.memory;
     let returnData = bytearray_extract(memory, returnOffset, returnLength);
 
-    if let Some(newTopFrame) = unsafecast<option<EvmCallFrame>>(topFrame.parent) {
+    if let Some(newTopFrame) = topFrame.parent {
         // Returning from a non-top-level call
 
         topFrame = topFrame with {   // copy cached account back into callframe's main accountStore
@@ -798,8 +798,7 @@ public impure func evmCallStack_oldestCallFrame() -> option<EvmCallFrame> {
     let frame = globalCallStack?;
     loop {
         if let Some(parent) = frame.parent {
-            // do "unsafe" cast because compiler doesn't know the true type of parent
-            frame = unsafecast<EvmCallFrame>(parent);
+            frame = parent;
         } else {
             return Some(frame);
         }

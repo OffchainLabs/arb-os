@@ -54,7 +54,7 @@ public func marshalledBytes_firstByte(mb: MarshalledBytes) -> uint {
         return 0;
     }
     while (nbytes > 32) {
-        contents = unsafecast<MarshalledBytesCell>(contents.rest);
+        contents = contents.rest;
         nbytes = nbytes-32;
     }
     return asm(256-8, contents.first) uint { shr };
@@ -96,7 +96,7 @@ public func bytearray_unmarshalBytes(inBytes: MarshalledBytes) -> option<ByteArr
             eia = expandingIntArray_setN(eia, 8, nwords, block);
             // it's safe to re-use block after this, because we're going to overwrite all of it
         }
-        words = unsafecast<MarshalledBytesCell>(words.rest);
+        words = words.rest;
     }
 
     return Some(struct {

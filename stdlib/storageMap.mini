@@ -94,7 +94,7 @@ public func storageMap_set(s: StorageMap, key: uint, value: uint) -> StorageMap 
             utree = unwinder.kvs with {
                 [unwinder.index] = utree
             };
-            maybeUnwinder = unsafecast<option<Unwinder>>(unwinder.next);
+            maybeUnwinder = unwinder.next;
         } else {
             if (delta != int(0)) {
                 s = s with { size: uint(int(s.size) + delta) };
