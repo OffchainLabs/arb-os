@@ -52,7 +52,7 @@ $(BUILTINDIR)/maptest.mexe: $(BUILTINMAOS) $(BUILTINDIR)/maptest.mini
 	$(CARGORUN) compile $(BUILTINDIR)/maptest.mini -o $(BUILTINDIR)/maptest.mexe
 
 $(ARBOSDIR)/arbos.mexe: $(ARBOSDIR) $(STDDIR) $(BUILTINDIR)
-	$(CARGORUN) compile "arb_os" -o "arb_os/arbos.mexe"
+	$(CARGORUN) compile "arb_os" -o "arb_os/arbos.mexe" -i
 
 run:
 	cargo run --release -- run "arb_os/arbos.mexe"

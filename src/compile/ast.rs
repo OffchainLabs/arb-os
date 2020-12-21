@@ -28,6 +28,7 @@ pub struct DebugInfo {
 #[derive(Debug, Clone, Copy, Default, Serialize, Deserialize, PartialEq, Eq)]
 pub struct Attributes {
     pub breakpoint: bool,
+    pub inline: bool,
 }
 
 impl DebugInfo {

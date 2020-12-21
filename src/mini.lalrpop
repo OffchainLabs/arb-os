@@ -85,6 +85,7 @@ Attributes: Attributes = {
    <names: (<IdentString> ",")*> => {let mut attribs = Attributes::default(); for name in names {
        match name.as_ref() {
            "breakpoint" => attribs.breakpoint = true,
+           "inline" => attribs.inline = true,
            _ => {}
        }
    }; attribs},

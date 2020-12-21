@@ -122,7 +122,10 @@ fn inline(
     state: &(&Vec<TypeCheckedFunc>, &StringTable),
     _mut_state: &mut (),
 ) -> bool {
-    if let TypeCheckedNode::Expression(exp) = to_do {
+    if let TypeCheckedNode::Statement(stat) = to_do {
+        stat.debug_info.attributes.inline
+    }
+    else if let TypeCheckedNode::Expression(exp) = to_do {
         if let TypeCheckedExpr {
             kind: TypeCheckedExprKind::FunctionCall(name, args, _, _),
             debug_info: _,
