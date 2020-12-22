@@ -50,23 +50,7 @@ public impure func tokens_erc20deposit(
 
     // encode the calldata for call to adminMint
     let calldata = bytearray_new(0);
-    calldata = bytearray_setByte(
-        bytearray_setByte(
-            bytearray_setByte(
-                bytearray_setByte(
-                    calldata,
-                    0,
-                    0xe5,
-                ),
-                1,
-                0x83,
-            ),
-            2,
-            0x06,
-        ),
-        3,
-        0xf9
-    );
+    calldata = bytearray_set256(calldata, 0, asm(256-32, 0xe58306f9) uint { shl });
     calldata = bytearray_set256(calldata, 4, uint(payee));
     calldata = bytearray_set256(calldata, 36, amount);
 
@@ -105,23 +89,7 @@ public impure func tokens_erc721deposit(
 
     // encode the calldata for call to adminMint
     let calldata = bytearray_new(0);
-    calldata = bytearray_setByte(
-        bytearray_setByte(
-            bytearray_setByte(
-                bytearray_setByte(
-                    calldata,
-                    0,
-                    0xe5,
-                ),
-                1,
-                0x83,
-            ),
-            2,
-            0x06,
-        ),
-        3,
-        0xf9
-    );
+    calldata bytearray_set256(calldata, 0, asm(256-32, 0xe58306f9) { shl });
     calldata = bytearray_set256(calldata, 4, uint(payee));
     calldata = bytearray_set256(calldata, 36, id);
 
