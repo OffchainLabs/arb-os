@@ -42,24 +42,40 @@ pub(crate) trait MiniProperties {
     fn is_pure(&self) -> bool;
 }
 
+///Represents the contents of a source file after parsing.
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 struct Module {
+    ///The list of imported functions imported through the old import/export system
     imported_funcs: Vec<ImportedFunc>,
+    ///List of functions defined locally within the source file
     funcs: Vec<FuncDecl>,
+    ///Map from `StringId`s in this file to the `Type`s they represent.
     named_types: HashMap<usize, Type>,
+    ///List of global variables defined within this file.
     global_vars: Vec<GlobalVarDecl>,
+    ///Map from `StringId`s to the names they derived from.
     string_table: StringTable,
+    ///Map from `StringId`s to the types of the functions they represent.
     func_table: HashMap<usize, Type>,
+    ///The name of the module, this may be removed later.
     name: String,
 }
 
+///Represents the contents of a source file after type checking is done.
 #[derive(Clone, Debug)]
 struct TypeCheckedModule {
+    /// List of functions defined locally within the source file that have been validated by
+    /// typechecking
     checked_funcs: Vec<TypeCheckedFunc>,
+    ///Map from `StringId`s to the names they derived from.
     string_table: StringTable,
+    ///The list of imported functions imported through the old import/export system
     imported_funcs: Vec<ImportedFunc>,
+    ///The list of exported functions exported through the old import/export system
     exported_funcs: Vec<ExportedFunc>,
+    ///List of global variables defined in this module.
     global_vars: Vec<GlobalVarDecl>,
+    ///The name of the module, this may be removed later.
     name: String,
 }
 
@@ -103,6 +119,8 @@ impl TypeCheckedModule {
             name,
         }
     }
+    ///Inlines functions in the AST by replacing function calls with `CodeBlock` expressions where
+    /// appropriate
     fn inline(&mut self) {
         let mut new_funcs = self.checked_funcs.clone();
         for f in &mut new_funcs {
@@ -112,15 +130,21 @@ impl TypeCheckedModule {
     }
 }
 
-///Represents a mini program that has been compiled and possibly linked, but has not had post-link
-/// compilation steps applied. Is directly serialized to and from .mao files.
+///Represents a mini program or module that has been compiled and possibly linked, but has not had
+/// post-link compilation steps applied. Is directly serialized to and from .mao files.
 #[derive(Clone, Serialize, Deserialize)]
 pub struct CompiledProgram {
+    ///Instructions to be run to execute the program/module
     pub code: Vec<Instruction>,
+    ///The list of exported functions exported through the old import/export system
     pub exported_funcs: Vec<ExportedFunc>,
+    ///The list of imported functions imported through the old import/export system
     pub imported_funcs: Vec<ImportedFunc>,
+    ///Highest ID used for any global in this program, used for linking
     pub global_num_limit: usize,
+    ///Contains list of offsets of the various modules contained in this program
     pub source_file_map: Option<SourceFileMap>,
+    ///Map from u64 hashes of file names to the `String`s they originate from
     pub file_name_chart: HashMap<u64, String>,
 }
 
@@ -283,6 +307,7 @@ pub fn compile_from_file(
     }
 }
 
+///Prints the AST nodes with indentation representing their depth, currently not used.
 fn _print_node(node: &mut TypeCheckedNode, state: &String, mut_state: &mut usize) -> bool {
     for _ in 0..*mut_state {
         print!("{}", state);
@@ -292,6 +317,14 @@ fn _print_node(node: &mut TypeCheckedNode, state: &String, mut_state: &mut usize
     true
 }
 
+///Compiles a `Vec<CompiledProgram>` from a folder or generates a `CompileError` if a problem is
+///encountered during compilation.
+///
+///The `folder` argument gives the path to the folder, `library` optionally contains a library
+///prefix attached to the front of all paths, `main` contains the name of the main file in the
+///folder, `file_name_chart` contains a map from the `u64` hashes of file names to the `Strings`
+///they represent, useful for formatting errors, and `inline` determines whether inlining is used
+///when compiling this folder.
 pub fn compile_from_folder(
     folder: &Path,
     library: Option<&str>,
@@ -299,13 +332,16 @@ pub fn compile_from_folder(
     file_name_chart: &mut BTreeMap<u64, String>,
     inline: bool,
 ) -> Result<Vec<CompiledProgram>, CompileError> {
+    //Parsing step
     let (mut programs, import_map) = create_program_tree(folder, library, main, file_name_chart)?;
+    //Resolution of imports (use statements)
     for (name, imports) in &import_map {
         for import in imports {
             let import_path = import.path.clone();
             let (named_type, imp_func, imp_func_decl) = if let Some(program) =
                 programs.get_mut(&import_path)
             {
+                //Looks up info from target program
                 let index = program.string_table.get(import.name.clone());
                 let type_table = SymTable::new();
                 let type_table = type_table
@@ -340,6 +376,7 @@ pub fn compile_from_folder(
                     None,
                 ));
             };
+            //Modifies origin program to include import
             let origin_program = programs.get_mut(name).ok_or_else(|| {
                 CompileError::new(
                     format!(
@@ -383,6 +420,7 @@ pub fn compile_from_folder(
             }
         }
     }
+    //Conversion of programs `HashMap` to `Vec` for typechecking
     let mut typechecked = vec![];
     let mut progs = vec![];
     let type_tree = create_type_tree(&programs);
@@ -398,6 +436,7 @@ pub fn compile_from_folder(
         out.sort_by(|module1, module2| module2.name.cmp(&module1.name));
         out
     });
+    //Typechecking loop
     for Module {
         imported_funcs,
         funcs,
@@ -450,9 +489,11 @@ pub fn compile_from_folder(
             func.recursive_apply(print_node, &"    ".to_string(), &mut 0);
         }
     }*/
+    //Inlining stage
     if inline {
         typechecked.iter_mut().for_each(|module| module.inline());
     }
+    //Codegen loop
     for TypeCheckedModule {
         checked_funcs,
         string_table,
@@ -485,6 +526,7 @@ pub fn compile_from_folder(
     Ok(progs)
 }
 
+///Converts the `Vec<String>` used to identify a path into a single formatted string
 fn path_display(path: &Vec<String>) -> String {
     let mut s = "".to_string();
     if let Some(first) = path.get(0) {
@@ -497,8 +539,9 @@ fn path_display(path: &Vec<String>) -> String {
     s
 }
 
-///Creates a HashMap containing a list of modules and imports generated by interpreting the contents
-/// of `folder` as source code. Returns a `CompileError` if the contents of `folder` fail to parse.
+///Parsing stage of the compiler, creates a `HashMap` containing a list of modules and imports
+/// generated by interpreting the contents of `folder` as source code. Returns a `CompileError` if
+/// the contents of `folder` fail to parse.
 fn create_program_tree(
     folder: &Path,
     library: Option<&str>,
@@ -574,6 +617,7 @@ fn create_program_tree(
     Ok((programs, import_map))
 }
 
+///Constructor for `TypeTree`
 fn create_type_tree(program_tree: &HashMap<Vec<String>, Module>) -> TypeTree {
     program_tree
         .iter()
@@ -622,7 +666,9 @@ pub fn parse_from_source(
 ///Represents any error encountered during compilation.
 #[derive(Debug, Clone)]
 pub struct CompileError {
+    ///What the error is.
     pub description: String,
+    ///Where the error happened.
     pub location: Option<Location>,
 }
 
@@ -669,6 +715,7 @@ impl SourceFileMap {
         }
     }
 
+    ///Adds a new source file to self with offset at current end
     pub fn push(&mut self, size: usize, filepath: String) {
         self.offsets.push((self.end, filepath));
         self.end += size;
