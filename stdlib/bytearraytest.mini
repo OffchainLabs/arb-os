@@ -34,12 +34,13 @@ func tests() -> uint {
 		return 987;
 	}	
 
+	// check that this wont error
+	let buf2 = setbuffer8(buf2, 10000, 1234);
+
 	let ba = bytearray_new(33);
 	if (bytearray_size(ba) != 0) {
 		return 1;
 	}
-
-	debug(123);
 
 	ba = bytearray_new(117);
 	ba = bytearray_setByte(ba, 33, 42);
@@ -104,8 +105,6 @@ func tests() -> uint {
 		),
 	));
 
-	debug(1);
-
 	ba = bytearray_new(67);
 	if let Some(ba2) = bytearray_unmarshalBytes(marshalledStruct) {
         let i = 0;
@@ -126,8 +125,6 @@ func tests() -> uint {
 		return 9;
     }
 
-	debug(2);
-
 	ba = setupFromUnmarshal();
 	if (bytearray_get64(ba, 29) != 0x1d1e1f2021222324) {
 		return 10;
@@ -146,8 +143,6 @@ func tests() -> uint {
 	if (bytearray_get256(ba, 0) != 1) {
 	    return 12;
 	}
-
-	debug(3);
 
     if (bytes32(0x4fc384a19926e9ff7ec8f2376a0d146dc273031df1db4d133236d209700e4780)
         != marshalledBytes_hash(bytearray_marshalFull(setupFromUnmarshal()))
@@ -169,8 +164,6 @@ func tests() -> uint {
 
     let ba = setupFromUnmarshal();
     let ba2 = bytearray_extract(ba, 0, 41);
-    // let ba3 = bytearray_extract(ba, 0, 41);
-    // let ba2 = bytearray_copy(ba, 0, bytearray_new(0), 0, 41);
     let ba3 = bytearray_copy(ba, 0, bytearray_new(0), 0, 41);
     let mb2 = bytearray_marshalFull(ba2);
     let mb3 = bytearray_marshalFull(ba3);
@@ -178,7 +171,19 @@ func tests() -> uint {
         return 16;
     }
 
-	debug(4);
+	let ba = bytearray_new(0);
+	let ba = bytearray_set256(ba, 0, 0x0101010101010101010101010101010101010101010101010101010101010101);
+	let ba = bytearray_set256(ba, 32, 0x2222222222222222222222222222222222222222222222222222222222222222);
+	let ba2 = bytearray_extract(ba, 0, 36);
+	let mb1 = bytearray_getByte(ba2, 36);
+	if (mb1 != 0x0) {
+		return 17;
+	} 
+	let mw1 = bytearray_get256(ba2, 32);
+	if (mw1 != 0x2222222200000000000000000000000000000000000000000000000000000000) {
+		debug(mw1);
+		return 18;
+	} 
 
     let ba = bytearray_new(0);
     let i = 0;
@@ -186,17 +191,15 @@ func tests() -> uint {
         ba = bytearray_set256(ba, i*32, i);
         i = i+1;
     }
-	debug(345);
     i = 0;
     let sum = 0;
     while (i < 5000) {
         sum = sum + bytearray_get256(ba, i*32);
         i = i+1;
     }
-	debug(5);
 
     if (sum != (2500*4999)) {
-        return 17;
+        return 19;
     }
 
 	return 0;

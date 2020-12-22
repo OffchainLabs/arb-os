@@ -24,7 +24,7 @@ use decompression::decompression_init;
 use errorHandler::errorHandler_init;
 use evmCallStack::evmCallStack_init;
 use evmOps::evmOps_init;
-use evmLogs::EvmLogs;
+use evmlogs::EvmLogs;
 use gasAccounting::GasUsage;
 use gasAccounting::gasAccounting_init;
 use inbox::inbox_init;
@@ -98,7 +98,13 @@ public impure func mainRunLoop() {
                     }
                 } else {
                     // reject for congestion error
-                    emitTxReceipt(request.incomingRequest, 2, None<ByteArray>, None<EvmLogs>, None<GasUsage>);
+                    emitTxReceipt(
+                        request.incomingRequest,
+                        const::TxResultCode_congestion,
+                        None<ByteArray>,
+                        None<EvmLogs>,
+                        None<GasUsage>
+                    );
                 }
             } // else request was not identified as either L1 or L2, which should be impossible
         }

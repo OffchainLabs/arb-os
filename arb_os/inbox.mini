@@ -92,7 +92,7 @@ public impure func inbox_get() -> IncomingRequest {
         let (updatedQ, ret,) = incomingRequestQueue_getOrDie(globalInbox.queue);
         globalInbox = globalInbox with { queue: updatedQ };
         let ebMsg = unsafecast<IncomingRequest>(ret);
-        if (ebMsg.kind == 4) {
+        if (ebMsg.kind == const::L1MessageType_chainInit) {
             chainParams_gotParamsMessage(ebMsg.sender, ebMsg.msgData);
         } else {
             return ebMsg with {
@@ -246,11 +246,11 @@ public impure func inbox_getNextUnpackedRequest() -> (
             // it's not a batch, so process it immediately
             // get its maxGas amount -- for now, set the limit high, unless caller asked for less
             let maxGas = 1000000000;
-            if (msg.kind == 7) {
+            if (msg.kind == const::L1MessageType_L2FundedByL1) {
                 // the message carries an ETH deposit
                 // verify the validity of the message, process the deposit, then process the tx
                 let firstByte = bytearray_getByte(msg.msgData, 0);
-                if (firstByte == 0) {
+                if (firstByte == const::L2MessageType_unsignedEOATx) {
                     let callvalue = bytearray_get256(msg.msgData, 1+4*32);
                     let gAcctStore = getGlobalAccountStore();
                     setGlobalAccountStore(
@@ -265,7 +265,7 @@ public impure func inbox_getNextUnpackedRequest() -> (
                     }
                     // else request was malformatted, ignore it and execute loop again to get another
                     //     but don't undo the deposit
-                } elseif (firstByte == 1) {
+                } elseif (firstByte == const::L2MessageType_unsignedContractTx) {
                     let callvalue = bytearray_get256(msg.msgData, 1+3*32);
                     let gAcctStore = getGlobalAccountStore();
                     setGlobalAccountStore(
@@ -283,34 +283,34 @@ public impure func inbox_getNextUnpackedRequest() -> (
                 }
                 // else L2 msg type is invalid in ETH deposit message, ignore msg and execute loop again to get another
                 //      note that deposit doesn't happen in this case
-            } elseif (msg.kind == 6) {
+            } elseif (msg.kind == const::L1MessageType_endOfBlock) {
                 // it's an end-of-block message, so just trigger end-of-block processing
                 outputStats_endOfBlock(msg.blockNumber, msg.timestamp);
-            } elseif (msg.kind == 3) {
+            } elseif (msg.kind == const::L1MessageType_L2) {
                 // it's an L2 message, so switch based on the L2 type
                 let firstByte = bytearray_getByte(msg.msgData, 0);
-                if (firstByte == 6) {
+                if (firstByte == const::L2MessageType_heartbeat) {
                     // it's a heartbeat message, don't do anything
-                } elseif (firstByte == 4) {
+                } elseif (firstByte == const::L2MessageType_signedTx) {
                     // it's a signed tx; verify sig and then process request or discard
                     if let Some(txRequest) = translateSignedTx(msg) {
                         return (None<IncomingRequest>, Some(txRequest));
                     }
                     // else signature was invalid, ignore msg and execute loop again to get another
-                } elseif (firstByte == 7) {
+                } elseif (firstByte == const::L2MessageType_signedCompressedTx) {
                     // it's a single message with compressed headers
                     if let Some(txRequest) = decompressAndVerifyEcdsaSignedTx(msg.msgData, msg) {
                         return (None<IncomingRequest>, Some(txRequest));
                     }
                     // else signature was invalid, ignore msg and execute loop again to get another
                 } else {
-                    // subtype must be 0, 1, or 2
+                    // subtype must be unsigned EOA, unsigned contract, or nonmutating
                     if let Some(txRequest) = translateUnsignedTx(msg) {
                         return (None<IncomingRequest>, Some(txRequest));
                     }
                     // else request was malformatted, ignore it and execute loop again to get another
                 }
-            } elseif (msg.kind == 5) {
+            } elseif (msg.kind == const::L1MessageType_buddyDeploy) {
                 if let Some(txRequest) = translateBuddyDeployTx(msg) {
                     return (None<IncomingRequest>, Some(txRequest));
                 }
@@ -334,7 +334,7 @@ impure func translateUnsignedTx(request: IncomingRequest) -> option<TxRequestDat
     inStream = us;
 
     let seqNum = None<uint>;
-    if (subtype == 0) {
+    if (subtype == const::L2MessageType_unsignedEOATx) {
         let (us, sn) = bytestream_get256(inStream)?;
         inStream = us;
         seqNum = Some(sn);
@@ -348,7 +348,7 @@ impure func translateUnsignedTx(request: IncomingRequest) -> option<TxRequestDat
 
     let calldata = bytestream_getRemainingBytes(inStream);
 
-    if (subtype == 0) {
+    if (subtype == const::L2MessageType_unsignedEOATx) {
         request = request with {
             requestId: uint(hash(
                 bytes32(request.sender),
@@ -365,7 +365,7 @@ impure func translateUnsignedTx(request: IncomingRequest) -> option<TxRequestDat
             calleeAddr: address(destAddrAsUint),
             value: value,
             calldata: calldata,
-            nonMutating: (subtype == 2),
+            nonMutating: (subtype == const::L2MessageType_nonmutatingCall),
             incomingRequest: request
         }
     );
