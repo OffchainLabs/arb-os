@@ -293,10 +293,10 @@ impure func arbsys_withdrawEth(topFrame: EvmCallFrame, calldata: ByteArray) { //
     let destAddr = address(bytearray_get256(calldata, 4));
     let amount = evmCallFrame_getCallvalue(topFrame);
 
-    let arbSysAddr = evmCallFrame_runningAsAddress(topFrame);
-    let arbSysAccount = evmCallFrame_getAccount(topFrame, arbSysAddr);
-    if let Some(updatedAcct) = account_deductFromEthBalance(arbSysAccount, amount) {
-        if ( ! evmCallStack_setAccount(arbSysAddr, updatedAcct)) {
+    let runningAsAddr = evmCallFrame_runningAsAddress(topFrame);
+    let runningAsAccount = evmCallFrame_getAccount(topFrame, runningAsAddr);
+    if let Some(updatedAcct) = account_deductFromEthBalance(runningAsAccount, amount) {
+        if ( ! evmCallStack_setAccount(runningAsAddr, updatedAcct)) {
             evmOp_revert_knownCodePc(address(const::Address_ArbSys), 31, 0, 0);
         }
         let messageData = bytearray_extract(calldata, 4, 32);
@@ -327,10 +327,10 @@ impure func arbsys_sendTxToL1(topFrame: EvmCallFrame, calldata: ByteArray) { // 
     let innerCalldata = bytearray_extract(calldata, 4+3*32, nbytes);
 
     let callvalue = evmCallFrame_getCallvalue(topFrame);
-    let arbSysAddr = evmCallFrame_runningAsAddress(topFrame);
-    let arbSysAccount = evmCallFrame_getAccount(topFrame, arbSysAddr);
-    if let Some(updatedAcct) = account_deductFromEthBalance(arbSysAccount, callvalue) {
-        if ( ! evmCallStack_setAccount(arbSysAddr, updatedAcct)) {
+    let runningAsAddr = evmCallFrame_runningAsAddress(topFrame);
+    let runningAsAccount = evmCallFrame_getAccount(topFrame, runningAsAddr);
+    if let Some(updatedAcct) = account_deductFromEthBalance(runningAsAccount, callvalue) {
+        if ( ! evmCallStack_setAccount(runningAsAddr, updatedAcct)) {
             evmOp_revert_knownCodePc(address(const::Address_ArbSys), 220, 0, 0);
         }
         queueMessageForSend(
