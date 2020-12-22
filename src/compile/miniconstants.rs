@@ -180,6 +180,10 @@ pub fn init_constant_table() -> HashMap<String, Uint256> {
         ("LogType_blockSummary", 1),
 
         // outgoing message types
+        ("SendType_withdrawETH", 0),
+        ("SendType_withdrawERC20", 1),
+        ("SendType_withdrawERC721", 2),
+        ("SendType_sendTxToL1", 3),
         ("SendType_buddyContractResult", 5),
 
         // misc
