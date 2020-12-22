@@ -4,3 +4,5 @@
 [submodule "contracts/add/openzeppelin-contracts"]
 	path = contracts/arbos/openzeppelin-contracts
 	url = https://github.com/OpenZeppelin/openzeppelin-contracts.git
+[submodule "openzeppelin-contracts/"]
+	branch = v3.3.0
