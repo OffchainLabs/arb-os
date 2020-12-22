@@ -227,7 +227,7 @@ fn test_biguint() {
     let res = run_from_file(
         path,
         vec![],
-        RuntimeEnvironment::new(Uint256::from_usize(1111)),
+        RuntimeEnvironment::new(Uint256::from_usize(1111), None),
         false,
     );
     match res {
@@ -585,7 +585,7 @@ fn test_call_to_precompile5(
 
 #[test]
 fn test_precompile5_small() {
-    let rt_env = RuntimeEnvironment::new(Uint256::from_usize(1111));
+    let rt_env = RuntimeEnvironment::new(Uint256::from_usize(1111), None);
     let mut machine = load_from_file(Path::new("arb_os/arbos.mexe"), rt_env);
     machine.start_at_zero();
     let my_addr = Uint256::from_usize(1025);
@@ -608,7 +608,7 @@ fn test_precompile5_small() {
 
 #[test]
 fn test_precompile5_big() {
-    let rt_env = RuntimeEnvironment::new(Uint256::from_usize(1111));
+    let rt_env = RuntimeEnvironment::new(Uint256::from_usize(1111), None);
     let mut machine = load_from_file(Path::new("arb_os/arbos.mexe"), rt_env);
     machine.start_at_zero();
     let my_addr = Uint256::from_usize(1025);
