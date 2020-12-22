@@ -42,25 +42,25 @@
       "type": "function"
     }
   ],
-  "metadata": "{\"compiler\":{\"version\":\"0.6.0+commit.26b70077\"},\"language\":\"Solidity\",\"output\":{\"abi\":[{\"inputs\":[{\"internalType\":\"bytes\",\"name\":\"marshalledCode\",\"type\":\"bytes\"}],\"name\":\"continueArbosUpgrade\",\"outputs\":[],\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"inputs\":[],\"name\":\"finishArbosUpgrade\",\"outputs\":[],\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"address\",\"name\":\"newOwnerAddr\",\"type\":\"address\"}],\"name\":\"giveOwnership\",\"outputs\":[],\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"inputs\":[],\"name\":\"startArbosUpgrade\",\"outputs\":[],\"stateMutability\":\"nonpayable\",\"type\":\"function\"}],\"devdoc\":{\"methods\":{}},\"userdoc\":{\"methods\":{}}},\"settings\":{\"compilationTarget\":{\"/Users/ed/OffchainLabs/arb-os/contracts/add/contracts/ArbOwner.sol\":\"ArbOwner\"},\"evmVersion\":\"istanbul\",\"libraries\":{},\"metadata\":{\"bytecodeHash\":\"ipfs\"},\"optimizer\":{\"enabled\":false,\"runs\":200},\"remappings\":[]},\"sources\":{\"/Users/ed/OffchainLabs/arb-os/contracts/add/contracts/ArbOwner.sol\":{\"keccak256\":\"0x962a5571f584ebcb3892629bd7e5212ff497d1761d32b031d67dcd7309561226\",\"urls\":[\"bzz-raw://296df3b3fd0d10d1b6f15b0284d3773261a46464c20688a8d1318c7d8f3d95b5\",\"dweb:/ipfs/QmTy5NyvKfm6va5QMDwj6pQPnQvU5rbfzXrU3uNGqTCJmq\"]}},\"version\":1}",
+  "metadata": "{\"compiler\":{\"version\":\"0.6.2+commit.bacdbe57\"},\"language\":\"Solidity\",\"output\":{\"abi\":[{\"inputs\":[{\"internalType\":\"bytes\",\"name\":\"marshalledCode\",\"type\":\"bytes\"}],\"name\":\"continueArbosUpgrade\",\"outputs\":[],\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"inputs\":[],\"name\":\"finishArbosUpgrade\",\"outputs\":[],\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"address\",\"name\":\"newOwnerAddr\",\"type\":\"address\"}],\"name\":\"giveOwnership\",\"outputs\":[],\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"inputs\":[],\"name\":\"startArbosUpgrade\",\"outputs\":[],\"stateMutability\":\"nonpayable\",\"type\":\"function\"}],\"devdoc\":{\"methods\":{}},\"userdoc\":{\"methods\":{}}},\"settings\":{\"compilationTarget\":{\"/Users/ed/OffchainLabs/arb-os/contracts/arbos/contracts/ArbOwner.sol\":\"ArbOwner\"},\"evmVersion\":\"istanbul\",\"libraries\":{},\"metadata\":{\"bytecodeHash\":\"ipfs\"},\"optimizer\":{\"enabled\":false,\"runs\":200},\"remappings\":[]},\"sources\":{\"/Users/ed/OffchainLabs/arb-os/contracts/arbos/contracts/ArbOwner.sol\":{\"keccak256\":\"0x962a5571f584ebcb3892629bd7e5212ff497d1761d32b031d67dcd7309561226\",\"urls\":[\"bzz-raw://296df3b3fd0d10d1b6f15b0284d3773261a46464c20688a8d1318c7d8f3d95b5\",\"dweb:/ipfs/QmTy5NyvKfm6va5QMDwj6pQPnQvU5rbfzXrU3uNGqTCJmq\"]}},\"version\":1}",
   "bytecode": "0x",
   "deployedBytecode": "0x",
   "sourceMap": "",
   "deployedSourceMap": "",
   "source": "pragma solidity >=0.4.21 <0.7.0;\n\ninterface ArbOwner {\n    // Support actions that can be taken by the chain's owner.\n    // All methods will revert, unless the caller is the chain's owner.\n\n    function giveOwnership(address newOwnerAddr) external;\n\n    // To upgrade ArbOS, the ower calls startArbosUpgrade, then calls continueArbosUpgrade one or more times to upload \n    // the code to be installed as the upgrade, then calls finishArbosUpgrade to complete the upgrade and start executing the new code.\n    function startArbosUpgrade() external;\n    function continueArbosUpgrade(bytes calldata marshalledCode) external;\n    function finishArbosUpgrade() external;\n}\n\n",
-  "sourcePath": "/Users/ed/OffchainLabs/arb-os/contracts/add/contracts/ArbOwner.sol",
+  "sourcePath": "/Users/ed/OffchainLabs/arb-os/contracts/arbos/contracts/ArbOwner.sol",
   "ast": {
-    "absolutePath": "/Users/ed/OffchainLabs/arb-os/contracts/add/contracts/ArbOwner.sol",
+    "absolutePath": "/Users/ed/OffchainLabs/arb-os/contracts/arbos/contracts/ArbOwner.sol",
     "exportedSymbols": {
       "ArbOwner": [
-        332
+        463
       ]
     },
-    "id": 333,
+    "id": 464,
     "nodeType": "SourceUnit",
     "nodes": [
       {
-        "id": 315,
+        "id": 446,
         "literals": [
           "solidity",
           ">=",
@@ -71,7 +71,7 @@
           ".0"
         ],
         "nodeType": "PragmaDirective",
-        "src": "0:32:6"
+        "src": "0:32:7"
       },
       {
         "abstract": false,
@@ -80,9 +80,9 @@
         "contractKind": "interface",
         "documentation": null,
         "fullyImplemented": false,
-        "id": 332,
+        "id": 463,
         "linearizedBaseContracts": [
-          332
+          463
         ],
         "name": "ArbOwner",
         "nodeType": "ContractDefinition",
@@ -91,7 +91,7 @@
             "body": null,
             "documentation": null,
             "functionSelector": "e3a0a148",
-            "id": 320,
+            "id": 451,
             "implemented": false,
             "kind": "function",
             "modifiers": [],
@@ -99,17 +99,17 @@
             "nodeType": "FunctionDefinition",
             "overrides": null,
             "parameters": {
-              "id": 318,
+              "id": 449,
               "nodeType": "ParameterList",
               "parameters": [
                 {
                   "constant": false,
-                  "id": 317,
+                  "id": 448,
                   "name": "newOwnerAddr",
                   "nodeType": "VariableDeclaration",
                   "overrides": null,
-                  "scope": 320,
-                  "src": "218:20:6",
+                  "scope": 451,
+                  "src": "218:20:7",
                   "stateVariable": false,
                   "storageLocation": "default",
                   "typeDescriptions": {
@@ -117,10 +117,10 @@
                     "typeString": "address"
                   },
                   "typeName": {
-                    "id": 316,
+                    "id": 447,
                     "name": "address",
                     "nodeType": "ElementaryTypeName",
-                    "src": "218:7:6",
+                    "src": "218:7:7",
                     "stateMutability": "nonpayable",
                     "typeDescriptions": {
                       "typeIdentifier": "t_address",
@@ -131,16 +131,16 @@
                   "visibility": "internal"
                 }
               ],
-              "src": "217:22:6"
+              "src": "217:22:7"
             },
             "returnParameters": {
-              "id": 319,
+              "id": 450,
               "nodeType": "ParameterList",
               "parameters": [],
-              "src": "248:0:6"
+              "src": "248:0:7"
             },
-            "scope": 332,
-            "src": "195:54:6",
+            "scope": 463,
+            "src": "195:54:7",
             "stateMutability": "nonpayable",
             "virtual": false,
             "visibility": "external"
@@ -149,7 +149,7 @@
             "body": null,
             "documentation": null,
             "functionSelector": "6d92b8e4",
-            "id": 323,
+            "id": 454,
             "implemented": false,
             "kind": "function",
             "modifiers": [],
@@ -157,19 +157,19 @@
             "nodeType": "FunctionDefinition",
             "overrides": null,
             "parameters": {
-              "id": 321,
+              "id": 452,
               "nodeType": "ParameterList",
               "parameters": [],
-              "src": "537:2:6"
+              "src": "537:2:7"
             },
             "returnParameters": {
-              "id": 322,
+              "id": 453,
               "nodeType": "ParameterList",
               "parameters": [],
-              "src": "548:0:6"
+              "src": "548:0:7"
             },
-            "scope": 332,
-            "src": "511:38:6",
+            "scope": 463,
+            "src": "511:38:7",
             "stateMutability": "nonpayable",
             "virtual": false,
             "visibility": "external"
@@ -178,7 +178,7 @@
             "body": null,
             "documentation": null,
             "functionSelector": "0b766fec",
-            "id": 328,
+            "id": 459,
             "implemented": false,
             "kind": "function",
             "modifiers": [],
@@ -186,17 +186,17 @@
             "nodeType": "FunctionDefinition",
             "overrides": null,
             "parameters": {
-              "id": 326,
+              "id": 457,
               "nodeType": "ParameterList",
               "parameters": [
                 {
                   "constant": false,
-                  "id": 325,
+                  "id": 456,
                   "name": "marshalledCode",
                   "nodeType": "VariableDeclaration",
                   "overrides": null,
-                  "scope": 328,
-                  "src": "584:29:6",
+                  "scope": 459,
+                  "src": "584:29:7",
                   "stateVariable": false,
                   "storageLocation": "calldata",
                   "typeDescriptions": {
@@ -204,10 +204,10 @@
                     "typeString": "bytes"
                   },
                   "typeName": {
-                    "id": 324,
+                    "id": 455,
                     "name": "bytes",
                     "nodeType": "ElementaryTypeName",
-                    "src": "584:5:6",
+                    "src": "584:5:7",
                     "typeDescriptions": {
                       "typeIdentifier": "t_bytes_storage_ptr",
                       "typeString": "bytes"
@@ -217,16 +217,16 @@
                   "visibility": "internal"
                 }
               ],
-              "src": "583:31:6"
+              "src": "583:31:7"
             },
             "returnParameters": {
-              "id": 327,
+              "id": 458,
               "nodeType": "ParameterList",
               "parameters": [],
-              "src": "623:0:6"
+              "src": "623:0:7"
             },
-            "scope": 332,
-            "src": "554:70:6",
+            "scope": 463,
+            "src": "554:70:7",
             "stateMutability": "nonpayable",
             "virtual": false,
             "visibility": "external"
@@ -235,7 +235,7 @@
             "body": null,
             "documentation": null,
             "functionSelector": "e380002e",
-            "id": 331,
+            "id": 462,
             "implemented": false,
             "kind": "function",
             "modifiers": [],
@@ -243,42 +243,42 @@
             "nodeType": "FunctionDefinition",
             "overrides": null,
             "parameters": {
-              "id": 329,
+              "id": 460,
               "nodeType": "ParameterList",
               "parameters": [],
-              "src": "656:2:6"
+              "src": "656:2:7"
             },
             "returnParameters": {
-              "id": 330,
+              "id": 461,
               "nodeType": "ParameterList",
               "parameters": [],
-              "src": "667:0:6"
+              "src": "667:0:7"
             },
-            "scope": 332,
-            "src": "629:39:6",
+            "scope": 463,
+            "src": "629:39:7",
             "stateMutability": "nonpayable",
             "virtual": false,
             "visibility": "external"
           }
         ],
-        "scope": 333,
-        "src": "34:636:6"
+        "scope": 464,
+        "src": "34:636:7"
       }
     ],
-    "src": "0:672:6"
+    "src": "0:672:7"
   },
   "legacyAST": {
-    "absolutePath": "/Users/ed/OffchainLabs/arb-os/contracts/add/contracts/ArbOwner.sol",
+    "absolutePath": "/Users/ed/OffchainLabs/arb-os/contracts/arbos/contracts/ArbOwner.sol",
     "exportedSymbols": {
       "ArbOwner": [
-        332
+        463
       ]
     },
-    "id": 333,
+    "id": 464,
     "nodeType": "SourceUnit",
     "nodes": [
       {
-        "id": 315,
+        "id": 446,
         "literals": [
           "solidity",
           ">=",
@@ -289,7 +289,7 @@
           ".0"
         ],
         "nodeType": "PragmaDirective",
-        "src": "0:32:6"
+        "src": "0:32:7"
       },
       {
         "abstract": false,
@@ -298,9 +298,9 @@
         "contractKind": "interface",
         "documentation": null,
         "fullyImplemented": false,
-        "id": 332,
+        "id": 463,
         "linearizedBaseContracts": [
-          332
+          463
         ],
         "name": "ArbOwner",
         "nodeType": "ContractDefinition",
@@ -309,7 +309,7 @@
             "body": null,
             "documentation": null,
             "functionSelector": "e3a0a148",
-            "id": 320,
+            "id": 451,
             "implemented": false,
             "kind": "function",
             "modifiers": [],
@@ -317,17 +317,17 @@
             "nodeType": "FunctionDefinition",
             "overrides": null,
             "parameters": {
-              "id": 318,
+              "id": 449,
               "nodeType": "ParameterList",
               "parameters": [
                 {
                   "constant": false,
-                  "id": 317,
+                  "id": 448,
                   "name": "newOwnerAddr",
                   "nodeType": "VariableDeclaration",
                   "overrides": null,
-                  "scope": 320,
-                  "src": "218:20:6",
+                  "scope": 451,
+                  "src": "218:20:7",
                   "stateVariable": false,
                   "storageLocation": "default",
                   "typeDescriptions": {
@@ -335,10 +335,10 @@
                     "typeString": "address"
                   },
                   "typeName": {
-                    "id": 316,
+                    "id": 447,
                     "name": "address",
                     "nodeType": "ElementaryTypeName",
-                    "src": "218:7:6",
+                    "src": "218:7:7",
                     "stateMutability": "nonpayable",
                     "typeDescriptions": {
                       "typeIdentifier": "t_address",
@@ -349,16 +349,16 @@
                   "visibility": "internal"
                 }
               ],
-              "src": "217:22:6"
+              "src": "217:22:7"
             },
             "returnParameters": {
-              "id": 319,
+              "id": 450,
               "nodeType": "ParameterList",
               "parameters": [],
-              "src": "248:0:6"
+              "src": "248:0:7"
             },
-            "scope": 332,
-            "src": "195:54:6",
+            "scope": 463,
+            "src": "195:54:7",
             "stateMutability": "nonpayable",
             "virtual": false,
             "visibility": "external"
@@ -367,7 +367,7 @@
             "body": null,
             "documentation": null,
             "functionSelector": "6d92b8e4",
-            "id": 323,
+            "id": 454,
             "implemented": false,
             "kind": "function",
             "modifiers": [],
@@ -375,19 +375,19 @@
             "nodeType": "FunctionDefinition",
             "overrides": null,
             "parameters": {
-              "id": 321,
+              "id": 452,
               "nodeType": "ParameterList",
               "parameters": [],
-              "src": "537:2:6"
+              "src": "537:2:7"
             },
             "returnParameters": {
-              "id": 322,
+              "id": 453,
               "nodeType": "ParameterList",
               "parameters": [],
-              "src": "548:0:6"
+              "src": "548:0:7"
             },
-            "scope": 332,
-            "src": "511:38:6",
+            "scope": 463,
+            "src": "511:38:7",
             "stateMutability": "nonpayable",
             "virtual": false,
             "visibility": "external"
@@ -396,7 +396,7 @@
             "body": null,
             "documentation": null,
             "functionSelector": "0b766fec",
-            "id": 328,
+            "id": 459,
             "implemented": false,
             "kind": "function",
             "modifiers": [],
@@ -404,17 +404,17 @@
             "nodeType": "FunctionDefinition",
             "overrides": null,
             "parameters": {
-              "id": 326,
+              "id": 457,
               "nodeType": "ParameterList",
               "parameters": [
                 {
                   "constant": false,
-                  "id": 325,
+                  "id": 456,
                   "name": "marshalledCode",
                   "nodeType": "VariableDeclaration",
                   "overrides": null,
-                  "scope": 328,
-                  "src": "584:29:6",
+                  "scope": 459,
+                  "src": "584:29:7",
                   "stateVariable": false,
                   "storageLocation": "calldata",
                   "typeDescriptions": {
@@ -422,10 +422,10 @@
                     "typeString": "bytes"
                   },
                   "typeName": {
-                    "id": 324,
+                    "id": 455,
                     "name": "bytes",
                     "nodeType": "ElementaryTypeName",
-                    "src": "584:5:6",
+                    "src": "584:5:7",
                     "typeDescriptions": {
                       "typeIdentifier": "t_bytes_storage_ptr",
                       "typeString": "bytes"
@@ -435,16 +435,16 @@
                   "visibility": "internal"
                 }
               ],
-              "src": "583:31:6"
+              "src": "583:31:7"
             },
             "returnParameters": {
-              "id": 327,
+              "id": 458,
               "nodeType": "ParameterList",
               "parameters": [],
-              "src": "623:0:6"
+              "src": "623:0:7"
             },
-            "scope": 332,
-            "src": "554:70:6",
+            "scope": 463,
+            "src": "554:70:7",
             "stateMutability": "nonpayable",
             "virtual": false,
             "visibility": "external"
@@ -453,7 +453,7 @@
             "body": null,
             "documentation": null,
             "functionSelector": "e380002e",
-            "id": 331,
+            "id": 462,
             "implemented": false,
             "kind": "function",
             "modifiers": [],
@@ -461,37 +461,37 @@
             "nodeType": "FunctionDefinition",
             "overrides": null,
             "parameters": {
-              "id": 329,
+              "id": 460,
               "nodeType": "ParameterList",
               "parameters": [],
-              "src": "656:2:6"
+              "src": "656:2:7"
             },
             "returnParameters": {
-              "id": 330,
+              "id": 461,
               "nodeType": "ParameterList",
               "parameters": [],
-              "src": "667:0:6"
+              "src": "667:0:7"
             },
-            "scope": 332,
-            "src": "629:39:6",
+            "scope": 463,
+            "src": "629:39:7",
             "stateMutability": "nonpayable",
             "virtual": false,
             "visibility": "external"
           }
         ],
-        "scope": 333,
-        "src": "34:636:6"
+        "scope": 464,
+        "src": "34:636:7"
       }
     ],
-    "src": "0:672:6"
+    "src": "0:672:7"
   },
   "compiler": {
     "name": "solc",
-    "version": "0.6.0+commit.26b70077.Emscripten.clang"
+    "version": "0.6.2+commit.bacdbe57.Emscripten.clang"
   },
   "networks": {},
   "schemaVersion": "3.3.1",
-  "updatedAt": "2020-12-22T11:02:47.763Z",
+  "updatedAt": "2020-12-22T20:47:01.965Z",
   "devdoc": {
     "methods": {}
   },

@@ -26,6 +26,12 @@ contract ArbERC20 is ERC20("", "") {
         _mint(account, amount);
     }
 
+    function adminTransfer(address from, address to, uint256 amount) public {
+        // This function is only callable through admin logic since address 1 cannot make calls
+        require(msg.sender == address(1));
+        _transfer(from, to, amount);
+    }
+
     function withdraw(address account, uint256 amount) public {
         _burn(msg.sender, amount);
         ArbSys(100).withdrawERC20(account, amount);

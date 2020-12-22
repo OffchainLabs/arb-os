@@ -64,15 +64,15 @@
       "type": "function"
     }
   ],
-  "metadata": "{\"compiler\":{\"version\":\"0.6.0+commit.26b70077\"},\"language\":\"Solidity\",\"output\":{\"abi\":[{\"inputs\":[{\"internalType\":\"address\",\"name\":\"addr\",\"type\":\"address\"}],\"name\":\"getPublicKey\",\"outputs\":[{\"internalType\":\"uint256\",\"name\":\"\",\"type\":\"uint256\"},{\"internalType\":\"uint256\",\"name\":\"\",\"type\":\"uint256\"},{\"internalType\":\"uint256\",\"name\":\"\",\"type\":\"uint256\"},{\"internalType\":\"uint256\",\"name\":\"\",\"type\":\"uint256\"}],\"stateMutability\":\"view\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"uint256\",\"name\":\"x0\",\"type\":\"uint256\"},{\"internalType\":\"uint256\",\"name\":\"x1\",\"type\":\"uint256\"},{\"internalType\":\"uint256\",\"name\":\"y0\",\"type\":\"uint256\"},{\"internalType\":\"uint256\",\"name\":\"y1\",\"type\":\"uint256\"}],\"name\":\"register\",\"outputs\":[],\"stateMutability\":\"nonpayable\",\"type\":\"function\"}],\"devdoc\":{\"methods\":{}},\"userdoc\":{\"methods\":{}}},\"settings\":{\"compilationTarget\":{\"/Users/ed/OffchainLabs/arb-os/contracts/add/contracts/ArbBLS.sol\":\"ArbBLS\"},\"evmVersion\":\"istanbul\",\"libraries\":{},\"metadata\":{\"bytecodeHash\":\"ipfs\"},\"optimizer\":{\"enabled\":false,\"runs\":200},\"remappings\":[]},\"sources\":{\"/Users/ed/OffchainLabs/arb-os/contracts/add/contracts/ArbBLS.sol\":{\"keccak256\":\"0x8829725bdae9123bc175d53ab9cbb8bd0547645d286e5f70dcb0936019d683e0\",\"urls\":[\"bzz-raw://a33594cf49fc5eebe452b01d9ab7d31439dfbd6b6dbe2a53ea10fc19467f5313\",\"dweb:/ipfs/QmSfKZdb57uK2HD73G73B955j3svWerQfb4WLPmTP8qb7F\"]}},\"version\":1}",
+  "metadata": "{\"compiler\":{\"version\":\"0.6.2+commit.bacdbe57\"},\"language\":\"Solidity\",\"output\":{\"abi\":[{\"inputs\":[{\"internalType\":\"address\",\"name\":\"addr\",\"type\":\"address\"}],\"name\":\"getPublicKey\",\"outputs\":[{\"internalType\":\"uint256\",\"name\":\"\",\"type\":\"uint256\"},{\"internalType\":\"uint256\",\"name\":\"\",\"type\":\"uint256\"},{\"internalType\":\"uint256\",\"name\":\"\",\"type\":\"uint256\"},{\"internalType\":\"uint256\",\"name\":\"\",\"type\":\"uint256\"}],\"stateMutability\":\"view\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"uint256\",\"name\":\"x0\",\"type\":\"uint256\"},{\"internalType\":\"uint256\",\"name\":\"x1\",\"type\":\"uint256\"},{\"internalType\":\"uint256\",\"name\":\"y0\",\"type\":\"uint256\"},{\"internalType\":\"uint256\",\"name\":\"y1\",\"type\":\"uint256\"}],\"name\":\"register\",\"outputs\":[],\"stateMutability\":\"nonpayable\",\"type\":\"function\"}],\"devdoc\":{\"methods\":{}},\"userdoc\":{\"methods\":{}}},\"settings\":{\"compilationTarget\":{\"/Users/ed/OffchainLabs/arb-os/contracts/arbos/contracts/ArbBLS.sol\":\"ArbBLS\"},\"evmVersion\":\"istanbul\",\"libraries\":{},\"metadata\":{\"bytecodeHash\":\"ipfs\"},\"optimizer\":{\"enabled\":false,\"runs\":200},\"remappings\":[]},\"sources\":{\"/Users/ed/OffchainLabs/arb-os/contracts/arbos/contracts/ArbBLS.sol\":{\"keccak256\":\"0x8829725bdae9123bc175d53ab9cbb8bd0547645d286e5f70dcb0936019d683e0\",\"urls\":[\"bzz-raw://a33594cf49fc5eebe452b01d9ab7d31439dfbd6b6dbe2a53ea10fc19467f5313\",\"dweb:/ipfs/QmSfKZdb57uK2HD73G73B955j3svWerQfb4WLPmTP8qb7F\"]}},\"version\":1}",
   "bytecode": "0x",
   "deployedBytecode": "0x",
   "sourceMap": "",
   "deployedSourceMap": "",
   "source": "pragma solidity >=0.4.21 <0.7.0;\n\ninterface ArbBLS {\n    // Associate a BLS public key with the caller's address\n    function register(uint x0, uint x1, uint y0, uint y1) external;\n\n    // Get the BLS public key associated with an address (revert if there isn't one)\n    function getPublicKey(address addr) external view returns (uint, uint, uint, uint);\n}\n\n",
-  "sourcePath": "/Users/ed/OffchainLabs/arb-os/contracts/add/contracts/ArbBLS.sol",
+  "sourcePath": "/Users/ed/OffchainLabs/arb-os/contracts/arbos/contracts/ArbBLS.sol",
   "ast": {
-    "absolutePath": "/Users/ed/OffchainLabs/arb-os/contracts/add/contracts/ArbBLS.sol",
+    "absolutePath": "/Users/ed/OffchainLabs/arb-os/contracts/arbos/contracts/ArbBLS.sol",
     "exportedSymbols": {
       "ArbBLS": [
         195
@@ -422,7 +422,7 @@
     "src": "0:358:2"
   },
   "legacyAST": {
-    "absolutePath": "/Users/ed/OffchainLabs/arb-os/contracts/add/contracts/ArbBLS.sol",
+    "absolutePath": "/Users/ed/OffchainLabs/arb-os/contracts/arbos/contracts/ArbBLS.sol",
     "exportedSymbols": {
       "ArbBLS": [
         195
@@ -773,11 +773,11 @@
   },
   "compiler": {
     "name": "solc",
-    "version": "0.6.0+commit.26b70077.Emscripten.clang"
+    "version": "0.6.2+commit.bacdbe57.Emscripten.clang"
   },
   "networks": {},
   "schemaVersion": "3.3.1",
-  "updatedAt": "2020-12-22T11:02:47.759Z",
+  "updatedAt": "2020-12-22T20:47:01.954Z",
   "devdoc": {
     "methods": {}
   },
