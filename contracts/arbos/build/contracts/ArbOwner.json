@@ -2,53 +2,47 @@
   "contractName": "ArbOwner",
   "abi": [
     {
-      "constant": false,
       "inputs": [
         {
+          "internalType": "address",
           "name": "newOwnerAddr",
           "type": "address"
         }
       ],
       "name": "giveOwnership",
       "outputs": [],
-      "payable": false,
       "stateMutability": "nonpayable",
       "type": "function"
     },
     {
-      "constant": false,
       "inputs": [],
       "name": "startArbosUpgrade",
       "outputs": [],
-      "payable": false,
       "stateMutability": "nonpayable",
       "type": "function"
     },
     {
-      "constant": false,
       "inputs": [
         {
+          "internalType": "bytes",
           "name": "marshalledCode",
           "type": "bytes"
         }
       ],
       "name": "continueArbosUpgrade",
       "outputs": [],
-      "payable": false,
       "stateMutability": "nonpayable",
       "type": "function"
     },
     {
-      "constant": false,
       "inputs": [],
       "name": "finishArbosUpgrade",
       "outputs": [],
-      "payable": false,
       "stateMutability": "nonpayable",
       "type": "function"
     }
   ],
-  "metadata": "{\"compiler\":{\"version\":\"0.5.10+commit.5a6ea5b1\"},\"language\":\"Solidity\",\"output\":{\"abi\":[{\"constant\":false,\"inputs\":[{\"name\":\"marshalledCode\",\"type\":\"bytes\"}],\"name\":\"continueArbosUpgrade\",\"outputs\":[],\"payable\":false,\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"constant\":false,\"inputs\":[],\"name\":\"startArbosUpgrade\",\"outputs\":[],\"payable\":false,\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"constant\":false,\"inputs\":[],\"name\":\"finishArbosUpgrade\",\"outputs\":[],\"payable\":false,\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"constant\":false,\"inputs\":[{\"name\":\"newOwnerAddr\",\"type\":\"address\"}],\"name\":\"giveOwnership\",\"outputs\":[],\"payable\":false,\"stateMutability\":\"nonpayable\",\"type\":\"function\"}],\"devdoc\":{\"methods\":{}},\"userdoc\":{\"methods\":{}}},\"settings\":{\"compilationTarget\":{\"/Users/ed/OffchainLabs/arb-os/contracts/add/contracts/ArbOwner.sol\":\"ArbOwner\"},\"evmVersion\":\"petersburg\",\"libraries\":{},\"optimizer\":{\"enabled\":false,\"runs\":200},\"remappings\":[]},\"sources\":{\"/Users/ed/OffchainLabs/arb-os/contracts/add/contracts/ArbOwner.sol\":{\"keccak256\":\"0x962a5571f584ebcb3892629bd7e5212ff497d1761d32b031d67dcd7309561226\",\"urls\":[\"bzzr://a731e0388c0b55b0f92d014d02a2f5edfbf5bd11927476f7af9398b1541c696c\",\"dweb:/ipfs/QmTy5NyvKfm6va5QMDwj6pQPnQvU5rbfzXrU3uNGqTCJmq\"]}},\"version\":1}",
+  "metadata": "{\"compiler\":{\"version\":\"0.6.0+commit.26b70077\"},\"language\":\"Solidity\",\"output\":{\"abi\":[{\"inputs\":[{\"internalType\":\"bytes\",\"name\":\"marshalledCode\",\"type\":\"bytes\"}],\"name\":\"continueArbosUpgrade\",\"outputs\":[],\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"inputs\":[],\"name\":\"finishArbosUpgrade\",\"outputs\":[],\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"address\",\"name\":\"newOwnerAddr\",\"type\":\"address\"}],\"name\":\"giveOwnership\",\"outputs\":[],\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"inputs\":[],\"name\":\"startArbosUpgrade\",\"outputs\":[],\"stateMutability\":\"nonpayable\",\"type\":\"function\"}],\"devdoc\":{\"methods\":{}},\"userdoc\":{\"methods\":{}}},\"settings\":{\"compilationTarget\":{\"/Users/ed/OffchainLabs/arb-os/contracts/add/contracts/ArbOwner.sol\":\"ArbOwner\"},\"evmVersion\":\"istanbul\",\"libraries\":{},\"metadata\":{\"bytecodeHash\":\"ipfs\"},\"optimizer\":{\"enabled\":false,\"runs\":200},\"remappings\":[]},\"sources\":{\"/Users/ed/OffchainLabs/arb-os/contracts/add/contracts/ArbOwner.sol\":{\"keccak256\":\"0x962a5571f584ebcb3892629bd7e5212ff497d1761d32b031d67dcd7309561226\",\"urls\":[\"bzz-raw://296df3b3fd0d10d1b6f15b0284d3773261a46464c20688a8d1318c7d8f3d95b5\",\"dweb:/ipfs/QmTy5NyvKfm6va5QMDwj6pQPnQvU5rbfzXrU3uNGqTCJmq\"]}},\"version\":1}",
   "bytecode": "0x",
   "deployedBytecode": "0x",
   "sourceMap": "",
@@ -59,14 +53,14 @@
     "absolutePath": "/Users/ed/OffchainLabs/arb-os/contracts/add/contracts/ArbOwner.sol",
     "exportedSymbols": {
       "ArbOwner": [
-        237
+        332
       ]
     },
-    "id": 238,
+    "id": 333,
     "nodeType": "SourceUnit",
     "nodes": [
       {
-        "id": 220,
+        "id": 315,
         "literals": [
           "solidity",
           ">=",
@@ -77,17 +71,18 @@
           ".0"
         ],
         "nodeType": "PragmaDirective",
-        "src": "0:32:4"
+        "src": "0:32:6"
       },
       {
+        "abstract": false,
         "baseContracts": [],
         "contractDependencies": [],
         "contractKind": "interface",
         "documentation": null,
         "fullyImplemented": false,
-        "id": 237,
+        "id": 332,
         "linearizedBaseContracts": [
-          237
+          332
         ],
         "name": "ArbOwner",
         "nodeType": "ContractDefinition",
@@ -95,23 +90,26 @@
           {
             "body": null,
             "documentation": null,
-            "id": 225,
+            "functionSelector": "e3a0a148",
+            "id": 320,
             "implemented": false,
             "kind": "function",
             "modifiers": [],
             "name": "giveOwnership",
             "nodeType": "FunctionDefinition",
+            "overrides": null,
             "parameters": {
-              "id": 223,
+              "id": 318,
               "nodeType": "ParameterList",
               "parameters": [
                 {
                   "constant": false,
-                  "id": 222,
+                  "id": 317,
                   "name": "newOwnerAddr",
                   "nodeType": "VariableDeclaration",
-                  "scope": 225,
-                  "src": "218:20:4",
+                  "overrides": null,
+                  "scope": 320,
+                  "src": "218:20:6",
                   "stateVariable": false,
                   "storageLocation": "default",
                   "typeDescriptions": {
@@ -119,10 +117,10 @@
                     "typeString": "address"
                   },
                   "typeName": {
-                    "id": 221,
+                    "id": 316,
                     "name": "address",
                     "nodeType": "ElementaryTypeName",
-                    "src": "218:7:4",
+                    "src": "218:7:6",
                     "stateMutability": "nonpayable",
                     "typeDescriptions": {
                       "typeIdentifier": "t_address",
@@ -133,67 +131,72 @@
                   "visibility": "internal"
                 }
               ],
-              "src": "217:22:4"
+              "src": "217:22:6"
             },
             "returnParameters": {
-              "id": 224,
+              "id": 319,
               "nodeType": "ParameterList",
               "parameters": [],
-              "src": "248:0:4"
+              "src": "248:0:6"
             },
-            "scope": 237,
-            "src": "195:54:4",
+            "scope": 332,
+            "src": "195:54:6",
             "stateMutability": "nonpayable",
-            "superFunction": null,
+            "virtual": false,
             "visibility": "external"
           },
           {
             "body": null,
             "documentation": null,
-            "id": 228,
+            "functionSelector": "6d92b8e4",
+            "id": 323,
             "implemented": false,
             "kind": "function",
             "modifiers": [],
             "name": "startArbosUpgrade",
             "nodeType": "FunctionDefinition",
+            "overrides": null,
             "parameters": {
-              "id": 226,
+              "id": 321,
               "nodeType": "ParameterList",
               "parameters": [],
-              "src": "537:2:4"
+              "src": "537:2:6"
             },
             "returnParameters": {
-              "id": 227,
+              "id": 322,
               "nodeType": "ParameterList",
               "parameters": [],
-              "src": "548:0:4"
+              "src": "548:0:6"
             },
-            "scope": 237,
-            "src": "511:38:4",
+            "scope": 332,
+            "src": "511:38:6",
             "stateMutability": "nonpayable",
-            "superFunction": null,
+            "virtual": false,
             "visibility": "external"
           },
           {
             "body": null,
             "documentation": null,
-            "id": 233,
+            "functionSelector": "0b766fec",
+            "id": 328,
             "implemented": false,
             "kind": "function",
             "modifiers": [],
             "name": "continueArbosUpgrade",
             "nodeType": "FunctionDefinition",
+            "overrides": null,
             "parameters": {
-              "id": 231,
+              "id": 326,
               "nodeType": "ParameterList",
               "parameters": [
                 {
                   "constant": false,
-                  "id": 230,
+                  "id": 325,
                   "name": "marshalledCode",
                   "nodeType": "VariableDeclaration",
-                  "scope": 233,
-                  "src": "584:29:4",
+                  "overrides": null,
+                  "scope": 328,
+                  "src": "584:29:6",
                   "stateVariable": false,
                   "storageLocation": "calldata",
                   "typeDescriptions": {
@@ -201,10 +204,10 @@
                     "typeString": "bytes"
                   },
                   "typeName": {
-                    "id": 229,
+                    "id": 324,
                     "name": "bytes",
                     "nodeType": "ElementaryTypeName",
-                    "src": "584:5:4",
+                    "src": "584:5:6",
                     "typeDescriptions": {
                       "typeIdentifier": "t_bytes_storage_ptr",
                       "typeString": "bytes"
@@ -214,66 +217,68 @@
                   "visibility": "internal"
                 }
               ],
-              "src": "583:31:4"
+              "src": "583:31:6"
             },
             "returnParameters": {
-              "id": 232,
+              "id": 327,
               "nodeType": "ParameterList",
               "parameters": [],
-              "src": "623:0:4"
+              "src": "623:0:6"
             },
-            "scope": 237,
-            "src": "554:70:4",
+            "scope": 332,
+            "src": "554:70:6",
             "stateMutability": "nonpayable",
-            "superFunction": null,
+            "virtual": false,
             "visibility": "external"
           },
           {
             "body": null,
             "documentation": null,
-            "id": 236,
+            "functionSelector": "e380002e",
+            "id": 331,
             "implemented": false,
             "kind": "function",
             "modifiers": [],
             "name": "finishArbosUpgrade",
             "nodeType": "FunctionDefinition",
+            "overrides": null,
             "parameters": {
-              "id": 234,
+              "id": 329,
               "nodeType": "ParameterList",
               "parameters": [],
-              "src": "656:2:4"
+              "src": "656:2:6"
             },
             "returnParameters": {
-              "id": 235,
+              "id": 330,
               "nodeType": "ParameterList",
               "parameters": [],
-              "src": "667:0:4"
+              "src": "667:0:6"
             },
-            "scope": 237,
-            "src": "629:39:4",
+            "scope": 332,
+            "src": "629:39:6",
             "stateMutability": "nonpayable",
-            "superFunction": null,
+            "virtual": false,
             "visibility": "external"
           }
         ],
-        "scope": 238,
-        "src": "34:636:4"
+        "scope": 333,
+        "src": "34:636:6"
       }
     ],
-    "src": "0:672:4"
+    "src": "0:672:6"
   },
   "legacyAST": {
     "absolutePath": "/Users/ed/OffchainLabs/arb-os/contracts/add/contracts/ArbOwner.sol",
     "exportedSymbols": {
       "ArbOwner": [
-        237
+        332
       ]
     },
-    "id": 238,
+    "id": 333,
     "nodeType": "SourceUnit",
     "nodes": [
       {
-        "id": 220,
+        "id": 315,
         "literals": [
           "solidity",
           ">=",
@@ -284,17 +289,18 @@
           ".0"
         ],
         "nodeType": "PragmaDirective",
-        "src": "0:32:4"
+        "src": "0:32:6"
       },
       {
+        "abstract": false,
         "baseContracts": [],
         "contractDependencies": [],
         "contractKind": "interface",
         "documentation": null,
         "fullyImplemented": false,
-        "id": 237,
+        "id": 332,
         "linearizedBaseContracts": [
-          237
+          332
         ],
         "name": "ArbOwner",
         "nodeType": "ContractDefinition",
@@ -302,23 +308,26 @@
           {
             "body": null,
             "documentation": null,
-            "id": 225,
+            "functionSelector": "e3a0a148",
+            "id": 320,
             "implemented": false,
             "kind": "function",
             "modifiers": [],
             "name": "giveOwnership",
             "nodeType": "FunctionDefinition",
+            "overrides": null,
             "parameters": {
-              "id": 223,
+              "id": 318,
               "nodeType": "ParameterList",
               "parameters": [
                 {
                   "constant": false,
-                  "id": 222,
+                  "id": 317,
                   "name": "newOwnerAddr",
                   "nodeType": "VariableDeclaration",
-                  "scope": 225,
-                  "src": "218:20:4",
+                  "overrides": null,
+                  "scope": 320,
+                  "src": "218:20:6",
                   "stateVariable": false,
                   "storageLocation": "default",
                   "typeDescriptions": {
@@ -326,10 +335,10 @@
                     "typeString": "address"
                   },
                   "typeName": {
-                    "id": 221,
+                    "id": 316,
                     "name": "address",
                     "nodeType": "ElementaryTypeName",
-                    "src": "218:7:4",
+                    "src": "218:7:6",
                     "stateMutability": "nonpayable",
                     "typeDescriptions": {
                       "typeIdentifier": "t_address",
@@ -340,67 +349,72 @@
                   "visibility": "internal"
                 }
               ],
-              "src": "217:22:4"
+              "src": "217:22:6"
             },
             "returnParameters": {
-              "id": 224,
+              "id": 319,
               "nodeType": "ParameterList",
               "parameters": [],
-              "src": "248:0:4"
+              "src": "248:0:6"
             },
-            "scope": 237,
-            "src": "195:54:4",
+            "scope": 332,
+            "src": "195:54:6",
             "stateMutability": "nonpayable",
-            "superFunction": null,
+            "virtual": false,
             "visibility": "external"
           },
           {
             "body": null,
             "documentation": null,
-            "id": 228,
+            "functionSelector": "6d92b8e4",
+            "id": 323,
             "implemented": false,
             "kind": "function",
             "modifiers": [],
             "name": "startArbosUpgrade",
             "nodeType": "FunctionDefinition",
+            "overrides": null,
             "parameters": {
-              "id": 226,
+              "id": 321,
               "nodeType": "ParameterList",
               "parameters": [],
-              "src": "537:2:4"
+              "src": "537:2:6"
             },
             "returnParameters": {
-              "id": 227,
+              "id": 322,
               "nodeType": "ParameterList",
               "parameters": [],
-              "src": "548:0:4"
+              "src": "548:0:6"
             },
-            "scope": 237,
-            "src": "511:38:4",
+            "scope": 332,
+            "src": "511:38:6",
             "stateMutability": "nonpayable",
-            "superFunction": null,
+            "virtual": false,
             "visibility": "external"
           },
           {
             "body": null,
             "documentation": null,
-            "id": 233,
+            "functionSelector": "0b766fec",
+            "id": 328,
             "implemented": false,
             "kind": "function",
             "modifiers": [],
             "name": "continueArbosUpgrade",
             "nodeType": "FunctionDefinition",
+            "overrides": null,
             "parameters": {
-              "id": 231,
+              "id": 326,
               "nodeType": "ParameterList",
               "parameters": [
                 {
                   "constant": false,
-                  "id": 230,
+                  "id": 325,
                   "name": "marshalledCode",
                   "nodeType": "VariableDeclaration",
-                  "scope": 233,
-                  "src": "584:29:4",
+                  "overrides": null,
+                  "scope": 328,
+                  "src": "584:29:6",
                   "stateVariable": false,
                   "storageLocation": "calldata",
                   "typeDescriptions": {
@@ -408,10 +422,10 @@
                     "typeString": "bytes"
                   },
                   "typeName": {
-                    "id": 229,
+                    "id": 324,
                     "name": "bytes",
                     "nodeType": "ElementaryTypeName",
-                    "src": "584:5:4",
+                    "src": "584:5:6",
                     "typeDescriptions": {
                       "typeIdentifier": "t_bytes_storage_ptr",
                       "typeString": "bytes"
@@ -421,61 +435,63 @@
                   "visibility": "internal"
                 }
               ],
-              "src": "583:31:4"
+              "src": "583:31:6"
             },
             "returnParameters": {
-              "id": 232,
+              "id": 327,
               "nodeType": "ParameterList",
               "parameters": [],
-              "src": "623:0:4"
+              "src": "623:0:6"
             },
-            "scope": 237,
-            "src": "554:70:4",
+            "scope": 332,
+            "src": "554:70:6",
             "stateMutability": "nonpayable",
-            "superFunction": null,
+            "virtual": false,
             "visibility": "external"
           },
           {
             "body": null,
             "documentation": null,
-            "id": 236,
+            "functionSelector": "e380002e",
+            "id": 331,
             "implemented": false,
             "kind": "function",
             "modifiers": [],
             "name": "finishArbosUpgrade",
             "nodeType": "FunctionDefinition",
+            "overrides": null,
             "parameters": {
-              "id": 234,
+              "id": 329,
               "nodeType": "ParameterList",
               "parameters": [],
-              "src": "656:2:4"
+              "src": "656:2:6"
             },
             "returnParameters": {
-              "id": 235,
+              "id": 330,
               "nodeType": "ParameterList",
               "parameters": [],
-              "src": "667:0:4"
+              "src": "667:0:6"
             },
-            "scope": 237,
-            "src": "629:39:4",
+            "scope": 332,
+            "src": "629:39:6",
             "stateMutability": "nonpayable",
-            "superFunction": null,
+            "virtual": false,
             "visibility": "external"
           }
         ],
-        "scope": 238,
-        "src": "34:636:4"
+        "scope": 333,
+        "src": "34:636:6"
       }
     ],
-    "src": "0:672:4"
+    "src": "0:672:6"
   },
   "compiler": {
     "name": "solc",
-    "version": "0.5.10+commit.5a6ea5b1.Emscripten.clang"
+    "version": "0.6.0+commit.26b70077.Emscripten.clang"
   },
   "networks": {},
   "schemaVersion": "3.3.1",
-  "updatedAt": "2020-12-15T15:42:01.533Z",
+  "updatedAt": "2020-12-22T11:02:47.763Z",
   "devdoc": {
     "methods": {}
   },
