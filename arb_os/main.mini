@@ -30,7 +30,7 @@ use gasAccounting::gasAccounting_init;
 use inbox::inbox_init;
 use inbox::inbox_get;
 use messages::TxRequestData;
-
+use output::output_init;
 use output::txReceipts_init;
 use precompiles::precompiles_init;
 
@@ -57,6 +57,7 @@ impure func main() {
     errorHandler_init();
     codeSegment_init();
     chainParams_init();
+    output_init();
     decompression_init();
     gasAccounting_init();
     evmCallStack_init();

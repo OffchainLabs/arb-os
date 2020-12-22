@@ -50,6 +50,12 @@ type OutputStatistics = struct {
     numSends: uint,
 }
 
+var merkleOfSends: MerkleTreeBuilder;
+
+public impure func output_init() {
+    merkleOfSends = merkleTreeBuilder_new();
+}
+
 func outputStats_new() -> OutputStatistics {
     return struct {
         totalGasUsed: 0,
@@ -236,6 +242,8 @@ impure func emitBlockSummaryLog(blockNum: uint, timestamp: uint, prevBlockNum: u
         globalBlockReceiptData.statsAllTime,
         prevBlockNum
     ),) { log };
+    asm(merkleTreeBuilder_rootHash(merkleOfSends),) { send };
+    merkleOfSends = merkleTreeBuilder_new();
 }
 
 public impure func queueMessageForSend(msgType: uint, sender: address, data: ByteArray) {
@@ -272,5 +280,7 @@ public impure func sendMessage(msgType: uint, sender: address, data: ByteArray) 
 
 impure func sendPackagedMessage(msg: any) {
     outputStats_addSend();
-    asm(msg,) { send };
+    merkleOfSends = merkleTreeBuilder_add(merkleOfSends, msg);
+    // asm(msg,) { send };
+    asm((const::LogType_send, msg),) { log };
 }
