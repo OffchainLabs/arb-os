@@ -42,12 +42,10 @@ const T24 = 0x1000000000000000000000000000000000000000000000000;
 const MASK24 = 0xffffffffffffffffffffffffffffffffffffffffffffffff;
 
 
-
 type BLSHashedMessage = struct {
     x: uint,
     y: uint,
 }
-
 
 type BLSSignature = struct {
     x: uint,
@@ -65,7 +63,7 @@ public func bls_verifySingleSig(
     message:  BLSHashedMessage,
     key:      BLSKey,
     signature: BLSSignature
-) -> bool {
+) -> option<()> {
 	let messages = newarray <BLSHashedMessage> (1);
 	messages = messages with { [0] = message };
 	let keys = newarray <BLSKey> (1);
@@ -105,90 +103,75 @@ public func bls_verifySignature(
     messages:  []BLSHashedMessage,
     keys:      []BLSKey,
     signature: BLSSignature
-) -> bool {
+) -> option<()> {
 	let size = len(keys);
 	if (numMsgs == 0 || numMsgs > 30 || numMsgs != len(messages) || numMsgs != len(keys)) {
-		panic;
+		return None;
 	}
-
 
 	let acc = unsafecast<any>(());
 	acc = (
-                    acc,
-                    (
-                      signature.x, 
-                      signature.y,
-                      const::nG2x0,
-                      const::nG2x1,
-                      const::nG2y0,
-                      const::nG2y1
+        acc,
+        (
+          signature.x,
+          signature.y,
+          const::nG2x0,
+          const::nG2x1,
+          const::nG2y0,
+          const::nG2y1
 
-                    ),
-                );
-
+        ),
+    );
 
 	let i = 0;
-
     while (i < numMsgs) {
-                acc = (
-                    acc,
-                    (
-                        messages[i].x, 
-                        messages[i].y,
-                        keys[i].ax,
-                        keys[i].ay,
-                        keys[i].bx,
-                        keys[i].by 
-                    ),
-                );
-                i = i + 1;
+        acc = (
+            acc,
+            (
+                messages[i].x,
+                messages[i].y,
+                keys[i].ax,
+                keys[i].ay,
+                keys[i].bx,
+                keys[i].by
+            ),
+        );
+        i = i + 1;
     }
 
     let result = asm(acc,) bool { ecpairing }; // TODO Catch AVM ERROR
-
-
-    return result;
-
+    if (result) {
+        return Some(());
+    } else {
+        return None;
+    }
 }
 
-  // public for testing
-  public func hashToPoint(
+// public for testing
+public func hashToPoint(
   	domain: 	ByteArray,
   	message:	ByteArray
-  	)
-        ->BLSHashedMessage
-    {
-        let u = hashToField(domain, message);
-        let p0 = mapToPoint(u[0]);
-        let p1 = mapToPoint(u[1]);
+) -> BLSHashedMessage {
+    let u = hashToField(domain, message);
+    let p0 = mapToPoint(u[0]);
+    let p1 = mapToPoint(u[1]);
 
-       let x = asm(p0[0], p0[1], p1[0], p1[1]) uint { ecadd }; // check order
-        let y = asm() uint { };
+    let x = asm(p0[0], p0[1], p1[0], p1[1]) uint { ecadd }; // check order
+    let y = asm() uint { };
 
-       asm(x,) { debugprint };
-       asm(y,) { debugprint };
+    asm(x,) { debugprint };
+    asm(y,) { debugprint };
 
+    // AVM error checking
 
-
-        // AVM error checking
-
-
-        return unsafecast<BLSHashedMessage>((x,y));
-
-
-    }
+    return struct { x: x, y: y };
+}
 
 
 
-func mapToPoint(
-        _x:	uint
-        )
-        -> [2]uint
-    {
-
-
+func mapToPoint(_x:	uint) -> option<[2]uint> {
     if(_x >= const::N) {
-    	panic;
+    	return None;
     }
      
     let x = _x;
@@ -237,7 +220,7 @@ func mapToPoint(
     	} else {
     		a1 = const::N - sqa1;
     	}
-    	   return unsafecast<[2]uint>((x,a1));
+    	   return Some(unsafecast<[2]uint>((x,a1)));
 
     }
 
@@ -261,7 +244,7 @@ func mapToPoint(
     	} else {
     		a1 = const::N - sqa1;
     	}
-    	  	return unsafecast<[2]uint>((x,a1));
+    	  	return Some(unsafecast<[2]uint>((x,a1)));
 
     }
 
@@ -290,9 +273,9 @@ func mapToPoint(
         }
 
      } else {
-    	panic; // BLS: bad ft mapping implementation
+    	return None; // BLS: bad ft mapping implementation
      }
-    return unsafecast<[2]uint>((x,a1));
+    return Some(unsafecast<[2]uint>((x,a1)));
     }
 
 
