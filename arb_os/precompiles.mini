@@ -27,6 +27,8 @@ use std::bytearray::bytearray_set256;
 use std::sha256::sha256_byteArray;
 
 use arbsys::arbsys_txcall;
+use arbowner::arbowner_txcall;
+use arbosTest::arbosTest_txcall;
 use arbsys::arbAddressTable_txcall;
 use arbsys::arbBLS_txcall;
 use arbsys::arbFunctionTable_txcall;
@@ -36,64 +38,89 @@ public impure func precompiles_init(acctStore: AccountStore) -> option<AccountSt
     acctStore = accountStore_createBuiltinContract(
         acctStore,
         address(0x01),
-        precompile_0x01,
+        makeTrampoline(precompile_0x01),
         false,
     )?;
     acctStore = accountStore_createBuiltinContract(
         acctStore,
         address(0x02),
-        precompile_0x02,
+        makeTrampoline(precompile_0x02),
         false,
     )?;
     acctStore = accountStore_createBuiltinContract(
         acctStore,
         address(0x04),
-        precompile_0x04,
+        makeTrampoline(precompile_0x04),
         false,
     )?;
     acctStore = accountStore_createBuiltinContract(
     	acctStore,
         address(0x06),
-        precompile_0x06,
+        makeTrampoline(precompile_0x06),
         false,
     )?;
     acctStore = accountStore_createBuiltinContract(
         acctStore,
         address(0x07),
-        precompile_0x07,
+        makeTrampoline(precompile_0x07),
         false,
     )?;
     acctStore = accountStore_createBuiltinContract(
         acctStore,
         address(0x08),
-        precompile_0x08,
+        makeTrampoline(precompile_0x08),
         false,
     )?;
     acctStore = accountStore_createBuiltinContract(
         acctStore,
-        address(100),
-        arbsys_txcall,
+        address(const::Address_ArbSys),
+        makeTrampoline(arbsys_txcall),
         true,
     )?;
     acctStore = accountStore_createBuiltinContract(
         acctStore,
-        address(102),
-        arbAddressTable_txcall,
+        address(const::Address_ArbosTest),
+        makeTrampoline(arbosTest_txcall),
         true,
     )?;
     acctStore = accountStore_createBuiltinContract(
         acctStore,
-        address(103),
-        arbBLS_txcall,
+        address(const::Address_ArbAddressTable),
+        makeTrampoline(arbAddressTable_txcall),
         true,
     )?;
     acctStore = accountStore_createBuiltinContract(
         acctStore,
-        address(104),
-        arbFunctionTable_txcall,
+        address(const::Address_ArbBLS),
+        makeTrampoline(arbBLS_txcall),
+        true,
+    )?;
+    acctStore = accountStore_createBuiltinContract(
+        acctStore,
+        address(const::Address_ArbFunctionTable),
+        makeTrampoline(arbFunctionTable_txcall),
+        true,
+    )?;
+    acctStore = accountStore_createBuiltinContract(
+        acctStore,
+        address(const::Address_ArbOwner),
+        makeTrampoline(arbowner_txcall),
         true,
     )?;
     return Some(acctStore);
+}
+
+impure func makeTrampoline(txcallFunc: impure func()) -> impure func() {
+    // make a small code snippet that function-calls to txcallFunc (with a dummy return address)
+    return asm(
+        const::AVM_nop,
+        0,
+        asm(
+            const::AVM_jump,
+            txcallFunc,
+            asm() func() { errcodept }
+        ) func() { pushinsnimm }
+    ) func() { pushinsnimm };
 }
 
 public impure func precompile_0x01() {  // ecrecover
@@ -150,9 +177,6 @@ public impure func precompile_0x04() {  // identity function
 public impure func precompile_0x06() {  // ecadd
     if let Some(topFrame) = evmCallStack_topFrame() {
         let calldata = evmCallFrame_getCalldata(topFrame);
-        if (bytearray_size(calldata) != 4*32) {
-            evmOp_revert_knownPc(0, 0, 0);
-        }
         let x0 = bytearray_get256(calldata, 0);
         let x1 = bytearray_get256(calldata, 32);
         let y0 = bytearray_get256(calldata, 2*32);
@@ -183,9 +207,6 @@ public impure func precompile_0x06() {  // ecadd
 public impure func precompile_0x07() {  // ecmul
     if let Some(topFrame) = evmCallStack_topFrame() {
         let calldata = evmCallFrame_getCalldata(topFrame);
-        if (bytearray_size(calldata) != 3*32) {
-            evmOp_revert_knownPc(0, 0, 0);
-        }
         let x0 = bytearray_get256(calldata, 0);
         let x1 = bytearray_get256(calldata, 32);
         let n = bytearray_get256(calldata, 2*32);

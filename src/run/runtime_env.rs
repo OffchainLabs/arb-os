@@ -37,12 +37,29 @@ impl RuntimeEnvironment {
     pub fn new_options(
         chain_address: Uint256,
         sequencer_info: Option<(Uint256, Uint256, Uint256)>,
+        RuntimeEnvironment::new_with_owner(chain_address, None)
+    }
+
+    pub fn new_with_owner(chain_address: Uint256, owner: Option<Uint256>) -> Self {
+        RuntimeEnvironment::new_with_blocknum_timestamp(
+            chain_address,
+            Uint256::from_u64(100_000),
+            Uint256::from_u64(10_000_000),
+            owner,
+        )
+    }
+
+    pub fn new_with_blocknum_timestamp(
+        chain_address: Uint256,
+        blocknum: Uint256,
+        timestamp: Uint256,
+        owner: Option<Uint256>,
     ) -> Self {
         let mut ret = RuntimeEnvironment {
             chain_id: chain_address.trim_to_u64() & 0xffffffffffff, // truncate to 48 bits
             l1_inbox: vec![],
-            current_block_num: Uint256::from_u64(100_000),
-            current_timestamp: Uint256::from_u64(1_350_000),
+            current_block_num: blocknum,
+            current_timestamp: timestamp,
             logs: Vec::new(),
             sends: Vec::new(),
             next_inbox_seq_num: Uint256::zero(),
@@ -54,19 +71,25 @@ impl RuntimeEnvironment {
         ret.insert_l1_message(
             4,
             chain_address,
-            &RuntimeEnvironment::get_params_bytes(sequencer_info),
+            &RuntimeEnvironment::get_params_bytes(sequencer_info, owner),
         );
         ret
     }
 
     fn get_params_bytes(sequencer_info: Option<(Uint256, Uint256, Uint256)>) -> Vec<u8> {
+        ret.insert_l1_message(4, chain_address, &RuntimeEnvironment::get_params_bytes(owner));
+        ret
+    }
+
+
+    fn get_params_bytes(owner: Option<Uint256>) -> Vec<u8> {
         let mut buf = Vec::new();
         buf.extend(Uint256::from_u64(3 * 60 * 60 * 1000).to_bytes_be()); // grace period in ticks
         buf.extend(Uint256::from_u64(100_000_000 / 1000).to_bytes_be()); // arbgas speed limit per tick
         buf.extend(Uint256::from_u64(10_000_000_000).to_bytes_be()); // max execution steps
         buf.extend(Uint256::from_u64(1000).to_bytes_be()); // base stake amount in wei
         buf.extend(Uint256::zero().to_bytes_be()); // staking token address (zero means ETH)
-        buf.extend(Uint256::zero().to_bytes_be()); // owner address
+        buf.extend(owner.unwrap_or(Uint256::zero()).to_bytes_be()); // owner address
 
         if let Some((seq_addr, delay_blocks, delay_time)) = sequencer_info {
             buf.extend(&[0u8; 8]);
@@ -146,6 +169,24 @@ impl RuntimeEnvironment {
         }
     }
 
+    pub fn insert_l2_message_with_deposit(&mut self, sender_addr: Uint256, msg: &[u8]) -> Uint256 {
+        if (msg[0] != 0u8) && (msg[0] != 1u8) {
+            panic!();
+        }
+        let default_id = self.insert_l1_message(7, sender_addr.clone(), msg);
+        if msg[0] == 0 {
+            Uint256::avm_hash2(
+                &sender_addr,
+                &Uint256::avm_hash2(
+                    &Uint256::from_u64(self.chain_id),
+                    &hash_bytestack(bytestack_from_bytes(msg)).unwrap(),
+                ),
+            )
+        } else {
+            default_id
+        }
+    }
+
     pub fn insert_tx_message(
         &mut self,
         sender_addr: Uint256,
@@ -154,6 +195,7 @@ impl RuntimeEnvironment {
         to_addr: Uint256,
         value: Uint256,
         data: &[u8],
+        with_deposit: bool,
     ) -> Uint256 {
         let mut buf = vec![0u8];
         let seq_num = self.get_and_incr_seq_num(&sender_addr.clone());
@@ -164,7 +206,11 @@ impl RuntimeEnvironment {
         buf.extend(value.to_bytes_be());
         buf.extend_from_slice(data);
 
-        self.insert_l2_message(sender_addr.clone(), &buf, false)
+        if with_deposit {
+            self.insert_l2_message_with_deposit(sender_addr.clone(), &buf)
+        } else {
+            self.insert_l2_message(sender_addr.clone(), &buf, false)
+        }
     }
 
     pub fn insert_buddy_deploy_message(
@@ -507,7 +553,7 @@ pub struct ArbosReceipt {
     request_id: Uint256,
     return_code: Uint256,
     return_data: Vec<u8>,
-    evm_logs: Value,
+    evm_logs: Vec<EvmLog>,
     gas_used: Uint256,
     gas_price_wei: Uint256,
     pub provenance: ArbosRequestProvenance,
@@ -547,7 +593,7 @@ impl ArbosReceipt {
                 },
                 return_code,
                 return_data,
-                evm_logs,
+                evm_logs: EvmLog::new_vec(evm_logs),
                 gas_used,
                 gas_price_wei,
                 provenance: if let Value::Tuple(stup) = &tup[1] {
@@ -678,12 +724,65 @@ impl ArbosReceipt {
         self.return_data.clone()
     }
 
+    pub fn _get_evm_logs(&self) -> Vec<EvmLog> {
+        self.evm_logs.clone()
+    }
+
     pub fn get_gas_used(&self) -> Uint256 {
         self.gas_used.clone()
     }
 
     pub fn get_gas_used_so_far(&self) -> Uint256 {
         self.gas_so_far.clone()
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct EvmLog {
+    addr: Uint256,
+    data: Vec<u8>,
+    vals: Vec<Uint256>,
+}
+
+impl EvmLog {
+    pub fn new(val: Value) -> Self {
+        if let Value::Tuple(tup) = val {
+            EvmLog {
+                addr: if let Value::Int(ui) = &tup[0] {
+                    ui.clone()
+                } else {
+                    panic!()
+                },
+                data: bytes_from_bytestack(tup[1].clone()).unwrap(),
+                vals: tup[2..]
+                    .iter()
+                    .map(|v| {
+                        if let Value::Int(ui) = v {
+                            ui.clone()
+                        } else {
+                            panic!()
+                        }
+                    })
+                    .collect(),
+            }
+        } else {
+            panic!("invalid EVM log format");
+        }
+    }
+
+    pub fn new_vec(val: Value) -> Vec<Self> {
+        if let Value::Tuple(tup) = val {
+            if tup.len() == 0 {
+                vec![]
+            } else {
+                let mut rest = EvmLog::new_vec(tup[1].clone());
+                let last = EvmLog::new(tup[0].clone());
+                rest.push(last);
+                rest
+            }
+        } else {
+            panic!()
+        }
     }
 }
 

@@ -2,7 +2,7 @@
 // Copyright 2020, Offchain Labs, Inc. All rights reserved.
 //
 
-
+use arbowner::arbowner_init;
 use evmCallStack::evmCallStack_callHitError;
 
 use inbox::inbox_addSequencer;
@@ -37,6 +37,8 @@ public impure func chainParams_init() {
 
 public impure func chainParams_gotParamsMessage(sender: address, data: ByteArray) {
     if (globalChainParams == None<ChainParams>) {
+        arbowner_init();
+
         globalChainParams = Some(struct{
             chainAddress: sender,
             gracePeriodSec: bytearray_get256(data, 0) / ticksPerSecond(),
@@ -119,3 +121,16 @@ public impure func chainParams_baseStake() -> (address, uint) {
     }
 }
 
+public impure func chainParams_getOwner() -> option<address> {
+    if let Some(params) = globalChainParams {
+        return Some(params.owner);
+    } else {
+        return None;
+    }
+}
+
+public impure func chainParams_setOwner(newOwner: address) {
+    if let Some(params) = globalChainParams {
+        globalChainParams = Some(params with { owner: newOwner });
+    }
+}

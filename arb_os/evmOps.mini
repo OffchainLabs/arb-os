@@ -8,8 +8,10 @@ use evmlogs::EvmLogs;
 use std::bytearray::ByteArray;
 use std::bytestream::ByteStream;
 use std::bytearray::MarshalledBytes;
+use std::stack::Stack;
 use std::storageMap::StorageMap;
 
+use chainParameters::chainParams_chainId;
 use errorHandler::errorHandler;
 
 use evmCallStack::evmCallStack_topFrame;
@@ -26,6 +28,7 @@ use evmCallStack::evmCallStack_doCall;
 use evmCallStack::evmCallStack_returnFromCall;
 use evmCallStack::evmCallStack_callHitError;
 use evmCallStack::evmCallStack_runningCodeFromAccount;
+use evmCallStack::snapshotAuxStack;
 
 use evmCallStack::evmCallFrame_runningAsAccount;
 use evmCallStack::evmCallFrame_runningCodeFromAccount;
@@ -69,16 +72,80 @@ use std::bytearray::bytearray_copy;
 use std::bytearray::bytearray_marshalFull;
 use std::bytestream::bytestream_new;
 
+use std::stack::stack_pop;
+use std::stack::stack_isEmpty;
+use std::stack::stack_discardDeepestItems;
+
 use codeSegment::translateEvmCodeSegment;
 
 use std::keccak::keccak256;
 use std::rlp::keccakOfRlpEncodedUintPair;
 
 
+var evmOpJumpTable: [const::NumEvmOps]impure func();
+
+public impure func evmOps_init() {
+    evmOpJumpTable = unsafecast<[const::NumEvmOps]impure func()>(newfixedarray(const::NumEvmOps))
+        with  { [const::EvmOp_stop] = unsafecast<impure func()>(evmOp_stop) }
+        with  { [const::EvmOp_sha3] = unsafecast<impure func()>(evmOp_sha3) }
+        with  { [const::EvmOp_address] = unsafecast<impure func()>(evmOp_address) }
+        with  { [const::EvmOp_balance] = unsafecast<impure func()>(evmOp_balance) }
+        with  { [const::EvmOp_selfbalance] = unsafecast<impure func()>(evmOp_selfbalance) }
+        with  { [const::EvmOp_origin] = unsafecast<impure func()>(evmOp_origin) }
+        with  { [const::EvmOp_caller] = unsafecast<impure func()>(evmOp_caller) }
+        with  { [const::EvmOp_callvalue] = unsafecast<impure func()>(evmOp_callvalue) }
+        with  { [const::EvmOp_calldataload] = unsafecast<impure func()>(evmOp_calldataload) }
+        with  { [const::EvmOp_calldatasize] = unsafecast<impure func()>(evmOp_calldatasize) }
+        with  { [const::EvmOp_calldatacopy] = unsafecast<impure func()>(evmOp_calldatacopy) }
+        with  { [const::EvmOp_codesize] = unsafecast<impure func()>(evmOp_codesize) }
+        with  { [const::EvmOp_codecopy] = unsafecast<impure func()>(evmOp_codecopy) }
+        with  { [const::EvmOp_extcodesize] = unsafecast<impure func()>(evmOp_extcodesize) }
+        with  { [const::EvmOp_extcodecopy] = unsafecast<impure func()>(evmOp_extcodecopy) }
+        with  { [const::EvmOp_extcodehash] = unsafecast<impure func()>(evmOp_extcodehash) }
+        with  { [const::EvmOp_returndatasize] = unsafecast<impure func()>(evmOp_returndatasize) }
+        with  { [const::EvmOp_returndatacopy] = unsafecast<impure func()>(evmOp_returndatacopy) }
+        with  { [const::EvmOp_timestamp] = unsafecast<impure func()>(evmOp_timestamp) }
+        with  { [const::EvmOp_number] = unsafecast<impure func()>(evmOp_number) }
+        with  { [const::EvmOp_msize] = unsafecast<impure func()>(evmOp_msize) }
+        with  { [const::EvmOp_mload] = unsafecast<impure func()>(evmOp_mload) }
+        with  { [const::EvmOp_mstore] = unsafecast<impure func()>(evmOp_mstore) }
+        with  { [const::EvmOp_mstore8] = unsafecast<impure func()>(evmOp_mstore8) }
+        with  { [const::EvmOp_sload] = unsafecast<impure func()>(evmOp_sload) }
+        with  { [const::EvmOp_sstore] = unsafecast<impure func()>(evmOp_sstore) }
+        with  { [const::EvmOp_getjumpaddr] = unsafecast<impure func()>(evmOp_getjumpaddr) }
+        with  { [const::EvmOp_msize] = unsafecast<impure func()>(evmOp_msize) }
+        with  { [const::EvmOp_log0] = unsafecast<impure func()>(evmOp_log0) }
+        with  { [const::EvmOp_log1] = unsafecast<impure func()>(evmOp_log1) }
+        with  { [const::EvmOp_log2] = unsafecast<impure func()>(evmOp_log2) }
+        with  { [const::EvmOp_log3] = unsafecast<impure func()>(evmOp_log3) }
+        with  { [const::EvmOp_log4] = unsafecast<impure func()>(evmOp_log4) }
+        with  { [const::EvmOp_call] = unsafecast<impure func()>(evmOp_call) }
+        with  { [const::EvmOp_callcode] = unsafecast<impure func()>(evmOp_callcode) }
+        with  { [const::EvmOp_delegatecall] = unsafecast<impure func()>(evmOp_delegatecall) }
+        with  { [const::EvmOp_staticcall] = unsafecast<impure func()>(evmOp_staticcall) }
+        with  { [const::EvmOp_revert] = unsafecast<impure func()>(evmOp_revert) }
+        with  { [const::EvmOp_revert_knownPc] = unsafecast<impure func()>(evmOp_revert_knownPc) }
+        with  { [const::EvmOp_return] = unsafecast<impure func()>(evmOp_return) }
+        with  { [const::EvmOp_selfdestruct] = unsafecast<impure func()>(evmOp_selfdestruct) }
+        with  { [const::EvmOp_create] = unsafecast<impure func()>(evmOp_create) }
+        with  { [const::EvmOp_create2] = unsafecast<impure func()>(evmOp_create2) }
+        with  { [const::EvmOp_chainId] = unsafecast<impure func()>(chainParams_chainId) };
+}
+
+public impure func evmOps_trampoline(index: uint) {
+    asm(evmOpJumpTable[index],) {
+        auxpop pop   // discard this function's call frame
+        auxpop
+        swap1
+        // stack holds: funcPtr returnAddr
+        jump
+    };
+}
+
+
 // Any function with a name like evmOp_XXX is designed to implement the XXX instruction in EVM.
 // Compiled EVM code will call that function to implement the XXX instruction.
 // Most of the functions are fairly simple, and access the callframe or similar information.
-
 
 public impure func evmOp_stop() {
     // return from the current call, with no calldata
@@ -123,7 +190,7 @@ public impure func evmOp_selfbalance() -> uint {
     
 public impure func evmOp_origin() -> address {
     if let Some(oldie) = evmCallStack_oldestCallFrame() {
-        return account_getAddress(evmCallFrame_runningAsAccount(oldie));
+        return evmCallFrame_getCaller(oldie);
     }
 
     evm_runtimePanic(3);
@@ -438,9 +505,7 @@ public impure func evmOp_getjumpaddr(evm_pc: uint) -> impure func() {
 
 public impure func evmOp_msize() -> uint {
     if let Some(topFrame) = evmCallStack_topFrame() {
-        return bytearray_size(
-            evmCallFrame_getMemory(topFrame)
-        );
+        return 32*((bytearray_size(evmCallFrame_getMemory(topFrame))+31)/32);
     } else {
         evm_runtimePanic(22);
         return 0;
@@ -577,6 +642,54 @@ public impure func evmOp_log4(
     panic;
 }
 
+public impure func evmOp_callAndReturn(
+    gas: uint,
+    callee: address,
+    balance: uint,
+    argsOffset: uint,
+    argsLength: uint,
+    retOffset: uint,
+    retLength: uint
+) -> bool {
+    let savedAuxStack = snapshotAuxStack();
+
+    // remove first two items from saved aux stack, so we get our caller's aux stack state
+    savedAuxStack = stack_discardDeepestItems(savedAuxStack, 2);
+
+    // First, get the return address of our caller.
+    // This will be the second-from-top item on the AVM AuxStack.
+    // Get a copy of it, without disturbing anything.
+    let resumeCodePoint = asm() func() {
+        auxpop
+        auxpop
+        dup0
+        swap2
+        swap1
+        auxpush
+        auxpush
+    };
+
+    // Now make the call.
+    // After the call completes, control will be thrown directly back to resumeCodePoint.
+    let res = evmCallStack_doCall(
+        0,
+        gas,
+        callee,
+        balance,
+        argsOffset,
+        argsLength,
+        retOffset,
+        retLength,
+        resumeCodePoint,
+        Some(savedAuxStack),
+    );
+    if let Some(success) = res {
+        return success;
+    } else {
+        return false;  // weird failure, best to return false
+    }
+}
+
 public impure func evmOp_call(
     gas: uint,
     calleeAsUint: uint,
@@ -604,7 +717,7 @@ public impure func evmOp_call(
     // Now make the call.
     // After the call completes, control will be thrown directly back to resumeCodePoint.
     let res = evmCallStack_doCall(
-        0,
+        const::EVMCallType_call,
         gas,
         callee,
         balance,
@@ -612,7 +725,8 @@ public impure func evmOp_call(
         argsLength,
         retOffset,
         retLength,
-        resumeCodePoint
+        resumeCodePoint,
+        None<Stack>,
     );
     if let Some(success) = res {
         return success;
@@ -643,7 +757,7 @@ public impure func evmOp_callcode(
         auxpush
     };
     let res = evmCallStack_doCall(
-        1,
+        const::EVMCallType_callcode,
         gas,
         callee,
         balance,
@@ -651,7 +765,8 @@ public impure func evmOp_callcode(
         argsLength,
         retOffset,
         retLength,
-        resumeCodePoint
+        resumeCodePoint,
+        None<Stack>,
     );
     if let Some(success) = res {
         return success;
@@ -681,7 +796,7 @@ public impure func evmOp_delegatecall(
          auxpush
      };
      let res = evmCallStack_doCall(
-         2,
+         const::EVMCallType_delegatecall,
          gas,
          callee,
          0,  // balance will be filled in by evmCallStack_doCall
@@ -689,7 +804,8 @@ public impure func evmOp_delegatecall(
          argsLength,
          retOffset,
          retLength,
-         resumeCodePoint
+         resumeCodePoint,
+         None<Stack>,
      );
     if let Some(success) = res {
         return success;
@@ -719,7 +835,7 @@ public impure func evmOp_staticcall(
         auxpush
     };
     let res = evmCallStack_doCall(
-        3,
+        const::EVMCallType_staticcall,
         gas,
         callee,
         0,  // balance is zero for a staticcall
@@ -727,7 +843,8 @@ public impure func evmOp_staticcall(
         argsLength,
         retOffset,
         retLength,
-        resumeCodePoint
+        resumeCodePoint,
+        None<Stack>,
     );
     if let Some(success) = res {
         return success;
@@ -765,6 +882,7 @@ public impure func evmOp_selfdestruct(ownerAsUint: uint) {
     let owner = address(ownerAsUint);     // truncates if necessary
 
     evmCallStack_selfDestructCurrentAccount(owner,);
+    evmOp_return(0, 0);
 }
 
 public impure func evmOp_create(value: uint, offset: uint, length: uint) -> address {
@@ -837,7 +955,8 @@ impure func doCreationOpcode(value: uint, offset: uint, length: uint, newAddress
                     constructorCode,
                     evmJumpTable,
                     startPoint,
-                    storageMap_new()
+                    storageMap_new(),
+                    true,
                 )
             )
         ) {
@@ -940,7 +1059,8 @@ impure func doCreationOpcode(value: uint, offset: uint, length: uint, newAddress
                                         contractCode,
                                         evmJumpTable2,
                                         startPoint2,
-                                        storage
+                                        storage,
+                                        true,
                                     )
                                 )
                             ) {

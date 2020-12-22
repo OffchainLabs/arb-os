@@ -9,6 +9,7 @@ use accounts::getGlobalAccountStore;
 use accounts::setGlobalAccountStore;
 use accounts::accountStore_createAccountFromEvmCode;
 use chainParameters::chainParams_init;
+use codeSegment::codeSegment_init;
 use codeSegment::translateEvmCodeSegment;
 use contractTemplates::getErc20code;
 use contractTemplates::getErc721code;
@@ -22,7 +23,8 @@ use contractTemplates::getArbInfoStorage;
 use decompression::decompression_init;
 use errorHandler::errorHandler_init;
 use evmCallStack::evmCallStack_init;
-use evmLogs::EvmLogs;
+use evmOps::evmOps_init;
+use evmlogs::EvmLogs;
 use gasAccounting::GasUsage;
 use gasAccounting::gasAccounting_init;
 use inbox::inbox_init;
@@ -53,10 +55,12 @@ use inbox::IncomingRequest;
 
 impure func main() {
     errorHandler_init();
+    codeSegment_init();
     chainParams_init();
     decompression_init();
     gasAccounting_init();
     evmCallStack_init();
+    evmOps_init();
     inbox_init();
     accountStore_init();
     txReceipts_init();
@@ -94,7 +98,13 @@ public impure func mainRunLoop() {
                     }
                 } else {
                     // reject for congestion error
-                    emitTxReceipt(request.incomingRequest, 2, None<ByteArray>, None<EvmLogs>, None<GasUsage>);
+                    emitTxReceipt(
+                        request.incomingRequest,
+                        const::TxResultCode_congestion,
+                        None<ByteArray>,
+                        None<EvmLogs>,
+                        None<GasUsage>
+                    );
                 }
             } // else request was not identified as either L1 or L2, which should be impossible
         }
