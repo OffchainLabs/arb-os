@@ -62,10 +62,13 @@ impl RuntimeEnvironment {
             recorder: RtEnvRecorder::new(),
             compressor: TxCompressor::new(),
         };
-        ret.insert_l1_message(4, chain_address, &RuntimeEnvironment::get_params_bytes(owner));
+        ret.insert_l1_message(
+            4,
+            chain_address,
+            &RuntimeEnvironment::get_params_bytes(owner),
+        );
         ret
     }
-
 
     fn get_params_bytes(owner: Option<Uint256>) -> Vec<u8> {
         let mut buf = Vec::new();
@@ -425,7 +428,29 @@ impl RuntimeEnvironment {
     }
 
     pub fn get_all_sends(&self) -> Vec<Value> {
-        self.sends.clone()
+        self.logs
+            .clone()
+            .into_iter()
+            .map(|log| get_send_contents(log))
+            .filter(|r| r.is_some())
+            .map(|r| r.unwrap())
+            .collect()
+    }
+}
+
+fn get_send_contents(log: Value) -> Option<Value> {
+    if let Value::Tuple(tup) = log {
+        if let Value::Int(kind) = &tup[0] {
+            if kind == &Uint256::from_u64(2) {
+                Some(tup[1].clone())
+            } else {
+                None
+            }
+        } else {
+            None
+        }
+    } else {
+        None
     }
 }
 
