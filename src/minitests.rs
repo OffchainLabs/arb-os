@@ -3,8 +3,11 @@
  */
 
 use crate::mavm::Value;
-use crate::run::{bytestack_from_bytes, run_from_file, RuntimeEnvironment};
+use crate::run::{
+    bytestack_from_bytes, load_from_file, run_from_file, Machine, RuntimeEnvironment,
+};
 use crate::uint256::Uint256;
+use num_bigint::{BigUint, RandBigInt};
 use rlp::RlpStream;
 use std::convert::TryInto;
 use std::path::Path;
@@ -183,6 +186,25 @@ fn test_keccak() {
 #[test]
 fn test_sha256() {
     let path = Path::new("stdlib/sha256test.mexe");
+    let res = run_from_file(
+        path,
+        vec![],
+        RuntimeEnvironment::new(Uint256::from_usize(1111)),
+        false,
+    );
+    match res {
+        Ok(res) => {
+            assert_eq!(res[0], Value::Int(Uint256::zero()));
+        }
+        Err(e) => {
+            panic!("{}\n{}", e.0, e.1);
+        }
+    }
+}
+
+#[test]
+fn test_biguint() {
+    let path = Path::new("stdlib/biguinttest.mexe");
     let res = run_from_file(
         path,
         vec![],
@@ -462,4 +484,89 @@ fn test_erc20() {
 #[test]
 fn test_erc721() {
     crate::evm::mint_erc721_and_get_balance(None, false);
+}
+
+fn test_call_to_precompile5(
+    machine: &mut Machine,
+    sender_addr: &Uint256,
+    b: BigUint,
+    e: BigUint,
+    m: BigUint,
+) -> Result<BigUint, ethabi::Error> {
+    let b_bytes = b.to_bytes_be();
+    let e_bytes = e.to_bytes_be();
+    let m_bytes = m.to_bytes_be();
+    let mut calldata = Uint256::from_usize(b_bytes.len()).to_bytes_be();
+    calldata.extend(Uint256::from_usize(e_bytes.len()).to_bytes_be());
+    calldata.extend(Uint256::from_usize(m_bytes.len()).to_bytes_be());
+    calldata.extend(b_bytes);
+    calldata.extend(e_bytes);
+    calldata.extend(m_bytes);
+
+    let txid = machine.runtime_env.insert_tx_message(
+        sender_addr.clone(),
+        Uint256::from_u64(1_000_000_000),
+        Uint256::zero(),
+        Uint256::from_u64(5),
+        Uint256::zero(),
+        &calldata,
+        false,
+    );
+    let num_logs_before = machine.runtime_env.get_all_receipt_logs().len();
+    let _gas_used = machine.run(None);
+    let logs = machine.runtime_env.get_all_receipt_logs();
+    assert_eq!(logs.len(), num_logs_before + 1);
+    let receipt = logs[num_logs_before].clone();
+
+    assert_eq!(receipt.get_request_id(), txid);
+    assert!(receipt.succeeded());
+
+    Ok(BigUint::from_bytes_be(&receipt.get_return_data()))
+}
+
+#[test]
+fn test_precompile5_small() {
+    let rt_env = RuntimeEnvironment::new(Uint256::from_usize(1111));
+    let mut machine = load_from_file(Path::new("arb_os/arbos.mexe"), rt_env);
+    machine.start_at_zero();
+    let my_addr = Uint256::from_usize(1025);
+
+    match test_call_to_precompile5(
+        &mut machine,
+        &my_addr,
+        BigUint::from(2u64),
+        BigUint::from(4u64),
+        BigUint::from(9u64),
+    ) {
+        Ok(bi) => {
+            assert_eq!(bi, BigUint::from(7u64));
+        }
+        Err(e) => {
+            panic!("{}", e);
+        }
+    }
+}
+
+#[test]
+fn test_precompile5_big() {
+    let rt_env = RuntimeEnvironment::new(Uint256::from_usize(1111));
+    let mut machine = load_from_file(Path::new("arb_os/arbos.mexe"), rt_env);
+    machine.start_at_zero();
+    let my_addr = Uint256::from_usize(1025);
+
+    let mut rng = rand::thread_rng();
+    let b: BigUint = rng.gen_biguint(128);
+    let e: BigUint = rng.gen_biguint(32);
+    let m: BigUint = rng.gen_biguint(128);
+    match test_call_to_precompile5(&mut machine, &my_addr, b.clone(), e.clone(), m.clone()) {
+        Ok(actual) => {
+            let expected = b.modpow(&e, &m);
+            println!("actual   {}", actual);
+            println!("expected {}", expected);
+            assert_eq!(actual, expected);
+        }
+        Err(e) => {
+            panic!("{}", e);
+        }
+    }
 }

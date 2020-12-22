@@ -17,6 +17,7 @@ stdlib/*.mao
 stdlib/*.mexe
 minitests/*.mao
 minitests/*.mexe
+contracts/add/node_modules/*
 contracts/arbos/node_modules/*
 testlogs/*
 arb_os/contractTemplates.mini

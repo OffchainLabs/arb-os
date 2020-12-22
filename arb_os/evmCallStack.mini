@@ -108,8 +108,7 @@ type EvmCallFrame = struct {
     selfDestructQueue: Queue,           // set of self-destruct directives, including those created by this call and its subcalls
     resumeInfo: option<ResumeInfo>,     // if call is suspended, its state will be saved here
     sendQueue: Queue,                   // outgoing messages, including those created by this call and its subcalls
-    parent: option<any>,                // call-frame that created this one, or None if this is a top-level call
-                      // parent is really an option<EvmCallFrame>, but compiler doesn't allow recursive types
+    parent: option<EvmCallFrame>,                // call-frame that created this one, or None if this is a top-level call
 }
 
 type ReturnInfo = struct {  // information about a call that previously completed
@@ -207,7 +206,7 @@ public impure func initEvmCallStack(
                     selfDestructQueue: queue_new(),
                     resumeInfo: None<ResumeInfo>,
                     sendQueue: queue_new(),
-                    parent: None<any>
+                    parent: None<EvmCallFrame>
                 });
 
                 emptyAvmStack();
@@ -357,7 +356,7 @@ public impure func initEvmCallStackForConstructor(
             selfDestructQueue: queue_new(),
             resumeInfo: None<ResumeInfo>,
             sendQueue: queue_new(),
-            parent: None<any>
+            parent: None<EvmCallFrame>
         });
 
         if (gasAccounting_startTxCharges(request.maxGas, request.gasPrice, request.caller) != None<()>) {
@@ -514,7 +513,7 @@ public impure func evmCallStack_returnFromCall(
     let memory = topFrame.memory;
     let returnData = bytearray_extract(memory, returnOffset, returnLength);
 
-    if let Some(newTopFrame) = unsafecast<option<EvmCallFrame>>(topFrame.parent) {
+    if let Some(newTopFrame) = topFrame.parent {
         // Returning from a non-top-level call
 
         topFrame = topFrame with {   // copy cached account back into callframe's main accountStore
@@ -847,8 +846,7 @@ public impure func evmCallStack_oldestCallFrame() -> option<EvmCallFrame> {
     let frame = globalCallStack?;
     loop {
         if let Some(parent) = frame.parent {
-            // do "unsafe" cast because compiler doesn't know the true type of parent
-            frame = unsafecast<EvmCallFrame>(parent);
+            frame = parent;
         } else {
             return Some(frame);
         }
@@ -1060,9 +1058,7 @@ public func evmCallFrame_getSelfDestructQueue(frame: EvmCallFrame) -> Queue {
 }
 
 public func evmCallFrame_getParent(frame: EvmCallFrame) -> option<EvmCallFrame> {
-    return unsafecast<option<EvmCallFrame>>(frame.parent);
-    // unsafecast is safe because underlying type is really EvmCallFrame
-    //    (compiler doesn't know because it doesn't accept recursive types)
+    return frame.parent;
 }
 
 public impure func evmCallStack_callHitError(errInfo: any) {
