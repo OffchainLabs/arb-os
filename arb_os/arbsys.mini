@@ -341,14 +341,22 @@ impure func arbsys_sendTxToL1(topFrame: EvmCallFrame, calldata: ByteArray) { // 
                 0,
                 bytearray_set256(
                     bytearray_set256(
-                        bytearray_new(0),
-                        0,
-                        uint(destAddr),
+                        bytearray_set256(
+                            bytearray_set256(
+                                bytearray_new(0),
+                                0,
+                                uint(destAddr),
+                            ),
+                            32,
+                            inbox_currentBlockNumber(),
+                        ),
+                        64,
+                        inbox_currentTimestamp(),
                     ),
-                    32,
+                    96,
                     callvalue,
                 ),
-                64,
+                128,
                 nbytes,
             ),
         );
