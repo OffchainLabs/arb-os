@@ -18,7 +18,6 @@ use std::bls::hashToField;
 use std::bls::bls_verifySignature;
 use std::bls::expandMsgTo96;
 use std::bls::hashToPoint;
-use std::bls::bls_initialize;
 use std::bls::bls_verifySingleSig;
 
 
@@ -34,8 +33,6 @@ func tests() -> uint {
     if (6*7 != 42) {
         return 2;
     }
-
-    bls_initialize();
 
     //let message = bytearray_new(1);
     //message = bytearray_setByte(message,0,0x02);

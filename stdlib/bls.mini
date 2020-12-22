@@ -23,27 +23,27 @@ use std::keccak::keccak256;
 use std::sha256::sha256_byteArray;
 
 
-    // Field order
-    var N: uint;
+// Field order
+const N = 21888242871839275222246405745257275088696311157297823662689037894645226208583;
 
-    // Negated genarator of G2
-    var nG2x1: uint;
-    var nG2x0: uint;
-    var nG2y1: uint;
-    var nG2y0: uint;
+// Negated genarator of G2
+const nG2x0 = 10857046999023057135944570762232829481370756359578518086990519993285655852781;
+const nG2x1 = 11559732032986387107991004021392285783925812861821192530917403151452391805634;
+const nG2y0 = 13392588948715843804641432497768002650278120570034223513918757245338268106653;
+const nG2y1 = 17805874995975841540914202342111839520379459829704422454583296818431106115052;
 
-    // sqrt(-3)
-    var z0: uint;
+// sqrt(-3)
+const z0 = 0x0000000000000000b3c4d79d41a91759a9e4c7e359b6b89eaec68e62effffffd;
 
-    // (sqrt(-3) - 1)  / 2
-    var z1: uint;
+// (sqrt(-3) - 1)  / 2
+const z1 = 0x000000000000000059e26bcea0d48bacd4f263f1acdb5c4f5763473177fffffe;
 
-    var T24: uint;
-    var MASK24: uint;
+const T24 = 0x1000000000000000000000000000000000000000000000000;
+const MASK24 = 0xffffffffffffffffffffffffffffffffffffffffffffffff;
 
 
 
- type BLSHashedMessage = struct {
+type BLSHashedMessage = struct {
     x: uint,
     y: uint,
 }
@@ -59,20 +59,6 @@ type BLSKey = struct {
     ay: uint,
     bx: uint,
     by: uint,
-}
-
-public impure func bls_initialize() 
-{
-	N = 21888242871839275222246405745257275088696311157297823662689037894645226208583;
-	nG2x1 = 11559732032986387107991004021392285783925812861821192530917403151452391805634;
-    nG2x0 = 10857046999023057135944570762232829481370756359578518086990519993285655852781;
-    nG2y1 = 17805874995975841540914202342111839520379459829704422454583296818431106115052;
-    nG2y0 = 13392588948715843804641432497768002650278120570034223513918757245338268106653;
-    z0 = 0x0000000000000000b3c4d79d41a91759a9e4c7e359b6b89eaec68e62effffffd;
-    z1 = 0x000000000000000059e26bcea0d48bacd4f263f1acdb5c4f5763473177fffffe;
-
-    T24 = 0x1000000000000000000000000000000000000000000000000;
-    MASK24 = 0xffffffffffffffffffffffffffffffffffffffffffffffff;
 }
 
 public func bls_verifySingleSig(
@@ -132,10 +118,10 @@ public func bls_verifySignature(
                     (
                       signature.x, 
                       signature.y,
-                      nG2x0,
-                      nG2x1,
-                      nG2y0,
-                      nG2y1
+                      const::nG2x0,
+                      const::nG2x1,
+                      const::nG2y0,
+                      const::nG2y1
 
                     ),
                 );
@@ -201,7 +187,7 @@ func mapToPoint(
     {
 
 
-    if(_x >= N) {
+    if(_x >= const::N) {
     	panic;
     }
      
@@ -216,29 +202,29 @@ func mapToPoint(
     }
 
 
-    let a0 = asm(x, x, N) uint { mulmod };
+    let a0 = asm(x, x, const::N) uint { mulmod };
 
 
-    a0 = asm(a0, 4, N) uint { addmod };
+    a0 = asm(a0, 4, const::N) uint { addmod };
 
-    let a1 = asm(x, z0, N) uint { mulmod };
-    let a2 = asm(a1, a0, N) uint { mulmod };
+    let a1 = asm(x, const::z0, const::N) uint { mulmod };
+    let a2 = asm(a1, a0, const::N) uint { mulmod };
 	a2 = inverse(a2);
 
-    a1 = asm(a1, a1, N) uint { mulmod };
-    a1 = asm(a1, a2, N) uint { mulmod };
+    a1 = asm(a1, a1, const::N) uint { mulmod };
+    a1 = asm(a1, a2, const::N) uint { mulmod };
 
      // x1
 
-    a1 = asm(x, a1, N) uint { mulmod };
+    a1 = asm(x, a1, const::N) uint { mulmod };
 
-    x = asm(z1, N - a1, N) uint { addmod };
+    x = asm(const::z1, const::N - a1, const::N) uint { addmod };
 
     // check curve
 
-    a1 = asm(x, x, N) uint { mulmod };
-    a1 = asm(a1, x, N) uint { mulmod };
-    a1 = asm(a1, 3, N) uint { addmod };
+    a1 = asm(x, x, const::N) uint { mulmod };
+    a1 = asm(a1, x, const::N) uint { mulmod };
+    a1 = asm(a1, 3, const::N) uint { addmod };
 
 
     let sqrtA1 = sqrt(a1);
@@ -249,7 +235,7 @@ func mapToPoint(
          a1 = sqa1;
 
     	} else {
-    		a1 = N - sqa1;
+    		a1 = const::N - sqa1;
     	}
     	   return unsafecast<[2]uint>((x,a1));
 
@@ -257,14 +243,14 @@ func mapToPoint(
 
 
     // x2
-    x = asm(x, 1, N) uint { addmod };
-    x = N - x;
+    x = asm(x, 1, const::N) uint { addmod };
+    x = const::N - x;
 
 
     // check curve
-    a1 = asm(x, x, N) uint { mulmod };
-    a1 = asm(a1, x, N) uint { mulmod };
-    a1 = asm(a1, 3, N) uint { addmod };
+    a1 = asm(x, x, const::N) uint { mulmod };
+    a1 = asm(a1, x, const::N) uint { mulmod };
+    a1 = asm(a1, 3, const::N) uint { addmod };
 
 
     sqrtA1 = sqrt(a1);
@@ -273,23 +259,23 @@ func mapToPoint(
          a1 = sqa1;
 
     	} else {
-    		a1 = N - sqa1;
+    		a1 = const::N - sqa1;
     	}
     	  	return unsafecast<[2]uint>((x,a1));
 
     }
 
     // x3
-    x = asm(a0, a0, N) uint { mulmod };
-    x = asm(x, x, N) uint { mulmod };
-    x = asm(x, a2, N) uint { mulmod };
-    x = asm(x, a2, N) uint { mulmod };
-    x = asm(x, 1, N) uint { addmod };
+    x = asm(a0, a0, const::N) uint { mulmod };
+    x = asm(x, x, const::N) uint { mulmod };
+    x = asm(x, a2, const::N) uint { mulmod };
+    x = asm(x, a2, const::N) uint { mulmod };
+    x = asm(x, 1, const::N) uint { addmod };
 
     // must be on curve
-    a1 = asm(x, x, N) uint { mulmod };
-    a1 = asm(a1, x, N) uint { mulmod };
-    a1 = asm(a1, 3, N) uint { addmod };
+    a1 = asm(x, x, const::N) uint { mulmod };
+    a1 = asm(a1, x, const::N) uint { mulmod };
+    a1 = asm(a1, 3, const::N) uint { addmod };
 
 
     sqrtA1 = sqrt(a1);
@@ -298,7 +284,7 @@ func mapToPoint(
      if let Some(squa1) = sqrtA1 {
     	if (!found) {
 
-         a1 = N - squa1;
+         a1 = const::N - squa1;
         } else {
           a1 = squa1;
         }
@@ -316,7 +302,7 @@ func sqrt(
 	) ->option<uint> {
         let x = modexp_c191_3f52(xx);
 
-        let square = asm(x, x, N) uint { mulmod };
+        let square = asm(x, x, const::N) uint { mulmod };
         if(square == xx) {
         	return Some(x);
         } else {
@@ -345,15 +331,15 @@ func sqrt(
       let u1 = asm(64, temp1) uint { shr };
 
       temp1 = bytearray_get256(_msg,16);
-      let u0 = asm(temp1, MASK24) uint { bitwiseand };
-      temp1 =  asm(u1, T24, N) uint { mulmod };
-      let a0 = asm(temp1, u0, N) uint { addmod };
+      let u0 = asm(temp1, const::MASK24) uint { bitwiseand };
+      temp1 =  asm(u1, const::T24, const::N) uint { mulmod };
+      let a0 = asm(temp1, u0, const::N) uint { addmod };
       temp1 = bytearray_get256(_msg,40);
-      let u1 = asm(temp1, MASK24) uint { bitwiseand };
+      let u1 = asm(temp1, const::MASK24) uint { bitwiseand };
       temp1 = bytearray_get256(_msg,64);
-      u0 = asm(temp1, MASK24) uint { bitwiseand };
-      temp1 =  asm(u1, T24, N) uint { mulmod };
-      let a1 = asm(temp1, u0, N) uint { addmod };
+      u0 = asm(temp1, const::MASK24) uint { bitwiseand };
+      temp1 =  asm(u1, const::T24, const::N) uint { mulmod };
+      let a1 = asm(temp1, u0, const::N) uint { addmod };
 
     return unsafecast<[2]uint>((a0,a1));
     }
