@@ -92,6 +92,14 @@ public func queue_get(q: Queue) -> option<(Queue, any)> {
     return boundedQueue_get(q);
 }
 
+public func queue_getOrDie(q: Queue) -> (Queue, any) {
+    if let Some(res) = queue_get(q) {
+        return res;
+    } else {
+        panic;
+    }
+}
+
 type QueueStack = option<any>
 type QueueStackCell = struct {
     head: Queue,

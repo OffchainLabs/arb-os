@@ -10,6 +10,11 @@ use evmlogs::EvmLogs;
 use std::bytearray::bytearray_new;
 use std::bytearray::bytearray_marshalFull;
 
+use std::merkletree::MerkleTreeBuilder;
+use std::merkletree::merkleTreeBuilder_new;
+use std::merkletree::merkleTreeBuilder_add;
+use std::merkletree::merkleTreeBuilder_rootHash;
+
 use std::queue::queue_get;
 
 use evmlogs::evmlogs_empty;
