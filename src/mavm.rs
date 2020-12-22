@@ -411,7 +411,7 @@ impl Value {
                     }
                 }
                 Value::Int(acc)
-            },
+            }
             Value::CodePoint(cp) => Value::avm_hash2(&Value::Int(Uint256::one()), &cp.avm_hash()),
             Value::Label(label) => {
                 Value::avm_hash2(&Value::Int(Uint256::from_usize(2)), &label.avm_hash())

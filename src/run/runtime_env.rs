@@ -37,14 +37,22 @@ impl RuntimeEnvironment {
     pub fn new_options(
         chain_address: Uint256,
         sequencer_info: Option<(Uint256, Uint256, Uint256)>,
-        RuntimeEnvironment::new_with_owner(chain_address, None)
-    }
-
-    pub fn new_with_owner(chain_address: Uint256, owner: Option<Uint256>) -> Self {
+    ) -> Self {
         RuntimeEnvironment::new_with_blocknum_timestamp(
             chain_address,
             Uint256::from_u64(100_000),
             Uint256::from_u64(10_000_000),
+            sequencer_info,
+            None,
+        )
+    }
+
+    pub fn _new_with_owner(chain_address: Uint256, owner: Option<Uint256>) -> Self {
+        RuntimeEnvironment::new_with_blocknum_timestamp(
+            chain_address,
+            Uint256::from_u64(100_000),
+            Uint256::from_u64(10_000_000),
+            None,
             owner,
         )
     }
@@ -53,6 +61,7 @@ impl RuntimeEnvironment {
         chain_address: Uint256,
         blocknum: Uint256,
         timestamp: Uint256,
+        sequencer_info: Option<(Uint256, Uint256, Uint256)>,
         owner: Option<Uint256>,
     ) -> Self {
         let mut ret = RuntimeEnvironment {
@@ -76,13 +85,10 @@ impl RuntimeEnvironment {
         ret
     }
 
-    fn get_params_bytes(sequencer_info: Option<(Uint256, Uint256, Uint256)>) -> Vec<u8> {
-        ret.insert_l1_message(4, chain_address, &RuntimeEnvironment::get_params_bytes(owner));
-        ret
-    }
-
-
-    fn get_params_bytes(owner: Option<Uint256>) -> Vec<u8> {
+    fn get_params_bytes(
+        sequencer_info: Option<(Uint256, Uint256, Uint256)>,
+        owner: Option<Uint256>,
+    ) -> Vec<u8> {
         let mut buf = Vec::new();
         buf.extend(Uint256::from_u64(3 * 60 * 60 * 1000).to_bytes_be()); // grace period in ticks
         buf.extend(Uint256::from_u64(100_000_000 / 1000).to_bytes_be()); // arbgas speed limit per tick

@@ -2,8 +2,8 @@
  * Copyright 2020, Offchain Labs, Inc. All rights reserved.
  */
 
-use crate::evm::abi::{ArbSys, ArbAddressTable, ArbBLS, ArbFunctionTable, ArbosTest, _ArbOwner};
 use crate::evm::abi::FunctionTable;
+use crate::evm::abi::{ArbAddressTable, ArbBLS, ArbFunctionTable, ArbSys, ArbosTest, _ArbOwner};
 use crate::mavm::Value;
 use crate::run::{bytestack_from_bytes, load_from_file, RuntimeEnvironment};
 use crate::uint256::Uint256;
@@ -116,7 +116,7 @@ pub fn _evm_tx_with_deposit(
 
     let mut fib_contract =
         AbiForContract::new_from_file("contracts/fibonacci/build/contracts/Fibonacci.json")?;
-    if fib_contract.deploy(&[], &mut machine, Uint256::zero(), None, debug) == None {
+    if fib_contract.deploy(&[], &mut machine, Uint256::zero(), None, None, debug) == None {
         panic!("failed to deploy Fibonacci contract");
     }
 
@@ -128,6 +128,7 @@ pub fn _evm_tx_with_deposit(
         ))],
         &mut machine,
         Uint256::zero(),
+        None,
         None,
         debug,
     ) == None
@@ -154,7 +155,7 @@ pub fn _evm_tx_with_deposit(
             ethabi::Token::Address(ethabi::Address::from_low_u64_be(1025)),
             ethabi::Token::Uint(ethabi::Uint::try_from(1).unwrap()),
         ]
-            .as_ref(),
+        .as_ref(),
         &mut machine,
         Uint256::zero(),
         debug,
@@ -291,7 +292,7 @@ pub fn _evm_test_arbowner(log_to: Option<&Path>, debug: bool) -> Result<(), etha
 
     arbowner._start_arbos_upgrade(&mut machine)?;
 
-    let mcode = vec![0x90u8, 1u8, 0u8, 42u8];   // debugprint(42)
+    let mcode = vec![0x90u8, 1u8, 0u8, 42u8]; // debugprint(42)
     arbowner._continue_arbos_upgrade(&mut machine, mcode)?;
 
     arbowner._finish_arbos_upgrade(&mut machine)?;
@@ -304,7 +305,6 @@ pub fn _evm_test_arbowner(log_to: Option<&Path>, debug: bool) -> Result<(), etha
 
     Ok(())
 }
-
 
 pub fn evm_test_function_table_access(
     log_to: Option<&Path>,
