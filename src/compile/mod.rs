@@ -13,7 +13,7 @@ use lalrpop_util::lalrpop_mod;
 use mini::DeclsParser;
 use serde::{Deserialize, Serialize};
 use std::collections::hash_map::DefaultHasher;
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeMap, HashMap, HashSet};
 use std::fmt::Formatter;
 use std::fs::File;
 use std::hash::{Hash, Hasher};
@@ -21,12 +21,14 @@ use std::io::{self, Read};
 use std::path::Path;
 use symtable::SymTable;
 use typecheck::{TypeCheckedFunc, TypeCheckedNode};
+use miniconstants::init_constant_table;
 
 pub use ast::{DebugInfo, TopLevelDecl, Type};
 pub use source::Lines;
 
 mod ast;
 mod codegen;
+mod miniconstants;
 mod source;
 mod symtable;
 mod typecheck;
@@ -40,7 +42,7 @@ pub(crate) trait MiniProperties {
     fn is_pure(&self) -> bool;
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 struct Module {
     imported_funcs: Vec<ImportedFunc>,
     funcs: Vec<FuncDecl>,
@@ -240,7 +242,7 @@ impl CompiledProgram {
 /// file, and if debug is set to true, then compiler internal debug information will be printed.
 pub fn compile_from_file(
     path: &Path,
-    file_name_chart: &mut HashMap<u64, String>,
+    file_name_chart: &mut BTreeMap<u64, String>,
     _debug: bool,
     inline: bool,
 ) -> Result<Vec<CompiledProgram>, CompileError> {
@@ -294,28 +296,27 @@ pub fn compile_from_folder(
     folder: &Path,
     library: Option<&str>,
     main: &str,
-    file_name_chart: &mut HashMap<u64, String>,
+    file_name_chart: &mut BTreeMap<u64, String>,
     inline: bool,
 ) -> Result<Vec<CompiledProgram>, CompileError> {
     let (mut programs, import_map) = create_program_tree(folder, library, main, file_name_chart)?;
     for (name, imports) in &import_map {
         for import in imports {
-            let mut named_type = None;
-            let mut imp_func = None;
-            let mut imp_func_decl = None;
             let import_path = import.path.clone();
-            if let Some(program) = programs.get_mut(&import_path) {
+            let (named_type, imp_func, imp_func_decl) = if let Some(program) =
+                programs.get_mut(&import_path)
+            {
                 let index = program.string_table.get(import.name.clone());
                 let type_table = SymTable::new();
                 let type_table = type_table
                     .push_multi(program.named_types.iter().map(|(i, t)| (*i, t)).collect());
-                named_type = program
+                let named_type = program
                     .named_types
                     .get(&index)
                     .map(|t| t.resolve_types(&type_table, None))
                     .transpose()
                     .map_err(|e| CompileError::new(format!("Type error: {:?}", e), None))?;
-                imp_func = program
+                let imp_func = program
                     .func_table
                     .get(&index)
                     .map(|decl| {
@@ -323,12 +324,22 @@ pub fn compile_from_folder(
                             .map_err(|e| CompileError::new(format!("Type error: {:?}", e), None))
                     })
                     .transpose()?;
-                imp_func_decl = program
+                let imp_func_decl = program
                     .funcs
                     .iter()
                     .find(|func| func.name == index)
                     .cloned();
-            }
+                (named_type, imp_func, imp_func_decl)
+            } else {
+                return Err(CompileError::new(
+                    format!(
+                        "Internal error: Can not find target file for import \"{}::{}\"",
+                        import.path.get(0).cloned().unwrap_or_else(String::new),
+                        import.name
+                    ),
+                    None,
+                ));
+            };
             let origin_program = programs.get_mut(name).ok_or_else(|| {
                 CompileError::new(
                     format!(
@@ -492,7 +503,7 @@ fn create_program_tree(
     folder: &Path,
     library: Option<&str>,
     main: &str,
-    file_name_chart: &mut HashMap<u64, String>,
+    file_name_chart: &mut BTreeMap<u64, String>,
 ) -> Result<
     (
         HashMap<Vec<String>, Module>,
@@ -589,8 +600,9 @@ pub fn parse_from_source(
     let comment_re = regex::Regex::new(r"//.*").unwrap();
     let source = comment_re.replace_all(&source, "");
     let lines = Lines::new(source.bytes());
+    let mut constants = init_constant_table();
     DeclsParser::new()
-        .parse(string_table, &lines, file_id, file_path, &source)
+        .parse(string_table, &lines, file_id, file_path, &mut constants, &source)
         .map_err(|e| match e {
             lalrpop_util::ParseError::UnrecognizedToken {
                 token: (offset, tok, end),

@@ -358,7 +358,7 @@ pub struct ProfilerData {
     data: HashMap<String, BTreeMap<(usize, usize), u64>>,
     stack_tree: HashMap<CodePt, (Vec<ProfilerEvent>, Option<Location>)>,
     unknown_gas: u64,
-    file_name_chart: HashMap<u64, String>,
+    file_name_chart: BTreeMap<u64, String>,
 }
 
 impl ProfilerData {
@@ -369,7 +369,7 @@ impl ProfilerData {
     fn get_mut(
         &mut self,
         loc: &Option<Location>,
-        chart: &HashMap<u64, String>,
+        chart: &BTreeMap<u64, String>,
     ) -> Option<&mut u64> {
         if let Some(loc) = loc {
             let filename = chart.get(&loc.file_id)?;
@@ -388,7 +388,7 @@ impl ProfilerData {
         &mut self,
         loc: &Option<Location>,
         gas: u64,
-        chart: &HashMap<u64, String>,
+        chart: &BTreeMap<u64, String>,
     ) -> Option<u64> {
         if let Some(loc) = loc {
             let filename = match chart.get(&loc.file_id) {
@@ -673,7 +673,7 @@ pub struct Machine {
     err_codepoint: CodePt,
     arb_gas_remaining: Uint256,
     pub runtime_env: RuntimeEnvironment,
-    file_name_chart: HashMap<u64, String>,
+    file_name_chart: BTreeMap<u64, String>,
     total_gas_usage: Uint256,
     trace_writer: Option<BufWriter<File>>,
 }

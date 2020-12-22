@@ -11,6 +11,7 @@ use crate::mavm::{AVMOpcode, CodePt, Instruction, Label, Opcode, Value};
 use crate::stringtable::{StringId, StringTable};
 use serde::{Deserialize, Serialize};
 use std::collections::hash_map::{DefaultHasher, HashMap};
+use std::collections::BTreeMap;
 use std::hash::Hasher;
 use std::io;
 use std::path::Path;
@@ -31,7 +32,7 @@ pub struct LinkedProgram {
     pub static_val: Value,
     pub exported_funcs: Vec<ExportedFuncPoint>,
     pub imported_funcs: Vec<ImportedFunc>,
-    pub file_name_chart: HashMap<u64, String>,
+    pub file_name_chart: BTreeMap<u64, String>,
 }
 
 impl LinkedProgram {
@@ -86,7 +87,7 @@ impl Import {
 }
 
 ///Represents a function imported from another mini program or module.
-#[derive(Clone, Serialize, Deserialize, Debug)]
+#[derive(Clone, Serialize, Deserialize, Debug, PartialEq, Eq)]
 pub struct ImportedFunc {
     pub name_id: StringId,
     pub slot_num: usize,
@@ -200,7 +201,7 @@ pub fn postlink_compile(
     program: CompiledProgram,
     is_module: bool,
     evm_pcs: Vec<usize>, // ignored unless we're in a module
-    mut file_name_chart: HashMap<u64, String>,
+    mut file_name_chart: BTreeMap<u64, String>,
     debug: bool,
 ) -> Result<LinkedProgram, CompileError> {
     if debug {
@@ -231,22 +232,13 @@ pub fn postlink_compile(
             println!("{:04}:  {}", idx, insn);
         }
     }
-    let (code_final, jump_table_final, exported_funcs_final) = match striplabels::strip_labels(
+    let (code_final, jump_table_final, exported_funcs_final) = striplabels::strip_labels(
         code_4,
         &jump_table,
         &program.exported_funcs,
         &program.imported_funcs,
         if is_module { Some(evm_pcs) } else { None },
-    ) {
-        Ok(tup) => tup,
-        Err(label) => {
-            println!("missing label {:?}", label);
-            return Err(CompileError::new(
-                "reference to non-existent function".to_string(),
-                None,
-            ));
-        }
-    };
+    )?;
     let jump_table_value = xformcode::jump_table_to_value(jump_table_final);
 
     if debug {
@@ -287,7 +279,7 @@ pub fn add_auto_link_progs(
     let mut progs = progs_in.to_owned();
     for pathname in builtin_pathnames.into_iter() {
         let path = Path::new(pathname);
-        match compile_from_file(path, &mut HashMap::new(), false, false) {
+        match compile_from_file(path, &mut BTreeMap::new(), false, false) {
             Ok(compiled_program) => {
                 compiled_program
                     .into_iter()
@@ -358,7 +350,7 @@ pub fn link(
         );
         global_num_limit = relocated_prog.global_num_limit;
         relocated_progs.push((relocated_prog, *typecheck));
-        func_offset = new_func_offset;
+        func_offset = new_func_offset + 1;
     }
 
     // Initialize globals or allow jump table retrieval

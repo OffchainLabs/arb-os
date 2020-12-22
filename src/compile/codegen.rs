@@ -44,7 +44,7 @@ pub fn mavm_codegen(
     string_table: &StringTable,
     imported_funcs: &[ImportedFunc],
     global_vars: &[GlobalVarDecl],
-    file_name_chart: &mut HashMap<u64, String>,
+    file_name_chart: &mut BTreeMap<u64, String>,
 ) -> Result<Vec<Instruction>, CodegenError> {
     let mut import_func_map = HashMap::new();
     for imp_func in imported_funcs {
@@ -95,7 +95,7 @@ fn mavm_codegen_func(
     string_table: &StringTable,
     import_func_map: &HashMap<StringId, Label>,
     global_var_map: &HashMap<StringId, usize>,
-    file_name_chart: &mut HashMap<u64, String>,
+    file_name_chart: &mut BTreeMap<u64, String>,
 ) -> Result<(LabelGenerator, Vec<Instruction>), CodegenError> {
     let mut code = vec![];
     let debug_info = func.debug_info;
@@ -166,7 +166,7 @@ fn add_args_to_locals_table(
     string_table: &StringTable,
     import_func_map: &HashMap<StringId, Label>,
     global_var_map: &HashMap<StringId, usize>,
-    file_name_chart: &mut HashMap<u64, String>,
+    file_name_chart: &mut BTreeMap<u64, String>,
 ) -> Result<(LabelGenerator, usize, bool), CodegenError> {
     let mut locals_map = HashMap::new();
     for (index, arg) in args.iter().enumerate() {
@@ -210,7 +210,7 @@ fn mavm_codegen_statements(
     global_var_map: &HashMap<StringId, usize>,
     prepushed_vals: usize,
     scopes: &mut Vec<(String, Label, Option<Type>)>,
-    file_name_chart: &mut HashMap<u64, String>,
+    file_name_chart: &mut BTreeMap<u64, String>,
 ) -> Result<(LabelGenerator, usize, bool, HashMap<StringId, usize>), CodegenError> {
     let mut bindings = HashMap::new();
     for statement in statements {
@@ -261,7 +261,7 @@ fn mavm_codegen_statement(
     global_var_map: &HashMap<StringId, usize>,
     prepushed_vals: usize,
     scopes: &mut Vec<(String, Label, Option<Type>)>,
-    file_name_chart: &mut HashMap<u64, String>,
+    file_name_chart: &mut BTreeMap<u64, String>,
 ) -> Result<(LabelGenerator, usize, bool, HashMap<StringId, usize>), CodegenError> {
     let debug = statement.debug_info;
     let loc = statement.debug_info.location;
@@ -859,7 +859,7 @@ fn mavm_codegen_if_arm(
     global_var_map: &HashMap<StringId, usize>,
     prepushed_vals: usize,
     scopes: &mut Vec<(String, Label, Option<Type>)>,
-    file_name_chart: &mut HashMap<u64, String>,
+    file_name_chart: &mut BTreeMap<u64, String>,
 ) -> Result<(LabelGenerator, usize, bool), CodegenError> {
     // (label_gen, num_labels, execution_might_continue)
     match arm {
@@ -992,7 +992,7 @@ fn mavm_codegen_expr<'a>(
     global_var_map: &HashMap<StringId, usize>,
     prepushed_vals: usize,
     scopes: &mut Vec<(String, Label, Option<Type>)>,
-    file_name_chart: &mut HashMap<u64, String>,
+    file_name_chart: &mut BTreeMap<u64, String>,
 ) -> Result<(LabelGenerator, &'a mut Vec<Instruction>, usize), CodegenError> {
     let debug = expr.debug_info;
     let loc = expr.debug_info.location;
@@ -2023,7 +2023,7 @@ fn codegen_fixed_array_mod<'a>(
     debug_info: DebugInfo,
     prepushed_vals: usize,
     scopes: &mut Vec<(String, Label, Option<Type>)>,
-    file_name_chart: &mut HashMap<u64, String>,
+    file_name_chart: &mut BTreeMap<u64, String>,
 ) -> Result<(LabelGenerator, &'a mut Vec<Instruction>, usize), CodegenError> {
     let (label_gen, code, val_locals) = mavm_codegen_expr(
         val_expr,

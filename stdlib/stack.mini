@@ -5,8 +5,9 @@
 type Stack = option<StackCell>
 
 type StackCell = struct {
-    top: any,
-    rest: option<any>   // really option<StackCell>, but compiler doesn't support recursive types
+    top: [8]any,
+    num: uint,
+    rest: option<StackCell>
 }
 
 
@@ -15,8 +16,21 @@ public func stack_new() -> Stack {
 }
 
 public func stack_push(stack: Stack, value: any) -> Stack {
+    if let Some(cell) = unsafecast<option<StackCell>>(stack) {
+        if (cell.num < 8) {
+            return Some(
+                cell with {
+                    top: cell.top with { [cell.num] = value }
+                } with {
+                    num: 1 + cell.num
+                }
+            );
+        }
+    }
+
     return Some(struct {
-        top: value,
+        top: newfixedarray(8) with { [0] = value },
+        num: 1,
         rest: stack
     });
 }
@@ -27,8 +41,30 @@ public func stack_isEmpty(stack: Stack) -> bool {
 
 public func stack_pop(stack: Stack) -> option<(Stack, any)> {
     let cell = stack?;
-    return Some((
-        unsafecast<Stack>(cell.rest),
-        cell.top
-    ));
+    if (cell.num == 1) {
+        return Some((unsafecast<Stack>(cell.rest), cell.top[0]));
+    } else {
+        return Some((
+            Some(cell with { num: cell.num - 1 }),
+            cell.top[cell.num-1]
+        ));
+    }
+}
+
+public func stack_discardDeepestItems(stack: Stack, numToDiscard: uint) -> Stack {
+    return stack_ddi2(stack, numToDiscard).0;
+}
+
+func stack_ddi2(stack: Stack, numToDiscard: uint) -> (Stack, uint) {
+    if let Some(res) = stack_pop(stack) {
+        let (ustack, val) = res;
+        let (subStack, subNum) = stack_ddi2(ustack, numToDiscard);
+        if (subNum == 0) {
+            return (stack_push(subStack, val), 0);
+        } else {
+            return (subStack, subNum-1);
+        }
+    } else {
+        return (stack, numToDiscard);  // stack is empty
+    }
 }

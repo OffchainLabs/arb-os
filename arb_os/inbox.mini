@@ -12,6 +12,12 @@ use std::queue::queuestack_new;
 use std::queue::queuestack_push;
 use std::queue::queuestack_get;
 
+use accounts::getGlobalAccountStore;
+use accounts::setGlobalAccountStore;
+use accounts::accountStore_get;
+use accounts::accountStore_set;
+use accounts::account_addToEthBalance;
+
 use chainParameters::chainParams_gotParamsMessage;
 use chainParameters::chainParams_chainId;
 
@@ -47,28 +53,28 @@ use signedTx::translateSignedTx;
 
 
 type Inbox = struct {
-    queue: Queue,     // Queue of messages that haven't yet been retrieved from the inbox
-    blockNum: uint,   // Highest blocknum of messages that we have retrieved from the inbox
-    timestamp: uint,  // Highest timestamp of messages that we have retrieved from the inbox
-    needToPeek: bool, // true iff we should be doing an inboxpeek before inbox instruction
+    queue: IncomingRequestQueue,  // Queue of requests that haven't yet been retrieved from the inbox
+    blockNum: uint,               // Highest blocknum of messages that we have retrieved from the inbox
+    timestamp: uint,              // Highest timestamp of messages that we have retrieved from the inbox
+    needToPeek: bool,             // true iff we should be doing an inboxpeek before inbox instruction
 }
 
 var globalInbox: Inbox;
 var globalInputQueue: struct {
-    txQ: Queue,
-    batchQ: QueueStack,
+    txQ: IncomingRequestQueue,
+    batchQ: IncomingRequestQueueStack,
 };
 
 public impure func inbox_init() {
     globalInbox = struct {
-        queue: queue_new(),
+        queue: incomingRequestQueue_new(),
         blockNum: 0,
         timestamp: 0,
         needToPeek: false,   // don't peek before the first message
     };
     globalInputQueue = struct {
-        txQ: queue_new(),
-        batchQ: queuestack_new()
+        txQ: incomingRequestQueue_new(),
+        batchQ: incomingRequestQueueStack_new()
     };
 }
 
@@ -79,28 +85,20 @@ public impure func inbox_get() -> IncomingRequest {
     //       so we keep trying until we find something we can return.
 
     loop {
-        while (queue_isEmpty(globalInbox.queue)) {
+        while (incomingRequestQueue_isEmpty(globalInbox.queue)) {
             globalInbox = getFromL1Inbox(globalInbox);
         }
 
-        let (updatedQ, ret,) = queueGetOrDie(globalInbox.queue);
+        let (updatedQ, ret,) = incomingRequestQueue_getOrDie(globalInbox.queue);
         globalInbox = globalInbox with { queue: updatedQ };
         let ebMsg = unsafecast<IncomingRequest>(ret);
-        if (ebMsg.kind == 4) {
+        if (ebMsg.kind == const::L1MessageType_chainInit) {
             chainParams_gotParamsMessage(ebMsg.sender, ebMsg.msgData);
         } else {
             return ebMsg with {
                 requestId: uint(hash(bytes32(chainParams_chainId()), bytes32(ebMsg.requestId)))
             };
         }
-    }
-}
-
-func queueGetOrDie(q: Queue) -> (Queue, any) {
-    if let Some(res) = queue_get(q) {
-        return res;
-    } else {
-        panic;
     }
 }
 
@@ -112,7 +110,7 @@ impure func getFromL1Inbox(inbox: Inbox) -> Inbox {
         if ( ! sameBlockNum) {
             // peek says we hit end of L1 block, so insert end-of-block message and return
             return inbox with {
-                queue: queue_put(
+                queue: incomingRequestQueue_put(
                     inbox.queue,
                     struct {
                         kind: 6,   // special kind that is reserved for these synthetic end-of-block messages
@@ -156,8 +154,9 @@ impure func getFromL1Inbox(inbox: Inbox) -> Inbox {
             newMsg = newMsg with { timestamp: inbox.timestamp };
         }
 
+
         return inbox with {
-            queue: queue_put(inbox.queue, newMsg)
+            queue: incomingRequestQueue_put(inbox.queue, newMsg)
         } with {
             needToPeek: true
         } with {
@@ -210,19 +209,19 @@ public impure func inbox_getNextUnpackedRequest() -> (
 ) {
     let msg = unsafecast<IncomingRequest>(());   // value will be re-initialized before use
     loop {
-        if let Some(res) = queue_get(globalInputQueue.txQ) {
+        if let Some(res) = incomingRequestQueue_get(globalInputQueue.txQ) {
             let (newQ, tx) = res;
             globalInputQueue = globalInputQueue with {
                 txQ: newQ
             };
             return (None<IncomingRequest>, Some(unsafecast<TxRequestData>(tx)));
         }
-        if let Some(res) = queuestack_get(globalInputQueue.batchQ) {
-            let (newQ, rawMsg) = res;
+        if let Some(res) = incomingRequestQueueStack_get(globalInputQueue.batchQ) {
+            let (newQ, umsg) = res;
             globalInputQueue = globalInputQueue with {
                 batchQ: newQ
             };
-            msg = unsafecast<IncomingRequest>(rawMsg);
+            msg = umsg;
         } else {
             msg = inbox_get();
         }
@@ -230,51 +229,88 @@ public impure func inbox_getNextUnpackedRequest() -> (
         if let Some(batch) = messageBatch_tryNew(msg) {
             // it's a batch message, so unpack its components and queue them
             let moreToDo = true;
-            let queue = queue_new();
+            let queue = incomingRequestQueue_new();
             while (moreToDo) {
                 if let Some(res) = messageBatch_get(batch) {
                     let (newMsg, restOfBatch) = res;
-                    queue = queue_put(queue, newMsg);
+                    queue = incomingRequestQueue_put(queue, newMsg);
                     batch = restOfBatch;
                 } else {
                     moreToDo = false;
                 }
             }
             globalInputQueue = globalInputQueue with {
-                batchQ: queuestack_push(globalInputQueue.batchQ, queue)
+                batchQ: incomingRequestQueueStack_push(globalInputQueue.batchQ, queue)
             };
         } else {
             // it's not a batch, so process it immediately
             // get its maxGas amount -- for now, set the limit high, unless caller asked for less
             let maxGas = 1000000000;
-            if (msg.kind == 6) {
+            if (msg.kind == const::L1MessageType_L2FundedByL1) {
+                // the message carries an ETH deposit
+                // verify the validity of the message, process the deposit, then process the tx
+                let firstByte = bytearray_getByte(msg.msgData, 0);
+                if (firstByte == const::L2MessageType_unsignedEOATx) {
+                    let callvalue = bytearray_get256(msg.msgData, 1+4*32);
+                    let gAcctStore = getGlobalAccountStore();
+                    setGlobalAccountStore(
+                        accountStore_set(
+                            gAcctStore,
+                            msg.sender,
+                            account_addToEthBalance(accountStore_get(gAcctStore, msg.sender), callvalue)
+                        )
+                    );
+                    if let Some(txRequest) = translateUnsignedTx(msg) {
+                        return (None<IncomingRequest>, Some(txRequest));
+                    }
+                    // else request was malformatted, ignore it and execute loop again to get another
+                    //     but don't undo the deposit
+                } elseif (firstByte == const::L2MessageType_unsignedContractTx) {
+                    let callvalue = bytearray_get256(msg.msgData, 1+3*32);
+                    let gAcctStore = getGlobalAccountStore();
+                    setGlobalAccountStore(
+                        accountStore_set(
+                            gAcctStore,
+                            msg.sender,
+                            account_addToEthBalance(accountStore_get(gAcctStore, msg.sender), callvalue)
+                        )
+                    );
+                    if let Some(txRequest) = translateUnsignedTx(msg) {
+                        return (None<IncomingRequest>, Some(txRequest));
+                    }
+                    // else request was malformatted, ignore it and execute loop again to get another
+                    //     but don't undo the deposit
+                }
+                // else L2 msg type is invalid in ETH deposit message, ignore msg and execute loop again to get another
+                //      note that deposit doesn't happen in this case
+            } elseif (msg.kind == const::L1MessageType_endOfBlock) {
                 // it's an end-of-block message, so just trigger end-of-block processing
                 outputStats_endOfBlock(msg.blockNumber, msg.timestamp);
-            } elseif (msg.kind == 3) {
+            } elseif (msg.kind == const::L1MessageType_L2) {
                 // it's an L2 message, so switch based on the L2 type
                 let firstByte = bytearray_getByte(msg.msgData, 0);
-                if (firstByte == 6) {
+                if (firstByte == const::L2MessageType_heartbeat) {
                     // it's a heartbeat message, don't do anything
-                } elseif (firstByte == 4) {
+                } elseif (firstByte == const::L2MessageType_signedTx) {
                     // it's a signed tx; verify sig and then process request or discard
                     if let Some(txRequest) = translateSignedTx(msg) {
                         return (None<IncomingRequest>, Some(txRequest));
                     }
                     // else signature was invalid, ignore msg and execute loop again to get another
-                } elseif (firstByte == 7) {
+                } elseif (firstByte == const::L2MessageType_signedCompressedTx) {
                     // it's a single message with compressed headers
                     if let Some(txRequest) = decompressAndVerifyEcdsaSignedTx(msg.msgData, msg) {
                         return (None<IncomingRequest>, Some(txRequest));
                     }
                     // else signature was invalid, ignore msg and execute loop again to get another
                 } else {
-                    // subtype must be 0, 1, or 2
+                    // subtype must be unsigned EOA, unsigned contract, or nonmutating
                     if let Some(txRequest) = translateUnsignedTx(msg) {
                         return (None<IncomingRequest>, Some(txRequest));
                     }
                     // else request was malformatted, ignore it and execute loop again to get another
                 }
-            } elseif (msg.kind == 5) {
+            } elseif (msg.kind == const::L1MessageType_buddyDeploy) {
                 if let Some(txRequest) = translateBuddyDeployTx(msg) {
                     return (None<IncomingRequest>, Some(txRequest));
                 }
@@ -298,7 +334,7 @@ impure func translateUnsignedTx(request: IncomingRequest) -> option<TxRequestDat
     inStream = us;
 
     let seqNum = None<uint>;
-    if (subtype == 0) {
+    if (subtype == const::L2MessageType_unsignedEOATx) {
         let (us, sn) = bytestream_get256(inStream)?;
         inStream = us;
         seqNum = Some(sn);
@@ -312,7 +348,7 @@ impure func translateUnsignedTx(request: IncomingRequest) -> option<TxRequestDat
 
     let calldata = bytestream_getRemainingBytes(inStream);
 
-    if (subtype == 0) {
+    if (subtype == const::L2MessageType_unsignedEOATx) {
         request = request with {
             requestId: uint(hash(
                 bytes32(request.sender),
@@ -329,7 +365,7 @@ impure func translateUnsignedTx(request: IncomingRequest) -> option<TxRequestDat
             calleeAddr: address(destAddrAsUint),
             value: value,
             calldata: calldata,
-            nonMutating: (subtype == 2),
+            nonMutating: (subtype == const::L2MessageType_nonmutatingCall),
             incomingRequest: request
         }
     );
@@ -364,3 +400,51 @@ func translateBuddyDeployTx(request: IncomingRequest) -> option<TxRequestData> {
     );
 }
 
+// below are specialized queue and queuestack types, to facilitate typechecking in the code above
+// we can eliminate these if/when the Mini language supports generics
+
+type IncomingRequestQueue = struct {
+    q: Queue,
+}
+
+func incomingRequestQueue_new() -> IncomingRequestQueue {
+    return struct { q: queue_new() };
+}
+
+func incomingRequestQueue_isEmpty(q: IncomingRequestQueue) -> bool {
+    return queue_isEmpty(q.q);
+}
+
+func incomingRequestQueue_get(q: IncomingRequestQueue) -> option<(IncomingRequestQueue, IncomingRequest)> {
+    let (uq, item) = queue_get(q.q)?;
+    return Some((struct{ q: uq }, unsafecast<IncomingRequest>(item)));
+}
+
+func incomingRequestQueue_getOrDie(q: IncomingRequestQueue) -> (IncomingRequestQueue, IncomingRequest) {
+    if let Some(res) = incomingRequestQueue_get(q) {
+        return res;
+    } else {
+        panic;
+    }
+}
+
+func incomingRequestQueue_put(q: IncomingRequestQueue, req: IncomingRequest) -> IncomingRequestQueue {
+    return struct { q: queue_put(q.q, req) };
+}
+
+type IncomingRequestQueueStack = struct {
+    qs: QueueStack,
+}
+
+func incomingRequestQueueStack_new() -> IncomingRequestQueueStack {
+    return struct { qs: queuestack_new() };
+}
+
+func incomingRequestQueueStack_get(qs: IncomingRequestQueueStack) -> option<(IncomingRequestQueueStack, IncomingRequest)> {
+    let (uqs, rawMsg) = queuestack_get(qs.qs)?;
+    return Some((struct { qs: uqs }, unsafecast<IncomingRequest>(rawMsg)));
+}
+
+func incomingRequestQueueStack_push(qs: IncomingRequestQueueStack, q: IncomingRequestQueue) -> IncomingRequestQueueStack {
+    return struct { qs: queuestack_push(qs.qs, q.q) };
+}
