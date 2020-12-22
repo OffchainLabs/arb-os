@@ -276,8 +276,8 @@ impure func getFromL1InboxSequencer(inbox: Inbox, seq: SequencerState) -> Inbox 
         seq = seq with { lastTimestampSeen: timestamp };
     }
 
-    let isSequencerMsg = (newMsg.kind == 3)
-                         && (bytearray_getByte(newMsg.msgData, 0) == 5)
+    let isSequencerMsg = (newMsg.kind == const::L1MessageType_L2)
+                         && (bytearray_getByte(newMsg.msgData, 0) == const::L2MessageType_sequencerBatch)
                          && (newMsg.sender == seq.sequencerAddr);
     if (isSequencerMsg) {
         // get low-order two bytes of blockNum assigned to this message, and reconstruct that blockNum
@@ -367,7 +367,7 @@ impure func getFromL1InboxSequencer(inbox: Inbox, seq: SequencerState) -> Inbox 
 
 func endOfBlockMessage(blockNum: uint, timestamp: uint) -> IncomingRequest {
     return struct {
-        kind: 6,
+        kind: const::L1MessageType_endOfBlock,
         blockNumber: blockNum,
         timestamp: timestamp,
         sender: address(0),

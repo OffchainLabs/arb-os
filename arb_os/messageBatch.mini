@@ -47,7 +47,7 @@ public func messageBatch_tryNew(msg: IncomingRequest) -> option<MessageBatch> {
                 numSoFar: 0,
             }
         );
-    } elseif ( (msg.kind == 3) && (bytearray_getByte(msg.msgData, 0) == 5) ) {  // sequencer batch
+    } elseif ( (msg.kind == const::L1MessageType_L2) && (bytearray_getByte(msg.msgData, 0) == const::L2MessageType_sequencerBatch) ) {  // sequencer batch
         let stream = bytestream_new(msg.msgData);
         stream = bytestream_skipBytes(stream, 6)?;
         return Some(
