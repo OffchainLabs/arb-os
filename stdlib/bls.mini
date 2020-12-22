@@ -151,12 +151,12 @@ public func bls_verifySignature(
 public func hashToPoint(
   	domain: 	ByteArray,
   	message:	ByteArray
-) -> BLSHashedMessage {
+) -> option<BLSHashedMessage> {
     let u = hashToField(domain, message);
-    let p0 = mapToPoint(u[0]);
-    let p1 = mapToPoint(u[1]);
+    let p0 = mapToPoint(u[0])?;
+    let p1 = mapToPoint(u[1])?;
 
-    let x = asm(p0[0], p0[1], p1[0], p1[1]) uint { ecadd }; // check order
+    let x = asm(p0.0, p0.1, p1.0, p1.1) uint { ecadd }; // check order
     let y = asm() uint { };
 
     asm(x,) { debugprint };
@@ -164,12 +164,10 @@ public func hashToPoint(
 
     // AVM error checking
 
-    return struct { x: x, y: y };
+    return Some(struct { x: x, y: y });
 }
 
-
-
-func mapToPoint(_x:	uint) -> option<[2]uint> {
+func mapToPoint(_x:	uint) -> option<(uint, uint)> {
     if(_x >= const::N) {
     	return None;
     }
@@ -184,9 +182,7 @@ func mapToPoint(_x:	uint) -> option<[2]uint> {
     	found = true;
     }
 
-
     let a0 = asm(x, x, const::N) uint { mulmod };
-
 
     a0 = asm(a0, 4, const::N) uint { addmod };
 
@@ -209,43 +205,34 @@ func mapToPoint(_x:	uint) -> option<[2]uint> {
     a1 = asm(a1, x, const::N) uint { mulmod };
     a1 = asm(a1, 3, const::N) uint { addmod };
 
-
     let sqrtA1 = sqrt(a1);
 
     if let Some(sqa1) = sqrtA1 {
     	if (found) {
-
-         a1 = sqa1;
-
+            a1 = sqa1;
     	} else {
     		a1 = const::N - sqa1;
     	}
-    	   return Some(unsafecast<[2]uint>((x,a1)));
-
+        return Some((x,a1));
     }
-
 
     // x2
     x = asm(x, 1, const::N) uint { addmod };
     x = const::N - x;
-
 
     // check curve
     a1 = asm(x, x, const::N) uint { mulmod };
     a1 = asm(a1, x, const::N) uint { mulmod };
     a1 = asm(a1, 3, const::N) uint { addmod };
 
-
     sqrtA1 = sqrt(a1);
     if let Some(sqa1) = sqrtA1 {
     	if (found) {
-         a1 = sqa1;
-
+            a1 = sqa1;
     	} else {
     		a1 = const::N - sqa1;
     	}
-    	  	return Some(unsafecast<[2]uint>((x,a1)));
-
+    	return Some((x,a1));
     }
 
     // x3
@@ -260,72 +247,60 @@ func mapToPoint(_x:	uint) -> option<[2]uint> {
     a1 = asm(a1, x, const::N) uint { mulmod };
     a1 = asm(a1, 3, const::N) uint { addmod };
 
-
     sqrtA1 = sqrt(a1);
 
-
-     if let Some(squa1) = sqrtA1 {
+    if let Some(squa1) = sqrtA1 {
     	if (!found) {
-
-         a1 = const::N - squa1;
+            a1 = const::N - squa1;
         } else {
-          a1 = squa1;
+            a1 = squa1;
         }
-
-     } else {
+    } else {
     	return None; // BLS: bad ft mapping implementation
-     }
-    return Some(unsafecast<[2]uint>((x,a1)));
     }
 
+    return Some((x,a1));
+}
 
+func sqrt(xx: uint) ->option<uint> {
+    let x = modexp_c191_3f52(xx);
 
-func sqrt(
-	xx:    uint
-	) ->option<uint> {
-        let x = modexp_c191_3f52(xx);
-
-        let square = asm(x, x, const::N) uint { mulmod };
-        if(square == xx) {
-        	return Some(x);
-        } else {
-        	return None;
-        }
+    let square = asm(x, x, const::N) uint { mulmod };
+    if(square == xx) {
+        return Some(x);
+    } else {
+        return None;
     }
+}
 
 
- func inverse(
- 	a:	uint 
- 	)
- 	-> uint {
-        return modexp_3064_fd54(a);
-    }
+func inverse(a:	uint) -> uint {
+    return modexp_3064_fd54(a);
+}
 
 
-    // public for testing
- public func hashToField( 
-    	domain:		ByteArray,
-    	messages:	ByteArray)
-        -> [2]uint
-    {
+// public for testing
+public func hashToField(
+    domain:		ByteArray,
+    messages:	ByteArray
+) -> [2]uint {
+    let _msg = expandMsgTo96(domain, messages);
+    let temp1 = bytearray_get256(_msg,0);
+    let u1 = asm(64, temp1) uint { shr };
 
-      let _msg = expandMsgTo96(domain, messages);
-      let temp1 = bytearray_get256(_msg,0);
-      let u1 = asm(64, temp1) uint { shr };
-
-      temp1 = bytearray_get256(_msg,16);
-      let u0 = asm(temp1, const::MASK24) uint { bitwiseand };
-      temp1 =  asm(u1, const::T24, const::N) uint { mulmod };
-      let a0 = asm(temp1, u0, const::N) uint { addmod };
-      temp1 = bytearray_get256(_msg,40);
-      let u1 = asm(temp1, const::MASK24) uint { bitwiseand };
-      temp1 = bytearray_get256(_msg,64);
-      u0 = asm(temp1, const::MASK24) uint { bitwiseand };
-      temp1 =  asm(u1, const::T24, const::N) uint { mulmod };
-      let a1 = asm(temp1, u0, const::N) uint { addmod };
+    temp1 = bytearray_get256(_msg,16);
+    let u0 = asm(temp1, const::MASK24) uint { bitwiseand };
+    temp1 =  asm(u1, const::T24, const::N) uint { mulmod };
+    let a0 = asm(temp1, u0, const::N) uint { addmod };
+    temp1 = bytearray_get256(_msg,40);
+    let u1 = asm(temp1, const::MASK24) uint { bitwiseand };
+    temp1 = bytearray_get256(_msg,64);
+    u0 = asm(temp1, const::MASK24) uint { bitwiseand };
+    temp1 =  asm(u1, const::T24, const::N) uint { mulmod };
+    let a1 = asm(temp1, u0, const::N) uint { addmod };
 
     return unsafecast<[2]uint>((a0,a1));
-    }
+}
        
 
 public func expandMsgTo96(
