@@ -272,7 +272,8 @@ public func accountStore_createERC20(
         acctStore = accountStore_cloneContract(
             acctStore, 
             getErc20address(),
-            addr
+            addr,
+            true,
         )?;
         return Some(acctStore);
     } else {
@@ -291,7 +292,8 @@ public func accountStore_createERC721(
         acctStore = accountStore_cloneContract(
             acctStore,
             getErc721address(),
-            addr
+            addr,
+            true,
         )?;
         return Some(acctStore);
     } else {
@@ -303,15 +305,21 @@ public func accountStore_createERC721(
 public func accountStore_cloneContract(
     acctStore: AccountStore,
     oldAddr: address, 
-    newAddr: address
+    newAddr: address,
+    copyStorage: bool,
 ) -> option<AccountStore> {
     // Clone an existing contract.
     // Return Some(updatedAccountStore), or None if something went wrong.
     let oldAccount = accountStore_get(acctStore, oldAddr);
+    let oldContractInfo = oldAccount.contractInfo?;
     let newAccount = oldAccount
         with { ethBalance: 0 }
-        with { nextSeqNum: 1 }
-        with { contractInfo: Some((oldAccount.contractInfo?) with { storage: storageMap_new() }) };
+        with { nextSeqNum: 1 };
+    if (!copyStorage) {
+        newAccount = newAccount with {
+            contractInfo: Some(oldContractInfo with { storage: storageMap_new() })
+        };
+    }
     return Some(acctStore with { [newAddr] = newAccount });
 }
 

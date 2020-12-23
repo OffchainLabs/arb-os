@@ -10,6 +10,10 @@ use ethers_signers::Signer;
 use ethers_signers::Wallet;
 use std::{fs::File, io::Read, path::Path};
 
+pub fn builtin_contract_path(contract_name: &str) -> String {
+    format!("contracts/arbos/build/contracts/{}.json", contract_name)
+}
+
 #[derive(Debug, Clone)]
 pub struct AbiForContract {
     code_bytes: Vec<u8>,
@@ -395,7 +399,7 @@ impl AbiForContract {
 
 #[test]
 fn test_function_short_signature_correct() {
-    let abi = AbiForContract::new_from_file("contracts/add/build/contracts/ArbSys.json").unwrap();
+    let abi = AbiForContract::new_from_file(&builtin_contract_path("ArbSys")).unwrap();
     let sig = abi.short_signature_for_function("withdrawEth").unwrap();
     assert_eq!(sig, [0x25u8, 0xe1u8, 0x60u8, 0x63u8]);
 }
@@ -410,7 +414,7 @@ pub struct ArbSys<'a> {
 impl<'a> ArbSys<'a> {
     pub fn new(wallet: &'a Wallet, debug: bool) -> Self {
         let mut contract_abi =
-            AbiForContract::new_from_file("contracts/add/build/contracts/ArbSys.json").unwrap();
+            AbiForContract::new_from_file(&builtin_contract_path("ArbSys")).unwrap();
         contract_abi.bind_interface_to_address(Uint256::from_u64(100));
         ArbSys {
             contract_abi,
@@ -581,7 +585,7 @@ pub struct ArbAddressTable<'a> {
 impl<'a> ArbAddressTable<'a> {
     pub fn new(wallet: &'a Wallet, debug: bool) -> Self {
         let mut contract_abi =
-            AbiForContract::new_from_file("contracts/add/build/contracts/ArbAddressTable.json")
+            AbiForContract::new_from_file(&builtin_contract_path("ArbAddressTable"))
                 .unwrap();
         contract_abi.bind_interface_to_address(Uint256::from_u64(102));
         ArbAddressTable {
@@ -771,7 +775,7 @@ pub struct ArbBLS<'a> {
 impl<'a> ArbBLS<'a> {
     pub fn new(wallet: &'a Wallet, debug: bool) -> Self {
         let mut contract_abi =
-            AbiForContract::new_from_file("contracts/add/build/contracts/ArbBLS.json").unwrap();
+            AbiForContract::new_from_file(&builtin_contract_path("ArbBLS")).unwrap();
         contract_abi.bind_interface_to_address(Uint256::from_u64(103));
         ArbBLS {
             contract_abi,
@@ -873,7 +877,7 @@ pub struct ArbFunctionTable<'a> {
 impl<'a> ArbFunctionTable<'a> {
     pub fn new(wallet: &'a Wallet, debug: bool) -> Self {
         let mut contract_abi =
-            AbiForContract::new_from_file("contracts/add/build/contracts/ArbFunctionTable.json")
+            AbiForContract::new_from_file(&builtin_contract_path("ArbFunctionTable"))
                 .unwrap();
         contract_abi.bind_interface_to_address(Uint256::from_u64(104));
         ArbFunctionTable {
@@ -1009,7 +1013,7 @@ pub struct _ArbOwner<'a> {
 impl<'a> _ArbOwner<'a> {
     pub fn _new(wallet: &'a Wallet, debug: bool) -> Self {
         let mut contract_abi =
-            AbiForContract::new_from_file("contracts/add/build/contracts/ArbOwner.json").unwrap();
+            AbiForContract::new_from_file(&builtin_contract_path("ArbOwner")).unwrap();
         contract_abi.bind_interface_to_address(Uint256::from_u64(107));
         _ArbOwner {
             contract_abi,
@@ -1377,7 +1381,7 @@ pub struct ArbosTest {
 impl ArbosTest {
     pub fn new(debug: bool) -> Self {
         let mut contract_abi =
-            AbiForContract::new_from_file("contracts/add/build/contracts/ArbosTest.json").unwrap();
+            AbiForContract::new_from_file(&builtin_contract_path("ArbosTest")).unwrap();
         contract_abi.bind_interface_to_address(Uint256::from_u64(105));
         ArbosTest {
             contract_abi,

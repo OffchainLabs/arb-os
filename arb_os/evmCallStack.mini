@@ -1082,33 +1082,6 @@ public impure func evmCallStack_selfDestructCurrentAccount(owner: address) {
     }
 }
 
-public impure func evmCallStack_cloneContract(addr: address) -> option<address> {
-    let (seqNum, acct) = account_fetchAndIncrSeqNum(
-        evmCallStack_getAccount(addr)?
-    );
-    if ( ! evmCallStack_setAccount(addr, acct)) {
-        return None;
-    }
-
-    let newAddr = address(hash(hash(addr), hash(seqNum)));
-
-    let topFrame = globalCallStack?;
-    let acctStore = topFrame.accountStore;
-    if (addr == topFrame.runningAs) {
-        // we're touching the cached account, so copy it back into the acctStore before cloneContract
-        //     and we'll copy it back out after cloneContract
-        acctStore = accountStore_set(acctStore, topFrame.runningAs, topFrame.runningAsAccount);
-    }
-    acctStore = accountStore_cloneContract(acctStore, addr, newAddr)?;
-    if (addr == topFrame.runningAs) {
-        topFrame = topFrame with { runningAsAccount: accountStore_get(acctStore, topFrame.runningAs) };
-    }
-    topFrame = topFrame with { accountStore: acctStore };
-    globalCallStack = Some(topFrame);
-
-    return Some(newAddr);
-}
-
 public func evmCallFrame_runningAsAddress(frame: EvmCallFrame) -> address {
     return frame.runningAs;
 }
