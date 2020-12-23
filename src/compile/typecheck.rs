@@ -119,7 +119,7 @@ fn strip_returns(to_strip: &mut TypeCheckedNode, _state: &(), _mut_state: &mut (
 
 fn inline(
     to_do: &mut TypeCheckedNode,
-    state: &(&Vec<TypeCheckedFunc>, &StringTable),
+    state: &(&Vec<TypeCheckedFunc>, &Vec<ImportedFunc>, &StringTable),
     _mut_state: &mut (),
 ) -> bool {
     if let TypeCheckedNode::Statement(stat) = to_do {
@@ -131,7 +131,7 @@ fn inline(
             debug_info: _,
         } = exp
         {
-            let (mut code, block_exp) = if let TypeCheckedExpr {
+            let (code, block_exp) = if let TypeCheckedExpr {
                 kind: TypeCheckedExprKind::FuncRef(id, _),
                 debug_info: _,
             } = **name
@@ -166,19 +166,19 @@ fn inline(
                         }
                         None
                     };
-                    (code, block_exp)
+                    (Some(code), block_exp)
                 } else {
-                    println!("fail 1");
-                    (vec![], None)
+                    (None, None)
                 }
             } else {
-                println!("fail 2");
-                (vec![], None)
+                (None, None)
             };
-            for statement in code.iter_mut().rev() {
-                statement.recursive_apply(strip_returns, &(), &mut ())
+            if let Some(mut code) = code {
+                for statement in code.iter_mut().rev() {
+                    statement.recursive_apply(strip_returns, &(), &mut ())
+                }
+                exp.kind = TypeCheckedExprKind::CodeBlock(code, block_exp, Some("_inline".to_string()));
             }
-            exp.kind = TypeCheckedExprKind::CodeBlock(code, block_exp, Some("_inline".to_string()));
             false
         } else {
             true
@@ -189,8 +189,8 @@ fn inline(
 }
 
 impl TypeCheckedFunc {
-    pub fn inline(&mut self, funcs: &Vec<TypeCheckedFunc>, string_table: &StringTable) {
-        self.recursive_apply(inline, &(funcs, string_table), &mut ());
+    pub fn inline(&mut self, funcs: &Vec<TypeCheckedFunc>, imported_funcs: &Vec<ImportedFunc>, string_table: &StringTable) {
+        self.recursive_apply(inline, &(funcs, imported_funcs, string_table), &mut ());
     }
 }
 
