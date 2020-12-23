@@ -24,7 +24,7 @@ pub struct CallInfo<'a> {
     mutating: bool,
 }
 
-pub fn fib_contract_path(contract_name: &str) -> String {
+pub fn _fib_contract_path(contract_name: &str) -> String {
     format!("contracts/fibonacci/build/contracts/{}.json", contract_name)
 }
 

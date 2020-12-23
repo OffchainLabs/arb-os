@@ -534,7 +534,7 @@ pub struct _ArbInfo {
 impl _ArbInfo {
     pub fn _new(debug: bool) -> Self {
         let mut contract_abi =
-            AbiForContract::new_from_file("contracts/add/build/contracts/ArbInfo.json").unwrap();
+            AbiForContract::new_from_file(&builtin_contract_path("ArbInfo")).unwrap();
         contract_abi.bind_interface_to_address(Uint256::from_u64(101));
         _ArbInfo {
             contract_abi,
