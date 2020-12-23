@@ -34,3 +34,6 @@ keccak="0.1.0"
 bn-plus = "0.4.4"
 rust-crypto="^0.2"
 rand="0.7.3"
+
+[features]
+sparse_buffers = []

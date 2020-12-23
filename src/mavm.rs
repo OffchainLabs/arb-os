@@ -516,7 +516,6 @@ impl Buffer {
         Buffer::leaf(Rc::new(Vec::new()))
     }
 
-    #[allow(dead_code)]
     pub fn empty1() -> Rc<Vec<Buffer>> {
         let mut vec = Vec::new();
         let empty = Rc::new(Vec::new());
@@ -526,7 +525,6 @@ impl Buffer {
         Rc::new(vec)
     }
 
-    #[allow(dead_code)]
     fn make_empty(h: u8) -> Rc<Vec<Buffer>> {
         if h == 1 {
             return Buffer::empty1();
@@ -590,16 +588,17 @@ impl Buffer {
                 if needed_height(offset) > calc_height(*h) {
                     let mut vec = Vec::new();
                     vec.push(Buffer::node(cell.clone(), *h));
+                    #[cfg(feature = "sparse")]
                     for _i in 1..128 {
                         vec.push(Buffer::sparse(Rc::new(Vec::new()), Rc::new(Vec::new()), *h));
                     }
-                    /*
-                    Non sparse version
-                    let empty = Buffer::make_empty(*h);
-                    for _i in 1..128 {
-                        vec.push(Buffer::Node(Rc::clone(&empty), *h));
+                    #[cfg(not(feature = "sparse"))]
+                    {
+                        let empty = Buffer::make_empty(*h);
+                        for _i in 1..128 {
+                            vec.push(Buffer::node(Rc::clone(&empty), *h));
+                        }
                     }
-                    */
                     let buf = Buffer::node(Rc::new(vec), *h + 1);
                     return buf.set_byte(offset, v);
                 }
@@ -761,7 +760,7 @@ impl Value {
                     }
                 }
                 Value::Int(acc)
-            },
+            }
             Value::CodePoint(cp) => Value::avm_hash2(&Value::Int(Uint256::one()), &cp.avm_hash()),
             Value::Label(label) => {
                 Value::avm_hash2(&Value::Int(Uint256::from_usize(2)), &label.avm_hash())
