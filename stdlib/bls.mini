@@ -149,8 +149,7 @@ public func bls_verifySignature(
     }
 }
 
-// public for testing
-public func hashToPoint(
+public func bls_hashToPoint(
   	domain: 	ByteArray,
   	message:	ByteArray
 ) -> option<BLSHashedMessage> {

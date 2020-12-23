@@ -4,6 +4,12 @@
 
 use chainParameters::chainParams_chainId;
 
+use std::bls::BLSHashedMessage;
+use std::bls::BLSKey;
+use std::bls::BLSSignature;
+use std::bls::bls_hashToPoint;
+use std::bls::bls_verifySignature;
+
 use std::bytearray::ByteArray;
 use std::bytearray::MarshalledBytes;
 use std::bytearray::bytearray_new;
@@ -11,6 +17,7 @@ use std::bytearray::bytearray_size;
 use std::bytearray::bytearray_getByte;
 use std::bytearray::bytearray_get256;
 use std::bytearray::bytearray_setByte;
+use std::bytearray::bytearray_set256;
 use std::bytearray::bytearray_extract;
 use std::bytearray::bytearray_copy;
 use std::bytearray::bytearray_marshalFull;
@@ -20,6 +27,7 @@ use std::bytestream::bytestream_new;
 use std::bytestream::bytestream_getByte;
 use std::bytestream::bytestream_get256;
 use std::bytestream::bytestream_getN;
+use std::bytestream::bytestream_skipBytes;
 use std::bytestream::bytestream_bytesReadSoFar;
 use std::bytestream::bytestream_bytesRemaining;
 use std::bytestream::bytestream_getRemainingBytes;
@@ -42,6 +50,8 @@ use accounts::getGlobalAccountStore;
 use accounts::accountStore_get;
 use accounts::account_getNextSeqNum;
 use accounts::account_getAggregatorDecompressionState;
+use accounts::account_getBlsKey;
+
 use evmCallStack::evmCallStack_getAccount;
 use inbox::IncomingRequest;
 use messages::TxRequestData;
@@ -221,6 +231,54 @@ public impure func decompressAndVerifyEcdsaSignedTx(
             }
         }
     );
+}
+
+public impure func decompressAndVerifyBLSSignedTxBatch(
+    ba: ByteArray,
+    originalRequest: IncomingRequest,
+) -> option<[]TxRequestData> {
+    let stream = bytestream_skipBytes(bytestream_new(ba), 1)?;
+
+    let (stream, numMsgs) = rlp_decodeUint(stream)?;
+    let msgHashes = newarray<BLSHashedMessage>(numMsgs);
+    let signerKeys = newarray<BLSKey>(numMsgs);
+    let txs = newarray<TxRequestData>(numMsgs);
+
+    let (stream, sigx) = bytestream_get256(stream)?;
+    let (stream, sigy) = bytestream_get256(stream)?;
+    let aggregatedSig = struct { x: sigx, y: sigy };
+
+    let i = 0;
+    let domain = bytearray_set256(bytearray_new(0), 0, uint(hash(20201223)));
+    while(i < numMsgs) {
+        let (us, signerAddr) = decompressAddress(stream)?;
+        stream = us;
+        let (us, txSize) = rlp_decodeUint(stream)?;
+        stream = us;
+        let (us, txData) = bytestream_getN(stream, txSize)?;
+        stream = us;
+        msgHashes = msgHashes with { [i] = bls_hashToPoint(domain, txData)? };
+        signerKeys = signerKeys with {
+            [i] = account_getBlsKey(accountStore_get(getGlobalAccountStore(), signerAddr))?
+        };
+        let (us, newTx) = decompressTx(bytestream_new(txData), Some(signerAddr), None<FunctionTable>)?;
+        stream = us;
+        newTx = newTx with {
+            incomingRequest: originalRequest with {
+                requestId: uint(hash(bytes32(originalRequest.requestId), bytes32(i)))
+            } with {
+                msgData: txData
+            }
+        };
+        txs = txs with { [i] = newTx };
+        i = i+1;
+    }
+
+    bls_verifySignature(numMsgs, msgHashes, signerKeys, aggregatedSig)?;
+
+    //TODO: after merging charging code, assign L1 data costs to txs, in incomingRequests
+
+    return Some(txs);
 }
 
 impure func decompressTx(
