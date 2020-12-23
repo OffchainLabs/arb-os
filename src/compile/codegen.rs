@@ -1633,7 +1633,7 @@ fn mavm_codegen_expr<'a>(
                 vec![Type::Uint, Type::Any],
                 Box::new(array_type.clone()),
             );
-            let default_val = base_type.default_value().unwrap_or(Value::none());
+            let (default_val, _is_safe) = base_type.default_value();
             let the_expr = TypeCheckedExpr {
                 kind: TypeCheckedExprKind::FunctionCall(
                     Box::new(TypeCheckedExpr {
