@@ -65,8 +65,8 @@ impure func main() {
     inbox_init();
     accountStore_init();
     txReceipts_init();
-    if (initializeContractTemplates() == None<()>) {
-        panic;   // don't try to run without contract templates
+    if (initializePreinstalls() == None<()>) {
+        panic;   // don't try to run without preinstalls and precompiles
     }
 
     // initialize any customizations here
@@ -113,7 +113,7 @@ public impure func mainRunLoop() {
     }
 }
 
-impure func initializeContractTemplates() -> option<()> {
+impure func initializePreinstalls() -> option<()> {
     let acctStore = getGlobalAccountStore();
 
     let code = bytearray_unmarshalBytes(getErc20code())?;
