@@ -124,8 +124,7 @@ fn inline(
 ) -> bool {
     if let TypeCheckedNode::Statement(stat) = to_do {
         stat.debug_info.attributes.inline
-    }
-    else if let TypeCheckedNode::Expression(exp) = to_do {
+    } else if let TypeCheckedNode::Expression(exp) = to_do {
         if let TypeCheckedExpr {
             kind: TypeCheckedExprKind::FunctionCall(name, args, _, _),
             debug_info: _,
@@ -177,7 +176,8 @@ fn inline(
                 for statement in code.iter_mut().rev() {
                     statement.recursive_apply(strip_returns, &(), &mut ())
                 }
-                exp.kind = TypeCheckedExprKind::CodeBlock(code, block_exp, Some("_inline".to_string()));
+                exp.kind =
+                    TypeCheckedExprKind::CodeBlock(code, block_exp, Some("_inline".to_string()));
             }
             false
         } else {
@@ -189,7 +189,12 @@ fn inline(
 }
 
 impl TypeCheckedFunc {
-    pub fn inline(&mut self, funcs: &Vec<TypeCheckedFunc>, imported_funcs: &Vec<ImportedFunc>, string_table: &StringTable) {
+    pub fn inline(
+        &mut self,
+        funcs: &Vec<TypeCheckedFunc>,
+        imported_funcs: &Vec<ImportedFunc>,
+        string_table: &StringTable,
+    ) {
         self.recursive_apply(inline, &(funcs, imported_funcs, string_table), &mut ());
     }
 }

@@ -62,10 +62,13 @@ impl RuntimeEnvironment {
             recorder: RtEnvRecorder::new(),
             compressor: TxCompressor::new(),
         };
-        ret.insert_l1_message(4, chain_address, &RuntimeEnvironment::get_params_bytes(owner));
+        ret.insert_l1_message(
+            4,
+            chain_address,
+            &RuntimeEnvironment::get_params_bytes(owner),
+        );
         ret
     }
-
 
     fn get_params_bytes(owner: Option<Uint256>) -> Vec<u8> {
         let mut buf = Vec::new();

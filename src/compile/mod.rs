@@ -104,7 +104,11 @@ impl TypeCheckedModule {
     fn inline(&mut self) {
         let mut new_funcs = self.checked_funcs.clone();
         for f in &mut new_funcs {
-            f.inline(&self.checked_funcs, &self.imported_funcs, &self.string_table)
+            f.inline(
+                &self.checked_funcs,
+                &self.imported_funcs,
+                &self.string_table,
+            )
         }
         self.checked_funcs = new_funcs;
     }
@@ -599,7 +603,14 @@ pub fn parse_from_source(
     let source = comment_re.replace_all(&source, "");
     let lines = Lines::new(source.bytes());
     DeclsParser::new()
-        .parse(string_table, &lines, file_id, file_path, &mut HashMap::new(), &source)
+        .parse(
+            string_table,
+            &lines,
+            file_id,
+            file_path,
+            &mut HashMap::new(),
+            &source,
+        )
         .map_err(|e| match e {
             lalrpop_util::ParseError::UnrecognizedToken {
                 token: (offset, tok, end),

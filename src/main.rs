@@ -130,7 +130,8 @@ fn main() -> Result<(), CompileError> {
                 let mut compiled_progs = Vec::new();
                 for filename in &filenames {
                     let path = Path::new(filename);
-                    match compile_from_file(path, &mut file_name_chart, debug_mode, compile.inline) {
+                    match compile_from_file(path, &mut file_name_chart, debug_mode, compile.inline)
+                    {
                         Ok(compiled_program) => {
                             compiled_program.into_iter().for_each(|prog| {
                                 file_name_chart.extend(prog.file_name_chart.clone());
