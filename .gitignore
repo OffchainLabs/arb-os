@@ -25,5 +25,7 @@ arb_os/contractTemplates.mini
 contracts/add/yarn.lock
 contracts/arbos/yarn.lock
 contracts/add/contracts/.ArbSys.sol.swp
+contracts/arbos/yarn.lock
+contracts/arbos/contracts/.ArbSys.sol.swp
 evm-tests/.travis.yml
 evm-test-logs/*
