@@ -483,7 +483,6 @@ impl Buffer {
     }
 
     pub fn read_byte(&self, offset: usize) -> u8 {
-        // println!("read byte {}", offset);
         match &self.elem {
             BufferElem::Leaf(buf) => {
                 if offset >= buf.len() {
@@ -503,7 +502,6 @@ impl Buffer {
             BufferElem::Node(buf, h) => {
                 let len = calc_height(*h);
                 let cell_len = calc_len(*h - 1);
-                // println!("read node {} {}", offset, offset/cell_len);
                 if needed_height(offset) > len {
                     0
                 } else {
@@ -555,7 +553,6 @@ impl Buffer {
     }
 
     pub fn set_byte(&self, offset: usize, v: u8) -> Self {
-        // println!("set byte {}", offset);
         match &self.elem {
             BufferElem::Leaf(cell) => {
                 if offset >= 1024 {
@@ -583,7 +580,6 @@ impl Buffer {
                     }
                     return nbuf.set_byte(offset, v);
                 }
-                // println!("set sparse {} {}", offset, h);
                 let mut nidx = idx.to_vec().clone();
                 let mut nbuf = buf.to_vec().clone();
                 nidx.push(offset);
@@ -598,6 +594,7 @@ impl Buffer {
                         vec.push(Buffer::sparse(Rc::new(Vec::new()), Rc::new(Vec::new()), *h));
                     }
                     /*
+                    Non sparse version
                     let empty = Buffer::make_empty(*h);
                     for _i in 1..128 {
                         vec.push(Buffer::Node(Rc::clone(&empty), *h));
@@ -608,7 +605,6 @@ impl Buffer {
                 }
                 let mut vec = cell.to_vec().clone();
                 let cell_len = calc_len(*h - 1);
-                // println!("set node {} {} {} needed {} calc {}", offset, h, offset/cell_len, needed_height(offset), calc_height(*h));
                 vec[offset / cell_len] = vec[offset / cell_len].set_byte(offset % cell_len, v);
                 Buffer::node(Rc::new(vec), *h)
             }

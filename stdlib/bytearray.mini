@@ -107,10 +107,8 @@ public func bytearray_marshalFull(ba: ByteArray) -> MarshalledBytes {
             first: getbuffer256(ba.contents, 32*i),
             rest: words,
         };
-        // debug((333, 32*i, words.first));
         i = i+1;
     }
-    // debug((111, nbytes, words));
     return struct {
         nbytes: nbytes,
         contents: words,
@@ -119,7 +117,6 @@ public func bytearray_marshalFull(ba: ByteArray) -> MarshalledBytes {
 
 // bytearray_size gets the size of a ByteArray
 public func bytearray_size(ba: ByteArray) -> uint {
-    // debug((444, ba.size));
     return ba.size;
 }
 
@@ -134,19 +131,16 @@ public func bytearray_slice(ba: ByteArray) -> uint {
 // bytearray_getByte reads one byte from a ByteArray
 public func bytearray_getByte(ba: ByteArray, offset: uint) -> uint {
     if (offset >= ba.size) {
-        // debug((111,offset,0));
         return 0;
     }
     offset = offset + ba.sliceOffset;
     let res = getbuffer8(ba.contents, offset);
-    // debug((111,offset,res));
     return res;
 }
 
 // bytearray_get64 reads a chunk of 8 bytes from a ByteArray
 public func bytearray_get64(ba: ByteArray, offset: uint) -> uint {
     if (offset >= ba.size) {
-        // debug((123, 0));
         return 0;
     }
     if (offset+7 >= ba.size) {
@@ -154,14 +148,12 @@ public func bytearray_get64(ba: ByteArray, offset: uint) -> uint {
     }
     offset = offset + ba.sliceOffset;
     let res = getbuffer64(ba.contents, offset);
-    // debug((123, res));
     return res;
 }
 
 // bytearray_get256 reads a chunk of 32 bytes from a ByteArray
 public func bytearray_get256(ba: ByteArray, offset: uint) -> uint {
     if (offset >= ba.size) {
-        // debug((333,offset,0));
         return 0;
     }
     if (offset+31 >= ba.size) {
@@ -170,12 +162,10 @@ public func bytearray_get256(ba: ByteArray, offset: uint) -> uint {
         // ba = bytearray_copy(make(ba), ba.sliceOffset, bytearray_new(0), 0, ba.size);
         let diff = offset+32 - ba.size;
         let ret = ((res SHR (diff*8)) SHL (diff*8));
-        // debug((333,offset+ba.sliceOffset,ret));
         return ret;
     }
     offset = offset + ba.sliceOffset;
     let res = getbuffer256(ba.contents, offset);
-    // debug((333,offset,res));
     return res;
 }
 
@@ -199,7 +189,6 @@ public func bytearray_wrap(cont: buffer, size: uint) -> ByteArray {
 
 // bytearray_setbyte writes one byte to a ByteArray, returns the resulting ByteArray
 public func bytearray_setByte(ba: ByteArray, offset: uint, value: uint) -> ByteArray {
-    // debug((1,offset,value));
     if (offset >= ba.size) {
         if (offset >= 0x100000000000000000000000000000000) {
             return ba;    // ignore out-of-bounds write
@@ -213,7 +202,6 @@ public func bytearray_setByte(ba: ByteArray, offset: uint, value: uint) -> ByteA
 
 // bytearray_set64 writes an 8-byte chunk to a ByteArray, returning the resulting ByteArray
 public func bytearray_set64(ba: ByteArray, offset: uint, value: uint) -> ByteArray {
-    // debug((2,offset,value));
     if (offset >= 0x100000000000000000000000000000000-7) {
         return ba;    // ignore out-of-bounds write
     }
@@ -226,7 +214,6 @@ public func bytearray_set64(ba: ByteArray, offset: uint, value: uint) -> ByteArr
 
 // bytearray_set256 writes a 32-byte chunk to a ByteArray, returning the resulting ByteArray
 public func bytearray_set256(ba: ByteArray, offset: uint, value: uint) -> ByteArray {
-    // debug((3,offset,value));
     if (offset >= 0x100000000000000000000000000000000-31) {
         return ba;    // ignore out-of-bounds write
     }
@@ -253,7 +240,6 @@ public func bytearray_copy(
     }
 
     // TODO: optimize this to exploit alignment and speed up the endgame
-    // debug(nbytes);
     if (to.size < toOffset + nbytes) {
         to = to with { size: toOffset + nbytes };
     }
@@ -263,7 +249,6 @@ public func bytearray_copy(
     let fromContents = from.contents;
     while (nbytes >= 32) {
         let val = getbuffer256(fromContents, fromOffset);
-        // debug((333, fromOffset, val));
         toContents = setbuffer256(toContents, toOffset, val);
         fromOffset = 32+fromOffset;
         toOffset = 32+toOffset;
@@ -271,7 +256,6 @@ public func bytearray_copy(
     }
     while (nbytes > 0) {
         let val = getbuffer8(fromContents, fromOffset);
-        // debug((111, fromOffset, val));
         toContents = setbuffer8(toContents, toOffset, val);
         fromOffset = 1+fromOffset;
         toOffset = 1+toOffset;
@@ -287,7 +271,6 @@ public func bytearray_extract(from: ByteArray, offset: uint, nbytes: uint) -> By
     if ((nbytes >= 0x100000000000000000000000000000000) || (offset+nbytes >= 0x100000000000000000000000000000000)) {
         return bytearray_new(0);
     }
-    // return bytearray_copy(make(from), from.sliceOffset+offset, bytearray_new(0), 0, nbytes);
     
     return struct { size: nbytes, sliceOffset: offset + from.sliceOffset, contents: from.contents, copy: true };
 }

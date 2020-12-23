@@ -259,12 +259,3 @@ public impure func getNextRequestFromCongestionAuction() -> (
     let (maybeRequest, maybeTx) = inbox_getNextUnpackedRequest();
     return (true, maybeRequest, maybeTx);
 }
-
-public impure func getNextRequestFromCongestionAuctionbogus() -> (
-    bool,           // was it approved for execution
-    option<IncomingRequest>,  // if it was an L1 message
-    option<TxRequestData>,    // if it was an L2 tx message
-) {
-    let (maybeRequest, maybeTx) = inbox_getNextUnpackedRequest();
-    return (true, maybeRequest, maybeTx);
-}

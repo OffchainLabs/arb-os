@@ -171,10 +171,11 @@ impl ValueStack {
         }
     }
 
+    ///If the top `Value` on self is a buffer, pops the `Value` and returns it as a vector.
+    /// Otherwise returns an `ExecutionError`.
     pub fn pop_buffer(&mut self, state: &MachineState) -> Result<Buffer, ExecutionError> {
         let val = self.pop(state)?;
         if let Value::Buffer(v) = val {
-            // let vs = &*v;
             Ok(v.clone())
         } else {
             Err(ExecutionError::new(
@@ -370,7 +371,6 @@ enum ProfilerEvent {
 #[derive(Debug, Clone, Default)]
 pub struct ProfilerData {
     data: HashMap<String, BTreeMap<(usize, usize), u64>>,
-    instructions: Vec<u64>,
     stack_tree: HashMap<CodePt, (Vec<ProfilerEvent>, Option<Location>)>,
     unknown_gas: u64,
     file_name_chart: BTreeMap<u64, String>,
@@ -434,18 +434,6 @@ impl ProfilerData {
     ///
     /// Use exit to exit the profiler.
     pub fn profiler_session(&self) {
-        println!("Instructions");
-        let mut total_instructions = 0;
-        for i in 0..256 {
-            let x = self.instructions[i];
-            total_instructions += x;
-            if x != 0 {
-                if let Some(op) = Opcode::from_number(i) {
-                    println!("{}: {}", op, x);
-                }
-            }
-        }
-        println!("Total: {}", total_instructions);
         let mut formatted_data = BTreeMap::new();
         for (func, (events, location)) in &self.stack_tree {
             let mut callers: BTreeMap<CodePt, (u64, Option<Location>)> = BTreeMap::new();
