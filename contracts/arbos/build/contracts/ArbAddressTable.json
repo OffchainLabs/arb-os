@@ -139,15 +139,15 @@
       "type": "function"
     }
   ],
-  "metadata": "{\"compiler\":{\"version\":\"0.6.2+commit.bacdbe57\"},\"language\":\"Solidity\",\"output\":{\"abi\":[{\"inputs\":[{\"internalType\":\"address\",\"name\":\"addr\",\"type\":\"address\"}],\"name\":\"addressExists\",\"outputs\":[{\"internalType\":\"bool\",\"name\":\"\",\"type\":\"bool\"}],\"stateMutability\":\"view\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"address\",\"name\":\"addr\",\"type\":\"address\"}],\"name\":\"compress\",\"outputs\":[{\"internalType\":\"bytes\",\"name\":\"\",\"type\":\"bytes\"}],\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"bytes\",\"name\":\"buf\",\"type\":\"bytes\"},{\"internalType\":\"uint256\",\"name\":\"offset\",\"type\":\"uint256\"}],\"name\":\"decompress\",\"outputs\":[{\"internalType\":\"address\",\"name\":\"\",\"type\":\"address\"},{\"internalType\":\"uint256\",\"name\":\"\",\"type\":\"uint256\"}],\"stateMutability\":\"pure\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"address\",\"name\":\"addr\",\"type\":\"address\"}],\"name\":\"lookup\",\"outputs\":[{\"internalType\":\"uint256\",\"name\":\"\",\"type\":\"uint256\"}],\"stateMutability\":\"view\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"uint256\",\"name\":\"index\",\"type\":\"uint256\"}],\"name\":\"lookupIndex\",\"outputs\":[{\"internalType\":\"address\",\"name\":\"\",\"type\":\"address\"}],\"stateMutability\":\"view\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"address\",\"name\":\"addr\",\"type\":\"address\"}],\"name\":\"register\",\"outputs\":[{\"internalType\":\"uint256\",\"name\":\"\",\"type\":\"uint256\"}],\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"inputs\":[],\"name\":\"size\",\"outputs\":[{\"internalType\":\"uint256\",\"name\":\"\",\"type\":\"uint256\"}],\"stateMutability\":\"view\",\"type\":\"function\"}],\"devdoc\":{\"methods\":{}},\"userdoc\":{\"methods\":{}}},\"settings\":{\"compilationTarget\":{\"/Users/ed/OffchainLabs/arb-os/contracts/arbos/contracts/ArbAddressTable.sol\":\"ArbAddressTable\"},\"evmVersion\":\"istanbul\",\"libraries\":{},\"metadata\":{\"bytecodeHash\":\"ipfs\"},\"optimizer\":{\"enabled\":false,\"runs\":200},\"remappings\":[]},\"sources\":{\"/Users/ed/OffchainLabs/arb-os/contracts/arbos/contracts/ArbAddressTable.sol\":{\"keccak256\":\"0xa9f5a679baf2db46aaaf903779bead0187a8429aa50b702e1b4bd3b77291320d\",\"urls\":[\"bzz-raw://99c08efe67397bddbec26d7da4c104be9a6c429ec0717b194349778e34a69e99\",\"dweb:/ipfs/QmPTteWSgNNvT8CU8vZke5bJAKxbGGqhj2GK3CWp4YGbxt\"]}},\"version\":1}",
+  "metadata": "{\"compiler\":{\"version\":\"0.6.2+commit.bacdbe57\"},\"language\":\"Solidity\",\"output\":{\"abi\":[{\"inputs\":[{\"internalType\":\"address\",\"name\":\"addr\",\"type\":\"address\"}],\"name\":\"addressExists\",\"outputs\":[{\"internalType\":\"bool\",\"name\":\"\",\"type\":\"bool\"}],\"stateMutability\":\"view\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"address\",\"name\":\"addr\",\"type\":\"address\"}],\"name\":\"compress\",\"outputs\":[{\"internalType\":\"bytes\",\"name\":\"\",\"type\":\"bytes\"}],\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"bytes\",\"name\":\"buf\",\"type\":\"bytes\"},{\"internalType\":\"uint256\",\"name\":\"offset\",\"type\":\"uint256\"}],\"name\":\"decompress\",\"outputs\":[{\"internalType\":\"address\",\"name\":\"\",\"type\":\"address\"},{\"internalType\":\"uint256\",\"name\":\"\",\"type\":\"uint256\"}],\"stateMutability\":\"pure\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"address\",\"name\":\"addr\",\"type\":\"address\"}],\"name\":\"lookup\",\"outputs\":[{\"internalType\":\"uint256\",\"name\":\"\",\"type\":\"uint256\"}],\"stateMutability\":\"view\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"uint256\",\"name\":\"index\",\"type\":\"uint256\"}],\"name\":\"lookupIndex\",\"outputs\":[{\"internalType\":\"address\",\"name\":\"\",\"type\":\"address\"}],\"stateMutability\":\"view\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"address\",\"name\":\"addr\",\"type\":\"address\"}],\"name\":\"register\",\"outputs\":[{\"internalType\":\"uint256\",\"name\":\"\",\"type\":\"uint256\"}],\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"inputs\":[],\"name\":\"size\",\"outputs\":[{\"internalType\":\"uint256\",\"name\":\"\",\"type\":\"uint256\"}],\"stateMutability\":\"view\",\"type\":\"function\"}],\"devdoc\":{\"methods\":{}},\"userdoc\":{\"methods\":{}}},\"settings\":{\"compilationTarget\":{\"/Users/hkalodner/Github/mini-compiler/contracts/arbos/contracts/ArbAddressTable.sol\":\"ArbAddressTable\"},\"evmVersion\":\"istanbul\",\"libraries\":{},\"metadata\":{\"bytecodeHash\":\"ipfs\"},\"optimizer\":{\"enabled\":false,\"runs\":200},\"remappings\":[]},\"sources\":{\"/Users/hkalodner/Github/mini-compiler/contracts/arbos/contracts/ArbAddressTable.sol\":{\"keccak256\":\"0xa9f5a679baf2db46aaaf903779bead0187a8429aa50b702e1b4bd3b77291320d\",\"urls\":[\"bzz-raw://99c08efe67397bddbec26d7da4c104be9a6c429ec0717b194349778e34a69e99\",\"dweb:/ipfs/QmPTteWSgNNvT8CU8vZke5bJAKxbGGqhj2GK3CWp4YGbxt\"]}},\"version\":1}",
   "bytecode": "0x",
   "deployedBytecode": "0x",
   "sourceMap": "",
   "deployedSourceMap": "",
   "source": "pragma solidity >=0.4.21 <0.7.0;\n\ninterface ArbAddressTable {\n    // Register an address in the address table\n    // Return index of the address (existing index, or newly created index if not already registered)\n    function register(address addr) external returns(uint);\n\n    // Return index of an address in the address table (revert if address isn't in the table)\n    function lookup(address addr) external view returns(uint);\n\n    // Check whether an address exists in the address table\n    function addressExists(address addr) external view returns(bool);\n\n    // Get size of address table (= first unused index)\n    function size() external view returns(uint);\n\n    // Return address at a given index in address table (revert if index is beyond end of table)\n    function lookupIndex(uint index) external view returns(address);\n\n    // Read a compressed address from a bytes buffer\n    // Return resulting address and updated offset into the buffer (revert if buffer is too short)\n    function decompress(bytes calldata buf, uint offset) external pure returns(address, uint);\n\n    // Compress an address and return the result\n    function compress(address addr) external returns(bytes memory);\n}\n\n",
-  "sourcePath": "/Users/ed/OffchainLabs/arb-os/contracts/arbos/contracts/ArbAddressTable.sol",
+  "sourcePath": "/Users/hkalodner/Github/mini-compiler/contracts/arbos/contracts/ArbAddressTable.sol",
   "ast": {
-    "absolutePath": "/Users/ed/OffchainLabs/arb-os/contracts/arbos/contracts/ArbAddressTable.sol",
+    "absolutePath": "/Users/hkalodner/Github/mini-compiler/contracts/arbos/contracts/ArbAddressTable.sol",
     "exportedSymbols": {
       "ArbAddressTable": [
         168
@@ -819,7 +819,7 @@
     "src": "0:1203:1"
   },
   "legacyAST": {
-    "absolutePath": "/Users/ed/OffchainLabs/arb-os/contracts/arbos/contracts/ArbAddressTable.sol",
+    "absolutePath": "/Users/hkalodner/Github/mini-compiler/contracts/arbos/contracts/ArbAddressTable.sol",
     "exportedSymbols": {
       "ArbAddressTable": [
         168
@@ -1495,8 +1495,8 @@
     "version": "0.6.2+commit.bacdbe57.Emscripten.clang"
   },
   "networks": {},
-  "schemaVersion": "3.3.1",
-  "updatedAt": "2020-12-22T20:47:01.953Z",
+  "schemaVersion": "3.3.2",
+  "updatedAt": "2020-12-22T23:16:02.376Z",
   "devdoc": {
     "methods": {}
   },

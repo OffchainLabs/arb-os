@@ -42,15 +42,15 @@
       "type": "function"
     }
   ],
-  "metadata": "{\"compiler\":{\"version\":\"0.6.2+commit.bacdbe57\"},\"language\":\"Solidity\",\"output\":{\"abi\":[{\"inputs\":[{\"internalType\":\"bytes\",\"name\":\"marshalledCode\",\"type\":\"bytes\"}],\"name\":\"continueArbosUpgrade\",\"outputs\":[],\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"inputs\":[],\"name\":\"finishArbosUpgrade\",\"outputs\":[],\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"address\",\"name\":\"newOwnerAddr\",\"type\":\"address\"}],\"name\":\"giveOwnership\",\"outputs\":[],\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"inputs\":[],\"name\":\"startArbosUpgrade\",\"outputs\":[],\"stateMutability\":\"nonpayable\",\"type\":\"function\"}],\"devdoc\":{\"methods\":{}},\"userdoc\":{\"methods\":{}}},\"settings\":{\"compilationTarget\":{\"/Users/ed/OffchainLabs/arb-os/contracts/arbos/contracts/ArbOwner.sol\":\"ArbOwner\"},\"evmVersion\":\"istanbul\",\"libraries\":{},\"metadata\":{\"bytecodeHash\":\"ipfs\"},\"optimizer\":{\"enabled\":false,\"runs\":200},\"remappings\":[]},\"sources\":{\"/Users/ed/OffchainLabs/arb-os/contracts/arbos/contracts/ArbOwner.sol\":{\"keccak256\":\"0x962a5571f584ebcb3892629bd7e5212ff497d1761d32b031d67dcd7309561226\",\"urls\":[\"bzz-raw://296df3b3fd0d10d1b6f15b0284d3773261a46464c20688a8d1318c7d8f3d95b5\",\"dweb:/ipfs/QmTy5NyvKfm6va5QMDwj6pQPnQvU5rbfzXrU3uNGqTCJmq\"]}},\"version\":1}",
+  "metadata": "{\"compiler\":{\"version\":\"0.6.2+commit.bacdbe57\"},\"language\":\"Solidity\",\"output\":{\"abi\":[{\"inputs\":[{\"internalType\":\"bytes\",\"name\":\"marshalledCode\",\"type\":\"bytes\"}],\"name\":\"continueArbosUpgrade\",\"outputs\":[],\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"inputs\":[],\"name\":\"finishArbosUpgrade\",\"outputs\":[],\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"address\",\"name\":\"newOwnerAddr\",\"type\":\"address\"}],\"name\":\"giveOwnership\",\"outputs\":[],\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"inputs\":[],\"name\":\"startArbosUpgrade\",\"outputs\":[],\"stateMutability\":\"nonpayable\",\"type\":\"function\"}],\"devdoc\":{\"methods\":{}},\"userdoc\":{\"methods\":{}}},\"settings\":{\"compilationTarget\":{\"/Users/hkalodner/Github/mini-compiler/contracts/arbos/contracts/ArbOwner.sol\":\"ArbOwner\"},\"evmVersion\":\"istanbul\",\"libraries\":{},\"metadata\":{\"bytecodeHash\":\"ipfs\"},\"optimizer\":{\"enabled\":false,\"runs\":200},\"remappings\":[]},\"sources\":{\"/Users/hkalodner/Github/mini-compiler/contracts/arbos/contracts/ArbOwner.sol\":{\"keccak256\":\"0x962a5571f584ebcb3892629bd7e5212ff497d1761d32b031d67dcd7309561226\",\"urls\":[\"bzz-raw://296df3b3fd0d10d1b6f15b0284d3773261a46464c20688a8d1318c7d8f3d95b5\",\"dweb:/ipfs/QmTy5NyvKfm6va5QMDwj6pQPnQvU5rbfzXrU3uNGqTCJmq\"]}},\"version\":1}",
   "bytecode": "0x",
   "deployedBytecode": "0x",
   "sourceMap": "",
   "deployedSourceMap": "",
   "source": "pragma solidity >=0.4.21 <0.7.0;\n\ninterface ArbOwner {\n    // Support actions that can be taken by the chain's owner.\n    // All methods will revert, unless the caller is the chain's owner.\n\n    function giveOwnership(address newOwnerAddr) external;\n\n    // To upgrade ArbOS, the ower calls startArbosUpgrade, then calls continueArbosUpgrade one or more times to upload \n    // the code to be installed as the upgrade, then calls finishArbosUpgrade to complete the upgrade and start executing the new code.\n    function startArbosUpgrade() external;\n    function continueArbosUpgrade(bytes calldata marshalledCode) external;\n    function finishArbosUpgrade() external;\n}\n\n",
-  "sourcePath": "/Users/ed/OffchainLabs/arb-os/contracts/arbos/contracts/ArbOwner.sol",
+  "sourcePath": "/Users/hkalodner/Github/mini-compiler/contracts/arbos/contracts/ArbOwner.sol",
   "ast": {
-    "absolutePath": "/Users/ed/OffchainLabs/arb-os/contracts/arbos/contracts/ArbOwner.sol",
+    "absolutePath": "/Users/hkalodner/Github/mini-compiler/contracts/arbos/contracts/ArbOwner.sol",
     "exportedSymbols": {
       "ArbOwner": [
         463
@@ -268,7 +268,7 @@
     "src": "0:672:7"
   },
   "legacyAST": {
-    "absolutePath": "/Users/ed/OffchainLabs/arb-os/contracts/arbos/contracts/ArbOwner.sol",
+    "absolutePath": "/Users/hkalodner/Github/mini-compiler/contracts/arbos/contracts/ArbOwner.sol",
     "exportedSymbols": {
       "ArbOwner": [
         463
@@ -490,8 +490,8 @@
     "version": "0.6.2+commit.bacdbe57.Emscripten.clang"
   },
   "networks": {},
-  "schemaVersion": "3.3.1",
-  "updatedAt": "2020-12-22T20:47:01.965Z",
+  "schemaVersion": "3.3.2",
+  "updatedAt": "2020-12-22T23:16:02.421Z",
   "devdoc": {
     "methods": {}
   },
