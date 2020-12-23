@@ -18,11 +18,17 @@ use accounts::getGlobalAccountStore;
 use accounts::setGlobalAccountStore;
 use accounts::accountStore_createBuiltinContract;
 
+use std::biguint::biguint_fromBytes;
+use std::biguint::biguint_modexp;
+use std::biguint::biguint_toBytes;
+
 use std::bytearray::bytearray_new;
 use std::bytearray::bytearray_size;
 use std::bytearray::bytearray_getByte;
 use std::bytearray::bytearray_get256;
 use std::bytearray::bytearray_set256;
+use std::bytearray::bytearray_extract;
+use std::bytearray::bytearray_copy;
 
 use std::sha256::sha256_byteArray;
 use std::ripemd160::ripemd160_byteArray;
@@ -61,6 +67,12 @@ public impure func precompiles_init(acctStore: AccountStore) -> option<AccountSt
         false,
     )?;
     acctStore = accountStore_createBuiltinContract(
+        acctStore,
+        address(0x05),
+        makeTrampoline(precompile_0x05),
+        false,
+    )?;
+    acctStore = accountStore_createBuiltinContract(
     	acctStore,
         address(0x06),
         makeTrampoline(precompile_0x06),
@@ -80,37 +92,37 @@ public impure func precompiles_init(acctStore: AccountStore) -> option<AccountSt
     )?;
     acctStore = accountStore_createBuiltinContract(
         acctStore,
-        address(100),
+        address(const::Address_ArbSys),
         makeTrampoline(arbsys_txcall),
         true,
     )?;
     acctStore = accountStore_createBuiltinContract(
         acctStore,
-        address(105),
+        address(const::Address_ArbosTest),
         makeTrampoline(arbosTest_txcall),
         true,
     )?;
     acctStore = accountStore_createBuiltinContract(
         acctStore,
-        address(102),
+        address(const::Address_ArbAddressTable),
         makeTrampoline(arbAddressTable_txcall),
         true,
     )?;
     acctStore = accountStore_createBuiltinContract(
         acctStore,
-        address(103),
+        address(const::Address_ArbBLS),
         makeTrampoline(arbBLS_txcall),
         true,
     )?;
     acctStore = accountStore_createBuiltinContract(
         acctStore,
-        address(104),
+        address(const::Address_ArbFunctionTable),
         makeTrampoline(arbFunctionTable_txcall),
         true,
     )?;
     acctStore = accountStore_createBuiltinContract(
         acctStore,
-        address(107),
+        address(const::Address_ArbOwner),
         makeTrampoline(arbowner_txcall),
         true,
     )?;
@@ -120,10 +132,10 @@ public impure func precompiles_init(acctStore: AccountStore) -> option<AccountSt
 impure func makeTrampoline(txcallFunc: impure func()) -> impure func() {
     // make a small code snippet that function-calls to txcallFunc (with a dummy return address)
     return asm(
-        0x3b,
+        const::AVM_nop,
         0,
         asm(
-            0x34,
+            const::AVM_jump,
             txcallFunc,
             asm() func() { errcodept }
         ) func() { pushinsnimm }
@@ -196,12 +208,57 @@ public impure func precompile_0x04() {  // identity function
     evmOp_revert_knownPc(0, 0, 0);
 }
 
+public impure func precompile_0x05() {  // modexp
+    if let Some(topFrame) = evmCallStack_topFrame() {
+        let calldata = evmCallFrame_getCalldata(topFrame);
+
+        let baseLen = bytearray_get256(calldata, 0);
+        let expLen = bytearray_get256(calldata, 32);
+        let modLen = bytearray_get256(calldata, 64);
+
+        let base = bytearray_extract(calldata, 96, baseLen);
+        let exp = bytearray_extract(calldata, 96+baseLen, expLen);
+        let mod = bytearray_extract(calldata, 96+baseLen+expLen, modLen);
+
+        if let Some(result) = biguint_modexp(
+            biguint_fromBytes(base),
+            biguint_fromBytes(exp),
+            biguint_fromBytes(mod),
+        ) {
+            let mem = biguint_toBytes(result);
+            let memSize = bytearray_size(mem);
+            if (memSize > modLen) {
+                mem = bytearray_extract(mem, memSize-modLen, modLen);
+            } elseif (memSize < modLen) {
+                mem = bytearray_copy(   // pad result with leading zeroes up to size of modLen
+                    mem,
+                    0,
+                    bytearray_new(0),
+                    modLen-memSize,
+                    memSize
+                );
+            }
+            if (evmCallStack_setTopFrameMemory(mem)) {
+                evmOp_return(0, modLen);
+            } else {
+                evmOp_revert_knownPc(0, 0, 0);
+            }
+        } else {
+            // modulus was zero, so we return zero
+            if (evmCallStack_setTopFrameMemory(bytearray_new(0))) {
+                evmOp_return(0, modLen);
+            } else {
+                evmOp_revert_knownPc(1, 0, 0);
+            }
+        }
+    }
+
+    evmOp_revert_knownPc(2, 0, 0);
+}
+
 public impure func precompile_0x06() {  // ecadd
     if let Some(topFrame) = evmCallStack_topFrame() {
         let calldata = evmCallFrame_getCalldata(topFrame);
-        if (bytearray_size(calldata) != 4*32) {
-            evmOp_revert_knownPc(0, 0, 0);
-        }
         let x0 = bytearray_get256(calldata, 0);
         let x1 = bytearray_get256(calldata, 32);
         let y0 = bytearray_get256(calldata, 2*32);
@@ -232,9 +289,6 @@ public impure func precompile_0x06() {  // ecadd
 public impure func precompile_0x07() {  // ecmul
     if let Some(topFrame) = evmCallStack_topFrame() {
         let calldata = evmCallFrame_getCalldata(topFrame);
-        if (bytearray_size(calldata) != 3*32) {
-            evmOp_revert_knownPc(0, 0, 0);
-        }
         let x0 = bytearray_get256(calldata, 0);
         let x1 = bytearray_get256(calldata, 32);
         let n = bytearray_get256(calldata, 2*32);

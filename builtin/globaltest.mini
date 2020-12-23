@@ -125,6 +125,15 @@ impure func tests() -> uint {
         return 22;
     }
 
+    let a = -int(1);
+    let b = int(0);
+    if (b < a) {
+        return 23;
+    }
+    if (a >= b) {
+        return 24;
+    }
+
     return struct9test();
 }
 

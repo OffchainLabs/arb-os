@@ -64,8 +64,8 @@ impure func main() {
     inbox_init();
     accountStore_init();
     txReceipts_init();
-    if (initializeContractTemplates() == None<()>) {
-        panic;   // don't try to run without contract templates
+    if (initializePreinstalls() == None<()>) {
+        panic;   // don't try to run without preinstalls and precompiles
     }
 
     // initialize any customizations here
@@ -98,7 +98,13 @@ public impure func mainRunLoop() {
                     }
                 } else {
                     // reject for congestion error
-                    emitTxReceipt(request.incomingRequest, 2, None<ByteArray>, None<EvmLogs>, None<GasUsage>);
+                    emitTxReceipt(
+                        request.incomingRequest,
+                        const::TxResultCode_congestion,
+                        None<ByteArray>,
+                        None<EvmLogs>,
+                        None<GasUsage>
+                    );
                 }
             } // else request was not identified as either L1 or L2, which should be impossible
         }
@@ -106,7 +112,7 @@ public impure func mainRunLoop() {
     }
 }
 
-impure func initializeContractTemplates() -> option<()> {
+impure func initializePreinstalls() -> option<()> {
     let acctStore = getGlobalAccountStore();
 
     let code = bytearray_unmarshalBytes(getErc20code())?;

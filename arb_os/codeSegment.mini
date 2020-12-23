@@ -68,51 +68,6 @@ use evmOps::evmOp_timestamp;
 use evmOps::evmOp_create;
 use evmOps::evmOp_create2;
 
-const opNum_stop = 0;
-const opNum_sha3 = 1;
-const opNum_address = 2;
-const opNum_balance = 3;
-const opNum_selfbalance = 4;
-const opNum_origin = 5;
-const opNum_caller = 6;
-const opNum_callvalue = 7;
-const opNum_calldataload = 8;
-const opNum_calldatasize = 9;
-const opNum_calldatacopy = 10;
-const opNum_codesize = 11;
-const opNum_codecopy = 12;
-const opNum_extcodesize = 13;
-const opNum_extcodecopy = 14;
-const opNum_extcodehash = 15;
-const opNum_returndatasize = 16;
-const opNum_returndatacopy = 17;
-const opNum_timestamp = 18;
-const opNum_number = 19;
-const opNum_msize = 20;
-const opNum_mload = 21;
-const opNum_mstore = 22;
-const opNum_mstore8 = 23;
-const opNum_sload = 24;
-const opNum_sstore = 25;
-const opNum_getjumpaddr = 26;
-const opNum_msize = 27;
-const opNum_log0 = 28;
-const opNum_log1 = 29;
-const opNum_log2 = 30;
-const opNum_log3 = 31;
-const opNum_log4 = 32;
-const opNum_call = 33;
-const opNum_callcode = 34;
-const opNum_delegatecall = 35;
-const opNum_staticcall = 36;
-const opNum_revert = 37;
-const opNum_revert_knownPc = 38;
-const opNum_return = 39;
-const opNum_selfdestruct = 40;
-const opNum_create = 41;
-const opNum_create2 = 42;
-const opNum_chainId = 43;
-
 
 // An AVM CodePoint, that is, a place that AVM code can jump to, is represented as a func()
 type AvmCodePoint = impure func()
@@ -129,7 +84,7 @@ impure func pushInstructionImm(opcode: uint, val: any, restOfCode: AvmCodePoint)
 
 impure func pushValue(val: any, restOfCode: AvmCodePoint) -> AvmCodePoint {
     // Push a noop (with immediate value) onto the beginning of a code segment, and return the resulting CodePoint.
-    return asm(0x3b, val, restOfCode) AvmCodePoint { pushinsnimm };
+    return asm(const::AVM_nop, val, restOfCode) AvmCodePoint { pushinsnimm };
 }
 
 public impure func pcTableForCode(code: ByteArray) -> option<Stack> {
@@ -246,7 +201,7 @@ impure func generateCodeForEvmSegment(
     makePcTable: bool,
 ) -> (AvmCodePoint, map<uint, AvmCodePoint>, Stack) {
     let code = pushEvmInsnCall(
-        constval(opNum_stop),
+        const::EvmOp_stop,
         asm() AvmCodePoint { errcodept },
     );
     let evmJumpTable = newmap<uint, AvmCodePoint>;
@@ -264,13 +219,13 @@ impure func generateCodeForEvmSegment(
                         if (opcode < 0x10) {
                             if (opcode < 0x04) {
                                 if (opcode == 0x00) { // STOP
-                                    code = pushEvmInsnCall(constval(opNum_stop), code);
+                                    code = pushEvmInsnCall(const::EvmOp_stop, code);
                                 } elseif (opcode == 0x01) { // ADD
-                                    code = pushInstruction(0x01, code);
+                                    code = pushInstruction(const::AVM_add, code);
                                 } elseif (opcode == 0x02) { // MUL
-                                    code = pushInstruction(0x02, code);
+                                    code = pushInstruction(const::AVM_mul, code);
                                 } elseif (opcode == 0x03) { // SUB
-                                    code = pushInstruction(0x03, code);
+                                    code = pushInstruction(const::AVM_sub, code);
                                 } else {
                                     invalidInstruction = true;
                                 }
@@ -280,9 +235,9 @@ impure func generateCodeForEvmSegment(
                                 } elseif ( (opcode >= 0x08) && (opcode <= 0x09) ) { // ADDMOD, MULMOD
                                     code = pushEvmInsnDenomCheck(opcode, 3, code);
                                 } elseif (opcode == 0x0a) { // EXP
-                                    code = pushInstruction(0x0a, code);
+                                    code = pushInstruction(const::AVM_exp, code);
                                 } elseif (opcode == 0x0b) { // SIGNEXTEND
-                                    code = pushInstruction(0x0b, code);
+                                    code = pushInstruction(const::AVM_signextend, code);
                                 } else {
                                     invalidInstruction = true;
                                 }
@@ -291,11 +246,11 @@ impure func generateCodeForEvmSegment(
                             if ( (opcode >= 0x10) && (opcode <= 0x1a) ) {
                                 code = pushInstruction(opcode, code);
                             } elseif (opcode == 0x1b) { // SHL
-                                code = pushInstruction(0x1b, code);
+                                code = pushInstruction(const::AVM_shl, code);
                             } elseif (opcode == 0x1c) { // SHR
-                                code = pushInstruction(0x1c, code);
+                                code = pushInstruction(const::AVM_shr, code);
                             } elseif (opcode == 0x1d) { // SAR
-                                code = pushInstruction(0x1d, code);
+                                code = pushInstruction(const::AVM_sar, code);
                             } else {
                                 invalidInstruction = true;
                             }
@@ -304,25 +259,25 @@ impure func generateCodeForEvmSegment(
                         if (opcode < 0x37 ) {
                             if (opcode < 0x33) {
                                 if (opcode == 0x20) { // SHA3
-                                    code = pushEvmInsnCall(constval(opNum_sha3), code);
+                                    code = pushEvmInsnCall(const::EvmOp_sha3, code);
                                 } elseif (opcode == 0x30) { // ADDRESS
-                                    code = pushEvmInsnCall(constval(opNum_address), code);
+                                    code = pushEvmInsnCall(const::EvmOp_address, code);
                                 } elseif (opcode == 0x31) { // BALANCE
-                                    code = pushEvmInsnCall(constval(opNum_balance), code);
+                                    code = pushEvmInsnCall(const::EvmOp_balance, code);
                                 } elseif (opcode == 0x32) { // ORIGIN
-                                    code = pushEvmInsnCall(constval(opNum_origin), code);
+                                    code = pushEvmInsnCall(const::EvmOp_origin, code);
                                 } else {
                                     invalidInstruction = true;
                                 }
                             } else {
                                 if (opcode == 0x33) { // CALLER
-                                    code = pushEvmInsnCall(constval(opNum_caller), code);
+                                    code = pushEvmInsnCall(const::EvmOp_caller, code);
                                 } elseif (opcode == 0x34) { // CALLVALUE
-                                    code = pushEvmInsnCall(constval(opNum_callvalue), code);
+                                    code = pushEvmInsnCall(const::EvmOp_callvalue, code);
                                 } elseif (opcode == 0x35) { // CALLDATALOAD
-                                    code = pushEvmInsnCall(constval(opNum_calldataload), code);
+                                    code = pushEvmInsnCall(const::EvmOp_calldataload, code);
                                 } elseif (opcode == 0x36) { // CALLDATASIZE
-                                    code = pushEvmInsnCall(constval(opNum_calldatasize), code);
+                                    code = pushEvmInsnCall(const::EvmOp_calldatasize, code);
                                 } else {
                                     invalidInstruction = true;
                                 }
@@ -330,11 +285,11 @@ impure func generateCodeForEvmSegment(
                         } else {
                             if (opcode < 0x3b) {
                                 if (opcode == 0x37) { // CALLDATACOPY
-                                    code = pushEvmInsnCall(constval(opNum_calldatacopy), code);
+                                    code = pushEvmInsnCall(const::EvmOp_calldatacopy, code);
                                 } elseif (opcode == 0x38) { // CODESIZE
-                                    code = pushEvmInsnCall(constval(opNum_codesize), code);
+                                    code = pushEvmInsnCall(const::EvmOp_codesize, code);
                                 } elseif (opcode == 0x39) { // CODECOPY
-                                    code = pushEvmInsnCall(constval(opNum_codecopy), code);
+                                    code = pushEvmInsnCall(const::EvmOp_codecopy, code);
                                 } elseif (opcode == 0x3a) { // GASPRICE
                                     code = pushValue(1, code);
                                 } else {
@@ -342,15 +297,15 @@ impure func generateCodeForEvmSegment(
                                 }
                             } else {
                                 if (opcode == 0x3b) { // EXTCODESIZE
-                                    code = pushEvmInsnCall(constval(opNum_extcodesize), code);
+                                    code = pushEvmInsnCall(const::EvmOp_extcodesize, code);
                                 } elseif (opcode == 0x3c) { // EXTCODECOPY
-                                    code = pushEvmInsnCall(constval(opNum_extcodecopy), code);
+                                    code = pushEvmInsnCall(const::EvmOp_extcodecopy, code);
                                 } elseif (opcode == 0x3d) { // RETURNDATASIZE
-                                    code = pushEvmInsnCall(constval(opNum_returndatasize), code);
+                                    code = pushEvmInsnCall(const::EvmOp_returndatasize, code);
                                 } elseif (opcode == 0x3e) { // RETURNDATACOPY
-                                    code = pushEvmInsnCall(constval(opNum_returndatacopy), code);
+                                    code = pushEvmInsnCall(const::EvmOp_returndatacopy, code);
                                 } elseif (opcode == 0x3f) { // EXTCODEHASH
-                                    code = pushEvmInsnCall(constval(opNum_extcodehash), code);
+                                    code = pushEvmInsnCall(const::EvmOp_extcodehash, code);
                                 } else {
                                     invalidInstruction = true;
                                 }
@@ -363,19 +318,19 @@ impure func generateCodeForEvmSegment(
                             if (opcode < 0x43) {
                                 if (opcode == 0x40) { // BLOCKHASH
                                     code = pushInstruction(
-                                        0x30,  // pop
+                                        const::AVM_pop,
                                         pushValue(0, code),
                                     );
                                 } elseif (opcode == 0x41) { // COINBASE
                                     code = pushValue(0, code);
                                 } elseif (opcode == 0x42) { // TIMESTAMP
-                                    code = pushEvmInsnCall(constval(opNum_timestamp), code);
+                                    code = pushEvmInsnCall(const::EvmOp_timestamp, code);
                                 } else {
                                     invalidInstruction = true;
                                 }
                             } else {
                                 if (opcode == 0x43) { // NUMBER
-                                    code = pushEvmInsnCall(constval(opNum_number), code);
+                                    code = pushEvmInsnCall(const::EvmOp_number, code);
                                 } elseif (opcode == 0x44) { // DIFFICULTY
                                      code = pushValue(2500000000000000, code);
                                 } else {
@@ -386,15 +341,15 @@ impure func generateCodeForEvmSegment(
                             if (opcode == 0x45) { // GASLIMIT
                                 code = pushValue(10000000000, code);
                             } elseif (opcode == 0x46) { // CHAINID
-                                code = pushEvmInsnCall(constval(opNum_chainId), code);
+                                code = pushEvmInsnCall(const::EvmOp_chainId, code);
                             } elseif (opcode == 0x47) { // SELFBALANCE
-                                code = pushEvmInsnCall(constval(opNum_selfbalance), code);
+                                code = pushEvmInsnCall(const::EvmOp_selfbalance, code);
                             } elseif (opcode == 0x50) { // POP
-                                code = pushInstruction(0x30, code); // pop
+                                code = pushInstruction(const::AVM_pop, code);
                             } elseif (opcode == 0x51) { // MLOAD
-                                code = pushEvmInsnCall(constval(opNum_mload), code);
+                                code = pushEvmInsnCall(const::EvmOp_mload, code);
                             } elseif (opcode == 0x52) { // MSTORE
-                                code = pushEvmInsnCall(constval(opNum_mstore), code);
+                                code = pushEvmInsnCall(const::EvmOp_mstore, code);
                             } else {
                                 invalidInstruction = true;
                             }
@@ -403,34 +358,34 @@ impure func generateCodeForEvmSegment(
                         if (opcode < 0x58) {
                             if (opcode < 0x56) {
                                 if (opcode == 0x53) { // MSTORE8
-                                    code = pushEvmInsnCall(constval(opNum_mstore8), code);
+                                    code = pushEvmInsnCall(const::EvmOp_mstore8, code);
                                 } elseif (opcode == 0x54) { // SLOAD
-                                    code = pushEvmInsnCall(constval(opNum_sload), code);
+                                    code = pushEvmInsnCall(const::EvmOp_sload, code);
                                 } elseif (opcode == 0x55) { // SSTORE
-                                    code = pushEvmInsnCall(constval(opNum_sstore), code);
+                                    code = pushEvmInsnCall(const::EvmOp_sstore, code);
                                 } else {
                                     invalidInstruction = true;
                                 }
                             } else {
                                 if (opcode == 0x56) { // JUMP
                                     code = pushEvmInsnCall(
-                                        constval(opNum_getjumpaddr),
-                                        pushInstruction(0x34, code), // jump
+                                        const::EvmOp_getjumpaddr,
+                                        pushInstruction(const::AVM_jump, code),
                                     );
                                 } elseif (opcode == 0x57) { // JUMPI
                                     let doJump = pushEvmInsnCall(
-                                        constval(opNum_getjumpaddr),
-                                        pushInstruction(0x34, code), // jump
+                                        const::EvmOp_getjumpaddr,
+                                        pushInstruction(const::AVM_jump, code),
                                     );
                                     code = pushInstruction(
-                                        0x43,  // swap1
+                                        const::AVM_swap1,
                                         pushInstructionImm(
-                                            0x35, // cjump
+                                            const::AVM_cjump,
                                             doJump,
                                             pushInstruction(
-                                                0x30, // pop
+                                                const::AVM_pop,
                                                 pushInstructionImm(
-                                                    0x34,  // jump
+                                                    const::AVM_jump,
                                                     code,
                                                     doJump,
                                                 )
@@ -445,9 +400,9 @@ impure func generateCodeForEvmSegment(
                             if (opcode == 0x58) {  // GETPC
                                 code = pushValue(insn.pc, code);
                             } elseif (opcode == 0x59) { // MSIZE
-                                code = pushEvmInsnCall(constval(opNum_msize), code);
+                                code = pushEvmInsnCall(const::EvmOp_msize, code);
                             } elseif (opcode == 0x5a) { // GAS
-                                code = pushInstruction(0x76, code);
+                                code = pushInstruction(const::AVM_pushgas, code);
                             } elseif (opcode == 0x5b) { // JUMPDEST
                                 evmJumpTable = evmJumpTable with { [insn.pc] = code };
                             } else {
@@ -469,11 +424,11 @@ impure func generateCodeForEvmSegment(
                     if (opcode < 0xa0) {
                         if (opcode < 0x90) {
                             if (opcode == 0x80) {  // DUP1 -- note that DUPn in EVM corresponds to DUP(n-1) in AvmCodePoint
-                                code = pushInstruction(0x40, code);  // dup0
+                                code = pushInstruction(const::AVM_dup0, code);
                             } elseif (opcode == 0x81) {  // DUP2
-                                code = pushInstruction(0x41, code);  // dup1
+                                code = pushInstruction(const::AVM_dup1, code);
                             } elseif (opcode == 0x82) {  // DUP3
-                                code = pushInstruction(0x42, code);  // DUP2
+                                code = pushInstruction(const::AVM_dup2, code);
                             } elseif ( (opcode >= 0x83) && (opcode <= 0x8f) ) {
                                 code = pushDupn(opcode-0x80, code);
                             } else {
@@ -481,9 +436,9 @@ impure func generateCodeForEvmSegment(
                             }
                         } else {
                             if (opcode == 0x90) {  // SWAP1
-                                code = pushInstruction(0x43, code);  // swap1
+                                code = pushInstruction(const::AVM_swap1, code);
                             } elseif (opcode == 0x91) {  // SWAP2
-                                code = pushInstruction(0x44, code);  // swap2
+                                code = pushInstruction(const::AVM_swap2, code);
                             } elseif ( (opcode >= 0x92) && (opcode <= 0x9f) ) {
                                 code = pushSwapn(opcode-0x8f, code);
                             } else {
@@ -493,19 +448,19 @@ impure func generateCodeForEvmSegment(
                     } else {
                         if (opcode < 0xa3) {
                             if (opcode == 0xa0) { // LOG0
-                                code = pushEvmInsnCall(constval(opNum_log0), code);
+                                code = pushEvmInsnCall(const::EvmOp_log0, code);
                             } elseif (opcode == 0xa1) { // LOG1
-                                code = pushEvmInsnCall(constval(opNum_log1), code);
+                                code = pushEvmInsnCall(const::EvmOp_log1, code);
                             } elseif (opcode == 0xa2) { // LOG2
-                                code = pushEvmInsnCall(constval(opNum_log2), code);
+                                code = pushEvmInsnCall(const::EvmOp_log2, code);
                             } else {
                                 invalidInstruction = true;
                             }
                         } else {
                             if (opcode == 0xa3) { // LOG3
-                                code = pushEvmInsnCall(constval(opNum_log3), code);
+                                code = pushEvmInsnCall(const::EvmOp_log3, code);
                             } elseif (opcode == 0xa4) { // LOG0
-                                code = pushEvmInsnCall(constval(opNum_log4), code);
+                                code = pushEvmInsnCall(const::EvmOp_log4, code);
                             } else {
                                 invalidInstruction = true;
                             }
@@ -514,22 +469,22 @@ impure func generateCodeForEvmSegment(
                 } else {
                     if (opcode < 0xf4) {
                         if (opcode == 0xf0) {  // CREATE
-                            code = pushEvmInsnCall(constval(opNum_create), code);
+                            code = pushEvmInsnCall(const::EvmOp_create, code);
                         } elseif (opcode == 0xf1) { // CALL
-                            code = pushEvmInsnCall(constval(opNum_call), code);
+                            code = pushEvmInsnCall(const::EvmOp_call, code);
                         } elseif (opcode == 0xf2) { // CALLCODE
-                            code = pushEvmInsnCall(constval(opNum_callcode), code);
+                            code = pushEvmInsnCall(const::EvmOp_callcode, code);
                         } elseif (opcode == 0xf3) { // RETURN
-                            code = pushEvmInsnCall(constval(opNum_return), code);
+                            code = pushEvmInsnCall(const::EvmOp_return, code);
                         }
                     } else {
                         if (opcode < 0xfc) {
                             if (opcode == 0xf4) { // DELEGATECALL
-                                code = pushEvmInsnCall(constval(opNum_delegatecall), code);
+                                code = pushEvmInsnCall(const::EvmOp_delegatecall, code);
                             } elseif (opcode == 0xf5) {  // CREATE2
-                                code = pushEvmInsnCall(constval(opNum_create2), code);
+                                code = pushEvmInsnCall(const::EvmOp_create2, code);
                             } elseif (opcode == 0xfa) { // STATICCALL
-                                code = pushEvmInsnCall(constval(opNum_staticcall), code);
+                                code = pushEvmInsnCall(const::EvmOp_staticcall, code);
                             } else {
                                 invalidInstruction = true;
                             }
@@ -537,10 +492,10 @@ impure func generateCodeForEvmSegment(
                             if (opcode == 0xfd) { // REVERT
                                 code = pushValue(
                                     insn.pc,
-                                    pushEvmInsnCall(constval(opNum_revert_knownPc), code)
+                                    pushEvmInsnCall(const::EvmOp_revert_knownPc, code)
                                 );
                             } elseif (opcode == 0xff) { // SELFDESTRUCT
-                                code = pushEvmInsnCall(constval(opNum_selfdestruct), code);
+                                code = pushEvmInsnCall(const::EvmOp_selfdestruct, code);
                             } else {
                                 invalidInstruction = true;
                             }
@@ -555,7 +510,7 @@ impure func generateCodeForEvmSegment(
                         0,
                         pushValue(
                             insn.pc,
-                            pushEvmInsnCall(constval(opNum_revert_knownPc), code)
+                            pushEvmInsnCall(const::EvmOp_revert_knownPc, code)
                         )
                     )
                 );
@@ -588,14 +543,14 @@ impure func pushEvmInsnDenomCheck(
     return pushDupn(
         numStackOperands-1,  // dup denominator/modulus to top of stack
         pushInstructionImm(
-            0x35,  // cjump
+            const::AVM_cjump,
             doTheOp,
             prependPops(
                 numStackOperands,
                 pushValue(
                     0,
                     pushInstructionImm(
-                        0x34, // jump
+                        const::AVM_jump,
                         restOfCode,
                         doTheOp
                     )
@@ -607,7 +562,7 @@ impure func pushEvmInsnDenomCheck(
 
 impure func prependPops(numPops: uint, restOfCode: AvmCodePoint) -> AvmCodePoint {
     while (numPops > 0) {
-        restOfCode = pushInstruction(0x30, restOfCode);   // pop instruction
+        restOfCode = pushInstruction(const::AVM_pop, restOfCode);
         numPops = numPops-1;
     }
     return restOfCode;
@@ -624,13 +579,13 @@ impure func pushDupn(
         return pushInstruction(0x40+n, restOfCode);  //dup_n
     } else {
         return pushInstruction(
-            0x38,  // auxpush,
+            const::AVM_auxpush,
             pushDupn(
                 n-1,
                 pushInstruction(
-                    0x39,  // auxpop
+                    const::AVM_auxpop,
                     pushInstruction(
-                        0x43,  // swap1
+                        const::AVM_swap1,
                         restOfCode
                     )
                 )
@@ -646,18 +601,18 @@ impure func pushSwapn(
     // Generate code for a swapN pseudo-operation.
     // AVM supports this only for N <= 2, whereas EVM can ask for larger ones.
     if (n == 2) {
-        return pushInstruction(0x44, restOfCode);  // swap2
+        return pushInstruction(const::AVM_swap2, restOfCode);
     } else {
         return pushInstruction(
-            0x43, // swap1
+            const::AVM_swap1,
             pushInstruction(
-                0x38, // auxpush
+                const::AVM_auxpush,
                 pushSwapn(
                     n-1,
                     pushInstruction(
-                        0x39, // auxpop
+                        const::AVM_auxpop,
                         pushInstruction(
-                            0x43, // swap1
+                            const::AVM_swap1,
                             restOfCode
                         )
                     )
@@ -677,7 +632,7 @@ impure func pushEvmInsnCall(evmOpNum: uint, code: AvmCodePoint) -> AvmCodePoint 
         pushValue(
             code,
             pushInstructionImm(
-                0x34,
+                const::AVM_jump,
                 evmOps_trampoline,
                 code,
             ),
@@ -752,8 +707,8 @@ public func avmCodeBuilder_finish(builder: AvmCodeBuilder) -> AvmCodePoint {
 }
 
 func isSafeInstruction(insn: uint) -> bool {
-    return (insn != 0x34)                      // rset
-        && (insn != 0x3d)                      // errset
+    return (insn != const::AVM_rset)
+        && (insn != const::AVM_errset)
         && ((insn < 0x60) || (insn > 0x7f));   // various unsafe instructions
 }
 
