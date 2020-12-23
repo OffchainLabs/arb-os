@@ -141,6 +141,23 @@ public impure func evmCallStack_init() {
     globalCallStack = None<EvmCallFrame>;
 }
 
+public impure func evmCallStack_stackInfo() -> (uint, (address, address), (address, address)) {
+    if let Some(topFrame) = globalCallStack {
+        let sndRunningAs = address(0);
+        let sndRunningCodeFrom = address(0);
+        if let Some(sndFrame) = unsafecast<option<EvmCallFrame>>(topFrame.parent) {
+            sndRunningAs = sndFrame.runningAs;
+            sndRunningCodeFrom = sndFrame.runningCodeFrom;
+        }
+        return (
+            globalCurrentTxRequest.incomingRequest.requestId,
+            (topFrame.runningAs, topFrame.runningCodeFrom),
+            (sndRunningAs, sndRunningCodeFrom),
+        );
+    } else {
+        return (0, (address(0), address(0)), (address(0), address(0)));
+    }
+}
 
 type TxRequestData = struct {
     maxGas: uint,
