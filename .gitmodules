@@ -1,3 +1,6 @@
 [submodule "evm-tests/tests"]
 	path = evm-tests/tests
 	url = https://github.com/ethereum/tests.git
+[submodule "contracts/arbos/openzeppelin-contracts"]
+	path = contracts/arbos/openzeppelin-contracts
+	url = https://github.com/OpenZeppelin/openzeppelin-contracts.git
