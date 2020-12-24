@@ -90,13 +90,10 @@ message2 = bytearray_setByte(message2,11,0x7b);
         let pubkey = unsafecast<BLSKey>((0x16d85ac6b1495562dabf0e052b323cb27095143a8dd228dceeccd94ca23fce6e,0x252f8568427a600d5e7b2db105ca1bdf8b4f10c2c98a78da764f0cdb6fa9547d,0x2bb33da900a0cc9a13e56fd0d3226c562d1fc54106754f11dc992daa153407a0,0x236e9f6e5631d4800ea7f50debef4d331ea50f50e6c1c03a3efdd292e30a52ff));
 
 
-if let Some(sigres) = bls_hashAndVerifySingleSig(domain2,message2) {
-
-
 
 if let Some(hashedmessage) = bls_hashToPoint(domain2,message2) {
 
-    if let Some(res) = bls_verifySingleSig(domain2,message2,pubkey,signature){
+    if let Some(res) = bls_verifySingleSig(hashedmessage,pubkey,signature){
 
     } else {
         return 5;
