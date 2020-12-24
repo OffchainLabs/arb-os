@@ -13,6 +13,7 @@ use std::path::Path;
 
 mod abi;
 pub mod benchmarks;
+pub mod bls;
 pub mod evmtest;
 
 #[derive(Clone)]

@@ -505,6 +505,11 @@ fn test_erc721() {
     crate::evm::mint_erc721_and_get_balance(None, false);
 }
 
+#[test]
+fn test_bls_registry() {
+    crate::evm::bls::_evm_test_bls_registry(None, false);
+}
+
 fn test_call_to_precompile5(
     machine: &mut Machine,
     sender_addr: &Uint256,
