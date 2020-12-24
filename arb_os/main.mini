@@ -30,8 +30,8 @@ use gasAccounting::gasAccounting_init;
 use inbox::inbox_init;
 use inbox::inbox_get;
 use messages::TxRequestData;
-
 use output::txReceipts_init;
+use pluggables::pluggables_init;
 use precompiles::precompiles_init;
 
 use std::bytearray::MarshalledBytes;
@@ -55,6 +55,7 @@ use inbox::IncomingRequest;
 
 impure func main() {
     errorHandler_init();
+    pluggables_init();
     codeSegment_init();
     chainParams_init();
     decompression_init();

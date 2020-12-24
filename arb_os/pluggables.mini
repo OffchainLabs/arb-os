@@ -1,0 +1,80 @@
+//
+// Copyright 2020, Offchain Labs, Inc. All rights reserved.
+//
+
+use core::array::array;
+use core::array::array_resize;
+
+const ModuleIdLimit = 4096;
+
+
+type ModuleFunction = impure func(any, any, bool) -> (any, any)
+
+type ModuleState = struct {
+    code: ModuleFunction,
+    state: any,
+    neverBeenCalled: bool,
+}
+
+type ModuleManager = struct {
+    capacity: uint,
+    modules: []option<ModuleState>,
+}
+
+var moduleManager: ModuleManager;
+
+public impure func pluggables_init() {
+    moduleManager = struct {
+        capacity: 1,
+        modules: newarray<option<ModuleState>>(1) with { [0] = None<ModuleState> },
+    };
+}
+
+public impure func call_pluggable(id: uint, args: any) -> option<any> {
+    if (id >= moduleManager.capacity) {
+        return None;
+    }
+
+    let this = moduleManager.modules[id]?;
+    let (retVal, newState) = this.code(args, this.state, this.neverBeenCalled);
+
+    moduleManager = moduleManager with {
+        modules: moduleManager.modules with {
+            [id] = Some(this with { state: newState } with { neverBeenCalled: false })
+        }
+    };
+    return Some(retVal);
+}
+
+public impure func install_pluggable(id: uint, newFunc: ModuleFunction, keepState: bool) -> option<()> {
+    if (id > const::ModuleIdLimit) {
+        return None;
+    }
+
+    while (id >= moduleManager.capacity) {
+        let newCapacity = 8 * moduleManager.capacity;
+        moduleManager = moduleManager with {
+            capacity: newCapacity
+        } with {
+            modules: unsafecast<[]option<ModuleState>>(
+                array_resize(
+                    unsafecast<array>(moduleManager.modules),
+                    newCapacity,
+                    None<ModuleState>
+                )
+            )
+        };
+    }
+
+    let newState = unsafecast<any>(());
+    if (keepState) {
+        newState = (moduleManager.modules[id]?).state;
+    }
+    moduleManager = moduleManager with {
+        modules: moduleManager.modules with {
+            [id] = Some(struct { code: newFunc, state: newState, neverBeenCalled: true })
+        }
+    };
+
+    return Some(());
+}
