@@ -61,6 +61,53 @@ type BLSKey = struct {
     by: uint,
 }
 
+// ==================================================================
+// BLS top level functions with built-in hashing
+// ==================================================================
+
+public func bls_hashAndVerifySingleSig(
+    domain:    ByteArray,
+    message:  ByteArray,
+    key:       BLSKey,
+    signature: BLSSignature
+) -> option<()> {
+
+
+       if let Some(hashedMessage) = bls_hashToPoint(domain, message) {
+            return bls_verifySingleSig(hashedMessage, key, signature);
+       } else {
+            return None;
+       }
+}
+
+public func bls_hashAndVerifySignature(
+    numMsgs:   uint,
+    domain:    ByteArray,
+    messages:  []ByteArray,
+    keys:      []BLSKey,
+    signature: BLSSignature
+) -> option<()> {
+
+let hashedMessages = newarray <BLSHashedMessage> (numMsgs);
+
+    let i = 0;
+    while (i < numMsgs) {
+       if let Some(hashedMessage) = bls_hashToPoint(domain, messages[i]) {
+            hashedMessages = hashedMessages with { [i] = hashedMessage };
+
+       } else {
+            return None;
+       }
+    }
+    
+return bls_verifySignature(numMsgs, hashedMessages, keys, signature);
+
+}
+
+// ==================================================================
+// BLS top level functions which assume a pre-hashed input
+// ==================================================================
+
 public func bls_verifySingleSig(
     message:  BLSHashedMessage,
     key:      BLSKey,
@@ -108,6 +155,7 @@ public func bls_verifySignature(
 ) -> option<()> {
 	let size = len(keys);
 	if (numMsgs == 0 || numMsgs > 30 || numMsgs != len(messages) || numMsgs != len(keys)) {
+        asm(56,) { debugprint };
 		return None;
 	}
 
@@ -141,13 +189,20 @@ public func bls_verifySignature(
         i = i + 1;
     }
 
-    let result = asm(acc,) bool { ecpairing }; // TODO Catch AVM ERROR
+    let result = asm(acc,) bool { ecpairing };
+    asm(result,) { debugprint };
     if (result) {
+        asm(99,) { debugprint };
         return Some(());
     } else {
+        asm(100,) { debugprint };
         return None;
     }
 }
+
+// ==================================================================
+// BLS Hash to Point in G1
+// ==================================================================
 
 public func bls_hashToPoint(
   	domain: 	ByteArray,
@@ -278,9 +333,7 @@ func inverse(a:	uint) -> uint {
     return modexp_3064_fd54(a);
 }
 
-
-// public for testing
-public func hashToField(
+func hashToField(
     domain:		ByteArray,
     messages:	ByteArray
 ) -> (uint, uint) {
@@ -302,7 +355,7 @@ public func hashToField(
     return (a0, a1);
 }
 
-public func expandMsgTo96(
+func expandMsgTo96(
 	domain:		ByteArray,
 	message:	ByteArray
 ) -> ByteArray {
