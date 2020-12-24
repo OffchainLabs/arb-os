@@ -12,6 +12,7 @@ pub struct _ArbBLS<'a> {
     pub contract_abi: AbiForContract,
     _wallet: &'a Wallet,
     my_address: Uint256,
+    debug: bool,
 }
 
 impl<'a> _ArbBLS<'a> {
