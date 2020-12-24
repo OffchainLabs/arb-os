@@ -66,42 +66,37 @@ type BLSKey = struct {
 // ==================================================================
 
 public func bls_hashAndVerifySingleSig(
-    domain:    ByteArray,
-    message:  ByteArray,
-    key:       BLSKey,
-    signature: BLSSignature
+    domain: ByteArray,
+    message: ByteArray,
+    key: BLSKey,
+    signature: BLSSignature
 ) -> option<()> {
-
-
-       if let Some(hashedMessage) = bls_hashToPoint(domain, message) {
-            return bls_verifySingleSig(hashedMessage, key, signature);
-       } else {
-            return None;
-       }
+    if let Some(hashedMessage) = bls_hashToPoint(domain, message) {
+        return bls_verifySingleSig(hashedMessage, key, signature);
+    } else {
+        return None;
+    }
 }
 
 public func bls_hashAndVerifySignature(
-    numMsgs:   uint,
-    domain:    ByteArray,
-    messages:  []ByteArray,
-    keys:      []BLSKey,
-    signature: BLSSignature
+    numMsgs: uint,
+    domain: ByteArray,
+    messages: []ByteArray,
+    keys: []BLSKey,
+    signature: BLSSignature
 ) -> option<()> {
+    let hashedMessages = newarray <BLSHashedMessage> (numMsgs);
 
-let hashedMessages = newarray <BLSHashedMessage> (numMsgs);
+    let i = 0;
+    while (i < numMsgs) {
+        if let Some(hashedMessage) = bls_hashToPoint(domain, messages[i]) {
+            hashedMessages = hashedMessages with { [i] = hashedMessage };
+        } else {
+            return None;
+        }
+    }
 
-    let i = 0;
-    while (i < numMsgs) {
-       if let Some(hashedMessage) = bls_hashToPoint(domain, messages[i]) {
-            hashedMessages = hashedMessages with { [i] = hashedMessage };
-
-       } else {
-            return None;
-       }
-    }
-    
-return bls_verifySignature(numMsgs, hashedMessages, keys, signature);
-
+    return bls_verifySignature(numMsgs, hashedMessages, keys, signature);
 }
 
 // ==================================================================
