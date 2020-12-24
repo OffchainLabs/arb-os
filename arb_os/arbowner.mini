@@ -47,12 +47,12 @@ public impure func arbowner_txcall() {
         let funcCode = asm(224, bytearray_get256(calldata, 0)) uint { shr };
         if (funcCode == 0xe3a0a148) {
             arbowner_giveOwnership(topFrame, calldata);
-        } elseif (funcCode == 0x6d92b8e4) {
-            arbowner_startArbosUpgrade(topFrame, calldata);
-        } elseif (funcCode == 0x0b766fec) {
-            arbowner_continueArbosUpgrade(topFrame, calldata);
-        } elseif (funcCode == 0xe380002e) {
-           arbowner_finishArbosUpgrade(topFrame, calldata);
+        } elseif (funcCode == 0x31acdf5e) {
+            arbowner_startCodeUpload(topFrame, calldata);
+        } elseif (funcCode == 0x56331f75) {
+            arbowner_continueCodeUpload(topFrame, calldata);
+        } elseif (funcCode == 0xfbb5a179) {
+           arbowner_finishCodeUploadAsArbosUpgrade(topFrame, calldata);
         } else {
             // unrecognized function code
             panic;
@@ -72,7 +72,7 @@ impure func arbowner_giveOwnership(topFrame: EvmCallFrame, calldata: ByteArray) 
     evmOp_return(0, 0);
 }
 
-impure func arbowner_startArbosUpgrade(topFrame: EvmCallFrame, calldata: ByteArray) { // ()
+impure func arbowner_startCodeUpload(topFrame: EvmCallFrame, calldata: ByteArray) { // ()
     if (bytearray_size(calldata) != 4) {
         evmOp_revert_knownCodePc(address(const::Address_ArbOwner), 20, 0, 0);
     }
@@ -80,7 +80,7 @@ impure func arbowner_startArbosUpgrade(topFrame: EvmCallFrame, calldata: ByteArr
     evmOp_return(0, 0);
 }
 
-impure func arbowner_continueArbosUpgrade(topFrame: EvmCallFrame, calldata: ByteArray) { // (bytes)
+impure func arbowner_continueCodeUpload(topFrame: EvmCallFrame, calldata: ByteArray) { // (bytes)
     if (bytearray_size(calldata) < 68) {
         evmOp_revert_knownCodePc(address(const::Address_ArbOwner), 30, 0, 0);
     }
@@ -98,7 +98,7 @@ impure func arbowner_continueArbosUpgrade(topFrame: EvmCallFrame, calldata: Byte
     }
 }
 
-impure func arbowner_finishArbosUpgrade(topFrame: EvmCallFrame, calldata: ByteArray) { // ()
+impure func arbowner_finishCodeUploadAsArbosUpgrade(topFrame: EvmCallFrame, calldata: ByteArray) { // ()
     if (bytearray_size(calldata) != 4) {
         evmOp_revert_knownCodePc(address(const::Address_ArbOwner), 40, 0, 0);
     }

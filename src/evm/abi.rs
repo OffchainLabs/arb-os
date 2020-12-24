@@ -1002,13 +1002,13 @@ impl<'a> _ArbOwner<'a> {
         }
     }
 
-    pub fn _start_arbos_upgrade(
+    pub fn _start_code_upload(
         &self,
         machine: &mut Machine,
     ) -> Result<(), ethabi::Error> {
         let (receipts, _sends) = self.contract_abi.call_function_compressed(
             self.my_address.clone(),
-            "startArbosUpgrade",
+            "startCodeUpload",
             &[],
             machine,
             Uint256::zero(),
@@ -1027,14 +1027,14 @@ impl<'a> _ArbOwner<'a> {
         }
     }
 
-    pub fn _continue_arbos_upgrade(
+    pub fn _continue_code_upload(
         &self,
         machine: &mut Machine,
         marshalled_code: Vec<u8>,
     ) -> Result<(), ethabi::Error> {
         let (receipts, _sends) = self.contract_abi.call_function(
             self.my_address.clone(),
-            "continueArbosUpgrade",
+            "continueCodeUpload",
             &[ethabi::Token::Bytes(marshalled_code)],
             machine,
             Uint256::zero(),
@@ -1052,13 +1052,13 @@ impl<'a> _ArbOwner<'a> {
         }
     }
 
-    pub fn _finish_arbos_upgrade(
+    pub fn _finish_code_upload_as_arbos_upgrade(
         &self,
         machine: &mut Machine,
     ) -> Result<(), ethabi::Error> {
         let (receipts, _sends) = self.contract_abi.call_function(
             self.my_address.clone(),
-            "finishArbosUpgrade",
+            "finishCodeUploadAsArbosUpgrade",
             &[],
             machine,
             Uint256::zero(),

@@ -292,14 +292,12 @@ pub fn _evm_test_arbowner(log_to: Option<&Path>, debug: bool) -> Result<(), etha
 
     arbowner._give_ownership(&mut machine, my_addr, Some(Uint256::zero()))?;
 
-    arbowner._start_arbos_upgrade(&mut machine)?;
+    arbowner._start_code_upload(&mut machine)?;
 
     let mcode = vec![0x90u8, 1u8, 0u8, 42u8];   // debugprint(42)
-    arbowner._continue_arbos_upgrade(&mut machine, mcode)?;
+    arbowner._continue_code_upload(&mut machine, mcode)?;
 
-    arbowner._finish_arbos_upgrade(&mut machine)?;
-
-    // panic!("Deliberate panic so output is displayed");  // uncomment this to see output from this test
+    arbowner._finish_code_upload_as_arbos_upgrade(&mut machine)?;
 
     if let Some(path) = log_to {
         machine.runtime_env.recorder.to_file(path).unwrap();
@@ -307,7 +305,6 @@ pub fn _evm_test_arbowner(log_to: Option<&Path>, debug: bool) -> Result<(), etha
 
     Ok(())
 }
-
 
 pub fn evm_test_function_table_access(
     log_to: Option<&Path>,

@@ -68,15 +68,15 @@
       "type": "function"
     }
   ],
-  "metadata": "{\"compiler\":{\"version\":\"0.6.2+commit.bacdbe57\"},\"language\":\"Solidity\",\"output\":{\"abi\":[{\"inputs\":[{\"internalType\":\"address\",\"name\":\"addr\",\"type\":\"address\"},{\"internalType\":\"uint256\",\"name\":\"index\",\"type\":\"uint256\"}],\"name\":\"get\",\"outputs\":[{\"internalType\":\"uint256\",\"name\":\"\",\"type\":\"uint256\"},{\"internalType\":\"bool\",\"name\":\"\",\"type\":\"bool\"},{\"internalType\":\"uint256\",\"name\":\"\",\"type\":\"uint256\"}],\"stateMutability\":\"view\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"address\",\"name\":\"addr\",\"type\":\"address\"}],\"name\":\"size\",\"outputs\":[{\"internalType\":\"uint256\",\"name\":\"\",\"type\":\"uint256\"}],\"stateMutability\":\"view\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"bytes\",\"name\":\"buf\",\"type\":\"bytes\"}],\"name\":\"upload\",\"outputs\":[],\"stateMutability\":\"nonpayable\",\"type\":\"function\"}],\"devdoc\":{\"methods\":{}},\"userdoc\":{\"methods\":{}}},\"settings\":{\"compilationTarget\":{\"/Users/hkalodner/Github/mini-compiler/contracts/arbos/contracts/ArbFunctionTable.sol\":\"ArbFunctionTable\"},\"evmVersion\":\"istanbul\",\"libraries\":{},\"metadata\":{\"bytecodeHash\":\"ipfs\"},\"optimizer\":{\"enabled\":false,\"runs\":200},\"remappings\":[]},\"sources\":{\"/Users/hkalodner/Github/mini-compiler/contracts/arbos/contracts/ArbFunctionTable.sol\":{\"keccak256\":\"0x4168b67f92a5ae51eb4ef817b8474c604717c5b9e7d7045f8fb6c01b78ccae9c\",\"urls\":[\"bzz-raw://4cc8845974cfe5386e7a85a6758251185e5610e9c5692dd297fd71f771889bce\",\"dweb:/ipfs/QmfVvwmTbgNskGJu11zSVXZR6uq6hbp2FDiuHc58aR6BrV\"]}},\"version\":1}",
+  "metadata": "{\"compiler\":{\"version\":\"0.6.2+commit.bacdbe57\"},\"language\":\"Solidity\",\"output\":{\"abi\":[{\"inputs\":[{\"internalType\":\"address\",\"name\":\"addr\",\"type\":\"address\"},{\"internalType\":\"uint256\",\"name\":\"index\",\"type\":\"uint256\"}],\"name\":\"get\",\"outputs\":[{\"internalType\":\"uint256\",\"name\":\"\",\"type\":\"uint256\"},{\"internalType\":\"bool\",\"name\":\"\",\"type\":\"bool\"},{\"internalType\":\"uint256\",\"name\":\"\",\"type\":\"uint256\"}],\"stateMutability\":\"view\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"address\",\"name\":\"addr\",\"type\":\"address\"}],\"name\":\"size\",\"outputs\":[{\"internalType\":\"uint256\",\"name\":\"\",\"type\":\"uint256\"}],\"stateMutability\":\"view\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"bytes\",\"name\":\"buf\",\"type\":\"bytes\"}],\"name\":\"upload\",\"outputs\":[],\"stateMutability\":\"nonpayable\",\"type\":\"function\"}],\"devdoc\":{\"methods\":{}},\"userdoc\":{\"methods\":{}}},\"settings\":{\"compilationTarget\":{\"/Users/ed/OffchainLabs/arb-os/contracts/arbos/contracts/ArbFunctionTable.sol\":\"ArbFunctionTable\"},\"evmVersion\":\"istanbul\",\"libraries\":{},\"metadata\":{\"bytecodeHash\":\"ipfs\"},\"optimizer\":{\"enabled\":false,\"runs\":200},\"remappings\":[]},\"sources\":{\"/Users/ed/OffchainLabs/arb-os/contracts/arbos/contracts/ArbFunctionTable.sol\":{\"keccak256\":\"0x4168b67f92a5ae51eb4ef817b8474c604717c5b9e7d7045f8fb6c01b78ccae9c\",\"urls\":[\"bzz-raw://4cc8845974cfe5386e7a85a6758251185e5610e9c5692dd297fd71f771889bce\",\"dweb:/ipfs/QmfVvwmTbgNskGJu11zSVXZR6uq6hbp2FDiuHc58aR6BrV\"]}},\"version\":1}",
   "bytecode": "0x",
   "deployedBytecode": "0x",
   "sourceMap": "",
   "deployedSourceMap": "",
   "source": "pragma solidity >=0.4.21 <0.7.0;\n\ninterface ArbFunctionTable {\n    // Upload a serialized function table and associate it with the caller's address\n    // If caller already had a function table, this will overwrite the old one\n    // Revert if buf is mal-formatted\n    // (Caller will typically be an aggregator)\n    function upload(bytes calldata buf) external;\n\n    // Get the size of addr's function table; revert if addr doesn't have a function table\n    function size(address addr) external view returns(uint);\n\n    // Get the entry from addr's function table, at index; revert if addr has no table or index out of bounds\n    // Returns (functionCode, isPayable, gasLimit)\n    function get(address addr, uint index) external view returns(uint, bool, uint);\n}\n\n",
-  "sourcePath": "/Users/hkalodner/Github/mini-compiler/contracts/arbos/contracts/ArbFunctionTable.sol",
+  "sourcePath": "/Users/ed/OffchainLabs/arb-os/contracts/arbos/contracts/ArbFunctionTable.sol",
   "ast": {
-    "absolutePath": "/Users/hkalodner/Github/mini-compiler/contracts/arbos/contracts/ArbFunctionTable.sol",
+    "absolutePath": "/Users/ed/OffchainLabs/arb-os/contracts/arbos/contracts/ArbFunctionTable.sol",
     "exportedSymbols": {
       "ArbFunctionTable": [
         408
@@ -431,7 +431,7 @@
     "src": "0:765:5"
   },
   "legacyAST": {
-    "absolutePath": "/Users/hkalodner/Github/mini-compiler/contracts/arbos/contracts/ArbFunctionTable.sol",
+    "absolutePath": "/Users/ed/OffchainLabs/arb-os/contracts/arbos/contracts/ArbFunctionTable.sol",
     "exportedSymbols": {
       "ArbFunctionTable": [
         408
@@ -790,8 +790,8 @@
     "version": "0.6.2+commit.bacdbe57.Emscripten.clang"
   },
   "networks": {},
-  "schemaVersion": "3.3.2",
-  "updatedAt": "2020-12-22T23:16:02.412Z",
+  "schemaVersion": "3.3.1",
+  "updatedAt": "2020-12-24T16:37:28.661Z",
   "devdoc": {
     "methods": {}
   },
