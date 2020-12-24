@@ -151,3 +151,7 @@ pub fn _evm_test_bls_registry(log_to: Option<&Path>, debug: bool) {
         let _ = machine.runtime_env.recorder.to_file(path).unwrap();
     }
 }
+
+// use bn::{pairing, AffineG1, AffineG2, Fq, Fq2, Group, Gt, G1, G2};
+// ADD HERE: BLS key generation, BLS signature on a &[u8] with a key, aggregation of signatures
+
