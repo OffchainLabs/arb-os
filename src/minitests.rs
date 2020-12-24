@@ -397,6 +397,11 @@ fn test_sha256_precompile() {
 }
 
 #[test]
+fn test_ecpairing_precompile() {
+    crate::evm::_evm_ecpairing_precompile(None, false);
+}
+
+#[test]
 fn test_deploy_buddy_contract() {
     crate::evm::evm_deploy_buddy_contract(None, false);
 }

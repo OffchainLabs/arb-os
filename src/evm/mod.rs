@@ -2,12 +2,12 @@
  * Copyright 2020, Offchain Labs, Inc. All rights reserved.
  */
 
-use crate::evm::abi::{ArbSys, ArbAddressTable, ArbBLS, ArbFunctionTable, ArbosTest, _ArbOwner};
 use crate::evm::abi::FunctionTable;
+use crate::evm::abi::{ArbAddressTable, ArbBLS, ArbFunctionTable, ArbSys, ArbosTest, _ArbOwner};
 use crate::mavm::Value;
 use crate::run::{bytestack_from_bytes, load_from_file, RuntimeEnvironment};
 use crate::uint256::Uint256;
-use abi::{AbiForContract, builtin_contract_path};
+use abi::{builtin_contract_path, AbiForContract};
 use ethers_signers::Signer;
 use std::path::Path;
 
@@ -50,14 +50,12 @@ pub fn evm_xcontract_call_with_constructors(
         machine.run(None)
     }; // handle this eth deposit message
 
-    let mut fib_contract =
-        AbiForContract::new_from_file(&fib_contract_path("Fibonacci"))?;
+    let mut fib_contract = AbiForContract::new_from_file(&fib_contract_path("Fibonacci"))?;
     if fib_contract.deploy(&[], &mut machine, Uint256::zero(), None, debug) == None {
         panic!("failed to deploy Fibonacci contract");
     }
 
-    let mut pc_contract =
-        AbiForContract::new_from_file(&fib_contract_path("PaymentChannel"))?;
+    let mut pc_contract = AbiForContract::new_from_file(&fib_contract_path("PaymentChannel"))?;
     if pc_contract.deploy(
         &[ethabi::Token::Address(ethereum_types::H160::from_slice(
             &fib_contract.address.to_bytes_be()[12..],
@@ -118,14 +116,12 @@ pub fn _evm_tx_with_deposit(
 
     let my_addr = Uint256::from_usize(1025);
 
-    let mut fib_contract =
-        AbiForContract::new_from_file(&fib_contract_path("Fibonacci"))?;
+    let mut fib_contract = AbiForContract::new_from_file(&fib_contract_path("Fibonacci"))?;
     if fib_contract.deploy(&[], &mut machine, Uint256::zero(), None, debug) == None {
         panic!("failed to deploy Fibonacci contract");
     }
 
-    let mut pc_contract =
-        AbiForContract::new_from_file(&fib_contract_path("PaymentChannel"))?;
+    let mut pc_contract = AbiForContract::new_from_file(&fib_contract_path("PaymentChannel"))?;
     if pc_contract.deploy(
         &[ethabi::Token::Address(ethereum_types::H160::from_slice(
             &fib_contract.address.to_bytes_be()[12..],
@@ -158,7 +154,7 @@ pub fn _evm_tx_with_deposit(
             ethabi::Token::Address(ethabi::Address::from_low_u64_be(1025)),
             ethabi::Token::Uint(ethabi::Uint::try_from(1).unwrap()),
         ]
-            .as_ref(),
+        .as_ref(),
         &mut machine,
         Uint256::zero(),
         debug,
@@ -295,7 +291,7 @@ pub fn _evm_test_arbowner(log_to: Option<&Path>, debug: bool) -> Result<(), etha
 
     arbowner._start_arbos_upgrade(&mut machine)?;
 
-    let mcode = vec![0x90u8, 1u8, 0u8, 42u8];   // debugprint(42)
+    let mcode = vec![0x90u8, 1u8, 0u8, 42u8]; // debugprint(42)
     arbowner._continue_arbos_upgrade(&mut machine, mcode)?;
 
     arbowner._finish_arbos_upgrade(&mut machine)?;
@@ -410,14 +406,12 @@ pub fn evm_test_create(
         machine.run(None)
     }; // handle this eth deposit message
 
-    let mut fib_contract =
-        AbiForContract::new_from_file(&fib_contract_path("Fibonacci"))?;
+    let mut fib_contract = AbiForContract::new_from_file(&fib_contract_path("Fibonacci"))?;
     if fib_contract.deploy(&[], &mut machine, Uint256::zero(), None, debug) == None {
         panic!("failed to deploy Fibonacci contract");
     }
 
-    let mut pc_contract =
-        AbiForContract::new_from_file(&fib_contract_path("PaymentChannel"))?;
+    let mut pc_contract = AbiForContract::new_from_file(&fib_contract_path("PaymentChannel"))?;
     if pc_contract.deploy(
         &[ethabi::Token::Address(ethereum_types::H160::from_slice(
             &fib_contract.address.to_bytes_be()[12..],
@@ -475,14 +469,12 @@ pub fn evm_xcontract_call_using_batch(
         machine.run(None)
     }; // handle this eth deposit message
 
-    let mut fib_contract =
-        AbiForContract::new_from_file(&fib_contract_path("Fibonacci"))?;
+    let mut fib_contract = AbiForContract::new_from_file(&fib_contract_path("Fibonacci"))?;
     if fib_contract.deploy(&[], &mut machine, Uint256::zero(), None, debug) == None {
         panic!("failed to deploy Fibonacci contract");
     }
 
-    let mut pc_contract =
-        AbiForContract::new_from_file(&fib_contract_path("PaymentChannel"))?;
+    let mut pc_contract = AbiForContract::new_from_file(&fib_contract_path("PaymentChannel"))?;
     if pc_contract.deploy(
         &[ethabi::Token::Address(ethereum_types::H160::from_slice(
             &fib_contract.address.to_bytes_be()[12..],
@@ -585,14 +577,12 @@ pub fn _evm_xcontract_call_using_compressed_batch(
         machine.run(None)
     }; // handle this eth deposit message
 
-    let mut fib_contract =
-        AbiForContract::new_from_file(&fib_contract_path("Fibonacci"))?;
+    let mut fib_contract = AbiForContract::new_from_file(&fib_contract_path("Fibonacci"))?;
     if fib_contract.deploy(&[], &mut machine, Uint256::zero(), None, debug) == None {
         panic!("failed to deploy Fibonacci contract");
     }
 
-    let mut pc_contract =
-        AbiForContract::new_from_file(&fib_contract_path("PaymentChannel"))?;
+    let mut pc_contract = AbiForContract::new_from_file(&fib_contract_path("PaymentChannel"))?;
     if pc_contract.deploy(
         &[ethabi::Token::Address(ethereum_types::H160::from_slice(
             &fib_contract.address.to_bytes_be()[12..],
@@ -1154,6 +1144,42 @@ pub fn evm_eval_sha256(log_to: Option<&Path>, debug: bool) {
         )
         .unwrap()
     );
+
+    if let Some(path) = log_to {
+        machine.runtime_env.recorder.to_file(path).unwrap();
+    }
+}
+
+pub fn _evm_ecpairing_precompile(log_to: Option<&Path>, debug: bool) {
+    let rt_env = RuntimeEnvironment::new(Uint256::from_usize(1111));
+    let mut machine = load_from_file(Path::new("arb_os/arbos.mexe"), rt_env);
+    machine.start_at_zero();
+
+    let my_addr = Uint256::from_u64(1025);
+
+    let tx_id = machine.runtime_env.insert_tx_message(
+        my_addr,
+        Uint256::from_u64(1000000000),
+        Uint256::zero(),
+        Uint256::from_u64(8), // ecpairing precompile
+        Uint256::from_u64(0),
+        &vec![0xCCu8], // insert data here
+        false,
+    );
+
+    let _ = if debug {
+        machine.debug(None)
+    } else {
+        machine.run(None)
+    };
+
+    let receipts = machine.runtime_env.get_all_receipt_logs();
+    assert_eq!(receipts.len(), 1);
+    assert_eq!(receipts[0].get_request_id(), tx_id);
+    assert!(receipts[0].succeeded());
+    let return_data = receipts[0].get_return_data();
+    let return_uint = Uint256::from_bytes(&return_data);
+    assert_eq!(return_uint, Uint256::one(),);
 
     if let Some(path) = log_to {
         machine.runtime_env.recorder.to_file(path).unwrap();
