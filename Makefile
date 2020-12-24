@@ -43,7 +43,7 @@ $(STDDIR)/sha256test.mexe: $(STDDIR)/sha256test.mini
 	$(CARGORUN) compile $(STDDIR)/sha256test.mini -o $(STDDIR)/sha256test.mexe -i
 
 $(STDDIR)/rlptest.mexe: $(BUILTINMAOS) $(STDDIR)/rlptest.mini
-	$(CARGORUN) compile $(STDDIR)/rlptest.mini -o $(STDDIR)/rlptest.mexe
+	$(CARGORUN) compile $(STDDIR)/rlptest.mini -o $(STDDIR)/rlptest.mexe -i
 
 $(STDDIR)/bls.mao: $(STDDIR)/bls.mini
 	$(CARGORUN) compile $(STDDIR)/bls.mini -c -o $(STDDIR)/bls.mao -i

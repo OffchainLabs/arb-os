@@ -161,7 +161,7 @@ fn main() -> Result<(), CompileError> {
                             linked_prog,
                             is_module,
                             Vec::new(),
-                            file_name_chart,
+                            file_name_chart.clone(),
                             debug_mode,
                         ) {
                             Ok(completed_program) => {
@@ -169,13 +169,31 @@ fn main() -> Result<(), CompileError> {
                                     .to_output(&mut *output, compile.format.as_deref());
                             }
                             Err(e) => {
-                                println!("Linking error: {}", e);
+                                println!(
+                                    "Linking error: {}\nIn file: {}",
+                                    e,
+                                    e.location
+                                        .map(|loc| file_name_chart
+                                            .get(&loc.file_id)
+                                            .unwrap_or(&loc.file_id.to_string())
+                                            .clone())
+                                        .unwrap_or("Unknown".to_string())
+                                );
                                 return Err(e);
                             }
                         }
                     }
                     Err(e) => {
-                        println!("Linking error: {}", e);
+                        println!(
+                            "Linking error: {}\nIn file: {}",
+                            e,
+                            e.location
+                                .map(|loc| file_name_chart
+                                    .get(&loc.file_id)
+                                    .unwrap_or(&loc.file_id.to_string())
+                                    .clone())
+                                .unwrap_or("Unknown".to_string())
+                        );
                         return Err(e);
                     }
                 }
