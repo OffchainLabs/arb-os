@@ -2159,7 +2159,7 @@ fn do_ecpairing(mut val: Value) -> Option<bool> {
                         let a = if ax.is_zero() && ay.is_zero() {
                             G1::zero()
                         } else {
-                            AffineG1::new(ax, ay).unwrap().into()
+                             if let Ok(t) = AffineG1::new(ax, ay) { t.into() } else { return Some(false); }
                         };
                         acc = acc * pairing(a, b);
                     } else {
