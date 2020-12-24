@@ -71,11 +71,8 @@ public func bls_hashAndVerifySingleSig(
     key: BLSKey,
     signature: BLSSignature
 ) -> option<()> {
-    if let Some(hashedMessage) = bls_hashToPoint(domain, message) {
-        return bls_verifySingleSig(hashedMessage, key, signature);
-    } else {
-        return None;
-    }
+    let hashedMessage = bls_hashToPoint(domain, message)?;
+    return bls_verifySingleSig(hashedMessage, key, signature);
 }
 
 public func bls_hashAndVerifySignature(
@@ -89,11 +86,8 @@ public func bls_hashAndVerifySignature(
 
     let i = 0;
     while (i < numMsgs) {
-        if let Some(hashedMessage) = bls_hashToPoint(domain, messages[i]) {
-            hashedMessages = hashedMessages with { [i] = hashedMessage };
-        } else {
-            return None;
-        }
+        let hashedMessage) = bls_hashToPoint(domain, messages[i])?;
+        hashedMessages = hashedMessages with { [i] = hashedMessage };
     }
 
     return bls_verifySignature(numMsgs, hashedMessages, keys, signature);
@@ -1076,6 +1070,3 @@ func modexp_c191_3f52(t6: uint) -> uint {
 
      return t0;
 }
-
-
-
