@@ -1075,6 +1075,32 @@ impl<'a> _ArbOwner<'a> {
             Ok(())
         }
     }
+
+    pub fn _finish_code_upload_as_pluggable(
+        &self,
+        machine: &mut Machine,
+        id: Uint256,
+        keep_state: bool,
+    ) -> Result<(), ethabi::Error> {
+        let (receipts, _sends) = self.contract_abi.call_function(
+            self.my_address.clone(),
+            "finishCodeUploadAsPluggable",
+            &[ethabi::Token::Uint(id.to_u256()), ethabi::Token::Bool(keep_state)],
+            machine,
+            Uint256::zero(),
+            self.debug,
+        )?;
+
+        if receipts.len() != 1 {
+            return Err(ethabi::Error::from("wrong number of receipts"));
+        }
+
+        if receipts[0].succeeded() {
+            Ok(())
+        } else {
+            Err(ethabi::Error::from("reverted"))
+        }
+    }
 }
 
 pub struct ArbosTest {

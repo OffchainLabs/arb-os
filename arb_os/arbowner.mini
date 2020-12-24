@@ -19,6 +19,9 @@ use evmCallStack::evmCallFrame_getCaller;
 use evmOps::evmOp_return;
 use evmOps::evmOp_revert_knownCodePc;
 
+use pluggables::ModuleFunction;
+use pluggables::installPluggable;
+
 use std::bytearray::ByteArray;
 use std::bytearray::bytearray_size;
 use std::bytearray::bytearray_get256;
@@ -53,6 +56,8 @@ public impure func arbowner_txcall() {
             arbowner_continueCodeUpload(topFrame, calldata);
         } elseif (funcCode == 0xfbb5a179) {
            arbowner_finishCodeUploadAsArbosUpgrade(topFrame, calldata);
+        } elseif (funcCode == 0xf4f4e136) {
+           arbowner_finishCodeUploadAsPluggable(topFrame, calldata);
         } else {
             // unrecognized function code
             panic;
@@ -109,6 +114,19 @@ impure func arbowner_finishCodeUploadAsArbosUpgrade(topFrame: EvmCallFrame, call
     }
 }
 
+impure func arbowner_finishCodeUploadAsPluggable(topFrame: EvmCallFrame, calldata: ByteArray) { // ()
+    if (bytearray_size(calldata) != 68) {
+        evmOp_revert_knownCodePc(address(const::Address_ArbOwner), 50, 0, 0);
+    }
+    let id = bytearray_get256(calldata, 4);
+    let keepState = bytearray_get256(calldata, 36) != 0;
+    if let Some(upgrade) = upgradeInProgress {
+        installPluggable(id, unsafecast<ModuleFunction>(avmCodeBuilder_finish(upgrade)), keepState);
+        evmOp_return(0, 0);
+    } else {
+        evmOp_revert_knownCodePc(address(const::Address_ArbOwner), 51, 0, 0);
+    }
+}
 
 
 

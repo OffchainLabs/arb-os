@@ -11,5 +11,6 @@ interface ArbOwner {
     function startCodeUpload() external;
     function continueCodeUpload(bytes calldata marshalledCode) external;
     function finishCodeUploadAsArbosUpgrade() external;
+    function finishCodeUploadAsPluggable(uint id, bool keepState) external;
 }
 

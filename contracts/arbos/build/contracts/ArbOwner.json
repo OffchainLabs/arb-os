@@ -40,23 +40,41 @@
       "outputs": [],
       "stateMutability": "nonpayable",
       "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "uint256",
+          "name": "id",
+          "type": "uint256"
+        },
+        {
+          "internalType": "bool",
+          "name": "keepState",
+          "type": "bool"
+        }
+      ],
+      "name": "finishCodeUploadAsPluggable",
+      "outputs": [],
+      "stateMutability": "nonpayable",
+      "type": "function"
     }
   ],
-  "metadata": "{\"compiler\":{\"version\":\"0.6.2+commit.bacdbe57\"},\"language\":\"Solidity\",\"output\":{\"abi\":[{\"inputs\":[{\"internalType\":\"bytes\",\"name\":\"marshalledCode\",\"type\":\"bytes\"}],\"name\":\"continueCodeUpload\",\"outputs\":[],\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"inputs\":[],\"name\":\"finishCodeUploadAsArbosUpgrade\",\"outputs\":[],\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"address\",\"name\":\"newOwnerAddr\",\"type\":\"address\"}],\"name\":\"giveOwnership\",\"outputs\":[],\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"inputs\":[],\"name\":\"startCodeUpload\",\"outputs\":[],\"stateMutability\":\"nonpayable\",\"type\":\"function\"}],\"devdoc\":{\"methods\":{}},\"userdoc\":{\"methods\":{}}},\"settings\":{\"compilationTarget\":{\"/Users/ed/OffchainLabs/arb-os/contracts/arbos/contracts/ArbOwner.sol\":\"ArbOwner\"},\"evmVersion\":\"istanbul\",\"libraries\":{},\"metadata\":{\"bytecodeHash\":\"ipfs\"},\"optimizer\":{\"enabled\":false,\"runs\":200},\"remappings\":[]},\"sources\":{\"/Users/ed/OffchainLabs/arb-os/contracts/arbos/contracts/ArbOwner.sol\":{\"keccak256\":\"0xa20d58a171eeeedd1e6a344672232228ceb4f622ff5641f1b827b4de3c5e5b9e\",\"urls\":[\"bzz-raw://ae590805149d86ac65f3bd1f86a3e5b179de0b38cf709245f3d681acd8a3b583\",\"dweb:/ipfs/QmfK3PX476W4BcCQ6vfXjx6myjPFmDu3rT6U49ZnqWvX5b\"]}},\"version\":1}",
+  "metadata": "{\"compiler\":{\"version\":\"0.6.2+commit.bacdbe57\"},\"language\":\"Solidity\",\"output\":{\"abi\":[{\"inputs\":[{\"internalType\":\"bytes\",\"name\":\"marshalledCode\",\"type\":\"bytes\"}],\"name\":\"continueCodeUpload\",\"outputs\":[],\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"inputs\":[],\"name\":\"finishCodeUploadAsArbosUpgrade\",\"outputs\":[],\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"uint256\",\"name\":\"id\",\"type\":\"uint256\"},{\"internalType\":\"bool\",\"name\":\"keepState\",\"type\":\"bool\"}],\"name\":\"finishCodeUploadAsPluggable\",\"outputs\":[],\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"address\",\"name\":\"newOwnerAddr\",\"type\":\"address\"}],\"name\":\"giveOwnership\",\"outputs\":[],\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"inputs\":[],\"name\":\"startCodeUpload\",\"outputs\":[],\"stateMutability\":\"nonpayable\",\"type\":\"function\"}],\"devdoc\":{\"methods\":{}},\"userdoc\":{\"methods\":{}}},\"settings\":{\"compilationTarget\":{\"/Users/ed/OffchainLabs/arb-os/contracts/arbos/contracts/ArbOwner.sol\":\"ArbOwner\"},\"evmVersion\":\"istanbul\",\"libraries\":{},\"metadata\":{\"bytecodeHash\":\"ipfs\"},\"optimizer\":{\"enabled\":false,\"runs\":200},\"remappings\":[]},\"sources\":{\"/Users/ed/OffchainLabs/arb-os/contracts/arbos/contracts/ArbOwner.sol\":{\"keccak256\":\"0xffe5166db57f34a8dd4db0b4087351c9f248083d77cbe2ca983f1df559c3924b\",\"urls\":[\"bzz-raw://54aec020da96ab09d1baa5c6cecad3499b53ee52b0a05a08440219a4637352c3\",\"dweb:/ipfs/QmfHoBZtLq8uXZfYzmzf64ERcDcHh8P5VrcjxDV2JonUHQ\"]}},\"version\":1}",
   "bytecode": "0x",
   "deployedBytecode": "0x",
   "sourceMap": "",
   "deployedSourceMap": "",
-  "source": "pragma solidity >=0.4.21 <0.7.0;\n\ninterface ArbOwner {\n    // Support actions that can be taken by the chain's owner.\n    // All methods will revert, unless the caller is the chain's owner.\n\n    function giveOwnership(address newOwnerAddr) external;\n\n    // To upgrade ArbOS, the ower calls startArbosUpgrade, then calls continueArbosUpgrade one or more times to upload \n    // the code to be installed as the upgrade, then calls finishArbosUpgrade to complete the upgrade and start executing the new code.\n    function startCodeUpload() external;\n    function continueCodeUpload(bytes calldata marshalledCode) external;\n    function finishCodeUploadAsArbosUpgrade() external;\n}\n\n",
+  "source": "pragma solidity >=0.4.21 <0.7.0;\n\ninterface ArbOwner {\n    // Support actions that can be taken by the chain's owner.\n    // All methods will revert, unless the caller is the chain's owner.\n\n    function giveOwnership(address newOwnerAddr) external;\n\n    // To upgrade ArbOS, the ower calls startArbosUpgrade, then calls continueArbosUpgrade one or more times to upload \n    // the code to be installed as the upgrade, then calls finishArbosUpgrade to complete the upgrade and start executing the new code.\n    function startCodeUpload() external;\n    function continueCodeUpload(bytes calldata marshalledCode) external;\n    function finishCodeUploadAsArbosUpgrade() external;\n    function finishCodeUploadAsPluggable(uint id, bool keepState) external;\n}\n\n",
   "sourcePath": "/Users/ed/OffchainLabs/arb-os/contracts/arbos/contracts/ArbOwner.sol",
   "ast": {
     "absolutePath": "/Users/ed/OffchainLabs/arb-os/contracts/arbos/contracts/ArbOwner.sol",
     "exportedSymbols": {
       "ArbOwner": [
-        463
+        470
       ]
     },
-    "id": 464,
+    "id": 471,
     "nodeType": "SourceUnit",
     "nodes": [
       {
@@ -80,9 +98,9 @@
         "contractKind": "interface",
         "documentation": null,
         "fullyImplemented": false,
-        "id": 463,
+        "id": 470,
         "linearizedBaseContracts": [
-          463
+          470
         ],
         "name": "ArbOwner",
         "nodeType": "ContractDefinition",
@@ -139,7 +157,7 @@
               "parameters": [],
               "src": "248:0:7"
             },
-            "scope": 463,
+            "scope": 470,
             "src": "195:54:7",
             "stateMutability": "nonpayable",
             "virtual": false,
@@ -168,7 +186,7 @@
               "parameters": [],
               "src": "546:0:7"
             },
-            "scope": 463,
+            "scope": 470,
             "src": "511:36:7",
             "stateMutability": "nonpayable",
             "virtual": false,
@@ -225,7 +243,7 @@
               "parameters": [],
               "src": "619:0:7"
             },
-            "scope": 463,
+            "scope": 470,
             "src": "552:68:7",
             "stateMutability": "nonpayable",
             "virtual": false,
@@ -254,27 +272,111 @@
               "parameters": [],
               "src": "675:0:7"
             },
-            "scope": 463,
+            "scope": 470,
             "src": "625:51:7",
+            "stateMutability": "nonpayable",
+            "virtual": false,
+            "visibility": "external"
+          },
+          {
+            "body": null,
+            "documentation": null,
+            "functionSelector": "f4f4e136",
+            "id": 469,
+            "implemented": false,
+            "kind": "function",
+            "modifiers": [],
+            "name": "finishCodeUploadAsPluggable",
+            "nodeType": "FunctionDefinition",
+            "overrides": null,
+            "parameters": {
+              "id": 467,
+              "nodeType": "ParameterList",
+              "parameters": [
+                {
+                  "constant": false,
+                  "id": 464,
+                  "name": "id",
+                  "nodeType": "VariableDeclaration",
+                  "overrides": null,
+                  "scope": 469,
+                  "src": "718:7:7",
+                  "stateVariable": false,
+                  "storageLocation": "default",
+                  "typeDescriptions": {
+                    "typeIdentifier": "t_uint256",
+                    "typeString": "uint256"
+                  },
+                  "typeName": {
+                    "id": 463,
+                    "name": "uint",
+                    "nodeType": "ElementaryTypeName",
+                    "src": "718:4:7",
+                    "typeDescriptions": {
+                      "typeIdentifier": "t_uint256",
+                      "typeString": "uint256"
+                    }
+                  },
+                  "value": null,
+                  "visibility": "internal"
+                },
+                {
+                  "constant": false,
+                  "id": 466,
+                  "name": "keepState",
+                  "nodeType": "VariableDeclaration",
+                  "overrides": null,
+                  "scope": 469,
+                  "src": "727:14:7",
+                  "stateVariable": false,
+                  "storageLocation": "default",
+                  "typeDescriptions": {
+                    "typeIdentifier": "t_bool",
+                    "typeString": "bool"
+                  },
+                  "typeName": {
+                    "id": 465,
+                    "name": "bool",
+                    "nodeType": "ElementaryTypeName",
+                    "src": "727:4:7",
+                    "typeDescriptions": {
+                      "typeIdentifier": "t_bool",
+                      "typeString": "bool"
+                    }
+                  },
+                  "value": null,
+                  "visibility": "internal"
+                }
+              ],
+              "src": "717:25:7"
+            },
+            "returnParameters": {
+              "id": 468,
+              "nodeType": "ParameterList",
+              "parameters": [],
+              "src": "751:0:7"
+            },
+            "scope": 470,
+            "src": "681:71:7",
             "stateMutability": "nonpayable",
             "virtual": false,
             "visibility": "external"
           }
         ],
-        "scope": 464,
-        "src": "34:644:7"
+        "scope": 471,
+        "src": "34:720:7"
       }
     ],
-    "src": "0:680:7"
+    "src": "0:756:7"
   },
   "legacyAST": {
     "absolutePath": "/Users/ed/OffchainLabs/arb-os/contracts/arbos/contracts/ArbOwner.sol",
     "exportedSymbols": {
       "ArbOwner": [
-        463
+        470
       ]
     },
-    "id": 464,
+    "id": 471,
     "nodeType": "SourceUnit",
     "nodes": [
       {
@@ -298,9 +400,9 @@
         "contractKind": "interface",
         "documentation": null,
         "fullyImplemented": false,
-        "id": 463,
+        "id": 470,
         "linearizedBaseContracts": [
-          463
+          470
         ],
         "name": "ArbOwner",
         "nodeType": "ContractDefinition",
@@ -357,7 +459,7 @@
               "parameters": [],
               "src": "248:0:7"
             },
-            "scope": 463,
+            "scope": 470,
             "src": "195:54:7",
             "stateMutability": "nonpayable",
             "virtual": false,
@@ -386,7 +488,7 @@
               "parameters": [],
               "src": "546:0:7"
             },
-            "scope": 463,
+            "scope": 470,
             "src": "511:36:7",
             "stateMutability": "nonpayable",
             "virtual": false,
@@ -443,7 +545,7 @@
               "parameters": [],
               "src": "619:0:7"
             },
-            "scope": 463,
+            "scope": 470,
             "src": "552:68:7",
             "stateMutability": "nonpayable",
             "virtual": false,
@@ -472,18 +574,102 @@
               "parameters": [],
               "src": "675:0:7"
             },
-            "scope": 463,
+            "scope": 470,
             "src": "625:51:7",
+            "stateMutability": "nonpayable",
+            "virtual": false,
+            "visibility": "external"
+          },
+          {
+            "body": null,
+            "documentation": null,
+            "functionSelector": "f4f4e136",
+            "id": 469,
+            "implemented": false,
+            "kind": "function",
+            "modifiers": [],
+            "name": "finishCodeUploadAsPluggable",
+            "nodeType": "FunctionDefinition",
+            "overrides": null,
+            "parameters": {
+              "id": 467,
+              "nodeType": "ParameterList",
+              "parameters": [
+                {
+                  "constant": false,
+                  "id": 464,
+                  "name": "id",
+                  "nodeType": "VariableDeclaration",
+                  "overrides": null,
+                  "scope": 469,
+                  "src": "718:7:7",
+                  "stateVariable": false,
+                  "storageLocation": "default",
+                  "typeDescriptions": {
+                    "typeIdentifier": "t_uint256",
+                    "typeString": "uint256"
+                  },
+                  "typeName": {
+                    "id": 463,
+                    "name": "uint",
+                    "nodeType": "ElementaryTypeName",
+                    "src": "718:4:7",
+                    "typeDescriptions": {
+                      "typeIdentifier": "t_uint256",
+                      "typeString": "uint256"
+                    }
+                  },
+                  "value": null,
+                  "visibility": "internal"
+                },
+                {
+                  "constant": false,
+                  "id": 466,
+                  "name": "keepState",
+                  "nodeType": "VariableDeclaration",
+                  "overrides": null,
+                  "scope": 469,
+                  "src": "727:14:7",
+                  "stateVariable": false,
+                  "storageLocation": "default",
+                  "typeDescriptions": {
+                    "typeIdentifier": "t_bool",
+                    "typeString": "bool"
+                  },
+                  "typeName": {
+                    "id": 465,
+                    "name": "bool",
+                    "nodeType": "ElementaryTypeName",
+                    "src": "727:4:7",
+                    "typeDescriptions": {
+                      "typeIdentifier": "t_bool",
+                      "typeString": "bool"
+                    }
+                  },
+                  "value": null,
+                  "visibility": "internal"
+                }
+              ],
+              "src": "717:25:7"
+            },
+            "returnParameters": {
+              "id": 468,
+              "nodeType": "ParameterList",
+              "parameters": [],
+              "src": "751:0:7"
+            },
+            "scope": 470,
+            "src": "681:71:7",
             "stateMutability": "nonpayable",
             "virtual": false,
             "visibility": "external"
           }
         ],
-        "scope": 464,
-        "src": "34:644:7"
+        "scope": 471,
+        "src": "34:720:7"
       }
     ],
-    "src": "0:680:7"
+    "src": "0:756:7"
   },
   "compiler": {
     "name": "solc",
@@ -491,7 +677,7 @@
   },
   "networks": {},
   "schemaVersion": "3.3.1",
-  "updatedAt": "2020-12-24T16:37:28.663Z",
+  "updatedAt": "2020-12-24T20:29:14.468Z",
   "devdoc": {
     "methods": {}
   },
