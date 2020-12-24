@@ -2141,20 +2141,20 @@ fn do_ecpairing(mut val: Value) -> Option<bool> {
                                 return None;
                             }
                         }
-                        let ax = Fq::from_slice(&uis[0].to_bytes_be()).unwrap();
-                        let ay = Fq::from_slice(&uis[1].to_bytes_be()).unwrap();
+                        let ax = if let Ok(t) = Fq::from_slice(&uis[0].to_bytes_be()) { t } else { return Some(false); };
+                        let ay = if let Ok(t) = Fq::from_slice(&uis[1].to_bytes_be()) { t } else { return Some(false); };
                         let ba = Fq2::new(
-                            Fq::from_slice(&uis[2].to_bytes_be()).unwrap(),
-                            Fq::from_slice(&uis[3].to_bytes_be()).unwrap(),
+                            if let Ok(t) = Fq::from_slice(&uis[2].to_bytes_be())  { t } else { return Some(false); },
+                            if let Ok(t) = Fq::from_slice(&uis[3].to_bytes_be()) { t } else { return Some(false); },
                         );
                         let bb = Fq2::new(
-                            Fq::from_slice(&uis[4].to_bytes_be()).unwrap(),
-                            Fq::from_slice(&uis[5].to_bytes_be()).unwrap(),
+                            if let Ok(t) = Fq::from_slice(&uis[4].to_bytes_be()) { t } else { return Some(false); },
+                            if let Ok(t) = Fq::from_slice(&uis[5].to_bytes_be()) { t } else { return Some(false); },
                         );
                         let b = if ba.is_zero() && bb.is_zero() {
                             G2::zero()
                         } else {
-                            AffineG2::new(ba, bb).unwrap().into()
+                            if let Ok(t) = AffineG2::new(ba, bb) { t.into() } else { return Some(false); }
                         };
                         let a = if ax.is_zero() && ay.is_zero() {
                             G1::zero()
