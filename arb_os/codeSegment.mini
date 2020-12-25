@@ -186,7 +186,7 @@ func unreachableAfterOpcode(opcode: uint) -> bool {
         || (opcode == 0x1e)  // invalid
         || (opcode == 0x1f)  // invalid
         || ((opcode >= 0x21) && (opcode <= 0x2f)) // invalid
-        || ((opcode >= 0x47) && (opcode <= 0x4f)) // invalid
+        || ((opcode >= 0x48) && (opcode <= 0x4f)) // invalid
         || (opcode == 0x56)  // JUMP
         || ((opcode >= 0x5c) && (opcode <= 0x5f)) // invalid
         || ((opcode >= 0xa5) && (opcode <= 0xef)) // invalid
