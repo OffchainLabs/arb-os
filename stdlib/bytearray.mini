@@ -12,6 +12,8 @@ use std::expandingIntArray::expandingIntArray_setN;
 use std::expandingIntArray::expandingIntArray_op;
 use std::expandingIntArray::expandingIntArray_opConsecutive;
 
+const TwoTo64 = 0x10000000000000000;
+
 type OpClosureFunc = func(any, uint) -> (uint, any)
 type opClosure = struct {
 	f: OpClosureFunc,
@@ -78,7 +80,7 @@ public func marshalledBytes_hash(mb: MarshalledBytes) -> bytes32 {
 //        returns a new bytearray holding the unmarshaled bytes, or None if unmarshalled array would be too large
 public func bytearray_unmarshalBytes(inBytes: MarshalledBytes) -> option<ByteArray> {
     let nbytes = inBytes.nbytes;
-    if (nbytes > 0x100000000000000000000000000000000) {
+    if (nbytes > const::TwoTo64) {
         return None;
     }
     let nwords = (nbytes+31)/32;
@@ -162,7 +164,7 @@ public func bytearray_get64(ba: ByteArray, offset: uint) -> uint {
         return ret;
     } else {
         let res = bytearray_get256(ba, offset-ba.sliceOffset);
-        let ret = res / 0x1000000000000000000000000000000000000000000000000;
+        let ret = asm(256-64, res) uint { shr };
         if (bytesToTrim > 0) {
             ret = ret & ~(asm(8*bytesToTrim, 1) uint { shl } - 1);
         }
@@ -203,7 +205,7 @@ public func bytearray_get256(ba: ByteArray, offset: uint) -> uint {
 // bytearray_setbyte writes one byte to a ByteArray, returns the resulting ByteArray
 public func bytearray_setByte(ba: ByteArray, offset: uint, val: uint) -> ByteArray {
     if (offset >= ba.size) {
-        if (offset >= 0x100000000000000000000000000000000) {
+        if (offset >= const::TwoTo64) {
             return ba;    // ignore out-of-bounds write
         }
         ba = ba with { size: offset+1 };
@@ -222,7 +224,7 @@ public func bytearray_setByte(ba: ByteArray, offset: uint, val: uint) -> ByteArr
 
 // bytearray_set64 writes an 8-byte chunk to a ByteArray, returning the resulting ByteArray
 public func bytearray_set64(ba: ByteArray, offset: uint, value: uint) -> ByteArray {
-    if (offset >= 0x100000000000000000000000000000000-7) {
+    if (offset >= const::TwoTo64 - 7) {
         return ba;    // ignore out-of-bounds write
     }
     if (offset+8 > ba.size) {
@@ -260,7 +262,7 @@ public func bytearray_set64(ba: ByteArray, offset: uint, value: uint) -> ByteArr
 
 // bytearray_set256 writes a 32-byte chunk to a ByteArray, returning the resulting ByteArray
 public func bytearray_set256(ba: ByteArray, offset: uint, value: uint) -> ByteArray {
-    if (offset >= 0x100000000000000000000000000000000-31) {
+    if (offset >= const::TwoTo64 - 31) {
         return ba;    // ignore out-of-bounds write
     }
     if (offset+32 > ba.size) {
@@ -299,9 +301,11 @@ public func bytearray_copy(
     toOffset: uint,
     nbytes: uint,
 ) -> ByteArray {
-    if ((fromOffset >= 0x100000000000000000000000000000000)
-        || (toOffset >= 0x100000000000000000000000000000000)
-        || (nbytes >= 0x100000000000000000000000000000000) ) {
+    if ((fromOffset >= const::TwoTo64)
+        || (toOffset >= const::TwoTo64)
+        || (nbytes > const::TwoTo64)
+        || (fromOffset + nbytes > const::TwoTo64)
+        || (toOffset + nbytes > const::TwoTo64) ){
         return to;  // ignore out-of-bounds parameters
     }
 
@@ -324,17 +328,17 @@ public func bytearray_copy(
 }
 
 public func bytearray_extract(from: ByteArray, offset: uint, nbytes: uint) -> ByteArray {
-    if (offset >= 0x100000000000000000000000000000000) {
+    if (offset >= const::TwoTo64) {
         return bytearray_new(0);
-    }
-    if ((nbytes >= 0x100000000000000000000000000000000) || (offset+nbytes >= 0x100000000000000000000000000000000)) {
+    } elseif ((nbytes >= const::TwoTo64) || (offset+nbytes > const::TwoTo64)) {
         return bytearray_new(0);
+    } else {
+        return from with {
+            size: nbytes
+        } with {
+            sliceOffset: offset + from.sliceOffset
+        };
     }
-    return from with {
-        size: nbytes
-    } with {
-        sliceOffset: offset + from.sliceOffset
-    };
 }
 
 func basb_closure_func(args: (uint, uint), oldval: uint) -> (uint, uint) { // returns (newval, junk)
