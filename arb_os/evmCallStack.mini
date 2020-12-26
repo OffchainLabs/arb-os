@@ -108,8 +108,7 @@ type EvmCallFrame = struct {
     selfDestructQueue: Queue,           // set of self-destruct directives, including those created by this call and its subcalls
     resumeInfo: option<ResumeInfo>,     // if call is suspended, its state will be saved here
     sendQueue: Queue,                   // outgoing messages, including those created by this call and its subcalls
-    parent: option<any>,                // call-frame that created this one, or None if this is a top-level call
-                      // parent is really an option<EvmCallFrame>, but compiler doesn't allow recursive types
+    parent: option<EvmCallFrame>,                // call-frame that created this one, or None if this is a top-level call
 }
 
 type ReturnInfo = struct {  // information about a call that previously completed
@@ -142,6 +141,23 @@ public impure func evmCallStack_init() {
     globalCallStack = None<EvmCallFrame>;
 }
 
+public impure func evmCallStack_stackInfo() -> (uint, (address, address), (address, address)) {
+    if let Some(topFrame) = globalCallStack {
+        let sndRunningAs = address(0);
+        let sndRunningCodeFrom = address(0);
+        if let Some(sndFrame) = unsafecast<option<EvmCallFrame>>(topFrame.parent) {
+            sndRunningAs = sndFrame.runningAs;
+            sndRunningCodeFrom = sndFrame.runningCodeFrom;
+        }
+        return (
+            globalCurrentTxRequest.incomingRequest.requestId,
+            (topFrame.runningAs, topFrame.runningCodeFrom),
+            (sndRunningAs, sndRunningCodeFrom),
+        );
+    } else {
+        return (0, (address(0), address(0)), (address(0), address(0)));
+    }
+}
 
 type TxRequestData = struct {
     maxGas: uint,
@@ -207,7 +223,7 @@ public impure func initEvmCallStack(
                     selfDestructQueue: queue_new(),
                     resumeInfo: None<ResumeInfo>,
                     sendQueue: queue_new(),
-                    parent: None<any>
+                    parent: None<EvmCallFrame>
                 });
 
                 emptyAvmStack();
@@ -357,7 +373,7 @@ public impure func initEvmCallStackForConstructor(
             selfDestructQueue: queue_new(),
             resumeInfo: None<ResumeInfo>,
             sendQueue: queue_new(),
-            parent: None<any>
+            parent: None<EvmCallFrame>
         });
 
         if (gasAccounting_startTxCharges(request.maxGas, request.gasPrice, request.caller) != None<()>) {
@@ -411,8 +427,8 @@ public impure func evmCallStack_doCall(
             // The size of our stipend was chosen experimentally, to make sure a call that will run on Ethereum will run here.
             gas = gas + 20000;
         }
-        if (gas > availableGas) {
-            gas = availableGas;  // don't give the callee more gas than the caller has
+        if (gas > 63*availableGas/64) {
+            gas = 63*availableGas/64;  // don't give the callee more than 63/64 of the call's gas
         }
 
         let callerAddr = topFrame.runningAs;
@@ -514,7 +530,7 @@ public impure func evmCallStack_returnFromCall(
     let memory = topFrame.memory;
     let returnData = bytearray_extract(memory, returnOffset, returnLength);
 
-    if let Some(newTopFrame) = unsafecast<option<EvmCallFrame>>(topFrame.parent) {
+    if let Some(newTopFrame) = topFrame.parent {
         // Returning from a non-top-level call
 
         topFrame = topFrame with {   // copy cached account back into callframe's main accountStore
@@ -847,8 +863,7 @@ public impure func evmCallStack_oldestCallFrame() -> option<EvmCallFrame> {
     let frame = globalCallStack?;
     loop {
         if let Some(parent) = frame.parent {
-            // do "unsafe" cast because compiler doesn't know the true type of parent
-            frame = unsafecast<EvmCallFrame>(parent);
+            frame = parent;
         } else {
             return Some(frame);
         }
@@ -1007,33 +1022,6 @@ public impure func evmCallStack_selfDestructCurrentAccount(owner: address) {
     }
 }
 
-public impure func evmCallStack_cloneContract(addr: address) -> option<address> {
-    let (seqNum, acct) = account_fetchAndIncrSeqNum(
-        evmCallStack_getAccount(addr)?
-    );
-    if ( ! evmCallStack_setAccount(addr, acct)) {
-        return None;
-    }
-
-    let newAddr = address(hash(hash(addr), hash(seqNum)));
-
-    let topFrame = globalCallStack?;
-    let acctStore = topFrame.accountStore;
-    if (addr == topFrame.runningAs) {
-        // we're touching the cached account, so copy it back into the acctStore before cloneContract
-        //     and we'll copy it back out after cloneContract
-        acctStore = accountStore_set(acctStore, topFrame.runningAs, topFrame.runningAsAccount);
-    }
-    acctStore = accountStore_cloneContract(acctStore, addr, newAddr)?;
-    if (addr == topFrame.runningAs) {
-        topFrame = topFrame with { runningAsAccount: accountStore_get(acctStore, topFrame.runningAs) };
-    }
-    topFrame = topFrame with { accountStore: acctStore };
-    globalCallStack = Some(topFrame);
-
-    return Some(newAddr);
-}
-
 public func evmCallFrame_runningAsAddress(frame: EvmCallFrame) -> address {
     return frame.runningAs;
 }
@@ -1087,9 +1075,7 @@ public func evmCallFrame_getSelfDestructQueue(frame: EvmCallFrame) -> Queue {
 }
 
 public func evmCallFrame_getParent(frame: EvmCallFrame) -> option<EvmCallFrame> {
-    return unsafecast<option<EvmCallFrame>>(frame.parent);
-    // unsafecast is safe because underlying type is really EvmCallFrame
-    //    (compiler doesn't know because it doesn't accept recursive types)
+    return frame.parent;
 }
 
 public impure func evmCallStack_callHitError(errInfo: any) {

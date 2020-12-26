@@ -36,7 +36,7 @@ type MarshalledBytes = struct {
 
 type MarshalledBytesCell = struct {
     first: uint,
-    rest: any,  // really a MarshalledbytesCell, but compiler can't handle recursive types
+    rest: MarshalledBytesCell,
 }
 
 public func marshalledBytes_firstByte(mb: MarshalledBytes) -> uint {
@@ -46,7 +46,7 @@ public func marshalledBytes_firstByte(mb: MarshalledBytes) -> uint {
         return 0;
     }
     while (nbytes > 32) {
-        contents = unsafecast<MarshalledBytesCell>(contents.rest);
+        contents = contents.rest;
         nbytes = nbytes-32;
     }
     return asm(256-8, contents.first) uint { shr };
@@ -83,7 +83,7 @@ public func bytearray_unmarshalBytes(inBytes: MarshalledBytes) -> option<ByteArr
     while (nwords > 0) {
         nwords = nwords-1;
         eia = setbuffer256(eia, nwords*32, words.first);
-        words = unsafecast<MarshalledBytesCell>(words.rest);
+        words = words.rest;
     }
 
     return Some(struct {

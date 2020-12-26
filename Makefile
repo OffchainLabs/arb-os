@@ -4,7 +4,7 @@ BUILTINDIR = builtin
 STDDIR = stdlib
 
 TEMPLATES = $(ARBOSDIR)/contractTemplates.mini
-TESTFILES = $(BUILTINDIR)/kvstest.mexe $(STDDIR)/queuetest.mexe $(BUILTINDIR)/arraytest.mexe $(BUILTINDIR)/globaltest.mexe $(STDDIR)/priorityqtest.mexe $(STDDIR)/bytearraytest.mexe $(STDDIR)/keccaktest.mexe $(STDDIR)/rlptest.mexe $(STDDIR)/storageMapTest.mexe $(BUILTINDIR)/maptest.mexe $(STDDIR)/sha256test.mexe minitests/codeloadtest.mexe
+TESTFILES = $(BUILTINDIR)/kvstest.mexe $(STDDIR)/queuetest.mexe $(BUILTINDIR)/arraytest.mexe $(BUILTINDIR)/globaltest.mexe $(STDDIR)/priorityqtest.mexe $(STDDIR)/bytearraytest.mexe $(STDDIR)/keccaktest.mexe $(STDDIR)/biguinttest.mexe $(STDDIR)/rlptest.mexe $(STDDIR)/storageMapTest.mexe $(BUILTINDIR)/maptest.mexe $(STDDIR)/sha256test.mexe minitests/codeloadtest.mexe
 ARBOS = $(ARBOSDIR)/arbos.mexe
 
 all: $(TESTFILES) $(TEMPLATES) $(ARBOS) test
@@ -44,6 +44,9 @@ minitests/codeloadtest.mexe: minitests/codeloadtest.mini
 
 $(STDDIR)/keccaktest.mexe: $(STDDIR)/keccaktest.mini
 	$(CARGORUN) compile $(STDDIR)/keccaktest.mini $(STDDIR)/keccak.mao $(STDDIR)/bytearray.mao $(STDDIR)/expandingIntArray.mao -o $(STDDIR)/keccaktest.mexe
+
+$(STDDIR)/biguinttest.mexe: $(STDDIR)/biguinttest.mini $(STDDIR)/biguint.mini
+	$(CARGORUN) compile $(STDDIR)/biguinttest.mini -o $(STDDIR)/biguinttest.mexe
 
 $(STDDIR)/sha256test.mexe: $(STDDIR)/sha256test.mini
 	$(CARGORUN) compile $(STDDIR)/sha256test.mini -o $(STDDIR)/sha256test.mexe
