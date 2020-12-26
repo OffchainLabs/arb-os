@@ -899,7 +899,7 @@ public impure func restoreAuxStack(saved: Stack) {
 }
 
 public impure func saveAvmAndAuxStacks() -> Stack {
-    asm(saveAuxStack,) { };
+    asm(saveAuxStack(),) { };    // push stackified aux stack contents onto the main stack
     return saveAvmStack();
 }
 
