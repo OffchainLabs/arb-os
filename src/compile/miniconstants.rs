@@ -133,6 +133,7 @@ pub fn init_constant_table() -> HashMap<String, Uint256> {
         ("AVM_ecadd", 0x81),
         ("AVM_ecmul", 0x82),
         ("AVM_ecpairing", 0x83),
+        ("AVM_debugprint", 0x90),
         // L1 message types
         ("L1MessageType_ethDeposit", 0),
         ("L1MessageType_erc20Deposit", 1),

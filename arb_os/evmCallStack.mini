@@ -138,6 +138,23 @@ public impure func evmCallStack_init() {
     globalCallStack = None<EvmCallFrame>;
 }
 
+public impure func evmCallStack_stackInfo() -> (uint, (address, address), (address, address)) {
+    if let Some(topFrame) = globalCallStack {
+        let sndRunningAs = address(0);
+        let sndRunningCodeFrom = address(0);
+        if let Some(sndFrame) = unsafecast<option<EvmCallFrame>>(topFrame.parent) {
+            sndRunningAs = sndFrame.runningAs;
+            sndRunningCodeFrom = sndFrame.runningCodeFrom;
+        }
+        return (
+            globalCurrentTxRequest.incomingRequest.requestId,
+            (topFrame.runningAs, topFrame.runningCodeFrom),
+            (sndRunningAs, sndRunningCodeFrom),
+        );
+    } else {
+        return (0, (address(0), address(0)), (address(0), address(0)));
+    }
+}
 
 type TxRequestData = struct {
     maxGas: uint,
@@ -409,8 +426,8 @@ public impure func evmCallStack_doCall(
             // The size of our stipend was chosen experimentally, to make sure a call that will run on Ethereum will run here.
             gas = gas + 20000;
         }
-        if (gas > availableGas) {
-            gas = availableGas;  // don't give the callee more gas than the caller has
+        if (gas > 63*availableGas/64) {
+            gas = 63*availableGas/64;  // don't give the callee more than 63/64 of the call's gas
         }
 
         let callerAddr = topFrame.runningAs;

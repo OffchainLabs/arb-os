@@ -14,6 +14,7 @@ use std::storageMap::StorageMap;
 use chainParameters::chainParams_chainId;
 use errorHandler::errorHandler;
 
+use evmCallStack::evmCallStack_stackInfo;
 use evmCallStack::evmCallStack_topFrame;
 use evmCallStack::evmCallStack_oldestCallFrame;
 use evmCallStack::evmCallStack_setAccount;
@@ -340,7 +341,7 @@ public impure func evmOp_extcodehash(addrAsUint: uint) -> bytes32 {
     let addr = address(addrAsUint);     // truncates if necessary
     if let Some(topFrame) = evmCallStack_topFrame() {
         let acct = evmCallFrame_getAccount(topFrame, addr);
-        if (! account_isEmpty(acct)) {
+        if (account_isEmpty(acct)) {
             return bytes32(0);
         }
         if let Some(code) = account_getCode(acct) {
@@ -860,7 +861,8 @@ public impure func evmOp_revert(memOffset: uint, memNbytes: uint) {
 }
 
 public impure func evmOp_revert_knownCodePc(codeAddr: address, evmPc: uint, memOffset: uint, memNbytes: uint) {
-    asm((10000, codeAddr, evmPc),) { debugprint };
+    let (txid, addrs, parentAddrs) = evmCallStack_stackInfo();
+    asm((10000, codeAddr, evmPc, txid, addrs, parentAddrs),) { debugprint };
     evmOp_revert(memOffset, memNbytes);
 }
 
