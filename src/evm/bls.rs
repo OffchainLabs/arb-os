@@ -152,6 +152,59 @@ pub fn _evm_test_bls_registry(log_to: Option<&Path>, debug: bool) {
     }
 }
 
-// use bn::{pairing, AffineG1, AffineG2, Fq, Fq2, Group, Gt, G1, G2};
-// ADD HERE: BLS key generation, BLS signature on a &[u8] with a key, aggregation of signatures
+use bn::{pairing, AffineG1, AffineG2, Fq, Fq2, Group, Gt, G1, G2};
 
+pub struct BLSPublicKey {
+    //TODO: add fields
+}
+
+pub struct BLSPrivateKey {
+    //TODO: add fields
+}
+
+pub struct BLSSignature {
+    //TODO: add fields
+}
+
+pub struct BLSAggregateSignature {
+    //TODO: add fields
+}
+
+pub fn generate_bls_key_pair() -> (BLSPublicKey, BLSPrivateKey) {
+    let random_generator = rand::thread_rng();
+    //TODO: implement this
+    (BLSPublicKey{}, BLSPrivateKey{})  // temporary, for typechecking
+}
+
+impl BLSPrivateKey {
+    pub fn sign_message(&self, message: &[u8]) -> BLSSignature {
+        //TODO: implement this
+        BLSSignature{}  // temporary, for typechecking
+    }
+}
+
+impl BLSPublicKey {
+    pub fn to_bytes(&self) -> Vec<u8> {
+        //TODO: implement this
+        vec![]   // temporary, for typechecking
+    }
+}
+
+impl BLSSignature {
+    pub fn to_bytes(&self) -> Vec<u8> {
+        //TODO: implement this
+        vec![]   // temporary, for typechecking
+    }
+}
+
+impl BLSAggregateSignature {
+    pub fn new(sigs: Vec<BLSSignature>, messages: Vec<&[u8]>) -> Self {
+        //TODO: implement this
+        BLSAggregateSignature{}   // temporary, for typechecking
+    }
+
+    pub fn to_bytes(&self) -> Vec<u8> {
+        //TODO: implement this
+        vec![]     // temporary, for typechecking
+    }
+}
