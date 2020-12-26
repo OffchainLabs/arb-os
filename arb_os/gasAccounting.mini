@@ -65,7 +65,7 @@ var gasAccountingInfo: struct {
     overheadTracker: OverheadTracker,
 };
 
-var gasAccountingConstants: struct {
+var gasAccountingParams: struct {
     SpeedLimitPerBlock: uint,
     GasPoolMax: int,
     BaseGasPrice: uint,
@@ -101,7 +101,7 @@ public impure func gasAccounting_init() {
     if (maxBacklogSeconds < 4 * millisecondsPerBlock / 1000) {
         maxBacklogSeconds = 4 * millisecondsPerBlock / 1000;
     }
-    gasAccountingConstants = struct {
+    gasAccountingParams = struct {
         SpeedLimitPerBlock: speedLimitPerSecond * millisecondsPerBlock / 1000,
         GasPoolMax: int(speedLimitPerSecond * maxBacklogSeconds),
         BaseGasPrice: 0,
@@ -122,7 +122,7 @@ public impure func gasAccounting_init() {
     }
 
     gasAccountingInfo = struct {
-        gasPool: gasAccountingConstants.GasPoolMax,
+        gasPool: gasAccountingParams.GasPoolMax,
         reserve: 0,
         owedToValidators: 0,
         totalPaidToValidators: 0,
@@ -139,7 +139,7 @@ public impure func gasAccounting_init() {
 }
 
 public impure func gasAccounting_setFeeParams(baseGasPrice: uint, storageCharge: uint, feeRecipient: address) {
-    gasAccountingConstants = gasAccountingConstants with {
+    gasAccountingParams = gasAccountingParams with {
         BaseGasPrice: baseGasPrice
     } with {
         StorageCharge: storageCharge
@@ -160,14 +160,14 @@ public impure func gasAccounting_postInitMessage() {
     let millisecondsPerBlock = chainParams_millisecondsPerBlock();
     let speedLimitPerSecond = chainParams_speedLimitPerSecond();
     let speedLimitPerBlock = millisecondsPerBlock * speedLimitPerSecond / 1000;
-    gasAccountingConstants = struct {
+    gasAccountingParams = struct {
         SpeedLimitPerBlock: speedLimitPerBlock,
         GasPoolMax: int(5 * speedLimitPerBlock),
         BaseGasPrice: 0,
         TxGasLimit: 2 * speedLimitPerBlock,
         StorageCharge: 0,
     };
-    gasAccountingInfo = gasAccountingInfo with { gasPool: gasAccountingConstants.GasPoolMax };
+    gasAccountingInfo = gasAccountingInfo with { gasPool: gasAccountingParams.GasPoolMax };
 }
 
 public impure func gasAccounting_summaryToPublish() -> any {
@@ -251,8 +251,8 @@ public impure func gasAccounting_startTxCharges(
 
     let _ = switchToChargingOS();   // call this in case we're somehow still charging a tx; ignore return value
 
-    if (maxGas > gasAccountingConstants.TxGasLimit) {
-        maxGas = gasAccountingConstants.TxGasLimit;
+    if (maxGas > gasAccountingParams.TxGasLimit) {
+        maxGas = gasAccountingParams.TxGasLimit;
     }
 
     // take funds from the payer, enough to pay for maxGas at gasPrice
@@ -321,7 +321,7 @@ public impure func gasAccounting_endTxCharges(storageDelta: int) -> option<GasUs
         reserve: gasAccountingInfo.reserve + (txState.weiHeldForGas - refund)
     } with {
         owedToValidators: gasAccountingInfo.owedToValidators
-                             + gasAccountingConstants.BaseGasPrice * (txState.originalMax - gasToRefund)
+                             + gasAccountingParams.BaseGasPrice * (txState.originalMax - gasToRefund)
     } with {
         txState: None<TxGasState>
     };
@@ -357,7 +357,7 @@ public impure func gasAccounting_extraGasCharge(numArbGas: uint) {
 
 public impure func gasAccounting_chargeForStorage(numStorageUnits: uint) {
     if let Some(txState) = gasAccountingInfo.txState {
-        gasAccounting_extraGasCharge(numStorageUnits * gasAccountingConstants.StorageCharge);
+        gasAccounting_extraGasCharge(numStorageUnits * gasAccountingParams.StorageCharge);
     }
 }
 
@@ -489,7 +489,7 @@ public impure func getNextRequestFromCongestionAuction() -> (
         gasAccountingInfo = gasAccountingInfo with {
             overheadTracker: uot
         } with {
-            owedToValidators: gasAccountingInfo.owedToValidators + delayedGas * gasAccountingConstants.BaseGasPrice
+            owedToValidators: gasAccountingInfo.owedToValidators + delayedGas * gasAccountingParams.BaseGasPrice
         } with {
             gasPool: gasAccountingInfo.gasPool - int(delayedGas)
         };
@@ -519,7 +519,7 @@ public impure func getNextRequestFromCongestionAuction() -> (
 
         // figure out the gas surcharge for the next block, to cover overhead
         let deficit = (int(gasAccountingInfo.owedToValidators) - int(gasAccountingInfo.reserve));
-        let surchargeBase = int(gasAccountingInfo.gasSurcharge) + deficit / int(gasAccountingConstants.SpeedLimitPerBlock);
+        let surchargeBase = int(gasAccountingInfo.gasSurcharge) + deficit / int(gasAccountingParams.SpeedLimitPerBlock);
         if (surchargeBase < int(0)) {
             surchargeBase = int(0);
         }
@@ -531,13 +531,13 @@ public impure func getNextRequestFromCongestionAuction() -> (
         let blocksElapsed = blockNum - gasAccountingInfo.lastBlockNumSeen;
         let price = gasAccountingInfo.currentGasPrice;
         let gasPool = int(gasAccountingInfo.gasPool);
-        let speedLimit = gasAccountingConstants.SpeedLimitPerBlock;
-        while((blocksElapsed > 0) && (   (gasAccountingInfo.gasPool < gasAccountingConstants.GasPoolMax)
-                                      || (gasAccountingInfo.currentGasPrice > gasAccountingConstants.BaseGasPrice) )) {
+        let speedLimit = gasAccountingParams.SpeedLimitPerBlock;
+        while((blocksElapsed > 0) && (   (gasAccountingInfo.gasPool < gasAccountingParams.GasPoolMax)
+                                      || (gasAccountingInfo.currentGasPrice > gasAccountingParams.BaseGasPrice) )) {
             blocksElapsed = blocksElapsed-1;
             gasPool = gasPool + int(speedLimit);
-            if (gasPool > gasAccountingConstants.GasPoolMax) {
-                gasPool = gasAccountingConstants.GasPoolMax;
+            if (gasPool > gasAccountingParams.GasPoolMax) {
+                gasPool = gasAccountingParams.GasPoolMax;
             }
 
             let maxtc = gasPool;
@@ -545,12 +545,12 @@ public impure func getNextRequestFromCongestionAuction() -> (
                 maxtc = int(speedLimit);
             }
             price = price * (19 * speedLimit - uint(maxtc)) / (16 * speedLimit);
-            if (price < gasAccountingConstants.BaseGasPrice) {
-                price = gasAccountingConstants.BaseGasPrice;
+            if (price < gasAccountingParams.BaseGasPrice) {
+                price = gasAccountingParams.BaseGasPrice;
             }
         }
-        if (price < gasAccountingConstants.BaseGasPrice + gasAccountingInfo.gasSurcharge) {
-            price = gasAccountingConstants.BaseGasPrice + gasAccountingInfo.gasSurcharge;
+        if (price < gasAccountingParams.BaseGasPrice + gasAccountingInfo.gasSurcharge) {
+            price = gasAccountingParams.BaseGasPrice + gasAccountingInfo.gasSurcharge;
         }
         
         let gasAvailable = 0;
@@ -628,7 +628,7 @@ public impure func getNextRequestFromCongestionAuction() -> (
 }
 
 public impure func getGasLimitConstant() -> uint {
-    return gasAccountingConstants.TxGasLimit;
+    return gasAccountingParams.TxGasLimit;
 }
 
 public impure func gasAccounting_getFeeRecipient() -> option<address> {
