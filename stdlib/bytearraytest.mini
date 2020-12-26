@@ -20,6 +20,8 @@ use std::bytearray::bytearray_copy;
 
 use std::bytearray::marshalledBytes_hash;
 
+const TwoTo64 = 0x10000000000000000;
+const LargeOffset = 0xf000000000000000;
 
 impure func main() {
 	asm(tests(),) { log };
@@ -168,6 +170,8 @@ func tests() -> uint {
     let mb2 = bytearray_marshalFull(ba2);
     let mb3 = bytearray_marshalFull(ba3);
     if (mb2 != mb3) {
+        asm(mb2, ) { debugprint };
+        asm(mb3, ) { debugprint };
         return 16;
     }
 
@@ -200,6 +204,51 @@ func tests() -> uint {
 
     if (sum != (2500*4999)) {
         return 19;
+    }
+
+    // test handling of large bytearrays with large offsets
+    ba = bytearray_new(0);
+    if (bytearray_get256(ba, const::TwoTo64 - 32) != 0) {
+        return 18;
+    }
+    if (bytearray_get256(ba, const::TwoTo64) != 0) {
+        return 19;
+    }
+
+    ba = bytearray_set256(ba, const::LargeOffset, 42);
+    if (bytearray_size(ba) != (const::LargeOffset + 32)) {
+        return 20;
+    }
+    if (bytearray_get256(ba, const::LargeOffset) != 42) {
+        return 21;
+    }
+
+    let ba2 = bytearray_extract(ba, const::LargeOffset, 32);
+    if (bytearray_size(ba2) != 32) {
+        return 22;
+    }
+    if (bytearray_get256(ba2, 0) != 42) {
+        return 23;
+    }
+    if (bytearray_get256(ba2, const::LargeOffset) != 0) {
+        return 24;
+    }
+    ba2 = bytearray_set256(ba2, const::LargeOffset, 99);
+    if (bytearray_get256(ba2, const::LargeOffset) != 99) {
+        return 25;
+    }
+
+    ba = bytearray_set256(bytearray_new(0), const::TwoTo64-1, ~0);
+    if (bytearray_size(ba) != 0) {
+        return 26;
+    }
+    if (bytearray_get256(ba, const::TwoTo64-1) != 0) {
+        return 27;
+    }
+
+    let ba3 = bytearray_copy(ba2, 0, ba2, const::LargeOffset, const::LargeOffset);
+    if (bytearray_size(ba3) != bytearray_size(ba2)) {
+        return 28;
     }
 
 	return 0;
