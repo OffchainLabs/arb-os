@@ -6,7 +6,8 @@ use std::bytearray::ByteArray;
 use std::bytestream::ByteStream;
 use std::keccak::Hasher;
 
-import func builtin_arrayGetSafe(arr: []any, index: uint) -> option<any>;
+use core::array::array;
+use core::array::builtin_arrayGetSafe;
 
 use std::bytearray::bytearray_new;
 use std::bytearray::bytearray_size;
@@ -254,7 +255,7 @@ public func rlp_encodeList(
     let totalWritten = 0;
     let i = 0;
     while (i < numEncItems) {
-        let item = unsafecast<ByteArray>(builtin_arrayGetSafe(encodedItems, encItemsOffset+i)?);
+        let item = unsafecast<ByteArray>(builtin_arrayGetSafe(unsafecast<array>(encodedItems), encItemsOffset+i)?);
         totalSize = totalSize + bytearray_size(item);
         i = i+1;
     }

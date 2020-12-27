@@ -20,19 +20,8 @@ use std::bytearray::bytearray_set256;
 
 use evmCallStack::initEvmCallStack;
 
-// This is duplicated from messages.mini
-type TxRequestData = struct {
-    maxGas: uint,
-    gasPrice: uint,
-    seqNum: option<uint>,
-    caller: address,
-    calleeAddr: address,
-    value: uint,
-    calldata: ByteArray,
-    nonMutating: bool,
-    isConstructor: bool,
-    incomingRequest: IncomingRequest,
-}
+use messages::TxRequestData;
+
 
 public impure func tokens_erc20deposit(
     tokenAddress: address,

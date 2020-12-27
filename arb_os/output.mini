@@ -23,12 +23,8 @@ use inbox::IncomingRequest;
 use inbox::inbox_currentBlockNumber;
 use inbox::inbox_currentTimestamp;
 
+use gasAccounting::GasUsage;
 
-// This is declared identically in gasAccounting.mini
-type GasUsage = struct {
-    gasUsed: uint,
-    gasPriceWei: uint,
-}
 
 // PerBlockReceiptData is different from OutputStatistics for now; might want to unify
 type PerBlockReceiptData = struct {

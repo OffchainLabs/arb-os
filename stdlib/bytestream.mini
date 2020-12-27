@@ -3,22 +3,13 @@
 //
 
 use std::bytearray::ByteArray;
+use std::bytearray::bytearray_new;
 use std::bytearray::bytearray_size;
 use std::bytearray::bytearray_getByte;
 use std::bytearray::bytearray_get64;
 use std::bytearray::bytearray_get256;
 use std::bytearray::bytearray_extract;
 
-import func bytearray_new(unused: uint) -> ByteArray;
-import func bytearray_size(ba: ByteArray) -> uint;
-import func bytearray_slice(ba: ByteArray) -> uint;
-import func bytearray_buffer(ba: ByteArray) -> buffer;
-import func bytearray_getByte(ba: ByteArray, offset: uint) -> uint;
-import func bytearray_get64(ba: ByteArray, offset: uint) -> uint;
-import func bytearray_get256(ba: ByteArray, offset: uint) -> uint;
-import func bytearray_extract(ba: ByteArray, offset: uint, nbytes: uint) -> ByteArray;
-import func bytearray_wrap_slice(ba: buffer, offset: uint, nbytes: uint) -> ByteArray;
-import func bytearray_copy(from: ByteArray, fromOffset: uint, to: ByteArray, toOffset: uint, nbytes: uint) -> ByteArray;
 
 type ByteStream = struct {
     buf: buffer,
