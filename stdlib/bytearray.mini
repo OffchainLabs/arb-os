@@ -154,7 +154,7 @@ public func bytearray_get64(ba: ByteArray, offset: uint) -> uint {
         offset = offset + ba.sliceOffset;
         if (offset + bytesToRead >= 8) {
             let mask = asm(8*bytesToRead, 1) uint { shl } - 1;
-            return asm(8*(8-bytesToRead), getbuffer64(ba.contents, offset+bytesToRead-8)) uint { shl };
+            return asm(8*(8-bytesToRead), mask & getbuffer64(ba.contents, offset+bytesToRead-8)) uint { shl };
         } else {
             return getbuffer64(ba.contents, offset);
         }
@@ -174,7 +174,7 @@ public func bytearray_get256(ba: ByteArray, offset: uint) -> uint {
         offset = offset + ba.sliceOffset;
         if (offset + bytesToRead >= 32) {
             let mask = asm(8*bytesToRead, 1) uint { shl } - 1;
-            return asm(8*(32-bytesToRead), getbuffer256(ba.contents, offset+bytesToRead-32)) uint { shl };
+            return asm(8*(32-bytesToRead), mask & getbuffer256(ba.contents, offset+bytesToRead-32)) uint { shl };
         } else {
             return getbuffer256(ba.contents, offset);
         }
@@ -204,19 +204,21 @@ public func bytearray_wrap(cont: buffer, size: uint) -> ByteArray {
 
 // bytearray_setbyte writes one byte to a ByteArray, returns the resulting ByteArray
 public func bytearray_setByte(ba: ByteArray, offset: uint, value: uint) -> ByteArray {
-    if (offset >= ba.size) {
-        if (offset >= const::MaxByteArraySize) {
-            return ba;    // ignore out-of-bounds write
-        }
-        ba = ba with { size: offset+1 };
-    }
-    offset = offset + ba.sliceOffset;
     if (offset >= const::MaxByteArraySize) {
-        offset = offset - ba.sliceOffset;
+        return ba;    // ignore out-of-bounds write
+    }
+    if (offset >= const::MaxByteArraySize) {
         ba = bytearray_copy(ba, 0, bytearray_new(0), 0, ba.size);
+        if (offset+1 > ba.size) {
+            ba = ba with { size: offset+1 };
+        }
+    } else {
+        if (offset+1 > ba.size) {
+            ba = ba with { size: offset+1 };
+        }
+        offset = offset + ba.sliceOffset;
     }
     return ba with { contents: setbuffer8(ba.contents, offset, value) };
-    // return ba with { contents: ba.contents };
 }
 
 // bytearray_set64 writes an 8-byte chunk to a ByteArray, returning the resulting ByteArray
@@ -224,14 +226,18 @@ public func bytearray_set64(ba: ByteArray, offset: uint, value: uint) -> ByteArr
     if (offset >= const::MaxByteArraySize - 7) {
         return ba;    // ignore out-of-bounds write
     }
-    offset = offset + ba.sliceOffset;
     if (offset >= const::MaxByteArraySize - 7) {
-        offset = offset - ba.sliceOffset;
         ba = bytearray_copy(ba, 0, bytearray_new(0), 0, ba.size);
+        if (offset+8 > ba.size) {
+            ba = ba with { size: offset+8 };
+        }
+    } else {
+        if (offset+8 > ba.size) {
+            ba = ba with { size: offset+8 };
+        }
+        offset = offset + ba.sliceOffset;
     }
-    if (offset+8 > ba.size) {
-        ba = ba with { size: offset+8 };
-    }
+
     return ba with { contents: setbuffer64(ba.contents, offset, value) };
 }
 
@@ -240,14 +246,18 @@ public func bytearray_set256(ba: ByteArray, offset: uint, value: uint) -> ByteAr
     if (offset >= const::MaxByteArraySize - 31) {
         return ba;    // ignore out-of-bounds write
     }
-    offset = offset + ba.sliceOffset;
-    if (offset >= const::MaxByteArraySize - 31) {
-        offset = offset - ba.sliceOffset;
+    if (offset + ba.sliceOffset >= const::MaxByteArraySize - 31) {
         ba = bytearray_copy(ba, 0, bytearray_new(0), 0, ba.size);
+        if (offset+32 > ba.size) {
+            ba = ba with { size: offset+32 };
+        }
+    } else {
+        if (offset+32 > ba.size) {
+            ba = ba with { size: offset+32 };
+        }
+        offset = offset + ba.sliceOffset;
     }
-    if (offset+32 > ba.size) {
-        ba = ba with { size: offset+32 };
-    }
+
     return ba with { contents: setbuffer256(ba.contents, offset, value) };
 }
 
