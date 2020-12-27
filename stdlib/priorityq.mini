@@ -2,7 +2,9 @@
 // Copyright 2020, Offchain Labs, Inc. All rights reserved.
 //
 
-import func array_resize(a: []PqItem, newSize: uint, baseVal: any) -> []PqItem;
+use core::array::array;
+use core::array::array_resize;
+
 
 type PqItem = struct {
     priority: uint,
@@ -105,7 +107,7 @@ public func priorityq_insert(pq: PriorityQ, item: any, priority: uint) -> Priori
     if (pq.size == pq.capacity) {
         let newCapacity = 8*pq.capacity;
         pq = pq with { capacity: newCapacity }
-                with { contents: array_resize(pq.contents, newCapacity, null) };
+                with { contents: unsafecast<[]PqItem>(array_resize(unsafecast<array>(pq.contents), newCapacity, null)) };
     }
     let index = pq.size;
     let newpq = pq with { size: index+1 }

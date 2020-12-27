@@ -16,6 +16,8 @@ use accounts::accountStore_set;
 use accounts::account_addToEthBalance;
 use accounts::account_deductFromEthBalance;
 
+use messages::TxRequestData;
+
 use std::bytearray::bytearray_new;
 use std::bytearray::bytearray_getByte;
 use std::bytearray::bytearray_get256;
@@ -229,19 +231,6 @@ impure func switchToChargingOS() -> uint {
         asm(~0,) { setgas };
         return gasRemaining;
     }
-}
-
-// TxRequestData is declared identically in message.mini and elsewhere.
-type TxRequestData = struct {
-    maxGas: uint,
-    gasPrice: uint,
-    seqNum: option<uint>,
-    caller: address,
-    calleeAddr: address,
-    value: uint,
-    calldata: ByteArray,
-    nonMutating: bool,
-    incomingRequest: IncomingRequest,
 }
 
 // The next section of code implements the congestion auction. For each request, the auction
