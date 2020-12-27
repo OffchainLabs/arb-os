@@ -69,6 +69,9 @@ public impure func decompression_init() {
     globalIndexedAddressTable = addressTable_new();
 }
 
+// The global indexed address table is used for compression. The idea is that rather than sending a 20-byte
+//      address, we can just send an RLP-encoded index into the table.
+
 public impure func getGlobalAddressTable() -> IndexedAddressTable {
     return globalIndexedAddressTable;
 }
@@ -126,7 +129,7 @@ public impure func decompressAddress(
 ) -> option<(ByteStream, address)> {
     // Returns None if insufficient data in stream
     // A compressed address is one of three things:
-    //   * a single byte 0x80, which is interpreted as the null address
+    //   * a single byte 0x80, which is interpreted as the null address (which ArbOS current encodes as address 0)
     //   * an RLP-encoding of a value 1-19 bytes in length, which is interpreted as an index into
     //           the IndexedAddressTable, or
     //   * an RLP-encoding of a 20-byte value which is interpreted as an address.
@@ -146,6 +149,10 @@ public impure func decompressAddress(
 }
 
 public func decompressTokenAmount(bs: ByteStream) -> option<(ByteStream, uint)> {
+    // Returns None if insufficient data in stream
+    // A compressed token amount is either:
+    //   * an RLP-encoded zero, which is interpreted as zero
+    //   * an RLP-encoded non-zero integer I, followed by a byte B, which is interpreted as I*(10**B)
     let (ustr, base) = rlp_decodeUint(bs)?;
     if (base == 0) {
         return Some((ustr, 0));
@@ -175,6 +182,8 @@ public impure func decompressAndVerifyEcdsaSignedTx(
         seqNum = sn;
     }
 
+    // decompress the v portion of the signature; this will be 0 or 1 for an EIP-155 signature
+    //          otherwise it's a pre-EIP-155 signature (presumably with v = 27 or 28) so v needs no unpacking
     if (v < 2) {
         v = 35 + 2 * chainParams_chainId() + (1 - (v % 2));
     }
@@ -189,6 +198,13 @@ public impure func decompressAndVerifyEcdsaSignedTx(
         r: r,
         s: s
     };
+
+    // Now reconstruct the original transaction, before it was compressed.
+    // If this is actually the transaction that the sender originally signed, then recoverSigner will return the
+    //       signer's identity correctly, and we'll have exactly the tx that was originally signed.
+    // If not, then the result will be a pseudorandom signer. This will be a fake transaction that anybody could
+    //       have forged, without bothering with any decompression stuff. It will be rejected/ignored just like any
+    //       forged transaction would be.
     let signer = recoverSigner(tx)?;
     let encodedMessage = rlp_encodeMessageInfo(
         tx.seqNum,
@@ -231,12 +247,12 @@ impure func decompressTx(
     // decompress a compressed transaction, reading it from ByteStream
     // return None if insufficient data in the ByteStream
     // the TxRequestData we return will have an invalid dummy value in the incomingRequest field,
-    //         and we'll assume the caller will supply that later
+    //         and we'll assume the caller will fill that in later
     //
     // caller will tell us the tx sender if it knows the sender
     // (knowing the sender lets us compress the sequence number more efficiently)
     // if we aren't given the sender address, we'll return a dummy value in that slot of the TxRequestData,
-    //         and assume the caller will supply it later
+    //         and assume the caller will fill it in later
 
     let funcTableEntry = None<FunctionTableEntry>;
     let (ustr, firstByte) = bytestream_getByte(stream)?;  // peek at first byte of stream
@@ -333,6 +349,11 @@ impure func decompressTx(
         }
     ));
 }
+
+// The function table is another compression affordance. The idea is to keep a table of
+// (calldataPrefix, maxGas, payableFlag) triples. (A calldataPrefix is the four-byte code used by the Ethereum
+// ABI to identify which function is being called.) The idea is that clients often call the same function with
+// the same maxGas value. In this case we can just send a small table index instead of the redundant information.
 
 type FunctionTableEntry = struct {
     callDataPrefix: any,    // really a ByteArray, but compiler doesn't allow array of imported type

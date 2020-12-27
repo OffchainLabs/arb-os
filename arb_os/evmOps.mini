@@ -83,6 +83,9 @@ use std::keccak::keccak256;
 use std::rlp::keccakOfRlpEncodedUintPair;
 
 
+// evmOpJumpTable points to all of the functions that are callable by transpiled EVM code
+// calls from transpiled code always jump through this table, so we can replace these functions
+//          when ArbOS is upgraded, without needing to re-transpile anything
 var evmOpJumpTable: [const::NumEvmOps]impure func();
 
 public impure func evmOps_init() {
@@ -133,7 +136,7 @@ public impure func evmOps_init() {
         with  { [const::EvmOp_chainId] = unsafecast<impure func()>(chainParams_chainId) };
 }
 
-public impure func evmOps_trampoline(index: uint) {
+public impure func callThroughEvmOpsTable(index: uint) {
     asm(evmOpJumpTable[index],) {
         auxpop pop   // discard this function's call frame
         auxpop
@@ -495,7 +498,7 @@ public impure func evmOp_getjumpaddr(evm_pc: uint) -> impure func() {
             if let Some(codept) = jumpTable[evm_pc] {
                 return codept;
             } else {
-                evm_error();   // EVM code tried to jump to a forbidden EVM jump destination
+                evm_error();   // EVM code tried to jump to a location that isn't a JUMPDEST
                 evmCallStack_callHitError(11);
                 panic;
             }
@@ -680,6 +683,13 @@ public impure func evmOp_callAndReturn(
     retOffset: uint,
     retLength: uint
 ) -> bool {
+    // This does an EVM call, then returns from this function when the call is done.
+    // This differs from the common-case EVM call pattern, which jumps directly to a return codepoint when done.
+    // Note that it's not safe to just call this from outside of an EVM transaction, because ArbOS will expect the
+    //       EVM callstack to be non-empty when we call evmCallStack_doCall.  So clients of this function might
+    //       need to make a fake one-frame EVM call stack to keep ArbOS happy.
+    // (This function was written in advance of the need for it, so there might not be any calls to this.)
+
     let savedAuxStack = snapshotAuxStack();
 
     // remove first two items from saved aux stack, so we get our caller's aux stack state
@@ -754,7 +764,7 @@ public impure func evmOp_call(
     };
 
     // Now make the call.
-    // After the call completes, control will be thrown directly back to resumeCodePoint.
+    // After the call completes, control will normally be thrown directly back to resumeCodePoint.
     let res = evmCallStack_doCall(
         const::EVMCallType_call,
         gas,

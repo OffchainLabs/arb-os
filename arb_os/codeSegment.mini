@@ -24,7 +24,7 @@ use std::rlp::rlp_decodeUint;
 
 use chainParameters::chainParams_chainId;
 
-use evmOps::evmOps_trampoline;
+use evmOps::callThroughEvmOpsTable;
 
 use evmOps::evmOp_address;
 use evmOps::evmOp_balance;
@@ -636,7 +636,7 @@ impure func pushEvmInsnCall(evmOpNum: uint, code: AvmCodePoint) -> AvmCodePoint 
             code,
             pushInstructionImm(
                 const::AVM_jump,
-                evmOps_trampoline,
+                callThroughEvmOpsTable,
                 code,
             ),
         ),

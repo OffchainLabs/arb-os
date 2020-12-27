@@ -31,19 +31,8 @@ use inbox::IncomingRequest;
 
 use messages::TxRequestData;
 
-// A copy of this struct is defined in stdlib/rlp.mini.
-// The declaration there must remain consistent with the one here.
-type SignedTx = struct {
-    seqNum: uint,
-    gasPrice: uint,
-    gasLimit: uint,
-    to: address,
-    value: uint,
-    data: ByteArray,
-    v: uint,
-    r: uint,
-    s: uint
-}
+use std::rlp::SignedTx;
+
 
 public impure func translateSignedTx(req: IncomingRequest) -> option<TxRequestData> {
     // Given an IncomingRequest that contains an L2 signed tx message, translate the
