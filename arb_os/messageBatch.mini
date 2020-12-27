@@ -21,7 +21,7 @@ use std::bytearray::marshalledBytes_hash;
 
 use inbox::IncomingRequest;
 
-import func rlp_decodeUint(bs: ByteStream) -> option<(ByteStream, uint)>;
+use std::rlp::rlp_decodeUint;
 
 
 type MessageBatch = struct {

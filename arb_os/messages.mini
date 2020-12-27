@@ -50,12 +50,8 @@ use codeSegment::translateEvmCodeSegment;
 
 use inbox::IncomingRequest;
 
+use gasAccounting::GasUsage;
 
-// This is declared identically in gasAccounting.mini
-type GasUsage = struct {
-    gasUsed: uint,
-    gasPriceWei: uint,
-}
 
 public impure func handleL1Request(
     msg: IncomingRequest
