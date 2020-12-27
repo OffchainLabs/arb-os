@@ -57,11 +57,11 @@ var gasAccountingInfo: struct {
     owedToValidators: uint,       // wei owed for work done but not yet collected
     totalPaidToValidators: uint,  // total number of wei paid to validators over all time
     specialDebts: SpecialDebts,   // other debts, e.g. to active validators
-    gasSurcharge: uint,           // gas surcharge to cover unpaid overhead
     currentGasPrice: uint,        // gas price for this block
     gasRemainingThisBlock: uint,  // amount of gas remaining for this block
     lastBlockNumSeen: uint,       // last L1 block number seen by this module
     txState: option<TxGasState>,  // status of currently active tx (if there is one)
+    pricingState: GasPricingState, // state needed to set gas prices
     payValFeesTo: option<address>, // where to pay validator fees
     netFeeInfo: option<NetFeeInfo>,
     overheadTracker: OverheadTracker,
@@ -89,6 +89,12 @@ type NetFeeInfo = struct {
     rate2: FixedPoint,
     maxRate1: FixedPoint,
     maxRate2: FixedPoint,
+}
+
+type GasPricingState = struct {
+    costRecoveryPrice: uint,
+    previousAmountOwed: uint,
+    congestionPrice: uint,
 }
 
 type GasUsage = struct {
@@ -129,11 +135,15 @@ public impure func gasAccounting_init() {
         owedToValidators: 0,
         totalPaidToValidators: 0,
         specialDebts: specialDebts_new(),
-        gasSurcharge: 0,
         currentGasPrice: 0,
         gasRemainingThisBlock: 0,
         lastBlockNumSeen: 0,
         txState: None<TxGasState>,
+        pricingState: struct {
+            costRecoveryPrice: 0,
+            previousAmountOwed: 0,
+            congestionPrice: 0,
+        },
         payValFeesTo: None<address>,
         netFeeInfo: netFeeInfo,
         overheadTracker: overheadTracker_new(5, 0),
@@ -336,9 +346,9 @@ public impure func gasAccounting_extraGasCharge(numArbGas: uint) {
     // we're not counting this gas against the chain's speed limit,
     //       so add it back to the places it's going to be subtracted from
     gasAccountingInfo = gasAccountingInfo with {
-        gasRemainingThisBlock: gasAccountingInfo.gasRemainingThisblock + numArbGas
+        gasRemainingThisBlock: gasAccountingInfo.gasRemainingThisBlock + numArbGas
     } with {
-        gasPool: gasAccountingInfo.gasPool + numArbGas
+        gasPool: gasAccountingInfo.gasPool + int(numArbGas)
     };
 
 
@@ -460,7 +470,7 @@ type TxRequestData = struct {
     incomingRequest: IncomingRequest,
 }
 
-// The next section of code implements the congestion auction. For each request, the auction
+// getNextRequestFromCongestionAuction implements the congestion auction. For each request, the auction
 //     determines (a) whether to approve the request for execution, and (b) what gas price the request will pay.
 // This uses a "pull" interface: the main run loop calls this to get the next request.
 //     This code will in turn call back to the inbox to pull in incoming requests from the L1.
@@ -473,8 +483,10 @@ public impure func getNextRequestFromCongestionAuction() -> (
     let (isChargeable, blockNum, payer, maxGas, gasBid) = getRequestGasInfo(maybeRequest, maybeTx);
 
     if (blockNum > gasAccountingInfo.lastBlockNumSeen) {
-        // it's the first tx of a new block
+        // it's the first tx of a new block, so do beginning-of-block work
+
         let (uot, delayedGas) = overheadTracker_advanceToBlock(gasAccountingInfo.overheadTracker, blockNum);
+
         gasAccountingInfo = gasAccountingInfo with {
             overheadTracker: uot
         } with {
@@ -492,6 +504,7 @@ public impure func getNextRequestFromCongestionAuction() -> (
         };
         payOutFundsToValidators();
         if (gasAccountingInfo.reserve > 0) {
+            // all debts are paid and funds remain in the reserve, so we can pay network fee
             if let Some(netFeeInfo) = gasAccountingInfo.netFeeInfo {
                 let amt = fixedPoint_integerPart(fixedPoint_mulByUint(netFeeInfo.rate2, gasAccountingInfo.reserve));
                 let globalAS = getGlobalAccountStore();
@@ -506,23 +519,13 @@ public impure func getNextRequestFromCongestionAuction() -> (
             }
         }
 
-        // figure out the gas surcharge for the next block, to cover overhead
-        let deficit = (int(gasAccountingInfo.owedToValidators) - int(gasAccountingInfo.reserve));
-        let surchargeBase = int(gasAccountingInfo.gasSurcharge) + deficit / int(gasAccountingParams.SpeedLimitPerBlock);
-        if (surchargeBase < int(0)) {
-            surchargeBase = int(0);
-        }
-        gasAccountingInfo = gasAccountingInfo with {
-            gasSurcharge: uint(surchargeBase) / 20
-        };
-
-        // determine gas pool, gas price, and gas limit for the new block
+        // determine gas pool and congestion price for next block
         let blocksElapsed = blockNum - gasAccountingInfo.lastBlockNumSeen;
-        let price = gasAccountingInfo.currentGasPrice;
-        let gasPool = int(gasAccountingInfo.gasPool);
+        let congestionPrice = gasAccountingInfo.pricingState.congestionPrice;
+        let gasPool = gasAccountingInfo.gasPool;
         let speedLimit = gasAccountingParams.SpeedLimitPerBlock;
         while((blocksElapsed > 0) && (   (gasAccountingInfo.gasPool < gasAccountingParams.GasPoolMax)
-                                      || (gasAccountingInfo.currentGasPrice > gasAccountingParams.BaseGasPrice) )) {
+                                      || (congestionPrice > gasAccountingParams.BaseGasPrice) )) {
             blocksElapsed = blocksElapsed-1;
             gasPool = gasPool + int(speedLimit);
             if (gasPool > gasAccountingParams.GasPoolMax) {
@@ -533,19 +536,33 @@ public impure func getNextRequestFromCongestionAuction() -> (
             if (maxtc < int(speedLimit)) {
                 maxtc = int(speedLimit);
             }
-            price = price * (19 * speedLimit - uint(maxtc)) / (16 * speedLimit);
-            if (price < gasAccountingParams.BaseGasPrice) {
-                price = gasAccountingParams.BaseGasPrice;
+            congestionPrice = congestionPrice * (19 * speedLimit - uint(maxtc)) / (16 * speedLimit);
+            if (congestionPrice < gasAccountingParams.BaseGasPrice) {
+                congestionPrice = gasAccountingParams.BaseGasPrice;
             }
         }
-        if (price < gasAccountingParams.BaseGasPrice + gasAccountingInfo.gasSurcharge) {
-            price = gasAccountingParams.BaseGasPrice + gasAccountingInfo.gasSurcharge;
+
+        // determine cost recovery price (we update this only for blocks containing work, not every block)
+        let amountOwed = gasAccountingInfo.owedToValidators + gasAccountingInfo.specialDebts.totalDue;
+        let prevOwed = gasAccountingInfo.pricingState.previousAmountOwed;
+        let costRecoveryPrice = int(gasAccountingInfo.pricingState.costRecoveryPrice);
+        if (amountOwed == 0) {
+            costRecoveryPrice = int(19) * costRecoveryPrice / int(20);
+        } else {
+            costRecoveryPrice = costRecoveryPrice + int((20*amountOwed - 19*prevOwed) / (20*speedLimit));
+            if (costRecoveryPrice < int(0)) {    costRecoveryPrice = int(0);    }
         }
-        
+
+        // determine gas price as max of base, congestion, and cost recovery prices
+        let price = gasAccountingParams.BaseGasPrice;
+        if (price < congestionPrice) {    price = congestionPrice;    }
+        if (price < uint(costRecoveryPrice)) {    price = uint(costRecoveryPrice);    }
+
         let gasAvailable = 0;
-        if (gasAccountingInfo.gasPool > int(0)) {
-            gasAvailable = 3 * uint(gasAccountingInfo.gasPool) / 4;
+        if (gasPool > int(0)) {
+            gasAvailable = 3 * uint(gasPool) / 4;
         }
+
         gasAccountingInfo = gasAccountingInfo with {
             gasPool: gasPool
         } with {
@@ -554,6 +571,12 @@ public impure func getNextRequestFromCongestionAuction() -> (
             gasRemainingThisBlock: gasAvailable
         } with {
             lastBlockNumSeen: blockNum
+        } with {
+            pricingState: struct {
+                costRecoveryPrice: uint(costRecoveryPrice),
+                previousAmountOwed: amountOwed,
+                congestionPrice: congestionPrice,
+            }
         };
     }
 
@@ -716,7 +739,8 @@ impure func getRequestGasInfo(maybeRequest: option<IncomingRequest>, maybeTx: op
 }
 
 // Overhead tracking functionality follows
-// This keeps track of all of the overhead costs, but delays their effect by a fixed period of blocks
+// Overhead costs are costs incurred by validators doing things other than running user transactions.
+// This keeps track of all of the overhead costs, but delays their effect by a fixed period of blocks.
 // The delay exists to ensure that aggregators can ignore the short-term affects of overhead, thereby allowing
 //     them to run speculatively for a little while without having overhead differences affect gas pricing.
 
@@ -791,7 +815,7 @@ func overheadTracker_advanceToBlock(ot: OverheadTracker, bnum: uint) -> (Overhea
     return (ot, gas);
 }
 
-// Tracking of special debts
+// Tracking of special debts. These are debts to parties other than the validators.
 
 type SpecialDebts = struct {
     totalDue: uint,
