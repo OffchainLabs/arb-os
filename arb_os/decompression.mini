@@ -50,10 +50,8 @@ use std::rlp::rlp_decodeAddress;
 use std::rlp::rlp_decodeUint;
 use std::rlp::rlp_encodeMessageInfo;
 
-use signedTx::SignedTx;
 use signedTx::recoverSigner;
 
-use inbox::IncomingRequest;
 use messages::TxRequestData;
 
 
@@ -356,7 +354,7 @@ impure func decompressTx(
 // the same maxGas value. In this case we can just send a small table index instead of the redundant information.
 
 type FunctionTableEntry = struct {
-    callDataPrefix: any,    // really a ByteArray, but compiler doesn't allow array of imported type
+    callDataPrefix: ByteArray,
     maxGas: uint,
     payable: bool,
 }
@@ -419,9 +417,3 @@ public impure func getFromFunctionTable(addr: address, index: uint) -> option<(u
     return None;
 }
 
-//This function is necessary because there is currently bug in the compiler that will occasionally corrupt the last
-//function in a module, so including this function prevents the bug from affecting decompressTx
-func dumbHack() {
-    let x = 4;
-    return;
-}
