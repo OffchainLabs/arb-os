@@ -2,9 +2,13 @@
 // Copyright 2020, Offchain Labs, Inc. All rights reserved.
 //
 
-import func builtin_kvsDelete(kvs: any, key: any) -> any;
-import func builtin_kvsForall(kvs: any, cb: func(any, any, any) -> any, state: any) -> any;
-import func builtin_kvsSize(kvs: any) -> uint;
+use core::kvs::Kvs;
+use core::kvs::builtin_kvsNew;
+use core::kvs::builtin_kvsGet;
+use core::kvs::builtin_kvsSet;
+use core::kvs::builtin_kvsDelete;
+use core::kvs::builtin_kvsForall;
+use core::kvs::builtin_kvsSize;
 
 impure func main() {
 	asm(tests(),) { log };

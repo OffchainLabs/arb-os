@@ -604,6 +604,7 @@ impure func translateUnsignedTx(request: IncomingRequest) -> option<TxRequestDat
             value: value,
             calldata: calldata,
             nonMutating: (subtype == const::L2MessageType_nonmutatingCall),
+            isConstructor: (destAddrAsUint == 0),
             incomingRequest: request
         }
     );
@@ -633,6 +634,7 @@ func translateBuddyDeployTx(request: IncomingRequest) -> option<TxRequestData> {
             value: value,
             calldata: calldata,
             nonMutating: false,
+            isConstructor: true,
             incomingRequest: request
         }
     );
