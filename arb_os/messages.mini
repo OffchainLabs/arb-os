@@ -53,6 +53,7 @@ use codeSegment::translateEvmCodeSegment;
 
 use inbox::IncomingRequest;
 
+use gasAccounting::GasUsage;
 
 
 public impure func handleL1Request(

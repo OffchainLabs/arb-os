@@ -27,7 +27,6 @@ use gasAccounting::GasUsage;
 use gasAccounting::gasAccounting_summaryToPublish;
 
 
-
 // PerBlockReceiptData is different from OutputStatistics for now; might want to unify
 type PerBlockReceiptData = struct {
     totalGasUsed: uint,

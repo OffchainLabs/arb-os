@@ -23,6 +23,8 @@ use accounts::accountStore_transferEthBalance;
 
 use evmCallStack::evmCallStack_isEmpty;
 
+use messages::TxRequestData;
+
 use std::bytearray::bytearray_new;
 use std::bytearray::bytearray_getByte;
 use std::bytearray::bytearray_get256;

@@ -39,8 +39,8 @@ $(STDDIR)/fixedpointtest.mexe: $(STDDIR)/fixedpointtest.mini $(STDDIR)/fixedpoin
 minitests/codeloadtest.mexe: minitests/codeloadtest.mini
 	$(CARGORUN) compile minitests/codeloadtest.mini -o minitests/codeloadtest.mexe
 
-$(STDDIR)/keccaktest.mexe: $(STDDIR)/keccaktest.mini
-	$(CARGORUN) compile $(STDDIR)/keccaktest.mini $(STDDIR)/keccak.mao $(STDDIR)/bytearray.mao $(STDDIR)/expandingIntArray.mao -o $(STDDIR)/keccaktest.mexe
+$(STDDIR)/keccaktest.mexe: $(STDDIR)/keccaktest.mini $(STDDIR)/keccak.mini $(STDDIR)/bytearray.mini $(STDDIR)/expandingIntArray.mini
+	$(CARGORUN) compile $(STDDIR)/keccaktest.mini -o $(STDDIR)/keccaktest.mexe
 
 $(STDDIR)/biguinttest.mexe: $(STDDIR)/biguinttest.mini $(STDDIR)/biguint.mini
 	$(CARGORUN) compile $(STDDIR)/biguinttest.mini -o $(STDDIR)/biguinttest.mexe
@@ -50,9 +50,6 @@ $(STDDIR)/sha256test.mexe: $(STDDIR)/sha256test.mini
 
 $(STDDIR)/rlptest.mexe: $(BUILTINMAOS) $(STDDIR)/rlptest.mini
 	$(CARGORUN) compile $(STDDIR)/rlptest.mini -o $(STDDIR)/rlptest.mexe
-
-$(STDDIR)/bls.mao: $(STDDIR)/bls.mini
-	$(CARGORUN) compile $(STDDIR)/bls.mini -c -o $(STDDIR)/bls.mao
 
 $(BUILTINDIR)/maptest.mexe: $(BUILTINMAOS) $(BUILTINDIR)/maptest.mini
 	$(CARGORUN) compile $(BUILTINDIR)/maptest.mini -o $(BUILTINDIR)/maptest.mexe

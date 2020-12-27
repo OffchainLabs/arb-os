@@ -12,6 +12,7 @@ use std::bytestream::ByteStream;
 use std::bytearray::MarshalledBytes;
 use std::stack::Stack;
 use std::storageMap::StorageMap;
+use messages::TxRequestData;
 
 use errorHandler::errorHandler;
 
@@ -154,19 +155,6 @@ public impure func evmCallStack_stackInfo() -> (uint, (address, address), (addre
     } else {
         return (0, (address(0), address(0)), (address(0), address(0)));
     }
-}
-
-type TxRequestData = struct {
-    maxGas: uint,
-    gasPrice: uint,
-    seqNum: option<uint>,
-    caller: address,
-    calleeAddr: address,
-    value: uint,
-    calldata: ByteArray,
-    nonMutating: bool,
-    isConstructor: bool,
-    incomingRequest: IncomingRequest,
 }
 
 public impure func initEvmCallStack(
