@@ -57,10 +57,10 @@ var gasAccountingInfo: struct {
     specialDebts: SpecialDebts,   // other debts, e.g. to active validators
     gasSurcharge: uint,           // gas surcharge to cover unpaid overhead
     currentGasPrice: uint,        // gas price for this block
-    gasLeftForThisBlock: uint,    // amount of gas left for this block
+    gasRemainingThisBlock: uint,  // amount of gas remaining for this block
     lastBlockNumSeen: uint,       // last L1 block number seen by this module
     txState: option<TxGasState>,  // status of currently active tx (if there is one)
-    payValFeesTo: option<address>, // where to pay validator fees; if None, funds should be burned
+    payValFeesTo: option<address>, // where to pay validator fees
     netFeeInfo: option<NetFeeInfo>,
     overheadTracker: OverheadTracker,
 };
@@ -129,7 +129,7 @@ public impure func gasAccounting_init() {
         specialDebts: specialDebts_new(),
         gasSurcharge: 0,
         currentGasPrice: 0,
-        gasLeftForThisBlock: 0,
+        gasRemainingThisBlock: 0,
         lastBlockNumSeen: 0,
         txState: None<TxGasState>,
         payValFeesTo: None<address>,
@@ -138,15 +138,15 @@ public impure func gasAccounting_init() {
     };
 }
 
-public impure func gasAccounting_setFeeParams(baseGasPrice: uint, storageCharge: uint, feeRecipient: address) {
+public impure func gasAccounting_setFeeParams(baseGasPrice: uint, storageCharge: uint, validatorFeeRecipient: address) {
     gasAccountingParams = gasAccountingParams with {
         BaseGasPrice: baseGasPrice
     } with {
         StorageCharge: storageCharge
     };
     let recipient = None<address>;
-    if (feeRecipient != address(0)) {
-        recipient = Some(feeRecipient);
+    if (validatorFeeRecipient != address(0)) {
+        recipient = Some(validatorFeeRecipient);
     }
 
     gasAccountingInfo = gasAccountingInfo with {
@@ -191,29 +191,6 @@ public impure func gasAccounting_addToReserveFunds(amount: uint) {
     };
 }
 
-public impure func gasAccounting_specialCharge(payer: address, amount: uint) -> option<()> {
-    if ( ! evmCallStack_isEmpty() ) {
-        // This must be called outside of a tx.
-        return None;
-    }
-
-    let globalAcctStore = getGlobalAccountStore();
-    let payerAcct = accountStore_get(globalAcctStore, payer);
-    setGlobalAccountStore(
-        accountStore_set(
-            globalAcctStore,
-            payer,
-            account_deductFromEthBalance(payerAcct, amount)?,
-        )
-    );
-    gasAccountingInfo = gasAccountingInfo with {
-        owedToValidators: gasAccountingInfo.owedToValidators + amount
-    } with {
-        reserve: gasAccountingInfo.reserve + amount
-    };
-    return Some(());
-}
-
 impure func addDelayedOverhead(amount: uint) {
     gasAccountingInfo = gasAccountingInfo with {
         overheadTracker: overheadTracker_add(gasAccountingInfo.overheadTracker, amount)
@@ -226,13 +203,14 @@ public impure func recycleBurnedFunds(amount: uint) {
     };
 }
 
+// The next section of code supports tracking gas use of the currently running transactions.
 // The currently-running Tx has some amount of gas remaining. That gas can be in two places:
 // *  in the ArbGasRemaining register, if that register is < 2**255
 // *  in reserve
 //
-// The state of the ArbGasRemaining register tells us whether we're currently charging gas to the tx or to the OS.
+// The state of the ArbGasRemaining register tells us whether we're currently charging gas to the tx or to ArbOS.
 // *  If the register is < 2**255, we're charging to the tx
-// *  If the register is >= 2**255, we're charging to the OS
+// *  If the register is >= 2**255, we're charging to ArbOS
 // Note that if execution in the tx (or a subcall it makes) runs out of gas, this will generate an Error and
 //    set ArbGasRemaining to 2**256 - 1, which correctly puts us into the mode of charging the OS.
 // If there is an Error, the Error handler will call us, to inform us that there might have been an out-of-gas situation.
@@ -316,7 +294,8 @@ public impure func gasAccounting_endTxCharges(storageDelta: int) -> option<GasUs
     gasAccountingInfo = gasAccountingInfo with {
         gasPool: gasAccountingInfo.gasPool - int(txState.originalMax - gasToRefund)
     } with {
-        gasLeftForThisBlock: gasAccountingInfo.gasLeftForThisBlock + gasToRefund - txState.originalMax
+                                                        // won't underflow because gasToRefund <= originalMax
+        gasRemainingThisBlock: gasAccountingInfo.gasRemainingThisBlock + gasToRefund - txState.originalMax
     } with {
         reserve: gasAccountingInfo.reserve + (txState.weiHeldForGas - refund)
     } with {
@@ -335,7 +314,7 @@ public impure func gasAccounting_endTxCharges(storageDelta: int) -> option<GasUs
 }
 
 public impure func gasAccounting_extraGasCharge(numArbGas: uint) {
-    // assess an extra gas charge on the current tx
+    // assess an extra gas charge on the current tx, but don't count it against the speed limit
     // this lets us charge for things that use up system resources
     // callers should assess the charge for a thing before they do the thing, because we can
     //      only take the gas that the user has remaining
@@ -351,6 +330,15 @@ public impure func gasAccounting_extraGasCharge(numArbGas: uint) {
         //      ensuring that they'll get an out-of-gas error
         numArbGas = gasLeft-1;
     }
+
+    // we're not counting this gas against the chain's speed limit,
+    //       so add it back to the places it's going to be subtracted from
+    gasAccountingInfo = gasAccountingInfo with {
+        gasRemainingThisBlock: gasAccountingInfo.gasRemainingThisblock + numArbGas
+    } with {
+        gasPool: gasAccountingInfo.gasPool + numArbGas
+    };
+
 
     asm(gasLeft-numArbGas,) { setgas };
 }
@@ -384,10 +372,11 @@ public impure func gasAccounting_pauseTxCharges() -> uint {
 
 public impure func gasAccounting_resumeTxCharges(allocationRequested: uint) -> uint {
     // resume the charging of the tx for gas
-    // allocationRequested is how much of its gas the tx wants to allocate
+    // allocationRequested is how much of its gas the tx wants to allocate for whatever is going to execute
     // return how much gas we actually allocated = min(requested, available)
 
     if let Some(txState) = gasAccountingInfo.txState {
+        // stop charging the OS, and record the OS gas usage as overhead
         let gasRegister = asm() uint { getgas };
         if (gasRegister >= asm(1, 255) uint { shl }) {
             addDelayedOverhead((~0) - gasRegister);
@@ -416,7 +405,7 @@ public impure func gasAccounting_resumeTxCharges(allocationRequested: uint) -> u
 
 impure func switchToChargingOS() -> uint {
     // switch to charging the OS for gas, if we aren't already
-    // return amount of the tx's gas that was left over in ArbGasRemaining
+    // return amount of the tx's gas that is still unused
     let gasRemaining = asm() uint { getgas };
     if (gasRemaining >= asm(255, 1) uint { shl }) {
         // we were already charging the OS, tx has nothing remaining
@@ -473,9 +462,6 @@ type TxRequestData = struct {
 //     determines (a) whether to approve the request for execution, and (b) what gas price the request will pay.
 // This uses a "pull" interface: the main run loop calls this to get the next request.
 //     This code will in turn call back to the inbox to pull in incoming requests from the L1.
-// Eventually this component will pull in a group of requests from the inbox, run the congestion
-//     auction over them, then enqueue them to be eventually fetched by the main run loop.
-// For now, this approves every request, and charges zero gas price.
 public impure func getNextRequestFromCongestionAuction() -> (
     bool,                     // was it approved for execution
     option<IncomingRequest>,  // if it was an L1 message
@@ -563,7 +549,7 @@ public impure func getNextRequestFromCongestionAuction() -> (
         } with {
             currentGasPrice: price
         } with {
-            gasLeftForThisBlock: gasAvailable
+            gasRemainingThisBlock: gasAvailable
         } with {
             lastBlockNumSeen: blockNum
         };
@@ -607,8 +593,8 @@ public impure func getNextRequestFromCongestionAuction() -> (
             let txGasPrice = gasAccountingInfo.currentGasPrice;
             if (txGasPrice < tx.gasPrice) {    txGasPrice = tx.gasPrice;    }
             let txGasLimit = tx.maxGas * txGasPrice / gasAccountingInfo.currentGasPrice;
-            if (txGasLimit > gasAccountingInfo.gasLeftForThisBlock) {
-                txGasLimit = gasAccountingInfo.gasLeftForThisBlock;
+            if (txGasLimit > gasAccountingInfo.gasRemainingThisBlock) {
+                txGasLimit = gasAccountingInfo.gasRemainingThisBlock;
             }
             return (
                 true,
