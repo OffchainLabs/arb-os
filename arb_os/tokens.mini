@@ -29,6 +29,9 @@ public impure func tokens_erc20deposit(
     amount: uint,
     fullMsg: IncomingRequest
 ) -> option<()> {
+    // Deposit ERC-20 tokens into an L2 account, on receiving a deposit request from the EthBridge.
+    // This creates a transaction to mint the tokens in the L2 ERC-20 contract.
+
     let globalAS = getGlobalAccountStore();
     if(account_isEmpty(accountStore_get(globalAS, tokenAddress))) {
         globalAS = accountStore_createERC20(
@@ -69,6 +72,9 @@ public impure func tokens_erc721deposit(
     id: uint,
     fullMsg: IncomingRequest
 ) -> option<()> {
+    // Deposit an ERC-721 token into an L2 account, on receiving a deposit request from the EthBridge.
+    // This creates a transaction to mint the token in the L2 ERC-721 contract.
+
     let globalAS = getGlobalAccountStore();
     if(account_isEmpty(accountStore_get(globalAS, tokenAddress))) {
         globalAS = accountStore_createERC721(

@@ -116,6 +116,15 @@ func evmInstructionStack_pop(s: EvmInstructionStack) -> option<(EvmInstructionSt
 var unreachableMask: uint;
 
 impure func parseEvmCodeSegment(bs: ByteStream) -> option<EvmInstructionStack> {
+    // This parses the EVM bytecode for a contract, and creates a stack of parsed instructions,
+    //      with the last instruction of the EVM program at the top of the stack.  (The code generator
+    //      wants to generate code from end-to-beginning, so the stack ordering is what is needed.)
+    // This tracks whether the current location is reachable, and doesn't generate stack entries for
+    //      instructions that are not reachable.  An instruction is unreachable if it is not a JUMPDES and
+    //      either (a) it immediately follows a jump, return, revert, or invalid instruction (because
+    //      control never continues to the next instruction) or (b) if it immediately follows an
+    //      unreachable instruction.
+
     let stack = evmInstructionStack_new();
     let evmPc = 0;
     let reachable = true;
@@ -169,6 +178,8 @@ impure func parseEvmCodeSegment(bs: ByteStream) -> option<EvmInstructionStack> {
 }
 
 public impure func codeSegment_init() {
+    // set up the unreachable mask, which allows us to efficiently check whether an opcode makes the
+    //     next instruction unreachable
     let mask = 0;
     let opcode = 0;
     while (opcode < 256) {
@@ -200,6 +211,15 @@ impure func generateCodeForEvmSegment(
     insns: EvmInstructionStack,
     makePcTable: bool,
 ) -> (AvmCodePoint, map<uint, AvmCodePoint>, Stack) {
+    // generate AVM code to emulate the EVM instructions in the provided EvmInstructionStack
+    // Code generation goes from end-to-beginning in the program, consistent with the stack ordering.
+    // This builds a variable containing the generated code (code) and a jump table that maps JUMPDEST
+    //      locations in the EVM code to the corresponding AVM codepoint (evmJumpTable).  If also optionally
+    //      (if makePcTable is true) generates a map allowing any EVM locations to its corresponding codepoint,
+    //      which can be useful for debugging.
+
+    // Generate the suffix of the transpiled code. This is equivalent to executing an EVM STOP instruction,
+    //      which is the specified behavior if EVM execution "falls off the end" of its program.
     let code = pushEvmInsnCall(
         const::EvmOp_stop,
         asm() AvmCodePoint { errcodept },
@@ -207,13 +227,14 @@ impure func generateCodeForEvmSegment(
     let evmJumpTable = newmap<uint, AvmCodePoint>;
     let pcTable = stack_new();
 
+    // Now append instructions to the front of the code segment, taking one EVM instruction at a time.
     loop {
         if let Some(res) = evmInstructionStack_pop(insns) {
             let invalidInstruction = false;
             let (uinsns, insn) = res;
             insns = uinsns;
             let opcode = insn.opcode;
-            if (opcode < 0x80) {
+            if (opcode < 0x80) {    // nested if-elses here are for efficiency, to avoid a long chain of elseifs
                 if (opcode < 0x40) {
                     if (opcode < 0x20) {
                         if (opcode < 0x10) {
@@ -504,6 +525,7 @@ impure func generateCodeForEvmSegment(
                 }
             }
             if (invalidInstruction) {
+                // the instruction was invalid, so generate a revert action
                 code = pushValue(
                     0,
                     pushValue(
@@ -540,7 +562,7 @@ impure func pushEvmInsnDenomCheck(
     restOfCode: AvmCodePoint,
 ) -> AvmCodePoint {
     // Deal with the EVM instructions that can "divide by zero" or the equivalent.
-    // EVM defines these to return zero if the denominator is zero.
+    // EVM defines these to return zero if the denominator (or modulus) is zero.
     // So we need to generate a little conditional to handle the special case.
     let doTheOp = pushInstruction(opcode, restOfCode);
     return pushDupn(
@@ -601,8 +623,8 @@ impure func pushSwapn(
     n: uint, 
     restOfCode: AvmCodePoint,
 ) -> AvmCodePoint {
-    // Generate code for a swapN pseudo-operation.
-    // AVM supports this only for N <= 2, whereas EVM can ask for larger ones.
+    // Generate code for a swapN pseudo-operation, for N >= 2.
+    // AVM supports swapN only for N <= 2, whereas EVM can ask for larger ones.
     if (n == 2) {
         return pushInstruction(const::AVM_swap2, restOfCode);
     } else {
@@ -643,23 +665,15 @@ impure func pushEvmInsnCall(evmOpNum: uint, code: AvmCodePoint) -> AvmCodePoint 
     );
 }
 
-func isKnownOpcode(opcode: uint) -> bool {  // return true iff opcode is a known EVM opcode
-    return ( (opcode >= 0x00) && (opcode <= 0x0b) )
-        || ( (opcode >= 0x10) && (opcode <= 0x1d) )
-        || (opcode == 0x20)
-        || ( (opcode >= 0x30) && (opcode <= 0x45) )
-        || ( (opcode >= 0x50) && (opcode <= 0x5b) )
-        || ( (opcode >= 0x60) && (opcode <= 0xa4) )
-        || ( (opcode >= 0xf0) && (opcode <= 0xf5) )
-        || (opcode == 0xfa)
-        || ( (opcode == 0xfd) && (opcode <= 0xff) );
-}
-
+// An AvmCodeBuilder supports unmarshaling AVM code, reading a sequence of marshalled program segments and
+//     unmarshaling them collectively into a single AVM code segment that will be runnable.
+// The program is marshalled back-to-front, so this will build the program back-to-front.
+// The marshalling format ensures that the generated code segment can only jump to locations within itself.
 type AvmCodeBuilder = struct {
-    requireSafe: bool,
-    code: AvmCodePoint,
-    size: uint,
-    codeMap: map<uint, AvmCodePoint>,
+    requireSafe: bool,     // if true, only allow instructions that are safe for untrusted code
+    code: AvmCodePoint,    // the code generated so far
+    size: uint,            // number of instructions in the code so far
+    codeMap: map<uint, AvmCodePoint>,  // map from instruction offset to AVM codepoint, for instructions built so far
 }
 
 public impure func avmCodeBuilder_new(requireSafe: bool) -> AvmCodeBuilder {
@@ -706,6 +720,9 @@ public impure func avmCodeBuilder_append(builder: AvmCodeBuilder, stream: ByteSt
 }
 
 public func avmCodeBuilder_finish(builder: AvmCodeBuilder) -> AvmCodePoint {
+    // This finishes unmarshalling a code segment and returns a jumpable codepoint for the beginning of
+    //     the generated code.
+
     return builder.code;
 }
 
