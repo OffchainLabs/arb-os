@@ -465,6 +465,7 @@ type TxRequestData = struct {
     value: uint,
     calldata: ByteArray,
     nonMutating: bool,
+    isConstructor: bool,
     incomingRequest: IncomingRequest,
 }
 

@@ -40,6 +40,7 @@ type TxRequestData = struct {
     value: uint,
     calldata: ByteArray,
     nonMutating: bool,
+    isConstructor: bool,
     incomingRequest: IncomingRequest,
 }
 
@@ -82,6 +83,7 @@ public impure func translateSignedTx(req: IncomingRequest) -> option<TxRequestDa
             value: signedTx.value,
             calldata: signedTx.data,
             nonMutating: false,
+            isConstructor: (signedTx.to == address(0)),
             incomingRequest: req with {
                 sender: signer
             } with {
