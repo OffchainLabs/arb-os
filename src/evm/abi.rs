@@ -423,10 +423,7 @@ impl<'a> ArbSys<'a> {
         }
     }
 
-    pub fn _arbos_version(
-        &self,
-        machine: &mut Machine,
-    ) -> Result<Uint256, ethabi::Error> {
+    pub fn _arbos_version(&self, machine: &mut Machine) -> Result<Uint256, ethabi::Error> {
         let (receipts, _sends) = self.contract_abi.call_function_compressed(
             self.my_address.clone(),
             "arbOSVersion",
@@ -991,7 +988,7 @@ impl<'a> _ArbOwner<'a> {
             self.debug,
         )?;
 
-       if receipts.len() != 1 {
+        if receipts.len() != 1 {
             return Err(ethabi::Error::from("wrong number of receipts"));
         }
 
@@ -1002,10 +999,7 @@ impl<'a> _ArbOwner<'a> {
         }
     }
 
-    pub fn _start_arbos_upgrade(
-        &self,
-        machine: &mut Machine,
-    ) -> Result<(), ethabi::Error> {
+    pub fn _start_arbos_upgrade(&self, machine: &mut Machine) -> Result<(), ethabi::Error> {
         let (receipts, _sends) = self.contract_abi.call_function_compressed(
             self.my_address.clone(),
             "startArbosUpgrade",
@@ -1048,14 +1042,11 @@ impl<'a> _ArbOwner<'a> {
         if receipts[0].succeeded() {
             Ok(())
         } else {
-           Err(ethabi::Error::from("reverted"))
+            Err(ethabi::Error::from("reverted"))
         }
     }
 
-    pub fn _finish_arbos_upgrade(
-        &self,
-        machine: &mut Machine,
-    ) -> Result<(), ethabi::Error> {
+    pub fn _finish_arbos_upgrade(&self, machine: &mut Machine) -> Result<(), ethabi::Error> {
         let (receipts, _sends) = self.contract_abi.call_function(
             self.my_address.clone(),
             "finishArbosUpgrade",
@@ -1070,7 +1061,9 @@ impl<'a> _ArbOwner<'a> {
         }
 
         if receipts[0].succeeded() {
-            Err(ethabi::Error::from("should have reverted but actually succeeded"))
+            Err(ethabi::Error::from(
+                "should have reverted but actually succeeded",
+            ))
         } else {
             Ok(())
         }

@@ -9,21 +9,24 @@ use std::bytearray::bytearray_getByte;
 use std::bytearray::bytearray_get64;
 use std::bytearray::bytearray_get256;
 use std::bytearray::bytearray_extract;
+use std::bytearray::bytearray_buffer;
+use std::bytearray::bytearray_slice;
+use std::bytearray::bytearray_wrap_slice;
 
 
 type ByteStream = struct {
-    contents: ByteArray,
+    buf: buffer,
     capacity: uint,
+    slice: uint,
     currentOffset: uint,
-    cache: option<uint>,
 }
 
 public func bytestream_new(contents: ByteArray) -> ByteStream {
     return struct {
-        contents: contents,
+        buf: bytearray_buffer(contents),
         capacity: bytearray_size(contents),
+        slice: bytearray_slice(contents),
         currentOffset: 0,
-        cache: None<uint>,
     };
 }
 
@@ -46,7 +49,7 @@ public func bytestream_bytesRemaining(bs: ByteStream) -> uint {
 public func bytestream_skipBytes(bs: ByteStream, nbytes: uint) -> option<ByteStream> {
     let newOffset = bs.currentOffset + nbytes;
     if (newOffset <= bs.capacity) {
-        return Some(bs with { currentOffset: newOffset } with { cache: None<uint> });
+        return Some(bs with { currentOffset: newOffset });
     } else {
         return None;
     }
@@ -68,22 +71,9 @@ public func bytestream_getByte(bs: ByteStream) -> option<(ByteStream, uint)> {
     if (bs.currentOffset >= bs.capacity) {
         return None;
     } else {
-        let cache = 0;
-        let offsetMod32 = bs.currentOffset % 32;
-        if let Some(c) = bs.cache {
-            if (offsetMod32 == 0) {
-                cache = bytearray_get256(bs.contents, bs.currentOffset);
-                bs = bs with { cache: Some(cache) };
-            } else {
-                cache = c;
-            }
-        } else {
-            cache = bytearray_get256(bs.contents, bs.currentOffset & ~0x1f);
-            bs = bs with { cache: Some(cache) };
-        }
         return Some((
             bs with { currentOffset: bs.currentOffset+1 },
-            asm(offsetMod32, cache) uint { byte }
+            getbuffer8(bs.buf, bs.currentOffset+bs.slice)
         ));
     }
 }
@@ -93,8 +83,8 @@ public func bytestream_get64(bs: ByteStream) -> option<(ByteStream, uint)> {
         return None;
     } else {
         return Some((
-            bs with { currentOffset: bs.currentOffset+8 } with { cache: None<uint> },
-            bytearray_get64(bs.contents, bs.currentOffset)
+            bs with { currentOffset: bs.currentOffset+8 },
+            getbuffer64(bs.buf, bs.currentOffset+bs.slice)
         ));
     }
 }
@@ -104,8 +94,8 @@ public func bytestream_get256(bs: ByteStream) -> option<(ByteStream, uint)> {
         return None;
     } else {
         return Some((
-            bs with { currentOffset: bs.currentOffset+32 } with { cache: None<uint> },
-            bytearray_get256(bs.contents, bs.currentOffset)
+            bs with { currentOffset: bs.currentOffset+32 },
+            getbuffer256(bs.buf, bs.currentOffset+bs.slice)
         ));
     }
 }
@@ -116,18 +106,14 @@ public func bytestream_getN(bs: ByteStream, nbytes: uint) -> option<(ByteStream,
     }
 
     return Some((
-        bs with { currentOffset: bs.currentOffset + nbytes } with { cache: None<uint> },
-        bytearray_extract(bs.contents, bs.currentOffset, nbytes)
+        bs with { currentOffset: bs.currentOffset + nbytes },
+        bytearray_wrap_slice(bs.buf, bs.currentOffset + bs.slice, nbytes)
     ));
 }
 
 public func bytestream_getRemainingBytes(bs: ByteStream) -> ByteArray {
     if (bs.capacity > bs.currentOffset) {
-        return bytearray_extract(
-            bs.contents,
-            bs.currentOffset,
-            bs.capacity - bs.currentOffset
-        );
+        return bytearray_wrap_slice(bs.buf, bs.currentOffset + bs.slice, bs.capacity - bs.currentOffset);
     } else {
         return bytearray_new(0);
     }
