@@ -9,35 +9,37 @@ use std::collections::HashMap;
 use std::io;
 use std::path::Path;
 
-pub fn run_evm_tests(dir_path: &Path, logfiles_path: Option<&Path>) -> io::Result<(u64, u64)> {
+pub fn run_evm_tests(path: &Path, logfiles_path: Option<&Path>) -> io::Result<(u64, u64)> {
     let mut num_success = 0;
     let mut num_fail = 0;
-    for entry in dir_path.read_dir()? {
-        let entry = entry?;
-        let path = entry.path();
-        if path.is_dir() {
-            run_evm_tests(&path, logfiles_path)?;
-        } else {
-            let contents = std::fs::read_to_string(path.clone())
-                .expect("Something went wrong reading the file");
-            let json: serde_json::Value =
-                serde_json::from_str(&contents).expect("JSON was not well-formatted");
-            if !path.ends_with("gas0.json")
-                && !path.ends_with("gas1.json")
-                && !path.ends_with("gasprice.json")
-                && !path.ends_with("push32AndSuicide.json")
-            {
-                // ignore tests that rely on detailed Eth gas accounting
-                let result = run_one_test(json, &path, logfiles_path, path.to_str().unwrap());
-                match result {
-                    Ok(()) => {
-                        println!("..ok {}", path.to_str().unwrap());
-                        num_success = num_success + 1;
-                    }
-                    Err(e) => {
-                        println!("FAIL ({}) {}", e, path.to_str().unwrap());
-                        num_fail = num_fail + 1;
-                    }
+    if path.is_dir() {
+        for entry in path.read_dir()? {
+            let entry = entry?;
+            let (ns, nf) = run_evm_tests(&entry.path(), logfiles_path)?;
+            num_success = num_success + ns;
+            num_fail = num_fail + nf;
+        }
+    } else {
+        let contents =
+            std::fs::read_to_string(path.clone()).expect("Something went wrong reading the file");
+        let json: serde_json::Value =
+            serde_json::from_str(&contents).expect("JSON was not well-formatted");
+        if !path.ends_with("gas0.json")
+            && !path.ends_with("gas1.json")
+            && !path.ends_with("origin.json")
+            && !path.ends_with("gasprice.json")
+            && !path.ends_with("push32AndSuicide.json")
+        {
+            // ignore tests that rely on detailed Eth gas accounting
+            let result = run_one_test(json, &path, logfiles_path, path.to_str().unwrap());
+            match result {
+                Ok(()) => {
+                    println!("..ok {}", path.to_str().unwrap());
+                    num_success = num_success + 1;
+                }
+                Err(e) => {
+                    println!("FAIL ({}) {}", e, path.to_str().unwrap());
+                    num_fail = num_fail + 1;
                 }
             }
         }

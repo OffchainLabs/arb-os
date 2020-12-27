@@ -5,7 +5,6 @@
 use crate::uint256::Uint256;
 use std::collections::HashMap;
 
-
 pub fn init_constant_table() -> HashMap<String, Uint256> {
     let mut ret = HashMap::new();
     for (s, i) in &[
@@ -16,7 +15,6 @@ pub fn init_constant_table() -> HashMap<String, Uint256> {
         ("Address_ArbFunctionTable", 104),
         ("Address_ArbosTest", 105),
         ("Address_ArbOwner", 107),
-        
         // indices of EVM operations
         ("EvmOp_stop", 0),
         ("EvmOp_sha3", 1),
@@ -63,7 +61,6 @@ pub fn init_constant_table() -> HashMap<String, Uint256> {
         ("EvmOp_create2", 42),
         ("EvmOp_chainId", 43),
         ("NumEvmOps", 44),
-
         // AVM instructions
         ("AVM_add", 0x01),
         ("AVM_mul", 0x02),
@@ -147,7 +144,6 @@ pub fn init_constant_table() -> HashMap<String, Uint256> {
         ("L1MessageType_buddyDeploy", 5),
         ("L1MessageType_endOfBlock", 6),
         ("L1MessageType_L2FundedByL1", 7),
-
         // L2 message types
         ("L2MessageType_unsignedEOATx", 0),
         ("L2MessageType_unsignedContractTx", 1),
@@ -157,7 +153,6 @@ pub fn init_constant_table() -> HashMap<String, Uint256> {
         ("L2MessageType_sequencerBatch", 5),
         ("L2MessageType_heartbeat", 6),
         ("L2MessageType_signedCompressedTx", 7),
-
         // tx result codes
         ("TxResultCode_success", 0),
         ("TxResultCode_revert", 1),
@@ -168,21 +163,17 @@ pub fn init_constant_table() -> HashMap<String, Uint256> {
         ("TxResultCode_formatError", 6),
         ("TxResultCode_cannotDeployAtAddress", 7),
         ("TxResultCode_unknownFailure", 255),
-
         // EVM call types
         ("EVMCallType_call", 0),
         ("EVMCallType_callcode", 1),
         ("EVMCallType_delegatecall", 2),
         ("EVMCallType_staticcall", 3),
         ("EVMCallType_constructor", 4),
-
         // Arbitrum log item types
         ("LogType_txReceipt", 0),
         ("LogType_blockSummary", 1),
-
         // outgoing message types
         ("SendType_buddyContractResult", 5),
-
         // misc
     ] {
         ret.insert(s.to_string(), Uint256::from_u64(*i));

@@ -5,7 +5,8 @@
 use crate::mavm::Value;
 use crate::run::{load_from_file, ProfilerMode};
 use crate::uint256::Uint256;
-use ethers_core::rand::thread_rng;
+use ethers_core::rand::rngs::StdRng;
+use ethers_core::rand::SeedableRng;
 use ethers_core::types::TransactionRequest;
 use ethers_core::utils::keccak256;
 use ethers_signers::{Signer, Wallet};
@@ -62,10 +63,13 @@ impl RuntimeEnvironment {
             recorder: RtEnvRecorder::new(),
             compressor: TxCompressor::new(),
         };
-        ret.insert_l1_message(4, chain_address, &RuntimeEnvironment::get_params_bytes(owner));
+        ret.insert_l1_message(
+            4,
+            chain_address,
+            &RuntimeEnvironment::get_params_bytes(owner),
+        );
         ret
     }
-
 
     fn get_params_bytes(owner: Option<Uint256>) -> Vec<u8> {
         let mut buf = Vec::new();
@@ -79,7 +83,8 @@ impl RuntimeEnvironment {
     }
 
     pub fn new_wallet(&self) -> Wallet {
-        Wallet::new(&mut thread_rng()).set_chain_id(self.get_chain_id())
+        let mut r = StdRng::seed_from_u64(42);
+        Wallet::new(&mut r).set_chain_id(self.get_chain_id())
     }
 
     pub fn get_chain_id(&self) -> u64 {

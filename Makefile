@@ -33,6 +33,12 @@ $(STDDIR)/storageMapTest.mexe: $(STDDIR)/storageMapTest.mini
 $(STDDIR)/bytearraytest.mexe: $(STDDIR)/bytearraytest.mini
 	$(CARGORUN) compile $(STDDIR)/bytearraytest.mini -o $(STDDIR)/bytearraytest.mexe
 
+$(STDDIR)/bytearraybench.mexe: $(BUILTINMAOS) $(STDDIR)/bytearraybench.mini $(STDLIB)
+	$(CARGORUN) compile $(STDDIR)/bytearraybench.mini $(STDLIB) -o $(STDDIR)/bytearraybench.mexe
+
+$(STDDIR)/bufferopcodetest.mexe: $(BUILTINMAOS) $(STDDIR)/bufferopcodetest.mini
+	$(CARGORUN) compile $(STDDIR)/bufferopcodetest.mini -o $(STDDIR)/bufferopcodetest.mexe
+
 minitests/codeloadtest.mexe: minitests/codeloadtest.mini
 	$(CARGORUN) compile minitests/codeloadtest.mini -o minitests/codeloadtest.mexe
 
@@ -57,8 +63,8 @@ $(ARBOSDIR)/arbos.mexe: $(ARBOSDIR) $(STDDIR) $(BUILTINDIR)
 run:
 	cargo run --release -- run "arb_os/arbos.mexe"
 
-test:
-	cargo test --release
+test: $(TEMPLATES) $(ARBOS)
+	cargo test --release 
 
 evmtest: $(ARBOS)
 	$(CARGORUN) evm-tests
