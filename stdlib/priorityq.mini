@@ -2,7 +2,9 @@
 // Copyright 2020, Offchain Labs, Inc. All rights reserved.
 //
 
-import func array_resize(a: []PqItem, newSize: uint, baseVal: any) -> []PqItem;
+use core::array::array;
+use core::array::array_resize;
+
 
 type PqItem = struct {
     priority: uint,
