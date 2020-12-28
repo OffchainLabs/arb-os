@@ -140,7 +140,6 @@ pub fn _test_rollup_tracker() {
     println!("_");
     let _ = machine.run(None);
 
-    println!("A");
     _insert_confirm_node(&mut machine.runtime_env, &Uint256::zero());
     _insert_confirm_node(&mut machine.runtime_env, &Uint256::one());
     _insert_confirm_node(&mut machine.runtime_env, &Uint256::from_u64(2));
@@ -150,7 +149,7 @@ pub fn _test_rollup_tracker() {
     println!("B");
     machine
         .runtime_env
-        ._advance_time(&Uint256::from_u64(100), None);
+        ._advance_time(Uint256::from_u64(100), None, true);
 
     println!("C");
     _insert_create_node(

@@ -75,7 +75,7 @@ pub fn benchmark_add(iterations: u64, log_to: &Path) -> u64 {
     let contract = match AbiForContract::new_from_file("contracts/add/build/contracts/Add.json") {
         Ok(mut contract) => {
             let result = contract.deploy(&[], &mut machine, Uint256::zero(), None, None, false);
-            if let Some(contract_addr) = result {
+            if let Ok(contract_addr) = result {
                 assert_ne!(contract_addr, Uint256::zero());
                 contract
             } else {
@@ -120,7 +120,7 @@ pub fn benchmark_add_batched(iterations: u64, log_to: &Path) -> u64 {
     let contract = match AbiForContract::new_from_file("contracts/add/build/contracts/Add.json") {
         Ok(mut contract) => {
             let result = contract.deploy(&[], &mut machine, Uint256::zero(), None, None, false);
-            if let Some(contract_addr) = result {
+            if let Ok(contract_addr) = result {
                 assert_ne!(contract_addr, Uint256::zero());
                 contract
             } else {

@@ -50,6 +50,11 @@ public func messageBatch_tryNew(msg: IncomingRequest) -> option<MessageBatch> {
                         parentRequestId: msg.requestId,
                         indexInParent: 0,
                     }
+                } with {
+                    aggregator: Some(struct {
+                        aggregator: aggregator,
+                        calldataBytes: 0,
+                    })
                 },
                 stream: stream,
                 numSoFar: 0,
@@ -59,12 +64,12 @@ public func messageBatch_tryNew(msg: IncomingRequest) -> option<MessageBatch> {
         let stream = bytestream_new(msg.msgData);
         stream = bytestream_skipBytes(stream, 6)?;   // skip past type byte, blocknum, and timestamp in message
 
-        / aggregator credit goes to the original aggregator of the request, if any, otherwise to sender of request
+        // aggregator credit goes to the original aggregator of the request, if any, otherwise to sender of request
         let aggregator = msg.sender;
         if let Some(aggInfo) = msg.aggregator {
             aggregator = aggInfo.aggregator;
         }
-        
+
         return Some(
             struct {
                 template: msg with {

@@ -141,7 +141,7 @@ impl AbiForContract {
         if let Some(delta_blocks) = advance_time {
             machine.runtime_env._advance_time(
                 delta_blocks.clone(),
-                delta_blocks.mul(&Uint256::from_u64(13)),
+                None,
                 true,
             );
         }

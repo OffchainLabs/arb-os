@@ -43,10 +43,11 @@ impl RuntimeEnvironment {
             Uint256::from_u64(10_000_000),
             charging_policy,
             None,
+            None,
         )
     }
 
-    pub fn new_options(
+    pub fn _new_options(
         chain_address: Uint256,
         sequencer_info: Option<(Uint256, Uint256, Uint256)>,
     ) -> Self {
@@ -54,6 +55,7 @@ impl RuntimeEnvironment {
             chain_address,
             Uint256::from_u64(100_000),
             Uint256::from_u64(10_000_000),
+            None,
             sequencer_info,
             None,
         )
@@ -64,6 +66,7 @@ impl RuntimeEnvironment {
             chain_address,
             Uint256::from_u64(100_000),
             Uint256::from_u64(10_000_000),
+            None,
             None,
             owner,
         )
@@ -89,18 +92,19 @@ impl RuntimeEnvironment {
             next_id: Uint256::zero(),
             recorder: RtEnvRecorder::new(),
             compressor: TxCompressor::new(),
-            charging_policy,
+            charging_policy: charging_policy.clone(),
         };
 
         ret.insert_l1_message(
             4,
             chain_address,
-            &RuntimeEnvironment::get_params_bytes(sequencer_info, owner),
+            &RuntimeEnvironment::get_params_bytes(charging_policy, sequencer_info, owner),
         );
         ret
     }
 
     fn get_params_bytes(
+        charging_policy: Option<(Uint256, Uint256, Uint256)>,
         sequencer_info: Option<(Uint256, Uint256, Uint256)>,
         owner: Option<Uint256>,
     ) -> Vec<u8> {
@@ -112,7 +116,7 @@ impl RuntimeEnvironment {
         buf.extend(Uint256::zero().to_bytes_be()); // staking token address (zero means ETH)
         buf.extend(owner.clone().unwrap_or(Uint256::zero()).to_bytes_be()); // owner address
 
-        if let Some((base_gas_price, storage_charge, pay_fees_to)) = self.charging_policy.clone() {
+        if let Some((base_gas_price, storage_charge, pay_fees_to)) = charging_policy.clone() {
             buf.extend(&[0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 2u8]); // option ID = 2
             buf.extend(&[0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 64u8]); // option payload size = 64 bytes
             buf.extend(base_gas_price.to_bytes_be());
@@ -136,11 +140,11 @@ impl RuntimeEnvironment {
     pub fn _advance_time(
         &mut self,
         delta_blocks: Uint256,
-        delta_timestamp: Uint256,
+        delta_timestamp: Option<Uint256>,
         send_heartbeat_message: bool,
     ) {
         self.current_block_num = self.current_block_num.add(&delta_blocks);
-        self.current_timestamp = self.current_timestamp.add(&delta_timestamp);
+        self.current_timestamp = self.current_timestamp.add(&delta_timestamp.unwrap_or(Uint256::from_u64(13).mul(&delta_blocks)));
         if send_heartbeat_message {
             self.insert_l2_message(Uint256::zero(), &[6u8], false);
         }
@@ -153,13 +157,6 @@ impl RuntimeEnvironment {
 
     pub fn get_chain_id(&self) -> u64 {
         self.chain_id
-    }
-
-    pub fn _advance_time(&mut self, delta_blocks: &Uint256, delta_seconds: Option<&Uint256>) {
-        self.current_block_num = self.current_block_num.add(delta_blocks);
-        self.current_timestamp = self
-            .current_timestamp
-            .add(delta_seconds.unwrap_or(&Uint256::from_u64(13).mul(delta_blocks)));
     }
 
     pub fn insert_full_inbox_contents(&mut self, contents: Vec<Value>) {

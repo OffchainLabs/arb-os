@@ -265,6 +265,7 @@ impure func getFromL1InboxSequencer(inbox: Inbox, seq: SequencerState) -> Inbox 
                 parentRequestId: 0,
                 indexInParent: ~0,
             },
+            aggregtor: None<AggregatorInfo>,
         };
     } else {
         return inbox;
@@ -390,6 +391,7 @@ func endOfBlockMessage(blockNum: uint, timestamp: uint) -> IncomingRequest {
             parentRequestId: 0,
             indexInParent: ~0,
         },
+        aggregator: None<AggregatorInfo>,
     };
 }
 
