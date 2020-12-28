@@ -8,7 +8,7 @@ use core::array::array_resize;
 const ModuleIdLimit = 4096;
 
 
-type ModuleFunction = impure func(any, any, bool) -> (any, any)
+type ModuleFunction = impure func(any, any, bool, impure func(uint, any) -> option<any>) -> (any, any)
 
 type ModuleState = struct {
     code: ModuleFunction,
@@ -36,7 +36,7 @@ public impure func callPluggable(id: uint, args: any) -> option<any> {
     }
 
     let theModule = moduleManager.modules[id]?;
-    let (retVal, newState) = theModule.code(args, theModule.state, theModule.neverBeenCalled);
+    let (retVal, newState) = theModule.code(args, theModule.state, theModule.neverBeenCalled, callPluggable);
 
     moduleManager = moduleManager with {
         modules: moduleManager.modules with {
