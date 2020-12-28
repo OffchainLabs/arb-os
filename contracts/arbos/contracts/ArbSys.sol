@@ -17,7 +17,7 @@ interface ArbSys {
     function withdrawEth(address dest) external payable;
 
     // Send a transaction to L1
-    function sendTxToL1(address destAddr, bytes calldataForL1) external payable;
+    function sendTxToL1(address destAddr, bytes calldata calldataForL1) external payable;
 
     // Return the number of transactions issued by the given external account
     // or the account sequence number of the given contract
