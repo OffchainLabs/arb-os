@@ -1,0 +1,66 @@
+//
+// Copyright 2020, Offchain Labs, Inc. All rights reserved.
+//
+
+use std::queue::Queue;
+use std::queue::queue_new;
+use std::queue::queue_size;
+use std::queue::queue_put;
+use std::queue::queue_getOrDie;
+
+
+public func merkleize(data: []any) -> bytes32 {
+    let length = len(data);
+    let chunk = 1;
+    while (2*chunk < length) {
+        chunk = 2*chunk;
+    }
+    return merkleize2(data, 0, length, chunk);
+}
+
+public func merkleizeFromQueue(queue: Queue) -> bytes32 {
+    let num = queue_size(queue);
+    let arr = newarray<any>(num);
+    let i = 0;
+    while (i < num) {
+        let (uq, item) = queue_getOrDie(queue);
+        queue = uq;
+        arr = arr with { [i] = item };
+    }
+    return merkleize(arr);
+}
+
+func merkleize2(data: []any, offset: uint, num: uint, chunk: uint) -> bytes32 {
+    if (num == 0) {
+        return bytes32(0);
+    } elseif (num == 1) {
+        return hash(data[offset]);
+    } else {
+        let num1 = num;
+        let num2 = 0;
+        if (num > chunk) {
+            num1 = chunk;
+            num2 = num-chunk;
+        }
+        return hash(
+            merkleize2(data, offset, num1, chunk/2),
+            merkleize2(data, offset+chunk, num2, chunk/2),
+        );
+    }
+}
+
+type MerkleTreeBuilder = struct {
+    contents: Queue,
+}
+
+public func merkleTreeBuilder_new() -> MerkleTreeBuilder {
+    return struct { contents: queue_new() };
+}
+
+public func merkleTreeBuilder_add(mtb: MerkleTreeBuilder, item: any) -> MerkleTreeBuilder {
+    return mtb with { contents: queue_put(mtb.contents, item) };
+}
+
+public func merkleTreeBuilder_rootHash(mtb: MerkleTreeBuilder) -> bytes32 {
+    return merkleizeFromQueue(mtb.contents);
+}

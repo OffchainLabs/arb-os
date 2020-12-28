@@ -30,10 +30,10 @@ use gasAccounting::gasAccounting_init;
 use inbox::inbox_init;
 use inbox::inbox_get;
 use messages::TxRequestData;
-use rollupTracker::rollupTracker_init;
-
+use output::output_init;
 use output::txReceipts_init;
 use precompiles::precompiles_init;
+use rollupTracker::rollupTracker_init;
 
 use std::bytearray::MarshalledBytes;
 use std::bytearray::ByteArray;
@@ -58,6 +58,7 @@ impure func main() {
     errorHandler_init();
     codeSegment_init();
     chainParams_init();
+    output_init();
     decompression_init();
     gasAccounting_init();
     evmCallStack_init();

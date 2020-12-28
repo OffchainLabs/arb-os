@@ -532,7 +532,29 @@ impl RuntimeEnvironment {
     }
 
     pub fn get_all_sends(&self) -> Vec<Value> {
-        self.sends.clone()
+        self.logs
+            .clone()
+            .into_iter()
+            .map(|log| get_send_contents(log))
+            .filter(|r| r.is_some())
+            .map(|r| r.unwrap())
+            .collect()
+    }
+}
+
+fn get_send_contents(log: Value) -> Option<Value> {
+    if let Value::Tuple(tup) = log {
+        if let Value::Int(kind) = &tup[0] {
+            if kind == &Uint256::from_u64(2) {
+                Some(tup[1].clone())
+            } else {
+                None
+            }
+        } else {
+            None
+        }
+    } else {
+        None
     }
 }
 
@@ -1171,7 +1193,7 @@ impl RtEnvRecorder {
 
 fn strip_var_from_log(log: Value) -> Value {
     // strip from a log item all info that might legitimately vary as ArbOS evolves (e.g. gas usage)
-    if let Value::Tuple(tup) = log {
+    if let Value::Tuple(tup) = log.clone() {
         if let Value::Int(item_type) = tup[0].clone() {
             if item_type == Uint256::zero() {
                 // Tx receipt log item
@@ -1192,6 +1214,8 @@ fn strip_var_from_log(log: Value) -> Value {
                     zero_item_in_tuple(tup[4].clone(), 0),
                     zero_item_in_tuple(tup[5].clone(), 0),
                 ])
+            } else if item_type == Uint256::from_u64(2) {
+                log
             } else {
                 panic!("unrecognized log item type {}", item_type);
             }

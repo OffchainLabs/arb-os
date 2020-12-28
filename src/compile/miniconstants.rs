@@ -179,6 +179,7 @@ pub fn init_constant_table() -> HashMap<String, Uint256> {
         // Arbitrum log item types
         ("LogType_txReceipt", 0),
         ("LogType_blockSummary", 1),
+        ("LogType_send", 2),
         // outgoing message types
         ("SendType_withdrawETH", 0),
         ("SendType_withdrawERC20", 1),
