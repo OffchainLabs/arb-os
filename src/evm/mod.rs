@@ -1878,7 +1878,7 @@ pub fn evm_eval_sha256(log_to: Option<&Path>, debug: bool) {
 }
 
 pub fn _evm_eval_ripemd160(log_to: Option<&Path>, debug: bool) {
-    let rt_env = RuntimeEnvironment::new(Uint256::from_usize(1111));
+    let rt_env = RuntimeEnvironment::new(Uint256::from_usize(1111), None);
     let mut machine = load_from_file(Path::new("arb_os/arbos.mexe"), rt_env);
     machine.start_at_zero();
 
