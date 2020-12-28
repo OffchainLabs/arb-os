@@ -70,6 +70,7 @@ use gasAccounting::gasAccounting_startTxCharges;
 use gasAccounting::gasAccounting_endTxCharges;
 use gasAccounting::gasAccounting_pauseTxCharges;
 use gasAccounting::gasAccounting_resumeTxCharges;
+use gasAccounting::gasAccounting_getGasChargeAmount;
 
 use codeSegment::translateEvmCodeSegment;
 
@@ -529,6 +530,21 @@ public impure func evmCallStack_returnFromCall(
                 topFrame.runningAsAccount
             )
         };
+
+        // if not reverting, make sure the callee has enough gas that they could pay for their storage delta
+        // note that we don't charge them here, we just make sure they could have paid
+        // the top-level caller will eventually be charged for this storage
+        if ( success
+          && (topFrame.storageDelta > int(0))
+          && (leftoverGas < gasAccounting_getGasChargeAmount(uint(topFrame.storageDelta))) ) {
+            // callee couldn't pay for their storage, so morph this into a revert
+            success = false;
+            returnOffset = 0;
+            returnLength = 0;
+            returnData = bytearray_new(0);
+            let (txid, addrs, parentAddrs) = evmCallStack_stackInfo();
+            asm((10000, topFrame.runningCodeFrom, 0xfffffffffffffffd, txid, addrs, parentAddrs),) { debugprint };
+        }
 
         if (success && !topFrame.static) {
             // copy relevant data back to parent frame

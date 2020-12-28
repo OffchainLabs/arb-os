@@ -359,6 +359,10 @@ public impure func gasAccounting_chargeForStorage(numStorageUnits: uint) {
     }
 }
 
+public impure func gasAccounting_getGasChargeAmount(numStorageUnits: uint) -> uint {
+    return numStorageUnits * gasAccountingParams.StorageCharge;
+}
+
 public impure func gasAccounting_pauseTxCharges() -> uint {
     // pause charging the currently running tx
     // return how many units of the tx's initial maxGas are still unused
