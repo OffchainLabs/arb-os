@@ -75,6 +75,7 @@ use gasAccounting::gasAccounting_getGasChargeAmount;
 use codeSegment::translateEvmCodeSegment;
 
 use output::emitTxReceipt;
+use output::queueMessageForSend;
 
 use main::mainRunLoop;
 
@@ -107,6 +108,7 @@ type EvmCallFrame = struct {
     selfDestructQueue: Queue,           // set of self-destruct directives, including those created by this call and its subcalls
     resumeInfo: option<ResumeInfo>,     // if call is suspended, its state will be saved here
     sendQueue: Queue,                   // outgoing messages, including those created by this call and its subcalls
+    sendOnFailure: option<(uint, address,ByteArray)>,  // message to send if call fails
     parent: option<EvmCallFrame>,                // call-frame that created this one, or None if this is a top-level call
 }
 
@@ -161,6 +163,7 @@ public impure func evmCallStack_stackInfo() -> (uint, (address, address), (addre
 public impure func initEvmCallStack(
     callKind: uint,
     request: TxRequestData,
+    sendOnFailure: option<(uint, address, ByteArray)>,
 ) {
     // Set up the call frame for a top-level call, and launch the call's execution.
     if let Some(entryPoint) = account_getStartCodePoint(
@@ -211,6 +214,7 @@ public impure func initEvmCallStack(
                     selfDestructQueue: queue_new(),
                     resumeInfo: None<ResumeInfo>,
                     sendQueue: queue_new(),
+                    sendOnFailure: sendOnFailure,
                     parent: None<EvmCallFrame>
                 });
 
@@ -362,6 +366,7 @@ public impure func initEvmCallStackForConstructor(
             selfDestructQueue: queue_new(),
             resumeInfo: None<ResumeInfo>,
             sendQueue: queue_new(),
+            sendOnFailure: None<(uint, address, ByteArray)>,
             parent: None<EvmCallFrame>
         });
 
@@ -483,6 +488,7 @@ public impure func evmCallStack_doCall(
             selfDestructQueue: topFrame.selfDestructQueue,
             resumeInfo: None<ResumeInfo>,
             sendQueue: topFrame.sendQueue,
+            sendOnFailure: None<(uint, address, ByteArray)>,
             parent: Some(topFrame)
         };
 
@@ -574,8 +580,16 @@ public impure func evmCallStack_returnFromCall(
         newTopFrame = newTopFrame with { memory: newMemory };
 
         // ready to return to caller
-        // save updated EVM callstack state; restore caller's stack; jump to resume address
+        // save updated EVM callstack state; send sendOnFailure message if applicable; restore caller's stack; jump to resume address
         globalCallStack = Some(newTopFrame);
+        if ( ! success) {
+            if let Some(sendArgs) = topFrame.sendOnFailure {
+                // promote the send-on-failure message to the next level of the callstack
+                // note that it will still be discarded if the parent (or grandparent etc) reverts
+                let (msgType, addr, msg) = sendArgs;
+                queueMessageForSend(msgType, addr, msg);
+            }
+        }
         emptyAvmStack();                             // throw away anything that callee left on the stack
         restoreAvmStack(resumeInfo.stackContents,);  // restore the caller's stack
         asm(success,) { };                           // push return code onto the stack, where caller expects it to be
@@ -711,8 +725,11 @@ public impure func evmCallStack_returnFromCall(
             }
         } else {
             // Request failed
-
             let gasUsage = gasAccounting_endTxCharges(int(0))?;
+            if let Some(sendArgs) = topFrame.sendOnFailure {
+                let (msgType, addr, msg) = sendArgs;
+                sendMessage(msgType, addr, msg);
+            }
             emitTxReceipt(
                 globalCurrentTxRequest.incomingRequest,
                 const::TxResultCode_revert,
