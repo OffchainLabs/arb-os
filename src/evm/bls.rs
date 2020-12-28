@@ -507,19 +507,20 @@ pub fn _evm_test_bls_signed_batch(log_to: Option<&Path>, debug: bool) -> Result<
     let b4 = bob_public_key.to_four_uints();
     bob_arb_bls._register(&mut machine, b4.0, b4.1, b4.2, b4.3)?;
 
+    let calldata = add_contract.generate_calldata_for_function(
+        "add",
+        &[
+            ethabi::Token::Uint(Uint256::one().to_u256()),
+            ethabi::Token::Uint(Uint256::one().to_u256()),
+        ],
+    )?;
     let alice_compressed_tx = machine.runtime_env.make_compressed_tx_for_bls(
         &alice_addr,
         Uint256::zero(),
         Uint256::from_u64(100000000),
         add_contract.address,
         Uint256::zero(),
-        add_contract.calldata_for_function(
-            "add",
-            &[
-                ethabi::Token::Uint(Uint256::one().to_u256()),
-                ethabi::Token::Uint(Uint256::one().to_u256()),
-            ],
-        ),
+        &calldata,
     );
 
     Ok(())
