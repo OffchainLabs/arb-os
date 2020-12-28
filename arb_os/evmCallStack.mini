@@ -12,6 +12,7 @@ use std::bytestream::ByteStream;
 use std::bytearray::MarshalledBytes;
 use std::stack::Stack;
 use std::storageMap::StorageMap;
+use messages::TxRequestData;
 
 use errorHandler::errorHandler;
 
@@ -63,6 +64,7 @@ use std::stack::stack_push;
 use std::stack::stack_pop;
 use std::stack::stack_discardDeepestItems;
 
+use gasAccounting::GasUsage;
 use gasAccounting::gasAccounting_startTxCharges;
 use gasAccounting::gasAccounting_endTxCharges;
 use gasAccounting::gasAccounting_pauseTxCharges;
@@ -80,12 +82,6 @@ use output::sendQueuedMessages;
 use inbox::IncomingRequest;
 
 
-// This is declared identically in gasAccounting.mini
-type GasUsage = struct {
-    gasUsed: uint,
-    gasPriceWei: uint,
-}
-
 // This callframe is used to represent an EVM call in progress.
 // The callframe will have a full copy of the global AccountStore, but
 //        whether to ultimately adopt this AccountStore version will be contingent on the call succeeding.
@@ -98,7 +94,7 @@ type EvmCallFrame = struct {
     accountStore: AccountStore,         // accountStore used for executing this call
     runningAsAccount: Account,          // cache of accountStore[runningAs]
     caller: address,                    // who called this
-    callKind: uint,                     // type of call: 0=call, 2=delegatecall, 3=staticcall, 4=constructor
+    static: bool,                       // static flag, per EIP-214
     calldata: ByteArray,                // calldata passed in by our caller
     callvalue: uint,                    // Eth value given to this call by its caller
     returnInfo: option<ReturnInfo>,     // result of last subcall made by this call (if any)
@@ -141,17 +137,22 @@ public impure func evmCallStack_init() {
     globalCallStack = None<EvmCallFrame>;
 }
 
-
-type TxRequestData = struct {
-    maxGas: uint,
-    gasPrice: uint,
-    seqNum: option<uint>,
-    caller: address,
-    calleeAddr: address,
-    value: uint,
-    calldata: ByteArray,
-    nonMutating: bool,
-    incomingRequest: IncomingRequest,
+public impure func evmCallStack_stackInfo() -> (uint, (address, address), (address, address)) {
+    if let Some(topFrame) = globalCallStack {
+        let sndRunningAs = address(0);
+        let sndRunningCodeFrom = address(0);
+        if let Some(sndFrame) = unsafecast<option<EvmCallFrame>>(topFrame.parent) {
+            sndRunningAs = sndFrame.runningAs;
+            sndRunningCodeFrom = sndFrame.runningCodeFrom;
+        }
+        return (
+            globalCurrentTxRequest.incomingRequest.requestId,
+            (topFrame.runningAs, topFrame.runningCodeFrom),
+            (sndRunningAs, sndRunningCodeFrom),
+        );
+    } else {
+        return (0, (address(0), address(0)), (address(0), address(0)));
+    }
 }
 
 public impure func initEvmCallStack(
@@ -196,7 +197,7 @@ public impure func initEvmCallStack(
                     accountStore: globalAS,
                     runningAsAccount: accountStore_get(globalAS, request.calleeAddr),
                     caller: request.caller,
-                    callKind: callKind,
+                    static: false,
                     calldata: request.calldata,
                     callvalue: request.value,
                     returnInfo: None<ReturnInfo>,
@@ -321,7 +322,7 @@ public impure func initEvmCallStackForConstructor(
     // The constructor will run, and (if it succeeds) it will return code, which will become the new
     //      code for this new account.
 
-    globalCurrentTxRequest = request;
+    globalCurrentTxRequest = request with { isConstructor: true };
 
     // Create a new account to run the constructor code.
     let acctStore = accountStore_set(
@@ -346,7 +347,7 @@ public impure func initEvmCallStackForConstructor(
             accountStore: acctStore,
             runningAsAccount: accountStore_get(acctStore, request.calleeAddr),
             caller: request.caller,
-            callKind: const::EVMCallType_constructor,
+            static: false,
             calldata: request.calldata,
             callvalue: 0,
             returnInfo: None<ReturnInfo>,
@@ -410,8 +411,8 @@ public impure func evmCallStack_doCall(
             // The size of our stipend was chosen experimentally, to make sure a call that will run on Ethereum will run here.
             gas = gas + 20000;
         }
-        if (gas > availableGas) {
-            gas = availableGas;  // don't give the callee more gas than the caller has
+        if (gas > 63*availableGas/64) {
+            gas = 63*availableGas/64;  // don't give the callee more than 63/64 of the call's gas
         }
 
         let callerAddr = topFrame.runningAs;
@@ -452,7 +453,7 @@ public impure func evmCallStack_doCall(
                 calleeAddr,
                 balance
             )?;
-        } elseif (kind == const::EVMCallType_staticcall) {
+        } elseif (kind == const::EVMCallType_delegatecall) {
             // delegatecall inherits the callvalue of its parent
             // but don't do a transfer because it's running as the same account
             balance = topFrame.callvalue;
@@ -463,7 +464,7 @@ public impure func evmCallStack_doCall(
             accountStore: updatedAcctStore,
             runningAsAccount: accountStore_get(updatedAcctStore, runningAsAddr),
             caller: newCallerAddr,
-            callKind: kind,
+            static: topFrame.static || (kind == const::EVMCallType_staticcall),
             calldata: bytearray_extract(topFrame.memory, argsOffset, argsLength),
             callvalue: balance,
             returnInfo: None<ReturnInfo>,
@@ -524,7 +525,7 @@ public impure func evmCallStack_returnFromCall(
             )
         };
 
-        if (success && (topFrame.callKind != const::EVMCallType_staticcall)) {
+        if (success && !topFrame.static) {
             // copy relevant data back to parent frame
             newTopFrame = newTopFrame
                 with { accountStore: topFrame.accountStore }
@@ -565,7 +566,7 @@ public impure func evmCallStack_returnFromCall(
         // top-level call completed; will need to return to external caller
         let gasUsage = gasAccounting_endTxCharges()?;
         if (success) {
-            if (topFrame.callKind == const::EVMCallType_constructor) {
+            if (globalCurrentTxRequest.isConstructor) {
                 // Constructor call was successful, so finish setting up the account.
                 // The constructor's returndata is EVM code for the contract.
                 // Compile that EVM code into AVM, and substitute that in as the code for the contract.
@@ -650,7 +651,7 @@ public impure func evmCallStack_returnFromCall(
                     }
                 }
             } else {
-                if (topFrame.callKind != const::EVMCallType_staticcall) {
+                if (! globalCurrentTxRequest.nonMutating) {
                     // It was a successful tx (not a non-mutating call).
                     // We'll commit the results of the tx
 

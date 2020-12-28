@@ -95,6 +95,7 @@ impl AbiForContract {
         args: &[ethabi::Token],
         machine: &mut Machine,
         payment: Uint256,
+        advance_time: Option<Uint256>,
         address_for_buddy: Option<Uint256>,
         debug: bool,
     ) -> Option<Uint256> {
@@ -136,6 +137,14 @@ impl AbiForContract {
                 Uint256::from_u64(1025),
             )
         };
+
+        if let Some(delta_blocks) = advance_time {
+            machine.runtime_env._advance_time(
+                delta_blocks.clone(),
+                delta_blocks.mul(&Uint256::from_u64(13)),
+                true,
+            );
+        }
 
         let _gas_used = if debug {
             machine.debug(None)
@@ -340,7 +349,6 @@ impl AbiForContract {
         Ok((Uint256::from_bytes(&tx_id_bytes)))
     }
 
-    #[cfg(test)]
     pub fn _add_function_call_to_compressed_batch(
         &self,
         batch: &mut Vec<u8>,
@@ -423,10 +431,7 @@ impl<'a> ArbSys<'a> {
         }
     }
 
-    pub fn _arbos_version(
-        &self,
-        machine: &mut Machine,
-    ) -> Result<Uint256, ethabi::Error> {
+    pub fn _arbos_version(&self, machine: &mut Machine) -> Result<Uint256, ethabi::Error> {
         let (receipts, _sends) = self.contract_abi.call_function_compressed(
             self.my_address.clone(),
             "arbOSVersion",
@@ -538,8 +543,7 @@ pub struct ArbAddressTable<'a> {
 impl<'a> ArbAddressTable<'a> {
     pub fn new(wallet: &'a Wallet, debug: bool) -> Self {
         let mut contract_abi =
-            AbiForContract::new_from_file(&builtin_contract_path("ArbAddressTable"))
-                .unwrap();
+            AbiForContract::new_from_file(&builtin_contract_path("ArbAddressTable")).unwrap();
         contract_abi.bind_interface_to_address(Uint256::from_u64(102));
         ArbAddressTable {
             contract_abi,
@@ -830,8 +834,7 @@ pub struct ArbFunctionTable<'a> {
 impl<'a> ArbFunctionTable<'a> {
     pub fn new(wallet: &'a Wallet, debug: bool) -> Self {
         let mut contract_abi =
-            AbiForContract::new_from_file(&builtin_contract_path("ArbFunctionTable"))
-                .unwrap();
+            AbiForContract::new_from_file(&builtin_contract_path("ArbFunctionTable")).unwrap();
         contract_abi.bind_interface_to_address(Uint256::from_u64(104));
         ArbFunctionTable {
             contract_abi,
@@ -991,7 +994,7 @@ impl<'a> _ArbOwner<'a> {
             self.debug,
         )?;
 
-       if receipts.len() != 1 {
+        if receipts.len() != 1 {
             return Err(ethabi::Error::from("wrong number of receipts"));
         }
 
@@ -1002,10 +1005,38 @@ impl<'a> _ArbOwner<'a> {
         }
     }
 
-    pub fn _start_arbos_upgrade(
+    pub fn _change_sequencer(
         &self,
         machine: &mut Machine,
+        sequencer_addr: Uint256,
+        delay_blocks: Uint256,
+        delay_seconds: Uint256,
     ) -> Result<(), ethabi::Error> {
+        let (receipts, _sends) = self.contract_abi.call_function(
+            self.my_address.clone(),
+            "changeSequencer",
+            &[
+                ethabi::Token::Address(sequencer_addr.to_h160()),
+                ethabi::Token::Uint(delay_blocks.to_u256()),
+                ethabi::Token::Uint(delay_seconds.to_u256()),
+            ],
+            machine,
+            Uint256::zero(),
+            self.debug,
+        )?;
+
+        if receipts.len() != 1 {
+            return Err(ethabi::Error::from("wrong number of receipts"));
+        }
+
+        if receipts[0].succeeded() {
+            Ok(())
+        } else {
+            Err(ethabi::Error::from("reverted"))
+        }
+    }
+
+    pub fn _start_arbos_upgrade(&self, machine: &mut Machine) -> Result<(), ethabi::Error> {
         let (receipts, _sends) = self.contract_abi.call_function_compressed(
             self.my_address.clone(),
             "startArbosUpgrade",
@@ -1048,14 +1079,11 @@ impl<'a> _ArbOwner<'a> {
         if receipts[0].succeeded() {
             Ok(())
         } else {
-           Err(ethabi::Error::from("reverted"))
+            Err(ethabi::Error::from("reverted"))
         }
     }
 
-    pub fn _finish_arbos_upgrade(
-        &self,
-        machine: &mut Machine,
-    ) -> Result<(), ethabi::Error> {
+    pub fn _finish_arbos_upgrade(&self, machine: &mut Machine) -> Result<(), ethabi::Error> {
         let (receipts, _sends) = self.contract_abi.call_function(
             self.my_address.clone(),
             "finishArbosUpgrade",
@@ -1070,7 +1098,9 @@ impl<'a> _ArbOwner<'a> {
         }
 
         if receipts[0].succeeded() {
-            Err(ethabi::Error::from("should have reverted but actually succeeded"))
+            Err(ethabi::Error::from(
+                "should have reverted but actually succeeded",
+            ))
         } else {
             Ok(())
         }

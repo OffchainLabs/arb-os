@@ -80,6 +80,7 @@ pub enum Type {
     Bool,
     Bytes32,
     EthAddress,
+    Buffer,
     Tuple(Vec<Type>),
     Array(Box<Type>),
     FixedArray(Box<Type>, usize),
@@ -107,6 +108,7 @@ impl Type {
             | Type::Uint
             | Type::Int
             | Type::Bool
+            | Type::Buffer
             | Type::Bytes32
             | Type::EthAddress
             | Type::Imported(_)
@@ -202,6 +204,7 @@ impl Type {
             | Type::Bool
             | Type::Bytes32
             | Type::EthAddress
+            | Type::Buffer
             | Type::Imported(_)
             | Type::Every => (self == rhs),
             Type::Tuple(tvec) => {
@@ -271,66 +274,66 @@ impl Type {
         }
     }
 
-    ///Panics if specified type does not have a default value
+    ///This will always return a value. The second return says whether that value is type-safe.
     // TODO: have this resolve nominal types
-    pub fn default_value(&self) -> Value {
+    pub fn default_value(&self) -> (Value, bool) {
         match self {
             Type::Void => {
                 panic!("tried to get default value for void type");
             }
+            Type::Buffer => (Value::new_buffer(vec![]), true),
             Type::Uint | Type::Int | Type::Bytes32 | Type::EthAddress | Type::Bool => {
-                Value::Int(Uint256::zero())
+                (Value::Int(Uint256::zero()), true)
             }
             Type::Tuple(tvec) => {
                 let mut default_tup = Vec::new();
+                let mut is_safe = true;
                 for t in tvec {
-                    default_tup.push(t.default_value());
+                    let (def, safe) = t.default_value();
+                    default_tup.push(def);
+                    is_safe = is_safe && safe;
                 }
-                Value::new_tuple(default_tup)
+                (Value::new_tuple(default_tup), is_safe)
             }
-            Type::Array(t) => Value::new_tuple(vec![
-                Value::Int(Uint256::one()),
-                Value::Int(Uint256::one()),
-                Value::new_tuple(vec![t.default_value()]),
-            ]),
+            Type::Array(t) => {
+                let (def, safe) = t.default_value();
+                (
+                    Value::new_tuple(vec![
+                        Value::Int(Uint256::one()),
+                        Value::Int(Uint256::one()),
+                        Value::new_tuple(vec![def]),
+                    ]),
+                    safe,
+                )
+            }
             Type::FixedArray(t, sz) => {
-                let default_val = t.default_value();
+                let (default_val, safe) = t.default_value();
                 let mut val = Value::new_tuple(vec![default_val; 8]);
                 let mut chunk_size = 1;
                 while chunk_size * TUPLE_SIZE < *sz {
                     val = Value::new_tuple(vec![val; 8]);
                     chunk_size *= 8;
                 }
-                val
+                (val, safe)
             }
             Type::Struct(fields) => {
                 let mut vals = Vec::new();
+                let mut is_safe = true;
                 for field in fields {
-                    vals.push(field.tipe.default_value());
+                    let (val, safe) = field.tipe.default_value();
+                    vals.push(val);
+                    is_safe = is_safe && safe;
                 }
-                value_from_field_list(vals)
+                (value_from_field_list(vals), is_safe)
             }
-            Type::Map(_key, _val) => {
-                // an unusable dummy value -- application will panic if it accesses this
-                Value::none()
-            }
-            Type::Named(_) => {
-                panic!("tried to get default value for a named type");
-            }
-            Type::Func(_, _, _) => {
-                panic!("tried to get default value for a function type");
-            }
-            Type::Imported(_) => {
-                panic!("tried to get default value for an imported type");
-            }
-            Type::Nominal(_, _) => {
-                panic!("tried to get default value for a nominal type");
-            }
-            Type::Any => Value::none(),
-            Type::Every => {
-                panic!("tried to get default value for the every type");
-            }
-            Type::Option(_) => Value::new_tuple(vec![Value::Int(Uint256::zero())]),
+            Type::Map(_, _)
+            | Type::Named(_)
+            | Type::Func(_, _, _)
+            | Type::Imported(_)
+            | Type::Nominal(_, _) => (Value::none(), false),
+            Type::Any => (Value::none(), true),
+            Type::Every => (Value::none(), false),
+            Type::Option(_) => (Value::new_tuple(vec![Value::Int(Uint256::zero())]), true),
         }
     }
 }
@@ -378,6 +381,7 @@ impl PartialEq for Type {
             | (Type::Bytes32, Type::Bytes32)
             | (Type::EthAddress, Type::EthAddress)
             | (Type::Any, Type::Any)
+            | (Type::Buffer, Type::Buffer)
             | (Type::Every, Type::Every) => true,
             (Type::Tuple(v1), Type::Tuple(v2)) => type_vectors_equal(&v1, &v2),
             (Type::Array(a1), Type::Array(a2)) => *a1 == *a2,
@@ -870,6 +874,7 @@ pub struct Expr {
 pub enum ExprKind {
     UnaryOp(UnaryOp, Box<Expr>),
     Binary(BinaryOp, Box<Expr>, Box<Expr>),
+    Trinary(TrinaryOp, Box<Expr>, Box<Expr>, Box<Expr>),
     ShortcutOr(Box<Expr>, Box<Expr>),
     ShortcutAnd(Box<Expr>, Box<Expr>),
     VariableRef(StringId),
@@ -890,6 +895,7 @@ pub enum ExprKind {
     UnsafeCast(Box<Expr>, Type),
     Asm(Type, Vec<Instruction>, Vec<Expr>),
     Try(Box<Expr>),
+    NewBuffer,
 }
 
 impl Expr {
@@ -905,6 +911,14 @@ impl Expr {
     pub fn new_binary(op: BinaryOp, e1: Expr, e2: Expr, loc: Option<Location>) -> Self {
         Self {
             kind: ExprKind::Binary(op, Box::new(e1), Box::new(e2)),
+            debug_info: DebugInfo::from(loc),
+        }
+    }
+
+    ///Returns an expression that applies 3-ary op to e1, e2 and e3.
+    pub fn new_trinary(op: TrinaryOp, e1: Expr, e2: Expr, e3: Expr, loc: Option<Location>) -> Self {
+        Self {
+            kind: ExprKind::Trinary(op, Box::new(e1), Box::new(e2), Box::new(e3)),
             debug_info: DebugInfo::from(loc),
         }
     }
@@ -937,6 +951,12 @@ impl ExprKind {
                 Box::new(be1.resolve_types(type_table)?),
                 Box::new(be2.resolve_types(type_table)?),
             )),
+            ExprKind::Trinary(op, be1, be2, be3) => Ok(ExprKind::Trinary(
+                *op,
+                Box::new(be1.resolve_types(type_table)?),
+                Box::new(be2.resolve_types(type_table)?),
+                Box::new(be3.resolve_types(type_table)?),
+            )),
             ExprKind::ShortcutOr(be1, be2) => Ok(ExprKind::ShortcutOr(
                 Box::new(be1.resolve_types(type_table)?),
                 Box::new(be2.resolve_types(type_table)?),
@@ -954,6 +974,7 @@ impl ExprKind {
                 Box::new(be.resolve_types(type_table)?),
                 name.clone(),
             )),
+            ExprKind::NewBuffer => Ok(ExprKind::NewBuffer),
             ExprKind::Constant(b) => Ok(ExprKind::Constant(b.resolve_types(type_table)?)),
             ExprKind::FunctionCall(fexpr, args) => {
                 let mut rargs = Vec::new();
@@ -1079,9 +1100,21 @@ pub enum BinaryOp {
     BitwiseAnd,
     BitwiseOr,
     BitwiseXor,
+    ShiftLeft,
+    ShiftRight,
     _LogicalAnd,
     LogicalOr,
     Hash,
+    GetBuffer8,
+    GetBuffer64,
+    GetBuffer256,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+pub enum TrinaryOp {
+    SetBuffer8,
+    SetBuffer64,
+    SetBuffer256,
 }
 
 ///Used in StructInitializer expressions to map expressions to fields of the struct.

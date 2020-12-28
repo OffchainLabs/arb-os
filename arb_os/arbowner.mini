@@ -19,6 +19,8 @@ use evmCallStack::evmCallFrame_getCaller;
 use evmOps::evmOp_return;
 use evmOps::evmOp_revert_knownCodePc;
 
+use inbox::inbox_changeSequencer;
+
 use std::bytearray::ByteArray;
 use std::bytearray::bytearray_size;
 use std::bytearray::bytearray_get256;
@@ -47,6 +49,8 @@ public impure func arbowner_txcall() {
         let funcCode = asm(224, bytearray_get256(calldata, 0)) uint { shr };
         if (funcCode == 0xe3a0a148) {
             arbowner_giveOwnership(topFrame, calldata);
+        } elseif (funcCode == 0xea180a38) {
+            arbowner_changeSequencer(topFrame, calldata);
         } elseif (funcCode == 0x6d92b8e4) {
             arbowner_startArbosUpgrade(topFrame, calldata);
         } elseif (funcCode == 0x0b766fec) {
@@ -55,7 +59,6 @@ public impure func arbowner_txcall() {
            arbowner_finishArbosUpgrade(topFrame, calldata);
         } else {
             // unrecognized function code
-            panic;
             evmOp_revert_knownCodePc(address(const::Address_ArbOwner), 2, 0, 0);
         }
     } else {
@@ -69,6 +72,17 @@ impure func arbowner_giveOwnership(topFrame: EvmCallFrame, calldata: ByteArray) 
         evmOp_revert_knownCodePc(address(const::Address_ArbOwner), 10, 0, 0);
     }
     chainParams_setOwner(address(bytearray_get256(calldata, 4)));
+    evmOp_return(0, 0);
+}
+
+impure func arbowner_changeSequencer(topFrame: EvmCallFrame, calldata: ByteArray) {  // (address, uint, uint)
+    if (bytearray_size(calldata) != 4+3*32) {
+        evmOp_revert_knownCodePc(address(const::Address_ArbOwner), 50, 0, 0);
+    }
+    let sequencerAddr = address(bytearray_get256(calldata, 4));
+    let delayBlocks = bytearray_get256(calldata, 4+32);
+    let delaySeconds = bytearray_get256(calldata, 4+2*32);
+    inbox_changeSequencer(sequencerAddr, delayBlocks, delaySeconds);
     evmOp_return(0, 0);
 }
 
@@ -107,6 +121,10 @@ impure func arbowner_finishArbosUpgrade(topFrame: EvmCallFrame, calldata: ByteAr
     } else {
         evmOp_revert_knownCodePc(address(const::Address_ArbOwner), 42, 0, 0);
     }
+}
+
+func dummy(x: uint) -> uint {
+    return x;
 }
 
 

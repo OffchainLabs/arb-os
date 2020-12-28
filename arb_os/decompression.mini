@@ -328,6 +328,7 @@ impure func decompressTx(
             value: value,
             calldata: calldata,
             nonMutating: false,
+            isConstructor: (toAddr == address(0)),
             incomingRequest: unsafecast<IncomingRequest>(0),  // caller will fill this in
         }
     ));

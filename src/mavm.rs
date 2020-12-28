@@ -8,7 +8,7 @@ use crate::uint256::Uint256;
 use ethers_core::utils::keccak256;
 use serde::{Deserialize, Serialize};
 use serde_repr::{Deserialize_repr, Serialize_repr};
-use std::{collections::HashMap, fmt, rc::Rc};
+use std::{cell::RefCell, collections::HashMap, fmt, rc::Rc};
 
 #[derive(PartialEq, Eq, Hash, Debug, Clone, Copy, Serialize, Deserialize)]
 pub enum Label {
@@ -275,12 +275,349 @@ impl fmt::Display for CodePt {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum BufferElem {
+    Leaf(Rc<Vec<u8>>),
+    Node(Rc<Vec<Buffer>>, u8),
+    Sparse(Rc<Vec<usize>>, Rc<Vec<u8>>, u8),
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Buffer {
+    elem: BufferElem,
+    hash: RefCell<Option<Packed>>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Packed {
+    pub hash: Uint256,
+    size: u8,      // total size
+    packed: usize, // packed levels
+}
+
+fn calc_len(h: u8) -> usize {
+    if h == 0 {
+        1024
+    } else {
+        128 * calc_len(h - 1)
+    }
+}
+
+fn calc_height(h: u8) -> u8 {
+    if h == 0 {
+        10
+    } else {
+        7 + calc_height(h - 1)
+    }
+}
+
+pub fn needed_height(offset: usize) -> u8 {
+    if offset <= 1 {
+        1
+    } else {
+        1 + needed_height(offset / 2)
+    }
+}
+
+fn hash_buf(buf: &[u8]) -> Packed {
+    if buf.len() == 0 {
+        return zero_packed(10);
+    }
+    if buf.len() == 32 {
+        return normal(Uint256::from_bytes(buf).avm_hash(), 5);
+    }
+    let len = buf.len();
+    let h1 = hash_buf(&buf[0..len / 2]);
+    let h2 = hash_buf(&buf[len / 2..len]);
+    if is_zero_hash(&h2) {
+        return pack(&h1);
+    }
+    normal(Uint256::avm_hash2(&unpack(&h1), &unpack(&h2)), h1.size + 1)
+}
+
+#[allow(dead_code)]
+pub fn hash_buffer(buf: &[u8]) -> Uint256 {
+    unpack(&hash_buf(buf))
+}
+
+fn hash_node(buf: &mut [Buffer], sz: u8) -> Packed {
+    if buf.len() == 1 {
+        return buf[0].hash();
+    }
+    let len = buf.len();
+    let h1 = hash_node(&mut buf[0..len / 2], sz - 1);
+    let h2 = hash_node(&mut buf[len / 2..len], sz - 1);
+    if is_zero_hash(&h2) {
+        pack(&h1)
+    } else {
+        normal(Uint256::avm_hash2(&unpack(&h1), &unpack(&h2)), sz)
+    }
+}
+
+pub fn zero_hash(sz: u8) -> Uint256 {
+    if sz == 5 {
+        return Uint256::zero().avm_hash();
+    }
+    let h1 = zero_hash(sz - 1);
+    Uint256::avm_hash2(&h1, &h1)
+}
+
+fn normal(hash: Uint256, sz: u8) -> Packed {
+    Packed {
+        size: sz,
+        packed: 0,
+        hash: hash,
+    }
+}
+
+fn pack(packed: &Packed) -> Packed {
+    Packed {
+        size: packed.size,
+        packed: packed.packed + 1,
+        hash: packed.hash.clone(),
+    }
+}
+
+fn is_zero_hash(packed: &Packed) -> bool {
+    packed.hash == Uint256::zero().avm_hash()
+}
+
+fn unpack(packed: &Packed) -> Uint256 {
+    let mut res = packed.hash.clone();
+    let mut sz = packed.size;
+    for _i in 0..packed.packed {
+        res = Uint256::avm_hash2(&res, &zero_hash(sz));
+        sz = sz + 1;
+    }
+    res
+}
+
+fn zero_packed(sz: u8) -> Packed {
+    if sz == 5 {
+        normal(zero_hash(5), 5)
+    } else {
+        pack(&zero_packed(sz - 1))
+    }
+}
+
+fn hash_sparse(idx: &[usize], buf: &[u8], sz: u8) -> Packed {
+    if sz == 5 {
+        let mut res = [0u8; 32];
+        for (i, &el) in idx.iter().enumerate() {
+            res[el] = buf[i];
+        }
+        return normal(Uint256::from_bytes(&res).avm_hash(), 5);
+    }
+    if idx.len() == 0 {
+        return zero_packed(sz);
+    }
+    let pivot = 1 << (sz - 1);
+    let mut idx1 = Vec::new();
+    let mut buf1 = Vec::new();
+    let mut idx2 = Vec::new();
+    let mut buf2 = Vec::new();
+    for (i, &el) in idx.iter().enumerate() {
+        if idx[i] < pivot {
+            idx1.push(el);
+            buf1.push(buf[i]);
+        } else {
+            idx2.push(el - pivot);
+            buf2.push(buf[i]);
+        }
+    }
+    let h1 = hash_sparse(&idx1, &buf1, sz - 1);
+    let h2 = hash_sparse(&idx2, &buf2, sz - 1);
+    if is_zero_hash(&h2) {
+        pack(&h1)
+    } else {
+        normal(Uint256::avm_hash2(&unpack(&h1), &unpack(&h2)), sz)
+    }
+}
+
+impl Buffer {
+    fn node(vec: Rc<Vec<Buffer>>, h: u8) -> Buffer {
+        Buffer {
+            elem: BufferElem::Node(vec, h),
+            hash: RefCell::new(None),
+        }
+    }
+
+    fn leaf(vec: Rc<Vec<u8>>) -> Buffer {
+        Buffer {
+            elem: BufferElem::Leaf(vec),
+            hash: RefCell::new(None),
+        }
+    }
+
+    fn sparse(vec: Rc<Vec<usize>>, vec2: Rc<Vec<u8>>, h: u8) -> Buffer {
+        Buffer {
+            elem: BufferElem::Sparse(vec, vec2, h),
+            hash: RefCell::new(None),
+        }
+    }
+
+    pub fn avm_hash(&self) -> Uint256 {
+        Uint256::avm_hash2(&Uint256::from_u64(123), &self.hash().hash)
+    }
+
+    pub fn hash_no_caching(&self) -> Packed {
+        match self.hash.borrow().clone() {
+            None => {
+                let res = match &self.elem {
+                    BufferElem::Leaf(cell) => hash_buf(&cell.to_vec()),
+                    BufferElem::Node(cell, h) => hash_node(&mut cell.to_vec(), calc_height(*h)),
+                    BufferElem::Sparse(idx_cell, buf_cell, h) => {
+                        hash_sparse(&idx_cell.to_vec(), &buf_cell.to_vec(), calc_height(*h))
+                    }
+                };
+                res
+            }
+            Some(x) => x.clone(),
+        }
+    }
+
+    pub fn hash(&self) -> Packed {
+        let res = self.hash_no_caching();
+        self.hash.replace(Some(res.clone()));
+        res
+    }
+
+    pub fn read_byte(&self, offset: usize) -> u8 {
+        match &self.elem {
+            BufferElem::Leaf(buf) => {
+                if offset >= buf.len() {
+                    0
+                } else {
+                    buf[offset]
+                }
+            }
+            BufferElem::Sparse(idx, buf, _) => {
+                for (i, &el) in idx.iter().enumerate() {
+                    if el == offset {
+                        return buf[i];
+                    }
+                }
+                0
+            }
+            BufferElem::Node(buf, h) => {
+                let len = calc_height(*h);
+                let cell_len = calc_len(*h - 1);
+                if needed_height(offset) > len {
+                    0
+                } else {
+                    buf[offset / cell_len].read_byte(offset % cell_len)
+                }
+            }
+        }
+    }
+
+    #[allow(dead_code)]
+    pub fn empty0() -> Buffer {
+        Buffer::leaf(Rc::new(Vec::new()))
+    }
+
+    pub fn empty1() -> Rc<Vec<Buffer>> {
+        let mut vec = Vec::new();
+        let empty = Rc::new(Vec::new());
+        for _i in 0..128 {
+            vec.push(Buffer::leaf(Rc::clone(&empty)));
+        }
+        Rc::new(vec)
+    }
+
+    fn make_empty(h: u8) -> Rc<Vec<Buffer>> {
+        if h == 1 {
+            return Buffer::empty1();
+        }
+        let mut vec = Vec::new();
+        let empty = Buffer::make_empty(h - 1);
+        for _i in 0..128 {
+            vec.push(Buffer::node(Rc::clone(&empty), h - 1));
+        }
+        Rc::new(vec)
+    }
+
+    // Make for level, lower levels are sparse
+    fn make_sparse(h: u8) -> Buffer {
+        if h == 0 {
+            return Buffer::leaf(Rc::new(Vec::new()));
+        }
+        let mut vec = Vec::new();
+        let empty = Buffer::sparse(Rc::new(Vec::new()), Rc::new(Vec::new()), h - 1);
+        for _i in 0..128 {
+            vec.push(empty.clone());
+        }
+        Buffer::node(Rc::new(vec), h)
+    }
+
+    pub fn set_byte(&self, offset: usize, v: u8) -> Self {
+        match &self.elem {
+            BufferElem::Leaf(cell) => {
+                if offset >= 1024 {
+                    let mut vec = Vec::new();
+                    vec.push(Buffer::leaf(cell.clone()));
+                    let empty = Rc::new(Vec::new());
+                    for _i in 1..128 {
+                        vec.push(Buffer::leaf(Rc::clone(&empty)));
+                    }
+                    let buf = Buffer::node(Rc::new(vec), 1);
+                    return buf.set_byte(offset, v);
+                }
+                let mut buf = cell.to_vec().clone();
+                if buf.len() < 1024 {
+                    buf.resize(1024, 0);
+                }
+                buf[offset] = v;
+                Buffer::leaf(Rc::new(buf))
+            }
+            BufferElem::Sparse(idx, buf, h) => {
+                if idx.len() > 16 {
+                    let mut nbuf = Buffer::make_sparse(*h);
+                    for (i, &el) in idx.iter().enumerate() {
+                        nbuf = nbuf.set_byte(el, buf[i]);
+                    }
+                    return nbuf.set_byte(offset, v);
+                }
+                let mut nidx = idx.to_vec().clone();
+                let mut nbuf = buf.to_vec().clone();
+                nidx.push(offset);
+                nbuf.push(v);
+                Buffer::sparse(Rc::new(nidx), Rc::new(nbuf), *h)
+            }
+            BufferElem::Node(cell, h) => {
+                if needed_height(offset) > calc_height(*h) {
+                    let mut vec = Vec::new();
+                    vec.push(Buffer::node(cell.clone(), *h));
+                    #[cfg(feature = "sparse")]
+                    for _i in 1..128 {
+                        vec.push(Buffer::sparse(Rc::new(Vec::new()), Rc::new(Vec::new()), *h));
+                    }
+                    #[cfg(not(feature = "sparse"))]
+                    {
+                        let empty = Buffer::make_empty(*h);
+                        for _i in 1..128 {
+                            vec.push(Buffer::node(Rc::clone(&empty), *h));
+                        }
+                    }
+                    let buf = Buffer::node(Rc::new(vec), *h + 1);
+                    return buf.set_byte(offset, v);
+                }
+                let mut vec = cell.to_vec().clone();
+                let cell_len = calc_len(*h - 1);
+                vec[offset / cell_len] = vec[offset / cell_len].set_byte(offset % cell_len, v);
+                Buffer::node(Rc::new(vec), *h)
+            }
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum Value {
     Int(Uint256),
     Tuple(Rc<Vec<Value>>),
     CodePoint(CodePt),
     Label(Label),
+    Buffer(Buffer),
 }
 
 impl Value {
@@ -310,11 +647,20 @@ impl Value {
         Value::Tuple(Rc::new(v))
     }
 
+    pub fn new_buffer(v: Vec<u8>) -> Self {
+        Value::Buffer(Buffer::leaf(Rc::new(v)))
+    }
+
+    pub fn copy_buffer(v: Buffer) -> Self {
+        Value::Buffer(v)
+    }
+
     pub fn type_insn_result(&self) -> usize {
         match self {
             Value::Int(_) => 0,
             Value::CodePoint(_) => 1,
             Value::Tuple(_) => 3,
+            Value::Buffer(_) => 4,
             Value::Label(_) => {
                 panic!("tried to run type instruction on a label");
             }
@@ -325,6 +671,7 @@ impl Value {
         match self {
             Value::Int(_) => Ok(self),
             Value::CodePoint(_) => Ok(self),
+            Value::Buffer(_) => Ok(self),
             Value::Label(label) => {
                 let maybe_pc = label_map.get(&label);
                 match maybe_pc {
@@ -351,6 +698,7 @@ impl Value {
     ) -> (Self, usize) {
         match self {
             Value::Int(_) => (self, 0),
+            Value::Buffer(_) => (self, 0),
             Value::Tuple(v) => {
                 let mut rel_v = Vec::new();
                 let mut max_func_offset = 0;
@@ -375,7 +723,7 @@ impl Value {
 
     pub fn xlate_labels(self, label_map: &HashMap<Label, &Label>) -> Self {
         match self {
-            Value::Int(_) | Value::CodePoint(_) => self,
+            Value::Int(_) | Value::CodePoint(_) | Value::Buffer(_) => self,
             Value::Tuple(v) => {
                 let mut newv = Vec::new();
                 for val in &*v {
@@ -401,6 +749,7 @@ impl Value {
         //BUGBUG: should do same hash as AVM
         match self {
             Value::Int(ui) => Value::Int(ui.avm_hash()),
+            Value::Buffer(buf) => Value::Int(buf.avm_hash()),
             Value::Tuple(v) => {
                 let mut acc = Uint256::zero();
                 for val in v.to_vec() {
@@ -411,7 +760,7 @@ impl Value {
                     }
                 }
                 Value::Int(acc)
-            },
+            }
             Value::CodePoint(cp) => Value::avm_hash2(&Value::Int(Uint256::one()), &cp.avm_hash()),
             Value::Label(label) => {
                 Value::avm_hash2(&Value::Int(Uint256::from_usize(2)), &label.avm_hash())
@@ -438,6 +787,11 @@ impl fmt::Display for Value {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             Value::Int(i) => i.fmt(f),
+            Value::Buffer(buf) => match &buf.elem {
+                BufferElem::Leaf(vec) => write!(f, "Buffer(Leaf({}))", vec.len()),
+                BufferElem::Node(vec, h) => write!(f, "Buffer(Node({}, {}))", vec.len(), h),
+                BufferElem::Sparse(vec1, _, _) => write!(f, "Buffer(Sparse({}))", vec1.len()),
+            },
             Value::CodePoint(pc) => write!(f, "CodePoint({})", pc),
             Value::Label(label) => write!(f, "Label({})", label),
             Value::Tuple(tup) => {
@@ -556,6 +910,13 @@ pub enum AVMOpcode {
     EcMul,
     EcPairing,
     DebugPrint = 0x90,
+    NewBuffer = 0xa0,
+    GetBuffer8,
+    GetBuffer64,
+    GetBuffer256,
+    SetBuffer8,
+    SetBuffer64,
+    SetBuffer256,
 }
 
 impl MiniProperties for Opcode {
@@ -657,6 +1018,83 @@ impl Opcode {
         }
     }
 
+    pub fn to_name(&self) -> &str {
+        match self {
+            Opcode::AVMOpcode(AVMOpcode::Rget) => "rget",
+            Opcode::AVMOpcode(AVMOpcode::Rset) => "rset",
+            Opcode::AVMOpcode(AVMOpcode::PushStatic) => "pushstatic",
+            Opcode::AVMOpcode(AVMOpcode::Tset) => "tset",
+            Opcode::AVMOpcode(AVMOpcode::Tget) => "tget",
+            Opcode::AVMOpcode(AVMOpcode::Pop) => "pop",
+            Opcode::AVMOpcode(AVMOpcode::StackEmpty) => "stackempty",
+            Opcode::AVMOpcode(AVMOpcode::AuxPush) => "auxpush",
+            Opcode::AVMOpcode(AVMOpcode::AuxPop) => "auxpop",
+            Opcode::AVMOpcode(AVMOpcode::AuxStackEmpty) => "auxstackempty",
+            Opcode::AVMOpcode(AVMOpcode::Xget) => "xget",
+            Opcode::AVMOpcode(AVMOpcode::Xset) => "xset",
+            Opcode::AVMOpcode(AVMOpcode::Dup0) => "dup0",
+            Opcode::AVMOpcode(AVMOpcode::Dup1) => "dup1",
+            Opcode::AVMOpcode(AVMOpcode::Dup2) => "dup2",
+            Opcode::AVMOpcode(AVMOpcode::Swap1) => "swap1",
+            Opcode::AVMOpcode(AVMOpcode::Swap2) => "swap2",
+            Opcode::UnaryMinus => "unaryminus",
+            Opcode::AVMOpcode(AVMOpcode::BitwiseNeg) => "bitwiseneg",
+            Opcode::AVMOpcode(AVMOpcode::Hash) => "hash",
+            Opcode::AVMOpcode(AVMOpcode::Hash2) => "hash2",
+            Opcode::AVMOpcode(AVMOpcode::Keccakf) => "keccakf",
+            Opcode::AVMOpcode(AVMOpcode::Tlen) => "length",
+            Opcode::AVMOpcode(AVMOpcode::Plus) => "plus",
+            Opcode::AVMOpcode(AVMOpcode::Minus) => "minus",
+            Opcode::AVMOpcode(AVMOpcode::Mul) => "mul",
+            Opcode::AVMOpcode(AVMOpcode::Div) => "div",
+            Opcode::AVMOpcode(AVMOpcode::Mod) => "mod",
+            Opcode::AVMOpcode(AVMOpcode::Sdiv) => "sdiv",
+            Opcode::AVMOpcode(AVMOpcode::Smod) => "smod",
+            Opcode::AVMOpcode(AVMOpcode::Exp) => "exp",
+            Opcode::AVMOpcode(AVMOpcode::LessThan) => "lt",
+            Opcode::AVMOpcode(AVMOpcode::GreaterThan) => "gt",
+            Opcode::AVMOpcode(AVMOpcode::SLessThan) => "slt",
+            Opcode::AVMOpcode(AVMOpcode::SGreaterThan) => "sgt",
+            Opcode::AVMOpcode(AVMOpcode::Equal) => "eq",
+            Opcode::AVMOpcode(AVMOpcode::IsZero) => "iszero",
+            Opcode::AVMOpcode(AVMOpcode::Byte) => "byte",
+            Opcode::AVMOpcode(AVMOpcode::SignExtend) => "signextend",
+            Opcode::AVMOpcode(AVMOpcode::ShiftLeft) => "shl",
+            Opcode::AVMOpcode(AVMOpcode::ShiftRight) => "shr",
+            Opcode::AVMOpcode(AVMOpcode::ShiftArith) => "sar",
+            Opcode::AVMOpcode(AVMOpcode::BitwiseAnd) => "bitwiseand",
+            Opcode::AVMOpcode(AVMOpcode::BitwiseOr) => "bitwiseor",
+            Opcode::AVMOpcode(AVMOpcode::BitwiseXor) => "bitwisexor",
+            Opcode::LogicalAnd => "logicaland",
+            Opcode::LogicalOr => "logicalor",
+            Opcode::AVMOpcode(AVMOpcode::Noop) => "noop",
+            Opcode::AVMOpcode(AVMOpcode::Inbox) => "inbox",
+            Opcode::AVMOpcode(AVMOpcode::InboxPeek) => "inboxpeek",
+            Opcode::AVMOpcode(AVMOpcode::Jump) => "jump",
+            Opcode::AVMOpcode(AVMOpcode::Cjump) => "cjump",
+            Opcode::AVMOpcode(AVMOpcode::Log) => "log",
+            Opcode::AVMOpcode(AVMOpcode::Send) => "send",
+            Opcode::AVMOpcode(AVMOpcode::ErrCodePoint) => "errcodept",
+            Opcode::AVMOpcode(AVMOpcode::PushInsn) => "pushinsn",
+            Opcode::AVMOpcode(AVMOpcode::PushInsnImm) => "pushinsnimm",
+            Opcode::AVMOpcode(AVMOpcode::OpenInsn) => "openinsn",
+            Opcode::AVMOpcode(AVMOpcode::DebugPrint) => "debugprint",
+            Opcode::AVMOpcode(AVMOpcode::SetGas) => "setgas",
+            Opcode::AVMOpcode(AVMOpcode::GetGas) => "getgas",
+            Opcode::AVMOpcode(AVMOpcode::ErrSet) => "errset",
+            Opcode::AVMOpcode(AVMOpcode::Sideload) => "sideload",
+            Opcode::AVMOpcode(AVMOpcode::EcRecover) => "ecrecover",
+            Opcode::AVMOpcode(AVMOpcode::NewBuffer) => "newbuffer",
+            Opcode::AVMOpcode(AVMOpcode::GetBuffer8) => "getbuffer8",
+            Opcode::AVMOpcode(AVMOpcode::GetBuffer64) => "getbuffer64",
+            Opcode::AVMOpcode(AVMOpcode::GetBuffer256) => "getbuffer256",
+            Opcode::AVMOpcode(AVMOpcode::SetBuffer8) => "setbuffer8",
+            Opcode::AVMOpcode(AVMOpcode::SetBuffer64) => "setbuffer64",
+            Opcode::AVMOpcode(AVMOpcode::SetBuffer256) => "setbuffer256",
+            _ => "Unknown",
+        }
+    }
+
     pub fn from_number(num: usize) -> Option<Self> {
         match num {
             0x01 => Some(Opcode::AVMOpcode(AVMOpcode::Plus)),
@@ -731,6 +1169,13 @@ impl Opcode {
             0x82 => Some(Opcode::AVMOpcode(AVMOpcode::EcMul)),
             0x83 => Some(Opcode::AVMOpcode(AVMOpcode::EcPairing)),
             0x90 => Some(Opcode::AVMOpcode(AVMOpcode::DebugPrint)),
+            0xa0 => Some(Opcode::AVMOpcode(AVMOpcode::NewBuffer)),
+            0xa1 => Some(Opcode::AVMOpcode(AVMOpcode::GetBuffer8)),
+            0xa2 => Some(Opcode::AVMOpcode(AVMOpcode::GetBuffer64)),
+            0xa3 => Some(Opcode::AVMOpcode(AVMOpcode::GetBuffer256)),
+            0xa4 => Some(Opcode::AVMOpcode(AVMOpcode::SetBuffer8)),
+            0xa5 => Some(Opcode::AVMOpcode(AVMOpcode::SetBuffer64)),
+            0xa6 => Some(Opcode::AVMOpcode(AVMOpcode::SetBuffer256)),
             _ => None,
         }
     }
@@ -809,6 +1254,14 @@ impl Opcode {
             Opcode::AVMOpcode(AVMOpcode::EcMul) => Some(0x82),
             Opcode::AVMOpcode(AVMOpcode::EcPairing) => Some(0x83),
             Opcode::AVMOpcode(AVMOpcode::DebugPrint) => Some(0x90),
+            Opcode::AVMOpcode(AVMOpcode::NewBuffer) => Some(0xa0),
+            Opcode::AVMOpcode(AVMOpcode::GetBuffer8) => Some(0xa1),
+            Opcode::AVMOpcode(AVMOpcode::GetBuffer64) => Some(0xa2),
+            Opcode::AVMOpcode(AVMOpcode::GetBuffer256) => Some(0xa3),
+            Opcode::AVMOpcode(AVMOpcode::SetBuffer8) => Some(0xa4),
+            Opcode::AVMOpcode(AVMOpcode::SetBuffer64) => Some(0xa5),
+            Opcode::AVMOpcode(AVMOpcode::SetBuffer256) => Some(0xa6),
+
             _ => None,
         }
     }
@@ -828,7 +1281,7 @@ impl fmt::Display for Opcode {
         match self {
             Opcode::MakeFrame(s1, s2) => write!(f, "MakeFrame({}, {})", s1, s2),
             Opcode::Label(label) => label.fmt(f),
-            _ => write!(f, "{:?}", self),
+            _ => write!(f, "{}", self.to_name()),
         }
     }
 }

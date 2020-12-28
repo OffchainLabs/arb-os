@@ -1,0 +1,22 @@
+//
+// Copyright 2020, Offchain Labs, Inc. All rights reserved.
+//
+
+
+func main() {
+	let ba = newbuffer();
+	let ba = setbuffer8(ba, 0, getbuffer8(ba, 0)+1);
+	let ba = setbuffer8(ba, 100, 123);
+	getbuffer256(ba, 100);
+	let ba = setbuffer256(ba, 1000, 1234567891011121315161718);
+	let ba = setbuffer256(ba, 1000, 0);
+	let bb = newbuffer();
+	let bb = setbuffer8(bb, 100, 123);
+	let bb = setbuffer8(bb, 100, 0);
+	let bc = newbuffer();
+	let bc = setbuffer64(bc, 100, 1234567891011121314);
+	getbuffer64(bc, 100);
+	getbuffer8(ba, 1234567891011121314);
+	let ba = setbuffer8(ba, 1234567891011121314, 100);
+	getbuffer8(ba, 1234567891011121314);
+}

@@ -7,8 +7,8 @@ use accounts::Account;
 use std::bytearray::ByteArray;
 use std::bytearray::MarshalledBytes;
 use std::stack::Stack;
-import type AccountStore;
-import type ByteStream;
+use accounts::AccountStore;
+use std::bytestream::ByteStream;
 
 use evmCallStack::evmCallStack_topFrame;
 use evmCallStack::evmCallStack_setAccount;
@@ -53,12 +53,7 @@ use std::bytestream::bytestream_bytesReadSoFar;
 use inbox::inbox_currentBlockNumber;
 use inbox::inbox_currentTimestamp;
 
-import func bytestream_new(ba: ByteArray) -> ByteStream;
-
-import func stack_pop(stack: Stack) -> option<(Stack, any)>;
-
-import impure func inbox_currentBlockNumber() -> uint;
-import impure func inbox_currentTimestamp() -> uint;
+use std::stack::stack_pop;
 
 use output::queueMessageForSend;
 
@@ -81,7 +76,7 @@ use std::bls::bls_marshalPublicKey;
 
 use decompression::parseAggregatorFunctionTable;
 
-import impure func pcTableForCode(code: ByteArray) -> option<Stack>;
+use codeSegment::pcTableForCode;
 
 
 public impure func arbsys_txcall() {
