@@ -82,8 +82,6 @@ impure func doInitializationOption(stream: ByteStream) -> option<ByteStream> {
         if (numPayloadBytes != 3*32) {
             // unexpected payload size; discard the payload and ignore this option
             return bytestream_skipBytes(stream, numPayloadBytes);
-        } else {
-            return Some(stream);
         }
         let (ustr, sequencerAddrAsUint) = bytestream_get256(stream)?;
         let (ustr, delayBlocks) = bytestream_get256(ustr)?;
