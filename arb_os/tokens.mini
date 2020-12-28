@@ -20,18 +20,8 @@ use std::bytearray::bytearray_set256;
 
 use evmCallStack::initEvmCallStack;
 
-// This is duplicated from messages.mini
-type TxRequestData = struct {
-    maxGas: uint,
-    gasPrice: uint,
-    seqNum: option<uint>,
-    caller: address,
-    calleeAddr: address,
-    value: uint,
-    calldata: ByteArray,
-    nonMutating: bool,
-    incomingRequest: IncomingRequest,
-}
+use messages::TxRequestData;
+
 
 public impure func tokens_erc20deposit(
     tokenAddress: address,
@@ -50,23 +40,7 @@ public impure func tokens_erc20deposit(
 
     // encode the calldata for call to adminMint
     let calldata = bytearray_new(0);
-    calldata = bytearray_setByte(
-        bytearray_setByte(
-            bytearray_setByte(
-                bytearray_setByte(
-                    calldata,
-                    0,
-                    0xe5,
-                ),
-                1,
-                0x83,
-            ),
-            2,
-            0x06,
-        ),
-        3,
-        0xf9
-    );
+    calldata = bytearray_set256(calldata, 0, asm(256-32, 0xe58306f9) uint { shl });
     calldata = bytearray_set256(calldata, 4, uint(payee));
     calldata = bytearray_set256(calldata, 36, amount);
 
@@ -81,6 +55,7 @@ public impure func tokens_erc20deposit(
             value: 0,
             calldata: calldata,
             nonMutating: false,
+            isConstructor: false,
             incomingRequest: fullMsg,
         }
     );  // should never return
@@ -105,23 +80,7 @@ public impure func tokens_erc721deposit(
 
     // encode the calldata for call to adminMint
     let calldata = bytearray_new(0);
-    calldata = bytearray_setByte(
-        bytearray_setByte(
-            bytearray_setByte(
-                bytearray_setByte(
-                    calldata,
-                    0,
-                    0xe5,
-                ),
-                1,
-                0x83,
-            ),
-            2,
-            0x06,
-        ),
-        3,
-        0xf9
-    );
+    calldata = bytearray_set256(calldata, 0, asm(256-32, 0xe58306f9) uint { shl });
     calldata = bytearray_set256(calldata, 4, uint(payee));
     calldata = bytearray_set256(calldata, 36, id);
 
@@ -136,6 +95,7 @@ public impure func tokens_erc721deposit(
             value: 0,
             calldata: calldata,
             nonMutating: false,
+            isConstructor: false,
             incomingRequest: fullMsg,
         }
     );  // should never return
