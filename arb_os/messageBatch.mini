@@ -33,7 +33,7 @@ type MessageBatch = struct {
 public func messageBatch_tryNew(msg: IncomingRequest) -> option<MessageBatch> {
     if ( (msg.kind == const::L1MessageType_L2) && (bytearray_getByte(msg.msgData, 0) == const::L2MessageType_batch) ) {
         let stream = bytestream_new(msg.msgData);
-        stream = bytestream_skipBytes(stream, 1)?;
+        stream = bytestream_skipBytes(stream, 1)?;   // skip past type byte in message
         return Some(
             struct {
                 template: msg with {
@@ -49,7 +49,7 @@ public func messageBatch_tryNew(msg: IncomingRequest) -> option<MessageBatch> {
         );
     } elseif ( (msg.kind == const::L1MessageType_L2) && (bytearray_getByte(msg.msgData, 0) == const::L2MessageType_sequencerBatch) ) {  // sequencer batch
         let stream = bytestream_new(msg.msgData);
-        stream = bytestream_skipBytes(stream, 6)?;
+        stream = bytestream_skipBytes(stream, 6)?;   // skip past type byte, blocknum, and timestamp in message
         return Some(
             struct {
                 template: msg with {

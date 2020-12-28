@@ -293,12 +293,15 @@ impl Type {
             }
             Type::Array(t) => {
                 let (def, safe) = t.default_value();
-                (Value::new_tuple(vec![
-                    Value::Int(Uint256::one()),
-                    Value::Int(Uint256::one()),
-                    Value::new_tuple(vec![def]),
-                ]), safe)
-            },
+                (
+                    Value::new_tuple(vec![
+                        Value::Int(Uint256::one()),
+                        Value::Int(Uint256::one()),
+                        Value::new_tuple(vec![def]),
+                    ]),
+                    safe,
+                )
+            }
             Type::FixedArray(t, sz) => {
                 let (default_val, safe) = t.default_value();
                 let mut val = Value::new_tuple(vec![default_val; 8]);
@@ -319,11 +322,11 @@ impl Type {
                 }
                 (value_from_field_list(vals), is_safe)
             }
-            Type::Map(_, _) |
-            Type::Named(_) |
-            Type::Func(_, _, _) |
-            Type::Imported(_) |
-            Type::Nominal(_, _) => (Value::none(), false),
+            Type::Map(_, _)
+            | Type::Named(_)
+            | Type::Func(_, _, _)
+            | Type::Imported(_)
+            | Type::Nominal(_, _) => (Value::none(), false),
             Type::Any => (Value::none(), true),
             Type::Every => (Value::none(), false),
             Type::Option(_) => (Value::new_tuple(vec![Value::Int(Uint256::zero())]), true),

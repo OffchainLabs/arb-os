@@ -92,7 +92,7 @@ public impure func inbox_init() {
     };
 }
 
-public impure func inbox_addSequencer(addr: address, delayBlocks: uint, delayTime: uint) {
+public impure func inbox_changeSequencer(addr: address, delayBlocks: uint, delayTime: uint) {
     // deliver messages from old sequencer, if any (shouldn't be needed, but doing it just to be extra cautious)
     let bnum = globalInbox.blockNum;
     let ts = globalInbox.timestamp;
@@ -110,25 +110,29 @@ public impure func inbox_addSequencer(addr: address, delayBlocks: uint, delayTim
         }
     }
 
-    // set up the new sequencer
-    if (delayBlocks > 128*256) {
-        delayBlocks = 128*256;
+    if(addr == address(0)) {
+        globalInbox = globalInbox with { sequencer: None<SequencerState> };
+    } else {
+        // set up the new sequencer
+        if (delayBlocks > const::Sequencer_maxDelayBlocks) {
+            delayBlocks = const::Sequencer_maxDelayBlocks;
+        }
+        if (delayTime > const::Sequencer_maxDelaySeconds) {
+            delayTime = const::Sequencer_maxDelaySeconds;
+        }
+        globalInbox = globalInbox with {
+            sequencer: Some(struct {
+                sequencerAddr: addr,
+                delayBlocks: delayBlocks,
+                delayTime: delayTime,
+                delayQueue: incomingRequestQueue_new(),
+                lastBlockNumSeen: bnum,
+                lastTimestampSeen: ts,
+                lastBlockNumReleased: bnum,
+                lastTimestampReleased: ts,
+            })
+        };
     }
-    if (delayTime > 128*256*30) {
-        delayTime = 128*256*30;
-    }
-    globalInbox = globalInbox with {
-        sequencer: Some(struct {
-            sequencerAddr: addr,
-            delayBlocks: delayBlocks,
-            delayTime: delayTime,
-            delayQueue: incomingRequestQueue_new(),
-            lastBlockNumSeen: bnum,
-            lastTimestampSeen: ts,
-            lastBlockNumReleased: bnum,
-            lastTimestampReleased: ts,
-        })
-    };
 }
 
 public impure func inbox_get() -> IncomingRequest {
@@ -286,7 +290,8 @@ impure func getFromL1InboxSequencer(inbox: Inbox, seq: SequencerState) -> Inbox 
         if ((bnum <= blockNum) || (bnum < 256*256)) {
             blockNum = bnum;
         } else {
-            blockNum = bnum-256*256;
+            // blocknum is too large, try the next smaller value with same last 2 bytes
+            blockNum = bnum-256*256;   // can't underflow because of check above
         }
         // get low-order three bytes of timestamp assigned to this message, and reconstruct that timestamp
         let ts = (timestamp & ~0xffffff)
@@ -294,12 +299,16 @@ impure func getFromL1InboxSequencer(inbox: Inbox, seq: SequencerState) -> Inbox 
         if ((ts <= timestamp) || (ts < 256*256*256)) {
             timestamp = ts;
         } else {
-            timestamp = ts - 256*256*256;
+            // timestamp is too large, try the next smaller value with same last 3 bytes
+            timestamp = ts - 256*256*256;  // can't underflow because of check above
         }
 
+        // make sure blockNum isn't more than seq.delayBlocks in the past
         if (blockNum+seq.delayBlocks < seq.lastBlockNumSeen) {
             blockNum = seq.lastBlockNumSeen - seq.delayBlocks;
         }
+
+        // separately, make sure timestamp isn't more than seq.delayTime in the past
         if (timestamp+seq.delayTime < seq.lastTimestampSeen) {
             timestamp = seq.lastTimestampSeen - seq.delayTime;
         }
@@ -339,8 +348,8 @@ impure func getFromL1InboxSequencer(inbox: Inbox, seq: SequencerState) -> Inbox 
             let (uSeq, uInboxQ) = releaseDelayedRequests(
                 seq,
                 inbox.queue,
-                blockNum - seq.delayBlocks,
-                timestamp - seq.delayTime,
+                blockNum - seq.delayBlocks,  // can't underflow because of check above
+                timestamp - seq.delayTime,   // can't underflow because of check above
             );
             seq = uSeq;
             inbox = inbox with { queue: uInboxQ };

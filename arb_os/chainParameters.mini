@@ -5,7 +5,7 @@
 use arbowner::arbowner_init;
 use evmCallStack::evmCallStack_callHitError;
 
-use inbox::inbox_addSequencer;
+use inbox::inbox_changeSequencer;
 
 use std::bytearray::MarshalledBytes;
 use std::bytearray::ByteArray;
@@ -79,7 +79,7 @@ impure func doInitializationOption(stream: ByteStream) -> option<ByteStream> {
         let (ustr, sequencerAddrAsUint) = bytestream_get256(stream)?;
         let (ustr, delayBlocks) = bytestream_get256(ustr)?;
         let (ustr, delayTime) = bytestream_get256(ustr)?;
-        inbox_addSequencer(address(sequencerAddrAsUint), delayBlocks, delayTime);
+        inbox_changeSequencer(address(sequencerAddrAsUint), delayBlocks, delayTime);
         return Some(ustr);
     } else {
         // unrecognized option, discard it

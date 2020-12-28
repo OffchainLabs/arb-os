@@ -543,8 +543,7 @@ pub struct ArbAddressTable<'a> {
 impl<'a> ArbAddressTable<'a> {
     pub fn new(wallet: &'a Wallet, debug: bool) -> Self {
         let mut contract_abi =
-            AbiForContract::new_from_file(&builtin_contract_path("ArbAddressTable"))
-                .unwrap();
+            AbiForContract::new_from_file(&builtin_contract_path("ArbAddressTable")).unwrap();
         contract_abi.bind_interface_to_address(Uint256::from_u64(102));
         ArbAddressTable {
             contract_abi,
@@ -835,8 +834,7 @@ pub struct ArbFunctionTable<'a> {
 impl<'a> ArbFunctionTable<'a> {
     pub fn new(wallet: &'a Wallet, debug: bool) -> Self {
         let mut contract_abi =
-            AbiForContract::new_from_file(&builtin_contract_path("ArbFunctionTable"))
-                .unwrap();
+            AbiForContract::new_from_file(&builtin_contract_path("ArbFunctionTable")).unwrap();
         contract_abi.bind_interface_to_address(Uint256::from_u64(104));
         ArbFunctionTable {
             contract_abi,
@@ -991,6 +989,37 @@ impl<'a> _ArbOwner<'a> {
             old_owner.unwrap_or(self.my_address.clone()),
             "giveOwnership",
             &[ethabi::Token::Address(new_owner.to_h160())],
+            machine,
+            Uint256::zero(),
+            self.debug,
+        )?;
+
+        if receipts.len() != 1 {
+            return Err(ethabi::Error::from("wrong number of receipts"));
+        }
+
+        if receipts[0].succeeded() {
+            Ok(())
+        } else {
+            Err(ethabi::Error::from("reverted"))
+        }
+    }
+
+    pub fn _change_sequencer(
+        &self,
+        machine: &mut Machine,
+        sequencer_addr: Uint256,
+        delay_blocks: Uint256,
+        delay_seconds: Uint256,
+    ) -> Result<(), ethabi::Error> {
+        let (receipts, _sends) = self.contract_abi.call_function(
+            self.my_address.clone(),
+            "changeSequencer",
+            &[
+                ethabi::Token::Address(sequencer_addr.to_h160()),
+                ethabi::Token::Uint(delay_blocks.to_u256()),
+                ethabi::Token::Uint(delay_seconds.to_u256()),
+            ],
             machine,
             Uint256::zero(),
             self.debug,
