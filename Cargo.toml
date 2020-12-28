@@ -35,3 +35,6 @@ keccak="0.1.0"
 bn-plus = "0.4.4"
 rust-crypto="^0.2"
 num-integer = "0.1"
+
+[features]
+sparse_buffers = []

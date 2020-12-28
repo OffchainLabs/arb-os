@@ -20,12 +20,25 @@ use std::bytearray::bytearray_copy;
 
 use std::bytearray::marshalledBytes_hash;
 
+const TwoTo64 = 0x10000000000000000;
+const LargeOffset = 0xf000000000000000;
 
 impure func main() {
 	asm(tests(),) { log };
 }
 
 func tests() -> uint {
+
+	let buf = newbuffer();
+	let buf2 = setbuffer8(buf, 10000, 12);
+
+	if (getbuffer8(buf, 10000) != 0) {
+		return 987;
+	}	
+
+	// check that this wont error
+	let buf2 = setbuffer8(buf2, 10000, 1234);
+
 	let ba = bytearray_new(33);
 	if (bytearray_size(ba) != 0) {
 		return 1;
@@ -35,6 +48,12 @@ func tests() -> uint {
 	ba = bytearray_setByte(ba, 33, 42);
     if (bytearray_getByte(ba, 33) != 42) {
 	    return 2;
+    }
+
+	ba = bytearray_new(117);
+	ba = bytearray_setByte(ba, 33000, 42);
+    if (bytearray_getByte(ba, 33000) != 42) {
+	    return 2001;
     }
 
 	ba = bytearray_new(117);
@@ -54,7 +73,7 @@ func tests() -> uint {
 	ba = bytearray_new(117);
 	ba = bytearray_set256(ba, 64, 7373);
 	if (bytearray_get256(ba, 64) != 7373) {
-		return 5;
+		return bytearray_get256(ba, 64);
 	}
 
 	ba = bytearray_new(117);
@@ -144,14 +163,31 @@ func tests() -> uint {
     ) {
         return 15;
     }
+
     let ba = setupFromUnmarshal();
     let ba2 = bytearray_extract(ba, 0, 41);
     let ba3 = bytearray_copy(ba, 0, bytearray_new(0), 0, 41);
     let mb2 = bytearray_marshalFull(ba2);
     let mb3 = bytearray_marshalFull(ba3);
     if (mb2 != mb3) {
+        asm(mb2, ) { debugprint };
+        asm(mb3, ) { debugprint };
         return 16;
     }
+
+	let ba = bytearray_new(0);
+	let ba = bytearray_set256(ba, 0, 0x0101010101010101010101010101010101010101010101010101010101010101);
+	let ba = bytearray_set256(ba, 32, 0x2222222222222222222222222222222222222222222222222222222222222222);
+	let ba2 = bytearray_extract(ba, 0, 36);
+	let mb1 = bytearray_getByte(ba2, 36);
+	if (mb1 != 0x0) {
+		return 17;
+	} 
+	let mw1 = bytearray_get256(ba2, 32);
+	if (mw1 != 0x2222222200000000000000000000000000000000000000000000000000000000) {
+		debug(mw1);
+		return 18;
+	} 
 
     let ba = bytearray_new(0);
     let i = 0;
@@ -165,8 +201,51 @@ func tests() -> uint {
         sum = sum + bytearray_get256(ba, i*32);
         i = i+1;
     }
+
     if (sum != (2500*4999)) {
-        return 17;
+        return 19;
+    }
+
+    // test handling of large bytearrays with large offsets
+    ba = bytearray_new(0);
+    if (bytearray_get256(ba, const::TwoTo64 - 32) != 0) {
+        return 20;
+    }
+    if (bytearray_get256(ba, const::TwoTo64) != 0) {
+        return 21;
+    }
+
+    ba = bytearray_set256(ba, const::LargeOffset, 42);
+    if (bytearray_size(ba) != (const::LargeOffset + 32)) {
+        return 22;
+    }
+    if (bytearray_get256(ba, const::LargeOffset) != 42) {
+        return 23;
+    }
+    let ba2 = bytearray_extract(ba, const::LargeOffset, 32);
+    if (bytearray_size(ba2) != 32) {
+        return 24;
+    }
+    if (bytearray_get256(ba2, 0) != 42) {
+        return 25;
+    }
+    if (bytearray_get256(ba2, const::LargeOffset) != 0) {
+        return 26;
+    }
+    ba2 = bytearray_set256(ba2, const::LargeOffset, 99);  // this one runs for a very long time
+    if (bytearray_get256(ba2, const::LargeOffset) != 99) {
+        return 27;
+    }
+    ba = bytearray_set256(bytearray_new(0), const::TwoTo64-1, ~0);
+    if (bytearray_size(ba) != 0) {
+        return 28;
+    }
+    if (bytearray_get256(ba, const::TwoTo64-1) != 0) {
+        return 29;
+    }
+    let ba3 = bytearray_copy(ba2, 0, ba2, const::LargeOffset, const::LargeOffset);
+    if (bytearray_size(ba3) != bytearray_size(ba2)) {
+        return 30;
     }
 
 	return 0;

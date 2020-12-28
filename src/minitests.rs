@@ -18,7 +18,7 @@ fn test_arraytest() {
     let res = run_from_file(
         path,
         vec![],
-        RuntimeEnvironment::new(Uint256::from_usize(1111)),
+        RuntimeEnvironment::new(Uint256::from_usize(1111), None),
         false,
     );
     match res {
@@ -37,7 +37,7 @@ fn test_kvstest() {
     let res = run_from_file(
         path,
         vec![],
-        RuntimeEnvironment::new(Uint256::from_usize(1111)),
+        RuntimeEnvironment::new(Uint256::from_usize(1111), None),
         false,
     );
     match res {
@@ -56,7 +56,7 @@ fn test_storage_map() {
     let res = run_from_file(
         path,
         vec![],
-        RuntimeEnvironment::new(Uint256::from_usize(1111)),
+        RuntimeEnvironment::new(Uint256::from_usize(1111), None),
         false,
     );
     match res {
@@ -75,7 +75,7 @@ fn test_queuetest() {
     let res = run_from_file(
         path,
         vec![],
-        RuntimeEnvironment::new(Uint256::from_usize(1111)),
+        RuntimeEnvironment::new(Uint256::from_usize(1111), None),
         false,
     );
     match res {
@@ -94,7 +94,7 @@ fn test_globaltest() {
     let res = run_from_file(
         path,
         vec![],
-        RuntimeEnvironment::new(Uint256::from_usize(1111)),
+        RuntimeEnvironment::new(Uint256::from_usize(1111), None),
         false,
     );
     match res {
@@ -113,7 +113,7 @@ fn test_pqtest() {
     let res = run_from_file(
         path,
         vec![],
-        RuntimeEnvironment::new(Uint256::from_usize(1111)),
+        RuntimeEnvironment::new(Uint256::from_usize(1111), None),
         false,
     );
     match res {
@@ -132,7 +132,7 @@ fn test_bytearray() {
     let res = run_from_file(
         path,
         vec![],
-        RuntimeEnvironment::new(Uint256::from_usize(1111)),
+        RuntimeEnvironment::new(Uint256::from_usize(1111), None),
         false,
     );
     match res {
@@ -151,7 +151,7 @@ fn test_map() {
     let res = run_from_file(
         path,
         vec![],
-        RuntimeEnvironment::new(Uint256::from_usize(1111)),
+        RuntimeEnvironment::new(Uint256::from_usize(1111), None),
         false,
     );
     match res {
@@ -170,7 +170,7 @@ fn test_keccak() {
     let res = run_from_file(
         path,
         vec![],
-        RuntimeEnvironment::new(Uint256::from_usize(1111)),
+        RuntimeEnvironment::new(Uint256::from_usize(1111), None),
         false,
     );
     match res {
@@ -208,7 +208,7 @@ fn test_sha256() {
     let res = run_from_file(
         path,
         vec![],
-        RuntimeEnvironment::new(Uint256::from_usize(1111)),
+        RuntimeEnvironment::new(Uint256::from_usize(1111), None),
         false,
     );
     match res {
@@ -222,12 +222,49 @@ fn test_sha256() {
 }
 
 #[test]
+fn test_fixedpoint() {
+    let path = Path::new("stdlib/fixedpointtest.mexe");
+    let res = run_from_file(
+        path,
+        vec![],
+        RuntimeEnvironment::new(Uint256::from_usize(1111), None),
+        false,
+    );
+    match res {
+        Ok(res) => {
+            assert_eq!(res[0], Value::Int(Uint256::zero()));
+        }
+        Err(e) => {
+            panic!("{}\n{}", e.0, e.1);
+        }
+    }
+}
+
+#[test]
+fn test_ripemd160() {
+    let path = Path::new("stdlib/ripemd160test.mexe");
+    let res = run_from_file(
+        path,
+        vec![],
+        RuntimeEnvironment::new(Uint256::from_usize(1111), None),
+        false,
+    );
+    match res {
+        Ok(res) => {
+            assert_eq!(res[0], Value::Int(Uint256::zero()));
+        }
+        Err(e) => {
+            panic!("{}\n{}", e.0, e.1);
+        }
+    }
+}
+
 fn test_biguint() {
     let path = Path::new("stdlib/biguinttest.mexe");
     let res = run_from_file(
         path,
         vec![],
-        RuntimeEnvironment::new(Uint256::from_usize(1111)),
+        RuntimeEnvironment::new(Uint256::from_usize(1111), None),
         false,
     );
     match res {
@@ -309,7 +346,7 @@ fn test_rlp_uint(ui: Uint256, correct_result: Vec<u8>) {
     let res = run_from_file(
         path,
         vec![Value::Int(Uint256::zero()), Value::Int(ui)],
-        RuntimeEnvironment::new(Uint256::from_usize(1111)),
+        RuntimeEnvironment::new(Uint256::from_usize(1111), None),
         false,
     );
     match res {
@@ -328,7 +365,7 @@ fn test_rlp_bytearray(input: Vec<u8>, correct_result: Vec<u8>) {
     let res = run_from_file(
         path,
         vec![Value::Int(Uint256::one()), bytestack_from_bytes(&input)],
-        RuntimeEnvironment::new(Uint256::from_usize(1111)),
+        RuntimeEnvironment::new(Uint256::from_usize(1111), None),
         false,
     );
     match res {
@@ -354,7 +391,7 @@ fn test_rlp_list3(testvec: (Uint256, Vec<u8>, Uint256), correct_result: Vec<u8>)
                 Value::Int(testvec.2),
             ]),
         ],
-        RuntimeEnvironment::new(Uint256::from_usize(1111)),
+        RuntimeEnvironment::new(Uint256::from_usize(1111), None),
         false,
     );
     match res {
@@ -373,7 +410,7 @@ fn test_codeload() {
     let res = run_from_file(
         path,
         vec![],
-        RuntimeEnvironment::new(Uint256::from_usize(1111)),
+        RuntimeEnvironment::new(Uint256::from_usize(1111), None),
         false,
     );
     match res {
@@ -401,6 +438,10 @@ fn test_ecpairing_precompile() {
     crate::evm::_evm_ecpairing_precompile(None, false);
 }
 
+fn test_ripemd160_precompile() {
+    crate::evm::_evm_eval_ripemd160(None, false);
+}
+
 #[test]
 fn test_deploy_buddy_contract() {
     crate::evm::evm_deploy_buddy_contract(None, false);
@@ -423,7 +464,7 @@ fn test_direct_deploy_and_compressed_call_add() {
 
 #[test]
 fn test_payment_in_constructor() {
-    crate::evm::evm_test_payment_in_constructor(None, false);
+    crate::evm::_evm_test_payment_in_constructor(None, false);
 }
 
 #[test]
@@ -439,6 +480,11 @@ fn test_arbsys_direct() {
 #[test]
 fn test_arbowner() {
     crate::evm::_evm_test_arbowner(None, false).unwrap();
+}
+
+#[test]
+fn test_rate_control() {
+    crate::evm::_evm_test_rate_control(None, false).unwrap();
 }
 
 #[test]
@@ -465,6 +511,36 @@ pub fn test_crosscontract_call_with_constructors() {
 }
 
 #[test]
+pub fn test_gas_charging_underfunded() {
+    match crate::evm::_evm_run_with_gas_charging(
+        None,
+        Some((
+            Uint256::_from_gwei(1000000),
+            Uint256::from_u64(100),
+            Uint256::zero(),
+        )),
+        false,
+        false,
+    ) {
+        Ok(result) => assert_eq!(result, false),
+        Err(e) => panic!("error {}", e),
+    }
+}
+
+#[test]
+pub fn test_gas_charging_fully_funded() {
+    match crate::evm::_evm_run_with_gas_charging(
+        None,
+        Some((Uint256::one(), Uint256::from_u64(100), Uint256::zero())),
+        false,
+        false,
+    ) {
+        Ok(result) => assert_eq!(result, true),
+        Err(e) => panic!("error {}", e),
+    }
+}
+
+#[test]
 pub fn test_tx_with_deposit() {
     match crate::evm::_evm_tx_with_deposit(None, false, false) {
         Ok(result) => assert_eq!(result, true),
@@ -483,6 +559,30 @@ pub fn test_create_opcode() {
 #[test]
 pub fn test_crosscontract_call_using_batch() {
     match crate::evm::evm_xcontract_call_using_batch(None, false, false) {
+        Ok(result) => assert_eq!(result, true),
+        Err(e) => panic!("error {}", e),
+    }
+}
+
+#[test]
+pub fn test_crosscontract_call_sequencer_fast_path() {
+    match crate::evm::_evm_xcontract_call_using_sequencer_batch(None, false, false) {
+        Ok(result) => assert_eq!(result, true),
+        Err(e) => panic!("error {}", e),
+    }
+}
+
+#[test]
+pub fn test_crosscontract_call_sequencer_slow_path() {
+    match crate::evm::_evm_xcontract_call_sequencer_slow_path(None, false, false) {
+        Ok(result) => assert_eq!(result, true),
+        Err(e) => panic!("error {}", e),
+    }
+}
+
+#[test]
+pub fn test_crosscontract_call_sequencer_reordering() {
+    match crate::evm::_evm_xcontract_call_sequencer_reordering(None, false, false) {
         Ok(result) => assert_eq!(result, true),
         Err(e) => panic!("error {}", e),
     }
@@ -513,6 +613,10 @@ fn test_erc721() {
 #[test]
 fn test_bls_registry() {
     crate::evm::bls::_evm_test_bls_registry(None, false);
+}
+
+fn test_rollup_tracker() {
+    crate::run::rolluptest::_test_rollup_tracker();
 }
 
 fn test_call_to_precompile5(
@@ -555,7 +659,7 @@ fn test_call_to_precompile5(
 
 #[test]
 fn test_precompile5_small() {
-    let rt_env = RuntimeEnvironment::new(Uint256::from_usize(1111));
+    let rt_env = RuntimeEnvironment::new(Uint256::from_usize(1111), None);
     let mut machine = load_from_file(Path::new("arb_os/arbos.mexe"), rt_env);
     machine.start_at_zero();
     let my_addr = Uint256::from_usize(1025);
@@ -578,7 +682,7 @@ fn test_precompile5_small() {
 
 #[test]
 fn test_precompile5_big() {
-    let rt_env = RuntimeEnvironment::new(Uint256::from_usize(1111));
+    let rt_env = RuntimeEnvironment::new(Uint256::from_usize(1111), None);
     let mut machine = load_from_file(Path::new("arb_os/arbos.mexe"), rt_env);
     machine.start_at_zero();
     let my_addr = Uint256::from_usize(1025);

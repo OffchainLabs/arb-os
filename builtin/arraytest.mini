@@ -2,7 +2,8 @@
 // Copyright 2020, Offchain Labs, Inc. All rights reserved.
 //
 
-import func builtin_arrayOp(a: any, index: uint, closure: opClosure) -> (any, any);
+use core::array::array;
+use core::array::builtin_arrayOp;
 
 type opClosure = struct {
 	f: func(any, any) -> (any, any),
@@ -50,7 +51,7 @@ func tests() -> uint {
 	let a = newarray<uint>(17);
 	a = a with { [11] = 3 };
 	let result = builtin_arrayOp(
-		a,
+		unsafecast<array>(a),
 		11,
 		unsafecast<opClosure>(struct { f: addFunc, val: 4, })
 	);

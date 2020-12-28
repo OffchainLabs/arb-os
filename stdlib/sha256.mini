@@ -16,7 +16,7 @@ use std::bytearray::bytearray_copy;
 
 type Sha256Hasher = struct {
     accumulator: bytes32,
-    buffer: [2]uint,
+    buf: [2]uint,
     offset: uint,
     totalSizeBits: uint,
 }
@@ -24,7 +24,7 @@ type Sha256Hasher = struct {
 public func sha256hasher_new() -> Sha256Hasher {
     return struct {
         accumulator: bytes32(0x6a09e667bb67ae853c6ef372a54ff53a510e527f9b05688c1f83d9ab5be0cd19),
-        buffer: unsafecast<[2]uint>((0,0)),
+        buf: unsafecast<[2]uint>((0,0)),
         offset: 0,
         totalSizeBits: 0,
     };
@@ -32,14 +32,14 @@ public func sha256hasher_new() -> Sha256Hasher {
 
 public func sha256hasher_pushByte(h: Sha256Hasher, b: uint) -> Sha256Hasher {
     let word = h.offset / 32;
-    let newBuffer = h.buffer with {
-        [word] = h.buffer[word] ^ asm(248-8*(h.offset % 32), b&0xff) uint { shl }
+    let newBuffer = h.buf with {
+        [word] = h.buf[word] ^ asm(248-8*(h.offset % 32), b&0xff) uint { shl }
     };
     if (h.offset >= 63) {
         return h with {
             accumulator: asm(h.accumulator, newBuffer[0], newBuffer[1]) bytes32 { sha256f }
         } with {
-            buffer: unsafecast<[2]uint>((0,0))
+            buf: unsafecast<[2]uint>((0,0))
         } with {
             offset: 0
         } with {
@@ -47,7 +47,7 @@ public func sha256hasher_pushByte(h: Sha256Hasher, b: uint) -> Sha256Hasher {
         };
     } else {
         return h with {
-            buffer: newBuffer
+            buf: newBuffer
         } with {
             offset: h.offset+1
         } with {
@@ -60,7 +60,7 @@ public func sha256hasher_push256(h: Sha256Hasher, val: uint) -> Sha256Hasher {
     let offset = h.offset;
     if (offset == 0) {
         return h with {
-            buffer: h.buffer with { [0] = val }
+            buf: h.buf with { [0] = val }
         } with {
             offset: 32
         } with {
@@ -68,9 +68,9 @@ public func sha256hasher_push256(h: Sha256Hasher, val: uint) -> Sha256Hasher {
         };
     } elseif (offset == 32) {
         return h with {
-            accumulator: asm(h.accumulator, h.buffer[0], val) bytes32 { sha256f }
+            accumulator: asm(h.accumulator, h.buf[0], val) bytes32 { sha256f }
         } with {
-            buffer: unsafecast<[2]uint>((0,0))
+            buf: unsafecast<[2]uint>((0,0))
         } with {
             offset: 0
         } with {
@@ -78,10 +78,10 @@ public func sha256hasher_push256(h: Sha256Hasher, val: uint) -> Sha256Hasher {
         };
     } elseif (offset < 32) {
         return h with {
-            buffer: h.buffer with {
-                [0] = h.buffer[0] | asm(8*offset, val) uint { shr }
+            buf: h.buf with {
+                [0] = h.buf[0] | asm(8*offset, val) uint { shr }
             } with {
-                [1] = h.buffer[1] | asm(8*(32-offset), val) uint { shl }
+                [1] = h.buf[1] | asm(8*(32-offset), val) uint { shl }
             }
         } with {
             offset: 32+offset
@@ -93,11 +93,11 @@ public func sha256hasher_push256(h: Sha256Hasher, val: uint) -> Sha256Hasher {
         return h with {
             accumulator: asm(
                 h.accumulator,
-                h.buffer[0],
-                h.buffer[1] | asm(8*offset, val) uint { shr }
+                h.buf[0],
+                h.buf[1] | asm(8*offset, val) uint { shr }
             ) bytes32 { sha256f }
         } with {
-            buffer: unsafecast<[2]uint>((
+            buf: unsafecast<[2]uint>((
                 asm(8*(32-offset), val) uint { shl },
                 0
             ))
@@ -118,17 +118,17 @@ public func sha256hasher_finish(h: Sha256Hasher) -> bytes32 {
     // make sure there is space for the 64-bit total length
     if (h.offset > 56) {
         h = h with {
-            accumulator: asm(h.accumulator, h.buffer[0], h.buffer[1]) bytes32 { sha256f }
+            accumulator: asm(h.accumulator, h.buf[0], h.buf[1]) bytes32 { sha256f }
         } with {
-            buffer: unsafecast<[2]uint>((0,0))
+            buf: unsafecast<[2]uint>((0,0))
         };
     }
 
     // insert the total size, and invoke the compression function
     return asm(
         h.accumulator,
-        h.buffer[0],
-        h.buffer[1] | (h.totalSizeBits & 0xffffffffffffffff),
+        h.buf[0],
+        h.buf[1] | (h.totalSizeBits & 0xffffffffffffffff),
     ) bytes32 { sha256f };
 }
 

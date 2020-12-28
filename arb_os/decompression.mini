@@ -388,6 +388,7 @@ impure func decompressTx(
             value: value,
             calldata: calldata,
             nonMutating: false,
+            isConstructor: (toAddr == address(0)),
             incomingRequest: unsafecast<IncomingRequest>(0),  // caller will fill this in
         }
     ));
@@ -457,9 +458,3 @@ public impure func getFromFunctionTable(addr: address, index: uint) -> option<(u
     return None;
 }
 
-//This function is necessary because there is currently bug in the compiler that will occasionally corrupt the last
-//function in a module, so including this function prevents the bug from affecting decompressTx
-func dumbHack() {
-    let x = 4;
-    return;
-}
