@@ -10,6 +10,11 @@ use evmlogs::EvmLogs;
 use std::bytearray::bytearray_new;
 use std::bytearray::bytearray_marshalFull;
 
+use std::merkletree::MerkleTreeBuilder;
+use std::merkletree::merkleTreeBuilder_new;
+use std::merkletree::merkleTreeBuilder_add;
+use std::merkletree::merkleTreeBuilder_rootHash;
+
 use std::queue::queue_get;
 
 use evmlogs::evmlogs_empty;
@@ -17,18 +22,15 @@ use evmlogs::evmlogs_numLogs;
 
 use evmCallStack::evmCallStack_queueMessage;
 
-use chainParameters::chainParams_speedLimitPerSecond;
+use chainParameters::chainParams_speedLimitPerBlock;
 
 use inbox::IncomingRequest;
 use inbox::inbox_currentBlockNumber;
 use inbox::inbox_currentTimestamp;
 
+use gasAccounting::GasUsage;
+use gasAccounting::gasAccounting_summaryToPublish;
 
-// This is declared identically in gasAccounting.mini
-type GasUsage = struct {
-    gasUsed: uint,
-    gasPriceWei: uint,
-}
 
 // PerBlockReceiptData is different from OutputStatistics for now; might want to unify
 type PerBlockReceiptData = struct {
@@ -43,6 +45,12 @@ type OutputStatistics = struct {
     numEvmLogs: uint,
     numLogs: uint,
     numSends: uint,
+}
+
+var merkleOfSends: MerkleTreeBuilder;
+
+public impure func output_init() {
+    merkleOfSends = merkleTreeBuilder_new();
 }
 
 func outputStats_new() -> OutputStatistics {
@@ -218,7 +226,7 @@ public impure func emitTxReceipt(
 
 impure func emitBlockSummaryLog(blockNum: uint, timestamp: uint, prevBlockNum: uint) {
     let gasUsedThisBlock = globalBlockReceiptData.statsThisBlock.totalGasUsed;
-    let gasLimit = 13 * chainParams_speedLimitPerSecond();
+    let gasLimit = chainParams_speedLimitPerBlock();
     if (gasLimit < gasUsedThisBlock) {
         gasLimit = gasUsedThisBlock;
     }
@@ -229,8 +237,11 @@ impure func emitBlockSummaryLog(blockNum: uint, timestamp: uint, prevBlockNum: u
         gasLimit,
         globalBlockReceiptData.statsThisBlock,
         globalBlockReceiptData.statsAllTime,
+        gasAccounting_summaryToPublish(),
         prevBlockNum
     ),) { log };
+    asm(merkleTreeBuilder_rootHash(merkleOfSends),) { send };
+    merkleOfSends = merkleTreeBuilder_new();
 }
 
 public impure func queueMessageForSend(msgType: uint, sender: address, data: ByteArray) {
@@ -265,7 +276,11 @@ public impure func sendMessage(msgType: uint, sender: address, data: ByteArray) 
     );
 }
 
+func workaroundForCompilerBug() { }  // This is needed to work around a compiler bug; otherwise sendMessage can crash.
+
 impure func sendPackagedMessage(msg: any) {
     outputStats_addSend();
-    asm(msg,) { send };
+    merkleOfSends = merkleTreeBuilder_add(merkleOfSends, msg);
+    // asm(msg,) { send };
+    asm((const::LogType_send, msg),) { log };
 }

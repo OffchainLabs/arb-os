@@ -7,7 +7,7 @@
 use super::runtime_env::RuntimeEnvironment;
 use crate::compile::{CompileError, DebugInfo};
 use crate::link::LinkedProgram;
-use crate::mavm::{AVMOpcode, CodePt, Instruction, Opcode, Value};
+use crate::mavm::{AVMOpcode, Buffer, CodePt, Instruction, Opcode, Value};
 use crate::pos::Location;
 use crate::run::ripemd160port;
 use crate::uint256::Uint256;
@@ -166,6 +166,21 @@ impl ValueStack {
         } else {
             Err(ExecutionError::new(
                 "expected tuple on stack",
+                state,
+                Some(val),
+            ))
+        }
+    }
+
+    ///If the top `Value` on self is a buffer, pops the `Value` and returns it as a vector.
+    /// Otherwise returns an `ExecutionError`.
+    pub fn pop_buffer(&mut self, state: &MachineState) -> Result<Buffer, ExecutionError> {
+        let val = self.pop(state)?;
+        if let Value::Buffer(v) = val {
+            Ok(v.clone())
+        } else {
+            Err(ExecutionError::new(
+                "expected buffer on stack",
                 state,
                 Some(val),
             ))
@@ -576,11 +591,15 @@ impl ProfilerData {
             .iter()
             .map(|(name, tree)| (name.clone(), tree.values().sum()))
             .collect();
+        let mut total = 0;
         println!("Per file gas cost usage:");
         for (filename, gas_cost) in &file_gas_costs {
+            total += gas_cost;
             println!("{}: {};", filename, gas_cost);
         }
         println!("unknown_file: {}", self.unknown_gas);
+        total += self.unknown_gas;
+        println!("Total: {}", total);
         loop {
             println!("Enter file to examine");
             let mut command = String::new();
@@ -1238,6 +1257,13 @@ impl Machine {
                 Opcode::AVMOpcode(AVMOpcode::EcMul) => 82_000,
                 Opcode::AVMOpcode(AVMOpcode::EcPairing) => self.gas_for_pairing(),
                 Opcode::AVMOpcode(AVMOpcode::Sideload) => 10,
+                Opcode::AVMOpcode(AVMOpcode::NewBuffer) => 1,
+                Opcode::AVMOpcode(AVMOpcode::GetBuffer8) => 10,
+                Opcode::AVMOpcode(AVMOpcode::GetBuffer64) => 10,
+                Opcode::AVMOpcode(AVMOpcode::GetBuffer256) => 10,
+                Opcode::AVMOpcode(AVMOpcode::SetBuffer8) => 100,
+                Opcode::AVMOpcode(AVMOpcode::SetBuffer64) => 100,
+                Opcode::AVMOpcode(AVMOpcode::SetBuffer256) => 100,
                 _ => return None,
             })
         } else {
@@ -1975,6 +2001,89 @@ impl Machine {
                             Err(ExecutionError::new("invalid operand to EcPairing instruction", &self.state, None))
                         }
 
+                    }
+                    Opcode::AVMOpcode(AVMOpcode::NewBuffer) => {
+                        // self.stack.push(Value::new_buffer(vec![0; 256]));
+                        self.stack.push(Value::new_buffer(vec![]));
+                        self.incr_pc();
+                        Ok(true)
+                    }
+                    Opcode::AVMOpcode(AVMOpcode::GetBuffer8) => {
+                        let offset = self.stack.pop_usize(&self.state)?;
+                        let buf = self.stack.pop_buffer(&self.state)?;
+                        self.stack.push_usize(buf.read_byte(offset).into());
+                        self.incr_pc();
+                        Ok(true)
+                    }
+                    Opcode::AVMOpcode(AVMOpcode::GetBuffer64) => {
+                        let offset = self.stack.pop_usize(&self.state)?;
+                        let buf = self.stack.pop_buffer(&self.state)?;
+                        if offset + 7 < offset {
+                            return Err(ExecutionError::new("buffer overflow", &self.state, Some(Value::Int(Uint256::from_usize(offset)))))
+                        }
+                        let mut res = [0u8; 8];
+                        for i in 0..8 {
+                            res[i] = buf.read_byte(offset+i);
+                        }
+                        self.stack.push_uint(Uint256::from_bytes(&res));
+                        self.incr_pc();
+                        Ok(true)
+                    }
+                    Opcode::AVMOpcode(AVMOpcode::GetBuffer256) => {
+                        let offset = self.stack.pop_usize(&self.state)?;
+                        let buf = self.stack.pop_buffer(&self.state)?;
+                        if offset + 31 < offset {
+                            return Err(ExecutionError::new("buffer overflow", &self.state, Some(Value::Int(Uint256::from_usize(offset)))))
+                        }
+                        let mut res = [0u8; 32];
+                        for i in 0..32 {
+                            res[i] = buf.read_byte(offset+i);
+                        }
+                        self.stack.push_uint(Uint256::from_bytes(&res));
+                        self.incr_pc();
+                        Ok(true)
+                    }
+                    Opcode::AVMOpcode(AVMOpcode::SetBuffer8) => {
+                        let offset = self.stack.pop_usize(&self.state)?;
+                        let val = self.stack.pop_uint(&self.state)?;
+                        let buf = self.stack.pop_buffer(&self.state)?;
+                        let bytes = val.to_bytes_be();
+                        let nbuf = buf.set_byte(offset, bytes[31]);
+                        self.stack.push(Value::copy_buffer(nbuf));
+                        self.incr_pc();
+                        Ok(true)
+                    }
+                    Opcode::AVMOpcode(AVMOpcode::SetBuffer64) => {
+                        let offset = self.stack.pop_usize(&self.state)?;
+                        if offset + 7 < offset {
+                            return Err(ExecutionError::new("buffer overflow", &self.state, Some(Value::Int(Uint256::from_usize(offset)))))
+                        }
+                        let val = self.stack.pop_uint(&self.state)?;
+                        let buf = self.stack.pop_buffer(&self.state)?;
+                        let mut nbuf = buf;
+                        let bytes = val.to_bytes_be();
+                        for i in 0..8 {
+                            nbuf = nbuf.set_byte(offset+i, bytes[i]);
+                        }
+                        self.stack.push(Value::copy_buffer(nbuf));
+                        self.incr_pc();
+                        Ok(true)
+                    }
+                    Opcode::AVMOpcode(AVMOpcode::SetBuffer256) => {
+                        let offset = self.stack.pop_usize(&self.state)?;
+                        if offset + 31 < offset {
+                            return Err(ExecutionError::new("buffer overflow", &self.state, Some(Value::Int(Uint256::from_usize(offset)))))
+                        }
+                        let val = self.stack.pop_uint(&self.state)?;
+                        let buf = self.stack.pop_buffer(&self.state)?;
+                        let mut nbuf = buf;
+                        let bytes = val.to_bytes_be();
+                        for i in 0..32 {
+                            nbuf = nbuf.set_byte(offset+i, bytes[i]);
+                        }
+                        self.stack.push(Value::copy_buffer(nbuf));
+                        self.incr_pc();
+                        Ok(true)
                     }
 					Opcode::GetLocal |  // these opcodes are for intermediate use in compilation only
 					Opcode::SetLocal |  // they should never appear in fully compiled code

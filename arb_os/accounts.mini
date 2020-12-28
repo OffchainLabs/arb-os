@@ -12,6 +12,7 @@ use std::bytearray::bytearray_setByte;
 use std::bls::BLSKey;
 use std::storageMap::StorageMap;
 use std::storageMap::storageMap_new;
+use std::storageMap::storageMap_size;
 use std::storageMap::storageMap_get;
 use std::storageMap::storageMap_set;
 
@@ -392,6 +393,10 @@ public func account_setStorageCell(
             storage: storageMap_set(contractInfo.storage, cell, value)
         })
     });
+}
+
+public func account_getStorageSize(account: Account) -> option<uint> {
+    return Some(storageMap_size((account.contractInfo?).storage));
 }
 
 public func account_setContractInfo(

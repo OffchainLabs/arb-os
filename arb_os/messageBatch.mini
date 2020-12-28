@@ -18,10 +18,11 @@ use std::bytestream::bytestream_getN;
 use std::bytestream::bytestream_skipBytes;
 use std::bytearray::marshalledBytes_firstByte;
 use std::bytearray::marshalledBytes_hash;
+use std::bytestream::bytestream_bytesReadSoFar;
 
 use inbox::IncomingRequest;
 
-import func rlp_decodeUint(bs: ByteStream) -> option<(ByteStream, uint)>;
+use std::rlp::rlp_decodeUint;
 
 
 type MessageBatch = struct {
@@ -33,7 +34,14 @@ type MessageBatch = struct {
 public func messageBatch_tryNew(msg: IncomingRequest) -> option<MessageBatch> {
     if ( (msg.kind == const::L1MessageType_L2) && (bytearray_getByte(msg.msgData, 0) == const::L2MessageType_batch) ) {
         let stream = bytestream_new(msg.msgData);
-        stream = bytestream_skipBytes(stream, 1)?;
+        stream = bytestream_skipBytes(stream, 1)?;    // skip past type byte in message
+
+        // aggregator credit goes to the original aggregator of the request, if any, otherwise to sender of request
+        let aggregator = msg.sender;
+        if let Some(aggInfo) = msg.aggregator {
+            aggregator = aggInfo.aggregator;
+        }
+
         return Some(
             struct {
                 template: msg with {
@@ -42,6 +50,39 @@ public func messageBatch_tryNew(msg: IncomingRequest) -> option<MessageBatch> {
                         parentRequestId: msg.requestId,
                         indexInParent: 0,
                     }
+                } with {
+                    aggregator: Some(struct {
+                        aggregator: aggregator,
+                        calldataBytes: 0,
+                    })
+                },
+                stream: stream,
+                numSoFar: 0,
+            }
+        );
+    } elseif ( (msg.kind == const::L1MessageType_L2) && (bytearray_getByte(msg.msgData, 0) == const::L2MessageType_sequencerBatch) ) {  // sequencer batch
+        let stream = bytestream_new(msg.msgData);
+        stream = bytestream_skipBytes(stream, 6)?;   // skip past type byte, blocknum, and timestamp in message
+
+        // aggregator credit goes to the original aggregator of the request, if any, otherwise to sender of request
+        let aggregator = msg.sender;
+        if let Some(aggInfo) = msg.aggregator {
+            aggregator = aggInfo.aggregator;
+        }
+
+        return Some(
+            struct {
+                template: msg with {
+                    provenance: struct {
+                        l1SeqNum: msg.provenance.l1SeqNum,
+                        parentRequestId: msg.requestId,
+                        indexInParent: 0,
+                    }
+                } with {
+                    aggregator: Some(struct {
+                        aggregator: aggregator,
+                        calldataBytes: 0,
+                    })
                 },
                 stream: stream,
                 numSoFar: 0,
@@ -66,6 +107,11 @@ public func messageBatch_get(batch: MessageBatch) -> option<(IncomingRequest, Me
             requestId: uint(hash(bytes32(batch.template.requestId), bytes32(batch.numSoFar)))
         } with {
             provenance: batch.template.provenance with { indexInParent: batch.numSoFar }
+        } with {
+            aggregator: Some(struct {
+                aggregator: (batch.template.aggregator?).aggregator,
+                calldataBytes: bytestream_bytesReadSoFar(bs) - bytestream_bytesReadSoFar(stream),
+            })
         },
         batch with {
             stream: stream

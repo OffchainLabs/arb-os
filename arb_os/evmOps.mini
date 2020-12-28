@@ -14,6 +14,7 @@ use std::storageMap::StorageMap;
 use chainParameters::chainParams_chainId;
 use errorHandler::errorHandler;
 
+use evmCallStack::evmCallStack_stackInfo;
 use evmCallStack::evmCallStack_topFrame;
 use evmCallStack::evmCallStack_oldestCallFrame;
 use evmCallStack::evmCallStack_setAccount;
@@ -340,7 +341,7 @@ public impure func evmOp_extcodehash(addrAsUint: uint) -> bytes32 {
     let addr = address(addrAsUint);     // truncates if necessary
     if let Some(topFrame) = evmCallStack_topFrame() {
         let acct = evmCallFrame_getAccount(topFrame, addr);
-        if (! account_isEmpty(acct)) {
+        if (account_isEmpty(acct)) {
             return bytes32(0);
         }
         if let Some(code) = account_getCode(acct) {
@@ -463,6 +464,9 @@ public impure func evmOp_sload(storageAddr: uint) -> uint {
 
 public impure func evmOp_sstore(storageAddr: uint, value: uint) {
     if let Some(topFrame) = evmCallStack_topFrame() {
+        if (topFrame.static) {
+            evmOp_revert_knownPc(0xfffffffffffffffe, 0, 0);
+        }
         if (evmCallFrame_shouldRevertOnStorageWrite(topFrame)) {
             // the currently running code was given a gas amount that wouldn't allow a storage write on EVM
             // for compatibility with EVM code that uses gas limit to prevent writes, we cause out-of-gas error here
@@ -516,18 +520,23 @@ public impure func evmOp_log0(
     memAddr: uint, 
     nbytes: uint
 ) {
-    let data = bytearray_extract(
-        evmCallStack_getTopFrameMemoryOrDie(),
-        memAddr,
-        nbytes
-    );
-    if (evmCallStack_addEvmLogToCurrent(
-        (
-            address(0),  // addEvmLogToCurrent will fill this in
-            bytearray_marshalFull(data),
-        )
-    ) == Some(()) ) {
-        return;
+    if let Some(topFrame) = evmCallStack_topFrame() {
+        if (topFrame.static) {
+            evmOp_revert_knownPc(0xfffffffffffffffe, 0, 0);
+        }
+        let data = bytearray_extract(
+            evmCallFrame_getMemory(topFrame),
+            memAddr,
+            nbytes
+        );
+        if (evmCallStack_addEvmLogToCurrent(
+            (
+                address(0),  // addEvmLogToCurrent will fill this in
+                bytearray_marshalFull(data),
+            )
+        ) == Some(()) ) {
+            return;
+        }
     }
 
     evm_runtimePanic(23);
@@ -539,19 +548,24 @@ public impure func evmOp_log1(
     nbytes: uint, 
     topic0: uint
 ) {
-    let data = bytearray_extract(
-        evmCallStack_getTopFrameMemoryOrDie(),
-        memAddr,
-        nbytes
-    );
-    if (evmCallStack_addEvmLogToCurrent(
-        (
-            address(0),  // addEvmLogToCurrent will fill this in
-            bytearray_marshalFull(data),
-            topic0
-        )
-    ) == Some(()) ) {
-        return;
+    if let Some(topFrame) = evmCallStack_topFrame() {
+        if (topFrame.static) {
+            evmOp_revert_knownPc(0xfffffffffffffffe, 0, 0);
+        }
+        let data = bytearray_extract(
+            evmCallFrame_getMemory(topFrame),
+            memAddr,
+            nbytes
+        );
+        if (evmCallStack_addEvmLogToCurrent(
+            (
+                address(0),  // addEvmLogToCurrent will fill this in
+                bytearray_marshalFull(data),
+                topic0,
+            )
+        ) == Some(()) ) {
+            return;
+        }
     }
 
     evm_runtimePanic(24);
@@ -564,20 +578,25 @@ public impure func evmOp_log2(
     topic0: uint,
     topic1: uint,
 ) {
-    let data = bytearray_extract(
-        evmCallStack_getTopFrameMemoryOrDie(),
-        memAddr,
-        nbytes
-    );
-    if (evmCallStack_addEvmLogToCurrent(
-        (
-            address(0),  // addEvmLogToCurrent will fill this in
-            bytearray_marshalFull(data),
-            topic0,
-            topic1
-        )
-    ) == Some(()) ) {
-        return;
+    if let Some(topFrame) = evmCallStack_topFrame() {
+        if (topFrame.static) {
+            evmOp_revert_knownPc(0xfffffffffffffffe, 0, 0);
+        }
+        let data = bytearray_extract(
+            evmCallFrame_getMemory(topFrame),
+            memAddr,
+            nbytes
+        );
+        if (evmCallStack_addEvmLogToCurrent(
+            (
+                address(0),  // addEvmLogToCurrent will fill this in
+                bytearray_marshalFull(data),
+                topic0,
+                topic1,
+            )
+        ) == Some(()) ) {
+            return;
+        }
     }
 
     evm_runtimePanic(25);
@@ -591,21 +610,26 @@ public impure func evmOp_log3(
     topic1: uint,
     topic2: uint,
 ) {
-    let data = bytearray_extract(
-        evmCallStack_getTopFrameMemoryOrDie(),
-        memAddr,
-        nbytes
-    );
-    if (evmCallStack_addEvmLogToCurrent(
-        (
-            address(0),  // addEvmLogToCurrent will fill this in
-            bytearray_marshalFull(data),
-            topic0,
-            topic1,
-            topic2
-        )
-    ) == Some(()) ) {
-        return;
+    if let Some(topFrame) = evmCallStack_topFrame() {
+        if (topFrame.static) {
+            evmOp_revert_knownPc(0xfffffffffffffffe, 0, 0);
+        }
+        let data = bytearray_extract(
+            evmCallFrame_getMemory(topFrame),
+            memAddr,
+            nbytes
+        );
+        if (evmCallStack_addEvmLogToCurrent(
+            (
+                address(0),  // addEvmLogToCurrent will fill this in
+                bytearray_marshalFull(data),
+                topic0,
+                topic1,
+                topic2,
+            )
+        ) == Some(()) ) {
+            return;
+        }
     }
 
     evm_runtimePanic(26);
@@ -620,22 +644,27 @@ public impure func evmOp_log4(
     topic2: uint,
     topic3: uint,
 ) {
-    let data = bytearray_extract(
-        evmCallStack_getTopFrameMemoryOrDie(),
-        memAddr,
-        nbytes
-    );
-    if (evmCallStack_addEvmLogToCurrent(
-        (
-            address(0),  // addEvmLogToCurrent will fill this in
-            bytearray_marshalFull(data),
-            topic0,
-            topic1,
-            topic2,
-            topic3
-        )
-    ) == Some(()) ) {
-        return;
+    if let Some(topFrame) = evmCallStack_topFrame() {
+        if (topFrame.static) {
+            evmOp_revert_knownPc(0xfffffffffffffffe, 0, 0);
+        }
+        let data = bytearray_extract(
+            evmCallFrame_getMemory(topFrame),
+            memAddr,
+            nbytes
+        );
+        if (evmCallStack_addEvmLogToCurrent(
+            (
+                address(0),  // addEvmLogToCurrent will fill this in
+                bytearray_marshalFull(data),
+                topic0,
+                topic1,
+                topic2,
+                topic3,
+            )
+        ) == Some(()) ) {
+            return;
+        }
     }
 
     evm_runtimePanic(27);
@@ -699,6 +728,16 @@ public impure func evmOp_call(
     retOffset: uint,
     retLength: uint
 ) -> bool {
+    if (balance > 0) {
+        if let Some(topFrame) = evmCallStack_topFrame() {
+            if (topFrame.static) {
+                evmOp_revert_knownPc(0xfffffffffffffffe, 0, 0);
+            }
+        } else {
+            evm_runtimePanic(34);
+        }
+    }
+
     let callee = address(calleeAsUint);  // truncates if necessary
 
     // First, get the return address of our caller.
@@ -860,7 +899,8 @@ public impure func evmOp_revert(memOffset: uint, memNbytes: uint) {
 }
 
 public impure func evmOp_revert_knownCodePc(codeAddr: address, evmPc: uint, memOffset: uint, memNbytes: uint) {
-    asm((10000, codeAddr, evmPc),) { debugprint };
+    let (txid, addrs, parentAddrs) = evmCallStack_stackInfo();
+    asm((10000, codeAddr, evmPc, txid, addrs, parentAddrs),) { debugprint };
     evmOp_revert(memOffset, memNbytes);
 }
 
@@ -879,14 +919,24 @@ public impure func evmOp_return(memOffset: uint, memNbytes: uint) {
 }
 
 public impure func evmOp_selfdestruct(ownerAsUint: uint) {
-    let owner = address(ownerAsUint);     // truncates if necessary
+    if let Some(topFrame) = evmCallStack_topFrame() {
+        if (topFrame.static) {
+            evmOp_revert_knownPc(0xfffffffffffffffe, 0, 0);
+        }
+        let owner = address(ownerAsUint);     // truncates if necessary
 
-    evmCallStack_selfDestructCurrentAccount(owner,);
-    evmOp_return(0, 0);
+        evmCallStack_selfDestructCurrentAccount(owner,);
+        evmOp_return(0, 0);
+    } else {
+        evm_runtimePanic(33);
+    }
 }
 
 public impure func evmOp_create(value: uint, offset: uint, length: uint) -> address {
     if let Some(topFrame) = evmCallStack_topFrame() {
+        if (topFrame.static) {
+            evmOp_revert_knownPc(0xfffffffffffffffe, 0, 0);
+        }
         let myAcct = evmCallFrame_runningAsAccount(topFrame);
         let myAddr = account_getAddress(myAcct);
         let (seqNum, updatedAcct) = account_fetchAndIncrSeqNum(myAcct);
@@ -903,6 +953,9 @@ public impure func evmOp_create(value: uint, offset: uint, length: uint) -> addr
 
 public impure func evmOp_create2(value: uint, offset: uint, length: uint, salt: uint) -> address {
     if let Some(topFrame) = evmCallStack_topFrame() {
+        if (topFrame.static) {
+            evmOp_revert_knownPc(0xfffffffffffffffe, 0, 0);
+        }
         let myAcct = evmCallFrame_runningAsAccount(topFrame);
         let myAddr = account_getAddress(myAcct);
         let newAddrBuf = bytearray_new(85);

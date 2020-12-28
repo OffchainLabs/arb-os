@@ -16,6 +16,7 @@ pub use runtime_env::{
 };
 
 mod emulator;
+pub mod rolluptest;
 mod runtime_env;
 mod ripemd160port;
 
