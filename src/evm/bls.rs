@@ -430,6 +430,11 @@ impl BLSPrivateKey {
 }
 
 impl BLSPublicKey {
+    pub fn to_four_uints(&self) -> (Uint256, Uint256, Uint256, Uint256) {
+        //TODO: implement this
+        (Uint256::zero(), Uint256::zero(), Uint256::zero(), Uint256::zero())  // temporary, for typechecking
+    }
+
     pub fn to_bytes(&self) -> Vec<u8> {
         //TODO: implement this
         vec![]   // temporary, for typechecking
@@ -453,4 +458,36 @@ impl BLSAggregateSignature {
         //TODO: implement this
         vec![]     // temporary, for typechecking
     }
+}
+
+#[test]
+pub fn test_bls_signed_batch() {
+    _evm_test_bls_signed_batch(None, false).unwrap();
+}
+
+pub fn _evm_test_bls_signed_batch(
+    log_to: Option<&Path>,
+    debug: bool,
+) -> Result<(), ethabi::Error> {
+    let rt_env = RuntimeEnvironment::new(Uint256::from_usize(1111));
+
+    let alice_wallet = rt_env.new_wallet();
+    let alice_addr = Uint256::from_bytes(alice_wallet.address().as_bytes());
+    let bob_wallet = rt_env.new_wallet();
+    let bob_addr = Uint256::from_bytes(bob_wallet.address().as_bytes());
+
+    let mut machine = load_from_file(Path::new("arb_os/arbos.mexe"), rt_env);
+    machine.start_at_zero();
+
+    // generate and register BLS keys for Alice and Bob
+    let (alice_public_key, alice_private_key) = generate_bls_key_pair();
+    let (bob_public_key, bob_private_key) = generate_bls_key_pair();
+    let alice_arb_bls = _ArbBLS::_new(&alice_wallet, debug);
+    let bob_arb_bls = _ArbBLS::_new(&bob_wallet, debug);
+    let a4 = alice_public_key.to_four_uints();
+    alice_arb_bls._register(&mut machine, a4.0, a4.1, a4.2, a4.3)?;
+    let b4 = bob_public_key.to_four_uints();
+    bob_arb_bls._register(&mut machine, b4.0, b4.1, b4.2, b4.3)?;
+
+    Ok(())
 }
