@@ -24,6 +24,10 @@ use std::queue::queue_set_nth;
 
 var globalRollupTracker: RollupTracker;
 
+public impure func rollupTracker_init() {
+    globalRollupTracker = rollupTracker_initModule();
+}
+
 public impure func rollupTracker_processEvent(msg: ByteArray) {
     let _ = processEventOrError(bytestream_new(msg));
 }
@@ -38,24 +42,41 @@ impure func processEventOrError(stream: ByteStream) -> option<()> {
         let (us, heightL1) = bytestream_get256(us)?;
         let (us, deadlineL1) = bytestream_get256(us)?;
         let (us, asserterUint) = bytestream_get256(us)?;
-        return rollupTracker_addNode(heightL2, prev, heightL1, deadlineL1, address(asserterUint));
+        globalRollupTracker = rollupTracker_addNode(
+            globalRollupTracker,
+            heightL2,
+            prev,
+            heightL1,
+            deadlineL1,
+            address(asserterUint)
+        )?;
+        return Some(());
     } elseif (eventType == const::ProtoEvent_confirmNode) {
         let (us, heightL2) = bytestream_get256(stream)?;
-        return rollupTracker_confirmNode(heightL2);
+        globalRollupTracker = rollupTracker_confirmNode(globalRollupTracker, heightL2)?;
+        return Some(());
     } elseif (eventType == const::ProtoEvent_rejectNode) {
         let (us, heightL2) = bytestream_get256(stream)?;
-        return rollupTracker_rejectNode(heightL2);
+        globalRollupTracker = rollupTracker_rejectNode(globalRollupTracker, heightL2)?;
+        return Some(());
     } elseif (eventType == const::ProtoEvent_newStake) {
         let (us, heightL2) = bytestream_get256(stream)?;
         let (us, stakerUint) = bytestream_get256(us)?;
         let (us, stakeTimeL1) = bytestream_get256(us)?;
-        return rollupTracker_newStake(heightL2, address(stakerUint), stakeTimeL1);
+        globalRollupTracker = rollupTracker_newStake(
+            globalRollupTracker,
+            heightL2,
+            address(stakerUint),
+            stakeTimeL1
+        )?;
+        return Some(());
     } elseif (eventType == const::ProtoEvent_claimNode) {
         let (us, heightL2) = bytestream_get256(stream)?;
         let (us, claimerUint) = bytestream_get256(us)?;
-        return rollupTracker_claimNode(heightL2, address(claimerUint));
+        globalRollupTracker = rollupTracker_claimNode(globalRollupTracker, heightL2, address(claimerUint))?;
+        return Some(());
     } elseif (eventType == const::ProtoEvent_debug) {
-        _debug();
+        _debug(globalRollupTracker);
         return Some(());
     } else {
         return None;
@@ -80,7 +101,7 @@ type RollupTracker = struct {
     minimumPayment: uint,
 }
 
-public impure func rollupTracker_init() {
+func rollupTracker_initModule() -> RollupTracker {
     let genesisNode = struct {
         heightL2: 0,
         prev: None<uint>,
@@ -91,7 +112,7 @@ public impure func rollupTracker_init() {
         validatorEquity: 0,
         payment: 0,
     };
-    globalRollupTracker = struct {
+    return struct {
         nodes: rsw_new(genesisNode),
         latestConfirmed: 0,
         firstUnresolved: 1,
@@ -99,14 +120,14 @@ public impure func rollupTracker_init() {
     };
 }
 
-public impure func rollupTracker_get(heightL2: uint) -> option<RollupNode> {
-    return rsw_get(globalRollupTracker.nodes, heightL2);
+func rollupTracker_get(tracker: RollupTracker, heightL2: uint) -> option<RollupNode> {
+    return rsw_get(tracker.nodes, heightL2);
 }
 
-public impure func rollupTracker_confirmNode(heightL2: uint) -> option<()> {
-    if (heightL2 != globalRollupTracker.firstUnresolved) {    return None;    }
+impure func rollupTracker_confirmNode(tracker: RollupTracker, heightL2: uint) -> option<RollupTracker> {
+    if (heightL2 != tracker.firstUnresolved) {    return None;    }
 
-    let nodes = globalRollupTracker.nodes;
+    let nodes = tracker.nodes;
     let node = rsw_get(nodes, heightL2)?;
 
     // now eliminate nodes that aren't needed anymore
@@ -115,7 +136,7 @@ public impure func rollupTracker_confirmNode(heightL2: uint) -> option<()> {
         nodes = rsw_dropOne(nodes)?;
     }
 
-    globalRollupTracker = globalRollupTracker with {
+    tracker = tracker with {
         latestConfirmed: heightL2
     } with {
         firstUnresolved: heightL2 + 1
@@ -125,56 +146,59 @@ public impure func rollupTracker_confirmNode(heightL2: uint) -> option<()> {
 
     recordSpecialDebt(node.activeValidator, node.payment);
 
-    return Some(());
+    return Some(tracker);
 }
 
-public impure func rollupTracker_rejectNode(heightL2: uint) -> option<()> {
-    if (heightL2 != globalRollupTracker.firstUnresolved) {    return None;    }
+func rollupTracker_rejectNode(tracker: RollupTracker, heightL2: uint) -> option<RollupTracker> {
+    if (heightL2 != tracker.firstUnresolved) {    return None;    }
 
-    globalRollupTracker = globalRollupTracker with {
-        nodes: rsw_dropOne(globalRollupTracker.nodes)?
+    return Some(tracker with {
+        nodes: rsw_dropOne(tracker.nodes)?
     } with {
-        firstUnresolved: globalRollupTracker.firstUnresolved + 1
-    };
-    return Some(());
+        firstUnresolved: tracker.firstUnresolved + 1
+    });
 }
 
-public impure func rollupTracker_newStake(heightL2: uint, staker: address, stakeTimeL1: uint) -> option<()> {
-    let node = rsw_get(globalRollupTracker.nodes, heightL2)?;
+func rollupTracker_newStake(
+    tracker: RollupTracker,
+    heightL2: uint,
+    staker: address,
+    stakeTimeL1: uint
+) -> option<RollupTracker> {
+    let node = rsw_get(tracker.nodes, heightL2)?;
     if (stakeTimeL1 > node.deadlineL1) {
         return None;
     }
 
-    let prevNode = rsw_get(globalRollupTracker.nodes, node.prev?)?;
+    let prevNode = rsw_get(tracker.nodes, node.prev?)?;
     if (staker != prevNode.activeValidator) {
         return None;
     }
 
-    globalRollupTracker = globalRollupTracker with {
+    return Some(tracker with {
         nodes: rsw_set(
-            globalRollupTracker.nodes,
+            tracker.nodes,
             heightL2,
             node with {
                 activeValidator: staker
             },
         )?
-    };
-
-    return Some(());
+    });
 }
 
-public impure func rollupTracker_addNode(
+func rollupTracker_addNode(
+    tracker: RollupTracker,
     heightL2: uint,
     prev: uint,
     heightL1: uint,
     deadlineL1: uint,
     asserter: address,
-) -> option<()> {
-    let prevNode = rsw_get(globalRollupTracker.nodes, prev)?;
+) -> option<RollupTracker> {
+    let prevNode = rsw_get(tracker.nodes, prev)?;
     let payment = (prevNode.validatorEquity + prevNode.perNodeCharge) / 20;
-    globalRollupTracker = globalRollupTracker with {
+    return Some(tracker with {
         nodes: rsw_append(
-            globalRollupTracker.nodes,
+            tracker.nodes,
             struct {
                 heightL2: heightL2,
                 prev: Some(prev),
@@ -186,16 +210,19 @@ public impure func rollupTracker_addNode(
                 payment: payment,
             }
         )?
-    };
-    return Some(());
+    });
 }
 
 // claiming a node means taking the active validator role from somebody else, with a reduced payment
-public impure func rollupTracker_claimNode(heightL2: uint, claimer: address) -> option<()> {
-    let nodes = globalRollupTracker.nodes;
+impure func rollupTracker_claimNode(
+    tracker: RollupTracker,
+    heightL2: uint,
+    claimer: address
+) -> option<RollupTracker> {
+    let nodes = tracker.nodes;
     let _ = rsw_verifyIsLeaf(nodes, heightL2)?;
-    let node = rsw_get(globalRollupTracker.nodes, heightL2)?;
-    if (node.payment > globalRollupTracker.minimumPayment) {
+    let node = rsw_get(tracker.nodes, heightL2)?;
+    if (node.payment > tracker.minimumPayment) {
         if (claimer != node.activeValidator) {
             setGlobalAccountStore(
                 accountStore_transferEthBalance(
@@ -206,18 +233,17 @@ public impure func rollupTracker_claimNode(heightL2: uint, claimer: address) -> 
                 )?
             );
         }
-        globalRollupTracker = globalRollupTracker with {
+        return Some(tracker with {
             nodes: rsw_set(
-                globalRollupTracker.nodes,
+                tracker.nodes,
                 heightL2,
                 node with {
                     activeValidator: claimer
                 } with {
-                    payment: (node.payment + globalRollupTracker.minimumPayment) / 2
+                    payment: (node.payment + tracker.minimumPayment) / 2
                 }
             )?
-        };
-        return Some(());
+        });
     } else {
         return None;
     }
@@ -317,9 +343,9 @@ func rsw_verifyIsLeaf(rsw: RollupSlidingWindow, heightL2: uint) -> option<()> {
     return Some(());
 }
 
-impure func _debug() {
-    let height = globalRollupTracker.nodes.nextOut;
-    let q = globalRollupTracker.nodes.contents;
+func _debug(tracker: RollupTracker) {
+    let height = tracker.nodes.nextOut;
+    let q = tracker.nodes.contents;
     loop {
         if let Some(res) = queue_get(q) {
             let (uq, node) = res;
