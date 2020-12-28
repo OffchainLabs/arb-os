@@ -5,6 +5,7 @@
 //!Provides utilities used in the `postlink_compile` function
 
 use super::{ExportedFunc, ExportedFuncPoint, ImportedFunc};
+use crate::compile::{CompileError, DebugInfo};
 use crate::mavm::{AVMOpcode, CodePt, Instruction, Label, Opcode, Value};
 use crate::uint256::Uint256;
 use std::collections::{HashMap, HashSet};
@@ -21,7 +22,7 @@ pub fn strip_labels(
     exported_funcs: &[ExportedFunc],
     imported_funcs: &[ImportedFunc],
     maybe_evm_pcs: Option<Vec<usize>>, // will be Some iff this is a module
-) -> Result<(Vec<Instruction>, Vec<CodePt>, Vec<ExportedFuncPoint>), Label> {
+) -> Result<(Vec<Instruction>, Vec<CodePt>, Vec<ExportedFuncPoint>), CompileError> {
     if let Some(evm_pcs) = maybe_evm_pcs {
         let mut list_val = Value::none();
         for evm_pc in evm_pcs {
@@ -42,7 +43,7 @@ pub fn strip_labels(
                     .expect("module did not have storage immediate")
                     .clone(),
             ]),
-            None,
+            DebugInfo::default(),
         );
     }
     let mut label_map = HashMap::new();
@@ -57,7 +58,16 @@ pub fn strip_labels(
     for insn in &code_in {
         match insn.get_label() {
             Some(label) => {
-                label_map.insert(*label, CodePt::new_internal(after_count));
+                let old_value = label_map.insert(*label, CodePt::new_internal(after_count));
+                if let Some(CodePt::Internal(x)) = old_value {
+                    return Err(CompileError::new(
+                        format!(
+                            "Internal error: Duplicate instance of internal label {:?}",
+                            x
+                        ),
+                        insn.debug_info.location,
+                    ));
+                }
             }
             None => {
                 after_count += 1;
@@ -71,7 +81,12 @@ pub fn strip_labels(
             Some(_) => {}
             None => {
                 let insn_in = insn.clone();
-                code_out.push(insn_in.replace_labels(&label_map)?);
+                code_out.push(insn_in.replace_labels(&label_map)
+                    .map_err(|lab| CompileError::new(
+                        format!("Couldn't find a definition for label {:?} contained in instruction {:?}, most likely reference to non-existent frunction", lab, insn),
+                        insn.debug_info.location)
+                    )?
+                );
             }
         }
     }
@@ -83,7 +98,13 @@ pub fn strip_labels(
                 jump_table_out.push(*index);
             }
             None => {
-                panic!("strip_labels: lookup failed for jump table item");
+                return Err(CompileError::new(
+                    format!(
+                        "strip_labels: lookup failed for jump table item: {:?}",
+                        jt_item
+                    ),
+                    None,
+                ));
             }
         }
     }
@@ -95,7 +116,10 @@ pub fn strip_labels(
                 exported_funcs_out.push(exp_func.resolve(*index));
             }
             None => {
-                panic!("strip_labels: lookup failed for exported func");
+                return Err(CompileError::new(
+                    format!("strip_labels: lookup failed for exported func"),
+                    None,
+                ));
             }
         }
     }
@@ -144,18 +168,18 @@ pub fn fix_nonforward_labels(
                         };
                         code_out.push(Instruction::from_opcode(
                             Opcode::AVMOpcode(AVMOpcode::PushStatic),
-                            insn_in.location,
+                            insn_in.debug_info,
                         ));
                         code_out.push(Instruction::from_opcode(
                             Opcode::PushExternal(idx),
-                            insn_in.location,
+                            insn_in.debug_info,
                         ));
-                        code_out.push(Instruction::from_opcode(insn_in.opcode, insn_in.location));
+                        code_out.push(Instruction::from_opcode(insn_in.opcode, insn_in.debug_info));
                     } else {
                         code_out.push(Instruction::from_opcode_imm(
                             insn_in.opcode,
                             val,
-                            insn_in.location,
+                            insn_in.debug_info,
                         ));
                     }
                 }
@@ -163,12 +187,12 @@ pub fn fix_nonforward_labels(
                     code_out.push(Instruction::from_opcode_imm(
                         insn_in.opcode,
                         val,
-                        insn_in.location,
+                        insn_in.debug_info,
                     ));
                 }
             },
             None => {
-                code_out.push(Instruction::from_opcode(insn_in.opcode, insn_in.location));
+                code_out.push(Instruction::from_opcode(insn_in.opcode, insn_in.debug_info));
             }
         }
         if let Opcode::Label(label) = insn_in.opcode {
@@ -184,13 +208,13 @@ pub fn fix_nonforward_labels(
                     code_xformed.push(Instruction::from_opcode_imm(
                         Opcode::AVMOpcode(AVMOpcode::Noop),
                         val.clone(),
-                        insn.location,
+                        insn.debug_info,
                     ));
                 }
                 code_xformed.push(Instruction::from_opcode_imm(
                     Opcode::TupleGet(jump_table.len()),
                     Value::Int(Uint256::from_usize(idx)),
-                    insn.location,
+                    insn.debug_info,
                 ));
             }
             _ => {

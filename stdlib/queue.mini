@@ -92,6 +92,23 @@ public func queue_get(q: Queue) -> option<(Queue, any)> {
     return boundedQueue_get(q);
 }
 
+public func queue_getOrDie(q: Queue) -> (Queue, any) {
+    if let Some(res) = queue_get(q) {
+        return res;
+    } else {
+        panic;
+    }
+}
+
+public func queue_discardOne(q: Queue) -> Queue {
+    // return q with first item removed; if no first item, return it q unmodified
+    if let Some(res) = queue_get(q) {
+        return res.0;
+    } else {
+        return q;
+    }
+}
+
 type QueueStack = option<any>
 type QueueStackCell = struct {
     head: Queue,
@@ -115,19 +132,15 @@ public func queuestack_push(qs: QueueStack, q: Queue) -> QueueStack {
 
 public func queuestack_get(qs: QueueStack) -> option<(QueueStack, any)> {
     loop {
-        if let Some(rawCell) = qs {
-            let cell = unsafecast<QueueStackCell>(rawCell);
-            if let Some(res) = queue_get(cell.head) {
-                let (uq, item) = res;
-                return Some((
-                    queuestack_push(cell.rest, uq),
-                    item
-                ));
-            } else {
-                qs = cell.rest;
-            }
+        let cell = unsafecast<QueueStackCell>(qs?);
+        if let Some(res) = queue_get(cell.head) {
+            let (uq, item) = res;
+            return Some((
+                queuestack_push(cell.rest, uq),
+                item
+            ));
         } else {
-            return None;
+            qs = cell.rest;
         }
     }
 }

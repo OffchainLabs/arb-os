@@ -3,7 +3,7 @@
  */
 
 use crate::mavm::Value;
-use crate::run::load_from_file;
+use crate::run::{load_from_file, ProfilerMode};
 use crate::uint256::Uint256;
 use ethers_core::rand::thread_rng;
 use ethers_core::types::TransactionRequest;
@@ -31,11 +31,44 @@ pub struct RuntimeEnvironment {
 
 impl RuntimeEnvironment {
     pub fn new(chain_address: Uint256) -> Self {
+        RuntimeEnvironment::new_options(chain_address, None)
+    }
+
+    pub fn new_options(
+        chain_address: Uint256,
+        sequencer_info: Option<(Uint256, Uint256, Uint256)>,
+    ) -> Self {
+        RuntimeEnvironment::new_with_blocknum_timestamp(
+            chain_address,
+            Uint256::from_u64(100_000),
+            Uint256::from_u64(10_000_000),
+            sequencer_info,
+            None,
+        )
+    }
+
+    pub fn _new_with_owner(chain_address: Uint256, owner: Option<Uint256>) -> Self {
+        RuntimeEnvironment::new_with_blocknum_timestamp(
+            chain_address,
+            Uint256::from_u64(100_000),
+            Uint256::from_u64(10_000_000),
+            None,
+            owner,
+        )
+    }
+
+    pub fn new_with_blocknum_timestamp(
+        chain_address: Uint256,
+        blocknum: Uint256,
+        timestamp: Uint256,
+        sequencer_info: Option<(Uint256, Uint256, Uint256)>,
+        owner: Option<Uint256>,
+    ) -> Self {
         let mut ret = RuntimeEnvironment {
             chain_id: chain_address.trim_to_u64() & 0xffffffffffff, // truncate to 48 bits
             l1_inbox: vec![],
-            current_block_num: Uint256::zero(),
-            current_timestamp: Uint256::zero(),
+            current_block_num: blocknum,
+            current_timestamp: timestamp,
             logs: Vec::new(),
             sends: Vec::new(),
             next_inbox_seq_num: Uint256::zero(),
@@ -44,19 +77,48 @@ impl RuntimeEnvironment {
             recorder: RtEnvRecorder::new(),
             compressor: TxCompressor::new(),
         };
-        ret.insert_l1_message(4, chain_address, &RuntimeEnvironment::get_params_bytes());
+        ret.insert_l1_message(
+            4,
+            chain_address,
+            &RuntimeEnvironment::get_params_bytes(sequencer_info, owner),
+        );
         ret
     }
 
-    fn get_params_bytes() -> Vec<u8> {
+    fn get_params_bytes(
+        sequencer_info: Option<(Uint256, Uint256, Uint256)>,
+        owner: Option<Uint256>,
+    ) -> Vec<u8> {
         let mut buf = Vec::new();
         buf.extend(Uint256::from_u64(3 * 60 * 60 * 1000).to_bytes_be()); // grace period in ticks
         buf.extend(Uint256::from_u64(100_000_000 / 1000).to_bytes_be()); // arbgas speed limit per tick
         buf.extend(Uint256::from_u64(10_000_000_000).to_bytes_be()); // max execution steps
         buf.extend(Uint256::from_u64(1000).to_bytes_be()); // base stake amount in wei
         buf.extend(Uint256::zero().to_bytes_be()); // staking token address (zero means ETH)
-        buf.extend(Uint256::zero().to_bytes_be()); // owner address
+        buf.extend(owner.unwrap_or(Uint256::zero()).to_bytes_be()); // owner address
+
+        if let Some((seq_addr, delay_blocks, delay_time)) = sequencer_info {
+            buf.extend(&[0u8; 8]);
+            buf.extend(&96u64.to_be_bytes());
+            buf.extend(seq_addr.to_bytes_be());
+            buf.extend(delay_blocks.to_bytes_be());
+            buf.extend(delay_time.to_bytes_be());
+        }
+
         buf
+    }
+
+    pub fn _advance_time(
+        &mut self,
+        delta_blocks: Uint256,
+        delta_timestamp: Uint256,
+        send_heartbeat_message: bool,
+    ) {
+        self.current_block_num = self.current_block_num.add(&delta_blocks);
+        self.current_timestamp = self.current_timestamp.add(&delta_timestamp);
+        if send_heartbeat_message {
+            self.insert_l2_message(Uint256::zero(), &[6u8], false);
+        }
     }
 
     pub fn new_wallet(&self) -> Wallet {
@@ -113,6 +175,24 @@ impl RuntimeEnvironment {
         }
     }
 
+    pub fn insert_l2_message_with_deposit(&mut self, sender_addr: Uint256, msg: &[u8]) -> Uint256 {
+        if (msg[0] != 0u8) && (msg[0] != 1u8) {
+            panic!();
+        }
+        let default_id = self.insert_l1_message(7, sender_addr.clone(), msg);
+        if msg[0] == 0 {
+            Uint256::avm_hash2(
+                &sender_addr,
+                &Uint256::avm_hash2(
+                    &Uint256::from_u64(self.chain_id),
+                    &hash_bytestack(bytestack_from_bytes(msg)).unwrap(),
+                ),
+            )
+        } else {
+            default_id
+        }
+    }
+
     pub fn insert_tx_message(
         &mut self,
         sender_addr: Uint256,
@@ -121,6 +201,7 @@ impl RuntimeEnvironment {
         to_addr: Uint256,
         value: Uint256,
         data: &[u8],
+        with_deposit: bool,
     ) -> Uint256 {
         let mut buf = vec![0u8];
         let seq_num = self.get_and_incr_seq_num(&sender_addr.clone());
@@ -131,7 +212,11 @@ impl RuntimeEnvironment {
         buf.extend(value.to_bytes_be());
         buf.extend_from_slice(data);
 
-        self.insert_l2_message(sender_addr.clone(), &buf, false)
+        if with_deposit {
+            self.insert_l2_message_with_deposit(sender_addr.clone(), &buf)
+        } else {
+            self.insert_l2_message(sender_addr.clone(), &buf, false)
+        }
     }
 
     pub fn insert_buddy_deploy_message(
@@ -154,6 +239,31 @@ impl RuntimeEnvironment {
 
     pub fn new_batch(&self) -> Vec<u8> {
         vec![3u8]
+    }
+
+    pub fn _new_sequencer_batch(&self, delay: Option<(Uint256, Uint256)>) -> Vec<u8> {
+        let (delay_blocks, delay_seconds) = delay.unwrap_or((Uint256::one(), Uint256::one()));
+        let (release_block_num, release_timestamp) = if (self.current_block_num <= delay_blocks)
+            || (self.current_timestamp <= delay_seconds)
+        {
+            (Uint256::zero(), Uint256::zero())
+        } else {
+            (
+                self.current_block_num.sub(&delay_blocks).unwrap(),
+                self.current_timestamp.sub(&delay_seconds).unwrap(),
+            )
+        };
+        let low_order_bnum = release_block_num.trim_to_u64() & 0xffff;
+        let low_order_ts = release_timestamp.trim_to_u64() & 0xffffff;
+        let ret = vec![
+            5u8,
+            (low_order_bnum >> 8) as u8,
+            (low_order_bnum & 0xff) as u8,
+            (low_order_ts >> 16) as u8,
+            ((low_order_ts >> 8) & 0xff) as u8,
+            (low_order_ts & 0xff) as u8,
+        ];
+        ret
     }
 
     pub fn make_signed_l2_message(
@@ -193,7 +303,7 @@ impl RuntimeEnvironment {
         wallet: &Wallet,
     ) -> (Vec<u8>, Vec<u8>) {
         let sender = Uint256::from_bytes(wallet.address().as_bytes());
-        let mut result = vec![7u8];
+        let mut result = vec![7u8, 0xffu8];
         let seq_num = self.get_and_incr_seq_num(&sender);
         result.extend(seq_num.rlp_encode());
         result.extend(gas_price.rlp_encode());
@@ -214,7 +324,7 @@ impl RuntimeEnvironment {
 
         result.extend(Uint256::from_u256(&tx.r).to_bytes_be());
         result.extend(Uint256::from_u256(&tx.s).to_bytes_be());
-        result.extend(vec![(tx.v.as_u64() & 0xff) as u8]);
+        result.extend(vec![(tx.v.as_u64() % 2) as u8]);
 
         (result, keccak256(tx.rlp().as_ref()).to_vec())
     }
@@ -242,18 +352,11 @@ impl RuntimeEnvironment {
         let msg_size: u64 = msg.len().try_into().unwrap();
         let rlp_encoded_len = Uint256::from_u64(msg_size).rlp_encode();
         batch.extend(rlp_encoded_len.clone());
-        println!(
-            "batch item size {}, RLP(size).len {}, RLP-encoded: {:?}",
-            msg_size,
-            rlp_encoded_len.len(),
-            rlp_encoded_len
-        );
         batch.extend(msg);
         tx_id_bytes
     }
 
-    #[cfg(test)]
-    pub fn append_compressed_and_signed_tx_message_to_batch(
+    pub fn _append_compressed_and_signed_tx_message_to_batch(
         &mut self,
         batch: &mut Vec<u8>,
         max_gas: Uint256,
@@ -393,7 +496,6 @@ impl RuntimeEnvironment {
     }
 }
 
-
 // TxCompressor assumes that all client traffic uses it.
 // For example, it assumes nobody else affects ArbOS's address compression table.
 // This is fine for testing but wouldn't work in a less controlled setting.
@@ -427,21 +529,25 @@ impl TxCompressor {
         }
     }
 
-    pub fn compress_token_amount(&self, mut amt: Uint256) -> Vec<u8> {
-        if amt.is_zero() {
-            amt.rlp_encode()
-        } else {
-            let mut num_zeroes = 0;
-            let ten = Uint256::from_u64(10);
-            loop {
-                if amt.modulo(&ten).unwrap().is_zero() {
-                    num_zeroes = 1 + num_zeroes;
-                    amt = amt.div(&ten).unwrap();
-                } else {
-                    let mut result = amt.rlp_encode();
-                    result.extend(vec![num_zeroes as u8]);
-                    return result;
-                }
+    pub fn compress_token_amount(&self, amt: Uint256) -> Vec<u8> {
+        generic_compress_token_amount(amt)
+    }
+}
+
+pub fn generic_compress_token_amount(mut amt: Uint256) -> Vec<u8> {
+    if amt.is_zero() {
+        amt.rlp_encode()
+    } else {
+        let mut num_zeroes = 0;
+        let ten = Uint256::from_u64(10);
+        loop {
+            if amt.modulo(&ten).unwrap().is_zero() {
+                num_zeroes = 1 + num_zeroes;
+                amt = amt.div(&ten).unwrap();
+            } else {
+                let mut result = amt.rlp_encode();
+                result.extend(vec![num_zeroes as u8]);
+                return result;
             }
         }
     }
@@ -453,12 +559,20 @@ pub struct ArbosReceipt {
     request_id: Uint256,
     return_code: Uint256,
     return_data: Vec<u8>,
-    evm_logs: Value,
+    evm_logs: Vec<EvmLog>,
     gas_used: Uint256,
     gas_price_wei: Uint256,
+    pub provenance: ArbosRequestProvenance,
     gas_so_far: Uint256,     // gas used so far in L1 block, including this tx
     index_in_block: Uint256, // index of this tx in L1 block
     logs_so_far: Uint256,    // EVM logs emitted so far in L1 block, NOT including this tx
+}
+
+#[derive(Clone, Debug)]
+pub struct ArbosRequestProvenance {
+    l1_sequence_num: Uint256,
+    parent_request_id: Option<Uint256>,
+    index_in_parent: Option<Uint256>,
 }
 
 impl ArbosReceipt {
@@ -485,9 +599,42 @@ impl ArbosReceipt {
                 },
                 return_code,
                 return_data,
-                evm_logs,
+                evm_logs: EvmLog::new_vec(evm_logs),
                 gas_used,
                 gas_price_wei,
+                provenance: if let Value::Tuple(stup) = &tup[1] {
+                    if let Value::Tuple(subtup) = &stup[6] {
+                        ArbosRequestProvenance {
+                            l1_sequence_num: if let Value::Int(ui) = &subtup[0] {
+                                ui.clone()
+                            } else {
+                                panic!();
+                            },
+                            parent_request_id: if let Value::Int(ui) = &subtup[1] {
+                                if ui.is_zero() {
+                                    Some(ui.clone())
+                                } else {
+                                    None
+                                }
+                            } else {
+                                panic!();
+                            },
+                            index_in_parent: if let Value::Int(ui) = &subtup[2] {
+                                if ui.is_zero() {
+                                    Some(ui.clone())
+                                } else {
+                                    None
+                                }
+                            } else {
+                                panic!();
+                            },
+                        }
+                    } else {
+                        panic!();
+                    }
+                } else {
+                    panic!();
+                },
                 gas_so_far,
                 index_in_block,
                 logs_so_far,
@@ -583,12 +730,65 @@ impl ArbosReceipt {
         self.return_data.clone()
     }
 
+    pub fn _get_evm_logs(&self) -> Vec<EvmLog> {
+        self.evm_logs.clone()
+    }
+
     pub fn get_gas_used(&self) -> Uint256 {
         self.gas_used.clone()
     }
 
     pub fn get_gas_used_so_far(&self) -> Uint256 {
         self.gas_so_far.clone()
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct EvmLog {
+    addr: Uint256,
+    data: Vec<u8>,
+    vals: Vec<Uint256>,
+}
+
+impl EvmLog {
+    pub fn new(val: Value) -> Self {
+        if let Value::Tuple(tup) = val {
+            EvmLog {
+                addr: if let Value::Int(ui) = &tup[0] {
+                    ui.clone()
+                } else {
+                    panic!()
+                },
+                data: bytes_from_bytestack(tup[1].clone()).unwrap(),
+                vals: tup[2..]
+                    .iter()
+                    .map(|v| {
+                        if let Value::Int(ui) = v {
+                            ui.clone()
+                        } else {
+                            panic!()
+                        }
+                    })
+                    .collect(),
+            }
+        } else {
+            panic!("invalid EVM log format");
+        }
+    }
+
+    pub fn new_vec(val: Value) -> Vec<Self> {
+        if let Value::Tuple(tup) = val {
+            if tup.len() == 0 {
+                vec![]
+            } else {
+                let mut rest = EvmLog::new_vec(tup[1].clone());
+                let last = EvmLog::new(tup[0].clone());
+                rest.push(last);
+                rest
+            }
+        } else {
+            panic!()
+        }
     }
 }
 
@@ -768,7 +968,7 @@ impl RtEnvRecorder {
         &self,
         require_same_gas: bool,
         debug: bool,
-        profiler: bool,
+        profiler_mode: ProfilerMode,
         trace_file: Option<&str>,
     ) -> bool {
         // returns true iff result matches
@@ -781,8 +981,8 @@ impl RtEnvRecorder {
         machine.start_at_zero();
         if debug {
             let _ = machine.debug(None);
-        } else if profiler {
-            let profile_data = machine.profile_gen(vec![]);
+        } else if (profiler_mode != ProfilerMode::Never) {
+            let profile_data = machine.profile_gen(vec![], profiler_mode);
             profile_data.profiler_session();
         } else {
             let _ = machine.run(None);
@@ -902,7 +1102,7 @@ pub fn replay_from_testlog_file(
     filename: &str,
     require_same_gas: bool,
     debug: bool,
-    profiler: bool,
+    profiler_mode: ProfilerMode,
     trace_file: Option<&str>,
 ) -> std::io::Result<bool> {
     let mut file = File::open(filename)?;
@@ -919,7 +1119,7 @@ pub fn replay_from_testlog_file(
     match res {
         Ok(recorder) => {
             let success =
-                recorder.replay_and_compare(require_same_gas, debug, profiler, trace_file);
+                recorder.replay_and_compare(require_same_gas, debug, profiler_mode, trace_file);
             println!("{}", if success { "success" } else { "mismatch " });
             Ok(success)
         }
@@ -937,7 +1137,7 @@ fn logfile_replay_tests() {
                 &("./replayTests/".to_owned() + name.to_str().unwrap()),
                 false,
                 false,
-                false,
+                ProfilerMode::Never,
                 None,
             )
             .unwrap(),

@@ -2,43 +2,29 @@
 // Copyright 2020, Offchain Labs, Inc. All rights reserved.
 //
 
-import type ByteArray;
-import type MarshalledBytes;
-import type Queue;
-import type EvmLogs;
+use std::bytearray::ByteArray;
+use std::bytearray::MarshalledBytes;
+use std::queue::Queue;
+use evmlogs::EvmLogs;
 
-import func bytearray_new(capacity: uint) -> ByteArray;
-import func bytearray_marshalFull(ba: ByteArray) -> MarshalledBytes;
+use std::bytearray::bytearray_new;
+use std::bytearray::bytearray_marshalFull;
 
-import func queue_get(queue: Queue) -> option<(Queue, any)>;
+use std::queue::queue_get;
 
-import func evmlogs_empty() -> EvmLogs;
-import func evmlogs_numLogs(logs: EvmLogs) -> uint;
+use evmlogs::evmlogs_empty;
+use evmlogs::evmlogs_numLogs;
 
-import impure func evmCallStack_queueMessage(message: any);
+use evmCallStack::evmCallStack_queueMessage;
 
-import impure func chainParams_speedLimitPerSecond() -> uint;
+use chainParameters::chainParams_speedLimitPerSecond;
 
-import impure func inbox_currentBlockNumber() -> uint;
-import impure func inbox_currentTimestamp() -> uint;
+use inbox::IncomingRequest;
+use inbox::inbox_currentBlockNumber;
+use inbox::inbox_currentTimestamp;
 
+use gasAccounting::GasUsage;
 
-// This structure defines an incoming request.
-// It is defined identically in inbox.mini and elsewhere.
-type IncomingRequest = struct {
-    kind: uint,               // type of message
-    blockNumber: uint,        // block number of the L1 block
-    timestamp: uint,          // timestamp of the L1 block
-    sender: address,          // address of the sender
-    requestId: uint,
-    msgData: MarshalledBytes  // contents of the message, as a marshalled bytearray
-}
-
-// This is declared identically in gasAccounting.mini
-type GasUsage = struct {
-    gasUsed: uint,
-    gasPriceWei: uint,
-}
 
 // PerBlockReceiptData is different from OutputStatistics for now; might want to unify
 type PerBlockReceiptData = struct {
@@ -83,6 +69,7 @@ var globalBlockReceiptData: struct {
     data: PerBlockReceiptData,
     statsThisBlock: OutputStatistics,
     statsAllTime: OutputStatistics,
+    lastBlockNum: uint,
 };
 
 public impure func outputStats_endOfBlock(blockNum: uint, timestamp: uint) {
@@ -95,11 +82,15 @@ public impure func outputStats_endOfBlock(blockNum: uint, timestamp: uint) {
         updatedStats = updatedStats with {
             numLogs: updatedStats.numLogs + 1  // +1 for soon-to-be-issued block summary log
         };
+
         globalBlockReceiptData = globalBlockReceiptData with {
             statsAllTime: updatedStats
         };
+        emitBlockSummaryLog(blockNum, timestamp, globalBlockReceiptData.lastBlockNum);
 
-        emitBlockSummaryLog(blockNum, timestamp);
+        globalBlockReceiptData = globalBlockReceiptData with {
+            lastBlockNum: blockNum
+        };
     }
 
     // now clear current block stats, because we're advancing to a new current block
@@ -111,7 +102,6 @@ public impure func outputStats_endOfBlock(blockNum: uint, timestamp: uint) {
             numTx: 0,
             numEvmLogs: 0
         }
-
     };
 }
 
@@ -146,6 +136,7 @@ public impure func txReceipts_init() {  // will be called at beginning of main()
         },
         statsThisBlock: outputStats_new(),
         statsAllTime: outputStats_new(),
+        lastBlockNum: ~0,
     };
 }
 
@@ -171,16 +162,7 @@ impure func update_txReceiptsForBlock(
     return ret;
 }
 
-// result codes:
-//    0    return (success)
-//    1    tx reverted
-//    2    rejected due to congestion
-//    3    insufficient funds to pay for gas
-//    4    insufficient funds for tx payment
-//    5    bad sequence number
-//    6    message format error
-//    255  unknown error
-public impure func emitLog(
+public impure func emitTxReceipt(
     l1message: IncomingRequest,
     resultCode: uint,
     maybeReturnData: option<ByteArray>,
@@ -216,8 +198,10 @@ public impure func emitLog(
     };
 
     asm((
-        0,
-        l1message,
+        const::LogType_txReceipt,
+        l1message with {
+            msgData: unsafecast<ByteArray>(bytearray_marshalFull(l1message.msgData))  // because caller expects marshalled bytes
+        },
         txResultInfo,
         realGasUsage,
         update_txReceiptsForBlock(
@@ -228,19 +212,20 @@ public impure func emitLog(
     ),) { log };
 }
 
-impure func emitBlockSummaryLog(blockNum: uint, timestamp: uint) {
+impure func emitBlockSummaryLog(blockNum: uint, timestamp: uint, prevBlockNum: uint) {
     let gasUsedThisBlock = globalBlockReceiptData.statsThisBlock.totalGasUsed;
     let gasLimit = 13 * chainParams_speedLimitPerSecond();
     if (gasLimit < gasUsedThisBlock) {
         gasLimit = gasUsedThisBlock;
     }
     asm((
-        1,
+        const::LogType_blockSummary,
         blockNum,
         timestamp,
         gasLimit,
         globalBlockReceiptData.statsThisBlock,
-        globalBlockReceiptData.statsAllTime
+        globalBlockReceiptData.statsAllTime,
+        prevBlockNum
     ),) { log };
 }
 
@@ -276,7 +261,7 @@ public impure func sendMessage(msgType: uint, sender: address, data: ByteArray) 
     );
 }
 
-func sendPackagedMessage(msg: any) {
+impure func sendPackagedMessage(msg: any) {
     outputStats_addSend();
     asm(msg,) { send };
 }

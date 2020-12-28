@@ -12,11 +12,40 @@ use crate::pos::Location;
 use crate::stringtable::StringId;
 use crate::uint256::Uint256;
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
+
+///This is a map of the types at a given location, with the Vec<String> representing the module path
+///and the usize representing the stringID of the type at that location.
+pub type TypeTree = HashMap<(Vec<String>, usize), Type>;
 
 ///Debugging info serialized into mini executables, currently only contains a location.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Copy, Default, Serialize, Deserialize, PartialEq, Eq)]
 pub struct DebugInfo {
     pub location: Option<Location>,
+    pub attributes: Attributes,
+}
+
+#[derive(Debug, Clone, Copy, Default, Serialize, Deserialize, PartialEq, Eq)]
+pub struct Attributes {
+    pub breakpoint: bool,
+}
+
+impl DebugInfo {
+    pub fn new(location: Option<Location>, attributes: Attributes) -> Self {
+        DebugInfo {
+            location,
+            attributes,
+        }
+    }
+}
+
+impl From<Option<Location>> for DebugInfo {
+    fn from(location: Option<Location>) -> Self {
+        DebugInfo {
+            location,
+            attributes: Attributes::default(),
+        }
+    }
 }
 
 ///A top level language declaration.  Represents any language construct that can be directly
@@ -56,6 +85,7 @@ pub enum Type {
     FixedArray(Box<Type>, usize),
     Struct(Vec<StructField>),
     Named(StringId),
+    Nominal(Vec<String>, StringId),
     Func(bool, Vec<Type>, Box<Type>),
     Map(Box<Type>, Box<Type>),
     Imported(StringId),
@@ -80,6 +110,7 @@ impl Type {
             | Type::Bytes32
             | Type::EthAddress
             | Type::Imported(_)
+            | Type::Nominal(_, _)
             | Type::Every
             | Type::Any => Ok(self.clone()),
             Type::Tuple(tvec) => {
@@ -128,9 +159,23 @@ impl Type {
         }
     }
 
+    pub fn get_representation(&self, type_tree: &TypeTree) -> Result<Self, TypeError> {
+        let mut base_type = self.clone();
+        while let Type::Nominal(path, id) = base_type.clone() {
+            base_type = type_tree
+                .get(&(path.clone(), id))
+                .cloned()
+                .ok_or(new_type_error(
+                    format!("No type at {:?}, {}", path, id),
+                    None,
+                ))?;
+        }
+        Ok(base_type)
+    }
+
     ///If self is a Struct, and name is the StringID of a field of self, then returns Some(n), where
     /// n is the index of the field of self whose ID matches name.  Otherwise returns None.
-    pub fn get_struct_slot_by_name(&self, name: StringId) -> Option<usize> {
+    pub fn get_struct_slot_by_name(&self, name: String) -> Option<usize> {
         match self {
             Type::Struct(fields) => {
                 for (i, field) in fields.iter().enumerate() {
@@ -145,7 +190,7 @@ impl Type {
     }
 
     ///Returns true if rhs is a subtype of self, and false otherwise
-    pub fn assignable(&self, rhs: &Self) -> bool {
+    pub fn assignable(&self, rhs: &Self, type_tree: &TypeTree) -> bool {
         if *rhs == Type::Every {
             return true;
         }
@@ -160,53 +205,65 @@ impl Type {
             | Type::Imported(_)
             | Type::Every => (self == rhs),
             Type::Tuple(tvec) => {
-                if let Type::Tuple(tvec2) = rhs {
-                    type_vectors_assignable(tvec, tvec2)
+                if let Ok(Type::Tuple(tvec2)) = rhs.get_representation(type_tree) {
+                    type_vectors_assignable(tvec, &tvec2, type_tree)
                 } else {
                     false
                 }
             }
             Type::Array(t) => {
-                if let Type::Array(t2) = rhs {
-                    t.assignable(t2)
+                if let Ok(Type::Array(t2)) = rhs.get_representation(type_tree) {
+                    t.assignable(&t2, type_tree)
                 } else {
                     false
                 }
             }
             Type::FixedArray(t, s) => {
-                if let Type::FixedArray(t2, s2) = rhs {
-                    (s == s2) && t.assignable(t2)
+                if let Ok(Type::FixedArray(t2, s2)) = rhs.get_representation(type_tree) {
+                    (*s == s2) && t.assignable(&t2, type_tree)
                 } else {
                     false
                 }
             }
             Type::Struct(fields) => {
-                if let Type::Struct(fields2) = rhs {
-                    field_vectors_assignable(fields, fields2)
+                if let Ok(Type::Struct(fields2)) = rhs.get_representation(type_tree) {
+                    field_vectors_assignable(fields, &fields2, type_tree)
                 } else {
                     false
                 }
             }
             Type::Named(_) => (self == rhs),
+            // TODO: This will cause an infinite loop when dealing with recursive types, need new method to identify loops
+            Type::Nominal(path, id) => {
+                self == rhs
+                    || type_tree
+                        .get(&(path.clone(), *id))
+                        .map(|tipe| tipe.assignable(rhs, type_tree))
+                        .unwrap_or(false)
+            }
             Type::Func(is_impure, args, ret) => {
                 if let Type::Func(is_impure2, args2, ret2) = rhs {
                     (*is_impure || !is_impure2)
-                        && arg_vectors_assignable(args, args2)
-                        && (ret2.assignable(ret)) // note: rets in reverse order
+                        && arg_vectors_assignable(args, args2, type_tree)
+                        && (ret2.assignable(ret, type_tree)) // note: rets in reverse order
                 } else {
                     false
                 }
             }
             Type::Map(key1, val1) => {
                 if let Type::Map(key2, val2) = rhs {
-                    key1.assignable(key2) && (val1 == val2)
+                    if let Ok(val2) = val2.get_representation(type_tree) {
+                        key1.assignable(key2, type_tree) && (val1.assignable(&val2, type_tree))
+                    } else {
+                        false
+                    }
                 } else {
                     false
                 }
             }
             Type::Option(inner) => {
-                if let Type::Option(inner2) = rhs {
-                    inner.assignable(inner2)
+                if let Ok(Type::Option(inner2)) = rhs.get_representation(type_tree) {
+                    inner.assignable(&inner2, type_tree)
                 } else {
                     false
                 }
@@ -214,85 +271,100 @@ impl Type {
         }
     }
 
-    ///Panics if specified type does not have a default value
-    pub fn default_value(&self) -> Value {
+    ///This will always return a value. The second return says whether that value is type-safe.
+    // TODO: have this resolve nominal types
+    pub fn default_value(&self) -> (Value, bool) {
         match self {
             Type::Void => {
                 panic!("tried to get default value for void type");
             }
             Type::Uint | Type::Int | Type::Bytes32 | Type::EthAddress | Type::Bool => {
-                Value::Int(Uint256::zero())
+                (Value::Int(Uint256::zero()), true)
             }
             Type::Tuple(tvec) => {
                 let mut default_tup = Vec::new();
+                let mut is_safe = true;
                 for t in tvec {
-                    default_tup.push(t.default_value());
+                    let (def, safe) = t.default_value();
+                    default_tup.push(def);
+                    is_safe = is_safe && safe;
                 }
-                Value::new_tuple(default_tup)
+                (Value::new_tuple(default_tup), is_safe)
             }
-            Type::Array(t) => Value::new_tuple(vec![
-                Value::Int(Uint256::one()),
-                Value::Int(Uint256::one()),
-                Value::new_tuple(vec![t.default_value()]),
-            ]),
+            Type::Array(t) => {
+                let (def, safe) = t.default_value();
+                (
+                    Value::new_tuple(vec![
+                        Value::Int(Uint256::one()),
+                        Value::Int(Uint256::one()),
+                        Value::new_tuple(vec![def]),
+                    ]),
+                    safe,
+                )
+            }
             Type::FixedArray(t, sz) => {
-                let default_val = t.default_value();
+                let (default_val, safe) = t.default_value();
                 let mut val = Value::new_tuple(vec![default_val; 8]);
                 let mut chunk_size = 1;
                 while chunk_size * TUPLE_SIZE < *sz {
                     val = Value::new_tuple(vec![val; 8]);
                     chunk_size *= 8;
                 }
-                val
+                (val, safe)
             }
             Type::Struct(fields) => {
                 let mut vals = Vec::new();
+                let mut is_safe = true;
                 for field in fields {
-                    vals.push(field.tipe.default_value());
+                    let (val, safe) = field.tipe.default_value();
+                    vals.push(val);
+                    is_safe = is_safe && safe;
                 }
-                value_from_field_list(vals)
+                (value_from_field_list(vals), is_safe)
             }
-            Type::Map(_key, _val) => {
-                // an unusable dummy value -- application will panic if it accesses this
-                Value::none()
-            }
-            Type::Named(_) => {
-                panic!("tried to get default value for a named type");
-            }
-            Type::Func(_, _, _) => {
-                panic!("tried to get default value for a function type");
-            }
-            Type::Imported(_) => {
-                panic!("tried to get default value for an imported type");
-            }
-            Type::Any => Value::none(),
-            Type::Every => {
-                panic!("tried to get default value for the every type");
-            }
-            Type::Option(_) => Value::new_tuple(vec![Value::Int(Uint256::zero())]),
+            Type::Map(_, _)
+            | Type::Named(_)
+            | Type::Func(_, _, _)
+            | Type::Imported(_)
+            | Type::Nominal(_, _) => (Value::none(), false),
+            Type::Any => (Value::none(), true),
+            Type::Every => (Value::none(), false),
+            Type::Option(_) => (Value::new_tuple(vec![Value::Int(Uint256::zero())]), true),
         }
     }
 }
 
 ///Returns true if each type in tvec2 is a subtype of the type in tvec1 at the same index, and tvec1
 /// and tvec2 have the same length.
-pub fn type_vectors_assignable(tvec1: &[Type], tvec2: &[Type]) -> bool {
-    tvec1.len() == tvec2.len() && tvec1.iter().zip(tvec2).all(|(t1, t2)| t1.assignable(t2))
-}
-
-///Identical to `type_vectors_assignable`
-pub fn arg_vectors_assignable(tvec1: &[Type], tvec2: &[Type]) -> bool {
-    tvec1.len() == tvec2.len() && tvec1.iter().zip(tvec2).all(|(t1, t2)| t1.assignable(t2))
-}
-
-///Identical to `type_vectors_assignable` but using StructField slices as inputs and comparing their
-/// inner types.
-pub fn field_vectors_assignable(tvec1: &[StructField], tvec2: &[StructField]) -> bool {
+pub fn type_vectors_assignable(tvec1: &[Type], tvec2: &[Type], type_tree: &TypeTree) -> bool {
     tvec1.len() == tvec2.len()
         && tvec1
             .iter()
             .zip(tvec2)
-            .all(|(t1, t2)| t1.tipe.assignable(&t2.tipe))
+            .all(|(t1, t2)| t1.assignable(t2, type_tree))
+}
+
+///Identical to `type_vectors_assignable`
+pub fn arg_vectors_assignable(tvec1: &[Type], tvec2: &[Type], type_tree: &TypeTree) -> bool {
+    tvec1.len() == tvec2.len()
+        && tvec1
+            .iter()
+            .zip(tvec2)
+            .all(|(t1, t2)| t1.assignable(t2, type_tree))
+}
+
+///Identical to `type_vectors_assignable` but using StructField slices as inputs and comparing their
+/// inner types.
+pub fn field_vectors_assignable(
+    tvec1: &[StructField],
+    tvec2: &[StructField],
+    type_tree: &TypeTree,
+) -> bool {
+    tvec1.len() == tvec2.len()
+        && tvec1
+            .iter()
+            .zip(tvec2)
+            .all(|(t1, t2)| t1.tipe.assignable(&t2.tipe, type_tree))
 }
 
 impl PartialEq for Type {
@@ -316,6 +388,7 @@ impl PartialEq for Type {
                 (i1 == i2) && type_vectors_equal(&a1, &a2) && (*r1 == *r2)
             }
             (Type::Imported(n1), Type::Imported(n2)) => (n1 == n2),
+            (Type::Nominal(p1, id1), Type::Nominal(p2, id2)) => (p1, id1) == (p2, id2),
             (Type::Option(x), Type::Option(y)) => *x == *y,
             (_, _) => false,
         }
@@ -335,12 +408,12 @@ fn struct_field_vectors_equal(f1: &[StructField], f2: &[StructField]) -> bool {
 ///Field of a struct, contains field name and underlying type.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct StructField {
-    pub name: StringId,
+    pub name: String,
     pub tipe: Type,
 }
 
 impl StructField {
-    pub fn new(name: StringId, tipe: Type) -> StructField {
+    pub fn new(name: String, tipe: Type) -> StructField {
         StructField { name, tipe }
     }
 
@@ -353,14 +426,14 @@ impl StructField {
     ) -> Result<Self, TypeError> {
         let t = self.tipe.resolve_types(type_table, location)?;
         Ok(StructField {
-            name: self.name,
+            name: self.name.clone(),
             tipe: t,
         })
     }
 }
 
 ///Argument to a function, contains field name and underlying type.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct FuncArg {
     pub name: StringId,
     pub tipe: Type,
@@ -386,7 +459,7 @@ pub fn new_func_arg(name: StringId, tipe: Type) -> FuncArg {
 }
 
 ///Represents a declaration of a global mini variable.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct GlobalVarDecl {
     pub name: StringId,
     pub tipe: Type,
@@ -475,7 +548,7 @@ impl ImportTypeDecl {
 }
 
 ///Represents whether the FuncDecl that contains it is public or private.
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 pub enum FuncDeclKind {
     Public,
     Private,
@@ -483,7 +556,7 @@ pub enum FuncDeclKind {
 
 ///Represents a top level function declaration.  The is_impure, args, and ret_type fields are
 /// assumed to be derived from tipe, and this must be upheld by the user of this type.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct FuncDecl {
     pub name: StringId,
     pub is_impure: bool,
@@ -555,19 +628,20 @@ impl FuncDecl {
 }
 
 ///A statement in the mini language with associated `DebugInfo` that has not yet been type checked.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct Statement {
     pub kind: StatementKind,
     pub debug_info: DebugInfo,
 }
 
 ///A raw statement containing no debug information that has not yet been type checked.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub enum StatementKind {
     Noop(),
     Panic(),
     ReturnVoid(),
     Return(Expr),
+    Break(Option<Expr>, Option<String>),
     Expression(Expr),
     Let(MatchPattern, Expr),
     Assign(StringId, Expr),
@@ -614,6 +688,12 @@ impl StatementKind {
             StatementKind::Return(expr) => {
                 Ok(StatementKind::Return(expr.resolve_types(type_table)?))
             }
+            StatementKind::Break(ret, scope) => Ok(StatementKind::Break(
+                ret.clone()
+                    .map(|exp| exp.resolve_types(type_table))
+                    .transpose()?,
+                scope.clone(),
+            )),
             StatementKind::Expression(expr) => {
                 Ok(StatementKind::Expression(expr.resolve_types(type_table)?))
             }
@@ -659,7 +739,7 @@ impl StatementKind {
 }
 
 ///Either a single identifier or a tuple of identifiers, used in mini let bindings.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub enum MatchPattern {
     Simple(StringId),
     Tuple(Vec<MatchPattern>),
@@ -667,10 +747,10 @@ pub enum MatchPattern {
 
 ///Represents an arm of an If-Else chain, is Cond(condition, block, possible_else, location) if it
 /// contains a condition, and Catchall(block, location) if it is an else block.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub enum IfArm {
-    Cond(Expr, Vec<Statement>, Option<Box<IfArm>>, Option<Location>),
-    Catchall(Vec<Statement>, Option<Location>),
+    Cond(Expr, Vec<Statement>, Option<Box<IfArm>>, DebugInfo),
+    Catchall(Vec<Statement>, DebugInfo),
 }
 
 impl IfArm {
@@ -696,7 +776,7 @@ impl IfArm {
 }
 
 ///Represents a constant mini value of type Option<T> for some type T.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub enum OptionConst {
     _Some(Box<Constant>),
     None(Type),
@@ -704,7 +784,7 @@ pub enum OptionConst {
 
 ///Represents a mini constant value. This is different than `Value` as it encodes Options as distinct
 /// from tuples.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub enum Constant {
     Uint(Uint256),
     Int(Uint256),
@@ -778,181 +858,191 @@ impl Constant {
     }
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct Expr {
+    pub kind: ExprKind,
+    pub debug_info: DebugInfo,
+}
+
 ///A mini expression that has not yet been type checked.
-#[derive(Debug, Clone)]
-pub enum Expr {
-    UnaryOp(UnaryOp, Box<Expr>, Option<Location>),
-    Binary(BinaryOp, Box<Expr>, Box<Expr>, Option<Location>),
-    ShortcutOr(Box<Expr>, Box<Expr>, Option<Location>),
-    ShortcutAnd(Box<Expr>, Box<Expr>, Option<Location>),
-    VariableRef(StringId, Option<Location>),
-    TupleRef(Box<Expr>, Uint256, Option<Location>),
-    DotRef(Box<Expr>, StringId, Option<Location>),
-    Constant(Constant, Option<Location>),
-    OptionInitializer(Box<Expr>, Option<Location>),
-    FunctionCall(Box<Expr>, Vec<Expr>, Option<Location>),
-    CodeBlock(Vec<Statement>, Option<Box<Expr>>, Option<Location>),
-    ArrayOrMapRef(Box<Expr>, Box<Expr>, Option<Location>),
-    StructInitializer(Vec<FieldInitializer>, Option<Location>),
-    Tuple(Vec<Expr>, Option<Location>),
-    NewArray(Box<Expr>, Type, Option<Location>),
-    NewFixedArray(usize, Option<Box<Expr>>, Option<Location>),
-    NewMap(Type, Type, Option<Location>),
-    ArrayOrMapMod(Box<Expr>, Box<Expr>, Box<Expr>, Option<Location>),
-    StructMod(Box<Expr>, StringId, Box<Expr>, Option<Location>),
-    UnsafeCast(Box<Expr>, Type, Option<Location>),
-    Asm(Type, Vec<Instruction>, Vec<Expr>, Option<Location>),
-    Try(Box<Expr>, Option<Location>),
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub enum ExprKind {
+    UnaryOp(UnaryOp, Box<Expr>),
+    Binary(BinaryOp, Box<Expr>, Box<Expr>),
+    ShortcutOr(Box<Expr>, Box<Expr>),
+    ShortcutAnd(Box<Expr>, Box<Expr>),
+    VariableRef(StringId),
+    TupleRef(Box<Expr>, Uint256),
+    DotRef(Box<Expr>, String),
+    Constant(Constant),
+    OptionInitializer(Box<Expr>),
+    FunctionCall(Box<Expr>, Vec<Expr>),
+    CodeBlock(Vec<Statement>, Option<Box<Expr>>),
+    ArrayOrMapRef(Box<Expr>, Box<Expr>),
+    StructInitializer(Vec<FieldInitializer>),
+    Tuple(Vec<Expr>),
+    NewArray(Box<Expr>, Type),
+    NewFixedArray(usize, Option<Box<Expr>>),
+    NewMap(Type, Type),
+    ArrayOrMapMod(Box<Expr>, Box<Expr>, Box<Expr>),
+    StructMod(Box<Expr>, String, Box<Expr>),
+    UnsafeCast(Box<Expr>, Type),
+    Asm(Type, Vec<Instruction>, Vec<Expr>),
+    Try(Box<Expr>),
 }
 
 impl Expr {
     ///Returns an expression that applies unary operator op to e.
     pub fn new_unary(op: UnaryOp, e: Expr, loc: Option<Location>) -> Self {
-        Expr::UnaryOp(op, Box::new(e), loc)
+        Self {
+            kind: ExprKind::UnaryOp(op, Box::new(e)),
+            debug_info: DebugInfo::from(loc),
+        }
     }
 
     ///Returns an expression that applies binary operator op to e1 and e2.
     pub fn new_binary(op: BinaryOp, e1: Expr, e2: Expr, loc: Option<Location>) -> Self {
-        Expr::Binary(op, Box::new(e1), Box::new(e2), loc)
+        Self {
+            kind: ExprKind::Binary(op, Box::new(e1), Box::new(e2)),
+            debug_info: DebugInfo::from(loc),
+        }
     }
 
+    pub fn resolve_types(&self, type_table: &SymTable<Type>) -> Result<Self, TypeError> {
+        Ok(Self {
+            kind: self
+                .kind
+                .resolve_types(type_table, self.debug_info.location)?,
+            debug_info: self.debug_info.clone(),
+        })
+    }
+}
+
+impl ExprKind {
     ///Returns either a fully specified version of self specified by matching Named types to the
     /// contents of type_table, or a TypeError if a Named type does not have an associated entry.
-    pub fn resolve_types(&self, type_table: &SymTable<Type>) -> Result<Self, TypeError> {
+    pub fn resolve_types(
+        &self,
+        type_table: &SymTable<Type>,
+        loc: Option<Location>,
+    ) -> Result<Self, TypeError> {
         match self {
-            Expr::UnaryOp(op, be, loc) => Ok(Expr::UnaryOp(
+            ExprKind::UnaryOp(op, be) => Ok(ExprKind::UnaryOp(
                 *op,
                 Box::new(be.resolve_types(type_table)?),
-                *loc,
             )),
-            Expr::Binary(op, be1, be2, loc) => Ok(Expr::Binary(
+            ExprKind::Binary(op, be1, be2) => Ok(ExprKind::Binary(
                 *op,
                 Box::new(be1.resolve_types(type_table)?),
                 Box::new(be2.resolve_types(type_table)?),
-                *loc,
             )),
-            Expr::ShortcutOr(be1, be2, loc) => Ok(Expr::ShortcutOr(
+            ExprKind::ShortcutOr(be1, be2) => Ok(ExprKind::ShortcutOr(
                 Box::new(be1.resolve_types(type_table)?),
                 Box::new(be2.resolve_types(type_table)?),
-                *loc,
             )),
-            Expr::ShortcutAnd(be1, be2, loc) => Ok(Expr::ShortcutAnd(
+            ExprKind::ShortcutAnd(be1, be2) => Ok(ExprKind::ShortcutAnd(
                 Box::new(be1.resolve_types(type_table)?),
                 Box::new(be2.resolve_types(type_table)?),
-                *loc,
             )),
-            Expr::VariableRef(name, loc) => Ok(Expr::VariableRef(*name, *loc)),
-            Expr::TupleRef(be, idx, loc) => Ok(Expr::TupleRef(
+            ExprKind::VariableRef(name) => Ok(ExprKind::VariableRef(*name)),
+            ExprKind::TupleRef(be, idx) => Ok(ExprKind::TupleRef(
                 Box::new(be.resolve_types(type_table)?),
                 idx.clone(),
-                *loc,
             )),
-            Expr::DotRef(be, name, loc) => Ok(Expr::DotRef(
+            ExprKind::DotRef(be, name) => Ok(ExprKind::DotRef(
                 Box::new(be.resolve_types(type_table)?),
-                *name,
-                *loc,
+                name.clone(),
             )),
-            Expr::Constant(b, loc) => Ok(Expr::Constant(b.resolve_types(type_table)?, *loc)),
-            Expr::FunctionCall(fexpr, args, loc) => {
+            ExprKind::Constant(b) => Ok(ExprKind::Constant(b.resolve_types(type_table)?)),
+            ExprKind::FunctionCall(fexpr, args) => {
                 let mut rargs = Vec::new();
                 for arg in args.iter() {
                     rargs.push(arg.resolve_types(type_table)?);
                 }
-                Ok(Expr::FunctionCall(
+                Ok(ExprKind::FunctionCall(
                     Box::new(fexpr.resolve_types(type_table)?),
                     rargs,
-                    *loc,
                 ))
             }
-            Expr::CodeBlock(body, result, loc) => Ok(Expr::CodeBlock(
+            ExprKind::CodeBlock(body, result) => Ok(ExprKind::CodeBlock(
                 Statement::resolve_types_vec(body.to_vec(), type_table)?,
                 result
                     .clone()
                     .map(|exp| exp.resolve_types(type_table))
                     .transpose()?
                     .map(Box::new),
-                *loc,
             )),
-            Expr::ArrayOrMapRef(e1, e2, loc) => Ok(Expr::ArrayOrMapRef(
+            ExprKind::ArrayOrMapRef(e1, e2) => Ok(ExprKind::ArrayOrMapRef(
                 Box::new(e1.resolve_types(type_table)?),
                 Box::new(e2.resolve_types(type_table)?),
-                *loc,
             )),
-            Expr::StructInitializer(fields, loc) => {
+            ExprKind::StructInitializer(fields) => {
                 let mut rfields = Vec::new();
                 for field in fields.iter() {
                     rfields.push(FieldInitializer::new(
-                        field.name,
+                        field.name.clone(),
                         field.value.resolve_types(type_table)?,
                     ));
                 }
-                Ok(Expr::StructInitializer(rfields, *loc))
+                Ok(ExprKind::StructInitializer(rfields))
             }
-            Expr::OptionInitializer(inner, loc) => Ok(Expr::OptionInitializer(
-                Box::new(inner.resolve_types(type_table)?),
-                *loc,
-            )),
-            Expr::Tuple(evec, loc) => {
+            ExprKind::OptionInitializer(inner) => Ok(ExprKind::OptionInitializer(Box::new(
+                inner.resolve_types(type_table)?,
+            ))),
+            ExprKind::Tuple(evec) => {
                 let mut rvec = Vec::new();
                 for expr in evec {
                     rvec.push(expr.resolve_types(type_table)?);
                 }
-                Ok(Expr::Tuple(rvec, *loc))
+                Ok(ExprKind::Tuple(rvec))
             }
-            Expr::NewArray(sz, tipe, loc) => Ok(Expr::NewArray(
+            ExprKind::NewArray(sz, tipe) => Ok(ExprKind::NewArray(
                 Box::new(sz.resolve_types(type_table)?),
-                tipe.resolve_types(type_table, *loc)?,
-                *loc,
+                tipe.resolve_types(type_table, loc)?,
             )),
-            Expr::NewFixedArray(sz, init_expr, loc) => match &*init_expr {
-                Some(expr) => Ok(Expr::NewFixedArray(
+            ExprKind::NewFixedArray(sz, init_expr) => match &*init_expr {
+                Some(expr) => Ok(ExprKind::NewFixedArray(
                     *sz,
                     Some(Box::new(expr.resolve_types(type_table)?)),
-                    *loc,
                 )),
-                None => Ok(Expr::NewFixedArray(*sz, None, *loc)),
+                None => Ok(ExprKind::NewFixedArray(*sz, None)),
             },
-            Expr::NewMap(key_type, value_type, loc) => Ok(Expr::NewMap(
-                key_type.resolve_types(type_table, *loc)?,
-                value_type.resolve_types(type_table, *loc)?,
-                *loc,
+            ExprKind::NewMap(key_type, value_type) => Ok(ExprKind::NewMap(
+                key_type.resolve_types(type_table, loc)?,
+                value_type.resolve_types(type_table, loc)?,
             )),
-            Expr::ArrayOrMapMod(e1, e2, e3, loc) => Ok(Expr::ArrayOrMapMod(
+            ExprKind::ArrayOrMapMod(e1, e2, e3) => Ok(ExprKind::ArrayOrMapMod(
                 Box::new(e1.resolve_types(type_table)?),
                 Box::new(e2.resolve_types(type_table)?),
                 Box::new(e3.resolve_types(type_table)?),
-                *loc,
             )),
-            Expr::StructMod(e1, i, e3, loc) => Ok(Expr::StructMod(
+            ExprKind::StructMod(e1, i, e3) => Ok(ExprKind::StructMod(
                 Box::new(e1.resolve_types(type_table)?),
-                *i,
+                i.clone(),
                 Box::new(e3.resolve_types(type_table)?),
-                *loc,
             )),
-            Expr::UnsafeCast(be, t, loc) => Ok(Expr::UnsafeCast(
+            ExprKind::UnsafeCast(be, t) => Ok(ExprKind::UnsafeCast(
                 Box::new(be.resolve_types(type_table)?),
-                t.resolve_types(type_table, *loc)?,
-                *loc,
+                t.resolve_types(type_table, loc)?,
             )),
-            Expr::Asm(t, insns, exprs, loc) => {
+            ExprKind::Asm(t, insns, exprs) => {
                 let mut res_exprs = Vec::new();
                 for ex in exprs {
                     res_exprs.push(ex.resolve_types(type_table)?);
                 }
-                Ok(Expr::Asm(
-                    t.resolve_types(type_table, *loc)?,
+                Ok(ExprKind::Asm(
+                    t.resolve_types(type_table, loc)?,
                     insns.to_vec(),
                     res_exprs,
-                    *loc,
                 ))
             }
-            Expr::Try(expr, loc) => Ok(Expr::Try(Box::new(expr.resolve_types(type_table)?), *loc)),
+            ExprKind::Try(expr) => Ok(ExprKind::Try(Box::new(expr.resolve_types(type_table)?))),
         }
     }
 }
 
 ///A mini unary operator.
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 pub enum UnaryOp {
     Minus,
     BitwiseNeg,
@@ -966,7 +1056,7 @@ pub enum UnaryOp {
 }
 
 ///A mini binary operator.
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 pub enum BinaryOp {
     Plus,
     Minus,
@@ -994,14 +1084,14 @@ pub enum BinaryOp {
 }
 
 ///Used in StructInitializer expressions to map expressions to fields of the struct.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct FieldInitializer {
-    pub name: StringId,
+    pub name: String,
     pub value: Expr,
 }
 
 impl FieldInitializer {
-    pub fn new(name: StringId, value: Expr) -> Self {
+    pub fn new(name: String, value: Expr) -> Self {
         FieldInitializer { name, value }
     }
 }
