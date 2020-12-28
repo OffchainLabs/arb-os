@@ -21,6 +21,9 @@ use evmCallStack::evmCallStack_setTopFrameMemory;
 use evmOps::evmOp_return;
 use evmOps::evmOp_revert_knownCodePc;
 
+use pluggables::ModuleFunction;
+use pluggables::installPluggable;
+
 use gasAccounting::gasAccounting_addToReserveFunds;
 use gasAccounting::gasAccounting_getFeeRecipient;
 use gasAccounting::gasAccounting_setFeeRecipient;
@@ -49,8 +52,9 @@ public impure func arbowner_init() {
 
 public impure func arbowner_txcall() {
     if let Some(topFrame) = evmCallStack_topFrame() {
-        // make sure the caller is the chain's owner
-        if (Some(evmCallFrame_getCaller(topFrame)) != chainParams_getOwner()) {
+        // make sure the caller is either address zero or the chain's owner
+        let caller = evmCallFrame_getCaller(topFrame);
+        if ( (caller != address(0)) && (Some(caller) != chainParams_getOwner()) ) {
             evmOp_revert_knownCodePc(address(const::Address_ArbOwner), 0, 0, 0);
         }
 
@@ -61,6 +65,14 @@ public impure func arbowner_txcall() {
         let funcCode = asm(224, bytearray_get256(calldata, 0)) uint { shr };
         if (funcCode == 0xe3a0a148) {
             arbowner_giveOwnership(topFrame, calldata);
+        } elseif (funcCode == 0x31acdf5e) {
+            arbowner_startCodeUpload(topFrame, calldata);
+        } elseif (funcCode == 0x56331f75) {
+            arbowner_continueCodeUpload(topFrame, calldata);
+        } elseif (funcCode == 0xfbb5a179) {
+           arbowner_finishCodeUploadAsArbosUpgrade(topFrame, calldata);
+        } elseif (funcCode == 0xf4f4e136) {
+           arbowner_finishCodeUploadAsPluggable(topFrame, calldata);
         } elseif (funcCode == 0xc3bf429d) {
             arbowner_addToReserveFunds(topFrame, calldata);
         } elseif (funcCode == 0x4ccb20c0) {
@@ -77,12 +89,6 @@ public impure func arbowner_txcall() {
             arbowner_setFeeMaxes(topFrame, calldata);
         } elseif (funcCode == 0xea180a38) {
             arbowner_changeSequencer(topFrame, calldata);
-        } elseif (funcCode == 0x6d92b8e4) {
-            arbowner_startArbosUpgrade(topFrame, calldata);
-        } elseif (funcCode == 0x0b766fec) {
-            arbowner_continueArbosUpgrade(topFrame, calldata);
-        } elseif (funcCode == 0xe380002e) {
-           arbowner_finishArbosUpgrade(topFrame, calldata);
         } else {
             // unrecognized function code
             evmOp_revert_knownCodePc(address(const::Address_ArbOwner), 2, 0, 0);
@@ -250,7 +256,7 @@ impure func arbowner_changeSequencer(topFrame: EvmCallFrame, calldata: ByteArray
     evmOp_return(0, 0);
 }
 
-impure func arbowner_startArbosUpgrade(topFrame: EvmCallFrame, calldata: ByteArray) { // ()
+impure func arbowner_startCodeUpload(topFrame: EvmCallFrame, calldata: ByteArray) { // ()
     if (bytearray_size(calldata) != 4) {
         evmOp_revert_knownCodePc(address(const::Address_ArbOwner), 20, 0, 0);
     }
@@ -258,7 +264,7 @@ impure func arbowner_startArbosUpgrade(topFrame: EvmCallFrame, calldata: ByteArr
     evmOp_return(0, 0);
 }
 
-impure func arbowner_continueArbosUpgrade(topFrame: EvmCallFrame, calldata: ByteArray) { // (bytes)
+impure func arbowner_continueCodeUpload(topFrame: EvmCallFrame, calldata: ByteArray) { // (bytes)
     if (bytearray_size(calldata) < 68) {
         evmOp_revert_knownCodePc(address(const::Address_ArbOwner), 30, 0, 0);
     }
@@ -276,7 +282,7 @@ impure func arbowner_continueArbosUpgrade(topFrame: EvmCallFrame, calldata: Byte
     }
 }
 
-impure func arbowner_finishArbosUpgrade(topFrame: EvmCallFrame, calldata: ByteArray) { // ()
+impure func arbowner_finishCodeUploadAsArbosUpgrade(topFrame: EvmCallFrame, calldata: ByteArray) { // ()
     if (bytearray_size(calldata) != 4) {
         evmOp_revert_knownCodePc(address(const::Address_ArbOwner), 40, 0, 0);
     }
@@ -287,6 +293,22 @@ impure func arbowner_finishArbosUpgrade(topFrame: EvmCallFrame, calldata: ByteAr
     }
 }
 
+impure func arbowner_finishCodeUploadAsPluggable(topFrame: EvmCallFrame, calldata: ByteArray) { // ()
+    if (bytearray_size(calldata) != 68) {
+        evmOp_revert_knownCodePc(address(const::Address_ArbOwner), 50, 0, 0);
+    }
+    let id = bytearray_get256(calldata, 4);
+    let keepState = bytearray_get256(calldata, 36) != 0;
+    if let Some(upgrade) = upgradeInProgress {
+        if let Some(_) = installPluggable(id, unsafecast<ModuleFunction>(avmCodeBuilder_finish(upgrade)), keepState) {
+            evmOp_return(0, 0);
+        } else {
+            evmOp_revert_knownCodePc(address(const::Address_ArbOwner), 51, 0, 0);
+        }
+    } else {
+        evmOp_revert_knownCodePc(address(const::Address_ArbOwner), 52, 0, 0);
+    }
+}
 
 
 
