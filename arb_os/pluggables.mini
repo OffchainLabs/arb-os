@@ -35,12 +35,12 @@ public impure func callPluggable(id: uint, args: any) -> option<any> {
         return None;
     }
 
-    let this = moduleManager.modules[id]?;
-    let (retVal, newState) = this.code(args, this.state, this.neverBeenCalled);
+    let theModule = moduleManager.modules[id]?;
+    let (retVal, newState) = theModule.code(args, theModule.state, theModule.neverBeenCalled);
 
     moduleManager = moduleManager with {
         modules: moduleManager.modules with {
-            [id] = Some(this with { state: newState } with { neverBeenCalled: false })
+            [id] = Some(theModule with { state: newState } with { neverBeenCalled: false })
         }
     };
     return Some(retVal);
