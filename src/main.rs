@@ -189,7 +189,7 @@ fn main() -> Result<(), CompileError> {
             let filename = run.input;
             let debug = run.debug;
             let path = Path::new(&filename);
-            let env = RuntimeEnvironment::new(Uint256::from_usize(1111));
+            let env = RuntimeEnvironment::new(Uint256::from_usize(1111), None);
             match run_from_file(path, Vec::new(), env, debug) {
                 Ok(logs) => {
                     println!("Logs: {:?}", logs);
@@ -212,7 +212,7 @@ fn main() -> Result<(), CompileError> {
             profile_gen_from_file(
                 input.as_ref(),
                 Vec::new(),
-                RuntimeEnvironment::new(Uint256::from_usize(1111)),
+                RuntimeEnvironment::new(Uint256::from_usize(1111), None),
                 path.mode,
             );
         }

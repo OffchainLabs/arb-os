@@ -51,6 +51,22 @@ public func boundedQueue_get(q: BoundedQueue) -> option<(BoundedQueue, any)> {
     }
 }
 
+public func boundedQueue_nth(q: BoundedQueue, n: uint) -> option<any> {
+    if (n < boundedQueue_size(q)) {
+        return Some(q.contents[(q.nextGet + n) % q.capacity]);
+    } else {
+        return None;
+    }
+}
+
+public func boundedQueue_set_nth(q: BoundedQueue, n: uint, value: any) -> option<BoundedQueue> {
+    if (n < boundedQueue_size(q)) {
+        return Some(q with { contents: q.contents with { [(q.nextGet + n) % q.capacity] = value } });
+    } else {
+        return None;
+    }
+}
+
 public func boundedQueue_expand(q: BoundedQueue, newSize: uint) -> BoundedQueue {
     if (newSize <= q.capacity) {
         panic;
@@ -98,6 +114,14 @@ public func queue_getOrDie(q: Queue) -> (Queue, any) {
     } else {
         panic;
     }
+}
+
+public func queue_nth(q: Queue, n: uint) -> option<any> {
+    return boundedQueue_nth(q, n);
+}
+
+public func queue_set_nth(q: Queue, n: uint, value: any) -> option<Queue> {
+    return boundedQueue_set_nth(q, n, value);
 }
 
 public func queue_discardOne(q: Queue) -> Queue {

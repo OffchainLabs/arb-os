@@ -937,6 +937,8 @@ impl MiniProperties for Opcode {
             | Opcode::AVMOpcode(AVMOpcode::GetGas)
             | Opcode::AVMOpcode(AVMOpcode::Jump)
             | Opcode::AVMOpcode(AVMOpcode::Cjump)
+            | Opcode::AVMOpcode(AVMOpcode::AuxPop)
+            | Opcode::AVMOpcode(AVMOpcode::AuxPush)
             | Opcode::AVMOpcode(AVMOpcode::Sideload) => false,
             _ => true,
         }

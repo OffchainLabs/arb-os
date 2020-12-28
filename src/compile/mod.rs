@@ -28,7 +28,7 @@ pub use source::Lines;
 
 mod ast;
 mod codegen;
-mod miniconstants;
+pub mod miniconstants;
 mod source;
 mod symtable;
 mod typecheck;
