@@ -2,6 +2,7 @@
 // Copyright 2020, Offchain Labs, Inc. All rights reserved.
 //
 
+
 use std::bytearray::ByteArray;
 use std::bytestream::ByteStream;
 use std::bytearray::MarshalledBytes;
@@ -257,7 +258,8 @@ public impure func handleL2Request(
 
         initEvmCallStack(
             callKind,
-            request
+            request,
+            None<(uint, address, ByteArray)>,
         );  // should never return
     }
 

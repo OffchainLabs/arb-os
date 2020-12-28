@@ -259,6 +259,7 @@ fn test_ripemd160() {
     }
 }
 
+#[test]
 fn test_biguint() {
     let path = Path::new("stdlib/biguinttest.mexe");
     let res = run_from_file(
