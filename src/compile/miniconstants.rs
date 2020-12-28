@@ -172,6 +172,8 @@ pub fn init_constant_table() -> HashMap<String, Uint256> {
         ("LogType_txReceipt", 0),
         ("LogType_blockSummary", 1),
         // outgoing message types
+        ("SendType_erc20Withdraw", 1),
+        ("SendType_erc721Withdraw", 2),
         ("SendType_buddyContractResult", 5),
         // sequencer constants
         ("Sequencer_maxDelayBlocks", 32768), // 128*256
