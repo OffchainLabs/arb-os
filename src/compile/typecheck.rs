@@ -131,7 +131,7 @@ fn inline(
         } = exp
         {
             let (code, block_exp) = if let TypeCheckedExpr {
-                kind: TypeCheckedExprKind::FuncRef(id, _),
+                kind: TypeCheckedExprKind::FuncRef(id, ref func_ref_type),
                 debug_info: _,
             } = **name
             {
@@ -153,17 +153,44 @@ fn inline(
                         .collect();
                     code.append(&mut func.code.clone());
                     let last = code.pop();
-                    let block_exp = if let Some(TypeCheckedStatement {
-                        kind: TypeCheckedStatementKind::Return(exp),
-                        debug_info: _,
-                    }) = last
-                    {
-                        Some(Box::new(exp))
-                    } else {
-                        if let Some(statement) = last {
-                            code.push(statement);
+                    let block_exp = match last {
+                        Some(TypeCheckedStatement {
+                            kind: TypeCheckedStatementKind::Return(exp),
+                            debug_info: _,
+                        }) => Some(Box::new(exp)),
+                        Some(TypeCheckedStatement {
+                            kind: TypeCheckedStatementKind::If(_),
+                            debug_info,
+                        })
+                        | Some(TypeCheckedStatement {
+                            kind: TypeCheckedStatementKind::IfLet(_, _, _, _),
+                            debug_info,
+                        }) => {
+                            if let Some(statement) = last {
+                                code.push(statement);
+                            }
+                            Some(Box::new(TypeCheckedExpr {
+                                kind: TypeCheckedExprKind::Const(
+                                    if let Type::Func(_, _, ret) = func_ref_type {
+                                        ret.default_value().0
+                                    } else {
+                                        panic!()
+                                    },
+                                    if let Type::Func(_, _, ret) = func_ref_type {
+                                        *ret.clone()
+                                    } else {
+                                        panic!()
+                                    },
+                                ),
+                                debug_info,
+                            }))
                         }
-                        None
+                        _ => {
+                            if let Some(statement) = last {
+                                code.push(statement);
+                            }
+                            None
+                        }
                     };
                     (Some(code), block_exp)
                 } else {
