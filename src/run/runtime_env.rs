@@ -118,7 +118,7 @@ impl RuntimeEnvironment {
 
         if let Some((base_gas_price, storage_charge, pay_fees_to)) = charging_policy.clone() {
             buf.extend(&[0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 2u8]); // option ID = 2
-            buf.extend(&[0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 96u8]); // option payload size = 64 bytes
+            buf.extend(&[0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 96u8]); // option payload size = 96 bytes
             buf.extend(base_gas_price.to_bytes_be());
             buf.extend(storage_charge.to_bytes_be());
             buf.extend(pay_fees_to.to_bytes_be());

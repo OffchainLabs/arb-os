@@ -117,7 +117,7 @@ impl<'a> _ArbBLS<'a> {
 }
 
 pub fn _evm_test_bls_registry(log_to: Option<&Path>, debug: bool) {
-    let rt_env = RuntimeEnvironment::new(Uint256::from_usize(1111));
+    let rt_env = RuntimeEnvironment::new(Uint256::from_usize(1111), None);
     let mut machine = load_from_file(Path::new("arb_os/arbos.mexe"), rt_env);
     machine.start_at_zero();
 
@@ -482,7 +482,7 @@ pub fn test_bls_signed_batch() {
 }
 
 pub fn _evm_test_bls_signed_batch(log_to: Option<&Path>, debug: bool) -> Result<(), ethabi::Error> {
-    let rt_env = RuntimeEnvironment::new(Uint256::from_usize(1111));
+    let rt_env = RuntimeEnvironment::new(Uint256::from_usize(1111), None);
 
     let alice_wallet = rt_env.new_wallet();
     let alice_addr = Uint256::from_bytes(alice_wallet.address().as_bytes());
@@ -493,7 +493,7 @@ pub fn _evm_test_bls_signed_batch(log_to: Option<&Path>, debug: bool) -> Result<
     machine.start_at_zero();
 
     let mut add_contract = AbiForContract::new_from_file(&builtin_contract_path("Add"))?;
-    if add_contract.deploy(&[], &mut machine, Uint256::zero(), None, debug) == None {
+    if add_contract.deploy(&[], &mut machine, Uint256::zero(), None, None, debug).is_err() {
         panic!("failed to deploy Add contract");
     }
 

@@ -130,13 +130,17 @@ pub fn _evm_run_with_gas_charging(
         machine.run(None)
     };  // handle these ETH deposit messages
 
-    let mut fib_contract = AbiForContract::new_from_file(&fib_contract_path("Fibonacci"))?;
-    if fib_contract.deploy(&[], &mut machine, Uint256::zero(), None, debug) == None {
-        panic!("failed to deploy Fibonacci contract");
+    let mut fib_contract = AbiForContract::new_from_file(&_fib_contract_path("Fibonacci"))?;
+    if let Err(receipt) = fib_contract.deploy(&[], &mut machine, Uint256::zero(), None, None, debug) {
+        if receipt.unwrap().get_return_code() == Uint256::from_u64(3) {
+            return Ok(false);
+        } else {
+            panic!("unexpected failure deploying Fibonacci contract");
+        }
     }
 
-    let mut pc_contract = AbiForContract::new_from_file(&fib_contract_path("PaymentChannel"))?;
-    if pc_contract.deploy(
+    let mut pc_contract = AbiForContract::new_from_file(&_fib_contract_path("PaymentChannel"))?;
+    if let Err(receipt) = pc_contract.deploy(
         &[ethabi::Token::Address(ethereum_types::H160::from_slice(
             &fib_contract.address.to_bytes_be()[12..],
         ))],
@@ -1040,12 +1044,12 @@ pub fn _evm_xcontract_call_using_compressed_batch(
         machine.run(None)
     }; // handle this eth deposit message
 
-    let mut fib_contract = AbiForContract::new_from_file(&fib_contract_path("Fibonacci"))?;
-    if fib_contract.deploy(&[], &mut machine, Uint256::zero(), None, debug) == None {
+    let mut fib_contract = AbiForContract::new_from_file(&_fib_contract_path("Fibonacci"))?;
+    if fib_contract.deploy(&[], &mut machine, Uint256::zero(), None, None, debug).is_err() {
         panic!("failed to deploy Fibonacci contract");
     }
 
-    let mut pc_contract = AbiForContract::new_from_file(&fib_contract_path("PaymentChannel"))?;
+    let mut pc_contract = AbiForContract::new_from_file(&_fib_contract_path("PaymentChannel"))?;
     if pc_contract.deploy(
         &[ethabi::Token::Address(ethereum_types::H160::from_slice(
             &fib_contract.address.to_bytes_be()[12..],
@@ -1156,12 +1160,12 @@ pub fn _evm_xcontract_call_sequencer_reordering(
         machine.run(None)
     }; // handle this eth deposit message
 
-    let mut fib_contract = AbiForContract::new_from_file(&fib_contract_path("Fibonacci"))?;
-    if fib_contract.deploy(&[], &mut machine, Uint256::zero(), None, debug) == None {
+    let mut fib_contract = AbiForContract::new_from_file(&_fib_contract_path("Fibonacci"))?;
+    if fib_contract.deploy(&[], &mut machine, Uint256::zero(), Some(Uint256::from_u64(30)), None, debug).is_err() {
         panic!("failed to deploy Fibonacci contract");
     }
 
-    let mut pc_contract = AbiForContract::new_from_file(&fib_contract_path("PaymentChannel"))?;
+    let mut pc_contract = AbiForContract::new_from_file(&_fib_contract_path("PaymentChannel"))?;
     if pc_contract.deploy(
         &[ethabi::Token::Address(ethereum_types::H160::from_slice(
             &fib_contract.address.to_bytes_be()[12..],
@@ -1279,12 +1283,12 @@ pub fn _evm_xcontract_call_using_compressed_batch_2(
         machine.run(None)
     }; // handle this eth deposit message
 
-    let mut fib_contract = AbiForContract::new_from_file(&fib_contract_path("Fibonacci"))?;
-    if fib_contract.deploy(&[], &mut machine, Uint256::zero(), None, debug) == None {
+    let mut fib_contract = AbiForContract::new_from_file(&_fib_contract_path("Fibonacci"))?;
+    if fib_contract.deploy(&[], &mut machine, Uint256::zero(), None, None, debug).is_err() {
         panic!("failed to deploy Fibonacci contract");
     }
 
-    let mut pc_contract = AbiForContract::new_from_file(&fib_contract_path("PaymentChannel"))?;
+    let mut pc_contract = AbiForContract::new_from_file(&_fib_contract_path("PaymentChannel"))?;
     if pc_contract.deploy(
         &[ethabi::Token::Address(ethereum_types::H160::from_slice(
             &fib_contract.address.to_bytes_be()[12..],
@@ -1885,7 +1889,7 @@ pub fn _evm_ecpairing_precompile(_log_to: Option<&Path>, debug: bool) {
 }
 
 fn _evm_ecpairing_precompile_test_one(calldata: &str, result: bool, debug: bool) {
-    let rt_env = RuntimeEnvironment::new(Uint256::from_usize(1111));
+    let rt_env = RuntimeEnvironment::new(Uint256::from_usize(1111), None);
     let mut machine = load_from_file(Path::new("arb_os/arbos.mexe"), rt_env);
     machine.start_at_zero();
 

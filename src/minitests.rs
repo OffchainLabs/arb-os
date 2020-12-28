@@ -189,7 +189,7 @@ fn test_bls() {
     let res = run_from_file(
         path,
         vec![],
-        RuntimeEnvironment::new(Uint256::from_usize(1111)),
+        RuntimeEnvironment::new(Uint256::from_usize(1111), None),
         false,
     );
     match res {
