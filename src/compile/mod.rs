@@ -11,6 +11,7 @@ use crate::stringtable::StringTable;
 use ast::{FuncDecl, GlobalVarDecl, TypeTree};
 use lalrpop_util::lalrpop_mod;
 use mini::DeclsParser;
+use miniconstants::init_constant_table;
 use serde::{Deserialize, Serialize};
 use std::collections::hash_map::DefaultHasher;
 use std::collections::{BTreeMap, HashMap, HashSet};
@@ -27,6 +28,7 @@ pub use source::Lines;
 
 mod ast;
 mod codegen;
+mod miniconstants;
 mod source;
 mod symtable;
 mod typecheck;
@@ -602,13 +604,14 @@ pub fn parse_from_source(
     let comment_re = regex::Regex::new(r"//.*").unwrap();
     let source = comment_re.replace_all(&source, "");
     let lines = Lines::new(source.bytes());
+    let mut constants = init_constant_table();
     DeclsParser::new()
         .parse(
             string_table,
             &lines,
             file_id,
             file_path,
-            &mut HashMap::new(),
+            &mut constants,
             &source,
         )
         .map_err(|e| match e {

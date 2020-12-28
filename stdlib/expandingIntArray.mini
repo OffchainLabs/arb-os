@@ -103,7 +103,7 @@ public func expandingIntArray_setN(
             loop {
                 if let Some(unw) = unwinder {
                     tree = unw.tree with { [unw.slot] = tree };
-                    unwinder = unsafecast<option<Unwinder>>(unw.next);
+                    unwinder = unw.next;
                 } else {
                     return arr with { contents: tree };
                 }

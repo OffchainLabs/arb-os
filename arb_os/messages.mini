@@ -50,12 +50,8 @@ use codeSegment::translateEvmCodeSegment;
 
 use inbox::IncomingRequest;
 
+use gasAccounting::GasUsage;
 
-// This is declared identically in gasAccounting.mini
-type GasUsage = struct {
-    gasUsed: uint,
-    gasPriceWei: uint,
-}
 
 public impure func handleL1Request(
     msg: IncomingRequest
@@ -63,7 +59,7 @@ public impure func handleL1Request(
     // Parse an incoming message and do appropriate computations
     let inStream = bytestream_new(msg.msgData);
 
-    if (msg.kind == 0) {
+    if (msg.kind == const::L1MessageType_ethDeposit) {
         // ethdeposit message
         let (bs, destination) = bytestream_get256(inStream)?;
         inStream = bs;
@@ -82,7 +78,7 @@ public impure func handleL1Request(
             )
         );
         return Some(());
-    } elseif (msg.kind == 1) {
+    } elseif (msg.kind == const::L1MessageType_erc20Deposit) {
         // ERC20 deposit message
         let (bs, tokenAddress) = bytestream_get256(inStream)?;
         inStream = bs;
@@ -101,7 +97,7 @@ public impure func handleL1Request(
         )?;  // should never return
 
         return None;
-    } elseif (msg.kind == 2) {
+    } elseif (msg.kind == const::L1MessageType_erc721Deposit) {
          // ERC721 deposit message
          let (bs, tokenAddress) = bytestream_get256(inStream)?;
          inStream = bs;
@@ -122,7 +118,7 @@ public impure func handleL1Request(
          return None;
     } else {
         // not a valid message type
-        // (This should not have been called if msg.kind == 3.)
+        // (This should not have been called if msg.kind == const::L1MessageType_L2.)
         return None;
     }
 }
@@ -170,6 +166,7 @@ type TxRequestData = struct {
     value: uint,
     calldata: ByteArray,
     nonMutating: bool,
+    isConstructor: bool,
     incomingRequest: IncomingRequest,
 }
 
@@ -182,16 +179,28 @@ public impure func handleL2Request(
                 accountStore_get(getGlobalAccountStore(), request.caller)
             ) != sequenceNum) {
             // bad sequence number error
-            emitTxReceipt(request.incomingRequest, 5, None<ByteArray>, None<EvmLogs>, None<GasUsage>);
+            emitTxReceipt(
+                request.incomingRequest,
+                const::TxResultCode_badSequenceNum,
+                None<ByteArray>,
+                None<EvmLogs>,
+                None<GasUsage>
+            );
             return Some(());
         }
     }
 
     if (request.calleeAddr == address(0)) {
         // this is a constructor call
-        if (request.incomingRequest.kind == 2) {
+        if (request.nonMutating) {
             // revert error (tried to call constructor in a non-mutating call)
-            emitTxReceipt(request.incomingRequest, 1, None<ByteArray>, None<EvmLogs>, None<GasUsage>);
+            emitTxReceipt(
+                request.incomingRequest,
+                const::TxResultCode_revert,
+                None<ByteArray>,
+                None<EvmLogs>,
+                None<GasUsage>
+                );
             return Some(());
         }
 
@@ -214,7 +223,7 @@ public impure func handleL2Request(
         if (request.seqNum == None<uint>) {
             request = request with { seqNum: Some(fetchAndIncrSequenceNum(request.caller)) };
         }
-        if (request.incomingRequest.kind == 5) {
+        if (request.incomingRequest.kind == const::L1MessageType_buddyDeploy) {
             // it's a buddy contract deployment; hardwire the new contract address
             request = request with { calleeAddr: request.caller };
         } else {
@@ -238,9 +247,9 @@ public impure func handleL2Request(
         }
     } else {
         // this is a non-constructor call
-        let callKind = 0;
+        let callKind = const::EVMCallType_call;
         if (request.nonMutating) {
-            callKind = 3;  // staticcall
+            callKind = const::EVMCallType_staticcall;
         }
 
         initEvmCallStack(

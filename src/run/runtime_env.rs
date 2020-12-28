@@ -31,14 +31,28 @@ pub struct RuntimeEnvironment {
 
 impl RuntimeEnvironment {
     pub fn new(chain_address: Uint256) -> Self {
-        RuntimeEnvironment::new_with_owner(chain_address, None)
+        RuntimeEnvironment::new_options(chain_address, None)
     }
 
-    pub fn new_with_owner(chain_address: Uint256, owner: Option<Uint256>) -> Self {
+    pub fn new_options(
+        chain_address: Uint256,
+        sequencer_info: Option<(Uint256, Uint256, Uint256)>,
+    ) -> Self {
         RuntimeEnvironment::new_with_blocknum_timestamp(
             chain_address,
             Uint256::from_u64(100_000),
             Uint256::from_u64(10_000_000),
+            sequencer_info,
+            None,
+        )
+    }
+
+    pub fn _new_with_owner(chain_address: Uint256, owner: Option<Uint256>) -> Self {
+        RuntimeEnvironment::new_with_blocknum_timestamp(
+            chain_address,
+            Uint256::from_u64(100_000),
+            Uint256::from_u64(10_000_000),
+            None,
             owner,
         )
     }
@@ -47,6 +61,7 @@ impl RuntimeEnvironment {
         chain_address: Uint256,
         blocknum: Uint256,
         timestamp: Uint256,
+        sequencer_info: Option<(Uint256, Uint256, Uint256)>,
         owner: Option<Uint256>,
     ) -> Self {
         let mut ret = RuntimeEnvironment {
@@ -65,12 +80,15 @@ impl RuntimeEnvironment {
         ret.insert_l1_message(
             4,
             chain_address,
-            &RuntimeEnvironment::get_params_bytes(owner),
+            &RuntimeEnvironment::get_params_bytes(sequencer_info, owner),
         );
         ret
     }
 
-    fn get_params_bytes(owner: Option<Uint256>) -> Vec<u8> {
+    fn get_params_bytes(
+        sequencer_info: Option<(Uint256, Uint256, Uint256)>,
+        owner: Option<Uint256>,
+    ) -> Vec<u8> {
         let mut buf = Vec::new();
         buf.extend(Uint256::from_u64(3 * 60 * 60 * 1000).to_bytes_be()); // grace period in ticks
         buf.extend(Uint256::from_u64(100_000_000 / 1000).to_bytes_be()); // arbgas speed limit per tick
@@ -78,7 +96,29 @@ impl RuntimeEnvironment {
         buf.extend(Uint256::from_u64(1000).to_bytes_be()); // base stake amount in wei
         buf.extend(Uint256::zero().to_bytes_be()); // staking token address (zero means ETH)
         buf.extend(owner.unwrap_or(Uint256::zero()).to_bytes_be()); // owner address
+
+        if let Some((seq_addr, delay_blocks, delay_time)) = sequencer_info {
+            buf.extend(&[0u8; 8]);
+            buf.extend(&96u64.to_be_bytes());
+            buf.extend(seq_addr.to_bytes_be());
+            buf.extend(delay_blocks.to_bytes_be());
+            buf.extend(delay_time.to_bytes_be());
+        }
+
         buf
+    }
+
+    pub fn _advance_time(
+        &mut self,
+        delta_blocks: Uint256,
+        delta_timestamp: Uint256,
+        send_heartbeat_message: bool,
+    ) {
+        self.current_block_num = self.current_block_num.add(&delta_blocks);
+        self.current_timestamp = self.current_timestamp.add(&delta_timestamp);
+        if send_heartbeat_message {
+            self.insert_l2_message(Uint256::zero(), &[6u8], false);
+        }
     }
 
     pub fn new_wallet(&self) -> Wallet {
@@ -201,6 +241,31 @@ impl RuntimeEnvironment {
         vec![3u8]
     }
 
+    pub fn _new_sequencer_batch(&self, delay: Option<(Uint256, Uint256)>) -> Vec<u8> {
+        let (delay_blocks, delay_seconds) = delay.unwrap_or((Uint256::one(), Uint256::one()));
+        let (release_block_num, release_timestamp) = if (self.current_block_num <= delay_blocks)
+            || (self.current_timestamp <= delay_seconds)
+        {
+            (Uint256::zero(), Uint256::zero())
+        } else {
+            (
+                self.current_block_num.sub(&delay_blocks).unwrap(),
+                self.current_timestamp.sub(&delay_seconds).unwrap(),
+            )
+        };
+        let low_order_bnum = release_block_num.trim_to_u64() & 0xffff;
+        let low_order_ts = release_timestamp.trim_to_u64() & 0xffffff;
+        let ret = vec![
+            5u8,
+            (low_order_bnum >> 8) as u8,
+            (low_order_bnum & 0xff) as u8,
+            (low_order_ts >> 16) as u8,
+            ((low_order_ts >> 8) & 0xff) as u8,
+            (low_order_ts & 0xff) as u8,
+        ];
+        ret
+    }
+
     pub fn make_signed_l2_message(
         &mut self,
         sender_addr: Uint256,
@@ -291,7 +356,6 @@ impl RuntimeEnvironment {
         tx_id_bytes
     }
 
-    #[cfg(test)]
     pub fn _append_compressed_and_signed_tx_message_to_batch(
         &mut self,
         batch: &mut Vec<u8>,

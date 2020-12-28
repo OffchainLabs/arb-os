@@ -40,11 +40,11 @@ use evmCallStack::evmCallFrame_getAccount;
 public impure func arbosTest_txcall() {
     if let Some(topFrame) = evmCallStack_topFrame() {
         if (topFrame.caller != address(0)) {
-            evmOp_revert_knownCodePc(address(105), 0, 0, 0);
+            evmOp_revert_knownCodePc(address(const::Address_ArbosTest), 0, 0, 0);
         }
         let calldata = evmCallFrame_getCalldata(topFrame);
         if (bytearray_size(calldata) < 4) {
-            evmOp_revert_knownCodePc(address(105), 1, 0, 0);
+            evmOp_revert_knownCodePc(address(const::Address_ArbosTest), 1, 0, 0);
         }
         let funcCode = getFuncCode(calldata);
         if (funcCode == 0xFBE6E022) {
@@ -55,7 +55,7 @@ public impure func arbosTest_txcall() {
             arbosTest_getAccountInfo(topFrame, calldata);
         } else {
             // unrecognized function code
-            evmOp_revert_knownCodePc(address(105), 2, 0, 0);
+            evmOp_revert_knownCodePc(address(const::Address_ArbosTest), 2, 0, 0);
         }
     } else {
         // this shouldn't happen -- should always be called in an EVM tx
@@ -71,11 +71,11 @@ impure func arbosTest_installAccount(topFrame: EvmCallFrame, calldata: ByteArray
     // Verify that this has been called by address zero.
     // This ensures that this method can only be called (1) in testing, or (2) by the EthBridge.
     if (evmCallFrame_getCaller(topFrame) != address(0)) {
-        evmOp_revert_knownCodePc(address(105), 10, 0, 0);
+        evmOp_revert_knownCodePc(address(const::Address_ArbosTest), 10, 0, 0);
     }
 
     if (bytearray_size(calldata) <= 4+5*32) {
-        evmOp_revert_knownCodePc(address(105), 11, 0, 0);
+        evmOp_revert_knownCodePc(address(const::Address_ArbosTest), 11, 0, 0);
     }
     let addr = address(bytearray_get256(calldata, 4));
     let isEOA = bytearray_get256(calldata, 4+32) != 0;
@@ -107,28 +107,28 @@ impure func arbosTest_installAccount(topFrame: EvmCallFrame, calldata: ByteArray
                     false,
                 );
             } else {
-                evmOp_revert_knownCodePc(address(105), 12, 0, 0);
+                evmOp_revert_knownCodePc(address(const::Address_ArbosTest), 12, 0, 0);
             }
         } else {
-            evmOp_revert_knownCodePc(address(105), 12, 0, 0);
+            evmOp_revert_knownCodePc(address(const::Address_ArbosTest), 12, 0, 0);
         }
     }
 
     if (evmCallStack_setAccount(addr, acct)) {
         evmOp_return(0, 0);
     } else {
-        evmOp_revert_knownCodePc(address(105), 13, 0, 0);
+        evmOp_revert_knownCodePc(address(const::Address_ArbosTest), 13, 0, 0);
     }
 }
 
 impure func arbosTest_getMarshalledStorage(topFrame: EvmCallFrame, calldata: ByteArray) { // (address) -> bytes
     // Return the marshalled storage for the contract at addr. Revert if no contract at that address.
     if (evmCallFrame_getCaller(topFrame) != address(0)) {
-        evmOp_revert_knownCodePc(address(105), 20, 0, 0);
+        evmOp_revert_knownCodePc(address(const::Address_ArbosTest), 20, 0, 0);
     }
 
     if (bytearray_size(calldata) != 36) {
-        evmOp_revert_knownCodePc(address(105), 21, 0, 0);
+        evmOp_revert_knownCodePc(address(const::Address_ArbosTest), 21, 0, 0);
     }
 
     let addr = address(bytearray_get256(calldata, 4));
@@ -144,7 +144,7 @@ impure func arbosTest_getMarshalledStorage(topFrame: EvmCallFrame, calldata: Byt
         if (evmCallStack_setTopFrameMemory(marshalledStorage)) {
             evmOp_return(0, msSize);
         } else {
-            evmOp_revert_knownCodePc(address(105), 22, 0, 0);
+            evmOp_revert_knownCodePc(address(const::Address_ArbosTest), 22, 0, 0);
         }
     } else {
         evmOp_return(0, 0);  // tests expect a report of empty storage if there is no storage
@@ -154,11 +154,11 @@ impure func arbosTest_getMarshalledStorage(topFrame: EvmCallFrame, calldata: Byt
 impure func arbosTest_getAccountInfo(topFrame: EvmCallFrame, calldata: ByteArray) { // (address) -> bytes
     // Return the balance, nonce, and marshalled storage for the contract at addr. Revert if no contract at that address.
     if (evmCallFrame_getCaller(topFrame) != address(0)) {
-        evmOp_revert_knownCodePc(address(105), 20, 0, 0);
+        evmOp_revert_knownCodePc(address(const::Address_ArbosTest), 20, 0, 0);
     }
 
     if (bytearray_size(calldata) != 36) {
-        evmOp_revert_knownCodePc(address(105), 21, 0, 0);
+        evmOp_revert_knownCodePc(address(const::Address_ArbosTest), 21, 0, 0);
     }
 
     let addr = address(bytearray_get256(calldata, 4));
@@ -176,6 +176,6 @@ impure func arbosTest_getAccountInfo(topFrame: EvmCallFrame, calldata: ByteArray
     if (evmCallStack_setTopFrameMemory(mem)) {
         evmOp_return(0, bytearray_size(mem));
     } else {
-        evmOp_revert_knownCodePc(address(105), 22, 0, 0);
+        evmOp_revert_knownCodePc(address(const::Address_ArbosTest), 22, 0, 0);
     }
 }

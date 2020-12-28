@@ -272,66 +272,65 @@ impl Type {
         }
     }
 
-    ///Panics if specified type does not have a default value
+    ///This will always return a value. The second return says whether that value is type-safe.
     // TODO: have this resolve nominal types
-    pub fn default_value(&self) -> Value {
+    pub fn default_value(&self) -> (Value, bool) {
         match self {
             Type::Void => {
                 panic!("tried to get default value for void type");
             }
             Type::Uint | Type::Int | Type::Bytes32 | Type::EthAddress | Type::Bool => {
-                Value::Int(Uint256::zero())
+                (Value::Int(Uint256::zero()), true)
             }
             Type::Tuple(tvec) => {
                 let mut default_tup = Vec::new();
+                let mut is_safe = true;
                 for t in tvec {
-                    default_tup.push(t.default_value());
+                    let (def, safe) = t.default_value();
+                    default_tup.push(def);
+                    is_safe = is_safe && safe;
                 }
-                Value::new_tuple(default_tup)
+                (Value::new_tuple(default_tup), is_safe)
             }
-            Type::Array(t) => Value::new_tuple(vec![
-                Value::Int(Uint256::one()),
-                Value::Int(Uint256::one()),
-                Value::new_tuple(vec![t.default_value()]),
-            ]),
+            Type::Array(t) => {
+                let (def, safe) = t.default_value();
+                (
+                    Value::new_tuple(vec![
+                        Value::Int(Uint256::one()),
+                        Value::Int(Uint256::one()),
+                        Value::new_tuple(vec![def]),
+                    ]),
+                    safe,
+                )
+            }
             Type::FixedArray(t, sz) => {
-                let default_val = t.default_value();
+                let (default_val, safe) = t.default_value();
                 let mut val = Value::new_tuple(vec![default_val; 8]);
                 let mut chunk_size = 1;
                 while chunk_size * TUPLE_SIZE < *sz {
                     val = Value::new_tuple(vec![val; 8]);
                     chunk_size *= 8;
                 }
-                val
+                (val, safe)
             }
             Type::Struct(fields) => {
                 let mut vals = Vec::new();
+                let mut is_safe = true;
                 for field in fields {
-                    vals.push(field.tipe.default_value());
+                    let (val, safe) = field.tipe.default_value();
+                    vals.push(val);
+                    is_safe = is_safe && safe;
                 }
-                value_from_field_list(vals)
+                (value_from_field_list(vals), is_safe)
             }
-            Type::Map(_key, _val) => {
-                // an unusable dummy value -- application will panic if it accesses this
-                Value::none()
-            }
-            Type::Named(_) => {
-                panic!("tried to get default value for a named type");
-            }
-            Type::Func(_, _, _) => {
-                panic!("tried to get default value for a function type");
-            }
-            Type::Imported(_) => {
-                panic!("tried to get default value for an imported type");
-            }
-            Type::Nominal(_, _) => {
-                panic!("tried to get default value for a nominal type");
-            }
-            Type::Any => Value::none(),
-            Type::Every => {
-                panic!("tried to get default value for the every type");
-            }
-            Type::Option(_) => Value::new_tuple(vec![Value::Int(Uint256::zero())]),
+            Type::Map(_, _)
+            | Type::Named(_)
+            | Type::Func(_, _, _)
+            | Type::Imported(_)
+            | Type::Nominal(_, _) => (Value::none(), false),
+            Type::Any => (Value::none(), true),
+            Type::Every => (Value::none(), false),
+            Type::Option(_) => (Value::new_tuple(vec![Value::Int(Uint256::zero())]), true),
         }
     }
 }
