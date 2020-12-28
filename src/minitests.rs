@@ -222,6 +222,24 @@ fn test_fixedpoint() {
 }
 
 #[test]
+fn test_ripemd160() {
+    let path = Path::new("stdlib/ripemd160test.mexe");
+    let res = run_from_file(
+        path,
+        vec![],
+        RuntimeEnvironment::new(Uint256::from_usize(1111), None),
+        false,
+    );
+    match res {
+        Ok(res) => {
+            assert_eq!(res[0], Value::Int(Uint256::zero()));
+        }
+        Err(e) => {
+            panic!("{}\n{}", e.0, e.1);
+        }
+    }
+}
+
 fn test_biguint() {
     let path = Path::new("stdlib/biguinttest.mexe");
     let res = run_from_file(
@@ -394,6 +412,11 @@ fn test_direct_deploy_add() {
 #[test]
 fn test_sha256_precompile() {
     crate::evm::evm_eval_sha256(None, false);
+}
+
+#[test]
+fn test_ripemd160_precompile() {
+    crate::evm::_evm_eval_ripemd160(None, false);
 }
 
 #[test]

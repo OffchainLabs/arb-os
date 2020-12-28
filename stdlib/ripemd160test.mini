@@ -1,0 +1,75 @@
+//
+// Copyright 2020, Offchain Labs, Inc. All rights reserved.
+//
+
+use std::bytearray::bytearray_new;
+use std::bytearray::bytearray_unmarshalBytes;
+use std::bytearray::bytearray_size;
+use std::bytearray::bytearray_getByte;
+use std::bytearray::bytearray_setByte;
+use std::bytearray::bytearray_get64;
+use std::bytearray::bytearray_set64;
+use std::bytearray::bytearray_get256;
+use std::bytearray::bytearray_set256;
+use std::bytearray::bytearray_copy;
+
+use std::ripemd160::ripemd160hasher_new;
+use std::ripemd160::ripemd160hasher_finish;
+use std::ripemd160::ripemd160_byteArray;
+use std::ripemd160::ripemd160hasher_pushByte;
+use std::ripemd160::ripemd160hasher_push256;
+
+impure func main() {
+	asm(tests(),) { log };
+}
+
+func tests() -> uint {
+    let x = asm(
+        0x67452301EFCDAB8998BADCFE10325476C3D2E1F0,
+        0,
+        0
+    ) bytes32 { ripemd160f };
+    if (x != bytes32(0xc59b7e1835958b24ccddd6d0304e7c981f1045cb)) {
+        return 1;
+    }
+
+    let x = asm(
+        0x67452301EFCDAB8998BADCFE10325476C3D2E1F0,
+        0x8000000000000000000000000000000000000000000000000000000000000000,
+        0
+    ) bytes32 { ripemd160f };
+    if (x != bytes32(0x9c1185a5c5e9fc54612808977ee8f548b2258d31)) {
+        return 2;
+    }
+
+    if (ripemd160_byteArray(bytearray_new(0)) != bytes32(0x9c1185a5c5e9fc54612808977ee8f548b2258d31)) {
+        return 3;
+    }
+
+    if (ripemd160hasher_finish(ripemd160hasher_new()) != bytes32(0x9c1185a5c5e9fc54612808977ee8f548b2258d31)) {
+        return 4;
+    }
+
+    let h = ripemd160hasher_new();
+    h = ripemd160hasher_pushByte(h, 0x61);
+    if (ripemd160hasher_finish(h) != bytes32(0x0bdc9d2d256b3ee9daae347be6f4dc835a467ffe)) {
+        return 5;
+    }
+
+    let h = ripemd160hasher_new();
+    let i = 0x41;
+    while(i < 0x5b) {
+        h = ripemd160hasher_pushByte(h, i);
+        i = i+1;
+    }
+    i = 0x61;
+    while(i < 0x7b) {
+        h = ripemd160hasher_pushByte(h, i);
+        i = i+1;
+    }
+    if (ripemd160hasher_finish(h) != bytes32(0x74e856c137772846e18c0c6d955666133f1d32dc)) {
+        return 6;
+    }
+
+	return 0;
+}

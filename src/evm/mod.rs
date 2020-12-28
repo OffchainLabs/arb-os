@@ -1877,6 +1877,48 @@ pub fn evm_eval_sha256(log_to: Option<&Path>, debug: bool) {
     }
 }
 
+pub fn _evm_eval_ripemd160(log_to: Option<&Path>, debug: bool) {
+    let rt_env = RuntimeEnvironment::new(Uint256::from_usize(1111), None);
+    let mut machine = load_from_file(Path::new("arb_os/arbos.mexe"), rt_env);
+    machine.start_at_zero();
+
+    let my_addr = Uint256::from_u64(1025);
+
+    let tx_id = machine.runtime_env.insert_tx_message(
+        my_addr,
+        Uint256::from_u64(1000000000),
+        Uint256::zero(),
+        Uint256::from_u64(3), // ripemd160 precompile
+        Uint256::from_u64(0),
+        &vec![0x61u8],
+        false,
+    );
+
+    let _ = if debug {
+        machine.debug(None)
+    } else {
+        machine.run(None)
+    };
+
+    let receipts = machine.runtime_env.get_all_receipt_logs();
+    assert_eq!(receipts.len(), 1);
+    assert_eq!(receipts[0].get_request_id(), tx_id);
+    assert!(receipts[0].succeeded());
+    let return_data = receipts[0].get_return_data();
+    let return_uint = Uint256::from_bytes(&return_data);
+    assert_eq!(
+        return_uint,
+        Uint256::from_string_hex(
+            "0000000000000000000000000bdc9d2d256b3ee9daae347be6f4dc835a467ffe"
+        )
+            .unwrap()
+    );
+
+    if let Some(path) = log_to {
+        machine.runtime_env.recorder.to_file(path).unwrap();
+    }
+}
+
 pub fn mint_erc20_and_get_balance(log_to: Option<&Path>, debug: bool) {
     let token_addr = Uint256::from_usize(32563);
     let me = Uint256::from_usize(1025);
