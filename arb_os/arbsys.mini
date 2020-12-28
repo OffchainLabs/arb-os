@@ -214,7 +214,7 @@ impure func arbsys_withdrawErc20(topFrame: EvmCallFrame, calldata: ByteArray) { 
     let amount = bytearray_get256(calldata, 36);
 
     queueMessageForSend(
-        1,
+        const::SendType_erc20Withdraw,
         address(0),
         bytearray_set256(
             bytearray_set256(
@@ -250,7 +250,7 @@ impure func arbsys_withdrawErc721(topFrame: EvmCallFrame, calldata: ByteArray) {
     let id = bytearray_get256(calldata, 36);
 
     queueMessageForSend(
-        2,
+        const::SendType_erc721Withdraw,
         address(0),
         bytearray_set256(
             bytearray_set256(

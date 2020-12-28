@@ -57,7 +57,20 @@ public impure func tokens_erc20deposit(
             nonMutating: false,
             isConstructor: false,
             incomingRequest: fullMsg,
-        }
+        },
+        Some((
+            const::SendType_erc20Withdraw,
+            address(0),
+            bytearray_set256(
+                bytearray_set256(
+                    bytearray_set256(bytearray_new(0), 0, uint(tokenAddress)),
+                    32,
+                    uint(payee),
+                ),
+                64,
+                amount,
+            )
+        )),
     );  // should never return
 
     return None;
@@ -97,7 +110,20 @@ public impure func tokens_erc721deposit(
             nonMutating: false,
             isConstructor: false,
             incomingRequest: fullMsg,
-        }
+        },
+        Some((
+            const::SendType_erc721Withdraw,
+            address(0),
+            bytearray_set256(
+                bytearray_set256(
+                    bytearray_set256(bytearray_new(0), 0, uint(tokenAddress)),
+                    32,
+                    uint(payee),
+                ),
+                64,
+                id
+            )
+        )),
     );  // should never return
 
     return None;
