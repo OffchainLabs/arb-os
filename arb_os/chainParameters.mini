@@ -126,14 +126,6 @@ public impure func chainParams_chainId() -> uint {
     return uint(chainParams_chainAddress()) & 0xffffffffffff;  // chainID == low 48 bits of chainAddress
 }
 
-public impure func chainParams_millisecondsPerBlock() -> uint {
-    if let Some(params) = globalChainParams {
-        return params.millisecondsPerBlock;
-    } else {
-        return const::DefaultMillisecondsPerBlock;
-    }
-}
-
 public impure func chainParams_speedLimitPerBlock() -> uint {
     if let Some(params) = globalChainParams {
         return params.arbGasSpeedLimitPerBlock;

@@ -44,7 +44,6 @@ use std::queue::queue_put;
 use std::queue::queue_get;
 use std::queue::queue_getOrDie;
 
-use chainParameters::chainParams_millisecondsPerBlock;
 use chainParameters::chainParams_speedLimitPerBlock;
 
 use inbox::IncomingRequest;
@@ -103,17 +102,11 @@ type GasUsage = struct {
 }
 
 public impure func gasAccounting_init() {
-    let millisecondsPerBlock = 13500;     // default, until chain gets its initialization message
-    let speedLimitPerSecond = 100000000;  // default, until chain gets its initialization message
-    let maxBacklogSeconds = 60;
-    if (maxBacklogSeconds < 4 * millisecondsPerBlock / 1000) {
-        maxBacklogSeconds = 4 * millisecondsPerBlock / 1000;
-    }
     gasAccountingParams = struct {
-        SpeedLimitPerBlock: speedLimitPerSecond * millisecondsPerBlock / 1000,
-        GasPoolMax: int(speedLimitPerSecond * maxBacklogSeconds),
+        SpeedLimitPerBlock: const::DefaultSpeedLimitPerBlock,
+        GasPoolMax: int(const::DefaultSpeedLimitPerBlock * 5),
         BaseGasPrice: 0,
-        TxGasLimit: speedLimitPerSecond * maxBacklogSeconds / 2,
+        TxGasLimit: const::DefaultSpeedLimitPerBlock * 5 / 2,
         StorageCharge: 0,
     };
     let netFeeInfo = None<NetFeeInfo>;
@@ -641,7 +634,7 @@ public impure func getNextRequestFromCongestionAuction() -> (
     }
 }
 
-public impure func getGasLimitConstant() -> uint {
+public impure func getGasLimitPerTx() -> uint {
     return gasAccountingParams.TxGasLimit;
 }
 

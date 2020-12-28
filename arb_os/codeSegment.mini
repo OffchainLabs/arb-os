@@ -23,7 +23,7 @@ use std::stack::stack_pop;
 use std::rlp::rlp_decodeUint;
 
 use chainParameters::chainParams_chainId;
-use gasAccounting::getGasLimitConstant;
+use gasAccounting::getGasLimitPerTx;
 
 use evmOps::evmOps_trampoline;
 
@@ -340,7 +340,7 @@ impure func generateCodeForEvmSegment(
                             }
                         } else {
                             if (opcode == 0x45) { // GASLIMIT
-                                code = pushValue(getGasLimitConstant(), code);  // return the chain's per-tx gas limit
+                                code = pushValue(getGasLimitPerTx(), code);
                             } elseif (opcode == 0x46) { // CHAINID
                                 code = pushEvmInsnCall(const::EvmOp_chainId, code);
                             } elseif (opcode == 0x47) { // SELFBALANCE
