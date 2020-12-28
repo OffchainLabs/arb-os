@@ -13,6 +13,8 @@ use num_bigint::BigUint;
 use num_bigint::ToBigUint;
 use num_integer::Integer;
 use std::cmp::Ordering;
+use bn::{AffineG1, Fq, Group, G1};
+
 
 pub struct _ArbBLS<'a> {
     pub contract_abi: AbiForContract,
@@ -160,26 +162,53 @@ pub fn _evm_test_bls_registry(log_to: Option<&Path>, debug: bool) {
 
 
 
-fn hash_to_point(
+pub fn hash_to_point(
     domain: &[u8],
     msg: &[u8]
-    ) -> () {
+    ) -> Option<AffineG1> {
 
     let (u0, u1) = hashToField(domain, msg);
-    let p0 = map_to_g1(&u0);
-    let p1 = map_to_g1(&u1);
-
-//     let x = asm(p0.0, p0.1, p1.0, p1.1) uint { ecadd }; // check order
-//     let y = asm() uint { };
+    if let Some((pX_bi, pY_bi)) = map_to_g1(&u0) {
+       if let Some((qX_bi, qY_bi)) = map_to_g1(&u1) {
 
 
+        let px = Fq::from_slice(&pX_bi.to_bytes_be()).unwrap();
+        let py = Fq::from_slice(&pY_bi.to_bytes_be()).unwrap();
+        let qx = Fq::from_slice(&qX_bi.to_bytes_be()).unwrap();
+        let qy = Fq::from_slice(&qY_bi.to_bytes_be()).unwrap();
 
-//     return Some(struct { x: x, y: y });
+        let p = if px == Fq::zero() && py == Fq::zero() {
+           G1::zero()
+        } else {
+           AffineG1::new(px, py).unwrap().into()
+         };
+         let q = if qx == Fq::zero() && qy == Fq::zero() {
+            G1::zero()
+         } else {
+           AffineG1::new(qx, qy).unwrap().into()
+        };
+
+        if let Some(ret) = AffineG1::from_jacobian(p + q) {
+            let mut out_buf_0 = vec![0u8; 32];
+            ret.x().to_big_endian(&mut out_buf_0).unwrap();
+            let mut out_buf_1 = vec![0u8; 32];
+            ret.y().to_big_endian(&mut out_buf_1).unwrap();
+            println!("{:?}", out_buf_0);
+             println!("{:?}", out_buf_1);
+
+          return Some(ret)
+         } 
+    }
+    }
+    println!("fooobeeeefoooo1");
+    None
 }
 
 
 
-fn map_to_g1(_x: &BigUint) -> (Option<(BigUint)>, Option<(BigUint)>) {
+fn map_to_g1(_x: &BigUint) -> Option<(BigUint, BigUint)> {
+            println!("fooobeeeefoooo8");
+
         let field_order = BigUint::parse_bytes(b"30644e72e131a029b85045b68181585d97816a916871ca8d3c208c16d87cfd47", 16).unwrap();
         // sqrt(-3)
     let z0 = BigUint::parse_bytes(b"0000000000000000b3c4d79d41a91759a9e4c7e359b6b89eaec68e62effffffd", 16).unwrap();
@@ -188,7 +217,8 @@ fn map_to_g1(_x: &BigUint) -> (Option<(BigUint)>, Option<(BigUint)>) {
     let z1 = BigUint::parse_bytes(b"000000000000000059e26bcea0d48bacd4f263f1acdb5c4f5763473177fffffe", 16).unwrap();
 
         if(_x.cmp(&field_order) != Ordering::Less) {
-            return (None,None)
+            println!("seriously");
+            return None
         } 
 
         let sqrtX = sqrt(_x);
@@ -223,7 +253,7 @@ fn map_to_g1(_x: &BigUint) -> (Option<(BigUint)>, Option<(BigUint)>) {
     	    } else {
      	    	a1 = &field_order - sqa1;
      	    }
-            return (Some(x),Some(a1));
+            return Some((x,a1));
         }
 
         x = (x + &ToBigUint::to_biguint(&1).unwrap()).mod_floor(&field_order);  
@@ -242,7 +272,7 @@ fn map_to_g1(_x: &BigUint) -> (Option<(BigUint)>, Option<(BigUint)>) {
     	    } else {
      	    	a1 = &field_order - sqa1;
      	    }
-            return (Some(x),Some(a1));
+            return Some((x,a1));
         }
 
 
@@ -264,10 +294,11 @@ fn map_to_g1(_x: &BigUint) -> (Option<(BigUint)>, Option<(BigUint)>) {
     	    } else {
      	    	a1 = &field_order - sqa1;
      	    }
-            return (Some(x),Some(a1));
+            return Some((x,a1));
         }
+        println!("fooobeeeefoooo2");
 
-        (None, None)
+        None
 
 
 }
@@ -275,20 +306,22 @@ fn map_to_g1(_x: &BigUint) -> (Option<(BigUint)>, Option<(BigUint)>) {
 
 fn sqrt(xx: &BigUint) -> Option<BigUint> {
         let field_order = BigUint::parse_bytes(b"30644e72e131a029b85045b68181585d97816a916871ca8d3c208c16d87cfd47", 16).unwrap();
-        let field_orderplus1_div4 = BigUint::parse_bytes(b"0xc19139cb84c680a6e14116da060561765e05aa45a1c72a34f082305b61f3f52", 16).unwrap();
+        let field_orderplus1_div4 = BigUint::parse_bytes(b"c19139cb84c680a6e14116da060561765e05aa45a1c72a34f082305b61f3f52", 16).unwrap();
         let x = xx.modpow(&field_orderplus1_div4,&field_order);
 
-        let square = x.modpow(&ToBigUint::to_biguint(&2).unwrap(),&field_order);
-    if(&square == xx) {
+        let square = (&x * &x).mod_floor(&field_order);
+    if(square.cmp(xx) == Ordering::Equal){
+         println!("fooobeeeefoooo7");
         Some(x)
     } else {
+            println!("fooobeeeefoooo3");
         None
     }
 }
 
 fn inverse(xx: &BigUint) -> BigUint {
         let field_order = BigUint::parse_bytes(b"30644e72e131a029b85045b68181585d97816a916871ca8d3c208c16d87cfd47", 16).unwrap();
-        let field_ordermin2 = BigUint::parse_bytes(b"0x30644e72e131a029b85045b68181585d97816a916871ca8d3c208c16d87cfd45", 16).unwrap();
+        let field_ordermin2 = BigUint::parse_bytes(b"30644e72e131a029b85045b68181585d97816a916871ca8d3c208c16d87cfd45", 16).unwrap();
         xx.modpow(&field_ordermin2,&field_order)
 }
 
@@ -397,8 +430,6 @@ pub fn expandMsgTo96(
     out[64..96].clone_from_slice(&bi);
     out
 }
-
-use bn::{pairing, AffineG1, AffineG2, Fq, Fq2, Group, Gt, G1, G2};
 
 pub struct BLSPublicKey {
     //TODO: add fields
