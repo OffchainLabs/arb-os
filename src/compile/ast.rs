@@ -25,8 +25,10 @@ pub struct DebugInfo {
     pub attributes: Attributes,
 }
 
+///A list of properties that an AST node has, currently only contains breakpoints.
 #[derive(Debug, Clone, Copy, Default, Serialize, Deserialize, PartialEq, Eq)]
 pub struct Attributes {
+    ///Is true if the current node is a breakpoint, false otherwise.
     pub breakpoint: bool,
 }
 
@@ -159,6 +161,9 @@ impl Type {
         }
     }
 
+    ///Gets the representation of a `Nominal` type, based on the types in `type_tree`, returns self
+    /// if the type is not `Nominal`, or a `TypeError` if the type of `self` cannot be resolved in
+    /// `type_tree`.
     pub fn get_representation(&self, type_tree: &TypeTree) -> Result<Self, TypeError> {
         let mut base_type = self.clone();
         while let Type::Nominal(path, id) = base_type.clone() {
@@ -271,7 +276,8 @@ impl Type {
         }
     }
 
-    ///This will always return a value. The second return says whether that value is type-safe.
+    ///Returns a tuple containing `Type`s default value and a `bool` representing whether use of
+    /// that default is type-safe.
     // TODO: have this resolve nominal types
     pub fn default_value(&self) -> (Value, bool) {
         match self {
@@ -858,13 +864,14 @@ impl Constant {
     }
 }
 
+///A mini expression that has not yet been type checked with an associated `DebugInfo`.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct Expr {
     pub kind: ExprKind,
     pub debug_info: DebugInfo,
 }
 
-///A mini expression that has not yet been type checked.
+///A mini expression that has not yet been type checked, contains no debug information.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub enum ExprKind {
     UnaryOp(UnaryOp, Box<Expr>),
@@ -908,6 +915,8 @@ impl Expr {
         }
     }
 
+    ///Returns either a fully specified version of self specified by matching Named types to the
+    /// contents of type_table, or a TypeError if a Named type does not have an associated entry.
     pub fn resolve_types(&self, type_table: &SymTable<Type>) -> Result<Self, TypeError> {
         Ok(Self {
             kind: self
