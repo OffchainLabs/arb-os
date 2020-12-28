@@ -29,6 +29,8 @@ use gasAccounting::gasAccounting_setFeeRates;
 use gasAccounting::gasAccounting_getFeeMaxes;
 use gasAccounting::gasAccounting_setFeeMaxes;
 
+use inbox::inbox_changeSequencer;
+
 use std::bytearray::ByteArray;
 use std::bytearray::bytearray_new;
 use std::bytearray::bytearray_size;
@@ -73,6 +75,8 @@ public impure func arbowner_txcall() {
             arbowner_getFeeMaxes(topFrame, calldata);
         } elseif (funcCode == 0x72861aa4) {
             arbowner_setFeeMaxes(topFrame, calldata);
+        } elseif (funcCode == 0xea180a38) {
+            arbowner_changeSequencer(topFrame, calldata);
         } elseif (funcCode == 0x6d92b8e4) {
             arbowner_startArbosUpgrade(topFrame, calldata);
         } elseif (funcCode == 0x0b766fec) {
@@ -235,6 +239,16 @@ impure func arbowner_setFeeMaxes(topFrame: EvmCallFrame, calldata: ByteArray) { 
     }
 }
 
+impure func arbowner_changeSequencer(topFrame: EvmCallFrame, calldata: ByteArray) {  // (address, uint, uint)
+    if (bytearray_size(calldata) != 4+3*32) {
+        evmOp_revert_knownCodePc(address(const::Address_ArbOwner), 50, 0, 0);
+    }
+    let sequencerAddr = address(bytearray_get256(calldata, 4));
+    let delayBlocks = bytearray_get256(calldata, 4+32);
+    let delaySeconds = bytearray_get256(calldata, 4+2*32);
+    inbox_changeSequencer(sequencerAddr, delayBlocks, delaySeconds);
+    evmOp_return(0, 0);
+}
 
 impure func arbowner_startArbosUpgrade(topFrame: EvmCallFrame, calldata: ByteArray) { // ()
     if (bytearray_size(calldata) != 4) {
@@ -271,6 +285,10 @@ impure func arbowner_finishArbosUpgrade(topFrame: EvmCallFrame, calldata: ByteAr
     } else {
         evmOp_revert_knownCodePc(address(const::Address_ArbOwner), 42, 0, 0);
     }
+}
+
+func dummy(x: uint) -> uint {
+    return x;
 }
 
 

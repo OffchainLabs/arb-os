@@ -15,7 +15,11 @@ interface ArbOwner {
     function getFeeMaxes() external view returns (uint, uint, uint, uint);
     function setFeeMaxes(uint num1, uint denom1, uint num2, uint denom2) external;
 
-    // To upgrade ArbOS, the owner calls startArbosUpgrade, then calls continueArbosUpgrade one or more times to upload 
+    // Change the sequencer or its parameters
+    // if sequencerAddr is zero, operate without a sequencer
+    function changeSequencer(address sequencerAddr, uint maxDelayBlocks, uint maxDelaySeconds) external;
+
+    // To upgrade ArbOS, the ower calls startArbosUpgrade, then calls continueArbosUpgrade one or more times to upload 
     // the code to be installed as the upgrade, then calls finishArbosUpgrade to complete the upgrade and start executing the new code.
     function startArbosUpgrade() external;
     function continueArbosUpgrade(bytes calldata marshalledCode) external;

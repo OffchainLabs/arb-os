@@ -194,7 +194,9 @@ pub fn init_constant_table() -> HashMap<String, Uint256> {
         ("NetFee_defaultRate2Denom", 10000),
         ("NetFee_maxRate2Num", 1),
         ("NetFee_maxRate2Denom", 1000),
-        // misc
+        // sequencer constants
+        ("Sequencer_maxDelayBlocks", 32768),   // 128*256
+        ("Sequencer_maxDelaySeconds", 983040), // 30*Sequencer_maxDelayBlocks
     ] {
         ret.insert(s.to_string(), Uint256::from_u64(*i));
     }
