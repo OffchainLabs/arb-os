@@ -59,15 +59,15 @@ public impure func tokens_erc20deposit(
             incomingRequest: fullMsg,
         },
         Some((
-            1,
-            tokenAddress,
+            const::SendType_erc20Withdraw,
+            address(0),
             bytearray_set256(
                 bytearray_set256(
-                    bytearray_new(0),
-                    0,
+                    bytearray_set256(bytearray_new(0), 0, uint(tokenAddress)),
+                    32,
                     uint(payee),
                 ),
-                32,
+                64,
                 amount,
             )
         )),
@@ -112,15 +112,15 @@ public impure func tokens_erc721deposit(
             incomingRequest: fullMsg,
         },
         Some((
-            1,
-            tokenAddress,
+            const::SendType_erc721Withdraw,
+            address(0),
             bytearray_set256(
                 bytearray_set256(
-                    bytearray_new(0),
-                    0,
+                    bytearray_set256(bytearray_new(0), 0, uint(tokenAddress)),
+                    32,
                     uint(payee),
                 ),
-                32,
+                64,
                 id
             )
         )),
