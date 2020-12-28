@@ -261,6 +261,26 @@ impl RuntimeEnvironment {
         (result, keccak256(tx.rlp().as_ref()).to_vec())
     }
 
+    pub fn make_compressed_tx_for_bls(
+        &mut self,
+        sender: &Uint256,
+        gas_price: Uint256,
+        gas_limit: Uint256,
+        to_addr: Uint256,
+        value: Uint256,
+        calldata: &[u8],
+    ) -> Vec<u8> {
+        let seq_num = self.get_and_incr_seq_num(&sender);
+        let mut result = seq_num.rlp_encode();
+        result.extend(gas_price.rlp_encode());
+        result.extend(gas_limit.rlp_encode());
+        result.extend(self.compressor.compress_address(to_addr.clone()));
+        result.extend(self.compressor.compress_token_amount(value.clone()));
+        result.extend(calldata);
+
+        result
+    }
+
     pub fn append_signed_tx_message_to_batch(
         &mut self,
         batch: &mut Vec<u8>,
