@@ -261,7 +261,7 @@ impl RuntimeEnvironment {
         (result, keccak256(tx.rlp().as_ref()).to_vec())
     }
 
-    pub fn make_compressed_tx_for_bls(
+    pub fn _make_compressed_tx_for_bls(
         &mut self,
         sender: &Uint256,
         gas_price: Uint256,
@@ -279,6 +279,26 @@ impl RuntimeEnvironment {
         result.extend(calldata);
 
         result
+    }
+
+    pub fn _insert_bls_batch(
+        &mut self,
+        senders: &[&Uint256],
+        msgs: &[Vec<u8>],
+        aggregated_sig: &[u8],
+        batch_sender: &Uint256,
+    ) {
+        assert_eq!(senders.len(), msgs.len());
+        let mut buf = vec![8u8];
+        buf.extend(Uint256::from_usize(senders.len()).rlp_encode());
+        buf.extend(aggregated_sig);
+        for i in 0..senders.len() {
+            buf.extend(self.compressor.compress_address(senders[i].clone()));
+            buf.extend(Uint256::from_usize(msgs[i].len()).rlp_encode());
+            buf.extend(msgs[i].clone());
+        }
+
+        self.insert_l2_message(batch_sender.clone(), &buf, false);
     }
 
     pub fn append_signed_tx_message_to_batch(

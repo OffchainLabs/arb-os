@@ -261,8 +261,7 @@ public impure func decompressAndVerifyBLSSignedTxBatch(
         signerKeys = signerKeys with {
             [i] = account_getBlsKey(accountStore_get(getGlobalAccountStore(), signerAddr))?
         };
-        let (us, newTx) = decompressTx(bytestream_new(txData), Some(signerAddr), None<FunctionTable>)?;
-        stream = us;
+        let (_, newTx) = decompressTx(bytestream_new(txData), Some(signerAddr), None<FunctionTable>)?;
         newTx = newTx with {
             incomingRequest: originalRequest with {
                 requestId: uint(hash(bytes32(originalRequest.requestId), bytes32(i)))

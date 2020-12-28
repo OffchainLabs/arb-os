@@ -156,6 +156,7 @@ pub fn init_constant_table() -> HashMap<String, Uint256> {
         ("L2MessageType_sequencerBatch", 5),
         ("L2MessageType_heartbeat", 6),
         ("L2MessageType_signedCompressedTx", 7),
+        ("L2MessageType_blsBatch", 8),
 
         // tx result codes
         ("TxResultCode_success", 0),
