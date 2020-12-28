@@ -100,6 +100,15 @@ public func queue_getOrDie(q: Queue) -> (Queue, any) {
     }
 }
 
+public func queue_discardOne(q: Queue) -> Queue {
+    // return q with first item removed; if no first item, return it q unmodified
+    if let Some(res) = queue_get(q) {
+        return res.0;
+    } else {
+        return q;
+    }
+}
+
 type QueueStack = option<any>
 type QueueStackCell = struct {
     head: Queue,
