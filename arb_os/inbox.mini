@@ -30,7 +30,7 @@ use messageBatch::messageBatch_get;
 
 use output::outputStats_endOfBlock;
 
-use rollupTracker::rollupTracker_processEvent;
+use pluggables::callPluggable;
 
 use std::bytearray::ByteArray;
 use std::bytearray::MarshalledBytes;
@@ -575,7 +575,7 @@ public impure func inbox_getNextUnpackedRequest() -> (
                 // else request was malformatted, ignore it and execute loop again to get another
             } elseif (msg.kind == const::L1MessageType_rollupProtocolEvent) {
                 if (msg.sender == address(0)) {
-                    rollupTracker_processEvent(msg.msgData);
+                    let _ = callPluggable(const::PluggableModuleID_rollupTracker, msg.msgData);
                 }
                 // else request was forged or malformatted, ignore it and execute loop again to get another
             } else {

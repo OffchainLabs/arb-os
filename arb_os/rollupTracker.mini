@@ -8,6 +8,9 @@ use accounts::accountStore_transferEthBalance;
 
 use gasAccounting::recordSpecialDebt;
 
+use pluggables::ModuleFunction;
+use pluggables::installPluggable;
+
 use std::bytearray::ByteArray;
 use std::bytestream::ByteStream;
 use std::bytestream::bytestream_new;
@@ -22,17 +25,35 @@ use std::queue::queue_getOrDie;
 use std::queue::queue_nth;
 use std::queue::queue_set_nth;
 
-var globalRollupTracker: RollupTracker;
 
 public impure func rollupTracker_init() {
-    globalRollupTracker = rollupTracker_initModule();
+    if let Some(_) = installPluggable(
+        const::PluggableModuleID_rollupTracker,
+        unsafecast<ModuleFunction>(rollupTracker_processEvent),
+        false,
+    ) {
+        return;
+    } else {
+        panic;
+    }
 }
 
-public impure func rollupTracker_processEvent(msg: ByteArray) {
-    let _ = processEventOrError(bytestream_new(msg));
+public impure func rollupTracker_processEvent(
+    msg: ByteArray,
+    tracker: RollupTracker,
+    neverBeenCalled: bool
+) -> (any, any) {   // returns (success: bool, updatedTracker: RollupTracker)
+    if (neverBeenCalled) {
+        tracker = rollupTracker_initModule();
+    }
+    if let Some(updatedTracker) = processEventOrError(bytestream_new(msg), tracker) {
+        return (true, updatedTracker);
+    } else {
+        return (false, tracker);
+    }
 }
 
-impure func processEventOrError(stream: ByteStream) -> option<()> {
+impure func processEventOrError(stream: ByteStream, tracker: RollupTracker) -> option<RollupTracker> {
     let (us, eventType) = bytestream_getByte(stream)?;
     stream = us;
 
@@ -42,42 +63,37 @@ impure func processEventOrError(stream: ByteStream) -> option<()> {
         let (us, heightL1) = bytestream_get256(us)?;
         let (us, deadlineL1) = bytestream_get256(us)?;
         let (us, asserterUint) = bytestream_get256(us)?;
-        globalRollupTracker = rollupTracker_addNode(
-            globalRollupTracker,
+        return rollupTracker_addNode(
+            tracker,
             heightL2,
             prev,
             heightL1,
             deadlineL1,
             address(asserterUint)
-        )?;
-        return Some(());
+        );
     } elseif (eventType == const::ProtoEvent_confirmNode) {
         let (us, heightL2) = bytestream_get256(stream)?;
-        globalRollupTracker = rollupTracker_confirmNode(globalRollupTracker, heightL2)?;
-        return Some(());
+        return rollupTracker_confirmNode(tracker, heightL2);
     } elseif (eventType == const::ProtoEvent_rejectNode) {
         let (us, heightL2) = bytestream_get256(stream)?;
-        globalRollupTracker = rollupTracker_rejectNode(globalRollupTracker, heightL2)?;
-        return Some(());
+        return rollupTracker_rejectNode(tracker, heightL2);
     } elseif (eventType == const::ProtoEvent_newStake) {
         let (us, heightL2) = bytestream_get256(stream)?;
         let (us, stakerUint) = bytestream_get256(us)?;
         let (us, stakeTimeL1) = bytestream_get256(us)?;
-        globalRollupTracker = rollupTracker_newStake(
-            globalRollupTracker,
+        return rollupTracker_newStake(
+            tracker,
             heightL2,
             address(stakerUint),
             stakeTimeL1
-        )?;
-        return Some(());
+        );
     } elseif (eventType == const::ProtoEvent_claimNode) {
         let (us, heightL2) = bytestream_get256(stream)?;
         let (us, claimerUint) = bytestream_get256(us)?;
-        globalRollupTracker = rollupTracker_claimNode(globalRollupTracker, heightL2, address(claimerUint))?;
-        return Some(());
+        return rollupTracker_claimNode(tracker, heightL2, address(claimerUint));
     } elseif (eventType == const::ProtoEvent_debug) {
-        _debug(globalRollupTracker);
-        return Some(());
+        _debug(tracker);
+        return Some(tracker);
     } else {
         return None;
     }
