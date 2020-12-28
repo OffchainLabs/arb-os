@@ -1339,10 +1339,10 @@ impl<'a> _ArbOwner<'a> {
         }
     }
 
-    pub fn _start_arbos_upgrade(&self, machine: &mut Machine) -> Result<(), ethabi::Error> {
+    pub fn _start_code_upload(&self, machine: &mut Machine) -> Result<(), ethabi::Error> {
         let (receipts, _sends) = self.contract_abi.call_function_compressed(
             self.my_address.clone(),
-            "startArbosUpgrade",
+            "startCodeUpload",
             &[],
             machine,
             Uint256::zero(),
@@ -1361,14 +1361,14 @@ impl<'a> _ArbOwner<'a> {
         }
     }
 
-    pub fn _continue_arbos_upgrade(
+    pub fn _continue_code_upload(
         &self,
         machine: &mut Machine,
         marshalled_code: Vec<u8>,
     ) -> Result<(), ethabi::Error> {
         let (receipts, _sends) = self.contract_abi.call_function(
             self.my_address.clone(),
-            "continueArbosUpgrade",
+            "continueCodeUpload",
             &[ethabi::Token::Bytes(marshalled_code)],
             machine,
             Uint256::zero(),
@@ -1386,10 +1386,13 @@ impl<'a> _ArbOwner<'a> {
         }
     }
 
-    pub fn _finish_arbos_upgrade(&self, machine: &mut Machine) -> Result<(), ethabi::Error> {
+    pub fn _finish_code_upload_as_arbos_upgrade(
+        &self,
+        machine: &mut Machine,
+    ) -> Result<(), ethabi::Error> {
         let (receipts, _sends) = self.contract_abi.call_function(
             self.my_address.clone(),
-            "finishArbosUpgrade",
+            "finishCodeUploadAsArbosUpgrade",
             &[],
             machine,
             Uint256::zero(),
@@ -1406,6 +1409,32 @@ impl<'a> _ArbOwner<'a> {
             ))
         } else {
             Ok(())
+        }
+    }
+
+    pub fn _finish_code_upload_as_pluggable(
+        &self,
+        machine: &mut Machine,
+        id: Uint256,
+        keep_state: bool,
+    ) -> Result<(), ethabi::Error> {
+        let (receipts, _sends) = self.contract_abi.call_function(
+            self.my_address.clone(),
+            "finishCodeUploadAsPluggable",
+            &[ethabi::Token::Uint(id.to_u256()), ethabi::Token::Bool(keep_state)],
+            machine,
+            Uint256::zero(),
+            self.debug,
+        )?;
+
+        if receipts.len() != 1 {
+            return Err(ethabi::Error::from("wrong number of receipts"));
+        }
+
+        if receipts[0].succeeded() {
+            Ok(())
+        } else {
+            Err(ethabi::Error::from("reverted"))
         }
     }
 }
