@@ -6,6 +6,15 @@ interface ArbOwner {
 
     function giveOwnership(address newOwnerAddr) external;
 
+    function addToReserveFunds() external payable;
+
+    function getFeeRecipient() external view returns (address);
+    function setFeeRecipient(address recipient) external;
+    function getFeeRates() external view returns (uint, uint, uint, uint);
+    function setFeeRates(uint num1, uint denom1, uint num2, uint denom2) external;
+    function getFeeMaxes() external view returns (uint, uint, uint, uint);
+    function setFeeMaxes(uint num1, uint denom1, uint num2, uint denom2) external;
+
     // Change the sequencer or its parameters
     // if sequencerAddr is zero, operate without a sequencer
     function changeSequencer(address sequencerAddr, uint maxDelayBlocks, uint maxDelaySeconds) external;

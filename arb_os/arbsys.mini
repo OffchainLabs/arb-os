@@ -656,7 +656,4 @@ impure func arbFunctionTable_get(topFrame: EvmCallFrame, calldata: ByteArray) { 
     evmOp_revert_knownCodePc(address(const::Address_ArbFunctionTable), 211, 0, 0);
 }
 
-func dummyAtEnd() {  // unused, workaround for compiler bug
-    asm((666,666),) { debugprint };
-}
 

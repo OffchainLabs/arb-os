@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-pragma solidity ^0.6.0;
+pragma solidity ^0.6.2;
 
 contract ArbInfo {
     function getBalance(address account) external view returns (uint256) {
@@ -33,3 +33,4 @@ contract ArbInfo {
         return code;
     }
 }
+

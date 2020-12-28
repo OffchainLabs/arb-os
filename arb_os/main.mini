@@ -33,6 +33,7 @@ use messages::TxRequestData;
 use output::output_init;
 use output::txReceipts_init;
 use precompiles::precompiles_init;
+use rollupTracker::rollupTracker_init;
 
 use std::bytearray::MarshalledBytes;
 use std::bytearray::ByteArray;
@@ -65,6 +66,7 @@ impure func main() {
     inbox_init();
     accountStore_init();
     txReceipts_init();
+    rollupTracker_init();
     if (initializePreinstalls() == None<()>) {
         panic;   // don't try to run without preinstalls and precompiles
     }
