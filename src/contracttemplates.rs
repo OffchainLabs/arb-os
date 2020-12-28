@@ -67,7 +67,7 @@ fn mini_code_for_erc20(buf: &mut BytesMut) {
     mini_code_getter_for_bytes(
         buf,
         "getErc20code",
-        &get_deployed_bytecode(Path::new("contracts/arbos/build/contracts/ArbERC20.json"))
+        &get_deployed_bytecode(Path::new("contracts/arbos/build/contracts/ArbERC20.json")),
     );
 
     buf.put(
@@ -82,8 +82,7 @@ fn mini_code_for_erc721(buf: &mut BytesMut) {
     mini_code_getter_for_bytes(
         buf,
         "getErc721code",
-        &get_deployed_bytecode(Path::new("contracts/arbos/build/contracts/ArbERC721.json"))
-
+        &get_deployed_bytecode(Path::new("contracts/arbos/build/contracts/ArbERC721.json")),
     );
 
     buf.put(
@@ -122,10 +121,10 @@ fn mini_code_for_arbinfo(buf: &mut BytesMut) {
 }
 
 fn get_deployed_bytecode(path: &Path) -> Vec<u8> {
-    let contents = std::fs::read_to_string(path.clone())
-        .expect("Something went wrong reading the file");
+    let contents =
+        std::fs::read_to_string(path.clone()).expect("Something went wrong reading the file");
     let json: serde_json::Value =
         serde_json::from_str(&contents).expect("JSON was not well-formatted");
     let code_str = json["deployedBytecode"].to_string();
-    hex::decode(&code_str[3..(code_str.len()-1)]).unwrap()
+    hex::decode(&code_str[3..(code_str.len() - 1)]).unwrap()
 }
