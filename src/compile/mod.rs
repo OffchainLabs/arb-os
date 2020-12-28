@@ -11,6 +11,7 @@ use crate::stringtable::StringTable;
 use ast::{FuncDecl, GlobalVarDecl, TypeTree};
 use lalrpop_util::lalrpop_mod;
 use mini::DeclsParser;
+use miniconstants::init_constant_table;
 use serde::{Deserialize, Serialize};
 use std::collections::hash_map::DefaultHasher;
 use std::collections::{BTreeMap, HashMap, HashSet};
@@ -21,14 +22,13 @@ use std::io::{self, Read};
 use std::path::Path;
 use symtable::SymTable;
 use typecheck::{TypeCheckedFunc, TypeCheckedNode};
-use miniconstants::init_constant_table;
 
 pub use ast::{DebugInfo, TopLevelDecl, Type};
 pub use source::Lines;
 
 mod ast;
 mod codegen;
-mod miniconstants;
+pub mod miniconstants;
 mod source;
 mod symtable;
 mod typecheck;
@@ -602,7 +602,14 @@ pub fn parse_from_source(
     let lines = Lines::new(source.bytes());
     let mut constants = init_constant_table();
     DeclsParser::new()
-        .parse(string_table, &lines, file_id, file_path, &mut constants, &source)
+        .parse(
+            string_table,
+            &lines,
+            file_id,
+            file_path,
+            &mut constants,
+            &source,
+        )
         .map_err(|e| match e {
             lalrpop_util::ParseError::UnrecognizedToken {
                 token: (offset, tok, end),

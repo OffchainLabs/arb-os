@@ -89,6 +89,14 @@ impl Uint256 {
         Uint256 { val }
     }
 
+    pub fn _from_gwei(num_gwei: u64) -> Self {
+        Uint256::from_u64(num_gwei).mul(&Uint256::from_u64(1_000_000_000))
+    }
+
+    pub fn _from_eth(num_eth: u64) -> Self {
+        Uint256::from_u64(num_eth).mul(&Uint256::from_u64(1_000_000_000_000_000_000))
+    }
+
     pub fn to_usize(&self) -> Option<usize> {
         self.val.to_usize()
     }

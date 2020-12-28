@@ -29,19 +29,7 @@ use std::keccak::keccak256;
 
 use inbox::IncomingRequest;
 
-
-// TxRequestData is declared identically in message.mini and elsewhere.
-type TxRequestData = struct {
-    maxGas: uint,
-    gasPrice: uint,
-    seqNum: option<uint>,
-    caller: address,
-    calleeAddr: address,
-    value: uint,
-    calldata: ByteArray,
-    nonMutating: bool,
-    incomingRequest: IncomingRequest,
-}
+use messages::TxRequestData;
 
 // A copy of this struct is defined in stdlib/rlp.mini.
 // The declaration there must remain consistent with the one here.
@@ -82,6 +70,7 @@ public impure func translateSignedTx(req: IncomingRequest) -> option<TxRequestDa
             value: signedTx.value,
             calldata: signedTx.data,
             nonMutating: false,
+            isConstructor: (signedTx.to == address(0)),
             incomingRequest: req with {
                 sender: signer
             } with {

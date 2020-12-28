@@ -1,0 +1,61 @@
+//
+// Copyright 2020, Offchain Labs, Inc. All rights reserved.
+//
+
+use fixedpoint::FixedPoint;
+use fixedpoint::fixedPoint_new;
+use fixedpoint::fixedPoint_fromUintMatch;
+use fixedpoint::fixedPoint_integerPart;
+use fixedpoint::fixedPoint_add;
+use fixedpoint::fixedPoint_mul;
+use fixedpoint::fixedPoint_equal;
+use fixedpoint::fixedPoint_compare;
+
+
+impure func main() {
+	asm(tests(),) { log };
+}
+
+func tests() -> uint {
+    let s9292 = fixedPoint_new(179292, 9292);
+    let s1000 = fixedPoint_new(17820, 1000);
+
+    if (fixedPoint_integerPart(s9292) != 179292/9292) {
+        return 1;
+    }
+
+    if let Some(_) = fixedPoint_add(s9292, s1000) {
+        return 2;
+    }
+
+    if let Some(sum) = fixedPoint_add(s1000, s1000) {
+        if (!fixedPoint_equal(sum, fixedPoint_new(17820*2, 1000))) {
+            return 3;
+        }
+    } else {
+        return 4;
+    }
+
+    if let Some(_) = fixedPoint_mul(s9292, s1000) {
+        return 5;
+    }
+
+    if let Some(prod) = fixedPoint_mul(s1000, s1000) {
+        if (!fixedPoint_equal(prod, fixedPoint_new(17820*17820/1000, 1000))) {
+            return 6;
+        }
+    } else {
+        return 7;
+    }
+
+    if let Some(prod) = fixedPoint_mul(s9292, fixedPoint_fromUintMatch(970000, s9292)) {
+        if (!fixedPoint_equal(prod, fixedPoint_new(179292*970000, 9292))) {
+            return 8;
+        }
+    } else {
+        return 9;
+    }
+
+    return 0;
+}
+
