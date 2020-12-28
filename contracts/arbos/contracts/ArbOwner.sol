@@ -21,8 +21,9 @@ interface ArbOwner {
 
     // To upgrade ArbOS, the ower calls startArbosUpgrade, then calls continueArbosUpgrade one or more times to upload 
     // the code to be installed as the upgrade, then calls finishArbosUpgrade to complete the upgrade and start executing the new code.
-    function startArbosUpgrade() external;
-    function continueArbosUpgrade(bytes calldata marshalledCode) external;
-    function finishArbosUpgrade() external;
+    function startCodeUpload() external;
+    function continueCodeUpload(bytes calldata marshalledCode) external;
+    function finishCodeUploadAsArbosUpgrade() external;
+    function finishCodeUploadAsPluggable(uint id, bool keepState) external;
 }
 
