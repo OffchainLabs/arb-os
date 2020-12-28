@@ -1,3 +1,7 @@
+//
+// Ported from this code: https://github.com/RustCrypto/hashes/blob/master/ripemd160/src/block.rs
+// (Apache 2.0 license)
+
 use core::convert::TryInto;
 
 pub const DIGEST_BUF_LEN: usize = 5;
