@@ -30,6 +30,7 @@ mod run;
 mod stringtable;
 mod uint256;
 
+///Command line options for compile subcommand.
 #[derive(Clap, Debug)]
 struct CompileStruct {
     input: Vec<String>,
@@ -50,6 +51,7 @@ struct CompileStruct {
     //inline: bool,
 }
 
+///Command line options for run subcommand.
 #[derive(Clap, Debug)]
 struct RunStruct {
     input: String,
@@ -57,6 +59,7 @@ struct RunStruct {
     debug: bool,
 }
 
+///Command line options for EvmDebug subcommand.
 #[derive(Clap, Debug)]
 struct EvmDebug {
     #[clap(short, long)]
@@ -65,6 +68,7 @@ struct EvmDebug {
     profiler: bool,
 }
 
+///Command line options for replay subcommand.
 #[derive(Clap, Debug)]
 struct Replay {
     input: String,
@@ -76,6 +80,7 @@ struct Replay {
     trace: Option<String>,
 }
 
+///Command line options for profiler subcommand.
 #[derive(Clap, Debug)]
 struct Profiler {
     input: String,
@@ -83,12 +88,14 @@ struct Profiler {
     mode: ProfilerMode,
 }
 
+///Command line options for evm-tests subcommand.
 #[derive(Clap, Debug)]
 struct EvmTests {
     #[clap(short, long)]
     savelogs: bool,
 }
 
+///Main enum for command line arguments.
 #[derive(Clap, Debug)]
 enum Args {
     Compile(CompileStruct),
@@ -274,6 +281,8 @@ fn main() -> Result<(), CompileError> {
     Ok(())
 }
 
+///Creates a `dyn Write` from an optional filename, if a filename is specified, creates a file
+/// handle, otherwise gives stdout.
 fn get_output(output_filename: Option<&str>) -> Result<Box<dyn io::Write>, io::Error> {
     match output_filename {
         Some(ref path) => File::create(path).map(|f| Box::new(f) as Box<dyn io::Write>),

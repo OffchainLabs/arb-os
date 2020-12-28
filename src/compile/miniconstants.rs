@@ -2,6 +2,8 @@
  * Copyright 2020, Offchain Labs, Inc. All rights reserved
  */
 
+//!Creates a fixed list of globally accessible constants.
+
 use crate::uint256::Uint256;
 use std::collections::HashMap;
 
