@@ -2,6 +2,10 @@
 // Copyright 2020, Offchain Labs, Inc. All rights reserved.
 //
 
+// This file implements fixed-point numbers, consisting of a numerator and denominator.
+// Some operations can only be done on values that have the same denominator.
+// We assume that num and denom will always be less than 2**128. If this is true, arithmetic will never overflow.
+
 type FixedPoint = struct {
     val: uint,
     shiftFactor: uint,
@@ -38,12 +42,12 @@ public func fixedPoint_equal(x: FixedPoint, y: FixedPoint) -> bool {
     return (x.val * y.shiftFactor) == (y.val * x.shiftFactor);
 }
 
-public func fixedPoint_compare(x: FixedPoint, y: FixedPoint) -> option<int> {
+public func fixedPoint_compare(x: FixedPoint, y: FixedPoint) -> int {
     let xProd = x.val * y.shiftFactor;
     let yProd = y.val * x.shiftFactor;
-    if (xProd > yProd) {    return Some(int(1));    }
-    elseif(xProd == yProd) {    return Some(int(0));    }
-    else {    return Some(-int(1));    }
+    if (xProd > yProd) {    return int(1);    }
+    elseif(xProd == yProd) {    return int(0);    }
+    else {    return -int(1);    }
 }
 
 public func fixedPoint_add(x: FixedPoint, y: FixedPoint) -> option<FixedPoint> {

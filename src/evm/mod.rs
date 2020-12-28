@@ -123,11 +123,6 @@ pub fn _evm_run_with_gas_charging(
         my_addr.clone(),
         Uint256::_from_eth(1),
     );
-    machine.runtime_env.insert_eth_deposit_message(
-        Uint256::from_u64(1025),
-        Uint256::from_u64(1025),
-        Uint256::_from_eth(1),
-    );
     let _gas_used = if debug {
         machine.debug(None)
     } else {

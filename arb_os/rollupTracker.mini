@@ -87,7 +87,7 @@ public impure func rollupTracker_init() {
         heightL1: 0,
         deadlineL1: 1,
         activeValidator: address(0),
-        perNodeCharge: 1000000000,   // set initial charge to 1 gwei; TODO make this a per-chain parameter
+        perNodeCharge: const::Estimate_L1GasCostPerNode * const::Estimate_L1GasPrice,
         validatorEquity: 0,
         payment: 0,
     };
@@ -95,7 +95,7 @@ public impure func rollupTracker_init() {
         nodes: rsw_new(genesisNode),
         latestConfirmed: 0,
         firstUnresolved: 1,
-        minimumPayment: 1000000000/20,   // set to 1 gwei; TODO make this a per-chain parameter
+        minimumPayment: genesisNode.perNodeCharge/10,
     };
 }
 
@@ -108,6 +108,9 @@ public impure func rollupTracker_confirmNode(heightL2: uint) -> option<()> {
 
     let nodes = globalRollupTracker.nodes;
     let node = rsw_get(nodes, heightL2)?;
+
+    // now eliminate nodes that aren't needed anymore
+    // these will include the old latestConfirmed, and any already rejected nodes that follow it
     while(rsw_getNextOut(nodes) < heightL2) {
         nodes = rsw_dropOne(nodes)?;
     }
@@ -187,6 +190,7 @@ public impure func rollupTracker_addNode(
     return Some(());
 }
 
+// claiming a node means taking the active validator role from somebody else, with a reduced payment
 public impure func rollupTracker_claimNode(heightL2: uint, claimer: address) -> option<()> {
     let nodes = globalRollupTracker.nodes;
     let _ = rsw_verifyIsLeaf(nodes, heightL2)?;

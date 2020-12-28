@@ -137,7 +137,6 @@ pub fn _test_rollup_tracker() {
     );
 
     _insert_rollup_debug(&mut machine.runtime_env);
-    println!("_");
     let _ = machine.run(None);
 
     _insert_confirm_node(&mut machine.runtime_env, &Uint256::zero());
@@ -146,12 +145,10 @@ pub fn _test_rollup_tracker() {
     _insert_reject_node(&mut machine.runtime_env, &Uint256::from_u64(3));
     _insert_confirm_node(&mut machine.runtime_env, &Uint256::from_u64(4));
 
-    println!("B");
     machine
         .runtime_env
         ._advance_time(Uint256::from_u64(100), None, true);
 
-    println!("C");
     _insert_create_node(
         &mut machine.runtime_env,
         &Uint256::from_u64(5),
@@ -160,20 +157,13 @@ pub fn _test_rollup_tracker() {
         &Uint256::from_u64(10),
         my_addr.clone(),
     );
-    println!("D");
 
     let _ = machine.run(None);
-    println!("E");
-
-    let my_payments = 50000000u64;
-    let claimer_payments = 76250000u64 + 157875000u64;
-    let transfer_fee = 1947500000u64;
-    let one_eth = 1_000_000_000_000_000_000u64;
 
     let arb_info = _ArbInfo::_new(false);
     let bal = arb_info._get_balance(&mut machine, &my_addr).unwrap();
-    assert_eq!(bal, Uint256::from_u64(my_payments + transfer_fee));
+    assert_eq!(bal, Uint256::from_u64(43945000000000000));
 
     let bal = arb_info._get_balance(&mut machine, &claimer).unwrap();
-    assert_eq!(bal, Uint256::from_u64(one_eth + claimer_payments - transfer_fee));
+    assert_eq!(bal, Uint256::from_u64(962855750000000000));
 }

@@ -45,7 +45,7 @@ use std::queue::queue_get;
 use std::queue::queue_getOrDie;
 
 use chainParameters::chainParams_millisecondsPerBlock;
-use chainParameters::chainParams_speedLimitPerSecond;
+use chainParameters::chainParams_speedLimitPerBlock;
 
 use inbox::IncomingRequest;
 use inbox::inbox_getNextUnpackedRequest;
@@ -169,9 +169,7 @@ public impure func gasAccounting_setFeeParams(baseGasPrice: uint, storageCharge:
 }
 
 public impure func gasAccounting_postInitMessage() {
-    let millisecondsPerBlock = chainParams_millisecondsPerBlock();
-    let speedLimitPerSecond = chainParams_speedLimitPerSecond();
-    let speedLimitPerBlock = millisecondsPerBlock * speedLimitPerSecond / 1000;
+    let speedLimitPerBlock = chainParams_speedLimitPerBlock();
     gasAccountingParams = struct {
         SpeedLimitPerBlock: speedLimitPerBlock,
         GasPoolMax: int(5 * speedLimitPerBlock),
@@ -670,10 +668,10 @@ public impure func gasAccounting_setFeeRates(num1: uint, denom1: uint, num2: uin
     let current = gasAccountingInfo.netFeeInfo?;
     let rate1 = fixedPoint_new(num1, denom1);
     let rate2 = fixedPoint_new(num2, denom2);
-    if (fixedPoint_compare(rate1, current.maxRate1)? > int(0)) {
+    if (fixedPoint_compare(rate1, current.maxRate1) > int(0)) {
         return None;
     }
-    if (fixedPoint_compare(rate2, current.maxRate2)? > int(0)) {
+    if (fixedPoint_compare(rate2, current.maxRate2) > int(0)) {
         return None;
     }
     gasAccountingInfo = gasAccountingInfo with {
@@ -700,18 +698,18 @@ public impure func gasAccounting_setFeeMaxes(num1: uint, denom1: uint, num2: uin
     let current = gasAccountingInfo.netFeeInfo?;
     let max1 = fixedPoint_new(num1, denom1);
     let max2 = fixedPoint_new(num2, denom2);
-    if (fixedPoint_compare(max1, current.maxRate1)? > int(0)) {
+    if (fixedPoint_compare(max1, current.maxRate1) > int(0)) {
         return None;
     }
-    if (fixedPoint_compare(max2, current.maxRate2)? > int(0)) {
+    if (fixedPoint_compare(max2, current.maxRate2) > int(0)) {
         return None;
     }
     let rate1 = current.rate1;
-    if (fixedPoint_compare(rate1, max1)? > int(0)) {
+    if (fixedPoint_compare(rate1, max1) > int(0)) {
         rate1 = max1;
     }
     let rate2 = current.rate2;
-    if (fixedPoint_compare(rate2, max2)? > int(0)) {
+    if (fixedPoint_compare(rate2, max2) > int(0)) {
         rate2 = max2;
     }
     gasAccountingInfo = gasAccountingInfo with {

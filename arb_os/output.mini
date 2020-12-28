@@ -17,7 +17,7 @@ use evmlogs::evmlogs_numLogs;
 
 use evmCallStack::evmCallStack_queueMessage;
 
-use chainParameters::chainParams_speedLimitPerSecond;
+use chainParameters::chainParams_speedLimitPerBlock;
 
 use inbox::IncomingRequest;
 use inbox::inbox_currentBlockNumber;
@@ -215,7 +215,7 @@ public impure func emitTxReceipt(
 
 impure func emitBlockSummaryLog(blockNum: uint, timestamp: uint, prevBlockNum: uint) {
     let gasUsedThisBlock = globalBlockReceiptData.statsThisBlock.totalGasUsed;
-    let gasLimit = 13 * chainParams_speedLimitPerSecond();
+    let gasLimit = chainParams_speedLimitPerBlock();
     if (gasLimit < gasUsedThisBlock) {
         gasLimit = gasUsedThisBlock;
     }

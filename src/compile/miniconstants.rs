@@ -197,6 +197,11 @@ pub fn init_constant_table() -> HashMap<String, Uint256> {
         // sequencer constants
         ("Sequencer_maxDelayBlocks", 32768),   // 128*256
         ("Sequencer_maxDelaySeconds", 983040), // 30*Sequencer_maxDelayBlocks
+        // misc
+        ("DefaultMillisecondsPerBlock", 13500),
+        ("DefaultSpeedLimitPerBlock", 13500*100000),
+        ("Estimate_L1GasCostPerNode", 220000),
+        ("Estimate_L1GasPrice", 100 * 1_000_000_000),  // 100 gwei
     ] {
         ret.insert(s.to_string(), Uint256::from_u64(*i));
     }
