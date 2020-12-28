@@ -287,9 +287,6 @@ impure func arbowner_finishArbosUpgrade(topFrame: EvmCallFrame, calldata: ByteAr
     }
 }
 
-func dummy(x: uint) -> uint {
-    return x;
-}
 
 
 
