@@ -134,7 +134,6 @@ pub fn init_constant_table() -> HashMap<String, Uint256> {
         ("AVM_ecmul", 0x82),
         ("AVM_ecpairing", 0x83),
         ("AVM_debugprint", 0x90),
-
         // L1 message types
         ("L1MessageType_ethDeposit", 0),
         ("L1MessageType_erc20Deposit", 1),
@@ -174,7 +173,9 @@ pub fn init_constant_table() -> HashMap<String, Uint256> {
         ("LogType_blockSummary", 1),
         // outgoing message types
         ("SendType_buddyContractResult", 5),
-        // misc
+        // sequencer constants
+        ("Sequencer_maxDelayBlocks", 32768),   // 128*256
+        ("Sequencer_maxDelaySeconds", 983040), // 30*Sequencer_maxDelayBlocks
     ] {
         ret.insert(s.to_string(), Uint256::from_u64(*i));
     }

@@ -5,6 +5,8 @@
 use arbowner::arbowner_init;
 use evmCallStack::evmCallStack_callHitError;
 
+use inbox::inbox_changeSequencer;
+
 use std::bytearray::MarshalledBytes;
 use std::bytearray::ByteArray;
 use std::bytearray::MarshalledBytes;
@@ -13,6 +15,7 @@ use std::bytearray::bytearray_get256;
 use std::bytestream::ByteStream;
 use std::bytestream::bytestream_new;
 use std::bytestream::bytestream_get64;
+use std::bytestream::bytestream_get256;
 use std::bytestream::bytestream_skipBytes;
 
 
@@ -24,7 +27,6 @@ type ChainParams = struct {
     baseStake: uint,          // base stake of a validator, in wei
     stakingToken: address,    // ERC-20 token used for staking; or zero if using ETH
     owner: address,           // owner of the chain, who has admin privileges (or zero if there is no owner)
-    isProChain: bool          // is this an Arbitrum Pro chain?
 }
 
 var globalChainParams: option<ChainParams>;
@@ -45,11 +47,10 @@ public impure func chainParams_gotParamsMessage(sender: address, data: ByteArray
             baseStake: bytearray_get256(data, 3*32),
             stakingToken: address(bytearray_get256(data, 4*32)),
             owner: address(bytearray_get256(data, 5*32)),
-            isProChain: false,
         });
 
         // now read and process initialization options
-        if let Some(stream) = bytestream_skipBytes(bytestream_new(data), 5*32) {
+        if let Some(stream) = bytestream_skipBytes(bytestream_new(data), 6*32) {
             loop {
                 if let Some(ustr2) = doInitializationOption(stream) {
                     stream = ustr2;
@@ -70,13 +71,16 @@ impure func doInitializationOption(stream: ByteStream) -> option<ByteStream> {
     stream = ustr;
     let (ustr, numPayloadBytes) = bytestream_get64(stream)?;
     stream = ustr;
-    if (optionId == 0) {   // option: Arbitrum Pro chain
-        if (numPayloadBytes != 0) {
+    if (optionId == 0) {   // option: sequencer
+        if (numPayloadBytes != 3*32) {
             // unexpected payload size; discard the payload and ignore this option
             return bytestream_skipBytes(stream, numPayloadBytes);
         }
-        globalChainParams = Some(globalChainParams? with { isProChain: true });
-        return Some(stream);
+        let (ustr, sequencerAddrAsUint) = bytestream_get256(stream)?;
+        let (ustr, delayBlocks) = bytestream_get256(ustr)?;
+        let (ustr, delayTime) = bytestream_get256(ustr)?;
+        inbox_changeSequencer(address(sequencerAddrAsUint), delayBlocks, delayTime);
+        return Some(ustr);
     } else {
         // unrecognized option, discard it
         return bytestream_skipBytes(stream, numPayloadBytes);
@@ -114,14 +118,6 @@ public impure func chainParams_baseStake() -> (address, uint) {
         return (params.stakingToken, params.baseStake);
     } else {
         return (address(0), 0);
-    }
-}
-
-public impure func chainParams_isProChain() -> bool {
-    if let Some(params) = globalChainParams {
-        return params.isProChain;
-    } else {
-        return false;
     }
 }
 

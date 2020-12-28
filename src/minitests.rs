@@ -399,7 +399,7 @@ fn test_direct_deploy_and_compressed_call_add() {
 
 #[test]
 fn test_payment_in_constructor() {
-    crate::evm::evm_test_payment_in_constructor(None, false);
+    crate::evm::_evm_test_payment_in_constructor(None, false);
 }
 
 #[test]
@@ -459,6 +459,30 @@ pub fn test_create_opcode() {
 #[test]
 pub fn test_crosscontract_call_using_batch() {
     match crate::evm::evm_xcontract_call_using_batch(None, false, false) {
+        Ok(result) => assert_eq!(result, true),
+        Err(e) => panic!("error {}", e),
+    }
+}
+
+#[test]
+pub fn test_crosscontract_call_sequencer_fast_path() {
+    match crate::evm::_evm_xcontract_call_using_sequencer_batch(None, false, false) {
+        Ok(result) => assert_eq!(result, true),
+        Err(e) => panic!("error {}", e),
+    }
+}
+
+#[test]
+pub fn test_crosscontract_call_sequencer_slow_path() {
+    match crate::evm::_evm_xcontract_call_sequencer_slow_path(None, false, false) {
+        Ok(result) => assert_eq!(result, true),
+        Err(e) => panic!("error {}", e),
+    }
+}
+
+#[test]
+pub fn test_crosscontract_call_sequencer_reordering() {
+    match crate::evm::_evm_xcontract_call_sequencer_reordering(None, false, false) {
         Ok(result) => assert_eq!(result, true),
         Err(e) => panic!("error {}", e),
     }
