@@ -299,10 +299,13 @@ impure func arbowner_finishCodeUploadAsPluggable(topFrame: EvmCallFrame, calldat
     let id = bytearray_get256(calldata, 4);
     let keepState = bytearray_get256(calldata, 36) != 0;
     if let Some(upgrade) = upgradeInProgress {
-        installPluggable(id, unsafecast<ModuleFunction>(avmCodeBuilder_finish(upgrade)), keepState);
-        evmOp_return(0, 0);
+        if let Some(_) = installPluggable(id, unsafecast<ModuleFunction>(avmCodeBuilder_finish(upgrade)), keepState) {
+            evmOp_return(0, 0);
+        } else {
+            evmOp_revert_knownCodePc(address(const::Address_ArbOwner), 51, 0, 0);
+        }
     } else {
-        evmOp_revert_knownCodePc(address(const::Address_ArbOwner), 51, 0, 0);
+        evmOp_revert_knownCodePc(address(const::Address_ArbOwner), 52, 0, 0);
     }
 }
 
