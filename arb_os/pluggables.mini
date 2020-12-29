@@ -65,7 +65,7 @@ public impure func callPluggable(id: uint, args: any) -> option<any> {
 }
 
 public impure func pluggableExists(id: uint) -> bool {
-    return (id < moduleManager.capacity) && (moduleManager.modules[id] != None<ModuleState);
+    return (id < moduleManager.capacity) && (moduleManager.modules[id] != None<ModuleState>);
 }
 
 public impure func installPluggable(id: uint, newFunc: ModuleFunction, keepState: bool) -> option<()> {
