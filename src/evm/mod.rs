@@ -391,6 +391,50 @@ pub fn _basic_evm_add_test(log_to: Option<&Path>, debug: bool) -> Result<(), eth
     Ok(())
 }
 
+pub fn _underfunded_nested_call_test(
+    log_to: Option<&Path>,
+    debug: bool,
+) -> Result<(), ethabi::Error> {
+    let rt_env = RuntimeEnvironment::new(Uint256::from_usize(1111));
+    let mut machine = load_from_file(Path::new("arb_os/arbos.mexe"), rt_env);
+    machine.start_at_zero();
+
+    let mut contract = AbiForContract::new_from_file(&test_contract_path("Underfunded"))?;
+    if contract.deploy(&[], &mut machine, Uint256::zero(), None, None, debug) == None {
+        panic!("failed to deploy Fibonacci contract");
+    }
+
+    let (logs, sends) = contract.call_function(
+        Uint256::from_u64(1028),
+        "nestedCall",
+        &[ethabi::Token::Uint(Uint256::zero().to_u256())],
+        &mut machine,
+        Uint256::zero(),
+        debug,
+    )?;
+    assert_eq!(logs.len(), 1);
+    assert_eq!(sends.len(), 0);
+    assert!(logs[0].succeeded());
+
+    let (logs, sends) = contract.call_function(
+        Uint256::from_u64(1028),
+        "nestedCall",
+        &[ethabi::Token::Uint(Uint256::one().to_u256())],
+        &mut machine,
+        Uint256::zero(),
+        debug,
+    )?;
+    assert_eq!(logs.len(), 1);
+    assert_eq!(sends.len(), 0);
+    assert!(logs[0].succeeded());
+
+    if let Some(path) = log_to {
+        machine.runtime_env.recorder.to_file(path).unwrap();
+    }
+
+    Ok(())
+}
+
 pub fn evm_test_create(
     log_to: Option<&Path>,
     debug: bool,
@@ -595,8 +639,7 @@ pub fn _evm_xcontract_call_using_sequencer_batch(
         machine.run(None)
     }; // handle this eth deposit message
 
-    let mut fib_contract =
-        AbiForContract::new_from_file(&test_contract_path("Fibonacci"))?;
+    let mut fib_contract = AbiForContract::new_from_file(&test_contract_path("Fibonacci"))?;
     if fib_contract.deploy(
         &[],
         &mut machine,
@@ -609,8 +652,7 @@ pub fn _evm_xcontract_call_using_sequencer_batch(
         panic!("failed to deploy Fibonacci contract");
     }
 
-    let mut pc_contract =
-        AbiForContract::new_from_file(&test_contract_path("PaymentChannel"))?;
+    let mut pc_contract = AbiForContract::new_from_file(&test_contract_path("PaymentChannel"))?;
     if pc_contract.deploy(
         &[ethabi::Token::Address(ethereum_types::H160::from_slice(
             &fib_contract.address.to_bytes_be()[12..],
@@ -728,8 +770,7 @@ pub fn _evm_xcontract_call_sequencer_slow_path(
         machine.run(None)
     }; // handle this eth deposit message
 
-    let mut fib_contract =
-        AbiForContract::new_from_file(&test_contract_path("Fibonacci"))?;
+    let mut fib_contract = AbiForContract::new_from_file(&test_contract_path("Fibonacci"))?;
     if fib_contract.deploy(
         &[],
         &mut machine,
@@ -742,8 +783,7 @@ pub fn _evm_xcontract_call_sequencer_slow_path(
         panic!("failed to deploy Fibonacci contract");
     }
 
-    let mut pc_contract =
-        AbiForContract::new_from_file(&test_contract_path("PaymentChannel"))?;
+    let mut pc_contract = AbiForContract::new_from_file(&test_contract_path("PaymentChannel"))?;
     if pc_contract.deploy(
         &[ethabi::Token::Address(ethereum_types::H160::from_slice(
             &fib_contract.address.to_bytes_be()[12..],
@@ -861,8 +901,7 @@ pub fn _evm_xcontract_call_sequencer_reordering(
         machine.run(None)
     }; // handle this eth deposit message
 
-    let mut fib_contract =
-        AbiForContract::new_from_file(&test_contract_path("Fibonacci"))?;
+    let mut fib_contract = AbiForContract::new_from_file(&test_contract_path("Fibonacci"))?;
     if fib_contract.deploy(
         &[],
         &mut machine,
@@ -875,8 +914,7 @@ pub fn _evm_xcontract_call_sequencer_reordering(
         panic!("failed to deploy Fibonacci contract");
     }
 
-    let mut pc_contract =
-        AbiForContract::new_from_file(&test_contract_path("PaymentChannel"))?;
+    let mut pc_contract = AbiForContract::new_from_file(&test_contract_path("PaymentChannel"))?;
     if pc_contract.deploy(
         &[ethabi::Token::Address(ethereum_types::H160::from_slice(
             &fib_contract.address.to_bytes_be()[12..],

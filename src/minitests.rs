@@ -501,6 +501,11 @@ fn test_payment_to_empty_address() {
 }
 
 #[test]
+fn test_underfunded_nested_call() {
+    assert!(crate::evm::_underfunded_nested_call_test(None, false).is_ok());
+}
+
+#[test]
 fn test_erc20() {
     crate::evm::mint_erc20_and_get_balance(None, false);
 }
