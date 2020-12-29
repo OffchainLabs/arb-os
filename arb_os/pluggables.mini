@@ -2,8 +2,25 @@
 // Copyright 2020, Offchain Labs, Inc. All rights reserved.
 //
 
+use accounts::Account;
+use accounts::account_setContractInfo;
+
+use evmCallStack::evmCallStack_topFrame;
+use evmCallStack::evmCallStack_setTopFrameMemory;
+
+use evmOps::getEvmOpJumpTable;
+use evmOps::evmOp_return;
+use evmOps::evmOp_revert;
+
 use core::array::array;
 use core::array::array_resize;
+
+use std::bytearray::ByteArray;
+use std::bytearray::bytearray_new;
+use std::bytearray::bytearray_size;
+use std::bytearray::bytearray_setByte;
+
+use std::storageMap::storageMap_new;
 
 const ModuleIdLimit = 4096;
 
@@ -77,4 +94,49 @@ public impure func installPluggable(id: uint, newFunc: ModuleFunction, keepState
     };
 
     return Some(());
+}
+
+public impure func bindContractAddressToPluggable(account: Account, addr: address, id: uint) -> Account {
+    return account_setContractInfo(
+       account,
+       bytearray_setByte(bytearray_new(0), 0, 0xfe),   // like an "Arbitrum style" precompiled contract
+       newmap<uint, impure func()>,
+       makePluggableContractEntryPoint(id),
+       storageMap_new(),
+       true,    // force initial nonce to be 1
+    );
+}
+
+impure func makePluggableContractEntryPoint(id: uint) -> impure func() {
+    // make a small code snippet that function-calls to entryPointForPluggableContract(id) (with a dummy return address)
+    // using a dummy return address is safe because entryPointForPluggableContract will never return
+    return asm(
+        const::AVM_nop,
+        id,
+        asm(
+            const::AVM_nop,
+            0,    // dummy return address
+            asm(
+                const::AVM_jump,
+                entryPointForPluggableContract,
+                asm() func() { errcodept }
+            ) func() { pushinsnimm }
+        ) func() { pushinsnimm }
+    ) impure func() { pushinsnimm };
+}
+
+impure func entryPointForPluggableContract(id: uint) {
+    if let Some(topFrame) = evmCallStack_topFrame() {
+        if let Some(retVal) = callPluggable(id, (topFrame, getEvmOpJumpTable())) {
+            let (success, resultData) = unsafecast<(bool, ByteArray)>(retVal);
+            if (evmCallStack_setTopFrameMemory(resultData)) {
+                if (success) {
+                    evmOp_return(0, bytearray_size(resultData));
+                } else {
+                    evmOp_revert(0, bytearray_size(resultData));
+                }
+            }
+        }
+    }
+    evmOp_revert(0, 0);
 }

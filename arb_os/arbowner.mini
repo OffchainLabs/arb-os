@@ -25,11 +25,11 @@ use evmCallStack::evmCallStack_setTopFrameMemory;
 use evmOps::evmOp_return;
 use evmOps::evmOp_revert;
 use evmOps::evmOp_revert_knownCodePc;
-use evmOps::getEvmOpJumpTable;
 
 use pluggables::ModuleFunction;
 use pluggables::installPluggable;
 use pluggables::callPluggable;
+use pluggables::bindContractAddressToPluggable;
 
 use gasAccounting::gasAccounting_addToReserveFunds;
 use gasAccounting::gasAccounting_getFeeRecipient;
@@ -328,14 +328,7 @@ impure func arbowner_bindAddressToPluggable(topFrame: EvmCallFrame, calldata: By
     let pluggableId = bytearray_get256(calldata, 36);
 
     let acct = evmCallFrame_getAccount(topFrame, addr);
-    acct = account_setContractInfo(
-       acct,
-       bytearray_setByte(bytearray_new(0), 0, 0xfe),   // like an "Arbitrum style" precompiled contract
-       newmap<uint, impure func()>,
-       makePluggableContractEntryPoint(pluggableId),
-       storageMap_new(),
-       true,    // force initial nonce to be 1
-    );
+    acct = bindContractAddressToPluggable(acct, addr, pluggableId);
     let success = evmCallStack_setAccount(addr, acct);
     if (success) {
         evmOp_return(0, 0);
@@ -344,39 +337,6 @@ impure func arbowner_bindAddressToPluggable(topFrame: EvmCallFrame, calldata: By
     }
 }
 
-impure func makePluggableContractEntryPoint(id: uint) -> impure func() {
-    // make a small code snippet that function-calls to entryPointForPluggableContract(id) (with a dummy return address)
-    // using a dummy return address is safe because entryPointForPluggableContract will never return
-    return asm(
-        const::AVM_nop,
-        id,
-        asm(
-            const::AVM_nop,
-            0,    // dummy return address
-            asm(
-                const::AVM_jump,
-                entryPointForPluggableContract,
-                asm() func() { errcodept }
-            ) func() { pushinsnimm }
-        ) func() { pushinsnimm }
-    ) impure func() { pushinsnimm };
-}
-
-impure func entryPointForPluggableContract(id: uint) {
-    if let Some(topFrame) = evmCallStack_topFrame() {
-        if let Some(retVal) = callPluggable(id, (topFrame, getEvmOpJumpTable())) {
-            let (success, resultData) = unsafecast<(bool, ByteArray)>(retVal);
-            if (evmCallStack_setTopFrameMemory(resultData)) {
-                if (success) {
-                    evmOp_return(0, bytearray_size(resultData));
-                } else {
-                    evmOp_revert(0, bytearray_size(resultData));
-                }
-            }
-        }
-    }
-    evmOp_revert(0, 0);
-}
 
 
 
