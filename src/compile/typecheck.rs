@@ -16,7 +16,7 @@ use crate::mavm::{Instruction, Label, Value};
 use crate::pos::Location;
 use crate::stringtable::{StringId, StringTable};
 use crate::uint256::Uint256;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 pub trait AbstractSyntaxTree {
     fn child_nodes(&mut self) -> Vec<TypeCheckedNode> {
@@ -1013,6 +1013,7 @@ fn typecheck_statement<'a>(
             if return_type.get_representation(type_tree)?.assignable(
                 &tc_expr.get_type().get_representation(type_tree)?,
                 type_tree,
+                HashSet::new(),
             ) {
                 Ok((TypeCheckedStatementKind::Return(tc_expr), vec![]))
             } else {
@@ -1153,6 +1154,7 @@ fn typecheck_statement<'a>(
                     if var_type.get_representation(type_tree)?.assignable(
                         &tc_expr.get_type().get_representation(type_tree)?,
                         type_tree,
+                        HashSet::new(),
                     ) {
                         Ok((
                             TypeCheckedStatementKind::AssignLocal(*name, tc_expr),
@@ -1160,16 +1162,21 @@ fn typecheck_statement<'a>(
                         ))
                     } else {
                         Err(new_type_error(
-                            "mismatched types in assignment statement".to_string(),
+                            format!(
+                                "mismatched types in assignment statement expected {:?}, got {:?}",
+                                var_type.get_representation(type_tree)?,
+                                tc_expr.get_type().get_representation(type_tree)?
+                            ),
                             debug_info.location,
                         ))
                     }
                 }
                 None => match global_vars.get(&*name) {
                     Some((var_type, idx)) => {
-                        if var_type.assignable(
+                        if var_type.get_representation(type_tree)?.assignable(
                             &tc_expr.get_type().get_representation(type_tree)?,
                             type_tree,
+                            HashSet::new(),
                         ) {
                             Ok((
                                 TypeCheckedStatementKind::AssignGlobal(*idx, tc_expr),
@@ -1177,7 +1184,7 @@ fn typecheck_statement<'a>(
                             ))
                         } else {
                             Err(new_type_error(
-                                "mismatched types in assignment statement".to_string(),
+                                format!("mismatched types in assignment statement expected {:?}, got {:?}", var_type.get_representation(type_tree)?, tc_expr.get_type().get_representation(type_tree)?),
                                 debug_info.location,
                             ))
                         }
@@ -1721,6 +1728,7 @@ fn typecheck_expr(
                                 if !resolved_arg_type.assignable(
                                     &tc_args[i].get_type().get_representation(type_tree)?,
                                     type_tree,
+                                    HashSet::new(),
                                 ) {
                                     println!(
                                         "expected {:?}",
@@ -1976,7 +1984,7 @@ fn typecheck_expr(
                 )?;
                 match tc_arr.get_type().get_representation(type_tree)? {
                     Type::Array(t) => {
-                        if t.assignable(&tc_val.get_type(), type_tree) {
+                        if t.assignable(&tc_val.get_type(), type_tree, HashSet::new()) {
                             if tc_index.get_type() != Type::Uint {
                                 Err(new_type_error(
                                     "array modifier requires uint index".to_string(),
@@ -2015,7 +2023,7 @@ fn typecheck_expr(
                     }
                     Type::Map(kt, vt) => {
                         if tc_index.get_type() == *kt {
-                            if vt.assignable(&tc_val.get_type(), type_tree) {
+                            if vt.assignable(&tc_val.get_type(), type_tree, HashSet::new()) {
                                 Ok(TypeCheckedExprKind::MapMod(
                                     Box::new(tc_arr),
                                     Box::new(tc_index),
@@ -2064,7 +2072,11 @@ fn typecheck_expr(
                 if let Type::Struct(fields) = &tcs_type {
                     match tcs_type.get_struct_slot_by_name(name.clone()) {
                         Some(index) => {
-                            if fields[index].tipe.assignable(&tc_val.get_type(), type_tree) {
+                            if fields[index].tipe.assignable(
+                                &tc_val.get_type(),
+                                type_tree,
+                                HashSet::new(),
+                            ) {
                                 Ok(TypeCheckedExprKind::StructMod(
                                     Box::new(tc_struc),
                                     index,

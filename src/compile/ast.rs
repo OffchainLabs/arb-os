@@ -12,7 +12,7 @@ use crate::pos::Location;
 use crate::stringtable::StringId;
 use crate::uint256::Uint256;
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 ///This is a map of the types at a given location, with the Vec<String> representing the module path
 ///and the usize representing the stringID of the type at that location.
@@ -72,7 +72,7 @@ pub fn new_type_decl(name: StringId, tipe: Type) -> TypeDecl {
 }
 
 ///A type in the mini language.
-#[derive(Debug, Clone, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Eq, Serialize, Deserialize, Hash)]
 pub enum Type {
     Void,
     Uint,
@@ -190,7 +190,12 @@ impl Type {
     }
 
     ///Returns true if rhs is a subtype of self, and false otherwise
-    pub fn assignable(&self, rhs: &Self, type_tree: &TypeTree) -> bool {
+    pub fn assignable(
+        &self,
+        rhs: &Self,
+        type_tree: &TypeTree,
+        mut seen: HashSet<(Type, Type)>,
+    ) -> bool {
         if *rhs == Type::Every {
             return true;
         }
@@ -206,46 +211,52 @@ impl Type {
             | Type::Every => (self == rhs),
             Type::Tuple(tvec) => {
                 if let Ok(Type::Tuple(tvec2)) = rhs.get_representation(type_tree) {
-                    type_vectors_assignable(tvec, &tvec2, type_tree)
+                    type_vectors_assignable(tvec, &tvec2, type_tree, seen)
                 } else {
                     false
                 }
             }
             Type::Array(t) => {
                 if let Ok(Type::Array(t2)) = rhs.get_representation(type_tree) {
-                    t.assignable(&t2, type_tree)
+                    t.assignable(&t2, type_tree, seen)
                 } else {
                     false
                 }
             }
             Type::FixedArray(t, s) => {
                 if let Ok(Type::FixedArray(t2, s2)) = rhs.get_representation(type_tree) {
-                    (*s == s2) && t.assignable(&t2, type_tree)
+                    (*s == s2) && t.assignable(&t2, type_tree, seen)
                 } else {
                     false
                 }
             }
             Type::Struct(fields) => {
                 if let Ok(Type::Struct(fields2)) = rhs.get_representation(type_tree) {
-                    field_vectors_assignable(fields, &fields2, type_tree)
+                    field_vectors_assignable(fields, &fields2, type_tree, seen)
                 } else {
                     false
                 }
             }
-            Type::Named(_) => (self == rhs),
-            // TODO: This will cause an infinite loop when dealing with recursive types, need new method to identify loops
-            Type::Nominal(path, id) => {
-                self == rhs
-                    || type_tree
-                        .get(&(path.clone(), *id))
-                        .map(|tipe| tipe.assignable(rhs, type_tree))
-                        .unwrap_or(false)
+            Type::Named(_) => self == rhs,
+            Type::Nominal(_, _) => {
+                if let (Ok(left), Ok(right)) = (
+                    self.get_representation(type_tree),
+                    rhs.get_representation(type_tree),
+                ) {
+                    if seen.insert((left.clone(), right.clone())) {
+                        left.assignable(&right, type_tree, seen)
+                    } else {
+                        true
+                    }
+                } else {
+                    false
+                }
             }
             Type::Func(is_impure, args, ret) => {
                 if let Type::Func(is_impure2, args2, ret2) = rhs {
                     (*is_impure || !is_impure2)
-                        && arg_vectors_assignable(args, args2, type_tree)
-                        && (ret2.assignable(ret, type_tree)) // note: rets in reverse order
+                        && arg_vectors_assignable(args, args2, type_tree, seen.clone())
+                        && (ret2.assignable(ret, type_tree, seen)) // note: rets in reverse order
                 } else {
                     false
                 }
@@ -253,7 +264,8 @@ impl Type {
             Type::Map(key1, val1) => {
                 if let Type::Map(key2, val2) = rhs {
                     if let Ok(val2) = val2.get_representation(type_tree) {
-                        key1.assignable(key2, type_tree) && (val1.assignable(&val2, type_tree))
+                        key1.assignable(key2, type_tree, seen.clone())
+                            && (val1.assignable(&val2, type_tree, seen))
                     } else {
                         false
                     }
@@ -263,7 +275,7 @@ impl Type {
             }
             Type::Option(inner) => {
                 if let Ok(Type::Option(inner2)) = rhs.get_representation(type_tree) {
-                    inner.assignable(&inner2, type_tree)
+                    inner.assignable(&inner2, type_tree, seen)
                 } else {
                     false
                 }
@@ -336,21 +348,31 @@ impl Type {
 
 ///Returns true if each type in tvec2 is a subtype of the type in tvec1 at the same index, and tvec1
 /// and tvec2 have the same length.
-pub fn type_vectors_assignable(tvec1: &[Type], tvec2: &[Type], type_tree: &TypeTree) -> bool {
+pub fn type_vectors_assignable(
+    tvec1: &[Type],
+    tvec2: &[Type],
+    type_tree: &TypeTree,
+    seen: HashSet<(Type, Type)>,
+) -> bool {
     tvec1.len() == tvec2.len()
         && tvec1
             .iter()
             .zip(tvec2)
-            .all(|(t1, t2)| t1.assignable(t2, type_tree))
+            .all(|(t1, t2)| t1.assignable(t2, type_tree, seen.clone()))
 }
 
 ///Identical to `type_vectors_assignable`
-pub fn arg_vectors_assignable(tvec1: &[Type], tvec2: &[Type], type_tree: &TypeTree) -> bool {
+pub fn arg_vectors_assignable(
+    tvec1: &[Type],
+    tvec2: &[Type],
+    type_tree: &TypeTree,
+    seen: HashSet<(Type, Type)>,
+) -> bool {
     tvec1.len() == tvec2.len()
         && tvec1
             .iter()
             .zip(tvec2)
-            .all(|(t1, t2)| t1.assignable(t2, type_tree))
+            .all(|(t1, t2)| t1.assignable(t2, type_tree, seen.clone()))
 }
 
 ///Identical to `type_vectors_assignable` but using StructField slices as inputs and comparing their
@@ -359,12 +381,13 @@ pub fn field_vectors_assignable(
     tvec1: &[StructField],
     tvec2: &[StructField],
     type_tree: &TypeTree,
+    seen: HashSet<(Type, Type)>,
 ) -> bool {
     tvec1.len() == tvec2.len()
         && tvec1
             .iter()
             .zip(tvec2)
-            .all(|(t1, t2)| t1.tipe.assignable(&t2.tipe, type_tree))
+            .all(|(t1, t2)| t1.tipe.assignable(&t2.tipe, type_tree, seen.clone()))
 }
 
 impl PartialEq for Type {
@@ -406,7 +429,7 @@ fn struct_field_vectors_equal(f1: &[StructField], f2: &[StructField]) -> bool {
 }
 
 ///Field of a struct, contains field name and underlying type.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Hash)]
 pub struct StructField {
     pub name: String,
     pub tipe: Type,
