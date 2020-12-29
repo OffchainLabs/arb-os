@@ -16,7 +16,7 @@ use crate::mavm::{Instruction, Label, Value};
 use crate::pos::Location;
 use crate::stringtable::{StringId, StringTable};
 use crate::uint256::Uint256;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 ///Trait for all nodes in the AST, currently only implemented for type checked versions.
 pub trait AbstractSyntaxTree {
@@ -673,12 +673,6 @@ fn builtin_func_decls(mut string_table: StringTable) -> (Vec<ImportFuncDecl>, St
             Type::Any,
         ),
         ImportFuncDecl::new_types(
-            string_table.get("builtin_kvsHasKey".to_string()),
-            false,
-            vec![Type::Any, Type::Any],
-            Type::Bool,
-        ),
-        ImportFuncDecl::new_types(
             string_table.get("builtin_kvsGet".to_string()),
             false,
             vec![Type::Any, Type::Any],
@@ -688,12 +682,6 @@ fn builtin_func_decls(mut string_table: StringTable) -> (Vec<ImportFuncDecl>, St
             string_table.get("builtin_kvsSet".to_string()),
             false,
             vec![Type::Any, Type::Any, Type::Any],
-            Type::Any,
-        ),
-        ImportFuncDecl::new_types(
-            string_table.get("builtin_kvsDelete".to_string()),
-            false,
-            vec![Type::Any, Type::Any],
             Type::Any,
         ),
     ];
@@ -721,6 +709,7 @@ pub fn sort_top_level_decls(
     let mut global_vars = Vec::new();
 
     let (builtin_fds, string_table) = builtin_func_decls(string_table_in);
+    //TODO:Remove or move to new system
     for fd in builtin_fds.iter() {
         func_table.insert(fd.name, fd.tipe.clone());
         imported_funcs.push(ImportedFunc::new(
@@ -743,20 +732,6 @@ pub fn sort_top_level_decls(
             }
             TopLevelDecl::VarDecl(vd) => {
                 global_vars.push(vd.clone());
-            }
-            TopLevelDecl::ImpFuncDecl(fd) => {
-                func_table.insert(fd.name, fd.tipe.clone());
-                imported_funcs.push(ImportedFunc::new(
-                    imported_funcs.len(),
-                    fd.name,
-                    &string_table,
-                    fd.arg_types.clone(),
-                    fd.ret_type.clone(),
-                    fd.is_impure,
-                ));
-            }
-            TopLevelDecl::ImpTypeDecl(itd) => {
-                named_types.insert(itd.name, itd.tipe.clone());
             }
             TopLevelDecl::UseDecl(path, filename) => {
                 imports.push(Import::new(path.clone(), filename.clone()));
@@ -1024,6 +999,7 @@ fn typecheck_statement<'a>(
             if return_type.get_representation(type_tree)?.assignable(
                 &tc_expr.get_type().get_representation(type_tree)?,
                 type_tree,
+                HashSet::new(),
             ) {
                 Ok((TypeCheckedStatementKind::Return(tc_expr), vec![]))
             } else {
@@ -1164,6 +1140,7 @@ fn typecheck_statement<'a>(
                     if var_type.get_representation(type_tree)?.assignable(
                         &tc_expr.get_type().get_representation(type_tree)?,
                         type_tree,
+                        HashSet::new(),
                     ) {
                         Ok((
                             TypeCheckedStatementKind::AssignLocal(*name, tc_expr),
@@ -1171,16 +1148,21 @@ fn typecheck_statement<'a>(
                         ))
                     } else {
                         Err(new_type_error(
-                            "mismatched types in assignment statement".to_string(),
+                            format!(
+                                "mismatched types in assignment statement expected {:?}, got {:?}",
+                                var_type.get_representation(type_tree)?,
+                                tc_expr.get_type().get_representation(type_tree)?
+                            ),
                             debug_info.location,
                         ))
                     }
                 }
                 None => match global_vars.get(&*name) {
                     Some((var_type, idx)) => {
-                        if var_type.assignable(
+                        if var_type.get_representation(type_tree)?.assignable(
                             &tc_expr.get_type().get_representation(type_tree)?,
                             type_tree,
+                            HashSet::new(),
                         ) {
                             Ok((
                                 TypeCheckedStatementKind::AssignGlobal(*idx, tc_expr),
@@ -1188,7 +1170,7 @@ fn typecheck_statement<'a>(
                             ))
                         } else {
                             Err(new_type_error(
-                                "mismatched types in assignment statement".to_string(),
+                                format!("mismatched types in assignment statement expected {:?}, got {:?}", var_type.get_representation(type_tree)?, tc_expr.get_type().get_representation(type_tree)?),
                                 debug_info.location,
                             ))
                         }
@@ -1732,6 +1714,7 @@ fn typecheck_expr(
                                 if !resolved_arg_type.assignable(
                                     &tc_args[i].get_type().get_representation(type_tree)?,
                                     type_tree,
+                                    HashSet::new(),
                                 ) {
                                     println!(
                                         "expected {:?}",
@@ -1987,7 +1970,7 @@ fn typecheck_expr(
                 )?;
                 match tc_arr.get_type().get_representation(type_tree)? {
                     Type::Array(t) => {
-                        if t.assignable(&tc_val.get_type(), type_tree) {
+                        if t.assignable(&tc_val.get_type(), type_tree, HashSet::new()) {
                             if tc_index.get_type() != Type::Uint {
                                 Err(new_type_error(
                                     "array modifier requires uint index".to_string(),
@@ -2026,7 +2009,7 @@ fn typecheck_expr(
                     }
                     Type::Map(kt, vt) => {
                         if tc_index.get_type() == *kt {
-                            if vt.assignable(&tc_val.get_type(), type_tree) {
+                            if vt.assignable(&tc_val.get_type(), type_tree, HashSet::new()) {
                                 Ok(TypeCheckedExprKind::MapMod(
                                     Box::new(tc_arr),
                                     Box::new(tc_index),
@@ -2075,7 +2058,11 @@ fn typecheck_expr(
                 if let Type::Struct(fields) = &tcs_type {
                     match tcs_type.get_struct_slot_by_name(name.clone()) {
                         Some(index) => {
-                            if fields[index].tipe.assignable(&tc_val.get_type(), type_tree) {
+                            if fields[index].tipe.assignable(
+                                &tc_val.get_type(),
+                                type_tree,
+                                HashSet::new(),
+                            ) {
                                 Ok(TypeCheckedExprKind::StructMod(
                                     Box::new(tc_struc),
                                     index,
