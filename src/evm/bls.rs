@@ -5,16 +5,16 @@
 use crate::evm::abi::{builtin_contract_path, AbiForContract};
 use crate::run::{load_from_file, Machine, RuntimeEnvironment};
 use crate::uint256::Uint256;
-use ethers_signers::{Signer, Wallet};
-use std::path::Path;
 use crypto::digest::Digest;
 use crypto::sha2::Sha256;
+use ethers_signers::{Signer, Wallet};
 use num_bigint::BigUint;
 use num_bigint::ToBigUint;
+use num_bigint::RandBigInt;
 use num_integer::Integer;
 use std::cmp::Ordering;
-use bn::{AffineG1, Fq, Group, G1};
-
+use parity_bn::{AffineG1, AffineG2, Fq, Fr, Group, G1, G2};
+use std::path::Path;
 
 pub struct _ArbBLS<'a> {
     pub contract_abi: AbiForContract,
@@ -128,7 +128,9 @@ pub fn _evm_test_bls_registry(log_to: Option<&Path>, debug: bool) {
 
     let arb_bls = _ArbBLS::_new(&wallet, debug);
 
-    assert!(arb_bls._get_public_key(&mut machine, my_addr.clone()).is_err());
+    assert!(arb_bls
+        ._get_public_key(&mut machine, my_addr.clone())
+        .is_err());
 
     let expected = [
         Uint256::from_u64(13),
@@ -165,215 +167,223 @@ pub fn _evm_test_bls_registry(log_to: Option<&Path>, debug: bool) {
 pub fn hash_to_point(
     domain: &[u8],
     msg: &[u8]
-    ) -> Option<AffineG1> {
+    ) -> Option<G1> {
 
-    let (u0, u1) = hashToField(domain, msg);
-    if let Some((pX_bi, pY_bi)) = map_to_g1(&u0) {
-       if let Some((qX_bi, qY_bi)) = map_to_g1(&u1) {
+    let (u0, u1) = hash_to_field(domain, msg);
+    if let Some((px_bi, py_bi)) = map_to_g1(&u0) {
+        if let Some((qx_bi, qy_bi)) = map_to_g1(&u1) {
 
 
-        let px = Fq::from_slice(&pX_bi.to_bytes_be()).unwrap();
-        let py = Fq::from_slice(&pY_bi.to_bytes_be()).unwrap();
-        let qx = Fq::from_slice(&qX_bi.to_bytes_be()).unwrap();
-        let qy = Fq::from_slice(&qY_bi.to_bytes_be()).unwrap();
+            let px = Fq::from_slice(&px_bi.to_bytes_be()).unwrap();
+            let py = Fq::from_slice(&py_bi.to_bytes_be()).unwrap();
+            let qx = Fq::from_slice(&qx_bi.to_bytes_be()).unwrap();
+            let qy = Fq::from_slice(&qy_bi.to_bytes_be()).unwrap();
 
-        let p = if px == Fq::zero() && py == Fq::zero() {
-           G1::zero()
-        } else {
-           AffineG1::new(px, py).unwrap().into()
-         };
-         let q = if qx == Fq::zero() && qy == Fq::zero() {
-            G1::zero()
-         } else {
-           AffineG1::new(qx, qy).unwrap().into()
-        };
+            let p = if px == Fq::zero() && py == Fq::zero() {
+                G1::zero()
+            } else {
+                AffineG1::new(px, py).unwrap().into()
+            };
+            let q = if qx == Fq::zero() && qy == Fq::zero() {
+                G1::zero()
+            } else {
+                AffineG1::new(qx, qy).unwrap().into()
+            };
 
-        if let Some(ret) = AffineG1::from_jacobian(p + q) {
+            let ret = p + q ;
             let mut out_buf_0 = vec![0u8; 32];
             ret.x().to_big_endian(&mut out_buf_0).unwrap();
             let mut out_buf_1 = vec![0u8; 32];
             ret.y().to_big_endian(&mut out_buf_1).unwrap();
             println!("{:?}", out_buf_0);
-             println!("{:?}", out_buf_1);
-
-          return Some(ret)
-         } 
+            println!("{:?}", out_buf_1);
+            return Some(ret) 
+        }
     }
-    }
-    println!("fooobeeeefoooo1");
     None
 }
 
 
-
 fn map_to_g1(_x: &BigUint) -> Option<(BigUint, BigUint)> {
-            println!("fooobeeeefoooo8");
 
-        let field_order = BigUint::parse_bytes(b"30644e72e131a029b85045b68181585d97816a916871ca8d3c208c16d87cfd47", 16).unwrap();
-        // sqrt(-3)
-    let z0 = BigUint::parse_bytes(b"0000000000000000b3c4d79d41a91759a9e4c7e359b6b89eaec68e62effffffd", 16).unwrap();
+    let field_order = BigUint::parse_bytes(
+        b"30644e72e131a029b85045b68181585d97816a916871ca8d3c208c16d87cfd47",
+        16,
+    )
+    .unwrap();
+    // sqrt(-3)
+    let z0 = BigUint::parse_bytes(
+        b"0000000000000000b3c4d79d41a91759a9e4c7e359b6b89eaec68e62effffffd",
+        16,
+    )
+    .unwrap();
+    // (sqrt(-3) - 1)  / 2
+    let z1 = BigUint::parse_bytes(
+        b"000000000000000059e26bcea0d48bacd4f263f1acdb5c4f5763473177fffffe",
+        16,
+    )
+    .unwrap();
 
-// (sqrt(-3) - 1)  / 2
-    let z1 = BigUint::parse_bytes(b"000000000000000059e26bcea0d48bacd4f263f1acdb5c4f5763473177fffffe", 16).unwrap();
+    if(_x.cmp(&field_order) != Ordering::Less) {
+        return None 
+    } 
 
-        if(_x.cmp(&field_order) != Ordering::Less) {
-            println!("seriously");
-            return None
-        } 
+            
+    let mut found = false;
+    let sqrt_x = sqrt(_x);
+    if sqrt_x.is_some() {
+        found = true;
+    }
 
-        let sqrtX = sqrt(_x);
-
-        let mut found = false;
-
-        if sqrtX.is_some() {
-        	found = true;
-        }
-
-        let mut a0 = (_x * _x).mod_floor(&field_order);
-        a0 = (a0 + &ToBigUint::to_biguint(&4).unwrap()).mod_floor(&field_order);
-        let mut a1 = (_x * z0).mod_floor(&field_order);
-        let mut a2 = (&a0 * &a1).mod_floor(&field_order);
-        a2 = inverse(&a2);
-        a1 = (&a1 * &a1).mod_floor(&field_order);
-        a1 = (&a1 * &a2).mod_floor(&field_order);
+    let mut a0 = (_x * _x).mod_floor(&field_order);
+    a0 = (a0 + &ToBigUint::to_biguint(&4).unwrap()).mod_floor(&field_order);
+    let mut a1 = (_x * z0).mod_floor(&field_order);
+    let mut a2 = (&a0 * &a1).mod_floor(&field_order);
+    a2 = inverse(&a2);
+    a1 = (&a1 * &a1).mod_floor(&field_order);
+    a1 = (&a1 * &a2).mod_floor(&field_order);
         
-        a1 = (_x * &a1).mod_floor(&field_order);
+    a1 = (_x * &a1).mod_floor(&field_order);
         
-        let mut x = (z1 + (&field_order-&a1)).mod_floor(&field_order);
+    let mut x = (z1 + (&field_order-&a1)).mod_floor(&field_order);
 
-        a1 = (&x * &x).mod_floor(&field_order);
-        a1 = (&a1 * &x).mod_floor(&field_order);
-        a1 = (&a1 + &ToBigUint::to_biguint(&3).unwrap()).mod_floor(&field_order);
+    a1 = (&x * &x).mod_floor(&field_order);
+    a1 = (&a1 * &x).mod_floor(&field_order);
+    a1 = (&a1 + &ToBigUint::to_biguint(&3).unwrap()).mod_floor(&field_order);
 
-        let mut sqrt_a1 = sqrt(&a1);
+    let mut sqrt_a1 = sqrt(&a1);
 
-         if let Some(sqa1) = sqrt_a1 {
-        	if (found) {
-                a1 = sqa1;
-    	    } else {
-     	    	a1 = &field_order - sqa1;
-     	    }
-            return Some((x,a1));
+    if let Some(sqa1) = sqrt_a1 {
+        if (found) {
+            a1 = sqa1;
+    	} else {
+     	    a1 = &field_order - sqa1;
+     	}
+        return Some((x,a1));
+    }
+
+    x = (x + &ToBigUint::to_biguint(&1).unwrap()).mod_floor(&field_order);
+    x = &field_order - &x;
+
+    a1 = (&x * &x).mod_floor(&field_order);
+    a1 = (&a1 * &x).mod_floor(&field_order);
+    a1 = (&a1 + &ToBigUint::to_biguint(&3).unwrap()).mod_floor(&field_order);
+
+    sqrt_a1 = sqrt(&a1);
+
+    if let Some(sqa1) = sqrt_a1 {
+        if (found) {
+            a1 = sqa1;
+        } else {
+            a1 = &field_order - sqa1;
         }
+        return Some((x,a1));
+    }
 
-        x = (x + &ToBigUint::to_biguint(&1).unwrap()).mod_floor(&field_order);  
-        x = &field_order - &x;
+    x = (&a0 * &a0).mod_floor(&field_order);
+    x = (&x * &x).mod_floor(&field_order);
+    x = (&x * &a2).mod_floor(&field_order);
+    x = (&x * &a2).mod_floor(&field_order);
+    x = (&x + &ToBigUint::to_biguint(&1).unwrap()).mod_floor(&field_order);
 
-        a1 = (&x * &x).mod_floor(&field_order);
-        a1 = (&a1 * &x).mod_floor(&field_order);
-        a1 = (&a1 + &ToBigUint::to_biguint(&3).unwrap()).mod_floor(&field_order);
+    a1 = (&x * &x).mod_floor(&field_order);
+    a1 = (&a1 * &x).mod_floor(&field_order);
+    a1 = (&a1 + &ToBigUint::to_biguint(&3).unwrap()).mod_floor(&field_order);
 
+    sqrt_a1 = sqrt(&a1);
 
-        sqrt_a1 = sqrt(&a1);
-
-         if let Some(sqa1) = sqrt_a1 {
-        	if (found) {
-                a1 = sqa1;
-    	    } else {
-     	    	a1 = &field_order - sqa1;
-     	    }
-            return Some((x,a1));
+    if let Some(sqa1) = sqrt_a1 {
+        if (found) {
+            a1 = sqa1;
+        } else {
+            a1 = &field_order - sqa1;
         }
+        return Some((x,a1));
+    }
 
-
-        x = (&a0 * &a0).mod_floor(&field_order);
-        x = (&x * &x).mod_floor(&field_order);
-        x = (&x * &a2).mod_floor(&field_order);
-        x = (&x * &a2).mod_floor(&field_order);
-        x = (&x + &ToBigUint::to_biguint(&1).unwrap()).mod_floor(&field_order);
-
-        a1 = (&x * &x).mod_floor(&field_order);
-        a1 = (&a1 * &x).mod_floor(&field_order);
-        a1 = (&a1 + &ToBigUint::to_biguint(&3).unwrap()).mod_floor(&field_order);
-
-        sqrt_a1 = sqrt(&a1);
-
-         if let Some(sqa1) = sqrt_a1 {
-        	if (found) {
-                a1 = sqa1;
-    	    } else {
-     	    	a1 = &field_order - sqa1;
-     	    }
-            return Some((x,a1));
-        }
-        println!("fooobeeeefoooo2");
-
-        None
-
-
+    None
 }
 
-
 fn sqrt(xx: &BigUint) -> Option<BigUint> {
-        let field_order = BigUint::parse_bytes(b"30644e72e131a029b85045b68181585d97816a916871ca8d3c208c16d87cfd47", 16).unwrap();
-        let field_orderplus1_div4 = BigUint::parse_bytes(b"c19139cb84c680a6e14116da060561765e05aa45a1c72a34f082305b61f3f52", 16).unwrap();
-        let x = xx.modpow(&field_orderplus1_div4,&field_order);
+    let field_order = BigUint::parse_bytes(
+        b"30644e72e131a029b85045b68181585d97816a916871ca8d3c208c16d87cfd47",
+        16,
+    )
+    .unwrap();
+    let field_orderplus1_div4 = BigUint::parse_bytes(
+        b"c19139cb84c680a6e14116da060561765e05aa45a1c72a34f082305b61f3f52",
+        16,
+    )
+    .unwrap();
+    let x = xx.modpow(&field_orderplus1_div4, &field_order);
 
-        let square = (&x * &x).mod_floor(&field_order);
+    let square = (&x * &x).mod_floor(&field_order);
     if(square.cmp(xx) == Ordering::Equal){
-         println!("fooobeeeefoooo7");
         Some(x)
     } else {
-            println!("fooobeeeefoooo3");
         None
     }
 }
 
 fn inverse(xx: &BigUint) -> BigUint {
-        let field_order = BigUint::parse_bytes(b"30644e72e131a029b85045b68181585d97816a916871ca8d3c208c16d87cfd47", 16).unwrap();
-        let field_ordermin2 = BigUint::parse_bytes(b"30644e72e131a029b85045b68181585d97816a916871ca8d3c208c16d87cfd45", 16).unwrap();
-        xx.modpow(&field_ordermin2,&field_order)
+    let field_order = BigUint::parse_bytes(
+        b"30644e72e131a029b85045b68181585d97816a916871ca8d3c208c16d87cfd47",
+        16,
+    )
+    .unwrap();
+    let field_ordermin2 = BigUint::parse_bytes(
+        b"30644e72e131a029b85045b68181585d97816a916871ca8d3c208c16d87cfd45",
+        16,
+    )
+    .unwrap();
+    xx.modpow(&field_ordermin2, &field_order)
 }
 
-fn hashToField(
-    domain: &[u8],
-    msg: &[u8]
-    ) ->(BigUint,BigUint){
-        let _msg = expandMsgTo96(domain, msg);
-    
-    let field_order = BigUint::parse_bytes(b"30644e72e131a029b85045b68181585d97816a916871ca8d3c208c16d87cfd47", 16).unwrap();
+fn hash_to_field(domain: &[u8], msg: &[u8]) -> (BigUint, BigUint) {
+    let _msg = expand_msg_to_96(domain, msg);
+
+    let field_order = BigUint::parse_bytes(
+        b"30644e72e131a029b85045b68181585d97816a916871ca8d3c208c16d87cfd47",
+        16,
+    )
+    .unwrap();
     let a = BigUint::from_bytes_be(&_msg[0..48]).mod_floor(&field_order);
     let b = BigUint::from_bytes_be(&_msg[48..96]).mod_floor(&field_order);
-    (a,b)
+    (a, b)
+}
 
-
-    }
-
-pub fn expandMsgTo96(
-    domain: &[u8],
-    msg: &[u8],
-)->Vec<u8>{
-        if (domain.len() > 32) {
+pub fn expand_msg_to_96(domain: &[u8], msg: &[u8]) -> Vec<u8> {
+    if (domain.len() > 32) {
         panic!(); //todo fix error handling
-        }
+    }
 
     let t0 = msg.len();
     let t1 = domain.len();
     let mut out = vec![0; 96];
     let len0 = 64 + t0 + t1 + 4;
     let mut in0 = vec![0; len0];
-    
+
     // zero pad
     let mut off = 64;
     // msg
-    in0[off..off+t0].clone_from_slice(msg);
+    in0[off..off + t0].clone_from_slice(msg);
     off += t0;
 
     in0[off] = 0;
-    off +=1;
+    off += 1;
     in0[off] = 96;
-    off +=1;
+    off += 1;
     in0[off] = 0;
-    off +=1;
+    off += 1;
 
-    in0[off..off+t1].clone_from_slice(domain);
+    in0[off..off + t1].clone_from_slice(domain);
     off += t1;
     in0[off] = t1 as u8;
 
     let mut hasher = Sha256::new();
     hasher.input(&in0);
     let mut b0 = vec![0; 32];
-     hasher.result(&mut b0);
+    hasher.result(&mut b0);
 
     let len1 = 32 + 1 + domain.len() + 1;
 
@@ -382,8 +392,8 @@ pub fn expandMsgTo96(
     off = 32;
 
     in1[off] = 1;
-    off+=1;
-    in1[off..off+t1].clone_from_slice(domain);
+    off += 1;
+    in1[off..off + t1].clone_from_slice(domain);
     off += t1;
     in1[off] = t1 as u8;
 
@@ -394,7 +404,7 @@ pub fn expandMsgTo96(
 
     out[0..32].clone_from_slice(&bi);
 
-    let mut t: Vec<u8> = b0.iter().zip(bi.iter()).map(|(&l, &r)| l ^ r).collect(); 
+    let mut t: Vec<u8> = b0.iter().zip(bi.iter()).map(|(&l, &r)| l ^ r).collect();
 
     in1[0..32].clone_from_slice(&t);
 
@@ -402,7 +412,7 @@ pub fn expandMsgTo96(
     in1[off] = 2;
     off += 1;
 
-    in1[off..off+t1].clone_from_slice(domain);
+    in1[off..off + t1].clone_from_slice(domain);
     off = off + t1;
     in1[off] = t1 as u8;
 
@@ -412,15 +422,15 @@ pub fn expandMsgTo96(
 
     out[32..64].clone_from_slice(&bi);
 
-    t = b0.iter().zip(bi.iter()).map(|(&l, &r)| l ^ r).collect(); 
+    t = b0.iter().zip(bi.iter()).map(|(&l, &r)| l ^ r).collect();
 
     in1[0..32].clone_from_slice(&t);
 
     off = 32;
     in1[off] = 3;
     off = off + 1;
-    
-    in1[off..off+t1].clone_from_slice(domain);
+
+    in1[off..off + t1].clone_from_slice(domain);
     off = off + t1;
     in1[off] = t1 as u8;
 
@@ -432,56 +442,150 @@ pub fn expandMsgTo96(
 }
 
 pub struct BLSPublicKey {
-    //TODO: add fields
+    g2p:    AffineG2,
 }
 
 pub struct BLSPrivateKey {
-    //TODO: add fields
+    s:      Fr
 }
 
 pub struct BLSSignature {
-    //TODO: add fields
+    g1p:    AffineG1,
 }
 
 pub struct BLSAggregateSignature {
-    //TODO: add fields
+    g1p:    AffineG1,
 }
 
 pub fn generate_bls_key_pair() -> (BLSPublicKey, BLSPrivateKey) {
-    let random_generator = rand::thread_rng();
-    //TODO: implement this
-    (BLSPublicKey{}, BLSPrivateKey{})  // temporary, for typechecking
+    // can't use built in FR::random() due to versioning mismatch of rand
+    let subgroup_order =  BigUint::parse_bytes(b"30644E72E131A029B85045B68181585D2833E84879B9709143E1F593F0000001",16).unwrap();
+    let mut rng = rand::thread_rng();
+    let s_bi: BigUint = rng.gen_biguint(256).mod_floor(&subgroup_order);
+    let s_str = s_bi.to_str_radix(10);
+    let s = Fr::from_str(&s_str).unwrap();
+    let p_j = (G2::one() * s); // check base point
+    let p_a = AffineG2::from_jacobian(p_j).unwrap();
+    (BLSPublicKey {g2p: p_a}, BLSPrivateKey {s: s}) 
 }
 
+// hardcode domain?
 impl BLSPrivateKey {
-    pub fn sign_message(&self, message: &[u8]) -> BLSSignature {
-        //TODO: implement this
-        BLSSignature{}  // temporary, for typechecking
+    pub fn sign_message(&self, domain: &[u8], message: &[u8]) -> BLSSignature {
+        let h = hash_to_point(domain, message);
+        // ignores error that should never arise that would return None for h. Handle and Return Option<BLSSignature> instead?
+        let sigma = h.unwrap() * self.s;
+        BLSSignature {g1p: AffineG1::from_jacobian(sigma).unwrap()}
     }
 }
 
 impl BLSPublicKey {
-    pub fn to_bytes(&self) -> Vec<u8> {
-        //TODO: implement this
-        vec![]   // temporary, for typechecking
+    pub fn to_four_uints(&self) -> (Uint256, Uint256, Uint256, Uint256) {
+        let mut out_buf_0 = vec![0u8; 32];
+        let mut out_buf_1 = vec![0u8; 32];
+        let mut out_buf_2 = vec![0u8; 32];
+        let mut out_buf_3 = vec![0u8; 32];
+
+        self.g2p.x().real().to_big_endian(&mut out_buf_0).unwrap();
+        self.g2p.x().imaginary().to_big_endian(&mut out_buf_1).unwrap();
+        self.g2p.y().real().to_big_endian(&mut out_buf_2).unwrap();
+        self.g2p.y().imaginary().to_big_endian(&mut out_buf_3).unwrap();
+
+        (
+            Uint256::from_bytes(&out_buf_0),
+            Uint256::from_bytes(&out_buf_1),
+            Uint256::from_bytes(&out_buf_2),
+            Uint256::from_bytes(&out_buf_3),
+
+        )
+         
     }
+
+    pub fn to_bytes(&self) -> Vec<u8> {
+        let mut out = vec![0u8; 128];
+        self.g2p.x().real().to_big_endian(&mut out[0..32]).unwrap();
+        self.g2p.x().imaginary().to_big_endian(&mut out[32..64]).unwrap();
+        self.g2p.y().real().to_big_endian(&mut out[64..96]).unwrap();
+        self.g2p.y().imaginary().to_big_endian(&mut out[96..128]).unwrap();
+        out
+    }
+
 }
 
 impl BLSSignature {
     pub fn to_bytes(&self) -> Vec<u8> {
-        //TODO: implement this
-        vec![]   // temporary, for typechecking
+        let mut out = vec![0u8; 64];
+        self.g1p.x().to_big_endian(&mut out[0..32]).unwrap();
+        self.g1p.y().to_big_endian(&mut out[32..64]).unwrap();
+        out
     }
 }
 
 impl BLSAggregateSignature {
-    pub fn new(sigs: Vec<BLSSignature>, messages: Vec<&[u8]>) -> Self {
-        //TODO: implement this
-        BLSAggregateSignature{}   // temporary, for typechecking
+    pub fn new(sigs: Vec<BLSSignature>) -> Self {
+        let mut sum = G1::zero();
+        for sig in &sigs {  
+            sum = (sum + G1::from(sig.g1p));
+        }   
+        BLSAggregateSignature{g1p: AffineG1::from_jacobian(sum).unwrap()}
+        
+
     }
 
     pub fn to_bytes(&self) -> Vec<u8> {
-        //TODO: implement this
-        vec![]     // temporary, for typechecking
+        let mut out = vec![0u8; 64];
+        self.g1p.x().to_big_endian(&mut out[0..32]).unwrap();
+        self.g1p.y().to_big_endian(&mut out[32..64]).unwrap();
+        out
     }
+}
+
+#[test]
+pub fn test_bls_signed_batch() {
+    _evm_test_bls_signed_batch(None, false).unwrap();
+}
+
+pub fn _evm_test_bls_signed_batch(log_to: Option<&Path>, debug: bool) -> Result<(), ethabi::Error> {
+    let rt_env = RuntimeEnvironment::new(Uint256::from_usize(1111));
+
+    let alice_wallet = rt_env.new_wallet();
+    let alice_addr = Uint256::from_bytes(alice_wallet.address().as_bytes());
+    let bob_wallet = rt_env.new_wallet();
+    let bob_addr = Uint256::from_bytes(bob_wallet.address().as_bytes());
+
+    let mut machine = load_from_file(Path::new("arb_os/arbos.mexe"), rt_env);
+    machine.start_at_zero();
+
+    let mut add_contract = AbiForContract::new_from_file(&builtin_contract_path("Add"))?;
+    if add_contract.deploy(&[], &mut machine, Uint256::zero(), None, debug) == None {
+        panic!("failed to deploy Add contract");
+    }
+
+    // generate and register BLS keys for Alice and Bob
+    let (alice_public_key, alice_private_key) = generate_bls_key_pair();
+    let (bob_public_key, bob_private_key) = generate_bls_key_pair();
+    let alice_arb_bls = _ArbBLS::_new(&alice_wallet, debug);
+    let bob_arb_bls = _ArbBLS::_new(&bob_wallet, debug);
+    let a4 = alice_public_key.to_four_uints();
+    alice_arb_bls._register(&mut machine, a4.0, a4.1, a4.2, a4.3)?;
+    let b4 = bob_public_key.to_four_uints();
+    bob_arb_bls._register(&mut machine, b4.0, b4.1, b4.2, b4.3)?;
+
+    let calldata = add_contract.generate_calldata_for_function(
+        "add",
+        &[
+            ethabi::Token::Uint(Uint256::one().to_u256()),
+            ethabi::Token::Uint(Uint256::one().to_u256()),
+        ],
+    )?;
+    let alice_compressed_tx = machine.runtime_env.make_compressed_tx_for_bls(
+        &alice_addr,
+        Uint256::zero(),
+        Uint256::from_u64(100000000),
+        add_contract.address,
+        Uint256::zero(),
+        &calldata,
+    );
+
+    Ok(())
 }

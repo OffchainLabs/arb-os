@@ -2062,7 +2062,7 @@ fn do_ecrecover(
 }
 
 fn do_ecadd(x0: Uint256, x1: Uint256, y0: Uint256, y1: Uint256) -> (Uint256, Uint256) {
-    use bn::{AffineG1, Fq, Group, G1};
+    use parity_bn::{AffineG1, Fq, Group, G1};
 
     let px = Fq::from_slice(&x0.to_bytes_be()).unwrap();
     let py = Fq::from_slice(&x1.to_bytes_be()).unwrap();
@@ -2095,7 +2095,7 @@ fn do_ecadd(x0: Uint256, x1: Uint256, y0: Uint256, y1: Uint256) -> (Uint256, Uin
 }
 
 fn do_ecmul(x0: Uint256, x1: Uint256, nui: Uint256) -> (Uint256, Uint256) {
-    use bn::{AffineG1, Fq, Fr, Group, G1};
+    use parity_bn::{AffineG1, Fq, Fr, Group, G1};
 
     let px = Fq::from_slice(&x0.to_bytes_be()).unwrap();
     let py = Fq::from_slice(&x1.to_bytes_be()).unwrap();
@@ -2122,7 +2122,7 @@ fn do_ecmul(x0: Uint256, x1: Uint256, nui: Uint256) -> (Uint256, Uint256) {
 }
 
 fn do_ecpairing(mut val: Value) -> Option<bool> {
-    use bn::{pairing, AffineG1, AffineG2, Fq, Fq2, Group, Gt, G1, G2};
+    use parity_bn::{pairing, AffineG1, AffineG2, Fq, Fq2, Group, Gt, G1, G2};
 
     let mut acc = Gt::one();
     for _i in 0..MAX_PAIRING_SIZE {
