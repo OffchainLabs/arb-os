@@ -17,12 +17,14 @@ stdlib/*.mao
 stdlib/*.mexe
 minitests/*.mao
 minitests/*.mexe
+contracts/test/node_modules/*
 contracts/add/node_modules/*
 contracts/test/node_modules/*
 contracts/arbos/node_modules/*
 testlogs/*
 arb_os/contractTemplates.mini
 .idea
+contracts/test/yarn.lock
 contracts/add/yarn.lock
 contracts/add/contracts/.ArbSys.sol.swp
 contracts/test/yarn.lock

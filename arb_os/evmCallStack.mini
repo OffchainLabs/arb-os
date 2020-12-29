@@ -457,12 +457,17 @@ public impure func evmCallStack_doCall(
         }
         let updatedAcctStore = topFrame.accountStore;
         if (balance > 0) {
-            updatedAcctStore = accountStore_transferEthBalance(
+            if let Some(uas) = accountStore_transferEthBalance(
                 updatedAcctStore,
                 callerAddr,
                 calleeAddr,
                 balance
-            )?;
+            ) {
+                updatedAcctStore = uas;
+            } else {
+                restoreAvmStack(stackContents);
+                return Some(false);
+            }
         } elseif (kind == const::EVMCallType_delegatecall) {
             // delegatecall inherits the callvalue of its parent
             // but don't do a transfer because it's running as the same account

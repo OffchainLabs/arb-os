@@ -7,6 +7,7 @@ use std::collections::HashMap;
 
 pub type StringId = usize;
 
+///Maps `String`s to `usize` IDs.
 #[derive(Clone, Debug, Default, Serialize, Deserialize, PartialEq, Eq)]
 pub struct StringTable {
     next_id: StringId,
@@ -25,6 +26,8 @@ impl StringTable {
         }
     }
 
+    ///Returns the `StringID` associated with `name` if it exists, if not creates a new entry and
+    /// returns the newly created ID.
     pub fn get(&mut self, name: String) -> StringId {
         match self.table.get(&name) {
             Some(id) => *id,
@@ -38,10 +41,12 @@ impl StringTable {
         }
     }
 
+    ///If an ID exists, returns it, if not returns `None`.
     pub fn get_if_exists(&self, name: &str) -> Option<&StringId> {
         self.table.get(name)
     }
 
+    ///Takes a `usize` ID and returns the associated `String`
     pub fn name_from_id(&self, name: StringId) -> &String {
         &self.by_id[name as usize]
     }
