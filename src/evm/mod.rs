@@ -8,7 +8,7 @@ use crate::evm::abi::{ArbAddressTable, ArbBLS, ArbFunctionTable, ArbSys, ArbosTe
 use crate::mavm::Value;
 use crate::run::{bytestack_from_bytes, load_from_file, RuntimeEnvironment};
 use crate::uint256::Uint256;
-use abi::{builtin_contract_path, AbiForContract};
+use abi::AbiForContract;
 use ethers_signers::Signer;
 use std::path::Path;
 
@@ -24,8 +24,8 @@ pub struct CallInfo<'a> {
     mutating: bool,
 }
 
-pub fn _fib_contract_path(contract_name: &str) -> String {
-    format!("contracts/fibonacci/build/contracts/{}.json", contract_name)
+pub fn test_contract_path(contract_name: &str) -> String {
+    format!("contracts/test/build/contracts/{}.json", contract_name)
 }
 
 pub fn evm_xcontract_call_with_constructors(
@@ -50,13 +50,12 @@ pub fn evm_xcontract_call_with_constructors(
         machine.run(None)
     }; // handle this eth deposit message
 
-
-    let mut fib_contract = AbiForContract::new_from_file(&_fib_contract_path("Fibonacci"))?;
-    if fib_contract.deploy(&[], &mut machine, Uint256::zero(), None, None, debug).is_err() {
+    let mut fib_contract = AbiForContract::new_from_file(&test_contract_path("Fibonacci"))?;
+    if fib_contract.deploy(&[], &mut machine, Uint256::zero(), None, None, debug) == None {
         panic!("failed to deploy Fibonacci contract");
     }
 
-    let mut pc_contract = AbiForContract::new_from_file(&_fib_contract_path("PaymentChannel"))?;
+    let mut pc_contract = AbiForContract::new_from_file(&test_contract_path("PaymentChannel"))?;
     if pc_contract.deploy(
         &[ethabi::Token::Address(ethereum_types::H160::from_slice(
             &fib_contract.address.to_bytes_be()[12..],
@@ -118,6 +117,7 @@ pub fn _evm_run_with_gas_charging(
     machine.start_at_zero();
 
     let my_addr = Uint256::from_usize(1025);
+
     machine.runtime_env.insert_eth_deposit_message(
         my_addr.clone(),
         my_addr.clone(),
@@ -129,17 +129,13 @@ pub fn _evm_run_with_gas_charging(
         machine.run(None)
     }; // handle these eth deposit messages
 
-    let mut fib_contract = AbiForContract::new_from_file(&_fib_contract_path("Fibonacci"))?;
-    if let Err(receipt ) = fib_contract.deploy(&[], &mut machine, Uint256::zero(), None, None, debug) {
-        if receipt.unwrap().get_return_code() == Uint256::from_u64(3) {
-            return Ok(false);
-        } else {
-            panic!("unexpected failure deploying Fibonacci contract");
-        }
+    let mut fib_contract = AbiForContract::new_from_file(&test_contract_path("Fibonacci"))?;
+    if fib_contract.deploy(&[], &mut machine, Uint256::zero(), None, None, debug) == None {
+        panic!("failed to deploy Fibonacci contract");
     }
 
-    let mut pc_contract = AbiForContract::new_from_file(&_fib_contract_path("PaymentChannel"))?;
-    if let Err(receipt) = pc_contract.deploy(
+    let mut pc_contract = AbiForContract::new_from_file(&test_contract_path("PaymentChannel"))?;
+    if pc_contract.deploy(
         &[ethabi::Token::Address(ethereum_types::H160::from_slice(
             &fib_contract.address.to_bytes_be()[12..],
         ))],
@@ -583,6 +579,50 @@ pub fn _basic_evm_add_test(log_to: Option<&Path>, debug: bool) -> Result<(), eth
     Ok(())
 }
 
+pub fn _underfunded_nested_call_test(
+    log_to: Option<&Path>,
+    debug: bool,
+) -> Result<(), ethabi::Error> {
+    let rt_env = RuntimeEnvironment::new(Uint256::from_usize(1111));
+    let mut machine = load_from_file(Path::new("arb_os/arbos.mexe"), rt_env);
+    machine.start_at_zero();
+
+    let mut contract = AbiForContract::new_from_file(&test_contract_path("Underfunded"))?;
+    if contract.deploy(&[], &mut machine, Uint256::zero(), None, None, debug) == None {
+        panic!("failed to deploy Fibonacci contract");
+    }
+
+    let (logs, sends) = contract.call_function(
+        Uint256::from_u64(1028),
+        "nestedCall",
+        &[ethabi::Token::Uint(Uint256::zero().to_u256())],
+        &mut machine,
+        Uint256::zero(),
+        debug,
+    )?;
+    assert_eq!(logs.len(), 1);
+    assert_eq!(sends.len(), 0);
+    assert!(logs[0].succeeded());
+
+    let (logs, sends) = contract.call_function(
+        Uint256::from_u64(1028),
+        "nestedCall",
+        &[ethabi::Token::Uint(Uint256::one().to_u256())],
+        &mut machine,
+        Uint256::zero(),
+        debug,
+    )?;
+    assert_eq!(logs.len(), 1);
+    assert_eq!(sends.len(), 0);
+    assert!(logs[0].succeeded());
+
+    if let Some(path) = log_to {
+        machine.runtime_env.recorder.to_file(path).unwrap();
+    }
+
+    Ok(())
+}
+
 pub fn evm_test_create(
     log_to: Option<&Path>,
     debug: bool,
@@ -604,12 +644,12 @@ pub fn evm_test_create(
         machine.run(None)
     }; // handle this eth deposit message
 
-    let mut fib_contract = AbiForContract::new_from_file(&_fib_contract_path("Fibonacci"))?;
-    if fib_contract.deploy(&[], &mut machine, Uint256::zero(), None, None, debug).is_err() {
+    let mut fib_contract = AbiForContract::new_from_file(&test_contract_path("Fibonacci"))?;
+    if fib_contract.deploy(&[], &mut machine, Uint256::zero(), None, None, debug) == None {
         panic!("failed to deploy Fibonacci contract");
     }
 
-    let mut pc_contract = AbiForContract::new_from_file(&_fib_contract_path("PaymentChannel"))?;
+    let mut pc_contract = AbiForContract::new_from_file(&test_contract_path("PaymentChannel"))?;
     if pc_contract.deploy(
         &[ethabi::Token::Address(ethereum_types::H160::from_slice(
             &fib_contract.address.to_bytes_be()[12..],
@@ -667,12 +707,12 @@ pub fn evm_xcontract_call_using_batch(
         machine.run(None)
     }; // handle this eth deposit message
 
-    let mut fib_contract = AbiForContract::new_from_file(&_fib_contract_path("Fibonacci"))?;
-    if fib_contract.deploy(&[], &mut machine, Uint256::zero(), None, None, debug).is_err() {
+    let mut fib_contract = AbiForContract::new_from_file(&test_contract_path("Fibonacci"))?;
+    if fib_contract.deploy(&[], &mut machine, Uint256::zero(), None, None, debug) == None {
         panic!("failed to deploy Fibonacci contract");
     }
 
-    let mut pc_contract = AbiForContract::new_from_file(&_fib_contract_path("PaymentChannel"))?;
+    let mut pc_contract = AbiForContract::new_from_file(&test_contract_path("PaymentChannel"))?;
     if pc_contract.deploy(
         &[ethabi::Token::Address(ethereum_types::H160::from_slice(
             &fib_contract.address.to_bytes_be()[12..],
@@ -786,8 +826,7 @@ pub fn _evm_xcontract_call_using_sequencer_batch(
         machine.run(None)
     }; // handle this eth deposit message
 
-    let mut fib_contract =
-        AbiForContract::new_from_file("contracts/fibonacci/build/contracts/Fibonacci.json")?;
+    let mut fib_contract = AbiForContract::new_from_file(&test_contract_path("Fibonacci"))?;
     if fib_contract.deploy(
         &[],
         &mut machine,
@@ -800,8 +839,7 @@ pub fn _evm_xcontract_call_using_sequencer_batch(
         panic!("failed to deploy Fibonacci contract");
     }
 
-    let mut pc_contract =
-        AbiForContract::new_from_file("contracts/fibonacci/build/contracts/PaymentChannel.json")?;
+    let mut pc_contract = AbiForContract::new_from_file(&test_contract_path("PaymentChannel"))?;
     if pc_contract.deploy(
         &[ethabi::Token::Address(ethereum_types::H160::from_slice(
             &fib_contract.address.to_bytes_be()[12..],
@@ -919,8 +957,7 @@ pub fn _evm_xcontract_call_sequencer_slow_path(
         machine.run(None)
     }; // handle this eth deposit message
 
-    let mut fib_contract =
-        AbiForContract::new_from_file("contracts/fibonacci/build/contracts/Fibonacci.json")?;
+    let mut fib_contract = AbiForContract::new_from_file(&test_contract_path("Fibonacci"))?;
     if fib_contract.deploy(
         &[],
         &mut machine,
@@ -933,8 +970,7 @@ pub fn _evm_xcontract_call_sequencer_slow_path(
         panic!("failed to deploy Fibonacci contract");
     }
 
-    let mut pc_contract =
-        AbiForContract::new_from_file("contracts/fibonacci/build/contracts/PaymentChannel.json")?;
+    let mut pc_contract = AbiForContract::new_from_file(&test_contract_path("PaymentChannel"))?;
     if pc_contract.deploy(
         &[ethabi::Token::Address(ethereum_types::H160::from_slice(
             &fib_contract.address.to_bytes_be()[12..],
@@ -1161,8 +1197,7 @@ pub fn _evm_xcontract_call_sequencer_reordering(
         machine.run(None)
     }; // handle this eth deposit message
 
-    let mut fib_contract =
-        AbiForContract::new_from_file("contracts/fibonacci/build/contracts/Fibonacci.json")?;
+    let mut fib_contract = AbiForContract::new_from_file(&test_contract_path("Fibonacci"))?;
     if fib_contract.deploy(
         &[],
         &mut machine,
@@ -1175,8 +1210,7 @@ pub fn _evm_xcontract_call_sequencer_reordering(
         panic!("failed to deploy Fibonacci contract");
     }
 
-    let mut pc_contract =
-        AbiForContract::new_from_file("contracts/fibonacci/build/contracts/PaymentChannel.json")?;
+    let mut pc_contract = AbiForContract::new_from_file(&test_contract_path("PaymentChannel"))?;
     if pc_contract.deploy(
         &[ethabi::Token::Address(ethereum_types::H160::from_slice(
             &fib_contract.address.to_bytes_be()[12..],
@@ -1294,12 +1328,12 @@ pub fn _evm_xcontract_call_using_compressed_batch_2(
         machine.run(None)
     }; // handle this eth deposit message
 
-    let mut fib_contract = AbiForContract::new_from_file(&_fib_contract_path("Fibonacci"))?;
-    if fib_contract.deploy(&[], &mut machine, Uint256::zero(), None, None, debug).is_err() {
+    let mut fib_contract = AbiForContract::new_from_file(&test_contract_path("Fibonacci"))?;
+    if fib_contract.deploy(&[], &mut machine, Uint256::zero(), None, None, debug) == None {
         panic!("failed to deploy Fibonacci contract");
     }
 
-    let mut pc_contract = AbiForContract::new_from_file(&_fib_contract_path("PaymentChannel"))?;
+    let mut pc_contract = AbiForContract::new_from_file(&test_contract_path("PaymentChannel"))?;
     if pc_contract.deploy(
         &[ethabi::Token::Address(ethereum_types::H160::from_slice(
             &fib_contract.address.to_bytes_be()[12..],
@@ -1379,7 +1413,7 @@ pub fn evm_direct_deploy_add(log_to: Option<&Path>, debug: bool) {
     let mut machine = load_from_file(Path::new("arb_os/arbos.mexe"), rt_env);
     machine.start_at_zero();
 
-    match AbiForContract::new_from_file(&builtin_contract_path("Add")) {
+    match AbiForContract::new_from_file(&test_contract_path("Add")) {
         Ok(mut contract) => {
             let result = contract.deploy(&[], &mut machine, Uint256::zero(), None, None, debug);
             if let Ok(contract_addr) = result {
@@ -1403,7 +1437,7 @@ pub fn evm_deploy_buddy_contract(log_to: Option<&Path>, debug: bool) {
     let mut machine = load_from_file(Path::new("arb_os/arbos.mexe"), rt_env);
     machine.start_at_zero();
 
-    match AbiForContract::new_from_file(&builtin_contract_path("Add")) {
+    match AbiForContract::new_from_file(&test_contract_path("Add")) {
         Ok(mut contract) => {
             let result = contract.deploy(
                 &[],
@@ -1446,7 +1480,7 @@ pub fn _evm_test_payment_in_constructor(log_to: Option<&Path>, debug: bool) {
         machine.run(None)
     }; // handle this eth deposit message
 
-    let contract = match AbiForContract::new_from_file(&builtin_contract_path("Add")) {
+    let contract = match AbiForContract::new_from_file(&test_contract_path("Add")) {
         Ok(mut contract) => {
             let result = contract.deploy(
                 &vec![],
@@ -1521,7 +1555,7 @@ pub fn evm_test_arbsys(log_to: Option<&Path>, debug: bool) {
         machine.run(None)
     }; // handle this eth deposit message
 
-    let contract = match AbiForContract::new_from_file(&builtin_contract_path("Add")) {
+    let contract = match AbiForContract::new_from_file(&test_contract_path("Add")) {
         Ok(mut contract) => {
             let result = contract.deploy(&vec![], &mut machine, Uint256::zero(), None, None, debug);
             if let Ok(contract_addr) = result {
@@ -1604,7 +1638,7 @@ pub fn evm_direct_deploy_and_call_add(log_to: Option<&Path>, debug: bool) {
     machine.start_at_zero();
 
     let my_addr = Uint256::from_usize(1025);
-    let contract = match AbiForContract::new_from_file(&builtin_contract_path("Add")) {
+    let contract = match AbiForContract::new_from_file(&test_contract_path("Add")) {
         Ok(mut contract) => {
             let result = contract.deploy(&[], &mut machine, Uint256::zero(), None, None, debug);
             if let Ok(contract_addr) = result {
@@ -1664,7 +1698,7 @@ pub fn _evm_test_same_address_deploy(log_to: Option<&Path>, debug: bool) {
 
     let my_addr = Uint256::from_usize(1025);
     let (contract, orig_contract_addr) =
-        match AbiForContract::new_from_file(&builtin_contract_path("Add")) {
+        match AbiForContract::new_from_file(&test_contract_path("Add")) {
             Ok(mut contract) => {
                 let result = contract.deploy(&[], &mut machine, Uint256::zero(), None, None, debug);
                 if let Ok(contract_addr) = result {
@@ -1679,7 +1713,7 @@ pub fn _evm_test_same_address_deploy(log_to: Option<&Path>, debug: bool) {
             }
         };
 
-    match AbiForContract::new_from_file(&builtin_contract_path("Add")) {
+    match AbiForContract::new_from_file(&test_contract_path("Add")) {
         Ok(mut new_contract) => {
             let result = new_contract.deploy(
                 &[],
@@ -1743,7 +1777,7 @@ pub fn evm_direct_deploy_and_compressed_call_add(log_to: Option<&Path>, debug: b
     machine.start_at_zero();
 
     let my_addr = Uint256::from_bytes(wallet.address().as_bytes());
-    let contract = match AbiForContract::new_from_file(&builtin_contract_path("Add")) {
+    let contract = match AbiForContract::new_from_file(&test_contract_path("Add")) {
         Ok(mut contract) => {
             let result = contract.deploy(&[], &mut machine, Uint256::zero(), None, None, debug);
             if let Ok(contract_addr) = result {
