@@ -5,8 +5,8 @@
 use crate::evm::abi::{_ArbInfo, _ArbOwner};
 use crate::run::{load_from_file, runtime_env::RuntimeEnvironment};
 use crate::uint256::Uint256;
-use std::path::Path;
 use ethers_signers::Signer;
+use std::path::Path;
 
 pub fn _insert_create_node(
     rt_env: &mut RuntimeEnvironment,
@@ -74,7 +74,9 @@ pub fn _test_rollup_tracker() {
     let wallet = machine.runtime_env.new_wallet();
     let owner = Uint256::from_bytes(wallet.address().as_bytes());
     let arbowner = _ArbOwner::_new(&wallet, false);
-    arbowner._give_ownership(&mut machine, owner.clone(), Some(Uint256::zero())).unwrap();
+    arbowner
+        ._give_ownership(&mut machine, owner.clone(), Some(Uint256::zero()))
+        .unwrap();
 
     let my_addr = Uint256::from_u64(11025);
     let claimer = Uint256::from_u64(4242);
@@ -90,7 +92,9 @@ pub fn _test_rollup_tracker() {
         Uint256::_from_eth(1),
     );
 
-    arbowner._add_to_reserve_funds(&mut machine, Uint256::_from_eth(1)).unwrap();
+    arbowner
+        ._add_to_reserve_funds(&mut machine, Uint256::_from_eth(1))
+        .unwrap();
 
     _insert_create_node(
         &mut machine.runtime_env,

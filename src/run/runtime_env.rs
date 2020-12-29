@@ -144,7 +144,9 @@ impl RuntimeEnvironment {
         send_heartbeat_message: bool,
     ) {
         self.current_block_num = self.current_block_num.add(&delta_blocks);
-        self.current_timestamp = self.current_timestamp.add(&delta_timestamp.unwrap_or(Uint256::from_u64(13).mul(&delta_blocks)));
+        self.current_timestamp = self
+            .current_timestamp
+            .add(&delta_timestamp.unwrap_or(Uint256::from_u64(13).mul(&delta_blocks)));
         if send_heartbeat_message {
             self.insert_l2_message(Uint256::zero(), &[6u8], false);
         }
