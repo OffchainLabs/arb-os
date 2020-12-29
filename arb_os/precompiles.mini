@@ -6,6 +6,7 @@ use accounts::AccountStore;
 use evmCallStack::EvmCallFrame;
 use std::bytearray::ByteArray;
 
+use evmCallStack::EvmCallFrame;
 use evmCallStack::evmCallStack_topFrame;
 use evmCallStack::evmCallStack_setTopFrameMemory;
 use evmCallStack::evmCallFrame_getCalldata;
@@ -273,11 +274,11 @@ public impure func precompile_0x05() {  // modexp
 }
 
 func precompile_0x05_pluggable(
-    args: (EvmCalFrame, ByteArray, any),
+    args: (EvmCallFrame, ByteArray, any),
     state: any,
     firstTime: bool
 ) -> (any, any) {  // return ((success: bool, returnData: ByteArray), any)
-    let (topFrame, calldata, _) = args;
+    let (_, calldata, _) = args;
 
     let baseLen = bytearray_get256(calldata, 0);
     let expLen = bytearray_get256(calldata, 32);
