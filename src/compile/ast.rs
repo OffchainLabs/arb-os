@@ -56,8 +56,6 @@ pub enum TopLevelDecl {
     FuncDecl(FuncDecl),
     VarDecl(GlobalVarDecl),
     UseDecl(Vec<String>, String),
-    ImpFuncDecl(ImportFuncDecl),
-    ImpTypeDecl(ImportTypeDecl),
 }
 
 ///Type Declaration, contains the StringId corresponding to the type name, and the underlying Type.
@@ -522,20 +520,6 @@ pub struct ImportFuncDecl {
 }
 
 impl ImportFuncDecl {
-    ///Constructor taking a `Vec` of `FuncArg`s
-    pub fn new(name: StringId, is_impure: bool, args: Vec<FuncArg>, ret_type: Type) -> Self {
-        let mut arg_types = Vec::new();
-        for arg in args.iter() {
-            arg_types.push(arg.tipe.clone());
-        }
-        ImportFuncDecl {
-            name,
-            is_impure,
-            arg_types: arg_types.clone(),
-            ret_type: ret_type.clone(),
-            tipe: Type::Func(is_impure, arg_types, Box::new(ret_type)),
-        }
-    }
 
     ///Identical to new but takes a `Vec` of `Type` instead of a `Vec` of `FuncArg`
     pub fn new_types(
@@ -550,22 +534,6 @@ impl ImportFuncDecl {
             arg_types: arg_types.clone(),
             ret_type: ret_type.clone(),
             tipe: Type::Func(is_impure, arg_types, Box::new(ret_type)),
-        }
-    }
-}
-
-///Represents a type imported from another source file or external location.
-#[derive(Clone, Debug)]
-pub struct ImportTypeDecl {
-    pub name: StringId,
-    pub tipe: Type,
-}
-
-impl ImportTypeDecl {
-    pub fn new(name: StringId) -> Self {
-        ImportTypeDecl {
-            name,
-            tipe: Type::Imported(name),
         }
     }
 }

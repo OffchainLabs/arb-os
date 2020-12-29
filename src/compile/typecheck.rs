@@ -712,6 +712,7 @@ pub fn sort_top_level_decls(
     let mut global_vars = Vec::new();
 
     let (builtin_fds, string_table) = builtin_func_decls(string_table_in);
+    //TODO:Remove or move to new system
     for fd in builtin_fds.iter() {
         func_table.insert(fd.name, fd.tipe.clone());
         imported_funcs.push(ImportedFunc::new(
@@ -734,20 +735,6 @@ pub fn sort_top_level_decls(
             }
             TopLevelDecl::VarDecl(vd) => {
                 global_vars.push(vd.clone());
-            }
-            TopLevelDecl::ImpFuncDecl(fd) => {
-                func_table.insert(fd.name, fd.tipe.clone());
-                imported_funcs.push(ImportedFunc::new(
-                    imported_funcs.len(),
-                    fd.name,
-                    &string_table,
-                    fd.arg_types.clone(),
-                    fd.ret_type.clone(),
-                    fd.is_impure,
-                ));
-            }
-            TopLevelDecl::ImpTypeDecl(itd) => {
-                named_types.insert(itd.name, itd.tipe.clone());
             }
             TopLevelDecl::UseDecl(path, filename) => {
                 imports.push(Import::new(path.clone(), filename.clone()));
