@@ -209,6 +209,11 @@ impl AbiForContract {
         self.contract.function(name)
     }
 
+    pub fn generate_calldata_for_function(&self, func_name: &str, args: &[ethabi::Token]) -> Result<Vec<u8>, ethabi::Error> {
+        let this_function = self.contract.function(func_name)?;
+        Ok(this_function.encode_input(args).unwrap())
+    }
+
     pub fn call_function(
         &self,
         sender_addr: Uint256,
