@@ -621,5 +621,9 @@ pub fn _evm_test_bls_signed_batch(log_to: Option<&Path>, debug: bool) -> Result<
     assert!(logs[logs.len() - 2].succeeded());
     assert!(logs[logs.len() - 1].succeeded());
 
+    if let Some(path) = log_to {
+        machine.runtime_env.recorder.to_file(path).unwrap();
+    }
+
     Ok(())
 }
