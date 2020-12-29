@@ -7,6 +7,7 @@ use accounts::account_setContractInfo;
 
 use evmCallStack::evmCallStack_topFrame;
 use evmCallStack::evmCallStack_setTopFrameMemory;
+use evmCallStack::evmCallFrame_getCalldata;
 
 use evmOps::getEvmOpJumpTable;
 use evmOps::evmOp_return;
@@ -63,6 +64,10 @@ public impure func callPluggable(id: uint, args: any) -> option<any> {
     return Some(retVal);
 }
 
+public impure func pluggableExists(id: uint) -> bool {
+    return (id < moduleManager.capacity) && (moduleManager.modules[id] != None<ModuleState);
+}
+
 public impure func installPluggable(id: uint, newFunc: ModuleFunction, keepState: bool) -> option<()> {
     if (id > const::ModuleIdLimit) {
         return None;
@@ -96,6 +101,12 @@ public impure func installPluggable(id: uint, newFunc: ModuleFunction, keepState
     return Some(());
 }
 
+// The next section supports binding pluggables to a contract address, so a pluggable can function as
+//     a contract.
+// A pluggable functioning this way expects to receive args consisting of the 3-tuple
+//          (callFrame: EvmCallFrame, calldata: ByteArray, evmOpJumpTable: [const::NumEvmOps]impure func()).
+// Its should return (success: bool, resultData: ByteArray).
+
 public impure func bindContractAddressToPluggable(account: Account, addr: address, id: uint) -> Account {
     return account_setContractInfo(
        account,
@@ -127,7 +138,7 @@ impure func makePluggableContractEntryPoint(id: uint) -> impure func() {
 
 impure func entryPointForPluggableContract(id: uint) {
     if let Some(topFrame) = evmCallStack_topFrame() {
-        if let Some(retVal) = callPluggable(id, (topFrame, getEvmOpJumpTable())) {
+        if let Some(retVal) = callPluggable(id, (topFrame, evmCallFrame_getCalldata(topFrame), getEvmOpJumpTable())) {
             let (success, resultData) = unsafecast<(bool, ByteArray)>(retVal);
             if (evmCallStack_setTopFrameMemory(resultData)) {
                 if (success) {
