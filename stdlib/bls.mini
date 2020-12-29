@@ -144,7 +144,6 @@ public func bls_verifySignature(
 ) -> option<()> {
 	let size = len(keys);
 	if (numMsgs == 0 || numMsgs > 30 || numMsgs != len(messages) || numMsgs != len(keys)) {
-        asm(56,) { debugprint };
 		return None;
 	}
 
@@ -179,12 +178,9 @@ public func bls_verifySignature(
     }
 
     let result = asm(acc,) bool { ecpairing };
-    asm(result,) { debugprint };
     if (result) {
-        asm(99,) { debugprint };
         return Some(());
     } else {
-        asm(100,) { debugprint };
         return None;
     }
 }
@@ -203,9 +199,6 @@ public func bls_hashToPoint(
 
     let x = asm(p0.0, p0.1, p1.0, p1.1) uint { ecadd }; // check order
     let y = asm() uint { };
-
-    asm(x,) { debugprint };
-    asm(y,) { debugprint };
 
     // AVM error checking
 

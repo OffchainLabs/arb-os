@@ -30,6 +30,7 @@ pub struct RuntimeEnvironment {
     pub recorder: RtEnvRecorder,
     compressor: TxCompressor,
     charging_policy: Option<(Uint256, Uint256, Uint256)>,
+    num_wallets: u64,
 }
 
 impl RuntimeEnvironment {
@@ -93,6 +94,7 @@ impl RuntimeEnvironment {
             recorder: RtEnvRecorder::new(),
             compressor: TxCompressor::new(),
             charging_policy: charging_policy.clone(),
+            num_wallets: 0,
         };
 
         ret.insert_l1_message(
@@ -152,8 +154,9 @@ impl RuntimeEnvironment {
         }
     }
 
-    pub fn new_wallet(&self) -> Wallet {
-        let mut r = StdRng::seed_from_u64(42);
+    pub fn new_wallet(&mut self) -> Wallet {
+        let mut r = StdRng::seed_from_u64(42 + self.num_wallets);
+        self.num_wallets = self.num_wallets + 1;
         Wallet::new(&mut r).set_chain_id(self.get_chain_id())
     }
 
@@ -370,13 +373,19 @@ impl RuntimeEnvironment {
         value: Uint256,
         calldata: &[u8],
     ) -> Vec<u8> {
+        let mut result = self.compressor.compress_address(sender.clone());
+
+        let mut buf = vec![0xffu8];
         let seq_num = self.get_and_incr_seq_num(&sender);
-        let mut result = seq_num.rlp_encode();
-        result.extend(gas_price.rlp_encode());
-        result.extend(gas_limit.rlp_encode());
-        result.extend(self.compressor.compress_address(to_addr.clone()));
-        result.extend(self.compressor.compress_token_amount(value.clone()));
-        result.extend(calldata);
+        buf.extend(seq_num.rlp_encode());
+        buf.extend(gas_price.rlp_encode());
+        buf.extend(gas_limit.rlp_encode());
+        buf.extend(self.compressor.compress_address(to_addr.clone()));
+        buf.extend(self.compressor.compress_token_amount(value.clone()));
+        buf.extend(calldata);
+
+        result.extend(Uint256::from_usize(buf.len()).rlp_encode());
+        result.extend(buf);
 
         result
     }
@@ -391,10 +400,9 @@ impl RuntimeEnvironment {
         assert_eq!(senders.len(), msgs.len());
         let mut buf = vec![8u8];
         buf.extend(Uint256::from_usize(senders.len()).rlp_encode());
+        assert_eq!(aggregated_sig.len(), 64);
         buf.extend(aggregated_sig);
         for i in 0..senders.len() {
-            buf.extend(self.compressor.compress_address(senders[i].clone()));
-            buf.extend(Uint256::from_usize(msgs[i].len()).rlp_encode());
             buf.extend(msgs[i].clone());
         }
 
@@ -613,7 +621,7 @@ impl TxCompressor {
     pub fn new() -> Self {
         TxCompressor {
             address_map: HashMap::new(),
-            next_index: 0,
+            next_index: 1,
         }
     }
 

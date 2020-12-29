@@ -439,6 +439,7 @@ fn test_ecpairing_precompile() {
     crate::evm::_evm_ecpairing_precompile(None, false);
 }
 
+#[test]
 fn test_ripemd160_precompile() {
     crate::evm::_evm_eval_ripemd160(None, false);
 }
@@ -621,6 +622,7 @@ fn test_bls_registry() {
     crate::evm::bls::_evm_test_bls_registry(None, false);
 }
 
+#[test]
 fn test_rollup_tracker() {
     crate::run::rolluptest::_test_rollup_tracker();
 }

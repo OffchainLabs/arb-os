@@ -207,7 +207,7 @@ impl AbiForContract {
         self.contract.function(name)
     }
 
-    pub fn generate_calldata_for_function(
+    pub fn _generate_calldata_for_function(
         &self,
         func_name: &str,
         args: &[ethabi::Token],

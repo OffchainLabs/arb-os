@@ -151,6 +151,8 @@ public impure func decompressAddress(
         return Some((ustr, addressTable_getByIndex(globalIndexedAddressTable, decodedUint)?));
     } else {
         let (ustr, addr) = rlp_decodeAddress(stream)?;
+        let (giat, _) = addressTable_getByAddressAlloc(globalIndexedAddressTable, addr);
+        globalIndexedAddressTable = giat;
         return Some((ustr, addr));
     }
 }
@@ -250,30 +252,48 @@ public impure func decompressAndVerifyBLSSignedTxBatch(
     let aggregatedSig = struct { x: sigx, y: sigy };
 
     let i = 0;
-    let domain = bytearray_set256(bytearray_new(0), 0, uint(hash(20201223)));
+    let domain = bytearray_set256(bytearray_new(0), 0, 0);
     while(i < numMsgs) {
+        // the signature on this tx covers all of the data associated with this tx
+        // we remember the start of the stream, so we can extract the full data later, once we know where the end is
+        let startStream = stream;
+
         let (us, signerAddr) = decompressAddress(stream)?;
         stream = us;
+
         let (us, txSize) = rlp_decodeUint(stream)?;
         stream = us;
+
         let (us, txData) = bytestream_getN(stream, txSize)?;
         stream = us;
-        msgHashes = msgHashes with { [i] = bls_hashToPoint(domain, txData)? };
+
+        let fullDataSize = bytestream_bytesReadSoFar(stream)-bytestream_bytesReadSoFar(startStream);
+        let (_, fullData) = bytestream_getN(startStream, fullDataSize)?;
+        msgHashes = msgHashes with { [i] = bls_hashToPoint(domain, fullData)? };
+
         signerKeys = signerKeys with {
             [i] = account_getBlsKey(accountStore_get(getGlobalAccountStore(), signerAddr))?
         };
 
-        let (_, newTx) = decompressTx(bytestream_new(txData), Some(signerAddr), None<FunctionTable>)?;
+        let aggregator = originalRequest.sender;
+        if let Some(aggInfo) = originalRequest.aggregator {
+            aggregator = aggInfo.aggregator;
+        }
 
+        let (_, newTx) = decompressTx(bytestream_new(txData), Some(signerAddr), None<FunctionTable>)?;
         newTx = newTx with {
             incomingRequest: originalRequest with {
                 requestId: uint(hash(bytes32(originalRequest.requestId), bytes32(i)))
             } with {
                 msgData: txData
+            } with {
+                aggregator: Some(struct {
+                    aggregator: aggregator,
+                    calldataBytes: fullDataSize + 64/numMsgs,   // charge for your data plus your share of the signature
+                })
             }
         };
-        //TODO: after merging charging code, assign L1 data costs to txs, in incomingRequests
-        
+
         queueToFill = queue_put(queueToFill, newTx);
         i = i+1;
     }
@@ -316,7 +336,6 @@ impure func decompressTx(
             stream = ustr;
         }
     }
-
     let sender = address(0);
     let seqNum = 0;
     if let Some(senderAddr) = maybeSender {
@@ -353,7 +372,6 @@ impure func decompressTx(
 
     let (ustr, toAddr) = decompressAddress(stream)?;
     stream = ustr;
-
     let value = 0;
     let calldata = bytearray_new(0);
     if let Some(tableEntry) = funcTableEntry {
@@ -376,7 +394,6 @@ impure func decompressTx(
         value = val;
         calldata = bytestream_getRemainingBytes(stream);
     }
-
     return Some((
         stream,
         struct {

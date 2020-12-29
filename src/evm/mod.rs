@@ -365,7 +365,7 @@ pub fn evm_test_arbsys_direct(log_to: Option<&Path>, debug: bool) -> Result<(), 
     assert_eq!(my_addr.clone(), my_addr_decompressed);
     assert_eq!(offset, Uint256::from_usize(my_addr_compressed.len()));
 
-    assert_eq!(Uint256::from_u64(2), arb_address_table.size(&mut machine)?);
+    assert_eq!(Uint256::from_u64(3), arb_address_table.size(&mut machine)?);
 
     let an_addr = Uint256::from_u64(581351734971918347);
     let an_addr_compressed = arb_address_table.compress(&mut machine, an_addr.clone())?;
@@ -710,7 +710,7 @@ pub fn evm_xcontract_call_using_batch(
     _profile: bool,
 ) -> Result<bool, ethabi::Error> {
     use std::convert::TryFrom;
-    let rt_env = RuntimeEnvironment::new(Uint256::from_usize(1111), None);
+    let mut rt_env = RuntimeEnvironment::new(Uint256::from_usize(1111), None);
 
     let wallet = rt_env.new_wallet();
     let my_addr = Uint256::from_bytes(wallet.address().as_bytes());
@@ -824,7 +824,7 @@ pub fn _evm_xcontract_call_using_sequencer_batch(
 ) -> Result<bool, ethabi::Error> {
     use std::convert::TryFrom;
     let sequencer_addr = Uint256::from_usize(1337);
-    let rt_env = RuntimeEnvironment::_new_options(
+    let mut rt_env = RuntimeEnvironment::_new_options(
         Uint256::from_usize(1111),
         Some((
             sequencer_addr.clone(),
@@ -959,7 +959,7 @@ pub fn _evm_xcontract_call_sequencer_slow_path(
 ) -> Result<bool, ethabi::Error> {
     use std::convert::TryFrom;
     let sequencer_addr = Uint256::from_usize(1337);
-    let rt_env = RuntimeEnvironment::_new_options(
+    let mut rt_env = RuntimeEnvironment::_new_options(
         Uint256::from_usize(1111),
         Some((
             sequencer_addr.clone(),
@@ -1093,7 +1093,7 @@ pub fn _evm_xcontract_call_using_compressed_batch(
     _profile: bool,
 ) -> Result<bool, ethabi::Error> {
     use std::convert::TryFrom;
-    let rt_env = RuntimeEnvironment::new(Uint256::from_usize(1111), None);
+    let mut rt_env = RuntimeEnvironment::new(Uint256::from_usize(1111), None);
 
     let wallet = rt_env.new_wallet();
     let my_addr = Uint256::from_bytes(wallet.address().as_bytes());
@@ -1208,7 +1208,7 @@ pub fn _evm_xcontract_call_sequencer_reordering(
 ) -> Result<bool, ethabi::Error> {
     use std::convert::TryFrom;
     let sequencer_addr = Uint256::from_usize(1337);
-    let rt_env = RuntimeEnvironment::_new_options(
+    let mut rt_env = RuntimeEnvironment::_new_options(
         Uint256::from_usize(1111),
         Some((
             sequencer_addr.clone(),
@@ -1353,7 +1353,7 @@ pub fn _evm_xcontract_call_using_compressed_batch_2(
     _profile: bool,
 ) -> Result<bool, ethabi::Error> {
     use std::convert::TryFrom;
-    let rt_env = RuntimeEnvironment::new(Uint256::from_usize(1111), None);
+    let mut rt_env = RuntimeEnvironment::new(Uint256::from_usize(1111), None);
 
     let wallet = rt_env.new_wallet();
     let my_addr = Uint256::from_bytes(wallet.address().as_bytes());
@@ -1821,7 +1821,7 @@ pub fn _evm_test_same_address_deploy(log_to: Option<&Path>, debug: bool) {
 
 pub fn evm_direct_deploy_and_compressed_call_add(log_to: Option<&Path>, debug: bool) {
     use std::convert::TryFrom;
-    let rt_env = RuntimeEnvironment::new(Uint256::from_usize(1111), None);
+    let mut rt_env = RuntimeEnvironment::new(Uint256::from_usize(1111), None);
     let wallet = rt_env.new_wallet();
     let mut machine = load_from_file(Path::new("arb_os/arbos.mexe"), rt_env);
     machine.start_at_zero();
