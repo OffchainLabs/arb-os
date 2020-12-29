@@ -33,14 +33,14 @@
     "absolutePath": "/Users/ed/OffchainLabs/arb-os/contracts/test/contracts/Underfunded.sol",
     "exportedSymbols": {
       "Underfunded": [
-        567
+        574
       ]
     },
-    "id": 568,
+    "id": 575,
     "nodeType": "SourceUnit",
     "nodes": [
       {
-        "id": 541,
+        "id": 548,
         "literals": [
           "solidity",
           "^",
@@ -56,16 +56,16 @@
         "contractKind": "contract",
         "documentation": null,
         "fullyImplemented": true,
-        "id": 567,
+        "id": 574,
         "linearizedBaseContracts": [
-          567
+          574
         ],
         "name": "Underfunded",
         "nodeType": "ContractDefinition",
         "nodes": [
           {
             "body": {
-              "id": 549,
+              "id": 556,
               "nodeType": "Block",
               "src": "81:46:5",
               "statements": [
@@ -76,7 +76,7 @@
                       {
                         "argumentTypes": null,
                         "hexValue": "66616c7365",
-                        "id": 545,
+                        "id": 552,
                         "isConstant": false,
                         "isLValue": false,
                         "isPure": true,
@@ -94,7 +94,7 @@
                       {
                         "argumentTypes": null,
                         "hexValue": "6e6f206465706f73697473",
-                        "id": 546,
+                        "id": 553,
                         "isConstant": false,
                         "isLValue": false,
                         "isPure": true,
@@ -121,21 +121,21 @@
                           "typeString": "literal_string \"no deposits\""
                         }
                       ],
-                      "id": 544,
+                      "id": 551,
                       "name": "require",
                       "nodeType": "Identifier",
                       "overloadedDeclarations": [
-                        585,
-                        586
+                        592,
+                        593
                       ],
-                      "referencedDeclaration": 586,
+                      "referencedDeclaration": 593,
                       "src": "91:7:5",
                       "typeDescriptions": {
                         "typeIdentifier": "t_function_require_pure$_t_bool_$_t_string_memory_ptr_$returns$__$",
                         "typeString": "function (bool,string memory) pure"
                       }
                     },
-                    "id": 547,
+                    "id": 554,
                     "isConstant": false,
                     "isLValue": false,
                     "isPure": false,
@@ -149,32 +149,32 @@
                       "typeString": "tuple()"
                     }
                   },
-                  "id": 548,
+                  "id": 555,
                   "nodeType": "ExpressionStatement",
                   "src": "91:29:5"
                 }
               ]
             },
             "documentation": null,
-            "id": 550,
+            "id": 557,
             "implemented": true,
             "kind": "fallback",
             "modifiers": [],
             "name": "",
             "nodeType": "FunctionDefinition",
             "parameters": {
-              "id": 542,
+              "id": 549,
               "nodeType": "ParameterList",
               "parameters": [],
               "src": "61:2:5"
             },
             "returnParameters": {
-              "id": 543,
+              "id": 550,
               "nodeType": "ParameterList",
               "parameters": [],
               "src": "81:0:5"
             },
-            "scope": 567,
+            "scope": 574,
             "src": "53:74:5",
             "stateMutability": "payable",
             "superFunction": null,
@@ -182,7 +182,7 @@
           },
           {
             "body": {
-              "id": 565,
+              "id": 572,
               "nodeType": "Block",
               "src": "176:52:5",
               "statements": [
@@ -193,7 +193,7 @@
                       {
                         "argumentTypes": null,
                         "hexValue": "",
-                        "id": 562,
+                        "id": 569,
                         "isConstant": false,
                         "isLValue": false,
                         "isPure": true,
@@ -219,11 +219,11 @@
                       "arguments": [
                         {
                           "argumentTypes": null,
-                          "id": 560,
+                          "id": 567,
                           "name": "value",
                           "nodeType": "Identifier",
                           "overloadedDeclarations": [],
-                          "referencedDeclaration": 552,
+                          "referencedDeclaration": 559,
                           "src": "211:5:5",
                           "typeDescriptions": {
                             "typeIdentifier": "t_uint256",
@@ -245,14 +245,14 @@
                             "arguments": [
                               {
                                 "argumentTypes": null,
-                                "id": 556,
+                                "id": 563,
                                 "name": "this",
                                 "nodeType": "Identifier",
                                 "overloadedDeclarations": [],
-                                "referencedDeclaration": 596,
+                                "referencedDeclaration": 613,
                                 "src": "194:4:5",
                                 "typeDescriptions": {
-                                  "typeIdentifier": "t_contract$_Underfunded_$567",
+                                  "typeIdentifier": "t_contract$_Underfunded_$574",
                                   "typeString": "contract Underfunded"
                                 }
                               }
@@ -260,11 +260,11 @@
                             "expression": {
                               "argumentTypes": [
                                 {
-                                  "typeIdentifier": "t_contract$_Underfunded_$567",
+                                  "typeIdentifier": "t_contract$_Underfunded_$574",
                                   "typeString": "contract Underfunded"
                                 }
                               ],
-                              "id": 555,
+                              "id": 562,
                               "isConstant": false,
                               "isLValue": false,
                               "isPure": true,
@@ -277,7 +277,7 @@
                               },
                               "typeName": "address"
                             },
-                            "id": 557,
+                            "id": 564,
                             "isConstant": false,
                             "isLValue": false,
                             "isPure": false,
@@ -291,7 +291,7 @@
                               "typeString": "address payable"
                             }
                           },
-                          "id": 558,
+                          "id": 565,
                           "isConstant": false,
                           "isLValue": false,
                           "isPure": false,
@@ -305,7 +305,7 @@
                             "typeString": "function (bytes memory) payable returns (bool,bytes memory)"
                           }
                         },
-                        "id": 559,
+                        "id": 566,
                         "isConstant": false,
                         "isLValue": false,
                         "isPure": false,
@@ -319,7 +319,7 @@
                           "typeString": "function (uint256) pure returns (function (bytes memory) payable returns (bool,bytes memory))"
                         }
                       },
-                      "id": 561,
+                      "id": 568,
                       "isConstant": false,
                       "isLValue": false,
                       "isPure": false,
@@ -333,7 +333,7 @@
                         "typeString": "function (bytes memory) payable returns (bool,bytes memory)"
                       }
                     },
-                    "id": 563,
+                    "id": 570,
                     "isConstant": false,
                     "isLValue": false,
                     "isPure": false,
@@ -347,29 +347,29 @@
                       "typeString": "tuple(bool,bytes memory)"
                     }
                   },
-                  "id": 564,
+                  "id": 571,
                   "nodeType": "ExpressionStatement",
                   "src": "186:35:5"
                 }
               ]
             },
             "documentation": null,
-            "id": 566,
+            "id": 573,
             "implemented": true,
             "kind": "function",
             "modifiers": [],
             "name": "nestedCall",
             "nodeType": "FunctionDefinition",
             "parameters": {
-              "id": 553,
+              "id": 560,
               "nodeType": "ParameterList",
               "parameters": [
                 {
                   "constant": false,
-                  "id": 552,
+                  "id": 559,
                   "name": "value",
                   "nodeType": "VariableDeclaration",
-                  "scope": 566,
+                  "scope": 573,
                   "src": "152:13:5",
                   "stateVariable": false,
                   "storageLocation": "default",
@@ -378,7 +378,7 @@
                     "typeString": "uint256"
                   },
                   "typeName": {
-                    "id": 551,
+                    "id": 558,
                     "name": "uint256",
                     "nodeType": "ElementaryTypeName",
                     "src": "152:7:5",
@@ -394,19 +394,19 @@
               "src": "151:15:5"
             },
             "returnParameters": {
-              "id": 554,
+              "id": 561,
               "nodeType": "ParameterList",
               "parameters": [],
               "src": "176:0:5"
             },
-            "scope": 567,
+            "scope": 574,
             "src": "132:96:5",
             "stateMutability": "nonpayable",
             "superFunction": null,
             "visibility": "external"
           }
         ],
-        "scope": 568,
+        "scope": 575,
         "src": "26:204:5"
       }
     ],
@@ -416,14 +416,14 @@
     "absolutePath": "/Users/ed/OffchainLabs/arb-os/contracts/test/contracts/Underfunded.sol",
     "exportedSymbols": {
       "Underfunded": [
-        567
+        574
       ]
     },
-    "id": 568,
+    "id": 575,
     "nodeType": "SourceUnit",
     "nodes": [
       {
-        "id": 541,
+        "id": 548,
         "literals": [
           "solidity",
           "^",
@@ -439,16 +439,16 @@
         "contractKind": "contract",
         "documentation": null,
         "fullyImplemented": true,
-        "id": 567,
+        "id": 574,
         "linearizedBaseContracts": [
-          567
+          574
         ],
         "name": "Underfunded",
         "nodeType": "ContractDefinition",
         "nodes": [
           {
             "body": {
-              "id": 549,
+              "id": 556,
               "nodeType": "Block",
               "src": "81:46:5",
               "statements": [
@@ -459,7 +459,7 @@
                       {
                         "argumentTypes": null,
                         "hexValue": "66616c7365",
-                        "id": 545,
+                        "id": 552,
                         "isConstant": false,
                         "isLValue": false,
                         "isPure": true,
@@ -477,7 +477,7 @@
                       {
                         "argumentTypes": null,
                         "hexValue": "6e6f206465706f73697473",
-                        "id": 546,
+                        "id": 553,
                         "isConstant": false,
                         "isLValue": false,
                         "isPure": true,
@@ -504,21 +504,21 @@
                           "typeString": "literal_string \"no deposits\""
                         }
                       ],
-                      "id": 544,
+                      "id": 551,
                       "name": "require",
                       "nodeType": "Identifier",
                       "overloadedDeclarations": [
-                        585,
-                        586
+                        592,
+                        593
                       ],
-                      "referencedDeclaration": 586,
+                      "referencedDeclaration": 593,
                       "src": "91:7:5",
                       "typeDescriptions": {
                         "typeIdentifier": "t_function_require_pure$_t_bool_$_t_string_memory_ptr_$returns$__$",
                         "typeString": "function (bool,string memory) pure"
                       }
                     },
-                    "id": 547,
+                    "id": 554,
                     "isConstant": false,
                     "isLValue": false,
                     "isPure": false,
@@ -532,32 +532,32 @@
                       "typeString": "tuple()"
                     }
                   },
-                  "id": 548,
+                  "id": 555,
                   "nodeType": "ExpressionStatement",
                   "src": "91:29:5"
                 }
               ]
             },
             "documentation": null,
-            "id": 550,
+            "id": 557,
             "implemented": true,
             "kind": "fallback",
             "modifiers": [],
             "name": "",
             "nodeType": "FunctionDefinition",
             "parameters": {
-              "id": 542,
+              "id": 549,
               "nodeType": "ParameterList",
               "parameters": [],
               "src": "61:2:5"
             },
             "returnParameters": {
-              "id": 543,
+              "id": 550,
               "nodeType": "ParameterList",
               "parameters": [],
               "src": "81:0:5"
             },
-            "scope": 567,
+            "scope": 574,
             "src": "53:74:5",
             "stateMutability": "payable",
             "superFunction": null,
@@ -565,7 +565,7 @@
           },
           {
             "body": {
-              "id": 565,
+              "id": 572,
               "nodeType": "Block",
               "src": "176:52:5",
               "statements": [
@@ -576,7 +576,7 @@
                       {
                         "argumentTypes": null,
                         "hexValue": "",
-                        "id": 562,
+                        "id": 569,
                         "isConstant": false,
                         "isLValue": false,
                         "isPure": true,
@@ -602,11 +602,11 @@
                       "arguments": [
                         {
                           "argumentTypes": null,
-                          "id": 560,
+                          "id": 567,
                           "name": "value",
                           "nodeType": "Identifier",
                           "overloadedDeclarations": [],
-                          "referencedDeclaration": 552,
+                          "referencedDeclaration": 559,
                           "src": "211:5:5",
                           "typeDescriptions": {
                             "typeIdentifier": "t_uint256",
@@ -628,14 +628,14 @@
                             "arguments": [
                               {
                                 "argumentTypes": null,
-                                "id": 556,
+                                "id": 563,
                                 "name": "this",
                                 "nodeType": "Identifier",
                                 "overloadedDeclarations": [],
-                                "referencedDeclaration": 596,
+                                "referencedDeclaration": 613,
                                 "src": "194:4:5",
                                 "typeDescriptions": {
-                                  "typeIdentifier": "t_contract$_Underfunded_$567",
+                                  "typeIdentifier": "t_contract$_Underfunded_$574",
                                   "typeString": "contract Underfunded"
                                 }
                               }
@@ -643,11 +643,11 @@
                             "expression": {
                               "argumentTypes": [
                                 {
-                                  "typeIdentifier": "t_contract$_Underfunded_$567",
+                                  "typeIdentifier": "t_contract$_Underfunded_$574",
                                   "typeString": "contract Underfunded"
                                 }
                               ],
-                              "id": 555,
+                              "id": 562,
                               "isConstant": false,
                               "isLValue": false,
                               "isPure": true,
@@ -660,7 +660,7 @@
                               },
                               "typeName": "address"
                             },
-                            "id": 557,
+                            "id": 564,
                             "isConstant": false,
                             "isLValue": false,
                             "isPure": false,
@@ -674,7 +674,7 @@
                               "typeString": "address payable"
                             }
                           },
-                          "id": 558,
+                          "id": 565,
                           "isConstant": false,
                           "isLValue": false,
                           "isPure": false,
@@ -688,7 +688,7 @@
                             "typeString": "function (bytes memory) payable returns (bool,bytes memory)"
                           }
                         },
-                        "id": 559,
+                        "id": 566,
                         "isConstant": false,
                         "isLValue": false,
                         "isPure": false,
@@ -702,7 +702,7 @@
                           "typeString": "function (uint256) pure returns (function (bytes memory) payable returns (bool,bytes memory))"
                         }
                       },
-                      "id": 561,
+                      "id": 568,
                       "isConstant": false,
                       "isLValue": false,
                       "isPure": false,
@@ -716,7 +716,7 @@
                         "typeString": "function (bytes memory) payable returns (bool,bytes memory)"
                       }
                     },
-                    "id": 563,
+                    "id": 570,
                     "isConstant": false,
                     "isLValue": false,
                     "isPure": false,
@@ -730,29 +730,29 @@
                       "typeString": "tuple(bool,bytes memory)"
                     }
                   },
-                  "id": 564,
+                  "id": 571,
                   "nodeType": "ExpressionStatement",
                   "src": "186:35:5"
                 }
               ]
             },
             "documentation": null,
-            "id": 566,
+            "id": 573,
             "implemented": true,
             "kind": "function",
             "modifiers": [],
             "name": "nestedCall",
             "nodeType": "FunctionDefinition",
             "parameters": {
-              "id": 553,
+              "id": 560,
               "nodeType": "ParameterList",
               "parameters": [
                 {
                   "constant": false,
-                  "id": 552,
+                  "id": 559,
                   "name": "value",
                   "nodeType": "VariableDeclaration",
-                  "scope": 566,
+                  "scope": 573,
                   "src": "152:13:5",
                   "stateVariable": false,
                   "storageLocation": "default",
@@ -761,7 +761,7 @@
                     "typeString": "uint256"
                   },
                   "typeName": {
-                    "id": 551,
+                    "id": 558,
                     "name": "uint256",
                     "nodeType": "ElementaryTypeName",
                     "src": "152:7:5",
@@ -777,19 +777,19 @@
               "src": "151:15:5"
             },
             "returnParameters": {
-              "id": 554,
+              "id": 561,
               "nodeType": "ParameterList",
               "parameters": [],
               "src": "176:0:5"
             },
-            "scope": 567,
+            "scope": 574,
             "src": "132:96:5",
             "stateMutability": "nonpayable",
             "superFunction": null,
             "visibility": "external"
           }
         ],
-        "scope": 568,
+        "scope": 575,
         "src": "26:204:5"
       }
     ],
@@ -801,7 +801,7 @@
   },
   "networks": {},
   "schemaVersion": "3.3.1",
-  "updatedAt": "2020-12-29T10:43:59.595Z",
+  "updatedAt": "2020-12-29T15:49:07.079Z",
   "devdoc": {
     "methods": {}
   },

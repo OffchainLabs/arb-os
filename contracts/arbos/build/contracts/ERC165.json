@@ -37,14 +37,14 @@
     "absolutePath": "/Users/ed/OffchainLabs/arb-os/contracts/arbos/openzeppelin-contracts/contracts/introspection/ERC165.sol",
     "exportedSymbols": {
       "ERC165": [
-        726
+        625
       ]
     },
-    "id": 727,
+    "id": 626,
     "nodeType": "SourceUnit",
     "nodes": [
       {
-        "id": 675,
+        "id": 574,
         "literals": [
           "solidity",
           ">=",
@@ -55,16 +55,16 @@
           ".0"
         ],
         "nodeType": "PragmaDirective",
-        "src": "33:31:12"
+        "src": "33:31:11"
       },
       {
         "absolutePath": "/Users/ed/OffchainLabs/arb-os/contracts/arbos/openzeppelin-contracts/contracts/introspection/IERC165.sol",
         "file": "./IERC165.sol",
-        "id": 676,
+        "id": 575,
         "nodeType": "ImportDirective",
-        "scope": 727,
-        "sourceUnit": 737,
-        "src": "66:23:12",
+        "scope": 626,
+        "sourceUnit": 636,
+        "src": "66:23:11",
         "symbolAliases": [],
         "unitAlias": ""
       },
@@ -75,43 +75,43 @@
             "arguments": null,
             "baseName": {
               "contractScope": null,
-              "id": 677,
+              "id": 576,
               "name": "IERC165",
               "nodeType": "UserDefinedTypeName",
-              "referencedDeclaration": 736,
-              "src": "291:7:12",
+              "referencedDeclaration": 635,
+              "src": "291:7:11",
               "typeDescriptions": {
-                "typeIdentifier": "t_contract$_IERC165_$736",
+                "typeIdentifier": "t_contract$_IERC165_$635",
                 "typeString": "contract IERC165"
               }
             },
-            "id": 678,
+            "id": 577,
             "nodeType": "InheritanceSpecifier",
-            "src": "291:7:12"
+            "src": "291:7:11"
           }
         ],
         "contractDependencies": [
-          736
+          635
         ],
         "contractKind": "contract",
         "documentation": "@dev Implementation of the {IERC165} interface.\n * Contracts may inherit from this and call {_registerInterface} to declare\ntheir support of an interface.",
         "fullyImplemented": true,
-        "id": 726,
+        "id": 625,
         "linearizedBaseContracts": [
-          726,
-          736
+          625,
+          635
         ],
         "name": "ERC165",
         "nodeType": "ContractDefinition",
         "nodes": [
           {
             "constant": true,
-            "id": 681,
+            "id": 580,
             "name": "_INTERFACE_ID_ERC165",
             "nodeType": "VariableDeclaration",
             "overrides": null,
-            "scope": 726,
-            "src": "388:57:12",
+            "scope": 625,
+            "src": "388:57:11",
             "stateVariable": true,
             "storageLocation": "default",
             "typeDescriptions": {
@@ -119,10 +119,10 @@
               "typeString": "bytes4"
             },
             "typeName": {
-              "id": 679,
+              "id": 578,
               "name": "bytes4",
               "nodeType": "ElementaryTypeName",
-              "src": "388:6:12",
+              "src": "388:6:11",
               "typeDescriptions": {
                 "typeIdentifier": "t_bytes4",
                 "typeString": "bytes4"
@@ -131,14 +131,14 @@
             "value": {
               "argumentTypes": null,
               "hexValue": "30783031666663396137",
-              "id": 680,
+              "id": 579,
               "isConstant": false,
               "isLValue": false,
               "isPure": true,
               "kind": "number",
               "lValueRequested": false,
               "nodeType": "Literal",
-              "src": "435:10:12",
+              "src": "435:10:11",
               "subdenomination": null,
               "typeDescriptions": {
                 "typeIdentifier": "t_rational_33540519_by_1",
@@ -150,12 +150,12 @@
           },
           {
             "constant": false,
-            "id": 685,
+            "id": 584,
             "name": "_supportedInterfaces",
             "nodeType": "VariableDeclaration",
             "overrides": null,
-            "scope": 726,
-            "src": "539:52:12",
+            "scope": 625,
+            "src": "539:52:11",
             "stateVariable": true,
             "storageLocation": "default",
             "typeDescriptions": {
@@ -163,28 +163,28 @@
               "typeString": "mapping(bytes4 => bool)"
             },
             "typeName": {
-              "id": 684,
+              "id": 583,
               "keyType": {
-                "id": 682,
+                "id": 581,
                 "name": "bytes4",
                 "nodeType": "ElementaryTypeName",
-                "src": "547:6:12",
+                "src": "547:6:11",
                 "typeDescriptions": {
                   "typeIdentifier": "t_bytes4",
                   "typeString": "bytes4"
                 }
               },
               "nodeType": "Mapping",
-              "src": "539:23:12",
+              "src": "539:23:11",
               "typeDescriptions": {
                 "typeIdentifier": "t_mapping$_t_bytes4_$_t_bool_$",
                 "typeString": "mapping(bytes4 => bool)"
               },
               "valueType": {
-                "id": 683,
+                "id": 582,
                 "name": "bool",
                 "nodeType": "ElementaryTypeName",
-                "src": "557:4:12",
+                "src": "557:4:11",
                 "typeDescriptions": {
                   "typeIdentifier": "t_bool",
                   "typeString": "bool"
@@ -196,9 +196,9 @@
           },
           {
             "body": {
-              "id": 692,
+              "id": 591,
               "nodeType": "Block",
-              "src": "622:193:12",
+              "src": "622:193:11",
               "statements": [
                 {
                   "expression": {
@@ -206,12 +206,12 @@
                     "arguments": [
                       {
                         "argumentTypes": null,
-                        "id": 689,
+                        "id": 588,
                         "name": "_INTERFACE_ID_ERC165",
                         "nodeType": "Identifier",
                         "overloadedDeclarations": [],
-                        "referencedDeclaration": 681,
-                        "src": "787:20:12",
+                        "referencedDeclaration": 580,
+                        "src": "787:20:11",
                         "typeDescriptions": {
                           "typeIdentifier": "t_bytes4",
                           "typeString": "bytes4"
@@ -225,18 +225,18 @@
                           "typeString": "bytes4"
                         }
                       ],
-                      "id": 688,
+                      "id": 587,
                       "name": "_registerInterface",
                       "nodeType": "Identifier",
                       "overloadedDeclarations": [],
-                      "referencedDeclaration": 725,
-                      "src": "768:18:12",
+                      "referencedDeclaration": 624,
+                      "src": "768:18:11",
                       "typeDescriptions": {
                         "typeIdentifier": "t_function_internal_nonpayable$_t_bytes4_$returns$__$",
                         "typeString": "function (bytes4)"
                       }
                     },
-                    "id": 690,
+                    "id": 589,
                     "isConstant": false,
                     "isLValue": false,
                     "isPure": false,
@@ -244,21 +244,21 @@
                     "lValueRequested": false,
                     "names": [],
                     "nodeType": "FunctionCall",
-                    "src": "768:40:12",
+                    "src": "768:40:11",
                     "tryCall": false,
                     "typeDescriptions": {
                       "typeIdentifier": "t_tuple$__$",
                       "typeString": "tuple()"
                     }
                   },
-                  "id": 691,
+                  "id": 590,
                   "nodeType": "ExpressionStatement",
-                  "src": "768:40:12"
+                  "src": "768:40:11"
                 }
               ]
             },
             "documentation": null,
-            "id": 693,
+            "id": 592,
             "implemented": true,
             "kind": "constructor",
             "modifiers": [],
@@ -266,57 +266,57 @@
             "nodeType": "FunctionDefinition",
             "overrides": null,
             "parameters": {
-              "id": 686,
+              "id": 585,
               "nodeType": "ParameterList",
               "parameters": [],
-              "src": "610:2:12"
+              "src": "610:2:11"
             },
             "returnParameters": {
-              "id": 687,
+              "id": 586,
               "nodeType": "ParameterList",
               "parameters": [],
-              "src": "622:0:12"
+              "src": "622:0:11"
             },
-            "scope": 726,
-            "src": "598:217:12",
+            "scope": 625,
+            "src": "598:217:11",
             "stateMutability": "nonpayable",
             "virtual": false,
             "visibility": "internal"
           },
           {
             "baseFunctions": [
-              735
+              634
             ],
             "body": {
-              "id": 705,
+              "id": 604,
               "nodeType": "Block",
-              "src": "1048:57:12",
+              "src": "1048:57:11",
               "statements": [
                 {
                   "expression": {
                     "argumentTypes": null,
                     "baseExpression": {
                       "argumentTypes": null,
-                      "id": 701,
+                      "id": 600,
                       "name": "_supportedInterfaces",
                       "nodeType": "Identifier",
                       "overloadedDeclarations": [],
-                      "referencedDeclaration": 685,
-                      "src": "1065:20:12",
+                      "referencedDeclaration": 584,
+                      "src": "1065:20:11",
                       "typeDescriptions": {
                         "typeIdentifier": "t_mapping$_t_bytes4_$_t_bool_$",
                         "typeString": "mapping(bytes4 => bool)"
                       }
                     },
-                    "id": 703,
+                    "id": 602,
                     "indexExpression": {
                       "argumentTypes": null,
-                      "id": 702,
+                      "id": 601,
                       "name": "interfaceId",
                       "nodeType": "Identifier",
                       "overloadedDeclarations": [],
-                      "referencedDeclaration": 695,
-                      "src": "1086:11:12",
+                      "referencedDeclaration": 594,
+                      "src": "1086:11:11",
                       "typeDescriptions": {
                         "typeIdentifier": "t_bytes4",
                         "typeString": "bytes4"
@@ -327,45 +327,45 @@
                     "isPure": false,
                     "lValueRequested": false,
                     "nodeType": "IndexAccess",
-                    "src": "1065:33:12",
+                    "src": "1065:33:11",
                     "typeDescriptions": {
                       "typeIdentifier": "t_bool",
                       "typeString": "bool"
                     }
                   },
-                  "functionReturnParameters": 700,
-                  "id": 704,
+                  "functionReturnParameters": 599,
+                  "id": 603,
                   "nodeType": "Return",
-                  "src": "1058:40:12"
+                  "src": "1058:40:11"
                 }
               ]
             },
             "documentation": "@dev See {IERC165-supportsInterface}.\n     * Time complexity O(1), guaranteed to always use less than 30 000 gas.",
             "functionSelector": "01ffc9a7",
-            "id": 706,
+            "id": 605,
             "implemented": true,
             "kind": "function",
             "modifiers": [],
             "name": "supportsInterface",
             "nodeType": "FunctionDefinition",
             "overrides": {
-              "id": 697,
+              "id": 596,
               "nodeType": "OverrideSpecifier",
               "overrides": [],
-              "src": "1024:8:12"
+              "src": "1024:8:11"
             },
             "parameters": {
-              "id": 696,
+              "id": 595,
               "nodeType": "ParameterList",
               "parameters": [
                 {
                   "constant": false,
-                  "id": 695,
+                  "id": 594,
                   "name": "interfaceId",
                   "nodeType": "VariableDeclaration",
                   "overrides": null,
-                  "scope": 706,
-                  "src": "992:18:12",
+                  "scope": 605,
+                  "src": "992:18:11",
                   "stateVariable": false,
                   "storageLocation": "default",
                   "typeDescriptions": {
@@ -373,10 +373,10 @@
                     "typeString": "bytes4"
                   },
                   "typeName": {
-                    "id": 694,
+                    "id": 593,
                     "name": "bytes4",
                     "nodeType": "ElementaryTypeName",
-                    "src": "992:6:12",
+                    "src": "992:6:11",
                     "typeDescriptions": {
                       "typeIdentifier": "t_bytes4",
                       "typeString": "bytes4"
@@ -386,20 +386,20 @@
                   "visibility": "internal"
                 }
               ],
-              "src": "991:20:12"
+              "src": "991:20:11"
             },
             "returnParameters": {
-              "id": 700,
+              "id": 599,
               "nodeType": "ParameterList",
               "parameters": [
                 {
                   "constant": false,
-                  "id": 699,
+                  "id": 598,
                   "name": "",
                   "nodeType": "VariableDeclaration",
                   "overrides": null,
-                  "scope": 706,
-                  "src": "1042:4:12",
+                  "scope": 605,
+                  "src": "1042:4:11",
                   "stateVariable": false,
                   "storageLocation": "default",
                   "typeDescriptions": {
@@ -407,10 +407,10 @@
                     "typeString": "bool"
                   },
                   "typeName": {
-                    "id": 698,
+                    "id": 597,
                     "name": "bool",
                     "nodeType": "ElementaryTypeName",
-                    "src": "1042:4:12",
+                    "src": "1042:4:11",
                     "typeDescriptions": {
                       "typeIdentifier": "t_bool",
                       "typeString": "bool"
@@ -420,19 +420,19 @@
                   "visibility": "internal"
                 }
               ],
-              "src": "1041:6:12"
+              "src": "1041:6:11"
             },
-            "scope": 726,
-            "src": "965:140:12",
+            "scope": 625,
+            "src": "965:140:11",
             "stateMutability": "view",
             "virtual": false,
             "visibility": "public"
           },
           {
             "body": {
-              "id": 724,
+              "id": 623,
               "nodeType": "Block",
-              "src": "1564:133:12",
+              "src": "1564:133:11",
               "statements": [
                 {
                   "expression": {
@@ -444,19 +444,19 @@
                           "typeIdentifier": "t_bytes4",
                           "typeString": "bytes4"
                         },
-                        "id": 714,
+                        "id": 613,
                         "isConstant": false,
                         "isLValue": false,
                         "isPure": false,
                         "lValueRequested": false,
                         "leftExpression": {
                           "argumentTypes": null,
-                          "id": 712,
+                          "id": 611,
                           "name": "interfaceId",
                           "nodeType": "Identifier",
                           "overloadedDeclarations": [],
-                          "referencedDeclaration": 708,
-                          "src": "1582:11:12",
+                          "referencedDeclaration": 607,
+                          "src": "1582:11:11",
                           "typeDescriptions": {
                             "typeIdentifier": "t_bytes4",
                             "typeString": "bytes4"
@@ -467,14 +467,14 @@
                         "rightExpression": {
                           "argumentTypes": null,
                           "hexValue": "30786666666666666666",
-                          "id": 713,
+                          "id": 612,
                           "isConstant": false,
                           "isLValue": false,
                           "isPure": true,
                           "kind": "number",
                           "lValueRequested": false,
                           "nodeType": "Literal",
-                          "src": "1597:10:12",
+                          "src": "1597:10:11",
                           "subdenomination": null,
                           "typeDescriptions": {
                             "typeIdentifier": "t_rational_4294967295_by_1",
@@ -482,7 +482,7 @@
                           },
                           "value": "0xffffffff"
                         },
-                        "src": "1582:25:12",
+                        "src": "1582:25:11",
                         "typeDescriptions": {
                           "typeIdentifier": "t_bool",
                           "typeString": "bool"
@@ -491,14 +491,14 @@
                       {
                         "argumentTypes": null,
                         "hexValue": "4552433136353a20696e76616c696420696e74657266616365206964",
-                        "id": 715,
+                        "id": 614,
                         "isConstant": false,
                         "isLValue": false,
                         "isPure": true,
                         "kind": "string",
                         "lValueRequested": false,
                         "nodeType": "Literal",
-                        "src": "1609:30:12",
+                        "src": "1609:30:11",
                         "subdenomination": null,
                         "typeDescriptions": {
                           "typeIdentifier": "t_stringliteral_282912c0dfceceb28d77d0333f496b83948f9ba5b3154358a8b140b849289dee",
@@ -518,7 +518,7 @@
                           "typeString": "literal_string \"ERC165: invalid interface id\""
                         }
                       ],
-                      "id": 711,
+                      "id": 610,
                       "name": "require",
                       "nodeType": "Identifier",
                       "overloadedDeclarations": [
@@ -526,13 +526,13 @@
                         -18
                       ],
                       "referencedDeclaration": -18,
-                      "src": "1574:7:12",
+                      "src": "1574:7:11",
                       "typeDescriptions": {
                         "typeIdentifier": "t_function_require_pure$_t_bool_$_t_string_memory_ptr_$returns$__$",
                         "typeString": "function (bool,string memory) pure"
                       }
                     },
-                    "id": 716,
+                    "id": 615,
                     "isConstant": false,
                     "isLValue": false,
                     "isPure": false,
@@ -540,21 +540,21 @@
                     "lValueRequested": false,
                     "names": [],
                     "nodeType": "FunctionCall",
-                    "src": "1574:66:12",
+                    "src": "1574:66:11",
                     "tryCall": false,
                     "typeDescriptions": {
                       "typeIdentifier": "t_tuple$__$",
                       "typeString": "tuple()"
                     }
                   },
-                  "id": 717,
+                  "id": 616,
                   "nodeType": "ExpressionStatement",
-                  "src": "1574:66:12"
+                  "src": "1574:66:11"
                 },
                 {
                   "expression": {
                     "argumentTypes": null,
-                    "id": 722,
+                    "id": 621,
                     "isConstant": false,
                     "isLValue": false,
                     "isPure": false,
@@ -563,26 +563,26 @@
                       "argumentTypes": null,
                       "baseExpression": {
                         "argumentTypes": null,
-                        "id": 718,
+                        "id": 617,
                         "name": "_supportedInterfaces",
                         "nodeType": "Identifier",
                         "overloadedDeclarations": [],
-                        "referencedDeclaration": 685,
-                        "src": "1650:20:12",
+                        "referencedDeclaration": 584,
+                        "src": "1650:20:11",
                         "typeDescriptions": {
                           "typeIdentifier": "t_mapping$_t_bytes4_$_t_bool_$",
                           "typeString": "mapping(bytes4 => bool)"
                         }
                       },
-                      "id": 720,
+                      "id": 619,
                       "indexExpression": {
                         "argumentTypes": null,
-                        "id": 719,
+                        "id": 618,
                         "name": "interfaceId",
                         "nodeType": "Identifier",
                         "overloadedDeclarations": [],
-                        "referencedDeclaration": 708,
-                        "src": "1671:11:12",
+                        "referencedDeclaration": 607,
+                        "src": "1671:11:11",
                         "typeDescriptions": {
                           "typeIdentifier": "t_bytes4",
                           "typeString": "bytes4"
@@ -593,7 +593,7 @@
                       "isPure": false,
                       "lValueRequested": true,
                       "nodeType": "IndexAccess",
-                      "src": "1650:33:12",
+                      "src": "1650:33:11",
                       "typeDescriptions": {
                         "typeIdentifier": "t_bool",
                         "typeString": "bool"
@@ -604,14 +604,14 @@
                     "rightHandSide": {
                       "argumentTypes": null,
                       "hexValue": "74727565",
-                      "id": 721,
+                      "id": 620,
                       "isConstant": false,
                       "isLValue": false,
                       "isPure": true,
                       "kind": "bool",
                       "lValueRequested": false,
                       "nodeType": "Literal",
-                      "src": "1686:4:12",
+                      "src": "1686:4:11",
                       "subdenomination": null,
                       "typeDescriptions": {
                         "typeIdentifier": "t_bool",
@@ -619,20 +619,20 @@
                       },
                       "value": "true"
                     },
-                    "src": "1650:40:12",
+                    "src": "1650:40:11",
                     "typeDescriptions": {
                       "typeIdentifier": "t_bool",
                       "typeString": "bool"
                     }
                   },
-                  "id": 723,
+                  "id": 622,
                   "nodeType": "ExpressionStatement",
-                  "src": "1650:40:12"
+                  "src": "1650:40:11"
                 }
               ]
             },
             "documentation": "@dev Registers the contract as an implementer of the interface defined by\n`interfaceId`. Support of the actual ERC165 interface is automatic and\nregistering its interface id is not required.\n     * See {IERC165-supportsInterface}.\n     * Requirements:\n     * - `interfaceId` cannot be the ERC165 invalid interface (`0xffffffff`).",
-            "id": 725,
+            "id": 624,
             "implemented": true,
             "kind": "function",
             "modifiers": [],
@@ -640,17 +640,17 @@
             "nodeType": "FunctionDefinition",
             "overrides": null,
             "parameters": {
-              "id": 709,
+              "id": 608,
               "nodeType": "ParameterList",
               "parameters": [
                 {
                   "constant": false,
-                  "id": 708,
+                  "id": 607,
                   "name": "interfaceId",
                   "nodeType": "VariableDeclaration",
                   "overrides": null,
-                  "scope": 725,
-                  "src": "1527:18:12",
+                  "scope": 624,
+                  "src": "1527:18:11",
                   "stateVariable": false,
                   "storageLocation": "default",
                   "typeDescriptions": {
@@ -658,10 +658,10 @@
                     "typeString": "bytes4"
                   },
                   "typeName": {
-                    "id": 707,
+                    "id": 606,
                     "name": "bytes4",
                     "nodeType": "ElementaryTypeName",
-                    "src": "1527:6:12",
+                    "src": "1527:6:11",
                     "typeDescriptions": {
                       "typeIdentifier": "t_bytes4",
                       "typeString": "bytes4"
@@ -671,39 +671,39 @@
                   "visibility": "internal"
                 }
               ],
-              "src": "1526:20:12"
+              "src": "1526:20:11"
             },
             "returnParameters": {
-              "id": 710,
+              "id": 609,
               "nodeType": "ParameterList",
               "parameters": [],
-              "src": "1564:0:12"
+              "src": "1564:0:11"
             },
-            "scope": 726,
-            "src": "1499:198:12",
+            "scope": 625,
+            "src": "1499:198:11",
             "stateMutability": "nonpayable",
             "virtual": true,
             "visibility": "internal"
           }
         ],
-        "scope": 727,
-        "src": "263:1436:12"
+        "scope": 626,
+        "src": "263:1436:11"
       }
     ],
-    "src": "33:1667:12"
+    "src": "33:1667:11"
   },
   "legacyAST": {
     "absolutePath": "/Users/ed/OffchainLabs/arb-os/contracts/arbos/openzeppelin-contracts/contracts/introspection/ERC165.sol",
     "exportedSymbols": {
       "ERC165": [
-        726
+        625
       ]
     },
-    "id": 727,
+    "id": 626,
     "nodeType": "SourceUnit",
     "nodes": [
       {
-        "id": 675,
+        "id": 574,
         "literals": [
           "solidity",
           ">=",
@@ -714,16 +714,16 @@
           ".0"
         ],
         "nodeType": "PragmaDirective",
-        "src": "33:31:12"
+        "src": "33:31:11"
       },
       {
         "absolutePath": "/Users/ed/OffchainLabs/arb-os/contracts/arbos/openzeppelin-contracts/contracts/introspection/IERC165.sol",
         "file": "./IERC165.sol",
-        "id": 676,
+        "id": 575,
         "nodeType": "ImportDirective",
-        "scope": 727,
-        "sourceUnit": 737,
-        "src": "66:23:12",
+        "scope": 626,
+        "sourceUnit": 636,
+        "src": "66:23:11",
         "symbolAliases": [],
         "unitAlias": ""
       },
@@ -734,43 +734,43 @@
             "arguments": null,
             "baseName": {
               "contractScope": null,
-              "id": 677,
+              "id": 576,
               "name": "IERC165",
               "nodeType": "UserDefinedTypeName",
-              "referencedDeclaration": 736,
-              "src": "291:7:12",
+              "referencedDeclaration": 635,
+              "src": "291:7:11",
               "typeDescriptions": {
-                "typeIdentifier": "t_contract$_IERC165_$736",
+                "typeIdentifier": "t_contract$_IERC165_$635",
                 "typeString": "contract IERC165"
               }
             },
-            "id": 678,
+            "id": 577,
             "nodeType": "InheritanceSpecifier",
-            "src": "291:7:12"
+            "src": "291:7:11"
           }
         ],
         "contractDependencies": [
-          736
+          635
         ],
         "contractKind": "contract",
         "documentation": "@dev Implementation of the {IERC165} interface.\n * Contracts may inherit from this and call {_registerInterface} to declare\ntheir support of an interface.",
         "fullyImplemented": true,
-        "id": 726,
+        "id": 625,
         "linearizedBaseContracts": [
-          726,
-          736
+          625,
+          635
         ],
         "name": "ERC165",
         "nodeType": "ContractDefinition",
         "nodes": [
           {
             "constant": true,
-            "id": 681,
+            "id": 580,
             "name": "_INTERFACE_ID_ERC165",
             "nodeType": "VariableDeclaration",
             "overrides": null,
-            "scope": 726,
-            "src": "388:57:12",
+            "scope": 625,
+            "src": "388:57:11",
             "stateVariable": true,
             "storageLocation": "default",
             "typeDescriptions": {
@@ -778,10 +778,10 @@
               "typeString": "bytes4"
             },
             "typeName": {
-              "id": 679,
+              "id": 578,
               "name": "bytes4",
               "nodeType": "ElementaryTypeName",
-              "src": "388:6:12",
+              "src": "388:6:11",
               "typeDescriptions": {
                 "typeIdentifier": "t_bytes4",
                 "typeString": "bytes4"
@@ -790,14 +790,14 @@
             "value": {
               "argumentTypes": null,
               "hexValue": "30783031666663396137",
-              "id": 680,
+              "id": 579,
               "isConstant": false,
               "isLValue": false,
               "isPure": true,
               "kind": "number",
               "lValueRequested": false,
               "nodeType": "Literal",
-              "src": "435:10:12",
+              "src": "435:10:11",
               "subdenomination": null,
               "typeDescriptions": {
                 "typeIdentifier": "t_rational_33540519_by_1",
@@ -809,12 +809,12 @@
           },
           {
             "constant": false,
-            "id": 685,
+            "id": 584,
             "name": "_supportedInterfaces",
             "nodeType": "VariableDeclaration",
             "overrides": null,
-            "scope": 726,
-            "src": "539:52:12",
+            "scope": 625,
+            "src": "539:52:11",
             "stateVariable": true,
             "storageLocation": "default",
             "typeDescriptions": {
@@ -822,28 +822,28 @@
               "typeString": "mapping(bytes4 => bool)"
             },
             "typeName": {
-              "id": 684,
+              "id": 583,
               "keyType": {
-                "id": 682,
+                "id": 581,
                 "name": "bytes4",
                 "nodeType": "ElementaryTypeName",
-                "src": "547:6:12",
+                "src": "547:6:11",
                 "typeDescriptions": {
                   "typeIdentifier": "t_bytes4",
                   "typeString": "bytes4"
                 }
               },
               "nodeType": "Mapping",
-              "src": "539:23:12",
+              "src": "539:23:11",
               "typeDescriptions": {
                 "typeIdentifier": "t_mapping$_t_bytes4_$_t_bool_$",
                 "typeString": "mapping(bytes4 => bool)"
               },
               "valueType": {
-                "id": 683,
+                "id": 582,
                 "name": "bool",
                 "nodeType": "ElementaryTypeName",
-                "src": "557:4:12",
+                "src": "557:4:11",
                 "typeDescriptions": {
                   "typeIdentifier": "t_bool",
                   "typeString": "bool"
@@ -855,9 +855,9 @@
           },
           {
             "body": {
-              "id": 692,
+              "id": 591,
               "nodeType": "Block",
-              "src": "622:193:12",
+              "src": "622:193:11",
               "statements": [
                 {
                   "expression": {
@@ -865,12 +865,12 @@
                     "arguments": [
                       {
                         "argumentTypes": null,
-                        "id": 689,
+                        "id": 588,
                         "name": "_INTERFACE_ID_ERC165",
                         "nodeType": "Identifier",
                         "overloadedDeclarations": [],
-                        "referencedDeclaration": 681,
-                        "src": "787:20:12",
+                        "referencedDeclaration": 580,
+                        "src": "787:20:11",
                         "typeDescriptions": {
                           "typeIdentifier": "t_bytes4",
                           "typeString": "bytes4"
@@ -884,18 +884,18 @@
                           "typeString": "bytes4"
                         }
                       ],
-                      "id": 688,
+                      "id": 587,
                       "name": "_registerInterface",
                       "nodeType": "Identifier",
                       "overloadedDeclarations": [],
-                      "referencedDeclaration": 725,
-                      "src": "768:18:12",
+                      "referencedDeclaration": 624,
+                      "src": "768:18:11",
                       "typeDescriptions": {
                         "typeIdentifier": "t_function_internal_nonpayable$_t_bytes4_$returns$__$",
                         "typeString": "function (bytes4)"
                       }
                     },
-                    "id": 690,
+                    "id": 589,
                     "isConstant": false,
                     "isLValue": false,
                     "isPure": false,
@@ -903,21 +903,21 @@
                     "lValueRequested": false,
                     "names": [],
                     "nodeType": "FunctionCall",
-                    "src": "768:40:12",
+                    "src": "768:40:11",
                     "tryCall": false,
                     "typeDescriptions": {
                       "typeIdentifier": "t_tuple$__$",
                       "typeString": "tuple()"
                     }
                   },
-                  "id": 691,
+                  "id": 590,
                   "nodeType": "ExpressionStatement",
-                  "src": "768:40:12"
+                  "src": "768:40:11"
                 }
               ]
             },
             "documentation": null,
-            "id": 693,
+            "id": 592,
             "implemented": true,
             "kind": "constructor",
             "modifiers": [],
@@ -925,57 +925,57 @@
             "nodeType": "FunctionDefinition",
             "overrides": null,
             "parameters": {
-              "id": 686,
+              "id": 585,
               "nodeType": "ParameterList",
               "parameters": [],
-              "src": "610:2:12"
+              "src": "610:2:11"
             },
             "returnParameters": {
-              "id": 687,
+              "id": 586,
               "nodeType": "ParameterList",
               "parameters": [],
-              "src": "622:0:12"
+              "src": "622:0:11"
             },
-            "scope": 726,
-            "src": "598:217:12",
+            "scope": 625,
+            "src": "598:217:11",
             "stateMutability": "nonpayable",
             "virtual": false,
             "visibility": "internal"
           },
           {
             "baseFunctions": [
-              735
+              634
             ],
             "body": {
-              "id": 705,
+              "id": 604,
               "nodeType": "Block",
-              "src": "1048:57:12",
+              "src": "1048:57:11",
               "statements": [
                 {
                   "expression": {
                     "argumentTypes": null,
                     "baseExpression": {
                       "argumentTypes": null,
-                      "id": 701,
+                      "id": 600,
                       "name": "_supportedInterfaces",
                       "nodeType": "Identifier",
                       "overloadedDeclarations": [],
-                      "referencedDeclaration": 685,
-                      "src": "1065:20:12",
+                      "referencedDeclaration": 584,
+                      "src": "1065:20:11",
                       "typeDescriptions": {
                         "typeIdentifier": "t_mapping$_t_bytes4_$_t_bool_$",
                         "typeString": "mapping(bytes4 => bool)"
                       }
                     },
-                    "id": 703,
+                    "id": 602,
                     "indexExpression": {
                       "argumentTypes": null,
-                      "id": 702,
+                      "id": 601,
                       "name": "interfaceId",
                       "nodeType": "Identifier",
                       "overloadedDeclarations": [],
-                      "referencedDeclaration": 695,
-                      "src": "1086:11:12",
+                      "referencedDeclaration": 594,
+                      "src": "1086:11:11",
                       "typeDescriptions": {
                         "typeIdentifier": "t_bytes4",
                         "typeString": "bytes4"
@@ -986,45 +986,45 @@
                     "isPure": false,
                     "lValueRequested": false,
                     "nodeType": "IndexAccess",
-                    "src": "1065:33:12",
+                    "src": "1065:33:11",
                     "typeDescriptions": {
                       "typeIdentifier": "t_bool",
                       "typeString": "bool"
                     }
                   },
-                  "functionReturnParameters": 700,
-                  "id": 704,
+                  "functionReturnParameters": 599,
+                  "id": 603,
                   "nodeType": "Return",
-                  "src": "1058:40:12"
+                  "src": "1058:40:11"
                 }
               ]
             },
             "documentation": "@dev See {IERC165-supportsInterface}.\n     * Time complexity O(1), guaranteed to always use less than 30 000 gas.",
             "functionSelector": "01ffc9a7",
-            "id": 706,
+            "id": 605,
             "implemented": true,
             "kind": "function",
             "modifiers": [],
             "name": "supportsInterface",
             "nodeType": "FunctionDefinition",
             "overrides": {
-              "id": 697,
+              "id": 596,
               "nodeType": "OverrideSpecifier",
               "overrides": [],
-              "src": "1024:8:12"
+              "src": "1024:8:11"
             },
             "parameters": {
-              "id": 696,
+              "id": 595,
               "nodeType": "ParameterList",
               "parameters": [
                 {
                   "constant": false,
-                  "id": 695,
+                  "id": 594,
                   "name": "interfaceId",
                   "nodeType": "VariableDeclaration",
                   "overrides": null,
-                  "scope": 706,
-                  "src": "992:18:12",
+                  "scope": 605,
+                  "src": "992:18:11",
                   "stateVariable": false,
                   "storageLocation": "default",
                   "typeDescriptions": {
@@ -1032,10 +1032,10 @@
                     "typeString": "bytes4"
                   },
                   "typeName": {
-                    "id": 694,
+                    "id": 593,
                     "name": "bytes4",
                     "nodeType": "ElementaryTypeName",
-                    "src": "992:6:12",
+                    "src": "992:6:11",
                     "typeDescriptions": {
                       "typeIdentifier": "t_bytes4",
                       "typeString": "bytes4"
@@ -1045,20 +1045,20 @@
                   "visibility": "internal"
                 }
               ],
-              "src": "991:20:12"
+              "src": "991:20:11"
             },
             "returnParameters": {
-              "id": 700,
+              "id": 599,
               "nodeType": "ParameterList",
               "parameters": [
                 {
                   "constant": false,
-                  "id": 699,
+                  "id": 598,
                   "name": "",
                   "nodeType": "VariableDeclaration",
                   "overrides": null,
-                  "scope": 706,
-                  "src": "1042:4:12",
+                  "scope": 605,
+                  "src": "1042:4:11",
                   "stateVariable": false,
                   "storageLocation": "default",
                   "typeDescriptions": {
@@ -1066,10 +1066,10 @@
                     "typeString": "bool"
                   },
                   "typeName": {
-                    "id": 698,
+                    "id": 597,
                     "name": "bool",
                     "nodeType": "ElementaryTypeName",
-                    "src": "1042:4:12",
+                    "src": "1042:4:11",
                     "typeDescriptions": {
                       "typeIdentifier": "t_bool",
                       "typeString": "bool"
@@ -1079,19 +1079,19 @@
                   "visibility": "internal"
                 }
               ],
-              "src": "1041:6:12"
+              "src": "1041:6:11"
             },
-            "scope": 726,
-            "src": "965:140:12",
+            "scope": 625,
+            "src": "965:140:11",
             "stateMutability": "view",
             "virtual": false,
             "visibility": "public"
           },
           {
             "body": {
-              "id": 724,
+              "id": 623,
               "nodeType": "Block",
-              "src": "1564:133:12",
+              "src": "1564:133:11",
               "statements": [
                 {
                   "expression": {
@@ -1103,19 +1103,19 @@
                           "typeIdentifier": "t_bytes4",
                           "typeString": "bytes4"
                         },
-                        "id": 714,
+                        "id": 613,
                         "isConstant": false,
                         "isLValue": false,
                         "isPure": false,
                         "lValueRequested": false,
                         "leftExpression": {
                           "argumentTypes": null,
-                          "id": 712,
+                          "id": 611,
                           "name": "interfaceId",
                           "nodeType": "Identifier",
                           "overloadedDeclarations": [],
-                          "referencedDeclaration": 708,
-                          "src": "1582:11:12",
+                          "referencedDeclaration": 607,
+                          "src": "1582:11:11",
                           "typeDescriptions": {
                             "typeIdentifier": "t_bytes4",
                             "typeString": "bytes4"
@@ -1126,14 +1126,14 @@
                         "rightExpression": {
                           "argumentTypes": null,
                           "hexValue": "30786666666666666666",
-                          "id": 713,
+                          "id": 612,
                           "isConstant": false,
                           "isLValue": false,
                           "isPure": true,
                           "kind": "number",
                           "lValueRequested": false,
                           "nodeType": "Literal",
-                          "src": "1597:10:12",
+                          "src": "1597:10:11",
                           "subdenomination": null,
                           "typeDescriptions": {
                             "typeIdentifier": "t_rational_4294967295_by_1",
@@ -1141,7 +1141,7 @@
                           },
                           "value": "0xffffffff"
                         },
-                        "src": "1582:25:12",
+                        "src": "1582:25:11",
                         "typeDescriptions": {
                           "typeIdentifier": "t_bool",
                           "typeString": "bool"
@@ -1150,14 +1150,14 @@
                       {
                         "argumentTypes": null,
                         "hexValue": "4552433136353a20696e76616c696420696e74657266616365206964",
-                        "id": 715,
+                        "id": 614,
                         "isConstant": false,
                         "isLValue": false,
                         "isPure": true,
                         "kind": "string",
                         "lValueRequested": false,
                         "nodeType": "Literal",
-                        "src": "1609:30:12",
+                        "src": "1609:30:11",
                         "subdenomination": null,
                         "typeDescriptions": {
                           "typeIdentifier": "t_stringliteral_282912c0dfceceb28d77d0333f496b83948f9ba5b3154358a8b140b849289dee",
@@ -1177,7 +1177,7 @@
                           "typeString": "literal_string \"ERC165: invalid interface id\""
                         }
                       ],
-                      "id": 711,
+                      "id": 610,
                       "name": "require",
                       "nodeType": "Identifier",
                       "overloadedDeclarations": [
@@ -1185,13 +1185,13 @@
                         -18
                       ],
                       "referencedDeclaration": -18,
-                      "src": "1574:7:12",
+                      "src": "1574:7:11",
                       "typeDescriptions": {
                         "typeIdentifier": "t_function_require_pure$_t_bool_$_t_string_memory_ptr_$returns$__$",
                         "typeString": "function (bool,string memory) pure"
                       }
                     },
-                    "id": 716,
+                    "id": 615,
                     "isConstant": false,
                     "isLValue": false,
                     "isPure": false,
@@ -1199,21 +1199,21 @@
                     "lValueRequested": false,
                     "names": [],
                     "nodeType": "FunctionCall",
-                    "src": "1574:66:12",
+                    "src": "1574:66:11",
                     "tryCall": false,
                     "typeDescriptions": {
                       "typeIdentifier": "t_tuple$__$",
                       "typeString": "tuple()"
                     }
                   },
-                  "id": 717,
+                  "id": 616,
                   "nodeType": "ExpressionStatement",
-                  "src": "1574:66:12"
+                  "src": "1574:66:11"
                 },
                 {
                   "expression": {
                     "argumentTypes": null,
-                    "id": 722,
+                    "id": 621,
                     "isConstant": false,
                     "isLValue": false,
                     "isPure": false,
@@ -1222,26 +1222,26 @@
                       "argumentTypes": null,
                       "baseExpression": {
                         "argumentTypes": null,
-                        "id": 718,
+                        "id": 617,
                         "name": "_supportedInterfaces",
                         "nodeType": "Identifier",
                         "overloadedDeclarations": [],
-                        "referencedDeclaration": 685,
-                        "src": "1650:20:12",
+                        "referencedDeclaration": 584,
+                        "src": "1650:20:11",
                         "typeDescriptions": {
                           "typeIdentifier": "t_mapping$_t_bytes4_$_t_bool_$",
                           "typeString": "mapping(bytes4 => bool)"
                         }
                       },
-                      "id": 720,
+                      "id": 619,
                       "indexExpression": {
                         "argumentTypes": null,
-                        "id": 719,
+                        "id": 618,
                         "name": "interfaceId",
                         "nodeType": "Identifier",
                         "overloadedDeclarations": [],
-                        "referencedDeclaration": 708,
-                        "src": "1671:11:12",
+                        "referencedDeclaration": 607,
+                        "src": "1671:11:11",
                         "typeDescriptions": {
                           "typeIdentifier": "t_bytes4",
                           "typeString": "bytes4"
@@ -1252,7 +1252,7 @@
                       "isPure": false,
                       "lValueRequested": true,
                       "nodeType": "IndexAccess",
-                      "src": "1650:33:12",
+                      "src": "1650:33:11",
                       "typeDescriptions": {
                         "typeIdentifier": "t_bool",
                         "typeString": "bool"
@@ -1263,14 +1263,14 @@
                     "rightHandSide": {
                       "argumentTypes": null,
                       "hexValue": "74727565",
-                      "id": 721,
+                      "id": 620,
                       "isConstant": false,
                       "isLValue": false,
                       "isPure": true,
                       "kind": "bool",
                       "lValueRequested": false,
                       "nodeType": "Literal",
-                      "src": "1686:4:12",
+                      "src": "1686:4:11",
                       "subdenomination": null,
                       "typeDescriptions": {
                         "typeIdentifier": "t_bool",
@@ -1278,20 +1278,20 @@
                       },
                       "value": "true"
                     },
-                    "src": "1650:40:12",
+                    "src": "1650:40:11",
                     "typeDescriptions": {
                       "typeIdentifier": "t_bool",
                       "typeString": "bool"
                     }
                   },
-                  "id": 723,
+                  "id": 622,
                   "nodeType": "ExpressionStatement",
-                  "src": "1650:40:12"
+                  "src": "1650:40:11"
                 }
               ]
             },
             "documentation": "@dev Registers the contract as an implementer of the interface defined by\n`interfaceId`. Support of the actual ERC165 interface is automatic and\nregistering its interface id is not required.\n     * See {IERC165-supportsInterface}.\n     * Requirements:\n     * - `interfaceId` cannot be the ERC165 invalid interface (`0xffffffff`).",
-            "id": 725,
+            "id": 624,
             "implemented": true,
             "kind": "function",
             "modifiers": [],
@@ -1299,17 +1299,17 @@
             "nodeType": "FunctionDefinition",
             "overrides": null,
             "parameters": {
-              "id": 709,
+              "id": 608,
               "nodeType": "ParameterList",
               "parameters": [
                 {
                   "constant": false,
-                  "id": 708,
+                  "id": 607,
                   "name": "interfaceId",
                   "nodeType": "VariableDeclaration",
                   "overrides": null,
-                  "scope": 725,
-                  "src": "1527:18:12",
+                  "scope": 624,
+                  "src": "1527:18:11",
                   "stateVariable": false,
                   "storageLocation": "default",
                   "typeDescriptions": {
@@ -1317,10 +1317,10 @@
                     "typeString": "bytes4"
                   },
                   "typeName": {
-                    "id": 707,
+                    "id": 606,
                     "name": "bytes4",
                     "nodeType": "ElementaryTypeName",
-                    "src": "1527:6:12",
+                    "src": "1527:6:11",
                     "typeDescriptions": {
                       "typeIdentifier": "t_bytes4",
                       "typeString": "bytes4"
@@ -1330,26 +1330,26 @@
                   "visibility": "internal"
                 }
               ],
-              "src": "1526:20:12"
+              "src": "1526:20:11"
             },
             "returnParameters": {
-              "id": 710,
+              "id": 609,
               "nodeType": "ParameterList",
               "parameters": [],
-              "src": "1564:0:12"
+              "src": "1564:0:11"
             },
-            "scope": 726,
-            "src": "1499:198:12",
+            "scope": 625,
+            "src": "1499:198:11",
             "stateMutability": "nonpayable",
             "virtual": true,
             "visibility": "internal"
           }
         ],
-        "scope": 727,
-        "src": "263:1436:12"
+        "scope": 626,
+        "src": "263:1436:11"
       }
     ],
-    "src": "33:1667:12"
+    "src": "33:1667:11"
   },
   "compiler": {
     "name": "solc",
@@ -1357,7 +1357,7 @@
   },
   "networks": {},
   "schemaVersion": "3.3.1",
-  "updatedAt": "2020-12-28T02:35:17.784Z",
+  "updatedAt": "2020-12-29T15:49:24.246Z",
   "devdoc": {
     "details": "Implementation of the {IERC165} interface. * Contracts may inherit from this and call {_registerInterface} to declare their support of an interface.",
     "methods": {

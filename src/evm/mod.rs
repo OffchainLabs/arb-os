@@ -51,7 +51,7 @@ pub fn evm_xcontract_call_with_constructors(
     }; // handle this eth deposit message
 
     let mut fib_contract = AbiForContract::new_from_file(&test_contract_path("Fibonacci"))?;
-    if fib_contract.deploy(&[], &mut machine, Uint256::zero(), None, None, debug) == None {
+    if fib_contract.deploy(&[], &mut machine, Uint256::zero(), None, None, debug).is_err() {
         panic!("failed to deploy Fibonacci contract");
     }
 
@@ -130,12 +130,16 @@ pub fn _evm_run_with_gas_charging(
     }; // handle these eth deposit messages
 
     let mut fib_contract = AbiForContract::new_from_file(&test_contract_path("Fibonacci"))?;
-    if fib_contract.deploy(&[], &mut machine, Uint256::zero(), None, None, debug) == None {
-        panic!("failed to deploy Fibonacci contract");
+    if let Err(receipt) = fib_contract.deploy(&[], &mut machine, Uint256::zero(), None, None, debug) {
+        if receipt.unwrap().get_return_code() == Uint256::from_u64(3) {
+            return Ok(false);
+        } else {
+            panic!("unexpected failure deploying Fibonacci contract");
+        }
     }
 
     let mut pc_contract = AbiForContract::new_from_file(&test_contract_path("PaymentChannel"))?;
-    if pc_contract.deploy(
+    if let Err(receipt) = pc_contract.deploy(
         &[ethabi::Token::Address(ethereum_types::H160::from_slice(
             &fib_contract.address.to_bytes_be()[12..],
         ))],
@@ -213,7 +217,7 @@ pub fn _evm_tx_with_deposit(
     let my_addr = Uint256::from_usize(1025);
 
     let mut fib_contract =
-        AbiForContract::new_from_file("contracts/fibonacci/build/contracts/Fibonacci.json")?;
+        AbiForContract::new_from_file(&test_contract_path("Fibonacci"))?;
     if fib_contract
         .deploy(&[], &mut machine, Uint256::zero(), None, None, debug)
         .is_err()
@@ -222,7 +226,7 @@ pub fn _evm_tx_with_deposit(
     }
 
     let mut pc_contract =
-        AbiForContract::new_from_file("contracts/fibonacci/build/contracts/PaymentChannel.json")?;
+        AbiForContract::new_from_file(&test_contract_path("PaymentChannel"))?;
 
     if pc_contract
         .deploy(
@@ -583,12 +587,12 @@ pub fn _underfunded_nested_call_test(
     log_to: Option<&Path>,
     debug: bool,
 ) -> Result<(), ethabi::Error> {
-    let rt_env = RuntimeEnvironment::new(Uint256::from_usize(1111));
+    let rt_env = RuntimeEnvironment::new(Uint256::from_usize(1111), None);
     let mut machine = load_from_file(Path::new("arb_os/arbos.mexe"), rt_env);
     machine.start_at_zero();
 
     let mut contract = AbiForContract::new_from_file(&test_contract_path("Underfunded"))?;
-    if contract.deploy(&[], &mut machine, Uint256::zero(), None, None, debug) == None {
+    if contract.deploy(&[], &mut machine, Uint256::zero(), None, None, debug).is_err() {
         panic!("failed to deploy Fibonacci contract");
     }
 
@@ -645,7 +649,7 @@ pub fn evm_test_create(
     }; // handle this eth deposit message
 
     let mut fib_contract = AbiForContract::new_from_file(&test_contract_path("Fibonacci"))?;
-    if fib_contract.deploy(&[], &mut machine, Uint256::zero(), None, None, debug) == None {
+    if fib_contract.deploy(&[], &mut machine, Uint256::zero(), None, None, debug).is_err() {
         panic!("failed to deploy Fibonacci contract");
     }
 
@@ -708,7 +712,7 @@ pub fn evm_xcontract_call_using_batch(
     }; // handle this eth deposit message
 
     let mut fib_contract = AbiForContract::new_from_file(&test_contract_path("Fibonacci"))?;
-    if fib_contract.deploy(&[], &mut machine, Uint256::zero(), None, None, debug) == None {
+    if fib_contract.deploy(&[], &mut machine, Uint256::zero(), None, None, debug).is_err() {
         panic!("failed to deploy Fibonacci contract");
     }
 
@@ -1329,7 +1333,7 @@ pub fn _evm_xcontract_call_using_compressed_batch_2(
     }; // handle this eth deposit message
 
     let mut fib_contract = AbiForContract::new_from_file(&test_contract_path("Fibonacci"))?;
-    if fib_contract.deploy(&[], &mut machine, Uint256::zero(), None, None, debug) == None {
+    if fib_contract.deploy(&[], &mut machine, Uint256::zero(), None, None, debug).is_err() {
         panic!("failed to deploy Fibonacci contract");
     }
 
