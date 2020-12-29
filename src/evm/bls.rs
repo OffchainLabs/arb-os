@@ -162,7 +162,18 @@ pub fn _evm_test_bls_registry(log_to: Option<&Path>, debug: bool) {
     }
 }
 
-
+fn to_32_bytes_be(bi: &BigUint) -> Vec<u8>{
+    let bytes = bi.to_bytes_be();
+    let len = bytes.len();
+    if len > 32 {
+        panic!(); // altenratively, retrun error cal like all 0 vector?
+    } else if len < 32 {
+        let mut out = vec![0u8; 32];
+        out[32-len..32].clone_from_slice(&bytes);
+        return out;
+    }
+    bytes
+}
 
 pub fn hash_to_point(
     domain: &[u8],
@@ -173,11 +184,10 @@ pub fn hash_to_point(
     if let Some((px_bi, py_bi)) = map_to_g1(&u0) {
         if let Some((qx_bi, qy_bi)) = map_to_g1(&u1) {
 
-
-            let px = Fq::from_slice(&px_bi.to_bytes_be()).unwrap();
-            let py = Fq::from_slice(&py_bi.to_bytes_be()).unwrap();
-            let qx = Fq::from_slice(&qx_bi.to_bytes_be()).unwrap();
-            let qy = Fq::from_slice(&qy_bi.to_bytes_be()).unwrap();
+            let px = Fq::from_slice(&to_32_bytes_be(&px_bi)).unwrap();
+            let py = Fq::from_slice(&to_32_bytes_be(&py_bi)).unwrap();
+            let qx = Fq::from_slice(&to_32_bytes_be(&qx_bi)).unwrap();
+            let qy = Fq::from_slice(&to_32_bytes_be(&qy_bi)).unwrap();
 
             let p = if px == Fq::zero() && py == Fq::zero() {
                 G1::zero()
@@ -195,8 +205,6 @@ pub fn hash_to_point(
             ret.x().to_big_endian(&mut out_buf_0).unwrap();
             let mut out_buf_1 = vec![0u8; 32];
             ret.y().to_big_endian(&mut out_buf_1).unwrap();
-            println!("{:?}", out_buf_0);
-            println!("{:?}", out_buf_1);
             return Some(ret) 
         }
     }
@@ -300,7 +308,6 @@ fn map_to_g1(_x: &BigUint) -> Option<(BigUint, BigUint)> {
         }
         return Some((x,a1));
     }
-
     None
 }
 
