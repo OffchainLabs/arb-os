@@ -249,7 +249,7 @@
                                 "name": "this",
                                 "nodeType": "Identifier",
                                 "overloadedDeclarations": [],
-                                "referencedDeclaration": 596,
+                                "referencedDeclaration": 606,
                                 "src": "194:4:5",
                                 "typeDescriptions": {
                                   "typeIdentifier": "t_contract$_Underfunded_$567",
@@ -632,7 +632,7 @@
                                 "name": "this",
                                 "nodeType": "Identifier",
                                 "overloadedDeclarations": [],
-                                "referencedDeclaration": 596,
+                                "referencedDeclaration": 606,
                                 "src": "194:4:5",
                                 "typeDescriptions": {
                                   "typeIdentifier": "t_contract$_Underfunded_$567",
@@ -801,7 +801,7 @@
   },
   "networks": {},
   "schemaVersion": "3.3.1",
-  "updatedAt": "2020-12-29T10:43:59.595Z",
+  "updatedAt": "2020-12-29T17:42:08.097Z",
   "devdoc": {
     "methods": {}
   },

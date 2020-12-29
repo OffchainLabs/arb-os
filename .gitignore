@@ -29,5 +29,7 @@ contracts/arbos/yarn.lock
 contracts/add/contracts/.ArbSys.sol.swp
 contracts/arbos/yarn.lock
 contracts/arbos/contracts/.ArbSys.sol.swp
+contracts/test/build/contracts/*
+contracts/arbos/build/contracts/*
 evm-tests/.travis.yml
 evm-test-logs/*
