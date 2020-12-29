@@ -562,6 +562,7 @@ pub fn _evm_test_bls_signed_batch(log_to: Option<&Path>, debug: bool) -> Result<
     }
 
     // generate and register BLS keys for Alice and Bob
+    let domain = vec![0u8; 32]; // TODO change
     let (alice_public_key, alice_private_key) = generate_bls_key_pair();
     let (bob_public_key, bob_private_key) = generate_bls_key_pair();
     let alice_arb_bls = _ArbBLS::_new(&alice_wallet, debug);
@@ -595,12 +596,11 @@ pub fn _evm_test_bls_signed_batch(log_to: Option<&Path>, debug: bool) -> Result<
         &calldata,
     );
 
-    let alice_sig = alice_private_key.sign_message(&alice_compressed_tx);
-    let bob_sig = bob_private_key.sign_message(&bob_compressed_tx);
+    let alice_sig = alice_private_key.sign_message(&domain, &alice_compressed_tx);
+    let bob_sig = bob_private_key.sign_message(&domain, &bob_compressed_tx);
 
     let aggregated_sig = BLSAggregateSignature::new(
         vec![alice_sig, bob_sig],
-        vec![&alice_compressed_tx, &bob_compressed_tx],
     );
 
     machine.runtime_env._insert_bls_batch(

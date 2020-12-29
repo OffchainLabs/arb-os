@@ -359,8 +359,6 @@ impl RuntimeEnvironment {
         (result, keccak256(tx.rlp().as_ref()).to_vec())
     }
 
-<<<<<<< HEAD
-=======
     pub fn _make_compressed_tx_for_bls(
         &mut self,
         sender: &Uint256,
@@ -401,7 +399,6 @@ impl RuntimeEnvironment {
         self.insert_l2_message(batch_sender.clone(), &buf, false);
     }
 
->>>>>>> 5251cc965dc78a26ea8669e6cbe94eda96260cb3
     pub fn append_signed_tx_message_to_batch(
         &mut self,
         batch: &mut Vec<u8>,
