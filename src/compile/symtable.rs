@@ -20,7 +20,7 @@ pub enum SymTable<'a, T> {
 }
 
 impl<'a, T> SymTable<'a, T> {
-    ///Constructs and empty SymTable
+    ///Constructs an empty SymTable
     pub fn new() -> Self {
         SymTable::Empty
     }
@@ -63,18 +63,22 @@ pub enum CopyingSymTable<'a, T: Copy> {
 }
 
 impl<'a, T: Copy> CopyingSymTable<'a, T> {
+    /// Constructs an empty SymTable
     pub fn new() -> Self {
         CopyingSymTable::Empty
     }
 
+    ///Adds a node to the front of the linked list containing a single `T`-`ID` pair
     pub fn push_one(self: &'a CopyingSymTable<'a, T>, sid: StringId, t: T) -> Self {
         CopyingSymTable::Single(sid, t, self)
     }
 
+    ///Adds a node to the front of the linked list containing a hashmap
     pub fn push_multi(self: &'a CopyingSymTable<'a, T>, hm: HashMap<StringId, T>) -> Self {
         CopyingSymTable::Multi(hm, self)
     }
 
+    ///Looks up sid in each node and returns the first match found, and None if no match is found.
     pub fn get(&self, sid: StringId) -> Option<T> {
         match self {
             CopyingSymTable::Empty => None,

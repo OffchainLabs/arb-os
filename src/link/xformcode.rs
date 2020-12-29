@@ -214,7 +214,7 @@ pub fn make_uninitialized_tuple(size: usize) -> Value {
     TupleTree::new(size, false).make_empty()
 }
 
-///
+///Represents tuple structure of mini value.
 #[derive(Debug)]
 pub enum TupleTree {
     Single,

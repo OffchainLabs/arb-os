@@ -2,9 +2,12 @@
  * Copyright 2020, Offchain Labs, Inc. All rights reserved
  */
 
+//!Creates a fixed list of globally accessible constants.
+
 use crate::uint256::Uint256;
 use std::collections::HashMap;
 
+///Creates a fixed list of globally accessible constants.
 pub fn init_constant_table() -> HashMap<String, Uint256> {
     let mut ret = HashMap::new();
     for (s, i) in &[

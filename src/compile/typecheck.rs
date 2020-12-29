@@ -18,10 +18,15 @@ use crate::stringtable::{StringId, StringTable};
 use crate::uint256::Uint256;
 use std::collections::HashMap;
 
+///Trait for all nodes in the AST, currently only implemented for type checked versions.
 pub trait AbstractSyntaxTree {
+    ///Returns a list of direct children of `self`
     fn child_nodes(&mut self) -> Vec<TypeCheckedNode> {
         vec![]
     }
+    ///Applies `func` to `self` recursively, stopping when `func` returns `false`.  The `state` and
+    ///`mut_state` arguments are accessible to all nodes called by this method, and `mut_state` can
+    ///be modified by `func`.  The modifications will only be visible to the child nodes.
     fn recursive_apply<F, S, MS>(&mut self, func: F, state: &S, mut_state: &mut MS)
     where
         F: Fn(&mut TypeCheckedNode, &S, &mut MS) -> bool + Copy,
@@ -38,6 +43,7 @@ pub trait AbstractSyntaxTree {
     }
 }
 
+///Represents a mutable reference to any AST node.
 #[derive(Debug)]
 pub enum TypeCheckedNode<'a> {
     Statement(&'a mut TypeCheckedStatement),
@@ -106,6 +112,7 @@ impl MiniProperties for TypeCheckedFunc {
     }
 }
 
+///Used by inlining to replace early returns with break statements
 fn strip_returns(to_strip: &mut TypeCheckedNode, _state: &(), _mut_state: &mut ()) -> bool {
     if let TypeCheckedNode::Statement(stat) = to_strip {
         if let TypeCheckedStatementKind::Return(exp) = &mut stat.kind {
@@ -117,6 +124,7 @@ fn strip_returns(to_strip: &mut TypeCheckedNode, _state: &(), _mut_state: &mut (
     true
 }
 
+///Used to inline an AST node
 fn inline(
     to_do: &mut TypeCheckedNode,
     state: &(&Vec<TypeCheckedFunc>, &StringTable),
@@ -374,6 +382,7 @@ impl MiniProperties for TypeCheckedIfArm {
     }
 }
 
+///A mini expression with associated `DebugInfo` that has been type checked.
 #[derive(Debug, Clone)]
 pub struct TypeCheckedExpr {
     pub kind: TypeCheckedExprKind,
@@ -785,6 +794,8 @@ pub fn sort_top_level_decls(
     )
 }
 
+///Performs typechecking various top level declarations, including `ImportedFunc`s, `FuncDecl`s,
+/// named `Type`s, and global variables.
 pub fn typecheck_top_level_decls(
     imported_funcs: Vec<ImportedFunc>,
     funcs: Vec<FuncDecl>,
