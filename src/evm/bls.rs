@@ -9,11 +9,11 @@ use crypto::digest::Digest;
 use crypto::sha2::Sha256;
 use ethers_signers::{Signer, Wallet};
 use num_bigint::BigUint;
-use num_bigint::ToBigUint;
 use num_bigint::RandBigInt;
+use num_bigint::ToBigUint;
 use num_integer::Integer;
-use std::cmp::Ordering;
 use parity_bn::{AffineG1, AffineG2, Fq, Fr, Group, G1, G2};
+use std::cmp::Ordering;
 use std::path::Path;
 
 pub struct _ArbBLS<'a> {
@@ -162,18 +162,10 @@ pub fn _evm_test_bls_registry(log_to: Option<&Path>, debug: bool) {
     }
 }
 
-
-
-pub fn hash_to_point(
-    domain: &[u8],
-    msg: &[u8]
-    ) -> Option<G1> {
-
+pub fn hash_to_point(domain: &[u8], msg: &[u8]) -> Option<G1> {
     let (u0, u1) = hash_to_field(domain, msg);
     if let Some((px_bi, py_bi)) = map_to_g1(&u0) {
         if let Some((qx_bi, qy_bi)) = map_to_g1(&u1) {
-
-
             let px = Fq::from_slice(&px_bi.to_bytes_be()).unwrap();
             let py = Fq::from_slice(&py_bi.to_bytes_be()).unwrap();
             let qx = Fq::from_slice(&qx_bi.to_bytes_be()).unwrap();
@@ -190,22 +182,20 @@ pub fn hash_to_point(
                 AffineG1::new(qx, qy).unwrap().into()
             };
 
-            let ret = p + q ;
+            let ret = p + q;
             let mut out_buf_0 = vec![0u8; 32];
             ret.x().to_big_endian(&mut out_buf_0).unwrap();
             let mut out_buf_1 = vec![0u8; 32];
             ret.y().to_big_endian(&mut out_buf_1).unwrap();
             println!("{:?}", out_buf_0);
             println!("{:?}", out_buf_1);
-            return Some(ret) 
+            return Some(ret);
         }
     }
     None
 }
 
-
 fn map_to_g1(_x: &BigUint) -> Option<(BigUint, BigUint)> {
-
     let field_order = BigUint::parse_bytes(
         b"30644e72e131a029b85045b68181585d97816a916871ca8d3c208c16d87cfd47",
         16,
@@ -224,11 +214,10 @@ fn map_to_g1(_x: &BigUint) -> Option<(BigUint, BigUint)> {
     )
     .unwrap();
 
-    if(_x.cmp(&field_order) != Ordering::Less) {
-        return None 
-    } 
+    if (_x.cmp(&field_order) != Ordering::Less) {
+        return None;
+    }
 
-            
     let mut found = false;
     let sqrt_x = sqrt(_x);
     if sqrt_x.is_some() {
@@ -242,10 +231,10 @@ fn map_to_g1(_x: &BigUint) -> Option<(BigUint, BigUint)> {
     a2 = inverse(&a2);
     a1 = (&a1 * &a1).mod_floor(&field_order);
     a1 = (&a1 * &a2).mod_floor(&field_order);
-        
+
     a1 = (_x * &a1).mod_floor(&field_order);
-        
-    let mut x = (z1 + (&field_order-&a1)).mod_floor(&field_order);
+
+    let mut x = (z1 + (&field_order - &a1)).mod_floor(&field_order);
 
     a1 = (&x * &x).mod_floor(&field_order);
     a1 = (&a1 * &x).mod_floor(&field_order);
@@ -256,10 +245,10 @@ fn map_to_g1(_x: &BigUint) -> Option<(BigUint, BigUint)> {
     if let Some(sqa1) = sqrt_a1 {
         if (found) {
             a1 = sqa1;
-    	} else {
-     	    a1 = &field_order - sqa1;
-     	}
-        return Some((x,a1));
+        } else {
+            a1 = &field_order - sqa1;
+        }
+        return Some((x, a1));
     }
 
     x = (x + &ToBigUint::to_biguint(&1).unwrap()).mod_floor(&field_order);
@@ -277,7 +266,7 @@ fn map_to_g1(_x: &BigUint) -> Option<(BigUint, BigUint)> {
         } else {
             a1 = &field_order - sqa1;
         }
-        return Some((x,a1));
+        return Some((x, a1));
     }
 
     x = (&a0 * &a0).mod_floor(&field_order);
@@ -298,7 +287,7 @@ fn map_to_g1(_x: &BigUint) -> Option<(BigUint, BigUint)> {
         } else {
             a1 = &field_order - sqa1;
         }
-        return Some((x,a1));
+        return Some((x, a1));
     }
 
     None
@@ -318,7 +307,7 @@ fn sqrt(xx: &BigUint) -> Option<BigUint> {
     let x = xx.modpow(&field_orderplus1_div4, &field_order);
 
     let square = (&x * &x).mod_floor(&field_order);
-    if(square.cmp(xx) == Ordering::Equal){
+    if (square.cmp(xx) == Ordering::Equal) {
         Some(x)
     } else {
         None
@@ -442,31 +431,35 @@ pub fn expand_msg_to_96(domain: &[u8], msg: &[u8]) -> Vec<u8> {
 }
 
 pub struct BLSPublicKey {
-    g2p:    AffineG2,
+    g2p: AffineG2,
 }
 
 pub struct BLSPrivateKey {
-    s:      Fr
+    s: Fr,
 }
 
 pub struct BLSSignature {
-    g1p:    AffineG1,
+    g1p: AffineG1,
 }
 
 pub struct BLSAggregateSignature {
-    g1p:    AffineG1,
+    g1p: AffineG1,
 }
 
 pub fn generate_bls_key_pair() -> (BLSPublicKey, BLSPrivateKey) {
     // can't use built in FR::random() due to versioning mismatch of rand
-    let subgroup_order =  BigUint::parse_bytes(b"30644E72E131A029B85045B68181585D2833E84879B9709143E1F593F0000001",16).unwrap();
+    let subgroup_order = BigUint::parse_bytes(
+        b"30644E72E131A029B85045B68181585D2833E84879B9709143E1F593F0000001",
+        16,
+    )
+    .unwrap();
     let mut rng = rand::thread_rng();
     let s_bi: BigUint = rng.gen_biguint(256).mod_floor(&subgroup_order);
     let s_str = s_bi.to_str_radix(10);
     let s = Fr::from_str(&s_str).unwrap();
     let p_j = (G2::one() * s); // check base point
     let p_a = AffineG2::from_jacobian(p_j).unwrap();
-    (BLSPublicKey {g2p: p_a}, BLSPrivateKey {s: s}) 
+    (BLSPublicKey { g2p: p_a }, BLSPrivateKey { s: s })
 }
 
 // hardcode domain?
@@ -475,7 +468,9 @@ impl BLSPrivateKey {
         let h = hash_to_point(domain, message);
         // ignores error that should never arise that would return None for h. Handle and Return Option<BLSSignature> instead?
         let sigma = h.unwrap() * self.s;
-        BLSSignature {g1p: AffineG1::from_jacobian(sigma).unwrap()}
+        BLSSignature {
+            g1p: AffineG1::from_jacobian(sigma).unwrap(),
+        }
     }
 }
 
@@ -487,29 +482,42 @@ impl BLSPublicKey {
         let mut out_buf_3 = vec![0u8; 32];
 
         self.g2p.x().real().to_big_endian(&mut out_buf_0).unwrap();
-        self.g2p.x().imaginary().to_big_endian(&mut out_buf_1).unwrap();
+        self.g2p
+            .x()
+            .imaginary()
+            .to_big_endian(&mut out_buf_1)
+            .unwrap();
         self.g2p.y().real().to_big_endian(&mut out_buf_2).unwrap();
-        self.g2p.y().imaginary().to_big_endian(&mut out_buf_3).unwrap();
+        self.g2p
+            .y()
+            .imaginary()
+            .to_big_endian(&mut out_buf_3)
+            .unwrap();
 
         (
             Uint256::from_bytes(&out_buf_0),
             Uint256::from_bytes(&out_buf_1),
             Uint256::from_bytes(&out_buf_2),
             Uint256::from_bytes(&out_buf_3),
-
         )
-         
     }
 
     pub fn to_bytes(&self) -> Vec<u8> {
         let mut out = vec![0u8; 128];
         self.g2p.x().real().to_big_endian(&mut out[0..32]).unwrap();
-        self.g2p.x().imaginary().to_big_endian(&mut out[32..64]).unwrap();
+        self.g2p
+            .x()
+            .imaginary()
+            .to_big_endian(&mut out[32..64])
+            .unwrap();
         self.g2p.y().real().to_big_endian(&mut out[64..96]).unwrap();
-        self.g2p.y().imaginary().to_big_endian(&mut out[96..128]).unwrap();
+        self.g2p
+            .y()
+            .imaginary()
+            .to_big_endian(&mut out[96..128])
+            .unwrap();
         out
     }
-
 }
 
 impl BLSSignature {
@@ -524,12 +532,12 @@ impl BLSSignature {
 impl BLSAggregateSignature {
     pub fn new(sigs: Vec<BLSSignature>) -> Self {
         let mut sum = G1::zero();
-        for sig in &sigs {  
+        for sig in &sigs {
             sum = (sum + G1::from(sig.g1p));
-        }   
-        BLSAggregateSignature{g1p: AffineG1::from_jacobian(sum).unwrap()}
-        
-
+        }
+        BLSAggregateSignature {
+            g1p: AffineG1::from_jacobian(sum).unwrap(),
+        }
     }
 
     pub fn to_bytes(&self) -> Vec<u8> {
@@ -557,7 +565,10 @@ pub fn _evm_test_bls_signed_batch(log_to: Option<&Path>, debug: bool) -> Result<
     machine.start_at_zero();
 
     let mut add_contract = AbiForContract::new_from_file(&builtin_contract_path("Add"))?;
-    if add_contract.deploy(&[], &mut machine, Uint256::zero(), None, None, debug).is_err() {
+    if add_contract
+        .deploy(&[], &mut machine, Uint256::zero(), None, None, debug)
+        .is_err()
+    {
         panic!("failed to deploy Add contract");
     }
 
@@ -599,9 +610,7 @@ pub fn _evm_test_bls_signed_batch(log_to: Option<&Path>, debug: bool) -> Result<
     let alice_sig = alice_private_key.sign_message(&domain, &alice_compressed_tx);
     let bob_sig = bob_private_key.sign_message(&domain, &bob_compressed_tx);
 
-    let aggregated_sig = BLSAggregateSignature::new(
-        vec![alice_sig, bob_sig],
-    );
+    let aggregated_sig = BLSAggregateSignature::new(vec![alice_sig, bob_sig]);
 
     machine.runtime_env._insert_bls_batch(
         &[&alice_addr, &bob_addr],

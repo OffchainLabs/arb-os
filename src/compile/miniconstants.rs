@@ -210,16 +210,19 @@ pub fn init_constant_table() -> HashMap<String, Uint256> {
         ("PluggableModuleID_rollupTracker", 0),
         // misc
         ("DefaultMillisecondsPerBlock", 13500),
-        ("DefaultSpeedLimitPerBlock", 13500*100000),
+        ("DefaultSpeedLimitPerBlock", 13500 * 100000),
         ("Estimate_L1GasCostPerNode", 220000),
-        ("Estimate_L1GasPrice", 100 * 1_000_000_000),  // 100 gwei
+        ("Estimate_L1GasPrice", 100 * 1_000_000_000), // 100 gwei
     ] {
         ret.insert(s.to_string(), Uint256::from_u64(*i));
     }
 
     for (s, u) in &[
-                                                // Keccak256 of "Arbitrum gas accounting reserve account"
-        ("SpecialAccount_gasAccountingReserve", "af6cbc19f66dec07f790912226744d744f04b37b666b9343317df33a5114fb96")
+        // Keccak256 of "Arbitrum gas accounting reserve account"
+        (
+            "SpecialAccount_gasAccountingReserve",
+            "af6cbc19f66dec07f790912226744d744f04b37b666b9343317df33a5114fb96",
+        ),
     ] {
         ret.insert(s.to_string(), Uint256::from_string_hex(u).unwrap());
     }
