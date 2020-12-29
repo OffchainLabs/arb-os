@@ -520,7 +520,6 @@ pub struct ImportFuncDecl {
 }
 
 impl ImportFuncDecl {
-
     ///Identical to new but takes a `Vec` of `Type` instead of a `Vec` of `FuncArg`
     pub fn new_types(
         name: StringId,
