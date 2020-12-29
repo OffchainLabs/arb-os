@@ -2,7 +2,7 @@
 * Copyright 2020, Offchain Labs, Inc. All rights reserved.
 */
 
-use crate::evm::abi::AbiForContract;
+use crate::evm::{abi::AbiForContract, test_contract_path};
 use crate::run::{load_from_file, RuntimeEnvironment};
 use crate::uint256::Uint256;
 use ethers_signers::Signer;
@@ -72,7 +72,7 @@ pub fn benchmark_add(iterations: u64, log_to: &Path) -> u64 {
     machine.start_at_zero();
 
     let my_addr = Uint256::from_u64(1025);
-    let contract = match AbiForContract::new_from_file("contracts/add/build/contracts/Add.json") {
+    let contract = match AbiForContract::new_from_file(&test_contract_path("Add")) {
         Ok(mut contract) => {
             let result = contract.deploy(&[], &mut machine, Uint256::zero(), None, None, false);
             if let Some(contract_addr) = result {
@@ -117,7 +117,7 @@ pub fn benchmark_add_batched(iterations: u64, log_to: &Path) -> u64 {
     let _my_addr = Uint256::from_bytes(wallet.address().as_bytes());
 
     let my_addr = Uint256::from_u64(1025);
-    let contract = match AbiForContract::new_from_file("contracts/add/build/contracts/Add.json") {
+    let contract = match AbiForContract::new_from_file(&test_contract_path("Add")) {
         Ok(mut contract) => {
             let result = contract.deploy(&[], &mut machine, Uint256::zero(), None, None, false);
             if let Some(contract_addr) = result {

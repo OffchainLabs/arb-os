@@ -1,6 +1,6 @@
 pragma solidity >=0.4.21 <0.7.0;
 
-import "./ArbSys.sol";
+import "../../arbos/contracts/ArbSys.sol";
 
 
 contract Add {
