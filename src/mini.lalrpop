@@ -2,8 +2,9 @@
 // Copyright 2020, Offchain Labs, Inc. All rights reserved.
 //
 
-use crate::compile::ast::{TopLevelDecl, TypeDecl, FuncDecl, GlobalVarDecl, ImportFuncDecl, ImportTypeDecl, Type,
-StructField, FuncArg, Statement, StatementKind, DebugInfo, Attributes, MatchPattern, IfArm, Expr, ExprKind,  TrinaryOp, BinaryOp, UnaryOp, Constant,
+
+use crate::compile::ast::{TopLevelDecl, TypeDecl, FuncDecl, GlobalVarDecl, Type,
+StructField, FuncArg, Statement, StatementKind, DebugInfo, Attributes, MatchPattern, IfArm, Expr, ExprKind, TrinaryOp, BinaryOp, UnaryOp, Constant,
 OptionConst, FieldInitializer, new_func_arg, new_type_decl};
 use crate::stringtable::{StringTable, StringId};
 use crate::compile::Lines;
@@ -26,8 +27,6 @@ ImportDecl: TopLevelDecl = {
         TopLevelDecl::UseDecl(p, file)
     },
     <d: ImportDecl> "const" <n: IdentString> "=" <u: UnsignedInteger> ";" => { constants.insert(n, u);  d },
-	ImportFuncDecl => TopLevelDecl::ImpFuncDecl(<>),
-	ImportTypeDecl => TopLevelDecl::ImpTypeDecl(<>),	
 }
 
 PathDecl: Vec<String> = {
@@ -36,14 +35,6 @@ PathDecl: Vec<String> = {
         output.append(&mut folds);
         output
     },
-}
-
-ImportFuncDecl: ImportFuncDecl = {
-	"import" <imp: "impure"?> "func" <i:Ident> "(" <fa:FuncArgs> ")" <t: ("->" <Type>)?> ";" => ImportFuncDecl::new(i, imp.is_some(), fa, t.unwrap_or(Type::Void)),
-}
-
-ImportTypeDecl: ImportTypeDecl = {
-	"import" "type" <Ident> ";" => ImportTypeDecl::new(<>),
 }
 
 NonImportDecl: TopLevelDecl = {
