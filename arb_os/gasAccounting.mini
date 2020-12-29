@@ -32,7 +32,7 @@ use std::bytearray::bytearray_get256;
 use std::fixedpoint::FixedPoint;
 use std::fixedpoint::fixedPoint_new;
 use std::fixedpoint::fixedPoint_getNum;
-use std::fixedPoint::fixedPoint_getDenom;
+use std::fixedpoint::fixedPoint_getDenom;
 use std::fixedpoint::fixedPoint_zero;
 use std::fixedpoint::fixedPoint_compare;
 use std::fixedpoint::fixedPoint_mulByUint;
