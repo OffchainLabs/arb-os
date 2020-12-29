@@ -18,10 +18,6 @@
  *
  */
 
-const ArbProvider = require("arb-provider-truffle");
-const path = require("path");
-const mnemonic = "jar deny prosper gasp flush glass core corn alarm treat leg smart";
-
 module.exports = {
   /**
    * $ truffle test --network <network-name>
@@ -33,22 +29,6 @@ module.exports = {
       port: 7545,             // Standard Ethereum port (default: none)
       network_id: "*",        // Any network (default: none)
       websockets: true,       // Enable EventEmitter interface for web3 (default: false)
-    },
-
-    arbitrum: {
-      provider: function() {
-        if(typeof this.provider.prov == 'undefined') {
-            this.provider.prov = ArbProvider.provider(
-              __dirname,
-              'build/contracts',
-              {
-                'mnemonic': mnemonic,
-              }
-            );
-        }
-        return this.provider.prov
-      },
-      network_id: "*",
     },
   },
 
