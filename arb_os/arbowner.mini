@@ -25,6 +25,7 @@ use evmCallStack::evmCallStack_setTopFrameMemory;
 use evmOps::evmOp_return;
 use evmOps::evmOp_revert;
 use evmOps::evmOp_revert_knownCodePc;
+use evmOps::getEvmOpJumpTable;
 
 use pluggables::ModuleFunction;
 use pluggables::installPluggable;
@@ -363,10 +364,14 @@ impure func makePluggableContractEntryPoint(id: uint) -> impure func() {
 
 impure func entryPointForPluggableContract(id: uint) {
     if let Some(topFrame) = evmCallStack_topFrame() {
-        if let Some(retVal) = callPluggable(id, topFrame) {
-            let returnData = unsafecast<ByteArray>(retVal);
-            if (evmCallStack_setTopFrameMemory(returnData)) {
-                evmOp_return(0, bytearray_size(returnData));
+        if let Some(retVal) = callPluggable(id, (topFrame, getEvmOpJumpTable())) {
+            let (success, resultData) = unsafecast<(bool, ByteArray)>(retVal);
+            if (evmCallStack_setTopFrameMemory(resultData)) {
+                if (success) {
+                    evmOp_return(0, bytearray_size(resultData));
+                } else {
+                    evmOp_revert(0, bytearray_size(resultData));
+                }
             }
         }
     }
