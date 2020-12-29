@@ -6,8 +6,8 @@
 
 use super::ast::{
     BinaryOp, Constant, Expr, FuncArg, FuncDecl, FuncDeclKind, GlobalVarDecl, IfArm,
-    ImportFuncDecl, MatchPattern, Statement, StatementKind, StructField, TopLevelDecl, Type,
-    UnaryOp,
+    ImportFuncDecl, MatchPattern, Statement, StatementKind, StructField, TopLevelDecl, TrinaryOp,
+    Type, UnaryOp,
 };
 use super::{symtable::SymTable, MiniProperties};
 use crate::compile::ast::{DebugInfo, ExprKind, TypeTree};
@@ -18,10 +18,15 @@ use crate::stringtable::{StringId, StringTable};
 use crate::uint256::Uint256;
 use std::collections::HashMap;
 
+///Trait for all nodes in the AST, currently only implemented for type checked versions.
 pub trait AbstractSyntaxTree {
+    ///Returns a list of direct children of `self`
     fn child_nodes(&mut self) -> Vec<TypeCheckedNode> {
         vec![]
     }
+    ///Applies `func` to `self` recursively, stopping when `func` returns `false`.  The `state` and
+    ///`mut_state` arguments are accessible to all nodes called by this method, and `mut_state` can
+    ///be modified by `func`.  The modifications will only be visible to the child nodes.
     fn recursive_apply<F, S, MS>(&mut self, func: F, state: &S, mut_state: &mut MS)
     where
         F: Fn(&mut TypeCheckedNode, &S, &mut MS) -> bool + Copy,
@@ -38,6 +43,7 @@ pub trait AbstractSyntaxTree {
     }
 }
 
+///Represents a mutable reference to any AST node.
 #[derive(Debug)]
 pub enum TypeCheckedNode<'a> {
     Statement(&'a mut TypeCheckedStatement),
@@ -106,6 +112,7 @@ impl MiniProperties for TypeCheckedFunc {
     }
 }
 
+///Used by inlining to replace early returns with break statements
 fn strip_returns(to_strip: &mut TypeCheckedNode, _state: &(), _mut_state: &mut ()) -> bool {
     if let TypeCheckedNode::Statement(stat) = to_strip {
         if let TypeCheckedStatementKind::Return(exp) = &mut stat.kind {
@@ -117,6 +124,7 @@ fn strip_returns(to_strip: &mut TypeCheckedNode, _state: &(), _mut_state: &mut (
     true
 }
 
+///Used to inline an AST node
 fn inline(
     to_do: &mut TypeCheckedNode,
     state: &(&Vec<TypeCheckedFunc>, &StringTable),
@@ -374,6 +382,7 @@ impl MiniProperties for TypeCheckedIfArm {
     }
 }
 
+///A mini expression with associated `DebugInfo` that has been type checked.
 #[derive(Debug, Clone)]
 pub struct TypeCheckedExpr {
     pub kind: TypeCheckedExprKind,
@@ -383,8 +392,16 @@ pub struct TypeCheckedExpr {
 ///A mini expression that has been type checked.
 #[derive(Debug, Clone)]
 pub enum TypeCheckedExprKind {
+    NewBuffer,
     UnaryOp(UnaryOp, Box<TypeCheckedExpr>, Type),
     Binary(BinaryOp, Box<TypeCheckedExpr>, Box<TypeCheckedExpr>, Type),
+    Trinary(
+        TrinaryOp,
+        Box<TypeCheckedExpr>,
+        Box<TypeCheckedExpr>,
+        Box<TypeCheckedExpr>,
+        Type,
+    ),
     ShortcutOr(Box<TypeCheckedExpr>, Box<TypeCheckedExpr>),
     ShortcutAnd(Box<TypeCheckedExpr>, Box<TypeCheckedExpr>),
     LocalVariableRef(StringId, Type),
@@ -443,10 +460,14 @@ impl MiniProperties for TypeCheckedExpr {
         match &self.kind {
             TypeCheckedExprKind::UnaryOp(_, expr, _) => expr.is_pure(),
             TypeCheckedExprKind::Binary(_, left, right, _) => left.is_pure() && right.is_pure(),
+            TypeCheckedExprKind::Trinary(_, a, b, c, _) => {
+                a.is_pure() && b.is_pure() && c.is_pure()
+            }
             TypeCheckedExprKind::ShortcutOr(left, right) => left.is_pure() && right.is_pure(),
             TypeCheckedExprKind::ShortcutAnd(left, right) => left.is_pure() && right.is_pure(),
             TypeCheckedExprKind::LocalVariableRef(_, _) => true,
             TypeCheckedExprKind::GlobalVariableRef(_, _) => false,
+            TypeCheckedExprKind::NewBuffer => true,
             TypeCheckedExprKind::Variant(expr) => expr.is_pure(),
             TypeCheckedExprKind::FuncRef(_, func_type) => {
                 if let Type::Func(impure, _, _) = func_type {
@@ -516,6 +537,7 @@ impl AbstractSyntaxTree for TypeCheckedExpr {
             | TypeCheckedExprKind::GlobalVariableRef(_, _)
             | TypeCheckedExprKind::FuncRef(_, _)
             | TypeCheckedExprKind::Const(_, _)
+            | TypeCheckedExprKind::NewBuffer
             | TypeCheckedExprKind::NewMap(_) => vec![],
             TypeCheckedExprKind::UnaryOp(_, exp, _)
             | TypeCheckedExprKind::Variant(exp)
@@ -524,6 +546,11 @@ impl AbstractSyntaxTree for TypeCheckedExpr {
             | TypeCheckedExprKind::NewArray(exp, _, _)
             | TypeCheckedExprKind::Cast(exp, _)
             | TypeCheckedExprKind::Try(exp, _) => vec![TypeCheckedNode::Expression(exp)],
+            TypeCheckedExprKind::Trinary(_, a, b, c, _) => vec![
+                TypeCheckedNode::Expression(a),
+                TypeCheckedNode::Expression(b),
+                TypeCheckedNode::Expression(c),
+            ],
             TypeCheckedExprKind::Binary(_, lexp, rexp, _)
             | TypeCheckedExprKind::ShortcutOr(lexp, rexp)
             | TypeCheckedExprKind::ShortcutAnd(lexp, rexp)
@@ -580,8 +607,10 @@ impl TypeCheckedExpr {
     ///Extracts the type returned from the expression.
     pub fn get_type(&self) -> Type {
         match &self.kind {
+            TypeCheckedExprKind::NewBuffer => Type::Buffer,
             TypeCheckedExprKind::UnaryOp(_, _, t) => t.clone(),
             TypeCheckedExprKind::Binary(_, _, _, t) => t.clone(),
+            TypeCheckedExprKind::Trinary(_, _, _, _, t) => t.clone(),
             TypeCheckedExprKind::ShortcutOr(_, _) | TypeCheckedExprKind::ShortcutAnd(_, _) => {
                 Type::Bool
             }
@@ -765,6 +794,8 @@ pub fn sort_top_level_decls(
     )
 }
 
+///Performs typechecking various top level declarations, including `ImportedFunc`s, `FuncDecl`s,
+/// named `Type`s, and global variables.
 pub fn typecheck_top_level_decls(
     imported_funcs: Vec<ImportedFunc>,
     funcs: Vec<FuncDecl>,
@@ -1476,6 +1507,7 @@ fn typecheck_expr(
     let loc = debug_info.location;
     Ok(TypeCheckedExpr {
         kind: match &expr.kind {
+            ExprKind::NewBuffer => Ok(TypeCheckedExprKind::NewBuffer),
             ExprKind::UnaryOp(op, subexpr) => {
                 let tc_sub = typecheck_expr(
                     subexpr,
@@ -1508,6 +1540,36 @@ fn typecheck_expr(
                     scopes,
                 )?;
                 typecheck_binary_op(*op, tc_sub1, tc_sub2, type_tree, loc)
+            }
+            ExprKind::Trinary(op, sub1, sub2, sub3) => {
+                let tc_sub1 = typecheck_expr(
+                    sub1,
+                    type_table,
+                    global_vars,
+                    func_table,
+                    return_type,
+                    type_tree,
+                    scopes,
+                )?;
+                let tc_sub2 = typecheck_expr(
+                    sub2,
+                    type_table,
+                    global_vars,
+                    func_table,
+                    return_type,
+                    type_tree,
+                    scopes,
+                )?;
+                let tc_sub3 = typecheck_expr(
+                    sub3,
+                    type_table,
+                    global_vars,
+                    func_table,
+                    return_type,
+                    type_tree,
+                    scopes,
+                )?;
+                typecheck_trinary_op(*op, tc_sub1, tc_sub2, tc_sub3, type_tree, loc)
             }
             ExprKind::ShortcutOr(sub1, sub2) => {
                 let tc_sub1 = typecheck_expr(
@@ -2361,7 +2423,12 @@ fn typecheck_binary_op(
     if let TypeCheckedExprKind::Const(Value::Int(val2), t2) = tcs2.kind.clone() {
         if let TypeCheckedExprKind::Const(Value::Int(val1), t1) = tcs1.kind.clone() {
             // both args are constants, so we can do the op at compile time
-            return typecheck_binary_op_const(op, val1, t1, val2, t2, loc);
+            match op {
+                BinaryOp::GetBuffer256 | BinaryOp::GetBuffer64 | BinaryOp::GetBuffer8 => {}
+                _ => {
+                    return typecheck_binary_op_const(op, val1, t1, val2, t2, loc);
+                }
+            }
         } else {
             match op {
                 BinaryOp::Plus
@@ -2430,6 +2497,42 @@ fn typecheck_binary_op(
             )),
             _ => Err(new_type_error(
                 "invalid argument types to divide".to_string(),
+                loc,
+            )),
+        },
+        BinaryOp::GetBuffer8 => match (subtype1, subtype2) {
+            (Type::Uint, Type::Buffer) => Ok(TypeCheckedExprKind::Binary(
+                op,
+                Box::new(tcs1),
+                Box::new(tcs2),
+                Type::Uint,
+            )),
+            _ => Err(new_type_error(
+                "invalid argument types to getbuffer8".to_string(),
+                loc,
+            )),
+        },
+        BinaryOp::GetBuffer64 => match (subtype1, subtype2) {
+            (Type::Uint, Type::Buffer) => Ok(TypeCheckedExprKind::Binary(
+                op,
+                Box::new(tcs1),
+                Box::new(tcs2),
+                Type::Uint,
+            )),
+            _ => Err(new_type_error(
+                "invalid argument types to getbuffer64".to_string(),
+                loc,
+            )),
+        },
+        BinaryOp::GetBuffer256 => match (subtype1, subtype2) {
+            (Type::Uint, Type::Buffer) => Ok(TypeCheckedExprKind::Binary(
+                op,
+                Box::new(tcs1),
+                Box::new(tcs2),
+                Type::Uint,
+            )),
+            _ => Err(new_type_error(
+                "invalid argument types to getbuffer256".to_string(),
                 loc,
             )),
         },
@@ -2541,32 +2644,34 @@ fn typecheck_binary_op(
                 ))
             }
         }
-        BinaryOp::BitwiseAnd | BinaryOp::BitwiseOr | BinaryOp::BitwiseXor => {
-            match (subtype1, subtype2) {
-                (Type::Uint, Type::Uint) => Ok(TypeCheckedExprKind::Binary(
-                    op,
-                    Box::new(tcs1),
-                    Box::new(tcs2),
-                    Type::Uint,
-                )),
-                (Type::Int, Type::Int) => Ok(TypeCheckedExprKind::Binary(
-                    op,
-                    Box::new(tcs1),
-                    Box::new(tcs2),
-                    Type::Int,
-                )),
-                (Type::Bytes32, Type::Bytes32) => Ok(TypeCheckedExprKind::Binary(
-                    op,
-                    Box::new(tcs1),
-                    Box::new(tcs2),
-                    Type::Bytes32,
-                )),
-                _ => Err(new_type_error(
-                    "invalid argument types to binary bitwise operator".to_string(),
-                    loc,
-                )),
-            }
-        }
+        BinaryOp::BitwiseAnd
+        | BinaryOp::BitwiseOr
+        | BinaryOp::BitwiseXor
+        | BinaryOp::ShiftLeft
+        | BinaryOp::ShiftRight => match (subtype1, subtype2) {
+            (Type::Uint, Type::Uint) => Ok(TypeCheckedExprKind::Binary(
+                op,
+                Box::new(tcs1),
+                Box::new(tcs2),
+                Type::Uint,
+            )),
+            (Type::Int, Type::Int) => Ok(TypeCheckedExprKind::Binary(
+                op,
+                Box::new(tcs1),
+                Box::new(tcs2),
+                Type::Int,
+            )),
+            (Type::Bytes32, Type::Bytes32) => Ok(TypeCheckedExprKind::Binary(
+                op,
+                Box::new(tcs1),
+                Box::new(tcs2),
+                Type::Bytes32,
+            )),
+            _ => Err(new_type_error(
+                "invalid argument types to binary bitwise operator".to_string(),
+                loc,
+            )),
+        },
         BinaryOp::_LogicalAnd | BinaryOp::LogicalOr => match (subtype1, subtype2) {
             (Type::Bool, Type::Bool) => Ok(TypeCheckedExprKind::Binary(
                 op,
@@ -2598,6 +2703,36 @@ fn typecheck_binary_op(
         | BinaryOp::SLessEq
         | BinaryOp::SGreaterEq => {
             panic!("unexpected op in typecheck_binary_op");
+        }
+    }
+}
+
+fn typecheck_trinary_op(
+    op: TrinaryOp,
+    tcs1: TypeCheckedExpr,
+    tcs2: TypeCheckedExpr,
+    tcs3: TypeCheckedExpr,
+    type_tree: &TypeTree,
+    loc: Option<Location>,
+) -> Result<TypeCheckedExprKind, TypeError> {
+    let subtype1 = tcs1.get_type().get_representation(type_tree)?;
+    let subtype2 = tcs2.get_type().get_representation(type_tree)?;
+    let subtype3 = tcs3.get_type().get_representation(type_tree)?;
+    match op {
+        TrinaryOp::SetBuffer8 | TrinaryOp::SetBuffer64 | TrinaryOp::SetBuffer256 => {
+            match (subtype1, subtype2, subtype3) {
+                (Type::Uint, Type::Uint, Type::Buffer) => Ok(TypeCheckedExprKind::Trinary(
+                    op,
+                    Box::new(tcs1),
+                    Box::new(tcs2),
+                    Box::new(tcs3),
+                    Type::Buffer,
+                )),
+                _ => Err(new_type_error(
+                    "invalid argument types to 3-ary op".to_string(),
+                    loc,
+                )),
+            }
         }
     }
 }
@@ -2733,6 +2868,8 @@ fn typecheck_binary_op_const(
         | BinaryOp::NotEqual
         | BinaryOp::BitwiseAnd
         | BinaryOp::BitwiseOr
+        | BinaryOp::ShiftLeft
+        | BinaryOp::ShiftRight
         | BinaryOp::BitwiseXor
         | BinaryOp::Hash => {
             if t1 == t2 {
@@ -2796,6 +2933,9 @@ fn typecheck_binary_op_const(
             }
         }
         BinaryOp::Smod
+        | BinaryOp::GetBuffer8
+        | BinaryOp::GetBuffer64
+        | BinaryOp::GetBuffer256
         | BinaryOp::Sdiv
         | BinaryOp::SLessThan
         | BinaryOp::SGreaterThan

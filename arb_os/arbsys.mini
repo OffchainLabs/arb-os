@@ -7,8 +7,8 @@ use accounts::Account;
 use std::bytearray::ByteArray;
 use std::bytearray::MarshalledBytes;
 use std::stack::Stack;
-import type AccountStore;
-import type ByteStream;
+use accounts::AccountStore;
+use std::bytestream::ByteStream;
 
 use evmCallStack::evmCallStack_topFrame;
 use evmCallStack::evmCallStack_setAccount;
@@ -45,6 +45,7 @@ use std::bytearray::bytearray_set256;
 use std::bytearray::bytearray_extract;
 use std::bytearray::bytearray_marshalFull;
 use std::bytearray::bytearray_extract;
+use std::bytearray::bytearray_copy;
 
 use std::bytestream::bytestream_new;
 use std::bytestream::bytestream_bytesReadSoFar;
@@ -52,12 +53,7 @@ use std::bytestream::bytestream_bytesReadSoFar;
 use inbox::inbox_currentBlockNumber;
 use inbox::inbox_currentTimestamp;
 
-import func bytestream_new(ba: ByteArray) -> ByteStream;
-
-import func stack_pop(stack: Stack) -> option<(Stack, any)>;
-
-import impure func inbox_currentBlockNumber() -> uint;
-import impure func inbox_currentTimestamp() -> uint;
+use std::stack::stack_pop;
 
 use output::queueMessageForSend;
 
@@ -80,7 +76,7 @@ use std::bls::bls_marshalPublicKey;
 
 use decompression::parseAggregatorFunctionTable;
 
-import impure func pcTableForCode(code: ByteArray) -> option<Stack>;
+use codeSegment::pcTableForCode;
 
 
 public impure func arbsys_txcall() {
@@ -219,7 +215,7 @@ impure func arbsys_withdrawErc20(topFrame: EvmCallFrame, calldata: ByteArray) { 
     let amount = bytearray_get256(calldata, 36);
 
     queueMessageForSend(
-        1,
+        const::SendType_withdrawERC20,
         address(0),
         bytearray_set256(
             bytearray_set256(
@@ -255,7 +251,7 @@ impure func arbsys_withdrawErc721(topFrame: EvmCallFrame, calldata: ByteArray) {
     let id = bytearray_get256(calldata, 36);
 
     queueMessageForSend(
-        2,
+        const::SendType_withdrawERC721,
         address(0),
         bytearray_set256(
             bytearray_set256(
@@ -291,15 +287,19 @@ impure func arbsys_withdrawEth(topFrame: EvmCallFrame, calldata: ByteArray) { //
     let destAddr = address(bytearray_get256(calldata, 4));
     let amount = evmCallFrame_getCallvalue(topFrame);
 
-    let arbSysAddr = evmCallFrame_runningAsAddress(topFrame);
-    let arbSysAccount = evmCallFrame_getAccount(topFrame, arbSysAddr);
-    if let Some(updatedAcct) = account_deductFromEthBalance(arbSysAccount, amount) {
-        if ( ! evmCallStack_setAccount(arbSysAddr, updatedAcct)) {
+    let runningAsAddr = evmCallFrame_runningAsAddress(topFrame);
+    let runningAsAccount = evmCallFrame_getAccount(topFrame, runningAsAddr);
+    if let Some(updatedAcct) = account_deductFromEthBalance(runningAsAccount, amount) {
+        if ( ! evmCallStack_setAccount(runningAsAddr, updatedAcct)) {
             evmOp_revert_knownCodePc(address(const::Address_ArbSys), 31, 0, 0);
         }
         let messageData = bytearray_extract(calldata, 4, 32);
         messageData = bytearray_set256(messageData, 32, amount);
-        queueMessageForSend(0, senderAddr, messageData);
+        queueMessageForSend(
+            const::SendType_withdrawETH,
+            senderAddr,
+            messageData
+        );
         if (evmCallStack_addEvmLogToCurrent(
             (
                 address(const::Address_ArbSys),  // addEvmLogToCurrent will fill this in
@@ -313,6 +313,55 @@ impure func arbsys_withdrawEth(topFrame: EvmCallFrame, calldata: ByteArray) { //
     }
 
     evmOp_revert_knownCodePc(address(const::Address_ArbSys), 32, 0, 0);
+}
+
+impure func arbsys_sendTxToL1(topFrame: EvmCallFrame, calldata: ByteArray) { // (address, bytes) payable -> bool
+    let destAddr = address(bytearray_get256(calldata, 4));
+    let nbytes = bytearray_get256(calldata, 4+2*32);
+    let innerCalldata = bytearray_extract(calldata, 4+3*32, nbytes);
+
+    let callvalue = evmCallFrame_getCallvalue(topFrame);
+    let runningAsAddr = evmCallFrame_runningAsAddress(topFrame);
+    let runningAsAccount = evmCallFrame_getAccount(topFrame, runningAsAddr);
+    if let Some(updatedAcct) = account_deductFromEthBalance(runningAsAccount, callvalue) {
+        if ( ! evmCallStack_setAccount(runningAsAddr, updatedAcct)) {
+            evmOp_revert_knownCodePc(address(const::Address_ArbSys), 220, 0, 0);
+        }
+        queueMessageForSend(
+            const::SendType_sendTxToL1,
+            evmCallFrame_getCaller(topFrame),
+            bytearray_copy(
+                innerCalldata,
+                0,
+                bytearray_set256(
+                    bytearray_set256(
+                        bytearray_set256(
+                            bytearray_set256(
+                                bytearray_new(0),
+                                0,
+                                uint(destAddr),
+                            ),
+                            32,
+                            inbox_currentBlockNumber(),
+                        ),
+                        64,
+                        inbox_currentTimestamp(),
+                    ),
+                    96,
+                    callvalue,
+                ),
+                128,
+                nbytes,
+            ),
+        );
+        if (evmCallStack_setTopFrameMemory(bytearray_set256(bytearray_new(0), 0, 1))) {
+            evmOp_return(0, 32);
+        } else {
+            evmOp_revert_knownCodePc(address(const::Address_ArbSys), 221, 0, 0);
+        }
+    } else {
+        evmOp_revert_knownCodePc(address(const::Address_ArbSys), 222, 0, 0);
+    }
 }
 
 impure func arbsys_getTransactionCount(topFrame: EvmCallFrame, calldata: ByteArray) { // (address account) -> uint
@@ -661,7 +710,4 @@ impure func arbFunctionTable_get(topFrame: EvmCallFrame, calldata: ByteArray) { 
     evmOp_revert_knownCodePc(address(const::Address_ArbFunctionTable), 211, 0, 0);
 }
 
-func dummyAtEnd() {  // unused, workaround for compiler bug
-    asm((666,666),) { debugprint };
-}
 

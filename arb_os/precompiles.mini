@@ -31,6 +31,7 @@ use std::bytearray::bytearray_extract;
 use std::bytearray::bytearray_copy;
 
 use std::sha256::sha256_byteArray;
+use std::ripemd160::ripemd160_byteArray;
 
 use arbsys::arbsys_txcall;
 use arbowner::arbowner_txcall;
@@ -51,6 +52,12 @@ public impure func precompiles_init(acctStore: AccountStore) -> option<AccountSt
         acctStore,
         address(0x02),
         makeTrampoline(precompile_0x02),
+        false,
+    )?;
+    acctStore = accountStore_createBuiltinContract(
+        acctStore,
+        address(0x03),
+        makeTrampoline(precompile_0x03),
         false,
     )?;
     acctStore = accountStore_createBuiltinContract(
@@ -165,6 +172,21 @@ public impure func precompile_0x02() {  // sha256
         let success = evmCallStack_setTopFrameMemory(
             bytearray_set256(
             bytearray_new(0), 0, uint(result))
+        );
+        if (success) {
+            evmOp_return(0, 32);
+        }
+    }
+
+    evmOp_revert_knownPc(0, 0, 0);
+}
+
+public impure func precompile_0x03() {  // ripemd160
+    if let Some(topFrame) = evmCallStack_topFrame() {
+        let calldata = evmCallFrame_getCalldata(topFrame);
+        let result = ripemd160_byteArray(calldata);
+        let success = evmCallStack_setTopFrameMemory(
+            bytearray_set256(bytearray_new(0), 0, uint(result))
         );
         if (success) {
             evmOp_return(0, 32);

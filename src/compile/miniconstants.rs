@@ -2,10 +2,12 @@
  * Copyright 2020, Offchain Labs, Inc. All rights reserved
  */
 
+//!Creates a fixed list of globally accessible constants.
+
 use crate::uint256::Uint256;
 use std::collections::HashMap;
 
-
+///Creates a fixed list of globally accessible constants.
 pub fn init_constant_table() -> HashMap<String, Uint256> {
     let mut ret = HashMap::new();
     for (s, i) in &[
@@ -16,7 +18,6 @@ pub fn init_constant_table() -> HashMap<String, Uint256> {
         ("Address_ArbFunctionTable", 104),
         ("Address_ArbosTest", 105),
         ("Address_ArbOwner", 107),
-        
         // indices of EVM operations
         ("EvmOp_stop", 0),
         ("EvmOp_sha3", 1),
@@ -63,7 +64,6 @@ pub fn init_constant_table() -> HashMap<String, Uint256> {
         ("EvmOp_create2", 42),
         ("EvmOp_chainId", 43),
         ("NumEvmOps", 44),
-
         // AVM instructions
         ("AVM_add", 0x01),
         ("AVM_mul", 0x02),
@@ -136,7 +136,7 @@ pub fn init_constant_table() -> HashMap<String, Uint256> {
         ("AVM_ecadd", 0x81),
         ("AVM_ecmul", 0x82),
         ("AVM_ecpairing", 0x83),
-
+        ("AVM_debugprint", 0x90),
         // L1 message types
         ("L1MessageType_ethDeposit", 0),
         ("L1MessageType_erc20Deposit", 1),
@@ -146,7 +146,7 @@ pub fn init_constant_table() -> HashMap<String, Uint256> {
         ("L1MessageType_buddyDeploy", 5),
         ("L1MessageType_endOfBlock", 6),
         ("L1MessageType_L2FundedByL1", 7),
-
+        ("L1MessageType_rollupProtocolEvent", 8),
         // L2 message types
         ("L2MessageType_unsignedEOATx", 0),
         ("L2MessageType_unsignedContractTx", 1),
@@ -156,7 +156,14 @@ pub fn init_constant_table() -> HashMap<String, Uint256> {
         ("L2MessageType_sequencerBatch", 5),
         ("L2MessageType_heartbeat", 6),
         ("L2MessageType_signedCompressedTx", 7),
-
+        ("L2MessageType_blsBatch", 8),
+        // rollup protocol event types
+        ("ProtoEvent_createNode", 0),
+        ("ProtoEvent_confirmNode", 1),
+        ("ProtoEvent_rejectNode", 2),
+        ("ProtoEvent_newStake", 3),
+        ("ProtoEvent_claimNode", 4),
+        ("ProtoEvent_debug", 255),
         // tx result codes
         ("TxResultCode_success", 0),
         ("TxResultCode_revert", 1),
@@ -167,24 +174,54 @@ pub fn init_constant_table() -> HashMap<String, Uint256> {
         ("TxResultCode_formatError", 6),
         ("TxResultCode_cannotDeployAtAddress", 7),
         ("TxResultCode_unknownFailure", 255),
-
         // EVM call types
         ("EVMCallType_call", 0),
         ("EVMCallType_callcode", 1),
         ("EVMCallType_delegatecall", 2),
         ("EVMCallType_staticcall", 3),
         ("EVMCallType_constructor", 4),
-
         // Arbitrum log item types
         ("LogType_txReceipt", 0),
         ("LogType_blockSummary", 1),
-
+        ("LogType_send", 2),
         // outgoing message types
+        ("SendType_withdrawETH", 0),
+        ("SendType_withdrawERC20", 1),
+        ("SendType_withdrawERC721", 2),
+        ("SendType_sendTxToL1", 3),
         ("SendType_buddyContractResult", 5),
-
+        // chain initialization options
+        ("InitOption_setSecondsPerBlock", 1),
+        ("InitOption_setChargingParams", 2),
+        // fee customizability
+        ("NetFee_defaultRecipient", 42),
+        ("NetFee_defaultRate1Num", 1),
+        ("NetFee_defaultRate1Denom", 10000),
+        ("NetFee_maxRate1Num", 1),
+        ("NetFee_maxRate1Denom", 1000),
+        ("NetFee_defaultRate2Num", 1),
+        ("NetFee_defaultRate2Denom", 10000),
+        ("NetFee_maxRate2Num", 1),
+        ("NetFee_maxRate2Denom", 1000),
+        // sequencer constants
+        ("Sequencer_maxDelayBlocks", 32768),   // 128*256
+        ("Sequencer_maxDelaySeconds", 983040), // 30*Sequencer_maxDelayBlocks
+        // pluggable modules
+        ("PluggableModuleID_rollupTracker", 0),
         // misc
+        ("DefaultMillisecondsPerBlock", 13500),
+        ("DefaultSpeedLimitPerBlock", 13500*100000),
+        ("Estimate_L1GasCostPerNode", 220000),
+        ("Estimate_L1GasPrice", 100 * 1_000_000_000),  // 100 gwei
     ] {
         ret.insert(s.to_string(), Uint256::from_u64(*i));
+    }
+
+    for (s, u) in &[
+                                                // Keccak256 of "Arbitrum gas accounting reserve account"
+        ("SpecialAccount_gasAccountingReserve", "af6cbc19f66dec07f790912226744d744f04b37b666b9343317df33a5114fb96")
+    ] {
+        ret.insert(s.to_string(), Uint256::from_string_hex(u).unwrap());
     }
     ret
 }

@@ -236,7 +236,8 @@ public impure func decompressAndVerifyEcdsaSignedTx(
 public impure func decompressAndVerifyBLSSignedTxBatch(
     ba: ByteArray,
     originalRequest: IncomingRequest,
-) -> option<[]TxRequestData> {
+    queueToFill: Queue,
+) -> option<Queue> {
     let stream = bytestream_skipBytes(bytestream_new(ba), 1)?;
 
     let (stream, numMsgs) = rlp_decodeUint(stream)?;
@@ -261,8 +262,9 @@ public impure func decompressAndVerifyBLSSignedTxBatch(
         signerKeys = signerKeys with {
             [i] = account_getBlsKey(accountStore_get(getGlobalAccountStore(), signerAddr))?
         };
-        let (us, newTx) = decompressTx(bytestream_new(txData), Some(signerAddr), None<FunctionTable>)?;
-        stream = us;
+
+        let (_, newTx) = decompressTx(bytestream_new(txData), Some(signerAddr), None<FunctionTable>)?;
+
         newTx = newTx with {
             incomingRequest: originalRequest with {
                 requestId: uint(hash(bytes32(originalRequest.requestId), bytes32(i)))
@@ -270,15 +272,15 @@ public impure func decompressAndVerifyBLSSignedTxBatch(
                 msgData: txData
             }
         };
-        txs = txs with { [i] = newTx };
+        //TODO: after merging charging code, assign L1 data costs to txs, in incomingRequests
+        
+        queueToFill = queue_put(queueToFill, newTx);
         i = i+1;
     }
 
     bls_verifySignature(numMsgs, msgHashes, signerKeys, aggregatedSig)?;
 
-    //TODO: after merging charging code, assign L1 data costs to txs, in incomingRequests
-
-    return Some(txs);
+    return Some(queueToFill);
 }
 
 impure func decompressTx(
@@ -386,6 +388,7 @@ impure func decompressTx(
             value: value,
             calldata: calldata,
             nonMutating: false,
+            isConstructor: (toAddr == address(0)),
             incomingRequest: unsafecast<IncomingRequest>(0),  // caller will fill this in
         }
     ));
@@ -455,9 +458,3 @@ public impure func getFromFunctionTable(addr: address, index: uint) -> option<(u
     return None;
 }
 
-//This function is necessary because there is currently bug in the compiler that will occasionally corrupt the last
-//function in a module, so including this function prevents the bug from affecting decompressTx
-func dumbHack() {
-    let x = 4;
-    return;
-}

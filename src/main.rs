@@ -18,6 +18,8 @@ use crate::run::ProfilerMode;
 use crate::uint256::Uint256;
 use clap::Clap;
 
+#[cfg(test)]
+mod buffertests;
 mod compile;
 mod contracttemplates;
 mod evm;
@@ -30,6 +32,7 @@ mod run;
 mod stringtable;
 mod uint256;
 
+///Command line options for compile subcommand.
 #[derive(Clap, Debug)]
 struct CompileStruct {
     input: Vec<String>,
@@ -50,6 +53,7 @@ struct CompileStruct {
     //inline: bool,
 }
 
+///Command line options for run subcommand.
 #[derive(Clap, Debug)]
 struct RunStruct {
     input: String,
@@ -57,6 +61,7 @@ struct RunStruct {
     debug: bool,
 }
 
+///Command line options for EvmDebug subcommand.
 #[derive(Clap, Debug)]
 struct EvmDebug {
     #[clap(short, long)]
@@ -65,6 +70,7 @@ struct EvmDebug {
     profiler: bool,
 }
 
+///Command line options for replay subcommand.
 #[derive(Clap, Debug)]
 struct Replay {
     input: String,
@@ -76,6 +82,7 @@ struct Replay {
     trace: Option<String>,
 }
 
+///Command line options for profiler subcommand.
 #[derive(Clap, Debug)]
 struct Profiler {
     input: String,
@@ -83,12 +90,15 @@ struct Profiler {
     mode: ProfilerMode,
 }
 
+///Command line options for evm-tests subcommand.
 #[derive(Clap, Debug)]
 struct EvmTests {
+    input: Vec<String>,
     #[clap(short, long)]
     savelogs: bool,
 }
 
+///Main enum for command line arguments.
 #[derive(Clap, Debug)]
 enum Args {
     Compile(CompileStruct),
@@ -186,7 +196,7 @@ fn main() -> Result<(), CompileError> {
             let filename = run.input;
             let debug = run.debug;
             let path = Path::new(&filename);
-            let env = RuntimeEnvironment::new(Uint256::from_usize(1111));
+            let env = RuntimeEnvironment::new(Uint256::from_usize(1111), None);
             match run_from_file(path, Vec::new(), env, debug) {
                 Ok(logs) => {
                     println!("Logs: {:?}", logs);
@@ -209,7 +219,7 @@ fn main() -> Result<(), CompileError> {
             profile_gen_from_file(
                 input.as_ref(),
                 Vec::new(),
-                RuntimeEnvironment::new(Uint256::from_usize(1111)),
+                RuntimeEnvironment::new(Uint256::from_usize(1111), None),
                 path.mode,
             );
         }
@@ -239,21 +249,26 @@ fn main() -> Result<(), CompileError> {
         }
 
         Args::EvmTests(options) => {
+            let mut paths = options.input;
+            if paths.len() == 0 {
+                paths = [
+                    "evm-tests/tests/VMTests/vmArithmeticTest",
+                    "evm-tests/tests/VMTests/vmPushDupSwapTest",
+                    "evm-tests/tests/VMTests/vmBitwiseLogicOperation",
+                    "evm-tests/tests/VMTests/vmIOandFlowOperations",
+                    "evm-tests/tests/VMTests/vmSha3Test",
+                    "evm-tests/tests/VMTests/vmRandomTest",
+                    "evm-tests/tests/VMTests/vmSystemOperations",
+                    "evm-tests/tests/VMTests/vmEnvironmentalInfo",
+                    "evm-tests/tests/VMTests/vmLogTest",
+                ]
+                .iter()
+                .map(|a| a.to_string())
+                .collect()
+            }
             let mut num_successes = 0u64;
             let mut num_failures = 0u64;
-            for path_name in [
-                "evm-tests/tests/VMTests/vmArithmeticTest",
-                "evm-tests/tests/VMTests/vmPushDupSwapTest",
-                "evm-tests/tests/VMTests/vmBitwiseLogicOperation",
-                "evm-tests/tests/VMTests/vmIOandFlowOperations",
-                "evm-tests/tests/VMTests/vmSha3Test",
-                "evm-tests/tests/VMTests/vmRandomTest",
-                "evm-tests/tests/VMTests/vmSystemOperations",
-                "evm-tests/tests/VMTests/vmEnvironmentalInfo",
-                "evm-tests/tests/VMTests/vmLogTest",
-            ]
-            .iter()
-            {
+            for path_name in paths.iter() {
                 let path = Path::new(path_name);
                 let (ns, nf) = evm::evmtest::run_evm_tests(
                     path,
@@ -274,6 +289,8 @@ fn main() -> Result<(), CompileError> {
     Ok(())
 }
 
+///Creates a `dyn Write` from an optional filename, if a filename is specified, creates a file
+/// handle, otherwise gives stdout.
 fn get_output(output_filename: Option<&str>) -> Result<Box<dyn io::Write>, io::Error> {
     match output_filename {
         Some(ref path) => File::create(path).map(|f| Box::new(f) as Box<dyn io::Write>),

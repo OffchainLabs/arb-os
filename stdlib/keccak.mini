@@ -10,9 +10,7 @@ use std::bytearray::bytearray_get64;
 use std::bytearray::bytearray_set64;
 use std::bytearray::bytearray_getByte;
 use std::bytearray::bytearray_setByte;
-
-import func bytearray_copy(src: ByteArray, srcOffset: uint, dest: ByteArray, destOffset: uint, nbytes: uint) -> ByteArray;
-
+use std::bytearray::bytearray_copy;
 
 
 public func keccak256(ba: ByteArray, offset: uint, nbytes: uint) -> bytes32 {
@@ -79,14 +77,14 @@ public func keccak_permutation(s: [7]uint) -> [7]uint {
     return asm(s,) [7]uint { keccakf };
 }
 
-func flipEndian64(x: uint) -> uint {
+public func flipEndian64(x: uint) -> uint {
     x = ((x & 0xffffffff) * 0x100000000) | ((x / 0x100000000) & 0xffffffff);
     x = ((x & 0xffff0000ffff) * 0x10000) | ((x / 0x10000) & 0xffff0000ffff);
     x = ((x & 0xff00ff00ff00ff) * 0x100) | ((x / 0x100) & 0xff00ff00ff00ff);
     return x;
 }
 
-func flipEndian256(x: uint) -> uint {
+public func flipEndian256(x: uint) -> uint {
     let acc = 0;
     let i = 0;
     while (i < 4) {

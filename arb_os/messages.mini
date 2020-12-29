@@ -2,6 +2,7 @@
 // Copyright 2020, Offchain Labs, Inc. All rights reserved.
 //
 
+
 use std::bytearray::ByteArray;
 use std::bytestream::ByteStream;
 use std::bytearray::MarshalledBytes;
@@ -28,6 +29,9 @@ use accounts::account_getStartCodePoint;
 use evmCallStack::initEvmCallStack;
 use evmCallStack::initEvmCallStackForConstructor;
 use evmCallStack::evmCallStack_runningCodeFromAccount;
+
+use gasAccounting::GasUsage;
+
 use output::emitTxReceipt;
 
 use tokens::tokens_erc20deposit;
@@ -50,12 +54,8 @@ use codeSegment::translateEvmCodeSegment;
 
 use inbox::IncomingRequest;
 
+use gasAccounting::GasUsage;
 
-// This is declared identically in gasAccounting.mini
-type GasUsage = struct {
-    gasUsed: uint,
-    gasPriceWei: uint,
-}
 
 public impure func handleL1Request(
     msg: IncomingRequest
@@ -170,6 +170,7 @@ type TxRequestData = struct {
     value: uint,
     calldata: ByteArray,
     nonMutating: bool,
+    isConstructor: bool,
     incomingRequest: IncomingRequest,
 }
 
@@ -257,7 +258,8 @@ public impure func handleL2Request(
 
         initEvmCallStack(
             callKind,
-            request
+            request,
+            None<(uint, address, ByteArray)>,
         );  // should never return
     }
 

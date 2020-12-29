@@ -20,18 +20,8 @@ use std::bytearray::bytearray_set256;
 
 use evmCallStack::initEvmCallStack;
 
-// This is duplicated from messages.mini
-type TxRequestData = struct {
-    maxGas: uint,
-    gasPrice: uint,
-    seqNum: option<uint>,
-    caller: address,
-    calleeAddr: address,
-    value: uint,
-    calldata: ByteArray,
-    nonMutating: bool,
-    incomingRequest: IncomingRequest,
-}
+use messages::TxRequestData;
+
 
 public impure func tokens_erc20deposit(
     tokenAddress: address,
@@ -65,8 +55,22 @@ public impure func tokens_erc20deposit(
             value: 0,
             calldata: calldata,
             nonMutating: false,
+            isConstructor: false,
             incomingRequest: fullMsg,
-        }
+        },
+        Some((
+            const::SendType_withdrawERC20,
+            address(0),
+            bytearray_set256(
+                bytearray_set256(
+                    bytearray_set256(bytearray_new(0), 0, uint(tokenAddress)),
+                    32,
+                    uint(payee),
+                ),
+                64,
+                amount,
+            )
+        )),
     );  // should never return
 
     return None;
@@ -104,8 +108,22 @@ public impure func tokens_erc721deposit(
             value: 0,
             calldata: calldata,
             nonMutating: false,
+            isConstructor: false,
             incomingRequest: fullMsg,
-        }
+        },
+        Some((
+            const::SendType_withdrawERC721,
+            address(0),
+            bytearray_set256(
+                bytearray_set256(
+                    bytearray_set256(bytearray_new(0), 0, uint(tokenAddress)),
+                    32,
+                    uint(payee),
+                ),
+                64,
+                id
+            )
+        )),
     );  // should never return
 
     return None;
