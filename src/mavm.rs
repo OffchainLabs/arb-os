@@ -621,29 +621,13 @@ pub enum Value {
 }
 
 impl Value {
+    ///Returns a value containing no data, a zero sized tuple.
     pub fn none() -> Self {
         Value::Tuple(Rc::new(vec![]))
     }
 
-    pub fn _is_none(&self) -> bool {
-        if let Value::Tuple(v) = self {
-            v.is_empty()
-        } else {
-            false
-        }
-    }
-
+    ///Creates a single tuple `Value` from a `Vec<Value>`
     pub fn new_tuple(v: Vec<Value>) -> Self {
-        /*
-        let mut acc = Uint256::zero();
-        for val in &v {
-            if let Value::Int(ui) = val.avm_hash() {
-                acc = Uint256::avm_hash2(&acc, &ui);
-            } else {
-                panic!("Invalid value type from hash");
-            }
-        }
-        */
         Value::Tuple(Rc::new(v))
     }
 
@@ -738,6 +722,7 @@ impl Value {
         }
     }
 
+    ///Converts `Value` to usize if possible, otherwise returns `None`.
     pub fn to_usize(&self) -> Option<usize> {
         match self {
             Value::Int(i) => i.to_usize(),
