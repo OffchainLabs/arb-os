@@ -33,7 +33,7 @@ $(STDDIR)/storageMapTest.mexe: $(STDDIR)/storageMapTest.mini
 $(STDDIR)/bytearraytest.mexe: $(STDDIR)/bytearraytest.mini
 	$(CARGORUN) compile $(STDDIR)/bytearraytest.mini -o $(STDDIR)/bytearraytest.mexe
 
-$(STDDIR)/blstest.mexe: $(BUILTINMAOS) $(STDDIR)/blstest.mini $(STDLIB)
+$(STDDIR)/blstest.mexe: $(BUILTINMAOS) $(STDDIR)/blstest.mini $(STDDIR)
 	$(CARGORUN) compile $(STDDIR)/blstest.mini $(STDLIB) -o $(STDDIR)/blstest.mexe
 
 $(STDDIR)/fixedpointtest.mexe: $(STDDIR)/fixedpointtest.mini $(STDDIR)/fixedpoint.mini

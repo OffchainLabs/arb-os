@@ -234,11 +234,7 @@ fn _map_to_g1(_x: &BigUint) -> Option<(BigUint, BigUint)> {
         return None;
     }
 
-    let mut found = false;
-    let sqrt_x = _sqrt(_x);
-    if sqrt_x.is_some() {
-        found = true;
-    }
+    let found_first_sqrt = _sqrt(_x).is_some();
 
     let mut a0 = (_x * _x).mod_floor(&field_order);
     a0 = (a0 + &ToBigUint::to_biguint(&4).unwrap()).mod_floor(&field_order);
@@ -256,14 +252,8 @@ fn _map_to_g1(_x: &BigUint) -> Option<(BigUint, BigUint)> {
     a1 = (&a1 * &x).mod_floor(&field_order);
     a1 = (&a1 + &ToBigUint::to_biguint(&3).unwrap()).mod_floor(&field_order);
 
-    let mut sqrt_a1 = _sqrt(&a1);
-
-    if let Some(sqa1) = sqrt_a1 {
-        if (found) {
-            a1 = sqa1;
-        } else {
-            a1 = &field_order - sqa1;
-        }
+    if let Some(sqa1) = _sqrt(&a1) {
+        a1 = if (found_first_sqrt) { sqa1 } else { &field_order - sqa1 };
         return Some((x, a1));
     }
 
@@ -274,14 +264,8 @@ fn _map_to_g1(_x: &BigUint) -> Option<(BigUint, BigUint)> {
     a1 = (&a1 * &x).mod_floor(&field_order);
     a1 = (&a1 + &ToBigUint::to_biguint(&3).unwrap()).mod_floor(&field_order);
 
-    sqrt_a1 = _sqrt(&a1);
-
-    if let Some(sqa1) = sqrt_a1 {
-        if (found) {
-            a1 = sqa1;
-        } else {
-            a1 = &field_order - sqa1;
-        }
+    if let Some(sqa1) = _sqrt(&a1) {
+        a1 = if (found_first_sqrt) { sqa1 } else { &field_order - sqa1 };
         return Some((x, a1));
     }
 
@@ -295,17 +279,12 @@ fn _map_to_g1(_x: &BigUint) -> Option<(BigUint, BigUint)> {
     a1 = (&a1 * &x).mod_floor(&field_order);
     a1 = (&a1 + &ToBigUint::to_biguint(&3).unwrap()).mod_floor(&field_order);
 
-    sqrt_a1 = _sqrt(&a1);
-
-    if let Some(sqa1) = sqrt_a1 {
-        if (found) {
-            a1 = sqa1;
-        } else {
-            a1 = &field_order - sqa1;
-        }
-        return Some((x, a1));
+    if let Some(sqa1) = _sqrt(&a1) {
+        a1 = if (found_first_sqrt) { sqa1 } else { &field_order - sqa1 };
+        Some((x, a1))
+    } else {
+        None
     }
-    None
 }
 
 fn _sqrt(xx: &BigUint) -> Option<BigUint> {
@@ -477,7 +456,6 @@ pub fn _generate_bls_key_pair() -> (_BLSPublicKey, _BLSPrivateKey) {
     (_BLSPublicKey { g2p: p_a }, _BLSPrivateKey { s: s })
 }
 
-// hardcode domain?
 impl _BLSPrivateKey {
     pub fn _sign_message(&self, domain: &[u8], message: &[u8]) -> _BLSSignature {
         let h = _hash_to_point(domain, message);

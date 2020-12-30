@@ -12,6 +12,7 @@ use std::bytearray::bytearray_getByte;
 use std::bytearray::bytearray_setByte;
 use std::bytearray::bytearray_get256;
 use std::bytearray::bytearray_set256;
+use std::bytearray::bytearray_copy;
 
 use std::keccak::keccak256;
 
@@ -102,14 +103,9 @@ public func bls_verifySingleSig(
     key:      BLSKey,
     signature: BLSSignature
 ) -> option<()> {
-	let messages = newarray <BLSHashedMessage> (1);
-	messages = messages with { [0] = message };
-	let keys = newarray <BLSKey> (1);
-    keys = keys with { [0] = key };
-    return bls_verifySignature(1,
-    messages,
-    keys,
-    signature);
+	let messages = newarray <BLSHashedMessage>(1) with { [0] = message };
+	let keys = newarray <BLSKey> (1) with { [0] = key };
+    return bls_verifySignature(1, messages, keys, signature);
 }
 
 public func bls_makeKey(x0: uint, x1: uint, y0: uint, y1: uint) -> option<BLSKey> {
@@ -197,31 +193,21 @@ public func bls_hashToPoint(
     let p0 = mapToPoint(u0)?;
     let p1 = mapToPoint(u1)?;
 
-    let x = asm(p0.0, p0.1, p1.0, p1.1) uint { ecadd }; // check order
-    let y = asm() uint { };
-
-    // AVM error checking
+    // ecadd leaves two values on the stack, so we need two asm statements to recover them both
+    let x = asm(p0.0, p0.1, p1.0, p1.1) uint { ecadd };
+    let y = asm() uint { };  // pick up the second return value
 
     return Some(struct { x: x, y: y });
 }
 
-func mapToPoint(_x:	uint) -> option<(uint, uint)> {
-    if(_x >= const::N) {
+func mapToPoint(x:	uint) -> option<(uint, uint)> {
+    if(x >= const::N) {
     	return None;
     }
-     
-    let x = _x;
-
-    let sqrtX = sqrt(x);
-
-    let found = false;
-
-    if let Some(squx) = sqrtX {
-    	found = true;
-    }
+   
+    let foundFirstSqrt = (sqrt(x) != None<uint>);
 
     let a0 = asm(x, x, const::N) uint { mulmod };
-
     a0 = asm(a0, 4, const::N) uint { addmod };
 
     let a1 = asm(x, const::z0, const::N) uint { mulmod };
@@ -231,41 +217,31 @@ func mapToPoint(_x:	uint) -> option<(uint, uint)> {
     a1 = asm(a1, a1, const::N) uint { mulmod };
     a1 = asm(a1, a2, const::N) uint { mulmod };
 
-     // x1
-
+    // x1
     a1 = asm(x, a1, const::N) uint { mulmod };
-
     x = asm(const::z1, const::N - a1, const::N) uint { addmod };
 
-    // check curve
-
+    // check if on curve
     a1 = asm(x, x, const::N) uint { mulmod };
     a1 = asm(a1, x, const::N) uint { mulmod };
     a1 = asm(a1, 3, const::N) uint { addmod };
-
-    let sqrtA1 = sqrt(a1);
-
-    if let Some(sqa1) = sqrtA1 {
-    	if (found) {
-            a1 = sqa1;
+    if let Some(sqa1) = sqrt(a1) {
+    	if (foundFirstSqrt) {
+    	    return Some((x, sqa1));
     	} else {
-    		a1 = const::N - sqa1;
+    		return Some((x, const::N - sqa1));
     	}
-        return Some((x,a1));
     }
 
     // x2
-    x = asm(x, 1, const::N) uint { addmod };
-    x = const::N - x;
+    x = const::N - asm(x, 1, const::N) uint { addmod };
 
-    // check curve
+    // check if on curve
     a1 = asm(x, x, const::N) uint { mulmod };
     a1 = asm(a1, x, const::N) uint { mulmod };
     a1 = asm(a1, 3, const::N) uint { addmod };
-
-    sqrtA1 = sqrt(a1);
-    if let Some(sqa1) = sqrtA1 {
-    	if (found) {
+    if let Some(sqa1) = sqrt(a1) {
+    	if (foundFirstSqrt) {
             a1 = sqa1;
     	} else {
     		a1 = const::N - sqa1;
@@ -280,24 +256,20 @@ func mapToPoint(_x:	uint) -> option<(uint, uint)> {
     x = asm(x, a2, const::N) uint { mulmod };
     x = asm(x, 1, const::N) uint { addmod };
 
-    // must be on curve
+    // check if on curve
     a1 = asm(x, x, const::N) uint { mulmod };
     a1 = asm(a1, x, const::N) uint { mulmod };
     a1 = asm(a1, 3, const::N) uint { addmod };
 
-    sqrtA1 = sqrt(a1);
-
-    if let Some(squa1) = sqrtA1 {
-    	if (!found) {
-            a1 = const::N - squa1;
-        } else {
-            a1 = squa1;
+    if let Some(squa1) = sqrt(a1) {
+        if (foundFirstSqrt) {
+            return Some((x, squa1));
+    	} else {
+            return Some((x, const::N - squa1));
         }
     } else {
     	return None; // BLS: bad ft mapping implementation
     }
-
-    return Some((x,a1));
 }
 
 func sqrt(xx: uint) ->option<uint> {
@@ -319,20 +291,22 @@ func hashToField(
     domain:		ByteArray,
     messages:	ByteArray
 ) -> (uint, uint) {
-    let _msg = expandMsgTo96(domain, messages);
-    let temp1 = bytearray_get256(_msg,0);
-    let u1 = asm(64, temp1) uint { shr };
+    let msg = expandMsgTo96(domain, messages);
 
-    temp1 = bytearray_get256(_msg,16);
-    let u0 = asm(temp1, const::MASK24) uint { bitwiseand };
-    temp1 =  asm(u1, const::T24, const::N) uint { mulmod };
-    let a0 = asm(temp1, u0, const::N) uint { addmod };
-    temp1 = bytearray_get256(_msg,40);
-    let u1 = asm(temp1, const::MASK24) uint { bitwiseand };
-    temp1 = bytearray_get256(_msg,64);
-    u0 = asm(temp1, const::MASK24) uint { bitwiseand };
-    temp1 =  asm(u1, const::T24, const::N) uint { mulmod };
-    let a1 = asm(temp1, u0, const::N) uint { addmod };
+    let u1 = asm(64, bytearray_get256(msg,0)) uint { shr };
+    let u0 = bytearray_get256(msg,16) & const::MASK24;
+    let a0 = asm(
+        asm(u1, const::T24, const::N) uint { mulmod },
+        u0, const::N
+    ) uint { addmod };
+
+    u1 = bytearray_get256(msg,40) & const::MASK24;
+    u0 = bytearray_get256(msg,64) & const::MASK24;
+    let a1 = asm(
+        asm(u1, const::T24, const::N) uint { mulmod },
+        u0,
+        const::N
+    ) uint { addmod };
 
     return (a0, a1);
 }
@@ -343,101 +317,43 @@ func expandMsgTo96(
 ) -> ByteArray {
     let out = bytearray_new(96);
 
-    let t0 = bytearray_size(message);
-    let t1 = bytearray_size(domain);
+    let msgSize = bytearray_size(message);
+    let domainSize = bytearray_size(domain);
 
-    let msg0 = bytearray_new(64 + t0 + t1 + 4);
-
-    let off = 64;
-    let z = 0;
-
-    while(z < t0) {
-        msg0 = bytearray_setByte(msg0,z+off,bytearray_getByte(message,z));
-        z = z + 1;
-    }
-
-    off = off + t0;
-
-    msg0 = bytearray_setByte(msg0,off,0);
-    off = off + 1;
-    msg0 = bytearray_setByte(msg0,off,96);
-    off = off + 1;
-    msg0 = bytearray_setByte(msg0,off,0);
-    off = off + 1;
-
-    z = 0;
-
-    while(z < t1) {
-        msg0 = bytearray_setByte(msg0,z+off,bytearray_getByte(domain,z));
-        z = z + 1;
-    }
-     off = off + t1;
-     msg0 = bytearray_setByte(msg0,off,t1);
-
+    let msg0 = bytearray_copy(message, 0, bytearray_new(0), 64, msgSize);
+    msg0 = bytearray_setByte(msg0, 64+msgSize, 0);
+    msg0 = bytearray_setByte(msg0, 65+msgSize, 96);
+    msg0 = bytearray_setByte(msg0, 66+msgSize, 0);
+    msg0 = bytearray_copy(domain, 0, msg0, 67+msgSize, domainSize);
+    msg0 = bytearray_setByte(msg0, 67+msgSize+domainSize, domainSize);
     let b0 = sha256_byteArray(msg0);
 
-    msg0 = bytearray_new(32 + 1 + 32 + 1);
-    off = 0;
-    msg0 = bytearray_set256(msg0,off,uint(b0));
-    off = off + 32;
-    msg0 = bytearray_setByte(msg0,off,1);
-    off = off + 1;
-
-    z = 0;
-
-    while(z < t1) {
-        msg0 = bytearray_setByte(msg0,z+off,bytearray_getByte(domain,z));
-        z = z + 1;
-    }
-    off = off + t1;
-    msg0 = bytearray_setByte(msg0,off,t1);
-
+    msg0 = bytearray_new(0);
+    msg0 = bytearray_set256(msg0, 0, uint(b0));
+    msg0 = bytearray_setByte(msg0, 32, 1);
+    msg0 = bytearray_copy(domain, 0, msg0, 33, domainSize);
+    msg0 = bytearray_setByte(msg0, 33+domainSize, domainSize);
     let bi = sha256_byteArray(msg0);
 
-    out = bytearray_set256(out,0,uint(bi));
-
     let t = b0 ^ bi;
 
-    off = 0;
-    msg0 = bytearray_set256(msg0,off,uint(t));
-    off = off + 32;
-    msg0 = bytearray_setByte(msg0,off,2);
-    off = off + 1;
+    out = bytearray_set256(out, 0, uint(bi));
 
-    z = 0;
-    while(z < t1) {
-        msg0 = bytearray_setByte(msg0,z+off,bytearray_getByte(domain,z));
-        z = z + 1;
-    }
-    off = off + t1;
-    msg0 = bytearray_setByte(msg0,off,t1);
-
+    msg0 = bytearray_set256(msg0, 0, uint(t));
+    msg0 = bytearray_setByte(msg0, 32, 2);
+    msg0 = bytearray_copy(domain, 0, msg0, 33, domainSize);
+    msg0 = bytearray_setByte(msg0, 33+domainSize, domainSize);
     bi = sha256_byteArray(msg0);
 
-    out = bytearray_set256(out,32,uint(bi));
+    out = bytearray_set256(out, 32, uint(bi));
 
-    let t = b0 ^ bi;
-
-    off = 0;
-    msg0 = bytearray_set256(msg0,off,uint(t));
-    off = off + 32;
-    msg0 = bytearray_setByte(msg0,off,3);
-    off = off + 1;
-
-    z = 0;
-
-    while(z < t1) {
-        msg0 = bytearray_setByte(msg0,z+off,bytearray_getByte(domain,z));
-        z = z + 1;
-    }
-    off = off + t1;
-    msg0 = bytearray_setByte(msg0,off,t1);
-
+    msg0 = bytearray_set256(msg0, 0, uint(b0 ^ bi));
+    msg0 = bytearray_setByte(msg0 ,32, 3);
+    msg0 = bytearray_copy(domain, 0, msg0, 33, domainSize);
+    msg0 = bytearray_setByte(msg0, 33+domainSize, domainSize);
     bi = sha256_byteArray(msg0);
 
-    out = bytearray_set256(out,64,uint(bi));
-
-    return out;
+    return bytearray_set256(out, 64, uint(bi));
 }
 
 
@@ -764,302 +680,302 @@ func modexp_c191_3f52(t6: uint) -> uint {
     let t5 = asm(t3, t2, const::n_modexp_c191_3f52) uint { mulmod };
     t0 = asm(t3, t3, const::n_modexp_c191_3f52) uint { mulmod };
     let t7 = asm(t8, t3, const::n_modexp_c191_3f52) uint { mulmod };
-     t3 = asm(t1, t3, const::n_modexp_c191_3f52) uint { mulmod };
-     t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
-     t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
-     t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
-     t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
-     t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
-     t0 = asm(t0, t4, const::n_modexp_c191_3f52) uint { mulmod };
-     t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
-     t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
-     t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
-     t0 = asm(t0, t6, const::n_modexp_c191_3f52) uint { mulmod };
-     t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
-     t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
-     t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
-     t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
-     t0 = asm(t0, t6, const::n_modexp_c191_3f52) uint { mulmod };
-     t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
-     t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
-     t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
-     t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
-     t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
-     t0 = asm(t0, t8, const::n_modexp_c191_3f52) uint { mulmod };
-     t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
-     t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
-     t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
-     t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
-     t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
-     t0 = asm(t0, t8, const::n_modexp_c191_3f52) uint { mulmod };
-     t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
-     t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
-     t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
-     t0 = asm(t0, t6, const::n_modexp_c191_3f52) uint { mulmod };
-     t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
-     t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
-     t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
-     t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
-     t0 = asm(t0, t8, const::n_modexp_c191_3f52) uint { mulmod };
-     t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
-     t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
-     t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
-     t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
-     t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
-     t0 = asm(t0, t6, const::n_modexp_c191_3f52) uint { mulmod };
-     t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
-     t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
-     t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
-     t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
-     t0 = asm(t0, t4, const::n_modexp_c191_3f52) uint { mulmod };
-     t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
-     t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
-     t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
-     t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
-     t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
-     t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
-     t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
-     t0 = asm(t0, t7, const::n_modexp_c191_3f52) uint { mulmod };
-     t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
-     t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
-     t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
-     t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
-     t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
-     t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
-     t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
-     t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
-     t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
-     t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
-     t0 = asm(t0, t2, const::n_modexp_c191_3f52) uint { mulmod };
-     t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
-     t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
-     t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
-     t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
-     t0 = asm(t0, t4, const::n_modexp_c191_3f52) uint { mulmod };
-     t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
-     t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
-     t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
-     t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
-     t0 = asm(t0, t8, const::n_modexp_c191_3f52) uint { mulmod };
-     t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
-     t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
-     t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
-     t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
-     t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
-     t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
-     t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
-     t0 = asm(t0, t2, const::n_modexp_c191_3f52) uint { mulmod };
-     t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
-     t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
-     t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
-     t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
-     t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
-     t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
-     t0 = asm(t0, t6, const::n_modexp_c191_3f52) uint { mulmod };
-     t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
-     t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
-     t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
-     t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
-     t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
-     t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
-     t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
-     t0 = asm(t0, t5, const::n_modexp_c191_3f52) uint { mulmod };
-     t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
-     t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
-     t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
-     t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
-     t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
-     t0 = asm(t0, t7, const::n_modexp_c191_3f52) uint { mulmod };
-     t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
-     t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
-     t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
-     t0 = asm(t0, t2, const::n_modexp_c191_3f52) uint { mulmod };
-     t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
-     t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
-     t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
-     t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
-     t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
-     t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
-     t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
-     t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
-     t0 = asm(t0, t4, const::n_modexp_c191_3f52) uint { mulmod };
-     t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
-     t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
-     t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
-     t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
-     t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
-     t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
-     t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
-     t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
-     t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
-     t0 = asm(t0, t2, const::n_modexp_c191_3f52) uint { mulmod };
-     t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
-     t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
-     t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
-     t0 = asm(t0, t4, const::n_modexp_c191_3f52) uint { mulmod };
-     t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
-     t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
-     t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
-     t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
-     t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
-     t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
-     t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
-     t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
-     t0 = asm(t0, t5, const::n_modexp_c191_3f52) uint { mulmod };
-     t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
-     t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
-     t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
-     t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
-     t0 = asm(t0, t5, const::n_modexp_c191_3f52) uint { mulmod };
-     t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
-     t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
-     t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
-     t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
-     t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
-     t0 = asm(t0, t2, const::n_modexp_c191_3f52) uint { mulmod };
-     t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
-     t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
-     t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
-     t0 = asm(t0, t8, const::n_modexp_c191_3f52) uint { mulmod };
-     t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
-     t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
-     t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
-     t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
-     t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
-     t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
-     t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
-     t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
-     t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
-     t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
-     t0 = asm(t0, t5, const::n_modexp_c191_3f52) uint { mulmod };
-     t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
-     t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
-     t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
-     t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
-     t0 = asm(t0, t2, const::n_modexp_c191_3f52) uint { mulmod };
-     t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
-     t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
-     t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
-     t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
-     t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
-     t0 = asm(t0, t1, const::n_modexp_c191_3f52) uint { mulmod };
-     t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
-     t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
-     t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
-     t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
-     t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
-     t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
-     t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
-     t0 = asm(t0, t5, const::n_modexp_c191_3f52) uint { mulmod };
-     t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
-     t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
-     t0 = asm(t0, t6, const::n_modexp_c191_3f52) uint { mulmod };
-     t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
-     t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
-     t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
-     t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
-     t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
-     t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
-     t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
-     t0 = asm(t0, t8, const::n_modexp_c191_3f52) uint { mulmod };
-     t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
-     t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
-     t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
-     t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
-     t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
-     t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
-     t0 = asm(t0, t8, const::n_modexp_c191_3f52) uint { mulmod };
-     t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
-     t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
-     t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
-     t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
-     t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
-     t0 = asm(t0, t2, const::n_modexp_c191_3f52) uint { mulmod };
-     t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
-     t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
-     t0 = asm(t0, t6, const::n_modexp_c191_3f52) uint { mulmod };
-     t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
-     t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
-     t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
-     t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
-     t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
-     t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
-     t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
-     t0 = asm(t0, t7, const::n_modexp_c191_3f52) uint { mulmod };
-     t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
-     t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
-     t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
-     t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
-     t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
-     t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
-     t0 = asm(t0, t3, const::n_modexp_c191_3f52) uint { mulmod };
-     t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
-     t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
-     t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
-     t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
-     t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
-     t0 = asm(t0, t6, const::n_modexp_c191_3f52) uint { mulmod };
-     t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
-     t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
-     t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
-     t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
-     t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
-     t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
-     t0 = asm(t0, t6, const::n_modexp_c191_3f52) uint { mulmod };
-     t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
-     t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
-     t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
-     t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
-     t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
-     t0 = asm(t0, t4, const::n_modexp_c191_3f52) uint { mulmod };
-     t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
-     t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
-     t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
-     t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
-     t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
-     t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
-     t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
-     t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
-     t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
-     t0 = asm(t0, t5, const::n_modexp_c191_3f52) uint { mulmod };
-     t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
-     t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
-     t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
-     t0 = asm(t0, t4, const::n_modexp_c191_3f52) uint { mulmod };
-     t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
-     t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
-     t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
-     t0 = asm(t0, t4, const::n_modexp_c191_3f52) uint { mulmod };
-     t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
-     t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
-     t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
-     t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
-     t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
-     t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
-     t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
-     t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
-     t0 = asm(t0, t3, const::n_modexp_c191_3f52) uint { mulmod };
-     t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
-     t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
-     t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
-     t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
-     t0 = asm(t0, t1, const::n_modexp_c191_3f52) uint { mulmod };
-     t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
-     t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
-     t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
-     t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
-     t0 = asm(t0, t3, const::n_modexp_c191_3f52) uint { mulmod };
-     t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
-     t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
-     t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
-     t0 = asm(t0, t2, const::n_modexp_c191_3f52) uint { mulmod };
-     t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
-     t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
-     t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
-     t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
-     t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
-     t0 = asm(t0, t1, const::n_modexp_c191_3f52) uint { mulmod };
-     t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
+    t3 = asm(t1, t3, const::n_modexp_c191_3f52) uint { mulmod };
+    t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
+    t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
+    t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
+    t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
+    t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
+    t0 = asm(t0, t4, const::n_modexp_c191_3f52) uint { mulmod };
+    t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
+    t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
+    t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
+    t0 = asm(t0, t6, const::n_modexp_c191_3f52) uint { mulmod };
+    t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
+    t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
+    t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
+    t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
+    t0 = asm(t0, t6, const::n_modexp_c191_3f52) uint { mulmod };
+    t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
+    t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
+    t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
+    t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
+    t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
+    t0 = asm(t0, t8, const::n_modexp_c191_3f52) uint { mulmod };
+    t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
+    t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
+    t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
+    t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
+    t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
+    t0 = asm(t0, t8, const::n_modexp_c191_3f52) uint { mulmod };
+    t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
+    t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
+    t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
+    t0 = asm(t0, t6, const::n_modexp_c191_3f52) uint { mulmod };
+    t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
+    t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
+    t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
+    t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
+    t0 = asm(t0, t8, const::n_modexp_c191_3f52) uint { mulmod };
+    t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
+    t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
+    t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
+    t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
+    t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
+    t0 = asm(t0, t6, const::n_modexp_c191_3f52) uint { mulmod };
+    t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
+    t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
+    t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
+    t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
+    t0 = asm(t0, t4, const::n_modexp_c191_3f52) uint { mulmod };
+    t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
+    t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
+    t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
+    t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
+    t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
+    t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
+    t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
+    t0 = asm(t0, t7, const::n_modexp_c191_3f52) uint { mulmod };
+    t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
+    t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
+    t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
+    t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
+    t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
+    t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
+    t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
+    t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
+    t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
+    t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
+    t0 = asm(t0, t2, const::n_modexp_c191_3f52) uint { mulmod };
+    t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
+    t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
+    t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
+    t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
+    t0 = asm(t0, t4, const::n_modexp_c191_3f52) uint { mulmod };
+    t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
+    t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
+    t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
+    t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
+    t0 = asm(t0, t8, const::n_modexp_c191_3f52) uint { mulmod };
+    t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
+    t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
+    t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
+    t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
+    t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
+    t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
+    t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
+    t0 = asm(t0, t2, const::n_modexp_c191_3f52) uint { mulmod };
+    t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
+    t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
+    t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
+    t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
+    t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
+    t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
+    t0 = asm(t0, t6, const::n_modexp_c191_3f52) uint { mulmod };
+    t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
+    t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
+    t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
+    t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
+    t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
+    t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
+    t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
+    t0 = asm(t0, t5, const::n_modexp_c191_3f52) uint { mulmod };
+    t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
+    t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
+    t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
+    t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
+    t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
+    t0 = asm(t0, t7, const::n_modexp_c191_3f52) uint { mulmod };
+    t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
+    t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
+    t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
+    t0 = asm(t0, t2, const::n_modexp_c191_3f52) uint { mulmod };
+    t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
+    t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
+    t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
+    t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
+    t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
+    t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
+    t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
+    t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
+    t0 = asm(t0, t4, const::n_modexp_c191_3f52) uint { mulmod };
+    t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
+    t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
+    t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
+    t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
+    t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
+    t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
+    t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
+    t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
+    t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
+    t0 = asm(t0, t2, const::n_modexp_c191_3f52) uint { mulmod };
+    t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
+    t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
+    t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
+    t0 = asm(t0, t4, const::n_modexp_c191_3f52) uint { mulmod };
+    t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
+    t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
+    t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
+    t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
+    t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
+    t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
+    t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
+    t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
+    t0 = asm(t0, t5, const::n_modexp_c191_3f52) uint { mulmod };
+    t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
+    t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
+    t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
+    t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
+    t0 = asm(t0, t5, const::n_modexp_c191_3f52) uint { mulmod };
+    t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
+    t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
+    t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
+    t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
+    t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
+    t0 = asm(t0, t2, const::n_modexp_c191_3f52) uint { mulmod };
+    t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
+    t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
+    t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
+    t0 = asm(t0, t8, const::n_modexp_c191_3f52) uint { mulmod };
+    t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
+    t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
+    t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
+    t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
+    t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
+    t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
+    t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
+    t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
+    t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
+    t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
+    t0 = asm(t0, t5, const::n_modexp_c191_3f52) uint { mulmod };
+    t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
+    t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
+    t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
+    t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
+    t0 = asm(t0, t2, const::n_modexp_c191_3f52) uint { mulmod };
+    t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
+    t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
+    t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
+    t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
+    t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
+    t0 = asm(t0, t1, const::n_modexp_c191_3f52) uint { mulmod };
+    t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
+    t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
+    t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
+    t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
+    t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
+    t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
+    t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
+    t0 = asm(t0, t5, const::n_modexp_c191_3f52) uint { mulmod };
+    t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
+    t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
+    t0 = asm(t0, t6, const::n_modexp_c191_3f52) uint { mulmod };
+    t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
+    t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
+    t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
+    t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
+    t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
+    t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
+    t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
+    t0 = asm(t0, t8, const::n_modexp_c191_3f52) uint { mulmod };
+    t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
+    t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
+    t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
+    t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
+    t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
+    t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
+    t0 = asm(t0, t8, const::n_modexp_c191_3f52) uint { mulmod };
+    t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
+    t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
+    t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
+    t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
+    t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
+    t0 = asm(t0, t2, const::n_modexp_c191_3f52) uint { mulmod };
+    t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
+    t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
+    t0 = asm(t0, t6, const::n_modexp_c191_3f52) uint { mulmod };
+    t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
+    t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
+    t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
+    t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
+    t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
+    t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
+    t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
+    t0 = asm(t0, t7, const::n_modexp_c191_3f52) uint { mulmod };
+    t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
+    t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
+    t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
+    t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
+    t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
+    t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
+    t0 = asm(t0, t3, const::n_modexp_c191_3f52) uint { mulmod };
+    t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
+    t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
+    t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
+    t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
+    t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
+    t0 = asm(t0, t6, const::n_modexp_c191_3f52) uint { mulmod };
+    t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
+    t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
+    t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
+    t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
+    t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
+    t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
+    t0 = asm(t0, t6, const::n_modexp_c191_3f52) uint { mulmod };
+    t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
+    t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
+    t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
+    t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
+    t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
+    t0 = asm(t0, t4, const::n_modexp_c191_3f52) uint { mulmod };
+    t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
+    t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
+    t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
+    t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
+    t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
+    t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
+    t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
+    t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
+    t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
+    t0 = asm(t0, t5, const::n_modexp_c191_3f52) uint { mulmod };
+    t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
+    t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
+    t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
+    t0 = asm(t0, t4, const::n_modexp_c191_3f52) uint { mulmod };
+    t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
+    t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
+    t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
+    t0 = asm(t0, t4, const::n_modexp_c191_3f52) uint { mulmod };
+    t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
+    t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
+    t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
+    t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
+    t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
+    t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
+    t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
+    t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
+    t0 = asm(t0, t3, const::n_modexp_c191_3f52) uint { mulmod };
+    t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
+    t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
+    t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
+    t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
+    t0 = asm(t0, t1, const::n_modexp_c191_3f52) uint { mulmod };
+    t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
+    t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
+    t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
+    t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
+    t0 = asm(t0, t3, const::n_modexp_c191_3f52) uint { mulmod };
+    t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
+    t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
+    t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
+    t0 = asm(t0, t2, const::n_modexp_c191_3f52) uint { mulmod };
+    t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
+    t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
+    t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
+    t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
+    t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
+    t0 = asm(t0, t1, const::n_modexp_c191_3f52) uint { mulmod };
+    t0 = asm(t0, t0, const::n_modexp_c191_3f52) uint { mulmod };
 
-     return t0;
+    return t0;
 }
