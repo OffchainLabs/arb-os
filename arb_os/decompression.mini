@@ -304,7 +304,7 @@ public impure func decompressAndVerifyBLSSignedTxBatch(
 
         newTx = newTx with {
             incomingRequest: originalRequest with {
-                requestId: uint(txHash)
+                requestId: uint(hash(bytes32(signerAddr), txHash))
             } with {
                 msgData: txData
             } with {
