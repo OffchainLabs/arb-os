@@ -463,6 +463,7 @@ impl StructField {
 pub struct FuncArg {
     pub name: StringId,
     pub tipe: Type,
+    pub debug_info: DebugInfo,
 }
 
 impl FuncArg {
@@ -476,12 +477,17 @@ impl FuncArg {
         Ok(FuncArg {
             name: self.name,
             tipe: self.tipe.resolve_types(type_table, location)?,
+            debug_info: self.debug_info,
         })
     }
 }
 
-pub fn new_func_arg(name: StringId, tipe: Type) -> FuncArg {
-    FuncArg { name, tipe }
+pub fn new_func_arg(name: StringId, tipe: Type, debug_info: DebugInfo) -> FuncArg {
+    FuncArg {
+        name,
+        tipe,
+        debug_info,
+    }
 }
 
 ///Represents a declaration of a global mini variable.
