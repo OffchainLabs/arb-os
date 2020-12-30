@@ -2,14 +2,23 @@ CARGORUN = cargo run --release --
 ARBOSDIR = arb_os
 BUILTINDIR = builtin
 STDDIR = stdlib
+TESTCONTRACTDIR = contracts/test
+TCSRCDIR = $(TESTCONTRACTDIR)/contracts
+TCBUILDDIR = $(TESTCONTRACTDIR)/build/contracts
+ARBCONTRACTDIR = contracts/arbos
+ACSRCDIR = $(ARBCONTRACTDIR)/contracts
+ACBUILDDIR = $(ARBCONTRACTDIR)/build/contracts
+ARBOS = $(ARBOSDIR)/arbos.mexe
 
 TEMPLATES = $(ARBOSDIR)/contractTemplates.mini
 TESTFILES = $(BUILTINDIR)/kvstest.mexe $(STDDIR)/queuetest.mexe $(BUILTINDIR)/arraytest.mexe $(BUILTINDIR)/globaltest.mexe $(STDDIR)/priorityqtest.mexe $(STDDIR)/bytearraytest.mexe $(STDDIR)/keccaktest.mexe $(STDDIR)/biguinttest.mexe $(STDDIR)/rlptest.mexe $(STDDIR)/storageMapTest.mexe $(BUILTINDIR)/maptest.mexe $(STDDIR)/sha256test.mexe minitests/codeloadtest.mexe
-ARBOS = $(ARBOSDIR)/arbos.mexe
+TESTCONTRACTS = $(TCBUILDDIR)/Add.json $(TCBUILDDIR)/ArbSys.json $(TCBUILDDIR)/Fibonacci.json $(TCBUILDDIR)/Migrations.json $(TCBUILDDIR)/PaymentChannel.json $(TCBUILDDIR)/Underfunded.json
+ARBOSCONTRACTS = $(ACBUILDDIR)/ArbAddressTable.json $(ACBUILDDIR)/ArbBLS.json $(ACBUILDDIR)/ArbERC20.json $(ACBUILDDIR)/ArbERC721.json $(ACBUILDDIR)/ArbFunctionTable.json $(ACBUILDDIR)/ArbInfo.json $(ACBUILDDIR)/ArbOwner.json $(ACBUILDDIR)/ArbSys.json $(ACBUILDDIR)/ArbosTest.json
 
-all: $(TESTFILES) $(TEMPLATES) $(ARBOS) test
+all: $(TESTFILES) $(TESTCONTRACTS) $(ARBOSCONTRACTS) $(TEMPLATES) $(ARBOS) test
+contracts: $(TESTCONTRACTS) $(ARBOSCONTRACTS)
 
-$(ARBOSDIR)/contractTemplates.mini:
+$(ARBOSDIR)/contractTemplates.mini: $(ARBOSCONTRACTS)
 	$(CARGORUN) make-templates
 
 $(BUILTINDIR)/kvstest.mexe: $(BUILTINDIR)/kvstest.mini
@@ -54,6 +63,12 @@ $(BUILTINDIR)/maptest.mexe: $(BUILTINMAOS) $(BUILTINDIR)/maptest.mini
 $(ARBOSDIR)/arbos.mexe: $(ARBOSDIR) $(STDDIR) $(BUILTINDIR)
 	$(CARGORUN) compile "arb_os" -o "arb_os/arbos.mexe"
 
+$(TESTCONTRACTS): $(TCSRCDIR) $(ACSRCDIR)/ArbSys.sol
+	(cd contracts/test; truffle compile)
+
+$(ARBOSCONTRACTS): $(ACSRCDIR)
+	(cd contracts/arbos; truffle compile)
+
 run:
 	cargo run --release -- run "arb_os/arbos.mexe"
 
@@ -80,4 +95,4 @@ benchmark: $(TEMPLATES) $(ARBOS)
 	$(CARGORUN) make-benchmarks
 
 clean:
-	rm -f $(BUILTINDIR)/*.mexe $(STDDIR)/*.mexe $(ARBOSDIR)/*.mexe minitests/*.mexe $(ARBOSDIR)/contractTemplates.mini
+	rm -f $(BUILTINDIR)/*.mexe $(STDDIR)/*.mexe $(ARBOSDIR)/*.mexe minitests/*.mexe $(ARBOSDIR)/contractTemplates.mini $(TCBUILDDIR)/*.json $(ACBUILDDIR)/*.json
