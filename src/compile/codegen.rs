@@ -327,14 +327,15 @@ fn mavm_codegen_statement(
                         .map(|exp| exp.get_type())
                         .unwrap_or(Type::Tuple(vec![]))
                 {
-                    println!(
+                    //Uncomment for info on break statement type mismatches
+                    /*println!(
                         "Types did not match in break statement expected {:?} got {:?}",
                         tipe,
                         oexpr
                             .clone()
                             .map(|exp| exp.get_type())
                             .unwrap_or(Type::Tuple(vec![]))
-                    );
+                    );*/
                 }
             } else {
                 *t = Some(
