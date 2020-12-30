@@ -142,7 +142,7 @@ public func bls_verifySignature(
     signature: BLSSignature
 ) -> option<()> {
     let numMsgs = len(keys);
-    if (numMsgs == 0 || numMsgs > 30 || numMsgs != len(messages)) {
+    if (numMsgs == 0 || numMsgs > 29 || numMsgs != len(messages)) {
         return None;
     }
 
@@ -322,11 +322,11 @@ func expandMsgTo96(
     let msgSize = bytearray_size(message);
 
     let msg0 = bytearray_copy(message, 0, bytearray_new(0), 64, msgSize);
-    msg0 = bytearray_setByte(msg0, 64+msgSize, 0);
-    msg0 = bytearray_setByte(msg0, 65+msgSize, 96);
-    msg0 = bytearray_setByte(msg0, 66+msgSize, 0);
-    msg0 = bytearray_set256(msg0, 67+msgSize, uint(domain));
-    msg0 = bytearray_setByte(msg0, 67+32+msgSize, 32);
+    msg0 = bytearray_setByte(msg0, 64 + msgSize, 0);
+    msg0 = bytearray_setByte(msg0, 65 + msgSize, 96);
+    msg0 = bytearray_setByte(msg0, 66 + msgSize, 0);
+    msg0 = bytearray_set256(msg0, 67 + msgSize, uint(domain));
+    msg0 = bytearray_setByte(msg0, 67 + 32 + msgSize, 32);
     let b0 = sha256_byteArray(msg0);
 
     msg0 = bytearray_new(0);
