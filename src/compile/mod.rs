@@ -20,7 +20,6 @@ use std::fs::File;
 use std::hash::{Hash, Hasher};
 use std::io::{self, Read};
 use std::path::Path;
-use symtable::SymTable;
 use typecheck::{TypeCheckedFunc, TypeCheckedNode};
 
 pub use ast::{DebugInfo, TopLevelDecl, Type};
@@ -342,44 +341,28 @@ pub fn compile_from_folder(
     for (name, imports) in &import_map {
         for import in imports {
             let import_path = import.path.clone();
-            let (named_type, imp_func, imp_func_decl) = if let Some(program) =
-                programs.get_mut(&import_path)
-            {
-                //Looks up info from target program
-                let index = program.string_table.get(import.name.clone());
-                let type_table = SymTable::new();
-                let type_table = type_table
-                    .push_multi(program.named_types.iter().map(|(i, t)| (*i, t)).collect());
-                let named_type = program
-                    .named_types
-                    .get(&index)
-                    .map(|t| t.resolve_types(&type_table, None))
-                    .transpose()
-                    .map_err(|e| CompileError::new(format!("Type error: {:?}", e), None))?;
-                let imp_func = program
-                    .func_table
-                    .get(&index)
-                    .map(|decl| {
-                        decl.resolve_types(&type_table, None)
-                            .map_err(|e| CompileError::new(format!("Type error: {:?}", e), None))
-                    })
-                    .transpose()?;
-                let imp_func_decl = program
-                    .funcs
-                    .iter()
-                    .find(|func| func.name == index)
-                    .cloned();
-                (named_type, imp_func, imp_func_decl)
-            } else {
-                return Err(CompileError::new(
-                    format!(
-                        "Internal error: Can not find target file for import \"{}::{}\"",
-                        import.path.get(0).cloned().unwrap_or_else(String::new),
-                        import.name
-                    ),
-                    None,
-                ));
-            };
+            let (named_type, imp_func, imp_func_decl) =
+                if let Some(program) = programs.get_mut(&import_path) {
+                    //Looks up info from target program
+                    let index = program.string_table.get(import.name.clone());
+                    let named_type = program.named_types.get(&index).cloned();
+                    let imp_func = program.func_table.get(&index).cloned();
+                    let imp_func_decl = program
+                        .funcs
+                        .iter()
+                        .find(|func| func.name == index)
+                        .cloned();
+                    (named_type, imp_func, imp_func_decl)
+                } else {
+                    return Err(CompileError::new(
+                        format!(
+                            "Internal error: Can not find target file for import \"{}::{}\"",
+                            import.path.get(0).cloned().unwrap_or_else(String::new),
+                            import.name
+                        ),
+                        None,
+                    ));
+                };
             //Modifies origin program to include import
             let origin_program = programs.get_mut(name).ok_or_else(|| {
                 CompileError::new(
@@ -393,9 +376,9 @@ pub fn compile_from_folder(
             })?;
             let index = origin_program.string_table.get(import.name.clone());
             if let Some(named_type) = named_type {
-                origin_program.named_types.insert(index, named_type);
+                origin_program.named_types.insert(index, named_type.clone());
             } else if let Some(imp_func) = imp_func {
-                origin_program.func_table.insert(index, imp_func);
+                origin_program.func_table.insert(index, imp_func.clone());
                 let imp_func_decl = imp_func_decl.ok_or(CompileError::new(
                     format!(
                         "Internal error: Imported function {} has no associated decl",
