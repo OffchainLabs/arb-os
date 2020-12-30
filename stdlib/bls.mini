@@ -66,12 +66,12 @@ type BLSKey = struct {
 // BLS top level functions with built-in hashing
 // ==================================================================
 
-public func bls_defaultDomain() -> ByteArray {
-    return bytearray_set256(bytearray_new(0), 0, const::BLSSignatureDomain);
+public func bls_defaultDomain(chainId: uint) -> bytes32 {
+    return bytes32(const::BLSSignatureDomainBase ^ chainId);
 }
 
 public func bls_hashAndVerifySingleSig(
-    domain: ByteArray,
+    domain: bytes32,
     message: ByteArray,
     key: BLSKey,
     signature: BLSSignature
@@ -82,7 +82,7 @@ public func bls_hashAndVerifySingleSig(
 
 public func bls_hashAndVerifySignature(
     numMsgs: uint,
-    domain: ByteArray,
+    domain: bytes32,
     messages: []ByteArray,
     keys: []BLSKey,
     signature: BLSSignature
@@ -188,7 +188,7 @@ public func bls_verifySignature(
 // ==================================================================
 
 public func bls_hashToPoint(
-    domain: ByteArray,
+    domain: bytes32,
     message: ByteArray
 ) -> option<BLSHashedMessage> {
     let (u0, u1) = hashToField(domain, message);
@@ -290,7 +290,7 @@ func inverse(a: uint) -> uint {
 }
 
 func hashToField(
-    domain: ByteArray,
+    domain: bytes32,
     messages: ByteArray
 ) -> (uint, uint) {
     let msg = expandMsgTo96(domain, messages);
@@ -314,27 +314,26 @@ func hashToField(
 }
 
 func expandMsgTo96(
-    domain: ByteArray,
+    domain: bytes32,
     message: ByteArray
 ) -> ByteArray {
     let out = bytearray_new(96);
 
     let msgSize = bytearray_size(message);
-    let domainSize = bytearray_size(domain);
 
     let msg0 = bytearray_copy(message, 0, bytearray_new(0), 64, msgSize);
     msg0 = bytearray_setByte(msg0, 64+msgSize, 0);
     msg0 = bytearray_setByte(msg0, 65+msgSize, 96);
     msg0 = bytearray_setByte(msg0, 66+msgSize, 0);
-    msg0 = bytearray_copy(domain, 0, msg0, 67+msgSize, domainSize);
-    msg0 = bytearray_setByte(msg0, 67+msgSize+domainSize, domainSize);
+    msg0 = bytearray_set256(msg0, 67+msgSize, uint(domain));
+    msg0 = bytearray_setByte(msg0, 67+32+msgSize, 32);
     let b0 = sha256_byteArray(msg0);
 
     msg0 = bytearray_new(0);
     msg0 = bytearray_set256(msg0, 0, uint(b0));
     msg0 = bytearray_setByte(msg0, 32, 1);
-    msg0 = bytearray_copy(domain, 0, msg0, 33, domainSize);
-    msg0 = bytearray_setByte(msg0, 33+domainSize, domainSize);
+    msg0 = bytearray_set256(msg0, 33, uint(domain));
+    msg0 = bytearray_setByte(msg0, 65, 32);
     let bi = sha256_byteArray(msg0);
 
     let t = b0 ^ bi;
@@ -343,16 +342,16 @@ func expandMsgTo96(
 
     msg0 = bytearray_set256(msg0, 0, uint(t));
     msg0 = bytearray_setByte(msg0, 32, 2);
-    msg0 = bytearray_copy(domain, 0, msg0, 33, domainSize);
-    msg0 = bytearray_setByte(msg0, 33+domainSize, domainSize);
+    msg0 = bytearray_set256(msg0, 33, uint(domain));
+    msg0 = bytearray_setByte(msg0, 65, 32);
     bi = sha256_byteArray(msg0);
 
     out = bytearray_set256(out, 32, uint(bi));
 
     msg0 = bytearray_set256(msg0, 0, uint(b0 ^ bi));
-    msg0 = bytearray_setByte(msg0 ,32, 3);
-    msg0 = bytearray_copy(domain, 0, msg0, 33, domainSize);
-    msg0 = bytearray_setByte(msg0, 33+domainSize, domainSize);
+    msg0 = bytearray_setByte(msg0, 32, 3);
+    msg0 = bytearray_set256(msg0, 33, uint(domain));
+    msg0 = bytearray_setByte(msg0, 65, 32);
     bi = sha256_byteArray(msg0);
 
     return bytearray_set256(out, 64, uint(bi));

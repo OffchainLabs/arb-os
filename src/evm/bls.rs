@@ -177,7 +177,7 @@ fn _to_32_bytes_be(bi: &BigUint) -> Vec<u8>{
 }
 
 pub fn _hash_to_point(
-    domain: &[u8],
+    domain: &Uint256,
     msg: &[u8]
     ) -> Option<G1> {
 
@@ -323,7 +323,7 @@ fn _inverse(xx: &BigUint) -> BigUint {
     xx.modpow(&field_ordermin2, &field_order)
 }
 
-fn _hash_to_field(domain: &[u8], msg: &[u8]) -> (BigUint, BigUint) {
+fn _hash_to_field(domain: &Uint256, msg: &[u8]) -> (BigUint, BigUint) {
     let _msg = _expand_msg_to_96(domain, msg);
 
     let field_order = BigUint::parse_bytes(
@@ -336,15 +336,10 @@ fn _hash_to_field(domain: &[u8], msg: &[u8]) -> (BigUint, BigUint) {
     (a, b)
 }
 
-pub fn _expand_msg_to_96(domain: &[u8], msg: &[u8]) -> Vec<u8> {
-    if (domain.len() > 32) {
-        panic!(); //todo fix error handling
-    }
-
+pub fn _expand_msg_to_96(domain: &Uint256, msg: &[u8]) -> Vec<u8> {
     let t0 = msg.len();
-    let t1 = domain.len();
     let mut out = vec![0; 96];
-    let len0 = 64 + t0 + t1 + 4;
+    let len0 = 64 + t0 + 32 + 4;
     let mut in0 = vec![0; len0];
 
     // zero pad
@@ -360,16 +355,16 @@ pub fn _expand_msg_to_96(domain: &[u8], msg: &[u8]) -> Vec<u8> {
     in0[off] = 0;
     off += 1;
 
-    in0[off..off + t1].clone_from_slice(domain);
-    off += t1;
-    in0[off] = t1 as u8;
+    in0[off..off + 32].clone_from_slice(&domain.to_bytes_be());
+    off += 32;
+    in0[off] = 32u8;
 
     let mut hasher = Sha256::new();
     hasher.input(&in0);
     let mut b0 = vec![0; 32];
     hasher.result(&mut b0);
 
-    let len1 = 32 + 1 + domain.len() + 1;
+    let len1 = 32 + 1 + 32 + 1;
 
     let mut in1 = vec![0; len1];
     in1[0..32].clone_from_slice(&b0);
@@ -377,9 +372,9 @@ pub fn _expand_msg_to_96(domain: &[u8], msg: &[u8]) -> Vec<u8> {
 
     in1[off] = 1;
     off += 1;
-    in1[off..off + t1].clone_from_slice(domain);
-    off += t1;
-    in1[off] = t1 as u8;
+    in1[off..off + 32].clone_from_slice(&domain.to_bytes_be());
+    off += 32;
+    in1[off] = 32u8;
 
     hasher.reset();
     hasher.input(&in1);
@@ -396,9 +391,9 @@ pub fn _expand_msg_to_96(domain: &[u8], msg: &[u8]) -> Vec<u8> {
     in1[off] = 2;
     off += 1;
 
-    in1[off..off + t1].clone_from_slice(domain);
-    off = off + t1;
-    in1[off] = t1 as u8;
+    in1[off..off + 32].clone_from_slice(&domain.to_bytes_be());
+    off = off + 32;
+    in1[off] = 32u8;
 
     hasher.reset();
     hasher.input(&in1);
@@ -414,9 +409,9 @@ pub fn _expand_msg_to_96(domain: &[u8], msg: &[u8]) -> Vec<u8> {
     in1[off] = 3;
     off = off + 1;
 
-    in1[off..off + t1].clone_from_slice(domain);
-    off = off + t1;
-    in1[off] = t1 as u8;
+    in1[off..off + 32].clone_from_slice(&domain.to_bytes_be());
+    off = off + 32;
+    in1[off] = 32u8;
 
     hasher.reset();
     hasher.input(&in1);
@@ -431,7 +426,6 @@ pub struct _BLSPublicKey {
 
 pub struct _BLSPrivateKey {
     s: Fr,
-    domain: Vec<u8>,
 }
 
 pub struct _BLSSignature {
@@ -442,7 +436,7 @@ pub struct _BLSAggregateSignature {
     g1p: AffineG1,
 }
 
-pub fn _generate_bls_key_pair(domain: &[u8]) -> (_BLSPublicKey, _BLSPrivateKey) {
+pub fn _generate_bls_key_pair() -> (_BLSPublicKey, _BLSPrivateKey) {
     // can't use built in FR::random() due to versioning mismatch of rand
     let subgroup_order = BigUint::parse_bytes(
         b"30644E72E131A029B85045B68181585D2833E84879B9709143E1F593F0000001",
@@ -455,12 +449,19 @@ pub fn _generate_bls_key_pair(domain: &[u8]) -> (_BLSPublicKey, _BLSPrivateKey) 
     let s = Fr::from_str(&s_str).unwrap();
     let p_j = (G2::one() * s); // check base point
     let p_a = AffineG2::from_jacobian(p_j).unwrap();
-    (_BLSPublicKey { g2p: p_a }, _BLSPrivateKey { s: s, domain: domain.to_vec() })
+    (_BLSPublicKey { g2p: p_a }, _BLSPrivateKey { s })
+}
+
+fn _domain_from_chain_id(chain_id: Uint256) -> Uint256 {
+    init_constant_table().get("BLSSignatureDomainBase").unwrap().bitwise_xor(&chain_id)
 }
 
 impl _BLSPrivateKey {
-    pub fn _sign_message(&self, message: &[u8]) -> _BLSSignature {
-        let h = _hash_to_point(&self.domain, message);
+    pub fn _sign_message(&self, chain_id: Uint256, message: &[u8]) -> _BLSSignature {
+        let h = _hash_to_point(
+            &_domain_from_chain_id(chain_id),
+            message
+        );
         // ignores error that should never arise that would return None for h. Handle and Return Option<BLSSignature> instead?
         let sigma = h.unwrap() * self.s;
         _BLSSignature {
@@ -568,9 +569,8 @@ pub fn _evm_test_bls_signed_batch(log_to: Option<&Path>, debug: bool) -> Result<
     }
 
     // generate and register BLS keys for Alice and Bob
-    let domain = init_constant_table().get("BLSSignatureDomain").unwrap().to_bytes_be();
-    let (alice_public_key, alice_private_key) = _generate_bls_key_pair(&domain);
-    let (bob_public_key, bob_private_key) = _generate_bls_key_pair(&domain);
+    let (alice_public_key, alice_private_key) = _generate_bls_key_pair();
+    let (bob_public_key, bob_private_key) = _generate_bls_key_pair();
     let alice_arb_bls = _ArbBLS::_new(&alice_wallet, debug);
     let bob_arb_bls = _ArbBLS::_new(&bob_wallet, debug);
     let a4 = alice_public_key._to_four_uints();
@@ -607,8 +607,8 @@ pub fn _evm_test_bls_signed_batch(log_to: Option<&Path>, debug: bool) -> Result<
         )?,
     );
 
-    let alice_sig = alice_private_key._sign_message(&alice_compressed_tx);
-    let bob_sig = bob_private_key._sign_message(&bob_compressed_tx);
+    let alice_sig = alice_private_key._sign_message(Uint256::from_u64(machine.runtime_env.chain_id), &alice_compressed_tx);
+    let bob_sig = bob_private_key._sign_message(Uint256::from_u64(machine.runtime_env.chain_id), &bob_compressed_tx);
 
     let aggregated_sig = _BLSAggregateSignature::_new(vec![alice_sig, bob_sig]);
 

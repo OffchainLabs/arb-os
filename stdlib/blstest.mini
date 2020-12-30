@@ -25,8 +25,7 @@ impure func main() {
 }
 
 func tests() -> uint {
-    let domain2 = bytearray_new(32);
-    domain2 = bytearray_set256(domain2, 0,0x2d889d03243d367c56457383bb04bcdadff3a522dbf9c97145d0a58c1e88d6f9);
+    let domain2 = bytes32(0x2d889d03243d367c56457383bb04bcdadff3a522dbf9c97145d0a58c1e88d6f9);
 
     let message2 = bytearray_new(12);
     message2 = bytearray_setByte(message2,0,0x46);

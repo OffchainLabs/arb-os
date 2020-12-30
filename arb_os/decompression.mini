@@ -253,7 +253,7 @@ public impure func decompressAndVerifyBLSSignedTxBatch(
     let aggregatedSig = struct { x: sigx, y: sigy };
 
     let i = 0;
-    let domain = bls_defaultDomain();
+    let domain = bls_defaultDomain(chainParams_chainId());
     while(i < numMsgs) {
         // the signature on this tx covers all of the data associated with this tx
         // we remember the start of the stream, so we can extract the full data later, once we know where the end is
