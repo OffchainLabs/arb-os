@@ -156,6 +156,7 @@ pub fn init_constant_table() -> HashMap<String, Uint256> {
         ("L2MessageType_sequencerBatch", 5),
         ("L2MessageType_heartbeat", 6),
         ("L2MessageType_signedCompressedTx", 7),
+        ("L2MessageType_blsBatch", 8),
         // rollup protocol event types
         ("ProtoEvent_createNode", 0),
         ("ProtoEvent_confirmNode", 1),
@@ -210,16 +211,24 @@ pub fn init_constant_table() -> HashMap<String, Uint256> {
         ("PluggableModuleID_precompile_0x05", 1),
         // misc
         ("DefaultMillisecondsPerBlock", 13500),
-        ("DefaultSpeedLimitPerBlock", 13500*100000),
+        ("DefaultSpeedLimitPerBlock", 13500 * 100000),
         ("Estimate_L1GasCostPerNode", 220000),
-        ("Estimate_L1GasPrice", 100 * 1_000_000_000),  // 100 gwei
+        ("Estimate_L1GasPrice", 100 * 1_000_000_000), // 100 gwei
     ] {
         ret.insert(s.to_string(), Uint256::from_u64(*i));
     }
 
     for (s, u) in &[
-                                                // Keccak256 of "Arbitrum gas accounting reserve account"
-        ("SpecialAccount_gasAccountingReserve", "af6cbc19f66dec07f790912226744d744f04b37b666b9343317df33a5114fb96")
+        (
+            "SpecialAccount_gasAccountingReserve",
+            // Keccak256 of "Arbitrum gas accounting reserve account"
+            "af6cbc19f66dec07f790912226744d744f04b37b666b9343317df33a5114fb96",
+        ),
+        (
+            "BLSSignatureDomainBase",
+            // Keccak256 of "Arbitrum BLS signature domain"
+            "73a92f91d473214defd5ffa91d036007eb2e6487fffaa551835e988fb24aaa2b"
+        )
     ] {
         ret.insert(s.to_string(), Uint256::from_string_hex(u).unwrap());
     }

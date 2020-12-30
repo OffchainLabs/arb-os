@@ -184,6 +184,25 @@ fn test_keccak() {
 }
 
 #[test]
+fn test_bls() {
+    let path = Path::new("stdlib/blstest.mexe");
+    let res = run_from_file(
+        path,
+        vec![],
+        RuntimeEnvironment::new(Uint256::from_usize(1111), None),
+        false,
+    );
+    match res {
+        Ok(res) => {
+            assert_eq!(res[0], Value::Int(Uint256::zero()));
+        }
+        Err(e) => {
+            panic!("{}\n{}", e.0, e.1);
+        }
+    }
+}
+
+#[test]
 fn test_sha256() {
     let path = Path::new("stdlib/sha256test.mexe");
     let res = run_from_file(
@@ -416,6 +435,11 @@ fn test_sha256_precompile() {
 }
 
 #[test]
+fn test_ecpairing_precompile() {
+    crate::evm::_evm_ecpairing_precompile(None, false);
+}
+
+#[test]
 fn test_ripemd160_precompile() {
     crate::evm::_evm_eval_ripemd160(None, false);
 }
@@ -591,6 +615,11 @@ fn test_erc20() {
 #[test]
 fn test_erc721() {
     crate::evm::mint_erc721_and_get_balance(None, false);
+}
+
+#[test]
+fn test_bls_registry() {
+    crate::evm::bls::_evm_test_bls_registry(None, false);
 }
 
 #[test]

@@ -4,6 +4,13 @@
 
 use chainParameters::chainParams_chainId;
 
+use std::bls::BLSHashedMessage;
+use std::bls::BLSKey;
+use std::bls::BLSSignature;
+use std::bls::bls_defaultDomain;
+use std::bls::bls_hashToPoint;
+use std::bls::bls_verifySignature;
+
 use std::bytearray::ByteArray;
 use std::bytearray::MarshalledBytes;
 use std::bytearray::bytearray_new;
@@ -11,6 +18,7 @@ use std::bytearray::bytearray_size;
 use std::bytearray::bytearray_getByte;
 use std::bytearray::bytearray_get256;
 use std::bytearray::bytearray_setByte;
+use std::bytearray::bytearray_set256;
 use std::bytearray::bytearray_extract;
 use std::bytearray::bytearray_copy;
 use std::bytearray::bytearray_marshalFull;
@@ -20,6 +28,7 @@ use std::bytestream::bytestream_new;
 use std::bytestream::bytestream_getByte;
 use std::bytestream::bytestream_get256;
 use std::bytestream::bytestream_getN;
+use std::bytestream::bytestream_skipBytes;
 use std::bytestream::bytestream_bytesReadSoFar;
 use std::bytestream::bytestream_bytesRemaining;
 use std::bytestream::bytestream_getRemainingBytes;
@@ -42,13 +51,17 @@ use accounts::getGlobalAccountStore;
 use accounts::accountStore_get;
 use accounts::account_getNextSeqNum;
 use accounts::account_getAggregatorDecompressionState;
+use accounts::account_getBlsKey;
+
 use evmCallStack::evmCallStack_getAccount;
 use inbox::IncomingRequest;
 use messages::TxRequestData;
 
+use std::rlp::SignedTx;
 use std::rlp::rlp_decodeAddress;
 use std::rlp::rlp_decodeUint;
 use std::rlp::rlp_encodeMessageInfo;
+use std::rlp::rlp_encodeAndHashMessageInfoForSignature;
 
 use signedTx::SignedTx;
 use signedTx::recoverSigner;
@@ -141,6 +154,8 @@ public impure func decompressAddress(
         return Some((ustr, addressTable_getByIndex(globalIndexedAddressTable, decodedUint)?));
     } else {
         let (ustr, addr) = rlp_decodeAddress(stream)?;
+        let (giat, _) = addressTable_getByAddressAlloc(globalIndexedAddressTable, addr);
+        globalIndexedAddressTable = giat;
         return Some((ustr, addr));
     }
 }
@@ -223,6 +238,92 @@ public impure func decompressAndVerifyEcdsaSignedTx(
     );
 }
 
+public impure func decompressAndVerifyBLSSignedTxBatch(
+    ba: ByteArray,
+    originalRequest: IncomingRequest,
+    queueToFill: Queue,
+) -> option<Queue> {
+    let stream = bytestream_skipBytes(bytestream_new(ba), 1)?;
+
+    let (stream, numMsgs) = rlp_decodeUint(stream)?;
+    let msgHashes = newarray<BLSHashedMessage>(numMsgs);
+    let signerKeys = newarray<BLSKey>(numMsgs);
+    let txs = newarray<TxRequestData>(numMsgs);
+
+    let (stream, sigx) = bytestream_get256(stream)?;
+    let (stream, sigy) = bytestream_get256(stream)?;
+    let aggregatedSig = struct { x: sigx, y: sigy };
+
+    let i = 0;
+    while(i < numMsgs) {
+        // the signature on this tx covers all of the data associated with this tx
+        // we remember the start of the stream, so we can extract the full data later, once we know where the end is
+        let startStream = stream;
+
+        let (us, signerAddr) = decompressAddress(stream)?;
+        stream = us;
+
+        let (us, txSize) = rlp_decodeUint(stream)?;
+        stream = us;
+
+        let (us, txData) = bytestream_getN(stream, txSize)?;
+        stream = us;
+
+        let fullDataSize = bytestream_bytesReadSoFar(stream)-bytestream_bytesReadSoFar(startStream);
+
+        signerKeys = signerKeys with {
+            [i] = account_getBlsKey(accountStore_get(getGlobalAccountStore(), signerAddr))?
+        };
+
+        let aggregator = originalRequest.sender;
+        if let Some(aggInfo) = originalRequest.aggregator {
+            aggregator = aggInfo.aggregator;
+        }
+
+        let (_, newTx) = decompressTx(bytestream_new(txData), Some(signerAddr), None<FunctionTable>)?;
+        let txHash = rlp_encodeAndHashMessageInfoForSignature(
+             struct {
+                 seqNum: newTx.seqNum?,
+                 gasPrice: newTx.gasPrice,
+                 gasLimit: newTx.maxGas,
+                 to: newTx.calleeAddr,
+                 value: newTx.value,
+                 data: newTx.calldata,
+                 v: 0,
+                 r: 0,
+                 s: 0,
+             },
+             Some(chainParams_chainId()),
+        );
+        msgHashes = msgHashes with {
+            [i] = bls_hashToPoint(
+                bls_defaultDomain(signerAddr),
+                bytearray_set256(bytearray_new(0), 0, uint(txHash)),
+            )?
+        };
+
+        newTx = newTx with {
+            incomingRequest: originalRequest with {
+                requestId: uint(hash(bytes32(signerAddr), txHash))
+            } with {
+                msgData: txData
+            } with {
+                aggregator: Some(struct {
+                    aggregator: aggregator,
+                    calldataBytes: fullDataSize + 64/numMsgs,   // charge for your data plus your share of the signature
+                })
+            }
+        };
+
+        queueToFill = queue_put(queueToFill, newTx);
+        i = i+1;
+    }
+
+    bls_verifySignature(msgHashes, signerKeys, aggregatedSig)?;
+
+    return Some(queueToFill);
+}
+
 impure func decompressTx(
     stream: ByteStream,
     maybeSender: option<address>,
@@ -256,7 +357,6 @@ impure func decompressTx(
             stream = ustr;
         }
     }
-
     let sender = address(0);
     let seqNum = 0;
     if let Some(senderAddr) = maybeSender {
@@ -293,7 +393,6 @@ impure func decompressTx(
 
     let (ustr, toAddr) = decompressAddress(stream)?;
     stream = ustr;
-
     let value = 0;
     let calldata = bytearray_new(0);
     if let Some(tableEntry) = funcTableEntry {
@@ -316,7 +415,6 @@ impure func decompressTx(
         value = val;
         calldata = bytestream_getRemainingBytes(stream);
     }
-
     return Some((
         stream,
         struct {

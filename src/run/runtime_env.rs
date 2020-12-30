@@ -30,6 +30,7 @@ pub struct RuntimeEnvironment {
     pub recorder: RtEnvRecorder,
     compressor: TxCompressor,
     charging_policy: Option<(Uint256, Uint256, Uint256)>,
+    num_wallets: u64,
 }
 
 impl RuntimeEnvironment {
@@ -93,6 +94,7 @@ impl RuntimeEnvironment {
             recorder: RtEnvRecorder::new(),
             compressor: TxCompressor::new(),
             charging_policy: charging_policy.clone(),
+            num_wallets: 0,
         };
 
         ret.insert_l1_message(
@@ -118,7 +120,7 @@ impl RuntimeEnvironment {
 
         if let Some((base_gas_price, storage_charge, pay_fees_to)) = charging_policy.clone() {
             buf.extend(&[0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 2u8]); // option ID = 2
-            buf.extend(&[0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 96u8]); // option payload size = 64 bytes
+            buf.extend(&[0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 96u8]); // option payload size = 96 bytes
             buf.extend(base_gas_price.to_bytes_be());
             buf.extend(storage_charge.to_bytes_be());
             buf.extend(pay_fees_to.to_bytes_be());
@@ -144,14 +146,17 @@ impl RuntimeEnvironment {
         send_heartbeat_message: bool,
     ) {
         self.current_block_num = self.current_block_num.add(&delta_blocks);
-        self.current_timestamp = self.current_timestamp.add(&delta_timestamp.unwrap_or(Uint256::from_u64(13).mul(&delta_blocks)));
+        self.current_timestamp = self
+            .current_timestamp
+            .add(&delta_timestamp.unwrap_or(Uint256::from_u64(13).mul(&delta_blocks)));
         if send_heartbeat_message {
             self.insert_l2_message(Uint256::zero(), &[6u8], false);
         }
     }
 
-    pub fn new_wallet(&self) -> Wallet {
-        let mut r = StdRng::seed_from_u64(42);
+    pub fn new_wallet(&mut self) -> Wallet {
+        let mut r = StdRng::seed_from_u64(42 + self.num_wallets);
+        self.num_wallets = self.num_wallets + 1;
         Wallet::new(&mut r).set_chain_id(self.get_chain_id())
     }
 
@@ -357,6 +362,65 @@ impl RuntimeEnvironment {
         result.extend(vec![(tx.v.as_u64() % 2) as u8]);
 
         (result, keccak256(tx.rlp().as_ref()).to_vec())
+    }
+
+    pub fn _make_compressed_tx_for_bls(
+        &mut self,
+        sender: &Uint256,
+        gas_price: Uint256,
+        gas_limit: Uint256,
+        to_addr: Uint256,
+        value: Uint256,
+        calldata: &[u8],
+    ) -> (Vec<u8>, Vec<u8>) {
+        // returns (compressed tx to send, hash to sign)
+        let mut result = self.compressor.compress_address(sender.clone());
+
+        let mut buf = vec![0xffu8];
+        let seq_num = self.get_and_incr_seq_num(&sender);
+        buf.extend(seq_num.rlp_encode());
+        buf.extend(gas_price.rlp_encode());
+        buf.extend(gas_limit.rlp_encode());
+        buf.extend(self.compressor.compress_address(to_addr.clone()));
+        buf.extend(self.compressor.compress_token_amount(value.clone()));
+        buf.extend(calldata);
+
+        result.extend(Uint256::from_usize(buf.len()).rlp_encode());
+        result.extend(buf);
+
+        (
+            result,
+            TransactionRequest::new()
+                .from(sender.to_h160())
+                .to(to_addr.to_h160())
+                .gas(gas_limit.to_u256())
+                .gas_price(gas_price.to_u256())
+                .value(value.to_u256())
+                .data(calldata.to_vec())
+                .nonce(seq_num.to_u256())
+                .sighash(Some(self.chain_id))
+                .as_bytes()
+                .to_vec(),
+        )
+    }
+
+    pub fn _insert_bls_batch(
+        &mut self,
+        senders: &[&Uint256],
+        msgs: &[Vec<u8>],
+        aggregated_sig: &[u8],
+        batch_sender: &Uint256,
+    ) {
+        assert_eq!(senders.len(), msgs.len());
+        let mut buf = vec![8u8];
+        buf.extend(Uint256::from_usize(senders.len()).rlp_encode());
+        assert_eq!(aggregated_sig.len(), 64);
+        buf.extend(aggregated_sig);
+        for i in 0..senders.len() {
+            buf.extend(msgs[i].clone());
+        }
+
+        self.insert_l2_message(batch_sender.clone(), &buf, false);
     }
 
     pub fn append_signed_tx_message_to_batch(
@@ -571,7 +635,7 @@ impl TxCompressor {
     pub fn new() -> Self {
         TxCompressor {
             address_map: HashMap::new(),
-            next_index: 0,
+            next_index: 1,
         }
     }
 

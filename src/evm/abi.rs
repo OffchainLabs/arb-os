@@ -139,11 +139,9 @@ impl AbiForContract {
         };
 
         if let Some(delta_blocks) = advance_time {
-            machine.runtime_env._advance_time(
-                delta_blocks.clone(),
-                None,
-                true,
-            );
+            machine
+                .runtime_env
+                ._advance_time(delta_blocks.clone(), None, true);
         }
 
         let _gas_used = if debug {
@@ -207,6 +205,15 @@ impl AbiForContract {
 
     pub fn get_function(&self, name: &str) -> Result<&ethabi::Function, ethabi::Error> {
         self.contract.function(name)
+    }
+
+    pub fn _generate_calldata_for_function(
+        &self,
+        func_name: &str,
+        args: &[ethabi::Token],
+    ) -> Result<Vec<u8>, ethabi::Error> {
+        let this_function = self.contract.function(func_name)?;
+        Ok(this_function.encode_input(args).unwrap())
     }
 
     pub fn call_function(
@@ -1081,10 +1088,7 @@ impl<'a> _ArbOwner<'a> {
         }
     }
 
-    pub fn _get_fee_recipient(
-        &self,
-        machine: &mut Machine,
-    ) -> Result<Uint256, ethabi::Error> {
+    pub fn _get_fee_recipient(&self, machine: &mut Machine) -> Result<Uint256, ethabi::Error> {
         let (receipts, _sends) = self.contract_abi.call_function(
             self.my_address.clone(),
             "getFeeRecipient",
@@ -1421,7 +1425,10 @@ impl<'a> _ArbOwner<'a> {
         let (receipts, _sends) = self.contract_abi.call_function(
             self.my_address.clone(),
             "finishCodeUploadAsPluggable",
-            &[ethabi::Token::Uint(id.to_u256()), ethabi::Token::Bool(keep_state)],
+            &[
+                ethabi::Token::Uint(id.to_u256()),
+                ethabi::Token::Bool(keep_state),
+            ],
             machine,
             Uint256::zero(),
             self.debug,

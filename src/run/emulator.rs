@@ -2181,7 +2181,7 @@ fn do_ecrecover(
 }
 
 fn do_ecadd(x0: Uint256, x1: Uint256, y0: Uint256, y1: Uint256) -> (Uint256, Uint256) {
-    use bn::{AffineG1, Fq, Group, G1};
+    use parity_bn::{AffineG1, Fq, Group, G1};
 
     let px = Fq::from_slice(&x0.to_bytes_be()).unwrap();
     let py = Fq::from_slice(&x1.to_bytes_be()).unwrap();
@@ -2214,7 +2214,7 @@ fn do_ecadd(x0: Uint256, x1: Uint256, y0: Uint256, y1: Uint256) -> (Uint256, Uin
 }
 
 fn do_ecmul(x0: Uint256, x1: Uint256, nui: Uint256) -> (Uint256, Uint256) {
-    use bn::{AffineG1, Fq, Fr, Group, G1};
+    use parity_bn::{AffineG1, Fq, Fr, Group, G1};
 
     let px = Fq::from_slice(&x0.to_bytes_be()).unwrap();
     let py = Fq::from_slice(&x1.to_bytes_be()).unwrap();
@@ -2241,7 +2241,7 @@ fn do_ecmul(x0: Uint256, x1: Uint256, nui: Uint256) -> (Uint256, Uint256) {
 }
 
 fn do_ecpairing(mut val: Value) -> Option<bool> {
-    use bn::{pairing, AffineG1, AffineG2, Fq, Fq2, Group, Gt, G1, G2};
+    use parity_bn::{pairing, AffineG1, AffineG2, Fq, Fq2, Group, Gt, G1, G2};
 
     let mut acc = Gt::one();
     for _i in 0..MAX_PAIRING_SIZE {
@@ -2260,25 +2260,57 @@ fn do_ecpairing(mut val: Value) -> Option<bool> {
                                 return None;
                             }
                         }
-                        let ax = Fq::from_slice(&uis[0].to_bytes_be()).unwrap();
-                        let ay = Fq::from_slice(&uis[1].to_bytes_be()).unwrap();
+                        let ax = if let Ok(t) = Fq::from_slice(&uis[0].to_bytes_be()) {
+                            t
+                        } else {
+                            return Some(false);
+                        };
+                        let ay = if let Ok(t) = Fq::from_slice(&uis[1].to_bytes_be()) {
+                            t
+                        } else {
+                            return Some(false);
+                        };
                         let ba = Fq2::new(
-                            Fq::from_slice(&uis[2].to_bytes_be()).unwrap(),
-                            Fq::from_slice(&uis[3].to_bytes_be()).unwrap(),
+                            if let Ok(t) = Fq::from_slice(&uis[2].to_bytes_be()) {
+                                t
+                            } else {
+                                return Some(false);
+                            },
+                            if let Ok(t) = Fq::from_slice(&uis[3].to_bytes_be()) {
+                                t
+                            } else {
+                                return Some(false);
+                            },
                         );
                         let bb = Fq2::new(
-                            Fq::from_slice(&uis[4].to_bytes_be()).unwrap(),
-                            Fq::from_slice(&uis[5].to_bytes_be()).unwrap(),
+                            if let Ok(t) = Fq::from_slice(&uis[4].to_bytes_be()) {
+                                t
+                            } else {
+                                return Some(false);
+                            },
+                            if let Ok(t) = Fq::from_slice(&uis[5].to_bytes_be()) {
+                                t
+                            } else {
+                                return Some(false);
+                            },
                         );
                         let b = if ba.is_zero() && bb.is_zero() {
                             G2::zero()
                         } else {
-                            AffineG2::new(ba, bb).unwrap().into()
+                            if let Ok(t) = AffineG2::new(ba, bb) {
+                                t.into()
+                            } else {
+                                return Some(false);
+                            }
                         };
                         let a = if ax.is_zero() && ay.is_zero() {
                             G1::zero()
                         } else {
-                            AffineG1::new(ax, ay).unwrap().into()
+                            if let Ok(t) = AffineG1::new(ax, ay) {
+                                t.into()
+                            } else {
+                                return Some(false);
+                            }
                         };
                         acc = acc * pairing(a, b);
                     } else {
