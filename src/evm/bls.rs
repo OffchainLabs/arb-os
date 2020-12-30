@@ -2,6 +2,7 @@
  * Copyright 2020, Offchain Labs, Inc. All rights reserved
  */
 
+use crate::evm::test_contract_path;
 use crate::evm::abi::{builtin_contract_path, AbiForContract};
 use crate::run::{load_from_file, Machine, RuntimeEnvironment};
 use crate::compile::miniconstants::init_constant_table;
@@ -563,7 +564,7 @@ pub fn _evm_test_bls_signed_batch(log_to: Option<&Path>, debug: bool) -> Result<
     let mut machine = load_from_file(Path::new("arb_os/arbos.mexe"), rt_env);
     machine.start_at_zero();
 
-    let mut add_contract = AbiForContract::new_from_file(&builtin_contract_path("Add"))?;
+    let mut add_contract = AbiForContract::new_from_file(&test_contract_path("Add"))?;
     if add_contract
         .deploy(&[], &mut machine, Uint256::zero(), None, None, debug)
         .is_err()
