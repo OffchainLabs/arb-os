@@ -87,7 +87,7 @@ public func bls_hashAndVerifySignature(
     keys: []BLSKey,
     signature: BLSSignature
 ) -> option<()> {
-    let hashedMessages = newarray <BLSHashedMessage> (numMsgs);
+    let hashedMessages = newarray<BLSHashedMessage>(numMsgs);
 
     let i = 0;
     while (i < numMsgs) {
@@ -103,12 +103,12 @@ public func bls_hashAndVerifySignature(
 // ==================================================================
 
 public func bls_verifySingleSig(
-    message:  BLSHashedMessage,
-    key:      BLSKey,
+    message: BLSHashedMessage,
+    key: BLSKey,
     signature: BLSSignature
 ) -> option<()> {
-	let messages = newarray <BLSHashedMessage>(1) with { [0] = message };
-	let keys = newarray <BLSKey> (1) with { [0] = key };
+    let messages = newarray<BLSHashedMessage>(1) with { [0] = message };
+    let keys = newarray<BLSKey>(1) with { [0] = key };
     return bls_verifySignature(messages, keys, signature);
 }
 
@@ -137,17 +137,17 @@ public func bls_marshalPublicKey(key: BLSKey, ba: ByteArray, offset: uint) -> By
 }
 
 public func bls_verifySignature(
-    messages:  []BLSHashedMessage,
-    keys:      []BLSKey,
+    messages: []BLSHashedMessage,
+    keys: []BLSKey,
     signature: BLSSignature
 ) -> option<()> {
-	let numMsgs = len(keys);
-	if (numMsgs == 0 || numMsgs > 30 || numMsgs != len(messages) || numMsgs != len(keys)) {
-		return None;
-	}
+    let numMsgs = len(keys);
+    if (numMsgs == 0 || numMsgs > 30 || numMsgs != len(messages)) {
+        return None;
+    }
 
-	let acc = unsafecast<any>(());
-	acc = (
+    let acc = unsafecast<any>(());
+    acc = (
         acc,
         (
           signature.x,
@@ -156,11 +156,10 @@ public func bls_verifySignature(
           const::nG2x1,
           const::nG2y0,
           const::nG2y1
-
         ),
     );
 
-	let i = 0;
+    let i = 0;
     while (i < numMsgs) {
         acc = (
             acc,
@@ -189,8 +188,8 @@ public func bls_verifySignature(
 // ==================================================================
 
 public func bls_hashToPoint(
-  	domain: 	ByteArray,
-  	message:	ByteArray
+    domain: ByteArray,
+    message: ByteArray
 ) -> option<BLSHashedMessage> {
     let (u0, u1) = hashToField(domain, message);
     let p0 = mapToPoint(u0)?;
@@ -203,9 +202,9 @@ public func bls_hashToPoint(
     return Some(struct { x: x, y: y });
 }
 
-func mapToPoint(x:	uint) -> option<(uint, uint)> {
+func mapToPoint(x:  uint) -> option<(uint, uint)> {
     if(x >= const::N) {
-    	return None;
+        return None;
     }
    
     let foundFirstSqrt = (sqrt(x) != None<uint>);
@@ -215,7 +214,7 @@ func mapToPoint(x:	uint) -> option<(uint, uint)> {
 
     let a1 = asm(x, const::z0, const::N) uint { mulmod };
     let a2 = asm(a1, a0, const::N) uint { mulmod };
-	a2 = inverse(a2);
+    a2 = inverse(a2);
 
     a1 = asm(a1, a1, const::N) uint { mulmod };
     a1 = asm(a1, a2, const::N) uint { mulmod };
@@ -229,11 +228,11 @@ func mapToPoint(x:	uint) -> option<(uint, uint)> {
     a1 = asm(a1, x, const::N) uint { mulmod };
     a1 = asm(a1, 3, const::N) uint { addmod };
     if let Some(sqa1) = sqrt(a1) {
-    	if (foundFirstSqrt) {
-    	    return Some((x, sqa1));
-    	} else {
-    		return Some((x, const::N - sqa1));
-    	}
+        if (foundFirstSqrt) {
+            return Some((x, sqa1));
+        } else {
+            return Some((x, const::N - sqa1));
+        }
     }
 
     // x2
@@ -244,12 +243,12 @@ func mapToPoint(x:	uint) -> option<(uint, uint)> {
     a1 = asm(a1, x, const::N) uint { mulmod };
     a1 = asm(a1, 3, const::N) uint { addmod };
     if let Some(sqa1) = sqrt(a1) {
-    	if (foundFirstSqrt) {
+        if (foundFirstSqrt) {
             a1 = sqa1;
-    	} else {
-    		a1 = const::N - sqa1;
-    	}
-    	return Some((x,a1));
+        } else {
+            a1 = const::N - sqa1;
+        }
+        return Some((x,a1));
     }
 
     // x3
@@ -267,11 +266,11 @@ func mapToPoint(x:	uint) -> option<(uint, uint)> {
     if let Some(squa1) = sqrt(a1) {
         if (foundFirstSqrt) {
             return Some((x, squa1));
-    	} else {
+        } else {
             return Some((x, const::N - squa1));
         }
     } else {
-    	return None; // BLS: bad ft mapping implementation
+        return None; // BLS: bad ft mapping implementation
     }
 }
 
@@ -286,25 +285,25 @@ func sqrt(xx: uint) ->option<uint> {
     }
 }
 
-func inverse(a:	uint) -> uint {
+func inverse(a: uint) -> uint {
     return modexp_3064_fd54(a);
 }
 
 func hashToField(
-    domain:		ByteArray,
-    messages:	ByteArray
+    domain: ByteArray,
+    messages: ByteArray
 ) -> (uint, uint) {
     let msg = expandMsgTo96(domain, messages);
 
-    let u1 = asm(64, bytearray_get256(msg,0)) uint { shr };
-    let u0 = bytearray_get256(msg,16) & const::MASK24;
+    let u1 = asm(64, bytearray_get256(msg, 0)) uint { shr };
+    let u0 = bytearray_get256(msg, 16) & const::MASK24;
     let a0 = asm(
         asm(u1, const::T24, const::N) uint { mulmod },
         u0, const::N
     ) uint { addmod };
 
-    u1 = bytearray_get256(msg,40) & const::MASK24;
-    u0 = bytearray_get256(msg,64) & const::MASK24;
+    u1 = bytearray_get256(msg, 40) & const::MASK24;
+    u0 = bytearray_get256(msg, 64) & const::MASK24;
     let a1 = asm(
         asm(u1, const::T24, const::N) uint { mulmod },
         u0,
@@ -315,8 +314,8 @@ func hashToField(
 }
 
 func expandMsgTo96(
-	domain:		ByteArray,
-	message:	ByteArray
+    domain: ByteArray,
+    message: ByteArray
 ) -> ByteArray {
     let out = bytearray_new(96);
 
