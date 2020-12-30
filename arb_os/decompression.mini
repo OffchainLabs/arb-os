@@ -57,9 +57,11 @@ use evmCallStack::evmCallStack_getAccount;
 use inbox::IncomingRequest;
 use messages::TxRequestData;
 
+use std::rlp::SignedTx;
 use std::rlp::rlp_decodeAddress;
 use std::rlp::rlp_decodeUint;
 use std::rlp::rlp_encodeMessageInfo;
+use std::rlp::rlp_encodeAndHashMessageInfoForSignature;
 
 use signedTx::SignedTx;
 use signedTx::recoverSigner;
@@ -253,7 +255,6 @@ public impure func decompressAndVerifyBLSSignedTxBatch(
     let aggregatedSig = struct { x: sigx, y: sigy };
 
     let i = 0;
-    let domain = bls_defaultDomain(chainParams_chainId());
     while(i < numMsgs) {
         // the signature on this tx covers all of the data associated with this tx
         // we remember the start of the stream, so we can extract the full data later, once we know where the end is
@@ -270,7 +271,6 @@ public impure func decompressAndVerifyBLSSignedTxBatch(
 
         let fullDataSize = bytestream_bytesReadSoFar(stream)-bytestream_bytesReadSoFar(startStream);
         let (_, fullData) = bytestream_getN(startStream, fullDataSize)?;
-        msgHashes = msgHashes with { [i] = bls_hashToPoint(domain, fullData)? };
 
         signerKeys = signerKeys with {
             [i] = account_getBlsKey(accountStore_get(getGlobalAccountStore(), signerAddr))?
@@ -282,6 +282,31 @@ public impure func decompressAndVerifyBLSSignedTxBatch(
         }
 
         let (_, newTx) = decompressTx(bytestream_new(txData), Some(signerAddr), None<FunctionTable>)?;
+
+        msgHashes = msgHashes with {
+            [i] = bls_hashToPoint(
+                bls_defaultDomain(signerAddr),
+                bytearray_set256(
+                    bytearray_new(0),
+                    0,
+                    uint(rlp_encodeAndHashMessageInfoForSignature(
+                        struct {
+                            seqNum: newTx.seqNum?,
+                            gasPrice: newTx.gasPrice,
+                            gasLimit: newTx.maxGas,
+                            to: newTx.calleeAddr,
+                            value: newTx.value,
+                            data: newTx.calldata,
+                            v: 0,
+                            r: 0,
+                            s: 0,
+                        },
+                        Some(chainParams_chainId()),
+                    )),
+                ),
+            )?
+        };
+
         newTx = newTx with {
             incomingRequest: originalRequest with {
                 requestId: uint(keccak256(fullData, 0, fullDataSize))

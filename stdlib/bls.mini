@@ -66,8 +66,8 @@ type BLSKey = struct {
 // BLS top level functions with built-in hashing
 // ==================================================================
 
-public func bls_defaultDomain(chainId: uint) -> bytes32 {
-    return bytes32(const::BLSSignatureDomainBase ^ chainId);
+public func bls_defaultDomain(sender: address) -> bytes32 {
+    return hash(bytes32(const::BLSSignatureDomainBase), bytes32(sender));
 }
 
 public func bls_hashAndVerifySingleSig(

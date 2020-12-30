@@ -452,14 +452,17 @@ pub fn _generate_bls_key_pair() -> (_BLSPublicKey, _BLSPrivateKey) {
     (_BLSPublicKey { g2p: p_a }, _BLSPrivateKey { s })
 }
 
-fn _domain_from_chain_id(chain_id: Uint256) -> Uint256 {
-    init_constant_table().get("BLSSignatureDomainBase").unwrap().bitwise_xor(&chain_id)
+fn _domain_for_sender(sender: Uint256) -> Uint256 {
+    Uint256::avm_hash2(
+        init_constant_table().get("BLSSignatureDomainBase").unwrap(),
+        &sender
+    )
 }
 
 impl _BLSPrivateKey {
-    pub fn _sign_message(&self, chain_id: Uint256, message: &[u8]) -> _BLSSignature {
+    pub fn _sign_message(&self, sender_address: Uint256, message: &[u8]) -> _BLSSignature {
         let h = _hash_to_point(
-            &_domain_from_chain_id(chain_id),
+            &_domain_for_sender(sender_address),
             message
         );
         // ignores error that should never arise that would return None for h. Handle and Return Option<BLSSignature> instead?
@@ -578,7 +581,7 @@ pub fn _evm_test_bls_signed_batch(log_to: Option<&Path>, debug: bool) -> Result<
     let b4 = bob_public_key._to_four_uints();
     bob_arb_bls._register(&mut machine, b4.0, b4.1, b4.2, b4.3)?;
 
-    let alice_compressed_tx = machine.runtime_env._make_compressed_tx_for_bls(
+    let (alice_compressed_tx, alice_hash_to_sign) = machine.runtime_env._make_compressed_tx_for_bls(
         &alice_addr,
         Uint256::zero(),
         Uint256::from_u64(100000000),
@@ -592,7 +595,7 @@ pub fn _evm_test_bls_signed_batch(log_to: Option<&Path>, debug: bool) -> Result<
             ],
         )?,
     );
-    let bob_compressed_tx = machine.runtime_env._make_compressed_tx_for_bls(
+    let (bob_compressed_tx, bob_hash_to_sign) = machine.runtime_env._make_compressed_tx_for_bls(
         &bob_addr,
         Uint256::zero(),
         Uint256::from_u64(100000000),
@@ -607,8 +610,8 @@ pub fn _evm_test_bls_signed_batch(log_to: Option<&Path>, debug: bool) -> Result<
         )?,
     );
 
-    let alice_sig = alice_private_key._sign_message(Uint256::from_u64(machine.runtime_env.chain_id), &alice_compressed_tx);
-    let bob_sig = bob_private_key._sign_message(Uint256::from_u64(machine.runtime_env.chain_id), &bob_compressed_tx);
+    let alice_sig = alice_private_key._sign_message(alice_addr.clone(), &alice_hash_to_sign);
+    let bob_sig = bob_private_key._sign_message(bob_addr.clone(), &bob_hash_to_sign);
 
     let aggregated_sig = _BLSAggregateSignature::_new(vec![alice_sig, bob_sig]);
 
