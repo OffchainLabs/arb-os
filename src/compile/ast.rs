@@ -650,6 +650,14 @@ impl Expr {
             debug_info: DebugInfo::from(loc),
         }
     }
+
+    ///Returns an expression that applies trinary operator op to e1, e2, and e3.
+    pub fn new_trinary(op: TrinaryOp, e1: Expr, e2: Expr, e3: Expr, loc: Option<Location>) -> Self {
+        Self {
+            kind: ExprKind::Trinary(op, Box::new(e1), Box::new(e2), Box::new(e3)),
+            debug_info: DebugInfo::from(loc),
+        }
+    }
 }
 
 ///A mini unary operator.
