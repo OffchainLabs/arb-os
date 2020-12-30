@@ -17,7 +17,13 @@ interface ArbOwner {
 
     // Change the sequencer or its parameters
     // if sequencerAddr is zero, operate without a sequencer
-    function changeSequencer(address sequencerAddr, uint maxDelayBlocks, uint maxDelaySeconds) external;
+    function changeSequencer(
+        address sequencerAddr, 
+        uint maxDelayBlocks, 
+        uint maxDelaySeconds, 
+        uint maxSpDeltaBlocks, 
+        uint maxSpDeltaSeconds
+    ) external;
 
     // To upgrade ArbOS, the ower calls startArbosUpgrade, then calls continueArbosUpgrade one or more times to upload 
     // the code to be installed as the upgrade, then calls finishArbosUpgrade to complete the upgrade and start executing the new code.

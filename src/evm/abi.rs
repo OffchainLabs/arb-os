@@ -219,6 +219,7 @@ impl AbiForContract {
         debug: bool,
     ) -> Result<(Vec<ArbosReceipt>, Vec<Value>), ethabi::Error> {
         let this_function = self.contract.function(func_name)?;
+        println!("call_function {}", func_name);
         let calldata = this_function.encode_input(args).unwrap();
 
         machine.runtime_env.insert_tx_message(

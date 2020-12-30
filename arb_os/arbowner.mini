@@ -97,7 +97,7 @@ public impure func arbowner_txcall() {
             arbowner_getFeeMaxes(topFrame, calldata);
         } elseif (funcCode == 0x72861aa4) {
             arbowner_setFeeMaxes(topFrame, calldata);
-        } elseif (funcCode == 0xea180a38) {
+        } elseif (funcCode == 0xfbb53a17) {
             arbowner_changeSequencer(topFrame, calldata);
         } else {
             // unrecognized function code
@@ -256,13 +256,15 @@ impure func arbowner_setFeeMaxes(topFrame: EvmCallFrame, calldata: ByteArray) { 
 }
 
 impure func arbowner_changeSequencer(topFrame: EvmCallFrame, calldata: ByteArray) {  // (address, uint, uint)
-    if (bytearray_size(calldata) != 4+3*32) {
+    if (bytearray_size(calldata) != 4+5*32) {
         evmOp_revert_knownCodePc(address(const::Address_ArbOwner), 50, 0, 0);
     }
     let sequencerAddr = address(bytearray_get256(calldata, 4));
     let delayBlocks = bytearray_get256(calldata, 4+32);
     let delaySeconds = bytearray_get256(calldata, 4+2*32);
-    inbox_changeSequencer(sequencerAddr, delayBlocks, delaySeconds);
+    let spDeltaBlocks = bytearray_get256(calldata, 4+3*32);
+    let spDeltaSeconds = bytearray_get256(calldata, 4+4*32);
+    inbox_changeSequencer(sequencerAddr, delayBlocks, delaySeconds, spDeltaBlocks, spDeltaSeconds);
     evmOp_return(0, 0);
 }
 
@@ -305,6 +307,7 @@ impure func arbowner_finishCodeUploadAsArbosUpgrade(topFrame: EvmCallFrame, call
 
 impure func arbowner_finishCodeUploadAsPluggable(topFrame: EvmCallFrame, calldata: ByteArray) { // ()
     if (bytearray_size(calldata) != 68) {
+        asm((97, bytearray_size(calldata), calldata),) { debugprint };
         evmOp_revert_knownCodePc(address(const::Address_ArbOwner), 50, 0, 0);
     }
     let id = bytearray_get256(calldata, 4);

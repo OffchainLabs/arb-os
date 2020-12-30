@@ -79,14 +79,22 @@ impure func doInitializationOption(stream: ByteStream) -> option<ByteStream> {
     let (ustr, numPayloadBytes) = bytestream_get64(stream)?;
     stream = ustr;
     if (optionId == 0) {   // option: sequencer
-        if (numPayloadBytes != 3*32) {
+        if (numPayloadBytes != 5*32) {
             // unexpected payload size; discard the payload and ignore this option
             return bytestream_skipBytes(stream, numPayloadBytes);
         }
         let (ustr, sequencerAddrAsUint) = bytestream_get256(stream)?;
         let (ustr, delayBlocks) = bytestream_get256(ustr)?;
         let (ustr, delayTime) = bytestream_get256(ustr)?;
-        inbox_changeSequencer(address(sequencerAddrAsUint), delayBlocks, delayTime);
+        let (ustr, slowPathDeltaBlocks) = bytestream_get256(ustr)?;
+        let (ustr, slowPathDeltaSeconds) = bytestream_get256(ustr)?;
+        inbox_changeSequencer(
+            address(sequencerAddrAsUint),
+            delayBlocks,
+            delayTime,
+            slowPathDeltaBlocks,
+            slowPathDeltaSeconds
+        );
         return Some(ustr);
     } elseif (optionId == const::InitOption_setSecondsPerBlock) {
         if (numPayloadBytes != 32) {

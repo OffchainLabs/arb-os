@@ -67,6 +67,8 @@ type SequencerState = struct {
     sequencerAddr: address,
     delayBlocks: uint,
     delayTime: uint,
+    slowPathDeltaBlocks: uint,
+    slowPathDeltaSeconds: uint,
     delayQueue: IncomingRequestQueue,
     lastBlockNumSeen: uint,      // Highest actual blocknum of message we have seen
     lastTimestampSeen: uint,     // Highest actual timestamp of message we have seen
@@ -94,7 +96,13 @@ public impure func inbox_init() {
     };
 }
 
-public impure func inbox_changeSequencer(addr: address, delayBlocks: uint, delayTime: uint) {
+public impure func inbox_changeSequencer(
+    addr: address,
+    delayBlocks: uint,
+    delayTime: uint,
+    slowPathDeltaBlocks: uint,
+    slowPathDeltaSeconds: uint,
+) {
     // deliver messages from old sequencer, if any (shouldn't be needed, but doing it just to be extra cautious)
     let bnum = globalInbox.blockNum;
     let ts = globalInbox.timestamp;
@@ -106,6 +114,15 @@ public impure func inbox_changeSequencer(addr: address, delayBlocks: uint, delay
             let (uq, rawMsg) = incomingRequestQueue_getOrDie(oldq);
             oldq = uq;
             let msg = unsafecast<IncomingRequest>(rawMsg);
+
+            // if sequencer pushed msg into the future, bring it back to the present
+            if (msg.blockNumber > bnum) {
+                msg = msg with { blockNumber: bnum };
+            }
+            if (msg.timestamp > ts) {
+                msg = msg with { timestamp: ts };
+            }
+
             globalInbox = globalInbox with {
                 queue: incomingRequestQueue_put(globalInbox.queue, msg)
             };
@@ -122,11 +139,19 @@ public impure func inbox_changeSequencer(addr: address, delayBlocks: uint, delay
         if (delayTime > const::Sequencer_maxDelaySeconds) {
             delayTime = const::Sequencer_maxDelaySeconds;
         }
+        if (slowPathDeltaBlocks > const::Sequencer_maxSlowPathDeltaBlocks) {
+            slowPathDeltaBlocks = const::Sequencer_maxSlowPathDeltaBlocks;
+        }
+        if (slowPathDeltaSeconds > const::Sequencer_maxSlowPathDeltaSeconds) {
+            slowPathDeltaSeconds = const::Sequencer_maxSlowPathDeltaSeconds;
+        }
         globalInbox = globalInbox with {
             sequencer: Some(struct {
                 sequencerAddr: addr,
                 delayBlocks: delayBlocks,
                 delayTime: delayTime,
+                slowPathDeltaBlocks: slowPathDeltaBlocks,
+                slowPathDeltaSeconds: slowPathDeltaSeconds,
                 delayQueue: incomingRequestQueue_new(),
                 lastBlockNumSeen: bnum,
                 lastTimestampSeen: ts,

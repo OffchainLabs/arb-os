@@ -807,6 +807,8 @@ pub fn _evm_xcontract_call_using_sequencer_batch(
             sequencer_addr.clone(),
             Uint256::from_u64(20),
             Uint256::from_u64(20 * 30),
+            Uint256::zero(),
+            Uint256::zero(),
         )),
     );
 
@@ -938,6 +940,8 @@ pub fn _evm_xcontract_call_sequencer_slow_path(
             sequencer_addr.clone(),
             Uint256::from_u64(20),
             Uint256::from_u64(20 * 30),
+            Uint256::zero(),
+            Uint256::zero(),
         )),
     );
 
@@ -1178,6 +1182,8 @@ pub fn _evm_xcontract_call_sequencer_reordering(
             sequencer_addr.clone(),
             Uint256::from_u64(20),
             Uint256::from_u64(20 * 30),
+            Uint256::zero(),
+            Uint256::zero(),
         )),
     );
 

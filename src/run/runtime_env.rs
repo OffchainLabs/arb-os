@@ -49,7 +49,7 @@ impl RuntimeEnvironment {
 
     pub fn _new_options(
         chain_address: Uint256,
-        sequencer_info: Option<(Uint256, Uint256, Uint256)>,
+        sequencer_info: Option<(Uint256, Uint256, Uint256, Uint256, Uint256)>,
     ) -> Self {
         RuntimeEnvironment::new_with_blocknum_timestamp(
             chain_address,
@@ -77,7 +77,7 @@ impl RuntimeEnvironment {
         blocknum: Uint256,
         timestamp: Uint256,
         charging_policy: Option<(Uint256, Uint256, Uint256)>,
-        sequencer_info: Option<(Uint256, Uint256, Uint256)>,
+        sequencer_info: Option<(Uint256, Uint256, Uint256, Uint256, Uint256)>,
         owner: Option<Uint256>,
     ) -> Self {
         let mut ret = RuntimeEnvironment {
@@ -105,7 +105,7 @@ impl RuntimeEnvironment {
 
     fn get_params_bytes(
         charging_policy: Option<(Uint256, Uint256, Uint256)>,
-        sequencer_info: Option<(Uint256, Uint256, Uint256)>,
+        sequencer_info: Option<(Uint256, Uint256, Uint256, Uint256, Uint256)>,
         owner: Option<Uint256>,
     ) -> Vec<u8> {
         let mut buf = Vec::new();
@@ -126,12 +126,14 @@ impl RuntimeEnvironment {
 
         buf.extend(owner.unwrap_or(Uint256::zero()).to_bytes_be()); // owner address
 
-        if let Some((seq_addr, delay_blocks, delay_time)) = sequencer_info {
+        if let Some((seq_addr, delay_blocks, delay_time, sp_delta_blocks, sp_delta_time)) = sequencer_info {
             buf.extend(&[0u8; 8]);
             buf.extend(&96u64.to_be_bytes());
             buf.extend(seq_addr.to_bytes_be());
             buf.extend(delay_blocks.to_bytes_be());
             buf.extend(delay_time.to_bytes_be());
+            buf.extend(sp_delta_blocks.to_bytes_be());
+            buf.extend(sp_delta_time.to_bytes_be());
         }
 
         buf
