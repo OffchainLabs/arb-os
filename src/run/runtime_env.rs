@@ -372,7 +372,8 @@ impl RuntimeEnvironment {
         to_addr: Uint256,
         value: Uint256,
         calldata: &[u8],
-    ) -> Vec<u8> {
+    ) -> (Vec<u8>, Vec<u8>) {
+        // returns (compressed tx to send, hash to sign)
         let mut result = self.compressor.compress_address(sender.clone());
 
         let mut buf = vec![0xffu8];
@@ -387,7 +388,20 @@ impl RuntimeEnvironment {
         result.extend(Uint256::from_usize(buf.len()).rlp_encode());
         result.extend(buf);
 
-        result
+        (
+            result,
+            TransactionRequest::new()
+                .from(sender.to_h160())
+                .to(to_addr.to_h160())
+                .gas(gas_limit.to_u256())
+                .gas_price(gas_price.to_u256())
+                .value(value.to_u256())
+                .data(calldata.to_vec())
+                .nonce(seq_num.to_u256())
+                .sighash(Some(self.chain_id))
+                .as_bytes()
+                .to_vec(),
+        )
     }
 
     pub fn _insert_bls_batch(
