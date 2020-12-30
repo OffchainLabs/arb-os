@@ -4,6 +4,7 @@
 
 use crate::evm::abi::{builtin_contract_path, AbiForContract};
 use crate::run::{load_from_file, Machine, RuntimeEnvironment};
+use crate::compile::miniconstants::init_constant_table;
 use crate::uint256::Uint256;
 use crypto::digest::Digest;
 use crypto::sha2::Sha256;
@@ -430,6 +431,7 @@ pub struct _BLSPublicKey {
 
 pub struct _BLSPrivateKey {
     s: Fr,
+    domain: Vec<u8>,
 }
 
 pub struct _BLSSignature {
@@ -440,7 +442,7 @@ pub struct _BLSAggregateSignature {
     g1p: AffineG1,
 }
 
-pub fn _generate_bls_key_pair() -> (_BLSPublicKey, _BLSPrivateKey) {
+pub fn _generate_bls_key_pair(domain: &[u8]) -> (_BLSPublicKey, _BLSPrivateKey) {
     // can't use built in FR::random() due to versioning mismatch of rand
     let subgroup_order = BigUint::parse_bytes(
         b"30644E72E131A029B85045B68181585D2833E84879B9709143E1F593F0000001",
@@ -453,12 +455,12 @@ pub fn _generate_bls_key_pair() -> (_BLSPublicKey, _BLSPrivateKey) {
     let s = Fr::from_str(&s_str).unwrap();
     let p_j = (G2::one() * s); // check base point
     let p_a = AffineG2::from_jacobian(p_j).unwrap();
-    (_BLSPublicKey { g2p: p_a }, _BLSPrivateKey { s: s })
+    (_BLSPublicKey { g2p: p_a }, _BLSPrivateKey { s: s, domain: domain.to_vec() })
 }
 
 impl _BLSPrivateKey {
-    pub fn _sign_message(&self, domain: &[u8], message: &[u8]) -> _BLSSignature {
-        let h = _hash_to_point(domain, message);
+    pub fn _sign_message(&self, message: &[u8]) -> _BLSSignature {
+        let h = _hash_to_point(&self.domain, message);
         // ignores error that should never arise that would return None for h. Handle and Return Option<BLSSignature> instead?
         let sigma = h.unwrap() * self.s;
         _BLSSignature {
@@ -566,9 +568,9 @@ pub fn _evm_test_bls_signed_batch(log_to: Option<&Path>, debug: bool) -> Result<
     }
 
     // generate and register BLS keys for Alice and Bob
-    let domain = vec![0u8; 32]; // TODO change
-    let (alice_public_key, alice_private_key) = _generate_bls_key_pair();
-    let (bob_public_key, bob_private_key) = _generate_bls_key_pair();
+    let domain = init_constant_table().get("BLSSignatureDomain").unwrap().to_bytes_be();
+    let (alice_public_key, alice_private_key) = _generate_bls_key_pair(&domain);
+    let (bob_public_key, bob_private_key) = _generate_bls_key_pair(&domain);
     let alice_arb_bls = _ArbBLS::_new(&alice_wallet, debug);
     let bob_arb_bls = _ArbBLS::_new(&bob_wallet, debug);
     let a4 = alice_public_key._to_four_uints();
@@ -605,8 +607,8 @@ pub fn _evm_test_bls_signed_batch(log_to: Option<&Path>, debug: bool) -> Result<
         )?,
     );
 
-    let alice_sig = alice_private_key._sign_message(&domain, &alice_compressed_tx);
-    let bob_sig = bob_private_key._sign_message(&domain, &bob_compressed_tx);
+    let alice_sig = alice_private_key._sign_message(&alice_compressed_tx);
+    let bob_sig = bob_private_key._sign_message(&bob_compressed_tx);
 
     let aggregated_sig = _BLSAggregateSignature::_new(vec![alice_sig, bob_sig]);
 

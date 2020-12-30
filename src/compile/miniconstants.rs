@@ -223,6 +223,8 @@ pub fn init_constant_table() -> HashMap<String, Uint256> {
             "SpecialAccount_gasAccountingReserve",
             "af6cbc19f66dec07f790912226744d744f04b37b666b9343317df33a5114fb96",
         ),
+        // Keccak256 of "Arbitrum BLS signature domain"
+        ("BLSSignatureDomain", "73a92f91d473214defd5ffa91d036007eb2e6487fffaa551835e988fb24aaa2b")
     ] {
         ret.insert(s.to_string(), Uint256::from_string_hex(u).unwrap());
     }

@@ -66,6 +66,10 @@ type BLSKey = struct {
 // BLS top level functions with built-in hashing
 // ==================================================================
 
+public func bls_defaultDomain() -> ByteArray {
+    return bytearray_set256(bytearray_new(0), 0, const::BLSSignatureDomain);
+}
+
 public func bls_hashAndVerifySingleSig(
     domain: ByteArray,
     message: ByteArray,
