@@ -128,7 +128,7 @@ impl RuntimeEnvironment {
 
         if let Some((seq_addr, delay_blocks, delay_time, sp_delta_blocks, sp_delta_time)) = sequencer_info {
             buf.extend(&[0u8; 8]);
-            buf.extend(&96u64.to_be_bytes());
+            buf.extend(&(5u64 * 32u64).to_be_bytes());
             buf.extend(seq_addr.to_bytes_be());
             buf.extend(delay_blocks.to_bytes_be());
             buf.extend(delay_time.to_bytes_be());

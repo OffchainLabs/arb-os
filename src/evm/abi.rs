@@ -1230,6 +1230,8 @@ impl<'a> _ArbOwner<'a> {
         sequencer_addr: Uint256,
         delay_blocks: Uint256,
         delay_seconds: Uint256,
+        slow_path_delta_blocks: Uint256,
+        slow_path_delta_seconds: Uint256,
     ) -> Result<(), ethabi::Error> {
         let (receipts, _sends) = self.contract_abi.call_function(
             self.my_address.clone(),
@@ -1238,6 +1240,8 @@ impl<'a> _ArbOwner<'a> {
                 ethabi::Token::Address(sequencer_addr.to_h160()),
                 ethabi::Token::Uint(delay_blocks.to_u256()),
                 ethabi::Token::Uint(delay_seconds.to_u256()),
+                ethabi::Token::Uint(slow_path_delta_blocks.to_u256()),
+                ethabi::Token::Uint(slow_path_delta_seconds.to_u256()),
             ],
             machine,
             Uint256::zero(),

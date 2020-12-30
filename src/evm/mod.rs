@@ -412,6 +412,8 @@ pub fn _evm_test_arbowner(log_to: Option<&Path>, debug: bool) -> Result<(), etha
         Uint256::from_u64(18498),
         Uint256::from_u64(12),
         Uint256::from_u64(12 * 14),
+        Uint256::zero(),
+        Uint256::zero(),
     )?;
 
     if let Some(path) = log_to {

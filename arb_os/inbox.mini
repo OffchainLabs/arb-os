@@ -389,9 +389,9 @@ impure func getFromL1InboxSequencer(inbox: Inbox, seq: SequencerState) -> Inbox 
                 delayQueue: incomingRequestQueue_put(
                     seq.delayQueue,
                     newMsg with {
-                        blockNumber: blockNum
+                        blockNumber: blockNum + seq.slowPathDeltaBlocks
                     } with {
-                        timestamp: timestamp
+                        timestamp: timestamp + seq.slowPathDeltaSeconds
                     }
                 )
             } with {
