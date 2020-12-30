@@ -56,7 +56,7 @@ FuncArgs: Vec<FuncArg> = {
 }
 
 FuncArg: FuncArg = {
-	<i:Ident> ":" <t:Type> => new_func_arg(i, t),
+	<lno: @L> <i:Ident> ":" <t:Type> => new_func_arg(i, t, DebugInfo::from(file_info.location(BytePos::from(lno), filename))),
 }
 
 GlobalVarDecl: GlobalVarDecl = {
