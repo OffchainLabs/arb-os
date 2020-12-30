@@ -2,6 +2,8 @@
 // Copyright 2020, Offchain Labs, Inc. All rights reserved.
 //
 
+use accounts::account_setContractInfo;
+
 use chainParameters::chainParams_getOwner;
 use chainParameters::chainParams_setOwner;
 
@@ -16,13 +18,18 @@ use evmCallStack::evmCallStack_callHitError;
 use evmCallStack::evmCallFrame_getCalldata;
 use evmCallStack::evmCallFrame_getCaller;
 use evmCallStack::evmCallFrame_getCallvalue;
+use evmCallStack::evmCallFrame_getAccount;
+use evmCallStack::evmCallStack_setAccount;
 use evmCallStack::evmCallStack_setTopFrameMemory;
 
 use evmOps::evmOp_return;
+use evmOps::evmOp_revert;
 use evmOps::evmOp_revert_knownCodePc;
 
 use pluggables::ModuleFunction;
 use pluggables::installPluggable;
+use pluggables::callPluggable;
+use pluggables::bindContractAddressToPluggable;
 
 use gasAccounting::gasAccounting_addToReserveFunds;
 use gasAccounting::gasAccounting_getFeeRecipient;
@@ -37,11 +44,14 @@ use inbox::inbox_changeSequencer;
 use std::bytearray::ByteArray;
 use std::bytearray::bytearray_new;
 use std::bytearray::bytearray_size;
+use std::bytearray::bytearray_setByte;
 use std::bytearray::bytearray_get256;
 use std::bytearray::bytearray_set256;
 use std::bytearray::bytearray_extract;
 
 use std::bytestream::bytestream_new;
+
+use std::storageMap::storageMap_new;
 
 
 var upgradeInProgress: option<AvmCodeBuilder>;
@@ -309,6 +319,26 @@ impure func arbowner_finishCodeUploadAsPluggable(topFrame: EvmCallFrame, calldat
         evmOp_revert_knownCodePc(address(const::Address_ArbOwner), 52, 0, 0);
     }
 }
+
+impure func arbowner_bindAddressToPluggable(topFrame: EvmCallFrame, calldata: ByteArray) { // (address, uint)
+    if (bytearray_size(calldata) != 68) {
+        evmOp_revert_knownCodePc(address(const::Address_ArbOwner), 60, 0, 0);
+    }
+    let addr = address(bytearray_get256(calldata, 4));
+    let pluggableId = bytearray_get256(calldata, 36);
+
+    let acct = evmCallFrame_getAccount(topFrame, addr);
+    acct = bindContractAddressToPluggable(acct, addr, pluggableId);
+    let success = evmCallStack_setAccount(addr, acct);
+    if (success) {
+        evmOp_return(0, 0);
+    } else {
+        evmOp_revert_knownCodePc(address(const::Address_ArbOwner), 61, 0, 0);
+    }
+}
+
+
+
 
 
 

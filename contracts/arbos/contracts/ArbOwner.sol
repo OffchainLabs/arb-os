@@ -25,5 +25,8 @@ interface ArbOwner {
     function continueCodeUpload(bytes calldata marshalledCode) external;
     function finishCodeUploadAsArbosUpgrade() external;
     function finishCodeUploadAsPluggable(uint id, bool keepState) external;
+
+    // Bind an address to a pluggable, so the pluggable can be a contract.
+    function bindAddressToPluggable(address addr, uint pluggableId) external;
 }
 
