@@ -85,7 +85,6 @@ pub enum Type {
     Array(Box<Type>),
     FixedArray(Box<Type>, usize),
     Struct(Vec<StructField>),
-    Named(StringId),
     Nominal(Vec<String>, StringId),
     Func(bool, Vec<Type>, Box<Type>),
     Map(Box<Type>, Box<Type>),
@@ -135,13 +134,6 @@ impl Type {
                 }
                 Ok(Type::Struct(fvec))
             }
-            Type::Named(name) => match type_table.get(*name) {
-                Some(t) => Ok(t.resolve_types(type_table, location)?),
-                None => Err(new_type_error(
-                    "referenced non-existent type name".to_string(),
-                    location,
-                )),
-            },
             Type::Func(is_impure, args, ret) => {
                 let rret = ret.resolve_types(type_table, location)?;
                 let mut rargs = Vec::new();
@@ -241,7 +233,6 @@ impl Type {
                     false
                 }
             }
-            Type::Named(_) => self == rhs,
             Type::Nominal(_, _) => {
                 if let (Ok(left), Ok(right)) = (
                     self.get_representation(type_tree),
@@ -338,7 +329,6 @@ impl Type {
                 (value_from_field_list(vals), is_safe)
             }
             Type::Map(_, _)
-            | Type::Named(_)
             | Type::Func(_, _, _)
             | Type::Imported(_)
             | Type::Nominal(_, _) => (Value::none(), false),
@@ -409,7 +399,6 @@ impl PartialEq for Type {
             (Type::FixedArray(a1, s1), Type::FixedArray(a2, s2)) => (s1 == s2) && (*a1 == *a2),
             (Type::Struct(f1), Type::Struct(f2)) => struct_field_vectors_equal(&f1, &f2),
             (Type::Map(k1, v1), Type::Map(k2, v2)) => (*k1 == *k2) && (*v1 == *v2),
-            (Type::Named(n1), Type::Named(n2)) => (n1 == n2),
             (Type::Func(i1, a1, r1), Type::Func(i2, a2, r2)) => {
                 (i1 == i2) && type_vectors_equal(&a1, &a2) && (*r1 == *r2)
             }
