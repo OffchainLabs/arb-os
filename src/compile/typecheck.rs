@@ -829,6 +829,7 @@ pub fn typecheck_top_level_decls(
             &resolved_global_vars_map,
             &func_table,
             type_tree,
+            &string_table,
         ) {
             Ok(f) => match func.kind {
                 FuncDeclKind::Public => {
@@ -873,11 +874,21 @@ pub fn typecheck_function<'a>(
     global_vars: &'a HashMap<StringId, (Type, usize)>,
     func_table: &'a SymTable<'a, Type>,
     type_tree: &TypeTree,
+    string_table: &StringTable,
 ) -> Result<TypeCheckedFunc, TypeError> {
     match fd.kind {
         FuncDeclKind::Public | FuncDeclKind::Private => {
             let mut hm = HashMap::new();
             for arg in fd.args.iter() {
+                arg.tipe.get_representation(type_tree).map_err(|_| {
+                    new_type_error(
+                        format!(
+                            "Unknown type for function argument \"{}\"",
+                            string_table.name_from_id(arg.name)
+                        ),
+                        arg.debug_info.location,
+                    )
+                })?;
                 hm.insert(arg.name, &arg.tipe);
             }
             let inner_type_table = type_table.push_multi(hm);

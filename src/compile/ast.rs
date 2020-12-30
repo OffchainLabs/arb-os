@@ -379,10 +379,15 @@ impl StructField {
 pub struct FuncArg {
     pub name: StringId,
     pub tipe: Type,
+    pub debug_info: DebugInfo,
 }
 
-pub fn new_func_arg(name: StringId, tipe: Type) -> FuncArg {
-    FuncArg { name, tipe }
+pub fn new_func_arg(name: StringId, tipe: Type, debug_info: DebugInfo) -> FuncArg {
+    FuncArg {
+        name,
+        tipe,
+        debug_info,
+    }
 }
 
 ///Represents a declaration of a global mini variable.
