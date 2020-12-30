@@ -270,7 +270,6 @@ public impure func decompressAndVerifyBLSSignedTxBatch(
         stream = us;
 
         let fullDataSize = bytestream_bytesReadSoFar(stream)-bytestream_bytesReadSoFar(startStream);
-        let (_, fullData) = bytestream_getN(startStream, fullDataSize)?;
 
         signerKeys = signerKeys with {
             [i] = account_getBlsKey(accountStore_get(getGlobalAccountStore(), signerAddr))?
@@ -282,34 +281,30 @@ public impure func decompressAndVerifyBLSSignedTxBatch(
         }
 
         let (_, newTx) = decompressTx(bytestream_new(txData), Some(signerAddr), None<FunctionTable>)?;
-
+        let txHash = rlp_encodeAndHashMessageInfoForSignature(
+             struct {
+                 seqNum: newTx.seqNum?,
+                 gasPrice: newTx.gasPrice,
+                 gasLimit: newTx.maxGas,
+                 to: newTx.calleeAddr,
+                 value: newTx.value,
+                 data: newTx.calldata,
+                 v: 0,
+                 r: 0,
+                 s: 0,
+             },
+             Some(chainParams_chainId()),
+        );
         msgHashes = msgHashes with {
             [i] = bls_hashToPoint(
                 bls_defaultDomain(signerAddr),
-                bytearray_set256(
-                    bytearray_new(0),
-                    0,
-                    uint(rlp_encodeAndHashMessageInfoForSignature(
-                        struct {
-                            seqNum: newTx.seqNum?,
-                            gasPrice: newTx.gasPrice,
-                            gasLimit: newTx.maxGas,
-                            to: newTx.calleeAddr,
-                            value: newTx.value,
-                            data: newTx.calldata,
-                            v: 0,
-                            r: 0,
-                            s: 0,
-                        },
-                        Some(chainParams_chainId()),
-                    )),
-                ),
+                bytearray_set256(bytearray_new(0), 0, uint(txHash)),
             )?
         };
 
         newTx = newTx with {
             incomingRequest: originalRequest with {
-                requestId: uint(keccak256(fullData, 0, fullDataSize))
+                requestId: uint(txHash)
             } with {
                 msgData: txData
             } with {
