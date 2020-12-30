@@ -206,6 +206,8 @@ pub fn init_constant_table() -> HashMap<String, Uint256> {
         // sequencer constants
         ("Sequencer_maxDelayBlocks", 32768),   // 128*256
         ("Sequencer_maxDelaySeconds", 983040), // 30*Sequencer_maxDelayBlocks
+        ("Sequencer_deltaBlocks", 0),
+        ("Sequencer_deltaSeconds", 0),
         // pluggable modules
         ("PluggableModuleID_rollupTracker", 0),
         ("PluggableModuleID_precompile_0x05", 1),

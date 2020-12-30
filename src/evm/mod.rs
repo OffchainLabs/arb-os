@@ -846,7 +846,7 @@ pub fn _evm_xcontract_call_using_sequencer_batch(
     );
     machine
         .runtime_env
-        ._advance_time(Uint256::from_u64(30), None, true);
+        ._advance_time(Uint256::from_u64(50), None, true);
     let _gas_used = if debug {
         machine.debug(None)
     } else {
@@ -859,7 +859,7 @@ pub fn _evm_xcontract_call_using_sequencer_batch(
             &[],
             &mut machine,
             Uint256::zero(),
-            Some(Uint256::from_u64(30)),
+            Some(Uint256::from_u64(50)),
             None,
             debug,
         )
@@ -876,7 +876,7 @@ pub fn _evm_xcontract_call_using_sequencer_batch(
             ))],
             &mut machine,
             Uint256::zero(),
-            Some(Uint256::from_u64(30)),
+            Some(Uint256::from_u64(50)),
             None,
             debug,
         )
@@ -887,7 +887,7 @@ pub fn _evm_xcontract_call_using_sequencer_batch(
 
     machine
         .runtime_env
-        ._advance_time(Uint256::from_u64(30), None, true);
+        ._advance_time(Uint256::from_u64(50), None, true);
 
     let mut batch = machine.runtime_env._new_sequencer_batch(None);
     let tx_id_1 = pc_contract.add_function_call_to_batch(
@@ -981,7 +981,7 @@ pub fn _evm_xcontract_call_sequencer_slow_path(
     );
     machine
         .runtime_env
-        ._advance_time(Uint256::from_u64(30), None, true);
+        ._advance_time(Uint256::from_u64(50), None, true);
     let _gas_used = if debug {
         machine.debug(None)
     } else {
@@ -994,7 +994,7 @@ pub fn _evm_xcontract_call_sequencer_slow_path(
             &[],
             &mut machine,
             Uint256::zero(),
-            Some(Uint256::from_u64(30)),
+            Some(Uint256::from_u64(50)),
             None,
             debug,
         )
@@ -1011,7 +1011,7 @@ pub fn _evm_xcontract_call_sequencer_slow_path(
             ))],
             &mut machine,
             Uint256::zero(),
-            Some(Uint256::from_u64(30)),
+            Some(Uint256::from_u64(50)),
             None,
             debug,
         )
@@ -1052,7 +1052,7 @@ pub fn _evm_xcontract_call_sequencer_slow_path(
 
     machine
         .runtime_env
-        ._advance_time(Uint256::from_u64(30), None, true);
+        ._advance_time(Uint256::from_u64(50), None, true);
 
     let num_logs_before = machine.runtime_env.get_all_receipt_logs().len();
     let num_sends_before = machine.runtime_env.get_all_sends().len();
@@ -1108,7 +1108,7 @@ pub fn _evm_xcontract_call_using_compressed_batch(
     );
     machine
         .runtime_env
-        ._advance_time(Uint256::from_u64(30), None, true);
+        ._advance_time(Uint256::from_u64(50), None, true);
     let _gas_used = if debug {
         machine.debug(None)
     } else {
@@ -1230,7 +1230,7 @@ pub fn _evm_xcontract_call_sequencer_reordering(
     );
     machine
         .runtime_env
-        ._advance_time(Uint256::from_u64(30), None, true);
+        ._advance_time(Uint256::from_u64(50), None, true);
     let _gas_used = if debug {
         machine.debug(None)
     } else {
@@ -1243,7 +1243,7 @@ pub fn _evm_xcontract_call_sequencer_reordering(
             &[],
             &mut machine,
             Uint256::zero(),
-            Some(Uint256::from_u64(30)),
+            Some(Uint256::from_u64(50)),
             None,
             debug,
         )
@@ -1260,7 +1260,7 @@ pub fn _evm_xcontract_call_sequencer_reordering(
             ))],
             &mut machine,
             Uint256::zero(),
-            Some(Uint256::from_u64(30)),
+            Some(Uint256::from_u64(50)),
             None,
             debug,
         )
@@ -1271,7 +1271,7 @@ pub fn _evm_xcontract_call_sequencer_reordering(
 
     machine
         .runtime_env
-        ._advance_time(Uint256::from_u64(30), None, true);
+        ._advance_time(Uint256::from_u64(50), None, true);
 
     let mut slow_batch = machine.runtime_env.new_batch();
     let mut seq_batch = machine
@@ -1317,7 +1317,7 @@ pub fn _evm_xcontract_call_sequencer_reordering(
 
     machine
         .runtime_env
-        ._advance_time(Uint256::from_u64(30), None, true);
+        ._advance_time(Uint256::from_u64(50), None, true);
 
     let num_logs_before = machine.runtime_env.get_all_receipt_logs().len();
     let num_sends_before = machine.runtime_env.get_all_sends().len();
