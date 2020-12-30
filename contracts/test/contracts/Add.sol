@@ -4,6 +4,8 @@ import "../../arbos/contracts/ArbSys.sol";
 
 
 contract Add {
+    constructor() public payable {}
+    
     function add(uint x, uint y) public pure returns (uint) {
         return x+y;
     }
