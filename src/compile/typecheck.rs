@@ -885,6 +885,9 @@ pub fn typecheck_function<'a>(
         FuncDeclKind::Public | FuncDeclKind::Private => {
             let mut hm = HashMap::new();
             for arg in fd.args.iter() {
+                arg.tipe.get_representation(type_tree).map_err(|_| {
+                    new_type_error(format!("Unknown type for function argument"), fd.location)
+                })?;
                 hm.insert(arg.name, &arg.tipe);
             }
             let inner_type_table = type_table.push_multi(hm);
