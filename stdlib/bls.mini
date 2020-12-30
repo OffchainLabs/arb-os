@@ -95,7 +95,7 @@ public func bls_hashAndVerifySignature(
         hashedMessages = hashedMessages with { [i] = hashedMessage };
     }
 
-    return bls_verifySignature(numMsgs, hashedMessages, keys, signature);
+    return bls_verifySignature(hashedMessages, keys, signature);
 }
 
 // ==================================================================
@@ -109,7 +109,7 @@ public func bls_verifySingleSig(
 ) -> option<()> {
 	let messages = newarray <BLSHashedMessage>(1) with { [0] = message };
 	let keys = newarray <BLSKey> (1) with { [0] = key };
-    return bls_verifySignature(1, messages, keys, signature);
+    return bls_verifySignature(messages, keys, signature);
 }
 
 public func bls_makeKey(x0: uint, x1: uint, y0: uint, y1: uint) -> option<BLSKey> {
@@ -137,12 +137,11 @@ public func bls_marshalPublicKey(key: BLSKey, ba: ByteArray, offset: uint) -> By
 }
 
 public func bls_verifySignature(
-    numMsgs:   uint,
     messages:  []BLSHashedMessage,
     keys:      []BLSKey,
     signature: BLSSignature
 ) -> option<()> {
-	let size = len(keys);
+	let numMsgs = len(keys);
 	if (numMsgs == 0 || numMsgs > 30 || numMsgs != len(messages) || numMsgs != len(keys)) {
 		return None;
 	}

@@ -284,7 +284,7 @@ public impure func decompressAndVerifyBLSSignedTxBatch(
         let (_, newTx) = decompressTx(bytestream_new(txData), Some(signerAddr), None<FunctionTable>)?;
         newTx = newTx with {
             incomingRequest: originalRequest with {
-                requestId: uint(hash(bytes32(originalRequest.requestId), bytes32(i)))
+                requestId: uint(keccak256(fullData, 0, fullDataSize))
             } with {
                 msgData: txData
             } with {
@@ -299,7 +299,7 @@ public impure func decompressAndVerifyBLSSignedTxBatch(
         i = i+1;
     }
 
-    bls_verifySignature(numMsgs, msgHashes, signerKeys, aggregatedSig)?;
+    bls_verifySignature(msgHashes, signerKeys, aggregatedSig)?;
 
     return Some(queueToFill);
 }
