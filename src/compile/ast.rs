@@ -30,6 +30,7 @@ pub struct DebugInfo {
 pub struct Attributes {
     ///Is true if the current node is a breakpoint, false otherwise.
     pub breakpoint: bool,
+    pub inline: bool,
 }
 
 impl DebugInfo {
@@ -294,9 +295,7 @@ impl Type {
     // TODO: have this resolve nominal types
     pub fn default_value(&self) -> (Value, bool) {
         match self {
-            Type::Void => {
-                panic!("tried to get default value for void type");
-            }
+            Type::Void => (Value::none(), false),
             Type::Buffer => (Value::new_buffer(vec![]), true),
             Type::Uint | Type::Int | Type::Bytes32 | Type::EthAddress | Type::Bool => {
                 (Value::Int(Uint256::zero()), true)

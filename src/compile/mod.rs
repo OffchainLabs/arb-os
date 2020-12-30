@@ -124,7 +124,11 @@ impl TypeCheckedModule {
     fn inline(&mut self) {
         let mut new_funcs = self.checked_funcs.clone();
         for f in &mut new_funcs {
-            f.inline(&self.checked_funcs, &self.string_table)
+            f.inline(
+                &self.checked_funcs,
+                &self.imported_funcs,
+                &self.string_table,
+            )
         }
         self.checked_funcs = new_funcs;
     }
