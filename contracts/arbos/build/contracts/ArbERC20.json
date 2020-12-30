@@ -365,7 +365,7 @@
         "id": 83,
         "nodeType": "ImportDirective",
         "scope": 161,
-        "sourceUnit": 485,
+        "sourceUnit": 492,
         "src": "634:22:2",
         "symbolAliases": [],
         "unitAlias": ""
@@ -376,7 +376,7 @@
         "id": 84,
         "nodeType": "ImportDirective",
         "scope": 161,
-        "sourceUnit": 1307,
+        "sourceUnit": 1314,
         "src": "657:67:2",
         "symbolAliases": [],
         "unitAlias": ""
@@ -428,10 +428,10 @@
               "id": 85,
               "name": "ERC20",
               "nodeType": "UserDefinedTypeName",
-              "referencedDeclaration": 1306,
+              "referencedDeclaration": 1313,
               "src": "747:5:2",
               "typeDescriptions": {
-                "typeIdentifier": "t_contract$_ERC20_$1306",
+                "typeIdentifier": "t_contract$_ERC20_$1313",
                 "typeString": "contract ERC20"
               }
             },
@@ -441,9 +441,9 @@
           }
         ],
         "contractDependencies": [
-          572,
-          1306,
-          1375
+          579,
+          1313,
+          1382
         ],
         "contractKind": "contract",
         "documentation": null,
@@ -451,9 +451,9 @@
         "id": 160,
         "linearizedBaseContracts": [
           160,
-          1306,
-          1375,
-          572
+          1313,
+          1382,
+          579
         ],
         "name": "ArbERC20",
         "nodeType": "ContractDefinition",
@@ -669,7 +669,7 @@
                       "name": "_mint",
                       "nodeType": "Identifier",
                       "overloadedDeclarations": [],
-                      "referencedDeclaration": 1186,
+                      "referencedDeclaration": 1193,
                       "src": "975:5:2",
                       "typeDescriptions": {
                         "typeIdentifier": "t_function_internal_nonpayable$_t_address_$_t_uint256_$returns$__$",
@@ -1008,7 +1008,7 @@
                       "name": "_transfer",
                       "nodeType": "Identifier",
                       "overloadedDeclarations": [],
-                      "referencedDeclaration": 1132,
+                      "referencedDeclaration": 1139,
                       "src": "1231:9:2",
                       "typeDescriptions": {
                         "typeIdentifier": "t_function_internal_nonpayable$_t_address_$_t_address_$_t_uint256_$returns$__$",
@@ -1215,7 +1215,7 @@
                       "name": "_burn",
                       "nodeType": "Identifier",
                       "overloadedDeclarations": [],
-                      "referencedDeclaration": 1241,
+                      "referencedDeclaration": 1248,
                       "src": "1339:5:2",
                       "typeDescriptions": {
                         "typeIdentifier": "t_function_internal_nonpayable$_t_address_$_t_uint256_$returns$__$",
@@ -1316,10 +1316,10 @@
                           "name": "ArbSys",
                           "nodeType": "Identifier",
                           "overloadedDeclarations": [],
-                          "referencedDeclaration": 484,
+                          "referencedDeclaration": 491,
                           "src": "1374:6:2",
                           "typeDescriptions": {
-                            "typeIdentifier": "t_type$_t_contract$_ArbSys_$484_$",
+                            "typeIdentifier": "t_type$_t_contract$_ArbSys_$491_$",
                             "typeString": "type(contract ArbSys)"
                           }
                         },
@@ -1334,7 +1334,7 @@
                         "src": "1374:11:2",
                         "tryCall": false,
                         "typeDescriptions": {
-                          "typeIdentifier": "t_contract$_ArbSys_$484",
+                          "typeIdentifier": "t_contract$_ArbSys_$491",
                           "typeString": "contract ArbSys"
                         }
                       },
@@ -1345,7 +1345,7 @@
                       "lValueRequested": false,
                       "memberName": "withdrawERC20",
                       "nodeType": "MemberAccess",
-                      "referencedDeclaration": 435,
+                      "referencedDeclaration": 442,
                       "src": "1374:25:2",
                       "typeDescriptions": {
                         "typeIdentifier": "t_function_external_nonpayable$_t_address_$_t_uint256_$returns$__$",
@@ -1490,7 +1490,7 @@
         "id": 83,
         "nodeType": "ImportDirective",
         "scope": 161,
-        "sourceUnit": 485,
+        "sourceUnit": 492,
         "src": "634:22:2",
         "symbolAliases": [],
         "unitAlias": ""
@@ -1501,7 +1501,7 @@
         "id": 84,
         "nodeType": "ImportDirective",
         "scope": 161,
-        "sourceUnit": 1307,
+        "sourceUnit": 1314,
         "src": "657:67:2",
         "symbolAliases": [],
         "unitAlias": ""
@@ -1553,10 +1553,10 @@
               "id": 85,
               "name": "ERC20",
               "nodeType": "UserDefinedTypeName",
-              "referencedDeclaration": 1306,
+              "referencedDeclaration": 1313,
               "src": "747:5:2",
               "typeDescriptions": {
-                "typeIdentifier": "t_contract$_ERC20_$1306",
+                "typeIdentifier": "t_contract$_ERC20_$1313",
                 "typeString": "contract ERC20"
               }
             },
@@ -1566,9 +1566,9 @@
           }
         ],
         "contractDependencies": [
-          572,
-          1306,
-          1375
+          579,
+          1313,
+          1382
         ],
         "contractKind": "contract",
         "documentation": null,
@@ -1576,9 +1576,9 @@
         "id": 160,
         "linearizedBaseContracts": [
           160,
-          1306,
-          1375,
-          572
+          1313,
+          1382,
+          579
         ],
         "name": "ArbERC20",
         "nodeType": "ContractDefinition",
@@ -1794,7 +1794,7 @@
                       "name": "_mint",
                       "nodeType": "Identifier",
                       "overloadedDeclarations": [],
-                      "referencedDeclaration": 1186,
+                      "referencedDeclaration": 1193,
                       "src": "975:5:2",
                       "typeDescriptions": {
                         "typeIdentifier": "t_function_internal_nonpayable$_t_address_$_t_uint256_$returns$__$",
@@ -2133,7 +2133,7 @@
                       "name": "_transfer",
                       "nodeType": "Identifier",
                       "overloadedDeclarations": [],
-                      "referencedDeclaration": 1132,
+                      "referencedDeclaration": 1139,
                       "src": "1231:9:2",
                       "typeDescriptions": {
                         "typeIdentifier": "t_function_internal_nonpayable$_t_address_$_t_address_$_t_uint256_$returns$__$",
@@ -2340,7 +2340,7 @@
                       "name": "_burn",
                       "nodeType": "Identifier",
                       "overloadedDeclarations": [],
-                      "referencedDeclaration": 1241,
+                      "referencedDeclaration": 1248,
                       "src": "1339:5:2",
                       "typeDescriptions": {
                         "typeIdentifier": "t_function_internal_nonpayable$_t_address_$_t_uint256_$returns$__$",
@@ -2441,10 +2441,10 @@
                           "name": "ArbSys",
                           "nodeType": "Identifier",
                           "overloadedDeclarations": [],
-                          "referencedDeclaration": 484,
+                          "referencedDeclaration": 491,
                           "src": "1374:6:2",
                           "typeDescriptions": {
-                            "typeIdentifier": "t_type$_t_contract$_ArbSys_$484_$",
+                            "typeIdentifier": "t_type$_t_contract$_ArbSys_$491_$",
                             "typeString": "type(contract ArbSys)"
                           }
                         },
@@ -2459,7 +2459,7 @@
                         "src": "1374:11:2",
                         "tryCall": false,
                         "typeDescriptions": {
-                          "typeIdentifier": "t_contract$_ArbSys_$484",
+                          "typeIdentifier": "t_contract$_ArbSys_$491",
                           "typeString": "contract ArbSys"
                         }
                       },
@@ -2470,7 +2470,7 @@
                       "lValueRequested": false,
                       "memberName": "withdrawERC20",
                       "nodeType": "MemberAccess",
-                      "referencedDeclaration": 435,
+                      "referencedDeclaration": 442,
                       "src": "1374:25:2",
                       "typeDescriptions": {
                         "typeIdentifier": "t_function_external_nonpayable$_t_address_$_t_uint256_$returns$__$",
@@ -2594,7 +2594,7 @@
   },
   "networks": {},
   "schemaVersion": "3.3.1",
-  "updatedAt": "2020-12-29T21:11:39.736Z",
+  "updatedAt": "2020-12-29T16:39:42.758Z",
   "devdoc": {
     "methods": {
       "allowance(address,address)": {

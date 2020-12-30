@@ -14,7 +14,7 @@ impure func main() {
 	asm(tests(),) { log };
 }
 
-func tests() -> uint {
+impure func tests() -> uint {
 	let s = builtin_kvsNew();
 	if (builtin_kvsGet(s, 17) != None<any>) {
 		return 1;

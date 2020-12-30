@@ -19,13 +19,8 @@ use errorHandler::errorHandler;
 use accounts::getGlobalAccountStore;
 use accounts::setGlobalAccountStore;
 use accounts::accountStore_get;
-import func accountStore_set(store: AccountStore, addr: address, acct: Account) -> AccountStore;
-import func accountStore_transferEthBalance(
-    acctStore: AccountStore,
-    from: address,
-    to: address,
-    amount: uint
-) -> option<AccountStore>;
+use accounts::accountStore_set;
+use accounts::accountStore_transferEthBalance;
 
 use accounts::accountStore_destroyAndTransferBalance;
 use accounts::accountStore_cloneContract;
@@ -357,7 +352,7 @@ public impure func initEvmCallStackForConstructor(
             caller: request.caller,
             static: false,
             calldata: request.calldata,
-            callvalue: 0,
+            callvalue: request.value,
             returnInfo: None<ReturnInfo>,
             memory: bytearray_new(0),
             storageDelta: int(0),

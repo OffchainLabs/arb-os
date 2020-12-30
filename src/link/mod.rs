@@ -221,7 +221,7 @@ pub fn postlink_compile(
             println!("{:04}:  {}", idx, insn);
         }
     }
-    let code_3 = xformcode::fix_tuple_size(&code_2, program.global_num_limit);
+    let code_3 = xformcode::fix_tuple_size(&code_2, program.global_num_limit)?;
     if debug {
         println!("=========== after fix_tuple_size ==============");
         for (idx, insn) in code_3.iter().enumerate() {

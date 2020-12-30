@@ -41,7 +41,8 @@ public impure func rollupTracker_init() {
 public impure func rollupTracker_processEvent(
     msg: ByteArray,
     tracker: RollupTracker,
-    neverBeenCalled: bool
+    neverBeenCalled: bool,
+    pluggableCallback: impure func(uint, any) -> option<any>,
 ) -> (any, any) {   // returns (success: bool, updatedTracker: RollupTracker)
     if (neverBeenCalled) {
         tracker = rollupTracker_initModule();

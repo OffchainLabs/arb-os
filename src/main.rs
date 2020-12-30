@@ -48,9 +48,8 @@ struct CompileStruct {
     format: Option<String>,
     #[clap(short, long)]
     module: bool,
-    //Inlining is currently disabled
-    //#[clap(short, long)]
-    //inline: bool,
+    #[clap(short, long)]
+    inline: bool,
 }
 
 ///Command line options for run subcommand.
@@ -125,7 +124,7 @@ fn main() -> Result<(), CompileError> {
             if compile.compile_only {
                 let filename = &filenames[0];
                 let path = Path::new(filename);
-                match compile_from_file(path, &mut file_name_chart, debug_mode, false) {
+                match compile_from_file(path, &mut file_name_chart, debug_mode, compile.inline) {
                     Ok(mut compiled_program) => {
                         compiled_program.iter_mut().for_each(|prog| {
                             prog.file_name_chart.extend(file_name_chart.clone());
@@ -141,7 +140,8 @@ fn main() -> Result<(), CompileError> {
                 let mut compiled_progs = Vec::new();
                 for filename in &filenames {
                     let path = Path::new(filename);
-                    match compile_from_file(path, &mut file_name_chart, debug_mode, false) {
+                    match compile_from_file(path, &mut file_name_chart, debug_mode, compile.inline)
+                    {
                         Ok(compiled_program) => {
                             compiled_program.into_iter().for_each(|prog| {
                                 file_name_chart.extend(prog.file_name_chart.clone());
@@ -171,7 +171,7 @@ fn main() -> Result<(), CompileError> {
                             linked_prog,
                             is_module,
                             Vec::new(),
-                            file_name_chart,
+                            file_name_chart.clone(),
                             debug_mode,
                         ) {
                             Ok(completed_program) => {
@@ -179,13 +179,31 @@ fn main() -> Result<(), CompileError> {
                                     .to_output(&mut *output, compile.format.as_deref());
                             }
                             Err(e) => {
-                                println!("Linking error: {}", e);
+                                println!(
+                                    "Linking error: {}\nIn file: {}",
+                                    e,
+                                    e.location
+                                        .map(|loc| file_name_chart
+                                            .get(&loc.file_id)
+                                            .unwrap_or(&loc.file_id.to_string())
+                                            .clone())
+                                        .unwrap_or("Unknown".to_string())
+                                );
                                 return Err(e);
                             }
                         }
                     }
                     Err(e) => {
-                        println!("Linking error: {}", e);
+                        println!(
+                            "Linking error: {}\nIn file: {}",
+                            e,
+                            e.location
+                                .map(|loc| file_name_chart
+                                    .get(&loc.file_id)
+                                    .unwrap_or(&loc.file_id.to_string())
+                                    .clone())
+                                .unwrap_or("Unknown".to_string())
+                        );
                         return Err(e);
                     }
                 }
