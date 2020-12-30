@@ -816,42 +816,35 @@ pub fn typecheck_top_level_decls(
 
     let mut resolved_global_vars_map = HashMap::new();
     for (name, (tipe, slot_num)) in global_vars_map {
-        resolved_global_vars_map.insert(name, (tipe.resolve_types(&type_table, None)?, slot_num));
+        resolved_global_vars_map.insert(name, (tipe, slot_num));
     }
 
     let func_table = SymTable::<Type>::new();
     let func_table = func_table.push_multi(func_map.iter().map(|(k, v)| (*k, v)).collect());
 
     for func in funcs.iter() {
-        match func.resolve_types(&type_table, func.location) {
-            Ok(f) => {
-                match typecheck_function(
-                    &f,
-                    &type_table,
-                    &resolved_global_vars_map,
-                    &func_table,
-                    type_tree,
-                    &string_table,
-                ) {
-                    Ok(f) => match func.kind {
-                        FuncDeclKind::Public => {
-                            exported_funcs.push(ExportedFunc::new(
-                                f.name,
-                                Label::Func(f.name),
-                                f.tipe.clone(),
-                                &string_table,
-                            ));
-                            checked_funcs.push(f);
-                        }
-                        FuncDeclKind::Private => {
-                            checked_funcs.push(f);
-                        }
-                    },
-                    Err(e) => {
-                        return Err(e);
-                    }
+        match typecheck_function(
+            &func,
+            &type_table,
+            &resolved_global_vars_map,
+            &func_table,
+            type_tree,
+            &string_table,
+        ) {
+            Ok(f) => match func.kind {
+                FuncDeclKind::Public => {
+                    exported_funcs.push(ExportedFunc::new(
+                        f.name,
+                        Label::Func(f.name),
+                        f.tipe.clone(),
+                        &string_table,
+                    ));
+                    checked_funcs.push(f);
                 }
-            }
+                FuncDeclKind::Private => {
+                    checked_funcs.push(f);
+                }
+            },
             Err(e) => {
                 return Err(e);
             }
@@ -860,7 +853,7 @@ pub fn typecheck_top_level_decls(
 
     let mut res_global_vars = Vec::new();
     for global_var in global_vars {
-        res_global_vars.push(global_var.resolve_types(&type_table)?);
+        res_global_vars.push(global_var);
     }
 
     Ok((
@@ -1741,7 +1734,6 @@ fn typecheck_expr(
                 )?;
                 match tc_fexpr.get_type().get_representation(type_tree)? {
                     Type::Func(impure, arg_types, ret_type) => {
-                        let ret_type = ret_type.resolve_types(type_table, loc)?;
                         if args.len() == arg_types.len() {
                             let mut tc_args = Vec::new();
                             for i in 0..args.len() {
@@ -1755,8 +1747,7 @@ fn typecheck_expr(
                                     scopes,
                                 )?;
                                 tc_args.push(tc_arg);
-                                let resolved_arg_type =
-                                    arg_types[i].resolve_types(&type_table, loc)?;
+                                let resolved_arg_type = arg_types[i].clone();
                                 if !resolved_arg_type.assignable(
                                     &tc_args[i].get_type().get_representation(type_tree)?,
                                     type_tree,
@@ -1779,7 +1770,7 @@ fn typecheck_expr(
                             Ok(TypeCheckedExprKind::FunctionCall(
                                 Box::new(tc_fexpr),
                                 tc_args,
-                                ret_type,
+                                *ret_type,
                                 PropertiesList { pure: !impure },
                             ))
                         } else {

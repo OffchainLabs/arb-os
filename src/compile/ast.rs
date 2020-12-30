@@ -4,7 +4,6 @@
 
 //!Contains types and utilities for constructing the mini AST
 
-use super::symtable::SymTable;
 use super::typecheck::{new_type_error, TypeError};
 use crate::link::{value_from_field_list, TUPLE_SIZE};
 use crate::mavm::{Instruction, Value};
@@ -85,7 +84,6 @@ pub enum Type {
     Array(Box<Type>),
     FixedArray(Box<Type>, usize),
     Struct(Vec<StructField>),
-    Named(StringId),
     Nominal(Vec<String>, StringId),
     Func(bool, Vec<Type>, Box<Type>),
     Map(Box<Type>, Box<Type>),
@@ -96,70 +94,6 @@ pub enum Type {
 }
 
 impl Type {
-    ///Returns either a fully specified version of self specified by matching Named types to the
-    /// contents of type_table, or a TypeError if a Named type does not have an associated entry.
-    pub fn resolve_types(
-        &self,
-        type_table: &SymTable<Type>,
-        location: Option<Location>,
-    ) -> Result<Self, TypeError> {
-        match self {
-            Type::Void
-            | Type::Uint
-            | Type::Int
-            | Type::Bool
-            | Type::Bytes32
-            | Type::EthAddress
-            | Type::Imported(_)
-            | Type::Nominal(_, _)
-            | Type::Every
-            | Type::Any => Ok(self.clone()),
-            Type::Tuple(tvec) => {
-                let mut rvec = Vec::new();
-                for t in tvec.iter() {
-                    rvec.push(t.resolve_types(type_table, location)?);
-                }
-                Ok(Type::Tuple(rvec))
-            }
-            Type::Array(t) => Ok(Type::Array(Box::new(
-                t.resolve_types(type_table, location)?,
-            ))),
-            Type::FixedArray(t, s) => Ok(Type::FixedArray(
-                Box::new(t.resolve_types(type_table, location)?),
-                *s,
-            )),
-            Type::Struct(vf) => {
-                let mut fvec = Vec::new();
-                for field in vf.iter() {
-                    fvec.push(field.resolve_types(type_table, location)?);
-                }
-                Ok(Type::Struct(fvec))
-            }
-            Type::Named(name) => match type_table.get(*name) {
-                Some(t) => Ok(t.resolve_types(type_table, location)?),
-                None => Err(new_type_error(
-                    "referenced non-existent type name".to_string(),
-                    location,
-                )),
-            },
-            Type::Func(is_impure, args, ret) => {
-                let rret = ret.resolve_types(type_table, location)?;
-                let mut rargs = Vec::new();
-                for arg in args.iter() {
-                    rargs.push(arg.resolve_types(type_table, location)?);
-                }
-                Ok(Type::Func(*is_impure, rargs, Box::new(rret)))
-            }
-            Type::Map(key, val) => Ok(Type::Map(
-                Box::new(key.resolve_types(type_table, location)?),
-                Box::new(val.resolve_types(type_table, location)?),
-            )),
-            Type::Option(t) => Ok(Type::Option(Box::new(
-                t.resolve_types(type_table, location)?,
-            ))),
-        }
-    }
-
     ///Gets the representation of a `Nominal` type, based on the types in `type_tree`, returns self
     /// if the type is not `Nominal`, or a `TypeError` if the type of `self` cannot be resolved in
     /// `type_tree`.
@@ -241,7 +175,6 @@ impl Type {
                     false
                 }
             }
-            Type::Named(_) => self == rhs,
             Type::Nominal(_, _) => {
                 if let (Ok(left), Ok(right)) = (
                     self.get_representation(type_tree),
@@ -337,11 +270,9 @@ impl Type {
                 }
                 (value_from_field_list(vals), is_safe)
             }
-            Type::Map(_, _)
-            | Type::Named(_)
-            | Type::Func(_, _, _)
-            | Type::Imported(_)
-            | Type::Nominal(_, _) => (Value::none(), false),
+            Type::Map(_, _) | Type::Func(_, _, _) | Type::Imported(_) | Type::Nominal(_, _) => {
+                (Value::none(), false)
+            }
             Type::Any => (Value::none(), true),
             Type::Every => (Value::none(), false),
             Type::Option(_) => (Value::new_tuple(vec![Value::Int(Uint256::zero())]), true),
@@ -409,7 +340,6 @@ impl PartialEq for Type {
             (Type::FixedArray(a1, s1), Type::FixedArray(a2, s2)) => (s1 == s2) && (*a1 == *a2),
             (Type::Struct(f1), Type::Struct(f2)) => struct_field_vectors_equal(&f1, &f2),
             (Type::Map(k1, v1), Type::Map(k2, v2)) => (*k1 == *k2) && (*v1 == *v2),
-            (Type::Named(n1), Type::Named(n2)) => (n1 == n2),
             (Type::Func(i1, a1, r1), Type::Func(i2, a2, r2)) => {
                 (i1 == i2) && type_vectors_equal(&a1, &a2) && (*r1 == *r2)
             }
@@ -442,20 +372,6 @@ impl StructField {
     pub fn new(name: String, tipe: Type) -> StructField {
         StructField { name, tipe }
     }
-
-    ///Converts partially specified type to fully specified type by converting named types via type
-    /// table.
-    pub fn resolve_types(
-        &self,
-        type_table: &SymTable<Type>,
-        location: Option<Location>,
-    ) -> Result<Self, TypeError> {
-        let t = self.tipe.resolve_types(type_table, location)?;
-        Ok(StructField {
-            name: self.name.clone(),
-            tipe: t,
-        })
-    }
 }
 
 ///Argument to a function, contains field name and underlying type.
@@ -464,22 +380,6 @@ pub struct FuncArg {
     pub name: StringId,
     pub tipe: Type,
     pub debug_info: DebugInfo,
-}
-
-impl FuncArg {
-    ///Returns either a fully specified version of self specified by matching Named types to the
-    /// contents of type_table, or a TypeError if a Named type does not have an associated entry.
-    pub fn resolve_types(
-        &self,
-        type_table: &SymTable<Type>,
-        location: Option<Location>,
-    ) -> Result<Self, TypeError> {
-        Ok(FuncArg {
-            name: self.name,
-            tipe: self.tipe.resolve_types(type_table, location)?,
-            debug_info: self.debug_info,
-        })
-    }
 }
 
 pub fn new_func_arg(name: StringId, tipe: Type, debug_info: DebugInfo) -> FuncArg {
@@ -505,16 +405,6 @@ impl GlobalVarDecl {
             tipe,
             location,
         }
-    }
-
-    ///Returns either a fully specified version of self specified by matching Named types to the
-    /// contents of type_table, or a TypeError if a Named type does not have an associated entry.
-    pub fn resolve_types(&self, type_table: &SymTable<Type>) -> Result<Self, TypeError> {
-        Ok(GlobalVarDecl::new(
-            self.name,
-            self.tipe.resolve_types(type_table, self.location)?,
-            self.location,
-        ))
     }
 }
 
@@ -599,33 +489,6 @@ impl FuncDecl {
             location,
         }
     }
-
-    ///Returns either a fully specified version of self, specified by matching Named types to the
-    /// contents of type_table, or a TypeError if a Named type does not have an associated entry.
-    pub fn resolve_types(
-        &self,
-        type_table: &SymTable<Type>,
-        location: Option<Location>,
-    ) -> Result<Self, TypeError> {
-        let mut rargs = Vec::new();
-        for arg in self.args.iter() {
-            rargs.push(arg.resolve_types(type_table, location)?);
-        }
-        let mut rcode = Vec::new();
-        for stat in self.code.iter() {
-            rcode.push(stat.resolve_types(type_table)?);
-        }
-        Ok(FuncDecl {
-            name: self.name,
-            is_impure: self.is_impure,
-            args: rargs,
-            ret_type: self.ret_type.resolve_types(type_table, location)?,
-            code: rcode,
-            tipe: self.tipe.resolve_types(type_table, location)?,
-            kind: self.kind,
-            location: self.location,
-        })
-    }
 }
 
 ///A statement in the mini language with associated `DebugInfo` that has not yet been type checked.
@@ -654,91 +517,6 @@ pub enum StatementKind {
     DebugPrint(Expr),
 }
 
-impl Statement {
-    ///Returns either a fully specified version of self specified by matching Named types to the
-    /// contents of type_table, or a TypeError if a Named type does not have an associated entry.
-    pub fn resolve_types(&self, type_table: &SymTable<Type>) -> Result<Self, TypeError> {
-        Ok(Self {
-            kind: self.kind.resolve_types(type_table)?,
-            debug_info: self.debug_info.clone(),
-        })
-    }
-
-    ///Applies `resolve_types` to each member of v using type_table, and collects the results into a
-    /// `Vec` if all are successful.
-    pub fn resolve_types_vec(
-        v: Vec<Self>,
-        type_table: &SymTable<Type>,
-    ) -> Result<Vec<Self>, TypeError> {
-        let mut vr = Vec::new();
-        for s in v.iter() {
-            vr.push(s.resolve_types(type_table)?);
-        }
-        Ok(vr)
-    }
-}
-
-impl StatementKind {
-    ///Returns either a fully specified version of self specified by matching Named types to the
-    /// contents of type_table, or a TypeError if a Named type does not have an associated entry.
-    pub fn resolve_types(&self, type_table: &SymTable<Type>) -> Result<Self, TypeError> {
-        match &self {
-            StatementKind::Noop() => Ok(StatementKind::Noop()),
-            StatementKind::Panic() => Ok(StatementKind::Panic()),
-            StatementKind::ReturnVoid() => Ok(StatementKind::ReturnVoid()),
-            StatementKind::Return(expr) => {
-                Ok(StatementKind::Return(expr.resolve_types(type_table)?))
-            }
-            StatementKind::Break(ret, scope) => Ok(StatementKind::Break(
-                ret.clone()
-                    .map(|exp| exp.resolve_types(type_table))
-                    .transpose()?,
-                scope.clone(),
-            )),
-            StatementKind::Expression(expr) => {
-                Ok(StatementKind::Expression(expr.resolve_types(type_table)?))
-            }
-            StatementKind::Let(pat, expr) => Ok(StatementKind::Let(
-                pat.clone(),
-                expr.resolve_types(type_table)?,
-            )),
-            StatementKind::Assign(name, expr) => Ok(StatementKind::Assign(
-                *name,
-                expr.resolve_types(type_table)?,
-            )),
-            StatementKind::Loop(body) => Ok(StatementKind::Loop(Statement::resolve_types_vec(
-                body.to_vec(),
-                type_table,
-            )?)),
-            StatementKind::While(c, body) => Ok(StatementKind::While(
-                c.resolve_types(type_table)?,
-                Statement::resolve_types_vec(body.to_vec(), type_table)?,
-            )),
-            StatementKind::If(arms) => Ok(StatementKind::If(arms.resolve_types(type_table)?)),
-            StatementKind::Asm(insns, args) => {
-                let mut rargs = Vec::new();
-                for arg in args.iter() {
-                    rargs.push(arg.resolve_types(type_table)?);
-                }
-                Ok(StatementKind::Asm(insns.to_vec(), rargs))
-            }
-            StatementKind::DebugPrint(e) => {
-                Ok(StatementKind::DebugPrint(e.resolve_types(type_table)?))
-            }
-            StatementKind::IfLet(l, r, s, e) => Ok(StatementKind::IfLet(
-                *l,
-                r.resolve_types(type_table)?,
-                s.iter()
-                    .map(|x| x.resolve_types(type_table))
-                    .collect::<Result<Vec<_>, _>>()?,
-                e.clone()
-                    .map(|block| block.iter().map(|x| x.resolve_types(type_table)).collect())
-                    .transpose()?,
-            )),
-        }
-    }
-}
-
 ///Either a single identifier or a tuple of identifiers, used in mini let bindings.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub enum MatchPattern {
@@ -752,28 +530,6 @@ pub enum MatchPattern {
 pub enum IfArm {
     Cond(Expr, Vec<Statement>, Option<Box<IfArm>>, DebugInfo),
     Catchall(Vec<Statement>, DebugInfo),
-}
-
-impl IfArm {
-    ///Returns either a fully specified version of self specified by matching Named types to the
-    /// contents of type_table, or a TypeError if a Named type does not have an associated entry.
-    pub fn resolve_types(&self, type_table: &SymTable<Type>) -> Result<Self, TypeError> {
-        match self {
-            IfArm::Cond(cond, body, rest, loc) => Ok(IfArm::Cond(
-                cond.resolve_types(type_table)?,
-                Statement::resolve_types_vec(body.to_vec(), type_table)?,
-                match rest {
-                    Some(body) => Some(Box::new(body.resolve_types(type_table)?)),
-                    None => None,
-                },
-                *loc,
-            )),
-            IfArm::Catchall(body, loc) => Ok(IfArm::Catchall(
-                Statement::resolve_types_vec(body.to_vec(), type_table)?,
-                *loc,
-            )),
-        }
-    }
 }
 
 ///Represents a constant mini value of type Option<T> for some type T.
@@ -812,17 +568,6 @@ impl OptionConst {
             OptionConst::None(_) => Value::new_tuple(vec![Value::Int(Uint256::zero())]),
         }
     }
-
-    ///Returns either a fully specified version of self specified by matching Named types to the
-    /// contents of type_table, or a TypeError if a Named type does not have an associated entry.
-    pub fn resolve_types(&self, type_table: &SymTable<Type>) -> Result<Self, TypeError> {
-        match self {
-            OptionConst::_Some(bc) => {
-                Ok(OptionConst::_Some(Box::new(bc.resolve_types(type_table)?)))
-            }
-            OptionConst::None(t) => Ok(OptionConst::None(t.resolve_types(type_table, None)?)),
-        }
-    }
 }
 
 impl Constant {
@@ -845,16 +590,6 @@ impl Constant {
             Constant::Bool(b) => Value::Int(Uint256::from_bool(*b)),
             Constant::Option(c) => c.value(),
             Constant::Null => Value::none(),
-        }
-    }
-
-    ///Returns either a fully specified version of self specified by matching Named types to the
-    /// contents of type_table, or a TypeError if a Named type does not have an associated entry.
-    pub fn resolve_types(&self, type_table: &SymTable<Type>) -> Result<Self, TypeError> {
-        if let Constant::Option(oc) = self {
-            Ok(Constant::Option(oc.resolve_types(type_table)?))
-        } else {
-            Ok(self.clone())
         }
     }
 }
@@ -907,140 +642,6 @@ impl Expr {
         Self {
             kind: ExprKind::Binary(op, Box::new(e1), Box::new(e2)),
             debug_info: DebugInfo::from(loc),
-        }
-    }
-
-    ///Returns either a fully specified version of self specified by matching Named types to the
-    /// contents of type_table, or a TypeError if a Named type does not have an associated entry.
-    pub fn resolve_types(&self, type_table: &SymTable<Type>) -> Result<Self, TypeError> {
-        Ok(Self {
-            kind: self
-                .kind
-                .resolve_types(type_table, self.debug_info.location)?,
-            debug_info: self.debug_info.clone(),
-        })
-    }
-}
-
-impl ExprKind {
-    ///Returns either a fully specified version of self specified by matching Named types to the
-    /// contents of type_table, or a TypeError if a Named type does not have an associated entry.
-    pub fn resolve_types(
-        &self,
-        type_table: &SymTable<Type>,
-        loc: Option<Location>,
-    ) -> Result<Self, TypeError> {
-        match self {
-            ExprKind::UnaryOp(op, be) => Ok(ExprKind::UnaryOp(
-                *op,
-                Box::new(be.resolve_types(type_table)?),
-            )),
-            ExprKind::Binary(op, be1, be2) => Ok(ExprKind::Binary(
-                *op,
-                Box::new(be1.resolve_types(type_table)?),
-                Box::new(be2.resolve_types(type_table)?),
-            )),
-            ExprKind::ShortcutOr(be1, be2) => Ok(ExprKind::ShortcutOr(
-                Box::new(be1.resolve_types(type_table)?),
-                Box::new(be2.resolve_types(type_table)?),
-            )),
-            ExprKind::ShortcutAnd(be1, be2) => Ok(ExprKind::ShortcutAnd(
-                Box::new(be1.resolve_types(type_table)?),
-                Box::new(be2.resolve_types(type_table)?),
-            )),
-            ExprKind::VariableRef(name) => Ok(ExprKind::VariableRef(*name)),
-            ExprKind::TupleRef(be, idx) => Ok(ExprKind::TupleRef(
-                Box::new(be.resolve_types(type_table)?),
-                idx.clone(),
-            )),
-            ExprKind::DotRef(be, name) => Ok(ExprKind::DotRef(
-                Box::new(be.resolve_types(type_table)?),
-                name.clone(),
-            )),
-            ExprKind::Constant(b) => Ok(ExprKind::Constant(b.resolve_types(type_table)?)),
-            ExprKind::FunctionCall(fexpr, args) => {
-                let mut rargs = Vec::new();
-                for arg in args.iter() {
-                    rargs.push(arg.resolve_types(type_table)?);
-                }
-                Ok(ExprKind::FunctionCall(
-                    Box::new(fexpr.resolve_types(type_table)?),
-                    rargs,
-                ))
-            }
-            ExprKind::CodeBlock(body, result) => Ok(ExprKind::CodeBlock(
-                Statement::resolve_types_vec(body.to_vec(), type_table)?,
-                result
-                    .clone()
-                    .map(|exp| exp.resolve_types(type_table))
-                    .transpose()?
-                    .map(Box::new),
-            )),
-            ExprKind::ArrayOrMapRef(e1, e2) => Ok(ExprKind::ArrayOrMapRef(
-                Box::new(e1.resolve_types(type_table)?),
-                Box::new(e2.resolve_types(type_table)?),
-            )),
-            ExprKind::StructInitializer(fields) => {
-                let mut rfields = Vec::new();
-                for field in fields.iter() {
-                    rfields.push(FieldInitializer::new(
-                        field.name.clone(),
-                        field.value.resolve_types(type_table)?,
-                    ));
-                }
-                Ok(ExprKind::StructInitializer(rfields))
-            }
-            ExprKind::OptionInitializer(inner) => Ok(ExprKind::OptionInitializer(Box::new(
-                inner.resolve_types(type_table)?,
-            ))),
-            ExprKind::Tuple(evec) => {
-                let mut rvec = Vec::new();
-                for expr in evec {
-                    rvec.push(expr.resolve_types(type_table)?);
-                }
-                Ok(ExprKind::Tuple(rvec))
-            }
-            ExprKind::NewArray(sz, tipe) => Ok(ExprKind::NewArray(
-                Box::new(sz.resolve_types(type_table)?),
-                tipe.resolve_types(type_table, loc)?,
-            )),
-            ExprKind::NewFixedArray(sz, init_expr) => match &*init_expr {
-                Some(expr) => Ok(ExprKind::NewFixedArray(
-                    *sz,
-                    Some(Box::new(expr.resolve_types(type_table)?)),
-                )),
-                None => Ok(ExprKind::NewFixedArray(*sz, None)),
-            },
-            ExprKind::NewMap(key_type, value_type) => Ok(ExprKind::NewMap(
-                key_type.resolve_types(type_table, loc)?,
-                value_type.resolve_types(type_table, loc)?,
-            )),
-            ExprKind::ArrayOrMapMod(e1, e2, e3) => Ok(ExprKind::ArrayOrMapMod(
-                Box::new(e1.resolve_types(type_table)?),
-                Box::new(e2.resolve_types(type_table)?),
-                Box::new(e3.resolve_types(type_table)?),
-            )),
-            ExprKind::StructMod(e1, i, e3) => Ok(ExprKind::StructMod(
-                Box::new(e1.resolve_types(type_table)?),
-                i.clone(),
-                Box::new(e3.resolve_types(type_table)?),
-            )),
-            ExprKind::UnsafeCast(be, t) => Ok(ExprKind::UnsafeCast(
-                Box::new(be.resolve_types(type_table)?),
-                t.resolve_types(type_table, loc)?,
-            )),
-            ExprKind::Asm(t, insns, exprs) => {
-                let mut res_exprs = Vec::new();
-                for ex in exprs {
-                    res_exprs.push(ex.resolve_types(type_table)?);
-                }
-                Ok(ExprKind::Asm(
-                    t.resolve_types(type_table, loc)?,
-                    insns.to_vec(),
-                    res_exprs,
-                ))
-            }
-            ExprKind::Try(expr) => Ok(ExprKind::Try(Box::new(expr.resolve_types(type_table)?))),
         }
     }
 }
