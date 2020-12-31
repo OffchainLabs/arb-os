@@ -21,7 +21,6 @@ use accounts::setGlobalAccountStore;
 use accounts::accountStore_get;
 use accounts::accountStore_set;
 use accounts::accountStore_transferEthBalance;
-
 use accounts::accountStore_destroyAndTransferBalance;
 use accounts::accountStore_cloneContract;
 use accounts::account_setStorageCell;
@@ -323,9 +322,19 @@ public impure func initEvmCallStackForConstructor(
 
     globalCurrentTxRequest = request with { isConstructor: true };
 
+    // Create an accountStore with the caller's sequence number incremented; will decide later whether to commit it
+    let acctStore = getGlobalAccountStore();
+    let acctStoreAfterIncrement = accountStore_set(
+        acctStore,
+        request.caller,
+        account_incrSeqNum(
+            accountStore_get(acctStore, request.caller)
+        )
+    );
+
     // Create a new account to run the constructor code.
-    let acctStore = accountStore_set(
-        getGlobalAccountStore(),
+    acctStore = accountStore_set(
+        acctStoreAfterIncrement,   // start with this, so it is permanent if the current tx commits
         request.calleeAddr,
         account_setContractInfo(
             pristineAccount(request.calleeAddr),
@@ -338,29 +347,30 @@ public impure func initEvmCallStackForConstructor(
     );
     if let Some(uas) = accountStore_transferEthBalance(acctStore, request.caller, request.calleeAddr, request.value) {
         acctStore = uas;
-        // don't update globalAccountStore; that happens if/when the constructor commits its results later
-
-        globalCallStack = Some(struct {
-            runningAs: request.calleeAddr,
-            runningCodeFrom: request.calleeAddr,
-            accountStore: acctStore,
-            runningAsAccount: accountStore_get(acctStore, request.calleeAddr),
-            caller: request.caller,
-            static: false,
-            calldata: request.calldata,
-            callvalue: request.value,
-            returnInfo: None<ReturnInfo>,
-            memory: bytearray_new(0),
-            revertOnStorageWrite: false,
-            evmLogs: evmlogs_empty(),
-            selfDestructQueue: queue_new(),
-            resumeInfo: None<ResumeInfo>,
-            sendQueue: queue_new(),
-            sendOnFailure: None<(uint, address, ByteArray)>,
-            parent: None<EvmCallFrame>
-        });
 
         if (gasAccounting_startTxCharges(request.maxGas, request.gasPrice, request.caller) != None<()>) {
+            setGlobalAccountStore(acctStoreAfterIncrement);   // commit the incremented sequence number
+
+            globalCallStack = Some(struct {
+                runningAs: request.calleeAddr,
+                runningCodeFrom: request.calleeAddr,
+                accountStore: acctStore,
+                runningAsAccount: accountStore_get(acctStore, request.calleeAddr),
+                caller: request.caller,
+                static: false,
+                calldata: request.calldata,
+                callvalue: request.value,
+                returnInfo: None<ReturnInfo>,
+                memory: bytearray_new(0),
+                revertOnStorageWrite: false,
+                evmLogs: evmlogs_empty(),
+                selfDestructQueue: queue_new(),
+                resumeInfo: None<ResumeInfo>,
+                sendQueue: queue_new(),
+                sendOnFailure: None<(uint, address, ByteArray)>,
+                parent: None<EvmCallFrame>
+            });
+
             startPoint();  // start executing the call; should never return
             panic;
         } else {
@@ -375,10 +385,10 @@ public impure func initEvmCallStackForConstructor(
             evmCallStack_callHitError(15);
         }
     } else {
-        // can't pay for gas error
+        // caller doesn't have the funds to provide callvalue
         emitTxReceipt(
             request.incomingRequest,
-            const::TxResultCode_noGasFunds,
+            const::TxResultCode_insufficientBalance,
             None<ByteArray>,
             None<EvmLogs>,
             None<GasUsage>
