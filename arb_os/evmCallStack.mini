@@ -32,6 +32,7 @@ use accounts::account_getStartCodePoint;
 use accounts::account_setContractInfo;
 use accounts::account_fetchAndIncrSeqNum;
 use accounts::account_incrSeqNum;
+use accounts::account_getStorageSize;
 use accounts::pristineAccount;
 
 use evmlogs::evmlogs_empty;
@@ -63,6 +64,7 @@ use gasAccounting::gasAccounting_startTxCharges;
 use gasAccounting::gasAccounting_endTxCharges;
 use gasAccounting::gasAccounting_pauseTxCharges;
 use gasAccounting::gasAccounting_resumeTxCharges;
+use gasAccounting::gasAccounting_getGasChargeAmount;
 
 use codeSegment::translateEvmCodeSegment;
 
@@ -94,6 +96,7 @@ type EvmCallFrame = struct {
     callvalue: uint,                    // Eth value given to this call by its caller
     returnInfo: option<ReturnInfo>,     // result of last subcall made by this call (if any)
     memory: ByteArray,                  // EVM memory of this call
+    storageDelta: int,                  // change in total EVM storage usage, including child calls
     revertOnStorageWrite: bool,         // if true, revert if the EVM code tries to write to storage
     evmLogs: EvmLogs,                   // EVM logs, including those created by this call and its subcalls
     selfDestructQueue: Queue,           // set of self-destruct directives, including those created by this call and its subcalls
@@ -199,6 +202,7 @@ public impure func initEvmCallStack(
                     callvalue: request.value,
                     returnInfo: None<ReturnInfo>,
                     memory: bytearray_new(0),
+                    storageDelta: int(0),
                     revertOnStorageWrite: false,
                     evmLogs: evmlogs_empty(),
                     selfDestructQueue: queue_new(),
@@ -212,7 +216,7 @@ public impure func initEvmCallStack(
                 asm(entryPoint,) { jump };
                 // entryPoint();  // start executing the call; should never return
             } else {
-                if let Some(gasUsage) = gasAccounting_endTxCharges() {
+                if let Some(gasUsage) = gasAccounting_endTxCharges(int(0)) {
                     // insufficient balance error
                     emitTxReceipt(
                         request.incomingRequest,
@@ -484,6 +488,7 @@ public impure func evmCallStack_doCall(
             callvalue: balance,
             returnInfo: None<ReturnInfo>,
             memory: bytearray_new(0),
+            storageDelta: topFrame.storageDelta,
             revertOnStorageWrite: // disallow storage write if gas provided < EVM gas cost of storage write
                                   topFrame.revertOnStorageWrite
                                   || (gas < 5000)
@@ -541,11 +546,27 @@ public impure func evmCallStack_returnFromCall(
             )
         };
 
+        // if not reverting, make sure the callee has enough gas that they could pay for their storage delta
+        // note that we don't charge them here, we just make sure they could have paid
+        // the top-level caller will eventually be charged for this storage
+        if ( success
+          && (topFrame.storageDelta > int(0))
+          && (leftoverGas < gasAccounting_getGasChargeAmount(uint(topFrame.storageDelta))) ) {
+            // callee couldn't pay for their storage, so morph this into a revert
+            success = false;
+            returnOffset = 0;
+            returnLength = 0;
+            returnData = bytearray_new(0);
+            let (txid, addrs, parentAddrs) = evmCallStack_stackInfo();
+            asm((10000, topFrame.runningCodeFrom, 0xfffffffffffffffd, txid, addrs, parentAddrs),) { debugprint };
+        }
+
         if (success && !topFrame.static) {
             // copy relevant data back to parent frame
             newTopFrame = newTopFrame
                 with { accountStore: topFrame.accountStore }
                 with { runningAsAccount: accountStore_get(topFrame.accountStore, newTopFrame.runningAs) }
+                with { storageDelta: topFrame.storageDelta }
                 with { evmLogs: topFrame.evmLogs }
                 with { sendQueue: topFrame.sendQueue };
         }
@@ -588,8 +609,8 @@ public impure func evmCallStack_returnFromCall(
         panic;  // shouldn't happen -- previous instruction jumped away
     } else {
         // top-level call completed; will need to return to external caller
-        let gasUsage = gasAccounting_endTxCharges()?;
         if (success) {
+            let gasUsage = gasAccounting_endTxCharges(topFrame.storageDelta - int(storageReclaimedForSDQ(topFrame)))?;
             if (globalCurrentTxRequest.isConstructor) {
                 // Constructor call was successful, so finish setting up the account.
                 // The constructor's returndata is EVM code for the contract.
@@ -713,6 +734,7 @@ public impure func evmCallStack_returnFromCall(
             }
         } else {
             // Request failed
+            let gasUsage = gasAccounting_endTxCharges(int(0))?;
             if let Some(sendArgs) = topFrame.sendOnFailure {
                 let (msgType, addr, msg) = sendArgs;
                 sendMessage(msgType, addr, msg);
@@ -731,6 +753,23 @@ public impure func evmCallStack_returnFromCall(
         restoreAuxStackAndCall(mainRunLoop, None<Stack>, true);  // should never return
         evmCallStack_callHitError(9);
         panic;
+    }
+}
+
+func storageReclaimedForSDQ(topFrame: EvmCallFrame) -> uint {
+    let q = topFrame.selfDestructQueue;
+    let ret = 0;
+    loop {
+        if let Some(res) = queue_get(q) {
+            let (uq, rawItem) = res;
+            q = uq;
+            let (victim, _) = unsafecast<(address, address)>(rawItem);
+            if let Some(sz) = account_getStorageSize(accountStore_get(topFrame.accountStore, victim)) {
+                ret = ret + sz;
+            }
+        } else {
+            return ret;
+        }
     }
 }
 
@@ -861,6 +900,60 @@ public impure func restoreAuxStackAndCall(
             jump
         };
     }
+}
+
+public impure func saveAuxStack() -> Stack {
+    let ret = stack_new();
+
+    while ( ! asm() bool { auxpop auxstackempty swap1 auxpush }) {
+        let topItemFromAuxstack = asm() any {
+            auxpop
+            auxpop
+            swap1
+            auxpush
+        };
+        ret = stack_push(ret, topItemFromAuxstack);
+    }
+
+    return ret;
+}
+
+public impure func restoreAuxStack(saved: Stack) {
+    // discard everything on the auxstack, except the current frame
+    while ( ! asm() bool { auxpop auxstackempty swap1 auxpush }) {
+        asm() {
+            auxpop
+            auxpop
+            pop
+            auxpush
+        };
+    }
+
+    // restore the saved aux stack contents
+    loop {
+        if let Some(res) = stack_pop(saved) {
+            let (usaved, item) = res;
+            saved = usaved;
+            asm(item,) {
+                auxpop
+                swap1
+                auxpush
+                auxpush
+            };
+        } else {
+            return;
+        }
+    }
+}
+
+public impure func saveAvmAndAuxStacks() -> Stack {
+    asm(saveAuxStack(),) { };    // push stackified aux stack contents onto the main stack
+    return saveAvmStack();
+}
+
+public impure func restoreAvmAndAuxStacks(saved: Stack) {
+    restoreAvmStack(saved);
+    restoreAuxStack(asm() Stack { });
 }
 
 public impure func evmCallStack_isEmpty() -> bool {
@@ -999,12 +1092,15 @@ public impure func evmCallStack_transferEthFromCurrent(
 
 public impure func evmCallStack_setTopFrameStorageCell(offset: uint, value: uint) -> option<()> {
     let topFrame = globalCallStack?;
+    let storageSizeBefore = account_getStorageSize(topFrame.runningAsAccount)?;
     globalCallStack = Some(topFrame with {
         runningAsAccount: account_setStorageCell(
             topFrame.runningAsAccount,
             offset,
             value
         )?
+    } with {
+        storageDelta: topFrame.storageDelta + int(account_getStorageSize(topFrame.runningAsAccount)?) - int(storageSizeBefore)
     });
     return Some(());
 }
@@ -1096,7 +1192,7 @@ public impure func evmCallStack_callHitError(errInfo: any) {
         // something has gone seriously wrong with the evmCallStack
         // recover by clearing the evmCallStack, refunding unused gas, and jumping back to the error handler
         globalCallStack = None<EvmCallFrame>;
-        let _ = gasAccounting_endTxCharges();
+        let _ = gasAccounting_endTxCharges(int(0));
 
         errorHandler();  // should never return
         panic;

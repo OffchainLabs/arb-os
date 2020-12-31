@@ -6,6 +6,7 @@ use accounts::AccountStore;
 use evmCallStack::EvmCallFrame;
 use std::bytearray::ByteArray;
 
+use evmCallStack::EvmCallFrame;
 use evmCallStack::evmCallStack_topFrame;
 use evmCallStack::evmCallStack_setTopFrameMemory;
 use evmCallStack::evmCallFrame_getCalldata;
@@ -16,7 +17,13 @@ use evmOps::evmOp_revert_knownPc;
 
 use accounts::getGlobalAccountStore;
 use accounts::setGlobalAccountStore;
+use accounts::accountStore_get;
+use accounts::accountStore_set;
 use accounts::accountStore_createBuiltinContract;
+
+use pluggables::ModuleFunction;
+use pluggables::installPluggable;
+use pluggables::bindContractAddressToPluggable;
 
 use std::biguint::biguint_fromBytes;
 use std::biguint::biguint_modexp;
@@ -31,6 +38,7 @@ use std::bytearray::bytearray_extract;
 use std::bytearray::bytearray_copy;
 
 use std::sha256::sha256_byteArray;
+use std::ripemd160::ripemd160_byteArray;
 
 use arbsys::arbsys_txcall;
 use arbowner::arbowner_txcall;
@@ -55,16 +63,32 @@ public impure func precompiles_init(acctStore: AccountStore) -> option<AccountSt
     )?;
     acctStore = accountStore_createBuiltinContract(
         acctStore,
-        address(0x04),
-        makeTrampoline(precompile_0x04),
+        address(0x03),
+        makeTrampoline(precompile_0x03),
         false,
     )?;
     acctStore = accountStore_createBuiltinContract(
         acctStore,
-        address(0x05),
-        makeTrampoline(precompile_0x05),
+        address(0x04),
+        makeTrampoline(precompile_0x04),
         false,
     )?;
+
+    installPluggable(
+        const::PluggableModuleID_precompile_0x05,
+        unsafecast<ModuleFunction>(precompile_0x05_pluggable),
+        false,
+    )?;
+    acctStore = accountStore_set(
+        acctStore,
+        address(0x05),
+        bindContractAddressToPluggable(
+            accountStore_get(acctStore, address(0x05)),
+            address(0x05),
+            const::PluggableModuleID_precompile_0x05,
+        ),
+    );
+
     acctStore = accountStore_createBuiltinContract(
     	acctStore,
         address(0x06),
@@ -174,6 +198,21 @@ public impure func precompile_0x02() {  // sha256
     evmOp_revert_knownPc(0, 0, 0);
 }
 
+public impure func precompile_0x03() {  // ripemd160
+    if let Some(topFrame) = evmCallStack_topFrame() {
+        let calldata = evmCallFrame_getCalldata(topFrame);
+        let result = ripemd160_byteArray(calldata);
+        let success = evmCallStack_setTopFrameMemory(
+            bytearray_set256(bytearray_new(0), 0, uint(result))
+        );
+        if (success) {
+            evmOp_return(0, 32);
+        }
+    }
+
+    evmOp_revert_knownPc(0, 0, 0);
+}
+
 public impure func precompile_0x04() {  // identity function
     if let Some(topFrame) = evmCallStack_topFrame() {
         let calldata = evmCallFrame_getCalldata(topFrame);
@@ -232,6 +271,45 @@ public impure func precompile_0x05() {  // modexp
     }
 
     evmOp_revert_knownPc(2, 0, 0);
+}
+
+func precompile_0x05_pluggable(
+    args: (EvmCallFrame, ByteArray, any),
+    state: any,
+    firstTime: bool
+) -> (any, any) {  // return ((success: bool, returnData: ByteArray), any)
+    let (_, calldata, _) = args;
+
+    let baseLen = bytearray_get256(calldata, 0);
+    let expLen = bytearray_get256(calldata, 32);
+    let modLen = bytearray_get256(calldata, 64);
+
+    let base = bytearray_extract(calldata, 96, baseLen);
+    let exp = bytearray_extract(calldata, 96+baseLen, expLen);
+    let mod = bytearray_extract(calldata, 96+baseLen+expLen, modLen);
+
+    if let Some(result) = biguint_modexp(
+        biguint_fromBytes(base),
+        biguint_fromBytes(exp),
+        biguint_fromBytes(mod),
+    ) {
+        let mem = biguint_toBytes(result);
+        let memSize = bytearray_size(mem);
+        if (memSize > modLen) {
+            mem = bytearray_extract(mem, memSize-modLen, modLen);
+        } elseif (memSize < modLen) {
+            mem = bytearray_copy(   // pad result with leading zeroes up to size of modLen
+                mem,
+                0,
+                bytearray_new(0),
+                modLen-memSize,
+                memSize
+            );
+        }
+        return ((true, mem), ());
+    } else {
+        return ((true, bytearray_extract(bytearray_new(0), 0, modLen)), ());
+    }
 }
 
 public impure func precompile_0x06() {  // ecadd
@@ -297,11 +375,12 @@ public impure func precompile_0x08() { // ecpairing
     if let Some(topFrame) = evmCallStack_topFrame() {
         let calldata = evmCallFrame_getCalldata(topFrame);
         let numPts = bytearray_size(calldata) / (6*32);
-        if ((numPts > 0) && (numPts <= 30)) {
+        if ((numPts >= 0) && (numPts <= 30)) {
             let acc = unsafecast<any>(());
             let offset = 0;
             while (numPts > 0) {
                 acc = (
+                    acc,
                     (
                         bytearray_get256(calldata, offset),
                         bytearray_get256(calldata, offset+32),
@@ -310,7 +389,6 @@ public impure func precompile_0x08() { // ecpairing
                         bytearray_get256(calldata, offset+5*32),
                         bytearray_get256(calldata, offset+4*32)
                     ),
-                    acc
                 );
                 offset = offset + 6*32;
                 numPts = numPts - 1;

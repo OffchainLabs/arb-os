@@ -30,6 +30,8 @@ use messageBatch::messageBatch_get;
 
 use output::outputStats_endOfBlock;
 
+use pluggables::callPluggable;
+
 use std::bytearray::ByteArray;
 use std::bytearray::MarshalledBytes;
 use std::bytearray::marshalledBytes_firstByte;
@@ -48,6 +50,7 @@ use std::bytestream::bytestream_getRemainingBytes;
 use std::bytestream::bytestream_skipBytes;
 
 use decompression::decompressAndVerifyEcdsaSignedTx;
+use decompression::decompressAndVerifyBLSSignedTxBatch;
 
 use signedTx::hashUnsignedL2messageInfo;
 use signedTx::translateSignedTx;
@@ -221,6 +224,7 @@ impure func getFromL1Inbox(inbox: Inbox) -> Inbox {
                 parentRequestId: 0,
                 indexInParent: ~0,
             },
+            aggregator: None<AggregatorInfo>,
         };
 
         if (newMsg.blockNumber == 0) {
@@ -262,6 +266,7 @@ impure func getFromL1InboxSequencer(inbox: Inbox, seq: SequencerState) -> Inbox 
                 parentRequestId: 0,
                 indexInParent: ~0,
             },
+            aggregtor: None<AggregatorInfo>,
         };
     } else {
         return inbox;
@@ -360,9 +365,9 @@ impure func getFromL1InboxSequencer(inbox: Inbox, seq: SequencerState) -> Inbox 
                 delayQueue: incomingRequestQueue_put(
                     seq.delayQueue,
                     newMsg with {
-                        blockNumber: blockNum
+                        blockNumber: blockNum + const::Sequencer_deltaBlocks
                     } with {
-                        timestamp: timestamp
+                        timestamp: timestamp + const::Sequencer_deltaSeconds
                     }
                 )
             } with {
@@ -387,6 +392,7 @@ func endOfBlockMessage(blockNum: uint, timestamp: uint) -> IncomingRequest {
             parentRequestId: 0,
             indexInParent: ~0,
         },
+        aggregator: None<AggregatorInfo>,
     };
 }
 
@@ -444,12 +450,18 @@ type IncomingRequest = struct {
     requestId: uint,
     msgData: ByteArray,       // kind-specific data
     provenance: RequestProvenance,
+    aggregator: option<AggregatorInfo>,
 }
 
 type RequestProvenance = struct {
     l1SeqNum: uint,
     parentRequestId: uint,
     indexInParent: uint,
+}
+
+type AggregatorInfo = struct {
+    aggregator: address,
+    calldataBytes: uint,
 }
 
 public impure func inbox_getNextUnpackedRequest() -> (
@@ -550,6 +562,15 @@ public impure func inbox_getNextUnpackedRequest() -> (
                         return (None<IncomingRequest>, Some(txRequest));
                     }
                     // else signature was invalid, ignore msg and execute loop again to get another
+                } elseif (firstByte == const::L2MessageType_blsBatch) {
+                    if let Some(updatedQ) = decompressAndVerifyBLSSignedTxBatch(
+                        msg.msgData,
+                        msg,
+                        unsafecast<Queue>(globalInputQueue.txQ)
+                    ) {
+                        globalInputQueue = globalInputQueue with { txQ: unsafecast<IncomingRequestQueue>(updatedQ) };
+                    }
+                    // else BLS batch was bad, so ignore it
                 } else {
                     // subtype must be unsigned EOA, unsigned contract, or nonmutating
                     if let Some(txRequest) = translateUnsignedTx(msg) {
@@ -562,6 +583,11 @@ public impure func inbox_getNextUnpackedRequest() -> (
                     return (None<IncomingRequest>, Some(txRequest));
                 }
                 // else request was malformatted, ignore it and execute loop again to get another
+            } elseif (msg.kind == const::L1MessageType_rollupProtocolEvent) {
+                if (msg.sender == address(0)) {
+                    let _ = callPluggable(const::PluggableModuleID_rollupTracker, msg.msgData);
+                }
+                // else request was forged or malformatted, ignore it and execute loop again to get another
             } else {
                 return (Some(msg), None<TxRequestData>);
             }

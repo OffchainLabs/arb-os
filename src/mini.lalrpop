@@ -2,8 +2,9 @@
 // Copyright 2020, Offchain Labs, Inc. All rights reserved.
 //
 
+
 use crate::compile::ast::{TopLevelDecl, TypeDecl, FuncDecl, GlobalVarDecl, Type,
-StructField, FuncArg, Statement, StatementKind, DebugInfo, Attributes, MatchPattern, IfArm, Expr, ExprKind, BinaryOp, UnaryOp, Constant,
+StructField, FuncArg, Statement, StatementKind, DebugInfo, Attributes, MatchPattern, IfArm, Expr, ExprKind, TrinaryOp, BinaryOp, UnaryOp, Constant,
 OptionConst, FieldInitializer, new_func_arg, new_type_decl};
 use crate::stringtable::{StringTable, StringId};
 use crate::compile::Lines;
@@ -125,6 +126,7 @@ Type: Type = {
 	"uint" => Type::Uint,
 	"int" => Type::Int,
 	"bool" => Type::Bool,
+	"buffer" => Type::Buffer,
 	"bytes32" => Type::Bytes32,
 	"address" => Type::EthAddress,
 	"struct" "{" <StructFields> "}" => Type::Struct(<>),
@@ -193,6 +195,8 @@ BinaryOpMidfix3: BinaryOp = {
 
 Expr4: Expr = {
 	<lno: @L> <l:Expr4> "|" <r:Expr5> => Expr::new_binary(BinaryOp::BitwiseOr, l, r, file_info.location(BytePos::from(lno),filename)),
+	<lno: @L> <l:Expr4> "SHL" <r:Expr5> => Expr::new_binary(BinaryOp::ShiftLeft, r, l, file_info.location(BytePos::from(lno),filename)),
+	<lno: @L> <l:Expr4> "SHR" <r:Expr5> => Expr::new_binary(BinaryOp::ShiftRight, r, l, file_info.location(BytePos::from(lno),filename)),
 	Expr5,
 };
 
@@ -250,6 +254,13 @@ Expr12: Expr = {
 	<lno: @L> "int" "(" <e: Expr> ")" => Expr::new_unary(UnaryOp::ToInt, e, file_info.location(BytePos::from(lno),filename)),
 	<lno: @L> "bytes32" "(" <e: Expr> ")" => Expr::new_unary(UnaryOp::ToBytes32, e, file_info.location(BytePos::from(lno),filename)),
 	<lno: @L> "address" "(" <e: Expr> ")" => Expr::new_unary(UnaryOp::ToAddress, e, file_info.location(BytePos::from(lno),filename)),
+	<lno: @L> "newbuffer" "(" ")" => Expr { kind: ExprKind::NewBuffer, debug_info: DebugInfo::from(file_info.location(BytePos::from(lno), filename))},
+	<lno: @L> "getbuffer8" "(" <e: Expr> "," <f:Expr> ")" => Expr::new_binary(BinaryOp::GetBuffer8, f, e, file_info.location(BytePos::from(lno),filename)),
+	<lno: @L> "getbuffer64" "(" <e: Expr> "," <f:Expr> ")" => Expr::new_binary(BinaryOp::GetBuffer64, f, e, file_info.location(BytePos::from(lno),filename)),
+	<lno: @L> "getbuffer256" "(" <e: Expr> "," <f:Expr> ")" => Expr::new_binary(BinaryOp::GetBuffer256, f, e, file_info.location(BytePos::from(lno),filename)),
+	<lno: @L> "setbuffer8" "(" <e: Expr> "," <f:Expr> "," <g:Expr> ")" => Expr::new_trinary(TrinaryOp::SetBuffer8, f, g, e, file_info.location(BytePos::from(lno),filename)),
+	<lno: @L> "setbuffer64" "(" <e: Expr> "," <f:Expr> "," <g:Expr> ")" => Expr::new_trinary(TrinaryOp::SetBuffer64, f, g, e, file_info.location(BytePos::from(lno),filename)),
+	<lno: @L> "setbuffer256" "(" <e: Expr> "," <f:Expr> "," <g:Expr> ")" => Expr::new_trinary(TrinaryOp::SetBuffer256, f, g, e, file_info.location(BytePos::from(lno),filename)),
 	<lno: @L> "newarray" "<" <t:Type> ">" "(" <e:Expr> ")" => Expr { kind: ExprKind::NewArray(Box::new(e), t), debug_info: DebugInfo::from(file_info.location(BytePos::from(lno), filename))},
 	<lno: @L> "newfixedarray" "(" <s:UnsignedInteger> "," <e:Expr> ","? ")" => Expr { kind: ExprKind::NewFixedArray(
 		s.to_usize().unwrap(),

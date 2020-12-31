@@ -13,37 +13,39 @@ use std::bytearray::bytearray_getByte;
 use std::bytearray::bytearray_setByte;
 use std::bytearray::bytearray_copy;
 
+use std::keccak::flipEndian64;
 
-type Sha256Hasher = struct {
+
+type Ripemd160Hasher = struct {
     accumulator: bytes32,
     buf: [2]uint,
     offset: uint,
-    totalSizeBits: uint,
+    totalSizeBytes: uint,
 }
 
-public func sha256hasher_new() -> Sha256Hasher {
+public func ripemd160hasher_new() -> Ripemd160Hasher {
     return struct {
-        accumulator: bytes32(0x6a09e667bb67ae853c6ef372a54ff53a510e527f9b05688c1f83d9ab5be0cd19),
+        accumulator: bytes32(0x67452301EFCDAB8998BADCFE10325476C3D2E1F0),
         buf: unsafecast<[2]uint>((0,0)),
         offset: 0,
-        totalSizeBits: 0,
+        totalSizeBytes: 0,
     };
 }
 
-public func sha256hasher_pushByte(h: Sha256Hasher, b: uint) -> Sha256Hasher {
+public func ripemd160hasher_pushByte(h: Ripemd160Hasher, b: uint) -> Ripemd160Hasher {
     let word = h.offset / 32;
     let newBuffer = h.buf with {
         [word] = h.buf[word] ^ asm(248-8*(h.offset % 32), b&0xff) uint { shl }
     };
     if (h.offset >= 63) {
         return h with {
-            accumulator: asm(h.accumulator, newBuffer[0], newBuffer[1]) bytes32 { sha256f }
+            accumulator: asm(h.accumulator, newBuffer[0], newBuffer[1]) bytes32 { ripemd160f }
         } with {
             buf: unsafecast<[2]uint>((0,0))
         } with {
             offset: 0
         } with {
-            totalSizeBits: 8 + h.totalSizeBits
+            totalSizeBytes: 1 + h.totalSizeBytes
         };
     } else {
         return h with {
@@ -51,12 +53,12 @@ public func sha256hasher_pushByte(h: Sha256Hasher, b: uint) -> Sha256Hasher {
         } with {
             offset: h.offset+1
         } with {
-            totalSizeBits: 8 + h.totalSizeBits
+            totalSizeBytes: 1 + h.totalSizeBytes
         };
     }
 }
 
-public func sha256hasher_push256(h: Sha256Hasher, val: uint) -> Sha256Hasher {
+public func ripemd160hasher_push256(h: Ripemd160Hasher, val: uint) -> Ripemd160Hasher {
     let offset = h.offset;
     if (offset == 0) {
         return h with {
@@ -64,17 +66,17 @@ public func sha256hasher_push256(h: Sha256Hasher, val: uint) -> Sha256Hasher {
         } with {
             offset: 32
         } with {
-            totalSizeBits: 256+h.totalSizeBits
+            totalSizeBytes: 32+h.totalSizeBytes
         };
     } elseif (offset == 32) {
         return h with {
-            accumulator: asm(h.accumulator, h.buf[0], val) bytes32 { sha256f }
+            accumulator: asm(h.accumulator, h.buf[0], val) bytes32 { ripemd160f }
         } with {
             buf: unsafecast<[2]uint>((0,0))
         } with {
             offset: 0
         } with {
-            totalSizeBits: 256+h.totalSizeBits
+            totalSizeBytes: 32+h.totalSizeBytes
         };
     } elseif (offset < 32) {
         return h with {
@@ -86,7 +88,7 @@ public func sha256hasher_push256(h: Sha256Hasher, val: uint) -> Sha256Hasher {
         } with {
             offset: 32+offset
         } with {
-            totalSizeBits: 256+h.totalSizeBits
+            totalSizeBytes: 32+h.totalSizeBytes
         };
     } else {
         offset = offset-32;
@@ -95,7 +97,7 @@ public func sha256hasher_push256(h: Sha256Hasher, val: uint) -> Sha256Hasher {
                 h.accumulator,
                 h.buf[0],
                 h.buf[1] | asm(8*offset, val) uint { shr }
-            ) bytes32 { sha256f }
+            ) bytes32 { ripemd160f }
         } with {
             buf: unsafecast<[2]uint>((
                 asm(8*(32-offset), val) uint { shl },
@@ -104,21 +106,21 @@ public func sha256hasher_push256(h: Sha256Hasher, val: uint) -> Sha256Hasher {
         } with {
             offset: offset
         } with {
-            totalSizeBits: 256+h.totalSizeBits
+            totalSizeBytes: 32+h.totalSizeBytes
         };
     }
 }
 
-public func sha256hasher_finish(h: Sha256Hasher) -> bytes32 {
+public func ripemd160hasher_finish(h: Ripemd160Hasher) -> bytes32 {
     // write the first padding byte
-    h = sha256hasher_pushByte(h, 0x80) with {
-        totalSizeBits: h.totalSizeBits   // undo the +8 caused by sha256hasher_pushByte call
+    h = ripemd160hasher_pushByte(h, 0x80) with {
+        totalSizeBytes: h.totalSizeBytes   // undo the +1 caused by ripemd160hasher_pushByte call
     };
 
     // make sure there is space for the 64-bit total length
     if (h.offset > 56) {
         h = h with {
-            accumulator: asm(h.accumulator, h.buf[0], h.buf[1]) bytes32 { sha256f }
+            accumulator: asm(h.accumulator, h.buf[0], h.buf[1]) bytes32 { ripemd160f }
         } with {
             buf: unsafecast<[2]uint>((0,0))
         };
@@ -128,22 +130,23 @@ public func sha256hasher_finish(h: Sha256Hasher) -> bytes32 {
     return asm(
         h.accumulator,
         h.buf[0],
-        h.buf[1] | (h.totalSizeBits & 0xffffffffffffffff),
-    ) bytes32 { sha256f };
+        h.buf[1] | flipEndian64(8*h.totalSizeBytes),  //TODO: check endianness
+    ) bytes32 { ripemd160f };
 }
 
-public func sha256_byteArray(ba: ByteArray) -> bytes32 {
-    let hasher = sha256hasher_new();
+public func ripemd160_byteArray(ba: ByteArray) -> bytes32 {
+    let hasher = ripemd160hasher_new();
     let i = 0;
     let sz = bytearray_size(ba);
     while (i+32 < sz) {
-        hasher = sha256hasher_push256(hasher, bytearray_get256(ba, i));
+        hasher = ripemd160hasher_push256(hasher, bytearray_get256(ba, i));
         i = i+32;
     }
     while (i < sz) {
-        hasher = sha256hasher_pushByte(hasher, bytearray_getByte(ba, i));
+        hasher = ripemd160hasher_pushByte(hasher, bytearray_getByte(ba, i));
         i = i+1;
     }
-    return sha256hasher_finish(hasher);
+    return ripemd160hasher_finish(hasher);
 }
+
 

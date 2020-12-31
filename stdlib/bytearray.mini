@@ -2,15 +2,10 @@
 // Copyright 2020, Offchain Labs, Inc. All rights reserved.
 //
 
-use std::expandingIntArray::ExpandingIntArray;
-use std::expandingIntArray::expandingIntArray_new;
-use std::expandingIntArray::expandingIntArray_get;
-use std::expandingIntArray::expandingIntArray_getConsecutive;
-use std::expandingIntArray::expandingIntArray_set;
-use std::expandingIntArray::expandingIntArray_setN;
+use std::random::RandomGenerator;  // dummy use, to work around compiler issue (error on const if not preceded by use)
 
-use std::expandingIntArray::expandingIntArray_op;
-use std::expandingIntArray::expandingIntArray_opConsecutive;
+const MaxByteArraySize = 0x10000000000000000;
+
 
 type OpClosureFunc = func(any, uint) -> (uint, any)
 type opClosure = struct {
@@ -21,7 +16,7 @@ type opClosure = struct {
 type ByteArray = struct { 
     size: uint,
     sliceOffset: uint,
-    contents: ExpandingIntArray,
+    contents: buffer,
 }
 
 // bytearray_new makes a new ByteArray
@@ -33,7 +28,7 @@ public func bytearray_new(ignored: uint) -> ByteArray {
     return struct {
         size: 0,
         sliceOffset: 0,
-        contents: expandingIntArray_new(),
+        contents: setbuffer256(newbuffer(), 32, 0),   // ensure that contents size is always >= 64
     };
 }
 
@@ -78,24 +73,19 @@ public func marshalledBytes_hash(mb: MarshalledBytes) -> bytes32 {
 //        returns a new bytearray holding the unmarshaled bytes, or None if unmarshalled array would be too large
 public func bytearray_unmarshalBytes(inBytes: MarshalledBytes) -> option<ByteArray> {
     let nbytes = inBytes.nbytes;
-    if (nbytes > 0x100000000000000000000000000000000) {
+    if (nbytes > const::MaxByteArraySize) {
         return None;
     }
     let nwords = (nbytes+31)/32;
     let words = inBytes.contents;
 
-    // For efficiency, we'll build an ExpandingIntArray here, then make a ByteArray from it at the end.
     // We'll also build 8-tuples of 32-byte words, and insert each tuple into the ExpIntArr with a single call.
-    let eia = expandingIntArray_new();
+    let eia = newbuffer();
     let block = unsafecast<[8]any>((0,0,0,0,0,0,0,0));
 
     while (nwords > 0) {
         nwords = nwords-1;
-        block = block with { [nwords & 7] = words.first };
-        if ((nwords & 7) == 0) {
-            eia = expandingIntArray_setN(eia, 8, nwords, block);
-            // it's safe to re-use block after this, because we're going to overwrite all of it
-        }
+        eia = setbuffer256(eia, nwords*32, words.first);
         words = words.rest;
     }
 
@@ -129,14 +119,22 @@ public func bytearray_size(ba: ByteArray) -> uint {
     return ba.size;
 }
 
+public func bytearray_buffer(ba: ByteArray) -> buffer {
+    return ba.contents;
+}
+
+public func bytearray_slice(ba: ByteArray) -> uint {
+    return ba.sliceOffset;
+}
+
 // bytearray_getByte reads one byte from a ByteArray
 public func bytearray_getByte(ba: ByteArray, offset: uint) -> uint {
     if (offset >= ba.size) {
         return 0;
     }
     offset = offset + ba.sliceOffset;
-    let word = expandingIntArray_get(ba.contents, offset/32);
-    return asm(offset & 0x1f, word) uint { byte };
+    let res = getbuffer8(ba.contents, offset);
+    return res;
 }
 
 // bytearray_get64 reads a chunk of 8 bytes from a ByteArray
@@ -144,30 +142,19 @@ public func bytearray_get64(ba: ByteArray, offset: uint) -> uint {
     if (offset >= ba.size) {
         return 0;
     }
-    let bytesToTrim = 0;
     if (offset+8 > ba.size) {
-        bytesToTrim = offset+8 - ba.size;
+        let bytesToRead = ba.size-offset;
+        offset = offset + ba.sliceOffset;
+        if (offset + bytesToRead >= 8) {
+            let mask = asm(8*bytesToRead, 1) uint { shl } - 1;
+            return asm(8*(8-bytesToRead), mask & getbuffer64(ba.contents, offset+bytesToRead-8)) uint { shl };
+        } else {
+            return getbuffer64(ba.contents, offset);
+        }
     }
-    // the access might extend beyond size, but access to the underlying array will be in-bounds
-    //    on the true side of the if, any overage is within an existing word of the underlying array
-    //    on the false side of the if, bytearray_get256 will avoid out-of-bounds accesses
     offset = offset + ba.sliceOffset;
-    let alignment = offset % 32;
-    if (alignment <= 24) {
-        let word = expandingIntArray_get(ba.contents, offset/32);
-        let ret = asm(8*(24-alignment), word) uint { shr } & 0xffffffffffffffff;
-        if (bytesToTrim > 0) {
-            ret = ret & ~(asm(8*bytesToTrim, 1) uint { shl } - 1);
-        }
-        return ret;
-    } else {
-        let res = bytearray_get256(ba, offset-ba.sliceOffset);
-        let ret = res / 0x1000000000000000000000000000000000000000000000000;
-        if (bytesToTrim > 0) {
-            ret = ret & ~(asm(8*bytesToTrim, 1) uint { shl } - 1);
-        }
-        return ret;
-    }
+    let res = getbuffer64(ba.contents, offset);
+    return res;
 }
 
 // bytearray_get256 reads a chunk of 32 bytes from a ByteArray
@@ -175,119 +162,94 @@ public func bytearray_get256(ba: ByteArray, offset: uint) -> uint {
     if (offset >= ba.size) {
         return 0;
     }
-    let bytesToTrim = 0;
     if (offset+32 > ba.size) {
-        bytesToTrim = offset+32 - ba.size;
+        let bytesToRead = ba.size-offset;
+        offset = offset + ba.sliceOffset;
+        if (offset + bytesToRead >= 32) {
+            let mask = asm(8*bytesToRead, 1) uint { shl } - 1;
+            return asm(8*(32-bytesToRead), mask & getbuffer256(ba.contents, offset+bytesToRead-32)) uint { shl };
+        } else {
+            return getbuffer256(ba.contents, offset);
+        }
     }
     offset = offset + ba.sliceOffset;
-    let lowWordIndex = offset / 32;
-    let alignment = offset % 32;
-    if (alignment == 0) {
-        let ret = expandingIntArray_get(ba.contents, lowWordIndex);
-        if (bytesToTrim > 0) {
-            ret = ret & ~(asm(8*bytesToTrim, 1) uint { shl } - 1);
-        }
-        return ret;
-    } else {
-        let (lowWord, hiWord) = expandingIntArray_getConsecutive(ba.contents, lowWordIndex);
-        let shiftFactor = asm(8*alignment, 1) uint { shl };
-        let invShiftFactor = asm(8*(32-alignment), 1) uint { shl };
-        let ret = (hiWord/invShiftFactor) | (lowWord*shiftFactor);
-        if (bytesToTrim > 0) {
-            ret = ret & ~(asm(8*bytesToTrim, 1) uint { shl } - 1);
-        }
-        return ret;
-    }
+    let res = getbuffer256(ba.contents, offset);
+    return res;
+}
+
+func make(cont: ByteArray) -> ByteArray {
+    return struct {
+        size: cont.size + cont.sliceOffset + 32,
+        sliceOffset: 0,
+        contents: cont.contents,
+    };
+}
+
+public func bytearray_wrap(cont: buffer, size: uint) -> ByteArray {
+    return struct {
+        size: size,
+        sliceOffset: 0,
+        contents: cont,
+    };
 }
 
 // bytearray_setbyte writes one byte to a ByteArray, returns the resulting ByteArray
-public func bytearray_setByte(ba: ByteArray, offset: uint, val: uint) -> ByteArray {
-    if (offset >= ba.size) {
-        if (offset >= 0x100000000000000000000000000000000) {
-            return ba;    // ignore out-of-bounds write
-        }
-        ba = ba with { size: offset+1 };
+public func bytearray_setByte(ba: ByteArray, offset: uint, value: uint) -> ByteArray {
+    if (offset >= const::MaxByteArraySize) {
+        return ba;    // ignore out-of-bounds write
     }
-    offset = offset + ba.sliceOffset;
-    let (newContents, _) = expandingIntArray_op(
-        ba.contents, 
-        offset/32, 
-        struct {
-            f: unsafecast<OpClosureFunc>(basb_closure_func),
-            val: (31-(offset%32), val,),
+    if (offset + ba.sliceOffset >= const::MaxByteArraySize) {
+        ba = bytearray_copy(ba, 0, bytearray_new(0), 0, ba.size);
+        if (offset+1 > ba.size) {
+            ba = ba with { size: offset+1 };
         }
-    );
-    return ba with { contents: newContents };
+    } else {
+        if (offset+1 > ba.size) {
+            ba = ba with { size: offset+1 };
+        }
+        offset = offset + ba.sliceOffset;
+    }
+    return ba with { contents: setbuffer8(ba.contents, offset, value) };
 }
 
 // bytearray_set64 writes an 8-byte chunk to a ByteArray, returning the resulting ByteArray
 public func bytearray_set64(ba: ByteArray, offset: uint, value: uint) -> ByteArray {
-    if (offset >= 0x100000000000000000000000000000000-7) {
+    if (offset >= const::MaxByteArraySize - 7) {
         return ba;    // ignore out-of-bounds write
     }
-    if (offset+8 > ba.size) {
-        ba = ba with { size: offset+8 };
-    }
-    offset = offset + ba.sliceOffset;
-    let lowWordIndex = offset / 32;
-    let alignment = offset % 32;
-    if (alignment <= 24) {
-        let (newContents, _) = expandingIntArray_op(
-            ba.contents,
-            lowWordIndex,
-            struct{
-                f: unsafecast<OpClosureFunc>(bas64_single_closure_func),
-                val: (alignment, value,),
-            }
-        );
-        return ba with { contents: newContents };
+    if (offset + ba.sliceOffset >= const::MaxByteArraySize - 7) {
+        ba = bytearray_copy(ba, 0, bytearray_new(0), 0, ba.size);
+        if (offset+8 > ba.size) {
+            ba = ba with { size: offset+8 };
+        }
     } else {
-        let (newContents, _0, _1) = expandingIntArray_opConsecutive(
-            ba.contents,
-            lowWordIndex,
-            struct {
-                f: unsafecast<OpClosureFunc>(bas64_low_closure_func),
-                val: (alignment, value,),
-            },
-            struct {
-                f: unsafecast<OpClosureFunc>(basmulti_hi_closure_func),
-                val: (alignment, value,),
-            }
-        );
-        return ba with { contents: newContents };
+        if (offset+8 > ba.size) {
+            ba = ba with { size: offset+8 };
+        }
+        offset = offset + ba.sliceOffset;
     }
+
+    return ba with { contents: setbuffer64(ba.contents, offset, value) };
 }
 
 // bytearray_set256 writes a 32-byte chunk to a ByteArray, returning the resulting ByteArray
 public func bytearray_set256(ba: ByteArray, offset: uint, value: uint) -> ByteArray {
-    if (offset >= 0x100000000000000000000000000000000-31) {
+    if (offset >= const::MaxByteArraySize - 31) {
         return ba;    // ignore out-of-bounds write
     }
-    if (offset+32 > ba.size) {
-        ba = ba with { size: offset+32 };
-    }
-    offset = offset + ba.sliceOffset;
-    let lowWordIndex = offset / 32;
-    let alignment = offset % 32;
-    if (alignment == 0) {
-        return ba with {
-            contents: expandingIntArray_set(ba.contents, lowWordIndex, value)
-        };
+    if (offset + ba.sliceOffset >= const::MaxByteArraySize - 31) {
+        ba = bytearray_copy(ba, 0, bytearray_new(0), 0, ba.size);
+        if (offset+32 > ba.size) {
+            ba = ba with { size: offset+32 };
+        }
     } else {
-        let (newContents, _0, _1) = expandingIntArray_opConsecutive(
-            ba.contents,
-            lowWordIndex,
-            struct {
-                f: unsafecast<OpClosureFunc>(bas256_low_closure_func),
-                val: (alignment, value,),
-            },
-            struct {
-                f: unsafecast<OpClosureFunc>(basmulti_hi_closure_func),
-                val: (alignment, value,),
-            }
-        );
-        return ba with { contents: newContents };
+        if (offset+32 > ba.size) {
+            ba = ba with { size: offset+32 };
+        }
+        offset = offset + ba.sliceOffset;
     }
+
+    return ba with { contents: setbuffer256(ba.contents, offset, value) };
 }
 
 // bytearray_copy copies bytes from one ByteArray to another, 
@@ -299,88 +261,59 @@ public func bytearray_copy(
     toOffset: uint,
     nbytes: uint,
 ) -> ByteArray {
-    if ((fromOffset >= 0x100000000000000000000000000000000)
-        || (toOffset >= 0x100000000000000000000000000000000)
-        || (nbytes >= 0x100000000000000000000000000000000) ) {
+    if ((fromOffset >= const::MaxByteArraySize)
+        || (toOffset >= const::MaxByteArraySize)
+        || (nbytes > const::MaxByteArraySize)
+        || (fromOffset + nbytes > const::MaxByteArraySize)
+        || (toOffset + nbytes > const::MaxByteArraySize) ) {
         return to;  // ignore out-of-bounds parameters
     }
 
     // TODO: optimize this to exploit alignment and speed up the endgame
+    if (to.size + to.sliceOffset + nbytes > const::MaxByteArraySize) {
+        to = bytearray_copy(to, 0, bytearray_new(0), 0, to.size);
+    }
+    if (to.size < toOffset + nbytes) {
+        to = to with { size: toOffset + nbytes };
+    }
+    fromOffset = fromOffset + from.sliceOffset;
+    toOffset = toOffset + to.sliceOffset;
+    let toContents = to.contents;
+    let fromContents = from.contents;
     while (nbytes >= 32) {
-        let val = bytearray_get256(from, fromOffset);
-        to = bytearray_set256(to, toOffset, val);
+        let val = getbuffer256(fromContents, fromOffset);
+        toContents = setbuffer256(toContents, toOffset, val);
         fromOffset = 32+fromOffset;
         toOffset = 32+toOffset;
         nbytes = nbytes-32;
     }
     while (nbytes > 0) {
-        let val = bytearray_getByte(from, fromOffset);
-        to = bytearray_setByte(to, toOffset, val);
+        let val = getbuffer8(fromContents, fromOffset);
+        toContents = setbuffer8(toContents, toOffset, val);
         fromOffset = 1+fromOffset;
         toOffset = 1+toOffset;
         nbytes = nbytes-1;
     }
-    return to;
+    return to with { contents: toContents };
 }
 
 public func bytearray_extract(from: ByteArray, offset: uint, nbytes: uint) -> ByteArray {
-    if (offset >= 0x100000000000000000000000000000000) {
+    if (offset >= const::MaxByteArraySize) {
         return bytearray_new(0);
     }
-    if ((nbytes >= 0x100000000000000000000000000000000) || (offset+nbytes >= 0x100000000000000000000000000000000)) {
+    if ((nbytes > const::MaxByteArraySize) || (offset+nbytes > const::MaxByteArraySize)) {
         return bytearray_new(0);
     }
-    return from with {
-        size: nbytes
-    } with {
-        sliceOffset: offset + from.sliceOffset
+    
+    return struct { size: nbytes, sliceOffset: offset + from.sliceOffset, contents: from.contents };
+}
+
+
+public func bytearray_wrap_slice(cont: buffer, offset: uint, size: uint) -> ByteArray {
+    return struct {
+        size: size,
+        sliceOffset: offset,
+        contents: cont,
     };
 }
 
-func basb_closure_func(args: (uint, uint), oldval: uint) -> (uint, uint) { // returns (newval, junk)
-    let (subidx, newbval,) = args;
-    let shiftFac = asm(8*subidx, 1) uint { shl };
-    let mask = 0xff * shiftFac;
-    let pasteIn = (newbval & 0xff) * shiftFac;
-    return (
-        (oldval & ~mask) | pasteIn,
-        0, 
-    );
-}
-
-func bas64_single_closure_func(args: (uint, uint), oldval: uint) -> (uint, uint) { // returns (newval, junk)
-    let (subidx, newbval,) = args;
-    let shiftFac = asm(8*subidx, 1) uint { shl };
-    let mask = 0xffffffffffffffff * shiftFac;
-    let pasteIn = (newbval & 0xff) * shiftFac;
-    return (
-        (oldval & ~mask) | pasteIn,
-        0, 
-    );
-}
-
-func basmulti_hi_closure_func(args: (uint, uint), oldval: uint) -> (uint, uint) { // returns (newval, junk)
-    let (alignment, value,) = args; 
-    let revAlignment = 32-alignment;
-    let factor = asm(8*revAlignment, 1) uint { shl };
-    let newVal = (value*factor) | (oldval & (factor-1));
-    return (newVal, 0,);
-}
-
-func bas64_low_closure_func(args: (uint, uint), oldval: uint) -> (uint, uint) { // returns (newval, junk)
-    let (alignment, value,) = args; 
-    let revAlignment = 8-alignment;
-    let factor = asm(8*alignment, 1) uint { shl };
-    let invFactor = asm(8*revAlignment, 1) uint { shl };
-    let newVal = (value/factor) | (oldval & (invFactor * ~0));
-    return (newVal, 0,);
-}
-
-func bas256_low_closure_func(args: (uint, uint), oldval: uint) -> (uint, uint) { // returns (newval, junk)
-    let (alignment, value,) = args; 
-    let revAlignment = 32-alignment;
-    let factor = asm(8*alignment, 1) uint { shl };
-    let invFactor = asm(8*revAlignment, 1) uint { shl };
-    let newVal = (value/factor) | (oldval & (invFactor * ~0));
-    return (newVal, 0,);
-}

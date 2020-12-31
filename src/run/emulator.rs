@@ -7,8 +7,9 @@
 use super::runtime_env::RuntimeEnvironment;
 use crate::compile::{CompileError, DebugInfo};
 use crate::link::LinkedProgram;
-use crate::mavm::{AVMOpcode, CodePt, Instruction, Opcode, Value};
+use crate::mavm::{AVMOpcode, Buffer, CodePt, Instruction, Opcode, Value};
 use crate::pos::Location;
+use crate::run::ripemd160port;
 use crate::uint256::Uint256;
 use clap::Clap;
 use ethers_core::types::{Signature, H256};
@@ -165,6 +166,21 @@ impl ValueStack {
         } else {
             Err(ExecutionError::new(
                 "expected tuple on stack",
+                state,
+                Some(val),
+            ))
+        }
+    }
+
+    ///If the top `Value` on self is a buffer, pops the `Value` and returns it as a vector.
+    /// Otherwise returns an `ExecutionError`.
+    pub fn pop_buffer(&mut self, state: &MachineState) -> Result<Buffer, ExecutionError> {
+        let val = self.pop(state)?;
+        if let Value::Buffer(v) = val {
+            Ok(v.clone())
+        } else {
+            Err(ExecutionError::new(
+                "expected buffer on stack",
                 state,
                 Some(val),
             ))
@@ -575,11 +591,15 @@ impl ProfilerData {
             .iter()
             .map(|(name, tree)| (name.clone(), tree.values().sum()))
             .collect();
+        let mut total = 0;
         println!("Per file gas cost usage:");
         for (filename, gas_cost) in &file_gas_costs {
+            total += gas_cost;
             println!("{}: {};", filename, gas_cost);
         }
         println!("unknown_file: {}", self.unknown_gas);
+        total += self.unknown_gas;
+        println!("Total: {}", total);
         loop {
             println!("Enter file to examine");
             let mut command = String::new();
@@ -1193,6 +1213,7 @@ impl Machine {
                 Opcode::AVMOpcode(AVMOpcode::Hash2) => 8,
                 Opcode::AVMOpcode(AVMOpcode::Keccakf) => 600,
                 Opcode::AVMOpcode(AVMOpcode::Sha256f) => 250,
+                Opcode::AVMOpcode(AVMOpcode::Ripemd160f) => 250, //TODO: measure and update this
                 Opcode::AVMOpcode(AVMOpcode::Pop) => 1,
                 Opcode::AVMOpcode(AVMOpcode::PushStatic) => 1,
                 Opcode::AVMOpcode(AVMOpcode::Rget) => 1,
@@ -1236,6 +1257,13 @@ impl Machine {
                 Opcode::AVMOpcode(AVMOpcode::EcMul) => 82_000,
                 Opcode::AVMOpcode(AVMOpcode::EcPairing) => self.gas_for_pairing(),
                 Opcode::AVMOpcode(AVMOpcode::Sideload) => 10,
+                Opcode::AVMOpcode(AVMOpcode::NewBuffer) => 1,
+                Opcode::AVMOpcode(AVMOpcode::GetBuffer8) => 10,
+                Opcode::AVMOpcode(AVMOpcode::GetBuffer64) => 10,
+                Opcode::AVMOpcode(AVMOpcode::GetBuffer256) => 10,
+                Opcode::AVMOpcode(AVMOpcode::SetBuffer8) => 100,
+                Opcode::AVMOpcode(AVMOpcode::SetBuffer64) => 100,
+                Opcode::AVMOpcode(AVMOpcode::SetBuffer256) => 100,
                 _ => return None,
             })
         } else {
@@ -1795,6 +1823,14 @@ impl Machine {
                         self.incr_pc();
                         Ok(true)
                     }
+                    Opcode::AVMOpcode(AVMOpcode::Ripemd160f) => {
+                        let t1 = self.stack.pop_uint(&self.state)?;
+                        let t2 = self.stack.pop_uint(&self.state)?;
+                        let t3 = self.stack.pop_uint(&self.state)?;
+                        self.stack.push_uint(ripemd160_compression(t1, t2, t3));
+                        self.incr_pc();
+                        Ok(true)
+                    }
                     Opcode::AVMOpcode(AVMOpcode::Inbox) => {
 						match self.runtime_env.get_from_inbox() {
                             Some(msg) => {
@@ -1966,6 +2002,89 @@ impl Machine {
                         }
 
                     }
+                    Opcode::AVMOpcode(AVMOpcode::NewBuffer) => {
+                        // self.stack.push(Value::new_buffer(vec![0; 256]));
+                        self.stack.push(Value::new_buffer(vec![]));
+                        self.incr_pc();
+                        Ok(true)
+                    }
+                    Opcode::AVMOpcode(AVMOpcode::GetBuffer8) => {
+                        let offset = self.stack.pop_usize(&self.state)?;
+                        let buf = self.stack.pop_buffer(&self.state)?;
+                        self.stack.push_usize(buf.read_byte(offset).into());
+                        self.incr_pc();
+                        Ok(true)
+                    }
+                    Opcode::AVMOpcode(AVMOpcode::GetBuffer64) => {
+                        let offset = self.stack.pop_usize(&self.state)?;
+                        let buf = self.stack.pop_buffer(&self.state)?;
+                        if offset + 7 < offset {
+                            return Err(ExecutionError::new("buffer overflow", &self.state, Some(Value::Int(Uint256::from_usize(offset)))))
+                        }
+                        let mut res = [0u8; 8];
+                        for i in 0..8 {
+                            res[i] = buf.read_byte(offset+i);
+                        }
+                        self.stack.push_uint(Uint256::from_bytes(&res));
+                        self.incr_pc();
+                        Ok(true)
+                    }
+                    Opcode::AVMOpcode(AVMOpcode::GetBuffer256) => {
+                        let offset = self.stack.pop_usize(&self.state)?;
+                        let buf = self.stack.pop_buffer(&self.state)?;
+                        if offset + 31 < offset {
+                            return Err(ExecutionError::new("buffer overflow", &self.state, Some(Value::Int(Uint256::from_usize(offset)))))
+                        }
+                        let mut res = [0u8; 32];
+                        for i in 0..32 {
+                            res[i] = buf.read_byte(offset+i);
+                        }
+                        self.stack.push_uint(Uint256::from_bytes(&res));
+                        self.incr_pc();
+                        Ok(true)
+                    }
+                    Opcode::AVMOpcode(AVMOpcode::SetBuffer8) => {
+                        let offset = self.stack.pop_usize(&self.state)?;
+                        let val = self.stack.pop_uint(&self.state)?;
+                        let buf = self.stack.pop_buffer(&self.state)?;
+                        let bytes = val.to_bytes_be();
+                        let nbuf = buf.set_byte(offset, bytes[31]);
+                        self.stack.push(Value::copy_buffer(nbuf));
+                        self.incr_pc();
+                        Ok(true)
+                    }
+                    Opcode::AVMOpcode(AVMOpcode::SetBuffer64) => {
+                        let offset = self.stack.pop_usize(&self.state)?;
+                        if offset + 7 < offset {
+                            return Err(ExecutionError::new("buffer overflow", &self.state, Some(Value::Int(Uint256::from_usize(offset)))))
+                        }
+                        let val = self.stack.pop_uint(&self.state)?;
+                        let buf = self.stack.pop_buffer(&self.state)?;
+                        let mut nbuf = buf;
+                        let bytes = val.to_bytes_be();
+                        for i in 0..8 {
+                            nbuf = nbuf.set_byte(offset+i, bytes[i]);
+                        }
+                        self.stack.push(Value::copy_buffer(nbuf));
+                        self.incr_pc();
+                        Ok(true)
+                    }
+                    Opcode::AVMOpcode(AVMOpcode::SetBuffer256) => {
+                        let offset = self.stack.pop_usize(&self.state)?;
+                        if offset + 31 < offset {
+                            return Err(ExecutionError::new("buffer overflow", &self.state, Some(Value::Int(Uint256::from_usize(offset)))))
+                        }
+                        let val = self.stack.pop_uint(&self.state)?;
+                        let buf = self.stack.pop_buffer(&self.state)?;
+                        let mut nbuf = buf;
+                        let bytes = val.to_bytes_be();
+                        for i in 0..32 {
+                            nbuf = nbuf.set_byte(offset+i, bytes[i]);
+                        }
+                        self.stack.push(Value::copy_buffer(nbuf));
+                        self.incr_pc();
+                        Ok(true)
+                    }
 					Opcode::GetLocal |  // these opcodes are for intermediate use in compilation only
 					Opcode::SetLocal |  // they should never appear in fully compiled code
 					Opcode::MakeFrame(_, _) |
@@ -2062,7 +2181,7 @@ fn do_ecrecover(
 }
 
 fn do_ecadd(x0: Uint256, x1: Uint256, y0: Uint256, y1: Uint256) -> (Uint256, Uint256) {
-    use bn::{AffineG1, Fq, Group, G1};
+    use parity_bn::{AffineG1, Fq, Group, G1};
 
     let px = Fq::from_slice(&x0.to_bytes_be()).unwrap();
     let py = Fq::from_slice(&x1.to_bytes_be()).unwrap();
@@ -2095,7 +2214,7 @@ fn do_ecadd(x0: Uint256, x1: Uint256, y0: Uint256, y1: Uint256) -> (Uint256, Uin
 }
 
 fn do_ecmul(x0: Uint256, x1: Uint256, nui: Uint256) -> (Uint256, Uint256) {
-    use bn::{AffineG1, Fq, Fr, Group, G1};
+    use parity_bn::{AffineG1, Fq, Fr, Group, G1};
 
     let px = Fq::from_slice(&x0.to_bytes_be()).unwrap();
     let py = Fq::from_slice(&x1.to_bytes_be()).unwrap();
@@ -2122,7 +2241,7 @@ fn do_ecmul(x0: Uint256, x1: Uint256, nui: Uint256) -> (Uint256, Uint256) {
 }
 
 fn do_ecpairing(mut val: Value) -> Option<bool> {
-    use bn::{pairing, AffineG1, AffineG2, Fq, Fq2, Group, Gt, G1, G2};
+    use parity_bn::{pairing, AffineG1, AffineG2, Fq, Fq2, Group, Gt, G1, G2};
 
     let mut acc = Gt::one();
     for _i in 0..MAX_PAIRING_SIZE {
@@ -2141,25 +2260,57 @@ fn do_ecpairing(mut val: Value) -> Option<bool> {
                                 return None;
                             }
                         }
-                        let ax = Fq::from_slice(&uis[0].to_bytes_be()).unwrap();
-                        let ay = Fq::from_slice(&uis[1].to_bytes_be()).unwrap();
+                        let ax = if let Ok(t) = Fq::from_slice(&uis[0].to_bytes_be()) {
+                            t
+                        } else {
+                            return Some(false);
+                        };
+                        let ay = if let Ok(t) = Fq::from_slice(&uis[1].to_bytes_be()) {
+                            t
+                        } else {
+                            return Some(false);
+                        };
                         let ba = Fq2::new(
-                            Fq::from_slice(&uis[2].to_bytes_be()).unwrap(),
-                            Fq::from_slice(&uis[3].to_bytes_be()).unwrap(),
+                            if let Ok(t) = Fq::from_slice(&uis[2].to_bytes_be()) {
+                                t
+                            } else {
+                                return Some(false);
+                            },
+                            if let Ok(t) = Fq::from_slice(&uis[3].to_bytes_be()) {
+                                t
+                            } else {
+                                return Some(false);
+                            },
                         );
                         let bb = Fq2::new(
-                            Fq::from_slice(&uis[4].to_bytes_be()).unwrap(),
-                            Fq::from_slice(&uis[5].to_bytes_be()).unwrap(),
+                            if let Ok(t) = Fq::from_slice(&uis[4].to_bytes_be()) {
+                                t
+                            } else {
+                                return Some(false);
+                            },
+                            if let Ok(t) = Fq::from_slice(&uis[5].to_bytes_be()) {
+                                t
+                            } else {
+                                return Some(false);
+                            },
                         );
                         let b = if ba.is_zero() && bb.is_zero() {
                             G2::zero()
                         } else {
-                            AffineG2::new(ba, bb).unwrap().into()
+                            if let Ok(t) = AffineG2::new(ba, bb) {
+                                t.into()
+                            } else {
+                                return Some(false);
+                            }
                         };
                         let a = if ax.is_zero() && ay.is_zero() {
                             G1::zero()
                         } else {
-                            AffineG1::new(ax, ay).unwrap().into()
+                            if let Ok(t) = AffineG1::new(ax, ay) {
+                                t.into()
+                            } else {
+                                return Some(false);
+                            }
                         };
                         acc = acc * pairing(a, b);
                     } else {
@@ -2186,6 +2337,36 @@ fn sha256_compression(acc: Uint256, buf0: Uint256, buf1: Uint256) -> Uint256 {
     let acc_32 = &mut acc_32[..];
     acc_32.reverse();
     Uint256::from_u32_digits(acc_32)
+}
+
+fn ripemd160_compression(acc: Uint256, buf0: Uint256, buf1: Uint256) -> Uint256 {
+    let words = acc.to_u32_digits_be();
+    let mut acc_buf = [words[3], words[4], words[5], words[6], words[7]];
+    let mut buf = buf0.to_bytes_be();
+    buf.extend(buf1.to_bytes_be());
+
+    println!("before {:?}", acc_buf);
+    println!("buf    {:?}", buf);
+    ripemd160port::process_msg_block(&mut acc_buf, &buf);
+    println!("after  {:?}", acc_buf);
+
+    println!("reversed {:?}", reverse32(acc_buf[0]));
+
+    Uint256::from_u32_digits(&[
+        reverse32(acc_buf[4]),
+        reverse32(acc_buf[3]),
+        reverse32(acc_buf[2]),
+        reverse32(acc_buf[1]),
+        reverse32(acc_buf[0]),
+        0u32,
+        0u32,
+        0u32,
+    ])
+}
+
+fn reverse32(x: u32) -> u32 {
+    let mid = (x >> 16) | (x << 16);
+    ((mid & 0x00ff00ff) << 8) | ((mid & 0xff00ff00) >> 8)
 }
 
 ///Represents a stack trace, with each CodePt indicating a stack frame, Unknown variant is unused.

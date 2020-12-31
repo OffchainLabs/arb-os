@@ -29,6 +29,9 @@ use accounts::account_getStartCodePoint;
 use evmCallStack::initEvmCallStack;
 use evmCallStack::initEvmCallStackForConstructor;
 use evmCallStack::evmCallStack_runningCodeFromAccount;
+
+use gasAccounting::GasUsage;
+
 use output::emitTxReceipt;
 
 use tokens::tokens_erc20deposit;

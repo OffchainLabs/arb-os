@@ -4,7 +4,7 @@
 
 //!Contains utilities for generating instructions from AST structures.
 
-use super::ast::{BinaryOp, FuncArg, GlobalVarDecl, Type, UnaryOp};
+use super::ast::{BinaryOp, FuncArg, GlobalVarDecl, TrinaryOp, Type, UnaryOp};
 use super::symtable::CopyingSymTable;
 use super::typecheck::{
     PropertiesList, TypeCheckedExpr, TypeCheckedFunc, TypeCheckedIfArm, TypeCheckedMatchPattern,
@@ -998,6 +998,11 @@ fn mavm_codegen_expr<'a>(
     let debug = expr.debug_info;
     let loc = expr.debug_info.location;
     match &expr.kind {
+        TypeCheckedExprKind::NewBuffer => {
+            let opcode = Opcode::AVMOpcode(AVMOpcode::NewBuffer);
+            code.push(Instruction::new(opcode, None, debug));
+            Ok((label_gen, code, num_locals))
+        }
         TypeCheckedExprKind::UnaryOp(op, tce, _) => {
             let (lg, c, exp_locals) = mavm_codegen_expr(
                 tce,
@@ -1097,6 +1102,9 @@ fn mavm_codegen_expr<'a>(
             label_gen = lg;
             code = c;
             let opcode = match op {
+                BinaryOp::GetBuffer8 => Opcode::AVMOpcode(AVMOpcode::GetBuffer8),
+                BinaryOp::GetBuffer64 => Opcode::AVMOpcode(AVMOpcode::GetBuffer64),
+                BinaryOp::GetBuffer256 => Opcode::AVMOpcode(AVMOpcode::GetBuffer256),
                 BinaryOp::Plus => Opcode::AVMOpcode(AVMOpcode::Plus),
                 BinaryOp::Minus => Opcode::AVMOpcode(AVMOpcode::Minus),
                 BinaryOp::Times => Opcode::AVMOpcode(AVMOpcode::Mul),
@@ -1116,6 +1124,8 @@ fn mavm_codegen_expr<'a>(
                 BinaryOp::NotEqual => Opcode::AVMOpcode(AVMOpcode::Equal), // will negate
                 BinaryOp::BitwiseAnd => Opcode::AVMOpcode(AVMOpcode::BitwiseAnd),
                 BinaryOp::BitwiseOr => Opcode::AVMOpcode(AVMOpcode::BitwiseOr),
+                BinaryOp::ShiftLeft => Opcode::AVMOpcode(AVMOpcode::ShiftLeft),
+                BinaryOp::ShiftRight => Opcode::AVMOpcode(AVMOpcode::ShiftRight),
                 BinaryOp::BitwiseXor => Opcode::AVMOpcode(AVMOpcode::BitwiseXor),
                 BinaryOp::_LogicalAnd => Opcode::LogicalAnd,
                 BinaryOp::LogicalOr => Opcode::LogicalOr,
@@ -1139,6 +1149,60 @@ fn mavm_codegen_expr<'a>(
                 label_gen,
                 code,
                 max(num_locals, max(left_locals, right_locals)),
+            ))
+        }
+        TypeCheckedExprKind::Trinary(op, tce1, tce2, tce3, _) => {
+            let (lg, c, locals3) = mavm_codegen_expr(
+                tce3,
+                code,
+                num_locals,
+                locals,
+                label_gen,
+                string_table,
+                import_func_map,
+                global_var_map,
+                prepushed_vals,
+                scopes,
+                file_name_chart,
+            )?;
+            let (lg, c, locals2) = mavm_codegen_expr(
+                tce2,
+                c,
+                num_locals,
+                locals,
+                lg,
+                string_table,
+                import_func_map,
+                global_var_map,
+                prepushed_vals + 1,
+                scopes,
+                file_name_chart,
+            )?;
+            let (lg, c, locals1) = mavm_codegen_expr(
+                tce1,
+                c,
+                num_locals,
+                locals,
+                lg,
+                string_table,
+                import_func_map,
+                global_var_map,
+                prepushed_vals + 2,
+                scopes,
+                file_name_chart,
+            )?;
+            label_gen = lg;
+            code = c;
+            let opcode = match op {
+                TrinaryOp::SetBuffer8 => Opcode::AVMOpcode(AVMOpcode::SetBuffer8),
+                TrinaryOp::SetBuffer64 => Opcode::AVMOpcode(AVMOpcode::SetBuffer64),
+                TrinaryOp::SetBuffer256 => Opcode::AVMOpcode(AVMOpcode::SetBuffer256),
+            };
+            code.push(Instruction::from_opcode(opcode, debug));
+            Ok((
+                label_gen,
+                code,
+                max(num_locals, max(locals1, max(locals2, locals3))),
             ))
         }
         TypeCheckedExprKind::ShortcutOr(tce1, tce2) => {

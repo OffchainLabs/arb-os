@@ -80,6 +80,7 @@ pub enum Type {
     Bool,
     Bytes32,
     EthAddress,
+    Buffer,
     Tuple(Vec<Type>),
     Array(Box<Type>),
     FixedArray(Box<Type>, usize),
@@ -145,6 +146,7 @@ impl Type {
             | Type::Bool
             | Type::Bytes32
             | Type::EthAddress
+            | Type::Buffer
             | Type::Imported(_)
             | Type::Every => (self == rhs),
             Type::Tuple(tvec) => {
@@ -226,6 +228,7 @@ impl Type {
     pub fn default_value(&self) -> (Value, bool) {
         match self {
             Type::Void => (Value::none(), false),
+            Type::Buffer => (Value::new_buffer(vec![]), true),
             Type::Uint | Type::Int | Type::Bytes32 | Type::EthAddress | Type::Bool => {
                 (Value::Int(Uint256::zero()), true)
             }
@@ -334,6 +337,7 @@ impl PartialEq for Type {
             | (Type::Bytes32, Type::Bytes32)
             | (Type::EthAddress, Type::EthAddress)
             | (Type::Any, Type::Any)
+            | (Type::Buffer, Type::Buffer)
             | (Type::Every, Type::Every) => true,
             (Type::Tuple(v1), Type::Tuple(v2)) => type_vectors_equal(&v1, &v2),
             (Type::Array(a1), Type::Array(a2)) => *a1 == *a2,
@@ -606,6 +610,7 @@ pub struct Expr {
 pub enum ExprKind {
     UnaryOp(UnaryOp, Box<Expr>),
     Binary(BinaryOp, Box<Expr>, Box<Expr>),
+    Trinary(TrinaryOp, Box<Expr>, Box<Expr>, Box<Expr>),
     ShortcutOr(Box<Expr>, Box<Expr>),
     ShortcutAnd(Box<Expr>, Box<Expr>),
     VariableRef(StringId),
@@ -626,6 +631,7 @@ pub enum ExprKind {
     UnsafeCast(Box<Expr>, Type),
     Asm(Type, Vec<Instruction>, Vec<Expr>),
     Try(Box<Expr>),
+    NewBuffer,
 }
 
 impl Expr {
@@ -641,6 +647,14 @@ impl Expr {
     pub fn new_binary(op: BinaryOp, e1: Expr, e2: Expr, loc: Option<Location>) -> Self {
         Self {
             kind: ExprKind::Binary(op, Box::new(e1), Box::new(e2)),
+            debug_info: DebugInfo::from(loc),
+        }
+    }
+
+    ///Returns an expression that applies trinary operator op to e1, e2, and e3.
+    pub fn new_trinary(op: TrinaryOp, e1: Expr, e2: Expr, e3: Expr, loc: Option<Location>) -> Self {
+        Self {
+            kind: ExprKind::Trinary(op, Box::new(e1), Box::new(e2), Box::new(e3)),
             debug_info: DebugInfo::from(loc),
         }
     }
@@ -683,9 +697,21 @@ pub enum BinaryOp {
     BitwiseAnd,
     BitwiseOr,
     BitwiseXor,
+    ShiftLeft,
+    ShiftRight,
     _LogicalAnd,
     LogicalOr,
     Hash,
+    GetBuffer8,
+    GetBuffer64,
+    GetBuffer256,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+pub enum TrinaryOp {
+    SetBuffer8,
+    SetBuffer64,
+    SetBuffer256,
 }
 
 ///Used in StructInitializer expressions to map expressions to fields of the struct.
