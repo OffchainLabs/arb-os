@@ -208,18 +208,6 @@ public impure func handleL2Request(
             return Some(());
         }
 
-        // increment the caller's sequence number, unconditionally
-        let acctStore = getGlobalAccountStore();
-        setGlobalAccountStore(
-            accountStore_set(
-                acctStore,
-                request.caller,
-                account_incrSeqNum(
-                    accountStore_get(acctStore, request.caller)
-                )
-            )
-        );
-
         let codeBytes = request.calldata;
         request = request with { calldata: bytearray_new(0) };
         let (codept, evmJumpTable, _) = translateEvmCodeSegment(bytestream_new(codeBytes), false)?;
