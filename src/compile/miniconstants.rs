@@ -229,8 +229,8 @@ pub fn init_constant_table() -> HashMap<String, Uint256> {
         (
             "BLSSignatureDomainBase",
             // Keccak256 of "Arbitrum BLS signature domain"
-            "73a92f91d473214defd5ffa91d036007eb2e6487fffaa551835e988fb24aaa2b"
-        )
+            "73a92f91d473214defd5ffa91d036007eb2e6487fffaa551835e988fb24aaa2b",
+        ),
     ] {
         ret.insert(s.to_string(), Uint256::from_string_hex(u).unwrap());
     }
