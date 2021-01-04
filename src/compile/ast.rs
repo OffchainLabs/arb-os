@@ -281,6 +281,69 @@ impl Type {
             Type::Option(_) => (Value::new_tuple(vec![Value::Int(Uint256::zero())]), true),
         }
     }
+
+    pub fn display(&self) -> String {
+        match self {
+            Type::Void => "void".to_string(),
+            Type::Uint => "uint".to_string(),
+            Type::Int => "int".to_string(),
+            Type::Bool => "bool".to_string(),
+            Type::Bytes32 => "bytes32".to_string(),
+            Type::EthAddress => "address".to_string(),
+            Type::Buffer => "buffer".to_string(),
+            Type::Tuple(subtypes) => {
+                let mut out = "(".to_string();
+                for s in subtypes {
+                    //This should be improved by removing the final trailing comma.
+                    out.push_str(&(s.display() + ", "));
+                }
+                out.push(')');
+                out
+            }
+            Type::Array(t) => format!("[]{}", t.display()),
+            Type::FixedArray(t, size) => format!("[{}]{}", size, t.display()),
+            Type::Struct(fields) => {
+                let mut out = "struct {\n".to_string();
+                for field in fields {
+                    //This should indent further when dealing with sub-structs
+                    out.push_str(&format!("    {}: {},\n", field.name, field.tipe.display()));
+                }
+                out.push('}');
+                out
+            }
+            Type::Nominal(path, id) => {
+                let mut out = String::new();
+                for path_item in path {
+                    out.push_str(&format!("{}::", path_item))
+                }
+                out.push_str(&format!("{}", id));
+                out
+            }
+            Type::Func(impure, args, ret) => {
+                let mut out = String::new();
+                if *impure {
+                    out.push_str("impure ");
+                }
+                out.push_str("func(");
+                for arg in args {
+                    out.push_str(&(arg.display() + ", "));
+                }
+                out.push(')');
+                if **ret != Type::Void {
+                    out.push_str(" -> ");
+                    out.push_str(&ret.display());
+                }
+                out
+            }
+            Type::Map(key, val) => {
+                format!("map<{},{}>", key.display(), val.display())
+            }
+            Type::Imported(id) => format!("imported({})", id),
+            Type::Any => "any".to_string(),
+            Type::Every => "every".to_string(),
+            Type::Option(t) => format!("option<{}>", t.display()),
+        }
+    }
 }
 
 ///Returns true if each type in tvec2 is a subtype of the type in tvec1 at the same index, and tvec1
