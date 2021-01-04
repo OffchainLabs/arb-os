@@ -1340,7 +1340,10 @@ fn typecheck_statement<'a>(
                 Type::Option(t) => *t,
                 unexpected => {
                     return Err(new_type_error(
-                        format!("Expected option type got: {:?}", unexpected),
+                        format!(
+                            "Expected option type got: \"{}\"",
+                            unexpected.display()
+                        ),
                         debug_info.location,
                     ))
                 }

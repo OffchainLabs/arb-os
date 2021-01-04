@@ -2,10 +2,10 @@
  * Copyright 2020, Offchain Labs, Inc. All rights reserved
  */
 
-use crate::evm::test_contract_path;
-use crate::evm::abi::{builtin_contract_path, AbiForContract};
-use crate::run::{load_from_file, Machine, RuntimeEnvironment};
 use crate::compile::miniconstants::init_constant_table;
+use crate::evm::abi::{builtin_contract_path, AbiForContract};
+use crate::evm::test_contract_path;
+use crate::run::{load_from_file, Machine, RuntimeEnvironment};
 use crate::uint256::Uint256;
 use crypto::digest::Digest;
 use crypto::sha2::Sha256;
@@ -164,28 +164,23 @@ pub fn _evm_test_bls_registry(log_to: Option<&Path>, debug: bool) {
     }
 }
 
-fn _to_32_bytes_be(bi: &BigUint) -> Vec<u8>{
+fn _to_32_bytes_be(bi: &BigUint) -> Vec<u8> {
     let bytes = bi.to_bytes_be();
     let len = bytes.len();
     if len > 32 {
         panic!(); // altenratively, retrun error cal like all 0 vector?
     } else if len < 32 {
         let mut out = vec![0u8; 32];
-        out[32-len..32].clone_from_slice(&bytes);
+        out[32 - len..32].clone_from_slice(&bytes);
         return out;
     }
     bytes
 }
 
-pub fn _hash_to_point(
-    domain: &Uint256,
-    msg: &[u8]
-    ) -> Option<G1> {
-
+pub fn _hash_to_point(domain: &Uint256, msg: &[u8]) -> Option<G1> {
     let (u0, u1) = _hash_to_field(domain, msg);
     if let Some((px_bi, py_bi)) = _map_to_g1(&u0) {
         if let Some((qx_bi, qy_bi)) = _map_to_g1(&u1) {
-
             let px = Fq::from_slice(&_to_32_bytes_be(&px_bi)).unwrap();
             let py = Fq::from_slice(&_to_32_bytes_be(&py_bi)).unwrap();
             let qx = Fq::from_slice(&_to_32_bytes_be(&qx_bi)).unwrap();
@@ -207,7 +202,7 @@ pub fn _hash_to_point(
             ret.x().to_big_endian(&mut out_buf_0).unwrap();
             let mut out_buf_1 = vec![0u8; 32];
             ret.y().to_big_endian(&mut out_buf_1).unwrap();
-            return Some(ret) 
+            return Some(ret);
         }
     }
     None
@@ -255,7 +250,11 @@ fn _map_to_g1(_x: &BigUint) -> Option<(BigUint, BigUint)> {
     a1 = (&a1 + &ToBigUint::to_biguint(&3).unwrap()).mod_floor(&field_order);
 
     if let Some(sqa1) = _sqrt(&a1) {
-        a1 = if (found_first_sqrt) { sqa1 } else { &field_order - sqa1 };
+        a1 = if (found_first_sqrt) {
+            sqa1
+        } else {
+            &field_order - sqa1
+        };
         return Some((x, a1));
     }
 
@@ -267,7 +266,11 @@ fn _map_to_g1(_x: &BigUint) -> Option<(BigUint, BigUint)> {
     a1 = (&a1 + &ToBigUint::to_biguint(&3).unwrap()).mod_floor(&field_order);
 
     if let Some(sqa1) = _sqrt(&a1) {
-        a1 = if (found_first_sqrt) { sqa1 } else { &field_order - sqa1 };
+        a1 = if (found_first_sqrt) {
+            sqa1
+        } else {
+            &field_order - sqa1
+        };
         return Some((x, a1));
     }
 
@@ -282,7 +285,11 @@ fn _map_to_g1(_x: &BigUint) -> Option<(BigUint, BigUint)> {
     a1 = (&a1 + &ToBigUint::to_biguint(&3).unwrap()).mod_floor(&field_order);
 
     if let Some(sqa1) = _sqrt(&a1) {
-        a1 = if (found_first_sqrt) { sqa1 } else { &field_order - sqa1 };
+        a1 = if (found_first_sqrt) {
+            sqa1
+        } else {
+            &field_order - sqa1
+        };
         Some((x, a1))
     } else {
         None
@@ -456,16 +463,13 @@ pub fn _generate_bls_key_pair() -> (_BLSPublicKey, _BLSPrivateKey) {
 fn _domain_for_sender(sender: Uint256) -> Uint256 {
     Uint256::avm_hash2(
         init_constant_table().get("BLSSignatureDomainBase").unwrap(),
-        &sender
+        &sender,
     )
 }
 
 impl _BLSPrivateKey {
     pub fn _sign_message(&self, sender_address: Uint256, message: &[u8]) -> _BLSSignature {
-        let h = _hash_to_point(
-            &_domain_for_sender(sender_address),
-            message
-        );
+        let h = _hash_to_point(&_domain_for_sender(sender_address), message);
         // ignores error that should never arise that would return None for h. Handle and Return Option<BLSSignature> instead?
         let sigma = h.unwrap() * self.s;
         _BLSSignature {
@@ -582,20 +586,21 @@ pub fn _evm_test_bls_signed_batch(log_to: Option<&Path>, debug: bool) -> Result<
     let b4 = bob_public_key._to_four_uints();
     bob_arb_bls._register(&mut machine, b4.0, b4.1, b4.2, b4.3)?;
 
-    let (alice_compressed_tx, alice_hash_to_sign) = machine.runtime_env._make_compressed_tx_for_bls(
-        &alice_addr,
-        Uint256::zero(),
-        Uint256::from_u64(100000000),
-        add_contract.address.clone(),
-        Uint256::zero(),
-        &add_contract._generate_calldata_for_function(
-            "add",
-            &[
-                ethabi::Token::Uint(Uint256::one().to_u256()),
-                ethabi::Token::Uint(Uint256::one().to_u256()),
-            ],
-        )?,
-    );
+    let (alice_compressed_tx, alice_hash_to_sign) =
+        machine.runtime_env._make_compressed_tx_for_bls(
+            &alice_addr,
+            Uint256::zero(),
+            Uint256::from_u64(100000000),
+            add_contract.address.clone(),
+            Uint256::zero(),
+            &add_contract._generate_calldata_for_function(
+                "add",
+                &[
+                    ethabi::Token::Uint(Uint256::one().to_u256()),
+                    ethabi::Token::Uint(Uint256::one().to_u256()),
+                ],
+            )?,
+        );
     let (bob_compressed_tx, bob_hash_to_sign) = machine.runtime_env._make_compressed_tx_for_bls(
         &bob_addr,
         Uint256::zero(),
@@ -639,8 +644,14 @@ pub fn _evm_test_bls_signed_batch(log_to: Option<&Path>, debug: bool) -> Result<
     assert_eq!(logs.len(), num_logs_before + 2);
     assert!(logs[logs.len() - 2].succeeded());
     assert!(logs[logs.len() - 1].succeeded());
-    assert_eq!(Uint256::from_bytes(&logs[logs.len()-2].get_return_data()), Uint256::from_u64(2));
-    assert_eq!(Uint256::from_bytes(&logs[logs.len()-1].get_return_data()), Uint256::from_u64(27+96));
+    assert_eq!(
+        Uint256::from_bytes(&logs[logs.len() - 2].get_return_data()),
+        Uint256::from_u64(2)
+    );
+    assert_eq!(
+        Uint256::from_bytes(&logs[logs.len() - 1].get_return_data()),
+        Uint256::from_u64(27 + 96)
+    );
 
     if let Some(path) = log_to {
         machine.runtime_env.recorder.to_file(path).unwrap();
