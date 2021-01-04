@@ -1622,20 +1622,12 @@ fn typecheck_expr(
                     type_tree,
                     scopes,
                 )?;
-                if tc_sub1.get_type() != Type::Bool {
+                if (tc_sub1.get_type(), tc_sub2.get_type()) != (Type::Bool, Type::Bool) {
                     return Err(new_type_error(
                         format!(
-                            "operands to logical or must be boolean, got {}",
-                            tc_sub1.get_type().display()
-                        ),
-                        loc,
-                    ));
-                }
-                if tc_sub2.get_type() != Type::Bool {
-                    return Err(new_type_error(
-                        format!(
-                            "operands to logical or must be boolean, got {}",
-                            tc_sub2.get_type().display()
+                            "operands to logical or must be boolean, got \"{}\" and \"{}\"",
+                            tc_sub1.get_type().display(),
+                            tc_sub2.get_type().display(),
                         ),
                         loc,
                     ));
@@ -1952,7 +1944,7 @@ fn typecheck_expr(
                         } else {
                             Err(new_type_error(
                                 format!(
-                                    "fixedarray index must be Uint, found \"{}\"",
+                                    "fixedarray index must be uint, found \"{}\"",
                                     tc_idx.get_type().display()
                                 ),
                                 loc,
