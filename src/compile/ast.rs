@@ -306,11 +306,7 @@ impl Type {
                 let mut out = "struct {\n".to_string();
                 for field in fields {
                     //This should indent further when dealing with sub-structs
-                    out.push_str(&format!(
-                        "    {}: {},\n",
-                        field.name,
-                        field.tipe.display()
-                    ));
+                    out.push_str(&format!("    {}: {},\n", field.name, field.tipe.display()));
                 }
                 out.push('}');
                 out

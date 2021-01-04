@@ -1064,9 +1064,9 @@ fn typecheck_statement<'a>(
             } else {
                 Err(new_type_error(
                     format!(
-                        "return statement has wrong type, expected: \"{:?}\", got: \"{:?}\"",
-                        return_type.get_representation(type_tree)?,
-                        tc_expr.get_type().get_representation(type_tree)?
+                        "return statement has wrong type, expected: \"{}\", got: \"{}\"",
+                        return_type.get_representation(type_tree)?.display(),
+                        tc_expr.get_type().get_representation(type_tree)?.display()
                     ),
                     debug_info.location,
                 ))
@@ -1208,37 +1208,39 @@ fn typecheck_statement<'a>(
                     } else {
                         Err(new_type_error(
                             format!(
-                                "mismatched types in assignment statement expected {:?}, got {:?}",
-                                var_type.get_representation(type_tree)?,
-                                tc_expr.get_type().get_representation(type_tree)?
+                                "mismatched types in assignment statement expected {}, got {}",
+                                var_type.get_representation(type_tree)?.display(),
+                                tc_expr.get_type().get_representation(type_tree)?.display()
                             ),
                             debug_info.location,
                         ))
                     }
                 }
-                None => match global_vars.get(&*name) {
-                    Some((var_type, idx)) => {
-                        if var_type.get_representation(type_tree)?.assignable(
-                            &tc_expr.get_type().get_representation(type_tree)?,
-                            type_tree,
-                            HashSet::new(),
-                        ) {
-                            Ok((
-                                TypeCheckedStatementKind::AssignGlobal(*idx, tc_expr),
-                                vec![],
-                            ))
-                        } else {
-                            Err(new_type_error(
-                                format!("mismatched types in assignment statement expected {:?}, got {:?}", var_type.get_representation(type_tree)?, tc_expr.get_type().get_representation(type_tree)?),
+                None => {
+                    match global_vars.get(&*name) {
+                        Some((var_type, idx)) => {
+                            if var_type.get_representation(type_tree)?.assignable(
+                                &tc_expr.get_type().get_representation(type_tree)?,
+                                type_tree,
+                                HashSet::new(),
+                            ) {
+                                Ok((
+                                    TypeCheckedStatementKind::AssignGlobal(*idx, tc_expr),
+                                    vec![],
+                                ))
+                            } else {
+                                Err(new_type_error(
+                                format!("mismatched types in assignment statement expected {}, got {}", var_type.get_representation(type_tree)?.display(), tc_expr.get_type().get_representation(type_tree)?.display()),
                                 debug_info.location,
                             ))
+                            }
                         }
+                        None => Err(new_type_error(
+                            "assignment to non-existent variable".to_string(),
+                            debug_info.location,
+                        )),
                     }
-                    None => Err(new_type_error(
-                        "assignment to non-existent variable".to_string(),
-                        debug_info.location,
-                    )),
-                },
+                }
             }
         }
         StatementKind::Loop(body) => {
@@ -1279,7 +1281,10 @@ fn typecheck_statement<'a>(
                     Ok((TypeCheckedStatementKind::While(tc_cond, tc_body), vec![]))
                 }
                 _ => Err(new_type_error(
-                    "while condition is not bool".to_string(),
+                    format!(
+                        "while condition must be bool, found {}",
+                        tc_cond.get_type().display()
+                    ),
                     debug_info.location,
                 )),
             }
@@ -1340,10 +1345,7 @@ fn typecheck_statement<'a>(
                 Type::Option(t) => *t,
                 unexpected => {
                     return Err(new_type_error(
-                        format!(
-                            "Expected option type got: \"{}\"",
-                            unexpected.display()
-                        ),
+                        format!("Expected option type got: \"{}\"", unexpected.display()),
                         debug_info.location,
                     ))
                 }
@@ -1431,7 +1433,10 @@ fn typecheck_patvec(
         }
     } else {
         Err(new_type_error(
-            "tuple-match let must receive tuple value".to_string(),
+            format!(
+                "tuple-match let must receive tuple value, found \"{}\"",
+                rhs_type.display()
+            ),
             location,
         ))
     }
@@ -1491,7 +1496,10 @@ fn typecheck_if_arm(
                     debug_info.clone(),
                 )),
                 _ => Err(new_type_error(
-                    "if condition must be boolean".to_string(),
+                    format!(
+                        "if condition must be boolean, found \"{}\"",
+                        tc_cond.get_type().display()
+                    ),
                     loc,
                 )),
             }
@@ -1616,13 +1624,19 @@ fn typecheck_expr(
                 )?;
                 if tc_sub1.get_type() != Type::Bool {
                     return Err(new_type_error(
-                        "operands to logical or must be boolean".to_string(),
+                        format!(
+                            "operands to logical or must be boolean, got {}",
+                            tc_sub1.get_type().display()
+                        ),
                         loc,
                     ));
                 }
                 if tc_sub2.get_type() != Type::Bool {
                     return Err(new_type_error(
-                        "operands to logical or must be boolean".to_string(),
+                        format!(
+                            "operands to logical or must be boolean, got {}",
+                            tc_sub2.get_type().display()
+                        ),
                         loc,
                     ));
                 }
@@ -1652,13 +1666,19 @@ fn typecheck_expr(
                 )?;
                 if tc_sub1.get_type() != Type::Bool {
                     return Err(new_type_error(
-                        "operands to logical and must be boolean".to_string(),
+                        format!(
+                            "operands to logical and must be boolean, got {}",
+                            tc_sub1.get_type().display()
+                        ),
                         loc,
                     ));
                 }
                 if tc_sub2.get_type() != Type::Bool {
                     return Err(new_type_error(
-                        "operands to logical and must be boolean".to_string(),
+                        format!(
+                            "operands to logical and must be boolean, got {}",
+                            tc_sub2.get_type().display()
+                        ),
                         loc,
                     ));
                 }
@@ -1719,7 +1739,10 @@ fn typecheck_expr(
                     }
                 } else {
                     Err(new_type_error(
-                        "tuple field access to non-tuple value".to_string(),
+                        format!(
+                            "tuple field access to non-tuple value of type \"{}\"",
+                            tc_sub.get_type().display()
+                        ),
                         loc,
                     ))
                 }
@@ -1762,7 +1785,10 @@ fn typecheck_expr(
                     ))
                 } else {
                     Err(new_type_error(
-                        "struct field access to non-struct value".to_string(),
+                        format!(
+                            "struct field access to non-struct value of type \"{}\"",
+                            tc_sub.get_type().display()
+                        ),
                         loc,
                     ))
                 }
@@ -1807,16 +1833,8 @@ fn typecheck_expr(
                                     type_tree,
                                     HashSet::new(),
                                 ) {
-                                    println!(
-                                        "expected {:?}",
-                                        resolved_arg_type.get_representation(type_tree)?
-                                    );
-                                    println!(
-                                        "actual   {:?}",
-                                        tc_args[i].get_type().get_representation(type_tree)?
-                                    );
                                     return Err(new_type_error(
-                                        "wrong argument type in function call".to_string(),
+                                        format!("wrong argument type in function call, expected \"{}\", got \"{}\"", resolved_arg_type.get_representation(type_tree)?.display(), tc_args[i].get_type().get_representation(type_tree)?.display()),
                                         loc,
                                     ));
                                 }
@@ -1835,7 +1853,10 @@ fn typecheck_expr(
                         }
                     }
                     _ => Err(new_type_error(
-                        "function call to value that is not a function".to_string(),
+                        format!(
+                            "function call to non-function value of type \"{}\"",
+                            tc_fexpr.get_type().get_representation(type_tree)?.display()
+                        ),
                         loc,
                     )),
                 }
@@ -1911,7 +1932,13 @@ fn typecheck_expr(
                                 *t,
                             ))
                         } else {
-                            Err(new_type_error("array index must be Uint".to_string(), loc))
+                            Err(new_type_error(
+                                format!(
+                                    "array index must be Uint, found \"{}\"",
+                                    tc_idx.get_type().display()
+                                ),
+                                loc,
+                            ))
                         }
                     }
                     Type::FixedArray(t, sz) => {
@@ -1924,7 +1951,10 @@ fn typecheck_expr(
                             ))
                         } else {
                             Err(new_type_error(
-                                "fixedarray index must be Uint".to_string(),
+                                format!(
+                                    "fixedarray index must be Uint, found \"{}\"",
+                                    tc_idx.get_type().display()
+                                ),
                                 loc,
                             ))
                         }
@@ -1938,13 +1968,20 @@ fn typecheck_expr(
                             ))
                         } else {
                             Err(new_type_error(
-                                "invalid key value in map lookup".to_string(),
+                                format!(
+                                    "invalid key value in map lookup, expected \"{}\", got \"{}\"",
+                                    kt.display(),
+                                    tc_idx.get_type().display()
+                                ),
                                 loc,
                             ))
                         }
                     }
                     _ => Err(new_type_error(
-                        "fixedarray lookup in non-array type".to_string(),
+                        format!(
+                            "fixedarray lookup in non-array type \"{}\"",
+                            tc_arr.get_type().get_representation(type_tree)?.display()
+                        ),
                         loc,
                     )),
                 }
@@ -2064,7 +2101,10 @@ fn typecheck_expr(
                         if t.assignable(&tc_val.get_type(), type_tree, HashSet::new()) {
                             if tc_index.get_type() != Type::Uint {
                                 Err(new_type_error(
-                                    "array modifier requires uint index".to_string(),
+                                    format!(
+                                        "array modifier requires uint index, found \"{}\"",
+                                        tc_index.get_type().display()
+                                    ),
                                     loc,
                                 ))
                             } else {
@@ -2077,7 +2117,7 @@ fn typecheck_expr(
                             }
                         } else {
                             Err(new_type_error(
-                                "mismatched types in array modifier".to_string(),
+                                format!("mismatched types in array modifier, expected \"{}\", got \"{}\"", t.display(), tc_val.get_type().display()),
                                 loc,
                             ))
                         }
@@ -2085,7 +2125,10 @@ fn typecheck_expr(
                     Type::FixedArray(t, sz) => {
                         if tc_index.get_type() != Type::Uint {
                             Err(new_type_error(
-                                "array modifier requires uint index".to_string(),
+                                format!(
+                                    "array modifier requires uint index, found \"{}\"",
+                                    tc_index.get_type().display()
+                                ),
                                 loc,
                             ))
                         } else {
@@ -2109,19 +2152,22 @@ fn typecheck_expr(
                                 ))
                             } else {
                                 Err(new_type_error(
-                                    "invalid value type for map modifier".to_string(),
+                                    format!("invalid value type for map modifier, expected \"{}\", got \"{}\"", vt.display(), tc_val.get_type().display()),
                                     loc,
                                 ))
                             }
                         } else {
                             Err(new_type_error(
-                                "invalid key type for map modifier".to_string(),
+                                format!("invalid key type for map modifier, expected \"{}\", got \"{}\"", kt.display(), tc_index.get_type().display()),
                                 loc,
                             ))
                         }
                     }
-                    _ => Err(new_type_error(
-                        "[] modifier must operate on array or block".to_string(),
+                    other => Err(new_type_error(
+                        format!(
+                            "[] modifier must operate on array or block, found \"{}\"",
+                            other.display()
+                        ),
                         loc,
                     )),
                 }
@@ -2162,7 +2208,7 @@ fn typecheck_expr(
                                 ))
                             } else {
                                 Err(new_type_error(
-                                    "incorrect value type in struct modifier".to_string(),
+                                    format!("incorrect value type in struct modifier, expected \"{}\", found \"{}\"", fields[index].tipe.display(), tc_val.get_type().display()),
                                     loc,
                                 ))
                             }
@@ -2174,7 +2220,10 @@ fn typecheck_expr(
                     }
                 } else {
                     Err(new_type_error(
-                        "struct modifier must operate on a struct".to_string(),
+                        format!(
+                            "struct modifier must operate on a struct, found \"{}\"",
+                            tcs_type.display()
+                        ),
                         loc,
                     ))
                 }
@@ -2219,10 +2268,9 @@ fn typecheck_expr(
             ExprKind::Try(inner) => {
                 match return_type {
                     Type::Option(_) | Type::Any => {}
-                    _ => {
+                    ret => {
                         return Err(new_type_error(
-                            "Can only use \"?\" operator in functions that can return option"
-                                .to_string(),
+                            format!("Can only use \"?\" operator in functions that can return option, found \"{}\"", ret.display()),
                             loc,
                         ))
                     }
@@ -2239,7 +2287,10 @@ fn typecheck_expr(
                 match res.get_type().get_representation(type_tree)? {
                     Type::Option(t) => Ok(TypeCheckedExprKind::Try(Box::new(res), *t)),
                     other => Err(new_type_error(
-                        format!("Try expression requires option type, found \"{:?}\"", other),
+                        format!(
+                            "Try expression requires option type, found \"{}\"",
+                            other.display()
+                        ),
                         loc,
                     )),
                 }
@@ -2275,8 +2326,11 @@ fn typecheck_unary_op(
                     ))
                 }
             }
-            _ => Err(new_type_error(
-                "invalid operand type for unary minus".to_string(),
+            other => Err(new_type_error(
+                format!(
+                    "invalid operand type \"{}\" for unary minus",
+                    other.display()
+                ),
                 loc,
             )),
         },
@@ -2287,8 +2341,11 @@ fn typecheck_unary_op(
                         Value::Int(ui.bitwise_neg()),
                         tc_type,
                     )),
-                    _ => Err(new_type_error(
-                        "invalid operand type for bitwise negation".to_string(),
+                    other => Err(new_type_error(
+                        format!(
+                            "invalid operand type \"{}\" for bitwise negation",
+                            other.display()
+                        ),
                         loc,
                     )),
                 }
@@ -2299,8 +2356,11 @@ fn typecheck_unary_op(
                         Box::new(sub_expr),
                         tc_type,
                     )),
-                    _ => Err(new_type_error(
-                        "invalid operand type for bitwise negation".to_string(),
+                    other => Err(new_type_error(
+                        format!(
+                            "invalid operand type \"{}\" for bitwise negation",
+                            other.display()
+                        ),
                         loc,
                     )),
                 }
@@ -2322,8 +2382,11 @@ fn typecheck_unary_op(
                     ))
                 }
             }
-            _ => Err(new_type_error(
-                "invalid operand type for logical negation".to_string(),
+            other => Err(new_type_error(
+                format!(
+                    "invalid operand type \"{}\" for logical negation",
+                    other.display()
+                ),
                 loc,
             )),
         },
@@ -2355,8 +2418,8 @@ fn typecheck_unary_op(
                 Box::new(sub_expr),
                 Type::Uint,
             )),
-            _ => Err(new_type_error(
-                "invalid operand type for len".to_string(),
+            other => Err(new_type_error(
+                format!("invalid operand type \"{}\" for len", other.display()),
                 loc,
             )),
         },
@@ -2372,8 +2435,8 @@ fn typecheck_unary_op(
                             Type::Uint,
                         ))
                     }
-                    _ => Err(new_type_error(
-                        "invalid operand type for uint()".to_string(),
+                    other => Err(new_type_error(
+                        format!("invalid operand type \"{}\" for uint()", other.display()),
                         loc,
                     )),
                 }
@@ -2387,8 +2450,8 @@ fn typecheck_unary_op(
                     Type::Uint | Type::Int | Type::Bytes32 | Type::EthAddress | Type::Bool => Ok(
                         TypeCheckedExprKind::UnaryOp(UnaryOp::ToInt, Box::new(sub_expr), Type::Int),
                     ),
-                    _ => Err(new_type_error(
-                        "invalid operand type for int()".to_string(),
+                    other => Err(new_type_error(
+                        format!("invalid operand type \"{}\" for int()", other.display()),
                         loc,
                     )),
                 }
@@ -2406,8 +2469,8 @@ fn typecheck_unary_op(
                             Type::Bytes32,
                         ))
                     }
-                    _ => Err(new_type_error(
-                        "invalid operand type for bytes32()".to_string(),
+                    other => Err(new_type_error(
+                        format!("invalid operand type \"{}\" for bytes32()", other.display()),
                         loc,
                     )),
                 }
@@ -2425,8 +2488,8 @@ fn typecheck_unary_op(
                             Type::EthAddress,
                         ))
                     }
-                    _ => Err(new_type_error(
-                        "invalid operand type for bytes32()".to_string(),
+                    other => Err(new_type_error(
+                        format!("invalid operand type \"{}\" for bytes32()", other.display()),
                         loc,
                     )),
                 }
@@ -2504,8 +2567,12 @@ fn typecheck_binary_op(
                 Box::new(tcs2),
                 Type::Int,
             )),
-            _ => Err(new_type_error(
-                "invalid argument types to binary op".to_string(),
+            (subtype1, subtype2) => Err(new_type_error(
+                format!(
+                    "invalid argument types to binary op: \"{}\" and \"{}\"",
+                    subtype1.display(),
+                    subtype2.display()
+                ),
                 loc,
             )),
         },
@@ -2522,8 +2589,12 @@ fn typecheck_binary_op(
                 Box::new(tcs2),
                 Type::Int,
             )),
-            _ => Err(new_type_error(
-                "invalid argument types to divide".to_string(),
+            (subtype1, subtype2) => Err(new_type_error(
+                format!(
+                    "invalid argument types to divide: \"{}\" and \"{}\"",
+                    subtype1.display(),
+                    subtype2.display()
+                ),
                 loc,
             )),
         },
@@ -2534,8 +2605,12 @@ fn typecheck_binary_op(
                 Box::new(tcs2),
                 Type::Uint,
             )),
-            _ => Err(new_type_error(
-                "invalid argument types to getbuffer8".to_string(),
+            (subtype1, subtype2) => Err(new_type_error(
+                format!(
+                    "invalid argument types to getbuffer8: \"{}\" and \"{}\"",
+                    subtype1.display(),
+                    subtype2.display()
+                ),
                 loc,
             )),
         },
@@ -2546,8 +2621,12 @@ fn typecheck_binary_op(
                 Box::new(tcs2),
                 Type::Uint,
             )),
-            _ => Err(new_type_error(
-                "invalid argument types to getbuffer64".to_string(),
+            (subtype1, subtype2) => Err(new_type_error(
+                format!(
+                    "invalid argument types to getbuffer64: \"{}\" and \"{}\"",
+                    subtype1.display(),
+                    subtype2.display()
+                ),
                 loc,
             )),
         },
@@ -2558,8 +2637,12 @@ fn typecheck_binary_op(
                 Box::new(tcs2),
                 Type::Uint,
             )),
-            _ => Err(new_type_error(
-                "invalid argument types to getbuffer256".to_string(),
+            (subtype1, subtype2) => Err(new_type_error(
+                format!(
+                    "invalid argument types to getbuffer256: \"{}\" and \"{}\"",
+                    subtype1.display(),
+                    subtype2.display()
+                ),
                 loc,
             )),
         },
@@ -2576,8 +2659,12 @@ fn typecheck_binary_op(
                 Box::new(tcs2),
                 Type::Int,
             )),
-            _ => Err(new_type_error(
-                "invalid argument types to mod".to_string(),
+            (subtype1, subtype2) => Err(new_type_error(
+                format!(
+                    "invalid argument types to mod: \"{}\" and \"{}\"",
+                    subtype1.display(),
+                    subtype2.display()
+                ),
                 loc,
             )),
         },
@@ -2594,8 +2681,12 @@ fn typecheck_binary_op(
                 Box::new(tcs2),
                 Type::Bool,
             )),
-            _ => Err(new_type_error(
-                "invalid argument types to <".to_string(),
+            (subtype1, subtype2) => Err(new_type_error(
+                format!(
+                    "invalid argument types to <: \"{}\" and \"{}\"",
+                    subtype1.display(),
+                    subtype2.display()
+                ),
                 loc,
             )),
         },
@@ -2612,8 +2703,12 @@ fn typecheck_binary_op(
                 Box::new(tcs2),
                 Type::Bool,
             )),
-            _ => Err(new_type_error(
-                "invalid argument types to >".to_string(),
+            (subtype1, subtype2) => Err(new_type_error(
+                format!(
+                    "invalid argument types to >: \"{}\" and \"{}\"",
+                    subtype1.display(),
+                    subtype2.display()
+                ),
                 loc,
             )),
         },
@@ -2630,8 +2725,12 @@ fn typecheck_binary_op(
                 Box::new(tcs2),
                 Type::Bool,
             )),
-            _ => Err(new_type_error(
-                "invalid argument types to <=".to_string(),
+            (subtype1, subtype2) => Err(new_type_error(
+                format!(
+                    "invalid argument types to <=: \"{}\" and \"{}\"",
+                    subtype1.display(),
+                    subtype2.display()
+                ),
                 loc,
             )),
         },
@@ -2648,8 +2747,12 @@ fn typecheck_binary_op(
                 Box::new(tcs2),
                 Type::Bool,
             )),
-            _ => Err(new_type_error(
-                "invalid argument types to >=".to_string(),
+            (subtype1, subtype2) => Err(new_type_error(
+                format!(
+                    "invalid argument types to >=: \"{}\" and \"{}\"",
+                    subtype1.display(),
+                    subtype2.display()
+                ),
                 loc,
             )),
         },
@@ -2664,8 +2767,9 @@ fn typecheck_binary_op(
             } else {
                 Err(new_type_error(
                     format!(
-                        "invalid argument types to equality comparison: {:?} and {:?}",
-                        subtype1, subtype2
+                        "invalid argument types to equality comparison: \"{}\" and \"{}\"",
+                        subtype1.display(),
+                        subtype2.display()
                     ),
                     loc,
                 ))
@@ -2694,8 +2798,12 @@ fn typecheck_binary_op(
                 Box::new(tcs2),
                 Type::Bytes32,
             )),
-            _ => Err(new_type_error(
-                "invalid argument types to binary bitwise operator".to_string(),
+            (subtype1, subtype2) => Err(new_type_error(
+                format!(
+                    "invalid argument types to binary bitwise operator: \"{}\" and \"{}\"",
+                    subtype1.display(),
+                    subtype2.display()
+                ),
                 loc,
             )),
         },
@@ -2706,8 +2814,12 @@ fn typecheck_binary_op(
                 Box::new(tcs2),
                 Type::Bool,
             )),
-            _ => Err(new_type_error(
-                "invalid argument types to binary logical operator".to_string(),
+            (subtype1, subtype2) => Err(new_type_error(
+                format!(
+                    "invalid argument types to binary logical operator: \"{}\" and \"{}\"",
+                    subtype1.display(),
+                    subtype2.display()
+                ),
                 loc,
             )),
         },
@@ -2718,8 +2830,12 @@ fn typecheck_binary_op(
                 Box::new(tcs2),
                 Type::Bytes32,
             )),
-            _ => Err(new_type_error(
-                "invalid argument types to binary hash operator".to_string(),
+            (subtype1, subtype2) => Err(new_type_error(
+                format!(
+                    "invalid argument types to binary hash operator: \"{}\" and \"{}\"",
+                    subtype1.display(),
+                    subtype2.display()
+                ),
                 loc,
             )),
         },
@@ -2755,8 +2871,13 @@ fn typecheck_trinary_op(
                     Box::new(tcs3),
                     Type::Buffer,
                 )),
-                _ => Err(new_type_error(
-                    "invalid argument types to 3-ary op".to_string(),
+                (t1, t2, t3) => Err(new_type_error(
+                    format!(
+                        "invalid argument types to 3-ary op: \"{}\", \"{}\" and \"{}\"",
+                        t1.display(),
+                        t2.display(),
+                        t3.display()
+                    ),
                     loc,
                 )),
             }
@@ -2803,7 +2924,11 @@ fn typecheck_binary_op_const(
                 t1,
             )),
             _ => Err(new_type_error(
-                "invalid argument types to binary op".to_string(),
+                format!(
+                    "invalid argument types to binary op: \"{}\" and \"{}\"",
+                    t1.display(),
+                    t2.display()
+                ),
                 loc,
             )),
         },
@@ -2817,7 +2942,11 @@ fn typecheck_binary_op_const(
                 None => Err(new_type_error("divide by constant zero".to_string(), loc)),
             },
             _ => Err(new_type_error(
-                "invalid argument types to divide".to_string(),
+                format!(
+                    "invalid argument types to divide: \"{}\" and \"{}\"",
+                    t1.display(),
+                    t2.display()
+                ),
                 loc,
             )),
         },
@@ -2831,7 +2960,11 @@ fn typecheck_binary_op_const(
                 None => Err(new_type_error("divide by constant zero".to_string(), loc)),
             },
             _ => Err(new_type_error(
-                "invalid argument types to mod".to_string(),
+                format!(
+                    "invalid argument types to mod: \"{}\" and \"{}\"",
+                    t1.display(),
+                    t2.display()
+                ),
                 loc,
             )),
         },
@@ -2844,8 +2977,12 @@ fn typecheck_binary_op_const(
                 Value::Int(Uint256::from_bool(val1.s_less_than(&val2))),
                 Type::Bool,
             )),
-            _ => Err(new_type_error(
-                "invalid argument types to <".to_string(),
+            (t1, t2) => Err(new_type_error(
+                format!(
+                    "invalid argument types to <: \"{}\" and \"{}\"",
+                    t1.display(),
+                    t2.display()
+                ),
                 loc,
             )),
         },
@@ -2858,8 +2995,12 @@ fn typecheck_binary_op_const(
                 Value::Int(Uint256::from_bool(val2.s_less_than(&val1))),
                 Type::Bool,
             )),
-            _ => Err(new_type_error(
-                "invalid argument types to >".to_string(),
+            (t1, t2) => Err(new_type_error(
+                format!(
+                    "invalid argument types to >: \"{}\" and \"{}\"",
+                    t1.display(),
+                    t2.display()
+                ),
                 loc,
             )),
         },
@@ -2872,8 +3013,12 @@ fn typecheck_binary_op_const(
                 Value::Int(Uint256::from_bool(!val2.s_less_than(&val1))),
                 Type::Bool,
             )),
-            _ => Err(new_type_error(
-                "invalid argument types to <=".to_string(),
+            (t1, t2) => Err(new_type_error(
+                format!(
+                    "invalid argument types to <=: \"{}\" and \"{}\"",
+                    t1.display(),
+                    t2.display()
+                ),
                 loc,
             )),
         },
@@ -2886,8 +3031,12 @@ fn typecheck_binary_op_const(
                 Value::Int(Uint256::from_bool(!val1.s_less_than(&val2))),
                 Type::Bool,
             )),
-            _ => Err(new_type_error(
-                "invalid argument types to >=".to_string(),
+            (t1, t2) => Err(new_type_error(
+                format!(
+                    "invalid argument types to >=: \"{}\" and \"{}\"",
+                    t1.display(),
+                    t2.display()
+                ),
                 loc,
             )),
         },
@@ -2915,7 +3064,11 @@ fn typecheck_binary_op_const(
                                 ));
                             } else {
                                 return Err(new_type_error(
-                                    "invalid argument types to binary op".to_string(),
+                                    format!(
+                                        "invalid argument types to binary op: \"{}\" and \"{}\"",
+                                        t1.display(),
+                                        t2.display()
+                                    ),
                                     loc,
                                 ));
                             }
@@ -2928,7 +3081,11 @@ fn typecheck_binary_op_const(
                 ))
             } else {
                 Err(new_type_error(
-                    "invalid argument types to binary op".to_string(),
+                    format!(
+                        "invalid argument types to binary op: \"{}\" and \"{}\"",
+                        t1.display(),
+                        t2.display()
+                    ),
                     loc,
                 ))
             }
@@ -2941,7 +3098,11 @@ fn typecheck_binary_op_const(
                 ))
             } else {
                 Err(new_type_error(
-                    "invalid argument types to logical and".to_string(),
+                    format!(
+                        "invalid argument types to logical and: \"{}\" and \"{}\"",
+                        t1.display(),
+                        t2.display()
+                    ),
                     loc,
                 ))
             }
@@ -2954,7 +3115,11 @@ fn typecheck_binary_op_const(
                 ))
             } else {
                 Err(new_type_error(
-                    "invalid argument types to logical or".to_string(),
+                    format!(
+                        "invalid argument types to logical or: \"{}\" and \"{}\"",
+                        t1.display(),
+                        t2.display()
+                    ),
                     loc,
                 ))
             }
