@@ -15,7 +15,7 @@ use miniconstants::init_constant_table;
 use serde::{Deserialize, Serialize};
 use std::collections::hash_map::DefaultHasher;
 use std::collections::{BTreeMap, HashMap, HashSet};
-use std::fmt::Formatter;
+use std::fmt::{Display, Formatter};
 use std::fs::File;
 use std::hash::{Hash, Hasher};
 use std::io::{self, Read};
@@ -666,14 +666,9 @@ pub struct CompileError {
     pub location: Option<Location>,
 }
 
-impl std::fmt::Display for CompileError {
+impl Display for CompileError {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), std::fmt::Error> {
-        if let Some(loc) = self.location {
-            write!(f, "{},\n{}", self.description, loc)?;
-        } else {
-            write!(f, "{},\n No location", self.description)?;
-        }
-        Ok(())
+        write!(f, "{}", self.description)
     }
 }
 

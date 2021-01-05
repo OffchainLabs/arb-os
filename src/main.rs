@@ -4,19 +4,21 @@
 
 #![allow(unused_parens)]
 
+use clap::Clap;
 use compile::{compile_from_file, CompileError};
 use contracttemplates::generate_contract_template_file_or_die;
 use link::{link, postlink_compile};
 use mavm::Value;
-use run::{profile_gen_from_file, replay_from_testlog_file, run_from_file, RuntimeEnvironment};
+use pos::try_display_location;
+use run::{
+    profile_gen_from_file, replay_from_testlog_file, run_from_file, ProfilerMode,
+    RuntimeEnvironment,
+};
 use std::collections::BTreeMap;
 use std::fs::File;
 use std::io;
 use std::path::Path;
-
-use crate::run::ProfilerMode;
-use crate::uint256::Uint256;
-use clap::Clap;
+use uint256::Uint256;
 
 #[cfg(test)]
 mod buffertests;
@@ -132,7 +134,11 @@ fn main() -> Result<(), CompileError> {
                         });
                     }
                     Err(e) => {
-                        println!("Compilation error: {:?}\nIn file: {}", e, filename);
+                        println!(
+                            "Compilation error: {}\n{}",
+                            e,
+                            try_display_location(e.location, file_name_chart)
+                        );
                         return Err(e);
                     }
                 }
@@ -150,14 +156,9 @@ fn main() -> Result<(), CompileError> {
                         }
                         Err(e) => {
                             println!(
-                                "Compilation error: {}\nIn file: {}",
+                                "Compilation error: {}\n{}",
                                 e,
-                                e.location
-                                    .map(|loc| file_name_chart
-                                        .get(&loc.file_id)
-                                        .unwrap_or(&loc.file_id.to_string())
-                                        .clone())
-                                    .unwrap_or("Unknown".to_string())
+                                try_display_location(e.location, file_name_chart)
                             );
                             return Err(e);
                         }
@@ -180,14 +181,9 @@ fn main() -> Result<(), CompileError> {
                             }
                             Err(e) => {
                                 println!(
-                                    "Linking error: {}\nIn file: {}",
+                                    "Linking error: {}\n{}",
                                     e,
-                                    e.location
-                                        .map(|loc| file_name_chart
-                                            .get(&loc.file_id)
-                                            .unwrap_or(&loc.file_id.to_string())
-                                            .clone())
-                                        .unwrap_or("Unknown".to_string())
+                                    try_display_location(e.location, file_name_chart)
                                 );
                                 return Err(e);
                             }
@@ -195,14 +191,9 @@ fn main() -> Result<(), CompileError> {
                     }
                     Err(e) => {
                         println!(
-                            "Linking error: {}\nIn file: {}",
+                            "Linking error: {}\n{}",
                             e,
-                            e.location
-                                .map(|loc| file_name_chart
-                                    .get(&loc.file_id)
-                                    .unwrap_or(&loc.file_id.to_string())
-                                    .clone())
-                                .unwrap_or("Unknown".to_string())
+                            try_display_location(e.location, file_name_chart)
                         );
                         return Err(e);
                     }
