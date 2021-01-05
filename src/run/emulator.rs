@@ -8,7 +8,7 @@ use super::runtime_env::RuntimeEnvironment;
 use crate::compile::{CompileError, DebugInfo};
 use crate::link::LinkedProgram;
 use crate::mavm::{AVMOpcode, Buffer, CodePt, Instruction, Opcode, Value};
-use crate::pos::Location;
+use crate::pos::{try_display_location, Location};
 use crate::run::ripemd160port;
 use crate::uint256::Uint256;
 use clap::Clap;
@@ -1941,6 +1941,7 @@ impl Machine {
 					Opcode::AVMOpcode(AVMOpcode::DebugPrint) => {
 						let r1 = self.stack.pop(&self.state)?;
                         println!("debugprint: {}", r1);
+                        println!("{}", try_display_location(insn.debug_info.location, &self.file_name_chart));
 						self.incr_pc();
 						Ok(true)
 					}

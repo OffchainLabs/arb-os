@@ -135,7 +135,7 @@ impl fmt::Display for Location {
 }
 
 impl Location {
-    pub fn display_with_file(&self, file_name_chart: BTreeMap<u64, String>) -> String {
+    pub fn display_with_file(&self, file_name_chart: &BTreeMap<u64, String>) -> String {
         format!(
             "{}\nIn file: {}",
             self,
@@ -148,7 +148,7 @@ impl Location {
 
 pub fn try_display_location(
     location: Option<Location>,
-    file_name_chart: BTreeMap<u64, String>,
+    file_name_chart: &BTreeMap<u64, String>,
 ) -> String {
     location
         .map(|loc| loc.display_with_file(file_name_chart))

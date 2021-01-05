@@ -137,7 +137,7 @@ fn main() -> Result<(), CompileError> {
                         println!(
                             "Compilation error: {}\n{}",
                             e,
-                            try_display_location(e.location, file_name_chart)
+                            try_display_location(e.location, &file_name_chart)
                         );
                         return Err(e);
                     }
@@ -158,7 +158,7 @@ fn main() -> Result<(), CompileError> {
                             println!(
                                 "Compilation error: {}\n{}",
                                 e,
-                                try_display_location(e.location, file_name_chart)
+                                try_display_location(e.location, &file_name_chart)
                             );
                             return Err(e);
                         }
@@ -183,7 +183,7 @@ fn main() -> Result<(), CompileError> {
                                 println!(
                                     "Linking error: {}\n{}",
                                     e,
-                                    try_display_location(e.location, file_name_chart)
+                                    try_display_location(e.location, &file_name_chart)
                                 );
                                 return Err(e);
                             }
@@ -193,7 +193,7 @@ fn main() -> Result<(), CompileError> {
                         println!(
                             "Linking error: {}\n{}",
                             e,
-                            try_display_location(e.location, file_name_chart)
+                            try_display_location(e.location, &file_name_chart)
                         );
                         return Err(e);
                     }
