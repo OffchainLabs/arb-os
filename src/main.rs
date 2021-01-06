@@ -18,6 +18,7 @@ use std::collections::BTreeMap;
 use std::fs::File;
 use std::io;
 use std::path::Path;
+use std::time::Instant;
 use uint256::Uint256;
 
 #[cfg(test)]
@@ -114,6 +115,7 @@ enum Args {
 }
 
 fn main() -> Result<(), CompileError> {
+    let start_time = Instant::now();
     let matches = Args::parse();
 
     match matches {
@@ -294,6 +296,12 @@ fn main() -> Result<(), CompileError> {
             println!("{} successes, {} failures", num_successes, num_failures);
         }
     }
+    let total_time = Instant::now() - start_time;
+    println!(
+        "Finished in {}.{:0>3} seconds.",
+        total_time.as_secs(),
+        total_time.subsec_millis()
+    );
 
     Ok(())
 }
