@@ -366,6 +366,7 @@ public impure func initEvmCallStackForConstructor(
                 callvalue: request.value,
                 returnInfo: None<ReturnInfo>,
                 memory: bytearray_new(0),
+                storageDelta: int(0),
                 revertOnStorageWrite: false,
                 evmLogs: evmlogs_empty(),
                 selfDestructQueue: queue_new(),
