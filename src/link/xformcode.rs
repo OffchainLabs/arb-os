@@ -44,7 +44,7 @@ pub fn fix_tuple_size(
                     debug_info,
                 ));
                 for lnum in 0..nargs {
-                    code_out = locals_tree.write_code(true, lnum, &mut code_out, debug_info)?;
+                    locals_tree.write_code(true, lnum, &mut code_out, debug_info)?;
                 }
             }
             Opcode::TupleGet(size) => {
@@ -52,7 +52,7 @@ pub fn fix_tuple_size(
                 if let Some(index) = &insn.immediate {
                     match index.to_usize() {
                         Some(iu) => {
-                            code_out = ttree.read_code(false, iu, &mut code_out, debug_info)?;
+                            ttree.read_code(false, iu, &mut code_out, debug_info)?;
                         }
                         None => {
                             return Err(CompileError::new(
@@ -73,7 +73,7 @@ pub fn fix_tuple_size(
                 if let Some(index) = &insn.immediate {
                     match index.to_usize() {
                         Some(iu) => {
-                            code_out = ttree.write_code(false, iu, &mut code_out, debug_info)?;
+                            ttree.write_code(false, iu, &mut code_out, debug_info)?;
                         }
                         None => {
                             return Err(CompileError::new(
@@ -93,8 +93,7 @@ pub fn fix_tuple_size(
                 if let Some(index) = &insn.immediate {
                     match index.to_usize() {
                         Some(iu) => {
-                            code_out =
-                                locals_tree.write_code(true, iu, &mut code_out, debug_info)?;
+                            locals_tree.write_code(true, iu, &mut code_out, debug_info)?;
                         }
                         None => {
                             return Err(CompileError::new(
@@ -114,8 +113,7 @@ pub fn fix_tuple_size(
                 if let Some(index) = &insn.immediate {
                     match index.to_usize() {
                         Some(iu) => {
-                            code_out =
-                                locals_tree.read_code(true, iu, &mut code_out, debug_info)?;
+                            locals_tree.read_code(true, iu, &mut code_out, debug_info)?;
                         }
                         None => {
                             return Err(CompileError::new(
@@ -136,7 +134,7 @@ pub fn fix_tuple_size(
                     Opcode::AVMOpcode(AVMOpcode::Rget),
                     debug_info,
                 ));
-                code_out = global_tree.write_code(false, idx, &mut code_out, debug_info)?;
+                global_tree.write_code(false, idx, &mut code_out, debug_info)?;
                 code_out.push(Instruction::from_opcode(
                     Opcode::AVMOpcode(AVMOpcode::Rset),
                     debug_info,
@@ -147,7 +145,7 @@ pub fn fix_tuple_size(
                     Opcode::AVMOpcode(AVMOpcode::Rget),
                     debug_info,
                 ));
-                code_out = global_tree.read_code(false, idx, &mut code_out, debug_info)?;
+                global_tree.read_code(false, idx, &mut code_out, debug_info)?;
             }
             Opcode::Return => {
                 code_out.push(Instruction::new(
@@ -231,6 +229,7 @@ pub fn fix_tuple_size(
             }
         }
     }
+
     Ok(code_out)
 }
 
@@ -352,7 +351,7 @@ impl TupleTree {
         index: usize,
         code: &mut Vec<Instruction>,
         debug_info: DebugInfo,
-    ) -> Result<Vec<Instruction>, CompileError> {
+    ) -> Result<(), CompileError> {
         match self {
             TupleTree::Single => {
                 if is_local {
@@ -369,7 +368,7 @@ impl TupleTree {
                         debug_info,
                     ));
                 }
-                Ok(code.to_vec())
+                Ok(())
             }
             TupleTree::Tree(_, v) => {
                 let mut index = index;
@@ -408,7 +407,7 @@ impl TupleTree {
         index_in: usize,
         code: &mut Vec<Instruction>,
         debug_info: DebugInfo,
-    ) -> Result<Vec<Instruction>, CompileError> {
+    ) -> Result<(), CompileError> {
         if let TupleTree::Tree(_, v) = self {
             let mut index = index_in;
             for (slot, subtree) in v.iter().enumerate() {
@@ -424,7 +423,7 @@ impl TupleTree {
                                 Value::Int(Uint256::from_usize(slot)),
                                 debug_info,
                             ));
-                            return Ok(code.to_vec());
+                            return Ok(());
                         }
                         TupleTree::Tree(_, _) => {
                             if is_local {
@@ -448,26 +447,25 @@ impl TupleTree {
                                     debug_info,
                                 ));
                             }
-                            let mut new_code =
-                                subtree.write_code(false, index, code, debug_info)?;
+                            subtree.write_code(false, index, code, debug_info)?;
                             if is_local {
-                                new_code.push(Instruction::from_opcode_imm(
+                                code.push(Instruction::from_opcode_imm(
                                     Opcode::AVMOpcode(AVMOpcode::Xset),
                                     Value::Int(Uint256::from_usize(slot)),
                                     debug_info,
                                 ));
                             } else {
-                                new_code.push(Instruction::from_opcode(
+                                code.push(Instruction::from_opcode(
                                     Opcode::AVMOpcode(AVMOpcode::Swap1),
                                     debug_info,
                                 ));
-                                new_code.push(Instruction::from_opcode_imm(
+                                code.push(Instruction::from_opcode_imm(
                                     Opcode::AVMOpcode(AVMOpcode::Tset),
                                     Value::Int(Uint256::from_usize(slot)),
                                     debug_info,
                                 ));
                             }
-                            return Ok(new_code);
+                            return Ok(());
                         }
                     }
                 } else {
@@ -483,7 +481,7 @@ impl TupleTree {
                 Opcode::AVMOpcode(AVMOpcode::Pop),
                 debug_info,
             ));
-            Ok(code.to_vec())
+            Ok(())
         }
     }
 }
