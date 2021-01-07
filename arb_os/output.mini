@@ -17,6 +17,8 @@ use std::merkletree::merkleTreeBuilder_rootHash;
 
 use std::queue::queue_get;
 
+use chainParameters::chainParams_getBlocksPerSend;
+
 use evmlogs::evmlogs_empty;
 use evmlogs::evmlogs_numLogs;
 
@@ -82,6 +84,7 @@ var globalBlockReceiptData: struct {
     statsThisBlock: OutputStatistics,
     statsAllTime: OutputStatistics,
     lastBlockNum: uint,
+    nextSendBlockNum: uint,
 };
 
 public impure func outputStats_endOfBlock(blockNum: uint, timestamp: uint) {
@@ -149,6 +152,7 @@ public impure func txReceipts_init() {  // will be called at beginning of main()
         statsThisBlock: outputStats_new(),
         statsAllTime: outputStats_new(),
         lastBlockNum: ~0,
+        nextSendBlockNum: 0,
     };
 }
 
@@ -240,8 +244,13 @@ impure func emitBlockSummaryLog(blockNum: uint, timestamp: uint, prevBlockNum: u
         gasAccounting_summaryToPublish(),
         prevBlockNum
     ),) { log };
-    asm(merkleTreeBuilder_rootHash(merkleOfSends),) { send };
-    merkleOfSends = merkleTreeBuilder_new();
+    if (inbox_currentBlockNumber() >= globalBlockReceiptData.nextSendBlockNum) {
+        asm(merkleTreeBuilder_rootHash(merkleOfSends),) { send };
+        merkleOfSends = merkleTreeBuilder_new();
+        globalBlockReceiptData = globalBlockReceiptData with {
+            nextSendBlockNum: inbox_currentBlockNumber() + chainParams_getBlocksPerSend()
+        };
+    }
 }
 
 public impure func queueMessageForSend(msgType: uint, sender: address, data: ByteArray) {
@@ -281,6 +290,5 @@ func workaroundForCompilerBug() { }  // This is needed to work around a compiler
 impure func sendPackagedMessage(msg: any) {
     outputStats_addSend();
     merkleOfSends = merkleTreeBuilder_add(merkleOfSends, msg);
-    // asm(msg,) { send };
     asm((const::LogType_send, msg),) { log };
 }
