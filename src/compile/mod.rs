@@ -44,6 +44,7 @@ pub(crate) trait MiniProperties {
 ///Represents the contents of a source file after parsing.
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 struct Module {
+    //TODO: Remove this field
     ///The list of imported functions imported through the old import/export system
     imported_funcs: Vec<ImportedFunc>,
     ///List of functions defined locally within the source file
@@ -581,17 +582,15 @@ fn create_program_tree(
         let file_id = file_hasher.finish();
         file_name_chart.insert(file_id, path_display(&name));
         let mut string_table = StringTable::new();
-        let (imports, imported_funcs, funcs, named_types, global_vars, string_table, hm) =
-            typecheck::sort_top_level_decls(
-                &parse_from_source(source, file_id, &name, &mut string_table)?,
-                string_table,
-            );
+        let (imports, funcs, named_types, global_vars, hm) = typecheck::sort_top_level_decls(
+            &parse_from_source(source, file_id, &name, &mut string_table)?,
+        );
         paths.append(&mut imports.iter().map(|imp| imp.path.clone()).collect());
         import_map.insert(name.clone(), imports);
         programs.insert(
             name.clone(),
             Module::new(
-                imported_funcs,
+                vec![],
                 funcs,
                 named_types,
                 global_vars,

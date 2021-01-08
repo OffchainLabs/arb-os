@@ -469,36 +469,6 @@ impl GlobalVarDecl {
     }
 }
 
-///Represents an import of a mini function from another source file or external location.
-/// is_impure, arg_types, and ret_type are assumed to correspond to the associated elements of tipe,
-/// this must be upheld by users of this type.
-#[derive(Debug, Clone)]
-pub struct ImportFuncDecl {
-    pub name: StringId,
-    pub is_impure: bool,
-    pub arg_types: Vec<Type>,
-    pub ret_type: Type,
-    pub tipe: Type,
-}
-
-impl ImportFuncDecl {
-    ///Identical to new but takes a `Vec` of `Type` instead of a `Vec` of `FuncArg`
-    pub fn new_types(
-        name: StringId,
-        is_impure: bool,
-        arg_types: Vec<Type>,
-        ret_type: Type,
-    ) -> Self {
-        ImportFuncDecl {
-            name,
-            is_impure,
-            arg_types: arg_types.clone(),
-            ret_type: ret_type.clone(),
-            tipe: Type::Func(is_impure, arg_types, Box::new(ret_type)),
-        }
-    }
-}
-
 ///Represents whether the FuncDecl that contains it is public or private.
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 pub enum FuncDeclKind {
