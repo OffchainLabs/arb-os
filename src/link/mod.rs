@@ -270,8 +270,8 @@ pub fn postlink_compile(
 /// module should be type checked, and returns a vector containing the slice contents with the
 /// auto-linked programs attached if successful, and a `CompileError` otherwise.
 pub fn add_auto_link_progs(
-    progs_in: &[(CompiledProgram, bool)],
-) -> Result<Vec<(CompiledProgram, bool)>, CompileError> {
+    progs_in: &[CompiledProgram],
+) -> Result<Vec<CompiledProgram>, CompileError> {
     let builtin_pathnames = vec!["builtin/array.mao", "builtin/kvs.mao"];
     let mut progs = progs_in.to_owned();
     for pathname in builtin_pathnames.into_iter() {
@@ -280,7 +280,7 @@ pub fn add_auto_link_progs(
             Ok(compiled_program) => {
                 compiled_program
                     .into_iter()
-                    .for_each(|prog| progs.push((prog, false)));
+                    .for_each(|prog| progs.push(prog));
             }
             Err(e) => {
                 return Err(e);
@@ -303,12 +303,7 @@ pub fn link(
     progs_in: &[CompiledProgram],
     is_module: bool,
     init_storage_descriptor: Option<Value>, // used only for compiling modules
-    typecheck: bool,
 ) -> Result<CompiledProgram, CompileError> {
-    let progs_in: Vec<_> = progs_in
-        .iter()
-        .map(|prog| (prog.clone(), typecheck))
-        .collect();
     let progs = if is_module {
         progs_in.to_vec()
     } else {
@@ -321,7 +316,7 @@ pub fn link(
     let mut merged_source_file_map = SourceFileMap::new_empty();
     let mut global_num_limit = 0;
 
-    for (prog, _) in &progs {
+    for prog in &progs {
         merged_source_file_map.push(
             prog.code.len(),
             match &prog.source_file_map {
@@ -337,7 +332,7 @@ pub fn link(
 
     let mut relocated_progs = Vec::new();
     let mut func_offset: usize = 0;
-    for (i, (prog, typecheck)) in progs.iter().enumerate() {
+    for (i, prog) in progs.iter().enumerate() {
         let (relocated_prog, new_func_offset) = prog.clone().relocate(
             int_offsets[i],
             ext_offsets[i],
@@ -346,7 +341,7 @@ pub fn link(
             prog.clone().source_file_map,
         );
         global_num_limit = relocated_prog.global_num_limit;
-        relocated_progs.push((relocated_prog, *typecheck));
+        relocated_progs.push(relocated_prog);
         func_offset = new_func_offset + 1;
     }
 
@@ -386,45 +381,19 @@ pub fn link(
 
     let mut linked_exports = Vec::new();
     let mut linked_imports = Vec::new();
-    for (mut rel_prog, typecheck) in relocated_progs {
+    for mut rel_prog in relocated_progs {
         linked_code.append(&mut rel_prog.code);
-        linked_exports.append(
-            &mut rel_prog
-                .exported_funcs
-                .into_iter()
-                .map(|prog| (prog, typecheck))
-                .collect(),
-        );
-        linked_imports.append(
-            &mut rel_prog
-                .imported_funcs
-                .into_iter()
-                .map(|prog| (prog, typecheck))
-                .collect(),
-        );
+        linked_exports.append(&mut rel_prog.exported_funcs);
+        linked_imports.append(&mut rel_prog.imported_funcs);
     }
 
     let mut exports_map = HashMap::new();
     let mut label_xlate_map = HashMap::new();
-    for (exp, typecheck) in &linked_exports {
-        exports_map.insert(exp.name.clone(), (exp.label, exp.tipe.clone(), *typecheck));
+    for exp in &linked_exports {
+        exports_map.insert(exp.name.clone(), exp.label);
     }
-    for (imp, typecheck_in) in &linked_imports {
-        if let Some((label, tipe, typecheck_out)) = exports_map.get(&imp.name) {
-            if *typecheck_in && *typecheck_out && *tipe != imp.tipe {
-                println!(
-                    "Warning: {:?}",
-                    CompileError::new(
-                        format!(
-                            "Imported type \"{:?}\" doesn't match exported type, \"{:?}\" in function {}",
-                            imp.tipe,
-                            tipe,
-                            imp.name
-                        ),
-                        None
-                    )
-                );
-            }
+    for imp in &linked_imports {
+        if let Some(label) = exports_map.get(&imp.name) {
             label_xlate_map.insert(Label::External(imp.slot_num), label);
         } else {
             println!(
@@ -441,8 +410,8 @@ pub fn link(
 
     Ok(CompiledProgram::new(
         linked_xlated_code,
-        linked_exports.into_iter().map(|x| x.0).collect(),
-        linked_imports.into_iter().map(|x| x.0).collect(),
+        linked_exports,
+        linked_imports,
         global_num_limit,
         Some(merged_source_file_map),
         if is_module {
