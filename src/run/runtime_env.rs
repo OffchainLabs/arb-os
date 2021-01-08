@@ -1210,7 +1210,9 @@ impl RtEnvRecorder {
     ) -> bool {
         // returns true iff result matches
         let mut rt_env = RuntimeEnvironment::new(Uint256::from_usize(1111), None);
-        rt_env.insert_full_inbox_contents(self.inbox.iter().map(|b| Buffer::new(b.to_vec())).collect());
+        rt_env.insert_full_inbox_contents(
+            self.inbox.iter().map(|b| Buffer::new(b.to_vec())).collect(),
+        );
         let mut machine = load_from_file(Path::new("arb_os/arbos.mexe"), rt_env);
         if let Some(trace_file_name) = trace_file {
             machine.add_trace_writer(trace_file_name);

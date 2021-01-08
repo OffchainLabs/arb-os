@@ -518,7 +518,7 @@ impl Buffer {
     pub fn read_word(&self, offset: usize) -> Uint256 {
         let mut acc = vec![];
         for i in 0..32 {
-            acc.push(self.read_byte(offset+i));
+            acc.push(self.read_byte(offset + i));
         }
         Uint256::from_bytes(&acc)
     }
