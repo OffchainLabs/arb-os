@@ -95,10 +95,7 @@ pub struct ImportedFunc {
     pub name_id: StringId,
     pub slot_num: usize,
     pub name: String,
-    pub arg_types: Vec<Type>,
-    pub ret_type: Type,
     pub tipe: Type,
-    pub is_impure: bool,
 }
 
 impl ImportedFunc {
@@ -114,10 +111,7 @@ impl ImportedFunc {
             name_id,
             slot_num,
             name: string_table.name_from_id(name_id).to_string(),
-            tipe: Type::Func(is_impure, arg_types.clone(), Box::new(ret_type.clone())),
-            arg_types,
-            ret_type,
-            is_impure,
+            tipe: Type::Func(is_impure, arg_types, Box::new(ret_type)),
         }
     }
 
@@ -417,25 +411,13 @@ pub fn link(
     }
     for (imp, typecheck_in) in &linked_imports {
         if let Some((label, tipe, typecheck_out)) = exports_map.get(&imp.name) {
-            if *typecheck_in
-                && *typecheck_out
-                && *tipe
-                    != Type::Func(
-                        imp.is_impure,
-                        imp.arg_types.clone(),
-                        Box::new(imp.ret_type.clone()),
-                    )
-            {
+            if *typecheck_in && *typecheck_out && *tipe != imp.tipe {
                 println!(
                     "Warning: {:?}",
                     CompileError::new(
                         format!(
                             "Imported type \"{:?}\" doesn't match exported type, \"{:?}\" in function {}",
-                            Type::Func(
-                                imp.is_impure,
-                                imp.arg_types.clone(),
-                                Box::new(imp.ret_type.clone())
-                            ),
+                            imp.tipe,
                             tipe,
                             imp.name
                         ),
