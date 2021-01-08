@@ -7,7 +7,7 @@
 use crate::compile::{
     compile_from_file, CompileError, CompiledProgram, DebugInfo, SourceFileMap, Type,
 };
-use crate::mavm::{AVMOpcode, CodePt, Instruction, Label, Opcode, Value};
+use crate::mavm::{AVMOpcode, Instruction, Label, Opcode, Value};
 use crate::stringtable::{StringId, StringTable};
 use serde::{Deserialize, Serialize};
 use std::collections::hash_map::{DefaultHasher, HashMap};
@@ -30,8 +30,6 @@ mod xformcode;
 pub struct LinkedProgram {
     pub code: Vec<Instruction>,
     pub static_val: Value,
-    pub exported_funcs: Vec<ExportedFuncPoint>,
-    pub imported_funcs: Vec<ImportedFunc>,
     pub file_name_chart: BTreeMap<u64, String>,
 }
 
@@ -42,8 +40,6 @@ impl LinkedProgram {
     pub fn to_output(&self, output: &mut dyn io::Write, format: Option<&str>) {
         match format {
             Some("pretty") => {
-                writeln!(output, "exported: {:?}", self.exported_funcs).unwrap();
-                writeln!(output, "imported: {:?}", self.imported_funcs).unwrap();
                 writeln!(output, "static: {}", self.static_val).unwrap();
                 for (idx, insn) in self.code.iter().enumerate() {
                     writeln!(output, "{:05}:  {}", idx, insn).unwrap();
@@ -150,34 +146,12 @@ impl ExportedFunc {
     }
 }
 
-///Represents a function that is part of the modules public interface.  The codept field represents
-/// the start location of the function in the program it is contained in.
-///
-/// This struct differs from `ExportedFunc` as its codept field points to an absolute address rather
-/// than a virtual label.
-#[derive(Debug, Serialize, Deserialize)]
-pub struct ExportedFuncPoint {
-    pub name: String,
-    pub codept: CodePt,
-    pub tipe: Type,
-}
-
 impl ExportedFunc {
     pub fn new(name_id: StringId, label: Label, tipe: Type, string_table: &StringTable) -> Self {
         Self {
             name: string_table.name_from_id(name_id).to_string(),
             label,
             tipe,
-        }
-    }
-
-    ///Returns an `ExportedFuncPoint` with the same name and type, and codept field specified by
-    ///the function argument.
-    pub fn resolve(&self, codept: CodePt) -> ExportedFuncPoint {
-        ExportedFuncPoint {
-            name: self.name.clone(),
-            codept,
-            tipe: self.tipe.clone(),
         }
     }
 }
@@ -220,10 +194,9 @@ pub fn postlink_compile(
             println!("{:04}:  {}", idx, insn);
         }
     }
-    let (code_final, jump_table_final, exported_funcs_final) = striplabels::strip_labels(
+    let (code_final, jump_table_final) = striplabels::strip_labels(
         code_4,
         &jump_table,
-        &program.exported_funcs,
         &program.imported_funcs,
         if is_module { Some(evm_pcs) } else { None },
     )?;
@@ -243,16 +216,6 @@ pub fn postlink_compile(
     Ok(LinkedProgram {
         code: code_final,
         static_val: jump_table_value,
-        exported_funcs: if is_module {
-            vec![]
-        } else {
-            exported_funcs_final
-        },
-        imported_funcs: if is_module {
-            vec![]
-        } else {
-            program.imported_funcs
-        },
         file_name_chart,
     })
 }
