@@ -95,23 +95,14 @@ pub struct ImportedFunc {
     pub name_id: StringId,
     pub slot_num: usize,
     pub name: String,
-    pub tipe: Type,
 }
 
 impl ImportedFunc {
-    pub fn new(
-        slot_num: usize,
-        name_id: StringId,
-        string_table: &StringTable,
-        arg_types: Vec<Type>,
-        ret_type: Type,
-        is_impure: bool,
-    ) -> Self {
+    pub fn new(slot_num: usize, name_id: StringId, string_table: &StringTable) -> Self {
         ImportedFunc {
             name_id,
             slot_num,
             name: string_table.name_from_id(name_id).to_string(),
-            tipe: Type::Func(is_impure, arg_types, Box::new(ret_type)),
         }
     }
 

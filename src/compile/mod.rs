@@ -342,28 +342,22 @@ pub fn compile_from_folder(
     for (name, imports) in &import_map {
         for import in imports {
             let import_path = import.path.clone();
-            let (named_type, imp_func, imp_func_decl) =
-                if let Some(program) = programs.get_mut(&import_path) {
-                    //Looks up info from target program
-                    let index = program.string_table.get(import.name.clone());
-                    let named_type = program.named_types.get(&index).cloned();
-                    let imp_func = program.func_table.get(&index).cloned();
-                    let imp_func_decl = program
-                        .funcs
-                        .iter()
-                        .find(|func| func.name == index)
-                        .cloned();
-                    (named_type, imp_func, imp_func_decl)
-                } else {
-                    return Err(CompileError::new(
-                        format!(
-                            "Internal error: Can not find target file for import \"{}::{}\"",
-                            import.path.get(0).cloned().unwrap_or_else(String::new),
-                            import.name
-                        ),
-                        None,
-                    ));
-                };
+            let (named_type, imp_func) = if let Some(program) = programs.get_mut(&import_path) {
+                //Looks up info from target program
+                let index = program.string_table.get(import.name.clone());
+                let named_type = program.named_types.get(&index).cloned();
+                let imp_func = program.func_table.get(&index).cloned();
+                (named_type, imp_func)
+            } else {
+                return Err(CompileError::new(
+                    format!(
+                        "Internal error: Can not find target file for import \"{}::{}\"",
+                        import.path.get(0).cloned().unwrap_or_else(String::new),
+                        import.name
+                    ),
+                    None,
+                ));
+            };
             //Modifies origin program to include import
             let origin_program = programs.get_mut(name).ok_or_else(|| {
                 CompileError::new(
@@ -380,24 +374,10 @@ pub fn compile_from_folder(
                 origin_program.named_types.insert(index, named_type.clone());
             } else if let Some(imp_func) = imp_func {
                 origin_program.func_table.insert(index, imp_func.clone());
-                let imp_func_decl = imp_func_decl.ok_or(CompileError::new(
-                    format!(
-                        "Internal error: Imported function {} has no associated decl",
-                        origin_program.string_table.name_from_id(index)
-                    ),
-                    None,
-                ))?;
                 origin_program.imported_funcs.push(ImportedFunc::new(
                     origin_program.imported_funcs.len(),
                     index,
                     &origin_program.string_table,
-                    imp_func_decl
-                        .args
-                        .iter()
-                        .map(|arg| arg.tipe.clone())
-                        .collect(),
-                    imp_func_decl.ret_type,
-                    imp_func_decl.is_impure,
                 ));
             } else {
                 println!(
