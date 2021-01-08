@@ -768,7 +768,6 @@ pub fn sort_top_level_decls(
 ///Performs typechecking various top level declarations, including `ImportedFunc`s, `FuncDecl`s,
 /// named `Type`s, and global variables.
 pub fn typecheck_top_level_decls(
-    imported_funcs: Vec<ImportedFunc>,
     funcs: Vec<FuncDecl>,
     named_types: HashMap<usize, Type>,
     global_vars: Vec<GlobalVarDecl>,
@@ -776,15 +775,7 @@ pub fn typecheck_top_level_decls(
     func_map: HashMap<usize, Type>,
     checked_funcs: &mut Vec<TypeCheckedFunc>,
     type_tree: &TypeTree,
-) -> Result<
-    (
-        Vec<ExportedFunc>,
-        Vec<ImportedFunc>,
-        Vec<GlobalVarDecl>,
-        StringTable,
-    ),
-    TypeError,
-> {
+) -> Result<(Vec<ExportedFunc>, Vec<GlobalVarDecl>, StringTable), TypeError> {
     let global_vars_map = global_vars
         .iter()
         .enumerate()
@@ -837,12 +828,7 @@ pub fn typecheck_top_level_decls(
         res_global_vars.push(global_var);
     }
 
-    Ok((
-        exported_funcs,
-        imported_funcs,
-        res_global_vars,
-        string_table,
-    ))
+    Ok((exported_funcs, res_global_vars, string_table))
 }
 
 ///If successful, produces a `TypeCheckedFunc` from `FuncDecl` reference fd, according to global

@@ -416,18 +416,16 @@ pub fn compile_from_folder(
     } in output
     {
         let mut checked_funcs = vec![];
-        let (exported_funcs, imported_funcs, global_vars, string_table) =
-            typecheck::typecheck_top_level_decls(
-                imported_funcs,
-                funcs,
-                named_types,
-                global_vars,
-                string_table,
-                hm,
-                &mut checked_funcs,
-                &type_tree,
-            )
-            .map_err(|res3| CompileError::new(res3.reason.to_string(), res3.location))?;
+        let (exported_funcs, global_vars, string_table) = typecheck::typecheck_top_level_decls(
+            funcs,
+            named_types,
+            global_vars,
+            string_table,
+            hm,
+            &mut checked_funcs,
+            &type_tree,
+        )
+        .map_err(|res3| CompileError::new(res3.reason.to_string(), res3.location))?;
         checked_funcs.iter().for_each(|func| {
             let detected_purity = func.is_pure();
             let declared_purity = func.properties.pure;
