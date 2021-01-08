@@ -46,7 +46,7 @@ func merkleize2(data: []any, offset: uint, num: uint, chunk: uint) -> bytes32 {
         return hash(
             merkleize2(data, offset, num1, chunk/2),
             merkleize2(data, offset+chunk, num2, chunk/2),
-        );
+        ) ^ bytes32(1);        // flip low-order bit in hash of internal node, to avoid collision with leaf hash
     }
 }
 
