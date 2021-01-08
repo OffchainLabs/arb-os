@@ -88,7 +88,6 @@ pub enum Type {
     Nominal(Vec<String>, StringId),
     Func(bool, Vec<Type>, Box<Type>),
     Map(Box<Type>, Box<Type>),
-    Imported(StringId),
     Any,
     Every,
     Option(Box<Type>),
@@ -147,7 +146,6 @@ impl Type {
             | Type::Bytes32
             | Type::EthAddress
             | Type::Buffer
-            | Type::Imported(_)
             | Type::Every => (self == rhs),
             Type::Tuple(tvec) => {
                 if let Ok(Type::Tuple(tvec2)) = rhs.get_representation(type_tree) {
@@ -273,9 +271,7 @@ impl Type {
                 }
                 (value_from_field_list(vals), is_safe)
             }
-            Type::Map(_, _) | Type::Func(_, _, _) | Type::Imported(_) | Type::Nominal(_, _) => {
-                (Value::none(), false)
-            }
+            Type::Map(_, _) | Type::Func(_, _, _) | Type::Nominal(_, _) => (Value::none(), false),
             Type::Any => (Value::none(), true),
             Type::Every => (Value::none(), false),
             Type::Option(_) => (Value::new_tuple(vec![Value::Int(Uint256::zero())]), true),
@@ -338,7 +334,6 @@ impl Type {
             Type::Map(key, val) => {
                 format!("map<{},{}>", key.display(), val.display())
             }
-            Type::Imported(id) => format!("imported({})", id),
             Type::Any => "any".to_string(),
             Type::Every => "every".to_string(),
             Type::Option(t) => format!("option<{}>", t.display()),
@@ -410,7 +405,6 @@ impl PartialEq for Type {
             (Type::Func(i1, a1, r1), Type::Func(i2, a2, r2)) => {
                 (i1 == i2) && type_vectors_equal(&a1, &a2) && (*r1 == *r2)
             }
-            (Type::Imported(n1), Type::Imported(n2)) => (n1 == n2),
             (Type::Nominal(p1, id1), Type::Nominal(p2, id2)) => (p1, id1) == (p2, id2),
             (Type::Option(x), Type::Option(y)) => *x == *y,
             (_, _) => false,
