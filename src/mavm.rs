@@ -435,6 +435,10 @@ fn hash_sparse(idx: &[usize], buf: &[u8], sz: u8) -> Packed {
 }
 
 impl Buffer {
+    pub fn new(v: Vec<u8>) -> Self {
+        Buffer::leaf(Rc::new(v))
+    }
+
     fn node(vec: Rc<Vec<Buffer>>, h: u8) -> Buffer {
         Buffer {
             elem: BufferElem::Node(vec, h),
@@ -509,6 +513,14 @@ impl Buffer {
                 }
             }
         }
+    }
+
+    pub fn read_word(&self, offset: usize) -> Uint256 {
+        let mut acc = vec![];
+        for i in 0..32 {
+            acc.push(self.read_byte(offset+i));
+        }
+        Uint256::from_bytes(&acc)
     }
 
     #[allow(dead_code)]
@@ -632,7 +644,7 @@ impl Value {
     }
 
     pub fn new_buffer(v: Vec<u8>) -> Self {
-        Value::Buffer(Buffer::leaf(Rc::new(v)))
+        Value::Buffer(Buffer::new(v))
     }
 
     pub fn copy_buffer(v: Buffer) -> Self {
@@ -1003,6 +1015,13 @@ impl Opcode {
             "ecpairing" => Opcode::AVMOpcode(AVMOpcode::EcPairing),
             "addmod" => Opcode::AVMOpcode(AVMOpcode::AddMod),
             "mulmod" => Opcode::AVMOpcode(AVMOpcode::MulMod),
+            "newbuffer" => Opcode::AVMOpcode(AVMOpcode::NewBuffer),
+            "getbuffer8" => Opcode::AVMOpcode(AVMOpcode::GetBuffer8),
+            "getbuffer64" => Opcode::AVMOpcode(AVMOpcode::GetBuffer64),
+            "getbuffer256" => Opcode::AVMOpcode(AVMOpcode::GetBuffer256),
+            "setbuffer8" => Opcode::AVMOpcode(AVMOpcode::SetBuffer8),
+            "setbuffer64" => Opcode::AVMOpcode(AVMOpcode::SetBuffer64),
+            "setbuffer256" => Opcode::AVMOpcode(AVMOpcode::SetBuffer256),
             _ => {
                 panic!("opcode not supported in asm segment: {}", name);
             }

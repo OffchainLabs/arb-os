@@ -66,6 +66,11 @@ impl ValueStack {
     }
 
     ///Pushes a `Value` created from val to the top of self.
+    pub fn push_buffer(&mut self, val: Buffer) {
+        self.push(Value::Buffer(val));
+    }
+
+    ///Pushes a `Value` created from val to the top of self.
     pub fn push_bool(&mut self, val: bool) {
         self.push_uint(if val { Uint256::one() } else { Uint256::zero() })
     }
@@ -1834,7 +1839,7 @@ impl Machine {
                     Opcode::AVMOpcode(AVMOpcode::Inbox) => {
 						match self.runtime_env.get_from_inbox() {
                             Some(msg) => {
-                                self.stack.push(msg);
+                                self.stack.push_buffer(msg);
                                 self.incr_pc();
                                 Ok(true)
                             }
@@ -1845,17 +1850,9 @@ impl Machine {
                         let bn = self.stack.pop_uint(&self.state)?;
                         match self.runtime_env.peek_at_inbox_head() {
                             Some(msg) => {
-                                if let Value::Tuple(tup) = msg {
-                                    if let Value::Int(msg_bn) = &tup[1] {
-                                        self.stack.push_bool(bn == msg_bn.clone());
-                                        self.incr_pc();
-                                        Ok(true)
-                                    } else {
-                                        Err(ExecutionError::new("inbox contents not a tuple", &self.state, None))
-                                    }
-                                } else {
-                                    Err(ExecutionError::new("blocknum not an integer", &self.state, None))
-                                }
+                                self.stack.push_bool(bn == msg.read_word(32));
+                                self.incr_pc();
+                                Ok(true)
                             }
                             None => {
                                 // machine is blocked, waiting for nonempty inbox

@@ -41,6 +41,7 @@ use std::bytearray::bytearray_unmarshalBytes;
 use std::bytearray::bytearray_new;
 use std::bytearray::bytearray_getByte;
 use std::bytearray::bytearray_get256;
+use std::bytearray::bytearray_fromBuffer;
 
 use std::bytestream::ByteStream;
 use std::bytestream::bytestream_new;
@@ -210,67 +211,59 @@ impure func getFromL1Inbox(inbox: Inbox) -> Inbox {
         }
     }
 
-    let newMsgRaw = asm() IncomingRequestFromInbox { inbox };
-    if let Some(msgData) = bytearray_unmarshalBytes(newMsgRaw.msgData) {
-        let newMsg = struct {
-            kind: newMsgRaw.kind,
-            blockNumber: newMsgRaw.blockNumber,
-            timestamp: newMsgRaw.timestamp,
-            sender: newMsgRaw.sender,
-            requestId: newMsgRaw.requestId,
-            msgData: msgData,
-            provenance: struct {
-                l1SeqNum: newMsgRaw.requestId,
-                parentRequestId: 0,
-                indexInParent: ~0,
-            },
-            aggregator: None<AggregatorInfo>,
-        };
+    let newMsgRaw = asm() buffer { inbox };
+    let requestId = getbuffer256(newMsgRaw, 4*32);
+    let newMsg = struct {
+        kind: getbuffer256(newMsgRaw, 0),
+        blockNumber: getbuffer256(newMsgRaw, 32),
+        timestamp: getbuffer256(newMsgRaw, 2*32),
+        sender: address(getbuffer256(newMsgRaw, 3*32)),
+        requestId: requestId,
+        msgData: bytearray_fromBuffer(newMsgRaw, 6*32, getbuffer256(newMsgRaw, 5*32)),
+        provenance: struct {
+            l1SeqNum: requestId,
+            parentRequestId: 0,
+            indexInParent: ~0,
+        },
+        aggregator: None<AggregatorInfo>,
+    };
 
-        if (newMsg.blockNumber == 0) {
-            newMsg = newMsg with { blockNumber: inbox.blockNum };
-        }
-        if (newMsg.timestamp == 0) {
-            newMsg = newMsg with { timestamp: inbox.timestamp };
-        }
-
-
-        return inbox with {
-            queue: incomingRequestQueue_put(inbox.queue, newMsg)
-        } with {
-            blockNum: newMsg.blockNumber
-        } with {
-            timestamp: newMsg.timestamp
-        } with {
-            seenMsgAtThisBlockNum: true
-        };
-    } else {
-        // message was malformatted; ignore it and return; caller will call this function again
-        return inbox;
+    if (newMsg.blockNumber == 0) {
+        newMsg = newMsg with { blockNumber: inbox.blockNum };
     }
+    if (newMsg.timestamp == 0) {
+        newMsg = newMsg with { timestamp: inbox.timestamp };
+    }
+
+
+    return inbox with {
+        queue: incomingRequestQueue_put(inbox.queue, newMsg)
+    } with {
+        blockNum: newMsg.blockNumber
+    } with {
+        timestamp: newMsg.timestamp
+    } with {
+        seenMsgAtThisBlockNum: true
+    };
 }
 
 impure func getFromL1InboxSequencer(inbox: Inbox, seq: SequencerState) -> Inbox {
-    let newMsgRaw = asm() IncomingRequestFromInbox { inbox };
-    let newMsg = unsafecast<IncomingRequest>(0);
-    if let Some(msgData) = bytearray_unmarshalBytes(newMsgRaw.msgData) {
-        newMsg = struct {
-            kind: newMsgRaw.kind,
-            blockNumber: newMsgRaw.blockNumber,
-            timestamp: newMsgRaw.timestamp,
-            sender: newMsgRaw.sender,
-            requestId: newMsgRaw.requestId,
-            msgData: msgData,
-            provenance: struct {
-                l1SeqNum: newMsgRaw.requestId,
-                parentRequestId: 0,
-                indexInParent: ~0,
-            },
-            aggregtor: None<AggregatorInfo>,
-        };
-    } else {
-        return inbox;
-    }
+    let newMsgRaw = asm() buffer { inbox };
+    let requestId = getbuffer256(newMsgRaw, 4*32);
+    let newMsg = struct {
+        kind: getbuffer256(newMsgRaw, 0),
+        blockNumber: getbuffer256(newMsgRaw, 32),
+        timestamp: getbuffer256(newMsgRaw, 2*32),
+        sender: address(getbuffer256(newMsgRaw, 3*32)),
+        requestId: requestId,
+        msgData: bytearray_fromBuffer(newMsgRaw, 6*32, getbuffer256(newMsgRaw, 5*32)),
+        provenance: struct {
+            l1SeqNum: requestId,
+            parentRequestId: 0,
+            indexInParent: ~0,
+        },
+        aggregator: None<AggregatorInfo>,
+    };
 
     let blockNum = newMsg.blockNumber;
     if (blockNum == 0) {
