@@ -14,6 +14,7 @@ use std::merkletree::MerkleTreeBuilder;
 use std::merkletree::merkleTreeBuilder_new;
 use std::merkletree::merkleTreeBuilder_add;
 use std::merkletree::merkleTreeBuilder_rootHash;
+use std::merkletree::merkleTreeBuilder_isEmpty;
 
 use std::queue::queue_get;
 
@@ -244,7 +245,7 @@ impure func emitBlockSummaryLog(blockNum: uint, timestamp: uint, prevBlockNum: u
         gasAccounting_summaryToPublish(),
         prevBlockNum
     ),) { log };
-    if (inbox_currentBlockNumber() >= globalBlockReceiptData.nextSendBlockNum) {
+    if ((inbox_currentBlockNumber() >= globalBlockReceiptData.nextSendBlockNum) && !merkleTreeBuilder_isEmpty(merkleOfSends) ){
         asm(merkleTreeBuilder_rootHash(merkleOfSends),) { send };
         merkleOfSends = merkleTreeBuilder_new();
         globalBlockReceiptData = globalBlockReceiptData with {
@@ -284,8 +285,6 @@ public impure func sendMessage(msgType: uint, sender: address, data: ByteArray) 
         )
     );
 }
-
-func workaroundForCompilerBug() { }  // This is needed to work around a compiler bug; otherwise sendMessage can crash.
 
 impure func sendPackagedMessage(msg: any) {
     outputStats_addSend();

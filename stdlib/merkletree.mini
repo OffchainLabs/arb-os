@@ -5,6 +5,7 @@
 use std::queue::Queue;
 use std::queue::queue_new;
 use std::queue::queue_size;
+use std::queue::queue_isEmpty;
 use std::queue::queue_put;
 use std::queue::queue_getOrDie;
 
@@ -55,6 +56,10 @@ type MerkleTreeBuilder = struct {
 
 public func merkleTreeBuilder_new() -> MerkleTreeBuilder {
     return struct { contents: queue_new() };
+}
+
+public func merkleTreeBuilder_isEmpty(mtb: MerkleTreeBuilder) -> bool {
+    return queue_isEmpty(mtb.contents);
 }
 
 public func merkleTreeBuilder_add(mtb: MerkleTreeBuilder, item: any) -> MerkleTreeBuilder {
