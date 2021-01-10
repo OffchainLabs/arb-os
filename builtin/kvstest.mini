@@ -11,7 +11,7 @@ use core::kvs::builtin_kvsForall;
 use core::kvs::builtin_kvsSize;
 
 impure func main() {
-	asm(tests(),) { log };
+    asm(32, setbuffer256(newbuffer(), 0, tests())) { log };
 }
 
 impure func tests() -> uint {

@@ -11,9 +11,9 @@ use std::queue::queue_get;
 
 impure func main() {
     if let Some(res) = tests() {
-	    asm(res,) { log };
+        asm(32, setbuffer256(newbuffer(), 0, res)) { log };
 	} else {
-	    asm(1000,) { log };
+        asm(32, setbuffer256(newbuffer(), 0, 1000)) { log };
 	}
 }
 

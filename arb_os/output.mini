@@ -15,10 +15,21 @@ use std::merkletree::merkleTreeBuilder_new;
 use std::merkletree::merkleTreeBuilder_add;
 use std::merkletree::merkleTreeBuilder_rootHash;
 
+use std::outputstream::OutputStream;
+use std::outputstream::outputStream_new;
+use std::outputstream::outputStream_push256;
+use std::outputstream::outputStream_push256;
+use std::outputstream::outputStream_pushByteArray;
+use std::outputstream::outputStream_pushBuffer;
+use std::outputstream::outputStream_size;
+use std::outputstream::outputStream_contents;
+use std::outputstream::outputStream_writeAsLog;
+
 use std::queue::queue_get;
 
 use evmlogs::evmlogs_empty;
 use evmlogs::evmlogs_numLogs;
+use evmlogs::pushEvmLogsToOutputStream;
 
 use evmCallStack::evmCallStack_queueMessage;
 
@@ -27,9 +38,11 @@ use chainParameters::chainParams_speedLimitPerBlock;
 use inbox::IncomingRequest;
 use inbox::inbox_currentBlockNumber;
 use inbox::inbox_currentTimestamp;
+use inbox::pushIncomingRequestToOutputStream;
+use inbox::pushProvenanceToOutputStream;
 
 use gasAccounting::GasUsage;
-use gasAccounting::gasAccounting_summaryToPublish;
+use gasAccounting::gasSummaryToOutputStream;
 
 
 // PerBlockReceiptData is different from OutputStatistics for now; might want to unify
@@ -51,6 +64,12 @@ var merkleOfSends: MerkleTreeBuilder;
 
 public impure func output_init() {
     merkleOfSends = merkleTreeBuilder_new();
+}
+
+func pushPerBlockReceiptDataToOutputStream(os: OutputStream, pbrd: PerBlockReceiptData) -> OutputStream {
+    os = outputStream_push256(os, pbrd.totalGasUsed);
+    os = outputStream_push256(os, pbrd.numTx);
+    return outputStream_push256(os, pbrd.numEvmLogs);
 }
 
 func outputStats_new() -> OutputStatistics {
@@ -209,19 +228,30 @@ public impure func emitTxReceipt(
         evmLogs: evmLogs,
     };
 
-    asm((
-        const::LogType_txReceipt,
-        l1message with {
-            msgData: unsafecast<ByteArray>(bytearray_marshalFull(l1message.msgData))  // because caller expects marshalled bytes
-        },
-        txResultInfo,
-        realGasUsage,
+    let os = outputStream_new();
+    os = outputStream_push256(os, const::LogType_txReceipt);
+
+    os = pushIncomingRequestToOutputStream(os, l1message, false);
+
+    os = outputStream_push256(os, resultCode);
+    os = outputStream_pushByteArray(os, returnData, true);
+    os = pushEvmLogsToOutputStream(os, evmLogs);
+
+    os = outputStream_push256(os, realGasUsage.gasUsed);
+    os = outputStream_push256(os, realGasUsage.gasPriceWei);
+
+    os = pushProvenanceToOutputStream(os, l1message.provenance);
+
+    os = pushPerBlockReceiptDataToOutputStream(
+        os,
         update_txReceiptsForBlock(
             l1message.blockNumber,
             realGasUsage.gasUsed,
             numEvmLogs,
         )
-    ),) { log };
+    );
+
+    outputStream_writeAsLog(os);
 }
 
 impure func emitBlockSummaryLog(blockNum: uint, timestamp: uint, prevBlockNum: uint) {
@@ -230,36 +260,48 @@ impure func emitBlockSummaryLog(blockNum: uint, timestamp: uint, prevBlockNum: u
     if (gasLimit < gasUsedThisBlock) {
         gasLimit = gasUsedThisBlock;
     }
-    asm((
-        const::LogType_blockSummary,
-        blockNum,
-        timestamp,
-        gasLimit,
-        globalBlockReceiptData.statsThisBlock,
-        globalBlockReceiptData.statsAllTime,
-        gasAccounting_summaryToPublish(),
-        prevBlockNum
-    ),) { log };
-    asm(merkleTreeBuilder_rootHash(merkleOfSends),) { send };
+
+    let os = outputStream_new();
+    os = outputStream_push256(os, const::LogType_blockSummary);
+    os = outputStream_push256(os, blockNum);
+    os = outputStream_push256(os, timestamp);
+    os = outputStream_push256(os, gasLimit);
+    os = pushStatsToOutputStream(os, globalBlockReceiptData.statsThisBlock);
+    os = pushStatsToOutputStream(os, globalBlockReceiptData.statsAllTime);
+    os = gasSummaryToOutputStream(os);
+    os = outputStream_push256(os, prevBlockNum);
+    outputStream_writeAsLog(os);
+
+    asm(
+        32,
+        setbuffer256(newbuffer(), 0, uint(merkleTreeBuilder_rootHash(merkleOfSends))),
+    ) { send };
     merkleOfSends = merkleTreeBuilder_new();
 }
 
+func pushStatsToOutputStream(os: OutputStream, stats: OutputStatistics) -> OutputStream {
+    os = outputStream_push256(os, stats.totalGasUsed);
+    os = outputStream_push256(os, stats.numTx);
+    os = outputStream_push256(os, stats.numEvmLogs);
+    os = outputStream_push256(os, stats.numLogs);
+    return outputStream_push256(os, stats.numSends);
+}
+
 public impure func queueMessageForSend(msgType: uint, sender: address, data: ByteArray) {
-    evmCallStack_queueMessage(
-        (
-            msgType,
-            uint(sender),
-            bytearray_marshalFull(data),
-        )
-    );
+    let os = outputStream_new();
+    os = outputStream_push256(os, msgType);
+    os = outputStream_push256(os, uint(sender));
+    os = outputStream_pushByteArray(os, data, false);
+    evmCallStack_queueMessage(os);
 }
 
 public impure func sendQueuedMessages(queue: Queue) {
     loop {
         if let Some(res) = queue_get(queue) {
-            let (uq, msg) = res;
+            let (uq, rawOs) = res;
             queue = uq;
-            sendPackagedMessage(msg);
+            let os = unsafecast<OutputStream>(rawOs);
+            sendPackagedMessage(outputStream_size(os), outputStream_contents(os));
         } else {
             return;
         }
@@ -267,20 +309,19 @@ public impure func sendQueuedMessages(queue: Queue) {
 }
 
 public impure func sendMessage(msgType: uint, sender: address, data: ByteArray) {
-    sendPackagedMessage(
-        (
-            msgType,
-            uint(sender),
-            bytearray_marshalFull(data),
-        )
-    );
+    let os = outputStream_new();
+    os = outputStream_push256(os, msgType);
+    os = outputStream_push256(os, uint(sender));
+    os = outputStream_pushByteArray(os, data, false);
+    sendPackagedMessage(outputStream_size(os), outputStream_contents(os));
 }
 
-func workaroundForCompilerBug() { }  // This is needed to work around a compiler bug; otherwise sendMessage can crash.
-
-impure func sendPackagedMessage(msg: any) {
+impure func sendPackagedMessage(size: uint, contents: buffer) {
     outputStats_addSend();
-    merkleOfSends = merkleTreeBuilder_add(merkleOfSends, msg);
-    // asm(msg,) { send };
-    asm((const::LogType_send, msg),) { log };
+    merkleOfSends = merkleTreeBuilder_add(merkleOfSends, size, contents);
+    let os = outputStream_new();
+    os = outputStream_push256(os, const::LogType_send);
+    os = outputStream_push256(os, size);
+    os = outputStream_pushBuffer(os, size, contents);
+    outputStream_writeAsLog(os);
 }

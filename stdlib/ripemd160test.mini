@@ -20,7 +20,7 @@ use std::ripemd160::ripemd160hasher_pushByte;
 use std::ripemd160::ripemd160hasher_push256;
 
 impure func main() {
-	asm(tests(),) { log };
+    asm(32, setbuffer256(newbuffer(), 0, tests())) { log };
 }
 
 func tests() -> uint {

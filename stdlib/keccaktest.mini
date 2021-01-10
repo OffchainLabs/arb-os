@@ -25,9 +25,9 @@ use std::keccak::hasher_finish;
 
 impure func main() {
     if let Some(x) = tests() {
-	    asm(x,) { log };
+        asm(32, setbuffer256(newbuffer(), 0, uint(x))) { log };
 	} else {
-	    asm(666,) { log };
+        asm(32, setbuffer256(newbuffer(), 0, 999)) { log };
 	}
 }
 

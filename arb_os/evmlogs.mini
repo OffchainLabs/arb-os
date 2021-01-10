@@ -3,34 +3,58 @@
 //
 
 // This structure accumulates the EVM log items emitted by a transaction.
-// It uses the same representation as the Arbitrum protocol, so this structure can be emitted
-//       directly without needing any more encoding.
 
-type EvmLogs = struct {
-    last: any,
-    rest: any,
+use std::bytearray::ByteArray;
+use std::outputstream::OutputStream;
+use std::queue::Queue;
+
+use std::outputstream::outputStream_push256;
+use std::outputstream::outputStream_pushByteArray;
+
+use std::queue::queue_new;
+use std::queue::queue_size;
+use std::queue::queue_put;
+use std::queue::queue_get;
+
+
+type EvmLog = struct {
+    sender: address,
+    data: ByteArray,
+    topics: []uint,
 }
+
+type EvmLogs = Queue
 
 public func evmlogs_empty() -> EvmLogs {  // make an empty log-sequence
-    return unsafecast<EvmLogs>(());
+    return queue_new();
 }
 
-public func evmlogs_appendAny(logs: EvmLogs, item: any) -> EvmLogs {
-    // Append an item to the end of a log-sequence, returning the updated log-sequence.
-    return struct {
-        last: item,
-        rest: logs,
-    };
+public func evmlogs_append(logs: EvmLogs, newLog: EvmLog) -> EvmLogs {
+    return queue_put(logs, newLog);
 }
 
 public func evmlogs_numLogs(logs: EvmLogs) -> uint {
-    let ret = 0;
+    return queue_size(logs);
+}
+
+public func pushEvmLogsToOutputStream(os: OutputStream, logs: EvmLogs) -> OutputStream {
+    os = outputStream_push256(os, evmlogs_numLogs(logs));
     loop {
-        if (logs == unsafecast<EvmLogs>(())) {
-            return ret;
+        if let Some(res) = queue_get(logs) {
+            let (ulogs, rawItem) = res;
+            logs = ulogs;
+            let item = unsafecast<EvmLog>(rawItem);
+            os = outputStream_push256(os, uint(item.sender));
+            os = outputStream_pushByteArray(os, item.data, true);
+            os = outputStream_push256(os, len(item.topics));
+            let i = 0;
+            while(i < len(item.topics)) {
+                os = outputStream_push256(os, item.topics[i]);
+                i = i+1;
+            }
         } else {
-            ret = ret + 1;
-            logs = unsafecast<EvmLogs>(logs.rest);
+            return os;
         }
     }
 }
+

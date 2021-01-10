@@ -38,6 +38,9 @@ use std::fixedpoint::fixedPoint_compare;
 use std::fixedpoint::fixedPoint_mulByUint;
 use std::fixedpoint::fixedPoint_integerPart;
 
+use std::outputstream::OutputStream;
+use std::outputstream::outputStream_push256;
+
 use std::queue::queue_new;
 use std::queue::queue_isEmpty;
 use std::queue::queue_put;
@@ -173,19 +176,36 @@ public impure func gasAccounting_postInitMessage() {
     gasAccountingInfo = gasAccountingInfo with { gasPool: gasAccountingParams.GasPoolMax };
 }
 
-public impure func gasAccounting_summaryToPublish() -> any {
+type GasSummaryToPublish = struct {
+    gasPrice: uint,
+    gasPool: int,
+    netReserve: int,
+    totalPaidToValidators: uint,
+    payoutAddress: address,
+}
+
+public impure func gasAccounting_summaryToPublish() -> GasSummaryToPublish {
     let payoutAddress = address(0);
     if let Some(paddr) = gasAccountingInfo.payValFeesTo {
         payoutAddress = paddr;
     }
 
-    return (
-        gasAccountingInfo.currentGasPrice,
-        gasAccountingInfo.gasPool,
-        int(gasAccountingInfo.reserve) - int(gasAccountingInfo.owedToValidators),
-        gasAccountingInfo.totalPaidToValidators,
-        payoutAddress,
-    );
+    return struct {
+        gasPrice: gasAccountingInfo.currentGasPrice,
+        gasPool: gasAccountingInfo.gasPool,
+        netReserve: int(gasAccountingInfo.reserve) - int(gasAccountingInfo.owedToValidators),
+        totalPaidToValidators: gasAccountingInfo.totalPaidToValidators,
+        payoutAddress: payoutAddress,
+    };
+}
+
+public impure func gasSummaryToOutputStream(os: OutputStream) -> OutputStream {
+    let summary = gasAccounting_summaryToPublish();
+    os = outputStream_push256(os, summary.gasPrice);
+    os = outputStream_push256(os, uint(summary.gasPool));
+    os = outputStream_push256(os, uint(summary.netReserve));
+    os = outputStream_push256(os, summary.totalPaidToValidators);
+    return outputStream_push256(os, uint(summary.payoutAddress));
 }
 
 public impure func gasAccounting_addToReserveFunds(amount: uint) {

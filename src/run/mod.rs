@@ -11,7 +11,7 @@ use std::{fs::File, io::Read, path::Path};
 
 pub use emulator::{Machine, ProfilerMode};
 pub use runtime_env::{
-    bytes_from_bytestack, bytestack_from_bytes, generic_compress_token_amount,
+    bytestack_from_bytes, generic_compress_token_amount, get_send_contents,
     replay_from_testlog_file, ArbosReceipt, RuntimeEnvironment,
 };
 
@@ -36,7 +36,7 @@ pub fn run_from_file(
     args: Vec<Value>,
     env: RuntimeEnvironment,
     debug: bool,
-) -> Result<Vec<Value>, (ExecutionError, StackTrace)> {
+) -> Result<Vec<Vec<u8>>, (ExecutionError, StackTrace)> {
     let mut machine = load_from_file(path, env);
     run(&mut machine, args, debug)
 }
@@ -83,7 +83,7 @@ pub fn run(
     machine: &mut Machine,
     args: Vec<Value>,
     debug: bool,
-) -> Result<Vec<Value>, (ExecutionError, StackTrace)> {
+) -> Result<Vec<Vec<u8>>, (ExecutionError, StackTrace)> {
     // We use PC 1 here because PC pushes an unwanted value--designed for a different entry ABI
     match machine.test_call(CodePt::new_internal(1), args, debug) {
         Ok(_stack) => Ok(machine.runtime_env.get_all_raw_logs()),

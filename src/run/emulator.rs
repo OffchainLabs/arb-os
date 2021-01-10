@@ -1869,14 +1869,16 @@ impl Machine {
 						Ok(true)
 					}
 					Opcode::AVMOpcode(AVMOpcode::Send) => {
-                        let val = self.stack.pop(&self.state)?;
-                        self.runtime_env.push_send(val);
+                        let size = self.stack.pop_uint(&self.state)?;
+                        let buf = self.stack.pop_buffer(&self.state)?;
+                        self.runtime_env.push_send(size, buf);
                         self.incr_pc();
                         Ok(true)
 					}
 					Opcode::AVMOpcode(AVMOpcode::Log) => {
-						let val = self.stack.pop(&self.state)?;
-						self.runtime_env.push_log(val);
+						let size = self.stack.pop_uint(&self.state)?;
+                        let buf = self.stack.pop_buffer(&self.state)?;
+						self.runtime_env.push_log(size, buf);
 						self.incr_pc();
 						Ok(true)
 					}

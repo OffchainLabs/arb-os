@@ -1,0 +1,77 @@
+//
+// Copyright 2020, Offchain Labs, Inc. All rights reserved.
+//
+
+use std::bytearray::ByteArray;
+use std::bytearray::bytearray_size;
+use std::bytearray::bytearray_getByte;
+use std::bytearray::bytearray_get256;
+
+
+type OutputStream = struct {
+    size: uint,
+    contents: buffer,
+}
+
+public func outputStream_new() -> OutputStream {
+    return struct {
+        size: 0,
+        contents: newbuffer(),
+    };
+}
+
+public func outputStream_size(os: OutputStream) -> uint {
+    return os.size;
+}
+
+public func outputStream_contents(os: OutputStream) -> buffer {
+    return os.contents;
+}
+
+public func outputStream_pushByte(os: OutputStream, b: uint) -> OutputStream {
+    return struct {
+        size: os.size + 1,
+        contents: setbuffer8(os.contents, os.size, b),
+    };
+}
+
+public func outputStream_push256(os: OutputStream, val: uint) -> OutputStream {
+    return struct {
+        size: os.size + 32,
+        contents: setbuffer256(os.contents, os.size, val),
+    };
+}
+
+public func outputStream_pushByteArray(os: OutputStream, ba: ByteArray, pushSize: bool) -> OutputStream {
+    let i = 0;
+    let sz = bytearray_size(ba);
+    if (pushSize) {
+        os = outputStream_push256(os, sz);
+    }
+    while(i+32 < sz) {
+        os = outputStream_push256(os, bytearray_get256(ba, i));
+        i = i+32;
+    }
+    while(i < sz) {
+        os = outputStream_pushByte(os, bytearray_getByte(ba, i));
+        i = i+1;
+    }
+    return os;
+}
+
+public func outputStream_pushBuffer(os: OutputStream, size: uint, buf: buffer) -> OutputStream {
+    let i = 0;
+    while(i+32 < size) {
+        os = outputStream_push256(os, getbuffer256(buf, i));
+        i = i+32;
+    }
+    while(i < size) {
+        os = outputStream_pushByte(os, getbuffer8(buf, i));
+        i = i+1;
+    }
+    return os;
+}
+
+public impure func outputStream_writeAsLog(os: OutputStream) {
+    asm(os.size, os.contents) { log };
+}

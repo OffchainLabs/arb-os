@@ -35,8 +35,9 @@ use accounts::account_incrSeqNum;
 use accounts::account_getStorageSize;
 use accounts::pristineAccount;
 
+use evmlogs::EvmLog;
 use evmlogs::evmlogs_empty;
-use evmlogs::evmlogs_appendAny;
+use evmlogs::evmlogs_append;
 
 use std::bytearray::bytearray_new;
 use std::bytearray::bytearray_marshalFull;
@@ -45,6 +46,8 @@ use std::bytearray::bytearray_copy;
 use std::bytearray::bytearray_setByte;
 use std::bytearray::bytearray_set256;
 use std::bytestream::bytestream_new;
+
+use std::outputstream::OutputStream;
 
 use std::storageMap::storageMap_new;
 
@@ -1044,7 +1047,7 @@ public impure func evmCallStack_setTopFrameMemory(mem: ByteArray) -> bool {
     }
 }
 
-public impure func evmCallStack_queueMessage(msg: any) {
+public impure func evmCallStack_queueMessage(msg: OutputStream) {
     if let Some(topFrame) = globalCallStack {
         globalCallStack = Some(
             topFrame with {
@@ -1106,10 +1109,16 @@ public impure func evmCallStack_setTopFrameStorageCell(offset: uint, value: uint
     return Some(());
 }
 
-public impure func evmCallStack_addEvmLogToCurrent(item: any) -> option<()> {
+public impure func evmCallStack_addEvmLogToCurrent(data: ByteArray, topics: []uint) -> option<()> {
     let topFrame = globalCallStack?;
-    item = asm(0, item, topFrame.runningAs) any { tset };
-    let newLogs = evmlogs_appendAny(topFrame.evmLogs, item);
+    let newLogs = evmlogs_append(
+        topFrame.evmLogs,
+        struct {
+            sender: topFrame.runningAs,
+            data: data,
+            topics: topics,
+        }
+    );
     globalCallStack = Some(
         topFrame with {
             evmLogs: newLogs

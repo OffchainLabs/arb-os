@@ -21,9 +21,9 @@ use std::sha256::sha256hasher_push256;
 
 impure func main() {
     if let Some(x) = tests() {
-	    asm(x,) { log };
+        asm(32, setbuffer256(newbuffer(), 0, uint(x))) { log };
 	} else {
-	    asm(666,) { log };
+        asm(32, setbuffer256(newbuffer(), 0, 666)) { log };
 	}
 }
 

@@ -50,6 +50,10 @@ use std::bytestream::bytestream_get256;
 use std::bytestream::bytestream_getRemainingBytes;
 use std::bytestream::bytestream_skipBytes;
 
+use std::outputstream::OutputStream;
+use std::outputstream::outputStream_push256;
+use std::outputstream::outputStream_pushByteArray;
+
 use decompression::decompressAndVerifyEcdsaSignedTx;
 use decompression::decompressAndVerifyBLSSignedTxBatch;
 
@@ -455,6 +459,30 @@ type RequestProvenance = struct {
 type AggregatorInfo = struct {
     aggregator: address,
     calldataBytes: uint,
+}
+
+public func pushIncomingRequestToOutputStream(
+    os: OutputStream,
+    req: IncomingRequest,
+    includeProvenance: bool
+) -> OutputStream {
+    os = outputStream_push256(os, req.kind);
+    os = outputStream_push256(os, req.blockNumber);
+    os = outputStream_push256(os, req.timestamp);
+    os = outputStream_push256(os, uint(req.sender));
+    os = outputStream_push256(os, req.requestId);
+    os = outputStream_pushByteArray(os, req.msgData, true);
+    if (includeProvenance) {
+        os = pushProvenanceToOutputStream(os, req.provenance);
+    }
+    // don't push aggregator
+    return os;
+}
+
+public func pushProvenanceToOutputStream(os: OutputStream, prov: RequestProvenance) -> OutputStream {
+    os = outputStream_push256(os, prov.l1SeqNum);
+    os = outputStream_push256(os, prov.parentRequestId);
+    return outputStream_push256(os, prov.indexInParent);
 }
 
 public impure func inbox_getNextUnpackedRequest() -> (

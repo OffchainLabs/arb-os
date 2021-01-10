@@ -57,8 +57,8 @@ public func merkleTreeBuilder_new() -> MerkleTreeBuilder {
     return struct { contents: queue_new() };
 }
 
-public func merkleTreeBuilder_add(mtb: MerkleTreeBuilder, item: any) -> MerkleTreeBuilder {
-    return mtb with { contents: queue_put(mtb.contents, item) };
+public func merkleTreeBuilder_add(mtb: MerkleTreeBuilder, size: uint, buf: buffer) -> MerkleTreeBuilder {
+    return mtb with { contents: queue_put(mtb.contents, (size, buf)) };
 }
 
 public func merkleTreeBuilder_rootHash(mtb: MerkleTreeBuilder) -> bytes32 {

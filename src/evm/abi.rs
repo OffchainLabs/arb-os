@@ -3,7 +3,7 @@
  */
 
 use crate::mavm::Value;
-use crate::run::{ArbosReceipt, Machine};
+use crate::run::{get_send_contents, ArbosReceipt, Machine};
 use crate::uint256::Uint256;
 use ethers_core::utils::keccak256;
 use ethers_signers::Signer;
@@ -168,15 +168,11 @@ impl AbiForContract {
                 );
                 return Err(None);
             }
-            if let Value::Tuple(tup) = &sends[sends.len() - 1] {
-                if (tup[0] != Value::Int(Uint256::from_usize(5)))
-                    || (tup[1] != Value::Int(sender_addr))
-                {
-                    println!("deploy: incorrect values in send item");
-                    return Err(None);
-                }
-            } else {
-                println!("malformed send item");
+            let send_contents = get_send_contents(sends[sends.len() - 1].clone());
+            if Uint256::from_bytes(&send_contents[0..32]) != Uint256::from_u64(5)
+                || Uint256::from_bytes(&send_contents[32..64]) != sender_addr
+            {
+                println!("deploy: incorrect values in send item");
                 return Err(None);
             }
         }
@@ -224,7 +220,7 @@ impl AbiForContract {
         machine: &mut Machine,
         payment: Uint256,
         debug: bool,
-    ) -> Result<(Vec<ArbosReceipt>, Vec<Value>), ethabi::Error> {
+    ) -> Result<(Vec<ArbosReceipt>, Vec<Vec<u8>>), ethabi::Error> {
         let this_function = self.contract.function(func_name)?;
         let calldata = this_function.encode_input(args).unwrap();
 
@@ -249,7 +245,10 @@ impl AbiForContract {
         let sends = machine.runtime_env.get_all_sends();
         Ok((
             logs[num_logs_before..].to_vec(),
-            sends[num_sends_before..].to_vec(),
+            sends[num_sends_before..]
+                .iter()
+                .map(|s| get_send_contents(s.to_vec()))
+                .collect(),
         ))
     }
 
@@ -261,7 +260,7 @@ impl AbiForContract {
         machine: &mut Machine,
         payment: Uint256,
         debug: bool,
-    ) -> Result<(Vec<ArbosReceipt>, Vec<Value>), ethabi::Error> {
+    ) -> Result<(Vec<ArbosReceipt>, Vec<Vec<u8>>), ethabi::Error> {
         let this_function = self.contract.function(func_name)?;
         let calldata = this_function.encode_input(args).unwrap();
 
@@ -286,7 +285,10 @@ impl AbiForContract {
         let sends = machine.runtime_env.get_all_sends();
         Ok((
             logs[num_logs_before..].to_vec(),
-            sends[num_sends_before..].to_vec(),
+            sends[num_sends_before..]
+                .iter()
+                .map(|s| get_send_contents(s.to_vec()))
+                .collect(),
         ))
     }
 
@@ -299,7 +301,7 @@ impl AbiForContract {
         payment: Uint256,
         wallet: &Wallet,
         debug: bool,
-    ) -> Result<(Vec<ArbosReceipt>, Vec<Value>), ethabi::Error> {
+    ) -> Result<(Vec<ArbosReceipt>, Vec<Vec<u8>>), ethabi::Error> {
         let this_function = self.contract.function(func_name)?;
         let calldata = this_function.encode_input(args).unwrap();
 
@@ -327,7 +329,10 @@ impl AbiForContract {
         let sends = machine.runtime_env.get_all_sends();
         Ok((
             logs[num_logs_before..].to_vec(),
-            sends[num_sends_before..].to_vec(),
+            sends[num_sends_before..]
+                .iter()
+                .map(|s| get_send_contents(s.to_vec()))
+                .collect(),
         ))
     }
 

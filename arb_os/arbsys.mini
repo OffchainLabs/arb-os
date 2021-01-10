@@ -264,14 +264,16 @@ impure func arbsys_withdrawErc721(topFrame: EvmCallFrame, calldata: ByteArray) {
         ),
     );
     if (evmCallStack_addEvmLogToCurrent(
-        (
-            address(const::Address_ArbSys),  // addEvmLogToCurrent will fill this in
-            bytearray_marshalFull(bytearray_new(0)),
-            0xdce1abc7607cf83c96953308072c045ec35d02fbf5777e7d0ec8b102cd89ff81, // ERC721Withdrawal(address,address,uint256)
-            uint(destAddr),
-            uint(tokenAddr),
-            id,
-        )
+        bytearray_new(0),
+        newarray<uint>(4) with {
+            [0] = 0xdce1abc7607cf83c96953308072c045ec35d02fbf5777e7d0ec8b102cd89ff81 // ERC721Withdrawal(address,address,uint256)
+        } with {
+            [1] = uint(destAddr)
+        } with {
+            [2] = uint(tokenAddr)
+        } with {
+            [3] = id
+        }
     ) == Some(())) {
         evmOp_return(0, 0);
     } else {
@@ -301,12 +303,12 @@ impure func arbsys_withdrawEth(topFrame: EvmCallFrame, calldata: ByteArray) { //
             messageData
         );
         if (evmCallStack_addEvmLogToCurrent(
-            (
-                address(const::Address_ArbSys),  // addEvmLogToCurrent will fill this in
-                bytearray_marshalFull(bytearray_set256(bytearray_new(0), 0, amount)),
-                0xc32d3c7eb0f275cbb5b72b3d3c688269430f30e5b9bb36980396edd9101c615c, // EthWithdrawal(address,uint256)
-                uint(destAddr),
-            )
+            bytearray_set256(bytearray_new(0), 0, amount),
+            newarray<uint>(2) with {
+                [0] = 0xc32d3c7eb0f275cbb5b72b3d3c688269430f30e5b9bb36980396edd9101c615c // EthWithdrawal(address,uint256)
+            } with {
+                [1] = uint(destAddr)
+            }
         ) == Some(())) {
             evmOp_return(0, 0);
         }

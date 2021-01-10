@@ -12,7 +12,7 @@ use ethers_core::utils::keccak256;
 use ethers_signers::{Signer, Wallet};
 use serde::{Deserialize, Serialize};
 use std::convert::TryInto;
-use std::io::Read;
+use std::io::{Cursor, Read};
 use std::rc::Rc;
 use std::{collections::HashMap, fs::File, io, path::Path};
 
@@ -22,8 +22,8 @@ pub struct RuntimeEnvironment {
     pub l1_inbox: Vec<Buffer>,
     pub current_block_num: Uint256,
     pub current_timestamp: Uint256,
-    pub logs: Vec<Value>,
-    pub sends: Vec<Value>,
+    pub logs: Vec<Vec<u8>>,
+    pub sends: Vec<Vec<u8>>,
     pub next_inbox_seq_num: Uint256,
     pub caller_seq_nums: HashMap<Uint256, Uint256>,
     next_id: Uint256, // used to assign unique (but artificial) txids to messages
@@ -562,12 +562,16 @@ impl RuntimeEnvironment {
         }
     }
 
-    pub fn push_log(&mut self, log_item: Value) {
-        self.logs.push(log_item.clone());
-        self.recorder.add_log(log_item);
+    pub fn push_log(&mut self, size: Uint256, buf: Buffer) {
+        let mut res = vec![];
+        for i in 0..size.to_usize().unwrap() {
+            res.push(buf.read_byte(i));
+        }
+        self.logs.push(res.clone());
+        self.recorder.add_log(res);
     }
 
-    pub fn get_all_raw_logs(&self) -> Vec<Value> {
+    pub fn get_all_raw_logs(&self) -> Vec<Vec<u8>> {
         self.logs.clone()
     }
 
@@ -591,36 +595,39 @@ impl RuntimeEnvironment {
             .collect()
     }
 
-    pub fn push_send(&mut self, send_item: Value) {
-        self.sends.push(send_item.clone());
-        self.recorder.add_send(send_item);
+    pub fn push_send(&mut self, size: Uint256, buf: Buffer) {
+        let mut res = vec![];
+        for i in 0..size.to_usize().unwrap() {
+            res.push(buf.read_byte(i));
+        }
+        self.sends.push(res.clone());
+        self.recorder.add_send(res);
     }
 
-    pub fn get_all_sends(&self) -> Vec<Value> {
+    pub fn get_all_sends(&self) -> Vec<Vec<u8>> {
         self.logs
             .clone()
             .into_iter()
-            .map(|log| get_send_contents(log))
+            .map(|log| get_send_from_log(log))
             .filter(|r| r.is_some())
             .map(|r| r.unwrap())
             .collect()
     }
 }
 
-fn get_send_contents(log: Value) -> Option<Value> {
-    if let Value::Tuple(tup) = log {
-        if let Value::Int(kind) = &tup[0] {
-            if kind == &Uint256::from_u64(2) {
-                Some(tup[1].clone())
-            } else {
-                None
-            }
-        } else {
-            None
-        }
+pub fn get_send_from_log(log: Vec<u8>) -> Option<Vec<u8>> {
+    let mut rd = Cursor::new(log);
+    let kind = Uint256::read(&mut rd);
+    if kind == Uint256::from_u64(2) {
+        let size = Uint256::read(&mut rd).to_usize().unwrap();
+        Some(read_bytes(&mut rd, size))
     } else {
         None
     }
+}
+
+pub fn get_send_contents(send: Vec<u8>) -> Vec<u8> {
+    send
 }
 
 // TxCompressor assumes that all client traffic uses it.
@@ -702,90 +709,112 @@ pub struct ArbosRequestProvenance {
     index_in_parent: Option<Uint256>,
 }
 
+fn read_bytes(cursor: &mut Cursor<Vec<u8>>, num: usize) -> Vec<u8> {
+    let mut ret = vec![];
+    let mut b = [0u8];
+    for _ in 0..num {
+        cursor.read(&mut b).unwrap();
+        ret.push(b[0]);
+    }
+    ret
+}
+
 impl ArbosReceipt {
-    pub fn new(arbos_log: Value) -> Option<Self> {
-        if let Value::Tuple(tup) = arbos_log {
-            if !(tup[0] == Value::Int(Uint256::zero())) {
-                return None;
-            }
-            let (return_code, return_data, evm_logs) =
-                ArbosReceipt::unpack_return_info(&tup[2]).unwrap();
-            let (gas_used, gas_price_wei) = ArbosReceipt::unpack_gas_info(&tup[3]).unwrap();
-            let (gas_so_far, index_in_block, logs_so_far) =
-                ArbosReceipt::unpack_cumulative_info(&tup[4]).unwrap();
-            Some(ArbosReceipt {
-                request: tup[1].clone(),
-                request_id: if let Value::Tuple(subtup) = &tup[1] {
-                    if let Value::Int(ui) = &subtup[4] {
-                        ui.clone()
-                    } else {
-                        panic!()
-                    }
-                } else {
-                    panic!();
-                },
-                return_code,
-                return_data,
-                evm_logs: EvmLog::new_vec(evm_logs),
-                gas_used,
-                gas_price_wei,
-                provenance: if let Value::Tuple(stup) = &tup[1] {
-                    if let Value::Tuple(subtup) = &stup[6] {
-                        ArbosRequestProvenance {
-                            l1_sequence_num: if let Value::Int(ui) = &subtup[0] {
-                                ui.clone()
-                            } else {
-                                panic!();
-                            },
-                            parent_request_id: if let Value::Int(ui) = &subtup[1] {
-                                if ui.is_zero() {
-                                    Some(ui.clone())
-                                } else {
-                                    None
-                                }
-                            } else {
-                                panic!();
-                            },
-                            index_in_parent: if let Value::Int(ui) = &subtup[2] {
-                                if ui.is_zero() {
-                                    Some(ui.clone())
-                                } else {
-                                    None
-                                }
-                            } else {
-                                panic!();
-                            },
-                        }
-                    } else {
-                        panic!();
-                    }
-                } else {
-                    panic!();
-                },
-                gas_so_far,
-                index_in_block,
-                logs_so_far,
-            })
-        } else {
-            panic!("ArbOS log item was not a Tuple");
+    pub fn new(arbos_log: Vec<u8>) -> Option<Self> {
+        let mut rd = Cursor::new(arbos_log);
+
+        let log_type = Uint256::read(&mut rd);
+        if !log_type.is_zero() {
+            return None;
         }
+
+        // read incoming request info
+        let l1_type = Uint256::read(&mut rd);
+        let l1_blocknum = Uint256::read(&mut rd);
+        let l1_timestamp = Uint256::read(&mut rd);
+        let l1_sender = Uint256::read(&mut rd);
+        let l1_request_id = Uint256::read(&mut rd);
+        let l2_message_len = Uint256::read(&mut rd);
+        let l2_message = read_bytes(&mut rd, l2_message_len.to_usize().unwrap());
+        let l1_request = Value::new_tuple(vec![
+            Value::Int(l1_type),
+            Value::Int(l1_blocknum),
+            Value::Int(l1_timestamp),
+            Value::Int(l1_sender),
+            Value::Int(l1_request_id.clone()),
+            Value::Int(l2_message_len),
+            Value::new_buffer(l2_message),
+        ]);
+
+        // read tx result info
+        let return_code = Uint256::read(&mut rd);
+        let return_data_size = Uint256::read(&mut rd);
+        let mut return_data = vec![0u8; return_data_size.to_usize().unwrap()];
+        rd.read(&mut return_data).unwrap();
+
+        // read EVM logs
+        let num_evm_logs = Uint256::read(&mut rd);
+        let mut evm_logs = vec![];
+        for _ in 0..num_evm_logs.to_usize().unwrap() {
+            evm_logs.push(EvmLog::read(&mut rd));
+        }
+
+        // read ArbGas info
+        let gas_used = Uint256::read(&mut rd);
+        let gas_price_wei = Uint256::read(&mut rd);
+
+        // read provenance info
+        let l1_sequence_num = Uint256::read(&mut rd);
+        let parent_request_id = Uint256::read(&mut rd);
+        let index_in_parent = Uint256::read(&mut rd);
+
+        // read cumulative info in block
+        let gas_so_far = Uint256::read(&mut rd);
+        let index_in_block = Uint256::read(&mut rd);
+        let logs_so_far = Uint256::read(&mut rd);
+
+        Some(ArbosReceipt {
+            request: l1_request,
+            request_id: l1_request_id,
+            return_code,
+            return_data,
+            evm_logs,
+            gas_used,
+            gas_price_wei,
+            provenance: ArbosRequestProvenance {
+                l1_sequence_num,
+                parent_request_id: if parent_request_id.is_zero() {
+                    None
+                } else {
+                    Some(parent_request_id.clone())
+                },
+                index_in_parent: if parent_request_id.is_zero() {
+                    None
+                } else {
+                    Some(index_in_parent)
+                },
+            },
+            gas_so_far,
+            index_in_block,
+            logs_so_far,
+        })
     }
 
-    fn unpack_return_info(val: &Value) -> Option<(Uint256, Vec<u8>, Value)> {
+    fn _unpack_return_info(val: &Value) -> Option<(Uint256, Vec<u8>, Value)> {
         if let Value::Tuple(tup) = val {
             let return_code = if let Value::Int(ui) = &tup[0] {
                 ui
             } else {
                 return None;
             };
-            let return_data = bytes_from_bytestack(tup[1].clone())?;
+            let return_data = _bytes_from_bytestack(tup[1].clone())?;
             Some((return_code.clone(), return_data, tup[2].clone()))
         } else {
             None
         }
     }
 
-    fn unpack_gas_info(val: &Value) -> Option<(Uint256, Uint256)> {
+    fn _unpack_gas_info(val: &Value) -> Option<(Uint256, Uint256)> {
         if let Value::Tuple(tup) = val {
             Some((
                 if let Value::Int(ui) = &tup[0] {
@@ -804,7 +833,7 @@ impl ArbosReceipt {
         }
     }
 
-    fn unpack_cumulative_info(val: &Value) -> Option<(Uint256, Uint256, Uint256)> {
+    fn _unpack_cumulative_info(val: &Value) -> Option<(Uint256, Uint256, Uint256)> {
         if let Value::Tuple(tup) = val {
             Some((
                 if let Value::Int(ui) = &tup[0] {
@@ -880,97 +909,66 @@ pub struct _ArbosBlockSummaryLog {
 }
 
 impl _ArbosBlockSummaryLog {
-    pub fn _new(arbos_log: Value) -> Option<Self> {
-        if let Value::Tuple(tup) = arbos_log {
-            if tup[0] != Value::Int(Uint256::one()) {
-                return None;
-            }
-            let block_num = if let Value::Int(bn) = &tup[1] {
-                bn
-            } else {
-                return None;
-            };
-            let timestamp = if let Value::Int(ts) = &tup[2] {
-                ts
-            } else {
-                return None;
-            };
-            let gas_limit = if let Value::Int(gl) = &tup[3] {
-                gl
-            } else {
-                return None;
-            };
-            let stats_this_block = if let Value::Tuple(t2) = &tup[4] {
-                t2
-            } else {
-                return None;
-            };
-            let stats_all_time = if let Value::Tuple(t2) = &tup[5] {
-                t2
-            } else {
-                return None;
-            };
-            let gas_summary = if let Value::Tuple(t2) = &tup[6] {
-                t2
-            } else {
-                return None;
-            };
-            Some(_ArbosBlockSummaryLog {
-                block_num: block_num.clone(),
-                timestamp: timestamp.clone(),
-                gas_limit: gas_limit.clone(),
-                stats_this_block: stats_this_block.clone(),
-                stats_all_time: stats_all_time.clone(),
-                gas_summary: _BlockGasAccountingSummary::_new(gas_summary.to_vec()),
-            })
-        } else {
-            None
+    pub fn _new(arbos_log: Vec<u8>) -> Option<Self> {
+        let mut rd = Cursor::new(arbos_log);
+        let log_type = Uint256::read(&mut rd);
+        if log_type != Uint256::one() {
+            return None;
         }
+
+        let block_num = Uint256::read(&mut rd);
+        let timestamp = Uint256::read(&mut rd);
+        let gas_limit = Uint256::read(&mut rd);
+        let stats_this_block = Rc::new(_read_block_stats(&mut rd));
+        let stats_all_time = Rc::new(_read_block_stats(&mut rd));
+        let gas_summary = _BlockGasAccountingSummary::_read(&mut rd);
+        let _prev_block_num = Uint256::read(&mut rd);
+
+        Some(Self {
+            block_num,
+            timestamp,
+            gas_limit,
+            stats_this_block,
+            stats_all_time,
+            gas_summary,
+        })
     }
+}
+
+fn _read_block_stats(rd: &mut Cursor<Vec<u8>>) -> Vec<Value> {
+    let total_gas_used = Uint256::read(rd);
+    let num_tx = Uint256::read(rd);
+    let num_evm_logs = Uint256::read(rd);
+    let num_logs = Uint256::read(rd);
+    let num_sends = Uint256::read(rd);
+
+    vec![total_gas_used, num_tx, num_evm_logs, num_logs, num_sends]
+        .iter()
+        .map(|u| Value::Int(u.clone()))
+        .collect()
 }
 
 pub struct _BlockGasAccountingSummary {
     gas_price_estimate: Uint256,
     gas_pool: Uint256,
-    wei_pool: Uint256,
-    wei_shortfall: Uint256,
+    signed_net_reserve: Uint256,
     total_wei_paid_to_validators: Uint256,
     payout_address: Uint256,
 }
 
 impl _BlockGasAccountingSummary {
-    pub fn _new(tup: Vec<Value>) -> Self {
+    pub fn _read(rd: &mut Cursor<Vec<u8>>) -> Self {
+        let gas_price_estimate = Uint256::read(rd);
+        let gas_pool = Uint256::read(rd);
+        let signed_net_reserve = Uint256::read(rd);
+        let total_wei_paid_to_validators = Uint256::read(rd);
+        let payout_address = Uint256::read(rd);
         _BlockGasAccountingSummary {
-            gas_price_estimate: if let Value::Int(ui) = &tup[0] {
-                ui.clone()
-            } else {
-                panic!();
-            },
-            gas_pool: if let Value::Int(ui) = &tup[1] {
-                ui.clone()
-            } else {
-                panic!();
-            },
-            wei_pool: if let Value::Int(ui) = &tup[2] {
-                ui.clone()
-            } else {
-                panic!();
-            },
-            wei_shortfall: if let Value::Int(ui) = &tup[3] {
-                ui.clone()
-            } else {
-                panic!();
-            },
-            total_wei_paid_to_validators: if let Value::Int(ui) = &tup[4] {
-                ui.clone()
-            } else {
-                panic!();
-            },
-            payout_address: if let Value::Int(ui) = &tup[5] {
-                ui.clone()
-            } else {
-                panic!();
-            },
+            gas_price_estimate,
+            gas_pool,
+            signed_net_reserve,
+            total_wei_paid_to_validators,
+            payout_address,
         }
     }
 }
@@ -983,7 +981,7 @@ pub struct EvmLog {
 }
 
 impl EvmLog {
-    pub fn new(val: Value) -> Self {
+    pub fn _new(val: Value) -> Self {
         if let Value::Tuple(tup) = val {
             EvmLog {
                 addr: if let Value::Int(ui) = &tup[0] {
@@ -991,7 +989,7 @@ impl EvmLog {
                 } else {
                     panic!()
                 },
-                data: bytes_from_bytestack(tup[1].clone()).unwrap(),
+                data: _bytes_from_bytestack(tup[1].clone()).unwrap(),
                 vals: tup[2..]
                     .iter()
                     .map(|v| {
@@ -1008,19 +1006,16 @@ impl EvmLog {
         }
     }
 
-    pub fn new_vec(val: Value) -> Vec<Self> {
-        if let Value::Tuple(tup) = val {
-            if tup.len() == 0 {
-                vec![]
-            } else {
-                let mut rest = EvmLog::new_vec(tup[1].clone());
-                let last = EvmLog::new(tup[0].clone());
-                rest.push(last);
-                rest
-            }
-        } else {
-            panic!()
+    pub fn read(rd: &mut Cursor<Vec<u8>>) -> Self {
+        let addr = Uint256::read(rd);
+        let data_len = Uint256::read(rd).to_usize().unwrap();
+        let data = read_bytes(rd, data_len);
+        let num_topics = Uint256::read(rd).to_usize().unwrap();
+        let mut vals = vec![];
+        for _ in 0..num_topics {
+            vals.push(Uint256::read(rd));
         }
+        EvmLog { addr, data, vals }
     }
 }
 
@@ -1096,18 +1091,18 @@ fn test_hash_bytestack() {
     );
 }
 
-pub fn bytes_from_bytestack(bs: Value) -> Option<Vec<u8>> {
+pub fn _bytes_from_bytestack(bs: Value) -> Option<Vec<u8>> {
     if let Value::Tuple(tup) = bs {
         if let Value::Int(ui) = &tup[0] {
             if let Some(nbytes) = ui.to_usize() {
-                return bytes_from_bytestack_2(tup[1].clone(), nbytes);
+                return _bytes_from_bytestack_2(tup[1].clone(), nbytes);
             }
         }
     }
     None
 }
 
-fn bytes_from_bytestack_2(cell: Value, nbytes: usize) -> Option<Vec<u8>> {
+fn _bytes_from_bytestack_2(cell: Value, nbytes: usize) -> Option<Vec<u8>> {
     if nbytes == 0 {
         Some(vec![])
     } else if let Value::Tuple(tup) = cell {
@@ -1115,7 +1110,7 @@ fn bytes_from_bytestack_2(cell: Value, nbytes: usize) -> Option<Vec<u8>> {
         if let Value::Int(mut int_val) = tup[0].clone() {
             let _256 = Uint256::from_usize(256);
             if (nbytes % 32) == 0 {
-                let mut sub_arr = match bytes_from_bytestack_2(tup[1].clone(), nbytes - 32) {
+                let mut sub_arr = match _bytes_from_bytestack_2(tup[1].clone(), nbytes - 32) {
                     Some(arr) => arr,
                     None => {
                         return None;
@@ -1130,7 +1125,7 @@ fn bytes_from_bytestack_2(cell: Value, nbytes: usize) -> Option<Vec<u8>> {
                 sub_arr.append(&mut this_arr);
                 Some(sub_arr)
             } else {
-                let mut sub_arr = match bytes_from_bytestack_2(tup[1].clone(), 32 * (nbytes / 32)) {
+                let mut sub_arr = match _bytes_from_bytestack_2(tup[1].clone(), 32 * (nbytes / 32)) {
                     Some(arr) => arr,
                     None => {
                         return None;
@@ -1161,8 +1156,8 @@ fn bytes_from_bytestack_2(cell: Value, nbytes: usize) -> Option<Vec<u8>> {
 pub struct RtEnvRecorder {
     format_version: u64,
     inbox: Vec<Vec<u8>>,
-    logs: Vec<Value>,
-    sends: Vec<Value>,
+    logs: Vec<Vec<u8>>,
+    sends: Vec<Vec<u8>>,
 }
 
 impl RtEnvRecorder {
@@ -1184,11 +1179,11 @@ impl RtEnvRecorder {
         self.inbox.push(buf);
     }
 
-    fn add_log(&mut self, log_item: Value) {
+    fn add_log(&mut self, log_item: Vec<u8>) {
         self.logs.push(log_item);
     }
 
-    fn add_send(&mut self, send_item: Value) {
+    fn add_send(&mut self, send_item: Vec<u8>) {
         self.sends.push(send_item);
     }
 
@@ -1263,6 +1258,10 @@ impl RtEnvRecorder {
     }
 }
 
+fn strip_var_from_log(log: Vec<u8>) -> Vec<u8> {
+    log
+}
+/* Replacing this with a no-op, because it would have to work very differently under the new format.
 fn strip_var_from_log(log: Value) -> Value {
     // strip from a log item all info that might legitimately vary as ArbOS evolves (e.g. gas usage)
     if let Value::Tuple(tup) = log.clone() {
@@ -1298,8 +1297,9 @@ fn strip_var_from_log(log: Value) -> Value {
         panic!("malformed log item");
     }
 }
+*/
 
-fn zero_item_in_tuple(in_val: Value, index: usize) -> Value {
+fn _zero_item_in_tuple(in_val: Value, index: usize) -> Value {
     if let Value::Tuple(tup) = in_val {
         Value::new_tuple(
             tup.iter()
@@ -1318,7 +1318,7 @@ fn zero_item_in_tuple(in_val: Value, index: usize) -> Value {
     }
 }
 
-fn print_output_differences(kind: &str, seen: Vec<Value>, expected: Vec<Value>) {
+fn print_output_differences(kind: &str, seen: Vec<Vec<u8>>, expected: Vec<Vec<u8>>) {
     if seen.len() != expected.len() {
         println!(
             "{} mismatch: expected {}, got {}",
@@ -1331,8 +1331,8 @@ fn print_output_differences(kind: &str, seen: Vec<Value>, expected: Vec<Value>) 
         for i in 0..(seen.len()) {
             if !(seen[i] == expected[i]) {
                 println!("{} {} mismatch:", kind, i);
-                println!("expected: {}", expected[i]);
-                println!("seen: {}", seen[i]);
+                println!("expected: {:?}", expected[i]);
+                println!("seen: {:?}", seen[i]);
                 return;
             }
         }
@@ -1392,6 +1392,6 @@ fn test_rust_bytestacks() {
     let before =
         "The quick brown fox jumped over the lazy dog. Lorem ipsum and all that.".as_bytes();
     let bs = bytestack_from_bytes(before);
-    let after = bytes_from_bytestack(bs);
+    let after = _bytes_from_bytestack(bs);
     assert_eq!(after, Some(before.to_vec()));
 }

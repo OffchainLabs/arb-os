@@ -12,6 +12,7 @@ use num_traits::CheckedSub;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::cmp::Ordering;
 use std::fmt;
+use std::io::{Cursor, Read};
 use std::ops::{Add, BitAnd, BitOr, BitXor, Div, Mul, Rem, Shl, Sub};
 
 #[derive(Debug, Clone, PartialEq, Eq, Ord, Hash)]
@@ -95,6 +96,12 @@ impl Uint256 {
 
     pub fn _from_eth(num_eth: u64) -> Self {
         Uint256::from_u64(num_eth).mul(&Uint256::from_u64(1_000_000_000_000_000_000))
+    }
+
+    pub fn read(cursor: &mut Cursor<Vec<u8>>) -> Self {
+        let mut buf = [0u8; 32];
+        cursor.read(&mut buf).unwrap();
+        Uint256::from_bytes(&buf)
     }
 
     pub fn to_usize(&self) -> Option<usize> {

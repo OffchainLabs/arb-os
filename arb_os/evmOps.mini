@@ -534,10 +534,8 @@ public impure func evmOp_log0(
             nbytes
         );
         if (evmCallStack_addEvmLogToCurrent(
-            (
-                address(0),  // addEvmLogToCurrent will fill this in
-                bytearray_marshalFull(data),
-            )
+            data,
+            newarray<uint>(0),
         ) == Some(()) ) {
             return;
         }
@@ -562,11 +560,8 @@ public impure func evmOp_log1(
             nbytes
         );
         if (evmCallStack_addEvmLogToCurrent(
-            (
-                address(0),  // addEvmLogToCurrent will fill this in
-                bytearray_marshalFull(data),
-                topic0,
-            )
+            data,
+            newarray<uint>(1) with { [0] = topic0 },
         ) == Some(()) ) {
             return;
         }
@@ -592,12 +587,12 @@ public impure func evmOp_log2(
             nbytes
         );
         if (evmCallStack_addEvmLogToCurrent(
-            (
-                address(0),  // addEvmLogToCurrent will fill this in
-                bytearray_marshalFull(data),
-                topic0,
-                topic1,
-            )
+            data,
+            newarray<uint>(2) with {
+                [0] = topic0
+            } with {
+                [1] = topic1
+            },
         ) == Some(()) ) {
             return;
         }
@@ -624,13 +619,14 @@ public impure func evmOp_log3(
             nbytes
         );
         if (evmCallStack_addEvmLogToCurrent(
-            (
-                address(0),  // addEvmLogToCurrent will fill this in
-                bytearray_marshalFull(data),
-                topic0,
-                topic1,
-                topic2,
-            )
+            data,
+            newarray<uint>(3) with {
+                [0] = topic0
+            } with {
+                [1] = topic1
+            } with {
+                [2] = topic2
+            },
         ) == Some(()) ) {
             return;
         }
@@ -658,14 +654,16 @@ public impure func evmOp_log4(
             nbytes
         );
         if (evmCallStack_addEvmLogToCurrent(
-            (
-                address(0),  // addEvmLogToCurrent will fill this in
-                bytearray_marshalFull(data),
-                topic0,
-                topic1,
-                topic2,
-                topic3,
-            )
+            data,
+            newarray<uint>(4) with {
+                [0] = topic0
+            } with {
+                [1] = topic1
+            } with {
+                [2] = topic2
+            } with {
+                [3] = topic3
+            },
         ) == Some(()) ) {
             return;
         }
