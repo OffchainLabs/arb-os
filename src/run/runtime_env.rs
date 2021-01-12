@@ -990,7 +990,20 @@ impl EvmLog {
                 } else {
                     panic!()
                 },
-                data: bytes_from_bytestack(tup[1].clone()).unwrap(),
+                data: if let Value::Tuple(stup) = &tup[1] {
+                    if let (Value::Int(usz), Value::Buffer(buf)) = (&stup[0], &stup[1]) {
+                        let sz = usz.to_usize().unwrap();
+                        let mut d = vec![];
+                        for i in 0..sz {
+                            d.push(buf.read_byte(i));
+                        }
+                        d
+                    } else {
+                        panic!()
+                    }
+                } else {
+                    panic!()
+                },
                 vals: tup[2..]
                     .iter()
                     .map(|v| {

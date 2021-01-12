@@ -32,6 +32,12 @@ public func bytearray_new(ignored: uint) -> ByteArray {
     };
 }
 
+public func bytearray_toSizeAndBuffer(ba: ByteArray) -> (uint, buffer) {
+    // to be safe, copy the buffer, to eliminate any bytes tht might be beyond size of ba
+    ba = bytearray_copy(ba, 0, bytearray_new(0), 0, ba.size);
+    return (ba.size, ba.contents);
+}
+
 type MarshalledBytes = struct {
     nbytes: uint,
     contents: MarshalledBytesCell,
