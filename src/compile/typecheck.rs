@@ -2279,6 +2279,7 @@ fn typecheck_expr(
                     )),
                 }
             }
+            ExprKind::If() => unimplemented!(),
         }?,
         debug_info,
     })

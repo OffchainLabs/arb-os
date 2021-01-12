@@ -243,6 +243,7 @@ Expr11: Expr = {
 	<lno: @L> <e1:Expr11> "[" <e2:Expr> "]" => Expr { kind: ExprKind::ArrayOrMapRef(Box::new(e1), Box::new(e2)), debug_info: DebugInfo::from(file_info.location(BytePos::from(lno), filename))},
 	<lno: @L> <e:Expr11> "." <i:Ident> => Expr { kind: ExprKind::DotRef(Box::new(e), stringtable.name_from_id(i).to_string()), debug_info: DebugInfo::from(file_info.location(BytePos::from(lno), filename))},
 	<lno: @L> <e:Expr11> "." <u:UnsignedInteger> => Expr { kind: ExprKind::TupleRef(Box::new(e), u), debug_info: DebugInfo::from(file_info.location(BytePos::from(lno), filename))},
+	<lno: @L> "eif" <cond: Expr> "{" <cb: Statement*> <e: Expr?> "}" => Expr { kind: ExprKind::If(), debug_info: DebugInfo::from(file_info.location(BytePos::from(lno), filename))},
 	Expr12,
 }
 
