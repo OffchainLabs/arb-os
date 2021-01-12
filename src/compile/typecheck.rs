@@ -488,6 +488,7 @@ pub enum TypeCheckedExprKind {
     Cast(Box<TypeCheckedExpr>, Type),
     Asm(Type, Vec<Instruction>, Vec<TypeCheckedExpr>),
     Try(Box<TypeCheckedExpr>, Type),
+    If(),
 }
 
 impl MiniProperties for TypeCheckedExpr {
@@ -561,6 +562,7 @@ impl MiniProperties for TypeCheckedExpr {
                 instrs.iter().all(|inst| inst.is_pure()) && args.iter().all(|expr| expr.is_pure())
             }
             TypeCheckedExprKind::Try(expr, _) => expr.is_pure(),
+            TypeCheckedExprKind::If() => unimplemented!(),
         }
     }
 }
@@ -634,6 +636,7 @@ impl AbstractSyntaxTree for TypeCheckedExpr {
                 TypeCheckedNode::Expression(exp2),
                 TypeCheckedNode::Expression(exp3),
             ],
+            TypeCheckedExprKind::If() => unimplemented!(),
         }
     }
 }
@@ -676,6 +679,7 @@ impl TypeCheckedExpr {
             TypeCheckedExprKind::Cast(_, t) => t.clone(),
             TypeCheckedExprKind::Asm(t, _, _) => t.clone(),
             TypeCheckedExprKind::Try(_, t) => t.clone(),
+            TypeCheckedExprKind::If() => unimplemented!(),
         }
     }
 }
@@ -2279,7 +2283,7 @@ fn typecheck_expr(
                     )),
                 }
             }
-            ExprKind::If() => unimplemented!(),
+            ExprKind::If() => Ok(TypeCheckedExprKind::If()),
         }?,
         debug_info,
     })
