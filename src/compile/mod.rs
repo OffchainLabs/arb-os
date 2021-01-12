@@ -29,7 +29,6 @@ mod ast;
 mod codegen;
 pub mod miniconstants;
 mod source;
-mod symtable;
 mod typecheck;
 lalrpop_mod!(mini);
 
