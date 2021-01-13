@@ -694,7 +694,12 @@ pub enum ExprKind {
     UnsafeCast(Box<Expr>, Type),
     Asm(Type, Vec<Instruction>, Vec<Expr>),
     Try(Box<Expr>),
-    If(),
+    If(
+        Box<Expr>,
+        Vec<Statement>,
+        Option<Box<Expr>>,
+        Option<Box<Expr>>,
+    ),
     NewBuffer,
 }
 
