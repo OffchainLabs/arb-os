@@ -88,7 +88,6 @@ pub enum Type {
     Nominal(Vec<String>, StringId),
     Func(bool, Vec<Type>, Box<Type>),
     Map(Box<Type>, Box<Type>),
-    Imported(StringId),
     Any,
     Every,
     Option(Box<Type>),
@@ -139,7 +138,7 @@ impl Type {
             return true;
         }
         match self {
-            Type::Any => true,
+            Type::Any => *rhs != Type::Void,
             Type::Void
             | Type::Uint
             | Type::Int
@@ -147,7 +146,6 @@ impl Type {
             | Type::Bytes32
             | Type::EthAddress
             | Type::Buffer
-            | Type::Imported(_)
             | Type::Every => (self == rhs),
             Type::Tuple(tvec) => {
                 if let Ok(Type::Tuple(tvec2)) = rhs.get_representation(type_tree) {
@@ -274,9 +272,7 @@ impl Type {
                 }
                 (value_from_field_list(vals), is_safe)
             }
-            Type::Map(_, _) | Type::Func(_, _, _) | Type::Imported(_) | Type::Nominal(_, _) => {
-                (Value::none(), false)
-            }
+            Type::Map(_, _) | Type::Func(_, _, _) | Type::Nominal(_, _) => (Value::none(), false),
             Type::Any => (Value::none(), true),
             Type::Every => (Value::none(), false),
             Type::Option(_) => (Value::new_tuple(vec![Value::Int(Uint256::zero())]), true),
@@ -339,7 +335,6 @@ impl Type {
             Type::Map(key, val) => {
                 format!("map<{},{}>", key.display(), val.display())
             }
-            Type::Imported(id) => format!("imported({})", id),
             Type::Any => "any".to_string(),
             Type::Every => "every".to_string(),
             Type::Option(t) => format!("option<{}>", t.display()),
@@ -411,7 +406,6 @@ impl PartialEq for Type {
             (Type::Func(i1, a1, r1), Type::Func(i2, a2, r2)) => {
                 (i1 == i2) && type_vectors_equal(&a1, &a2) && (*r1 == *r2)
             }
-            (Type::Imported(n1), Type::Imported(n2)) => (n1 == n2),
             (Type::Nominal(p1, id1), Type::Nominal(p2, id2)) => (p1, id1) == (p2, id2),
             (Type::Option(x), Type::Option(y)) => *x == *y,
             (_, _) => false,
@@ -472,36 +466,6 @@ impl GlobalVarDecl {
             name,
             tipe,
             location,
-        }
-    }
-}
-
-///Represents an import of a mini function from another source file or external location.
-/// is_impure, arg_types, and ret_type are assumed to correspond to the associated elements of tipe,
-/// this must be upheld by users of this type.
-#[derive(Debug, Clone)]
-pub struct ImportFuncDecl {
-    pub name: StringId,
-    pub is_impure: bool,
-    pub arg_types: Vec<Type>,
-    pub ret_type: Type,
-    pub tipe: Type,
-}
-
-impl ImportFuncDecl {
-    ///Identical to new but takes a `Vec` of `Type` instead of a `Vec` of `FuncArg`
-    pub fn new_types(
-        name: StringId,
-        is_impure: bool,
-        arg_types: Vec<Type>,
-        ret_type: Type,
-    ) -> Self {
-        ImportFuncDecl {
-            name,
-            is_impure,
-            arg_types: arg_types.clone(),
-            ret_type: ret_type.clone(),
-            tipe: Type::Func(is_impure, arg_types, Box::new(ret_type)),
         }
     }
 }
