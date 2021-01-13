@@ -139,7 +139,7 @@ impl Type {
             return true;
         }
         match self {
-            Type::Any => true,
+            Type::Any => *rhs != Type::Void,
             Type::Void
             | Type::Uint
             | Type::Int
