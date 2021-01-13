@@ -194,8 +194,8 @@ impl Type {
             Type::Func(is_impure, args, ret) => {
                 if let Type::Func(is_impure2, args2, ret2) = rhs {
                     (*is_impure || !is_impure2)
-                        && arg_vectors_assignable(args, args2, type_tree, seen.clone())
-                        && (ret2.assignable(ret, type_tree, seen)) // note: rets in reverse order
+                        && arg_vectors_assignable(args2, args, type_tree, seen.clone())
+                        && (ret.assignable(ret2, type_tree, seen)) // note: rets in reverse order
                 } else {
                     false
                 }
