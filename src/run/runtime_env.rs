@@ -2,7 +2,7 @@
  * Copyright 2020, Offchain Labs, Inc. All rights reserved.
  */
 
-use crate::mavm::{Value, Buffer};
+use crate::mavm::{Buffer, Value};
 use crate::run::{load_from_file, ProfilerMode};
 use crate::uint256::Uint256;
 use ethers_core::rand::rngs::StdRng;
@@ -620,8 +620,16 @@ fn get_send_contents(log: Value) -> Option<ArbosSend> {
             if kind == &Uint256::from_u64(2) {
                 if let Value::Tuple(stup) = &tup[1] {
                     Some(ArbosSend {
-                        kind: if let Value::Int(ui) = &stup[0] { ui.clone() } else { panic!() },
-                        sender: if let Value::Int(ui) = &stup[1] { ui.clone() } else { panic!() },
+                        kind: if let Value::Int(ui) = &stup[0] {
+                            ui.clone()
+                        } else {
+                            panic!()
+                        },
+                        sender: if let Value::Int(ui) = &stup[1] {
+                            ui.clone()
+                        } else {
+                            panic!()
+                        },
                         data: size_buffer_tuple_to_bytes(&stup[2]).unwrap(),
                     })
                 } else {
@@ -1159,7 +1167,8 @@ fn _bytes_from_bytestack_2(cell: Value, nbytes: usize) -> Option<Vec<u8>> {
                 sub_arr.append(&mut this_arr);
                 Some(sub_arr)
             } else {
-                let mut sub_arr = match _bytes_from_bytestack_2(tup[1].clone(), 32 * (nbytes / 32)) {
+                let mut sub_arr = match _bytes_from_bytestack_2(tup[1].clone(), 32 * (nbytes / 32))
+                {
                     Some(arr) => arr,
                     None => {
                         return None;

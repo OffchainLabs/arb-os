@@ -169,9 +169,7 @@ impl AbiForContract {
                 return Err(None);
             }
             let last_send = &sends[sends.len() - 1];
-            if (last_send.kind != Uint256::from_usize(5))
-                || (last_send.sender != sender_addr)
-            {
+            if (last_send.kind != Uint256::from_usize(5)) || (last_send.sender != sender_addr) {
                 println!("deploy: incorrect values in send item");
                 return Err(None);
             }
