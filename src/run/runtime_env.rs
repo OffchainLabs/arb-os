@@ -175,7 +175,8 @@ impl RuntimeEnvironment {
             Value::Int(self.current_timestamp.clone()),
             Value::Int(sender_addr),
             Value::Int(self.next_inbox_seq_num.clone()),
-            _bytestack_from_bytes(msg),
+            Value::Int(Uint256::from_usize(msg.len())),
+            Value::new_buffer(msg.to_vec()),
         ]);
         let msg_id =
             Uint256::avm_hash2(&Uint256::from_u64(self.chain_id), &self.next_inbox_seq_num);

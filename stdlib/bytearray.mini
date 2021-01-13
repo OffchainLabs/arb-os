@@ -38,6 +38,14 @@ public func bytearray_toSizeAndBuffer(ba: ByteArray) -> (uint, buffer) {
     return (ba.size, ba.contents);
 }
 
+public func bytearray_fromSizeAndBuffer(size: uint, buf: buffer) -> ByteArray {
+    return struct {
+        size: size,
+        sliceOffset: 0,
+        contents: buf,
+    };
+}
+
 type MarshalledBytes = struct {
     nbytes: uint,
     contents: MarshalledBytesCell,
