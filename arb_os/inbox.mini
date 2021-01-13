@@ -33,12 +33,8 @@ use output::outputStats_endOfBlock;
 use pluggables::callPluggable;
 
 use std::bytearray::ByteArray;
-use std::bytearray::MarshalledBytes;
-use std::bytearray::marshalledBytes_firstByte;
-use std::bytearray::marshalledBytes_hash;
-use std::bytearray::bytearray_marshalFull;
-use std::bytearray::bytearray_unmarshalBytes;
 use std::bytearray::bytearray_new;
+use std::bytearray::bytearray_size;
 use std::bytearray::bytearray_fromSizeAndBuffer;
 use std::bytearray::bytearray_getByte;
 use std::bytearray::bytearray_get256;
@@ -49,6 +45,8 @@ use std::bytestream::bytestream_getByte;
 use std::bytestream::bytestream_get256;
 use std::bytestream::bytestream_getRemainingBytes;
 use std::bytestream::bytestream_skipBytes;
+
+use std::keccak::keccak256;
 
 use decompression::decompressAndVerifyEcdsaSignedTx;
 use decompression::decompressAndVerifyBLSSignedTxBatch;
@@ -617,7 +615,7 @@ impure func translateUnsignedTx(request: IncomingRequest) -> option<TxRequestDat
         request = request with {
             requestId: uint(hash(
                 bytes32(request.sender),
-                hash(bytes32(chainParams_chainId()), marshalledBytes_hash(bytearray_marshalFull(request.msgData)))
+                hash(bytes32(chainParams_chainId()), keccak256(request.msgData, 0, bytearray_size(request.msgData))),
             ))
         };
     }

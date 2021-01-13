@@ -203,7 +203,7 @@ impl RuntimeEnvironment {
                 &sender_addr,
                 &Uint256::avm_hash2(
                     &Uint256::from_u64(self.chain_id),
-                    &hash_bytestack(_bytestack_from_bytes(msg)).unwrap(),
+                    &Uint256::from_bytes(&keccak256(msg)),
                 ),
             )
         } else {
