@@ -5,9 +5,8 @@
 //!Converts non-type checked ast nodes to type checked versions, and other related utilities.
 
 use super::ast::{
-    BinaryOp, Constant, Expr, FuncArg, FuncDecl, FuncDeclKind, GlobalVarDecl, IfArm,
-    ImportFuncDecl, MatchPattern, Statement, StatementKind, StructField, TopLevelDecl, TrinaryOp,
-    Type, UnaryOp,
+    BinaryOp, Constant, Expr, FuncArg, FuncDecl, FuncDeclKind, GlobalVarDecl, IfArm, MatchPattern,
+    Statement, StatementKind, StructField, TopLevelDecl, TrinaryOp, Type, UnaryOp,
 };
 use super::{symtable::SymTable, MiniProperties};
 use crate::compile::ast::{DebugInfo, ExprKind, TypeTree};
@@ -701,81 +700,51 @@ impl TypeCheckedStructField {
 
 ///Returns a vector of `ImportFuncDecl`s corresponding to the builtins as defined by string_table,
 /// if they are not defined in string_table, they are inserted.
-fn builtin_func_decls(mut string_table: StringTable) -> (Vec<ImportFuncDecl>, StringTable) {
-    let imps = vec![
-        ImportFuncDecl::new_types(
-            string_table.get("builtin_arrayNew".to_string()),
-            false,
-            vec![Type::Uint, Type::Any],
-            Type::Any,
+fn builtin_func_decls() -> Vec<Import> {
+    vec![
+        Import::new(
+            vec!["core".to_string(), "array".to_string()],
+            "builtin_arrayNew".to_string(),
         ),
-        ImportFuncDecl::new_types(
-            string_table.get("builtin_arrayGet".to_string()),
-            false,
-            vec![Type::Any, Type::Uint],
-            Type::Any,
+        Import::new(
+            vec!["core".to_string(), "array".to_string()],
+            "builtin_arrayGet".to_string(),
         ),
-        ImportFuncDecl::new_types(
-            string_table.get("builtin_arraySet".to_string()),
-            false,
-            vec![Type::Any, Type::Uint, Type::Any],
-            Type::Any,
+        Import::new(
+            vec!["core".to_string(), "array".to_string()],
+            "builtin_arraySet".to_string(),
         ),
-        ImportFuncDecl::new_types(
-            string_table.get("builtin_kvsNew".to_string()),
-            false,
-            vec![],
-            Type::Any,
+        Import::new(
+            vec!["core".to_string(), "kvs".to_string()],
+            "builtin_kvsNew".to_string(),
         ),
-        ImportFuncDecl::new_types(
-            string_table.get("builtin_kvsGet".to_string()),
-            false,
-            vec![Type::Any, Type::Any],
-            Type::Option(Box::new(Type::Any)),
+        Import::new(
+            vec!["core".to_string(), "kvs".to_string()],
+            "builtin_kvsGet".to_string(),
         ),
-        ImportFuncDecl::new_types(
-            string_table.get("builtin_kvsSet".to_string()),
-            false,
-            vec![Type::Any, Type::Any, Type::Any],
-            Type::Any,
+        Import::new(
+            vec!["core".to_string(), "kvs".to_string()],
+            "builtin_kvsSet".to_string(),
         ),
-    ];
-    (imps, string_table)
+    ]
 }
 
 ///Sorts the `TopLevelDecl`s into collections based on their type
 pub fn sort_top_level_decls(
     decls: &[TopLevelDecl],
-    string_table_in: StringTable,
 ) -> (
     Vec<Import>,
-    Vec<ImportedFunc>,
     Vec<FuncDecl>,
     HashMap<usize, Type>,
     Vec<GlobalVarDecl>,
-    StringTable,
     HashMap<usize, Type>,
 ) {
-    let mut imports = vec![];
-    let mut imported_funcs = Vec::new();
+    let mut imports = builtin_func_decls();
     let mut funcs = Vec::new();
     let mut named_types = HashMap::new();
     let mut func_table = HashMap::new();
     let mut global_vars = Vec::new();
 
-    let (builtin_fds, string_table) = builtin_func_decls(string_table_in);
-    //TODO:Remove or move to new system
-    for fd in builtin_fds.iter() {
-        func_table.insert(fd.name, fd.tipe.clone());
-        imported_funcs.push(ImportedFunc::new(
-            imported_funcs.len(),
-            fd.name,
-            &string_table,
-            fd.arg_types.clone(),
-            fd.ret_type.clone(),
-            fd.is_impure,
-        ));
-    }
     for decl in decls.iter() {
         match decl {
             TopLevelDecl::TypeDecl(td) => {
@@ -793,21 +762,12 @@ pub fn sort_top_level_decls(
             }
         }
     }
-    (
-        imports,
-        imported_funcs,
-        funcs,
-        named_types,
-        global_vars,
-        string_table,
-        func_table,
-    )
+    (imports, funcs, named_types, global_vars, func_table)
 }
 
 ///Performs typechecking various top level declarations, including `ImportedFunc`s, `FuncDecl`s,
 /// named `Type`s, and global variables.
 pub fn typecheck_top_level_decls(
-    imported_funcs: Vec<ImportedFunc>,
     funcs: Vec<FuncDecl>,
     named_types: HashMap<usize, Type>,
     global_vars: Vec<GlobalVarDecl>,
@@ -815,15 +775,7 @@ pub fn typecheck_top_level_decls(
     func_map: HashMap<usize, Type>,
     checked_funcs: &mut Vec<TypeCheckedFunc>,
     type_tree: &TypeTree,
-) -> Result<
-    (
-        Vec<ExportedFunc>,
-        Vec<ImportedFunc>,
-        Vec<GlobalVarDecl>,
-        StringTable,
-    ),
-    TypeError,
-> {
+) -> Result<(Vec<ExportedFunc>, Vec<GlobalVarDecl>, StringTable), TypeError> {
     let global_vars_map = global_vars
         .iter()
         .enumerate()
@@ -876,12 +828,7 @@ pub fn typecheck_top_level_decls(
         res_global_vars.push(global_var);
     }
 
-    Ok((
-        exported_funcs,
-        imported_funcs,
-        res_global_vars,
-        string_table,
-    ))
+    Ok((exported_funcs, res_global_vars, string_table))
 }
 
 ///If successful, produces a `TypeCheckedFunc` from `FuncDecl` reference fd, according to global
