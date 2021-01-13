@@ -1957,6 +1957,7 @@ impl Machine {
                         Ok(true)
                     },
                     Opcode::AVMOpcode(AVMOpcode::Sideload) => {
+                        let _block_num = self.stack.pop_uint(&self.state)?;
                         self.stack.push(Value::none());
                         self.incr_pc();
                         Ok(true)
