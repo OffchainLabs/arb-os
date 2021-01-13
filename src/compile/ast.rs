@@ -191,9 +191,10 @@ impl Type {
             }
             Type::Func(is_impure, args, ret) => {
                 if let Type::Func(is_impure2, args2, ret2) = rhs {
+                    //note: The order of arg2 and args, and ret and ret2 are in this order to ensure contravariance in function arg types
                     (*is_impure || !is_impure2)
-                        && arg_vectors_assignable(args, args2, type_tree, seen.clone())
-                        && (ret2.assignable(ret, type_tree, seen)) // note: rets in reverse order
+                        && arg_vectors_assignable(args2, args, type_tree, seen.clone())
+                        && (ret.assignable(ret2, type_tree, seen))
                 } else {
                     false
                 }
