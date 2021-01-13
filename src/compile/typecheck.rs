@@ -1044,7 +1044,19 @@ fn typecheck_statement<'a>(
     let (stat, binds) = match kind {
         StatementKind::Noop() => Ok((TypeCheckedStatementKind::Noop(), vec![])),
         StatementKind::Panic() => Ok((TypeCheckedStatementKind::Panic(), vec![])),
-        StatementKind::ReturnVoid() => Ok((TypeCheckedStatementKind::ReturnVoid(), vec![])),
+        StatementKind::ReturnVoid() => {
+            if Type::Void.assignable(return_type, type_tree, HashSet::new()) {
+                Ok((TypeCheckedStatementKind::ReturnVoid(), vec![]))
+            } else {
+                Err(new_type_error(
+                    format!(
+                        "Tried to return without type in function that returns {}",
+                        return_type.display()
+                    ),
+                    debug_info.location,
+                ))
+            }
+        }
         StatementKind::Return(expr) => {
             let tc_expr = typecheck_expr(
                 expr,
@@ -2741,7 +2753,10 @@ fn typecheck_binary_op(
             )),
         },
         BinaryOp::Equal | BinaryOp::NotEqual => {
-            if (subtype1 == Type::Any) || (subtype2 == Type::Any) || (subtype1 == subtype2) {
+            if subtype1 != Type::Void
+                && subtype2 != Type::Void
+                && ((subtype1 == Type::Any) || (subtype2 == Type::Any) || (subtype1 == subtype2))
+            {
                 Ok(TypeCheckedExprKind::Binary(
                     op,
                     Box::new(tcs1),
