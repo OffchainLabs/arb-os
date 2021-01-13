@@ -8,7 +8,7 @@ use std::queue::Queue;
 use evmlogs::EvmLogs;
 
 use std::bytearray::bytearray_new;
-use std::bytearray::bytearray_marshalFull;
+use std::bytearray::bytearray_toSizeAndBuffer;
 
 use std::merkletree::MerkleTreeBuilder;
 use std::merkletree::merkleTreeBuilder_new;
@@ -205,14 +205,14 @@ public impure func emitTxReceipt(
 
     let txResultInfo = struct {
         returnCode: resultCode,
-        returnData: bytearray_marshalFull(returnData),
+        returnData: bytearray_toSizeAndBuffer(returnData),
         evmLogs: evmLogs,
     };
 
     asm((
         const::LogType_txReceipt,
         l1message with {
-            msgData: unsafecast<ByteArray>(bytearray_marshalFull(l1message.msgData))  // because caller expects marshalled bytes
+            msgData: unsafecast<ByteArray>(bytearray_toSizeAndBuffer(l1message.msgData))  // because caller expects marshalled bytes
         },
         txResultInfo,
         realGasUsage,
@@ -249,7 +249,7 @@ public impure func queueMessageForSend(msgType: uint, sender: address, data: Byt
         (
             msgType,
             uint(sender),
-            bytearray_marshalFull(data),
+            bytearray_toSizeAndBuffer(data),
         )
     );
 }
@@ -271,7 +271,7 @@ public impure func sendMessage(msgType: uint, sender: address, data: ByteArray) 
         (
             msgType,
             uint(sender),
-            bytearray_marshalFull(data),
+            bytearray_toSizeAndBuffer(data),
         )
     );
 }
