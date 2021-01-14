@@ -2072,7 +2072,7 @@ fn mavm_codegen_expr<'a>(
             ));
             Ok((label_gen, code, max(num_locals, exp_locals)))
         }
-        TypeCheckedExprKind::_If(_, _, _, _) => unimplemented!(),
+        TypeCheckedExprKind::If(_, _, _) => unimplemented!(),
     }
 }
 

@@ -488,11 +488,10 @@ pub enum TypeCheckedExprKind {
     Cast(Box<TypeCheckedExpr>, Type),
     Asm(Type, Vec<Instruction>, Vec<TypeCheckedExpr>),
     Try(Box<TypeCheckedExpr>, Type),
-    _If(
-        Vec<Statement>,
-        Option<Expr>,
-        Option<(Vec<Statement>, Option<Expr>)>,
-        Type,
+    If(
+        Box<TypeCheckedExpr>,
+        TypeCheckedCodeBlock,
+        Option<TypeCheckedCodeBlock>,
     ),
 }
 
@@ -561,7 +560,7 @@ impl MiniProperties for TypeCheckedExpr {
                 instrs.iter().all(|inst| inst.is_pure()) && args.iter().all(|expr| expr.is_pure())
             }
             TypeCheckedExprKind::Try(expr, _) => expr.is_pure(),
-            TypeCheckedExprKind::_If(_, _, _, _) => unimplemented!(),
+            TypeCheckedExprKind::If(_, _, _) => unimplemented!(),
         }
     }
 }
@@ -627,7 +626,7 @@ impl AbstractSyntaxTree for TypeCheckedExpr {
                 TypeCheckedNode::Expression(exp2),
                 TypeCheckedNode::Expression(exp3),
             ],
-            TypeCheckedExprKind::_If(_, _, _, _) => unimplemented!(),
+            TypeCheckedExprKind::If(_, _, _) => unimplemented!(),
         }
     }
 }
@@ -671,7 +670,7 @@ impl TypeCheckedExpr {
             TypeCheckedExprKind::Cast(_, t) => t.clone(),
             TypeCheckedExprKind::Asm(t, _, _) => t.clone(),
             TypeCheckedExprKind::Try(_, t) => t.clone(),
-            TypeCheckedExprKind::_If(_, _, _, _) => unimplemented!(),
+            TypeCheckedExprKind::If(_, _, _) => unimplemented!(),
         }
     }
 }
@@ -2201,7 +2200,73 @@ fn typecheck_expr(
                     )),
                 }
             }
-            ExprKind::If(_cond, _block, _else_block) => unimplemented!(),
+            ExprKind::If(cond, block, else_block) => {
+                let cond_expr = typecheck_expr(
+                    cond,
+                    type_table,
+                    global_vars,
+                    func_table,
+                    return_type,
+                    type_tree,
+                    scopes,
+                )?;
+                let block = typecheck_codeblock(
+                    block,
+                    type_table,
+                    global_vars,
+                    func_table,
+                    return_type,
+                    type_tree,
+                    scopes,
+                )?;
+                let else_block = else_block
+                    .clone()
+                    .map(|e| {
+                        typecheck_codeblock(
+                            &e,
+                            type_table,
+                            global_vars,
+                            func_table,
+                            return_type,
+                            type_tree,
+                            scopes,
+                        )
+                    })
+                    .transpose()?;
+                if cond_expr.get_type() != Type::Bool {
+                    return Err(new_type_error(
+                        format!(
+                            "Condition of if expression must be bool: found \"{}\"",
+                            cond_expr.get_type().display()
+                        ),
+                        debug_info.location,
+                    ));
+                }
+                if block.get_type()
+                    != else_block
+                        .clone()
+                        .map(|b| b.get_type())
+                        .unwrap_or(Type::Void)
+                {
+                    return Err(new_type_error(
+                        format!(
+                            "Mismatch of if and else types found: \"{}\" and \"{}\"",
+                            block.get_type().display(),
+                            else_block
+                                .clone()
+                                .map(|b| b.get_type())
+                                .unwrap_or(Type::Void)
+                                .display()
+                        ),
+                        debug_info.location,
+                    ));
+                }
+                Ok(TypeCheckedExprKind::If(
+                    Box::new(cond_expr),
+                    block,
+                    else_block,
+                ))
+            }
         }?,
         debug_info,
     })
@@ -3066,6 +3131,12 @@ impl TypeCheckedCodeBlock {
             ret_expr,
             scope,
         }
+    }
+    pub fn get_type(&self) -> Type {
+        self.ret_expr
+            .clone()
+            .map(|r| r.get_type())
+            .unwrap_or(Type::Void)
     }
 }
 
