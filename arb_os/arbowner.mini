@@ -6,6 +6,7 @@ use accounts::account_setContractInfo;
 
 use chainParameters::chainParams_getOwner;
 use chainParameters::chainParams_setOwner;
+use chainParameters::chainParams_setBlocksPerSend;
 
 use codeSegment::AvmCodeBuilder;
 use codeSegment::avmCodeBuilder_new;
@@ -97,6 +98,8 @@ public impure func arbowner_txcall() {
             arbowner_getFeeMaxes(topFrame, calldata);
         } elseif (funcCode == 0x72861aa4) {
             arbowner_setFeeMaxes(topFrame, calldata);
+        } elseif (funcCode == 0x340e4fc2) {
+            arbowner_setBlocksPerSend(topFrame, calldata);
         } elseif (funcCode == 0xea180a38) {
             arbowner_changeSequencer(topFrame, calldata);
         } else {
@@ -253,6 +256,14 @@ impure func arbowner_setFeeMaxes(topFrame: EvmCallFrame, calldata: ByteArray) { 
     } else {
         evmOp_revert_knownCodePc(address(const::Address_ArbOwner), 91, 0, 0);
     }
+}
+
+impure func arbowner_setBlocksPerSend(topFrame: EvmCallFrame, calldata: ByteArray) {  // (uint)
+    if (bytearray_size(calldata) != 36) {
+        evmOp_revert_knownCodePc(address(const::Address_ArbOwner), 120, 0, 0);
+    }
+    chainParams_setBlocksPerSend(bytearray_get256(calldata, 4));
+    evmOp_return(0, 0);
 }
 
 impure func arbowner_changeSequencer(topFrame: EvmCallFrame, calldata: ByteArray) {  // (address, uint, uint)

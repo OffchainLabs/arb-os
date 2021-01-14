@@ -413,6 +413,8 @@ pub fn _evm_test_arbowner(log_to: Option<&Path>, debug: bool) -> Result<(), etha
 
     arbowner._finish_code_upload_as_arbos_upgrade(&mut machine)?;
 
+    arbowner._set_blocks_per_send(&mut machine, Uint256::from_u64(10))?;
+
     arbowner._change_sequencer(
         &mut machine,
         Uint256::from_u64(18498),

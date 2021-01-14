@@ -1227,6 +1227,31 @@ impl<'a> _ArbOwner<'a> {
         }
     }
 
+    pub fn _set_blocks_per_send(
+        &self,
+        machine: &mut Machine,
+        blocks_per_send: Uint256,
+    ) -> Result<(), ethabi::Error> {
+        let (receipts, _sends) = self.contract_abi.call_function(
+            self.my_address.clone(),
+            "setBlocksPerSend",
+            &[ethabi::Token::Uint(blocks_per_send.to_u256())],
+            machine,
+            Uint256::zero(),
+            self.debug,
+        )?;
+
+        if receipts.len() != 1 {
+            return Err(ethabi::Error::from("wrong number of receipts"));
+        }
+
+        if receipts[0].succeeded() {
+            Ok(())
+        } else {
+            Err(ethabi::Error::from("reverted"))
+        }
+    }
+
     pub fn _change_sequencer(
         &self,
         machine: &mut Machine,

@@ -117,7 +117,6 @@ impl RuntimeEnvironment {
         buf.extend(Uint256::from_u64(1000).to_bytes_be()); // base stake amount in wei
         buf.extend(Uint256::zero().to_bytes_be()); // staking token address (zero means ETH)
         buf.extend(owner.clone().unwrap_or(Uint256::zero()).to_bytes_be()); // owner address
-        buf.extend(Uint256::from_u64(10).to_bytes_be()); // blocks per send
 
         if let Some((base_gas_price, storage_charge, pay_fees_to)) = charging_policy.clone() {
             buf.extend(&[0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 2u8]); // option ID = 2
