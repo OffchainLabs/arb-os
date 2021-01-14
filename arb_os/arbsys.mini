@@ -43,7 +43,6 @@ use std::bytearray::bytearray_getByte;
 use std::bytearray::bytearray_get256;
 use std::bytearray::bytearray_set256;
 use std::bytearray::bytearray_extract;
-use std::bytearray::bytearray_marshalFull;
 use std::bytearray::bytearray_extract;
 use std::bytearray::bytearray_copy;
 
@@ -230,7 +229,7 @@ impure func arbsys_withdrawErc20(topFrame: EvmCallFrame, calldata: ByteArray) { 
     if (evmCallStack_addEvmLogToCurrent(
         (
             address(const::Address_ArbSys),  // addEvmLogToCurrent will fill this in
-            bytearray_marshalFull(bytearray_set256(bytearray_new(0), 0, amount)),
+            (32, setbuffer256(newbuffer(), 0, amount)),
             0x2fbb3e8dc2807d6a61feb98fc2120153f77b2c0d25ef6272e1756935dd62c847, // ERC20Withdrawal(address,address,uint256)
             uint(destAddr),
             uint(tokenAddr),
@@ -266,7 +265,7 @@ impure func arbsys_withdrawErc721(topFrame: EvmCallFrame, calldata: ByteArray) {
     if (evmCallStack_addEvmLogToCurrent(
         (
             address(const::Address_ArbSys),  // addEvmLogToCurrent will fill this in
-            bytearray_marshalFull(bytearray_new(0)),
+            (0, newbuffer()),
             0xdce1abc7607cf83c96953308072c045ec35d02fbf5777e7d0ec8b102cd89ff81, // ERC721Withdrawal(address,address,uint256)
             uint(destAddr),
             uint(tokenAddr),
@@ -303,7 +302,7 @@ impure func arbsys_withdrawEth(topFrame: EvmCallFrame, calldata: ByteArray) { //
         if (evmCallStack_addEvmLogToCurrent(
             (
                 address(const::Address_ArbSys),  // addEvmLogToCurrent will fill this in
-                bytearray_marshalFull(bytearray_set256(bytearray_new(0), 0, amount)),
+                (32, setbuffer256(newbuffer(), 0, amount)),
                 0xc32d3c7eb0f275cbb5b72b3d3c688269430f30e5b9bb36980396edd9101c615c, // EthWithdrawal(address,uint256)
                 uint(destAddr),
             )

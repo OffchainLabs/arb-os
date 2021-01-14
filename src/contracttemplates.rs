@@ -3,7 +3,7 @@
 */
 
 use crate::mavm::Value;
-use crate::run::bytestack_from_bytes;
+use crate::run::_bytestack_from_bytes;
 use bytes::{BufMut, BytesMut};
 use std::{fs::File, io::Write, path::Path};
 
@@ -39,7 +39,7 @@ fn mini_code_for_avm_value(buf: &mut BytesMut, val: Value) {
 }
 
 fn mini_code_for_bytes(buf: &mut BytesMut, b: &[u8]) {
-    mini_code_for_avm_value(buf, bytestack_from_bytes(b));
+    mini_code_for_avm_value(buf, _bytestack_from_bytes(b));
 }
 
 fn mini_code_getter_for_bytes(buf: &mut BytesMut, name: &str, b: &[u8]) {

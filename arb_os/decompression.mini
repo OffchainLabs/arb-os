@@ -21,7 +21,6 @@ use std::bytearray::bytearray_setByte;
 use std::bytearray::bytearray_set256;
 use std::bytearray::bytearray_extract;
 use std::bytearray::bytearray_copy;
-use std::bytearray::bytearray_marshalFull;
 
 use std::bytestream::ByteStream;
 use std::bytestream::bytestream_new;
