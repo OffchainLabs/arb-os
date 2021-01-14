@@ -253,6 +253,7 @@ impure func getFromL1Inbox(inbox: Inbox) -> Inbox {
                         indexInParent: ~0,
                     },
                     aggregator: None<AggregatorInfo>,
+                    adminMode: true,
                 };
 
                 if (newMsg.blockNumber == 0) {
@@ -282,6 +283,7 @@ impure func getFromL1Inbox(inbox: Inbox) -> Inbox {
             indexInParent: ~0,
         },
         aggregator: None<AggregatorInfo>,
+        adminMode: false,
     };
 
     if (newMsg.blockNumber == 0) {
@@ -318,6 +320,7 @@ impure func getFromL1InboxSequencer(inbox: Inbox, seq: SequencerState) -> Inbox 
             indexInParent: ~0,
         },
         aggregtor: None<AggregatorInfo>,
+        adminMode: false,
     };
 
     let blockNum = newMsg.blockNumber;
@@ -441,6 +444,7 @@ func endOfBlockMessage(blockNum: uint, timestamp: uint) -> IncomingRequest {
             indexInParent: ~0,
         },
         aggregator: None<AggregatorInfo>,
+        adminMode: false,
     };
 }
 
@@ -500,6 +504,7 @@ type IncomingRequest = struct {
     msgData: ByteArray,       // kind-specific data
     provenance: RequestProvenance,
     aggregator: option<AggregatorInfo>,
+    adminMode: bool,
 }
 
 type RequestProvenance = struct {
