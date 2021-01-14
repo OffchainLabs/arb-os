@@ -212,8 +212,11 @@ fn inline(
                 for statement in code.iter_mut().rev() {
                     statement.recursive_apply(strip_returns, &(), &mut ())
                 }
-                exp.kind =
-                    TypeCheckedExprKind::CodeBlock(code, block_exp, Some("_inline".to_string()));
+                exp.kind = TypeCheckedExprKind::CodeBlock(TypeCheckedCodeBlock::new(
+                    code,
+                    block_exp,
+                    Some("_inline".to_string()),
+                ));
             }
             false
         } else {
@@ -453,11 +456,7 @@ pub enum TypeCheckedExprKind {
         Type,
         PropertiesList,
     ),
-    CodeBlock(
-        Vec<TypeCheckedStatement>,
-        Option<Box<TypeCheckedExpr>>,
-        Option<String>,
-    ),
+    CodeBlock(TypeCheckedCodeBlock),
     StructInitializer(Vec<TypeCheckedStructField>, Type),
     ArrayRef(Box<TypeCheckedExpr>, Box<TypeCheckedExpr>, Type),
     FixedArrayRef(Box<TypeCheckedExpr>, Box<TypeCheckedExpr>, usize, Type),
@@ -526,13 +525,7 @@ impl MiniProperties for TypeCheckedExpr {
                     && fields_exprs.iter().all(|statement| statement.is_pure())
                     && properties.pure
             }
-            TypeCheckedExprKind::CodeBlock(statements, return_expr, _) => {
-                statements.iter().all(|statement| statement.is_pure())
-                    && return_expr
-                        .as_ref()
-                        .map(|expr| expr.is_pure())
-                        .unwrap_or(true)
-            }
+            TypeCheckedExprKind::CodeBlock(block) => block.is_pure(),
             TypeCheckedExprKind::StructInitializer(fields, _) => {
                 fields.iter().all(|field| field.value.is_pure())
             }
@@ -614,15 +607,7 @@ impl AbstractSyntaxTree for TypeCheckedExpr {
                     )
                     .collect()
             }
-            TypeCheckedExprKind::CodeBlock(stats, oexpr, _) => oexpr
-                .iter_mut()
-                .map(|exp| TypeCheckedNode::Expression(exp))
-                .chain(
-                    stats
-                        .iter_mut()
-                        .map(|stat| TypeCheckedNode::Statement(stat)),
-                )
-                .collect(),
+            TypeCheckedExprKind::CodeBlock(block) => block.child_nodes(),
             TypeCheckedExprKind::StructInitializer(fields, _) => fields
                 .iter_mut()
                 .map(|field| TypeCheckedNode::StructField(field))
@@ -666,7 +651,7 @@ impl TypeCheckedExpr {
             TypeCheckedExprKind::DotRef(_, _, _, t) => t.clone(),
             TypeCheckedExprKind::Const(_, t) => t.clone(),
             TypeCheckedExprKind::FunctionCall(_, _, t, _) => t.clone(),
-            TypeCheckedExprKind::CodeBlock(_, expr, _) => expr
+            TypeCheckedExprKind::CodeBlock(block) => block.ret_expr
                 .clone()
                 .map(|exp| exp.get_type())
                 .unwrap_or_else(|| Type::Tuple(vec![])),
@@ -1816,19 +1801,16 @@ fn typecheck_expr(
                 }
             }
             ExprKind::CodeBlock(block) => {
-                let type_checked_block = typecheck_codeblock(
-                    block,
-                    &type_table,
-                    global_vars,
-                    func_table,
-                    return_type,
-                    type_tree,
-                    scopes,
-                )?;
                 Ok(TypeCheckedExprKind::CodeBlock(
-                    type_checked_block.body,
-                    type_checked_block.ret_expr,
-                    type_checked_block.scope,
+                    typecheck_codeblock(
+                        block,
+                        &type_table,
+                        global_vars,
+                        func_table,
+                        return_type,
+                        type_tree,
+                        scopes,
+                    )?
                 ))
             }
             ExprKind::ArrayOrMapRef(array, index) => {
@@ -3069,10 +3051,48 @@ fn typecheck_binary_op_const(
     }
 }
 
+#[derive(Debug, Clone)]
 pub struct TypeCheckedCodeBlock {
-    body: Vec<TypeCheckedStatement>,
-    ret_expr: Option<Box<TypeCheckedExpr>>,
-    scope: Option<String>,
+    pub body: Vec<TypeCheckedStatement>,
+    pub ret_expr: Option<Box<TypeCheckedExpr>>,
+    pub scope: Option<String>,
+}
+
+impl TypeCheckedCodeBlock {
+    fn new(
+        body: Vec<TypeCheckedStatement>,
+        ret_expr: Option<Box<TypeCheckedExpr>>,
+        scope: Option<String>,
+    ) -> Self {
+        Self {
+            body,
+            ret_expr,
+            scope,
+        }
+    }
+}
+
+impl AbstractSyntaxTree for TypeCheckedCodeBlock {
+    fn child_nodes(&mut self) -> Vec<TypeCheckedNode> {self.ret_expr
+        .iter_mut()
+        .map(|exp| TypeCheckedNode::Expression(exp))
+        .chain(
+            self.body
+                .iter_mut()
+                .map(|stat| TypeCheckedNode::Statement(stat)),
+        )
+        .collect()}
+}
+
+impl MiniProperties for TypeCheckedCodeBlock {
+    fn is_pure(&self) -> bool {
+        self.body.iter().all(|statement| statement.is_pure())
+            && self
+                .ret_expr
+                .as_ref()
+                .map(|expr| expr.is_pure())
+                .unwrap_or(true)
+    }
 }
 
 fn typecheck_codeblock(

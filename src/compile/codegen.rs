@@ -1438,15 +1438,15 @@ fn mavm_codegen_expr<'a>(
             c.push(Instruction::from_opcode(Opcode::Label(ret_label), debug));
             Ok((lg, c, max(num_locals, max(fexpr_locals, args_locals))))
         }
-        TypeCheckedExprKind::CodeBlock(body, ret_expr, scope_name) => {
+        TypeCheckedExprKind::CodeBlock(block) => {
             let (bottom_label, lg) = label_gen.next();
             scopes.push((
-                scope_name.clone().unwrap_or("_".to_string()),
+                block.scope.clone().unwrap_or("_".to_string()),
                 bottom_label,
                 None,
             ));
             let (lab_gen, nl, _cont, block_locals) = mavm_codegen_statements(
-                body.to_vec(),
+                block.body.clone(),
                 code,
                 num_locals,
                 locals,
@@ -1458,7 +1458,7 @@ fn mavm_codegen_expr<'a>(
                 scopes,
                 file_name_chart,
             )?;
-            if let Some(ret_expr) = ret_expr {
+            if let Some(ret_expr) = &block.ret_expr {
                 let mut new_locals = locals.clone();
                 new_locals.extend(block_locals);
                 let (lg, code, prepushed_vals_expr) = mavm_codegen_expr(
