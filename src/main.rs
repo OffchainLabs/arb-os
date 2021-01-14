@@ -42,8 +42,6 @@ struct CompileStruct {
     #[clap(short, long)]
     debug_mode: bool,
     #[clap(short, long)]
-    typecheck: bool,
-    #[clap(short, long)]
     output: Option<String>,
     #[clap(short, long)]
     compile_only: bool,
@@ -121,7 +119,6 @@ fn main() -> Result<(), CompileError> {
     match matches {
         Args::Compile(compile) => {
             let debug_mode = compile.debug_mode;
-            let typecheck = compile.typecheck;
             let mut output = get_output(compile.output.as_deref()).unwrap();
             let filenames: Vec<_> = compile.input.clone();
             let mut file_name_chart = BTreeMap::new();
@@ -168,7 +165,7 @@ fn main() -> Result<(), CompileError> {
                 }
 
                 let is_module = compile.module;
-                match link(&compiled_progs, is_module, Some(Value::none()), typecheck) {
+                match link(&compiled_progs, is_module, Some(Value::none())) {
                     Ok(linked_prog) => {
                         match postlink_compile(
                             linked_prog,
