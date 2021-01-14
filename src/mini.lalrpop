@@ -68,7 +68,9 @@ CodeBlock: Vec<Statement> = {
 	"{" <Statement*> "}" => <>
 }
 
-CodeBlockNew: CodeBlock = {}
+CodeBlockNew: CodeBlock = {
+    "{" <stats: Statement*> <expr: Expr?> "}" => CodeBlock::new(stats, expr.map(Box::new)),
+}
 
 Statement: Statement = {
 	<lno: @L> <attribs: ("#[" <Attributes> "]")?> <kind:StatementKind> => Statement {kind, debug_info: DebugInfo::new(file_info.location(BytePos::from(lno), filename), attribs.unwrap_or_default())},
@@ -245,7 +247,7 @@ Expr11: Expr = {
 	<lno: @L> <e1:Expr11> "[" <e2:Expr> "]" => Expr { kind: ExprKind::ArrayOrMapRef(Box::new(e1), Box::new(e2)), debug_info: DebugInfo::from(file_info.location(BytePos::from(lno), filename))},
 	<lno: @L> <e:Expr11> "." <i:Ident> => Expr { kind: ExprKind::DotRef(Box::new(e), stringtable.name_from_id(i).to_string()), debug_info: DebugInfo::from(file_info.location(BytePos::from(lno), filename))},
 	<lno: @L> <e:Expr11> "." <u:UnsignedInteger> => Expr { kind: ExprKind::TupleRef(Box::new(e), u), debug_info: DebugInfo::from(file_info.location(BytePos::from(lno), filename))},
-	<lno: @L> "eif" <cond: Expr> "{" <cb: Statement*> <e: Expr?> "}" <el: ("else" "{" <Expr> "}")?> => Expr { kind: ExprKind::If(Box::new(cond), cb, e.map(Box::new), el.map(Box::new)), debug_info: DebugInfo::from(file_info.location(BytePos::from(lno), filename))},
+	<lno: @L> "eif" <cond: Expr> <cb: CodeBlockNew> <el: ("else" <CodeBlockNew>)?> => Expr { kind: ExprKind::If(Box::new(cond), cb, el), debug_info: DebugInfo::from(file_info.location(BytePos::from(lno), filename))},
 	Expr12,
 }
 

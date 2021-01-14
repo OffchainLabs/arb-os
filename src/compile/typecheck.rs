@@ -651,7 +651,8 @@ impl TypeCheckedExpr {
             TypeCheckedExprKind::DotRef(_, _, _, t) => t.clone(),
             TypeCheckedExprKind::Const(_, t) => t.clone(),
             TypeCheckedExprKind::FunctionCall(_, _, t, _) => t.clone(),
-            TypeCheckedExprKind::CodeBlock(block) => block.ret_expr
+            TypeCheckedExprKind::CodeBlock(block) => block
+                .ret_expr
                 .clone()
                 .map(|exp| exp.get_type())
                 .unwrap_or_else(|| Type::Tuple(vec![])),
@@ -1800,19 +1801,15 @@ fn typecheck_expr(
                     )),
                 }
             }
-            ExprKind::CodeBlock(block) => {
-                Ok(TypeCheckedExprKind::CodeBlock(
-                    typecheck_codeblock(
-                        block,
-                        &type_table,
-                        global_vars,
-                        func_table,
-                        return_type,
-                        type_tree,
-                        scopes,
-                    )?
-                ))
-            }
+            ExprKind::CodeBlock(block) => Ok(TypeCheckedExprKind::CodeBlock(typecheck_codeblock(
+                block,
+                &type_table,
+                global_vars,
+                func_table,
+                return_type,
+                type_tree,
+                scopes,
+            )?)),
             ExprKind::ArrayOrMapRef(array, index) => {
                 let tc_arr = typecheck_expr(
                     &*array,
@@ -2204,7 +2201,7 @@ fn typecheck_expr(
                     )),
                 }
             }
-            ExprKind::If(_cond, _block, _block_ret, _else_block) => unimplemented!(),
+            ExprKind::If(_cond, _block, _else_block) => unimplemented!(),
         }?,
         debug_info,
     })
@@ -3073,15 +3070,17 @@ impl TypeCheckedCodeBlock {
 }
 
 impl AbstractSyntaxTree for TypeCheckedCodeBlock {
-    fn child_nodes(&mut self) -> Vec<TypeCheckedNode> {self.ret_expr
-        .iter_mut()
-        .map(|exp| TypeCheckedNode::Expression(exp))
-        .chain(
-            self.body
-                .iter_mut()
-                .map(|stat| TypeCheckedNode::Statement(stat)),
-        )
-        .collect()}
+    fn child_nodes(&mut self) -> Vec<TypeCheckedNode> {
+        self.ret_expr
+            .iter_mut()
+            .map(|exp| TypeCheckedNode::Expression(exp))
+            .chain(
+                self.body
+                    .iter_mut()
+                    .map(|stat| TypeCheckedNode::Statement(stat)),
+            )
+            .collect()
+    }
 }
 
 impl MiniProperties for TypeCheckedCodeBlock {

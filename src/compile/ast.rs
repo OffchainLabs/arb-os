@@ -659,12 +659,7 @@ pub enum ExprKind {
     UnsafeCast(Box<Expr>, Type),
     Asm(Type, Vec<Instruction>, Vec<Expr>),
     Try(Box<Expr>),
-    If(
-        Box<Expr>,
-        Vec<Statement>,
-        Option<Box<Expr>>,
-        Option<Box<Expr>>,
-    ),
+    If(Box<Expr>, CodeBlock, Option<CodeBlock>),
     NewBuffer,
 }
 
@@ -765,4 +760,10 @@ impl FieldInitializer {
 pub struct CodeBlock {
     pub body: Vec<Statement>,
     pub ret_expr: Option<Box<Expr>>,
+}
+
+impl CodeBlock {
+    pub fn new(body: Vec<Statement>, ret_expr: Option<Box<Expr>>) -> Self {
+        Self { body, ret_expr }
+    }
 }
