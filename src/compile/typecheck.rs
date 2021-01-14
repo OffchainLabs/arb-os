@@ -5,11 +5,11 @@
 //!Converts non-type checked ast nodes to type checked versions, and other related utilities.
 
 use super::ast::{
-    BinaryOp, Constant, Expr, FuncArg, FuncDecl, FuncDeclKind, GlobalVarDecl, IfArm, MatchPattern,
-    Statement, StatementKind, StructField, TopLevelDecl, TrinaryOp, Type, UnaryOp,
+    BinaryOp, CodeBlock, Constant, DebugInfo, Expr, ExprKind, FuncArg, FuncDecl, FuncDeclKind,
+    GlobalVarDecl, IfArm, MatchPattern, Statement, StatementKind, StructField, TopLevelDecl,
+    TrinaryOp, Type, TypeTree, UnaryOp,
 };
 use super::MiniProperties;
-use crate::compile::ast::{DebugInfo, ExprKind, TypeTree};
 use crate::link::{ExportedFunc, Import, ImportedFunc};
 use crate::mavm::{Instruction, Label, Value};
 use crate::pos::Location;
@@ -1815,57 +1815,20 @@ fn typecheck_expr(
                     )),
                 }
             }
-            ExprKind::CodeBlock(body, ret_expr) => {
-                let mut output = Vec::new();
-                let mut block_bindings = Vec::new();
-                scopes.push(("_".to_string(), None));
-                for statement in body {
-                    let mut inner_type_table = type_table.clone();
-                    inner_type_table.extend(
-                        block_bindings
-                            .iter()
-                            .map(|(k, v)| (*k, v))
-                            .collect::<HashMap<_, _>>(),
-                    );
-                    let (statement, bindings) = typecheck_statement(
-                        &statement,
-                        return_type,
-                        &inner_type_table,
-                        global_vars,
-                        func_table,
-                        type_tree,
-                        scopes,
-                    )?;
-                    output.push(statement);
-                    for (key, value) in bindings {
-                        block_bindings.push((key, value));
-                    }
-                }
-                let mut inner_type_table = type_table.clone();
-                inner_type_table.extend(
-                    block_bindings
-                        .iter()
-                        .map(|(k, v)| (*k, v))
-                        .collect::<HashMap<_, _>>(),
-                );
+            ExprKind::CodeBlock(block) => {
+                let type_checked_block = typecheck_codeblock(
+                    block,
+                    &type_table,
+                    global_vars,
+                    func_table,
+                    return_type,
+                    type_tree,
+                    scopes,
+                )?;
                 Ok(TypeCheckedExprKind::CodeBlock(
-                    output,
-                    ret_expr
-                        .clone()
-                        .map(|x| {
-                            typecheck_expr(
-                                &*x,
-                                &inner_type_table,
-                                global_vars,
-                                func_table,
-                                return_type,
-                                type_tree,
-                                scopes,
-                            )
-                        })
-                        .transpose()?
-                        .map(Box::new),
-                    None,
+                    type_checked_block.body,
+                    type_checked_block.ret_expr,
+                    type_checked_block.scope,
                 ))
             }
             ExprKind::ArrayOrMapRef(array, index) => {
@@ -3104,4 +3067,73 @@ fn typecheck_binary_op_const(
             panic!("unexpected op in typecheck_binary_op");
         }
     }
+}
+
+pub struct TypeCheckedCodeBlock {
+    body: Vec<TypeCheckedStatement>,
+    ret_expr: Option<Box<TypeCheckedExpr>>,
+    scope: Option<String>,
+}
+
+fn typecheck_codeblock(
+    block: &CodeBlock,
+    type_table: &TypeTable,
+    global_vars: &HashMap<StringId, (Type, usize)>,
+    func_table: &TypeTable,
+    return_type: &Type,
+    type_tree: &TypeTree,
+    scopes: &mut Vec<(String, Option<Type>)>,
+) -> Result<TypeCheckedCodeBlock, TypeError> {
+    let mut output = Vec::new();
+    let mut block_bindings = Vec::new();
+    scopes.push(("_".to_string(), None));
+    for statement in &block.body {
+        let mut inner_type_table = type_table.clone();
+        inner_type_table.extend(
+            block_bindings
+                .iter()
+                .map(|(k, v)| (*k, v))
+                .collect::<HashMap<_, _>>(),
+        );
+        let (statement, bindings) = typecheck_statement(
+            &statement,
+            return_type,
+            &inner_type_table,
+            global_vars,
+            func_table,
+            type_tree,
+            scopes,
+        )?;
+        output.push(statement);
+        for (key, value) in bindings {
+            block_bindings.push((key, value));
+        }
+    }
+    let mut inner_type_table = type_table.clone();
+    inner_type_table.extend(
+        block_bindings
+            .iter()
+            .map(|(k, v)| (*k, v))
+            .collect::<HashMap<_, _>>(),
+    );
+    Ok(TypeCheckedCodeBlock {
+        body: output,
+        ret_expr: block
+            .ret_expr
+            .clone()
+            .map(|x| {
+                typecheck_expr(
+                    &*x,
+                    &inner_type_table,
+                    global_vars,
+                    func_table,
+                    return_type,
+                    type_tree,
+                    scopes,
+                )
+            })
+            .transpose()?
+            .map(Box::new),
+        scope: None,
+    })
 }

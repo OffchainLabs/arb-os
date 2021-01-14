@@ -647,7 +647,7 @@ pub enum ExprKind {
     Constant(Constant),
     OptionInitializer(Box<Expr>),
     FunctionCall(Box<Expr>, Vec<Expr>),
-    CodeBlock(Vec<Statement>, Option<Box<Expr>>),
+    CodeBlock(CodeBlock),
     ArrayOrMapRef(Box<Expr>, Box<Expr>),
     StructInitializer(Vec<FieldInitializer>),
     Tuple(Vec<Expr>),
@@ -759,4 +759,10 @@ impl FieldInitializer {
     pub fn new(name: String, value: Expr) -> Self {
         FieldInitializer { name, value }
     }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct CodeBlock {
+    pub body: Vec<Statement>,
+    pub ret_expr: Option<Box<Expr>>,
 }
