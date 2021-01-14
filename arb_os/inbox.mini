@@ -155,22 +155,28 @@ public impure func inbox_get() -> IncomingRequest {
 
         let (updatedQ, rawMsg,) = incomingRequestQueue_getOrDie(globalInbox.queue);
 
-        globalInbox = globalInbox with { queue: updatedQ };
-
         let ebMsg = unsafecast<IncomingRequest>(rawMsg);
         if (ebMsg.blockNumber > globalInbox.blockNum) {
             if ((globalInbox.sequencer != None<SequencerState>) && globalInbox.seenMsgAtThisBlockNum) {
-                let eobMsg = endOfBlockMessage(globalInbox.blockNum, globalInbox.timestamp);
-                globalInbox = globalInbox with {
-                    blockNum: ebMsg.blockNumber
-                } with {
-                    timestamp: ebMsg.timestamp
-                } with {
-                    seenMsgAtThisBlockNum: false
-                };
-                return eobMsg;
+                // don't update queue, because we're not consuming ebMsg
+                let rawSideloadMsg = asm(globalInbox.blockNum,) any { sideload };
+                if (rawSideloadMsg == ()) {
+                    let eobMsg = endOfBlockMessage(globalInbox.blockNum, globalInbox.timestamp);
+                    globalInbox = globalInbox with {
+                        blockNum: ebMsg.blockNumber
+                    } with {
+                        timestamp: ebMsg.timestamp
+                    } with {
+                        seenMsgAtThisBlockNum: false
+                    };
+                    return eobMsg;
+                } else {
+                    return unsafecast<IncomingRequest>(rawSideloadMsg);
+                }
             } else {
                 globalInbox = globalInbox with {
+                    queue: updatedQ
+                } with {
                     blockNum: ebMsg.blockNumber
                 } with {
                     timestamp: ebMsg.timestamp
@@ -178,6 +184,8 @@ public impure func inbox_get() -> IncomingRequest {
                     seenMsgAtThisBlockNum: true
                 };
             }
+        } else {
+            globalInbox = globalInbox with { queue: updatedQ };
         }
 
         if (ebMsg.kind == const::L1MessageType_chainInit) {
@@ -196,17 +204,24 @@ impure func getFromL1Inbox(inbox: Inbox) -> Inbox {
     if (inbox.seenMsgAtThisBlockNum) {
         let sameBlockNum = asm(inbox.blockNum,) bool { inboxpeek };
         if ( ! sameBlockNum) {
-            // peek says we hit end of L1 block, so insert end-of-block message and return
-            return inbox with {
-                queue: incomingRequestQueue_put(
-                    inbox.queue,
-                    endOfBlockMessage(inbox.blockNum, inbox.timestamp),
-                )
-            } with {
-                blockNum: inbox.blockNum+1
-            } with {
-                seenMsgAtThisBlockNum: false
-            };
+            // peek says we hit end of L1 block, so try sideload, then insert end-of-block message and return
+            let rawSideloadedMsg = asm(inbox.blockNum,) any { sideload };
+            if (rawSideloadedMsg == ()) {
+                return inbox with {
+                    queue: incomingRequestQueue_put(
+                        inbox.queue,
+                        endOfBlockMessage(inbox.blockNum, inbox.timestamp),
+                    )
+                } with {
+                    blockNum: inbox.blockNum+1
+                } with {
+                    seenMsgAtThisBlockNum: false
+                };
+            } else {
+                return inbox with {
+                    queue: incomingRequestQueue_put(inbox.queue, unsafecast<IncomingRequest>(rawSideloadedMsg))
+                };
+            }
         }
     }
 
