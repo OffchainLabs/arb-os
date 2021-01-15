@@ -35,7 +35,7 @@ func merkleize2(data: []any, offset: uint, num: uint, chunk: uint) -> bytes32 {
     if (num == 0) {
         return bytes32(0);
     } elseif (num == 1) {
-        return hash(data[offset]);
+        return hash(hash(data[offset]));  // hash twice so it can't collide with internal node hash (which hashes 64 bytes)
     } else {
         let num1 = num;
         let num2 = 0;
@@ -46,7 +46,7 @@ func merkleize2(data: []any, offset: uint, num: uint, chunk: uint) -> bytes32 {
         return hash(
             merkleize2(data, offset, num1, chunk/2),
             merkleize2(data, offset+chunk, num2, chunk/2),
-        ) ^ bytes32(1);        // flip low-order bit in hash of internal node, to avoid collision with leaf hash
+        );
     }
 }
 
