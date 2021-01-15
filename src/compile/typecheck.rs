@@ -492,6 +492,7 @@ pub enum TypeCheckedExprKind {
         Box<TypeCheckedExpr>,
         TypeCheckedCodeBlock,
         Option<TypeCheckedCodeBlock>,
+        Type,
     ),
 }
 
@@ -560,7 +561,15 @@ impl MiniProperties for TypeCheckedExpr {
                 instrs.iter().all(|inst| inst.is_pure()) && args.iter().all(|expr| expr.is_pure())
             }
             TypeCheckedExprKind::Try(expr, _) => expr.is_pure(),
-            TypeCheckedExprKind::If(_, _, _) => unimplemented!(),
+            TypeCheckedExprKind::If(cond, block, else_block, _) => {
+                cond.is_pure()
+                    && block.is_pure()
+                    && if let Some(block) = else_block {
+                        block.is_pure()
+                    } else {
+                        true
+                    }
+            }
         }
     }
 }
@@ -626,7 +635,7 @@ impl AbstractSyntaxTree for TypeCheckedExpr {
                 TypeCheckedNode::Expression(exp2),
                 TypeCheckedNode::Expression(exp3),
             ],
-            TypeCheckedExprKind::If(_, _, _) => unimplemented!(),
+            TypeCheckedExprKind::If(_, _, _, _) => unimplemented!(),
         }
     }
 }
@@ -650,11 +659,7 @@ impl TypeCheckedExpr {
             TypeCheckedExprKind::DotRef(_, _, _, t) => t.clone(),
             TypeCheckedExprKind::Const(_, t) => t.clone(),
             TypeCheckedExprKind::FunctionCall(_, _, t, _) => t.clone(),
-            TypeCheckedExprKind::CodeBlock(block) => block
-                .ret_expr
-                .clone()
-                .map(|exp| exp.get_type())
-                .unwrap_or_else(|| Type::Tuple(vec![])),
+            TypeCheckedExprKind::CodeBlock(block) => block.get_type(),
             TypeCheckedExprKind::StructInitializer(_, t) => t.clone(),
             TypeCheckedExprKind::ArrayRef(_, _, t) => t.clone(),
             TypeCheckedExprKind::FixedArrayRef(_, _, _, t) => t.clone(),
@@ -670,7 +675,7 @@ impl TypeCheckedExpr {
             TypeCheckedExprKind::Cast(_, t) => t.clone(),
             TypeCheckedExprKind::Asm(t, _, _) => t.clone(),
             TypeCheckedExprKind::Try(_, t) => t.clone(),
-            TypeCheckedExprKind::If(_, _, _) => unimplemented!(),
+            TypeCheckedExprKind::If(_, _, _, t) => t.clone(),
         }
     }
 }
@@ -2234,21 +2239,20 @@ fn typecheck_expr(
                     })
                     .transpose()?;
                 if cond_expr.get_type() != Type::Bool {
-                    return Err(new_type_error(
+                    Err(new_type_error(
                         format!(
                             "Condition of if expression must be bool: found \"{}\"",
                             cond_expr.get_type().display()
                         ),
                         debug_info.location,
-                    ));
-                }
-                if block.get_type()
+                    ))
+                } else if block.get_type()
                     != else_block
                         .clone()
                         .map(|b| b.get_type())
                         .unwrap_or(Type::Void)
                 {
-                    return Err(new_type_error(
+                    Err(new_type_error(
                         format!(
                             "Mismatch of if and else types found: \"{}\" and \"{}\"",
                             block.get_type().display(),
@@ -2259,13 +2263,16 @@ fn typecheck_expr(
                                 .display()
                         ),
                         debug_info.location,
-                    ));
+                    ))
+                } else {
+                    let block_type = block.get_type();
+                    Ok(TypeCheckedExprKind::If(
+                        Box::new(cond_expr),
+                        block,
+                        else_block,
+                        block_type,
+                    ))
                 }
-                Ok(TypeCheckedExprKind::If(
-                    Box::new(cond_expr),
-                    block,
-                    else_block,
-                ))
             }
         }?,
         debug_info,
