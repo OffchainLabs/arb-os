@@ -3,7 +3,7 @@
  */
 
 use crate::mavm::Value;
-use crate::run::{ArbosReceipt, Machine};
+use crate::run::{ArbosReceipt, ArbosSend, Machine};
 use crate::uint256::Uint256;
 use ethers_core::utils::keccak256;
 use ethers_signers::Signer;
@@ -168,15 +168,9 @@ impl AbiForContract {
                 );
                 return Err(None);
             }
-            if let Value::Tuple(tup) = &sends[sends.len() - 1] {
-                if (tup[0] != Value::Int(Uint256::from_usize(5)))
-                    || (tup[1] != Value::Int(sender_addr))
-                {
-                    println!("deploy: incorrect values in send item");
-                    return Err(None);
-                }
-            } else {
-                println!("malformed send item");
+            let last_send = &sends[sends.len() - 1];
+            if (last_send.kind != Uint256::from_usize(5)) || (last_send.sender != sender_addr) {
+                println!("deploy: incorrect values in send item");
                 return Err(None);
             }
         }
@@ -224,7 +218,7 @@ impl AbiForContract {
         machine: &mut Machine,
         payment: Uint256,
         debug: bool,
-    ) -> Result<(Vec<ArbosReceipt>, Vec<Value>), ethabi::Error> {
+    ) -> Result<(Vec<ArbosReceipt>, Vec<ArbosSend>), ethabi::Error> {
         let this_function = self.contract.function(func_name)?;
         let calldata = this_function.encode_input(args).unwrap();
 
@@ -261,7 +255,7 @@ impl AbiForContract {
         machine: &mut Machine,
         payment: Uint256,
         debug: bool,
-    ) -> Result<(Vec<ArbosReceipt>, Vec<Value>), ethabi::Error> {
+    ) -> Result<(Vec<ArbosReceipt>, Vec<ArbosSend>), ethabi::Error> {
         let this_function = self.contract.function(func_name)?;
         let calldata = this_function.encode_input(args).unwrap();
 
@@ -299,7 +293,7 @@ impl AbiForContract {
         payment: Uint256,
         wallet: &Wallet,
         debug: bool,
-    ) -> Result<(Vec<ArbosReceipt>, Vec<Value>), ethabi::Error> {
+    ) -> Result<(Vec<ArbosReceipt>, Vec<ArbosSend>), ethabi::Error> {
         let this_function = self.contract.function(func_name)?;
         let calldata = this_function.encode_input(args).unwrap();
 
