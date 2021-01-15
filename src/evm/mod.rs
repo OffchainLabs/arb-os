@@ -5,8 +5,7 @@
 use crate::compile::miniconstants::init_constant_table;
 use crate::evm::abi::FunctionTable;
 use crate::evm::abi::{ArbAddressTable, ArbBLS, ArbFunctionTable, ArbSys, ArbosTest, _ArbOwner};
-use crate::mavm::Value;
-use crate::run::{bytestack_from_bytes, load_from_file, RuntimeEnvironment};
+use crate::run::{load_from_file, RuntimeEnvironment};
 use crate::uint256::Uint256;
 use abi::AbiForContract;
 use ethers_signers::Signer;
@@ -1495,7 +1494,7 @@ pub fn evm_deploy_buddy_contract(log_to: Option<&Path>, debug: bool) {
                 &[],
                 &mut machine,
                 Uint256::zero(),
-                None,
+                Some(Uint256::from_u64(100)),
                 Some(Uint256::from_u64(1025)),
                 debug,
             );
@@ -1570,14 +1569,9 @@ pub fn _evm_test_payment_in_constructor(log_to: Option<&Path>, debug: bool) {
             assert_eq!(sends.len(), 1);
             let mut expected_bytes = my_addr.to_bytes_be();
             expected_bytes.extend(Uint256::from_usize(5000).to_bytes_be());
-            assert_eq!(
-                sends[0],
-                Value::new_tuple(vec![
-                    Value::Int(Uint256::zero()),
-                    Value::Int(contract.address),
-                    bytestack_from_bytes(&expected_bytes),
-                ]),
-            )
+            assert_eq!(sends[0].kind, 0);
+            assert_eq!(sends[0].sender, contract.address);
+            assert_eq!(sends[0].data, expected_bytes);
         }
         Err(e) => {
             panic!(e.to_string());
@@ -1664,14 +1658,9 @@ pub fn evm_test_arbsys(log_to: Option<&Path>, debug: bool) {
             assert_eq!(sends.len(), 1);
             let mut expected_bytes = my_addr.to_bytes_be();
             expected_bytes.extend(Uint256::from_usize(5000).to_bytes_be());
-            assert_eq!(
-                sends[0],
-                Value::new_tuple(vec![
-                    Value::Int(Uint256::zero()),
-                    Value::Int(contract.address),
-                    bytestack_from_bytes(&expected_bytes),
-                ]),
-            )
+            assert_eq!(sends[0].kind, 0);
+            assert_eq!(sends[0].sender, contract.address);
+            assert_eq!(sends[0].data, expected_bytes);
         }
         Err(e) => {
             panic!(e.to_string());

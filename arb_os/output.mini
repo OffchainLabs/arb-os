@@ -8,7 +8,13 @@ use std::queue::Queue;
 use evmlogs::EvmLogs;
 
 use std::bytearray::bytearray_new;
+use std::bytearray::bytearray_size;
 use std::bytearray::bytearray_marshalFull;
+use std::bytearray::bytearray_getByte;
+use std::bytearray::bytearray_get64;
+use std::bytearray::bytearray_get256;
+
+use std::keccak::keccak256_sizedBuffer;
 
 use std::merkletree::MerkleTreeBuilder;
 use std::merkletree::merkleTreeBuilder_new;
@@ -254,13 +260,19 @@ impure func emitBlockSummaryLog(blockNum: uint, timestamp: uint, prevBlockNum: u
     }
 }
 
+type AvmSend = struct {
+    kind: uint,
+    sender: address,
+    data: ByteArray,
+}
+
 public impure func queueMessageForSend(msgType: uint, sender: address, data: ByteArray) {
     evmCallStack_queueMessage(
-        (
-            msgType,
-            uint(sender),
-            bytearray_marshalFull(data),
-        )
+        struct {
+            kind: msgType,
+            sender: sender,
+            data: data,
+        }
     );
 }
 
@@ -269,7 +281,7 @@ public impure func sendQueuedMessages(queue: Queue) {
         if let Some(res) = queue_get(queue) {
             let (uq, msg) = res;
             queue = uq;
-            sendPackagedMessage(msg);
+            sendPackagedMessage(unsafecast<AvmSend>(msg));
         } else {
             return;
         }
@@ -278,16 +290,37 @@ public impure func sendQueuedMessages(queue: Queue) {
 
 public impure func sendMessage(msgType: uint, sender: address, data: ByteArray) {
     sendPackagedMessage(
-        (
-            msgType,
-            uint(sender),
-            bytearray_marshalFull(data),
-        )
+        struct {
+            kind: msgType,
+            sender: sender,
+            data: data,
+        }
     );
 }
 
-impure func sendPackagedMessage(msg: any) {
+impure func sendPackagedMessage(msg: AvmSend) {
     outputStats_addSend();
-    merkleOfSends = merkleTreeBuilder_add(merkleOfSends, msg);
-    asm((const::LogType_send, msg),) { log };
+
+    let buf = newbuffer();
+    buf = setbuffer256(buf, 0, msg.kind);
+    buf = setbuffer256(buf, 32, uint(msg.sender));
+    let sz = bytearray_size(msg.data);
+    let i = 0;
+    while (i+32 <= sz) {
+        buf = setbuffer256(buf, 64+i, bytearray_get256(msg.data, i));
+        i = i+32;
+    }
+    while (i+8 <= sz) {
+        buf = setbuffer64(buf, 64+i, bytearray_get64(msg.data, i));
+        i = i+8;
+    }
+    while (i < sz) {
+        buf = setbuffer8(buf, 64+i, bytearray_getByte(msg.data, i));
+        i = i+1;
+    }
+    merkleOfSends = merkleTreeBuilder_add(
+        merkleOfSends,
+        keccak256_sizedBuffer(64+sz, buf),
+    );
+    asm((const::LogType_send, 64+sz, buf),) { log };
 }

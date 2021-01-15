@@ -595,7 +595,7 @@ impl RuntimeEnvironment {
         self.recorder.add_send(send_item);
     }
 
-    pub fn get_all_sends(&self) -> Vec<Value> {
+    pub fn get_all_sends(&self) -> Vec<ArbosSend> {
         self.logs
             .clone()
             .into_iter()
@@ -606,11 +606,25 @@ impl RuntimeEnvironment {
     }
 }
 
-fn get_send_contents(log: Value) -> Option<Value> {
+#[derive(Clone)]
+pub struct ArbosSend {
+    pub(crate) kind: u64,
+    pub(crate) sender: Uint256,
+    pub(crate) data: Vec<u8>,
+}
+
+fn get_send_contents(log: Value) -> Option<ArbosSend> {
     if let Value::Tuple(tup) = log {
         if let Value::Int(kind) = &tup[0] {
             if kind == &Uint256::from_u64(2) {
-                Some(tup[1].clone())
+                let sz = if let Value::Int(usz) = &tup[1] { usz.to_usize().unwrap() } else { panic!() };
+                let buf = if let Value::Buffer(buf) = &tup[2] { buf } else { panic!() };
+                let raw = buf.as_bytes(sz);
+                Some(ArbosSend {
+                    kind: Uint256::from_bytes(&raw[0..32]).to_u64().unwrap(),
+                    sender: Uint256::from_bytes(&raw[32..64]),
+                    data: raw[64..].to_vec(),
+                })
             } else {
                 None
             }

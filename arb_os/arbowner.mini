@@ -262,8 +262,11 @@ impure func arbowner_setBlocksPerSend(topFrame: EvmCallFrame, calldata: ByteArra
     if (bytearray_size(calldata) != 36) {
         evmOp_revert_knownCodePc(address(const::Address_ArbOwner), 120, 0, 0);
     }
-    chainParams_setBlocksPerSend(bytearray_get256(calldata, 4));
-    evmOp_return(0, 0);
+    if (chainParams_setBlocksPerSend(bytearray_get256(calldata, 4)) == Some(())) {
+        evmOp_return(0, 0);
+    } else {
+        evmOp_revert_knownCodePc(address(const::Address_ArbOwner), 121, 0, 0);
+    }
 }
 
 impure func arbowner_changeSequencer(topFrame: EvmCallFrame, calldata: ByteArray) {  // (address, uint, uint)
