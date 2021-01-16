@@ -94,6 +94,8 @@ public impure func arbsys_txcall() {
             arbsys_withdrawErc721(topFrame, calldata);
         } elseif(funcCode == 0x25e16063) {
             arbsys_withdrawEth(topFrame, calldata);
+        } elseif(funcCode == 0x928c169a) {
+            arbsys_sendTxToL1(topFrame, calldata);
         } elseif(funcCode == 0x23ca0cd2) {
             arbsys_getTransactionCount(topFrame, calldata);
         } elseif(funcCode == 0xa169625f) {
