@@ -59,15 +59,17 @@ public impure func tokens_erc20deposit(
             incomingRequest: fullMsg,
         },
         Some((
-            const::SendType_withdrawERC20,
-            address(0),
             bytearray_set256(
                 bytearray_set256(
-                    bytearray_set256(bytearray_new(0), 0, uint(tokenAddress)),
-                    32,
+                    bytearray_set256(
+                        bytearray_set256(bytearray_new(0), 0, const::SendType_withdrawERC20),
+                        32,
+                        uint(tokenAddress)
+                    ),
+                    64,
                     uint(payee),
                 ),
-                64,
+                96,
                 amount,
             )
         )),
@@ -112,15 +114,17 @@ public impure func tokens_erc721deposit(
             incomingRequest: fullMsg,
         },
         Some((
-            const::SendType_withdrawERC721,
-            address(0),
             bytearray_set256(
                 bytearray_set256(
-                    bytearray_set256(bytearray_new(0), 0, uint(tokenAddress)),
-                    32,
+                    bytearray_set256(
+                        bytearray_set256(bytearray_new(0), 0, const::SendType_withdrawERC721),
+                        32,
+                        uint(tokenAddress)
+                    ),
+                    64,
                     uint(payee),
                 ),
-                64,
+                96,
                 id
             )
         )),

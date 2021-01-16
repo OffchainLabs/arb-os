@@ -3,7 +3,7 @@
  */
 
 use crate::mavm::Value;
-use crate::run::{ArbosReceipt, ArbosSend, Machine};
+use crate::run::{ArbosReceipt, Machine};
 use crate::uint256::Uint256;
 use ethers_core::utils::keccak256;
 use ethers_signers::Signer;
@@ -99,7 +99,6 @@ impl AbiForContract {
         address_for_buddy: Option<Uint256>,
         debug: bool,
     ) -> Result<Uint256, Option<ArbosReceipt>> {
-        println!("A");
         let initial_logs_len = machine.runtime_env.get_all_receipt_logs().len();
         let initial_sends_len = machine.runtime_env.get_all_sends().len();
         let augmented_code = if let Some(constructor) = self.contract.constructor() {
@@ -112,7 +111,6 @@ impl AbiForContract {
         } else {
             self.code_bytes.clone()
         };
-        println!("B");
 
         let (request_id, sender_addr) = if let Some(buddy_addr) = address_for_buddy.clone() {
             (
@@ -140,23 +138,19 @@ impl AbiForContract {
             )
         };
 
-        println!("C");
         if let Some(delta_blocks) = advance_time {
             machine
                 .runtime_env
                 ._advance_time(delta_blocks.clone(), None, true);
         }
 
-        println!("C2");
         let _gas_used = if debug {
             machine.debug(None)
         } else {
             machine.run(None)
         }; // handle this deploy message
-        println!("C3");
         let logs = machine.runtime_env.get_all_receipt_logs();
 
-        println!("D");
         if logs.len() != initial_logs_len + 1 {
             println!(
                 "deploy: expected 1 new log item, got {}",
@@ -165,7 +159,6 @@ impl AbiForContract {
             return Err(None);
         }
 
-        println!("E");
         if address_for_buddy.is_some() {
             let sends = machine.runtime_env.get_all_sends();
             if sends.len() != initial_sends_len + 1 {
@@ -176,13 +169,14 @@ impl AbiForContract {
                 return Err(None);
             }
             let the_send = &sends[sends.len() - 1];
-            if (the_send.kind != 5) || (the_send.sender != sender_addr) {
+            if (the_send[0..32] != Uint256::from_u64(5).to_bytes_be())
+                || (the_send[32..64] != sender_addr.to_bytes_be())
+            {
                 println!("deploy: incorrect values in send item");
                 return Err(None);
             }
         }
 
-        println!("F");
         let log_item = &logs[logs.len() - 1];
         if !log_item.succeeded() {
             return Err(Some(log_item.clone()));
@@ -226,7 +220,7 @@ impl AbiForContract {
         machine: &mut Machine,
         payment: Uint256,
         debug: bool,
-    ) -> Result<(Vec<ArbosReceipt>, Vec<ArbosSend>), ethabi::Error> {
+    ) -> Result<(Vec<ArbosReceipt>, Vec<Vec<u8>>), ethabi::Error> {
         let this_function = self.contract.function(func_name)?;
         let calldata = this_function.encode_input(args).unwrap();
 
@@ -263,7 +257,7 @@ impl AbiForContract {
         machine: &mut Machine,
         payment: Uint256,
         debug: bool,
-    ) -> Result<(Vec<ArbosReceipt>, Vec<ArbosSend>), ethabi::Error> {
+    ) -> Result<(Vec<ArbosReceipt>, Vec<Vec<u8>>), ethabi::Error> {
         let this_function = self.contract.function(func_name)?;
         let calldata = this_function.encode_input(args).unwrap();
 
@@ -301,7 +295,7 @@ impl AbiForContract {
         payment: Uint256,
         wallet: &Wallet,
         debug: bool,
-    ) -> Result<(Vec<ArbosReceipt>, Vec<ArbosSend>), ethabi::Error> {
+    ) -> Result<(Vec<ArbosReceipt>, Vec<Vec<u8>>), ethabi::Error> {
         let this_function = self.contract.function(func_name)?;
         let calldata = this_function.encode_input(args).unwrap();
 

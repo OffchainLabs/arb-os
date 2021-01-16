@@ -377,9 +377,7 @@ pub fn evm_test_arbsys_direct(log_to: Option<&Path>, debug: bool) -> Result<(), 
     let x1 = Uint256::from_u64(35);
     let y0 = Uint256::from_u64(71);
     let y1 = Uint256::from_u64(143);
-    println!("registering BLS key");
     arb_bls.register(&mut machine, x0.clone(), x1.clone(), y0.clone(), y1.clone())?;
-    println!("reading BLS key");
     let (ox0, ox1, oy0, oy1) = arb_bls.get_public_key(&mut machine, my_addr.clone())?;
     assert_eq!(x0, ox0);
     assert_eq!(x1, ox1);
@@ -541,13 +539,11 @@ pub fn evm_test_function_table_access(
     )?;
     arb_function_table.upload(&mut machine, &func_table)?;
 
-    println!("Checking size");
     assert_eq!(
         arb_function_table.size(&mut machine, my_addr.clone())?,
         Uint256::one()
     );
 
-    println!("Getting item");
     let (func_code, is_payable, gas_limit) =
         arb_function_table.get(&mut machine, my_addr, Uint256::zero())?;
     assert_eq!(
@@ -1569,9 +1565,8 @@ pub fn _evm_test_payment_in_constructor(log_to: Option<&Path>, debug: bool) {
             assert_eq!(sends.len(), 1);
             let mut expected_bytes = my_addr.to_bytes_be();
             expected_bytes.extend(Uint256::from_usize(5000).to_bytes_be());
-            assert_eq!(sends[0].kind, 0);
-            assert_eq!(sends[0].sender, contract.address);
-            assert_eq!(sends[0].data, expected_bytes);
+            assert_eq!(sends[0][0..32], Uint256::zero().to_bytes_be());
+            assert_eq!(sends[0][32..], expected_bytes);
         }
         Err(e) => {
             panic!(e.to_string());
@@ -1658,9 +1653,8 @@ pub fn evm_test_arbsys(log_to: Option<&Path>, debug: bool) {
             assert_eq!(sends.len(), 1);
             let mut expected_bytes = my_addr.to_bytes_be();
             expected_bytes.extend(Uint256::from_usize(5000).to_bytes_be());
-            assert_eq!(sends[0].kind, 0);
-            assert_eq!(sends[0].sender, contract.address);
-            assert_eq!(sends[0].data, expected_bytes);
+            assert_eq!(sends[0][0..32], Uint256::zero().to_bytes_be());
+            assert_eq!(sends[0][32..], expected_bytes);
         }
         Err(e) => {
             panic!(e.to_string());

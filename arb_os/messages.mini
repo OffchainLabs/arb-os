@@ -244,11 +244,7 @@ public impure func handleL2Request(
             callKind = const::EVMCallType_staticcall;
         }
 
-        initEvmCallStack(
-            callKind,
-            request,
-            None<(uint, address, ByteArray)>,
-        );  // should never return
+        initEvmCallStack(callKind, request, None<ByteArray>);  // should never return
     }
 
     panic;   // this should never be reached

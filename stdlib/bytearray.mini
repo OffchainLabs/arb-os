@@ -40,6 +40,25 @@ public func bytearray_fromSizeAndBuffer(size: uint, buf: buffer) -> ByteArray {
     };
 }
 
+public func bytearray_toSizeAndBuffer(ba: ByteArray) -> (uint, buffer) {
+    let size = ba.size;
+    let buf = newbuffer();  // make a fresh buffer, in case ba is a slice into a larger buffer
+    let i = 0;
+    while(i+32 <= size) {
+        buf = setbuffer256(buf, i, getbuffer256(ba.contents, i + ba.sliceOffset));
+        i = i+32;
+    }
+    while(i+8 <= size) {
+        buf = setbuffer64(buf, i, getbuffer64(ba.contents, i + ba.sliceOffset));
+        i = i+8;
+    }
+    while(i < size) {
+        buf = setbuffer8(buf, i, getbuffer8(ba.contents, i + ba.sliceOffset));
+        i = i+1;
+    }
+    return (size, buf);
+}
+
 type MarshalledBytes = struct {
     nbytes: uint,
     contents: MarshalledBytesCell,
