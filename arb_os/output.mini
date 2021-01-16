@@ -20,7 +20,7 @@ use std::keccak::keccak256_sizedBuffer;
 use std::merkletree::MerkleTreeBuilder;
 use std::merkletree::merkleTreeBuilder_new;
 use std::merkletree::merkleTreeBuilder_add;
-use std::merkletree::merkleTreeBuilder_rootHash;
+use std::merkletree::merkleTreeBuilder_finish;
 use std::merkletree::merkleTreeBuilder_isEmpty;
 
 use std::queue::queue_get;
@@ -57,10 +57,8 @@ type OutputStatistics = struct {
     numSends: uint,
 }
 
-var merkleOfSends: MerkleTreeBuilder;
-
 public impure func output_init() {
-    merkleOfSends = merkleTreeBuilder_new();
+    outbox_init();
 }
 
 func outputStats_new() -> OutputStatistics {
@@ -252,13 +250,54 @@ impure func emitBlockSummaryLog(blockNum: uint, timestamp: uint, prevBlockNum: u
         gasAccounting_summaryToPublish(),
         prevBlockNum
     ),) { log };
-    if ((inbox_currentBlockNumber() >= globalBlockReceiptData.nextSendBlockNum) && !merkleTreeBuilder_isEmpty(merkleOfSends) ){
-        asm(merkleTreeBuilder_rootHash(merkleOfSends),) { send };
-        merkleOfSends = merkleTreeBuilder_new();
+    if ((inbox_currentBlockNumber() >= globalBlockReceiptData.nextSendBlockNum) && !outbox_isEmpty() ){
+        outbox_send();
         globalBlockReceiptData = globalBlockReceiptData with {
             nextSendBlockNum: inbox_currentBlockNumber() + chainParams_getBlocksPerSend()
         };
     }
+}
+
+var globalOutbox: struct {
+    batch: MerkleTreeBuilder,
+    batchNumber: uint,
+    numInBatch: uint,
+};
+
+impure func outbox_init() {
+    globalOutbox = struct {
+        batch: merkleTreeBuilder_new(),
+        batchNumber: 0,
+        numInBatch: 0,
+    };
+}
+
+impure func outbox_isEmpty() -> bool {
+    return globalOutbox.numInBatch == 0;
+}
+
+public impure func outbox_append(item: ByteArray) {
+    outputStats_addSend();
+    let batchNumber = globalOutbox.batchNumber;
+    let numInBatch = globalOutbox.numInBatch;
+    globalOutbox = globalOutbox with {
+        numInBatch: numInBatch + 1
+    } with {
+        batch: merkleTreeBuilder_add(globalOutbox.batch, item)
+    };
+    let (size, buf) = bytearray_toSizeAndBuffer(item);
+    asm((const::LogType_send, batchNumber, numInBatch, size, buf),) { log };
+}
+
+func outbox_send() {
+    let (tree, rootHash) = merkleTreeBuilder_finish(globalOutbox.batch);
+    asm((const::LogType_sendMerkleTree, globalOutbox.batchNumber, globalOutbox.numInBatch, tree),) { log };
+    asm(rootHash,) { send };
+    globalOutbox = struct {
+        batch: merkleTreeBuilder_new(),
+        batchNumber: globalOutbox.batchNumber + 1,
+        numInBatch: 0,
+    };
 }
 
 public impure func queueMessageForSend(msg: ByteArray) {
@@ -270,21 +309,17 @@ public impure func sendQueuedMessages(queue: Queue) {
         if let Some(res) = queue_get(queue) {
             let (uq, msg) = res;
             queue = uq;
-            sendPackagedMessage(unsafecast<ByteArray>(msg));
+            outbox_append(unsafecast<ByteArray>(msg));
         } else {
             return;
         }
     }
 }
 
-public impure func sendMessage(msg: ByteArray) {
-    sendPackagedMessage(msg);
+public impure func _sendMessage(msg: ByteArray) {
+    outbox_append(msg);
 }
 
-impure func sendPackagedMessage(msg: ByteArray) {
-    outputStats_addSend();
-
-    merkleOfSends = merkleTreeBuilder_add(merkleOfSends, msg);
-    let (size, buf) = bytearray_toSizeAndBuffer(msg);
-    asm((const::LogType_send, size, buf),) { log };
+impure func _sendPackagedMessage(msg: ByteArray) {
+    outbox_append(msg);
 }

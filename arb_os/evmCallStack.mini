@@ -73,7 +73,7 @@ use output::queueMessageForSend;
 
 use main::mainRunLoop;
 
-use output::sendMessage;
+use output::outbox_append;
 use output::sendQueuedMessages;
 
 use inbox::IncomingRequest;
@@ -671,7 +671,7 @@ public impure func evmCallStack_returnFromCall(
 
                     if (globalCurrentTxRequest.incomingRequest.kind == 5) {
                         // successfully created a buddy contract -- announce that as a message
-                        sendMessage(
+                        outbox_append(
                             bytearray_setByte(
                                 bytearray_set256(
                                     bytearray_set256(bytearray_new(0), 0, const::SendType_buddyContractResult),
@@ -694,7 +694,7 @@ public impure func evmCallStack_returnFromCall(
                     );
                     if (globalCurrentTxRequest.incomingRequest.kind == 5) {
                         // failed to create a buddy contract -- announce that as a message
-                        sendMessage(
+                        outbox_append(
                             bytearray_setByte(
                                 bytearray_set256(
                                     bytearray_set256(bytearray_new(0), 0, const::SendType_buddyContractResult),
@@ -748,7 +748,7 @@ public impure func evmCallStack_returnFromCall(
             // Request failed
             let gasUsage = gasAccounting_endTxCharges(int(0))?;
             if let Some(msg) = topFrame.sendOnFailure {
-                sendMessage(msg);
+                outbox_append(msg);
             }
             emitTxReceipt(
                 globalCurrentTxRequest.incomingRequest,

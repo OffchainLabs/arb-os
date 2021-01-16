@@ -72,6 +72,6 @@ public func merkleTreeBuilder_add(mtb: MerkleTreeBuilder, item: ByteArray) -> Me
     return mtb with { contents: queue_put(mtb.contents, item) };
 }
 
-public func merkleTreeBuilder_rootHash(mtb: MerkleTreeBuilder) -> (any, bytes32) {
+public func merkleTreeBuilder_finish(mtb: MerkleTreeBuilder) -> (any, bytes32) {
     return merkleizeFromQueue(mtb.contents);
 }
