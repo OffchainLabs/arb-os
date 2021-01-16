@@ -175,7 +175,8 @@ impl RuntimeEnvironment {
             Value::Int(self.current_timestamp.clone()),
             Value::Int(sender_addr),
             Value::Int(self.next_inbox_seq_num.clone()),
-            bytestack_from_bytes(msg),
+            Value::Int(Uint256::from_usize(msg.len())),
+            Value::new_buffer(msg.to_vec()),
         ]);
         let msg_id =
             Uint256::avm_hash2(&Uint256::from_u64(self.chain_id), &self.next_inbox_seq_num);
@@ -202,7 +203,7 @@ impl RuntimeEnvironment {
                 &sender_addr,
                 &Uint256::avm_hash2(
                     &Uint256::from_u64(self.chain_id),
-                    &hash_bytestack(bytestack_from_bytes(msg)).unwrap(),
+                    &Uint256::from_bytes(&keccak256(msg)),
                 ),
             )
         } else {
@@ -220,7 +221,7 @@ impl RuntimeEnvironment {
                 &sender_addr,
                 &Uint256::avm_hash2(
                     &Uint256::from_u64(self.chain_id),
-                    &hash_bytestack(bytestack_from_bytes(msg)).unwrap(),
+                    &hash_bytestack(_bytestack_from_bytes(msg)).unwrap(),
                 ),
             )
         } else {
@@ -780,7 +781,7 @@ impl ArbosReceipt {
             } else {
                 return None;
             };
-            let return_data = bytes_from_bytestack(tup[1].clone())?;
+            let return_data = size_buffer_tuple_to_bytes(&tup[1])?;
             Some((return_code.clone(), return_data, tup[2].clone()))
         } else {
             None
@@ -869,6 +870,20 @@ impl ArbosReceipt {
 
     pub fn get_gas_used_so_far(&self) -> Uint256 {
         self.gas_so_far.clone()
+    }
+}
+
+fn size_buffer_tuple_to_bytes(val: &Value) -> Option<Vec<u8>> {
+    if let Value::Tuple(tup) = val {
+        if let (Value::Int(usz), Value::Buffer(buf)) = (&tup[0], &tup[1]) {
+            Some(buf.as_bytes(usz.to_usize().unwrap()))
+        } else {
+            println!("sizebuffertuple got {}", val);
+            None
+        }
+    } else {
+        println!("sizebuffertuple got {}", val);
+        None
     }
 }
 
@@ -993,7 +1008,7 @@ impl EvmLog {
                 } else {
                     panic!()
                 },
-                data: bytes_from_bytestack(tup[1].clone()).unwrap(),
+                data: size_buffer_tuple_to_bytes(&tup[1]).unwrap(),
                 vals: tup[2..]
                     .iter()
                     .map(|v| {
@@ -1026,26 +1041,26 @@ impl EvmLog {
     }
 }
 
-pub fn bytestack_from_bytes(b: &[u8]) -> Value {
+pub fn _bytestack_from_bytes(b: &[u8]) -> Value {
     Value::new_tuple(vec![
         Value::Int(Uint256::from_usize(b.len())),
-        bytestack_from_bytes_2(b, Value::none()),
+        _bytestack_from_bytes_2(b, Value::none()),
     ])
 }
 
-fn bytestack_from_bytes_2(b: &[u8], so_far: Value) -> Value {
+fn _bytestack_from_bytes_2(b: &[u8], so_far: Value) -> Value {
     let size = b.len();
     if size > 32 {
-        bytestack_from_bytes_2(
+        _bytestack_from_bytes_2(
             &b[32..],
-            Value::new_tuple(vec![bytestack_build_uint(&b[..32]), so_far]),
+            Value::new_tuple(vec![_bytestack_build_uint(&b[..32]), so_far]),
         )
     } else {
-        Value::new_tuple(vec![bytestack_build_uint(b), so_far])
+        Value::new_tuple(vec![_bytestack_build_uint(b), so_far])
     }
 }
 
-fn bytestack_build_uint(b: &[u8]) -> Value {
+fn _bytestack_build_uint(b: &[u8]) -> Value {
     let mut ui = Uint256::zero();
     for j in (0..32) {
         if j < b.len() {
@@ -1088,7 +1103,7 @@ pub fn hash_bytestack(bs: Value) -> Option<Uint256> {
 #[test]
 fn test_hash_bytestack() {
     let buf = hex::decode("000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f303132333435363738393a3b3c3d3e3f404142").unwrap();
-    let h = hash_bytestack(bytestack_from_bytes(&buf)).unwrap();
+    let h = hash_bytestack(_bytestack_from_bytes(&buf)).unwrap();
     assert_eq!(
         h,
         Uint256::from_string_hex(
@@ -1098,18 +1113,18 @@ fn test_hash_bytestack() {
     );
 }
 
-pub fn bytes_from_bytestack(bs: Value) -> Option<Vec<u8>> {
+pub fn _bytes_from_bytestack(bs: Value) -> Option<Vec<u8>> {
     if let Value::Tuple(tup) = bs {
         if let Value::Int(ui) = &tup[0] {
             if let Some(nbytes) = ui.to_usize() {
-                return bytes_from_bytestack_2(tup[1].clone(), nbytes);
+                return _bytes_from_bytestack_2(tup[1].clone(), nbytes);
             }
         }
     }
     None
 }
 
-fn bytes_from_bytestack_2(cell: Value, nbytes: usize) -> Option<Vec<u8>> {
+fn _bytes_from_bytestack_2(cell: Value, nbytes: usize) -> Option<Vec<u8>> {
     if nbytes == 0 {
         Some(vec![])
     } else if let Value::Tuple(tup) = cell {
@@ -1117,7 +1132,7 @@ fn bytes_from_bytestack_2(cell: Value, nbytes: usize) -> Option<Vec<u8>> {
         if let Value::Int(mut int_val) = tup[0].clone() {
             let _256 = Uint256::from_usize(256);
             if (nbytes % 32) == 0 {
-                let mut sub_arr = match bytes_from_bytestack_2(tup[1].clone(), nbytes - 32) {
+                let mut sub_arr = match _bytes_from_bytestack_2(tup[1].clone(), nbytes - 32) {
                     Some(arr) => arr,
                     None => {
                         return None;
@@ -1132,7 +1147,8 @@ fn bytes_from_bytestack_2(cell: Value, nbytes: usize) -> Option<Vec<u8>> {
                 sub_arr.append(&mut this_arr);
                 Some(sub_arr)
             } else {
-                let mut sub_arr = match bytes_from_bytestack_2(tup[1].clone(), 32 * (nbytes / 32)) {
+                let mut sub_arr = match _bytes_from_bytestack_2(tup[1].clone(), 32 * (nbytes / 32))
+                {
                     Some(arr) => arr,
                     None => {
                         return None;
@@ -1407,7 +1423,7 @@ fn logfile_replay_tests() {
 fn test_rust_bytestacks() {
     let before =
         "The quick brown fox jumped over the lazy dog. Lorem ipsum and all that.".as_bytes();
-    let bs = bytestack_from_bytes(before);
-    let after = bytes_from_bytestack(bs);
+    let bs = _bytestack_from_bytes(before);
+    let after = _bytes_from_bytestack(bs);
     assert_eq!(after, Some(before.to_vec()));
 }

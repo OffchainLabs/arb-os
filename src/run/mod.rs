@@ -11,8 +11,8 @@ use std::{fs::File, io::Read, path::Path};
 
 pub use emulator::{Machine, ProfilerMode};
 pub use runtime_env::{
-    bytes_from_bytestack, bytestack_from_bytes, generic_compress_token_amount,
-    replay_from_testlog_file, ArbosReceipt, RuntimeEnvironment,
+    _bytes_from_bytestack, _bytestack_from_bytes, generic_compress_token_amount,
+    replay_from_testlog_file, ArbosReceipt, ArbosSend, RuntimeEnvironment,
 };
 
 mod emulator;

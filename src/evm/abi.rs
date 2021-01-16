@@ -3,7 +3,7 @@
  */
 
 use crate::mavm::Value;
-use crate::run::{ArbosReceipt, Machine};
+use crate::run::{ArbosReceipt, ArbosSend, Machine};
 use crate::uint256::Uint256;
 use ethers_core::utils::keccak256;
 use ethers_signers::Signer;

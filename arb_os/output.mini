@@ -215,14 +215,14 @@ public impure func emitTxReceipt(
 
     let txResultInfo = struct {
         returnCode: resultCode,
-        returnData: bytearray_marshalFull(returnData),
+        returnData: bytearray_toSizeAndBuffer(returnData),
         evmLogs: evmLogs,
     };
 
     asm((
         const::LogType_txReceipt,
         l1message with {
-            msgData: unsafecast<ByteArray>(bytearray_marshalFull(l1message.msgData))  // because caller expects marshalled bytes
+            msgData: unsafecast<ByteArray>(bytearray_toSizeAndBuffer(l1message.msgData))  // because caller expects marshalled bytes
         },
         txResultInfo,
         realGasUsage,
@@ -302,6 +302,7 @@ impure func outbox_send() {
             ),
             64,
             uint(rootHash)
+
         )
     ) { send };
     globalOutbox = struct {
@@ -325,12 +326,4 @@ public impure func sendQueuedMessages(queue: Queue) {
             return;
         }
     }
-}
-
-public impure func _sendMessage(msg: ByteArray) {
-    outbox_append(msg);
-}
-
-impure func _sendPackagedMessage(msg: ByteArray) {
-    outbox_append(msg);
 }

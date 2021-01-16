@@ -39,7 +39,6 @@ use evmlogs::evmlogs_empty;
 use evmlogs::evmlogs_appendAny;
 
 use std::bytearray::bytearray_new;
-use std::bytearray::bytearray_marshalFull;
 use std::bytearray::bytearray_extract;
 use std::bytearray::bytearray_copy;
 use std::bytearray::bytearray_setByte;
