@@ -2,7 +2,7 @@
  * Copyright 2020, Offchain Labs, Inc. All rights reserved.
  */
 
-use crate::mavm::Value;
+use crate::mavm::{Value, Buffer};
 use crate::run::{load_from_file, ProfilerMode};
 use crate::uint256::Uint256;
 use ethers_core::rand::rngs::StdRng;
@@ -23,7 +23,7 @@ pub struct RuntimeEnvironment {
     pub current_block_num: Uint256,
     pub current_timestamp: Uint256,
     pub logs: Vec<Value>,
-    pub sends: Vec<Value>,
+    pub sends: Vec<Vec<u8>>,
     pub next_inbox_seq_num: Uint256,
     pub caller_seq_nums: HashMap<Uint256, Uint256>,
     next_id: Uint256, // used to assign unique (but artificial) txids to messages
@@ -590,9 +590,10 @@ impl RuntimeEnvironment {
             .collect()
     }
 
-    pub fn push_send(&mut self, send_item: Value) {
-        self.sends.push(send_item.clone());
-        self.recorder.add_send(send_item);
+    pub fn push_send(&mut self, size: Uint256, buf: Buffer) {
+        let contents = buf.as_bytes(size.to_usize().unwrap());
+        self.sends.push(contents.clone());
+        self.recorder.add_send(contents);
     }
 
     pub fn get_all_sends(&self) -> Vec<Vec<u8>> {
@@ -1163,7 +1164,7 @@ pub struct RtEnvRecorder {
     format_version: u64,
     inbox: Vec<Value>,
     logs: Vec<Value>,
-    sends: Vec<Value>,
+    sends: Vec<Vec<u8>>,
 }
 
 impl RtEnvRecorder {
@@ -1184,7 +1185,7 @@ impl RtEnvRecorder {
         self.logs.push(log_item);
     }
 
-    fn add_send(&mut self, send_item: Value) {
+    fn add_send(&mut self, send_item: Vec<u8>) {
         self.sends.push(send_item);
     }
 
@@ -1246,7 +1247,7 @@ impl RtEnvRecorder {
             return false;
         }
         if !(self.sends == machine.runtime_env.recorder.sends) {
-            print_output_differences(
+            print_output_differences_bytevec(
                 "send",
                 machine.runtime_env.recorder.sends,
                 self.sends.clone(),
@@ -1327,6 +1328,27 @@ fn print_output_differences(kind: &str, seen: Vec<Value>, expected: Vec<Value>) 
                 println!("{} {} mismatch:", kind, i);
                 println!("expected: {}", expected[i]);
                 println!("seen: {}", seen[i]);
+                return;
+            }
+        }
+    }
+}
+
+fn print_output_differences_bytevec(kind: &str, seen: Vec<Vec<u8>>, expected: Vec<Vec<u8>>) {
+    if seen.len() != expected.len() {
+        println!(
+            "{} mismatch: expected {}, got {}",
+            kind,
+            expected.len(),
+            seen.len()
+        );
+        return;
+    } else {
+        for i in 0..(seen.len()) {
+            if !(seen[i] == expected[i]) {
+                println!("{} {} mismatch:", kind, i);
+                println!("expected: {:?}", expected[i]);
+                println!("seen: {:?}", seen[i]);
                 return;
             }
         }

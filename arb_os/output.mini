@@ -289,10 +289,21 @@ public impure func outbox_append(item: ByteArray) {
     asm((const::LogType_send, batchNumber, numInBatch, size, buf),) { log };
 }
 
-func outbox_send() {
+impure func outbox_send() {
     let (tree, rootHash) = merkleTreeBuilder_finish(globalOutbox.batch);
     asm((const::LogType_sendMerkleTree, globalOutbox.batchNumber, globalOutbox.numInBatch, tree),) { log };
-    asm(rootHash,) { send };
+    asm(
+        96,
+        setbuffer256(
+            setbuffer256(
+                setbuffer256(newbuffer(), 0, globalOutbox.batchNumber),
+                32,
+                globalOutbox.numInBatch
+            ),
+            64,
+            uint(rootHash)
+        )
+    ) { send };
     globalOutbox = struct {
         batch: merkleTreeBuilder_new(),
         batchNumber: globalOutbox.batchNumber + 1,
