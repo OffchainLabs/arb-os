@@ -255,7 +255,6 @@ public impure func precompile_0x05() {  // modexp
                     memSize
                 );
             }
-            asm(bytearray_copy(mem, 0, bytearray_new(0), 0, modLen),) { debugprint };
             if (evmCallStack_setTopFrameMemory(mem)) {
                 evmOp_return(0, modLen);
             } else {
@@ -289,19 +288,13 @@ func precompile_0x05_pluggable(
     let exp = bytearray_extract(calldata, 96+baseLen, expLen);
     let mod = bytearray_extract(calldata, 96+baseLen+expLen, modLen);
 
-    asm(bytearray_copy(base, 0, bytearray_new(0), 0, baseLen),) { debugprint };
-    asm(bytearray_copy(exp, 0, bytearray_new(0), 0, expLen),) { debugprint };
-    asm(bytearray_copy(mod, 0, bytearray_new(0), 0, modLen),) { debugprint };
-
     if let Some(result) = biguint_modexp(
         biguint_fromBytes(base),
         biguint_fromBytes(exp),
         biguint_fromBytes(mod),
     ) {
-        asm(result,) { debugprint };
         let mem = biguint_toBytes(result);
         let memSize = bytearray_size(mem);
-        asm((86, memSize, modLen),) { debugprint };
 
         if (memSize > modLen) {
             mem = bytearray_extract(mem, memSize-modLen, modLen);
