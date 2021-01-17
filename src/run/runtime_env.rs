@@ -2,7 +2,7 @@
  * Copyright 2020, Offchain Labs, Inc. All rights reserved.
  */
 
-use crate::mavm::{Buffer, Value};
+use crate::mavm::{Value, Buffer};
 use crate::run::{load_from_file, ProfilerMode};
 use crate::uint256::Uint256;
 use ethers_core::rand::rngs::StdRng;
@@ -592,12 +592,12 @@ impl RuntimeEnvironment {
     }
 
     pub fn push_send(&mut self, size: Uint256, buf: Buffer) {
-        let send_bytes = buf.as_bytes(size.to_usize().unwrap());
-        self.sends.push(send_bytes.clone());
-        self.recorder.add_send(send_bytes);
+        let contents = buf.as_bytes(size.to_usize().unwrap());
+        self.sends.push(contents.clone());
+        self.recorder.add_send(contents);
     }
 
-    pub fn get_all_sends(&self) -> Vec<ArbosSend> {
+    pub fn get_all_sends(&self) -> Vec<Vec<u8>> {
         self.logs
             .clone()
             .into_iter()
@@ -608,34 +608,13 @@ impl RuntimeEnvironment {
     }
 }
 
-#[derive(Clone)]
-pub struct ArbosSend {
-    pub kind: Uint256,
-    pub sender: Uint256,
-    pub data: Vec<u8>,
-}
-
-fn get_send_contents(log: Value) -> Option<ArbosSend> {
+fn get_send_contents(log: Value) -> Option<Vec<u8>> {
     if let Value::Tuple(tup) = log {
         if let Value::Int(kind) = &tup[0] {
             if kind == &Uint256::from_u64(2) {
-                if let Value::Tuple(stup) = &tup[1] {
-                    Some(ArbosSend {
-                        kind: if let Value::Int(ui) = &stup[0] {
-                            ui.clone()
-                        } else {
-                            panic!()
-                        },
-                        sender: if let Value::Int(ui) = &stup[1] {
-                            ui.clone()
-                        } else {
-                            panic!()
-                        },
-                        data: size_buffer_tuple_to_bytes(&stup[2]).unwrap(),
-                    })
-                } else {
-                    None
-                }
+                let sz = if let Value::Int(usz) = &tup[3] { usz.to_usize().unwrap() } else { panic!() };
+                let buf = if let Value::Buffer(buf) = &tup[4] { buf } else { panic!() };
+                Some(buf.as_bytes(sz))
             } else {
                 None
             }
@@ -1284,7 +1263,7 @@ impl RtEnvRecorder {
             return false;
         }
         if !(self.sends == machine.runtime_env.recorder.sends) {
-            print_output_differences_bytes(
+            print_output_differences_bytevec(
                 "send",
                 machine.runtime_env.recorder.sends,
                 self.sends.clone(),
@@ -1371,7 +1350,7 @@ fn print_output_differences(kind: &str, seen: Vec<Value>, expected: Vec<Value>) 
     }
 }
 
-fn print_output_differences_bytes(kind: &str, seen: Vec<Vec<u8>>, expected: Vec<Vec<u8>>) {
+fn print_output_differences_bytevec(kind: &str, seen: Vec<Vec<u8>>, expected: Vec<Vec<u8>>) {
     if seen.len() != expected.len() {
         println!(
             "{} mismatch: expected {}, got {}",

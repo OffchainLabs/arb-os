@@ -3,7 +3,7 @@
  */
 
 use crate::mavm::Value;
-use crate::run::{ArbosReceipt, ArbosSend, Machine};
+use crate::run::{ArbosReceipt, Machine};
 use crate::uint256::Uint256;
 use ethers_core::utils::keccak256;
 use ethers_signers::Signer;
@@ -116,7 +116,7 @@ impl AbiForContract {
             (
                 machine.runtime_env.insert_buddy_deploy_message(
                     buddy_addr.clone(),
-                    Uint256::from_usize(1_000_000_000_000),
+                    Uint256::from_usize(1_000_000_000),
                     Uint256::zero(),
                     payment,
                     &augmented_code,
@@ -168,8 +168,10 @@ impl AbiForContract {
                 );
                 return Err(None);
             }
-            let last_send = &sends[sends.len() - 1];
-            if (last_send.kind != Uint256::from_usize(5)) || (last_send.sender != sender_addr) {
+            let the_send = &sends[sends.len() - 1];
+            if (the_send[0..32] != Uint256::from_u64(5).to_bytes_be())
+                || (the_send[32..64] != sender_addr.to_bytes_be())
+            {
                 println!("deploy: incorrect values in send item");
                 return Err(None);
             }
@@ -218,7 +220,7 @@ impl AbiForContract {
         machine: &mut Machine,
         payment: Uint256,
         debug: bool,
-    ) -> Result<(Vec<ArbosReceipt>, Vec<ArbosSend>), ethabi::Error> {
+    ) -> Result<(Vec<ArbosReceipt>, Vec<Vec<u8>>), ethabi::Error> {
         let this_function = self.contract.function(func_name)?;
         let calldata = this_function.encode_input(args).unwrap();
 
@@ -255,7 +257,7 @@ impl AbiForContract {
         machine: &mut Machine,
         payment: Uint256,
         debug: bool,
-    ) -> Result<(Vec<ArbosReceipt>, Vec<ArbosSend>), ethabi::Error> {
+    ) -> Result<(Vec<ArbosReceipt>, Vec<Vec<u8>>), ethabi::Error> {
         let this_function = self.contract.function(func_name)?;
         let calldata = this_function.encode_input(args).unwrap();
 
@@ -293,7 +295,7 @@ impl AbiForContract {
         payment: Uint256,
         wallet: &Wallet,
         debug: bool,
-    ) -> Result<(Vec<ArbosReceipt>, Vec<ArbosSend>), ethabi::Error> {
+    ) -> Result<(Vec<ArbosReceipt>, Vec<Vec<u8>>), ethabi::Error> {
         let this_function = self.contract.function(func_name)?;
         let calldata = this_function.encode_input(args).unwrap();
 
@@ -1205,6 +1207,31 @@ impl<'a> _ArbOwner<'a> {
                 ethabi::Token::Uint(num2.to_u256()),
                 ethabi::Token::Uint(denom2.to_u256()),
             ],
+            machine,
+            Uint256::zero(),
+            self.debug,
+        )?;
+
+        if receipts.len() != 1 {
+            return Err(ethabi::Error::from("wrong number of receipts"));
+        }
+
+        if receipts[0].succeeded() {
+            Ok(())
+        } else {
+            Err(ethabi::Error::from("reverted"))
+        }
+    }
+
+    pub fn _set_blocks_per_send(
+        &self,
+        machine: &mut Machine,
+        blocks_per_send: Uint256,
+    ) -> Result<(), ethabi::Error> {
+        let (receipts, _sends) = self.contract_abi.call_function(
+            self.my_address.clone(),
+            "setBlocksPerSend",
+            &[ethabi::Token::Uint(blocks_per_send.to_u256())],
             machine,
             Uint256::zero(),
             self.debug,

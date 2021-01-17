@@ -184,6 +184,7 @@ pub fn init_constant_table() -> HashMap<String, Uint256> {
         ("LogType_txReceipt", 0),
         ("LogType_blockSummary", 1),
         ("LogType_send", 2),
+        ("LogType_sendMerkleTree", 3),
         // outgoing message types
         ("SendType_withdrawETH", 0),
         ("SendType_withdrawERC20", 1),
@@ -214,6 +215,7 @@ pub fn init_constant_table() -> HashMap<String, Uint256> {
         // misc
         ("DefaultMillisecondsPerBlock", 13500),
         ("DefaultSpeedLimitPerBlock", 13500 * 100000),
+        ("DefaultBlocksPerSend", 10),
         ("Estimate_L1GasCostPerNode", 220000),
         ("Estimate_L1GasPrice", 100 * 1_000_000_000), // 100 gwei
     ] {
