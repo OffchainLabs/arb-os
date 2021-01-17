@@ -2047,82 +2047,6 @@ pub fn _evm_eval_ripemd160(log_to: Option<&Path>, debug: bool) {
     }
 }
 
-pub fn mint_erc20_and_get_balance(log_to: Option<&Path>, debug: bool) {
-    let token_addr = Uint256::from_usize(32563);
-    let me = Uint256::from_usize(1025);
-    let million = Uint256::from_usize(1000000);
-
-    let mut rt_env = RuntimeEnvironment::new(Uint256::from_usize(1111), None);
-    rt_env.insert_erc20_deposit_message(me.clone(), token_addr.clone(), me.clone(), million);
-    let mut calldata: Vec<u8> = vec![0x70, 0xa0, 0x82, 0x31]; // code for balanceOf method
-    calldata.extend(me.to_bytes_be());
-    rt_env.insert_tx_message(
-        me,
-        Uint256::from_usize(1000000000),
-        Uint256::zero(),
-        token_addr,
-        Uint256::zero(),
-        &calldata,
-        false,
-    );
-
-    let mut machine = load_from_file(Path::new("arb_os/arbos.mexe"), rt_env);
-    machine.start_at_zero();
-
-    let num_logs_before = machine.runtime_env.get_all_receipt_logs().len();
-    let _arbgas_used = if debug {
-        machine.debug(None)
-    } else {
-        machine.run(None)
-    };
-    let logs = machine.runtime_env.get_all_receipt_logs();
-    assert_eq!(logs.len(), num_logs_before + 2);
-    assert!(logs[logs.len() - 2].succeeded());
-    assert!(logs[logs.len() - 1].succeeded());
-
-    if let Some(path) = log_to {
-        machine.runtime_env.recorder.to_file(path).unwrap();
-    }
-}
-
-pub fn mint_erc721_and_get_balance(log_to: Option<&Path>, debug: bool) {
-    let token_addr = Uint256::from_usize(32563);
-    let me = Uint256::from_usize(1025);
-    let million = Uint256::from_usize(1000000);
-
-    let mut rt_env = RuntimeEnvironment::new(Uint256::from_usize(1111), None);
-    rt_env.insert_erc721_deposit_message(me.clone(), token_addr.clone(), me.clone(), million);
-    let mut calldata: Vec<u8> = vec![0x70, 0xa0, 0x82, 0x31]; // code for balanceOf method
-    calldata.extend(me.to_bytes_be());
-    rt_env.insert_tx_message(
-        me,
-        Uint256::from_usize(1000000000),
-        Uint256::zero(),
-        token_addr,
-        Uint256::zero(),
-        &calldata,
-        false,
-    );
-
-    let mut machine = load_from_file(Path::new("arb_os/arbos.mexe"), rt_env);
-    machine.start_at_zero();
-
-    let num_logs_before = machine.runtime_env.get_all_receipt_logs().len();
-    let _arbgas_used = if debug {
-        machine.debug(None)
-    } else {
-        machine.run(None)
-    };
-    let logs = machine.runtime_env.get_all_receipt_logs();
-    assert_eq!(logs.len(), num_logs_before + 2);
-    assert!(logs[logs.len() - 2].succeeded());
-    assert!(logs[logs.len() - 1].succeeded());
-
-    if let Some(path) = log_to {
-        machine.runtime_env.recorder.to_file(path).unwrap();
-    }
-}
-
 pub fn make_logs_for_all_arbos_tests() {
     evm_direct_deploy_add(
         Some(Path::new("testlogs/evm_direct_deploy_add.aoslog")),
@@ -2178,6 +2102,4 @@ pub fn make_logs_for_all_arbos_tests() {
         Some(Path::new("testlogs/payment_to_empty_address.aoslog")),
         false,
     );
-    mint_erc20_and_get_balance(Some(Path::new("testlogs/erc20_test.aoslog")), false);
-    mint_erc721_and_get_balance(Some(Path::new("testlogs/erc721_test.aoslog")), false);
 }
