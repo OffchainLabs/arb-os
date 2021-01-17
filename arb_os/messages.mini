@@ -34,9 +34,6 @@ use gasAccounting::GasUsage;
 
 use output::emitTxReceipt;
 
-use tokens::tokens_erc20deposit;
-use tokens::tokens_erc721deposit;
-
 use std::bytearray::bytearray_new;
 use std::bytearray::bytearray_size;
 use std::bytearray::bytearray_extract;
@@ -81,44 +78,6 @@ public impure func handleL1Request(
             )
         );
         return Some(());
-    } elseif (msg.kind == const::L1MessageType_erc20Deposit) {
-        // ERC20 deposit message
-        let (bs, tokenAddress) = bytestream_get256(inStream)?;
-        inStream = bs;
-
-        let (bs, payeeAddress) = bytestream_get256(inStream)?;
-        inStream = bs;
-
-        let (bs, amount) = bytestream_get256(inStream)?;
-        inStream = bs;
-
-        tokens_erc20deposit(
-            address(tokenAddress),
-            address(payeeAddress),
-            amount,
-            msg
-        )?;  // should never return
-
-        return None;
-    } elseif (msg.kind == const::L1MessageType_erc721Deposit) {
-         // ERC721 deposit message
-         let (bs, tokenAddress) = bytestream_get256(inStream)?;
-         inStream = bs;
-
-         let (bs, payeeAddress) = bytestream_get256(inStream)?;
-         inStream = bs;
-
-         let (bs, id) = bytestream_get256(inStream)?;
-         inStream = bs;
-
-         tokens_erc721deposit(
-             address(tokenAddress),
-             address(payeeAddress),
-             id,
-             msg
-         )?;  // should never return
-
-         return None;
     } else {
         // not a valid message type
         // (This should not have been called if msg.kind == const::L1MessageType_L2.)

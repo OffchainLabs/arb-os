@@ -139,8 +139,6 @@ pub fn init_constant_table() -> HashMap<String, Uint256> {
         ("AVM_debugprint", 0x90),
         // L1 message types
         ("L1MessageType_ethDeposit", 0),
-        ("L1MessageType_erc20Deposit", 1),
-        ("L1MessageType_erc721Deposit", 2),
         ("L1MessageType_L2", 3),
         ("L1MessageType_chainInit", 4),
         ("L1MessageType_buddyDeploy", 5),
@@ -187,8 +185,6 @@ pub fn init_constant_table() -> HashMap<String, Uint256> {
         ("LogType_sendMerkleTree", 3),
         // outgoing message types
         ("SendType_withdrawETH", 0),
-        ("SendType_withdrawERC20", 1),
-        ("SendType_withdrawERC721", 2),
         ("SendType_sendTxToL1", 3),
         ("SendType_buddyContractResult", 5),
         // chain initialization options
