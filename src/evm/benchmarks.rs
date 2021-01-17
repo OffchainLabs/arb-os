@@ -11,8 +11,6 @@ use std::path::Path;
 pub fn make_benchmarks() {
     let benchmarks: Vec<(fn(u64, &Path) -> u64, u64, &str, &str)> = vec![
         (benchmark_boot, 1, "boot ArbOS", "boot"),
-        (benchmark_erc20, 100, "100 ERC-20 deposits", "erc20_100"),
-        (benchmark_erc20, 1000, "1000 ERC-20 deposits", "erc20_1000"),
         (benchmark_add, 100, "100 null txs", "nulltx_100"),
         (benchmark_add, 1000, "1000 null txs", "nulltx_1000"),
         (
@@ -41,25 +39,6 @@ pub fn benchmark_boot(_iterations: u64, log_to: &Path) -> u64 {
     let rt_env = RuntimeEnvironment::new(Uint256::from_usize(1111), None);
     let mut machine = load_from_file(Path::new("arb_os/arbos.mexe"), rt_env);
     machine.start_at_zero();
-
-    let gas_used = machine.run(None);
-    machine.runtime_env.recorder.to_file(log_to).unwrap();
-    gas_used
-}
-
-pub fn benchmark_erc20(iterations: u64, log_to: &Path) -> u64 {
-    let rt_env = RuntimeEnvironment::new(Uint256::from_usize(1111), None);
-    let mut machine = load_from_file(Path::new("arb_os/arbos.mexe"), rt_env);
-    machine.start_at_zero();
-
-    for _ in 0..iterations {
-        machine.runtime_env.insert_erc20_deposit_message(
-            Uint256::from_u64(1025),
-            Uint256::from_u64(1026),
-            Uint256::from_u64(1027),
-            Uint256::from_u64(5000),
-        );
-    }
 
     let gas_used = machine.run(None);
     machine.runtime_env.recorder.to_file(log_to).unwrap();
