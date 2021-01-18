@@ -101,7 +101,6 @@ StatementKind: StatementKind = {
 	"panic" ";" => StatementKind::Panic(),
 	"debug" "(" <e: Expr> ")" ";" => StatementKind::DebugPrint(e),
 	"asm" "(" <a:CommaedExprs?> ")" "{" <body:AsmInsn*> "}" ";" => StatementKind::Asm(body, a.unwrap_or(vec![])),
-	";" => StatementKind::Noop(),
 }
 
 MatchPattern: MatchPattern = {
