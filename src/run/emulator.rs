@@ -1251,7 +1251,7 @@ impl Machine {
                 Opcode::AVMOpcode(AVMOpcode::OpenInsn) => 25,
                 Opcode::AVMOpcode(AVMOpcode::DebugPrint) => 1,
                 Opcode::AVMOpcode(AVMOpcode::GetGas) => 1,
-                Opcode::AVMOpcode(AVMOpcode::SetGas) => 0,
+                Opcode::AVMOpcode(AVMOpcode::SetGas) => 1,
                 Opcode::AVMOpcode(AVMOpcode::EcRecover) => 20_000,
                 Opcode::AVMOpcode(AVMOpcode::EcAdd) => 3500,
                 Opcode::AVMOpcode(AVMOpcode::EcMul) => 82_000,
