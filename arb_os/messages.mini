@@ -59,11 +59,10 @@ public impure func handleL1Request(
     // Parse an incoming message and do appropriate computations
     let inStream = bytestream_new(msg.msgData);
 
-    if (true) {
-        // not a valid message type
-        // (This should not have been called if msg.kind == const::L1MessageType_L2.)
-        return None;
-    }
+    // There are no valid messages types for which this should be called.
+    // (This function exists for historical reasons; preserved now in case we add more L1 message types.)
+    // (This should not have been called if msg.kind == const::L1MessageType_L2.)
+    return None;
 }
 
 impure func verifyAndIncrSequenceNum(addr: address, seqNum: uint) -> option<()> {

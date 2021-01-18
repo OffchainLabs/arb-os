@@ -92,6 +92,8 @@ pub fn _test_rollup_tracker() {
         Uint256::_from_eth(1),
     );
 
+    let _ = machine.run(None);
+
     arbowner
         ._add_to_reserve_funds(&mut machine, Uint256::_from_eth(1))
         .unwrap();
@@ -169,5 +171,5 @@ pub fn _test_rollup_tracker() {
     assert_eq!(bal, Uint256::from_u64(43945000000000000));
 
     let bal = arb_info._get_balance(&mut machine, &claimer).unwrap();
-    assert_eq!(bal, Uint256::from_u64(962855750000000000));
+    assert_eq!(bal, Uint256::from_u64(1962855750000000000));
 }

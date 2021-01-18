@@ -75,7 +75,7 @@ pub fn evm_xcontract_call_with_constructors(
         panic!("failed to deploy PaymentChannel contract");
     }
 
-    let (logs, sends) = pc_contract.call_function(
+    let (logs, sends, _) = pc_contract.call_function(
         my_addr.clone(),
         "deposit",
         &[],
@@ -87,7 +87,7 @@ pub fn evm_xcontract_call_with_constructors(
     assert_eq!(sends.len(), 0);
     assert!(logs[0].succeeded());
 
-    let (logs, sends) = pc_contract.call_function(
+    let (logs, sends, _) = pc_contract.call_function(
         my_addr,
         "transferFib",
         vec![
@@ -163,7 +163,7 @@ pub fn _evm_run_with_gas_charging(
         }
     }
 
-    let (logs, sends) = pc_contract.call_function(
+    let (logs, sends, _) = pc_contract.call_function(
         my_addr.clone(),
         "deposit",
         &[],
@@ -182,7 +182,7 @@ pub fn _evm_run_with_gas_charging(
         }
     }
 
-    let (logs, sends) = pc_contract.call_function(
+    let (logs, sends, _) = pc_contract.call_function(
         my_addr,
         "transferFib",
         &[
@@ -249,7 +249,7 @@ pub fn _evm_tx_with_deposit(
         panic!("failed to deploy PaymentChannel contract");
     }
 
-    let (logs, sends) = pc_contract._call_function_with_deposit(
+    let (logs, sends, _) = pc_contract._call_function_with_deposit(
         my_addr.clone(),
         "deposit",
         &[],
@@ -262,7 +262,7 @@ pub fn _evm_tx_with_deposit(
 
     assert!(logs[0].succeeded());
 
-    let (logs, sends) = pc_contract.call_function(
+    let (logs, sends, _) = pc_contract.call_function(
         my_addr,
         "transferFib",
         vec![
@@ -323,7 +323,7 @@ pub fn evm_deploy_using_non_eip159_signature(
     }; // handle this deploy message
 
     let logs = machine.runtime_env.get_all_receipt_logs();
-    assert_eq!(logs.len(), 1);
+    assert_eq!(logs.len(), 2);
     assert!(logs[0].succeeded());
 
     if let Some(path) = log_to {
@@ -605,7 +605,7 @@ pub fn _underfunded_nested_call_test(
         panic!("failed to deploy Fibonacci contract");
     }
 
-    let (logs, sends) = contract.call_function(
+    let (logs, sends, _) = contract.call_function(
         Uint256::from_u64(1028),
         "nestedCall",
         &[ethabi::Token::Uint(Uint256::zero().to_u256())],
@@ -617,7 +617,7 @@ pub fn _underfunded_nested_call_test(
     assert_eq!(sends.len(), 0);
     assert!(logs[0].succeeded());
 
-    let (logs, sends) = contract.call_function(
+    let (logs, sends, _) = contract.call_function(
         Uint256::from_u64(1028),
         "nestedCall",
         &[ethabi::Token::Uint(Uint256::one().to_u256())],
@@ -682,7 +682,7 @@ pub fn evm_test_create(
         panic!("failed to deploy PaymentChannel contract");
     }
 
-    let (logs, sends) = pc_contract.call_function(
+    let (logs, sends, _) = pc_contract.call_function(
         my_addr.clone(),
         "testCreate",
         &[],
@@ -1559,14 +1559,15 @@ pub fn _evm_test_payment_in_constructor(log_to: Option<&Path>, debug: bool) {
         debug,
     );
     match result {
-        Ok((logs, sends)) => {
+        Ok((logs, _sends, callbacks)) => {
             assert_eq!(logs.len(), 1);
             assert!(logs[0].succeeded());
-            assert_eq!(sends.len(), 1);
-            let mut expected_bytes = my_addr.to_bytes_be();
-            expected_bytes.extend(Uint256::from_usize(5000).to_bytes_be());
-            assert_eq!(sends[0][0..32], Uint256::zero().to_bytes_be());
-            assert_eq!(sends[0][32..], expected_bytes);
+            assert_eq!(callbacks.len(), 1);
+            assert_eq!(callbacks[0].caller, contract.address);
+            assert_eq!(callbacks[0].destination, my_addr);
+            assert_eq!(callbacks[0].callvalue, Uint256::from_u64(5000));
+            let empty_bytes: Vec<u8> = vec![];
+            assert_eq!(callbacks[0].calldata, empty_bytes);
         }
         Err(e) => {
             panic!(e.to_string());
@@ -1619,7 +1620,7 @@ pub fn evm_test_arbsys(log_to: Option<&Path>, debug: bool) {
         debug,
     );
     match result {
-        Ok((logs, sends)) => {
+        Ok((logs, sends, _)) => {
             assert_eq!(logs.len(), 1);
             assert_eq!(sends.len(), 0);
             assert!(logs[0].succeeded());
@@ -1630,7 +1631,7 @@ pub fn evm_test_arbsys(log_to: Option<&Path>, debug: bool) {
                 .unwrap();
             assert_eq!(
                 decoded_result[0],
-                ethabi::Token::Uint(ethabi::Uint::try_from(2).unwrap())
+                ethabi::Token::Uint(ethabi::Uint::try_from(3).unwrap())
             );
         }
         Err(e) => {
@@ -1647,14 +1648,15 @@ pub fn evm_test_arbsys(log_to: Option<&Path>, debug: bool) {
         debug,
     );
     match result {
-        Ok((logs, sends)) => {
+        Ok((logs, _sends, callbacks)) => {
             assert_eq!(logs.len(), 1);
             assert!(logs[0].succeeded());
-            assert_eq!(sends.len(), 1);
-            let mut expected_bytes = my_addr.to_bytes_be();
-            expected_bytes.extend(Uint256::from_usize(5000).to_bytes_be());
-            assert_eq!(sends[0][0..32], Uint256::zero().to_bytes_be());
-            assert_eq!(sends[0][32..], expected_bytes);
+            assert_eq!(callbacks.len(), 1);
+            assert_eq!(callbacks[0].caller, contract.address);
+            assert_eq!(callbacks[0].destination, my_addr);
+            assert_eq!(callbacks[0].callvalue, Uint256::from_u64(5000));
+            let empty_bytes: Vec<u8> = vec![];
+            assert_eq!(callbacks[0].calldata, empty_bytes);
         }
         Err(e) => {
             panic!(e.to_string());
@@ -1701,7 +1703,7 @@ pub fn evm_direct_deploy_and_call_add(log_to: Option<&Path>, debug: bool) {
         debug,
     );
     match result {
-        Ok((logs, sends)) => {
+        Ok((logs, sends, _)) => {
             assert_eq!(logs.len(), 1);
             assert_eq!(sends.len(), 0);
             assert!(logs[0].succeeded());
@@ -1780,7 +1782,7 @@ pub fn _evm_test_same_address_deploy(log_to: Option<&Path>, debug: bool) {
         debug,
     );
     match result {
-        Ok((logs, sends)) => {
+        Ok((logs, sends, _)) => {
             assert_eq!(logs.len(), 1);
             assert_eq!(sends.len(), 0);
             assert!(logs[0].succeeded());
@@ -1841,7 +1843,7 @@ pub fn evm_direct_deploy_and_compressed_call_add(log_to: Option<&Path>, debug: b
         debug,
     );
     match result {
-        Ok((logs, sends)) => {
+        Ok((logs, sends, _)) => {
             assert_eq!(logs.len(), 1);
             assert_eq!(sends.len(), 0);
             assert!(logs[0].succeeded());
@@ -1895,9 +1897,10 @@ pub fn evm_payment_to_empty_address(log_to: Option<&Path>, debug: bool) {
     };
 
     let receipts = machine.runtime_env.get_all_receipt_logs();
-    assert_eq!(receipts.len(), 1);
-    assert_eq!(receipts[0].get_request_id(), tx_id);
+    assert_eq!(receipts.len(), 2);
     assert!(receipts[0].succeeded());
+    assert_eq!(receipts[1].get_request_id(), tx_id);
+    assert!(receipts[1].succeeded());
 
     if let Some(path) = log_to {
         machine.runtime_env.recorder.to_file(path).unwrap();

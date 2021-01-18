@@ -502,10 +502,15 @@ impl RuntimeEnvironment {
         payee: Uint256,
         amount: Uint256,
     ) {
-        let mut buf = payee.to_bytes_be();
-        buf.extend(amount.to_bytes_be());
-
-        self.insert_l1_message(0, sender_addr, &buf);
+        self.insert_tx_message(
+            sender_addr,
+            Uint256::from_u64(100000),
+            Uint256::zero(),
+            payee,
+            amount,
+            &[],
+            true
+        );
     }
 
     pub fn get_and_incr_seq_num(&mut self, addr: &Uint256) -> Uint256 {
@@ -578,6 +583,15 @@ impl RuntimeEnvironment {
             .map(|r| r.unwrap())
             .collect()
     }
+
+    pub fn get_all_l2_to_l1_calls(&self) -> Vec<L2toL1call> {
+        self.get_all_sends()
+            .into_iter()
+            .map(|b| get_l2_to_l1_call(b))
+            .filter(|r| r.is_some())
+            .map(|r| r.unwrap())
+            .collect()
+    }
 }
 
 fn get_send_contents(log: Value) -> Option<Vec<u8>> {
@@ -593,6 +607,31 @@ fn get_send_contents(log: Value) -> Option<Vec<u8>> {
         } else {
             None
         }
+    } else {
+        None
+    }
+}
+
+#[derive(Clone)]
+pub struct L2toL1call {
+    pub caller: Uint256,
+    pub destination: Uint256,
+    pub block_num: Uint256,
+    pub timestamp: Uint256,
+    pub callvalue: Uint256,
+    pub calldata: Vec<u8>,
+}
+
+fn get_l2_to_l1_call(b: Vec<u8>) -> Option<L2toL1call> {
+    if b[0..32] == Uint256::from_u64(3).to_bytes_be() {
+        Some(L2toL1call {
+            caller: Uint256::from_bytes(&b[32..64]),
+            destination: Uint256::from_bytes(&b[64..96]),
+            block_num: Uint256::from_bytes(&b[96..128]),
+            timestamp: Uint256::from_bytes(&b[128..160]),
+            callvalue: Uint256::from_bytes(&b[160..192]),
+            calldata: b[192..].to_vec(),
+        })
     } else {
         None
     }

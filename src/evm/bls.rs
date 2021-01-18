@@ -46,7 +46,7 @@ impl<'a> _ArbBLS<'a> {
         y0: Uint256,
         y1: Uint256,
     ) -> Result<(), ethabi::Error> {
-        let (receipts, sends) = self.contract_abi.call_function(
+        let (receipts, sends, _) = self.contract_abi.call_function(
             self.my_address.clone(),
             "register",
             &[
@@ -73,7 +73,7 @@ impl<'a> _ArbBLS<'a> {
         machine: &mut Machine,
         addr: Uint256,
     ) -> Result<(Uint256, Uint256, Uint256, Uint256), ethabi::Error> {
-        let (receipts, sends) = self.contract_abi.call_function(
+        let (receipts, sends, _) = self.contract_abi.call_function(
             self.my_address.clone(),
             "getPublicKey",
             &[ethabi::Token::Address(addr.to_h160())],
