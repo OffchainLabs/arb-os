@@ -635,7 +635,17 @@ impl AbstractSyntaxTree for TypeCheckedExpr {
                 TypeCheckedNode::Expression(exp2),
                 TypeCheckedNode::Expression(exp3),
             ],
-            TypeCheckedExprKind::If(_, _, _, _) => unimplemented!(),
+            TypeCheckedExprKind::If(cond, block, else_block, _) => cond
+                .child_nodes()
+                .into_iter()
+                .chain(block.child_nodes().into_iter())
+                .chain(
+                    else_block
+                        .into_iter()
+                        .map(|n| n.child_nodes().into_iter())
+                        .flatten(),
+                )
+                .collect(),
         }
     }
 }
