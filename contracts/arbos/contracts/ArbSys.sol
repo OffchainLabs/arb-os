@@ -4,9 +4,6 @@ interface ArbSys {
     // Get ArbOS version number
     function arbOSVersion() external pure returns (uint);
 
-    // Send given amount of Eth to dest with from sender.
-    function withdrawEth(address dest) external payable;
-
     // Send a transaction to L1
     function sendTxToL1(address destAddr, bytes calldata calldataForL1) external payable;
 

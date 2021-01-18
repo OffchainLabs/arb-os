@@ -59,26 +59,7 @@ public impure func handleL1Request(
     // Parse an incoming message and do appropriate computations
     let inStream = bytestream_new(msg.msgData);
 
-    if (msg.kind == const::L1MessageType_ethDeposit) {
-        // ethdeposit message
-        let (bs, destination) = bytestream_get256(inStream)?;
-        inStream = bs;
-
-        let (bs, amount) = bytestream_get256(inStream)?;
-        inStream = bs;
-
-        let globalAS = getGlobalAccountStore();
-        let destAccount = accountStore_get(globalAS, address(destination));
-        destAccount = account_addToEthBalance(destAccount, amount);
-        setGlobalAccountStore(
-            accountStore_set(
-                globalAS,
-                address(destination),
-                destAccount
-            )
-        );
-        return Some(());
-    } else {
+    if (true) {
         // not a valid message type
         // (This should not have been called if msg.kind == const::L1MessageType_L2.)
         return None;

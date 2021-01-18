@@ -87,8 +87,6 @@ public impure func arbsys_txcall() {
         let funcCode = getFuncCode(calldata);
         if (funcCode == 0x051038F2) {
             arbsys_arbOSVersion(topFrame, calldata);
-        } elseif(funcCode == 0x25e16063) {
-            arbsys_withdrawEth(topFrame, calldata);
         } elseif(funcCode == 0x928c169a) {
             arbsys_sendTxToL1(topFrame, calldata);
         } elseif(funcCode == 0x23ca0cd2) {
@@ -201,46 +199,6 @@ impure func arbsys_arbOSVersion(topFrame: EvmCallFrame, calldata: ByteArray) {  
     } else {
         evmOp_revert_knownCodePc(address(const::Address_ArbSys), 6, 0, 0);
     }
-}
-
-impure func arbsys_withdrawEth(topFrame: EvmCallFrame, calldata: ByteArray) { // (address payee) payable -> nil
-    if (bytearray_size(calldata) != 36) {
-        evmOp_revert_knownCodePc(address(const::Address_ArbSys), 30, 0, 0);
-    }
-    let senderAddr = evmCallFrame_getCaller(topFrame);
-    let destAddr = address(bytearray_get256(calldata, 4));
-    let amount = evmCallFrame_getCallvalue(topFrame);
-
-    let runningAsAddr = evmCallFrame_runningAsAddress(topFrame);
-    let runningAsAccount = evmCallFrame_getAccount(topFrame, runningAsAddr);
-    if let Some(updatedAcct) = account_deductFromEthBalance(runningAsAccount, amount) {
-        if ( ! evmCallStack_setAccount(runningAsAddr, updatedAcct)) {
-            evmOp_revert_knownCodePc(address(const::Address_ArbSys), 31, 0, 0);
-        }
-        queueMessageForSend(
-            bytearray_set256(
-                bytearray_set256(
-                    bytearray_set256(bytearray_new(0), 0, const::SendType_withdrawETH),
-                    32,
-                    bytearray_get256(calldata, 4),
-                ),
-                64,
-                amount
-            )
-        );
-        if (evmCallStack_addEvmLogToCurrent(
-            (
-                address(const::Address_ArbSys),  // addEvmLogToCurrent will fill this in
-                (32, setbuffer256(newbuffer(), 0, amount)),
-                0xc32d3c7eb0f275cbb5b72b3d3c688269430f30e5b9bb36980396edd9101c615c, // EthWithdrawal(address,uint256)
-                uint(destAddr),
-            )
-        ) == Some(())) {
-            evmOp_return(0, 0);
-        }
-    }
-
-    evmOp_revert_knownCodePc(address(const::Address_ArbSys), 32, 0, 0);
 }
 
 impure func arbsys_sendTxToL1(topFrame: EvmCallFrame, calldata: ByteArray) { // (address, bytes) payable -> bool
