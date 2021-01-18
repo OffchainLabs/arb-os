@@ -187,6 +187,8 @@ pub fn init_constant_table() -> HashMap<String, Uint256> {
         ("SendType_withdrawETH", 0),
         ("SendType_sendTxToL1", 3),
         ("SendType_buddyContractResult", 5),
+        // AVM send types
+        ("AVMSendType_batch", 0),
         // chain initialization options
         ("InitOption_setSecondsPerBlock", 1),
         ("InitOption_setChargingParams", 2),
