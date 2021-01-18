@@ -1747,13 +1747,13 @@ pub fn _evm_test_contract_call(log_to: Option<&Path>, debug: bool) {
         }
     };
 
-    for _ in 0..4 {
+    for i in 0..4 {
         let result = contract._call_function_from_contract(
             my_addr.clone(),
             "add",
             vec![
                 ethabi::Token::Uint(ethabi::Uint::one()),
-                ethabi::Token::Uint(ethabi::Uint::one()),
+                ethabi::Token::Uint(Uint256::from_u64(i).to_u256()),
             ]
                 .as_ref(),
             &mut machine,
@@ -1772,7 +1772,7 @@ pub fn _evm_test_contract_call(log_to: Option<&Path>, debug: bool) {
                     .unwrap();
                 assert_eq!(
                     decoded_result[0],
-                    ethabi::Token::Uint(ethabi::Uint::try_from(2).unwrap())
+                    ethabi::Token::Uint(ethabi::Uint::try_from(1+i).unwrap())
                 );
             }
             Err(e) => {
