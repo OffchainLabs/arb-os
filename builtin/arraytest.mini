@@ -19,7 +19,7 @@ func tests() -> uint {
 	let a = newarray<any>(17);
 	if (a[6] != null) {
 		return 1;
-	};
+	}
 
 	a = newarray<uint>(71);
 	if (a[66] != 0) {
