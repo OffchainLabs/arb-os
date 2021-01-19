@@ -647,7 +647,7 @@ pub enum ExprKind {
     Constant(Constant),
     OptionInitializer(Box<Expr>),
     FunctionCall(Box<Expr>, Vec<Expr>),
-    CodeBlock(Vec<Statement>, Option<Box<Expr>>),
+    CodeBlock(CodeBlock),
     ArrayOrMapRef(Box<Expr>, Box<Expr>),
     StructInitializer(Vec<FieldInitializer>),
     Tuple(Vec<Expr>),
@@ -659,6 +659,7 @@ pub enum ExprKind {
     UnsafeCast(Box<Expr>, Type),
     Asm(Type, Vec<Instruction>, Vec<Expr>),
     Try(Box<Expr>),
+    If(Box<Expr>, CodeBlock, Option<CodeBlock>),
     NewBuffer,
 }
 
@@ -752,5 +753,17 @@ pub struct FieldInitializer {
 impl FieldInitializer {
     pub fn new(name: String, value: Expr) -> Self {
         FieldInitializer { name, value }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct CodeBlock {
+    pub body: Vec<Statement>,
+    pub ret_expr: Option<Box<Expr>>,
+}
+
+impl CodeBlock {
+    pub fn new(body: Vec<Statement>, ret_expr: Option<Box<Expr>>) -> Self {
+        Self { body, ret_expr }
     }
 }

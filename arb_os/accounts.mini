@@ -58,7 +58,7 @@ public impure func getGlobalAccountStore() -> AccountStore {
 }
 
 public impure func setGlobalAccountStore(acctStore: AccountStore) {
-    globalAccountStore = acctStore;;
+    globalAccountStore = acctStore;
 }
 
 public func accountStore_get(acctStore: AccountStore, addr: address) -> Account {
