@@ -724,7 +724,7 @@ impl Machine {
 
     ///Returns a stack trace of the current state of the machine.
     pub fn get_stack_trace(&self) -> StackTrace {
-        StackTrace::Known(self.aux_stack.all_codepts())
+        StackTrace { trace: self.aux_stack.all_codepts() }
     }
 
     ///Adds a trace writer to the machine
@@ -1089,11 +1089,7 @@ impl Machine {
                     loc_map.insert(&loc, next_op_gas, &self.file_name_chart);
                 }
                 total_gas += next_op_gas;
-                let alt_stack = if let StackTrace::Known(trace) = self.get_stack_trace() {
-                    trace
-                } else {
-                    panic!("Internal error: Unknown stack trace");
-                };
+                let alt_stack = self.get_stack_trace().trace;
                 match stack_len.cmp(&stack.len()) {
                     Ordering::Less => {
                         stack.pop();
@@ -2372,16 +2368,12 @@ fn reverse32(x: u32) -> u32 {
 
 ///Represents a stack trace, with each CodePt indicating a stack frame, Unknown variant is unused.
 #[derive(Debug)]
-pub enum StackTrace {
-    _Unknown,
-    Known(Vec<CodePt>),
+pub struct StackTrace {
+    pub trace: Vec<CodePt>,
 }
 
 impl fmt::Display for StackTrace {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            StackTrace::_Unknown => writeln!(f, "[stack trace unknown]"),
-            StackTrace::Known(v) => writeln!(f, "{:?}", v),
-        }
+        self.trace.iter().map(|v|  writeln!(f, "{:?}", v)).collect()
     }
 }
