@@ -2177,6 +2177,7 @@ fn mavm_codegen_expr<'a>(
             code.push(Instruction::from_opcode(Opcode::Label(end_label), debug));
             Ok((lg, code, max(cond_locals, max(block_locals, else_locals))))
         }
+        TypeCheckedExprKind::IfLet(_, _, _, _, _) => unimplemented!(),
     }
 }
 
