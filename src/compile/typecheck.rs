@@ -2284,6 +2284,7 @@ fn typecheck_expr(
                     ))
                 }
             }
+            ExprKind::IfLet(_, _, _, _) => unimplemented!(),
         }?,
         debug_info,
     })
