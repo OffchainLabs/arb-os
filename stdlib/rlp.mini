@@ -160,7 +160,7 @@ public func rlp_encodeBytes(
             bytearray_copy(inBytes, inOffset, outBytes, outOffset, nbytes),
             1+nbytes
         );
-    };
+    }
 
     let sizeOfSize = bytesNeededToRepresentUint(nbytes);
     outBytes = bytearray_setByte(outBytes, outOffset, 0xb7+sizeOfSize);
