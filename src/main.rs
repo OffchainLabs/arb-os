@@ -35,6 +35,8 @@ mod run;
 mod stringtable;
 mod uint256;
 
+mod wasm;
+
 ///Command line options for compile subcommand.
 #[derive(Clap, Debug)]
 struct CompileStruct {
@@ -112,6 +114,7 @@ enum Args {
     MakeBenchmarks,
     MakeTemplates,
     EvmTests(EvmTests),
+    WasmTest,
 }
 
 fn main() -> Result<(), CompileError> {
@@ -119,6 +122,9 @@ fn main() -> Result<(), CompileError> {
     let matches = Args::parse();
 
     match matches {
+        Args::WasmTest => {
+            wasm::load();
+        }
         Args::Compile(compile) => {
             let debug_mode = compile.debug_mode;
             let typecheck = compile.typecheck;
