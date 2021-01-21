@@ -643,7 +643,8 @@ impl AbstractSyntaxTree for TypeCheckedExpr {
                 TypeCheckedNode::Expression(exp2),
                 TypeCheckedNode::Expression(exp3),
             ],
-            TypeCheckedExprKind::If(cond, block, else_block, _) => cond
+            TypeCheckedExprKind::If(cond, block, else_block, _)
+            | TypeCheckedExprKind::IfLet(_, cond, block, else_block, _) => cond
                 .child_nodes()
                 .into_iter()
                 .chain(block.child_nodes().into_iter())
@@ -654,7 +655,6 @@ impl AbstractSyntaxTree for TypeCheckedExpr {
                         .flatten(),
                 )
                 .collect(),
-            TypeCheckedExprKind::IfLet(_, _, _, _, _) => unimplemented!(),
         }
     }
 }
