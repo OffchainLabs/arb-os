@@ -8,7 +8,7 @@ use clap::Clap;
 use compile::{compile_from_file, CompileError};
 use contracttemplates::generate_contract_template_file_or_die;
 use link::{link, postlink_compile};
-use mavm::Value;
+use mavm::{Value, CodePt};
 use pos::try_display_location;
 use run::{
     profile_gen_from_file, replay_from_testlog_file, run_from_file, ProfilerMode,
@@ -20,6 +20,8 @@ use std::io;
 use std::path::Path;
 use std::time::Instant;
 use uint256::Uint256;
+use crate::link::LinkedProgram;
+use crate::run::Machine;
 
 #[cfg(test)]
 mod buffertests;
@@ -123,7 +125,19 @@ fn main() -> Result<(), CompileError> {
 
     match matches {
         Args::WasmTest => {
-            wasm::load();
+            let code = wasm::load();
+            let code_len = code.len();
+            let env = RuntimeEnvironment::new(Uint256::from_usize(1111), None);
+            let program = LinkedProgram {
+                code: code,
+                static_val: Value::new_tuple(vec![]),
+                exported_funcs: vec![],
+                imported_funcs: vec![],
+                file_name_chart: BTreeMap::new(),
+            };
+            let mut machine = Machine::new(program, env);
+            machine.start_at_zero();
+            machine.debug(Some(CodePt::new_internal(code_len-1)));
         }
         Args::Compile(compile) => {
             let debug_mode = compile.debug_mode;

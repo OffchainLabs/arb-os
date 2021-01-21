@@ -44,6 +44,14 @@ fn get_frame() -> Instruction {
     Instruction::from_opcode_imm(Opcode::AVMOpcode(AVMOpcode::Xget), Value::Int(Uint256::from_usize(0)), DebugInfo::from(None))
 }
 
+fn push_frame(v: Value) -> Instruction {
+    Instruction::from_opcode_imm(Opcode::AVMOpcode(AVMOpcode::AuxPush), v, DebugInfo::from(None))
+}
+
+fn push_value(v: Value) -> Instruction {
+    Instruction::from_opcode_imm(Opcode::AVMOpcode(AVMOpcode::Noop), v, DebugInfo::from(None))
+}
+
 fn set_frame() -> Instruction {
     Instruction::from_opcode_imm(Opcode::AVMOpcode(AVMOpcode::Xset), Value::Int(Uint256::from_usize(0)), DebugInfo::from(None))
 }
@@ -127,6 +135,10 @@ fn handle_function(m : &Module, func : &FuncBody, idx : usize) -> Vec<Instructio
                 // store frame
                 res.push(set_frame());
                 ptr = ptr - 1;
+            },
+            I32Add => {
+                ptr = ptr - 1;
+                res.push(simple_op(AVMOpcode::Plus));
             },
             /*
             Loop(bt) => {
@@ -519,7 +531,7 @@ fn handle_function(m : &Module, func : &FuncBody, idx : usize) -> Vec<Instructio
 
 }
 
-pub fn load() {
+pub fn load() -> Vec<Instruction> {
     let module = parity_wasm::deserialize_file("./wasm-tests/test.wasm").unwrap();
     assert!(module.code_section().is_some());
 
@@ -527,8 +539,24 @@ pub fn load() {
 
     println!("Function count in wasm file: {}", code_section.bodies().len());
 
+    // Put initial frame to aux stack
+    let mut init = vec![];
+    init.push(push_frame(Value::new_tuple(vec![Value::new_buffer(vec![])])));
+
+    // Add test argument to the frame
+    init.push(get_frame());
+    init.push(push_value(Value::Int(Uint256::from_usize(1234))));
+    init.push(set64_from_buffer(0));
+    init.push(set_frame());
+
     for (idx,f) in code_section.bodies().iter().enumerate() {
-        handle_function(&module, f, idx);
+        // function return will be in the stack
+        let mut res = handle_function(&module, f, idx);
+        init.append(&mut res);
     }
+
+    init.push(simple_op(AVMOpcode::Noop));
+
+    init
 
 }
