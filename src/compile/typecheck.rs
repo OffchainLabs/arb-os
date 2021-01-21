@@ -568,7 +568,8 @@ impl MiniProperties for TypeCheckedExpr {
                 instrs.iter().all(|inst| inst.is_pure()) && args.iter().all(|expr| expr.is_pure())
             }
             TypeCheckedExprKind::Try(expr, _) => expr.is_pure(),
-            TypeCheckedExprKind::If(cond, block, else_block, _) => {
+            TypeCheckedExprKind::If(cond, block, else_block, _)
+            | TypeCheckedExprKind::IfLet(_, cond, block, else_block, _) => {
                 cond.is_pure()
                     && block.is_pure()
                     && if let Some(block) = else_block {
@@ -577,7 +578,6 @@ impl MiniProperties for TypeCheckedExpr {
                         true
                     }
             }
-            TypeCheckedExprKind::IfLet(_, _, _, _, _) => unimplemented!(),
         }
     }
 }
