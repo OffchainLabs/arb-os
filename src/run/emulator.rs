@@ -240,8 +240,8 @@ impl fmt::Display for ExecutionError {
             ExecutionError::StoppedErr(s) => writeln!(f, "error with machine stopped: {}", s),
             ExecutionError::Wrapped(s, bee) => writeln!(f, "{} ({})", s, *bee),
             ExecutionError::RunningErr(s, cp, ov) => match ov {
-                Some(val) => writeln!(f, "{} ({:?}) with value {}", s, cp, val),
-                None => writeln!(f, "{} ({:?})", s, cp),
+                Some(val) => writeln!(f, "{} ({}) with value {}", s, cp, val),
+                None => writeln!(f, "{} ({})", s, cp),
             },
         }
     }
@@ -310,7 +310,7 @@ impl CodeStore {
                 }
             }
             _ => {
-                panic!("unlinked codepoint reference in running code: {:?}", codept);
+                panic!("unlinked codepoint reference in running code: {}", codept);
             }
         }
     }
@@ -355,7 +355,7 @@ impl CodeStore {
                 }
             }
         } else {
-            panic!("invalid codepoint in push_insn: {:?}", codept);
+            panic!("invalid codepoint in push_insn: {}", codept);
         }
     }
 }
@@ -533,7 +533,7 @@ impl ProfilerData {
                     in_func_gas
                 );
             } else {
-                println!("Unknown func at {:?}: {}", func, in_func_gas);
+                println!("Unknown func at {}: {}", func, in_func_gas);
             }
             let callers: BTreeMap<_, _> = callers
                 .into_iter()
@@ -553,7 +553,7 @@ impl ProfilerData {
                     );
                 } else {
                     println!(
-                        "    Called by unknown function at {:?}, for {}",
+                        "    Called by unknown function at {}, for {}",
                         caller, gas
                     );
                 }
@@ -575,7 +575,7 @@ impl ProfilerData {
                         gas
                     );
                 } else {
-                    println!("    Calls unknown func at {:?}, for {}", called, gas);
+                    println!("    Calls unknown func at {}, for {}", called, gas);
                 }
             }
             if total_callers != total_called + *in_func_gas {
@@ -724,7 +724,7 @@ impl Machine {
 
     ///Returns a stack trace of the current state of the machine.
     pub fn get_stack_trace(&self) -> StackTrace {
-        StackTrace::Known(self.aux_stack.all_codepts())
+        StackTrace { trace: self.aux_stack.all_codepts() }
     }
 
     ///Adds a trace writer to the machine
@@ -769,7 +769,7 @@ impl Machine {
         };
         println!("ArbGas cost of call: {}", cost);
         if let Some(ret_val) = self.stack.top() {
-            println!("Stack top: {:?}", ret_val);
+            println!("Stack top: {}", ret_val);
         }
         match &self.state {
             MachineState::Stopped => {
@@ -861,7 +861,7 @@ impl Machine {
             }
             if breakpoint {
                 if let Ok(pc) = self.get_pc() {
-                    println!("PC: {:?}", pc);
+                    println!("PC: {}", pc);
                 }
                 println!("Stack contents: {}", self.stack);
                 if show_aux {
@@ -1089,11 +1089,7 @@ impl Machine {
                     loc_map.insert(&loc, next_op_gas, &self.file_name_chart);
                 }
                 total_gas += next_op_gas;
-                let alt_stack = if let StackTrace::Known(trace) = self.get_stack_trace() {
-                    trace
-                } else {
-                    panic!("Internal error: Unknown stack trace");
-                };
+                let alt_stack = self.get_stack_trace().trace;
                 match stack_len.cmp(&stack.len()) {
                     Ordering::Less => {
                         stack.pop();
@@ -2372,16 +2368,12 @@ fn reverse32(x: u32) -> u32 {
 
 ///Represents a stack trace, with each CodePt indicating a stack frame, Unknown variant is unused.
 #[derive(Debug)]
-pub enum StackTrace {
-    _Unknown,
-    Known(Vec<CodePt>),
+pub struct StackTrace {
+    pub trace: Vec<CodePt>,
 }
 
 impl fmt::Display for StackTrace {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            StackTrace::_Unknown => writeln!(f, "[stack trace unknown]"),
-            StackTrace::Known(v) => writeln!(f, "{:?}", v),
-        }
+        self.trace.iter().map(|v|  writeln!(f, "{:?}", v)).collect()
     }
 }
