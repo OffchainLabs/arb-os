@@ -494,6 +494,13 @@ pub enum TypeCheckedExprKind {
         Option<TypeCheckedCodeBlock>,
         Type,
     ),
+    IfLet(
+        StringId,
+        Box<TypeCheckedExpr>,
+        TypeCheckedCodeBlock,
+        Option<TypeCheckedCodeBlock>,
+        Type,
+    ),
 }
 
 impl MiniProperties for TypeCheckedExpr {
@@ -561,7 +568,8 @@ impl MiniProperties for TypeCheckedExpr {
                 instrs.iter().all(|inst| inst.is_pure()) && args.iter().all(|expr| expr.is_pure())
             }
             TypeCheckedExprKind::Try(expr, _) => expr.is_pure(),
-            TypeCheckedExprKind::If(cond, block, else_block, _) => {
+            TypeCheckedExprKind::If(cond, block, else_block, _)
+            | TypeCheckedExprKind::IfLet(_, cond, block, else_block, _) => {
                 cond.is_pure()
                     && block.is_pure()
                     && if let Some(block) = else_block {
@@ -635,7 +643,8 @@ impl AbstractSyntaxTree for TypeCheckedExpr {
                 TypeCheckedNode::Expression(exp2),
                 TypeCheckedNode::Expression(exp3),
             ],
-            TypeCheckedExprKind::If(cond, block, else_block, _) => cond
+            TypeCheckedExprKind::If(cond, block, else_block, _)
+            | TypeCheckedExprKind::IfLet(_, cond, block, else_block, _) => cond
                 .child_nodes()
                 .into_iter()
                 .chain(block.child_nodes().into_iter())
@@ -686,6 +695,7 @@ impl TypeCheckedExpr {
             TypeCheckedExprKind::Asm(t, _, _) => t.clone(),
             TypeCheckedExprKind::Try(_, t) => t.clone(),
             TypeCheckedExprKind::If(_, _, _, t) => t.clone(),
+            TypeCheckedExprKind::IfLet(_, _, _, _, t) => t.clone(),
         }
     }
 }
@@ -2283,6 +2293,73 @@ fn typecheck_expr(
                         block_type,
                     ))
                 }
+            }
+            ExprKind::IfLet(l, r, if_block, else_block) => {
+                let tcr = typecheck_expr(
+                    r,
+                    type_table,
+                    global_vars,
+                    func_table,
+                    return_type,
+                    type_tree,
+                    scopes,
+                )?;
+                let tct = match tcr.get_type() {
+                    Type::Option(t) => *t,
+                    unexpected => {
+                        return Err(new_type_error(
+                            format!("Expected option type got: \"{}\"", unexpected.display()),
+                            debug_info.location,
+                        ))
+                    }
+                };
+                let mut inner_type_table = type_table.clone();
+                inner_type_table.insert(*l, &tct);
+                let checked_block = typecheck_codeblock(
+                    if_block,
+                    &inner_type_table,
+                    global_vars,
+                    func_table,
+                    return_type,
+                    type_tree,
+                    scopes,
+                )?;
+                let tipe = checked_block.get_type();
+                let checked_else = else_block
+                    .clone()
+                    .map(|block| {
+                        typecheck_codeblock(
+                            &block,
+                            type_table,
+                            global_vars,
+                            func_table,
+                            return_type,
+                            type_tree,
+                            scopes,
+                        )
+                    })
+                    .transpose()?;
+                let else_type = checked_else
+                    .clone()
+                    .map(|g| g.get_type())
+                    .unwrap_or(Type::Void);
+                if tipe != else_type {
+                    return Err(new_type_error(
+                        format!(
+                            "Mismatch of if and else types found: \"{}\" and \"{}\"",
+                            tipe.display(),
+                            else_type.display()
+                        ),
+                        debug_info.location,
+                    ));
+                }
+                Ok(TypeCheckedExprKind::IfLet(
+                    *l,
+                    Box::new(tcr),
+                    checked_block,
+                    checked_else,
+                    tipe,
+                ))
             }
         }?,
         debug_info,

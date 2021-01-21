@@ -660,6 +660,7 @@ pub enum ExprKind {
     Asm(Type, Vec<Instruction>, Vec<Expr>),
     Try(Box<Expr>),
     If(Box<Expr>, CodeBlock, Option<CodeBlock>),
+    IfLet(StringId, Box<Expr>, CodeBlock, Option<CodeBlock>),
     NewBuffer,
 }
 
