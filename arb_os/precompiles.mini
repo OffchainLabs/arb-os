@@ -295,6 +295,7 @@ func precompile_0x05_pluggable(
     ) {
         let mem = biguint_toBytes(result);
         let memSize = bytearray_size(mem);
+
         if (memSize > modLen) {
             mem = bytearray_extract(mem, memSize-modLen, modLen);
         } elseif (memSize < modLen) {

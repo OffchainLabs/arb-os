@@ -39,7 +39,6 @@ use evmlogs::evmlogs_empty;
 use evmlogs::evmlogs_appendAny;
 
 use std::bytearray::bytearray_new;
-use std::bytearray::bytearray_marshalFull;
 use std::bytearray::bytearray_extract;
 use std::bytearray::bytearray_copy;
 use std::bytearray::bytearray_setByte;
@@ -73,7 +72,7 @@ use output::queueMessageForSend;
 
 use main::mainRunLoop;
 
-use output::sendMessage;
+use output::outbox_append;
 use output::sendQueuedMessages;
 
 use inbox::IncomingRequest;
@@ -102,7 +101,7 @@ type EvmCallFrame = struct {
     selfDestructQueue: Queue,           // set of self-destruct directives, including those created by this call and its subcalls
     resumeInfo: option<ResumeInfo>,     // if call is suspended, its state will be saved here
     sendQueue: Queue,                   // outgoing messages, including those created by this call and its subcalls
-    sendOnFailure: option<(uint, address,ByteArray)>,  // message to send if call fails
+    sendOnFailure: option<ByteArray>,  // message to send if call fails
     parent: option<EvmCallFrame>,                // call-frame that created this one, or None if this is a top-level call
 }
 
@@ -157,7 +156,7 @@ public impure func evmCallStack_stackInfo() -> (uint, (address, address), (addre
 public impure func initEvmCallStack(
     callKind: uint,
     request: TxRequestData,
-    sendOnFailure: option<(uint, address, ByteArray)>,
+    sendOnFailure: option<ByteArray>,
 ) {
     // Set up the call frame for a top-level call, and launch the call's execution.
     if let Some(entryPoint) = account_getStartCodePoint(
@@ -372,7 +371,7 @@ public impure func initEvmCallStackForConstructor(
                 selfDestructQueue: queue_new(),
                 resumeInfo: None<ResumeInfo>,
                 sendQueue: queue_new(),
-                sendOnFailure: None<(uint, address, ByteArray)>,
+                sendOnFailure: None<ByteArray>,
                 parent: None<EvmCallFrame>
             });
 
@@ -498,7 +497,7 @@ public impure func evmCallStack_doCall(
             selfDestructQueue: topFrame.selfDestructQueue,
             resumeInfo: None<ResumeInfo>,
             sendQueue: topFrame.sendQueue,
-            sendOnFailure: None<(uint, address, ByteArray)>,
+            sendOnFailure: None<ByteArray>,
             parent: Some(topFrame)
         };
 
@@ -593,11 +592,10 @@ public impure func evmCallStack_returnFromCall(
         // save updated EVM callstack state; send sendOnFailure message if applicable; restore caller's stack; jump to resume address
         globalCallStack = Some(newTopFrame);
         if ( ! success) {
-            if let Some(sendArgs) = topFrame.sendOnFailure {
+            if let Some(msg) = topFrame.sendOnFailure {
                 // promote the send-on-failure message to the next level of the callstack
                 // note that it will still be discarded if the parent (or grandparent etc) reverts
-                let (msgType, addr, msg) = sendArgs;
-                queueMessageForSend(msgType, addr, msg);
+                queueMessageForSend(msg);
             }
         }
         emptyAvmStack();                             // throw away anything that callee left on the stack
@@ -672,10 +670,16 @@ public impure func evmCallStack_returnFromCall(
 
                     if (globalCurrentTxRequest.incomingRequest.kind == 5) {
                         // successfully created a buddy contract -- announce that as a message
-                        sendMessage(
-                            const::SendType_buddyContractResult,
-                            globalCurrentTxRequest.incomingRequest.sender,
-                            bytearray_setByte(bytearray_new(0), 0, 1)
+                        outbox_append(
+                            bytearray_setByte(
+                                bytearray_set256(
+                                    bytearray_set256(bytearray_new(0), 0, const::SendType_buddyContractResult),
+                                    32,
+                                    uint(globalCurrentTxRequest.incomingRequest.sender)
+                                ),
+                                64,
+                                1,
+                            )
                         );
                     }
                 } else {
@@ -689,10 +693,16 @@ public impure func evmCallStack_returnFromCall(
                     );
                     if (globalCurrentTxRequest.incomingRequest.kind == 5) {
                         // failed to create a buddy contract -- announce that as a message
-                        sendMessage(
-                            const::SendType_buddyContractResult,
-                            globalCurrentTxRequest.incomingRequest.sender,
-                            bytearray_setByte(bytearray_new(0), 0, 0)
+                        outbox_append(
+                            bytearray_setByte(
+                                bytearray_set256(
+                                    bytearray_set256(bytearray_new(0), 0, const::SendType_buddyContractResult),
+                                    32,
+                                    uint(globalCurrentTxRequest.incomingRequest.sender),
+                                ),
+                                64,
+                                0,
+                            )
                         );
                     }
                 }
@@ -736,9 +746,8 @@ public impure func evmCallStack_returnFromCall(
         } else {
             // Request failed
             let gasUsage = gasAccounting_endTxCharges(int(0))?;
-            if let Some(sendArgs) = topFrame.sendOnFailure {
-                let (msgType, addr, msg) = sendArgs;
-                sendMessage(msgType, addr, msg);
+            if let Some(msg) = topFrame.sendOnFailure {
+                outbox_append(msg);
             }
             emitTxReceipt(
                 globalCurrentTxRequest.incomingRequest,

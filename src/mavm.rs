@@ -456,6 +456,14 @@ impl Buffer {
         }
     }
 
+    pub fn as_bytes(&self, nbytes: usize) -> Vec<u8> {
+        let mut ret = vec![];
+        for i in 0..nbytes {
+            ret.push(self.read_byte(i));
+        }
+        ret
+    }
+
     pub fn avm_hash(&self) -> Uint256 {
         Uint256::avm_hash2(&Uint256::from_u64(123), &self.hash().hash)
     }

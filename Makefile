@@ -13,7 +13,7 @@ ARBOS = $(ARBOSDIR)/arbos.mexe
 TEMPLATES = $(ARBOSDIR)/contractTemplates.mini
 TESTFILES = $(BUILTINDIR)/kvstest.mexe $(STDDIR)/queuetest.mexe $(BUILTINDIR)/arraytest.mexe $(BUILTINDIR)/globaltest.mexe $(STDDIR)/priorityqtest.mexe $(STDDIR)/bytearraytest.mexe $(STDDIR)/keccaktest.mexe $(STDDIR)/biguinttest.mexe $(STDDIR)/rlptest.mexe $(STDDIR)/storageMapTest.mexe $(BUILTINDIR)/maptest.mexe $(STDDIR)/sha256test.mexe $(STDDIR)/ripemd160test.mexe minitests/codeloadtest.mexe $(STDDIR)/fixedpointtest.mexe $(STDDIR)/blstest.mexe
 TESTCONTRACTS = $(TCBUILDDIR)/Add.json $(TCBUILDDIR)/ArbSys.json $(TCBUILDDIR)/Fibonacci.json $(TCBUILDDIR)/Migrations.json $(TCBUILDDIR)/PaymentChannel.json $(TCBUILDDIR)/Underfunded.json
-ARBOSCONTRACTS = $(ACBUILDDIR)/ArbAddressTable.json $(ACBUILDDIR)/ArbBLS.json $(ACBUILDDIR)/ArbERC20.json $(ACBUILDDIR)/ArbERC721.json $(ACBUILDDIR)/ArbFunctionTable.json $(ACBUILDDIR)/ArbInfo.json $(ACBUILDDIR)/ArbOwner.json $(ACBUILDDIR)/ArbSys.json $(ACBUILDDIR)/ArbosTest.json
+ARBOSCONTRACTS = $(ACBUILDDIR)/ArbAddressTable.json $(ACBUILDDIR)/ArbBLS.json $(ACBUILDDIR)/ArbFunctionTable.json $(ACBUILDDIR)/ArbInfo.json $(ACBUILDDIR)/ArbOwner.json $(ACBUILDDIR)/ArbSys.json $(ACBUILDDIR)/ArbosTest.json
 
 COMPILEFLAGS = -i
 

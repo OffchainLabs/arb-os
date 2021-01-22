@@ -43,7 +43,6 @@ use std::bytearray::bytearray_getByte;
 use std::bytearray::bytearray_get256;
 use std::bytearray::bytearray_set256;
 use std::bytearray::bytearray_extract;
-use std::bytearray::bytearray_marshalFull;
 use std::bytearray::bytearray_extract;
 use std::bytearray::bytearray_copy;
 
@@ -88,12 +87,10 @@ public impure func arbsys_txcall() {
         let funcCode = getFuncCode(calldata);
         if (funcCode == 0x051038F2) {
             arbsys_arbOSVersion(topFrame, calldata);
-        } elseif (funcCode == 0xa1db9782) {
-            arbsys_withdrawErc20(topFrame, calldata);
-        } elseif(funcCode == 0xf3e414f8) {
-            arbsys_withdrawErc721(topFrame, calldata);
         } elseif(funcCode == 0x25e16063) {
             arbsys_withdrawEth(topFrame, calldata);
+        } elseif(funcCode == 0x928c169a) {
+            arbsys_sendTxToL1(topFrame, calldata);
         } elseif(funcCode == 0x23ca0cd2) {
             arbsys_getTransactionCount(topFrame, calldata);
         } elseif(funcCode == 0xa169625f) {
@@ -206,79 +203,6 @@ impure func arbsys_arbOSVersion(topFrame: EvmCallFrame, calldata: ByteArray) {  
     }
 }
 
-impure func arbsys_withdrawErc20(topFrame: EvmCallFrame, calldata: ByteArray) { // (address token, uint amount) -> nil
-    if (bytearray_size(calldata) != 68) {
-        evmOp_revert_knownCodePc(address(const::Address_ArbSys), 10, 0, 0);
-    }
-    let tokenAddr = evmCallFrame_getCaller(topFrame);
-    let destAddr = address(bytearray_get256(calldata, 4));
-    let amount = bytearray_get256(calldata, 36);
-
-    queueMessageForSend(
-        const::SendType_withdrawERC20,
-        address(0),
-        bytearray_set256(
-            bytearray_set256(
-                bytearray_set256(bytearray_new(0), 0, uint(tokenAddr)),
-                32,
-                uint(destAddr),
-            ),
-            64,
-            amount
-        ),
-    );
-    if (evmCallStack_addEvmLogToCurrent(
-        (
-            address(const::Address_ArbSys),  // addEvmLogToCurrent will fill this in
-            bytearray_marshalFull(bytearray_set256(bytearray_new(0), 0, amount)),
-            0x2fbb3e8dc2807d6a61feb98fc2120153f77b2c0d25ef6272e1756935dd62c847, // ERC20Withdrawal(address,address,uint256)
-            uint(destAddr),
-            uint(tokenAddr),
-        )
-    ) == Some(())) {
-        evmOp_return(0, 0);
-    } else {
-        evmOp_revert_knownCodePc(address(const::Address_ArbSys), 11, 0, 0);
-    }
-}
-
-impure func arbsys_withdrawErc721(topFrame: EvmCallFrame, calldata: ByteArray) { // (address token, uint id) -> nil
-    if (bytearray_size(calldata) != 68) {
-        evmOp_revert_knownCodePc(address(const::Address_ArbSys), 20, 0, 0);
-    }
-    let tokenAddr = evmCallFrame_getCaller(topFrame);
-    let destAddr = address(bytearray_get256(calldata, 4));
-    let id = bytearray_get256(calldata, 36);
-
-    queueMessageForSend(
-        const::SendType_withdrawERC721,
-        address(0),
-        bytearray_set256(
-            bytearray_set256(
-                bytearray_set256(bytearray_new(0), 0, uint(tokenAddr)),
-                32,
-                uint(destAddr),
-            ),
-            64,
-            id
-        ),
-    );
-    if (evmCallStack_addEvmLogToCurrent(
-        (
-            address(const::Address_ArbSys),  // addEvmLogToCurrent will fill this in
-            bytearray_marshalFull(bytearray_new(0)),
-            0xdce1abc7607cf83c96953308072c045ec35d02fbf5777e7d0ec8b102cd89ff81, // ERC721Withdrawal(address,address,uint256)
-            uint(destAddr),
-            uint(tokenAddr),
-            id,
-        )
-    ) == Some(())) {
-        evmOp_return(0, 0);
-    } else {
-        evmOp_revert_knownCodePc(address(const::Address_ArbSys), 21, 0, 0);
-    }
-}
-
 impure func arbsys_withdrawEth(topFrame: EvmCallFrame, calldata: ByteArray) { // (address payee) payable -> nil
     if (bytearray_size(calldata) != 36) {
         evmOp_revert_knownCodePc(address(const::Address_ArbSys), 30, 0, 0);
@@ -293,17 +217,21 @@ impure func arbsys_withdrawEth(topFrame: EvmCallFrame, calldata: ByteArray) { //
         if ( ! evmCallStack_setAccount(runningAsAddr, updatedAcct)) {
             evmOp_revert_knownCodePc(address(const::Address_ArbSys), 31, 0, 0);
         }
-        let messageData = bytearray_extract(calldata, 4, 32);
-        messageData = bytearray_set256(messageData, 32, amount);
         queueMessageForSend(
-            const::SendType_withdrawETH,
-            senderAddr,
-            messageData
+            bytearray_set256(
+                bytearray_set256(
+                    bytearray_set256(bytearray_new(0), 0, const::SendType_withdrawETH),
+                    32,
+                    bytearray_get256(calldata, 4),
+                ),
+                64,
+                amount
+            )
         );
         if (evmCallStack_addEvmLogToCurrent(
             (
                 address(const::Address_ArbSys),  // addEvmLogToCurrent will fill this in
-                bytearray_marshalFull(bytearray_set256(bytearray_new(0), 0, amount)),
+                (32, setbuffer256(newbuffer(), 0, amount)),
                 0xc32d3c7eb0f275cbb5b72b3d3c688269430f30e5b9bb36980396edd9101c615c, // EthWithdrawal(address,uint256)
                 uint(destAddr),
             )
@@ -328,8 +256,6 @@ impure func arbsys_sendTxToL1(topFrame: EvmCallFrame, calldata: ByteArray) { // 
             evmOp_revert_knownCodePc(address(const::Address_ArbSys), 220, 0, 0);
         }
         queueMessageForSend(
-            const::SendType_sendTxToL1,
-            evmCallFrame_getCaller(topFrame),
             bytearray_copy(
                 innerCalldata,
                 0,
@@ -337,20 +263,28 @@ impure func arbsys_sendTxToL1(topFrame: EvmCallFrame, calldata: ByteArray) { // 
                     bytearray_set256(
                         bytearray_set256(
                             bytearray_set256(
-                                bytearray_new(0),
-                                0,
+                                bytearray_set256(
+                                    bytearray_set256(
+                                        bytearray_new(0),
+                                        0,
+                                        const::SendType_sendTxToL1
+                                    ),
+                                    32,
+                                    uint(evmCallFrame_getCaller(topFrame)),
+                                ),
+                                64,
                                 uint(destAddr),
                             ),
-                            32,
+                            96,
                             inbox_currentBlockNumber(),
                         ),
-                        64,
+                        128,
                         inbox_currentTimestamp(),
                     ),
-                    96,
+                    160,
                     callvalue,
                 ),
-                128,
+                192,
                 nbytes,
             ),
         );
