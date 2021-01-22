@@ -957,31 +957,19 @@ fn typecheck_statement_sequence_with_bindings<'a>(
     type_tree: &TypeTree,
     scopes: &mut Vec<(String, Option<Type>)>,
 ) -> Result<Vec<TypeCheckedStatement>, TypeError> {
-    if bindings.is_empty() {
-        typecheck_statement_sequence(
-            statements,
-            return_type,
-            type_table,
-            global_vars,
-            func_table,
-            type_tree,
-            scopes,
-        )
-    } else {
-        let (sid, tipe) = &bindings[0];
-        let mut inner_type_table = type_table.clone();
+    let mut inner_type_table = type_table.clone();
+    for (sid, tipe) in bindings {
         inner_type_table.insert(*sid, tipe);
-        typecheck_statement_sequence_with_bindings(
-            statements,
-            return_type,
-            &inner_type_table,
-            global_vars,
-            func_table,
-            &bindings[1..],
-            type_tree,
-            scopes,
-        )
     }
+    typecheck_statement_sequence(
+        statements,
+        return_type,
+        &inner_type_table,
+        global_vars,
+        func_table,
+        type_tree,
+        scopes,
+    )
 }
 
 ///Performs type checking on statement.
