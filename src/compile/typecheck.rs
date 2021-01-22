@@ -859,6 +859,23 @@ pub fn typecheck_function<'a>(
     string_table: &StringTable,
 ) -> Result<TypeCheckedFunc, TypeError> {
     let mut hm = HashMap::new();
+    if fd.ret_type != Type::Void {
+        if let Some(stat) = fd.code.last() {
+            match &stat.kind {
+                StatementKind::Return(_)
+                | StatementKind::Loop(_)
+                | StatementKind::Panic()
+                | StatementKind::If(_)
+                | StatementKind::IfLet(_, _, _, _) => {}
+                kind => {
+                    return Err(new_type_error(
+                        format!("Last statement of function must be return found {:?}", kind),
+                        stat.debug_info.location,
+                    ))
+                }
+            }
+        }
+    }
     for arg in fd.args.iter() {
         arg.tipe.get_representation(type_tree).map_err(|_| {
             new_type_error(
