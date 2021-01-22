@@ -17,7 +17,7 @@ use crate::stringtable::{StringId, StringTable};
 use crate::uint256::Uint256;
 use std::collections::{HashMap, HashSet};
 
-type TypeTable<'a> = HashMap<usize, Type>;
+type TypeTable = HashMap<usize, Type>;
 
 ///Trait for all nodes in the AST, currently only implemented for type checked versions.
 pub trait AbstractSyntaxTree {
@@ -849,11 +849,11 @@ pub fn typecheck_top_level_decls(
 /// state defined by type_table, global_vars, and func_table.
 ///
 /// If not successful the function returns a `TypeError`.
-pub fn typecheck_function<'a>(
-    fd: &'a FuncDecl,
-    type_table: &'a TypeTable<'a>,
-    global_vars: &'a HashMap<StringId, (Type, usize)>,
-    func_table: &'a TypeTable<'a>,
+pub fn typecheck_function(
+    fd: &FuncDecl,
+    type_table: &TypeTable,
+    global_vars: &HashMap<StringId, (Type, usize)>,
+    func_table: &TypeTable,
     type_tree: &TypeTree,
     string_table: &StringTable,
 ) -> Result<TypeCheckedFunc, TypeError> {
@@ -922,11 +922,11 @@ pub fn typecheck_function<'a>(
 ///Takes return_type to ensure that `Return` statements produce the correct type, type_table,
 /// global_vars, and func_table should correspond to the types, globals, and functions available
 /// to the statement sequence.
-fn typecheck_statement_sequence<'a>(
-    statements: &'a [Statement],
+fn typecheck_statement_sequence(
+    statements: &[Statement],
     return_type: &Type,
-    type_table: &'a TypeTable<'a>,
-    global_vars: &'a HashMap<StringId, (Type, usize)>,
+    type_table: &TypeTable,
+    global_vars: &HashMap<StringId, (Type, usize)>,
     func_table: &TypeTable,
     type_tree: &TypeTree,
     scopes: &mut Vec<(String, Option<Type>)>,
