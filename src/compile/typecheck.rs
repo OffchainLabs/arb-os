@@ -814,30 +814,26 @@ pub fn typecheck_top_level_decls(
     let func_table: HashMap<_, _> = func_map.iter().map(|(k, v)| (*k, v)).collect();
 
     for func in funcs.iter() {
-        match typecheck_function(
+        let f = typecheck_function(
             &func,
             &type_table,
             &resolved_global_vars_map,
             &func_table,
             type_tree,
             &string_table,
-        ) {
-            Ok(f) => match func.kind {
-                FuncDeclKind::Public => {
-                    exported_funcs.push(ExportedFunc::new(
-                        f.name,
-                        Label::Func(f.name),
-                        f.tipe.clone(),
-                        &string_table,
-                    ));
-                    checked_funcs.push(f);
-                }
-                FuncDeclKind::Private => {
-                    checked_funcs.push(f);
-                }
-            },
-            Err(e) => {
-                return Err(e);
+        )?;
+        match func.kind {
+            FuncDeclKind::Public => {
+                exported_funcs.push(ExportedFunc::new(
+                    f.name,
+                    Label::Func(f.name),
+                    f.tipe.clone(),
+                    &string_table,
+                ));
+                checked_funcs.push(f);
+            }
+            FuncDeclKind::Private => {
+                checked_funcs.push(f);
             }
         }
     }
@@ -862,46 +858,42 @@ pub fn typecheck_function<'a>(
     type_tree: &TypeTree,
     string_table: &StringTable,
 ) -> Result<TypeCheckedFunc, TypeError> {
-    match fd.kind {
-        FuncDeclKind::Public | FuncDeclKind::Private => {
-            let mut hm = HashMap::new();
-            for arg in fd.args.iter() {
-                arg.tipe.get_representation(type_tree).map_err(|_| {
-                    new_type_error(
-                        format!(
-                            "Unknown type for function argument \"{}\"",
-                            string_table.name_from_id(arg.name)
-                        ),
-                        arg.debug_info.location,
-                    )
-                })?;
-                hm.insert(arg.name, &arg.tipe);
-            }
-            let mut inner_type_table = type_table.clone();
-            inner_type_table.extend(hm);
-            let tc_stats = typecheck_statement_sequence(
-                &fd.code,
-                &fd.ret_type,
-                &inner_type_table,
-                global_vars,
-                func_table,
-                type_tree,
-                &mut vec![],
-            )?;
-            Ok(TypeCheckedFunc {
-                name: fd.name,
-                args: fd.args.clone(),
-                ret_type: fd.ret_type.clone(),
-                code: tc_stats,
-                tipe: fd.tipe.clone(),
-                imported: false,
-                debug_info: DebugInfo::from(fd.location),
-                properties: PropertiesList {
-                    pure: !fd.is_impure,
-                },
-            })
-        }
+    let mut hm = HashMap::new();
+    for arg in fd.args.iter() {
+        arg.tipe.get_representation(type_tree).map_err(|_| {
+            new_type_error(
+                format!(
+                    "Unknown type for function argument \"{}\"",
+                    string_table.name_from_id(arg.name)
+                ),
+                arg.debug_info.location,
+            )
+        })?;
+        hm.insert(arg.name, &arg.tipe);
     }
+    let mut inner_type_table = type_table.clone();
+    inner_type_table.extend(hm);
+    let tc_stats = typecheck_statement_sequence(
+        &fd.code,
+        &fd.ret_type,
+        &inner_type_table,
+        global_vars,
+        func_table,
+        type_tree,
+        &mut vec![],
+    )?;
+    Ok(TypeCheckedFunc {
+        name: fd.name,
+        args: fd.args.clone(),
+        ret_type: fd.ret_type.clone(),
+        code: tc_stats,
+        tipe: fd.tipe.clone(),
+        imported: false,
+        debug_info: DebugInfo::from(fd.location),
+        properties: PropertiesList {
+            pure: !fd.is_impure,
+        },
+    })
 }
 
 ///If successful, produces a `Vec<TypeCheckedStatement>` corresponding to the items in statements
