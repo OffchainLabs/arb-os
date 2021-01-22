@@ -17,7 +17,7 @@ use crate::stringtable::{StringId, StringTable};
 use crate::uint256::Uint256;
 use std::collections::{HashMap, HashSet};
 
-type TypeTable<'a> = HashMap<usize, &'a Type>;
+type TypeTable = HashMap<usize, Type>;
 
 ///Trait for all nodes in the AST, currently only implemented for type checked versions.
 pub trait AbstractSyntaxTree {
@@ -804,40 +804,36 @@ pub fn typecheck_top_level_decls(
         .collect::<HashMap<_, _>>();
     let mut exported_funcs = Vec::new();
 
-    let type_table: HashMap<_, _> = named_types.iter().map(|(k, v)| (*k, v)).collect();
+    let type_table: HashMap<_, _> = named_types.clone().into_iter().collect();
 
     let mut resolved_global_vars_map = HashMap::new();
     for (name, (tipe, slot_num)) in global_vars_map {
         resolved_global_vars_map.insert(name, (tipe, slot_num));
     }
 
-    let func_table: HashMap<_, _> = func_map.iter().map(|(k, v)| (*k, v)).collect();
+    let func_table: HashMap<_, _> = func_map.clone().into_iter().collect();
 
     for func in funcs.iter() {
-        match typecheck_function(
+        let f = typecheck_function(
             &func,
             &type_table,
             &resolved_global_vars_map,
             &func_table,
             type_tree,
             &string_table,
-        ) {
-            Ok(f) => match func.kind {
-                FuncDeclKind::Public => {
-                    exported_funcs.push(ExportedFunc::new(
-                        f.name,
-                        Label::Func(f.name),
-                        f.tipe.clone(),
-                        &string_table,
-                    ));
-                    checked_funcs.push(f);
-                }
-                FuncDeclKind::Private => {
-                    checked_funcs.push(f);
-                }
-            },
-            Err(e) => {
-                return Err(e);
+        )?;
+        match func.kind {
+            FuncDeclKind::Public => {
+                exported_funcs.push(ExportedFunc::new(
+                    f.name,
+                    Label::Func(f.name),
+                    f.tipe.clone(),
+                    &string_table,
+                ));
+                checked_funcs.push(f);
+            }
+            FuncDeclKind::Private => {
+                checked_funcs.push(f);
             }
         }
     }
@@ -854,54 +850,50 @@ pub fn typecheck_top_level_decls(
 /// state defined by type_table, global_vars, and func_table.
 ///
 /// If not successful the function returns a `TypeError`.
-pub fn typecheck_function<'a>(
-    fd: &'a FuncDecl,
-    type_table: &'a TypeTable<'a>,
-    global_vars: &'a HashMap<StringId, (Type, usize)>,
-    func_table: &'a TypeTable<'a>,
+pub fn typecheck_function(
+    fd: &FuncDecl,
+    type_table: &TypeTable,
+    global_vars: &HashMap<StringId, (Type, usize)>,
+    func_table: &TypeTable,
     type_tree: &TypeTree,
     string_table: &StringTable,
 ) -> Result<TypeCheckedFunc, TypeError> {
-    match fd.kind {
-        FuncDeclKind::Public | FuncDeclKind::Private => {
-            let mut hm = HashMap::new();
-            for arg in fd.args.iter() {
-                arg.tipe.get_representation(type_tree).map_err(|_| {
-                    new_type_error(
-                        format!(
-                            "Unknown type for function argument \"{}\"",
-                            string_table.name_from_id(arg.name)
-                        ),
-                        arg.debug_info.location,
-                    )
-                })?;
-                hm.insert(arg.name, &arg.tipe);
-            }
-            let mut inner_type_table = type_table.clone();
-            inner_type_table.extend(hm);
-            let tc_stats = typecheck_statement_sequence(
-                &fd.code,
-                &fd.ret_type,
-                &inner_type_table,
-                global_vars,
-                func_table,
-                type_tree,
-                &mut vec![],
-            )?;
-            Ok(TypeCheckedFunc {
-                name: fd.name,
-                args: fd.args.clone(),
-                ret_type: fd.ret_type.clone(),
-                code: tc_stats,
-                tipe: fd.tipe.clone(),
-                imported: false,
-                debug_info: DebugInfo::from(fd.location),
-                properties: PropertiesList {
-                    pure: !fd.is_impure,
-                },
-            })
-        }
+    let mut hm = HashMap::new();
+    for arg in fd.args.iter() {
+        arg.tipe.get_representation(type_tree).map_err(|_| {
+            new_type_error(
+                format!(
+                    "Unknown type for function argument \"{}\"",
+                    string_table.name_from_id(arg.name)
+                ),
+                arg.debug_info.location,
+            )
+        })?;
+        hm.insert(arg.name, arg.tipe.clone());
     }
+    let mut inner_type_table = type_table.clone();
+    inner_type_table.extend(hm);
+    let tc_stats = typecheck_statement_sequence(
+        &fd.code,
+        &fd.ret_type,
+        &inner_type_table,
+        global_vars,
+        func_table,
+        type_tree,
+        &mut vec![],
+    )?;
+    Ok(TypeCheckedFunc {
+        name: fd.name,
+        args: fd.args.clone(),
+        ret_type: fd.ret_type.clone(),
+        code: tc_stats,
+        tipe: fd.tipe.clone(),
+        imported: false,
+        debug_info: DebugInfo::from(fd.location),
+        properties: PropertiesList {
+            pure: !fd.is_impure,
+        },
+    })
 }
 
 ///If successful, produces a `Vec<TypeCheckedStatement>` corresponding to the items in statements
@@ -915,42 +907,25 @@ pub fn typecheck_function<'a>(
 ///Takes return_type to ensure that `Return` statements produce the correct type, type_table,
 /// global_vars, and func_table should correspond to the types, globals, and functions available
 /// to the statement sequence.
-fn typecheck_statement_sequence<'a>(
-    statements: &'a [Statement],
+fn typecheck_statement_sequence(
+    statements: &[Statement],
     return_type: &Type,
-    type_table: &'a TypeTable<'a>,
-    global_vars: &'a HashMap<StringId, (Type, usize)>,
+    type_table: &TypeTable,
+    global_vars: &HashMap<StringId, (Type, usize)>,
     func_table: &TypeTable,
     type_tree: &TypeTree,
     scopes: &mut Vec<(String, Option<Type>)>,
 ) -> Result<Vec<TypeCheckedStatement>, TypeError> {
-    if statements.is_empty() {
-        return Ok(Vec::new());
-    }
-    let first_stat = &statements[0];
-    let rest_of_stats = &statements[1..];
-
-    let (tcs, bindings) = typecheck_statement(
-        &first_stat,
+    typecheck_statement_sequence_with_bindings(
+        &statements,
         return_type,
         type_table,
         global_vars,
         func_table,
+        &[],
         type_tree,
         scopes,
-    )?;
-    let mut rest_result = typecheck_statement_sequence_with_bindings(
-        rest_of_stats,
-        return_type,
-        type_table,
-        global_vars,
-        func_table,
-        &bindings,
-        type_tree,
-        scopes,
-    )?;
-    rest_result.insert(0, tcs);
-    Ok(rest_result)
+    )
 }
 
 ///Operates identically to `typecheck_statement_sequence`, except that the pairs in bindings are
@@ -965,31 +940,27 @@ fn typecheck_statement_sequence_with_bindings<'a>(
     type_tree: &TypeTree,
     scopes: &mut Vec<(String, Option<Type>)>,
 ) -> Result<Vec<TypeCheckedStatement>, TypeError> {
-    if bindings.is_empty() {
-        typecheck_statement_sequence(
-            statements,
-            return_type,
-            type_table,
-            global_vars,
-            func_table,
-            type_tree,
-            scopes,
-        )
-    } else {
-        let (sid, tipe) = &bindings[0];
-        let mut inner_type_table = type_table.clone();
-        inner_type_table.insert(*sid, tipe);
-        typecheck_statement_sequence_with_bindings(
-            statements,
+    let mut inner_type_table = type_table.clone();
+    for (sid, tipe) in bindings {
+        inner_type_table.insert(*sid, tipe.clone());
+    }
+    let mut output = vec![];
+    for stat in statements {
+        let (tcs, bindings) = typecheck_statement(
+            stat,
             return_type,
             &inner_type_table,
             global_vars,
             func_table,
-            &bindings[1..],
             type_tree,
             scopes,
-        )
+        )?;
+        output.push(tcs);
+        for (sid, bind) in bindings {
+            inner_type_table.insert(sid, bind);
+        }
     }
+    Ok(output)
 }
 
 ///Performs type checking on statement.
@@ -1035,11 +1006,7 @@ fn typecheck_statement<'a>(
                 type_tree,
                 scopes,
             )?;
-            if return_type.get_representation(type_tree)?.assignable(
-                &tc_expr.get_type().get_representation(type_tree)?,
-                type_tree,
-                HashSet::new(),
-            ) {
+            if return_type.assignable(&tc_expr.get_type(), type_tree, HashSet::new()) {
                 Ok((TypeCheckedStatementKind::Return(tc_expr), vec![]))
             } else {
                 Err(new_type_error(
@@ -1176,11 +1143,7 @@ fn typecheck_statement<'a>(
             )?;
             match type_table.get(name) {
                 Some(var_type) => {
-                    if var_type.get_representation(type_tree)?.assignable(
-                        &tc_expr.get_type().get_representation(type_tree)?,
-                        type_tree,
-                        HashSet::new(),
-                    ) {
+                    if var_type.assignable(&tc_expr.get_type(), type_tree, HashSet::new()) {
                         Ok((
                             TypeCheckedStatementKind::AssignLocal(*name, tc_expr),
                             vec![],
@@ -1199,11 +1162,7 @@ fn typecheck_statement<'a>(
                 None => {
                     match global_vars.get(&*name) {
                         Some((var_type, idx)) => {
-                            if var_type.get_representation(type_tree)?.assignable(
-                                &tc_expr.get_type().get_representation(type_tree)?,
-                                type_tree,
-                                HashSet::new(),
-                            ) {
+                            if var_type.assignable(&tc_expr.get_type(), type_tree, HashSet::new()) {
                                 Ok((
                                     TypeCheckedStatementKind::AssignGlobal(*idx, tc_expr),
                                     vec![],
@@ -2314,7 +2273,7 @@ fn typecheck_expr(
                     }
                 };
                 let mut inner_type_table = type_table.clone();
-                inner_type_table.insert(*l, &tct);
+                inner_type_table.insert(*l, tct);
                 let checked_block = typecheck_codeblock(
                     if_block,
                     &inner_type_table,
@@ -3275,8 +3234,8 @@ fn typecheck_codeblock(
         let mut inner_type_table = type_table.clone();
         inner_type_table.extend(
             block_bindings
-                .iter()
-                .map(|(k, v)| (*k, v))
+                .clone()
+                .into_iter()
                 .collect::<HashMap<_, _>>(),
         );
         let (statement, bindings) = typecheck_statement(
@@ -3296,8 +3255,8 @@ fn typecheck_codeblock(
     let mut inner_type_table = type_table.clone();
     inner_type_table.extend(
         block_bindings
-            .iter()
-            .map(|(k, v)| (*k, v))
+            .clone()
+            .into_iter()
             .collect::<HashMap<_, _>>(),
     );
     Ok(TypeCheckedCodeBlock {
