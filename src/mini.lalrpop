@@ -98,7 +98,6 @@ StatementKind: StatementKind = {
 	"return" ";" => StatementKind::ReturnVoid(),
 	<lno: @L> "return" "None" ";" => StatementKind::Return(Expr{ kind: ExprKind::Constant(Constant::Option(OptionConst::None(Type::Every))), debug_info: DebugInfo::from(file_info.location(BytePos::from(lno), filename))}),
 	"break" <e: Expr?> ";" => StatementKind::Break(e,None),
-	"panic" ";" => StatementKind::Panic(),
 	"debug" "(" <e: Expr> ")" ";" => StatementKind::DebugPrint(e),
 	"asm" "(" <a:CommaedExprs?> ")" "{" <body:AsmInsn*> "}" ";" => StatementKind::Asm(body, a.unwrap_or(vec![])),
 }
@@ -295,6 +294,7 @@ Expr13: Expr = {
 	"(" <e: Expr> ")" => <>,
 	<lno: @L> <cb: CodeBlockNew> => Expr { kind: ExprKind::CodeBlock(cb), debug_info: DebugInfo::from(file_info.location(BytePos::from(lno), filename))},
 	<lno: @L> "(" <c: CommaedExprs?> ")" => Expr { kind: ExprKind::Tuple(c.unwrap_or(vec![])), debug_info: DebugInfo::from(file_info.location(BytePos::from(lno), filename))},
+	<lno: @L> "panic" => Expr { kind: ExprKind::Panic, debug_info: DebugInfo::from(file_info.location(BytePos::from(lno), filename))},
 	<lno: @L> <i: Ident> => Expr { kind: ExprKind::VariableRef(i), debug_info: DebugInfo::from(file_info.location(BytePos::from(lno), filename))},
 }
 

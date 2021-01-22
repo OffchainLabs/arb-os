@@ -328,7 +328,7 @@ public func rlp_encodeMessageInfo(
         return res.0;
     } else {
         // This can't happen, because we know encodedPieces is big enough that accesses will be in-bounds
-        panic;
+        return panic;
     }
 }
 

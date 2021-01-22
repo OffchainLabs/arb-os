@@ -487,6 +487,7 @@ pub enum TypeCheckedExprKind {
     StructMod(Box<TypeCheckedExpr>, usize, Box<TypeCheckedExpr>, Type),
     Cast(Box<TypeCheckedExpr>, Type),
     Asm(Type, Vec<Instruction>, Vec<TypeCheckedExpr>),
+    Panic,
     Try(Box<TypeCheckedExpr>, Type),
     If(
         Box<TypeCheckedExpr>,
@@ -507,6 +508,7 @@ impl MiniProperties for TypeCheckedExpr {
     fn is_pure(&self) -> bool {
         match &self.kind {
             TypeCheckedExprKind::UnaryOp(_, expr, _) => expr.is_pure(),
+            TypeCheckedExprKind::Panic => true,
             TypeCheckedExprKind::Binary(_, left, right, _) => left.is_pure() && right.is_pure(),
             TypeCheckedExprKind::Trinary(_, a, b, c, _) => {
                 a.is_pure() && b.is_pure() && c.is_pure()
@@ -590,7 +592,8 @@ impl AbstractSyntaxTree for TypeCheckedExpr {
             | TypeCheckedExprKind::FuncRef(_, _)
             | TypeCheckedExprKind::Const(_, _)
             | TypeCheckedExprKind::NewBuffer
-            | TypeCheckedExprKind::NewMap(_) => vec![],
+            | TypeCheckedExprKind::NewMap(_)
+            | TypeCheckedExprKind::Panic => vec![],
             TypeCheckedExprKind::UnaryOp(_, exp, _)
             | TypeCheckedExprKind::Variant(exp)
             | TypeCheckedExprKind::TupleRef(exp, _, _)
@@ -664,6 +667,7 @@ impl TypeCheckedExpr {
     pub fn get_type(&self) -> Type {
         match &self.kind {
             TypeCheckedExprKind::NewBuffer => Type::Buffer,
+            TypeCheckedExprKind::Panic => Type::Every,
             TypeCheckedExprKind::UnaryOp(_, _, t) => t.clone(),
             TypeCheckedExprKind::Binary(_, _, _, t) => t.clone(),
             TypeCheckedExprKind::Trinary(_, _, _, _, t) => t.clone(),
@@ -1496,6 +1500,7 @@ fn typecheck_expr(
     Ok(TypeCheckedExpr {
         kind: match &expr.kind {
             ExprKind::NewBuffer => Ok(TypeCheckedExprKind::NewBuffer),
+            ExprKind::Panic => Ok(TypeCheckedExprKind::Panic),
             ExprKind::UnaryOp(op, subexpr) => {
                 let tc_sub = typecheck_expr(
                     subexpr,

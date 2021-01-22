@@ -251,5 +251,5 @@ public impure func handleL2Request(
         );  // should never return
     }
 
-    panic;   // this should never be reached
+    return panic;   // this should never be reached
 }

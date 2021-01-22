@@ -658,6 +658,7 @@ pub enum ExprKind {
     StructMod(Box<Expr>, String, Box<Expr>),
     UnsafeCast(Box<Expr>, Type),
     Asm(Type, Vec<Instruction>, Vec<Expr>),
+    Panic,
     Try(Box<Expr>),
     If(Box<Expr>, CodeBlock, Option<CodeBlock>),
     IfLet(StringId, Box<Expr>, CodeBlock, Option<CodeBlock>),

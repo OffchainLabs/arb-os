@@ -699,7 +699,7 @@ func incomingRequestQueue_getOrDie(q: IncomingRequestQueue) -> (IncomingRequestQ
     if let Some(res) = incomingRequestQueue_get(q) {
         return res;
     } else {
-        panic;
+        return panic;
     }
 }
 

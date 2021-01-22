@@ -508,7 +508,7 @@ public impure func evmOp_getjumpaddr(evm_pc: uint) -> impure func() {
 
     evm_runtimePanic(21);
     evmCallStack_callHitError(12);
-    panic;
+    return panic;
 }
 
 public impure func evmOp_msize() -> uint {
@@ -952,7 +952,7 @@ public impure func evmOp_create(value: uint, offset: uint, length: uint) -> addr
     }
 
     evm_runtimePanic(30);
-    panic;
+    return panic;
 }
 
 public impure func evmOp_create2(value: uint, offset: uint, length: uint, salt: uint) -> address {
@@ -980,7 +980,7 @@ public impure func evmOp_create2(value: uint, offset: uint, length: uint, salt: 
     }
 
     evm_runtimePanic(31);
-    panic;
+    return panic;
 }
 
 impure func doCreationOpcode(value: uint, offset: uint, length: uint, newAddress: address) -> address {

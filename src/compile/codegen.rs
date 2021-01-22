@@ -456,7 +456,7 @@ fn mavm_codegen_statement(
                 scopes,
                 file_name_chart,
             )?;
-            if expr.get_type() != Type::Void {
+            if !(expr.get_type() == Type::Void || expr.get_type() == Type::Every) {
                 c.push(Instruction::from_opcode(
                     Opcode::AVMOpcode(AVMOpcode::Pop),
                     debug,
@@ -1075,6 +1075,13 @@ fn mavm_codegen_expr<'a>(
         TypeCheckedExprKind::NewBuffer => {
             let opcode = Opcode::AVMOpcode(AVMOpcode::NewBuffer);
             code.push(Instruction::new(opcode, None, debug));
+            Ok((label_gen, code, num_locals))
+        }
+        TypeCheckedExprKind::Panic => {
+            code.push(Instruction::from_opcode(
+                Opcode::AVMOpcode(AVMOpcode::Panic),
+                debug,
+            ));
             Ok((label_gen, code, num_locals))
         }
         TypeCheckedExprKind::UnaryOp(op, tce, _) => {

@@ -108,7 +108,7 @@ func setupFromUnmarshal() -> ByteArray {
 	if let Some(ba) = bytearray_unmarshalBytes(marshalledStruct) {
 	    return ba;
 	} else {
-	    panic;
+	    return panic;
 	}
 }
 

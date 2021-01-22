@@ -520,7 +520,7 @@ public impure func evmCallStack_doCall(
     }
 
     evmCallStack_callHitError(7);
-    panic;
+    return panic;
 }
 
 public impure func evmCallStack_returnFromCall(
@@ -607,7 +607,7 @@ public impure func evmCallStack_returnFromCall(
         restoreAuxStackAndCall(resumeInfo.codePoint, resumeInfo.auxStackContents, false);
 
         evmCallStack_callHitError(8);
-        panic;  // shouldn't happen -- previous instruction jumped away
+        return panic;  // shouldn't happen -- previous instruction jumped away
     } else {
         // top-level call completed; will need to return to external caller
         if (success) {
@@ -753,7 +753,7 @@ public impure func evmCallStack_returnFromCall(
         emptyAvmStack();
         restoreAuxStackAndCall(mainRunLoop, None<Stack>, true);  // should never return
         evmCallStack_callHitError(9);
-        panic;
+        return panic;
     }
 }
 
@@ -1031,7 +1031,7 @@ public impure func evmCallStack_getTopFrameMemoryOrDie() -> ByteArray {
         return topFrame.memory;
     } else {
         evmCallStack_callHitError(10);
-        panic;
+        return panic;
     }
 }
 

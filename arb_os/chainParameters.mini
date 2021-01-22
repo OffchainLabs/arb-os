@@ -118,7 +118,7 @@ public impure func chainParams_chainAddress() -> address {
     } else {
         // If we get here, the chain never received its initialization message.
         evmCallStack_callHitError(20);
-        panic;
+        return panic;
     }
 }
 

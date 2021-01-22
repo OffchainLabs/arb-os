@@ -112,7 +112,7 @@ public func queue_getOrDie(q: Queue) -> (Queue, any) {
     if let Some(res) = queue_get(q) {
         return res;
     } else {
-        panic;
+        return panic;
     }
 }
 
