@@ -1006,11 +1006,7 @@ fn typecheck_statement<'a>(
                 type_tree,
                 scopes,
             )?;
-            if return_type.get_representation(type_tree)?.assignable(
-                &tc_expr.get_type().get_representation(type_tree)?,
-                type_tree,
-                HashSet::new(),
-            ) {
+            if return_type.assignable(&tc_expr.get_type(), type_tree, HashSet::new()) {
                 Ok((TypeCheckedStatementKind::Return(tc_expr), vec![]))
             } else {
                 Err(new_type_error(
@@ -1147,11 +1143,7 @@ fn typecheck_statement<'a>(
             )?;
             match type_table.get(name) {
                 Some(var_type) => {
-                    if var_type.get_representation(type_tree)?.assignable(
-                        &tc_expr.get_type().get_representation(type_tree)?,
-                        type_tree,
-                        HashSet::new(),
-                    ) {
+                    if var_type.assignable(&tc_expr.get_type(), type_tree, HashSet::new()) {
                         Ok((
                             TypeCheckedStatementKind::AssignLocal(*name, tc_expr),
                             vec![],
@@ -1170,11 +1162,7 @@ fn typecheck_statement<'a>(
                 None => {
                     match global_vars.get(&*name) {
                         Some((var_type, idx)) => {
-                            if var_type.get_representation(type_tree)?.assignable(
-                                &tc_expr.get_type().get_representation(type_tree)?,
-                                type_tree,
-                                HashSet::new(),
-                            ) {
+                            if var_type.assignable(&tc_expr.get_type(), type_tree, HashSet::new()) {
                                 Ok((
                                     TypeCheckedStatementKind::AssignGlobal(*idx, tc_expr),
                                     vec![],
