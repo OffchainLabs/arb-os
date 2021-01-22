@@ -104,6 +104,12 @@ struct EvmTests {
     savelogs: bool,
 }
 
+///Command line options for wasm-test subcommand.
+#[derive(Clap, Debug)]
+struct WasmTest {
+    input: Vec<String>,
+}
+
 ///Main enum for command line arguments.
 #[derive(Clap, Debug)]
 enum Args {
@@ -116,7 +122,7 @@ enum Args {
     MakeBenchmarks,
     MakeTemplates,
     EvmTests(EvmTests),
-    WasmTest,
+    WasmTest(WasmTest),
 }
 
 fn main() -> Result<(), CompileError> {
@@ -124,8 +130,13 @@ fn main() -> Result<(), CompileError> {
     let matches = Args::parse();
 
     match matches {
-        Args::WasmTest => {
-            let code = wasm::load();
+        Args::WasmTest(fname) => {
+            let filenames: Vec<_> = fname.input.clone();
+            if (filenames.len() != 1) {
+                println!("no input");
+                return Ok(());
+            }
+            let code = wasm::load(filenames[0].clone());
             let code_len = code.len();
             let env = RuntimeEnvironment::new(Uint256::from_usize(1111), None);
             let program = LinkedProgram {

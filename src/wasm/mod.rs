@@ -1,29 +1,30 @@
 
 use parity_wasm::elements::*;
 use parity_wasm::elements::Instruction::*;
-use crate::mavm::{AVMOpcode, Instruction, Label, LabelGenerator, Opcode, Value};
-use crate::compile::{DebugInfo, MiniProperties};
+use crate::mavm::{AVMOpcode, CodePt, Instruction, Label, /*LabelGenerator,*/ Opcode, Value};
+use crate::compile::{DebugInfo};
 use crate::uint256::Uint256;
+use std::collections::BTreeMap;
 
 #[derive(Debug, Clone)]
 struct Control {
-    target : u32,
-    rets : u32,
-    level : u32,
-    else_label : u32,
+    target : usize,
+    rets : usize,
+    level : usize,
+    else_label : usize,
     is_ite : bool,
     is_loop : bool,
 }
 
-fn block_len(bt : &BlockType) -> u32 {
+fn block_len(bt : &BlockType) -> usize {
     match *bt {
         BlockType::Value(_) => 1,
         BlockType::NoResult => 0,
     }
 }
 
-fn count_locals(func : &FuncBody) -> u32 {
-    func.locals().iter().fold(0, |sum, x| sum + x.count())
+fn count_locals(func : &FuncBody) -> usize {
+    func.locals().iter().fold(0, |sum, x| sum + x.count() as usize)
 }
 
 fn get_func_type(m : &Module, sig : u32) -> &FunctionType {
@@ -32,12 +33,24 @@ fn get_func_type(m : &Module, sig : u32) -> &FunctionType {
     }
 }
 
-fn num_func_returns(ft : &FunctionType) -> u32 {
-    ft.results().len() as u32
+fn num_func_returns(ft : &FunctionType) -> usize {
+    ft.results().len()
 }
 
 fn simple_op(op : AVMOpcode) -> Instruction {
     Instruction::from_opcode(Opcode::AVMOpcode(op), DebugInfo::from(None))
+}
+
+fn mk_label(idx: usize) -> Instruction {
+    Instruction::from_opcode(Opcode::Label(Label::Evm(idx)), DebugInfo::from(None))
+}
+
+fn cjump(idx: usize) -> Instruction {
+    Instruction::from_opcode_imm(Opcode::AVMOpcode(AVMOpcode::Cjump), Value::Label(Label::Evm(idx)), DebugInfo::from(None))
+}
+
+fn jump(idx: usize) -> Instruction {
+    Instruction::from_opcode_imm(Opcode::AVMOpcode(AVMOpcode::Jump), Value::Label(Label::Evm(idx)), DebugInfo::from(None))
 }
 
 fn get_frame() -> Instruction {
@@ -74,9 +87,9 @@ fn handle_function(m : &Module, func : &FuncBody, idx : usize) -> Vec<Instructio
 
     let mut res : Vec<Instruction> = Vec::new();
     let mut stack : Vec<Control> = Vec::new();
-    let mut label : u32 = 1;
-    let mut ptr : u32 = count_locals(func) + (ftype.params().len() as u32);
-    let mut bptr : u32 = 0;
+    let mut label : usize = 1;
+    let mut ptr : usize = count_locals(func) + ftype.params().len();
+    let mut bptr : usize = 0;
 
     // Construct the function top level frame
     let end_label = label;
@@ -137,8 +150,53 @@ fn handle_function(m : &Module, func : &FuncBody, idx : usize) -> Vec<Instructio
                 ptr = ptr - 1;
             },
             I32Add => {
-                ptr = ptr - 1;
                 res.push(simple_op(AVMOpcode::Plus));
+                ptr = ptr - 1;
+            },
+            I32Const(x) => {
+                res.push(push_value(Value::Int(Uint256::from_usize(*x as usize))));
+                ptr = ptr+1;
+            },
+            I32Eq => {
+                res.push(simple_op(AVMOpcode::Equal));
+                ptr = ptr - 1;
+            },
+            If(bt) => {
+                ptr = ptr - 1;
+                bptr = bptr + 1;
+                let else_label = label;
+                let end_label = label+1;
+                let rets = block_len(&bt);
+                eprintln!("Level if {}", ptr);
+                stack.push(Control {level: ptr, rets: rets, target: end_label, else_label, is_ite: true, .. def});
+                label = label+2;
+                res.push(cjump(else_label));
+            },
+            Else => {
+                let mut c : Control = stack.pop().unwrap();
+                eprintln!("Level else {}", c.level);
+                ptr = c.level;
+                res.push(jump(c.target));
+                res.push(mk_label(c.else_label));
+                c.else_label = 0;
+                stack.push(c);
+            },
+            End => {
+                if stack.len() == 0 { break; }
+                let c : Control = stack.pop().unwrap();
+                bptr = bptr - 1;
+                if c.is_ite {
+                    if c.else_label != 0 {
+                        res.push(mk_label(c.else_label));
+                    }
+                }
+                if !c.is_loop {
+                    res.push(mk_label(c.target));
+                    ptr = c.level;
+                }
+                else {
+                    ptr = c.level + c.rets;
+                }
             },
             /*
             Loop(bt) => {
@@ -148,47 +206,6 @@ fn handle_function(m : &Module, func : &FuncBody, idx : usize) -> Vec<Instructio
                 let rets = block_len(&bt);
                 stack.push(Control {level: ptr, rets: rets, target: start_label, luuppi: true, .. def});
                 res.push(LABEL(start_label));
-            },
-            End => {
-                if stack.len() == 0 { break; }
-                let c : Control = stack.pop().unwrap();
-                bptr = bptr - 1;
-                if c.ite {
-                    if c.else_label != 0 {
-                        res.push(LABEL(c.else_label));
-                    }
-                    else {
-                        res.push(NOP);
-                    }
-                }
-                if !c.luuppi {
-                    res.push(LABEL(c.target));
-                    ptr = c.level;
-                }
-                else {
-                    ptr = c.level + c.rets;
-                }
-            },
-            If(bt) => {
-                ptr = ptr - 1;
-                bptr = bptr + 1;
-                let else_label = label;
-                let end_label = label+1;
-                let rets = block_len(&bt);
-                // eprintln!("Level if {}", ptr);
-                stack.push(Control {level: ptr, rets: rets, target: end_label, else_label, ite: true, .. def});
-                label = label+2;
-                res.push(JUMPZ(else_label));
-            },
-            Else => {
-                let mut c : Control = stack.pop().unwrap();
-                // eprintln!("Level else {}", c.level);
-                ptr = c.level;
-                res.push(NOP);
-                res.push(JUMP(c.target));
-                res.push(LABEL(c.else_label));
-                c.else_label = 0;
-                stack.push(c);
             },
             Drop => {
                 ptr = ptr - 1;
@@ -270,10 +287,6 @@ fn handle_function(m : &Module, func : &FuncBody, idx : usize) -> Vec<Instructio
                 ptr = ptr - (ftype.params().len() as u32) + num_func_returns(ftype) - 1;
             },
             
-            I32Const(x) => {
-                res.push(PUSH(x as u64));
-                ptr = ptr+1;
-            },
             I64Const(x) => {
                 res.push(PUSH(x as u64));
                 ptr = ptr+1;
@@ -390,7 +403,6 @@ fn handle_function(m : &Module, func : &FuncBody, idx : usize) -> Vec<Instructio
             },
             
             I32Eqz => res.push(UNOP(0x45)),
-            I32Eq => { ptr = ptr - 1; res.push(BINOP(0x46)); },
             I32Ne => { ptr = ptr - 1; res.push(BINOP(0x47)); },
             I32LtS => { ptr = ptr - 1; res.push(BINOP(0x48)); },
             I32LtU => { ptr = ptr - 1; res.push(BINOP(0x49)); },
@@ -531,8 +543,44 @@ fn handle_function(m : &Module, func : &FuncBody, idx : usize) -> Vec<Instructio
 
 }
 
-pub fn load() -> Vec<Instruction> {
-    let module = parity_wasm::deserialize_file("./wasm-tests/test.wasm").unwrap();
+pub fn clear_labels(arr: Vec<Instruction>) -> Vec<Instruction> {
+    let mut res = vec![];
+    for inst in arr.iter() {
+        match inst.opcode {
+            Opcode::Label(_) => res.push(simple_op(AVMOpcode::Noop)),
+            _ => res.push(inst.clone()),
+        }
+    }
+    res
+}
+
+pub fn resolve_labels(arr: Vec<Instruction>) -> Vec<Instruction> {
+    let mut labels = BTreeMap::new();
+    for (idx, inst) in arr.iter().enumerate() {
+        match inst.opcode {
+            Opcode::Label(Label::Evm(num)) => {
+                labels.insert(num, idx);
+            }
+            _ => {}
+        }
+    }
+    let mut res = vec![];
+    for inst in arr.iter() {
+        match inst.immediate {
+            Some(Value::Label(Label::Evm(n))) => {
+                match labels.get(&n) {
+                  Some(idx) => res.push(Instruction::from_opcode_imm(inst.opcode, Value::CodePoint(CodePt::Internal(*idx)), inst.debug_info)),
+                  None => panic!("Cannot find label"),
+                }
+            }
+            _ => res.push(inst.clone()),
+        }
+    }
+    clear_labels(res)
+}
+
+pub fn load(fname: String) -> Vec<Instruction> {
+    let module = parity_wasm::deserialize_file(fname).unwrap();
     assert!(module.code_section().is_some());
 
     let code_section = module.code_section().unwrap(); // Part of the module with functions code
@@ -545,7 +593,7 @@ pub fn load() -> Vec<Instruction> {
 
     // Add test argument to the frame
     init.push(get_frame());
-    init.push(push_value(Value::Int(Uint256::from_usize(1234))));
+    init.push(push_value(Value::Int(Uint256::from_usize(123))));
     init.push(set64_from_buffer(0));
     init.push(set_frame());
 
@@ -557,6 +605,6 @@ pub fn load() -> Vec<Instruction> {
 
     init.push(simple_op(AVMOpcode::Noop));
 
-    init
+    resolve_labels(init)
 
 }
