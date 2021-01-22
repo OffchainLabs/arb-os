@@ -2240,31 +2240,31 @@ fn typecheck_expr(
                         ),
                         debug_info.location,
                     ))
-                } else if block.get_type()
-                    != else_block
-                        .clone()
-                        .map(|b| b.get_type())
-                        .unwrap_or(Type::Void)
-                {
-                    Err(new_type_error(
-                        format!(
-                            "Mismatch of if and else types found: \"{}\" and \"{}\"",
-                            block.get_type().display(),
-                            else_block
-                                .clone()
-                                .map(|b| b.get_type())
-                                .unwrap_or(Type::Void)
-                                .display()
-                        ),
-                        debug_info.location,
-                    ))
                 } else {
                     let block_type = block.get_type();
+                    let else_type = else_block
+                        .clone()
+                        .map(|b| b.get_type())
+                        .unwrap_or(Type::Void);
+                    let if_type = if block_type.assignable(&else_type, type_tree, HashSet::new()) {
+                        block_type
+                    } else if else_type.assignable(&block_type, type_tree, HashSet::new()) {
+                        else_type
+                    } else {
+                        return Err(new_type_error(
+                            format!(
+                                "Mismatch of if and else types found: \"{}\" and \"{}\"",
+                                block_type.display(),
+                                else_type.display()
+                            ),
+                            debug_info.location,
+                        ));
+                    };
                     Ok(TypeCheckedExprKind::If(
                         Box::new(cond_expr),
                         block,
                         else_block,
-                        block_type,
+                        if_type,
                     ))
                 }
             }
@@ -2298,7 +2298,6 @@ fn typecheck_expr(
                     type_tree,
                     scopes,
                 )?;
-                let tipe = checked_block.get_type();
                 let checked_else = else_block
                     .clone()
                     .map(|block| {
@@ -2313,26 +2312,31 @@ fn typecheck_expr(
                         )
                     })
                     .transpose()?;
+                let block_type = checked_block.get_type();
                 let else_type = checked_else
                     .clone()
-                    .map(|g| g.get_type())
+                    .map(|b| b.get_type())
                     .unwrap_or(Type::Void);
-                if tipe != else_type {
+                let if_let_type = if block_type.assignable(&else_type, type_tree, HashSet::new()) {
+                    block_type
+                } else if else_type.assignable(&block_type, type_tree, HashSet::new()) {
+                    else_type
+                } else {
                     return Err(new_type_error(
                         format!(
                             "Mismatch of if and else types found: \"{}\" and \"{}\"",
-                            tipe.display(),
+                            block_type.display(),
                             else_type.display()
                         ),
                         debug_info.location,
                     ));
-                }
+                };
                 Ok(TypeCheckedExprKind::IfLet(
                     *l,
                     Box::new(tcr),
                     checked_block,
                     checked_else,
-                    tipe,
+                    if_let_type,
                 ))
             }
         }?,
