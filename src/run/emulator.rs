@@ -552,10 +552,7 @@ impl ProfilerData {
                         gas
                     );
                 } else {
-                    println!(
-                        "    Called by unknown function at {}, for {}",
-                        caller, gas
-                    );
+                    println!("    Called by unknown function at {}, for {}", caller, gas);
                 }
             }
             let called: BTreeMap<_, _> = called
@@ -724,7 +721,9 @@ impl Machine {
 
     ///Returns a stack trace of the current state of the machine.
     pub fn get_stack_trace(&self) -> StackTrace {
-        StackTrace { trace: self.aux_stack.all_codepts() }
+        StackTrace {
+            trace: self.aux_stack.all_codepts(),
+        }
     }
 
     ///Adds a trace writer to the machine
@@ -2374,6 +2373,6 @@ pub struct StackTrace {
 
 impl fmt::Display for StackTrace {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        self.trace.iter().map(|v|  writeln!(f, "{:?}", v)).collect()
+        self.trace.iter().map(|v| writeln!(f, "{:?}", v)).collect()
     }
 }
