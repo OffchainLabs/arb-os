@@ -249,7 +249,6 @@ pub struct TypeCheckedStatement {
 #[derive(Debug, Clone)]
 pub enum TypeCheckedStatementKind {
     Noop(),
-    Panic(),
     ReturnVoid(),
     Return(TypeCheckedExpr),
     Break(Option<TypeCheckedExpr>, String),
@@ -273,9 +272,7 @@ pub enum TypeCheckedStatementKind {
 impl MiniProperties for TypeCheckedStatement {
     fn is_pure(&self) -> bool {
         match &self.kind {
-            TypeCheckedStatementKind::Noop()
-            | TypeCheckedStatementKind::Panic()
-            | TypeCheckedStatementKind::ReturnVoid() => true,
+            TypeCheckedStatementKind::Noop() | TypeCheckedStatementKind::ReturnVoid() => true,
             TypeCheckedStatementKind::Return(something) => something.is_pure(),
             TypeCheckedStatementKind::Break(exp, _) => {
                 exp.clone().map(|exp| exp.is_pure()).unwrap_or(true)
@@ -312,9 +309,7 @@ impl MiniProperties for TypeCheckedStatement {
 impl AbstractSyntaxTree for TypeCheckedStatement {
     fn child_nodes(&mut self) -> Vec<TypeCheckedNode> {
         match &mut self.kind {
-            TypeCheckedStatementKind::Noop()
-            | TypeCheckedStatementKind::Panic()
-            | TypeCheckedStatementKind::ReturnVoid() => vec![],
+            TypeCheckedStatementKind::Noop() | TypeCheckedStatementKind::ReturnVoid() => vec![],
             TypeCheckedStatementKind::Return(exp)
             | TypeCheckedStatementKind::Expression(exp)
             | TypeCheckedStatementKind::Let(_, exp)
@@ -868,7 +863,6 @@ pub fn typecheck_function<'a>(
             match &stat.kind {
                 StatementKind::Return(_)
                 | StatementKind::Loop(_)
-                | StatementKind::Panic()
                 | StatementKind::If(_)
                 | StatementKind::IfLet(_, _, _, _) => {}
                 kind => {
@@ -1003,7 +997,6 @@ fn typecheck_statement<'a>(
     let debug_info = statement.debug_info;
     let (stat, binds) = match kind {
         StatementKind::Noop() => Ok((TypeCheckedStatementKind::Noop(), vec![])),
-        StatementKind::Panic() => Ok((TypeCheckedStatementKind::Panic(), vec![])),
         StatementKind::ReturnVoid() => {
             if Type::Void.assignable(return_type, type_tree, HashSet::new()) {
                 Ok((TypeCheckedStatementKind::ReturnVoid(), vec![]))

@@ -534,7 +534,6 @@ pub struct Statement {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub enum StatementKind {
     Noop(),
-    Panic(),
     ReturnVoid(),
     Return(Expr),
     Break(Option<Expr>, Option<String>),
