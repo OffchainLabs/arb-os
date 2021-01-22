@@ -77,6 +77,19 @@ fn set64_from_buffer(loc: usize) -> Instruction {
     Instruction::from_opcode_imm(Opcode::AVMOpcode(AVMOpcode::SetBuffer64), Value::Int(Uint256::from_usize(loc*8)), DebugInfo::from(None))
 }
 
+fn adjust_stack(res : &mut Vec<Instruction>, diff : usize, num : usize) {
+    if diff == 0 { return; }
+    for i in 0..num {
+        res.push(simple_op(AVMOpcode::AuxPush));
+    }
+    for i in 0..diff {
+        res.push(simple_op(AVMOpcode::Pop));
+    }
+    for i in 0..num {
+        res.push(simple_op(AVMOpcode::AuxPush));
+    }
+}
+
 fn handle_function(m : &Module, func : &FuncBody, idx : usize) -> Vec<Instruction> {
     let sig = m.function_section().unwrap().entries()[idx].type_ref();
     let ftype = get_func_type(m, sig);
@@ -153,12 +166,22 @@ fn handle_function(m : &Module, func : &FuncBody, idx : usize) -> Vec<Instructio
                 res.push(simple_op(AVMOpcode::Plus));
                 ptr = ptr - 1;
             },
+            I32Sub => {
+                res.push(simple_op(AVMOpcode::Swap1));
+                res.push(simple_op(AVMOpcode::Minus));
+                ptr = ptr - 1;
+            },
             I32Const(x) => {
                 res.push(push_value(Value::Int(Uint256::from_usize(*x as usize))));
                 ptr = ptr+1;
             },
             I32Eq => {
                 res.push(simple_op(AVMOpcode::Equal));
+                ptr = ptr - 1;
+            },
+            I32GtU => {
+                res.push(simple_op(AVMOpcode::Swap1));
+                res.push(simple_op(AVMOpcode::GreaterThan));
                 ptr = ptr - 1;
             },
             If(bt) => {
@@ -170,6 +193,7 @@ fn handle_function(m : &Module, func : &FuncBody, idx : usize) -> Vec<Instructio
                 eprintln!("Level if {}", ptr);
                 stack.push(Control {level: ptr, rets: rets, target: end_label, else_label, is_ite: true, .. def});
                 label = label+2;
+                res.push(simple_op(AVMOpcode::IsZero));
                 res.push(cjump(else_label));
             },
             Else => {
@@ -198,39 +222,39 @@ fn handle_function(m : &Module, func : &FuncBody, idx : usize) -> Vec<Instructio
                     ptr = c.level + c.rets;
                 }
             },
-            /*
             Loop(bt) => {
                 let start_label = label;
                 label = label + 1;
                 bptr = bptr + 1;
                 let rets = block_len(&bt);
-                stack.push(Control {level: ptr, rets: rets, target: start_label, luuppi: true, .. def});
-                res.push(LABEL(start_label));
+                stack.push(Control {level: ptr, rets: rets, target: start_label, is_loop: true, .. def});
+                res.push(mk_label(start_label));
             },
             Drop => {
                 ptr = ptr - 1;
-                res.push(DROP(1));
+                res.push(simple_op(AVMOpcode::Pop));
             },
             Br(x) => {
-                let c = &stack[stack.len() - (x as usize) - 1];
+                let c = &stack[stack.len() - (*x as usize) - 1];
                 eprintln!("Debug br {:?} {}", c, c.level);
                 adjust_stack(&mut res, ptr - c.level, c.rets);
                 ptr = ptr - c.rets;
-                res.push(JUMP(c.target));
+                res.push(jump(c.target));
             },
             BrIf(x) => {
-                let c = &stack[stack.len() - (x as usize) - 1];
+                let c = &stack[stack.len() - (*x as usize) - 1];
                 let continue_label =label;
                 let end_label = label+1;
                 label = label+2;
-                res.push(JUMPI(continue_label));
-                res.push(JUMP(end_label));
-                res.push(LABEL(continue_label));
+                res.push(cjump(continue_label));
+                res.push(jump(end_label));
+                res.push(mk_label(continue_label));
                 adjust_stack(&mut res, ptr - c.level - 1, c.rets);
-                res.push(JUMP(c.target));
-                res.push(LABEL(end_label));
+                res.push(jump(c.target));
+                res.push(mk_label(end_label));
                 ptr = ptr - 1;
             },
+            /*
             Return => {
                 let c = &stack[0];
                 adjust_stack(&mut res, ptr - c.level, c.rets);
