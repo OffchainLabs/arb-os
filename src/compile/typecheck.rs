@@ -17,7 +17,7 @@ use crate::stringtable::{StringId, StringTable};
 use crate::uint256::Uint256;
 use std::collections::{HashMap, HashSet};
 
-type TypeTable<'a> = HashMap<usize, &'a Type>;
+type TypeTable<'a> = HashMap<usize, Type>;
 
 ///Trait for all nodes in the AST, currently only implemented for type checked versions.
 pub trait AbstractSyntaxTree {
@@ -804,14 +804,14 @@ pub fn typecheck_top_level_decls(
         .collect::<HashMap<_, _>>();
     let mut exported_funcs = Vec::new();
 
-    let type_table: HashMap<_, _> = named_types.iter().map(|(k, v)| (*k, v)).collect();
+    let type_table: HashMap<_, _> = named_types.clone().into_iter().collect();
 
     let mut resolved_global_vars_map = HashMap::new();
     for (name, (tipe, slot_num)) in global_vars_map {
         resolved_global_vars_map.insert(name, (tipe, slot_num));
     }
 
-    let func_table: HashMap<_, _> = func_map.iter().map(|(k, v)| (*k, v)).collect();
+    let func_table: HashMap<_, _> = func_map.clone().into_iter().collect();
 
     for func in funcs.iter() {
         let f = typecheck_function(
@@ -869,7 +869,7 @@ pub fn typecheck_function<'a>(
                 arg.debug_info.location,
             )
         })?;
-        hm.insert(arg.name, &arg.tipe);
+        hm.insert(arg.name, arg.tipe.clone());
     }
     let mut inner_type_table = type_table.clone();
     inner_type_table.extend(hm);
@@ -959,17 +959,25 @@ fn typecheck_statement_sequence_with_bindings<'a>(
 ) -> Result<Vec<TypeCheckedStatement>, TypeError> {
     let mut inner_type_table = type_table.clone();
     for (sid, tipe) in bindings {
-        inner_type_table.insert(*sid, tipe);
+        inner_type_table.insert(*sid, tipe.clone());
     }
-    typecheck_statement_sequence(
-        statements,
-        return_type,
-        &inner_type_table,
-        global_vars,
-        func_table,
-        type_tree,
-        scopes,
-    )
+    let mut output = vec![];
+    for stat in statements {
+        let (tcs, bindings) = typecheck_statement(
+            stat,
+            return_type,
+            &inner_type_table,
+            global_vars,
+            func_table,
+            type_tree,
+            scopes,
+        )?;
+        output.push(tcs);
+        for (sid, bind) in bindings {
+            inner_type_table.insert(sid, bind);
+        }
+    }
+    Ok(output)
 }
 
 ///Performs type checking on statement.
@@ -2294,7 +2302,7 @@ fn typecheck_expr(
                     }
                 };
                 let mut inner_type_table = type_table.clone();
-                inner_type_table.insert(*l, &tct);
+                inner_type_table.insert(*l, tct);
                 let checked_block = typecheck_codeblock(
                     if_block,
                     &inner_type_table,
@@ -3255,8 +3263,8 @@ fn typecheck_codeblock(
         let mut inner_type_table = type_table.clone();
         inner_type_table.extend(
             block_bindings
-                .iter()
-                .map(|(k, v)| (*k, v))
+                .clone()
+                .into_iter()
                 .collect::<HashMap<_, _>>(),
         );
         let (statement, bindings) = typecheck_statement(
@@ -3276,8 +3284,8 @@ fn typecheck_codeblock(
     let mut inner_type_table = type_table.clone();
     inner_type_table.extend(
         block_bindings
-            .iter()
-            .map(|(k, v)| (*k, v))
+            .clone()
+            .into_iter()
             .collect::<HashMap<_, _>>(),
     );
     Ok(TypeCheckedCodeBlock {
