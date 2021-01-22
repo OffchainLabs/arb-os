@@ -916,33 +916,16 @@ fn typecheck_statement_sequence<'a>(
     type_tree: &TypeTree,
     scopes: &mut Vec<(String, Option<Type>)>,
 ) -> Result<Vec<TypeCheckedStatement>, TypeError> {
-    if statements.is_empty() {
-        return Ok(Vec::new());
-    }
-    let first_stat = &statements[0];
-    let rest_of_stats = &statements[1..];
-
-    let (tcs, bindings) = typecheck_statement(
-        &first_stat,
+    typecheck_statement_sequence_with_bindings(
+        &statements,
         return_type,
         type_table,
         global_vars,
         func_table,
+        &[],
         type_tree,
         scopes,
-    )?;
-    let mut rest_result = typecheck_statement_sequence_with_bindings(
-        rest_of_stats,
-        return_type,
-        type_table,
-        global_vars,
-        func_table,
-        &bindings,
-        type_tree,
-        scopes,
-    )?;
-    rest_result.insert(0, tcs);
-    Ok(rest_result)
+    )
 }
 
 ///Operates identically to `typecheck_statement_sequence`, except that the pairs in bindings are
