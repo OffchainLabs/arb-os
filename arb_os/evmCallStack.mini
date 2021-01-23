@@ -137,21 +137,21 @@ public impure func evmCallStack_init() {
 }
 
 public impure func evmCallStack_stackInfo() -> (uint, (address, address), (address, address)) {
-    if let Some(topFrame) = globalCallStack {
+    return xif let Some(topFrame) = globalCallStack {
         let sndRunningAs = address(0);
         let sndRunningCodeFrom = address(0);
         if let Some(sndFrame) = unsafecast<option<EvmCallFrame>>(topFrame.parent) {
             sndRunningAs = sndFrame.runningAs;
             sndRunningCodeFrom = sndFrame.runningCodeFrom;
         }
-        return (
+        (
             globalCurrentTxRequest.incomingRequest.requestId,
             (topFrame.runningAs, topFrame.runningCodeFrom),
             (sndRunningAs, sndRunningCodeFrom),
-        );
+        )
     } else {
-        return (0, (address(0), address(0)), (address(0), address(0)));
-    }
+        (0, (address(0), address(0)), (address(0), address(0)))
+    };
 }
 
 public impure func initEvmCallStack(
@@ -536,7 +536,7 @@ public impure func evmCallStack_returnFromCall(
     let memory = topFrame.memory;
     let returnData = bytearray_extract(memory, returnOffset, returnLength);
 
-    if let Some(newTopFrame) = topFrame.parent {
+    return xif let Some(newTopFrame) = topFrame.parent {
         // Returning from a non-top-level call
 
         topFrame = topFrame with {   // copy cached account back into callframe's main accountStore
@@ -607,7 +607,7 @@ public impure func evmCallStack_returnFromCall(
         restoreAuxStackAndCall(resumeInfo.codePoint, resumeInfo.auxStackContents, false);
 
         evmCallStack_callHitError(8);
-        return panic;  // shouldn't happen -- previous instruction jumped away
+        panic  // shouldn't happen -- previous instruction jumped away
     } else {
         // top-level call completed; will need to return to external caller
         if (success) {
@@ -753,8 +753,8 @@ public impure func evmCallStack_returnFromCall(
         emptyAvmStack();
         restoreAuxStackAndCall(mainRunLoop, None<Stack>, true);  // should never return
         evmCallStack_callHitError(9);
-        return panic;
-    }
+        panic
+    };
 }
 
 func storageReclaimedForSDQ(topFrame: EvmCallFrame) -> uint {
@@ -990,12 +990,12 @@ public impure func evmCallStack_runningAsAccountAndAddr() -> option<(Account, ad
 }
 
 public impure func evmCallStack_writeRunningAsAccount(acct: Account) -> bool {
-    if let Some(topFrame) = globalCallStack {
+    return xif let Some(topFrame) = globalCallStack {
         globalCallStack = Some(topFrame with { runningAsAccount: acct });
-        return true;
+        true
     } else {
-        return false;
-    }
+        false
+    };
 }
 
 public impure func evmCallStack_getTopFrameReturnData() -> option<ByteArray> {
@@ -1012,7 +1012,7 @@ public impure func evmCallStack_getAccount(addr: address) -> option<Account> {
 }
 
 public impure func evmCallStack_setAccount(addr: address, acct: Account) -> bool {
-    if let Some(topFrame) = globalCallStack {
+    return xif let Some(topFrame) = globalCallStack {
         if (topFrame.runningAs == addr) {
             globalCallStack = Some(topFrame with { runningAsAccount: acct });
         } else {
@@ -1020,28 +1020,28 @@ public impure func evmCallStack_setAccount(addr: address, acct: Account) -> bool
                 accountStore: accountStore_set(topFrame.accountStore, addr, acct)
             });
         }
-        return true;
+        true
     } else {
-        return false;
-    }
+        false
+    };
 }
 
 public impure func evmCallStack_getTopFrameMemoryOrDie() -> ByteArray {
-    if let Some(topFrame) = globalCallStack {
-        return topFrame.memory;
+    return xif let Some(topFrame) = globalCallStack {
+        topFrame.memory
     } else {
         evmCallStack_callHitError(10);
-        return panic;
-    }
+        panic
+    };
 }
 
 public impure func evmCallStack_setTopFrameMemory(mem: ByteArray) -> bool {
-    if let Some(topFrame) = globalCallStack {
+    return xif let Some(topFrame) = globalCallStack {
         globalCallStack = Some(topFrame with { memory: mem });
-        return true;
+        true
     } else {
-        return false;
-    }
+        false
+    };
 }
 
 public impure func evmCallStack_queueMessage(msg: any) {

@@ -113,13 +113,13 @@ impure func doInitializationOption(stream: ByteStream) -> option<ByteStream> {
 }
 
 public impure func chainParams_chainAddress() -> address {
-    if let Some(params) = globalChainParams {
-        return params.chainAddress;
+    return xif let Some(params) = globalChainParams {
+        params.chainAddress
     } else {
         // If we get here, the chain never received its initialization message.
         evmCallStack_callHitError(20);
-        return panic;
-    }
+        panic
+    };
 }
 
 public impure func chainParams_chainId() -> uint {
@@ -127,27 +127,27 @@ public impure func chainParams_chainId() -> uint {
 }
 
 public impure func chainParams_speedLimitPerBlock() -> uint {
-    if let Some(params) = globalChainParams {
-        return params.arbGasSpeedLimitPerBlock;
+    return xif let Some(params) = globalChainParams {
+        params.arbGasSpeedLimitPerBlock
     } else {
-        return const::DefaultSpeedLimitPerBlock;
-    }
+        const::DefaultSpeedLimitPerBlock
+    };
 }
 
 public impure func chainParams_baseStake() -> (address, uint) {
-    if let Some(params) = globalChainParams {
-        return (params.stakingToken, params.baseStake);
+    return xif let Some(params) = globalChainParams {
+        (params.stakingToken, params.baseStake)
     } else {
-        return (address(0), 0);
-    }
+        (address(0), 0)
+    };
 }
 
 public impure func chainParams_getOwner() -> option<address> {
-    if let Some(params) = globalChainParams {
-        return Some(params.owner);
+    return xif let Some(params) = globalChainParams {
+        Some(params.owner)
     } else {
-        return None;
-    }
+        None<address>
+    };
 }
 
 public impure func chainParams_setOwner(newOwner: address) {

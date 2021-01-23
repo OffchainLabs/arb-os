@@ -47,11 +47,11 @@ public impure func rollupTracker_processEvent(
     if (neverBeenCalled) {
         tracker = rollupTracker_initModule();
     }
-    if let Some(updatedTracker) = processEventOrError(bytestream_new(msg), tracker) {
-        return (true, updatedTracker);
+    return xif let Some(updatedTracker) = processEventOrError(bytestream_new(msg), tracker) {
+        (true, updatedTracker)
     } else {
-        return (false, tracker);
-    }
+        (false, tracker)
+    };
 }
 
 impure func processEventOrError(stream: ByteStream, tracker: RollupTracker) -> option<RollupTracker> {

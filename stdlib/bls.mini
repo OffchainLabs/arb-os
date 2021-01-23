@@ -263,15 +263,15 @@ func mapToPoint(x:  uint) -> option<(uint, uint)> {
     a1 = asm(a1, x, const::N) uint { mulmod };
     a1 = asm(a1, 3, const::N) uint { addmod };
 
-    if let Some(squa1) = sqrt(a1) {
-        if (foundFirstSqrt) {
-            return Some((x, squa1));
+    return xif let Some(squa1) = sqrt(a1) {
+        xif (foundFirstSqrt) {
+            Some((x, squa1))
         } else {
-            return Some((x, const::N - squa1));
+            Some((x, const::N - squa1))
         }
     } else {
-        return None; // BLS: bad ft mapping implementation
-    }
+        None<(uint, uint)> // BLS: bad ft mapping implementation
+    };
 }
 
 func sqrt(xx: uint) ->option<uint> {

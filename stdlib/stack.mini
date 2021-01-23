@@ -56,15 +56,15 @@ public func stack_discardDeepestItems(stack: Stack, numToDiscard: uint) -> Stack
 }
 
 func stack_ddi2(stack: Stack, numToDiscard: uint) -> (Stack, uint) {
-    if let Some(res) = stack_pop(stack) {
+    return xif let Some(res) = stack_pop(stack) {
         let (ustack, val) = res;
         let (subStack, subNum) = stack_ddi2(ustack, numToDiscard);
-        if (subNum == 0) {
-            return (stack_push(subStack, val), 0);
+        xif (subNum == 0) {
+            (stack_push(subStack, val), 0)
         } else {
-            return (subStack, subNum-1);
+            (subStack, subNum-1)
         }
     } else {
-        return (stack, numToDiscard);  // stack is empty
-    }
+        (stack, numToDiscard)  // stack is empty
+    };
 }

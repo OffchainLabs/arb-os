@@ -324,12 +324,12 @@ public func rlp_encodeMessageInfo(
         [8] = rlp_encodeUint(s, bytearray_new(0), 0).0
     };
 
-    if let Some(res) = rlp_encodeList(encodedPieces, 0, 9, bytearray_new(0), 0) {
-        return res.0;
+    return xif let Some(res) = rlp_encodeList(encodedPieces, 0, 9, bytearray_new(0), 0) {
+        res.0
     } else {
         // This can't happen, because we know encodedPieces is big enough that accesses will be in-bounds
-        return panic;
-    }
+        panic
+    };
 }
 
 public func rlp_encodeAndHashMessageInfoForSignature(tx: SignedTx, eip155chainId: option<uint>) -> bytes32 {

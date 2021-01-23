@@ -62,12 +62,12 @@ public impure func setGlobalAccountStore(acctStore: AccountStore) {
 }
 
 public func accountStore_get(acctStore: AccountStore, addr: address) -> Account {
-    if let Some(acct) = acctStore[addr] {
-        return acct;
+    return xif let Some(acct) = acctStore[addr] {
+        acct
     } else {
         // There is no recorded account at this address, so make a pristine account.
-        return pristineAccount(addr);
-    }
+        pristineAccount(addr)
+    };
 }
 
 public func pristineAccount(addr: address) -> Account {
@@ -423,11 +423,11 @@ public func account_setContractInfo(
 }
 
 public func account_getCodeSize(acct: Account) -> uint {
-    if let Some(contractInfo) = acct.contractInfo {
-        return bytearray_size(contractInfo.code);
+    return xif let Some(contractInfo) = acct.contractInfo {
+        bytearray_size(contractInfo.code)
     } else {
-        return 0;  // Account has no code, so its codesize is deemed to be zero.
-    }
+        0  // Account has no code, so its codesize is deemed to be zero.
+    };
 }
 
 public func account_getCode(acct: Account) -> option<ByteArray> {

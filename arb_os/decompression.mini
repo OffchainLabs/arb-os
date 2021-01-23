@@ -115,11 +115,11 @@ public func addressTable_getByAddress(iat: IndexedAddressTable, addr: address) -
 }
 
 public func addressTable_getByAddressAlloc(iat: IndexedAddressTable, addr: address) -> (IndexedAddressTable, uint) {
-    if let Some(val) = iat.byAddress[addr] {
-        return (iat, val);
+    return xif let Some(val) = iat.byAddress[addr] {
+        (iat, val)
     } else {
         // allocate space in the table
-        return (
+        (
             iat with {
                 byIndex: expandingIntArray_set(iat.byIndex, iat.size, uint(addr))
             } with {
@@ -130,8 +130,8 @@ public func addressTable_getByAddressAlloc(iat: IndexedAddressTable, addr: addre
                 size: 1+iat.size
             },
             iat.size
-        );
-    }
+        )
+    };
 }
 
 public impure func decompressAddress(
