@@ -78,7 +78,7 @@ impure func doInitializationOption(stream: ByteStream) -> option<ByteStream> {
     stream = ustr;
     let (ustr, numPayloadBytes) = bytestream_get64(stream)?;
     stream = ustr;
-    if (optionId == 0) {   // option: sequencer
+    return xif (optionId == 0) {   // option: sequencer
         if (numPayloadBytes != 3*32) {
             // unexpected payload size; discard the payload and ignore this option
             return bytestream_skipBytes(stream, numPayloadBytes);
@@ -87,7 +87,7 @@ impure func doInitializationOption(stream: ByteStream) -> option<ByteStream> {
         let (ustr, delayBlocks) = bytestream_get256(ustr)?;
         let (ustr, delayTime) = bytestream_get256(ustr)?;
         inbox_changeSequencer(address(sequencerAddrAsUint), delayBlocks, delayTime);
-        return Some(ustr);
+        Some(ustr)
     } elseif (optionId == const::InitOption_setSecondsPerBlock) {
         if (numPayloadBytes != 32) {
             // unexpected payload size; discard the payload and ignore this option
@@ -95,7 +95,7 @@ impure func doInitializationOption(stream: ByteStream) -> option<ByteStream> {
         }
         let (ustr, secsPerBlock) = bytestream_get256(stream)?;
         globalChainParams = Some(globalChainParams? with { millisecondsPerBlock: 1000*secsPerBlock });
-        return Some(ustr);
+        Some(ustr)
     } elseif (optionId == const::InitOption_setChargingParams) {
         if (numPayloadBytes != 3*32) {
             // unexpected payload size; discard the payload and ignore this option
@@ -105,11 +105,11 @@ impure func doInitializationOption(stream: ByteStream) -> option<ByteStream> {
         let (ustr, storageCharge) = bytestream_get256(ustr)?;
         let (ustr, gasFeeRecipientAsUint) = bytestream_get256(ustr)?;
         gasAccounting_setFeeParams(baseGasPrice, storageCharge, address(gasFeeRecipientAsUint));
-        return Some(ustr);
+        Some(ustr)
     } else {
         // unrecognized option, discard it
-        return bytestream_skipBytes(stream, numPayloadBytes);
-    }
+        bytestream_skipBytes(stream, numPayloadBytes)
+    };
 }
 
 public impure func chainParams_chainAddress() -> address {

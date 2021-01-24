@@ -63,7 +63,7 @@ public impure func handleL1Request(
     // Parse an incoming message and do appropriate computations
     let inStream = bytestream_new(msg.msgData);
 
-    if (msg.kind == const::L1MessageType_ethDeposit) {
+    return xif (msg.kind == const::L1MessageType_ethDeposit) {
         // ethdeposit message
         let (bs, destination) = bytestream_get256(inStream)?;
         inStream = bs;
@@ -81,7 +81,7 @@ public impure func handleL1Request(
                 destAccount
             )
         );
-        return Some(());
+        Some(())
     } elseif (msg.kind == const::L1MessageType_erc20Deposit) {
         // ERC20 deposit message
         let (bs, tokenAddress) = bytestream_get256(inStream)?;
@@ -100,7 +100,7 @@ public impure func handleL1Request(
             msg
         )?;  // should never return
 
-        return None;
+        None<()>
     } elseif (msg.kind == const::L1MessageType_erc721Deposit) {
          // ERC721 deposit message
          let (bs, tokenAddress) = bytestream_get256(inStream)?;
@@ -119,12 +119,12 @@ public impure func handleL1Request(
              msg
          )?;  // should never return
 
-         return None;
+         None<()>
     } else {
         // not a valid message type
         // (This should not have been called if msg.kind == const::L1MessageType_L2.)
-        return None;
-    }
+        None<()>
+    };
 }
 
 impure func verifyAndIncrSequenceNum(addr: address, seqNum: uint) -> option<()> {

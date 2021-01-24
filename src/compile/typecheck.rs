@@ -861,7 +861,7 @@ pub fn typecheck_function(
     if fd.ret_type != Type::Void {
         if let Some(stat) = fd.code.last() {
             match &stat.kind {
-                StatementKind::Return(_) | StatementKind::Loop(_) | StatementKind::If(_) => {}
+                StatementKind::Return(_) | StatementKind::Loop(_) => {}
                 _ => {
                     return Err(new_type_error(
                         format!("Last statement of function must be return"),

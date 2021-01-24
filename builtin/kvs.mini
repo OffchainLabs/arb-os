@@ -208,18 +208,18 @@ impure func kvs_forall_tree(
     closure: impure func(any, any, any) -> any,
     state: any
 ) -> any {
-    if (t == unsafecast<KvsNode>(0)) {
-        return state;
+    return xif (t == unsafecast<KvsNode>(0)) {
+        state
     } elseif (asm(t,) uint { length } == 2) {
-        if let Some(val) = unsafecast<KvsCell>(t).value {
-            return closure(
+        xif let Some(val) = unsafecast<KvsCell>(t).value {
+            closure(
                 unsafecast<KvsCell>(t).key,
                 val,
                 state
-            );
+            )
         } else {
             // structure was corrupted, best to just ignore this cell
-            return state;
+            state
         }
    } else {
         let i = 0;
@@ -227,6 +227,6 @@ impure func kvs_forall_tree(
             state = kvs_forall_tree(unsafecast<KvsNode>(t[i]), closure, state);
             i = i+1;
         }
-        return state;
-   }
+        state
+   };
 }

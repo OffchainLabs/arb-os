@@ -43,27 +43,27 @@ type SignedTx = struct {
 }
 
 func rlp_uintSize(val: uint) -> uint {
-    if (val <= 0x7f) {
-        return 1;
+    return xif (val <= 0x7f) {
+        1
     } else {
-        return 1 + bytesNeededToRepresentUint(val);
-    }
+        1 + bytesNeededToRepresentUint(val)
+    };
 }
 
 public func rlp_encodeUint(val: uint, ba: ByteArray, offset: uint) -> (ByteArray, uint) {
     // RLP-encode val, writing the result to ba at offset
     // return (updated_ba, nbytes_written)
 
-    if (val == 0) {
-        return (
+    return xif (val == 0) {
+        (
             bytearray_setByte(ba, offset, 0x80),
             1
-        );
+        )
     } elseif (val <= 0x7f) {
-        return (
+        (
             bytearray_setByte(ba, offset, val),
             1
-        );
+        )
     } else {
         let length = bytesNeededToRepresentUint(val);
         let origLen = length;
@@ -74,15 +74,15 @@ public func rlp_encodeUint(val: uint, ba: ByteArray, offset: uint) -> (ByteArray
             ba = bytearray_setByte(ba, offset, (asm(8*length, val) uint { shr }) & 0xff);
             offset = offset+1;
         }
-        return (ba, origLen+1);
-    }
+        (ba, origLen+1)
+    };
 }
 
 func rlp_hashUint(hasher: Hasher, val: uint) -> Hasher {
-    if (val == 0) {
-        return hasher_pushByte(hasher, 0x80);
+    return xif (val == 0) {
+        hasher_pushByte(hasher, 0x80)
     } elseif (val <= 0x7f) {
-        return hasher_pushByte(hasher, val);
+        hasher_pushByte(hasher, val)
     } else {
         let length = bytesNeededToRepresentUint(val);
         hasher = hasher_pushByte(hasher, 0x80+length);
@@ -90,8 +90,8 @@ func rlp_hashUint(hasher: Hasher, val: uint) -> Hasher {
             length = length-1;
             hasher = hasher_pushByte(hasher, (asm(8*length, val) uint { shr }) & 0xff);
         }
-        return hasher;
-    }
+        hasher
+    };
 }
 
 func rlp_hashAddress(hasher: Hasher, addr: address) -> Hasher {
@@ -103,11 +103,11 @@ func rlp_hashAddress(hasher: Hasher, addr: address) -> Hasher {
 }
 
 func rlp_addressSize(addr: address) -> uint {
-    if (addr == address(0)) {
-        return 1;
+    return xif (addr == address(0)) {
+        1
     } else {
-        return 21;
-    }
+        21
+    };
 }
 
 public func rlp_encodeAddress(addr: address, ba: ByteArray, offset: uint) -> (ByteArray, uint) {
@@ -119,19 +119,19 @@ public func rlp_encodeAddress(addr: address, ba: ByteArray, offset: uint) -> (By
 }
 
 func rlp_bytesSize(ba: ByteArray, offset: uint, nbytes: uint) -> uint {
-    if (nbytes == 0) {
-        return 1;
+    return xif (nbytes == 0) {
+        1
     } elseif (nbytes == 1) {
-        if (bytearray_getByte(ba, offset) <= 0x7f) {
-            return 1;
+        xif (bytearray_getByte(ba, offset) <= 0x7f) {
+            1
         } else {
-            return 2;
+            2
         }
     } elseif (nbytes <= 55) {
-        return 1 + nbytes;
+        1 + nbytes
     } else {
-        return 1 + bytesNeededToRepresentUint(nbytes) + nbytes;
-    }
+        1 + bytesNeededToRepresentUint(nbytes) + nbytes
+    };
 }
 
 public func rlp_encodeBytes(
@@ -179,28 +179,28 @@ public func rlp_encodeBytes(
 }
 
 func rlp_hashBytes(hasher: Hasher, ba: ByteArray, offset: uint, nbytes: uint) -> Hasher {
-    if (nbytes == 0) {
-        return hasher_pushByte(hasher, 0x80);
+    return xif (nbytes == 0) {
+        hasher_pushByte(hasher, 0x80)
     } elseif (nbytes == 1) {
         let firstByte = bytearray_getByte(ba, offset);
-        if (firstByte <= 0x7f) {
-            return hasher_pushByte(hasher, firstByte);
+        xif (firstByte <= 0x7f) {
+            hasher_pushByte(hasher, firstByte)
         } else {
-            return hasher_pushByte(
+            hasher_pushByte(
                 hasher_pushByte(hasher, 0x81),
                 firstByte
-            );
+            )
         }
     } elseif (nbytes <= 55) {
         hasher = hasher_pushByte(hasher, 0x80+nbytes);
-        if (nbytes > 32) {
-            return hasher_pushN_be(
+        xif (nbytes > 32) {
+            hasher_pushN_be(
                 hasher_pushN_be(hasher, bytearray_get256(ba, offset), 32),
                 bytearray_get256(ba, offset+32),
                 nbytes-32
-            );
+            )
         } else {
-            return hasher_pushN_be(hasher, bytearray_get256(ba, offset), nbytes);
+            hasher_pushN_be(hasher, bytearray_get256(ba, offset), nbytes)
         }
     } else {
         let sizeOfSize = bytesNeededToRepresentUint(nbytes);
@@ -215,8 +215,8 @@ func rlp_hashBytes(hasher: Hasher, ba: ByteArray, offset: uint, nbytes: uint) ->
             offset = offset+32;
             nbytes = nbytes-32;
         }
-        return hasher_pushN_be(hasher, bytearray_get256(ba, offset), nbytes);
-    }
+        hasher_pushN_be(hasher, bytearray_get256(ba, offset), nbytes)
+    };
 }
 
 public func rlp_decodeBytes(inStream: ByteStream) -> option<(ByteStream, ByteArray)> {
@@ -467,8 +467,8 @@ public func rlp_decodeUint(bs: ByteStream) -> option<(ByteStream, uint)> {
     // return None if end-of-stream error, or Some((updated_bs, uint_read))
     let (ubs, firstByte) = bytestream_getByte(bs)?;
     bs = ubs;
-    if (firstByte <= 0x7f) {
-        return Some((bs, firstByte));
+    return xif (firstByte <= 0x7f) {
+        Some((bs, firstByte))
     } else {
         let length = firstByte - 0x80;
         let ret = 0;
@@ -479,17 +479,17 @@ public func rlp_decodeUint(bs: ByteStream) -> option<(ByteStream, uint)> {
             ret = 256*ret + x;
             i = i+1;
         }
-        return Some((bs, ret));
-    }
+        Some((bs, ret))
+    };
 }
 
 public func rlp_decodeAddress(bs: ByteStream) -> option<(ByteStream, address)> {
     let (bs, val) = rlp_decodeUint(bs)?;
-    if (bytesNeededToRepresentUint(val) <= 20) {
-        return Some((bs, address(val)));
+    return xif (bytesNeededToRepresentUint(val) <= 20) {
+        Some((bs, address(val)))
     } else {
-        return None;
-    }
+        None<(ByteStream, address)>
+    };
 }
 
 public func bytesNeededToRepresentUint(val: uint) -> uint {
@@ -503,9 +503,9 @@ public func bytesNeededToRepresentUint(val: uint) -> uint {
         }
         bytes = bytes / 2;
     }
-    if (val == 0) {
-        return ret;
+    return xif (val == 0) {
+        ret
     } else {
-        return ret+1;
-    }
+        ret+1
+    };
 }

@@ -94,11 +94,11 @@ public impure func recoverSigner(tx: SignedTx) -> option<address> {
         rlpHashForSig,
     ) address { ecrecover };
 
-    if (signer == address(0)) {
-        return None;
+    return xif (signer == address(0)) {
+        None<address>
     } else {
-        return Some(signer);
-    }
+        Some(signer)
+    };
 }
 
 func signedTxToUnsignedBytes(tx: SignedTx) -> ByteArray {

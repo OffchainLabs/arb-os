@@ -58,46 +58,46 @@ impure func processEventOrError(stream: ByteStream, tracker: RollupTracker) -> o
     let (us, eventType) = bytestream_getByte(stream)?;
     stream = us;
 
-    if (eventType == const::ProtoEvent_createNode) {
+    return xif (eventType == const::ProtoEvent_createNode) {
         let (us, heightL2) = bytestream_get256(stream)?;
         let (us, prev) = bytestream_get256(us)?;
         let (us, heightL1) = bytestream_get256(us)?;
         let (us, deadlineL1) = bytestream_get256(us)?;
         let (us, asserterUint) = bytestream_get256(us)?;
-        return rollupTracker_addNode(
+        rollupTracker_addNode(
             tracker,
             heightL2,
             prev,
             heightL1,
             deadlineL1,
             address(asserterUint)
-        );
+        )
     } elseif (eventType == const::ProtoEvent_confirmNode) {
         let (us, heightL2) = bytestream_get256(stream)?;
-        return rollupTracker_confirmNode(tracker, heightL2);
+        rollupTracker_confirmNode(tracker, heightL2)
     } elseif (eventType == const::ProtoEvent_rejectNode) {
         let (us, heightL2) = bytestream_get256(stream)?;
-        return rollupTracker_rejectNode(tracker, heightL2);
+        rollupTracker_rejectNode(tracker, heightL2)
     } elseif (eventType == const::ProtoEvent_newStake) {
         let (us, heightL2) = bytestream_get256(stream)?;
         let (us, stakerUint) = bytestream_get256(us)?;
         let (us, stakeTimeL1) = bytestream_get256(us)?;
-        return rollupTracker_newStake(
+        rollupTracker_newStake(
             tracker,
             heightL2,
             address(stakerUint),
             stakeTimeL1
-        );
+        )
     } elseif (eventType == const::ProtoEvent_claimNode) {
         let (us, heightL2) = bytestream_get256(stream)?;
         let (us, claimerUint) = bytestream_get256(us)?;
-        return rollupTracker_claimNode(tracker, heightL2, address(claimerUint));
+        rollupTracker_claimNode(tracker, heightL2, address(claimerUint))
     } elseif (eventType == const::ProtoEvent_debug) {
         _debug(tracker);
-        return Some(tracker);
+        Some(tracker)
     } else {
-        return None;
-    }
+        None<RollupTracker>
+    };
 }
 
 type RollupNode = struct {
@@ -239,7 +239,7 @@ impure func rollupTracker_claimNode(
     let nodes = tracker.nodes;
     let _ = rsw_verifyIsLeaf(nodes, heightL2)?;
     let node = rsw_get(tracker.nodes, heightL2)?;
-    if (node.payment > tracker.minimumPayment) {
+    return xif (node.payment > tracker.minimumPayment) {
         if (claimer != node.activeValidator) {
             setGlobalAccountStore(
                 accountStore_transferEthBalance(
@@ -250,7 +250,7 @@ impure func rollupTracker_claimNode(
                 )?
             );
         }
-        return Some(tracker with {
+        Some(tracker with {
             nodes: rsw_set(
                 tracker.nodes,
                 heightL2,
@@ -260,10 +260,10 @@ impure func rollupTracker_claimNode(
                     payment: (node.payment + tracker.minimumPayment) / 2
                 }
             )?
-        });
+        })
     } else {
-        return None;
-    }
+        None<RollupTracker>
+    };
 }
 
 type RollupSlidingWindow = struct {
@@ -293,11 +293,11 @@ func rsw_getNumNodes(rsw: RollupSlidingWindow) -> uint {
 }
 
 func rsw_confirmIndex(rsw: RollupSlidingWindow, index: uint) -> option<()> {
-    if ((index >= rsw.nextOut) && (index < rsw.nextIn)) {
-        return Some(());
+    return xif ((index >= rsw.nextOut) && (index < rsw.nextIn)) {
+        Some(())
     } else {
-        return None;
-    }
+        None<()>
+    };
 }
 
 func rsw_get(rsw: RollupSlidingWindow, index: uint) -> option<RollupNode> {

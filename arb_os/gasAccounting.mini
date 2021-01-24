@@ -414,14 +414,14 @@ impure func switchToChargingOS() -> uint {
     // switch to charging the OS for gas, if we aren't already
     // return amount of the tx's gas that is still unused
     let gasRemaining = asm() uint { getgas };
-    if (gasRemaining >= asm(255, 1) uint { shl }) {
+    return xif (gasRemaining >= asm(255, 1) uint { shl }) {
         // we were already charging the OS, tx has nothing remaining
-        return 0;
+        0
     } else {
         // we were charging the tx; switch to charging the OS and return tx's unused amount from ArbGasRemaining
         asm(~0,) { setgas };
-        return gasRemaining;
-    }
+        gasRemaining
+    };
 }
 
 impure func payOutFundsToValidators() {  // this should only be called when not in a tx
@@ -575,8 +575,8 @@ public impure func getNextRequestFromCongestionAuction() -> (
         };
     }
 
-    if (isChargeable && (gasAccountingInfo.currentGasPrice > 0)) {
-        if let Some(tx) = maybeTx {
+    return xif (isChargeable && (gasAccountingInfo.currentGasPrice > 0)) {
+        xif let Some(tx) = maybeTx {
             if let Some(aggInfo) = tx.incomingRequest.aggregator {
                 // user must pay L1 gas to the aggregator
                 let calldataL1Gas = 16 * aggInfo.calldataBytes;
@@ -616,7 +616,7 @@ public impure func getNextRequestFromCongestionAuction() -> (
             if (txGasLimit > gasAccountingInfo.gasRemainingThisBlock) {
                 txGasLimit = gasAccountingInfo.gasRemainingThisBlock;
             }
-            return (
+            (
                 true,
                 maybeRequest,
                 Some(tx with {
@@ -625,13 +625,13 @@ public impure func getNextRequestFromCongestionAuction() -> (
                         gasPrice: gasAccountingInfo.currentGasPrice
                     }
                 )
-            );
+            )
         } else {
-            return (true, maybeRequest, maybeTx);  // shouldn't happen
+            (true, maybeRequest, maybeTx)  // shouldn't happen
         }
     } else {
-        return (true, maybeRequest, maybeTx);
-    }
+        (true, maybeRequest, maybeTx)
+    };
 }
 
 public impure func getGasLimitPerTx() -> uint {

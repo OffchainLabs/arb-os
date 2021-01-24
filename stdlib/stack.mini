@@ -41,14 +41,14 @@ public func stack_isEmpty(stack: Stack) -> bool {
 
 public func stack_pop(stack: Stack) -> option<(Stack, any)> {
     let cell = stack?;
-    if (cell.num == 1) {
-        return Some((unsafecast<Stack>(cell.rest), cell.top[0]));
+    return xif (cell.num == 1) {
+        Some((unsafecast<Stack>(cell.rest), cell.top[0]))
     } else {
-        return Some((
+        Some((
             Some(cell with { num: cell.num - 1 }),
             cell.top[cell.num-1]
-        ));
-    }
+        ))
+    };
 }
 
 public func stack_discardDeepestItems(stack: Stack, numToDiscard: uint) -> Stack {

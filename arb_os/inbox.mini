@@ -288,7 +288,7 @@ impure func getFromL1InboxSequencer(inbox: Inbox, seq: SequencerState) -> Inbox 
     let isSequencerMsg = (newMsg.kind == const::L1MessageType_L2)
                          && (bytearray_getByte(newMsg.msgData, 0) == const::L2MessageType_sequencerBatch)
                          && (newMsg.sender == seq.sequencerAddr);
-    if (isSequencerMsg) {
+    return xif (isSequencerMsg) {
         // get low-order two bytes of blockNum assigned to this message, and reconstruct that blockNum
         let bnum = (blockNum & ~0xffff)
                          + asm (256-16, bytearray_get256(newMsg.msgData, 1)) uint { shr };
@@ -334,7 +334,7 @@ impure func getFromL1InboxSequencer(inbox: Inbox, seq: SequencerState) -> Inbox 
             timestamp = seq.lastTimestampReleased;
         }
 
-        return inbox with {
+        inbox with {
             queue: incomingRequestQueue_put(
                 inbox.queue,
                 newMsg with { blockNumber: blockNum } with { timestamp: timestamp }
@@ -347,7 +347,7 @@ impure func getFromL1InboxSequencer(inbox: Inbox, seq: SequencerState) -> Inbox 
                     lastTimestampReleased: timestamp
                 }
             )
-        };
+        }
     } else {
         if ((blockNum >= seq.delayBlocks) && (timestamp >= seq.delayTime)) {
             let (uSeq, uInboxQ) = releaseDelayedRequests(
@@ -360,7 +360,7 @@ impure func getFromL1InboxSequencer(inbox: Inbox, seq: SequencerState) -> Inbox 
             inbox = inbox with { queue: uInboxQ };
         }
 
-        return inbox with {
+        inbox with {
             sequencer: Some(seq with {
                 delayQueue: incomingRequestQueue_put(
                     seq.delayQueue,
@@ -375,8 +375,8 @@ impure func getFromL1InboxSequencer(inbox: Inbox, seq: SequencerState) -> Inbox 
             } with {
                 lastTimestampSeen: timestamp
             })
-        };
-    }
+        }
+    };
 }
 
 func endOfBlockMessage(blockNum: uint, timestamp: uint) -> IncomingRequest {

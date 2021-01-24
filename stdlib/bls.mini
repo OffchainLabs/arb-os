@@ -176,11 +176,11 @@ public func bls_verifySignature(
     }
 
     let result = asm(acc,) bool { ecpairing };
-    if (result) {
-        return Some(());
+    return xif (result) {
+        Some(())
     } else {
-        return None;
-    }
+        None<()>
+    };
 }
 
 // ==================================================================
@@ -278,11 +278,11 @@ func sqrt(xx: uint) ->option<uint> {
     let x = modexp_c191_3f52(xx);
 
     let square = asm(x, x, const::N) uint { mulmod };
-    if(square == xx) {
-        return Some(x);
+    return xif(square == xx) {
+        Some(x)
     } else {
-        return None;
-    }
+        None<uint>
+    };
 }
 
 func inverse(a: uint) -> uint {

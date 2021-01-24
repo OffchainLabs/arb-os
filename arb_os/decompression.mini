@@ -103,11 +103,11 @@ public func addressTable_size(iat: IndexedAddressTable) -> uint {
 }
 
 public func addressTable_getByIndex(iat: IndexedAddressTable, index: uint) -> option<address> {  // returns zero if not in table
-    if (index >= iat.size) {
-        return None;
+    return xif (index >= iat.size) {
+        None<address>
     } else {
-        return Some(address(expandingIntArray_get(iat.byIndex, index)));
-    }
+        Some(address(expandingIntArray_get(iat.byIndex, index)))
+    };
 }
 
 public func addressTable_getByAddress(iat: IndexedAddressTable, addr: address) -> option<uint> {
@@ -146,18 +146,18 @@ public impure func decompressAddress(
     // In the last case, the address is added to the globalIndexedAddressTable if it is not already there
 
     let (ustr, firstByte) = bytestream_getByte(stream)?;
-    if (firstByte == 0x80) {
-        return Some((ustr, address(0)));
+    return xif (firstByte == 0x80) {
+        Some((ustr, address(0)))
     } elseif (firstByte < 0x80 + 20) {
         // don't update stream, because we want to re-start from the beginning
         let (ustr, decodedUint) = rlp_decodeUint(stream)?;
-        return Some((ustr, addressTable_getByIndex(globalIndexedAddressTable, decodedUint)?));
+        Some((ustr, addressTable_getByIndex(globalIndexedAddressTable, decodedUint)?))
     } else {
         let (ustr, addr) = rlp_decodeAddress(stream)?;
         let (giat, _) = addressTable_getByAddressAlloc(globalIndexedAddressTable, addr);
         globalIndexedAddressTable = giat;
-        return Some((ustr, addr));
-    }
+        Some((ustr, addr))
+    };
 }
 
 public func decompressTokenAmount(bs: ByteStream) -> option<(ByteStream, uint)> {

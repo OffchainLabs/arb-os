@@ -31,10 +31,10 @@ public func merkleizeFromQueue(queue: Queue) -> bytes32 {
 }
 
 func merkleize2(data: []any, offset: uint, num: uint, chunk: uint) -> bytes32 {
-    if (num == 0) {
-        return bytes32(0);
+    return xif (num == 0) {
+        bytes32(0)
     } elseif (num == 1) {
-        return hash(data[offset]);
+        hash(data[offset])
     } else {
         let num1 = num;
         let num2 = 0;
@@ -42,11 +42,11 @@ func merkleize2(data: []any, offset: uint, num: uint, chunk: uint) -> bytes32 {
             num1 = chunk;
             num2 = num-chunk;
         }
-        return hash(
+        hash(
             merkleize2(data, offset, num1, chunk/2),
             merkleize2(data, offset+chunk, num2, chunk/2),
-        );
-    }
+        )
+    };
 }
 
 type MerkleTreeBuilder = struct {

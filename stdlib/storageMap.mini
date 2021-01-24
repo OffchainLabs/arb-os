@@ -190,22 +190,22 @@ public func storageMap_forall_tree(
     closure: func(uint, uint, any) -> any,
     state: any
 ) -> any {
-    if (t == unsafecast<StorageMapNode>(0)) {
-        return state;
+    return xif (t == unsafecast<StorageMapNode>(0)) {
+        state
     } elseif (asm(t,) uint { length } == 2) {
-        return closure(
+        closure(
             unsafecast<StorageMapCell>(t).key,
             unsafecast<StorageMapCell>(t).value,
             state
-        );
+        )
    } else {
         let i = 0;
         while (i < 8) {
             state = storageMap_forall_tree(unsafecast<StorageMapNode>(t[i]), closure, state);
             i = i+1;
         }
-        return state;
-   }
+        state
+   };
 }
 
 public func storageMap_serialize(s: StorageMap) -> ByteArray {

@@ -579,10 +579,10 @@ impure func pushDupn(
     // Generate code for a dupN pseudo-operation.
     // AVM supports this only for N <= 2, whereas EVM can ask for larger ones.
     // Note that N here uses the AVM semantics, which is off-by-one from the EVM semantics.
-    if (n <= 2) {
-        return pushInstruction(0x40+n, restOfCode);  //dup_n
+    return xif (n <= 2) {
+        pushInstruction(0x40+n, restOfCode)  //dup_n
     } else {
-        return pushInstruction(
+        pushInstruction(
             const::AVM_auxpush,
             pushDupn(
                 n-1,
@@ -594,8 +594,8 @@ impure func pushDupn(
                     )
                 )
             )
-        );
-    }
+        )
+    };
 }
 
 impure func pushSwapn(
@@ -604,10 +604,10 @@ impure func pushSwapn(
 ) -> AvmCodePoint {
     // Generate code for a swapN pseudo-operation.
     // AVM supports this only for N <= 2, whereas EVM can ask for larger ones.
-    if (n == 2) {
-        return pushInstruction(const::AVM_swap2, restOfCode);
+    return xif (n == 2) {
+        pushInstruction(const::AVM_swap2, restOfCode)
     } else {
-        return pushInstruction(
+        pushInstruction(
             const::AVM_swap1,
             pushInstruction(
                 const::AVM_auxpush,
@@ -622,8 +622,8 @@ impure func pushSwapn(
                     )
                 )
             )
-        );
-    }
+        )
+    };
 }
 
 impure func pushEvmInsnCall(evmOpNum: uint, code: AvmCodePoint) -> AvmCodePoint {
@@ -719,21 +719,21 @@ func isSafeInstruction(insn: uint) -> bool {
 func unmarshalValue(stream: ByteStream, codeMap: map<uint, AvmCodePoint>) -> option<(ByteStream, any)> {
     let (ustr, kind) = bytestream_getByte(stream)?;
     stream = ustr;
-    if (kind == 0) {  // integer
+    return xif (kind == 0) {  // integer
         let (ustr, val) = rlp_decodeUint(stream)?;
-        return Some((ustr, val));
+        Some((ustr, val))
     } elseif (kind == 1) { // codepoint
         let (ustr, idx) = rlp_decodeUint(stream)?;
-        if let Some(codePt) = codeMap[idx] {
-            return Some((ustr, codePt));
+        xif let Some(codePt) = codeMap[idx] {
+            Some((ustr, codePt))
         } else {
-            return None;
+            None<(ByteStream, any)>
         }
     } elseif (kind == 10) {   // 0-tuple
-        return Some((stream, ()));
+        Some((stream, ()))
     } elseif (kind == 11) {   // 1-tuple
         let (ustr, x) = unmarshalValue(stream, codeMap)?;
-        return Some((ustr, (x,)));
+        Some((ustr, (x,)))
     } elseif (kind == 12) {   // 2-tuple
         let val = unsafecast<[2]any>((0,0));
         let i = 0;
@@ -743,7 +743,7 @@ func unmarshalValue(stream: ByteStream, codeMap: map<uint, AvmCodePoint>) -> opt
             val = val with { [i] = x };
             i = i+1;
         }
-        return Some((stream, val));
+        Some((stream, val))
     } elseif (kind == 13) {   // 3-tuple
         let val = unsafecast<[3]any>((0,0,0));
         let i = 0;
@@ -753,7 +753,7 @@ func unmarshalValue(stream: ByteStream, codeMap: map<uint, AvmCodePoint>) -> opt
             val = val with { [i] = x };
             i = i+1;
         }
-        return Some((stream, val));
+        Some((stream, val))
     } elseif (kind == 14) {   // 4-tuple
         let val = unsafecast<[4]any>((0,0,0,0));
         let i = 0;
@@ -763,7 +763,7 @@ func unmarshalValue(stream: ByteStream, codeMap: map<uint, AvmCodePoint>) -> opt
             val = val with { [i] = x };
             i = i+1;
         }
-        return Some((stream, val));
+        Some((stream, val))
     } elseif (kind == 15) {   // 5-tuple
         let val = unsafecast<[5]any>((0,0,0,0,0));
         let i = 0;
@@ -773,7 +773,7 @@ func unmarshalValue(stream: ByteStream, codeMap: map<uint, AvmCodePoint>) -> opt
             val = val with { [i] = x };
             i = i+1;
         }
-        return Some((stream, val));
+        Some((stream, val))
     } elseif (kind == 16) {   // 6-tuple
         let val = unsafecast<[6]any>((0,0,0,0,0,0));
         let i = 0;
@@ -783,7 +783,7 @@ func unmarshalValue(stream: ByteStream, codeMap: map<uint, AvmCodePoint>) -> opt
             val = val with { [i] = x };
             i = i+1;
         }
-        return Some((stream, val));
+        Some((stream, val))
     } elseif (kind == 17) {   // 7-tuple
         let val = unsafecast<[7]any>((0,0,0,0,0,0,0));
         let i = 0;
@@ -793,7 +793,7 @@ func unmarshalValue(stream: ByteStream, codeMap: map<uint, AvmCodePoint>) -> opt
             val = val with { [i] = x };
             i = i+1;
         }
-        return Some((stream, val));
+        Some((stream, val))
     } elseif (kind == 18) {   // 8-tuple
         let val = unsafecast<[8]any>((0,0,0,0,0,0,0,0));
         let i = 0;
@@ -803,8 +803,8 @@ func unmarshalValue(stream: ByteStream, codeMap: map<uint, AvmCodePoint>) -> opt
             val = val with { [i] = x };
             i = i+1;
         }
-        return Some((stream, val));
+        Some((stream, val))
     } else {
-        return None;
-    }
+        None<(ByteStream, any)>
+    };
 }

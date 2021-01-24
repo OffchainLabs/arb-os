@@ -1004,11 +1004,11 @@ public impure func evmCallStack_getTopFrameReturnData() -> option<ByteArray> {
 
 public impure func evmCallStack_getAccount(addr: address) -> option<Account> {
     let topFrame = globalCallStack?;
-    if (topFrame.runningAs == addr) {
-        return Some(topFrame.runningAsAccount);
+    return xif (topFrame.runningAs == addr) {
+        Some(topFrame.runningAsAccount)
     } else {
-        return Some(accountStore_get(topFrame.accountStore, addr));
-    }
+        Some(accountStore_get(topFrame.accountStore, addr))
+    };
 }
 
 public impure func evmCallStack_setAccount(addr: address, acct: Account) -> bool {
@@ -1148,11 +1148,11 @@ public func evmCallFrame_getCaller(frame: EvmCallFrame) -> address {
 }
 
 public func evmCallFrame_getAccount(frame: EvmCallFrame, addr: address) -> Account {
-    if (addr == frame.runningAs) {
-        return frame.runningAsAccount;
+    return xif (addr == frame.runningAs) {
+        frame.runningAsAccount
     } else {
-        return accountStore_get(frame.accountStore, addr);
-    }
+        accountStore_get(frame.accountStore, addr)
+    };
 }
 
 public func evmCallFrame_getMemory(frame: EvmCallFrame) -> ByteArray {
