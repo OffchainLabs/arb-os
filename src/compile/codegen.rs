@@ -2278,6 +2278,50 @@ fn mavm_codegen_expr<'a>(
             ));
             Ok((label_gen, code, total_locals))
         }
+        TypeCheckedExprKind::Loop(body) => {
+            let slot_num = Value::Int(Uint256::from_usize(num_locals));
+            let (top_label, lgtop) = label_gen.next();
+            let (bottom_label, lg) = lgtop.next();
+            scopes.push(("_".to_string(), bottom_label, Some(Type::Tuple(vec![]))));
+            label_gen = lg;
+            code.push(Instruction::from_opcode_imm(
+                Opcode::AVMOpcode(AVMOpcode::Noop),
+                Value::Label(top_label),
+                debug,
+            ));
+            code.push(Instruction::from_opcode_imm(
+                Opcode::SetLocal,
+                slot_num.clone(),
+                debug,
+            ));
+            code.push(Instruction::from_opcode(Opcode::Label(top_label), debug));
+            let (lg, nl, _, _) = mavm_codegen_statements(
+                body.to_vec(),
+                code,
+                num_locals + 1,
+                locals,
+                label_gen,
+                string_table,
+                import_func_map,
+                global_var_map,
+                prepushed_vals,
+                scopes,
+                file_name_chart,
+            )?;
+            scopes.pop();
+            label_gen = lg;
+            code.push(Instruction::from_opcode_imm(
+                Opcode::GetLocal,
+                slot_num,
+                debug,
+            ));
+            code.push(Instruction::from_opcode(
+                Opcode::AVMOpcode(AVMOpcode::Jump),
+                debug,
+            ));
+            code.push(Instruction::from_opcode(Opcode::Label(bottom_label), debug));
+            Ok((label_gen, code, max(num_locals + 1, nl)))
+        }
     }
 }
 

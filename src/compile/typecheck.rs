@@ -497,6 +497,7 @@ pub enum TypeCheckedExprKind {
         Option<TypeCheckedCodeBlock>,
         Type,
     ),
+    Loop(Vec<TypeCheckedStatement>),
 }
 
 impl MiniProperties for TypeCheckedExpr {
@@ -575,6 +576,7 @@ impl MiniProperties for TypeCheckedExpr {
                         true
                     }
             }
+            TypeCheckedExprKind::Loop(stats) => stats.iter().all(|stat| stat.is_pure()),
         }
     }
 }
@@ -653,6 +655,7 @@ impl AbstractSyntaxTree for TypeCheckedExpr {
                         .flatten(),
                 )
                 .collect(),
+            TypeCheckedExprKind::Loop(_) => unimplemented!(),
         }
     }
 }
@@ -695,6 +698,7 @@ impl TypeCheckedExpr {
             TypeCheckedExprKind::Try(_, t) => t.clone(),
             TypeCheckedExprKind::If(_, _, _, t) => t.clone(),
             TypeCheckedExprKind::IfLet(_, _, _, _, t) => t.clone(),
+            TypeCheckedExprKind::Loop(_) => Type::Every,
         }
     }
 }
@@ -2336,6 +2340,15 @@ fn typecheck_expr(
                     if_let_type,
                 ))
             }
+            ExprKind::Loop(stats) => Ok(TypeCheckedExprKind::Loop(typecheck_statement_sequence(
+                stats,
+                return_type,
+                type_table,
+                global_vars,
+                func_table,
+                type_tree,
+                scopes,
+            )?)),
         }?,
         debug_info,
     })

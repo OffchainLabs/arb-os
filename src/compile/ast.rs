@@ -661,6 +661,7 @@ pub enum ExprKind {
     Try(Box<Expr>),
     If(Box<Expr>, CodeBlock, Option<CodeBlock>),
     IfLet(StringId, Box<Expr>, CodeBlock, Option<CodeBlock>),
+    Loop(Vec<Statement>),
     NewBuffer,
 }
 

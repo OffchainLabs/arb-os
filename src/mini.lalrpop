@@ -135,7 +135,7 @@ Type: Type = {
 	<CommaedTypesInParens> => Type::Tuple(<>),
 	"[" "]" <Type> => Type::Array(Box::new(<>)),
 	"[" <s:UnsignedInteger> "]" <t:Type> => Type::FixedArray(
-		Box::new(t), 
+		Box::new(t),
 		s.to_usize().unwrap(),
 	),
 	"map" "<" <t1:Type> "," <t2:Type> ","? ">" => Type::Map(Box::new(t1), Box::new(t2)),
@@ -163,8 +163,8 @@ Ident: StringId = {
 
 Expr: Expr = {
 	<lno: @L> <t:Expr> "with" "{" "[" <i:Expr> "]" "=" <v:Expr> "}" => Expr { kind: ExprKind::ArrayOrMapMod(
-		Box::new(t), 
-		Box::new(i), 
+		Box::new(t),
+		Box::new(i),
 		Box::new(v),),
 		debug_info: DebugInfo::from(file_info.location(BytePos::from(lno), filename))},
 	<lno: @L> <t: Expr> "with" "{" <i:Ident> ":" <e: Expr> "}" => Expr { kind: ExprKind::StructMod(Box::new(t), stringtable.name_from_id(i).to_string(), Box::new(e)), debug_info: DebugInfo::from(file_info.location(BytePos::from(lno), filename))},
@@ -183,7 +183,7 @@ Expr2: Expr = {
 
 Expr3: Expr = {
 	<lno: @L> <l:Expr3> <op: BinaryOpMidfix3> <r:Expr4> => Expr::new_binary(op, l, r, file_info.location(BytePos::from(lno),filename)),
-	Expr4,	
+	Expr4,
 }
 
 BinaryOpMidfix3: BinaryOp = {
@@ -247,6 +247,7 @@ Expr11: Expr = {
 	<lno: @L> <e:Expr11> "." <u:UnsignedInteger> => Expr { kind: ExprKind::TupleRef(Box::new(e), u), debug_info: DebugInfo::from(file_info.location(BytePos::from(lno), filename))},
 	<lno: @L> "xif" <cond: Expr> <cb: CodeBlockNew> <el: ElseIf?> => Expr { kind: ExprKind::If(Box::new(cond), cb, el), debug_info: DebugInfo::from(file_info.location(BytePos::from(lno), filename))},
 	<lno: @L> "xif" "let" "Some(" <l: Ident> ")" "=" <r:Expr> <t: CodeBlockNew> <el: ElseIf?> => Expr { kind: ExprKind::IfLet(l, Box::new(r), t, el), debug_info: DebugInfo::from(file_info.location(BytePos::from(lno), filename))},
+	<lno: @L> "xloop" <cb: CodeBlock> => Expr { kind: ExprKind::Loop(cb), debug_info: DebugInfo::from(file_info.location(BytePos::from(lno), filename))},
 	Expr12,
 }
 
