@@ -97,7 +97,7 @@ public func expandingIntArray_setN(
     let chunk = arr.chunk;
     let tree = arr.contents;
     let unwinder = None<Unwinder>;
-    loop {
+    return xloop {
         if (chunk <= inChunk) {
             tree = tree with { [index/chunk] = value };
             loop {
@@ -118,7 +118,7 @@ public func expandingIntArray_setN(
         tree = unsafecast<[8]any>(tree[slot]);
         index = index % chunk;
         chunk = chunk / 8;
-    }
+    };
 }
 
 public func expandingIntArray_op(
@@ -145,12 +145,12 @@ func ear_op2(
     index: uint,
     closure: opClosure
 ) -> ([8]any, any) {
-    if (chunk == 1) {
+    return xif (chunk == 1) {
         let (newSlotContents, retVal) = closure.f(closure.val, unsafecast<uint>(tree[index]));
-        return (
+        (
             tree with { [index] = newSlotContents },
             retVal,
-        );
+        )
     } else {
         let slot = index / chunk;
         let (newSlotContents, retVal) = ear_op2(
@@ -159,11 +159,11 @@ func ear_op2(
             index%chunk,
             closure
         );
-        return (
+        (
             tree with { [slot] = newSlotContents },
             retVal,
-        );
-    }
+        )
+    };
 }
 
 public func expandingIntArray_opConsecutive(

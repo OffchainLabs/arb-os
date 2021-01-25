@@ -31,7 +31,7 @@ type MessageBatch = struct {
 }
 
 public func messageBatch_tryNew(msg: IncomingRequest) -> option<MessageBatch> {
-    if ( (msg.kind == const::L1MessageType_L2) && (bytearray_getByte(msg.msgData, 0) == const::L2MessageType_batch) ) {
+    return xif ( (msg.kind == const::L1MessageType_L2) && (bytearray_getByte(msg.msgData, 0) == const::L2MessageType_batch) ) {
         let stream = bytestream_new(msg.msgData);
         stream = bytestream_skipBytes(stream, 1)?;    // skip past type byte in message
 
@@ -41,7 +41,7 @@ public func messageBatch_tryNew(msg: IncomingRequest) -> option<MessageBatch> {
             aggregator = aggInfo.aggregator;
         }
 
-        return Some(
+        Some(
             struct {
                 template: msg with {
                     provenance: struct {
@@ -58,7 +58,7 @@ public func messageBatch_tryNew(msg: IncomingRequest) -> option<MessageBatch> {
                 stream: stream,
                 numSoFar: 0,
             }
-        );
+        )
     } elseif ( (msg.kind == const::L1MessageType_L2) && (bytearray_getByte(msg.msgData, 0) == const::L2MessageType_sequencerBatch) ) {  // sequencer batch
         let stream = bytestream_new(msg.msgData);
         stream = bytestream_skipBytes(stream, 6)?;   // skip past type byte, blocknum, and timestamp in message
@@ -69,7 +69,7 @@ public func messageBatch_tryNew(msg: IncomingRequest) -> option<MessageBatch> {
             aggregator = aggInfo.aggregator;
         }
 
-        return Some(
+        Some(
             struct {
                 template: msg with {
                     provenance: struct {
@@ -86,11 +86,11 @@ public func messageBatch_tryNew(msg: IncomingRequest) -> option<MessageBatch> {
                 stream: stream,
                 numSoFar: 0,
             }
-        );
+        )
     } else {
         // it's not a batch
-        return None;
-    }
+        None<MessageBatch>
+    };
 }
 
 public func messageBatch_get(batch: MessageBatch) -> option<(IncomingRequest, MessageBatch)> {

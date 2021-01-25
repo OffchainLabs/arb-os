@@ -35,16 +35,16 @@ func realSize(x: []uint) -> uint {
 
 func shrinkToFit(x: []uint) -> []uint {
     let reducedSize = realSize(x);
-    if (reducedSize < len(x)) {
+    return xif (reducedSize < len(x)) {
         let ret = newarray<uint>(reducedSize);
         while(reducedSize > 0) {
             reducedSize = reducedSize-1;
             ret = ret with { [reducedSize] = x[reducedSize] };
         }
-        return ret;
+        ret
     } else {
-        return x;
-    }
+        x
+    };
 }
 
 func shiftPowerOfDigit(x: []uint, n: uint) -> []uint {
@@ -305,10 +305,10 @@ public func biguint_add(x: []uint, y: []uint) -> []uint {
 
 public func biguint_subtract(x: []uint, y: []uint) -> option<[]uint> {
     let comp = biguint_compare(x, y);
-    if (comp < int(0)) {
-        return None;
+    return xif (comp < int(0)) {
+        None<[]uint>
     } elseif(comp == int(0)) {
-        return Some(biguint_zero());
+        Some(biguint_zero())
     } else {
         let resSize = realSize(x);
         let ySize = realSize(y);
@@ -329,8 +329,8 @@ public func biguint_subtract(x: []uint, y: []uint) -> option<[]uint> {
             }
             i = i+1;
         }
-        return Some(ret);
-    }
+        Some(ret)
+    };
 }
 
 public func biguint_mul(x: []uint, y: []uint) -> []uint {
