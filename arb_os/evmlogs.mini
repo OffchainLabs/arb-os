@@ -25,12 +25,12 @@ public func evmlogs_appendAny(logs: EvmLogs, item: any) -> EvmLogs {
 
 public func evmlogs_numLogs(logs: EvmLogs) -> uint {
     let ret = 0;
-    loop {
+    return xloop {
         if (logs == unsafecast<EvmLogs>(())) {
             return ret;
         } else {
             ret = ret + 1;
             logs = unsafecast<EvmLogs>(logs.rest);
         }
-    }
+    };
 }

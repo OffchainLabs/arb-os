@@ -58,7 +58,7 @@ public func storageMap_size(kvs: StorageMap) -> uint {
 public func storageMap_get(kvs: StorageMap, key: uint) -> uint {
     let s = kvs.tree;
     let reductionFactor = 1;
-    loop {
+    return xloop {
         if (s == unsafecast<StorageMapNode>(0)) {
             // empty subtree
             return 0;
@@ -74,7 +74,7 @@ public func storageMap_get(kvs: StorageMap, key: uint) -> uint {
             s = unsafecast<StorageMapNode>(s[(key/reductionFactor) & 0x7]);
             reductionFactor = reductionFactor * 8;
         }
-    }
+    };
 }
 
 // An Unwinder remembers how to reassemble the tree as we traverse back up it.
@@ -89,7 +89,7 @@ type Unwinder = struct {
 
 public func storageMap_set(s: StorageMap, key: uint, value: uint) -> StorageMap {
     let (utree, maybeUnwinder, delta) = storageMap_set2(s.tree, key, value);
-    loop {
+    return xloop {
         if let Some(unwinder) = maybeUnwinder {
             utree = unwinder.kvs with {
                 [unwinder.index] = utree
@@ -101,13 +101,13 @@ public func storageMap_set(s: StorageMap, key: uint, value: uint) -> StorageMap 
             }
             return s with { tree: utree };
         }
-    }
+    };
 }
 
 public func storageMap_set2(s: StorageMapNode, key: uint, value: uint) -> (StorageMapNode, option<Unwinder>, int) {
     let reductionFactor = 1;
     let unwinder = None<Unwinder>;
-    loop {
+    return xloop {
         if (s == unsafecast<StorageMapNode>(0)) {
             if (value == 0) {
                 // writing zero to an empty slot; do nothing
@@ -165,7 +165,7 @@ public func storageMap_set2(s: StorageMapNode, key: uint, value: uint) -> (Stora
             s = unsafecast<StorageMapNode>(s[slot]);
             reductionFactor = reductionFactor * 8;
         }
-    }
+    };
 }
 
 public func storageMap_delete(s: StorageMap, key: uint) -> StorageMap {
@@ -190,22 +190,22 @@ public func storageMap_forall_tree(
     closure: func(uint, uint, any) -> any,
     state: any
 ) -> any {
-    if (t == unsafecast<StorageMapNode>(0)) {
-        return state;
+    return xif (t == unsafecast<StorageMapNode>(0)) {
+        state
     } elseif (asm(t,) uint { length } == 2) {
-        return closure(
+        closure(
             unsafecast<StorageMapCell>(t).key,
             unsafecast<StorageMapCell>(t).value,
             state
-        );
+        )
    } else {
         let i = 0;
         while (i < 8) {
             state = storageMap_forall_tree(unsafecast<StorageMapNode>(t[i]), closure, state);
             i = i+1;
         }
-        return state;
-   }
+        state
+   };
 }
 
 public func storageMap_serialize(s: StorageMap) -> ByteArray {

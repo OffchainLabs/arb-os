@@ -113,8 +113,8 @@ public func hasher_new() -> Hasher {
 }
 
 public func hasher_pushByte(h: Hasher, b: uint) -> Hasher {
-    if (h.offset == 135) {
-        return h with {
+    return xif (h.offset == 135) {
+        h with {
             accumulator: asm(
                 h.accumulator with {
                     [4] = h.accumulator[4] ^ asm(8*7, b & 0xff) uint { shl }
@@ -122,17 +122,17 @@ public func hasher_pushByte(h: Hasher, b: uint) -> Hasher {
             ) [7]uint { keccakf }
         } with {
             offset: 0
-        };
+        }
     } else {
         let word = h.offset / 32;
-        return h with {
+        h with {
             accumulator: h.accumulator with {
                 [word] = h.accumulator[word] ^ asm(8*(h.offset&0x1f), b&0xff) uint { shl }
             }
         } with {
             offset: h.offset+1
-        };
-    }
+        }
+    };
 }
 
 public func hasher_pushN_be(h: Hasher, val: uint, nbytes: uint) -> Hasher {
@@ -149,7 +149,7 @@ public func hasher_pushN_le(h: Hasher, val: uint, nbytes: uint) -> Hasher {
     }
     let accum = h.accumulator;
     let offset = h.offset;
-    loop {  // need to loop because data might cross word/block boundary
+    return xloop {  // need to loop because data might cross word/block boundary
         let word = offset / 32;
         let align = offset & 0x1f;
         if ( (align+nbytes <= 8) || ((word < 4) && (align+nbytes <= 32)) ){
@@ -190,7 +190,7 @@ public func hasher_pushN_le(h: Hasher, val: uint, nbytes: uint) -> Hasher {
                 nbytes = nbytes - nb;
             }
         }
-    }
+    };
 }
 
 public func hasher_finish(h: Hasher) -> bytes32 {
