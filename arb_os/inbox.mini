@@ -144,7 +144,7 @@ public impure func inbox_get() -> IncomingRequest {
     // This is a loop because some events don't generate a message that we can return,
     //       so we keep trying until we find something we can return.
 
-    loop {
+    return xloop {
         while (incomingRequestQueue_isEmpty(globalInbox.queue)) {
             if let Some(seqInfo) = globalInbox.sequencer {
                 globalInbox = getFromL1InboxSequencer(globalInbox, seqInfo);
@@ -187,7 +187,7 @@ public impure func inbox_get() -> IncomingRequest {
                 requestId: uint(hash(bytes32(chainParams_chainId()), bytes32(ebMsg.requestId)))
             };
         }
-    }
+    };
 }
 
 impure func getFromL1Inbox(inbox: Inbox) -> Inbox {
@@ -402,7 +402,7 @@ func releaseDelayedRequests(
     blockNum: uint,
     timestamp: uint,
 ) -> (SequencerState, IncomingRequestQueue) {
-    loop {
+    return xloop {
         if let Some(res) = incomingRequestQueue_get(seqInfo.delayQueue) {
             let (udq, rawMsg) = res;
             let msg = unsafecast<IncomingRequest>(rawMsg);
@@ -421,7 +421,7 @@ func releaseDelayedRequests(
         } else {
             return (seqInfo, inQ);
         }
-    }
+    };
 }
 
 
@@ -469,7 +469,7 @@ public impure func inbox_getNextUnpackedRequest() -> (
     option<TxRequestData>,    // if it was an L2 tx message
 ) {
     let msg = unsafecast<IncomingRequest>(());   // value will be re-initialized before use
-    loop {
+    return xloop {
         if let Some(res) = incomingRequestQueue_get(globalInputQueue.txQ) {
             let (newQ, tx) = res;
             globalInputQueue = globalInputQueue with {
@@ -592,7 +592,7 @@ public impure func inbox_getNextUnpackedRequest() -> (
                 return (Some(msg), None<TxRequestData>);
             }
         }
-    }
+    };
 }
 
 impure func translateUnsignedTx(request: IncomingRequest) -> option<TxRequestData> {

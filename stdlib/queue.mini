@@ -155,7 +155,7 @@ public func queuestack_push(qs: QueueStack, q: Queue) -> QueueStack {
 }
 
 public func queuestack_get(qs: QueueStack) -> option<(QueueStack, any)> {
-    loop {
+    return xloop {
         let cell = unsafecast<QueueStackCell>(qs?);
         if let Some(res) = queue_get(cell.head) {
             let (uq, item) = res;
@@ -166,5 +166,5 @@ public func queuestack_get(qs: QueueStack) -> option<(QueueStack, any)> {
         } else {
             qs = cell.rest;
         }
-    }
+    };
 }

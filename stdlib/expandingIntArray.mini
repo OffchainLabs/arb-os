@@ -97,7 +97,7 @@ public func expandingIntArray_setN(
     let chunk = arr.chunk;
     let tree = arr.contents;
     let unwinder = None<Unwinder>;
-    loop {
+    return xloop {
         if (chunk <= inChunk) {
             tree = tree with { [index/chunk] = value };
             loop {
@@ -118,7 +118,7 @@ public func expandingIntArray_setN(
         tree = unsafecast<[8]any>(tree[slot]);
         index = index % chunk;
         chunk = chunk / 8;
-    }
+    };
 }
 
 public func expandingIntArray_op(

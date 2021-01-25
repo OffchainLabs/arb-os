@@ -58,7 +58,7 @@ public func builtin_kvsGet(kvs: Kvs, key: any) -> option<any> {
     let hashedKey = uint(hash(key));
     let s = kvs.tree;
     let reductionFactor = 1;
-    loop {
+    return xloop {
         if (s == unsafecast<KvsNode>(0)) {
             // empty subtree
             return None;
@@ -74,7 +74,7 @@ public func builtin_kvsGet(kvs: Kvs, key: any) -> option<any> {
             s = unsafecast<KvsNode>(s[(hashedKey/reductionFactor) & 0x7]);
             reductionFactor = reductionFactor * 8;
         }
-    }
+    };
 }
 
 public func builtin_kvsHasKey(kvs: Kvs, key: any) -> bool {
@@ -93,7 +93,7 @@ type Unwinder = struct {
 
 public func builtin_kvsSet(s: Kvs, key: any, value: any) -> Kvs {
     let (utree, maybeUnwinder, delta) = kvs_set2(s.tree, key, Some(value));
-    loop {
+    return xloop {
         if let Some(unwinder) = maybeUnwinder {
             utree = unwinder.kvs with {
                 [unwinder.index] = utree
@@ -105,14 +105,14 @@ public func builtin_kvsSet(s: Kvs, key: any, value: any) -> Kvs {
             }
             return s with { tree: utree };
         }
-    }
+    };
 }
 
 func kvs_set2(s: KvsNode, key: any, value: option<any>) -> (KvsNode, option<Unwinder>, int) {
     let hashedKey = uint(hash(key));
     let reductionFactor = 1;
     let unwinder = None<Unwinder>;
-    loop {
+    return xloop {
         if (s == unsafecast<KvsNode>(0)) {
             if (value == None<any>) {
                 // writing None to an empty slot; do nothing
@@ -170,12 +170,12 @@ func kvs_set2(s: KvsNode, key: any, value: option<any>) -> (KvsNode, option<Unwi
             s = unsafecast<KvsNode>(s[slot]);
             reductionFactor = reductionFactor * 8;
         }
-    }
+    };
 }
 
 public func builtin_kvsDelete(s: Kvs, key: uint) -> Kvs {
     let (utree, maybeUnwinder, delta) = kvs_set2(s.tree, key, None<any>);
-    loop {
+    return xloop {
         if let Some(unwinder) = maybeUnwinder {
             utree = unwinder.kvs with {
                 [unwinder.index] = utree
@@ -187,7 +187,7 @@ public func builtin_kvsDelete(s: Kvs, key: uint) -> Kvs {
             }
             return s with { tree: utree };
         }
-    }
+    };
 }
 
 // apply a closure to all items in the storageMap, in sequence

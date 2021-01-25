@@ -120,7 +120,7 @@ impure func parseEvmCodeSegment(bs: ByteStream) -> option<EvmInstructionStack> {
     let stack = evmInstructionStack_new();
     let evmPc = 0;
     let reachable = true;
-    loop {
+    return xloop {
         if let Some(res) = bytestream_getByte(bs) {
             let (ubs, opcode) = res;
             bs = ubs;
@@ -166,7 +166,7 @@ impure func parseEvmCodeSegment(bs: ByteStream) -> option<EvmInstructionStack> {
         } else {
             return Some(stack);
         }
-    }
+    };
 }
 
 public impure func codeSegment_init() {
@@ -208,7 +208,7 @@ impure func generateCodeForEvmSegment(
     let evmJumpTable = newmap<uint, AvmCodePoint>;
     let pcTable = stack_new();
 
-    loop {
+    return xloop {
         if let Some(res) = evmInstructionStack_pop(insns) {
             let invalidInstruction = false;
             let (uinsns, insn) = res;
@@ -525,7 +525,7 @@ impure func generateCodeForEvmSegment(
         } else {
             return (code, evmJumpTable, pcTable);
         }
-    }
+    };
 }
 
 public impure func translateEvmCodeSegment(

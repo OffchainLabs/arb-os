@@ -760,7 +760,7 @@ public impure func evmCallStack_returnFromCall(
 func storageReclaimedForSDQ(topFrame: EvmCallFrame) -> uint {
     let q = topFrame.selfDestructQueue;
     let ret = 0;
-    loop {
+    return xloop {
         if let Some(res) = queue_get(q) {
             let (uq, rawItem) = res;
             q = uq;
@@ -771,7 +771,7 @@ func storageReclaimedForSDQ(topFrame: EvmCallFrame) -> uint {
         } else {
             return ret;
         }
-    }
+    };
 }
 
 func saveAvmStack() -> Stack {
@@ -967,13 +967,13 @@ public impure func evmCallStack_topFrame() -> option<EvmCallFrame> {
 
 public impure func evmCallStack_oldestCallFrame() -> option<EvmCallFrame> {
     let frame = globalCallStack?;
-    loop {
+    return xloop {
         if let Some(parent) = frame.parent {
             frame = parent;
         } else {
             return Some(frame);
         }
-    }
+    };
 }
 
 public impure func evmCallStack_runningAsAccount() -> option<Account> {
