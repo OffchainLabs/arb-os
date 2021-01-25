@@ -240,11 +240,6 @@ fn mavm_codegen_code_block<'a>(
         let _scope = scopes.pop();
         Ok((lg, code, prepushed_vals_expr))
     } else {
-        code.push(Instruction::from_opcode_imm(
-            Opcode::AVMOpcode(AVMOpcode::Noop),
-            Value::new_tuple(vec![]),
-            debug_info,
-        ));
         code.push(Instruction::from_opcode(
             Opcode::Label(bottom_label),
             debug_info,
