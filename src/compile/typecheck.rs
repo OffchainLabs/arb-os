@@ -170,10 +170,6 @@ fn inline(
                         Some(TypeCheckedStatement {
                             kind: TypeCheckedStatementKind::If(_),
                             debug_info,
-                        })
-                        | Some(TypeCheckedStatement {
-                            kind: TypeCheckedStatementKind::IfLet(_, _, _, _),
-                            debug_info,
                         }) => {
                             if let Some(statement) = last {
                                 code.push(statement);
@@ -258,12 +254,6 @@ pub enum TypeCheckedStatementKind {
     AssignGlobal(usize, TypeCheckedExpr),
     While(TypeCheckedExpr, Vec<TypeCheckedStatement>),
     If(TypeCheckedIfArm),
-    IfLet(
-        StringId,
-        TypeCheckedExpr,
-        Vec<TypeCheckedStatement>,
-        Option<Vec<TypeCheckedStatement>>,
-    ),
     Asm(Vec<Instruction>, Vec<TypeCheckedExpr>),
     DebugPrint(TypeCheckedExpr),
 }
@@ -284,15 +274,6 @@ impl MiniProperties for TypeCheckedStatement {
                 exp.is_pure() && block.iter().all(|statement| statement.is_pure())
             }
             TypeCheckedStatementKind::If(if_arm) => if_arm.is_pure(),
-            TypeCheckedStatementKind::IfLet(_, expr, block, eblock) => {
-                expr.is_pure()
-                    && block.iter().all(|statement| statement.is_pure())
-                    && eblock
-                        // This clone can most likely be avoided and it would probably be good idea to do so
-                        .clone()
-                        .map(|statements| statements.iter().all(|statement| statement.is_pure()))
-                        .unwrap_or(true)
-            }
             TypeCheckedStatementKind::Asm(instrs, exprs) => {
                 instrs.iter().all(|instr| instr.is_pure())
                     && exprs.iter().all(|expr| expr.is_pure())
@@ -321,22 +302,6 @@ impl AbstractSyntaxTree for TypeCheckedStatement {
                 )
                 .collect(),
             TypeCheckedStatementKind::If(arm) => vec![TypeCheckedNode::IfArm(arm)],
-            TypeCheckedStatementKind::IfLet(_, exp, stats, ostats) => {
-                vec![TypeCheckedNode::Expression(exp)]
-                    .into_iter()
-                    .chain(
-                        stats
-                            .iter_mut()
-                            .map(|stat| TypeCheckedNode::Statement(stat)),
-                    )
-                    .chain(
-                        ostats
-                            .iter_mut()
-                            .flatten()
-                            .map(|stat| TypeCheckedNode::Statement(stat)),
-                    )
-                    .collect()
-            }
             TypeCheckedStatementKind::Asm(_, exps) => exps
                 .iter_mut()
                 .map(|exp| TypeCheckedNode::Expression(exp))
@@ -1262,57 +1227,6 @@ fn typecheck_statement<'a>(
                 scopes,
             )?;
             Ok((TypeCheckedStatementKind::DebugPrint(tce), vec![]))
-        }
-        StatementKind::IfLet(l, r, if_block, else_block) => {
-            let tcr = typecheck_expr(
-                r,
-                type_table,
-                global_vars,
-                func_table,
-                return_type,
-                type_tree,
-                scopes,
-            )?;
-            let tct = match tcr.get_type() {
-                Type::Option(t) => *t,
-                unexpected => {
-                    return Err(new_type_error(
-                        format!("Expected option type got: \"{}\"", unexpected.display()),
-                        debug_info.location,
-                    ))
-                }
-            };
-            Ok((
-                TypeCheckedStatementKind::IfLet(
-                    *l,
-                    tcr,
-                    typecheck_statement_sequence_with_bindings(
-                        if_block,
-                        return_type,
-                        type_table,
-                        global_vars,
-                        func_table,
-                        &[(*l, tct.clone())],
-                        type_tree,
-                        scopes,
-                    )?,
-                    else_block
-                        .clone()
-                        .map(|block| {
-                            typecheck_statement_sequence(
-                                &block,
-                                return_type,
-                                type_table,
-                                global_vars,
-                                func_table,
-                                type_tree,
-                                scopes,
-                            )
-                        })
-                        .transpose()?,
-                ),
-                vec![(*l, tct)],
-            ))
         }
     }?;
     Ok((

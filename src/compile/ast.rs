@@ -542,7 +542,6 @@ pub enum StatementKind {
     Assign(StringId, Expr),
     While(Expr, Vec<Statement>),
     If(IfArm),
-    IfLet(StringId, Expr, Vec<Statement>, Option<Vec<Statement>>),
     Asm(Vec<Instruction>, Vec<Expr>),
     DebugPrint(Expr),
 }
