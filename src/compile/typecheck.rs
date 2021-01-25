@@ -80,7 +80,7 @@ pub fn new_type_error(msg: String, location: Option<Location>) -> TypeError {
 
 ///Keeps track of compiler enforced properties, currently only tracks purity, may be extended to
 /// keep track of potential to throw or other properties.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Eq, PartialEq)]
 pub struct PropertiesList {
     pub pure: bool,
 }
@@ -239,14 +239,14 @@ impl TypeCheckedFunc {
 }
 
 ///A mini statement that has been type checked.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Eq, PartialEq)]
 pub struct TypeCheckedStatement {
     pub kind: TypeCheckedStatementKind,
     pub debug_info: DebugInfo,
 }
 
 ///A mini statement that has been type checked.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Eq, PartialEq)]
 pub enum TypeCheckedStatementKind {
     Noop(),
     ReturnVoid(),
@@ -349,14 +349,14 @@ impl AbstractSyntaxTree for TypeCheckedStatement {
 }
 
 ///A `MatchPattern` that has gone through type checking.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Eq, PartialEq)]
 pub enum TypeCheckedMatchPattern {
     Simple(StringId, Type),
     Tuple(Vec<TypeCheckedMatchPattern>, Type),
 }
 
 ///An `IfArm` that has been type checked.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Eq, PartialEq)]
 pub enum TypeCheckedIfArm {
     Cond(
         TypeCheckedExpr,
@@ -409,14 +409,14 @@ impl MiniProperties for TypeCheckedIfArm {
 }
 
 ///A mini expression with associated `DebugInfo` that has been type checked.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Eq, PartialEq)]
 pub struct TypeCheckedExpr {
     pub kind: TypeCheckedExprKind,
     pub debug_info: DebugInfo,
 }
 
 ///A mini expression that has been type checked.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Eq, PartialEq)]
 pub enum TypeCheckedExprKind {
     NewBuffer,
     UnaryOp(UnaryOp, Box<TypeCheckedExpr>, Type),
@@ -696,7 +696,7 @@ impl TypeCheckedExpr {
 }
 
 ///A `StructField` that has been type checked.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Eq, PartialEq)]
 pub struct TypeCheckedStructField {
     pub name: String,
     pub value: TypeCheckedExpr,
@@ -3173,7 +3173,7 @@ fn typecheck_binary_op_const(
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Eq, PartialEq)]
 pub struct TypeCheckedCodeBlock {
     pub body: Vec<TypeCheckedStatement>,
     pub ret_expr: Option<Box<TypeCheckedExpr>>,
