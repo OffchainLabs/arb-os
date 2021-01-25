@@ -46,7 +46,7 @@ fn mk_label(idx: usize) -> Instruction {
 }
 
 fn mk_func_label(idx: usize) -> Instruction {
-    Instruction::from_opcode(Opcode::Label(Label::Evm(idx)), DebugInfo::from(None))
+    Instruction::from_opcode(Opcode::Label(Label::WasmFunc(idx)), DebugInfo::from(None))
 }
 
 fn cjump(idx: usize) -> Instruction {
@@ -63,6 +63,10 @@ fn call_jump(idx: u32) -> Instruction {
 
 fn get_frame() -> Instruction {
     Instruction::from_opcode_imm(Opcode::AVMOpcode(AVMOpcode::Xget), Value::Int(Uint256::from_usize(0)), DebugInfo::from(None))
+}
+
+fn get_return_pc() -> Instruction {
+    Instruction::from_opcode_imm(Opcode::AVMOpcode(AVMOpcode::Xget), Value::Int(Uint256::from_usize(1)), DebugInfo::from(None))
 }
 
 fn push_frame(v: Value) -> Instruction {
@@ -87,13 +91,13 @@ fn set64_from_buffer(loc: usize) -> Instruction {
 
 fn adjust_stack(res : &mut Vec<Instruction>, diff : usize, num : usize) {
     if diff == 0 { return; }
-    for i in 0..num {
+    for _i in 0..num {
         res.push(simple_op(AVMOpcode::AuxPush));
     }
-    for i in 0..diff {
+    for _i in 0..diff {
         res.push(simple_op(AVMOpcode::Pop));
     }
-    for i in 0..num {
+    for _i in 0..num {
         res.push(simple_op(AVMOpcode::AuxPush));
     }
 }
@@ -148,8 +152,8 @@ fn handle_function(m : &Module, func : &FuncBody, idx : usize, mut label : usize
     let mut bptr : usize = 0;
 
     // Construct the function top level frame
-    let end_label = label;
-    label = label + 1;
+    let end_label = label+1;
+    label = label + 2;
     bptr = bptr + 1;
     let rets = num_func_returns(ftype);
 
@@ -300,7 +304,7 @@ fn handle_function(m : &Module, func : &FuncBody, idx : usize, mut label : usize
             // Just keep the expression stack
             Call(x) => {
                 let ftype = find_func_type(m, *x);
-                // println!("calling {} with type {:?}", x, ftype);
+                println!("calling {} with type {:?} return label {}", x, ftype, label+1);
                 let return_label = label+1;
                 label = label+1;
                 // push new frame to aux stack
@@ -314,6 +318,9 @@ fn handle_function(m : &Module, func : &FuncBody, idx : usize, mut label : usize
                 }
                 res.push(call_jump(*x));
                 res.push(mk_label(return_label));
+                // Pop stack frame
+                res.push(simple_op(AVMOpcode::AuxPop));
+                res.push(simple_op(AVMOpcode::Pop));
                 ptr = ptr - ftype.params().len() + num_func_returns(ftype);
             },
             /*
@@ -618,6 +625,10 @@ fn handle_function(m : &Module, func : &FuncBody, idx : usize, mut label : usize
         }
     }
 
+    // Function return
+    res.push(get_return_pc());
+    res.push(simple_op(AVMOpcode::Jump));
+
     return (res, label);
 
 }
@@ -638,9 +649,11 @@ pub fn resolve_labels(arr: Vec<Instruction>) -> Vec<Instruction> {
     for (idx, inst) in arr.iter().enumerate() {
         match inst.opcode {
             Opcode::Label(Label::Evm(num)) => {
+                println!("Foudn label {} -> {}", num, idx);
                 labels.insert(Label::Evm(num), CodePt::Internal(idx));
             }
             Opcode::Label(Label::WasmFunc(num)) => {
+                println!("Foudn func label {} -> {}", num, idx);
                 labels.insert(Label::WasmFunc(num), CodePt::Internal(idx));
             }
             _ => {}
@@ -658,12 +671,13 @@ pub fn load(fname: String) -> Vec<Instruction> {
     assert!(module.code_section().is_some());
 
     let code_section = module.code_section().unwrap(); // Part of the module with functions code
+    let f_count = code_section.bodies().len();
 
-    println!("Function count in wasm file: {}", code_section.bodies().len());
+    println!("Function count in wasm file: {}", f_count);
 
     // Put initial frame to aux stack
     let mut init = vec![];
-    init.push(push_frame(Value::new_tuple(vec![Value::new_buffer(vec![])])));
+    init.push(push_frame(Value::new_tuple(vec![Value::new_buffer(vec![]), Value::Label(Label::WasmFunc(f_count))])));
 
     // Add test argument to the frame
     init.push(get_frame());
@@ -679,8 +693,12 @@ pub fn load(fname: String) -> Vec<Instruction> {
         let (mut res, n_label) = handle_function(&module, f, idx, label);
         init.append(&mut res);
         label = n_label;
+        println!("labels {}", label);
     }
 
+    init.push(mk_func_label(f_count));
+    init.push(simple_op(AVMOpcode::AuxPop));
+    init.push(simple_op(AVMOpcode::Pop));
     init.push(simple_op(AVMOpcode::Noop));
 
     clear_labels(resolve_labels(init))
