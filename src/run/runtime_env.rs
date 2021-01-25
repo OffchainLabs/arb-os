@@ -2,7 +2,7 @@
  * Copyright 2020, Offchain Labs, Inc. All rights reserved.
  */
 
-use crate::mavm::Value;
+use crate::mavm::{Value, Buffer};
 use crate::run::{load_from_file, ProfilerMode};
 use crate::uint256::Uint256;
 use ethers_core::rand::rngs::StdRng;
@@ -23,7 +23,7 @@ pub struct RuntimeEnvironment {
     pub current_block_num: Uint256,
     pub current_timestamp: Uint256,
     pub logs: Vec<Value>,
-    pub sends: Vec<Value>,
+    pub sends: Vec<Vec<u8>>,
     pub next_inbox_seq_num: Uint256,
     pub caller_seq_nums: HashMap<Uint256, Uint256>,
     next_id: Uint256, // used to assign unique (but artificial) txids to messages
@@ -175,7 +175,8 @@ impl RuntimeEnvironment {
             Value::Int(self.current_timestamp.clone()),
             Value::Int(sender_addr),
             Value::Int(self.next_inbox_seq_num.clone()),
-            bytestack_from_bytes(msg),
+            Value::Int(Uint256::from_usize(msg.len())),
+            Value::new_buffer(msg.to_vec()),
         ]);
         let msg_id =
             Uint256::avm_hash2(&Uint256::from_u64(self.chain_id), &self.next_inbox_seq_num);
@@ -202,7 +203,7 @@ impl RuntimeEnvironment {
                 &sender_addr,
                 &Uint256::avm_hash2(
                     &Uint256::from_u64(self.chain_id),
-                    &hash_bytestack(bytestack_from_bytes(msg)).unwrap(),
+                    &Uint256::from_bytes(&keccak256(msg)),
                 ),
             )
         } else {
@@ -220,7 +221,7 @@ impl RuntimeEnvironment {
                 &sender_addr,
                 &Uint256::avm_hash2(
                     &Uint256::from_u64(self.chain_id),
-                    &hash_bytestack(bytestack_from_bytes(msg)).unwrap(),
+                    &hash_bytestack(_bytestack_from_bytes(msg)).unwrap(),
                 ),
             )
         } else {
@@ -495,34 +496,6 @@ impl RuntimeEnvironment {
         self.insert_l2_message(sender_addr, &buf, false);
     }
 
-    pub fn insert_erc20_deposit_message(
-        &mut self,
-        sender_addr: Uint256,
-        token_addr: Uint256,
-        payee: Uint256,
-        amount: Uint256,
-    ) {
-        let mut buf = token_addr.to_bytes_be();
-        buf.extend(payee.to_bytes_be());
-        buf.extend(amount.to_bytes_be());
-
-        self.insert_l1_message(1, sender_addr, &buf);
-    }
-
-    pub fn insert_erc721_deposit_message(
-        &mut self,
-        sender_addr: Uint256,
-        token_addr: Uint256,
-        payee: Uint256,
-        amount: Uint256,
-    ) {
-        let mut buf = token_addr.to_bytes_be();
-        buf.extend(payee.to_bytes_be());
-        buf.extend(amount.to_bytes_be());
-
-        self.insert_l1_message(2, sender_addr, &buf);
-    }
-
     pub fn insert_eth_deposit_message(
         &mut self,
         sender_addr: Uint256,
@@ -590,12 +563,13 @@ impl RuntimeEnvironment {
             .collect()
     }
 
-    pub fn push_send(&mut self, send_item: Value) {
-        self.sends.push(send_item.clone());
-        self.recorder.add_send(send_item);
+    pub fn push_send(&mut self, size: Uint256, buf: Buffer) {
+        let contents = buf.as_bytes(size.to_usize().unwrap());
+        self.sends.push(contents.clone());
+        self.recorder.add_send(contents);
     }
 
-    pub fn get_all_sends(&self) -> Vec<Value> {
+    pub fn get_all_sends(&self) -> Vec<Vec<u8>> {
         self.logs
             .clone()
             .into_iter()
@@ -606,11 +580,13 @@ impl RuntimeEnvironment {
     }
 }
 
-fn get_send_contents(log: Value) -> Option<Value> {
+fn get_send_contents(log: Value) -> Option<Vec<u8>> {
     if let Value::Tuple(tup) = log {
         if let Value::Int(kind) = &tup[0] {
             if kind == &Uint256::from_u64(2) {
-                Some(tup[1].clone())
+                let sz = if let Value::Int(usz) = &tup[3] { usz.to_usize().unwrap() } else { panic!() };
+                let buf = if let Value::Buffer(buf) = &tup[4] { buf } else { panic!() };
+                Some(buf.as_bytes(sz))
             } else {
                 None
             }
@@ -777,7 +753,7 @@ impl ArbosReceipt {
             } else {
                 return None;
             };
-            let return_data = bytes_from_bytestack(tup[1].clone())?;
+            let return_data = size_buffer_tuple_to_bytes(&tup[1])?;
             Some((return_code.clone(), return_data, tup[2].clone()))
         } else {
             None
@@ -866,6 +842,20 @@ impl ArbosReceipt {
 
     pub fn get_gas_used_so_far(&self) -> Uint256 {
         self.gas_so_far.clone()
+    }
+}
+
+fn size_buffer_tuple_to_bytes(val: &Value) -> Option<Vec<u8>> {
+    if let Value::Tuple(tup) = val {
+        if let (Value::Int(usz), Value::Buffer(buf)) = (&tup[0], &tup[1]) {
+            Some(buf.as_bytes(usz.to_usize().unwrap()))
+        } else {
+            println!("sizebuffertuple got {}", val);
+            None
+        }
+    } else {
+        println!("sizebuffertuple got {}", val);
+        None
     }
 }
 
@@ -990,7 +980,7 @@ impl EvmLog {
                 } else {
                     panic!()
                 },
-                data: bytes_from_bytestack(tup[1].clone()).unwrap(),
+                data: size_buffer_tuple_to_bytes(&tup[1]).unwrap(),
                 vals: tup[2..]
                     .iter()
                     .map(|v| {
@@ -1023,26 +1013,26 @@ impl EvmLog {
     }
 }
 
-pub fn bytestack_from_bytes(b: &[u8]) -> Value {
+pub fn _bytestack_from_bytes(b: &[u8]) -> Value {
     Value::new_tuple(vec![
         Value::Int(Uint256::from_usize(b.len())),
-        bytestack_from_bytes_2(b, Value::none()),
+        _bytestack_from_bytes_2(b, Value::none()),
     ])
 }
 
-fn bytestack_from_bytes_2(b: &[u8], so_far: Value) -> Value {
+fn _bytestack_from_bytes_2(b: &[u8], so_far: Value) -> Value {
     let size = b.len();
     if size > 32 {
-        bytestack_from_bytes_2(
+        _bytestack_from_bytes_2(
             &b[32..],
-            Value::new_tuple(vec![bytestack_build_uint(&b[..32]), so_far]),
+            Value::new_tuple(vec![_bytestack_build_uint(&b[..32]), so_far]),
         )
     } else {
-        Value::new_tuple(vec![bytestack_build_uint(b), so_far])
+        Value::new_tuple(vec![_bytestack_build_uint(b), so_far])
     }
 }
 
-fn bytestack_build_uint(b: &[u8]) -> Value {
+fn _bytestack_build_uint(b: &[u8]) -> Value {
     let mut ui = Uint256::zero();
     for j in (0..32) {
         if j < b.len() {
@@ -1085,7 +1075,7 @@ pub fn hash_bytestack(bs: Value) -> Option<Uint256> {
 #[test]
 fn test_hash_bytestack() {
     let buf = hex::decode("000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f303132333435363738393a3b3c3d3e3f404142").unwrap();
-    let h = hash_bytestack(bytestack_from_bytes(&buf)).unwrap();
+    let h = hash_bytestack(_bytestack_from_bytes(&buf)).unwrap();
     assert_eq!(
         h,
         Uint256::from_string_hex(
@@ -1095,18 +1085,18 @@ fn test_hash_bytestack() {
     );
 }
 
-pub fn bytes_from_bytestack(bs: Value) -> Option<Vec<u8>> {
+pub fn _bytes_from_bytestack(bs: Value) -> Option<Vec<u8>> {
     if let Value::Tuple(tup) = bs {
         if let Value::Int(ui) = &tup[0] {
             if let Some(nbytes) = ui.to_usize() {
-                return bytes_from_bytestack_2(tup[1].clone(), nbytes);
+                return _bytes_from_bytestack_2(tup[1].clone(), nbytes);
             }
         }
     }
     None
 }
 
-fn bytes_from_bytestack_2(cell: Value, nbytes: usize) -> Option<Vec<u8>> {
+fn _bytes_from_bytestack_2(cell: Value, nbytes: usize) -> Option<Vec<u8>> {
     if nbytes == 0 {
         Some(vec![])
     } else if let Value::Tuple(tup) = cell {
@@ -1114,7 +1104,7 @@ fn bytes_from_bytestack_2(cell: Value, nbytes: usize) -> Option<Vec<u8>> {
         if let Value::Int(mut int_val) = tup[0].clone() {
             let _256 = Uint256::from_usize(256);
             if (nbytes % 32) == 0 {
-                let mut sub_arr = match bytes_from_bytestack_2(tup[1].clone(), nbytes - 32) {
+                let mut sub_arr = match _bytes_from_bytestack_2(tup[1].clone(), nbytes - 32) {
                     Some(arr) => arr,
                     None => {
                         return None;
@@ -1129,7 +1119,8 @@ fn bytes_from_bytestack_2(cell: Value, nbytes: usize) -> Option<Vec<u8>> {
                 sub_arr.append(&mut this_arr);
                 Some(sub_arr)
             } else {
-                let mut sub_arr = match bytes_from_bytestack_2(tup[1].clone(), 32 * (nbytes / 32)) {
+                let mut sub_arr = match _bytes_from_bytestack_2(tup[1].clone(), 32 * (nbytes / 32))
+                {
                     Some(arr) => arr,
                     None => {
                         return None;
@@ -1161,7 +1152,7 @@ pub struct RtEnvRecorder {
     format_version: u64,
     inbox: Vec<Value>,
     logs: Vec<Value>,
-    sends: Vec<Value>,
+    sends: Vec<Vec<u8>>,
 }
 
 impl RtEnvRecorder {
@@ -1182,7 +1173,7 @@ impl RtEnvRecorder {
         self.logs.push(log_item);
     }
 
-    fn add_send(&mut self, send_item: Value) {
+    fn add_send(&mut self, send_item: Vec<u8>) {
         self.sends.push(send_item);
     }
 
@@ -1244,7 +1235,7 @@ impl RtEnvRecorder {
             return false;
         }
         if !(self.sends == machine.runtime_env.recorder.sends) {
-            print_output_differences(
+            print_output_differences_bytevec(
                 "send",
                 machine.runtime_env.recorder.sends,
                 self.sends.clone(),
@@ -1331,6 +1322,27 @@ fn print_output_differences(kind: &str, seen: Vec<Value>, expected: Vec<Value>) 
     }
 }
 
+fn print_output_differences_bytevec(kind: &str, seen: Vec<Vec<u8>>, expected: Vec<Vec<u8>>) {
+    if seen.len() != expected.len() {
+        println!(
+            "{} mismatch: expected {}, got {}",
+            kind,
+            expected.len(),
+            seen.len()
+        );
+        return;
+    } else {
+        for i in 0..(seen.len()) {
+            if !(seen[i] == expected[i]) {
+                println!("{} {} mismatch:", kind, i);
+                println!("expected: {:?}", expected[i]);
+                println!("seen: {:?}", seen[i]);
+                return;
+            }
+        }
+    }
+}
+
 pub fn replay_from_testlog_file(
     filename: &str,
     require_same_gas: bool,
@@ -1383,7 +1395,7 @@ fn logfile_replay_tests() {
 fn test_rust_bytestacks() {
     let before =
         "The quick brown fox jumped over the lazy dog. Lorem ipsum and all that.".as_bytes();
-    let bs = bytestack_from_bytes(before);
-    let after = bytes_from_bytestack(bs);
+    let bs = _bytestack_from_bytes(before);
+    let after = _bytes_from_bytestack(bs);
     assert_eq!(after, Some(before.to_vec()));
 }

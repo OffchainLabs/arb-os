@@ -8,14 +8,24 @@ use std::queue::Queue;
 use evmlogs::EvmLogs;
 
 use std::bytearray::bytearray_new;
+use std::bytearray::bytearray_size;
 use std::bytearray::bytearray_marshalFull;
+use std::bytearray::bytearray_toSizeAndBuffer;
+use std::bytearray::bytearray_getByte;
+use std::bytearray::bytearray_get64;
+use std::bytearray::bytearray_get256;
+
+use std::keccak::keccak256_sizedBuffer;
 
 use std::merkletree::MerkleTreeBuilder;
 use std::merkletree::merkleTreeBuilder_new;
 use std::merkletree::merkleTreeBuilder_add;
-use std::merkletree::merkleTreeBuilder_rootHash;
+use std::merkletree::merkleTreeBuilder_finish;
+use std::merkletree::merkleTreeBuilder_isEmpty;
 
 use std::queue::queue_get;
+
+use chainParameters::chainParams_getBlocksPerSend;
 
 use evmlogs::evmlogs_empty;
 use evmlogs::evmlogs_numLogs;
@@ -47,10 +57,8 @@ type OutputStatistics = struct {
     numSends: uint,
 }
 
-var merkleOfSends: MerkleTreeBuilder;
-
 public impure func output_init() {
-    merkleOfSends = merkleTreeBuilder_new();
+    outbox_init();
 }
 
 func outputStats_new() -> OutputStatistics {
@@ -82,6 +90,7 @@ var globalBlockReceiptData: struct {
     statsThisBlock: OutputStatistics,
     statsAllTime: OutputStatistics,
     lastBlockNum: uint,
+    nextSendBlockNum: uint,
 };
 
 public impure func outputStats_endOfBlock(blockNum: uint, timestamp: uint) {
@@ -149,6 +158,7 @@ public impure func txReceipts_init() {  // will be called at beginning of main()
         statsThisBlock: outputStats_new(),
         statsAllTime: outputStats_new(),
         lastBlockNum: ~0,
+        nextSendBlockNum: 0,
     };
 }
 
@@ -205,14 +215,14 @@ public impure func emitTxReceipt(
 
     let txResultInfo = struct {
         returnCode: resultCode,
-        returnData: bytearray_marshalFull(returnData),
+        returnData: bytearray_toSizeAndBuffer(returnData),
         evmLogs: evmLogs,
     };
 
     asm((
         const::LogType_txReceipt,
         l1message with {
-            msgData: unsafecast<ByteArray>(bytearray_marshalFull(l1message.msgData))  // because caller expects marshalled bytes
+            msgData: unsafecast<ByteArray>(bytearray_toSizeAndBuffer(l1message.msgData))  // because caller expects marshalled bytes
         },
         txResultInfo,
         realGasUsage,
@@ -240,18 +250,74 @@ impure func emitBlockSummaryLog(blockNum: uint, timestamp: uint, prevBlockNum: u
         gasAccounting_summaryToPublish(),
         prevBlockNum
     ),) { log };
-    asm(merkleTreeBuilder_rootHash(merkleOfSends),) { send };
-    merkleOfSends = merkleTreeBuilder_new();
+    if ((inbox_currentBlockNumber() >= globalBlockReceiptData.nextSendBlockNum) && !outbox_isEmpty() ){
+        outbox_send();
+        globalBlockReceiptData = globalBlockReceiptData with {
+            nextSendBlockNum: inbox_currentBlockNumber() + chainParams_getBlocksPerSend()
+        };
+    }
 }
 
-public impure func queueMessageForSend(msgType: uint, sender: address, data: ByteArray) {
-    evmCallStack_queueMessage(
-        (
-            msgType,
-            uint(sender),
-            bytearray_marshalFull(data),
+var globalOutbox: struct {
+    batch: MerkleTreeBuilder,
+    batchNumber: uint,
+    numInBatch: uint,
+};
+
+impure func outbox_init() {
+    globalOutbox = struct {
+        batch: merkleTreeBuilder_new(),
+        batchNumber: 0,
+        numInBatch: 0,
+    };
+}
+
+impure func outbox_isEmpty() -> bool {
+    return globalOutbox.numInBatch == 0;
+}
+
+public impure func outbox_append(item: ByteArray) {
+    outputStats_addSend();
+    let batchNumber = globalOutbox.batchNumber;
+    let numInBatch = globalOutbox.numInBatch;
+    globalOutbox = globalOutbox with {
+        numInBatch: numInBatch + 1
+    } with {
+        batch: merkleTreeBuilder_add(globalOutbox.batch, item)
+    };
+    let (size, buf) = bytearray_toSizeAndBuffer(item);
+    asm((const::LogType_send, batchNumber, numInBatch, size, buf),) { log };
+}
+
+impure func outbox_send() {
+    let (tree, rootHash) = merkleTreeBuilder_finish(globalOutbox.batch);
+    asm((const::LogType_sendMerkleTree, globalOutbox.batchNumber, globalOutbox.numInBatch, tree),) { log };
+    asm(
+        97,
+        setbuffer256(
+            setbuffer256(
+                setbuffer256(
+                    setbuffer8(newbuffer(), 0, const::AVMSendType_batch),
+                    1,
+                    globalOutbox.batchNumber
+                ),
+                33,
+                globalOutbox.numInBatch
+            ),
+            65,
+            uint(rootHash)
+
         )
-    );
+    ) { send };
+    globalOutbox = struct {
+        batch: merkleTreeBuilder_new(),
+        batchNumber: globalOutbox.batchNumber + 1,
+        numInBatch: 0,
+    };
+}
+
+public impure func queueMessageForSend(msg: ByteArray) {
+    evmCallStack_queueMessage(msg);
 }
 
 public impure func sendQueuedMessages(queue: Queue) {
@@ -259,28 +325,9 @@ public impure func sendQueuedMessages(queue: Queue) {
         if let Some(res) = queue_get(queue) {
             let (uq, msg) = res;
             queue = uq;
-            sendPackagedMessage(msg);
+            outbox_append(unsafecast<ByteArray>(msg));
         } else {
             return;
         }
     }
-}
-
-public impure func sendMessage(msgType: uint, sender: address, data: ByteArray) {
-    sendPackagedMessage(
-        (
-            msgType,
-            uint(sender),
-            bytearray_marshalFull(data),
-        )
-    );
-}
-
-func workaroundForCompilerBug() { }  // This is needed to work around a compiler bug; otherwise sendMessage can crash.
-
-impure func sendPackagedMessage(msg: any) {
-    outputStats_addSend();
-    merkleOfSends = merkleTreeBuilder_add(merkleOfSends, msg);
-    // asm(msg,) { send };
-    asm((const::LogType_send, msg),) { log };
 }

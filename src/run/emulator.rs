@@ -1246,7 +1246,7 @@ impl Machine {
                 Opcode::AVMOpcode(AVMOpcode::OpenInsn) => 25,
                 Opcode::AVMOpcode(AVMOpcode::DebugPrint) => 1,
                 Opcode::AVMOpcode(AVMOpcode::GetGas) => 1,
-                Opcode::AVMOpcode(AVMOpcode::SetGas) => 0,
+                Opcode::AVMOpcode(AVMOpcode::SetGas) => 1,
                 Opcode::AVMOpcode(AVMOpcode::EcRecover) => 20_000,
                 Opcode::AVMOpcode(AVMOpcode::EcAdd) => 3500,
                 Opcode::AVMOpcode(AVMOpcode::EcMul) => 82_000,
@@ -1867,8 +1867,9 @@ impl Machine {
 						Ok(true)
 					}
 					Opcode::AVMOpcode(AVMOpcode::Send) => {
-                        let val = self.stack.pop(&self.state)?;
-                        self.runtime_env.push_send(val);
+                        let size = self.stack.pop_uint(&self.state)?;
+                        let buf = self.stack.pop_buffer(&self.state)?;
+                        self.runtime_env.push_send(size, buf);
                         self.incr_pc();
                         Ok(true)
 					}

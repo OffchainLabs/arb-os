@@ -2,9 +2,6 @@
 // Copyright 2020, Offchain Labs, Inc. All rights reserved.
 //
 
-use contractTemplates::getErc20address;
-use contractTemplates::getErc721address;
-
 use std::bytearray::ByteArray;
 use std::bytearray::bytearray_new;
 use std::bytearray::bytearray_size;
@@ -256,46 +253,6 @@ public func accountStore_createBuiltinContract(
                 }
             )
         )
-    } else {
-        // There was already an account at that address, so return failure.
-        None<AccountStore>
-    };
-}
-
-public func accountStore_createERC20(
-    acctStore: AccountStore, 
-    addr: address
-) -> option<AccountStore> {
-    // Create a new ERC20 proxy contract at the given address.
-    // Return Some(updatedAccountStore), or None if something went wrong.
-    return xif (account_isEmpty(accountStore_get(acctStore, addr))) {
-        acctStore = accountStore_cloneContract(
-            acctStore, 
-            getErc20address(),
-            addr,
-            true,
-        )?;
-        Some(acctStore)
-    } else {
-        // There was already an account at that address, so return failure.
-        None<AccountStore>
-    };
-}
-
-public func accountStore_createERC721(
-    acctStore: AccountStore,
-    addr: address
-) -> option<AccountStore> {
-    // Create a new ERC721 proxy contract at the given address.
-    // Return Some(updatedAccountStore), or None if something went wrong.
-    return xif (account_isEmpty(accountStore_get(acctStore, addr))) {
-        acctStore = accountStore_cloneContract(
-            acctStore,
-            getErc721address(),
-            addr,
-            true,
-        )?;
-        Some(acctStore)
     } else {
         // There was already an account at that address, so return failure.
         None<AccountStore>

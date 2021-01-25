@@ -4,6 +4,7 @@
 
 use std::bytearray::ByteArray;
 use std::bytearray::bytearray_new;
+use std::bytearray::bytearray_fromSizeAndBuffer;
 use std::bytearray::bytearray_get256;
 use std::bytearray::bytearray_set256;
 use std::bytearray::bytearray_get64;
@@ -57,6 +58,10 @@ public func keccak256(ba: ByteArray, offset: uint, nbytes: uint) -> bytes32 {
 
     // Extract the return value, with properly adjusted endianness
     return bytes32(flipEndian256(accumulator[0]));
+}
+
+public func keccak256_sizedBuffer(size: uint, buf: buffer) -> bytes32 {
+    return keccak256(bytearray_fromSizeAndBuffer(size, buf), 0, size);
 }
 
 func keccak_xorblock(accumulator: [7]uint, ba: ByteArray, offset: uint) -> [7]uint {

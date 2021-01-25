@@ -70,7 +70,7 @@ use std::bytearray::bytearray_get256;
 use std::bytearray::bytearray_set256;
 use std::bytearray::bytearray_extract;
 use std::bytearray::bytearray_copy;
-use std::bytearray::bytearray_marshalFull;
+use std::bytearray::bytearray_toSizeAndBuffer;
 use std::bytestream::bytestream_new;
 
 use std::stack::stack_pop;
@@ -536,7 +536,7 @@ public impure func evmOp_log0(
         if (evmCallStack_addEvmLogToCurrent(
             (
                 address(0),  // addEvmLogToCurrent will fill this in
-                bytearray_marshalFull(data),
+                bytearray_toSizeAndBuffer(data),
             )
         ) == Some(()) ) {
             return;
@@ -564,7 +564,7 @@ public impure func evmOp_log1(
         if (evmCallStack_addEvmLogToCurrent(
             (
                 address(0),  // addEvmLogToCurrent will fill this in
-                bytearray_marshalFull(data),
+                bytearray_toSizeAndBuffer(data),
                 topic0,
             )
         ) == Some(()) ) {
@@ -594,7 +594,7 @@ public impure func evmOp_log2(
         if (evmCallStack_addEvmLogToCurrent(
             (
                 address(0),  // addEvmLogToCurrent will fill this in
-                bytearray_marshalFull(data),
+                bytearray_toSizeAndBuffer(data),
                 topic0,
                 topic1,
             )
@@ -626,7 +626,7 @@ public impure func evmOp_log3(
         if (evmCallStack_addEvmLogToCurrent(
             (
                 address(0),  // addEvmLogToCurrent will fill this in
-                bytearray_marshalFull(data),
+                bytearray_toSizeAndBuffer(data),
                 topic0,
                 topic1,
                 topic2,
@@ -660,7 +660,7 @@ public impure func evmOp_log4(
         if (evmCallStack_addEvmLogToCurrent(
             (
                 address(0),  // addEvmLogToCurrent will fill this in
-                bytearray_marshalFull(data),
+                bytearray_toSizeAndBuffer(data),
                 topic0,
                 topic1,
                 topic2,
