@@ -4,7 +4,7 @@ use parity_wasm::elements::Instruction::*;
 use crate::mavm::{AVMOpcode, CodePt, Instruction, Label, /*LabelGenerator,*/ Opcode, Value};
 use crate::compile::{DebugInfo};
 use crate::uint256::Uint256;
-use std::collections::BTreeMap;
+use std::collections::HashMap;
 
 #[derive(Debug, Clone)]
 struct Control {
@@ -45,12 +45,20 @@ fn mk_label(idx: usize) -> Instruction {
     Instruction::from_opcode(Opcode::Label(Label::Evm(idx)), DebugInfo::from(None))
 }
 
+fn mk_func_label(idx: usize) -> Instruction {
+    Instruction::from_opcode(Opcode::Label(Label::Evm(idx)), DebugInfo::from(None))
+}
+
 fn cjump(idx: usize) -> Instruction {
     Instruction::from_opcode_imm(Opcode::AVMOpcode(AVMOpcode::Cjump), Value::Label(Label::Evm(idx)), DebugInfo::from(None))
 }
 
 fn jump(idx: usize) -> Instruction {
     Instruction::from_opcode_imm(Opcode::AVMOpcode(AVMOpcode::Jump), Value::Label(Label::Evm(idx)), DebugInfo::from(None))
+}
+
+fn call_jump(idx: u32) -> Instruction {
+    Instruction::from_opcode_imm(Opcode::AVMOpcode(AVMOpcode::Jump), Value::Label(Label::WasmFunc(idx as usize)), DebugInfo::from(None))
 }
 
 fn get_frame() -> Instruction {
@@ -90,7 +98,42 @@ fn adjust_stack(res : &mut Vec<Instruction>, diff : usize, num : usize) {
     }
 }
 
-fn handle_function(m : &Module, func : &FuncBody, idx : usize) -> Vec<Instruction> {
+fn is_func(e : &External) -> bool {
+    match *e {
+        External::Function(_idx) => {
+            true
+        },
+        _ => false
+    }
+}
+
+fn get_num_imports(m : &Module) -> u32 {
+    match m.import_section() {
+        None => 0,
+        Some(sec) => {
+            let arr = sec.entries();
+            arr.iter().filter(|&x| is_func(x.external())).count() as u32
+        }
+    }
+}
+
+fn find_func_type(m : &Module, num : u32) -> &FunctionType {
+    // maybe it is import
+    if num < get_num_imports(m) {
+        let arr = m.import_section().unwrap().entries();
+        let idx = match *arr.iter().filter(|&x| is_func(x.external())).collect::<Vec<&ImportEntry>>()[num as usize].external() {
+            External::Function(idx) => idx,
+            _ => 0,
+        };
+        get_func_type(m, idx)
+    }
+    // find it from sig section
+    else {
+        get_func_type(m, m.function_section().unwrap().entries()[(num - get_num_imports(m)) as usize].type_ref())
+    }
+}
+
+fn handle_function(m : &Module, func : &FuncBody, idx : usize, mut label : usize) -> (Vec<Instruction>, usize) {
     let sig = m.function_section().unwrap().entries()[idx].type_ref();
     let ftype = get_func_type(m, sig);
     
@@ -100,7 +143,7 @@ fn handle_function(m : &Module, func : &FuncBody, idx : usize) -> Vec<Instructio
 
     let mut res : Vec<Instruction> = Vec::new();
     let mut stack : Vec<Control> = Vec::new();
-    let mut label : usize = 1;
+    // let mut label : usize = 1;
     let mut ptr : usize = count_locals(func) + ftype.params().len();
     let mut bptr : usize = 0;
 
@@ -254,7 +297,32 @@ fn handle_function(m : &Module, func : &FuncBody, idx : usize) -> Vec<Instructio
                 res.push(mk_label(end_label));
                 ptr = ptr - 1;
             },
+            // Just keep the expression stack
+            Call(x) => {
+                let ftype = find_func_type(m, *x);
+                // println!("calling {} with type {:?}", x, ftype);
+                let return_label = label+1;
+                label = label+1;
+                // push new frame to aux stack
+                res.push(push_frame(Value::new_tuple(vec![Value::new_buffer(vec![]), Value::Label(Label::Evm(return_label))])));
+                // Push args to frame
+                for i in 0..ftype.params().len() {
+                    res.push(get_frame());
+                    res.push(simple_op(AVMOpcode::Swap1));
+                    res.push(set64_from_buffer(i));
+                    res.push(set_frame());
+                }
+                res.push(call_jump(*x));
+                res.push(mk_label(return_label));
+                ptr = ptr - ftype.params().len() + num_func_returns(ftype);
+            },
             /*
+            CallIndirect(x,_) => {
+                let ftype = get_func_type(m, x);
+                res.push(CHECKCALLI(hash_ftype(&ftype)));
+                res.push(CALLI);
+                ptr = ptr - (ftype.params().len() as u32) + num_func_returns(ftype) - 1;
+            },
             Return => {
                 let c = &stack[0];
                 adjust_stack(&mut res, ptr - c.level, c.rets);
@@ -296,19 +364,6 @@ fn handle_function(m : &Module, func : &FuncBody, idx : usize) -> Vec<Instructio
                 
                 label = label+2;
                 ptr = ptr-2;
-            },
-            
-            Call(x) => {
-                let ftype = find_func_type(m, x);
-                // println!("calling {} with type {:?}", x, ftype);
-                res.push(CALL(x));
-                ptr = ptr - (ftype.params().len() as u32) + num_func_returns(ftype);
-            },
-            CallIndirect(x,_) => {
-                let ftype = get_func_type(m, x);
-                res.push(CHECKCALLI(hash_ftype(&ftype)));
-                res.push(CALLI);
-                ptr = ptr - (ftype.params().len() as u32) + num_func_returns(ftype) - 1;
             },
             
             I64Const(x) => {
@@ -563,7 +618,7 @@ fn handle_function(m : &Module, func : &FuncBody, idx : usize) -> Vec<Instructio
         }
     }
 
-    return res;
+    return (res, label);
 
 }
 
@@ -579,28 +634,23 @@ pub fn clear_labels(arr: Vec<Instruction>) -> Vec<Instruction> {
 }
 
 pub fn resolve_labels(arr: Vec<Instruction>) -> Vec<Instruction> {
-    let mut labels = BTreeMap::new();
+    let mut labels = HashMap::new();
     for (idx, inst) in arr.iter().enumerate() {
         match inst.opcode {
             Opcode::Label(Label::Evm(num)) => {
-                labels.insert(num, idx);
+                labels.insert(Label::Evm(num), CodePt::Internal(idx));
+            }
+            Opcode::Label(Label::WasmFunc(num)) => {
+                labels.insert(Label::WasmFunc(num), CodePt::Internal(idx));
             }
             _ => {}
         }
     }
     let mut res = vec![];
     for inst in arr.iter() {
-        match inst.immediate {
-            Some(Value::Label(Label::Evm(n))) => {
-                match labels.get(&n) {
-                  Some(idx) => res.push(Instruction::from_opcode_imm(inst.opcode, Value::CodePoint(CodePt::Internal(*idx)), inst.debug_info)),
-                  None => panic!("Cannot find label"),
-                }
-            }
-            _ => res.push(inst.clone()),
-        }
+        res.push(inst.clone().replace_labels(&labels).unwrap());
     }
-    clear_labels(res)
+    res
 }
 
 pub fn load(fname: String) -> Vec<Instruction> {
@@ -617,18 +667,22 @@ pub fn load(fname: String) -> Vec<Instruction> {
 
     // Add test argument to the frame
     init.push(get_frame());
-    init.push(push_value(Value::Int(Uint256::from_usize(123))));
+    init.push(push_value(Value::Int(Uint256::from_usize(10))));
     init.push(set64_from_buffer(0));
     init.push(set_frame());
 
+    let mut label = 1;
+
     for (idx,f) in code_section.bodies().iter().enumerate() {
         // function return will be in the stack
-        let mut res = handle_function(&module, f, idx);
+        init.push(mk_func_label(idx));
+        let (mut res, n_label) = handle_function(&module, f, idx, label);
         init.append(&mut res);
+        label = n_label;
     }
 
     init.push(simple_op(AVMOpcode::Noop));
 
-    resolve_labels(init)
+    clear_labels(resolve_labels(init))
 
 }

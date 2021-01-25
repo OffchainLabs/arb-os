@@ -16,6 +16,7 @@ pub enum Label {
     Anon(usize),
     External(usize), // slot in imported funcs list
     Evm(usize),      // program counter in EVM contract
+    WasmFunc(usize),
 }
 
 impl Label {
@@ -30,6 +31,7 @@ impl Label {
             Label::Anon(pc) => (Label::Anon(pc + int_offset), func_offset),
             Label::External(slot) => (Label::External(slot + ext_offset), func_offset),
             Label::Evm(_) => (self, func_offset),
+            Label::WasmFunc(_) => (self, func_offset),
         }
     }
 
@@ -50,6 +52,9 @@ impl Label {
             Label::Evm(_) => {
                 panic!("tried to avm_hash an EVM label");
             }
+            Label::WasmFunc(_) => {
+                panic!("tried to avm_hash an Wasm func label");
+            }
         }
     }
 }
@@ -61,6 +66,7 @@ impl fmt::Display for Label {
             Label::Anon(n) => write!(f, "label_{}", n),
             Label::External(slot) => write!(f, "external_{}", slot),
             Label::Evm(pc) => write!(f, "EvmPC({})", pc),
+            Label::WasmFunc(pc) => write!(f, "WasmFunc({})", pc),
         }
     }
 }
