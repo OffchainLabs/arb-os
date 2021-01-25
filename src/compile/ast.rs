@@ -541,7 +541,6 @@ pub enum StatementKind {
     Let(MatchPattern, Expr),
     Assign(StringId, Expr),
     While(Expr, Vec<Statement>),
-    If(IfArm),
     Asm(Vec<Instruction>, Vec<Expr>),
     DebugPrint(Expr),
 }
@@ -551,14 +550,6 @@ pub enum StatementKind {
 pub enum MatchPattern {
     Simple(StringId),
     Tuple(Vec<MatchPattern>),
-}
-
-///Represents an arm of an If-Else chain, is Cond(condition, block, possible_else, location) if it
-/// contains a condition, and Catchall(block, location) if it is an else block.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-pub enum IfArm {
-    Cond(Expr, Vec<Statement>, Option<Box<IfArm>>, DebugInfo),
-    Catchall(Vec<Statement>, DebugInfo),
 }
 
 ///Represents a constant mini value of type Option<T> for some type T.

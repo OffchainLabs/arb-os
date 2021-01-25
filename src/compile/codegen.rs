@@ -6,7 +6,7 @@
 
 use super::ast::{BinaryOp, FuncArg, GlobalVarDecl, TrinaryOp, Type, UnaryOp};
 use super::typecheck::{
-    PropertiesList, TypeCheckedExpr, TypeCheckedFunc, TypeCheckedIfArm, TypeCheckedMatchPattern,
+    PropertiesList, TypeCheckedExpr, TypeCheckedFunc, TypeCheckedMatchPattern,
     TypeCheckedStatement,
 };
 use crate::compile::ast::DebugInfo;
@@ -632,24 +632,6 @@ fn mavm_codegen_statement(
             ));
             Ok((label_gen, max(cond_locals, num_locals), HashMap::new()))
         }
-        TypeCheckedStatementKind::If(arm) => {
-            let (end_label, lg) = label_gen.next();
-            let (lg, nl1) = mavm_codegen_if_arm(
-                arm,
-                end_label,
-                code,
-                num_locals,
-                locals,
-                lg,
-                string_table,
-                import_func_map,
-                global_var_map,
-                prepushed_vals,
-                scopes,
-                file_name_chart,
-            )?;
-            Ok((lg, nl1, HashMap::new()))
-        }
         TypeCheckedStatementKind::Asm(insns, args) => {
             let n_args = args.len();
             let mut exp_locals = 0;
@@ -737,128 +719,6 @@ fn mavm_codegen_tuple_pattern(
             TypeCheckedMatchPattern::Tuple(_, _) => {
                 panic!("Can't yet generate code for pattern-match let with nested tuples");
             }
-        }
-    }
-}
-
-///Generates code for if arm specified by arm, end_label is the label jumped to when exiting the if
-/// else chain, code is the previously generated code, num_locals is the maximum number of locals
-/// used at any point previously in this call frame, locals is a table of names to variable slot
-/// numbers, label_gen points to the next available local slot, string_table is used to look up
-/// builtins, import_func_map maps IDs to the associated label, and global_var_map maps IDs to
-/// global variables.
-fn mavm_codegen_if_arm(
-    arm: &TypeCheckedIfArm,
-    end_label: Label,
-    mut code: &mut Vec<Instruction>, // accumulates the code as it's generated
-    num_locals: usize,               // num locals that have been allocated
-    locals: &HashMap<usize, usize>,  // lookup local variable slot number by name
-    mut label_gen: LabelGenerator,
-    string_table: &StringTable,
-    import_func_map: &HashMap<StringId, Label>,
-    global_var_map: &HashMap<StringId, usize>,
-    prepushed_vals: usize,
-    scopes: &mut Vec<(String, Label, Option<Type>)>,
-    file_name_chart: &mut BTreeMap<u64, String>,
-) -> Result<(LabelGenerator, usize), CodegenError> {
-    // (label_gen, num_labels, execution_might_continue)
-    match arm {
-        TypeCheckedIfArm::Cond(cond, body, orest, debug_info) => {
-            let (after_label, lg) = label_gen.next();
-            let (lg, c, cond_locals) = mavm_codegen_expr(
-                cond,
-                code,
-                num_locals,
-                &locals,
-                lg,
-                string_table,
-                import_func_map,
-                global_var_map,
-                prepushed_vals,
-                scopes,
-                file_name_chart,
-            )?;
-            label_gen = lg;
-            code = c;
-            code.push(Instruction::from_opcode(
-                Opcode::AVMOpcode(AVMOpcode::IsZero),
-                *debug_info,
-            ));
-            code.push(Instruction::from_opcode_imm(
-                Opcode::AVMOpcode(AVMOpcode::Cjump),
-                Value::Label(after_label),
-                *debug_info,
-            ));
-            let (lg, nl1, _) = mavm_codegen_statements(
-                body.to_vec(),
-                code,
-                num_locals,
-                locals,
-                label_gen,
-                string_table,
-                import_func_map,
-                global_var_map,
-                prepushed_vals,
-                scopes,
-                file_name_chart,
-            )?;
-            label_gen = lg;
-            code.push(Instruction::from_opcode_imm(
-                Opcode::AVMOpcode(AVMOpcode::Jump),
-                Value::Label(end_label),
-                *debug_info,
-            ));
-            code.push(Instruction::from_opcode(
-                Opcode::Label(after_label),
-                *debug_info,
-            ));
-            let nl1 = max(nl1, cond_locals);
-            match orest {
-                Some(inner_arm) => {
-                    let (lg, nl2) = mavm_codegen_if_arm(
-                        inner_arm,
-                        end_label,
-                        code,
-                        num_locals,
-                        locals,
-                        label_gen,
-                        string_table,
-                        import_func_map,
-                        global_var_map,
-                        prepushed_vals,
-                        scopes,
-                        file_name_chart,
-                    )?;
-                    Ok((lg, if nl1 > nl2 { nl1 } else { nl2 }))
-                }
-                None => {
-                    code.push(Instruction::from_opcode(
-                        Opcode::Label(end_label),
-                        *debug_info,
-                    ));
-                    Ok((label_gen, nl1))
-                }
-            }
-        }
-        TypeCheckedIfArm::Catchall(body, debug_info) => {
-            let (lg, nl, _) = mavm_codegen_statements(
-                body.to_vec(),
-                code,
-                num_locals,
-                locals,
-                label_gen,
-                string_table,
-                import_func_map,
-                global_var_map,
-                prepushed_vals,
-                scopes,
-                file_name_chart,
-            )?;
-            code.push(Instruction::from_opcode(
-                Opcode::Label(end_label),
-                *debug_info,
-            ));
-            Ok((lg, nl))
         }
     }
 }

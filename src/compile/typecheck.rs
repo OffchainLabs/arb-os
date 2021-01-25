@@ -6,7 +6,7 @@
 
 use super::ast::{
     BinaryOp, CodeBlock, Constant, DebugInfo, Expr, ExprKind, FuncArg, FuncDecl, FuncDeclKind,
-    GlobalVarDecl, IfArm, MatchPattern, Statement, StatementKind, StructField, TopLevelDecl,
+    GlobalVarDecl, MatchPattern, Statement, StatementKind, StructField, TopLevelDecl,
     TrinaryOp, Type, TypeTree, UnaryOp,
 };
 use super::MiniProperties;
@@ -49,7 +49,6 @@ pub trait AbstractSyntaxTree {
 pub enum TypeCheckedNode<'a> {
     Statement(&'a mut TypeCheckedStatement),
     Expression(&'a mut TypeCheckedExpr),
-    IfArm(&'a mut TypeCheckedIfArm),
     StructField(&'a mut TypeCheckedStructField),
 }
 
@@ -58,7 +57,6 @@ impl<'a> AbstractSyntaxTree for TypeCheckedNode<'a> {
         match self {
             TypeCheckedNode::Statement(stat) => stat.child_nodes(),
             TypeCheckedNode::Expression(exp) => exp.child_nodes(),
-            TypeCheckedNode::IfArm(arm) => arm.child_nodes(),
             TypeCheckedNode::StructField(field) => field.child_nodes(),
         }
     }
@@ -140,7 +138,7 @@ fn inline(
         } = exp
         {
             let (code, block_exp) = if let TypeCheckedExpr {
-                kind: TypeCheckedExprKind::FuncRef(id, ref func_ref_type),
+                kind: TypeCheckedExprKind::FuncRef(id, _),
                 debug_info: _,
             } = **name
             {
@@ -167,29 +165,6 @@ fn inline(
                             kind: TypeCheckedStatementKind::Return(exp),
                             debug_info: _,
                         }) => Some(Box::new(exp)),
-                        Some(TypeCheckedStatement {
-                            kind: TypeCheckedStatementKind::If(_),
-                            debug_info,
-                        }) => {
-                            if let Some(statement) = last {
-                                code.push(statement);
-                            }
-                            Some(Box::new(TypeCheckedExpr {
-                                kind: TypeCheckedExprKind::Const(
-                                    if let Type::Func(_, _, ret) = func_ref_type {
-                                        ret.default_value().0
-                                    } else {
-                                        panic!()
-                                    },
-                                    if let Type::Func(_, _, ret) = func_ref_type {
-                                        *ret.clone()
-                                    } else {
-                                        panic!()
-                                    },
-                                ),
-                                debug_info,
-                            }))
-                        }
                         _ => {
                             if let Some(statement) = last {
                                 code.push(statement);
@@ -253,7 +228,6 @@ pub enum TypeCheckedStatementKind {
     AssignLocal(StringId, TypeCheckedExpr),
     AssignGlobal(usize, TypeCheckedExpr),
     While(TypeCheckedExpr, Vec<TypeCheckedStatement>),
-    If(TypeCheckedIfArm),
     Asm(Vec<Instruction>, Vec<TypeCheckedExpr>),
     DebugPrint(TypeCheckedExpr),
 }
@@ -273,7 +247,6 @@ impl MiniProperties for TypeCheckedStatement {
             TypeCheckedStatementKind::While(exp, block) => {
                 exp.is_pure() && block.iter().all(|statement| statement.is_pure())
             }
-            TypeCheckedStatementKind::If(if_arm) => if_arm.is_pure(),
             TypeCheckedStatementKind::Asm(instrs, exprs) => {
                 instrs.iter().all(|instr| instr.is_pure())
                     && exprs.iter().all(|expr| expr.is_pure())
@@ -301,7 +274,6 @@ impl AbstractSyntaxTree for TypeCheckedStatement {
                         .map(|stat| TypeCheckedNode::Statement(stat)),
                 )
                 .collect(),
-            TypeCheckedStatementKind::If(arm) => vec![TypeCheckedNode::IfArm(arm)],
             TypeCheckedStatementKind::Asm(_, exps) => exps
                 .iter_mut()
                 .map(|exp| TypeCheckedNode::Expression(exp))
@@ -318,59 +290,6 @@ impl AbstractSyntaxTree for TypeCheckedStatement {
 pub enum TypeCheckedMatchPattern {
     Simple(StringId, Type),
     Tuple(Vec<TypeCheckedMatchPattern>, Type),
-}
-
-///An `IfArm` that has been type checked.
-#[derive(Debug, Clone, Eq, PartialEq)]
-pub enum TypeCheckedIfArm {
-    Cond(
-        TypeCheckedExpr,
-        Vec<TypeCheckedStatement>,
-        Option<Box<TypeCheckedIfArm>>,
-        DebugInfo,
-    ),
-    Catchall(Vec<TypeCheckedStatement>, DebugInfo),
-}
-
-impl AbstractSyntaxTree for TypeCheckedIfArm {
-    fn child_nodes(&mut self) -> Vec<TypeCheckedNode> {
-        match self {
-            TypeCheckedIfArm::Cond(exp, stats, alt_stats, _) => {
-                vec![TypeCheckedNode::Expression(exp)]
-                    .into_iter()
-                    .chain(
-                        stats
-                            .iter_mut()
-                            .map(|stat| TypeCheckedNode::Statement(stat)),
-                    )
-                    .chain(alt_stats.iter_mut().map(|arm| TypeCheckedNode::IfArm(arm)))
-                    .collect()
-            }
-            TypeCheckedIfArm::Catchall(stats, _) => stats
-                .iter_mut()
-                .map(|stat| TypeCheckedNode::Statement(stat))
-                .collect(),
-        }
-    }
-}
-
-impl MiniProperties for TypeCheckedIfArm {
-    fn is_pure(&self) -> bool {
-        match self {
-            TypeCheckedIfArm::Cond(expr, statements, else_block, _) => {
-                expr.is_pure()
-                    && statements.iter().all(|statement| statement.is_pure())
-                    && if let Some(block) = else_block {
-                        block.is_pure()
-                    } else {
-                        true
-                    }
-            }
-            TypeCheckedIfArm::Catchall(statements, _) => {
-                statements.iter().all(|statement| statement.is_pure())
-            }
-        }
-    }
 }
 
 ///A mini expression with associated `DebugInfo` that has been type checked.
@@ -1186,18 +1105,6 @@ fn typecheck_statement<'a>(
                 )),
             }
         }
-        StatementKind::If(arm) => Ok((
-            TypeCheckedStatementKind::If(typecheck_if_arm(
-                arm,
-                return_type,
-                type_table,
-                global_vars,
-                func_table,
-                type_tree,
-                scopes,
-            )?),
-            vec![],
-        )),
         StatementKind::Asm(insns, args) => {
             let mut tc_args = Vec::new();
             for arg in args {
@@ -1285,83 +1192,6 @@ fn typecheck_patvec(
             ),
             location,
         ))
-    }
-}
-
-///Performs type checking on `IfArm` arm, returning a `TypeCheckedIfArm` if successful, and a
-/// `TypeError` otherwise.
-///
-/// This function takes the the return type of the containing function as arm may contain Return
-/// statements.  Also type_table, global_vars, and func_table contain the variables, globals, and
-/// functions available to the arm.
-fn typecheck_if_arm(
-    arm: &IfArm,
-    return_type: &Type,
-    type_table: &TypeTable,
-    global_vars: &HashMap<StringId, (Type, usize)>,
-    func_table: &TypeTable,
-    type_tree: &TypeTree,
-    scopes: &mut Vec<(String, Option<Type>)>,
-) -> Result<TypeCheckedIfArm, TypeError> {
-    match arm {
-        IfArm::Cond(cond, body, orest, debug_info) => {
-            let loc = debug_info.location;
-            let tc_cond = typecheck_expr(
-                cond,
-                type_table,
-                global_vars,
-                func_table,
-                return_type,
-                type_tree,
-                scopes,
-            )?;
-            match tc_cond.get_type() {
-                Type::Bool => Ok(TypeCheckedIfArm::Cond(
-                    tc_cond,
-                    typecheck_statement_sequence(
-                        body,
-                        return_type,
-                        type_table,
-                        global_vars,
-                        func_table,
-                        type_tree,
-                        scopes,
-                    )?,
-                    match orest {
-                        Some(rest) => Some(Box::new(typecheck_if_arm(
-                            rest,
-                            return_type,
-                            type_table,
-                            global_vars,
-                            func_table,
-                            type_tree,
-                            scopes,
-                        )?)),
-                        None => None,
-                    },
-                    debug_info.clone(),
-                )),
-                _ => Err(new_type_error(
-                    format!(
-                        "if condition must be boolean, found \"{}\"",
-                        tc_cond.get_type().display()
-                    ),
-                    loc,
-                )),
-            }
-        }
-        IfArm::Catchall(body, loc) => Ok(TypeCheckedIfArm::Catchall(
-            typecheck_statement_sequence(
-                body,
-                return_type,
-                type_table,
-                global_vars,
-                func_table,
-                type_tree,
-                scopes,
-            )?,
-            *loc,
-        )),
     }
 }
 

@@ -4,7 +4,7 @@
 
 
 use crate::compile::ast::{TopLevelDecl, TypeDecl, FuncDecl, GlobalVarDecl, Type, CodeBlock,
-StructField, FuncArg, Statement, StatementKind, DebugInfo, Attributes, MatchPattern, IfArm, Expr, ExprKind, TrinaryOp, BinaryOp, UnaryOp, Constant,
+StructField, FuncArg, Statement, StatementKind, DebugInfo, Attributes, MatchPattern, Expr, ExprKind, TrinaryOp, BinaryOp, UnaryOp, Constant,
 OptionConst, FieldInitializer, new_func_arg, new_type_decl};
 use crate::stringtable::{StringTable, StringId};
 use crate::compile::Lines;
@@ -90,7 +90,7 @@ StatementKind: StatementKind = {
 	"while" "(" <e: Expr> ")" <cb: CodeBlock> => StatementKind::While(e, cb),
 	<lno: @L> "loop" <cb: CodeBlock> => StatementKind::Expression(Expr { kind: ExprKind::Loop(cb), debug_info: DebugInfo::from(file_info.location(BytePos::from(lno), filename)), }),
 	<lno: @L> "if" "let" "Some(" <l: Ident> ")" "=" <r:Expr> <t: CodeBlock> <e: ElseIf?> => StatementKind::Expression( Expr { kind: ExprKind::IfLet(l,Box::new(r),CodeBlock::new(t,None),e), debug_info: DebugInfo::from(file_info.location(BytePos::from(lno),filename))}),
-	<lno: @L> "if" "(" <c: Expr> ")" <t: CodeBlock> <r: IfArm?> => StatementKind::If(IfArm::Cond(c, t, r.map(|m|Box::new(m)), DebugInfo::from(file_info.location(BytePos::from(lno),filename)))),
+	<lno: @L> "if" "(" <c: Expr> ")" <t: CodeBlock> <r: ElseIf?> => StatementKind::Expression( Expr { kind: ExprKind::If(Box::new(c), CodeBlock::new(t, None), r), debug_info: DebugInfo::from(file_info.location(BytePos::from(lno),filename))}),
 	"let" <p: MatchPattern> "=" <e: Expr> ";" => StatementKind::Let(p, e),
 	<e: Expr> ";" => StatementKind::Expression(e),
 	<i: Ident> "=" <e: Expr> ";" => StatementKind::Assign(i, e),
@@ -109,11 +109,6 @@ MatchPattern: MatchPattern = {
 
 CommaedMatchPatterns: Vec<MatchPattern> = {
 	<mut a: ( <MatchPattern> "," )+> <b: MatchPattern?> => {if let Some(c) = b {a.push(c)}a},
-}
-
-IfArm: IfArm = {
-	<lno: @L> "else" <cb: CodeBlock> => IfArm::Catchall(cb, DebugInfo::from(file_info.location(BytePos::from(lno), filename))),
-	<lno: @L> "elseif" "(" <c: Expr> ")" <cb: CodeBlock> <r: IfArm?> => IfArm::Cond(c, cb, r.map(|m| Box::new(m)), DebugInfo::from(file_info.location(BytePos::from(lno),filename))),
 }
 
 StructFields: Vec<StructField> = {
