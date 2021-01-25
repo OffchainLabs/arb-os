@@ -540,7 +540,6 @@ pub enum StatementKind {
     Expression(Expr),
     Let(MatchPattern, Expr),
     Assign(StringId, Expr),
-    Loop(Vec<Statement>),
     While(Expr, Vec<Statement>),
     If(IfArm),
     IfLet(StringId, Expr, Vec<Statement>, Option<Vec<Statement>>),

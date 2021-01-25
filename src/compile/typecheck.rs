@@ -256,7 +256,6 @@ pub enum TypeCheckedStatementKind {
     Let(TypeCheckedMatchPattern, TypeCheckedExpr),
     AssignLocal(StringId, TypeCheckedExpr),
     AssignGlobal(usize, TypeCheckedExpr),
-    Loop(Vec<TypeCheckedStatement>),
     While(TypeCheckedExpr, Vec<TypeCheckedStatement>),
     If(TypeCheckedIfArm),
     IfLet(
@@ -281,9 +280,6 @@ impl MiniProperties for TypeCheckedStatement {
             TypeCheckedStatementKind::Let(_, exp) => exp.is_pure(),
             TypeCheckedStatementKind::AssignLocal(_, exp) => exp.is_pure(),
             TypeCheckedStatementKind::AssignGlobal(_, _) => false,
-            TypeCheckedStatementKind::Loop(code) => {
-                code.iter().all(|statement| statement.is_pure())
-            }
             TypeCheckedStatementKind::While(exp, block) => {
                 exp.is_pure() && block.iter().all(|statement| statement.is_pure())
             }
@@ -316,10 +312,6 @@ impl AbstractSyntaxTree for TypeCheckedStatement {
             | TypeCheckedStatementKind::AssignLocal(_, exp)
             | TypeCheckedStatementKind::AssignGlobal(_, exp)
             | TypeCheckedStatementKind::DebugPrint(exp) => vec![TypeCheckedNode::Expression(exp)],
-            TypeCheckedStatementKind::Loop(stats) => stats
-                .iter_mut()
-                .map(|stat| TypeCheckedNode::Statement(stat))
-                .collect(),
             TypeCheckedStatementKind::While(exp, stats) => vec![TypeCheckedNode::Expression(exp)]
                 .into_iter()
                 .chain(
@@ -1196,20 +1188,6 @@ fn typecheck_statement<'a>(
                     }
                 }
             }
-        }
-        StatementKind::Loop(body) => {
-            scopes.push(("_".to_string(), Some(Type::Tuple(vec![]))));
-            let tc_body = typecheck_statement_sequence(
-                body,
-                return_type,
-                type_table,
-                global_vars,
-                func_table,
-                type_tree,
-                scopes,
-            )?;
-            scopes.pop();
-            Ok((TypeCheckedStatementKind::Loop(tc_body), vec![]))
         }
         StatementKind::While(cond, body) => {
             let tc_cond = typecheck_expr(

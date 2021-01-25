@@ -88,7 +88,7 @@ Attributes: Attributes = {
 
 StatementKind: StatementKind = {
 	"while" "(" <e: Expr> ")" <cb: CodeBlock> => StatementKind::While(e, cb),
-	"loop" <cb: CodeBlock> => StatementKind::Loop(cb),
+	<lno: @L> "loop" <cb: CodeBlock> => StatementKind::Expression(Expr { kind: ExprKind::Loop(cb), debug_info: DebugInfo::from(file_info.location(BytePos::from(lno), filename)), }),
 	"if" "let" "Some(" <l: Ident> ")" "=" <r:Expr> <t: CodeBlock> <e: ("else" <CodeBlock>)?> => StatementKind::IfLet(l,r,t,e),
 	<lno: @L> "if" "(" <c: Expr> ")" <t: CodeBlock> <r: IfArm?> => StatementKind::If(IfArm::Cond(c, t, r.map(|m|Box::new(m)), DebugInfo::from(file_info.location(BytePos::from(lno),filename)))),
 	"let" <p: MatchPattern> "=" <e: Expr> ";" => StatementKind::Let(p, e),

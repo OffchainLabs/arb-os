@@ -2,7 +2,7 @@
  * Copyright 2020, Offchain Labs, Inc. All rights reserved.
  */
 
-use crate::mavm::{Value, Buffer};
+use crate::mavm::{Buffer, Value};
 use crate::run::{load_from_file, ProfilerMode};
 use crate::uint256::Uint256;
 use ethers_core::rand::rngs::StdRng;
@@ -584,8 +584,16 @@ fn get_send_contents(log: Value) -> Option<Vec<u8>> {
     if let Value::Tuple(tup) = log {
         if let Value::Int(kind) = &tup[0] {
             if kind == &Uint256::from_u64(2) {
-                let sz = if let Value::Int(usz) = &tup[3] { usz.to_usize().unwrap() } else { panic!() };
-                let buf = if let Value::Buffer(buf) = &tup[4] { buf } else { panic!() };
+                let sz = if let Value::Int(usz) = &tup[3] {
+                    usz.to_usize().unwrap()
+                } else {
+                    panic!()
+                };
+                let buf = if let Value::Buffer(buf) = &tup[4] {
+                    buf
+                } else {
+                    panic!()
+                };
                 Some(buf.as_bytes(sz))
             } else {
                 None

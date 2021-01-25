@@ -584,52 +584,6 @@ fn mavm_codegen_statement(
             c.push(Instruction::from_opcode(Opcode::SetGlobalVar(*idx), debug));
             Ok((lg, exp_locals, false, HashMap::new()))
         }
-        TypeCheckedStatementKind::Loop(body) => {
-            let slot_num = Value::Int(Uint256::from_usize(num_locals));
-            num_locals += 1;
-            let (top_label, lgtop) = label_gen.next();
-            let (bottom_label, lg) = lgtop.next();
-            scopes.push(("_".to_string(), bottom_label, Some(Type::Tuple(vec![]))));
-            label_gen = lg;
-            code.push(Instruction::from_opcode_imm(
-                Opcode::AVMOpcode(AVMOpcode::Noop),
-                Value::Label(top_label),
-                debug,
-            ));
-            code.push(Instruction::from_opcode_imm(
-                Opcode::SetLocal,
-                slot_num.clone(),
-                debug,
-            ));
-            code.push(Instruction::from_opcode(Opcode::Label(top_label), debug));
-            let (lg, nl, val, hm) = mavm_codegen_statements(
-                body.to_vec(),
-                code,
-                num_locals,
-                locals,
-                label_gen,
-                string_table,
-                import_func_map,
-                global_var_map,
-                prepushed_vals,
-                scopes,
-                file_name_chart,
-            )?;
-            scopes.pop();
-            label_gen = lg;
-            num_locals = nl;
-            code.push(Instruction::from_opcode_imm(
-                Opcode::GetLocal,
-                slot_num,
-                debug,
-            ));
-            code.push(Instruction::from_opcode(
-                Opcode::AVMOpcode(AVMOpcode::Jump),
-                debug,
-            ));
-            code.push(Instruction::from_opcode(Opcode::Label(bottom_label), debug));
-            Ok((label_gen, num_locals, val, hm))
-        }
         TypeCheckedStatementKind::While(cond, body) => {
             let slot_num = Value::Int(Uint256::from_usize(num_locals));
             num_locals += 1;
