@@ -159,15 +159,15 @@ public impure func chainParams_setOwner(newOwner: address) {
 }
 
 public impure func chainParams_getBlocksPerSend() -> uint {
-    if let Some(params) = globalChainParams {
-        if let Some(bps) = params.blocksPerSend {
-            return bps;
+    return xif let Some(params) = globalChainParams {
+        xif let Some(bps) = params.blocksPerSend {
+            bps
         } else {
-            return params.gracePeriodBlocks / 3;
+            params.gracePeriodBlocks / 3
         }
     } else {
-        return const::DefaultBlocksPerSend;
-    }
+        const::DefaultBlocksPerSend
+    };
 }
 
 public impure func chainParams_setBlocksPerSend(bps: uint) -> option<()> {

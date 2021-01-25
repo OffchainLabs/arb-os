@@ -77,7 +77,7 @@ public impure func handleL1Request(
                 destAccount
             )
         );
-        return Some(());
+        Some(())
     } else {
         // not a valid message type
         // (This should not have been called if msg.kind == const::L1MessageType_L2.)
