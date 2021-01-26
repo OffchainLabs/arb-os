@@ -173,7 +173,7 @@ pub fn postlink_compile(
         }
     }
     let (code_2, jump_table) =
-        striplabels::fix_nonforward_labels(&program.code, &program.imported_funcs);
+        striplabels::fix_nonforward_labels(&program.code, &program.imported_funcs, program.global_num_limit-1);
     if debug {
         println!("========== after fix_backward_labels ===========");
         for (idx, insn) in code_2.iter().enumerate() {
@@ -194,13 +194,15 @@ pub fn postlink_compile(
             println!("{:04}:  {}", idx, insn);
         }
     }
-    let (code_final, jump_table_final) = striplabels::strip_labels(
+    let (mut code_final, jump_table_final) = striplabels::strip_labels(
         code_4,
         &jump_table,
         &program.imported_funcs,
         if is_module { Some(evm_pcs) } else { None },
     )?;
     let jump_table_value = xformcode::jump_table_to_value(jump_table_final);
+
+    hardcode_jump_table_into_register(&mut code_final, &jump_table_value);
 
     if debug {
         println!("============ after strip_labels =============");
@@ -215,9 +217,18 @@ pub fn postlink_compile(
 
     Ok(LinkedProgram {
         code: code_final,
-        static_val: jump_table_value,
+        static_val: Value::none(),
         file_name_chart,
     })
+}
+
+fn hardcode_jump_table_into_register(code: &mut Vec<Instruction>, jump_table: &Value) {
+    let old_imm = code[1].clone().immediate.unwrap();
+    code[1] = Instruction::from_opcode_imm(
+        code[1].opcode,
+        old_imm.replace_last_none(jump_table),
+        code[1].debug_info,
+    );
 }
 
 ///Takes a slice of tuples of `CompiledProgram`s and `bool`s representing whether the associated
@@ -294,14 +305,14 @@ pub fn link(
             global_num_limit,
             prog.clone().source_file_map,
         );
-        global_num_limit = relocated_prog.global_num_limit;
+        global_num_limit = relocated_prog.global_num_limit + 1;  // +1 is for jump table
         relocated_progs.push(relocated_prog);
         func_offset = new_func_offset + 1;
     }
 
     // Initialize globals or allow jump table retrieval
     let mut linked_code = if is_module {
-        // because this is a module, we want a 2-instruction function at the begining that returns
+        // because this is a module, we want a 3-instruction function at the begining that returns
         //     a list of (evm_pc, compiled_pc) correspondences
         // the postlink compilation phase (strip_labels) will plug in the actual table contents
         //     as the immediate in the first instruction
@@ -327,11 +338,14 @@ pub fn link(
                 DebugInfo::default(),
             ),
             Instruction::from_opcode_imm(
-                Opcode::AVMOpcode(AVMOpcode::Rset),
+                Opcode::AVMOpcode(AVMOpcode::Noop),
                 make_uninitialized_tuple(global_num_limit),
                 DebugInfo::default(),
             ),
-            Instruction::from_opcode(Opcode::AVMOpcode(AVMOpcode::Noop), DebugInfo::default()),
+            Instruction::from_opcode(
+                Opcode::AVMOpcode(AVMOpcode::Rset),
+                DebugInfo::default(),
+            ),
         ]
     };
 

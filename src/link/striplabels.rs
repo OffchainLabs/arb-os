@@ -119,6 +119,7 @@ pub fn strip_labels(
 pub fn fix_nonforward_labels(
     code_in: &[Instruction],
     imported_funcs: &[ImportedFunc],
+    jump_table_index_in_globals: usize,
 ) -> (Vec<Instruction>, Vec<Label>) {
     let mut jump_table = Vec::new();
     let mut jump_table_index = HashMap::new();
@@ -151,7 +152,7 @@ pub fn fix_nonforward_labels(
                             }
                         };
                         code_out.push(Instruction::from_opcode(
-                            Opcode::AVMOpcode(AVMOpcode::PushStatic),
+                            Opcode::GetGlobalVar(jump_table_index_in_globals),
                             insn_in.debug_info,
                         ));
                         code_out.push(Instruction::from_opcode(

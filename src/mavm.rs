@@ -647,6 +647,10 @@ impl Value {
         Value::Buffer(v)
     }
 
+    pub fn is_none(&self) -> bool {
+        self == &Value::none()
+    }
+
     pub fn type_insn_result(&self) -> usize {
         match self {
             Value::Int(_) => 0,
@@ -679,6 +683,21 @@ impl Value {
                 }
                 Ok(Value::new_tuple(new_vec))
             }
+        }
+    }
+
+    pub fn replace_last_none(&self, val: &Value) -> Self {
+        if self.is_none() {
+            return val.clone();
+        }
+        if let Value::Tuple(tup) = self {
+            let tlen = tup.len();
+            let mut mut_tup = tup.clone();
+            let new_tup = Rc::<Vec<Value>>::make_mut(&mut mut_tup);
+            new_tup[tlen-1] = new_tup[tlen-1].replace_last_none(val);
+            Value::new_tuple(new_tup.to_vec())
+        } else {
+            panic!();
         }
     }
 
