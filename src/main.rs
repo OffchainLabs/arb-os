@@ -8,7 +8,6 @@ use clap::Clap;
 use compile::{compile_from_file, CompileError};
 use contracttemplates::generate_contract_template_file_or_die;
 use link::{link, postlink_compile};
-use mavm::Value;
 use pos::try_display_location;
 use run::{
     profile_gen_from_file, replay_from_testlog_file, run_from_file, ProfilerMode,
@@ -47,8 +46,6 @@ struct CompileStruct {
     compile_only: bool,
     #[clap(short, long)]
     format: Option<String>,
-    #[clap(short, long)]
-    module: bool,
     #[clap(short, long)]
     inline: bool,
 }
@@ -164,13 +161,10 @@ fn main() -> Result<(), CompileError> {
                     }
                 }
 
-                let is_module = compile.module;
-                match link(&compiled_progs, is_module, Some(Value::none())) {
+                match link(&compiled_progs) {
                     Ok(linked_prog) => {
                         match postlink_compile(
                             linked_prog,
-                            is_module,
-                            Vec::new(),
                             file_name_chart.clone(),
                             debug_mode,
                         ) {

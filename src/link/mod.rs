@@ -161,8 +161,6 @@ impl ExportedFunc {
 /// table to a static value, and combining the file name chart with the associated argument.
 pub fn postlink_compile(
     program: CompiledProgram,
-    is_module: bool,
-    evm_pcs: Vec<usize>, // ignored unless we're in a module
     mut file_name_chart: BTreeMap<u64, String>,
     debug: bool,
 ) -> Result<LinkedProgram, CompileError> {
@@ -198,7 +196,6 @@ pub fn postlink_compile(
         code_4,
         &jump_table,
         &program.imported_funcs,
-        if is_module { Some(evm_pcs) } else { None },
     )?;
     let jump_table_value = xformcode::jump_table_to_value(jump_table_final);
 
@@ -258,23 +255,13 @@ pub fn add_auto_link_progs(
 ///Combines the `CompiledProgram`s in progs_in into a single `CompiledProgram` with offsets adjusted
 /// to avoid collisions and auto-linked programs added.
 ///
-/// The init_storage_descriptor argument provides the immediate value for the 2 instruction function
-/// at the start of the module that returns a list of (evm_pc, compiled_pc) correspondences. The
-/// typecheck argument indicates whether the programs should be type checked.
-///
 /// Also prints a warning message to the console if import and export types between modules don't
 /// match.
 pub fn link(
     progs_in: &[CompiledProgram],
-    is_module: bool,
-    init_storage_descriptor: Option<Value>, // used only for compiling modules
 ) -> Result<CompiledProgram, CompileError> {
-    let progs = if is_module {
-        progs_in.to_vec()
-    } else {
-        add_auto_link_progs(&progs_in)?
-    };
-    let mut insns_so_far: usize = 3; // leave 2 insns of space at beginning for initialization
+    let progs = add_auto_link_progs(&progs_in)?;
+    let mut insns_so_far: usize = 3; // leave 3 insns of space at beginning for initialization
     let mut imports_so_far: usize = 0;
     let mut int_offsets = Vec::new();
     let mut ext_offsets = Vec::new();
@@ -311,26 +298,8 @@ pub fn link(
     }
 
     // Initialize globals or allow jump table retrieval
-    let mut linked_code = if is_module {
-        // because this is a module, we want a 3-instruction function at the begining that returns
-        //     a list of (evm_pc, compiled_pc) correspondences
-        // the postlink compilation phase (strip_labels) will plug in the actual table contents
-        //     as the immediate in the first instruction
-        let init_immediate = match init_storage_descriptor {
-            Some(val) => val,
-            None => Value::none(),
-        };
-        vec![
-            Instruction::from_opcode(Opcode::AVMOpcode(AVMOpcode::Noop), DebugInfo::default()),
-            Instruction::from_opcode_imm(
-                Opcode::AVMOpcode(AVMOpcode::Swap1),
-                init_immediate,
-                DebugInfo::default(),
-            ),
-            Instruction::from_opcode(Opcode::AVMOpcode(AVMOpcode::Jump), DebugInfo::default()),
-        ]
-    } else {
-        // not a module, add an instruction that creates space for the globals, plus one to push a fake "return address"
+    let mut linked_code =
+        // add an instruction that creates space for the globals, plus one to push a fake "return address"
         vec![
             Instruction::from_opcode_imm(
                 Opcode::AVMOpcode(AVMOpcode::Noop),
@@ -346,8 +315,7 @@ pub fn link(
                 Opcode::AVMOpcode(AVMOpcode::Rset),
                 DebugInfo::default(),
             ),
-        ]
-    };
+        ];
 
     let mut linked_exports = Vec::new();
     let mut linked_imports = Vec::new();
@@ -384,9 +352,8 @@ pub fn link(
         linked_imports,
         global_num_limit,
         Some(merged_source_file_map),
-        if is_module {
-            HashMap::new()
-        } else {
+
+{
             let mut map = HashMap::new();
             let mut file_hasher = DefaultHasher::new();
             file_hasher.write(b"builtin/array.mini");
