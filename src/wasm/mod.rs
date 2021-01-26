@@ -95,6 +95,7 @@ fn set64_from_buffer(loc: usize) -> Instruction {
 }
 
 fn adjust_stack(res : &mut Vec<Instruction>, diff : usize, num : usize) {
+    println!("adjust remove {} save {}", diff, num);
     if diff == 0 { return; }
     for _i in 0..num {
         res.push(simple_op(AVMOpcode::AuxPush));
@@ -103,7 +104,7 @@ fn adjust_stack(res : &mut Vec<Instruction>, diff : usize, num : usize) {
         res.push(simple_op(AVMOpcode::Pop));
     }
     for _i in 0..num {
-        res.push(simple_op(AVMOpcode::AuxPush));
+        res.push(simple_op(AVMOpcode::AuxPop));
     }
 }
 
@@ -377,13 +378,29 @@ fn handle_function(m : &Module, func : &FuncBody, idx : usize, mut label : usize
                 res.push(simple_op(AVMOpcode::Pop));
                 ptr = ptr - ftype.params().len() + num_func_returns(ftype) - 1;
             },
-            /*
             Return => {
                 let c = &stack[0];
+                println!("return {} level {} rets {}", ptr, c.level, c.rets);
                 adjust_stack(&mut res, ptr - c.level, c.rets);
                 ptr = ptr - c.rets;
-                res.push(JUMP(c.target));
+                res.push(jump(c.target));
             },
+            /*
+            Select => {
+                let else_label = label;
+                let end_label = label+1;
+                res.push(JUMPI(else_label));
+                res.push(SET(2));
+                res.push(DROP(1));
+                res.push(JUMP(end_label));
+                res.push(LABEL(else_label));
+                res.push(DROP(1));
+                res.push(LABEL(end_label));
+                
+                label = label+2;
+                ptr = ptr-2;
+            },
+
             BrTable(ref tab, def) => {
                 let rets = &stack[stack.len() - (def as usize) - 1].rets;
                 let len = tab.len() as u32;
@@ -404,21 +421,6 @@ fn handle_function(m : &Module, func : &FuncBody, idx : usize, mut label : usize
                 
                 ptr = ptr-1-rets;
                 label = label + len + 2;
-            },
-            
-            Select => {
-                let else_label = label;
-                let end_label = label+1;
-                res.push(JUMPI(else_label));
-                res.push(SET(2));
-                res.push(DROP(1));
-                res.push(JUMP(end_label));
-                res.push(LABEL(else_label));
-                res.push(DROP(1));
-                res.push(LABEL(end_label));
-                
-                label = label+2;
-                ptr = ptr-2;
             },
             
             I64Const(x) => {
@@ -674,6 +676,7 @@ fn handle_function(m : &Module, func : &FuncBody, idx : usize, mut label : usize
     }
 
     // Function return
+    res.push(mk_label(end_label));
     res.push(get_return_pc());
     res.push(simple_op(AVMOpcode::Jump));
 
@@ -697,11 +700,11 @@ pub fn resolve_labels(arr: Vec<Instruction>) -> Vec<Instruction> {
     for (idx, inst) in arr.iter().enumerate() {
         match inst.opcode {
             Opcode::Label(Label::Evm(num)) => {
-                println!("Foudn label {} -> {}", num, idx);
+                // println!("Found label {} -> {}", num, idx);
                 labels.insert(Label::Evm(num), CodePt::Internal(idx));
             }
             Opcode::Label(Label::WasmFunc(num)) => {
-                println!("Foudn func label {} -> {}", num, idx);
+                // println!("Found func label {} -> {}", num, idx);
                 labels.insert(Label::WasmFunc(num), CodePt::Internal(idx));
             }
             _ => {}
@@ -742,7 +745,7 @@ pub fn load(fname: String) -> Vec<Instruction> {
         let (mut res, n_label) = handle_function(&module, f, idx, label, calli);
         init.append(&mut res);
         label = n_label;
-        println!("labels {}", label);
+        // println!("labels {}", label);
     }
 
     // Indirect calls
@@ -750,9 +753,8 @@ pub fn load(fname: String) -> Vec<Instruction> {
     if let Some(sec) = module.elements_section() {
         for seg in sec.entries().iter() {
             for (idx, f_idx) in seg.members().iter().enumerate() {
-                let next_label = label+1;
-                let test_label = label;
-                label = label + 2;
+                let next_label = label;
+                label = label + 1;
                 // Function index in module
                 let ftype = find_func_type(&module, *f_idx);
                 init.push(simple_op(AVMOpcode::Dup0));
