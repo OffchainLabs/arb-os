@@ -5,6 +5,7 @@ use crate::mavm::{AVMOpcode, CodePt, Instruction, Label, /*LabelGenerator,*/ Opc
 use crate::compile::{DebugInfo};
 use crate::uint256::Uint256;
 use std::collections::HashMap;
+use ethers_core::utils::keccak256;
 
 #[derive(Debug, Clone)]
 struct Control {
@@ -59,6 +60,10 @@ fn jump(idx: usize) -> Instruction {
 
 fn call_jump(idx: u32) -> Instruction {
     Instruction::from_opcode_imm(Opcode::AVMOpcode(AVMOpcode::Jump), Value::Label(Label::WasmFunc(idx as usize)), DebugInfo::from(None))
+}
+
+fn call_cjump(idx: u32) -> Instruction {
+    Instruction::from_opcode_imm(Opcode::AVMOpcode(AVMOpcode::Cjump), Value::Label(Label::WasmFunc(idx as usize)), DebugInfo::from(None))
 }
 
 fn get_frame() -> Instruction {
@@ -137,7 +142,32 @@ fn find_func_type(m : &Module, num : u32) -> &FunctionType {
     }
 }
 
-fn handle_function(m : &Module, func : &FuncBody, idx : usize, mut label : usize) -> (Vec<Instruction>, usize) {
+fn type_code(t : &ValueType) -> u8 {
+    match *t {
+        ValueType::I32 => 0,
+        ValueType::I64 => 1,
+        ValueType::F32 => 2,
+        ValueType::F64 => 3,
+    }
+}
+
+fn hash_ftype(ft : &FunctionType) -> Uint256 {
+    let mut data = Vec::new();
+    
+    for t in ft.params() {
+        data.push(type_code(t));
+    }
+    
+    data.push(0xff);
+    for t in ft.results() {
+        data.push(type_code(t));
+    }
+        
+    let hash_result = keccak256(&data);
+    Uint256::from_bytes(&hash_result)
+}
+
+fn handle_function(m : &Module, func : &FuncBody, idx : usize, mut label : usize, calli: usize) -> (Vec<Instruction>, usize) {
     let sig = m.function_section().unwrap().entries()[idx].type_ref();
     let ftype = get_func_type(m, sig);
     
@@ -321,15 +351,33 @@ fn handle_function(m : &Module, func : &FuncBody, idx : usize, mut label : usize
                 // Pop stack frame
                 res.push(simple_op(AVMOpcode::AuxPop));
                 res.push(simple_op(AVMOpcode::Pop));
-                ptr = ptr - ftype.params().len() + num_func_returns(ftype);
+                ptr = ptr - ftype.params().len() + ftype.results().len();
+            },
+            CallIndirect(x,_) => {
+                let ftype = get_func_type(m, *x);
+                println!("calling {} with type {:?} return label {}", x, ftype, label+1);
+                let return_label = label+1;
+                label = label+1;
+                // push new frame to aux stack
+                res.push(push_frame(Value::new_tuple(vec![Value::new_buffer(vec![]), Value::Label(Label::Evm(return_label))])));
+                // Push args to frame
+                for i in 0..ftype.params().len() {
+                    res.push(get_frame());
+                    res.push(simple_op(AVMOpcode::Swap1));
+                    res.push(set64_from_buffer(i));
+                    res.push(set_frame());
+                }
+                // Codepoints and hashes are in some kind of a table
+                res.push(push_value(Value::Int(hash_ftype(&ftype))));
+                res.push(simple_op(AVMOpcode::Swap1));
+                res.push(call_jump(calli as u32));
+                res.push(mk_label(return_label));
+                // Pop stack frame
+                res.push(simple_op(AVMOpcode::AuxPop));
+                res.push(simple_op(AVMOpcode::Pop));
+                ptr = ptr - ftype.params().len() + num_func_returns(ftype) - 1;
             },
             /*
-            CallIndirect(x,_) => {
-                let ftype = get_func_type(m, x);
-                res.push(CHECKCALLI(hash_ftype(&ftype)));
-                res.push(CALLI);
-                ptr = ptr - (ftype.params().len() as u32) + num_func_returns(ftype) - 1;
-            },
             Return => {
                 let c = &stack[0];
                 adjust_stack(&mut res, ptr - c.level, c.rets);
@@ -677,7 +725,7 @@ pub fn load(fname: String) -> Vec<Instruction> {
 
     // Put initial frame to aux stack
     let mut init = vec![];
-    init.push(push_frame(Value::new_tuple(vec![Value::new_buffer(vec![]), Value::Label(Label::WasmFunc(f_count))])));
+    init.push(push_frame(Value::new_tuple(vec![Value::new_buffer(vec![]), Value::Label(Label::WasmFunc(f_count+1))])));
 
     // Add test argument to the frame
     init.push(get_frame());
@@ -686,17 +734,45 @@ pub fn load(fname: String) -> Vec<Instruction> {
     init.push(set_frame());
 
     let mut label = 1;
+    let calli = f_count;
 
     for (idx,f) in code_section.bodies().iter().enumerate() {
         // function return will be in the stack
         init.push(mk_func_label(idx));
-        let (mut res, n_label) = handle_function(&module, f, idx, label);
+        let (mut res, n_label) = handle_function(&module, f, idx, label, calli);
         init.append(&mut res);
         label = n_label;
         println!("labels {}", label);
     }
 
+    // Indirect calls
     init.push(mk_func_label(f_count));
+    if let Some(sec) = module.elements_section() {
+        for seg in sec.entries().iter() {
+            for (idx, f_idx) in seg.members().iter().enumerate() {
+                let next_label = label+1;
+                let test_label = label;
+                label = label + 2;
+                // Function index in module
+                let ftype = find_func_type(&module, *f_idx);
+                init.push(simple_op(AVMOpcode::Dup0));
+                init.push(push_value(Value::Int(Uint256::from_usize(idx))));
+                init.push(simple_op(AVMOpcode::Equal));
+                init.push(simple_op(AVMOpcode::IsZero));
+                init.push(cjump(next_label));
+                // We will call this function now or fail
+                init.push(simple_op(AVMOpcode::Pop));
+                init.push(push_value(Value::Int(hash_ftype(&ftype))));
+                init.push(simple_op(AVMOpcode::Equal));
+                init.push(call_cjump(*f_idx as u32));
+                init.push(simple_op(AVMOpcode::Panic));
+                init.push(mk_label(next_label));
+            }
+        }
+    }
+
+    // Cleaning up
+    init.push(mk_func_label(f_count+1));
     init.push(simple_op(AVMOpcode::AuxPop));
     init.push(simple_op(AVMOpcode::Pop));
     init.push(simple_op(AVMOpcode::Noop));
