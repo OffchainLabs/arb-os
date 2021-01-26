@@ -263,7 +263,7 @@ pub fn link(
     } else {
         add_auto_link_progs(&progs_in)?
     };
-    let mut insns_so_far: usize = 2; // leave 2 insns of space at beginning for initialization
+    let mut insns_so_far: usize = 3; // leave 2 insns of space at beginning for initialization
     let mut imports_so_far: usize = 0;
     let mut int_offsets = Vec::new();
     let mut ext_offsets = Vec::new();
@@ -310,6 +310,7 @@ pub fn link(
             None => Value::none(),
         };
         vec![
+            Instruction::from_opcode(Opcode::AVMOpcode(AVMOpcode::Noop), DebugInfo::default()),
             Instruction::from_opcode_imm(
                 Opcode::AVMOpcode(AVMOpcode::Swap1),
                 init_immediate,
@@ -330,6 +331,7 @@ pub fn link(
                 make_uninitialized_tuple(global_num_limit),
                 DebugInfo::default(),
             ),
+            Instruction::from_opcode(Opcode::AVMOpcode(AVMOpcode::Noop), DebugInfo::default()),
         ]
     };
 
