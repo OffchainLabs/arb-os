@@ -729,6 +729,8 @@ func unmarshalValue(stream: ByteStream, codeMap: map<uint, AvmCodePoint>) -> opt
         } else {
             None<(ByteStream, any)>
         }
+    } elseif (kind == 2) { // empty buffer
+        Some((ustr, newbuffer()))
     } elseif (kind == 10) {   // 0-tuple
         Some((stream, ()))
     } elseif (kind == 11) {   // 1-tuple
