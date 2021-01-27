@@ -724,7 +724,9 @@ func unmarshalValue(stream: ByteStream, codeMap: map<uint, AvmCodePoint>) -> opt
         Some((ustr, val))
     } elseif (kind == 1) { // codepoint
         let (ustr, idx) = rlp_decodeUint(stream)?;
+        asm((401, ustr, idx),) { debugprint };
         xif let Some(codePt) = codeMap[idx] {
+            asm((402, ustr, idx, codePt),) { debugprint };
             Some((ustr, codePt))
         } else {
             None<(ByteStream, any)>
