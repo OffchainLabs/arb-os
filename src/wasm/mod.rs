@@ -42,6 +42,10 @@ fn simple_op(op : AVMOpcode) -> Instruction {
     Instruction::from_opcode(Opcode::AVMOpcode(op), DebugInfo::from(None))
 }
 
+fn immed_op(op : AVMOpcode, v: Value) -> Instruction {
+    Instruction::from_opcode_imm(Opcode::AVMOpcode(op), v, DebugInfo::from(None))
+}
+
 fn mk_label(idx: usize) -> Instruction {
     Instruction::from_opcode(Opcode::Label(Label::Evm(idx)), DebugInfo::from(None))
 }
@@ -168,7 +172,7 @@ fn hash_ftype(ft : &FunctionType) -> Uint256 {
     Uint256::from_bytes(&hash_result)
 }
 
-fn handle_function(m : &Module, func : &FuncBody, idx : usize, mut label : usize, calli: usize) -> (Vec<Instruction>, usize) {
+fn handle_function(m : &Module, func : &FuncBody, idx : usize, mut label : usize, calli: usize, memory_offset: usize) -> (Vec<Instruction>, usize) {
     let sig = m.function_section().unwrap().entries()[idx].type_ref();
     let ftype = get_func_type(m, sig);
     
@@ -178,7 +182,6 @@ fn handle_function(m : &Module, func : &FuncBody, idx : usize, mut label : usize
 
     let mut res : Vec<Instruction> = Vec::new();
     let mut stack : Vec<Control> = Vec::new();
-    // let mut label : usize = 1;
     let mut ptr : usize = count_locals(func) + ftype.params().len();
     let mut bptr : usize = 0;
 
@@ -194,11 +197,6 @@ fn handle_function(m : &Module, func : &FuncBody, idx : usize, mut label : usize
 
     eprintln!("Got function with {:?} ops, {:?} locals, {} params, {} rets",
         func.code().elements().len(), count_locals(func), ftype.params().len(), rets);
-    // Push default values
-    // not necessary to push anything
-    for _i in 0..(count_locals(func) as usize) {
-        eprintln!("pushing default");
-    }
 
     for op in func.code().elements().iter() {
         eprintln!("handling {} / {}; {:?} ... label {}", ptr, stack.len(), op, label);
@@ -250,6 +248,10 @@ fn handle_function(m : &Module, func : &FuncBody, idx : usize, mut label : usize
                 ptr = ptr - 1;
             },
             I32Const(x) => {
+                res.push(push_value(Value::Int(Uint256::from_usize(*x as usize))));
+                ptr = ptr+1;
+            },
+            I64Const(x) => {
                 res.push(push_value(Value::Int(Uint256::from_usize(*x as usize))));
                 ptr = ptr+1;
             },
@@ -385,74 +387,57 @@ fn handle_function(m : &Module, func : &FuncBody, idx : usize, mut label : usize
                 ptr = ptr - c.rets;
                 res.push(jump(c.target));
             },
-            /*
             Select => {
                 let else_label = label;
-                let end_label = label+1;
-                res.push(JUMPI(else_label));
-                res.push(SET(2));
-                res.push(DROP(1));
-                res.push(JUMP(end_label));
-                res.push(LABEL(else_label));
-                res.push(DROP(1));
-                res.push(LABEL(end_label));
+                // let end_label = label+1;
+                res.push(cjump(else_label));
+                res.push(simple_op(AVMOpcode::Swap1));
+                // res.push(jump(end_label));
+                res.push(mk_label(else_label));
+                res.push(simple_op(AVMOpcode::Pop));
                 
                 label = label+2;
                 ptr = ptr-2;
             },
 
-            BrTable(ref tab, def) => {
-                let rets = &stack[stack.len() - (def as usize) - 1].rets;
-                let len = tab.len() as u32;
-                res.push(JUMPFORWARD(len));
-                for i in 0..len {
-                    res.push(JUMP (label+i as u32));
-                }
+            BrTable(data) => {
+                let tab = &data.table;
+                let def = data.default;
+                let len = tab.len();
                 for (i,num) in tab.iter().enumerate() {
                     let c = &stack[stack.len() - (*num as usize) - 1];
-                    res.push(LABEL(label+i as u32));
+                    res.push(simple_op(AVMOpcode::Dup0));
+                    res.push(immed_op(AVMOpcode::Equal, Value::Int(Uint256::from_usize(i))));
+                    res.push(simple_op(AVMOpcode::IsZero));
+                    res.push(cjump(label+i));
+                    res.push(simple_op(AVMOpcode::Pop));
                     adjust_stack(&mut res, ptr - c.level - 1, c.rets);
-                    res.push(JUMP(c.target));
+                    res.push(jump(c.target));
+                    res.push(mk_label(label+i));
                 }
                 let c = &stack[stack.len() - (def as usize) - 1];
-                res.push(LABEL(label+len as u32));
+                res.push(simple_op(AVMOpcode::Pop));
                 adjust_stack(&mut res, ptr - c.level - 1, c.rets);
-                res.push(JUMP(c.target));
+                res.push(jump(c.target));
                 
-                ptr = ptr-1-rets;
+                ptr = ptr-1-c.rets;
                 label = label + len + 2;
             },
-            
-            I64Const(x) => {
-                res.push(PUSH(x as u64));
-                ptr = ptr+1;
-            },
-            F32Const(x) => {
-                res.push(PUSH(x as u64));
-                ptr = ptr+1;
-            },
-            F64Const(x) => {
-                res.push(PUSH(x as u64));
-                ptr = ptr+1;
-            },
-            
+
             GetGlobal(x) => {
                 ptr = ptr + 1;
-                res.push(LOADGLOBAL(x));
+                res.push(simple_op(AVMOpcode::Rget));
+                res.push(get64_from_buffer((*x+1) as usize));
             },
             SetGlobal(x) => {
                 ptr = ptr - 1;
-                res.push(STOREGLOBAL(x));
+                res.push(simple_op(AVMOpcode::Rget));
+                res.push(simple_op(AVMOpcode::Swap1));
+                res.push(set64_from_buffer((*x+1) as usize));
+                res.push(simple_op(AVMOpcode::Rset));
             },
             
-            CurrentMemory(_) => {
-                ptr = ptr+1;
-                res.push(CURMEM);
-            },
-            GrowMemory(_) => {
-                ptr = ptr-1;
-                res.push(GROW);
-            },
+            /*
             
             I32Load(_, offset) => {
                 res.push(LOAD {offset, memsize: Size::Mem32, packing:Packing::ZX, mtype:ValueType::I32});
@@ -492,13 +477,6 @@ fn handle_function(m : &Module, func : &FuncBody, idx : usize, mut label : usize
                 res.push(LOAD {offset, memsize: Size::Mem32, packing:Packing::ZX, mtype:ValueType::I64});
             },
             
-            F32Load(_, offset) => {
-                res.push(LOAD {offset, memsize: Size::Mem32, packing:Packing::ZX, mtype:ValueType::F32});
-            },
-            F64Load(_, offset) => {
-                res.push(LOAD {offset, memsize: Size::Mem64, packing:Packing::ZX, mtype:ValueType::F64});
-            },
-            
             I32Store(_, offset) => {
                 ptr = ptr - 2;
                 res.push(STORE {offset, memsize: Size::Mem32, mtype:ValueType::I32});
@@ -529,15 +507,6 @@ fn handle_function(m : &Module, func : &FuncBody, idx : usize, mut label : usize
                 res.push(STORE {offset, memsize: Size::Mem32, mtype:ValueType::I64});
             },
             
-            F32Store(_, offset) => {
-                ptr = ptr - 2;
-                res.push(STORE {offset, memsize: Size::Mem32, mtype:ValueType::F32});
-            },
-            F64Store(_, offset) => {
-                ptr = ptr - 2;
-                res.push(STORE {offset, memsize: Size::Mem64, mtype:ValueType::F64});
-            },
-            
             I32Eqz => res.push(UNOP(0x45)),
             I32Ne => { ptr = ptr - 1; res.push(BINOP(0x47)); },
             I32LtS => { ptr = ptr - 1; res.push(BINOP(0x48)); },
@@ -561,20 +530,6 @@ fn handle_function(m : &Module, func : &FuncBody, idx : usize, mut label : usize
             I64GeS => { ptr = ptr - 1; res.push(BINOP(0x59)); },
             I64GeU => { ptr = ptr - 1; res.push(BINOP(0x5a)); },
             
-            F32Eq => { ptr = ptr - 1; res.push(BINOP(0x5b)); },
-            F32Ne => { ptr = ptr - 1; res.push(BINOP(0x5c)); },
-            F32Lt => { ptr = ptr - 1; res.push(BINOP(0x5d)); },
-            F32Gt => { ptr = ptr - 1; res.push(BINOP(0x5e)); },
-            F32Le => { ptr = ptr - 1; res.push(BINOP(0x5f)); },
-            F32Ge => { ptr = ptr - 1; res.push(BINOP(0x60)); },
-            
-            F64Eq => { ptr = ptr - 1; res.push(BINOP(0x61)); },
-            F64Ne => { ptr = ptr - 1; res.push(BINOP(0x62)); },
-            F64Lt => { ptr = ptr - 1; res.push(BINOP(0x63)); },
-            F64Gt => { ptr = ptr - 1; res.push(BINOP(0x64)); },
-            F64Le => { ptr = ptr - 1; res.push(BINOP(0x65)); },
-            F64Ge => { ptr = ptr - 1; res.push(BINOP(0x66)); },
-
             I32Clz => res.push(UNOP(0x67)),
             I32Ctz => res.push(UNOP(0x68)),
             I32Popcnt => res.push(UNOP(0x69)),
@@ -613,63 +568,19 @@ fn handle_function(m : &Module, func : &FuncBody, idx : usize, mut label : usize
             I64Rotl => { ptr = ptr - 1; res.push(BINOP(0x89)); },
             I64Rotr => { ptr = ptr - 1; res.push(BINOP(0x8a)); },
             
-            F32Abs => res.push(UNOP(0x8b)),
-            F32Neg => res.push(UNOP(0x8c)),
-            F32Ceil => res.push(UNOP(0x8d)),
-            F32Floor => res.push(UNOP(0x8e)),
-            F32Trunc => res.push(UNOP(0x8f)),
-            F32Nearest => res.push(UNOP(0x90)),
-            F32Sqrt => res.push(UNOP(0x91)),
-            F32Add => { ptr = ptr - 1; res.push(BINOP(0x92)); },
-            F32Sub => { ptr = ptr - 1; res.push(BINOP(0x93)); },
-            F32Mul => { ptr = ptr - 1; res.push(BINOP(0x94)); },
-            F32Div => { ptr = ptr - 1; res.push(BINOP(0x95)); },
-            F32Min => { ptr = ptr - 1; res.push(BINOP(0x96)); },
-            F32Max => { ptr = ptr - 1; res.push(BINOP(0x97)); },
-            F32Copysign => { ptr = ptr - 1; res.push(BINOP(0x98)); },
-            
-            F64Abs => res.push(UNOP(0x99)),
-            F64Neg => res.push(UNOP(0x9a)),
-            F64Ceil => res.push(UNOP(0x9b)),
-            F64Floor => res.push(UNOP(0x9c)),
-            F64Trunc => res.push(UNOP(0x9d)),
-            F64Nearest => res.push(UNOP(0x9e)),
-            F64Sqrt => res.push(UNOP(0x9f)),
-            F64Add => { ptr = ptr - 1; res.push(BINOP(0xa0)); },
-            F64Sub => { ptr = ptr - 1; res.push(BINOP(0xa1)); },
-            F64Mul => { ptr = ptr - 1; res.push(BINOP(0xa2)); },
-            F64Div => { ptr = ptr - 1; res.push(BINOP(0xa3)); },
-            F64Min => { ptr = ptr - 1; res.push(BINOP(0xa4)); },
-            F64Max => { ptr = ptr - 1; res.push(BINOP(0xa5)); },
-            F64Copysign => { ptr = ptr - 1; res.push(BINOP(0xa6)); },
-            
-            
             I32WarpI64 => res.push(UNOP(0xa7)),
-            I32TruncSF32 => res.push(UNOP(0xa8)),
-            I32TruncUF32 => res.push(UNOP(0xa9)),
-            I32TruncSF64 => res.push(UNOP(0xaa)),
-            I32TruncUF64 => res.push(UNOP(0xab)),
             I64ExtendSI32 => res.push(UNOP(0xac)),
             I64ExtendUI32 => res.push(UNOP(0xad)),
-            I64TruncSF32 => res.push(UNOP(0xae)),
-            I64TruncUF32 => res.push(UNOP(0xaf)),
-            I64TruncSF64 => res.push(UNOP(0xb0)),
-            I64TruncUF64 => res.push(UNOP(0xb1)),
-            F32ConvertSI32 => res.push(UNOP(0xb2)),
-            F32ConvertUI32 => res.push(UNOP(0xb3)),
-            F32ConvertSI64 => res.push(UNOP(0xb4)),
-            F32ConvertUI64 => res.push(UNOP(0xb5)),
-            F32DemoteF64 => res.push(UNOP(0xb6)),
-            F64ConvertSI32 => res.push(UNOP(0xb7)),
-            F64ConvertUI32 => res.push(UNOP(0xb8)),
-            F64ConvertSI64 => res.push(UNOP(0xb9)),
-            F64ConvertUI64 => res.push(UNOP(0xba)),
-            F64PromoteF32 => res.push(UNOP(0xbb)),
 
-            I32ReinterpretF32 => res.push(UNOP(0xbc)),
-            I64ReinterpretF64 => res.push(UNOP(0xbd)),
-            F32ReinterpretI32 => res.push(UNOP(0xbe)),
-            F64ReinterpretI64 => res.push(UNOP(0xbf)),
+            CurrentMemory(_) => {
+                ptr = ptr+1;
+                res.push(CURMEM);
+            },
+            GrowMemory(_) => {
+                ptr = ptr-1;
+                res.push(GROW);
+            },
+            
             */
             _ => {},
         }
@@ -717,7 +628,18 @@ pub fn resolve_labels(arr: Vec<Instruction>) -> Vec<Instruction> {
     res
 }
 
-pub fn load(fname: String) -> Vec<Instruction> {
+fn init_value(_m : &Module, expr : &InitExpr) -> usize {
+    eprintln!("init {:?}", expr);
+    match expr.code()[0] {
+      I32Const(a) => a as usize,
+      F32Const(a) => a as usize,
+      I64Const(a) => a as usize,
+      F64Const(a) => a as usize,
+      _ => 0
+    }
+}
+
+pub fn load(fname: String, param: usize) -> Vec<Instruction> {
     let module = parity_wasm::deserialize_file(fname).unwrap();
     assert!(module.code_section().is_some());
 
@@ -725,24 +647,41 @@ pub fn load(fname: String) -> Vec<Instruction> {
     let f_count = code_section.bodies().len();
 
     println!("Function count in wasm file: {}", f_count);
+    let mut init = vec![];
+
+    // Save register
+    init.push(simple_op(AVMOpcode::Rget));
+    init.push(simple_op(AVMOpcode::AuxPush));
+
+    // Construct initial memory with globals
+    init.push(simple_op(AVMOpcode::NewBuffer));
+    let mut globals = 1;
+    if let Some(sec) = module.global_section() {
+        for g in sec.entries().iter() {
+            init.push(push_value(Value::Int(Uint256::from_usize(init_value(&module, g.init_expr())))));
+            init.push(set64_from_buffer(globals));
+            globals = globals + 1;
+        }
+    }
+    init.push(simple_op(AVMOpcode::Rset));
 
     // Put initial frame to aux stack
-    let mut init = vec![];
     init.push(push_frame(Value::new_tuple(vec![Value::new_buffer(vec![]), Value::Label(Label::WasmFunc(f_count+1))])));
 
     // Add test argument to the frame
     init.push(get_frame());
-    init.push(push_value(Value::Int(Uint256::from_usize(10))));
+    init.push(push_value(Value::Int(Uint256::from_usize(param))));
     init.push(set64_from_buffer(0));
     init.push(set_frame());
 
     let mut label = 1;
     let calli = f_count;
+    let memory_offset = globals*8;
 
     for (idx,f) in code_section.bodies().iter().enumerate() {
         // function return will be in the stack
         init.push(mk_func_label(idx));
-        let (mut res, n_label) = handle_function(&module, f, idx, label, calli);
+        let (mut res, n_label) = handle_function(&module, f, idx, label, calli, memory_offset);
         init.append(&mut res);
         label = n_label;
         // println!("labels {}", label);
@@ -777,6 +716,8 @@ pub fn load(fname: String) -> Vec<Instruction> {
     init.push(mk_func_label(f_count+1));
     init.push(simple_op(AVMOpcode::AuxPop));
     init.push(simple_op(AVMOpcode::Pop));
+    init.push(simple_op(AVMOpcode::AuxPop));
+    init.push(simple_op(AVMOpcode::Rset));
     init.push(simple_op(AVMOpcode::Noop));
 
     clear_labels(resolve_labels(init))

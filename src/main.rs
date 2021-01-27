@@ -108,6 +108,8 @@ struct EvmTests {
 #[derive(Clap, Debug)]
 struct WasmTest {
     input: Vec<String>,
+    #[clap(short, long)]
+    param: Option<usize>,
 }
 
 ///Main enum for command line arguments.
@@ -136,7 +138,11 @@ fn main() -> Result<(), CompileError> {
                 println!("no input");
                 return Ok(());
             }
-            let code = wasm::load(filenames[0].clone());
+            let param = match fname.param {
+                Some(p) => p,
+                None => 123,
+            };
+            let code = wasm::load(filenames[0].clone(), param);
             let code_len = code.len();
             let env = RuntimeEnvironment::new(Uint256::from_usize(1111), None);
             let program = LinkedProgram {
