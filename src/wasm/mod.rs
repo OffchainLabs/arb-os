@@ -112,6 +112,32 @@ fn adjust_stack(res : &mut Vec<Instruction>, diff : usize, num : usize) {
     }
 }
 
+// load byte, save address
+fn load_byte(res: &mut Vec<Instruction>, offset: usize) {
+    // value, address
+    res.push(simple_op(AVMOpcode::Swap1)); // address, value
+    res.push(simple_op(AVMOpcode::Dup0)); // address, address, value
+    res.push(simple_op(AVMOpcode::Rget)); // buffer, address, address, value
+    res.push(simple_op(AVMOpcode::Swap1)); // address, buffer, address, value
+    res.push(immed_op(AVMOpcode::Plus, Value::Int(Uint256::from_usize(offset)))); // address, buffer, address, value
+    res.push(simple_op(AVMOpcode::GetBuffer8)); // value2, address, value
+    res.push(simple_op(AVMOpcode::Swap1)); // address, value2, value
+    res.push(simple_op(AVMOpcode::Swap2)); // value, value2, address
+}
+
+// In stack? address (top), value
+fn store_byte(res: &mut Vec<Instruction>, offset: usize) {
+    // value, address
+    res.push(simple_op(AVMOpcode::Dup1)); // address, value, address
+    res.push(simple_op(AVMOpcode::Dup1)); // value, address, value, address
+
+    res.push(simple_op(AVMOpcode::Rget)); // buffer, value, address, value, address
+    res.push(simple_op(AVMOpcode::Swap2)); // address, value, buffer, value, address
+    res.push(immed_op(AVMOpcode::Plus, Value::Int(Uint256::from_usize(offset)))); // address, value, buffer, value, address
+    res.push(simple_op(AVMOpcode::SetBuffer8)); // buffer, value, address
+    res.push(simple_op(AVMOpcode::Rset)); // value, address
+}
+
 fn is_func(e : &External) -> bool {
     match *e {
         External::Function(_idx) => {
@@ -437,11 +463,65 @@ fn handle_function(m : &Module, func : &FuncBody, idx : usize, mut label : usize
                 res.push(simple_op(AVMOpcode::Rset));
             },
             
+            I32Load(_, offset) => {
+                /*
+                res.push(simple_op(AVMOpcode::Rget));
+                res.push(simple_op(AVMOpcode::Swap1));
+                res.push(immed_op(AVMOpcode::Add, Value::Int(Uint256::from_usize(offset+memory_offset))));
+                res.push(simple_op(AVMOpcode::GetBuffer64));
+                change_endian_32(&res);
+                */
+                let offset = *offset as usize;
+                res.push(immed_op(AVMOpcode::Noop, Value::Int(Uint256::from_usize(0))));
+                load_byte(&mut res, offset+memory_offset);
+                res.push(simple_op(AVMOpcode::BitwiseOr));
+                res.push(immed_op(AVMOpcode::ShiftLeft, Value::Int(Uint256::from_usize(8))));
+                load_byte(&mut res, offset+memory_offset+1);
+                res.push(simple_op(AVMOpcode::BitwiseOr));
+                res.push(immed_op(AVMOpcode::ShiftLeft, Value::Int(Uint256::from_usize(8))));
+                load_byte(&mut res, offset+memory_offset+2);
+                res.push(simple_op(AVMOpcode::BitwiseOr));
+                res.push(immed_op(AVMOpcode::ShiftLeft, Value::Int(Uint256::from_usize(8))));
+                load_byte(&mut res, offset+memory_offset+3);
+                res.push(simple_op(AVMOpcode::BitwiseOr));
+                res.push(simple_op(AVMOpcode::Swap1));
+                res.push(simple_op(AVMOpcode::Pop));
+            },
+
+            I32Store(_, offset) => {
+                let offset = *offset as usize;
+                ptr = ptr - 2;
+                store_byte(&mut res, offset+memory_offset+3);
+                res.push(immed_op(AVMOpcode::ShiftRight, Value::Int(Uint256::from_usize(8))));
+                store_byte(&mut res, offset+memory_offset+2);
+                res.push(immed_op(AVMOpcode::ShiftRight, Value::Int(Uint256::from_usize(8))));
+                store_byte(&mut res, offset+memory_offset+1);
+                res.push(immed_op(AVMOpcode::ShiftRight, Value::Int(Uint256::from_usize(8))));
+                store_byte(&mut res, offset+memory_offset+0);
+                res.push(immed_op(AVMOpcode::ShiftRight, Value::Int(Uint256::from_usize(8))));
+                res.push(simple_op(AVMOpcode::Pop));
+                res.push(simple_op(AVMOpcode::Pop));
+                /*
+                res.push(simple_op(AVMOpcode::AuxPush));
+                res.push(simple_op(AVMOpcode::Rget));
+                res.push(simple_op(AVMOpcode::Swap1));
+                res.push(immed_op(AVMOpcode::Add, Value::Int(Uint256::from_usize(offset+memory_offset))));
+                res.push(simple_op(AVMOpcode::Dup0));
+                res.push(simple_op(AVMOpcode::Swap2));
+                res.push(simple_op(AVMOpcode::GetBuffer64));
+                res.push(immed_op(AVMOpcode::BitwiseAnd, Value::Int(Uint256::from_usize(0xffffffffu64))));
+                res.push(simple_op(AVMOpcode::AuxPop));
+                change_endian_32(&res);
+                res.push(simple_op(AVMOpcode::BitwiseOr));
+                res.push(simple_op(AVMOpcode::Rget));
+                res.push(simple_op(AVMOpcode::Swap2));
+                res.push(simple_op(AVMOpcode::SetBuffer64));
+                res.push(simple_op(AVMOpcode::Rset));
+                */
+            },
+
             /*
             
-            I32Load(_, offset) => {
-                res.push(LOAD {offset, memsize: Size::Mem32, packing:Packing::ZX, mtype:ValueType::I32});
-            },
             I32Load8S(_, offset) => {
                 res.push(LOAD {offset, memsize: Size::Mem8, packing:Packing::SX, mtype:ValueType::I32});
             },
@@ -477,10 +557,6 @@ fn handle_function(m : &Module, func : &FuncBody, idx : usize, mut label : usize
                 res.push(LOAD {offset, memsize: Size::Mem32, packing:Packing::ZX, mtype:ValueType::I64});
             },
             
-            I32Store(_, offset) => {
-                ptr = ptr - 2;
-                res.push(STORE {offset, memsize: Size::Mem32, mtype:ValueType::I32});
-            },
             I32Store8(_, offset) => {
                 ptr = ptr - 2;
                 res.push(STORE {offset, memsize: Size::Mem8, mtype:ValueType::I32});

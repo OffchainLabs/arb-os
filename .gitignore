@@ -34,3 +34,4 @@ contracts/test/build/contracts/*
 contracts/arbos/build/contracts/*
 evm-tests/.travis.yml
 evm-test-logs/*
+wasm-tests/*.wasm
