@@ -8,6 +8,10 @@ use crate::link::LinkedProgram;
 use std::fs::File;
 use std::io::Read;
 use std::convert::TryInto;
+use crate::run::{RuntimeEnvironment, load_from_file};
+use crate::uint256::Uint256;
+use crate::evm::abi::_ArbOwner;
+use ethers_signers::Signer;
 
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct CodeUploader {
@@ -122,4 +126,33 @@ fn test_code_upload_prep() {
     assert_eq!(uploader.num_total, uploader.num_so_far);
     let reconstituted = CodeUploader::deserialize(uploader.clone().serialize());
     assert_eq!(uploader, reconstituted);
+}
+
+#[test]
+fn test_upgrade_arbos_over_itself() {
+    _test_upgrade_arbos_over_itself_impl().unwrap();
+}
+
+fn _test_upgrade_arbos_over_itself_impl() -> Result<(), ethabi::Error> {
+    let rt_env = RuntimeEnvironment::new(Uint256::from_usize(1111), None);
+    let mut machine = load_from_file(Path::new("arb_os/arbos.mexe"), rt_env);
+    machine.start_at_zero();
+
+    let wallet = machine.runtime_env.new_wallet();
+    let my_addr = Uint256::from_bytes(wallet.address().as_bytes());
+
+    let arbowner = _ArbOwner::_new(&wallet, false);
+
+    arbowner._give_ownership(&mut machine, my_addr, Some(Uint256::zero()))?;
+
+    let uploader = CodeUploader::new_from_file(Path::new("arb_os/arbos.mexe"));
+
+    arbowner._start_code_upload(&mut machine)?;
+
+    for buf in uploader.full_batches {
+        println!("uploading a batch");
+        arbowner._continue_code_upload(&mut machine, buf)?;
+    }
+
+    Ok(())
 }
