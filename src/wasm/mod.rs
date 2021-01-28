@@ -125,7 +125,6 @@ fn load_byte(res: &mut Vec<Instruction>, offset: usize) {
     res.push(simple_op(AVMOpcode::Swap2)); // value, value2, address
 }
 
-// In stack? address (top), value
 fn store_byte(res: &mut Vec<Instruction>, offset: usize) {
     // value, address
     res.push(simple_op(AVMOpcode::Dup1)); // address, value, address
@@ -136,6 +135,58 @@ fn store_byte(res: &mut Vec<Instruction>, offset: usize) {
     res.push(immed_op(AVMOpcode::Plus, Value::Int(Uint256::from_usize(offset)))); // address, value, buffer, value, address
     res.push(simple_op(AVMOpcode::SetBuffer8)); // buffer, value, address
     res.push(simple_op(AVMOpcode::Rset)); // value, address
+}
+
+fn generate_store(res: &mut Vec<Instruction>, offset: usize, num: usize) {
+    for i in 0..num {
+        store_byte(res, offset+i);
+        res.push(immed_op(AVMOpcode::ShiftRight, Value::Int(Uint256::from_usize(8))));
+    }
+    res.push(simple_op(AVMOpcode::Pop));
+    res.push(simple_op(AVMOpcode::Pop));
+}
+
+fn generate_load(res: &mut Vec<Instruction>, offset: usize, num: usize) {
+    res.push(immed_op(AVMOpcode::Noop, Value::Int(Uint256::from_usize(0))));
+    for i in 0..num {
+        res.push(immed_op(AVMOpcode::ShiftLeft, Value::Int(Uint256::from_usize(8))));
+        load_byte(res, offset+num-1-i);
+        res.push(simple_op(AVMOpcode::BitwiseOr));
+    }
+    res.push(simple_op(AVMOpcode::Swap1));
+    res.push(simple_op(AVMOpcode::Pop));
+}
+
+fn signed_op32_swap(res: &mut Vec<Instruction>, op: AVMOpcode) {
+    res.push(immed_op(AVMOpcode::SignExtend, Value::Int(Uint256::from_usize(4))));
+    res.push(simple_op(AVMOpcode::Swap1));
+    res.push(immed_op(AVMOpcode::SignExtend, Value::Int(Uint256::from_usize(4))));
+    res.push(simple_op(op));
+    res.push(immed_op(AVMOpcode::BitwiseAnd, Value::Int(Uint256::from_usize(0xffffffff))));
+}
+
+fn op32_swap(res: &mut Vec<Instruction>, op: AVMOpcode) {
+    res.push(immed_op(AVMOpcode::BitwiseAnd, Value::Int(Uint256::from_usize(0xffffffff))));
+    res.push(simple_op(AVMOpcode::Swap1));
+    res.push(immed_op(AVMOpcode::BitwiseAnd, Value::Int(Uint256::from_usize(0xffffffff))));
+    res.push(simple_op(op));
+    res.push(immed_op(AVMOpcode::BitwiseAnd, Value::Int(Uint256::from_usize(0xffffffff))));
+}
+
+fn signed_op64_swap(res: &mut Vec<Instruction>, op: AVMOpcode) {
+    res.push(immed_op(AVMOpcode::SignExtend, Value::Int(Uint256::from_usize(8))));
+    res.push(simple_op(AVMOpcode::Swap1));
+    res.push(immed_op(AVMOpcode::SignExtend, Value::Int(Uint256::from_usize(8))));
+    res.push(simple_op(op));
+    res.push(immed_op(AVMOpcode::BitwiseAnd, Value::Int(Uint256::from_usize(0xffffffffffffffff))));
+}
+
+fn op64_swap(res: &mut Vec<Instruction>, op: AVMOpcode) {
+    res.push(immed_op(AVMOpcode::BitwiseAnd, Value::Int(Uint256::from_usize(0xffffffffffffffff))));
+    res.push(simple_op(AVMOpcode::Swap1));
+    res.push(immed_op(AVMOpcode::BitwiseAnd, Value::Int(Uint256::from_usize(0xffffffffffffffff))));
+    res.push(simple_op(op));
+    res.push(immed_op(AVMOpcode::BitwiseAnd, Value::Int(Uint256::from_usize(0xffffffffffffffff))));
 }
 
 fn is_func(e : &External) -> bool {
@@ -264,15 +315,6 @@ fn handle_function(m : &Module, func : &FuncBody, idx : usize, mut label : usize
                 res.push(set_frame());
                 ptr = ptr - 1;
             },
-            I32Add => {
-                res.push(simple_op(AVMOpcode::Plus));
-                ptr = ptr - 1;
-            },
-            I32Sub => {
-                res.push(simple_op(AVMOpcode::Swap1));
-                res.push(simple_op(AVMOpcode::Minus));
-                ptr = ptr - 1;
-            },
             I32Const(x) => {
                 res.push(push_value(Value::Int(Uint256::from_usize(*x as usize))));
                 ptr = ptr+1;
@@ -280,15 +322,6 @@ fn handle_function(m : &Module, func : &FuncBody, idx : usize, mut label : usize
             I64Const(x) => {
                 res.push(push_value(Value::Int(Uint256::from_usize(*x as usize))));
                 ptr = ptr+1;
-            },
-            I32Eq => {
-                res.push(simple_op(AVMOpcode::Equal));
-                ptr = ptr - 1;
-            },
-            I32GtU => {
-                res.push(simple_op(AVMOpcode::Swap1));
-                res.push(simple_op(AVMOpcode::GreaterThan));
-                ptr = ptr - 1;
             },
             If(bt) => {
                 ptr = ptr - 1;
@@ -462,126 +495,95 @@ fn handle_function(m : &Module, func : &FuncBody, idx : usize, mut label : usize
                 res.push(set64_from_buffer((*x+1) as usize));
                 res.push(simple_op(AVMOpcode::Rset));
             },
-            
-            I32Load(_, offset) => {
-                /*
-                res.push(simple_op(AVMOpcode::Rget));
-                res.push(simple_op(AVMOpcode::Swap1));
-                res.push(immed_op(AVMOpcode::Add, Value::Int(Uint256::from_usize(offset+memory_offset))));
-                res.push(simple_op(AVMOpcode::GetBuffer64));
-                change_endian_32(&res);
-                */
-                let offset = *offset as usize;
-                res.push(immed_op(AVMOpcode::Noop, Value::Int(Uint256::from_usize(0))));
-                load_byte(&mut res, offset+memory_offset);
-                res.push(simple_op(AVMOpcode::BitwiseOr));
-                res.push(immed_op(AVMOpcode::ShiftLeft, Value::Int(Uint256::from_usize(8))));
-                load_byte(&mut res, offset+memory_offset+1);
-                res.push(simple_op(AVMOpcode::BitwiseOr));
-                res.push(immed_op(AVMOpcode::ShiftLeft, Value::Int(Uint256::from_usize(8))));
-                load_byte(&mut res, offset+memory_offset+2);
-                res.push(simple_op(AVMOpcode::BitwiseOr));
-                res.push(immed_op(AVMOpcode::ShiftLeft, Value::Int(Uint256::from_usize(8))));
-                load_byte(&mut res, offset+memory_offset+3);
-                res.push(simple_op(AVMOpcode::BitwiseOr));
-                res.push(simple_op(AVMOpcode::Swap1));
-                res.push(simple_op(AVMOpcode::Pop));
-            },
 
-            I32Store(_, offset) => {
-                let offset = *offset as usize;
-                ptr = ptr - 2;
-                store_byte(&mut res, offset+memory_offset+3);
-                res.push(immed_op(AVMOpcode::ShiftRight, Value::Int(Uint256::from_usize(8))));
-                store_byte(&mut res, offset+memory_offset+2);
-                res.push(immed_op(AVMOpcode::ShiftRight, Value::Int(Uint256::from_usize(8))));
-                store_byte(&mut res, offset+memory_offset+1);
-                res.push(immed_op(AVMOpcode::ShiftRight, Value::Int(Uint256::from_usize(8))));
-                store_byte(&mut res, offset+memory_offset+0);
-                res.push(immed_op(AVMOpcode::ShiftRight, Value::Int(Uint256::from_usize(8))));
-                res.push(simple_op(AVMOpcode::Pop));
-                res.push(simple_op(AVMOpcode::Pop));
-                /*
-                res.push(simple_op(AVMOpcode::AuxPush));
-                res.push(simple_op(AVMOpcode::Rget));
-                res.push(simple_op(AVMOpcode::Swap1));
-                res.push(immed_op(AVMOpcode::Add, Value::Int(Uint256::from_usize(offset+memory_offset))));
-                res.push(simple_op(AVMOpcode::Dup0));
-                res.push(simple_op(AVMOpcode::Swap2));
-                res.push(simple_op(AVMOpcode::GetBuffer64));
-                res.push(immed_op(AVMOpcode::BitwiseAnd, Value::Int(Uint256::from_usize(0xffffffffu64))));
-                res.push(simple_op(AVMOpcode::AuxPop));
-                change_endian_32(&res);
-                res.push(simple_op(AVMOpcode::BitwiseOr));
-                res.push(simple_op(AVMOpcode::Rget));
-                res.push(simple_op(AVMOpcode::Swap2));
-                res.push(simple_op(AVMOpcode::SetBuffer64));
-                res.push(simple_op(AVMOpcode::Rset));
-                */
-            },
-
-            /*
-            
-            I32Load8S(_, offset) => {
-                res.push(LOAD {offset, memsize: Size::Mem8, packing:Packing::SX, mtype:ValueType::I32});
-            },
-            I32Load8U(_, offset) => {
-                res.push(LOAD {offset, memsize: Size::Mem8, packing:Packing::ZX, mtype:ValueType::I32});
-            },
-            I32Load16S(_, offset) => {
-                res.push(LOAD {offset, memsize: Size::Mem16, packing:Packing::SX, mtype:ValueType::I32});
-            },
-            I32Load16U(_, offset) => {
-                res.push(LOAD {offset, memsize: Size::Mem16, packing:Packing::ZX, mtype:ValueType::I32});
-            },
-            
-            I64Load(_, offset) => {
-                res.push(LOAD {offset, memsize: Size::Mem64, packing:Packing::ZX, mtype:ValueType::I64});
-            },
-            I64Load8S(_, offset) => {
-                res.push(LOAD {offset, memsize: Size::Mem8, packing:Packing::SX, mtype:ValueType::I64});
-            },
-            I64Load8U(_, offset) => {
-                res.push(LOAD {offset, memsize: Size::Mem8, packing:Packing::ZX, mtype:ValueType::I64});
-            },
-            I64Load16S(_, offset) => {
-                res.push(LOAD {offset, memsize: Size::Mem16, packing:Packing::SX, mtype:ValueType::I64});
-            },
-            I64Load16U(_, offset) => {
-                res.push(LOAD {offset, memsize: Size::Mem16, packing:Packing::ZX, mtype:ValueType::I64});
-            },
-            I64Load32S(_, offset) => {
-                res.push(LOAD {offset, memsize: Size::Mem32, packing:Packing::SX, mtype:ValueType::I64});
-            },
-            I64Load32U(_, offset) => {
-                res.push(LOAD {offset, memsize: Size::Mem32, packing:Packing::ZX, mtype:ValueType::I64});
-            },
-            
-            I32Store8(_, offset) => {
-                ptr = ptr - 2;
-                res.push(STORE {offset, memsize: Size::Mem8, mtype:ValueType::I32});
-            },
-            I32Store16(_, offset) => {
-                ptr = ptr - 2;
-                res.push(STORE {offset, memsize: Size::Mem16, mtype:ValueType::I32});
-            },
-            
             I64Store(_, offset) => {
                 ptr = ptr - 2;
-                res.push(STORE {offset, memsize: Size::Mem64, mtype:ValueType::I64});
+                generate_store(&mut res, (*offset as usize) + memory_offset, 8);
             },
-            I64Store8(_, offset) => {
+
+            I32Store(_, offset) | I64Store32(_, offset) => {
                 ptr = ptr - 2;
-                res.push(STORE {offset, memsize: Size::Mem8, mtype:ValueType::I64});
+                generate_store(&mut res, (*offset as usize) + memory_offset, 4);
             },
-            I64Store16(_, offset) => {
+
+            I32Store16(_, offset) | I64Store16(_, offset) => {
                 ptr = ptr - 2;
-                res.push(STORE {offset, memsize: Size::Mem16, mtype:ValueType::I64});
+                generate_store(&mut res, (*offset as usize) + memory_offset, 2);
             },
-            I64Store32(_, offset) => {
+
+            I32Store8(_, offset) | I64Store8(_, offset) => {
                 ptr = ptr - 2;
-                res.push(STORE {offset, memsize: Size::Mem32, mtype:ValueType::I64});
+                generate_store(&mut res, (*offset as usize) + memory_offset, 1);
             },
+
+            I64Load(_, offset) => {
+                generate_load(&mut res, (*offset as usize) + memory_offset, 8);
+            },
+
+            I32Load(_, offset) | I64Load32U(_, offset) => {
+                generate_load(&mut res, (*offset as usize) + memory_offset, 4);
+            },
+
+            I32Load16U(_, offset) | I64Load16U(_, offset) => {
+                generate_load(&mut res, (*offset as usize) + memory_offset, 2);
+            },
+
+            I32Load8U(_, offset) | I64Load8U(_, offset) => {
+                generate_load(&mut res, (*offset as usize) + memory_offset, 1);
+            },
+
+            I64Load32S(_, offset) => {
+                println!("signed load");
+                generate_load(&mut res, (*offset as usize) + memory_offset, 4);
+                res.push(simple_op(AVMOpcode::Dup0));
+                res.push(immed_op(AVMOpcode::ShiftRight, Value::Int(Uint256::from_usize(31))));
+                res.push(immed_op(AVMOpcode::Mul, Value::Int(Uint256::from_usize(0xfffffff00000000))));
+                res.push(simple_op(AVMOpcode::BitwiseOr));
+            },
+
+            I64Load16S(_, offset) | I32Load16S(_, offset) => {
+                generate_load(&mut res, (*offset as usize) + memory_offset, 2);
+                res.push(simple_op(AVMOpcode::Dup0));
+                res.push(immed_op(AVMOpcode::ShiftRight, Value::Int(Uint256::from_usize(15))));
+                res.push(immed_op(AVMOpcode::Mul, Value::Int(Uint256::from_usize(0xfffffffffff0000))));
+                res.push(simple_op(AVMOpcode::BitwiseOr));
+            },
+
+            I64Load8S(_, offset) | I32Load8S(_, offset) => {
+                generate_load(&mut res, (*offset as usize) + memory_offset, 1);
+                res.push(simple_op(AVMOpcode::Dup0));
+                res.push(immed_op(AVMOpcode::ShiftRight, Value::Int(Uint256::from_usize(7))));
+                res.push(immed_op(AVMOpcode::Mul, Value::Int(Uint256::from_usize(0xfffffffffffff00))));
+                res.push(simple_op(AVMOpcode::BitwiseOr));
+            },
+
+            I32Add => {
+                res.push(simple_op(AVMOpcode::Plus));
+                ptr = ptr - 1;
+            },
+            I32Sub => {
+                res.push(immed_op(AVMOpcode::SignExtend, Value::Int(Uint256::from_usize(4))));
+                res.push(simple_op(AVMOpcode::Swap1));
+                res.push(immed_op(AVMOpcode::SignExtend, Value::Int(Uint256::from_usize(4))));
+                res.push(simple_op(AVMOpcode::Minus));
+                res.push(immed_op(AVMOpcode::BitwiseAnd, Value::Int(Uint256::from_usize(0xffffffff))));
+                ptr = ptr - 1;
+            },
+            I32Eq => {
+                res.push(immed_op(AVMOpcode::BitwiseAnd, Value::Int(Uint256::from_usize(0xffffffff))));
+                res.push(simple_op(AVMOpcode::Swap1));
+                res.push(immed_op(AVMOpcode::BitwiseAnd, Value::Int(Uint256::from_usize(0xffffffff))));
+                res.push(simple_op(AVMOpcode::Equal));
+                ptr = ptr - 1;
+            },
+            I32GtU => {
+                res.push(immed_op(AVMOpcode::SignExtend, Value::Int(Uint256::from_usize(4))));
+                res.push(simple_op(AVMOpcode::Swap1));
+                res.push(immed_op(AVMOpcode::SignExtend, Value::Int(Uint256::from_usize(4))));
+                res.push(simple_op(AVMOpcode::GreaterThan));
+                ptr = ptr - 1;
+            },
+            /*
             
             I32Eqz => res.push(UNOP(0x45)),
             I32Ne => { ptr = ptr - 1; res.push(BINOP(0x47)); },
