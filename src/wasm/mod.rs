@@ -237,6 +237,52 @@ fn make_popcnt(res: &mut Vec<Instruction>) {
     res.push(immed_op(AVMOpcode::BitwiseAnd, Value::Int(Uint256::from_usize(0xff))));
 }
 
+fn make_clz(res: &mut Vec<Instruction>, num: usize) {
+    res.push(immed_op(AVMOpcode::AuxPush, Value::Int(Uint256::from_usize(1))));
+    res.push(immed_op(AVMOpcode::Noop, Value::Int(Uint256::from_usize(0))));
+    // inc -- count, value
+    for i in 0..num {
+        res.push(simple_op(AVMOpcode::Swap1)); // inc -- value, count
+        res.push(simple_op(AVMOpcode::Dup0)); // inc -- value, value, count
+        res.push(immed_op(AVMOpcode::BitwiseAnd, Value::Int(Uint256::from_usize(1<<(num-i-1))))); // inc -- not(result), value, count
+        res.push(simple_op(AVMOpcode::IsZero)); // inc -- result, value, count
+        res.push(simple_op(AVMOpcode::AuxPop)); // inc, result, value, count
+        res.push(simple_op(AVMOpcode::BitwiseAnd)); // inc, value, count
+        res.push(simple_op(AVMOpcode::Dup0)); // inc, inc, value, count
+        res.push(simple_op(AVMOpcode::AuxPush)); // inc -- inc, value, count
+        res.push(simple_op(AVMOpcode::Swap1)); // inc -- value, inc, count
+        res.push(simple_op(AVMOpcode::Swap2)); // inc -- count, inc, value
+        res.push(simple_op(AVMOpcode::Plus)); // inc -- count, value
+    }
+    res.push(simple_op(AVMOpcode::AuxPop)); // inc, count, value
+    res.push(simple_op(AVMOpcode::Pop)); // count, value
+    res.push(simple_op(AVMOpcode::Swap1)); // value, count
+    res.push(simple_op(AVMOpcode::Pop)); // count
+}
+
+fn make_ctz(res: &mut Vec<Instruction>, num: usize) {
+    res.push(immed_op(AVMOpcode::AuxPush, Value::Int(Uint256::from_usize(1))));
+    res.push(immed_op(AVMOpcode::Noop, Value::Int(Uint256::from_usize(0))));
+    // inc -- count, value
+    for i in 0..num {
+        res.push(simple_op(AVMOpcode::Swap1)); // inc -- value, count
+        res.push(simple_op(AVMOpcode::Dup0)); // inc -- value, value, count
+        res.push(immed_op(AVMOpcode::BitwiseAnd, Value::Int(Uint256::from_usize(1<<i)))); // inc -- not(result), value, count
+        res.push(simple_op(AVMOpcode::IsZero)); // inc -- result, value, count
+        res.push(simple_op(AVMOpcode::AuxPop)); // inc, result, value, count
+        res.push(simple_op(AVMOpcode::BitwiseAnd)); // inc, value, count
+        res.push(simple_op(AVMOpcode::Dup0)); // inc, inc, value, count
+        res.push(simple_op(AVMOpcode::AuxPush)); // inc -- inc, value, count
+        res.push(simple_op(AVMOpcode::Swap1)); // inc -- value, inc, count
+        res.push(simple_op(AVMOpcode::Swap2)); // inc -- count, inc, value
+        res.push(simple_op(AVMOpcode::Plus)); // inc -- count, value
+    }
+    res.push(simple_op(AVMOpcode::AuxPop)); // inc, count, value
+    res.push(simple_op(AVMOpcode::Pop)); // count, value
+    res.push(simple_op(AVMOpcode::Swap1)); // value, count
+    res.push(simple_op(AVMOpcode::Pop)); // count
+}
+
 fn is_func(e : &External) -> bool {
     match *e {
         External::Function(_idx) => {
@@ -722,41 +768,142 @@ fn handle_function(m : &Module, func : &FuncBody, idx : usize, mut label : usize
                 res.push(immed_op(AVMOpcode::BitwiseAnd, Value::Int(Uint256::from_usize(0xffffffff))));
                 make_popcnt(&mut res);
             },
+            I32Clz => {
+                res.push(immed_op(AVMOpcode::BitwiseAnd, Value::Int(Uint256::from_usize(0xffffffff))));
+                make_clz(&mut res, 32);
+            },
+            I32Ctz => {
+                res.push(immed_op(AVMOpcode::BitwiseAnd, Value::Int(Uint256::from_usize(0xffffffff))));
+                make_ctz(&mut res, 32);
+            },
 
+            I64Add => {
+                op64_swap(&mut res, AVMOpcode::Plus);
+                ptr = ptr - 1;
+            },
+            I64Sub => {
+                signed_op64_swap(&mut res, AVMOpcode::Minus);
+                ptr = ptr - 1;
+            },
+            I64Eq => {
+                op64_swap(&mut res, AVMOpcode::Equal);
+                ptr = ptr - 1;
+            },
+            I64GtU => {
+                op64_swap(&mut res, AVMOpcode::GreaterThan);
+                ptr = ptr - 1;
+            },
+            I64GtS => {
+                signed_op64_swap(&mut res, AVMOpcode::SGreaterThan);
+                ptr = ptr - 1;
+            },
+            I64LtU => {
+                op64_swap(&mut res, AVMOpcode::LessThan);
+                ptr = ptr - 1;
+            },
+            I64LtS => {
+                signed_op64_swap(&mut res, AVMOpcode::SLessThan);
+                ptr = ptr - 1;
+            },
+            I64GeU => {
+                op64_swap(&mut res, AVMOpcode::LessThan);
+                res.push(simple_op(AVMOpcode::IsZero));
+                ptr = ptr - 1;
+            },
+            I64GeS => {
+                signed_op64_swap(&mut res, AVMOpcode::SLessThan);
+                res.push(simple_op(AVMOpcode::IsZero));
+                ptr = ptr - 1;
+            },
+            I64Ne => {
+                op64_swap(&mut res, AVMOpcode::Equal);
+                res.push(simple_op(AVMOpcode::IsZero));
+                ptr = ptr - 1;
+            },
+            I64LeU => {
+                op64_swap(&mut res, AVMOpcode::GreaterThan);
+                res.push(simple_op(AVMOpcode::IsZero));
+                ptr = ptr - 1;
+            },
+            I64LeS => {
+                signed_op64_swap(&mut res, AVMOpcode::SGreaterThan);
+                res.push(simple_op(AVMOpcode::IsZero));
+                ptr = ptr - 1;
+            },
+            I64Eqz => {
+                op64_swap(&mut res, AVMOpcode::IsZero);
+                ptr = ptr - 1;
+            },
+
+            I64Mul => {
+                op64_swap(&mut res, AVMOpcode::Mul);
+                ptr = ptr - 1;
+            },
+            I64DivU => {
+                op64_swap(&mut res, AVMOpcode::Div);
+                ptr = ptr - 1;
+            },
+            I64DivS => {
+                signed_op64_swap(&mut res, AVMOpcode::Sdiv);
+                ptr = ptr - 1;
+            },
+            I64RemU => {
+                op64_swap(&mut res, AVMOpcode::Mod);
+                ptr = ptr - 1;
+            },
+            I64RemS => {
+                signed_op64_swap(&mut res, AVMOpcode::Smod);
+                ptr = ptr - 1;
+            },
+            I64And => {
+                op64_swap(&mut res, AVMOpcode::BitwiseAnd);
+                ptr = ptr - 1;
+            },
+            I64Or => {
+                op64_swap(&mut res, AVMOpcode::BitwiseOr);
+                ptr = ptr - 1;
+            },
+            I64Xor => {
+                op64_swap(&mut res, AVMOpcode::BitwiseXor);
+                ptr = ptr - 1;
+            },
+            I64Shl => {
+                op64_swap(&mut res, AVMOpcode::ShiftLeft);
+                ptr = ptr - 1;
+            },
+            I64ShrU => {
+                op64_swap(&mut res, AVMOpcode::ShiftRight);
+                ptr = ptr - 1;
+            },
+            I64ShrS => {
+                op64_swap(&mut res, AVMOpcode::ShiftArith);
+                ptr = ptr - 1;
+            },
+
+            I64Rotl => {
+                make_rotl(&mut res, 64);
+                res.push(immed_op(AVMOpcode::BitwiseAnd, Value::Int(Uint256::from_usize(0xffffffffffffffff))));
+                ptr = ptr - 1;
+            },
+            I64Rotr => {
+                make_rotr(&mut res, 64);
+                res.push(immed_op(AVMOpcode::BitwiseAnd, Value::Int(Uint256::from_usize(0xffffffffffffffff))));
+                ptr = ptr - 1;
+            },
+
+            I64Popcnt => {
+                res.push(immed_op(AVMOpcode::BitwiseAnd, Value::Int(Uint256::from_usize(0xffffffffffffffff))));
+                make_popcnt(&mut res);
+            },
+            I64Clz => {
+                res.push(immed_op(AVMOpcode::BitwiseAnd, Value::Int(Uint256::from_usize(0xffffffffffffffff))));
+                make_clz(&mut res, 64);
+            },
+            I64Ctz => {
+                res.push(immed_op(AVMOpcode::BitwiseAnd, Value::Int(Uint256::from_usize(0xffffffffffffffff))));
+                make_ctz(&mut res, 64);
+            },
             /*
-            I32Clz => res.push(UNOP(0x67)),
-            I32Ctz => res.push(UNOP(0x68)),
-
-            I64Eqz => res.push(UNOP(0x50)),
-            I64Eq => { ptr = ptr - 1; res.push(BINOP(0x51)); },
-            I64Ne => { ptr = ptr - 1; res.push(BINOP(0x52)); },
-            I64LtS => { ptr = ptr - 1; res.push(BINOP(0x53)); },
-            I64LtU => { ptr = ptr - 1; res.push(BINOP(0x54)); },
-            I64GtS => { ptr = ptr - 1; res.push(BINOP(0x55)); },
-            I64GtU => { ptr = ptr - 1; res.push(BINOP(0x56)); },
-            I64LeS => { ptr = ptr - 1; res.push(BINOP(0x57)); },
-            I64LeU => { ptr = ptr - 1; res.push(BINOP(0x58)); },
-            I64GeS => { ptr = ptr - 1; res.push(BINOP(0x59)); },
-            I64GeU => { ptr = ptr - 1; res.push(BINOP(0x5a)); },
-            
-            I64Clz => res.push(UNOP(0x79)),
-            I64Ctz => res.push(UNOP(0x7a)),
-            I64Popcnt => res.push(UNOP(0x7b)),
-            I64Add => { ptr = ptr - 1; res.push(BINOP(0x7c)); },
-            I64Sub => { ptr = ptr - 1; res.push(BINOP(0x7d)); },
-            I64Mul => { ptr = ptr - 1; res.push(BINOP(0x7e)); },
-            I64DivS => { ptr = ptr - 1; res.push(BINOP(0x7f)); },
-            I64DivU => { ptr = ptr - 1; res.push(BINOP(0x80)); },
-            I64RemS => { ptr = ptr - 1; res.push(BINOP(0x81)); },
-            I64RemU => { ptr = ptr - 1; res.push(BINOP(0x82)); },
-            I64And => { ptr = ptr - 1; res.push(BINOP(0x83)); },
-            I64Or => { ptr = ptr - 1; res.push(BINOP(0x84)); },
-            I64Xor => { ptr = ptr - 1; res.push(BINOP(0x85)); },
-            I64Shl => { ptr = ptr - 1; res.push(BINOP(0x86)); },
-            I64ShrS => { ptr = ptr - 1; res.push(BINOP(0x87)); },
-            I64ShrU => { ptr = ptr - 1; res.push(BINOP(0x88)); },
-            I64Rotl => { ptr = ptr - 1; res.push(BINOP(0x89)); },
-            I64Rotr => { ptr = ptr - 1; res.push(BINOP(0x8a)); },
             
             I32WarpI64 => res.push(UNOP(0xa7)),
             I64ExtendSI32 => res.push(UNOP(0xac)),
