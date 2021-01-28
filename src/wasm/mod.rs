@@ -158,9 +158,9 @@ fn generate_load(res: &mut Vec<Instruction>, offset: usize, num: usize) {
 }
 
 fn signed_op32_swap(res: &mut Vec<Instruction>, op: AVMOpcode) {
-    res.push(immed_op(AVMOpcode::SignExtend, Value::Int(Uint256::from_usize(4))));
+    res.push(immed_op(AVMOpcode::SignExtend, Value::Int(Uint256::from_usize(3))));
     res.push(simple_op(AVMOpcode::Swap1));
-    res.push(immed_op(AVMOpcode::SignExtend, Value::Int(Uint256::from_usize(4))));
+    res.push(immed_op(AVMOpcode::SignExtend, Value::Int(Uint256::from_usize(3))));
     res.push(simple_op(op));
     res.push(immed_op(AVMOpcode::BitwiseAnd, Value::Int(Uint256::from_usize(0xffffffff))));
 }
@@ -174,9 +174,9 @@ fn op32_swap(res: &mut Vec<Instruction>, op: AVMOpcode) {
 }
 
 fn signed_op64_swap(res: &mut Vec<Instruction>, op: AVMOpcode) {
-    res.push(immed_op(AVMOpcode::SignExtend, Value::Int(Uint256::from_usize(8))));
+    res.push(immed_op(AVMOpcode::SignExtend, Value::Int(Uint256::from_usize(7))));
     res.push(simple_op(AVMOpcode::Swap1));
-    res.push(immed_op(AVMOpcode::SignExtend, Value::Int(Uint256::from_usize(8))));
+    res.push(immed_op(AVMOpcode::SignExtend, Value::Int(Uint256::from_usize(7))));
     res.push(simple_op(op));
     res.push(immed_op(AVMOpcode::BitwiseAnd, Value::Int(Uint256::from_usize(0xffffffffffffffff))));
 }
@@ -187,6 +187,54 @@ fn op64_swap(res: &mut Vec<Instruction>, op: AVMOpcode) {
     res.push(immed_op(AVMOpcode::BitwiseAnd, Value::Int(Uint256::from_usize(0xffffffffffffffff))));
     res.push(simple_op(op));
     res.push(immed_op(AVMOpcode::BitwiseAnd, Value::Int(Uint256::from_usize(0xffffffffffffffff))));
+}
+
+fn make_rotl(res: &mut Vec<Instruction>, num: usize) {
+    res.push(simple_op(AVMOpcode::ShiftLeft));
+    res.push(simple_op(AVMOpcode::Dup0));
+    res.push(immed_op(AVMOpcode::ShiftRight, Value::Int(Uint256::from_usize(num))));
+    res.push(simple_op(AVMOpcode::BitwiseOr));
+}
+
+fn make_rotr(res: &mut Vec<Instruction>, num: usize) {
+    res.push(simple_op(AVMOpcode::Swap1));
+    res.push(immed_op(AVMOpcode::ShiftLeft, Value::Int(Uint256::from_usize(64))));
+    res.push(simple_op(AVMOpcode::Swap1));
+    res.push(simple_op(AVMOpcode::ShiftRight));
+    res.push(simple_op(AVMOpcode::Dup0));
+    res.push(immed_op(AVMOpcode::ShiftLeft, Value::Int(Uint256::from_usize(num))));
+    res.push(simple_op(AVMOpcode::BitwiseOr));
+    res.push(immed_op(AVMOpcode::ShiftRight, Value::Int(Uint256::from_usize(64))));
+}
+
+fn make_popcnt(res: &mut Vec<Instruction>) {
+    let m1 = 0x5555555555555555;
+    let m2 = 0x3333333333333333;
+    let m4 = 0x0F0F0F0F0F0F0F0F;
+    let h01 = 0x0101010101010101;
+
+    // x -= (x >> 1) & m1;
+    res.push(simple_op(AVMOpcode::Dup0));
+    res.push(immed_op(AVMOpcode::ShiftRight, Value::Int(Uint256::from_usize(1))));
+    res.push(immed_op(AVMOpcode::BitwiseAnd, Value::Int(Uint256::from_usize(m1))));
+    res.push(simple_op(AVMOpcode::Swap1));
+    res.push(simple_op(AVMOpcode::Minus));
+    // x = (x & m2) + ((x >> 2) & m2);
+    res.push(simple_op(AVMOpcode::Dup0));
+    res.push(immed_op(AVMOpcode::ShiftRight, Value::Int(Uint256::from_usize(2))));
+    res.push(immed_op(AVMOpcode::BitwiseAnd, Value::Int(Uint256::from_usize(m2))));
+    res.push(simple_op(AVMOpcode::Swap1));
+    res.push(immed_op(AVMOpcode::BitwiseAnd, Value::Int(Uint256::from_usize(m2))));
+    res.push(simple_op(AVMOpcode::Plus));
+    // x = (x + (x >> 4)) & m4;
+    res.push(simple_op(AVMOpcode::Dup0));
+    res.push(immed_op(AVMOpcode::ShiftRight, Value::Int(Uint256::from_usize(4))));
+    res.push(simple_op(AVMOpcode::Plus));
+    res.push(immed_op(AVMOpcode::BitwiseAnd, Value::Int(Uint256::from_usize(m4))));
+    // x = (x * h01) >> 56;
+    res.push(immed_op(AVMOpcode::Mul, Value::Int(Uint256::from_usize(h01))));
+    res.push(immed_op(AVMOpcode::ShiftRight, Value::Int(Uint256::from_usize(56))));
+    res.push(immed_op(AVMOpcode::BitwiseAnd, Value::Int(Uint256::from_usize(0xff))));
 }
 
 fn is_func(e : &External) -> bool {
@@ -533,7 +581,6 @@ fn handle_function(m : &Module, func : &FuncBody, idx : usize, mut label : usize
             },
 
             I64Load32S(_, offset) => {
-                println!("signed load");
                 generate_load(&mut res, (*offset as usize) + memory_offset, 4);
                 res.push(simple_op(AVMOpcode::Dup0));
                 res.push(immed_op(AVMOpcode::ShiftRight, Value::Int(Uint256::from_usize(31))));
@@ -558,44 +605,128 @@ fn handle_function(m : &Module, func : &FuncBody, idx : usize, mut label : usize
             },
 
             I32Add => {
-                res.push(simple_op(AVMOpcode::Plus));
+                op32_swap(&mut res, AVMOpcode::Plus);
                 ptr = ptr - 1;
             },
             I32Sub => {
-                res.push(immed_op(AVMOpcode::SignExtend, Value::Int(Uint256::from_usize(4))));
-                res.push(simple_op(AVMOpcode::Swap1));
-                res.push(immed_op(AVMOpcode::SignExtend, Value::Int(Uint256::from_usize(4))));
-                res.push(simple_op(AVMOpcode::Minus));
-                res.push(immed_op(AVMOpcode::BitwiseAnd, Value::Int(Uint256::from_usize(0xffffffff))));
+                signed_op32_swap(&mut res, AVMOpcode::Minus);
                 ptr = ptr - 1;
             },
             I32Eq => {
-                res.push(immed_op(AVMOpcode::BitwiseAnd, Value::Int(Uint256::from_usize(0xffffffff))));
-                res.push(simple_op(AVMOpcode::Swap1));
-                res.push(immed_op(AVMOpcode::BitwiseAnd, Value::Int(Uint256::from_usize(0xffffffff))));
-                res.push(simple_op(AVMOpcode::Equal));
+                op32_swap(&mut res, AVMOpcode::Equal);
                 ptr = ptr - 1;
             },
             I32GtU => {
-                res.push(immed_op(AVMOpcode::SignExtend, Value::Int(Uint256::from_usize(4))));
-                res.push(simple_op(AVMOpcode::Swap1));
-                res.push(immed_op(AVMOpcode::SignExtend, Value::Int(Uint256::from_usize(4))));
-                res.push(simple_op(AVMOpcode::GreaterThan));
+                op32_swap(&mut res, AVMOpcode::GreaterThan);
                 ptr = ptr - 1;
             },
+            I32GtS => {
+                signed_op32_swap(&mut res, AVMOpcode::SGreaterThan);
+                ptr = ptr - 1;
+            },
+            I32LtU => {
+                op32_swap(&mut res, AVMOpcode::LessThan);
+                ptr = ptr - 1;
+            },
+            I32LtS => {
+                signed_op32_swap(&mut res, AVMOpcode::SLessThan);
+                ptr = ptr - 1;
+            },
+            I32GeU => {
+                op32_swap(&mut res, AVMOpcode::LessThan);
+                res.push(simple_op(AVMOpcode::IsZero));
+                ptr = ptr - 1;
+            },
+            I32GeS => {
+                signed_op32_swap(&mut res, AVMOpcode::SLessThan);
+                res.push(simple_op(AVMOpcode::IsZero));
+                ptr = ptr - 1;
+            },
+            I32Ne => {
+                op32_swap(&mut res, AVMOpcode::Equal);
+                res.push(simple_op(AVMOpcode::IsZero));
+                ptr = ptr - 1;
+            },
+            I32LeU => {
+                op32_swap(&mut res, AVMOpcode::GreaterThan);
+                res.push(simple_op(AVMOpcode::IsZero));
+                ptr = ptr - 1;
+            },
+            I32LeS => {
+                signed_op32_swap(&mut res, AVMOpcode::SGreaterThan);
+                res.push(simple_op(AVMOpcode::IsZero));
+                ptr = ptr - 1;
+            },
+            I32Eqz => {
+                op32_swap(&mut res, AVMOpcode::IsZero);
+                ptr = ptr - 1;
+            },
+
+            I32Mul => {
+                op32_swap(&mut res, AVMOpcode::Mul);
+                ptr = ptr - 1;
+            },
+            I32DivU => {
+                op32_swap(&mut res, AVMOpcode::Div);
+                ptr = ptr - 1;
+            },
+            I32DivS => {
+                signed_op32_swap(&mut res, AVMOpcode::Sdiv);
+                ptr = ptr - 1;
+            },
+            I32RemU => {
+                op32_swap(&mut res, AVMOpcode::Mod);
+                ptr = ptr - 1;
+            },
+            I32RemS => {
+                signed_op32_swap(&mut res, AVMOpcode::Smod);
+                ptr = ptr - 1;
+            },
+            I32And => {
+                op32_swap(&mut res, AVMOpcode::BitwiseAnd);
+                ptr = ptr - 1;
+            },
+            I32Or => {
+                op32_swap(&mut res, AVMOpcode::BitwiseOr);
+                ptr = ptr - 1;
+            },
+            I32Xor => {
+                op32_swap(&mut res, AVMOpcode::BitwiseXor);
+                ptr = ptr - 1;
+            },
+            I32Shl => {
+                op32_swap(&mut res, AVMOpcode::ShiftLeft);
+                ptr = ptr - 1;
+            },
+            I32ShrU => {
+                op32_swap(&mut res, AVMOpcode::ShiftRight);
+                ptr = ptr - 1;
+            },
+            I32ShrS => {
+                op32_swap(&mut res, AVMOpcode::ShiftArith);
+                ptr = ptr - 1;
+            },
+
+            I32Rotl => {
+                make_rotl(&mut res, 32);
+                res.push(immed_op(AVMOpcode::BitwiseAnd, Value::Int(Uint256::from_usize(0xffffffff))));
+                ptr = ptr - 1;
+            },
+            I32Rotr => {
+                make_rotr(&mut res, 32);
+                res.push(immed_op(AVMOpcode::BitwiseAnd, Value::Int(Uint256::from_usize(0xffffffff))));
+                ptr = ptr - 1;
+            },
+
+            I32Popcnt => {
+                res.push(immed_op(AVMOpcode::BitwiseAnd, Value::Int(Uint256::from_usize(0xffffffff))));
+                make_popcnt(&mut res);
+            },
+
             /*
-            
-            I32Eqz => res.push(UNOP(0x45)),
-            I32Ne => { ptr = ptr - 1; res.push(BINOP(0x47)); },
-            I32LtS => { ptr = ptr - 1; res.push(BINOP(0x48)); },
-            I32LtU => { ptr = ptr - 1; res.push(BINOP(0x49)); },
-            I32GtS => { ptr = ptr - 1; res.push(BINOP(0x4a)); },
-            I32GtU => { ptr = ptr - 1; res.push(BINOP(0x4b)); },
-            I32LeS => { ptr = ptr - 1; res.push(BINOP(0x4c)); },
-            I32LeU => { ptr = ptr - 1; res.push(BINOP(0x4d)); },
-            I32GeS => { ptr = ptr - 1; res.push(BINOP(0x4e)); },
-            I32GeU => { ptr = ptr - 1; res.push(BINOP(0x4f)); },
-            
+            I32Clz => res.push(UNOP(0x67)),
+            I32Ctz => res.push(UNOP(0x68)),
+
             I64Eqz => res.push(UNOP(0x50)),
             I64Eq => { ptr = ptr - 1; res.push(BINOP(0x51)); },
             I64Ne => { ptr = ptr - 1; res.push(BINOP(0x52)); },
@@ -608,25 +739,6 @@ fn handle_function(m : &Module, func : &FuncBody, idx : usize, mut label : usize
             I64GeS => { ptr = ptr - 1; res.push(BINOP(0x59)); },
             I64GeU => { ptr = ptr - 1; res.push(BINOP(0x5a)); },
             
-            I32Clz => res.push(UNOP(0x67)),
-            I32Ctz => res.push(UNOP(0x68)),
-            I32Popcnt => res.push(UNOP(0x69)),
-            I32Add => { ptr = ptr - 1; res.push(BINOP(0x6a)); },
-            I32Sub => { ptr = ptr - 1; res.push(BINOP(0x6b)); },
-            I32Mul => { ptr = ptr - 1; res.push(BINOP(0x6c)); },
-            I32DivS => { ptr = ptr - 1; res.push(BINOP(0x6d)); },
-            I32DivU => { ptr = ptr - 1; res.push(BINOP(0x6e)); },
-            I32RemS => { ptr = ptr - 1; res.push(BINOP(0x6f)); },
-            I32RemU => { ptr = ptr - 1; res.push(BINOP(0x70)); },
-            I32And => { ptr = ptr - 1; res.push(BINOP(0x71)); },
-            I32Or => { ptr = ptr - 1; res.push(BINOP(0x72)); },
-            I32Xor => { ptr = ptr - 1; res.push(BINOP(0x73)); },
-            I32Shl => { ptr = ptr - 1; res.push(BINOP(0x74)); },
-            I32ShrS => { ptr = ptr - 1; res.push(BINOP(0x75)); },
-            I32ShrU => { ptr = ptr - 1; res.push(BINOP(0x76)); },
-            I32Rotl => { ptr = ptr - 1; res.push(BINOP(0x77)); },
-            I32Rotr => { ptr = ptr - 1; res.push(BINOP(0x78)); },
-
             I64Clz => res.push(UNOP(0x79)),
             I64Ctz => res.push(UNOP(0x7a)),
             I64Popcnt => res.push(UNOP(0x7b)),
