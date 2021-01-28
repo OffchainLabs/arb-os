@@ -116,13 +116,13 @@ impl Instruction {
         Instruction::new(opcode, Some(immediate), debug_info)
     }
 
-    pub fn upload(&self, u: &mut CodeUploader) {
-        u.push_byte(self.opcode.to_number().unwrap());
+    pub fn _upload(&self, u: &mut CodeUploader) {
+        u._push_byte(self.opcode.to_number().unwrap());
         if let Some(val) = &self.immediate {
-            u.push_byte(1u8);
-            val.upload(u);
+            u._push_byte(1u8);
+            val._upload(u);
         } else {
-            u.push_byte(0u8);
+            u._push_byte(0u8);
         }
     }
 
@@ -230,11 +230,11 @@ impl CodePt {
         CodePt::InSegment(seg_num, offset)
     }
 
-    pub fn upload(&self, u: &mut CodeUploader) {
+    pub fn _upload(&self, u: &mut CodeUploader) {
         match self {
             CodePt::Internal(pc) => {
-                u.push_byte(1);
-                u.push_bytes(&Uint256::from_usize(u.translate_pc(*pc)).rlp_encode());
+                u._push_byte(1);
+                u._push_bytes(&Uint256::from_usize(u._translate_pc(*pc)).rlp_encode());
             },
             _ => { panic!(); },
         }
@@ -668,25 +668,25 @@ impl Value {
         Value::Buffer(v)
     }
 
-    pub fn upload(&self, u: &mut CodeUploader) {
+    pub fn _upload(&self, u: &mut CodeUploader) {
         match self {
             Value::Int(ui) => {
-                u.push_byte(0u8);  // type code for uint
-                u.push_bytes(&ui.rlp_encode());
+                u._push_byte(0u8);  // type code for uint
+                u._push_bytes(&ui.rlp_encode());
             },
             Value::Tuple(tup) => {
-                u.push_byte((10 + tup.len()) as u8);
+                u._push_byte((10 + tup.len()) as u8);
                 for subval in &**tup {
-                    subval.upload(u);
+                    subval._upload(u);
                 }
             }
             Value::CodePoint(cp) => {
-                cp.upload(u);
+                cp._upload(u);
             }
             Value::Buffer(buf) => {
                 if let BufferElem::Leaf(b) = &buf.elem {
                     if b.len() == 0 {
-                        u.push_byte(2u8);
+                        u._push_byte(2u8);
                     } else {
                         panic!();
                     }
