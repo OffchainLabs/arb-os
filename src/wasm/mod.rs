@@ -137,7 +137,16 @@ fn store_byte(res: &mut Vec<Instruction>, offset: usize) {
     res.push(simple_op(AVMOpcode::Rset)); // value, address
 }
 
-fn generate_store(res: &mut Vec<Instruction>, offset: usize, num: usize) {
+fn generate_store(res: &mut Vec<Instruction>, offset: u32, memory_offset: usize, num: usize) {
+    res.push(simple_op(AVMOpcode::Dup1));
+    res.push(immed_op(AVMOpcode::Plus, Value::Int(Uint256::from_usize(offset as usize + num - 1)))); // address, value, buffer, value, address
+    res.push(simple_op(AVMOpcode::Rget));
+    res.push(get64_from_buffer(0));
+    res.push(immed_op(AVMOpcode::Mul, Value::Int(Uint256::from_usize(1024))));
+    res.push(simple_op(AVMOpcode::LessThan));
+    res.push(cjump(1));
+
+    let offset = memory_offset + (offset as usize);
     for i in 0..num {
         store_byte(res, offset+i);
         res.push(immed_op(AVMOpcode::ShiftRight, Value::Int(Uint256::from_usize(8))));
@@ -146,7 +155,16 @@ fn generate_store(res: &mut Vec<Instruction>, offset: usize, num: usize) {
     res.push(simple_op(AVMOpcode::Pop));
 }
 
-fn generate_load(res: &mut Vec<Instruction>, offset: usize, num: usize) {
+fn generate_load(res: &mut Vec<Instruction>, offset: u32, memory_offset: usize, num: usize) {
+    res.push(simple_op(AVMOpcode::Dup0));
+    res.push(immed_op(AVMOpcode::Plus, Value::Int(Uint256::from_usize(offset as usize + num - 1)))); // address, value, buffer, value, address
+    res.push(simple_op(AVMOpcode::Rget));
+    res.push(get64_from_buffer(0));
+    res.push(immed_op(AVMOpcode::Mul, Value::Int(Uint256::from_usize(1024))));
+    res.push(simple_op(AVMOpcode::LessThan));
+    res.push(cjump(1));
+
+    let offset = memory_offset + (offset as usize);
     res.push(immed_op(AVMOpcode::Noop, Value::Int(Uint256::from_usize(0))));
     for i in 0..num {
         res.push(immed_op(AVMOpcode::ShiftLeft, Value::Int(Uint256::from_usize(8))));
@@ -343,7 +361,7 @@ fn hash_ftype(ft : &FunctionType) -> Uint256 {
     Uint256::from_bytes(&hash_result)
 }
 
-fn handle_function(m : &Module, func : &FuncBody, idx : usize, mut label : usize, calli: usize, memory_offset: usize) -> (Vec<Instruction>, usize) {
+fn handle_function(m : &Module, func : &FuncBody, idx : usize, mut label : usize, calli: usize, memory_offset: usize, max_memory: usize) -> (Vec<Instruction>, usize) {
     let sig = m.function_section().unwrap().entries()[idx].type_ref();
     let ftype = get_func_type(m, sig);
     
@@ -592,42 +610,42 @@ fn handle_function(m : &Module, func : &FuncBody, idx : usize, mut label : usize
 
             I64Store(_, offset) => {
                 ptr = ptr - 2;
-                generate_store(&mut res, (*offset as usize) + memory_offset, 8);
+                generate_store(&mut res, *offset, memory_offset, 8);
             },
 
             I32Store(_, offset) | I64Store32(_, offset) => {
                 ptr = ptr - 2;
-                generate_store(&mut res, (*offset as usize) + memory_offset, 4);
+                generate_store(&mut res, *offset, memory_offset, 4);
             },
 
             I32Store16(_, offset) | I64Store16(_, offset) => {
                 ptr = ptr - 2;
-                generate_store(&mut res, (*offset as usize) + memory_offset, 2);
+                generate_store(&mut res, *offset, memory_offset, 2);
             },
 
             I32Store8(_, offset) | I64Store8(_, offset) => {
                 ptr = ptr - 2;
-                generate_store(&mut res, (*offset as usize) + memory_offset, 1);
+                generate_store(&mut res, *offset, memory_offset, 1);
             },
 
             I64Load(_, offset) => {
-                generate_load(&mut res, (*offset as usize) + memory_offset, 8);
+                generate_load(&mut res, *offset, memory_offset, 8);
             },
 
             I32Load(_, offset) | I64Load32U(_, offset) => {
-                generate_load(&mut res, (*offset as usize) + memory_offset, 4);
+                generate_load(&mut res, *offset, memory_offset, 4);
             },
 
             I32Load16U(_, offset) | I64Load16U(_, offset) => {
-                generate_load(&mut res, (*offset as usize) + memory_offset, 2);
+                generate_load(&mut res, *offset, memory_offset, 2);
             },
 
             I32Load8U(_, offset) | I64Load8U(_, offset) => {
-                generate_load(&mut res, (*offset as usize) + memory_offset, 1);
+                generate_load(&mut res, *offset, memory_offset, 1);
             },
 
             I64Load32S(_, offset) => {
-                generate_load(&mut res, (*offset as usize) + memory_offset, 4);
+                generate_load(&mut res, *offset, memory_offset, 4);
                 res.push(simple_op(AVMOpcode::Dup0));
                 res.push(immed_op(AVMOpcode::ShiftRight, Value::Int(Uint256::from_usize(31))));
                 res.push(immed_op(AVMOpcode::Mul, Value::Int(Uint256::from_usize(0xfffffff00000000))));
@@ -635,7 +653,7 @@ fn handle_function(m : &Module, func : &FuncBody, idx : usize, mut label : usize
             },
 
             I64Load16S(_, offset) | I32Load16S(_, offset) => {
-                generate_load(&mut res, (*offset as usize) + memory_offset, 2);
+                generate_load(&mut res, *offset, memory_offset, 2);
                 res.push(simple_op(AVMOpcode::Dup0));
                 res.push(immed_op(AVMOpcode::ShiftRight, Value::Int(Uint256::from_usize(15))));
                 res.push(immed_op(AVMOpcode::Mul, Value::Int(Uint256::from_usize(0xfffffffffff0000))));
@@ -643,7 +661,7 @@ fn handle_function(m : &Module, func : &FuncBody, idx : usize, mut label : usize
             },
 
             I64Load8S(_, offset) | I32Load8S(_, offset) => {
-                generate_load(&mut res, (*offset as usize) + memory_offset, 1);
+                generate_load(&mut res, *offset, memory_offset, 1);
                 res.push(simple_op(AVMOpcode::Dup0));
                 res.push(immed_op(AVMOpcode::ShiftRight, Value::Int(Uint256::from_usize(7))));
                 res.push(immed_op(AVMOpcode::Mul, Value::Int(Uint256::from_usize(0xfffffffffffff00))));
@@ -903,22 +921,46 @@ fn handle_function(m : &Module, func : &FuncBody, idx : usize, mut label : usize
                 res.push(immed_op(AVMOpcode::BitwiseAnd, Value::Int(Uint256::from_usize(0xffffffffffffffff))));
                 make_ctz(&mut res, 64);
             },
-            /*
-            
-            I32WarpI64 => res.push(UNOP(0xa7)),
-            I64ExtendSI32 => res.push(UNOP(0xac)),
-            I64ExtendUI32 => res.push(UNOP(0xad)),
+
+            I32WrapI64 => {
+                res.push(immed_op(AVMOpcode::BitwiseAnd, Value::Int(Uint256::from_usize(0xffffffff))));
+            },
+            I64ExtendUI32 => {
+                res.push(simple_op(AVMOpcode::Noop));
+            },
+            I64ExtendSI32 => {
+                res.push(immed_op(AVMOpcode::SignExtend, Value::Int(Uint256::from_usize(7))));
+                res.push(immed_op(AVMOpcode::BitwiseAnd, Value::Int(Uint256::from_usize(0xffffffffffffffff))));
+            },
 
             CurrentMemory(_) => {
-                ptr = ptr+1;
-                res.push(CURMEM);
+                ptr = ptr + 1;
+                res.push(simple_op(AVMOpcode::Rget));
+                res.push(get64_from_buffer(0));
             },
+
             GrowMemory(_) => {
-                ptr = ptr-1;
-                res.push(GROW);
+                let end_label = label;
+                let ok_label = label+1;
+                res.push(simple_op(AVMOpcode::Rget));
+                res.push(get64_from_buffer(0));
+                res.push(simple_op(AVMOpcode::Dup0)); // old value to return (except need to handle error)
+                res.push(simple_op(AVMOpcode::Swap2));
+                res.push(simple_op(AVMOpcode::Plus));
+                res.push(simple_op(AVMOpcode::Dup0));
+                res.push(immed_op(AVMOpcode::GreaterThan, Value::Int(Uint256::from_usize(max_memory))));
+                res.push(cjump(ok_label));
+                res.push(simple_op(AVMOpcode::Pop));
+                res.push(simple_op(AVMOpcode::Pop));
+                res.push(push_value(Value::Int(Uint256::from_usize(0xffffffff)))); // -1 when error
+                res.push(mk_label(ok_label));
+                res.push(simple_op(AVMOpcode::Rget));
+                res.push(simple_op(AVMOpcode::Swap1));
+                res.push(set64_from_buffer(0));
+                res.push(simple_op(AVMOpcode::Rset));
+                res.push(mk_label(end_label));
+                label = label+2;
             },
-            
-            */
             _ => {},
         }
     }
@@ -985,6 +1027,7 @@ pub fn load(fname: String, param: usize) -> Vec<Instruction> {
 
     println!("Function count in wasm file: {}", f_count);
     let mut init = vec![];
+    let max_memory = 1 << 20;
 
     // Save register
     init.push(simple_op(AVMOpcode::Rget));
@@ -992,6 +1035,8 @@ pub fn load(fname: String, param: usize) -> Vec<Instruction> {
 
     // Construct initial memory with globals
     init.push(simple_op(AVMOpcode::NewBuffer));
+    init.push(push_value(Value::Int(Uint256::from_usize(10240))));
+    init.push(set64_from_buffer(0));
     let mut globals = 1;
     if let Some(sec) = module.global_section() {
         for g in sec.entries().iter() {
@@ -1011,19 +1056,21 @@ pub fn load(fname: String, param: usize) -> Vec<Instruction> {
     init.push(set64_from_buffer(0));
     init.push(set_frame());
 
-    let mut label = 1;
+    let mut label = 2;
     let calli = f_count;
     let memory_offset = globals*8;
 
     for (idx,f) in code_section.bodies().iter().enumerate() {
         // function return will be in the stack
         init.push(mk_func_label(idx));
-        let (mut res, n_label) = handle_function(&module, f, idx, label, calli, memory_offset);
+        let (mut res, n_label) = handle_function(&module, f, idx, label, calli, memory_offset, max_memory);
         init.append(&mut res);
         label = n_label;
         // println!("labels {}", label);
     }
 
+    init.push(mk_label(1));
+    init.push(simple_op(AVMOpcode::Panic));
     // Indirect calls
     init.push(mk_func_label(f_count));
     if let Some(sec) = module.elements_section() {
