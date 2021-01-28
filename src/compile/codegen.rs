@@ -222,7 +222,7 @@ fn mavm_codegen_code_block<'a>(
         let (lg, code, prepushed_vals_expr) = mavm_codegen_expr(
             ret_expr,
             code,
-            num_locals,
+            nl,
             &new_locals,
             lab_gen,
             string_table,
