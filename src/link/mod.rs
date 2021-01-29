@@ -180,7 +180,7 @@ pub fn postlink_compile(
             println!("{:04}:  {}", idx, insn);
         }
     }
-    let code_3 = xformcode::fix_tuple_size(&code_2, program.global_num_limit)?;
+    let code_3 = xformcode::fix_tuple_size(&code_2, program.globals.len())?;
     if debug {
         println!("=========== after fix_tuple_size ==============");
         for (idx, insn) in code_3.iter().enumerate() {
@@ -268,7 +268,7 @@ pub fn link(
     let mut int_offsets = Vec::new();
     let mut ext_offsets = Vec::new();
     let mut merged_source_file_map = SourceFileMap::new_empty();
-    let mut global_num_limit = 0;
+    let mut global_num_limit = vec![];
 
     for prog in &progs {
         merged_source_file_map.push(
@@ -294,7 +294,7 @@ pub fn link(
             global_num_limit,
             prog.clone().source_file_map,
         );
-        global_num_limit = relocated_prog.global_num_limit;
+        global_num_limit = relocated_prog.globals.clone();
         relocated_progs.push(relocated_prog);
         func_offset = new_func_offset + 1;
     }
@@ -327,7 +327,7 @@ pub fn link(
             ),
             Instruction::from_opcode_imm(
                 Opcode::AVMOpcode(AVMOpcode::Rset),
-                make_uninitialized_tuple(global_num_limit),
+                make_uninitialized_tuple(global_num_limit.len()),
                 DebugInfo::default(),
             ),
         ]
