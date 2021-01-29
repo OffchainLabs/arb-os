@@ -50,8 +50,8 @@ use arbsys::arbsys_txcall;
 use inbox::IncomingRequest;
 
 
-impure func main() {
-    if (chainParams_haveDoneInit()) {
+impure func main(oldGlobals: any) {
+    if (oldGlobals != ()) {
         // this is an upgrade; we're inheriting the state of a previous ArbOS instance
 
         // do any sanity checking here; do a panic if we need to abort the upgrade and stay with old version
@@ -61,6 +61,9 @@ impure func main() {
         // now re-do the initializations that set up pointers into the ArbOS code
         errorHandler_init();
         evmOps_init();
+        if (initializePreinstalls() == None<()>) {
+            panic;   // don't try to run without preinstalls and precompiles
+        }
     } else {
         // this is a clean start, not an upgrade
         errorHandler_init();

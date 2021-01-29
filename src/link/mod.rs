@@ -162,6 +162,7 @@ impl ExportedFunc {
 pub fn postlink_compile(
     program: CompiledProgram,
     mut file_name_chart: BTreeMap<u64, String>,
+    test_mode: bool,
     debug: bool,
 ) -> Result<LinkedProgram, CompileError> {
     if debug {
@@ -199,7 +200,7 @@ pub fn postlink_compile(
     )?;
     let jump_table_value = xformcode::jump_table_to_value(jump_table_final);
 
-    hardcode_jump_table_into_register(&mut code_final, &jump_table_value);
+    hardcode_jump_table_into_register(&mut code_final, &jump_table_value, test_mode);
 
     if debug {
         println!("============ after strip_labels =============");
@@ -219,12 +220,13 @@ pub fn postlink_compile(
     })
 }
 
-fn hardcode_jump_table_into_register(code: &mut Vec<Instruction>, jump_table: &Value) {
-    let old_imm = code[1].clone().immediate.unwrap();
-    code[1] = Instruction::from_opcode_imm(
-        code[1].opcode,
+fn hardcode_jump_table_into_register(code: &mut Vec<Instruction>, jump_table: &Value, test_mode: bool) {
+    let offset = if test_mode { 1 } else { 2 };
+    let old_imm = code[offset].clone().immediate.unwrap();
+    code[offset] = Instruction::from_opcode_imm(
+        code[offset].opcode,
         old_imm.replace_last_none(jump_table),
-        code[1].debug_info,
+        code[offset].debug_info,
     );
 }
 
@@ -259,6 +261,7 @@ pub fn add_auto_link_progs(
 /// match.
 pub fn link(
     progs_in: &[CompiledProgram],
+    test_mode: bool,
 ) -> Result<CompiledProgram, CompileError> {
     let progs = add_auto_link_progs(&progs_in)?;
     let mut insns_so_far: usize = 3; // leave 3 insns of space at beginning for initialization
@@ -299,23 +302,41 @@ pub fn link(
 
     // Initialize globals or allow jump table retrieval
     let mut linked_code =
-        // add an instruction that creates space for the globals, plus one to push a fake "return address"
-        vec![
-            Instruction::from_opcode_imm(
-                Opcode::AVMOpcode(AVMOpcode::Noop),
-                Value::none(),
-                DebugInfo::default(),
-            ),
-            Instruction::from_opcode_imm(
-                Opcode::AVMOpcode(AVMOpcode::Noop),
-                make_uninitialized_tuple(global_num_limit),
-                DebugInfo::default(),
-            ),
-            Instruction::from_opcode(
-                Opcode::AVMOpcode(AVMOpcode::Rset),
-                DebugInfo::default(),
-            ),
-        ];
+        if test_mode {
+            vec![
+                Instruction::from_opcode_imm(
+                    Opcode::AVMOpcode(AVMOpcode::Noop),
+                    Value::none(),
+                    DebugInfo::default(),
+                ),
+                Instruction::from_opcode_imm(
+                    Opcode::AVMOpcode(AVMOpcode::Noop),
+                    make_uninitialized_tuple(global_num_limit),
+                    DebugInfo::default(),
+                ),
+                Instruction::from_opcode(
+                    Opcode::AVMOpcode(AVMOpcode::Rset),
+                    DebugInfo::default(),
+                ),
+            ]
+        } else {
+            vec![
+                Instruction::from_opcode(
+                    Opcode::AVMOpcode(AVMOpcode::Rget),
+                    DebugInfo::default(),
+                ),
+                Instruction::from_opcode_imm(
+                    Opcode::AVMOpcode(AVMOpcode::Noop),
+                    Value::none(),
+                    DebugInfo::default(),
+                ),
+                Instruction::from_opcode_imm(
+                    Opcode::AVMOpcode(AVMOpcode::Rset),
+                    make_uninitialized_tuple(global_num_limit),
+                    DebugInfo::default(),
+                ),
+            ]
+        };
 
     let mut linked_exports = Vec::new();
     let mut linked_imports = Vec::new();
