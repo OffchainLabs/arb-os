@@ -162,9 +162,8 @@ impl ExportedFunc {
 /// table to a static value, and combining the file name chart with the associated argument.
 pub fn postlink_compile(
     program: CompiledProgram,
-    is_module: bool,
-    evm_pcs: Vec<usize>, // ignored unless we're in a module
     mut file_name_chart: BTreeMap<u64, String>,
+    test_mode: bool,
     debug: bool,
 ) -> Result<LinkedProgram, CompileError> {
     if debug {
@@ -174,7 +173,7 @@ pub fn postlink_compile(
         }
     }
     let (code_2, jump_table) =
-        striplabels::fix_nonforward_labels(&program.code, &program.imported_funcs);
+        striplabels::fix_nonforward_labels(&program.code, &program.imported_funcs, program.global_num_limit-1);
     if debug {
         println!("========== after fix_backward_labels ===========");
         for (idx, insn) in code_2.iter().enumerate() {
@@ -195,13 +194,14 @@ pub fn postlink_compile(
             println!("{:04}:  {}", idx, insn);
         }
     }
-    let (code_final, jump_table_final) = striplabels::strip_labels(
+    let (mut code_final, jump_table_final) = striplabels::strip_labels(
         code_4,
         &jump_table,
         &program.imported_funcs,
-        if is_module { Some(evm_pcs) } else { None },
     )?;
     let jump_table_value = xformcode::jump_table_to_value(jump_table_final);
+
+    hardcode_jump_table_into_register(&mut code_final, &jump_table_value, test_mode);
 
     if debug {
         println!("============ after strip_labels =============");
@@ -216,10 +216,20 @@ pub fn postlink_compile(
 
     Ok(LinkedProgram {
         code: code_final,
-        static_val: jump_table_value,
+        static_val: Value::none(),
         globals: program.globals,
         file_name_chart,
     })
+}
+
+fn hardcode_jump_table_into_register(code: &mut Vec<Instruction>, jump_table: &Value, test_mode: bool) {
+    let offset = if test_mode { 1 } else { 2 };
+    let old_imm = code[offset].clone().immediate.unwrap();
+    code[offset] = Instruction::from_opcode_imm(
+        code[offset].opcode,
+        old_imm.replace_last_none(jump_table),
+        code[offset].debug_info,
+    );
 }
 
 ///Takes a slice of tuples of `CompiledProgram`s and `bool`s representing whether the associated
@@ -249,23 +259,14 @@ pub fn add_auto_link_progs(
 ///Combines the `CompiledProgram`s in progs_in into a single `CompiledProgram` with offsets adjusted
 /// to avoid collisions and auto-linked programs added.
 ///
-/// The init_storage_descriptor argument provides the immediate value for the 2 instruction function
-/// at the start of the module that returns a list of (evm_pc, compiled_pc) correspondences. The
-/// typecheck argument indicates whether the programs should be type checked.
-///
 /// Also prints a warning message to the console if import and export types between modules don't
 /// match.
 pub fn link(
     progs_in: &[CompiledProgram],
-    is_module: bool,
-    init_storage_descriptor: Option<Value>, // used only for compiling modules
+    test_mode: bool,
 ) -> Result<CompiledProgram, CompileError> {
-    let progs = if is_module {
-        progs_in.to_vec()
-    } else {
-        add_auto_link_progs(&progs_in)?
-    };
-    let mut insns_so_far: usize = 2; // leave 2 insns of space at beginning for initialization
+    let progs = add_auto_link_progs(&progs_in)?;
+    let mut insns_so_far: usize = 3; // leave 3 insns of space at beginning for initialization
     let mut imports_so_far: usize = 0;
     let mut int_offsets = Vec::new();
     let mut ext_offsets = Vec::new();
@@ -296,44 +297,48 @@ pub fn link(
             global_num_limit,
             prog.clone().source_file_map,
         );
-        global_num_limit = relocated_prog.globals.clone();
+        global_num_limit = relocated_prog.global_num_limit + 1;  // +1 is for jump table
         relocated_progs.push(relocated_prog);
         func_offset = new_func_offset + 1;
     }
 
     // Initialize globals or allow jump table retrieval
-    let mut linked_code = if is_module {
-        // because this is a module, we want a 2-instruction function at the begining that returns
-        //     a list of (evm_pc, compiled_pc) correspondences
-        // the postlink compilation phase (strip_labels) will plug in the actual table contents
-        //     as the immediate in the first instruction
-        let init_immediate = match init_storage_descriptor {
-            Some(val) => val,
-            None => Value::none(),
+    let mut linked_code =
+        if test_mode {
+            vec![
+                Instruction::from_opcode_imm(
+                    Opcode::AVMOpcode(AVMOpcode::Noop),
+                    Value::none(),
+                    DebugInfo::default(),
+                ),
+                Instruction::from_opcode_imm(
+                    Opcode::AVMOpcode(AVMOpcode::Noop),
+                    make_uninitialized_tuple(global_num_limit),
+                    DebugInfo::default(),
+                ),
+                Instruction::from_opcode(
+                    Opcode::AVMOpcode(AVMOpcode::Rset),
+                    DebugInfo::default(),
+                ),
+            ]
+        } else {
+            vec![
+                Instruction::from_opcode(
+                    Opcode::AVMOpcode(AVMOpcode::Rget),
+                    DebugInfo::default(),
+                ),
+                Instruction::from_opcode_imm(
+                    Opcode::AVMOpcode(AVMOpcode::Noop),
+                    Value::none(),
+                    DebugInfo::default(),
+                ),
+                Instruction::from_opcode_imm(
+                    Opcode::AVMOpcode(AVMOpcode::Rset),
+                    make_uninitialized_tuple(global_num_limit),
+                    DebugInfo::default(),
+                ),
+            ]
         };
-        vec![
-            Instruction::from_opcode_imm(
-                Opcode::AVMOpcode(AVMOpcode::Swap1),
-                init_immediate,
-                DebugInfo::default(),
-            ),
-            Instruction::from_opcode(Opcode::AVMOpcode(AVMOpcode::Jump), DebugInfo::default()),
-        ]
-    } else {
-        // not a module, add an instruction that creates space for the globals, plus one to push a fake "return address"
-        vec![
-            Instruction::from_opcode_imm(
-                Opcode::AVMOpcode(AVMOpcode::Noop),
-                Value::none(),
-                DebugInfo::default(),
-            ),
-            Instruction::from_opcode_imm(
-                Opcode::AVMOpcode(AVMOpcode::Rset),
-                make_uninitialized_tuple(global_num_limit.len()),
-                DebugInfo::default(),
-            ),
-        ]
-    };
 
     let mut linked_exports = Vec::new();
     let mut linked_imports = Vec::new();
@@ -370,9 +375,8 @@ pub fn link(
         linked_imports,
         global_num_limit,
         Some(merged_source_file_map),
-        if is_module {
-            HashMap::new()
-        } else {
+
+{
             let mut map = HashMap::new();
             let mut file_hasher = DefaultHasher::new();
             file_hasher.write(b"builtin/array.mini");

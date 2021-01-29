@@ -3,6 +3,7 @@
  */
 
 use crate::compile::{DebugInfo, MiniProperties};
+use crate::run::upload::CodeUploader;
 use crate::stringtable::StringId;
 use crate::uint256::Uint256;
 use ethers_core::utils::keccak256;
@@ -115,6 +116,16 @@ impl Instruction {
         Instruction::new(opcode, Some(immediate), debug_info)
     }
 
+    pub fn _upload(&self, u: &mut CodeUploader) {
+        u._push_byte(self.opcode.to_number().unwrap());
+        if let Some(val) = &self.immediate {
+            u._push_byte(1u8);
+            val._upload(u);
+        } else {
+            u._push_byte(0u8);
+        }
+    }
+
     pub fn get_label(&self) -> Option<&Label> {
         match &self.opcode {
             Opcode::Label(label) => Some(label),
@@ -217,6 +228,16 @@ impl CodePt {
 
     pub fn new_in_segment(seg_num: usize, offset: usize) -> Self {
         CodePt::InSegment(seg_num, offset)
+    }
+
+    pub fn _upload(&self, u: &mut CodeUploader) {
+        match self {
+            CodePt::Internal(pc) => {
+                u._push_byte(1);
+                u._push_bytes(&Uint256::from_usize(u._translate_pc(*pc)).rlp_encode());
+            },
+            _ => { panic!(); },
+        }
     }
 
     pub fn incr(&self) -> Option<Self> {
@@ -647,6 +668,43 @@ impl Value {
         Value::Buffer(v)
     }
 
+    pub fn _upload(&self, u: &mut CodeUploader) {
+        match self {
+            Value::Int(ui) => {
+                u._push_byte(0u8);  // type code for uint
+                u._push_bytes(&ui.rlp_encode());
+            },
+            Value::Tuple(tup) => {
+                u._push_byte((10 + tup.len()) as u8);
+                for subval in &**tup {
+                    subval._upload(u);
+                }
+            }
+            Value::CodePoint(cp) => {
+                cp._upload(u);
+            }
+            Value::Buffer(buf) => {
+                if let BufferElem::Leaf(b) = &buf.elem {
+                    if b.len() == 0 {
+                        u._push_byte(2u8);
+                    } else {
+                        panic!();
+                    }
+                } else {
+                    panic!();
+                }
+            }
+            _ => {
+                println!("unable to upload value: {}", self);
+                panic!();
+            }  // other types should never be encountered here
+        }
+    }
+
+    pub fn is_none(&self) -> bool {
+        self == &Value::none()
+    }
+
     pub fn type_insn_result(&self) -> usize {
         match self {
             Value::Int(_) => 0,
@@ -679,6 +737,21 @@ impl Value {
                 }
                 Ok(Value::new_tuple(new_vec))
             }
+        }
+    }
+
+    pub fn replace_last_none(&self, val: &Value) -> Self {
+        if self.is_none() {
+            return val.clone();
+        }
+        if let Value::Tuple(tup) = self {
+            let tlen = tup.len();
+            let mut mut_tup = tup.clone();
+            let new_tup = Rc::<Vec<Value>>::make_mut(&mut mut_tup);
+            new_tup[tlen-1] = new_tup[tlen-1].replace_last_none(val);
+            Value::new_tuple(new_tup.to_vec())
+        } else {
+            panic!();
         }
     }
 

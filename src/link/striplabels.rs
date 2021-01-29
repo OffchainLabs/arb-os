@@ -5,7 +5,7 @@
 //!Provides utilities used in the `postlink_compile` function
 
 use super::ImportedFunc;
-use crate::compile::{CompileError, DebugInfo};
+use crate::compile::{CompileError};
 use crate::mavm::{AVMOpcode, CodePt, Instruction, Label, Opcode, Value};
 use crate::uint256::Uint256;
 use std::collections::{HashMap, HashSet};
@@ -17,34 +17,10 @@ use std::collections::{HashMap, HashSet};
 /// The maybe_evm_pcs argument appends a list of PCs to the immediate of the first instruction, if
 /// set to Some, this should only be done for modules.
 pub fn strip_labels(
-    mut code_in: Vec<Instruction>,
+    code_in: Vec<Instruction>,
     jump_table: &[Label],
     imported_funcs: &[ImportedFunc],
-    maybe_evm_pcs: Option<Vec<usize>>, // will be Some iff this is a module
 ) -> Result<(Vec<Instruction>, Vec<CodePt>), CompileError> {
-    if let Some(evm_pcs) = maybe_evm_pcs {
-        let mut list_val = Value::none();
-        for evm_pc in evm_pcs {
-            list_val = Value::new_tuple(vec![
-                list_val,
-                Value::Int(Uint256::from_usize(evm_pc)),
-                Value::Label(Label::Evm(evm_pc)),
-            ]);
-        }
-        // re-do the first instruction in the code, which got a dummy value in link
-        code_in[0] = Instruction::from_opcode_imm(
-            Opcode::AVMOpcode(AVMOpcode::Swap1),
-            Value::new_tuple(vec![
-                list_val,
-                code_in[0]
-                    .immediate
-                    .as_ref()
-                    .expect("module did not have storage immediate")
-                    .clone(),
-            ]),
-            DebugInfo::default(),
-        );
-    }
     let mut label_map = HashMap::new();
 
     for imp_func in imported_funcs {
@@ -119,6 +95,7 @@ pub fn strip_labels(
 pub fn fix_nonforward_labels(
     code_in: &[Instruction],
     imported_funcs: &[ImportedFunc],
+    jump_table_index_in_globals: usize,
 ) -> (Vec<Instruction>, Vec<Label>) {
     let mut jump_table = Vec::new();
     let mut jump_table_index = HashMap::new();
@@ -151,7 +128,7 @@ pub fn fix_nonforward_labels(
                             }
                         };
                         code_out.push(Instruction::from_opcode(
-                            Opcode::AVMOpcode(AVMOpcode::PushStatic),
+                            Opcode::GetGlobalVar(jump_table_index_in_globals),
                             insn_in.debug_info,
                         ));
                         code_out.push(Instruction::from_opcode(
