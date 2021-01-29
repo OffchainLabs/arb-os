@@ -5,7 +5,7 @@
 //!Provides types and utilities for linking together compiled mini programs
 
 use crate::compile::{
-    compile_from_file, CompileError, CompiledProgram, DebugInfo, SourceFileMap, Type,
+    compile_from_file, CompileError, CompiledProgram, DebugInfo, GlobalVarDecl, SourceFileMap, Type,
 };
 use crate::mavm::{AVMOpcode, Instruction, Label, Opcode, Value};
 use crate::stringtable::{StringId, StringTable};
@@ -30,6 +30,7 @@ mod xformcode;
 pub struct LinkedProgram {
     pub code: Vec<Instruction>,
     pub static_val: Value,
+    pub globals: Vec<GlobalVarDecl>,
     pub file_name_chart: BTreeMap<u64, String>,
 }
 
@@ -216,6 +217,7 @@ pub fn postlink_compile(
     Ok(LinkedProgram {
         code: code_final,
         static_val: jump_table_value,
+        globals: program.globals,
         file_name_chart,
     })
 }
