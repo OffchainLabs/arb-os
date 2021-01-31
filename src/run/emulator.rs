@@ -21,6 +21,7 @@ use std::fs::File;
 use std::io::{stdin, BufWriter, Write};
 use std::path::Path;
 use std::str::FromStr;
+use crate::run::blake2b::blake2bf_instruction;
 
 const MAX_PAIRING_SIZE: u64 = 30;
 
@@ -68,6 +69,10 @@ impl ValueStack {
     ///Pushes a `Value` created from val to the top of self.
     pub fn push_bool(&mut self, val: bool) {
         self.push_uint(if val { Uint256::one() } else { Uint256::zero() })
+    }
+
+    pub fn push_buffer(&mut self, val: Buffer) {
+        self.push(Value::Buffer(val));
     }
 
     ///Returns the `Value` on the top of self, or None if self is empty.
@@ -1209,6 +1214,7 @@ impl Machine {
                 Opcode::AVMOpcode(AVMOpcode::Keccakf) => 600,
                 Opcode::AVMOpcode(AVMOpcode::Sha256f) => 250,
                 Opcode::AVMOpcode(AVMOpcode::Ripemd160f) => 250, //TODO: measure and update this
+                Opcode::AVMOpcode(AVMOpcode::Blake2f) => 250, //TODO: measure and update this
                 Opcode::AVMOpcode(AVMOpcode::Pop) => 1,
                 Opcode::AVMOpcode(AVMOpcode::PushStatic) => 1,
                 Opcode::AVMOpcode(AVMOpcode::Rget) => 1,
@@ -1823,6 +1829,12 @@ impl Machine {
                         let t2 = self.stack.pop_uint(&self.state)?;
                         let t3 = self.stack.pop_uint(&self.state)?;
                         self.stack.push_uint(ripemd160_compression(t1, t2, t3));
+                        self.incr_pc();
+                        Ok(true)
+                    }
+                    Opcode::AVMOpcode(AVMOpcode::Blake2f) => {
+                        let t = self.stack.pop_buffer(&self.state)?;
+                        self.stack.push_buffer(blake2bf_instruction(t));
                         self.incr_pc();
                         Ok(true)
                     }
