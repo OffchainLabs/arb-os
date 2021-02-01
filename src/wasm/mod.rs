@@ -191,6 +191,22 @@ fn op32_swap(res: &mut Vec<Instruction>, op: AVMOpcode) {
     res.push(immed_op(AVMOpcode::BitwiseAnd, Value::Int(Uint256::from_usize(0xffffffff))));
 }
 
+fn op32_unary(res: &mut Vec<Instruction>, op: AVMOpcode) {
+    res.push(immed_op(AVMOpcode::BitwiseAnd, Value::Int(Uint256::from_usize(0xffffffff))));
+    res.push(simple_op(op));
+    res.push(immed_op(AVMOpcode::BitwiseAnd, Value::Int(Uint256::from_usize(0xffffffff))));
+}
+
+fn op32(res: &mut Vec<Instruction>, op: AVMOpcode) {
+    res.push(simple_op(AVMOpcode::Swap1));
+    op32_swap(res, op);
+}
+
+fn op64(res: &mut Vec<Instruction>, op: AVMOpcode) {
+    res.push(simple_op(AVMOpcode::Swap1));
+    op64_swap(res, op);
+}
+
 fn signed_op64_swap(res: &mut Vec<Instruction>, op: AVMOpcode) {
     res.push(immed_op(AVMOpcode::SignExtend, Value::Int(Uint256::from_usize(7))));
     res.push(simple_op(AVMOpcode::Swap1));
@@ -202,6 +218,12 @@ fn signed_op64_swap(res: &mut Vec<Instruction>, op: AVMOpcode) {
 fn op64_swap(res: &mut Vec<Instruction>, op: AVMOpcode) {
     res.push(immed_op(AVMOpcode::BitwiseAnd, Value::Int(Uint256::from_usize(0xffffffffffffffff))));
     res.push(simple_op(AVMOpcode::Swap1));
+    res.push(immed_op(AVMOpcode::BitwiseAnd, Value::Int(Uint256::from_usize(0xffffffffffffffff))));
+    res.push(simple_op(op));
+    res.push(immed_op(AVMOpcode::BitwiseAnd, Value::Int(Uint256::from_usize(0xffffffffffffffff))));
+}
+
+fn op64_unary(res: &mut Vec<Instruction>, op: AVMOpcode) {
     res.push(immed_op(AVMOpcode::BitwiseAnd, Value::Int(Uint256::from_usize(0xffffffffffffffff))));
     res.push(simple_op(op));
     res.push(immed_op(AVMOpcode::BitwiseAnd, Value::Int(Uint256::from_usize(0xffffffffffffffff))));
@@ -371,7 +393,8 @@ fn handle_function(m : &Module, func : &FuncBody, idx : usize, mut label : usize
 
     let mut res : Vec<Instruction> = Vec::new();
     let mut stack : Vec<Control> = Vec::new();
-    let mut ptr : usize = count_locals(func) + ftype.params().len();
+    // let mut ptr : usize = count_locals(func) + ftype.params().len();
+    let mut ptr : usize = 0;
     let mut bptr : usize = 0;
 
     // Construct the function top level frame
@@ -425,7 +448,6 @@ fn handle_function(m : &Module, func : &FuncBody, idx : usize, mut label : usize
                 res.push(set64_from_buffer(*x as usize));
                 // store frame
                 res.push(set_frame());
-                ptr = ptr - 1;
             },
             I32Const(x) => {
                 res.push(push_value(Value::Int(Uint256::from_usize(*x as usize))));
@@ -441,7 +463,7 @@ fn handle_function(m : &Module, func : &FuncBody, idx : usize, mut label : usize
                 let else_label = label;
                 let end_label = label+1;
                 let rets = block_len(&bt);
-                eprintln!("Level if {}", ptr);
+                eprintln!("Level if {} rets {}", ptr, rets);
                 stack.push(Control {level: ptr, rets: rets, target: end_label, else_label, is_ite: true, .. def});
                 label = label+2;
                 res.push(simple_op(AVMOpcode::IsZero));
@@ -467,11 +489,8 @@ fn handle_function(m : &Module, func : &FuncBody, idx : usize, mut label : usize
                 }
                 if !c.is_loop {
                     res.push(mk_label(c.target));
-                    ptr = c.level;
                 }
-                else {
-                    ptr = c.level + c.rets;
-                }
+                ptr = c.level + c.rets;
             },
             Loop(bt) => {
                 let start_label = label;
@@ -494,6 +513,7 @@ fn handle_function(m : &Module, func : &FuncBody, idx : usize, mut label : usize
             },
             BrIf(x) => {
                 let c = &stack[stack.len() - (*x as usize) - 1];
+                eprintln!("Debug brif {:?} ptr {} next level {}", c, ptr, c.level);
                 let continue_label =label;
                 let end_label = label+1;
                 label = label+2;
@@ -722,8 +742,7 @@ fn handle_function(m : &Module, func : &FuncBody, idx : usize, mut label : usize
                 ptr = ptr - 1;
             },
             I32Eqz => {
-                op32_swap(&mut res, AVMOpcode::IsZero);
-                ptr = ptr - 1;
+                op32_unary(&mut res, AVMOpcode::IsZero);
             },
 
             I32Mul => {
@@ -759,15 +778,15 @@ fn handle_function(m : &Module, func : &FuncBody, idx : usize, mut label : usize
                 ptr = ptr - 1;
             },
             I32Shl => {
-                op32_swap(&mut res, AVMOpcode::ShiftLeft);
+                op32(&mut res, AVMOpcode::ShiftLeft);
                 ptr = ptr - 1;
             },
             I32ShrU => {
-                op32_swap(&mut res, AVMOpcode::ShiftRight);
+                op32(&mut res, AVMOpcode::ShiftRight);
                 ptr = ptr - 1;
             },
             I32ShrS => {
-                op32_swap(&mut res, AVMOpcode::ShiftArith);
+                op32(&mut res, AVMOpcode::ShiftArith);
                 ptr = ptr - 1;
             },
 
@@ -849,8 +868,7 @@ fn handle_function(m : &Module, func : &FuncBody, idx : usize, mut label : usize
                 ptr = ptr - 1;
             },
             I64Eqz => {
-                op64_swap(&mut res, AVMOpcode::IsZero);
-                ptr = ptr - 1;
+                op64_unary(&mut res, AVMOpcode::IsZero);
             },
 
             I64Mul => {
@@ -886,15 +904,15 @@ fn handle_function(m : &Module, func : &FuncBody, idx : usize, mut label : usize
                 ptr = ptr - 1;
             },
             I64Shl => {
-                op64_swap(&mut res, AVMOpcode::ShiftLeft);
+                op64(&mut res, AVMOpcode::ShiftLeft);
                 ptr = ptr - 1;
             },
             I64ShrU => {
-                op64_swap(&mut res, AVMOpcode::ShiftRight);
+                op64(&mut res, AVMOpcode::ShiftRight);
                 ptr = ptr - 1;
             },
             I64ShrS => {
-                op64_swap(&mut res, AVMOpcode::ShiftArith);
+                op64(&mut res, AVMOpcode::ShiftArith);
                 ptr = ptr - 1;
             },
 
@@ -1018,6 +1036,10 @@ fn init_value(_m : &Module, expr : &InitExpr) -> usize {
     }
 }
 
+fn int_from_usize(a: usize) -> Value {
+    Value::Int(Uint256::from_usize(a))
+}
+
 pub fn load(fname: String, param: usize) -> Vec<Instruction> {
     let module = parity_wasm::deserialize_file(fname).unwrap();
     assert!(module.code_section().is_some());
@@ -1045,6 +1067,22 @@ pub fn load(fname: String, param: usize) -> Vec<Instruction> {
             globals = globals + 1;
         }
     }
+
+    // Add initial memory segments
+    let memory_offset = globals*8;
+    if let Some(sec) = module.data_section() {
+        for seg in sec.entries().iter() {
+            let offset = match seg.offset() {
+                Some(a) => init_value(&module, a),
+                None => 0,
+            };
+            for (i, bt) in seg.value().iter().enumerate() {
+                init.push(push_value(int_from_usize(*bt as usize)));
+                init.push(immed_op(AVMOpcode::SetBuffer8, int_from_usize(memory_offset+offset+i)));
+            }
+        }
+    }
+
     init.push(simple_op(AVMOpcode::Rset));
 
     // Put initial frame to aux stack
@@ -1058,7 +1096,6 @@ pub fn load(fname: String, param: usize) -> Vec<Instruction> {
 
     let mut label = 2;
     let calli = f_count;
-    let memory_offset = globals*8;
 
     for (idx,f) in code_section.bodies().iter().enumerate() {
         // function return will be in the stack
