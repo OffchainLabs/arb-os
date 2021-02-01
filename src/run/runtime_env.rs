@@ -98,7 +98,11 @@ impl RuntimeEnvironment {
             compressor: TxCompressor::new(),
             charging_policy: charging_policy.clone(),
             num_wallets: 0,
-            chain_init_message: RuntimeEnvironment::get_params_bytes(charging_policy, sequencer_info, owner),
+            chain_init_message: RuntimeEnvironment::get_params_bytes(
+                charging_policy,
+                sequencer_info,
+                owner,
+            ),
         };
 
         ret.send_chain_init_message();

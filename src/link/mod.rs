@@ -172,8 +172,11 @@ pub fn postlink_compile(
             println!("{:04}:  {}", idx, insn);
         }
     }
-    let (code_2, jump_table) =
-        striplabels::fix_nonforward_labels(&program.code, &program.imported_funcs, program.global_num_limit-1);
+    let (code_2, jump_table) = striplabels::fix_nonforward_labels(
+        &program.code,
+        &program.imported_funcs,
+        program.globals.len() - 1,
+    );
     if debug {
         println!("========== after fix_backward_labels ===========");
         for (idx, insn) in code_2.iter().enumerate() {
@@ -194,11 +197,8 @@ pub fn postlink_compile(
             println!("{:04}:  {}", idx, insn);
         }
     }
-    let (mut code_final, jump_table_final) = striplabels::strip_labels(
-        code_4,
-        &jump_table,
-        &program.imported_funcs,
-    )?;
+    let (mut code_final, jump_table_final) =
+        striplabels::strip_labels(code_4, &jump_table, &program.imported_funcs)?;
     let jump_table_value = xformcode::jump_table_to_value(jump_table_final);
 
     hardcode_jump_table_into_register(&mut code_final, &jump_table_value, test_mode);
@@ -222,7 +222,11 @@ pub fn postlink_compile(
     })
 }
 
-fn hardcode_jump_table_into_register(code: &mut Vec<Instruction>, jump_table: &Value, test_mode: bool) {
+fn hardcode_jump_table_into_register(
+    code: &mut Vec<Instruction>,
+    jump_table: &Value,
+    test_mode: bool,
+) {
     let offset = if test_mode { 1 } else { 2 };
     let old_imm = code[offset].clone().immediate.unwrap();
     code[offset] = Instruction::from_opcode_imm(
@@ -297,48 +301,42 @@ pub fn link(
             global_num_limit,
             prog.clone().source_file_map,
         );
-        global_num_limit = relocated_prog.global_num_limit + 1;  // +1 is for jump table
+        global_num_limit = relocated_prog.globals.clone(); // +1 is for jump table
+        global_num_limit.push(GlobalVarDecl::new(usize::max_value(), Type::Void, None));
         relocated_progs.push(relocated_prog);
         func_offset = new_func_offset + 1;
     }
 
     // Initialize globals or allow jump table retrieval
-    let mut linked_code =
-        if test_mode {
-            vec![
-                Instruction::from_opcode_imm(
-                    Opcode::AVMOpcode(AVMOpcode::Noop),
-                    Value::none(),
-                    DebugInfo::default(),
-                ),
-                Instruction::from_opcode_imm(
-                    Opcode::AVMOpcode(AVMOpcode::Noop),
-                    make_uninitialized_tuple(global_num_limit),
-                    DebugInfo::default(),
-                ),
-                Instruction::from_opcode(
-                    Opcode::AVMOpcode(AVMOpcode::Rset),
-                    DebugInfo::default(),
-                ),
-            ]
-        } else {
-            vec![
-                Instruction::from_opcode(
-                    Opcode::AVMOpcode(AVMOpcode::Rget),
-                    DebugInfo::default(),
-                ),
-                Instruction::from_opcode_imm(
-                    Opcode::AVMOpcode(AVMOpcode::Noop),
-                    Value::none(),
-                    DebugInfo::default(),
-                ),
-                Instruction::from_opcode_imm(
-                    Opcode::AVMOpcode(AVMOpcode::Rset),
-                    make_uninitialized_tuple(global_num_limit),
-                    DebugInfo::default(),
-                ),
-            ]
-        };
+    let mut linked_code = if test_mode {
+        vec![
+            Instruction::from_opcode_imm(
+                Opcode::AVMOpcode(AVMOpcode::Noop),
+                Value::none(),
+                DebugInfo::default(),
+            ),
+            Instruction::from_opcode_imm(
+                Opcode::AVMOpcode(AVMOpcode::Noop),
+                make_uninitialized_tuple(global_num_limit.len()),
+                DebugInfo::default(),
+            ),
+            Instruction::from_opcode(Opcode::AVMOpcode(AVMOpcode::Rset), DebugInfo::default()),
+        ]
+    } else {
+        vec![
+            Instruction::from_opcode(Opcode::AVMOpcode(AVMOpcode::Rget), DebugInfo::default()),
+            Instruction::from_opcode_imm(
+                Opcode::AVMOpcode(AVMOpcode::Noop),
+                Value::none(),
+                DebugInfo::default(),
+            ),
+            Instruction::from_opcode_imm(
+                Opcode::AVMOpcode(AVMOpcode::Rset),
+                make_uninitialized_tuple(global_num_limit.len()),
+                DebugInfo::default(),
+            ),
+        ]
+    };
 
     let mut linked_exports = Vec::new();
     let mut linked_imports = Vec::new();
@@ -375,8 +373,7 @@ pub fn link(
         linked_imports,
         global_num_limit,
         Some(merged_source_file_map),
-
-{
+        {
             let mut map = HashMap::new();
             let mut file_hasher = DefaultHasher::new();
             file_hasher.write(b"builtin/array.mini");

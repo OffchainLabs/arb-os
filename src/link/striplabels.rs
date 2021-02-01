@@ -5,7 +5,7 @@
 //!Provides utilities used in the `postlink_compile` function
 
 use super::ImportedFunc;
-use crate::compile::{CompileError};
+use crate::compile::CompileError;
 use crate::mavm::{AVMOpcode, CodePt, Instruction, Label, Opcode, Value};
 use crate::uint256::Uint256;
 use std::collections::{HashMap, HashSet};

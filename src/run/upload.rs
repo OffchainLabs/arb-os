@@ -9,11 +9,10 @@ use crate::run::{load_from_file, RuntimeEnvironment};
 use crate::uint256::Uint256;
 use ethers_signers::Signer;
 use rustc_hex::ToHex;
+use serde::{Deserialize, Serialize};
 use std::fs::File;
 use std::io::Read;
 use std::path::Path;
-use serde::{Deserialize, Serialize};
-
 
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct CodeUploader {
@@ -95,7 +94,9 @@ impl CodeUploader {
         for batch in &self.instructions {
             insns.push(batch.to_hex());
         }
-        CodeForUpload{ instructions: insns }
+        CodeForUpload {
+            instructions: insns,
+        }
     }
 
     pub fn _to_json(&self) -> serde_json::Result<String> {
@@ -107,7 +108,11 @@ impl CodeUploader {
         let num = cfu.instructions.clone().len();
         CodeUploader {
             build_buffer: vec![],
-            instructions: cfu.instructions.into_iter().map(|s| hex::decode(s).unwrap()).collect(),
+            instructions: cfu
+                .instructions
+                .into_iter()
+                .map(|s| hex::decode(s).unwrap())
+                .collect(),
             num_so_far: num,
             num_total: num,
         }
@@ -116,13 +121,13 @@ impl CodeUploader {
 
 #[derive(Serialize, Deserialize)]
 pub struct CodeForUpload {
-    instructions: Vec<String>
+    instructions: Vec<String>,
 }
 
 impl CodeForUpload {
     pub fn _new(insns: Vec<Vec<u8>>) -> Self {
         CodeForUpload {
-            instructions: insns.into_iter().map(|v| hex::encode(v)).collect()
+            instructions: insns.into_iter().map(|v| hex::encode(v)).collect(),
         }
     }
 
