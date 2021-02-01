@@ -598,6 +598,11 @@ pub fn _test_crosscontract_call_using_compressed_batch() {
 }
 
 #[test]
+fn test_payment_to_self() {
+    let _ = crate::evm::_evm_payment_to_self(None, false).unwrap();
+}
+
+#[test]
 fn test_payment_to_empty_address() {
     crate::evm::evm_payment_to_empty_address(None, false);
 }

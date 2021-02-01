@@ -318,11 +318,16 @@ public func accountStore_transferEthBalance(
     if (fromAcct.ethBalance < amount) {
         return None;
     }
-    let toAcct = accountStore_get(acctStore, to);
-    acctStore = acctStore 
-        with { [from] = fromAcct with { ethBalance: fromAcct.ethBalance - amount }}
-        with { [to] = toAcct with { ethBalance: toAcct.ethBalance + amount }};
-    return Some(acctStore);
+    return Some(
+        xif(to == from) {
+            acctStore
+        } else {
+            let toAcct = accountStore_get(acctStore, to);
+            acctStore
+                with { [from] = fromAcct with { ethBalance: fromAcct.ethBalance - amount }}
+                with { [to] = toAcct with { ethBalance: toAcct.ethBalance + amount }}
+        }
+    );
 }
 
 public func account_getAllStorage(account: Account) -> option<StorageMap> {
