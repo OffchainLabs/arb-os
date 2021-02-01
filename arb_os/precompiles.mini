@@ -427,10 +427,15 @@ public impure func precompile_0x09() { // Blake2
             evmOp_revert_knownPc(0, 0, 0);
         }
 
+        let numRounds = asm(256-32, bytearray_get256(calldata, 0)) uint { shr };
+        if (numRounds > 0xffff) {
+            evmOp_revert_knownPc(1, 0, 0);
+        }
+
         let (_, inputBuf) = bytearray_toSizeAndBuffer(calldata);
 
         if (getbuffer8(inputBuf, 212) > 1) {   // last byte of input must be 0 or 1
-            evmOp_revert_knownPc(1, 0, 0);
+            evmOp_revert_knownPc(2, 0, 0);
         }
 
         let outputBuf = asm(inputBuf,) buffer { blake2f };
@@ -438,9 +443,9 @@ public impure func precompile_0x09() { // Blake2
         if (evmCallStack_setTopFrameMemory(mem)) {
             evmOp_return(0, 64);
         } else {
-            evmOp_revert_knownPc(2, 0, 0);
+            evmOp_revert_knownPc(3, 0, 0);
         }
     } else {
-        evmOp_revert_knownPc(3, 0, 0);
+        evmOp_revert_knownPc(4, 0, 0);
     }
 }

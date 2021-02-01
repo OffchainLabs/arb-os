@@ -15,9 +15,9 @@ pub use runtime_env::{
     replay_from_testlog_file, ArbosReceipt, RuntimeEnvironment,
 };
 
+mod blake2b;
 mod emulator;
 mod ripemd160port;
-mod blake2b;
 pub mod rolluptest;
 mod runtime_env;
 

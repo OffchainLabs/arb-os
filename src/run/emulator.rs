@@ -9,6 +9,7 @@ use crate::compile::{CompileError, DebugInfo};
 use crate::link::LinkedProgram;
 use crate::mavm::{AVMOpcode, Buffer, CodePt, Instruction, Opcode, Value};
 use crate::pos::{try_display_location, Location};
+use crate::run::blake2b::blake2bf_instruction;
 use crate::run::ripemd160port;
 use crate::uint256::Uint256;
 use clap::Clap;
@@ -21,7 +22,6 @@ use std::fs::File;
 use std::io::{stdin, BufWriter, Write};
 use std::path::Path;
 use std::str::FromStr;
-use crate::run::blake2b::blake2bf_instruction;
 
 const MAX_PAIRING_SIZE: u64 = 30;
 
@@ -1214,7 +1214,7 @@ impl Machine {
                 Opcode::AVMOpcode(AVMOpcode::Keccakf) => 600,
                 Opcode::AVMOpcode(AVMOpcode::Sha256f) => 250,
                 Opcode::AVMOpcode(AVMOpcode::Ripemd160f) => 250, //TODO: measure and update this
-                Opcode::AVMOpcode(AVMOpcode::Blake2f) => 250, //TODO: measure and update this
+                Opcode::AVMOpcode(AVMOpcode::Blake2f) => self.gas_for_blake2f(),
                 Opcode::AVMOpcode(AVMOpcode::Pop) => 1,
                 Opcode::AVMOpcode(AVMOpcode::PushStatic) => 1,
                 Opcode::AVMOpcode(AVMOpcode::Rget) => 1,
@@ -1289,6 +1289,22 @@ impl Machine {
             1000 + MAX_PAIRING_SIZE * 500_000
         } else {
             1000
+        }
+    }
+
+    fn gas_for_blake2f(&self) -> u64 {
+        if let Some(val) = self.stack.contents.get(0) {
+            if let Value::Buffer(buf) = val {
+                let mut num_rounds = u32::from_be_bytes(buf.as_bytes(4).try_into().unwrap());
+                if num_rounds > 0xffff {
+                    num_rounds = 0xffff;
+                }
+                10 * (num_rounds as u64)
+            } else {
+                10
+            }
+        } else {
+            10
         }
     }
 
