@@ -77,7 +77,7 @@ type SequencerState = struct {
 
 var globalInbox: Inbox;
 var globalInputQueue: struct {
-    txQ: IncomingRequestQueue,
+    txQ: TxRequestQueue,
     batchQ: IncomingRequestQueueStack,
 };
 
@@ -90,7 +90,7 @@ public impure func inbox_init() {
         sequencer: None<SequencerState>,
     };
     globalInputQueue = struct {
-        txQ: incomingRequestQueue_new(),
+        txQ: txRequestQueue_new(),
         batchQ: incomingRequestQueueStack_new()
     };
 }
@@ -568,7 +568,7 @@ public impure func inbox_getNextUnpackedRequest() -> (
                         msg,
                         unsafecast<Queue>(globalInputQueue.txQ)
                     ) {
-                        globalInputQueue = globalInputQueue with { txQ: unsafecast<IncomingRequestQueue>(updatedQ) };
+                        globalInputQueue = globalInputQueue with { txQ: unsafecast<TxRequestQueue>(updatedQ) };
                     }
                     // else BLS batch was bad, so ignore it
                 } else {
@@ -723,3 +723,51 @@ func incomingRequestQueueStack_get(qs: IncomingRequestQueueStack) -> option<(Inc
 func incomingRequestQueueStack_push(qs: IncomingRequestQueueStack, q: IncomingRequestQueue) -> IncomingRequestQueueStack {
     return struct { qs: queuestack_push(qs.qs, q.q) };
 }
+
+
+type TxRequestQueue = struct {
+    q: Queue,
+}
+
+func txRequestQueue_new() -> TxRequestQueue {
+    return struct { q: queue_new() };
+}
+
+func txRequestQueue_isEmpty(q: TxRequestQueue) -> bool {
+    return queue_isEmpty(q.q);
+}
+
+func txRequestQueue_get(q: TxRequestQueue) -> option<(TxRequestQueue, TxRequestData)> {
+    let (uq, item) = queue_get(q.q)?;
+    return Some((struct{ q: uq }, unsafecast<TxRequestData>(item)));
+}
+
+func txRequestQueue_getOrDie(q: TxRequestQueue) -> (TxRequestQueue, TxRequestData) {
+    if let Some(res) = txRequestQueue_get(q) {
+        return res;
+    } else {
+        panic;
+    }
+}
+
+func txRequestQueue_put(q: TxRequestQueue, req: TxRequestData) -> TxRequestQueue {
+    return struct { q: queue_put(q.q, req) };
+}
+
+type TxRequestQueueStack = struct {
+    qs: QueueStack,
+}
+
+func txRequestQueueStack_new() -> TxRequestQueueStack {
+    return struct { qs: queuestack_new() };
+}
+
+func txRequestQueueStack_get(qs: TxRequestQueueStack) -> option<(TxRequestQueueStack, TxRequestData)> {
+    let (uqs, rawMsg) = queuestack_get(qs.qs)?;
+    return Some((struct { qs: uqs }, unsafecast<TxRequestData>(rawMsg)));
+}
+
+func txRequestQueueStack_push(qs: TxRequestQueueStack, q: TxRequestQueue) -> TxRequestQueueStack {
+    return struct { qs: queuestack_push(qs.qs, q.q) };
+}
+
