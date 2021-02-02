@@ -142,7 +142,7 @@ fn generate_store(res: &mut Vec<Instruction>, offset: u32, memory_offset: usize,
     res.push(immed_op(AVMOpcode::Plus, Value::Int(Uint256::from_usize(offset as usize + num - 1)))); // address, value, buffer, value, address
     res.push(simple_op(AVMOpcode::Rget));
     res.push(get64_from_buffer(0));
-    res.push(immed_op(AVMOpcode::Mul, Value::Int(Uint256::from_usize(1024))));
+    res.push(immed_op(AVMOpcode::Mul, Value::Int(Uint256::from_usize(1 << 16))));
     res.push(simple_op(AVMOpcode::LessThan));
     res.push(cjump(1));
 
@@ -160,7 +160,7 @@ fn generate_load(res: &mut Vec<Instruction>, offset: u32, memory_offset: usize, 
     res.push(immed_op(AVMOpcode::Plus, Value::Int(Uint256::from_usize(offset as usize + num - 1)))); // address, value, buffer, value, address
     res.push(simple_op(AVMOpcode::Rget));
     res.push(get64_from_buffer(0));
-    res.push(immed_op(AVMOpcode::Mul, Value::Int(Uint256::from_usize(1024))));
+    res.push(immed_op(AVMOpcode::Mul, Value::Int(Uint256::from_usize(1 << 16))));
     res.push(simple_op(AVMOpcode::LessThan));
     res.push(cjump(1));
 
@@ -529,7 +529,7 @@ fn handle_function(m : &Module, func : &FuncBody, idx : usize, mut label : usize
             Call(x) => {
                 let ftype = find_func_type(m, *x);
                 println!("calling {} with type {:?} return label {}", x, ftype, label+1);
-                let return_label = label+1;
+                let return_label = label;
                 label = label+1;
                 // push new frame to aux stack
                 res.push(push_frame(Value::new_tuple(vec![Value::new_buffer(vec![]), Value::Label(Label::Evm(return_label))])));
@@ -537,7 +537,7 @@ fn handle_function(m : &Module, func : &FuncBody, idx : usize, mut label : usize
                 for i in 0..ftype.params().len() {
                     res.push(get_frame());
                     res.push(simple_op(AVMOpcode::Swap1));
-                    res.push(set64_from_buffer(i));
+                    res.push(set64_from_buffer(ftype.params().len()-1-i));
                     res.push(set_frame());
                 }
                 res.push(call_jump(*x));
@@ -549,19 +549,25 @@ fn handle_function(m : &Module, func : &FuncBody, idx : usize, mut label : usize
             },
             CallIndirect(x,_) => {
                 let ftype = get_func_type(m, *x);
-                println!("calling {} with type {:?} return label {}", x, ftype, label+1);
-                let return_label = label+1;
+                println!("call indirect {} with type {:?} return label {} hash {}", x, ftype, label+1, hash_ftype(&ftype));
+                let return_label = label;
                 label = label+1;
+                // Save func ptr
+                res.push(simple_op(AVMOpcode::AuxPush));
                 // push new frame to aux stack
                 res.push(push_frame(Value::new_tuple(vec![Value::new_buffer(vec![]), Value::Label(Label::Evm(return_label))])));
                 // Push args to frame
                 for i in 0..ftype.params().len() {
                     res.push(get_frame());
                     res.push(simple_op(AVMOpcode::Swap1));
-                    res.push(set64_from_buffer(i));
+                    res.push(set64_from_buffer(ftype.params().len()-1-i));
                     res.push(set_frame());
                 }
                 // Codepoints and hashes are in some kind of a table
+                res.push(simple_op(AVMOpcode::AuxPop));
+                res.push(simple_op(AVMOpcode::AuxPop));
+                res.push(simple_op(AVMOpcode::Swap1));
+                res.push(simple_op(AVMOpcode::AuxPush));
                 res.push(push_value(Value::Int(hash_ftype(&ftype))));
                 res.push(simple_op(AVMOpcode::Swap1));
                 res.push(call_jump(calli as u32));
@@ -1040,6 +1046,23 @@ fn int_from_usize(a: usize) -> Value {
     Value::Int(Uint256::from_usize(a))
 }
 
+fn find_function(m : &Module, name : &str) -> Option<u32> {
+    match m.export_section() {
+        None => None,
+        Some(sec) => {
+            for e in sec.entries() {
+                println!("Export {}: {:?}", e.field(), e.internal());
+                if e.field() == name {
+                    if let Internal::Function(arg) = *e.internal() {
+                        return Some(arg);
+                    }
+                }
+            }
+            None
+        }
+    }
+}
+
 pub fn load(fname: String, param: usize) -> Vec<Instruction> {
     let module = parity_wasm::deserialize_file(fname).unwrap();
     assert!(module.code_section().is_some());
@@ -1057,7 +1080,7 @@ pub fn load(fname: String, param: usize) -> Vec<Instruction> {
 
     // Construct initial memory with globals
     init.push(simple_op(AVMOpcode::NewBuffer));
-    init.push(push_value(Value::Int(Uint256::from_usize(10240))));
+    init.push(push_value(Value::Int(Uint256::from_usize(1024))));
     init.push(set64_from_buffer(0));
     let mut globals = 1;
     if let Some(sec) = module.global_section() {
@@ -1094,6 +1117,11 @@ pub fn load(fname: String, param: usize) -> Vec<Instruction> {
     init.push(set64_from_buffer(0));
     init.push(set_frame());
 
+    // Here we should have jump to the correct function
+    if let Some(f) = find_function(&module, "test") {
+        init.push(call_jump(f));
+    }
+
     let mut label = 2;
     let calli = f_count;
 
@@ -1112,13 +1140,17 @@ pub fn load(fname: String, param: usize) -> Vec<Instruction> {
     init.push(mk_func_label(f_count));
     if let Some(sec) = module.elements_section() {
         for seg in sec.entries().iter() {
+            let offset = match seg.offset() {
+                None => 0,
+                Some(init) => init_value(&module, init),
+            };
             for (idx, f_idx) in seg.members().iter().enumerate() {
                 let next_label = label;
                 label = label + 1;
                 // Function index in module
                 let ftype = find_func_type(&module, *f_idx);
                 init.push(simple_op(AVMOpcode::Dup0));
-                init.push(push_value(Value::Int(Uint256::from_usize(idx))));
+                init.push(push_value(Value::Int(Uint256::from_usize(idx + offset))));
                 init.push(simple_op(AVMOpcode::Equal));
                 init.push(simple_op(AVMOpcode::IsZero));
                 init.push(cjump(next_label));
