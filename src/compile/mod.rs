@@ -22,7 +22,7 @@ use std::io::{self, Read};
 use std::path::Path;
 use typecheck::{TypeCheckedFunc, TypeCheckedNode};
 
-pub use ast::{DebugInfo, GlobalVarDecl, TopLevelDecl, Type};
+pub use ast::{DebugInfo, GlobalVarDecl, StructField, TopLevelDecl, Type};
 pub use source::Lines;
 
 mod ast;

@@ -7,6 +7,7 @@
 use clap::Clap;
 use compile::{compile_from_file, CompileError};
 use contracttemplates::generate_contract_template_file_or_die;
+use gen_code::gen_upgrade_code;
 use link::{link, postlink_compile};
 use pos::try_display_location;
 use run::{
@@ -25,6 +26,7 @@ mod buffertests;
 mod compile;
 mod contracttemplates;
 mod evm;
+mod gen_code;
 mod link;
 mod mavm;
 #[cfg(test)]
@@ -109,6 +111,7 @@ enum Args {
     MakeBenchmarks,
     MakeTemplates,
     EvmTests(EvmTests),
+    GenUpgradeCode,
 }
 
 fn main() -> Result<(), CompileError> {
@@ -289,6 +292,10 @@ fn main() -> Result<(), CompileError> {
                 num_failures = num_failures + nf;
             }
             println!("{} successes, {} failures", num_successes, num_failures);
+        }
+        Args::GenUpgradeCode => {
+            let filename = "arb_os/arbos.mexe".to_string();
+            gen_upgrade_code(Path::new(&filename));
         }
     }
     let total_time = Instant::now() - start_time;
