@@ -1865,6 +1865,37 @@ pub fn evm_direct_deploy_and_compressed_call_add(log_to: Option<&Path>, debug: b
     }
 }
 
+#[test]
+fn evm_reverter_factory_test() {
+    _evm_reverter_factory_test_impl();
+}
+
+fn _evm_reverter_factory_test_impl() {
+    let rt_env = RuntimeEnvironment::new(Uint256::from_usize(1111), None);
+    let mut machine = load_from_file(Path::new("arb_os/arbos.mexe"), rt_env);
+    machine.start_at_zero();
+
+    let _contract = match AbiForContract::new_from_file(&test_contract_path("ReverterFactory")) {
+        Ok(mut contract) => {
+            let result = contract.deploy(&[ethabi::Token::Uint(Uint256::one().to_u256())], &mut machine, Uint256::zero(), None, None, false);
+            if let Err(maybe_receipt) = result {
+                if let Some(receipt) = maybe_receipt {
+                    if receipt.get_return_data().len() == 0 {
+                        panic!("zero-length returndata")
+                    }
+                } else {
+                    panic!("deploy failed without receipt");
+                }
+            } else {
+                panic!("deploy succeeded but should have failed");
+            }
+        }
+        Err(e) => {
+            panic!("error loading contract: {:?}", e);
+        }
+    };
+}
+
 pub fn evm_payment_to_empty_address(log_to: Option<&Path>, debug: bool) {
     let rt_env = RuntimeEnvironment::new(Uint256::from_usize(1111), None);
     let mut machine = load_from_file(Path::new("arb_os/arbos.mexe"), rt_env);
