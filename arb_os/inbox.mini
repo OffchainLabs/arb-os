@@ -470,7 +470,7 @@ public impure func inbox_getNextUnpackedRequest() -> (
 ) {
     let msg = unsafecast<IncomingRequest>(());   // value will be re-initialized before use
     loop {
-        if let Some(res) = incomingRequestQueue_get(globalInputQueue.txQ) {
+        if let Some(res) = txRequestQueue_get(globalInputQueue.txQ) {
             let (newQ, tx) = res;
             globalInputQueue = globalInputQueue with {
                 txQ: newQ
