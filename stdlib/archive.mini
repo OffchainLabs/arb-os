@@ -1,0 +1,59 @@
+//
+// Copyright 2020, Offchain Labs, Inc. All rights reserved.
+//
+
+type Archive = struct {
+    newestBlockNum: uint,
+    oldestBlockNum: uint,
+    maxBlocks: uint,
+    contents: []any,
+}
+
+public func archive_new(maxBlocks: uint, defaultContents: any) -> Archive {
+    let contents = newarray<any>(maxBlocks);
+    let i = 0;
+    while(i < maxBlocks) {
+        contents = contents with { [i] = defaultContents };
+        i = i + 1;
+    }
+    return struct {
+        newestBlockNum: 0,
+        oldestBlockNum: 0,
+        maxBlocks: maxBlocks,
+        contents: contents,
+    };
+}
+
+public func archive_set(arch: Archive, blockNum: uint, value: any) -> option<Archive> {
+    return xif(blockNum <= arch.newestBlockNum) {
+        None<Archive>
+    } else {
+        let contents = arch.contents;
+        let oldVal = contents[arch.newestBlockNum % arch.maxBlocks];
+        let bn = xif (blockNum >= arch.newestBlockNum + arch.maxBlocks) {
+            blockNum - (arch.maxBlocks - 1)
+        } else {
+            arch.newestBlockNum + 1
+        };
+        while (bn < blockNum) {
+            contents = contents with { [bn % arch.maxBlocks] = oldVal };
+            bn = bn + 1;
+        }
+        arch = arch with {
+            newestBlockNum: blockNum
+        } with {
+            oldestBlockNum: xif(blockNum >= arch.maxBlocks) { blockNum - (arch.maxBlocks-1) } else { 0 }
+        } with {
+            contents: contents with { [blockNum % arch.maxBlocks] = value }
+        };
+        Some(arch)
+    };
+}
+
+public func archive_get(arch: Archive, blockNum: uint) -> option<any> {
+    return xif((blockNum >= arch.oldestBlockNum) && (blockNum <= arch.newestBlockNum)) {
+        Some(arch.contents[blockNum % arch.maxBlocks])
+    } else {
+        None<any>
+    };
+}
