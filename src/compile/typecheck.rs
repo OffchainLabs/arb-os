@@ -50,6 +50,7 @@ pub enum TypeCheckedNode<'a> {
     Statement(&'a mut TypeCheckedStatement),
     Expression(&'a mut TypeCheckedExpr),
     StructField(&'a mut TypeCheckedStructField),
+    Type(&'a mut Type),
 }
 
 impl<'a> AbstractSyntaxTree for TypeCheckedNode<'a> {
@@ -58,6 +59,7 @@ impl<'a> AbstractSyntaxTree for TypeCheckedNode<'a> {
             TypeCheckedNode::Statement(stat) => stat.child_nodes(),
             TypeCheckedNode::Expression(exp) => exp.child_nodes(),
             TypeCheckedNode::StructField(field) => field.child_nodes(),
+            TypeCheckedNode::Type(tipe) => tipe.child_nodes(),
         }
     }
 }

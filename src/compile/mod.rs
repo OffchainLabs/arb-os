@@ -20,10 +20,11 @@ use std::fs::File;
 use std::hash::{Hash, Hasher};
 use std::io::{self, Read};
 use std::path::Path;
-use typecheck::{TypeCheckedFunc, TypeCheckedNode};
+use typecheck::TypeCheckedFunc;
 
 pub use ast::{DebugInfo, GlobalVarDecl, StructField, TopLevelDecl, Type};
 pub use source::Lines;
+pub use typecheck::{AbstractSyntaxTree, TypeCheckedNode};
 
 mod ast;
 mod codegen;

@@ -295,7 +295,12 @@ fn main() -> Result<(), CompileError> {
         }
         Args::GenUpgradeCode => {
             let filename = "arb_os/arbos.mexe".to_string();
-            gen_upgrade_code(Path::new(&filename));
+            let result = gen_upgrade_code(Path::new(&filename));
+            if result.is_err() {
+                println!("Encountered an error");
+            } else {
+                println!("Successfully generated code");
+            }
         }
     }
     let total_time = Instant::now() - start_time;

@@ -5,6 +5,7 @@
 //!Contains types and utilities for constructing the mini AST
 
 use super::typecheck::{new_type_error, TypeError};
+use crate::compile::typecheck::{AbstractSyntaxTree, TypeCheckedNode};
 use crate::link::{value_from_field_list, TUPLE_SIZE};
 use crate::mavm::{Instruction, Value};
 use crate::pos::Location;
@@ -91,6 +92,36 @@ pub enum Type {
     Any,
     Every,
     Option(Box<Type>),
+}
+
+impl AbstractSyntaxTree for Type {
+    fn child_nodes(&mut self) -> Vec<TypeCheckedNode> {
+        match self {
+            Type::Void
+            | Type::Uint
+            | Type::Int
+            | Type::Bool
+            | Type::Bytes32
+            | Type::EthAddress
+            | Type::Buffer
+            | Type::Any
+            | Type::Every
+            | Type::Nominal(_, _) => vec![],
+            Type::Tuple(types) => types.iter_mut().map(|t| TypeCheckedNode::Type(t)).collect(),
+            Type::Array(tipe) | Type::FixedArray(tipe, _) | Type::Option(tipe) => {
+                vec![TypeCheckedNode::Type(tipe)]
+            }
+            Type::Struct(fields) => fields
+                .iter_mut()
+                .map(|field| TypeCheckedNode::Type(&mut field.tipe))
+                .collect(),
+            Type::Func(_, args, ret) => vec![TypeCheckedNode::Type(ret)]
+                .into_iter()
+                .chain(args.iter_mut().map(|t| TypeCheckedNode::Type(t)))
+                .collect(),
+            Type::Map(key, value) => vec![TypeCheckedNode::Type(key), TypeCheckedNode::Type(value)],
+        }
+    }
 }
 
 impl Type {
