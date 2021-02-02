@@ -679,7 +679,7 @@ pub fn typecheck_top_level_decls(
     let global_vars_map = global_vars
         .iter()
         .enumerate()
-        .map(|(idx, var)| (var.name, (var.tipe.clone(), idx)))
+        .map(|(idx, var)| (var.name_id, (var.tipe.clone(), idx)))
         .collect::<HashMap<_, _>>();
     let mut exported_funcs = Vec::new();
 

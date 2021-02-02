@@ -455,14 +455,16 @@ pub fn new_func_arg(name: StringId, tipe: Type, debug_info: DebugInfo) -> FuncAr
 ///Represents a declaration of a global mini variable.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct GlobalVarDecl {
-    pub name: StringId,
+    pub name_id: StringId,
+    pub name: String,
     pub tipe: Type,
     pub location: Option<Location>,
 }
 
 impl GlobalVarDecl {
-    pub fn new(name: StringId, tipe: Type, location: Option<Location>) -> Self {
+    pub fn new(name_id: StringId, name: String, tipe: Type, location: Option<Location>) -> Self {
         GlobalVarDecl {
+            name_id,
             name,
             tipe,
             location,

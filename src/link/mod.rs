@@ -302,7 +302,7 @@ pub fn link(
             prog.clone().source_file_map,
         );
         global_num_limit = relocated_prog.globals.clone(); // +1 is for jump table
-        global_num_limit.push(GlobalVarDecl::new(usize::max_value(), Type::Void, None));
+        global_num_limit.push(GlobalVarDecl::new(usize::max_value(), "Dummy global".to_string(), Type::Void, None));
         relocated_progs.push(relocated_prog);
         func_offset = new_func_offset + 1;
     }
