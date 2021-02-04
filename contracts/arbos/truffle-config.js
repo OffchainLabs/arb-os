@@ -24,11 +24,6 @@
 // const fs = require('fs');
 // const mnemonic = fs.readFileSync(".secret").toString().trim();
 
-const ArbProvider = require("arb-provider-truffle");
-const path = require("path");
-const mnemonic =
-  "jar deny prosper gasp flush glass core corn alarm treat leg smart";
-
 module.exports = {
   /**
    * Networks define how you connect to your ethereum client and let you set the
@@ -41,22 +36,6 @@ module.exports = {
    */
 
   networks: {
-    arbitrum: {
-      provider: function() {
-        if (typeof this.provider.prov == "undefined") {
-          this.provider.prov = ArbProvider.provider(
-            __dirname,
-            "build/contracts",
-            {
-              mnemonic: mnemonic
-            },
-            false
-          );
-        }
-        return this.provider.prov;
-      },
-      network_id: "*"
-    }
     // Useful for testing. The `development` name is special - truffle uses it by default
     // if it's defined here and no other network is specified at the command line.
     // You should run a client (like ganache-cli, geth or parity) in a separate terminal
