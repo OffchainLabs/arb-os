@@ -140,6 +140,14 @@ impure func outputStats_addTxLog(gasUsed: uint, numEvmLogs: uint) {
     };
 }
 
+impure func outputStats_addNonTxLog() {
+    globalBlockReceiptData = globalBlockReceiptData with {
+        statsThisBlock: globalBlockReceiptData.statsThisBlock with {
+            numLogs: 1 + globalBlockReceiptData.statsThisBlock.numLogs
+        }
+    };
+}
+
 impure func outputStats_addSend() {
     globalBlockReceiptData = globalBlockReceiptData with {
         statsThisBlock: globalBlockReceiptData.statsThisBlock with {
@@ -287,11 +295,13 @@ public impure func outbox_append(item: ByteArray) {
     };
     let (size, buf) = bytearray_toSizeAndBuffer(item);
     asm((const::LogType_send, batchNumber, numInBatch, size, buf),) { log };
+    outputStats_addNonTxLog();
 }
 
 impure func outbox_send() {
     let (tree, rootHash) = merkleTreeBuilder_finish(globalOutbox.batch);
     asm((const::LogType_sendMerkleTree, globalOutbox.batchNumber, globalOutbox.numInBatch, tree),) { log };
+    outputStats_addNonTxLog();
     asm(
         97,
         setbuffer256(
