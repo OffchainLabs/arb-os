@@ -99,6 +99,12 @@ struct EvmTests {
     savelogs: bool,
 }
 
+#[derive(Clap, Debug)]
+struct GenUpgrade {
+    from: String,
+    to: String,
+}
+
 ///Main enum for command line arguments.
 #[derive(Clap, Debug)]
 enum Args {
@@ -111,7 +117,7 @@ enum Args {
     MakeBenchmarks,
     MakeTemplates,
     EvmTests(EvmTests),
-    GenUpgradeCode,
+    GenUpgradeCode(GenUpgrade),
 }
 
 fn main() -> Result<(), CompileError> {
@@ -293,9 +299,10 @@ fn main() -> Result<(), CompileError> {
             }
             println!("{} successes, {} failures", num_successes, num_failures);
         }
-        Args::GenUpgradeCode => {
-            let filename = "arb_os/arbos.mexe".to_string();
-            let result = gen_upgrade_code(Path::new(&filename));
+        Args::GenUpgradeCode(upgrade) => {
+            let input = upgrade.from;
+            let output = upgrade.to;
+            let result = gen_upgrade_code(Path::new(&input), Path::new(&output));
             if result.is_err() {
                 println!("Encountered an error");
             } else {
