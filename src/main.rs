@@ -96,6 +96,7 @@ struct Profiler {
 #[derive(Clap, Debug)]
 struct Reformat {
     input: String,
+    output: Option<String>,
 }
 
 ///Command line options for evm-tests subcommand.
@@ -128,7 +129,7 @@ fn main() -> Result<(), CompileError> {
     match matches {
         Args::Compile(compile) => {
             let debug_mode = compile.debug_mode;
-            let mut output = get_output(compile.output.as_deref()).unwrap();
+            let mut output = get_output(compile.output.clone()).unwrap();
             let filenames: Vec<_> = compile.input.clone();
             let mut file_name_chart = BTreeMap::new();
             if compile.compile_only {
@@ -277,9 +278,20 @@ fn main() -> Result<(), CompileError> {
                 )
             })?;
             let mut s = String::new();
-            file.read_to_string(&mut s);
-            let result: LinkedProgram = serde_json::from_str(&s).unwrap();
-            result.to_output(&mut get_output(None).unwrap(), Some("pretty"));
+            file.read_to_string(&mut s).map_err(|_| {
+                CompileError::new(
+                    format!("Failed to read input file \"{}\" to string", reformat.input),
+                    None,
+                )
+            })?;
+            let result: LinkedProgram = serde_json::from_str(&s).map_err(|_| {
+                CompileError::new(
+                    format!("Could not parse input file \"{}\" as json", reformat.input),
+                    None,
+                )
+            })?;
+
+            result.to_output(&mut get_output(reformat.output).unwrap(), Some("pretty"));
         }
 
         Args::EvmTests(options) => {
@@ -331,7 +343,7 @@ fn main() -> Result<(), CompileError> {
 
 ///Creates a `dyn Write` from an optional filename, if a filename is specified, creates a file
 /// handle, otherwise gives stdout.
-fn get_output(output_filename: Option<&str>) -> Result<Box<dyn io::Write>, io::Error> {
+fn get_output(output_filename: Option<String>) -> Result<Box<dyn io::Write>, io::Error> {
     match output_filename {
         Some(ref path) => File::create(path).map(|f| Box::new(f) as Box<dyn io::Write>),
         None => Ok(Box::new(io::stdout())),
