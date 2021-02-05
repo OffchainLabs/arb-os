@@ -97,6 +97,8 @@ struct Profiler {
 struct Reformat {
     input: String,
     output: Option<String>,
+    #[clap(short, long)]
+    format: Option<String>,
 }
 
 ///Command line options for evm-tests subcommand.
@@ -291,7 +293,10 @@ fn main() -> Result<(), CompileError> {
                 )
             })?;
 
-            result.to_output(&mut get_output(reformat.output).unwrap(), Some("pretty"));
+            result.to_output(
+                &mut get_output(reformat.output).unwrap(),
+                reformat.format.as_deref(),
+            );
         }
 
         Args::EvmTests(options) => {
