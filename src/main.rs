@@ -306,8 +306,8 @@ fn main() -> Result<(), CompileError> {
                 Path::new(&upgrade.to),
                 Path::new(&upgrade.out),
             );
-            if result.is_err() {
-                println!("Encountered an error");
+            if let Err(e) = result {
+                println!("Encountered an error: {}", e);
             } else {
                 println!("Successfully generated code");
             }

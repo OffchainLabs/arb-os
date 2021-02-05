@@ -1,13 +1,41 @@
 use crate::compile::{AbstractSyntaxTree, StructField, Type, TypeCheckedNode};
 use crate::link::LinkedProgram;
+use serde::export::Formatter;
 use std::collections::HashSet;
+use std::fmt::Display;
 use std::fs::File;
 use std::io::Read;
 use std::io::Write;
 use std::path::Path;
 
-pub(crate) fn gen_upgrade_code(input: &Path, output: &Path, output_file: &Path) -> Result<(), ()> {
-    let mut code = File::create(output_file).map_err(|_| ())?;
+#[derive(Debug)]
+pub struct GenCodeError {
+    reason: String,
+}
+
+impl GenCodeError {
+    fn new(reason: String) -> Self {
+        GenCodeError { reason }
+    }
+}
+
+impl Display for GenCodeError {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), std::fmt::Error> {
+        write!(f, "{}", self.reason)
+    }
+}
+
+pub(crate) fn gen_upgrade_code(
+    input: &Path,
+    output: &Path,
+    output_file: &Path,
+) -> Result<(), GenCodeError> {
+    let mut code = File::create(output_file).map_err(|_| {
+        GenCodeError::new(format!(
+            "Could not create output file \"{}\"",
+            output_file.to_str().unwrap_or("")
+        ))
+    })?;
     let input_fields = get_globals_from_file(input)?;
     let output_fields = get_globals_from_file(output)?;
     let intersection: HashSet<&StructField> = input_fields
@@ -29,25 +57,25 @@ pub(crate) fn gen_upgrade_code(input: &Path, output: &Path, output_file: &Path) 
         "{}",
         type_decl_string(&"InputGlobals".to_string(), &input_struct)
     )
-    .map_err(|_| ())?;
+    .map_err(|_| GenCodeError::new("Failed to write to output file".to_string()))?;
     writeln!(
         code,
         "{}",
         type_decl_string(&"OutputGlobals".to_string(), &output_struct)
     )
-    .map_err(|_| ())?;
+    .map_err(|_| GenCodeError::new("Failed to write to output file".to_string()))?;
     writeln!(
         code,
         "func upgrade(input_globals: InputGlobals) -> OutputGlobals {{"
     )
-    .map_err(|_| ())?;
+    .map_err(|_| GenCodeError::new("Failed to write to output file".to_string()))?;
     for field in intersection {
         writeln!(
             code,
             "    {}",
             let_string(&field.name, &format!("input_globals.{}", field.name))
         )
-        .map_err(|_| ())?;
+        .map_err(|_| GenCodeError::new("Failed to write to output file".to_string()))?;
     }
     for field in output_only {
         writeln!(
@@ -55,22 +83,41 @@ pub(crate) fn gen_upgrade_code(input: &Path, output: &Path, output_file: &Path) 
             "    {}",
             let_string(&field.name, &"panic".to_string())
         )
-        .map_err(|_| ())?;
+        .map_err(|_| GenCodeError::new("Failed to write to output file".to_string()))?;
     }
-    writeln!(code, "    return struct {{").map_err(|_| ())?;
+    writeln!(code, "    return struct {{")
+        .map_err(|_| GenCodeError::new("Failed to write to output file".to_string()))?;
     for field in output_fields {
-        writeln!(code, "        {}: {},", field.name, field.name).map_err(|_| ())?;
+        writeln!(code, "        {}: {},", field.name, field.name)
+            .map_err(|_| GenCodeError::new("Failed to write to output file".to_string()))?;
     }
-    writeln!(code, "    }};").map_err(|_| ())?;
-    writeln!(code, "}}").map_err(|_| ())?;
+    writeln!(code, "    }};")
+        .map_err(|_| GenCodeError::new("Failed to write to output file".to_string()))?;
+    writeln!(code, "}}")
+        .map_err(|_| GenCodeError::new("Failed to write to output file".to_string()))?;
     Ok(())
 }
 
-fn get_globals_from_file(path: &Path) -> Result<Vec<StructField>, ()> {
-    let mut file = File::open(&path).map_err(|_| ())?;
+fn get_globals_from_file(path: &Path) -> Result<Vec<StructField>, GenCodeError> {
+    let mut file = File::open(&path).map_err(|_| {
+        GenCodeError::new(format!(
+            "Could not create file \"{}\"",
+            path.to_str().unwrap_or("")
+        ))
+    })?;
     let mut s = String::new();
-    file.read_to_string(&mut s).map_err(|_| ())?;
-    let globals: LinkedProgram = serde_json::from_str(&s).map_err(|_| ())?;
+    file.read_to_string(&mut s).map_err(|_| {
+        GenCodeError::new(format!(
+            "Failed to read \"{}\" to string",
+            path.to_str().unwrap_or("")
+        ))
+    })?;
+    let globals: LinkedProgram = serde_json::from_str(&s).map_err(|_| {
+        GenCodeError::new(format!(
+            "Failed to deserialize file \"{}\"",
+            path.to_str().unwrap_or("")
+        ))
+    })?;
 
     let mut fields = vec![];
     for global in globals.globals {
