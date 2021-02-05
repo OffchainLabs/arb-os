@@ -1,8 +1,8 @@
 use crate::compile::{AbstractSyntaxTree, StructField, Type, TypeCheckedNode};
 use crate::link::LinkedProgram;
-use serde::export::Formatter;
 use std::collections::HashSet;
 use std::fmt::Display;
+use std::fmt::Formatter;
 use std::fs::File;
 use std::io::Read;
 use std::io::Write;
