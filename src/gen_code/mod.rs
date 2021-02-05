@@ -3,9 +3,11 @@ use crate::link::LinkedProgram;
 use std::collections::HashSet;
 use std::fs::File;
 use std::io::Read;
+use std::io::Write;
 use std::path::Path;
 
-pub(crate) fn gen_upgrade_code(input: &Path, output: &Path) -> Result<(), ()> {
+pub(crate) fn gen_upgrade_code(input: &Path, output: &Path, output_file: &Path) -> Result<(), ()> {
+    let mut code = File::create(output_file).map_err(|_| ())?;
     let input_fields = get_globals_from_file(input)?;
     let output_fields = get_globals_from_file(output)?;
     let intersection: HashSet<&StructField> = input_fields
@@ -22,30 +24,45 @@ pub(crate) fn gen_upgrade_code(input: &Path, output: &Path) -> Result<(), ()> {
         .collect();
     let input_struct = Type::Struct(input_fields.clone());
     let output_struct = Type::Struct(output_fields.clone());
-    println!(
+    writeln!(
+        code,
         "{}",
         type_decl_string(&"InputGlobals".to_string(), &input_struct)
-    );
-    println!(
+    )
+    .map_err(|_| ())?;
+    writeln!(
+        code,
         "{}",
         type_decl_string(&"OutputGlobals".to_string(), &output_struct)
-    );
-    println!("func upgrade(input_globals: InputGlobals) -> OutputGlobals {{");
+    )
+    .map_err(|_| ())?;
+    writeln!(
+        code,
+        "func upgrade(input_globals: InputGlobals) -> OutputGlobals {{"
+    )
+    .map_err(|_| ())?;
     for field in intersection {
-        println!(
+        writeln!(
+            code,
             "    {}",
             let_string(&field.name, &format!("input_globals.{}", field.name))
-        );
+        )
+        .map_err(|_| ())?;
     }
     for field in output_only {
-        println!("    {}", let_string(&field.name, &"panic".to_string()));
+        writeln!(
+            code,
+            "    {}",
+            let_string(&field.name, &"panic".to_string())
+        )
+        .map_err(|_| ())?;
     }
-    println!("    return struct {{");
+    writeln!(code, "    return struct {{").map_err(|_| ())?;
     for field in output_fields {
-        println!("        {}: {},", field.name, field.name);
+        writeln!(code, "        {}: {},", field.name, field.name).map_err(|_| ())?;
     }
-    println!("    }};");
-    println!("}}");
+    writeln!(code, "    }};").map_err(|_| ())?;
+    writeln!(code, "}}").map_err(|_| ())?;
     Ok(())
 }
 

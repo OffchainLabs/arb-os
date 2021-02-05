@@ -103,6 +103,7 @@ struct EvmTests {
 struct GenUpgrade {
     from: String,
     to: String,
+    out: String,
 }
 
 ///Main enum for command line arguments.
@@ -300,9 +301,11 @@ fn main() -> Result<(), CompileError> {
             println!("{} successes, {} failures", num_successes, num_failures);
         }
         Args::GenUpgradeCode(upgrade) => {
-            let input = upgrade.from;
-            let output = upgrade.to;
-            let result = gen_upgrade_code(Path::new(&input), Path::new(&output));
+            let result = gen_upgrade_code(
+                Path::new(&upgrade.from),
+                Path::new(&upgrade.to),
+                Path::new(&upgrade.out),
+            );
             if result.is_err() {
                 println!("Encountered an error");
             } else {
