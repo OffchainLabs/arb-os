@@ -92,6 +92,12 @@ struct Profiler {
     mode: ProfilerMode,
 }
 
+///Command line options for reformat subcommand.
+#[derive(Clap, Debug)]
+struct Reformat {
+    input: String,
+}
+
 ///Command line options for evm-tests subcommand.
 #[derive(Clap, Debug)]
 struct EvmTests {
@@ -111,7 +117,7 @@ enum Args {
     MakeTestLogs,
     MakeBenchmarks,
     MakeTemplates,
-    Reformat,
+    Reformat(Reformat),
     EvmTests(EvmTests),
 }
 
@@ -259,8 +265,8 @@ fn main() -> Result<(), CompileError> {
             generate_contract_template_file_or_die(path);
         }
 
-        Args::Reformat => {
-            let path = Path::new("arb_os/arbos.mexe");
+        Args::Reformat(reformat) => {
+            let path = Path::new(&reformat.input);
             let mut file = File::open(path).map_err(|_| {
                 CompileError::new(
                     format!(
