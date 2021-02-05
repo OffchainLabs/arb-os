@@ -4,6 +4,7 @@
 
 #![allow(unused_parens)]
 
+use crate::link::LinkedProgram;
 use clap::Clap;
 use compile::{compile_from_file, CompileError};
 use contracttemplates::generate_contract_template_file_or_die;
@@ -17,6 +18,7 @@ use run::{
 use std::collections::BTreeMap;
 use std::fs::File;
 use std::io;
+use std::io::Read;
 use std::path::Path;
 use std::time::Instant;
 use uint256::Uint256;
@@ -109,6 +111,7 @@ enum Args {
     MakeTestLogs,
     MakeBenchmarks,
     MakeTemplates,
+    Reformat,
     EvmTests(EvmTests),
 }
 
@@ -254,6 +257,23 @@ fn main() -> Result<(), CompileError> {
         Args::MakeTemplates => {
             let path = Path::new("arb_os/contractTemplates.mini");
             generate_contract_template_file_or_die(path);
+        }
+
+        Args::Reformat => {
+            let path = Path::new("arb_os/arbos.mexe");
+            let mut file = File::open(path).map_err(|_| {
+                CompileError::new(
+                    format!(
+                        "Could not open file: \"{}\"",
+                        path.to_str().unwrap_or("non-utf8")
+                    ),
+                    None,
+                )
+            })?;
+            let mut s = String::new();
+            file.read_to_string(&mut s);
+            let result: LinkedProgram = serde_json::from_str(&s).unwrap();
+            result.to_output(&mut get_output(None).unwrap(), Some("pretty"));
         }
 
         Args::EvmTests(options) => {

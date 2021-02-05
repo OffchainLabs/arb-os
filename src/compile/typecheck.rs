@@ -6,8 +6,8 @@
 
 use super::ast::{
     BinaryOp, CodeBlock, Constant, DebugInfo, Expr, ExprKind, FuncArg, FuncDecl, FuncDeclKind,
-    GlobalVarDecl, MatchPattern, Statement, StatementKind, StructField, TopLevelDecl,
-    TrinaryOp, Type, TypeTree, UnaryOp,
+    GlobalVarDecl, MatchPattern, Statement, StatementKind, StructField, TopLevelDecl, TrinaryOp,
+    Type, TypeTree, UnaryOp,
 };
 use super::MiniProperties;
 use crate::link::{ExportedFunc, Import, ImportedFunc};

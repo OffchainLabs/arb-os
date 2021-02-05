@@ -6,8 +6,7 @@
 
 use super::ast::{BinaryOp, FuncArg, GlobalVarDecl, TrinaryOp, Type, UnaryOp};
 use super::typecheck::{
-    PropertiesList, TypeCheckedExpr, TypeCheckedFunc, TypeCheckedMatchPattern,
-    TypeCheckedStatement,
+    PropertiesList, TypeCheckedExpr, TypeCheckedFunc, TypeCheckedMatchPattern, TypeCheckedStatement,
 };
 use crate::compile::ast::DebugInfo;
 use crate::compile::typecheck::{
