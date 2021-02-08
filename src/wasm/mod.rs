@@ -17,6 +17,8 @@ struct Control {
     is_loop : bool,
 }
 
+const LEVEL: usize = 4;
+
 fn block_len(bt : &BlockType) -> usize {
     match *bt {
         BlockType::Value(_) => 1,
@@ -54,20 +56,61 @@ fn mk_func_label(idx: usize) -> Instruction {
     Instruction::from_opcode(Opcode::Label(Label::WasmFunc(idx)), DebugInfo::from(None))
 }
 
-fn cjump(idx: usize) -> Instruction {
-    Instruction::from_opcode_imm(Opcode::AVMOpcode(AVMOpcode::Cjump), Value::Label(Label::Evm(idx)), DebugInfo::from(None))
+fn get_from_table(res: &mut Vec<Instruction>, idx: Value) {
+    res.push(simple_op(AVMOpcode::Rget));
+    res.push(immed_op(AVMOpcode::Tget, int_from_usize(1)));
+    res.push(push_value(idx));
+    for _i in 0..LEVEL {
+        // Stack: idx, table
+        res.push(simple_op(AVMOpcode::Dup0)); // idx, idx, table
+        res.push(immed_op(AVMOpcode::BitwiseAnd, int_from_usize(7))); // idx (mod), idx, table
+        res.push(simple_op(AVMOpcode::Swap1)); // idx, idx (mod), table
+        res.push(immed_op(AVMOpcode::ShiftRight, int_from_usize(3))); // idx, idx (mod), table
+        res.push(simple_op(AVMOpcode::Swap2)); // table, idx (mod), idx
+        res.push(simple_op(AVMOpcode::Swap1)); // idx (mod), table, idx
+        res.push(simple_op(AVMOpcode::Tget)); // table, idx
+        res.push(simple_op(AVMOpcode::Swap1)); // idx, table
+    }
+    res.push(simple_op(AVMOpcode::Pop));
 }
 
-fn jump(idx: usize) -> Instruction {
-    Instruction::from_opcode_imm(Opcode::AVMOpcode(AVMOpcode::Jump), Value::Label(Label::Evm(idx)), DebugInfo::from(None))
+fn get_return_from_table(res: &mut Vec<Instruction>) {
+    res.push(simple_op(AVMOpcode::AuxPush));
+    res.push(simple_op(AVMOpcode::Rget));
+    res.push(immed_op(AVMOpcode::Tget, int_from_usize(1)));
+    res.push(simple_op(AVMOpcode::AuxPop));
+    for _i in 0..LEVEL {
+        // Stack: idx, table
+        res.push(simple_op(AVMOpcode::Dup0)); // idx, idx, table
+        res.push(immed_op(AVMOpcode::BitwiseAnd, int_from_usize(7))); // idx (mod), idx, table
+        res.push(simple_op(AVMOpcode::Swap1)); // idx, idx (mod), table
+        res.push(immed_op(AVMOpcode::ShiftRight, int_from_usize(3))); // idx, idx (mod), table
+        res.push(simple_op(AVMOpcode::Swap2)); // table, idx (mod), idx
+        res.push(simple_op(AVMOpcode::Swap1)); // idx (mod), table, idx
+        res.push(simple_op(AVMOpcode::Tget)); // table, idx
+        res.push(simple_op(AVMOpcode::Swap1)); // idx, table
+    }
+    res.push(simple_op(AVMOpcode::Pop));
 }
 
-fn call_jump(idx: u32) -> Instruction {
-    Instruction::from_opcode_imm(Opcode::AVMOpcode(AVMOpcode::Jump), Value::Label(Label::WasmFunc(idx as usize)), DebugInfo::from(None))
+fn cjump(res: &mut Vec<Instruction>, idx: usize) {
+    get_from_table(res, Value::Label(Label::Evm(idx)));
+    res.push(simple_op(AVMOpcode::Cjump));
 }
 
-fn call_cjump(idx: u32) -> Instruction {
-    Instruction::from_opcode_imm(Opcode::AVMOpcode(AVMOpcode::Cjump), Value::Label(Label::WasmFunc(idx as usize)), DebugInfo::from(None))
+fn jump(res: &mut Vec<Instruction>, idx: usize) {
+    get_from_table(res, Value::Label(Label::Evm(idx)));
+    res.push(simple_op(AVMOpcode::Jump));
+}
+
+fn call_cjump(res: &mut Vec<Instruction>, idx: u32) {
+    get_from_table(res, Value::Label(Label::WasmFunc(idx as usize)));
+    res.push(simple_op(AVMOpcode::Cjump));
+}
+
+fn call_jump(res: &mut Vec<Instruction>, idx: u32) {
+    get_from_table(res, Value::Label(Label::WasmFunc(idx as usize)));
+    res.push(simple_op(AVMOpcode::Jump));
 }
 
 fn get_frame() -> Instruction {
@@ -155,7 +198,7 @@ fn generate_store(res: &mut Vec<Instruction>, offset: u32, memory_offset: usize,
     res.push(get64_from_buffer(0));
     res.push(immed_op(AVMOpcode::Mul, Value::Int(Uint256::from_usize(1 << 16))));
     res.push(simple_op(AVMOpcode::LessThan));
-    res.push(cjump(1));
+    cjump(res, 1);
 
     let offset = memory_offset + (offset as usize);
     for i in 0..num {
@@ -173,7 +216,7 @@ fn generate_load(res: &mut Vec<Instruction>, offset: u32, memory_offset: usize, 
     res.push(get64_from_buffer(0));
     res.push(immed_op(AVMOpcode::Mul, Value::Int(Uint256::from_usize(1 << 16))));
     res.push(simple_op(AVMOpcode::LessThan));
-    res.push(cjump(1));
+    cjump(res, 1);
 
     let offset = memory_offset + (offset as usize);
     res.push(immed_op(AVMOpcode::Noop, Value::Int(Uint256::from_usize(0))));
@@ -398,13 +441,10 @@ fn handle_function(m : &Module, func : &FuncBody, idx : usize, mut label : usize
     let sig = m.function_section().unwrap().entries()[idx].type_ref();
     let ftype = get_func_type(m, sig);
     
-    // println!("{:?}", func.code().elements());
+    println!("func start label {}", label);
     
-    // let num_imports = get_num_imports(m);
-
     let mut res : Vec<Instruction> = Vec::new();
     let mut stack : Vec<Control> = Vec::new();
-    // let mut ptr : usize = count_locals(func) + ftype.params().len();
     let mut ptr : usize = 0;
     let mut bptr : usize = 0;
 
@@ -422,7 +462,7 @@ fn handle_function(m : &Module, func : &FuncBody, idx : usize, mut label : usize
         func.code().elements().len(), count_locals(func), ftype.params().len(), rets);
 
     for op in func.code().elements().iter() {
-        eprintln!("handling {} / {}; {:?} ... label {}", ptr, stack.len(), op, label);
+        eprintln!("handling {} / {}; {:?} ... label {} len {}", ptr, stack.len(), op, label, res.len());
         match &*op {
             Unreachable => res.push(simple_op(AVMOpcode::Panic)),
             Nop => res.push(simple_op(AVMOpcode::Noop)),
@@ -474,17 +514,17 @@ fn handle_function(m : &Module, func : &FuncBody, idx : usize, mut label : usize
                 let else_label = label;
                 let end_label = label+1;
                 let rets = block_len(&bt);
-                eprintln!("Level if {} rets {}", ptr, rets);
+                eprintln!("Level if {} rets {} end label {} else label {}", ptr, rets, end_label, else_label);
                 stack.push(Control {level: ptr, rets: rets, target: end_label, else_label, is_ite: true, .. def});
                 label = label+2;
                 res.push(simple_op(AVMOpcode::IsZero));
-                res.push(cjump(else_label));
+                cjump(&mut res, else_label);
             },
             Else => {
                 let mut c : Control = stack.pop().unwrap();
-                eprintln!("Level else {}", c.level);
+                eprintln!("Level else {} end label {} else label {}", c.level, c.target, c.else_label);
                 ptr = c.level;
-                res.push(jump(c.target));
+                jump(&mut res, c.target);
                 res.push(mk_label(c.else_label));
                 c.else_label = 0;
                 stack.push(c);
@@ -520,7 +560,7 @@ fn handle_function(m : &Module, func : &FuncBody, idx : usize, mut label : usize
                 eprintln!("Debug br {:?} {}", c, c.level);
                 adjust_stack(&mut res, ptr - c.level, c.rets);
                 ptr = ptr - c.rets;
-                res.push(jump(c.target));
+                jump(&mut res, c.target);
             },
             BrIf(x) => {
                 let c = &stack[stack.len() - (*x as usize) - 1];
@@ -528,11 +568,11 @@ fn handle_function(m : &Module, func : &FuncBody, idx : usize, mut label : usize
                 let continue_label =label;
                 let end_label = label+1;
                 label = label+2;
-                res.push(cjump(continue_label));
-                res.push(jump(end_label));
+                cjump(&mut res, continue_label);
+                jump(&mut res, end_label);
                 res.push(mk_label(continue_label));
                 adjust_stack(&mut res, ptr - c.level - 1, c.rets);
-                res.push(jump(c.target));
+                jump(&mut res, c.target);
                 res.push(mk_label(end_label));
                 ptr = ptr - 1;
             },
@@ -551,7 +591,7 @@ fn handle_function(m : &Module, func : &FuncBody, idx : usize, mut label : usize
                     res.push(set64_from_buffer(ftype.params().len()-1-i));
                     res.push(set_frame());
                 }
-                res.push(call_jump(*x));
+                call_jump(&mut res, *x);
                 res.push(mk_label(return_label));
                 // Pop stack frame
                 res.push(simple_op(AVMOpcode::AuxPop));
@@ -581,7 +621,7 @@ fn handle_function(m : &Module, func : &FuncBody, idx : usize, mut label : usize
                 res.push(simple_op(AVMOpcode::AuxPush));
                 res.push(push_value(Value::Int(hash_ftype(&ftype))));
                 res.push(simple_op(AVMOpcode::Swap1));
-                res.push(call_jump(calli as u32));
+                call_jump(&mut res, calli as u32);
                 res.push(mk_label(return_label));
                 // Pop stack frame
                 res.push(simple_op(AVMOpcode::AuxPop));
@@ -593,14 +633,12 @@ fn handle_function(m : &Module, func : &FuncBody, idx : usize, mut label : usize
                 println!("return {} level {} rets {}", ptr, c.level, c.rets);
                 adjust_stack(&mut res, ptr - c.level, c.rets);
                 ptr = ptr - c.rets;
-                res.push(jump(c.target));
+                jump(&mut res, c.target);
             },
             Select => {
                 let else_label = label;
-                // let end_label = label+1;
-                res.push(cjump(else_label));
+                cjump(&mut res, else_label);
                 res.push(simple_op(AVMOpcode::Swap1));
-                // res.push(jump(end_label));
                 res.push(mk_label(else_label));
                 res.push(simple_op(AVMOpcode::Pop));
                 
@@ -617,16 +655,16 @@ fn handle_function(m : &Module, func : &FuncBody, idx : usize, mut label : usize
                     res.push(simple_op(AVMOpcode::Dup0));
                     res.push(immed_op(AVMOpcode::Equal, Value::Int(Uint256::from_usize(i))));
                     res.push(simple_op(AVMOpcode::IsZero));
-                    res.push(cjump(label+i));
+                    cjump(&mut res, label+i);
                     res.push(simple_op(AVMOpcode::Pop));
                     adjust_stack(&mut res, ptr - c.level - 1, c.rets);
-                    res.push(jump(c.target));
+                    jump(&mut res, c.target);
                     res.push(mk_label(label+i));
                 }
                 let c = &stack[stack.len() - (def as usize) - 1];
                 res.push(simple_op(AVMOpcode::Pop));
                 adjust_stack(&mut res, ptr - c.level - 1, c.rets);
-                res.push(jump(c.target));
+                jump(&mut res, c.target);
                 
                 ptr = ptr-1-c.rets;
                 label = label + len + 2;
@@ -984,7 +1022,7 @@ fn handle_function(m : &Module, func : &FuncBody, idx : usize, mut label : usize
                 res.push(simple_op(AVMOpcode::Plus));
                 res.push(simple_op(AVMOpcode::Dup0));
                 res.push(immed_op(AVMOpcode::GreaterThan, Value::Int(Uint256::from_usize(max_memory))));
-                res.push(cjump(ok_label));
+                cjump(&mut res, ok_label);
                 res.push(simple_op(AVMOpcode::Pop));
                 res.push(simple_op(AVMOpcode::Pop));
                 res.push(push_value(Value::Int(Uint256::from_usize(0xffffffff)))); // -1 when error
@@ -1003,6 +1041,7 @@ fn handle_function(m : &Module, func : &FuncBody, idx : usize, mut label : usize
     // Function return
     res.push(mk_label(end_label));
     res.push(get_return_pc());
+    get_return_from_table(&mut res);
     res.push(simple_op(AVMOpcode::Jump));
 
     return (res, label);
@@ -1020,26 +1059,84 @@ pub fn clear_labels(arr: Vec<Instruction>) -> Vec<Instruction> {
     res
 }
 
-pub fn resolve_labels(arr: Vec<Instruction>) -> Vec<Instruction> {
+fn table_to_tuple(tab: &[usize], prefix: usize, shift: usize, level: usize) -> Value {
+    if level == 0 {
+        let mut v = vec![];
+        for i in 0..8 {
+            let idx = prefix + (i << shift);
+            let ptr = if idx < tab.len() { tab[idx] } else { 0 };
+            // We are adding one instruction to the beginning
+            v.push(Value::CodePoint(CodePt::Internal(ptr+1)));
+        }
+        return Value::new_tuple(v)
+    }
+    let mut v = vec![];
+    for i in 0..8 {
+        let prefix = prefix + (i << shift);
+        v.push(table_to_tuple(tab, prefix, shift+3, level-1));
+    }
+    return Value::new_tuple(v)
+}
+
+fn value_replace_labels(v: Value, label_map: &HashMap<Label, Value>) -> Result<Value, Label> {
+    match v {
+        Value::Int(_) => Ok(v),
+        Value::CodePoint(_) => Ok(v),
+        Value::Buffer(_) => Ok(v),
+        Value::Label(label) => {
+            let maybe_pc = label_map.get(&label);
+            match maybe_pc {
+                Some(pc) => Ok(pc.clone()),
+                None => Err(label),
+            }
+        }
+        Value::Tuple(tup) => {
+            let mut new_vec = Vec::new();
+            for v in tup.iter() {
+                let val = v.clone();
+                new_vec.push(value_replace_labels(val, label_map)?);
+            }
+            Ok(Value::new_tuple(new_vec))
+        }
+    }
+}
+
+fn inst_replace_labels(inst: Instruction, label_map: &HashMap<Label, Value>) -> Result<Instruction, Label> {
+    match inst.immediate {
+        Some(val) => Ok(Instruction::from_opcode_imm(
+            inst.opcode,
+            value_replace_labels(val, label_map)?,
+            inst.debug_info,
+        )),
+        None => Ok(inst),
+    }
+}
+
+
+pub fn resolve_labels(arr: Vec<Instruction>) -> (Vec<Instruction>, Value) {
     let mut labels = HashMap::new();
+    let mut tab = vec![];
     for (idx, inst) in arr.iter().enumerate() {
         match inst.opcode {
             Opcode::Label(Label::Evm(num)) => {
-                // println!("Found label {} -> {}", num, idx);
-                labels.insert(Label::Evm(num), CodePt::Internal(idx));
+                println!("Found label {} -> {}", num, idx);
+                tab.push(idx);
+                labels.insert(Label::Evm(num), int_from_usize(tab.len()-1));
             }
             Opcode::Label(Label::WasmFunc(num)) => {
-                // println!("Found func label {} -> {}", num, idx);
-                labels.insert(Label::WasmFunc(num), CodePt::Internal(idx));
+                println!("Found func label {} -> {}", num, idx);
+                tab.push(idx);
+                labels.insert(Label::WasmFunc(num), int_from_usize(tab.len()-1));
             }
             _ => {}
         }
     }
     let mut res = vec![];
     for inst in arr.iter() {
-        res.push(inst.clone().replace_labels(&labels).unwrap());
+        res.push(inst_replace_labels(inst.clone(), &labels).unwrap());
     }
-    res
+    println!("Labels {}", tab.len());
+    (res, table_to_tuple(&tab, 0, 0, LEVEL-1))
 }
 
 fn init_value(_m : &Module, expr : &InitExpr) -> usize {
@@ -1122,7 +1219,10 @@ pub fn load(fname: String, param: usize) -> Vec<Instruction> {
     init.push(simple_op(AVMOpcode::AuxPush));
 
     // Initialize register
-    init.push(immed_op(AVMOpcode::Rset, Value::new_tuple(vec![Value::new_buffer(vec![]), int_from_usize(0)])));
+    // init.push(immed_op(AVMOpcode::Rset, Value::new_tuple(vec![Value::new_buffer(vec![]), int_from_usize(0)])));
+    init.push(push_value(Value::new_tuple(vec![Value::new_buffer(vec![]), int_from_usize(0)])));
+    init.push(immed_op(AVMOpcode::Tset,int_from_usize(1)));
+    init.push(simple_op(AVMOpcode::Rset));
 
     // Construct initial memory with globals
     init.push(simple_op(AVMOpcode::NewBuffer));
@@ -1165,7 +1265,7 @@ pub fn load(fname: String, param: usize) -> Vec<Instruction> {
 
     // Here we should have jump to the correct function
     if let Some(f) = find_function(&module, "test") {
-        init.push(call_jump(f));
+        call_jump(&mut init, f);
     }
 
     let mut label = 2;
@@ -1199,12 +1299,12 @@ pub fn load(fname: String, param: usize) -> Vec<Instruction> {
                 init.push(push_value(Value::Int(Uint256::from_usize(idx + offset))));
                 init.push(simple_op(AVMOpcode::Equal));
                 init.push(simple_op(AVMOpcode::IsZero));
-                init.push(cjump(next_label));
+                cjump(&mut init, next_label);
                 // We will call this function now or fail
                 init.push(simple_op(AVMOpcode::Pop));
                 init.push(push_value(Value::Int(hash_ftype(&ftype))));
                 init.push(simple_op(AVMOpcode::Equal));
-                init.push(call_cjump(*f_idx as u32));
+                call_cjump(&mut init, *f_idx as u32);
                 init.push(simple_op(AVMOpcode::Panic));
                 init.push(mk_label(next_label));
             }
@@ -1219,6 +1319,13 @@ pub fn load(fname: String, param: usize) -> Vec<Instruction> {
     init.push(simple_op(AVMOpcode::Rset));
     init.push(simple_op(AVMOpcode::Noop));
 
-    clear_labels(resolve_labels(init))
-
+    let (res, tab) = resolve_labels(init);
+    println!("Table {}", tab);
+    let res = clear_labels(res);
+    let mut a = vec![];
+    a.push(push_value(tab));
+    for i in 0..res.len() {
+        a.push(res[i].clone());
+    }
+    a
 }

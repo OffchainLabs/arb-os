@@ -154,6 +154,7 @@ fn main() -> Result<(), CompileError> {
             };
             let mut machine = Machine::new(program, env);
             machine.start_at_zero();
+            machine.run(Some(CodePt::new_internal(code_len-1)));
             machine.debug(Some(CodePt::new_internal(code_len-1)));
         }
         Args::Compile(compile) => {
