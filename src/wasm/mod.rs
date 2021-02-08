@@ -112,12 +112,23 @@ fn adjust_stack(res : &mut Vec<Instruction>, diff : usize, num : usize) {
     }
 }
 
+fn get_memory(res: &mut Vec<Instruction>) {
+    res.push(simple_op(AVMOpcode::Rget));
+    res.push(immed_op(AVMOpcode::Tget, int_from_usize(0)));
+}
+
+fn set_memory(res: &mut Vec<Instruction>) {
+    res.push(simple_op(AVMOpcode::Rget));
+    res.push(immed_op(AVMOpcode::Tset, int_from_usize(0)));
+    res.push(simple_op(AVMOpcode::Rset)); // value, address
+}
+
 // load byte, save address
 fn load_byte(res: &mut Vec<Instruction>, offset: usize) {
     // value, address
     res.push(simple_op(AVMOpcode::Swap1)); // address, value
     res.push(simple_op(AVMOpcode::Dup0)); // address, address, value
-    res.push(simple_op(AVMOpcode::Rget)); // buffer, address, address, value
+    get_memory(res);
     res.push(simple_op(AVMOpcode::Swap1)); // address, buffer, address, value
     res.push(immed_op(AVMOpcode::Plus, Value::Int(Uint256::from_usize(offset)))); // address, buffer, address, value
     res.push(simple_op(AVMOpcode::GetBuffer8)); // value2, address, value
@@ -130,17 +141,17 @@ fn store_byte(res: &mut Vec<Instruction>, offset: usize) {
     res.push(simple_op(AVMOpcode::Dup1)); // address, value, address
     res.push(simple_op(AVMOpcode::Dup1)); // value, address, value, address
 
-    res.push(simple_op(AVMOpcode::Rget)); // buffer, value, address, value, address
+    get_memory(res);
     res.push(simple_op(AVMOpcode::Swap2)); // address, value, buffer, value, address
     res.push(immed_op(AVMOpcode::Plus, Value::Int(Uint256::from_usize(offset)))); // address, value, buffer, value, address
     res.push(simple_op(AVMOpcode::SetBuffer8)); // buffer, value, address
-    res.push(simple_op(AVMOpcode::Rset)); // value, address
+    set_memory(res);
 }
 
 fn generate_store(res: &mut Vec<Instruction>, offset: u32, memory_offset: usize, num: usize) {
     res.push(simple_op(AVMOpcode::Dup1));
     res.push(immed_op(AVMOpcode::Plus, Value::Int(Uint256::from_usize(offset as usize + num - 1)))); // address, value, buffer, value, address
-    res.push(simple_op(AVMOpcode::Rget));
+    get_memory(res);
     res.push(get64_from_buffer(0));
     res.push(immed_op(AVMOpcode::Mul, Value::Int(Uint256::from_usize(1 << 16))));
     res.push(simple_op(AVMOpcode::LessThan));
@@ -158,7 +169,7 @@ fn generate_store(res: &mut Vec<Instruction>, offset: u32, memory_offset: usize,
 fn generate_load(res: &mut Vec<Instruction>, offset: u32, memory_offset: usize, num: usize) {
     res.push(simple_op(AVMOpcode::Dup0));
     res.push(immed_op(AVMOpcode::Plus, Value::Int(Uint256::from_usize(offset as usize + num - 1)))); // address, value, buffer, value, address
-    res.push(simple_op(AVMOpcode::Rget));
+    get_memory(res);
     res.push(get64_from_buffer(0));
     res.push(immed_op(AVMOpcode::Mul, Value::Int(Uint256::from_usize(1 << 16))));
     res.push(simple_op(AVMOpcode::LessThan));
@@ -623,15 +634,15 @@ fn handle_function(m : &Module, func : &FuncBody, idx : usize, mut label : usize
 
             GetGlobal(x) => {
                 ptr = ptr + 1;
-                res.push(simple_op(AVMOpcode::Rget));
+                get_memory(&mut res);
                 res.push(get64_from_buffer((*x+1) as usize));
             },
             SetGlobal(x) => {
                 ptr = ptr - 1;
-                res.push(simple_op(AVMOpcode::Rget));
+                get_memory(&mut res);
                 res.push(simple_op(AVMOpcode::Swap1));
                 res.push(set64_from_buffer((*x+1) as usize));
-                res.push(simple_op(AVMOpcode::Rset));
+                set_memory(&mut res);
             },
 
             I64Store(_, offset) => {
@@ -959,14 +970,14 @@ fn handle_function(m : &Module, func : &FuncBody, idx : usize, mut label : usize
 
             CurrentMemory(_) => {
                 ptr = ptr + 1;
-                res.push(simple_op(AVMOpcode::Rget));
+                get_memory(&mut res);
                 res.push(get64_from_buffer(0));
             },
 
             GrowMemory(_) => {
                 let end_label = label;
                 let ok_label = label+1;
-                res.push(simple_op(AVMOpcode::Rget));
+                get_memory(&mut res);
                 res.push(get64_from_buffer(0));
                 res.push(simple_op(AVMOpcode::Dup0)); // old value to return (except need to handle error)
                 res.push(simple_op(AVMOpcode::Swap2));
@@ -978,10 +989,10 @@ fn handle_function(m : &Module, func : &FuncBody, idx : usize, mut label : usize
                 res.push(simple_op(AVMOpcode::Pop));
                 res.push(push_value(Value::Int(Uint256::from_usize(0xffffffff)))); // -1 when error
                 res.push(mk_label(ok_label));
-                res.push(simple_op(AVMOpcode::Rget));
+                get_memory(&mut res);
                 res.push(simple_op(AVMOpcode::Swap1));
                 res.push(set64_from_buffer(0));
-                res.push(simple_op(AVMOpcode::Rset));
+                set_memory(&mut res);
                 res.push(mk_label(end_label));
                 label = label+2;
             },
@@ -1110,9 +1121,12 @@ pub fn load(fname: String, param: usize) -> Vec<Instruction> {
     init.push(simple_op(AVMOpcode::Rget));
     init.push(simple_op(AVMOpcode::AuxPush));
 
+    // Initialize register
+    init.push(immed_op(AVMOpcode::Rset, Value::new_tuple(vec![Value::new_buffer(vec![]), int_from_usize(0)])));
+
     // Construct initial memory with globals
     init.push(simple_op(AVMOpcode::NewBuffer));
-    init.push(push_value(Value::Int(Uint256::from_usize(1024))));
+    init.push(push_value(int_from_usize(1024)));
     init.push(set64_from_buffer(0));
     let mut globals = 1;
     if let Some(sec) = module.global_section() {
@@ -1138,7 +1152,7 @@ pub fn load(fname: String, param: usize) -> Vec<Instruction> {
         }
     }
 
-    init.push(simple_op(AVMOpcode::Rset));
+    set_memory(&mut init);
 
     // Put initial frame to aux stack
     init.push(push_frame(Value::new_tuple(vec![Value::new_buffer(vec![]), Value::Label(Label::WasmFunc(f_count+1))])));
