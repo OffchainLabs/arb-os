@@ -8,6 +8,7 @@ use crate::compile::{
     compile_from_file, CompileError, CompiledProgram, DebugInfo, SourceFileMap, Type,
 };
 use crate::mavm::{AVMOpcode, Instruction, Label, Opcode, Value};
+use crate::pos::try_display_location;
 use crate::stringtable::{StringId, StringTable};
 use serde::{Deserialize, Serialize};
 use std::collections::hash_map::{DefaultHasher, HashMap};
@@ -42,7 +43,18 @@ impl LinkedProgram {
             Some("pretty") => {
                 writeln!(output, "static: {}", self.static_val).unwrap();
                 for (idx, insn) in self.code.iter().enumerate() {
-                    writeln!(output, "{:05}:  {}", idx, insn).unwrap();
+                    writeln!(
+                        output,
+                        "{:05}:  {} \t\t {}",
+                        idx,
+                        insn,
+                        try_display_location(
+                            insn.debug_info.location,
+                            &self.file_name_chart,
+                            false
+                        )
+                    )
+                    .unwrap();
                 }
             }
             None | Some("json") => match serde_json::to_string(self) {

@@ -186,14 +186,8 @@ impl Instruction {
 impl fmt::Display for Instruction {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match &self.immediate {
-            Some(v) => match self.debug_info.location {
-                Some(loc) => write!(f, "[{}] {}\t\t{}", v, self.opcode, loc),
-                None => write!(f, "[{}] {}\t\t[no location]", v, self.opcode),
-            },
-            None => match self.debug_info.location {
-                Some(loc) => write!(f, "{}\t\t{}", self.opcode, loc),
-                None => write!(f, "{}", self.opcode),
-            },
+            Some(v) => write!(f, "[{}] {}", v, self.opcode),
+            None => write!(f, "{}", self.opcode),
         }
     }
 }
