@@ -1094,7 +1094,7 @@ pub fn load(fname: String, param: usize) -> Vec<Instruction> {
     let mut buffer = Vec::<u8>::new();
     file.read_to_end(&mut buffer).unwrap();
 
-    run_jit(&buffer, param as i64);
+    // run_jit(&buffer, param as i64);
 
     let module = parity_wasm::deserialize_file(fname).unwrap();
     assert!(module.code_section().is_some());
