@@ -1063,7 +1063,39 @@ fn find_function(m : &Module, name : &str) -> Option<u32> {
     }
 }
 
+use std::fs::File;
+use std::io::Read;
+
+pub fn run_jit(buffer: &[u8], param: i64) -> i64 {
+    use wasmtime::*;
+    let engine = Engine::default();
+    let store = Store::new(&engine);
+
+    let module = Module::from_binary(&engine, &buffer).unwrap();
+
+    let instance = Instance::new(&store, &module, &[]).unwrap();
+
+    let answer = match instance.get_func("test") {
+        Some(f) => f,
+        None => return 0,
+    };
+
+    let answer = answer.get1::<i64, i64>().unwrap();
+
+    let result = answer(param).unwrap();
+    println!("Answer: {:?}", result);
+    result
+}
+
 pub fn load(fname: String, param: usize) -> Vec<Instruction> {
+
+    let mut file = File::open(&fname).unwrap();
+    // read the same file back into a Vec of bytes
+    let mut buffer = Vec::<u8>::new();
+    file.read_to_end(&mut buffer).unwrap();
+
+    run_jit(&buffer, param as i64);
+
     let module = parity_wasm::deserialize_file(fname).unwrap();
     assert!(module.code_section().is_some());
 

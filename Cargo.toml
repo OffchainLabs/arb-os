@@ -36,6 +36,7 @@ parity-bn = "0.4.4"
 rust-crypto="^0.2"
 num-integer = "0.1"
 parity-wasm = "0.42"
+wasmtime = "0.22.0"
 
 [features]
 sparse_buffers = []

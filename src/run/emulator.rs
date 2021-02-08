@@ -8,6 +8,7 @@ use super::runtime_env::RuntimeEnvironment;
 use crate::compile::{CompileError, DebugInfo};
 use crate::link::LinkedProgram;
 use crate::mavm::{AVMOpcode, Buffer, CodePt, Instruction, Opcode, Value};
+use crate::wasm::run_jit;
 use crate::pos::{try_display_location, Location};
 use crate::run::ripemd160port;
 use crate::uint256::Uint256;
@@ -2093,7 +2094,20 @@ impl Machine {
                         self.incr_pc();
                         Ok(true)
                     }
-					Opcode::GetLocal |  // these opcodes are for intermediate use in compilation only
+                    Opcode::AVMOpcode(AVMOpcode::RunWasm) => {
+                        let arg = self.stack.pop_usize(&self.state)?;
+                        let offset = self.stack.pop_usize(&self.state)?;
+                        let buf = self.stack.pop_buffer(&self.state)?;
+                        let mut vec = vec![];
+                        for i in 0..offset {
+                            vec.push(buf.read_byte(i));
+                        }
+                        let res = run_jit(&vec, arg as i64) as usize;
+                        self.stack.push(Value::Int(Uint256::from_usize(res)));
+                        self.incr_pc();
+                        Ok(true)
+                    },
+                    Opcode::GetLocal |  // these opcodes are for intermediate use in compilation only
 					Opcode::SetLocal |  // they should never appear in fully compiled code
 					Opcode::MakeFrame(_, _) |
 					Opcode::Label(_) |

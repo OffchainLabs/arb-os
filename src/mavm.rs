@@ -909,6 +909,7 @@ pub enum AVMOpcode {
     SetBuffer8,
     SetBuffer64,
     SetBuffer256,
+    RunWasm,
 }
 
 impl MiniProperties for Opcode {
