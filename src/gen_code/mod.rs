@@ -36,8 +36,10 @@ pub(crate) fn gen_upgrade_code(
             output_file.to_str().unwrap_or("")
         ))
     })?;
-    let input_fields = get_globals_from_file(input)?;
-    let output_fields = get_globals_from_file(output)?;
+    let mut input_fields = get_globals_from_file(input)?;
+    input_fields.push(StructField::new(String::from("_jump_table"), Type::Any));
+    let mut output_fields = get_globals_from_file(output)?;
+    output_fields.push(StructField::new(String::from("_jump_table"), Type::Any));
     let intersection: HashSet<&StructField> = input_fields
         .iter()
         .collect::<HashSet<_>>()
