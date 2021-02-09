@@ -29,6 +29,7 @@ pub(crate) fn gen_upgrade_code(
     input: &Path,
     output: &Path,
     output_file: &Path,
+    impl_file: &String,
 ) -> Result<(), GenCodeError> {
     let mut code = File::create(output_file).map_err(|_| {
         GenCodeError::new(format!(
@@ -54,6 +55,11 @@ pub(crate) fn gen_upgrade_code(
         .collect();
     let input_struct = Type::Struct(input_fields.clone());
     let output_struct = Type::Struct(output_fields.clone());
+    for field in output_only.iter() {
+        writeln!(code, "use {}::set_{};", impl_file, field.name)
+            .map_err(|_| GenCodeError::new("Failed to write use statement".to_string()))?;
+    }
+    writeln!(code).map_err(|_| GenCodeError::new("Failed to write empty line".to_string()))?;
     writeln!(
         code,
         "{}",

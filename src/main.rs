@@ -17,7 +17,7 @@ use run::{
 use std::collections::BTreeMap;
 use std::fs::File;
 use std::io;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::time::Instant;
 use uint256::Uint256;
 
@@ -101,9 +101,10 @@ struct EvmTests {
 
 #[derive(Clap, Debug)]
 struct GenUpgrade {
-    from: String,
-    to: String,
-    out: String,
+    from: PathBuf,
+    to: PathBuf,
+    out: PathBuf,
+    impl_file: String,
 }
 
 ///Main enum for command line arguments.
@@ -301,11 +302,8 @@ fn main() -> Result<(), CompileError> {
             println!("{} successes, {} failures", num_successes, num_failures);
         }
         Args::GenUpgradeCode(upgrade) => {
-            let result = gen_upgrade_code(
-                Path::new(&upgrade.from),
-                Path::new(&upgrade.to),
-                Path::new(&upgrade.out),
-            );
+            let result =
+                gen_upgrade_code(&upgrade.from, &upgrade.to, &upgrade.out, &upgrade.impl_file);
             if let Err(e) = result {
                 println!("Encountered an error: {}", e);
             } else {
