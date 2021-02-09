@@ -89,7 +89,7 @@ pub(crate) fn gen_upgrade_code(
         writeln!(
             code,
             "    {}",
-            let_string(&field.name, &"panic".to_string())
+            let_string(&field.name, &format!("set_{}(input_globals)", field.name))
         )
         .map_err(|_| GenCodeError::new("Failed to write to output file".to_string()))?;
     }
