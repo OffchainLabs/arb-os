@@ -1,5 +1,6 @@
 use crate::compile::{AbstractSyntaxTree, StructField, Type, TypeCheckedNode};
 use crate::link::LinkedProgram;
+use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 use std::fmt::Display;
 use std::fmt::Formatter;
@@ -11,6 +12,11 @@ use std::path::Path;
 #[derive(Debug)]
 pub struct GenCodeError {
     reason: String,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct ConfigFile {
+    data: HashSet<String>,
 }
 
 impl GenCodeError {
@@ -31,6 +37,13 @@ pub(crate) fn gen_upgrade_code(
     output_file: &Path,
     impl_file: &String,
 ) -> Result<(), GenCodeError> {
+    let mut file = File::open("scripts/config.toml")
+        .map_err(|_| GenCodeError::new("Could not open config file".to_string()))?;
+    let mut s = String::new();
+    file.read_to_string(&mut s)
+        .map_err(|_| GenCodeError::new("Could not read config file to string".to_string()))?;
+    let map: ConfigFile = toml::from_str(&s)
+        .map_err(|_| GenCodeError::new("Failed to parse config file as toml".to_string()))?;
     let mut code = File::create(output_file).map_err(|_| {
         GenCodeError::new(format!(
             "Could not create output file \"{}\"",
@@ -59,6 +72,12 @@ pub(crate) fn gen_upgrade_code(
         writeln!(code, "use {}::set_{};", impl_file, field.name)
             .map_err(|_| GenCodeError::new("Failed to write use statement".to_string()))?;
     }
+    for field in &intersection {
+        if map.data.contains(&field.name) {
+            writeln!(code, "use {}::set_{};", impl_file, field.name)
+                .map_err(|_| GenCodeError::new("Failed to write use statement".to_string()))?;
+        }
+    }
     writeln!(code).map_err(|_| GenCodeError::new("Failed to write empty line".to_string()))?;
     writeln!(
         code,
@@ -78,12 +97,21 @@ pub(crate) fn gen_upgrade_code(
     )
     .map_err(|_| GenCodeError::new("Failed to write to output file".to_string()))?;
     for field in intersection {
-        writeln!(
-            code,
-            "    {}",
-            let_string(&field.name, &format!("input_globals.{}", field.name))
-        )
-        .map_err(|_| GenCodeError::new("Failed to write to output file".to_string()))?;
+        if map.data.contains(&field.name) {
+            writeln!(
+                code,
+                "    {}",
+                let_string(&field.name, &format!("set_{}(input_globals)", field.name))
+            )
+            .map_err(|_| GenCodeError::new("Failed to write to output file".to_string()))?;
+        } else {
+            writeln!(
+                code,
+                "    {}",
+                let_string(&field.name, &format!("input_globals.{}", field.name))
+            )
+            .map_err(|_| GenCodeError::new("Failed to write to output file".to_string()))?;
+        }
     }
     for field in output_only {
         writeln!(
