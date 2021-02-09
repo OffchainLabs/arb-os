@@ -1,5 +1,6 @@
 use crate::compile::{AbstractSyntaxTree, StructField, Type, TypeCheckedNode};
 use crate::link::LinkedProgram;
+use crate::GenUpgrade;
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 use std::fmt::Display;
@@ -31,28 +32,36 @@ impl Display for GenCodeError {
     }
 }
 
-pub(crate) fn gen_upgrade_code(
-    input: &Path,
-    output: &Path,
-    output_file: &Path,
-    impl_file: &String,
-) -> Result<(), GenCodeError> {
-    let mut file = File::open("scripts/config.toml")
-        .map_err(|_| GenCodeError::new("Could not open config file".to_string()))?;
-    let mut s = String::new();
-    file.read_to_string(&mut s)
-        .map_err(|_| GenCodeError::new("Could not read config file to string".to_string()))?;
-    let map: ConfigFile = toml::from_str(&s)
-        .map_err(|_| GenCodeError::new("Failed to parse config file as toml".to_string()))?;
-    let mut code = File::create(output_file).map_err(|_| {
+pub(crate) fn gen_upgrade_code(input: GenUpgrade) -> Result<(), GenCodeError> {
+    let GenUpgrade {
+        from,
+        to,
+        out_file,
+        impl_file,
+        config_file,
+    } = input;
+    let map = if let Some(config_file) = config_file {
+        let mut file = File::open(config_file)
+            .map_err(|_| GenCodeError::new("Could not open config file".to_string()))?;
+        let mut s = String::new();
+        file.read_to_string(&mut s)
+            .map_err(|_| GenCodeError::new("Could not read config file to string".to_string()))?;
+        toml::from_str(&s)
+            .map_err(|_| GenCodeError::new("Failed to parse config file as toml".to_string()))?
+    } else {
+        ConfigFile {
+            data: HashSet::new(),
+        }
+    };
+    let mut code = File::create(&out_file).map_err(|_| {
         GenCodeError::new(format!(
             "Could not create output file \"{}\"",
-            output_file.to_str().unwrap_or("")
+            out_file.to_str().unwrap_or("")
         ))
     })?;
-    let mut input_fields = get_globals_from_file(input)?;
+    let mut input_fields = get_globals_from_file(&from)?;
     input_fields.push(StructField::new(String::from("_jump_table"), Type::Any));
-    let mut output_fields = get_globals_from_file(output)?;
+    let mut output_fields = get_globals_from_file(&to)?;
     output_fields.push(StructField::new(String::from("_jump_table"), Type::Any));
     let intersection: HashSet<&StructField> = input_fields
         .iter()
