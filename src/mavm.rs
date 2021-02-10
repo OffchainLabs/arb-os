@@ -186,7 +186,7 @@ impl Instruction {
 impl fmt::Display for Instruction {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match &self.immediate {
-            Some(v) => write!(f, "{} [{}]", self.opcode, v),
+            Some(v) => write!(f, "[{}]\n        {}", v, self.opcode),
             None => write!(f, "{}", self.opcode),
         }
     }
