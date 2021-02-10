@@ -325,6 +325,19 @@ pub fn needed_height(offset: usize) -> u8 {
     }
 }
 
+fn hash_full_buffer(buf: &[u8]) -> Uint256 {
+    if buf.len() == 0 {
+        return zero_hash(32);
+    }
+    if buf.len() == 32 {
+        return Uint256::from_bytes(buf).avm_hash();
+    }
+    let len = buf.len();
+    let h1 = hash_full_buffer(&buf[0..len / 2]);
+    let h2 = hash_full_buffer(&buf[len / 2..len]);
+    Uint256::avm_hash2(&h1, &h2)
+}
+
 fn hash_buf(buf: &[u8]) -> Packed {
     if buf.len() == 0 {
         return zero_packed(10);
@@ -338,7 +351,15 @@ fn hash_buf(buf: &[u8]) -> Packed {
     if is_zero_hash(&h2) {
         return pack(&h1);
     }
-    normal(Uint256::avm_hash2(&unpack(&h1), &unpack(&h2)), h1.size + 1)
+    let res = normal(Uint256::avm_hash2(&unpack(&h1), &unpack(&h2)), 1 + h1.size + h1.packed as u8);
+    /*
+    if res.hash != hash_full_buffer(&buf) {
+        let r1 = hash_full_buffer(&buf[0..len / 2]);
+        let r2 = hash_full_buffer(&buf[len / 2..len]);
+        println!("Hash error {} {} h2 {:?} h1 {:?}", unpack(&h1) == r1, unpack(&h2) == r2, h2, h1)
+    }
+    */
+    res
 }
 
 #[allow(dead_code)]
