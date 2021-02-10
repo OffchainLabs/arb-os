@@ -185,7 +185,10 @@ impl Instruction {
     }
 }
 
-impl fmt::Display for Instruction {
+impl<T> fmt::Display for Instruction<T>
+where
+    T: fmt::Display,
+{
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match &self.immediate {
             Some(v) => write!(f, "{} [{}]", self.opcode, v),
@@ -1303,5 +1306,11 @@ impl fmt::Display for Opcode {
             Opcode::Label(label) => label.fmt(f),
             _ => write!(f, "{}", self.to_name()),
         }
+    }
+}
+
+impl fmt::Display for AVMOpcode {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}", self.to_name())
     }
 }
