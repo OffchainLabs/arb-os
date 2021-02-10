@@ -77,13 +77,13 @@ $(STDDIR)/rlptest.mexe: $(BUILTINMAOS) $(STDDIR)/rlptest.mini
 $(BUILTINDIR)/maptest.mexe: $(BUILTINMAOS) $(BUILTINDIR)/maptest.mini
 	$(CARGORUN) compile $(BUILTINDIR)/maptest.mini -o $(BUILTINDIR)/maptest.mexe $(COMPILEFLAGS) -t
 
-$(ARBOSDIR)/arbos.mexe: $(ARBOSDIR) $(STDDIR) $(BUILTINDIR) src/compile/miniconstants.rs
+$(ARBOSDIR)/arbos.mexe: $(ARBOSDIR) $(STDDIR) $(BUILTINDIR) upgrade src/compile/miniconstants.rs
 	$(CARGORUN) compile "arb_os" -o "arb_os/arbos.mexe"
 
 upgrade: $(ARBOSDIR)/upgrade.mini
 
-$(ARBOSDIR)/upgrade.mini: upgradeConfig.toml
-	$(CARGORUN) gen-upgrade-code arb_os/arbos.mexe arb_os/arbos.mexe arb_os/upgrade.mini upgradeGlobals upgradeConfig.toml
+$(ARBOSDIR)/upgrade.mini: upgradeConfig.toml $(ARBOSDIR)/oldversion.mexe
+	$(CARGORUN) gen-upgrade-code arb_os/oldversion.mexe arb_os/arbos.mexe arb_os/upgrade.mini upgradeGlobals upgradeConfig.toml
 
 $(TESTCONTRACTS): $(TCSRCDIR) $(ACSRCDIR)/ArbSys.sol
 	(cd contracts/test; truffle compile)

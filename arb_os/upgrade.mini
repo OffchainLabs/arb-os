@@ -103,24 +103,24 @@ type OutputGlobals = struct {
     moduleManager: any,
     _jump_table: any,
 }
-func upgrade(input_globals: InputGlobals) -> OutputGlobals {
-    let globalCallStack = input_globals.globalCallStack;
-    let globalAccountStore = input_globals.globalAccountStore;
-    let upgradeInProgress = input_globals.upgradeInProgress;
-    let gasAccountingParams = input_globals.gasAccountingParams;
-    let globalOutbox = input_globals.globalOutbox;
-    let globalChainParams = input_globals.globalChainParams;
-    let unreachableMask = input_globals.unreachableMask;
-    let gasAccountingInfo = input_globals.gasAccountingInfo;
-    let evmOpJumpTable = input_globals.evmOpJumpTable;
+public impure func upgrade(input_globals: InputGlobals) -> OutputGlobals {
     let moduleManager = input_globals.moduleManager;
-    let globalCurrentTxRequest = input_globals.globalCurrentTxRequest;
-    let globalIndexedAddressTable = input_globals.globalIndexedAddressTable;
+    let unreachableMask = input_globals.unreachableMask;
+    let globalOutbox = input_globals.globalOutbox;
+    let globalAccountStore = input_globals.globalAccountStore;
     let globalBlockReceiptData = input_globals.globalBlockReceiptData;
-    let _jump_table = input_globals._jump_table;
+    let evmOpJumpTable = input_globals.evmOpJumpTable;
+    let globalChainParams = input_globals.globalChainParams;
+    let gasAccountingInfo = input_globals.gasAccountingInfo;
     let globalInputQueue = input_globals.globalInputQueue;
+    let globalCallStack = input_globals.globalCallStack;
     let inErrorHandler = input_globals.inErrorHandler;
     let globalInbox = input_globals.globalInbox;
+    let upgradeInProgress = input_globals.upgradeInProgress;
+    let gasAccountingParams = input_globals.gasAccountingParams;
+    let globalIndexedAddressTable = input_globals.globalIndexedAddressTable;
+    let globalCurrentTxRequest = input_globals.globalCurrentTxRequest;
+    let _jump_table = (asm() OutputGlobals { rget })._jump_table;
     return struct {
         globalAccountStore: globalAccountStore,
         upgradeInProgress: upgradeInProgress,

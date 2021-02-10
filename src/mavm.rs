@@ -237,6 +237,7 @@ impl CodePt {
                 u._push_bytes(&Uint256::from_usize(u._translate_pc(*pc)).rlp_encode());
             }
             _ => {
+                println!("Can't upload codepoint: {}", self);
                 panic!();
             }
         }

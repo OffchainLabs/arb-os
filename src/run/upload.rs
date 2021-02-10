@@ -157,40 +157,41 @@ fn test_upgrade_arbos_over_itself() {
 
 fn _test_upgrade_arbos_over_itself_impl() -> Result<(), ethabi::Error> {
     let rt_env = RuntimeEnvironment::new(Uint256::from_usize(1111), None);
-    let mut machine = load_from_file(Path::new("arb_os/arbos.mexe"), rt_env);
+    let mut machine = load_from_file(Path::new("arb_os/oldversion.mexe"), rt_env);
     machine.start_at_zero();
+
+    let wallet2 = machine.runtime_env.new_wallet();
+    let arbsys = ArbSys::new(&wallet2, false);
+    let arbos_version = arbsys._arbos_version(&mut machine)?;
+    assert_eq!(arbos_version, Uint256::zero());
 
     let wallet = machine.runtime_env.new_wallet();
     let my_addr = Uint256::from_bytes(wallet.address().as_bytes());
-
     let arbowner = _ArbOwner::_new(&wallet, false);
-
     arbowner._give_ownership(&mut machine, my_addr, Some(Uint256::zero()))?;
-
     let uploader = CodeUploader::_new_from_file(Path::new("arb_os/arbos.mexe"));
-
+    println!("start_Code_upload");
     arbowner._start_code_upload(&mut machine)?;
-
     let mut accum = vec![];
     for buf in uploader.instructions {
         accum.extend(buf);
         if (accum.len() > 3000) {
+            println!("continue_code_upload");
             arbowner._continue_code_upload(&mut machine, accum)?;
             accum = vec![];
         }
     }
     if (accum.len() > 0) {
+        println!("continue_code_uplaod");
         arbowner._continue_code_upload(&mut machine, accum)?;
     }
-
+    println!("finish_code_upload_as_arbos_upgrade");
     arbowner._finish_code_upload_as_arbos_upgrade(&mut machine)?;
 
     let wallet2 = machine.runtime_env.new_wallet();
     let arbsys = ArbSys::new(&wallet2, false);
     let arbos_version = arbsys._arbos_version(&mut machine)?;
-    let arbsys_orig = ArbSys::new(&wallet, false);
-    let arbos_version_orig = arbsys_orig._arbos_version(&mut machine)?;
-    assert_eq!(arbos_version, arbos_version_orig);
+    assert_eq!(arbos_version, Uint256::one());
 
     Ok(())
 }

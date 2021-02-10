@@ -107,7 +107,7 @@ pub(crate) fn gen_upgrade_code(input: GenUpgrade) -> Result<(), GenCodeError> {
     .map_err(|_| GenCodeError::new("Failed to write to output file".to_string()))?;
     writeln!(
         code,
-        "{}func upgrade(input_globals: InputGlobals) -> OutputGlobals {{",
+        "public {}func upgrade(input_globals: InputGlobals) -> OutputGlobals {{",
         if map.data.contains("_jump_table") {
             ""
         } else {

@@ -80,7 +80,7 @@ public impure func arbowner_txcall() {
             arbowner_startCodeUpload(topFrame, calldata);
         } elseif (funcCode == 0x56331f75) {
             arbowner_continueCodeUpload(topFrame, calldata);
-        } elseif (funcCode == 0xfbb5a179) {
+        } elseif (funcCode == 0xfbb53a17) {
            arbowner_finishCodeUploadAsArbosUpgrade(topFrame, calldata);
         } elseif (funcCode == 0xf4f4e136) {
            arbowner_finishCodeUploadAsPluggable(topFrame, calldata);
@@ -104,6 +104,7 @@ public impure func arbowner_txcall() {
             arbowner_changeSequencer(topFrame, calldata);
         } else {
             // unrecognized function code
+            asm((111, funcCode),) { debugprint };
             evmOp_revert_knownCodePc(address(const::Address_ArbOwner), 2, 0, 0);
         }
     } else {

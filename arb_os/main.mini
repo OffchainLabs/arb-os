@@ -49,12 +49,15 @@ use arbsys::arbsys_txcall;
 
 use inbox::IncomingRequest;
 
+use upgrade::InputGlobals;
+use upgrade::upgrade;
+
 
 impure func main(oldGlobals: any) {
     if (oldGlobals != ()) {
         // this is an upgrade; we're inheriting the state of a previous ArbOS instance
 
-        let newGlobals = upgrade(oldGlobals);
+        let newGlobals = upgrade(unsafecast<InputGlobals>(oldGlobals));
         asm(newGlobals,) { rset };
 
         // now re-do the initializations that set up pointers into the ArbOS code
