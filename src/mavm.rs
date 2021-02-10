@@ -86,8 +86,8 @@ impl LabelGenerator {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-pub struct Instruction {
-    pub opcode: Opcode,
+pub struct Instruction<T = Opcode> {
+    pub opcode: T,
     pub immediate: Option<Value>,
     pub debug_info: DebugInfo,
 }
@@ -98,8 +98,8 @@ impl MiniProperties for Instruction {
     }
 }
 
-impl Instruction {
-    pub fn new(opcode: Opcode, immediate: Option<Value>, debug_info: DebugInfo) -> Self {
+impl<T> Instruction<T> {
+    pub fn new(opcode: T, immediate: Option<Value>, debug_info: DebugInfo) -> Self {
         Instruction {
             opcode,
             immediate,
@@ -107,19 +107,12 @@ impl Instruction {
         }
     }
 
-    pub fn from_opcode(opcode: Opcode, debug_info: DebugInfo) -> Self {
+    pub fn from_opcode(opcode: T, debug_info: DebugInfo) -> Self {
         Instruction::new(opcode, None, debug_info)
     }
 
-    pub fn from_opcode_imm(opcode: Opcode, immediate: Value, debug_info: DebugInfo) -> Self {
+    pub fn from_opcode_imm(opcode: T, immediate: Value, debug_info: DebugInfo) -> Self {
         Instruction::new(opcode, Some(immediate), debug_info)
-    }
-
-    pub fn get_label(&self) -> Option<&Label> {
-        match &self.opcode {
-            Opcode::Label(label) => Some(label),
-            _ => None,
-        }
     }
 
     pub fn replace_labels(self, label_map: &HashMap<Label, CodePt>) -> Result<Self, Label> {
@@ -130,6 +123,26 @@ impl Instruction {
                 self.debug_info,
             )),
             None => Ok(self),
+        }
+    }
+
+    pub fn xlate_labels(self, xlate_map: &HashMap<Label, &Label>) -> Self {
+        match self.immediate {
+            Some(val) => Instruction::from_opcode_imm(
+                self.opcode,
+                val.xlate_labels(xlate_map),
+                self.debug_info,
+            ),
+            None => self,
+        }
+    }
+}
+
+impl Instruction {
+    pub fn get_label(&self) -> Option<&Label> {
+        match &self.opcode {
+            Opcode::Label(label) => Some(label),
+            _ => None,
         }
     }
 
@@ -169,17 +182,6 @@ impl Instruction {
             Instruction::new(opcode, imm, self.debug_info),
             max_func_offset,
         )
-    }
-
-    pub fn xlate_labels(self, xlate_map: &HashMap<Label, &Label>) -> Self {
-        match self.immediate {
-            Some(val) => Instruction::from_opcode_imm(
-                self.opcode,
-                val.xlate_labels(xlate_map),
-                self.debug_info,
-            ),
-            None => self,
-        }
     }
 }
 
