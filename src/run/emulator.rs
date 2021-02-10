@@ -701,7 +701,7 @@ impl Machine {
             stack: ValueStack::new(),
             aux_stack: ValueStack::new(),
             state: MachineState::Stopped,
-            code: CodeStore::new(program.code),
+            code: CodeStore::new(program.code.into_iter().map(|insn| insn.into()).collect()),
             static_val: program.static_val,
             register: Value::none(),
             err_codepoint: CodePt::Null,

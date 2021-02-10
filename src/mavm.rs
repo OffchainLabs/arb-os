@@ -92,6 +92,21 @@ pub struct Instruction<T = Opcode> {
     pub debug_info: DebugInfo,
 }
 
+impl From<Instruction<AVMOpcode>> for Instruction {
+    fn from(from: Instruction<AVMOpcode>) -> Self {
+        let Instruction {
+            opcode,
+            immediate,
+            debug_info,
+        } = from;
+        Self {
+            opcode: opcode.into(),
+            immediate,
+            debug_info,
+        }
+    }
+}
+
 impl MiniProperties for Instruction {
     fn is_pure(&self) -> bool {
         self.opcode.is_pure()
@@ -1199,6 +1214,12 @@ impl Opcode {
 
             _ => None,
         }
+    }
+}
+
+impl From<AVMOpcode> for Opcode {
+    fn from(from: AVMOpcode) -> Self {
+        Opcode::AVMOpcode(from)
     }
 }
 
