@@ -54,9 +54,8 @@ impure func main(oldGlobals: any) {
     if (oldGlobals != ()) {
         // this is an upgrade; we're inheriting the state of a previous ArbOS instance
 
-        // do any sanity checking here; do a panic if we need to abort the upgrade and stay with old version
-
-        // do any translation of globals or global formats here
+        let newGlobals = upgrade(oldGlobals);
+        asm(newGlobals,) { rset };
 
         // now re-do the initializations that set up pointers into the ArbOS code
         errorHandler_init();
