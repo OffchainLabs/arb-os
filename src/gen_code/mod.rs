@@ -60,15 +60,16 @@ pub(crate) fn gen_upgrade_code(input: GenUpgrade) -> Result<(), GenCodeError> {
         ))
     })?;
     let mut input_fields = get_globals_from_file(&from)?;
-    input_fields.push(StructField::new(String::from("_jump_table"), Type::Any));
     let mut output_fields = get_globals_from_file(&to)?;
     output_fields.push(StructField::new(String::from("_jump_table"), Type::Any));
-    let intersection: HashSet<&StructField> = input_fields
+    input_fields.push(StructField::new(String::from("_jump_table"), Type::Any));
+    let mut intersection: HashSet<&StructField> = input_fields
         .iter()
         .collect::<HashSet<_>>()
         .intersection(&(output_fields.iter().collect::<HashSet<_>>()))
         .cloned()
         .collect();
+    intersection.remove(&StructField::new(String::from("_jump_table"), Type::Any));
     let output_only: HashSet<&StructField> = output_fields
         .iter()
         .collect::<HashSet<_>>()
@@ -87,6 +88,10 @@ pub(crate) fn gen_upgrade_code(input: GenUpgrade) -> Result<(), GenCodeError> {
                 .map_err(|_| GenCodeError::new("Failed to write use statement".to_string()))?;
         }
     }
+    if map.data.contains("_jump_table") {
+        writeln!(code, "use {}::set_jump_table;", impl_file)
+            .map_err(|_| GenCodeError::new("Failed to write use statement".to_string()))?;
+    }
     writeln!(code).map_err(|_| GenCodeError::new("Failed to write empty line".to_string()))?;
     writeln!(
         code,
@@ -102,7 +107,12 @@ pub(crate) fn gen_upgrade_code(input: GenUpgrade) -> Result<(), GenCodeError> {
     .map_err(|_| GenCodeError::new("Failed to write to output file".to_string()))?;
     writeln!(
         code,
-        "func upgrade(input_globals: InputGlobals) -> OutputGlobals {{"
+        "{}func upgrade(input_globals: InputGlobals) -> OutputGlobals {{",
+        if map.data.contains("_jump_table") {
+            ""
+        } else {
+            "impure "
+        }
     )
     .map_err(|_| GenCodeError::new("Failed to write to output file".to_string()))?;
     for field in intersection {
@@ -127,6 +137,16 @@ pub(crate) fn gen_upgrade_code(input: GenUpgrade) -> Result<(), GenCodeError> {
             code,
             "    {}",
             let_string(&field.name, &format!("set_{}(input_globals)", field.name))
+        )
+        .map_err(|_| GenCodeError::new("Failed to write to output file".to_string()))?;
+    }
+    if map.data.contains("_jump_table") {
+        writeln!(code, "    let _jump_table = set_jump_table(input_globals);")
+            .map_err(|_| GenCodeError::new("Failed to write to output file".to_string()))?;
+    } else {
+        writeln!(
+            code,
+            "    let _jump_table = (asm() OutputGlobals {{ rget }})._jump_table;"
         )
         .map_err(|_| GenCodeError::new("Failed to write to output file".to_string()))?;
     }
