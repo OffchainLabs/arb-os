@@ -2,7 +2,7 @@
  * Copyright 2020, Offchain Labs, Inc. All rights reserved.
  */
 
-use crate::compile::{DebugInfo, MiniProperties};
+use crate::compile::DebugInfo;
 use crate::stringtable::StringId;
 use crate::uint256::Uint256;
 use ethers_core::utils::keccak256;
@@ -92,13 +92,10 @@ pub struct Instruction {
     pub debug_info: DebugInfo,
 }
 
-impl MiniProperties for Instruction {
-    fn is_pure(&self) -> bool {
+impl Instruction {
+    pub fn is_pure(&self) -> bool {
         self.opcode.is_pure()
     }
-}
-
-impl Instruction {
     pub fn new(opcode: Opcode, immediate: Option<Value>, debug_info: DebugInfo) -> Self {
         Instruction {
             opcode,
@@ -913,8 +910,8 @@ pub enum AVMOpcode {
     SetBuffer256,
 }
 
-impl MiniProperties for Opcode {
-    fn is_pure(&self) -> bool {
+impl Opcode {
+    pub fn is_pure(&self) -> bool {
         match self {
             Opcode::AVMOpcode(AVMOpcode::Log)
             | Opcode::AVMOpcode(AVMOpcode::Inbox)
