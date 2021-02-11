@@ -1937,7 +1937,7 @@ impl Machine {
 					Opcode::AVMOpcode(AVMOpcode::DebugPrint) => {
 						let r1 = self.stack.pop(&self.state)?;
                         println!("debugprint: {}", r1);
-                        println!("{}\n{}", try_display_location(insn.debug_info.location, &self.file_name_chart), self.arb_gas_remaining);
+                        println!("{}\n{}", try_display_location(insn.debug_info.location, &self.file_name_chart, true), self.arb_gas_remaining);
 						self.incr_pc();
 						Ok(true)
 					}
