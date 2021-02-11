@@ -264,24 +264,14 @@ impl AbstractSyntaxTree for TypeCheckedStatement {
         }
     }
     fn is_pure(&mut self) -> bool {
-        match &mut self.kind {
-            TypeCheckedStatementKind::Noop() | TypeCheckedStatementKind::ReturnVoid() => true,
-            TypeCheckedStatementKind::Return(something) => something.is_pure(),
-            TypeCheckedStatementKind::Break(exp, _) => {
-                exp.clone().map(|mut exp| exp.is_pure()).unwrap_or(true)
-            }
-            TypeCheckedStatementKind::Expression(expr) => expr.is_pure(),
-            TypeCheckedStatementKind::Let(_, exp) => exp.is_pure(),
-            TypeCheckedStatementKind::AssignLocal(_, exp) => exp.is_pure(),
-            TypeCheckedStatementKind::AssignGlobal(_, _) => false,
-            TypeCheckedStatementKind::While(exp, block) => {
-                exp.is_pure() && block.iter_mut().all(|statement| statement.is_pure())
-            }
-            TypeCheckedStatementKind::Asm(instrs, exprs) => {
-                instrs.iter().all(|instr| instr.is_pure())
-                    && exprs.iter_mut().all(|expr| expr.is_pure())
-            }
-            TypeCheckedStatementKind::DebugPrint(_) => true,
+        if let TypeCheckedStatementKind::Noop() | TypeCheckedStatementKind::ReturnVoid() = self.kind {
+            true
+        } else if let TypeCheckedStatementKind::AssignGlobal(_, _) = self.kind {
+            false
+        } else if let TypeCheckedStatementKind::Asm(vec, _) = &self.kind {
+            vec.iter().all(|insn| insn.is_pure()) && self.child_nodes().iter_mut().all(|node| node.is_pure())
+        } else {
+            self.child_nodes().iter_mut().all(|node| node.is_pure())
         }
     }
 }
