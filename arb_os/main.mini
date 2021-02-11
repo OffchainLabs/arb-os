@@ -56,16 +56,22 @@ use upgrade::upgrade;
 impure func main(oldGlobals: any) {
     if (oldGlobals != ()) {
         // this is an upgrade; we're inheriting the state of a previous ArbOS instance
-
+        asm(101,) { debugprint };
         let newGlobals = upgrade(unsafecast<InputGlobals>(oldGlobals));
+        asm(102,) { debugprint };
         asm(newGlobals,) { rset };
+        asm(103,) { debugprint };
 
         // now re-do the initializations that set up pointers into the ArbOS code
         errorHandler_init();
+        asm(104,) { debugprint };
         evmOps_init();
+        asm(105,) { debugprint };
         if (initializePreinstalls() == None<()>) {
+            asm(106,) { debugprint };
             panic;   // don't try to run without preinstalls and precompiles
         }
+        asm(107,) { debugprint };
     } else {
         // this is a clean start, not an upgrade
         errorHandler_init();
@@ -131,13 +137,17 @@ public impure func mainRunLoop() {
 }
 
 impure func initializePreinstalls() -> option<()> {
+    asm(300,) { debugprint };
     let acctStore = getGlobalAccountStore();
+    asm(301,) { debugprint };
 
     let code = bytearray_unmarshalBytes(getArbInfoCode())?;
+    asm(302,) { debugprint };
     let (initCodePt, evmJumpTable, _) = translateEvmCodeSegment(
         bytestream_new(code),
         false
     )?;
+    asm(303,) { debugprint };
     acctStore = accountStore_createAccountFromEvmCode(
         acctStore,
         getArbInfoAddress(),
@@ -146,11 +156,14 @@ impure func initializePreinstalls() -> option<()> {
         initCodePt,
         getArbInfoStorage()
     )?;
+    asm(304,) { debugprint };
 
     // set up precompiled contracts
     acctStore = precompiles_init(acctStore)?;
 
+    asm(305,) { debugprint };
     setGlobalAccountStore(acctStore);
+    asm(306,) { debugprint };
     return Some(());
 }
 

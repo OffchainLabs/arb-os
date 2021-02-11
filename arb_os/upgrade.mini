@@ -104,22 +104,22 @@ type OutputGlobals = struct {
     _jump_table: any,
 }
 public impure func upgrade(input_globals: InputGlobals) -> OutputGlobals {
-    let moduleManager = input_globals.moduleManager;
-    let unreachableMask = input_globals.unreachableMask;
-    let globalOutbox = input_globals.globalOutbox;
-    let globalAccountStore = input_globals.globalAccountStore;
-    let globalBlockReceiptData = input_globals.globalBlockReceiptData;
-    let evmOpJumpTable = input_globals.evmOpJumpTable;
-    let globalChainParams = input_globals.globalChainParams;
-    let gasAccountingInfo = input_globals.gasAccountingInfo;
     let globalInputQueue = input_globals.globalInputQueue;
-    let globalCallStack = input_globals.globalCallStack;
-    let inErrorHandler = input_globals.inErrorHandler;
-    let globalInbox = input_globals.globalInbox;
-    let upgradeInProgress = input_globals.upgradeInProgress;
-    let gasAccountingParams = input_globals.gasAccountingParams;
     let globalIndexedAddressTable = input_globals.globalIndexedAddressTable;
     let globalCurrentTxRequest = input_globals.globalCurrentTxRequest;
+    let inErrorHandler = input_globals.inErrorHandler;
+    let globalOutbox = input_globals.globalOutbox;
+    let globalBlockReceiptData = input_globals.globalBlockReceiptData;
+    let evmOpJumpTable = input_globals.evmOpJumpTable;
+    let gasAccountingInfo = input_globals.gasAccountingInfo;
+    let globalInbox = input_globals.globalInbox;
+    let globalAccountStore = input_globals.globalAccountStore;
+    let gasAccountingParams = input_globals.gasAccountingParams;
+    let globalChainParams = input_globals.globalChainParams;
+    let unreachableMask = input_globals.unreachableMask;
+    let moduleManager = input_globals.moduleManager;
+    let globalCallStack = input_globals.globalCallStack;
+    let upgradeInProgress = input_globals.upgradeInProgress;
     let _jump_table = (asm() OutputGlobals { rget })._jump_table;
     return struct {
         globalAccountStore: globalAccountStore,
@@ -138,6 +138,7 @@ public impure func upgrade(input_globals: InputGlobals) -> OutputGlobals {
         globalBlockReceiptData: globalBlockReceiptData,
         globalOutbox: globalOutbox,
         moduleManager: moduleManager,
+        _unused: (),
         _jump_table: _jump_table,
     };
 }
