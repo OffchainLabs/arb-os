@@ -1040,17 +1040,6 @@ impl Opcode {
             _ => "Unknown",
         }
     }
-
-    pub fn from_number(num: usize) -> Option<Self> {
-        Some(Opcode::AVMOpcode(AVMOpcode::from_number(num)?))
-    }
-
-    pub fn to_number(&self) -> Option<u8> {
-        match self {
-            Opcode::AVMOpcode(inner) => Some(inner.to_number()),
-            _ => None,
-        }
-    }
 }
 
 impl From<AVMOpcode> for Opcode {
@@ -1323,8 +1312,8 @@ impl AVMOpcode {
 #[test]
 fn test_consistent_opcode_numbers() {
     for i in 0..256 {
-        if let Some(op) = Opcode::from_number(i) {
-            assert_eq!(i as u8, op.to_number().unwrap());
+        if let Some(op) = AVMOpcode::from_number(i) {
+            assert_eq!(i as u8, op.to_number());
         }
     }
 }
