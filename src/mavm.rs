@@ -739,7 +739,7 @@ impl Value {
             Value::Buffer(buf) => Value::Int(buf.avm_hash()),
             Value::Tuple(v) => {
                 let mut acc = Uint256::zero();
-                for val in v.to_vec() {
+                for val in &**v {
                     if let Value::Int(ui) = val.avm_hash() {
                         acc = Uint256::avm_hash2(&acc, &ui);
                     } else {
