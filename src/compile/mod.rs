@@ -476,13 +476,14 @@ pub fn compile_from_folder(
             file_name_chart,
         )
         .map_err(|e| CompileError::new(e.reason.to_string(), e.location))?;
+        let code_len = code_out.len();
         progs.push(CompiledProgram::new(
-            code_out.to_vec(),
+            code_out,
             exported_funcs,
             imported_funcs,
             global_vars.len(),
             Some(SourceFileMap::new(
-                code_out.len(),
+                code_len,
                 folder.join(name.clone()).display().to_string(),
             )),
             HashMap::new(),
