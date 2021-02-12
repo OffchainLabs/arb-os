@@ -20,6 +20,7 @@ use std::fmt;
 use std::fs::File;
 use std::io::{stdin, BufWriter, Write};
 use std::path::Path;
+use std::rc::Rc;
 use std::str::FromStr;
 
 const MAX_PAIRING_SIZE: u64 = 30;
@@ -158,11 +159,10 @@ impl ValueStack {
 
     ///If the top `Value` on self is a tuple, pops the `Value` and returns the contained values of
     /// self as a vector. Otherwise returns an `ExecutionError`.
-    pub fn pop_tuple(&mut self, state: &MachineState) -> Result<Vec<Value>, ExecutionError> {
+    pub fn pop_tuple(&mut self, state: &MachineState) -> Result<Rc<Vec<Value>>, ExecutionError> {
         let val = self.pop(state)?;
         if let Value::Tuple(v) = val {
-            let vs = &*v;
-            Ok(vs.to_vec())
+            Ok(v)
         } else {
             Err(ExecutionError::new(
                 "expected tuple on stack",
@@ -177,7 +177,7 @@ impl ValueStack {
     pub fn pop_buffer(&mut self, state: &MachineState) -> Result<Buffer, ExecutionError> {
         let val = self.pop(state)?;
         if let Value::Buffer(v) = val {
-            Ok(v.clone())
+            Ok(v)
         } else {
             Err(ExecutionError::new(
                 "expected buffer on stack",
@@ -810,10 +810,10 @@ impl Machine {
 
     ///Returns the `Instruction` pointed to by self's program counter if it exists, and None
     /// otherwise.
-    pub fn next_opcode(&self) -> Option<Instruction> {
+    pub fn next_opcode(&self) -> Option<&Instruction> {
         if let MachineState::Running(pc) = self.state {
             if let Some(insn) = self.code.get_insn(pc) {
-                Some(insn.clone())
+                Some(insn)
             } else {
                 None
             }
@@ -877,7 +877,7 @@ impl Machine {
                         println!("We hit a breakpoint!");
                     }
                     println!("Next Opcode: {}", code.opcode);
-                    if let Some(imm) = code.immediate {
+                    if let Some(imm) = &code.immediate {
                         println!("Immediate: {}", imm);
                     }
                     if let Some(location) = code.debug_info.location {
@@ -1365,8 +1365,8 @@ impl Machine {
 						let tup = self.stack.pop_tuple(&self.state)?;
 						let val = self.stack.pop(&self.state)?;
 						let mut newv = Vec::new();
-						for v in tup {
-							newv.push(v);
+						for v in &*tup {
+							newv.push(v.clone());
 						}
 						if idx < newv.len() {
 							newv[idx] = val;
@@ -1442,7 +1442,7 @@ impl Machine {
 						let slot_num = self.stack.pop_usize(&self.state)?;
 						let tup = self.aux_stack.pop_tuple(&self.state)?;
 						if slot_num < tup.len() {
-							let mut new_tup = tup;
+							let mut new_tup = (*tup).clone();
 							new_tup[slot_num] = self.stack.pop(&self.state)?;
 							self.aux_stack.push(Value::new_tuple(new_tup));
 							self.incr_pc();
@@ -1805,7 +1805,7 @@ impl Machine {
 					}
                     Opcode::AVMOpcode(AVMOpcode::Keccakf) => {
                         let t1 = self.stack.pop_tuple(&self.state)?;
-                        let t2 = tuple_keccak(t1, &self.state)?;
+                        let t2 = tuple_keccak((*t1).clone(), &self.state)?;
                         self.stack.push(Value::new_tuple(t2));
                         self.incr_pc();
                         Ok(true)
