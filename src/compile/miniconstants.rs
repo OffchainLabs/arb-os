@@ -205,6 +205,7 @@ pub fn init_constant_table() -> HashMap<String, Uint256> {
         // TxRequestData flags
         ("TxReqDataFlag_nonMutating", 1),
         ("TxReqDataFlag_isConstructor", 2),
+        ("TxReqDataFlag_nonEIP155Sig", 4),
         // sequencer constants
         ("Sequencer_maxDelayBlocks", 32768),   // 128*256
         ("Sequencer_maxDelaySeconds", 983040), // 30*Sequencer_maxDelayBlocks

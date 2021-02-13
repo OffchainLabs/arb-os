@@ -81,6 +81,12 @@ public impure func translateSignedTx(req: IncomingRequest) -> option<TxRequestDa
 public impure func recoverSigner(tx: SignedTx) -> option<address> {
     let rlpHashForSig = bytes32(0);
     if ( (tx.v == 27) || (tx.v == 28) ) {
+        // This is a non-EIP-155 signature. We limit transactions signed this way, to protect against replay of
+        // old messages from the Ethereum main chain. Unless the transaction looks like a keyless deploy with zero
+        // callvalue, we reject the signature.
+        if ( (tx.seqNum != 0) || (tx.to != address(0)) || (tx.value != 0) ) {
+            return None;
+        }
         rlpHashForSig = rlp_encodeAndHashMessageInfoForSignature(tx, None<uint>);  // non-EIP155 signature
     } else {
         rlpHashForSig = rlp_encodeAndHashMessageInfoForSignature(tx, Some(chainParams_chainId()));  // EIP155 signature
