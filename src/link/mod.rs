@@ -28,7 +28,7 @@ mod xformcode;
 /// This is typically constructed via the `postlink_compile` function.
 #[derive(Serialize, Deserialize)]
 pub struct LinkedProgram {
-    pub code: Vec<Instruction>,
+    pub code: Vec<Instruction<AVMOpcode>>,
     pub static_val: Value,
     pub file_name_chart: BTreeMap<u64, String>,
 }
@@ -205,13 +205,27 @@ pub fn postlink_compile(
             println!("{:04}:  {}", idx, insn);
         }
     }
-    let (code_final, jump_table_final) = striplabels::strip_labels(
+    let (code_5, jump_table_final) = striplabels::strip_labels(
         code_4,
         &jump_table,
         &program.imported_funcs,
         if is_module { Some(evm_pcs) } else { None },
     )?;
     let jump_table_value = xformcode::jump_table_to_value(jump_table_final);
+
+    let code_final: Vec<_> = code_5
+        .into_iter()
+        .map(|insn| {
+            if let Opcode::AVMOpcode(inner) = insn.opcode {
+                Ok(Instruction::new(inner, insn.immediate, insn.debug_info))
+            } else {
+                Err(CompileError::new(
+                    format!("In final output encountered virtual opcode {}", insn.opcode),
+                    insn.debug_info.location,
+                ))
+            }
+        })
+        .collect::<Result<Vec<_>, CompileError>>()?;
 
     if debug {
         println!("============ after strip_labels =============");
