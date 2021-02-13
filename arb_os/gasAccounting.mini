@@ -451,20 +451,6 @@ impure func payOutFundsToValidators() {  // this should only be called when not 
     }
 }
 
-// TxRequestData is declared identically in message.mini and elsewhere.
-type TxRequestData = struct {
-    maxGas: uint,
-    gasPrice: uint,
-    seqNum: option<uint>,
-    caller: address,
-    calleeAddr: address,
-    value: uint,
-    calldata: ByteArray,
-    nonMutating: bool,
-    isConstructor: bool,
-    incomingRequest: IncomingRequest,
-}
-
 // getNextRequestFromCongestionAuction implements the congestion auction. For each request, the auction
 //     determines (a) whether to approve the request for execution, and (b) what gas price the request will pay.
 // This uses a "pull" interface: the main run loop calls this to get the next request.
