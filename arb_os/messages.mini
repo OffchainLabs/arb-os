@@ -127,8 +127,7 @@ type TxRequestData = struct {
     calleeAddr: address,
     value: uint,
     calldata: ByteArray,
-    nonMutating: bool,
-    isConstructor: bool,
+    flags: uint,
     incomingRequest: IncomingRequest,
 }
 
@@ -154,7 +153,7 @@ public impure func handleL2Request(
 
     if (request.calleeAddr == address(0)) {
         // this is a constructor call
-        if (request.nonMutating) {
+        if ( (request.flags & const::TxReqDataFlag_nonMutating) != 0) {
             // revert error (tried to call constructor in a non-mutating call)
             emitTxReceipt(
                 request.incomingRequest,
@@ -197,10 +196,11 @@ public impure func handleL2Request(
         }
     } else {
         // this is a non-constructor call
-        let callKind = const::EVMCallType_call;
-        if (request.nonMutating) {
-            callKind = const::EVMCallType_staticcall;
-        }
+        let callKind = xif( (request.flags & const::TxReqDataFlag_nonMutating) != 0) {
+            const::EVMCallType_staticcall
+        } else {
+            const::EVMCallType_call
+        };
 
         initEvmCallStack(callKind, request, None<ByteArray>);  // should never return
     }

@@ -68,8 +68,7 @@ public impure func translateSignedTx(req: IncomingRequest) -> option<TxRequestDa
             calleeAddr: signedTx.to,
             value: signedTx.value,
             calldata: signedTx.data,
-            nonMutating: false,
-            isConstructor: (signedTx.to == address(0)),
+            flags: xif (signedTx.to == address(0)) { const::TxReqDataFlag_isConstructor } else { 0 },
             incomingRequest: req with {
                 sender: signer
             } with {

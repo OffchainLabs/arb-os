@@ -628,8 +628,8 @@ impure func translateUnsignedTx(request: IncomingRequest) -> option<TxRequestDat
             calleeAddr: address(destAddrAsUint),
             value: value,
             calldata: calldata,
-            nonMutating: (subtype == const::L2MessageType_nonmutatingCall),
-            isConstructor: (destAddrAsUint == 0),
+            flags: (xif (subtype == const::L2MessageType_nonmutatingCall) { const::TxReqDataFlag_nonMutating } else { 0 })
+                 | (xif (destAddrAsUint == 0) { const::TxReqDataFlag_isConstructor } else { 0 }),
             incomingRequest: request
         }
     );
@@ -658,8 +658,7 @@ func translateBuddyDeployTx(request: IncomingRequest) -> option<TxRequestData> {
             calleeAddr: address(0),
             value: value,
             calldata: calldata,
-            nonMutating: false,
-            isConstructor: true,
+            flags: const::TxReqDataFlag_isConstructor,
             incomingRequest: request
         }
     );

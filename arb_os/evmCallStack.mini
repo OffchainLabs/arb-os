@@ -323,7 +323,9 @@ public impure func initEvmCallStackForConstructor(
     // The constructor will run, and (if it succeeds) it will return code, which will become the new
     //      code for this new account.
 
-    globalCurrentTxRequest = request with { isConstructor: true };
+    globalCurrentTxRequest = request with {
+        flags: request.flags | const::TxReqDataFlag_isConstructor
+    };
 
     // Create an accountStore with the caller's sequence number incremented; will decide later whether to commit it
     let acctStore = getGlobalAccountStore();
@@ -610,7 +612,7 @@ public impure func evmCallStack_returnFromCall(
         // top-level call completed; will need to return to external caller
         if (success) {
             let gasUsage = gasAccounting_endTxCharges(topFrame.storageDelta - int(storageReclaimedForSDQ(topFrame)))?;
-            if (globalCurrentTxRequest.isConstructor) {
+            if ((globalCurrentTxRequest.flags & const::TxReqDataFlag_isConstructor) != 0) {
                 // Constructor call was successful, so finish setting up the account.
                 // The constructor's returndata is EVM code for the contract.
                 // Compile that EVM code into AVM, and substitute that in as the code for the contract.
@@ -707,7 +709,7 @@ public impure func evmCallStack_returnFromCall(
                     }
                 }
             } else {
-                if (! globalCurrentTxRequest.nonMutating) {
+                if ((globalCurrentTxRequest.flags & const::TxReqDataFlag_nonMutating) == 0) {
                     // It was a successful tx (not a non-mutating call).
                     // We'll commit the results of the tx
 
