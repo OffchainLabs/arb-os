@@ -5,7 +5,7 @@
 //!Provides types and utilities for linking together compiled mini programs
 
 use crate::compile::{
-    compile_from_file, CompileError, CompiledProgram, DebugInfo, SourceFileMap, Type,
+    CompileError, CompiledProgram, DebugInfo, SourceFileMap, Type,
 };
 use crate::mavm::{AVMOpcode, Instruction, Label, Opcode, Value};
 use crate::pos::try_display_location;
@@ -15,7 +15,6 @@ use std::collections::hash_map::{DefaultHasher, HashMap};
 use std::collections::BTreeMap;
 use std::hash::Hasher;
 use std::io;
-use std::path::Path;
 use xformcode::make_uninitialized_tuple;
 
 pub use xformcode::{value_from_field_list, TupleTree, TUPLE_SIZE};
@@ -29,7 +28,7 @@ mod xformcode;
 /// This is typically constructed via the `postlink_compile` function.
 #[derive(Serialize, Deserialize)]
 pub struct LinkedProgram {
-    pub code: Vec<Instruction>,
+    pub code: Vec<Instruction<AVMOpcode>>,
     pub static_val: Value,
     pub file_name_chart: BTreeMap<u64, String>,
 }
@@ -206,13 +205,27 @@ pub fn postlink_compile(
             println!("{:04}:  {}", idx, insn);
         }
     }
-    let (code_final, jump_table_final) = striplabels::strip_labels(
+    let (code_5, jump_table_final) = striplabels::strip_labels(
         code_4,
         &jump_table,
         &program.imported_funcs,
         if is_module { Some(evm_pcs) } else { None },
     )?;
     let jump_table_value = xformcode::jump_table_to_value(jump_table_final);
+
+    let code_final: Vec<_> = code_5
+        .into_iter()
+        .map(|insn| {
+            if let Opcode::AVMOpcode(inner) = insn.opcode {
+                Ok(Instruction::new(inner, insn.immediate, insn.debug_info))
+            } else {
+                Err(CompileError::new(
+                    format!("In final output encountered virtual opcode {}", insn.opcode),
+                    insn.debug_info.location,
+                ))
+            }
+        })
+        .collect::<Result<Vec<_>, CompileError>>()?;
 
     if debug {
         println!("============ after strip_labels =============");
@@ -232,30 +245,6 @@ pub fn postlink_compile(
     })
 }
 
-///Takes a slice of tuples of `CompiledProgram`s and `bool`s representing whether the associated
-/// module should be type checked, and returns a vector containing the slice contents with the
-/// auto-linked programs attached if successful, and a `CompileError` otherwise.
-pub fn add_auto_link_progs(
-    progs_in: &[CompiledProgram],
-) -> Result<Vec<CompiledProgram>, CompileError> {
-    let builtin_pathnames = vec!["builtin/array.mao", "builtin/kvs.mao"];
-    let mut progs = progs_in.to_owned();
-    for pathname in builtin_pathnames.into_iter() {
-        let path = Path::new(pathname);
-        match compile_from_file(path, &mut BTreeMap::new(), false, false) {
-            Ok(compiled_program) => {
-                compiled_program
-                    .into_iter()
-                    .for_each(|prog| progs.push(prog));
-            }
-            Err(e) => {
-                return Err(e);
-            }
-        }
-    }
-    Ok(progs)
-}
-
 ///Combines the `CompiledProgram`s in progs_in into a single `CompiledProgram` with offsets adjusted
 /// to avoid collisions and auto-linked programs added.
 ///
@@ -270,11 +259,7 @@ pub fn link(
     is_module: bool,
     init_storage_descriptor: Option<Value>, // used only for compiling modules
 ) -> Result<CompiledProgram, CompileError> {
-    let progs = if is_module {
-        progs_in.to_vec()
-    } else {
-        add_auto_link_progs(&progs_in)?
-    };
+    let progs = progs_in.to_vec();
     let mut insns_so_far: usize = 2; // leave 2 insns of space at beginning for initialization
     let mut imports_so_far: usize = 0;
     let mut int_offsets = Vec::new();
