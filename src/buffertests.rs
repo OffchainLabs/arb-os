@@ -91,8 +91,9 @@ fn test_hash_test() {
         buf[i*32] = 123;
         let b = Buffer::empty0();
         let b = b.set_byte(i*32, 123);
-        // println!("iter {}", i);
-        // assert_eq!(hash_buffer(&buf), hash_full_buffer(&buf));
+        if i >= 512 {
+            assert_eq!(hash_buffer(&buf), hash_full_buffer(&buf));
+        }
         assert_eq!(hash_buffer(&buf), b.hash().hash);
     }
 

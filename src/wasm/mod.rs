@@ -412,6 +412,93 @@ fn find_func_type(m : &Module, num : u32) -> &FunctionType {
     }
 }
 
+fn get_avm_gas(insn : &Instruction) -> usize {
+    match insn.opcode {
+        Opcode::AVMOpcode(AVMOpcode::Plus) => 3,
+        Opcode::AVMOpcode(AVMOpcode::Mul) => 3,
+        Opcode::AVMOpcode(AVMOpcode::Minus) => 3,
+        Opcode::AVMOpcode(AVMOpcode::Div) => 4,
+        Opcode::AVMOpcode(AVMOpcode::Sdiv) => 7,
+        Opcode::AVMOpcode(AVMOpcode::Mod) => 4,
+        Opcode::AVMOpcode(AVMOpcode::Smod) => 7,
+        Opcode::AVMOpcode(AVMOpcode::AddMod) => 4,
+        Opcode::AVMOpcode(AVMOpcode::MulMod) => 4,
+        Opcode::AVMOpcode(AVMOpcode::Exp) => 25,
+        Opcode::AVMOpcode(AVMOpcode::SignExtend) => 7,
+        Opcode::AVMOpcode(AVMOpcode::LessThan) => 2,
+        Opcode::AVMOpcode(AVMOpcode::GreaterThan) => 2,
+        Opcode::AVMOpcode(AVMOpcode::SLessThan) => 2,
+        Opcode::AVMOpcode(AVMOpcode::SGreaterThan) => 2,
+        Opcode::AVMOpcode(AVMOpcode::Equal) => 2,
+        Opcode::AVMOpcode(AVMOpcode::IsZero) => 1,
+        Opcode::AVMOpcode(AVMOpcode::BitwiseAnd) => 2,
+        Opcode::AVMOpcode(AVMOpcode::BitwiseOr) => 2,
+        Opcode::AVMOpcode(AVMOpcode::BitwiseXor) => 2,
+        Opcode::AVMOpcode(AVMOpcode::BitwiseNeg) => 1,
+        Opcode::AVMOpcode(AVMOpcode::Byte) => 4,
+        Opcode::AVMOpcode(AVMOpcode::ShiftLeft) => 4,
+        Opcode::AVMOpcode(AVMOpcode::ShiftRight) => 4,
+        Opcode::AVMOpcode(AVMOpcode::ShiftArith) => 4,
+        Opcode::AVMOpcode(AVMOpcode::Hash) => 7,
+        Opcode::AVMOpcode(AVMOpcode::Type) => 3,
+        Opcode::AVMOpcode(AVMOpcode::Hash2) => 8,
+        Opcode::AVMOpcode(AVMOpcode::Keccakf) => 600,
+        Opcode::AVMOpcode(AVMOpcode::Sha256f) => 250,
+        Opcode::AVMOpcode(AVMOpcode::Ripemd160f) => 250, //TODO: measure and update this
+        Opcode::AVMOpcode(AVMOpcode::Pop) => 1,
+        Opcode::AVMOpcode(AVMOpcode::PushStatic) => 1,
+        Opcode::AVMOpcode(AVMOpcode::Rget) => 1,
+        Opcode::AVMOpcode(AVMOpcode::Rset) => 2,
+        Opcode::AVMOpcode(AVMOpcode::Jump) => 4,
+        Opcode::AVMOpcode(AVMOpcode::Cjump) => 4,
+        Opcode::AVMOpcode(AVMOpcode::StackEmpty) => 2,
+        Opcode::AVMOpcode(AVMOpcode::GetPC) => 1,
+        Opcode::AVMOpcode(AVMOpcode::AuxPush) => 1,
+        Opcode::AVMOpcode(AVMOpcode::AuxPop) => 1,
+        Opcode::AVMOpcode(AVMOpcode::AuxStackEmpty) => 2,
+        Opcode::AVMOpcode(AVMOpcode::Noop) => 1,
+        Opcode::AVMOpcode(AVMOpcode::ErrPush) => 1,
+        Opcode::AVMOpcode(AVMOpcode::ErrSet) => 1,
+        Opcode::AVMOpcode(AVMOpcode::Dup0) => 1,
+        Opcode::AVMOpcode(AVMOpcode::Dup1) => 1,
+        Opcode::AVMOpcode(AVMOpcode::Dup2) => 1,
+        Opcode::AVMOpcode(AVMOpcode::Swap1) => 1,
+        Opcode::AVMOpcode(AVMOpcode::Swap2) => 1,
+        Opcode::AVMOpcode(AVMOpcode::Tget) => 2,
+        Opcode::AVMOpcode(AVMOpcode::Tset) => 40,
+        Opcode::AVMOpcode(AVMOpcode::Tlen) => 2,
+        Opcode::AVMOpcode(AVMOpcode::Xget) => 3,
+        Opcode::AVMOpcode(AVMOpcode::Xset) => 41,
+        Opcode::AVMOpcode(AVMOpcode::Breakpoint) => 100,
+        Opcode::AVMOpcode(AVMOpcode::Log) => 100,
+        Opcode::AVMOpcode(AVMOpcode::Send) => 100,
+        Opcode::AVMOpcode(AVMOpcode::InboxPeek) => 40,
+        Opcode::AVMOpcode(AVMOpcode::Inbox) => 40,
+        Opcode::AVMOpcode(AVMOpcode::Panic) => 5,
+        Opcode::AVMOpcode(AVMOpcode::Halt) => 10,
+        Opcode::AVMOpcode(AVMOpcode::ErrCodePoint) => 25,
+        Opcode::AVMOpcode(AVMOpcode::PushInsn) => 25,
+        Opcode::AVMOpcode(AVMOpcode::PushInsnImm) => 25,
+        Opcode::AVMOpcode(AVMOpcode::OpenInsn) => 25,
+        Opcode::AVMOpcode(AVMOpcode::DebugPrint) => 1,
+        Opcode::AVMOpcode(AVMOpcode::GetGas) => 1,
+        Opcode::AVMOpcode(AVMOpcode::SetGas) => 0,
+        Opcode::AVMOpcode(AVMOpcode::EcRecover) => 20_000,
+        Opcode::AVMOpcode(AVMOpcode::EcAdd) => 3500,
+        Opcode::AVMOpcode(AVMOpcode::EcMul) => 82_000,
+        // Opcode::AVMOpcode(AVMOpcode::EcPairing) => self.gas_for_pairing(),
+        Opcode::AVMOpcode(AVMOpcode::Sideload) => 10,
+        Opcode::AVMOpcode(AVMOpcode::NewBuffer) => 1,
+        Opcode::AVMOpcode(AVMOpcode::GetBuffer8) => 10,
+        Opcode::AVMOpcode(AVMOpcode::GetBuffer64) => 10,
+        Opcode::AVMOpcode(AVMOpcode::GetBuffer256) => 10,
+        Opcode::AVMOpcode(AVMOpcode::SetBuffer8) => 100,
+        Opcode::AVMOpcode(AVMOpcode::SetBuffer64) => 100,
+        Opcode::AVMOpcode(AVMOpcode::SetBuffer256) => 100,
+        _ => 0,
+    }
+}
+
 fn type_code(t : &ValueType) -> u8 {
     match *t {
         ValueType::I32 => 0,
@@ -437,16 +524,18 @@ fn hash_ftype(ft : &FunctionType) -> Uint256 {
     Uint256::from_bytes(&hash_result)
 }
 
-fn handle_function(m : &Module, func : &FuncBody, idx : usize, mut label : usize, calli: usize, memory_offset: usize, max_memory: usize) -> (Vec<Instruction>, usize) {
+fn handle_function(m : &Module, func : &FuncBody, idx : usize, mut label : usize, calli: usize, memory_offset: usize, max_memory: usize) -> (Vec<Instruction>, usize, Vec<usize>) {
     let sig = m.function_section().unwrap().entries()[idx].type_ref();
     let ftype = get_func_type(m, sig);
-    
+
     println!("func start label {}", label);
-    
+
     let mut res : Vec<Instruction> = Vec::new();
     let mut stack : Vec<Control> = Vec::new();
     let mut ptr : usize = 0;
     let mut bptr : usize = 0;
+
+    let mut avm_gas : Vec<usize> = Vec::new();
 
     // Construct the function top level frame
     let end_label = label+1;
@@ -463,6 +552,7 @@ fn handle_function(m : &Module, func : &FuncBody, idx : usize, mut label : usize
 
     for op in func.code().elements().iter() {
         eprintln!("handling {} / {}; {:?} ... label {} len {}", ptr, stack.len(), op, label, res.len());
+        let cur_len = res.len();
         match &*op {
             Unreachable => res.push(simple_op(AVMOpcode::Panic)),
             Nop => res.push(simple_op(AVMOpcode::Noop)),
@@ -1036,6 +1126,13 @@ fn handle_function(m : &Module, func : &FuncBody, idx : usize, mut label : usize
             },
             _ => {},
         }
+
+        let mut gas_acc = 0;
+        for i in cur_len..res.len() {
+            gas_acc += get_avm_gas(&res[i])
+        }
+        avm_gas.push(gas_acc);
+
     }
 
     // Function return
@@ -1044,7 +1141,7 @@ fn handle_function(m : &Module, func : &FuncBody, idx : usize, mut label : usize
     get_return_from_table(&mut res);
     res.push(simple_op(AVMOpcode::Jump));
 
-    return (res, label);
+    return (res, label, avm_gas);
 
 }
 
@@ -1274,10 +1371,10 @@ pub fn load(fname: String, param: usize) -> Vec<Instruction> {
     for (idx,f) in code_section.bodies().iter().enumerate() {
         // function return will be in the stack
         init.push(mk_func_label(idx));
-        let (mut res, n_label) = handle_function(&module, f, idx, label, calli, memory_offset, max_memory);
+        let (mut res, n_label, avm_gas) = handle_function(&module, f, idx, label, calli, memory_offset, max_memory);
         init.append(&mut res);
         label = n_label;
-        // println!("labels {}", label);
+        println!("Gas {:?}", avm_gas);
     }
 
     init.push(mk_label(1));

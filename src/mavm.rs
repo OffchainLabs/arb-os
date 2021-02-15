@@ -351,15 +351,7 @@ fn hash_buf(buf: &[u8]) -> Packed {
     if is_zero_hash(&h2) {
         return pack(&h1);
     }
-    let res = normal(Uint256::avm_hash2(&unpack(&h1), &unpack(&h2)), 1 + h1.size + h1.packed as u8);
-    /*
-    if res.hash != hash_full_buffer(&buf) {
-        let r1 = hash_full_buffer(&buf[0..len / 2]);
-        let r2 = hash_full_buffer(&buf[len / 2..len]);
-        println!("Hash error {} {} h2 {:?} h1 {:?}", unpack(&h1) == r1, unpack(&h2) == r2, h2, h1)
-    }
-    */
-    res
+    normal(Uint256::avm_hash2(&unpack(&h1), &unpack(&h2)), 1 + h1.size + h1.packed as u8)
 }
 
 #[allow(dead_code)]
