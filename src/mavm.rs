@@ -108,9 +108,6 @@ impl From<Instruction<AVMOpcode>> for Instruction {
 }
 
 impl<T> Instruction<T> {
-    pub fn is_pure(&self) -> bool {
-        self.opcode.is_pure()
-    }
     pub fn new(opcode: T, immediate: Option<Value>, debug_info: DebugInfo) -> Self {
         Instruction {
             opcode,
@@ -151,6 +148,9 @@ impl<T> Instruction<T> {
 }
 
 impl Instruction {
+    pub fn is_pure(&self) -> bool {
+        self.opcode.is_pure()
+    }
     pub fn get_label(&self) -> Option<&Label> {
         match &self.opcode {
             Opcode::Label(label) => Some(label),
