@@ -20,7 +20,7 @@ use std::fs::File;
 use std::hash::{Hash, Hasher};
 use std::io::{self, Read};
 use std::path::Path;
-use typecheck::{TypeCheckedFunc, TypeCheckedNode};
+use typecheck::{AbstractSyntaxTree, TypeCheckedFunc, TypeCheckedNode};
 
 pub use ast::{DebugInfo, TopLevelDecl, Type};
 pub use source::Lines;
@@ -31,14 +31,6 @@ pub mod miniconstants;
 mod source;
 mod typecheck;
 lalrpop_mod!(mini);
-
-///Trait that identifies what mini compiler tracked properties a value implementing this trait has.
-///
-///Currently only purity/impurity is tracked, however more properties may be added in the future.
-pub(crate) trait MiniProperties {
-    ///Returns false if the value reads or writes mini global state, and true otherwise.
-    fn is_pure(&self) -> bool;
-}
 
 ///Represents the contents of a source file after parsing.
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
@@ -425,7 +417,7 @@ pub fn compile_from_folder(
             &type_tree,
         )
         .map_err(|res3| CompileError::new(res3.reason.to_string(), res3.location))?;
-        checked_funcs.iter().for_each(|func| {
+        checked_funcs.iter_mut().for_each(|func| {
             let detected_purity = func.is_pure();
             let declared_purity = func.properties.pure;
             if !detected_purity && declared_purity {

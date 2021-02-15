@@ -4,9 +4,7 @@
 
 //!Provides types and utilities for linking together compiled mini programs
 
-use crate::compile::{
-    CompileError, CompiledProgram, DebugInfo, SourceFileMap, Type,
-};
+use crate::compile::{CompileError, CompiledProgram, DebugInfo, SourceFileMap, Type};
 use crate::mavm::{AVMOpcode, Instruction, Label, Opcode, Value};
 use crate::pos::try_display_location;
 use crate::stringtable::{StringId, StringTable};
