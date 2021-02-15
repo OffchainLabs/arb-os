@@ -28,6 +28,7 @@ mod xformcode;
 pub struct LinkedProgram {
     pub code: Vec<Instruction<AVMOpcode>>,
     pub static_val: Value,
+    #[serde(default)]
     pub file_name_chart: BTreeMap<u64, String>,
 }
 

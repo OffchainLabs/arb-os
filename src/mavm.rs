@@ -89,6 +89,7 @@ impl LabelGenerator {
 pub struct Instruction<T = Opcode> {
     pub opcode: T,
     pub immediate: Option<Value>,
+    #[serde(default)]
     pub debug_info: DebugInfo,
 }
 
