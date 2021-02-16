@@ -460,6 +460,11 @@ fn test_direct_deploy_and_call_add() {
 }
 
 #[test]
+fn test_call_from_contract() {
+    let _log = crate::evm::_evm_test_contract_call(None, false);
+}
+
+#[test]
 fn test_direct_deploy_and_compressed_call_add() {
     let _log = crate::evm::evm_direct_deploy_and_compressed_call_add(None, false);
 }

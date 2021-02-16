@@ -1725,6 +1725,67 @@ pub fn evm_direct_deploy_and_call_add(log_to: Option<&Path>, debug: bool) {
     }
 }
 
+pub fn _evm_test_contract_call(log_to: Option<&Path>, debug: bool) {
+    use std::convert::TryFrom;
+    let rt_env = RuntimeEnvironment::new(Uint256::from_usize(1111), None);
+    let mut machine = load_from_file(Path::new("arb_os/arbos.mexe"), rt_env);
+    machine.start_at_zero();
+
+    let my_addr = Uint256::from_usize(1025);
+    let contract = match AbiForContract::new_from_file(&test_contract_path("Add")) {
+        Ok(mut contract) => {
+            let result = contract.deploy(&[], &mut machine, Uint256::zero(), None, None, debug);
+            if let Ok(contract_addr) = result {
+                assert_ne!(contract_addr, Uint256::zero());
+                contract
+            } else {
+                panic!("deploy failed");
+            }
+        }
+        Err(e) => {
+            panic!("error loading contract: {:?}", e);
+        }
+    };
+
+    for i in 0..4 {
+        let result = contract._call_function_from_contract(
+            my_addr.clone(),
+            "add",
+            vec![
+                ethabi::Token::Uint(ethabi::Uint::one()),
+                ethabi::Token::Uint(Uint256::from_u64(i).to_u256()),
+            ]
+                .as_ref(),
+            &mut machine,
+            Uint256::zero(),
+            debug,
+        );
+        match result {
+            Ok((logs, sends)) => {
+                assert_eq!(logs.len(), 1);
+                assert_eq!(sends.len(), 0);
+                assert!(logs[0].succeeded());
+                let decoded_result = contract
+                    .get_function("add")
+                    .unwrap()
+                    .decode_output(&logs[0].get_return_data())
+                    .unwrap();
+                assert_eq!(
+                    decoded_result[0],
+                    ethabi::Token::Uint(ethabi::Uint::try_from(1+i).unwrap())
+                );
+            }
+            Err(e) => {
+                panic!(e.to_string());
+            }
+        }
+    }
+
+    if let Some(path) = log_to {
+        machine.runtime_env.recorder.to_file(path).unwrap();
+    }
+}
+
 pub fn _evm_test_same_address_deploy(log_to: Option<&Path>, debug: bool) {
     use std::convert::TryFrom;
     let rt_env = RuntimeEnvironment::new(Uint256::from_usize(1111), None);
