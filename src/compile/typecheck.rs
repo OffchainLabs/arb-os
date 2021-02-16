@@ -166,9 +166,9 @@ fn inline(
                     let last = code.pop();
                     let block_exp = match last {
                         Some(TypeCheckedStatement {
-                            kind: TypeCheckedStatementKind::Return(exp),
+                            kind: TypeCheckedStatementKind::Return(mut exp),
                             debug_info: _,
-                        }) => Some(Box::new(exp)),
+                        }) => Some(Box::new({exp.recursive_apply(strip_returns, &(), &mut ()); exp})),
                         _ => {
                             if let Some(statement) = last {
                                 code.push(statement);
