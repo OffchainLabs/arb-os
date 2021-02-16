@@ -734,11 +734,11 @@ func txRequestQueue_get(q: TxRequestQueue) -> option<(TxRequestQueue, TxRequestD
 }
 
 func txRequestQueue_getOrDie(q: TxRequestQueue) -> (TxRequestQueue, TxRequestData) {
-    if let Some(res) = txRequestQueue_get(q) {
-        return res;
+    return xif let Some(res) = txRequestQueue_get(q) {
+        res
     } else {
-        panic;
-    }
+        panic
+    };
 }
 
 func txRequestQueue_put(q: TxRequestQueue, req: TxRequestData) -> TxRequestQueue {
