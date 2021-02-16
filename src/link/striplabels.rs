@@ -4,7 +4,7 @@
 
 //!Provides utilities used in the `postlink_compile` function
 
-use super::{ExportedFunc, ExportedFuncPoint, ImportedFunc};
+use super::ImportedFunc;
 use crate::compile::{CompileError, DebugInfo};
 use crate::mavm::{AVMOpcode, CodePt, Instruction, Label, Opcode, Value};
 use crate::uint256::Uint256;
@@ -19,10 +19,9 @@ use std::collections::{HashMap, HashSet};
 pub fn strip_labels(
     mut code_in: Vec<Instruction>,
     jump_table: &[Label],
-    exported_funcs: &[ExportedFunc],
     imported_funcs: &[ImportedFunc],
     maybe_evm_pcs: Option<Vec<usize>>, // will be Some iff this is a module
-) -> Result<(Vec<Instruction>, Vec<CodePt>, Vec<ExportedFuncPoint>), CompileError> {
+) -> Result<(Vec<Instruction>, Vec<CodePt>), CompileError> {
     if let Some(evm_pcs) = maybe_evm_pcs {
         let mut list_val = Value::none();
         for evm_pc in evm_pcs {
@@ -109,22 +108,7 @@ pub fn strip_labels(
         }
     }
 
-    let mut exported_funcs_out = Vec::new();
-    for exp_func in exported_funcs {
-        match label_map.get(&exp_func.label) {
-            Some(index) => {
-                exported_funcs_out.push(exp_func.resolve(*index));
-            }
-            None => {
-                return Err(CompileError::new(
-                    format!("strip_labels: lookup failed for exported func"),
-                    None,
-                ));
-            }
-        }
-    }
-
-    Ok((code_out, jump_table_out, exported_funcs_out))
+    Ok((code_out, jump_table_out))
 }
 
 ///Replaces jumps to labels not moving the PC forward with a series of instructions emulating a

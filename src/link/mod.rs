@@ -5,16 +5,16 @@
 //!Provides types and utilities for linking together compiled mini programs
 
 use crate::compile::{
-    compile_from_file, CompileError, CompiledProgram, DebugInfo, SourceFileMap, Type,
+    CompileError, CompiledProgram, DebugInfo, SourceFileMap, Type,
 };
-use crate::mavm::{AVMOpcode, CodePt, Instruction, Label, Opcode, Value};
+use crate::mavm::{AVMOpcode, Instruction, Label, Opcode, Value};
+use crate::pos::try_display_location;
 use crate::stringtable::{StringId, StringTable};
 use serde::{Deserialize, Serialize};
 use std::collections::hash_map::{DefaultHasher, HashMap};
 use std::collections::BTreeMap;
 use std::hash::Hasher;
 use std::io;
-use std::path::Path;
 use xformcode::make_uninitialized_tuple;
 
 pub use xformcode::{value_from_field_list, TupleTree, TUPLE_SIZE};
@@ -28,10 +28,8 @@ mod xformcode;
 /// This is typically constructed via the `postlink_compile` function.
 #[derive(Serialize, Deserialize)]
 pub struct LinkedProgram {
-    pub code: Vec<Instruction>,
+    pub code: Vec<Instruction<AVMOpcode>>,
     pub static_val: Value,
-    pub exported_funcs: Vec<ExportedFuncPoint>,
-    pub imported_funcs: Vec<ImportedFunc>,
     pub file_name_chart: BTreeMap<u64, String>,
 }
 
@@ -42,11 +40,20 @@ impl LinkedProgram {
     pub fn to_output(&self, output: &mut dyn io::Write, format: Option<&str>) {
         match format {
             Some("pretty") => {
-                writeln!(output, "exported: {:?}", self.exported_funcs).unwrap();
-                writeln!(output, "imported: {:?}", self.imported_funcs).unwrap();
                 writeln!(output, "static: {}", self.static_val).unwrap();
                 for (idx, insn) in self.code.iter().enumerate() {
-                    writeln!(output, "{:05}:  {}", idx, insn).unwrap();
+                    writeln!(
+                        output,
+                        "{:05}:  {} \t\t {}",
+                        idx,
+                        insn,
+                        try_display_location(
+                            insn.debug_info.location,
+                            &self.file_name_chart,
+                            false
+                        )
+                    )
+                    .unwrap();
                 }
             }
             None | Some("json") => match serde_json::to_string(self) {
@@ -95,29 +102,14 @@ pub struct ImportedFunc {
     pub name_id: StringId,
     pub slot_num: usize,
     pub name: String,
-    pub arg_types: Vec<Type>,
-    pub ret_type: Type,
-    pub tipe: Type,
-    pub is_impure: bool,
 }
 
 impl ImportedFunc {
-    pub fn new(
-        slot_num: usize,
-        name_id: StringId,
-        string_table: &StringTable,
-        arg_types: Vec<Type>,
-        ret_type: Type,
-        is_impure: bool,
-    ) -> Self {
+    pub fn new(slot_num: usize, name_id: StringId, string_table: &StringTable) -> Self {
         ImportedFunc {
             name_id,
             slot_num,
             name: string_table.name_from_id(name_id).to_string(),
-            tipe: Type::Func(is_impure, arg_types.clone(), Box::new(ret_type.clone())),
-            arg_types,
-            ret_type,
-            is_impure,
         }
     }
 
@@ -165,34 +157,12 @@ impl ExportedFunc {
     }
 }
 
-///Represents a function that is part of the modules public interface.  The codept field represents
-/// the start location of the function in the program it is contained in.
-///
-/// This struct differs from `ExportedFunc` as its codept field points to an absolute address rather
-/// than a virtual label.
-#[derive(Debug, Serialize, Deserialize)]
-pub struct ExportedFuncPoint {
-    pub name: String,
-    pub codept: CodePt,
-    pub tipe: Type,
-}
-
 impl ExportedFunc {
     pub fn new(name_id: StringId, label: Label, tipe: Type, string_table: &StringTable) -> Self {
         Self {
             name: string_table.name_from_id(name_id).to_string(),
             label,
             tipe,
-        }
-    }
-
-    ///Returns an `ExportedFuncPoint` with the same name and type, and codept field specified by
-    ///the function argument.
-    pub fn resolve(&self, codept: CodePt) -> ExportedFuncPoint {
-        ExportedFuncPoint {
-            name: self.name.clone(),
-            codept,
-            tipe: self.tipe.clone(),
         }
     }
 }
@@ -235,14 +205,27 @@ pub fn postlink_compile(
             println!("{:04}:  {}", idx, insn);
         }
     }
-    let (code_final, jump_table_final, exported_funcs_final) = striplabels::strip_labels(
+    let (code_5, jump_table_final) = striplabels::strip_labels(
         code_4,
         &jump_table,
-        &program.exported_funcs,
         &program.imported_funcs,
         if is_module { Some(evm_pcs) } else { None },
     )?;
     let jump_table_value = xformcode::jump_table_to_value(jump_table_final);
+
+    let code_final: Vec<_> = code_5
+        .into_iter()
+        .map(|insn| {
+            if let Opcode::AVMOpcode(inner) = insn.opcode {
+                Ok(Instruction::new(inner, insn.immediate, insn.debug_info))
+            } else {
+                Err(CompileError::new(
+                    format!("In final output encountered virtual opcode {}", insn.opcode),
+                    insn.debug_info.location,
+                ))
+            }
+        })
+        .collect::<Result<Vec<_>, CompileError>>()?;
 
     if debug {
         println!("============ after strip_labels =============");
@@ -258,42 +241,8 @@ pub fn postlink_compile(
     Ok(LinkedProgram {
         code: code_final,
         static_val: jump_table_value,
-        exported_funcs: if is_module {
-            vec![]
-        } else {
-            exported_funcs_final
-        },
-        imported_funcs: if is_module {
-            vec![]
-        } else {
-            program.imported_funcs
-        },
         file_name_chart,
     })
-}
-
-///Takes a slice of tuples of `CompiledProgram`s and `bool`s representing whether the associated
-/// module should be type checked, and returns a vector containing the slice contents with the
-/// auto-linked programs attached if successful, and a `CompileError` otherwise.
-pub fn add_auto_link_progs(
-    progs_in: &[(CompiledProgram, bool)],
-) -> Result<Vec<(CompiledProgram, bool)>, CompileError> {
-    let builtin_pathnames = vec!["builtin/array.mao", "builtin/kvs.mao"];
-    let mut progs = progs_in.to_owned();
-    for pathname in builtin_pathnames.into_iter() {
-        let path = Path::new(pathname);
-        match compile_from_file(path, &mut BTreeMap::new(), false, false) {
-            Ok(compiled_program) => {
-                compiled_program
-                    .into_iter()
-                    .for_each(|prog| progs.push((prog, false)));
-            }
-            Err(e) => {
-                return Err(e);
-            }
-        }
-    }
-    Ok(progs)
 }
 
 ///Combines the `CompiledProgram`s in progs_in into a single `CompiledProgram` with offsets adjusted
@@ -309,17 +258,8 @@ pub fn link(
     progs_in: &[CompiledProgram],
     is_module: bool,
     init_storage_descriptor: Option<Value>, // used only for compiling modules
-    typecheck: bool,
 ) -> Result<CompiledProgram, CompileError> {
-    let progs_in: Vec<_> = progs_in
-        .iter()
-        .map(|prog| (prog.clone(), typecheck))
-        .collect();
-    let progs = if is_module {
-        progs_in.to_vec()
-    } else {
-        add_auto_link_progs(&progs_in)?
-    };
+    let progs = progs_in.to_vec();
     let mut insns_so_far: usize = 2; // leave 2 insns of space at beginning for initialization
     let mut imports_so_far: usize = 0;
     let mut int_offsets = Vec::new();
@@ -327,7 +267,7 @@ pub fn link(
     let mut merged_source_file_map = SourceFileMap::new_empty();
     let mut global_num_limit = 0;
 
-    for (prog, _) in &progs {
+    for prog in &progs {
         merged_source_file_map.push(
             prog.code.len(),
             match &prog.source_file_map {
@@ -343,7 +283,7 @@ pub fn link(
 
     let mut relocated_progs = Vec::new();
     let mut func_offset: usize = 0;
-    for (i, (prog, typecheck)) in progs.iter().enumerate() {
+    for (i, prog) in progs.iter().enumerate() {
         let (relocated_prog, new_func_offset) = prog.clone().relocate(
             int_offsets[i],
             ext_offsets[i],
@@ -352,7 +292,7 @@ pub fn link(
             prog.clone().source_file_map,
         );
         global_num_limit = relocated_prog.global_num_limit;
-        relocated_progs.push((relocated_prog, *typecheck));
+        relocated_progs.push(relocated_prog);
         func_offset = new_func_offset + 1;
     }
 
@@ -392,57 +332,19 @@ pub fn link(
 
     let mut linked_exports = Vec::new();
     let mut linked_imports = Vec::new();
-    for (mut rel_prog, typecheck) in relocated_progs {
+    for mut rel_prog in relocated_progs {
         linked_code.append(&mut rel_prog.code);
-        linked_exports.append(
-            &mut rel_prog
-                .exported_funcs
-                .into_iter()
-                .map(|prog| (prog, typecheck))
-                .collect(),
-        );
-        linked_imports.append(
-            &mut rel_prog
-                .imported_funcs
-                .into_iter()
-                .map(|prog| (prog, typecheck))
-                .collect(),
-        );
+        linked_exports.append(&mut rel_prog.exported_funcs);
+        linked_imports.append(&mut rel_prog.imported_funcs);
     }
 
     let mut exports_map = HashMap::new();
     let mut label_xlate_map = HashMap::new();
-    for (exp, typecheck) in &linked_exports {
-        exports_map.insert(exp.name.clone(), (exp.label, exp.tipe.clone(), *typecheck));
+    for exp in &linked_exports {
+        exports_map.insert(exp.name.clone(), exp.label);
     }
-    for (imp, typecheck_in) in &linked_imports {
-        if let Some((label, tipe, typecheck_out)) = exports_map.get(&imp.name) {
-            if *typecheck_in
-                && *typecheck_out
-                && *tipe
-                    != Type::Func(
-                        imp.is_impure,
-                        imp.arg_types.clone(),
-                        Box::new(imp.ret_type.clone()),
-                    )
-            {
-                println!(
-                    "Warning: {:?}",
-                    CompileError::new(
-                        format!(
-                            "Imported type \"{:?}\" doesn't match exported type, \"{:?}\" in function {}",
-                            Type::Func(
-                                imp.is_impure,
-                                imp.arg_types.clone(),
-                                Box::new(imp.ret_type.clone())
-                            ),
-                            tipe,
-                            imp.name
-                        ),
-                        None
-                    )
-                );
-            }
+    for imp in &linked_imports {
+        if let Some(label) = exports_map.get(&imp.name) {
             label_xlate_map.insert(Label::External(imp.slot_num), label);
         } else {
             println!(
@@ -459,8 +361,8 @@ pub fn link(
 
     Ok(CompiledProgram::new(
         linked_xlated_code,
-        linked_exports.into_iter().map(|x| x.0).collect(),
-        linked_imports.into_iter().map(|x| x.0).collect(),
+        linked_exports,
+        linked_imports,
         global_num_limit,
         Some(merged_source_file_map),
         if is_module {

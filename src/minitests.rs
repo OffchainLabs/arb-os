@@ -4,7 +4,7 @@
 
 use crate::mavm::Value;
 use crate::run::{
-    bytestack_from_bytes, load_from_file, run_from_file, Machine, RuntimeEnvironment,
+    _bytestack_from_bytes, load_from_file, run_from_file, Machine, RuntimeEnvironment,
 };
 use crate::uint256::Uint256;
 use num_bigint::{BigUint, RandBigInt};
@@ -352,7 +352,7 @@ fn test_rlp_uint(ui: Uint256, correct_result: Vec<u8>) {
     );
     match res {
         Ok(res) => {
-            assert_eq!(res[0], bytestack_from_bytes(&correct_result));
+            assert_eq!(res[0], _bytestack_from_bytes(&correct_result));
         }
         Err(e) => {
             panic!("{}\n{}", e.0, e.1);
@@ -365,13 +365,13 @@ fn test_rlp_bytearray(input: Vec<u8>, correct_result: Vec<u8>) {
     let path = Path::new("stdlib/rlptest.mexe");
     let res = run_from_file(
         path,
-        vec![Value::Int(Uint256::one()), bytestack_from_bytes(&input)],
+        vec![Value::Int(Uint256::one()), _bytestack_from_bytes(&input)],
         RuntimeEnvironment::new(Uint256::from_usize(1111), None),
         false,
     );
     match res {
         Ok(res) => {
-            assert_eq!(res[0], bytestack_from_bytes(&correct_result));
+            assert_eq!(res[0], _bytestack_from_bytes(&correct_result));
         }
         Err(e) => {
             panic!("{}\n{}", e.0, e.1);
@@ -388,7 +388,7 @@ fn test_rlp_list3(testvec: (Uint256, Vec<u8>, Uint256), correct_result: Vec<u8>)
             Value::Int(Uint256::from_usize(2)),
             Value::new_tuple(vec![
                 Value::Int(testvec.0),
-                bytestack_from_bytes(&testvec.1),
+                _bytestack_from_bytes(&testvec.1),
                 Value::Int(testvec.2),
             ]),
         ],
@@ -397,7 +397,7 @@ fn test_rlp_list3(testvec: (Uint256, Vec<u8>, Uint256), correct_result: Vec<u8>)
     );
     match res {
         Ok(res) => {
-            assert_eq!(res[0], bytestack_from_bytes(&correct_result));
+            assert_eq!(res[0], _bytestack_from_bytes(&correct_result));
         }
         Err(e) => {
             panic!("{}\n{}", e.0, e.1);
@@ -457,6 +457,11 @@ fn test_non_eip155_signed_tx() {
 #[test]
 fn test_direct_deploy_and_call_add() {
     let _log = crate::evm::evm_direct_deploy_and_call_add(None, false);
+}
+
+#[test]
+fn test_call_from_contract() {
+    let _log = crate::evm::_evm_test_contract_call(None, false);
 }
 
 #[test]
@@ -598,6 +603,11 @@ pub fn _test_crosscontract_call_using_compressed_batch() {
 }
 
 #[test]
+fn test_payment_to_self() {
+    let _ = crate::evm::_evm_payment_to_self(None, false).unwrap();
+}
+
+#[test]
 fn test_payment_to_empty_address() {
     crate::evm::evm_payment_to_empty_address(None, false);
 }
@@ -605,16 +615,6 @@ fn test_payment_to_empty_address() {
 #[test]
 fn test_underfunded_nested_call() {
     assert!(crate::evm::_underfunded_nested_call_test(None, false).is_ok());
-}
-
-#[test]
-fn test_erc20() {
-    crate::evm::mint_erc20_and_get_balance(None, false);
-}
-
-#[test]
-fn test_erc721() {
-    crate::evm::mint_erc721_and_get_balance(None, false);
 }
 
 #[test]

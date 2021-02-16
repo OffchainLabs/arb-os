@@ -11,14 +11,8 @@ use accounts::accountStore_createAccountFromEvmCode;
 use chainParameters::chainParams_init;
 use codeSegment::codeSegment_init;
 use codeSegment::translateEvmCodeSegment;
-use contractTemplates::getErc20code;
-use contractTemplates::getErc721code;
 use contractTemplates::getArbInfoCode;
-use contractTemplates::getErc20address;
-use contractTemplates::getErc721address;
 use contractTemplates::getArbInfoAddress;
-use contractTemplates::getErc20storage;
-use contractTemplates::getErc721storage;
 use contractTemplates::getArbInfoStorage;
 use decompression::decompression_init;
 use errorHandler::errorHandler_init;
@@ -119,34 +113,6 @@ public impure func mainRunLoop() {
 
 impure func initializePreinstalls() -> option<()> {
     let acctStore = getGlobalAccountStore();
-
-    let code = bytearray_unmarshalBytes(getErc20code())?;
-    let (initCodePt, evmJumpTable, _) = translateEvmCodeSegment(
-        bytestream_new(code),
-        false
-    )?;
-    acctStore = accountStore_createAccountFromEvmCode(
-        acctStore,
-        getErc20address(),
-        code,
-        evmJumpTable,
-        initCodePt,
-        getErc20storage()
-    )?;
-
-    let code = bytearray_unmarshalBytes(getErc721code())?;
-    let (initCodePt, evmJumpTable, _) = translateEvmCodeSegment(
-        bytestream_new(code),
-        false
-    )?;
-    acctStore = accountStore_createAccountFromEvmCode(
-        acctStore,
-        getErc721address(),
-        code,
-        evmJumpTable,
-        initCodePt,
-        getErc721storage()
-    )?;
 
     let code = bytearray_unmarshalBytes(getArbInfoCode())?;
     let (initCodePt, evmJumpTable, _) = translateEvmCodeSegment(

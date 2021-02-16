@@ -7,6 +7,7 @@
 
 use serde::{Deserialize, Serialize};
 use std::cmp::{self, Ordering};
+use std::collections::BTreeMap;
 use std::fmt;
 use std::ops::{Add, AddAssign, Sub, SubAssign};
 
@@ -131,6 +132,33 @@ impl fmt::Display for Location {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "Line: {}, Column: {}", self.line, self.column)
     }
+}
+
+impl Location {
+    pub fn display_with_file(
+        &self,
+        file_name_chart: &BTreeMap<u64, String>,
+        line_break: bool,
+    ) -> String {
+        format!(
+            "{}{}In file: {}",
+            self,
+            if line_break { "\n" } else { " " },
+            file_name_chart
+                .get(&self.file_id)
+                .unwrap_or(&self.file_id.to_string())
+        )
+    }
+}
+
+pub fn try_display_location(
+    location: Option<Location>,
+    file_name_chart: &BTreeMap<u64, String>,
+    line_break: bool,
+) -> String {
+    location
+        .map(|loc| loc.display_with_file(file_name_chart, line_break))
+        .unwrap_or("No location".to_string())
 }
 
 /// An expansion identifier tracks whether a span originated from a macro expansion or not.

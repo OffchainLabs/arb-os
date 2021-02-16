@@ -3,10 +3,9 @@
  */
 
 use crate::compile::miniconstants::init_constant_table;
-use crate::evm::abi::FunctionTable;
+use crate::evm::abi::{FunctionTable, _ArbInfo};
 use crate::evm::abi::{ArbAddressTable, ArbBLS, ArbFunctionTable, ArbSys, ArbosTest, _ArbOwner};
-use crate::mavm::Value;
-use crate::run::{bytestack_from_bytes, load_from_file, RuntimeEnvironment};
+use crate::run::{load_from_file, RuntimeEnvironment};
 use crate::uint256::Uint256;
 use abi::AbiForContract;
 use ethers_signers::Signer;
@@ -378,9 +377,7 @@ pub fn evm_test_arbsys_direct(log_to: Option<&Path>, debug: bool) -> Result<(), 
     let x1 = Uint256::from_u64(35);
     let y0 = Uint256::from_u64(71);
     let y1 = Uint256::from_u64(143);
-    println!("registering BLS key");
     arb_bls.register(&mut machine, x0.clone(), x1.clone(), y0.clone(), y1.clone())?;
-    println!("reading BLS key");
     let (ox0, ox1, oy0, oy1) = arb_bls.get_public_key(&mut machine, my_addr.clone())?;
     assert_eq!(x0, ox0);
     assert_eq!(x1, ox1);
@@ -412,6 +409,8 @@ pub fn _evm_test_arbowner(log_to: Option<&Path>, debug: bool) -> Result<(), etha
     arbowner._continue_code_upload(&mut machine, mcode)?;
 
     arbowner._finish_code_upload_as_arbos_upgrade(&mut machine)?;
+
+    arbowner._set_blocks_per_send(&mut machine, Uint256::from_u64(10))?;
 
     arbowner._change_sequencer(
         &mut machine,
@@ -540,13 +539,11 @@ pub fn evm_test_function_table_access(
     )?;
     arb_function_table.upload(&mut machine, &func_table)?;
 
-    println!("Checking size");
     assert_eq!(
         arb_function_table.size(&mut machine, my_addr.clone())?,
         Uint256::one()
     );
 
-    println!("Getting item");
     let (func_code, is_payable, gas_limit) =
         arb_function_table.get(&mut machine, my_addr, Uint256::zero())?;
     assert_eq!(
@@ -1493,7 +1490,7 @@ pub fn evm_deploy_buddy_contract(log_to: Option<&Path>, debug: bool) {
                 &[],
                 &mut machine,
                 Uint256::zero(),
-                None,
+                Some(Uint256::from_u64(100)),
                 Some(Uint256::from_u64(1025)),
                 debug,
             );
@@ -1568,14 +1565,8 @@ pub fn _evm_test_payment_in_constructor(log_to: Option<&Path>, debug: bool) {
             assert_eq!(sends.len(), 1);
             let mut expected_bytes = my_addr.to_bytes_be();
             expected_bytes.extend(Uint256::from_usize(5000).to_bytes_be());
-            assert_eq!(
-                sends[0],
-                Value::new_tuple(vec![
-                    Value::Int(Uint256::zero()),
-                    Value::Int(contract.address),
-                    bytestack_from_bytes(&expected_bytes),
-                ]),
-            )
+            assert_eq!(sends[0][0..32], Uint256::zero().to_bytes_be());
+            assert_eq!(sends[0][32..], expected_bytes);
         }
         Err(e) => {
             panic!(e.to_string());
@@ -1662,14 +1653,8 @@ pub fn evm_test_arbsys(log_to: Option<&Path>, debug: bool) {
             assert_eq!(sends.len(), 1);
             let mut expected_bytes = my_addr.to_bytes_be();
             expected_bytes.extend(Uint256::from_usize(5000).to_bytes_be());
-            assert_eq!(
-                sends[0],
-                Value::new_tuple(vec![
-                    Value::Int(Uint256::zero()),
-                    Value::Int(contract.address),
-                    bytestack_from_bytes(&expected_bytes),
-                ]),
-            )
+            assert_eq!(sends[0][0..32], Uint256::zero().to_bytes_be());
+            assert_eq!(sends[0][32..], expected_bytes);
         }
         Err(e) => {
             panic!(e.to_string());
@@ -1732,6 +1717,67 @@ pub fn evm_direct_deploy_and_call_add(log_to: Option<&Path>, debug: bool) {
         }
         Err(e) => {
             panic!(e.to_string());
+        }
+    }
+
+    if let Some(path) = log_to {
+        machine.runtime_env.recorder.to_file(path).unwrap();
+    }
+}
+
+pub fn _evm_test_contract_call(log_to: Option<&Path>, debug: bool) {
+    use std::convert::TryFrom;
+    let rt_env = RuntimeEnvironment::new(Uint256::from_usize(1111), None);
+    let mut machine = load_from_file(Path::new("arb_os/arbos.mexe"), rt_env);
+    machine.start_at_zero();
+
+    let my_addr = Uint256::from_usize(1025);
+    let contract = match AbiForContract::new_from_file(&test_contract_path("Add")) {
+        Ok(mut contract) => {
+            let result = contract.deploy(&[], &mut machine, Uint256::zero(), None, None, debug);
+            if let Ok(contract_addr) = result {
+                assert_ne!(contract_addr, Uint256::zero());
+                contract
+            } else {
+                panic!("deploy failed");
+            }
+        }
+        Err(e) => {
+            panic!("error loading contract: {:?}", e);
+        }
+    };
+
+    for i in 0..4 {
+        let result = contract._call_function_from_contract(
+            my_addr.clone(),
+            "add",
+            vec![
+                ethabi::Token::Uint(ethabi::Uint::one()),
+                ethabi::Token::Uint(Uint256::from_u64(i).to_u256()),
+            ]
+                .as_ref(),
+            &mut machine,
+            Uint256::zero(),
+            debug,
+        );
+        match result {
+            Ok((logs, sends)) => {
+                assert_eq!(logs.len(), 1);
+                assert_eq!(sends.len(), 0);
+                assert!(logs[0].succeeded());
+                let decoded_result = contract
+                    .get_function("add")
+                    .unwrap()
+                    .decode_output(&logs[0].get_return_data())
+                    .unwrap();
+                assert_eq!(
+                    decoded_result[0],
+                    ethabi::Token::Uint(ethabi::Uint::try_from(1+i).unwrap())
+                );
+            }
+            Err(e) => {
+                panic!(e.to_string());
+            }
         }
     }
 
@@ -1878,6 +1924,54 @@ pub fn evm_direct_deploy_and_compressed_call_add(log_to: Option<&Path>, debug: b
     if let Some(path) = log_to {
         machine.runtime_env.recorder.to_file(path).unwrap();
     }
+}
+
+pub fn _evm_payment_to_self(log_to: Option<&Path>, debug: bool) -> Result<(), ethabi::Error> {
+    let rt_env = RuntimeEnvironment::new(Uint256::from_usize(1111), None);
+    let mut machine = load_from_file(Path::new("arb_os/arbos.mexe"), rt_env);
+    machine.start_at_zero();
+
+    let my_addr = Uint256::from_u64(1025);
+
+    machine.runtime_env.insert_eth_deposit_message(
+        my_addr.clone(),
+        my_addr.clone(),
+        Uint256::from_u64(20000),
+    );
+
+    let arbinfo = _ArbInfo::_new(false);
+    let balance = arbinfo._get_balance(&mut machine, &my_addr)?;
+    assert_eq!(balance, Uint256::from_u64(20000));
+
+    let tx_id = machine.runtime_env.insert_tx_message(
+        my_addr.clone(),
+        Uint256::from_u64(1000000000),
+        Uint256::zero(),
+        my_addr.clone(),
+        Uint256::from_u64(10000),
+        &vec![],
+        false,
+    );
+
+    let _ = if debug {
+        machine.debug(None)
+    } else {
+        machine.run(None)
+    };
+
+    let receipts = machine.runtime_env.get_all_receipt_logs();
+    let last_rcpt = receipts.len() - 1;
+    assert_eq!(receipts[last_rcpt].get_request_id(), tx_id);
+    assert!(receipts[last_rcpt].succeeded());
+
+    let new_balance = arbinfo._get_balance(&mut machine, &my_addr)?;
+    assert_eq!(new_balance, Uint256::from_u64(20000));
+
+    if let Some(path) = log_to {
+        machine.runtime_env.recorder.to_file(path).unwrap();
+    }
+
+    Ok(())
 }
 
 pub fn evm_payment_to_empty_address(log_to: Option<&Path>, debug: bool) {
@@ -2062,82 +2156,6 @@ pub fn _evm_eval_ripemd160(log_to: Option<&Path>, debug: bool) {
     }
 }
 
-pub fn mint_erc20_and_get_balance(log_to: Option<&Path>, debug: bool) {
-    let token_addr = Uint256::from_usize(32563);
-    let me = Uint256::from_usize(1025);
-    let million = Uint256::from_usize(1000000);
-
-    let mut rt_env = RuntimeEnvironment::new(Uint256::from_usize(1111), None);
-    rt_env.insert_erc20_deposit_message(me.clone(), token_addr.clone(), me.clone(), million);
-    let mut calldata: Vec<u8> = vec![0x70, 0xa0, 0x82, 0x31]; // code for balanceOf method
-    calldata.extend(me.to_bytes_be());
-    rt_env.insert_tx_message(
-        me,
-        Uint256::from_usize(1000000000),
-        Uint256::zero(),
-        token_addr,
-        Uint256::zero(),
-        &calldata,
-        false,
-    );
-
-    let mut machine = load_from_file(Path::new("arb_os/arbos.mexe"), rt_env);
-    machine.start_at_zero();
-
-    let num_logs_before = machine.runtime_env.get_all_receipt_logs().len();
-    let _arbgas_used = if debug {
-        machine.debug(None)
-    } else {
-        machine.run(None)
-    };
-    let logs = machine.runtime_env.get_all_receipt_logs();
-    assert_eq!(logs.len(), num_logs_before + 2);
-    assert!(logs[logs.len() - 2].succeeded());
-    assert!(logs[logs.len() - 1].succeeded());
-
-    if let Some(path) = log_to {
-        machine.runtime_env.recorder.to_file(path).unwrap();
-    }
-}
-
-pub fn mint_erc721_and_get_balance(log_to: Option<&Path>, debug: bool) {
-    let token_addr = Uint256::from_usize(32563);
-    let me = Uint256::from_usize(1025);
-    let million = Uint256::from_usize(1000000);
-
-    let mut rt_env = RuntimeEnvironment::new(Uint256::from_usize(1111), None);
-    rt_env.insert_erc721_deposit_message(me.clone(), token_addr.clone(), me.clone(), million);
-    let mut calldata: Vec<u8> = vec![0x70, 0xa0, 0x82, 0x31]; // code for balanceOf method
-    calldata.extend(me.to_bytes_be());
-    rt_env.insert_tx_message(
-        me,
-        Uint256::from_usize(1000000000),
-        Uint256::zero(),
-        token_addr,
-        Uint256::zero(),
-        &calldata,
-        false,
-    );
-
-    let mut machine = load_from_file(Path::new("arb_os/arbos.mexe"), rt_env);
-    machine.start_at_zero();
-
-    let num_logs_before = machine.runtime_env.get_all_receipt_logs().len();
-    let _arbgas_used = if debug {
-        machine.debug(None)
-    } else {
-        machine.run(None)
-    };
-    let logs = machine.runtime_env.get_all_receipt_logs();
-    assert_eq!(logs.len(), num_logs_before + 2);
-    assert!(logs[logs.len() - 2].succeeded());
-    assert!(logs[logs.len() - 1].succeeded());
-
-    if let Some(path) = log_to {
-        machine.runtime_env.recorder.to_file(path).unwrap();
-    }
-}
-
 pub fn make_logs_for_all_arbos_tests() {
     evm_direct_deploy_add(
         Some(Path::new("testlogs/evm_direct_deploy_add.aoslog")),
@@ -2193,6 +2211,4 @@ pub fn make_logs_for_all_arbos_tests() {
         Some(Path::new("testlogs/payment_to_empty_address.aoslog")),
         false,
     );
-    mint_erc20_and_get_balance(Some(Path::new("testlogs/erc20_test.aoslog")), false);
-    mint_erc721_and_get_balance(Some(Path::new("testlogs/erc721_test.aoslog")), false);
 }

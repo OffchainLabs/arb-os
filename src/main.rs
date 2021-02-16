@@ -4,19 +4,24 @@
 
 #![allow(unused_parens)]
 
+use crate::link::LinkedProgram;
+use clap::Clap;
 use compile::{compile_from_file, CompileError};
 use contracttemplates::generate_contract_template_file_or_die;
 use link::{link, postlink_compile};
 use mavm::Value;
-use run::{profile_gen_from_file, replay_from_testlog_file, run_from_file, RuntimeEnvironment};
+use pos::try_display_location;
+use run::{
+    profile_gen_from_file, replay_from_testlog_file, run_from_file, ProfilerMode,
+    RuntimeEnvironment,
+};
 use std::collections::BTreeMap;
 use std::fs::File;
 use std::io;
+use std::io::Read;
 use std::path::Path;
-
-use crate::run::ProfilerMode;
-use crate::uint256::Uint256;
-use clap::Clap;
+use std::time::Instant;
+use uint256::Uint256;
 
 #[cfg(test)]
 mod buffertests;
@@ -38,8 +43,6 @@ struct CompileStruct {
     input: Vec<String>,
     #[clap(short, long)]
     debug_mode: bool,
-    #[clap(short, long)]
-    typecheck: bool,
     #[clap(short, long)]
     output: Option<String>,
     #[clap(short, long)]
@@ -89,6 +92,15 @@ struct Profiler {
     mode: ProfilerMode,
 }
 
+///Command line options for reformat subcommand.
+#[derive(Clap, Debug)]
+struct Reformat {
+    input: String,
+    output: Option<String>,
+    #[clap(short, long)]
+    format: Option<String>,
+}
+
 ///Command line options for evm-tests subcommand.
 #[derive(Clap, Debug)]
 struct EvmTests {
@@ -108,17 +120,18 @@ enum Args {
     MakeTestLogs,
     MakeBenchmarks,
     MakeTemplates,
+    Reformat(Reformat),
     EvmTests(EvmTests),
 }
 
 fn main() -> Result<(), CompileError> {
+    let start_time = Instant::now();
     let matches = Args::parse();
 
     match matches {
         Args::Compile(compile) => {
             let debug_mode = compile.debug_mode;
-            let typecheck = compile.typecheck;
-            let mut output = get_output(compile.output.as_deref()).unwrap();
+            let mut output = get_output(compile.output.clone()).unwrap();
             let filenames: Vec<_> = compile.input.clone();
             let mut file_name_chart = BTreeMap::new();
             if compile.compile_only {
@@ -132,7 +145,11 @@ fn main() -> Result<(), CompileError> {
                         });
                     }
                     Err(e) => {
-                        println!("Compilation error: {:?}\nIn file: {}", e, filename);
+                        println!(
+                            "Compilation error: {}\n{}",
+                            e,
+                            try_display_location(e.location, &file_name_chart, true)
+                        );
                         return Err(e);
                     }
                 }
@@ -150,14 +167,9 @@ fn main() -> Result<(), CompileError> {
                         }
                         Err(e) => {
                             println!(
-                                "Compilation error: {}\nIn file: {}",
+                                "Compilation error: {}\n{}",
                                 e,
-                                e.location
-                                    .map(|loc| file_name_chart
-                                        .get(&loc.file_id)
-                                        .unwrap_or(&loc.file_id.to_string())
-                                        .clone())
-                                    .unwrap_or("Unknown".to_string())
+                                try_display_location(e.location, &file_name_chart, true)
                             );
                             return Err(e);
                         }
@@ -165,7 +177,7 @@ fn main() -> Result<(), CompileError> {
                 }
 
                 let is_module = compile.module;
-                match link(&compiled_progs, is_module, Some(Value::none()), typecheck) {
+                match link(&compiled_progs, is_module, Some(Value::none())) {
                     Ok(linked_prog) => {
                         match postlink_compile(
                             linked_prog,
@@ -180,14 +192,9 @@ fn main() -> Result<(), CompileError> {
                             }
                             Err(e) => {
                                 println!(
-                                    "Linking error: {}\nIn file: {}",
+                                    "Linking error: {}\n{}",
                                     e,
-                                    e.location
-                                        .map(|loc| file_name_chart
-                                            .get(&loc.file_id)
-                                            .unwrap_or(&loc.file_id.to_string())
-                                            .clone())
-                                        .unwrap_or("Unknown".to_string())
+                                    try_display_location(e.location, &file_name_chart, true)
                                 );
                                 return Err(e);
                             }
@@ -195,14 +202,9 @@ fn main() -> Result<(), CompileError> {
                     }
                     Err(e) => {
                         println!(
-                            "Linking error: {}\nIn file: {}",
+                            "Linking error: {}\n{}",
                             e,
-                            e.location
-                                .map(|loc| file_name_chart
-                                    .get(&loc.file_id)
-                                    .unwrap_or(&loc.file_id.to_string())
-                                    .clone())
-                                .unwrap_or("Unknown".to_string())
+                            try_display_location(e.location, &file_name_chart, true)
                         );
                         return Err(e);
                     }
@@ -266,6 +268,37 @@ fn main() -> Result<(), CompileError> {
             generate_contract_template_file_or_die(path);
         }
 
+        Args::Reformat(reformat) => {
+            let path = Path::new(&reformat.input);
+            let mut file = File::open(path).map_err(|_| {
+                CompileError::new(
+                    format!(
+                        "Could not open file: \"{}\"",
+                        path.to_str().unwrap_or("non-utf8")
+                    ),
+                    None,
+                )
+            })?;
+            let mut s = String::new();
+            file.read_to_string(&mut s).map_err(|_| {
+                CompileError::new(
+                    format!("Failed to read input file \"{}\" to string", reformat.input),
+                    None,
+                )
+            })?;
+            let result: LinkedProgram = serde_json::from_str(&s).map_err(|_| {
+                CompileError::new(
+                    format!("Could not parse input file \"{}\" as json", reformat.input),
+                    None,
+                )
+            })?;
+
+            result.to_output(
+                &mut get_output(reformat.output).unwrap(),
+                reformat.format.as_deref(),
+            );
+        }
+
         Args::EvmTests(options) => {
             let mut paths = options.input;
             if paths.len() == 0 {
@@ -303,13 +336,19 @@ fn main() -> Result<(), CompileError> {
             println!("{} successes, {} failures", num_successes, num_failures);
         }
     }
+    let total_time = Instant::now() - start_time;
+    println!(
+        "Finished in {}.{:0>3} seconds.",
+        total_time.as_secs(),
+        total_time.subsec_millis()
+    );
 
     Ok(())
 }
 
 ///Creates a `dyn Write` from an optional filename, if a filename is specified, creates a file
 /// handle, otherwise gives stdout.
-fn get_output(output_filename: Option<&str>) -> Result<Box<dyn io::Write>, io::Error> {
+fn get_output(output_filename: Option<String>) -> Result<Box<dyn io::Write>, io::Error> {
     match output_filename {
         Some(ref path) => File::create(path).map(|f| Box::new(f) as Box<dyn io::Write>),
         None => Ok(Box::new(io::stdout())),

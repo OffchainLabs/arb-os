@@ -88,7 +88,6 @@ pub enum Type {
     Nominal(Vec<String>, StringId),
     Func(bool, Vec<Type>, Box<Type>),
     Map(Box<Type>, Box<Type>),
-    Imported(StringId),
     Any,
     Every,
     Option(Box<Type>),
@@ -139,7 +138,7 @@ impl Type {
             return true;
         }
         match self {
-            Type::Any => true,
+            Type::Any => *rhs != Type::Void,
             Type::Void
             | Type::Uint
             | Type::Int
@@ -147,7 +146,6 @@ impl Type {
             | Type::Bytes32
             | Type::EthAddress
             | Type::Buffer
-            | Type::Imported(_)
             | Type::Every => (self == rhs),
             Type::Tuple(tvec) => {
                 if let Ok(Type::Tuple(tvec2)) = rhs.get_representation(type_tree) {
@@ -193,9 +191,10 @@ impl Type {
             }
             Type::Func(is_impure, args, ret) => {
                 if let Type::Func(is_impure2, args2, ret2) = rhs {
+                    //note: The order of arg2 and args, and ret and ret2 are in this order to ensure contravariance in function arg types
                     (*is_impure || !is_impure2)
-                        && arg_vectors_assignable(args, args2, type_tree, seen.clone())
-                        && (ret2.assignable(ret, type_tree, seen)) // note: rets in reverse order
+                        && arg_vectors_assignable(args2, args, type_tree, seen.clone())
+                        && (ret.assignable(ret2, type_tree, seen))
                 } else {
                     false
                 }
@@ -273,12 +272,72 @@ impl Type {
                 }
                 (value_from_field_list(vals), is_safe)
             }
-            Type::Map(_, _) | Type::Func(_, _, _) | Type::Imported(_) | Type::Nominal(_, _) => {
-                (Value::none(), false)
-            }
+            Type::Map(_, _) | Type::Func(_, _, _) | Type::Nominal(_, _) => (Value::none(), false),
             Type::Any => (Value::none(), true),
             Type::Every => (Value::none(), false),
             Type::Option(_) => (Value::new_tuple(vec![Value::Int(Uint256::zero())]), true),
+        }
+    }
+
+    pub fn display(&self) -> String {
+        match self {
+            Type::Void => "void".to_string(),
+            Type::Uint => "uint".to_string(),
+            Type::Int => "int".to_string(),
+            Type::Bool => "bool".to_string(),
+            Type::Bytes32 => "bytes32".to_string(),
+            Type::EthAddress => "address".to_string(),
+            Type::Buffer => "buffer".to_string(),
+            Type::Tuple(subtypes) => {
+                let mut out = "(".to_string();
+                for s in subtypes {
+                    //This should be improved by removing the final trailing comma.
+                    out.push_str(&(s.display() + ", "));
+                }
+                out.push(')');
+                out
+            }
+            Type::Array(t) => format!("[]{}", t.display()),
+            Type::FixedArray(t, size) => format!("[{}]{}", size, t.display()),
+            Type::Struct(fields) => {
+                let mut out = "struct {\n".to_string();
+                for field in fields {
+                    //This should indent further when dealing with sub-structs
+                    out.push_str(&format!("    {}: {},\n", field.name, field.tipe.display()));
+                }
+                out.push('}');
+                out
+            }
+            Type::Nominal(path, id) => {
+                let mut out = String::new();
+                for path_item in path {
+                    out.push_str(&format!("{}::", path_item))
+                }
+                out.push_str(&format!("{}", id));
+                out
+            }
+            Type::Func(impure, args, ret) => {
+                let mut out = String::new();
+                if *impure {
+                    out.push_str("impure ");
+                }
+                out.push_str("func(");
+                for arg in args {
+                    out.push_str(&(arg.display() + ", "));
+                }
+                out.push(')');
+                if **ret != Type::Void {
+                    out.push_str(" -> ");
+                    out.push_str(&ret.display());
+                }
+                out
+            }
+            Type::Map(key, val) => {
+                format!("map<{},{}>", key.display(), val.display())
+            }
+            Type::Any => "any".to_string(),
+            Type::Every => "every".to_string(),
+            Type::Option(t) => format!("option<{}>", t.display()),
         }
     }
 }
@@ -347,7 +406,6 @@ impl PartialEq for Type {
             (Type::Func(i1, a1, r1), Type::Func(i2, a2, r2)) => {
                 (i1 == i2) && type_vectors_equal(&a1, &a2) && (*r1 == *r2)
             }
-            (Type::Imported(n1), Type::Imported(n2)) => (n1 == n2),
             (Type::Nominal(p1, id1), Type::Nominal(p2, id2)) => (p1, id1) == (p2, id2),
             (Type::Option(x), Type::Option(y)) => *x == *y,
             (_, _) => false,
@@ -408,36 +466,6 @@ impl GlobalVarDecl {
             name,
             tipe,
             location,
-        }
-    }
-}
-
-///Represents an import of a mini function from another source file or external location.
-/// is_impure, arg_types, and ret_type are assumed to correspond to the associated elements of tipe,
-/// this must be upheld by users of this type.
-#[derive(Debug, Clone)]
-pub struct ImportFuncDecl {
-    pub name: StringId,
-    pub is_impure: bool,
-    pub arg_types: Vec<Type>,
-    pub ret_type: Type,
-    pub tipe: Type,
-}
-
-impl ImportFuncDecl {
-    ///Identical to new but takes a `Vec` of `Type` instead of a `Vec` of `FuncArg`
-    pub fn new_types(
-        name: StringId,
-        is_impure: bool,
-        arg_types: Vec<Type>,
-        ret_type: Type,
-    ) -> Self {
-        ImportFuncDecl {
-            name,
-            is_impure,
-            arg_types: arg_types.clone(),
-            ret_type: ret_type.clone(),
-            tipe: Type::Func(is_impure, arg_types, Box::new(ret_type)),
         }
     }
 }
@@ -506,17 +534,13 @@ pub struct Statement {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub enum StatementKind {
     Noop(),
-    Panic(),
     ReturnVoid(),
     Return(Expr),
     Break(Option<Expr>, Option<String>),
     Expression(Expr),
     Let(MatchPattern, Expr),
     Assign(StringId, Expr),
-    Loop(Vec<Statement>),
     While(Expr, Vec<Statement>),
-    If(IfArm),
-    IfLet(StringId, Expr, Vec<Statement>, Option<Vec<Statement>>),
     Asm(Vec<Instruction>, Vec<Expr>),
     DebugPrint(Expr),
 }
@@ -526,14 +550,6 @@ pub enum StatementKind {
 pub enum MatchPattern {
     Simple(StringId),
     Tuple(Vec<MatchPattern>),
-}
-
-///Represents an arm of an If-Else chain, is Cond(condition, block, possible_else, location) if it
-/// contains a condition, and Catchall(block, location) if it is an else block.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-pub enum IfArm {
-    Cond(Expr, Vec<Statement>, Option<Box<IfArm>>, DebugInfo),
-    Catchall(Vec<Statement>, DebugInfo),
 }
 
 ///Represents a constant mini value of type Option<T> for some type T.
@@ -619,7 +635,7 @@ pub enum ExprKind {
     Constant(Constant),
     OptionInitializer(Box<Expr>),
     FunctionCall(Box<Expr>, Vec<Expr>),
-    CodeBlock(Vec<Statement>, Option<Box<Expr>>),
+    CodeBlock(CodeBlock),
     ArrayOrMapRef(Box<Expr>, Box<Expr>),
     StructInitializer(Vec<FieldInitializer>),
     Tuple(Vec<Expr>),
@@ -630,7 +646,11 @@ pub enum ExprKind {
     StructMod(Box<Expr>, String, Box<Expr>),
     UnsafeCast(Box<Expr>, Type),
     Asm(Type, Vec<Instruction>, Vec<Expr>),
+    Panic,
     Try(Box<Expr>),
+    If(Box<Expr>, CodeBlock, Option<CodeBlock>),
+    IfLet(StringId, Box<Expr>, CodeBlock, Option<CodeBlock>),
+    Loop(Vec<Statement>),
     NewBuffer,
 }
 
@@ -724,5 +744,17 @@ pub struct FieldInitializer {
 impl FieldInitializer {
     pub fn new(name: String, value: Expr) -> Self {
         FieldInitializer { name, value }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct CodeBlock {
+    pub body: Vec<Statement>,
+    pub ret_expr: Option<Box<Expr>>,
+}
+
+impl CodeBlock {
+    pub fn new(body: Vec<Statement>, ret_expr: Option<Box<Expr>>) -> Self {
+        Self { body, ret_expr }
     }
 }

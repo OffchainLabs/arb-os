@@ -288,13 +288,14 @@ func precompile_0x05_pluggable(
     let exp = bytearray_extract(calldata, 96+baseLen, expLen);
     let mod = bytearray_extract(calldata, 96+baseLen+expLen, modLen);
 
-    if let Some(result) = biguint_modexp(
+    return xif let Some(result) = biguint_modexp(
         biguint_fromBytes(base),
         biguint_fromBytes(exp),
         biguint_fromBytes(mod),
     ) {
         let mem = biguint_toBytes(result);
         let memSize = bytearray_size(mem);
+
         if (memSize > modLen) {
             mem = bytearray_extract(mem, memSize-modLen, modLen);
         } elseif (memSize < modLen) {
@@ -306,10 +307,10 @@ func precompile_0x05_pluggable(
                 memSize
             );
         }
-        return ((true, mem), ());
+        ((true, mem), ())
     } else {
-        return ((true, bytearray_extract(bytearray_new(0), 0, modLen)), ());
-    }
+        ((true, bytearray_extract(bytearray_new(0), 0, modLen)), ())
+    };
 }
 
 public impure func precompile_0x06() {  // ecadd

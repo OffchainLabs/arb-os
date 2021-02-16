@@ -2,9 +2,6 @@
 // Copyright 2020, Offchain Labs, Inc. All rights reserved.
 //
 
-use contractTemplates::getErc20address;
-use contractTemplates::getErc721address;
-
 use std::bytearray::ByteArray;
 use std::bytearray::bytearray_new;
 use std::bytearray::bytearray_size;
@@ -58,16 +55,16 @@ public impure func getGlobalAccountStore() -> AccountStore {
 }
 
 public impure func setGlobalAccountStore(acctStore: AccountStore) {
-    globalAccountStore = acctStore;;
+    globalAccountStore = acctStore;
 }
 
 public func accountStore_get(acctStore: AccountStore, addr: address) -> Account {
-    if let Some(acct) = acctStore[addr] {
-        return acct;
+    return xif let Some(acct) = acctStore[addr] {
+        acct
     } else {
         // There is no recorded account at this address, so make a pristine account.
-        return pristineAccount(addr);
-    }
+        pristineAccount(addr)
+    };
 }
 
 public func pristineAccount(addr: address) -> Account {
@@ -119,11 +116,11 @@ public func account_checkAndIncrSeqNum(
     // if seqNumRecvd has the expected value, increment seqNum in account and return updated account.
     // else return None
     let nextSeq = account.nextSeqNum;
-    if (nextSeq == seqNumRecvd) {
-        return Some(account with { nextSeqNum: nextSeq+1 });
+    return xif (nextSeq == seqNumRecvd) {
+        Some(account with { nextSeqNum: nextSeq+1 })
     } else {
-        return None;
-    }
+        None<Account>
+    };
 }
 
 public func account_getAddress(account: Account) -> address {
@@ -202,8 +199,8 @@ public func accountStore_createAccountFromEvmCode(
     // Create a new account for a compiled EVM contract.
     // Returns Some(updatedAccountStore), or None if something went wrong.
     let oldAcct = accountStore_get(store, newAddr);
-    if ( ! account_hasContract(oldAcct)) {
-        return Some(accountStore_set(
+    return xif ( ! account_hasContract(oldAcct)) {
+        Some(accountStore_set(
             store,
             newAddr,
             oldAcct with {
@@ -216,11 +213,11 @@ public func accountStore_createAccountFromEvmCode(
                     storage: storageMap,
                 })
             }
-        ));
+        ))
     } else {
         // There was already an account at that address, so return failure.
-        return None;
-    }
+        None<AccountStore>
+    };
 }
 
 public func accountStore_createBuiltinContract(
@@ -230,7 +227,7 @@ public func accountStore_createBuiltinContract(
     isArbitrumStyle: bool,
 ) -> option<AccountStore> {
     let oldAcct = accountStore_get(acctStore, addr);
-    if (account_isEmpty(oldAcct)) {
+    return xif (account_isEmpty(oldAcct)) {
         // set up fake code for the contract
         // if Arbitrum style, must give it nonzero size because callers check if size is zero to see if contract exists
         // otherwise it's an Ethereum precompile which is specified to have null bytearray as its code
@@ -240,7 +237,7 @@ public func accountStore_createBuiltinContract(
             fakeCode = bytearray_setByte(fakeCode, 0, 0xfe);
         }
 
-        return Some(
+        Some(
             accountStore_set(
                 acctStore,
                 addr,
@@ -255,51 +252,11 @@ public func accountStore_createBuiltinContract(
                     nextSeqNum: 1
                 }
             )
-        );
+        )
     } else {
         // There was already an account at that address, so return failure.
-        return None;
-    }
-}
-
-public func accountStore_createERC20(
-    acctStore: AccountStore, 
-    addr: address
-) -> option<AccountStore> {
-    // Create a new ERC20 proxy contract at the given address.
-    // Return Some(updatedAccountStore), or None if something went wrong.
-    if (account_isEmpty(accountStore_get(acctStore, addr))) {
-        acctStore = accountStore_cloneContract(
-            acctStore, 
-            getErc20address(),
-            addr,
-            true,
-        )?;
-        return Some(acctStore);
-    } else {
-        // There was already an account at that address, so return failure.
-        return None;
-    }
-}
-
-public func accountStore_createERC721(
-    acctStore: AccountStore,
-    addr: address
-) -> option<AccountStore> {
-    // Create a new ERC721 proxy contract at the given address.
-    // Return Some(updatedAccountStore), or None if something went wrong.
-    if (account_isEmpty(accountStore_get(acctStore, addr))) {
-        acctStore = accountStore_cloneContract(
-            acctStore,
-            getErc721address(),
-            addr,
-            true,
-        )?;
-        return Some(acctStore);
-    } else {
-        // There was already an account at that address, so return failure.
-        return None;
-    }
+        None<AccountStore>
+    };
 }
 
 public func accountStore_cloneContract(
@@ -336,13 +293,13 @@ public func account_addToEthBalance(account: Account, addition: uint) -> Account
 }
 
 public func account_deductFromEthBalance(account: Account, deduction: uint) -> option<Account> {
-    if (account.ethBalance >= deduction) {
-        return Some(
+    return xif (account.ethBalance >= deduction) {
+        Some(
             account with { ethBalance: account.ethBalance-deduction }
-        );
+        )
     } else {
-        return None;
-    }
+        None<Account>
+    };
 }
 
 public func accountStore_transferEthBalance(
@@ -361,11 +318,16 @@ public func accountStore_transferEthBalance(
     if (fromAcct.ethBalance < amount) {
         return None;
     }
-    let toAcct = accountStore_get(acctStore, to);
-    acctStore = acctStore 
-        with { [from] = fromAcct with { ethBalance: fromAcct.ethBalance - amount }}
-        with { [to] = toAcct with { ethBalance: toAcct.ethBalance + amount }};
-    return Some(acctStore);
+    return Some(
+        xif(to == from) {
+            acctStore
+        } else {
+            let toAcct = accountStore_get(acctStore, to);
+            acctStore
+                with { [from] = fromAcct with { ethBalance: fromAcct.ethBalance - amount }}
+                with { [to] = toAcct with { ethBalance: toAcct.ethBalance + amount }}
+        }
+    );
 }
 
 public func account_getAllStorage(account: Account) -> option<StorageMap> {
@@ -423,11 +385,11 @@ public func account_setContractInfo(
 }
 
 public func account_getCodeSize(acct: Account) -> uint {
-    if let Some(contractInfo) = acct.contractInfo {
-        return bytearray_size(contractInfo.code);
+    return xif let Some(contractInfo) = acct.contractInfo {
+        bytearray_size(contractInfo.code)
     } else {
-        return 0;  // Account has no code, so its codesize is deemed to be zero.
-    }
+        0  // Account has no code, so its codesize is deemed to be zero.
+    };
 }
 
 public func account_getCode(acct: Account) -> option<ByteArray> {

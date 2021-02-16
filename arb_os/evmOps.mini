@@ -70,7 +70,7 @@ use std::bytearray::bytearray_get256;
 use std::bytearray::bytearray_set256;
 use std::bytearray::bytearray_extract;
 use std::bytearray::bytearray_copy;
-use std::bytearray::bytearray_marshalFull;
+use std::bytearray::bytearray_toSizeAndBuffer;
 use std::bytestream::bytestream_new;
 
 use std::stack::stack_pop;
@@ -172,25 +172,25 @@ public impure func evmOp_address() -> address {
 
 public impure func evmOp_balance(addrAsUint: uint) -> uint {
     let addr = address(addrAsUint);  // truncates if necessary
-    if let Some(topFrame) = evmCallStack_topFrame() {
-        return account_getBalance(
+    return xif let Some(topFrame) = evmCallStack_topFrame() {
+        account_getBalance(
             evmCallFrame_getAccount(topFrame, addr)
-        );
+        )
     } else {
         evm_runtimePanic(1);
-        return 0;
-    }
+        0
+    };
 }
 
 public impure func evmOp_selfbalance() -> uint {
-    if let Some(topFrame) = evmCallStack_topFrame() {
-        return account_getBalance(
+    return xif let Some(topFrame) = evmCallStack_topFrame() {
+        account_getBalance(
             evmCallFrame_runningAsAccount(topFrame)
-        );
+        )
     } else {
         evm_runtimePanic(2);
-        return 0;
-    }
+        0
+    };
 }
     
 public impure func evmOp_origin() -> address {
@@ -212,12 +212,12 @@ public impure func evmOp_caller() -> address {
 }
 
 public impure func evmOp_callvalue() -> uint {
-    if let Some(topFrame) = evmCallStack_topFrame() {
-        return evmCallFrame_getCallvalue(topFrame);
+    return xif let Some(topFrame) = evmCallStack_topFrame() {
+        evmCallFrame_getCallvalue(topFrame)
     } else {
         evm_runtimePanic(5);
-        return 0;
-    }
+        0
+    };
 }
 
 public impure func evmOp_calldataload(offset: uint) -> uint {
@@ -230,12 +230,12 @@ public impure func evmOp_calldataload(offset: uint) -> uint {
 }
 
 public impure func evmOp_calldatasize() -> uint {
-    if let Some(topFrame) = evmCallStack_topFrame() {
-        return bytearray_size(evmCallFrame_getCalldata(topFrame));
+    return xif let Some(topFrame) = evmCallStack_topFrame() {
+        bytearray_size(evmCallFrame_getCalldata(topFrame))
     } else {
         evm_runtimePanic(7);
-        return 0;
-    }
+        0
+    };
 }
 
 public impure func evmOp_calldatacopy(memAddr: uint, calldataOffset: uint, nbytes: uint) {
@@ -256,14 +256,14 @@ public impure func evmOp_calldatacopy(memAddr: uint, calldataOffset: uint, nbyte
 }
 
 public impure func evmOp_codesize() -> uint {
-    if let Some(topFrame) = evmCallStack_topFrame() {
-        return account_getCodeSize(
+    return xif let Some(topFrame) = evmCallStack_topFrame() {
+        account_getCodeSize(
             evmCallFrame_runningCodeFromAccount(topFrame)
-        );
+        )
     } else {
         evm_runtimePanic(9);
-        return 0;
-    }
+        0
+    };
 }
 
 public impure func evmOp_codecopy(memAddr: uint, codeOffset: uint, nbytes: uint) {
@@ -508,16 +508,16 @@ public impure func evmOp_getjumpaddr(evm_pc: uint) -> impure func() {
 
     evm_runtimePanic(21);
     evmCallStack_callHitError(12);
-    panic;
+    return panic;
 }
 
 public impure func evmOp_msize() -> uint {
-    if let Some(topFrame) = evmCallStack_topFrame() {
-        return 32*((bytearray_size(evmCallFrame_getMemory(topFrame))+31)/32);
+    return xif let Some(topFrame) = evmCallStack_topFrame() {
+        32*((bytearray_size(evmCallFrame_getMemory(topFrame))+31)/32)
     } else {
         evm_runtimePanic(22);
-        return 0;
-    }
+        0
+    };
 }
 
 public impure func evmOp_log0(
@@ -536,7 +536,7 @@ public impure func evmOp_log0(
         if (evmCallStack_addEvmLogToCurrent(
             (
                 address(0),  // addEvmLogToCurrent will fill this in
-                bytearray_marshalFull(data),
+                bytearray_toSizeAndBuffer(data),
             )
         ) == Some(()) ) {
             return;
@@ -564,7 +564,7 @@ public impure func evmOp_log1(
         if (evmCallStack_addEvmLogToCurrent(
             (
                 address(0),  // addEvmLogToCurrent will fill this in
-                bytearray_marshalFull(data),
+                bytearray_toSizeAndBuffer(data),
                 topic0,
             )
         ) == Some(()) ) {
@@ -594,7 +594,7 @@ public impure func evmOp_log2(
         if (evmCallStack_addEvmLogToCurrent(
             (
                 address(0),  // addEvmLogToCurrent will fill this in
-                bytearray_marshalFull(data),
+                bytearray_toSizeAndBuffer(data),
                 topic0,
                 topic1,
             )
@@ -626,7 +626,7 @@ public impure func evmOp_log3(
         if (evmCallStack_addEvmLogToCurrent(
             (
                 address(0),  // addEvmLogToCurrent will fill this in
-                bytearray_marshalFull(data),
+                bytearray_toSizeAndBuffer(data),
                 topic0,
                 topic1,
                 topic2,
@@ -660,7 +660,7 @@ public impure func evmOp_log4(
         if (evmCallStack_addEvmLogToCurrent(
             (
                 address(0),  // addEvmLogToCurrent will fill this in
-                bytearray_marshalFull(data),
+                bytearray_toSizeAndBuffer(data),
                 topic0,
                 topic1,
                 topic2,
@@ -716,11 +716,11 @@ public impure func evmOp_callAndReturn(
         resumeCodePoint,
         Some(savedAuxStack),
     );
-    if let Some(success) = res {
-        return success;
+    return xif let Some(success) = res {
+        success
     } else {
-        return false;  // weird failure, best to return false
-    }
+        false  // weird failure, best to return false
+    };
 }
 
 public impure func evmOp_call(
@@ -771,11 +771,11 @@ public impure func evmOp_call(
         resumeCodePoint,
         None<Stack>,
     );
-    if let Some(success) = res {
-        return success;
+    return xif let Some(success) = res {
+        success
     } else {
-        return false;  // weird failure, best to return false
-    }
+        false  // weird failure, best to return false
+    };
 }
 
 public impure func evmOp_callcode(
@@ -811,11 +811,11 @@ public impure func evmOp_callcode(
         resumeCodePoint,
         None<Stack>,
     );
-    if let Some(success) = res {
-        return success;
+    return xif let Some(success) = res {
+        success
     } else {
-        return false;  // weird failure, best to return false
-    }
+        false  // weird failure, best to return false
+    };
 }
 
 public impure func evmOp_delegatecall(
@@ -850,11 +850,11 @@ public impure func evmOp_delegatecall(
          resumeCodePoint,
          None<Stack>,
      );
-    if let Some(success) = res {
-        return success;
+    return xif let Some(success) = res {
+        success
     } else {
-        return false;  // weird failure, best to return false
-    }
+        false  // weird failure, best to return false
+    };
 }
 
 public impure func evmOp_staticcall(
@@ -889,11 +889,11 @@ public impure func evmOp_staticcall(
         resumeCodePoint,
         None<Stack>,
     );
-    if let Some(success) = res {
-        return success;
+    return xif let Some(success) = res {
+        success
     } else {
-        return false;  // weird failure, best to return false
-    }
+        false  // weird failure, best to return false
+    };
 }
 
 public impure func evmOp_revert(memOffset: uint, memNbytes: uint) {
@@ -952,7 +952,7 @@ public impure func evmOp_create(value: uint, offset: uint, length: uint) -> addr
     }
 
     evm_runtimePanic(30);
-    panic;
+    return panic;
 }
 
 public impure func evmOp_create2(value: uint, offset: uint, length: uint, salt: uint) -> address {
@@ -980,7 +980,7 @@ public impure func evmOp_create2(value: uint, offset: uint, length: uint, salt: 
     }
 
     evm_runtimePanic(31);
-    panic;
+    return panic;
 }
 
 impure func doCreationOpcode(value: uint, offset: uint, length: uint, newAddress: address) -> address {

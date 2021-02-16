@@ -31,6 +31,7 @@ type ChainParams = struct {
     baseStake: uint,                 // base stake of a validator, in wei
     stakingToken: address,           // ERC-20 token used for staking; or zero if using ETH
     owner: address,                  // owner of the chain, who has admin privileges (or zero if there is no owner)
+    blocksPerSend: option<uint>,     // issue at most one send per this many blocks
 }
 
 var globalChainParams: option<ChainParams>;
@@ -52,6 +53,7 @@ public impure func chainParams_gotParamsMessage(sender: address, data: ByteArray
             baseStake: bytearray_get256(data, 3*32),
             stakingToken: address(bytearray_get256(data, 4*32)),
             owner: address(bytearray_get256(data, 5*32)),
+            blocksPerSend: None<uint>,
         });
 
         // now read and process initialization options
@@ -78,7 +80,7 @@ impure func doInitializationOption(stream: ByteStream) -> option<ByteStream> {
     stream = ustr;
     let (ustr, numPayloadBytes) = bytestream_get64(stream)?;
     stream = ustr;
-    if (optionId == 0) {   // option: sequencer
+    return xif (optionId == 0) {   // option: sequencer
         if (numPayloadBytes != 3*32) {
             // unexpected payload size; discard the payload and ignore this option
             return bytestream_skipBytes(stream, numPayloadBytes);
@@ -87,7 +89,7 @@ impure func doInitializationOption(stream: ByteStream) -> option<ByteStream> {
         let (ustr, delayBlocks) = bytestream_get256(ustr)?;
         let (ustr, delayTime) = bytestream_get256(ustr)?;
         inbox_changeSequencer(address(sequencerAddrAsUint), delayBlocks, delayTime);
-        return Some(ustr);
+        Some(ustr)
     } elseif (optionId == const::InitOption_setSecondsPerBlock) {
         if (numPayloadBytes != 32) {
             // unexpected payload size; discard the payload and ignore this option
@@ -95,7 +97,7 @@ impure func doInitializationOption(stream: ByteStream) -> option<ByteStream> {
         }
         let (ustr, secsPerBlock) = bytestream_get256(stream)?;
         globalChainParams = Some(globalChainParams? with { millisecondsPerBlock: 1000*secsPerBlock });
-        return Some(ustr);
+        Some(ustr)
     } elseif (optionId == const::InitOption_setChargingParams) {
         if (numPayloadBytes != 3*32) {
             // unexpected payload size; discard the payload and ignore this option
@@ -105,21 +107,21 @@ impure func doInitializationOption(stream: ByteStream) -> option<ByteStream> {
         let (ustr, storageCharge) = bytestream_get256(ustr)?;
         let (ustr, gasFeeRecipientAsUint) = bytestream_get256(ustr)?;
         gasAccounting_setFeeParams(baseGasPrice, storageCharge, address(gasFeeRecipientAsUint));
-        return Some(ustr);
+        Some(ustr)
     } else {
         // unrecognized option, discard it
-        return bytestream_skipBytes(stream, numPayloadBytes);
-    }
+        bytestream_skipBytes(stream, numPayloadBytes)
+    };
 }
 
 public impure func chainParams_chainAddress() -> address {
-    if let Some(params) = globalChainParams {
-        return params.chainAddress;
+    return xif let Some(params) = globalChainParams {
+        params.chainAddress
     } else {
         // If we get here, the chain never received its initialization message.
         evmCallStack_callHitError(20);
-        panic;
-    }
+        panic
+    };
 }
 
 public impure func chainParams_chainId() -> uint {
@@ -127,31 +129,56 @@ public impure func chainParams_chainId() -> uint {
 }
 
 public impure func chainParams_speedLimitPerBlock() -> uint {
-    if let Some(params) = globalChainParams {
-        return params.arbGasSpeedLimitPerBlock;
+    return xif let Some(params) = globalChainParams {
+        params.arbGasSpeedLimitPerBlock
     } else {
-        return const::DefaultSpeedLimitPerBlock;
-    }
+        const::DefaultSpeedLimitPerBlock
+    };
 }
 
 public impure func chainParams_baseStake() -> (address, uint) {
-    if let Some(params) = globalChainParams {
-        return (params.stakingToken, params.baseStake);
+    return xif let Some(params) = globalChainParams {
+        (params.stakingToken, params.baseStake)
     } else {
-        return (address(0), 0);
-    }
+        (address(0), 0)
+    };
 }
 
 public impure func chainParams_getOwner() -> option<address> {
-    if let Some(params) = globalChainParams {
-        return Some(params.owner);
+    return xif let Some(params) = globalChainParams {
+        Some(params.owner)
     } else {
-        return None;
-    }
+        None<address>
+    };
 }
 
 public impure func chainParams_setOwner(newOwner: address) {
     if let Some(params) = globalChainParams {
         globalChainParams = Some(params with { owner: newOwner });
     }
+}
+
+public impure func chainParams_getBlocksPerSend() -> uint {
+    return xif let Some(params) = globalChainParams {
+        xif let Some(bps) = params.blocksPerSend {
+            bps
+        } else {
+            params.gracePeriodBlocks / 3
+        }
+    } else {
+        const::DefaultBlocksPerSend
+    };
+}
+
+public impure func chainParams_setBlocksPerSend(bps: uint) -> option<()> {
+    let sbps = None<uint>;
+    if (bps != 0) {           // interpret interval=0 as a request for the default behavior
+        sbps = Some(bps);
+    }
+    globalChainParams = Some(
+        (globalChainParams?) with {
+            blocksPerSend: sbps
+        }
+    );
+    return Some(());
 }

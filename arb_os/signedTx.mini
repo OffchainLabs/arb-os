@@ -13,7 +13,6 @@ use std::bytearray::bytearray_get256;
 use std::bytearray::bytearray_setByte;
 use std::bytearray::bytearray_set256;
 use std::bytearray::bytearray_extract;
-use std::bytearray::bytearray_marshalFull;
 use std::bytearray::marshalledBytes_hash;
 use std::bytearray::bytearray_copy;
 
@@ -94,11 +93,11 @@ public impure func recoverSigner(tx: SignedTx) -> option<address> {
         rlpHashForSig,
     ) address { ecrecover };
 
-    if (signer == address(0)) {
-        return None;
+    return xif (signer == address(0)) {
+        None<address>
     } else {
-        return Some(signer);
-    }
+        Some(signer)
+    };
 }
 
 func signedTxToUnsignedBytes(tx: SignedTx) -> ByteArray {

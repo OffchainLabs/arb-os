@@ -15,7 +15,7 @@ use miniconstants::init_constant_table;
 use serde::{Deserialize, Serialize};
 use std::collections::hash_map::DefaultHasher;
 use std::collections::{BTreeMap, HashMap, HashSet};
-use std::fmt::Formatter;
+use std::fmt::{Display, Formatter};
 use std::fs::File;
 use std::hash::{Hash, Hasher};
 use std::io::{self, Read};
@@ -29,7 +29,6 @@ mod ast;
 mod codegen;
 pub mod miniconstants;
 mod source;
-mod symtable;
 mod typecheck;
 lalrpop_mod!(mini);
 
@@ -44,6 +43,7 @@ pub(crate) trait MiniProperties {
 ///Represents the contents of a source file after parsing.
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 struct Module {
+    //TODO: Remove this field
     ///The list of imported functions imported through the old import/export system
     imported_funcs: Vec<ImportedFunc>,
     ///List of functions defined locally within the source file
@@ -341,28 +341,22 @@ pub fn compile_from_folder(
     for (name, imports) in &import_map {
         for import in imports {
             let import_path = import.path.clone();
-            let (named_type, imp_func, imp_func_decl) =
-                if let Some(program) = programs.get_mut(&import_path) {
-                    //Looks up info from target program
-                    let index = program.string_table.get(import.name.clone());
-                    let named_type = program.named_types.get(&index).cloned();
-                    let imp_func = program.func_table.get(&index).cloned();
-                    let imp_func_decl = program
-                        .funcs
-                        .iter()
-                        .find(|func| func.name == index)
-                        .cloned();
-                    (named_type, imp_func, imp_func_decl)
-                } else {
-                    return Err(CompileError::new(
-                        format!(
-                            "Internal error: Can not find target file for import \"{}::{}\"",
-                            import.path.get(0).cloned().unwrap_or_else(String::new),
-                            import.name
-                        ),
-                        None,
-                    ));
-                };
+            let (named_type, imp_func) = if let Some(program) = programs.get_mut(&import_path) {
+                //Looks up info from target program
+                let index = program.string_table.get(import.name.clone());
+                let named_type = program.named_types.get(&index).cloned();
+                let imp_func = program.func_table.get(&index).cloned();
+                (named_type, imp_func)
+            } else {
+                return Err(CompileError::new(
+                    format!(
+                        "Internal error: Can not find target file for import \"{}::{}\"",
+                        import.path.get(0).cloned().unwrap_or_else(String::new),
+                        import.name
+                    ),
+                    None,
+                ));
+            };
             //Modifies origin program to include import
             let origin_program = programs.get_mut(name).ok_or_else(|| {
                 CompileError::new(
@@ -379,24 +373,10 @@ pub fn compile_from_folder(
                 origin_program.named_types.insert(index, named_type.clone());
             } else if let Some(imp_func) = imp_func {
                 origin_program.func_table.insert(index, imp_func.clone());
-                let imp_func_decl = imp_func_decl.ok_or(CompileError::new(
-                    format!(
-                        "Internal error: Imported function {} has no associated decl",
-                        origin_program.string_table.name_from_id(index)
-                    ),
-                    None,
-                ))?;
                 origin_program.imported_funcs.push(ImportedFunc::new(
                     origin_program.imported_funcs.len(),
                     index,
                     &origin_program.string_table,
-                    imp_func_decl
-                        .args
-                        .iter()
-                        .map(|arg| arg.tipe.clone())
-                        .collect(),
-                    imp_func_decl.ret_type,
-                    imp_func_decl.is_impure,
                 ));
             } else {
                 println!(
@@ -435,18 +415,16 @@ pub fn compile_from_folder(
     } in output
     {
         let mut checked_funcs = vec![];
-        let (exported_funcs, imported_funcs, global_vars, string_table) =
-            typecheck::typecheck_top_level_decls(
-                imported_funcs,
-                funcs,
-                named_types,
-                global_vars,
-                string_table,
-                hm,
-                &mut checked_funcs,
-                &type_tree,
-            )
-            .map_err(|res3| CompileError::new(res3.reason.to_string(), res3.location))?;
+        let (exported_funcs, global_vars, string_table) = typecheck::typecheck_top_level_decls(
+            funcs,
+            named_types,
+            global_vars,
+            string_table,
+            hm,
+            &mut checked_funcs,
+            &type_tree,
+        )
+        .map_err(|res3| CompileError::new(res3.reason.to_string(), res3.location))?;
         checked_funcs.iter().for_each(|func| {
             let detected_purity = func.is_pure();
             let declared_purity = func.properties.pure;
@@ -581,17 +559,15 @@ fn create_program_tree(
         let file_id = file_hasher.finish();
         file_name_chart.insert(file_id, path_display(&name));
         let mut string_table = StringTable::new();
-        let (imports, imported_funcs, funcs, named_types, global_vars, string_table, hm) =
-            typecheck::sort_top_level_decls(
-                &parse_from_source(source, file_id, &name, &mut string_table)?,
-                string_table,
-            );
+        let (imports, funcs, named_types, global_vars, hm) = typecheck::sort_top_level_decls(
+            &parse_from_source(source, file_id, &name, &mut string_table)?,
+        );
         paths.append(&mut imports.iter().map(|imp| imp.path.clone()).collect());
         import_map.insert(name.clone(), imports);
         programs.insert(
             name.clone(),
             Module::new(
-                imported_funcs,
+                vec![],
                 funcs,
                 named_types,
                 global_vars,
@@ -666,14 +642,9 @@ pub struct CompileError {
     pub location: Option<Location>,
 }
 
-impl std::fmt::Display for CompileError {
+impl Display for CompileError {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), std::fmt::Error> {
-        if let Some(loc) = self.location {
-            write!(f, "{},\n{}", self.description, loc)?;
-        } else {
-            write!(f, "{},\n No location", self.description)?;
-        }
-        Ok(())
+        write!(f, "{}", self.description)
     }
 }
 
