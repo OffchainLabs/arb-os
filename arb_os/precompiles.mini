@@ -381,7 +381,6 @@ public impure func precompile_0x08() { // ecpairing
             let offset = 0;
             while (numPts > 0) {
                 acc = (
-                    acc,
                     (
                         bytearray_get256(calldata, offset),
                         bytearray_get256(calldata, offset+32),
@@ -390,6 +389,7 @@ public impure func precompile_0x08() { // ecpairing
                         bytearray_get256(calldata, offset+5*32),
                         bytearray_get256(calldata, offset+4*32)
                     ),
+                    acc,
                 );
                 offset = offset + 6*32;
                 numPts = numPts - 1;
