@@ -3,7 +3,7 @@
  */
 
 use crate::compile::miniconstants::init_constant_table;
-use crate::evm::abi::FunctionTable;
+use crate::evm::abi::{FunctionTable, _ArbInfo};
 use crate::evm::abi::{ArbAddressTable, ArbBLS, ArbFunctionTable, ArbSys, ArbosTest, _ArbOwner};
 use crate::run::{load_from_file, RuntimeEnvironment};
 use crate::uint256::Uint256;
@@ -1924,6 +1924,54 @@ pub fn evm_direct_deploy_and_compressed_call_add(log_to: Option<&Path>, debug: b
     if let Some(path) = log_to {
         machine.runtime_env.recorder.to_file(path).unwrap();
     }
+}
+
+pub fn _evm_payment_to_self(log_to: Option<&Path>, debug: bool) -> Result<(), ethabi::Error> {
+    let rt_env = RuntimeEnvironment::new(Uint256::from_usize(1111), None);
+    let mut machine = load_from_file(Path::new("arb_os/arbos.mexe"), rt_env);
+    machine.start_at_zero();
+
+    let my_addr = Uint256::from_u64(1025);
+
+    machine.runtime_env.insert_eth_deposit_message(
+        my_addr.clone(),
+        my_addr.clone(),
+        Uint256::from_u64(20000),
+    );
+
+    let arbinfo = _ArbInfo::_new(false);
+    let balance = arbinfo._get_balance(&mut machine, &my_addr)?;
+    assert_eq!(balance, Uint256::from_u64(20000));
+
+    let tx_id = machine.runtime_env.insert_tx_message(
+        my_addr.clone(),
+        Uint256::from_u64(1000000000),
+        Uint256::zero(),
+        my_addr.clone(),
+        Uint256::from_u64(10000),
+        &vec![],
+        false,
+    );
+
+    let _ = if debug {
+        machine.debug(None)
+    } else {
+        machine.run(None)
+    };
+
+    let receipts = machine.runtime_env.get_all_receipt_logs();
+    let last_rcpt = receipts.len() - 1;
+    assert_eq!(receipts[last_rcpt].get_request_id(), tx_id);
+    assert!(receipts[last_rcpt].succeeded());
+
+    let new_balance = arbinfo._get_balance(&mut machine, &my_addr)?;
+    assert_eq!(new_balance, Uint256::from_u64(20000));
+
+    if let Some(path) = log_to {
+        machine.runtime_env.recorder.to_file(path).unwrap();
+    }
+
+    Ok(())
 }
 
 pub fn evm_payment_to_empty_address(log_to: Option<&Path>, debug: bool) {
