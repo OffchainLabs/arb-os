@@ -249,6 +249,43 @@ impl AbiForContract {
         ))
     }
 
+    pub fn _call_function_from_contract(
+        &self,
+        sender_addr: Uint256,
+        func_name: &str,
+        args: &[ethabi::Token],
+        machine: &mut Machine,
+        payment: Uint256,
+        debug: bool,
+    ) -> Result<(Vec<ArbosReceipt>, Vec<Vec<u8>>), ethabi::Error> {
+        let this_function = self.contract.function(func_name)?;
+        let calldata = this_function.encode_input(args).unwrap();
+
+        machine.runtime_env._insert_tx_message_from_contract(
+            sender_addr,
+            Uint256::from_usize(1_000_000_000_000),
+            Uint256::zero(),
+            self.address.clone(),
+            payment,
+            &calldata,
+            false,
+        );
+
+        let num_logs_before = machine.runtime_env.get_all_receipt_logs().len();
+        let num_sends_before = machine.runtime_env.get_all_sends().len();
+        let _arbgas_used = if debug {
+            machine.debug(None)
+        } else {
+            machine.run(None)
+        };
+        let logs = machine.runtime_env.get_all_receipt_logs();
+        let sends = machine.runtime_env.get_all_sends();
+        Ok((
+            logs[num_logs_before..].to_vec(),
+            sends[num_sends_before..].to_vec(),
+        ))
+    }
+
     pub fn _call_function_with_deposit(
         &self,
         sender_addr: Uint256,
