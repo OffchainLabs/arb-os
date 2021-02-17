@@ -55,7 +55,6 @@ var gasAccountingInfo: struct {
     reserve: uint,                // pool of funds available to pay validators
     owedToValidators: uint,       // wei owed for work done but not yet collected
     totalPaidToValidators: uint,  // total number of wei paid to validators over all time
-    specialDebts: SpecialDebts,   // other debts, e.g. to active validators
     currentGasPrice: uint,        // gas price for this block
     gasRemainingThisBlock: uint,  // amount of gas remaining for this block
     lastBlockNumSeen: uint,       // last L1 block number seen by this module
@@ -127,7 +126,6 @@ public impure func gasAccounting_init() {
         reserve: 0,
         owedToValidators: 0,
         totalPaidToValidators: 0,
-        specialDebts: specialDebts_new(),
         currentGasPrice: 0,
         gasRemainingThisBlock: 0,
         lastBlockNumSeen: 0,
@@ -491,12 +489,6 @@ public impure func getNextRequestFromCongestionAuction() -> (
         };
 
         // pay our debts
-        let (usd, amtPaid) = specialDebts_pay(gasAccountingInfo.specialDebts, gasAccountingInfo.reserve);
-        gasAccountingInfo = gasAccountingInfo with {
-            specialDebts: usd
-        } with {
-            reserve: gasAccountingInfo.reserve - amtPaid
-        };
         payOutFundsToValidators();
         if (gasAccountingInfo.reserve > 0) {
             // all debts are paid and funds remain in the reserve, so we can pay network fee
@@ -538,7 +530,7 @@ public impure func getNextRequestFromCongestionAuction() -> (
         }
 
         // determine cost recovery price (we update this only for blocks containing work, not every block)
-        let amountOwed = gasAccountingInfo.owedToValidators + gasAccountingInfo.specialDebts.totalDue;
+        let amountOwed = gasAccountingInfo.owedToValidators;
         let prevOwed = gasAccountingInfo.pricingState.previousAmountOwed;
         let costRecoveryPrice = int(gasAccountingInfo.pricingState.costRecoveryPrice);
         if (amountOwed == 0) {
@@ -808,82 +800,4 @@ func overheadTracker_advanceToBlock(ot: OverheadTracker, bnum: uint) -> (Overhea
     }
 
     return (ot, gas);
-}
-
-// Tracking of special debts. These are debts to parties other than the validators.
-
-type SpecialDebts = struct {
-    totalDue: uint,
-    toWhom: map<address, uint>,
-    totalPaidOut: uint,
-}
-
-func specialDebts_new() -> SpecialDebts {
-    return struct {
-        totalDue: 0,
-        toWhom: newmap<address, uint>,
-        totalPaidOut: 0,
-    };
-}
-
-func specialDebts_add(sd: SpecialDebts, payee: address, amount: uint) -> SpecialDebts {
-    let updatedDebt = amount;
-    if let Some(oldAmount) = sd.toWhom[payee] {
-        updatedDebt = updatedDebt + oldAmount;
-    }
-    return sd with {
-        totalDue: sd.totalDue + amount
-    } with {
-        toWhom: sd.toWhom with { [payee] = updatedDebt }
-    };
-}
-
-impure func specialDebts_pay(sd: SpecialDebts, fundsAvail: uint) -> (SpecialDebts, uint) {
-    // pay up to fundsAvail to parties who are owed
-    // return (updatedSpecialDebts, amountActuallyPaid)
-
-    let totalPaid = 0;
-    let num = fundsAvail;
-    let denom = sd.totalDue;
-    if (num > denom) {
-        num = denom;
-    }
-
-    let (usd, _, _) = unsafecast<(SpecialDebts, uint, uint)>(
-        builtin_kvsForall(unsafecast<Kvs>(sd.toWhom), sdp_closure, (sd, num, denom))
-    );
-
-    return (usd, usd.totalPaidOut-sd.totalPaidOut);
-}
-
-impure func sdp_closure(k: any, v: any, state: any) -> any {
-    let addr = unsafecast<address>(k);
-    let currentDebt = unsafecast<uint>(v);
-    let (sd, num, denom) = unsafecast<(SpecialDebts, uint, uint)>(state);
-
-    let amountToPay =  currentDebt * num / denom;
-    sd = sd with {
-        totalDue: sd.totalDue - amountToPay
-    } with {
-        toWhom: sd.toWhom with { [addr] = currentDebt - amountToPay }
-    } with {
-        totalPaidOut: sd.totalPaidOut + amountToPay
-    };
-
-    let globalAS = getGlobalAccountStore();
-    setGlobalAccountStore(
-        accountStore_set(
-            globalAS,
-            addr,
-            account_addToEthBalance(accountStore_get(globalAS, addr), amountToPay)
-        )
-    );
-
-    return (sd, num, denom);
-}
-
-public impure func recordSpecialDebt(payee: address, amount: uint) {
-    gasAccountingInfo = gasAccountingInfo with {
-        specialDebts: specialDebts_add(gasAccountingInfo.specialDebts, payee, amount)
-    };
 }

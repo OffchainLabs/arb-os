@@ -6,8 +6,6 @@ use accounts::getGlobalAccountStore;
 use accounts::setGlobalAccountStore;
 use accounts::accountStore_transferEthBalance;
 
-use gasAccounting::recordSpecialDebt;
-
 use pluggables::ModuleFunction;
 use pluggables::installPluggable;
 
@@ -38,7 +36,7 @@ public impure func rollupTracker_init() {
     }
 }
 
-public impure func rollupTracker_processEvent(
+public func rollupTracker_processEvent(
     msg: ByteArray,
     tracker: RollupTracker,
     neverBeenCalled: bool,
@@ -54,7 +52,7 @@ public impure func rollupTracker_processEvent(
     };
 }
 
-impure func processEventOrError(stream: ByteStream, tracker: RollupTracker) -> option<RollupTracker> {
+func processEventOrError(stream: ByteStream, tracker: RollupTracker) -> option<RollupTracker> {
     let (us, eventType) = bytestream_getByte(stream)?;
     stream = us;
 
