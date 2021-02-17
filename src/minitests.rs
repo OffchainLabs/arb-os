@@ -624,7 +624,7 @@ fn test_bls_registry() {
 
 #[test]
 fn test_rollup_tracker() {
-    crate::run::rolluptest::_test_rollup_tracker();
+    crate::run::rolluptest::_do_rollup_tracker_ops();
 }
 
 fn test_call_to_precompile5(

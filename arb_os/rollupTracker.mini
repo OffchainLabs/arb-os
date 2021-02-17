@@ -105,17 +105,12 @@ type RollupNode = struct {
     prev: option<uint>,
     heightL1: uint,
     deadlineL1: uint,
-    activeValidator: address,
-    perNodeCharge: uint,
-    validatorEquity: uint,
-    payment: uint,
 }
 
 type RollupTracker = struct {
     nodes: RollupSlidingWindow,
     latestConfirmed: uint,
     firstUnresolved: uint,
-    minimumPayment: uint,
 }
 
 func rollupTracker_initModule() -> RollupTracker {
@@ -124,16 +119,11 @@ func rollupTracker_initModule() -> RollupTracker {
         prev: None<uint>,
         heightL1: 0,
         deadlineL1: 1,
-        activeValidator: address(0),
-        perNodeCharge: const::Estimate_L1GasCostPerNode * const::Estimate_L1GasPrice,
-        validatorEquity: 0,
-        payment: 0,
     };
     return struct {
         nodes: rsw_new(genesisNode),
         latestConfirmed: 0,
         firstUnresolved: 1,
-        minimumPayment: genesisNode.perNodeCharge/10,
     };
 }
 
@@ -141,7 +131,7 @@ func rollupTracker_get(tracker: RollupTracker, heightL2: uint) -> option<RollupN
     return rsw_get(tracker.nodes, heightL2);
 }
 
-impure func rollupTracker_confirmNode(tracker: RollupTracker, heightL2: uint) -> option<RollupTracker> {
+func rollupTracker_confirmNode(tracker: RollupTracker, heightL2: uint) -> option<RollupTracker> {
     if (heightL2 != tracker.firstUnresolved) {    return None;    }
 
     let nodes = tracker.nodes;
@@ -160,8 +150,6 @@ impure func rollupTracker_confirmNode(tracker: RollupTracker, heightL2: uint) ->
     } with {
         nodes: nodes
     };
-
-    recordSpecialDebt(node.activeValidator, node.payment);
 
     return Some(tracker);
 }
@@ -187,20 +175,9 @@ func rollupTracker_newStake(
         return None;
     }
 
-    let prevNode = rsw_get(tracker.nodes, node.prev?)?;
-    if (staker != prevNode.activeValidator) {
-        return None;
-    }
+    let _ = rsw_get(tracker.nodes, node.prev?)?;
 
-    return Some(tracker with {
-        nodes: rsw_set(
-            tracker.nodes,
-            heightL2,
-            node with {
-                activeValidator: staker
-            },
-        )?
-    });
+    return Some(tracker);
 }
 
 func rollupTracker_addNode(
@@ -211,8 +188,7 @@ func rollupTracker_addNode(
     deadlineL1: uint,
     asserter: address,
 ) -> option<RollupTracker> {
-    let prevNode = rsw_get(tracker.nodes, prev)?;
-    let payment = (prevNode.validatorEquity + prevNode.perNodeCharge) / 20;
+    let _ = rsw_get(tracker.nodes, prev)?;
     return Some(tracker with {
         nodes: rsw_append(
             tracker.nodes,
@@ -221,49 +197,18 @@ func rollupTracker_addNode(
                 prev: Some(prev),
                 heightL1: heightL1,
                 deadlineL1: deadlineL1,
-                activeValidator: asserter,
-                perNodeCharge: prevNode.perNodeCharge * 11 / 10,
-                validatorEquity: prevNode.validatorEquity + prevNode.perNodeCharge - payment,
-                payment: payment,
             }
         )?
     });
 }
 
 // claiming a node means taking the active validator role from somebody else, with a reduced payment
-impure func rollupTracker_claimNode(
+func rollupTracker_claimNode(
     tracker: RollupTracker,
     heightL2: uint,
     claimer: address
 ) -> option<RollupTracker> {
-    let nodes = tracker.nodes;
-    let _ = rsw_verifyIsLeaf(nodes, heightL2)?;
-    let node = rsw_get(tracker.nodes, heightL2)?;
-    return xif (node.payment > tracker.minimumPayment) {
-        if (claimer != node.activeValidator) {
-            setGlobalAccountStore(
-                accountStore_transferEthBalance(
-                    getGlobalAccountStore(),
-                    claimer,
-                    node.activeValidator,
-                    node.validatorEquity
-                )?
-            );
-        }
-        Some(tracker with {
-            nodes: rsw_set(
-                tracker.nodes,
-                heightL2,
-                node with {
-                    activeValidator: claimer
-                } with {
-                    payment: (node.payment + tracker.minimumPayment) / 2
-                }
-            )?
-        })
-    } else {
-        None<RollupTracker>
-    };
+    return Some(tracker);
 }
 
 type RollupSlidingWindow = struct {
