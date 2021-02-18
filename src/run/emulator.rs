@@ -2027,7 +2027,7 @@ impl Machine {
                         for i in 0..8 {
                             res[i] = buf.read_byte(offset+i);
                         }
-                        println!("getting buffer offset {} value {:?}", offset, res);
+                        // println!("getting buffer offset {} value {:?}", offset, res);
                         self.stack.push_uint(Uint256::from_bytes(&res));
                         self.incr_pc();
                         Ok(true)
@@ -2065,7 +2065,7 @@ impl Machine {
                         let buf = self.stack.pop_buffer(&self.state)?;
                         let mut nbuf = buf;
                         let bytes = val.to_bytes_be();
-                        println!("setting buffer offset {} value {} bytes {:?}", offset, val, bytes);
+                        // println!("setting buffer offset {} value {} bytes {:?}", offset, val, bytes);
                         for i in 0..8 {
                             nbuf = nbuf.set_byte(offset+i, bytes[i+24]);
                         }
@@ -2073,7 +2073,7 @@ impl Machine {
                         for i in 0..8 {
                             res[i] = nbuf.read_byte(offset+i);
                         }
-                        println!("getting buffer offset {} value {:?}", offset, res);
+                        // println!("getting buffer offset {} value {:?}", offset, res);
                         self.stack.push(Value::copy_buffer(nbuf));
                         self.incr_pc();
                         Ok(true)

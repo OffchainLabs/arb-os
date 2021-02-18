@@ -325,19 +325,6 @@ pub fn needed_height(offset: usize) -> u8 {
     }
 }
 
-fn hash_full_buffer(buf: &[u8]) -> Uint256 {
-    if buf.len() == 0 {
-        return zero_hash(32);
-    }
-    if buf.len() == 32 {
-        return Uint256::from_bytes(buf).avm_hash();
-    }
-    let len = buf.len();
-    let h1 = hash_full_buffer(&buf[0..len / 2]);
-    let h2 = hash_full_buffer(&buf[len / 2..len]);
-    Uint256::avm_hash2(&h1, &h2)
-}
-
 fn hash_buf(buf: &[u8]) -> Packed {
     if buf.len() == 0 {
         return zero_packed(10);

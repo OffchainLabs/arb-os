@@ -1209,9 +1209,37 @@ fn inst_replace_labels(inst: Instruction, label_map: &HashMap<Label, Value>) -> 
     }
 }
 
+pub fn has_label(inst: &Instruction) -> bool {
+    match inst.opcode {
+        Opcode::Label(Label::Evm(_)) => true,
+        Opcode::Label(Label::WasmFunc(_)) => true,
+        _ => false,
+    }
+}
+
+pub fn has_immed(inst: &Instruction) -> bool {
+    match inst.immediate {
+        Some(_) => true,
+        None => false,
+    }
+}
+
+pub fn get_immed(inst: &Instruction) -> u64 {
+    match &inst.immediate {
+        Some(Value::Int(a)) => a.trim_to_u64(),
+        _ => 0,
+    }
+}
+
+pub fn get_inst(inst: &Instruction) -> u8 {
+    match inst.opcode {
+        Opcode::AVMOpcode(op) => op as u8,
+        _ => 0,
+    }
+}
 
 pub fn resolve_labels(arr: Vec<Instruction>) -> (Vec<Instruction>, Value) {
-    let mut labels = HashMap::new();
+        let mut labels = HashMap::new();
     let mut tab = vec![];
     for (idx, inst) in arr.iter().enumerate() {
         match inst.opcode {
@@ -1416,8 +1444,27 @@ pub fn load(fname: String, param: usize) -> Vec<Instruction> {
     init.push(simple_op(AVMOpcode::Rset));
     init.push(simple_op(AVMOpcode::Noop));
 
+    let mut op_buf = vec![];
+    let mut immed_buf = vec![];
+    let mut has_immed_buf = vec![];
+    let mut has_label_buf = vec![];
+    for inst in init.iter() {
+        op_buf.push(get_inst(inst));
+        if has_immed(inst) {
+            has_immed_buf.push(1u8)
+        } else {
+            has_immed_buf.push(0u8)
+        }
+        if has_label(inst) {
+            has_label_buf.push(1u8)
+        } else {
+            has_label_buf.push(0u8)
+        }
+        immed_buf.push(get_immed(inst));
+    }
+
     let (res, tab) = resolve_labels(init);
-    println!("Table {}", tab);
+    // println!("Table {}", tab);
     let res = clear_labels(res);
     let mut a = vec![];
     a.push(push_value(tab));
