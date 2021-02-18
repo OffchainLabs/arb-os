@@ -1175,6 +1175,27 @@ fn table_to_tuple(tab: &[usize], prefix: usize, shift: usize, level: usize) -> V
     return Value::new_tuple(v)
 }
 
+fn table_to_tuple2(tab: &[Value], prefix: usize, shift: usize, level: usize) -> Value {
+    if level == 0 {
+        let mut v = vec![];
+        for i in 0..8 {
+            let idx = prefix + (i << shift);
+            if idx < tab.len() {
+                v.push(tab[idx].clone()) 
+            } else {
+                v.push(int_from_usize(0)) 
+            }
+        }
+        return Value::new_tuple(v)
+    }
+    let mut v = vec![];
+    for i in 0..8 {
+        let prefix = prefix + (i << shift);
+        v.push(table_to_tuple2(tab, prefix, shift+3, level-1));
+    }
+    return Value::new_tuple(v)
+}
+
 fn value_replace_labels(v: Value, label_map: &HashMap<Label, Value>) -> Result<Value, Label> {
     match v {
         Value::Int(_) => Ok(v),
@@ -1241,8 +1262,12 @@ pub fn get_inst(inst: &Instruction) -> u8 {
     }
 }
 
+pub fn make_table(tab: &[Value]) -> Value {
+    table_to_tuple2(tab, 0, 0, LEVEL-1)
+} 
+
 pub fn resolve_labels(arr: Vec<Instruction>) -> (Vec<Instruction>, Value) {
-        let mut labels = HashMap::new();
+    let mut labels = HashMap::new();
     let mut tab = vec![];
     for (idx, inst) in arr.iter().enumerate() {
         match inst.opcode {
@@ -1299,9 +1324,6 @@ fn find_function(m : &Module, name : &str) -> Option<u32> {
     }
 }
 
-use std::fs::File;
-use std::io::Read;
-
 pub fn run_jit(buffer: &[u8], param: i64) -> i64 {
     use wasmtime::*;
     let engine = Engine::default();
@@ -1323,16 +1345,9 @@ pub fn run_jit(buffer: &[u8], param: i64) -> i64 {
     result
 }
 
-pub fn load(fname: String, param: usize) -> Vec<Instruction> {
+pub fn process_wasm(buffer: &[u8], param: usize) -> Vec<Instruction> {
 
-    let mut file = File::open(&fname).unwrap();
-    // read the same file back into a Vec of bytes
-    let mut buffer = Vec::<u8>::new();
-    file.read_to_end(&mut buffer).unwrap();
-
-    // run_jit(&buffer, param as i64);
-
-    let module = parity_wasm::deserialize_file(fname).unwrap();
+    let module = parity_wasm::deserialize_buffer::<Module>(buffer).unwrap();
     assert!(module.code_section().is_some());
 
     let code_section = module.code_section().unwrap(); // Part of the module with functions code
@@ -1447,6 +1462,11 @@ pub fn load(fname: String, param: usize) -> Vec<Instruction> {
     init.push(simple_op(AVMOpcode::Rset));
     init.push(simple_op(AVMOpcode::Noop));
 
+    init
+}
+
+pub fn load(buffer: &[u8], param: usize) -> Vec<Instruction> {
+    let init = process_wasm(buffer, param);
     let mut op_buf = vec![];
     let mut immed_buf = vec![];
     let mut has_immed_buf = vec![];

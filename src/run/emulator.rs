@@ -8,7 +8,7 @@ use super::runtime_env::RuntimeEnvironment;
 use crate::compile::{CompileError, DebugInfo};
 use crate::link::LinkedProgram;
 use crate::mavm::{AVMOpcode, Buffer, CodePt, Instruction, Opcode, Value};
-use crate::wasm::run_jit;
+use crate::wasm::{run_jit, process_wasm};
 use crate::pos::{try_display_location, Location};
 use crate::run::ripemd160port;
 use crate::uint256::Uint256;
@@ -106,6 +106,21 @@ impl ValueStack {
         } else {
             Err(ExecutionError::new(
                 "expected CodePoint on stack",
+                state,
+                Some(val),
+            ))
+        }
+    }
+
+    ///If the top `Value` on the stack is a wasm code point, pops the value and returns it as a `WasmCodePt`,
+    /// otherwise returns an `ExecutionError`.
+    pub fn pop_wasm_codepoint(&mut self, state: &MachineState) -> Result<(Value,Vec<u8>), ExecutionError> {
+        let val = self.pop(state)?;
+        if let Value::WasmCodePoint(cp, buf) = val {
+            Ok((*cp, buf))
+        } else {
+            Err(ExecutionError::new(
+                "expected WasmCodePoint on stack",
                 state,
                 Some(val),
             ))
@@ -2096,14 +2111,33 @@ impl Machine {
                     }
                     Opcode::AVMOpcode(AVMOpcode::RunWasm) => {
                         let arg = self.stack.pop_usize(&self.state)?;
+                        let (_, vec) = self.stack.pop_wasm_codepoint(&self.state)?;
+                        let res = run_jit(&vec, arg as i64) as usize;
+                        self.stack.push(Value::Int(Uint256::from_usize(res)));
+                        self.incr_pc();
+                        Ok(true)
+                    },
+                    Opcode::AVMOpcode(AVMOpcode::CompileWasm) => {
                         let offset = self.stack.pop_usize(&self.state)?;
                         let buf = self.stack.pop_buffer(&self.state)?;
                         let mut vec = vec![];
                         for i in 0..offset {
                             vec.push(buf.read_byte(i));
                         }
-                        let res = run_jit(&vec, arg as i64) as usize;
-                        self.stack.push(Value::Int(Uint256::from_usize(res)));
+                        let init = process_wasm(&vec, 0);
+                        let (code_vec, _) = crate::wasm::resolve_labels(init.clone());
+                        let mut labels = vec![];
+                        let mut code_pt = self.code.create_segment();
+                        for i in init.len()..0 {
+                            let op = code_vec[i].clone();
+                            code_pt = self.code.push_insn(crate::wasm::get_inst(&op) as usize, op.immediate, code_pt).unwrap();
+                            if crate::wasm::has_label(&init[i]) {
+                                labels.push(Value::CodePoint(code_pt))
+                            }
+                        }
+                        let tab = crate::wasm::make_table(&labels);
+                        let val = Value::new_tuple(vec![Value::CodePoint(code_pt), tab]);
+                        self.stack.push(Value::WasmCodePoint(Box::new(val), vec));
                         self.incr_pc();
                         Ok(true)
                     },

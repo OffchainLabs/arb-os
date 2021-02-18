@@ -17,6 +17,7 @@ use run::{
 use std::collections::BTreeMap;
 use std::fs::File;
 use std::io;
+use std::io::Read;
 use std::path::Path;
 use std::time::Instant;
 use uint256::Uint256;
@@ -142,7 +143,10 @@ fn main() -> Result<(), CompileError> {
                 Some(p) => p,
                 None => 123,
             };
-            let code = wasm::load(filenames[0].clone(), param);
+            let mut file = File::open(&filenames[0]).unwrap();
+            let mut buffer = Vec::<u8>::new();
+            file.read_to_end(&mut buffer).unwrap();
+            let code = wasm::load(&buffer, param);
             let code_len = code.len();
             let env = RuntimeEnvironment::new(Uint256::from_usize(1111), None);
             let program = LinkedProgram {
