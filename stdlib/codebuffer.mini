@@ -1,0 +1,97 @@
+
+// Convert from buffer to codepointer
+type AvmCodePoint = impure func()
+
+impure func pushInstruction(opcode: uint, restOfCode: AvmCodePoint) -> AvmCodePoint {
+    // Push an instruction onto the beginning of a code segment, and return the resulting CodePoint.
+    return asm(opcode, restOfCode) AvmCodePoint { pushinsn };
+}
+
+impure func pushInstructionImm(opcode: uint, val: any, restOfCode: AvmCodePoint) -> AvmCodePoint {
+    // Push an instruction (with immediate value) onto the beginning of a code segment, and return the resulting CodePoint.
+    return asm(opcode, val, restOfCode) AvmCodePoint { pushinsnimm };
+}
+
+type Table = (any,any,any,any,any,any,any,any)
+
+func makeEmpty(level: uint) -> Table {
+    if (level == 0) {
+        return (0,0,0,0,0,0,0,0);
+    } else {
+        let e1 = makeEmpty(level-1);
+        return (e1,e1,e1,e1,e1,e1,e1,e1);
+    }
+}
+
+func addTable(level: uint, table: Table, loc: uint, val: any) -> Table {
+    if (level == 0) {
+        let (a1,a2,a3,a4,a5,a6,a7,a8) = unsafecast<(any,any,any,any,any,any,any,any)>(table);
+        if (loc == 0) {
+            return (val,a2,a3,a4,a5,a6,a7,a8);
+        } elseif (loc == 1) {
+            return (a1,val,a3,a4,a5,a6,a7,a8);
+        } elseif (loc == 2) {
+            return (a1,a2,val,a4,a5,a6,a7,a8);
+        } elseif (loc == 3) {
+            return (a1,a2,a3,val,a5,a6,a7,a8);
+        } elseif (loc == 4) {
+            return (a1,a2,a3,a4,val,a6,a7,a8);
+        } elseif (loc == 5) {
+            return (a1,a2,a3,a4,a5,val,a7,a8);
+        } elseif (loc == 6) {
+            return (a1,a2,a3,a4,a5,a6,val,a8);
+        } else {
+            return (a1,a2,a3,a4,a5,a6,a7,val);
+        }
+    }
+    let (a1,a2,a3,a4,a5,a6,a7,a8) = unsafecast<(any,any,any,any,any,any,any,any)>(table);
+    if (loc%8 == 0) {
+        let t = addTable(level-1, unsafecast<Table>(a1), loc/8, val);
+        return (t,a2,a3,a4,a5,a6,a7,a8);
+    } elseif (loc%8 == 1) {
+        let t = addTable(level-1, unsafecast<Table>(a2), loc/8, val);
+        return (a1,t,a3,a4,a5,a6,a7,a8);
+    } elseif (loc%8 == 2) {
+        let t = addTable(level-1, unsafecast<Table>(a3), loc/8, val);
+        return (a1,a2,t,a4,a5,a6,a7,a8);
+    } elseif (loc%8 == 3) {
+        let t = addTable(level-1, unsafecast<Table>(a4), loc/8, val);
+        return (a1,a2,a3,t,a5,a6,a7,a8);
+    } elseif (loc%8 == 4) {
+        let t = addTable(level-1, unsafecast<Table>(a5), loc/8, val);
+        return (a1,a2,a3,a4,t,a6,a7,a8);
+    } elseif (loc%8 == 5) {
+        let t = addTable(level-1, unsafecast<Table>(a6), loc/8, val);
+        return (a1,a2,a3,a4,a5,t,a7,a8);
+    } elseif (loc%8 == 6) {
+        let t = addTable(level-1, unsafecast<Table>(a8), loc/8, val);
+        return (a1,a2,a3,a4,a5,a6,t,a8);
+    } else {
+        let t = addTable(level-1, unsafecast<Table>(a8), loc/8, val);
+        return (a1,a2,a3,a4,a5,a6,a7,t);
+    }
+}
+
+public impure func convert(ops: buffer, blen: uint, values: buffer, has_value: buffer, has_jump: buffer, num_jumps: uint) -> Table {
+    let acc = 0;
+    let code = asm() AvmCodePoint { errcodept };
+    let table = makeEmpty(5);
+    while (acc < blen) {
+        let idx = blen-acc-1;
+        let op = getbuffer8(ops, idx);
+        if (getbuffer8(has_value, idx) == 0) {
+            code = pushInstruction(op, code);
+        } else {
+            let v = getbuffer64(values, idx*8);
+            code = pushInstructionImm(op, v, code);
+        }
+        if (getbuffer8(has_jump, idx) == 1) {
+            table = addTable(5, table, num_jumps, code);
+            num_jumps = num_jumps-1;
+        }
+        acc = acc + 1;
+    }
+    table = addTable(5, table, 0, code);
+    return table;
+}
+
