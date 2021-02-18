@@ -1187,6 +1187,9 @@ fn value_replace_labels(v: Value, label_map: &HashMap<Label, Value>) -> Result<V
                 None => Err(label),
             }
         }
+        Value::WasmCodePoint(val, code) => {
+            Ok(Value::WasmCodePoint(Box::new(value_replace_labels(*val, label_map)?), code.clone()))
+        }
         Value::Tuple(tup) => {
             let mut new_vec = Vec::new();
             for v in tup.iter() {

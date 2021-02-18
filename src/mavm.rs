@@ -624,6 +624,7 @@ pub enum Value {
     CodePoint(CodePt),
     Label(Label),
     Buffer(Buffer),
+    WasmCodePoint(Box<Value>, Vec<u8>),
 }
 
 impl Value {
@@ -651,6 +652,7 @@ impl Value {
             Value::CodePoint(_) => 1,
             Value::Tuple(_) => 3,
             Value::Buffer(_) => 4,
+            Value::WasmCodePoint(_,_) => 5,
             Value::Label(_) => {
                 panic!("tried to run type instruction on a label");
             }
@@ -668,6 +670,9 @@ impl Value {
                     Some(pc) => Ok(Value::CodePoint(*pc)),
                     None => Err(label),
                 }
+            }
+            Value::WasmCodePoint(v, code) => {
+                Ok(Value::WasmCodePoint(Box::new(v.replace_labels(label_map)?), code.clone()))
             }
             Value::Tuple(tup) => {
                 let mut new_vec = Vec::new();
@@ -703,6 +708,10 @@ impl Value {
                 (Value::new_tuple(rel_v), max_func_offset)
             }
             Value::CodePoint(cpt) => (Value::CodePoint(cpt.relocate(int_offset, ext_offset)), 0),
+            Value::WasmCodePoint(v, code) => {
+                let (new_val, new_func_offset) = v.relocate(int_offset, ext_offset, func_offset);
+                (Value::WasmCodePoint(Box::new(new_val), code.clone()), new_func_offset)
+            }
             Value::Label(label) => {
                 let (new_label, new_func_offset) =
                     label.relocate(int_offset, ext_offset, func_offset);
@@ -720,6 +729,10 @@ impl Value {
                     newv.push(val.clone().xlate_labels(label_map));
                 }
                 Value::new_tuple(newv)
+            }
+            Value::WasmCodePoint(v, code) => {
+                let new_val = v.clone().xlate_labels(label_map);
+                Value::WasmCodePoint(Box::new(new_val), code.clone())
             }
             Value::Label(label) => match label_map.get(&label) {
                 Some(label2) => Value::Label(**label2),
@@ -753,6 +766,7 @@ impl Value {
                 Value::Int(acc)
             }
             Value::CodePoint(cp) => Value::avm_hash2(&Value::Int(Uint256::one()), &cp.avm_hash()),
+            Value::WasmCodePoint(v, _) => Value::avm_hash2(&Value::Int(Uint256::from_usize(3)), &v.avm_hash()),
             Value::Label(label) => {
                 Value::avm_hash2(&Value::Int(Uint256::from_usize(2)), &label.avm_hash())
             }
@@ -784,6 +798,7 @@ impl fmt::Display for Value {
                 BufferElem::Sparse(vec1, _, _) => write!(f, "Buffer(Sparse({}))", vec1.len()),
             },
             Value::CodePoint(pc) => write!(f, "CodePoint({})", pc),
+            Value::WasmCodePoint(v,_) => write!(f, "WasmCodePoint({})", v),
             Value::Label(label) => write!(f, "Label({})", label),
             Value::Tuple(tup) => {
                 if tup.is_empty() {
