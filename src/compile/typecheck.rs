@@ -2187,8 +2187,30 @@ fn typecheck_unary_op(
             }
         }
         UnaryOp::ToAddress => {
-            if let TypeCheckedExprKind::Const(val, _) = sub_expr.kind {
-                Ok(TypeCheckedExprKind::Const(val, Type::EthAddress))
+            if let TypeCheckedExprKind::Const(val, tipe) = sub_expr.kind {
+                if let Value::Int(inner) = val {
+                    Ok(TypeCheckedExprKind::Const(
+                        Value::Int(
+                            inner
+                                .modulo(
+                                    &Uint256::from_string_hex(
+                                        "1__0000_0000__0000_0000__0000_0000__0000_0000__0000_0000",
+                                    )
+                                    .unwrap(),
+                                )
+                                .unwrap(),
+                        ),
+                        Type::EthAddress,
+                    ))
+                } else {
+                    Err(new_type_error(
+                        format!(
+                            "Invalid type \"{}\" for constant address cast",
+                            tipe.display()
+                        ),
+                        loc,
+                    ))
+                }
             } else {
                 match tc_type {
                     Type::Uint | Type::Int | Type::Bytes32 | Type::EthAddress | Type::Bool => {
@@ -2199,7 +2221,10 @@ fn typecheck_unary_op(
                         ))
                     }
                     other => Err(new_type_error(
-                        format!("invalid operand type \"{}\" for bytes32()", other.display()),
+                        format!(
+                            "invalid operand type \"{}\" for address cast",
+                            other.display()
+                        ),
                         loc,
                     )),
                 }
