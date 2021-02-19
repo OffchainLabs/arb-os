@@ -2,7 +2,7 @@
  * Copyright 2020, Offchain Labs, Inc. All rights reserved.
  */
 
-use crate::compile::{DebugInfo, MiniProperties};
+use crate::compile::DebugInfo;
 use crate::stringtable::StringId;
 use crate::uint256::Uint256;
 use ethers_core::utils::keccak256;
@@ -89,6 +89,7 @@ impl LabelGenerator {
 pub struct Instruction<T = Opcode> {
     pub opcode: T,
     pub immediate: Option<Value>,
+    #[serde(default)]
     pub debug_info: DebugInfo,
 }
 
@@ -104,12 +105,6 @@ impl From<Instruction<AVMOpcode>> for Instruction {
             immediate,
             debug_info,
         }
-    }
-}
-
-impl MiniProperties for Instruction {
-    fn is_pure(&self) -> bool {
-        self.opcode.is_pure()
     }
 }
 
@@ -154,6 +149,9 @@ impl<T> Instruction<T> {
 }
 
 impl Instruction {
+    pub fn is_pure(&self) -> bool {
+        self.opcode.is_pure()
+    }
     pub fn get_label(&self) -> Option<&Label> {
         match &self.opcode {
             Opcode::Label(label) => Some(label),
@@ -927,8 +925,8 @@ pub enum AVMOpcode {
     SetBuffer256,
 }
 
-impl MiniProperties for Opcode {
-    fn is_pure(&self) -> bool {
+impl Opcode {
+    pub fn is_pure(&self) -> bool {
         match self {
             Opcode::AVMOpcode(AVMOpcode::Log)
             | Opcode::AVMOpcode(AVMOpcode::Inbox)
