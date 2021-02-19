@@ -2134,8 +2134,8 @@ fn typecheck_unary_op(
             )),
         },
         UnaryOp::ToUint => {
-            if let TypeCheckedExprKind::Const(val, _) = sub_expr.kind {
-                Ok(TypeCheckedExprKind::Const(val, Type::Uint))
+            if let TypeCheckedExprKind::Const(Value::Int(val), _) = sub_expr.kind {
+                Ok(TypeCheckedExprKind::Const(Value::Int(val), Type::Uint))
             } else {
                 match tc_type {
                     Type::Uint | Type::Int | Type::Bytes32 | Type::EthAddress | Type::Bool => {
@@ -2153,8 +2153,8 @@ fn typecheck_unary_op(
             }
         }
         UnaryOp::ToInt => {
-            if let TypeCheckedExprKind::Const(val, _) = sub_expr.kind {
-                Ok(TypeCheckedExprKind::Const(val, Type::Int))
+            if let TypeCheckedExprKind::Const(Value::Int(val), _) = sub_expr.kind {
+                Ok(TypeCheckedExprKind::Const(Value::Int(val), Type::Int))
             } else {
                 match tc_type {
                     Type::Uint | Type::Int | Type::Bytes32 | Type::EthAddress | Type::Bool => Ok(
@@ -2168,8 +2168,8 @@ fn typecheck_unary_op(
             }
         }
         UnaryOp::ToBytes32 => {
-            if let TypeCheckedExprKind::Const(val, _) = sub_expr.kind {
-                Ok(TypeCheckedExprKind::Const(val, Type::Bytes32))
+            if let TypeCheckedExprKind::Const(Value::Int(val), _) = sub_expr.kind {
+                Ok(TypeCheckedExprKind::Const(Value::Int(val), Type::Bytes32))
             } else {
                 match tc_type {
                     Type::Uint | Type::Int | Type::Bytes32 | Type::EthAddress | Type::Bool => {
@@ -2187,30 +2187,19 @@ fn typecheck_unary_op(
             }
         }
         UnaryOp::ToAddress => {
-            if let TypeCheckedExprKind::Const(val, tipe) = sub_expr.kind {
-                if let Value::Int(inner) = val {
-                    Ok(TypeCheckedExprKind::Const(
-                        Value::Int(
-                            inner
-                                .modulo(
-                                    &Uint256::from_string_hex(
-                                        "1__0000_0000__0000_0000__0000_0000__0000_0000__0000_0000",
-                                    )
-                                    .unwrap(),
-                                )
-                                .unwrap(),
-                        ),
-                        Type::EthAddress,
-                    ))
-                } else {
-                    Err(new_type_error(
-                        format!(
-                            "Invalid type \"{}\" for constant address cast",
-                            tipe.display()
-                        ),
-                        loc,
-                    ))
-                }
+            if let TypeCheckedExprKind::Const(Value::Int(val), _) = sub_expr.kind {
+                Ok(TypeCheckedExprKind::Const(
+                    Value::Int(
+                        val.modulo(
+                            &Uint256::from_string_hex(
+                                "1__0000_0000__0000_0000__0000_0000__0000_0000__0000_0000",
+                            ) //2^40, 1+max address
+                            .unwrap(), //safe because we know this str is valid
+                        )
+                        .unwrap(), //safe because we know this str isn't 0
+                    ),
+                    Type::EthAddress,
+                ))
             } else {
                 match tc_type {
                     Type::Uint | Type::Int | Type::Bytes32 | Type::EthAddress | Type::Bool => {
