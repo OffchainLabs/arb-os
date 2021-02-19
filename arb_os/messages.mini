@@ -59,7 +59,7 @@ public impure func handleL1Request(
     // Parse an incoming message and do appropriate computations
     let inStream = bytestream_new(msg.msgData);
 
-    if (msg.kind == const::L1MessageType_ethDeposit) {
+    return xif (msg.kind == const::L1MessageType_ethDeposit) {
         // ethdeposit message
         let (bs, destination) = bytestream_get256(inStream)?;
         inStream = bs;
@@ -77,12 +77,12 @@ public impure func handleL1Request(
                 destAccount
             )
         );
-        return Some(());
+        Some(())
     } else {
         // not a valid message type
         // (This should not have been called if msg.kind == const::L1MessageType_L2.)
-        return None;
-    }
+        None<()>
+    };
 }
 
 impure func verifyAndIncrSequenceNum(addr: address, seqNum: uint) -> option<()> {
@@ -205,5 +205,5 @@ public impure func handleL2Request(
         initEvmCallStack(callKind, request, None<ByteArray>);  // should never return
     }
 
-    panic;   // this should never be reached
+    return panic;   // this should never be reached
 }

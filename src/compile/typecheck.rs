@@ -5,11 +5,11 @@
 //!Converts non-type checked ast nodes to type checked versions, and other related utilities.
 
 use super::ast::{
-    BinaryOp, Constant, Expr, FuncArg, FuncDecl, FuncDeclKind, GlobalVarDecl, IfArm, MatchPattern,
-    Statement, StatementKind, StructField, TopLevelDecl, TrinaryOp, Type, UnaryOp,
+    BinaryOp, CodeBlock, Constant, DebugInfo, Expr, ExprKind, FuncArg, FuncDecl, FuncDeclKind,
+    GlobalVarDecl, MatchPattern, Statement, StatementKind, StructField, TopLevelDecl, TrinaryOp,
+    Type, TypeTree, UnaryOp,
 };
 use super::MiniProperties;
-use crate::compile::ast::{DebugInfo, ExprKind, TypeTree};
 use crate::link::{ExportedFunc, Import, ImportedFunc};
 use crate::mavm::{Instruction, Label, Value};
 use crate::pos::Location;
@@ -17,7 +17,7 @@ use crate::stringtable::{StringId, StringTable};
 use crate::uint256::Uint256;
 use std::collections::{HashMap, HashSet};
 
-type TypeTable<'a> = HashMap<usize, &'a Type>;
+type TypeTable = HashMap<usize, Type>;
 
 ///Trait for all nodes in the AST, currently only implemented for type checked versions.
 pub trait AbstractSyntaxTree {
@@ -49,7 +49,6 @@ pub trait AbstractSyntaxTree {
 pub enum TypeCheckedNode<'a> {
     Statement(&'a mut TypeCheckedStatement),
     Expression(&'a mut TypeCheckedExpr),
-    IfArm(&'a mut TypeCheckedIfArm),
     StructField(&'a mut TypeCheckedStructField),
 }
 
@@ -58,7 +57,6 @@ impl<'a> AbstractSyntaxTree for TypeCheckedNode<'a> {
         match self {
             TypeCheckedNode::Statement(stat) => stat.child_nodes(),
             TypeCheckedNode::Expression(exp) => exp.child_nodes(),
-            TypeCheckedNode::IfArm(arm) => arm.child_nodes(),
             TypeCheckedNode::StructField(field) => field.child_nodes(),
         }
     }
@@ -80,7 +78,7 @@ pub fn new_type_error(msg: String, location: Option<Location>) -> TypeError {
 
 ///Keeps track of compiler enforced properties, currently only tracks purity, may be extended to
 /// keep track of potential to throw or other properties.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Eq, PartialEq)]
 pub struct PropertiesList {
     pub pure: bool,
 }
@@ -140,7 +138,7 @@ fn inline(
         } = exp
         {
             let (code, block_exp) = if let TypeCheckedExpr {
-                kind: TypeCheckedExprKind::FuncRef(id, ref func_ref_type),
+                kind: TypeCheckedExprKind::FuncRef(id, _),
                 debug_info: _,
             } = **name
             {
@@ -167,33 +165,6 @@ fn inline(
                             kind: TypeCheckedStatementKind::Return(exp),
                             debug_info: _,
                         }) => Some(Box::new(exp)),
-                        Some(TypeCheckedStatement {
-                            kind: TypeCheckedStatementKind::If(_),
-                            debug_info,
-                        })
-                        | Some(TypeCheckedStatement {
-                            kind: TypeCheckedStatementKind::IfLet(_, _, _, _),
-                            debug_info,
-                        }) => {
-                            if let Some(statement) = last {
-                                code.push(statement);
-                            }
-                            Some(Box::new(TypeCheckedExpr {
-                                kind: TypeCheckedExprKind::Const(
-                                    if let Type::Func(_, _, ret) = func_ref_type {
-                                        ret.default_value().0
-                                    } else {
-                                        panic!()
-                                    },
-                                    if let Type::Func(_, _, ret) = func_ref_type {
-                                        *ret.clone()
-                                    } else {
-                                        panic!()
-                                    },
-                                ),
-                                debug_info,
-                            }))
-                        }
                         _ => {
                             if let Some(statement) = last {
                                 code.push(statement);
@@ -212,8 +183,11 @@ fn inline(
                 for statement in code.iter_mut().rev() {
                     statement.recursive_apply(strip_returns, &(), &mut ())
                 }
-                exp.kind =
-                    TypeCheckedExprKind::CodeBlock(code, block_exp, Some("_inline".to_string()));
+                exp.kind = TypeCheckedExprKind::CodeBlock(TypeCheckedCodeBlock::new(
+                    code,
+                    block_exp,
+                    Some("_inline".to_string()),
+                ));
             }
             false
         } else {
@@ -236,17 +210,16 @@ impl TypeCheckedFunc {
 }
 
 ///A mini statement that has been type checked.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Eq, PartialEq)]
 pub struct TypeCheckedStatement {
     pub kind: TypeCheckedStatementKind,
     pub debug_info: DebugInfo,
 }
 
 ///A mini statement that has been type checked.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Eq, PartialEq)]
 pub enum TypeCheckedStatementKind {
     Noop(),
-    Panic(),
     ReturnVoid(),
     Return(TypeCheckedExpr),
     Break(Option<TypeCheckedExpr>, String),
@@ -254,15 +227,7 @@ pub enum TypeCheckedStatementKind {
     Let(TypeCheckedMatchPattern, TypeCheckedExpr),
     AssignLocal(StringId, TypeCheckedExpr),
     AssignGlobal(usize, TypeCheckedExpr),
-    Loop(Vec<TypeCheckedStatement>),
     While(TypeCheckedExpr, Vec<TypeCheckedStatement>),
-    If(TypeCheckedIfArm),
-    IfLet(
-        StringId,
-        TypeCheckedExpr,
-        Vec<TypeCheckedStatement>,
-        Option<Vec<TypeCheckedStatement>>,
-    ),
     Asm(Vec<Instruction>, Vec<TypeCheckedExpr>),
     DebugPrint(TypeCheckedExpr),
 }
@@ -270,9 +235,7 @@ pub enum TypeCheckedStatementKind {
 impl MiniProperties for TypeCheckedStatement {
     fn is_pure(&self) -> bool {
         match &self.kind {
-            TypeCheckedStatementKind::Noop()
-            | TypeCheckedStatementKind::Panic()
-            | TypeCheckedStatementKind::ReturnVoid() => true,
+            TypeCheckedStatementKind::Noop() | TypeCheckedStatementKind::ReturnVoid() => true,
             TypeCheckedStatementKind::Return(something) => something.is_pure(),
             TypeCheckedStatementKind::Break(exp, _) => {
                 exp.clone().map(|exp| exp.is_pure()).unwrap_or(true)
@@ -281,21 +244,8 @@ impl MiniProperties for TypeCheckedStatement {
             TypeCheckedStatementKind::Let(_, exp) => exp.is_pure(),
             TypeCheckedStatementKind::AssignLocal(_, exp) => exp.is_pure(),
             TypeCheckedStatementKind::AssignGlobal(_, _) => false,
-            TypeCheckedStatementKind::Loop(code) => {
-                code.iter().all(|statement| statement.is_pure())
-            }
             TypeCheckedStatementKind::While(exp, block) => {
                 exp.is_pure() && block.iter().all(|statement| statement.is_pure())
-            }
-            TypeCheckedStatementKind::If(if_arm) => if_arm.is_pure(),
-            TypeCheckedStatementKind::IfLet(_, expr, block, eblock) => {
-                expr.is_pure()
-                    && block.iter().all(|statement| statement.is_pure())
-                    && eblock
-                        // This clone can most likely be avoided and it would probably be good idea to do so
-                        .clone()
-                        .map(|statements| statements.iter().all(|statement| statement.is_pure()))
-                        .unwrap_or(true)
             }
             TypeCheckedStatementKind::Asm(instrs, exprs) => {
                 instrs.iter().all(|instr| instr.is_pure())
@@ -309,19 +259,13 @@ impl MiniProperties for TypeCheckedStatement {
 impl AbstractSyntaxTree for TypeCheckedStatement {
     fn child_nodes(&mut self) -> Vec<TypeCheckedNode> {
         match &mut self.kind {
-            TypeCheckedStatementKind::Noop()
-            | TypeCheckedStatementKind::Panic()
-            | TypeCheckedStatementKind::ReturnVoid() => vec![],
+            TypeCheckedStatementKind::Noop() | TypeCheckedStatementKind::ReturnVoid() => vec![],
             TypeCheckedStatementKind::Return(exp)
             | TypeCheckedStatementKind::Expression(exp)
             | TypeCheckedStatementKind::Let(_, exp)
             | TypeCheckedStatementKind::AssignLocal(_, exp)
             | TypeCheckedStatementKind::AssignGlobal(_, exp)
             | TypeCheckedStatementKind::DebugPrint(exp) => vec![TypeCheckedNode::Expression(exp)],
-            TypeCheckedStatementKind::Loop(stats) => stats
-                .iter_mut()
-                .map(|stat| TypeCheckedNode::Statement(stat))
-                .collect(),
             TypeCheckedStatementKind::While(exp, stats) => vec![TypeCheckedNode::Expression(exp)]
                 .into_iter()
                 .chain(
@@ -330,23 +274,6 @@ impl AbstractSyntaxTree for TypeCheckedStatement {
                         .map(|stat| TypeCheckedNode::Statement(stat)),
                 )
                 .collect(),
-            TypeCheckedStatementKind::If(arm) => vec![TypeCheckedNode::IfArm(arm)],
-            TypeCheckedStatementKind::IfLet(_, exp, stats, ostats) => {
-                vec![TypeCheckedNode::Expression(exp)]
-                    .into_iter()
-                    .chain(
-                        stats
-                            .iter_mut()
-                            .map(|stat| TypeCheckedNode::Statement(stat)),
-                    )
-                    .chain(
-                        ostats
-                            .iter_mut()
-                            .flatten()
-                            .map(|stat| TypeCheckedNode::Statement(stat)),
-                    )
-                    .collect()
-            }
             TypeCheckedStatementKind::Asm(_, exps) => exps
                 .iter_mut()
                 .map(|exp| TypeCheckedNode::Expression(exp))
@@ -359,74 +286,21 @@ impl AbstractSyntaxTree for TypeCheckedStatement {
 }
 
 ///A `MatchPattern` that has gone through type checking.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Eq, PartialEq)]
 pub enum TypeCheckedMatchPattern {
     Simple(StringId, Type),
     Tuple(Vec<TypeCheckedMatchPattern>, Type),
 }
 
-///An `IfArm` that has been type checked.
-#[derive(Debug, Clone)]
-pub enum TypeCheckedIfArm {
-    Cond(
-        TypeCheckedExpr,
-        Vec<TypeCheckedStatement>,
-        Option<Box<TypeCheckedIfArm>>,
-        DebugInfo,
-    ),
-    Catchall(Vec<TypeCheckedStatement>, DebugInfo),
-}
-
-impl AbstractSyntaxTree for TypeCheckedIfArm {
-    fn child_nodes(&mut self) -> Vec<TypeCheckedNode> {
-        match self {
-            TypeCheckedIfArm::Cond(exp, stats, alt_stats, _) => {
-                vec![TypeCheckedNode::Expression(exp)]
-                    .into_iter()
-                    .chain(
-                        stats
-                            .iter_mut()
-                            .map(|stat| TypeCheckedNode::Statement(stat)),
-                    )
-                    .chain(alt_stats.iter_mut().map(|arm| TypeCheckedNode::IfArm(arm)))
-                    .collect()
-            }
-            TypeCheckedIfArm::Catchall(stats, _) => stats
-                .iter_mut()
-                .map(|stat| TypeCheckedNode::Statement(stat))
-                .collect(),
-        }
-    }
-}
-
-impl MiniProperties for TypeCheckedIfArm {
-    fn is_pure(&self) -> bool {
-        match self {
-            TypeCheckedIfArm::Cond(expr, statements, else_block, _) => {
-                expr.is_pure()
-                    && statements.iter().all(|statement| statement.is_pure())
-                    && if let Some(block) = else_block {
-                        block.is_pure()
-                    } else {
-                        true
-                    }
-            }
-            TypeCheckedIfArm::Catchall(statements, _) => {
-                statements.iter().all(|statement| statement.is_pure())
-            }
-        }
-    }
-}
-
 ///A mini expression with associated `DebugInfo` that has been type checked.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Eq, PartialEq)]
 pub struct TypeCheckedExpr {
     pub kind: TypeCheckedExprKind,
     pub debug_info: DebugInfo,
 }
 
 ///A mini expression that has been type checked.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Eq, PartialEq)]
 pub enum TypeCheckedExprKind {
     NewBuffer,
     UnaryOp(UnaryOp, Box<TypeCheckedExpr>, Type),
@@ -453,11 +327,7 @@ pub enum TypeCheckedExprKind {
         Type,
         PropertiesList,
     ),
-    CodeBlock(
-        Vec<TypeCheckedStatement>,
-        Option<Box<TypeCheckedExpr>>,
-        Option<String>,
-    ),
+    CodeBlock(TypeCheckedCodeBlock),
     StructInitializer(Vec<TypeCheckedStructField>, Type),
     ArrayRef(Box<TypeCheckedExpr>, Box<TypeCheckedExpr>, Type),
     FixedArrayRef(Box<TypeCheckedExpr>, Box<TypeCheckedExpr>, usize, Type),
@@ -488,13 +358,29 @@ pub enum TypeCheckedExprKind {
     StructMod(Box<TypeCheckedExpr>, usize, Box<TypeCheckedExpr>, Type),
     Cast(Box<TypeCheckedExpr>, Type),
     Asm(Type, Vec<Instruction>, Vec<TypeCheckedExpr>),
+    Panic,
     Try(Box<TypeCheckedExpr>, Type),
+    If(
+        Box<TypeCheckedExpr>,
+        TypeCheckedCodeBlock,
+        Option<TypeCheckedCodeBlock>,
+        Type,
+    ),
+    IfLet(
+        StringId,
+        Box<TypeCheckedExpr>,
+        TypeCheckedCodeBlock,
+        Option<TypeCheckedCodeBlock>,
+        Type,
+    ),
+    Loop(Vec<TypeCheckedStatement>),
 }
 
 impl MiniProperties for TypeCheckedExpr {
     fn is_pure(&self) -> bool {
         match &self.kind {
             TypeCheckedExprKind::UnaryOp(_, expr, _) => expr.is_pure(),
+            TypeCheckedExprKind::Panic => true,
             TypeCheckedExprKind::Binary(_, left, right, _) => left.is_pure() && right.is_pure(),
             TypeCheckedExprKind::Trinary(_, a, b, c, _) => {
                 a.is_pure() && b.is_pure() && c.is_pure()
@@ -520,13 +406,7 @@ impl MiniProperties for TypeCheckedExpr {
                     && fields_exprs.iter().all(|statement| statement.is_pure())
                     && properties.pure
             }
-            TypeCheckedExprKind::CodeBlock(statements, return_expr, _) => {
-                statements.iter().all(|statement| statement.is_pure())
-                    && return_expr
-                        .as_ref()
-                        .map(|expr| expr.is_pure())
-                        .unwrap_or(true)
-            }
+            TypeCheckedExprKind::CodeBlock(block) => block.is_pure(),
             TypeCheckedExprKind::StructInitializer(fields, _) => {
                 fields.iter().all(|field| field.value.is_pure())
             }
@@ -562,6 +442,17 @@ impl MiniProperties for TypeCheckedExpr {
                 instrs.iter().all(|inst| inst.is_pure()) && args.iter().all(|expr| expr.is_pure())
             }
             TypeCheckedExprKind::Try(expr, _) => expr.is_pure(),
+            TypeCheckedExprKind::If(cond, block, else_block, _)
+            | TypeCheckedExprKind::IfLet(_, cond, block, else_block, _) => {
+                cond.is_pure()
+                    && block.is_pure()
+                    && if let Some(block) = else_block {
+                        block.is_pure()
+                    } else {
+                        true
+                    }
+            }
+            TypeCheckedExprKind::Loop(stats) => stats.iter().all(|stat| stat.is_pure()),
         }
     }
 }
@@ -574,7 +465,8 @@ impl AbstractSyntaxTree for TypeCheckedExpr {
             | TypeCheckedExprKind::FuncRef(_, _)
             | TypeCheckedExprKind::Const(_, _)
             | TypeCheckedExprKind::NewBuffer
-            | TypeCheckedExprKind::NewMap(_) => vec![],
+            | TypeCheckedExprKind::NewMap(_)
+            | TypeCheckedExprKind::Panic => vec![],
             TypeCheckedExprKind::UnaryOp(_, exp, _)
             | TypeCheckedExprKind::Variant(exp)
             | TypeCheckedExprKind::TupleRef(exp, _, _)
@@ -607,15 +499,7 @@ impl AbstractSyntaxTree for TypeCheckedExpr {
                     )
                     .collect()
             }
-            TypeCheckedExprKind::CodeBlock(stats, oexpr, _) => oexpr
-                .iter_mut()
-                .map(|exp| TypeCheckedNode::Expression(exp))
-                .chain(
-                    stats
-                        .iter_mut()
-                        .map(|stat| TypeCheckedNode::Statement(stat)),
-                )
-                .collect(),
+            TypeCheckedExprKind::CodeBlock(block) => block.child_nodes(),
             TypeCheckedExprKind::StructInitializer(fields, _) => fields
                 .iter_mut()
                 .map(|field| TypeCheckedNode::StructField(field))
@@ -635,6 +519,19 @@ impl AbstractSyntaxTree for TypeCheckedExpr {
                 TypeCheckedNode::Expression(exp2),
                 TypeCheckedNode::Expression(exp3),
             ],
+            TypeCheckedExprKind::If(cond, block, else_block, _)
+            | TypeCheckedExprKind::IfLet(_, cond, block, else_block, _) => cond
+                .child_nodes()
+                .into_iter()
+                .chain(block.child_nodes().into_iter())
+                .chain(
+                    else_block
+                        .into_iter()
+                        .map(|n| n.child_nodes().into_iter())
+                        .flatten(),
+                )
+                .collect(),
+            TypeCheckedExprKind::Loop(_) => unimplemented!(),
         }
     }
 }
@@ -644,6 +541,7 @@ impl TypeCheckedExpr {
     pub fn get_type(&self) -> Type {
         match &self.kind {
             TypeCheckedExprKind::NewBuffer => Type::Buffer,
+            TypeCheckedExprKind::Panic => Type::Every,
             TypeCheckedExprKind::UnaryOp(_, _, t) => t.clone(),
             TypeCheckedExprKind::Binary(_, _, _, t) => t.clone(),
             TypeCheckedExprKind::Trinary(_, _, _, _, t) => t.clone(),
@@ -658,10 +556,7 @@ impl TypeCheckedExpr {
             TypeCheckedExprKind::DotRef(_, _, _, t) => t.clone(),
             TypeCheckedExprKind::Const(_, t) => t.clone(),
             TypeCheckedExprKind::FunctionCall(_, _, t, _) => t.clone(),
-            TypeCheckedExprKind::CodeBlock(_, expr, _) => expr
-                .clone()
-                .map(|exp| exp.get_type())
-                .unwrap_or_else(|| Type::Tuple(vec![])),
+            TypeCheckedExprKind::CodeBlock(block) => block.get_type(),
             TypeCheckedExprKind::StructInitializer(_, t) => t.clone(),
             TypeCheckedExprKind::ArrayRef(_, _, t) => t.clone(),
             TypeCheckedExprKind::FixedArrayRef(_, _, _, t) => t.clone(),
@@ -677,12 +572,15 @@ impl TypeCheckedExpr {
             TypeCheckedExprKind::Cast(_, t) => t.clone(),
             TypeCheckedExprKind::Asm(t, _, _) => t.clone(),
             TypeCheckedExprKind::Try(_, t) => t.clone(),
+            TypeCheckedExprKind::If(_, _, _, t) => t.clone(),
+            TypeCheckedExprKind::IfLet(_, _, _, _, t) => t.clone(),
+            TypeCheckedExprKind::Loop(_) => Type::Every,
         }
     }
 }
 
 ///A `StructField` that has been type checked.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Eq, PartialEq)]
 pub struct TypeCheckedStructField {
     pub name: String,
     pub value: TypeCheckedExpr,
@@ -785,40 +683,36 @@ pub fn typecheck_top_level_decls(
         .collect::<HashMap<_, _>>();
     let mut exported_funcs = Vec::new();
 
-    let type_table: HashMap<_, _> = named_types.iter().map(|(k, v)| (*k, v)).collect();
+    let type_table: HashMap<_, _> = named_types.clone().into_iter().collect();
 
     let mut resolved_global_vars_map = HashMap::new();
     for (name, (tipe, slot_num)) in global_vars_map {
         resolved_global_vars_map.insert(name, (tipe, slot_num));
     }
 
-    let func_table: HashMap<_, _> = func_map.iter().map(|(k, v)| (*k, v)).collect();
+    let func_table: HashMap<_, _> = func_map.clone().into_iter().collect();
 
     for func in funcs.iter() {
-        match typecheck_function(
+        let f = typecheck_function(
             &func,
             &type_table,
             &resolved_global_vars_map,
             &func_table,
             type_tree,
             &string_table,
-        ) {
-            Ok(f) => match func.kind {
-                FuncDeclKind::Public => {
-                    exported_funcs.push(ExportedFunc::new(
-                        f.name,
-                        Label::Func(f.name),
-                        f.tipe.clone(),
-                        &string_table,
-                    ));
-                    checked_funcs.push(f);
-                }
-                FuncDeclKind::Private => {
-                    checked_funcs.push(f);
-                }
-            },
-            Err(e) => {
-                return Err(e);
+        )?;
+        match func.kind {
+            FuncDeclKind::Public => {
+                exported_funcs.push(ExportedFunc::new(
+                    f.name,
+                    Label::Func(f.name),
+                    f.tipe.clone(),
+                    &string_table,
+                ));
+                checked_funcs.push(f);
+            }
+            FuncDeclKind::Private => {
+                checked_funcs.push(f);
             }
         }
     }
@@ -835,54 +729,63 @@ pub fn typecheck_top_level_decls(
 /// state defined by type_table, global_vars, and func_table.
 ///
 /// If not successful the function returns a `TypeError`.
-pub fn typecheck_function<'a>(
-    fd: &'a FuncDecl,
-    type_table: &'a TypeTable<'a>,
-    global_vars: &'a HashMap<StringId, (Type, usize)>,
-    func_table: &'a TypeTable<'a>,
+pub fn typecheck_function(
+    fd: &FuncDecl,
+    type_table: &TypeTable,
+    global_vars: &HashMap<StringId, (Type, usize)>,
+    func_table: &TypeTable,
     type_tree: &TypeTree,
     string_table: &StringTable,
 ) -> Result<TypeCheckedFunc, TypeError> {
-    match fd.kind {
-        FuncDeclKind::Public | FuncDeclKind::Private => {
-            let mut hm = HashMap::new();
-            for arg in fd.args.iter() {
-                arg.tipe.get_representation(type_tree).map_err(|_| {
-                    new_type_error(
-                        format!(
-                            "Unknown type for function argument \"{}\"",
-                            string_table.name_from_id(arg.name)
-                        ),
-                        arg.debug_info.location,
-                    )
-                })?;
-                hm.insert(arg.name, &arg.tipe);
+    let mut hm = HashMap::new();
+    if fd.ret_type != Type::Void {
+        if let Some(stat) = fd.code.last() {
+            match &stat.kind {
+                StatementKind::Return(_) => {}
+                _ => {
+                    return Err(new_type_error(
+                        format!("Last statement of function must be return"),
+                        stat.debug_info.location,
+                    ))
+                }
             }
-            let mut inner_type_table = type_table.clone();
-            inner_type_table.extend(hm);
-            let tc_stats = typecheck_statement_sequence(
-                &fd.code,
-                &fd.ret_type,
-                &inner_type_table,
-                global_vars,
-                func_table,
-                type_tree,
-                &mut vec![],
-            )?;
-            Ok(TypeCheckedFunc {
-                name: fd.name,
-                args: fd.args.clone(),
-                ret_type: fd.ret_type.clone(),
-                code: tc_stats,
-                tipe: fd.tipe.clone(),
-                imported: false,
-                debug_info: DebugInfo::from(fd.location),
-                properties: PropertiesList {
-                    pure: !fd.is_impure,
-                },
-            })
         }
     }
+    for arg in fd.args.iter() {
+        arg.tipe.get_representation(type_tree).map_err(|_| {
+            new_type_error(
+                format!(
+                    "Unknown type for function argument \"{}\"",
+                    string_table.name_from_id(arg.name)
+                ),
+                arg.debug_info.location,
+            )
+        })?;
+        hm.insert(arg.name, arg.tipe.clone());
+    }
+    let mut inner_type_table = type_table.clone();
+    inner_type_table.extend(hm);
+    let tc_stats = typecheck_statement_sequence(
+        &fd.code,
+        &fd.ret_type,
+        &inner_type_table,
+        global_vars,
+        func_table,
+        type_tree,
+        &mut vec![],
+    )?;
+    Ok(TypeCheckedFunc {
+        name: fd.name,
+        args: fd.args.clone(),
+        ret_type: fd.ret_type.clone(),
+        code: tc_stats,
+        tipe: fd.tipe.clone(),
+        imported: false,
+        debug_info: DebugInfo::from(fd.location),
+        properties: PropertiesList {
+            pure: !fd.is_impure,
+        },
+    })
 }
 
 ///If successful, produces a `Vec<TypeCheckedStatement>` corresponding to the items in statements
@@ -896,42 +799,25 @@ pub fn typecheck_function<'a>(
 ///Takes return_type to ensure that `Return` statements produce the correct type, type_table,
 /// global_vars, and func_table should correspond to the types, globals, and functions available
 /// to the statement sequence.
-fn typecheck_statement_sequence<'a>(
-    statements: &'a [Statement],
+fn typecheck_statement_sequence(
+    statements: &[Statement],
     return_type: &Type,
-    type_table: &'a TypeTable<'a>,
-    global_vars: &'a HashMap<StringId, (Type, usize)>,
+    type_table: &TypeTable,
+    global_vars: &HashMap<StringId, (Type, usize)>,
     func_table: &TypeTable,
     type_tree: &TypeTree,
     scopes: &mut Vec<(String, Option<Type>)>,
 ) -> Result<Vec<TypeCheckedStatement>, TypeError> {
-    if statements.is_empty() {
-        return Ok(Vec::new());
-    }
-    let first_stat = &statements[0];
-    let rest_of_stats = &statements[1..];
-
-    let (tcs, bindings) = typecheck_statement(
-        &first_stat,
+    typecheck_statement_sequence_with_bindings(
+        &statements,
         return_type,
         type_table,
         global_vars,
         func_table,
+        &[],
         type_tree,
         scopes,
-    )?;
-    let mut rest_result = typecheck_statement_sequence_with_bindings(
-        rest_of_stats,
-        return_type,
-        type_table,
-        global_vars,
-        func_table,
-        &bindings,
-        type_tree,
-        scopes,
-    )?;
-    rest_result.insert(0, tcs);
-    Ok(rest_result)
+    )
 }
 
 ///Operates identically to `typecheck_statement_sequence`, except that the pairs in bindings are
@@ -946,31 +832,27 @@ fn typecheck_statement_sequence_with_bindings<'a>(
     type_tree: &TypeTree,
     scopes: &mut Vec<(String, Option<Type>)>,
 ) -> Result<Vec<TypeCheckedStatement>, TypeError> {
-    if bindings.is_empty() {
-        typecheck_statement_sequence(
-            statements,
-            return_type,
-            type_table,
-            global_vars,
-            func_table,
-            type_tree,
-            scopes,
-        )
-    } else {
-        let (sid, tipe) = &bindings[0];
-        let mut inner_type_table = type_table.clone();
-        inner_type_table.insert(*sid, tipe);
-        typecheck_statement_sequence_with_bindings(
-            statements,
+    let mut inner_type_table = type_table.clone();
+    for (sid, tipe) in bindings {
+        inner_type_table.insert(*sid, tipe.clone());
+    }
+    let mut output = vec![];
+    for stat in statements {
+        let (tcs, bindings) = typecheck_statement(
+            stat,
             return_type,
             &inner_type_table,
             global_vars,
             func_table,
-            &bindings[1..],
             type_tree,
             scopes,
-        )
+        )?;
+        output.push(tcs);
+        for (sid, bind) in bindings {
+            inner_type_table.insert(sid, bind);
+        }
     }
+    Ok(output)
 }
 
 ///Performs type checking on statement.
@@ -992,7 +874,6 @@ fn typecheck_statement<'a>(
     let debug_info = statement.debug_info;
     let (stat, binds) = match kind {
         StatementKind::Noop() => Ok((TypeCheckedStatementKind::Noop(), vec![])),
-        StatementKind::Panic() => Ok((TypeCheckedStatementKind::Panic(), vec![])),
         StatementKind::ReturnVoid() => {
             if Type::Void.assignable(return_type, type_tree, HashSet::new()) {
                 Ok((TypeCheckedStatementKind::ReturnVoid(), vec![]))
@@ -1016,11 +897,7 @@ fn typecheck_statement<'a>(
                 type_tree,
                 scopes,
             )?;
-            if return_type.get_representation(type_tree)?.assignable(
-                &tc_expr.get_type().get_representation(type_tree)?,
-                type_tree,
-                HashSet::new(),
-            ) {
+            if return_type.assignable(&tc_expr.get_type(), type_tree, HashSet::new()) {
                 Ok((TypeCheckedStatementKind::Return(tc_expr), vec![]))
             } else {
                 Err(new_type_error(
@@ -1157,11 +1034,7 @@ fn typecheck_statement<'a>(
             )?;
             match type_table.get(name) {
                 Some(var_type) => {
-                    if var_type.get_representation(type_tree)?.assignable(
-                        &tc_expr.get_type().get_representation(type_tree)?,
-                        type_tree,
-                        HashSet::new(),
-                    ) {
+                    if var_type.assignable(&tc_expr.get_type(), type_tree, HashSet::new()) {
                         Ok((
                             TypeCheckedStatementKind::AssignLocal(*name, tc_expr),
                             vec![],
@@ -1180,11 +1053,7 @@ fn typecheck_statement<'a>(
                 None => {
                     match global_vars.get(&*name) {
                         Some((var_type, idx)) => {
-                            if var_type.get_representation(type_tree)?.assignable(
-                                &tc_expr.get_type().get_representation(type_tree)?,
-                                type_tree,
-                                HashSet::new(),
-                            ) {
+                            if var_type.assignable(&tc_expr.get_type(), type_tree, HashSet::new()) {
                                 Ok((
                                     TypeCheckedStatementKind::AssignGlobal(*idx, tc_expr),
                                     vec![],
@@ -1203,20 +1072,6 @@ fn typecheck_statement<'a>(
                     }
                 }
             }
-        }
-        StatementKind::Loop(body) => {
-            scopes.push(("_".to_string(), Some(Type::Tuple(vec![]))));
-            let tc_body = typecheck_statement_sequence(
-                body,
-                return_type,
-                type_table,
-                global_vars,
-                func_table,
-                type_tree,
-                scopes,
-            )?;
-            scopes.pop();
-            Ok((TypeCheckedStatementKind::Loop(tc_body), vec![]))
         }
         StatementKind::While(cond, body) => {
             let tc_cond = typecheck_expr(
@@ -1250,18 +1105,6 @@ fn typecheck_statement<'a>(
                 )),
             }
         }
-        StatementKind::If(arm) => Ok((
-            TypeCheckedStatementKind::If(typecheck_if_arm(
-                arm,
-                return_type,
-                type_table,
-                global_vars,
-                func_table,
-                type_tree,
-                scopes,
-            )?),
-            vec![],
-        )),
         StatementKind::Asm(insns, args) => {
             let mut tc_args = Vec::new();
             for arg in args {
@@ -1291,57 +1134,6 @@ fn typecheck_statement<'a>(
                 scopes,
             )?;
             Ok((TypeCheckedStatementKind::DebugPrint(tce), vec![]))
-        }
-        StatementKind::IfLet(l, r, if_block, else_block) => {
-            let tcr = typecheck_expr(
-                r,
-                type_table,
-                global_vars,
-                func_table,
-                return_type,
-                type_tree,
-                scopes,
-            )?;
-            let tct = match tcr.get_type() {
-                Type::Option(t) => *t,
-                unexpected => {
-                    return Err(new_type_error(
-                        format!("Expected option type got: \"{}\"", unexpected.display()),
-                        debug_info.location,
-                    ))
-                }
-            };
-            Ok((
-                TypeCheckedStatementKind::IfLet(
-                    *l,
-                    tcr,
-                    typecheck_statement_sequence_with_bindings(
-                        if_block,
-                        return_type,
-                        type_table,
-                        global_vars,
-                        func_table,
-                        &[(*l, tct.clone())],
-                        type_tree,
-                        scopes,
-                    )?,
-                    else_block
-                        .clone()
-                        .map(|block| {
-                            typecheck_statement_sequence(
-                                &block,
-                                return_type,
-                                type_table,
-                                global_vars,
-                                func_table,
-                                type_tree,
-                                scopes,
-                            )
-                        })
-                        .transpose()?,
-                ),
-                vec![(*l, tct)],
-            ))
         }
     }?;
     Ok((
@@ -1403,83 +1195,6 @@ fn typecheck_patvec(
     }
 }
 
-///Performs type checking on `IfArm` arm, returning a `TypeCheckedIfArm` if successful, and a
-/// `TypeError` otherwise.
-///
-/// This function takes the the return type of the containing function as arm may contain Return
-/// statements.  Also type_table, global_vars, and func_table contain the variables, globals, and
-/// functions available to the arm.
-fn typecheck_if_arm(
-    arm: &IfArm,
-    return_type: &Type,
-    type_table: &TypeTable,
-    global_vars: &HashMap<StringId, (Type, usize)>,
-    func_table: &TypeTable,
-    type_tree: &TypeTree,
-    scopes: &mut Vec<(String, Option<Type>)>,
-) -> Result<TypeCheckedIfArm, TypeError> {
-    match arm {
-        IfArm::Cond(cond, body, orest, debug_info) => {
-            let loc = debug_info.location;
-            let tc_cond = typecheck_expr(
-                cond,
-                type_table,
-                global_vars,
-                func_table,
-                return_type,
-                type_tree,
-                scopes,
-            )?;
-            match tc_cond.get_type() {
-                Type::Bool => Ok(TypeCheckedIfArm::Cond(
-                    tc_cond,
-                    typecheck_statement_sequence(
-                        body,
-                        return_type,
-                        type_table,
-                        global_vars,
-                        func_table,
-                        type_tree,
-                        scopes,
-                    )?,
-                    match orest {
-                        Some(rest) => Some(Box::new(typecheck_if_arm(
-                            rest,
-                            return_type,
-                            type_table,
-                            global_vars,
-                            func_table,
-                            type_tree,
-                            scopes,
-                        )?)),
-                        None => None,
-                    },
-                    debug_info.clone(),
-                )),
-                _ => Err(new_type_error(
-                    format!(
-                        "if condition must be boolean, found \"{}\"",
-                        tc_cond.get_type().display()
-                    ),
-                    loc,
-                )),
-            }
-        }
-        IfArm::Catchall(body, loc) => Ok(TypeCheckedIfArm::Catchall(
-            typecheck_statement_sequence(
-                body,
-                return_type,
-                type_table,
-                global_vars,
-                func_table,
-                type_tree,
-                scopes,
-            )?,
-            *loc,
-        )),
-    }
-}
-
 ///Performs type checking on the expression expr.  Returns `TypeCheckedExpr` if successful, and
 /// `TypeError` otherwise.
 ///
@@ -1501,6 +1216,7 @@ fn typecheck_expr(
     Ok(TypeCheckedExpr {
         kind: match &expr.kind {
             ExprKind::NewBuffer => Ok(TypeCheckedExprKind::NewBuffer),
+            ExprKind::Panic => Ok(TypeCheckedExprKind::Panic),
             ExprKind::UnaryOp(op, subexpr) => {
                 let tc_sub = typecheck_expr(
                     subexpr,
@@ -1806,59 +1522,15 @@ fn typecheck_expr(
                     )),
                 }
             }
-            ExprKind::CodeBlock(body, ret_expr) => {
-                let mut output = Vec::new();
-                let mut block_bindings = Vec::new();
-                scopes.push(("_".to_string(), None));
-                for statement in body {
-                    let mut inner_type_table = type_table.clone();
-                    inner_type_table.extend(
-                        block_bindings
-                            .iter()
-                            .map(|(k, v)| (*k, v))
-                            .collect::<HashMap<_, _>>(),
-                    );
-                    let (statement, bindings) = typecheck_statement(
-                        &statement,
-                        return_type,
-                        &inner_type_table,
-                        global_vars,
-                        func_table,
-                        type_tree,
-                        scopes,
-                    )?;
-                    output.push(statement);
-                    for (key, value) in bindings {
-                        block_bindings.push((key, value));
-                    }
-                }
-                let mut inner_type_table = type_table.clone();
-                inner_type_table.extend(
-                    block_bindings
-                        .iter()
-                        .map(|(k, v)| (*k, v))
-                        .collect::<HashMap<_, _>>(),
-                );
-                Ok(TypeCheckedExprKind::CodeBlock(
-                    output,
-                    ret_expr
-                        .clone()
-                        .map(|x| {
-                            typecheck_expr(
-                                &*x,
-                                &inner_type_table,
-                                global_vars,
-                                func_table,
-                                return_type,
-                                type_tree,
-                                scopes,
-                            )
-                        })
-                        .transpose()?
-                        .map(Box::new),
-                    None,
-                ))
-            }
+            ExprKind::CodeBlock(block) => Ok(TypeCheckedExprKind::CodeBlock(typecheck_codeblock(
+                block,
+                &type_table,
+                global_vars,
+                func_table,
+                return_type,
+                type_tree,
+                scopes,
+            )?)),
             ExprKind::ArrayOrMapRef(array, index) => {
                 let tc_arr = typecheck_expr(
                     &*array,
@@ -2250,6 +1922,155 @@ fn typecheck_expr(
                     )),
                 }
             }
+            ExprKind::If(cond, block, else_block) => {
+                let cond_expr = typecheck_expr(
+                    cond,
+                    type_table,
+                    global_vars,
+                    func_table,
+                    return_type,
+                    type_tree,
+                    scopes,
+                )?;
+                let block = typecheck_codeblock(
+                    block,
+                    type_table,
+                    global_vars,
+                    func_table,
+                    return_type,
+                    type_tree,
+                    scopes,
+                )?;
+                let else_block = else_block
+                    .clone()
+                    .map(|e| {
+                        typecheck_codeblock(
+                            &e,
+                            type_table,
+                            global_vars,
+                            func_table,
+                            return_type,
+                            type_tree,
+                            scopes,
+                        )
+                    })
+                    .transpose()?;
+                if cond_expr.get_type() != Type::Bool {
+                    Err(new_type_error(
+                        format!(
+                            "Condition of if expression must be bool: found \"{}\"",
+                            cond_expr.get_type().display()
+                        ),
+                        debug_info.location,
+                    ))
+                } else {
+                    let block_type = block.get_type();
+                    let else_type = else_block
+                        .clone()
+                        .map(|b| b.get_type())
+                        .unwrap_or(Type::Void);
+                    let if_type = if block_type.assignable(&else_type, type_tree, HashSet::new()) {
+                        block_type
+                    } else if else_type.assignable(&block_type, type_tree, HashSet::new()) {
+                        else_type
+                    } else {
+                        return Err(new_type_error(
+                            format!(
+                                "Mismatch of if and else types found: \"{}\" and \"{}\"",
+                                block_type.display(),
+                                else_type.display()
+                            ),
+                            debug_info.location,
+                        ));
+                    };
+                    Ok(TypeCheckedExprKind::If(
+                        Box::new(cond_expr),
+                        block,
+                        else_block,
+                        if_type,
+                    ))
+                }
+            }
+            ExprKind::IfLet(l, r, if_block, else_block) => {
+                let tcr = typecheck_expr(
+                    r,
+                    type_table,
+                    global_vars,
+                    func_table,
+                    return_type,
+                    type_tree,
+                    scopes,
+                )?;
+                let tct = match tcr.get_type() {
+                    Type::Option(t) => *t,
+                    unexpected => {
+                        return Err(new_type_error(
+                            format!("Expected option type got: \"{}\"", unexpected.display()),
+                            debug_info.location,
+                        ))
+                    }
+                };
+                let mut inner_type_table = type_table.clone();
+                inner_type_table.insert(*l, tct);
+                let checked_block = typecheck_codeblock(
+                    if_block,
+                    &inner_type_table,
+                    global_vars,
+                    func_table,
+                    return_type,
+                    type_tree,
+                    scopes,
+                )?;
+                let checked_else = else_block
+                    .clone()
+                    .map(|block| {
+                        typecheck_codeblock(
+                            &block,
+                            type_table,
+                            global_vars,
+                            func_table,
+                            return_type,
+                            type_tree,
+                            scopes,
+                        )
+                    })
+                    .transpose()?;
+                let block_type = checked_block.get_type();
+                let else_type = checked_else
+                    .clone()
+                    .map(|b| b.get_type())
+                    .unwrap_or(Type::Void);
+                let if_let_type = if block_type.assignable(&else_type, type_tree, HashSet::new()) {
+                    block_type
+                } else if else_type.assignable(&block_type, type_tree, HashSet::new()) {
+                    else_type
+                } else {
+                    return Err(new_type_error(
+                        format!(
+                            "Mismatch of if and else types found: \"{}\" and \"{}\"",
+                            block_type.display(),
+                            else_type.display()
+                        ),
+                        debug_info.location,
+                    ));
+                };
+                Ok(TypeCheckedExprKind::IfLet(
+                    *l,
+                    Box::new(tcr),
+                    checked_block,
+                    checked_else,
+                    if_let_type,
+                ))
+            }
+            ExprKind::Loop(stats) => Ok(TypeCheckedExprKind::Loop(typecheck_statement_sequence(
+                stats,
+                return_type,
+                type_table,
+                global_vars,
+                func_table,
+                type_tree,
+                scopes,
+            )?)),
         }?,
         debug_info,
     })
@@ -3094,4 +2915,119 @@ fn typecheck_binary_op_const(
             panic!("unexpected op in typecheck_binary_op");
         }
     }
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub struct TypeCheckedCodeBlock {
+    pub body: Vec<TypeCheckedStatement>,
+    pub ret_expr: Option<Box<TypeCheckedExpr>>,
+    pub scope: Option<String>,
+}
+
+impl TypeCheckedCodeBlock {
+    fn new(
+        body: Vec<TypeCheckedStatement>,
+        ret_expr: Option<Box<TypeCheckedExpr>>,
+        scope: Option<String>,
+    ) -> Self {
+        Self {
+            body,
+            ret_expr,
+            scope,
+        }
+    }
+    pub fn get_type(&self) -> Type {
+        self.ret_expr
+            .clone()
+            .map(|r| r.get_type())
+            .unwrap_or(Type::Void)
+    }
+}
+
+impl AbstractSyntaxTree for TypeCheckedCodeBlock {
+    fn child_nodes(&mut self) -> Vec<TypeCheckedNode> {
+        self.ret_expr
+            .iter_mut()
+            .map(|exp| TypeCheckedNode::Expression(exp))
+            .chain(
+                self.body
+                    .iter_mut()
+                    .map(|stat| TypeCheckedNode::Statement(stat)),
+            )
+            .collect()
+    }
+}
+
+impl MiniProperties for TypeCheckedCodeBlock {
+    fn is_pure(&self) -> bool {
+        self.body.iter().all(|statement| statement.is_pure())
+            && self
+                .ret_expr
+                .as_ref()
+                .map(|expr| expr.is_pure())
+                .unwrap_or(true)
+    }
+}
+
+fn typecheck_codeblock(
+    block: &CodeBlock,
+    type_table: &TypeTable,
+    global_vars: &HashMap<StringId, (Type, usize)>,
+    func_table: &TypeTable,
+    return_type: &Type,
+    type_tree: &TypeTree,
+    scopes: &mut Vec<(String, Option<Type>)>,
+) -> Result<TypeCheckedCodeBlock, TypeError> {
+    let mut output = Vec::new();
+    let mut block_bindings = Vec::new();
+    scopes.push(("_".to_string(), None));
+    for statement in &block.body {
+        let mut inner_type_table = type_table.clone();
+        inner_type_table.extend(
+            block_bindings
+                .clone()
+                .into_iter()
+                .collect::<HashMap<_, _>>(),
+        );
+        let (statement, bindings) = typecheck_statement(
+            &statement,
+            return_type,
+            &inner_type_table,
+            global_vars,
+            func_table,
+            type_tree,
+            scopes,
+        )?;
+        output.push(statement);
+        for (key, value) in bindings {
+            block_bindings.push((key, value));
+        }
+    }
+    let mut inner_type_table = type_table.clone();
+    inner_type_table.extend(
+        block_bindings
+            .clone()
+            .into_iter()
+            .collect::<HashMap<_, _>>(),
+    );
+    Ok(TypeCheckedCodeBlock {
+        body: output,
+        ret_expr: block
+            .ret_expr
+            .clone()
+            .map(|x| {
+                typecheck_expr(
+                    &*x,
+                    &inner_type_table,
+                    global_vars,
+                    func_table,
+                    return_type,
+                    type_tree,
+                    scopes,
+                )
+            })
+            .transpose()?
+            .map(Box::new),
+        scope: None,
+    })
 }

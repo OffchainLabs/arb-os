@@ -3,8 +3,8 @@
 //
 
 
-use crate::compile::ast::{TopLevelDecl, TypeDecl, FuncDecl, GlobalVarDecl, Type,
-StructField, FuncArg, Statement, StatementKind, DebugInfo, Attributes, MatchPattern, IfArm, Expr, ExprKind, TrinaryOp, BinaryOp, UnaryOp, Constant,
+use crate::compile::ast::{TopLevelDecl, TypeDecl, FuncDecl, GlobalVarDecl, Type, CodeBlock,
+StructField, FuncArg, Statement, StatementKind, DebugInfo, Attributes, MatchPattern, Expr, ExprKind, TrinaryOp, BinaryOp, UnaryOp, Constant,
 OptionConst, FieldInitializer, new_func_arg, new_type_decl};
 use crate::stringtable::{StringTable, StringId};
 use crate::compile::Lines;
@@ -68,6 +68,10 @@ CodeBlock: Vec<Statement> = {
 	"{" <Statement*> "}" => <>
 }
 
+CodeBlockNew: CodeBlock = {
+    "{" <stats: Statement*> <expr: Expr?> "}" => CodeBlock::new(stats, expr.map(Box::new)),
+}
+
 Statement: Statement = {
 	<lno: @L> <attribs: ("#[" <Attributes> "]")?> <kind:StatementKind> => Statement {kind, debug_info: DebugInfo::new(file_info.location(BytePos::from(lno), filename), attribs.unwrap_or_default())},
 }
@@ -84,9 +88,9 @@ Attributes: Attributes = {
 
 StatementKind: StatementKind = {
 	"while" "(" <e: Expr> ")" <cb: CodeBlock> => StatementKind::While(e, cb),
-	"loop" <cb: CodeBlock> => StatementKind::Loop(cb),
-	"if" "let" "Some(" <l: Ident> ")" "=" <r:Expr> <t: CodeBlock> <e: ("else" <CodeBlock>)?> => StatementKind::IfLet(l,r,t,e),
-	<lno: @L> "if" "(" <c: Expr> ")" <t: CodeBlock> <r: IfArm?> => StatementKind::If(IfArm::Cond(c, t, r.map(|m|Box::new(m)), DebugInfo::from(file_info.location(BytePos::from(lno),filename)))),
+	<lno: @L> "loop" <cb: CodeBlock> => StatementKind::Expression(Expr { kind: ExprKind::Loop(cb), debug_info: DebugInfo::from(file_info.location(BytePos::from(lno), filename)), }),
+	<lno: @L> "if" "let" "Some(" <l: Ident> ")" "=" <r:Expr> <t: CodeBlock> <e: ElseIf?> => StatementKind::Expression( Expr { kind: ExprKind::IfLet(l,Box::new(r),CodeBlock::new(t,None),e), debug_info: DebugInfo::from(file_info.location(BytePos::from(lno),filename))}),
+	<lno: @L> "if" "(" <c: Expr> ")" <t: CodeBlock> <r: ElseIf?> => StatementKind::Expression( Expr { kind: ExprKind::If(Box::new(c), CodeBlock::new(t, None), r), debug_info: DebugInfo::from(file_info.location(BytePos::from(lno),filename))}),
 	"let" <p: MatchPattern> "=" <e: Expr> ";" => StatementKind::Let(p, e),
 	<e: Expr> ";" => StatementKind::Expression(e),
 	<i: Ident> "=" <e: Expr> ";" => StatementKind::Assign(i, e),
@@ -94,10 +98,8 @@ StatementKind: StatementKind = {
 	"return" ";" => StatementKind::ReturnVoid(),
 	<lno: @L> "return" "None" ";" => StatementKind::Return(Expr{ kind: ExprKind::Constant(Constant::Option(OptionConst::None(Type::Every))), debug_info: DebugInfo::from(file_info.location(BytePos::from(lno), filename))}),
 	"break" <e: Expr?> ";" => StatementKind::Break(e,None),
-	"panic" ";" => StatementKind::Panic(),
 	"debug" "(" <e: Expr> ")" ";" => StatementKind::DebugPrint(e),
 	"asm" "(" <a:CommaedExprs?> ")" "{" <body:AsmInsn*> "}" ";" => StatementKind::Asm(body, a.unwrap_or(vec![])),
-	";" => StatementKind::Noop(),
 }
 
 MatchPattern: MatchPattern = {
@@ -107,11 +109,6 @@ MatchPattern: MatchPattern = {
 
 CommaedMatchPatterns: Vec<MatchPattern> = {
 	<mut a: ( <MatchPattern> "," )+> <b: MatchPattern?> => {if let Some(c) = b {a.push(c)}a},
-}
-
-IfArm: IfArm = {
-	<lno: @L> "else" <cb: CodeBlock> => IfArm::Catchall(cb, DebugInfo::from(file_info.location(BytePos::from(lno), filename))),
-	<lno: @L> "elseif" "(" <c: Expr> ")" <cb: CodeBlock> <r: IfArm?> => IfArm::Cond(c, cb, r.map(|m| Box::new(m)), DebugInfo::from(file_info.location(BytePos::from(lno),filename))),
 }
 
 StructFields: Vec<StructField> = {
@@ -133,7 +130,7 @@ Type: Type = {
 	<CommaedTypesInParens> => Type::Tuple(<>),
 	"[" "]" <Type> => Type::Array(Box::new(<>)),
 	"[" <s:UnsignedInteger> "]" <t:Type> => Type::FixedArray(
-		Box::new(t), 
+		Box::new(t),
 		s.to_usize().unwrap(),
 	),
 	"map" "<" <t1:Type> "," <t2:Type> ","? ">" => Type::Map(Box::new(t1), Box::new(t2)),
@@ -161,8 +158,8 @@ Ident: StringId = {
 
 Expr: Expr = {
 	<lno: @L> <t:Expr> "with" "{" "[" <i:Expr> "]" "=" <v:Expr> "}" => Expr { kind: ExprKind::ArrayOrMapMod(
-		Box::new(t), 
-		Box::new(i), 
+		Box::new(t),
+		Box::new(i),
 		Box::new(v),),
 		debug_info: DebugInfo::from(file_info.location(BytePos::from(lno), filename))},
 	<lno: @L> <t: Expr> "with" "{" <i:Ident> ":" <e: Expr> "}" => Expr { kind: ExprKind::StructMod(Box::new(t), stringtable.name_from_id(i).to_string(), Box::new(e)), debug_info: DebugInfo::from(file_info.location(BytePos::from(lno), filename))},
@@ -181,7 +178,7 @@ Expr2: Expr = {
 
 Expr3: Expr = {
 	<lno: @L> <l:Expr3> <op: BinaryOpMidfix3> <r:Expr4> => Expr::new_binary(op, l, r, file_info.location(BytePos::from(lno),filename)),
-	Expr4,	
+	Expr4,
 }
 
 BinaryOpMidfix3: BinaryOp = {
@@ -243,7 +240,17 @@ Expr11: Expr = {
 	<lno: @L> <e1:Expr11> "[" <e2:Expr> "]" => Expr { kind: ExprKind::ArrayOrMapRef(Box::new(e1), Box::new(e2)), debug_info: DebugInfo::from(file_info.location(BytePos::from(lno), filename))},
 	<lno: @L> <e:Expr11> "." <i:Ident> => Expr { kind: ExprKind::DotRef(Box::new(e), stringtable.name_from_id(i).to_string()), debug_info: DebugInfo::from(file_info.location(BytePos::from(lno), filename))},
 	<lno: @L> <e:Expr11> "." <u:UnsignedInteger> => Expr { kind: ExprKind::TupleRef(Box::new(e), u), debug_info: DebugInfo::from(file_info.location(BytePos::from(lno), filename))},
+	<lno: @L> "xif" <cond: Expr> <cb: CodeBlockNew> <el: ElseIf?> => Expr { kind: ExprKind::If(Box::new(cond), cb, el), debug_info: DebugInfo::from(file_info.location(BytePos::from(lno), filename))},
+	<lno: @L> "xif" "let" "Some(" <l: Ident> ")" "=" <r:Expr> <t: CodeBlockNew> <el: ElseIf?> => Expr { kind: ExprKind::IfLet(l, Box::new(r), t, el), debug_info: DebugInfo::from(file_info.location(BytePos::from(lno), filename))},
+	<lno: @L> "xloop" <cb: CodeBlock> => Expr { kind: ExprKind::Loop(cb), debug_info: DebugInfo::from(file_info.location(BytePos::from(lno), filename))},
 	Expr12,
+}
+
+ElseIf: CodeBlock = {
+    ("else" <CodeBlockNew>) => <>,
+    <lno: @L> "elseif" <cond: Expr> <cb: CodeBlockNew> <el: ElseIf?> => CodeBlock::new(vec![], Some(Box::new(Expr { kind: ExprKind::If(Box::new(cond), cb, el), debug_info: DebugInfo::from(file_info.location(BytePos::from(lno), filename))}))),
+    <lno: @L> "elseif" "let" "Some(" <l: Ident> ")" "=" <r:Expr> <t: CodeBlockNew> <el: ElseIf?> => CodeBlock::new(vec![], Some(Box::new(
+                                Expr { kind: ExprKind::IfLet(l, Box::new(r), t, el), debug_info: DebugInfo::from(file_info.location(BytePos::from(lno), filename))}))),
 }
 
 Expr12: Expr = {
@@ -281,8 +288,9 @@ Expr13: Expr = {
 	<lno: @L> "asm" "(" <a:CommaedExprs?> ")" <rt:Type> "{" <body:AsmInsn*> "}" => Expr { kind: ExprKind::Asm(rt, body, a.unwrap_or(vec![])), debug_info: DebugInfo::from(file_info.location(BytePos::from(lno), filename))},
 	<lno: @L> "struct" "{" <fi: FieldInitializers> "}" => Expr { kind: ExprKind::StructInitializer(fi), debug_info: DebugInfo::from(file_info.location(BytePos::from(lno), filename))},
 	"(" <e: Expr> ")" => <>,
-	<lno: @L> "{" <cb: Statement*> <e: Expr?> "}" => Expr { kind: ExprKind::CodeBlock(cb, e.map(|x| Box::new(x))), debug_info: DebugInfo::from(file_info.location(BytePos::from(lno), filename))},
+	<lno: @L> <cb: CodeBlockNew> => Expr { kind: ExprKind::CodeBlock(cb), debug_info: DebugInfo::from(file_info.location(BytePos::from(lno), filename))},
 	<lno: @L> "(" <c: CommaedExprs?> ")" => Expr { kind: ExprKind::Tuple(c.unwrap_or(vec![])), debug_info: DebugInfo::from(file_info.location(BytePos::from(lno), filename))},
+	<lno: @L> "panic" => Expr { kind: ExprKind::Panic, debug_info: DebugInfo::from(file_info.location(BytePos::from(lno), filename))},
 	<lno: @L> <i: Ident> => Expr { kind: ExprKind::VariableRef(i), debug_info: DebugInfo::from(file_info.location(BytePos::from(lno), filename))},
 }
 

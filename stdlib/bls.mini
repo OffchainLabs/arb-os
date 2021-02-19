@@ -148,7 +148,6 @@ public func bls_verifySignature(
 
     let acc = unsafecast<any>(());
     acc = (
-        acc,
         (
           signature.x,
           signature.y,
@@ -157,12 +156,12 @@ public func bls_verifySignature(
           const::nG2y0,
           const::nG2y1
         ),
+        acc,
     );
 
     let i = 0;
     while (i < numMsgs) {
         acc = (
-            acc,
             (
                 messages[i].x,
                 messages[i].y,
@@ -171,16 +170,17 @@ public func bls_verifySignature(
                 keys[i].bx,
                 keys[i].by
             ),
+            acc,
         );
         i = i + 1;
     }
 
     let result = asm(acc,) bool { ecpairing };
-    if (result) {
-        return Some(());
+    return xif (result) {
+        Some(())
     } else {
-        return None;
-    }
+        None<()>
+    };
 }
 
 // ==================================================================
@@ -263,26 +263,26 @@ func mapToPoint(x:  uint) -> option<(uint, uint)> {
     a1 = asm(a1, x, const::N) uint { mulmod };
     a1 = asm(a1, 3, const::N) uint { addmod };
 
-    if let Some(squa1) = sqrt(a1) {
-        if (foundFirstSqrt) {
-            return Some((x, squa1));
+    return xif let Some(squa1) = sqrt(a1) {
+        xif (foundFirstSqrt) {
+            Some((x, squa1))
         } else {
-            return Some((x, const::N - squa1));
+            Some((x, const::N - squa1))
         }
     } else {
-        return None; // BLS: bad ft mapping implementation
-    }
+        None<(uint, uint)> // BLS: bad ft mapping implementation
+    };
 }
 
 func sqrt(xx: uint) ->option<uint> {
     let x = modexp_c191_3f52(xx);
 
     let square = asm(x, x, const::N) uint { mulmod };
-    if(square == xx) {
-        return Some(x);
+    return xif(square == xx) {
+        Some(x)
     } else {
-        return None;
-    }
+        None<uint>
+    };
 }
 
 func inverse(a: uint) -> uint {

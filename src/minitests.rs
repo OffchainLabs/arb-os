@@ -460,6 +460,11 @@ fn test_direct_deploy_and_call_add() {
 }
 
 #[test]
+fn test_call_from_contract() {
+    let _log = crate::evm::_evm_test_contract_call(None, false);
+}
+
+#[test]
 fn test_direct_deploy_and_compressed_call_add() {
     let _log = crate::evm::evm_direct_deploy_and_compressed_call_add(None, false);
 }
@@ -595,6 +600,11 @@ pub fn _test_crosscontract_call_using_compressed_batch() {
         Ok(result) => assert_eq!(result, true),
         Err(e) => panic!("error {}", e),
     }
+}
+
+#[test]
+fn test_payment_to_self() {
+    let _ = crate::evm::_evm_payment_to_self(None, false).unwrap();
 }
 
 #[test]

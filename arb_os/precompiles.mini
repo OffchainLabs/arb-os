@@ -288,7 +288,7 @@ func precompile_0x05_pluggable(
     let exp = bytearray_extract(calldata, 96+baseLen, expLen);
     let mod = bytearray_extract(calldata, 96+baseLen+expLen, modLen);
 
-    if let Some(result) = biguint_modexp(
+    return xif let Some(result) = biguint_modexp(
         biguint_fromBytes(base),
         biguint_fromBytes(exp),
         biguint_fromBytes(mod),
@@ -307,10 +307,10 @@ func precompile_0x05_pluggable(
                 memSize
             );
         }
-        return ((true, mem), ());
+        ((true, mem), ())
     } else {
-        return ((true, bytearray_extract(bytearray_new(0), 0, modLen)), ());
-    }
+        ((true, bytearray_extract(bytearray_new(0), 0, modLen)), ())
+    };
 }
 
 public impure func precompile_0x06() {  // ecadd
@@ -381,7 +381,6 @@ public impure func precompile_0x08() { // ecpairing
             let offset = 0;
             while (numPts > 0) {
                 acc = (
-                    acc,
                     (
                         bytearray_get256(calldata, offset),
                         bytearray_get256(calldata, offset+32),
@@ -390,6 +389,7 @@ public impure func precompile_0x08() { // ecpairing
                         bytearray_get256(calldata, offset+5*32),
                         bytearray_get256(calldata, offset+4*32)
                     ),
+                    acc,
                 );
                 offset = offset + 6*32;
                 numPts = numPts - 1;

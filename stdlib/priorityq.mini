@@ -34,18 +34,18 @@ public func priorityq_size(pq: PriorityQ) -> uint {
 }
 
 public func priorityq_get(pq: PriorityQ) -> option<(any, PriorityQ)> {
-    if (priorityq_isEmpty(pq)) {
-        return None;
+    return xif (priorityq_isEmpty(pq)) {
+        None<(any, PriorityQ)>
     } else {
         let ret = pq.contents[0].item;
         let newpq = pq with { size: pq.size-1 }
                        with { contents: pq.contents with { [0] = pq.contents[pq.size-1] } };
-        return Some((ret, pq_pushDown(newpq, 0)));
-    }
+        Some((ret, pq_pushDown(newpq, 0)))
+    };
 }
 
 func pq_pushDown(pq: PriorityQ, index: uint) -> PriorityQ {
-    loop {
+    return xloop {
         let firstKidIdx = 2*index+1;
         if (firstKidIdx >= pq.size) {
             return pq;
@@ -82,12 +82,12 @@ func pq_pushDown(pq: PriorityQ, index: uint) -> PriorityQ {
                 }
             }
         }
-    }
+    };
 }
 
 func pq_pushUp(pq: PriorityQ, index: uint) -> PriorityQ {
     let this = pq.contents[index];
-    loop {
+    return xloop {
         if (index == 0) {
             return pq;
         }
@@ -100,7 +100,7 @@ func pq_pushUp(pq: PriorityQ, index: uint) -> PriorityQ {
                                                  with { [parentIdx] = this } };
             index = parentIdx;
         }
-    }
+    };
 }
 
 public func priorityq_insert(pq: PriorityQ, item: any, priority: uint) -> PriorityQ {

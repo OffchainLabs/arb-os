@@ -534,17 +534,13 @@ pub struct Statement {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub enum StatementKind {
     Noop(),
-    Panic(),
     ReturnVoid(),
     Return(Expr),
     Break(Option<Expr>, Option<String>),
     Expression(Expr),
     Let(MatchPattern, Expr),
     Assign(StringId, Expr),
-    Loop(Vec<Statement>),
     While(Expr, Vec<Statement>),
-    If(IfArm),
-    IfLet(StringId, Expr, Vec<Statement>, Option<Vec<Statement>>),
     Asm(Vec<Instruction>, Vec<Expr>),
     DebugPrint(Expr),
 }
@@ -554,14 +550,6 @@ pub enum StatementKind {
 pub enum MatchPattern {
     Simple(StringId),
     Tuple(Vec<MatchPattern>),
-}
-
-///Represents an arm of an If-Else chain, is Cond(condition, block, possible_else, location) if it
-/// contains a condition, and Catchall(block, location) if it is an else block.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-pub enum IfArm {
-    Cond(Expr, Vec<Statement>, Option<Box<IfArm>>, DebugInfo),
-    Catchall(Vec<Statement>, DebugInfo),
 }
 
 ///Represents a constant mini value of type Option<T> for some type T.
@@ -647,7 +635,7 @@ pub enum ExprKind {
     Constant(Constant),
     OptionInitializer(Box<Expr>),
     FunctionCall(Box<Expr>, Vec<Expr>),
-    CodeBlock(Vec<Statement>, Option<Box<Expr>>),
+    CodeBlock(CodeBlock),
     ArrayOrMapRef(Box<Expr>, Box<Expr>),
     StructInitializer(Vec<FieldInitializer>),
     Tuple(Vec<Expr>),
@@ -658,7 +646,11 @@ pub enum ExprKind {
     StructMod(Box<Expr>, String, Box<Expr>),
     UnsafeCast(Box<Expr>, Type),
     Asm(Type, Vec<Instruction>, Vec<Expr>),
+    Panic,
     Try(Box<Expr>),
+    If(Box<Expr>, CodeBlock, Option<CodeBlock>),
+    IfLet(StringId, Box<Expr>, CodeBlock, Option<CodeBlock>),
+    Loop(Vec<Statement>),
     NewBuffer,
 }
 
@@ -752,5 +744,17 @@ pub struct FieldInitializer {
 impl FieldInitializer {
     pub fn new(name: String, value: Expr) -> Self {
         FieldInitializer { name, value }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct CodeBlock {
+    pub body: Vec<Statement>,
+    pub ret_expr: Option<Box<Expr>>,
+}
+
+impl CodeBlock {
+    pub fn new(body: Vec<Statement>, ret_expr: Option<Box<Expr>>) -> Self {
+        Self { body, ret_expr }
     }
 }

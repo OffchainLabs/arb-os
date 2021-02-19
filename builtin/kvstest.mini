@@ -132,19 +132,19 @@ impure func tests() -> uint {
 }
 
 func isSome(x: option<any>) -> bool {
-	if let Some(unused) = x {
-		return true;
+	return xif let Some(unused) = x {
+		true
 	} else {
-		return false;
-	}
+		false
+	};
 }
 
 func getSomeOr(x: option<any>, backupVal: any) -> any {
-	if let Some(val) = x {
-		return val;
+	return xif let Some(val) = x {
+		val
 	} else {
-		return backupVal;
-	}
+		backupVal
+	};
 }
 
 func sumForKvsIterator(key: any, value: any, state: any) -> any {
