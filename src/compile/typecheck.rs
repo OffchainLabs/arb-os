@@ -2193,7 +2193,7 @@ fn typecheck_unary_op(
                         val.modulo(
                             &Uint256::from_string_hex(
                                 "1__0000_0000__0000_0000__0000_0000__0000_0000__0000_0000",
-                            ) //2^40, 1+max address
+                            ) //2^160, 1+max address
                             .unwrap(), //safe because we know this str is valid
                         )
                         .unwrap(), //safe because we know this str isn't 0
