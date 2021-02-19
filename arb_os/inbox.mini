@@ -184,6 +184,7 @@ public impure func inbox_get() -> IncomingRequest {
                             indexInParent: ~0,
                         },
                         aggregator: None<AggregatorInfo>,
+                        adminMode: true,
                     };
 
                     if (newMsg.blockNumber == 0) {
@@ -192,7 +193,7 @@ public impure func inbox_get() -> IncomingRequest {
                     if (newMsg.timestamp == 0) {
                         newMsg = newMsg with { timestamp: globalInbox.timestamp };
                     }
-                    return unsafecast<IncomingRequest>(newMsg);
+                    return newMsg;
                 }
             } else {
                 globalInbox = globalInbox with {
