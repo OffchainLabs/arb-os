@@ -32,9 +32,10 @@ use pluggables::installPluggable;
 use pluggables::callPluggable;
 use pluggables::bindContractAddressToPluggable;
 
-use gasAccounting::gasAccounting_addToReserveFunds;
-use gasAccounting::gasAccounting_getFeeRecipient;
-use gasAccounting::gasAccounting_setFeeRecipient;
+use gasAccounting::gasAccounting_addToReserveInCurrentContext;
+use gasAccounting::gasAccounting_setFeesEnabled;
+use gasAccounting::gasAccounting_getFeeRecipients;
+use gasAccounting::gasAccounting_setFeeRecipients;
 use gasAccounting::gasAccounting_getFeeRates;
 use gasAccounting::gasAccounting_setFeeRates;
 use gasAccounting::gasAccounting_getFeeMaxes;
@@ -86,10 +87,12 @@ public impure func arbowner_txcall() {
            arbowner_finishCodeUploadAsPluggable(topFrame, calldata);
         } elseif (funcCode == 0xc3bf429d) {
             arbowner_addToReserveFunds(topFrame, calldata);
-        } elseif (funcCode == 0x4ccb20c0) {
-            arbowner_getFeeRecipient(topFrame, calldata);
-        } elseif (funcCode == 0xe74b981b) {
-            arbowner_setFeeRecipient(topFrame, calldata);
+        } elseif (funcCode == 0xa901dd92) {
+            arbowner_setFeesEnabled(topFrame, calldata);
+        } elseif (funcCode == 0x08df6923) {
+            arbowner_getFeeRecipients(topFrame, calldata);
+        } elseif (funcCode == 0xc6cabb40) {
+            arbowner_setFeeRecipients(topFrame, calldata);
         } elseif (funcCode == 0xd6e7a55e) {
             arbowner_getFeeRates(topFrame, calldata);
         } elseif (funcCode == 0x30d2361e) {
@@ -126,38 +129,45 @@ impure func arbowner_addToReserveFunds(topFrame: EvmCallFrame, calldata: ByteArr
     }
     let callvalue = evmCallFrame_getCallvalue(topFrame);
     if (callvalue > 0) {
-        gasAccounting_addToReserveFunds(callvalue);
+        gasAccounting_addToReserveInCurrentContext(callvalue);
     }
     evmOp_return(0, 0);
 }
 
-impure func arbowner_getFeeRecipient(topFrame: EvmCallFrame, calldata: ByteArray) { // () -> (address)
+impure func arbowner_setFeesEnabled(topFrame: EvmCallFrame, calldata: ByteArray) { // (bool)
+    if (bytearray_size(calldata) != 36) {
+        evmOp_revert_knownCodePc(address(const::Address_ArbOwner), 200, 0, 0);
+    }
+    gasAccounting_setFeesEnabled(bytearray_get256(calldata, 4) != 0);
+    evmOp_return(0, 0);
+}
+
+impure func arbowner_getFeeRecipients(topFrame: EvmCallFrame, calldata: ByteArray) { // () -> (address, address)
     if (bytearray_size(calldata) != 4) {
         evmOp_revert_knownCodePc(address(const::Address_ArbOwner), 100, 0, 0);
     }
 
-    if let Some(recipient) = gasAccounting_getFeeRecipient() {
-        let mem = bytearray_set256(bytearray_new(0), 0, uint(recipient));
-        if (evmCallStack_setTopFrameMemory(mem)) {
-            evmOp_return(0, 32);
-        } else {
-            evmOp_revert_knownCodePc(address(const::Address_ArbOwner), 101, 0, 0);
-        }
+    let (r1, r2) = gasAccounting_getFeeRecipients();
+    let mem = bytearray_set256(
+        bytearray_set256(bytearray_new(0), 0, uint(r1)),
+        32,
+        uint(r2)
+    );
+    if (evmCallStack_setTopFrameMemory(mem)) {
+        evmOp_return(0, 64);
     } else {
-        evmOp_revert_knownCodePc(address(const::Address_ArbOwner), 102, 0, 0);
+        evmOp_revert_knownCodePc(address(const::Address_ArbOwner), 101, 0, 0);
     }
 }
 
-impure func arbowner_setFeeRecipient(topFrame: EvmCallFrame, calldata: ByteArray) { // (address)
-    if (bytearray_size(calldata) != 36) {
+impure func arbowner_setFeeRecipients(topFrame: EvmCallFrame, calldata: ByteArray) { // (address, address)
+    if (bytearray_size(calldata) != 68) {
         evmOp_revert_knownCodePc(address(const::Address_ArbOwner), 110, 0, 0);
     }
-    let recipient = address(bytearray_get256(calldata, 4));
-    if let Some(_) = gasAccounting_setFeeRecipient(recipient) {
-        evmOp_return(0,0);
-    } else {
-        evmOp_revert_knownCodePc(address(const::Address_ArbOwner), 111, 0, 0);
-    }
+    let recipient1 = address(bytearray_get256(calldata, 4));
+    let recipient2 = address(bytearray_get256(calldata, 36));
+    gasAccounting_setFeeRecipients(recipient1, recipient2);
+    evmOp_return(0,0);
 }
 
 impure func arbowner_getFeeRates(topFrame: EvmCallFrame, calldata: ByteArray) { // () -> (uint, uint, uint, uint)

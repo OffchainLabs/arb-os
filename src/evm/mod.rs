@@ -3,8 +3,8 @@
  */
 
 use crate::compile::miniconstants::init_constant_table;
-use crate::evm::abi::{FunctionTable, _ArbInfo};
 use crate::evm::abi::{ArbAddressTable, ArbBLS, ArbFunctionTable, ArbSys, ArbosTest, _ArbOwner};
+use crate::evm::abi::{FunctionTable, _ArbInfo};
 use crate::run::{load_from_file, RuntimeEnvironment};
 use crate::uint256::Uint256;
 use abi::AbiForContract;
@@ -112,22 +112,23 @@ pub fn evm_xcontract_call_with_constructors(
 
 pub fn _evm_run_with_gas_charging(
     log_to: Option<&Path>,
-    charging_policy: Option<(Uint256, Uint256, Uint256)>,
+    funding: Uint256,
     debug: bool,
     _profile: bool,
 ) -> Result<bool, ethabi::Error> {
     // returns Ok(true) if success, Ok(false) if insufficient gas money, Err otherwise
     use std::convert::TryFrom;
-    let rt_env = RuntimeEnvironment::new(Uint256::from_usize(1111), charging_policy);
+    let rt_env = RuntimeEnvironment::new(Uint256::from_usize(1111), None);
     let mut machine = load_from_file(Path::new("arb_os/arbos.mexe"), rt_env);
     machine.start_at_zero();
 
-    let my_addr = Uint256::from_usize(1025);
+    let wallet = machine.runtime_env.new_wallet();
+    let my_addr = Uint256::from_bytes(wallet.address().as_bytes());
 
     machine.runtime_env.insert_eth_deposit_message(
         my_addr.clone(),
         my_addr.clone(),
-        Uint256::_from_eth(1),
+        funding,
     );
     let _gas_used = if debug {
         machine.debug(None)
@@ -135,6 +136,7 @@ pub fn _evm_run_with_gas_charging(
         machine.run(None)
     }; // handle these ETH deposit messages
 
+    println!("First deploy ...");
     let mut fib_contract = AbiForContract::new_from_file(&test_contract_path("Fibonacci"))?;
     if let Err(receipt) = fib_contract.deploy(&[], &mut machine, Uint256::zero(), None, None, debug)
     {
@@ -145,6 +147,7 @@ pub fn _evm_run_with_gas_charging(
         }
     }
 
+    println!("Second deploy ...");
     let mut pc_contract = AbiForContract::new_from_file(&test_contract_path("PaymentChannel"))?;
     if let Err(receipt) = pc_contract.deploy(
         &[ethabi::Token::Address(ethereum_types::H160::from_slice(
@@ -163,6 +166,12 @@ pub fn _evm_run_with_gas_charging(
         }
     }
 
+    // turn on gas charging
+    let arbowner = _ArbOwner::_new(&wallet, false);
+    arbowner._set_fees_enabled(&mut machine, true, true)?;
+    machine.runtime_env._advance_time(Uint256::one(), None, false);
+
+    println!("Function call ...");
     let (logs, sends) = pc_contract.call_function(
         my_addr.clone(),
         "deposit",
@@ -401,17 +410,23 @@ pub fn _evm_test_arbowner(log_to: Option<&Path>, debug: bool) -> Result<(), etha
 
     let arbowner = _ArbOwner::_new(&wallet, debug);
 
+    println!("A");
     arbowner._give_ownership(&mut machine, my_addr, Some(Uint256::zero()))?;
 
+    println!("B");
     arbowner._start_code_upload(&mut machine)?;
 
+    println!("C");
     let mcode = vec![0x90u8, 1u8, 0u8, 42u8]; // debugprint(42)
     arbowner._continue_code_upload(&mut machine, mcode)?;
 
+    println!("D");
     arbowner._finish_code_upload_as_arbos_upgrade(&mut machine)?;
 
+    println!("E");
     arbowner._set_blocks_per_send(&mut machine, Uint256::from_u64(10))?;
 
+    println!("F");
     arbowner._change_sequencer(
         &mut machine,
         Uint256::from_u64(18498),
@@ -419,6 +434,7 @@ pub fn _evm_test_arbowner(log_to: Option<&Path>, debug: bool) -> Result<(), etha
         Uint256::from_u64(12 * 14),
     )?;
 
+    println!("G");
     if let Some(path) = log_to {
         machine.runtime_env.recorder.to_file(path).unwrap();
     }
@@ -495,15 +511,19 @@ pub fn _evm_test_rate_control(log_to: Option<&Path>, debug: bool) -> Result<(), 
     assert_eq!(num2, max_num2);
     assert_eq!(denom2, max_denom2);
 
-    let recipient = arbowner._get_fee_recipient(&mut machine)?;
+    let (r1, r2) = arbowner._get_fee_recipients(&mut machine)?;
+    assert_eq!(&r1, const_table.get("NetFee_defaultRecipient").unwrap());
     assert_eq!(
-        &recipient,
-        const_table.get("NetFee_defaultRecipient").unwrap()
+        &r2,
+        const_table.get("CongestionFee_defaultRecipient").unwrap()
     );
-    let new_recipient = recipient.add(&Uint256::one());
-    arbowner._set_fee_recipient(&mut machine, new_recipient.clone())?;
-    let updated_recipient = arbowner._get_fee_recipient(&mut machine)?;
-    assert_eq!(new_recipient, updated_recipient);
+
+    let new_r1 = r1.add(&Uint256::one());
+    let new_r2 = r2.add(&Uint256::one());
+    arbowner._set_fee_recipients(&mut machine, new_r1.clone(), new_r2.clone())?;
+    let (updated_r1, updated_r2) = arbowner._get_fee_recipients(&mut machine)?;
+    assert_eq!(new_r1, updated_r1);
+    assert_eq!(new_r2, updated_r2);
 
     if let Some(path) = log_to {
         machine.runtime_env.recorder.to_file(path).unwrap();
@@ -1755,7 +1775,7 @@ pub fn _evm_test_contract_call(log_to: Option<&Path>, debug: bool) {
                 ethabi::Token::Uint(ethabi::Uint::one()),
                 ethabi::Token::Uint(Uint256::from_u64(i).to_u256()),
             ]
-                .as_ref(),
+            .as_ref(),
             &mut machine,
             Uint256::zero(),
             debug,
@@ -1772,7 +1792,7 @@ pub fn _evm_test_contract_call(log_to: Option<&Path>, debug: bool) {
                     .unwrap();
                 assert_eq!(
                     decoded_result[0],
-                    ethabi::Token::Uint(ethabi::Uint::try_from(1+i).unwrap())
+                    ethabi::Token::Uint(ethabi::Uint::try_from(1 + i).unwrap())
                 );
             }
             Err(e) => {

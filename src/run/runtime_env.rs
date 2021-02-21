@@ -198,7 +198,7 @@ impl RuntimeEnvironment {
             sender_addr.clone(),
             msg,
         );
-        if msg[0] == 0 {
+        if !is_buddy_deploy && (msg[0] == 0) {
             Uint256::avm_hash2(
                 &sender_addr,
                 &Uint256::avm_hash2(
@@ -287,7 +287,7 @@ impl RuntimeEnvironment {
         value: Uint256,
         data: &[u8],
     ) -> Uint256 {
-        let mut buf = vec![1u8];
+        let mut buf = vec![];  //vec![1u8];
         buf.extend(max_gas.to_bytes_be());
         buf.extend(gas_price_bid.to_bytes_be());
         buf.extend(Uint256::zero().to_bytes_be()); // destination address 0
@@ -854,6 +854,19 @@ impl ArbosReceipt {
 
     pub fn get_return_code(&self) -> Uint256 {
         self.return_code.clone()
+    }
+
+    pub fn _get_return_code_text(&self) -> String {
+        match self.get_return_code().to_u64().unwrap() {
+            0 => "success",
+            1 => "transaction reverted",
+            2 => "dropped due to L2 congestion",
+            3 => "insufficient funds for ArbGas",
+            4 => "insufficient balance for callvalue",
+            5 => "bad sequence number",
+            6 => "message format error",
+            _ => "unknown error",
+        }.to_string()
     }
 
     pub fn succeeded(&self) -> bool {

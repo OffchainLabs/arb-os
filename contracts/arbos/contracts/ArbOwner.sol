@@ -8,8 +8,9 @@ interface ArbOwner {
 
     function addToReserveFunds() external payable;
 
-    function getFeeRecipient() external view returns (address);
-    function setFeeRecipient(address recipient) external;
+    function setFeesEnabled(bool enabled) external;
+    function getFeeRecipients() external view returns (address, address);
+    function setFeeRecipients(address netFeeRecipient, address congestionFeeRecipient) external;
     function getFeeRates() external view returns (uint, uint, uint, uint);
     function setFeeRates(uint num1, uint denom1, uint num2, uint denom2) external;
     function getFeeMaxes() external view returns (uint, uint, uint, uint);

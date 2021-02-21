@@ -18,7 +18,7 @@ use std::bytestream::bytestream_get64;
 use std::bytestream::bytestream_get256;
 use std::bytestream::bytestream_skipBytes;
 
-use gasAccounting::gasAccounting_setFeeParams;
+use gasAccounting::gasAccounting_setChargingParams;
 use gasAccounting::gasAccounting_postInitMessage;
 
 
@@ -99,14 +99,32 @@ impure func doInitializationOption(stream: ByteStream) -> option<ByteStream> {
         globalChainParams = Some(globalChainParams? with { millisecondsPerBlock: 1000*secsPerBlock });
         Some(ustr)
     } elseif (optionId == const::InitOption_setChargingParams) {
-        if (numPayloadBytes != 3*32) {
+        if (numPayloadBytes != 6*32) {
             // unexpected payload size; discard the payload and ignore this option
             return bytestream_skipBytes(stream, numPayloadBytes);
         }
-        let (ustr, baseGasPrice) = bytestream_get256(stream)?;
-        let (ustr, storageCharge) = bytestream_get256(ustr)?;
-        let (ustr, gasFeeRecipientAsUint) = bytestream_get256(ustr)?;
-        gasAccounting_setFeeParams(baseGasPrice, storageCharge, address(gasFeeRecipientAsUint));
+        let (ustr, speedLimitPerBlock) = bytestream_get256(stream)?;
+        let (ustr, l1GasPerL2Tx) = bytestream_get256(ustr)?;
+        let (ustr, l1GasPerL2Calldata) = bytestream_get256(ustr)?;
+        let (ustr, l1GasPerStorage) = bytestream_get256(ustr)?;
+        let (ustr, arbGasDivisor) = bytestream_get256(ustr)?;
+        let (ustr, netFeeRecipientU) = bytestream_get256(ustr)?;
+        let (ustr, congestionFeeRecipientU) = bytestream_get256(ustr)?;
+
+        if let Some(params) = globalChainParams {
+            globalChainParams = Some(params with {
+                arbGasSpeedLimitPerBlock: speedLimitPerBlock
+            });
+        }
+
+        gasAccounting_setChargingParams(
+            l1GasPerL2Tx,
+            l1GasPerL2Calldata,
+            l1GasPerStorage,
+            arbGasDivisor,
+            address(netFeeRecipientU),
+            address(congestionFeeRecipientU),
+        );
         Some(ustr)
     } else {
         // unrecognized option, discard it

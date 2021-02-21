@@ -1039,6 +1039,26 @@ public impure func evmCallStack_setAccount(addr: address, acct: Account) -> bool
     };
 }
 
+public impure func evmCallStack_getAccountInCurrentContext(addr: address) -> Account {
+    return xif let Some(topFrame) = globalCallStack {
+        evmCallFrame_getAccount(topFrame, addr)
+    } else {
+        accountStore_get(getGlobalAccountStore(), addr)
+    };
+}
+
+public impure func evmCallStack_setAccountInCurrentContext(addr: address, acct: Account) {
+    if ( ! evmCallStack_setAccount(addr, acct)) {
+        setGlobalAccountStore(
+            accountStore_set(
+                getGlobalAccountStore(),
+                addr,
+                acct,
+            )
+        );
+    }
+}
+
 public impure func evmCallStack_getTopFrameMemoryOrDie() -> ByteArray {
     return xif let Some(topFrame) = globalCallStack {
         topFrame.memory

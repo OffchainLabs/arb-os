@@ -192,6 +192,11 @@ pub fn init_constant_table() -> HashMap<String, Uint256> {
         // chain initialization options
         ("InitOption_setSecondsPerBlock", 1),
         ("InitOption_setChargingParams", 2),
+        // charging mechanism
+        ("Charging_DefaultL1GasPerL2Tx", 10000),
+        ("Charging_DefaultL1GasPerCalldataByte", 16),
+        ("Charging_DefaultL1GasPerStorage", 2000),
+        ("Charging_DefaultArbGasDivisor", 10000),
         // fee customizability
         ("NetFee_defaultRecipient", 42),
         ("NetFee_defaultRate1Num", 1),
@@ -221,6 +226,8 @@ pub fn init_constant_table() -> HashMap<String, Uint256> {
     }
 
     for (s, u) in &[
+        ("Charging_DefaultNetworkFeeRecipient", "0"),
+        ("Charging_DefaultCongestionFeeRecipient", "0"),
         (
             "SpecialAccount_gasAccountingReserve",
             // Keccak256 of "Arbitrum gas accounting reserve account"
