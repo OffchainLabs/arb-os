@@ -148,20 +148,7 @@ fn inline(
             {
                 let found_func = state.0.iter().find(|func| func.name == id);
                 if let Some(func) = found_func {
-                    let mut code: Vec<_> = args
-                        .iter()
-                        .zip(func.args.iter())
-                        .map(|(arg, otherarg)| TypeCheckedStatement {
-                            kind: TypeCheckedStatementKind::Let(
-                                TypeCheckedMatchPattern::Simple(
-                                    otherarg.name,
-                                    otherarg.tipe.clone(),
-                                ),
-                                arg.clone(),
-                            ),
-                            debug_info: DebugInfo::default(),
-                        })
-                        .collect();
+                    let mut code: Vec<_> = vec![TypeCheckedStatement { kind: TypeCheckedStatementKind::Let(TypeCheckedMatchPattern::Tuple(func.args.iter().map(|arg| TypeCheckedMatchPattern::Simple(arg.name, arg.tipe.clone())).collect(), Type::Any), TypeCheckedExpr { kind: TypeCheckedExprKind::Tuple(args.clone(), Type::Any), debug_info: DebugInfo::default()}), debug_info: DebugInfo::default()}];
                     code.append(&mut func.code.clone());
                     let last = code.pop();
                     let block_exp = match last {
