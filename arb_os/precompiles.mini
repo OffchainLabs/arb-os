@@ -42,6 +42,7 @@ use std::ripemd160::ripemd160_byteArray;
 
 use arbsys::arbsys_txcall;
 use arbowner::arbowner_txcall;
+use arbgasinfo::arbgasinfo_txcall;
 use arbosTest::arbosTest_txcall;
 use arbsys::arbAddressTable_txcall;
 use arbsys::arbBLS_txcall;
@@ -141,6 +142,12 @@ public impure func precompiles_init(acctStore: AccountStore) -> option<AccountSt
         acctStore,
         address(const::Address_ArbOwner),
         makeTrampoline(arbowner_txcall),
+        true,
+    )?;
+    acctStore = accountStore_createBuiltinContract(
+        acctStore,
+        address(const::Address_ArbGasInfo),
+        makeTrampoline(arbgasinfo_txcall),
         true,
     )?;
     return Some(acctStore);

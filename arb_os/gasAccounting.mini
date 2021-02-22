@@ -188,6 +188,26 @@ impure func setPrices(feeConfig: FeeConfig, params: PricingParameters, congestio
     };
 }
 
+public impure func gasAccounting_getPricesInWei() -> (uint, uint, uint, uint, uint, uint) {
+    let prices = gasAccountingInfo.currentPrices;
+    return (
+        prices.perL2Tx,
+        prices.perL1CalldataByte,
+        prices.perStorageCell,
+        prices.perArbGasBase,
+        prices.perArbGasCongestion,
+        prices.perArbGasTotal,
+    );
+}
+
+type GasPrices = struct {    // all prices in this struct are denominated in wei
+    perL2Tx: uint,
+    perL1CalldataByte: uint,
+    perStorageCell: uint,
+    perArbGasBase: uint,
+    perArbGasCongestion: uint,
+    perArbGasTotal: uint,
+}
 public impure func gasAccounting_setFeesEnabled(enabled: bool) {
     gasAccountingInfo = gasAccountingInfo with {
         feeConfig: gasAccountingInfo.feeConfig with { enabled: enabled }
