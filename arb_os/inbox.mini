@@ -170,22 +170,7 @@ public impure func inbox_get() -> IncomingRequest {
                     };
                     return eobMsg;
                 } else {
-                    let newMsgRaw = unsafecast<IncomingRequestFromInbox>(rawSideloadMsg);
-                    let newMsg = struct {
-                        kind: newMsgRaw.kind,
-                        blockNumber: newMsgRaw.blockNumber,
-                        timestamp: newMsgRaw.timestamp,
-                        sender: newMsgRaw.sender,
-                        requestId: newMsgRaw.requestId,
-                        msgData: bytearray_fromSizeAndBuffer(newMsgRaw.msgSize, newMsgRaw.msgData),
-                        provenance: struct {
-                            l1SeqNum: newMsgRaw.requestId,
-                            parentRequestId: 0,
-                            indexInParent: ~0,
-                        },
-                        aggregator: None<AggregatorInfo>,
-                        adminMode: true,
-                    };
+                    let newMsg = incomingRequestFromRaw(unsafecast<IncomingRequestFromInbox>(rawSideloadMsg), true);
 
                     if (newMsg.blockNumber == 0) {
                         newMsg = newMsg with { blockNumber: globalInbox.blockNum };
@@ -210,8 +195,6 @@ public impure func inbox_get() -> IncomingRequest {
             globalInbox = globalInbox with { queue: updatedQ };
         }
 
-        globalInbox = globalInbox with { queue: updatedQ };
-
         if (ebMsg.kind == const::L1MessageType_chainInit) {
             chainParams_gotParamsMessage(ebMsg.sender, ebMsg.msgData);
         } else {
@@ -219,6 +202,24 @@ public impure func inbox_get() -> IncomingRequest {
                 requestId: uint(hash(bytes32(chainParams_chainId()), bytes32(ebMsg.requestId)))
             };
         }
+    };
+}
+
+func incomingRequestFromRaw(newMsgRaw: IncomingRequestFromInbox, adminMode: bool) -> IncomingRequest {
+    return struct {
+        kind: newMsgRaw.kind,
+        blockNumber: newMsgRaw.blockNumber,
+        timestamp: newMsgRaw.timestamp,
+        sender: newMsgRaw.sender,
+        requestId: newMsgRaw.requestId,
+        msgData: bytearray_fromSizeAndBuffer(newMsgRaw.msgSize, newMsgRaw.msgData),
+        provenance: struct {
+            l1SeqNum: newMsgRaw.requestId,
+            parentRequestId: 0,
+            indexInParent: ~0,
+        },
+        aggregator: None<AggregatorInfo>,
+        adminMode: adminMode,
     };
 }
 
@@ -242,23 +243,7 @@ impure func getFromL1Inbox(inbox: Inbox) -> Inbox {
                     seenMsgAtThisBlockNum: false
                 };
             } else {
-                let newMsgRaw = unsafecast<IncomingRequestFromInbox>(rawSideloadMsg);
-                let newMsg = struct {
-                    kind: newMsgRaw.kind,
-                    blockNumber: newMsgRaw.blockNumber,
-                    timestamp: newMsgRaw.timestamp,
-                    sender: newMsgRaw.sender,
-                    requestId: newMsgRaw.requestId,
-                    msgData: bytearray_fromSizeAndBuffer(newMsgRaw.msgSize, newMsgRaw.msgData),
-                    provenance: struct {
-                        l1SeqNum: newMsgRaw.requestId,
-                        parentRequestId: 0,
-                        indexInParent: ~0,
-                    },
-                    aggregator: None<AggregatorInfo>,
-                    adminMode: true,
-                };
-
+                let newMsg = incomingRequestFromRaw(unsafecast<IncomingRequestFromInbox>(rawSideloadMsg), true);
                 if (newMsg.blockNumber == 0) {
                     newMsg = newMsg with { blockNumber: inbox.blockNum };
                 }
@@ -272,22 +257,7 @@ impure func getFromL1Inbox(inbox: Inbox) -> Inbox {
         }
     }
 
-    let newMsgRaw = asm() IncomingRequestFromInbox { inbox };
-    let newMsg = struct {
-        kind: newMsgRaw.kind,
-        blockNumber: newMsgRaw.blockNumber,
-        timestamp: newMsgRaw.timestamp,
-        sender: newMsgRaw.sender,
-        requestId: newMsgRaw.requestId,
-        msgData: bytearray_fromSizeAndBuffer(newMsgRaw.msgSize, newMsgRaw.msgData),
-        provenance: struct {
-            l1SeqNum: newMsgRaw.requestId,
-            parentRequestId: 0,
-            indexInParent: ~0,
-        },
-        aggregator: None<AggregatorInfo>,
-        adminMode: false,
-    };
+    let newMsg = incomingRequestFromRaw(asm() IncomingRequestFromInbox { inbox }, false);
 
     if (newMsg.blockNumber == 0) {
         newMsg = newMsg with { blockNumber: inbox.blockNum };
@@ -309,22 +279,7 @@ impure func getFromL1Inbox(inbox: Inbox) -> Inbox {
 }
 
 impure func getFromL1InboxSequencer(inbox: Inbox, seq: SequencerState) -> Inbox {
-    let newMsgRaw = asm() IncomingRequestFromInbox { inbox };
-    let newMsg = struct {
-        kind: newMsgRaw.kind,
-        blockNumber: newMsgRaw.blockNumber,
-        timestamp: newMsgRaw.timestamp,
-        sender: newMsgRaw.sender,
-        requestId: newMsgRaw.requestId,
-        msgData: bytearray_fromSizeAndBuffer(newMsgRaw.msgSize, newMsgRaw.msgData),
-        provenance: struct {
-            l1SeqNum: newMsgRaw.requestId,
-            parentRequestId: 0,
-            indexInParent: ~0,
-        },
-        aggregtor: None<AggregatorInfo>,
-        adminMode: false,
-    };
+    let newMsg = incomingRequestFromRaw(asm() IncomingRequestFromInbox { inbox }, false);
 
     let blockNum = newMsg.blockNumber;
     if (blockNum == 0) {
