@@ -148,14 +148,43 @@ fn inline(
             {
                 let found_func = state.0.iter().find(|func| func.name == id);
                 if let Some(func) = found_func {
-                    let mut code: Vec<_> = vec![TypeCheckedStatement { kind: TypeCheckedStatementKind::Let(TypeCheckedMatchPattern::Tuple(func.args.iter().map(|arg| TypeCheckedMatchPattern::Simple(arg.name, arg.tipe.clone())).collect(), Type::Any), TypeCheckedExpr { kind: TypeCheckedExprKind::Tuple(args.clone(), Type::Any), debug_info: DebugInfo::default()}), debug_info: DebugInfo::default()}];
+                    let mut code: Vec<_> = vec![TypeCheckedStatement {
+                        kind: TypeCheckedStatementKind::Let(
+                            TypeCheckedMatchPattern::Tuple(
+                                func.args
+                                    .iter()
+                                    .map(|arg| {
+                                        TypeCheckedMatchPattern::Simple(arg.name, arg.tipe.clone())
+                                    })
+                                    .collect(),
+                                Type::Any,
+                            ),
+                            TypeCheckedExpr {
+                                kind: TypeCheckedExprKind::Tuple(
+                                    args.iter()
+                                        .cloned()
+                                        .map(|mut expr| {
+                                            expr.recursive_apply(strip_returns, &(), &mut ());
+                                            expr
+                                        })
+                                        .collect(),
+                                    Type::Any,
+                                ),
+                                debug_info: DebugInfo::default(),
+                            },
+                        ),
+                        debug_info: DebugInfo::default(),
+                    }];
                     code.append(&mut func.code.clone());
                     let last = code.pop();
                     let block_exp = match last {
                         Some(TypeCheckedStatement {
                             kind: TypeCheckedStatementKind::Return(mut exp),
                             debug_info: _,
-                        }) => Some(Box::new({exp.recursive_apply(strip_returns, &(), &mut ()); exp})),
+                        }) => Some(Box::new({
+                            exp.recursive_apply(strip_returns, &(), &mut ());
+                            exp
+                        })),
                         _ => {
                             if let Some(statement) = last {
                                 code.push(statement);
