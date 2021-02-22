@@ -199,15 +199,8 @@ pub fn init_constant_table() -> HashMap<String, Uint256> {
         ("Charging_DefaultL1GasPerStorage", 2000),
         ("Charging_DefaultArbGasDivisor", 10000),
         // fee customizability
-        ("NetFee_defaultRecipient", 42),
-        ("NetFee_defaultRate1Num", 1),
-        ("NetFee_defaultRate1Denom", 10000),
-        ("NetFee_maxRate1Num", 1),
-        ("NetFee_maxRate1Denom", 1000),
-        ("NetFee_defaultRate2Num", 1),
-        ("NetFee_defaultRate2Denom", 10000),
-        ("NetFee_maxRate2Num", 1),
-        ("NetFee_maxRate2Denom", 1000),
+        ("NetFee_defaultRateNumerator", 15),
+        ("NetFee_defaultRateDenominator", 100),
         // sequencer constants
         ("Sequencer_maxDelayBlocks", 32768),   // 128*256
         ("Sequencer_maxDelaySeconds", 983040), // 30*Sequencer_maxDelayBlocks
