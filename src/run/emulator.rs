@@ -2116,7 +2116,7 @@ impl Machine {
                         self.stack.push(Value::Int(Uint256::from_usize(res)));
                         self.incr_pc();
                         Ok(true)
-                    },
+                    }
                     Opcode::AVMOpcode(AVMOpcode::CompileWasm) => {
                         let offset = self.stack.pop_usize(&self.state)?;
                         let buf = self.stack.pop_buffer(&self.state)?;
@@ -2140,7 +2140,7 @@ impl Machine {
                         self.stack.push(Value::WasmCodePoint(Box::new(val), vec));
                         self.incr_pc();
                         Ok(true)
-                    },
+                    }
                     Opcode::GetLocal |  // these opcodes are for intermediate use in compilation only
 					Opcode::SetLocal |  // they should never appear in fully compiled code
 					Opcode::MakeFrame(_, _) |

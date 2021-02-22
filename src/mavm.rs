@@ -1026,6 +1026,15 @@ impl Opcode {
             "ecpairing" => Opcode::AVMOpcode(AVMOpcode::EcPairing),
             "addmod" => Opcode::AVMOpcode(AVMOpcode::AddMod),
             "mulmod" => Opcode::AVMOpcode(AVMOpcode::MulMod),
+            "newbuffer" => Opcode::AVMOpcode(AVMOpcode::NewBuffer),
+            "getbuffer8" => Opcode::AVMOpcode(AVMOpcode::GetBuffer8),
+            "getbuffer64" => Opcode::AVMOpcode(AVMOpcode::GetBuffer64),
+            "getbuffer256" => Opcode::AVMOpcode(AVMOpcode::GetBuffer256),
+            "setbuffer8" => Opcode::AVMOpcode(AVMOpcode::SetBuffer8),
+            "setbuffer64" => Opcode::AVMOpcode(AVMOpcode::SetBuffer64),
+            "setbuffer256" => Opcode::AVMOpcode(AVMOpcode::SetBuffer256),
+            "runwasm" => Opcode::AVMOpcode(AVMOpcode::RunWasm),
+            "compilewasm" => Opcode::AVMOpcode(AVMOpcode::CompileWasm),
             _ => {
                 panic!("opcode not supported in asm segment: {}", name);
             }
@@ -1105,6 +1114,8 @@ impl Opcode {
             Opcode::AVMOpcode(AVMOpcode::SetBuffer8) => "setbuffer8",
             Opcode::AVMOpcode(AVMOpcode::SetBuffer64) => "setbuffer64",
             Opcode::AVMOpcode(AVMOpcode::SetBuffer256) => "setbuffer256",
+            Opcode::AVMOpcode(AVMOpcode::RunWasm) => "runwasm",
+            Opcode::AVMOpcode(AVMOpcode::CompileWasm) => "compilewasm",
             _ => "Unknown",
         }
     }
@@ -1192,6 +1203,8 @@ impl Opcode {
             0xa4 => Some(Opcode::AVMOpcode(AVMOpcode::SetBuffer8)),
             0xa5 => Some(Opcode::AVMOpcode(AVMOpcode::SetBuffer64)),
             0xa6 => Some(Opcode::AVMOpcode(AVMOpcode::SetBuffer256)),
+            0xa7 => Some(Opcode::AVMOpcode(AVMOpcode::RunWasm)),
+            0xa8 => Some(Opcode::AVMOpcode(AVMOpcode::CompileWasm)),
             _ => None,
         }
     }
@@ -1279,6 +1292,8 @@ impl Opcode {
             Opcode::AVMOpcode(AVMOpcode::SetBuffer8) => Some(0xa4),
             Opcode::AVMOpcode(AVMOpcode::SetBuffer64) => Some(0xa5),
             Opcode::AVMOpcode(AVMOpcode::SetBuffer256) => Some(0xa6),
+            Opcode::AVMOpcode(AVMOpcode::RunWasm) => Some(0xa7),
+            Opcode::AVMOpcode(AVMOpcode::CompileWasm) => Some(0xa8),
 
             _ => None,
         }
