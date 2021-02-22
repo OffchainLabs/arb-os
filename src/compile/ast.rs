@@ -614,6 +614,7 @@ pub enum Constant {
     Int(Uint256),
     Bool(bool),
     Option(OptionConst),
+    Buffer(Vec<u8>),
     Null,
 }
 
@@ -644,6 +645,7 @@ impl Constant {
             Constant::Uint(_) => Type::Uint,
             Constant::Int(_) => Type::Int,
             Constant::Bool(_) => Type::Bool,
+            Constant::Buffer(_) => Type::Buffer,
             Constant::Option(inner) => inner.type_of(),
             Constant::Null => Type::Void,
         }
@@ -656,6 +658,7 @@ impl Constant {
             Constant::Int(i) => Value::Int(i.clone()),
             Constant::Bool(b) => Value::Int(Uint256::from_bool(*b)),
             Constant::Option(c) => c.value(),
+            Constant::Buffer(buf) => Value::new_buffer(buf.to_vec()),
             Constant::Null => Value::none(),
         }
     }

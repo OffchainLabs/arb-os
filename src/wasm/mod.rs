@@ -1272,13 +1272,13 @@ pub fn resolve_labels(arr: Vec<Instruction>) -> (Vec<Instruction>, Value) {
     for (idx, inst) in arr.iter().enumerate() {
         match inst.opcode {
             Opcode::Label(Label::Evm(num)) => {
-                println!("Found label {} -> {}", num, idx);
                 tab.push(idx);
+                println!("Found label {} -> {}", num, int_from_usize(tab.len()-1));
                 labels.insert(Label::Evm(num), int_from_usize(tab.len()-1));
             }
             Opcode::Label(Label::WasmFunc(num)) => {
-                println!("Found func label {} -> {}", num, idx);
                 tab.push(idx);
+                println!("Found func label {} -> {}", num, int_from_usize(tab.len()-1));
                 labels.insert(Label::WasmFunc(num), int_from_usize(tab.len()-1));
             }
             _ => {}
@@ -1324,6 +1324,22 @@ fn find_function(m : &Module, name : &str) -> Option<u32> {
     }
 }
 
+pub fn get_answer64(answer: wasmtime::Func, param: i64) -> i64 {
+    let answer = answer.get1::<i64, i64>().unwrap();
+
+    let result = answer(param).unwrap();
+    println!("Answer: {:?}", result);
+    result
+}
+
+pub fn get_answer32(answer: wasmtime::Func, param: i64) -> i32 {
+    let answer = answer.get1::<i32, i32>().unwrap();
+
+    let result = answer(param as i32).unwrap();
+    println!("Answer: {:?}", result);
+    result
+}
+
 pub fn run_jit(buffer: &[u8], param: i64) -> i64 {
     use wasmtime::*;
     let engine = Engine::default();
@@ -1333,16 +1349,15 @@ pub fn run_jit(buffer: &[u8], param: i64) -> i64 {
 
     let instance = Instance::new(&store, &module, &[]).unwrap();
 
-    let answer = match instance.get_func("test") {
-        Some(f) => f,
-        None => return 0,
+    match instance.get_func("test") {
+        Some(f) => return get_answer64(f, param),
+        None => {},
     };
-
-    let answer = answer.get1::<i64, i64>().unwrap();
-
-    let result = answer(param).unwrap();
-    println!("Answer: {:?}", result);
-    result
+    match instance.get_func("main") {
+        Some(f) => return get_answer32(f, param) as i64,
+        None => {},
+    };
+    return 0;
 }
 
 pub fn process_wasm(buffer: &[u8], param: usize) -> Vec<Instruction> {

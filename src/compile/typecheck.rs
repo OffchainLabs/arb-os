@@ -1783,6 +1783,9 @@ fn typecheck_expr(
                 Constant::Bool(b) => {
                     TypeCheckedExprKind::Const(Value::Int(Uint256::from_bool(*b)), Type::Bool)
                 }
+                Constant::Buffer(b) => {
+                    TypeCheckedExprKind::Const(Value::new_buffer(b.to_vec()), Type::Buffer)
+                }
                 Constant::Option(o) => TypeCheckedExprKind::Const(o.value(), o.type_of()),
                 Constant::Null => TypeCheckedExprKind::Const(Value::none(), Type::Any),
             }),

@@ -1280,6 +1280,8 @@ impl Machine {
                 Opcode::AVMOpcode(AVMOpcode::SetBuffer8) => 100,
                 Opcode::AVMOpcode(AVMOpcode::SetBuffer64) => 100,
                 Opcode::AVMOpcode(AVMOpcode::SetBuffer256) => 100,
+                Opcode::AVMOpcode(AVMOpcode::RunWasm) => 100,
+                Opcode::AVMOpcode(AVMOpcode::CompileWasm) => 100,
                 _ => return None,
             })
         } else {
@@ -2112,6 +2114,7 @@ impl Machine {
                     Opcode::AVMOpcode(AVMOpcode::RunWasm) => {
                         let arg = self.stack.pop_usize(&self.state)?;
                         let (_, vec) = self.stack.pop_wasm_codepoint(&self.state)?;
+                        println!("Going to run JIT");
                         let res = run_jit(&vec, arg as i64) as usize;
                         self.stack.push(Value::Int(Uint256::from_usize(res)));
                         self.incr_pc();
@@ -2126,19 +2129,36 @@ impl Machine {
                         }
                         let init = process_wasm(&vec, 0);
                         let (code_vec, _) = crate::wasm::resolve_labels(init.clone());
+                        let code_vec = crate::wasm::clear_labels(code_vec);
                         let mut labels = vec![];
                         let mut code_pt = self.code.create_segment();
-                        for i in init.len()..0 {
+                        println!("Got opcodes {}", init.len());
+                        for i in (0..init.len()).rev() {
                             let op = code_vec[i].clone();
+                            println!("Hmm {} {:?}", i, op);
                             code_pt = self.code.push_insn(crate::wasm::get_inst(&op) as usize, op.immediate, code_pt).unwrap();
                             if crate::wasm::has_label(&init[i]) {
+                                println!("Found label at {} {:?}", i, code_pt);
                                 labels.push(Value::CodePoint(code_pt))
                             }
                         }
-                        let tab = crate::wasm::make_table(&labels);
-                        let val = Value::new_tuple(vec![Value::CodePoint(code_pt), tab]);
+                        println!("Labels are here {:?}", labels);
+                        let mut labels_rev = vec![];
+                        for a in labels.iter().rev() {
+                            labels_rev.push(a.clone())
+                        }
+                        let tab = crate::wasm::make_table(&labels_rev);
+                        let val = Value::new_tuple(vec![Value::CodePoint(code_pt), tab.clone()]);
                         self.stack.push(Value::WasmCodePoint(Box::new(val), vec));
                         self.incr_pc();
+
+                        // Testing: push table, then jump to code point
+                        /*
+                        {
+                            self.stack.push(tab);
+                            self.state = MachineState::Running(code_pt);
+                        }
+                        */
                         Ok(true)
                     }
                     Opcode::GetLocal |  // these opcodes are for intermediate use in compilation only

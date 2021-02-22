@@ -289,6 +289,7 @@ Expr13: Expr = {
 Const: Constant = {
     <u: UnsignedInteger> => Constant::Uint(u),
 	<s: SignedInteger> => Constant::Int(s),
+	<s: BufferLiteral> => Constant::Buffer(s),
 	"None<" <t: Type> ">" => Constant::Option(OptionConst::None(t)),
 	"false" => Constant::Bool(false),
 	"true" => Constant::Bool(true),
@@ -340,6 +341,10 @@ UnsignedInteger: Uint256 = {
 	r"0x[0-9a-fA-F]+" => Uint256::from_string_hex(&<>[2..]).unwrap(),
     <ConstVal> => <>,
 }
+
+BufferLiteral: Vec<u8> = {
+	r"\\x[0-9a-fA-F]*" => hex::decode((&<>[2..]).to_string()).expect("Bad buffer literal"),
+};
 
 ConstVal: Uint256 = {
     "constval" "(" <IdentString> ")" =>?  {
