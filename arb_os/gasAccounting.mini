@@ -260,12 +260,15 @@ public func gasAccounting_setFeeMaxes(r1: uint, r2: uint, r3: uint, r4: uint) ->
 }
 
 public impure func gasAccounting_summaryToPublish() -> any {
-    return (  //TODO: redefine this
-//        gasAccountingInfo.currentGasPrice,
-//        gasAccountingInfo.gasPool,
-//        int(gasAccountingInfo.reserve) - int(gasAccountingInfo.owedToValidators),
-//        gasAccountingInfo.totalPaidToValidators,
-//        payoutAddress,
+    let prices = gasAccountingInfo.currentPrices;
+    return (
+        prices.perL2Tx,
+        prices.perL1CalldataByte,
+        prices.perStorageCell,
+        prices.perArbGasBase,
+        prices.perArbGasCongestion,
+        prices.perArbGasTotal,
+        gasAccountingInfo.congestionState.gasPool,
     );
 }
 
