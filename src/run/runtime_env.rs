@@ -175,6 +175,7 @@ impl RuntimeEnvironment {
             Value::Int(self.current_timestamp.clone()),
             Value::Int(sender_addr),
             Value::Int(self.next_inbox_seq_num.clone()),
+            Value::Int(self.get_gas_price()),
             Value::Int(Uint256::from_usize(msg.len())),
             Value::new_buffer(msg.to_vec()),
         ]);
@@ -185,6 +186,10 @@ impl RuntimeEnvironment {
         self.recorder.add_msg(l1_msg);
 
         msg_id
+    }
+
+    pub fn get_gas_price(&self) -> Uint256 {
+        Uint256::_from_gwei(200)
     }
 
     pub fn insert_l2_message(

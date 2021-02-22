@@ -20,6 +20,7 @@ use accounts::account_getBalance;
 use accounts::account_addToEthBalance;
 use accounts::account_deductFromEthBalance;
 use accounts::accountStore_transferEthBalance;
+use accounts::account_getNextSeqNum;
 
 use evmCallStack::evmCallStack_isEmpty;
 use evmCallStack::evmCallStack_getAccountInCurrentContext;
@@ -596,6 +597,12 @@ public impure func getNextRequestFromCongestionAuction() -> (
 
     return xif (isChargeable && gasAccountingInfo.feeConfig.enabled) {
         xif let Some(tx) = maybeTx {
+            if let Some(txSeqNum) = tx.seqNum {
+                if (txSeqNum != account_getNextSeqNum(accountStore_get(getGlobalAccountStore(), tx.caller))) {
+                    return (const::TxResultCode_badSequenceNum, maybeRequest, maybeTx);
+                }
+            }
+
             let prices = gasAccountingInfo.currentPrices;
             if let Some(aggInfo) = tx.incomingRequest.aggregator {
                 let feeForTxAndCalldata = prices.perL2Tx + prices.perL1CalldataByte * aggInfo.calldataBytes;
@@ -707,7 +714,10 @@ public impure func getGasLimitPerTx() -> uint {
     return gasAccountingParams.TxGasLimit;
 }
 
-impure func getRequestGasInfo(maybeRequest: option<IncomingRequest>, maybeTx: option<TxRequestData>) -> (bool, uint, address, uint, uint) {
+impure func getRequestGasInfo(
+    maybeRequest: option<IncomingRequest>,
+    maybeTx: option<TxRequestData>
+) -> (bool, uint, address, uint, uint) {
     if let Some(req) = maybeRequest {
         return (false, req.blockNumber, req.sender, 0, 0);
     }
@@ -717,16 +727,32 @@ impure func getRequestGasInfo(maybeRequest: option<IncomingRequest>, maybeTx: op
     return (true, gasAccountingInfo.congestionState.lastBlockNumSeen, address(~0), 0, 0);  // shouldn't happen
 }
 
-var globalL1GasPriceEstimateWei: uint;
+var globalL1GasPriceEstimator: struct {
+    estimateWei: uint,
+    honestGasPriceSender: address,
+};
 
 impure func initGasPriceEstimator() {
-    globalL1GasPriceEstimateWei = 150*(1000*1000*1000);  // 150 gwei
+    globalL1GasPriceEstimator = struct {
+        estimateWei: 150*(1000*1000*1000),  // 150 gwei
+        honestGasPriceSender: address(0),
+    };
 }
 
 impure func getL1GasPriceEstimate() -> uint {
-    return globalL1GasPriceEstimateWei;
+    return globalL1GasPriceEstimator.estimateWei;
 }
 
-public impure func updateL1GasPriceEstimate(recentPrice: uint) {
-    globalL1GasPriceEstimateWei = (recentPrice + 99 * globalL1GasPriceEstimateWei) / 100;
+public impure func updateL1GasPriceEstimate(sender: address, price: uint) {
+    if (sender == globalL1GasPriceEstimator.honestGasPriceSender) {
+        globalL1GasPriceEstimator = globalL1GasPriceEstimator with {
+            estimateWei: (price + 99 * globalL1GasPriceEstimator.estimateWei) / 100
+        };
+    }
+}
+
+public impure func setHonestGasPriceSender(sender: address) {
+    globalL1GasPriceEstimator = globalL1GasPriceEstimator with {
+        honestGasPriceSender: sender
+    };
 }

@@ -22,6 +22,8 @@ use accounts::account_addToEthBalance;
 use chainParameters::chainParams_gotParamsMessage;
 use chainParameters::chainParams_chainId;
 
+use gasAccounting::updateL1GasPriceEstimate;
+
 use messages::TxRequestData;
 
 use messageBatch::MessageBatch;
@@ -224,6 +226,7 @@ impure func getFromL1Inbox(inbox: Inbox) -> Inbox {
         },
         aggregator: None<AggregatorInfo>,
     };
+    updateL1GasPriceEstimate(newMsgRaw.sender, newMsgRaw.gasPriceL1);
 
     if (newMsg.blockNumber == 0) {
         newMsg = newMsg with { blockNumber: inbox.blockNum };
@@ -260,6 +263,7 @@ impure func getFromL1InboxSequencer(inbox: Inbox, seq: SequencerState) -> Inbox 
         },
         aggregtor: None<AggregatorInfo>,
     };
+    updateL1GasPriceEstimate(newMsgRaw.sender, newMsgRaw.gasPriceL1);
 
     let blockNum = newMsg.blockNumber;
     if (blockNum == 0) {
@@ -428,6 +432,7 @@ type IncomingRequestFromInbox = struct {
     timestamp: uint,          // timestamp of the L1 block
     sender: address,          // address of the sender
     requestId: uint,
+    gasPriceL1: uint,         // L1 gas price paid by this tx
     msgSize: uint,
     msgData: buffer,
 }
