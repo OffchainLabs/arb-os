@@ -255,6 +255,30 @@ impl RuntimeEnvironment {
         }
     }
 
+    pub fn _insert_tx_message_from_contract(
+        &mut self,
+        sender_addr: Uint256,
+        max_gas: Uint256,
+        gas_price_bid: Uint256,
+        to_addr: Uint256,
+        value: Uint256,
+        data: &[u8],
+        with_deposit: bool,
+    ) -> Uint256 {
+        let mut buf = vec![1u8];
+        buf.extend(max_gas.to_bytes_be());
+        buf.extend(gas_price_bid.to_bytes_be());
+        buf.extend(to_addr.to_bytes_be());
+        buf.extend(value.to_bytes_be());
+        buf.extend_from_slice(data);
+
+        if with_deposit {
+            self.insert_l2_message_with_deposit(sender_addr.clone(), &buf)
+        } else {
+            self.insert_l2_message(sender_addr.clone(), &buf, false)
+        }
+    }
+
     pub fn insert_buddy_deploy_message(
         &mut self,
         sender_addr: Uint256,

@@ -6,10 +6,9 @@
 
 use super::ast::{
     BinaryOp, CodeBlock, Constant, DebugInfo, Expr, ExprKind, FuncArg, FuncDecl, FuncDeclKind,
-    GlobalVarDecl, MatchPattern, Statement, StatementKind, StructField, TopLevelDecl,
-    TrinaryOp, Type, TypeTree, UnaryOp,
+    GlobalVarDecl, MatchPattern, Statement, StatementKind, StructField, TopLevelDecl, TrinaryOp,
+    Type, TypeTree, UnaryOp,
 };
-use super::MiniProperties;
 use crate::link::{ExportedFunc, Import, ImportedFunc};
 use crate::mavm::{Instruction, Label, Value};
 use crate::pos::Location;
@@ -42,6 +41,7 @@ pub trait AbstractSyntaxTree {
             }
         }
     }
+    fn is_pure(&mut self) -> bool;
 }
 
 ///Represents a mutable reference to any AST node.
@@ -58,6 +58,13 @@ impl<'a> AbstractSyntaxTree for TypeCheckedNode<'a> {
             TypeCheckedNode::Statement(stat) => stat.child_nodes(),
             TypeCheckedNode::Expression(exp) => exp.child_nodes(),
             TypeCheckedNode::StructField(field) => field.child_nodes(),
+        }
+    }
+    fn is_pure(&mut self) -> bool {
+        match self {
+            TypeCheckedNode::Statement(stat) => stat.is_pure(),
+            TypeCheckedNode::Expression(exp) => exp.is_pure(),
+            TypeCheckedNode::StructField(field) => field.is_pure(),
         }
     }
 }
@@ -103,11 +110,8 @@ impl AbstractSyntaxTree for TypeCheckedFunc {
             .map(|stat| TypeCheckedNode::Statement(stat))
             .collect()
     }
-}
-
-impl MiniProperties for TypeCheckedFunc {
-    fn is_pure(&self) -> bool {
-        self.code.iter().all(|statement| statement.is_pure())
+    fn is_pure(&mut self) -> bool {
+        self.code.iter_mut().all(|statement| statement.is_pure())
     }
 }
 
@@ -232,30 +236,6 @@ pub enum TypeCheckedStatementKind {
     DebugPrint(TypeCheckedExpr),
 }
 
-impl MiniProperties for TypeCheckedStatement {
-    fn is_pure(&self) -> bool {
-        match &self.kind {
-            TypeCheckedStatementKind::Noop() | TypeCheckedStatementKind::ReturnVoid() => true,
-            TypeCheckedStatementKind::Return(something) => something.is_pure(),
-            TypeCheckedStatementKind::Break(exp, _) => {
-                exp.clone().map(|exp| exp.is_pure()).unwrap_or(true)
-            }
-            TypeCheckedStatementKind::Expression(expr) => expr.is_pure(),
-            TypeCheckedStatementKind::Let(_, exp) => exp.is_pure(),
-            TypeCheckedStatementKind::AssignLocal(_, exp) => exp.is_pure(),
-            TypeCheckedStatementKind::AssignGlobal(_, _) => false,
-            TypeCheckedStatementKind::While(exp, block) => {
-                exp.is_pure() && block.iter().all(|statement| statement.is_pure())
-            }
-            TypeCheckedStatementKind::Asm(instrs, exprs) => {
-                instrs.iter().all(|instr| instr.is_pure())
-                    && exprs.iter().all(|expr| expr.is_pure())
-            }
-            TypeCheckedStatementKind::DebugPrint(_) => true,
-        }
-    }
-}
-
 impl AbstractSyntaxTree for TypeCheckedStatement {
     fn child_nodes(&mut self) -> Vec<TypeCheckedNode> {
         match &mut self.kind {
@@ -281,6 +261,19 @@ impl AbstractSyntaxTree for TypeCheckedStatement {
             TypeCheckedStatementKind::Break(oexp, _) => {
                 oexp.iter_mut().flat_map(|exp| exp.child_nodes()).collect()
             }
+        }
+    }
+    fn is_pure(&mut self) -> bool {
+        if let TypeCheckedStatementKind::Noop() | TypeCheckedStatementKind::ReturnVoid() = self.kind
+        {
+            true
+        } else if let TypeCheckedStatementKind::AssignGlobal(_, _) = self.kind {
+            false
+        } else if let TypeCheckedStatementKind::Asm(vec, _) = &self.kind {
+            vec.iter().all(|insn| insn.is_pure())
+                && self.child_nodes().iter_mut().all(|node| node.is_pure())
+        } else {
+            self.child_nodes().iter_mut().all(|node| node.is_pure())
         }
     }
 }
@@ -376,87 +369,6 @@ pub enum TypeCheckedExprKind {
     Loop(Vec<TypeCheckedStatement>),
 }
 
-impl MiniProperties for TypeCheckedExpr {
-    fn is_pure(&self) -> bool {
-        match &self.kind {
-            TypeCheckedExprKind::UnaryOp(_, expr, _) => expr.is_pure(),
-            TypeCheckedExprKind::Panic => true,
-            TypeCheckedExprKind::Binary(_, left, right, _) => left.is_pure() && right.is_pure(),
-            TypeCheckedExprKind::Trinary(_, a, b, c, _) => {
-                a.is_pure() && b.is_pure() && c.is_pure()
-            }
-            TypeCheckedExprKind::ShortcutOr(left, right) => left.is_pure() && right.is_pure(),
-            TypeCheckedExprKind::ShortcutAnd(left, right) => left.is_pure() && right.is_pure(),
-            TypeCheckedExprKind::LocalVariableRef(_, _) => true,
-            TypeCheckedExprKind::GlobalVariableRef(_, _) => false,
-            TypeCheckedExprKind::NewBuffer => true,
-            TypeCheckedExprKind::Variant(expr) => expr.is_pure(),
-            TypeCheckedExprKind::FuncRef(_, func_type) => {
-                if let Type::Func(impure, _, _) = func_type {
-                    !*impure
-                } else {
-                    panic!("Internal error: func ref has non function type")
-                }
-            }
-            TypeCheckedExprKind::TupleRef(expr, _, _) => expr.is_pure(),
-            TypeCheckedExprKind::DotRef(expr, _, _, _) => expr.is_pure(),
-            TypeCheckedExprKind::Const(_, _) => true,
-            TypeCheckedExprKind::FunctionCall(name_expr, fields_exprs, _, properties) => {
-                name_expr.is_pure()
-                    && fields_exprs.iter().all(|statement| statement.is_pure())
-                    && properties.pure
-            }
-            TypeCheckedExprKind::CodeBlock(block) => block.is_pure(),
-            TypeCheckedExprKind::StructInitializer(fields, _) => {
-                fields.iter().all(|field| field.value.is_pure())
-            }
-            TypeCheckedExprKind::ArrayRef(expr, expr2, _) => expr.is_pure() && expr2.is_pure(),
-            TypeCheckedExprKind::FixedArrayRef(expr, expr2, _, _) => {
-                expr.is_pure() && expr2.is_pure()
-            }
-            TypeCheckedExprKind::MapRef(expr, expr2, _) => expr.is_pure() && expr2.is_pure(),
-            TypeCheckedExprKind::Tuple(exprs, _) => exprs.iter().all(|expr| expr.is_pure()),
-            TypeCheckedExprKind::NewArray(expr, _, _) => expr.is_pure(),
-            TypeCheckedExprKind::NewFixedArray(_, opt_expr, _) => {
-                if let Some(expr) = opt_expr {
-                    expr.is_pure()
-                } else {
-                    true
-                }
-            }
-            TypeCheckedExprKind::NewMap(_) => true,
-            TypeCheckedExprKind::ArrayMod(arr, index, val, _) => {
-                arr.is_pure() && index.is_pure() && val.is_pure()
-            }
-            TypeCheckedExprKind::FixedArrayMod(arr, index, val, _, _) => {
-                arr.is_pure() && index.is_pure() && val.is_pure()
-            }
-            TypeCheckedExprKind::MapMod(map, key, val, _) => {
-                map.is_pure() && key.is_pure() && val.is_pure()
-            }
-            TypeCheckedExprKind::StructMod(the_struct, _, val, _) => {
-                the_struct.is_pure() && val.is_pure()
-            }
-            TypeCheckedExprKind::Cast(expr, _) => expr.is_pure(),
-            TypeCheckedExprKind::Asm(_, instrs, args) => {
-                instrs.iter().all(|inst| inst.is_pure()) && args.iter().all(|expr| expr.is_pure())
-            }
-            TypeCheckedExprKind::Try(expr, _) => expr.is_pure(),
-            TypeCheckedExprKind::If(cond, block, else_block, _)
-            | TypeCheckedExprKind::IfLet(_, cond, block, else_block, _) => {
-                cond.is_pure()
-                    && block.is_pure()
-                    && if let Some(block) = else_block {
-                        block.is_pure()
-                    } else {
-                        true
-                    }
-            }
-            TypeCheckedExprKind::Loop(stats) => stats.iter().all(|stat| stat.is_pure()),
-        }
-    }
-}
-
 impl AbstractSyntaxTree for TypeCheckedExpr {
     fn child_nodes(&mut self) -> Vec<TypeCheckedNode> {
         match &mut self.kind {
@@ -520,18 +432,37 @@ impl AbstractSyntaxTree for TypeCheckedExpr {
                 TypeCheckedNode::Expression(exp3),
             ],
             TypeCheckedExprKind::If(cond, block, else_block, _)
-            | TypeCheckedExprKind::IfLet(_, cond, block, else_block, _) => cond
-                .child_nodes()
-                .into_iter()
-                .chain(block.child_nodes().into_iter())
-                .chain(
-                    else_block
-                        .into_iter()
-                        .map(|n| n.child_nodes().into_iter())
-                        .flatten(),
-                )
+            | TypeCheckedExprKind::IfLet(_, cond, block, else_block, _) => {
+                vec![TypeCheckedNode::Expression(cond)]
+                    .into_iter()
+                    .chain(block.child_nodes().into_iter())
+                    .chain(
+                        else_block
+                            .into_iter()
+                            .map(|n| n.child_nodes().into_iter())
+                            .flatten(),
+                    )
+                    .collect()
+            }
+            TypeCheckedExprKind::Loop(stats) => stats
+                .iter_mut()
+                .map(|stat| TypeCheckedNode::Statement(stat))
                 .collect(),
-            TypeCheckedExprKind::Loop(_) => unimplemented!(),
+        }
+    }
+    fn is_pure(&mut self) -> bool {
+        if let TypeCheckedExprKind::GlobalVariableRef(_, _) = self.kind {
+            false
+        } else if let TypeCheckedExprKind::FuncRef(_, tipe) = &self.kind {
+            if let Type::Func(impure, _, _) = tipe {
+                !*impure
+            } else {
+                panic!("Internal error: func ref has non function type")
+            }
+        } else if let TypeCheckedExprKind::Asm(_, instrs, args) = &mut self.kind {
+            instrs.iter().all(|inst| inst.is_pure()) && args.iter_mut().all(|expr| expr.is_pure())
+        } else {
+            self.child_nodes().iter_mut().all(|node| node.is_pure())
         }
     }
 }
@@ -589,6 +520,9 @@ pub struct TypeCheckedStructField {
 impl AbstractSyntaxTree for TypeCheckedStructField {
     fn child_nodes(&mut self) -> Vec<TypeCheckedNode> {
         self.value.child_nodes()
+    }
+    fn is_pure(&mut self) -> bool {
+        self.value.is_pure()
     }
 }
 
@@ -2200,8 +2134,8 @@ fn typecheck_unary_op(
             )),
         },
         UnaryOp::ToUint => {
-            if let TypeCheckedExprKind::Const(val, _) = sub_expr.kind {
-                Ok(TypeCheckedExprKind::Const(val, Type::Uint))
+            if let TypeCheckedExprKind::Const(Value::Int(val), _) = sub_expr.kind {
+                Ok(TypeCheckedExprKind::Const(Value::Int(val), Type::Uint))
             } else {
                 match tc_type {
                     Type::Uint | Type::Int | Type::Bytes32 | Type::EthAddress | Type::Bool => {
@@ -2219,8 +2153,8 @@ fn typecheck_unary_op(
             }
         }
         UnaryOp::ToInt => {
-            if let TypeCheckedExprKind::Const(val, _) = sub_expr.kind {
-                Ok(TypeCheckedExprKind::Const(val, Type::Int))
+            if let TypeCheckedExprKind::Const(Value::Int(val), _) = sub_expr.kind {
+                Ok(TypeCheckedExprKind::Const(Value::Int(val), Type::Int))
             } else {
                 match tc_type {
                     Type::Uint | Type::Int | Type::Bytes32 | Type::EthAddress | Type::Bool => Ok(
@@ -2234,8 +2168,8 @@ fn typecheck_unary_op(
             }
         }
         UnaryOp::ToBytes32 => {
-            if let TypeCheckedExprKind::Const(val, _) = sub_expr.kind {
-                Ok(TypeCheckedExprKind::Const(val, Type::Bytes32))
+            if let TypeCheckedExprKind::Const(Value::Int(val), _) = sub_expr.kind {
+                Ok(TypeCheckedExprKind::Const(Value::Int(val), Type::Bytes32))
             } else {
                 match tc_type {
                     Type::Uint | Type::Int | Type::Bytes32 | Type::EthAddress | Type::Bool => {
@@ -2253,8 +2187,19 @@ fn typecheck_unary_op(
             }
         }
         UnaryOp::ToAddress => {
-            if let TypeCheckedExprKind::Const(val, _) = sub_expr.kind {
-                Ok(TypeCheckedExprKind::Const(val, Type::EthAddress))
+            if let TypeCheckedExprKind::Const(Value::Int(val), _) = sub_expr.kind {
+                Ok(TypeCheckedExprKind::Const(
+                    Value::Int(
+                        val.modulo(
+                            &Uint256::from_string_hex(
+                                "1__0000_0000__0000_0000__0000_0000__0000_0000__0000_0000",
+                            ) //2^160, 1+max address
+                            .unwrap(), //safe because we know this str is valid
+                        )
+                        .unwrap(), //safe because we know this str isn't 0
+                    ),
+                    Type::EthAddress,
+                ))
             } else {
                 match tc_type {
                     Type::Uint | Type::Int | Type::Bytes32 | Type::EthAddress | Type::Bool => {
@@ -2265,7 +2210,10 @@ fn typecheck_unary_op(
                         ))
                     }
                     other => Err(new_type_error(
-                        format!("invalid operand type \"{}\" for bytes32()", other.display()),
+                        format!(
+                            "invalid operand type \"{}\" for address cast",
+                            other.display()
+                        ),
                         loc,
                     )),
                 }
@@ -2956,14 +2904,11 @@ impl AbstractSyntaxTree for TypeCheckedCodeBlock {
             )
             .collect()
     }
-}
-
-impl MiniProperties for TypeCheckedCodeBlock {
-    fn is_pure(&self) -> bool {
-        self.body.iter().all(|statement| statement.is_pure())
+    fn is_pure(&mut self) -> bool {
+        self.body.iter_mut().all(|statement| statement.is_pure())
             && self
                 .ret_expr
-                .as_ref()
+                .as_mut()
                 .map(|expr| expr.is_pure())
                 .unwrap_or(true)
     }
