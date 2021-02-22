@@ -512,7 +512,7 @@ impure func switchToChargingOS() -> uint {
 // This uses a "pull" interface: the main run loop calls this to get the next request.
 //     This code will in turn call back to the inbox to pull in incoming requests from the L1.
 public impure func getNextRequestFromCongestionAuction() -> (
-    bool,                     // was it approved for execution
+    uint,                     // error code, or const::TxResultCode_success if no error
     option<IncomingRequest>,  // if it was an L1 message
     option<TxRequestData>,    // if it was an L2 tx message
 ) {
@@ -551,7 +551,7 @@ public impure func getNextRequestFromCongestionAuction() -> (
                 ) {
                     setGlobalAccountStore(globalAS);
                 } else {
-                    return (false, maybeRequest, maybeTx);  // caller has insufficient funds to pay aggregator fee
+                    return (const::TxResultCode_noGasFunds, maybeRequest, maybeTx);
                 }
 
                 // compute the number of ArbGas units corresponding to the aggregator fee, and deduct them from the tx
@@ -562,15 +562,15 @@ public impure func getNextRequestFromCongestionAuction() -> (
                 if (tx.maxGas > roundedUpGasDelta) {
                     tx = tx with { maxGas: tx.maxGas - roundedUpGasDelta };
                 } else {
-                     return (false, maybeRequest, maybeTx);   // aggregator fees used all of the tx's gas
+                     return (const::TxResultCode_noGasFunds, maybeRequest, maybeTx);
                 }
             }
             if (tx.maxGas > gasAccountingInfo.gasRemainingThisBlock) {
-                return (false, maybeRequest, maybeTx);    // not enough gas left in this block
+                return (const::TxResultCode_congestion, maybeRequest, maybeTx);
             }
 
             (
-                true,
+                const::TxResultCode_success,
                 maybeRequest,
                 Some(tx with {
                         gasPrice: gasAccountingInfo.currentPrices.perArbGasTotal
@@ -578,10 +578,10 @@ public impure func getNextRequestFromCongestionAuction() -> (
                 )
             )
         } else {
-            (true, maybeRequest, maybeTx)  // shouldn't happen
+            (const::TxResultCode_success, maybeRequest, maybeTx)  // shouldn't happen
         }
     } else {
-        (true, maybeRequest, maybeTx)
+        (const::TxResultCode_success, maybeRequest, maybeTx)
     };
 }
 

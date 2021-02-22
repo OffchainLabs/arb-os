@@ -74,20 +74,20 @@ impure func main() {
 
 public impure func mainRunLoop() {
     loop {
-        let (approved, maybeL1, maybeL2) = getNextRequestFromCongestionAuction();
+        let (resultCode, maybeL1, maybeL2) = getNextRequestFromCongestionAuction();
         if let Some(msg) = maybeL1 {
-            if (approved) {
+            if (resultCode == const::TxResultCode_success) {
                 if(handleL1Request(msg) == None<()>) {
                     // reject for message format error
                     emitTxReceipt(msg, 6, None<ByteArray>, None<EvmLogs>, None<GasUsage>);
                 }
             } else {
-                // reject for congestion error
-                emitTxReceipt(msg, 2, None<ByteArray>, None<EvmLogs>, None<GasUsage>);
+                // reject for error
+                emitTxReceipt(msg, resultCode, None<ByteArray>, None<EvmLogs>, None<GasUsage>);
             }
         } else {
             if let Some(request) = maybeL2 {
-                if (approved) {
+                if (resultCode == const::TxResultCode_success) {
                     if (handleL2Request(
                         bytestream_new(request.incomingRequest.msgData),
                         request
@@ -96,10 +96,10 @@ public impure func mainRunLoop() {
                         emitTxReceipt(request.incomingRequest, 6, None<ByteArray>, None<EvmLogs>, None<GasUsage>);
                     }
                 } else {
-                    // reject for congestion error
+                    // reject for error
                     emitTxReceipt(
                         request.incomingRequest,
-                        const::TxResultCode_congestion,
+                        resultCode,
                         None<ByteArray>,
                         None<EvmLogs>,
                         None<GasUsage>
