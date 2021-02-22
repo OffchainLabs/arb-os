@@ -1,0 +1,8 @@
+
+func main() {
+    let buf = \x0061736d0100000001060160017f017f030201000503010001070801046d61696e00000a12011000410041fe981b36020041002802000b;
+    let ln = 55;
+    let compiled = asm(ln, buf,) any { compilewasm };
+    let res = asm(1000,compiled,) any { runwasm };
+    debug(res);
+}
