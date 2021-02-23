@@ -441,6 +441,10 @@ fn hash_sparse(idx: &[usize], buf: &[u8], sz: u8) -> Packed {
 }
 
 impl Buffer {
+    pub fn new(v: Vec<u8>) -> Self {
+        Buffer::leaf(Rc::new(v))
+    }
+
     fn node(vec: Rc<Vec<Buffer>>, h: u8) -> Buffer {
         Buffer {
             elem: BufferElem::Node(vec, h),

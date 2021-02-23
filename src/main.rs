@@ -146,6 +146,9 @@ fn main() -> Result<(), CompileError> {
             let mut file = File::open(&filenames[0]).unwrap();
             let mut buffer = Vec::<u8>::new();
             file.read_to_end(&mut buffer).unwrap();
+
+            wasm::run_jit(&buffer, param as i64);
+
             let code = wasm::load(&buffer, param);
             let code_len = code.len();
             let env = RuntimeEnvironment::new(Uint256::from_usize(1111), None);

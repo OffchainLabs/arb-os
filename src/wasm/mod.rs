@@ -1,7 +1,7 @@
 
 use parity_wasm::elements::*;
 use parity_wasm::elements::Instruction::*;
-use crate::mavm::{AVMOpcode, CodePt, Instruction, Label, /*LabelGenerator,*/ Opcode, Value};
+use crate::mavm::{AVMOpcode, Buffer, CodePt, Instruction, Label, /*LabelGenerator,*/ Opcode, Value};
 use crate::compile::{DebugInfo};
 use crate::uint256::Uint256;
 use std::collections::HashMap;
@@ -1356,21 +1356,77 @@ pub fn get_answer64(answer: wasmtime::Func, param: i64) -> i64 {
 }
 
 pub fn get_answer32(answer: wasmtime::Func, param: i64) -> i32 {
-    let answer = answer.get1::<i32, i32>().unwrap();
+    let answer = answer.get1::<i64, i32>().unwrap();
 
-    let result = answer(param as i32).unwrap();
+    let result = answer(param as i64).unwrap();
     println!("Answer: {:?}", result);
     result
 }
 
 pub fn run_jit(buffer: &[u8], param: i64) -> i64 {
     use wasmtime::*;
+    use std::cell::RefCell;
+    use std::rc::Rc;
     let engine = Engine::default();
     let store = Store::new(&engine);
 
     let module = Module::from_binary(&engine, &buffer).unwrap();
 
-    let instance = Instance::new(&store, &module, &[]).unwrap();
+    let buf = Buffer::new(vec![123,234,34,45]);
+
+    let cell = Rc::new(RefCell::new(buf));
+    let cell2 = cell.clone();
+
+    let len = Rc::new(RefCell::new(4));
+    let len2 = len.clone();
+
+    cell2.replace_with(|buf| buf.set_byte(2, 111));
+
+    let read_func = Func::wrap(&store, move |offset: i64| {
+        cell.borrow().read_byte(offset as usize) as i32
+    });
+
+    let write_func = Func::wrap(&store, move |offset: i64, v: i32| {
+        cell2.replace_with(|buf| buf.set_byte(offset as usize, v as u8));
+    });
+
+    let len_func = Func::wrap(&store, move || {
+        len.borrow().clone() as i64
+    });
+
+    let set_len_func = Func::wrap(&store, move |nlen: i64| {
+        len2.replace_with(|_| nlen)
+    });
+
+    let error_func = Func::wrap(&store, || {
+        panic!("Unknown import");
+    });
+
+    let mut imports = vec![];
+
+    for f in module.imports() {
+        match (f.ty(), f.name()) {
+            (ExternType::Func(_), Some(name)) => {
+                if name.starts_with("read_buffer") {
+                    imports.push(read_func.clone().into())
+                } else if name.starts_with("write_buffer") {
+                    imports.push(write_func.clone().into())
+                } else if name.starts_with("len_buffer") {
+                    imports.push(len_func.clone().into())
+                } else if name.starts_with("set_len_buffer") {
+                    imports.push(set_len_func.clone().into())
+                } else {
+                    imports.push(error_func.clone().into())
+                }
+            },
+            (ExternType::Func(_), None) => {
+                imports.push(error_func.clone().into())
+            }
+            _ => {},
+        }
+    }
+
+    let instance = Instance::new(&store, &module, &imports).unwrap();
 
     match instance.get_func("test") {
         Some(f) => return get_answer64(f, param),
