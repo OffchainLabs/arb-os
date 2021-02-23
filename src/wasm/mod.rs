@@ -166,6 +166,28 @@ fn set_memory(res: &mut Vec<Instruction>) {
     res.push(simple_op(AVMOpcode::Rset)); // value, address
 }
 
+fn get_buffer(res: &mut Vec<Instruction>) {
+    res.push(simple_op(AVMOpcode::Rget));
+    res.push(immed_op(AVMOpcode::Tget, int_from_usize(2)));
+}
+
+fn set_buffer(res: &mut Vec<Instruction>) {
+    res.push(simple_op(AVMOpcode::Rget));
+    res.push(immed_op(AVMOpcode::Tset, int_from_usize(2)));
+    res.push(simple_op(AVMOpcode::Rset));
+}
+
+fn get_buffer_len(res: &mut Vec<Instruction>) {
+    res.push(simple_op(AVMOpcode::Rget));
+    res.push(immed_op(AVMOpcode::Tget, int_from_usize(3)));
+}
+
+fn set_buffer_len(res: &mut Vec<Instruction>) {
+    res.push(simple_op(AVMOpcode::Rget));
+    res.push(immed_op(AVMOpcode::Tset, int_from_usize(3)));
+    res.push(simple_op(AVMOpcode::Rset));
+}
+
 // load byte, save address
 fn load_byte(res: &mut Vec<Instruction>, offset: usize) {
     // value, address
@@ -1163,7 +1185,7 @@ fn table_to_tuple(tab: &[usize], prefix: usize, shift: usize, level: usize) -> V
             let idx = prefix + (i << shift);
             let ptr = if idx < tab.len() { tab[idx] } else { 0 };
             // We are adding one instruction to the beginning
-            v.push(Value::CodePoint(CodePt::Internal(ptr+1)));
+            v.push(Value::CodePoint(CodePt::Internal(ptr)));
         }
         return Value::new_tuple(v)
     }
@@ -1286,6 +1308,7 @@ pub fn resolve_labels(arr: Vec<Instruction>) -> (Vec<Instruction>, Value) {
     }
     let mut res = vec![];
     for inst in arr.iter() {
+        // handle error
         res.push(inst_replace_labels(inst.clone(), &labels).unwrap());
     }
     println!("Labels {}", tab.len());
@@ -1360,17 +1383,34 @@ pub fn run_jit(buffer: &[u8], param: i64) -> i64 {
     return 0;
 }
 
+fn get_func_imports(m : &Module) -> Vec<&ImportEntry> {
+    match m.import_section() {
+        None => Vec::new(),
+        Some(sec) => {
+            let arr = sec.entries();
+            arr.iter().filter(|&x| is_func(x.external())).collect::<Vec<&ImportEntry>>()
+        }
+    }
+}
+
 pub fn process_wasm(buffer: &[u8], param: usize) -> Vec<Instruction> {
 
     let module = parity_wasm::deserialize_buffer::<Module>(buffer).unwrap();
     assert!(module.code_section().is_some());
 
-    let code_section = module.code_section().unwrap(); // Part of the module with functions code
-    let f_count = code_section.bodies().len();
+    let imports = get_func_imports(&module);
 
-    println!("Function count in wasm file: {}", f_count);
+    let code_section = module.code_section().unwrap(); // Part of the module with functions code
+
+    println!("Function count in wasm file: {}, {} imports", code_section.bodies().len(), imports.len());
+    let f_count = code_section.bodies().len() + imports.len();
     let mut init = vec![];
     let max_memory = 1 << 20;
+
+    // These might become replaced
+    init.push(simple_op(AVMOpcode::Noop));
+    init.push(simple_op(AVMOpcode::Noop));
+    init.push(simple_op(AVMOpcode::Noop));
 
     // Save register
     init.push(simple_op(AVMOpcode::Rget));
@@ -1378,8 +1418,10 @@ pub fn process_wasm(buffer: &[u8], param: usize) -> Vec<Instruction> {
 
     // Initialize register
     // init.push(immed_op(AVMOpcode::Rset, Value::new_tuple(vec![Value::new_buffer(vec![]), int_from_usize(0)])));
-    init.push(push_value(Value::new_tuple(vec![Value::new_buffer(vec![]), int_from_usize(0)])));
+    init.push(push_value(Value::new_tuple(vec![Value::new_buffer(vec![]), int_from_usize(0), Value::new_buffer(vec![123,234,12]), int_from_usize(3)])));
     init.push(immed_op(AVMOpcode::Tset,int_from_usize(1)));
+    init.push(immed_op(AVMOpcode::Tset,int_from_usize(2)));
+    init.push(immed_op(AVMOpcode::Tset,int_from_usize(3)));
     init.push(simple_op(AVMOpcode::Rset));
 
     // Construct initial memory with globals
@@ -1431,13 +1473,49 @@ pub fn process_wasm(buffer: &[u8], param: usize) -> Vec<Instruction> {
 
     for (idx,f) in code_section.bodies().iter().enumerate() {
         // function return will be in the stack
-        init.push(mk_func_label(idx));
+        init.push(mk_func_label(idx+imports.len()));
         let (mut res, n_label, avm_gas) = handle_function(&module, f, idx, label, calli, memory_offset, max_memory);
         init.append(&mut res);
         label = n_label;
         println!("Gas {:?}", avm_gas);
     }
 
+    for (idx,f) in get_func_imports(&module).iter().enumerate() {
+        init.push(mk_func_label(idx));
+        if f.field().starts_with("read_buffer") {
+            // Get buffer
+            get_buffer(&mut init);
+            // Get param
+            init.push(get_frame());
+            init.push(get64_from_buffer(0));
+            init.push(simple_op(AVMOpcode::GetBuffer8));
+        }
+        if f.field().starts_with("write_buffer") {
+            // Get buffer
+            get_buffer(&mut init);
+            // Get params
+            init.push(get_frame());
+            init.push(get64_from_buffer(0));
+            init.push(get_frame());
+            init.push(get64_from_buffer(1));
+            init.push(simple_op(AVMOpcode::SetBuffer8));
+            set_buffer(&mut init);
+        }
+        if f.field().starts_with("len_buffer") {
+            get_buffer_len(&mut init);
+        }
+        if f.field().starts_with("set_len_buffer") {
+            init.push(get_frame());
+            init.push(get64_from_buffer(0));
+            set_buffer_len(&mut init);
+        }
+        // Return from function
+        init.push(get_return_pc());
+        get_return_from_table(&mut init);
+        init.push(simple_op(AVMOpcode::Jump));        
+    }
+
+    // Error handling
     init.push(mk_label(1));
     init.push(simple_op(AVMOpcode::Panic));
     // Indirect calls
@@ -1505,8 +1583,10 @@ pub fn load(buffer: &[u8], param: usize) -> Vec<Instruction> {
     // println!("Table {}", tab);
     let res = clear_labels(res);
     let mut a = vec![];
+    a.push(push_value(int_from_usize(4)));
+    a.push(push_value(Value::new_buffer(vec![123,234,12,56])));
     a.push(push_value(tab));
-    for i in 0..res.len() {
+    for i in 3..res.len() {
         a.push(res[i].clone());
     }
     a
