@@ -3,7 +3,9 @@
  */
 
 use crate::compile::miniconstants::init_constant_table;
-use crate::evm::abi::{ArbAddressTable, ArbBLS, ArbFunctionTable, ArbSys, ArbosTest, _ArbOwner};
+use crate::evm::abi::{
+    ArbAddressTable, ArbBLS, ArbFunctionTable, ArbSys, ArbosTest, _ArbGasInfo, _ArbOwner,
+};
 use crate::evm::abi::{FunctionTable, _ArbInfo};
 use crate::run::{load_from_file, RuntimeEnvironment};
 use crate::uint256::Uint256;
@@ -125,11 +127,9 @@ pub fn _evm_run_with_gas_charging(
     let wallet = machine.runtime_env.new_wallet();
     let my_addr = Uint256::from_bytes(wallet.address().as_bytes());
 
-    machine.runtime_env.insert_eth_deposit_message(
-        my_addr.clone(),
-        my_addr.clone(),
-        funding,
-    );
+    machine
+        .runtime_env
+        .insert_eth_deposit_message(my_addr.clone(), my_addr.clone(), funding);
     let _gas_used = if debug {
         machine.debug(None)
     } else {
@@ -169,7 +169,9 @@ pub fn _evm_run_with_gas_charging(
     // turn on gas charging
     let arbowner = _ArbOwner::_new(&wallet, false);
     arbowner._set_fees_enabled(&mut machine, true, true)?;
-    machine.runtime_env._advance_time(Uint256::one(), None, false);
+    machine
+        .runtime_env
+        ._advance_time(Uint256::one(), None, false);
 
     println!("Function call ...");
     let (logs, sends) = pc_contract.call_function(
@@ -435,6 +437,66 @@ pub fn _evm_test_arbowner(log_to: Option<&Path>, debug: bool) -> Result<(), etha
     )?;
 
     println!("G");
+    if let Some(path) = log_to {
+        machine.runtime_env.recorder.to_file(path).unwrap();
+    }
+
+    Ok(())
+}
+
+pub fn _evm_test_arbgasinfo(log_to: Option<&Path>, debug: bool) -> Result<(), ethabi::Error> {
+    let rt_env = RuntimeEnvironment::new(Uint256::from_usize(1111), None);
+    let mut machine = load_from_file(Path::new("arb_os/arbos.mexe"), rt_env);
+    machine.start_at_zero();
+
+    let wallet = machine.runtime_env.new_wallet();
+    let my_addr = Uint256::from_bytes(wallet.address().as_bytes());
+
+    let arbowner = _ArbOwner::_new(&wallet, debug);
+    let arbgasinfo = _ArbGasInfo::_new(&wallet, debug);
+
+    machine.runtime_env.insert_eth_deposit_message(
+        my_addr.clone(),
+        my_addr.clone(),
+        Uint256::_from_eth(100),
+    );
+
+    let (l2tx, l1calldata, storage, basegas, conggas, totalgas) =
+        arbgasinfo._get_prices_in_wei(&mut machine)?;
+    assert!(l2tx.is_zero());
+    assert!(l1calldata.is_zero());
+    assert!(storage.is_zero());
+    assert!(basegas.is_zero());
+    assert!(conggas.is_zero());
+    assert_eq!(basegas.add(&conggas), totalgas);
+
+    arbowner._set_fees_enabled(&mut machine, true, true)?;
+    machine
+        .runtime_env
+        ._advance_time(Uint256::one(), None, true);
+
+    let (l2tx, l1calldata, storage, basegas, conggas, totalgas) =
+        arbgasinfo._get_prices_in_wei(&mut machine)?;
+    println!(
+        "L2 tx {}, L1 calldata {}, L2 storage {}, base gas {}, congestion gas {}, total gas {}",
+        l2tx, l1calldata, storage, basegas, conggas, totalgas
+    );
+    assert_eq!(l2tx, Uint256::from_u64(1736442500000000));
+    assert_eq!(l1calldata, Uint256::from_u64(2778308000000));
+    assert_eq!(storage, Uint256::from_u64(301990000000000));
+    assert_eq!(basegas, Uint256::from_u64(15099500));
+    assert!(conggas.is_zero());
+    assert_eq!(basegas.add(&conggas), totalgas);
+
+    let (l2tx, l1calldata, storage) = arbgasinfo._get_prices_in_arbgas(&mut machine)?;
+    println!(
+        "L2 tx / ag {}, L1 calldata / ag {}, L2 storage / ag {}",
+        l2tx, l1calldata, storage
+    );
+    assert_eq!(l2tx, Uint256::from_u64(115000000));
+    assert_eq!(l1calldata, Uint256::from_u64(184000));
+    assert_eq!(storage, Uint256::from_u64(20000000));
+
     if let Some(path) = log_to {
         machine.runtime_env.recorder.to_file(path).unwrap();
     }

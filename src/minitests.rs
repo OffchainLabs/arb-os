@@ -493,6 +493,14 @@ fn test_arbowner() {
 }
 
 #[test]
+fn test_arbgasinfo() {
+    match crate::evm::_evm_test_arbgasinfo(None, false) {
+        Ok(()) => {},
+        Err(e) => panic!("{:?}", e),
+    }
+}
+
+#[test]
 fn test_rate_control() {
     //FIXME crate::evm::_evm_test_rate_control(None, false).unwrap();
 }

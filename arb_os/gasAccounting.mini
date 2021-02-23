@@ -170,7 +170,7 @@ impure func setPrices(feeConfig: FeeConfig, params: PricingParameters, congestio
         let perArbGasCongestion = congestionState.congestionPriceWei;
         struct {
             perL2Tx: fixedPoint_mulByUintTrunc(feeConfig.baseFeeMultiplier, params.l1GasPerL2Tx * l1GasPrice),
-            perL1CalldataByte: fixedPoint_mulByUintTrunc(feeConfig.baseFeeMultiplier, params.l1GasPerL2Tx * l1GasPrice),
+            perL1CalldataByte: fixedPoint_mulByUintTrunc(feeConfig.baseFeeMultiplier, params.l1GasPerL1Calldata * l1GasPrice),
             perStorageCell: params.l1GasPerStorage * l1GasPrice,
             perArbGasBase: perArbGasBase,
             perArbGasCongestion: perArbGasCongestion,
@@ -197,6 +197,16 @@ public impure func gasAccounting_getPricesInWei() -> (uint, uint, uint, uint, ui
         prices.perArbGasBase,
         prices.perArbGasCongestion,
         prices.perArbGasTotal,
+    );
+}
+
+public impure func gasAccounting_getPricesInArbGas() -> (uint, uint, uint) {
+    let prices = gasAccountingInfo.currentPrices;
+    let arbGasPrice = prices.perArbGasTotal;
+    return (
+        (prices.perL2Tx + arbGasPrice - 1) / arbGasPrice,
+        (prices.perL1CalldataByte + arbGasPrice - 1) / arbGasPrice,
+        (prices.perStorageCell + arbGasPrice - 1) / arbGasPrice,
     );
 }
 
