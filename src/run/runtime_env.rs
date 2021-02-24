@@ -1247,7 +1247,7 @@ impl RtEnvRecorder {
             self.logs
                 .clone()
                 .into_iter()
-                .map(strip_var_from_log)
+                .filter_map(strip_var_from_log)
                 .collect()
         };
         let logs_seen = if require_same_gas {
@@ -1259,7 +1259,7 @@ impl RtEnvRecorder {
                 .logs
                 .clone()
                 .into_iter()
-                .map(strip_var_from_log)
+                .filter_map(strip_var_from_log)
                 .collect()
         };
         if !(logs_expected == logs_seen) {
@@ -1278,31 +1278,33 @@ impl RtEnvRecorder {
     }
 }
 
-fn strip_var_from_log(log: Value) -> Value {
+fn strip_var_from_log(log: Value) -> Option<Value> {
     // strip from a log item all info that might legitimately vary as ArbOS evolves (e.g. gas usage)
     if let Value::Tuple(tup) = log.clone() {
         if let Value::Int(item_type) = tup[0].clone() {
             if item_type == Uint256::zero() {
                 // Tx receipt log item
-                Value::new_tuple(vec![
+                Some(Value::new_tuple(vec![
                     tup[0].clone(),
                     tup[1].clone(),
                     tup[2].clone(),
                     // skip tup[3] because it's all about gas usage
                     zero_item_in_tuple(tup[4].clone(), 0),
-                ])
+                ]))
             } else if item_type == Uint256::one() {
                 // block summary log item
-                Value::new_tuple(vec![
+                Some(Value::new_tuple(vec![
                     tup[0].clone(),
                     tup[1].clone(),
                     tup[2].clone(),
                     // skip tup[3] because it's all about gas usage
                     zero_item_in_tuple(tup[4].clone(), 0),
                     zero_item_in_tuple(tup[5].clone(), 0),
-                ])
+                ]))
             } else if item_type == Uint256::from_u64(2) {
-                log
+                Some(log)
+            } else if item_type == Uint256::from_u64(3) {
+                None
             } else {
                 panic!("unrecognized log item type {}", item_type);
             }
