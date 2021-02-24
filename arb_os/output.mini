@@ -94,6 +94,13 @@ var globalBlockReceiptData: struct {
 };
 
 public impure func outputStats_endOfBlock(blockNum: uint, timestamp: uint) {
+    if ((inbox_currentBlockNumber() >= globalBlockReceiptData.nextSendBlockNum) && !outbox_isEmpty() ){
+        outbox_send();
+        globalBlockReceiptData = globalBlockReceiptData with {
+            nextSendBlockNum: inbox_currentBlockNumber() + chainParams_getBlocksPerSend()
+        };
+    }
+
     if ( ! outputStats_isAllZero(globalBlockReceiptData.statsThisBlock)) {
         // add current block (including soon-to-be-issued block summary log) into total stats
         let updatedStats = outputStats_add(
@@ -107,7 +114,23 @@ public impure func outputStats_endOfBlock(blockNum: uint, timestamp: uint) {
         globalBlockReceiptData = globalBlockReceiptData with {
             statsAllTime: updatedStats
         };
-        emitBlockSummaryLog(blockNum, timestamp, globalBlockReceiptData.lastBlockNum);
+
+        let gasUsedThisBlock = globalBlockReceiptData.statsThisBlock.totalGasUsed;
+        let gasLimit = chainParams_speedLimitPerBlock();
+        if (gasLimit < gasUsedThisBlock) {
+            gasLimit = gasUsedThisBlock;
+        }
+
+        asm((
+            const::LogType_blockSummary,
+            blockNum,
+            timestamp,
+            gasLimit,
+            globalBlockReceiptData.statsThisBlock,
+            globalBlockReceiptData.statsAllTime,
+            gasAccounting_summaryToPublish(),
+            globalBlockReceiptData.lastBlockNum
+        ),) { log }; 
 
         globalBlockReceiptData = globalBlockReceiptData with {
             lastBlockNum: blockNum
@@ -248,6 +271,13 @@ impure func emitBlockSummaryLog(blockNum: uint, timestamp: uint, prevBlockNum: u
     if (gasLimit < gasUsedThisBlock) {
         gasLimit = gasUsedThisBlock;
     }
+    if ((inbox_currentBlockNumber() >= globalBlockReceiptData.nextSendBlockNum) && !outbox_isEmpty() ){
+        outbox_send();
+        globalBlockReceiptData = globalBlockReceiptData with {
+            nextSendBlockNum: inbox_currentBlockNumber() + chainParams_getBlocksPerSend()
+        };
+    }
+
     asm((
         const::LogType_blockSummary,
         blockNum,
@@ -257,13 +287,7 @@ impure func emitBlockSummaryLog(blockNum: uint, timestamp: uint, prevBlockNum: u
         globalBlockReceiptData.statsAllTime,
         gasAccounting_summaryToPublish(),
         prevBlockNum
-    ),) { log };
-    if ((inbox_currentBlockNumber() >= globalBlockReceiptData.nextSendBlockNum) && !outbox_isEmpty() ){
-        outbox_send();
-        globalBlockReceiptData = globalBlockReceiptData with {
-            nextSendBlockNum: inbox_currentBlockNumber() + chainParams_getBlocksPerSend()
-        };
-    }
+    ),) { log }; 
 }
 
 var globalOutbox: struct {
