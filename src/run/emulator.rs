@@ -1955,8 +1955,9 @@ impl Machine {
                         self.arb_gas_remaining = gas;
                         self.incr_pc();
                         Ok(true)
-                    }
+                    },
                     AVMOpcode::Sideload => {
+                        let _block_num = self.stack.pop_uint(&self.state)?;
                         self.stack.push(Value::none());
                         self.incr_pc();
                         Ok(true)

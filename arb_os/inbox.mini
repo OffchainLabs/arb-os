@@ -159,17 +159,33 @@ public impure func inbox_get() -> IncomingRequest {
         let ebMsg = unsafecast<IncomingRequest>(rawMsg);
         if (ebMsg.blockNumber > globalInbox.blockNum) {
             if ((globalInbox.sequencer != None<SequencerState>) && globalInbox.seenMsgAtThisBlockNum) {
-                let eobMsg = endOfBlockMessage(globalInbox.blockNum, globalInbox.timestamp);
-                globalInbox = globalInbox with {
-                    blockNum: ebMsg.blockNumber
-                } with {
-                    timestamp: ebMsg.timestamp
-                } with {
-                    seenMsgAtThisBlockNum: false
-                };
-                return eobMsg;
+                // don't update queue, because we're not consuming ebMsg
+                let rawSideloadMsg = asm(globalInbox.blockNum,) any { sideload };
+                if (rawSideloadMsg == ()) {
+                    let eobMsg = endOfBlockMessage(globalInbox.blockNum, globalInbox.timestamp);
+                    globalInbox = globalInbox with {
+                        blockNum: ebMsg.blockNumber
+                    } with {
+                        timestamp: ebMsg.timestamp
+                    } with {
+                        seenMsgAtThisBlockNum: false
+                    };
+                    return eobMsg;
+                } else {
+                    let newMsg = incomingRequestFromRaw(unsafecast<IncomingRequestFromInbox>(rawSideloadMsg), true);
+
+                    if (newMsg.blockNumber == 0) {
+                        newMsg = newMsg with { blockNumber: globalInbox.blockNum };
+                    }
+                    if (newMsg.timestamp == 0) {
+                        newMsg = newMsg with { timestamp: globalInbox.timestamp };
+                    }
+                    return newMsg;
+                }
             } else {
                 globalInbox = globalInbox with {
+                    queue: updatedQ
+                } with {
                     blockNum: ebMsg.blockNumber
                 } with {
                     timestamp: ebMsg.timestamp
@@ -177,9 +193,9 @@ public impure func inbox_get() -> IncomingRequest {
                     seenMsgAtThisBlockNum: true
                 };
             }
+        } else {
+            globalInbox = globalInbox with { queue: updatedQ };
         }
-
-        globalInbox = globalInbox with { queue: updatedQ };
 
         if (ebMsg.kind == const::L1MessageType_chainInit) {
             chainParams_gotParamsMessage(ebMsg.sender, ebMsg.msgData);
@@ -191,28 +207,8 @@ public impure func inbox_get() -> IncomingRequest {
     };
 }
 
-impure func getFromL1Inbox(inbox: Inbox) -> Inbox {
-    // Get a message from the L1 inbox, and append it to the inbox (assuming no sequencer).
-    // If there are no messages available in the L1 inbox, this blocks until one is available.
-    if (inbox.seenMsgAtThisBlockNum) {
-        let sameBlockNum = asm(inbox.blockNum,) bool { inboxpeek };
-        if ( ! sameBlockNum) {
-            // peek says we hit end of L1 block, so insert end-of-block message and return
-            return inbox with {
-                queue: incomingRequestQueue_put(
-                    inbox.queue,
-                    endOfBlockMessage(inbox.blockNum, inbox.timestamp),
-                )
-            } with {
-                blockNum: inbox.blockNum+1
-            } with {
-                seenMsgAtThisBlockNum: false
-            };
-        }
-    }
-
-    let newMsgRaw = asm() IncomingRequestFromInbox { inbox };
-    let newMsg = struct {
+func incomingRequestFromRaw(newMsgRaw: IncomingRequestFromInbox, adminMode: bool) -> IncomingRequest {
+    return struct {
         kind: newMsgRaw.kind,
         blockNumber: newMsgRaw.blockNumber,
         timestamp: newMsgRaw.timestamp,
@@ -225,8 +221,46 @@ impure func getFromL1Inbox(inbox: Inbox) -> Inbox {
             indexInParent: ~0,
         },
         aggregator: None<AggregatorInfo>,
+        adminMode: adminMode,
     };
     updateL1GasPriceEstimate(newMsgRaw.sender, newMsgRaw.gasPriceL1);
+}
+
+impure func getFromL1Inbox(inbox: Inbox) -> Inbox {
+    // Get a message from the L1 inbox, and append it to the inbox (assuming no sequencer).
+    // If there are no messages available in the L1 inbox, this blocks until one is available.
+    if (inbox.seenMsgAtThisBlockNum) {
+        let sameBlockNum = asm(inbox.blockNum,) bool { inboxpeek };
+        if ( ! sameBlockNum) {
+            // peek says we hit end of L1 block, so try sideload, then insert end-of-block message and return
+            let rawSideloadMsg = asm(inbox.blockNum,) any { sideload };
+            if (rawSideloadMsg == ()) {
+                return inbox with {
+                    queue: incomingRequestQueue_put(
+                        inbox.queue,
+                        endOfBlockMessage(inbox.blockNum, inbox.timestamp),
+                    )
+                } with {
+                    blockNum: inbox.blockNum+1
+                } with {
+                    seenMsgAtThisBlockNum: false
+                };
+            } else {
+                let newMsg = incomingRequestFromRaw(unsafecast<IncomingRequestFromInbox>(rawSideloadMsg), true);
+                if (newMsg.blockNumber == 0) {
+                    newMsg = newMsg with { blockNumber: inbox.blockNum };
+                }
+                if (newMsg.timestamp == 0) {
+                    newMsg = newMsg with { timestamp: inbox.timestamp };
+                }
+                return inbox with {
+                    queue: incomingRequestQueue_put(inbox.queue, newMsg)
+                };
+            }
+        }
+    }
+
+    let newMsg = incomingRequestFromRaw(asm() IncomingRequestFromInbox { inbox }, false);
 
     if (newMsg.blockNumber == 0) {
         newMsg = newMsg with { blockNumber: inbox.blockNum };
@@ -248,22 +282,7 @@ impure func getFromL1Inbox(inbox: Inbox) -> Inbox {
 }
 
 impure func getFromL1InboxSequencer(inbox: Inbox, seq: SequencerState) -> Inbox {
-    let newMsgRaw = asm() IncomingRequestFromInbox { inbox };
-    let newMsg = struct {
-        kind: newMsgRaw.kind,
-        blockNumber: newMsgRaw.blockNumber,
-        timestamp: newMsgRaw.timestamp,
-        sender: newMsgRaw.sender,
-        requestId: newMsgRaw.requestId,
-        msgData: bytearray_fromSizeAndBuffer(newMsgRaw.msgSize, newMsgRaw.msgData),
-        provenance: struct {
-            l1SeqNum: newMsgRaw.requestId,
-            parentRequestId: 0,
-            indexInParent: ~0,
-        },
-        aggregtor: None<AggregatorInfo>,
-    };
-    updateL1GasPriceEstimate(newMsgRaw.sender, newMsgRaw.gasPriceL1);
+    let newMsg = incomingRequestFromRaw(asm() IncomingRequestFromInbox { inbox }, false);
 
     let blockNum = newMsg.blockNumber;
     if (blockNum == 0) {
@@ -386,6 +405,7 @@ func endOfBlockMessage(blockNum: uint, timestamp: uint) -> IncomingRequest {
             indexInParent: ~0,
         },
         aggregator: None<AggregatorInfo>,
+        adminMode: false,
     };
 }
 
@@ -446,6 +466,7 @@ type IncomingRequest = struct {
     msgData: ByteArray,       // kind-specific data
     provenance: RequestProvenance,
     aggregator: option<AggregatorInfo>,
+    adminMode: bool,
 }
 
 type RequestProvenance = struct {

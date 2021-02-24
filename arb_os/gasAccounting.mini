@@ -752,7 +752,11 @@ impure func getRequestGasInfo(
         return (false, req.blockNumber, req.sender, 0, 0);
     }
     if let Some(tx) = maybeTx {
-        return (true, tx.incomingRequest.blockNumber, tx.incomingRequest.sender, tx.maxGas, tx.gasPrice);
+        if (tx.incomingRequest.adminMode) {
+            return (false, tx.incomingRequest.blockNumber, tx.incomingRequest.sender, tx.maxGas, 0);
+        } else {
+            return (true, tx.incomingRequest.blockNumber, tx.incomingRequest.sender, tx.maxGas, tx.gasPrice);
+        }
     }
     return (true, gasAccountingInfo.congestionState.lastBlockNumSeen, address(~0), 0, 0);  // shouldn't happen
 }
