@@ -111,7 +111,7 @@ impl RuntimeEnvironment {
         owner: Option<Uint256>,
     ) -> Vec<u8> {
         let mut buf = Vec::new();
-        buf.extend(Uint256::from_u64(3 * 60 * 60 * 1000).to_bytes_be()); // grace period in ticks
+        buf.extend(Uint256::from_u64(3 * 60 * 60).to_bytes_be()); // grace period in blocks
         buf.extend(Uint256::from_u64(100_000_000 / 1000).to_bytes_be()); // arbgas speed limit per tick
         buf.extend(Uint256::from_u64(10_000_000_000).to_bytes_be()); // max execution steps
         buf.extend(Uint256::from_u64(1000).to_bytes_be()); // base stake amount in wei
