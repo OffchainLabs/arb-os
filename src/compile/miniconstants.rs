@@ -195,7 +195,7 @@ pub fn init_constant_table() -> HashMap<String, Uint256> {
         ("InitOption_setSecondsPerBlock", 1),
         ("InitOption_setChargingParams", 2),
         // charging mechanism
-        ("Charging_DefaultL1GasPerL2Tx", 10000),
+        ("Charging_DefaultL1GasPerL2Tx", 3700),
         ("Charging_DefaultL1GasPerCalldataByte", 16),
         ("Charging_DefaultL1GasPerStorage", 2000),
         ("Charging_DefaultArbGasDivisor", 10000),

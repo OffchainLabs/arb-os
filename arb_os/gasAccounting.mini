@@ -390,20 +390,39 @@ public impure func gasAccounting_startTxCharges(
     return Some(());
 }
 
-public impure func gasAccounting_endTxCharges(storageDelta: int) -> option<GasUsage> {
+public impure func gasAccounting_endTxCharges(storageDelta: int, feeStats: TxFeeStats) -> option<(bool, GasUsage, TxFeeStats)> {
     // stop charging the current tx for gas
     // refund any unused gas
     // return the total amount it used, or None if there isn't a tx active
 
-    // charge the tx for storage it allocated (minus storage freed); for now, no refund if tx reduced total storage
-    if (storageDelta > int(0)) {
-        gasAccounting_chargeForStorage(uint(storageDelta));
-    }
-
     // switch over to charging the OS for gas
     let txState = gasAccountingInfo.txState?;
     let gasToRefund = txState.gasInReserve + switchToChargingOS();
-    let gasUsed = txState.originalMax - gasToRefund;    // won't underflow because gasToRefund <= originalMax
+
+    let gasForStorage = xif (storageDelta > int(0)) {
+        uint(storageDelta) * gasAccountingInfo.currentPrices.perStorageCell / txState.price
+    } else {
+        0
+    };
+
+    let (confirmed, gasUsed, weiForStorage, weiForCompute) = xif (gasForStorage <= gasToRefund) {
+        gasToRefund = gasToRefund - gasForStorage;
+        let gasUsed = txState.originalMax - gasToRefund;
+        (
+            true,
+            gasUsed,
+            gasForStorage * txState.price,
+            (gasUsed - gasForStorage) * txState.price
+        )
+    } else {
+        gasToRefund = 0;
+        (
+            false,
+            txState.originalMax,
+            0,
+            txState.originalMax * txState.price,
+        )
+    };
 
     // refund the unused gas, and pay fees
     let refund = gasToRefund * txState.price;
@@ -449,12 +468,18 @@ public impure func gasAccounting_endTxCharges(storageDelta: int) -> option<GasUs
         txState: None<TxGasState>
     };
 
-    return Some(
+    return Some((
+        confirmed,
         struct {
             gasUsed: gasUsed,
             gasPriceWei: txState.price,
-        }
-    );
+        },
+        feeStats with {
+            paidForStorage: weiForStorage
+        } with {
+            paidForCompute: weiForCompute
+        },
+    ));
 }
 
 public impure func gasAccounting_extraCharge(wei: uint) {
@@ -629,17 +654,30 @@ public impure func getNextRequestFromCongestionAuction() -> (
         xif let Some(tx) = maybeTx {
             if let Some(txSeqNum) = tx.seqNum {
                 if (txSeqNum != account_getNextSeqNum(accountStore_get(getGlobalAccountStore(), tx.caller))) {
-                    return (const::TxResultCode_badSequenceNum, maybeRequest, maybeTx);
+                    return (const::TxResultCode_badSequenceNum, maybeRequest, Some(tx));
                 }
             }
 
             let prices = gasAccountingInfo.currentPrices;
+            tx = tx with {
+                feeStats: txFeeStats_setPrices(tx.feeStats, prices)
+            };
+
             if let Some(aggInfo) = tx.incomingRequest.aggregator {
                 let feeForTxAndCalldata = prices.perL2Tx + prices.perL1CalldataByte * aggInfo.calldataBytes;
 
                 // reimburse aggregator for tx and calldata, and collect network fee
-                if ( ! payWithNetFee(tx.caller, aggInfo.aggregator, feeForTxAndCalldata, gasAccountingInfo.feeConfig)) {
-                    return (const::TxResultCode_noGasFunds, maybeRequest, maybeTx);
+                let (fullyPaid, feeStats) = payForTxAndL1Gas(
+                    tx.caller,
+                    aggInfo.aggregator,
+                    aggInfo.calldataBytes,
+                    gasAccountingInfo.feeConfig,
+                    prices,
+                    tx.feeStats
+                );
+                tx = tx with { feeStats: feeStats };
+                if (!fullyPaid) {
+                    return (const::TxResultCode_noGasFunds, maybeRequest, Some(tx));
                 }
 
                 // compute the number of ArbGas units corresponding to the aggregator fee, and deduct them from the tx
@@ -650,21 +688,21 @@ public impure func getNextRequestFromCongestionAuction() -> (
                 if (tx.maxGas > roundedUpGasDelta) {
                     tx = tx with { maxGas: tx.maxGas - roundedUpGasDelta };
                 } else {
-                     return (const::TxResultCode_noGasFunds, maybeRequest, maybeTx);
+                     return (const::TxResultCode_noGasFunds, maybeRequest, Some(tx));
                 }
             }
-            if (tx.maxGas > gasAccountingInfo.gasRemainingThisBlock) {
-                return (const::TxResultCode_congestion, maybeRequest, maybeTx);
-            }
-
-            (
-                const::TxResultCode_success,
-                maybeRequest,
-                Some(tx with {
-                        gasPrice: gasAccountingInfo.currentPrices.perArbGasTotal
-                    }
+            xif (tx.maxGas > gasAccountingInfo.gasRemainingThisBlock) {
+                (const::TxResultCode_congestion, maybeRequest, Some(tx))
+            } else {
+                (
+                    const::TxResultCode_success,
+                    maybeRequest,
+                    Some(tx with {
+                            gasPrice: gasAccountingInfo.currentPrices.perArbGasTotal
+                        }
+                    )
                 )
-            )
+            }
         } else {
             (const::TxResultCode_success, maybeRequest, maybeTx)  // shouldn't happen
         }
@@ -673,22 +711,34 @@ public impure func getNextRequestFromCongestionAuction() -> (
     };
 }
 
-impure func payWithNetFee(payer: address, recipient: address, amount: uint, feeConfig: FeeConfig) -> bool {
+impure func payForTxAndL1Gas(
+    payer: address,
+    recipient: address,
+    calldataBytes: uint,
+    feeConfig: FeeConfig,
+    prices: GasPrices,
+    feeStats: TxFeeStats
+) -> (bool, TxFeeStats) {
+    let fullAmount = prices.perL2Tx + prices.perL1CalldataByte * calldataBytes;
+    if (fullAmount == 0) {
+        return (true, feeStats);
+    }
+
     let acctStore = getGlobalAccountStore();
     let payerAcct = accountStore_get(acctStore, payer);
     let payerBalance = account_getBalance(payerAcct);
-    let (ret, totalPayable) = xif (payerBalance >= amount) {
-        (true, amount)
+    let amount = xif (payerBalance < fullAmount) {
+        payerBalance
     } else {
-        (false, payerBalance)
+        fullAmount
     };
 
-    let payableToFee = fixedPoint_mulByUintTrunc(feeConfig.shareForNetFee, totalPayable);
+    let payableToFee = fixedPoint_mulByUintTrunc(feeConfig.shareForNetFee, amount);
     acctStore = xif let Some(store) = accountStore_transferEthBalance(
         acctStore,
         payer,
         feeConfig.forNetwork,
-        payableToFee,
+        payableToFee,   // safe because payerBalance >= amount and feeConfig.shareForNetFee <= 1
     ) {
         store
     } else {
@@ -699,7 +749,7 @@ impure func payWithNetFee(payer: address, recipient: address, amount: uint, feeC
         acctStore,
         payer,
         recipient,
-        totalPayable - payableToFee,
+        amount - payableToFee,  // safe because payableToFee <= amount <= payer's original balance
     ) {
         store
     } else {
@@ -707,7 +757,15 @@ impure func payWithNetFee(payer: address, recipient: address, amount: uint, feeC
     };
 
     setGlobalAccountStore(acctStore);
-    return ret;
+    let amountForTx = prices.perL2Tx * amount / fullAmount;   // safe because fullAmount > 0
+    return (
+        amount == fullAmount,
+        feeStats with {
+            paidForTx: amountForTx
+        } with {
+            paidForCalldata: amount - amountForTx   // safe because amount >= amountForTx
+        }
+    );
 }
 
 impure func updateCongestionState(state: CongestionState, blockNum: uint) -> CongestionState {
@@ -788,5 +846,41 @@ public impure func updateL1GasPriceEstimate(sender: address, price: uint) {
 public impure func setHonestGasPriceSender(sender: address) {
     globalL1GasPriceEstimator = globalL1GasPriceEstimator with {
         honestGasPriceSender: sender
+    };
+}
+
+type TxFeeStats = struct {
+    weiPerTx: uint,
+    weiPerCalldata: uint,
+    weiPerStorage: uint,
+    weiPerArbGas: uint,
+    paidForTx: uint,
+    paidForCalldata: uint,
+    paidForStorage: uint,
+    paidForCompute: uint,
+}
+
+public func txFeeStats_zero() -> TxFeeStats {
+    return struct {
+        weiPerTx: 0,
+        weiPerCalldata: 0,
+        weiPerStorage: 0,
+        weiPerArbGas: 0,
+        paidForTx: 0,
+        paidForCalldata: 0,
+        paidForStorage: 0,
+        paidForCompute: 0,
+    };
+}
+
+public func txFeeStats_setPrices(stats: TxFeeStats, prices: GasPrices) -> TxFeeStats {
+    return stats with {
+        weiPerTx: prices.perL2Tx
+    } with {
+        weiPerCalldata: prices.perL1CalldataByte
+    } with {
+        weiPerStorage: prices.perStorageCell
+    } with {
+        weiPerArbGas: prices.perArbGasTotal
     };
 }

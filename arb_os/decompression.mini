@@ -54,6 +54,7 @@ use accounts::account_getBlsKey;
 
 use evmCallStack::evmCallStack_getAccount;
 use inbox::IncomingRequest;
+use gasAccounting::txFeeStats_zero;
 use messages::TxRequestData;
 
 use std::rlp::SignedTx;
@@ -64,9 +65,6 @@ use std::rlp::rlp_encodeAndHashMessageInfoForSignature;
 
 use signedTx::SignedTx;
 use signedTx::recoverSigner;
-
-use inbox::IncomingRequest;
-use messages::TxRequestData;
 
 
 type IndexedAddressTable = struct {
@@ -427,6 +425,7 @@ impure func decompressTx(
             nonMutating: false,
             isConstructor: (toAddr == address(0)),
             incomingRequest: unsafecast<IncomingRequest>(0),  // caller will fill this in
+            feeStats: txFeeStats_zero(),
         }
     ));
 }
