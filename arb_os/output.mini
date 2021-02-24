@@ -265,31 +265,6 @@ public impure func emitTxReceipt(
     ),) { log };
 }
 
-impure func emitBlockSummaryLog(blockNum: uint, timestamp: uint, prevBlockNum: uint) {
-    let gasUsedThisBlock = globalBlockReceiptData.statsThisBlock.totalGasUsed;
-    let gasLimit = chainParams_speedLimitPerBlock();
-    if (gasLimit < gasUsedThisBlock) {
-        gasLimit = gasUsedThisBlock;
-    }
-    if ((inbox_currentBlockNumber() >= globalBlockReceiptData.nextSendBlockNum) && !outbox_isEmpty() ){
-        outbox_send();
-        globalBlockReceiptData = globalBlockReceiptData with {
-            nextSendBlockNum: inbox_currentBlockNumber() + chainParams_getBlocksPerSend()
-        };
-    }
-
-    asm((
-        const::LogType_blockSummary,
-        blockNum,
-        timestamp,
-        gasLimit,
-        globalBlockReceiptData.statsThisBlock,
-        globalBlockReceiptData.statsAllTime,
-        gasAccounting_summaryToPublish(),
-        prevBlockNum
-    ),) { log }; 
-}
-
 var globalOutbox: struct {
     batch: MerkleTreeBuilder,
     batchNumber: uint,
