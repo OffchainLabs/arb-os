@@ -309,7 +309,6 @@ impure func outbox_isEmpty() -> bool {
 }
 
 public impure func outbox_append(item: ByteArray) {
-    outputStats_addSend();
     let batchNumber = globalOutbox.batchNumber;
     let numInBatch = globalOutbox.numInBatch;
     globalOutbox = globalOutbox with {
@@ -343,6 +342,7 @@ impure func outbox_send() {
 
         )
     ) { send };
+    outputStats_addSend();
     globalOutbox = struct {
         batch: merkleTreeBuilder_new(),
         batchNumber: globalOutbox.batchNumber + 1,
