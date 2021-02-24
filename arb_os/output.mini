@@ -94,6 +94,13 @@ var globalBlockReceiptData: struct {
 };
 
 public impure func outputStats_endOfBlock(blockNum: uint, timestamp: uint) {
+    if ((inbox_currentBlockNumber() >= globalBlockReceiptData.nextSendBlockNum) && !outbox_isEmpty() ){
+        outbox_send();
+        globalBlockReceiptData = globalBlockReceiptData with {
+            nextSendBlockNum: inbox_currentBlockNumber() + chainParams_getBlocksPerSend()
+        };
+    }
+
     if ( ! outputStats_isAllZero(globalBlockReceiptData.statsThisBlock)) {
         // add current block (including soon-to-be-issued block summary log) into total stats
         let updatedStats = outputStats_add(
@@ -107,7 +114,23 @@ public impure func outputStats_endOfBlock(blockNum: uint, timestamp: uint) {
         globalBlockReceiptData = globalBlockReceiptData with {
             statsAllTime: updatedStats
         };
-        emitBlockSummaryLog(blockNum, timestamp, globalBlockReceiptData.lastBlockNum);
+
+        let gasUsedThisBlock = globalBlockReceiptData.statsThisBlock.totalGasUsed;
+        let gasLimit = chainParams_speedLimitPerBlock();
+        if (gasLimit < gasUsedThisBlock) {
+            gasLimit = gasUsedThisBlock;
+        }
+
+        asm((
+            const::LogType_blockSummary,
+            blockNum,
+            timestamp,
+            gasLimit,
+            globalBlockReceiptData.statsThisBlock,
+            globalBlockReceiptData.statsAllTime,
+            gasAccounting_summaryToPublish(),
+            globalBlockReceiptData.lastBlockNum
+        ),) { log }; 
 
         globalBlockReceiptData = globalBlockReceiptData with {
             lastBlockNum: blockNum
@@ -242,30 +265,6 @@ public impure func emitTxReceipt(
     ),) { log };
 }
 
-impure func emitBlockSummaryLog(blockNum: uint, timestamp: uint, prevBlockNum: uint) {
-    let gasUsedThisBlock = globalBlockReceiptData.statsThisBlock.totalGasUsed;
-    let gasLimit = chainParams_speedLimitPerBlock();
-    if (gasLimit < gasUsedThisBlock) {
-        gasLimit = gasUsedThisBlock;
-    }
-    asm((
-        const::LogType_blockSummary,
-        blockNum,
-        timestamp,
-        gasLimit,
-        globalBlockReceiptData.statsThisBlock,
-        globalBlockReceiptData.statsAllTime,
-        gasAccounting_summaryToPublish(),
-        prevBlockNum
-    ),) { log };
-    if ((inbox_currentBlockNumber() >= globalBlockReceiptData.nextSendBlockNum) && !outbox_isEmpty() ){
-        outbox_send();
-        globalBlockReceiptData = globalBlockReceiptData with {
-            nextSendBlockNum: inbox_currentBlockNumber() + chainParams_getBlocksPerSend()
-        };
-    }
-}
-
 var globalOutbox: struct {
     batch: MerkleTreeBuilder,
     batchNumber: uint,
@@ -285,7 +284,6 @@ impure func outbox_isEmpty() -> bool {
 }
 
 public impure func outbox_append(item: ByteArray) {
-    outputStats_addSend();
     let batchNumber = globalOutbox.batchNumber;
     let numInBatch = globalOutbox.numInBatch;
     globalOutbox = globalOutbox with {
@@ -319,6 +317,7 @@ impure func outbox_send() {
 
         )
     ) { send };
+    outputStats_addSend();
     globalOutbox = struct {
         batch: merkleTreeBuilder_new(),
         batchNumber: globalOutbox.batchNumber + 1,
