@@ -4,7 +4,7 @@
 
 use crate::evm::abi::{ArbSys, _ArbOwner};
 use crate::link::LinkedProgram;
-use crate::mavm::Instruction;
+use crate::mavm::{AVMOpcode, Instruction};
 use crate::run::{load_from_file, RuntimeEnvironment};
 use crate::uint256::Uint256;
 use ethers_signers::Signer;
@@ -69,7 +69,7 @@ impl CodeUploader {
         self.build_buffer.extend(b);
     }
 
-    pub fn _serialize_one(&mut self, insn: &Instruction) {
+    pub fn _serialize_one(&mut self, insn: &Instruction<AVMOpcode>) {
         insn._upload(self);
         self.num_so_far = self.num_so_far + 1;
         self._finish_batch();

@@ -2,7 +2,7 @@
  * Copyright 2020, Offchain Labs, Inc. All rights reserved.
  */
 
-use crate::compile::{DebugInfo, MiniProperties};
+use crate::compile::{DebugInfo};
 use crate::run::upload::CodeUploader;
 use crate::stringtable::StringId;
 use crate::uint256::Uint256;
@@ -126,23 +126,6 @@ impl<T> Instruction<T> {
         Instruction::new(opcode, Some(immediate), debug_info)
     }
 
-    pub fn _upload(&self, u: &mut CodeUploader) {
-        u._push_byte(self.opcode.to_number().unwrap());
-        if let Some(val) = &self.immediate {
-            u._push_byte(1u8);
-            val._upload(u);
-        } else {
-            u._push_byte(0u8);
-        }
-    }
-
-    pub fn get_label(&self) -> Option<&Label> {
-        match &self.opcode {
-            Opcode::Label(label) => Some(label),
-            _ => None,
-        }
-    }
-
     pub fn replace_labels(self, label_map: &HashMap<Label, CodePt>) -> Result<Self, Label> {
         match self.immediate {
             Some(val) => Ok(Instruction::from_opcode_imm(
@@ -162,6 +145,18 @@ impl<T> Instruction<T> {
                 self.debug_info,
             ),
             None => self,
+        }
+    }
+}
+
+impl Instruction<AVMOpcode> {
+    pub fn _upload(&self, u: &mut CodeUploader) {
+        u._push_byte(self.opcode.to_number());
+        if let Some(val) = &self.immediate {
+            u._push_byte(1u8);
+            val._upload(u);
+        } else {
+            u._push_byte(0u8);
         }
     }
 }
