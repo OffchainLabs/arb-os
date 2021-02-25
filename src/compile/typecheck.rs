@@ -16,6 +16,7 @@ use crate::pos::Location;
 use crate::stringtable::{StringId, StringTable};
 use crate::uint256::Uint256;
 use std::collections::{HashMap, HashSet};
+use serde::{Deserialize, Serialize};
 
 type TypeTable = HashMap<usize, Type>;
 
@@ -86,7 +87,7 @@ pub fn new_type_error(msg: String, location: Option<Location>) -> TypeError {
 
 ///Keeps track of compiler enforced properties, currently only tracks purity, may be extended to
 /// keep track of potential to throw or other properties.
-#[derive(Debug, Clone, Eq, PartialEq)]
+#[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
 pub struct PropertiesList {
     pub pure: bool,
 }
@@ -701,9 +702,7 @@ pub fn typecheck_function(
         tipe: fd.tipe.clone(),
         imported: false,
         debug_info: DebugInfo::from(fd.location),
-        properties: PropertiesList {
-            pure: !fd.is_impure,
-        },
+        properties: fd.properties.clone(),
     })
 }
 

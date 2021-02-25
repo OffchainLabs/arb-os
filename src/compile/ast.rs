@@ -12,6 +12,7 @@ use crate::stringtable::StringId;
 use crate::uint256::Uint256;
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
+use crate::compile::typecheck::PropertiesList;
 
 ///This is a map of the types at a given location, with the Vec<String> representing the module path
 ///and the usize representing the stringID of the type at that location.
@@ -482,13 +483,13 @@ pub enum FuncDeclKind {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct FuncDecl {
     pub name: StringId,
-    pub is_impure: bool,
     pub args: Vec<FuncArg>,
     pub ret_type: Type,
     pub code: Vec<Statement>,
     pub tipe: Type,
     pub kind: FuncDeclKind,
     pub location: Option<Location>,
+    pub properties: PropertiesList,
 }
 
 impl FuncDecl {
@@ -508,7 +509,6 @@ impl FuncDecl {
         }
         FuncDecl {
             name,
-            is_impure,
             args: args_vec,
             ret_type: ret_type.clone(),
             code,
@@ -519,6 +519,7 @@ impl FuncDecl {
                 FuncDeclKind::Private
             },
             location,
+            properties: PropertiesList { pure: !is_impure },
         }
     }
 }
