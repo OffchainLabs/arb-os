@@ -860,13 +860,26 @@ public impure func setFairGasPriceSender(sender: address) {
     };
 }
 
+// This adjusts l1GasPerL2Tx to be a weighted average, over recent transactions that arrived in batches,
+//     of the quantity (const::Charging_AssumedBatchCostL1Gas / batchSize). Because we're averaging over
+//     transactions, a batch contributes (batchSize) times, once for each transaction in it.
+public impure func updateBatchSizeEstimate(size: uint) {
+    if (size > 500) { size = 500; }
+    let oldValue = gasAccountingInfo.pricingParams.l1GasPerL2Tx;
+    gasAccountingInfo = gasAccountingInfo with {
+        pricingParams: gasAccountingInfo.pricingParams with {
+            l1GasPerL2Tx: (const::Charging_AssumedBatchCostL1Gas + (10000 - size) * oldValue) / 10000
+        }
+    };
+}
+
 // Fee stats for a transaction, for inclusion in tx receipt
 type TxFeeStats = struct {
     weiPerTx: uint,
     weiPerCalldata: uint,
     weiPerStorage: uint,
     weiPerArbGas: uint,
-    paidForTx: uint,        // amounts actually paid, which might be less than price, if funds run out
+    paidForTx: uint,       // we record the amounts actually paid, which might be less than price, if funds run out
     paidForCalldata: uint,
     paidForStorage: uint,
     paidForCompute: uint,

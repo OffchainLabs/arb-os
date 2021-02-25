@@ -199,6 +199,7 @@ pub fn init_constant_table() -> HashMap<String, Uint256> {
         ("Charging_DefaultL1GasPerCalldataByte", 16),
         ("Charging_DefaultL1GasPerStorage", 2000),
         ("Charging_DefaultArbGasDivisor", 10000),
+        ("Charging_AssumedBatchCostL1Gas", 50000),
         // fee customizability
         ("NetFee_defaultRateNumerator", 15),
         ("NetFee_defaultRateDenominator", 100),
