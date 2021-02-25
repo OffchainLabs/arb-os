@@ -15,8 +15,8 @@ use crate::mavm::{Instruction, Label, Value};
 use crate::pos::Location;
 use crate::stringtable::{StringId, StringTable};
 use crate::uint256::Uint256;
-use std::collections::{HashMap, HashSet};
 use serde::{Deserialize, Serialize};
+use std::collections::{HashMap, HashSet};
 
 type TypeTable = HashMap<usize, Type>;
 
@@ -100,7 +100,7 @@ pub struct TypeCheckedFunc {
     pub ret_type: Type,
     pub code: Vec<TypeCheckedStatement>,
     pub tipe: Type,
-    pub imported: bool,
+    pub kind: FuncDeclKind,
     pub debug_info: DebugInfo,
     pub properties: PropertiesList,
 }
@@ -700,7 +700,7 @@ pub fn typecheck_function(
         ret_type: fd.ret_type.clone(),
         code: tc_stats,
         tipe: fd.tipe.clone(),
-        imported: false,
+        kind: fd.kind,
         debug_info: DebugInfo::from(fd.location),
         properties: fd.properties.clone(),
     })
