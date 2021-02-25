@@ -362,25 +362,35 @@ pub fn evm_test_arbsys_direct(log_to: Option<&Path>, debug: bool) -> Result<(), 
     let tx_count = arbsys.get_transaction_count(&mut machine, my_addr.clone())?;
     assert_eq!(tx_count, Uint256::from_u64(2));
 
+    println!("A");
     let addr_table_index = arb_address_table.register(&mut machine, my_addr.clone())?;
+    println!("B");
     let lookup_result = arb_address_table.lookup(&mut machine, my_addr.clone())?;
+    println!("C");
     assert_eq!(addr_table_index, lookup_result);
 
+    println!("D");
     let recovered_addr = arb_address_table.lookup_index(&mut machine, lookup_result)?;
     assert_eq!(recovered_addr, my_addr);
 
+    println!("E");
     let my_addr_compressed = arb_address_table.compress(&mut machine, my_addr.clone())?;
+    println!("F");
     let (my_addr_decompressed, offset) =
         arb_address_table.decompress(&mut machine, &my_addr_compressed, Uint256::zero())?;
     assert_eq!(my_addr.clone(), my_addr_decompressed);
     assert_eq!(offset, Uint256::from_usize(my_addr_compressed.len()));
 
+    println!("G");
     assert_eq!(Uint256::from_u64(3), arb_address_table.size(&mut machine)?);
 
+    println!("H");
     let an_addr = Uint256::from_u64(581351734971918347);
     let an_addr_compressed = arb_address_table.compress(&mut machine, an_addr.clone())?;
+    println!("I");
     let (an_addr_decompressed, offset) =
         arb_address_table.decompress(&mut machine, &an_addr_compressed, Uint256::zero())?;
+    println!("J");
     assert_eq!(an_addr.clone(), an_addr_decompressed);
     assert_eq!(offset, Uint256::from_usize(an_addr_compressed.len()));
 
@@ -516,62 +526,6 @@ pub fn _evm_test_rate_control(log_to: Option<&Path>, debug: bool) -> Result<(), 
     arbowner._give_ownership(&mut machine, my_addr, Some(Uint256::zero()))?;
 
     let const_table = init_constant_table();
-
-    let (num1, denom1, num2, denom2) = arbowner._get_fee_rates(&mut machine)?;
-    assert_eq!(&num1, const_table.get("NetFee_defaultRate1Num").unwrap());
-    assert_eq!(
-        &denom1,
-        const_table.get("NetFee_defaultRate1Denom").unwrap()
-    );
-    assert_eq!(&num2, const_table.get("NetFee_defaultRate2Num").unwrap());
-    assert_eq!(
-        &denom2,
-        const_table.get("NetFee_defaultRate2Denom").unwrap()
-    );
-
-    let (max_num1, max_denom1, max_num2, max_denom2) = arbowner._get_fee_maxes(&mut machine)?;
-    assert_eq!(&max_num1, const_table.get("NetFee_maxRate1Num").unwrap());
-    assert_eq!(
-        &max_denom1,
-        const_table.get("NetFee_maxRate1Denom").unwrap()
-    );
-    assert_eq!(&max_num2, const_table.get("NetFee_maxRate2Num").unwrap());
-    assert_eq!(
-        &max_denom2,
-        const_table.get("NetFee_maxRate2Denom").unwrap()
-    );
-
-    assert!(arbowner
-        ._set_fee_rates(
-            &mut machine,
-            max_num1.add(&Uint256::one()),
-            max_denom1.clone(),
-            max_num2.clone(),
-            max_denom2.clone(),
-        )
-        .is_err());
-
-    arbowner._set_fee_rates(
-        &mut machine,
-        max_num1.clone(),
-        max_denom1.add(&Uint256::one()),
-        max_num2.clone(),
-        max_denom2.clone(),
-    )?;
-
-    arbowner._set_fee_maxes(
-        &mut machine,
-        max_num1.clone(),
-        max_denom1.add(&Uint256::from_u64(13)),
-        max_num2.clone(),
-        max_denom2.clone(),
-    )?;
-
-    let (num1, denom1, num2, denom2) = arbowner._get_fee_rates(&mut machine)?;
-    assert_eq!(num1, max_num1);
-    assert_eq!(denom1, max_denom1.add(&Uint256::from_u64(13)));
-    assert_eq!(num2, max_num2);
-    assert_eq!(denom2, max_denom2);
 
     let (r1, r2) = arbowner._get_fee_recipients(&mut machine)?;
     assert_eq!(&r1, const_table.get("NetFee_defaultRecipient").unwrap());

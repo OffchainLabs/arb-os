@@ -53,6 +53,7 @@ use accounts::account_getAggregatorDecompressionState;
 use accounts::account_getBlsKey;
 
 use evmCallStack::evmCallStack_getAccount;
+use evmCallStack::evmCallStack_addStorageCharge;
 use inbox::IncomingRequest;
 use gasAccounting::txFeeStats_zero;
 use messages::TxRequestData;
@@ -116,6 +117,7 @@ public func addressTable_getByAddressAlloc(iat: IndexedAddressTable, addr: addre
         (iat, val)
     } else {
         // allocate space in the table
+        evmCallStack_addStorageCharge(2);   // charge current tx for 2 storage cells
         (
             iat with {
                 byIndex: expandingIntArray_set(iat.byIndex, iat.size, uint(addr))

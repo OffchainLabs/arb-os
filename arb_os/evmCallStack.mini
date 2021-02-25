@@ -136,6 +136,16 @@ public impure func evmCallStack_init() {
     globalCallStack = None<EvmCallFrame>;
 }
 
+public impure func evmCallStack_addStorageCharge(units: uint) {
+    if let Some(topFrame) = globalCallStack {
+        globalCallStack = Some(
+            topFrame with {
+                storageDelta: topFrame.storageDelta + int(units)
+            }
+        );
+    }
+}
+
 public impure func evmCallStack_stackInfo() -> (uint, (address, address), (address, address)) {
     return xif let Some(topFrame) = globalCallStack {
         let sndRunningAs = address(0);
@@ -166,7 +176,8 @@ public impure func initEvmCallStack(
             request.calleeAddr
         )
     ) {
-        if (gasAccounting_startTxCharges(request.maxGas, request.gasPrice, request.caller) != None<()>) {
+        let startTxResult = gasAccounting_startTxCharges(request.maxGas, request.gasPrice, request.caller);
+        if (startTxResult == const::TxResultCode_success) {
             if (request.seqNum != None<uint>) {
                 // increment the caller's sequence number, if caller has sufficient balance
                 let acctStore = getGlobalAccountStore();
@@ -246,7 +257,7 @@ public impure func initEvmCallStack(
             // can't pay for gas error
             emitTxReceipt(
                 request.incomingRequest,
-                const::TxResultCode_noGasFunds,
+                startTxResult,
                 None<ByteArray>,
                 None<EvmLogs>,
                 None<GasUsage>,
@@ -363,7 +374,8 @@ public impure func initEvmCallStackForConstructor(
     if let Some(uas) = accountStore_transferEthBalance(acctStore, request.caller, request.calleeAddr, request.value) {
         acctStore = uas;
 
-        if (gasAccounting_startTxCharges(request.maxGas, request.gasPrice, request.caller) != None<()>) {
+        let startTxResult = gasAccounting_startTxCharges(request.maxGas, request.gasPrice, request.caller);
+        if (startTxResult == const::TxResultCode_success) {
             setGlobalAccountStore(acctStoreAfterIncrement);   // commit the incremented sequence number
 
             globalCallStack = Some(struct {
@@ -393,7 +405,7 @@ public impure func initEvmCallStackForConstructor(
             // can't pay for gas error
             emitTxReceipt(
                 request.incomingRequest,
-                const::TxResultCode_noGasFunds,
+                startTxResult,
                 None<ByteArray>,
                 None<EvmLogs>,
                 None<GasUsage>,

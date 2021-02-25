@@ -36,10 +36,7 @@ use gasAccounting::gasAccounting_addToReserveInCurrentContext;
 use gasAccounting::gasAccounting_setFeesEnabled;
 use gasAccounting::gasAccounting_getFeeRecipients;
 use gasAccounting::gasAccounting_setFeeRecipients;
-use gasAccounting::gasAccounting_getFeeRates;
-use gasAccounting::gasAccounting_setFeeRates;
-use gasAccounting::gasAccounting_getFeeMaxes;
-use gasAccounting::gasAccounting_setFeeMaxes;
+use gasAccounting::setFairGasPriceSender;
 
 use inbox::inbox_changeSequencer;
 
@@ -93,14 +90,8 @@ public impure func arbowner_txcall() {
             arbowner_getFeeRecipients(topFrame, calldata);
         } elseif (funcCode == 0xc6cabb40) {
             arbowner_setFeeRecipients(topFrame, calldata);
-        } elseif (funcCode == 0xd6e7a55e) {
-            arbowner_getFeeRates(topFrame, calldata);
-        } elseif (funcCode == 0x30d2361e) {
-            arbowner_setFeeRates(topFrame, calldata);
-        } elseif (funcCode == 0x23e089dd) {
-            arbowner_getFeeMaxes(topFrame, calldata);
-        } elseif (funcCode == 0x72861aa4) {
-            arbowner_setFeeMaxes(topFrame, calldata);
+        } elseif (funcCode == 0xba7f4cc6) {
+            arbowner_setFairGasPriceSender(topFrame, calldata);
         } elseif (funcCode == 0x340e4fc2) {
             arbowner_setBlocksPerSend(topFrame, calldata);
         } elseif (funcCode == 0xea180a38) {
@@ -167,105 +158,15 @@ impure func arbowner_setFeeRecipients(topFrame: EvmCallFrame, calldata: ByteArra
     let recipient1 = address(bytearray_get256(calldata, 4));
     let recipient2 = address(bytearray_get256(calldata, 36));
     gasAccounting_setFeeRecipients(recipient1, recipient2);
-    evmOp_return(0,0);
+    evmOp_return(0, 0);
 }
 
-impure func arbowner_getFeeRates(topFrame: EvmCallFrame, calldata: ByteArray) { // () -> (uint, uint, uint, uint)
-    if (bytearray_size(calldata) != 4) {
-        evmOp_revert_knownCodePc(address(const::Address_ArbOwner), 60, 0, 0);
+impure func arbowner_setFairGasPriceSender(topFrame: EvmCallFrame, calldata: ByteArray) { // (address)
+    if (bytearray_size(calldata) != 36) {
+        evmOp_revert_knownCodePc(address(const::Address_ArbOwner), 210, 0, 0);
     }
-
-    if let Some(res) = gasAccounting_getFeeRates() {
-        let (num1, denom1, num2, denom2) = res;
-        let mem = bytearray_set256(
-            bytearray_set256(
-                bytearray_set256(
-                    bytearray_set256(
-                        bytearray_new(0),
-                        0,
-                        num1,
-                    ),
-                    32,
-                    denom1,
-                ),
-                64,
-                num2,
-            ),
-            96,
-            denom2,
-        );
-        if (evmCallStack_setTopFrameMemory(mem)) {
-            evmOp_return(0, 4*32);
-        } else {
-            evmOp_revert_knownCodePc(address(const::Address_ArbOwner), 61, 0, 0);
-        }
-    } else {
-        evmOp_revert_knownCodePc(address(const::Address_ArbOwner), 62, 0, 0);
-    }
-}
-
-impure func arbowner_setFeeRates(topFrame: EvmCallFrame, calldata: ByteArray) { // (uint, uint, uint, uint)
-    if (bytearray_size(calldata) != 4+4*32) {
-        evmOp_revert_knownCodePc(address(const::Address_ArbOwner), 70, 0, 0);
-    }
-    let num1 = bytearray_get256(calldata, 4);
-    let denom1 = bytearray_get256(calldata, 4+32);
-    let num2 = bytearray_get256(calldata, 4+2*32);
-    let denom2 = bytearray_get256(calldata, 4+3*32);
-    if let Some(_) = gasAccounting_setFeeRates(num1, denom1, num2, denom2) {
-        evmOp_return(0,0);
-    } else {
-        evmOp_revert_knownCodePc(address(const::Address_ArbOwner), 71, 0, 0);
-    }
-}
-
-impure func arbowner_getFeeMaxes(topFrame: EvmCallFrame, calldata: ByteArray) { // () -> (uint, uint, uint, uint)
-    if (bytearray_size(calldata) != 4) {
-        evmOp_revert_knownCodePc(address(const::Address_ArbOwner), 80, 0, 0);
-    }
-
-    if let Some(res) = gasAccounting_getFeeMaxes() {
-        let (num1, denom1, num2, denom2) = res;
-        let mem = bytearray_set256(
-            bytearray_set256(
-                bytearray_set256(
-                    bytearray_set256(
-                        bytearray_new(0),
-                        0,
-                        num1,
-                    ),
-                    32,
-                    denom1,
-                ),
-                64,
-                num2,
-            ),
-            96,
-            denom2,
-        );
-        if (evmCallStack_setTopFrameMemory(mem)) {
-            evmOp_return(0, 4*32);
-        } else {
-            evmOp_revert_knownCodePc(address(const::Address_ArbOwner), 81, 0, 0);
-        }
-    } else {
-        evmOp_revert_knownCodePc(address(const::Address_ArbOwner), 82, 0, 0);
-    }
-}
-
-impure func arbowner_setFeeMaxes(topFrame: EvmCallFrame, calldata: ByteArray) { // (uint, uint, uint, uint)
-    if (bytearray_size(calldata) != 4+4*32) {
-        evmOp_revert_knownCodePc(address(const::Address_ArbOwner), 90, 0, 0);
-    }
-    let num1 = bytearray_get256(calldata, 4);
-    let denom1 = bytearray_get256(calldata, 4+32);
-    let num2 = bytearray_get256(calldata, 4+2*32);
-    let denom2 = bytearray_get256(calldata, 4+3*32);
-    if let Some(_) = gasAccounting_setFeeMaxes(num1, denom1, num2, denom2) {
-        evmOp_return(0,0);
-    } else {
-        evmOp_revert_knownCodePc(address(const::Address_ArbOwner), 91, 0, 0);
-    }
+    setFairGasPriceSender(address(bytearray_get256(calldata, 4)));
+    evmOp_return(0, 0);
 }
 
 impure func arbowner_setBlocksPerSend(topFrame: EvmCallFrame, calldata: ByteArray) {  // (uint)

@@ -11,10 +11,7 @@ interface ArbOwner {
     function setFeesEnabled(bool enabled) external;
     function getFeeRecipients() external view returns (address, address);
     function setFeeRecipients(address netFeeRecipient, address congestionFeeRecipient) external;
-    function getFeeRates() external view returns (uint, uint, uint, uint);
-    function setFeeRates(uint num1, uint denom1, uint num2, uint denom2) external;
-    function getFeeMaxes() external view returns (uint, uint, uint, uint);
-    function setFeeMaxes(uint num1, uint denom1, uint num2, uint denom2) external;
+    function setFairGasPriceSender(address addr) external;
 
     function setBlocksPerSend(uint blocksPerSend) external;
 
