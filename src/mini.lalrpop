@@ -103,8 +103,8 @@ StatementKind: StatementKind = {
 }
 
 MatchPattern: MatchPattern = {
-	<Ident> => MatchPattern { kind: MatchPatternKind::Simple(<>)},
-	"(" <CommaedMatchPatterns> ")" => MatchPattern { kind: MatchPatternKind::Tuple(<>)},
+	<Ident> => MatchPattern { kind: MatchPatternKind::Simple(<>), cached: ()},
+	"(" <CommaedMatchPatterns> ")" => MatchPattern { kind: MatchPatternKind::Tuple(<>), cached: ()},
 }
 
 CommaedMatchPatterns: Vec<MatchPattern> = {

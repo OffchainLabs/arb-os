@@ -546,8 +546,9 @@ pub enum StatementKind {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-pub struct MatchPattern {
-    pub(crate) kind: MatchPatternKind<MatchPattern>,
+pub struct MatchPattern<T = ()> {
+    pub(crate) kind: MatchPatternKind<MatchPattern<T>>,
+    pub(crate) cached: T,
 }
 
 ///Either a single identifier or a tuple of identifiers, used in mini let bindings.

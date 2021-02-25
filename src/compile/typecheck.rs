@@ -155,7 +155,7 @@ fn inline(
                             kind: TypeCheckedStatementKind::Let(
                                 TypeCheckedMatchPattern {
                                     kind: MatchPatternKind::Simple(otherarg.name),
-                                    tipe: otherarg.tipe.clone(),
+                                    cached: otherarg.tipe.clone(),
                                 },
                                 arg.clone(),
                             ),
@@ -278,12 +278,7 @@ impl AbstractSyntaxTree for TypeCheckedStatement {
     }
 }
 
-///A `MatchPattern` that has gone through type checking.
-#[derive(Debug, Clone, Eq, PartialEq)]
-pub struct TypeCheckedMatchPattern {
-    pub(crate) kind: MatchPatternKind<TypeCheckedMatchPattern>,
-    tipe: Type,
-}
+pub type TypeCheckedMatchPattern = MatchPattern<Type>;
 
 ///A mini expression with associated `DebugInfo` that has been type checked.
 #[derive(Debug, Clone, Eq, PartialEq)]
@@ -940,7 +935,7 @@ fn typecheck_statement<'a>(
                     TypeCheckedStatementKind::Let(
                         TypeCheckedMatchPattern {
                             kind: MatchPatternKind::Simple(*name),
-                            tipe: tce_type.clone(),
+                            cached: tce_type.clone(),
                         },
                         tc_expr,
                     ),
@@ -953,7 +948,7 @@ fn typecheck_statement<'a>(
                         TypeCheckedStatementKind::Let(
                             TypeCheckedMatchPattern {
                                 kind: MatchPatternKind::Tuple(tc_pats),
-                                tipe: tce_type,
+                                cached: tce_type,
                             },
                             tc_expr,
                         ),
@@ -1107,7 +1102,7 @@ fn typecheck_patvec(
                     MatchPatternKind::Simple(name) => {
                         tc_pats.push(TypeCheckedMatchPattern {
                             kind: MatchPatternKind::Simple(*name),
-                            tipe: rhs_type.clone(),
+                            cached: rhs_type.clone(),
                         });
                         bindings.push((*name, rhs_type.clone()));
                     }
