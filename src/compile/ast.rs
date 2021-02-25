@@ -56,7 +56,7 @@ impl From<Option<Location>> for DebugInfo {
 #[derive(Debug, Clone)]
 pub enum TopLevelDecl {
     TypeDecl(TypeDecl),
-    FuncDecl(FuncDecl),
+    FuncDecl(Func),
     VarDecl(GlobalVarDecl),
     UseDecl(Vec<String>, String),
 }
@@ -481,18 +481,18 @@ pub enum FuncDeclKind {
 ///Represents a top level function declaration.  The is_impure, args, and ret_type fields are
 /// assumed to be derived from tipe, and this must be upheld by the user of this type.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-pub struct FuncDecl {
+pub struct Func<T = Statement> {
     pub name: StringId,
     pub args: Vec<FuncArg>,
     pub ret_type: Type,
-    pub code: Vec<Statement>,
+    pub code: Vec<T>,
     pub tipe: Type,
     pub kind: FuncDeclKind,
-    pub location: Option<Location>,
+    pub debug_info: DebugInfo,
     pub properties: PropertiesList,
 }
 
-impl FuncDecl {
+impl Func {
     pub fn new(
         name: StringId,
         is_impure: bool,
@@ -507,7 +507,7 @@ impl FuncDecl {
         for arg in args.iter() {
             arg_types.push(arg.tipe.clone());
         }
-        FuncDecl {
+        Func {
             name,
             args: args_vec,
             ret_type: ret_type.clone(),
@@ -518,7 +518,7 @@ impl FuncDecl {
             } else {
                 FuncDeclKind::Private
             },
-            location,
+            debug_info: DebugInfo::from(location),
             properties: PropertiesList { pure: !is_impure },
         }
     }

@@ -8,7 +8,7 @@ use crate::link::{ExportedFunc, Import, ImportedFunc};
 use crate::mavm::Instruction;
 use crate::pos::{BytePos, Location};
 use crate::stringtable::StringTable;
-use ast::{FuncDecl, GlobalVarDecl, TypeTree};
+use ast::{Func, GlobalVarDecl, TypeTree};
 use lalrpop_util::lalrpop_mod;
 use mini::DeclsParser;
 use miniconstants::init_constant_table;
@@ -39,7 +39,7 @@ struct Module {
     ///The list of imported functions imported through the old import/export system
     imported_funcs: Vec<ImportedFunc>,
     ///List of functions defined locally within the source file
-    funcs: Vec<FuncDecl>,
+    funcs: Vec<Func>,
     ///Map from `StringId`s in this file to the `Type`s they represent.
     named_types: HashMap<usize, Type>,
     ///List of global variables defined within this file.
@@ -73,7 +73,7 @@ struct TypeCheckedModule {
 impl Module {
     fn new(
         imported_funcs: Vec<ImportedFunc>,
-        funcs: Vec<FuncDecl>,
+        funcs: Vec<Func>,
         named_types: HashMap<usize, Type>,
         global_vars: Vec<GlobalVarDecl>,
         string_table: StringTable,

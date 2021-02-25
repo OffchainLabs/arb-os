@@ -5,9 +5,9 @@
 //!Converts non-type checked ast nodes to type checked versions, and other related utilities.
 
 use super::ast::{
-    BinaryOp, CodeBlock, Constant, DebugInfo, Expr, ExprKind, FuncArg, FuncDecl, FuncDeclKind,
-    GlobalVarDecl, MatchPattern, MatchPatternKind, Statement, StatementKind, StructField,
-    TopLevelDecl, TrinaryOp, Type, TypeTree, UnaryOp,
+    BinaryOp, CodeBlock, Constant, DebugInfo, Expr, ExprKind, Func, FuncDeclKind, GlobalVarDecl,
+    MatchPattern, MatchPatternKind, Statement, StatementKind, StructField, TopLevelDecl, TrinaryOp,
+    Type, TypeTree, UnaryOp,
 };
 use crate::compile::ast::FieldInitializer;
 use crate::link::{ExportedFunc, Import, ImportedFunc};
@@ -92,18 +92,7 @@ pub struct PropertiesList {
     pub pure: bool,
 }
 
-///A mini function that has been type checked.
-#[derive(Debug, Clone)]
-pub struct TypeCheckedFunc {
-    pub name: StringId,
-    pub args: Vec<FuncArg>,
-    pub ret_type: Type,
-    pub code: Vec<TypeCheckedStatement>,
-    pub tipe: Type,
-    pub kind: FuncDeclKind,
-    pub debug_info: DebugInfo,
-    pub properties: PropertiesList,
-}
+pub type TypeCheckedFunc = Func<TypeCheckedStatement>;
 
 impl AbstractSyntaxTree for TypeCheckedFunc {
     fn child_nodes(&mut self) -> Vec<TypeCheckedNode> {
@@ -554,7 +543,7 @@ pub fn sort_top_level_decls(
     decls: &[TopLevelDecl],
 ) -> (
     Vec<Import>,
-    Vec<FuncDecl>,
+    Vec<Func>,
     HashMap<usize, Type>,
     Vec<GlobalVarDecl>,
     HashMap<usize, Type>,
@@ -588,7 +577,7 @@ pub fn sort_top_level_decls(
 ///Performs typechecking various top level declarations, including `ImportedFunc`s, `FuncDecl`s,
 /// named `Type`s, and global variables.
 pub fn typecheck_top_level_decls(
-    funcs: Vec<FuncDecl>,
+    funcs: Vec<Func>,
     named_types: HashMap<usize, Type>,
     global_vars: Vec<GlobalVarDecl>,
     string_table: StringTable,
@@ -650,7 +639,7 @@ pub fn typecheck_top_level_decls(
 ///
 /// If not successful the function returns a `TypeError`.
 pub fn typecheck_function(
-    fd: &FuncDecl,
+    fd: &Func,
     type_table: &TypeTable,
     global_vars: &HashMap<StringId, (Type, usize)>,
     func_table: &TypeTable,
@@ -701,7 +690,7 @@ pub fn typecheck_function(
         code: tc_stats,
         tipe: fd.tipe.clone(),
         kind: fd.kind,
-        debug_info: DebugInfo::from(fd.location),
+        debug_info: DebugInfo::from(fd.debug_info),
         properties: fd.properties.clone(),
     })
 }
