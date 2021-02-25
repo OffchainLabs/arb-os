@@ -558,6 +558,21 @@ pub enum MatchPatternKind<T> {
     Tuple(Vec<T>),
 }
 
+impl<T> MatchPattern<T> {
+    pub fn new_simple(id: StringId, cached: T) -> Self {
+        Self {
+            kind: MatchPatternKind::Simple(id),
+            cached,
+        }
+    }
+    pub fn new_tuple(id: Vec<MatchPattern<T>>, cached: T) -> Self {
+        Self {
+            kind: MatchPatternKind::Tuple(id),
+            cached,
+        }
+    }
+}
+
 ///Represents a constant mini value of type Option<T> for some type T.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub enum OptionConst {

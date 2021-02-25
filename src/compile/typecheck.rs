@@ -153,10 +153,10 @@ fn inline(
                         .zip(func.args.iter())
                         .map(|(arg, otherarg)| TypeCheckedStatement {
                             kind: TypeCheckedStatementKind::Let(
-                                TypeCheckedMatchPattern {
-                                    kind: MatchPatternKind::Simple(otherarg.name),
-                                    cached: otherarg.tipe.clone(),
-                                },
+                                TypeCheckedMatchPattern::new_simple(
+                                    otherarg.name,
+                                    otherarg.tipe.clone(),
+                                ),
                                 arg.clone(),
                             ),
                             debug_info: DebugInfo::default(),
@@ -933,10 +933,7 @@ fn typecheck_statement<'a>(
             match &pat.kind {
                 MatchPatternKind::Simple(name) => Ok((
                     TypeCheckedStatementKind::Let(
-                        TypeCheckedMatchPattern {
-                            kind: MatchPatternKind::Simple(*name),
-                            cached: tce_type.clone(),
-                        },
+                        TypeCheckedMatchPattern::new_simple(*name, tce_type.clone()),
                         tc_expr,
                     ),
                     vec![(*name, tce_type)],
@@ -946,10 +943,7 @@ fn typecheck_statement<'a>(
                         typecheck_patvec(tce_type.clone(), pats.to_vec(), debug_info.location)?;
                     Ok((
                         TypeCheckedStatementKind::Let(
-                            TypeCheckedMatchPattern {
-                                kind: MatchPatternKind::Tuple(tc_pats),
-                                cached: tce_type,
-                            },
+                            TypeCheckedMatchPattern::new_tuple(tc_pats, tce_type),
                             tc_expr,
                         ),
                         bindings,
@@ -1100,10 +1094,7 @@ fn typecheck_patvec(
                 let pat = &patterns[i];
                 match &pat.kind {
                     MatchPatternKind::Simple(name) => {
-                        tc_pats.push(TypeCheckedMatchPattern {
-                            kind: MatchPatternKind::Simple(*name),
-                            cached: rhs_type.clone(),
-                        });
+                        tc_pats.push(TypeCheckedMatchPattern::new_simple(*name, rhs_type.clone()));
                         bindings.push((*name, rhs_type.clone()));
                     }
                     MatchPatternKind::Tuple(_) => {
