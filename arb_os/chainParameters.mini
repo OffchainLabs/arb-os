@@ -50,7 +50,7 @@ public impure func chainParams_gotParamsMessage(sender: address, data: ByteArray
 
         globalChainParams = Some(struct{
             chainAddress: sender,
-            gracePeriodBlocks: bytearray_get256(data, 0) / 1000,   // divide because grace period sent in ticks
+            gracePeriodBlocks: bytearray_get256(data, 0),
             arbGasSpeedLimitPerBlock: bytearray_get256(data, 32),
             millisecondsPerBlock: const::DefaultMillisecondsPerBlock,
             maxExecutionSteps: bytearray_get256(data, 2*32),

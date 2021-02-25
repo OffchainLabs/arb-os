@@ -4,17 +4,15 @@
 
 //!Provides types and utilities for linking together compiled mini programs
 
-use crate::compile::{
-    compile_from_file, CompileError, CompiledProgram, DebugInfo, SourceFileMap, Type,
-};
+use crate::compile::{CompileError, CompiledProgram, DebugInfo, SourceFileMap, Type};
 use crate::mavm::{AVMOpcode, Instruction, Label, Opcode, Value};
+use crate::pos::try_display_location;
 use crate::stringtable::{StringId, StringTable};
 use serde::{Deserialize, Serialize};
 use std::collections::hash_map::{DefaultHasher, HashMap};
 use std::collections::BTreeMap;
 use std::hash::Hasher;
 use std::io;
-use std::path::Path;
 use xformcode::make_uninitialized_tuple;
 
 pub use xformcode::{value_from_field_list, TupleTree, TUPLE_SIZE};
@@ -28,8 +26,9 @@ mod xformcode;
 /// This is typically constructed via the `postlink_compile` function.
 #[derive(Serialize, Deserialize)]
 pub struct LinkedProgram {
-    pub code: Vec<Instruction>,
+    pub code: Vec<Instruction<AVMOpcode>>,
     pub static_val: Value,
+    #[serde(default)]
     pub file_name_chart: BTreeMap<u64, String>,
 }
 
@@ -42,7 +41,18 @@ impl LinkedProgram {
             Some("pretty") => {
                 writeln!(output, "static: {}", self.static_val).unwrap();
                 for (idx, insn) in self.code.iter().enumerate() {
-                    writeln!(output, "{:05}:  {}", idx, insn).unwrap();
+                    writeln!(
+                        output,
+                        "{:05}:  {} \t\t {}",
+                        idx,
+                        insn,
+                        try_display_location(
+                            insn.debug_info.location,
+                            &self.file_name_chart,
+                            false
+                        )
+                    )
+                    .unwrap();
                 }
             }
             None | Some("json") => match serde_json::to_string(self) {
@@ -193,14 +203,27 @@ pub fn postlink_compile(
             println!("{:04}:  {}", idx, insn);
         }
     }
-    let (mut code_final, jump_table_final) = striplabels::strip_labels(
+    let (mut code_5, jump_table_final) = striplabels::strip_labels(
         code_4,
         &jump_table,
         &program.imported_funcs,
     )?;
     let jump_table_value = xformcode::jump_table_to_value(jump_table_final);
 
-    hardcode_jump_table_into_register(&mut code_final, &jump_table_value, test_mode);
+    hardcode_jump_table_into_register(&mut code_5, &jump_table_value, test_mode);
+    let code_final: Vec<_> = code_5
+        .into_iter()
+        .map(|insn| {
+            if let Opcode::AVMOpcode(inner) = insn.opcode {
+                Ok(Instruction::new(inner, insn.immediate, insn.debug_info))
+            } else {
+                Err(CompileError::new(
+                    format!("In final output encountered virtual opcode {}", insn.opcode),
+                    insn.debug_info.location,
+                ))
+            }
+        })
+        .collect::<Result<Vec<_>, CompileError>>()?;
 
     if debug {
         println!("============ after strip_labels =============");
@@ -263,8 +286,8 @@ pub fn link(
     progs_in: &[CompiledProgram],
     test_mode: bool,
 ) -> Result<CompiledProgram, CompileError> {
-    let progs = add_auto_link_progs(&progs_in)?;
-    let mut insns_so_far: usize = 3; // leave 3 insns of space at beginning for initialization
+    let progs = progs_in.to_vec();
+    let mut insns_so_far: usize = 3; // leave 2 insns of space at beginning for initialization
     let mut imports_so_far: usize = 0;
     let mut int_offsets = Vec::new();
     let mut ext_offsets = Vec::new();

@@ -76,7 +76,7 @@ type SequencerState = struct {
 
 var globalInbox: Inbox;
 var globalInputQueue: struct {
-    txQ: IncomingRequestQueue,
+    txQ: TxRequestQueue,
     batchQ: IncomingRequestQueueStack,
 };
 
@@ -89,7 +89,7 @@ public impure func inbox_init() {
         sequencer: None<SequencerState>,
     };
     globalInputQueue = struct {
-        txQ: incomingRequestQueue_new(),
+        txQ: txRequestQueue_new(),
         batchQ: incomingRequestQueueStack_new()
     };
 }
@@ -154,22 +154,36 @@ public impure func inbox_get() -> IncomingRequest {
 
         let (updatedQ, rawMsg,) = incomingRequestQueue_getOrDie(globalInbox.queue);
 
-        globalInbox = globalInbox with { queue: updatedQ };
-
         let ebMsg = unsafecast<IncomingRequest>(rawMsg);
         if (ebMsg.blockNumber > globalInbox.blockNum) {
             if ((globalInbox.sequencer != None<SequencerState>) && globalInbox.seenMsgAtThisBlockNum) {
-                let eobMsg = endOfBlockMessage(globalInbox.blockNum, globalInbox.timestamp);
-                globalInbox = globalInbox with {
-                    blockNum: ebMsg.blockNumber
-                } with {
-                    timestamp: ebMsg.timestamp
-                } with {
-                    seenMsgAtThisBlockNum: false
-                };
-                return eobMsg;
+                // don't update queue, because we're not consuming ebMsg
+                let rawSideloadMsg = asm(globalInbox.blockNum,) any { sideload };
+                if (rawSideloadMsg == ()) {
+                    let eobMsg = endOfBlockMessage(globalInbox.blockNum, globalInbox.timestamp);
+                    globalInbox = globalInbox with {
+                        blockNum: ebMsg.blockNumber
+                    } with {
+                        timestamp: ebMsg.timestamp
+                    } with {
+                        seenMsgAtThisBlockNum: false
+                    };
+                    return eobMsg;
+                } else {
+                    let newMsg = incomingRequestFromRaw(unsafecast<IncomingRequestFromInbox>(rawSideloadMsg), true);
+
+                    if (newMsg.blockNumber == 0) {
+                        newMsg = newMsg with { blockNumber: globalInbox.blockNum };
+                    }
+                    if (newMsg.timestamp == 0) {
+                        newMsg = newMsg with { timestamp: globalInbox.timestamp };
+                    }
+                    return newMsg;
+                }
             } else {
                 globalInbox = globalInbox with {
+                    queue: updatedQ
+                } with {
                     blockNum: ebMsg.blockNumber
                 } with {
                     timestamp: ebMsg.timestamp
@@ -177,6 +191,8 @@ public impure func inbox_get() -> IncomingRequest {
                     seenMsgAtThisBlockNum: true
                 };
             }
+        } else {
+            globalInbox = globalInbox with { queue: updatedQ };
         }
 
         if (ebMsg.kind == const::L1MessageType_chainInit) {
@@ -189,28 +205,8 @@ public impure func inbox_get() -> IncomingRequest {
     };
 }
 
-impure func getFromL1Inbox(inbox: Inbox) -> Inbox {
-    // Get a message from the L1 inbox, and append it to the inbox (assuming no sequencer).
-    // If there are no messages available in the L1 inbox, this blocks until one is available.
-    if (inbox.seenMsgAtThisBlockNum) {
-        let sameBlockNum = asm(inbox.blockNum,) bool { inboxpeek };
-        if ( ! sameBlockNum) {
-            // peek says we hit end of L1 block, so insert end-of-block message and return
-            return inbox with {
-                queue: incomingRequestQueue_put(
-                    inbox.queue,
-                    endOfBlockMessage(inbox.blockNum, inbox.timestamp),
-                )
-            } with {
-                blockNum: inbox.blockNum+1
-            } with {
-                seenMsgAtThisBlockNum: false
-            };
-        }
-    }
-
-    let newMsgRaw = asm() IncomingRequestFromInbox { inbox };
-    let newMsg = struct {
+func incomingRequestFromRaw(newMsgRaw: IncomingRequestFromInbox, adminMode: bool) -> IncomingRequest {
+    return struct {
         kind: newMsgRaw.kind,
         blockNumber: newMsgRaw.blockNumber,
         timestamp: newMsgRaw.timestamp,
@@ -223,7 +219,45 @@ impure func getFromL1Inbox(inbox: Inbox) -> Inbox {
             indexInParent: ~0,
         },
         aggregator: None<AggregatorInfo>,
+        adminMode: adminMode,
     };
+}
+
+impure func getFromL1Inbox(inbox: Inbox) -> Inbox {
+    // Get a message from the L1 inbox, and append it to the inbox (assuming no sequencer).
+    // If there are no messages available in the L1 inbox, this blocks until one is available.
+    if (inbox.seenMsgAtThisBlockNum) {
+        let sameBlockNum = asm(inbox.blockNum,) bool { inboxpeek };
+        if ( ! sameBlockNum) {
+            // peek says we hit end of L1 block, so try sideload, then insert end-of-block message and return
+            let rawSideloadMsg = asm(inbox.blockNum,) any { sideload };
+            if (rawSideloadMsg == ()) {
+                return inbox with {
+                    queue: incomingRequestQueue_put(
+                        inbox.queue,
+                        endOfBlockMessage(inbox.blockNum, inbox.timestamp),
+                    )
+                } with {
+                    blockNum: inbox.blockNum+1
+                } with {
+                    seenMsgAtThisBlockNum: false
+                };
+            } else {
+                let newMsg = incomingRequestFromRaw(unsafecast<IncomingRequestFromInbox>(rawSideloadMsg), true);
+                if (newMsg.blockNumber == 0) {
+                    newMsg = newMsg with { blockNumber: inbox.blockNum };
+                }
+                if (newMsg.timestamp == 0) {
+                    newMsg = newMsg with { timestamp: inbox.timestamp };
+                }
+                return inbox with {
+                    queue: incomingRequestQueue_put(inbox.queue, newMsg)
+                };
+            }
+        }
+    }
+
+    let newMsg = incomingRequestFromRaw(asm() IncomingRequestFromInbox { inbox }, false);
 
     if (newMsg.blockNumber == 0) {
         newMsg = newMsg with { blockNumber: inbox.blockNum };
@@ -245,21 +279,7 @@ impure func getFromL1Inbox(inbox: Inbox) -> Inbox {
 }
 
 impure func getFromL1InboxSequencer(inbox: Inbox, seq: SequencerState) -> Inbox {
-    let newMsgRaw = asm() IncomingRequestFromInbox { inbox };
-    let newMsg = struct {
-        kind: newMsgRaw.kind,
-        blockNumber: newMsgRaw.blockNumber,
-        timestamp: newMsgRaw.timestamp,
-        sender: newMsgRaw.sender,
-        requestId: newMsgRaw.requestId,
-        msgData: bytearray_fromSizeAndBuffer(newMsgRaw.msgSize, newMsgRaw.msgData),
-        provenance: struct {
-            l1SeqNum: newMsgRaw.requestId,
-            parentRequestId: 0,
-            indexInParent: ~0,
-        },
-        aggregtor: None<AggregatorInfo>,
-    };
+    let newMsg = incomingRequestFromRaw(asm() IncomingRequestFromInbox { inbox }, false);
 
     let blockNum = newMsg.blockNumber;
     if (blockNum == 0) {
@@ -382,6 +402,7 @@ func endOfBlockMessage(blockNum: uint, timestamp: uint) -> IncomingRequest {
             indexInParent: ~0,
         },
         aggregator: None<AggregatorInfo>,
+        adminMode: false,
     };
 }
 
@@ -441,6 +462,7 @@ type IncomingRequest = struct {
     msgData: ByteArray,       // kind-specific data
     provenance: RequestProvenance,
     aggregator: option<AggregatorInfo>,
+    adminMode: bool,
 }
 
 type RequestProvenance = struct {
@@ -459,8 +481,9 @@ public impure func inbox_getNextUnpackedRequest() -> (
     option<TxRequestData>,    // if it was an L2 tx message
 ) {
     let msg = unsafecast<IncomingRequest>(());   // value will be re-initialized before use
+    
     return xloop {
-        if let Some(res) = incomingRequestQueue_get(globalInputQueue.txQ) {
+        if let Some(res) = txRequestQueue_get(globalInputQueue.txQ) {
             let (newQ, tx) = res;
             globalInputQueue = globalInputQueue with {
                 txQ: newQ
@@ -558,7 +581,7 @@ public impure func inbox_getNextUnpackedRequest() -> (
                         msg,
                         unsafecast<Queue>(globalInputQueue.txQ)
                     ) {
-                        globalInputQueue = globalInputQueue with { txQ: unsafecast<IncomingRequestQueue>(updatedQ) };
+                        globalInputQueue = globalInputQueue with { txQ: unsafecast<TxRequestQueue>(updatedQ) };
                     }
                     // else BLS batch was bad, so ignore it
                 } else {
@@ -713,3 +736,51 @@ func incomingRequestQueueStack_get(qs: IncomingRequestQueueStack) -> option<(Inc
 func incomingRequestQueueStack_push(qs: IncomingRequestQueueStack, q: IncomingRequestQueue) -> IncomingRequestQueueStack {
     return struct { qs: queuestack_push(qs.qs, q.q) };
 }
+
+
+type TxRequestQueue = struct {
+    q: Queue,
+}
+
+func txRequestQueue_new() -> TxRequestQueue {
+    return struct { q: queue_new() };
+}
+
+func txRequestQueue_isEmpty(q: TxRequestQueue) -> bool {
+    return queue_isEmpty(q.q);
+}
+
+func txRequestQueue_get(q: TxRequestQueue) -> option<(TxRequestQueue, TxRequestData)> {
+    let (uq, item) = queue_get(q.q)?;
+    return Some((struct{ q: uq }, unsafecast<TxRequestData>(item)));
+}
+
+func txRequestQueue_getOrDie(q: TxRequestQueue) -> (TxRequestQueue, TxRequestData) {
+    return xif let Some(res) = txRequestQueue_get(q) {
+        res
+    } else {
+        panic
+    };
+}
+
+func txRequestQueue_put(q: TxRequestQueue, req: TxRequestData) -> TxRequestQueue {
+    return struct { q: queue_put(q.q, req) };
+}
+
+type TxRequestQueueStack = struct {
+    qs: QueueStack,
+}
+
+func txRequestQueueStack_new() -> TxRequestQueueStack {
+    return struct { qs: queuestack_new() };
+}
+
+func txRequestQueueStack_get(qs: TxRequestQueueStack) -> option<(TxRequestQueueStack, TxRequestData)> {
+    let (uqs, rawMsg) = queuestack_get(qs.qs)?;
+    return Some((struct { qs: uqs }, unsafecast<TxRequestData>(rawMsg)));
+}
+
+func txRequestQueueStack_push(qs: TxRequestQueueStack, q: TxRequestQueue) -> TxRequestQueueStack {
+    return struct { qs: queuestack_push(qs.qs, q.q) };
+}
+

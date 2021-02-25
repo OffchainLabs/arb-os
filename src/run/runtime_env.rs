@@ -119,7 +119,7 @@ impl RuntimeEnvironment {
         owner: Option<Uint256>,
     ) -> Vec<u8> {
         let mut buf = Vec::new();
-        buf.extend(Uint256::from_u64(3 * 60 * 60 * 1000).to_bytes_be()); // grace period in ticks
+        buf.extend(Uint256::from_u64(3 * 60 * 60).to_bytes_be()); // grace period in blocks
         buf.extend(Uint256::from_u64(100_000_000 / 1000).to_bytes_be()); // arbgas speed limit per tick
         buf.extend(Uint256::from_u64(10_000_000_000).to_bytes_be()); // max execution steps
         buf.extend(Uint256::from_u64(1000).to_bytes_be()); // base stake amount in wei
@@ -252,6 +252,30 @@ impl RuntimeEnvironment {
         buf.extend(max_gas.to_bytes_be());
         buf.extend(gas_price_bid.to_bytes_be());
         buf.extend(seq_num.to_bytes_be());
+        buf.extend(to_addr.to_bytes_be());
+        buf.extend(value.to_bytes_be());
+        buf.extend_from_slice(data);
+
+        if with_deposit {
+            self.insert_l2_message_with_deposit(sender_addr.clone(), &buf)
+        } else {
+            self.insert_l2_message(sender_addr.clone(), &buf, false)
+        }
+    }
+
+    pub fn _insert_tx_message_from_contract(
+        &mut self,
+        sender_addr: Uint256,
+        max_gas: Uint256,
+        gas_price_bid: Uint256,
+        to_addr: Uint256,
+        value: Uint256,
+        data: &[u8],
+        with_deposit: bool,
+    ) -> Uint256 {
+        let mut buf = vec![1u8];
+        buf.extend(max_gas.to_bytes_be());
+        buf.extend(gas_price_bid.to_bytes_be());
         buf.extend(to_addr.to_bytes_be());
         buf.extend(value.to_bytes_be());
         buf.extend_from_slice(data);
@@ -1231,7 +1255,7 @@ impl RtEnvRecorder {
             self.logs
                 .clone()
                 .into_iter()
-                .map(strip_var_from_log)
+                .filter_map(strip_var_from_log)
                 .collect()
         };
         let logs_seen = if require_same_gas {
@@ -1243,7 +1267,7 @@ impl RtEnvRecorder {
                 .logs
                 .clone()
                 .into_iter()
-                .map(strip_var_from_log)
+                .filter_map(strip_var_from_log)
                 .collect()
         };
         if !(logs_expected == logs_seen) {
@@ -1262,31 +1286,33 @@ impl RtEnvRecorder {
     }
 }
 
-fn strip_var_from_log(log: Value) -> Value {
+fn strip_var_from_log(log: Value) -> Option<Value> {
     // strip from a log item all info that might legitimately vary as ArbOS evolves (e.g. gas usage)
     if let Value::Tuple(tup) = log.clone() {
         if let Value::Int(item_type) = tup[0].clone() {
             if item_type == Uint256::zero() {
                 // Tx receipt log item
-                Value::new_tuple(vec![
+                Some(Value::new_tuple(vec![
                     tup[0].clone(),
                     tup[1].clone(),
                     tup[2].clone(),
                     // skip tup[3] because it's all about gas usage
                     zero_item_in_tuple(tup[4].clone(), 0),
-                ])
+                ]))
             } else if item_type == Uint256::one() {
                 // block summary log item
-                Value::new_tuple(vec![
+                Some(Value::new_tuple(vec![
                     tup[0].clone(),
                     tup[1].clone(),
                     tup[2].clone(),
                     // skip tup[3] because it's all about gas usage
                     zero_item_in_tuple(tup[4].clone(), 0),
                     zero_item_in_tuple(tup[5].clone(), 0),
-                ])
+                ]))
             } else if item_type == Uint256::from_u64(2) {
-                log
+                Some(log)
+            } else if item_type == Uint256::from_u64(3) {
+                None
             } else {
                 panic!("unrecognized log item type {}", item_type);
             }
