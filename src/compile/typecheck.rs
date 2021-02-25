@@ -9,6 +9,7 @@ use super::ast::{
     GlobalVarDecl, MatchPattern, MatchPatternKind, Statement, StatementKind, StructField,
     TopLevelDecl, TrinaryOp, Type, TypeTree, UnaryOp,
 };
+use crate::compile::ast::FieldInitializer;
 use crate::link::{ExportedFunc, Import, ImportedFunc};
 use crate::mavm::{Instruction, Label, Value};
 use crate::pos::Location;
@@ -49,7 +50,7 @@ pub trait AbstractSyntaxTree {
 pub enum TypeCheckedNode<'a> {
     Statement(&'a mut TypeCheckedStatement),
     Expression(&'a mut TypeCheckedExpr),
-    StructField(&'a mut TypeCheckedStructField),
+    StructField(&'a mut TypeCheckedFieldInitializer),
 }
 
 impl<'a> AbstractSyntaxTree for TypeCheckedNode<'a> {
@@ -316,7 +317,7 @@ pub enum TypeCheckedExprKind {
         PropertiesList,
     ),
     CodeBlock(TypeCheckedCodeBlock),
-    StructInitializer(Vec<TypeCheckedStructField>, Type),
+    StructInitializer(Vec<TypeCheckedFieldInitializer>, Type),
     ArrayRef(Box<TypeCheckedExpr>, Box<TypeCheckedExpr>, Type),
     FixedArrayRef(Box<TypeCheckedExpr>, Box<TypeCheckedExpr>, usize, Type),
     MapRef(Box<TypeCheckedExpr>, Box<TypeCheckedExpr>, Type),
@@ -505,25 +506,14 @@ impl TypeCheckedExpr {
     }
 }
 
-///A `StructField` that has been type checked.
-#[derive(Debug, Clone, Eq, PartialEq)]
-pub struct TypeCheckedStructField {
-    pub name: String,
-    pub value: TypeCheckedExpr,
-}
+type TypeCheckedFieldInitializer = FieldInitializer<TypeCheckedExpr>;
 
-impl AbstractSyntaxTree for TypeCheckedStructField {
+impl AbstractSyntaxTree for TypeCheckedFieldInitializer {
     fn child_nodes(&mut self) -> Vec<TypeCheckedNode> {
         self.value.child_nodes()
     }
     fn is_pure(&mut self) -> bool {
         self.value.is_pure()
-    }
-}
-
-impl TypeCheckedStructField {
-    pub fn new(name: String, value: TypeCheckedExpr) -> Self {
-        TypeCheckedStructField { name, value }
     }
 }
 
@@ -1595,7 +1585,7 @@ fn typecheck_expr(
                         type_tree,
                         scopes,
                     )?;
-                    tc_fields.push(TypeCheckedStructField::new(
+                    tc_fields.push(TypeCheckedFieldInitializer::new(
                         field.name.clone(),
                         tc_expr.clone(),
                     ));

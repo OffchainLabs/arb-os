@@ -757,13 +757,13 @@ pub enum TrinaryOp {
 
 ///Used in StructInitializer expressions to map expressions to fields of the struct.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-pub struct FieldInitializer {
+pub struct FieldInitializer<T = Expr> {
     pub name: String,
-    pub value: Expr,
+    pub value: T,
 }
 
-impl FieldInitializer {
-    pub fn new(name: String, value: Expr) -> Self {
+impl<T> FieldInitializer<T> {
+    pub fn new(name: String, value: T) -> Self {
         FieldInitializer { name, value }
     }
 }
