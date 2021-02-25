@@ -6,8 +6,8 @@
 
 use super::ast::{
     BinaryOp, CodeBlock, Constant, DebugInfo, Expr, ExprKind, FuncArg, FuncDecl, FuncDeclKind,
-    GlobalVarDecl, MatchPattern, Statement, StatementKind, StructField, TopLevelDecl, TrinaryOp,
-    Type, TypeTree, UnaryOp,
+    GlobalVarDecl, MatchPattern, MatchPatternKind, Statement, StatementKind, StructField,
+    TopLevelDecl, TrinaryOp, Type, TypeTree, UnaryOp,
 };
 use crate::link::{ExportedFunc, Import, ImportedFunc};
 use crate::mavm::{Instruction, Label, Value};
@@ -153,10 +153,10 @@ fn inline(
                         .zip(func.args.iter())
                         .map(|(arg, otherarg)| TypeCheckedStatement {
                             kind: TypeCheckedStatementKind::Let(
-                                TypeCheckedMatchPattern::Simple(
-                                    otherarg.name,
-                                    otherarg.tipe.clone(),
-                                ),
+                                TypeCheckedMatchPattern {
+                                    kind: MatchPatternKind::Simple(otherarg.name),
+                                    tipe: otherarg.tipe.clone(),
+                                },
                                 arg.clone(),
                             ),
                             debug_info: DebugInfo::default(),
@@ -280,9 +280,9 @@ impl AbstractSyntaxTree for TypeCheckedStatement {
 
 ///A `MatchPattern` that has gone through type checking.
 #[derive(Debug, Clone, Eq, PartialEq)]
-pub enum TypeCheckedMatchPattern {
-    Simple(StringId, Type),
-    Tuple(Vec<TypeCheckedMatchPattern>, Type),
+pub struct TypeCheckedMatchPattern {
+    pub(crate) kind: MatchPatternKind<TypeCheckedMatchPattern>,
+    tipe: Type,
 }
 
 ///A mini expression with associated `DebugInfo` that has been type checked.
@@ -935,20 +935,26 @@ fn typecheck_statement<'a>(
                 scopes,
             )?;
             let tce_type = tc_expr.get_type();
-            match pat {
-                MatchPattern::Simple(name) => Ok((
+            match &pat.kind {
+                MatchPatternKind::Simple(name) => Ok((
                     TypeCheckedStatementKind::Let(
-                        TypeCheckedMatchPattern::Simple(*name, tce_type.clone()),
+                        TypeCheckedMatchPattern {
+                            kind: MatchPatternKind::Simple(*name),
+                            tipe: tce_type.clone(),
+                        },
                         tc_expr,
                     ),
                     vec![(*name, tce_type)],
                 )),
-                MatchPattern::Tuple(pats) => {
+                MatchPatternKind::Tuple(pats) => {
                     let (tc_pats, bindings) =
                         typecheck_patvec(tce_type.clone(), pats.to_vec(), debug_info.location)?;
                     Ok((
                         TypeCheckedStatementKind::Let(
-                            TypeCheckedMatchPattern::Tuple(tc_pats, tce_type),
+                            TypeCheckedMatchPattern {
+                                kind: MatchPatternKind::Tuple(tc_pats),
+                                tipe: tce_type,
+                            },
                             tc_expr,
                         ),
                         bindings,
@@ -1097,12 +1103,15 @@ fn typecheck_patvec(
             let mut bindings = Vec::new();
             for (i, rhs_type) in tvec.iter().enumerate() {
                 let pat = &patterns[i];
-                match pat {
-                    MatchPattern::Simple(name) => {
-                        tc_pats.push(TypeCheckedMatchPattern::Simple(*name, rhs_type.clone()));
+                match &pat.kind {
+                    MatchPatternKind::Simple(name) => {
+                        tc_pats.push(TypeCheckedMatchPattern {
+                            kind: MatchPatternKind::Simple(*name),
+                            tipe: rhs_type.clone(),
+                        });
                         bindings.push((*name, rhs_type.clone()));
                     }
-                    MatchPattern::Tuple(_) => {
+                    MatchPatternKind::Tuple(_) => {
                         //TODO: implement this properly
                         return Err(new_type_error(
                             "nested pattern not yet supported in let".to_string(),
