@@ -4,7 +4,7 @@
 
 
 use crate::compile::ast::{TopLevelDecl, TypeDecl, FuncDecl, GlobalVarDecl, Type, CodeBlock,
-StructField, FuncArg, Statement, StatementKind, DebugInfo, Attributes, MatchPattern, Expr, ExprKind, TrinaryOp, BinaryOp, UnaryOp, Constant,
+StructField, FuncArg, Statement, StatementKind, DebugInfo, Attributes, MatchPattern, MatchPatternKind, Expr, ExprKind, TrinaryOp, BinaryOp, UnaryOp, Constant,
 OptionConst, FieldInitializer, new_func_arg, new_type_decl};
 use crate::stringtable::{StringTable, StringId};
 use crate::compile::Lines;
@@ -103,8 +103,8 @@ StatementKind: StatementKind = {
 }
 
 MatchPattern: MatchPattern = {
-	<Ident> => MatchPattern::Simple(<>),
-	"(" <CommaedMatchPatterns> ")" => MatchPattern::Tuple(<>),
+	<Ident> => MatchPattern::new_simple(<>,()),
+	"(" <CommaedMatchPatterns> ")" => MatchPattern::new_tuple(<>,()),
 }
 
 CommaedMatchPatterns: Vec<MatchPattern> = {

@@ -8,7 +8,7 @@ use super::ast::{BinaryOp, FuncArg, GlobalVarDecl, TrinaryOp, Type, UnaryOp};
 use super::typecheck::{
     PropertiesList, TypeCheckedExpr, TypeCheckedFunc, TypeCheckedMatchPattern, TypeCheckedStatement,
 };
-use crate::compile::ast::DebugInfo;
+use crate::compile::ast::{DebugInfo, MatchPatternKind};
 use crate::compile::typecheck::{
     TypeCheckedCodeBlock, TypeCheckedExprKind, TypeCheckedStatementKind,
 };
@@ -451,8 +451,8 @@ fn mavm_codegen_statement(
             }
             Ok((lg, exp_locals, HashMap::new()))
         }
-        TypeCheckedStatementKind::Let(pat, expr) => match pat {
-            TypeCheckedMatchPattern::Simple(name, _) => {
+        TypeCheckedStatementKind::Let(pat, expr) => match &pat.kind {
+            MatchPatternKind::Simple(name) => {
                 let slot_num = num_locals;
                 let (lg, c, exp_locals) = mavm_codegen_expr(
                     expr,
@@ -480,7 +480,7 @@ fn mavm_codegen_statement(
                 ));
                 Ok((label_gen, num_locals, bindings))
             }
-            TypeCheckedMatchPattern::Tuple(pattern, _) => {
+            MatchPatternKind::Tuple(pattern) => {
                 let (lg, c, exp_locals) = mavm_codegen_expr(
                     expr,
                     code,
@@ -499,12 +499,12 @@ fn mavm_codegen_statement(
                 let mut pairs = HashMap::new();
                 let mut binding_types = Vec::new();
                 for (i, sub_pat) in pattern.clone().iter().enumerate() {
-                    match sub_pat {
-                        TypeCheckedMatchPattern::Simple(name, _) => {
+                    match &sub_pat.kind {
+                        MatchPatternKind::Simple(name) => {
                             pairs.insert(*name, num_locals + i);
                             binding_types.push((*name, num_locals + i));
                         }
-                        TypeCheckedMatchPattern::Tuple(_, _) => {
+                        MatchPatternKind::Tuple(_) => {
                             return Err(new_codegen_error(
                                 "nested pattern not supported in pattern-match let".to_string(),
                                 loc,
@@ -702,8 +702,8 @@ fn mavm_codegen_tuple_pattern(
                 debug_info,
             ));
         }
-        match pat {
-            TypeCheckedMatchPattern::Simple(_, _) => {
+        match &pat.kind {
+            MatchPatternKind::Simple(_) => {
                 code.push(Instruction::from_opcode_imm(
                     Opcode::TupleGet(pat_size),
                     Value::Int(Uint256::from_usize(i)),
@@ -715,7 +715,7 @@ fn mavm_codegen_tuple_pattern(
                     debug_info,
                 ));
             }
-            TypeCheckedMatchPattern::Tuple(_, _) => {
+            MatchPatternKind::Tuple(_) => {
                 panic!("Can't yet generate code for pattern-match let with nested tuples");
             }
         }

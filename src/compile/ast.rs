@@ -545,11 +545,32 @@ pub enum StatementKind {
     DebugPrint(Expr),
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct MatchPattern<T = ()> {
+    pub(crate) kind: MatchPatternKind<MatchPattern<T>>,
+    pub(crate) cached: T,
+}
+
 ///Either a single identifier or a tuple of identifiers, used in mini let bindings.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-pub enum MatchPattern {
+pub enum MatchPatternKind<T> {
     Simple(StringId),
-    Tuple(Vec<MatchPattern>),
+    Tuple(Vec<T>),
+}
+
+impl<T> MatchPattern<T> {
+    pub fn new_simple(id: StringId, cached: T) -> Self {
+        Self {
+            kind: MatchPatternKind::Simple(id),
+            cached,
+        }
+    }
+    pub fn new_tuple(id: Vec<MatchPattern<T>>, cached: T) -> Self {
+        Self {
+            kind: MatchPatternKind::Tuple(id),
+            cached,
+        }
+    }
 }
 
 ///Represents a constant mini value of type Option<T> for some type T.
