@@ -362,35 +362,25 @@ pub fn evm_test_arbsys_direct(log_to: Option<&Path>, debug: bool) -> Result<(), 
     let tx_count = arbsys.get_transaction_count(&mut machine, my_addr.clone())?;
     assert_eq!(tx_count, Uint256::from_u64(2));
 
-    println!("A");
     let addr_table_index = arb_address_table.register(&mut machine, my_addr.clone())?;
-    println!("B");
     let lookup_result = arb_address_table.lookup(&mut machine, my_addr.clone())?;
-    println!("C");
     assert_eq!(addr_table_index, lookup_result);
 
-    println!("D");
     let recovered_addr = arb_address_table.lookup_index(&mut machine, lookup_result)?;
     assert_eq!(recovered_addr, my_addr);
 
-    println!("E");
     let my_addr_compressed = arb_address_table.compress(&mut machine, my_addr.clone())?;
-    println!("F");
     let (my_addr_decompressed, offset) =
         arb_address_table.decompress(&mut machine, &my_addr_compressed, Uint256::zero())?;
     assert_eq!(my_addr.clone(), my_addr_decompressed);
     assert_eq!(offset, Uint256::from_usize(my_addr_compressed.len()));
 
-    println!("G");
     assert_eq!(Uint256::from_u64(3), arb_address_table.size(&mut machine)?);
 
-    println!("H");
     let an_addr = Uint256::from_u64(581351734971918347);
     let an_addr_compressed = arb_address_table.compress(&mut machine, an_addr.clone())?;
-    println!("I");
     let (an_addr_decompressed, offset) =
         arb_address_table.decompress(&mut machine, &an_addr_compressed, Uint256::zero())?;
-    println!("J");
     assert_eq!(an_addr.clone(), an_addr_decompressed);
     assert_eq!(offset, Uint256::from_usize(an_addr_compressed.len()));
 
