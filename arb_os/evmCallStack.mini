@@ -39,6 +39,7 @@ use evmlogs::evmlogs_empty;
 use evmlogs::evmlogs_appendAny;
 
 use std::bytearray::bytearray_new;
+use std::bytearray::bytearray_size;
 use std::bytearray::bytearray_extract;
 use std::bytearray::bytearray_copy;
 use std::bytearray::bytearray_setByte;
@@ -635,6 +636,10 @@ public impure func evmCallStack_returnFromCall(
     } else {
         // top-level call completed; will need to return to external caller
         if (success) {
+            if (globalCurrentTxRequest.isConstructor) {
+                // contract code takes up space, so charge 1 storage for each 32 bytes of EVM code
+                evmCallStack_addStorageCharge( (bytearray_size(returnData) + 31) / 32 );
+            }
             let (completed, gasUsage, feeStats) = gasAccounting_endTxCharges(
                 topFrame.storageDelta - int(storageReclaimedForSDQ(topFrame)),
                 globalCurrentTxRequest.feeStats

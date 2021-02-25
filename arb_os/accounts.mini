@@ -14,6 +14,7 @@ use std::storageMap::storageMap_get;
 use std::storageMap::storageMap_set;
 
 use decompression::AggregatorDecompressionState;
+use evmCallStack::evmCallStack_addStorageCharge;
 
 
 type AccountStore = map<address, Account>
@@ -200,6 +201,7 @@ public func accountStore_createAccountFromEvmCode(
     // Returns Some(updatedAccountStore), or None if something went wrong.
     let oldAcct = accountStore_get(store, newAddr);
     return xif ( ! account_hasContract(oldAcct)) {
+        evmCallStack_addStorageCharge( (bytearray_size(code) + 31) / 32 );
         Some(accountStore_set(
             store,
             newAddr,
