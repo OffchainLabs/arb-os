@@ -5,6 +5,7 @@
 //!Contains types and utilities for constructing the mini AST
 
 use super::typecheck::{new_type_error, TypeError};
+use crate::compile::typecheck::PropertiesList;
 use crate::link::{value_from_field_list, TUPLE_SIZE};
 use crate::mavm::{Instruction, Value};
 use crate::pos::Location;
@@ -55,7 +56,7 @@ impl From<Option<Location>> for DebugInfo {
 #[derive(Debug, Clone)]
 pub enum TopLevelDecl {
     TypeDecl(TypeDecl),
-    FuncDecl(FuncDecl),
+    FuncDecl(Func),
     VarDecl(GlobalVarDecl),
     UseDecl(Vec<String>, String),
 }
@@ -480,18 +481,18 @@ pub enum FuncDeclKind {
 ///Represents a top level function declaration.  The is_impure, args, and ret_type fields are
 /// assumed to be derived from tipe, and this must be upheld by the user of this type.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-pub struct FuncDecl {
+pub struct Func<T = Statement> {
     pub name: StringId,
-    pub is_impure: bool,
     pub args: Vec<FuncArg>,
     pub ret_type: Type,
-    pub code: Vec<Statement>,
+    pub code: Vec<T>,
     pub tipe: Type,
     pub kind: FuncDeclKind,
-    pub location: Option<Location>,
+    pub debug_info: DebugInfo,
+    pub properties: PropertiesList,
 }
 
-impl FuncDecl {
+impl Func {
     pub fn new(
         name: StringId,
         is_impure: bool,
@@ -506,9 +507,8 @@ impl FuncDecl {
         for arg in args.iter() {
             arg_types.push(arg.tipe.clone());
         }
-        FuncDecl {
+        Func {
             name,
-            is_impure,
             args: args_vec,
             ret_type: ret_type.clone(),
             code,
@@ -518,7 +518,8 @@ impl FuncDecl {
             } else {
                 FuncDeclKind::Private
             },
-            location,
+            debug_info: DebugInfo::from(location),
+            properties: PropertiesList { pure: !is_impure },
         }
     }
 }
@@ -757,13 +758,13 @@ pub enum TrinaryOp {
 
 ///Used in StructInitializer expressions to map expressions to fields of the struct.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-pub struct FieldInitializer {
+pub struct FieldInitializer<T = Expr> {
     pub name: String,
-    pub value: Expr,
+    pub value: T,
 }
 
-impl FieldInitializer {
-    pub fn new(name: String, value: Expr) -> Self {
+impl<T> FieldInitializer<T> {
+    pub fn new(name: String, value: T) -> Self {
         FieldInitializer { name, value }
     }
 }

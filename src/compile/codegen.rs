@@ -59,19 +59,17 @@ pub fn mavm_codegen(
     let mut label_gen = LabelGenerator::new();
     let mut funcs_code = BTreeMap::new();
     for func in funcs {
-        if !func.imported {
-            let id = func.name;
-            let (lg, function_code) = mavm_codegen_func(
-                func,
-                label_gen,
-                string_table,
-                &import_func_map,
-                &global_var_map,
-                file_name_chart,
-            )?;
-            label_gen = lg;
-            funcs_code.insert(id, function_code);
-        }
+        let id = func.name;
+        let (lg, function_code) = mavm_codegen_func(
+            func,
+            label_gen,
+            string_table,
+            &import_func_map,
+            &global_var_map,
+            file_name_chart,
+        )?;
+        label_gen = lg;
+        funcs_code.insert(id, function_code);
     }
     let mut code = Vec::new();
     for (_id, mut func) in funcs_code {
