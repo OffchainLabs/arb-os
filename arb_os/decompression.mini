@@ -112,7 +112,7 @@ public func addressTable_getByAddress(iat: IndexedAddressTable, addr: address) -
     return iat.byAddress[addr];
 }
 
-public func addressTable_getByAddressAlloc(iat: IndexedAddressTable, addr: address) -> (IndexedAddressTable, uint) {
+public impure func addressTable_getByAddressAlloc(iat: IndexedAddressTable, addr: address) -> (IndexedAddressTable, uint) {
     return xif let Some(val) = iat.byAddress[addr] {
         (iat, val)
     } else {

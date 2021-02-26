@@ -189,7 +189,7 @@ public func account_setAggregatorDecompressionState(
     };
 }
 
-public func accountStore_createAccountFromEvmCode(
+public impure func accountStore_createAccountFromEvmCode(
     store: AccountStore,
     newAddr: address,
     code: ByteArray,

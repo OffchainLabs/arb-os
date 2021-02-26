@@ -64,6 +64,7 @@ var gasAccountingInfo: struct {
     congestionState: CongestionState,  // state of congestion pricing algorithm
     speedLimitPerBlock: uint,          // nominal ArbGas available for computation per L1 block
     pricingParams: PricingParameters,  // parameters that affect pricing
+    gasAllocatedToThisBlock: uint,     // total amount of gas allocated to the current L1 block
 };
 
 type GasPrices = struct {    // all prices in this struct are denominated in wei
@@ -160,6 +161,7 @@ public impure func gasAccounting_init() {    // initialize on boot, before we ha
         congestionState: congestionState,
         speedLimitPerBlock: const::DefaultSpeedLimitPerBlock,
         pricingParams: pricingParams,
+        gasAllocatedForThisBlock: uint(congestionState.gasPool),
     };
 }
 
@@ -198,6 +200,14 @@ public impure func gasAccounting_getPricesInWei() -> (uint, uint, uint, uint, ui
         prices.perArbGasCongestion,
         prices.perArbGasTotal,
     );
+}
+
+public impure func getArbGasPrice() -> uint {
+    return gasAccountingInfo.currentPrices.perArbGasTotal;
+}
+
+public impure func getCurrentBlockGasLimit() -> uint {
+    return gasAccountingInfo.gasAllocatedToThisBlock;
 }
 
 public impure func gasAccounting_getPricesInArbGas() -> (uint, uint, uint) {  // don't include price of ArbGas, which is 1
@@ -626,6 +636,11 @@ public impure func getNextRequestFromCongestionAuction() -> (
     if (blockNum > gasAccountingInfo.congestionState.lastBlockNumSeen) {
         // it's the first tx of a new block, so do beginning-of-block work
         let updatedCongestionState = updateCongestionState(gasAccountingInfo.congestionState, blockNum);
+        let gasForThisBlock = xif(gasAccountingInfo.congestionState.gasPool > int(0)) {
+            uint(gasAccountingInfo.congestionState.gasPool)
+        } else {
+            0   // gas pool has gone negative; wait until it gets positive
+        };
         gasAccountingInfo = gasAccountingInfo with {
             congestionState: updatedCongestionState
         } with {
@@ -635,11 +650,9 @@ public impure func getNextRequestFromCongestionAuction() -> (
                 updatedCongestionState
             )
         } with {
-            gasRemainingThisBlock: xif(gasAccountingInfo.congestionState.gasPool > int(0)) {
-                    uint(gasAccountingInfo.congestionState.gasPool)
-                } else {
-                    0   // gas pool has gone negative; wait until it gets positive
-                }
+            gasRemainingThisBlock: gasForThisBlock
+        } with {
+            gasAllocatedToThisBlock: gasForThisBlock
         };
     }
 
