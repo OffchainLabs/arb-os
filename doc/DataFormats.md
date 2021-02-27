@@ -54,8 +54,8 @@ This message type is initiated by the EthBridge, as part of the creation of a ne
 
 Type-specific data:
 
-* challenge period, in L1 blocks (uint)
-* ArbGas speed limit, in ArbGas per L1 block (uint)
+* challenge period, in seconds (uint)
+* ArbGas speed limit, in ArbGas per second (uint)
 * maximum number of execution steps allowed in an assertion (uint)
 * minimum stake requirement, in Wei (uint)
 * address of the staking token, or zero if staking in ETH (address encoded as uint)
@@ -72,9 +72,9 @@ Each chunk is:
 
 At present. the following options are supported:
 
-* Option 0: sequencer configuration: sequencer address (address encoded as uint); sequencer delay in blocks (uint); sequencer delay in timestamp (uint)
-* Option 1: set seconds per block: seconds per L1 block (uint)
-* Option 2: set charging parameters: base gas price (uint); storage charge (uint); gas fee recipient (address encoded as uint)
+* [Option 0 is currently unused]
+* [Option 1 is currently unused]
+* Option 2: set charging parameters: speed limit per second (uint); L1 gas per L2 tx (uint); L1 gas per L2 calldata byte; L1 gas per storage unit allocated (uint); ratio of L1 gas price to base ArbGas price; network fee recipient (address encoded as uint); congestion fee recipient (address encoded as uint)
 
 All other options are ignored at present.
 
@@ -201,10 +201,10 @@ A tx receipt log item consists of:
 * ArbGas info, as 2-tuple consisting of:
   * ArbGas used (uint)
   * ArbGas price paid, in wei (uint)
-* cumulative info in L1 block, a 3-tuple consisting of:
-  * ArbGas used in current L1 block including this tx (uint)
-  * index of this tx within this L1 block (uint)
-  * number of EVM logs emitted in this L1 block before this tx (uint)
+* cumulative info in Arbitrum block, a 3-tuple consisting of:
+  * ArbGas used in current Arbitrum block including this tx (uint)
+  * index of this tx within this Arbitrum block (uint)
+  * number of EVM logs emitted in this Arbitrum block before this tx (uint)
 * fee information for the transaction, an 8-tuple consisting of:
   * price per L2 transaction, in wei
   * price per byte of L1 calldata, in wei

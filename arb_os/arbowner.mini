@@ -6,7 +6,7 @@ use accounts::account_setContractInfo;
 
 use chainParameters::chainParams_getOwner;
 use chainParameters::chainParams_setOwner;
-use chainParameters::chainParams_setBlocksPerSend;
+use chainParameters::chainParams_setSecondsPerSend;
 
 use codeSegment::AvmCodeBuilder;
 use codeSegment::avmCodeBuilder_new;
@@ -37,8 +37,6 @@ use gasAccounting::gasAccounting_setFeesEnabled;
 use gasAccounting::gasAccounting_getFeeRecipients;
 use gasAccounting::gasAccounting_setFeeRecipients;
 use gasAccounting::setFairGasPriceSender;
-
-use inbox::inbox_changeSequencer;
 
 use std::bytearray::ByteArray;
 use std::bytearray::bytearray_new;
@@ -92,12 +90,11 @@ public impure func arbowner_txcall() {
             arbowner_setFeeRecipients(topFrame, calldata);
         } elseif (funcCode == 0xba7f4cc6) {
             arbowner_setFairGasPriceSender(topFrame, calldata);
-        } elseif (funcCode == 0x340e4fc2) {
-            arbowner_setBlocksPerSend(topFrame, calldata);
-        } elseif (funcCode == 0xea180a38) {
-            arbowner_changeSequencer(topFrame, calldata);
+        } elseif (funcCode == 0x29854f47) {
+            arbowner_setSecondsPerSend(topFrame, calldata);
         } else {
             // unrecognized function code
+            asm(funcCode,) { debugprint };
             evmOp_revert_knownCodePc(address(const::Address_ArbOwner), 2, 0, 0);
         }
     } else {
@@ -169,26 +166,15 @@ impure func arbowner_setFairGasPriceSender(topFrame: EvmCallFrame, calldata: Byt
     evmOp_return(0, 0);
 }
 
-impure func arbowner_setBlocksPerSend(topFrame: EvmCallFrame, calldata: ByteArray) {  // (uint)
+impure func arbowner_setSecondsPerSend(topFrame: EvmCallFrame, calldata: ByteArray) {  // (uint)
     if (bytearray_size(calldata) != 36) {
         evmOp_revert_knownCodePc(address(const::Address_ArbOwner), 120, 0, 0);
     }
-    if (chainParams_setBlocksPerSend(bytearray_get256(calldata, 4)) == Some(())) {
+    if (chainParams_setSecondsPerSend(bytearray_get256(calldata, 4)) == Some(())) {
         evmOp_return(0, 0);
     } else {
         evmOp_revert_knownCodePc(address(const::Address_ArbOwner), 121, 0, 0);
     }
-}
-
-impure func arbowner_changeSequencer(topFrame: EvmCallFrame, calldata: ByteArray) {  // (address, uint, uint)
-    if (bytearray_size(calldata) != 4+3*32) {
-        evmOp_revert_knownCodePc(address(const::Address_ArbOwner), 50, 0, 0);
-    }
-    let sequencerAddr = address(bytearray_get256(calldata, 4));
-    let delayBlocks = bytearray_get256(calldata, 4+32);
-    let delaySeconds = bytearray_get256(calldata, 4+2*32);
-    inbox_changeSequencer(sequencerAddr, delayBlocks, delaySeconds);
-    evmOp_return(0, 0);
 }
 
 impure func arbowner_startCodeUpload(topFrame: EvmCallFrame, calldata: ByteArray) { // ()

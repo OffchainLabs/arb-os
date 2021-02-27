@@ -412,27 +412,20 @@ pub fn _evm_test_arbowner(log_to: Option<&Path>, debug: bool) -> Result<(), etha
 
     let arbowner = _ArbOwner::_new(&wallet, debug);
 
-    println!("A");
     arbowner._give_ownership(&mut machine, my_addr, Some(Uint256::zero()))?;
 
-    println!("B");
     arbowner._start_code_upload(&mut machine)?;
 
-    println!("C");
     let mcode = vec![0x90u8, 1u8, 0u8, 42u8]; // debugprint(42)
     arbowner._continue_code_upload(&mut machine, mcode)?;
 
-    println!("D");
     arbowner._finish_code_upload_as_arbos_upgrade(&mut machine)?;
 
-    println!("E");
-    arbowner._set_blocks_per_send(&mut machine, Uint256::from_u64(10))?;
+    arbowner._set_seconds_per_send(&mut machine, Uint256::from_u64(10))?;
 
-    println!("F");
     arbowner._change_sequencer(
         &mut machine,
         Uint256::from_u64(18498),
-        Uint256::from_u64(12),
         Uint256::from_u64(12 * 14),
     )?;
 

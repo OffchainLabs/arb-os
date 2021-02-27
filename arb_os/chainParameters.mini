@@ -5,8 +5,6 @@
 use arbowner::arbowner_init;
 use evmCallStack::evmCallStack_callHitError;
 
-use inbox::inbox_changeSequencer;
-
 use std::bytearray::MarshalledBytes;
 use std::bytearray::ByteArray;
 use std::bytearray::MarshalledBytes;
@@ -24,14 +22,13 @@ use gasAccounting::gasAccounting_postInitMessage;
 
 type ChainParams = struct {
     chainAddress: address,
-    gracePeriodBlocks: uint,         // time validators are given to respond to an assertion
-    arbGasSpeedLimitPerBlock: uint,  // assumed max speed of nodes tracking this chain's VM
-    millisecondsPerBlock: uint,      // mean time per L1 block
+    gracePeriodSeconds: uint,        // time validators are given to respond to an assertion
+    arbGasSpeedLimitPerSecond: uint, // assumed max speed of nodes tracking this chain's VM
     maxExecutionSteps: uint,         // max number of steps in an assertion
     baseStake: uint,                 // base stake of a validator, in wei
     stakingToken: address,           // ERC-20 token used for staking; or zero if using ETH
     owner: address,                  // owner of the chain, who has admin privileges (or zero if there is no owner)
-    blocksPerSend: option<uint>,     // issue at most one send per this many blocks
+    secondsPerSend: option<uint>,    // issue at most one send per this many seconds
 }
 
 var globalChainParams: option<ChainParams>;
@@ -46,14 +43,13 @@ public impure func chainParams_gotParamsMessage(sender: address, data: ByteArray
 
         globalChainParams = Some(struct{
             chainAddress: sender,
-            gracePeriodBlocks: bytearray_get256(data, 0),
-            arbGasSpeedLimitPerBlock: bytearray_get256(data, 32),
-            millisecondsPerBlock: const::DefaultMillisecondsPerBlock,
+            gracePeriodSeconds: bytearray_get256(data, 0),
+            arbGasSpeedLimitPerSecond: bytearray_get256(data, 32),
             maxExecutionSteps: bytearray_get256(data, 2*32),
             baseStake: bytearray_get256(data, 3*32),
             stakingToken: address(bytearray_get256(data, 4*32)),
             owner: address(bytearray_get256(data, 5*32)),
-            blocksPerSend: None<uint>,
+            secondsPerSend: None<uint>,
         });
 
         // now read and process initialization options
@@ -80,30 +76,12 @@ impure func doInitializationOption(stream: ByteStream) -> option<ByteStream> {
     stream = ustr;
     let (ustr, numPayloadBytes) = bytestream_get64(stream)?;
     stream = ustr;
-    return xif (optionId == 0) {   // option: sequencer
-        if (numPayloadBytes != 3*32) {
-            // unexpected payload size; discard the payload and ignore this option
-            return bytestream_skipBytes(stream, numPayloadBytes);
-        }
-        let (ustr, sequencerAddrAsUint) = bytestream_get256(stream)?;
-        let (ustr, delayBlocks) = bytestream_get256(ustr)?;
-        let (ustr, delayTime) = bytestream_get256(ustr)?;
-        inbox_changeSequencer(address(sequencerAddrAsUint), delayBlocks, delayTime);
-        Some(ustr)
-    } elseif (optionId == const::InitOption_setSecondsPerBlock) {
-        if (numPayloadBytes != 32) {
-            // unexpected payload size; discard the payload and ignore this option
-            return bytestream_skipBytes(stream, numPayloadBytes);
-        }
-        let (ustr, secsPerBlock) = bytestream_get256(stream)?;
-        globalChainParams = Some(globalChainParams? with { millisecondsPerBlock: 1000*secsPerBlock });
-        Some(ustr)
-    } elseif (optionId == const::InitOption_setChargingParams) {
+    return xif (optionId == const::InitOption_setChargingParams) {
         if (numPayloadBytes != 6*32) {
             // unexpected payload size; discard the payload and ignore this option
             return bytestream_skipBytes(stream, numPayloadBytes);
         }
-        let (ustr, speedLimitPerBlock) = bytestream_get256(stream)?;
+        let (ustr, speedLimitPerSecond) = bytestream_get256(stream)?;
         let (ustr, l1GasPerL2Tx) = bytestream_get256(ustr)?;
         let (ustr, l1GasPerL2Calldata) = bytestream_get256(ustr)?;
         let (ustr, l1GasPerStorage) = bytestream_get256(ustr)?;
@@ -113,7 +91,7 @@ impure func doInitializationOption(stream: ByteStream) -> option<ByteStream> {
 
         if let Some(params) = globalChainParams {
             globalChainParams = Some(params with {
-                arbGasSpeedLimitPerBlock: speedLimitPerBlock
+                arbGasSpeedLimitPerSecond: speedLimitPerSecond
             });
         }
 
@@ -146,11 +124,11 @@ public impure func chainParams_chainId() -> uint {
     return uint(chainParams_chainAddress()) & 0xffffffffffff;  // chainID == low 48 bits of chainAddress
 }
 
-public impure func chainParams_speedLimitPerBlock() -> uint {
+public impure func chainParams_speedLimitPerSecond() -> uint {
     return xif let Some(params) = globalChainParams {
-        params.arbGasSpeedLimitPerBlock
+        params.arbGasSpeedLimitPerSecond
     } else {
-        const::DefaultSpeedLimitPerBlock
+        const::DefaultSpeedLimitPerSecond
     };
 }
 
@@ -176,26 +154,26 @@ public impure func chainParams_setOwner(newOwner: address) {
     }
 }
 
-public impure func chainParams_getBlocksPerSend() -> uint {
+public impure func chainParams_getSecondsPerSend() -> uint {
     return xif let Some(params) = globalChainParams {
-        xif let Some(bps) = params.blocksPerSend {
+        xif let Some(bps) = params.secondsPerSend {
             bps
         } else {
-            params.gracePeriodBlocks / 3
+            params.gracePeriodSeconds / 3
         }
     } else {
-        const::DefaultBlocksPerSend
+        const::DefaultSecondsPerSend
     };
 }
 
-public impure func chainParams_setBlocksPerSend(bps: uint) -> option<()> {
+public impure func chainParams_setSecondsPerSend(bps: uint) -> option<()> {
     let sbps = None<uint>;
     if (bps != 0) {           // interpret interval=0 as a request for the default behavior
         sbps = Some(bps);
     }
     globalChainParams = Some(
         (globalChainParams?) with {
-            blocksPerSend: sbps
+            secondsPerSend: sbps
         }
     );
     return Some(());

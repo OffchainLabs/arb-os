@@ -1208,15 +1208,15 @@ impl<'a> _ArbOwner<'a> {
         }
     }
 
-    pub fn _set_blocks_per_send(
+    pub fn _set_seconds_per_send(
         &self,
         machine: &mut Machine,
-        blocks_per_send: Uint256,
+        seconds_per_send: Uint256,
     ) -> Result<(), ethabi::Error> {
         let (receipts, _sends) = self.contract_abi.call_function(
             self.my_address.clone(),
-            "setBlocksPerSend",
-            &[ethabi::Token::Uint(blocks_per_send.to_u256())],
+            "setSecondsPerSend",
+            &[ethabi::Token::Uint(seconds_per_send.to_u256())],
             machine,
             Uint256::zero(),
             self.debug,
@@ -1237,7 +1237,6 @@ impl<'a> _ArbOwner<'a> {
         &self,
         machine: &mut Machine,
         sequencer_addr: Uint256,
-        delay_blocks: Uint256,
         delay_seconds: Uint256,
     ) -> Result<(), ethabi::Error> {
         let (receipts, _sends) = self.contract_abi.call_function(
@@ -1245,7 +1244,6 @@ impl<'a> _ArbOwner<'a> {
             "changeSequencer",
             &[
                 ethabi::Token::Address(sequencer_addr.to_h160()),
-                ethabi::Token::Uint(delay_blocks.to_u256()),
                 ethabi::Token::Uint(delay_seconds.to_u256()),
             ],
             machine,

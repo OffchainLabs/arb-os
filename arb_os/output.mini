@@ -25,14 +25,12 @@ use std::merkletree::merkleTreeBuilder_isEmpty;
 
 use std::queue::queue_get;
 
-use chainParameters::chainParams_getBlocksPerSend;
+use chainParameters::chainParams_getSecondsPerSend;
 
 use evmlogs::evmlogs_empty;
 use evmlogs::evmlogs_numLogs;
 
 use evmCallStack::evmCallStack_queueMessage;
-
-use chainParameters::chainParams_speedLimitPerBlock;
 
 use inbox::IncomingRequest;
 use inbox::inbox_currentBlockNumber;
@@ -91,14 +89,14 @@ var globalBlockReceiptData: struct {
     statsThisBlock: OutputStatistics,
     statsAllTime: OutputStatistics,
     lastBlockNum: uint,
-    nextSendBlockNum: uint,
+    nextSendTime: uint,
 };
 
 public impure func outputStats_endOfBlock(blockNum: uint, timestamp: uint) {
-    if ((inbox_currentBlockNumber() >= globalBlockReceiptData.nextSendBlockNum) && !outbox_isEmpty() ){
+    if ((inbox_currentTimestamp() >= globalBlockReceiptData.nextSendTime) && !outbox_isEmpty() ){
         outbox_send();
         globalBlockReceiptData = globalBlockReceiptData with {
-            nextSendBlockNum: inbox_currentBlockNumber() + chainParams_getBlocksPerSend()
+            nextSendTime: inbox_currentTimestamp() + chainParams_getSecondsPerSend()
         };
     }
 
@@ -116,17 +114,12 @@ public impure func outputStats_endOfBlock(blockNum: uint, timestamp: uint) {
             statsAllTime: updatedStats
         };
 
-        let gasUsedThisBlock = globalBlockReceiptData.statsThisBlock.totalGasUsed;
-        let gasLimit = chainParams_speedLimitPerBlock();
-        if (gasLimit < gasUsedThisBlock) {
-            gasLimit = gasUsedThisBlock;
-        }
+        // let gasUsedThisBlock = globalBlockReceiptData.statsThisBlock.totalGasUsed;
 
         asm((
             const::LogType_blockSummary,
             blockNum,
             timestamp,
-            gasLimit,
             globalBlockReceiptData.statsThisBlock,
             globalBlockReceiptData.statsAllTime,
             gasAccounting_summaryToPublish(),
@@ -195,7 +188,6 @@ public impure func txReceipts_init() {  // will be called at beginning of main()
 }
 
 impure func update_txReceiptsForBlock(
-    blockNum: uint,
     gasUsed: uint,
     numEvmLogs: uint
 ) -> PerBlockReceiptData {
@@ -260,7 +252,6 @@ public impure func emitTxReceipt(
         txResultInfo,
         realGasUsage,
         update_txReceiptsForBlock(
-            l1message.blockNumber,
             realGasUsage.gasUsed,
             numEvmLogs,
         ),
