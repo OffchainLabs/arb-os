@@ -113,8 +113,6 @@ public impure func outputStats_endOfBlock(blockNum: uint, timestamp: uint) {
             statsAllTime: updatedStats
         };
 
-        // let gasUsedThisBlock = globalBlockReceiptData.statsThisBlock.totalGasUsed;
-
         asm((
             const::LogType_blockSummary,
             blockNum,
