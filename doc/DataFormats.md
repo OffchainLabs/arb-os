@@ -186,14 +186,20 @@ ArbOS will make its best effort to emit a tx receipt for each transaction reques
 A tx receipt log item consists of:
 
 * 0 (uint)
-* incoming request info, a 7-tuple consisting of:
+* incoming request info, an 8-tuple consisting of:
   * 3 (uint)
   * L1 block number (uint)
+  * Arbitrum block number (uint)
   * L2 timestamp (uint)
   * address of sender (address represented as uint)
   * requestID (uint)  [described below]
-  * size of L2 message (uint)
-  * contents of L2 message for the request (buffer)
+  * a 2-tuple consisting of:
+    * size of L2 message (uint)
+    * contents of L2 message for the request (buffer)
+  * a 3-tuple consisting of:
+    * provenance info
+    * aggregator info
+    * whether message was artificially injected via sideload (boolean encoded as uint 0 or 1)
 * tx result info, a 3-tuple consisting of:
   * return code (uint)  [described below]
   * returndata (2-tuple of size (uint) and contents (buffer))

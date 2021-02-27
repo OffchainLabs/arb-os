@@ -49,7 +49,7 @@ use std::bytearray::bytearray_copy;
 use std::bytestream::bytestream_new;
 use std::bytestream::bytestream_bytesReadSoFar;
 
-use inbox::inbox_currentBlockNumber;
+use inbox::inbox_currentArbBlockNumber;
 use inbox::inbox_currentTimestamp;
 
 use std::stack::stack_pop;
@@ -276,7 +276,7 @@ impure func arbsys_sendTxToL1(topFrame: EvmCallFrame, calldata: ByteArray) { // 
                                 uint(destAddr),
                             ),
                             96,
-                            inbox_currentBlockNumber(),
+                            inbox_currentArbBlockNumber(),
                         ),
                         128,
                         inbox_currentTimestamp(),

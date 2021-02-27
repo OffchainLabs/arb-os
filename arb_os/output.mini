@@ -33,7 +33,6 @@ use evmlogs::evmlogs_numLogs;
 use evmCallStack::evmCallStack_queueMessage;
 
 use inbox::IncomingRequest;
-use inbox::inbox_currentBlockNumber;
 use inbox::inbox_currentTimestamp;
 
 use gasAccounting::GasUsage;

@@ -37,6 +37,10 @@ public impure func chainParams_init() {
     globalChainParams = None<ChainParams>;
 }
 
+public impure func haveReceivedChainInitMessage() -> bool {
+    return globalChainParams != None<ChainParams>;
+}
+
 public impure func chainParams_gotParamsMessage(sender: address, data: ByteArray) {
     if (globalChainParams == None<ChainParams>) {
         arbowner_init();

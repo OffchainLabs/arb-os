@@ -103,8 +103,8 @@ type EvmCallFrame = struct {
     selfDestructQueue: Queue,           // set of self-destruct directives, including those created by this call and its subcalls
     resumeInfo: option<ResumeInfo>,     // if call is suspended, its state will be saved here
     sendQueue: Queue,                   // outgoing messages, including those created by this call and its subcalls
-    sendOnFailure: option<ByteArray>,  // message to send if call fails
-    parent: option<EvmCallFrame>,                // call-frame that created this one, or None if this is a top-level call
+    sendOnFailure: option<ByteArray>,   // message to send if call fails
+    parent: option<EvmCallFrame>,       // call-frame that created this one, or None if this is a top-level call
 }
 
 type ReturnInfo = struct {  // information about a call that previously completed
@@ -125,8 +125,12 @@ type ResumeInfo = struct {            // information used to resume a call after
 var globalCallStack: option<EvmCallFrame>;   // call frame of currently running call, if any
 var globalCurrentTxRequest: TxRequestData;  // request that launched the top-level call
 
-public impure func evmCallStack_currentBlockNumber() -> uint {
-    return globalCurrentTxRequest.incomingRequest.blockNumber;
+public impure func evmCallStack_currentArbBlockNumber() -> uint {
+    return globalCurrentTxRequest.incomingRequest.arbBlockNumber;
+}
+
+public impure func evmCallStack_currentEthBlockNumber() -> uint {
+    return globalCurrentTxRequest.incomingRequest.ethBlockNumber;
 }
 
 public impure func evmCallStack_currentTimestamp() -> uint {

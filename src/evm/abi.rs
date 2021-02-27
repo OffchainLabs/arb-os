@@ -182,7 +182,7 @@ impl AbiForContract {
             return Err(Some(log_item.clone()));
         }
         if let Value::Tuple(tup2) = log_item.get_request() {
-            assert_eq!(tup2[4], Value::Int(request_id));
+            assert_eq!(tup2[5], Value::Int(request_id));
         } else {
             println!("Malformed ArbOS log item");
             return Err(None);

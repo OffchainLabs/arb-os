@@ -60,7 +60,7 @@ var gasAccountingInfo: struct {
     txState: option<TxGasState>,       // status of currently active tx (if there is one)
     feeConfig: FeeConfig,              // fee configuration
     currentPrices: GasPrices,          // current prices for resources
-    gasRemainingThisBlock: uint,       // amount of gas remaining for this block
+    gasRemainingThisBlock: uint,       // amount of gas remaining for this Arbitrum block
     congestionState: CongestionState,  // state of congestion pricing algorithm
     speedLimitPerSecond: uint,         // nominal ArbGas available for computation per second
     pricingParams: PricingParameters,  // parameters that affect pricing
@@ -78,7 +78,7 @@ type GasPrices = struct {    // all prices in this struct are denominated in wei
 
 type CongestionState = struct {
     gasPool: int,         // amount of gas available for use (note: signed value; if negative, we have overused gas)
-    lastBlockNumSeen: uint,
+    lastArbBlockNumSeen: uint,
     lastTimestampSeen: uint,
     congestionPriceWei: uint,
 }
@@ -633,11 +633,11 @@ public impure func getNextRequestFromCongestionAuction() -> (
     option<TxRequestData>,    // if it was an L2 tx message
 ) {
     let (maybeRequest, maybeTx) = inbox_getNextUnpackedRequest();
-    let (isChargeable, blockNum, timestamp, payer, maxGas, gasBid) = getRequestGasInfo(maybeRequest, maybeTx);
+    let (isChargeable, arbBlockNum, timestamp, payer, maxGas, gasBid) = getRequestGasInfo(maybeRequest, maybeTx);
 
-    if (blockNum > gasAccountingInfo.congestionState.lastBlockNumSeen) {
+    if (arbBlockNum > gasAccountingInfo.congestionState.lastArbBlockNumSeen) {
         // it's the first tx of a new block, so do beginning-of-block work
-        let updatedCongestionState = updateCongestionState(gasAccountingInfo.congestionState, blockNum, timestamp);
+        let updatedCongestionState = updateCongestionState(gasAccountingInfo.congestionState, arbBlockNum, timestamp);
         let gasForThisBlock = xif(gasAccountingInfo.congestionState.gasPool > int(0)) {
             uint(gasAccountingInfo.congestionState.gasPool)
         } else {
@@ -826,22 +826,22 @@ impure func updateCongestionState(state: CongestionState, toBlockNum: uint, toTi
     };
 }
 
-public func getGasLimitPerTx() -> uint {
+public impure func getGasLimitPerTx() -> uint {
     return gasAccountingParams.TxGasLimit;
 }
 
-impure func getRequestGasInfo(
+func getRequestGasInfo(
     maybeRequest: option<IncomingRequest>,
     maybeTx: option<TxRequestData>
 ) -> (bool, uint, uint, address, uint, uint) {
     if let Some(req) = maybeRequest {
-        return (false, req.blockNumber, req.timestamp, req.sender, 0, 0);
+        return (false, req.arbBlockNumber, req.timestamp, req.sender, 0, 0);
     }
     if let Some(tx) = maybeTx {
         if (tx.incomingRequest.adminMode) {
             return (
                 false,
-                tx.incomingRequest.blockNumber,
+                tx.incomingRequest.arbBlockNumber,
                 tx.incomingRequest.timestamp,
                 tx.incomingRequest.sender,
                 tx.maxGas,
@@ -850,7 +850,7 @@ impure func getRequestGasInfo(
         } else {
             return (
                 true,
-                tx.incomingRequest.blockNumber,
+                tx.incomingRequest.arbBlockNumber,
                 tx.incomingRequest.timestamp,
                 tx.incomingRequest.sender,
                 tx.maxGas,
