@@ -1320,8 +1320,9 @@ fn strip_var_from_log(log: Value) -> Option<Value> {
                     tup[0].clone(),
                     tup[1].clone(),
                     tup[2].clone(),
+                    tup[3].clone(),
                     // skip tup[3] because it's all about gas usage
-                    zero_item_in_tuple(tup[4].clone(), 0),
+                    zero_item_in_tuple(tup[5].clone(), 0),
                 ]))
             } else if item_type == Uint256::one() {
                 // block summary log item
@@ -1329,9 +1330,9 @@ fn strip_var_from_log(log: Value) -> Option<Value> {
                     tup[0].clone(),
                     tup[1].clone(),
                     tup[2].clone(),
-                    // skip tup[3] because it's all about gas usage
-                    zero_item_in_tuple(tup[4].clone(), 0),
-                    zero_item_in_tuple(tup[5].clone(), 0),
+                    tup[3].clone(),
+                    // skip tup[4] thru tup[5] because they're all about gas usage
+                    tup[6].clone(),
                 ]))
             } else if item_type == Uint256::from_u64(2) {
                 Some(log)
