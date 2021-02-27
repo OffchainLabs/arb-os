@@ -101,23 +101,8 @@ public impure func inbox_get() -> IncomingRequest {
         }
 
         let (updatedQ, rawMsg,) = incomingRequestQueue_getOrDie(globalInbox.queue);
-
+        globalInbox = globalInbox with { queue: updatedQ };
         let ebMsg = unsafecast<IncomingRequest>(rawMsg);
-        if ((ebMsg.arbBlockNumber > globalInbox.arbBlockNum) || (ebMsg.ethBlockNumber > globalInbox.ethBlockNum)) {
-            globalInbox = globalInbox with {
-                queue: updatedQ
-            } with {
-                arbBlockNum: ebMsg.arbBlockNumber
-            } with {
-                ethBlockNum: ebMsg.ethBlockNumber
-            } with {
-                timestamp: ebMsg.timestamp
-            } with {
-                seenMsgAtThisEthBlockNum: true
-            };
-        } else {
-            globalInbox = globalInbox with { queue: updatedQ };
-        }
 
         if (ebMsg.kind == const::L1MessageType_chainInit) {
             chainParams_gotParamsMessage(ebMsg.sender, ebMsg.msgData);

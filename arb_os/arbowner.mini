@@ -94,7 +94,6 @@ public impure func arbowner_txcall() {
             arbowner_setSecondsPerSend(topFrame, calldata);
         } else {
             // unrecognized function code
-            asm(funcCode,) { debugprint };
             evmOp_revert_knownCodePc(address(const::Address_ArbOwner), 2, 0, 0);
         }
     } else {
