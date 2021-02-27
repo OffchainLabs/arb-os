@@ -87,6 +87,8 @@ public impure func arbsys_txcall() {
         let funcCode = getFuncCode(calldata);
         if (funcCode == 0x051038F2) {
             arbsys_arbOSVersion(topFrame, calldata);
+        } elseif(funcCode == 0xa3b1b31d) {
+            arbsys_arbBlockNumber(topFrame, calldata);
         } elseif(funcCode == 0x25e16063) {
             arbsys_withdrawEth(topFrame, calldata);
         } elseif(funcCode == 0x928c169a) {
@@ -200,6 +202,18 @@ impure func arbsys_arbOSVersion(topFrame: EvmCallFrame, calldata: ByteArray) {  
         evmOp_return(0, 32);
     } else {
         evmOp_revert_knownCodePc(address(const::Address_ArbSys), 6, 0, 0);
+    }
+}
+
+impure func arbsys_arbBlockNumber(topFrame: EvmCallFrame, calldata: ByteArray) {  // () -> uint
+    if (bytearray_size(calldata) != 4) {
+        evmOp_revert_knownCodePc(address(const::Address_ArbSys), 6, 0, 0);
+    }
+    let blockNum = inbox_currentArbBlockNumber();
+    if (evmCallStack_setTopFrameMemory(bytearray_set256(bytearray_new(0), 0, blockNum))) {
+        evmOp_return(0, 32);
+    } else {
+        evmOp_revert_knownCodePc(address(const::Address_ArbSys), 7, 0, 0);
     }
 }
 
