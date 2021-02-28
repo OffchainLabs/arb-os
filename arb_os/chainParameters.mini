@@ -22,7 +22,7 @@ use gasAccounting::gasAccounting_postInitMessage;
 
 type ChainParams = struct {
     chainAddress: address,
-    gracePeriodSeconds: uint,        // time validators are given to respond to an assertion
+    gracePeriodBlocks: uint,         // time validators are given to respond to an assertion
     arbGasSpeedLimitPerSecond: uint, // assumed max speed of nodes tracking this chain's VM
     maxExecutionSteps: uint,         // max number of steps in an assertion
     baseStake: uint,                 // base stake of a validator, in wei
@@ -47,7 +47,7 @@ public impure func chainParams_gotParamsMessage(sender: address, data: ByteArray
 
         globalChainParams = Some(struct{
             chainAddress: sender,
-            gracePeriodSeconds: bytearray_get256(data, 0),
+            gracePeriodBlockss: bytearray_get256(data, 0),
             arbGasSpeedLimitPerSecond: bytearray_get256(data, 32),
             maxExecutionSteps: bytearray_get256(data, 2*32),
             baseStake: bytearray_get256(data, 3*32),
@@ -163,7 +163,7 @@ public impure func chainParams_getSecondsPerSend() -> uint {
         xif let Some(bps) = params.secondsPerSend {
             bps
         } else {
-            params.gracePeriodSeconds / 3
+            blocksToSeconds(params.gracePeriodBlocks) / 3
         }
     } else {
         const::DefaultSecondsPerSend
@@ -181,4 +181,8 @@ public impure func chainParams_setSecondsPerSend(bps: uint) -> option<()> {
         }
     );
     return Some(());
+}
+
+public func blocksToSeconds(numBlocks: uint) -> uint {
+    return numBlocks * const::SecondsPerBlockNumerator / const::SecondsPerBlockDenominator;
 }
