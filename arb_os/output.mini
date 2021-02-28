@@ -23,6 +23,9 @@ use std::merkletree::merkleTreeBuilder_add;
 use std::merkletree::merkleTreeBuilder_finish;
 use std::merkletree::merkleTreeBuilder_isEmpty;
 
+use std::queue::queue_isEmpty;
+use std::queue::queue_new;
+use std::queue::queue_put;
 use std::queue::queue_get;
 
 use chainParameters::chainParams_getBlocksPerSend;
@@ -59,6 +62,7 @@ type OutputStatistics = struct {
 }
 
 public impure func output_init() {
+    logsQueuedForEndOfBlock = queue_new();
     outbox_init();
 }
 
@@ -94,6 +98,8 @@ var globalBlockReceiptData: struct {
     nextSendBlockNum: uint,
 };
 
+var logsQueuedForEndOfBlock: Queue;
+
 public impure func outputStats_endOfBlock(blockNum: uint, timestamp: uint) {
     if ((inbox_currentBlockNumber() >= globalBlockReceiptData.nextSendBlockNum) && !outbox_isEmpty() ){
         outbox_send();
@@ -121,6 +127,19 @@ public impure func outputStats_endOfBlock(blockNum: uint, timestamp: uint) {
         if (gasLimit < gasUsedThisBlock) {
             gasLimit = gasUsedThisBlock;
         }
+
+        let q = logsQueuedForEndOfBlock;
+        while( ! queue_isEmpty(q) ){
+            if let Some(res) = queue_get(q) {
+                let (uq, logItem) = res;
+                q = uq;
+                asm(logItem,) { log };
+            } else {
+                // should never happen
+                q = queue_new();
+            }
+        }
+        logsQueuedForEndOfBlock = q;
 
         asm((
             const::LogType_blockSummary,
@@ -295,13 +314,19 @@ public impure func outbox_append(item: ByteArray) {
         batch: merkleTreeBuilder_add(globalOutbox.batch, item)
     };
     let (size, buf) = bytearray_toSizeAndBuffer(item);
-    asm((const::LogType_send, batchNumber, numInBatch, size, buf),) { log };
+    logsQueuedForEndOfBlock = queue_put(
+        logsQueuedForEndOfBlock,
+        (const::LogType_send, batchNumber, numInBatch, size, buf),
+    );
     outputStats_addNonTxLog();
 }
 
 impure func outbox_send() {
     let (tree, rootHash) = merkleTreeBuilder_finish(globalOutbox.batch);
-    asm((const::LogType_sendMerkleTree, globalOutbox.batchNumber, globalOutbox.numInBatch, tree),) { log };
+    logsQueuedForEndOfBlock = queue_put(
+        logsQueuedForEndOfBlock,
+        (const::LogType_sendMerkleTree, globalOutbox.batchNumber, globalOutbox.numInBatch, tree),
+    );
     outputStats_addNonTxLog();
     asm(
         97,
