@@ -367,7 +367,7 @@ public impure func gasAccounting_startTxCharges(
     let _ = switchToChargingOS();   // call this in case we're somehow still charging a tx; ignore return value
 
     if (maxGas > gasAccountingParams.TxGasLimit) {
-        return const::TxResultCode_exceededTxGasLimit;
+        maxGas = gasAccountingParams.TxGasLimit;
     }
 
     // take funds from the payer, enough to pay for maxGas at gasPrice
