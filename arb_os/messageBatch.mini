@@ -123,7 +123,7 @@ public impure func messageBatch_get(batch: MessageBatch) -> option<(IncomingRequ
         ))
     } else {
         if (batch.numSoFar > 0) {
-            updateBatchSizeEstimate(batch.numSoFar);
+            updateBatchSizeEstimate(batch.numSoFar, batch.template.sender);
         }
         None<(IncomingRequest, MessageBatch)>
     };

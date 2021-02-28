@@ -879,6 +879,10 @@ public impure func updateL1GasPriceEstimate(sender: address, price: uint) {
     }
 }
 
+public impure func getFairGasPriceSender() -> address {
+    return globalL1GasPriceEstimator.fairGasPriceSender;
+}
+
 public impure func setFairGasPriceSender(sender: address) {
     globalL1GasPriceEstimator = globalL1GasPriceEstimator with {
         fairGasPriceSender: sender
@@ -888,12 +892,18 @@ public impure func setFairGasPriceSender(sender: address) {
 // This adjusts l1GasPerL2Tx to be a weighted average, over recent transactions that arrived in batches,
 //     of the quantity (const::Charging_AssumedBatchCostL1Gas / batchSize). Because we're averaging over
 //     transactions, a batch contributes (batchSize) times, once for each transaction in it.
-public impure func updateBatchSizeEstimate(size: uint) {
+public impure func updateBatchSizeEstimate(size: uint, batchSender: address) {
     if (size > 500) { size = 500; }
     let oldValue = gasAccountingInfo.pricingParams.l1GasPerL2Tx;
+    let newValue = (const::Charging_AssumedBatchCostL1Gas + (5000 - size) * oldValue) / 5000;
+    if (batchSender != getFairGasPriceSender()) {
+        // We don't fully trust the batch sender, so reduce the adjustment by a factor of 5.
+        // This ensures that an attacker who makes deliberate small batches imposes more cost on themselves than on others.
+        newValue = (4 * oldValue + newValue) / 5;
+    }
     gasAccountingInfo = gasAccountingInfo with {
         pricingParams: gasAccountingInfo.pricingParams with {
-            l1GasPerL2Tx: (const::Charging_AssumedBatchCostL1Gas + (10000 - size) * oldValue) / 10000
+            l1GasPerL2Tx: newValue
         }
     };
 }
