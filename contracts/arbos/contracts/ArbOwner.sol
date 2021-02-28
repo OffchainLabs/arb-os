@@ -12,12 +12,9 @@ interface ArbOwner {
     function getFeeRecipients() external view returns (address, address);
     function setFeeRecipients(address netFeeRecipient, address congestionFeeRecipient) external;
     function setFairGasPriceSender(address addr) external;
+    function setGasAccountingParams(uint speedLimitPerBlock, uint gasPoolMax, uint maxTxGasLimit) external;
 
     function setBlocksPerSend(uint blocksPerSend) external;
-
-    // Change the sequencer or its parameters
-    // if sequencerAddr is zero, operate without a sequencer
-    function changeSequencer(address sequencerAddr, uint maxDelayBlocks, uint maxDelaySeconds) external;
 
     // To upgrade ArbOS, the ower calls startArbosUpgrade, then calls continueArbosUpgrade one or more times to upload 
     // the code to be installed as the upgrade, then calls finishArbosUpgrade to complete the upgrade and start executing the new code.

@@ -118,11 +118,8 @@ type GasUsage = struct {
 
 public impure func gasAccounting_init() {    // initialize on boot, before we have gotten the chain init message
     initGasPriceEstimator();
-    gasAccountingParams = struct {
-        SpeedLimitPerBlock: const::DefaultSpeedLimitPerBlock,
-        GasPoolMax: int(const::DefaultSpeedLimitPerBlock * 5),
-        TxGasLimit: const::DefaultSpeedLimitPerBlock * 5 / 2,
-    };
+
+    setGasAccountingParamsFromSpeedLimit(const::DefaultSpeedLimitPerBlock);
 
     let pricingParams = struct {
         l1GasPerL2Tx: const::Charging_DefaultL1GasPerL2Tx,
@@ -163,6 +160,34 @@ public impure func gasAccounting_init() {    // initialize on boot, before we ha
         pricingParams: pricingParams,
         gasAllocatedForThisBlock: uint(congestionState.gasPool),
     };
+}
+
+impure func setGasAccountingParamsFromSpeedLimit(speedLimitPerBlock: uint) {
+    gasAccountingParams = struct {
+        SpeedLimitPerBlock: speedLimitPerBlock,
+        GasPoolMax: int(speedLimitPerBlock * 5),
+        TxGasLimit: speedLimitPerBlock,
+    };
+}
+
+public impure func setGasAccountingParams(speedLimitPerBlock: uint, gasPoolMax: uint, txGasLimit: uint) {
+    // enforce reasonable relationships among the parameters
+    if (gasPoolMax < speedLimitPerBlock) { gasPoolMax = speedLimitPerBlock; }
+    if (txGasLimit > gasPoolMax/2) { txGasLimit = gasPoolMax / 2; }
+
+    gasAccountingParams = struct {
+        SpeedLimitPerBlock: speedLimitPerBlock,
+        GasPoolMax: int(gasPoolMax),
+        TxGasLimit: txGasLimit,
+    };
+}
+
+public impure func getGasAccountingParams() -> (uint, uint, uint) {
+    return (
+        gasAccountingParams.SpeedLimitPerBlock,
+        uint(gasAccountingParams.GasPoolMax),
+        gasAccountingParams.TxGasLimit,
+    );
 }
 
 impure func setPrices(feeConfig: FeeConfig, params: PricingParameters, congestionState: CongestionState) -> GasPrices {
@@ -220,15 +245,6 @@ public impure func gasAccounting_getPricesInArbGas() -> (uint, uint, uint) {  //
     );
 }
 
-type GasPrices = struct {    // all prices in this struct are denominated in wei
-    perL2Tx: uint,
-    perL1CalldataByte: uint,
-    perStorageCell: uint,
-    perArbGasBase: uint,
-    perArbGasCongestion: uint,
-    perArbGasTotal: uint,
-}
-
 public impure func gasAccounting_setFeesEnabled(enabled: bool) {
     gasAccountingInfo = gasAccountingInfo with {
         feeConfig: gasAccountingInfo.feeConfig with { enabled: enabled }
@@ -268,11 +284,7 @@ public impure func gasAccounting_setChargingParams(
 
 public impure func gasAccounting_postInitMessage() {   // this runs after we have received the init message, or similar
     let speedLimitPerBlock = chainParams_speedLimitPerBlock();
-    gasAccountingParams = struct {
-        SpeedLimitPerBlock: speedLimitPerBlock,
-        GasPoolMax: int(5 * speedLimitPerBlock),
-        TxGasLimit: speedLimitPerBlock,
-    };
+    setGasAccountingParamsFromSpeedLimit(speedLimitPerBlock);
     if (gasAccountingInfo.congestionState.gasPool > gasAccountingParams.GasPoolMax) {
         // max sure gas pool isn't above its max
         gasAccountingInfo = gasAccountingInfo with {

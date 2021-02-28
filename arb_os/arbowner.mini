@@ -37,6 +37,7 @@ use gasAccounting::gasAccounting_setFeesEnabled;
 use gasAccounting::gasAccounting_getFeeRecipients;
 use gasAccounting::gasAccounting_setFeeRecipients;
 use gasAccounting::setFairGasPriceSender;
+use gasAccounting::setGasAccountingParams;
 
 use inbox::inbox_changeSequencer;
 
@@ -78,7 +79,7 @@ public impure func arbowner_txcall() {
             arbowner_startCodeUpload(topFrame, calldata);
         } elseif (funcCode == 0x56331f75) {
             arbowner_continueCodeUpload(topFrame, calldata);
-        } elseif (funcCode == 0xfbb5a179) {
+        } elseif (funcCode == 0xfbb53a17) {
            arbowner_finishCodeUploadAsArbosUpgrade(topFrame, calldata);
         } elseif (funcCode == 0xf4f4e136) {
            arbowner_finishCodeUploadAsPluggable(topFrame, calldata);
@@ -92,12 +93,14 @@ public impure func arbowner_txcall() {
             arbowner_setFeeRecipients(topFrame, calldata);
         } elseif (funcCode == 0xba7f4cc6) {
             arbowner_setFairGasPriceSender(topFrame, calldata);
+        } elseif (funcCode == 0x8ea93643) {
+            asm(0,) { debugprint };
+            arbowner_setGasAccountingParams(topFrame, calldata);
         } elseif (funcCode == 0x340e4fc2) {
             arbowner_setBlocksPerSend(topFrame, calldata);
-        } elseif (funcCode == 0xea180a38) {
-            arbowner_changeSequencer(topFrame, calldata);
         } else {
             // unrecognized function code
+            asm(funcCode,) { debugprint };
             evmOp_revert_knownCodePc(address(const::Address_ArbOwner), 2, 0, 0);
         }
     } else {
@@ -180,17 +183,6 @@ impure func arbowner_setBlocksPerSend(topFrame: EvmCallFrame, calldata: ByteArra
     }
 }
 
-impure func arbowner_changeSequencer(topFrame: EvmCallFrame, calldata: ByteArray) {  // (address, uint, uint)
-    if (bytearray_size(calldata) != 4+3*32) {
-        evmOp_revert_knownCodePc(address(const::Address_ArbOwner), 50, 0, 0);
-    }
-    let sequencerAddr = address(bytearray_get256(calldata, 4));
-    let delayBlocks = bytearray_get256(calldata, 4+32);
-    let delaySeconds = bytearray_get256(calldata, 4+2*32);
-    inbox_changeSequencer(sequencerAddr, delayBlocks, delaySeconds);
-    evmOp_return(0, 0);
-}
-
 impure func arbowner_startCodeUpload(topFrame: EvmCallFrame, calldata: ByteArray) { // ()
     if (bytearray_size(calldata) != 4) {
         evmOp_revert_knownCodePc(address(const::Address_ArbOwner), 20, 0, 0);
@@ -260,6 +252,22 @@ impure func arbowner_bindAddressToPluggable(topFrame: EvmCallFrame, calldata: By
     } else {
         evmOp_revert_knownCodePc(address(const::Address_ArbOwner), 61, 0, 0);
     }
+}
+
+impure func arbowner_setGasAccountingParams(topFrame: EvmCallFrame, calldata: ByteArray) { // (uint, uint, uint)
+    asm(1,) { debugprint };
+    if (bytearray_size(calldata) != (4+3*32)) {
+        evmOp_revert_knownCodePc(address(const::Address_ArbOwner), 130, 0, 0);
+    }
+    asm(2,) { debugprint };
+    setGasAccountingParams(
+        bytearray_get256(calldata, 4),
+        bytearray_get256(calldata, 4+32),
+        bytearray_get256(calldata, 4+2*32),
+    );
+    asm(3,) { debugprint };
+    evmOp_return(0, 0);
+    asm(4,) { debugprint };
 }
 
 

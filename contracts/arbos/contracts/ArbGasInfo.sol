@@ -7,5 +7,8 @@ interface ArbGasInfo {
 
     // return prices in ArbGas (per L2 tx, per L1 calldata byte, per storage allocation)
     function getPricesInArbGas() external view returns (uint, uint, uint);
+
+    // return gas accounting parameters (speedLimitPerBlock, gasPoolMax, maxTxGasLimit)
+    function getGasAccountingParams() external view returns (uint, uint, uint);
 }
 
