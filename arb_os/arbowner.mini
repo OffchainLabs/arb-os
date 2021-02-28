@@ -6,7 +6,7 @@ use accounts::account_setContractInfo;
 
 use chainParameters::chainParams_getOwner;
 use chainParameters::chainParams_setOwner;
-use chainParameters::chainParams_setBlocksPerSend;
+use chainParameters::chainParams_setSecondsPerSend;
 
 use codeSegment::AvmCodeBuilder;
 use codeSegment::avmCodeBuilder_new;
@@ -38,8 +38,6 @@ use gasAccounting::gasAccounting_getFeeRecipients;
 use gasAccounting::gasAccounting_setFeeRecipients;
 use gasAccounting::setFairGasPriceSender;
 use gasAccounting::setGasAccountingParams;
-
-use inbox::inbox_changeSequencer;
 
 use std::bytearray::ByteArray;
 use std::bytearray::bytearray_new;
@@ -93,10 +91,10 @@ public impure func arbowner_txcall() {
             arbowner_setFeeRecipients(topFrame, calldata);
         } elseif (funcCode == 0xba7f4cc6) {
             arbowner_setFairGasPriceSender(topFrame, calldata);
+        } elseif (funcCode == 0x29854f47) {
+            arbowner_setSecondsPerSend(topFrame, calldata);
         } elseif (funcCode == 0x8ea93643) {
             arbowner_setGasAccountingParams(topFrame, calldata);
-        } elseif (funcCode == 0x340e4fc2) {
-            arbowner_setBlocksPerSend(topFrame, calldata);
         } else {
             // unrecognized function code
             evmOp_revert_knownCodePc(address(const::Address_ArbOwner), 2, 0, 0);
@@ -170,11 +168,11 @@ impure func arbowner_setFairGasPriceSender(topFrame: EvmCallFrame, calldata: Byt
     evmOp_return(0, 0);
 }
 
-impure func arbowner_setBlocksPerSend(topFrame: EvmCallFrame, calldata: ByteArray) {  // (uint)
+impure func arbowner_setSecondsPerSend(topFrame: EvmCallFrame, calldata: ByteArray) {  // (uint)
     if (bytearray_size(calldata) != 36) {
         evmOp_revert_knownCodePc(address(const::Address_ArbOwner), 120, 0, 0);
     }
-    if (chainParams_setBlocksPerSend(bytearray_get256(calldata, 4)) == Some(())) {
+    if (chainParams_setSecondsPerSend(bytearray_get256(calldata, 4)) == Some(())) {
         evmOp_return(0, 0);
     } else {
         evmOp_revert_knownCodePc(address(const::Address_ArbOwner), 121, 0, 0);

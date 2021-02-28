@@ -738,7 +738,7 @@ impl ArbosReceipt {
             Some(ArbosReceipt {
                 request: tup[1].clone(),
                 request_id: if let Value::Tuple(subtup) = &tup[1] {
-                    if let Value::Int(ui) = &subtup[4] {
+                    if let Value::Int(ui) = &subtup[5] {
                         ui.clone()
                     } else {
                         panic!()
@@ -752,31 +752,35 @@ impl ArbosReceipt {
                 gas_used,
                 gas_price_wei,
                 provenance: if let Value::Tuple(stup) = &tup[1] {
-                    if let Value::Tuple(subtup) = &stup[6] {
-                        ArbosRequestProvenance {
-                            l1_sequence_num: if let Value::Int(ui) = &subtup[0] {
-                                ui.clone()
-                            } else {
-                                panic!();
-                            },
-                            parent_request_id: if let Value::Int(ui) = &subtup[1] {
-                                if ui.is_zero() {
-                                    Some(ui.clone())
+                    if let Value::Tuple(subtup1) = &stup[7] {
+                        if let Value::Tuple(subtup) = &subtup1[0] {
+                            ArbosRequestProvenance {
+                                l1_sequence_num: if let Value::Int(ui) = &subtup[0] {
+                                    ui.clone()
                                 } else {
-                                    None
-                                }
-                            } else {
-                                panic!();
-                            },
-                            index_in_parent: if let Value::Int(ui) = &subtup[2] {
-                                if ui.is_zero() {
-                                    Some(ui.clone())
+                                    panic!();
+                                },
+                                parent_request_id: if let Value::Int(ui) = &subtup[1] {
+                                    if ui.is_zero() {
+                                        Some(ui.clone())
+                                    } else {
+                                        None
+                                    }
                                 } else {
-                                    None
-                                }
-                            } else {
-                                panic!();
-                            },
+                                    panic!();
+                                },
+                                index_in_parent: if let Value::Int(ui) = &subtup[2] {
+                                    if ui.is_zero() {
+                                        Some(ui.clone())
+                                    } else {
+                                        None
+                                    }
+                                } else {
+                                    panic!();
+                                },
+                            }
+                        } else {
+                            panic!();
                         }
                     } else {
                         panic!();
@@ -1325,8 +1329,9 @@ fn strip_var_from_log(log: Value) -> Option<Value> {
                     tup[0].clone(),
                     tup[1].clone(),
                     tup[2].clone(),
+                    tup[3].clone(),
                     // skip tup[3] because it's all about gas usage
-                    zero_item_in_tuple(tup[4].clone(), 0),
+                    zero_item_in_tuple(tup[5].clone(), 0),
                 ]))
             } else if item_type == Uint256::one() {
                 // block summary log item
@@ -1334,9 +1339,9 @@ fn strip_var_from_log(log: Value) -> Option<Value> {
                     tup[0].clone(),
                     tup[1].clone(),
                     tup[2].clone(),
-                    // skip tup[3] because it's all about gas usage
-                    zero_item_in_tuple(tup[4].clone(), 0),
-                    zero_item_in_tuple(tup[5].clone(), 0),
+                    tup[3].clone(),
+                    // skip tup[4] thru tup[5] because they're all about gas usage
+                    tup[6].clone(),
                 ]))
             } else if item_type == Uint256::from_u64(2) {
                 Some(log)

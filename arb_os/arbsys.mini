@@ -50,7 +50,8 @@ use std::bytearray::bytearray_copy;
 use std::bytestream::bytestream_new;
 use std::bytestream::bytestream_bytesReadSoFar;
 
-use inbox::inbox_currentBlockNumber;
+use inbox::inbox_currentArbBlockNumber;
+use inbox::inbox_currentEthBlockNumber;
 use inbox::inbox_currentTimestamp;
 
 use std::stack::stack_pop;
@@ -88,6 +89,8 @@ public impure func arbsys_txcall() {
         let funcCode = getFuncCode(calldata);
         if (funcCode == 0x051038F2) {
             arbsys_arbOSVersion(topFrame, calldata);
+        } elseif(funcCode == 0xa3b1b31d) {
+            arbsys_arbBlockNumber(topFrame, calldata);
         } elseif(funcCode == 0x25e16063) {
             arbsys_withdrawEth(topFrame, calldata);
         } elseif(funcCode == 0x928c169a) {
@@ -204,6 +207,18 @@ impure func arbsys_arbOSVersion(topFrame: EvmCallFrame, calldata: ByteArray) {  
     }
 }
 
+impure func arbsys_arbBlockNumber(topFrame: EvmCallFrame, calldata: ByteArray) {  // () -> uint
+    if (bytearray_size(calldata) != 4) {
+        evmOp_revert_knownCodePc(address(const::Address_ArbSys), 6, 0, 0);
+    }
+    let blockNum = inbox_currentArbBlockNumber();
+    if (evmCallStack_setTopFrameMemory(bytearray_set256(bytearray_new(0), 0, blockNum))) {
+        evmOp_return(0, 32);
+    } else {
+        evmOp_revert_knownCodePc(address(const::Address_ArbSys), 7, 0, 0);
+    }
+}
+
 impure func arbsys_withdrawEth(topFrame: EvmCallFrame, calldata: ByteArray) { // (address payee) payable -> nil
     if (bytearray_size(calldata) != 36) {
         evmOp_revert_knownCodePc(address(const::Address_ArbSys), 30, 0, 0);
@@ -266,27 +281,31 @@ impure func arbsys_sendTxToL1(topFrame: EvmCallFrame, calldata: ByteArray) { // 
                             bytearray_set256(
                                 bytearray_set256(
                                     bytearray_set256(
-                                        bytearray_new(0),
-                                        0,
-                                        const::SendType_sendTxToL1
+                                        bytearray_set256(
+                                            bytearray_new(0),
+                                            0,
+                                            const::SendType_sendTxToL1
+                                        ),
+                                        32,
+                                        uint(evmCallFrame_getCaller(topFrame)),
                                     ),
-                                    32,
-                                    uint(evmCallFrame_getCaller(topFrame)),
+                                    64,
+                                    uint(destAddr),
                                 ),
-                                64,
-                                uint(destAddr),
+                                96,
+                                inbox_currentArbBlockNumber(),
                             ),
-                            96,
-                            inbox_currentBlockNumber(),
+                            128,
+                            inbox_currentEthBlockNumber(),
                         ),
-                        128,
+                        160,
                         inbox_currentTimestamp(),
                     ),
-                    160,
+                    192,
                     callvalue,
                 ),
-                192,
-                nbytes,
+                224,
+                nbytes
             ),
         );
         if (evmCallStack_setTopFrameMemory(bytearray_set256(bytearray_new(0), 0, 1))) {
