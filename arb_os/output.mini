@@ -42,6 +42,7 @@ use inbox::inbox_currentBlockNumber;
 use inbox::inbox_currentTimestamp;
 
 use gasAccounting::GasUsage;
+use gasAccounting::TxFeeStats;
 use gasAccounting::gasAccounting_summaryToPublish;
 
 
@@ -240,6 +241,7 @@ public impure func emitTxReceipt(
     maybeReturnData: option<ByteArray>,
     maybeEvmLogs: option<EvmLogs>,
     gasUsage: option<GasUsage>,
+    feeStats: TxFeeStats,
 ) {
     let realGasUsage = struct {
         gasUsed: 0,
@@ -280,7 +282,8 @@ public impure func emitTxReceipt(
             l1message.blockNumber,
             realGasUsage.gasUsed,
             numEvmLogs,
-        )
+        ),
+        feeStats,
     ),) { log };
 }
 

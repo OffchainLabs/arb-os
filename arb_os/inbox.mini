@@ -22,6 +22,9 @@ use accounts::account_addToEthBalance;
 use chainParameters::chainParams_gotParamsMessage;
 use chainParameters::chainParams_chainId;
 
+use gasAccounting::updateL1GasPriceEstimate;
+use gasAccounting::txFeeStats_zero;
+
 use messages::TxRequestData;
 
 use messageBatch::MessageBatch;
@@ -205,7 +208,8 @@ public impure func inbox_get() -> IncomingRequest {
     };
 }
 
-func incomingRequestFromRaw(newMsgRaw: IncomingRequestFromInbox, adminMode: bool) -> IncomingRequest {
+impure func incomingRequestFromRaw(newMsgRaw: IncomingRequestFromInbox, adminMode: bool) -> IncomingRequest {
+    updateL1GasPriceEstimate(newMsgRaw.sender, newMsgRaw.gasPriceL1);
     return struct {
         kind: newMsgRaw.kind,
         blockNumber: newMsgRaw.blockNumber,
@@ -449,6 +453,7 @@ type IncomingRequestFromInbox = struct {
     timestamp: uint,          // timestamp of the L1 block
     sender: address,          // address of the sender
     requestId: uint,
+    gasPriceL1: uint,         // L1 gas price paid by this tx
     msgSize: uint,
     msgData: buffer,
 }
@@ -653,7 +658,8 @@ impure func translateUnsignedTx(request: IncomingRequest) -> option<TxRequestDat
             calldata: calldata,
             nonMutating: (subtype == const::L2MessageType_nonmutatingCall),
             isConstructor: (destAddrAsUint == 0),
-            incomingRequest: request
+            incomingRequest: request,
+            feeStats: txFeeStats_zero(),
         }
     );
 }
@@ -683,7 +689,8 @@ func translateBuddyDeployTx(request: IncomingRequest) -> option<TxRequestData> {
             calldata: calldata,
             nonMutating: false,
             isConstructor: true,
-            incomingRequest: request
+            incomingRequest: request,
+            feeStats: txFeeStats_zero(),
         }
     );
 }

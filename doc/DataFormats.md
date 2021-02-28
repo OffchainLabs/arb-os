@@ -186,7 +186,7 @@ ArbOS will make its best effort to emit a tx receipt for each transaction reques
 A tx receipt log item consists of:
 
 * 0 (uint)
-* incoming request info consisting of:
+* incoming request info, a 7-tuple consisting of:
   * 3 (uint)
   * L1 block number (uint)
   * L2 timestamp (uint)
@@ -194,17 +194,26 @@ A tx receipt log item consists of:
   * requestID (uint)  [described below]
   * size of L2 message (uint)
   * contents of L2 message for the request (buffer)
-* tx result info consisting of:
+* tx result info, a 3-tuple consisting of:
   * return code (uint)  [described below]
   * returndata (2-tuple of size (uint) and contents (buffer))
   * EVM logs [format described below]
-* ArbGas info consisting of:
+* ArbGas info, as 2-tuple consisting of:
   * ArbGas used (uint)
   * ArbGas price paid, in wei (uint)
-* cumulative info in L1 block consisting of:
+* cumulative info in L1 block, a 3-tuple consisting of:
   * ArbGas used in current L1 block including this tx (uint)
   * index of this tx within this L1 block (uint)
   * number of EVM logs emitted in this L1 block before this tx (uint)
+* fee information for the transaction, an 8-tuple consisting of:
+  * price per L2 transaction, in wei
+  * price per byte of L1 calldata, in wei
+  * price per L2 storage cell allocated, in wei
+  * price per ArbGas computed, in wei
+  * amount paid for L2 transaction base fee, in wei
+  * amount paid for L1 calldata, in wei
+  * amount paid for L2 storage, in wei
+  * amount paid for ArbGas computed, in wei
 
 Possible return codes are:
 	0: tx returned (success)

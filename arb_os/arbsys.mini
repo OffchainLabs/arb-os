@@ -16,6 +16,7 @@ use evmCallStack::evmCallStack_getTopFrameMemoryOrDie;
 use evmCallStack::evmCallStack_setTopFrameMemory;
 use evmCallStack::evmCallStack_callHitError;
 use evmCallStack::evmCallStack_addEvmLogToCurrent;
+use evmCallStack::evmCallStack_addStorageCharge;
 
 use evmCallStack::evmCallFrame_getCalldata;
 use evmCallStack::evmCallFrame_getCallvalue;
@@ -379,8 +380,11 @@ impure func arbAddressTable_register(topFrame: EvmCallFrame, calldata: ByteArray
         evmOp_revert_knownCodePc(address(const::Address_ArbAddressTable), 110, 0, 0);
     }
     let addr = address(bytearray_get256(calldata, 4));
-    let (atab, idx) = addressTable_getByAddressAlloc(getGlobalAddressTable(), addr);
-    setGlobalAddressTable(atab);
+    let (atab, idx, changed) = addressTable_getByAddressAlloc(getGlobalAddressTable(), addr);
+    if (changed) {
+        evmCallStack_addStorageCharge(2);   // charge current tx for 2 storage cells
+        setGlobalAddressTable(atab);
+    }
     if (evmCallStack_setTopFrameMemory(bytearray_set256(evmCallStack_getTopFrameMemoryOrDie(), 0, idx))) {
         evmOp_return(0, 32);
     } else {
