@@ -607,6 +607,15 @@ impl RuntimeEnvironment {
             .map(|r| r.unwrap())
             .collect()
     }
+
+    pub fn _get_last_send(&self) -> Option<Vec<u8>> {
+        let sends = self.get_all_sends();
+        if sends.len() == 0 {
+            None
+        } else {
+            Some(sends[0].clone())
+        }
+    }
 }
 
 fn get_send_contents(log: Value) -> Option<Vec<u8>> {

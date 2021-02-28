@@ -423,6 +423,13 @@ pub fn _evm_test_arbowner(log_to: Option<&Path>, debug: bool) -> Result<(), etha
 
     arbowner._set_seconds_per_send(&mut machine, Uint256::from_u64(10))?;
 
+    arbowner._set_gas_accounting_params(
+        &mut machine,
+        Uint256::from_u64(100_000_000),
+        Uint256::from_u64(6_000_000_000),
+        Uint256::from_u64(1_000_000_000),
+    )?;
+
     if let Some(path) = log_to {
         machine.runtime_env.recorder.to_file(path).unwrap();
     }
@@ -482,6 +489,12 @@ pub fn _evm_test_arbgasinfo(log_to: Option<&Path>, debug: bool) -> Result<(), et
     assert_eq!(l2tx, Uint256::from_u64(42550000));
     assert_eq!(l1calldata, Uint256::from_u64(184000));
     assert_eq!(storage, Uint256::from_u64(20000000));
+
+    let (speed_limit, gas_pool_max, tx_gas_limit) = arbgasinfo._get_gas_accounting_params(&mut machine)?;
+    println!("speed limit {}, pool max {}, tx gas limit {}", speed_limit, gas_pool_max, tx_gas_limit);
+    assert_eq!(speed_limit, Uint256::from_u64(1_350_000_000));
+    assert_eq!(gas_pool_max, Uint256::from_u64(5 * 1_350_000_000));
+    assert_eq!(tx_gas_limit, Uint256::from_u64(1_350_000_000));
 
     if let Some(path) = log_to {
         machine.runtime_env.recorder.to_file(path).unwrap();
@@ -1571,19 +1584,27 @@ pub fn _evm_test_payment_in_constructor(log_to: Option<&Path>, debug: bool) {
         debug,
     );
     match result {
-        Ok((logs, sends)) => {
+        Ok((logs, _sends)) => {
             assert_eq!(logs.len(), 1);
             assert!(logs[0].succeeded());
-            assert_eq!(sends.len(), 1);
-            let mut expected_bytes = my_addr.to_bytes_be();
-            expected_bytes.extend(Uint256::from_usize(5000).to_bytes_be());
-            assert_eq!(sends[0][0..32], Uint256::zero().to_bytes_be());
-            assert_eq!(sends[0][32..], expected_bytes);
         }
         Err(e) => {
             panic!(e.to_string());
         }
     }
+
+    machine.runtime_env._advance_time(Uint256::one(), None, true);
+    let _gas_used = if debug {
+        machine.debug(None)
+    } else {
+        machine.run(None)
+    }; // make sure the machine notices that time advanced
+
+    let last_send = machine.runtime_env._get_last_send().unwrap();
+    let mut expected_bytes = my_addr.to_bytes_be();
+    expected_bytes.extend(Uint256::from_usize(5000).to_bytes_be());
+    assert_eq!(last_send[0..32], Uint256::zero().to_bytes_be());
+    assert_eq!(last_send[32..], expected_bytes);
 
     if let Some(path) = log_to {
         let _ = machine.runtime_env.recorder.to_file(path).unwrap();
@@ -1659,19 +1680,27 @@ pub fn evm_test_arbsys(log_to: Option<&Path>, debug: bool) {
         debug,
     );
     match result {
-        Ok((logs, sends)) => {
+        Ok((logs, _sends)) => {
             assert_eq!(logs.len(), 1);
             assert!(logs[0].succeeded());
-            assert_eq!(sends.len(), 1);
-            let mut expected_bytes = my_addr.to_bytes_be();
-            expected_bytes.extend(Uint256::from_usize(5000).to_bytes_be());
-            assert_eq!(sends[0][0..32], Uint256::zero().to_bytes_be());
-            assert_eq!(sends[0][32..], expected_bytes);
         }
         Err(e) => {
             panic!(e.to_string());
         }
     }
+
+    machine.runtime_env._advance_time(Uint256::one(), None, true);
+    let _gas_used = if debug {
+        machine.debug(None)
+    } else {
+        machine.run(None)
+    }; // make sure the machine notices that time advanced
+
+    let last_send = machine.runtime_env._get_last_send().unwrap();
+    let mut expected_bytes = my_addr.to_bytes_be();
+    expected_bytes.extend(Uint256::from_usize(5000).to_bytes_be());
+    assert_eq!(last_send[0..32], Uint256::zero().to_bytes_be());
+    assert_eq!(last_send[32..], expected_bytes);
 
     if let Some(path) = log_to {
         let _ = machine.runtime_env.recorder.to_file(path).unwrap();

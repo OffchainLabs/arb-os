@@ -119,11 +119,8 @@ type GasUsage = struct {
 
 public impure func gasAccounting_init() {    // initialize on boot, before we have gotten the chain init message
     initGasPriceEstimator();
-    gasAccountingParams = struct {
-        SpeedLimitPerSecond: const::DefaultSpeedLimitPerSecond,
-        GasPoolMax: const::DefaultSpeedLimitPerSecond * const::Charging_GasPoolDepthSeconds,
-        TxGasLimit: const::DefaultSpeedLimitPerSecond * const::Charging_GasPoolDepthSeconds / 5,
-    };
+
+    setGasAccountingParamsFromSpeedLimit(const::DefaultSpeedLimitPerSecond);
 
     let pricingParams = struct {
         l1GasPerL2Tx: const::Charging_DefaultL1GasPerL2Tx,
@@ -165,6 +162,40 @@ public impure func gasAccounting_init() {    // initialize on boot, before we ha
         pricingParams: pricingParams,
         gasAllocatedForThisBlock: uint(congestionState.gasPool),
     };
+}
+
+impure func setGasAccountingParamsFromSpeedLimit(speedLimitPerBlock: uint) {
+    gasAccountingParams = struct {
+        SpeedLimitPerSecond: speedLimitPerSecond,
+        GasPoolMax: int(speedLimitPerSecond * 60),
+        TxGasLimit: speedLimitPerSecond * 10,
+    };
+}
+
+public impure func setGasAccountingParams(speedLimitPerBlock: uint, gasPoolMax: uint, txGasLimit: uint) -> bool {
+    // if parameters are reasonable, start using them, and return true
+    // otherwise, discard them, and return false
+
+    return xif (gasPoolMax < speedLimitPerBlock) {
+        false
+    } elseif (gasPoolMax < txGasLimit) {
+        false
+    } else {
+        gasAccountingParams = struct {
+            SpeedLimitPerBlock: speedLimitPerBlock,
+            GasPoolMax: int(gasPoolMax),
+            TxGasLimit: txGasLimit,
+        };
+        true
+    };
+}
+
+public impure func getGasAccountingParams() -> (uint, uint, uint) {
+    return (
+        gasAccountingParams.SpeedLimitPerBlock,
+        uint(gasAccountingParams.GasPoolMax),
+        gasAccountingParams.TxGasLimit,
+    );
 }
 
 impure func setPrices(feeConfig: FeeConfig, params: PricingParameters, congestionState: CongestionState) -> GasPrices {
@@ -222,15 +253,6 @@ public impure func gasAccounting_getPricesInArbGas() -> (uint, uint, uint) {  //
     );
 }
 
-type GasPrices = struct {    // all prices in this struct are denominated in wei
-    perL2Tx: uint,
-    perL1CalldataByte: uint,
-    perStorageCell: uint,
-    perArbGasBase: uint,
-    perArbGasCongestion: uint,
-    perArbGasTotal: uint,
-}
-
 public impure func gasAccounting_setFeesEnabled(enabled: bool) {
     gasAccountingInfo = gasAccountingInfo with {
         feeConfig: gasAccountingInfo.feeConfig with { enabled: enabled }
@@ -270,11 +292,7 @@ public impure func gasAccounting_setChargingParams(
 
 public impure func gasAccounting_postInitMessage() {   // this runs after we have received the init message, or similar
     let speedLimitPerSecond = chainParams_speedLimitPerSecond();
-    gasAccountingParams = struct {
-        SpeedLimitPerSecond: speedLimitPerSecond,
-        GasPoolMax: speedLimitPerSecond * const::Charging_GasPoolDepthSeconds,
-        TxGasLimit: speedLimitPerSecond * const::Charging_GasPoolDepthSeconds / 5,
-    };
+    setGasAccountingParamsFromSpeedLimit(speedLimitPerSecond);
     if (gasAccountingInfo.congestionState.gasPool > int(gasAccountingParams.GasPoolMax)) {
         // max sure gas pool isn't above its max
         gasAccountingInfo = gasAccountingInfo with {
@@ -357,7 +375,7 @@ public impure func gasAccounting_startTxCharges(
     let _ = switchToChargingOS();   // call this in case we're somehow still charging a tx; ignore return value
 
     if (maxGas > gasAccountingParams.TxGasLimit) {
-        return const::TxResultCode_exceededTxGasLimit;
+        maxGas = gasAccountingParams.TxGasLimit;
     }
 
     // take funds from the payer, enough to pay for maxGas at gasPrice
@@ -408,7 +426,7 @@ public impure func gasAccounting_endTxCharges(storageDelta: int, feeStats: TxFee
     let gasToRefund = txState.gasInReserve + switchToChargingOS();
 
     let gasForStorage = xif ((storageDelta > int(0)) && (txState.price > 0)) {
-        uint(storageDelta) * gasAccountingInfo.currentPrices.perStorageCell / txState.price
+        uint(storageDelta) * (gasAccountingInfo.currentPrices.perStorageCell + txState.price - 1) / txState.price
     } else {
         0
     };
@@ -888,6 +906,10 @@ public impure func updateL1GasPriceEstimate(sender: address, price: uint) {
     }
 }
 
+public impure func getFairGasPriceSender() -> address {
+    return globalL1GasPriceEstimator.fairGasPriceSender;
+}
+
 public impure func setFairGasPriceSender(sender: address) {
     globalL1GasPriceEstimator = globalL1GasPriceEstimator with {
         fairGasPriceSender: sender
@@ -897,14 +919,18 @@ public impure func setFairGasPriceSender(sender: address) {
 // This adjusts l1GasPerL2Tx to be a weighted average, over recent transactions that arrived in batches,
 //     of the quantity (const::Charging_AssumedBatchCostL1Gas / batchSize). Because we're averaging over
 //     transactions, a batch contributes (batchSize) times, once for each transaction in it.
-public impure func updateBatchSizeEstimate(size: uint) {
-    if (size > 500) { size = 500; }
-    let oldValue = gasAccountingInfo.pricingParams.l1GasPerL2Tx;
-    gasAccountingInfo = gasAccountingInfo with {
-        pricingParams: gasAccountingInfo.pricingParams with {
-            l1GasPerL2Tx: (const::Charging_AssumedBatchCostL1Gas + (10000 - size) * oldValue) / 10000
-        }
-    };
+public impure func updateBatchSizeEstimate(size: uint, batchSender: address) {
+    if (batchSender == getFairGasPriceSender()) {
+        if (size > 500) { size = 500; }
+        let oldValue = gasAccountingInfo.pricingParams.l1GasPerL2Tx;
+        let newValue = (const::Charging_AssumedBatchCostL1Gas + (5000 - size) * oldValue) / 5000;
+
+        gasAccountingInfo = gasAccountingInfo with {
+            pricingParams: gasAccountingInfo.pricingParams with {
+                l1GasPerL2Tx: newValue
+            }
+        };
+    }
 }
 
 // Fee stats for a transaction, for inclusion in tx receipt

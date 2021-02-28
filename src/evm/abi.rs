@@ -1092,7 +1092,10 @@ impl<'a> _ArbOwner<'a> {
         if receipts[0].succeeded() {
             Ok(())
         } else {
-            Err(ethabi::Error::from(format!("tx failed: {}", receipts[0]._get_return_code_text())))
+            Err(ethabi::Error::from(format!(
+                "tx failed: {}",
+                receipts[0]._get_return_code_text()
+            )))
         }
     }
 
@@ -1125,10 +1128,14 @@ impl<'a> _ArbOwner<'a> {
         &self,
         machine: &mut Machine,
         enabled: bool,
-        force_owner: bool,   // force the message to come from address zero, which is an owner
+        force_owner: bool, // force the message to come from address zero, which is an owner
     ) -> Result<(), ethabi::Error> {
         let (receipts, _sends) = self.contract_abi.call_function(
-            if force_owner { Uint256::zero() } else { self.my_address.clone() },
+            if force_owner {
+                Uint256::zero()
+            } else {
+                self.my_address.clone()
+            },
             "setFeesEnabled",
             &[ethabi::Token::Bool(enabled)],
             machine,
@@ -1143,7 +1150,10 @@ impl<'a> _ArbOwner<'a> {
         if receipts[0].succeeded() {
             Ok(())
         } else {
-            Err(ethabi::Error::from(format!("tx failed: {}", receipts[0]._get_return_code_text())))
+            Err(ethabi::Error::from(format!(
+                "tx failed: {}",
+                receipts[0]._get_return_code_text()
+            )))
         }
     }
 
@@ -1191,7 +1201,10 @@ impl<'a> _ArbOwner<'a> {
         let (receipts, _sends) = self.contract_abi.call_function(
             self.my_address.clone(),
             "setFeeRecipient",
-            &[ethabi::Token::Address(recipient1.to_h160()), ethabi::Token::Address(recipient2.to_h160())],
+            &[
+                ethabi::Token::Address(recipient1.to_h160()),
+                ethabi::Token::Address(recipient2.to_h160()),
+            ],
             machine,
             Uint256::zero(),
             self.debug,
@@ -1217,6 +1230,37 @@ impl<'a> _ArbOwner<'a> {
             self.my_address.clone(),
             "setSecondsPerSend",
             &[ethabi::Token::Uint(seconds_per_send.to_u256())],
+            machine,
+            Uint256::zero(),
+            self.debug,
+        )?;
+
+        if receipts.len() != 1 {
+            return Err(ethabi::Error::from("wrong number of receipts"));
+        }
+
+        if receipts[0].succeeded() {
+            Ok(())
+        } else {
+            Err(ethabi::Error::from("reverted"))
+        }
+    }
+
+    pub fn _set_gas_accounting_params(
+        &self,
+        machine: &mut Machine,
+        speed_limit: Uint256,
+        gas_pool_max: Uint256,
+        tx_gas_limit: Uint256,
+    ) -> Result<(), ethabi::Error> {
+        let (receipts, _sends) = self.contract_abi.call_function(
+            self.my_address.clone(),
+            "setGasAccountingParams",
+            &[
+                ethabi::Token::Uint(speed_limit.to_u256()),
+                ethabi::Token::Uint(gas_pool_max.to_u256()),
+                ethabi::Token::Uint(tx_gas_limit.to_u256()),
+            ],
             machine,
             Uint256::zero(),
             self.debug,
@@ -1441,7 +1485,10 @@ impl<'a> _ArbGasInfo<'a> {
                 _ => panic!(),
             }
         } else {
-            Err(ethabi::Error::from(format!("tx failed: {}", receipts[0]._get_return_code_text())))
+            Err(ethabi::Error::from(format!(
+                "tx failed: {}",
+                receipts[0]._get_return_code_text()
+            )))
         }
     }
 
@@ -1472,27 +1519,70 @@ impl<'a> _ArbGasInfo<'a> {
                 &receipts[0].get_return_data(),
             )?;
 
-            match (
-                &return_vals[0],
-                &return_vals[1],
-                &return_vals[2],
-            ) {
-                (
-                    ethabi::Token::Uint(ui0),
-                    ethabi::Token::Uint(ui1),
-                    ethabi::Token::Uint(ui2),
-                ) => Ok((
-                    Uint256::from_u256(&ui0),
-                    Uint256::from_u256(&ui1),
-                    Uint256::from_u256(&ui2),
-                )),
+            match (&return_vals[0], &return_vals[1], &return_vals[2]) {
+                (ethabi::Token::Uint(ui0), ethabi::Token::Uint(ui1), ethabi::Token::Uint(ui2)) => {
+                    Ok((
+                        Uint256::from_u256(&ui0),
+                        Uint256::from_u256(&ui1),
+                        Uint256::from_u256(&ui2),
+                    ))
+                }
                 _ => panic!(),
             }
         } else {
-            Err(ethabi::Error::from(format!("tx failed: {}", receipts[0]._get_return_code_text())))
+            Err(ethabi::Error::from(format!(
+                "tx failed: {}",
+                receipts[0]._get_return_code_text()
+            )))
+        }
+    }
+
+    pub fn _get_gas_accounting_params(
+        &self,
+        machine: &mut Machine,
+    ) -> Result<(Uint256, Uint256, Uint256), ethabi::Error> {
+        let (receipts, _sends) = self.contract_abi.call_function(
+            self.my_address.clone(),
+            "getGasAccountingParams",
+            &[],
+            machine,
+            Uint256::zero(),
+            self.debug,
+        )?;
+
+        if receipts.len() != 1 {
+            return Err(ethabi::Error::from("wrong number of receipts"));
+        }
+
+        if receipts[0].succeeded() {
+            let return_vals = ethabi::decode(
+                &[
+                    ethabi::ParamType::Uint(256),
+                    ethabi::ParamType::Uint(256),
+                    ethabi::ParamType::Uint(256),
+                ],
+                &receipts[0].get_return_data(),
+            )?;
+
+            match (&return_vals[0], &return_vals[1], &return_vals[2]) {
+                (ethabi::Token::Uint(ui0), ethabi::Token::Uint(ui1), ethabi::Token::Uint(ui2)) => {
+                    Ok((
+                        Uint256::from_u256(&ui0),
+                        Uint256::from_u256(&ui1),
+                        Uint256::from_u256(&ui2),
+                    ))
+                }
+                _ => panic!(),
+            }
+        } else {
+            Err(ethabi::Error::from(format!(
+                "tx failed: {}",
+                receipts[0]._get_return_code_text()
+            )))
         }
     }
 }
+
 pub struct ArbosTest {
     pub contract_abi: AbiForContract,
     debug: bool,
