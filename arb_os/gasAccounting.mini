@@ -418,7 +418,7 @@ public impure func gasAccounting_endTxCharges(storageDelta: int, feeStats: TxFee
     let gasToRefund = txState.gasInReserve + switchToChargingOS();
 
     let gasForStorage = xif ((storageDelta > int(0)) && (txState.price > 0)) {
-        uint(storageDelta) * gasAccountingInfo.currentPrices.perStorageCell / txState.price
+        uint(storageDelta) * (gasAccountingInfo.currentPrices.perStorageCell + txState.price - 1) / txState.price
     } else {
         0
     };
