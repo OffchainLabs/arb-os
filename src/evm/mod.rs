@@ -412,23 +412,17 @@ pub fn _evm_test_arbowner(log_to: Option<&Path>, debug: bool) -> Result<(), etha
 
     let arbowner = _ArbOwner::_new(&wallet, debug);
 
-    println!("A");
     arbowner._give_ownership(&mut machine, my_addr, Some(Uint256::zero()))?;
 
-    println!("B");
     arbowner._start_code_upload(&mut machine)?;
 
-    println!("C");
     let mcode = vec![0x90u8, 1u8, 0u8, 42u8]; // debugprint(42)
     arbowner._continue_code_upload(&mut machine, mcode)?;
 
-    println!("D");
     arbowner._finish_code_upload_as_arbos_upgrade(&mut machine)?;
 
-    println!("E");
     arbowner._set_blocks_per_send(&mut machine, Uint256::from_u64(10))?;
 
-    println!("F");
     arbowner._set_gas_accounting_params(
         &mut machine,
         Uint256::from_u64(2_000_000_000),
@@ -436,7 +430,6 @@ pub fn _evm_test_arbowner(log_to: Option<&Path>, debug: bool) -> Result<(), etha
         Uint256::from_u64(1_000_000_000),
     )?;
 
-    println!("G");
     if let Some(path) = log_to {
         machine.runtime_env.recorder.to_file(path).unwrap();
     }

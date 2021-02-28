@@ -641,7 +641,7 @@ public impure func evmCallStack_returnFromCall(
                 evmCallStack_addStorageCharge( (bytearray_size(returnData) + 31) / 32 );
             }
             let (completed, gasUsage, feeStats) = gasAccounting_endTxCharges(
-                topFrame.storageDelta - int(storageReclaimedForSDQ(topFrame)),
+                topFrame.storageDelta - int(storageReclaimedForSDQ(topFrame)),  // won't underflow because signed subtraction
                 globalCurrentTxRequest.feeStats
             )?;
             if (completed) {
