@@ -318,10 +318,7 @@ impure func generateCodeForEvmSegment(
                         if (opcode < 0x45) {
                             if (opcode < 0x43) {
                                 if (opcode == 0x40) { // BLOCKHASH
-                                    code = pushInstruction(
-                                        const::AVM_pop,
-                                        pushValue(0, code),
-                                    );
+                                    code = pushEvmInsnCall(const::EvmOp_blockhash, code);
                                 } elseif (opcode == 0x41) { // COINBASE
                                     code = pushValue(0, code);
                                 } elseif (opcode == 0x42) { // TIMESTAMP

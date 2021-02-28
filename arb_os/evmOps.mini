@@ -11,6 +11,8 @@ use std::bytearray::MarshalledBytes;
 use std::stack::Stack;
 use std::storageMap::StorageMap;
 
+use blockhash::blockhash_getForBlock;
+
 use chainParameters::chainParams_chainId;
 use errorHandler::errorHandler;
 
@@ -107,6 +109,7 @@ public impure func evmOps_init() {
         with  { [const::EvmOp_extcodesize] = unsafecast<impure func()>(evmOp_extcodesize) }
         with  { [const::EvmOp_extcodecopy] = unsafecast<impure func()>(evmOp_extcodecopy) }
         with  { [const::EvmOp_extcodehash] = unsafecast<impure func()>(evmOp_extcodehash) }
+        with  { [const::EvmOp_blockhash] = unsafecast<impure func()>(evmOp_blockhash) }
         with  { [const::EvmOp_returndatasize] = unsafecast<impure func()>(evmOp_returndatasize) }
         with  { [const::EvmOp_returndatacopy] = unsafecast<impure func()>(evmOp_returndatacopy) }
         with  { [const::EvmOp_timestamp] = unsafecast<impure func()>(evmOp_timestamp) }
@@ -362,6 +365,10 @@ public impure func evmOp_extcodehash(addrAsUint: uint) -> bytes32 {
 
     evm_runtimePanic(13);
     return bytes32(0);
+}
+
+public impure func evmOp_blockhash(blockNum: uint) -> bytes32 {
+    return xif let Some(h) = blockhash_getForBlock(blockNum) { h } else { bytes32(0) };
 }
 
 public impure func evmOp_returndatasize() -> uint {
