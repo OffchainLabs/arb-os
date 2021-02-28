@@ -1584,10 +1584,9 @@ pub fn _evm_test_payment_in_constructor(log_to: Option<&Path>, debug: bool) {
         debug,
     );
     match result {
-        Ok((logs, sends)) => {
+        Ok((logs, _sends)) => {
             assert_eq!(logs.len(), 1);
             assert!(logs[0].succeeded());
-            assert_eq!(sends.len(), 0);
         }
         Err(e) => {
             panic!(e.to_string());
@@ -1681,10 +1680,9 @@ pub fn evm_test_arbsys(log_to: Option<&Path>, debug: bool) {
         debug,
     );
     match result {
-        Ok((logs, sends)) => {
+        Ok((logs, _sends)) => {
             assert_eq!(logs.len(), 1);
             assert!(logs[0].succeeded());
-            assert_eq!(sends.len(), 0);
         }
         Err(e) => {
             panic!(e.to_string());
