@@ -170,15 +170,21 @@ impure func setGasAccountingParamsFromSpeedLimit(speedLimitPerBlock: uint) {
     };
 }
 
-public impure func setGasAccountingParams(speedLimitPerBlock: uint, gasPoolMax: uint, txGasLimit: uint) {
-    // enforce reasonable relationships among the parameters
-    if (gasPoolMax < speedLimitPerBlock) { gasPoolMax = speedLimitPerBlock; }
-    if (txGasLimit > gasPoolMax/2) { txGasLimit = gasPoolMax / 2; }
+public impure func setGasAccountingParams(speedLimitPerBlock: uint, gasPoolMax: uint, txGasLimit: uint) -> bool {
+    // if parameters are reasonable, start using them, and return true
+    // otherwise, discard them, and return false
 
-    gasAccountingParams = struct {
-        SpeedLimitPerBlock: speedLimitPerBlock,
-        GasPoolMax: int(gasPoolMax),
-        TxGasLimit: txGasLimit,
+    return xif (gasPoolMax < speedLimitPerBlock) {
+        false
+    } elseif (gasPoolMax < txGasLimit) {
+        false
+    } else {
+        gasAccountingParams = struct {
+            SpeedLimitPerBlock: speedLimitPerBlock,
+            GasPoolMax: int(gasPoolMax),
+            TxGasLimit: txGasLimit,
+        };
+        true
     };
 }
 
@@ -893,19 +899,17 @@ public impure func setFairGasPriceSender(sender: address) {
 //     of the quantity (const::Charging_AssumedBatchCostL1Gas / batchSize). Because we're averaging over
 //     transactions, a batch contributes (batchSize) times, once for each transaction in it.
 public impure func updateBatchSizeEstimate(size: uint, batchSender: address) {
-    if (size > 500) { size = 500; }
-    let oldValue = gasAccountingInfo.pricingParams.l1GasPerL2Tx;
-    let newValue = (const::Charging_AssumedBatchCostL1Gas + (5000 - size) * oldValue) / 5000;
-    if (batchSender != getFairGasPriceSender()) {
-        // We don't fully trust the batch sender, so reduce the adjustment by a factor of 5.
-        // This ensures that an attacker who makes deliberate small batches imposes more cost on themselves than on others.
-        newValue = (4 * oldValue + newValue) / 5;
+    if (batchSender == getFairGasPriceSender()) {
+        if (size > 500) { size = 500; }
+        let oldValue = gasAccountingInfo.pricingParams.l1GasPerL2Tx;
+        let newValue = (const::Charging_AssumedBatchCostL1Gas + (5000 - size) * oldValue) / 5000;
+
+        gasAccountingInfo = gasAccountingInfo with {
+            pricingParams: gasAccountingInfo.pricingParams with {
+                l1GasPerL2Tx: newValue
+            }
+        };
     }
-    gasAccountingInfo = gasAccountingInfo with {
-        pricingParams: gasAccountingInfo.pricingParams with {
-            l1GasPerL2Tx: newValue
-        }
-    };
 }
 
 // Fee stats for a transaction, for inclusion in tx receipt
