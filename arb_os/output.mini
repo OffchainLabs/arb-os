@@ -23,6 +23,9 @@ use std::merkletree::merkleTreeBuilder_add;
 use std::merkletree::merkleTreeBuilder_finish;
 use std::merkletree::merkleTreeBuilder_isEmpty;
 
+use std::queue::queue_isEmpty;
+use std::queue::queue_new;
+use std::queue::queue_put;
 use std::queue::queue_get;
 
 use chainParameters::chainParams_getBlocksPerSend;
@@ -39,6 +42,7 @@ use inbox::inbox_currentBlockNumber;
 use inbox::inbox_currentTimestamp;
 
 use gasAccounting::GasUsage;
+use gasAccounting::TxFeeStats;
 use gasAccounting::gasAccounting_summaryToPublish;
 
 
@@ -58,6 +62,7 @@ type OutputStatistics = struct {
 }
 
 public impure func output_init() {
+    logsQueuedForEndOfBlock = queue_new();
     outbox_init();
 }
 
@@ -93,7 +98,16 @@ var globalBlockReceiptData: struct {
     nextSendBlockNum: uint,
 };
 
+var logsQueuedForEndOfBlock: Queue;
+
 public impure func outputStats_endOfBlock(blockNum: uint, timestamp: uint) {
+    if ((inbox_currentBlockNumber() >= globalBlockReceiptData.nextSendBlockNum) && !outbox_isEmpty() ){
+        outbox_send();
+        globalBlockReceiptData = globalBlockReceiptData with {
+            nextSendBlockNum: inbox_currentBlockNumber() + chainParams_getBlocksPerSend()
+        };
+    }
+
     if ( ! outputStats_isAllZero(globalBlockReceiptData.statsThisBlock)) {
         // add current block (including soon-to-be-issued block summary log) into total stats
         let updatedStats = outputStats_add(
@@ -107,7 +121,36 @@ public impure func outputStats_endOfBlock(blockNum: uint, timestamp: uint) {
         globalBlockReceiptData = globalBlockReceiptData with {
             statsAllTime: updatedStats
         };
-        emitBlockSummaryLog(blockNum, timestamp, globalBlockReceiptData.lastBlockNum);
+
+        let gasUsedThisBlock = globalBlockReceiptData.statsThisBlock.totalGasUsed;
+        let gasLimit = chainParams_speedLimitPerBlock();
+        if (gasLimit < gasUsedThisBlock) {
+            gasLimit = gasUsedThisBlock;
+        }
+
+        let q = logsQueuedForEndOfBlock;
+        while( ! queue_isEmpty(q) ){
+            if let Some(res) = queue_get(q) {
+                let (uq, logItem) = res;
+                q = uq;
+                asm(logItem,) { log };
+            } else {
+                // should never happen
+                q = queue_new();
+            }
+        }
+        logsQueuedForEndOfBlock = q;
+
+        asm((
+            const::LogType_blockSummary,
+            blockNum,
+            timestamp,
+            gasLimit,
+            globalBlockReceiptData.statsThisBlock,
+            globalBlockReceiptData.statsAllTime,
+            gasAccounting_summaryToPublish(),
+            globalBlockReceiptData.lastBlockNum
+        ),) { log }; 
 
         globalBlockReceiptData = globalBlockReceiptData with {
             lastBlockNum: blockNum
@@ -198,6 +241,7 @@ public impure func emitTxReceipt(
     maybeReturnData: option<ByteArray>,
     maybeEvmLogs: option<EvmLogs>,
     gasUsage: option<GasUsage>,
+    feeStats: TxFeeStats,
 ) {
     let realGasUsage = struct {
         gasUsed: 0,
@@ -238,32 +282,9 @@ public impure func emitTxReceipt(
             l1message.blockNumber,
             realGasUsage.gasUsed,
             numEvmLogs,
-        )
+        ),
+        feeStats,
     ),) { log };
-}
-
-impure func emitBlockSummaryLog(blockNum: uint, timestamp: uint, prevBlockNum: uint) {
-    let gasUsedThisBlock = globalBlockReceiptData.statsThisBlock.totalGasUsed;
-    let gasLimit = chainParams_speedLimitPerBlock();
-    if (gasLimit < gasUsedThisBlock) {
-        gasLimit = gasUsedThisBlock;
-    }
-    asm((
-        const::LogType_blockSummary,
-        blockNum,
-        timestamp,
-        gasLimit,
-        globalBlockReceiptData.statsThisBlock,
-        globalBlockReceiptData.statsAllTime,
-        gasAccounting_summaryToPublish(),
-        prevBlockNum
-    ),) { log };
-    if ((inbox_currentBlockNumber() >= globalBlockReceiptData.nextSendBlockNum) && !outbox_isEmpty() ){
-        outbox_send();
-        globalBlockReceiptData = globalBlockReceiptData with {
-            nextSendBlockNum: inbox_currentBlockNumber() + chainParams_getBlocksPerSend()
-        };
-    }
 }
 
 var globalOutbox: struct {
@@ -285,7 +306,6 @@ impure func outbox_isEmpty() -> bool {
 }
 
 public impure func outbox_append(item: ByteArray) {
-    outputStats_addSend();
     let batchNumber = globalOutbox.batchNumber;
     let numInBatch = globalOutbox.numInBatch;
     globalOutbox = globalOutbox with {
@@ -294,13 +314,19 @@ public impure func outbox_append(item: ByteArray) {
         batch: merkleTreeBuilder_add(globalOutbox.batch, item)
     };
     let (size, buf) = bytearray_toSizeAndBuffer(item);
-    asm((const::LogType_send, batchNumber, numInBatch, size, buf),) { log };
+    logsQueuedForEndOfBlock = queue_put(
+        logsQueuedForEndOfBlock,
+        (const::LogType_send, batchNumber, numInBatch, size, buf),
+    );
     outputStats_addNonTxLog();
 }
 
 impure func outbox_send() {
     let (tree, rootHash) = merkleTreeBuilder_finish(globalOutbox.batch);
-    asm((const::LogType_sendMerkleTree, globalOutbox.batchNumber, globalOutbox.numInBatch, tree),) { log };
+    logsQueuedForEndOfBlock = queue_put(
+        logsQueuedForEndOfBlock,
+        (const::LogType_sendMerkleTree, globalOutbox.batchNumber, globalOutbox.numInBatch, tree),
+    );
     outputStats_addNonTxLog();
     asm(
         97,
@@ -319,6 +345,7 @@ impure func outbox_send() {
 
         )
     ) { send };
+    outputStats_addSend();
     globalOutbox = struct {
         batch: merkleTreeBuilder_new(),
         batchNumber: globalOutbox.batchNumber + 1,
