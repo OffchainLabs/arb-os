@@ -809,38 +809,37 @@ impure func updateCongestionState(state: CongestionState, toBlockNum: uint, toTi
     // update the congestion state, based on advancing from state.lastTimestampSeen to toTimestamp
 
     let lastTimestampSeen = state.lastTimestampSeen;
-    let congestionPrice = state.congestionPriceWei;
     let basePrice = gasAccountingInfo.currentPrices.perArbGasBase;
+    let totalPrice = basePrice + state.congestionPriceWei;
     let gasPool = state.gasPool;
     let gasPoolMax = gasAccountingParams.GasPoolMax;
     let speedLimit = gasAccountingParams.SpeedLimitPerSecond;
 
-    //TODO: solve this analytically, so we don't have to do a per-second loop
-    while((lastTimestampSeen < toTimestamp) && ( (state.gasPool < int(gasAccountingParams.GasPoolMax)) || (congestionPrice > 0) )) {
+    // doing a per-second loop isn't elegant, but cost is low enough that it shouldn't be a problem
+    // eventually we should solve this analytically to avoid the per-second loop
+    while((lastTimestampSeen < toTimestamp) && ( (state.gasPool < int(gasAccountingParams.GasPoolMax)) || (totalPrice > basePrice) )) {
         lastTimestampSeen = lastTimestampSeen + 1;
         gasPool = gasPool + int(speedLimit);
         if (gasPool > int(gasAccountingParams.GasPoolMax)) {
             gasPool = int(gasAccountingParams.GasPoolMax);
         }
 
-        let maxtc = gasPool;
-        if (maxtc < int(0)) {
-            maxtc = int(0);
-        }
+        let maxtc = xif (gasPool > int(0)) {
+            gasPool
+        } else {
+            int(0)
+        };
         // now 0 <= maxtc <= gasPoolMax
 
-        let totalPrice = (congestionPrice + basePrice) * (121 * gasPoolMax - 2 * uint(maxtc)) / (120 * gasPoolMax);
-        congestionPrice = xif(totalPrice > basePrice) {
-            totalPrice - basePrice
-        } else {
-            0
-        };
+        // constants here are chosen so that adjustment is by factor between 7/8 and 9/8 per mainnet block, as in EIP-1559
+        let totalPrice = totalPrice * (121 * gasPoolMax - 2 * uint(maxtc)) / (120 * gasPoolMax);
+        if (totalPrice < basePrice) { totalPrice = basePrice; }
     }
     return struct {
         gasPool: gasPool,
         lastBlockNumSeen: toBlockNum,
         lastTimestampSeen: toTimestamp,
-        congestionPriceWei: congestionPrice,
+        congestionPriceWei: totalPrice - basePrice,
     };
 }
 
