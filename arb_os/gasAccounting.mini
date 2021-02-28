@@ -164,10 +164,10 @@ public impure func gasAccounting_init() {    // initialize on boot, before we ha
     };
 }
 
-impure func setGasAccountingParamsFromSpeedLimit(speedLimitPerBlock: uint) {
+impure func setGasAccountingParamsFromSpeedLimit(speedLimitPerSecond: uint) {
     gasAccountingParams = struct {
         SpeedLimitPerSecond: speedLimitPerSecond,
-        GasPoolMax: int(speedLimitPerSecond * 60),
+        GasPoolMax: speedLimitPerSecond * 60,
         TxGasLimit: speedLimitPerSecond * 10,
     };
 }
@@ -183,7 +183,7 @@ public impure func setGasAccountingParams(speedLimitPerBlock: uint, gasPoolMax: 
     } else {
         gasAccountingParams = struct {
             SpeedLimitPerBlock: speedLimitPerBlock,
-            GasPoolMax: int(gasPoolMax),
+            GasPoolMax: gasPoolMax,
             TxGasLimit: txGasLimit,
         };
         true
@@ -192,8 +192,8 @@ public impure func setGasAccountingParams(speedLimitPerBlock: uint, gasPoolMax: 
 
 public impure func getGasAccountingParams() -> (uint, uint, uint) {
     return (
-        gasAccountingParams.SpeedLimitPerBlock,
-        uint(gasAccountingParams.GasPoolMax),
+        gasAccountingParams.SpeedLimitPerSecond,
+        gasAccountingParams.GasPoolMax,
         gasAccountingParams.TxGasLimit,
     );
 }
