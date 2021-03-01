@@ -1,0 +1,97 @@
+//
+// Copyright 2021, Offchain Labs, Inc. All rights reserved.
+//
+
+use evmCallStack::EvmCallFrame;
+use evmCallStack::evmCallFrame_getCalldata;
+use evmCallStack::evmCallStack_callHitError;
+use evmCallStack::evmCallStack_setTopFrameMemory;
+use evmCallStack::evmCallStack_topFrame;
+
+use evmOps::evmOp_return;
+use evmOps::evmOp_revert_knownPc;
+
+use gasAccounting::gasAccounting_getPricesInWei;
+use gasAccounting::gasAccounting_getPricesInArbGas;
+use gasAccounting::getGasAccountingParams;
+
+use std::bytearray::ByteArray;
+use std::bytearray::bytearray_new;
+use std::bytearray::bytearray_size;
+use std::bytearray::bytearray_get256;
+use std::bytearray::bytearray_set256;
+
+
+public impure func arbgasinfo_txcall() {
+    if let Some(topFrame) = evmCallStack_topFrame() {
+        let calldata = evmCallFrame_getCalldata(topFrame);
+        if (bytearray_size(calldata) < 4) {
+            evmOp_revert_knownPc(0, 0, 0);
+        }
+        let funcCode = asm(224, bytearray_get256(calldata, 0)) uint { shr };
+        if (funcCode == 0x41b247a8) {
+            arbgasinfo_getPricesInWei(topFrame, calldata);
+        } elseif (funcCode == 0x02199f34) {
+            arbgasinfo_getPricesInArbGas(topFrame, calldata);
+        } elseif (funcCode == 0x612af178) {
+            arbgasinfo_getGasAccountingParams(topFrame, calldata);
+        } else {
+            // unrecognized function code
+            evmOp_revert_knownPc(1, 0, 0);
+        }
+    } else {
+        // this shouldn't happen -- should always be called in an EVM tx
+        evmCallStack_callHitError(25);
+    }
+}
+
+impure func arbgasinfo_getPricesInWei(topFrame: EvmCallFrame, calldata: ByteArray) {  // () -> (uint, ..., uint)
+    if (bytearray_size(calldata) != 4) {
+        evmOp_revert_knownPc(10, 0, 0);
+    }
+    let gasPricesWei = gasAccounting_getPricesInWei();
+    let mem = bytearray_new(0);
+    mem = bytearray_set256(mem, 0*32, gasPricesWei.0);
+    mem = bytearray_set256(mem, 1*32, gasPricesWei.1);
+    mem = bytearray_set256(mem, 2*32, gasPricesWei.2);
+    mem = bytearray_set256(mem, 3*32, gasPricesWei.3);
+    mem = bytearray_set256(mem, 4*32, gasPricesWei.4);
+    mem = bytearray_set256(mem, 5*32, gasPricesWei.5);
+    if (evmCallStack_setTopFrameMemory(mem)) {
+        evmOp_return(0, 6*32);
+    } else {
+        evmOp_revert_knownPc(11, 0, 0);
+    }
+}
+
+impure func arbgasinfo_getPricesInArbGas(topFrame: EvmCallFrame, calldata: ByteArray) {  // () -> (uint, uint, uint)
+    if (bytearray_size(calldata) != 4) {
+        evmOp_revert_knownPc(20, 0, 0);
+    }
+    let gasPricesWei = gasAccounting_getPricesInArbGas();
+    let mem = bytearray_new(0);
+    mem = bytearray_set256(mem, 0*32, gasPricesWei.0);
+    mem = bytearray_set256(mem, 1*32, gasPricesWei.1);
+    mem = bytearray_set256(mem, 2*32, gasPricesWei.2);
+    if (evmCallStack_setTopFrameMemory(mem)) {
+        evmOp_return(0, 3*32);
+    } else {
+        evmOp_revert_knownPc(21, 0, 0);
+    }
+}
+
+impure func arbgasinfo_getGasAccountingParams(topFrame: EvmCallFrame, calldata: ByteArray) { // () -> (uint, uint, uint)
+    if (bytearray_size(calldata) != 4) {
+        evmOp_revert_knownPc(30, 0, 0);
+    }
+    let params = getGasAccountingParams();
+    let mem = bytearray_new(0);
+    mem = bytearray_set256(mem, 0*32, params.0);
+    mem = bytearray_set256(mem, 1*32, params.1);
+    mem = bytearray_set256(mem, 2*32, params.2);
+    if (evmCallStack_setTopFrameMemory(mem)) {
+        evmOp_return(0, 3*32);
+    } else {
+        evmOp_revert_knownPc(31, 0, 0);
+    }
+}

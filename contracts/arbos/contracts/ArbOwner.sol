@@ -8,18 +8,13 @@ interface ArbOwner {
 
     function addToReserveFunds() external payable;
 
-    function getFeeRecipient() external view returns (address);
-    function setFeeRecipient(address recipient) external;
-    function getFeeRates() external view returns (uint, uint, uint, uint);
-    function setFeeRates(uint num1, uint denom1, uint num2, uint denom2) external;
-    function getFeeMaxes() external view returns (uint, uint, uint, uint);
-    function setFeeMaxes(uint num1, uint denom1, uint num2, uint denom2) external;
+    function setFeesEnabled(bool enabled) external;
+    function getFeeRecipients() external view returns (address, address);
+    function setFeeRecipients(address netFeeRecipient, address congestionFeeRecipient) external;
+    function setFairGasPriceSender(address addr) external;
+    function setGasAccountingParams(uint speedLimitPerBlock, uint gasPoolMax, uint maxTxGasLimit) external;
 
     function setBlocksPerSend(uint blocksPerSend) external;
-
-    // Change the sequencer or its parameters
-    // if sequencerAddr is zero, operate without a sequencer
-    function changeSequencer(address sequencerAddr, uint maxDelayBlocks, uint maxDelaySeconds) external;
 
     // To upgrade ArbOS, the ower calls startArbosUpgrade, then calls continueArbosUpgrade one or more times to upload 
     // the code to be installed as the upgrade, then calls finishArbosUpgrade to complete the upgrade and start executing the new code.

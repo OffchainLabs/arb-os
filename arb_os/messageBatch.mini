@@ -20,6 +20,7 @@ use std::bytearray::marshalledBytes_hash;
 use std::bytestream::bytestream_bytesReadSoFar;
 
 use inbox::IncomingRequest;
+use gasAccounting::updateBatchSizeEstimate;
 
 use std::rlp::rlp_decodeUint;
 
@@ -93,29 +94,37 @@ public func messageBatch_tryNew(msg: IncomingRequest) -> option<MessageBatch> {
     };
 }
 
-public func messageBatch_get(batch: MessageBatch) -> option<(IncomingRequest, MessageBatch)> {
+public impure func messageBatch_get(batch: MessageBatch) -> option<(IncomingRequest, MessageBatch)> {
     // returns next message in the batch (and updated batch), or None if no more messages in batch
     let (stream, l2MsgLength) = rlp_decodeUint(batch.stream)?;
-    let (bs, extractedL2data) = bytestream_getN(stream, l2MsgLength)?;
-    stream = bs;
 
-    return Some((
-        batch.template with {
-            msgData: extractedL2data
-        } with {
-            requestId: uint(hash(bytes32(batch.template.requestId), bytes32(batch.numSoFar)))
-        } with {
-            provenance: batch.template.provenance with { indexInParent: batch.numSoFar }
-        } with {
-            aggregator: Some(struct {
-                aggregator: (batch.template.aggregator?).aggregator,
-                calldataBytes: bytestream_bytesReadSoFar(bs) - bytestream_bytesReadSoFar(stream),
-            })
-        },
-        batch with {
-            stream: stream
-        } with {
-            numSoFar: batch.numSoFar + 1
+    return xif let Some(res) = bytestream_getN(stream, l2MsgLength) {
+        let (bs, extractedL2data) = res;
+        stream = bs;
+
+        Some((
+            batch.template with {
+                msgData: extractedL2data
+            } with {
+                requestId: uint(hash(bytes32(batch.template.requestId), bytes32(batch.numSoFar)))
+            } with {
+                provenance: batch.template.provenance with { indexInParent: batch.numSoFar }
+            } with {
+                aggregator: Some(struct {
+                    aggregator: (batch.template.aggregator?).aggregator,
+                    calldataBytes: bytestream_bytesReadSoFar(bs) - bytestream_bytesReadSoFar(stream),
+                })
+            },
+            batch with {
+                stream: stream
+            } with {
+                numSoFar: batch.numSoFar + 1
+            }
+        ))
+    } else {
+        if (batch.numSoFar > 0) {
+            updateBatchSizeEstimate(batch.numSoFar, batch.template.sender);
         }
-    ));
+        None<(IncomingRequest, MessageBatch)>
+    };
 }

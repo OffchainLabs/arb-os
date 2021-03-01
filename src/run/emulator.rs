@@ -1955,8 +1955,9 @@ impl Machine {
                         self.arb_gas_remaining = gas;
                         self.incr_pc();
                         Ok(true)
-                    }
+                    },
                     AVMOpcode::Sideload => {
+                        let _block_num = self.stack.pop_uint(&self.state)?;
                         self.stack.push(Value::none());
                         self.incr_pc();
                         Ok(true)
@@ -2257,8 +2258,8 @@ fn do_ecpairing(mut val: Value) -> Option<bool> {
             if tup.len() == 0 {
                 return Some(acc == Gt::one());
             } else if tup.len() == 2 {
-                val = tup[0].clone();
-                if let Value::Tuple(pts_tup) = &tup[1] {
+                val = tup[1].clone();
+                if let Value::Tuple(pts_tup) = &tup[0] {
                     if pts_tup.len() == 6 {
                         let mut uis: Vec<Uint256> = Vec::new();
                         for j in 0..6 {

@@ -4,9 +4,7 @@
 
 //!Provides types and utilities for linking together compiled mini programs
 
-use crate::compile::{
-    CompileError, CompiledProgram, DebugInfo, SourceFileMap, Type,
-};
+use crate::compile::{CompileError, CompiledProgram, DebugInfo, SourceFileMap, Type};
 use crate::mavm::{AVMOpcode, Instruction, Label, Opcode, Value};
 use crate::pos::try_display_location;
 use crate::stringtable::{StringId, StringTable};
@@ -30,6 +28,7 @@ mod xformcode;
 pub struct LinkedProgram {
     pub code: Vec<Instruction<AVMOpcode>>,
     pub static_val: Value,
+    #[serde(default)]
     pub file_name_chart: BTreeMap<u64, String>,
 }
 
