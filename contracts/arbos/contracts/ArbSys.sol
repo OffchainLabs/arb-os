@@ -4,6 +4,9 @@ interface ArbSys {
     // Get ArbOS version number
     function arbOSVersion() external pure returns (uint);
 
+    // Get Arbitrum block number
+    function arbBlockNumber() external view returns (uint);
+
     // Send given amount of Eth to dest with from sender.
     function withdrawEth(address dest) external payable;
 

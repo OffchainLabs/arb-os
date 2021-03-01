@@ -14,7 +14,7 @@ interface ArbOwner {
     function setFairGasPriceSender(address addr) external;
     function setGasAccountingParams(uint speedLimitPerBlock, uint gasPoolMax, uint maxTxGasLimit) external;
 
-    function setBlocksPerSend(uint blocksPerSend) external;
+    function setSecondsPerSend(uint blocksPerSend) external;
 
     // To upgrade ArbOS, the ower calls startArbosUpgrade, then calls continueArbosUpgrade one or more times to upload 
     // the code to be installed as the upgrade, then calls finishArbosUpgrade to complete the upgrade and start executing the new code.

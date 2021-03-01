@@ -58,7 +58,7 @@ use accounts::pristineAccount;
 use std::storageMap::storageMap_new;
 
 use evmCallStack::evmCallStack_currentTimestamp;
-use evmCallStack::evmCallStack_currentBlockNumber;
+use evmCallStack::evmCallStack_currentEthBlockNumber;
 
 use evmlogs::evmlogs_empty;
 
@@ -412,7 +412,7 @@ public impure func evmOp_timestamp() -> uint {
 }
 
 public impure func evmOp_number() -> uint {
-    return evmCallStack_currentBlockNumber();
+    return evmCallStack_currentEthBlockNumber();
 }
 
 public impure func evmOp_mload(memAddr: uint) -> uint {
