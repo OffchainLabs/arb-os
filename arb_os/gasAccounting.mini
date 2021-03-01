@@ -54,6 +54,8 @@ use chainParameters::chainParams_speedLimitPerSecond;
 
 use inbox::IncomingRequest;
 use inbox::inbox_getNextUnpackedRequest;
+use inbox::inbox_currentArbBlockNumber;
+use inbox::inbox_currentTimestamp;
 
 
 var gasAccountingInfo: struct {
@@ -129,12 +131,7 @@ public impure func gasAccounting_init() {    // initialize on boot, before we ha
         arbGasDivisor: const::Charging_DefaultArbGasDivisor,
     };
 
-    let congestionState = struct {
-        gasPool: int(gasAccountingParams.GasPoolMax),
-        lastBlockNumSeen: 0,
-        lastTimestampSeen: 0,
-        congestionPricePerArbGas: 0,
-    };
+    let congestionState = initCongestionState(true);
 
     let netFeeRate = fixedPoint_new(const::NetFee_defaultRateNumerator, const::NetFee_defaultRateDenominator);
     let baseFeeMultiplier = fixedPoint_plusOne(netFeeRate);
@@ -161,6 +158,15 @@ public impure func gasAccounting_init() {    // initialize on boot, before we ha
         speedLimitPerSecond: const::DefaultSpeedLimitPerSecond,
         pricingParams: pricingParams,
         gasAllocatedForThisBlock: uint(congestionState.gasPool),
+    };
+}
+
+impure func initCongestionState(isInit: bool) -> CongestionState {
+    return struct {
+        gasPool: int(gasAccountingParams.GasPoolMax),
+        lastBlockNumSeen: xif (isInit) { 0 } else { inbox_currentArbBlockNumber() },
+        lastTimestampSeen: xif (isInit) { 0 } else { inbox_currentTimestamp() },
+        congestionPricePerArbGas: 0,
     };
 }
 
@@ -263,6 +269,11 @@ public impure func gasAccounting_setFeesEnabled(enabled: bool) {
             gasAccountingInfo.congestionState
         )
     };
+    if (enabled) {
+        gasAccountingInfo = gasAccountingInfo with {
+            congestionState: initCongestionState(false)
+        };
+    }
 }
 
 public impure func gasAccounting_setChargingParams(
