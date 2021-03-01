@@ -31,6 +31,7 @@ use arbsys::getBuddyContractAddress;
 use evmCallStack::initEvmCallStack;
 use evmCallStack::initEvmCallStackForConstructor;
 use evmCallStack::evmCallStack_runningCodeFromAccount;
+use evmCallStack::sendBuddyContractResult;
 
 use gasAccounting::GasUsage;
 use gasAccounting::TxFeeStats;
@@ -140,6 +141,7 @@ public impure func handleL2Request(
     inStream: ByteStream,
     request: TxRequestData
 ) -> option<()> {   // return None if message is malformatted; otherwise handle errors and return Some(()); if no error, never return
+    asm((4242, request.caller, account_getNextSeqNum(accountStore_get(getGlobalAccountStore(), request.caller)), request.seqNum),) { debugprint };
     if let Some(sequenceNum) = request.seqNum {
         if (account_getNextSeqNum(
                 accountStore_get(getGlobalAccountStore(), request.caller)
@@ -177,13 +179,15 @@ public impure func handleL2Request(
         let (codept, evmJumpTable, _) = translateEvmCodeSegment(bytestream_new(codeBytes), false)?;
 
         if (request.seqNum == None<uint>) {
-            request = request with { seqNum: Some(fetchAndIncrSequenceNum(request.caller)) };
+            // request = request with { seqNum: Some(fetchAndIncrSequenceNum(request.caller)) };
+            asm((4243, account_getNextSeqNum(accountStore_get(getGlobalAccountStore(), request.caller))),) { debugprint };
+            request = request with {    // Some(fetchAndIncrSequenceNum(request.caller)) };
+                seqNum: Some(account_getNextSeqNum(accountStore_get(getGlobalAccountStore(), request.caller)))
+            };
         }
         if (request.incomingRequest.kind == const::L1MessageType_buddyDeploy) {
             // it's a buddy contract deployment; hardwire the new contract address
-            asm(101,) { debugprint };
             request = request with { calleeAddr: getBuddyContractAddress(request.caller, 0) };
-            asm((102, request.calleeAddr),) { debugprint };
         } else {
             // ordinary contract deploy; use the standard formula to calculate new contract address
             request = request with {
@@ -192,7 +196,15 @@ public impure func handleL2Request(
         }
 
         if (account_hasContract(accountStore_get(getGlobalAccountStore(), request.calleeAddr))) {
-            // there's already an account at that address, revert the call
+            // there's already an account at that address, increment sequence number and revert the call
+            let globalStore = getGlobalAccountStore();
+            setGlobalAccountStore(
+                accountStore_set(
+                    globalStore,
+                    request.caller,
+                    account_incrSeqNum(accountStore_get(globalStore, request.caller)),
+                )
+            );
             emitTxReceipt(
                 request.incomingRequest,
                 const::TxResultCode_cannotDeployAtAddress,
@@ -201,6 +213,9 @@ public impure func handleL2Request(
                 None<GasUsage>,
                 request.feeStats,
             );
+            if (request.incomingRequest.kind == const::L1MessageType_buddyDeploy) {
+                sendBuddyContractResult(request.calleeAddr, false);
+            }
             return Some(());
         } else {
             asm(103,) { debugprint };

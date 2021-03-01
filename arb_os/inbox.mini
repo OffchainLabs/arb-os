@@ -407,8 +407,10 @@ public impure func inbox_getNextUnpackedRequest() -> (
                 }
             } elseif (msg.kind == const::L1MessageType_buddyDeploy) {
                 if let Some(txRequest) = translateBuddyDeployTx(msg) {
+                    asm(301,) { debugprint };
                     return (None<IncomingRequest>, Some(txRequest));
                 }
+                asm(302,) { debugprint };
                 // else request was malformatted, ignore it and execute loop again to get another
             } elseif (msg.kind == const::L1MessageType_rollupProtocolEvent) {
                 if (msg.sender == address(0)) {
@@ -487,6 +489,7 @@ func translateBuddyDeployTx(request: IncomingRequest) -> option<TxRequestData> {
 
     let calldata = bytestream_getRemainingBytes(inStream);
 
+    asm(101,) { debugprint };
     return Some(
         struct {
             maxGas: maxGas,

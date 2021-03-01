@@ -114,6 +114,7 @@ impl AbiForContract {
 
         let (request_id, l2_contract_addr) = if let Some((l1_contract_addr, buddy_id)) = info_for_buddy.clone()
         {
+            println!("Inserting buddy deploy message");
             (
                 machine.runtime_env.insert_buddy_deploy_message(
                     l1_contract_addr.clone(),
@@ -143,13 +144,20 @@ impl AbiForContract {
             machine
                 .runtime_env
                 ._advance_time(delta_blocks.clone(), None, true);
+        } else {
+            if info_for_buddy.is_some() {
+                println!("Advancing time for buddy");
+                machine.runtime_env._advance_time(Uint256::one(), None, true);
+            }
         }
 
+        println!("Running");
         let _gas_used = if debug {
             machine.debug(None)
         } else {
             machine.run(None)
         }; // handle this deploy message
+        println!("Done running");
         let logs = machine.runtime_env.get_all_receipt_logs();
 
         if logs.len() != initial_logs_len + 1 {
@@ -192,7 +200,7 @@ impl AbiForContract {
             return Err(None);
         }
         let buf = log_item.get_return_data();
-        println!("deploy address: {:?}", buf);
+        println!("deploy address: {}", Uint256::from_bytes(&buf));
         self.address = Uint256::from_bytes(&buf);
         Ok(self.address.clone())
     }
@@ -456,9 +464,11 @@ pub fn get_buddy_address(sender_addr: Uint256, buddy_id: Uint256) -> Uint256 {
         Uint256::from_string_hex("2d09e097c5aacec0d6a4ad31120edfe833dce39e8b6d8f77b9d2b87fb7edb5e7")
             .unwrap()
             .to_bytes_be();
+    assert_eq!(buf.len(), 32);
     buf.extend(sender_addr.to_bytes_be());
     buf.extend(buddy_id.to_bytes_be());
     let mut hbuf = keccak256(&buf);
+    assert_eq!(hbuf.len(), 32);
     for i in 0..12 {
         hbuf[i] = 0u8;
     }

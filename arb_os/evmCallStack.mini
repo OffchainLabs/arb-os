@@ -31,6 +31,7 @@ use accounts::account_getAllStorage;
 use accounts::account_getStartCodePoint;
 use accounts::account_setContractInfo;
 use accounts::account_fetchAndIncrSeqNum;
+use accounts::account_getNextSeqNum;
 use accounts::account_incrSeqNum;
 use accounts::account_getStorageSize;
 use accounts::pristineAccount;
@@ -358,6 +359,7 @@ public impure func initEvmCallStackForConstructor(
 
     // Create an accountStore with the caller's sequence number incremented; will decide later whether to commit it
     let acctStore = getGlobalAccountStore();
+    asm((800, request.caller, account_getNextSeqNum(accountStore_get(acctStore, request.caller))),) { debugprint };
     let acctStoreAfterIncrement = accountStore_set(
         acctStore,
         request.caller,
@@ -698,6 +700,7 @@ public impure func evmCallStack_returnFromCall(
                             0,
                             uint(topFrame.runningAs)
                         );
+                        asm((1100, topFrame.runningAs),) { debugprint };
 
                         // emit queued sends
                         sendQueuedMessages(topFrame.sendQueue);
@@ -714,17 +717,7 @@ public impure func evmCallStack_returnFromCall(
 
                         if (globalCurrentTxRequest.incomingRequest.kind == 5) {
                             // successfully created a buddy contract -- announce that as a message
-                            outbox_append(
-                                bytearray_setByte(
-                                    bytearray_set256(
-                                        bytearray_set256(bytearray_new(0), 0, const::SendType_buddyContractResult),
-                                        32,
-                                        uint(globalCurrentTxRequest.incomingRequest.sender)
-                                    ),
-                                    64,
-                                    1,
-                                )
-                            );
+                            sendBuddyContractResult(topFrame.runningAs, true);
                         }
                     } else {
                         // Compilation of resulting code failed; report an error.
@@ -738,16 +731,9 @@ public impure func evmCallStack_returnFromCall(
                         );
                         if (globalCurrentTxRequest.incomingRequest.kind == 5) {
                             // failed to create a buddy contract -- announce that as a message
-                            outbox_append(
-                                bytearray_setByte(
-                                    bytearray_set256(
-                                        bytearray_set256(bytearray_new(0), 0, const::SendType_buddyContractResult),
-                                        32,
-                                        uint(globalCurrentTxRequest.incomingRequest.sender),
-                                    ),
-                                    64,
-                                    0,
-                                )
+                            sendBuddyContractResult(
+                                getBuddyContractAddress(globalCurrentTxRequest.incomingRequest.sender, 0),
+                                false
                             );
                         }
                     }
@@ -788,47 +774,9 @@ public impure func evmCallStack_returnFromCall(
                         Some(gasUsage),
                         feeStats,
                     );
-
-                    if (globalCurrentTxRequest.incomingRequest.kind == 5) {
-                        // successfully created a buddy contract -- announce that as a message
-                        outbox_append(
-                            bytearray_setByte(
-                                bytearray_set256(
-                                    bytearray_set256(bytearray_new(0), 0, const::SendType_buddyContractResult),
-                                    32,
-                                    uint(getBuddyContractAddress(globalCurrentTxRequest.incomingRequest.sender, 0))
-                                ),
-                                64,
-                                1,
-                            )
-                        );
-                    }
-                } else {
-                    // Compilation of resulting code failed; report an error.
-                    emitTxReceipt(
-                        globalCurrentTxRequest.incomingRequest,
-                        const::TxResultCode_revert,
-                        None<ByteArray>,
-                        None<EvmLogs>,
-                        Some(gasUsage)
-                    );
-                    if (globalCurrentTxRequest.incomingRequest.kind == 5) {
-                        // failed to create a buddy contract -- announce that as a message
-                        outbox_append(
-                            bytearray_setByte(
-                                bytearray_set256(
-                                    bytearray_set256(bytearray_new(0), 0, const::SendType_buddyContractResult),
-                                    32,
-                                    uint(getBuddyContractAddress(globalCurrentTxRequest.incomingRequest.sender, 0))
-                                ),
-                                64,
-                                0,
-                            )
-                        );
-                    }
                 }
             } else {
-                // Emit a log item reporting failure
+                // Compilation of resulting code failed; report an error.
                 emitTxReceipt(
                     globalCurrentTxRequest.incomingRequest,
                     const::TxResultCode_revert,
@@ -837,7 +785,15 @@ public impure func evmCallStack_returnFromCall(
                     Some(gasUsage),
                     feeStats,
                 );
+                if (globalCurrentTxRequest.incomingRequest.kind == 5) {
+                    // failed to create a buddy contract -- announce that as a message
+                    sendBuddyContractResult(
+                        getBuddyContractAddress(globalCurrentTxRequest.incomingRequest.sender, 0),
+                        false
+                    );
+                }
             }
+
         } else {
             // Request failed
             let (_, gasUsage, feeStats) = gasAccounting_endTxCharges(int(0), globalCurrentTxRequest.feeStats)?;
@@ -860,6 +816,20 @@ public impure func evmCallStack_returnFromCall(
         evmCallStack_callHitError(9);
         panic
     };
+}
+
+public impure func sendBuddyContractResult(addr: address, success: bool) {
+    outbox_append(
+        bytearray_setByte(
+            bytearray_set256(
+                bytearray_set256(bytearray_new(0), 0, const::SendType_buddyContractResult),
+                32,
+                uint(addr),
+            ),
+            64,
+            uint(success),
+        )
+    );
 }
 
 func storageReclaimedForSDQ(topFrame: EvmCallFrame) -> uint {

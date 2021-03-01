@@ -76,6 +76,7 @@ impure func main() {
 public impure func mainRunLoop() {
     loop {
         let (resultCode, maybeL1, maybeL2) = getNextRequestFromCongestionAuction();
+        asm((201, resultCode),) { debugprint };
         if let Some(msg) = maybeL1 {
             if (resultCode == const::TxResultCode_success) {
                 if(handleL1Request(msg) == None<()>) {
@@ -95,11 +96,14 @@ public impure func mainRunLoop() {
             }
         } else {
             if let Some(request) = maybeL2 {
+                asm(202,) { debugprint };
                 if (resultCode == const::TxResultCode_success) {
+                    asm(203,) { debugprint };
                     if (handleL2Request(
                         bytestream_new(request.incomingRequest.msgData),
                         request
                     ) == None<()>) {
+                        asm(204,) { debugprint };
                         // reject for message format error
                         emitTxReceipt(
                             request.incomingRequest,
@@ -110,7 +114,9 @@ public impure func mainRunLoop() {
                             request.feeStats,
                         );
                     }
+                    asm(205,) { debugprint };
                 } else {
+                    asm(206,) { debugprint };
                     // reject for error
                     emitTxReceipt(
                         request.incomingRequest,
@@ -121,6 +127,7 @@ public impure func mainRunLoop() {
                         request.feeStats,
                     );
                 }
+                asm(207,) { debugprint };
             } // else request was not identified as either L1 or L2, which should be impossible
         }
         // if we reach here, message has already been handled and log already sent

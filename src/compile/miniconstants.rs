@@ -242,6 +242,7 @@ pub fn init_constant_table() -> HashMap<String, Uint256> {
             )
 
     ] {
+        assert_eq!(Uint256::from_string_hex(u).unwrap().to_bytes_be().len(), 32);
         ret.insert(s.to_string(), Uint256::from_string_hex(u).unwrap());
     }
     ret
