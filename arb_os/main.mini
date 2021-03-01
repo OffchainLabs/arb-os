@@ -74,7 +74,9 @@ impure func main() {
 
 public impure func mainRunLoop() {
     loop {
+        asm(301,) { debugprint };
         let (approved, maybeL1, maybeL2) = getNextRequestFromCongestionAuction();
+        asm(302,) { debugprint };
         if let Some(msg) = maybeL1 {
             if (approved) {
                 if(handleL1Request(msg) == None<()>) {

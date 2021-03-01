@@ -73,9 +73,14 @@ use std::rlp::rlp_encodeAddress;
 use std::bls::bls_makeKey;
 use std::bls::bls_marshalPublicKey;
 
+use std::keccak::hasher_new;
+use std::keccak::hasher_push256;
+use std::keccak::hasher_finish;
+
 use decompression::parseAggregatorFunctionTable;
 
 use codeSegment::pcTableForCode;
+
 
 
 public impure func arbsys_txcall() {
@@ -97,6 +102,8 @@ public impure func arbsys_txcall() {
             arbsys_getStorageAt(topFrame, calldata);
         } elseif(funcCode == 0x3dcfdac7) {
             arbsys_getPcTable(topFrame, calldata);
+        } elseif(funcCode == 0x6b0883a9) {
+            arbsys_getBuddyContractAddress(topFrame, calldata);
         } else {
             // unrecognized function code
             evmOp_revert_knownCodePc(address(const::Address_ArbSys), 1, 0, 0);
@@ -370,6 +377,30 @@ impure func arbsys_getPcTable(topFrame: EvmCallFrame, calldata: ByteArray) {
     } else {
         evmOp_revert_knownCodePc(address(const::Address_ArbSys), 61, 0, 0);
     }
+}
+
+func arbsys_getBuddyContractAddress(topFrame: EvmCallFrame, calldata: ByteArray) { // (address, uint) -> address
+    if (bytearray_size(calldata) != 68) {
+        evmOp_revert_knownCodePc(address(const::Address_ArbSys), 70, 0, 0);
+    }
+    let contractAtL1 = address(bytearray_get256(calldata, 4));
+    let buddyId = bytearray_get256(calldata, 36);
+    let buddyAddress = getBuddyContractAddress(contractAtL1, buddyId);
+    let mem = bytearray_set256(bytearray_new(0), 0, uint(buddyAddress));
+    if (evmCallStack_setTopFrameMemory(mem)) {
+        evmOp_return(0, 32);
+    } else {
+        evmOp_revert_knownCodePc(address(const::Address_ArbSys), 71, 0, 0);
+    }
+}
+
+public impure func getBuddyContractAddress(contractAtL1: address, buddyId: uint) -> address {
+    let hasher = hasher_new();
+    hasher = hasher_push256(hasher, const::BuddyContractAddressUniquifier);
+    hasher = hasher_push256(hasher, uint(contractAtL1));
+    hasher = hasher_push256(hasher, buddyId);
+    return address(hasher_finish(hasher));
+
 }
 
 impure func arbAddressTable_register(topFrame: EvmCallFrame, calldata: ByteArray) { // (address addr) -> uint

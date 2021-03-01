@@ -26,6 +26,8 @@ use accounts::account_getNextSeqNum;
 use accounts::account_addToEthBalance;
 use accounts::account_getStartCodePoint;
 
+use arbsys::getBuddyContractAddress;
+
 use evmCallStack::initEvmCallStack;
 use evmCallStack::initEvmCallStackForConstructor;
 use evmCallStack::evmCallStack_runningCodeFromAccount;
@@ -175,7 +177,9 @@ public impure func handleL2Request(
         }
         if (request.incomingRequest.kind == const::L1MessageType_buddyDeploy) {
             // it's a buddy contract deployment; hardwire the new contract address
-            request = request with { calleeAddr: request.caller };
+            asm(101,) { debugprint };
+            request = request with { calleeAddr: getBuddyContractAddress(request.caller, 0) };
+            asm((102, request.calleeAddr),) { debugprint };
         } else {
             // ordinary contract deploy; use the standard formula to calculate new contract address
             request = request with {
@@ -188,12 +192,14 @@ public impure func handleL2Request(
             emitTxReceipt(request.incomingRequest, 7, None<ByteArray>, None<EvmLogs>, None<GasUsage>);
             return Some(());
         } else {
+            asm(103,) { debugprint };
             initEvmCallStackForConstructor(
                 codeBytes,
                 evmJumpTable,
                 codept,
                 request
             );  // should never return
+            asm(104,) { debugprint };
         }
     } else {
         // this is a non-constructor call

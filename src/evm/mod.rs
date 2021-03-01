@@ -1491,7 +1491,7 @@ pub fn evm_deploy_buddy_contract(log_to: Option<&Path>, debug: bool) {
                 &mut machine,
                 Uint256::zero(),
                 Some(Uint256::from_u64(100)),
-                Some(Uint256::from_u64(1025)),
+                Some((Uint256::from_u64(1025), Uint256::zero())),
                 debug,
             );
             if let Ok(contract_addr) = result {
@@ -1732,10 +1732,17 @@ pub fn _evm_test_same_address_deploy(log_to: Option<&Path>, debug: bool) {
     machine.start_at_zero();
 
     let my_addr = Uint256::from_usize(1025);
-    let (contract, orig_contract_addr) =
+    let (contract, _) =
         match AbiForContract::new_from_file(&test_contract_path("Add")) {
             Ok(mut contract) => {
-                let result = contract.deploy(&[], &mut machine, Uint256::zero(), None, None, debug);
+                let result = contract.deploy(
+                    &[],
+                    &mut machine,
+                    Uint256::zero(),
+                    None,
+                    Some((my_addr.clone(), Uint256::zero())),
+                    debug,
+                );
                 if let Ok(contract_addr) = result {
                     assert_ne!(contract_addr, Uint256::zero());
                     (contract, contract_addr)
@@ -1755,7 +1762,7 @@ pub fn _evm_test_same_address_deploy(log_to: Option<&Path>, debug: bool) {
                 &mut machine,
                 Uint256::zero(),
                 None,
-                Some(orig_contract_addr),
+                Some((my_addr.clone(), Uint256::zero())),
                 debug,
             );
             if let Ok(_) = result {
@@ -1783,6 +1790,7 @@ pub fn _evm_test_same_address_deploy(log_to: Option<&Path>, debug: bool) {
         Ok((logs, sends)) => {
             assert_eq!(logs.len(), 1);
             assert_eq!(sends.len(), 0);
+            println!("{:?}", logs[0]);
             assert!(logs[0].succeeded());
             let decoded_result = contract
                 .get_function("add")

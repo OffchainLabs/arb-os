@@ -52,6 +52,7 @@ public func merkleizeFromQueue(queue: Queue) -> (any, bytes32) {
         let (uq, item) = queue_getOrDie(queue);
         queue = uq;
         arr = arr with { [i] = unsafecast<ByteArray>(item) };
+        i = i + 1;
     }
     return merkleize(arr);
 }

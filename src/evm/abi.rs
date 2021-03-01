@@ -96,7 +96,7 @@ impl AbiForContract {
         machine: &mut Machine,
         payment: Uint256,
         advance_time: Option<Uint256>,
-        address_for_buddy: Option<Uint256>,
+        info_for_buddy: Option<(Uint256, Uint256)>,
         debug: bool,
     ) -> Result<Uint256, Option<ArbosReceipt>> {
         let initial_logs_len = machine.runtime_env.get_all_receipt_logs().len();
@@ -112,16 +112,17 @@ impl AbiForContract {
             self.code_bytes.clone()
         };
 
-        let (request_id, sender_addr) = if let Some(buddy_addr) = address_for_buddy.clone() {
+        let (request_id, l2_contract_addr) = if let Some((l1_contract_addr, buddy_id)) = info_for_buddy.clone()
+        {
             (
                 machine.runtime_env.insert_buddy_deploy_message(
-                    buddy_addr.clone(),
+                    l1_contract_addr.clone(),
                     Uint256::from_usize(1_000_000_000),
                     Uint256::zero(),
                     payment,
                     &augmented_code,
                 ),
-                buddy_addr,
+                get_buddy_address(l1_contract_addr, buddy_id),
             )
         } else {
             (
@@ -159,7 +160,7 @@ impl AbiForContract {
             return Err(None);
         }
 
-        if address_for_buddy.is_some() {
+        if info_for_buddy.is_some() {
             let sends = machine.runtime_env.get_all_sends();
             if sends.len() != initial_sends_len + 1 {
                 println!(
@@ -170,9 +171,12 @@ impl AbiForContract {
             }
             let the_send = &sends[sends.len() - 1];
             if (the_send[0..32] != Uint256::from_u64(5).to_bytes_be())
-                || (the_send[32..64] != sender_addr.to_bytes_be())
+                || (the_send[32..64] != l2_contract_addr.to_bytes_be())
+                || (the_send[64] != 1u8)
             {
-                println!("deploy: incorrect values in send item");
+                println!("deploy: incorrect values in send item: ({}) {:?}", the_send.len(), the_send);
+                println!("expected {:?}", l2_contract_addr.to_bytes_be());
+                println!("got      {:?}", &the_send[32..64]);
                 return Err(None);
             }
         }
@@ -188,6 +192,7 @@ impl AbiForContract {
             return Err(None);
         }
         let buf = log_item.get_return_data();
+        println!("deploy address: {:?}", buf);
         self.address = Uint256::from_bytes(&buf);
         Ok(self.address.clone())
     }
@@ -407,6 +412,20 @@ impl AbiForContract {
         );
         Ok(())
     }
+}
+
+pub fn get_buddy_address(sender_addr: Uint256, buddy_id: Uint256) -> Uint256 {
+    let mut buf =
+        Uint256::from_string_hex("2d09e097c5aacec0d6a4ad31120edfe833dce39e8b6d8f77b9d2b87fb7edb5e7")
+            .unwrap()
+            .to_bytes_be();
+    buf.extend(sender_addr.to_bytes_be());
+    buf.extend(buddy_id.to_bytes_be());
+    let mut hbuf = keccak256(&buf);
+    for i in 0..12 {
+        hbuf[i] = 0u8;
+    }
+    Uint256::from_bytes(&hbuf)
 }
 
 #[test]

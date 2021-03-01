@@ -19,6 +19,8 @@ interface ArbSys {
     // able to call it
     function getStorageAt(address account, uint256 index) external view returns (uint256);
 
+    function getBuddyContractAddress(address contractL1, uint buddyId) external pure returns (address);
+
     event EthWithdrawal(address indexed destAddr, uint amount);
     event ERC20Withdrawal(address indexed destAddr, address indexed tokenAddr, uint amount);
     event ERC721Withdrawal(address indexed destAddr, address indexed tokenAddr, uint indexed id);

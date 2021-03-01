@@ -231,6 +231,12 @@ pub fn init_constant_table() -> HashMap<String, Uint256> {
             // Keccak256 of "Arbitrum BLS signature domain"
             "73a92f91d473214defd5ffa91d036007eb2e6487fffaa551835e988fb24aaa2b",
         ),
+        (
+            "BuddyContractAddressUniquifier",
+            // Keccak256 of "Arbitrum buddy contract address uniquifier"
+            "2d09e097c5aacec0d6a4ad31120edfe833dce39e8b6d8f77b9d2b87fb7edb5e7",
+            )
+
     ] {
         ret.insert(s.to_string(), Uint256::from_string_hex(u).unwrap());
     }
