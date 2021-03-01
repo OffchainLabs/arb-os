@@ -211,6 +211,8 @@ pub fn init_constant_table() -> HashMap<String, Uint256> {
         // pluggable modules
         ("PluggableModuleID_rollupTracker", 0),
         ("PluggableModuleID_precompile_0x05", 1),
+        // retry buffer
+        ("RetryBuffer_DefaultLifetimeSeconds", 600),
         // misc
         ("SecondsPerBlockNumerator", 2),
         ("SecondsPerBlockDenominator", 1),

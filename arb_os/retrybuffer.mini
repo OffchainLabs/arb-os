@@ -1,0 +1,87 @@
+//
+// Copyright 2021, Offchain Labs, Inc. All rights reserved.
+//
+
+use messages::TxRequestData;
+
+use std::queue::Queue;
+use std::queue::queue_new;
+use std::queue::queue_put;
+use std::queue::queue_get;
+
+
+var retryBuffer: struct {
+    byTxId: map<uint, TxRequestData>,
+    fifo: Queue,
+    txLifetimeSeconds: uint
+};
+
+public impure func retryBuffer_init() {
+    retryBuffer = struct {
+        byTxId: newmap<uint, TxRequestData>,
+        fifo: queue_new(),
+        txLifetimeSeconds: const::RetryBuffer_DefaultLifetimeSeconds,
+    };
+}
+
+public impure func retryBuffer_getLifetime() -> uint {
+    return retryBuffer.txLifetimeSeconds;
+}
+
+public impure func retryBuffer_setLifetime(lifetimeSeconds: uint) {
+    retryBuffer = retryBuffer with {
+        txLifetimeSeconds: lifetimeSeconds
+    };
+    // no need to discard newly aged-out txs, they'll get cleaned up later
+}
+
+impure func retryBuffer_trimTwo(currentTimestamp: uint) {
+    // remove up to 2 aged-out items from the retryBuffer
+    if (retryBuffer_trimOne(currentTimestamp)) {
+        let _ = retryBuffer_trimOne(currentTimestamp);
+    }
+}
+
+impure func retryBuffer_trimOne(currentTimestamp: uint) -> bool {  // returns true iff a tx was trimmed
+    return xif let Some(res) = queue_get(retryBuffer.fifo) {
+        let (uq, rawItem) = res;
+        let item = unsafecast<TxRequestData>(rawItem);
+        xif (item.incomingRequest.timestamp + retryBuffer.txLifetimeSeconds <= currentTimestamp) {
+            retryBuffer_delete(item.incomingRequest.requestId);
+            retryBuffer = retryBuffer with {
+               fifo: uq
+            };
+            true
+        } else {
+            false
+        }
+    } else {
+        false
+    };
+}
+
+public impure func retryBuffer_insert(tx: TxRequestData) {
+    retryBuffer_trimTwo(tx.incomingRequest.timestamp);
+    retryBuffer = retryBuffer with {
+        byTxId: retryBuffer.byTxId with { [tx.incomingRequest.requestId] = tx }
+    } with {
+        fifo: queue_put(retryBuffer.fifo, tx)
+    };
+}
+
+public impure func retryBuffer_get(txid: uint, removeIfFound: bool) -> option<TxRequestData> {
+    let ret = retryBuffer.byTxId[txid];
+    if (removeIfFound) {
+        if let Some(tx) = ret {
+            retryBuffer_delete(txid);
+        }
+    }
+    return ret;
+}
+
+public impure func retryBuffer_delete(txid: uint) {
+    retryBuffer = retryBuffer with {
+        byTxId: retryBuffer.byTxId with { [txid] = unsafecast<TxRequestData>(0) }    // deletes item from the map
+    };
+    // tx might still be in retryBuffer.fifo, but that isn't a problem because it's not gettable and re-deletion is safe
+}
