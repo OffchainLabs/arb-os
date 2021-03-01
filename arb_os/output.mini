@@ -97,6 +97,10 @@ var globalBlockReceiptData: struct {
 
 var logsQueuedForEndOfBlock: Queue;
 
+public impure func current_block_empty() -> bool {
+    return globalBlockReceiptData.statsThisBlock.numTx == 0;
+}
+
 public impure func outputStats_endOfBlock(blockNum: uint, timestamp: uint) {
     if ((inbox_currentTimestamp() >= globalBlockReceiptData.nextSendTime) && !outbox_isEmpty() ){
         outbox_send();
@@ -105,47 +109,45 @@ public impure func outputStats_endOfBlock(blockNum: uint, timestamp: uint) {
         };
     }
 
-    if ( ! outputStats_isAllZero(globalBlockReceiptData.statsThisBlock)) {
-        // add current block (including soon-to-be-issued block summary log) into total stats
-        let updatedStats = outputStats_add(
-            globalBlockReceiptData.statsThisBlock,
-            globalBlockReceiptData.statsAllTime
-        );
-        updatedStats = updatedStats with {
-            numLogs: updatedStats.numLogs + 1  // +1 for soon-to-be-issued block summary log
-        };
+    // add current block (including soon-to-be-issued block summary log) into total stats
+    let updatedStats = outputStats_add(
+        globalBlockReceiptData.statsThisBlock,
+        globalBlockReceiptData.statsAllTime
+    );
+    updatedStats = updatedStats with {
+        numLogs: updatedStats.numLogs + 1  // +1 for soon-to-be-issued block summary log
+    };
 
-        globalBlockReceiptData = globalBlockReceiptData with {
-            statsAllTime: updatedStats
-        };
+    globalBlockReceiptData = globalBlockReceiptData with {
+        statsAllTime: updatedStats
+    };
 
-        let q = logsQueuedForEndOfBlock;
-        while( ! queue_isEmpty(q) ){
-            if let Some(res) = queue_get(q) {
-                let (uq, logItem) = res;
-                q = uq;
-                asm(logItem,) { log };
-            } else {
-                // should never happen
-                q = queue_new();
-            }
+    let q = logsQueuedForEndOfBlock;
+    while( ! queue_isEmpty(q) ){
+        if let Some(res) = queue_get(q) {
+            let (uq, logItem) = res;
+            q = uq;
+            asm(logItem,) { log };
+        } else {
+            // should never happen
+            q = queue_new();
         }
-        logsQueuedForEndOfBlock = q;
-
-        asm((
-            const::LogType_blockSummary,
-            blockNum,
-            timestamp,
-            globalBlockReceiptData.statsThisBlock,
-            globalBlockReceiptData.statsAllTime,
-            gasAccounting_summaryToPublish(),
-            globalBlockReceiptData.lastBlockNum
-        ),) { log }; 
-
-        globalBlockReceiptData = globalBlockReceiptData with {
-            lastBlockNum: blockNum
-        };
     }
+    logsQueuedForEndOfBlock = q;
+
+    asm((
+        const::LogType_blockSummary,
+        blockNum,
+        timestamp,
+        globalBlockReceiptData.statsThisBlock,
+        globalBlockReceiptData.statsAllTime,
+        gasAccounting_summaryToPublish(),
+        globalBlockReceiptData.lastBlockNum
+    ),) { log }; 
+
+    globalBlockReceiptData = globalBlockReceiptData with {
+        lastBlockNum: blockNum
+    };
 
     // now clear current block stats, because we're advancing to a new current block
     globalBlockReceiptData = globalBlockReceiptData with {
