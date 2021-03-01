@@ -97,10 +97,6 @@ var globalBlockReceiptData: struct {
 
 var logsQueuedForEndOfBlock: Queue;
 
-public impure func current_block_empty() -> bool {
-    return globalBlockReceiptData.statsThisBlock.numTx == 0;
-}
-
 public impure func outputStats_endOfBlock(blockNum: uint, timestamp: uint) {
     if ((inbox_currentTimestamp() >= globalBlockReceiptData.nextSendTime) && !outbox_isEmpty() ){
         outbox_send();

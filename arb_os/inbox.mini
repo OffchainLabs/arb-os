@@ -33,7 +33,6 @@ use messageBatch::messageBatch_tryNew;
 use messageBatch::messageBatch_get;
 
 use output::outputStats_endOfBlock;
-use output::current_block_empty;
 
 use pluggables::callPluggable;
 
@@ -129,13 +128,13 @@ impure func incomingRequestFromRaw(newMsgRaw: IncomingRequestFromInbox, adminMod
 
     return struct {
         kind: newMsgRaw.kind,
-        ethBlockNumber: newMsgRaw.ethBlockNumber,
         arbBlockNumber:
-            xif (newMsgRaw.timestamp > globalInbox.timestamp && !current_block_empty()) {
+            xif (newMsgRaw.timestamp > globalInbox.timestamp && globalInbox.seenMsgAtThisArbBlockNum) {
                 globalInbox.arbBlockNum + 1
             } else {
                 globalInbox.arbBlockNum
             },
+        ethBlockNumber: newMsgRaw.ethBlockNumber,
         timestamp: newMsgRaw.timestamp,
         sender: newMsgRaw.sender,
         requestId: newMsgRaw.requestId,
@@ -195,19 +194,19 @@ impure func endOfArbitrumBlock(inbox: Inbox) -> Inbox {
             queue: incomingRequestQueue_put(inbox.queue, newMsg)
         }
     } else {
-        inbox with {
-            queue: xif (haveReceivedChainInitMessage()) {
-                incomingRequestQueue_put(
+        xif (haveReceivedChainInitMessage()) {
+            inbox with {
+                queue: incomingRequestQueue_put(
                     inbox.queue,
                     endOfArbBlockMessage(inbox.arbBlockNum, inbox.ethBlockNum, inbox.timestamp),
                 )
-            } else {
-                inbox.queue
+            } with {
+                arbBlockNum: inbox.arbBlockNum+1
+            } with {
+                seenMsgAtThisArbBlockNum: false
             }
-        } with {
-            arbBlockNum: inbox.arbBlockNum+1
-        } with {
-            seenMsgAtThisArbBlockNum: false
+        } else {
+            inbox
         }
     };
 }
