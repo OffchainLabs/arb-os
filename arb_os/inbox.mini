@@ -158,14 +158,15 @@ impure func getFromL1Inbox(inbox: Inbox) -> Inbox {
             // Inboxpeek says we hit end of L1 block.
             // This implies we have hit the end of an Arbitrum block, so do the end of block things.
             let (updatedInbox, endOfArbBlock) = maybeEndOfArbitrumBlock(inbox);
-            inbox = updatedInbox;
-            if (endOfArbBlock) {
-                return inbox with {
+            return xif(endOfArbBlock) {
+                updatedInbox with {
                     ethBlockNum: inbox.ethBlockNum + 1
                 } with {
                     seenMsgAtThisEthBlockNum: false
-                };
-            }
+                }
+            } else {
+                updatedInbox
+            };
         }
     }
 
