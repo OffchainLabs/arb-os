@@ -137,13 +137,13 @@ impure func incomingRequestFromRaw(newMsgRaw: IncomingRequestFromInbox, adminMod
 
     return struct {
         kind: newMsgRaw.kind,
-        ethBlockNumber: newMsgRaw.ethBlockNumber,
         arbBlockNumber:
-            xif (newMsgRaw.timestamp > globalInbox.timestamp) {
+            xif (newMsgRaw.timestamp > globalInbox.timestamp && globalInbox.seenMsgAtThisArbBlockNum) {
                 globalInbox.arbBlockNum + 1
             } else {
                 globalInbox.arbBlockNum
             },
+        ethBlockNumber: newMsgRaw.ethBlockNumber,
         timestamp: newMsgRaw.timestamp,
         sender: newMsgRaw.sender,
         requestId: newMsgRaw.requestId,
@@ -166,20 +166,24 @@ impure func getFromL1Inbox(inbox: Inbox) -> Inbox {
         if ( ! sameBlockNum) {
             // Inboxpeek says we hit end of L1 block.
             // This implies we have hit the end of an Arbitrum block, so do the end of block things.
-            inbox = endOfArbitrumBlock(inbox);
-            return inbox with {
-                ethBlockNum: inbox.ethBlockNum + 1
-            } with {
-                seenMsgAtThisEthBlockNum: false
+            let (updatedInbox, endOfArbBlock) = maybeEndOfArbitrumBlock(inbox);
+            return xif(endOfArbBlock) {
+                updatedInbox with {
+                    ethBlockNum: inbox.ethBlockNum + 1
+                } with {
+                    seenMsgAtThisEthBlockNum: false
+                }
+            } else {
+                updatedInbox
             };
         }
     }
 
     let newMsg = incomingRequestFromRaw(asm() IncomingRequestFromInbox { inbox }, false);
     if (newMsg.arbBlockNumber > inbox.arbBlockNum) {
-        inbox = endOfArbitrumBlock(inbox);
+        let (updatedInbox, _) = maybeEndOfArbitrumBlock(inbox);
+        inbox = updatedInbox;
     }
-
     return inbox with {
         queue: incomingRequestQueue_put(inbox.queue, newMsg)
     } with {
@@ -195,28 +199,37 @@ impure func getFromL1Inbox(inbox: Inbox) -> Inbox {
     };
 }
 
-impure func endOfArbitrumBlock(inbox: Inbox) -> Inbox {
-    let rawSideloadMsg = asm(inbox.arbBlockNum,) any { sideload };
-    if (rawSideloadMsg != ()) {
-        let newMsg = incomingRequestFromRaw(unsafecast<IncomingRequestFromInbox>(rawSideloadMsg), true);
-        inbox = inbox with {
-            queue: incomingRequestQueue_put(inbox.queue, newMsg)
-        };
-    }
+impure func maybeEndOfArbitrumBlock(inbox: Inbox) -> (Inbox, bool) {
+    // returns updated inbox, and whether it was truly the end of the Arbitrum block
+    // (if a sideload is provided, it's not truly the end of the Arbitrum block)
 
-    return inbox with {
-        queue: xif (haveReceivedChainInitMessage()) {
-            incomingRequestQueue_put(
-                inbox.queue,
-                endOfArbBlockMessage(inbox.arbBlockNum, inbox.ethBlockNum, inbox.timestamp),
-            )
-        } else {
-            inbox.queue
-        }
-    } with {
-        arbBlockNum: inbox.arbBlockNum+1
-    } with {
-        seenMsgAtThisArbBlockNum: false
+    let rawSideloadMsg = asm(inbox.arbBlockNum,) any { sideload };
+    return xif (rawSideloadMsg != ()) {
+        let newMsg = incomingRequestFromRaw(unsafecast<IncomingRequestFromInbox>(rawSideloadMsg), true);
+        (
+            inbox with {
+                queue: incomingRequestQueue_put(inbox.queue, newMsg)
+            },
+            false,
+        )
+    } else {
+        (
+            xif (haveReceivedChainInitMessage()) {
+                inbox with {
+                    queue: incomingRequestQueue_put(
+                        inbox.queue,
+                        endOfArbBlockMessage(inbox.arbBlockNum, inbox.ethBlockNum, inbox.timestamp),
+                    )
+                } with {
+                    arbBlockNum: inbox.arbBlockNum+1
+                } with {
+                    seenMsgAtThisArbBlockNum: false
+                }
+            } else {
+                inbox
+            },
+            true
+        )
     };
 }
 

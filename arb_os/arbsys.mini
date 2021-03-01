@@ -16,6 +16,7 @@ use evmCallStack::evmCallStack_getTopFrameMemoryOrDie;
 use evmCallStack::evmCallStack_setTopFrameMemory;
 use evmCallStack::evmCallStack_callHitError;
 use evmCallStack::evmCallStack_addEvmLogToCurrent;
+use evmCallStack::evmCallStack_addStorageCharge;
 
 use evmCallStack::evmCallFrame_getCalldata;
 use evmCallStack::evmCallFrame_getCallvalue;
@@ -50,6 +51,7 @@ use std::bytestream::bytestream_new;
 use std::bytestream::bytestream_bytesReadSoFar;
 
 use inbox::inbox_currentArbBlockNumber;
+use inbox::inbox_currentEthBlockNumber;
 use inbox::inbox_currentTimestamp;
 
 use std::stack::stack_pop;
@@ -279,27 +281,31 @@ impure func arbsys_sendTxToL1(topFrame: EvmCallFrame, calldata: ByteArray) { // 
                             bytearray_set256(
                                 bytearray_set256(
                                     bytearray_set256(
-                                        bytearray_new(0),
-                                        0,
-                                        const::SendType_sendTxToL1
+                                        bytearray_set256(
+                                            bytearray_new(0),
+                                            0,
+                                            const::SendType_sendTxToL1
+                                        ),
+                                        32,
+                                        uint(evmCallFrame_getCaller(topFrame)),
                                     ),
-                                    32,
-                                    uint(evmCallFrame_getCaller(topFrame)),
+                                    64,
+                                    uint(destAddr),
                                 ),
-                                64,
-                                uint(destAddr),
+                                96,
+                                inbox_currentArbBlockNumber(),
                             ),
-                            96,
-                            inbox_currentArbBlockNumber(),
+                            128,
+                            inbox_currentEthBlockNumber(),
                         ),
-                        128,
+                        160,
                         inbox_currentTimestamp(),
                     ),
-                    160,
+                    192,
                     callvalue,
                 ),
-                192,
-                nbytes,
+                224,
+                nbytes
             ),
         );
         if (evmCallStack_setTopFrameMemory(bytearray_set256(bytearray_new(0), 0, 1))) {
@@ -393,8 +399,11 @@ impure func arbAddressTable_register(topFrame: EvmCallFrame, calldata: ByteArray
         evmOp_revert_knownCodePc(address(const::Address_ArbAddressTable), 110, 0, 0);
     }
     let addr = address(bytearray_get256(calldata, 4));
-    let (atab, idx) = addressTable_getByAddressAlloc(getGlobalAddressTable(), addr);
-    setGlobalAddressTable(atab);
+    let (atab, idx, changed) = addressTable_getByAddressAlloc(getGlobalAddressTable(), addr);
+    if (changed) {
+        evmCallStack_addStorageCharge(2);   // charge current tx for 2 storage cells
+        setGlobalAddressTable(atab);
+    }
     if (evmCallStack_setTopFrameMemory(bytearray_set256(evmCallStack_getTopFrameMemoryOrDie(), 0, idx))) {
         evmOp_return(0, 32);
     } else {

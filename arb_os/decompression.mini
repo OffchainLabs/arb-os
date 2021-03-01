@@ -112,12 +112,11 @@ public func addressTable_getByAddress(iat: IndexedAddressTable, addr: address) -
     return iat.byAddress[addr];
 }
 
-public impure func addressTable_getByAddressAlloc(iat: IndexedAddressTable, addr: address) -> (IndexedAddressTable, uint) {
+public func addressTable_getByAddressAlloc(iat: IndexedAddressTable, addr: address) -> (IndexedAddressTable, uint, bool) {
     return xif let Some(val) = iat.byAddress[addr] {
-        (iat, val)
+        (iat, val, false)
     } else {
         // allocate space in the table
-        evmCallStack_addStorageCharge(2);   // charge current tx for 2 storage cells
         (
             iat with {
                 byIndex: expandingIntArray_set(iat.byIndex, iat.size, uint(addr))
@@ -128,7 +127,8 @@ public impure func addressTable_getByAddressAlloc(iat: IndexedAddressTable, addr
             } with {
                 size: 1+iat.size
             },
-            iat.size
+            iat.size,
+            true,
         )
     };
 }
@@ -153,8 +153,11 @@ public impure func decompressAddress(
         Some((ustr, addressTable_getByIndex(globalIndexedAddressTable, decodedUint)?))
     } else {
         let (ustr, addr) = rlp_decodeAddress(stream)?;
-        let (giat, _) = addressTable_getByAddressAlloc(globalIndexedAddressTable, addr);
-        globalIndexedAddressTable = giat;
+        let (giat, _, changed) = addressTable_getByAddressAlloc(globalIndexedAddressTable, addr);
+        if (changed) {
+            evmCallStack_addStorageCharge(2);   // charge current tx for 2 storage cells
+            globalIndexedAddressTable = giat;
+        }
         Some((ustr, addr))
     };
 }
