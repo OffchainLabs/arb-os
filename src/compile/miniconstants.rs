@@ -194,7 +194,6 @@ pub fn init_constant_table() -> HashMap<String, Uint256> {
         // AVM send types
         ("AVMSendType_batch", 0),
         // chain initialization options
-        ("InitOption_setSecondsPerBlock", 1),
         ("InitOption_setChargingParams", 2),
         // charging mechanism
         ("Charging_DefaultL1GasPerL2Tx", 3700),
@@ -202,21 +201,21 @@ pub fn init_constant_table() -> HashMap<String, Uint256> {
         ("Charging_DefaultL1GasPerStorage", 2000),
         ("Charging_DefaultArbGasDivisor", 10000),
         ("Charging_AssumedBatchCostL1Gas", 50000),
+        ("Charging_GasPoolDepthSeconds", 60),
         // fee customizability
         ("NetFee_defaultRateNumerator", 15),
         ("NetFee_defaultRateDenominator", 100),
         // sequencer constants
-        ("Sequencer_maxDelayBlocks", 32768),   // 128*256
-        ("Sequencer_maxDelaySeconds", 983040), // 30*Sequencer_maxDelayBlocks
-        ("Sequencer_deltaBlocks", 0),
+        ("Sequencer_maxDelaySeconds", 983040), // 30*128*256
         ("Sequencer_deltaSeconds", 0),
         // pluggable modules
         ("PluggableModuleID_rollupTracker", 0),
         ("PluggableModuleID_precompile_0x05", 1),
         // misc
-        ("DefaultMillisecondsPerBlock", 13500),
-        ("DefaultSpeedLimitPerBlock", 13500 * 100000),
-        ("DefaultBlocksPerSend", 10),
+        ("SecondsPerBlockNumerator", 2),
+        ("SecondsPerBlockDenominator", 1),
+        ("DefaultSpeedLimitPerSecond", 100_000_000),
+        ("DefaultSecondsPerSend", 900),               // 15 minutes
         ("Estimate_L1GasCostPerNode", 220000),
         ("Estimate_L1GasPrice", 100 * 1_000_000_000), // 100 gwei
     ] {

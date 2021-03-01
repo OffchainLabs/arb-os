@@ -421,12 +421,12 @@ pub fn _evm_test_arbowner(log_to: Option<&Path>, debug: bool) -> Result<(), etha
 
     arbowner._finish_code_upload_as_arbos_upgrade(&mut machine)?;
 
-    arbowner._set_blocks_per_send(&mut machine, Uint256::from_u64(10))?;
+    arbowner._set_seconds_per_send(&mut machine, Uint256::from_u64(10))?;
 
     arbowner._set_gas_accounting_params(
         &mut machine,
-        Uint256::from_u64(2_000_000_000),
-        Uint256::from_u64(8_000_000_000),
+        Uint256::from_u64(100_000_000),
+        Uint256::from_u64(6_000_000_000),
         Uint256::from_u64(1_000_000_000),
     )?;
 
@@ -492,9 +492,9 @@ pub fn _evm_test_arbgasinfo(log_to: Option<&Path>, debug: bool) -> Result<(), et
 
     let (speed_limit, gas_pool_max, tx_gas_limit) = arbgasinfo._get_gas_accounting_params(&mut machine)?;
     println!("speed limit {}, pool max {}, tx gas limit {}", speed_limit, gas_pool_max, tx_gas_limit);
-    assert_eq!(speed_limit, Uint256::from_u64(1_350_000_000));
-    assert_eq!(gas_pool_max, Uint256::from_u64(5 * 1_350_000_000));
-    assert_eq!(tx_gas_limit, Uint256::from_u64(1_350_000_000));
+    assert_eq!(speed_limit, Uint256::from_u64(100_000_000));
+    assert_eq!(gas_pool_max, Uint256::from_u64(6_000_000_000));
+    assert_eq!(tx_gas_limit, Uint256::from_u64(1_000_000_000));
 
     if let Some(path) = log_to {
         machine.runtime_env.recorder.to_file(path).unwrap();
