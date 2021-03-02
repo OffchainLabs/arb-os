@@ -27,3 +27,4 @@ evm-test-logs/*
 contracts/artifacts
 contracts/cache
 contracts/node_modules
+contracts/src/types
