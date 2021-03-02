@@ -1075,6 +1075,7 @@ impl AVMOpcode {
             AVMOpcode::Keccakf => "keccakf",
             AVMOpcode::Sha256f => "sha256f",
             AVMOpcode::Ripemd160f => "ripemd160f",
+            AVMOpcode::Blake2f => "blake2f",
             AVMOpcode::Tlen => "length",
             AVMOpcode::Plus => "plus",
             AVMOpcode::Minus => "minus",
