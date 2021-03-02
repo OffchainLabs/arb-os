@@ -953,7 +953,8 @@ public impure func evmOp_create(value: uint, offset: uint, length: uint) -> addr
             return address(0);
         }
         let newAddress = address(keccakOfRlpEncodedUintPair(uint(myAddr), seqNum));
-        return doCreationOpcode(value, offset, length, newAddress);
+        let ret = doCreationOpcode(value, offset, length, newAddress);
+        return ret;
     }
 
     evm_runtimePanic(30);
@@ -1022,88 +1023,15 @@ impure func doCreationOpcode(value: uint, offset: uint, length: uint, newAddress
                 )
             )
         ) {
-            // Now for the slightly tricky part.
-            // We're going to call the untrusted constructor, which might end up polluting our
-            //    Mini-language callstack (which is stored on the AVM auxstack).
-            // The possibly-polluted callstack includes our local variables and our return address.
-            // It also contains the locals and return address of our caller, which we also need to preserve.
-            // We don't need to preserve any more because our caller's caller is translated EVM code,
-            //    which doesn't use the aux stack and isn't trusted to maintain any invariants about it.
-            // We will make a copy of the things we want to preserve, on the AVM stack, because the AVM stack
-            //    gets saved and restored across calls to untrusted code.
-            // After the return we'll restore the saved info, and continue.
-
-            // copy top four AVM auxstack items onto the AVM stack (locals and return address of us and our caller)
-            asm(((),(),(),()),) {
-                auxpop
-                swap1
-                auxpop
-                swap1
-                auxpop
-                swap1
-                auxpop
-                swap1
-                dup1
-                auxpush
-                [0] tset
-                dup1
-                auxpush
-                [1] tset
-                dup1
-                auxpush
-                [2] tset
-                dup1
-                auxpush
-                [3] tset
-            };
-
-            let constructorSucceeded = false;
-
-            // We can't save the result of this call to a local variable, because when the calls returns,
-            //     we can't (yet) trust that our local callframe is in a reasonable state.
-            //     So we have to use an if-statement to capture the return value.
-            if (evmOp_call(
+            let constructorSucceeded = evmOp_callAndReturn(
                 1000000000,  // gas allocation
-                uint(newAddress),
+                newAddress,
                 value,
                 0,           // no calldata passed to constructor
                 0,
                 0,           // don't copy returndata back into caller's memory
                 0,
-            )) {
-                // Constructor call succeeded.
-                // Recover our saved information from the stack, put it back onto the auxstack
-                asm() {
-                    dup0
-                    [0] tget
-                    auxpush
-                    dup0
-                    [1] tget
-                    auxpush
-                    dup0
-                    [2] tget
-                    auxpush
-                    [3] tget
-                    auxpush
-                };
-
-                constructorSucceeded = true;
-            } else {
-                // Recover our saved information from the stack, put it back onto the auxstack
-                asm() {
-                    dup0
-                    [0] tget
-                    auxpush
-                    dup0
-                    [1] tget
-                    auxpush
-                    dup0
-                    [2] tget
-                    auxpush
-                    [3] tget
-                    auxpush
-                 };
-            }
+            );
 
             if (constructorSucceeded) {
                 if let Some(contractCode) = evmCallStack_getTopFrameReturnData() {
