@@ -828,7 +828,7 @@ impure func updateCongestionState(state: CongestionState, toBlockNum: uint, toTi
 
     // doing a per-second loop isn't elegant, but cost is low enough that it shouldn't be a problem
     // eventually we should solve this analytically to avoid the per-second loop
-    while((lastTimestampSeen < toTimestamp) && ( (state.gasPool < int(gasAccountingParams.GasPoolMax)) || (totalPrice > basePrice) )) {
+    while((lastTimestampSeen < toTimestamp) && ( (gasPool < int(gasAccountingParams.GasPoolMax)) || (totalPrice > basePrice) )) {
         lastTimestampSeen = lastTimestampSeen + 1;
         gasPool = gasPool + int(speedLimit);
         if (gasPool > int(gasAccountingParams.GasPoolMax)) {
