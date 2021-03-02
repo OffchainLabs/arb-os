@@ -27,7 +27,7 @@ pub struct CallInfo<'a> {
 }
 
 pub fn test_contract_path(contract_name: &str) -> String {
-    format!("contracts/test/build/contracts/{}.json", contract_name)
+    format!("contracts/artifacts/arbos/test/{}.sol/{}.json", contract_name, contract_name)
 }
 
 pub fn evm_xcontract_call_with_constructors(
