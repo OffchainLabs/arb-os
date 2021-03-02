@@ -1014,6 +1014,7 @@ impl Machine {
             match self.run_one(false) {
                 Ok(still_runnable) => {
                     if !still_runnable {
+                        self.total_gas_usage = self.total_gas_usage.sub(&Uint256::from_u64(gas_this_instruction)).unwrap();
                         return gas_used - gas_this_instruction;
                     }
                 }
