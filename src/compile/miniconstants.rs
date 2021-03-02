@@ -66,7 +66,8 @@ pub fn init_constant_table() -> HashMap<String, Uint256> {
         ("EvmOp_chainId", 43),
         ("EvmOp_gasprice", 44),
         ("EvmOp_gaslimit", 45),
-        ("NumEvmOps", 46),
+        ("EvmOp_blockhash", 46),
+        ("NumEvmOps", 47),
         // AVM instructions
         ("AVM_add", 0x01),
         ("AVM_mul", 0x02),
