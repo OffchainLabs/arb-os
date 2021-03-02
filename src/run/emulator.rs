@@ -966,11 +966,13 @@ impl Machine {
                     }
                 }
             }
-            if let Some(gas) = self.next_op_gas() {
+            let gas_this_instruction = if let Some(gas) = self.next_op_gas() {
                 gas_used += gas;
+                gas
             } else {
                 println!("Warning: next opcode does not have a gas cost");
-            }
+                1
+            };
 
             let cp = self.get_pc();
 
@@ -1012,7 +1014,11 @@ impl Machine {
             match self.run_one(false) {
                 Ok(still_runnable) => {
                     if !still_runnable {
-                        return gas_used;
+                        self.total_gas_usage = self
+                            .total_gas_usage
+                            .sub(&Uint256::from_u64(gas_this_instruction))
+                            .unwrap();
+                        return gas_used - gas_this_instruction;
                     }
                 }
                 Err(e) => {
@@ -1282,8 +1288,9 @@ impl Machine {
                 if let Some(val) = &insn.immediate {
                     self.stack.push(val.clone());
                 }
-                if let Some(gas) = self.next_op_gas() {
+                let gas_remaining_before = if let Some(gas) = self.next_op_gas() {
                     let gas256 = Uint256::from_u64(gas);
+                    let gas_remaining_before = self.arb_gas_remaining.clone();
                     if let Some(remaining) = self.arb_gas_remaining.sub(&gas256) {
                         self.arb_gas_remaining = remaining;
                         self.total_gas_usage = self.total_gas_usage.add(&gas256);
@@ -1291,7 +1298,10 @@ impl Machine {
                         self.arb_gas_remaining = Uint256::max_int();
                         return Err(ExecutionError::new("Out of ArbGas", &self.state, None));
                     }
-                }
+                    gas_remaining_before
+                } else {
+                    self.arb_gas_remaining.clone()
+                };
                 match insn.opcode {
                     AVMOpcode::Noop => {
                         self.incr_pc();
@@ -1811,7 +1821,10 @@ impl Machine {
                                 self.incr_pc();
                                 Ok(true)
                             }
-                            None => Ok(false), // machine is blocked, waiting for message
+                            None => {
+                                self.arb_gas_remaining = gas_remaining_before;
+                                Ok(false) // machine is blocked, waiting for message
+                            }
                         }
                     }
                     AVMOpcode::InboxPeek => {
@@ -1840,6 +1853,7 @@ impl Machine {
                             }
                             None => {
                                 // machine is blocked, waiting for nonempty inbox
+                                self.arb_gas_remaining = gas_remaining_before;
                                 self.stack.push_uint(bn); // put stack back the way it was
                                 Ok(false)
                             }
@@ -1955,7 +1969,7 @@ impl Machine {
                         self.arb_gas_remaining = gas;
                         self.incr_pc();
                         Ok(true)
-                    },
+                    }
                     AVMOpcode::Sideload => {
                         let _block_num = self.stack.pop_uint(&self.state)?;
                         self.stack.push(Value::none());

@@ -41,7 +41,7 @@ pub fn benchmark_boot(_iterations: u64, log_to: &Path) -> u64 {
     machine.start_at_zero();
 
     let gas_used = machine.run(None);
-    machine.runtime_env.recorder.to_file(log_to).unwrap();
+    machine.runtime_env.recorder.to_file(log_to, machine.get_total_gas_usage().to_u64().unwrap()).unwrap();
     gas_used
 }
 
@@ -83,7 +83,7 @@ pub fn benchmark_add(iterations: u64, log_to: &Path) -> u64 {
             .unwrap();
     }
 
-    machine.runtime_env.recorder.to_file(log_to).unwrap();
+    machine.runtime_env.recorder.to_file(log_to, machine.get_total_gas_usage().to_u64().unwrap()).unwrap();
     machine.get_total_gas_usage().to_u64().unwrap()
 }
 
@@ -137,6 +137,6 @@ pub fn benchmark_add_batched(iterations: u64, log_to: &Path) -> u64 {
 
     machine.run(None);
 
-    machine.runtime_env.recorder.to_file(log_to).unwrap();
+    machine.runtime_env.recorder.to_file(log_to, machine.get_total_gas_usage().to_u64().unwrap()).unwrap();
     machine.get_total_gas_usage().to_u64().unwrap()
 }
