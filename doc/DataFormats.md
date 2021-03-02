@@ -74,7 +74,14 @@ At present. the following options are supported:
 
 * [Option 0 is currently unused]
 * [Option 1 is currently unused]
-* Option 2: set charging parameters: speed limit per second (uint); L1 gas per L2 tx (uint); L1 gas per L2 calldata byte; L1 gas per storage unit allocated (uint); ratio of L1 gas price to base ArbGas price; network fee recipient (address encoded as uint); congestion fee recipient (address encoded as uint)
+* Option 2: set charging parameters: 
+  * speed limit per second (uint); 
+  * L1 gas per L2 tx (uint); 
+  * L1 gas per L2 calldata byte; 
+  * L1 gas per storage unit allocated (uint); 
+  * ratio of L1 gas price to base ArbGas price; 
+  * network fee recipient (address encoded as uint); 
+  * congestion fee recipient (address encoded as uint)
 
 All other options are ignored at present.
 
@@ -228,15 +235,22 @@ A tx receipt log item consists of:
   * ArbGas used in current Arbitrum block including this tx (uint)
   * index of this tx within this Arbitrum block (uint)
   * number of EVM logs emitted in this Arbitrum block before this tx (uint)
-* fee information for the transaction, an 8-tuple consisting of:
-  * price per L2 transaction, in wei
-  * price per byte of L1 calldata, in wei
-  * price per L2 storage cell allocated, in wei
-  * price per ArbGas computed, in wei
-  * amount paid for L2 transaction base fee, in wei
-  * amount paid for L1 calldata, in wei
-  * amount paid for L2 storage, in wei
-  * amount paid for ArbGas computed, in wei
+* fee information for the transaction, an 3-tuple consisting of:
+  * a 4-tuple of prices of:
+    * L2 transaction (uint)
+    * L1 calldata bytes (uint)
+    * L2 storage (uint)
+    * L2 computation (uint)
+  * a 4-tuple of units used of:
+    * L2 transaction (uint, will always be 1)
+    * L1 calldata bytes (uint)
+    * L2 storage (uint)
+    * L2 computation (uint)
+  * a 4-tuple of wei paid for: [might not equal product of units and price, e.g. if user has insufficient funds to pay]
+    * L2 transaction (uint)
+    * L1 calldata bytes (uint)
+    * L2 storage (uint)
+    * L2 computation (uint)
 
 Possible return codes are:
 	0: tx returned (success)

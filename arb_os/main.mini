@@ -8,6 +8,7 @@ use accounts::accountStore_init;
 use accounts::getGlobalAccountStore;
 use accounts::setGlobalAccountStore;
 use accounts::accountStore_createAccountFromEvmCode;
+use blockhash::blockhash_init;
 use chainParameters::chainParams_init;
 use codeSegment::codeSegment_init;
 use codeSegment::translateEvmCodeSegment;
@@ -62,6 +63,7 @@ impure func main() {
     gasAccounting_init();
     evmCallStack_init();
     evmOps_init();
+    blockhash_init();
     inbox_init();
     accountStore_init();
     txReceipts_init();
