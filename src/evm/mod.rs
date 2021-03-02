@@ -1603,8 +1603,8 @@ pub fn _evm_test_payment_in_constructor(log_to: Option<&Path>, debug: bool) {
     let last_send = machine.runtime_env._get_last_send().unwrap();
     let mut expected_bytes = my_addr.to_bytes_be();
     expected_bytes.extend(Uint256::from_usize(5000).to_bytes_be());
-    assert_eq!(last_send[0..32], Uint256::zero().to_bytes_be());
-    assert_eq!(last_send[32..], expected_bytes);
+    assert_eq!(&last_send[0..32], Uint256::zero().to_bytes_be());
+    assert_eq!(&last_send[32..], expected_bytes);
 
     if let Some(path) = log_to {
         let _ = machine.runtime_env.recorder.to_file(path, machine.get_total_gas_usage().to_u64().unwrap()).unwrap();
@@ -1699,8 +1699,8 @@ pub fn evm_test_arbsys(log_to: Option<&Path>, debug: bool) {
     let last_send = machine.runtime_env._get_last_send().unwrap();
     let mut expected_bytes = my_addr.to_bytes_be();
     expected_bytes.extend(Uint256::from_usize(5000).to_bytes_be());
-    assert_eq!(last_send[0..32], Uint256::zero().to_bytes_be());
-    assert_eq!(last_send[32..], expected_bytes);
+    assert_eq!(&last_send[0..32], Uint256::zero().to_bytes_be());
+    assert_eq!(&last_send[32..], expected_bytes);
 
     if let Some(path) = log_to {
         let _ = machine.runtime_env.recorder.to_file(path, machine.get_total_gas_usage().to_u64().unwrap()).unwrap();
