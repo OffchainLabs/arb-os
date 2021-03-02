@@ -425,6 +425,7 @@ impure func decompressTx(
             seqNum: Some(seqNum),
             caller: sender,
             calleeAddr: toAddr,
+            gasPayer: sender,
             value: value,
             calldata: calldata,
             nonMutating: false,

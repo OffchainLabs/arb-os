@@ -706,7 +706,7 @@ public impure func getNextRequestFromCongestionAuction() -> (
 
                 // reimburse aggregator for tx and calldata, and collect network fee
                 let (fullyPaid, feeStats) = payForTxAndL1Gas(
-                    tx.caller,
+                    tx.gasPayer,
                     aggInfo.aggregator,
                     aggInfo.calldataBytes,
                     gasAccountingInfo.feeConfig,

@@ -126,6 +126,7 @@ type TxRequestData = struct {
     seqNum: option<uint>,
     caller: address,
     calleeAddr: address,
+    gasPayer: address,
     value: uint,
     calldata: ByteArray,
     nonMutating: bool,

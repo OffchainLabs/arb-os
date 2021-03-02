@@ -68,6 +68,7 @@ public impure func translateSignedTx(req: IncomingRequest) -> option<TxRequestDa
             seqNum: Some(signedTx.seqNum),
             caller: signer,
             calleeAddr: signedTx.to,
+            gasPayer: signer,
             value: signedTx.value,
             calldata: signedTx.data,
             nonMutating: false,
