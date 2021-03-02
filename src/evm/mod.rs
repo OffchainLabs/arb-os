@@ -1836,20 +1836,21 @@ pub fn _evm_test_same_address_deploy(log_to: Option<&Path>, debug: bool) {
     let my_addr = Uint256::from_usize(1023);
     let (contract, _) =
         match AbiForContract::new_from_file(&test_contract_path("Add")) {
-            Ok(mut contract) => {
+            Ok(mut new_contract) => {
                 println!("Doing first deploy");
-                let result = contract.deploy(
+                let result = new_contract.deploy(
                     &[],
                     &mut machine,
                     Uint256::zero(),
-                    None,
+                    Some(Uint256::one()),
                     Some((my_addr.clone(), Uint256::zero())),
                     debug,
                 );
                 println!("First deploy finished");
                 if let Ok(contract_addr) = result {
                     assert_ne!(contract_addr, Uint256::zero());
-                    (contract, contract_addr)
+                    println!("contract_addr: {}", contract_addr);
+                    (new_contract, contract_addr)
                 } else {
                     panic!("deploy failed");
                 }

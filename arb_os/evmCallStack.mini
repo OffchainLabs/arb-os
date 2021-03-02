@@ -178,6 +178,7 @@ public impure func initEvmCallStack(
     request: TxRequestData,
     sendOnFailure: option<ByteArray>,
 ) {
+    asm(1,) { debugprint };
     // Set up the call frame for a top-level call, and launch the call's execution.
     if let Some(entryPoint) = account_getStartCodePoint(
         accountStore_get(
@@ -185,8 +186,11 @@ public impure func initEvmCallStack(
             request.calleeAddr
         )
     ) {
+        asm(2,) { debugprint };
         let startTxResult = gasAccounting_startTxCharges(request.maxGas, request.gasPrice, request.caller);
+        asm(3,) { debugprint };
         if (startTxResult == const::TxResultCode_success) {
+            asm(4,) { debugprint };
             if (request.seqNum != None<uint>) {
                 // increment the caller's sequence number, if caller has sufficient balance
                 let acctStore = getGlobalAccountStore();
@@ -202,6 +206,7 @@ public impure func initEvmCallStack(
                     );
                 }
             }
+            asm(5,) { debugprint };
 
             globalCurrentTxRequest = request;
 
@@ -213,6 +218,7 @@ public impure func initEvmCallStack(
                 request.calleeAddr,
                 request.value
             ) {
+                asm(6,) { debugprint };
                 globalCallStack = Some(struct {
                     runningAs: request.calleeAddr,
                     runningCodeFrom: request.calleeAddr,
@@ -233,8 +239,9 @@ public impure func initEvmCallStack(
                     sendOnFailure: sendOnFailure,
                     parent: None<EvmCallFrame>
                 });
-
+                asm(7,) { debugprint };
                 emptyAvmStack();
+                asm(8,) { debugprint };
                 asm(entryPoint,) { jump };
                 // entryPoint();  // start executing the call; should never return
             } else {
@@ -564,14 +571,16 @@ public impure func evmCallStack_returnFromCall(
     returnLength: uint
 ) -> option<()> {
     // A call just completed. Commit its effects as appropriate, and return control to its caller.
-
+    asm((90, success, returnOffset, returnLength),) { debugprint };
     let leftoverGas = gasAccounting_pauseTxCharges();  // amount of gas lent to call that wasn't used
 
     let topFrame = globalCallStack?;
     let memory = topFrame.memory;
     let returnData = bytearray_extract(memory, returnOffset, returnLength);
 
+    asm(91,) { debugprint };
     return xif let Some(newTopFrame) = topFrame.parent {
+        asm(92,) { debugprint };
         // Returning from a non-top-level call
 
         topFrame = topFrame with {   // copy cached account back into callframe's main accountStore
@@ -643,12 +652,16 @@ public impure func evmCallStack_returnFromCall(
         evmCallStack_callHitError(8);
         panic  // shouldn't happen -- previous instruction jumped away
     } else {
+        asm(93,) { debugprint };
         // top-level call completed; will need to return to external caller
         if (success) {
+            asm(94,) { debugprint };
             if (globalCurrentTxRequest.isConstructor) {
+                asm(95,) { debugprint };
                 // contract code takes up space, so charge 1 storage for each 32 bytes of EVM code
                 evmCallStack_addStorageCharge( (bytearray_size(returnData) + 31) / 32 );
             }
+            asm(96,) { debugprint };
             let (completed, gasUsage, feeStats) = gasAccounting_endTxCharges(
                 topFrame.storageDelta - int(storageReclaimedForSDQ(topFrame)),  // won't underflow because signed subtraction
                 globalCurrentTxRequest.feeStats
@@ -716,6 +729,7 @@ public impure func evmCallStack_returnFromCall(
                         );
 
                         if (globalCurrentTxRequest.incomingRequest.kind == 5) {
+                            asm((1400, topFrame.runningAs),) { debugprint };
                             // successfully created a buddy contract -- announce that as a message
                             sendBuddyContractResult(topFrame.runningAs, true);
                         }
