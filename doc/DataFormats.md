@@ -103,6 +103,27 @@ This message type encodes an L2 transaction that is funded by calldata provided 
 
 [This is not yet documented.]
 
+**Message type 9: Send tx to retry buffer**
+
+This message type delivers a transaction, to be placed in the L2 retry buffer. 
+
+Type-specific data:
+
+* destination address (address encoded as uint)
+* callvalue, in wei (uint)
+* calldata (bytes)
+
+**Message type 10: Redeem tx from retry buffer**
+
+This message type schedules for execution a transaction from the retry buffer.
+
+Type-specific data:
+
+* transaction ID
+* L2 ArbGas limit (uint)
+* L2 ArbGas price bid, in wei (uint)
+* funds sent from L1, in wei (uint)
+
 ## L2 messages
 
 As noted above, an L2 message is one type of incoming message that can be put into an L2 chain's inbox. The purpose of an L2 message is to convey information, typically a transaction request, to ArbOS. The EthBridge does not examine or interpret the contents of an L2 message.
