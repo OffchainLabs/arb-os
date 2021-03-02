@@ -105,24 +105,20 @@ This message type encodes an L2 transaction that is funded by calldata provided 
 
 **Message type 9: Send tx to retry buffer**
 
-This message type delivers a transaction, to be placed in the L2 retry buffer. 
+This message type delivers a transaction, which will be placed in the L2 retry buffer, rather than being executed immediately. 
 
 Type-specific data:
 
 * destination address (address encoded as uint)
 * callvalue, in wei (uint)
-* calldata (bytes)
+* L1-to-L2 deposit, in wei (uint)
+* calldata size (uint)
+* calldata
 
-**Message type 10: Redeem tx from retry buffer**
+If this message is properly formatted, ArbOS will emit a transaction receipt reporting success, and 64 bytes of return data: 
 
-This message type schedules for execution a transaction from the retry buffer.
-
-Type-specific data:
-
-* transaction ID
-* L2 ArbGas limit (uint)
-* L2 ArbGas price bid, in wei (uint)
-* funds sent from L1, in wei (uint)
+* transaction ID (uint)
+* keccak256 of retryable transaction that was created
 
 ## L2 messages
 

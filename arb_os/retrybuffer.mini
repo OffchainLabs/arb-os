@@ -2,7 +2,32 @@
 // Copyright 2021, Offchain Labs, Inc. All rights reserved.
 //
 
+use accounts::getGlobalAccountStore;
+use accounts::setGlobalAccountStore;
+use accounts::accountStore_get;
+use accounts::accountStore_set;
+use accounts::account_addToEthBalance;
+
+use evmlogs::EvmLogs;
+
+use gasAccounting::GasUsage;
+use gasAccounting::txFeeStats_zero;
+
+use inbox::IncomingRequest;
+use inbox::inbox_currentTimestamp;
+
 use messages::TxRequestData;
+
+use output::emitTxReceipt;
+
+use std::bytearray::ByteArray;
+use std::bytearray::bytearray_new;
+use std::bytearray::bytearray_size;
+use std::bytearray::bytearray_get256;
+use std::bytearray::bytearray_set256;
+use std::bytearray::bytearray_extract;
+
+use std::keccak::keccak256;
 
 use std::queue::Queue;
 use std::queue::queue_new;
@@ -10,15 +35,66 @@ use std::queue::queue_put;
 use std::queue::queue_get;
 
 
+type RetryableTx = struct {
+    txId: uint,
+    sender: address,
+    destination: address,
+    callvalue: uint,
+    calldata: ByteArray,
+}
+
+type RetryQueueItem = struct {
+    txId: uint,
+    enqueueTime: uint,
+}
+
+public func retryableTx_hash(rtx: RetryableTx) -> bytes32 {
+    return hash(
+        bytes32(rtx.txId),
+        hash(
+            bytes32(rtx.sender),
+            hash(
+                bytes32(rtx.destination),
+                hash(
+                    bytes32(rtx.callvalue),
+                    keccak256(rtx.calldata, 0, bytearray_size(rtx.calldata)),
+                )
+            )
+        )
+    );
+}
+
+public func retryItem_rebuildVerifyHash(
+    txId: uint,
+    sender: address,
+    destination: address,
+    callvalue: uint,
+    calldata: ByteArray,
+    claimedHash: bytes32,
+) -> option<RetryableTx> {
+    let claimedRtx = struct {
+        txId: txId,
+        sender: sender,
+        destination: destination,
+        callvalue: callvalue,
+        calldata: calldata,
+    };
+    return xif (claimedHash == retryableTx_hash(claimedRtx)) {
+        Some(claimedRtx)
+    } else {
+        None<RetryableTx>
+    };
+}
+
 var retryBuffer: struct {
-    byTxId: map<uint, TxRequestData>,
+    byTxId: map<uint, RetryableTx>,
     fifo: Queue,
     txLifetimeSeconds: uint
 };
 
 public impure func retryBuffer_init() {
     retryBuffer = struct {
-        byTxId: newmap<uint, TxRequestData>,
+        byTxId: newmap<uint, RetryableTx>,
         fifo: queue_new(),
         txLifetimeSeconds: const::RetryBuffer_DefaultLifetimeSeconds,
     };
@@ -44,11 +120,11 @@ impure func retryBuffer_trimTwo(currentTimestamp: uint) {
 
 impure func retryBuffer_trimOne(currentTimestamp: uint) -> bool {  // returns true iff a tx was trimmed
     return xif let Some(res) = queue_get(retryBuffer.fifo) {
-        let (uq, txid) = res;
-        xif let Some(rawItem) = retryBuffer.byTxId[unsafecast<uint>(txid)] {
-            let item = unsafecast<TxRequestData>(rawItem);
-            xif (item.incomingRequest.timestamp + retryBuffer.txLifetimeSeconds <= currentTimestamp) {
-                retryBuffer_delete(item.incomingRequest.requestId);
+        let (uq, rawQitem) = res;
+        let qitem = unsafecast<RetryQueueItem>(rawQitem);
+        xif let Some(rawItem) = retryBuffer.byTxId[qitem.txId] {
+            xif (qitem.enqueueTime + retryBuffer.txLifetimeSeconds <= currentTimestamp) {
+                retryBuffer_delete(qitem.txId);
                 retryBuffer = retryBuffer with {
                    fifo: uq
                 };
@@ -64,30 +140,83 @@ impure func retryBuffer_trimOne(currentTimestamp: uint) -> bool {  // returns tr
     };
 }
 
-public impure func retryBuffer_insert(tx: TxRequestData) {
-    retryBuffer_trimTwo(tx.incomingRequest.timestamp);
-    let txid = tx.incomingRequest.requestId;
+public impure func retryBuffer_insert(rtx: RetryableTx) {
+    let now = inbox_currentTimestamp();
+    retryBuffer_trimTwo(now);
+    let txId = rtx.txId;
     retryBuffer = retryBuffer with {
-        byTxId: retryBuffer.byTxId with { [txid] = tx }
+        byTxId: retryBuffer.byTxId with { [txId] = rtx }
     } with {
-        fifo: queue_put(retryBuffer.fifo, txid)
+        fifo: queue_put(retryBuffer.fifo, struct { txId: txId, enqueueTime: now })
     };
 }
 
-public impure func retryBuffer_get(txid: uint, removeIfFound: bool) -> option<TxRequestData> {
-    let ret = retryBuffer.byTxId[txid];
+public impure func retryBuffer_insertNew(
+    txId: uint,
+    sender: address,
+    destination: address,
+    callvalue: uint,
+    calldata: ByteArray
+) -> bytes32 {
+    let newTx = struct {
+        txId: txId,
+        sender: sender,
+        destination: destination,
+        callvalue: callvalue,
+        calldata: calldata,
+    };
+    retryBuffer_insert(newTx);
+
+    return retryableTx_hash(newTx);
+}
+
+public impure func retryBuffer_get(txId: uint, removeIfFound: bool) -> option<RetryableTx> {
+    let ret = retryBuffer.byTxId[txId];
     if (removeIfFound) {
         if let Some(tx) = ret {
-            retryBuffer_delete(txid);
+            retryBuffer_delete(txId);
         }
     }
     return ret;
 }
 
-public impure func retryBuffer_delete(txid: uint) {
+public impure func retryBuffer_delete(txId: uint) {
     retryBuffer = retryBuffer with {
-        byTxId: retryBuffer.byTxId with { [txid] = unsafecast<TxRequestData>(0) }    // deletes item from the map
+        byTxId: retryBuffer.byTxId with { [txId] = unsafecast<RetryableTx>(0) }    // deletes item from the map
     };
     // tx might still be in retryBuffer.fifo, but that isn't a problem because it's not gettable and re-deletion is safe
+}
+
+public impure func processRedeemableTx(req: IncomingRequest) {
+    let sender = req.sender;
+    let destination = address(bytearray_get256(req.msgData, 0));
+    let callvalue = bytearray_get256(req.msgData, 32);
+    let deposit = bytearray_get256(req.msgData, 2*32);
+    let calldataSize = bytearray_get256(req.msgData, 3*32);
+    let calldata = bytearray_extract(req.msgData, 4*32, calldataSize);
+
+    // deposited funds go into the caller's account
+    if (deposit > 0) {
+        let globalStore = getGlobalAccountStore();
+        setGlobalAccountStore(
+            accountStore_set(
+                globalStore,
+                sender,
+                account_addToEthBalance(accountStore_get(globalStore, sender), deposit)
+            )
+        );
+    }
+
+    let txHash = retryBuffer_insertNew(req.requestId, sender, destination, callvalue, calldata);
+
+    // emit tx receipt for this submission
+    emitTxReceipt(
+        req,
+        const::TxResultCode_success,
+        Some(bytearray_set256(bytearray_set256(bytearray_new(0), 0, req.requestId), 32, uint(txHash))),
+        None<EvmLogs>,
+        None<GasUsage>,
+        txFeeStats_zero(),
+    );
 }
 
