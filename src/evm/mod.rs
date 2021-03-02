@@ -106,7 +106,7 @@ pub fn evm_xcontract_call_with_constructors(
     assert!(logs[0].succeeded());
 
     if let Some(path) = log_to {
-        machine.runtime_env.recorder.to_file(path).unwrap();
+        machine.runtime_env.recorder.to_file(path, machine.get_total_gas_usage().to_u64().unwrap()).unwrap();
     }
 
     Ok(true)
@@ -216,7 +216,7 @@ pub fn _evm_run_with_gas_charging(
     }
 
     if let Some(path) = log_to {
-        machine.runtime_env.recorder.to_file(path).unwrap();
+        machine.runtime_env.recorder.to_file(path, machine.get_total_gas_usage().to_u64().unwrap()).unwrap();
     }
 
     Ok(true)
@@ -291,7 +291,7 @@ pub fn _evm_tx_with_deposit(
     assert!(logs[0].succeeded());
 
     if let Some(path) = log_to {
-        machine.runtime_env.recorder.to_file(path).unwrap();
+        machine.runtime_env.recorder.to_file(path, machine.get_total_gas_usage().to_u64().unwrap()).unwrap();
     }
 
     Ok(true)
@@ -338,7 +338,7 @@ pub fn evm_deploy_using_non_eip159_signature(
     assert!(logs[0].succeeded());
 
     if let Some(path) = log_to {
-        machine.runtime_env.recorder.to_file(path).unwrap();
+        machine.runtime_env.recorder.to_file(path, machine.get_total_gas_usage().to_u64().unwrap()).unwrap();
     }
 
     Ok(true)
@@ -396,7 +396,7 @@ pub fn evm_test_arbsys_direct(log_to: Option<&Path>, debug: bool) -> Result<(), 
     assert_eq!(y1, oy1);
 
     if let Some(path) = log_to {
-        machine.runtime_env.recorder.to_file(path).unwrap();
+        machine.runtime_env.recorder.to_file(path, machine.get_total_gas_usage().to_u64().unwrap()).unwrap();
     }
 
     Ok(())
@@ -431,7 +431,7 @@ pub fn _evm_test_arbowner(log_to: Option<&Path>, debug: bool) -> Result<(), etha
     )?;
 
     if let Some(path) = log_to {
-        machine.runtime_env.recorder.to_file(path).unwrap();
+        machine.runtime_env.recorder.to_file(path, machine.get_total_gas_usage().to_u64().unwrap()).unwrap();
     }
 
     Ok(())
@@ -497,7 +497,7 @@ pub fn _evm_test_arbgasinfo(log_to: Option<&Path>, debug: bool) -> Result<(), et
     assert_eq!(tx_gas_limit, Uint256::from_u64(1_000_000_000));
 
     if let Some(path) = log_to {
-        machine.runtime_env.recorder.to_file(path).unwrap();
+        machine.runtime_env.recorder.to_file(path, machine.get_total_gas_usage().to_u64().unwrap()).unwrap();
     }
 
     Ok(())
@@ -531,7 +531,7 @@ pub fn _evm_test_rate_control(log_to: Option<&Path>, debug: bool) -> Result<(), 
     assert_eq!(new_r2, updated_r2);
 
     if let Some(path) = log_to {
-        machine.runtime_env.recorder.to_file(path).unwrap();
+        machine.runtime_env.recorder.to_file(path, machine.get_total_gas_usage().to_u64().unwrap()).unwrap();
     }
 
     Ok(())
@@ -579,7 +579,7 @@ pub fn evm_test_function_table_access(
     assert_eq!(gas_limit, Uint256::from_u64(10000000));
 
     if let Some(path) = log_to {
-        machine.runtime_env.recorder.to_file(path).unwrap();
+        machine.runtime_env.recorder.to_file(path, machine.get_total_gas_usage().to_u64().unwrap()).unwrap();
     }
 
     Ok(())
@@ -608,7 +608,7 @@ pub fn _basic_evm_add_test(log_to: Option<&Path>, debug: bool) -> Result<(), eth
     assert_eq!(result, right_answer);
 
     if let Some(path) = log_to {
-        machine.runtime_env.recorder.to_file(path).unwrap();
+        machine.runtime_env.recorder.to_file(path, machine.get_total_gas_usage().to_u64().unwrap()).unwrap();
     }
 
     Ok(())
@@ -655,7 +655,7 @@ pub fn _underfunded_nested_call_test(
     assert!(logs[0].succeeded());
 
     if let Some(path) = log_to {
-        machine.runtime_env.recorder.to_file(path).unwrap();
+        machine.runtime_env.recorder.to_file(path, machine.get_total_gas_usage().to_u64().unwrap()).unwrap();
     }
 
     Ok(())
@@ -720,7 +720,7 @@ pub fn evm_test_create(
     assert!(logs[0].succeeded());
 
     if let Some(path) = log_to {
-        machine.runtime_env.recorder.to_file(path).unwrap();
+        machine.runtime_env.recorder.to_file(path, machine.get_total_gas_usage().to_u64().unwrap()).unwrap();
     }
 
     Ok(true)
@@ -833,7 +833,7 @@ pub fn evm_xcontract_call_using_batch(
     );
 
     if let Some(path) = log_to {
-        machine.runtime_env.recorder.to_file(path).unwrap();
+        machine.runtime_env.recorder.to_file(path, machine.get_total_gas_usage().to_u64().unwrap()).unwrap();
     }
 
     Ok(true)
@@ -968,7 +968,7 @@ pub fn _evm_xcontract_call_using_sequencer_batch(
     );
 
     if let Some(path) = log_to {
-        machine.runtime_env.recorder.to_file(path).unwrap();
+        machine.runtime_env.recorder.to_file(path, machine.get_total_gas_usage().to_u64().unwrap()).unwrap();
     }
 
     Ok(true)
@@ -1103,7 +1103,7 @@ pub fn _evm_xcontract_call_sequencer_slow_path(
     );
 
     if let Some(path) = log_to {
-        machine.runtime_env.recorder.to_file(path).unwrap();
+        machine.runtime_env.recorder.to_file(path, machine.get_total_gas_usage().to_u64().unwrap()).unwrap();
     }
 
     Ok(true)
@@ -1217,7 +1217,7 @@ pub fn _evm_xcontract_call_using_compressed_batch(
     );
 
     if let Some(path) = log_to {
-        machine.runtime_env.recorder.to_file(path).unwrap();
+        machine.runtime_env.recorder.to_file(path, machine.get_total_gas_usage().to_u64().unwrap()).unwrap();
     }
 
     Ok(true)
@@ -1363,7 +1363,7 @@ pub fn _evm_xcontract_call_sequencer_reordering(
     assert_eq!(logs[1].get_request_id(), tx_id_2);
 
     if let Some(path) = log_to {
-        machine.runtime_env.recorder.to_file(path).unwrap();
+        machine.runtime_env.recorder.to_file(path, machine.get_total_gas_usage().to_u64().unwrap()).unwrap();
     }
 
     Ok(true)
@@ -1474,7 +1474,7 @@ pub fn _evm_xcontract_call_using_compressed_batch_2(
     );
 
     if let Some(path) = log_to {
-        machine.runtime_env.recorder.to_file(path).unwrap();
+        machine.runtime_env.recorder.to_file(path, machine.get_total_gas_usage().to_u64().unwrap()).unwrap();
     }
 
     Ok(true)
@@ -1500,7 +1500,7 @@ pub fn evm_direct_deploy_add(log_to: Option<&Path>, debug: bool) {
     }
 
     if let Some(path) = log_to {
-        machine.runtime_env.recorder.to_file(path).unwrap();
+        machine.runtime_env.recorder.to_file(path, machine.get_total_gas_usage().to_u64().unwrap()).unwrap();
     }
 }
 
@@ -1531,7 +1531,7 @@ pub fn evm_deploy_buddy_contract(log_to: Option<&Path>, debug: bool) {
     }
 
     if let Some(path) = log_to {
-        machine.runtime_env.recorder.to_file(path).unwrap();
+        machine.runtime_env.recorder.to_file(path, machine.get_total_gas_usage().to_u64().unwrap()).unwrap();
     }
 }
 
@@ -1607,7 +1607,7 @@ pub fn _evm_test_payment_in_constructor(log_to: Option<&Path>, debug: bool) {
     assert_eq!(last_send[32..], expected_bytes);
 
     if let Some(path) = log_to {
-        let _ = machine.runtime_env.recorder.to_file(path).unwrap();
+        let _ = machine.runtime_env.recorder.to_file(path, machine.get_total_gas_usage().to_u64().unwrap()).unwrap();
     }
 }
 
@@ -1703,7 +1703,7 @@ pub fn evm_test_arbsys(log_to: Option<&Path>, debug: bool) {
     assert_eq!(last_send[32..], expected_bytes);
 
     if let Some(path) = log_to {
-        let _ = machine.runtime_env.recorder.to_file(path).unwrap();
+        let _ = machine.runtime_env.recorder.to_file(path, machine.get_total_gas_usage().to_u64().unwrap()).unwrap();
     }
 }
 
@@ -1762,7 +1762,7 @@ pub fn evm_direct_deploy_and_call_add(log_to: Option<&Path>, debug: bool) {
     }
 
     if let Some(path) = log_to {
-        machine.runtime_env.recorder.to_file(path).unwrap();
+        machine.runtime_env.recorder.to_file(path, machine.get_total_gas_usage().to_u64().unwrap()).unwrap();
     }
 }
 
@@ -1823,7 +1823,7 @@ pub fn _evm_test_contract_call(log_to: Option<&Path>, debug: bool) {
     }
 
     if let Some(path) = log_to {
-        machine.runtime_env.recorder.to_file(path).unwrap();
+        machine.runtime_env.recorder.to_file(path, machine.get_total_gas_usage().to_u64().unwrap()).unwrap();
     }
 }
 
@@ -1902,7 +1902,7 @@ pub fn _evm_test_same_address_deploy(log_to: Option<&Path>, debug: bool) {
     }
 
     if let Some(path) = log_to {
-        machine.runtime_env.recorder.to_file(path).unwrap();
+        machine.runtime_env.recorder.to_file(path, machine.get_total_gas_usage().to_u64().unwrap()).unwrap();
     }
 }
 
@@ -1963,7 +1963,7 @@ pub fn evm_direct_deploy_and_compressed_call_add(log_to: Option<&Path>, debug: b
     }
 
     if let Some(path) = log_to {
-        machine.runtime_env.recorder.to_file(path).unwrap();
+        machine.runtime_env.recorder.to_file(path, machine.get_total_gas_usage().to_u64().unwrap()).unwrap();
     }
 }
 
@@ -2040,7 +2040,7 @@ pub fn _evm_payment_to_self(log_to: Option<&Path>, debug: bool) -> Result<(), et
     assert_eq!(new_balance, Uint256::from_u64(20000));
 
     if let Some(path) = log_to {
-        machine.runtime_env.recorder.to_file(path).unwrap();
+        machine.runtime_env.recorder.to_file(path, machine.get_total_gas_usage().to_u64().unwrap()).unwrap();
     }
 
     Ok(())
@@ -2081,7 +2081,7 @@ pub fn evm_payment_to_empty_address(log_to: Option<&Path>, debug: bool) {
     assert!(receipts[0].succeeded());
 
     if let Some(path) = log_to {
-        machine.runtime_env.recorder.to_file(path).unwrap();
+        machine.runtime_env.recorder.to_file(path, machine.get_total_gas_usage().to_u64().unwrap()).unwrap();
     }
 }
 
@@ -2123,7 +2123,7 @@ pub fn evm_eval_sha256(log_to: Option<&Path>, debug: bool) {
     );
 
     if let Some(path) = log_to {
-        machine.runtime_env.recorder.to_file(path).unwrap();
+        machine.runtime_env.recorder.to_file(path, machine.get_total_gas_usage().to_u64().unwrap()).unwrap();
     }
 }
 
@@ -2183,7 +2183,7 @@ fn _evm_ecpairing_precompile_test_one(calldata: &str, result: bool, debug: bool)
     assert_eq!(return_uint == Uint256::one(), result);
 
     //if let Some(path) = log_to {
-    //    machine.runtime_env.recorder.to_file(path).unwrap();
+    //    machine.runtime_env.recorder.to_file(path, machine.get_total_gas_usage().to_u64().unwrap()).unwrap();
     //}
 }
 
@@ -2224,7 +2224,7 @@ pub fn _evm_eval_ripemd160(log_to: Option<&Path>, debug: bool) {
     );
 
     if let Some(path) = log_to {
-        machine.runtime_env.recorder.to_file(path).unwrap();
+        machine.runtime_env.recorder.to_file(path, machine.get_total_gas_usage().to_u64().unwrap()).unwrap();
     }
 }
 
