@@ -966,11 +966,13 @@ impl Machine {
                     }
                 }
             }
-            if let Some(gas) = self.next_op_gas() {
+            let gas_this_instruction = if let Some(gas) = self.next_op_gas() {
                 gas_used += gas;
+                gas
             } else {
                 println!("Warning: next opcode does not have a gas cost");
-            }
+                1
+            };
 
             let cp = self.get_pc();
 
@@ -1012,7 +1014,7 @@ impl Machine {
             match self.run_one(false) {
                 Ok(still_runnable) => {
                     if !still_runnable {
-                        return gas_used;
+                        return gas_used - gas_this_instruction;
                     }
                 }
                 Err(e) => {
