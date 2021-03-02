@@ -3,7 +3,7 @@
 //
 
 
-use crate::compile::ast::{TopLevelDecl, TypeDecl, FuncDecl, GlobalVarDecl, Type, CodeBlock,
+use crate::compile::ast::{TopLevelDecl, TypeDecl, Func, GlobalVarDecl, Type, CodeBlock,
 StructField, FuncArg, Statement, StatementKind, DebugInfo, Attributes, MatchPattern, Expr, ExprKind, TrinaryOp, BinaryOp, UnaryOp, Constant,
 OptionConst, FieldInitializer, new_func_arg, new_type_decl};
 use crate::stringtable::{StringTable, StringId};
@@ -47,9 +47,9 @@ TypeDecl: TypeDecl = {
 	"type" <Ident> "=" <Type> => new_type_decl(<>),
 }
 
-FuncDecl: FuncDecl = {
+FuncDecl: Func = {
 	<lno: @L> <p: "public"?> <imp: "impure"?> "func" <i:Ident> "(" <fa:FuncArgs> ")" <t: ("->" <Type>)?> <cb:CodeBlock> =>
-	        FuncDecl::new(i, imp.is_some(), fa, t.unwrap_or(Type::Void), cb, p.is_some(), file_info.location(BytePos::from(lno),filename)),
+	        Func::new(i, imp.is_some(), fa, t.unwrap_or(Type::Void), cb, p.is_some(), file_info.location(BytePos::from(lno),filename)),
 }
 
 FuncArgs: Vec<FuncArg> = {
@@ -103,8 +103,8 @@ StatementKind: StatementKind = {
 }
 
 MatchPattern: MatchPattern = {
-	<Ident> => MatchPattern::Simple(<>),
-	"(" <CommaedMatchPatterns> ")" => MatchPattern::Tuple(<>),
+	<Ident> => MatchPattern::new_simple(<>,()),
+	"(" <CommaedMatchPatterns> ")" => MatchPattern::new_tuple(<>,()),
 }
 
 CommaedMatchPatterns: Vec<MatchPattern> = {
