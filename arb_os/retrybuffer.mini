@@ -44,14 +44,18 @@ impure func retryBuffer_trimTwo(currentTimestamp: uint) {
 
 impure func retryBuffer_trimOne(currentTimestamp: uint) -> bool {  // returns true iff a tx was trimmed
     return xif let Some(res) = queue_get(retryBuffer.fifo) {
-        let (uq, rawItem) = res;
-        let item = unsafecast<TxRequestData>(rawItem);
-        xif (item.incomingRequest.timestamp + retryBuffer.txLifetimeSeconds <= currentTimestamp) {
-            retryBuffer_delete(item.incomingRequest.requestId);
-            retryBuffer = retryBuffer with {
-               fifo: uq
-            };
-            true
+        let (uq, txid) = res;
+        xif let Some(rawItem) = retryBuffer.byTxId[unsafecast<uint>(txid)] {
+            let item = unsafecast<TxRequestData>(rawItem);
+            xif (item.incomingRequest.timestamp + retryBuffer.txLifetimeSeconds <= currentTimestamp) {
+                retryBuffer_delete(item.incomingRequest.requestId);
+                retryBuffer = retryBuffer with {
+                   fifo: uq
+                };
+                true
+            } else {
+                false
+            }
         } else {
             false
         }
@@ -62,10 +66,11 @@ impure func retryBuffer_trimOne(currentTimestamp: uint) -> bool {  // returns tr
 
 public impure func retryBuffer_insert(tx: TxRequestData) {
     retryBuffer_trimTwo(tx.incomingRequest.timestamp);
+    let txid = tx.incomingRequest.requestId;
     retryBuffer = retryBuffer with {
-        byTxId: retryBuffer.byTxId with { [tx.incomingRequest.requestId] = tx }
+        byTxId: retryBuffer.byTxId with { [txid] = tx }
     } with {
-        fifo: queue_put(retryBuffer.fifo, tx)
+        fifo: queue_put(retryBuffer.fifo, txid)
     };
 }
 
@@ -85,3 +90,4 @@ public impure func retryBuffer_delete(txid: uint) {
     };
     // tx might still be in retryBuffer.fifo, but that isn't a problem because it's not gettable and re-deletion is safe
 }
+
