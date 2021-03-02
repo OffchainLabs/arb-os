@@ -1242,6 +1242,7 @@ pub struct RtEnvRecorder {
     inbox: Vec<Value>,
     logs: Vec<Value>,
     sends: Vec<Vec<u8>>,
+    total_gas: u64,
 }
 
 impl RtEnvRecorder {
@@ -1251,6 +1252,7 @@ impl RtEnvRecorder {
             inbox: vec![],
             logs: Vec::new(),
             sends: Vec::new(),
+            total_gas: 0,
         }
     }
 
@@ -1270,7 +1272,8 @@ impl RtEnvRecorder {
         serde_json::to_string(self)
     }
 
-    pub fn to_file(&self, path: &Path) -> Result<(), io::Error> {
+    pub fn to_file(&mut self, path: &Path, total_gas: u64) -> Result<(), io::Error> {
+        self.total_gas = total_gas;
         let mut file = File::create(path).map(|f| Box::new(f) as Box<dyn io::Write>)?;
         writeln!(file, "{}", self.to_json_string()?)
     }
@@ -1331,6 +1334,7 @@ impl RtEnvRecorder {
             );
             return false;
         }
+
         return true;
     }
 }
