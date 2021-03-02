@@ -230,7 +230,7 @@ fn do_call(
                 machine
                     .runtime_env
                     .recorder
-                    .to_file(Path::new(&this_log_path))
+                    .to_file(Path::new(&this_log_path), machine.get_total_gas_usage().to_u64().unwrap())
                     .unwrap();
             }
 
