@@ -9,6 +9,7 @@ use crate::compile::{CompileError, DebugInfo};
 use crate::link::LinkedProgram;
 use crate::mavm::{AVMOpcode, Buffer, CodePt, Instruction, Value};
 use crate::pos::{try_display_location, Location};
+use crate::run::blake2b::blake2bf_instruction;
 use crate::run::ripemd160port;
 use crate::uint256::Uint256;
 use clap::Clap;
@@ -68,6 +69,10 @@ impl ValueStack {
     ///Pushes a `Value` created from val to the top of self.
     pub fn push_bool(&mut self, val: bool) {
         self.push_uint(if val { Uint256::one() } else { Uint256::zero() })
+    }
+
+    pub fn push_buffer(&mut self, val: Buffer) {
+        self.push(Value::Buffer(val));
     }
 
     ///Returns the `Value` on the top of self, or None if self is empty.
@@ -1189,6 +1194,7 @@ impl Machine {
                 AVMOpcode::Keccakf => 600,
                 AVMOpcode::Sha256f => 250,
                 AVMOpcode::Ripemd160f => 250, //TODO: measure and update this
+                AVMOpcode::Blake2f => self.gas_for_blake2f(),
                 AVMOpcode::Pop => 1,
                 AVMOpcode::PushStatic => 1,
                 AVMOpcode::Rget => 1,
@@ -1262,6 +1268,22 @@ impl Machine {
             1000 + MAX_PAIRING_SIZE * 500_000
         } else {
             1000
+        }
+    }
+
+    fn gas_for_blake2f(&self) -> u64 {
+        if let Some(val) = self.stack.contents.get(0) {
+            if let Value::Buffer(buf) = val {
+                let mut num_rounds = u32::from_be_bytes(buf.as_bytes(4).try_into().unwrap());
+                if num_rounds > 0xffff {
+                    num_rounds = 0xffff;
+                }
+                10 * (num_rounds as u64)
+            } else {
+                10
+            }
+        } else {
+            10
         }
     }
 
@@ -1811,6 +1833,12 @@ impl Machine {
                         let t2 = self.stack.pop_uint(&self.state)?;
                         let t3 = self.stack.pop_uint(&self.state)?;
                         self.stack.push_uint(ripemd160_compression(t1, t2, t3));
+                        self.incr_pc();
+                        Ok(true)
+                    }
+                    AVMOpcode::Blake2f => {
+                        let t = self.stack.pop_buffer(&self.state)?;
+                        self.stack.push_buffer(blake2bf_instruction(t));
                         self.incr_pc();
                         Ok(true)
                     }
