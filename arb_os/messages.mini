@@ -31,6 +31,7 @@ use evmCallStack::initEvmCallStackForConstructor;
 use evmCallStack::evmCallStack_runningCodeFromAccount;
 
 use gasAccounting::GasUsage;
+use gasAccounting::TxFeeStats;
 
 use output::emitTxReceipt;
 
@@ -130,6 +131,7 @@ type TxRequestData = struct {
     nonMutating: bool,
     isConstructor: bool,
     incomingRequest: IncomingRequest,
+    feeStats: TxFeeStats,
 }
 
 public impure func handleL2Request(
@@ -146,7 +148,8 @@ public impure func handleL2Request(
                 const::TxResultCode_badSequenceNum,
                 None<ByteArray>,
                 None<EvmLogs>,
-                None<GasUsage>
+                None<GasUsage>,
+                request.feeStats,
             );
             return Some(());
         }
@@ -161,8 +164,9 @@ public impure func handleL2Request(
                 const::TxResultCode_revert,
                 None<ByteArray>,
                 None<EvmLogs>,
-                None<GasUsage>
-                );
+                None<GasUsage>,
+                request.feeStats,
+            );
             return Some(());
         }
 
@@ -185,7 +189,14 @@ public impure func handleL2Request(
 
         if (account_hasContract(accountStore_get(getGlobalAccountStore(), request.calleeAddr))) {
             // there's already an account at that address, revert the call
-            emitTxReceipt(request.incomingRequest, 7, None<ByteArray>, None<EvmLogs>, None<GasUsage>);
+            emitTxReceipt(
+                request.incomingRequest,
+                const::TxResultCode_cannotDeployAtAddress,
+                None<ByteArray>,
+                None<EvmLogs>,
+                None<GasUsage>,
+                request.feeStats,
+            );
             return Some(());
         } else {
             initEvmCallStackForConstructor(

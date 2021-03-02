@@ -36,12 +36,15 @@ use std::bytearray::bytearray_get256;
 use std::bytearray::bytearray_set256;
 use std::bytearray::bytearray_extract;
 use std::bytearray::bytearray_copy;
+use std::bytearray::bytearray_toSizeAndBuffer;
+use std::bytearray::bytearray_fromSizeAndBuffer;
 
 use std::sha256::sha256_byteArray;
 use std::ripemd160::ripemd160_byteArray;
 
 use arbsys::arbsys_txcall;
 use arbowner::arbowner_txcall;
+use arbgasinfo::arbgasinfo_txcall;
 use arbosTest::arbosTest_txcall;
 use arbsys::arbAddressTable_txcall;
 use arbsys::arbBLS_txcall;
@@ -109,6 +112,12 @@ public impure func precompiles_init(acctStore: AccountStore) -> option<AccountSt
     )?;
     acctStore = accountStore_createBuiltinContract(
         acctStore,
+        address(0x09),
+        makeTrampoline(precompile_0x09),
+        false,
+    )?;
+    acctStore = accountStore_createBuiltinContract(
+        acctStore,
         address(const::Address_ArbSys),
         makeTrampoline(arbsys_txcall),
         true,
@@ -141,6 +150,12 @@ public impure func precompiles_init(acctStore: AccountStore) -> option<AccountSt
         acctStore,
         address(const::Address_ArbOwner),
         makeTrampoline(arbowner_txcall),
+        true,
+    )?;
+    acctStore = accountStore_createBuiltinContract(
+        acctStore,
+        address(const::Address_ArbGasInfo),
+        makeTrampoline(arbgasinfo_txcall),
         true,
     )?;
     return Some(acctStore);
@@ -381,7 +396,6 @@ public impure func precompile_0x08() { // ecpairing
             let offset = 0;
             while (numPts > 0) {
                 acc = (
-                    acc,
                     (
                         bytearray_get256(calldata, offset),
                         bytearray_get256(calldata, offset+32),
@@ -390,6 +404,7 @@ public impure func precompile_0x08() { // ecpairing
                         bytearray_get256(calldata, offset+5*32),
                         bytearray_get256(calldata, offset+4*32)
                     ),
+                    acc,
                 );
                 offset = offset + 6*32;
                 numPts = numPts - 1;
@@ -410,4 +425,34 @@ public impure func precompile_0x08() { // ecpairing
     }
 
     evmOp_revert_knownPc(0, 0, 0);
+}
+
+public impure func precompile_0x09() { // Blake2
+    if let Some(topFrame) = evmCallStack_topFrame() {
+        let calldata = evmCallFrame_getCalldata(topFrame);
+        if (bytearray_size(calldata) != 213) {
+            evmOp_revert_knownPc(0, 0, 0);
+        }
+
+        let numRounds = asm(256-32, bytearray_get256(calldata, 0)) uint { shr };
+        if (numRounds > 0xffff) {
+            evmOp_revert_knownPc(1, 0, 0);
+        }
+
+        let (_, inputBuf) = bytearray_toSizeAndBuffer(calldata);
+
+        if (getbuffer8(inputBuf, 212) > 1) {   // last byte of input must be 0 or 1
+            evmOp_revert_knownPc(2, 0, 0);
+        }
+
+        let outputBuf = asm(inputBuf,) buffer { blake2f };
+        let mem = bytearray_fromSizeAndBuffer(64, outputBuf);
+        if (evmCallStack_setTopFrameMemory(mem)) {
+            evmOp_return(0, 64);
+        } else {
+            evmOp_revert_knownPc(3, 0, 0);
+        }
+    } else {
+        evmOp_revert_knownPc(4, 0, 0);
+    }
 }

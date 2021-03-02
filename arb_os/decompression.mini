@@ -53,7 +53,9 @@ use accounts::account_getAggregatorDecompressionState;
 use accounts::account_getBlsKey;
 
 use evmCallStack::evmCallStack_getAccount;
+use evmCallStack::evmCallStack_addStorageCharge;
 use inbox::IncomingRequest;
+use gasAccounting::txFeeStats_zero;
 use messages::TxRequestData;
 
 use std::rlp::SignedTx;
@@ -64,9 +66,6 @@ use std::rlp::rlp_encodeAndHashMessageInfoForSignature;
 
 use signedTx::SignedTx;
 use signedTx::recoverSigner;
-
-use inbox::IncomingRequest;
-use messages::TxRequestData;
 
 
 type IndexedAddressTable = struct {
@@ -113,9 +112,9 @@ public func addressTable_getByAddress(iat: IndexedAddressTable, addr: address) -
     return iat.byAddress[addr];
 }
 
-public func addressTable_getByAddressAlloc(iat: IndexedAddressTable, addr: address) -> (IndexedAddressTable, uint) {
+public func addressTable_getByAddressAlloc(iat: IndexedAddressTable, addr: address) -> (IndexedAddressTable, uint, bool) {
     return xif let Some(val) = iat.byAddress[addr] {
-        (iat, val)
+        (iat, val, false)
     } else {
         // allocate space in the table
         (
@@ -128,7 +127,8 @@ public func addressTable_getByAddressAlloc(iat: IndexedAddressTable, addr: addre
             } with {
                 size: 1+iat.size
             },
-            iat.size
+            iat.size,
+            true,
         )
     };
 }
@@ -153,8 +153,11 @@ public impure func decompressAddress(
         Some((ustr, addressTable_getByIndex(globalIndexedAddressTable, decodedUint)?))
     } else {
         let (ustr, addr) = rlp_decodeAddress(stream)?;
-        let (giat, _) = addressTable_getByAddressAlloc(globalIndexedAddressTable, addr);
-        globalIndexedAddressTable = giat;
+        let (giat, _, changed) = addressTable_getByAddressAlloc(globalIndexedAddressTable, addr);
+        if (changed) {
+            evmCallStack_addStorageCharge(2);   // charge current tx for 2 storage cells
+            globalIndexedAddressTable = giat;
+        }
         Some((ustr, addr))
     };
 }
@@ -427,6 +430,7 @@ impure func decompressTx(
             nonMutating: false,
             isConstructor: (toAddr == address(0)),
             incomingRequest: unsafecast<IncomingRequest>(0),  // caller will fill this in
+            feeStats: txFeeStats_zero(),
         }
     ));
 }
