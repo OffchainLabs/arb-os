@@ -511,9 +511,17 @@ public impure func gasAccounting_endTxCharges(storageDelta: int, feeStats: TxFee
             gasPriceWei: txState.price,
         },
         feeStats with {
-            paidForStorage: weiForStorage
+            units: feeStats.units with {
+                storage: xif(storageDelta > int(0)) { uint(storageDelta) } else { 0 }
+            } with {
+                compute: txState.originalMax - (gasToRefund - gasForStorage)
+            }
         } with {
-            paidForCompute: weiForCompute
+            weiPaid: feeStats.weiPaid with {
+                storage: weiForStorage
+            } with {
+                compute: weiForCompute
+            }
         },
     ));
 }
@@ -769,7 +777,16 @@ impure func payForTxAndL1Gas(
 
     let fullAmount = prices.perL2Tx + prices.perL1CalldataByte * calldataBytes;
     if (fullAmount == 0) {
-        return (true, feeStats);
+        return (
+            true,
+            feeStats with {
+                units: feeStats.units with {
+                    tx: 1
+                } with {
+                    calldataByte: calldataBytes
+                }
+            },
+        );
     }
 
     let acctStore = getGlobalAccountStore();
@@ -809,9 +826,17 @@ impure func payForTxAndL1Gas(
     return (
         amount == fullAmount,
         feeStats with {
-            paidForTx: amountForTx
+            units: feeStats.units with {
+                tx: 1
+            } with {
+                calldataByte: calldataBytes
+            }
         } with {
-            paidForCalldata: amount - amountForTx   // safe because amount >= amountForTx
+            weiPaid: feeStats.weiPaid with {
+                tx: amountForTx
+            } with {
+                calldataByte: amount - amountForTx   // safe because amount >= amountForTx
+            }
         }
     );
 }
@@ -943,39 +968,41 @@ public impure func updateBatchSizeEstimate(size: uint, batchSender: address) {
     }
 }
 
+type FourResources = struct {
+    tx: uint,
+    calldataByte: uint,
+    storage: uint,
+    compute: uint,
+}
+
 // Fee stats for a transaction, for inclusion in tx receipt
 type TxFeeStats = struct {
-    weiPerTx: uint,
-    weiPerCalldata: uint,
-    weiPerStorage: uint,
-    weiPerArbGas: uint,
-    paidForTx: uint,       // we record the amounts actually paid, which might be less than price, if funds run out
-    paidForCalldata: uint,
-    paidForStorage: uint,
-    paidForCompute: uint,
+    price: FourResources,
+    units: FourResources,
+    weiPaid: FourResources,
 }
 
 public func txFeeStats_zero() -> TxFeeStats {
+    let frZero = struct {
+        tx: 0,
+        calldataByte: 0,
+        storage: 0,
+        compute: 0,
+    };
     return struct {
-        weiPerTx: 0,
-        weiPerCalldata: 0,
-        weiPerStorage: 0,
-        weiPerArbGas: 0,
-        paidForTx: 0,
-        paidForCalldata: 0,
-        paidForStorage: 0,
-        paidForCompute: 0,
+        price: frZero,
+        units: frZero,
+        weiPaid: frZero,
     };
 }
 
 public func txFeeStats_setPrices(stats: TxFeeStats, prices: GasPrices) -> TxFeeStats {
     return stats with {
-        weiPerTx: prices.perL2Tx
-    } with {
-        weiPerCalldata: prices.perL1CalldataByte
-    } with {
-        weiPerStorage: prices.perStorageCell
-    } with {
-        weiPerArbGas: prices.perArbGasTotal
+        price: struct {
+            tx: prices.perL2Tx,
+            calldataByte: prices.perL1CalldataByte,
+            storage: prices.perStorageCell,
+            compute: prices.perArbGasTotal,
+        }
     };
 }
