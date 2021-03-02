@@ -5,15 +5,17 @@
 //!Converts non-type checked ast nodes to type checked versions, and other related utilities.
 
 use super::ast::{
-    BinaryOp, CodeBlock, Constant, DebugInfo, Expr, ExprKind, FuncArg, FuncDecl, FuncDeclKind,
-    GlobalVarDecl, MatchPattern, Statement, StatementKind, StructField, TopLevelDecl, TrinaryOp,
+    BinaryOp, CodeBlock, Constant, DebugInfo, Expr, ExprKind, Func, FuncDeclKind, GlobalVarDecl,
+    MatchPattern, MatchPatternKind, Statement, StatementKind, StructField, TopLevelDecl, TrinaryOp,
     Type, TypeTree, UnaryOp,
 };
+use crate::compile::ast::FieldInitializer;
 use crate::link::{ExportedFunc, Import, ImportedFunc};
 use crate::mavm::{Instruction, Label, Value};
 use crate::pos::Location;
 use crate::stringtable::{StringId, StringTable};
 use crate::uint256::Uint256;
+use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 
 type TypeTable = HashMap<usize, Type>;
@@ -49,7 +51,7 @@ pub trait AbstractSyntaxTree {
 pub enum TypeCheckedNode<'a> {
     Statement(&'a mut TypeCheckedStatement),
     Expression(&'a mut TypeCheckedExpr),
-    StructField(&'a mut TypeCheckedStructField),
+    StructField(&'a mut TypeCheckedFieldInitializer),
 }
 
 impl<'a> AbstractSyntaxTree for TypeCheckedNode<'a> {
@@ -85,23 +87,12 @@ pub fn new_type_error(msg: String, location: Option<Location>) -> TypeError {
 
 ///Keeps track of compiler enforced properties, currently only tracks purity, may be extended to
 /// keep track of potential to throw or other properties.
-#[derive(Debug, Clone, Eq, PartialEq)]
+#[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
 pub struct PropertiesList {
     pub pure: bool,
 }
 
-///A mini function that has been type checked.
-#[derive(Debug, Clone)]
-pub struct TypeCheckedFunc {
-    pub name: StringId,
-    pub args: Vec<FuncArg>,
-    pub ret_type: Type,
-    pub code: Vec<TypeCheckedStatement>,
-    pub tipe: Type,
-    pub imported: bool,
-    pub debug_info: DebugInfo,
-    pub properties: PropertiesList,
-}
+pub type TypeCheckedFunc = Func<TypeCheckedStatement>;
 
 impl AbstractSyntaxTree for TypeCheckedFunc {
     fn child_nodes(&mut self) -> Vec<TypeCheckedNode> {
@@ -153,7 +144,7 @@ fn inline(
                         .zip(func.args.iter())
                         .map(|(arg, otherarg)| TypeCheckedStatement {
                             kind: TypeCheckedStatementKind::Let(
-                                TypeCheckedMatchPattern::Simple(
+                                TypeCheckedMatchPattern::new_simple(
                                     otherarg.name,
                                     otherarg.tipe.clone(),
                                 ),
@@ -278,12 +269,7 @@ impl AbstractSyntaxTree for TypeCheckedStatement {
     }
 }
 
-///A `MatchPattern` that has gone through type checking.
-#[derive(Debug, Clone, Eq, PartialEq)]
-pub enum TypeCheckedMatchPattern {
-    Simple(StringId, Type),
-    Tuple(Vec<TypeCheckedMatchPattern>, Type),
-}
+pub type TypeCheckedMatchPattern = MatchPattern<Type>;
 
 ///A mini expression with associated `DebugInfo` that has been type checked.
 #[derive(Debug, Clone, Eq, PartialEq)]
@@ -321,7 +307,7 @@ pub enum TypeCheckedExprKind {
         PropertiesList,
     ),
     CodeBlock(TypeCheckedCodeBlock),
-    StructInitializer(Vec<TypeCheckedStructField>, Type),
+    StructInitializer(Vec<TypeCheckedFieldInitializer>, Type),
     ArrayRef(Box<TypeCheckedExpr>, Box<TypeCheckedExpr>, Type),
     FixedArrayRef(Box<TypeCheckedExpr>, Box<TypeCheckedExpr>, usize, Type),
     MapRef(Box<TypeCheckedExpr>, Box<TypeCheckedExpr>, Type),
@@ -510,25 +496,14 @@ impl TypeCheckedExpr {
     }
 }
 
-///A `StructField` that has been type checked.
-#[derive(Debug, Clone, Eq, PartialEq)]
-pub struct TypeCheckedStructField {
-    pub name: String,
-    pub value: TypeCheckedExpr,
-}
+type TypeCheckedFieldInitializer = FieldInitializer<TypeCheckedExpr>;
 
-impl AbstractSyntaxTree for TypeCheckedStructField {
+impl AbstractSyntaxTree for TypeCheckedFieldInitializer {
     fn child_nodes(&mut self) -> Vec<TypeCheckedNode> {
         self.value.child_nodes()
     }
     fn is_pure(&mut self) -> bool {
         self.value.is_pure()
-    }
-}
-
-impl TypeCheckedStructField {
-    pub fn new(name: String, value: TypeCheckedExpr) -> Self {
-        TypeCheckedStructField { name, value }
     }
 }
 
@@ -568,7 +543,7 @@ pub fn sort_top_level_decls(
     decls: &[TopLevelDecl],
 ) -> (
     Vec<Import>,
-    Vec<FuncDecl>,
+    Vec<Func>,
     HashMap<usize, Type>,
     Vec<GlobalVarDecl>,
     HashMap<usize, Type>,
@@ -602,7 +577,7 @@ pub fn sort_top_level_decls(
 ///Performs typechecking various top level declarations, including `ImportedFunc`s, `FuncDecl`s,
 /// named `Type`s, and global variables.
 pub fn typecheck_top_level_decls(
-    funcs: Vec<FuncDecl>,
+    funcs: Vec<Func>,
     named_types: HashMap<usize, Type>,
     global_vars: Vec<GlobalVarDecl>,
     string_table: StringTable,
@@ -664,7 +639,7 @@ pub fn typecheck_top_level_decls(
 ///
 /// If not successful the function returns a `TypeError`.
 pub fn typecheck_function(
-    fd: &FuncDecl,
+    fd: &Func,
     type_table: &TypeTable,
     global_vars: &HashMap<StringId, (Type, usize)>,
     func_table: &TypeTable,
@@ -714,11 +689,9 @@ pub fn typecheck_function(
         ret_type: fd.ret_type.clone(),
         code: tc_stats,
         tipe: fd.tipe.clone(),
-        imported: false,
-        debug_info: DebugInfo::from(fd.location),
-        properties: PropertiesList {
-            pure: !fd.is_impure,
-        },
+        kind: fd.kind,
+        debug_info: DebugInfo::from(fd.debug_info),
+        properties: fd.properties.clone(),
     })
 }
 
@@ -935,20 +908,20 @@ fn typecheck_statement<'a>(
                 scopes,
             )?;
             let tce_type = tc_expr.get_type();
-            match pat {
-                MatchPattern::Simple(name) => Ok((
+            match &pat.kind {
+                MatchPatternKind::Simple(name) => Ok((
                     TypeCheckedStatementKind::Let(
-                        TypeCheckedMatchPattern::Simple(*name, tce_type.clone()),
+                        TypeCheckedMatchPattern::new_simple(*name, tce_type.clone()),
                         tc_expr,
                     ),
                     vec![(*name, tce_type)],
                 )),
-                MatchPattern::Tuple(pats) => {
+                MatchPatternKind::Tuple(pats) => {
                     let (tc_pats, bindings) =
                         typecheck_patvec(tce_type.clone(), pats.to_vec(), debug_info.location)?;
                     Ok((
                         TypeCheckedStatementKind::Let(
-                            TypeCheckedMatchPattern::Tuple(tc_pats, tce_type),
+                            TypeCheckedMatchPattern::new_tuple(tc_pats, tce_type),
                             tc_expr,
                         ),
                         bindings,
@@ -1097,12 +1070,12 @@ fn typecheck_patvec(
             let mut bindings = Vec::new();
             for (i, rhs_type) in tvec.iter().enumerate() {
                 let pat = &patterns[i];
-                match pat {
-                    MatchPattern::Simple(name) => {
-                        tc_pats.push(TypeCheckedMatchPattern::Simple(*name, rhs_type.clone()));
+                match &pat.kind {
+                    MatchPatternKind::Simple(name) => {
+                        tc_pats.push(TypeCheckedMatchPattern::new_simple(*name, rhs_type.clone()));
                         bindings.push((*name, rhs_type.clone()));
                     }
-                    MatchPattern::Tuple(_) => {
+                    MatchPatternKind::Tuple(_) => {
                         //TODO: implement this properly
                         return Err(new_type_error(
                             "nested pattern not yet supported in let".to_string(),
@@ -1600,7 +1573,7 @@ fn typecheck_expr(
                         type_tree,
                         scopes,
                     )?;
-                    tc_fields.push(TypeCheckedStructField::new(
+                    tc_fields.push(TypeCheckedFieldInitializer::new(
                         field.name.clone(),
                         tc_expr.clone(),
                     ));
