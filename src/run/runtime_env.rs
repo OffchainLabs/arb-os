@@ -714,7 +714,7 @@ pub struct ArbosReceipt {
     gas_so_far: Uint256,     // gas used so far in L1 block, including this tx
     index_in_block: Uint256, // index of this tx in L1 block
     logs_so_far: Uint256,    // EVM logs emitted so far in L1 block, NOT including this tx
-    fee_stats: Vec<Uint256>,
+    fee_stats: Vec<Vec<Uint256>>,
 }
 
 #[derive(Clone, Debug)]
@@ -792,7 +792,23 @@ impl ArbosReceipt {
                 index_in_block,
                 logs_so_far,
                 fee_stats: if let Value::Tuple(t2) = &tup[5] {
-                    t2.iter().map(|v| if let Value::Int(ui) = v { ui.clone() } else { panic!() }).collect()
+                    vec![
+                        if let Value::Tuple(t3) = &t2[0] {
+                            t3.iter().map(|v| if let Value::Int(ui) = v { ui.clone() } else { panic!() }).collect()
+                        } else {
+                            panic!()
+                        },
+                        if let Value::Tuple(t3) = &t2[1] {
+                            t3.iter().map(|v| if let Value::Int(ui) = v { ui.clone() } else { panic!() }).collect()
+                        } else {
+                            panic!()
+                        },
+                        if let Value::Tuple(t3) = &t2[2] {
+                            t3.iter().map(|v| if let Value::Int(ui) = v { ui.clone() } else { panic!() }).collect()
+                        } else {
+                            panic!()
+                        },
+                    ]
                 } else { panic!() }
             })
         } else {
@@ -913,7 +929,7 @@ impl ArbosReceipt {
         self.gas_so_far.clone()
     }
 
-    pub fn _get_fee_stats(&self) -> Vec<Uint256> {
+    pub fn _get_fee_stats(&self) -> Vec<Vec<Uint256>> {
         self.fee_stats.clone()
     }
 }
