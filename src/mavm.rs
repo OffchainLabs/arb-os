@@ -961,6 +961,7 @@ impl MiniProperties for Opcode {
 impl Opcode {
     pub fn from_name(name: &str) -> Self {
         match name {
+            "noop" => Opcode::AVMOpcode(AVMOpcode::Noop),
             "rget" => Opcode::AVMOpcode(AVMOpcode::Rget),
             "rset" => Opcode::AVMOpcode(AVMOpcode::Rset),
             "pushstatic" => Opcode::AVMOpcode(AVMOpcode::PushStatic),
