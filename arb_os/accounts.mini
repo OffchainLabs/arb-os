@@ -211,7 +211,7 @@ public impure func accountStore_createAccountFromEvmCode(
                 contractInfo: Some(struct {
                     code: code,
                     evmJumpTable: evmJumpTable,
-                    resumeCodePoint: initCodePt,
+                    startCodePoint: initCodePt,
                     storage: storageMap,
                 })
             }
@@ -247,7 +247,7 @@ public func accountStore_createBuiltinContract(
                     contractInfo: Some(struct {
                         code: fakeCode,
                         evmJumpTable: newmap<uint, impure func()>,
-                        resumeCodePoint: entryPoint,
+                        startCodePoint: entryPoint,
                         storage: storageMap_new(),
                     })
                 } with {
