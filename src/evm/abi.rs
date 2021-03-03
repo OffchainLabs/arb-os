@@ -11,7 +11,7 @@ use ethers_signers::Wallet;
 use std::{fs::File, io::Read, path::Path};
 
 pub fn builtin_contract_path(contract_name: &str) -> String {
-    format!("contracts/arbos/build/contracts/{}.json", contract_name)
+    format!("contracts/artifacts/arbos/builtin/{}.sol/{}.json", contract_name, contract_name)
 }
 
 #[derive(Debug, Clone)]
@@ -169,8 +169,8 @@ impl AbiForContract {
                 return Err(None);
             }
             let the_send = &sends[sends.len() - 1];
-            if (the_send[0..32] != Uint256::from_u64(5).to_bytes_be())
-                || (the_send[32..64] != sender_addr.to_bytes_be())
+            if (&the_send[0..32] != Uint256::from_u64(5).to_bytes_be())
+                || (&the_send[32..64] != sender_addr.to_bytes_be())
             {
                 println!("deploy: incorrect values in send item");
                 return Err(None);
