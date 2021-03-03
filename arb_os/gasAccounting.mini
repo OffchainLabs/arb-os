@@ -157,16 +157,16 @@ public impure func gasAccounting_init() {    // initialize on boot, before we ha
         congestionState: congestionState,
         speedLimitPerSecond: const::DefaultSpeedLimitPerSecond,
         pricingParams: pricingParams,
-        gasAllocatedForThisBlock: uint(congestionState.gasPool),
+        gasAllocatedToThisBlock: uint(congestionState.gasPool),
     };
 }
 
 impure func initCongestionState(isInit: bool) -> CongestionState {
     return struct {
         gasPool: int(gasAccountingParams.GasPoolMax),
-        lastBlockNumSeen: xif (isInit) { 0 } else { inbox_currentArbBlockNumber() },
+        lastArbBlockNumSeen: xif (isInit) { 0 } else { inbox_currentArbBlockNumber() },
         lastTimestampSeen: xif (isInit) { 0 } else { inbox_currentTimestamp() },
-        congestionPricePerArbGas: 0,
+        congestionPriceWei: 0,
     };
 }
 
@@ -178,17 +178,17 @@ impure func setGasAccountingParamsFromSpeedLimit(speedLimitPerSecond: uint) {
     };
 }
 
-public impure func setGasAccountingParams(speedLimitPerBlock: uint, gasPoolMax: uint, txGasLimit: uint) -> bool {
+public impure func setGasAccountingParams(speedLimitPerSecond: uint, gasPoolMax: uint, txGasLimit: uint) -> bool {
     // if parameters are reasonable, start using them, and return true
     // otherwise, discard them, and return false
 
-    return xif (gasPoolMax < speedLimitPerBlock) {
+    return xif (gasPoolMax < speedLimitPerSecond) {
         false
     } elseif (gasPoolMax < txGasLimit) {
         false
     } else {
         gasAccountingParams = struct {
-            SpeedLimitPerBlock: speedLimitPerBlock,
+            SpeedLimitPerSecond: speedLimitPerSecond,
             GasPoolMax: gasPoolMax,
             TxGasLimit: txGasLimit,
         };
@@ -287,8 +287,8 @@ public impure func gasAccounting_setChargingParams(
     gasAccountingInfo = gasAccountingInfo with {
         pricingParams: struct {
             l1GasPerL2Tx: l1GasPerL2Tx,
-            l1GasPerL2CalldataByte: l1GasPerL2Calldata,
-            l1GasPerStorageCell: l1GasPerStorage,
+            l1GasPerL1Calldata: l1GasPerL2Calldata,
+            l1GasPerStorage: l1GasPerStorage,
             arbGasDivisor: arbGasDivisor,
         }
     } with {
@@ -873,7 +873,7 @@ impure func updateCongestionState(state: CongestionState, toBlockNum: uint, toTi
     }
     return struct {
         gasPool: gasPool,
-        lastBlockNumSeen: toBlockNum,
+        lastArbBlockNumSeen: toBlockNum,
         lastTimestampSeen: toTimestamp,
         congestionPriceWei: totalPrice - basePrice,
     };

@@ -487,7 +487,7 @@ fn test_arbsys_direct() {
 #[test]
 fn test_arbowner() {
     match crate::evm::_evm_test_arbowner(None, false) {
-        Ok(()) => {},
+        Ok(()) => {}
         Err(e) => panic!("{:?}", e),
     }
 }
@@ -495,7 +495,7 @@ fn test_arbowner() {
 #[test]
 fn test_arbgasinfo() {
     match crate::evm::_evm_test_arbgasinfo(None, false) {
-        Ok(()) => {},
+        Ok(()) => {}
         Err(e) => panic!("{:?}", e),
     }
 }
@@ -530,12 +530,7 @@ pub fn test_crosscontract_call_with_constructors() {
 
 #[test]
 pub fn test_gas_charging_underfunded() {
-    match crate::evm::_evm_run_with_gas_charging(
-        None,
-        Uint256::_from_gwei(20),
-        false,
-        false,
-    ) {
+    match crate::evm::_evm_run_with_gas_charging(None, Uint256::_from_gwei(20), false, false) {
         Ok(result) => assert_eq!(result, false),
         Err(e) => panic!("error {}", e),
     }
@@ -543,12 +538,7 @@ pub fn test_gas_charging_underfunded() {
 
 #[test]
 pub fn test_gas_charging_fully_funded() {
-    match crate::evm::_evm_run_with_gas_charging(
-        None,
-        Uint256::_from_eth(1),
-        false,
-        false,
-    ) {
+    match crate::evm::_evm_run_with_gas_charging(None, Uint256::_from_eth(1), false, false) {
         Ok(result) => assert_eq!(result, true),
         Err(e) => panic!("error {}", e),
     }

@@ -254,8 +254,10 @@ impure func arbowner_setGasAccountingParams(topFrame: EvmCallFrame, calldata: By
     if (bytearray_size(calldata) != (4+3*32)) {
         evmOp_revert_knownCodePc(address(const::Address_ArbOwner), 130, 0, 0);
     }
+    let speedLimitPerBlock = bytearray_get256(calldata, 4);
+    let speedLimitPerSecond = speedLimitPerBlock * const::SecondsPerBlockDenominator / const::SecondsPerBlockNumerator;
     if (setGasAccountingParams(
-            bytearray_get256(calldata, 4),
+            speedLimitPerSecond,
             bytearray_get256(calldata, 4+32),
             bytearray_get256(calldata, 4+2*32),
         )
