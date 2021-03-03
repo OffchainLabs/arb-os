@@ -178,17 +178,17 @@ impure func setGasAccountingParamsFromSpeedLimit(speedLimitPerSecond: uint) {
     };
 }
 
-public impure func setGasAccountingParams(speedLimitPerBlock: uint, gasPoolMax: uint, txGasLimit: uint) -> bool {
+public impure func setGasAccountingParams(speedLimitPerSecond: uint, gasPoolMax: uint, txGasLimit: uint) -> bool {
     // if parameters are reasonable, start using them, and return true
     // otherwise, discard them, and return false
 
-    return xif (gasPoolMax < speedLimitPerBlock) {
+    return xif (gasPoolMax < speedLimitPerSecond) {
         false
     } elseif (gasPoolMax < txGasLimit) {
         false
     } else {
         gasAccountingParams = struct {
-            SpeedLimitPerSecond: speedLimitPerBlock,
+            SpeedLimitPerSecond: speedLimitPerSecond,
             GasPoolMax: gasPoolMax,
             TxGasLimit: txGasLimit,
         };
