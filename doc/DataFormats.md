@@ -82,6 +82,8 @@ At present. the following options are supported:
   * ratio of L1 gas price to base ArbGas price; 
   * network fee recipient (address encoded as uint); 
   * congestion fee recipient (address encoded as uint)
+* Option 3: set default aggregator
+  * Default aggregator address (address encoded as uint)
 
 All other options are ignored at present.
 

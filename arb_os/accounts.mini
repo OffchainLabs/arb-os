@@ -13,6 +13,7 @@ use std::storageMap::storageMap_size;
 use std::storageMap::storageMap_get;
 use std::storageMap::storageMap_set;
 
+use chainParameters::chainParams_getDefaultAggregator;
 use decompression::AggregatorDecompressionState;
 use evmCallStack::evmCallStack_addStorageCharge;
 
@@ -26,6 +27,7 @@ type Account = struct {
     ethBalance: uint,
     contractInfo: option<AccountContractInfo>,  // info on the contract at this address, if there is one
     aggregatorInfo: option<AggregatorInfo>,     // info on the aggregator using this address, if there is one
+    aggregatorToPay: option<address>,           // aggregator this user prefers; if None, use the default aggregator
 }
 
 type AccountContractInfo = struct {
@@ -76,6 +78,7 @@ public func pristineAccount(addr: address) -> Account {
         ethBalance: 0,
         contractInfo: None<AccountContractInfo>,
         aggregatorInfo: None<AggregatorInfo>,
+        aggregatorToPay: None<address>
     };
 }
 
@@ -136,6 +139,22 @@ public func account_setBlsKey(account: Account, maybeKey: option<BLSKey>) -> Acc
     return account with {
         blsKey: maybeKey
     };
+}
+
+public func account_getAggregatorToPayAsOption(account: Account) -> option<address> {
+    return account.aggregatorToPay;
+}
+
+public func account_getAggregatorToPay(account: Account) -> address {
+    return xif let Some(atp) = account.aggregatorToPay {
+        atp
+    } else {
+        chainParams_getDefaultAggregator()
+    };
+}
+
+public func account_setAggregatorToPay(account: Account, atp: option<address>) -> Account {
+    return account with { aggregatorToPay: atp };
 }
 
 public func account_getStartCodePoint(account: Account) -> option<impure func()> {

@@ -196,6 +196,7 @@ pub fn init_constant_table() -> HashMap<String, Uint256> {
         ("AVMSendType_batch", 0),
         // chain initialization options
         ("InitOption_setChargingParams", 2),
+        ("InitOption_setDefaultAggregator", 3),
         // charging mechanism
         ("Charging_DefaultL1GasPerL2Tx", 3700),
         ("Charging_DefaultL1GasPerCalldataByte", 16),
