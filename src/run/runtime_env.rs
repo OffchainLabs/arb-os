@@ -284,24 +284,6 @@ impl RuntimeEnvironment {
         }
     }
 
-    pub fn insert_buddy_deploy_message(
-        &mut self,
-        sender_addr: Uint256,
-        max_gas: Uint256,
-        gas_price_bid: Uint256,
-        value: Uint256,
-        data: &[u8],
-    ) -> Uint256 {
-        let mut buf = vec![]; //vec![1u8];
-        buf.extend(max_gas.to_bytes_be());
-        buf.extend(gas_price_bid.to_bytes_be());
-        buf.extend(Uint256::zero().to_bytes_be()); // destination address 0
-        buf.extend(value.to_bytes_be());
-        buf.extend_from_slice(data);
-
-        self.insert_l2_message(sender_addr.clone(), &buf, true)
-    }
-
     pub fn new_batch(&self) -> Vec<u8> {
         vec![3u8]
     }
