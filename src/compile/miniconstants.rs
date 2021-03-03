@@ -216,7 +216,7 @@ pub fn init_constant_table() -> HashMap<String, Uint256> {
         ("SecondsPerBlockNumerator", 2),
         ("SecondsPerBlockDenominator", 1),
         ("DefaultSpeedLimitPerSecond", 100_000_000),
-        ("DefaultSecondsPerSend", 900),               // 15 minutes
+        ("DefaultSecondsPerSend", 900), // 15 minutes
         ("Estimate_L1GasCostPerNode", 220000),
         ("Estimate_L1GasPrice", 100 * 1_000_000_000), // 100 gwei
     ] {
