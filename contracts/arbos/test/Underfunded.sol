@@ -1,7 +1,7 @@
-pragma solidity ^0.5.16;
+pragma solidity >=0.4.21 <0.7.0;
 
 contract Underfunded {
-    function() external payable {
+    fallback() external payable {
         require(false, "no deposits");
     }
     function nestedCall(uint256 value) external {
