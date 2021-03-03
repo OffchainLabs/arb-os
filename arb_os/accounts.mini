@@ -145,7 +145,7 @@ public func account_getAggregatorToPayAsOption(account: Account) -> option<addre
     return account.aggregatorToPay;
 }
 
-public func account_getAggregatorToPay(account: Account) -> address {
+public impure func account_getAggregatorToPay(account: Account) -> address {
     return xif let Some(atp) = account.aggregatorToPay {
         atp
     } else {
