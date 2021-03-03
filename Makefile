@@ -1,4 +1,5 @@
-CARGORUN = cargo run --release --
+CARGORUN = cargo run --
+CARGORUNRELEASE = cargo run --release --
 ARBOSDIR = arb_os
 BUILTINDIR = builtin
 STDDIR = stdlib
@@ -18,6 +19,7 @@ ARBOSCONTRACTS = $(ACBUILDDIR)/ArbAddressTable.json $(ACBUILDDIR)/ArbBLS.json $(
 COMPILEFLAGS = -i
 
 all: $(TESTFILES) $(TESTCONTRACTS) $(ARBOSCONTRACTS) $(TEMPLATES) $(ARBOS) test
+arbos: $(ARBOSDIR)/arbos.mexe
 contracts: $(TESTCONTRACTS) $(ARBOSCONTRACTS)
 
 $(ARBOSDIR)/contractTemplates.mini: $(ARBOSCONTRACTS)
@@ -77,7 +79,7 @@ $(STDDIR)/rlptest.mexe: $(BUILTINMAOS) $(STDDIR)/rlptest.mini
 $(BUILTINDIR)/maptest.mexe: $(BUILTINMAOS) $(BUILTINDIR)/maptest.mini
 	$(CARGORUN) compile $(BUILTINDIR)/maptest.mini -o $(BUILTINDIR)/maptest.mexe $(COMPILEFLAGS)
 
-$(ARBOSDIR)/arbos.mexe: $(ARBOSDIR) $(STDDIR) $(BUILTINDIR) src/compile/miniconstants.rs
+$(ARBOSDIR)/arbos.mexe: $(ARBOSDIR) $(STDDIR) $(BUILTINDIR) $(TEMPLATES) src/compile/miniconstants.rs
 	$(CARGORUN) compile "arb_os" -o "arb_os/arbos.mexe"
 
 $(TESTCONTRACTS): $(TCSRCDIR) $(ACSRCDIR)/ArbSys.sol
@@ -87,29 +89,29 @@ $(ARBOSCONTRACTS): $(ACSRCDIR)
 	(cd contracts/arbos; truffle compile)
 
 run:
-	cargo run --release -- run "arb_os/arbos.mexe"
+	$(CARGORUNRELEASE) run "arb_os/arbos.mexe"
 
 test: $(TEMPLATES) $(ARBOS)
 	cargo test --release 
 
 evmtest: $(ARBOS)
-	$(CARGORUN) evm-tests
+	$(CARGORUNRELEASE) evm-tests
 
 evmtestlogs: $(ARBOS)
 	rm -rf evm-test-logs
 	mkdir evm-test-logs
-	$(CARGORUN) evm-tests --savelogs
+	$(CARGORUNRELEASE) evm-tests --savelogs
 
 testlogs: $(TEMPLATES) $(ARBOS)
 	rm -rf testlogs
 	mkdir testlogs
-	$(CARGORUN) make-test-logs >/dev/null
+	$(CARGORUNRELEASE) make-test-logs >/dev/null
 
 evmdebug: all
-	$(CARGORUN) evm-debug
+	$(CARGORUNRELEASE) evm-debug
 
 benchmark: $(TEMPLATES) $(ARBOS)
-	$(CARGORUN) make-benchmarks
+	$(CARGORUNRELEASE) make-benchmarks
 
 clean:
 	rm -f $(BUILTINDIR)/*.mexe $(STDDIR)/*.mexe $(ARBOSDIR)/*.mexe minitests/*.mexe $(ARBOSDIR)/contractTemplates.mini $(TCBUILDDIR)/*.json $(ACBUILDDIR)/*.json
