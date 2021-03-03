@@ -197,7 +197,7 @@ public impure func txReceipts_init() {  // will be called at beginning of main()
         statsThisBlock: outputStats_new(),
         statsAllTime: outputStats_new(),
         lastBlockNum: ~0,
-        nextSendBlockNum: 0,
+        nextSendTime: 0,
     };
 }
 
