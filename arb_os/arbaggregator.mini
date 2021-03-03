@@ -11,6 +11,7 @@ use accounts::account_getAggregatorToPayAsOption;
 
 use chainParameters::chainParams_getDefaultAggregator;
 use chainParameters::chainParams_setDefaultAggregator;
+use chainParameters::chainParams_getOwner;
 
 use evmCallStack::EvmCallFrame;
 use evmCallStack::evmCallStack_topFrame;
@@ -111,8 +112,12 @@ impure func arbaggregator_getDefaultAggregator(topFrame: EvmCallFrame, calldata:
 }
 
 impure func arbaggregator_setDefaultAggregator(topFrame: EvmCallFrame, calldata: ByteArray) { // (address)
+    let caller = evmCallFrame_getCaller(topFrame);
     if (bytearray_size(calldata) != 36) {
         evmOp_revert_knownPc(40, 0, 0);
+    }
+    if ((caller != address(0)) && (Some(caller) != chainParams_getOwner()) && (caller != chainParams_getDefaultAggregator())) {
+        evmOp_revert_knownPc(41, 0, 0);
     }
     let newDefaultAgg = address(bytearray_get256(calldata, 4));
     chainParams_setDefaultAggregator(newDefaultAgg);
