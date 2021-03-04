@@ -41,14 +41,16 @@ type RetryableTx = struct {
     destination: address,
     callvalue: uint,
     calldata: ByteArray,
+    retryCount: uint,
 }
 
 type RetryQueueItem = struct {
     txId: uint,
+    retryCount: uint,
     enqueueTime: uint,
 }
 
-public func retryableTx_hash(rtx: RetryableTx) -> bytes32 {
+public func retryableTx_hash(rtx: RetryableTx) -> bytes32 {  // note: hash does not include retryCount field
     return hash(
         bytes32(rtx.txId),
         hash(
@@ -78,6 +80,7 @@ public func retryItem_rebuildVerifyHash(
         destination: destination,
         callvalue: callvalue,
         calldata: calldata,
+        retryCount: 0,   // OK to put any value here because retryCount does not affect the hash.
     };
     return xif (claimedHash == retryableTx_hash(claimedRtx)) {
         Some(claimedRtx)
@@ -124,11 +127,16 @@ impure func retryBuffer_trimOne(currentTimestamp: uint) -> bool {  // returns tr
         let qitem = unsafecast<RetryQueueItem>(rawQitem);
         xif let Some(rawItem) = retryBuffer.byTxId[qitem.txId] {
             xif (qitem.enqueueTime + retryBuffer.txLifetimeSeconds <= currentTimestamp) {
-                retryBuffer_delete(qitem.txId);
-                retryBuffer = retryBuffer with {
-                   fifo: uq
-                };
-                true
+                let item = unsafecast<RetryableTx>(rawItem);
+                xif (qitem.retryCount >= item.retryCount) {
+                    retryBuffer_delete(qitem.txId);
+                    retryBuffer = retryBuffer with {
+                       fifo: uq
+                    };
+                    true
+                } else {
+                    false
+                }
             } else {
                 false
             }
@@ -144,10 +152,11 @@ public impure func retryBuffer_insert(rtx: RetryableTx) {
     let now = inbox_currentTimestamp();
     retryBuffer_trimTwo(now);
     let txId = rtx.txId;
+    let retryCount = rtx.retryCount + 1;
     retryBuffer = retryBuffer with {
-        byTxId: retryBuffer.byTxId with { [txId] = rtx }
+        byTxId: retryBuffer.byTxId with { [txId] = rtx with { retryCount: retryCount } }
     } with {
-        fifo: queue_put(retryBuffer.fifo, struct { txId: txId, enqueueTime: now })
+        fifo: queue_put(retryBuffer.fifo, struct { txId: txId, enqueueTime: now, retryCount: retryCount })
     };
 }
 
@@ -164,6 +173,7 @@ public impure func retryBuffer_insertNew(
         destination: destination,
         callvalue: callvalue,
         calldata: calldata,
+        retryCount: 0,
     };
     retryBuffer_insert(newTx);
 
@@ -187,7 +197,7 @@ public impure func retryBuffer_delete(txId: uint) {
     // tx might still be in retryBuffer.fifo, but that isn't a problem because it's not gettable and re-deletion is safe
 }
 
-public impure func processRedeemableTx(req: IncomingRequest) {
+public impure func processRetryableTx(req: IncomingRequest) {
     let sender = req.sender;
     let destination = address(bytearray_get256(req.msgData, 0));
     let callvalue = bytearray_get256(req.msgData, 32);

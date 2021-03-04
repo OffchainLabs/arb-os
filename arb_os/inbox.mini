@@ -38,7 +38,7 @@ use output::outputStats_endOfBlock;
 
 use pluggables::callPluggable;
 
-use retrybuffer::processRedeemableTx;
+use retrybuffer::processRetryableTx;
 
 use std::bytearray::ByteArray;
 use std::bytearray::bytearray_new;
@@ -450,7 +450,7 @@ public impure func inbox_getNextUnpackedRequest() -> (
                 }
                 // else request was forged or malformatted, ignore it and execute loop again to get another
             } elseif (msg.kind == const::L1MessageType_submitRedeemableTx) {
-                processRedeemableTx(msg);
+                processRetryableTx(msg);
                 // done with message, execute loop again to get the next message
             } else {
                 return (Some(msg), None<TxRequestData>);
