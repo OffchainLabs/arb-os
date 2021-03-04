@@ -11,7 +11,7 @@ use ethers_signers::Wallet;
 use std::{fs::File, io::Read, path::Path};
 
 pub fn builtin_contract_path(contract_name: &str) -> String {
-    format!("contracts/arbos/build/contracts/{}.json", contract_name)
+    format!("contracts/artifacts/arbos/builtin/{}.sol/{}.json", contract_name, contract_name)
 }
 
 #[derive(Debug, Clone)]

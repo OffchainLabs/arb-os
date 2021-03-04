@@ -65,7 +65,7 @@ fn mini_code_for_arbinfo(buf: &mut BytesMut) {
     mini_code_getter_for_bytes(
         buf,
         "getArbInfoCode",
-        &get_deployed_bytecode(Path::new("contracts/arbos/build/contracts/ArbInfo.json")),
+        &get_deployed_bytecode(Path::new("contracts/artifacts/arbos/builtin/ArbInfo.sol/ArbInfo.json")),
     );
 
     buf.put(

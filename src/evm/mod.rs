@@ -27,7 +27,7 @@ pub struct CallInfo<'a> {
 }
 
 pub fn test_contract_path(contract_name: &str) -> String {
-    format!("contracts/test/build/contracts/{}.json", contract_name)
+    format!("contracts/artifacts/arbos/test/{}.sol/{}.json", contract_name, contract_name)
 }
 
 pub fn evm_xcontract_call_with_constructors(
@@ -1634,8 +1634,8 @@ pub fn _evm_test_payment_in_constructor(log_to: Option<&Path>, debug: bool) {
     let last_send = machine.runtime_env._get_last_send().unwrap();
     let mut expected_bytes = my_addr.to_bytes_be();
     expected_bytes.extend(Uint256::from_usize(5000).to_bytes_be());
-    assert_eq!(last_send[0..32], Uint256::zero().to_bytes_be());
-    assert_eq!(last_send[32..], expected_bytes);
+    assert_eq!(&last_send[0..32], Uint256::zero().to_bytes_be());
+    assert_eq!(&last_send[32..], expected_bytes);
 
     if let Some(path) = log_to {
         let _ = machine
@@ -1736,8 +1736,8 @@ pub fn evm_test_arbsys(log_to: Option<&Path>, debug: bool) {
     let last_send = machine.runtime_env._get_last_send().unwrap();
     let mut expected_bytes = my_addr.to_bytes_be();
     expected_bytes.extend(Uint256::from_usize(5000).to_bytes_be());
-    assert_eq!(last_send[0..32], Uint256::zero().to_bytes_be());
-    assert_eq!(last_send[32..], expected_bytes);
+    assert_eq!(&last_send[0..32], Uint256::zero().to_bytes_be());
+    assert_eq!(&last_send[32..], expected_bytes);
 
     if let Some(path) = log_to {
         let _ = machine
