@@ -2,7 +2,7 @@
  * Copyright 2020, Offchain Labs, Inc. All rights reserved.
  */
 
-use crate::evm::abi::{_ArbOwner};
+use crate::evm::abi::_ArbOwner;
 use crate::run::{load_from_file, runtime_env::RuntimeEnvironment};
 use crate::uint256::Uint256;
 use ethers_signers::Signer;

@@ -381,10 +381,9 @@ pub fn field_vectors_assignable(
     seen: HashSet<(Type, Type)>,
 ) -> bool {
     tvec1.len() == tvec2.len()
-        && tvec1
-            .iter()
-            .zip(tvec2)
-            .all(|(t1, t2)| t1.tipe.assignable(&t2.tipe, type_tree, seen.clone()))
+        && tvec1.iter().zip(tvec2).all(|(t1, t2)| {
+            t1.tipe.assignable(&t2.tipe, type_tree, seen.clone()) && t1.name == t2.name
+        })
 }
 
 impl PartialEq for Type {

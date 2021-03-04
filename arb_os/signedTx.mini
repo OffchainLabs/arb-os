@@ -78,7 +78,7 @@ public impure func translateSignedTx(req: IncomingRequest) -> option<TxRequestDa
             } with {
                 requestId: uint(rlpHash)
             },
-            txFeeStats: txFeeStats_zero(),
+            feeStats: txFeeStats_zero(),
         }
     );
 }

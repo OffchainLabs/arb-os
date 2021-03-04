@@ -292,7 +292,7 @@ impl RuntimeEnvironment {
         value: Uint256,
         data: &[u8],
     ) -> Uint256 {
-        let mut buf = vec![];  //vec![1u8];
+        let mut buf = vec![]; //vec![1u8];
         buf.extend(max_gas.to_bytes_be());
         buf.extend(gas_price_bid.to_bytes_be());
         buf.extend(Uint256::zero().to_bytes_be()); // destination address 0
@@ -794,22 +794,48 @@ impl ArbosReceipt {
                 fee_stats: if let Value::Tuple(t2) = &tup[5] {
                     vec![
                         if let Value::Tuple(t3) = &t2[0] {
-                            t3.iter().map(|v| if let Value::Int(ui) = v { ui.clone() } else { panic!() }).collect()
+                            t3.iter()
+                                .map(|v| {
+                                    if let Value::Int(ui) = v {
+                                        ui.clone()
+                                    } else {
+                                        panic!()
+                                    }
+                                })
+                                .collect()
                         } else {
                             panic!()
                         },
                         if let Value::Tuple(t3) = &t2[1] {
-                            t3.iter().map(|v| if let Value::Int(ui) = v { ui.clone() } else { panic!() }).collect()
+                            t3.iter()
+                                .map(|v| {
+                                    if let Value::Int(ui) = v {
+                                        ui.clone()
+                                    } else {
+                                        panic!()
+                                    }
+                                })
+                                .collect()
                         } else {
                             panic!()
                         },
                         if let Value::Tuple(t3) = &t2[2] {
-                            t3.iter().map(|v| if let Value::Int(ui) = v { ui.clone() } else { panic!() }).collect()
+                            t3.iter()
+                                .map(|v| {
+                                    if let Value::Int(ui) = v {
+                                        ui.clone()
+                                    } else {
+                                        panic!()
+                                    }
+                                })
+                                .collect()
                         } else {
                             panic!()
                         },
                     ]
-                } else { panic!() }
+                } else {
+                    panic!()
+                },
             })
         } else {
             panic!("ArbOS log item was not a Tuple");
@@ -906,7 +932,8 @@ impl ArbosReceipt {
             7 => "cannot deploy at address",
             8 => "exceeded tx gas limit",
             _ => "unknown error",
-        }.to_string()
+        }
+        .to_string()
     }
 
     pub fn succeeded(&self) -> bool {
