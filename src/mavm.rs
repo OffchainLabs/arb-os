@@ -298,7 +298,7 @@ pub enum BufferElem {
 pub struct Buffer {
     elem: BufferElem,
     hash: RefCell<Option<Packed>>,
-    max_access: u64,
+    pub max_access: u64,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

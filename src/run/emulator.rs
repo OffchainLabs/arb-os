@@ -1233,15 +1233,34 @@ impl Machine {
                 AVMOpcode::EcPairing => self.gas_for_pairing(),
                 AVMOpcode::Sideload => 10,
                 AVMOpcode::NewBuffer => 1,
-                AVMOpcode::GetBuffer8 => 10,
-                AVMOpcode::GetBuffer64 => 10,
-                AVMOpcode::GetBuffer256 => 10,
-                AVMOpcode::SetBuffer8 => 100,
-                AVMOpcode::SetBuffer64 => 100,
-                AVMOpcode::SetBuffer256 => 100,
+                AVMOpcode::GetBuffer8 => 3,
+                AVMOpcode::GetBuffer64 => 3,
+                AVMOpcode::GetBuffer256 => 3,
+                AVMOpcode::SetBuffer8 => self.gas_for_setbuffer(),
+                AVMOpcode::SetBuffer64 => self.gas_for_setbuffer()*2,
+                AVMOpcode::SetBuffer256 => self.gas_for_setbuffer()*2,
             })
         } else {
             None
+        }
+    }
+
+    fn gas_for_setbuffer(&self) -> u64 {
+        if let Some(val) = self.stack.contents.get(2) {
+            if let Value::Buffer(buf) = val {
+                let mut mx = buf.max_access;
+                let mut res = 0;
+                mx = mx/1024;
+                while (mx > 0) {
+                    res += 80;
+                    mx = mx/8;
+                }
+                res + 240
+            } else {
+                240
+            }
+        } else {
+            240
         }
     }
 
