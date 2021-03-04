@@ -4,7 +4,7 @@
 
 use crate::compile::miniconstants::init_constant_table;
 use crate::evm::abi::{
-    ArbAddressTable, ArbBLS, ArbFunctionTable, ArbSys, ArbosTest, _ArbGasInfo, _ArbOwner,
+    ArbAddressTable, ArbBLS, ArbFunctionTable, ArbSys, ArbosTest, _ArbGasInfo, _ArbOwner, _ArbAggregator,
 };
 use crate::evm::abi::{FunctionTable, _ArbInfo};
 use crate::run::{load_from_file, RuntimeEnvironment};
@@ -523,6 +523,35 @@ pub fn _evm_test_arbgasinfo(log_to: Option<&Path>, debug: bool) -> Result<(), et
     assert_eq!(speed_limit, Uint256::from_u64(100_000_000));
     assert_eq!(gas_pool_max, Uint256::from_u64(6_000_000_000));
     assert_eq!(tx_gas_limit, Uint256::from_u64(1_000_000_000));
+
+    if let Some(path) = log_to {
+        machine
+            .runtime_env
+            .recorder
+            .to_file(path, machine.get_total_gas_usage().to_u64().unwrap())
+            .unwrap();
+    }
+
+    Ok(())
+}
+
+pub fn _evm_test_arbaggregator(log_to: Option<&Path>, debug: bool) -> Result<(), ethabi::Error> {
+    let rt_env = RuntimeEnvironment::new(Uint256::from_usize(1111), None);
+    let mut machine = load_from_file(Path::new("arb_os/arbos.mexe"), rt_env);
+    machine.start_at_zero();
+
+    let wallet = machine.runtime_env.new_wallet();
+    let my_addr = Uint256::from_bytes(wallet.address().as_bytes());
+
+    let arbagg = _ArbAggregator::_new(debug);
+
+    let pref_agg = arbagg._get_preferred_aggregator(&mut machine, my_addr.clone())?;
+    assert_eq!(pref_agg, (Uint256::zero(), true));
+
+    let new_pref_agg = Uint256::from_u64(4242);
+    arbagg._set_preferred_aggregator(&mut machine, new_pref_agg.clone(), my_addr.clone())?;
+    let pref_agg = arbagg._get_preferred_aggregator(&mut machine, my_addr.clone())?;
+    assert_eq!(pref_agg, (new_pref_agg, false));
 
     if let Some(path) = log_to {
         machine

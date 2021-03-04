@@ -19,6 +19,8 @@ use evmCallStack::evmCallStack_setTopFrameMemory;
 use evmCallStack::evmCallFrame_getCalldata;
 use evmCallStack::evmCallFrame_getCaller;
 use evmCallStack::evmCallStack_callHitError;
+use evmCallStack::evmCallStack_getAccountInCurrentContext;
+use evmCallStack::evmCallStack_setAccountInCurrentContext;
 
 use evmOps::evmOp_return;
 use evmOps::evmOp_revert_knownPc;
@@ -61,10 +63,7 @@ impure func arbaggregator_getPreferredAggregator(topFrame: EvmCallFrame, calldat
     }
     let addr = address(bytearray_get256(calldata, 4));
     let maybePA = account_getAggregatorToPayAsOption(
-        accountStore_get(
-            getGlobalAccountStore(),
-            addr,
-        )
+        evmCallStack_getAccountInCurrentContext(addr)
     );
     let (prefAgg, isDefault) = xif let Some(pa) = maybePA {
         (pa, false)
@@ -85,15 +84,24 @@ impure func arbaggregator_setPreferredAggregator(topFrame: EvmCallFrame, calldat
     }
     let caller = evmCallFrame_getCaller(topFrame);
     let newPA = address(bytearray_get256(calldata, 4));
-    let globalStore = getGlobalAccountStore();
-    setGlobalAccountStore(
-        accountStore_set(
-            globalStore,
-            caller,
-            account_setAggregatorToPay(
-                accountStore_get(globalStore, caller),
-                xif (newPA == address(0)) { None<address> } else { Some(newPA) },
-            )
+    let updatedAcct = account_setAggregatorToPay(
+        evmCallStack_getAccountInCurrentContext(caller),
+        xif (newPA == address(0)) {
+            None<address>
+        } else {
+            Some(newPA)
+        },
+    );
+    let newVal = xif (newPA == address(0)) {
+         None<address>
+     } else {
+         Some(newPA)
+     };
+    evmCallStack_setAccountInCurrentContext(
+        caller,
+        account_setAggregatorToPay(
+            evmCallStack_getAccountInCurrentContext(caller),
+            newVal,
         )
     );
     evmOp_return(0, 0);
