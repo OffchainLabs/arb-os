@@ -5,6 +5,7 @@
 use crate::compile::miniconstants::init_constant_table;
 use crate::evm::abi::{
     ArbAddressTable, ArbBLS, ArbFunctionTable, ArbSys, ArbosTest, _ArbGasInfo, _ArbOwner,
+    builtin_contract_path,
 };
 use crate::evm::abi::{FunctionTable, _ArbInfo};
 use crate::run::{load_from_file, RuntimeEnvironment};
@@ -27,7 +28,10 @@ pub struct CallInfo<'a> {
 }
 
 pub fn test_contract_path(contract_name: &str) -> String {
-    format!("contracts/artifacts/arbos/test/{}.sol/{}.json", contract_name, contract_name)
+    format!(
+        "contracts/artifacts/arbos/test/{}.sol/{}.json",
+        contract_name, contract_name
+    )
 }
 
 pub fn evm_xcontract_call_with_constructors(
@@ -370,6 +374,7 @@ pub fn evm_test_arbsys_direct(log_to: Option<&Path>, debug: bool) -> Result<(), 
 
     let arbsys = ArbSys::new(&wallet, debug);
     let arb_address_table = ArbAddressTable::new(&wallet, debug);
+    AbiForContract::new_from_file(&builtin_contract_path("ArbSys")).unwrap();
     let arb_bls = ArbBLS::new(&wallet, debug);
 
     let version = arbsys._arbos_version(&mut machine)?;
@@ -377,6 +382,45 @@ pub fn evm_test_arbsys_direct(log_to: Option<&Path>, debug: bool) -> Result<(), 
 
     let tx_count = arbsys.get_transaction_count(&mut machine, my_addr.clone())?;
     assert_eq!(tx_count, Uint256::from_u64(2));
+
+    assert!(arbsys.is_top_level_call(&mut machine)?);
+
+    let mut add_contract = AbiForContract::new_from_file(&test_contract_path("Add")).unwrap();
+    let res = add_contract.deploy(
+        &[],
+        &mut machine,
+        Uint256::zero(),
+        None,
+        None,
+        false,
+    );
+    assert!(res.is_ok());
+    let (add_receipts, _) = add_contract.call_function(
+        my_addr.clone(),
+        "isTopLevel",
+        &[],
+        &mut machine,
+        Uint256::zero(),
+        debug,
+    )?;
+    assert_eq!(add_receipts.len(), 1);
+    assert_eq!(
+        add_receipts[0].get_return_data(),
+        Uint256::one().to_bytes_be()
+    );
+    let (add_receipts, _) = add_contract.call_function(
+        my_addr.clone(),
+        "isNotTopLevel",
+        &[],
+        &mut machine,
+        Uint256::zero(),
+        debug,
+    )?;
+    assert_eq!(add_receipts.len(), 1);
+    assert_eq!(
+        add_receipts[0].get_return_data(),
+        Uint256::zero().to_bytes_be()
+    );
 
     let addr_table_index = arb_address_table.register(&mut machine, my_addr.clone())?;
     let lookup_result = arb_address_table.lookup(&mut machine, my_addr.clone())?;
