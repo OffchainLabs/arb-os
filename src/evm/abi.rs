@@ -1884,7 +1884,7 @@ impl _ArbAggregator {
     ) -> Result<(), ethabi::Error> {
         let (receipts, sends) = self.contract_abi.call_function(
             if let Some(s) = sender { s } else { Uint256::zero() },
-            "setPreferredAggregator",
+            "setDefaultAggregator",
             &[
                 ethabi::Token::Address(addr.to_h160()),
             ],

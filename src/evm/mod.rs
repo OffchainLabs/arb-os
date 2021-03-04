@@ -553,6 +553,16 @@ pub fn _evm_test_arbaggregator(log_to: Option<&Path>, debug: bool) -> Result<(),
     let pref_agg = arbagg._get_preferred_aggregator(&mut machine, my_addr.clone())?;
     assert_eq!(pref_agg, (new_pref_agg, false));
 
+    let def_agg = arbagg._get_default_aggregator(&mut machine)?;
+    assert_eq!(def_agg, Uint256::zero());
+
+    let new_def_agg = Uint256::from_u64(9696);
+    arbagg._set_default_aggregator(&mut machine, new_def_agg.clone(), None)?;
+    let def_agg = arbagg._get_default_aggregator(&mut machine)?;
+    assert_eq!(def_agg, new_def_agg);
+
+    assert!(arbagg._set_default_aggregator(&mut machine, Uint256::from_u64(12345), Some(my_addr)).is_err());
+
     if let Some(path) = log_to {
         machine
             .runtime_env
