@@ -573,6 +573,31 @@ impl<'a> ArbSys<'a> {
             _ => panic!(),
         }
     }
+
+    pub fn called_from_l1(
+        &self,
+        machine: &mut Machine,
+    ) -> Result<bool, ethabi::Error> {
+        let (receipts, _sends) = self.contract_abi.call_function_compressed(
+            self.my_address.clone(),
+            "calledFromL1",
+            &[],
+            machine,
+            Uint256::zero(),
+            self._wallet,
+            self.debug,
+        )?;
+
+        if (receipts.len() != 1) {
+            return Err(ethabi::Error::from("wrong number of receipts"));
+        }
+
+        if receipts[0].succeeded() {
+            Ok(receipts[0].get_return_data() == Uint256::zero().to_bytes_be())
+        } else {
+            Err(ethabi::Error::from("reverted"))
+        }
+    }
 }
 
 pub struct _ArbInfo {

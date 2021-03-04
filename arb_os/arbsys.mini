@@ -10,6 +10,7 @@ use std::stack::Stack;
 use accounts::AccountStore;
 use std::bytestream::ByteStream;
 
+use evmCallStack::evmCallStack_stackDepth;
 use evmCallStack::evmCallStack_topFrame;
 use evmCallStack::evmCallStack_setAccount;
 use evmCallStack::evmCallStack_getTopFrameMemoryOrDie;
@@ -101,6 +102,8 @@ public impure func arbsys_txcall() {
             arbsys_getStorageAt(topFrame, calldata);
         } elseif(funcCode == 0x3dcfdac7) {
             arbsys_getPcTable(topFrame, calldata);
+        } elseif (funcCode == 0x638aa966) {
+            arbsys_calledFromL1(topFrame, calldata);
         } else {
             // unrecognized function code
             evmOp_revert_knownCodePc(address(const::Address_ArbSys), 1, 0, 0);
@@ -392,6 +395,22 @@ impure func arbsys_getPcTable(topFrame: EvmCallFrame, calldata: ByteArray) {
     }
 }
 
+impure func arbsys_calledFromL1(topFrame: EvmCallFrame, calldata: ByteArray) {   // () -> bool
+    if (bytearray_size(calldata) != 4) {
+        evmOp_revert_knownCodePc(address(const::Address_ArbSys), 70, 0, 0);
+    }
+    let mem = bytearray_set256(
+        bytearray_new(0),
+        0,
+        uint(evmCallStack_stackDepth() == 2),
+    );
+    if (evmCallStack_setTopFrameMemory(mem)) {
+        evmOp_return(0, 32);
+    } else {
+        evmOp_revert_knownCodePc(address(const::Address_ArbSys), 71, 0, 0);
+    }
+}
+
 impure func arbAddressTable_register(topFrame: EvmCallFrame, calldata: ByteArray) { // (address addr) -> uint
 // return the index of addr in the address table
 // if addr isn't in the table already, add it to the table and return its new index
@@ -666,5 +685,4 @@ impure func arbFunctionTable_get(topFrame: EvmCallFrame, calldata: ByteArray) { 
 
     evmOp_revert_knownCodePc(address(const::Address_ArbFunctionTable), 211, 0, 0);
 }
-
 
