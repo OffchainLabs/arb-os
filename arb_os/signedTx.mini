@@ -32,6 +32,9 @@ use gasAccounting::txFeeStats_zero;
 
 use messages::TxRequestData;
 
+use retrybuffer::RetryableTx;
+
+
 // A copy of this struct is defined in stdlib/rlp.mini.
 // The declaration there must remain consistent with the one here.
 type SignedTx = struct {
@@ -79,6 +82,7 @@ public impure func translateSignedTx(req: IncomingRequest) -> option<TxRequestDa
                 requestId: uint(rlpHash)
             },
             feeStats: txFeeStats_zero(),
+            fromRetryable: None<RetryableTx>,
         }
     );
 }

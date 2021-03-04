@@ -38,6 +38,7 @@ use output::outputStats_endOfBlock;
 
 use pluggables::callPluggable;
 
+use retrybuffer::RetryableTx;
 use retrybuffer::processRetryableTx;
 
 use std::bytearray::ByteArray;
@@ -507,6 +508,7 @@ impure func translateUnsignedTx(request: IncomingRequest) -> option<TxRequestDat
             isConstructor: (destAddrAsUint == 0),
             incomingRequest: request,
             feeStats: txFeeStats_zero(),
+            fromRetryable: None<RetryableTx>,
         }
     );
 }
@@ -539,6 +541,7 @@ func translateBuddyDeployTx(request: IncomingRequest) -> option<TxRequestData> {
             isConstructor: true,
             incomingRequest: request,
             feeStats: txFeeStats_zero(),
+            fromRetryable: None<RetryableTx>,
         }
     );
 }
