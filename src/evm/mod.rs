@@ -383,7 +383,7 @@ pub fn evm_test_arbsys_direct(log_to: Option<&Path>, debug: bool) -> Result<(), 
     let tx_count = arbsys.get_transaction_count(&mut machine, my_addr.clone())?;
     assert_eq!(tx_count, Uint256::from_u64(2));
 
-    assert!(arbsys.called_from_l1(&mut machine)?);
+    assert!(arbsys.is_top_level_call(&mut machine)?);
 
     let mut add_contract = AbiForContract::new_from_file(&test_contract_path("Add")).unwrap();
     let res = add_contract.deploy(

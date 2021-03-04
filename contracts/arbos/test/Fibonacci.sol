@@ -38,6 +38,6 @@ uint[] fibseries;
   // }
 
   function isTopLevel() public returns (bool) {
-    return ArbSys(address(100)).calledFromL1();
+    return ArbSys(address(100)).isTopLevelCall();
   }
 }

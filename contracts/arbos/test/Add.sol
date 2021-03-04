@@ -33,7 +33,7 @@ contract Add {
     }
 
     function isTopLevel() public returns (bool) {
-        return ArbSys(address(100)).calledFromL1();
+        return ArbSys(address(100)).isTopLevelCall();
     }
 
     function isNotTopLevel() public returns (bool) {

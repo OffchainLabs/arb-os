@@ -574,13 +574,13 @@ impl<'a> ArbSys<'a> {
         }
     }
 
-    pub fn called_from_l1(
+    pub fn is_top_level_call(
         &self,
         machine: &mut Machine,
     ) -> Result<bool, ethabi::Error> {
         let (receipts, _sends) = self.contract_abi.call_function_compressed(
             self.my_address.clone(),
-            "calledFromL1",
+            "isTopLevelCall",
             &[],
             machine,
             Uint256::zero(),

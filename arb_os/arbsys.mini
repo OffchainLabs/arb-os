@@ -102,8 +102,8 @@ public impure func arbsys_txcall() {
             arbsys_getStorageAt(topFrame, calldata);
         } elseif(funcCode == 0x3dcfdac7) {
             arbsys_getPcTable(topFrame, calldata);
-        } elseif (funcCode == 0x638aa966) {
-            arbsys_calledFromL1(topFrame, calldata);
+        } elseif (funcCode == 0x08bd624c) {
+            arbsys_isTopLevelCall(topFrame, calldata);
         } else {
             // unrecognized function code
             evmOp_revert_knownCodePc(address(const::Address_ArbSys), 1, 0, 0);
@@ -395,7 +395,7 @@ impure func arbsys_getPcTable(topFrame: EvmCallFrame, calldata: ByteArray) {
     }
 }
 
-impure func arbsys_calledFromL1(topFrame: EvmCallFrame, calldata: ByteArray) {   // () -> bool
+impure func arbsys_isTopLevelCall(topFrame: EvmCallFrame, calldata: ByteArray) {   // () -> bool
     if (bytearray_size(calldata) != 4) {
         evmOp_revert_knownCodePc(address(const::Address_ArbSys), 70, 0, 0);
     }
