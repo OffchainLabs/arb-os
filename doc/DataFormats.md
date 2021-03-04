@@ -220,7 +220,7 @@ A tx receipt log item consists of:
   * ArbGas used in current Arbitrum block including this tx (uint)
   * index of this tx within this Arbitrum block (uint)
   * number of EVM logs emitted in this Arbitrum block before this tx (uint)
-* fee information for the transaction, an 3-tuple consisting of:
+* fee information for the transaction, a 4-tuple consisting of:
   * a 4-tuple of prices of:
     * L2 transaction (uint)
     * L1 calldata bytes (uint)
@@ -231,11 +231,12 @@ A tx receipt log item consists of:
     * L1 calldata bytes (uint)
     * L2 storage (uint)
     * L2 computation (uint)
-  * a 4-tuple of wei paid for: [might not equal product of units and price, e.g. if user has insufficient funds to pay]
+  * a 4-tuple of wei paid for: [might not equal product of units and price, e.g. if user has insufficient funds to pay, or no aggregator was reimbursed]
     * L2 transaction (uint)
     * L1 calldata bytes (uint)
     * L2 storage (uint)
     * L2 computation (uint)
+  * address of aggregator that was reimbursed (or zero if there wasn't one) (address encoded as uint)
 
 Possible return codes are:
 	0: tx returned (success)

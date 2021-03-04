@@ -826,6 +826,7 @@ impure func payForTxAndL1Gas(
     };
 
     if (amount > payableToFee) {
+        feeStats = feeStats with { paidAggregator: recipient };
         acctStore = xif let Some(store) = accountStore_transferEthBalance(
             acctStore,
             payer,
@@ -997,6 +998,7 @@ type TxFeeStats = struct {
     price: FourResources,
     units: FourResources,
     weiPaid: FourResources,
+    paidAggregator: address,
 }
 
 public func txFeeStats_zero() -> TxFeeStats {
@@ -1010,6 +1012,7 @@ public func txFeeStats_zero() -> TxFeeStats {
         price: frZero,
         units: frZero,
         weiPaid: frZero,
+        paidAggregator: address(0),
     };
 }
 
