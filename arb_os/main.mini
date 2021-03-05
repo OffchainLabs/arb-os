@@ -53,19 +53,26 @@ use inbox::IncomingRequest;
 
 
 impure func main(oldGlobals: any) {
+    asm(1,) { debugprint };
     if (oldGlobals != ()) {
+        asm(2,) { debugprint };
         // this is an upgrade; we're inheriting the state of a previous ArbOS instance
 
         // do any sanity checking here; do a panic if we need to abort the upgrade and stay with old version
 
         // do any translation of globals or global formats here
+        asm(oldGlobals,) { rset };
 
+        asm(3,) { debugprint };
         // now re-do the initializations that set up pointers into the ArbOS code
         errorHandler_init();
+        asm(4,) { debugprint };
         evmOps_init();
+        asm(5,) { debugprint };
         if (initializePreinstalls() == None<()>) {
             panic;   // don't try to run without preinstalls and precompiles
         }
+        asm(6,) { debugprint };
     } else {
         // this is a clean start, not an upgrade
         errorHandler_init();

@@ -164,21 +164,29 @@ fn _test_upgrade_arbos_over_itself_impl() -> Result<(), ethabi::Error> {
 
     let uploader = CodeUploader::_new_from_file(Path::new("arb_os/arbos.mexe"));
 
+    println!("A");
     arbowner._start_code_upload(&mut machine)?;
 
     let mut accum = vec![];
     for buf in uploader.instructions {
         accum.extend(buf);
         if (accum.len() > 3000) {
+            println!("B");
             arbowner._continue_code_upload(&mut machine, accum)?;
+            println!("C");
             accum = vec![];
         }
     }
+    println!("D");
     if (accum.len() > 0) {
+        println!("E");
         arbowner._continue_code_upload(&mut machine, accum)?;
+        println!("F");
     }
 
+    println!("G");
     arbowner._finish_code_upload_as_arbos_upgrade(&mut machine)?;
+    println!("H");
 
     let wallet2 = machine.runtime_env.new_wallet();
     let arbsys = ArbSys::new(&wallet2, false);
@@ -187,5 +195,6 @@ fn _test_upgrade_arbos_over_itself_impl() -> Result<(), ethabi::Error> {
     let arbos_version_orig = arbsys_orig._arbos_version(&mut machine)?;
     assert_eq!(arbos_version, arbos_version_orig);
 
+    println!("I");
     Ok(())
 }
