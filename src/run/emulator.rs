@@ -1037,7 +1037,7 @@ impl Machine {
 
     ///Generates a `ProfilerData` from a run of self with args from address 0.
     pub fn profile_gen(&mut self, args: Vec<Value>, mode: ProfilerMode) -> ProfilerData {
-        assert!(mode != ProfilerMode::Never);
+        assert_ne!(mode, ProfilerMode::Never);
         self.call_state(CodePt::new_internal(0), args);
         let mut loc_map = ProfilerData::default();
         loc_map.file_name_chart = self.file_name_chart.clone();
@@ -1065,85 +1065,14 @@ impl Machine {
                 profile_enabled = true;
             }
             if profile_enabled {
-                let loc = insn.debug_info.location;
-                let next_op_gas = self.next_op_gas().unwrap_or(0);
-                if let Some(gas_cost) = loc_map.get_mut(&loc, &self.file_name_chart) {
-                    *gas_cost += next_op_gas;
-                } else {
-                    loc_map.insert(&loc, next_op_gas, &self.file_name_chart);
-                }
-                total_gas += next_op_gas;
-                let alt_stack = self.get_stack_trace().trace;
-                match stack_len.cmp(&stack.len()) {
-                    Ordering::Less => {
-                        stack.pop();
-                        let mut next_len = loc_map
-                            .stack_tree
-                            .get(stack.last().unwrap_or(&CodePt::new_internal(0)))
-                            .map(|something| something.0.len())
-                            .unwrap_or(0);
-                        if *stack.last().unwrap_or(&CodePt::new_internal(0)) == current_codepoint {
-                            next_len += 1;
-                        }
-                        if let Some((func_info, _)) = loc_map.stack_tree.get_mut(&current_codepoint)
-                        {
-                            func_info.push(ProfilerEvent::Return(
-                                *stack.last().unwrap_or(&CodePt::new_internal(0)),
-                                next_len,
-                            ));
-                            current_codepoint = *stack.last().unwrap_or(&CodePt::new_internal(0));
-                        } else {
-                            panic!("Internal error: returned from untracked function");
-                        }
-                        if let Some((func_info, _)) = loc_map.stack_tree.get_mut(&current_codepoint)
-                        {
-                            func_info.push(ProfilerEvent::EnterFunc(total_gas));
-                        } else {
-                            panic!("Internal error: returned to untracked function");
-                        }
-                    }
-                    Ordering::Equal => {}
-                    Ordering::Greater => {
-                        stack.push(self.get_pc().unwrap_or(CodePt::new_internal(0)));
-                        let zero_codept = CodePt::new_internal(0);
-                        let next_codepoint = stack.last().unwrap_or(&zero_codept);
-                        let next_len = if let Some((next_info, _)) =
-                            loc_map.stack_tree.get_mut(next_codepoint)
-                        {
-                            if *next_codepoint == current_codepoint {
-                                next_info.len() + 1
-                            } else {
-                                next_info.len()
-                            }
-                        } else {
-                            loc_map.stack_tree.insert(
-                                *next_codepoint,
-                                (
-                                    vec![],
-                                    self.code
-                                        .get_insn(*next_codepoint)
-                                        .map(|insn| insn.debug_info.location)
-                                        .unwrap_or(None),
-                                ),
-                            );
-                            0
-                        };
-                        if let Some((func_info, _)) = loc_map.stack_tree.get_mut(&current_codepoint)
-                        {
-                            func_info.push(ProfilerEvent::CallFunc(*next_codepoint, next_len))
-                        } else {
-                            panic!("Internal error: calling from an untracked function");
-                        }
-                        current_codepoint = *next_codepoint;
-                        if let Some((func_info, _)) = loc_map.stack_tree.get_mut(&current_codepoint)
-                        {
-                            func_info.push(ProfilerEvent::EnterFunc(total_gas));
-                        } else {
-                            panic!("Internal error: called function not properly initialized");
-                        }
-                    }
-                }
-                stack_len = alt_stack.len();
+                self.gen_step(
+                    insn,
+                    &mut loc_map,
+                    &mut total_gas,
+                    &mut stack_len,
+                    &mut stack,
+                    &mut current_codepoint,
+                );
             }
             match self.run_one(false) {
                 Ok(false) => {
@@ -1157,6 +1086,91 @@ impl Machine {
             }
         }
         loc_map
+    }
+
+    fn gen_step(
+        &self,
+        insn: Instruction<AVMOpcode>,
+        loc_map: &mut ProfilerData,
+        total_gas: &mut u64,
+        stack_len: &mut usize,
+        stack: &mut Vec<CodePt>,
+        current_codepoint: &mut CodePt,
+    ) {
+        let loc = insn.debug_info.location;
+        let next_op_gas = self.next_op_gas().unwrap_or(0);
+        if let Some(gas_cost) = loc_map.get_mut(&loc, &self.file_name_chart) {
+            *gas_cost += next_op_gas;
+        } else {
+            loc_map.insert(&loc, next_op_gas, &self.file_name_chart);
+        }
+        *total_gas += next_op_gas;
+        let alt_stack = self.get_stack_trace().trace;
+        match (*stack_len).cmp(&stack.len()) {
+            Ordering::Less => {
+                stack.pop();
+                let mut next_len = loc_map
+                    .stack_tree
+                    .get(stack.last().unwrap_or(&CodePt::new_internal(0)))
+                    .map(|something| something.0.len())
+                    .unwrap_or(0);
+                if *stack.last().unwrap_or(&CodePt::new_internal(0)) == *current_codepoint {
+                    next_len += 1;
+                }
+                if let Some((func_info, _)) = loc_map.stack_tree.get_mut(&current_codepoint) {
+                    func_info.push(ProfilerEvent::Return(
+                        *stack.last().unwrap_or(&CodePt::new_internal(0)),
+                        next_len,
+                    ));
+                    *current_codepoint = *stack.last().unwrap_or(&CodePt::new_internal(0));
+                } else {
+                    panic!("Internal error: returned from untracked function");
+                }
+                if let Some((func_info, _)) = loc_map.stack_tree.get_mut(&current_codepoint) {
+                    func_info.push(ProfilerEvent::EnterFunc(*total_gas));
+                } else {
+                    panic!("Internal error: returned to untracked function");
+                }
+            }
+            Ordering::Equal => {}
+            Ordering::Greater => {
+                stack.push(self.get_pc().unwrap_or(CodePt::new_internal(0)));
+                let zero_codept = CodePt::new_internal(0);
+                let next_codepoint = stack.last().unwrap_or(&zero_codept);
+                let next_len =
+                    if let Some((next_info, _)) = loc_map.stack_tree.get_mut(next_codepoint) {
+                        if *next_codepoint == *current_codepoint {
+                            next_info.len() + 1
+                        } else {
+                            next_info.len()
+                        }
+                    } else {
+                        loc_map.stack_tree.insert(
+                            *next_codepoint,
+                            (
+                                vec![],
+                                self.code
+                                    .get_insn(*next_codepoint)
+                                    .map(|insn| insn.debug_info.location)
+                                    .unwrap_or(None),
+                            ),
+                        );
+                        0
+                    };
+                if let Some((func_info, _)) = loc_map.stack_tree.get_mut(&current_codepoint) {
+                    func_info.push(ProfilerEvent::CallFunc(*next_codepoint, next_len))
+                } else {
+                    panic!("Internal error: calling from an untracked function");
+                }
+                *current_codepoint = *next_codepoint;
+                if let Some((func_info, _)) = loc_map.stack_tree.get_mut(&current_codepoint) {
+                    func_info.push(ProfilerEvent::EnterFunc(*total_gas));
+                } else {
+                    panic!("Internal error: called function not properly initialized");
+                }
+            }
+        }
+        *stack_len = alt_stack.len();
     }
 
     ///If the opcode has a specified gas cost returns the gas cost, otherwise returns None.
