@@ -834,13 +834,21 @@ pub fn _evm_test_callback(
     assert_eq!(logs.len(), 1);
     assert!(logs[0].succeeded());
     let evmlogs = logs[0]._get_evm_logs();
-    assert_eq!(evmlogs.len(), 1);
+    assert_eq!(evmlogs.len(), 2);
+
     assert_eq!(evmlogs[0].addr, Uint256::from_u64(100));  // log was emitted by ArbSys
     assert_eq!(evmlogs[0].vals[1], contract.address);
     let batch_number = &evmlogs[0].vals[2];
     assert_eq!(batch_number, &Uint256::zero());
     let index_in_batch = Uint256::from_bytes(&evmlogs[0].data[0..32]);
     assert_eq!(index_in_batch, Uint256::zero());
+
+    assert_eq!(evmlogs[1].addr, Uint256::from_u64(100));  // log was emitted by ArbSys
+    assert_eq!(evmlogs[1].vals[1], contract.address);
+    let batch_number = &evmlogs[1].vals[2];
+    assert_eq!(batch_number, &Uint256::zero());
+    let index_in_batch = Uint256::from_bytes(&evmlogs[1].data[0..32]);
+    assert_eq!(index_in_batch, Uint256::one());
 
     machine.runtime_env._advance_time(Uint256::one(), None, true);
     let _gas_used = if debug {
@@ -850,11 +858,15 @@ pub fn _evm_test_callback(
     }; // advance time so that sends are emitted
 
     let sends = machine.runtime_env.get_all_sends();
-    assert_eq!(sends.len(), 1);
+    assert_eq!(sends.len(), 2);
     assert_eq!(sends[0][0], 3u8);   // send type
     assert_eq!(sends[0][1..33], contract.address.to_bytes_be()[0..32]);
     assert_eq!(sends[0][161..193], [0u8; 32]);
     assert_eq!(sends[0].len(), 204);  // 11 bytes of calldata after 193 bytes of fields
+    assert_eq!(sends[1][0], 3u8);   // send type
+    assert_eq!(sends[1][1..33], contract.address.to_bytes_be()[0..32]);
+    assert_eq!(sends[1][161..193], [0u8; 32]);
+    assert_eq!(sends[1].len(), 210);  // 17 bytes of calldata after 193 bytes of fields
 
     if let Some(path) = log_to {
         machine

@@ -13,6 +13,7 @@ contract Callback {
 
     function doCallback() external {
         ArbSys(address(100)).sendTxToL1(address(42), "hello world");
+        ArbSys(address(100)).sendTxToL1(address(43), "hello there world");
     }
 
     event DummyEvent(uint indexed a, uint b, uint c);

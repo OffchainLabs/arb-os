@@ -350,8 +350,7 @@ public impure func sendQueuedMessages(queue: Queue, evmLogs: EvmLogs) -> EvmLogs
             let (uq, rawMsg) = res;
             queue = uq;
             let msg = unsafecast<ByteArray>(rawMsg);
-            outbox_append(msg);
-            if (bytearray_get256(unsafecast<ByteArray>(msg), 0) == const::SendType_sendTxToL1) {
+            if (bytearray_getByte(unsafecast<ByteArray>(msg), 0) == const::SendType_sendTxToL1) {
                 // we need to find the EVM log corresponding to this send, and fill in batch number, item num in batch
                 evmLogs = evmlogs_forall(
                     evmLogs,
@@ -359,6 +358,7 @@ public impure func sendQueuedMessages(queue: Queue, evmLogs: EvmLogs) -> EvmLogs
                     true,
                 ).0;
             }
+            outbox_append(msg);
         } else {
             return evmLogs;
         }
