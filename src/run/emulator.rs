@@ -822,8 +822,8 @@ impl Machine {
         let mut break_line = 0;
         let mut break_gas_amount = 0u64;
         let mut gas_cost = 0;
-        let mut show_aux = false;
-        let mut show_reg = false;
+        let mut show_aux = true;
+        let mut show_reg = true;
         while self.state.is_running() {
             if let Some(gas) = self.next_op_gas() {
                 gas_cost += gas;
