@@ -165,6 +165,12 @@ public impure func precompiles_init(acctStore: AccountStore) -> option<AccountSt
         makeTrampoline(arbaggregator_txcall),
         true,
     )?;
+    acctStore = accountStore_createBuiltinContract(
+        acctStore,
+        address(const::Address_RevertAtL2),
+        makeTrampoline(revertPrecompile),
+        true,
+    )?;
     return Some(acctStore);
 }
 
@@ -462,4 +468,8 @@ public impure func precompile_0x09() { // Blake2
     } else {
         evmOp_revert_knownPc(4, 0, 0);
     }
+}
+
+public impure func revertPrecompile() {
+    evmOp_revert_knownPc(0, 0, 0);
 }

@@ -20,7 +20,7 @@ pub fn init_constant_table() -> HashMap<String, Uint256> {
         ("Address_ArbOwner", 107),
         ("Address_ArbGasInfo", 108),
         ("Address_ArbAggregator", 109),
-        // address 110 reserved for EthBridge functionality
+        ("Address_RevertAtL2", 110),   // reserved for special EthBridge functionality
         // indices of EVM operations
         ("EvmOp_stop", 0),
         ("EvmOp_sha3", 1),
