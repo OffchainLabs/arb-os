@@ -1082,9 +1082,9 @@ impl _BlockGasAccountingSummary {
 
 #[derive(Clone, Debug)]
 pub struct EvmLog {
-    addr: Uint256,
-    data: Vec<u8>,
-    vals: Vec<Uint256>,
+    pub addr: Uint256,
+    pub data: Vec<u8>,
+    pub vals: Vec<Uint256>,
 }
 
 impl EvmLog {

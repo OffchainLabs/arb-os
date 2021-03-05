@@ -787,6 +787,86 @@ pub fn _underfunded_nested_call_test(
     Ok(())
 }
 
+pub fn _evm_test_callback(
+    log_to: Option<&Path>,
+    debug: bool,
+) -> Result<(), ethabi::Error> {
+    let rt_env = RuntimeEnvironment::new(Uint256::from_usize(1111), None);
+    let mut machine = load_from_file(Path::new("arb_os/arbos.mexe"), rt_env);
+    machine.start_at_zero();
+
+    let mut contract = AbiForContract::new_from_file(&test_contract_path("Callback"))?;
+    if contract
+        .deploy(&[], &mut machine, Uint256::zero(), None, None, debug)
+        .is_err()
+    {
+        panic!("failed to deploy Callback contract");
+    }
+
+    let (logs, sends) = contract.call_function(
+        Uint256::from_u64(1028),
+        "sendDummies",
+        &[],
+        &mut machine,
+        Uint256::zero(),
+        debug,
+    )?;
+    assert_eq!(logs.len(), 1);
+    assert_eq!(sends.len(), 0);
+    assert!(logs[0].succeeded());
+    let evmlogs = logs[0]._get_evm_logs();
+    assert_eq!(evmlogs.len(), 3);
+    for i in 0..2 {
+        assert_eq!(evmlogs[i].addr, contract.address);
+        assert_eq!(evmlogs[i].vals[1], Uint256::from_usize(i+1));
+        assert_eq!(evmlogs[i].data[0..32], Uint256::from_usize(i+11).to_bytes_be()[0..32]);
+        assert_eq!(evmlogs[i].data[32..64], Uint256::from_usize(i+21).to_bytes_be()[0..32]);
+    }
+
+    let (logs, _) = contract.call_function(
+        Uint256::from_u64(1028),
+        "doCallback",
+        &[],
+        &mut machine,
+        Uint256::zero(),
+        debug,
+    )?;
+    assert_eq!(logs.len(), 1);
+    assert!(logs[0].succeeded());
+    let evmlogs = logs[0]._get_evm_logs();
+    assert_eq!(evmlogs.len(), 1);
+    assert_eq!(evmlogs[0].addr, Uint256::from_u64(100));  // log was emitted by ArbSys
+    assert_eq!(evmlogs[0].vals[1], contract.address);
+    let batch_number = &evmlogs[0].vals[2];
+    assert_eq!(batch_number, &Uint256::zero());
+    let index_in_batch = Uint256::from_bytes(&evmlogs[0].data[0..32]);
+    assert_eq!(index_in_batch, Uint256::zero());
+
+    machine.runtime_env._advance_time(Uint256::one(), None, true);
+    let _gas_used = if debug {
+        machine.debug(None)
+    } else {
+        machine.run(None)
+    }; // advance time so that sends are emitted
+
+    let sends = machine.runtime_env.get_all_sends();
+    assert_eq!(sends.len(), 1);
+    assert_eq!(sends[0][0], 3u8);   // send type
+    assert_eq!(sends[0][1..33], contract.address.to_bytes_be()[0..32]);
+    assert_eq!(sends[0][161..193], [0u8; 32]);
+    assert_eq!(sends[0].len(), 204);  // 11 bytes of calldata after 193 bytes of fields
+
+    if let Some(path) = log_to {
+        machine
+            .runtime_env
+            .recorder
+            .to_file(path, machine.get_total_gas_usage().to_u64().unwrap())
+            .unwrap();
+    }
+
+    Ok(())
+}
+
 pub fn evm_test_create(
     log_to: Option<&Path>,
     debug: bool,

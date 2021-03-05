@@ -43,6 +43,7 @@ use accounts::account_setAggregatorDecompressionState;
 use std::bytearray::bytearray_new;
 use std::bytearray::bytearray_size;
 use std::bytearray::bytearray_getByte;
+use std::bytearray::bytearray_setByte;
 use std::bytearray::bytearray_get256;
 use std::bytearray::bytearray_set256;
 use std::bytearray::bytearray_extract;
@@ -286,30 +287,30 @@ impure func arbsys_sendTxToL1(topFrame: EvmCallFrame, calldata: ByteArray) { // 
                             bytearray_set256(
                                 bytearray_set256(
                                     bytearray_set256(
-                                        bytearray_set256(
+                                        bytearray_setByte(
                                             bytearray_new(0),
                                             0,
                                             const::SendType_sendTxToL1
                                         ),
-                                        32,
+                                        1,
                                         uint(caller),
                                     ),
-                                    64,
+                                    32+1,
                                     uint(destAddr),
                                 ),
-                                96,
+                                2*32+1,
                                 inbox_currentArbBlockNumber(),
                             ),
-                            128,
+                            3*32+1,
                             inbox_currentEthBlockNumber(),
                         ),
-                        160,
+                        4*32+1,
                         inbox_currentTimestamp(),
                     ),
-                    192,
+                    5*32+1,
                     callvalue,
                 ),
-                224,
+                6*32+1,
                 nbytes
             ),
         );
@@ -320,35 +321,28 @@ impure func arbsys_sendTxToL1(topFrame: EvmCallFrame, calldata: ByteArray) { // 
                 bytearray_set256(
                     bytearray_set256(
                         bytearray_set256(
-                            bytearray_set256(
-                                bytearray_set256(
-                                    bytearray_new(0),
-                                    0,
-                                    uint(caller),
-                                ),
-                                32,
-                                0,   // batch number will be filled in later
-                            ),
-                            2*32,
-                            0,    // item number in batch iwll be filled in later
+                            bytearray_new(0),
+                            0,
+                            0,  // item number in batch will be filled in later
                         ),
-                        3*32,
+                        32,
                         uint(destAddr),
                     ),
-                    4*32,
+                    2*32,
                     callvalue,
                 ),
-                5*32,
-                0xc,
+                3*32,
+                0x8,
             ),
-            6*32,
+            4*32,
             bytearray_size(innerCalldata),
         );
+
         mem = bytearray_copy(
             innerCalldata,
             0,
             mem,
-            7*32,
+            5*32,
             bytearray_size(innerCalldata),
         );
         if ( ! evmCallStack_setTopFrameMemory(mem)) {
