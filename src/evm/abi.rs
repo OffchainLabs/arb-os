@@ -11,7 +11,10 @@ use ethers_signers::Wallet;
 use std::{fs::File, io::Read, path::Path};
 
 pub fn builtin_contract_path(contract_name: &str) -> String {
-    format!("contracts/artifacts/arbos/builtin/{}.sol/{}.json", contract_name, contract_name)
+    format!(
+        "contracts/artifacts/arbos/builtin/{}.sol/{}.json",
+        contract_name, contract_name
+    )
 }
 
 #[derive(Debug, Clone)]
@@ -574,10 +577,7 @@ impl<'a> ArbSys<'a> {
         }
     }
 
-    pub fn is_top_level_call(
-        &self,
-        machine: &mut Machine,
-    ) -> Result<bool, ethabi::Error> {
+    pub fn is_top_level_call(&self, machine: &mut Machine) -> Result<bool, ethabi::Error> {
         let (receipts, _sends) = self.contract_abi.call_function_compressed(
             self.my_address.clone(),
             "isTopLevelCall",
@@ -1810,9 +1810,7 @@ impl _ArbAggregator {
         let (receipts, sends) = self.contract_abi.call_function(
             Uint256::zero(), // send from address zero
             "getPreferredAggregator",
-            &[
-                ethabi::Token::Address(addr.to_h160()),
-            ],
+            &[ethabi::Token::Address(addr.to_h160())],
             machine,
             Uint256::zero(),
             self.debug,
@@ -1822,10 +1820,7 @@ impl _ArbAggregator {
             Err(ethabi::Error::from("wrong number of receipts or sends"))
         } else if receipts[0].succeeded() {
             let return_vals = ethabi::decode(
-                &[
-                    ethabi::ParamType::Address,
-                    ethabi::ParamType::Bool,
-                ],
+                &[ethabi::ParamType::Address, ethabi::ParamType::Bool],
                 &receipts[0].get_return_data(),
             )?;
 
@@ -1844,14 +1839,12 @@ impl _ArbAggregator {
         &self,
         machine: &mut Machine,
         addr: Uint256,
-        sender: Uint256
+        sender: Uint256,
     ) -> Result<(), ethabi::Error> {
         let (receipts, sends) = self.contract_abi.call_function(
             sender,
             "setPreferredAggregator",
-            &[
-                ethabi::Token::Address(addr.to_h160()),
-            ],
+            &[ethabi::Token::Address(addr.to_h160())],
             machine,
             Uint256::zero(),
             self.debug,
@@ -1866,15 +1859,11 @@ impl _ArbAggregator {
         }
     }
 
-    pub fn _get_default_aggregator(
-        &self,
-        machine: &mut Machine,
-    ) -> Result<Uint256, ethabi::Error> {
+    pub fn _get_default_aggregator(&self, machine: &mut Machine) -> Result<Uint256, ethabi::Error> {
         let (receipts, sends) = self.contract_abi.call_function(
             Uint256::zero(), // send from address zero
             "getDefaultAggregator",
-            &[
-            ],
+            &[],
             machine,
             Uint256::zero(),
             self.debug,
@@ -1884,16 +1873,12 @@ impl _ArbAggregator {
             Err(ethabi::Error::from("wrong number of receipts or sends"))
         } else if receipts[0].succeeded() {
             let return_vals = ethabi::decode(
-                &[
-                    ethabi::ParamType::Address,
-                ],
+                &[ethabi::ParamType::Address],
                 &receipts[0].get_return_data(),
             )?;
 
             match &return_vals[0] {
-                ethabi::Token::Address(r1) => {
-                    Ok(Uint256::from_bytes(r1.as_bytes()))
-                }
+                ethabi::Token::Address(r1) => Ok(Uint256::from_bytes(r1.as_bytes())),
                 _ => panic!(),
             }
         } else {
@@ -1905,14 +1890,16 @@ impl _ArbAggregator {
         &self,
         machine: &mut Machine,
         addr: Uint256,
-        sender: Option<Uint256>,   // default sender is address zero
+        sender: Option<Uint256>, // default sender is address zero
     ) -> Result<(), ethabi::Error> {
         let (receipts, sends) = self.contract_abi.call_function(
-            if let Some(s) = sender { s } else { Uint256::zero() },
+            if let Some(s) = sender {
+                s
+            } else {
+                Uint256::zero()
+            },
             "setDefaultAggregator",
-            &[
-                ethabi::Token::Address(addr.to_h160()),
-            ],
+            &[ethabi::Token::Address(addr.to_h160())],
             machine,
             Uint256::zero(),
             self.debug,
