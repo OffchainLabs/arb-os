@@ -321,20 +321,32 @@ impure func arbsys_sendTxToL1(topFrame: EvmCallFrame, calldata: ByteArray) { // 
                 bytearray_set256(
                     bytearray_set256(
                         bytearray_set256(
-                            bytearray_new(0),
-                            0,
-                            0,  // item number in batch will be filled in later
+                            bytearray_set256(
+                                bytearray_set256(
+                                    bytearray_set256(
+                                        bytearray_new(0),
+                                        0,
+                                        0,  // item number in batch will be filled in later
+                                    ),
+                                    32,
+                                    inbox_currentArbBlockNumber(),
+                                ),
+                                2*32,
+                                inbox_currentEthBlockNumber(),
+                            ),
+                            3*32,
+                            inbox_currentTimestamp(),
                         ),
-                        32,
+                        4*32,
                         uint(destAddr),
                     ),
-                    2*32,
+                    5*32,
                     callvalue,
                 ),
-                3*32,
-                0x8,
+                6*32,
+                0xe,
             ),
-            4*32,
+            7*32,
             bytearray_size(innerCalldata),
         );
 
@@ -342,7 +354,7 @@ impure func arbsys_sendTxToL1(topFrame: EvmCallFrame, calldata: ByteArray) { // 
             innerCalldata,
             0,
             mem,
-            5*32,
+            8*32,
             bytearray_size(innerCalldata),
         );
         if ( ! evmCallStack_setTopFrameMemory(mem)) {

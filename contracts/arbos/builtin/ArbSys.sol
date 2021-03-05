@@ -30,6 +30,7 @@ interface ArbSys {
     event ERC721Withdrawal(address indexed destAddr, address indexed tokenAddr, uint indexed id);
 
     event L2ToL1Transaction(address indexed caller, uint indexed batchNumber, uint itemNumber,
+                            uint arbBlockNum, uint ethBlockNum, uint timestamp,
                             address destination, uint callvalue, bytes data);
 }
 
