@@ -382,7 +382,7 @@ pub fn evm_test_arbsys_direct(log_to: Option<&Path>, debug: bool) -> Result<(), 
     assert!(arbsys.is_top_level_call(&mut machine)?);
 
     let mut add_contract = AbiForContract::new_from_file(&test_contract_path("Add")).unwrap();
-    let res = add_contract.deploy(&[], &mut machine, Uint256::zero(), None, None, false);
+    let res = add_contract.deploy(&[], &mut machine, Uint256::zero(), None, false);
     assert!(res.is_ok());
     let (add_receipts, _) = add_contract.call_function(
         my_addr.clone(),
