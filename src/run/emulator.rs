@@ -675,7 +675,7 @@ pub struct Machine {
     state: MachineState,
     code: CodeStore,
     static_val: Value,
-    register: Value,
+    pub register: Value,
     err_codepoint: CodePt,
     arb_gas_remaining: Uint256,
     pub runtime_env: RuntimeEnvironment,
@@ -700,6 +700,11 @@ impl Machine {
             total_gas_usage: Uint256::zero(),
             trace_writer: None,
         }
+    }
+
+    #[cfg(test)]
+    pub fn stack_top(&self) -> Option<&Value> {
+        self.stack.contents.last()
     }
 
     ///Pushes 0 to the stack and sets the program counter to the first instruction. Used by the EVM

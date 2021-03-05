@@ -145,8 +145,7 @@ fn test_code_upload_prep() {
     assert_eq!(uploader, reconstituted);
 }
 
-#[test]
-fn test_upgrade_arbos_over_itself() {
+fn _test_upgrade_arbos_over_itself() {
     _test_upgrade_arbos_over_itself_impl().unwrap();
 }
 
