@@ -778,6 +778,9 @@ impure func payForTxAndL1Gas(
 
     let preferredAggregator = account_getAggregatorToPay(evmCallStack_getAccountInCurrentContext(payer));
     if (preferredAggregator != recipient) {
+        // Tx isn't using the preferred aggregator, so only charge for the network fee, for L2 tx and L1 calldata gas.
+        // Here we reduce the prices of those things so they include only the network fee.
+        // Below we will charge the reduced price and give all of the funds for these things to the network fee.
         prices = prices with {
             perL2Tx: fixedPoint_mulByUintTrunc(feeConfig.shareForNetFee, prices.perL2Tx)
         } with {
@@ -809,8 +812,11 @@ impure func payForTxAndL1Gas(
     };
 
     let payableToFee = xif(preferredAggregator == recipient) {
+        // We're charging full price, so only give the network fee its share.
         fixedPoint_mulByUintTrunc(feeConfig.shareForNetFee, amount)
     } else {
+        // We're only charging the network fee, so give all of the collected funds to the network fee.
+        // (We reduced the prices above, so only the network fee funds are being collected.)
         amount
     };
 
@@ -826,6 +832,7 @@ impure func payForTxAndL1Gas(
     };
 
     if (amount > payableToFee) {
+        // Reimburse the aggregator for its costs for this tx.
         feeStats = feeStats with { paidAggregator: recipient };
         acctStore = xif let Some(store) = accountStore_transferEthBalance(
             acctStore,
