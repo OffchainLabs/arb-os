@@ -1,0 +1,133 @@
+//
+// Copyright 2021, Offchain Labs, Inc. All rights reserved.
+//
+
+use accounts::getGlobalAccountStore;
+use accounts::setGlobalAccountStore;
+use accounts::accountStore_get;
+use accounts::accountStore_set;
+use accounts::account_setAggregatorToPay;
+use accounts::account_getAggregatorToPayAsOption;
+
+use chainParameters::chainParams_getDefaultAggregator;
+use chainParameters::chainParams_setDefaultAggregator;
+use chainParameters::chainParams_getOwner;
+
+use evmCallStack::EvmCallFrame;
+use evmCallStack::evmCallStack_topFrame;
+use evmCallStack::evmCallStack_setTopFrameMemory;
+use evmCallStack::evmCallFrame_getCalldata;
+use evmCallStack::evmCallFrame_getCaller;
+use evmCallStack::evmCallStack_callHitError;
+use evmCallStack::evmCallStack_getAccountInCurrentContext;
+use evmCallStack::evmCallStack_setAccountInCurrentContext;
+
+use evmOps::evmOp_return;
+use evmOps::evmOp_revert_knownPc;
+
+use std::bytearray::ByteArray;
+use std::bytearray::bytearray_new;
+use std::bytearray::bytearray_size;
+use std::bytearray::bytearray_get256;
+use std::bytearray::bytearray_set256;
+
+
+public impure func arbaggregator_txcall() {
+    if let Some(topFrame) = evmCallStack_topFrame() {
+        let calldata = evmCallFrame_getCalldata(topFrame);
+        if (bytearray_size(calldata) < 4) {
+            evmOp_revert_knownPc(0, 0, 0);
+        }
+        let funcCode = asm(224, bytearray_get256(calldata, 0)) uint { shr };
+        if (funcCode == 0x52f10740) {
+            arbaggregator_getPreferredAggregator(topFrame, calldata);
+        } elseif (funcCode == 0x6e928a6e) {
+            arbaggregator_setPreferredAggregator(topFrame, calldata);
+        } elseif (funcCode == 0x875883f2) {
+            arbaggregator_getDefaultAggregator(topFrame, calldata);
+        } elseif (funcCode == 0x0ffd6650) {
+            arbaggregator_setDefaultAggregator(topFrame, calldata);
+        } else {
+            // unrecognized function code
+            evmOp_revert_knownPc(1, 0, 0);
+        }
+    } else {
+        // this shouldn't happen -- should always be called in an EVM tx
+        evmCallStack_callHitError(26);
+    }
+}
+
+impure func arbaggregator_getPreferredAggregator(topFrame: EvmCallFrame, calldata: ByteArray) {  // (address) -> (address, bool)
+    if (bytearray_size(calldata) != 36) {
+        evmOp_revert_knownPc(10, 0, 0);
+    }
+    let addr = address(bytearray_get256(calldata, 4));
+    let maybePA = account_getAggregatorToPayAsOption(
+        evmCallStack_getAccountInCurrentContext(addr)
+    );
+    let (prefAgg, isDefault) = xif let Some(pa) = maybePA {
+        (pa, false)
+    } else {
+        (chainParams_getDefaultAggregator(), true)
+    };
+    let mem = bytearray_set256(bytearray_set256(bytearray_new(0), 0, uint(prefAgg)), 32, uint(isDefault));
+    if (evmCallStack_setTopFrameMemory(mem)) {
+        evmOp_return(0, 2*32);
+    } else {
+        evmOp_revert_knownPc(11, 0, 0);
+    }
+}
+
+impure func arbaggregator_setPreferredAggregator(topFrame: EvmCallFrame, calldata: ByteArray) { // (address)
+    if (bytearray_size(calldata) != 36) {
+        evmOp_revert_knownPc(20, 0, 0);
+    }
+    let caller = evmCallFrame_getCaller(topFrame);
+    let newPA = address(bytearray_get256(calldata, 4));
+    let updatedAcct = account_setAggregatorToPay(
+        evmCallStack_getAccountInCurrentContext(caller),
+        xif (newPA == address(0)) {
+            None<address>
+        } else {
+            Some(newPA)
+        },
+    );
+    let newVal = xif (newPA == address(0)) {
+         None<address>
+     } else {
+         Some(newPA)
+     };
+    evmCallStack_setAccountInCurrentContext(
+        caller,
+        account_setAggregatorToPay(
+            evmCallStack_getAccountInCurrentContext(caller),
+            newVal,
+        )
+    );
+    evmOp_return(0, 0);
+}
+
+impure func arbaggregator_getDefaultAggregator(topFrame: EvmCallFrame, calldata: ByteArray) {  // () -> address
+    if (bytearray_size(calldata) != 4) {
+        evmOp_revert_knownPc(30, 0, 0);
+    }
+    let mem = bytearray_set256(bytearray_new(0), 0, uint(chainParams_getDefaultAggregator()));
+    if (evmCallStack_setTopFrameMemory(mem)) {
+        evmOp_return(0, 32);
+    } else {
+        evmOp_revert_knownPc(31, 0, 0);
+    }
+}
+
+impure func arbaggregator_setDefaultAggregator(topFrame: EvmCallFrame, calldata: ByteArray) { // (address)
+    let caller = evmCallFrame_getCaller(topFrame);
+    if (bytearray_size(calldata) != 36) {
+        evmOp_revert_knownPc(40, 0, 0);
+    }
+    if ((caller != address(0)) && (Some(caller) != chainParams_getOwner()) && (caller != chainParams_getDefaultAggregator())) {
+        evmOp_revert_knownPc(41, 0, 0);
+    }
+    let newDefaultAgg = address(bytearray_get256(calldata, 4));
+    chainParams_setDefaultAggregator(newDefaultAgg);
+    evmOp_return(0, 0);
+}

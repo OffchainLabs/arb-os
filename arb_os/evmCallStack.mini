@@ -151,6 +151,19 @@ public impure func evmCallStack_addStorageCharge(units: uint) {
     }
 }
 
+public impure func evmCallStack_stackDepth() -> uint {
+    let depth = 0;
+    let maybeFrame = globalCallStack;
+    return xloop {
+        if let Some(frame) = maybeFrame {
+            depth = depth + 1;
+            maybeFrame = frame.parent;
+        } else {
+            return depth;
+        }
+    };
+}
+
 public impure func evmCallStack_stackInfo() -> (uint, (address, address), (address, address)) {
     return xif let Some(topFrame) = globalCallStack {
         let sndRunningAs = address(0);

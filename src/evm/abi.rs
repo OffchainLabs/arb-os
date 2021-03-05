@@ -11,7 +11,10 @@ use ethers_signers::Wallet;
 use std::{fs::File, io::Read, path::Path};
 
 pub fn builtin_contract_path(contract_name: &str) -> String {
-    format!("contracts/artifacts/arbos/builtin/{}.sol/{}.json", contract_name, contract_name)
+    format!(
+        "contracts/artifacts/arbos/builtin/{}.sol/{}.json",
+        contract_name, contract_name
+    )
 }
 
 #[derive(Debug, Clone)]
@@ -571,6 +574,28 @@ impl<'a> ArbSys<'a> {
         match return_vals[0] {
             ethabi::Token::Uint(ui) => Ok(Uint256::from_u256(&ui)),
             _ => panic!(),
+        }
+    }
+
+    pub fn is_top_level_call(&self, machine: &mut Machine) -> Result<bool, ethabi::Error> {
+        let (receipts, _sends) = self.contract_abi.call_function_compressed(
+            self.my_address.clone(),
+            "isTopLevelCall",
+            &[],
+            machine,
+            Uint256::zero(),
+            self._wallet,
+            self.debug,
+        )?;
+
+        if (receipts.len() != 1) {
+            return Err(ethabi::Error::from("wrong number of receipts"));
+        }
+
+        if receipts[0].succeeded() {
+            Ok(receipts[0].get_return_data() == Uint256::zero().to_bytes_be())
+        } else {
+            Err(ethabi::Error::from("reverted"))
         }
     }
 }
@@ -1756,6 +1781,135 @@ impl ArbosTest {
                 "arbosTest.run revert code {}",
                 receipts[0].get_return_code()
             );
+            Err(ethabi::Error::from("reverted"))
+        }
+    }
+}
+
+pub struct _ArbAggregator {
+    pub contract_abi: AbiForContract,
+    debug: bool,
+}
+
+impl _ArbAggregator {
+    pub fn _new(debug: bool) -> Self {
+        let mut contract_abi =
+            AbiForContract::new_from_file(&builtin_contract_path("ArbAggregator")).unwrap();
+        contract_abi.bind_interface_to_address(Uint256::from_u64(109));
+        _ArbAggregator {
+            contract_abi,
+            debug,
+        }
+    }
+
+    pub fn _get_preferred_aggregator(
+        &self,
+        machine: &mut Machine,
+        addr: Uint256,
+    ) -> Result<(Uint256, bool), ethabi::Error> {
+        let (receipts, sends) = self.contract_abi.call_function(
+            Uint256::zero(), // send from address zero
+            "getPreferredAggregator",
+            &[ethabi::Token::Address(addr.to_h160())],
+            machine,
+            Uint256::zero(),
+            self.debug,
+        )?;
+
+        if (receipts.len() != 1) || (sends.len() != 0) {
+            Err(ethabi::Error::from("wrong number of receipts or sends"))
+        } else if receipts[0].succeeded() {
+            let return_vals = ethabi::decode(
+                &[ethabi::ParamType::Address, ethabi::ParamType::Bool],
+                &receipts[0].get_return_data(),
+            )?;
+
+            match (&return_vals[0], &return_vals[1]) {
+                (ethabi::Token::Address(r1), ethabi::Token::Bool(r2)) => {
+                    Ok((Uint256::from_bytes(r1.as_bytes()), *r2))
+                }
+                _ => panic!(),
+            }
+        } else {
+            Err(ethabi::Error::from("reverted"))
+        }
+    }
+
+    pub fn _set_preferred_aggregator(
+        &self,
+        machine: &mut Machine,
+        addr: Uint256,
+        sender: Uint256,
+    ) -> Result<(), ethabi::Error> {
+        let (receipts, sends) = self.contract_abi.call_function(
+            sender,
+            "setPreferredAggregator",
+            &[ethabi::Token::Address(addr.to_h160())],
+            machine,
+            Uint256::zero(),
+            self.debug,
+        )?;
+
+        if (receipts.len() != 1) || (sends.len() != 0) {
+            Err(ethabi::Error::from("wrong number of receipts or sends"))
+        } else if receipts[0].succeeded() {
+            Ok(())
+        } else {
+            Err(ethabi::Error::from("reverted"))
+        }
+    }
+
+    pub fn _get_default_aggregator(&self, machine: &mut Machine) -> Result<Uint256, ethabi::Error> {
+        let (receipts, sends) = self.contract_abi.call_function(
+            Uint256::zero(), // send from address zero
+            "getDefaultAggregator",
+            &[],
+            machine,
+            Uint256::zero(),
+            self.debug,
+        )?;
+
+        if (receipts.len() != 1) || (sends.len() != 0) {
+            Err(ethabi::Error::from("wrong number of receipts or sends"))
+        } else if receipts[0].succeeded() {
+            let return_vals = ethabi::decode(
+                &[ethabi::ParamType::Address],
+                &receipts[0].get_return_data(),
+            )?;
+
+            match &return_vals[0] {
+                ethabi::Token::Address(r1) => Ok(Uint256::from_bytes(r1.as_bytes())),
+                _ => panic!(),
+            }
+        } else {
+            Err(ethabi::Error::from("reverted"))
+        }
+    }
+
+    pub fn _set_default_aggregator(
+        &self,
+        machine: &mut Machine,
+        addr: Uint256,
+        sender: Option<Uint256>, // default sender is address zero
+    ) -> Result<(), ethabi::Error> {
+        let (receipts, sends) = self.contract_abi.call_function(
+            if let Some(s) = sender {
+                s
+            } else {
+                Uint256::zero()
+            },
+            "setDefaultAggregator",
+            &[ethabi::Token::Address(addr.to_h160())],
+            machine,
+            Uint256::zero(),
+            self.debug,
+        )?;
+
+        if (receipts.len() != 1) || (sends.len() != 0) {
+            Err(ethabi::Error::from("wrong number of receipts or sends"))
+        } else if receipts[0].succeeded() {
+            Ok(())
+        } else {
             Err(ethabi::Error::from("reverted"))
         }
     }
