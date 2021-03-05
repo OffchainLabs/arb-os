@@ -9,6 +9,7 @@ use crate::compile::{CompileError, DebugInfo};
 use crate::link::LinkedProgram;
 use crate::mavm::{AVMOpcode, Buffer, CodePt, Instruction, Value};
 use crate::pos::{try_display_location, Location};
+use crate::run::blake2b::blake2bf_instruction;
 use crate::run::ripemd160port;
 use crate::uint256::Uint256;
 use clap::Clap;
@@ -68,6 +69,10 @@ impl ValueStack {
     ///Pushes a `Value` created from val to the top of self.
     pub fn push_bool(&mut self, val: bool) {
         self.push_uint(if val { Uint256::one() } else { Uint256::zero() })
+    }
+
+    pub fn push_buffer(&mut self, val: Buffer) {
+        self.push(Value::Buffer(val));
     }
 
     ///Returns the `Value` on the top of self, or None if self is empty.
@@ -966,11 +971,13 @@ impl Machine {
                     }
                 }
             }
-            if let Some(gas) = self.next_op_gas() {
+            let gas_this_instruction = if let Some(gas) = self.next_op_gas() {
                 gas_used += gas;
+                gas
             } else {
                 println!("Warning: next opcode does not have a gas cost");
-            }
+                1
+            };
 
             let cp = self.get_pc();
 
@@ -1012,7 +1019,11 @@ impl Machine {
             match self.run_one(false) {
                 Ok(still_runnable) => {
                     if !still_runnable {
-                        return gas_used;
+                        self.total_gas_usage = self
+                            .total_gas_usage
+                            .sub(&Uint256::from_u64(gas_this_instruction))
+                            .unwrap();
+                        return gas_used - gas_this_instruction;
                     }
                 }
                 Err(e) => {
@@ -1183,6 +1194,7 @@ impl Machine {
                 AVMOpcode::Keccakf => 600,
                 AVMOpcode::Sha256f => 250,
                 AVMOpcode::Ripemd160f => 250, //TODO: measure and update this
+                AVMOpcode::Blake2f => self.gas_for_blake2f(),
                 AVMOpcode::Pop => 1,
                 AVMOpcode::PushStatic => 1,
                 AVMOpcode::Rget => 1,
@@ -1259,6 +1271,22 @@ impl Machine {
         }
     }
 
+    fn gas_for_blake2f(&self) -> u64 {
+        if let Some(val) = self.stack.contents.get(0) {
+            if let Value::Buffer(buf) = val {
+                let mut num_rounds = u32::from_be_bytes(buf.as_bytes(4).try_into().unwrap());
+                if num_rounds > 0xffff {
+                    num_rounds = 0xffff;
+                }
+                10 * (num_rounds as u64)
+            } else {
+                10
+            }
+        } else {
+            10
+        }
+    }
+
     ///Runs the instruction pointed to by the program counter, returns either a bool indicating
     /// whether the instruction was blocked if execution does not hit an error state, or an
     /// `ExecutionError` if an error was encountered.
@@ -1282,8 +1310,9 @@ impl Machine {
                 if let Some(val) = &insn.immediate {
                     self.stack.push(val.clone());
                 }
-                if let Some(gas) = self.next_op_gas() {
+                let gas_remaining_before = if let Some(gas) = self.next_op_gas() {
                     let gas256 = Uint256::from_u64(gas);
+                    let gas_remaining_before = self.arb_gas_remaining.clone();
                     if let Some(remaining) = self.arb_gas_remaining.sub(&gas256) {
                         self.arb_gas_remaining = remaining;
                         self.total_gas_usage = self.total_gas_usage.add(&gas256);
@@ -1291,7 +1320,10 @@ impl Machine {
                         self.arb_gas_remaining = Uint256::max_int();
                         return Err(ExecutionError::new("Out of ArbGas", &self.state, None));
                     }
-                }
+                    gas_remaining_before
+                } else {
+                    self.arb_gas_remaining.clone()
+                };
                 match insn.opcode {
                     AVMOpcode::Noop => {
                         self.incr_pc();
@@ -1804,6 +1836,12 @@ impl Machine {
                         self.incr_pc();
                         Ok(true)
                     }
+                    AVMOpcode::Blake2f => {
+                        let t = self.stack.pop_buffer(&self.state)?;
+                        self.stack.push_buffer(blake2bf_instruction(t));
+                        self.incr_pc();
+                        Ok(true)
+                    }
                     AVMOpcode::Inbox => {
                         match self.runtime_env.get_from_inbox() {
                             Some(msg) => {
@@ -1811,7 +1849,10 @@ impl Machine {
                                 self.incr_pc();
                                 Ok(true)
                             }
-                            None => Ok(false), // machine is blocked, waiting for message
+                            None => {
+                                self.arb_gas_remaining = gas_remaining_before;
+                                Ok(false) // machine is blocked, waiting for message
+                            }
                         }
                     }
                     AVMOpcode::InboxPeek => {
@@ -1840,6 +1881,7 @@ impl Machine {
                             }
                             None => {
                                 // machine is blocked, waiting for nonempty inbox
+                                self.arb_gas_remaining = gas_remaining_before;
                                 self.stack.push_uint(bn); // put stack back the way it was
                                 Ok(false)
                             }
@@ -1955,7 +1997,7 @@ impl Machine {
                         self.arb_gas_remaining = gas;
                         self.incr_pc();
                         Ok(true)
-                    },
+                    }
                     AVMOpcode::Sideload => {
                         let _block_num = self.stack.pop_uint(&self.state)?;
                         self.stack.push(Value::none());

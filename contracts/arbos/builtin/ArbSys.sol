@@ -4,6 +4,9 @@ interface ArbSys {
     // Get ArbOS version number
     function arbOSVersion() external pure returns (uint);
 
+    // Get Arbitrum block number
+    function arbBlockNumber() external view returns (uint);
+
     // Send given amount of Eth to dest with from sender.
     function withdrawEth(address dest) external payable;
 
@@ -18,6 +21,9 @@ interface ArbSys {
     // This function is only callable from address 0 to prevent contracts from being
     // able to call it
     function getStorageAt(address account, uint256 index) external view returns (uint256);
+
+    // Return true if the caller of this was called directly from L1
+    function isTopLevelCall() external view returns (bool);
 
     event EthWithdrawal(address indexed destAddr, uint amount);
     event ERC20Withdrawal(address indexed destAddr, address indexed tokenAddr, uint amount);

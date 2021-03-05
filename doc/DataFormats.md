@@ -54,8 +54,8 @@ This message type is initiated by the EthBridge, as part of the creation of a ne
 
 Type-specific data:
 
-* challenge period, in L1 blocks (uint)
-* ArbGas speed limit, in ArbGas per L1 block (uint)
+* challenge period, in seconds (uint)
+* ArbGas speed limit, in ArbGas per second (uint)
 * maximum number of execution steps allowed in an assertion (uint)
 * minimum stake requirement, in Wei (uint)
 * address of the staking token, or zero if staking in ETH (address encoded as uint)
@@ -72,9 +72,18 @@ Each chunk is:
 
 At present. the following options are supported:
 
-* Option 0: sequencer configuration: sequencer address (address encoded as uint); sequencer delay in blocks (uint); sequencer delay in timestamp (uint)
-* Option 1: set seconds per block: seconds per L1 block (uint)
-* Option 2: set charging parameters: base gas price (uint); storage charge (uint); gas fee recipient (address encoded as uint)
+* [Option 0 is currently unused]
+* [Option 1 is currently unused]
+* Option 2: set charging parameters: 
+  * speed limit per second (uint); 
+  * L1 gas per L2 tx (uint); 
+  * L1 gas per L2 calldata byte; 
+  * L1 gas per storage unit allocated (uint); 
+  * ratio of L1 gas price to base ArbGas price; 
+  * network fee recipient (address encoded as uint); 
+  * congestion fee recipient (address encoded as uint)
+* Option 3: set default aggregator
+  * Default aggregator address (address encoded as uint)
 
 All other options are ignored at present.
 
@@ -97,7 +106,7 @@ This message type is reserved for internal use by ArbOS. It should never appear 
 
 **Message type 7: L2 transaction funded by L1**
 
-This message type encodes an L2 transaction that is funded by calldata provided at L1. The type-specific data must be the same as an L2 message of subtype 0.
+This message type encodes an L2 transaction that is funded by calldata provided at L1. The type-specific data must be the same as an L2 message of subtype 0 or 1.
 
 **Message type 8: Rollup protocol event**
 
@@ -186,25 +195,48 @@ ArbOS will make its best effort to emit a tx receipt for each transaction reques
 A tx receipt log item consists of:
 
 * 0 (uint)
-* incoming request info consisting of:
+* incoming request info, an 8-tuple consisting of:
   * 3 (uint)
   * L1 block number (uint)
+  * Arbitrum block number (uint)
   * L2 timestamp (uint)
   * address of sender (address represented as uint)
   * requestID (uint)  [described below]
-  * size of L2 message (uint)
-  * contents of L2 message for the request (buffer)
-* tx result info consisting of:
+  * a 2-tuple consisting of:
+    * size of L2 message (uint)
+    * contents of L2 message for the request (buffer)
+  * a 3-tuple consisting of:
+    * provenance info
+    * aggregator info
+    * whether message was artificially injected via sideload (boolean encoded as uint 0 or 1)
+* tx result info, a 3-tuple consisting of:
   * return code (uint)  [described below]
   * returndata (2-tuple of size (uint) and contents (buffer))
   * EVM logs [format described below]
-* ArbGas info consisting of:
+* ArbGas info, as 2-tuple consisting of:
   * ArbGas used (uint)
   * ArbGas price paid, in wei (uint)
-* cumulative info in L1 block consisting of:
-  * ArbGas used in current L1 block including this tx (uint)
-  * index of this tx within this L1 block (uint)
-  * number of EVM logs emitted in this L1 block before this tx (uint)
+* cumulative info in Arbitrum block, a 3-tuple consisting of:
+  * ArbGas used in current Arbitrum block including this tx (uint)
+  * index of this tx within this Arbitrum block (uint)
+  * number of EVM logs emitted in this Arbitrum block before this tx (uint)
+* fee information for the transaction, a 4-tuple consisting of:
+  * a 4-tuple of prices of:
+    * L2 transaction (uint)
+    * L1 calldata bytes (uint)
+    * L2 storage (uint)
+    * L2 computation (uint)
+  * a 4-tuple of units used of:
+    * L2 transaction (uint, will always be 1)
+    * L1 calldata bytes (uint)
+    * L2 storage (uint)
+    * L2 computation (uint)
+  * a 4-tuple of wei paid for: [might not equal product of units and price, e.g. if user has insufficient funds to pay, or no aggregator was reimbursed]
+    * L2 transaction (uint)
+    * L1 calldata bytes (uint)
+    * L2 storage (uint)
+    * L2 computation (uint)
+  * address of aggregator that was reimbursed (or zero if there wasn't one) (address encoded as uint)
 
 Possible return codes are:
 	0: tx returned (success)

@@ -13,7 +13,9 @@ use std::storageMap::storageMap_size;
 use std::storageMap::storageMap_get;
 use std::storageMap::storageMap_set;
 
+use chainParameters::chainParams_getDefaultAggregator;
 use decompression::AggregatorDecompressionState;
+use evmCallStack::evmCallStack_addStorageCharge;
 
 
 type AccountStore = map<address, Account>
@@ -25,6 +27,7 @@ type Account = struct {
     ethBalance: uint,
     contractInfo: option<AccountContractInfo>,  // info on the contract at this address, if there is one
     aggregatorInfo: option<AggregatorInfo>,     // info on the aggregator using this address, if there is one
+    aggregatorToPay: option<address>,           // aggregator this user prefers; if None, use the default aggregator
 }
 
 type AccountContractInfo = struct {
@@ -75,6 +78,7 @@ public func pristineAccount(addr: address) -> Account {
         ethBalance: 0,
         contractInfo: None<AccountContractInfo>,
         aggregatorInfo: None<AggregatorInfo>,
+        aggregatorToPay: None<address>
     };
 }
 
@@ -137,6 +141,22 @@ public func account_setBlsKey(account: Account, maybeKey: option<BLSKey>) -> Acc
     };
 }
 
+public func account_getAggregatorToPayAsOption(account: Account) -> option<address> {
+    return account.aggregatorToPay;
+}
+
+public impure func account_getAggregatorToPay(account: Account) -> address {
+    return xif let Some(atp) = account.aggregatorToPay {
+        atp
+    } else {
+        chainParams_getDefaultAggregator()
+    };
+}
+
+public func account_setAggregatorToPay(account: Account, atp: option<address>) -> Account {
+    return account with { aggregatorToPay: atp };
+}
+
 public func account_getStartCodePoint(account: Account) -> option<impure func()> {
     return Some((account.contractInfo?).startCodePoint);
 }
@@ -188,7 +208,7 @@ public func account_setAggregatorDecompressionState(
     };
 }
 
-public func accountStore_createAccountFromEvmCode(
+public impure func accountStore_createAccountFromEvmCode(
     store: AccountStore,
     newAddr: address,
     code: ByteArray,
@@ -200,6 +220,7 @@ public func accountStore_createAccountFromEvmCode(
     // Returns Some(updatedAccountStore), or None if something went wrong.
     let oldAcct = accountStore_get(store, newAddr);
     return xif ( ! account_hasContract(oldAcct)) {
+        evmCallStack_addStorageCharge( (bytearray_size(code) + 31) / 32 );
         Some(accountStore_set(
             store,
             newAddr,
@@ -209,7 +230,7 @@ public func accountStore_createAccountFromEvmCode(
                 contractInfo: Some(struct {
                     code: code,
                     evmJumpTable: evmJumpTable,
-                    resumeCodePoint: initCodePt,
+                    startCodePoint: initCodePt,
                     storage: storageMap,
                 })
             }
@@ -245,7 +266,7 @@ public func accountStore_createBuiltinContract(
                     contractInfo: Some(struct {
                         code: fakeCode,
                         evmJumpTable: newmap<uint, impure func()>,
-                        resumeCodePoint: entryPoint,
+                        startCodePoint: entryPoint,
                         storage: storageMap_new(),
                     })
                 } with {

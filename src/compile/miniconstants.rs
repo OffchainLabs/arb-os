@@ -18,6 +18,9 @@ pub fn init_constant_table() -> HashMap<String, Uint256> {
         ("Address_ArbFunctionTable", 104),
         ("Address_ArbosTest", 105),
         ("Address_ArbOwner", 107),
+        ("Address_ArbGasInfo", 108),
+        ("Address_ArbAggregator", 109),
+        ("Address_RevertAtL2", 110), // reserved for special EthBridge functionality
         // indices of EVM operations
         ("EvmOp_stop", 0),
         ("EvmOp_sha3", 1),
@@ -63,7 +66,10 @@ pub fn init_constant_table() -> HashMap<String, Uint256> {
         ("EvmOp_create", 41),
         ("EvmOp_create2", 42),
         ("EvmOp_chainId", 43),
-        ("NumEvmOps", 44),
+        ("EvmOp_gasprice", 44),
+        ("EvmOp_gaslimit", 45),
+        ("EvmOp_blockhash", 46),
+        ("NumEvmOps", 47),
         // AVM instructions
         ("AVM_add", 0x01),
         ("AVM_mul", 0x02),
@@ -171,6 +177,7 @@ pub fn init_constant_table() -> HashMap<String, Uint256> {
         ("TxResultCode_badSequenceNum", 5),
         ("TxResultCode_formatError", 6),
         ("TxResultCode_cannotDeployAtAddress", 7),
+        ("TxResultCode_exceededTxGasLimit", 8),
         ("TxResultCode_unknownFailure", 255),
         // EVM call types
         ("EVMCallType_call", 0),
@@ -190,30 +197,29 @@ pub fn init_constant_table() -> HashMap<String, Uint256> {
         // AVM send types
         ("AVMSendType_batch", 0),
         // chain initialization options
-        ("InitOption_setSecondsPerBlock", 1),
         ("InitOption_setChargingParams", 2),
+        ("InitOption_setDefaultAggregator", 3),
+        // charging mechanism
+        ("Charging_DefaultL1GasPerL2Tx", 3700),
+        ("Charging_DefaultL1GasPerCalldataByte", 16),
+        ("Charging_DefaultL1GasPerStorage", 2000),
+        ("Charging_DefaultArbGasDivisor", 10000),
+        ("Charging_AssumedBatchCostL1Gas", 50000),
+        ("Charging_GasPoolDepthSeconds", 60),
         // fee customizability
-        ("NetFee_defaultRecipient", 42),
-        ("NetFee_defaultRate1Num", 1),
-        ("NetFee_defaultRate1Denom", 10000),
-        ("NetFee_maxRate1Num", 1),
-        ("NetFee_maxRate1Denom", 1000),
-        ("NetFee_defaultRate2Num", 1),
-        ("NetFee_defaultRate2Denom", 10000),
-        ("NetFee_maxRate2Num", 1),
-        ("NetFee_maxRate2Denom", 1000),
+        ("NetFee_defaultRateNumerator", 15),
+        ("NetFee_defaultRateDenominator", 100),
         // sequencer constants
-        ("Sequencer_maxDelayBlocks", 32768),   // 128*256
-        ("Sequencer_maxDelaySeconds", 983040), // 30*Sequencer_maxDelayBlocks
-        ("Sequencer_deltaBlocks", 0),
+        ("Sequencer_maxDelaySeconds", 983040), // 30*128*256
         ("Sequencer_deltaSeconds", 0),
         // pluggable modules
         ("PluggableModuleID_rollupTracker", 0),
         ("PluggableModuleID_precompile_0x05", 1),
         // misc
-        ("DefaultMillisecondsPerBlock", 13500),
-        ("DefaultSpeedLimitPerBlock", 13500 * 100000),
-        ("DefaultBlocksPerSend", 10),
+        ("SecondsPerBlockNumerator", 2),
+        ("SecondsPerBlockDenominator", 1),
+        ("DefaultSpeedLimitPerSecond", 100_000_000),
+        ("DefaultSecondsPerSend", 900), // 15 minutes
         ("Estimate_L1GasCostPerNode", 220000),
         ("Estimate_L1GasPrice", 100 * 1_000_000_000), // 100 gwei
     ] {
@@ -221,6 +227,8 @@ pub fn init_constant_table() -> HashMap<String, Uint256> {
     }
 
     for (s, u) in &[
+        ("Charging_DefaultNetworkFeeRecipient", "0"),
+        ("Charging_DefaultCongestionFeeRecipient", "0"),
         (
             "SpecialAccount_gasAccountingReserve",
             // Keccak256 of "Arbitrum gas accounting reserve account"

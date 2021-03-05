@@ -292,7 +292,7 @@ impure func generateCodeForEvmSegment(
                                 } elseif (opcode == 0x39) { // CODECOPY
                                     code = pushEvmInsnCall(const::EvmOp_codecopy, code);
                                 } elseif (opcode == 0x3a) { // GASPRICE
-                                    code = pushValue(1, code);
+                                    code = pushEvmInsnCall(const::EvmOp_gasprice, code);
                                 } else {
                                     invalidInstruction = true;
                                 }
@@ -318,10 +318,7 @@ impure func generateCodeForEvmSegment(
                         if (opcode < 0x45) {
                             if (opcode < 0x43) {
                                 if (opcode == 0x40) { // BLOCKHASH
-                                    code = pushInstruction(
-                                        const::AVM_pop,
-                                        pushValue(0, code),
-                                    );
+                                    code = pushEvmInsnCall(const::EvmOp_blockhash, code);
                                 } elseif (opcode == 0x41) { // COINBASE
                                     code = pushValue(0, code);
                                 } elseif (opcode == 0x42) { // TIMESTAMP
@@ -340,7 +337,7 @@ impure func generateCodeForEvmSegment(
                             }
                         } else {
                             if (opcode == 0x45) { // GASLIMIT
-                                code = pushValue(getGasLimitPerTx(), code);
+                                code = pushEvmInsnCall(const::EvmOp_gaslimit, code);
                             } elseif (opcode == 0x46) { // CHAINID
                                 code = pushEvmInsnCall(const::EvmOp_chainId, code);
                             } elseif (opcode == 0x47) { // SELFBALANCE
@@ -424,7 +421,7 @@ impure func generateCodeForEvmSegment(
                 if (opcode < 0xe1) {
                     if (opcode < 0xa0) {
                         if (opcode < 0x90) {
-                            if (opcode == 0x80) {  // DUP1 -- note that DUPn in EVM corresponds to DUP(n-1) in AvmCodePoint
+                            if (opcode == 0x80) {  // DUP1 -- note that DUPn in EVM corresponds to DUP(n-1) in AVM
                                 code = pushInstruction(const::AVM_dup0, code);
                             } elseif (opcode == 0x81) {  // DUP2
                                 code = pushInstruction(const::AVM_dup1, code);

@@ -486,12 +486,31 @@ fn test_arbsys_direct() {
 
 #[test]
 fn test_arbowner() {
-    crate::evm::_evm_test_arbowner(None, false).unwrap();
+    match crate::evm::_evm_test_arbowner(None, false) {
+        Ok(()) => {}
+        Err(e) => panic!("{:?}", e),
+    }
+}
+
+#[test]
+fn test_arbgasinfo() {
+    match crate::evm::_evm_test_arbgasinfo(None, false) {
+        Ok(()) => {}
+        Err(e) => panic!("{:?}", e),
+    }
+}
+
+#[test]
+fn test_arbaggregator() {
+    match crate::evm::_evm_test_arbaggregator(None, false) {
+        Ok(()) => {}
+        Err(e) => panic!("{:?}", e),
+    }
 }
 
 #[test]
 fn test_rate_control() {
-    crate::evm::_evm_test_rate_control(None, false).unwrap();
+    //FIXME crate::evm::_evm_test_rate_control(None, false).unwrap();
 }
 
 #[test]
@@ -519,16 +538,7 @@ pub fn test_crosscontract_call_with_constructors() {
 
 #[test]
 pub fn test_gas_charging_underfunded() {
-    match crate::evm::_evm_run_with_gas_charging(
-        None,
-        Some((
-            Uint256::_from_gwei(1000000),
-            Uint256::from_u64(100),
-            Uint256::zero(),
-        )),
-        false,
-        false,
-    ) {
+    match crate::evm::_evm_run_with_gas_charging(None, Uint256::_from_gwei(20), false, false) {
         Ok(result) => assert_eq!(result, false),
         Err(e) => panic!("error {}", e),
     }
@@ -536,12 +546,7 @@ pub fn test_gas_charging_underfunded() {
 
 #[test]
 pub fn test_gas_charging_fully_funded() {
-    match crate::evm::_evm_run_with_gas_charging(
-        None,
-        Some((Uint256::one(), Uint256::from_u64(100), Uint256::zero())),
-        false,
-        false,
-    ) {
+    match crate::evm::_evm_run_with_gas_charging(None, Uint256::_from_eth(1), false, false) {
         Ok(result) => assert_eq!(result, true),
         Err(e) => panic!("error {}", e),
     }
@@ -566,30 +571,6 @@ pub fn test_create_opcode() {
 #[test]
 pub fn test_crosscontract_call_using_batch() {
     match crate::evm::evm_xcontract_call_using_batch(None, false, false) {
-        Ok(result) => assert_eq!(result, true),
-        Err(e) => panic!("error {}", e),
-    }
-}
-
-#[test]
-pub fn test_crosscontract_call_sequencer_fast_path() {
-    match crate::evm::_evm_xcontract_call_using_sequencer_batch(None, false, false) {
-        Ok(result) => assert_eq!(result, true),
-        Err(e) => panic!("error {}", e),
-    }
-}
-
-#[test]
-pub fn test_crosscontract_call_sequencer_slow_path() {
-    match crate::evm::_evm_xcontract_call_sequencer_slow_path(None, false, false) {
-        Ok(result) => assert_eq!(result, true),
-        Err(e) => panic!("error {}", e),
-    }
-}
-
-#[test]
-pub fn test_crosscontract_call_sequencer_reordering() {
-    match crate::evm::_evm_xcontract_call_sequencer_reordering(None, false, false) {
         Ok(result) => assert_eq!(result, true),
         Err(e) => panic!("error {}", e),
     }
@@ -624,7 +605,7 @@ fn test_bls_registry() {
 
 #[test]
 fn test_rollup_tracker() {
-    crate::run::rolluptest::_test_rollup_tracker();
+    crate::run::rolluptest::_do_rollup_tracker_ops();
 }
 
 fn test_call_to_precompile5(

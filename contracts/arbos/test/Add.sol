@@ -1,6 +1,7 @@
 pragma solidity >=0.4.21 <0.7.0;
 
-import "../../arbos/contracts/ArbSys.sol";
+import "./Fibonacci.sol";
+import "../builtin/ArbSys.sol";
 
 
 contract Add {
@@ -29,5 +30,14 @@ contract Add {
 
     function withdraw5000() public {
 	ArbSys(address(100)).withdrawEth.value(5000)(address(1025));
+    }
+
+    function isTopLevel() public returns (bool) {
+        return ArbSys(address(100)).isTopLevelCall();
+    }
+
+    function isNotTopLevel() public returns (bool) {
+        Fibonacci fib = new Fibonacci();
+        return fib.isTopLevel();
     }
 }
