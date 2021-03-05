@@ -1055,11 +1055,7 @@ impl Machine {
         let mut current_codepoint = CodePt::new_internal(0);
         let mut total_gas = 0;
         let mut stack = vec![];
-        let mut profile_enabled = if mode == ProfilerMode::Always {
-            true
-        } else {
-            false
-        };
+        let mut profile_enabled = mode == ProfilerMode::Always;
         while let Some(insn) = self.next_opcode() {
             if insn.opcode == AVMOpcode::Inbox {
                 profile_enabled = true;
