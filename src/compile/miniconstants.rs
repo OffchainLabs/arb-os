@@ -239,6 +239,11 @@ pub fn init_constant_table() -> HashMap<String, Uint256> {
             // Keccak256 of "Arbitrum BLS signature domain"
             "73a92f91d473214defd5ffa91d036007eb2e6487fffaa551835e988fb24aaa2b",
         ),
+        (
+            "EVMLogTopicPlaceHolderForL2ToL1Send",
+            // Keccak256 of "Arbitrum EVM Log Placeholder for L2 to L1 Send"
+            "1d23da880a2e8f9190b0f3501b6a698fe39c7449c67752d747022a528eef504f"
+            ),
     ] {
         ret.insert(s.to_string(), Uint256::from_string_hex(u).unwrap());
     }
