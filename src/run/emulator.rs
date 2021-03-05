@@ -1032,6 +1032,7 @@ impl Machine {
 
     ///Generates a `ProfilerData` from a run of self with args from address 0.
     pub fn profile_gen(&mut self, args: Vec<Value>, mode: ProfilerMode) -> ProfilerData {
+        println!("Profile gen????");
         assert!(mode != ProfilerMode::Never);
         self.call_state(CodePt::new_internal(0), args);
         let mut loc_map = ProfilerData::default();
@@ -1236,30 +1237,123 @@ impl Machine {
                 AVMOpcode::GetBuffer8 => 3,
                 AVMOpcode::GetBuffer64 => 3,
                 AVMOpcode::GetBuffer256 => 3,
-                AVMOpcode::SetBuffer8 => self.gas_for_setbuffer(),
-                AVMOpcode::SetBuffer64 => self.gas_for_setbuffer()*2,
-                AVMOpcode::SetBuffer256 => self.gas_for_setbuffer()*2,
+                AVMOpcode::SetBuffer8 => self.gas_for_setbuffer(&self.code.get_insn(pc)?.immediate),
+                AVMOpcode::SetBuffer64 => self.gas_for_setbuffer(&self.code.get_insn(pc)?.immediate)*2,
+                AVMOpcode::SetBuffer256 => self.gas_for_setbuffer(&self.code.get_insn(pc)?.immediate)*2,
             })
         } else {
             None
         }
     }
 
-    fn gas_for_setbuffer(&self) -> u64 {
-        if let Some(val) = self.stack.contents.get(2) {
-            if let Value::Buffer(buf) = val {
-                let mut mx = buf.max_access;
-                let mut res = 0;
-                mx = mx/1024;
-                while (mx > 0) {
-                    res += 80;
-                    mx = mx/8;
-                }
-                res + 240
-            } else {
-                240
-            }
+    ///If the opcode has a specified gas cost returns the gas cost, otherwise returns None.
+    pub(crate) fn next_op_gas2(&self) -> Option<u64> {
+        if let MachineState::Running(pc) = self.state {
+            Some(match self.code.get_insn(pc)?.opcode {
+                AVMOpcode::Plus => 3,
+                AVMOpcode::Mul => 3,
+                AVMOpcode::Minus => 3,
+                AVMOpcode::Div => 4,
+                AVMOpcode::Sdiv => 7,
+                AVMOpcode::Mod => 4,
+                AVMOpcode::Smod => 7,
+                AVMOpcode::AddMod => 4,
+                AVMOpcode::MulMod => 4,
+                AVMOpcode::Exp => 25,
+                AVMOpcode::SignExtend => 7,
+                AVMOpcode::LessThan => 2,
+                AVMOpcode::GreaterThan => 2,
+                AVMOpcode::SLessThan => 2,
+                AVMOpcode::SGreaterThan => 2,
+                AVMOpcode::Equal => 2,
+                AVMOpcode::IsZero => 1,
+                AVMOpcode::BitwiseAnd => 2,
+                AVMOpcode::BitwiseOr => 2,
+                AVMOpcode::BitwiseXor => 2,
+                AVMOpcode::BitwiseNeg => 1,
+                AVMOpcode::Byte => 4,
+                AVMOpcode::ShiftLeft => 4,
+                AVMOpcode::ShiftRight => 4,
+                AVMOpcode::ShiftArith => 4,
+                AVMOpcode::Hash => 7,
+                AVMOpcode::Type => 3,
+                AVMOpcode::Hash2 => 8,
+                AVMOpcode::Keccakf => 600,
+                AVMOpcode::Sha256f => 250,
+                AVMOpcode::Ripemd160f => 250, //TODO: measure and update this
+                AVMOpcode::Pop => 1,
+                AVMOpcode::PushStatic => 1,
+                AVMOpcode::Rget => 1,
+                AVMOpcode::Rset => 2,
+                AVMOpcode::Jump => 4,
+                AVMOpcode::Cjump => 4,
+                AVMOpcode::StackEmpty => 2,
+                AVMOpcode::GetPC => 1,
+                AVMOpcode::AuxPush => 1,
+                AVMOpcode::AuxPop => 1,
+                AVMOpcode::AuxStackEmpty => 2,
+                AVMOpcode::Noop => 1,
+                AVMOpcode::ErrPush => 1,
+                AVMOpcode::ErrSet => 1,
+                AVMOpcode::Dup0 => 1,
+                AVMOpcode::Dup1 => 1,
+                AVMOpcode::Dup2 => 1,
+                AVMOpcode::Swap1 => 1,
+                AVMOpcode::Swap2 => 1,
+                AVMOpcode::Tget => 2,
+                AVMOpcode::Tset => 40,
+                AVMOpcode::Tlen => 2,
+                AVMOpcode::Xget => 3,
+                AVMOpcode::Xset => 41,
+                AVMOpcode::Breakpoint => 100,
+                AVMOpcode::Log => 100,
+                AVMOpcode::Send => 100,
+                AVMOpcode::InboxPeek => 40,
+                AVMOpcode::Inbox => 40,
+                AVMOpcode::Panic => 5,
+                AVMOpcode::Halt => 10,
+                AVMOpcode::ErrCodePoint => 25,
+                AVMOpcode::PushInsn => 25,
+                AVMOpcode::PushInsnImm => 25,
+                AVMOpcode::OpenInsn => 25,
+                AVMOpcode::DebugPrint => 1,
+                AVMOpcode::GetGas => 1,
+                AVMOpcode::SetGas => 1,
+                AVMOpcode::EcRecover => 20_000,
+                AVMOpcode::EcAdd => 3500,
+                AVMOpcode::EcMul => 82_000,
+                AVMOpcode::EcPairing => self.gas_for_pairing(),
+                AVMOpcode::Sideload => 10,
+                AVMOpcode::NewBuffer => 1,
+                AVMOpcode::GetBuffer8 => 3,
+                AVMOpcode::GetBuffer64 => 3,
+                AVMOpcode::GetBuffer256 => 3,
+                AVMOpcode::SetBuffer8 => 0,
+                AVMOpcode::SetBuffer64 => 0,
+                AVMOpcode::SetBuffer256 => 0,
+            })
         } else {
+            None
+        }
+    }
+
+    fn gas_for_setbuffer(&self, imm: &Option<Value>) -> u64 {
+        let idx = match imm {
+            None => 2,
+            Some(_) => 1,
+        };
+        if let Some(Value::Buffer(buf)) = self.stack.nth(idx) {
+            let mut mx = buf.max_access;
+            let mut res = 0;
+            mx = mx/1024;
+            while (mx > 0) {
+                res += 80;
+                mx = mx/8;
+            }
+            println!("set buffer gas {} {} size {}", res, buf.max_access, buf.check_size());
+            res + 240
+        } else {
+            println!("buffer not found {} {:?} {:?} {:?}", idx, self.stack.contents.get(0), self.stack.contents.get(1), self.stack.contents.get(2));
             240
         }
     }
@@ -1304,9 +1398,6 @@ impl Machine {
     fn run_one_dont_catch_errors(&mut self, _debug: bool) -> Result<bool, ExecutionError> {
         if let MachineState::Running(pc) = self.state {
             if let Some(insn) = self.code.get_insn(pc) {
-                if let Some(val) = &insn.immediate {
-                    self.stack.push(val.clone());
-                }
                 let gas_remaining_before = if let Some(gas) = self.next_op_gas() {
                     let gas256 = Uint256::from_u64(gas);
                     let gas_remaining_before = self.arb_gas_remaining.clone();
@@ -1321,6 +1412,9 @@ impl Machine {
                 } else {
                     self.arb_gas_remaining.clone()
                 };
+                if let Some(val) = &insn.immediate {
+                    self.stack.push(val.clone());
+                }
                 match insn.opcode {
                     AVMOpcode::Noop => {
                         self.incr_pc();
@@ -2093,6 +2187,7 @@ impl Machine {
                         let offset = self.stack.pop_usize(&self.state)?;
                         let val = self.stack.pop_uint(&self.state)?;
                         let buf = self.stack.pop_buffer(&self.state)?;
+                        // println!("Setting buffer {} {}", offset, val);
                         let bytes = val.to_bytes_be();
                         let nbuf = buf.set_byte(offset, bytes[31]);
                         self.stack.push(Value::copy_buffer(nbuf));
@@ -2110,6 +2205,7 @@ impl Machine {
                         }
                         let val = self.stack.pop_uint(&self.state)?;
                         let buf = self.stack.pop_buffer(&self.state)?;
+                        // println!("Setting buffer {} {}", offset, val);
                         let mut nbuf = buf;
                         let bytes = val.to_bytes_be();
                         for i in 0..8 {
@@ -2130,6 +2226,7 @@ impl Machine {
                         }
                         let val = self.stack.pop_uint(&self.state)?;
                         let buf = self.stack.pop_buffer(&self.state)?;
+                        // println!("Setting buffer {} {}", offset, val);
                         let mut nbuf = buf;
                         let bytes = val.to_bytes_be();
                         for i in 0..32 {

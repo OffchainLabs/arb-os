@@ -485,6 +485,15 @@ impl Buffer {
         ret
     }
 
+    pub fn check_size(&self) -> usize {
+        let v = self.as_bytes(1024);
+        let mut acc = 1023;
+        while acc > 0 && v[acc] == 0 {
+            acc = acc - 1;
+        }
+        acc
+    }
+
     pub fn avm_hash(&self) -> Uint256 {
         Uint256::avm_hash2(&Uint256::from_u64(self.max_access), &self.hash().hash)
     }

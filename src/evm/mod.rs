@@ -2246,7 +2246,9 @@ pub fn make_logs_for_all_arbos_tests() {
         Some(Path::new("testlogs/deploy_buddy_contract.aoslog")),
         false,
     );
+    println!("Arbsys");
     evm_test_arbsys(Some(Path::new("testlogs/evm_test_arbsys.aoslog")), false);
+    println!("Arbsys ok");
     evm_eval_sha256(Some(Path::new("testlogs/evm_eval_sha256.aoslog")), false);
     evm_payment_to_empty_address(
         Some(Path::new("testlogs/payment_to_empty_address.aoslog")),
