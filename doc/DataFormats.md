@@ -82,6 +82,8 @@ At present. the following options are supported:
   * ratio of L1 gas price to base ArbGas price; 
   * network fee recipient (address encoded as uint); 
   * congestion fee recipient (address encoded as uint)
+* Option 3: set default aggregator
+  * Default aggregator address (address encoded as uint)
 
 All other options are ignored at present.
 
@@ -104,7 +106,7 @@ This message type is reserved for internal use by ArbOS. It should never appear 
 
 **Message type 7: L2 transaction funded by L1**
 
-This message type encodes an L2 transaction that is funded by calldata provided at L1. The type-specific data must be the same as an L2 message of subtype 0.
+This message type encodes an L2 transaction that is funded by calldata provided at L1. The type-specific data must be the same as an L2 message of subtype 0 or 1.
 
 **Message type 8: Rollup protocol event**
 
@@ -218,7 +220,7 @@ A tx receipt log item consists of:
   * ArbGas used in current Arbitrum block including this tx (uint)
   * index of this tx within this Arbitrum block (uint)
   * number of EVM logs emitted in this Arbitrum block before this tx (uint)
-* fee information for the transaction, an 3-tuple consisting of:
+* fee information for the transaction, a 4-tuple consisting of:
   * a 4-tuple of prices of:
     * L2 transaction (uint)
     * L1 calldata bytes (uint)
@@ -229,11 +231,12 @@ A tx receipt log item consists of:
     * L1 calldata bytes (uint)
     * L2 storage (uint)
     * L2 computation (uint)
-  * a 4-tuple of wei paid for: [might not equal product of units and price, e.g. if user has insufficient funds to pay]
+  * a 4-tuple of wei paid for: [might not equal product of units and price, e.g. if user has insufficient funds to pay, or no aggregator was reimbursed]
     * L2 transaction (uint)
     * L1 calldata bytes (uint)
     * L2 storage (uint)
     * L2 computation (uint)
+  * address of aggregator that was reimbursed (or zero if there wasn't one) (address encoded as uint)
 
 Possible return codes are:
 	0: tx returned (success)

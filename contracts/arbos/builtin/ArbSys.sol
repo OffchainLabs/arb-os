@@ -22,6 +22,9 @@ interface ArbSys {
     // able to call it
     function getStorageAt(address account, uint256 index) external view returns (uint256);
 
+    // Return true if the caller of this was called directly from L1
+    function isTopLevelCall() external view returns (bool);
+
     event EthWithdrawal(address indexed destAddr, uint amount);
     event ERC20Withdrawal(address indexed destAddr, address indexed tokenAddr, uint amount);
     event ERC721Withdrawal(address indexed destAddr, address indexed tokenAddr, uint indexed id);
