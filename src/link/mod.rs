@@ -298,10 +298,12 @@ pub fn link(
             global_num_limit,
             prog.clone().source_file_map,
         );
-        global_num_limit = relocated_prog.global_num_limit + 1; // +1 is for jump table
+        global_num_limit = relocated_prog.global_num_limit;
         relocated_progs.push(relocated_prog);
         func_offset = new_func_offset + 1;
     }
+
+    global_num_limit += 1;
 
     // Initialize globals or allow jump table retrieval
     let mut linked_code = if test_mode {
