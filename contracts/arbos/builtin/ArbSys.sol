@@ -25,5 +25,8 @@ interface ArbSys {
     event EthWithdrawal(address indexed destAddr, uint amount);
     event ERC20Withdrawal(address indexed destAddr, address indexed tokenAddr, uint amount);
     event ERC721Withdrawal(address indexed destAddr, address indexed tokenAddr, uint indexed id);
+
+    event L2ToL1Transaction(address indexed caller, uint indexed batchNumber, uint itemNumber,
+                            address destination, uint callvalue, bytes data);
 }
 

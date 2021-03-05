@@ -26,6 +26,7 @@ use evmCallStack::evmCallFrame_runningAsAccount;
 use evmCallStack::evmCallFrame_getParent;
 use evmCallStack::evmCallFrame_getCaller;
 
+use evmOps::evmOp_log3;
 use evmOps::evmOp_return;
 use evmOps::evmOp_revert_knownCodePc;
 
@@ -264,6 +265,7 @@ impure func arbsys_sendTxToL1(topFrame: EvmCallFrame, calldata: ByteArray) { // 
     let nbytes = bytearray_get256(calldata, 4+2*32);
     let innerCalldata = bytearray_extract(calldata, 4+3*32, nbytes);
 
+    let caller = evmCallFrame_getCaller(topFrame);
     let callvalue = evmCallFrame_getCallvalue(topFrame);
     let runningAsAddr = evmCallFrame_runningAsAddress(topFrame);
     let runningAsAccount = evmCallFrame_getAccount(topFrame, runningAsAddr);
@@ -287,7 +289,7 @@ impure func arbsys_sendTxToL1(topFrame: EvmCallFrame, calldata: ByteArray) { // 
                                             const::SendType_sendTxToL1
                                         ),
                                         32,
-                                        uint(evmCallFrame_getCaller(topFrame)),
+                                        uint(caller),
                                     ),
                                     64,
                                     uint(destAddr),
@@ -308,13 +310,62 @@ impure func arbsys_sendTxToL1(topFrame: EvmCallFrame, calldata: ByteArray) { // 
                 nbytes
             ),
         );
+
+        // write log data into memory
+        let mem = bytearray_set256(
+            bytearray_set256(
+                bytearray_set256(
+                    bytearray_set256(
+                        bytearray_set256(
+                            bytearray_set256(
+                                bytearray_set256(
+                                    bytearray_new(0),
+                                    0,
+                                    uint(caller),
+                                ),
+                                32,
+                                0,   // batch number will be filled in later
+                            ),
+                            2*32,
+                            0,    // item number in batch iwll be filled in later
+                        ),
+                        3*32,
+                        uint(destAddr),
+                    ),
+                    4*32,
+                    callvalue,
+                ),
+                5*32,
+                0xc,
+            ),
+            6*32,
+            bytearray_size(innerCalldata),
+        );
+        mem = bytearray_copy(
+            innerCalldata,
+            0,
+            mem,
+            7*32,
+            bytearray_size(innerCalldata),
+        );
+        if ( ! evmCallStack_setTopFrameMemory(mem)) {
+            evmOp_revert_knownCodePc(address(const::Address_ArbSys), 221, 0, 0);
+        }
+        evmOp_log3(
+            0,
+            bytearray_size(mem),
+            0x3f807053c93787228b38cffd8ca4784060a7ff23f4e2eca903e33bdf9963f40f,
+            uint(caller),
+            0,    // batch number will be filled in later
+        );
+
         if (evmCallStack_setTopFrameMemory(bytearray_set256(bytearray_new(0), 0, 1))) {
             evmOp_return(0, 32);
         } else {
-            evmOp_revert_knownCodePc(address(const::Address_ArbSys), 221, 0, 0);
+            evmOp_revert_knownCodePc(address(const::Address_ArbSys), 222, 0, 0);
         }
     } else {
-        evmOp_revert_knownCodePc(address(const::Address_ArbSys), 222, 0, 0);
+        evmOp_revert_knownCodePc(address(const::Address_ArbSys), 223, 0, 0);
     }
 }
 
