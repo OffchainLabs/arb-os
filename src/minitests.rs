@@ -519,6 +519,11 @@ fn test_function_table_access() {
 }
 
 #[test]
+fn test_l2_to_l1_call() {
+    crate::evm::_evm_test_callback(None, false).unwrap();
+}
+
+#[test]
 fn test_evm_add_code() {
     crate::evm::_basic_evm_add_test(None, false).unwrap();
 }
