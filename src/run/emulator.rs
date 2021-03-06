@@ -672,7 +672,7 @@ impl FromStr for ProfilerMode {
 pub struct Machine {
     stack: ValueStack,
     aux_stack: ValueStack,
-    state: MachineState,
+    pub state: MachineState,
     code: CodeStore,
     static_val: Value,
     pub register: Value,

@@ -9,6 +9,7 @@ use crate::run::{load_from_file, RuntimeEnvironment};
 use crate::uint256::Uint256;
 use ethers_signers::Signer;
 use rustc_hex::ToHex;
+use std::fmt;
 use std::fs::File;
 use std::io::Read;
 use std::path::Path;
@@ -90,6 +91,14 @@ impl CodeUploader {
         self.instructions.clone()
     }
 
+    pub fn _to_flat_vec(&self) -> Vec<u8> {
+        let mut ret = vec![];
+        for insn in &self.instructions {
+            ret.extend(insn);
+        }
+        ret
+    }
+
     pub fn _to_code_for_upload(&self) -> CodeForUpload {
         let mut insns = vec![];
         for batch in &self.instructions {
@@ -111,6 +120,18 @@ impl CodeUploader {
             num_so_far: num,
             num_total: num,
         }
+    }
+}
+
+impl fmt::Display for CodeUploader {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        for insn in &self.instructions {
+            for b in insn {
+                write!(f, "{:2x} ", b)?;
+            }
+            write!(f, "\n")?;
+        }
+        Ok(())
     }
 }
 
