@@ -719,5 +719,5 @@ fn small_upgrade() {
     //let mut new_machine = load_from_file(Path::new("upgradetests/regcopy_new.mexe"), rt_env);
     //run(&mut new_machine, vec![machine.register], false).unwrap();
     println!("Machine state after: {:?}", machine.state);
-    assert_eq!(*machine.stack_top().unwrap(), Value::Int(Uint256::one()));
+    assert_eq!(*machine.stack_top().unwrap(), Value::Int(Uint256::from_u64(42)));
 }
