@@ -241,11 +241,11 @@ impure func arbsys_withdrawEth(topFrame: EvmCallFrame, calldata: ByteArray) { //
         queueMessageForSend(
             bytearray_set256(
                 bytearray_set256(
-                    bytearray_set256(bytearray_new(0), 0, const::SendType_withdrawETH),
-                    32,
+                    bytearray_setByte(bytearray_new(0), 0, const::SendType_withdrawETH),
+                    1,
                     bytearray_get256(calldata, 4),
                 ),
-                64,
+                33,
                 amount
             )
         );
