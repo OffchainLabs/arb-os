@@ -694,9 +694,9 @@ fn test_precompile5_big() {
 #[test]
 fn reinterpret_register() {
     let rt_env = RuntimeEnvironment::new(Uint256::from_usize(1111), None);
-    let mut old_machine = load_from_file(Path::new("scripts/input.mexe"), rt_env.clone());
+    let mut old_machine = load_from_file(Path::new("upgradetests/regcopy_old.mexe"), rt_env.clone());
     let _ = run(&mut old_machine, vec![], false);
-    let mut new_machine = load_from_file(Path::new("scripts/output.mexe"), rt_env);
+    let mut new_machine = load_from_file(Path::new("upgradetests/regcopy_new.mexe"), rt_env);
     run(&mut new_machine, vec![old_machine.register], false).unwrap();
     assert_eq!(*new_machine.stack_top().unwrap(), Value::Int(Uint256::one()));
 }
