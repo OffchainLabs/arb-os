@@ -241,8 +241,7 @@ pub fn init_constant_table() -> HashMap<String, Uint256> {
         ),
         (
             "EVMLogTopicForL2ToL1Send",
-            // Keccak256 of "Arbitrum EVM Log Placeholder for L2 to L1 Send"
-            "1389380ee1d43ae62f988fd47b8d5e9fc263444ea53d0cc330fc4869d7a8689a"
+            "99ecd3620b54462a4f03f96ee9a3618830bb7ed6baab03d81adad709b22d1322"
             ),
     ] {
         ret.insert(s.to_string(), Uint256::from_string_hex(u).unwrap());

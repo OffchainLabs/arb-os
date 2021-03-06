@@ -344,7 +344,7 @@ impure func arbsys_sendTxToL1(topFrame: EvmCallFrame, calldata: ByteArray) { // 
                     callvalue,
                 ),
                 6*32,
-                0xe,
+                0x12,
             ),
             7*32,
             bytearray_size(innerCalldata),
@@ -355,7 +355,7 @@ impure func arbsys_sendTxToL1(topFrame: EvmCallFrame, calldata: ByteArray) { // 
             0,
             mem,
             8*32,
-            bytearray_size(innerCalldata),
+            32*((bytearray_size(innerCalldata)+31)/32),
         );
         if ( ! evmCallStack_setTopFrameMemory(mem)) {
             evmOp_revert_knownCodePc(address(const::Address_ArbSys), 221, 0, 0);

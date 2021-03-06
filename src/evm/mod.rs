@@ -836,7 +836,7 @@ pub fn _evm_test_callback(
     let evmlogs = logs[0]._get_evm_logs();
     assert_eq!(evmlogs.len(), 8);
 
-    assert_eq!(evmlogs[2].vals[0], Uint256::from_bytes(&hex::decode("1389380ee1d43ae62f988fd47b8d5e9fc263444ea53d0cc330fc4869d7a8689a").unwrap()));
+    assert_eq!(evmlogs[2].vals[0], Uint256::from_bytes(&hex::decode("99ecd3620b54462a4f03f96ee9a3618830bb7ed6baab03d81adad709b22d1322").unwrap()));
     assert_eq!(evmlogs[2].addr, Uint256::from_u64(100));  // log was emitted by ArbSys
     assert_eq!(evmlogs[2].vals[1], contract.address);
     let batch_number = &evmlogs[2].vals[2];
@@ -846,7 +846,7 @@ pub fn _evm_test_callback(
     let calldata_size = Uint256::from_bytes(&evmlogs[2].data[(7*32)..(8*32)]);
     assert_eq!(calldata_size, Uint256::from_u64(11));
 
-    assert_eq!(evmlogs[6].vals[0], Uint256::from_bytes(&hex::decode("1389380ee1d43ae62f988fd47b8d5e9fc263444ea53d0cc330fc4869d7a8689a").unwrap()));
+    assert_eq!(evmlogs[6].vals[0], Uint256::from_bytes(&hex::decode("99ecd3620b54462a4f03f96ee9a3618830bb7ed6baab03d81adad709b22d1322").unwrap()));
     assert_eq!(evmlogs[6].addr, Uint256::from_u64(100));  // log was emitted by ArbSys
     assert_eq!(evmlogs[6].vals[1], contract.address);
     let batch_number = &evmlogs[6].vals[2];
