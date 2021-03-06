@@ -104,8 +104,9 @@ func unmarshalValue(stream: ByteStream, codeMap: map<uint, AvmCodePoint>) -> opt
     } elseif (kind == 10) {   // 0-tuple
         Some((stream, ()))
     } elseif (kind == 11) {   // 1-tuple
+        let val = unsafecast<[1]any>((0,0));
         let (ustr, x) = unmarshalValue(stream, codeMap)?;
-        Some((ustr, (x,)))
+        Some((ustr, val with { [0] = x }))
     } elseif (kind == 12) {   // 2-tuple
         let val = unsafecast<[2]any>((0,0));
         let i = 0;
