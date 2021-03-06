@@ -4,12 +4,13 @@
 
 use crate::evm::abi::{ArbSys, _ArbOwner};
 use crate::link::LinkedProgram;
-use crate::mavm::Instruction;
+use crate::mavm::{AVMOpcode, Instruction};
 use crate::run::{load_from_file, RuntimeEnvironment};
 use crate::uint256::Uint256;
 use ethers_signers::Signer;
 use rustc_hex::ToHex;
 use serde::{Deserialize, Serialize};
+use std::fmt;
 use std::fs::File;
 use std::io::Read;
 use std::path::Path;
@@ -68,7 +69,7 @@ impl CodeUploader {
         self.build_buffer.extend(b);
     }
 
-    pub fn _serialize_one(&mut self, insn: &Instruction) {
+    pub fn _serialize_one(&mut self, insn: &Instruction<AVMOpcode>) {
         insn._upload(self);
         self.num_so_far = self.num_so_far + 1;
         self._finish_batch();
@@ -87,6 +88,14 @@ impl CodeUploader {
 
     pub fn _finalize(&mut self) -> Vec<Vec<u8>> {
         self.instructions.clone()
+    }
+
+    pub fn _to_flat_vec(&self) -> Vec<u8> {
+        let mut ret = vec![];
+        for insn in &self.instructions {
+            ret.extend(insn);
+        }
+        ret
     }
 
     pub fn _to_code_for_upload(&self) -> CodeForUpload {
@@ -116,6 +125,18 @@ impl CodeUploader {
             num_so_far: num,
             num_total: num,
         }
+    }
+}
+
+impl fmt::Display for CodeUploader {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        for insn in &self.instructions {
+            for b in insn {
+                write!(f, "{:2x} ", b)?;
+            }
+            write!(f, "\n")?;
+        }
+        Ok(())
     }
 }
 
@@ -151,7 +172,7 @@ fn test_code_upload_prep() {
 }
 
 #[test]
-fn test_upgrade_arbos_over_itself() {
+fn _test_upgrade_arbos_over_itself() {
     _test_upgrade_arbos_over_itself_impl().unwrap();
 }
 
@@ -170,6 +191,7 @@ fn _test_upgrade_arbos_over_itself_impl() -> Result<(), ethabi::Error> {
     let arbowner = _ArbOwner::_new(&wallet, false);
     arbowner._give_ownership(&mut machine, my_addr, Some(Uint256::zero()))?;
     let uploader = CodeUploader::_new_from_file(Path::new("arb_os/arbos.mexe"));
+
     println!("start_Code_upload");
     arbowner._start_code_upload(&mut machine)?;
     let mut accum = vec![];
@@ -181,12 +203,15 @@ fn _test_upgrade_arbos_over_itself_impl() -> Result<(), ethabi::Error> {
             accum = vec![];
         }
     }
+
     if (accum.len() > 0) {
         println!("continue_code_uplaod");
         arbowner._continue_code_upload(&mut machine, accum)?;
     }
     println!("finish_code_upload_as_arbos_upgrade");
     arbowner._finish_code_upload_as_arbos_upgrade(&mut machine)?;
+
+    println!("Calling upgraded ArbOS");
 
     let wallet2 = machine.runtime_env.new_wallet();
     let arbsys = ArbSys::new(&wallet2, false);

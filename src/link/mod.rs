@@ -8,13 +8,13 @@ use crate::compile::{
     compile_from_file, CompileError, CompiledProgram, DebugInfo, GlobalVarDecl, SourceFileMap, Type,
 };
 use crate::mavm::{AVMOpcode, Instruction, Label, Opcode, Value};
+use crate::pos::try_display_location;
 use crate::stringtable::{StringId, StringTable};
 use serde::{Deserialize, Serialize};
 use std::collections::hash_map::{DefaultHasher, HashMap};
 use std::collections::BTreeMap;
 use std::hash::Hasher;
 use std::io;
-use std::path::Path;
 use xformcode::make_uninitialized_tuple;
 
 pub use xformcode::{value_from_field_list, TupleTree, TUPLE_SIZE};
@@ -28,9 +28,10 @@ mod xformcode;
 /// This is typically constructed via the `postlink_compile` function.
 #[derive(Serialize, Deserialize)]
 pub struct LinkedProgram {
-    pub code: Vec<Instruction>,
+    pub code: Vec<Instruction<AVMOpcode>>,
     pub static_val: Value,
     pub globals: Vec<GlobalVarDecl>,
+    #[serde(default)]
     pub file_name_chart: BTreeMap<u64, String>,
 }
 
@@ -43,7 +44,18 @@ impl LinkedProgram {
             Some("pretty") => {
                 writeln!(output, "static: {}", self.static_val).unwrap();
                 for (idx, insn) in self.code.iter().enumerate() {
-                    writeln!(output, "{:05}:  {}", idx, insn).unwrap();
+                    writeln!(
+                        output,
+                        "{:05}:  {} \t\t {}",
+                        idx,
+                        insn,
+                        try_display_location(
+                            insn.debug_info.location,
+                            &self.file_name_chart,
+                            false
+                        )
+                    )
+                    .unwrap();
                 }
             }
             None | Some("json") => match serde_json::to_string(self) {
@@ -197,11 +209,25 @@ pub fn postlink_compile(
             println!("{:04}:  {}", idx, insn);
         }
     }
-    let (mut code_final, jump_table_final) =
+
+    let (mut code_5, jump_table_final) =
         striplabels::strip_labels(code_4, &jump_table, &program.imported_funcs)?;
     let jump_table_value = xformcode::jump_table_to_value(jump_table_final);
 
-    hardcode_jump_table_into_register(&mut code_final, &jump_table_value, test_mode);
+    hardcode_jump_table_into_register(&mut code_5, &jump_table_value, test_mode);
+    let code_final: Vec<_> = code_5
+        .into_iter()
+        .map(|insn| {
+            if let Opcode::AVMOpcode(inner) = insn.opcode {
+                Ok(Instruction::new(inner, insn.immediate, insn.debug_info))
+            } else {
+                Err(CompileError::new(
+                    format!("In final output encountered virtual opcode {}", insn.opcode),
+                    insn.debug_info.location,
+                ))
+            }
+        })
+        .collect::<Result<Vec<_>, CompileError>>()?;
 
     if debug {
         println!("============ after strip_labels =============");
@@ -236,30 +262,6 @@ fn hardcode_jump_table_into_register(
     );
 }
 
-///Takes a slice of tuples of `CompiledProgram`s and `bool`s representing whether the associated
-/// module should be type checked, and returns a vector containing the slice contents with the
-/// auto-linked programs attached if successful, and a `CompileError` otherwise.
-pub fn add_auto_link_progs(
-    progs_in: &[CompiledProgram],
-) -> Result<Vec<CompiledProgram>, CompileError> {
-    let builtin_pathnames = vec!["builtin/array.mao", "builtin/kvs.mao"];
-    let mut progs = progs_in.to_owned();
-    for pathname in builtin_pathnames.into_iter() {
-        let path = Path::new(pathname);
-        match compile_from_file(path, &mut BTreeMap::new(), false, false) {
-            Ok(compiled_program) => {
-                compiled_program
-                    .into_iter()
-                    .for_each(|prog| progs.push(prog));
-            }
-            Err(e) => {
-                return Err(e);
-            }
-        }
-    }
-    Ok(progs)
-}
-
 ///Combines the `CompiledProgram`s in progs_in into a single `CompiledProgram` with offsets adjusted
 /// to avoid collisions and auto-linked programs added.
 ///
@@ -269,8 +271,8 @@ pub fn link(
     progs_in: &[CompiledProgram],
     test_mode: bool,
 ) -> Result<CompiledProgram, CompileError> {
-    let progs = add_auto_link_progs(&progs_in)?;
-    let mut insns_so_far: usize = 3; // leave 3 insns of space at beginning for initialization
+    let progs = progs_in.to_vec();
+    let mut insns_so_far: usize = 3; // leave 2 insns of space at beginning for initialization
     let mut imports_so_far: usize = 0;
     let mut int_offsets = Vec::new();
     let mut ext_offsets = Vec::new();
@@ -311,6 +313,8 @@ pub fn link(
         relocated_progs.push(relocated_prog);
         func_offset = new_func_offset + 1;
     }
+
+    global_num_limit += 1;
 
     // Initialize globals or allow jump table retrieval
     let mut linked_code = if test_mode {
