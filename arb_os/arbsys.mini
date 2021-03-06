@@ -344,7 +344,7 @@ impure func arbsys_sendTxToL1(topFrame: EvmCallFrame, calldata: ByteArray) { // 
                     callvalue,
                 ),
                 6*32,
-                0x12,
+                7*32,  // offset to beginning of bytes size
             ),
             7*32,
             bytearray_size(innerCalldata),
