@@ -8,7 +8,7 @@ use crate::link::{ExportedFunc, Import, ImportedFunc};
 use crate::mavm::Instruction;
 use crate::pos::{BytePos, Location};
 use crate::stringtable::StringTable;
-use ast::{FuncDecl, TypeTree};
+use ast::{Func, FuncDecl, GlobalVarDecl, TypeTree};
 use lalrpop_util::lalrpop_mod;
 use mini::DeclsParser;
 use miniconstants::init_constant_table;
@@ -20,7 +20,7 @@ use std::fs::File;
 use std::hash::{Hash, Hasher};
 use std::io::{self, Read};
 use std::path::Path;
-use typecheck::TypeCheckedFunc;
+use typecheck::{AbstractSyntaxTree, TypeCheckedFunc, TypeCheckedNode};
 
 pub use ast::{DebugInfo, GlobalVarDecl, StructField, TopLevelDecl, Type};
 pub use source::Lines;
@@ -33,14 +33,6 @@ mod source;
 mod typecheck;
 lalrpop_mod!(mini);
 
-///Trait that identifies what mini compiler tracked properties a value implementing this trait has.
-///
-///Currently only purity/impurity is tracked, however more properties may be added in the future.
-pub(crate) trait MiniProperties {
-    ///Returns false if the value reads or writes mini global state, and true otherwise.
-    fn is_pure(&self) -> bool;
-}
-
 ///Represents the contents of a source file after parsing.
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 struct Module {
@@ -48,7 +40,7 @@ struct Module {
     ///The list of imported functions imported through the old import/export system
     imported_funcs: Vec<ImportedFunc>,
     ///List of functions defined locally within the source file
-    funcs: Vec<FuncDecl>,
+    funcs: Vec<Func>,
     ///Map from `StringId`s in this file to the `Type`s they represent.
     named_types: HashMap<usize, Type>,
     ///List of global variables defined within this file.
@@ -82,7 +74,7 @@ struct TypeCheckedModule {
 impl Module {
     fn new(
         imported_funcs: Vec<ImportedFunc>,
-        funcs: Vec<FuncDecl>,
+        funcs: Vec<Func>,
         named_types: HashMap<usize, Type>,
         global_vars: Vec<GlobalVarDecl>,
         string_table: StringTable,
@@ -430,7 +422,7 @@ pub fn compile_from_folder(
             &type_tree,
         )
         .map_err(|res3| CompileError::new(res3.reason.to_string(), res3.location))?;
-        checked_funcs.iter().for_each(|func| {
+        checked_funcs.iter_mut().for_each(|func| {
             let detected_purity = func.is_pure();
             let declared_purity = func.properties.pure;
             if !detected_purity && declared_purity {

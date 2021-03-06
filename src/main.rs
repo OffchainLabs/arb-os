@@ -4,6 +4,7 @@
 
 #![allow(unused_parens)]
 
+use crate::link::LinkedProgram;
 use clap::Clap;
 use compile::{compile_from_file, CompileError};
 use contracttemplates::generate_contract_template_file_or_die;
@@ -18,6 +19,7 @@ use std::collections::BTreeMap;
 use std::fs::File;
 use std::io;
 use std::path::{Path, PathBuf};
+use std::io::Read;
 use std::time::Instant;
 use uint256::Uint256;
 
@@ -91,6 +93,15 @@ struct Profiler {
     mode: ProfilerMode,
 }
 
+///Command line options for reformat subcommand.
+#[derive(Clap, Debug)]
+struct Reformat {
+    input: String,
+    output: Option<String>,
+    #[clap(short, long)]
+    format: Option<String>,
+}
+
 ///Command line options for evm-tests subcommand.
 #[derive(Clap, Debug)]
 struct EvmTests {
@@ -119,6 +130,7 @@ enum Args {
     MakeTestLogs,
     MakeBenchmarks,
     MakeTemplates,
+    Reformat(Reformat),
     EvmTests(EvmTests),
     GenUpgradeCode(GenUpgrade),
 }
@@ -131,7 +143,7 @@ fn main() -> Result<(), CompileError> {
         Args::Compile(compile) => {
             let debug_mode = compile.debug_mode;
             let test_mode = compile.test_mode;
-            let mut output = get_output(compile.output.as_deref()).unwrap();
+            let mut output = get_output(compile.output.clone()).unwrap();
             let filenames: Vec<_> = compile.input.clone();
             let mut file_name_chart = BTreeMap::new();
             if compile.compile_only {
@@ -148,7 +160,7 @@ fn main() -> Result<(), CompileError> {
                         println!(
                             "Compilation error: {}\n{}",
                             e,
-                            try_display_location(e.location, &file_name_chart)
+                            try_display_location(e.location, &file_name_chart, true)
                         );
                         return Err(e);
                     }
@@ -169,7 +181,7 @@ fn main() -> Result<(), CompileError> {
                             println!(
                                 "Compilation error: {}\n{}",
                                 e,
-                                try_display_location(e.location, &file_name_chart)
+                                try_display_location(e.location, &file_name_chart, true)
                             );
                             return Err(e);
                         }
@@ -192,7 +204,7 @@ fn main() -> Result<(), CompileError> {
                                 println!(
                                     "Linking error: {}\n{}",
                                     e,
-                                    try_display_location(e.location, &file_name_chart)
+                                    try_display_location(e.location, &file_name_chart, true)
                                 );
                                 return Err(e);
                             }
@@ -202,7 +214,7 @@ fn main() -> Result<(), CompileError> {
                         println!(
                             "Linking error: {}\n{}",
                             e,
-                            try_display_location(e.location, &file_name_chart)
+                            try_display_location(e.location, &file_name_chart, true)
                         );
                         return Err(e);
                     }
@@ -266,6 +278,37 @@ fn main() -> Result<(), CompileError> {
             generate_contract_template_file_or_die(path);
         }
 
+        Args::Reformat(reformat) => {
+            let path = Path::new(&reformat.input);
+            let mut file = File::open(path).map_err(|_| {
+                CompileError::new(
+                    format!(
+                        "Could not open file: \"{}\"",
+                        path.to_str().unwrap_or("non-utf8")
+                    ),
+                    None,
+                )
+            })?;
+            let mut s = String::new();
+            file.read_to_string(&mut s).map_err(|_| {
+                CompileError::new(
+                    format!("Failed to read input file \"{}\" to string", reformat.input),
+                    None,
+                )
+            })?;
+            let result: LinkedProgram = serde_json::from_str(&s).map_err(|_| {
+                CompileError::new(
+                    format!("Could not parse input file \"{}\" as json", reformat.input),
+                    None,
+                )
+            })?;
+
+            result.to_output(
+                &mut get_output(reformat.output).unwrap(),
+                reformat.format.as_deref(),
+            );
+        }
+
         Args::EvmTests(options) => {
             let mut paths = options.input;
             if paths.len() == 0 {
@@ -323,7 +366,7 @@ fn main() -> Result<(), CompileError> {
 
 ///Creates a `dyn Write` from an optional filename, if a filename is specified, creates a file
 /// handle, otherwise gives stdout.
-fn get_output(output_filename: Option<&str>) -> Result<Box<dyn io::Write>, io::Error> {
+fn get_output(output_filename: Option<String>) -> Result<Box<dyn io::Write>, io::Error> {
     match output_filename {
         Some(ref path) => File::create(path).map(|f| Box::new(f) as Box<dyn io::Write>),
         None => Ok(Box::new(io::stdout())),

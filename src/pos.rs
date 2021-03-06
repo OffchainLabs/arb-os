@@ -135,10 +135,15 @@ impl fmt::Display for Location {
 }
 
 impl Location {
-    pub fn display_with_file(&self, file_name_chart: &BTreeMap<u64, String>) -> String {
+    pub fn display_with_file(
+        &self,
+        file_name_chart: &BTreeMap<u64, String>,
+        line_break: bool,
+    ) -> String {
         format!(
-            "{}\nIn file: {}",
+            "{}{}In file: {}",
             self,
+            if line_break { "\n" } else { " " },
             file_name_chart
                 .get(&self.file_id)
                 .unwrap_or(&self.file_id.to_string())
@@ -149,9 +154,10 @@ impl Location {
 pub fn try_display_location(
     location: Option<Location>,
     file_name_chart: &BTreeMap<u64, String>,
+    line_break: bool,
 ) -> String {
     location
-        .map(|loc| loc.display_with_file(file_name_chart))
+        .map(|loc| loc.display_with_file(file_name_chart, line_break))
         .unwrap_or("No location".to_string())
 }
 

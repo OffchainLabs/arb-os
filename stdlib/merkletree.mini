@@ -29,7 +29,7 @@ public func merkleize(data: []ByteArray) -> (any, bytes32) {
     while(length > 1) {
         let newLayer = newarray<(any, bytes32)>((length+1)/2);
         let i = 0;
-        while(i < length) {
+        while(i < (length+1)/2) {
             if (2*i+1 == length) {
                 newLayer = newLayer with { [i] = layer[2*i] };
             } else {
@@ -52,6 +52,7 @@ public func merkleizeFromQueue(queue: Queue) -> (any, bytes32) {
         let (uq, item) = queue_getOrDie(queue);
         queue = uq;
         arr = arr with { [i] = unsafecast<ByteArray>(item) };
+        i = i + 1;
     }
     return merkleize(arr);
 }

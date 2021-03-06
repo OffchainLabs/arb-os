@@ -1,23 +1,29 @@
-CARGORUN = cargo run --release --
+CARGORUN = cargo run --
+CARGORUNRELEASE = cargo run --release --
 ARBOSDIR = arb_os
 BUILTINDIR = builtin
 STDDIR = stdlib
-TESTCONTRACTDIR = contracts/test
-TCSRCDIR = $(TESTCONTRACTDIR)/contracts
-TCBUILDDIR = $(TESTCONTRACTDIR)/build/contracts
-ARBCONTRACTDIR = contracts/arbos
-ACSRCDIR = $(ARBCONTRACTDIR)/contracts
-ACBUILDDIR = $(ARBCONTRACTDIR)/build/contracts
+ARTIFACTDIR = contracts/artifacts/arbos
+CONTRACTDIR = contracts/arbos
+TCSRCDIR = $(CONTRACTDIR)/test
+TCBUILDDIR = $(ARTIFACTDIR)/test
+UPGRADETESTDIR = upgradetests
+ACSRCDIR = $(CONTRACTDIR)/builtin
+ACBUILDDIR = $(ARTIFACTDIR)/builtin
 ARBOS = $(ARBOSDIR)/arbos.mexe
 
 TEMPLATES = $(ARBOSDIR)/contractTemplates.mini
 TESTFILES = $(BUILTINDIR)/kvstest.mexe $(STDDIR)/queuetest.mexe $(BUILTINDIR)/arraytest.mexe $(BUILTINDIR)/globaltest.mexe $(STDDIR)/priorityqtest.mexe $(STDDIR)/bytearraytest.mexe $(STDDIR)/keccaktest.mexe $(STDDIR)/biguinttest.mexe $(STDDIR)/rlptest.mexe $(STDDIR)/storageMapTest.mexe $(BUILTINDIR)/maptest.mexe $(STDDIR)/sha256test.mexe $(STDDIR)/ripemd160test.mexe minitests/codeloadtest.mexe $(STDDIR)/fixedpointtest.mexe $(STDDIR)/blstest.mexe
-TESTCONTRACTS = $(TCBUILDDIR)/Add.json $(TCBUILDDIR)/ArbSys.json $(TCBUILDDIR)/Fibonacci.json $(TCBUILDDIR)/Migrations.json $(TCBUILDDIR)/PaymentChannel.json $(TCBUILDDIR)/Underfunded.json
-ARBOSCONTRACTS = $(ACBUILDDIR)/ArbAddressTable.json $(ACBUILDDIR)/ArbBLS.json $(ACBUILDDIR)/ArbFunctionTable.json $(ACBUILDDIR)/ArbInfo.json $(ACBUILDDIR)/ArbOwner.json $(ACBUILDDIR)/ArbSys.json $(ACBUILDDIR)/ArbosTest.json
+TESTCONTRACTSPURE = $(TCBUILDDIR)/Add.sol/Add.json $(TCBUILDDIR)/Fibonacci.sol/Fibonacci.json $(TCBUILDDIR)/PaymentChannel.sol/PaymentChannel.json $(TCBUILDDIR)/Underfunded.sol/Underfunded.json $(TCBUILDDIR)/ReverterFactory.sol/ReverterFactory.json
+TESTCONTRACTS = $(ACBUILDDIR)/ArbSys.sol/ArbSys.json $(TESTCONTRACTSPURE)
+UPGRADEFILES = $(UPGRADETESTDIR)/regcopy_old.mexe $(UPGRADETESTDIR)/regcopy_new.mexe $(UPGRADETESTDIR)/upgrade1_old.mexe $(UPGRADETESTDIR)/upgrade1_new.mexe
+ARBOSCONTRACTS = $(ACBUILDDIR)/ArbAddressTable.sol/ArbAddressTable.json $(ACBUILDDIR)/ArbBLS.sol/ArbBLS.json $(ACBUILDDIR)/ArbFunctionTable.sol/ArbFunctionTable.json $(ACBUILDDIR)/ArbInfo.sol/ArbInfo.json $(ACBUILDDIR)/ArbOwner.sol/ArbOwner.json $(ACBUILDDIR)/ArbSys.sol/ArbSys.json $(ACBUILDDIR)/ArbosTest.sol/ArbosTest.json
 
 COMPILEFLAGS = -i
+COMPILEFLAGSNOINLINE =
 
 all: $(TESTFILES) $(TESTCONTRACTS) $(ARBOSCONTRACTS) $(TEMPLATES) $(ARBOS) test
+arbos: $(ARBOSDIR)/arbos.mexe
 contracts: $(TESTCONTRACTS) $(ARBOSCONTRACTS)
 
 $(ARBOSDIR)/contractTemplates.mini: $(ARBOSCONTRACTS)
@@ -74,10 +80,22 @@ $(STDDIR)/ripemd160test.mexe: $(STDDIR)/ripemd160test.mini $(STDDIR)/ripemd160.m
 $(STDDIR)/rlptest.mexe: $(BUILTINMAOS) $(STDDIR)/rlptest.mini
 	$(CARGORUN) compile $(STDDIR)/rlptest.mini -o $(STDDIR)/rlptest.mexe $(COMPILEFLAGS) -t
 
+$(UPGRADETESTDIR)/regcopy_old.mexe: $(UPGRADETESTDIR)/regcopy_old.mini
+	$(CARGORUN) compile $(UPGRADETESTDIR)/regcopy_old.mini -o $(UPGRADETESTDIR)/regcopy_old.mexe $(COMPILEFLAGS) -t
+
+$(UPGRADETESTDIR)/regcopy_new.mexe: $(UPGRADETESTDIR)/regcopy_new.mini
+	$(CARGORUN) compile $(UPGRADETESTDIR)/regcopy_new.mini -o $(UPGRADETESTDIR)/regcopy_new.mexe $(COMPILEFLAGS) -t
+
+$(UPGRADETESTDIR)/upgrade1_old.mexe: $(UPGRADETESTDIR)/upgrade1_old.mini $(STDDIR)/avmcodebuilder.mini
+	$(CARGORUN) compile $(UPGRADETESTDIR)/upgrade1_old.mini -o $(UPGRADETESTDIR)/upgrade1_old.mexe $(COMPILEFLAGS) -t
+
+$(UPGRADETESTDIR)/upgrade1_new.mexe: $(UPGRADETESTDIR)/upgrade1_new.mini
+	$(CARGORUN) compile $(UPGRADETESTDIR)/upgrade1_new.mini -o $(UPGRADETESTDIR)/upgrade1_new.mexe $(COMPILEFLAGSNOINLINE)
+
 $(BUILTINDIR)/maptest.mexe: $(BUILTINMAOS) $(BUILTINDIR)/maptest.mini
 	$(CARGORUN) compile $(BUILTINDIR)/maptest.mini -o $(BUILTINDIR)/maptest.mexe $(COMPILEFLAGS) -t
 
-$(ARBOSDIR)/arbos.mexe: $(ARBOSDIR) $(STDDIR) $(BUILTINDIR) src/compile/miniconstants.rs
+$(ARBOSDIR)/arbos.mexe: $(ARBOSDIR) $(STDDIR) $(BUILTINDIR) $(TEMPLATES) src/compile/miniconstants.rs
 	$(CARGORUN) compile "arb_os" -o "arb_os/arbos.mexe"
 
 upgrade: $(ARBOSDIR)/upgrade.mini
@@ -85,36 +103,37 @@ upgrade: $(ARBOSDIR)/upgrade.mini
 $(ARBOSDIR)/upgrade.mini: upgradeConfig.toml
 	$(CARGORUN) gen-upgrade-code arb_os/arbos.mexe arb_os/arbos.mexe arb_os/upgrade.mini upgradeGlobals upgradeConfig.toml
 
-$(TESTCONTRACTS): $(TCSRCDIR) $(ACSRCDIR)/ArbSys.sol
-	(cd contracts/test; truffle compile)
+$(TESTCONTRACTSPURE): $(TCSRCDIR)
+	(cd contracts; yarn build)
 
 $(ARBOSCONTRACTS): $(ACSRCDIR)
-	(cd contracts/arbos; truffle compile)
+	(cd contracts; yarn build)
 
 run:
-	cargo run --release -- run "arb_os/arbos.mexe"
+	$(CARGORUNRELEASE) run "arb_os/arbos.mexe"
 
-test: $(TEMPLATES) $(ARBOS)
+test: $(TEMPLATES) $(ARBOS) $(UPGRADEFILES)
 	cargo test --release 
 
 evmtest: $(ARBOS)
-	$(CARGORUN) evm-tests
+	$(CARGORUNRELEASE) evm-tests
 
 evmtestlogs: $(ARBOS)
 	rm -rf evm-test-logs
 	mkdir evm-test-logs
-	$(CARGORUN) evm-tests --savelogs
+	$(CARGORUNRELEASE) evm-tests --savelogs
 
 testlogs: $(TEMPLATES) $(ARBOS)
 	rm -rf testlogs
 	mkdir testlogs
-	$(CARGORUN) make-test-logs >/dev/null
+	$(CARGORUNRELEASE) make-test-logs >/dev/null
 
 evmdebug: all
-	$(CARGORUN) evm-debug
+	$(CARGORUNRELEASE) evm-debug
 
 benchmark: $(TEMPLATES) $(ARBOS)
-	$(CARGORUN) make-benchmarks
+	$(CARGORUNRELEASE) make-benchmarks
 
 clean:
-	rm -f $(BUILTINDIR)/*.mexe $(STDDIR)/*.mexe $(ARBOSDIR)/*.mexe minitests/*.mexe $(ARBOSDIR)/contractTemplates.mini $(TCBUILDDIR)/*.json $(ACBUILDDIR)/*.json
+	rm -f $(BUILTINDIR)/*.mexe $(STDDIR)/*.mexe $(UPGRADETESTDIR)/*.mexe $(ARBOSDIR)/*.mexe minitests/*.mexe $(ARBOSDIR)/contractTemplates.mini
+	rm -rf contracts/artifacts contracts/cache

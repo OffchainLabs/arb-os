@@ -28,6 +28,8 @@ use std::keccak::keccak256;
 
 use inbox::IncomingRequest;
 
+use gasAccounting::txFeeStats_zero;
+
 use messages::TxRequestData;
 
 // A copy of this struct is defined in stdlib/rlp.mini.
@@ -75,6 +77,7 @@ public impure func translateSignedTx(req: IncomingRequest) -> option<TxRequestDa
             } with {
                 requestId: uint(rlpHash)
             },
+            feeStats: txFeeStats_zero(),
         }
     );
 }

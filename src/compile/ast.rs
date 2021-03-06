@@ -5,7 +5,7 @@
 //!Contains types and utilities for constructing the mini AST
 
 use super::typecheck::{new_type_error, TypeError};
-use crate::compile::typecheck::{AbstractSyntaxTree, TypeCheckedNode};
+use crate::compile::typecheck::{AbstractSyntaxTree, PropertiesList, TypeCheckedNode};
 use crate::link::{value_from_field_list, TUPLE_SIZE};
 use crate::mavm::{Instruction, Value};
 use crate::pos::Location;
@@ -56,7 +56,7 @@ impl From<Option<Location>> for DebugInfo {
 #[derive(Debug, Clone)]
 pub enum TopLevelDecl {
     TypeDecl(TypeDecl),
-    FuncDecl(FuncDecl),
+    FuncDecl(Func),
     VarDecl(GlobalVarDecl),
     UseDecl(Vec<String>, String),
 }
@@ -411,10 +411,9 @@ pub fn field_vectors_assignable(
     seen: HashSet<(Type, Type)>,
 ) -> bool {
     tvec1.len() == tvec2.len()
-        && tvec1
-            .iter()
-            .zip(tvec2)
-            .all(|(t1, t2)| t1.tipe.assignable(&t2.tipe, type_tree, seen.clone()))
+        && tvec1.iter().zip(tvec2).all(|(t1, t2)| {
+            t1.tipe.assignable(&t2.tipe, type_tree, seen.clone()) && t1.name == t2.name
+        })
 }
 
 impl PartialEq for Type {
@@ -513,18 +512,18 @@ pub enum FuncDeclKind {
 ///Represents a top level function declaration.  The is_impure, args, and ret_type fields are
 /// assumed to be derived from tipe, and this must be upheld by the user of this type.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-pub struct FuncDecl {
+pub struct Func<T = Statement> {
     pub name: StringId,
-    pub is_impure: bool,
     pub args: Vec<FuncArg>,
     pub ret_type: Type,
-    pub code: Vec<Statement>,
+    pub code: Vec<T>,
     pub tipe: Type,
     pub kind: FuncDeclKind,
-    pub location: Option<Location>,
+    pub debug_info: DebugInfo,
+    pub properties: PropertiesList,
 }
 
-impl FuncDecl {
+impl Func {
     pub fn new(
         name: StringId,
         is_impure: bool,
@@ -539,9 +538,8 @@ impl FuncDecl {
         for arg in args.iter() {
             arg_types.push(arg.tipe.clone());
         }
-        FuncDecl {
+        Func {
             name,
-            is_impure,
             args: args_vec,
             ret_type: ret_type.clone(),
             code,
@@ -551,7 +549,8 @@ impl FuncDecl {
             } else {
                 FuncDeclKind::Private
             },
-            location,
+            debug_info: DebugInfo::from(location),
+            properties: PropertiesList { pure: !is_impure },
         }
     }
 }
@@ -578,11 +577,32 @@ pub enum StatementKind {
     DebugPrint(Expr),
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct MatchPattern<T = ()> {
+    pub(crate) kind: MatchPatternKind<MatchPattern<T>>,
+    pub(crate) cached: T,
+}
+
 ///Either a single identifier or a tuple of identifiers, used in mini let bindings.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-pub enum MatchPattern {
+pub enum MatchPatternKind<T> {
     Simple(StringId),
-    Tuple(Vec<MatchPattern>),
+    Tuple(Vec<T>),
+}
+
+impl<T> MatchPattern<T> {
+    pub fn new_simple(id: StringId, cached: T) -> Self {
+        Self {
+            kind: MatchPatternKind::Simple(id),
+            cached,
+        }
+    }
+    pub fn new_tuple(id: Vec<MatchPattern<T>>, cached: T) -> Self {
+        Self {
+            kind: MatchPatternKind::Tuple(id),
+            cached,
+        }
+    }
 }
 
 ///Represents a constant mini value of type Option<T> for some type T.
@@ -769,13 +789,13 @@ pub enum TrinaryOp {
 
 ///Used in StructInitializer expressions to map expressions to fields of the struct.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-pub struct FieldInitializer {
+pub struct FieldInitializer<T = Expr> {
     pub name: String,
-    pub value: Expr,
+    pub value: T,
 }
 
-impl FieldInitializer {
-    pub fn new(name: String, value: Expr) -> Self {
+impl<T> FieldInitializer<T> {
+    pub fn new(name: String, value: T) -> Self {
         FieldInitializer { name, value }
     }
 }

@@ -8,6 +8,7 @@ use accounts::accountStore_init;
 use accounts::getGlobalAccountStore;
 use accounts::setGlobalAccountStore;
 use accounts::accountStore_createAccountFromEvmCode;
+use blockhash::blockhash_init;
 use chainParameters::chainParams_init;
 use chainParameters::chainParams_haveDoneInit;
 use codeSegment::codeSegment_init;
@@ -42,6 +43,7 @@ use std::storageMap::StorageMap;
 
 use decompression::decompression_init;
 use gasAccounting::getNextRequestFromCongestionAuction;
+use gasAccounting::txFeeStats_zero;
 use messages::handleL1Request; // return None if message format error; Some(()) if other error; if no error, never return
 use messages::handleL2Request; // return None if message format error; Some(()) if other error; if no error, never return
 use output::emitTxReceipt;
@@ -51,11 +53,15 @@ use inbox::IncomingRequest;
 
 
 impure func main(oldGlobals: any) {
+    asm(1,) { debugprint };
     if (oldGlobals != ()) {
+        asm(2,) { debugprint };
         // this is an upgrade; we're inheriting the state of a previous ArbOS instance
 
-        let newGlobals = upgrade(oldGlobals);
-        asm(newGlobals,) { rset };
+        asm(oldGlobals,) { rset };
+        // do any sanity checking here; do a panic if we need to abort the upgrade and stay with old version
+
+        // do any translation of globals or global formats here
 
         // now re-do the initializations that set up pointers into the ArbOS code
         errorHandler_init();
@@ -64,6 +70,7 @@ impure func main(oldGlobals: any) {
             panic;   // don't try to run without preinstalls and precompiles
         }
     } else {
+        asm(10,) { debugprint };
         // this is a clean start, not an upgrade
         errorHandler_init();
         pluggables_init();
@@ -90,35 +97,50 @@ impure func main(oldGlobals: any) {
 
 public impure func mainRunLoop() {
     loop {
-        let (approved, maybeL1, maybeL2) = getNextRequestFromCongestionAuction();
+        let (resultCode, maybeL1, maybeL2) = getNextRequestFromCongestionAuction();
         if let Some(msg) = maybeL1 {
-            if (approved) {
+            if (resultCode == const::TxResultCode_success) {
                 if(handleL1Request(msg) == None<()>) {
                     // reject for message format error
-                    emitTxReceipt(msg, 6, None<ByteArray>, None<EvmLogs>, None<GasUsage>);
+                    emitTxReceipt(
+                        msg,
+                        const::TxResultCode_formatError,
+                        None<ByteArray>,
+                        None<EvmLogs>,
+                        None<GasUsage>,
+                        txFeeStats_zero(),
+                    );
                 }
             } else {
-                // reject for congestion error
-                emitTxReceipt(msg, 2, None<ByteArray>, None<EvmLogs>, None<GasUsage>);
+                // reject for error
+                emitTxReceipt(msg, resultCode, None<ByteArray>, None<EvmLogs>, None<GasUsage>, txFeeStats_zero());
             }
         } else {
             if let Some(request) = maybeL2 {
-                if (approved) {
+                if (resultCode == const::TxResultCode_success) {
                     if (handleL2Request(
                         bytestream_new(request.incomingRequest.msgData),
                         request
                     ) == None<()>) {
                         // reject for message format error
-                        emitTxReceipt(request.incomingRequest, 6, None<ByteArray>, None<EvmLogs>, None<GasUsage>);
+                        emitTxReceipt(
+                            request.incomingRequest,
+                            const::TxResultCode_formatError,
+                            None<ByteArray>,
+                            None<EvmLogs>,
+                            None<GasUsage>,
+                            request.feeStats,
+                        );
                     }
                 } else {
-                    // reject for congestion error
+                    // reject for error
                     emitTxReceipt(
                         request.incomingRequest,
-                        const::TxResultCode_congestion,
+                        resultCode,
                         None<ByteArray>,
                         None<EvmLogs>,
-                        None<GasUsage>
+                        None<GasUsage>,
+                        request.feeStats,
                     );
                 }
             } // else request was not identified as either L1 or L2, which should be impossible

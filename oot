@@ -1,0 +1,2042 @@
+static: _
+00000:  rget 		 No location
+00001:  [_]
+        noop 		 No location
+00002:  [Tuple(CodePoint(Internal(43)), CodePoint(Internal(187)), CodePoint(Internal(415)), CodePoint(Internal(540)), CodePoint(Internal(607)), CodePoint(Internal(731)), CodePoint(Internal(706)), Tuple(CodePoint(Internal(829)), CodePoint(Internal(796)), CodePoint(Internal(950)), CodePoint(Internal(917)), CodePoint(Internal(1013)), CodePoint(Internal(477))))]
+        rset 		 No location
+00003:  auxpush 		 Line: 7, Column: 1 In file: upgrade1_new
+00004:  [Tuple(_)]
+        auxpush 		 Line: 7, Column: 1 In file: upgrade1_new
+00005:  [0]
+        xset 		 Line: 7, Column: 1 In file: upgrade1_new
+00006:  [0]
+        xget 		 Line: 8, Column: 9 In file: upgrade1_new
+00007:  debugprint 		 Line: 8, Column: 17 In file: upgrade1_new
+00008:  [0]
+        xget 		 Line: 9, Column: 9 In file: upgrade1_new
+00009:  length 		 Line: 9, Column: 17 In file: upgrade1_new
+00010:  debugprint 		 Line: 9, Column: 22 In file: upgrade1_new
+00011:  [0]
+        xget 		 Line: 10, Column: 13 In file: upgrade1_new
+00012:  length 		 Line: 10, Column: 26 In file: upgrade1_new
+00013:  [3]
+        eq 		 Line: 10, Column: 9 In file: upgrade1_new
+00014:  [CodePoint(Internal(19))]
+        cjump 		 Line: 10, Column: 5 In file: upgrade1_new
+00015:  [0]
+        auxpop 		 Line: 11, Column: 9 In file: upgrade1_new
+00016:  pop 		 Line: 11, Column: 9 In file: upgrade1_new
+00017:  auxpop 		 Line: 11, Column: 9 In file: upgrade1_new
+00018:  jump 		 Line: 11, Column: 9 In file: upgrade1_new
+00019:  [1]
+        auxpop 		 Line: 13, Column: 5 In file: upgrade1_new
+00020:  pop 		 Line: 13, Column: 5 In file: upgrade1_new
+00021:  auxpop 		 Line: 13, Column: 5 In file: upgrade1_new
+00022:  jump 		 Line: 13, Column: 5 In file: upgrade1_new
+00023:  auxpush 		 Line: 46, Column: 1 In file: core::kvs
+00024:  [_]
+        auxpush 		 Line: 46, Column: 1 In file: core::kvs
+00025:  [0]
+        noop 		 Line: 49, Column: 15 In file: core::kvs
+00026:  [0]
+        noop 		 Line: 48, Column: 35 In file: core::kvs
+00027:  [Tuple(_, _)]
+        noop 		 Line: 47, Column: 12 In file: core::kvs
+00028:  [0]
+        tset 		 Line: 47, Column: 12 In file: core::kvs
+00029:  [1]
+        tset 		 Line: 47, Column: 12 In file: core::kvs
+00030:  auxpop 		 Line: 47, Column: 5 In file: core::kvs
+00031:  pop 		 Line: 47, Column: 5 In file: core::kvs
+00032:  auxpop 		 Line: 47, Column: 5 In file: core::kvs
+00033:  jump 		 Line: 47, Column: 5 In file: core::kvs
+00034:  auxpush 		 Line: 53, Column: 1 In file: core::kvs
+00035:  [Tuple(_)]
+        auxpush 		 Line: 53, Column: 1 In file: core::kvs
+00036:  [0]
+        xset 		 Line: 53, Column: 1 In file: core::kvs
+00037:  [0]
+        xget 		 Line: 54, Column: 12 In file: core::kvs
+00038:  [1]
+        tget 		 Line: 54, Column: 12 In file: core::kvs
+00039:  auxpop 		 Line: 54, Column: 5 In file: core::kvs
+00040:  pop 		 Line: 54, Column: 5 In file: core::kvs
+00041:  auxpop 		 Line: 54, Column: 5 In file: core::kvs
+00042:  jump 		 Line: 54, Column: 5 In file: core::kvs
+00043:  auxpush 		 Line: 57, Column: 1 In file: core::kvs
+00044:  [Tuple(_, _, _, _, _, _)]
+        auxpush 		 Line: 57, Column: 1 In file: core::kvs
+00045:  [0]
+        xset 		 Line: 57, Column: 1 In file: core::kvs
+00046:  [1]
+        xset 		 Line: 57, Column: 1 In file: core::kvs
+00047:  [1]
+        xget 		 Line: 58, Column: 31 In file: core::kvs
+00048:  hash 		 Line: 58, Column: 26 In file: core::kvs
+00049:  [2]
+        xset 		 Line: 58, Column: 5 In file: core::kvs
+00050:  [0]
+        xget 		 Line: 59, Column: 13 In file: core::kvs
+00051:  [0]
+        tget 		 Line: 59, Column: 13 In file: core::kvs
+00052:  [3]
+        xset 		 Line: 59, Column: 5 In file: core::kvs
+00053:  [1]
+        noop 		 Line: 60, Column: 27 In file: core::kvs
+00054:  [4]
+        xset 		 Line: 60, Column: 5 In file: core::kvs
+00055:  [CodePoint(Internal(57))]
+        noop 		 Line: 61, Column: 12 In file: core::kvs
+00056:  [5]
+        xset 		 Line: 61, Column: 12 In file: core::kvs
+00057:  [0]
+        noop 		 Line: 62, Column: 38 In file: core::kvs
+00058:  [3]
+        xget 		 Line: 62, Column: 13 In file: core::kvs
+00059:  eq 		 Line: 62, Column: 13 In file: core::kvs
+00060:  iszero 		 Line: 62, Column: 9 In file: core::kvs
+00061:  [CodePoint(Internal(67))]
+        cjump 		 Line: 62, Column: 9 In file: core::kvs
+00062:  [Tuple(0)]
+        auxpop 		 Line: 64, Column: 13 In file: core::kvs
+00063:  pop 		 Line: 64, Column: 13 In file: core::kvs
+00064:  auxpop 		 Line: 64, Column: 13 In file: core::kvs
+00065:  jump 		 Line: 64, Column: 13 In file: core::kvs
+00066:  [CodePoint(Internal(100))]
+        jump 		 Line: 62, Column: 9 In file: core::kvs
+00067:  [3]
+        xget 		 Line: 65, Column: 23 In file: core::kvs
+00068:  length 		 Line: 65, Column: 34 In file: core::kvs
+00069:  [2]
+        eq 		 Line: 65, Column: 19 In file: core::kvs
+00070:  iszero 		 Line: 65, Column: 11 In file: core::kvs
+00071:  [CodePoint(Internal(90))]
+        cjump 		 Line: 65, Column: 11 In file: core::kvs
+00072:  [3]
+        xget 		 Line: 67, Column: 44 In file: core::kvs
+00073:  [0]
+        tget 		 Line: 67, Column: 24 In file: core::kvs
+00074:  [1]
+        xget 		 Line: 67, Column: 17 In file: core::kvs
+00075:  eq 		 Line: 67, Column: 17 In file: core::kvs
+00076:  iszero 		 Line: 67, Column: 13 In file: core::kvs
+00077:  [CodePoint(Internal(85))]
+        cjump 		 Line: 67, Column: 13 In file: core::kvs
+00078:  [3]
+        xget 		 Line: 68, Column: 44 In file: core::kvs
+00079:  [1]
+        tget 		 Line: 68, Column: 24 In file: core::kvs
+00080:  auxpop 		 Line: 68, Column: 17 In file: core::kvs
+00081:  pop 		 Line: 68, Column: 17 In file: core::kvs
+00082:  auxpop 		 Line: 68, Column: 17 In file: core::kvs
+00083:  jump 		 Line: 68, Column: 17 In file: core::kvs
+00084:  [CodePoint(Internal(89))]
+        jump 		 Line: 67, Column: 13 In file: core::kvs
+00085:  [Tuple(0)]
+        auxpop 		 Line: 70, Column: 17 In file: core::kvs
+00086:  pop 		 Line: 70, Column: 17 In file: core::kvs
+00087:  auxpop 		 Line: 70, Column: 17 In file: core::kvs
+00088:  jump 		 Line: 70, Column: 17 In file: core::kvs
+00089:  [CodePoint(Internal(100))]
+        jump 		 Line: 65, Column: 11 In file: core::kvs
+00090:  [3]
+        xget 		 Line: 74, Column: 37 In file: core::kvs
+00091:  [4]
+        xget 		 Line: 74, Column: 50 In file: core::kvs
+00092:  [2]
+        xget 		 Line: 74, Column: 40 In file: core::kvs
+00093:  div 		 Line: 74, Column: 40 In file: core::kvs
+00094:  [7]
+        bitwiseand 		 Line: 74, Column: 39 In file: core::kvs
+00095:  tget 		 Line: 74, Column: 37 In file: core::kvs
+00096:  [3]
+        xset 		 Line: 74, Column: 13 In file: core::kvs
+00097:  [4]
+        xget 		 Line: 75, Column: 31 In file: core::kvs
+00098:  [8]
+        mul 		 Line: 75, Column: 31 In file: core::kvs
+00099:  [4]
+        xset 		 Line: 75, Column: 13 In file: core::kvs
+00100:  [5]
+        xget 		 Line: 61, Column: 12 In file: core::kvs
+00101:  jump 		 Line: 61, Column: 12 In file: core::kvs
+00102:  auxpop 		 Line: 61, Column: 5 In file: core::kvs
+00103:  pop 		 Line: 61, Column: 5 In file: core::kvs
+00104:  auxpop 		 Line: 61, Column: 5 In file: core::kvs
+00105:  jump 		 Line: 61, Column: 5 In file: core::kvs
+00106:  auxpush 		 Line: 80, Column: 1 In file: core::kvs
+00107:  [Tuple(_, _)]
+        auxpush 		 Line: 80, Column: 1 In file: core::kvs
+00108:  [0]
+        xset 		 Line: 80, Column: 1 In file: core::kvs
+00109:  [1]
+        xset 		 Line: 80, Column: 1 In file: core::kvs
+00110:  [Tuple(0)]
+        noop 		 Line: 81, Column: 40 In file: core::kvs
+00111:  [1]
+        xget 		 Line: 81, Column: 32 In file: core::kvs
+00112:  [0]
+        xget 		 Line: 81, Column: 27 In file: core::kvs
+00113:  [CodePoint(Internal(116))]
+        rget 		 Line: 81, Column: 12 In file: core::kvs
+00114:  [0]
+        tget 		 Line: 81, Column: 12 In file: core::kvs
+00115:  jump 		 Line: 81, Column: 12 In file: core::kvs
+00116:  eq 		 Line: 81, Column: 12 In file: core::kvs
+00117:  iszero 		 Line: 81, Column: 12 In file: core::kvs
+00118:  auxpop 		 Line: 81, Column: 5 In file: core::kvs
+00119:  pop 		 Line: 81, Column: 5 In file: core::kvs
+00120:  auxpop 		 Line: 81, Column: 5 In file: core::kvs
+00121:  jump 		 Line: 81, Column: 5 In file: core::kvs
+00122:  auxpush 		 Line: 94, Column: 1 In file: core::kvs
+00123:  [Tuple(_, _, _, _, _, _, _, _)]
+        auxpush 		 Line: 94, Column: 1 In file: core::kvs
+00124:  [0]
+        xset 		 Line: 94, Column: 1 In file: core::kvs
+00125:  [1]
+        xset 		 Line: 94, Column: 1 In file: core::kvs
+00126:  [2]
+        xset 		 Line: 94, Column: 1 In file: core::kvs
+00127:  [2]
+        xget 		 Line: 95, Column: 68 In file: core::kvs
+00128:  [Tuple(1, _)]
+        noop 		 Line: 95, Column: 63 In file: core::kvs
+00129:  [1]
+        tset 		 Line: 95, Column: 63 In file: core::kvs
+00130:  [1]
+        xget 		 Line: 95, Column: 58 In file: core::kvs
+00131:  [0]
+        xget 		 Line: 95, Column: 50 In file: core::kvs
+00132:  [0]
+        tget 		 Line: 95, Column: 50 In file: core::kvs
+00133:  [CodePoint(Internal(135))]
+        noop 		 Line: 95, Column: 41 In file: core::kvs
+00134:  [CodePoint(Internal(187))]
+        jump 		 Line: 95, Column: 41 In file: core::kvs
+00135:  dup0 		 Line: 95, Column: 5 In file: core::kvs
+00136:  [0]
+        tget 		 Line: 95, Column: 5 In file: core::kvs
+00137:  [3]
+        xset 		 Line: 95, Column: 5 In file: core::kvs
+00138:  dup0 		 Line: 95, Column: 5 In file: core::kvs
+00139:  [1]
+        tget 		 Line: 95, Column: 5 In file: core::kvs
+00140:  [4]
+        xset 		 Line: 95, Column: 5 In file: core::kvs
+00141:  [2]
+        tget 		 Line: 95, Column: 5 In file: core::kvs
+00142:  [5]
+        xset 		 Line: 95, Column: 5 In file: core::kvs
+00143:  [CodePoint(Internal(145))]
+        noop 		 Line: 96, Column: 12 In file: core::kvs
+00144:  [6]
+        xset 		 Line: 96, Column: 12 In file: core::kvs
+00145:  [4]
+        xget 		 Line: 97, Column: 33 In file: core::kvs
+00146:  dup0 		 Line: 97, Column: 9 In file: core::kvs
+00147:  [0]
+        tget 		 Line: 97, Column: 9 In file: core::kvs
+00148:  iszero 		 Line: 97, Column: 9 In file: core::kvs
+00149:  [CodePoint(Internal(163))]
+        cjump 		 Line: 97, Column: 9 In file: core::kvs
+00150:  [1]
+        tget 		 Line: 97, Column: 9 In file: core::kvs
+00151:  [7]
+        xset 		 Line: 97, Column: 9 In file: core::kvs
+00152:  [3]
+        xget 		 Line: 99, Column: 36 In file: core::kvs
+00153:  [7]
+        xget 		 Line: 98, Column: 21 In file: core::kvs
+00154:  [0]
+        tget 		 Line: 98, Column: 21 In file: core::kvs
+00155:  [7]
+        xget 		 Line: 99, Column: 18 In file: core::kvs
+00156:  [1]
+        tget 		 Line: 99, Column: 18 In file: core::kvs
+00157:  tset 		 Line: 98, Column: 21 In file: core::kvs
+00158:  [3]
+        xset 		 Line: 98, Column: 13 In file: core::kvs
+00159:  [7]
+        xget 		 Line: 101, Column: 29 In file: core::kvs
+00160:  [2]
+        tget 		 Line: 101, Column: 29 In file: core::kvs
+00161:  [4]
+        xset 		 Line: 101, Column: 13 In file: core::kvs
+00162:  [CodePoint(Internal(181))]
+        jump 		 Line: 97, Column: 9 In file: core::kvs
+00163:  pop 		 Line: 97, Column: 9 In file: core::kvs
+00164:  [5]
+        xget 		 Line: 103, Column: 17 In file: core::kvs
+00165:  [0]
+        eq 		 Line: 103, Column: 17 In file: core::kvs
+00166:  [CodePoint(Internal(174))]
+        cjump 		 Line: 103, Column: 13 In file: core::kvs
+00167:  [5]
+        xget 		 Line: 104, Column: 55 In file: core::kvs
+00168:  [0]
+        xget 		 Line: 104, Column: 45 In file: core::kvs
+00169:  [1]
+        tget 		 Line: 104, Column: 45 In file: core::kvs
+00170:  plus 		 Line: 104, Column: 41 In file: core::kvs
+00171:  [0]
+        xget 		 Line: 104, Column: 21 In file: core::kvs
+00172:  [1]
+        tset 		 Line: 104, Column: 21 In file: core::kvs
+00173:  [0]
+        xset 		 Line: 104, Column: 17 In file: core::kvs
+00174:  [3]
+        xget 		 Line: 106, Column: 35 In file: core::kvs
+00175:  [0]
+        xget 		 Line: 106, Column: 20 In file: core::kvs
+00176:  [0]
+        tset 		 Line: 106, Column: 20 In file: core::kvs
+00177:  auxpop 		 Line: 106, Column: 13 In file: core::kvs
+00178:  pop 		 Line: 106, Column: 13 In file: core::kvs
+00179:  auxpop 		 Line: 106, Column: 13 In file: core::kvs
+00180:  jump 		 Line: 106, Column: 13 In file: core::kvs
+00181:  [6]
+        xget 		 Line: 96, Column: 12 In file: core::kvs
+00182:  jump 		 Line: 96, Column: 12 In file: core::kvs
+00183:  auxpop 		 Line: 96, Column: 5 In file: core::kvs
+00184:  pop 		 Line: 96, Column: 5 In file: core::kvs
+00185:  auxpop 		 Line: 96, Column: 5 In file: core::kvs
+00186:  jump 		 Line: 96, Column: 5 In file: core::kvs
+00187:  auxpush 		 Line: 111, Column: 1 In file: core::kvs
+00188:  [Tuple(_, _, _, _, _, _, _, _)]
+        auxpush 		 Line: 111, Column: 1 In file: core::kvs
+00189:  [0]
+        xset 		 Line: 111, Column: 1 In file: core::kvs
+00190:  [1]
+        xset 		 Line: 111, Column: 1 In file: core::kvs
+00191:  [2]
+        xset 		 Line: 111, Column: 1 In file: core::kvs
+00192:  [1]
+        xget 		 Line: 112, Column: 31 In file: core::kvs
+00193:  hash 		 Line: 112, Column: 26 In file: core::kvs
+00194:  [3]
+        xset 		 Line: 112, Column: 5 In file: core::kvs
+00195:  [1]
+        noop 		 Line: 113, Column: 27 In file: core::kvs
+00196:  [4]
+        xset 		 Line: 113, Column: 5 In file: core::kvs
+00197:  [Tuple(0)]
+        noop 		 Line: 114, Column: 20 In file: core::kvs
+00198:  [5]
+        xset 		 Line: 114, Column: 5 In file: core::kvs
+00199:  [CodePoint(Internal(201))]
+        noop 		 Line: 115, Column: 12 In file: core::kvs
+00200:  [6]
+        xset 		 Line: 115, Column: 12 In file: core::kvs
+00201:  [0]
+        noop 		 Line: 116, Column: 38 In file: core::kvs
+00202:  [0]
+        xget 		 Line: 116, Column: 13 In file: core::kvs
+00203:  eq 		 Line: 116, Column: 13 In file: core::kvs
+00204:  iszero 		 Line: 116, Column: 9 In file: core::kvs
+00205:  [CodePoint(Internal(239))]
+        cjump 		 Line: 116, Column: 9 In file: core::kvs
+00206:  [Tuple(0)]
+        noop 		 Line: 117, Column: 26 In file: core::kvs
+00207:  [2]
+        xget 		 Line: 117, Column: 17 In file: core::kvs
+00208:  eq 		 Line: 117, Column: 17 In file: core::kvs
+00209:  iszero 		 Line: 117, Column: 13 In file: core::kvs
+00210:  [CodePoint(Internal(223))]
+        cjump 		 Line: 117, Column: 13 In file: core::kvs
+00211:  [0]
+        noop 		 Line: 119, Column: 38 In file: core::kvs
+00212:  [5]
+        xget 		 Line: 119, Column: 28 In file: core::kvs
+00213:  [0]
+        xget 		 Line: 119, Column: 25 In file: core::kvs
+00214:  [Tuple(_, _, _)]
+        noop 		 Line: 119, Column: 24 In file: core::kvs
+00215:  [0]
+        tset 		 Line: 119, Column: 24 In file: core::kvs
+00216:  [1]
+        tset 		 Line: 119, Column: 24 In file: core::kvs
+00217:  [2]
+        tset 		 Line: 119, Column: 24 In file: core::kvs
+00218:  auxpop 		 Line: 119, Column: 17 In file: core::kvs
+00219:  pop 		 Line: 119, Column: 17 In file: core::kvs
+00220:  auxpop 		 Line: 119, Column: 17 In file: core::kvs
+00221:  jump 		 Line: 119, Column: 17 In file: core::kvs
+00222:  [CodePoint(Internal(238))]
+        jump 		 Line: 117, Column: 13 In file: core::kvs
+00223:  [1]
+        noop 		 Line: 130, Column: 21 In file: core::kvs
+00224:  [5]
+        xget 		 Line: 129, Column: 21 In file: core::kvs
+00225:  [2]
+        xget 		 Line: 126, Column: 36 In file: core::kvs
+00226:  [1]
+        xget 		 Line: 125, Column: 34 In file: core::kvs
+00227:  [Tuple(_, _)]
+        noop 		 Line: 124, Column: 25 In file: core::kvs
+00228:  [0]
+        tset 		 Line: 124, Column: 25 In file: core::kvs
+00229:  [1]
+        tset 		 Line: 124, Column: 25 In file: core::kvs
+00230:  [Tuple(_, _, _)]
+        noop 		 Line: 122, Column: 24 In file: core::kvs
+00231:  [0]
+        tset 		 Line: 122, Column: 24 In file: core::kvs
+00232:  [1]
+        tset 		 Line: 122, Column: 24 In file: core::kvs
+00233:  [2]
+        tset 		 Line: 122, Column: 24 In file: core::kvs
+00234:  auxpop 		 Line: 122, Column: 17 In file: core::kvs
+00235:  pop 		 Line: 122, Column: 17 In file: core::kvs
+00236:  auxpop 		 Line: 122, Column: 17 In file: core::kvs
+00237:  jump 		 Line: 122, Column: 17 In file: core::kvs
+00238:  [CodePoint(Internal(331))]
+        jump 		 Line: 116, Column: 9 In file: core::kvs
+00239:  [0]
+        xget 		 Line: 133, Column: 23 In file: core::kvs
+00240:  length 		 Line: 133, Column: 34 In file: core::kvs
+00241:  [2]
+        eq 		 Line: 133, Column: 19 In file: core::kvs
+00242:  iszero 		 Line: 133, Column: 11 In file: core::kvs
+00243:  [CodePoint(Internal(309))]
+        cjump 		 Line: 133, Column: 11 In file: core::kvs
+00244:  [0]
+        xget 		 Line: 134, Column: 43 In file: core::kvs
+00245:  [7]
+        xset 		 Line: 134, Column: 13 In file: core::kvs
+00246:  [1]
+        xget 		 Line: 135, Column: 28 In file: core::kvs
+00247:  [7]
+        xget 		 Line: 135, Column: 17 In file: core::kvs
+00248:  [0]
+        tget 		 Line: 135, Column: 17 In file: core::kvs
+00249:  eq 		 Line: 135, Column: 17 In file: core::kvs
+00250:  iszero 		 Line: 135, Column: 13 In file: core::kvs
+00251:  [CodePoint(Internal(283))]
+        cjump 		 Line: 135, Column: 13 In file: core::kvs
+00252:  [Tuple(0)]
+        noop 		 Line: 137, Column: 30 In file: core::kvs
+00253:  [2]
+        xget 		 Line: 137, Column: 21 In file: core::kvs
+00254:  eq 		 Line: 137, Column: 21 In file: core::kvs
+00255:  iszero 		 Line: 137, Column: 17 In file: core::kvs
+00256:  [CodePoint(Internal(269))]
+        cjump 		 Line: 137, Column: 17 In file: core::kvs
+00257:  [0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff]
+        noop 		 Line: 142, Column: 25 In file: core::kvs
+00258:  [5]
+        xget 		 Line: 141, Column: 25 In file: core::kvs
+00259:  [0]
+        noop 		 Line: 140, Column: 45 In file: core::kvs
+00260:  [Tuple(_, _, _)]
+        noop 		 Line: 139, Column: 28 In file: core::kvs
+00261:  [0]
+        tset 		 Line: 139, Column: 28 In file: core::kvs
+00262:  [1]
+        tset 		 Line: 139, Column: 28 In file: core::kvs
+00263:  [2]
+        tset 		 Line: 139, Column: 28 In file: core::kvs
+00264:  auxpop 		 Line: 139, Column: 21 In file: core::kvs
+00265:  pop 		 Line: 139, Column: 21 In file: core::kvs
+00266:  auxpop 		 Line: 139, Column: 21 In file: core::kvs
+00267:  jump 		 Line: 139, Column: 21 In file: core::kvs
+00268:  [CodePoint(Internal(282))]
+        jump 		 Line: 137, Column: 17 In file: core::kvs
+00269:  [0]
+        noop 		 Line: 149, Column: 25 In file: core::kvs
+00270:  [5]
+        xget 		 Line: 148, Column: 25 In file: core::kvs
+00271:  [2]
+        xget 		 Line: 147, Column: 63 In file: core::kvs
+00272:  [7]
+        xget 		 Line: 147, Column: 45 In file: core::kvs
+00273:  [1]
+        tset 		 Line: 147, Column: 45 In file: core::kvs
+00274:  [Tuple(_, _, _)]
+        noop 		 Line: 146, Column: 28 In file: core::kvs
+00275:  [0]
+        tset 		 Line: 146, Column: 28 In file: core::kvs
+00276:  [1]
+        tset 		 Line: 146, Column: 28 In file: core::kvs
+00277:  [2]
+        tset 		 Line: 146, Column: 28 In file: core::kvs
+00278:  auxpop 		 Line: 146, Column: 21 In file: core::kvs
+00279:  pop 		 Line: 146, Column: 21 In file: core::kvs
+00280:  auxpop 		 Line: 146, Column: 21 In file: core::kvs
+00281:  jump 		 Line: 146, Column: 21 In file: core::kvs
+00282:  [CodePoint(Internal(308))]
+        jump 		 Line: 135, Column: 13 In file: core::kvs
+00283:  [7]
+        xget 		 Line: 157, Column: 69 In file: core::kvs
+00284:  [0]
+        dup0 		 Line: 156, Column: 41 In file: core::kvs
+00285:  dup0 		 Line: 156, Column: 41 In file: core::kvs
+00286:  dup0 		 Line: 156, Column: 41 In file: core::kvs
+00287:  dup0 		 Line: 156, Column: 41 In file: core::kvs
+00288:  dup0 		 Line: 156, Column: 41 In file: core::kvs
+00289:  dup0 		 Line: 156, Column: 41 In file: core::kvs
+00290:  dup0 		 Line: 156, Column: 41 In file: core::kvs
+00291:  [Tuple(_, _, _, _, _, _, _, _)]
+        noop 		 Line: 156, Column: 41 In file: core::kvs
+00292:  [0]
+        tset 		 Line: 156, Column: 41 In file: core::kvs
+00293:  [1]
+        tset 		 Line: 156, Column: 41 In file: core::kvs
+00294:  [2]
+        tset 		 Line: 156, Column: 41 In file: core::kvs
+00295:  [3]
+        tset 		 Line: 156, Column: 41 In file: core::kvs
+00296:  [4]
+        tset 		 Line: 156, Column: 41 In file: core::kvs
+00297:  [5]
+        tset 		 Line: 156, Column: 41 In file: core::kvs
+00298:  [6]
+        tset 		 Line: 156, Column: 41 In file: core::kvs
+00299:  [7]
+        tset 		 Line: 156, Column: 41 In file: core::kvs
+00300:  [4]
+        xget 		 Line: 157, Column: 43 In file: core::kvs
+00301:  [7]
+        xget 		 Line: 157, Column: 33 In file: core::kvs
+00302:  [0]
+        tget 		 Line: 157, Column: 33 In file: core::kvs
+00303:  hash 		 Line: 157, Column: 28 In file: core::kvs
+00304:  div 		 Line: 157, Column: 23 In file: core::kvs
+00305:  [7]
+        bitwiseand 		 Line: 157, Column: 22 In file: core::kvs
+00306:  tset 		 Line: 156, Column: 21 In file: core::kvs
+00307:  [0]
+        xset 		 Line: 156, Column: 17 In file: core::kvs
+00308:  [CodePoint(Internal(331))]
+        jump 		 Line: 133, Column: 11 In file: core::kvs
+00309:  [4]
+        xget 		 Line: 164, Column: 37 In file: core::kvs
+00310:  [3]
+        xget 		 Line: 164, Column: 25 In file: core::kvs
+00311:  div 		 Line: 164, Column: 25 In file: core::kvs
+00312:  [7]
+        bitwiseand 		 Line: 164, Column: 24 In file: core::kvs
+00313:  [7]
+        xset 		 Line: 164, Column: 13 In file: core::kvs
+00314:  [5]
+        xget 		 Line: 168, Column: 23 In file: core::kvs
+00315:  [7]
+        xget 		 Line: 167, Column: 24 In file: core::kvs
+00316:  [0]
+        xget 		 Line: 166, Column: 22 In file: core::kvs
+00317:  [Tuple(_, _, _)]
+        noop 		 Line: 165, Column: 29 In file: core::kvs
+00318:  [0]
+        tset 		 Line: 165, Column: 29 In file: core::kvs
+00319:  [1]
+        tset 		 Line: 165, Column: 29 In file: core::kvs
+00320:  [2]
+        tset 		 Line: 165, Column: 29 In file: core::kvs
+00321:  [Tuple(1, _)]
+        noop 		 Line: 165, Column: 24 In file: core::kvs
+00322:  [1]
+        tset 		 Line: 165, Column: 24 In file: core::kvs
+00323:  [5]
+        xset 		 Line: 165, Column: 13 In file: core::kvs
+00324:  [0]
+        xget 		 Line: 170, Column: 37 In file: core::kvs
+00325:  [7]
+        xget 		 Line: 170, Column: 39 In file: core::kvs
+00326:  tget 		 Line: 170, Column: 37 In file: core::kvs
+00327:  [0]
+        xset 		 Line: 170, Column: 13 In file: core::kvs
+00328:  [4]
+        xget 		 Line: 171, Column: 31 In file: core::kvs
+00329:  [8]
+        mul 		 Line: 171, Column: 31 In file: core::kvs
+00330:  [4]
+        xset 		 Line: 171, Column: 13 In file: core::kvs
+00331:  [6]
+        xget 		 Line: 115, Column: 12 In file: core::kvs
+00332:  jump 		 Line: 115, Column: 12 In file: core::kvs
+00333:  auxpop 		 Line: 115, Column: 5 In file: core::kvs
+00334:  pop 		 Line: 115, Column: 5 In file: core::kvs
+00335:  auxpop 		 Line: 115, Column: 5 In file: core::kvs
+00336:  jump 		 Line: 115, Column: 5 In file: core::kvs
+00337:  auxpush 		 Line: 176, Column: 1 In file: core::kvs
+00338:  [Tuple(_, _, _, _, _, _, _)]
+        auxpush 		 Line: 176, Column: 1 In file: core::kvs
+00339:  [0]
+        xset 		 Line: 176, Column: 1 In file: core::kvs
+00340:  [1]
+        xset 		 Line: 176, Column: 1 In file: core::kvs
+00341:  [Tuple(0)]
+        noop 		 Line: 177, Column: 63 In file: core::kvs
+00342:  [1]
+        xget 		 Line: 177, Column: 58 In file: core::kvs
+00343:  [0]
+        xget 		 Line: 177, Column: 50 In file: core::kvs
+00344:  [0]
+        tget 		 Line: 177, Column: 50 In file: core::kvs
+00345:  [CodePoint(Internal(348))]
+        rget 		 Line: 177, Column: 41 In file: core::kvs
+00346:  [1]
+        tget 		 Line: 177, Column: 41 In file: core::kvs
+00347:  jump 		 Line: 177, Column: 41 In file: core::kvs
+00348:  dup0 		 Line: 177, Column: 5 In file: core::kvs
+00349:  [0]
+        tget 		 Line: 177, Column: 5 In file: core::kvs
+00350:  [2]
+        xset 		 Line: 177, Column: 5 In file: core::kvs
+00351:  dup0 		 Line: 177, Column: 5 In file: core::kvs
+00352:  [1]
+        tget 		 Line: 177, Column: 5 In file: core::kvs
+00353:  [3]
+        xset 		 Line: 177, Column: 5 In file: core::kvs
+00354:  [2]
+        tget 		 Line: 177, Column: 5 In file: core::kvs
+00355:  [4]
+        xset 		 Line: 177, Column: 5 In file: core::kvs
+00356:  [CodePoint(Internal(358))]
+        noop 		 Line: 178, Column: 12 In file: core::kvs
+00357:  [5]
+        xset 		 Line: 178, Column: 12 In file: core::kvs
+00358:  [3]
+        xget 		 Line: 179, Column: 33 In file: core::kvs
+00359:  dup0 		 Line: 179, Column: 9 In file: core::kvs
+00360:  [0]
+        tget 		 Line: 179, Column: 9 In file: core::kvs
+00361:  iszero 		 Line: 179, Column: 9 In file: core::kvs
+00362:  [CodePoint(Internal(376))]
+        cjump 		 Line: 179, Column: 9 In file: core::kvs
+00363:  [1]
+        tget 		 Line: 179, Column: 9 In file: core::kvs
+00364:  [6]
+        xset 		 Line: 179, Column: 9 In file: core::kvs
+00365:  [2]
+        xget 		 Line: 181, Column: 36 In file: core::kvs
+00366:  [6]
+        xget 		 Line: 180, Column: 21 In file: core::kvs
+00367:  [0]
+        tget 		 Line: 180, Column: 21 In file: core::kvs
+00368:  [6]
+        xget 		 Line: 181, Column: 18 In file: core::kvs
+00369:  [1]
+        tget 		 Line: 181, Column: 18 In file: core::kvs
+00370:  tset 		 Line: 180, Column: 21 In file: core::kvs
+00371:  [2]
+        xset 		 Line: 180, Column: 13 In file: core::kvs
+00372:  [6]
+        xget 		 Line: 183, Column: 29 In file: core::kvs
+00373:  [2]
+        tget 		 Line: 183, Column: 29 In file: core::kvs
+00374:  [3]
+        xset 		 Line: 183, Column: 13 In file: core::kvs
+00375:  [CodePoint(Internal(394))]
+        jump 		 Line: 179, Column: 9 In file: core::kvs
+00376:  pop 		 Line: 179, Column: 9 In file: core::kvs
+00377:  [4]
+        xget 		 Line: 185, Column: 17 In file: core::kvs
+00378:  [0]
+        eq 		 Line: 185, Column: 17 In file: core::kvs
+00379:  [CodePoint(Internal(387))]
+        cjump 		 Line: 185, Column: 13 In file: core::kvs
+00380:  [4]
+        xget 		 Line: 186, Column: 55 In file: core::kvs
+00381:  [0]
+        xget 		 Line: 186, Column: 45 In file: core::kvs
+00382:  [1]
+        tget 		 Line: 186, Column: 45 In file: core::kvs
+00383:  plus 		 Line: 186, Column: 41 In file: core::kvs
+00384:  [0]
+        xget 		 Line: 186, Column: 21 In file: core::kvs
+00385:  [1]
+        tset 		 Line: 186, Column: 21 In file: core::kvs
+00386:  [0]
+        xset 		 Line: 186, Column: 17 In file: core::kvs
+00387:  [2]
+        xget 		 Line: 188, Column: 35 In file: core::kvs
+00388:  [0]
+        xget 		 Line: 188, Column: 20 In file: core::kvs
+00389:  [0]
+        tset 		 Line: 188, Column: 20 In file: core::kvs
+00390:  auxpop 		 Line: 188, Column: 13 In file: core::kvs
+00391:  pop 		 Line: 188, Column: 13 In file: core::kvs
+00392:  auxpop 		 Line: 188, Column: 13 In file: core::kvs
+00393:  jump 		 Line: 188, Column: 13 In file: core::kvs
+00394:  [5]
+        xget 		 Line: 178, Column: 12 In file: core::kvs
+00395:  jump 		 Line: 178, Column: 12 In file: core::kvs
+00396:  auxpop 		 Line: 178, Column: 5 In file: core::kvs
+00397:  pop 		 Line: 178, Column: 5 In file: core::kvs
+00398:  auxpop 		 Line: 178, Column: 5 In file: core::kvs
+00399:  jump 		 Line: 178, Column: 5 In file: core::kvs
+00400:  auxpush 		 Line: 198, Column: 1 In file: core::kvs
+00401:  [Tuple(_, _, _)]
+        auxpush 		 Line: 198, Column: 1 In file: core::kvs
+00402:  [0]
+        xset 		 Line: 198, Column: 1 In file: core::kvs
+00403:  [1]
+        xset 		 Line: 198, Column: 1 In file: core::kvs
+00404:  [2]
+        xset 		 Line: 198, Column: 1 In file: core::kvs
+00405:  [2]
+        xget 		 Line: 203, Column: 45 In file: core::kvs
+00406:  [1]
+        xget 		 Line: 203, Column: 36 In file: core::kvs
+00407:  [0]
+        xget 		 Line: 203, Column: 28 In file: core::kvs
+00408:  [0]
+        tget 		 Line: 203, Column: 28 In file: core::kvs
+00409:  [CodePoint(Internal(411))]
+        noop 		 Line: 203, Column: 12 In file: core::kvs
+00410:  [CodePoint(Internal(415))]
+        jump 		 Line: 203, Column: 12 In file: core::kvs
+00411:  auxpop 		 Line: 203, Column: 5 In file: core::kvs
+00412:  pop 		 Line: 203, Column: 5 In file: core::kvs
+00413:  auxpop 		 Line: 203, Column: 5 In file: core::kvs
+00414:  jump 		 Line: 203, Column: 5 In file: core::kvs
+00415:  auxpush 		 Line: 206, Column: 1 In file: core::kvs
+00416:  [Tuple(_, _, _, _, _)]
+        auxpush 		 Line: 206, Column: 1 In file: core::kvs
+00417:  [0]
+        xset 		 Line: 206, Column: 1 In file: core::kvs
+00418:  [1]
+        xset 		 Line: 206, Column: 1 In file: core::kvs
+00419:  [2]
+        xset 		 Line: 206, Column: 1 In file: core::kvs
+00420:  [0]
+        noop 		 Line: 211, Column: 42 In file: core::kvs
+00421:  [0]
+        xget 		 Line: 211, Column: 17 In file: core::kvs
+00422:  eq 		 Line: 211, Column: 17 In file: core::kvs
+00423:  iszero 		 Line: 211, Column: 12 In file: core::kvs
+00424:  [CodePoint(Internal(427))]
+        cjump 		 Line: 211, Column: 12 In file: core::kvs
+00425:  [2]
+        xget 		 Line: 212, Column: 9 In file: core::kvs
+00426:  [CodePoint(Internal(473))]
+        jump 		 Line: 211, Column: 12 In file: core::kvs
+00427:  [0]
+        xget 		 Line: 213, Column: 19 In file: core::kvs
+00428:  length 		 Line: 213, Column: 30 In file: core::kvs
+00429:  [2]
+        eq 		 Line: 213, Column: 15 In file: core::kvs
+00430:  iszero 		 Line: 213, Column: 7 In file: core::kvs
+00431:  [CodePoint(Internal(451))]
+        cjump 		 Line: 213, Column: 7 In file: core::kvs
+00432:  [0]
+        xget 		 Line: 214, Column: 49 In file: core::kvs
+00433:  [1]
+        tget 		 Line: 214, Column: 29 In file: core::kvs
+00434:  dup0 		 Line: 214, Column: 9 In file: core::kvs
+00435:  [0]
+        tget 		 Line: 214, Column: 9 In file: core::kvs
+00436:  iszero 		 Line: 214, Column: 9 In file: core::kvs
+00437:  [CodePoint(Internal(448))]
+        cjump 		 Line: 214, Column: 9 In file: core::kvs
+00438:  [1]
+        tget 		 Line: 214, Column: 9 In file: core::kvs
+00439:  [3]
+        xset 		 Line: 214, Column: 9 In file: core::kvs
+00440:  [2]
+        xget 		 Line: 218, Column: 17 In file: core::kvs
+00441:  [3]
+        xget 		 Line: 217, Column: 17 In file: core::kvs
+00442:  [0]
+        xget 		 Line: 216, Column: 37 In file: core::kvs
+00443:  [0]
+        tget 		 Line: 216, Column: 17 In file: core::kvs
+00444:  [CodePoint(Internal(447))]
+        noop 		 Line: 215, Column: 13 In file: core::kvs
+00445:  [1]
+        xget 		 Line: 215, Column: 13 In file: core::kvs
+00446:  jump 		 Line: 215, Column: 13 In file: core::kvs
+00447:  [CodePoint(Internal(450))]
+        jump 		 Line: 214, Column: 9 In file: core::kvs
+00448:  pop 		 Line: 214, Column: 9 In file: core::kvs
+00449:  [2]
+        xget 		 Line: 222, Column: 13 In file: core::kvs
+00450:  [CodePoint(Internal(473))]
+        jump 		 Line: 213, Column: 7 In file: core::kvs
+00451:  [0]
+        noop 		 Line: 225, Column: 17 In file: core::kvs
+00452:  [3]
+        xset 		 Line: 225, Column: 9 In file: core::kvs
+00453:  [CodePoint(Internal(456))]
+        noop 		 Line: 226, Column: 9 In file: core::kvs
+00454:  [4]
+        xset 		 Line: 226, Column: 9 In file: core::kvs
+00455:  [CodePoint(Internal(468))]
+        jump 		 Line: 226, Column: 9 In file: core::kvs
+00456:  [2]
+        xget 		 Line: 227, Column: 73 In file: core::kvs
+00457:  [1]
+        xget 		 Line: 227, Column: 64 In file: core::kvs
+00458:  [0]
+        xget 		 Line: 227, Column: 57 In file: core::kvs
+00459:  [3]
+        xget 		 Line: 227, Column: 59 In file: core::kvs
+00460:  tget 		 Line: 227, Column: 57 In file: core::kvs
+00461:  [CodePoint(Internal(464))]
+        rget 		 Line: 227, Column: 21 In file: core::kvs
+00462:  [2]
+        tget 		 Line: 227, Column: 21 In file: core::kvs
+00463:  jump 		 Line: 227, Column: 21 In file: core::kvs
+00464:  [2]
+        xset 		 Line: 227, Column: 13 In file: core::kvs
+00465:  [3]
+        xget 		 Line: 228, Column: 17 In file: core::kvs
+00466:  [1]
+        plus 		 Line: 228, Column: 17 In file: core::kvs
+00467:  [3]
+        xset 		 Line: 228, Column: 13 In file: core::kvs
+00468:  [3]
+        xget 		 Line: 226, Column: 16 In file: core::kvs
+00469:  [8]
+        gt 		 Line: 226, Column: 16 In file: core::kvs
+00470:  [4]
+        xget 		 Line: 226, Column: 9 In file: core::kvs
+00471:  cjump 		 Line: 226, Column: 9 In file: core::kvs
+00472:  [2]
+        xget 		 Line: 230, Column: 9 In file: core::kvs
+00473:  auxpop 		 Line: 211, Column: 5 In file: core::kvs
+00474:  pop 		 Line: 211, Column: 5 In file: core::kvs
+00475:  auxpop 		 Line: 211, Column: 5 In file: core::kvs
+00476:  jump 		 Line: 211, Column: 5 In file: core::kvs
+00477:  auxpush 		 Line: 27, Column: 1 In file: core::array
+00478:  [Tuple(_, _, _, _)]
+        auxpush 		 Line: 27, Column: 1 In file: core::array
+00479:  [0]
+        xset 		 Line: 27, Column: 1 In file: core::array
+00480:  [1]
+        xset 		 Line: 27, Column: 1 In file: core::array
+00481:  [1]
+        noop 		 Line: 28, Column: 14 In file: core::array
+00482:  [2]
+        xset 		 Line: 28, Column: 2 In file: core::array
+00483:  [CodePoint(Internal(486))]
+        noop 		 Line: 29, Column: 2 In file: core::array
+00484:  [3]
+        xset 		 Line: 29, Column: 2 In file: core::array
+00485:  [CodePoint(Internal(507))]
+        jump 		 Line: 29, Column: 2 In file: core::array
+00486:  [2]
+        xget 		 Line: 30, Column: 13 In file: core::array
+00487:  [8]
+        mul 		 Line: 30, Column: 11 In file: core::array
+00488:  [2]
+        xset 		 Line: 30, Column: 3 In file: core::array
+00489:  [1]
+        xget 		 Line: 31, Column: 31 In file: core::array
+00490:  dup0 		 Line: 31, Column: 14 In file: core::array
+00491:  dup0 		 Line: 31, Column: 14 In file: core::array
+00492:  dup0 		 Line: 31, Column: 14 In file: core::array
+00493:  dup0 		 Line: 31, Column: 14 In file: core::array
+00494:  dup0 		 Line: 31, Column: 14 In file: core::array
+00495:  dup0 		 Line: 31, Column: 14 In file: core::array
+00496:  dup0 		 Line: 31, Column: 14 In file: core::array
+00497:  [Tuple(_, _, _, _, _, _, _, _)]
+        noop 		 Line: 31, Column: 14 In file: core::array
+00498:  [0]
+        tset 		 Line: 31, Column: 14 In file: core::array
+00499:  [1]
+        tset 		 Line: 31, Column: 14 In file: core::array
+00500:  [2]
+        tset 		 Line: 31, Column: 14 In file: core::array
+00501:  [3]
+        tset 		 Line: 31, Column: 14 In file: core::array
+00502:  [4]
+        tset 		 Line: 31, Column: 14 In file: core::array
+00503:  [5]
+        tset 		 Line: 31, Column: 14 In file: core::array
+00504:  [6]
+        tset 		 Line: 31, Column: 14 In file: core::array
+00505:  [7]
+        tset 		 Line: 31, Column: 14 In file: core::array
+00506:  [1]
+        xset 		 Line: 31, Column: 3 In file: core::array
+00507:  [0]
+        xget 		 Line: 29, Column: 19 In file: core::array
+00508:  [2]
+        xget 		 Line: 29, Column: 11 In file: core::array
+00509:  [8]
+        mul 		 Line: 29, Column: 9 In file: core::array
+00510:  lt 		 Line: 29, Column: 9 In file: core::array
+00511:  [3]
+        xget 		 Line: 29, Column: 2 In file: core::array
+00512:  cjump 		 Line: 29, Column: 2 In file: core::array
+00513:  [1]
+        xget 		 Line: 36, Column: 48 In file: core::array
+00514:  dup0 		 Line: 36, Column: 31 In file: core::array
+00515:  dup0 		 Line: 36, Column: 31 In file: core::array
+00516:  dup0 		 Line: 36, Column: 31 In file: core::array
+00517:  dup0 		 Line: 36, Column: 31 In file: core::array
+00518:  dup0 		 Line: 36, Column: 31 In file: core::array
+00519:  dup0 		 Line: 36, Column: 31 In file: core::array
+00520:  dup0 		 Line: 36, Column: 31 In file: core::array
+00521:  [Tuple(_, _, _, _, _, _, _, _)]
+        noop 		 Line: 36, Column: 31 In file: core::array
+00522:  [0]
+        tset 		 Line: 36, Column: 31 In file: core::array
+00523:  [1]
+        tset 		 Line: 36, Column: 31 In file: core::array
+00524:  [2]
+        tset 		 Line: 36, Column: 31 In file: core::array
+00525:  [3]
+        tset 		 Line: 36, Column: 31 In file: core::array
+00526:  [4]
+        tset 		 Line: 36, Column: 31 In file: core::array
+00527:  [5]
+        tset 		 Line: 36, Column: 31 In file: core::array
+00528:  [6]
+        tset 		 Line: 36, Column: 31 In file: core::array
+00529:  [7]
+        tset 		 Line: 36, Column: 31 In file: core::array
+00530:  [2]
+        xget 		 Line: 35, Column: 12 In file: core::array
+00531:  [0]
+        xget 		 Line: 34, Column: 9 In file: core::array
+00532:  [Tuple(_, _, _)]
+        noop 		 Line: 33, Column: 9 In file: core::array
+00533:  [0]
+        tset 		 Line: 33, Column: 9 In file: core::array
+00534:  [1]
+        tset 		 Line: 33, Column: 9 In file: core::array
+00535:  [2]
+        tset 		 Line: 33, Column: 9 In file: core::array
+00536:  auxpop 		 Line: 33, Column: 2 In file: core::array
+00537:  pop 		 Line: 33, Column: 2 In file: core::array
+00538:  auxpop 		 Line: 33, Column: 2 In file: core::array
+00539:  jump 		 Line: 33, Column: 2 In file: core::array
+00540:  auxpush 		 Line: 40, Column: 1 In file: core::array
+00541:  [Tuple(_, _, _, _, _)]
+        auxpush 		 Line: 40, Column: 1 In file: core::array
+00542:  [0]
+        xset 		 Line: 40, Column: 1 In file: core::array
+00543:  [1]
+        xset 		 Line: 40, Column: 1 In file: core::array
+00544:  [0]
+        xget 		 Line: 41, Column: 15 In file: core::array
+00545:  [0]
+        tget 		 Line: 41, Column: 15 In file: core::array
+00546:  [1]
+        xget 		 Line: 41, Column: 6 In file: core::array
+00547:  lt 		 Line: 41, Column: 6 In file: core::array
+00548:  [CodePoint(Internal(550))]
+        cjump 		 Line: 41, Column: 2 In file: core::array
+00549:  panic 		 Line: 42, Column: 3 In file: core::array
+00550:  [0]
+        xget 		 Line: 44, Column: 12 In file: core::array
+00551:  [2]
+        tget 		 Line: 44, Column: 12 In file: core::array
+00552:  [2]
+        xset 		 Line: 44, Column: 2 In file: core::array
+00553:  [0]
+        xget 		 Line: 45, Column: 14 In file: core::array
+00554:  [1]
+        tget 		 Line: 45, Column: 14 In file: core::array
+00555:  [3]
+        xset 		 Line: 45, Column: 2 In file: core::array
+00556:  [CodePoint(Internal(559))]
+        noop 		 Line: 46, Column: 2 In file: core::array
+00557:  [4]
+        xset 		 Line: 46, Column: 2 In file: core::array
+00558:  [CodePoint(Internal(573))]
+        jump 		 Line: 46, Column: 2 In file: core::array
+00559:  [2]
+        xget 		 Line: 47, Column: 27 In file: core::array
+00560:  [3]
+        xget 		 Line: 47, Column: 37 In file: core::array
+00561:  [1]
+        xget 		 Line: 47, Column: 31 In file: core::array
+00562:  div 		 Line: 47, Column: 31 In file: core::array
+00563:  tget 		 Line: 47, Column: 27 In file: core::array
+00564:  [2]
+        xset 		 Line: 47, Column: 3 In file: core::array
+00565:  [3]
+        xget 		 Line: 48, Column: 19 In file: core::array
+00566:  [1]
+        xget 		 Line: 48, Column: 11 In file: core::array
+00567:  mod 		 Line: 48, Column: 11 In file: core::array
+00568:  [1]
+        xset 		 Line: 48, Column: 3 In file: core::array
+00569:  [8]
+        noop 		 Line: 49, Column: 19 In file: core::array
+00570:  [3]
+        xget 		 Line: 49, Column: 11 In file: core::array
+00571:  div 		 Line: 49, Column: 11 In file: core::array
+00572:  [3]
+        xset 		 Line: 49, Column: 3 In file: core::array
+00573:  [3]
+        xget 		 Line: 46, Column: 14 In file: core::array
+00574:  [1]
+        gt 		 Line: 46, Column: 9 In file: core::array
+00575:  iszero 		 Line: 46, Column: 9 In file: core::array
+00576:  [4]
+        xget 		 Line: 46, Column: 2 In file: core::array
+00577:  cjump 		 Line: 46, Column: 2 In file: core::array
+00578:  [2]
+        xget 		 Line: 51, Column: 9 In file: core::array
+00579:  auxpop 		 Line: 51, Column: 2 In file: core::array
+00580:  pop 		 Line: 51, Column: 2 In file: core::array
+00581:  auxpop 		 Line: 51, Column: 2 In file: core::array
+00582:  jump 		 Line: 51, Column: 2 In file: core::array
+00583:  auxpush 		 Line: 54, Column: 1 In file: core::array
+00584:  [Tuple(_, _)]
+        auxpush 		 Line: 54, Column: 1 In file: core::array
+00585:  [0]
+        xset 		 Line: 54, Column: 1 In file: core::array
+00586:  [1]
+        xset 		 Line: 54, Column: 1 In file: core::array
+00587:  [0]
+        xget 		 Line: 56, Column: 15 In file: core::array
+00588:  [0]
+        tget 		 Line: 56, Column: 15 In file: core::array
+00589:  [1]
+        xget 		 Line: 56, Column: 6 In file: core::array
+00590:  lt 		 Line: 56, Column: 6 In file: core::array
+00591:  [CodePoint(Internal(596))]
+        cjump 		 Line: 56, Column: 2 In file: core::array
+00592:  [Tuple(0)]
+        auxpop 		 Line: 57, Column: 3 In file: core::array
+00593:  pop 		 Line: 57, Column: 3 In file: core::array
+00594:  auxpop 		 Line: 57, Column: 3 In file: core::array
+00595:  jump 		 Line: 57, Column: 3 In file: core::array
+00596:  [1]
+        xget 		 Line: 59, Column: 36 In file: core::array
+00597:  [0]
+        xget 		 Line: 59, Column: 31 In file: core::array
+00598:  [CodePoint(Internal(601))]
+        rget 		 Line: 59, Column: 14 In file: core::array
+00599:  [3]
+        tget 		 Line: 59, Column: 14 In file: core::array
+00600:  jump 		 Line: 59, Column: 14 In file: core::array
+00601:  [Tuple(1, _)]
+        noop 		 Line: 59, Column: 9 In file: core::array
+00602:  [1]
+        tset 		 Line: 59, Column: 9 In file: core::array
+00603:  auxpop 		 Line: 59, Column: 2 In file: core::array
+00604:  pop 		 Line: 59, Column: 2 In file: core::array
+00605:  auxpop 		 Line: 59, Column: 2 In file: core::array
+00606:  jump 		 Line: 59, Column: 2 In file: core::array
+00607:  auxpush 		 Line: 62, Column: 1 In file: core::array
+00608:  [Tuple(_, _, _, _, _)]
+        auxpush 		 Line: 62, Column: 1 In file: core::array
+00609:  [0]
+        xset 		 Line: 62, Column: 1 In file: core::array
+00610:  [1]
+        xset 		 Line: 62, Column: 1 In file: core::array
+00611:  [0]
+        xget 		 Line: 65, Column: 17 In file: core::array
+00612:  [0]
+        tget 		 Line: 65, Column: 17 In file: core::array
+00613:  [1]
+        xget 		 Line: 65, Column: 6 In file: core::array
+00614:  [1]
+        plus 		 Line: 65, Column: 6 In file: core::array
+00615:  lt 		 Line: 65, Column: 6 In file: core::array
+00616:  [CodePoint(Internal(618))]
+        cjump 		 Line: 65, Column: 2 In file: core::array
+00617:  panic 		 Line: 66, Column: 3 In file: core::array
+00618:  [8]
+        noop 		 Line: 68, Column: 23 In file: core::array
+00619:  [1]
+        xget 		 Line: 68, Column: 15 In file: core::array
+00620:  mod 		 Line: 68, Column: 15 In file: core::array
+00621:  [7]
+        eq 		 Line: 68, Column: 14 In file: core::array
+00622:  iszero 		 Line: 68, Column: 9 In file: core::array
+00623:  [CodePoint(Internal(639))]
+        cjump 		 Line: 68, Column: 9 In file: core::array
+00624:  [1]
+        xget 		 Line: 70, Column: 56 In file: core::array
+00625:  [1]
+        plus 		 Line: 70, Column: 56 In file: core::array
+00626:  [0]
+        xget 		 Line: 70, Column: 51 In file: core::array
+00627:  [CodePoint(Internal(630))]
+        rget 		 Line: 70, Column: 34 In file: core::array
+00628:  [3]
+        tget 		 Line: 70, Column: 34 In file: core::array
+00629:  jump 		 Line: 70, Column: 34 In file: core::array
+00630:  [1]
+        xget 		 Line: 70, Column: 26 In file: core::array
+00631:  [0]
+        xget 		 Line: 70, Column: 21 In file: core::array
+00632:  [CodePoint(Internal(635))]
+        rget 		 Line: 70, Column: 4 In file: core::array
+00633:  [3]
+        tget 		 Line: 70, Column: 4 In file: core::array
+00634:  jump 		 Line: 70, Column: 4 In file: core::array
+00635:  [Tuple(_, _)]
+        noop 		 Line: 70, Column: 3 In file: core::array
+00636:  [0]
+        tset 		 Line: 70, Column: 3 In file: core::array
+00637:  [1]
+        tset 		 Line: 70, Column: 3 In file: core::array
+00638:  [CodePoint(Internal(677))]
+        jump 		 Line: 68, Column: 9 In file: core::array
+00639:  [0]
+        xget 		 Line: 72, Column: 13 In file: core::array
+00640:  [2]
+        tget 		 Line: 72, Column: 13 In file: core::array
+00641:  [2]
+        xset 		 Line: 72, Column: 3 In file: core::array
+00642:  [0]
+        xget 		 Line: 73, Column: 15 In file: core::array
+00643:  [1]
+        tget 		 Line: 73, Column: 15 In file: core::array
+00644:  [3]
+        xset 		 Line: 73, Column: 3 In file: core::array
+00645:  [CodePoint(Internal(648))]
+        noop 		 Line: 74, Column: 3 In file: core::array
+00646:  [4]
+        xset 		 Line: 74, Column: 3 In file: core::array
+00647:  [CodePoint(Internal(662))]
+        jump 		 Line: 74, Column: 3 In file: core::array
+00648:  [2]
+        xget 		 Line: 75, Column: 28 In file: core::array
+00649:  [3]
+        xget 		 Line: 75, Column: 38 In file: core::array
+00650:  [1]
+        xget 		 Line: 75, Column: 32 In file: core::array
+00651:  div 		 Line: 75, Column: 32 In file: core::array
+00652:  tget 		 Line: 75, Column: 28 In file: core::array
+00653:  [2]
+        xset 		 Line: 75, Column: 4 In file: core::array
+00654:  [3]
+        xget 		 Line: 76, Column: 20 In file: core::array
+00655:  [1]
+        xget 		 Line: 76, Column: 12 In file: core::array
+00656:  mod 		 Line: 76, Column: 12 In file: core::array
+00657:  [1]
+        xset 		 Line: 76, Column: 4 In file: core::array
+00658:  [8]
+        noop 		 Line: 77, Column: 20 In file: core::array
+00659:  [3]
+        xget 		 Line: 77, Column: 12 In file: core::array
+00660:  div 		 Line: 77, Column: 12 In file: core::array
+00661:  [3]
+        xset 		 Line: 77, Column: 4 In file: core::array
+00662:  [3]
+        xget 		 Line: 74, Column: 15 In file: core::array
+00663:  [8]
+        gt 		 Line: 74, Column: 10 In file: core::array
+00664:  iszero 		 Line: 74, Column: 10 In file: core::array
+00665:  [4]
+        xget 		 Line: 74, Column: 3 In file: core::array
+00666:  cjump 		 Line: 74, Column: 3 In file: core::array
+00667:  [2]
+        xget 		 Line: 79, Column: 16 In file: core::array
+00668:  [1]
+        xget 		 Line: 79, Column: 20 In file: core::array
+00669:  [1]
+        plus 		 Line: 79, Column: 20 In file: core::array
+00670:  tget 		 Line: 79, Column: 16 In file: core::array
+00671:  [2]
+        xget 		 Line: 79, Column: 4 In file: core::array
+00672:  [1]
+        xget 		 Line: 79, Column: 8 In file: core::array
+00673:  tget 		 Line: 79, Column: 4 In file: core::array
+00674:  [Tuple(_, _)]
+        noop 		 Line: 79, Column: 3 In file: core::array
+00675:  [0]
+        tset 		 Line: 79, Column: 3 In file: core::array
+00676:  [1]
+        tset 		 Line: 79, Column: 3 In file: core::array
+00677:  auxpop 		 Line: 68, Column: 2 In file: core::array
+00678:  pop 		 Line: 68, Column: 2 In file: core::array
+00679:  auxpop 		 Line: 68, Column: 2 In file: core::array
+00680:  jump 		 Line: 68, Column: 2 In file: core::array
+00681:  auxpush 		 Line: 83, Column: 1 In file: core::array
+00682:  [Tuple(_, _)]
+        auxpush 		 Line: 83, Column: 1 In file: core::array
+00683:  [0]
+        xset 		 Line: 83, Column: 1 In file: core::array
+00684:  [1]
+        xset 		 Line: 83, Column: 1 In file: core::array
+00685:  [0]
+        xget 		 Line: 85, Column: 17 In file: core::array
+00686:  [0]
+        tget 		 Line: 85, Column: 17 In file: core::array
+00687:  [1]
+        xget 		 Line: 85, Column: 6 In file: core::array
+00688:  [1]
+        plus 		 Line: 85, Column: 6 In file: core::array
+00689:  lt 		 Line: 85, Column: 6 In file: core::array
+00690:  [CodePoint(Internal(695))]
+        cjump 		 Line: 85, Column: 2 In file: core::array
+00691:  [Tuple(0)]
+        auxpop 		 Line: 86, Column: 3 In file: core::array
+00692:  pop 		 Line: 86, Column: 3 In file: core::array
+00693:  auxpop 		 Line: 86, Column: 3 In file: core::array
+00694:  jump 		 Line: 86, Column: 3 In file: core::array
+00695:  [1]
+        xget 		 Line: 88, Column: 47 In file: core::array
+00696:  [0]
+        xget 		 Line: 88, Column: 42 In file: core::array
+00697:  [CodePoint(Internal(700))]
+        rget 		 Line: 88, Column: 14 In file: core::array
+00698:  [4]
+        tget 		 Line: 88, Column: 14 In file: core::array
+00699:  jump 		 Line: 88, Column: 14 In file: core::array
+00700:  [Tuple(1, _)]
+        noop 		 Line: 88, Column: 9 In file: core::array
+00701:  [1]
+        tset 		 Line: 88, Column: 9 In file: core::array
+00702:  auxpop 		 Line: 88, Column: 2 In file: core::array
+00703:  pop 		 Line: 88, Column: 2 In file: core::array
+00704:  auxpop 		 Line: 88, Column: 2 In file: core::array
+00705:  jump 		 Line: 88, Column: 2 In file: core::array
+00706:  auxpush 		 Line: 91, Column: 1 In file: core::array
+00707:  [Tuple(_, _, _)]
+        auxpush 		 Line: 91, Column: 1 In file: core::array
+00708:  [0]
+        xset 		 Line: 91, Column: 1 In file: core::array
+00709:  [1]
+        xset 		 Line: 91, Column: 1 In file: core::array
+00710:  [2]
+        xset 		 Line: 91, Column: 1 In file: core::array
+00711:  [0]
+        xget 		 Line: 92, Column: 15 In file: core::array
+00712:  [0]
+        tget 		 Line: 92, Column: 15 In file: core::array
+00713:  [1]
+        xget 		 Line: 92, Column: 6 In file: core::array
+00714:  lt 		 Line: 92, Column: 6 In file: core::array
+00715:  [CodePoint(Internal(717))]
+        cjump 		 Line: 92, Column: 2 In file: core::array
+00716:  panic 		 Line: 93, Column: 3 In file: core::array
+00717:  [2]
+        xget 		 Line: 95, Column: 74 In file: core::array
+00718:  [1]
+        xget 		 Line: 95, Column: 67 In file: core::array
+00719:  [0]
+        xget 		 Line: 95, Column: 54 In file: core::array
+00720:  [1]
+        tget 		 Line: 95, Column: 54 In file: core::array
+00721:  [0]
+        xget 		 Line: 95, Column: 40 In file: core::array
+00722:  [2]
+        tget 		 Line: 95, Column: 40 In file: core::array
+00723:  [CodePoint(Internal(725))]
+        noop 		 Line: 95, Column: 30 In file: core::array
+00724:  [CodePoint(Internal(731))]
+        jump 		 Line: 95, Column: 30 In file: core::array
+00725:  [0]
+        xget 		 Line: 95, Column: 9 In file: core::array
+00726:  [2]
+        tset 		 Line: 95, Column: 9 In file: core::array
+00727:  auxpop 		 Line: 95, Column: 2 In file: core::array
+00728:  pop 		 Line: 95, Column: 2 In file: core::array
+00729:  auxpop 		 Line: 95, Column: 2 In file: core::array
+00730:  jump 		 Line: 95, Column: 2 In file: core::array
+00731:  auxpush 		 Line: 105, Column: 1 In file: core::array
+00732:  [Tuple(_, _, _, _)]
+        auxpush 		 Line: 105, Column: 1 In file: core::array
+00733:  [0]
+        xset 		 Line: 105, Column: 1 In file: core::array
+00734:  [1]
+        xset 		 Line: 105, Column: 1 In file: core::array
+00735:  [2]
+        xset 		 Line: 105, Column: 1 In file: core::array
+00736:  [3]
+        xset 		 Line: 105, Column: 1 In file: core::array
+00737:  [1]
+        xget 		 Line: 106, Column: 19 In file: core::array
+00738:  [1]
+        eq 		 Line: 106, Column: 14 In file: core::array
+00739:  iszero 		 Line: 106, Column: 9 In file: core::array
+00740:  [CodePoint(Internal(746))]
+        cjump 		 Line: 106, Column: 9 In file: core::array
+00741:  [3]
+        xget 		 Line: 108, Column: 21 In file: core::array
+00742:  [0]
+        xget 		 Line: 108, Column: 3 In file: core::array
+00743:  [2]
+        xget 		 Line: 108, Column: 12 In file: core::array
+00744:  tset 		 Line: 108, Column: 3 In file: core::array
+00745:  [CodePoint(Internal(766))]
+        jump 		 Line: 106, Column: 9 In file: core::array
+00746:  [3]
+        xget 		 Line: 115, Column: 4 In file: core::array
+00747:  [1]
+        xget 		 Line: 114, Column: 12 In file: core::array
+00748:  [2]
+        xget 		 Line: 114, Column: 4 In file: core::array
+00749:  mod 		 Line: 114, Column: 4 In file: core::array
+00750:  [8]
+        noop 		 Line: 113, Column: 16 In file: core::array
+00751:  [1]
+        xget 		 Line: 113, Column: 4 In file: core::array
+00752:  div 		 Line: 113, Column: 4 In file: core::array
+00753:  [0]
+        xget 		 Line: 112, Column: 22 In file: core::array
+00754:  [1]
+        xget 		 Line: 112, Column: 30 In file: core::array
+00755:  [2]
+        xget 		 Line: 112, Column: 24 In file: core::array
+00756:  div 		 Line: 112, Column: 24 In file: core::array
+00757:  tget 		 Line: 112, Column: 22 In file: core::array
+00758:  [CodePoint(Internal(761))]
+        rget 		 Line: 111, Column: 31 In file: core::array
+00759:  [5]
+        tget 		 Line: 111, Column: 31 In file: core::array
+00760:  jump 		 Line: 111, Column: 31 In file: core::array
+00761:  [0]
+        xget 		 Line: 111, Column: 3 In file: core::array
+00762:  [1]
+        xget 		 Line: 111, Column: 18 In file: core::array
+00763:  [2]
+        xget 		 Line: 111, Column: 12 In file: core::array
+00764:  div 		 Line: 111, Column: 12 In file: core::array
+00765:  tset 		 Line: 111, Column: 3 In file: core::array
+00766:  auxpop 		 Line: 106, Column: 2 In file: core::array
+00767:  pop 		 Line: 106, Column: 2 In file: core::array
+00768:  auxpop 		 Line: 106, Column: 2 In file: core::array
+00769:  jump 		 Line: 106, Column: 2 In file: core::array
+00770:  auxpush 		 Line: 98, Column: 1 In file: core::array
+00771:  [Tuple(_, _, _)]
+        auxpush 		 Line: 98, Column: 1 In file: core::array
+00772:  [0]
+        xset 		 Line: 98, Column: 1 In file: core::array
+00773:  [1]
+        xset 		 Line: 98, Column: 1 In file: core::array
+00774:  [2]
+        xset 		 Line: 98, Column: 1 In file: core::array
+00775:  [0]
+        xget 		 Line: 99, Column: 15 In file: core::array
+00776:  [0]
+        tget 		 Line: 99, Column: 15 In file: core::array
+00777:  [1]
+        xget 		 Line: 99, Column: 6 In file: core::array
+00778:  lt 		 Line: 99, Column: 6 In file: core::array
+00779:  [CodePoint(Internal(784))]
+        cjump 		 Line: 99, Column: 2 In file: core::array
+00780:  [Tuple(0)]
+        auxpop 		 Line: 100, Column: 3 In file: core::array
+00781:  pop 		 Line: 100, Column: 3 In file: core::array
+00782:  auxpop 		 Line: 100, Column: 3 In file: core::array
+00783:  jump 		 Line: 100, Column: 3 In file: core::array
+00784:  [2]
+        xget 		 Line: 102, Column: 43 In file: core::array
+00785:  [1]
+        xget 		 Line: 102, Column: 36 In file: core::array
+00786:  [0]
+        xget 		 Line: 102, Column: 31 In file: core::array
+00787:  [CodePoint(Internal(790))]
+        rget 		 Line: 102, Column: 14 In file: core::array
+00788:  [6]
+        tget 		 Line: 102, Column: 14 In file: core::array
+00789:  jump 		 Line: 102, Column: 14 In file: core::array
+00790:  [Tuple(1, _)]
+        noop 		 Line: 102, Column: 9 In file: core::array
+00791:  [1]
+        tset 		 Line: 102, Column: 9 In file: core::array
+00792:  auxpop 		 Line: 102, Column: 2 In file: core::array
+00793:  pop 		 Line: 102, Column: 2 In file: core::array
+00794:  auxpop 		 Line: 102, Column: 2 In file: core::array
+00795:  jump 		 Line: 102, Column: 2 In file: core::array
+00796:  auxpush 		 Line: 120, Column: 1 In file: core::array
+00797:  [Tuple(_, _, _, _)]
+        auxpush 		 Line: 120, Column: 1 In file: core::array
+00798:  [0]
+        xset 		 Line: 120, Column: 1 In file: core::array
+00799:  [1]
+        xset 		 Line: 120, Column: 1 In file: core::array
+00800:  [2]
+        xset 		 Line: 120, Column: 1 In file: core::array
+00801:  [0]
+        xget 		 Line: 122, Column: 15 In file: core::array
+00802:  [0]
+        tget 		 Line: 122, Column: 15 In file: core::array
+00803:  [1]
+        xget 		 Line: 122, Column: 6 In file: core::array
+00804:  lt 		 Line: 122, Column: 6 In file: core::array
+00805:  [CodePoint(Internal(807))]
+        cjump 		 Line: 122, Column: 2 In file: core::array
+00806:  panic 		 Line: 123, Column: 3 In file: core::array
+00807:  [2]
+        xget 		 Line: 125, Column: 53 In file: core::array
+00808:  [1]
+        xget 		 Line: 125, Column: 46 In file: core::array
+00809:  [0]
+        xget 		 Line: 125, Column: 35 In file: core::array
+00810:  [1]
+        tget 		 Line: 125, Column: 35 In file: core::array
+00811:  [0]
+        xget 		 Line: 125, Column: 23 In file: core::array
+00812:  [2]
+        tget 		 Line: 125, Column: 23 In file: core::array
+00813:  [CodePoint(Internal(815))]
+        noop 		 Line: 125, Column: 12 In file: core::array
+00814:  [CodePoint(Internal(829))]
+        jump 		 Line: 125, Column: 12 In file: core::array
+00815:  [3]
+        xset 		 Line: 125, Column: 2 In file: core::array
+00816:  [3]
+        xget 		 Line: 128, Column: 3 In file: core::array
+00817:  [1]
+        tget 		 Line: 128, Column: 3 In file: core::array
+00818:  [3]
+        xget 		 Line: 127, Column: 22 In file: core::array
+00819:  [0]
+        tget 		 Line: 127, Column: 22 In file: core::array
+00820:  [0]
+        xget 		 Line: 127, Column: 3 In file: core::array
+00821:  [2]
+        tset 		 Line: 127, Column: 3 In file: core::array
+00822:  [Tuple(_, _)]
+        noop 		 Line: 126, Column: 9 In file: core::array
+00823:  [0]
+        tset 		 Line: 126, Column: 9 In file: core::array
+00824:  [1]
+        tset 		 Line: 126, Column: 9 In file: core::array
+00825:  auxpop 		 Line: 126, Column: 2 In file: core::array
+00826:  pop 		 Line: 126, Column: 2 In file: core::array
+00827:  auxpop 		 Line: 126, Column: 2 In file: core::array
+00828:  jump 		 Line: 126, Column: 2 In file: core::array
+00829:  auxpush 		 Line: 145, Column: 1 In file: core::array
+00830:  [Tuple(_, _, _, _, _, _)]
+        auxpush 		 Line: 145, Column: 1 In file: core::array
+00831:  [0]
+        xset 		 Line: 145, Column: 1 In file: core::array
+00832:  [1]
+        xset 		 Line: 145, Column: 1 In file: core::array
+00833:  [2]
+        xset 		 Line: 145, Column: 1 In file: core::array
+00834:  [3]
+        xset 		 Line: 145, Column: 1 In file: core::array
+00835:  [1]
+        xget 		 Line: 146, Column: 19 In file: core::array
+00836:  [1]
+        eq 		 Line: 146, Column: 14 In file: core::array
+00837:  iszero 		 Line: 146, Column: 9 In file: core::array
+00838:  [CodePoint(Internal(850))]
+        cjump 		 Line: 146, Column: 9 In file: core::array
+00839:  [0]
+        xget 		 Line: 149, Column: 9 In file: core::array
+00840:  [2]
+        xget 		 Line: 149, Column: 11 In file: core::array
+00841:  tget 		 Line: 149, Column: 9 In file: core::array
+00842:  [3]
+        xget 		 Line: 148, Column: 28 In file: core::array
+00843:  [0]
+        xget 		 Line: 148, Column: 10 In file: core::array
+00844:  [2]
+        xget 		 Line: 148, Column: 19 In file: core::array
+00845:  tset 		 Line: 148, Column: 10 In file: core::array
+00846:  [Tuple(_, _)]
+        noop 		 Line: 147, Column: 3 In file: core::array
+00847:  [0]
+        tset 		 Line: 147, Column: 3 In file: core::array
+00848:  [1]
+        tset 		 Line: 147, Column: 3 In file: core::array
+00849:  [CodePoint(Internal(876))]
+        jump 		 Line: 146, Column: 9 In file: core::array
+00850:  [1]
+        xget 		 Line: 152, Column: 24 In file: core::array
+00851:  [2]
+        xget 		 Line: 152, Column: 18 In file: core::array
+00852:  div 		 Line: 152, Column: 18 In file: core::array
+00853:  [4]
+        xset 		 Line: 152, Column: 3 In file: core::array
+00854:  [3]
+        xget 		 Line: 157, Column: 4 In file: core::array
+00855:  [1]
+        xget 		 Line: 156, Column: 10 In file: core::array
+00856:  [2]
+        xget 		 Line: 156, Column: 4 In file: core::array
+00857:  mod 		 Line: 156, Column: 4 In file: core::array
+00858:  [8]
+        noop 		 Line: 155, Column: 10 In file: core::array
+00859:  [1]
+        xget 		 Line: 155, Column: 4 In file: core::array
+00860:  div 		 Line: 155, Column: 4 In file: core::array
+00861:  [0]
+        xget 		 Line: 154, Column: 22 In file: core::array
+00862:  [4]
+        xget 		 Line: 154, Column: 24 In file: core::array
+00863:  tget 		 Line: 154, Column: 22 In file: core::array
+00864:  [CodePoint(Internal(868))]
+        rget 		 Line: 153, Column: 13 In file: core::array
+00865:  [7]
+        tget 		 Line: 153, Column: 13 In file: core::array
+00866:  [0]
+        tget 		 Line: 153, Column: 13 In file: core::array
+00867:  jump 		 Line: 153, Column: 13 In file: core::array
+00868:  [5]
+        xset 		 Line: 153, Column: 3 In file: core::array
+00869:  [5]
+        xget 		 Line: 159, Column: 41 In file: core::array
+00870:  [0]
+        tget 		 Line: 159, Column: 41 In file: core::array
+00871:  [0]
+        xget 		 Line: 159, Column: 20 In file: core::array
+00872:  [4]
+        xget 		 Line: 159, Column: 29 In file: core::array
+00873:  tset 		 Line: 159, Column: 20 In file: core::array
+00874:  [5]
+        xget 		 Line: 159, Column: 3 In file: core::array
+00875:  [0]
+        tset 		 Line: 159, Column: 3 In file: core::array
+00876:  auxpop 		 Line: 146, Column: 2 In file: core::array
+00877:  pop 		 Line: 146, Column: 2 In file: core::array
+00878:  auxpop 		 Line: 146, Column: 2 In file: core::array
+00879:  jump 		 Line: 146, Column: 2 In file: core::array
+00880:  auxpush 		 Line: 132, Column: 1 In file: core::array
+00881:  [Tuple(_, _, _, _, _)]
+        auxpush 		 Line: 132, Column: 1 In file: core::array
+00882:  [0]
+        xset 		 Line: 132, Column: 1 In file: core::array
+00883:  [1]
+        xset 		 Line: 132, Column: 1 In file: core::array
+00884:  [2]
+        xset 		 Line: 132, Column: 1 In file: core::array
+00885:  [0]
+        xget 		 Line: 133, Column: 15 In file: core::array
+00886:  [0]
+        tget 		 Line: 133, Column: 15 In file: core::array
+00887:  [1]
+        xget 		 Line: 133, Column: 6 In file: core::array
+00888:  lt 		 Line: 133, Column: 6 In file: core::array
+00889:  [CodePoint(Internal(894))]
+        cjump 		 Line: 133, Column: 2 In file: core::array
+00890:  [Tuple(0)]
+        auxpop 		 Line: 134, Column: 3 In file: core::array
+00891:  pop 		 Line: 134, Column: 3 In file: core::array
+00892:  auxpop 		 Line: 134, Column: 3 In file: core::array
+00893:  jump 		 Line: 134, Column: 3 In file: core::array
+00894:  [2]
+        xget 		 Line: 136, Column: 51 In file: core::array
+00895:  [1]
+        xget 		 Line: 136, Column: 44 In file: core::array
+00896:  [0]
+        xget 		 Line: 136, Column: 41 In file: core::array
+00897:  [CodePoint(Internal(901))]
+        rget 		 Line: 136, Column: 23 In file: core::array
+00898:  [7]
+        tget 		 Line: 136, Column: 23 In file: core::array
+00899:  [1]
+        tget 		 Line: 136, Column: 23 In file: core::array
+00900:  jump 		 Line: 136, Column: 23 In file: core::array
+00901:  dup0 		 Line: 136, Column: 2 In file: core::array
+00902:  [0]
+        tget 		 Line: 136, Column: 2 In file: core::array
+00903:  [3]
+        xset 		 Line: 136, Column: 2 In file: core::array
+00904:  [1]
+        tget 		 Line: 136, Column: 2 In file: core::array
+00905:  [4]
+        xset 		 Line: 136, Column: 2 In file: core::array
+00906:  [4]
+        xget 		 Line: 137, Column: 21 In file: core::array
+00907:  [3]
+        xget 		 Line: 137, Column: 15 In file: core::array
+00908:  [Tuple(_, _)]
+        noop 		 Line: 137, Column: 14 In file: core::array
+00909:  [0]
+        tset 		 Line: 137, Column: 14 In file: core::array
+00910:  [1]
+        tset 		 Line: 137, Column: 14 In file: core::array
+00911:  [Tuple(1, _)]
+        noop 		 Line: 137, Column: 9 In file: core::array
+00912:  [1]
+        tset 		 Line: 137, Column: 9 In file: core::array
+00913:  auxpop 		 Line: 137, Column: 2 In file: core::array
+00914:  pop 		 Line: 137, Column: 2 In file: core::array
+00915:  auxpop 		 Line: 137, Column: 2 In file: core::array
+00916:  jump 		 Line: 137, Column: 2 In file: core::array
+00917:  auxpush 		 Line: 168, Column: 1 In file: core::array
+00918:  [Tuple(_, _, _, _)]
+        auxpush 		 Line: 168, Column: 1 In file: core::array
+00919:  [0]
+        xset 		 Line: 168, Column: 1 In file: core::array
+00920:  [1]
+        xset 		 Line: 168, Column: 1 In file: core::array
+00921:  [2]
+        xset 		 Line: 168, Column: 1 In file: core::array
+00922:  [0]
+        xget 		 Line: 173, Column: 15 In file: core::array
+00923:  [0]
+        tget 		 Line: 173, Column: 15 In file: core::array
+00924:  [1]
+        xget 		 Line: 173, Column: 6 In file: core::array
+00925:  lt 		 Line: 173, Column: 6 In file: core::array
+00926:  [CodePoint(Internal(928))]
+        cjump 		 Line: 173, Column: 2 In file: core::array
+00927:  panic 		 Line: 174, Column: 3 In file: core::array
+00928:  [2]
+        xget 		 Line: 176, Column: 51 In file: core::array
+00929:  [1]
+        xget 		 Line: 176, Column: 44 In file: core::array
+00930:  [0]
+        xget 		 Line: 176, Column: 33 In file: core::array
+00931:  [1]
+        tget 		 Line: 176, Column: 33 In file: core::array
+00932:  [0]
+        xget 		 Line: 176, Column: 21 In file: core::array
+00933:  [2]
+        tget 		 Line: 176, Column: 21 In file: core::array
+00934:  [CodePoint(Internal(936))]
+        noop 		 Line: 176, Column: 12 In file: core::array
+00935:  [CodePoint(Internal(950))]
+        jump 		 Line: 176, Column: 12 In file: core::array
+00936:  [3]
+        xset 		 Line: 176, Column: 2 In file: core::array
+00937:  [3]
+        xget 		 Line: 179, Column: 3 In file: core::array
+00938:  [1]
+        tget 		 Line: 179, Column: 3 In file: core::array
+00939:  [3]
+        xget 		 Line: 178, Column: 22 In file: core::array
+00940:  [0]
+        tget 		 Line: 178, Column: 22 In file: core::array
+00941:  [0]
+        xget 		 Line: 178, Column: 3 In file: core::array
+00942:  [2]
+        tset 		 Line: 178, Column: 3 In file: core::array
+00943:  [Tuple(_, _)]
+        noop 		 Line: 177, Column: 9 In file: core::array
+00944:  [0]
+        tset 		 Line: 177, Column: 9 In file: core::array
+00945:  [1]
+        tset 		 Line: 177, Column: 9 In file: core::array
+00946:  auxpop 		 Line: 177, Column: 2 In file: core::array
+00947:  pop 		 Line: 177, Column: 2 In file: core::array
+00948:  auxpop 		 Line: 177, Column: 2 In file: core::array
+00949:  jump 		 Line: 177, Column: 2 In file: core::array
+00950:  auxpush 		 Line: 191, Column: 1 In file: core::array
+00951:  [Tuple(_, _, _, _, _, _)]
+        auxpush 		 Line: 191, Column: 1 In file: core::array
+00952:  [0]
+        xset 		 Line: 191, Column: 1 In file: core::array
+00953:  [1]
+        xset 		 Line: 191, Column: 1 In file: core::array
+00954:  [2]
+        xset 		 Line: 191, Column: 1 In file: core::array
+00955:  [3]
+        xset 		 Line: 191, Column: 1 In file: core::array
+00956:  [1]
+        xget 		 Line: 192, Column: 19 In file: core::array
+00957:  [1]
+        eq 		 Line: 192, Column: 14 In file: core::array
+00958:  iszero 		 Line: 192, Column: 9 In file: core::array
+00959:  [CodePoint(Internal(983))]
+        cjump 		 Line: 192, Column: 9 In file: core::array
+00960:  [0]
+        xget 		 Line: 193, Column: 63 In file: core::array
+00961:  [2]
+        xget 		 Line: 193, Column: 65 In file: core::array
+00962:  tget 		 Line: 193, Column: 63 In file: core::array
+00963:  [3]
+        xget 		 Line: 193, Column: 50 In file: core::array
+00964:  [1]
+        tget 		 Line: 193, Column: 50 In file: core::array
+00965:  [CodePoint(Internal(969))]
+        noop 		 Line: 193, Column: 40 In file: core::array
+00966:  [3]
+        xget 		 Line: 193, Column: 40 In file: core::array
+00967:  [0]
+        tget 		 Line: 193, Column: 40 In file: core::array
+00968:  jump 		 Line: 193, Column: 40 In file: core::array
+00969:  dup0 		 Line: 193, Column: 3 In file: core::array
+00970:  [0]
+        tget 		 Line: 193, Column: 3 In file: core::array
+00971:  [4]
+        xset 		 Line: 193, Column: 3 In file: core::array
+00972:  [1]
+        tget 		 Line: 193, Column: 3 In file: core::array
+00973:  [5]
+        xset 		 Line: 193, Column: 3 In file: core::array
+00974:  [5]
+        xget 		 Line: 196, Column: 9 In file: core::array
+00975:  [4]
+        xget 		 Line: 195, Column: 29 In file: core::array
+00976:  [0]
+        xget 		 Line: 195, Column: 10 In file: core::array
+00977:  [2]
+        xget 		 Line: 195, Column: 20 In file: core::array
+00978:  tset 		 Line: 195, Column: 10 In file: core::array
+00979:  [Tuple(_, _)]
+        noop 		 Line: 194, Column: 3 In file: core::array
+00980:  [0]
+        tset 		 Line: 194, Column: 3 In file: core::array
+00981:  [1]
+        tset 		 Line: 194, Column: 3 In file: core::array
+00982:  [CodePoint(Internal(1009))]
+        jump 		 Line: 192, Column: 9 In file: core::array
+00983:  [1]
+        xget 		 Line: 199, Column: 24 In file: core::array
+00984:  [2]
+        xget 		 Line: 199, Column: 18 In file: core::array
+00985:  div 		 Line: 199, Column: 18 In file: core::array
+00986:  [4]
+        xset 		 Line: 199, Column: 3 In file: core::array
+00987:  [3]
+        xget 		 Line: 204, Column: 4 In file: core::array
+00988:  [1]
+        xget 		 Line: 203, Column: 10 In file: core::array
+00989:  [2]
+        xget 		 Line: 203, Column: 4 In file: core::array
+00990:  mod 		 Line: 203, Column: 4 In file: core::array
+00991:  [8]
+        noop 		 Line: 202, Column: 10 In file: core::array
+00992:  [1]
+        xget 		 Line: 202, Column: 4 In file: core::array
+00993:  div 		 Line: 202, Column: 4 In file: core::array
+00994:  [0]
+        xget 		 Line: 201, Column: 22 In file: core::array
+00995:  [4]
+        xget 		 Line: 201, Column: 24 In file: core::array
+00996:  tget 		 Line: 201, Column: 22 In file: core::array
+00997:  [CodePoint(Internal(1001))]
+        rget 		 Line: 200, Column: 13 In file: core::array
+00998:  [7]
+        tget 		 Line: 200, Column: 13 In file: core::array
+00999:  [2]
+        tget 		 Line: 200, Column: 13 In file: core::array
+01000:  jump 		 Line: 200, Column: 13 In file: core::array
+01001:  [5]
+        xset 		 Line: 200, Column: 3 In file: core::array
+01002:  [5]
+        xget 		 Line: 206, Column: 41 In file: core::array
+01003:  [0]
+        tget 		 Line: 206, Column: 41 In file: core::array
+01004:  [0]
+        xget 		 Line: 206, Column: 20 In file: core::array
+01005:  [4]
+        xget 		 Line: 206, Column: 29 In file: core::array
+01006:  tset 		 Line: 206, Column: 20 In file: core::array
+01007:  [5]
+        xget 		 Line: 206, Column: 3 In file: core::array
+01008:  [0]
+        tset 		 Line: 206, Column: 3 In file: core::array
+01009:  auxpop 		 Line: 192, Column: 2 In file: core::array
+01010:  pop 		 Line: 192, Column: 2 In file: core::array
+01011:  auxpop 		 Line: 192, Column: 2 In file: core::array
+01012:  jump 		 Line: 192, Column: 2 In file: core::array
+01013:  auxpush 		 Line: 183, Column: 1 In file: core::array
+01014:  [Tuple(_, _, _, _, _)]
+        auxpush 		 Line: 183, Column: 1 In file: core::array
+01015:  [0]
+        xset 		 Line: 183, Column: 1 In file: core::array
+01016:  [1]
+        xset 		 Line: 183, Column: 1 In file: core::array
+01017:  [2]
+        xset 		 Line: 183, Column: 1 In file: core::array
+01018:  [0]
+        xget 		 Line: 184, Column: 15 In file: core::array
+01019:  [0]
+        tget 		 Line: 184, Column: 15 In file: core::array
+01020:  [1]
+        xget 		 Line: 184, Column: 6 In file: core::array
+01021:  lt 		 Line: 184, Column: 6 In file: core::array
+01022:  [CodePoint(Internal(1027))]
+        cjump 		 Line: 184, Column: 2 In file: core::array
+01023:  [Tuple(0)]
+        auxpop 		 Line: 185, Column: 3 In file: core::array
+01024:  pop 		 Line: 185, Column: 3 In file: core::array
+01025:  auxpop 		 Line: 185, Column: 3 In file: core::array
+01026:  jump 		 Line: 185, Column: 3 In file: core::array
+01027:  [2]
+        xget 		 Line: 187, Column: 49 In file: core::array
+01028:  [1]
+        xget 		 Line: 187, Column: 42 In file: core::array
+01029:  [0]
+        xget 		 Line: 187, Column: 39 In file: core::array
+01030:  [CodePoint(Internal(1034))]
+        rget 		 Line: 187, Column: 23 In file: core::array
+01031:  [7]
+        tget 		 Line: 187, Column: 23 In file: core::array
+01032:  [3]
+        tget 		 Line: 187, Column: 23 In file: core::array
+01033:  jump 		 Line: 187, Column: 23 In file: core::array
+01034:  dup0 		 Line: 187, Column: 2 In file: core::array
+01035:  [0]
+        tget 		 Line: 187, Column: 2 In file: core::array
+01036:  [3]
+        xset 		 Line: 187, Column: 2 In file: core::array
+01037:  [1]
+        tget 		 Line: 187, Column: 2 In file: core::array
+01038:  [4]
+        xset 		 Line: 187, Column: 2 In file: core::array
+01039:  [4]
+        xget 		 Line: 188, Column: 21 In file: core::array
+01040:  [3]
+        xget 		 Line: 188, Column: 15 In file: core::array
+01041:  [Tuple(_, _)]
+        noop 		 Line: 188, Column: 14 In file: core::array
+01042:  [0]
+        tset 		 Line: 188, Column: 14 In file: core::array
+01043:  [1]
+        tset 		 Line: 188, Column: 14 In file: core::array
+01044:  [Tuple(1, _)]
+        noop 		 Line: 188, Column: 9 In file: core::array
+01045:  [1]
+        tset 		 Line: 188, Column: 9 In file: core::array
+01046:  auxpop 		 Line: 188, Column: 2 In file: core::array
+01047:  pop 		 Line: 188, Column: 2 In file: core::array
+01048:  auxpop 		 Line: 188, Column: 2 In file: core::array
+01049:  jump 		 Line: 188, Column: 2 In file: core::array
+01050:  auxpush 		 Line: 210, Column: 1 In file: core::array
+01051:  [Tuple(_, _, _, _, _, _, _, _)]
+        auxpush 		 Line: 210, Column: 1 In file: core::array
+01052:  [0]
+        xset 		 Line: 210, Column: 1 In file: core::array
+01053:  [1]
+        xset 		 Line: 210, Column: 1 In file: core::array
+01054:  [2]
+        xset 		 Line: 210, Column: 1 In file: core::array
+01055:  [3]
+        xset 		 Line: 210, Column: 1 In file: core::array
+01056:  [2]
+        xget 		 Line: 220, Column: 48 In file: core::array
+01057:  [1]
+        xget 		 Line: 220, Column: 41 In file: core::array
+01058:  [0]
+        xget 		 Line: 220, Column: 38 In file: core::array
+01059:  [CodePoint(Internal(1063))]
+        rget 		 Line: 220, Column: 22 In file: core::array
+01060:  [7]
+        tget 		 Line: 220, Column: 22 In file: core::array
+01061:  [3]
+        tget 		 Line: 220, Column: 22 In file: core::array
+01062:  jump 		 Line: 220, Column: 22 In file: core::array
+01063:  dup0 		 Line: 220, Column: 2 In file: core::array
+01064:  [0]
+        tget 		 Line: 220, Column: 2 In file: core::array
+01065:  [4]
+        xset 		 Line: 220, Column: 2 In file: core::array
+01066:  [1]
+        tget 		 Line: 220, Column: 2 In file: core::array
+01067:  [5]
+        xset 		 Line: 220, Column: 2 In file: core::array
+01068:  [3]
+        xget 		 Line: 221, Column: 53 In file: core::array
+01069:  [1]
+        xget 		 Line: 221, Column: 44 In file: core::array
+01070:  [1]
+        plus 		 Line: 221, Column: 44 In file: core::array
+01071:  [4]
+        xget 		 Line: 221, Column: 38 In file: core::array
+01072:  [CodePoint(Internal(1076))]
+        rget 		 Line: 221, Column: 22 In file: core::array
+01073:  [7]
+        tget 		 Line: 221, Column: 22 In file: core::array
+01074:  [3]
+        tget 		 Line: 221, Column: 22 In file: core::array
+01075:  jump 		 Line: 221, Column: 22 In file: core::array
+01076:  dup0 		 Line: 221, Column: 2 In file: core::array
+01077:  [0]
+        tget 		 Line: 221, Column: 2 In file: core::array
+01078:  [6]
+        xset 		 Line: 221, Column: 2 In file: core::array
+01079:  [1]
+        tget 		 Line: 221, Column: 2 In file: core::array
+01080:  [7]
+        xset 		 Line: 221, Column: 2 In file: core::array
+01081:  [7]
+        xget 		 Line: 222, Column: 22 In file: core::array
+01082:  [5]
+        xget 		 Line: 222, Column: 16 In file: core::array
+01083:  [6]
+        xget 		 Line: 222, Column: 10 In file: core::array
+01084:  [Tuple(_, _, _)]
+        noop 		 Line: 222, Column: 9 In file: core::array
+01085:  [0]
+        tset 		 Line: 222, Column: 9 In file: core::array
+01086:  [1]
+        tset 		 Line: 222, Column: 9 In file: core::array
+01087:  [2]
+        tset 		 Line: 222, Column: 9 In file: core::array
+01088:  auxpop 		 Line: 222, Column: 2 In file: core::array
+01089:  pop 		 Line: 222, Column: 2 In file: core::array
+01090:  auxpop 		 Line: 222, Column: 2 In file: core::array
+01091:  jump 		 Line: 222, Column: 2 In file: core::array
+01092:  auxpush 		 Line: 225, Column: 1 In file: core::array
+01093:  [Tuple(_, _, _, _, _, _, _, _)]
+        auxpush 		 Line: 225, Column: 1 In file: core::array
+01094:  [0]
+        xset 		 Line: 225, Column: 1 In file: core::array
+01095:  [1]
+        xset 		 Line: 225, Column: 1 In file: core::array
+01096:  [2]
+        xset 		 Line: 225, Column: 1 In file: core::array
+01097:  [3]
+        xset 		 Line: 225, Column: 1 In file: core::array
+01098:  [2]
+        xget 		 Line: 231, Column: 51 In file: core::array
+01099:  [1]
+        xget 		 Line: 231, Column: 44 In file: core::array
+01100:  [0]
+        xget 		 Line: 231, Column: 41 In file: core::array
+01101:  [CodePoint(Internal(1105))]
+        rget 		 Line: 231, Column: 21 In file: core::array
+01102:  [7]
+        tget 		 Line: 231, Column: 21 In file: core::array
+01103:  [4]
+        tget 		 Line: 231, Column: 21 In file: core::array
+01104:  jump 		 Line: 231, Column: 21 In file: core::array
+01105:  dup0 		 Line: 231, Column: 21 In file: core::array
+01106:  [0]
+        tget 		 Line: 231, Column: 21 In file: core::array
+01107:  [CodePoint(Internal(1112))]
+        cjump 		 Line: 231, Column: 21 In file: core::array
+01108:  auxpop 		 Line: 231, Column: 21 In file: core::array
+01109:  pop 		 Line: 231, Column: 21 In file: core::array
+01110:  auxpop 		 Line: 231, Column: 21 In file: core::array
+01111:  jump 		 Line: 231, Column: 21 In file: core::array
+01112:  [1]
+        tget 		 Line: 231, Column: 21 In file: core::array
+01113:  dup0 		 Line: 231, Column: 2 In file: core::array
+01114:  [0]
+        tget 		 Line: 231, Column: 2 In file: core::array
+01115:  [4]
+        xset 		 Line: 231, Column: 2 In file: core::array
+01116:  [1]
+        tget 		 Line: 231, Column: 2 In file: core::array
+01117:  [5]
+        xset 		 Line: 231, Column: 2 In file: core::array
+01118:  [3]
+        xget 		 Line: 232, Column: 56 In file: core::array
+01119:  [1]
+        xget 		 Line: 232, Column: 47 In file: core::array
+01120:  [1]
+        plus 		 Line: 232, Column: 47 In file: core::array
+01121:  [4]
+        xget 		 Line: 232, Column: 41 In file: core::array
+01122:  [CodePoint(Internal(1126))]
+        rget 		 Line: 232, Column: 21 In file: core::array
+01123:  [7]
+        tget 		 Line: 232, Column: 21 In file: core::array
+01124:  [4]
+        tget 		 Line: 232, Column: 21 In file: core::array
+01125:  jump 		 Line: 232, Column: 21 In file: core::array
+01126:  dup0 		 Line: 232, Column: 21 In file: core::array
+01127:  [0]
+        tget 		 Line: 232, Column: 21 In file: core::array
+01128:  [CodePoint(Internal(1133))]
+        cjump 		 Line: 232, Column: 21 In file: core::array
+01129:  auxpop 		 Line: 232, Column: 21 In file: core::array
+01130:  pop 		 Line: 232, Column: 21 In file: core::array
+01131:  auxpop 		 Line: 232, Column: 21 In file: core::array
+01132:  jump 		 Line: 232, Column: 21 In file: core::array
+01133:  [1]
+        tget 		 Line: 232, Column: 21 In file: core::array
+01134:  dup0 		 Line: 232, Column: 2 In file: core::array
+01135:  [0]
+        tget 		 Line: 232, Column: 2 In file: core::array
+01136:  [6]
+        xset 		 Line: 232, Column: 2 In file: core::array
+01137:  [1]
+        tget 		 Line: 232, Column: 2 In file: core::array
+01138:  [7]
+        xset 		 Line: 232, Column: 2 In file: core::array
+01139:  [7]
+        xget 		 Line: 233, Column: 27 In file: core::array
+01140:  [5]
+        xget 		 Line: 233, Column: 21 In file: core::array
+01141:  [6]
+        xget 		 Line: 233, Column: 15 In file: core::array
+01142:  [Tuple(_, _, _)]
+        noop 		 Line: 233, Column: 14 In file: core::array
+01143:  [0]
+        tset 		 Line: 233, Column: 14 In file: core::array
+01144:  [1]
+        tset 		 Line: 233, Column: 14 In file: core::array
+01145:  [2]
+        tset 		 Line: 233, Column: 14 In file: core::array
+01146:  [Tuple(1, _)]
+        noop 		 Line: 233, Column: 9 In file: core::array
+01147:  [1]
+        tset 		 Line: 233, Column: 9 In file: core::array
+01148:  auxpop 		 Line: 233, Column: 2 In file: core::array
+01149:  pop 		 Line: 233, Column: 2 In file: core::array
+01150:  auxpop 		 Line: 233, Column: 2 In file: core::array
+01151:  jump 		 Line: 233, Column: 2 In file: core::array
+01152:  auxpush 		 Line: 236, Column: 1 In file: core::array
+01153:  [Tuple(_, _, _, _, _, _, _)]
+        auxpush 		 Line: 236, Column: 1 In file: core::array
+01154:  [0]
+        xset 		 Line: 236, Column: 1 In file: core::array
+01155:  [1]
+        xset 		 Line: 236, Column: 1 In file: core::array
+01156:  [2]
+        xset 		 Line: 236, Column: 1 In file: core::array
+01157:  [0]
+        xget 		 Line: 242, Column: 16 In file: core::array
+01158:  [0]
+        tget 		 Line: 242, Column: 16 In file: core::array
+01159:  [3]
+        xset 		 Line: 242, Column: 2 In file: core::array
+01160:  [1]
+        xget 		 Line: 243, Column: 16 In file: core::array
+01161:  [3]
+        xget 		 Line: 243, Column: 6 In file: core::array
+01162:  gt 		 Line: 243, Column: 6 In file: core::array
+01163:  iszero 		 Line: 243, Column: 2 In file: core::array
+01164:  [CodePoint(Internal(1167))]
+        cjump 		 Line: 243, Column: 2 In file: core::array
+01165:  [1]
+        xget 		 Line: 244, Column: 13 In file: core::array
+01166:  [3]
+        xset 		 Line: 244, Column: 3 In file: core::array
+01167:  [2]
+        xget 		 Line: 246, Column: 38 In file: core::array
+01168:  [1]
+        xget 		 Line: 246, Column: 29 In file: core::array
+01169:  [CodePoint(Internal(1173))]
+        rget 		 Line: 246, Column: 12 In file: core::array
+01170:  [7]
+        tget 		 Line: 246, Column: 12 In file: core::array
+01171:  [5]
+        tget 		 Line: 246, Column: 12 In file: core::array
+01172:  jump 		 Line: 246, Column: 12 In file: core::array
+01173:  [4]
+        xset 		 Line: 246, Column: 2 In file: core::array
+01174:  [0]
+        noop 		 Line: 247, Column: 10 In file: core::array
+01175:  [5]
+        xset 		 Line: 247, Column: 2 In file: core::array
+01176:  [CodePoint(Internal(1179))]
+        noop 		 Line: 248, Column: 2 In file: core::array
+01177:  [6]
+        xset 		 Line: 248, Column: 2 In file: core::array
+01178:  [CodePoint(Internal(1193))]
+        jump 		 Line: 248, Column: 2 In file: core::array
+01179:  [5]
+        xget 		 Line: 249, Column: 54 In file: core::array
+01180:  [0]
+        xget 		 Line: 249, Column: 51 In file: core::array
+01181:  [CodePoint(Internal(1184))]
+        rget 		 Line: 249, Column: 34 In file: core::array
+01182:  [3]
+        tget 		 Line: 249, Column: 34 In file: core::array
+01183:  jump 		 Line: 249, Column: 34 In file: core::array
+01184:  [5]
+        xget 		 Line: 249, Column: 31 In file: core::array
+01185:  [4]
+        xget 		 Line: 249, Column: 26 In file: core::array
+01186:  [CodePoint(Internal(1189))]
+        rget 		 Line: 249, Column: 9 In file: core::array
+01187:  [6]
+        tget 		 Line: 249, Column: 9 In file: core::array
+01188:  jump 		 Line: 249, Column: 9 In file: core::array
+01189:  [4]
+        xset 		 Line: 249, Column: 3 In file: core::array
+01190:  [5]
+        xget 		 Line: 250, Column: 7 In file: core::array
+01191:  [1]
+        plus 		 Line: 250, Column: 7 In file: core::array
+01192:  [5]
+        xset 		 Line: 250, Column: 3 In file: core::array
+01193:  [3]
+        xget 		 Line: 248, Column: 13 In file: core::array
+01194:  [5]
+        xget 		 Line: 248, Column: 9 In file: core::array
+01195:  lt 		 Line: 248, Column: 9 In file: core::array
+01196:  [6]
+        xget 		 Line: 248, Column: 2 In file: core::array
+01197:  cjump 		 Line: 248, Column: 2 In file: core::array
+01198:  [4]
+        xget 		 Line: 252, Column: 9 In file: core::array
+01199:  auxpop 		 Line: 252, Column: 2 In file: core::array
+01200:  pop 		 Line: 252, Column: 2 In file: core::array
+01201:  auxpop 		 Line: 252, Column: 2 In file: core::array
+01202:  jump 		 Line: 252, Column: 2 In file: core::array

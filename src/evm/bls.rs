@@ -160,7 +160,11 @@ pub fn _evm_test_bls_registry(log_to: Option<&Path>, debug: bool) {
     assert_eq!(res3, expected[3]);
 
     if let Some(path) = log_to {
-        let _ = machine.runtime_env.recorder.to_file(path).unwrap();
+        let _ = machine
+            .runtime_env
+            .recorder
+            .to_file(path, machine.get_total_gas_usage().to_u64().unwrap())
+            .unwrap();
     }
 }
 
@@ -654,7 +658,11 @@ pub fn _evm_test_bls_signed_batch(log_to: Option<&Path>, debug: bool) -> Result<
     );
 
     if let Some(path) = log_to {
-        machine.runtime_env.recorder.to_file(path).unwrap();
+        machine
+            .runtime_env
+            .recorder
+            .to_file(path, machine.get_total_gas_usage().to_u64().unwrap())
+            .unwrap();
     }
 
     Ok(())

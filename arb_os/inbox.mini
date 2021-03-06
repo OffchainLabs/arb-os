@@ -19,8 +19,14 @@ use accounts::accountStore_get;
 use accounts::accountStore_set;
 use accounts::account_addToEthBalance;
 
+use blockhash::blockhash_submitHash;
+
 use chainParameters::chainParams_gotParamsMessage;
 use chainParameters::chainParams_chainId;
+use chainParameters::haveReceivedChainInitMessage;
+
+use gasAccounting::updateL1GasPriceEstimate;
+use gasAccounting::txFeeStats_zero;
 
 use messages::TxRequestData;
 
@@ -57,84 +63,34 @@ use signedTx::translateSignedTx;
 
 type Inbox = struct {
     queue: IncomingRequestQueue,  // Queue of requests that haven't yet been retrieved from the inbox
-    blockNum: uint,               // Highest blocknum of messages that we have retrieved from the inbox
+    arbBlockNum: uint,            // Highest Arbitrum blocknum of messages that we have retrieved from the inbox
+    ethBlockNum: uint,            // Highest L1 blocknum of messages that we have retrieved from the inbox
     timestamp: uint,              // Highest timestamp of messages that we have retrieved from the inbox
-    seenMsgAtThisBlockNum: bool,  // true iff we have seen a message at this block number
-    sequencer: option<SequencerState>,
-}
-
-type SequencerState = struct {
-    sequencerAddr: address,
-    delayBlocks: uint,
-    delayTime: uint,
-    delayQueue: IncomingRequestQueue,
-    lastBlockNumSeen: uint,      // Highest actual blocknum of message we have seen
-    lastTimestampSeen: uint,     // Highest actual timestamp of message we have seen
-    lastBlockNumReleased: uint,  // Highest blocknum we have released to inbox queue
-    lastTimestampReleased: uint, // Highest timestamp we have released to inbox queue
+    seenMsgAtThisArbBlockNum: bool, // true iff we have seen a message at this Arbitrum block number
+    seenMsgAtThisEthBlockNum: bool, // true iff we have seen a message at this Ethereum block number
+    inboxHashAccumulator: bytes32,  // hash accumulator covering all inbox messages so far
 }
 
 var globalInbox: Inbox;
 var globalInputQueue: struct {
-    txQ: IncomingRequestQueue,
+    txQ: TxRequestQueue,
     batchQ: IncomingRequestQueueStack,
 };
 
 public impure func inbox_init() {
     globalInbox = struct {
         queue: incomingRequestQueue_new(),
-        blockNum: 0,
+        arbBlockNum: 0,
+        ethBlockNum: 0,
         timestamp: 0,
-        seenMsgAtThisBlockNum: false,
-        sequencer: None<SequencerState>,
+        seenMsgAtThisArbBlockNum: false,
+        seenMsgAtThisEthBlockNum: false,
+        inboxHashAccumulator: bytes32(0),
     };
     globalInputQueue = struct {
-        txQ: incomingRequestQueue_new(),
+        txQ: txRequestQueue_new(),
         batchQ: incomingRequestQueueStack_new()
     };
-}
-
-public impure func inbox_changeSequencer(addr: address, delayBlocks: uint, delayTime: uint) {
-    // deliver messages from old sequencer, if any (shouldn't be needed, but doing it just to be extra cautious)
-    let bnum = globalInbox.blockNum;
-    let ts = globalInbox.timestamp;
-    if let Some(oldSeq) = globalInbox.sequencer {
-        bnum = oldSeq.lastBlockNumSeen;
-        ts = oldSeq.lastTimestampSeen;
-        let oldq = oldSeq.delayQueue;
-        while( ! incomingRequestQueue_isEmpty(oldq) ){
-            let (uq, rawMsg) = incomingRequestQueue_getOrDie(oldq);
-            oldq = uq;
-            let msg = unsafecast<IncomingRequest>(rawMsg);
-            globalInbox = globalInbox with {
-                queue: incomingRequestQueue_put(globalInbox.queue, msg)
-            };
-        }
-    }
-
-    if(addr == address(0)) {
-        globalInbox = globalInbox with { sequencer: None<SequencerState> };
-    } else {
-        // set up the new sequencer
-        if (delayBlocks > const::Sequencer_maxDelayBlocks) {
-            delayBlocks = const::Sequencer_maxDelayBlocks;
-        }
-        if (delayTime > const::Sequencer_maxDelaySeconds) {
-            delayTime = const::Sequencer_maxDelaySeconds;
-        }
-        globalInbox = globalInbox with {
-            sequencer: Some(struct {
-                sequencerAddr: addr,
-                delayBlocks: delayBlocks,
-                delayTime: delayTime,
-                delayQueue: incomingRequestQueue_new(),
-                lastBlockNumSeen: bnum,
-                lastTimestampSeen: ts,
-                lastBlockNumReleased: bnum,
-                lastTimestampReleased: ts,
-            })
-        };
-    }
 }
 
 public impure func inbox_get() -> IncomingRequest {
@@ -145,39 +101,17 @@ public impure func inbox_get() -> IncomingRequest {
 
     return xloop {
         while (incomingRequestQueue_isEmpty(globalInbox.queue)) {
-            if let Some(seqInfo) = globalInbox.sequencer {
-                globalInbox = getFromL1InboxSequencer(globalInbox, seqInfo);
-            } else {
-                globalInbox = getFromL1Inbox(globalInbox);
-            }
+            globalInbox = getFromL1Inbox(globalInbox);
         }
 
         let (updatedQ, rawMsg,) = incomingRequestQueue_getOrDie(globalInbox.queue);
-
         globalInbox = globalInbox with { queue: updatedQ };
-
         let ebMsg = unsafecast<IncomingRequest>(rawMsg);
-        if (ebMsg.blockNumber > globalInbox.blockNum) {
-            if ((globalInbox.sequencer != None<SequencerState>) && globalInbox.seenMsgAtThisBlockNum) {
-                let eobMsg = endOfBlockMessage(globalInbox.blockNum, globalInbox.timestamp);
-                globalInbox = globalInbox with {
-                    blockNum: ebMsg.blockNumber
-                } with {
-                    timestamp: ebMsg.timestamp
-                } with {
-                    seenMsgAtThisBlockNum: false
-                };
-                return eobMsg;
-            } else {
-                globalInbox = globalInbox with {
-                    blockNum: ebMsg.blockNumber
-                } with {
-                    timestamp: ebMsg.timestamp
-                } with {
-                    seenMsgAtThisBlockNum: true
-                };
-            }
-        }
+
+        let ebMsgHash = hashIncomingRequest(ebMsg);
+        globalInbox = globalInbox with {
+            inboxHashAccumulator: hash(globalInbox.inboxHashAccumulator, ebMsgHash)
+        };
 
         if (ebMsg.kind == const::L1MessageType_chainInit) {
             chainParams_gotParamsMessage(ebMsg.sender, ebMsg.msgData);
@@ -189,30 +123,27 @@ public impure func inbox_get() -> IncomingRequest {
     };
 }
 
-impure func getFromL1Inbox(inbox: Inbox) -> Inbox {
-    // Get a message from the L1 inbox, and append it to the inbox (assuming no sequencer).
-    // If there are no messages available in the L1 inbox, this blocks until one is available.
-    if (inbox.seenMsgAtThisBlockNum) {
-        let sameBlockNum = asm(inbox.blockNum,) bool { inboxpeek };
-        if ( ! sameBlockNum) {
-            // peek says we hit end of L1 block, so insert end-of-block message and return
-            return inbox with {
-                queue: incomingRequestQueue_put(
-                    inbox.queue,
-                    endOfBlockMessage(inbox.blockNum, inbox.timestamp),
-                )
-            } with {
-                blockNum: inbox.blockNum+1
-            } with {
-                seenMsgAtThisBlockNum: false
-            };
-        }
+impure func incomingRequestFromRaw(newMsgRaw: IncomingRequestFromInbox, adminMode: bool) -> IncomingRequest {
+    if (! adminMode) {
+        updateL1GasPriceEstimate(newMsgRaw.sender, newMsgRaw.gasPriceL1);
     }
 
-    let newMsgRaw = asm() IncomingRequestFromInbox { inbox };
-    let newMsg = struct {
+    if (newMsgRaw.ethBlockNumber == 0) {
+        newMsgRaw = newMsgRaw with { ethBlockNumber: globalInbox.ethBlockNum };
+    }
+    if (newMsgRaw.timestamp == 0) {
+        newMsgRaw = newMsgRaw with { timestamp: globalInbox.timestamp };
+    }
+
+    return struct {
         kind: newMsgRaw.kind,
-        blockNumber: newMsgRaw.blockNumber,
+        arbBlockNumber:
+            xif (newMsgRaw.timestamp > globalInbox.timestamp && globalInbox.seenMsgAtThisArbBlockNum) {
+                globalInbox.arbBlockNum + 1
+            } else {
+                globalInbox.arbBlockNum
+            },
+        ethBlockNumber: newMsgRaw.ethBlockNumber,
         timestamp: newMsgRaw.timestamp,
         sender: newMsgRaw.sender,
         requestId: newMsgRaw.requestId,
@@ -223,155 +154,90 @@ impure func getFromL1Inbox(inbox: Inbox) -> Inbox {
             indexInParent: ~0,
         },
         aggregator: None<AggregatorInfo>,
+        adminMode: adminMode,
     };
+}
 
-    if (newMsg.blockNumber == 0) {
-        newMsg = newMsg with { blockNumber: inbox.blockNum };
+impure func getFromL1Inbox(inbox: Inbox) -> Inbox {
+    // Get a message from the L1 inbox, and append it to the inbox.
+    // If there are no messages available in the L1 inbox, this blocks until one is available.
+    if (inbox.seenMsgAtThisEthBlockNum) {
+        let sameBlockNum = asm(inbox.ethBlockNum,) bool { inboxpeek };
+        if ( ! sameBlockNum) {
+            // Inboxpeek says we hit end of L1 block.
+            // This implies we have hit the end of an Arbitrum block, so do the end of block things.
+            let (updatedInbox, endOfArbBlock) = maybeEndOfArbitrumBlock(inbox);
+            return xif(endOfArbBlock) {
+                updatedInbox with {
+                    ethBlockNum: inbox.ethBlockNum + 1
+                } with {
+                    seenMsgAtThisEthBlockNum: false
+                }
+            } else {
+                updatedInbox
+            };
+        }
     }
-    if (newMsg.timestamp == 0) {
-        newMsg = newMsg with { timestamp: inbox.timestamp };
+
+    let newMsg = incomingRequestFromRaw(asm() IncomingRequestFromInbox { inbox }, false);
+    if (newMsg.arbBlockNumber > inbox.arbBlockNum) {
+        let (updatedInbox, _) = maybeEndOfArbitrumBlock(inbox);
+        inbox = updatedInbox;
     }
-
-
     return inbox with {
         queue: incomingRequestQueue_put(inbox.queue, newMsg)
     } with {
-        blockNum: newMsg.blockNumber
+        ethBlockNum: newMsg.ethBlockNumber
+    } with {
+        arbBlockNum: newMsg.arbBlockNumber
     } with {
         timestamp: newMsg.timestamp
     } with {
-        seenMsgAtThisBlockNum: true
+        seenMsgAtThisEthBlockNum: true
+    } with {
+        seenMsgAtThisArbBlockNum: true
     };
 }
 
-impure func getFromL1InboxSequencer(inbox: Inbox, seq: SequencerState) -> Inbox {
-    let newMsgRaw = asm() IncomingRequestFromInbox { inbox };
-    let newMsg = struct {
-        kind: newMsgRaw.kind,
-        blockNumber: newMsgRaw.blockNumber,
-        timestamp: newMsgRaw.timestamp,
-        sender: newMsgRaw.sender,
-        requestId: newMsgRaw.requestId,
-        msgData: bytearray_fromSizeAndBuffer(newMsgRaw.msgSize, newMsgRaw.msgData),
-        provenance: struct {
-            l1SeqNum: newMsgRaw.requestId,
-            parentRequestId: 0,
-            indexInParent: ~0,
-        },
-        aggregtor: None<AggregatorInfo>,
-    };
+impure func maybeEndOfArbitrumBlock(inbox: Inbox) -> (Inbox, bool) {
+    // returns updated inbox, and whether it was truly the end of the Arbitrum block
+    // (if a sideload is provided, it's not truly the end of the Arbitrum block)
 
-    let blockNum = newMsg.blockNumber;
-    if (blockNum == 0) {
-        blockNum = seq.lastBlockNumSeen;
+    let rawSideloadMsg = asm(inbox.arbBlockNum,) any { sideload };
+    return xif (rawSideloadMsg != ()) {
+        let newMsg = incomingRequestFromRaw(unsafecast<IncomingRequestFromInbox>(rawSideloadMsg), true);
+        (
+            inbox with {
+                queue: incomingRequestQueue_put(inbox.queue, newMsg)
+            },
+            false,
+        )
     } else {
-        seq = seq with { lastBlockNumSeen: blockNum };
-    }
-    let timestamp = newMsg.timestamp;
-    if (timestamp == 0) {
-        timestamp = seq.lastBlockNumSeen;
-    } else {
-        seq = seq with { lastTimestampSeen: timestamp };
-    }
-
-    let isSequencerMsg = (newMsg.kind == const::L1MessageType_L2)
-                         && (bytearray_getByte(newMsg.msgData, 0) == const::L2MessageType_sequencerBatch)
-                         && (newMsg.sender == seq.sequencerAddr);
-    return xif (isSequencerMsg) {
-        // get low-order two bytes of blockNum assigned to this message, and reconstruct that blockNum
-        let bnum = (blockNum & ~0xffff)
-                         + asm (256-16, bytearray_get256(newMsg.msgData, 1)) uint { shr };
-        if ((bnum <= blockNum) || (bnum < 256*256)) {
-            blockNum = bnum;
-        } else {
-            // blocknum is too large, try the next smaller value with same last 2 bytes
-            blockNum = bnum-256*256;   // can't underflow because of check above
-        }
-        // get low-order three bytes of timestamp assigned to this message, and reconstruct that timestamp
-        let ts = (timestamp & ~0xffffff)
-                        + asm (256-24, bytearray_get256(newMsg.msgData, 3)) uint { shr };
-        if ((ts <= timestamp) || (ts < 256*256*256)) {
-            timestamp = ts;
-        } else {
-            // timestamp is too large, try the next smaller value with same last 3 bytes
-            timestamp = ts - 256*256*256;  // can't underflow because of check above
-        }
-
-        // make sure blockNum isn't more than seq.delayBlocks in the past
-        if (blockNum+seq.delayBlocks < seq.lastBlockNumSeen) {
-            blockNum = seq.lastBlockNumSeen - seq.delayBlocks;
-        }
-
-        // separately, make sure timestamp isn't more than seq.delayTime in the past
-        if (timestamp+seq.delayTime < seq.lastTimestampSeen) {
-            timestamp = seq.lastTimestampSeen - seq.delayTime;
-        }
-
-        let (uSeq, uInboxQ) = releaseDelayedRequests(
-            seq,
-            inbox.queue,
-            blockNum,
-            timestamp,
-        );
-        seq = uSeq;
-        inbox = inbox with { queue: uInboxQ };
-
-        if (blockNum < seq.lastBlockNumReleased) {
-            blockNum = seq.lastBlockNumReleased;
-        }
-        if (timestamp < seq.lastTimestampReleased) {
-            timestamp = seq.lastTimestampReleased;
-        }
-
-        inbox with {
-            queue: incomingRequestQueue_put(
-                inbox.queue,
-                newMsg with { blockNumber: blockNum } with { timestamp: timestamp }
-            )
-        } with {
-            sequencer: Some(
-                seq with {
-                    lastBlockNumReleased: blockNum
+        (
+            xif (haveReceivedChainInitMessage()) {
+                inbox with {
+                    queue: incomingRequestQueue_put(
+                        inbox.queue,
+                        endOfArbBlockMessage(inbox.arbBlockNum, inbox.ethBlockNum, inbox.timestamp),
+                    )
                 } with {
-                    lastTimestampReleased: timestamp
+                    arbBlockNum: inbox.arbBlockNum+1
+                } with {
+                    seenMsgAtThisArbBlockNum: false
                 }
-            )
-        }
-    } else {
-        if ((blockNum >= seq.delayBlocks) && (timestamp >= seq.delayTime)) {
-            let (uSeq, uInboxQ) = releaseDelayedRequests(
-                seq,
-                inbox.queue,
-                blockNum - seq.delayBlocks,  // can't underflow because of check above
-                timestamp - seq.delayTime,   // can't underflow because of check above
-            );
-            seq = uSeq;
-            inbox = inbox with { queue: uInboxQ };
-        }
-
-        inbox with {
-            sequencer: Some(seq with {
-                delayQueue: incomingRequestQueue_put(
-                    seq.delayQueue,
-                    newMsg with {
-                        blockNumber: blockNum + const::Sequencer_deltaBlocks
-                    } with {
-                        timestamp: timestamp + const::Sequencer_deltaSeconds
-                    }
-                )
-            } with {
-                lastBlockNumSeen: blockNum
-            } with {
-                lastTimestampSeen: timestamp
-            })
-        }
+            } else {
+                inbox
+            },
+            true
+        )
     };
 }
 
-func endOfBlockMessage(blockNum: uint, timestamp: uint) -> IncomingRequest {
+func endOfArbBlockMessage(arbBlockNum: uint, ethBlockNum: uint, timestamp: uint) -> IncomingRequest {
     return struct {
         kind: const::L1MessageType_endOfBlock,
-        blockNumber: blockNum,
+        arbBlockNumber: arbBlockNum,
+        ethBlockNumber: ethBlockNum,
         timestamp: timestamp,
         sender: address(0),
         requestId: 0,
@@ -382,65 +248,44 @@ func endOfBlockMessage(blockNum: uint, timestamp: uint) -> IncomingRequest {
             indexInParent: ~0,
         },
         aggregator: None<AggregatorInfo>,
+        adminMode: false,
     };
 }
-
-func releaseDelayedRequests(
-    seqInfo: SequencerState,
-    inQ: IncomingRequestQueue,
-    blockNum: uint,
-    timestamp: uint,
-) -> (SequencerState, IncomingRequestQueue) {
-    return xloop {
-        if let Some(res) = incomingRequestQueue_get(seqInfo.delayQueue) {
-            let (udq, rawMsg) = res;
-            let msg = unsafecast<IncomingRequest>(rawMsg);
-            if ((msg.blockNumber <= blockNum) || (msg.timestamp <= timestamp)) {
-                seqInfo = seqInfo with {
-                    delayQueue: udq
-                } with {
-                    lastBlockNumReleased: msg.blockNumber
-                } with {
-                    lastTimestampReleased: msg.timestamp
-                };
-                inQ = incomingRequestQueue_put(inQ, msg);
-            } else {
-                return (seqInfo, inQ);
-            }
-        } else {
-            return (seqInfo, inQ);
-        }
-    };
-}
-
 
 public impure func inbox_currentTimestamp() -> uint {
     return globalInbox.timestamp;
 }
 
-public impure func inbox_currentBlockNumber() -> uint {
-    return globalInbox.blockNum;
+public impure func inbox_currentArbBlockNumber() -> uint {
+    return globalInbox.arbBlockNum;
+}
+
+public impure func inbox_currentEthBlockNumber() -> uint {
+    return globalInbox.ethBlockNum;
 }
 
 type IncomingRequestFromInbox = struct {
     kind: uint,               // type of message
-    blockNumber: uint,        // block number of the L1 block
+    ethBlockNumber: uint,     // block number of the L1 block
     timestamp: uint,          // timestamp of the L1 block
     sender: address,          // address of the sender
     requestId: uint,
+    gasPriceL1: uint,         // L1 gas price paid by this tx
     msgSize: uint,
     msgData: buffer,
 }
 
 type IncomingRequest = struct {
     kind: uint,               // type of message
-    blockNumber: uint,        // block number of the L1 block
+    arbBlockNumber: uint,     // Arbitrum block number
+    ethBlockNumber: uint,     // block number of the L1 block
     timestamp: uint,          // timestamp of the L1 block
     sender: address,          // address of the sender
     requestId: uint,
     msgData: ByteArray,       // kind-specific data
     provenance: RequestProvenance,
     aggregator: option<AggregatorInfo>,
+    adminMode: bool,
 }
 
 type RequestProvenance = struct {
@@ -454,13 +299,36 @@ type AggregatorInfo = struct {
     calldataBytes: uint,
 }
 
+func hashIncomingRequest(req: IncomingRequest) -> bytes32 {
+    return hash(
+        bytes32(req.kind),
+        hash(
+            bytes32(req.arbBlockNumber),
+            hash(
+                bytes32(req.ethBlockNumber),
+                hash(
+                    bytes32(req.timestamp),
+                    hash(
+                        bytes32(req.sender),
+                        hash(
+                            bytes32(req.requestId),
+                            keccak256(req.msgData, 0, bytearray_size(req.msgData)),
+                        )
+                    )
+                )
+            )
+        )
+    );
+}
+
 public impure func inbox_getNextUnpackedRequest() -> (
     option<IncomingRequest>,  // if it was an L1 message
     option<TxRequestData>,    // if it was an L2 tx message
 ) {
     let msg = unsafecast<IncomingRequest>(());   // value will be re-initialized before use
+    
     return xloop {
-        if let Some(res) = incomingRequestQueue_get(globalInputQueue.txQ) {
+        if let Some(res) = txRequestQueue_get(globalInputQueue.txQ) {
             let (newQ, tx) = res;
             globalInputQueue = globalInputQueue with {
                 txQ: newQ
@@ -534,7 +402,8 @@ public impure func inbox_getNextUnpackedRequest() -> (
                 //      note that deposit doesn't happen in this case
             } elseif (msg.kind == const::L1MessageType_endOfBlock) {
                 // it's an end-of-block message, so just trigger end-of-block processing
-                outputStats_endOfBlock(msg.blockNumber, msg.timestamp);
+                outputStats_endOfBlock(msg.arbBlockNumber, msg.timestamp);
+                blockhash_submitHash(msg.arbBlockNumber, msg.ethBlockNumber, globalInbox.inboxHashAccumulator);
             } elseif (msg.kind == const::L1MessageType_L2) {
                 // it's an L2 message, so switch based on the L2 type
                 let firstByte = bytearray_getByte(msg.msgData, 0);
@@ -558,7 +427,7 @@ public impure func inbox_getNextUnpackedRequest() -> (
                         msg,
                         unsafecast<Queue>(globalInputQueue.txQ)
                     ) {
-                        globalInputQueue = globalInputQueue with { txQ: unsafecast<IncomingRequestQueue>(updatedQ) };
+                        globalInputQueue = globalInputQueue with { txQ: unsafecast<TxRequestQueue>(updatedQ) };
                     }
                     // else BLS batch was bad, so ignore it
                 } else {
@@ -630,7 +499,8 @@ impure func translateUnsignedTx(request: IncomingRequest) -> option<TxRequestDat
             calldata: calldata,
             nonMutating: (subtype == const::L2MessageType_nonmutatingCall),
             isConstructor: (destAddrAsUint == 0),
-            incomingRequest: request
+            incomingRequest: request,
+            feeStats: txFeeStats_zero(),
         }
     );
 }
@@ -660,7 +530,8 @@ func translateBuddyDeployTx(request: IncomingRequest) -> option<TxRequestData> {
             calldata: calldata,
             nonMutating: false,
             isConstructor: true,
-            incomingRequest: request
+            incomingRequest: request,
+            feeStats: txFeeStats_zero(),
         }
     );
 }
@@ -713,3 +584,51 @@ func incomingRequestQueueStack_get(qs: IncomingRequestQueueStack) -> option<(Inc
 func incomingRequestQueueStack_push(qs: IncomingRequestQueueStack, q: IncomingRequestQueue) -> IncomingRequestQueueStack {
     return struct { qs: queuestack_push(qs.qs, q.q) };
 }
+
+
+type TxRequestQueue = struct {
+    q: Queue,
+}
+
+func txRequestQueue_new() -> TxRequestQueue {
+    return struct { q: queue_new() };
+}
+
+func txRequestQueue_isEmpty(q: TxRequestQueue) -> bool {
+    return queue_isEmpty(q.q);
+}
+
+func txRequestQueue_get(q: TxRequestQueue) -> option<(TxRequestQueue, TxRequestData)> {
+    let (uq, item) = queue_get(q.q)?;
+    return Some((struct{ q: uq }, unsafecast<TxRequestData>(item)));
+}
+
+func txRequestQueue_getOrDie(q: TxRequestQueue) -> (TxRequestQueue, TxRequestData) {
+    return xif let Some(res) = txRequestQueue_get(q) {
+        res
+    } else {
+        panic
+    };
+}
+
+func txRequestQueue_put(q: TxRequestQueue, req: TxRequestData) -> TxRequestQueue {
+    return struct { q: queue_put(q.q, req) };
+}
+
+type TxRequestQueueStack = struct {
+    qs: QueueStack,
+}
+
+func txRequestQueueStack_new() -> TxRequestQueueStack {
+    return struct { qs: queuestack_new() };
+}
+
+func txRequestQueueStack_get(qs: TxRequestQueueStack) -> option<(TxRequestQueueStack, TxRequestData)> {
+    let (uqs, rawMsg) = queuestack_get(qs.qs)?;
+    return Some((struct { qs: uqs }, unsafecast<TxRequestData>(rawMsg)));
+}
+
+func txRequestQueueStack_push(qs: TxRequestQueueStack, q: TxRequestQueue) -> TxRequestQueueStack {
+    return struct { qs: queuestack_push(qs.qs, q.q) };
+}
+
