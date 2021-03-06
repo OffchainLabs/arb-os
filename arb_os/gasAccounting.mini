@@ -26,6 +26,7 @@ use accounts::account_getAggregatorToPay;
 use evmCallStack::evmCallStack_isEmpty;
 use evmCallStack::evmCallStack_getAccountInCurrentContext;
 use evmCallStack::evmCallStack_setAccountInCurrentContext;
+use evmCallStack::evmCallStack_transferEthInCurrentContext;
 
 use messages::TxRequestData;
 
@@ -938,6 +939,45 @@ func getRequestGasInfo(
     }
     panic;  // shouldn't happen
     return (false, 0, 0, address(0), 0, 0);
+}
+
+public impure func chargeForRetryableTx(
+    sender: address,
+    calldataSize: uint,
+    gasPriceL1: uint,
+) -> (bool, TxFeeStats) {
+    return xif (gasAccountingInfo.feeConfig.enabled) {
+        let calldataPrice = gasPriceL1 / 256;
+        let totalDue = gasPriceL1 + calldataPrice * calldataSize;
+
+        xif (evmCallStack_transferEthInCurrentContext(sender, gasAccountingInfo.feeConfig.forNetwork, totalDue) == Some(())) {
+            let feeStats = txFeeStats_zero();
+            feeStats = feeStats with {
+                price: feeStats.price with {
+                    tx: gasPriceL1
+                } with {
+                    calldataByte: calldataPrice
+                }
+            } with {
+                units: feeStats.price with {
+                    tx: 1
+                } with {
+                    calldataByte: calldataSize
+                }
+            } with {
+                weiPaid: feeStats.weiPaid with {
+                    tx: gasPriceL1
+                } with {
+                    calldataByte: calldataPrice * calldataSize
+                }
+            };
+            (true, feeStats)
+        } else {
+            (false, txFeeStats_zero())
+        }
+    } else {
+        (true, txFeeStats_zero())
+    };
 }
 
 // The L1 gas price estimator is a weighted average of recent L1 gas prices of messages injected by

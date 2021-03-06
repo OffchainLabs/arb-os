@@ -27,6 +27,7 @@ use accounts::account_setStorageCell;
 use accounts::account_getBalance;
 use accounts::account_setBalance;
 use accounts::account_deductFromEthBalance;
+use accounts::account_addToEthBalance;
 use accounts::account_getAllStorage;
 use accounts::account_getStartCodePoint;
 use accounts::account_setContractInfo;
@@ -1125,6 +1126,23 @@ public impure func evmCallStack_setAccountInCurrentContext(addr: address, acct: 
             )
         );
     }
+}
+
+public impure func evmCallStack_transferEthInCurrentContext(from: address, to: address, amount: uint) -> option<()> {
+    return xif (from == to) {
+        Some(())  // self-transfer is a no-op
+    } else {
+        xif let Some(updatedFrom) = account_deductFromEthBalance(evmCallStack_getAccountInCurrentContext(from), amount) {
+            evmCallStack_setAccountInCurrentContext(from, updatedFrom);
+            evmCallStack_setAccountInCurrentContext(
+                to,
+                account_addToEthBalance(evmCallStack_getAccountInCurrentContext(to), amount)
+            );
+            Some(())
+        } else {
+            None<()>
+        }
+    };
 }
 
 public impure func evmCallStack_getTopFrameMemoryOrDie() -> ByteArray {

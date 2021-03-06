@@ -12,6 +12,7 @@ use evmlogs::EvmLogs;
 
 use gasAccounting::GasUsage;
 use gasAccounting::txFeeStats_zero;
+use gasAccounting::chargeForRetryableTx;
 
 use inbox::IncomingRequest;
 use inbox::inbox_currentTimestamp;
@@ -217,16 +218,30 @@ public impure func processRetryableTx(req: IncomingRequest) {
         );
     }
 
-    let txHash = retryBuffer_insertNew(req.requestId, sender, destination, callvalue, calldata);
+    // charge for injecting this message
+    let (paid, feeStats) = chargeForRetryableTx(sender, calldataSize, req.gasPriceL1);
 
-    // emit tx receipt for this submission
-    emitTxReceipt(
-        req,
-        const::TxResultCode_success,
-        Some(bytearray_set256(bytearray_set256(bytearray_new(0), 0, req.requestId), 32, uint(txHash))),
-        None<EvmLogs>,
-        None<GasUsage>,
-        txFeeStats_zero(),
-    );
+    if (paid) {
+        // remember the retryable tx
+        let txHash = retryBuffer_insertNew(req.requestId, sender, destination, callvalue, calldata);
+
+        emitTxReceipt(
+            req,
+            const::TxResultCode_success,
+            Some(bytearray_set256(bytearray_set256(bytearray_new(0), 0, req.requestId), 32, uint(txHash))),
+            None<EvmLogs>,
+            None<GasUsage>,
+            feeStats,
+        );
+    } else {
+        emitTxReceipt(
+            req,
+            const::TxResultCode_noGasFunds,
+            None<ByteArray>,
+            None<EvmLogs>,
+            None<GasUsage>,
+            feeStats,
+        );
+    }
 }
 
