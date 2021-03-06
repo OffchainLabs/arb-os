@@ -5,7 +5,7 @@
 //!Provides utilities for emulation of AVM bytecode.
 
 use super::runtime_env::RuntimeEnvironment;
-use crate::compile::{CompileError, DebugInfo};
+use crate::compile::{CompileError, ast::DebugInfo};
 use crate::link::LinkedProgram;
 use crate::mavm::{AVMOpcode, Buffer, CodePt, Instruction, Value};
 use crate::pos::{try_display_location, Location};

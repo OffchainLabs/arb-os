@@ -5,7 +5,7 @@
 //!Provides types and utilities for linking together compiled mini programs
 
 use crate::compile::{
-    compile_from_file, CompileError, CompiledProgram, DebugInfo, GlobalVarDecl, SourceFileMap, Type,
+    compile_from_file, CompileError, CompiledProgram, GlobalVarDecl, SourceFileMap, ast::{Type, DebugInfo},
 };
 use crate::mavm::{AVMOpcode, Instruction, Label, Opcode, Value};
 use crate::pos::try_display_location;

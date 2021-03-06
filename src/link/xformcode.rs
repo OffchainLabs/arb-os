@@ -5,7 +5,8 @@
 //!Provides utilities for dealing with nested tuples and conversion from large flat tuples to
 //! nested tuples
 
-use crate::compile::{CompileError, DebugInfo};
+use crate::compile::CompileError;
+use crate::compile::ast::DebugInfo;
 use crate::mavm::{AVMOpcode, CodePt, Instruction, Opcode, Value};
 use crate::uint256::Uint256;
 

@@ -1,4 +1,4 @@
-use crate::compile::{AbstractSyntaxTree, StructField, Type, TypeCheckedNode};
+use crate::compile::{AbstractSyntaxTree, TypeCheckedNode, ast::Type, ast::StructField};
 use crate::link::LinkedProgram;
 use crate::GenUpgrade;
 use serde::{Deserialize, Serialize};

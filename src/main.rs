@@ -19,7 +19,7 @@ use std::collections::BTreeMap;
 use std::fs::File;
 use std::io;
 use std::io::Read;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::time::Instant;
 use uint256::Uint256;
 
