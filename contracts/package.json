@@ -12,6 +12,7 @@
   },
   "scripts": {
     "build": "hardhat compile",
+    "typechain": "hardhat typechain",
     "deploy:test": "hardhat run --network localhost scripts/deploy-test.js"
   }
 }
