@@ -363,7 +363,7 @@ impure func arbsys_sendTxToL1(topFrame: EvmCallFrame, calldata: ByteArray) { // 
         evmOp_log3(
             0,
             bytearray_size(mem),
-            const::EVMLogTopicPlaceHolderForL2ToL1Send,
+            const::EVMLogTopicForL2ToL1Send,
             uint(caller),
             0,    // batch number will be filled in later
         );
