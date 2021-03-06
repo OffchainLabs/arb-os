@@ -5,7 +5,7 @@
 //!Provides types and utilities for linking together compiled mini programs
 
 use crate::compile::{
-    compile_from_file, CompileError, CompiledProgram, DebugInfo, GlobalVarDecl, SourceFileMap, Type,
+    CompileError, CompiledProgram, DebugInfo, GlobalVarDecl, SourceFileMap, Type,
 };
 use crate::mavm::{AVMOpcode, Instruction, Label, Opcode, Value};
 use crate::pos::try_display_location;
@@ -209,7 +209,7 @@ pub fn postlink_compile(
             println!("{:04}:  {}", idx, insn);
         }
     }
-    let (mut code5, jump_table_final) =
+    let (mut code_5, jump_table_final) =
         striplabels::strip_labels(code_4, &jump_table, &program.imported_funcs)?;
     let jump_table_value = xformcode::jump_table_to_value(jump_table_final);
 
@@ -307,7 +307,12 @@ pub fn link(
         func_offset = new_func_offset + 1;
     }
 
-    global_num_limit += 1;
+    global_num_limit.push(GlobalVarDecl::new(
+        usize::MAX,
+        "_jump_table".to_string(),
+        Type::Any,
+        None,
+    ));
 
     // Initialize globals or allow jump table retrieval
     let mut linked_code = if test_mode {
@@ -319,7 +324,7 @@ pub fn link(
             ),
             Instruction::from_opcode_imm(
                 Opcode::AVMOpcode(AVMOpcode::Noop),
-                make_uninitialized_tuple(global_num_limit),
+                make_uninitialized_tuple(global_num_limit.len()),
                 DebugInfo::default(),
             ),
             Instruction::from_opcode(Opcode::AVMOpcode(AVMOpcode::Rset), DebugInfo::default()),
@@ -334,7 +339,7 @@ pub fn link(
             ),
             Instruction::from_opcode_imm(
                 Opcode::AVMOpcode(AVMOpcode::Rset),
-                make_uninitialized_tuple(global_num_limit),
+                make_uninitialized_tuple(global_num_limit.len()),
                 DebugInfo::default(),
             ),
         ]

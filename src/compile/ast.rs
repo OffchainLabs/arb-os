@@ -122,6 +122,9 @@ impl AbstractSyntaxTree for Type {
             Type::Map(key, value) => vec![TypeCheckedNode::Type(key), TypeCheckedNode::Type(value)],
         }
     }
+    fn is_pure(&mut self) -> bool {
+        true
+    }
 }
 
 impl Type {

@@ -8,7 +8,7 @@ use crate::link::{ExportedFunc, Import, ImportedFunc};
 use crate::mavm::Instruction;
 use crate::pos::{BytePos, Location};
 use crate::stringtable::StringTable;
-use ast::{Func, FuncDecl, GlobalVarDecl, TypeTree};
+use ast::{Func, TypeTree};
 use lalrpop_util::lalrpop_mod;
 use mini::DeclsParser;
 use miniconstants::init_constant_table;
@@ -20,7 +20,7 @@ use std::fs::File;
 use std::hash::{Hash, Hasher};
 use std::io::{self, Read};
 use std::path::Path;
-use typecheck::{AbstractSyntaxTree, TypeCheckedFunc, TypeCheckedNode};
+use typecheck::TypeCheckedFunc;
 
 pub use ast::{DebugInfo, GlobalVarDecl, StructField, TopLevelDecl, Type};
 pub use source::Lines;

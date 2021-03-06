@@ -18,8 +18,8 @@ use run::{
 use std::collections::BTreeMap;
 use std::fs::File;
 use std::io;
-use std::path::{Path, PathBuf};
 use std::io::Read;
+use std::path::{Path, PathBuf};
 use std::time::Instant;
 use uint256::Uint256;
 

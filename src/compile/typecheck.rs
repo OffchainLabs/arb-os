@@ -5,9 +5,6 @@
 //!Converts non-type checked ast nodes to type checked versions, and other related utilities.
 
 use super::ast::{
-    BinaryOp, CodeBlock, Constant, DebugInfo, Expr, ExprKind, Func, FuncArg, FuncDecl, FuncDeclKind,
-    GlobalVarDecl, MatchPattern, MatchPatternKind, Statement, StatementKind, StructField, TopLevelDecl, TrinaryOp,
-    Type, TypeTree, UnaryOp,
     BinaryOp, CodeBlock, Constant, DebugInfo, Expr, ExprKind, Func, FuncDeclKind, GlobalVarDecl,
     MatchPattern, MatchPatternKind, Statement, StatementKind, StructField, TopLevelDecl, TrinaryOp,
     Type, TypeTree, UnaryOp,
@@ -72,6 +69,7 @@ impl<'a> AbstractSyntaxTree for TypeCheckedNode<'a> {
             TypeCheckedNode::Statement(stat) => stat.is_pure(),
             TypeCheckedNode::Expression(exp) => exp.is_pure(),
             TypeCheckedNode::StructField(field) => field.is_pure(),
+            TypeCheckedNode::Type(_) => true,
         }
     }
 }

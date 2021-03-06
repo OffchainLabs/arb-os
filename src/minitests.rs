@@ -3,7 +3,9 @@
  */
 
 use crate::mavm::Value;
-use crate::run::{_bytestack_from_bytes, load_from_file, run_from_file, Machine, RuntimeEnvironment, run};
+use crate::run::{
+    _bytestack_from_bytes, load_from_file, run, run_from_file, Machine, RuntimeEnvironment,
+};
 use crate::uint256::Uint256;
 use num_bigint::{BigUint, RandBigInt};
 use rlp::RlpStream;
@@ -694,11 +696,15 @@ fn test_precompile5_big() {
 #[test]
 fn reinterpret_register() {
     let rt_env = RuntimeEnvironment::new(Uint256::from_usize(1111), None);
-    let mut old_machine = load_from_file(Path::new("upgradetests/regcopy_old.mexe"), rt_env.clone());
+    let mut old_machine =
+        load_from_file(Path::new("upgradetests/regcopy_old.mexe"), rt_env.clone());
     let _ = run(&mut old_machine, vec![], false);
     let mut new_machine = load_from_file(Path::new("upgradetests/regcopy_new.mexe"), rt_env);
     run(&mut new_machine, vec![old_machine.register], false).unwrap();
-    assert_eq!(*new_machine.stack_top().unwrap(), Value::Int(Uint256::one()));
+    assert_eq!(
+        *new_machine.stack_top().unwrap(),
+        Value::Int(Uint256::one())
+    );
 }
 
 #[test]
@@ -719,5 +725,8 @@ fn small_upgrade() {
     //let mut new_machine = load_from_file(Path::new("upgradetests/regcopy_new.mexe"), rt_env);
     //run(&mut new_machine, vec![machine.register], false).unwrap();
     println!("Machine state after: {:?}", machine.state);
-    assert_eq!(*machine.stack_top().unwrap(), Value::Int(Uint256::from_u64(42)));
+    assert_eq!(
+        *machine.stack_top().unwrap(),
+        Value::Int(Uint256::from_u64(42))
+    );
 }
