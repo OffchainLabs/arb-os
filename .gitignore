@@ -13,6 +13,7 @@ arb_os/*.mexe
 arb_os/evmJumpTable.mini
 builtin/*.mao
 builtin/*.mexe
+scripts/*.mexe
 stdlib/*.mao
 stdlib/*.mexe
 minitests/*.mao

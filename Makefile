@@ -7,6 +7,7 @@ ARTIFACTDIR = contracts/artifacts/arbos
 CONTRACTDIR = contracts/arbos
 TCSRCDIR = $(CONTRACTDIR)/test
 TCBUILDDIR = $(ARTIFACTDIR)/test
+SCRIPTDIR = scripts
 ACSRCDIR = $(CONTRACTDIR)/builtin
 ACBUILDDIR = $(ARTIFACTDIR)/builtin
 ARBOS = $(ARBOSDIR)/arbos.mexe
@@ -15,6 +16,7 @@ TEMPLATES = $(ARBOSDIR)/contractTemplates.mini
 TESTFILES = $(BUILTINDIR)/kvstest.mexe $(STDDIR)/queuetest.mexe $(BUILTINDIR)/arraytest.mexe $(BUILTINDIR)/globaltest.mexe $(STDDIR)/priorityqtest.mexe $(STDDIR)/bytearraytest.mexe $(STDDIR)/keccaktest.mexe $(STDDIR)/biguinttest.mexe $(STDDIR)/rlptest.mexe $(STDDIR)/storageMapTest.mexe $(BUILTINDIR)/maptest.mexe $(STDDIR)/sha256test.mexe $(STDDIR)/ripemd160test.mexe minitests/codeloadtest.mexe $(STDDIR)/fixedpointtest.mexe $(STDDIR)/blstest.mexe
 TESTCONTRACTSPURE = $(TCBUILDDIR)/Add.sol/Add.json $(TCBUILDDIR)/Fibonacci.sol/Fibonacci.json $(TCBUILDDIR)/PaymentChannel.sol/PaymentChannel.json $(TCBUILDDIR)/Underfunded.sol/Underfunded.json $(TCBUILDDIR)/ReverterFactory.sol/ReverterFactory.json
 TESTCONTRACTS = $(ACBUILDDIR)/ArbSys.sol/ArbSys.json $(TESTCONTRACTSPURE)
+SCRIPTFILES = $(SCRIPTDIR)/input.mexe $(SCRIPTDIR)/output.mexe
 ARBOSCONTRACTS = $(ACBUILDDIR)/ArbAddressTable.sol/ArbAddressTable.json $(ACBUILDDIR)/ArbBLS.sol/ArbBLS.json $(ACBUILDDIR)/ArbFunctionTable.sol/ArbFunctionTable.json $(ACBUILDDIR)/ArbInfo.sol/ArbInfo.json $(ACBUILDDIR)/ArbOwner.sol/ArbOwner.json $(ACBUILDDIR)/ArbSys.sol/ArbSys.json $(ACBUILDDIR)/ArbosTest.sol/ArbosTest.json
 
 COMPILEFLAGS = -i
@@ -77,6 +79,12 @@ $(STDDIR)/ripemd160test.mexe: $(STDDIR)/ripemd160test.mini $(STDDIR)/ripemd160.m
 $(STDDIR)/rlptest.mexe: $(BUILTINMAOS) $(STDDIR)/rlptest.mini
 	$(CARGORUN) compile $(STDDIR)/rlptest.mini -o $(STDDIR)/rlptest.mexe $(COMPILEFLAGS) -t
 
+$(SCRIPTDIR)/input.mexe: $(SCRIPTDIR)/input.mini
+	$(CARGORUN) compile $(SCRIPTDIR)/input.mini -o $(SCRIPTDIR)/input.mexe $(COMPILEFLAGS) -t
+
+$(SCRIPTDIR)/output.mexe: $(SCRIPTDIR)/output.mini
+	$(CARGORUN) compile $(SCRIPTDIR)/output.mini -o $(SCRIPTDIR)/output.mexe $(COMPILEFLAGS) -t
+
 $(BUILTINDIR)/maptest.mexe: $(BUILTINMAOS) $(BUILTINDIR)/maptest.mini
 	$(CARGORUN) compile $(BUILTINDIR)/maptest.mini -o $(BUILTINDIR)/maptest.mexe $(COMPILEFLAGS) -t
 
@@ -92,7 +100,7 @@ $(ARBOSCONTRACTS): $(ACSRCDIR)
 run:
 	$(CARGORUNRELEASE) run "arb_os/arbos.mexe"
 
-test: $(TEMPLATES) $(ARBOS)
+test: $(TEMPLATES) $(ARBOS) $(SCRIPTFILES)
 	cargo test --release 
 
 evmtest: $(ARBOS)
@@ -115,5 +123,5 @@ benchmark: $(TEMPLATES) $(ARBOS)
 	$(CARGORUNRELEASE) make-benchmarks
 
 clean:
-	rm -f $(BUILTINDIR)/*.mexe $(STDDIR)/*.mexe $(ARBOSDIR)/*.mexe minitests/*.mexe $(ARBOSDIR)/contractTemplates.mini
+	rm -f $(BUILTINDIR)/*.mexe $(STDDIR)/*.mexe $(SCRIPTDIR)/*.mexe $(ARBOSDIR)/*.mexe minitests/*.mexe $(ARBOSDIR)/contractTemplates.mini
 	rm -rf contracts/artifacts contracts/cache
