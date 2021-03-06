@@ -834,26 +834,26 @@ pub fn _evm_test_callback(
     assert_eq!(logs.len(), 1);
     assert!(logs[0].succeeded());
     let evmlogs = logs[0]._get_evm_logs();
-    assert_eq!(evmlogs.len(), 2);
+    assert_eq!(evmlogs.len(), 8);
 
-    assert_eq!(evmlogs[0].vals[0], Uint256::from_bytes(&hex::decode("1389380ee1d43ae62f988fd47b8d5e9fc263444ea53d0cc330fc4869d7a8689a").unwrap()));
-    assert_eq!(evmlogs[0].addr, Uint256::from_u64(100));  // log was emitted by ArbSys
-    assert_eq!(evmlogs[0].vals[1], contract.address);
-    let batch_number = &evmlogs[0].vals[2];
+    assert_eq!(evmlogs[2].vals[0], Uint256::from_bytes(&hex::decode("1389380ee1d43ae62f988fd47b8d5e9fc263444ea53d0cc330fc4869d7a8689a").unwrap()));
+    assert_eq!(evmlogs[2].addr, Uint256::from_u64(100));  // log was emitted by ArbSys
+    assert_eq!(evmlogs[2].vals[1], contract.address);
+    let batch_number = &evmlogs[2].vals[2];
     assert_eq!(batch_number, &Uint256::zero());
-    let index_in_batch = Uint256::from_bytes(&evmlogs[0].data[0..32]);
+    let index_in_batch = Uint256::from_bytes(&evmlogs[2].data[0..32]);
     assert_eq!(index_in_batch, Uint256::zero());
-    let calldata_size = Uint256::from_bytes(&evmlogs[0].data[(7*32)..(8*32)]);
+    let calldata_size = Uint256::from_bytes(&evmlogs[2].data[(7*32)..(8*32)]);
     assert_eq!(calldata_size, Uint256::from_u64(11));
 
-    assert_eq!(evmlogs[1].vals[0], Uint256::from_bytes(&hex::decode("1389380ee1d43ae62f988fd47b8d5e9fc263444ea53d0cc330fc4869d7a8689a").unwrap()));
-    assert_eq!(evmlogs[1].addr, Uint256::from_u64(100));  // log was emitted by ArbSys
-    assert_eq!(evmlogs[1].vals[1], contract.address);
-    let batch_number = &evmlogs[1].vals[2];
+    assert_eq!(evmlogs[6].vals[0], Uint256::from_bytes(&hex::decode("1389380ee1d43ae62f988fd47b8d5e9fc263444ea53d0cc330fc4869d7a8689a").unwrap()));
+    assert_eq!(evmlogs[6].addr, Uint256::from_u64(100));  // log was emitted by ArbSys
+    assert_eq!(evmlogs[6].vals[1], contract.address);
+    let batch_number = &evmlogs[6].vals[2];
     assert_eq!(batch_number, &Uint256::zero());
-    let index_in_batch = Uint256::from_bytes(&evmlogs[1].data[0..32]);
+    let index_in_batch = Uint256::from_bytes(&evmlogs[6].data[0..32]);
     assert_eq!(index_in_batch, Uint256::one());
-    let calldata_size = Uint256::from_bytes(&evmlogs[1].data[(7*32)..(8*32)]);
+    let calldata_size = Uint256::from_bytes(&evmlogs[6].data[(7*32)..(8*32)]);
     assert_eq!(calldata_size, Uint256::from_u64(17));
 
     machine.runtime_env._advance_time(Uint256::one(), None, true);
