@@ -385,7 +385,7 @@ impure func updateEvmLogForSendToL1(rawLog: any, state: any) -> (any, any) {
         // Cast the log item to a struct that assumes 3 topics. topic1 and topic2 might not exist,
         //      but that's OK because we won't try to access them until after we have verified that they exist.
         let log = unsafecast<LogWith3Topics>(rawLog);
-        xif (log.topic0 == const::EVMLogTopicPlaceHolderForL2ToL1Send) {
+        xif ((asm(log,) uint { tlen } == 5) && (log.topic0 == const::EVMLogTopicPlaceHolderForL2ToL1Send)) {
             // Now we know that the log has 3 topics.
             log = log with {
                 topic0: 0x1389380ee1d43ae62f988fd47b8d5e9fc263444ea53d0cc330fc4869d7a8689a // ArbSys.L2toL1Transaction
