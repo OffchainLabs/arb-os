@@ -124,10 +124,14 @@ Type-specific data:
 * calldata size (uint)
 * calldata
 
-If this message is properly formatted, ArbOS will emit a transaction receipt reporting success, and 64 bytes of return data: 
+If this message is properly formatted, and the caller has sufficient funds (after the L1-to-L2 deposit occurs) to pay for the submission, ArbOS will emit a transaction receipt reporting success, and 64 bytes of return data: 
 
 * transaction ID (uint)
 * keccak256 of retryable transaction that was created
+
+Otherwise, ArbOS will emit a transaction receipt reporting a failure code, with no return data.
+
+The cost of submitting a tx to the retry buffer is (*G + GN/256*) where *G* is the L1 gas price of the transaction that submitted the item, and *N* is the calldata size of the L2 transaction (the 4th field of the type-specific data).
 
 ## L2 messages
 
