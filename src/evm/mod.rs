@@ -793,7 +793,7 @@ pub fn _evm_test_callback(
 
     let mut contract = AbiForContract::new_from_file(&test_contract_path("Callback"))?;
     if contract
-        .deploy(&[], &mut machine, Uint256::zero(), None, None, debug)
+        .deploy(&[], &mut machine, Uint256::zero(), None, debug)
         .is_err()
     {
         panic!("failed to deploy Callback contract");
