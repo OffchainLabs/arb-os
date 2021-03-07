@@ -445,11 +445,6 @@ fn test_ripemd160_precompile() {
 }
 
 #[test]
-fn test_deploy_buddy_contract() {
-    crate::evm::evm_deploy_buddy_contract(None, false);
-}
-
-#[test]
 fn test_non_eip155_signed_tx() {
     crate::evm::evm_deploy_using_non_eip159_signature(None, false).unwrap();
 }
@@ -526,11 +521,6 @@ fn test_l2_to_l1_call() {
 #[test]
 fn test_evm_add_code() {
     crate::evm::_basic_evm_add_test(None, false).unwrap();
-}
-
-#[test]
-fn test_same_address_deploy() {
-    crate::evm::_evm_test_same_address_deploy(None, false);
 }
 
 #[test]

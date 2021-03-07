@@ -574,7 +574,7 @@ pub fn _evm_test_bls_signed_batch(log_to: Option<&Path>, debug: bool) -> Result<
 
     let mut add_contract = AbiForContract::new_from_file(&test_contract_path("Add"))?;
     if add_contract
-        .deploy(&[], &mut machine, Uint256::zero(), None, None, debug)
+        .deploy(&[], &mut machine, Uint256::zero(), None, debug)
         .is_err()
     {
         panic!("failed to deploy Add contract");

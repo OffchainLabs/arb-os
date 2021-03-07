@@ -721,21 +721,6 @@ public impure func evmCallStack_returnFromCall(
                             Some(gasUsage),
                             feeStats,
                         );
-
-                        if (globalCurrentTxRequest.incomingRequest.kind == 5) {
-                            // successfully created a buddy contract -- announce that as a message
-                            outbox_append(
-                                bytearray_set256(
-                                    bytearray_set256(
-                                        bytearray_setByte(bytearray_new(0), 0, const::SendType_buddyContractResult),
-                                        1,
-                                        uint(globalCurrentTxRequest.incomingRequest.sender)
-                                    ),
-                                    33,
-                                    1,
-                                )
-                            );
-                        }
                     } else {
                         // Compilation of resulting code failed; report an error.
                         emitTxReceipt(
@@ -746,20 +731,6 @@ public impure func evmCallStack_returnFromCall(
                             Some(gasUsage),
                             feeStats,
                         );
-                        if (globalCurrentTxRequest.incomingRequest.kind == 5) {
-                            // failed to create a buddy contract -- announce that as a message
-                            outbox_append(
-                                bytearray_setByte(
-                                    bytearray_set256(
-                                        bytearray_setByte(bytearray_new(0), 0, const::SendType_buddyContractResult),
-                                        1,
-                                        uint(globalCurrentTxRequest.incomingRequest.sender),
-                                    ),
-                                    33,
-                                    0,
-                                )
-                            );
-                        }
                     }
                 } else {
                     let updatedEvmLogs = xif (! globalCurrentTxRequest.nonMutating) {
