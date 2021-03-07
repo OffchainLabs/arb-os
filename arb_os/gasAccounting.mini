@@ -941,22 +941,28 @@ func getRequestGasInfo(
     return (false, 0, 0, address(0), 0, 0);
 }
 
+public func getGasCostOfRetryableTx(calldataSize: uint) -> (uint, uint) {
+    // returns (num, denom) such that cost in wei of this tx would be (gasPrice * num / denom)
+    return (256 + calldataSize, 256);
+}
+
 public impure func chargeForRetryableTx(
     sender: address,
     calldataSize: uint,
     gasPriceL1: uint,
 ) -> (bool, TxFeeStats) {
     return xif (gasAccountingInfo.feeConfig.enabled) {
-        let calldataPrice = gasPriceL1 / 256;
-        let totalDue = gasPriceL1 + calldataPrice * calldataSize;
+        let totalDue = gasPriceL1 * (256 + calldataSize) / 256;
+        let gasCostPerCalldataByte = gasPriceL1 / 256;
+        let gasCostPerTx = totalDue - calldataSize * gasCostPerCalldataByte;
 
         xif (evmCallStack_transferEthInCurrentContext(sender, gasAccountingInfo.feeConfig.forNetwork, totalDue) == Some(())) {
             let feeStats = txFeeStats_zero();
             feeStats = feeStats with {
                 price: feeStats.price with {
-                    tx: gasPriceL1
+                    tx: gasCostPerTx
                 } with {
-                    calldataByte: calldataPrice
+                    calldataByte: gasCostPerCalldataByte
                 }
             } with {
                 units: feeStats.price with {
@@ -966,9 +972,9 @@ public impure func chargeForRetryableTx(
                 }
             } with {
                 weiPaid: feeStats.weiPaid with {
-                    tx: gasPriceL1
+                    tx: gasCostPerTx
                 } with {
-                    calldataByte: calldataPrice * calldataSize
+                    calldataByte: totalDue - gasCostPerTx
                 }
             };
             (true, feeStats)

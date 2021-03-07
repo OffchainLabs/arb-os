@@ -5,6 +5,7 @@
 //!Creates a fixed list of globally accessible constants.
 
 use crate::uint256::Uint256;
+use crate::evm::abi::{AbiForContract, builtin_contract_path};
 use std::collections::HashMap;
 
 ///Creates a fixed list of globally accessible constants.
@@ -20,6 +21,7 @@ pub fn init_constant_table() -> HashMap<String, Uint256> {
         ("Address_ArbOwner", 107),
         ("Address_ArbGasInfo", 108),
         ("Address_ArbAggregator", 109),
+        ("Address_ArbRedeemRetryableTx", 110),
         // addresses of dummy builtin contracts
         ("Address_ReservedForEthBridge", 200), // reserved for special EthBridge functionality
         // indices of EVM operations
@@ -250,5 +252,58 @@ pub fn init_constant_table() -> HashMap<String, Uint256> {
     ] {
         ret.insert(s.to_string(), Uint256::from_string_hex(u).unwrap());
     }
+
+    for builtin in &["ArbRetryableTx"] {
+        let fcodes = match func_codes_for_builtin_contract(builtin) {
+            Ok(v) => v,
+            Err(e) => panic!("Error accessing builtin function {}: {}", builtin, e),
+        };
+        for (name, code) in fcodes {
+            ret.insert(name, code);
+        }
+
+        let etopics = match event_topics_for_builtin_contract(builtin) {
+            Ok(v) => v,
+            Err(e) => panic!("Error accessing builtin event {}: {}", builtin, e),
+        };
+        for (name, topic) in etopics {
+            ret.insert(name, topic);
+        }
+    }
+
     ret
+}
+
+fn func_codes_for_builtin_contract(contract_name: &str) -> Result<Vec<(String, Uint256)>, ethabi::Error> {
+    let cabi = AbiForContract::new_from_file(&builtin_contract_path(contract_name))?;
+    let mut ret = vec![];
+    for (_, funcs) in &cabi.contract.functions {
+        for func in funcs {
+            let func_name = &func.name;
+            ret.push(
+                (
+                    "funcCode_".to_owned() + contract_name + "_" + func_name,
+                    Uint256::from_bytes(&cabi.short_signature_for_function(func_name)?[..]),
+                )
+            )
+        }
+    }
+    Ok(ret)
+}
+
+fn event_topics_for_builtin_contract(contract_name: &str) -> Result<Vec<(String, Uint256)>, ethabi::Error> {
+    let cabi = AbiForContract::new_from_file(&builtin_contract_path(contract_name))?;
+    let mut ret = vec![];
+    for (_, events) in &cabi.contract.events {
+        for event in events {
+            let event_name = &event.name;
+            ret.push(
+                (
+                    "eventTopic_".to_owned() + contract_name + "_" + event_name,
+                    Uint256::from_bytes(&event.signature()[..]),
+                )
+            )
+        }
+    }
+    Ok(ret)
 }

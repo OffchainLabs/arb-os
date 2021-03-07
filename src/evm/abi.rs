@@ -20,7 +20,7 @@ pub fn builtin_contract_path(contract_name: &str) -> String {
 #[derive(Debug, Clone)]
 pub struct AbiForContract {
     code_bytes: Vec<u8>,
-    contract: ethabi::Contract,
+    pub contract: ethabi::Contract,
     pub address: Uint256,
     name: String,
 }

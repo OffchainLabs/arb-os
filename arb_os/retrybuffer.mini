@@ -13,6 +13,7 @@ use evmlogs::EvmLogs;
 use gasAccounting::GasUsage;
 use gasAccounting::txFeeStats_zero;
 use gasAccounting::chargeForRetryableTx;
+use gasAccounting::getGasCostOfRetryableTx;
 
 use inbox::IncomingRequest;
 use inbox::inbox_currentTimestamp;
@@ -43,12 +44,13 @@ type RetryableTx = struct {
     callvalue: uint,
     calldata: ByteArray,
     retryCount: uint,
+    expiryTime: uint,
 }
 
 type RetryQueueItem = struct {
     txId: uint,
     retryCount: uint,
-    enqueueTime: uint,
+    expiryTime: uint,
 }
 
 public func retryableTx_hash(rtx: RetryableTx) -> bytes32 {  // note: hash does not include retryCount field
@@ -81,7 +83,8 @@ public func retryItem_rebuildVerifyHash(
         destination: destination,
         callvalue: callvalue,
         calldata: calldata,
-        retryCount: 0,   // OK to put any value here because retryCount does not affect the hash.
+        retryCount: 0,     // OK to put any value here because it does not affect the hash.
+        expiryTime: 0,     // OK to put any value here because it does not affect the hash.
     };
     return xif (claimedHash == retryableTx_hash(claimedRtx)) {
         Some(claimedRtx)
@@ -92,7 +95,7 @@ public func retryItem_rebuildVerifyHash(
 
 var retryBuffer: struct {
     byTxId: map<uint, RetryableTx>,
-    fifo: Queue,
+    fifo: Queue,     // not in strict expirationTime order, but this doesn't affect correctness
     txLifetimeSeconds: uint
 };
 
@@ -127,7 +130,7 @@ impure func retryBuffer_trimOne(currentTimestamp: uint) -> bool {  // returns tr
         let (uq, rawQitem) = res;
         let qitem = unsafecast<RetryQueueItem>(rawQitem);
         xif let Some(rawItem) = retryBuffer.byTxId[qitem.txId] {
-            xif (qitem.enqueueTime + retryBuffer.txLifetimeSeconds <= currentTimestamp) {
+            xif (qitem.expiryTime <= currentTimestamp) {
                 let item = unsafecast<RetryableTx>(rawItem);
                 xif (qitem.retryCount >= item.retryCount) {
                     retryBuffer_delete(qitem.txId);
@@ -153,11 +156,14 @@ public impure func retryBuffer_insert(rtx: RetryableTx) {
     let now = inbox_currentTimestamp();
     retryBuffer_trimTwo(now);
     let txId = rtx.txId;
-    let retryCount = rtx.retryCount + 1;
     retryBuffer = retryBuffer with {
-        byTxId: retryBuffer.byTxId with { [txId] = rtx with { retryCount: retryCount } }
+        byTxId: retryBuffer.byTxId with {
+            [txId] = rtx with {
+                retryCount: rtx.retryCount + 1
+            }
+        }
     } with {
-        fifo: queue_put(retryBuffer.fifo, struct { txId: txId, enqueueTime: now, retryCount: retryCount })
+        fifo: queue_put(retryBuffer.fifo, struct { txId: txId, retryCount: rtx.retryCount, expiryTime: rtx.expiryTime })
     };
 }
 
@@ -175,6 +181,7 @@ public impure func retryBuffer_insertNew(
         callvalue: callvalue,
         calldata: calldata,
         retryCount: 0,
+        expiryTime: inbox_currentTimestamp() + retryBuffer.txLifetimeSeconds,
     };
     retryBuffer_insert(newTx);
 
@@ -189,6 +196,29 @@ public impure func retryBuffer_get(txId: uint, removeIfFound: bool) -> option<Re
         }
     }
     return ret;
+}
+
+public impure func retryBuffer_getTxTimeout(txId: uint) -> uint {
+    return xif let Some(rtx) = retryBuffer_get(txId, false) {
+        rtx.expiryTime
+    } else {
+        0
+    };
+}
+
+public impure func retryBuffer_getLifetime() -> uint {
+    return retryBuffer.txLifetimeSeconds;
+}
+
+public impure func retryBuffer_getTxKeepaliveCost(txId: uint) -> option<(uint, uint)>{
+    let rtx = retryBuffer_get(txId, false)?;
+    return Some(getGasCostOfRetryableTx(bytearray_size(rtx.calldata)));
+}
+
+public impure func retryBuffer_keepalive(txId: uint) -> option<()> {
+    let rtx = retryBuffer_get(txId, false)?;
+    retryBuffer_insert(rtx with { expiryTime: rtx.expiryTime + retryBuffer.txLifetimeSeconds });
+    return Some(());
 }
 
 public impure func retryBuffer_delete(txId: uint) {
@@ -243,5 +273,10 @@ public impure func processRetryableTx(req: IncomingRequest) {
             feeStats,
         );
     }
+}
+
+public impure func redeemRetryableTxInTx(txToRedeem: uint) {
+    //TODO: implement this
+    panic;
 }
 
