@@ -167,7 +167,7 @@ public impure func precompiles_init(acctStore: AccountStore) -> option<AccountSt
     )?;
     acctStore = accountStore_createBuiltinContract(
         acctStore,
-        address(const::Address_RevertAtL2),
+        address(const::Address_ReservedForEthBridge),
         makeTrampoline(revertPrecompile),
         true,
     )?;
