@@ -1008,21 +1008,19 @@ public impure func getRetryableTxPrice(calldataSize: uint) -> (uint, uint) {
 
 public impure func chargeForRetryableTx(
     sender: address,
-    calldataSize: uint,
-    gasPriceL1: uint,
+    calldataSize: uint
 ) -> (bool, TxFeeStats) {
     return xif (gasAccountingInfo.feeConfig.enabled) {
-        let totalDue = gasPriceL1 * (256 + calldataSize) / 256;
-        let gasCostPerCalldataByte = gasPriceL1 / 256;
-        let gasCostPerTx = totalDue - calldataSize * gasCostPerCalldataByte;
+        let prices = gasAccountingInfo.retryablePrices;
+        let totalDue = prices.perTx + calldataSize * prices.perCalldataByte;
 
         xif (evmCallStack_transferEthInCurrentContext(sender, gasAccountingInfo.feeConfig.forNetwork, totalDue) == Some(())) {
             let feeStats = txFeeStats_zero();
             feeStats = feeStats with {
                 price: feeStats.price with {
-                    tx: gasCostPerTx
+                    tx: prices.perTx
                 } with {
-                    calldataByte: gasCostPerCalldataByte
+                    calldataByte: prices.perCalldataByte
                 }
             } with {
                 units: feeStats.price with {
@@ -1032,9 +1030,9 @@ public impure func chargeForRetryableTx(
                 }
             } with {
                 weiPaid: feeStats.weiPaid with {
-                    tx: gasCostPerTx
+                    tx: prices.perTx
                 } with {
-                    calldataByte: totalDue - gasCostPerTx
+                    calldataByte: calldataSize * prices.perCalldataByte
                 }
             };
             (true, feeStats)

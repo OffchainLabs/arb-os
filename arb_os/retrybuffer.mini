@@ -249,7 +249,7 @@ public impure func processRetryableTx(req: IncomingRequest) {
     }
 
     // charge for injecting this message
-    let (paid, feeStats) = chargeForRetryableTx(sender, calldataSize, req.gasPriceL1);
+    let (paid, feeStats) = chargeForRetryableTx(sender, calldataSize);
 
     if (paid) {
         // remember the retryable tx
