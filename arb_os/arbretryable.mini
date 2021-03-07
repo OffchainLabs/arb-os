@@ -28,7 +28,7 @@ use std::bytearray::bytearray_set256;
 use retrybuffer::retryBuffer_getLifetime;
 use retrybuffer::retryBuffer_getTxTimeout;
 use retrybuffer::redeemRetryableTxInTx;
-use retrybuffer::retryBuffer_getTxKeepaliveCost;
+use retrybuffer::retryBuffer_getTxKeepalivePrice;
 use retrybuffer::retryBuffer_keepalive;
 
 
@@ -45,8 +45,8 @@ public impure func arbretryable_txcall() {
             arbRetryable_getLifetime(topFrame, calldata);
         } elseif (funcCode == const::funcCode_ArbRetryableTx_getTimeout) {
             arbRetryable_getTimeout(topFrame, calldata);
-        } elseif (funcCode == const::funcCode_ArbRetryableTx_getKeepaliveCost) {
-            arbRetryable_getKeepaliveCost(topFrame, calldata);
+        } elseif (funcCode == const::funcCode_ArbRetryableTx_getKeepalivePrice) {
+            arbRetryable_getKeepalivePrice(topFrame, calldata);
         } elseif (funcCode == const::funcCode_ArbRetryableTx_keepalive) {
             arbRetryable_keepalive(topFrame, calldata);
         } else {
@@ -103,17 +103,17 @@ impure func arbRetryable_getLifetime(topFrame: EvmCallFrame, calldata: ByteArray
     }
 }
 
-impure func arbRetryable_getKeepaliveCost(topFrame: EvmCallFrame, calldata: ByteArray) {  // (txId) -> (uint, uint)
+impure func arbRetryable_getKeepalivePrice(topFrame: EvmCallFrame, calldata: ByteArray) {  // (txId) -> (uint, uint)
     if (bytearray_size(calldata) != 36) {
         evmOp_revert_knownPc(40, 0, 0);
     }
     let txId = bytearray_get256(calldata, 4);
-    if let Some(res) = retryBuffer_getTxKeepaliveCost(txId) {
-        let (num, denom) = res;
+    if let Some(res) = retryBuffer_getTxKeepalivePrice(txId) {
+        let (price, nextUpdate) = res;
         let mem = bytearray_set256(
-            bytearray_set256(bytearray_new(0), 0, num),
+            bytearray_set256(bytearray_new(0), 0, price),
             32,
-            denom,
+            nextUpdate
         );
         if (evmCallStack_setTopFrameMemory(mem)) {
             evmOp_return(0, 64);

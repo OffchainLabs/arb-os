@@ -210,6 +210,7 @@ pub fn init_constant_table() -> HashMap<String, Uint256> {
         ("Charging_DefaultArbGasDivisor", 10000),
         ("Charging_AssumedBatchCostL1Gas", 50000),
         ("Charging_GasPoolDepthSeconds", 60),
+        ("Charging_RetryableTxRepriceIntervalSeconds", 15*60),   // 15 minutes
         // fee customizability
         ("NetFee_defaultRateNumerator", 15),
         ("NetFee_defaultRateDenominator", 100),

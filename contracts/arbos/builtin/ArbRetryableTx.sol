@@ -18,15 +18,13 @@ interface ArbRetryableTx {
     // This could be in the past, because aged-out txs may not be discarded immediately.
     function getTimeout(uint txId) external view returns(uint);
 
-    // Returns the cost, in L1 gas, of extending the lifetime of txId by an additional lifetime period.
-    // Return value is (num, denom). If the L1 gas price is G, then cost if (G*num/denom).
+    // Returns the price, in wei, of extending the lifetime of txId by an additional lifetime period.
+    // Return value is (price, nextUpdateTimestamp). Price is guaranteed not to change until nextUpdateTimestamp.
     // Reverts if txId doesn't exist.
-    function getKeepaliveCost(uint txId) external view returns(uint, uint);
+    function getKeepalivePrice(uint txId) external view returns(uint, uint);
 
     // Deposits callvalue into the sender's L2 account, then adds one lifetime period to the life of txId.
     // Reverts if txId does not exist or the sender has insufficient funds (after the deposit).
-    // The cost will be (gasPrice * num / denom), where gasPrice is the gas price of the L1 tx that submits the
-    //            tx in which this is run, and (num, denom) is what getKeepaliveCost returns for txId.
     function keepalive(uint txId) external payable;
 
     event LifetimeExtended(uint txId, uint newTimeout);

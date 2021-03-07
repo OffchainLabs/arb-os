@@ -13,7 +13,7 @@ use evmlogs::EvmLogs;
 use gasAccounting::GasUsage;
 use gasAccounting::txFeeStats_zero;
 use gasAccounting::chargeForRetryableTx;
-use gasAccounting::getGasCostOfRetryableTx;
+use gasAccounting::getRetryableTxPrice;
 
 use inbox::IncomingRequest;
 use inbox::inbox_currentTimestamp;
@@ -210,9 +210,9 @@ public impure func retryBuffer_getLifetime() -> uint {
     return retryBuffer.txLifetimeSeconds;
 }
 
-public impure func retryBuffer_getTxKeepaliveCost(txId: uint) -> option<(uint, uint)>{
+public impure func retryBuffer_getTxKeepalivePrice(txId: uint) -> option<(uint, uint)>{
     let rtx = retryBuffer_get(txId, false)?;
-    return Some(getGasCostOfRetryableTx(bytearray_size(rtx.calldata)));
+    return Some(getRetryableTxPrice(bytearray_size(rtx.calldata)));
 }
 
 public impure func retryBuffer_keepalive(txId: uint) -> option<()> {

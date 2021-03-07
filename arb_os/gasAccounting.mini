@@ -69,6 +69,7 @@ var gasAccountingInfo: struct {
     speedLimitPerSecond: uint,         // nominal ArbGas available for computation per second
     pricingParams: PricingParameters,  // parameters that affect pricing
     gasAllocatedToThisBlock: uint,     // total amount of gas allocated to the current Arbitrum block
+    retryablePrices: RetryablePrices,  // prices of retryable txs
 };
 
 type GasPrices = struct {    // all prices in this struct are denominated in wei
@@ -121,6 +122,12 @@ type GasUsage = struct {
     gasPriceWei: uint,
 }
 
+type RetryablePrices = struct {
+    perTx: uint,
+    perCalldataByte: uint,
+    nextUpdateTimestamp: uint,
+}
+
 public impure func gasAccounting_init() {    // initialize on boot, before we have gotten the chain init message
     initGasPriceEstimator();
 
@@ -151,15 +158,26 @@ public impure func gasAccounting_init() {    // initialize on boot, before we ha
         shareForNetFee: shareForNetFee,
     };
 
+    let (gasPrices, retryablePrices) = setPrices(
+        feeConfig,
+        pricingParams,
+        congestionState,
+        struct {
+            perTx: 0,
+            perCalldataByte: 0,
+            nextUpdateTimestamp: 0,
+        }
+    );
     gasAccountingInfo = struct {
         txState: None<TxGasState>,
         feeConfig: feeConfig,
-        currentPrices: setPrices(feeConfig, pricingParams, congestionState),
+        currentPrices: gasPrices,
         gasRemainingThisBlock: uint(congestionState.gasPool),
         congestionState: congestionState,
         speedLimitPerSecond: const::DefaultSpeedLimitPerSecond,
         pricingParams: pricingParams,
         gasAllocatedToThisBlock: uint(congestionState.gasPool),
+        retryablePrices: retryablePrices,
     };
 }
 
@@ -169,6 +187,15 @@ impure func initCongestionState(isInit: bool) -> CongestionState {
         lastArbBlockNumSeen: xif (isInit) { 0 } else { inbox_currentArbBlockNumber() },
         lastTimestampSeen: xif (isInit) { 0 } else { inbox_currentTimestamp() },
         congestionPriceWei: 0,
+    };
+}
+
+impure func setRetryablePrices() -> RetryablePrices {
+    let gasPrice = getL1GasPriceEstimate();
+    return struct {
+        perTx: gasPrice,
+        perCalldataByte: gasPrice / 256,
+        nextUpdateTimestamp: inbox_currentTimestamp() + const::Charging_RetryableTxRepriceIntervalSeconds,
     };
 }
 
@@ -206,28 +233,49 @@ public impure func getGasAccountingParams() -> (uint, uint, uint) {
     );
 }
 
-impure func setPrices(feeConfig: FeeConfig, params: PricingParameters, congestionState: CongestionState) -> GasPrices {
+impure func setPrices(
+    feeConfig: FeeConfig,
+    params: PricingParameters,
+    congestionState: CongestionState,
+    oldRetryablePrices: RetryablePrices,
+) -> (GasPrices, RetryablePrices) {
     return xif (feeConfig.enabled) {
+        let timestamp = inbox_currentTimestamp();
         let l1GasPrice = getL1GasPriceEstimate();
         let perArbGasBase = l1GasPrice / params.arbGasDivisor;
         let perArbGasCongestion = congestionState.congestionPriceWei;
-        struct {
-            perL2Tx: fixedPoint_mulByUintTrunc(feeConfig.baseFeeMultiplier, params.l1GasPerL2Tx * l1GasPrice),
-            perL1CalldataByte: fixedPoint_mulByUintTrunc(feeConfig.baseFeeMultiplier, params.l1GasPerL1Calldata * l1GasPrice),
-            perStorageCell: params.l1GasPerStorage * l1GasPrice,
-            perArbGasBase: perArbGasBase,
-            perArbGasCongestion: perArbGasCongestion,
-            perArbGasTotal: perArbGasBase + perArbGasCongestion,
-        }
+        (
+            struct {
+                perL2Tx: fixedPoint_mulByUintTrunc(feeConfig.baseFeeMultiplier, params.l1GasPerL2Tx * l1GasPrice),
+                perL1CalldataByte: fixedPoint_mulByUintTrunc(feeConfig.baseFeeMultiplier, params.l1GasPerL1Calldata * l1GasPrice),
+                perStorageCell: params.l1GasPerStorage * l1GasPrice,
+                perArbGasBase: perArbGasBase,
+                perArbGasCongestion: perArbGasCongestion,
+                perArbGasTotal: perArbGasBase + perArbGasCongestion,
+            },
+            xif (timestamp > oldRetryablePrices.nextUpdateTimestamp) {
+                let gasPrice = getL1GasPriceEstimate();
+                struct {
+                    perTx: gasPrice,
+                    perCalldataByte: gasPrice / 256,
+                    nextUpdateTimestamp: timestamp + const::Charging_RetryableTxRepriceIntervalSeconds,
+                }
+            } else {
+                oldRetryablePrices
+            },
+        )
     } else {
-        struct {
-            perL2Tx: 0,
-            perL1CalldataByte: 0,
-            perStorageCell: 0,
-            perArbGasBase: 0,
-            perArbGasCongestion: 0,
-            perArbGasTotal: 0,
-        }
+        (
+            struct {
+                perL2Tx: 0,
+                perL1CalldataByte: 0,
+                perStorageCell: 0,
+                perArbGasBase: 0,
+                perArbGasCongestion: 0,
+                perArbGasTotal: 0,
+            },
+            oldRetryablePrices,
+        )
     };
 }
 
@@ -262,14 +310,18 @@ public impure func gasAccounting_getPricesInArbGas() -> (uint, uint, uint) {  //
 }
 
 public impure func gasAccounting_setFeesEnabled(enabled: bool) {
+    let (gasPrices, retryablePrices) = setPrices(
+        gasAccountingInfo.feeConfig,
+        gasAccountingInfo.pricingParams,
+        gasAccountingInfo.congestionState,
+        gasAccountingInfo.retryablePrices,
+    );
     gasAccountingInfo = gasAccountingInfo with {
         feeConfig: gasAccountingInfo.feeConfig with { enabled: enabled }
     } with {
-        currentPrices: setPrices(
-            gasAccountingInfo.feeConfig,
-            gasAccountingInfo.pricingParams,
-            gasAccountingInfo.congestionState
-        )
+        currentPrices: gasPrices
+    } with {
+        retryablePrices: retryablePrices
     };
     if (enabled) {
         gasAccountingInfo = gasAccountingInfo with {
@@ -682,14 +734,18 @@ public impure func getNextRequestFromCongestionAuction() -> (
         } else {
             0   // gas pool has gone negative; wait until it gets positive
         };
+        let (currentPrices, retryablePrices) = setPrices(
+           gasAccountingInfo.feeConfig,
+           gasAccountingInfo.pricingParams,
+           updatedCongestionState,
+           gasAccountingInfo.retryablePrices,
+       );
         gasAccountingInfo = gasAccountingInfo with {
             congestionState: updatedCongestionState
         } with {
-            currentPrices: setPrices(
-                gasAccountingInfo.feeConfig,
-                gasAccountingInfo.pricingParams,
-                updatedCongestionState
-            )
+            currentPrices: currentPrices
+        } with {
+            retryablePrices: retryablePrices
         } with {
             gasRemainingThisBlock: gasForThisBlock
         } with {
@@ -941,9 +997,13 @@ func getRequestGasInfo(
     return (false, 0, 0, address(0), 0, 0);
 }
 
-public func getGasCostOfRetryableTx(calldataSize: uint) -> (uint, uint) {
-    // returns (num, denom) such that cost in wei of this tx would be (gasPrice * num / denom)
-    return (256 + calldataSize, 256);
+public impure func getRetryableTxPrice(calldataSize: uint) -> (uint, uint) {
+    // returns (basePriceWei, calldataBytePriceWei, nextChangeTimestamp
+    let prices = gasAccountingInfo.retryablePrices;
+    return (
+        prices.perTx + calldataSize * prices.perCalldataByte,
+        prices.nextUpdateTimestamp,
+    );
 }
 
 public impure func chargeForRetryableTx(
