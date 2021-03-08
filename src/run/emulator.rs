@@ -1037,7 +1037,6 @@ impl Machine {
 
     ///Generates a `ProfilerData` from a run of self with args from address 0.
     pub fn profile_gen(&mut self, args: Vec<Value>, mode: ProfilerMode) -> ProfilerData {
-        println!("Profile gen????");
         assert!(mode != ProfilerMode::Never);
         self.call_state(CodePt::new_internal(0), args);
         let mut loc_map = ProfilerData::default();
@@ -1281,10 +1280,8 @@ impl Machine {
                 res += 80;
                 mx = mx / 8;
             }
-            // println!("set buffer gas {} {} size {}", res, buf.max_access, buf.check_size());
             res + 240
         } else {
-            // println!("buffer not found {} {:?} {:?} {:?}", idx, self.stack.contents.get(0), self.stack.contents.get(1), self.stack.contents.get(2));
             240
         }
     }
@@ -2141,7 +2138,6 @@ impl Machine {
                         let offset = self.stack.pop_usize(&self.state)?;
                         let val = self.stack.pop_uint(&self.state)?;
                         let buf = self.stack.pop_buffer(&self.state)?;
-                        // println!("Setting buffer {} {}", offset, val);
                         let bytes = val.to_bytes_be();
                         let nbuf = buf.set_byte(offset, bytes[31]);
                         self.stack.push(Value::copy_buffer(nbuf));
@@ -2159,7 +2155,6 @@ impl Machine {
                         }
                         let val = self.stack.pop_uint(&self.state)?;
                         let buf = self.stack.pop_buffer(&self.state)?;
-                        // println!("Setting buffer {} {}", offset, val);
                         let mut nbuf = buf;
                         let bytes = val.to_bytes_be();
                         for i in 0..8 {
@@ -2180,7 +2175,6 @@ impl Machine {
                         }
                         let val = self.stack.pop_uint(&self.state)?;
                         let buf = self.stack.pop_buffer(&self.state)?;
-                        // println!("Setting buffer {} {}", offset, val);
                         let mut nbuf = buf;
                         let bytes = val.to_bytes_be();
                         for i in 0..32 {
