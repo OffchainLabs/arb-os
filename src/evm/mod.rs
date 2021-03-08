@@ -909,7 +909,7 @@ pub fn _test_retryable(log_to: Option<&Path>, debug: bool) -> Result<(), ethabi:
         "add",
         &[ethabi::Token::Uint(Uint256::one().to_u256()), ethabi::Token::Uint(Uint256::one().to_u256())],
         &mut machine,
-        Uint256::from_u64(1_000_000_000_000_000),
+        Uint256::zero(),
     )?;
     assert!(txid != Uint256::zero());
 
@@ -934,6 +934,12 @@ pub fn _test_retryable(log_to: Option<&Path>, debug: bool) -> Result<(), ethabi:
     assert_eq!(keepalive_ret, new_timeout);
     assert!(new_timeout > timeout);
 
+    println!("Redeeming");
+    arb_replayable._redeem(&mut machine, txid.clone())?;
+    println!("Redeemed");
+
+    let new_timeout = arb_replayable._get_timeout(&mut machine, txid.clone())?;
+    assert_eq!(new_timeout, Uint256::zero());  // verify that txid has been removed
 
     if let Some(path) = log_to {
         machine

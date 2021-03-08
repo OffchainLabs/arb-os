@@ -124,18 +124,15 @@ Type-specific data:
 * calldata size (uint)
 * calldata
 
-If this message is properly formatted, and the caller has sufficient funds (after the L1-to-L2 deposit occurs) to pay for the submission, ArbOS will emit a transaction receipt reporting success, and 64 bytes of return data: 
+If this message is properly formatted, and the caller has sufficient funds (after the L1-to-L2 deposit occurs) to pay for the submission, ArbOS will emit a transaction receipt reporting success, and 32 bytes of return data: 
 
-* transaction ID (uint)
-* keccak256 of retryable transaction that was created
+* id of retryable transaction
 
 Otherwise, ArbOS will emit a transaction receipt reporting a failure code, with no return data.
 
-The cost of submitting a tx to the retry buffer is ( G * (1 + (N+255)/256) ) where *G* is the L1 gas price of the transaction that submitted the item, and *N* is the calldata size of the L2 transaction (the 4th field of the type-specific data).
-
 ## L2 messages
 
-As noted above, an L2 message is one type of incoming message that can be put into an L2 chain's inbox. The purpose of an L2 message is to convey information, typically a transaction request, to ArbOS. The EthBridge does not examine or interpret the contents of an L2 message.
+As noted above, an L2 message is one type of incoming message that can be put into an L2 chain's inbox. The purpose of an L2 message is to convey information, typically a transaction request, to ArbOS. Except where specified here, the EthBridge does not examine or interpret the contents of an L2 message.
 
 An L2 message consists of:
 

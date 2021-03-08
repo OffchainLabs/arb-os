@@ -203,11 +203,14 @@ impl RuntimeEnvironment {
         msg.extend(Uint256::from_usize(calldata.len()).to_bytes_be());
         msg.extend(calldata);
 
-        self.insert_l1_message(
-            9u8,
-            sender,
-            &msg,
-        )
+        let mut buf =
+            self.insert_l1_message(
+                9u8,
+                sender,
+                &msg,
+            ).to_bytes_be();
+        buf.extend(&[0u8; 32]);
+        Uint256::from_bytes(&keccak256(&buf))
     }
 
     pub fn get_gas_price(&self) -> Uint256 {

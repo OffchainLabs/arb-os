@@ -15,7 +15,7 @@ use evmCallStack::evmCallStack_callHitError;
 use evmCallStack::evmCallStack_getAccountInCurrentContext;
 use evmCallStack::evmCallStack_setAccountInCurrentContext;
 
-use evmOps::evmOp_log1;
+use evmOps::evmOp_log2;
 use evmOps::evmOp_return;
 use evmOps::evmOp_revert_knownPc;
 
@@ -59,21 +59,23 @@ public impure func arbretryable_txcall() {
     }
 }
 
-impure func arbRetryable_redeem(topFrame: EvmCallFrame, calldata: ByteArray) {  // (txId) -> (bool, bool)
+impure func arbRetryable_redeem(topFrame: EvmCallFrame, calldata: ByteArray) {  // (txId)
     if (bytearray_size(calldata) != 36) {
         evmOp_revert_knownPc(10, 0, 0);
     }
 
     // This can only be called directly from L1. Revert if called from L2.
-    if (evmCallStack_stackDepth() != 2) {
+    if (evmCallStack_stackDepth() != 1) {
         evmOp_revert_knownPc(11, 0, 0);
     }
 
     let txId = bytearray_get256(calldata, 4);
-    redeemRetryableTxInTx(txId);
-
-    // This should never be reached. To be safe, revert.
-    evmOp_revert_knownPc(12, 0, 0);
+    if (redeemRetryableTxInTx(txId)) {
+        arbRetryable_emitRedeemed(topFrame, txId);
+        evmOp_return(0, 0);
+    } else {
+        evmOp_revert_knownPc(12, 0, 0);
+    }
 }
 
 impure func arbRetryable_getTimeout(topFrame: EvmCallFrame, calldata: ByteArray) {  // (txId) -> uint
@@ -82,7 +84,8 @@ impure func arbRetryable_getTimeout(topFrame: EvmCallFrame, calldata: ByteArray)
     }
     let txId = bytearray_get256(calldata, 4);
 
-    let mem = bytearray_set256(bytearray_new(0), 0, retryBuffer_getTxTimeout(txId));
+    let timeout = retryBuffer_getTxTimeout(txId);
+    let mem = bytearray_set256(bytearray_new(0), 0, timeout);
     if (evmCallStack_setTopFrameMemory(mem)) {
         evmOp_return(0, 32);
     } else {
@@ -156,15 +159,11 @@ impure func arbRetryable_keepalive(topFrame: EvmCallFrame, calldata: ByteArray) 
 
 impure func arbRetryable_emitLifetimeExtended(topFrame: EvmCallFrame, txId: uint, newTimeout: uint) -> option<()> {
     let savedMem = evmCallFrame_getMemory(topFrame);
-    let mem = bytearray_set256(
-        bytearray_set256(bytearray_new(0), 0, txId),
-        32,
-        newTimeout,
-    );
+    let mem = bytearray_set256(bytearray_new(0), 0, newTimeout);
     if ( ! evmCallStack_setTopFrameMemory(mem)) {
        return None<()>;
     }
-    evmOp_log1(0, 64, const::eventTopic_ArbRetryableTx_LifetimeExtended);
+    evmOp_log2(0, 32, const::eventTopic_ArbRetryableTx_LifetimeExtended, txId);
     return xif(evmCallStack_setTopFrameMemory(savedMem)) {
         Some(())
     } else {
@@ -172,29 +171,6 @@ impure func arbRetryable_emitLifetimeExtended(topFrame: EvmCallFrame, txId: uint
     };
 }
 
-impure func arbRetryable_emitRedemptionResult(
-    topFrame: EvmCallFrame,
-    txId: uint,
-    success: bool,
-    retryable: bool
-) -> option<()> {
-    let savedMem = evmCallFrame_getMemory(topFrame);
-    let mem = bytearray_set256(
-        bytearray_set256(
-            bytearray_set256(bytearray_new(0), 0, txId),
-            32,
-            uint(success),
-        ),
-        64,
-        uint(retryable),
-    );
-    if ( ! evmCallStack_setTopFrameMemory(mem)) {
-       return None<()>;
-    }
-    evmOp_log1(0, 3*32, const::eventTopic_ArbRetryableTx_RedemptionResult);
-    return xif(evmCallStack_setTopFrameMemory(savedMem)) {
-        Some(())
-    } else {
-        None<()>
-    };
+impure func arbRetryable_emitRedeemed(topFrame: EvmCallFrame, txId: uint) {
+    evmOp_log2(0, 0, const::eventTopic_ArbRetryableTx_Redeemed, txId);
 }

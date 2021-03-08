@@ -1917,6 +1917,30 @@ impl _ArbReplayableTx {
         }
     }
 
+    pub fn _redeem(
+        &self,
+        machine: &mut Machine,
+        txid: Uint256
+    ) -> Result<(), ethabi::Error> {
+        let (receipts, sends) = self.contract_abi.call_function(
+            Uint256::zero(), // send from address zero
+            "redeem",
+            &[ethabi::Token::Uint(txid.to_u256())],
+            machine,
+            Uint256::zero(),
+            self.debug,
+        )?;
+
+        if (receipts.len() < 1) || (receipts.len() > 2) || (sends.len() != 0) {
+            println!("{} receipts, {} sends", receipts.len(), sends.len());
+            Err(ethabi::Error::from("wrong number of receipts or sends"))
+        } else if receipts[receipts.len()-1].succeeded() {
+            Ok(())
+        } else {
+            Err(ethabi::Error::from("reverted"))
+        }
+    }
+
     pub fn _get_timeout(
         &self,
         machine: &mut Machine,

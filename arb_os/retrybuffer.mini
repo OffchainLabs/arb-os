@@ -8,12 +8,15 @@ use accounts::accountStore_get;
 use accounts::accountStore_set;
 use accounts::account_addToEthBalance;
 
+use evmCallStack::evmCallStack_callRetryableTxAndReturn;
+
 use evmlogs::EvmLogs;
 
 use gasAccounting::GasUsage;
 use gasAccounting::txFeeStats_zero;
 use gasAccounting::chargeForRetryableTx;
 use gasAccounting::getRetryableTxPrice;
+use gasAccounting::txFeeStats_zero;
 
 use inbox::IncomingRequest;
 use inbox::inbox_currentTimestamp;
@@ -36,6 +39,9 @@ use std::queue::queue_new;
 use std::queue::queue_put;
 use std::queue::queue_get;
 
+use core::kvs::Kvs;
+use core::kvs::builtin_kvsDelete;
+
 
 type RetryableTx = struct {
     txId: uint,
@@ -45,52 +51,13 @@ type RetryableTx = struct {
     calldata: ByteArray,
     retryCount: uint,
     expiryTime: uint,
+    l1Message: IncomingRequest,
 }
 
 type RetryQueueItem = struct {
     txId: uint,
     retryCount: uint,
     expiryTime: uint,
-}
-
-public func retryableTx_hash(rtx: RetryableTx) -> bytes32 {  // note: hash does not include retryCount field
-    return hash(
-        bytes32(rtx.txId),
-        hash(
-            bytes32(rtx.sender),
-            hash(
-                bytes32(rtx.destination),
-                hash(
-                    bytes32(rtx.callvalue),
-                    keccak256(rtx.calldata, 0, bytearray_size(rtx.calldata)),
-                )
-            )
-        )
-    );
-}
-
-public func retryItem_rebuildVerifyHash(
-    txId: uint,
-    sender: address,
-    destination: address,
-    callvalue: uint,
-    calldata: ByteArray,
-    claimedHash: bytes32,
-) -> option<RetryableTx> {
-    let claimedRtx = struct {
-        txId: txId,
-        sender: sender,
-        destination: destination,
-        callvalue: callvalue,
-        calldata: calldata,
-        retryCount: 0,     // OK to put any value here because it does not affect the hash.
-        expiryTime: 0,     // OK to put any value here because it does not affect the hash.
-    };
-    return xif (claimedHash == retryableTx_hash(claimedRtx)) {
-        Some(claimedRtx)
-    } else {
-        None<RetryableTx>
-    };
 }
 
 var retryBuffer: struct {
@@ -172,34 +139,36 @@ public impure func retryBuffer_insertNew(
     sender: address,
     destination: address,
     callvalue: uint,
-    calldata: ByteArray
-) -> bytes32 {
+    calldata: ByteArray,
+    l1Message: IncomingRequest,
+) -> uint {
     let newTx = struct {
-        txId: txId,
+        txId: uint(hash(bytes32(txId), bytes32(0))),
         sender: sender,
         destination: destination,
         callvalue: callvalue,
         calldata: calldata,
         retryCount: 0,
         expiryTime: inbox_currentTimestamp() + retryBuffer.txLifetimeSeconds,
+        l1Message: l1Message with { requestId: uint(hash(bytes32(l1Message.requestId), bytes32(0))) },
     };
     retryBuffer_insert(newTx);
 
-    return retryableTx_hash(newTx);
+    return newTx.txId;
 }
 
-public impure func retryBuffer_get(txId: uint, removeIfFound: bool) -> option<RetryableTx> {
-    let ret = retryBuffer.byTxId[txId];
-    if (removeIfFound) {
-        if let Some(tx) = ret {
-            retryBuffer_delete(txId);
-        }
-    }
-    return ret;
+public impure func retryBuffer_delete(txId: uint) {
+    retryBuffer = retryBuffer with {
+        byTxId: retryBuffer.byTxId with { [txId] = unsafecast<RetryableTx>(0) }   // effectively deletes the map entry
+    };
+}
+
+public impure func retryBuffer_get(txId: uint) -> option<RetryableTx> {
+    return retryBuffer.byTxId[txId];
 }
 
 public impure func retryBuffer_getTxTimeout(txId: uint) -> uint {
-    return xif let Some(rtx) = retryBuffer_get(txId, false) {
+    return xif let Some(rtx) = retryBuffer_get(txId) {
         rtx.expiryTime
     } else {
         0
@@ -211,12 +180,12 @@ public impure func retryBuffer_getLifetime() -> uint {
 }
 
 public impure func retryBuffer_getTxKeepalivePrice(txId: uint) -> option<(uint, uint)>{
-    let rtx = retryBuffer_get(txId, false)?;
+    let rtx = retryBuffer_get(txId)?;
     return Some(getRetryableTxPrice(bytearray_size(rtx.calldata)));
 }
 
 public impure func retryBuffer_keepalive(txId: uint) -> option<uint> {
-    let rtx = retryBuffer_get(txId, false)?;
+    let rtx = retryBuffer_get(txId)?;
     let newExpiryTime = rtx.expiryTime + retryBuffer.txLifetimeSeconds;
     retryBuffer_insert(rtx with { expiryTime: newExpiryTime });
     return Some(newExpiryTime);
@@ -224,7 +193,9 @@ public impure func retryBuffer_keepalive(txId: uint) -> option<uint> {
 
 public impure func retryBuffer_delete(txId: uint) {
     retryBuffer = retryBuffer with {
-        byTxId: retryBuffer.byTxId with { [txId] = unsafecast<RetryableTx>(0) }    // deletes item from the map
+        byTxId: unsafecast<map<uint, RetryableTx>>(
+            builtin_kvsDelete(unsafecast<Kvs>(retryBuffer.byTxId), txId)
+        )
     };
     // tx might still be in retryBuffer.fifo, but that isn't a problem because it's not gettable and re-deletion is safe
 }
@@ -254,12 +225,12 @@ public impure func processRetryableTx(req: IncomingRequest) {
 
     if (paid) {
         // remember the retryable tx
-        let txHash = retryBuffer_insertNew(req.requestId, sender, destination, callvalue, calldata);
+        let txId = retryBuffer_insertNew(req.requestId, sender, destination, callvalue, calldata, req);
 
         emitTxReceipt(
             req,
             const::TxResultCode_success,
-            Some(bytearray_set256(bytearray_set256(bytearray_new(0), 0, req.requestId), 32, uint(txHash))),
+            Some(bytearray_set256(bytearray_new(0), 0, txId)),
             None<EvmLogs>,
             None<GasUsage>,
             feeStats,
@@ -276,8 +247,28 @@ public impure func processRetryableTx(req: IncomingRequest) {
     }
 }
 
-public impure func redeemRetryableTxInTx(txToRedeem: uint) {
-    //TODO: implement this
-    panic;
+public impure func redeemRetryableTxInTx(txToRedeem: uint) -> bool {
+    return xif let Some(rtx) = retryBuffer_get(txToRedeem) {
+       evmCallStack_callRetryableTxAndReturn(rtx)
+    } else {
+        false
+    };
 }
 
+public impure func retryableCompletedCallback(
+    returnData: ByteArray,
+    rawRtx: any
+) {
+    let rtx = unsafecast<RetryableTx>(rawRtx);
+    let retryableSucceeded = (bytearray_get256(returnData, 0) != 0);
+
+    retryBuffer_delete(rtx.txId);
+    emitTxReceipt(
+        rtx.l1Message,
+        xif (retryableSucceeded) { const::TxResultCode_success } else { const::TxResultCode_revert },
+        None<ByteArray>,
+        None<EvmLogs>,
+        None<GasUsage>,
+        txFeeStats_zero(),
+    );
+}
