@@ -150,7 +150,7 @@ pub fn init_constant_table() -> HashMap<String, Uint256> {
         ("L1MessageType_ethDeposit", 0),
         ("L1MessageType_L2", 3),
         ("L1MessageType_chainInit", 4),
-        ("L1MessageType_buddyDeploy", 5),
+        // type 5 not used -- previously was for buddy contract deploy
         ("L1MessageType_endOfBlock", 6),
         ("L1MessageType_L2FundedByL1", 7),
         ("L1MessageType_rollupProtocolEvent", 8),
@@ -197,7 +197,7 @@ pub fn init_constant_table() -> HashMap<String, Uint256> {
         // outgoing message types
         ("SendType_withdrawETH", 0),
         ("SendType_sendTxToL1", 3),
-        ("SendType_buddyContractResult", 5),
+        // type 5 not used -- was previously buddy contract result
         // AVM send types
         ("AVMSendType_batch", 0),
         // chain initialization options

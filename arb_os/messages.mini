@@ -181,18 +181,14 @@ public impure func handleL2Request(
         if (request.seqNum == None<uint>) {
             request = request with { seqNum: Some(fetchAndIncrSequenceNum(request.caller)) };
         }
-        if (request.incomingRequest.kind == const::L1MessageType_buddyDeploy) {
-            // it's a buddy contract deployment; hardwire the new contract address
-            request = request with { calleeAddr: request.caller };
-        } else {
-            // ordinary contract deploy; use the standard formula to calculate new contract address
-            request = request with {
-                calleeAddr: address(keccakOfRlpEncodedUintPair(uint(request.caller), request.seqNum?))
-            };
-        }
+
+        request = request with {
+            calleeAddr: address(keccakOfRlpEncodedUintPair(uint(request.caller), request.seqNum?))
+        };
 
         if (account_hasContract(accountStore_get(getGlobalAccountStore(), request.calleeAddr))) {
             // there's already an account at that address, revert the call
+            // should never happen -- this is just defensive code
             emitTxReceipt(
                 request.incomingRequest,
                 const::TxResultCode_cannotDeployAtAddress,
