@@ -60,11 +60,11 @@ impure func main() {
     chainParams_init();
     output_init();
     decompression_init();
+    inbox_init();
     gasAccounting_init();
     evmCallStack_init();
     evmOps_init();
     blockhash_init();
-    inbox_init();
     accountStore_init();
     txReceipts_init();
     rollupTracker_init();

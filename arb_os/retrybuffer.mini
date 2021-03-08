@@ -215,10 +215,11 @@ public impure func retryBuffer_getTxKeepalivePrice(txId: uint) -> option<(uint, 
     return Some(getRetryableTxPrice(bytearray_size(rtx.calldata)));
 }
 
-public impure func retryBuffer_keepalive(txId: uint) -> option<()> {
+public impure func retryBuffer_keepalive(txId: uint) -> option<uint> {
     let rtx = retryBuffer_get(txId, false)?;
-    retryBuffer_insert(rtx with { expiryTime: rtx.expiryTime + retryBuffer.txLifetimeSeconds });
-    return Some(());
+    let newExpiryTime = rtx.expiryTime + retryBuffer.txLifetimeSeconds;
+    retryBuffer_insert(rtx with { expiryTime: newExpiryTime });
+    return Some(newExpiryTime);
 }
 
 public impure func retryBuffer_delete(txId: uint) {

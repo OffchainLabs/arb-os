@@ -125,7 +125,7 @@ impure func arbRetryable_getKeepalivePrice(topFrame: EvmCallFrame, calldata: Byt
     }
 }
 
-impure func arbRetryable_keepalive(topFrame: EvmCallFrame, calldata: ByteArray) {  // (uint) payable
+impure func arbRetryable_keepalive(topFrame: EvmCallFrame, calldata: ByteArray) {  // (uint) payable -> uint
     if (bytearray_size(calldata) != 36) {
         evmOp_revert_knownPc(50, 0, 0);
     }
@@ -137,10 +137,19 @@ impure func arbRetryable_keepalive(topFrame: EvmCallFrame, calldata: ByteArray) 
         }
     }
 
-    if (retryBuffer_keepalive(bytearray_get256(calldata, 4)) != None<()>) {
-        evmOp_return(0, 0);
+    let txId = bytearray_get256(calldata, 4);
+    if let Some(newTimeout) = retryBuffer_keepalive(txId) {
+        if (arbRetryable_emitLifetimeExtended(topFrame, txId, newTimeout) == None<()>) {
+            evmOp_revert_knownPc(52, 0, 0);
+        }
+        let mem = bytearray_set256(bytearray_new(0), 0, newTimeout);
+        if (evmCallStack_setTopFrameMemory(mem)) {
+            evmOp_return(0, 32);
+        } else {
+            evmOp_revert_knownPc(53, 0, 0);
+        }
     } else {
-        evmOp_revert_knownPc(52, 0, 0);
+        evmOp_revert_knownPc(54, 0, 0);
     }
 }
 

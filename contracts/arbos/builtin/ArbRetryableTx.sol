@@ -24,8 +24,9 @@ interface ArbRetryableTx {
     function getKeepalivePrice(uint txId) external view returns(uint, uint);
 
     // Deposits callvalue into the sender's L2 account, then adds one lifetime period to the life of txId.
+    // If successful, emits LifetimeExtended evcent, and returns the new timeout of txId.
     // Reverts if txId does not exist or the sender has insufficient funds (after the deposit).
-    function keepalive(uint txId) external payable;
+    function keepalive(uint txId) external payable returns(uint);
 
     event LifetimeExtended(uint txId, uint newTimeout);
     event RedemptionResult(uint txId, bool success, bool retryable);

@@ -5,7 +5,7 @@
 use crate::compile::miniconstants::init_constant_table;
 use crate::evm::abi::{
     ArbAddressTable, ArbBLS, ArbFunctionTable, ArbSys, ArbosTest, _ArbAggregator, _ArbGasInfo,
-    _ArbOwner, builtin_contract_path,
+    _ArbOwner, builtin_contract_path, _ArbReplayableTx,
 };
 use crate::evm::abi::{FunctionTable, _ArbInfo};
 use crate::run::{load_from_file, RuntimeEnvironment};
@@ -873,6 +873,71 @@ pub fn _evm_test_callback(
     assert_eq!(sends[1][1..33], contract.address.to_bytes_be()[0..32]);
     assert_eq!(sends[1][161..193], [0u8; 32]);
     assert_eq!(sends[1].len(), 210);  // 17 bytes of calldata after 193 bytes of fields
+
+    if let Some(path) = log_to {
+        machine
+            .runtime_env
+            .recorder
+            .to_file(path, machine.get_total_gas_usage().to_u64().unwrap())
+            .unwrap();
+    }
+
+    Ok(())
+}
+
+#[test]
+fn test_retryable() {
+    match _test_retryable(None, false) {
+        Ok(()) => {},
+        Err(e) => panic!("{}", e),
+    }
+}
+
+pub fn _test_retryable(log_to: Option<&Path>, debug: bool) -> Result<(), ethabi::Error> {
+    let rt_env = RuntimeEnvironment::new(Uint256::from_usize(1111), None);
+    let mut machine = load_from_file(Path::new("arb_os/arbos.mexe"), rt_env);
+    machine.start_at_zero();
+
+    let my_addr = Uint256::from_u64(1234);
+
+    let mut add_contract = AbiForContract::new_from_file(&test_contract_path("Add"))?;
+    if add_contract
+        .deploy(&[], &mut machine, Uint256::zero(), None, None, debug)
+        .is_err()
+    {
+        panic!("failed to deploy Add contract");
+    }
+
+    let txid = add_contract._send_retryable_tx(
+        my_addr.clone(),
+        "add",
+        &[ethabi::Token::Uint(Uint256::one().to_u256()), ethabi::Token::Uint(Uint256::one().to_u256())],
+        &mut machine,
+        Uint256::from_u64(1_000_000_000_000_000),
+    )?;
+    assert!(txid != Uint256::zero());
+
+    machine.runtime_env._advance_time(Uint256::one(), None, true);
+    let _gas_used = if debug {
+        machine.debug(None)
+    } else {
+        machine.run(None)
+    };
+
+    let arb_replayable = _ArbReplayableTx::_new(debug);
+    let timeout = arb_replayable._get_timeout(&mut machine, txid.clone())?;
+    assert!(timeout > machine.runtime_env.current_timestamp);
+
+    let (keepalive_price, reprice_time) = arb_replayable._get_keepalive_price(&mut machine, txid.clone())?;
+    assert_eq!(keepalive_price, Uint256::zero());
+    assert!(reprice_time > machine.runtime_env.current_timestamp);
+
+    let keepalive_ret = arb_replayable._keepalive(&mut machine, txid.clone(), keepalive_price)?;
+
+    let new_timeout = arb_replayable._get_timeout(&mut machine, txid.clone())?;
+    assert_eq!(keepalive_ret, new_timeout);
+    assert!(new_timeout > timeout);
+
 
     if let Some(path) = log_to {
         machine

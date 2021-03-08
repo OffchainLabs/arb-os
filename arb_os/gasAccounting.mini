@@ -239,6 +239,11 @@ impure func setPrices(
     congestionState: CongestionState,
     oldRetryablePrices: RetryablePrices,
 ) -> (GasPrices, RetryablePrices) {
+    if (oldRetryablePrices.nextUpdateTimestamp <= inbox_currentTimestamp()) {
+        oldRetryablePrices = oldRetryablePrices with {
+            nextUpdateTimestamp: inbox_currentTimestamp() + const::Charging_RetryableTxRepriceIntervalSeconds
+        };
+    }
     return xif (feeConfig.enabled) {
         let timestamp = inbox_currentTimestamp();
         let l1GasPrice = getL1GasPriceEstimate();
@@ -274,7 +279,7 @@ impure func setPrices(
                 perArbGasCongestion: 0,
                 perArbGasTotal: 0,
             },
-            oldRetryablePrices,
+            oldRetryablePrices
         )
     };
 }
