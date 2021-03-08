@@ -32,6 +32,7 @@ use chainParameters::chainParams_getSecondsPerSend;
 
 use evmlogs::evmlogs_empty;
 use evmlogs::evmlogs_numLogs;
+use evmlogs::evmlogs_forall;
 
 use evmCallStack::evmCallStack_queueMessage;
 
@@ -197,7 +198,7 @@ public impure func txReceipts_init() {  // will be called at beginning of main()
         statsThisBlock: outputStats_new(),
         statsAllTime: outputStats_new(),
         lastBlockNum: ~0,
-        nextSendBlockNum: 0,
+        nextSendTime: 0,
     };
 }
 
@@ -343,14 +344,64 @@ public impure func queueMessageForSend(msg: ByteArray) {
     evmCallStack_queueMessage(msg);
 }
 
-public impure func sendQueuedMessages(queue: Queue) {
-    loop {
+public impure func sendQueuedMessages(queue: Queue, evmLogs: EvmLogs) -> EvmLogs {
+    let sendTxIndexQ = queue_new();
+    return xloop {
         if let Some(res) = queue_get(queue) {
-            let (uq, msg) = res;
+            let (uq, rawMsg) = res;
             queue = uq;
-            outbox_append(unsafecast<ByteArray>(msg));
+            let msg = unsafecast<ByteArray>(rawMsg);
+            if (bytearray_getByte(unsafecast<ByteArray>(msg), 0) == const::SendType_sendTxToL1) {
+                sendTxIndexQ = queue_put(sendTxIndexQ, globalOutbox.numInBatch);
+            }
+            outbox_append(msg);
         } else {
-            return;
+            return xif (queue_isEmpty(sendTxIndexQ)) {
+                evmLogs
+            } else {
+                evmlogs_forall(evmLogs, updateEvmLogForSendToL1, sendTxIndexQ).0
+            };
         }
-    }
+    };
+}
+
+type LogWith3Topics = struct {
+    sender: address,
+    data: struct {
+        size: uint,
+        buf: buffer
+    },
+    topic0: uint,
+    topic1: uint,
+    topic2: uint,
+}
+
+impure func updateEvmLogForSendToL1(rawLog: any, state: any) -> (any, any) {
+    // This is designed to be used by evmlogs_forall. When used by evmlogs_forall in its pass through
+    //      the current set of logs, this morphs EVM logs with topic[0] == const::EVMLogTopicPlaceHolderForL2ToL1Send
+    //      into proper EVM log items with batch-related fields filled in
+
+    // Cast the log item to a struct that assumes 3 topics. topic0, topic1, and topic2 might not exist,
+    //      but that's OK because we won't try to access them until after we have verified that they exist.
+    let log = unsafecast<LogWith3Topics>(rawLog);
+    return xif ((asm(log,) uint { tlen } == 5) && (log.topic0 == const::EVMLogTopicForL2ToL1Send)) {
+        // Now we know that the log has 3 topics.
+        xif let Some(res) = queue_get(unsafecast<Queue>(state)) {
+            let (uq, item) = res;
+            log = log with {
+                topic2: globalOutbox.batchNumber
+            } with {
+                data: log.data with { buf: setbuffer256(log.data.buf, 0, unsafecast<uint>(item)) }
+            };
+            (log, uq)
+        } else {
+            // This should never happen, but if it does, get everything right except for the index in batch.
+            log = log with {
+                topic2: globalOutbox.batchNumber
+            };
+            (log, state)
+        }
+    } else {
+        (rawLog, state)
+    };
 }

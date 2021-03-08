@@ -19,6 +19,9 @@ pub fn init_constant_table() -> HashMap<String, Uint256> {
         ("Address_ArbosTest", 105),
         ("Address_ArbOwner", 107),
         ("Address_ArbGasInfo", 108),
+        ("Address_ArbAggregator", 109),
+        // addresses of dummy builtin contracts
+        ("Address_ReservedForEthBridge", 200), // reserved for special EthBridge functionality
         // indices of EVM operations
         ("EvmOp_stop", 0),
         ("EvmOp_sha3", 1),
@@ -66,7 +69,8 @@ pub fn init_constant_table() -> HashMap<String, Uint256> {
         ("EvmOp_chainId", 43),
         ("EvmOp_gasprice", 44),
         ("EvmOp_gaslimit", 45),
-        ("NumEvmOps", 46),
+        ("EvmOp_blockhash", 46),
+        ("NumEvmOps", 47),
         // AVM instructions
         ("AVM_add", 0x01),
         ("AVM_mul", 0x02),
@@ -144,7 +148,7 @@ pub fn init_constant_table() -> HashMap<String, Uint256> {
         ("L1MessageType_ethDeposit", 0),
         ("L1MessageType_L2", 3),
         ("L1MessageType_chainInit", 4),
-        ("L1MessageType_buddyDeploy", 5),
+        // type 5 not used -- previously was for buddy contract deploy
         ("L1MessageType_endOfBlock", 6),
         ("L1MessageType_L2FundedByL1", 7),
         ("L1MessageType_rollupProtocolEvent", 8),
@@ -190,11 +194,12 @@ pub fn init_constant_table() -> HashMap<String, Uint256> {
         // outgoing message types
         ("SendType_withdrawETH", 0),
         ("SendType_sendTxToL1", 3),
-        ("SendType_buddyContractResult", 5),
+        // type 5 not used -- was previously buddy contract result
         // AVM send types
         ("AVMSendType_batch", 0),
         // chain initialization options
         ("InitOption_setChargingParams", 2),
+        ("InitOption_setDefaultAggregator", 3),
         // charging mechanism
         ("Charging_DefaultL1GasPerL2Tx", 3700),
         ("Charging_DefaultL1GasPerCalldataByte", 16),
@@ -215,7 +220,7 @@ pub fn init_constant_table() -> HashMap<String, Uint256> {
         ("SecondsPerBlockNumerator", 2),
         ("SecondsPerBlockDenominator", 1),
         ("DefaultSpeedLimitPerSecond", 100_000_000),
-        ("DefaultSecondsPerSend", 900),               // 15 minutes
+        ("DefaultSecondsPerSend", 900), // 15 minutes
         ("Estimate_L1GasCostPerNode", 220000),
         ("Estimate_L1GasPrice", 100 * 1_000_000_000), // 100 gwei
     ] {
@@ -235,6 +240,10 @@ pub fn init_constant_table() -> HashMap<String, Uint256> {
             // Keccak256 of "Arbitrum BLS signature domain"
             "73a92f91d473214defd5ffa91d036007eb2e6487fffaa551835e988fb24aaa2b",
         ),
+        (
+            "EVMLogTopicForL2ToL1Send",
+            "99ecd3620b54462a4f03f96ee9a3618830bb7ed6baab03d81adad709b22d1322"
+            ),
     ] {
         ret.insert(s.to_string(), Uint256::from_string_hex(u).unwrap());
     }

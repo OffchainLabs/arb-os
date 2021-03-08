@@ -113,7 +113,7 @@ public func bls_verifySingleSig(
 }
 
 public func bls_makeKey(x0: uint, x1: uint, y0: uint, y1: uint) -> option<BLSKey> {
-    return Some(struct { x0: x0, x1: x1, y0: y0, y1: y1 });
+    return Some(struct { ax: x0, ay: x1, bx: y0, by: y1 });
 }
 
 public func bls_marshalPublicKey(key: BLSKey, ba: ByteArray, offset: uint) -> ByteArray {

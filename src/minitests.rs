@@ -445,11 +445,6 @@ fn test_ripemd160_precompile() {
 }
 
 #[test]
-fn test_deploy_buddy_contract() {
-    crate::evm::evm_deploy_buddy_contract(None, false);
-}
-
-#[test]
 fn test_non_eip155_signed_tx() {
     crate::evm::evm_deploy_using_non_eip159_signature(None, false).unwrap();
 }
@@ -487,7 +482,7 @@ fn test_arbsys_direct() {
 #[test]
 fn test_arbowner() {
     match crate::evm::_evm_test_arbowner(None, false) {
-        Ok(()) => {},
+        Ok(()) => {}
         Err(e) => panic!("{:?}", e),
     }
 }
@@ -495,7 +490,15 @@ fn test_arbowner() {
 #[test]
 fn test_arbgasinfo() {
     match crate::evm::_evm_test_arbgasinfo(None, false) {
-        Ok(()) => {},
+        Ok(()) => {}
+        Err(e) => panic!("{:?}", e),
+    }
+}
+
+#[test]
+fn test_arbaggregator() {
+    match crate::evm::_evm_test_arbaggregator(None, false) {
+        Ok(()) => {}
         Err(e) => panic!("{:?}", e),
     }
 }
@@ -511,13 +514,13 @@ fn test_function_table_access() {
 }
 
 #[test]
-fn test_evm_add_code() {
-    crate::evm::_basic_evm_add_test(None, false).unwrap();
+fn test_l2_to_l1_call() {
+    crate::evm::_evm_test_callback(None, false).unwrap();
 }
 
 #[test]
-fn test_same_address_deploy() {
-    crate::evm::_evm_test_same_address_deploy(None, false);
+fn test_evm_add_code() {
+    crate::evm::_basic_evm_add_test(None, false).unwrap();
 }
 
 #[test]
@@ -530,12 +533,7 @@ pub fn test_crosscontract_call_with_constructors() {
 
 #[test]
 pub fn test_gas_charging_underfunded() {
-    match crate::evm::_evm_run_with_gas_charging(
-        None,
-        Uint256::_from_gwei(20),
-        false,
-        false,
-    ) {
+    match crate::evm::_evm_run_with_gas_charging(None, Uint256::_from_gwei(20), false, false) {
         Ok(result) => assert_eq!(result, false),
         Err(e) => panic!("error {}", e),
     }
@@ -543,12 +541,7 @@ pub fn test_gas_charging_underfunded() {
 
 #[test]
 pub fn test_gas_charging_fully_funded() {
-    match crate::evm::_evm_run_with_gas_charging(
-        None,
-        Uint256::_from_eth(1),
-        false,
-        false,
-    ) {
+    match crate::evm::_evm_run_with_gas_charging(None, Uint256::_from_eth(1), false, false) {
         Ok(result) => assert_eq!(result, true),
         Err(e) => panic!("error {}", e),
     }

@@ -41,7 +41,11 @@ pub fn benchmark_boot(_iterations: u64, log_to: &Path) -> u64 {
     machine.start_at_zero();
 
     let gas_used = machine.run(None);
-    machine.runtime_env.recorder.to_file(log_to, machine.get_total_gas_usage().to_u64().unwrap()).unwrap();
+    machine
+        .runtime_env
+        .recorder
+        .to_file(log_to, machine.get_total_gas_usage().to_u64().unwrap())
+        .unwrap();
     gas_used
 }
 
@@ -53,7 +57,7 @@ pub fn benchmark_add(iterations: u64, log_to: &Path) -> u64 {
     let my_addr = Uint256::from_u64(1025);
     let contract = match AbiForContract::new_from_file(&test_contract_path("Add")) {
         Ok(mut contract) => {
-            let result = contract.deploy(&[], &mut machine, Uint256::zero(), None, None, false);
+            let result = contract.deploy(&[], &mut machine, Uint256::zero(), None, false);
             if let Ok(contract_addr) = result {
                 assert_ne!(contract_addr, Uint256::zero());
                 contract
@@ -83,7 +87,11 @@ pub fn benchmark_add(iterations: u64, log_to: &Path) -> u64 {
             .unwrap();
     }
 
-    machine.runtime_env.recorder.to_file(log_to, machine.get_total_gas_usage().to_u64().unwrap()).unwrap();
+    machine
+        .runtime_env
+        .recorder
+        .to_file(log_to, machine.get_total_gas_usage().to_u64().unwrap())
+        .unwrap();
     machine.get_total_gas_usage().to_u64().unwrap()
 }
 
@@ -98,7 +106,7 @@ pub fn benchmark_add_batched(iterations: u64, log_to: &Path) -> u64 {
     let my_addr = Uint256::from_u64(1025);
     let contract = match AbiForContract::new_from_file(&test_contract_path("Add")) {
         Ok(mut contract) => {
-            let result = contract.deploy(&[], &mut machine, Uint256::zero(), None, None, false);
+            let result = contract.deploy(&[], &mut machine, Uint256::zero(), None, false);
             if let Ok(contract_addr) = result {
                 assert_ne!(contract_addr, Uint256::zero());
                 contract
@@ -137,6 +145,10 @@ pub fn benchmark_add_batched(iterations: u64, log_to: &Path) -> u64 {
 
     machine.run(None);
 
-    machine.runtime_env.recorder.to_file(log_to, machine.get_total_gas_usage().to_u64().unwrap()).unwrap();
+    machine
+        .runtime_env
+        .recorder
+        .to_file(log_to, machine.get_total_gas_usage().to_u64().unwrap())
+        .unwrap();
     machine.get_total_gas_usage().to_u64().unwrap()
 }

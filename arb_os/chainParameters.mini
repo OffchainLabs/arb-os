@@ -29,6 +29,7 @@ type ChainParams = struct {
     stakingToken: address,           // ERC-20 token used for staking; or zero if using ETH
     owner: address,                  // owner of the chain, who has admin privileges (or zero if there is no owner)
     secondsPerSend: option<uint>,    // issue at most one send per this many seconds
+    defaultAggregator: address,      // default aggregator, for users who haven't specified one
 }
 
 var globalChainParams: option<ChainParams>;
@@ -45,15 +46,17 @@ public impure func chainParams_gotParamsMessage(sender: address, data: ByteArray
     if (globalChainParams == None<ChainParams>) {
         arbowner_init();
 
+        let arbGasSpeedLimitPerBlock = bytearray_get256(data, 32);
         globalChainParams = Some(struct{
             chainAddress: sender,
-            gracePeriodBlockss: bytearray_get256(data, 0),
-            arbGasSpeedLimitPerSecond: bytearray_get256(data, 32),
+            gracePeriodBlocks: bytearray_get256(data, 0),
+            arbGasSpeedLimitPerSecond: blocksToSeconds(arbGasSpeedLimitPerBlock),
             maxExecutionSteps: bytearray_get256(data, 2*32),
             baseStake: bytearray_get256(data, 3*32),
             stakingToken: address(bytearray_get256(data, 4*32)),
             owner: address(bytearray_get256(data, 5*32)),
             secondsPerSend: None<uint>,
+            defaultAggregator: address(0),
         });
 
         // now read and process initialization options
@@ -108,6 +111,14 @@ impure func doInitializationOption(stream: ByteStream) -> option<ByteStream> {
             address(congestionFeeRecipientU),
         );
         Some(ustr)
+    } elseif (optionId == const::InitOption_setDefaultAggregator) {
+        if (numPayloadBytes != 32) {
+            // unexpected payload size; discard the payload and ignore this option
+            return bytestream_skipBytes(stream, numPayloadBytes);
+        }
+        let (ustr, newDefaultAgg) = bytestream_get256(stream)?;
+        chainParams_setDefaultAggregator(address(newDefaultAgg));
+        Some(ustr)
     } else {
         // unrecognized option, discard it
         bytestream_skipBytes(stream, numPayloadBytes)
@@ -155,6 +166,20 @@ public impure func chainParams_getOwner() -> option<address> {
 public impure func chainParams_setOwner(newOwner: address) {
     if let Some(params) = globalChainParams {
         globalChainParams = Some(params with { owner: newOwner });
+    }
+}
+
+public impure func chainParams_getDefaultAggregator() -> address {
+    return xif let Some(params) = globalChainParams {
+        params.defaultAggregator
+    } else {
+        address(0)
+    };
+}
+
+public impure func chainParams_setDefaultAggregator(newDefault: address) {
+    if let Some(params) = globalChainParams {
+        globalChainParams = Some(params with { defaultAggregator: newDefault });
     }
 }
 

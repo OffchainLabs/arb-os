@@ -21,6 +21,7 @@ use accounts::account_addToEthBalance;
 use accounts::account_deductFromEthBalance;
 use accounts::accountStore_transferEthBalance;
 use accounts::account_getNextSeqNum;
+use accounts::account_getAggregatorToPay;
 
 use evmCallStack::evmCallStack_isEmpty;
 use evmCallStack::evmCallStack_getAccountInCurrentContext;
@@ -157,16 +158,16 @@ public impure func gasAccounting_init() {    // initialize on boot, before we ha
         congestionState: congestionState,
         speedLimitPerSecond: const::DefaultSpeedLimitPerSecond,
         pricingParams: pricingParams,
-        gasAllocatedForThisBlock: uint(congestionState.gasPool),
+        gasAllocatedToThisBlock: uint(congestionState.gasPool),
     };
 }
 
 impure func initCongestionState(isInit: bool) -> CongestionState {
     return struct {
         gasPool: int(gasAccountingParams.GasPoolMax),
-        lastBlockNumSeen: xif (isInit) { 0 } else { inbox_currentArbBlockNumber() },
+        lastArbBlockNumSeen: xif (isInit) { 0 } else { inbox_currentArbBlockNumber() },
         lastTimestampSeen: xif (isInit) { 0 } else { inbox_currentTimestamp() },
-        congestionPricePerArbGas: 0,
+        congestionPriceWei: 0,
     };
 }
 
@@ -178,17 +179,17 @@ impure func setGasAccountingParamsFromSpeedLimit(speedLimitPerSecond: uint) {
     };
 }
 
-public impure func setGasAccountingParams(speedLimitPerBlock: uint, gasPoolMax: uint, txGasLimit: uint) -> bool {
+public impure func setGasAccountingParams(speedLimitPerSecond: uint, gasPoolMax: uint, txGasLimit: uint) -> bool {
     // if parameters are reasonable, start using them, and return true
     // otherwise, discard them, and return false
 
-    return xif (gasPoolMax < speedLimitPerBlock) {
+    return xif (gasPoolMax < speedLimitPerSecond) {
         false
     } elseif (gasPoolMax < txGasLimit) {
         false
     } else {
         gasAccountingParams = struct {
-            SpeedLimitPerBlock: speedLimitPerBlock,
+            SpeedLimitPerSecond: speedLimitPerSecond,
             GasPoolMax: gasPoolMax,
             TxGasLimit: txGasLimit,
         };
@@ -287,8 +288,8 @@ public impure func gasAccounting_setChargingParams(
     gasAccountingInfo = gasAccountingInfo with {
         pricingParams: struct {
             l1GasPerL2Tx: l1GasPerL2Tx,
-            l1GasPerL2CalldataByte: l1GasPerL2Calldata,
-            l1GasPerStorageCell: l1GasPerStorage,
+            l1GasPerL1Calldata: l1GasPerL2Calldata,
+            l1GasPerStorage: l1GasPerStorage,
             arbGasDivisor: arbGasDivisor,
         }
     } with {
@@ -775,6 +776,18 @@ impure func payForTxAndL1Gas(
     // This pays for the base Tx fee plus L1 calldata fee.
     // Most of the funds go to the aggregator, and a slice goes to the network fee pool.
 
+    let preferredAggregator = account_getAggregatorToPay(evmCallStack_getAccountInCurrentContext(payer));
+    if (preferredAggregator != recipient) {
+        // Tx isn't using the preferred aggregator, so only charge for the network fee, for L2 tx and L1 calldata gas.
+        // Here we reduce the prices of those things so they include only the network fee.
+        // Below we will charge the reduced price and give all of the funds for these things to the network fee.
+        prices = prices with {
+            perL2Tx: fixedPoint_mulByUintTrunc(feeConfig.shareForNetFee, prices.perL2Tx)
+        } with {
+            perL1CalldataByte: fixedPoint_mulByUintTrunc(feeConfig.shareForNetFee, prices.perL1CalldataByte)
+        };
+    }
+
     let fullAmount = prices.perL2Tx + prices.perL1CalldataByte * calldataBytes;
     if (fullAmount == 0) {
         return (
@@ -798,7 +811,15 @@ impure func payForTxAndL1Gas(
         fullAmount
     };
 
-    let payableToFee = fixedPoint_mulByUintTrunc(feeConfig.shareForNetFee, amount);
+    let payableToFee = xif(preferredAggregator == recipient) {
+        // We're charging full price, so only give the network fee its share.
+        fixedPoint_mulByUintTrunc(feeConfig.shareForNetFee, amount)
+    } else {
+        // We're only charging the network fee, so give all of the collected funds to the network fee.
+        // (We reduced the prices above, so only the network fee funds are being collected.)
+        amount
+    };
+
     acctStore = xif let Some(store) = accountStore_transferEthBalance(
         acctStore,
         payer,
@@ -810,16 +831,20 @@ impure func payForTxAndL1Gas(
         panic  // should never happen -- we just checked the balance
     };
 
-    acctStore = xif let Some(store) = accountStore_transferEthBalance(
-        acctStore,
-        payer,
-        recipient,
-        amount - payableToFee,  // safe because payableToFee <= amount <= payer's original balance
-    ) {
-        store
-    } else {
-        panic   // should never happen -- we have deducted amount (in total) <= payerBalance
-    };
+    if (amount > payableToFee) {
+        // Reimburse the aggregator for its costs for this tx.
+        feeStats = feeStats with { paidAggregator: recipient };
+        acctStore = xif let Some(store) = accountStore_transferEthBalance(
+            acctStore,
+            payer,
+            recipient,
+            amount - payableToFee,  // safe because payableToFee <= amount <= payer's original balance
+        ) {
+            store
+        } else {
+            panic   // should never happen -- we have deducted amount (in total) <= payerBalance
+        };
+    }
 
     setGlobalAccountStore(acctStore);
     let amountForTx = prices.perL2Tx * amount / fullAmount;   // safe because fullAmount > 0
@@ -873,7 +898,7 @@ impure func updateCongestionState(state: CongestionState, toBlockNum: uint, toTi
     }
     return struct {
         gasPool: gasPool,
-        lastBlockNumSeen: toBlockNum,
+        lastArbBlockNumSeen: toBlockNum,
         lastTimestampSeen: toTimestamp,
         congestionPriceWei: totalPrice - basePrice,
     };
@@ -980,6 +1005,7 @@ type TxFeeStats = struct {
     price: FourResources,
     units: FourResources,
     weiPaid: FourResources,
+    paidAggregator: address,
 }
 
 public func txFeeStats_zero() -> TxFeeStats {
@@ -993,6 +1019,7 @@ public func txFeeStats_zero() -> TxFeeStats {
         price: frZero,
         units: frZero,
         weiPaid: frZero,
+        paidAggregator: address(0),
     };
 }
 
