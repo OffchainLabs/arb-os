@@ -7,6 +7,7 @@ use accounts::setGlobalAccountStore;
 use accounts::accountStore_get;
 use accounts::accountStore_set;
 use accounts::account_addToEthBalance;
+use accounts::account_deductFromEthBalance;
 
 use evmCallStack::evmCallStack_callRetryableTxAndReturn;
 
@@ -192,12 +193,29 @@ public impure func retryBuffer_keepalive(txId: uint) -> option<uint> {
 }
 
 public impure func retryBuffer_delete(txId: uint) {
-    retryBuffer = retryBuffer with {
-        byTxId: unsafecast<map<uint, RetryableTx>>(
-            builtin_kvsDelete(unsafecast<Kvs>(retryBuffer.byTxId), txId)
-        )
-    };
-    // tx might still be in retryBuffer.fifo, but that isn't a problem because it's not gettable and re-deletion is safe
+    if let Some(rtx) = retryBuffer_get(txId) {
+        // delete the tx
+        retryBuffer = retryBuffer with {
+            byTxId: unsafecast<map<uint, RetryableTx>>(
+                builtin_kvsDelete(unsafecast<Kvs>(retryBuffer.byTxId), txId)
+            )
+        };
+
+        // now credit the callvalue back to the original sender
+        let globalStore = getGlobalAccountStore();
+        setGlobalAccountStore(
+            accountStore_set(
+                globalStore,
+                rtx.sender,
+                account_addToEthBalance(
+                    accountStore_get(globalStore, rtx.sender),
+                    rtx.callvalue,
+                )
+            )
+        );
+    }
+    // tx might still be in retryBuffer.fifo, but that isn't a problem because it's not gettable
+    //         and attempts to delete it again will be no-ops
 }
 
 public impure func processRetryableTx(req: IncomingRequest) {
@@ -205,10 +223,14 @@ public impure func processRetryableTx(req: IncomingRequest) {
     let destination = address(bytearray_get256(req.msgData, 0));
     let callvalue = bytearray_get256(req.msgData, 32);
     let deposit = bytearray_get256(req.msgData, 2*32);
-    let calldataSize = bytearray_get256(req.msgData, 3*32);
-    let calldata = bytearray_extract(req.msgData, 4*32, calldataSize);
+    let maxSubmissionCost = bytearray_get256(req.msgData, 3*32);
+    let creditBack = address(bytearray_get256(req.msgData, 4*32));
+    let calldataSize = bytearray_get256(req.msgData, 5*32);
+    let calldata = bytearray_extract(req.msgData, 6*32, calldataSize);
 
-    // deposited funds go into the caller's account
+    if (creditBack == address(0)) { creditBack = sender; }
+
+    // deposited funds go into the sender's account
     if (deposit > 0) {
         let globalStore = getGlobalAccountStore();
         setGlobalAccountStore(
@@ -221,21 +243,61 @@ public impure func processRetryableTx(req: IncomingRequest) {
     }
 
     // charge for injecting this message
-    let (paid, feeStats) = chargeForRetryableTx(sender, calldataSize);
+    let (submissionFee, subFeeRecipient, feeStats) = chargeForRetryableTx(sender, calldataSize);
+    if (submissionFee <= maxSubmissionCost) {
+        let totalDue = callvalue + maxSubmissionCost;
 
-    if (paid) {
-        // remember the retryable tx
-        let txId = retryBuffer_insertNew(req.requestId, sender, destination, callvalue, calldata, req);
+        let globalStore = getGlobalAccountStore();
+        if let Some(senderAcct) = account_deductFromEthBalance(accountStore_get(globalStore, sender), totalDue) {
+            // We took maxSubmissionCost + callvalue from the sender.
+            // We will distribute those funds as follows:
+            //       submissionFee to the subFeeRecipient
+            //       maxSubmissionCost-submissionFee to the creditBack address
+            //       callvalue to the retryableTx we will create
 
-        emitTxReceipt(
-            req,
-            const::TxResultCode_success,
-            Some(bytearray_set256(bytearray_new(0), 0, txId)),
-            None<EvmLogs>,
-            None<GasUsage>,
-            feeStats,
-        );
+            globalStore = accountStore_set(globalStore, sender, senderAcct);
+            if (submissionFee > 0) {
+                globalStore = accountStore_set(
+                    globalStore,
+                    subFeeRecipient,
+                    account_addToEthBalance(accountStore_get(globalStore, subFeeRecipient), submissionFee)
+                );
+            }
+            if (submissionFee < maxSubmissionCost) {
+                globalStore = accountStore_set(
+                    globalStore,
+                    creditBack,
+                    account_addToEthBalance(
+                        accountStore_get(globalStore, creditBack),
+                        maxSubmissionCost - submissionFee
+                    )
+                );
+            }
+            setGlobalAccountStore(globalStore);
+
+            // Create a new retryable tx, holding the callvalue
+            let txId = retryBuffer_insertNew(req.requestId, sender, destination, callvalue, calldata, req);
+
+            emitTxReceipt(
+                req,
+                const::TxResultCode_success,
+                Some(bytearray_set256(bytearray_new(0), 0, txId)),
+                None<EvmLogs>,
+                None<GasUsage>,
+                feeStats,
+            );
+        } else {
+            emitTxReceipt(
+                req,
+                const::TxResultCode_insufficientBalance,
+                None<ByteArray>,
+                None<EvmLogs>,
+                None<GasUsage>,
+                feeStats,
+            );
+        }
     } else {
+        // submission cost was higher than the maximum allowed by the request
         emitTxReceipt(
             req,
             const::TxResultCode_noGasFunds,

@@ -223,15 +223,19 @@ impl AbiForContract {
         args: &[ethabi::Token],
         machine: &mut Machine,
         payment: Uint256,
+        max_submission_cost: Uint256,
+        credit_back_address: Option<Uint256>,
     ) -> Result<Uint256, ethabi::Error> {
         let this_function = self.contract.function(func_name)?;
         let calldata = this_function.encode_input(args).unwrap();
 
         let txid = machine.runtime_env._insert_retryable_tx_message(
-            sender,
+            sender.clone(),
             self.address.clone(),
             payment.clone(),
             payment,
+            max_submission_cost,
+            credit_back_address.unwrap_or(sender),
             &calldata,
         );
 

@@ -110,7 +110,7 @@ type EvmCallFrame = struct {
     resumeInfo: option<ResumeInfo>,     // if call is suspended, its state will be saved here
     sendQueue: Queue,                   // outgoing messages, including those created by this call and its subcalls
     sendOnFailure: option<ByteArray>,   // message to send if call fails
-    returndataHook: option<TxReturndataHook>, // called if this is a top-level non-constructor tx that completes
+    returndataHook: option<TxReturndataHook>, // called if/when this call succeed, if it's a top-level non-constructor tx
     parent: option<EvmCallFrame>,       // call-frame that created this one, or None if this is a top-level call
 }
 
@@ -132,8 +132,7 @@ type ResumeInfo = struct {            // information used to resume a call after
 var globalCallStack: option<EvmCallFrame>;   // call frame of currently running call, if any
 var globalCurrentTxRequest: TxRequestData;  // request that launched the top-level call
 
-// This is designed to be called if a top-level, non-constructor tx succeeds.
-// It is passed (success, returnData) and returns new (success, returnData) values that will become those of the tx.
+// This is designed to be called if a top-level, non-constructor tx succeeds. First arg is tx's returndata.
 type TxReturndataHook = struct {
     callback: impure func(ByteArray, any),
     data: any,
@@ -851,7 +850,7 @@ public impure func evmCallStack_callRetryableTxAndReturn(rtx: RetryableTx) -> bo
         globalCallStack = Some(theFrame);
 
         let retCode = doCallDirect(
-            1000000000000000,
+            1000000000000000000,    // give all of our gas to the callee
             rtx.destination,
             rtx.callvalue,
             0,
@@ -861,9 +860,6 @@ public impure func evmCallStack_callRetryableTxAndReturn(rtx: RetryableTx) -> bo
         );
         ret = xif let Some(newTopFrame) = globalCallStack {
             // restore saved callframe info
-            //globalCallStack = Some(
-            //    evmCallFrame_setRunningAsAddress(newTopFrame with { memory: savedMemory }, savedRunningAs)
-            //);
             newTopFrame = newTopFrame with { memory: savedMemory };
             newTopFrame = evmCallFrame_setRunningAsAddress(newTopFrame, savedRunningAs);
             globalCallStack = Some(newTopFrame);

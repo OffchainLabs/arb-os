@@ -194,12 +194,16 @@ impl RuntimeEnvironment {
         destination: Uint256,
         callvalue: Uint256,
         deposit: Uint256,
+        max_submission_cost: Uint256,
+        credit_back_address: Uint256,
         calldata: &[u8],
     ) -> Uint256 {
         let mut msg = vec![];
         msg.extend(destination.to_bytes_be());
         msg.extend(callvalue.to_bytes_be());
         msg.extend(deposit.to_bytes_be());
+        msg.extend(max_submission_cost.to_bytes_be());
+        msg.extend(credit_back_address.to_bytes_be());
         msg.extend(Uint256::from_usize(calldata.len()).to_bytes_be());
         msg.extend(calldata);
 

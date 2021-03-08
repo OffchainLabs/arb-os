@@ -910,6 +910,8 @@ pub fn _test_retryable(log_to: Option<&Path>, debug: bool) -> Result<(), ethabi:
         &[ethabi::Token::Uint(Uint256::one().to_u256()), ethabi::Token::Uint(Uint256::one().to_u256())],
         &mut machine,
         Uint256::zero(),
+        Uint256::zero(),
+        None,
     )?;
     assert!(txid != Uint256::zero());
 
