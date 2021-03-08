@@ -1243,9 +1243,15 @@ impl Machine {
                 AVMOpcode::GetBuffer8 => 3,
                 AVMOpcode::GetBuffer64 => 3,
                 AVMOpcode::GetBuffer256 => 3,
-                AVMOpcode::SetBuffer8 => self.gas_for_setbuffer(&self.code.get_insn(pc)?.immediate, 0),
-                AVMOpcode::SetBuffer64 => self.gas_for_setbuffer(&self.code.get_insn(pc)?.immediate, 7)*2,
-                AVMOpcode::SetBuffer256 => self.gas_for_setbuffer(&self.code.get_insn(pc)?.immediate, 31)*2,
+                AVMOpcode::SetBuffer8 => {
+                    self.gas_for_setbuffer(&self.code.get_insn(pc)?.immediate, 0)
+                }
+                AVMOpcode::SetBuffer64 => {
+                    self.gas_for_setbuffer(&self.code.get_insn(pc)?.immediate, 7) * 2
+                }
+                AVMOpcode::SetBuffer256 => {
+                    self.gas_for_setbuffer(&self.code.get_insn(pc)?.immediate, 31) * 2
+                }
             })
         } else {
             None
@@ -1257,16 +1263,23 @@ impl Machine {
             None => (2, self.stack.nth(0)),
             Some(_) => (1, imm.clone()),
         };
-        if let (Some(Value::Buffer(buf)), Some(Value::Int(offset))) = (self.stack.nth(idx), offset) {
+        if let (Some(Value::Buffer(buf)), Some(Value::Int(offset))) = (self.stack.nth(idx), offset)
+        {
             let mut mx = match (offset.add(&Uint256::from_usize(add))).to_usize() {
                 None => 0,
-                Some(off) => if off as u64 > buf.max_access { off as u64 } else { buf.max_access },
+                Some(off) => {
+                    if off as u64 > buf.max_access {
+                        off as u64
+                    } else {
+                        buf.max_access
+                    }
+                }
             };
             let mut res = 0;
-            mx = mx/1024;
+            mx = mx / 1024;
             while (mx > 0) {
                 res += 80;
-                mx = mx/8;
+                mx = mx / 8;
             }
             // println!("set buffer gas {} {} size {}", res, buf.max_access, buf.check_size());
             res + 240
@@ -1277,7 +1290,8 @@ impl Machine {
     }
 
     fn gas_for_pairing(&self) -> u64 {
-        if let Some(val) = self.stack.contents.get(0) { // Is this correct?
+        if let Some(val) = self.stack.contents.get(0) {
+            // Is this correct?
             let mut v = val;
             for i in 0..MAX_PAIRING_SIZE {
                 if let Value::Tuple(tup) = v {
