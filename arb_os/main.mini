@@ -8,6 +8,7 @@ use accounts::accountStore_init;
 use accounts::getGlobalAccountStore;
 use accounts::setGlobalAccountStore;
 use accounts::accountStore_createAccountFromEvmCode;
+use blockhash::blockhash_init;
 use chainParameters::chainParams_init;
 use codeSegment::codeSegment_init;
 use codeSegment::translateEvmCodeSegment;
@@ -41,6 +42,7 @@ use std::storageMap::StorageMap;
 
 use decompression::decompression_init;
 use gasAccounting::getNextRequestFromCongestionAuction;
+use gasAccounting::txFeeStats_zero;
 use messages::handleL1Request; // return None if message format error; Some(()) if other error; if no error, never return
 use messages::handleL2Request; // return None if message format error; Some(()) if other error; if no error, never return
 use output::emitTxReceipt;
@@ -59,6 +61,7 @@ impure func main() {
     gasAccounting_init();
     evmCallStack_init();
     evmOps_init();
+    blockhash_init();
     inbox_init();
     accountStore_init();
     txReceipts_init();
@@ -74,35 +77,50 @@ impure func main() {
 
 public impure func mainRunLoop() {
     loop {
-        let (approved, maybeL1, maybeL2) = getNextRequestFromCongestionAuction();
+        let (resultCode, maybeL1, maybeL2) = getNextRequestFromCongestionAuction();
         if let Some(msg) = maybeL1 {
-            if (approved) {
+            if (resultCode == const::TxResultCode_success) {
                 if(handleL1Request(msg) == None<()>) {
                     // reject for message format error
-                    emitTxReceipt(msg, 6, None<ByteArray>, None<EvmLogs>, None<GasUsage>);
+                    emitTxReceipt(
+                        msg,
+                        const::TxResultCode_formatError,
+                        None<ByteArray>,
+                        None<EvmLogs>,
+                        None<GasUsage>,
+                        txFeeStats_zero(),
+                    );
                 }
             } else {
-                // reject for congestion error
-                emitTxReceipt(msg, 2, None<ByteArray>, None<EvmLogs>, None<GasUsage>);
+                // reject for error
+                emitTxReceipt(msg, resultCode, None<ByteArray>, None<EvmLogs>, None<GasUsage>, txFeeStats_zero());
             }
         } else {
             if let Some(request) = maybeL2 {
-                if (approved) {
+                if (resultCode == const::TxResultCode_success) {
                     if (handleL2Request(
                         bytestream_new(request.incomingRequest.msgData),
                         request
                     ) == None<()>) {
                         // reject for message format error
-                        emitTxReceipt(request.incomingRequest, 6, None<ByteArray>, None<EvmLogs>, None<GasUsage>);
+                        emitTxReceipt(
+                            request.incomingRequest,
+                            const::TxResultCode_formatError,
+                            None<ByteArray>,
+                            None<EvmLogs>,
+                            None<GasUsage>,
+                            request.feeStats,
+                        );
                     }
                 } else {
-                    // reject for congestion error
+                    // reject for error
                     emitTxReceipt(
                         request.incomingRequest,
-                        const::TxResultCode_congestion,
+                        resultCode,
                         None<ByteArray>,
                         None<EvmLogs>,
-                        None<GasUsage>
+                        None<GasUsage>,
+                        request.feeStats,
                     );
                 }
             } // else request was not identified as either L1 or L2, which should be impossible

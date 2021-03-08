@@ -31,6 +31,7 @@ use evmCallStack::initEvmCallStackForConstructor;
 use evmCallStack::evmCallStack_runningCodeFromAccount;
 
 use gasAccounting::GasUsage;
+use gasAccounting::TxFeeStats;
 
 use output::emitTxReceipt;
 
@@ -130,6 +131,7 @@ type TxRequestData = struct {
     nonMutating: bool,
     isConstructor: bool,
     incomingRequest: IncomingRequest,
+    feeStats: TxFeeStats,
 }
 
 public impure func handleL2Request(
@@ -146,7 +148,8 @@ public impure func handleL2Request(
                 const::TxResultCode_badSequenceNum,
                 None<ByteArray>,
                 None<EvmLogs>,
-                None<GasUsage>
+                None<GasUsage>,
+                request.feeStats,
             );
             return Some(());
         }
@@ -161,8 +164,9 @@ public impure func handleL2Request(
                 const::TxResultCode_revert,
                 None<ByteArray>,
                 None<EvmLogs>,
-                None<GasUsage>
-                );
+                None<GasUsage>,
+                request.feeStats,
+            );
             return Some(());
         }
 
@@ -173,19 +177,22 @@ public impure func handleL2Request(
         if (request.seqNum == None<uint>) {
             request = request with { seqNum: Some(fetchAndIncrSequenceNum(request.caller)) };
         }
-        if (request.incomingRequest.kind == const::L1MessageType_buddyDeploy) {
-            // it's a buddy contract deployment; hardwire the new contract address
-            request = request with { calleeAddr: request.caller };
-        } else {
-            // ordinary contract deploy; use the standard formula to calculate new contract address
-            request = request with {
-                calleeAddr: address(keccakOfRlpEncodedUintPair(uint(request.caller), request.seqNum?))
-            };
-        }
+
+        request = request with {
+            calleeAddr: address(keccakOfRlpEncodedUintPair(uint(request.caller), request.seqNum?))
+        };
 
         if (account_hasContract(accountStore_get(getGlobalAccountStore(), request.calleeAddr))) {
             // there's already an account at that address, revert the call
-            emitTxReceipt(request.incomingRequest, 7, None<ByteArray>, None<EvmLogs>, None<GasUsage>);
+            // should never happen -- this is just defensive code
+            emitTxReceipt(
+                request.incomingRequest,
+                const::TxResultCode_cannotDeployAtAddress,
+                None<ByteArray>,
+                None<EvmLogs>,
+                None<GasUsage>,
+                request.feeStats,
+            );
             return Some(());
         } else {
             initEvmCallStackForConstructor(

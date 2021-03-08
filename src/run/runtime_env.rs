@@ -111,7 +111,7 @@ impl RuntimeEnvironment {
         owner: Option<Uint256>,
     ) -> Vec<u8> {
         let mut buf = Vec::new();
-        buf.extend(Uint256::from_u64(3 * 60 * 60 * 1000).to_bytes_be()); // grace period in ticks
+        buf.extend(Uint256::from_u64(3 * 60 * 60).to_bytes_be()); // grace period in blocks
         buf.extend(Uint256::from_u64(100_000_000 / 1000).to_bytes_be()); // arbgas speed limit per tick
         buf.extend(Uint256::from_u64(10_000_000_000).to_bytes_be()); // max execution steps
         buf.extend(Uint256::from_u64(1000).to_bytes_be()); // base stake amount in wei
@@ -175,6 +175,7 @@ impl RuntimeEnvironment {
             Value::Int(self.current_timestamp.clone()),
             Value::Int(sender_addr),
             Value::Int(self.next_inbox_seq_num.clone()),
+            Value::Int(self.get_gas_price()),
             Value::Int(Uint256::from_usize(msg.len())),
             Value::new_buffer(msg.to_vec()),
         ]);
@@ -185,6 +186,10 @@ impl RuntimeEnvironment {
         self.recorder.add_msg(l1_msg);
 
         msg_id
+    }
+
+    pub fn get_gas_price(&self) -> Uint256 {
+        Uint256::_from_gwei(200)
     }
 
     pub fn insert_l2_message(
@@ -198,7 +203,7 @@ impl RuntimeEnvironment {
             sender_addr.clone(),
             msg,
         );
-        if msg[0] == 0 {
+        if !is_buddy_deploy && (msg[0] == 0) {
             Uint256::avm_hash2(
                 &sender_addr,
                 &Uint256::avm_hash2(
@@ -255,22 +260,28 @@ impl RuntimeEnvironment {
         }
     }
 
-    pub fn insert_buddy_deploy_message(
+    pub fn _insert_tx_message_from_contract(
         &mut self,
         sender_addr: Uint256,
         max_gas: Uint256,
         gas_price_bid: Uint256,
+        to_addr: Uint256,
         value: Uint256,
         data: &[u8],
+        with_deposit: bool,
     ) -> Uint256 {
         let mut buf = vec![1u8];
         buf.extend(max_gas.to_bytes_be());
         buf.extend(gas_price_bid.to_bytes_be());
-        buf.extend(Uint256::zero().to_bytes_be()); // destination address 0
+        buf.extend(to_addr.to_bytes_be());
         buf.extend(value.to_bytes_be());
         buf.extend_from_slice(data);
 
-        self.insert_l2_message(sender_addr.clone(), &buf, true)
+        if with_deposit {
+            self.insert_l2_message_with_deposit(sender_addr.clone(), &buf)
+        } else {
+            self.insert_l2_message(sender_addr.clone(), &buf, false)
+        }
     }
 
     pub fn new_batch(&self) -> Vec<u8> {
@@ -578,6 +589,15 @@ impl RuntimeEnvironment {
             .map(|r| r.unwrap())
             .collect()
     }
+
+    pub fn _get_last_send(&self) -> Option<Vec<u8>> {
+        let sends = self.get_all_sends();
+        if sends.len() == 0 {
+            None
+        } else {
+            Some(sends[0].clone())
+        }
+    }
 }
 
 fn get_send_contents(log: Value) -> Option<Vec<u8>> {
@@ -676,6 +696,7 @@ pub struct ArbosReceipt {
     gas_so_far: Uint256,     // gas used so far in L1 block, including this tx
     index_in_block: Uint256, // index of this tx in L1 block
     logs_so_far: Uint256,    // EVM logs emitted so far in L1 block, NOT including this tx
+    fee_stats: Vec<Vec<Uint256>>,
 }
 
 #[derive(Clone, Debug)]
@@ -699,7 +720,7 @@ impl ArbosReceipt {
             Some(ArbosReceipt {
                 request: tup[1].clone(),
                 request_id: if let Value::Tuple(subtup) = &tup[1] {
-                    if let Value::Int(ui) = &subtup[4] {
+                    if let Value::Int(ui) = &subtup[5] {
                         ui.clone()
                     } else {
                         panic!()
@@ -713,31 +734,35 @@ impl ArbosReceipt {
                 gas_used,
                 gas_price_wei,
                 provenance: if let Value::Tuple(stup) = &tup[1] {
-                    if let Value::Tuple(subtup) = &stup[6] {
-                        ArbosRequestProvenance {
-                            l1_sequence_num: if let Value::Int(ui) = &subtup[0] {
-                                ui.clone()
-                            } else {
-                                panic!();
-                            },
-                            parent_request_id: if let Value::Int(ui) = &subtup[1] {
-                                if ui.is_zero() {
-                                    Some(ui.clone())
+                    if let Value::Tuple(subtup1) = &stup[7] {
+                        if let Value::Tuple(subtup) = &subtup1[0] {
+                            ArbosRequestProvenance {
+                                l1_sequence_num: if let Value::Int(ui) = &subtup[0] {
+                                    ui.clone()
                                 } else {
-                                    None
-                                }
-                            } else {
-                                panic!();
-                            },
-                            index_in_parent: if let Value::Int(ui) = &subtup[2] {
-                                if ui.is_zero() {
-                                    Some(ui.clone())
+                                    panic!();
+                                },
+                                parent_request_id: if let Value::Int(ui) = &subtup[1] {
+                                    if ui.is_zero() {
+                                        Some(ui.clone())
+                                    } else {
+                                        None
+                                    }
                                 } else {
-                                    None
-                                }
-                            } else {
-                                panic!();
-                            },
+                                    panic!();
+                                },
+                                index_in_parent: if let Value::Int(ui) = &subtup[2] {
+                                    if ui.is_zero() {
+                                        Some(ui.clone())
+                                    } else {
+                                        None
+                                    }
+                                } else {
+                                    panic!();
+                                },
+                            }
+                        } else {
+                            panic!();
                         }
                     } else {
                         panic!();
@@ -748,6 +773,51 @@ impl ArbosReceipt {
                 gas_so_far,
                 index_in_block,
                 logs_so_far,
+                fee_stats: if let Value::Tuple(t2) = &tup[5] {
+                    vec![
+                        if let Value::Tuple(t3) = &t2[0] {
+                            t3.iter()
+                                .map(|v| {
+                                    if let Value::Int(ui) = v {
+                                        ui.clone()
+                                    } else {
+                                        panic!()
+                                    }
+                                })
+                                .collect()
+                        } else {
+                            panic!()
+                        },
+                        if let Value::Tuple(t3) = &t2[1] {
+                            t3.iter()
+                                .map(|v| {
+                                    if let Value::Int(ui) = v {
+                                        ui.clone()
+                                    } else {
+                                        panic!()
+                                    }
+                                })
+                                .collect()
+                        } else {
+                            panic!()
+                        },
+                        if let Value::Tuple(t3) = &t2[2] {
+                            t3.iter()
+                                .map(|v| {
+                                    if let Value::Int(ui) = v {
+                                        ui.clone()
+                                    } else {
+                                        panic!()
+                                    }
+                                })
+                                .collect()
+                        } else {
+                            panic!()
+                        },
+                    ]
+                } else {
+                    panic!()
+                },
             })
         } else {
             panic!("ArbOS log item was not a Tuple");
@@ -832,6 +902,22 @@ impl ArbosReceipt {
         self.return_code.clone()
     }
 
+    pub fn _get_return_code_text(&self) -> String {
+        match self.get_return_code().to_u64().unwrap() {
+            0 => "success",
+            1 => "transaction reverted",
+            2 => "dropped due to L2 congestion",
+            3 => "insufficient funds for ArbGas",
+            4 => "insufficient balance for callvalue",
+            5 => "bad sequence number",
+            6 => "message format error",
+            7 => "cannot deploy at address",
+            8 => "exceeded tx gas limit",
+            _ => "unknown error",
+        }
+        .to_string()
+    }
+
     pub fn succeeded(&self) -> bool {
         self.get_return_code() == Uint256::zero()
     }
@@ -850,6 +936,10 @@ impl ArbosReceipt {
 
     pub fn get_gas_used_so_far(&self) -> Uint256 {
         self.gas_so_far.clone()
+    }
+
+    pub fn _get_fee_stats(&self) -> Vec<Vec<Uint256>> {
+        self.fee_stats.clone()
     }
 }
 
@@ -974,9 +1064,9 @@ impl _BlockGasAccountingSummary {
 
 #[derive(Clone, Debug)]
 pub struct EvmLog {
-    addr: Uint256,
-    data: Vec<u8>,
-    vals: Vec<Uint256>,
+    pub addr: Uint256,
+    pub data: Vec<u8>,
+    pub vals: Vec<Uint256>,
 }
 
 impl EvmLog {
@@ -1161,6 +1251,7 @@ pub struct RtEnvRecorder {
     inbox: Vec<Value>,
     logs: Vec<Value>,
     sends: Vec<Vec<u8>>,
+    total_gas: u64,
 }
 
 impl RtEnvRecorder {
@@ -1170,6 +1261,7 @@ impl RtEnvRecorder {
             inbox: vec![],
             logs: Vec::new(),
             sends: Vec::new(),
+            total_gas: 0,
         }
     }
 
@@ -1189,7 +1281,8 @@ impl RtEnvRecorder {
         serde_json::to_string(self)
     }
 
-    pub fn to_file(&self, path: &Path) -> Result<(), io::Error> {
+    pub fn to_file(&mut self, path: &Path, total_gas: u64) -> Result<(), io::Error> {
+        self.total_gas = total_gas;
         let mut file = File::create(path).map(|f| Box::new(f) as Box<dyn io::Write>)?;
         writeln!(file, "{}", self.to_json_string()?)
     }
@@ -1223,7 +1316,7 @@ impl RtEnvRecorder {
             self.logs
                 .clone()
                 .into_iter()
-                .map(strip_var_from_log)
+                .filter_map(strip_var_from_log)
                 .collect()
         };
         let logs_seen = if require_same_gas {
@@ -1235,7 +1328,7 @@ impl RtEnvRecorder {
                 .logs
                 .clone()
                 .into_iter()
-                .map(strip_var_from_log)
+                .filter_map(strip_var_from_log)
                 .collect()
         };
         if !(logs_expected == logs_seen) {
@@ -1250,35 +1343,39 @@ impl RtEnvRecorder {
             );
             return false;
         }
+
         return true;
     }
 }
 
-fn strip_var_from_log(log: Value) -> Value {
+fn strip_var_from_log(log: Value) -> Option<Value> {
     // strip from a log item all info that might legitimately vary as ArbOS evolves (e.g. gas usage)
     if let Value::Tuple(tup) = log.clone() {
         if let Value::Int(item_type) = tup[0].clone() {
             if item_type == Uint256::zero() {
                 // Tx receipt log item
-                Value::new_tuple(vec![
+                Some(Value::new_tuple(vec![
                     tup[0].clone(),
                     tup[1].clone(),
                     tup[2].clone(),
+                    tup[3].clone(),
                     // skip tup[3] because it's all about gas usage
-                    zero_item_in_tuple(tup[4].clone(), 0),
-                ])
+                    zero_item_in_tuple(tup[5].clone(), 0),
+                ]))
             } else if item_type == Uint256::one() {
                 // block summary log item
-                Value::new_tuple(vec![
+                Some(Value::new_tuple(vec![
                     tup[0].clone(),
                     tup[1].clone(),
                     tup[2].clone(),
-                    // skip tup[3] because it's all about gas usage
-                    zero_item_in_tuple(tup[4].clone(), 0),
-                    zero_item_in_tuple(tup[5].clone(), 0),
-                ])
+                    tup[3].clone(),
+                    // skip tup[4] thru tup[5] because they're all about gas usage
+                    tup[6].clone(),
+                ]))
             } else if item_type == Uint256::from_u64(2) {
-                log
+                Some(log)
+            } else if item_type == Uint256::from_u64(3) {
+                None
             } else {
                 panic!("unrecognized log item type {}", item_type);
             }
