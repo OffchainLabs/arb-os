@@ -49,6 +49,7 @@ type RetryableTx = struct {
     sender: address,
     destination: address,
     callvalue: uint,
+    beneficiary: address,
     calldata: ByteArray,
     retryCount: uint,
     expiryTime: uint,
@@ -101,7 +102,7 @@ impure func retryBuffer_trimOne(currentTimestamp: uint) -> bool {  // returns tr
             xif (qitem.expiryTime <= currentTimestamp) {
                 let item = unsafecast<RetryableTx>(rawItem);
                 xif (qitem.retryCount >= item.retryCount) {
-                    retryBuffer_delete(qitem.txId);
+                    let _ = retryBuffer_delete(qitem.txId);
                     retryBuffer = retryBuffer with {
                        fifo: uq
                     };
@@ -140,6 +141,7 @@ public impure func retryBuffer_insertNew(
     sender: address,
     destination: address,
     callvalue: uint,
+    beneficiary: address,
     calldata: ByteArray,
     l1Message: IncomingRequest,
 ) -> uint {
@@ -148,6 +150,7 @@ public impure func retryBuffer_insertNew(
         sender: sender,
         destination: destination,
         callvalue: callvalue,
+        beneficiary: beneficiary,
         calldata: calldata,
         retryCount: 0,
         expiryTime: inbox_currentTimestamp() + retryBuffer.txLifetimeSeconds,
@@ -176,6 +179,10 @@ public impure func retryBuffer_getTxTimeout(txId: uint) -> uint {
     };
 }
 
+public impure func retryBuffer_getBeneficiary(txId: uint) -> option<address> {
+    return Some( (retryBuffer_get(txId)?).beneficiary );
+}
+
 public impure func retryBuffer_getLifetime() -> uint {
     return retryBuffer.txLifetimeSeconds;
 }
@@ -192,8 +199,8 @@ public impure func retryBuffer_keepalive(txId: uint) -> option<uint> {
     return Some(newExpiryTime);
 }
 
-public impure func retryBuffer_delete(txId: uint) {
-    if let Some(rtx) = retryBuffer_get(txId) {
+public impure func retryBuffer_delete(txId: uint) -> bool {
+    return xif let Some(rtx) = retryBuffer_get(txId) {
         // delete the tx
         retryBuffer = retryBuffer with {
             byTxId: unsafecast<map<uint, RetryableTx>>(
@@ -201,21 +208,26 @@ public impure func retryBuffer_delete(txId: uint) {
             )
         };
 
-        // now credit the callvalue back to the original sender
+        // tx might still be in retryBuffer.fifo, but that isn't a problem because it's not gettable
+        //         and attempts to delete it again will be no-ops
+
+        // now credit the callvalue back to the beneficiary
         let globalStore = getGlobalAccountStore();
         setGlobalAccountStore(
             accountStore_set(
                 globalStore,
-                rtx.sender,
+                rtx.beneficiary,
                 account_addToEthBalance(
-                    accountStore_get(globalStore, rtx.sender),
+                    accountStore_get(globalStore, rtx.beneficiary),
                     rtx.callvalue,
                 )
             )
         );
-    }
-    // tx might still be in retryBuffer.fifo, but that isn't a problem because it's not gettable
-    //         and attempts to delete it again will be no-ops
+
+        true
+    } else {
+        false
+    };
 }
 
 public impure func processRetryableTx(req: IncomingRequest) {
@@ -225,8 +237,9 @@ public impure func processRetryableTx(req: IncomingRequest) {
     let deposit = bytearray_get256(req.msgData, 2*32);
     let maxSubmissionCost = bytearray_get256(req.msgData, 3*32);
     let creditBack = address(bytearray_get256(req.msgData, 4*32));
-    let calldataSize = bytearray_get256(req.msgData, 5*32);
-    let calldata = bytearray_extract(req.msgData, 6*32, calldataSize);
+    let beneficiary = address(bytearray_get256(req.msgData, 5*32));
+    let calldataSize = bytearray_get256(req.msgData, 6*32);
+    let calldata = bytearray_extract(req.msgData, 7*32, calldataSize);
 
     if (creditBack == address(0)) { creditBack = sender; }
 
@@ -276,7 +289,7 @@ public impure func processRetryableTx(req: IncomingRequest) {
             setGlobalAccountStore(globalStore);
 
             // Create a new retryable tx, holding the callvalue
-            let txId = retryBuffer_insertNew(req.requestId, sender, destination, callvalue, calldata, req);
+            let txId = retryBuffer_insertNew(req.requestId, sender, destination, callvalue, beneficiary, calldata, req);
 
             emitTxReceipt(
                 req,
@@ -298,6 +311,8 @@ public impure func processRetryableTx(req: IncomingRequest) {
         }
     } else {
         // submission cost was higher than the maximum allowed by the request
+
+
         emitTxReceipt(
             req,
             const::TxResultCode_noGasFunds,
@@ -324,7 +339,7 @@ public impure func retryableCompletedCallback(
     let rtx = unsafecast<RetryableTx>(rawRtx);
     let retryableSucceeded = (bytearray_get256(returnData, 0) != 0);
 
-    retryBuffer_delete(rtx.txId);
+    let _ = retryBuffer_delete(rtx.txId);
     emitTxReceipt(
         rtx.l1Message,
         xif (retryableSucceeded) { const::TxResultCode_success } else { const::TxResultCode_revert },

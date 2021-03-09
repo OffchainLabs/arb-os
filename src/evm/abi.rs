@@ -225,6 +225,7 @@ impl AbiForContract {
         payment: Uint256,
         max_submission_cost: Uint256,
         credit_back_address: Option<Uint256>,
+        beneficiary: Option<Uint256>,
     ) -> Result<Uint256, ethabi::Error> {
         let this_function = self.contract.function(func_name)?;
         let calldata = this_function.encode_input(args).unwrap();
@@ -235,7 +236,8 @@ impl AbiForContract {
             payment.clone(),
             payment,
             max_submission_cost,
-            credit_back_address.unwrap_or(sender),
+            credit_back_address.unwrap_or(sender.clone()),
+            beneficiary.unwrap_or(sender),
             &calldata,
         );
 
@@ -2033,6 +2035,53 @@ impl _ArbReplayableTx {
             Err(ethabi::Error::from("wrong number of receipts or sends"))
         } else if receipts[0].succeeded() {
             Ok(Uint256::from_bytes(&receipts[0].get_return_data()))
+        } else {
+            Err(ethabi::Error::from("reverted"))
+        }
+    }
+
+    pub fn _get_beneficiary(
+        &self,
+        machine: &mut Machine,
+        txid: Uint256,
+    ) -> Result<Uint256, ethabi::Error> {
+        let (receipts, sends) = self.contract_abi.call_function(
+            Uint256::zero(), // send from address zero
+            "getBeneficiary",
+            &[ethabi::Token::Uint(txid.to_u256())],
+            machine,
+            Uint256::zero(),
+            self.debug,
+        )?;
+
+        if (receipts.len() != 1) || (sends.len() != 0) {
+            Err(ethabi::Error::from("wrong number of receipts or sends"))
+        } else if receipts[0].succeeded() {
+            Ok(Uint256::from_bytes(&receipts[0].get_return_data()))
+        } else {
+            Err(ethabi::Error::from("reverted"))
+        }
+    }
+
+    pub fn _cancel(
+        &self,
+        machine: &mut Machine,
+        txid: Uint256,
+        sender: Uint256,
+    ) -> Result<(), ethabi::Error> {
+        let (receipts, sends) = self.contract_abi.call_function(
+            sender,
+            "cancel",
+            &[ethabi::Token::Uint(txid.to_u256())],
+            machine,
+            Uint256::zero(),
+            self.debug,
+        )?;
+
+        if (receipts.len() != 1) || (sends.len() != 0) {
+            Err(ethabi::Error::from("wrong number of receipts or sends"))
+        } else if receipts[0].succeeded() {
+            Ok(())
         } else {
             Err(ethabi::Error::from("reverted"))
         }

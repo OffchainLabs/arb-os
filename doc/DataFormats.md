@@ -123,6 +123,7 @@ Type-specific data:
 * L1-to-L2 deposit, in wei (uint)
 * maximum submission cost (uint)
 * credit-back address (address encoded as uint)
+* beneficiary (address encoded as uint)
 * calldata size (uint)
 * calldata
 
@@ -130,10 +131,10 @@ If this message is properly formatted, the L1-to-L2 deposit amount will be credi
 
 Then, if the caller's L2 balance (after the L1-to-L2 deposit has occurred) is at least callvalue+maximumSubmissionCost, the transaction will proceed. 
 
-* callvalue+maximumSubmissionCost will be deducted from the caller's L2 ETH account,
-* currentSubmissionCost will be collected by ArbOS as a submission fee,
-* maximumSubmissionCost-currentSubmissionCost will be credited to the creditBack address's L2 account,
-* a retryable tx will be created and held in ArbOS's buffer, containing callvalue, [if the retryable tx later times out, having never been successfully executed, the callvalue will be credited to the creditBack address]
+* *callvalue+maximumSubmissionCost* will be deducted from the caller's L2 ETH account,
+* *currentSubmissionCost* will be collected by ArbOS as a submission fee,
+* *maximumSubmissionCost-currentSubmissionCost* will be credited to the creditBack address's L2 account,
+* a retryable tx will be created and held in ArbOS's buffer, containing *callvalue*, with the specified beneficiary [if the retryable tx times out or is canceled by the beneficiary, the callvalue will be refunded to the beneficiary]
 * ArbOS will emit a transaction receipt reporting success, with 32 bytes of return data: a transaction ID for the retryable tx (uint) which will be equal to keccak256(submissionID, uint(0) ), where submissionID is the requestID of this message
 
 Otherwise, ArbOS will emit a transaction receipt reporting a failure code, with no return data.

@@ -904,6 +904,8 @@ pub fn _test_retryable(log_to: Option<&Path>, debug: bool) -> Result<(), ethabi:
         panic!("failed to deploy Add contract");
     }
 
+    let beneficiary = Uint256::from_u64(9185);
+
     let txid = add_contract._send_retryable_tx(
         my_addr.clone(),
         "add",
@@ -912,10 +914,9 @@ pub fn _test_retryable(log_to: Option<&Path>, debug: bool) -> Result<(), ethabi:
         Uint256::zero(),
         Uint256::zero(),
         None,
+        Some(beneficiary.clone()),
     )?;
     assert!(txid != Uint256::zero());
-
-    machine.runtime_env._advance_time(Uint256::one(), None, true);
     let _gas_used = if debug {
         machine.debug(None)
     } else {
@@ -928,6 +929,7 @@ pub fn _test_retryable(log_to: Option<&Path>, debug: bool) -> Result<(), ethabi:
 
     let (keepalive_price, reprice_time) = arb_replayable._get_keepalive_price(&mut machine, txid.clone())?;
     assert_eq!(keepalive_price, Uint256::zero());
+    println!("reprice time {}, timestamp {}", reprice_time, machine.runtime_env.current_timestamp);
     assert!(reprice_time > machine.runtime_env.current_timestamp);
 
     let keepalive_ret = arb_replayable._keepalive(&mut machine, txid.clone(), keepalive_price)?;
@@ -936,12 +938,35 @@ pub fn _test_retryable(log_to: Option<&Path>, debug: bool) -> Result<(), ethabi:
     assert_eq!(keepalive_ret, new_timeout);
     assert!(new_timeout > timeout);
 
-    println!("Redeeming");
     arb_replayable._redeem(&mut machine, txid.clone())?;
-    println!("Redeemed");
 
     let new_timeout = arb_replayable._get_timeout(&mut machine, txid.clone())?;
     assert_eq!(new_timeout, Uint256::zero());  // verify that txid has been removed
+
+    // make another one, and have the beneficiary cancel it
+    let txid = add_contract._send_retryable_tx(
+        my_addr.clone(),
+        "add",
+        &[ethabi::Token::Uint(Uint256::one().to_u256()), ethabi::Token::Uint(Uint256::one().to_u256())],
+        &mut machine,
+        Uint256::zero(),
+        Uint256::zero(),
+        None,
+        Some(beneficiary.clone()),
+    )?;
+    assert!(txid != Uint256::zero());
+    let _gas_used = if debug {
+        machine.debug(None)
+    } else {
+        machine.run(None)
+    };
+
+    let out_beneficiary = arb_replayable._get_beneficiary(&mut machine, txid.clone())?;
+    assert_eq!(out_beneficiary, beneficiary);
+
+    arb_replayable._cancel(&mut machine, txid.clone(), beneficiary.clone())?;
+
+    assert_eq!(arb_replayable._get_timeout(&mut machine, txid)?, Uint256::zero());  // verify txid no longer exists
 
     if let Some(path) = log_to {
         machine

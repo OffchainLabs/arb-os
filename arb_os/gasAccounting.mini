@@ -190,15 +190,6 @@ impure func initCongestionState(isInit: bool) -> CongestionState {
     };
 }
 
-impure func setRetryablePrices() -> RetryablePrices {
-    let gasPrice = getL1GasPriceEstimate();
-    return struct {
-        perTx: gasPrice,
-        perCalldataByte: gasPrice / 256,
-        nextUpdateTimestamp: inbox_currentTimestamp() + const::Charging_RetryableTxRepriceIntervalSeconds,
-    };
-}
-
 impure func setGasAccountingParamsFromSpeedLimit(speedLimitPerSecond: uint) {
     gasAccountingParams = struct {
         SpeedLimitPerSecond: speedLimitPerSecond,
@@ -239,11 +230,7 @@ impure func setPrices(
     congestionState: CongestionState,
     oldRetryablePrices: RetryablePrices,
 ) -> (GasPrices, RetryablePrices) {
-    if (oldRetryablePrices.nextUpdateTimestamp <= inbox_currentTimestamp()) {
-        oldRetryablePrices = oldRetryablePrices with {
-            nextUpdateTimestamp: inbox_currentTimestamp() + const::Charging_RetryableTxRepriceIntervalSeconds
-        };
-    }
+    oldRetryablePrices = setRetryablePrices(oldRetryablePrices);
     return xif (feeConfig.enabled) {
         let timestamp = inbox_currentTimestamp();
         let l1GasPrice = getL1GasPriceEstimate();
@@ -258,16 +245,7 @@ impure func setPrices(
                 perArbGasCongestion: perArbGasCongestion,
                 perArbGasTotal: perArbGasBase + perArbGasCongestion,
             },
-            xif (timestamp > oldRetryablePrices.nextUpdateTimestamp) {
-                let gasPrice = getL1GasPriceEstimate();
-                struct {
-                    perTx: gasPrice,
-                    perCalldataByte: gasPrice / 256,
-                    nextUpdateTimestamp: timestamp + const::Charging_RetryableTxRepriceIntervalSeconds,
-                }
-            } else {
-                oldRetryablePrices
-            },
+            oldRetryablePrices
         )
     } else {
         (
@@ -281,6 +259,25 @@ impure func setPrices(
             },
             oldRetryablePrices
         )
+    };
+}
+
+impure func setRetryablePrices(oldRetryablePrices: RetryablePrices) -> RetryablePrices {
+    return xif (oldRetryablePrices.nextUpdateTimestamp >= inbox_currentTimestamp()) {
+        oldRetryablePrices
+    } else {
+        xif (gasAccountingInfo.feeConfig.enabled) {
+            let gasPrice = getL1GasPriceEstimate();
+            struct {
+                perTx: gasPrice,
+                perCalldataByte: gasPrice / 256,
+                nextUpdateTimestamp: inbox_currentTimestamp() + const::Charging_RetryableTxRepriceIntervalSeconds,
+            }
+        } else {
+            oldRetryablePrices with {
+                nextUpdateTimestamp: inbox_currentTimestamp() + const::Charging_RetryableTxRepriceIntervalSeconds
+            }
+        }
     };
 }
 
@@ -1005,6 +1002,10 @@ func getRequestGasInfo(
 public impure func getRetryableTxPrice(calldataSize: uint) -> (uint, uint) {
     // returns (basePriceWei, calldataBytePriceWei, nextChangeTimestamp
     let prices = gasAccountingInfo.retryablePrices;
+    if (prices.nextUpdateTimestamp < inbox_currentTimestamp()) {
+        prices = setRetryablePrices(prices);
+        gasAccountingInfo = gasAccountingInfo with { retryablePrices: prices };
+    }
     return (
         prices.perTx + calldataSize * prices.perCalldataByte,
         prices.nextUpdateTimestamp,
