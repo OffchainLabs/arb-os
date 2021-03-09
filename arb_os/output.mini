@@ -7,6 +7,8 @@ use std::bytearray::MarshalledBytes;
 use std::queue::Queue;
 use evmlogs::EvmLogs;
 
+use arbstatistics::arbStatistics_addTxReceipt;
+
 use std::bytearray::bytearray_new;
 use std::bytearray::bytearray_size;
 use std::bytearray::bytearray_marshalFull;
@@ -231,6 +233,8 @@ public impure func emitTxReceipt(
     gasUsage: option<GasUsage>,
     feeStats: TxFeeStats,
 ) {
+    arbStatistics_addTxReceipt();
+
     let realGasUsage = struct {
         gasUsed: 0,
         gasPriceWei: 0,

@@ -13,6 +13,10 @@ use std::storageMap::storageMap_size;
 use std::storageMap::storageMap_get;
 use std::storageMap::storageMap_set;
 
+use core::kvs::Kvs;
+use core::kvs::builtin_kvsSize;
+
+use arbstatistics::arbStatistics_addContract;
 use chainParameters::chainParams_getDefaultAggregator;
 use decompression::AggregatorDecompressionState;
 use evmCallStack::evmCallStack_addStorageCharge;
@@ -90,6 +94,9 @@ public func accountStore_set(
     return acctStore with { [addr] = acct };
 }
 
+public func accountStore_getNumAccounts(acctStore: AccountStore) -> uint {
+    return builtin_kvsSize(unsafecast<Kvs>(acctStore));
+}
 
 public func accountStore_destroyAndTransferBalance(
     acctStore: AccountStore,
@@ -241,12 +248,14 @@ public impure func accountStore_createAccountFromEvmCode(
     };
 }
 
-public func accountStore_createBuiltinContract(
+public impure func accountStore_createBuiltinContract(
     acctStore: AccountStore,
     addr: address,
     entryPoint: impure func(),
     isArbitrumStyle: bool,
 ) -> option<AccountStore> {
+    arbStatistics_addContract();
+
     let oldAcct = accountStore_get(acctStore, addr);
     return xif (account_isEmpty(oldAcct)) {
         // set up fake code for the contract

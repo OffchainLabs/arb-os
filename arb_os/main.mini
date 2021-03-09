@@ -8,6 +8,7 @@ use accounts::accountStore_init;
 use accounts::getGlobalAccountStore;
 use accounts::setGlobalAccountStore;
 use accounts::accountStore_createAccountFromEvmCode;
+use arbstatistics::arbStatistics_init;
 use blockhash::blockhash_init;
 use chainParameters::chainParams_init;
 use codeSegment::codeSegment_init;
@@ -54,6 +55,7 @@ use inbox::IncomingRequest;
 
 impure func main() {
     errorHandler_init();
+    arbStatistics_init();
     retryBuffer_init();
     pluggables_init();
     codeSegment_init();

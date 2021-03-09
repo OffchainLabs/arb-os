@@ -51,6 +51,7 @@ use arbsys::arbBLS_txcall;
 use arbsys::arbFunctionTable_txcall;
 use arbaggregator::arbaggregator_txcall;
 use arbretryable::arbretryable_txcall;
+use arbstatistics::arbStatistics_txcall;
 
 
 public impure func precompiles_init(acctStore: AccountStore) -> option<AccountStore> {
@@ -174,10 +175,16 @@ public impure func precompiles_init(acctStore: AccountStore) -> option<AccountSt
     )?;
     acctStore = accountStore_createBuiltinContract(
         acctStore,
-        address(const::Address_ReservedForEthBridge),
-        makeTrampoline(revertPrecompile),
+        address(const::Address_ArbStatistics),
+        makeTrampoline(arbStatistics_txcall),
         true,
     )?;
+    acctStore = accountStore_createBuiltinContract(
+            acctStore,
+            address(const::Address_ReservedForEthBridge),
+            makeTrampoline(revertPrecompile),
+            true,
+        )?;
     return Some(acctStore);
 }
 

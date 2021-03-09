@@ -3,8 +3,9 @@
  */
 
 use crate::mavm::Value;
-use crate::run::{ArbosReceipt, Machine};
+use crate::run::{ArbosReceipt, Machine, load_from_file};
 use crate::uint256::Uint256;
+use crate::RuntimeEnvironment;
 use ethers_core::utils::keccak256;
 use ethers_signers::Signer;
 use ethers_signers::Wallet;
@@ -2086,6 +2087,75 @@ impl _ArbReplayableTx {
             Err(ethabi::Error::from("reverted"))
         }
     }
+}
+
+pub struct _ArbStatistics {
+    pub contract_abi: AbiForContract,
+    debug: bool,
+}
+
+impl _ArbStatistics {
+    pub fn _new(debug: bool) -> Self {
+        let mut contract_abi =
+            AbiForContract::new_from_file(&builtin_contract_path("ArbStatistics")).unwrap();
+        contract_abi.bind_interface_to_address(Uint256::from_u64(111));
+        _ArbStatistics {
+            contract_abi,
+            debug,
+        }
+    }
+
+    pub fn _get_stats(
+        &self,
+        machine: &mut Machine,
+    ) -> Result<(Uint256, Uint256, Uint256, Uint256, Uint256, Uint256), ethabi::Error> {
+        let (receipts, sends) = self.contract_abi.call_function(
+            Uint256::zero(), // send from address zero
+            "getStats",
+            &[],
+            machine,
+            Uint256::zero(),
+            self.debug,
+        )?;
+
+        if (receipts.len() != 1) || (sends.len() != 0) {
+            println!("{} receipts, {} sends", receipts.len(), sends.len());
+            Err(ethabi::Error::from("wrong number of receipts or sends"))
+        } else if receipts[0].succeeded() {
+            let retdata = receipts[0].get_return_data();
+            Ok((
+                Uint256::from_bytes(&retdata[0..32]),
+                Uint256::from_bytes(&retdata[32..64]),
+                Uint256::from_bytes(&retdata[64..96]),
+                Uint256::from_bytes(&retdata[96..128]),
+                Uint256::from_bytes(&retdata[128..160]),
+                Uint256::from_bytes(&retdata[160..192]),
+            ))
+        } else {
+            Err(ethabi::Error::from("reverted"))
+        }
+    }
+}
+
+#[test]
+fn test_arb_statistics() { assert!(_test_arb_stats().is_ok()); }
+
+fn _test_arb_stats() -> Result<(), ethabi::Error>{
+    let rt_env = RuntimeEnvironment::new(Uint256::from_usize(1111), None);
+    let mut machine = load_from_file(Path::new("arb_os/arbos.mexe"), rt_env);
+    machine.start_at_zero();
+
+    let arbstats = _ArbStatistics::_new(false);
+
+    let (arb_blocknum, num_accounts, storage, _arbgas, txs, contracts) = arbstats._get_stats(&mut machine)?;
+
+    assert_eq!(arb_blocknum, Uint256::from_u64(0));
+    assert_eq!(num_accounts, Uint256::from_u64(22));
+    assert_eq!(storage, Uint256::from_u64(0));
+    // assert_eq!(_arbgas, Uint256::from_u64(1_490_972));  // disable this because it will vary over versions
+    assert_eq!(txs, Uint256::from_u64(0));
+    assert_eq!(contracts, Uint256::from_u64(19));
+    Ok(())
 }
 
 struct FunctionTableItem {
