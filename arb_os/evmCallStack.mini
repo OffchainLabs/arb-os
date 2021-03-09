@@ -849,7 +849,7 @@ public impure func evmCallStack_callRetryableTxAndReturn(rtx: RetryableTx) -> bo
         };
         globalCallStack = Some(theFrame);
 
-        let retCode = doCallDirect(
+        let retCode = evmOp_callAndReturn(
             1000000000000000000,    // give all of our gas to the callee
             rtx.destination,
             rtx.callvalue,
@@ -869,18 +869,6 @@ public impure func evmCallStack_callRetryableTxAndReturn(rtx: RetryableTx) -> bo
         };
     }
     return ret;
-}
-
-impure func doCallDirect(
-    gas: uint,
-    dest: address,
-    callvalue: uint,
-    calldataOffset: uint,
-    calldataSize: uint,
-    retOffset: uint,
-    retSize: uint,
-) -> bool {
-    return evmOp_callAndReturn(gas, dest, callvalue, calldataOffset, calldataSize, retOffset, retSize);
 }
 
 func storageReclaimedForSDQ(topFrame: EvmCallFrame) -> uint {

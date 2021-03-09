@@ -21,7 +21,7 @@ pub fn init_constant_table() -> HashMap<String, Uint256> {
         ("Address_ArbOwner", 107),
         ("Address_ArbGasInfo", 108),
         ("Address_ArbAggregator", 109),
-        ("Address_ArbRedeemRetryableTx", 110),
+        ("Address_ArbRetryableTx", 110),
         // addresses of dummy builtin contracts
         ("Address_ReservedForEthBridge", 200), // reserved for special EthBridge functionality
         // indices of EVM operations
@@ -154,7 +154,7 @@ pub fn init_constant_table() -> HashMap<String, Uint256> {
         ("L1MessageType_endOfBlock", 6),
         ("L1MessageType_L2FundedByL1", 7),
         ("L1MessageType_rollupProtocolEvent", 8),
-        ("L1MessageType_submitRedeemableTx", 9),
+        ("L1MessageType_submitRetryableTx", 9),
         // L2 message types
         ("L2MessageType_unsignedEOATx", 0),
         ("L2MessageType_unsignedContractTx", 1),

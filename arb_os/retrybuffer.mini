@@ -51,17 +51,20 @@ type RetryableTx = struct {
     callvalue: uint,
     beneficiary: address,
     calldata: ByteArray,
-    retryCount: uint,
     expiryTime: uint,
     l1Message: IncomingRequest,
 }
 
 type RetryQueueItem = struct {
-    txId: uint,
-    retryCount: uint,
-    expiryTime: uint,
+    txId: uint,         // id of item to check
+    checkTime: uint,    // when to check for expiration of the item
 }
 
+// RetryBuffer holds retryable transactions.
+// byTxId holds all active RetryableTx's, indexed by their txId
+// fifo holds RetryQueueItems, which direct us to check for expiration of a particular item at a particular time.
+// Every time an RetryableTx's lifetime is renewed, a fresh fifo item is created,
+//          with checkTime equal to the RetryableTx's new expiry time.
 var retryBuffer: struct {
     byTxId: map<uint, RetryableTx>,
     fifo: Queue,     // not in strict expirationTime order, but this doesn't affect correctness
@@ -77,32 +80,32 @@ public impure func retryBuffer_init() {
 }
 
 public impure func retryBuffer_getLifetime() -> uint {
+    let _ = retryBuffer_trimOne();
     return retryBuffer.txLifetimeSeconds;
 }
 
-public impure func retryBuffer_setLifetime(lifetimeSeconds: uint) {
-    retryBuffer = retryBuffer with {
-        txLifetimeSeconds: lifetimeSeconds
-    };
-    // no need to discard newly aged-out txs, they'll get cleaned up later
-}
-
-impure func retryBuffer_trimTwo(currentTimestamp: uint) {
+// We trim the buffer when it's acccessed. This removes aged-out items from the buffer.
+// trimTwo will trim up to two entries, and trimOne will trim zero or one entries.
+// These are called by every externally-callable function in this file, except init.
+// We also trim two items whenever we create or update a new item.
+impure func retryBuffer_trimTwo() {
     // remove up to 2 aged-out items from the retryBuffer
-    if (retryBuffer_trimOne(currentTimestamp)) {
-        let _ = retryBuffer_trimOne(currentTimestamp);
+    if (retryBuffer_trimOne()) {
+        let _ = retryBuffer_trimOne();
     }
 }
 
-impure func retryBuffer_trimOne(currentTimestamp: uint) -> bool {  // returns true iff a tx was trimmed
+impure func retryBuffer_trimOne() -> bool {  // returns true iff a tx was trimmed
     return xif let Some(res) = queue_get(retryBuffer.fifo) {
         let (uq, rawQitem) = res;
         let qitem = unsafecast<RetryQueueItem>(rawQitem);
         xif let Some(rawItem) = retryBuffer.byTxId[qitem.txId] {
-            xif (qitem.expiryTime <= currentTimestamp) {
-                let item = unsafecast<RetryableTx>(rawItem);
-                xif (qitem.retryCount >= item.retryCount) {
-                    let _ = retryBuffer_delete(qitem.txId);
+            let currentTimestamp = inbox_currentTimestamp();
+            xif (qitem.checkTime < currentTimestamp) {
+                xif let Some(rtx) = retryBuffer_get(qitem.txId) {
+                    if (rtx.expiryTime < currentTimestamp) {
+                        let _ = retryBuffer_delete(qitem.txId);
+                    }
                     retryBuffer = retryBuffer with {
                        fifo: uq
                     };
@@ -122,21 +125,16 @@ impure func retryBuffer_trimOne(currentTimestamp: uint) -> bool {  // returns tr
 }
 
 public impure func retryBuffer_insert(rtx: RetryableTx) {
-    let now = inbox_currentTimestamp();
-    retryBuffer_trimTwo(now);
+    retryBuffer_trimTwo();
     let txId = rtx.txId;
     retryBuffer = retryBuffer with {
-        byTxId: retryBuffer.byTxId with {
-            [txId] = rtx with {
-                retryCount: rtx.retryCount + 1
-            }
-        }
+        byTxId: retryBuffer.byTxId with { [txId] = rtx }
     } with {
-        fifo: queue_put(retryBuffer.fifo, struct { txId: txId, retryCount: rtx.retryCount, expiryTime: rtx.expiryTime })
+        fifo: queue_put(retryBuffer.fifo, struct { txId: txId, expiryTime: rtx.expiryTime })
     };
 }
 
-public impure func retryBuffer_insertNew(
+impure func retryBuffer_insertNew(
     txId: uint,
     sender: address,
     destination: address,
@@ -152,7 +150,6 @@ public impure func retryBuffer_insertNew(
         callvalue: callvalue,
         beneficiary: beneficiary,
         calldata: calldata,
-        retryCount: 0,
         expiryTime: inbox_currentTimestamp() + retryBuffer.txLifetimeSeconds,
         l1Message: l1Message with { requestId: uint(hash(bytes32(l1Message.requestId), bytes32(0))) },
     };
@@ -162,16 +159,19 @@ public impure func retryBuffer_insertNew(
 }
 
 public impure func retryBuffer_delete(txId: uint) {
+    // don't call retryBuffer_trimOne here, because this is called by retryBuffer_trimOne, and we don't want to recurse
     retryBuffer = retryBuffer with {
         byTxId: retryBuffer.byTxId with { [txId] = unsafecast<RetryableTx>(0) }   // effectively deletes the map entry
     };
 }
 
 public impure func retryBuffer_get(txId: uint) -> option<RetryableTx> {
+    // don't call retryBuffer_trimOne here, because this is called by retryBuffer_trimOne, and we don't want to recurse
     return retryBuffer.byTxId[txId];
 }
 
 public impure func retryBuffer_getTxTimeout(txId: uint) -> uint {
+    let _ = retryBuffer_trimOne();
     return xif let Some(rtx) = retryBuffer_get(txId) {
         rtx.expiryTime
     } else {
@@ -180,19 +180,23 @@ public impure func retryBuffer_getTxTimeout(txId: uint) -> uint {
 }
 
 public impure func retryBuffer_getBeneficiary(txId: uint) -> option<address> {
+    let _ = retryBuffer_trimOne();
     return Some( (retryBuffer_get(txId)?).beneficiary );
 }
 
 public impure func retryBuffer_getLifetime() -> uint {
+    let _ = retryBuffer_trimOne();
     return retryBuffer.txLifetimeSeconds;
 }
 
 public impure func retryBuffer_getTxKeepalivePrice(txId: uint) -> option<(uint, uint)>{
+    let _ = retryBuffer_trimOne();
     let rtx = retryBuffer_get(txId)?;
     return Some(getRetryableTxPrice(bytearray_size(rtx.calldata)));
 }
 
 public impure func retryBuffer_keepalive(txId: uint) -> option<uint> {
+    let _ = retryBuffer_trimOne();
     let rtx = retryBuffer_get(txId)?;
     let newExpiryTime = rtx.expiryTime + retryBuffer.txLifetimeSeconds;
     retryBuffer_insert(rtx with { expiryTime: newExpiryTime });
@@ -200,6 +204,7 @@ public impure func retryBuffer_keepalive(txId: uint) -> option<uint> {
 }
 
 public impure func retryBuffer_delete(txId: uint) -> bool {
+    let _ = retryBuffer_trimOne();
     return xif let Some(rtx) = retryBuffer_get(txId) {
         // delete the tx
         retryBuffer = retryBuffer with {
@@ -325,6 +330,7 @@ public impure func processRetryableTx(req: IncomingRequest) {
 }
 
 public impure func redeemRetryableTxInTx(txToRedeem: uint) -> bool {
+    let _ = retryBuffer_trimOne();
     return xif let Some(rtx) = retryBuffer_get(txToRedeem) {
        evmCallStack_callRetryableTxAndReturn(rtx)
     } else {

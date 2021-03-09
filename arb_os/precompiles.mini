@@ -168,7 +168,7 @@ public impure func precompiles_init(acctStore: AccountStore) -> option<AccountSt
     )?;
     acctStore = accountStore_createBuiltinContract(
         acctStore,
-        address(const::Address_ArbRedeemRetryableTx),
+        address(const::Address_ArbRetryableTx),
         makeTrampoline(arbretryable_txcall),
         true,
     )?;
