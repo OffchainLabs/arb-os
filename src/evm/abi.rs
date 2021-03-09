@@ -115,12 +115,12 @@ impl AbiForContract {
 
         let request_id = machine.runtime_env.insert_tx_message(
             Uint256::from_u64(1025),
+            None,
             Uint256::from_usize(1_000_000_000),
             Uint256::zero(),
             Uint256::zero(),
             payment,
             &augmented_code,
-            false,
         );
 
         if let Some(delta_blocks) = advance_time {
@@ -193,12 +193,12 @@ impl AbiForContract {
 
         machine.runtime_env.insert_tx_message(
             sender_addr,
+            None,
             Uint256::from_usize(100_000_000),
             Uint256::zero(),
             self.address.clone(),
             payment,
             &calldata,
-            false,
         );
 
         let num_logs_before = machine.runtime_env.get_all_receipt_logs().len();
@@ -230,12 +230,12 @@ impl AbiForContract {
 
         machine.runtime_env._insert_tx_message_from_contract(
             sender_addr,
+            None,
             Uint256::from_usize(100_000_000),
             Uint256::zero(),
             self.address.clone(),
             payment,
             &calldata,
-            false,
         );
 
         let num_logs_before = machine.runtime_env.get_all_receipt_logs().len();
@@ -267,12 +267,12 @@ impl AbiForContract {
 
         machine.runtime_env.insert_tx_message(
             sender_addr,
+            Some(payment.clone()),
             Uint256::from_usize(100_000_000),
             Uint256::zero(),
             self.address.clone(),
             payment,
             &calldata,
-            true,
         );
 
         let num_logs_before = machine.runtime_env.get_all_receipt_logs().len();
@@ -1659,12 +1659,12 @@ impl ArbosTest {
         );
         let _tx_id = machine.runtime_env.insert_tx_message(
             caller_addr,
+            None,
             Uint256::from_usize(1000000000),
             Uint256::zero(),
             callee_addr,
             callvalue,
             &calldata,
-            false,
         );
         let num_logs_before = machine.runtime_env.get_all_receipt_logs().len();
         let num_sends_before = machine.runtime_env.get_all_sends().len();

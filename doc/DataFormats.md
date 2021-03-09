@@ -30,17 +30,17 @@ The L1 block number and/or L1 timestamp fields can be set to zero. Zero values i
 
 Each message type is associated with rules, imposed by the Arbitrum protocol, regarding which properties the EthBridge must verify before sending a specific message type. These rules are not described here because they are not a part of the data format.
 
-##### Message type 0: Eth deposit
+##### Message type 0: Reserved
 
-[This is no longer supported.]
+This message type is reserved.  It was used in previous versions but is no longer needed.
 
-##### Message type 1: ERC20 deposit
+##### Message type 1: Reserved
 
-[This is no longer supported.]
+This message type is reserved.  It was used in previous versions but is no longer needed.
 
-##### Message type 2: ERC721 deposit
+##### Message type 2: Reserved
 
-[This is no longer supported.]
+This message type is reserved.  It was used in previous versions but is no longer needed.
 
 ##### Message type 3: L2 message
 
@@ -104,9 +104,9 @@ Type-specific data:
 
 This message type is reserved for internal use by ArbOS. It should never appear in the inbox.
 
-**Message type 7: L2 transaction funded by L1**
+**Message type 7: reserved**
 
-This message type encodes an L2 transaction that is funded by calldata provided at L1. The type-specific data must be the same as an L2 message of subtype 0 or 1.
+This message type is reserved.  It was used in previous versions but is no longer needed.
 
 **Message type 8: Rollup protocol event**
 
@@ -123,6 +123,7 @@ An L2 message consists of:
 
 **Subtype 0: unsigned tx from user** has subtype-specific data of:
 
+* pre-deposit amount
 * ArbGas limit (uint)
 * ArbGas price bid, in wei (uint)
 * sequence number (uint)
@@ -130,13 +131,18 @@ An L2 message consists of:
 * callvalue, in wei (uint)
 * calldata (bytes)
 
+The pre-deposit amount will be deposited into the sender's L2 account, unconditionally, before attempting to execute the transaction.mak
+
 **Subtype 1: tx from contract** has subtype-specific data of:
 
+* pre-deposit amount
 * ArbGas limit (uint)
 * ArbGas price bid, in wei (uint)
 * destination address (uint)
 * callvalue, in wei (uint)
 * calldata (bytes)
+
+The pre-deposit amount will be deposited into the sender's L2 account, unconditionally, before attempting to execute the transaction.
 
 **Subtype 2: non-mutating call** has subtype-specific data of:
 

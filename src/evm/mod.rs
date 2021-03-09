@@ -2173,12 +2173,12 @@ pub fn _evm_payment_to_self(log_to: Option<&Path>, debug: bool) -> Result<(), et
 
     let tx_id = machine.runtime_env.insert_tx_message(
         my_addr.clone(),
+        None,
         Uint256::from_u64(1000000000),
         Uint256::zero(),
         my_addr.clone(),
         Uint256::from_u64(10000),
         &vec![],
-        false,
     );
 
     let _ = if debug {
@@ -2221,12 +2221,12 @@ pub fn evm_payment_to_empty_address(log_to: Option<&Path>, debug: bool) {
     );
     let tx_id = machine.runtime_env.insert_tx_message(
         my_addr,
+        None,
         Uint256::from_u64(1000000000),
         Uint256::zero(),
         dest_addr,
         Uint256::from_u64(10000),
         &vec![],
-        false,
     );
 
     let _ = if debug {
@@ -2258,12 +2258,12 @@ pub fn evm_eval_sha256(log_to: Option<&Path>, debug: bool) {
 
     let tx_id = machine.runtime_env.insert_tx_message(
         my_addr,
+        None,
         Uint256::from_u64(1000000000),
         Uint256::zero(),
         Uint256::from_u64(2), // sha256 precompile
         Uint256::from_u64(0),
         &vec![0xCCu8],
-        false,
     );
 
     let _ = if debug {
@@ -2328,12 +2328,12 @@ fn _evm_ecpairing_precompile_test_one(calldata: &str, result: bool, debug: bool)
 
     let tx_id = machine.runtime_env.insert_tx_message(
         my_addr,
+        None,
         Uint256::from_u64(1000000000),
         Uint256::zero(),
         Uint256::from_u64(8), // ecpairing precompile
         Uint256::from_u64(0),
         &calldata,
-        false,
     );
 
     let _ = if debug {
@@ -2363,12 +2363,12 @@ pub fn _evm_eval_ripemd160(log_to: Option<&Path>, debug: bool) {
     let my_addr = Uint256::from_u64(1025);
     let tx_id = machine.runtime_env.insert_tx_message(
         my_addr,
+        None,
         Uint256::from_u64(1000000000),
         Uint256::zero(),
         Uint256::from_u64(3), // ripemd160 precompile
         Uint256::from_u64(0),
         &vec![0x61u8],
-        false,
     );
 
     let _ = if debug {

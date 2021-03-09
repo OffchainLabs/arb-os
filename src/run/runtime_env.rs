@@ -216,36 +216,19 @@ impl RuntimeEnvironment {
         }
     }
 
-    pub fn insert_l2_message_with_deposit(&mut self, sender_addr: Uint256, msg: &[u8]) -> Uint256 {
-        if (msg[0] != 0u8) && (msg[0] != 1u8) {
-            panic!();
-        }
-        let default_id = self.insert_l1_message(7, sender_addr.clone(), msg);
-        if msg[0] == 0 {
-            Uint256::avm_hash2(
-                &sender_addr,
-                &Uint256::avm_hash2(
-                    &Uint256::from_u64(self.chain_id),
-                    &hash_bytestack(_bytestack_from_bytes(msg)).unwrap(),
-                ),
-            )
-        } else {
-            default_id
-        }
-    }
-
     pub fn insert_tx_message(
         &mut self,
         sender_addr: Uint256,
+        pre_deposit: Option<Uint256>,
         max_gas: Uint256,
         gas_price_bid: Uint256,
         to_addr: Uint256,
         value: Uint256,
         data: &[u8],
-        with_deposit: bool,
     ) -> Uint256 {
         let mut buf = vec![0u8];
         let seq_num = self.get_and_incr_seq_num(&sender_addr.clone());
+        buf.extend(pre_deposit.unwrap_or(Uint256::zero()).to_bytes_be());
         buf.extend(max_gas.to_bytes_be());
         buf.extend(gas_price_bid.to_bytes_be());
         buf.extend(seq_num.to_bytes_be());
@@ -253,35 +236,28 @@ impl RuntimeEnvironment {
         buf.extend(value.to_bytes_be());
         buf.extend_from_slice(data);
 
-        if with_deposit {
-            self.insert_l2_message_with_deposit(sender_addr.clone(), &buf)
-        } else {
-            self.insert_l2_message(sender_addr.clone(), &buf, false)
-        }
+        self.insert_l2_message(sender_addr.clone(), &buf, false)
     }
 
     pub fn _insert_tx_message_from_contract(
         &mut self,
         sender_addr: Uint256,
+        pre_deposit: Option<Uint256>,
         max_gas: Uint256,
         gas_price_bid: Uint256,
         to_addr: Uint256,
         value: Uint256,
         data: &[u8],
-        with_deposit: bool,
     ) -> Uint256 {
         let mut buf = vec![1u8];
+        buf.extend(pre_deposit.unwrap_or(Uint256::zero()).to_bytes_be());
         buf.extend(max_gas.to_bytes_be());
         buf.extend(gas_price_bid.to_bytes_be());
         buf.extend(to_addr.to_bytes_be());
         buf.extend(value.to_bytes_be());
         buf.extend_from_slice(data);
 
-        if with_deposit {
-            self.insert_l2_message_with_deposit(sender_addr.clone(), &buf)
-        } else {
-            self.insert_l2_message(sender_addr.clone(), &buf, false)
-        }
+        self.insert_l2_message(sender_addr.clone(), &buf, false)
     }
 
     pub fn new_batch(&self) -> Vec<u8> {
@@ -1144,6 +1120,7 @@ fn _bytestack_build_uint(b: &[u8]) -> Value {
     Value::Int(ui)
 }
 
+/*
 pub fn hash_bytestack(bs: Value) -> Option<Uint256> {
     if let Value::Tuple(tup) = bs {
         if let Value::Int(ui) = &tup[0] {
@@ -1182,6 +1159,7 @@ fn test_hash_bytestack() {
         .unwrap()
     );
 }
+ */
 
 pub fn _bytes_from_bytestack(bs: Value) -> Option<Vec<u8>> {
     if let Value::Tuple(tup) = bs {
