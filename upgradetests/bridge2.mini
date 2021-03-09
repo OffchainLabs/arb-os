@@ -1,0 +1,23 @@
+use impl2::set_newGlobal1;
+use impl2::set_newGlobal2;
+
+type InputGlobals = struct {
+    global1: uint,
+    global2: option<int>,
+    _jump_table: any,
+}
+type OutputGlobals = struct {
+    newGlobal1: option<int>,
+    newGlobal2: uint,
+    _jump_table: any,
+}
+impure func upgrade(input_globals: InputGlobals) -> OutputGlobals {
+    let newGlobal1 = set_newGlobal1(input_globals);
+    let newGlobal2 = set_newGlobal2(input_globals);
+    let _jump_table = (asm() OutputGlobals { rget })._jump_table;
+    return struct {
+        newGlobal1: newGlobal1,
+        newGlobal2: newGlobal2,
+        _jump_table: _jump_table,
+    };
+}
