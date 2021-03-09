@@ -15,6 +15,7 @@ use std::queue::queuestack_get;
 
 use accounts::getGlobalAccountStore;
 use accounts::setGlobalAccountStore;
+use accounts::accountStore_transferEthBalance;
 use accounts::accountStore_get;
 use accounts::accountStore_set;
 use accounts::account_addToEthBalance;
@@ -423,6 +424,8 @@ impure func translateUnsignedTx(request: IncomingRequest) -> option<TxRequestDat
     let (us, subtype) = bytestream_getByte(inStream)?;
     inStream = us;
 
+    let gasRefundRecipient = request.sender;
+    let callvalueRefundRecipient = request.sender;
     if ( (subtype == const::L2MessageType_unsignedContractTx) || (subtype == const::L2MessageType_unsignedEOATx) ) {
         let (us, preDepositAmount) = bytestream_get256(inStream)?;
         inStream = us;
@@ -440,6 +443,14 @@ impure func translateUnsignedTx(request: IncomingRequest) -> option<TxRequestDat
                     ),
                 ),
             );
+        }
+
+        if (subtype == const::L2MessageType_unsignedContractTx) {
+            let (us, rawGasRefundRecipient) = bytestream_get256(inStream)?;
+            let (us, rawCallvalueRefundRecipient) = bytestream_get256(us)?;
+            inStream = us;
+            gasRefundRecipient = address(rawGasRefundRecipient);
+            callvalueRefundRecipient = address(rawCallvalueRefundRecipient);
         }
     }
 
@@ -459,8 +470,40 @@ impure func translateUnsignedTx(request: IncomingRequest) -> option<TxRequestDat
     let (us, destAddrAsUint) = bytestream_get256(inStream)?;
     inStream = us;
 
-    let (us, value) = bytestream_get256(inStream)?;
+    let (us, callvalue) = bytestream_get256(inStream)?;
     inStream = us;
+
+    if (subtype == const::L2MessageType_unsignedContractTx) {
+        if (gasRefundRecipient == address(0)) {
+            gasRefundRecipient = request.sender;
+        } elseif (gasRefundRecipient != request.sender) {
+            // transfer gas money to the gasRefundRecipient
+            // later we will make the gasRefundRecipient pay for the tx's gas
+            setGlobalAccountStore(
+                accountStore_transferEthBalance(
+                    getGlobalAccountStore(),
+                    request.sender,
+                    gasRefundRecipient,
+                    maxGas * gasPrice,
+                )?
+            );
+        }
+
+        if (callvalueRefundRecipient == address(0)) {
+            callvalueRefundRecipient = request.sender;
+        } elseif (callvalueRefundRecipient != request.sender) {
+            // transfer the callvalue to the callvalueRefundRecipient
+            // later we will make the callvalueRefundRecipient pay for the tx's callvalue
+            setGlobalAccountStore(
+                accountStore_transferEthBalance(
+                    getGlobalAccountStore(),
+                    request.sender,
+                    callvalueRefundRecipient,
+                    callvalue,
+                )?
+            );
+        }
+    }
 
     let calldata = bytestream_getRemainingBytes(inStream);
 
@@ -479,8 +522,9 @@ impure func translateUnsignedTx(request: IncomingRequest) -> option<TxRequestDat
             seqNum: seqNum,
             caller: request.sender,
             calleeAddr: address(destAddrAsUint),
-            gasPayer: request.sender,
-            value: value,
+            gasPayer: gasRefundRecipient,
+            callvalue: callvalue,
+            callvaluePayer: callvalueRefundRecipient,
             calldata: calldata,
             nonMutating: (subtype == const::L2MessageType_nonmutatingCall),
             isConstructor: (destAddrAsUint == 0),

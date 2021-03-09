@@ -210,9 +210,9 @@ public impure func initEvmCallStack(
         let startTxResult = gasAccounting_startTxCharges(request.maxGas, request.gasPrice, request.gasPayer);
         if (startTxResult == const::TxResultCode_success) {
             if (request.seqNum != None<uint>) {
-                // increment the caller's sequence number, if caller has sufficient balance
+                // increment the caller's sequence number, if callvalue payer has sufficient balance
                 let acctStore = getGlobalAccountStore();
-                if (account_getBalance(accountStore_get(acctStore, request.caller)) >= request.value) {
+                if (account_getBalance(accountStore_get(acctStore, request.callvaluePayer)) >= request.callvalue) {
                     setGlobalAccountStore(
                         accountStore_set(
                             acctStore,
@@ -227,13 +227,13 @@ public impure func initEvmCallStack(
 
             globalCurrentTxRequest = request;
 
-            // pay callvalue from caller to the called contract
+            // pay callvalue from callvalue payer to the called contract
             // payment will only be recorded inside the callframe, so it will be discarded if the call reverts
             if let Some(globalAS) = accountStore_transferEthBalance(
                 getGlobalAccountStore(),
-                request.caller,
+                request.callvaluePayer,
                 request.calleeAddr,
-                request.value
+                request.callvalue,
             ) {
                 globalCallStack = Some(struct {
                     runningAs: request.calleeAddr,
@@ -243,7 +243,7 @@ public impure func initEvmCallStack(
                     caller: request.caller,
                     static: false,
                     calldata: request.calldata,
-                    callvalue: request.value,
+                    callvalue: request.callvalue,
                     returnInfo: None<ReturnInfo>,
                     memory: bytearray_new(0),
                     storageDelta: int(0),
@@ -301,9 +301,9 @@ public impure func initEvmCallStack(
         // no contract at this address, so treat tx as a simple eth transfer
 
         if (request.seqNum != None<uint>) {
-            // increment the caller's sequence number, if caller has sufficient balance
+            // increment the caller's sequence number, if callvalue payer has sufficient balance
             let acctStore = getGlobalAccountStore();
-            if (account_getBalance(accountStore_get(acctStore, request.caller)) >= request.value) {
+            if (account_getBalance(accountStore_get(acctStore, request.callvaluePayer)) >= request.callvalue) {
                 setGlobalAccountStore(
                     accountStore_set(
                         acctStore,
@@ -316,13 +316,13 @@ public impure func initEvmCallStack(
             }
         }
 
-        if (request.value > 0) {
+        if (request.callvalue > 0) {
             // transfer value to destination address
             if let Some(globalAS) = accountStore_transferEthBalance(
                 getGlobalAccountStore(),
-                request.caller,
+                request.callvaluePayer,
                 request.calleeAddr,
-                request.value
+                request.callvalue
             ) {
                 if (callKind != const::EVMCallType_staticcall) {  // commit the transfer, unless it's a static call
                     setGlobalAccountStore(globalAS);
@@ -403,7 +403,12 @@ public impure func initEvmCallStackForConstructor(
             true,
         )
     );
-    if let Some(uas) = accountStore_transferEthBalance(acctStore, request.caller, request.calleeAddr, request.value) {
+    if let Some(uas) = accountStore_transferEthBalance(
+        acctStore,
+        request.callvaluePayer,
+        request.calleeAddr,
+        request.callvalue
+    ) {
         acctStore = uas;
 
         let startTxResult = gasAccounting_startTxCharges(request.maxGas, request.gasPrice, request.gasPayer);
@@ -418,7 +423,7 @@ public impure func initEvmCallStackForConstructor(
                 caller: request.caller,
                 static: false,
                 calldata: request.calldata,
-                callvalue: request.value,
+                callvalue: request.callvalue,
                 returnInfo: None<ReturnInfo>,
                 memory: bytearray_new(0),
                 storageDelta: int(0),
