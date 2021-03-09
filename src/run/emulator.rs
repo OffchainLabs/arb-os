@@ -1160,7 +1160,7 @@ impl Machine {
     }
 
     // This only makes sense before the immediate is added to stack
-    fn get_stack_or_immed(&self, idx: usize)-> Option<Value> {
+    fn get_stack_or_immed(&self, idx: usize) -> Option<Value> {
         if let MachineState::Running(pc) = self.state {
             match &self.code.get_insn(pc)?.immediate {
                 None => self.stack.nth(idx),
@@ -1168,12 +1168,11 @@ impl Machine {
                     if idx == 0 {
                         Some(imm.clone())
                     } else {
-                        self.stack.nth(idx-1)
+                        self.stack.nth(idx - 1)
                     }
                 }
             }
-        }
-        else {
+        } else {
             self.stack.nth(idx)
         }
     }
@@ -1261,15 +1260,9 @@ impl Machine {
                 AVMOpcode::GetBuffer8 => 3,
                 AVMOpcode::GetBuffer64 => 3,
                 AVMOpcode::GetBuffer256 => 3,
-                AVMOpcode::SetBuffer8 => {
-                    self.gas_for_setbuffer(0)
-                }
-                AVMOpcode::SetBuffer64 => {
-                    self.gas_for_setbuffer(7) * 2
-                }
-                AVMOpcode::SetBuffer256 => {
-                    self.gas_for_setbuffer(31) * 2
-                }
+                AVMOpcode::SetBuffer8 => self.gas_for_setbuffer(0),
+                AVMOpcode::SetBuffer64 => self.gas_for_setbuffer(7) * 2,
+                AVMOpcode::SetBuffer256 => self.gas_for_setbuffer(31) * 2,
             })
         } else {
             None
@@ -1278,7 +1271,8 @@ impl Machine {
 
     fn gas_for_setbuffer(&self, add: usize) -> u64 {
         let offset = self.get_stack_or_immed(0);
-        if let (Some(Value::Buffer(buf)), Some(Value::Int(offset))) = (self.get_stack_or_immed(2), offset)
+        if let (Some(Value::Buffer(buf)), Some(Value::Int(offset))) =
+            (self.get_stack_or_immed(2), offset)
         {
             let mut mx = match (offset.add(&Uint256::from_usize(add))).to_usize() {
                 None => 0,
