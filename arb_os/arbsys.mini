@@ -238,30 +238,13 @@ impure func arbsys_withdrawEth(topFrame: EvmCallFrame, calldata: ByteArray) { //
         if ( ! evmCallStack_setAccount(runningAsAddr, updatedAcct)) {
             evmOp_revert_knownCodePc(address(const::Address_ArbSys), 31, 0, 0);
         }
-        queueMessageForSend(
-            bytearray_set256(
-                bytearray_set256(
-                    bytearray_setByte(bytearray_new(0), 0, const::SendType_withdrawETH),
-                    1,
-                    bytearray_get256(calldata, 4),
-                ),
-                33,
-                amount
-            )
-        );
-        if (evmCallStack_addEvmLogToCurrent(
-            (
-                address(const::Address_ArbSys),  // addEvmLogToCurrent will fill this in
-                (32, setbuffer256(newbuffer(), 0, amount)),
-                0xc32d3c7eb0f275cbb5b72b3d3c688269430f30e5b9bb36980396edd9101c615c, // EthWithdrawal(address,uint256)
-                uint(destAddr),
-            )
-        ) == Some(())) {
-            evmOp_return(0, 0);
-        }
-    }
 
-    evmOp_revert_knownCodePc(address(const::Address_ArbSys), 32, 0, 0);
+        sendTxToL1(senderAddr, destAddr, amount, bytearray_new(0));
+
+        evmOp_return(0, 0);
+    } else {
+        evmOp_revert_knownCodePc(address(const::Address_ArbSys), 32, 0, 0);
+    }
 }
 
 impure func arbsys_sendTxToL1(topFrame: EvmCallFrame, calldata: ByteArray) { // (address, bytes) payable -> bool
@@ -277,96 +260,8 @@ impure func arbsys_sendTxToL1(topFrame: EvmCallFrame, calldata: ByteArray) { // 
         if ( ! evmCallStack_setAccount(runningAsAddr, updatedAcct)) {
             evmOp_revert_knownCodePc(address(const::Address_ArbSys), 220, 0, 0);
         }
-        queueMessageForSend(
-            bytearray_copy(
-                innerCalldata,
-                0,
-                bytearray_set256(
-                    bytearray_set256(
-                        bytearray_set256(
-                            bytearray_set256(
-                                bytearray_set256(
-                                    bytearray_set256(
-                                        bytearray_setByte(
-                                            bytearray_new(0),
-                                            0,
-                                            const::SendType_sendTxToL1
-                                        ),
-                                        1,
-                                        uint(caller),
-                                    ),
-                                    32+1,
-                                    uint(destAddr),
-                                ),
-                                2*32+1,
-                                inbox_currentArbBlockNumber(),
-                            ),
-                            3*32+1,
-                            inbox_currentEthBlockNumber(),
-                        ),
-                        4*32+1,
-                        inbox_currentTimestamp(),
-                    ),
-                    5*32+1,
-                    callvalue,
-                ),
-                6*32+1,
-                nbytes
-            ),
-        );
 
-        // write log data into memory
-        let mem = bytearray_set256(
-            bytearray_set256(
-                bytearray_set256(
-                    bytearray_set256(
-                        bytearray_set256(
-                            bytearray_set256(
-                                bytearray_set256(
-                                    bytearray_set256(
-                                        bytearray_new(0),
-                                        0,
-                                        0,  // item number in batch will be filled in later
-                                    ),
-                                    32,
-                                    inbox_currentArbBlockNumber(),
-                                ),
-                                2*32,
-                                inbox_currentEthBlockNumber(),
-                            ),
-                            3*32,
-                            inbox_currentTimestamp(),
-                        ),
-                        4*32,
-                        uint(destAddr),
-                    ),
-                    5*32,
-                    callvalue,
-                ),
-                6*32,
-                7*32,  // offset to beginning of bytes size
-            ),
-            7*32,
-            bytearray_size(innerCalldata),
-        );
-
-        mem = bytearray_copy(
-            innerCalldata,
-            0,
-            mem,
-            8*32,
-            32*((bytearray_size(innerCalldata)+31)/32),
-        );
-        if ( ! evmCallStack_setTopFrameMemory(mem)) {
-            evmOp_revert_knownCodePc(address(const::Address_ArbSys), 221, 0, 0);
-        }
-        evmOp_log3(
-            0,
-            bytearray_size(mem),
-            const::EVMLogTopicForL2ToL1Send,
-            uint(caller),
-            0,    // batch number will be filled in later
-        );
+        sendTxToL1(caller, destAddr, callvalue, innerCalldata);
 
         if (evmCallStack_setTopFrameMemory(bytearray_set256(bytearray_new(0), 0, 1))) {
             evmOp_return(0, 32);
@@ -375,6 +270,107 @@ impure func arbsys_sendTxToL1(topFrame: EvmCallFrame, calldata: ByteArray) { // 
         }
     } else {
         evmOp_revert_knownCodePc(address(const::Address_ArbSys), 223, 0, 0);
+    }
+}
+
+impure func sendTxToL1(caller: address, destination: address, callvalue: uint, calldata: ByteArray) {
+    let calldataSize = bytearray_size(calldata);
+    queueMessageForSend(
+        bytearray_copy(
+            calldata,
+            0,
+            bytearray_set256(
+                bytearray_set256(
+                    bytearray_set256(
+                        bytearray_set256(
+                            bytearray_set256(
+                                bytearray_set256(
+                                    bytearray_setByte(
+                                        bytearray_new(0),
+                                        0,
+                                        const::SendType_sendTxToL1
+                                    ),
+                                    1,
+                                    uint(caller),
+                                ),
+                                32+1,
+                                uint(destination),
+                            ),
+                            2*32+1,
+                            inbox_currentArbBlockNumber(),
+                        ),
+                        3*32+1,
+                        inbox_currentEthBlockNumber(),
+                    ),
+                    4*32+1,
+                    inbox_currentTimestamp(),
+                ),
+                5*32+1,
+                callvalue,
+            ),
+            6*32+1,
+            calldataSize,
+        ),
+    );
+
+    // write log data into memory
+    let mem = bytearray_set256(
+        bytearray_set256(
+            bytearray_set256(
+                bytearray_set256(
+                    bytearray_set256(
+                        bytearray_set256(
+                            bytearray_set256(
+                                bytearray_set256(
+                                    bytearray_new(0),
+                                    0,
+                                    0,  // item number in batch will be filled in later
+                                ),
+                                32,
+                                inbox_currentArbBlockNumber(),
+                            ),
+                            2*32,
+                            inbox_currentEthBlockNumber(),
+                        ),
+                        3*32,
+                        inbox_currentTimestamp(),
+                    ),
+                    4*32,
+                    uint(destination),
+                ),
+                5*32,
+                callvalue,
+            ),
+            6*32,
+            7*32,  // offset to beginning of bytes size
+        ),
+        7*32,
+        calldataSize,
+    );
+
+    mem = bytearray_copy(
+        calldata,
+        0,
+        mem,
+        8*32,
+        32*((calldataSize+31)/32),
+    );
+
+    let savedMem = evmCallStack_getTopFrameMemoryOrDie();
+
+    if ( ! evmCallStack_setTopFrameMemory(mem)) {
+        evmOp_revert_knownCodePc(address(const::Address_ArbSys), 230, 0, 0);
+    }
+    evmOp_log3(
+        0,
+        bytearray_size(mem),
+        const::EVMLogTopicForL2ToL1Send,
+        uint(caller),
+        0,    // batch number will be filled in later
+    );
+
+    if ( ! evmCallStack_setTopFrameMemory(savedMem)) {
+        evmOp_revert_knownCodePc(address(const::Address_ArbSys), 231, 0, 0);
     }
 }
 
