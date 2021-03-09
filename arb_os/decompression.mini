@@ -64,6 +64,8 @@ use std::rlp::rlp_decodeUint;
 use std::rlp::rlp_encodeMessageInfo;
 use std::rlp::rlp_encodeAndHashMessageInfoForSignature;
 
+use retrybuffer::RetryableTx;
+
 use signedTx::SignedTx;
 use signedTx::recoverSigner;
 
@@ -425,12 +427,14 @@ impure func decompressTx(
             seqNum: Some(seqNum),
             caller: sender,
             calleeAddr: toAddr,
+            gasPayer: sender,
             value: value,
             calldata: calldata,
             nonMutating: false,
             isConstructor: (toAddr == address(0)),
             incomingRequest: unsafecast<IncomingRequest>(0),  // caller will fill this in
             feeStats: txFeeStats_zero(),
+            fromRetryable: None<RetryableTx>,
         }
     ));
 }

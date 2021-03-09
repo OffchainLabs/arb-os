@@ -35,6 +35,8 @@ use gasAccounting::TxFeeStats;
 
 use output::emitTxReceipt;
 
+use retrybuffer::RetryableTx;
+
 use std::bytearray::bytearray_new;
 use std::bytearray::bytearray_size;
 use std::bytearray::bytearray_extract;
@@ -126,12 +128,14 @@ type TxRequestData = struct {
     seqNum: option<uint>,
     caller: address,
     calleeAddr: address,
+    gasPayer: address,
     value: uint,
     calldata: ByteArray,
     nonMutating: bool,
     isConstructor: bool,
     incomingRequest: IncomingRequest,
     feeStats: TxFeeStats,
+    fromRetryable: option<RetryableTx>,
 }
 
 public impure func handleL2Request(

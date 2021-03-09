@@ -29,6 +29,7 @@ use output::output_init;
 use output::txReceipts_init;
 use pluggables::pluggables_init;
 use precompiles::precompiles_init;
+use retrybuffer::retryBuffer_init;
 use rollupTracker::rollupTracker_init;
 
 use std::bytearray::MarshalledBytes;
@@ -53,16 +54,17 @@ use inbox::IncomingRequest;
 
 impure func main() {
     errorHandler_init();
+    retryBuffer_init();
     pluggables_init();
     codeSegment_init();
     chainParams_init();
     output_init();
     decompression_init();
+    inbox_init();
     gasAccounting_init();
     evmCallStack_init();
     evmOps_init();
     blockhash_init();
-    inbox_init();
     accountStore_init();
     txReceipts_init();
     rollupTracker_init();
