@@ -243,6 +243,8 @@ impl RuntimeEnvironment {
         &mut self,
         sender_addr: Uint256,
         pre_deposit: Option<Uint256>,
+        gas_refund_recipient: Option<Uint256>,
+        callvalue_refund_recipient: Option<Uint256>,
         max_gas: Uint256,
         gas_price_bid: Uint256,
         to_addr: Uint256,
@@ -251,6 +253,8 @@ impl RuntimeEnvironment {
     ) -> Uint256 {
         let mut buf = vec![1u8];
         buf.extend(pre_deposit.unwrap_or(Uint256::zero()).to_bytes_be());
+        buf.extend(gas_refund_recipient.unwrap_or(Uint256::zero()).to_bytes_be());
+        buf.extend(callvalue_refund_recipient.unwrap_or(Uint256::zero()).to_bytes_be());
         buf.extend(max_gas.to_bytes_be());
         buf.extend(gas_price_bid.to_bytes_be());
         buf.extend(to_addr.to_bytes_be());

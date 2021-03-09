@@ -231,6 +231,8 @@ impl AbiForContract {
         machine.runtime_env._insert_tx_message_from_contract(
             sender_addr,
             None,
+            None,
+            None,
             Uint256::from_usize(100_000_000),
             Uint256::zero(),
             self.address.clone(),

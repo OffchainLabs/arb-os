@@ -136,13 +136,20 @@ The pre-deposit amount will be deposited into the sender's L2 account, unconditi
 **Subtype 1: tx from contract** has subtype-specific data of:
 
 * pre-deposit amount
+* gas refund recipient
+* callvalue refund recipient
 * ArbGas limit (uint)
 * ArbGas price bid, in wei (uint)
 * destination address (uint)
 * callvalue, in wei (uint)
 * calldata (bytes)
 
-The pre-deposit amount will be deposited into the sender's L2 account, unconditionally, before attempting to execute the transaction.
+When this message reaches the head of the inbox, the following steps occur:
+
+* add the pre-deposit amount to the caller's L2 account,
+* if the the gas refund recipient is not the sender, transfer (arbGasLimit * arbGasPriceBid) from the sender to the gas refund recipient (reverting the transaction if the sender has insufficient funds), 
+* if the transaction has not reverted yet, and the calldata refund recipient is not the sender, transfer callvalue from the sender to the callvalue refund recipient (reverting the transaction if the sender has insufficient funds),
+* if the transaction has not reverted yet, execute the transaction, with the gas refund recipient paying for the transaction's gas, and the callvalue refund recipient providing the callvalue.
 
 **Subtype 2: non-mutating call** has subtype-specific data of:
 

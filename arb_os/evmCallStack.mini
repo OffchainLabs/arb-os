@@ -26,7 +26,6 @@ use accounts::accountStore_cloneContract;
 use accounts::account_setStorageCell;
 use accounts::account_getBalance;
 use accounts::account_setBalance;
-use accounts::account_deductFromEthBalance;
 use accounts::account_getAllStorage;
 use accounts::account_getStartCodePoint;
 use accounts::account_setContractInfo;

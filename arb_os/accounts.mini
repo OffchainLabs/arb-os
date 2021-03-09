@@ -351,6 +351,32 @@ public func accountStore_transferEthBalance(
     );
 }
 
+public func accountStore_transferEthBalanceOrPartial(
+    acctStore: AccountStore,
+    from: address,
+    to: address,
+    maxAmount: uint,
+) -> (AccountStore, uint) {
+    // If [from] has at least maxAmount of ETH, transfer maxAmount to [to].
+    // Otherwise, transfer all of [from]'s ETH to [to].
+    // Return updated account store, and amount transferred.
+
+    return xif (maxAmount == 0) {
+        (acctStore, 0)
+    } else {
+        let fromAcct = accountStore_get(acctStore, from);
+        let fromBalance = account_getBalance(fromAcct);
+        let amount = xif (fromBalance < maxAmount) { fromBalance } else { maxAmount };
+
+        xif let Some(astore) = accountStore_transferEthBalance(acctStore, from, to, amount) {
+            (astore, amount)
+        } else {
+            // this should never happen
+            (acctStore, 0)
+        }
+    };
+}
+
 public func account_getAllStorage(account: Account) -> option<StorageMap> {
     // Get the full contents of a contract's storage.
     // Return None if account doesn't have contract storage.
