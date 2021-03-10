@@ -1,13 +1,14 @@
 
-use bridge2::upgrade;
-use bridge2::InputGlobals;
+use bridge2::remapGlobalsForUpgrade;
+use bridge2::GlobalsBeforeUpgrade;
 
 var newGlobal1: option<int>;
 var newGlobal2: uint;
 var newGlobal3: (uint, uint);
 
-impure func main(old: InputGlobals) -> uint {
-    asm(upgrade(old),) { rset };
+
+impure func main(oldGlobals: GlobalsBeforeUpgrade) -> uint {
+    asm(remapGlobalsForUpgrade(oldGlobals),) { rset };
 
     if (newGlobal1 != Some(-3s)) {
         asm((1, newGlobal1),) { debugprint };

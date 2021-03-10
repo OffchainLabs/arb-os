@@ -79,12 +79,12 @@ pub(crate) fn gen_upgrade_code(input: GenUpgrade) -> Result<(), GenCodeError> {
     let input_struct = Type::Struct(input_fields.clone());
     let output_struct = Type::Struct(output_fields.clone());
     for field in output_only.iter() {
-        writeln!(code, "use {}::set_{};", impl_file, field.name)
+        writeln!(code, "use {}::set_{}_onUpgrade;", impl_file, field.name)
             .map_err(|_| GenCodeError::new("Failed to write use statement".to_string()))?;
     }
     for field in &intersection {
         if map.data.contains(&field.name) {
-            writeln!(code, "use {}::set_{};", impl_file, field.name)
+            writeln!(code, "use {}::set_{}_onUpgrade;", impl_file, field.name)
                 .map_err(|_| GenCodeError::new("Failed to write use statement".to_string()))?;
         }
     }
@@ -96,18 +96,18 @@ pub(crate) fn gen_upgrade_code(input: GenUpgrade) -> Result<(), GenCodeError> {
     writeln!(
         code,
         "{}",
-        type_decl_string(&"InputGlobals".to_string(), &input_struct)
+        type_decl_string(&"GlobalsBeforeUpgrade".to_string(), &input_struct)
     )
     .map_err(|_| GenCodeError::new("Failed to write to output file".to_string()))?;
     writeln!(
         code,
         "{}",
-        type_decl_string(&"OutputGlobals".to_string(), &output_struct)
+        type_decl_string(&"GlobalsAfterUpgrade".to_string(), &output_struct)
     )
     .map_err(|_| GenCodeError::new("Failed to write to output file".to_string()))?;
     writeln!(
         code,
-        "public {}func upgrade(input_globals: InputGlobals) -> OutputGlobals {{",
+        "public {}func remapGlobalsForUpgrade(input_globals: GlobalsBeforeUpgrade) -> GlobalsAfterUpgrade {{",
         if map.data.contains("_jump_table") {
             ""
         } else {
@@ -120,7 +120,7 @@ pub(crate) fn gen_upgrade_code(input: GenUpgrade) -> Result<(), GenCodeError> {
             writeln!(
                 code,
                 "    {}",
-                let_string(&field.name, &format!("set_{}(input_globals)", field.name))
+                let_string(&field.name, &format!("set_{}_onUpgrade(input_globals)", field.name))
             )
             .map_err(|_| GenCodeError::new("Failed to write to output file".to_string()))?;
         } else {
@@ -136,7 +136,7 @@ pub(crate) fn gen_upgrade_code(input: GenUpgrade) -> Result<(), GenCodeError> {
         writeln!(
             code,
             "    {}",
-            let_string(&field.name, &format!("set_{}(input_globals)", field.name))
+            let_string(&field.name, &format!("set_{}_onUpgrade(input_globals)", field.name))
         )
         .map_err(|_| GenCodeError::new("Failed to write to output file".to_string()))?;
     }
@@ -146,7 +146,7 @@ pub(crate) fn gen_upgrade_code(input: GenUpgrade) -> Result<(), GenCodeError> {
     } else {
         writeln!(
             code,
-            "    let _jump_table = (asm() OutputGlobals {{ rget }})._jump_table;"
+            "    let _jump_table = (asm() GlobalsAfterUpgrade {{ rget }})._jump_table;"
         )
         .map_err(|_| GenCodeError::new("Failed to write to output file".to_string()))?;
     }

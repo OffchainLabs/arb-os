@@ -1,23 +1,23 @@
-use impl2::set_newGlobal3;
-use impl2::set_newGlobal2;
-use impl2::set_newGlobal1;
+use impl2::set_newGlobal1_onUpgrade;
+use impl2::set_newGlobal2_onUpgrade;
+use impl2::set_newGlobal3_onUpgrade;
 
-type InputGlobals = struct {
+type GlobalsBeforeUpgrade = struct {
     global1: uint,
     global2: option<int>,
     _jump_table: any,
 }
-type OutputGlobals = struct {
+type GlobalsAfterUpgrade = struct {
     newGlobal1: option<int>,
     newGlobal2: uint,
     newGlobal3: (uint, uint, ),
     _jump_table: any,
 }
-public impure func upgrade(input_globals: InputGlobals) -> OutputGlobals {
-    let newGlobal3 = set_newGlobal3(input_globals);
-    let newGlobal2 = set_newGlobal2(input_globals);
-    let newGlobal1 = set_newGlobal1(input_globals);
-    let _jump_table = (asm() OutputGlobals { rget })._jump_table;
+public impure func remapGlobalsForUpgrade(input_globals: GlobalsBeforeUpgrade) -> GlobalsAfterUpgrade {
+    let newGlobal1 = set_newGlobal1_onUpgrade(input_globals);
+    let newGlobal2 = set_newGlobal2_onUpgrade(input_globals);
+    let newGlobal3 = set_newGlobal3_onUpgrade(input_globals);
+    let _jump_table = (asm() GlobalsAfterUpgrade { rget })._jump_table;
     return struct {
         newGlobal1: newGlobal1,
         newGlobal2: newGlobal2,
