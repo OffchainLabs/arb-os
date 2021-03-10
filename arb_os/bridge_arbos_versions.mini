@@ -1,18 +1,25 @@
 
 type GlobalsBeforeUpgrade = struct {
-    globalAccountStore: any,
-    upgradeInProgress: option<any>,
-    blockhashes: struct {
-        latestBlockNum: uint,
-        oldHashes: [256]bytes32,
+    extraVariableForTesting: uint,
+    moduleManager: any,
+    globalBlockReceiptData: struct {
+        data: any,
+        statsThisBlock: any,
+        statsAllTime: any,
+        lastBlockNum: uint,
+        nextSendTime: uint,
     },
-    globalChainParams: option<any>,
-    unreachableMask: uint,
-    globalIndexedAddressTable: any,
-    inErrorHandler: bool,
-    globalCallStack: option<any>,
-    globalCurrentTxRequest: any,
-    evmOpJumpTable: [47]impure func(),
+    logsQueuedForEndOfBlock: any,
+    globalOutbox: struct {
+        batch: any,
+        batchNumber: uint,
+        numInBatch: uint,
+    },
+    globalInbox: any,
+    globalInputQueue: struct {
+        txQ: any,
+        batchQ: any,
+    },
     gasAccountingInfo: struct {
         txState: option<any>,
         feeConfig: any,
@@ -33,11 +40,24 @@ type GlobalsBeforeUpgrade = struct {
         estimateWei: uint,
         fairGasPriceSender: address,
     },
-    globalInbox: any,
-    globalInputQueue: struct {
-        txQ: any,
-        batchQ: any,
+    evmOpJumpTable: [47]impure func(),
+    globalCallStack: option<any>,
+    globalCurrentTxRequest: any,
+    inErrorHandler: bool,
+    globalIndexedAddressTable: any,
+    unreachableMask: uint,
+    globalChainParams: option<any>,
+    blockhashes: struct {
+        latestBlockNum: uint,
+        oldHashes: [256]bytes32,
     },
+    upgradeInProgress: option<any>,
+    globalAccountStore: any,
+    _jump_table: any,
+}
+
+type GlobalsAfterUpgrade = struct {
+    moduleManager: any,
     globalBlockReceiptData: struct {
         data: any,
         statsThisBlock: any,
@@ -51,25 +71,11 @@ type GlobalsBeforeUpgrade = struct {
         batchNumber: uint,
         numInBatch: uint,
     },
-    moduleManager: any,
-    extraVariableForTesting: uint,
-    _jump_table: any,
-}
-
-type GlobalsAfterUpgrade = struct {
-    globalAccountStore: any,
-    upgradeInProgress: option<any>,
-    blockhashes: struct {
-        latestBlockNum: uint,
-        oldHashes: [256]bytes32,
+    globalInbox: any,
+    globalInputQueue: struct {
+        txQ: any,
+        batchQ: any,
     },
-    globalChainParams: option<any>,
-    unreachableMask: uint,
-    globalIndexedAddressTable: any,
-    inErrorHandler: bool,
-    globalCallStack: option<any>,
-    globalCurrentTxRequest: any,
-    evmOpJumpTable: [47]impure func(),
     gasAccountingInfo: struct {
         txState: option<any>,
         feeConfig: any,
@@ -89,77 +95,63 @@ type GlobalsAfterUpgrade = struct {
         estimateWei: uint,
         fairGasPriceSender: address,
     },
-    globalInbox: any,
-    globalInputQueue: struct {
-        txQ: any,
-        batchQ: any,
+    evmOpJumpTable: [47]impure func(),
+    globalCallStack: option<any>,
+    globalCurrentTxRequest: any,
+    inErrorHandler: bool,
+    globalIndexedAddressTable: any,
+    unreachableMask: uint,
+    globalChainParams: option<any>,
+    blockhashes: struct {
+        latestBlockNum: uint,
+        oldHashes: [256]bytes32,
     },
-    globalBlockReceiptData: struct {
-        data: any,
-        statsThisBlock: any,
-        statsAllTime: any,
-        lastBlockNum: uint,
-        nextSendTime: uint,
-    },
-    logsQueuedForEndOfBlock: any,
-    globalOutbox: struct {
-        batch: any,
-        batchNumber: uint,
-        numInBatch: uint,
-    },
-    moduleManager: any,
+    upgradeInProgress: option<any>,
+    globalAccountStore: any,
     _jump_table: any,
 }
 
 public impure func remapGlobalsForUpgrade(input_globals: GlobalsBeforeUpgrade) -> GlobalsAfterUpgrade {
-    asm(33,) { debugprint };
-    asm(input_globals.globalAccountStore,) { debugprint };
-    asm(input_globals.upgradeInProgress,) { debugprint };
-    asm(input_globals.blockhashes,) { debugprint };
-    asm(input_globals.globalChainParams,) { debugprint };
-    asm(input_globals.unreachableMask,) { debugprint };
-
-    let globalL1GasPriceEstimator = input_globals.globalL1GasPriceEstimator;
-    let globalCallStack = input_globals.globalCallStack;
-    let globalBlockReceiptData = input_globals.globalBlockReceiptData;
     let globalCurrentTxRequest = input_globals.globalCurrentTxRequest;
     let gasAccountingParams = input_globals.gasAccountingParams;
     let globalInputQueue = input_globals.globalInputQueue;
-    let upgradeInProgress = input_globals.upgradeInProgress;
-    let globalIndexedAddressTable = input_globals.globalIndexedAddressTable;
-    let inErrorHandler = input_globals.inErrorHandler;
-    let blockhashes = input_globals.blockhashes;
-    let globalChainParams = input_globals.globalChainParams;
-    let moduleManager = input_globals.moduleManager;
-    let globalInbox = input_globals.globalInbox;
-    let evmOpJumpTable = input_globals.evmOpJumpTable;
-    let gasAccountingInfo = input_globals.gasAccountingInfo;
     let globalOutbox = input_globals.globalOutbox;
-    let logsQueuedForEndOfBlock = input_globals.logsQueuedForEndOfBlock;
-    let unreachableMask = input_globals.unreachableMask;
+    let evmOpJumpTable = input_globals.evmOpJumpTable;
+    let globalInbox = input_globals.globalInbox;
+    let globalIndexedAddressTable = input_globals.globalIndexedAddressTable;
+    let gasAccountingInfo = input_globals.gasAccountingInfo;
     let globalAccountStore = input_globals.globalAccountStore;
+    let logsQueuedForEndOfBlock = input_globals.logsQueuedForEndOfBlock;
+    let upgradeInProgress = input_globals.upgradeInProgress;
+    let globalBlockReceiptData = input_globals.globalBlockReceiptData;
+    let globalChainParams = input_globals.globalChainParams;
+    let inErrorHandler = input_globals.inErrorHandler;
+    let unreachableMask = input_globals.unreachableMask;
+    let blockhashes = input_globals.blockhashes;
+    let globalCallStack = input_globals.globalCallStack;
+    let globalL1GasPriceEstimator = input_globals.globalL1GasPriceEstimator;
+    let moduleManager = input_globals.moduleManager;
     let _jump_table = (asm() GlobalsAfterUpgrade { rget })._jump_table;
     return struct {
-        globalAccountStore: globalAccountStore,
-        upgradeInProgress: upgradeInProgress,
-        blockhashes: blockhashes,
-        globalChainParams: globalChainParams,
-        unreachableMask: unreachableMask,
-        globalIndexedAddressTable: globalIndexedAddressTable,
-        inErrorHandler: inErrorHandler,
-        globalCallStack: globalCallStack,
-        globalCurrentTxRequest: globalCurrentTxRequest,
-        evmOpJumpTable: evmOpJumpTable,
-        gasAccountingInfo: gasAccountingInfo,
-        gasAccountingParams: gasAccountingParams,
-        globalL1GasPriceEstimator: globalL1GasPriceEstimator,
-        globalInbox: globalInbox,
-        globalInputQueue: globalInputQueue,
+        moduleManager: moduleManager,
         globalBlockReceiptData: globalBlockReceiptData,
         logsQueuedForEndOfBlock: logsQueuedForEndOfBlock,
         globalOutbox: globalOutbox,
-        moduleManager: moduleManager,
+        globalInbox: globalInbox,
+        globalInputQueue: globalInputQueue,
+        gasAccountingInfo: gasAccountingInfo,
+        gasAccountingParams: gasAccountingParams,
+        globalL1GasPriceEstimator: globalL1GasPriceEstimator,
+        evmOpJumpTable: evmOpJumpTable,
+        globalCallStack: globalCallStack,
+        globalCurrentTxRequest: globalCurrentTxRequest,
+        inErrorHandler: inErrorHandler,
+        globalIndexedAddressTable: globalIndexedAddressTable,
+        unreachableMask: unreachableMask,
+        globalChainParams: globalChainParams,
+        blockhashes: blockhashes,
+        upgradeInProgress: upgradeInProgress,
+        globalAccountStore: globalAccountStore,
         _jump_table: _jump_table,
     };
 }
-

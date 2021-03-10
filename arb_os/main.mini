@@ -8,6 +8,7 @@ use accounts::accountStore_init;
 use accounts::getGlobalAccountStore;
 use accounts::setGlobalAccountStore;
 use accounts::accountStore_createAccountFromEvmCode;
+use accounts::accountStore_upgradeContractFromEvmCode;
 use blockhash::blockhash_init;
 use chainParameters::chainParams_init;
 use chainParameters::chainParams_haveDoneInit;
@@ -57,21 +58,16 @@ use codeSegment::debugprintUnreachableMask;
 
 
 impure func main(oldGlobals: GlobalsBeforeUpgrade) {
-    asm(1,) { debugprint };
     if (unsafecast<any>(oldGlobals) != ()) {
         // this is an upgrade; we're inheriting the state of a previous ArbOS instance
 
-        asm(2,) { debugprint };
         asm(remapGlobalsForUpgrade(oldGlobals),) { rset };
-        asm(3,) { debugprint };
-        debugprintUnreachableMask();
-        asm(4,) { debugprint };
 
         // now re-do the initializations that set up pointers into the ArbOS code
         errorHandler_init();
         evmOps_init();
         evmCallStack_makeEmpty();   // clear out the old EVM call stack from before the upgrade
-        if (initializePreinstalls() == None<()>) {
+        if (initializePreinstalls(true) == None<()>) {
             panic;   // don't try to run without preinstalls and precompiles
         }
     } else {
@@ -89,7 +85,7 @@ impure func main(oldGlobals: GlobalsBeforeUpgrade) {
         accountStore_init();
         txReceipts_init();
         rollupTracker_init();
-        if (initializePreinstalls() == None<()>) {
+        if (initializePreinstalls(false) == None<()>) {
             panic;   // don't try to run without preinstalls and precompiles
         }
     }
@@ -153,7 +149,7 @@ public impure func mainRunLoop() {
     }
 }
 
-impure func initializePreinstalls() -> option<()> {
+impure func initializePreinstalls(isUpgrade: bool) -> option<()> {
     let acctStore = getGlobalAccountStore();
 
     let code = bytearray_unmarshalBytes(getArbInfoCode())?;
@@ -161,19 +157,30 @@ impure func initializePreinstalls() -> option<()> {
         bytestream_new(code),
         false
     )?;
-    acctStore = accountStore_createAccountFromEvmCode(
-        acctStore,
-        getArbInfoAddress(),
-        code,
-        evmJumpTable,
-        initCodePt,
-        getArbInfoStorage()
-    )?;
+    acctStore = xif (isUpgrade) {
+        accountStore_upgradeContractFromEvmCode(
+            acctStore,
+            getArbInfoAddress(),
+            code,
+            evmJumpTable,
+            initCodePt,
+        )?
+    } else {
+        accountStore_createAccountFromEvmCode(
+            acctStore,
+            getArbInfoAddress(),
+            code,
+            evmJumpTable,
+            initCodePt,
+            getArbInfoStorage()
+        )?
+    };
 
     // set up precompiled contracts
-    acctStore = precompiles_init(acctStore)?;
+    acctStore = precompiles_init(acctStore, isUpgrade)?;
 
     setGlobalAccountStore(acctStore);
+
     return Some(());
 }
 

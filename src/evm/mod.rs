@@ -378,7 +378,7 @@ pub fn evm_test_arbsys_direct(log_to: Option<&Path>, debug: bool) -> Result<(), 
     let arb_bls = ArbBLS::new(&wallet, debug);
 
     let version = arbsys._arbos_version(&mut machine)?;
-    assert_eq!(version, Uint256::zero());
+    assert_eq!(version, Uint256::one());
 
     let tx_count = arbsys.get_transaction_count(&mut machine, my_addr.clone())?;
     assert_eq!(tx_count, Uint256::from_u64(2));
@@ -476,7 +476,7 @@ pub fn _evm_test_arbowner(log_to: Option<&Path>, debug: bool) -> Result<(), etha
     let mcode = vec![0x90u8, 1u8, 0u8, 42u8]; // debugprint(42)
     arbowner._continue_code_upload(&mut machine, mcode)?;
 
-    arbowner._finish_code_upload_as_arbos_upgrade(&mut machine)?;
+    arbowner._finish_code_upload_as_arbos_upgrade(&mut machine);
 
     arbowner._set_seconds_per_send(&mut machine, Uint256::from_u64(10))?;
 
