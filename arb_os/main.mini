@@ -183,4 +183,3 @@ impure func initializePreinstalls(isUpgrade: bool) -> option<()> {
 
     return Some(());
 }
-

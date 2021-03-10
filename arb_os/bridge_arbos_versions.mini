@@ -1,6 +1,5 @@
 
 type GlobalsBeforeUpgrade = struct {
-    extraVariableForTesting: uint,
     moduleManager: any,
     globalBlockReceiptData: struct {
         data: any,
@@ -30,7 +29,6 @@ type GlobalsBeforeUpgrade = struct {
         pricingParams: any,
         gasAllocatedToThisBlock: uint,
     },
-    anotherExtraVarForTesting: uint,
     gasAccountingParams: struct {
         SpeedLimitPerSecond: uint,
         GasPoolMax: uint,
@@ -53,6 +51,7 @@ type GlobalsBeforeUpgrade = struct {
     },
     upgradeInProgress: option<any>,
     globalAccountStore: any,
+    dummyGlobalForUpgradeTest: uint,
     _jump_table: any,
 }
 
@@ -112,25 +111,25 @@ type GlobalsAfterUpgrade = struct {
 }
 
 public impure func remapGlobalsForUpgrade(input_globals: GlobalsBeforeUpgrade) -> GlobalsAfterUpgrade {
-    let globalOutbox = input_globals.globalOutbox;
-    let blockhashes = input_globals.blockhashes;
-    let globalL1GasPriceEstimator = input_globals.globalL1GasPriceEstimator;
-    let globalBlockReceiptData = input_globals.globalBlockReceiptData;
-    let globalAccountStore = input_globals.globalAccountStore;
-    let globalIndexedAddressTable = input_globals.globalIndexedAddressTable;
-    let globalChainParams = input_globals.globalChainParams;
-    let globalInputQueue = input_globals.globalInputQueue;
-    let gasAccountingInfo = input_globals.gasAccountingInfo;
-    let gasAccountingParams = input_globals.gasAccountingParams;
     let unreachableMask = input_globals.unreachableMask;
-    let evmOpJumpTable = input_globals.evmOpJumpTable;
-    let upgradeInProgress = input_globals.upgradeInProgress;
-    let globalCallStack = input_globals.globalCallStack;
+    let globalOutbox = input_globals.globalOutbox;
     let inErrorHandler = input_globals.inErrorHandler;
     let globalCurrentTxRequest = input_globals.globalCurrentTxRequest;
-    let moduleManager = input_globals.moduleManager;
-    let logsQueuedForEndOfBlock = input_globals.logsQueuedForEndOfBlock;
+    let globalL1GasPriceEstimator = input_globals.globalL1GasPriceEstimator;
+    let upgradeInProgress = input_globals.upgradeInProgress;
     let globalInbox = input_globals.globalInbox;
+    let globalChainParams = input_globals.globalChainParams;
+    let blockhashes = input_globals.blockhashes;
+    let globalAccountStore = input_globals.globalAccountStore;
+    let globalCallStack = input_globals.globalCallStack;
+    let globalInputQueue = input_globals.globalInputQueue;
+    let evmOpJumpTable = input_globals.evmOpJumpTable;
+    let gasAccountingParams = input_globals.gasAccountingParams;
+    let globalIndexedAddressTable = input_globals.globalIndexedAddressTable;
+    let logsQueuedForEndOfBlock = input_globals.logsQueuedForEndOfBlock;
+    let moduleManager = input_globals.moduleManager;
+    let gasAccountingInfo = input_globals.gasAccountingInfo;
+    let globalBlockReceiptData = input_globals.globalBlockReceiptData;
     let _jump_table = (asm() GlobalsAfterUpgrade { rget })._jump_table;
     return struct {
         moduleManager: moduleManager,

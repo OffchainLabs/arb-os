@@ -263,7 +263,6 @@ public func accountStore_upgradeContractFromEvmCode(
     ));
 }
 
-
 public func accountStore_createBuiltinContract(
     acctStore: AccountStore,
     addr: address,
