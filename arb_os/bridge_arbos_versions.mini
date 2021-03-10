@@ -1,4 +1,6 @@
 
+// This file is machine-generated. Don't edit it unless you know what you're doing.
+
 type GlobalsBeforeUpgrade = struct {
     moduleManager: any,
     globalBlockReceiptData: struct {
@@ -111,25 +113,25 @@ type GlobalsAfterUpgrade = struct {
 }
 
 public impure func remapGlobalsForUpgrade(input_globals: GlobalsBeforeUpgrade) -> GlobalsAfterUpgrade {
-    let unreachableMask = input_globals.unreachableMask;
-    let globalOutbox = input_globals.globalOutbox;
-    let inErrorHandler = input_globals.inErrorHandler;
-    let globalCurrentTxRequest = input_globals.globalCurrentTxRequest;
-    let globalL1GasPriceEstimator = input_globals.globalL1GasPriceEstimator;
-    let upgradeInProgress = input_globals.upgradeInProgress;
-    let globalInbox = input_globals.globalInbox;
-    let globalChainParams = input_globals.globalChainParams;
-    let blockhashes = input_globals.blockhashes;
-    let globalAccountStore = input_globals.globalAccountStore;
-    let globalCallStack = input_globals.globalCallStack;
-    let globalInputQueue = input_globals.globalInputQueue;
-    let evmOpJumpTable = input_globals.evmOpJumpTable;
     let gasAccountingParams = input_globals.gasAccountingParams;
-    let globalIndexedAddressTable = input_globals.globalIndexedAddressTable;
+    let globalChainParams = input_globals.globalChainParams;
+    let globalCurrentTxRequest = input_globals.globalCurrentTxRequest;
     let logsQueuedForEndOfBlock = input_globals.logsQueuedForEndOfBlock;
-    let moduleManager = input_globals.moduleManager;
-    let gasAccountingInfo = input_globals.gasAccountingInfo;
+    let inErrorHandler = input_globals.inErrorHandler;
+    let globalCallStack = input_globals.globalCallStack;
+    let globalIndexedAddressTable = input_globals.globalIndexedAddressTable;
     let globalBlockReceiptData = input_globals.globalBlockReceiptData;
+    let globalAccountStore = input_globals.globalAccountStore;
+    let gasAccountingInfo = input_globals.gasAccountingInfo;
+    let moduleManager = input_globals.moduleManager;
+    let unreachableMask = input_globals.unreachableMask;
+    let upgradeInProgress = input_globals.upgradeInProgress;
+    let globalInputQueue = input_globals.globalInputQueue;
+    let blockhashes = input_globals.blockhashes;
+    let globalOutbox = input_globals.globalOutbox;
+    let globalInbox = input_globals.globalInbox;
+    let evmOpJumpTable = input_globals.evmOpJumpTable;
+    let globalL1GasPriceEstimator = input_globals.globalL1GasPriceEstimator;
     let _jump_table = (asm() GlobalsAfterUpgrade { rget })._jump_table;
     return struct {
         moduleManager: moduleManager,

@@ -59,6 +59,8 @@ pub(crate) fn gen_upgrade_code(input: GenUpgrade) -> Result<(), GenCodeError> {
             out_file.to_str().unwrap_or("")
         ))
     })?;
+    writeln!(code, "").unwrap();
+    writeln!(code, "// This file is machine-generated. Don't edit it unless you know what you're doing.").unwrap();
     let mut input_fields = get_globals_from_file(&from)?;
     let mut output_fields = get_globals_from_file(&to)?;
     output_fields.push(StructField::new(String::from("_jump_table"), Type::Any));
