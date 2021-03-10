@@ -211,8 +211,8 @@ impl CompiledProgram {
                 relocated_exported_funcs,
                 relocated_imported_funcs,
                 {
-                    let mut new_vec = self.globals.clone();
-                    new_vec.append(&mut globals_offset.clone());
+                    let mut new_vec = globals_offset.clone();
+                    new_vec.append(&mut self.globals.clone());
                     new_vec
                 },
                 source_file_map,
