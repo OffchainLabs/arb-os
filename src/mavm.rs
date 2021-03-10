@@ -680,7 +680,7 @@ impl Value {
     }
 
     pub fn new_buffer(v: Vec<u8>) -> Self {
-        let mx = v.len() as u64;
+        let mx = if v.len() == 0 { 0 } else { v.len() as u64 };
         Value::Buffer(Buffer::leaf(Rc::new(v), mx))
     }
 
