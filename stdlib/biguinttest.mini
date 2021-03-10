@@ -35,7 +35,7 @@ func tests() -> uint {
     }
 
     let i = 0;
-    while(i < 100) {
+    while(i < 20) {
         let (res, ugen) = doTests(gen);
         gen = ugen;
         if (res != 0) {    return 100*i + res;    }
