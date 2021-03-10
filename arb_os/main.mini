@@ -54,8 +54,6 @@ use evmCallStack::evmCallStack_makeEmpty;
 use bridge_arbos_versions::GlobalsBeforeUpgrade;
 use bridge_arbos_versions::remapGlobalsForUpgrade;
 
-use codeSegment::debugprintUnreachableMask;
-
 
 impure func main(oldGlobals: GlobalsBeforeUpgrade) {
     if (unsafecast<any>(oldGlobals) != ()) {

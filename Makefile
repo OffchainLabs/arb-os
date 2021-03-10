@@ -22,7 +22,7 @@ ARBOSCONTRACTS = $(ACBUILDDIR)/ArbAddressTable.sol/ArbAddressTable.json $(ACBUIL
 COMPILEFLAGS = -i
 COMPILEFLAGSNOINLINE =
 
-all: $(TESTFILES) $(TESTCONTRACTS) $(ARBOSCONTRACTS) $(TEMPLATES) $(ARBOS) test
+all: $(TESTFILES) $(TESTCONTRACTS) $(ARBOSCONTRACTS) $(TEMPLATES) $(UPGRADEFILES) upgradebridge test
 arbos: $(ARBOSDIR)/arbos.mexe
 contracts: $(TESTCONTRACTS) $(ARBOSCONTRACTS)
 
@@ -128,7 +128,7 @@ $(ARBOSCONTRACTS): $(ACSRCDIR)
 run:
 	$(CARGORUNRELEASE) run "arb_os/arbos.mexe"
 
-test: $(TEMPLATES) $(ARBOS) $(UPGRADEFILES)
+test:
 	cargo test --release 
 
 evmtest: $(ARBOS)
@@ -151,5 +151,5 @@ benchmark: $(TEMPLATES) $(ARBOS)
 	$(CARGORUNRELEASE) make-benchmarks
 
 clean:
-	rm -f $(BUILTINDIR)/*.mexe $(STDDIR)/*.mexe $(UPGRADETESTDIR)/*.mexe $(ARBOSDIR)/*.mexe minitests/*.mexe $(ARBOSDIR)/contractTemplates.mini
+	rm -f $(BUILTINDIR)/*.mexe $(STDDIR)/*.mexe $(UPGRADETESTDIR)/*.mexe $(ARBOSDIR)/arbos.mexe minitests/*.mexe $(ARBOSDIR)/contractTemplates.mini
 	rm -rf contracts/artifacts contracts/cache

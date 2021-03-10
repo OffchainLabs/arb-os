@@ -103,11 +103,6 @@ func evmInstructionStack_pop(s: EvmInstructionStack) -> option<(EvmInstructionSt
 
 var unreachableMask: uint;
 
-public impure func debugprintUnreachableMask() {
-    asm(737,) { debugprint };
-    asm(unreachableMask,) { debugprint };
-}
-
 impure func parseEvmCodeSegment(bs: ByteStream) -> option<EvmInstructionStack> {
     let stack = evmInstructionStack_new();
     let evmPc = 0;
