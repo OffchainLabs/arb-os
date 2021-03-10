@@ -113,25 +113,25 @@ type GlobalsAfterUpgrade = struct {
 }
 
 public impure func remapGlobalsForUpgrade(input_globals: GlobalsBeforeUpgrade) -> GlobalsAfterUpgrade {
+    let unreachableMask = input_globals.unreachableMask;
     let globalChainParams = input_globals.globalChainParams;
-    let globalInputQueue = input_globals.globalInputQueue;
-    let blockhashes = input_globals.blockhashes;
     let globalCurrentTxRequest = input_globals.globalCurrentTxRequest;
+    let evmOpJumpTable = input_globals.evmOpJumpTable;
+    let globalAccountStore = input_globals.globalAccountStore;
+    let globalOutbox = input_globals.globalOutbox;
+    let gasAccountingParams = input_globals.gasAccountingParams;
+    let globalCallStack = input_globals.globalCallStack;
     let globalBlockReceiptData = input_globals.globalBlockReceiptData;
-    let inErrorHandler = input_globals.inErrorHandler;
-    let moduleManager = input_globals.moduleManager;
-    let globalIndexedAddressTable = input_globals.globalIndexedAddressTable;
+    let blockhashes = input_globals.blockhashes;
     let globalL1GasPriceEstimator = input_globals.globalL1GasPriceEstimator;
     let gasAccountingInfo = input_globals.gasAccountingInfo;
-    let gasAccountingParams = input_globals.gasAccountingParams;
-    let globalAccountStore = input_globals.globalAccountStore;
-    let upgradeInProgress = input_globals.upgradeInProgress;
-    let globalOutbox = input_globals.globalOutbox;
-    let evmOpJumpTable = input_globals.evmOpJumpTable;
-    let globalCallStack = input_globals.globalCallStack;
-    let logsQueuedForEndOfBlock = input_globals.logsQueuedForEndOfBlock;
-    let unreachableMask = input_globals.unreachableMask;
+    let moduleManager = input_globals.moduleManager;
     let globalInbox = input_globals.globalInbox;
+    let globalIndexedAddressTable = input_globals.globalIndexedAddressTable;
+    let upgradeInProgress = input_globals.upgradeInProgress;
+    let logsQueuedForEndOfBlock = input_globals.logsQueuedForEndOfBlock;
+    let globalInputQueue = input_globals.globalInputQueue;
+    let inErrorHandler = input_globals.inErrorHandler;
     let _jump_table = (asm() GlobalsAfterUpgrade { rget })._jump_table;
     return struct {
         moduleManager: moduleManager,

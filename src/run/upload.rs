@@ -2,7 +2,8 @@
  * Copyright 2021, Offchain Labs, Inc. All rights reserved.
  */
 
-use crate::evm::abi::{ArbSys, _ArbOwner};
+use crate::evm::test_contract_path;
+use crate::evm::abi::{AbiForContract, ArbSys, _ArbOwner};
 use crate::link::LinkedProgram;
 use crate::mavm::{AVMOpcode, Instruction};
 use crate::run::{load_from_file, RuntimeEnvironment};
@@ -183,6 +184,14 @@ fn _test_upgrade_arbos_over_itself_impl() -> Result<(), ethabi::Error> {
 
     let wallet = machine.runtime_env.new_wallet();
     let my_addr = Uint256::from_bytes(wallet.address().as_bytes());
+
+    let mut add_contract = AbiForContract::new_from_file(&test_contract_path("Add"))?;
+    if add_contract
+        .deploy(&[], &mut machine, Uint256::zero(), None, false)
+        .is_err()
+    {
+        panic!("failed to deploy Add contract");
+    }
 
     let arbowner = _ArbOwner::_new(&wallet, false);
 
