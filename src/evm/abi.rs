@@ -99,11 +99,9 @@ impl AbiForContract {
         machine: &mut Machine,
         payment: Uint256,
         advance_time: Option<Uint256>,
-        address_for_buddy: Option<Uint256>,
         debug: bool,
     ) -> Result<Uint256, Option<ArbosReceipt>> {
         let initial_logs_len = machine.runtime_env.get_all_receipt_logs().len();
-        let initial_sends_len = machine.runtime_env.get_all_sends().len();
         let augmented_code = if let Some(constructor) = self.contract.constructor() {
             match constructor.encode_input(self.code_bytes.clone(), args) {
                 Ok(aug_code) => aug_code,
@@ -115,31 +113,15 @@ impl AbiForContract {
             self.code_bytes.clone()
         };
 
-        let (request_id, sender_addr) = if let Some(buddy_addr) = address_for_buddy.clone() {
-            (
-                machine.runtime_env.insert_buddy_deploy_message(
-                    buddy_addr.clone(),
-                    Uint256::from_usize(1_000_000_000),
-                    Uint256::zero(),
-                    payment,
-                    &augmented_code,
-                ),
-                buddy_addr,
-            )
-        } else {
-            (
-                machine.runtime_env.insert_tx_message(
-                    Uint256::from_u64(1025),
-                    Uint256::from_usize(1_000_000_000),
-                    Uint256::zero(),
-                    Uint256::zero(),
-                    payment,
-                    &augmented_code,
-                    false,
-                ),
-                Uint256::from_u64(1025),
-            )
-        };
+        let request_id = machine.runtime_env.insert_tx_message(
+            Uint256::from_u64(1025),
+            Uint256::from_usize(1_000_000_000),
+            Uint256::zero(),
+            Uint256::zero(),
+            payment,
+            &augmented_code,
+            false,
+        );
 
         if let Some(delta_blocks) = advance_time {
             machine
@@ -160,24 +142,6 @@ impl AbiForContract {
                 logs.len() - initial_logs_len
             );
             return Err(None);
-        }
-
-        if address_for_buddy.is_some() {
-            let sends = machine.runtime_env.get_all_sends();
-            if sends.len() != initial_sends_len + 1 {
-                println!(
-                    "deploy: expected 1 new send, got {}",
-                    sends.len() - initial_sends_len
-                );
-                return Err(None);
-            }
-            let the_send = &sends[sends.len() - 1];
-            if (&the_send[0..32] != Uint256::from_u64(5).to_bytes_be())
-                || (&the_send[32..64] != sender_addr.to_bytes_be())
-            {
-                println!("deploy: incorrect values in send item");
-                return Err(None);
-            }
         }
 
         let log_item = &logs[logs.len() - 1];

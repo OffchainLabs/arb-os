@@ -1037,6 +1037,7 @@ impl Opcode {
             "pushstatic" => Opcode::AVMOpcode(AVMOpcode::PushStatic),
             "tset" => Opcode::AVMOpcode(AVMOpcode::Tset),
             "tget" => Opcode::AVMOpcode(AVMOpcode::Tget),
+            "tlen" => Opcode::AVMOpcode(AVMOpcode::Tlen),
             "pop" => Opcode::AVMOpcode(AVMOpcode::Pop),
             "stackempty" => Opcode::AVMOpcode(AVMOpcode::StackEmpty),
             "auxpush" => Opcode::AVMOpcode(AVMOpcode::AuxPush),

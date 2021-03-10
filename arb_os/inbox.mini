@@ -437,11 +437,6 @@ public impure func inbox_getNextUnpackedRequest() -> (
                     }
                     // else request was malformatted, ignore it and execute loop again to get another
                 }
-            } elseif (msg.kind == const::L1MessageType_buddyDeploy) {
-                if let Some(txRequest) = translateBuddyDeployTx(msg) {
-                    return (None<IncomingRequest>, Some(txRequest));
-                }
-                // else request was malformatted, ignore it and execute loop again to get another
             } elseif (msg.kind == const::L1MessageType_rollupProtocolEvent) {
                 if (msg.sender == address(0)) {
                     let _ = callPluggable(const::PluggableModuleID_rollupTracker, msg.msgData);
@@ -499,37 +494,6 @@ impure func translateUnsignedTx(request: IncomingRequest) -> option<TxRequestDat
             calldata: calldata,
             nonMutating: (subtype == const::L2MessageType_nonmutatingCall),
             isConstructor: (destAddrAsUint == 0),
-            incomingRequest: request,
-            feeStats: txFeeStats_zero(),
-        }
-    );
-}
-
-func translateBuddyDeployTx(request: IncomingRequest) -> option<TxRequestData> {
-    let inStream = bytestream_new(request.msgData);
-
-    let (us, maxGas) = bytestream_get256(inStream)?;
-    inStream = us;
-
-    let (us, gasPrice) = bytestream_get256(inStream)?;
-    inStream = us;
-
-    let (us, value) = bytestream_get256(inStream)?;
-    inStream = us;
-
-    let calldata = bytestream_getRemainingBytes(inStream);
-
-    return Some(
-        struct {
-            maxGas: maxGas,
-            gasPrice: gasPrice,
-            seqNum: None<uint>,
-            caller: request.sender,
-            calleeAddr: address(0),
-            value: value,
-            calldata: calldata,
-            nonMutating: false,
-            isConstructor: true,
             incomingRequest: request,
             feeStats: txFeeStats_zero(),
         }

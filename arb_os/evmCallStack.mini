@@ -714,32 +714,17 @@ public impure func evmCallStack_returnFromCall(
                         );
 
                         // emit queued sends
-                        sendQueuedMessages(topFrame.sendQueue);
+                        let updatedEvmLogs = sendQueuedMessages(topFrame.sendQueue, topFrame.evmLogs);
 
                         // Emit log item reporting success
                         emitTxReceipt(
                             globalCurrentTxRequest.incomingRequest,
                             const::TxResultCode_success,
                             Some(returnData),
-                            Some(topFrame.evmLogs),
+                            Some(updatedEvmLogs),
                             Some(gasUsage),
                             feeStats,
                         );
-
-                        if (globalCurrentTxRequest.incomingRequest.kind == 5) {
-                            // successfully created a buddy contract -- announce that as a message
-                            outbox_append(
-                                bytearray_setByte(
-                                    bytearray_set256(
-                                        bytearray_set256(bytearray_new(0), 0, const::SendType_buddyContractResult),
-                                        32,
-                                        uint(globalCurrentTxRequest.incomingRequest.sender)
-                                    ),
-                                    64,
-                                    1,
-                                )
-                            );
-                        }
                     } else {
                         // Compilation of resulting code failed; report an error.
                         emitTxReceipt(
@@ -750,23 +735,9 @@ public impure func evmCallStack_returnFromCall(
                             Some(gasUsage),
                             feeStats,
                         );
-                        if (globalCurrentTxRequest.incomingRequest.kind == 5) {
-                            // failed to create a buddy contract -- announce that as a message
-                            outbox_append(
-                                bytearray_setByte(
-                                    bytearray_set256(
-                                        bytearray_set256(bytearray_new(0), 0, const::SendType_buddyContractResult),
-                                        32,
-                                        uint(globalCurrentTxRequest.incomingRequest.sender),
-                                    ),
-                                    64,
-                                    0,
-                                )
-                            );
-                        }
                     }
                 } else {
-                    if (! globalCurrentTxRequest.nonMutating) {
+                    let updatedEvmLogs = xif (! globalCurrentTxRequest.nonMutating) {
                         // It was a successful tx (not a non-mutating call).
                         // We'll commit the results of the tx
 
@@ -787,18 +758,22 @@ public impure func evmCallStack_returnFromCall(
                         }
 
                         // emit queued sends
-                        sendQueuedMessages(topFrame.sendQueue);
+                        let updEvmLogs = sendQueuedMessages(topFrame.sendQueue, topFrame.evmLogs);
 
                         // Save results back to the main globalAccountStore
                         setGlobalAccountStore(acctStore,);
-                    }
+
+                        updEvmLogs
+                    } else {
+                        topFrame.evmLogs
+                    };
 
                     // Emit a log item reporting success
                     emitTxReceipt(
                         globalCurrentTxRequest.incomingRequest,
                         const::TxResultCode_success,
                         Some(returnData),
-                        Some(topFrame.evmLogs),
+                        Some(updatedEvmLogs),
                         Some(gasUsage),
                         feeStats,
                     );
