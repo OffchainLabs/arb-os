@@ -730,3 +730,25 @@ fn small_upgrade() {
         Value::Int(Uint256::from_u64(42))
     );
 }
+
+#[test]
+fn small_upgrade_auto_remap() {
+    use crate::run::upload::CodeUploader;
+
+    let rt_env = RuntimeEnvironment::new(Uint256::from_usize(1111), None);
+    let mut machine = load_from_file(Path::new("upgradetests/upgrade2_old.mexe"), rt_env.clone());
+    let uploader = CodeUploader::_new_from_file(Path::new("upgradetests/upgrade2_new.mexe"));
+    let code_bytes = uploader._to_flat_vec();
+    let msg = Value::new_tuple(vec![
+        Value::Int(Uint256::from_usize(code_bytes.len())),
+        Value::new_buffer(code_bytes),
+    ]);
+    machine.runtime_env.insert_full_inbox_contents(vec![msg]);
+    let _ = run(&mut machine, vec![], false);
+
+    println!("Machine state after: {:?}", machine.state);
+    assert_eq!(
+        *machine.stack_top().unwrap(),
+        Value::Int(Uint256::from_u64(42))
+    );
+}

@@ -1,0 +1,14 @@
+
+use bridge2::InputGlobals;
+
+public func set_newGlobal1(input: InputGlobals) -> option<int> {
+    return input.global2;
+}
+
+public func set_newGlobal2(input: InputGlobals) -> uint {
+    return input.global1;
+}
+
+public func set_newGlobal3(input: InputGlobals) -> (uint, uint) {
+    return (17, 39);
+}

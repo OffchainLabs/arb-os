@@ -95,7 +95,7 @@ $(UPGRADETESTDIR)/upgrade1_new.mexe: $(UPGRADETESTDIR)/upgrade1_new.mini
 $(UPGRADETESTDIR)/upgrade2_old.mexe: $(UPGRADETESTDIR)/upgrade2_old.mini $(STDDIR)/avmcodebuilder.mini
 	$(CARGORUN) compile $(UPGRADETESTDIR)/upgrade2_old.mini -o $(UPGRADETESTDIR)/upgrade2_old.mexe $(COMPILEFLAGS) -t
 
-$(UPGRADETESTDIR)/upgrade2_new.mexe: $(UPGRADETESTDIR)/upgrade2_old.mexe $(UPGRADETESTDIR)/upgrade2_new.mini $(UPGRADETESTDIR)/upgrade2.toml
+$(UPGRADETESTDIR)/upgrade2_new.mexe: $(UPGRADETESTDIR)/upgrade2_old.mexe $(UPGRADETESTDIR)/upgrade2_new.mini $(UPGRADETESTDIR)/impl2.mini $(UPGRADETESTDIR)/upgrade2.toml
 	$(CARGORUN) compile $(UPGRADETESTDIR)/upgrade2_new.mini -o $(UPGRADETESTDIR)/upgrade2_new.mexe $(COMPILEFLAGSNOINLINE)
 	$(CARGORUN) gen-upgrade-code $(UPGRADETESTDIR)/upgrade2_old.mexe $(UPGRADETESTDIR)/upgrade2_new.mexe $(UPGRADETESTDIR)/bridge2.mini impl2 $(UPGRADETESTDIR)/upgrade2.toml
 	$(CARGORUN) compile $(UPGRADETESTDIR)/upgrade2_new.mini -o $(UPGRADETESTDIR)/upgrade2_new.mexe $(COMPILEFLAGSNOINLINE)
