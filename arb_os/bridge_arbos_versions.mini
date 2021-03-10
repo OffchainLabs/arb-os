@@ -112,6 +112,13 @@ type GlobalsAfterUpgrade = struct {
 }
 
 public impure func remapGlobalsForUpgrade(input_globals: GlobalsBeforeUpgrade) -> GlobalsAfterUpgrade {
+    asm(33,) { debugprint };
+    asm(input_globals.globalAccountStore,) { debugprint };
+    asm(input_globals.upgradeInProgress,) { debugprint };
+    asm(input_globals.blockhashes,) { debugprint };
+    asm(input_globals.globalChainParams,) { debugprint };
+    asm(input_globals.unreachableMask,) { debugprint };
+
     let globalL1GasPriceEstimator = input_globals.globalL1GasPriceEstimator;
     let globalCallStack = input_globals.globalCallStack;
     let globalBlockReceiptData = input_globals.globalBlockReceiptData;
