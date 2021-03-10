@@ -150,6 +150,7 @@ pub fn init_constant_table() -> HashMap<String, Uint256> {
         ("L1MessageType_ethDeposit", 0),
         ("L1MessageType_L2", 3),
         ("L1MessageType_chainInit", 4),
+        ("L1MessageType_L2WithPredeposit", 10),
         // type 5 not used -- previously was for buddy contract deploy
         ("L1MessageType_endOfBlock", 6),
         ("L1MessageType_rollupProtocolEvent", 8),

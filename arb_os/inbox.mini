@@ -139,6 +139,21 @@ impure func incomingRequestFromRaw(newMsgRaw: IncomingRequestFromInbox, adminMod
         newMsgRaw = newMsgRaw with { timestamp: globalInbox.timestamp };
     }
 
+    // do the pre-deposit
+    if (newMsgRaw.predeposit > 0) {
+        let globalStore = getGlobalAccountStore();
+        setGlobalAccountStore(
+            accountStore_set(
+                globalStore,
+                newMsgRaw.sender,
+                account_addToEthBalance(
+                    accountStore_get(globalStore, newMsgRaw.sender),
+                    newMsgRaw.predeposit,
+                ),
+            ),
+        );
+    }
+
     return struct {
         kind: newMsgRaw.kind,
         arbBlockNumber:
@@ -273,6 +288,7 @@ type IncomingRequestFromInbox = struct {
     ethBlockNumber: uint,     // block number of the L1 block
     timestamp: uint,          // timestamp of the L1 block
     sender: address,          // address of the sender
+    predeposit: uint,         // amount of funds to pre-deposit
     requestId: uint,
     gasPriceL1: uint,         // L1 gas price paid by this tx
     msgSize: uint,
@@ -426,32 +442,13 @@ impure func translateUnsignedTx(request: IncomingRequest) -> option<TxRequestDat
 
     let gasRefundRecipient = request.sender;
     let callvalueRefundRecipient = request.sender;
-    if ( (subtype == const::L2MessageType_unsignedContractTx) || (subtype == const::L2MessageType_unsignedEOATx) ) {
-        let (us, preDepositAmount) = bytestream_get256(inStream)?;
+
+    if (subtype == const::L2MessageType_unsignedContractTx) {
+        let (us, rawGasRefundRecipient) = bytestream_get256(inStream)?;
+        let (us, rawCallvalueRefundRecipient) = bytestream_get256(us)?;
         inStream = us;
-
-        // add the preDeposit amount to the sender's account
-        if (preDepositAmount > 0) {
-            let globalStore = getGlobalAccountStore();
-            setGlobalAccountStore(
-                accountStore_set(
-                    globalStore,
-                    request.sender,
-                    account_addToEthBalance(
-                        accountStore_get(globalStore, request.sender),
-                        preDepositAmount,
-                    ),
-                ),
-            );
-        }
-
-        if (subtype == const::L2MessageType_unsignedContractTx) {
-            let (us, rawGasRefundRecipient) = bytestream_get256(inStream)?;
-            let (us, rawCallvalueRefundRecipient) = bytestream_get256(us)?;
-            inStream = us;
-            gasRefundRecipient = address(rawGasRefundRecipient);
-            callvalueRefundRecipient = address(rawCallvalueRefundRecipient);
-        }
+        gasRefundRecipient = address(rawGasRefundRecipient);
+        callvalueRefundRecipient = address(rawCallvalueRefundRecipient);
     }
 
     let (us, maxGas) = bytestream_get256(inStream)?;

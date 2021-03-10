@@ -16,15 +16,18 @@ Every Arbitrum chain has a 48-bit chain ID, which is the low-order 48 bits of th
 
 Incoming messages are put into a chain's EthBridge-managed inbox, and received by a chain's instance of ArbOS.
 
-An incoming message is a 6-tuple:
+An incoming message is an 8-tuple:
 
 * message type (uint)
 * L1 block number (uint): L1 block number when this message was inserted into the inbox 
 * L1 timestamp (uint): timestamp of L1 block when this message was inserted into the inbox
 * Sender (address encoded as uint)
+* Pre-deposit amount (uint) [funds deposited into the L2 account of the sender]
 * RequestID: 0 for the first message inserted into the inbox; otherwise 1 + the requestID of the previous message inserted into the inbox
-* Size of type-specific data (uint)
-* Type-specific data: (buffer)
+* L1 gas price
+* 2-tuple of:
+  * Size of type-specific data (uint)
+  * Type-specific data: (buffer)
 
 The L1 block number and/or L1 timestamp fields can be set to zero. Zero values in these fields will be replaced, by ArbOS, with the value of the same field in the previous message. If there was no previous message, ArbOS will leave these values as zero. (Note that the EthBridge will never create messages with zeroed block number or timestamp fields. The treatment of zero block number and timestamp values exists only as a convenience for use in private executions of a chain.)
 
@@ -150,7 +153,6 @@ An L2 message consists of:
 
 **Subtype 0: unsigned tx from user** has subtype-specific data of:
 
-* pre-deposit amount
 * ArbGas limit (uint)
 * ArbGas price bid, in wei (uint)
 * sequence number (uint)
@@ -162,7 +164,6 @@ The pre-deposit amount will be deposited into the sender's L2 account, unconditi
 
 **Subtype 1: tx from contract** has subtype-specific data of:
 
-* pre-deposit amount (uint)
 * gas refund recipient (address encoded as uint; if zero, this will be replaced with the sender's address)
 * callvalue refund recipient (address encoded as uint; if zero, this will be replaced with the sender's address)
 * ArbGas limit (uint)
@@ -191,8 +192,6 @@ When this message reaches the head of the inbox, the following steps occur:
 * L2 message (byte array)
 
 The L2 messages in a batch will be separated, and treated as if each had arrived separately, in the order in which they appear in the batch.
-
-The enclosed L2 message may not have subtype 5 (sequencer batch).  All other subtypes are allowed.
 
 **Subtype 4: signed tx from user** has subtype-specific data that is identical to the standard Ethereum encoded transaction format. The subtype-specific data consists of an RLP-encoded list containing:
 

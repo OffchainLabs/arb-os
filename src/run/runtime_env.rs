@@ -100,6 +100,7 @@ impl RuntimeEnvironment {
         ret.insert_l1_message(
             4,
             chain_address,
+            None,
             &RuntimeEnvironment::get_params_bytes(charging_policy, sequencer_info, owner),
         );
         ret
@@ -150,7 +151,7 @@ impl RuntimeEnvironment {
             .current_timestamp
             .add(&delta_timestamp.unwrap_or(Uint256::from_u64(13).mul(&delta_blocks)));
         if send_heartbeat_message {
-            self.insert_l2_message(Uint256::zero(), &[6u8], false);
+            self.insert_l2_message(Uint256::zero(), None, &[6u8], false);
         }
     }
 
@@ -168,16 +169,19 @@ impl RuntimeEnvironment {
         self.l1_inbox = contents;
     }
 
-    pub fn insert_l1_message(&mut self, msg_type: u8, sender_addr: Uint256, msg: &[u8]) -> Uint256 {
+    pub fn insert_l1_message(&mut self, msg_type: u8, sender_addr: Uint256, predeposit: Option<Uint256>, msg: &[u8]) -> Uint256 {
         let l1_msg = Value::new_tuple(vec![
             Value::Int(Uint256::from_usize(msg_type as usize)),
             Value::Int(self.current_block_num.clone()),
             Value::Int(self.current_timestamp.clone()),
             Value::Int(sender_addr),
+            Value::Int(predeposit.unwrap_or(Uint256::zero())),
             Value::Int(self.next_inbox_seq_num.clone()),
             Value::Int(self.get_gas_price()),
-            Value::Int(Uint256::from_usize(msg.len())),
-            Value::new_buffer(msg.to_vec()),
+            Value::new_tuple(vec![
+                Value::Int(Uint256::from_usize(msg.len())),
+                Value::new_buffer(msg.to_vec()),
+            ]),
         ]);
         let msg_id =
             Uint256::avm_hash2(&Uint256::from_u64(self.chain_id), &self.next_inbox_seq_num);
@@ -213,6 +217,7 @@ impl RuntimeEnvironment {
             self.insert_l1_message(
                 9u8,
                 sender,
+                None,
                 &msg,
             ).to_bytes_be();
         buf.extend(&[0u8; 32]);
@@ -226,12 +231,14 @@ impl RuntimeEnvironment {
     pub fn insert_l2_message(
         &mut self,
         sender_addr: Uint256,
+        predeposit: Option<Uint256>,
         msg: &[u8],
         is_buddy_deploy: bool,
     ) -> Uint256 {
         let default_id = self.insert_l1_message(
             if is_buddy_deploy { 5 } else { 3 },
             sender_addr.clone(),
+            predeposit,
             msg,
         );
         if !is_buddy_deploy && (msg[0] == 0) {
@@ -259,7 +266,6 @@ impl RuntimeEnvironment {
     ) -> Uint256 {
         let mut buf = vec![0u8];
         let seq_num = self.get_and_incr_seq_num(&sender_addr.clone());
-        buf.extend(pre_deposit.unwrap_or(Uint256::zero()).to_bytes_be());
         buf.extend(max_gas.to_bytes_be());
         buf.extend(gas_price_bid.to_bytes_be());
         buf.extend(seq_num.to_bytes_be());
@@ -267,7 +273,7 @@ impl RuntimeEnvironment {
         buf.extend(value.to_bytes_be());
         buf.extend_from_slice(data);
 
-        self.insert_l2_message(sender_addr.clone(), &buf, false)
+        self.insert_l2_message(sender_addr.clone(), pre_deposit, &buf, false)
     }
 
     pub fn _insert_tx_message_from_contract(
@@ -283,7 +289,6 @@ impl RuntimeEnvironment {
         data: &[u8],
     ) -> Uint256 {
         let mut buf = vec![1u8];
-        buf.extend(pre_deposit.unwrap_or(Uint256::zero()).to_bytes_be());
         buf.extend(gas_refund_recipient.unwrap_or(Uint256::zero()).to_bytes_be());
         buf.extend(callvalue_refund_recipient.unwrap_or(Uint256::zero()).to_bytes_be());
         buf.extend(max_gas.to_bytes_be());
@@ -292,7 +297,7 @@ impl RuntimeEnvironment {
         buf.extend(value.to_bytes_be());
         buf.extend_from_slice(data);
 
-        self.insert_l2_message(sender_addr.clone(), &buf, false)
+        self.insert_l2_message(sender_addr.clone(), pre_deposit, &buf, false)
     }
 
     pub fn new_batch(&self) -> Vec<u8> {
@@ -443,7 +448,7 @@ impl RuntimeEnvironment {
             buf.extend(msgs[i].clone());
         }
 
-        self.insert_l2_message(batch_sender.clone(), &buf, false);
+        self.insert_l2_message(batch_sender.clone(), None, &buf, false);
     }
 
     pub fn append_signed_tx_message_to_batch(
@@ -499,7 +504,7 @@ impl RuntimeEnvironment {
     }
 
     pub fn insert_batch_message(&mut self, sender_addr: Uint256, batch: &[u8]) {
-        self.insert_l2_message(sender_addr, batch, false);
+        self.insert_l2_message(sender_addr, None, batch, false);
     }
 
     pub fn _insert_nonmutating_call_message(
@@ -515,7 +520,7 @@ impl RuntimeEnvironment {
         buf.extend(to_addr.to_bytes_be());
         buf.extend_from_slice(data);
 
-        self.insert_l2_message(sender_addr, &buf, false);
+        self.insert_l2_message(sender_addr, None, &buf, false);
     }
 
     pub fn insert_eth_deposit_message(
@@ -527,7 +532,7 @@ impl RuntimeEnvironment {
         let mut buf = payee.to_bytes_be();
         buf.extend(amount.to_bytes_be());
 
-        self.insert_l1_message(0, sender_addr, &buf);
+        self.insert_l1_message(0, sender_addr, None, &buf);
     }
 
     pub fn get_and_incr_seq_num(&mut self, addr: &Uint256) -> Uint256 {

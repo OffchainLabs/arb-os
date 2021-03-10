@@ -344,7 +344,7 @@ impl AbiForContract {
             );
         machine
             .runtime_env
-            .insert_l2_message(sender_addr, &tx_contents, false);
+            .insert_l2_message(sender_addr, None, &tx_contents, false);
 
         let num_logs_before = machine.runtime_env.get_all_receipt_logs().len();
         let num_sends_before = machine.runtime_env.get_all_sends().len();
