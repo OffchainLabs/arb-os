@@ -61,9 +61,6 @@ use std::keccak::keccak256;
 use decompression::decompressAndVerifyEcdsaSignedTx;
 use decompression::decompressAndVerifyBLSSignedTxBatch;
 
-use signedTx::hashUnsignedL2messageInfo;
-use signedTx::translateSignedTx;
-
 
 type Inbox = struct {
     queue: IncomingRequestQueue,  // Queue of requests that haven't yet been retrieved from the inbox
@@ -392,12 +389,6 @@ public impure func inbox_getNextUnpackedRequest() -> (
                 let firstByte = bytearray_getByte(msg.msgData, 0);
                 if (firstByte == const::L2MessageType_heartbeat) {
                     // it's a heartbeat message, don't do anything
-                } elseif (firstByte == const::L2MessageType_signedTx) {
-                    // it's a signed tx; verify sig and then process request or discard
-                    if let Some(txRequest) = translateSignedTx(msg) {
-                        return (None<IncomingRequest>, Some(txRequest));
-                    }
-                    // else signature was invalid, ignore msg and execute loop again to get another
                 } elseif (firstByte == const::L2MessageType_signedCompressedTx) {
                     // it's a single message with compressed headers
                     if let Some(txRequest) = decompressAndVerifyEcdsaSignedTx(msg.msgData, msg) {

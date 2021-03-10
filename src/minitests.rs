@@ -444,10 +444,13 @@ fn test_ripemd160_precompile() {
     crate::evm::_evm_eval_ripemd160(None, false);
 }
 
+/*  Disabled this test because the format it uses is no longer supported. Aggregator testing
+    will still exercise this functionality.
 #[test]
 fn test_non_eip155_signed_tx() {
     crate::evm::evm_deploy_using_non_eip159_signature(None, false).unwrap();
 }
+*/
 
 #[test]
 fn test_direct_deploy_and_call_add() {

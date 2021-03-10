@@ -309,58 +309,6 @@ pub fn _evm_tx_with_deposit(
     Ok(true)
 }
 
-#[cfg(test)]
-pub fn evm_deploy_using_non_eip159_signature(
-    log_to: Option<&Path>,
-    debug: bool,
-) -> Result<bool, ethabi::Error> {
-    let rt_env = RuntimeEnvironment::new(Uint256::from_usize(1111), None);
-    let mut machine = load_from_file(Path::new("arb_os/arbos.mexe"), rt_env);
-    machine.start_at_zero();
-
-    let num_wei = 21700000000140000u64;
-
-    let my_addr = Uint256::from_usize(1025);
-    machine.runtime_env.insert_eth_deposit_message(
-        my_addr.clone(),
-        Uint256::from_string_hex("9c5a87452d4FAC0cbd53BDCA580b20A45526B3AB").unwrap(),
-        Uint256::from_u64(num_wei),
-    );
-    let _gas_used = if debug {
-        machine.debug(None)
-    } else {
-        machine.run(None)
-    }; // handle this eth deposit message
-
-    // submit a "universal deployer" tx referenced by Discord user Agust1211
-    //     see https://gist.github.com/Agusx1211/de05dabf918d448d315aa018e2572031
-    machine.runtime_env.insert_l2_message(
-        my_addr,
-        None,
-        &hex::decode("04f9010880852416b84e01830222e08080b8b66080604052348015600f57600080fd5b50609980601d6000396000f3fe60a06020601f369081018290049091028201604052608081815260009260609284918190838280828437600092018290525084519495509392505060208401905034f5604080516001600160a01b0383168152905191935081900360200190a0505000fea26469706673582212205a310755225e3c740b2f013fb6343f4c205e7141fcdf15947f5f0e0e818727fb64736f6c634300060a00331ca01820182018201820182018201820182018201820182018201820182018201820a01820182018201820182018201820182018201820182018201820182018201820").expect("Hex decoding failed"),
-        false,
-    );
-    let _gas_used = if debug {
-        machine.debug(None)
-    } else {
-        machine.run(None)
-    }; // handle this deploy message
-
-    let logs = machine.runtime_env.get_all_receipt_logs();
-    assert_eq!(logs.len(), 1);
-    assert!(logs[0].succeeded());
-
-    if let Some(path) = log_to {
-        machine
-            .runtime_env
-            .recorder
-            .to_file(path, machine.get_total_gas_usage().to_u64().unwrap())
-            .unwrap();
-    }
-
-    Ok(true)
-}
-
 pub fn evm_test_arbsys_direct(log_to: Option<&Path>, debug: bool) -> Result<(), ethabi::Error> {
     let rt_env = RuntimeEnvironment::new(Uint256::from_usize(1111), None);
     let mut machine = load_from_file(Path::new("arb_os/arbos.mexe"), rt_env);
@@ -1100,7 +1048,6 @@ pub fn evm_xcontract_call_using_batch(
     let mut batch = machine.runtime_env.new_batch();
     let tx_id_1 = pc_contract.add_function_call_to_batch(
         &mut batch,
-        my_addr.clone(),
         "deposit",
         &[],
         &mut machine,
@@ -1109,7 +1056,6 @@ pub fn evm_xcontract_call_using_batch(
     )?;
     let tx_id_2 = pc_contract.add_function_call_to_batch(
         &mut batch,
-        my_addr.clone(),
         "transferFib",
         vec![
             ethabi::Token::Address(ethereum_types::H160::from_slice(
@@ -1237,7 +1183,6 @@ pub fn _evm_xcontract_call_using_sequencer_batch(
     let mut batch = machine.runtime_env._new_sequencer_batch(None);
     let tx_id_1 = pc_contract.add_function_call_to_batch(
         &mut batch,
-        my_addr.clone(),
         "deposit",
         &[],
         &mut machine,
@@ -1246,7 +1191,6 @@ pub fn _evm_xcontract_call_using_sequencer_batch(
     )?;
     let tx_id_2 = pc_contract.add_function_call_to_batch(
         &mut batch,
-        my_addr.clone(),
         "transferFib",
         vec![
             ethabi::Token::Address(ethereum_types::H160::from_slice(
@@ -1370,7 +1314,6 @@ pub fn _evm_xcontract_call_sequencer_slow_path(
     let mut batch = machine.runtime_env.new_batch();
     let tx_id_1 = pc_contract.add_function_call_to_batch(
         &mut batch,
-        my_addr.clone(),
         "deposit",
         &[],
         &mut machine,
@@ -1379,7 +1322,6 @@ pub fn _evm_xcontract_call_sequencer_slow_path(
     )?;
     let tx_id_2 = pc_contract.add_function_call_to_batch(
         &mut batch,
-        my_addr.clone(),
         "transferFib",
         vec![
             ethabi::Token::Address(ethereum_types::H160::from_slice(
@@ -1632,7 +1574,6 @@ pub fn _evm_xcontract_call_sequencer_reordering(
 
     let tx_id_1 = pc_contract.add_function_call_to_batch(
         &mut seq_batch,
-        my_addr.clone(),
         "deposit",
         &[],
         &mut machine,
@@ -1641,7 +1582,6 @@ pub fn _evm_xcontract_call_sequencer_reordering(
     )?;
     let tx_id_2 = pc_contract.add_function_call_to_batch(
         &mut slow_batch,
-        my_addr.clone(),
         "transferFib",
         vec![
             ethabi::Token::Address(ethereum_types::H160::from_slice(
@@ -1907,10 +1847,11 @@ pub fn _evm_test_payment_in_constructor(log_to: Option<&Path>, debug: bool) {
     }; // make sure the machine notices that time advanced
 
     let last_send = machine.runtime_env._get_last_send().unwrap();
-    let mut expected_bytes = my_addr.to_bytes_be();
-    expected_bytes.extend(Uint256::from_usize(5000).to_bytes_be());
-    assert_eq!(last_send[0], 0u8);
-    assert_eq!(&last_send[1..], expected_bytes);
+    assert_eq!(last_send[0], 3u8);
+    assert_eq!(last_send[1..33], contract.address.to_bytes_be());
+    assert_eq!(last_send[33..65], Uint256::from_u64(1025).to_bytes_be());
+    assert_eq!(last_send[161..193], Uint256::from_u64(5000).to_bytes_be());
+    assert_eq!(last_send.len(), 193);
 
     if let Some(path) = log_to {
         let _ = machine
@@ -2009,10 +1950,11 @@ pub fn evm_test_arbsys(log_to: Option<&Path>, debug: bool) {
     }; // make sure the machine notices that time advanced
 
     let last_send = machine.runtime_env._get_last_send().unwrap();
-    let mut expected_bytes = my_addr.to_bytes_be();
-    expected_bytes.extend(Uint256::from_usize(5000).to_bytes_be());
-    assert_eq!(last_send[0], 0u8);
-    assert_eq!(&last_send[1..], expected_bytes);
+    assert_eq!(last_send[0], 3u8);
+    assert_eq!(last_send[1..33], contract.address.to_bytes_be());
+    assert_eq!(last_send[33..65], my_addr.to_bytes_be());
+    assert_eq!(last_send[161..193], Uint256::from_u64(5000).to_bytes_be());
+    assert_eq!(last_send.len(), 193);
 
     if let Some(path) = log_to {
         let _ = machine
