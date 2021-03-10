@@ -52,6 +52,8 @@ use arbsys::arbsys_txcall;
 use inbox::IncomingRequest;
 
 
+var extraVariableForTesting: uint;
+
 impure func main(oldGlobals: any) {
     asm(1,) { debugprint };
     if (oldGlobals != ()) {

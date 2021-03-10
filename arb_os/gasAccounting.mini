@@ -79,6 +79,8 @@ type GasPrices = struct {    // all prices in this struct are denominated in wei
     perArbGasTotal: uint,       // perArbGasBase + perArbGasCongestion
 }
 
+var anotherExtraVarForTesting: uint;
+
 type CongestionState = struct {
     gasPool: int,         // amount of gas available for use (note: signed value; if negative, we have overused gas)
     lastArbBlockNumSeen: uint,
