@@ -191,7 +191,6 @@ pub fn init_constant_table() -> HashMap<String, Uint256> {
         ("LogType_send", 2),
         ("LogType_sendMerkleTree", 3),
         // outgoing message types
-        ("SendType_withdrawETH", 0),
         ("SendType_sendTxToL1", 3),
         // type 5 not used -- was previously buddy contract result
         // AVM send types

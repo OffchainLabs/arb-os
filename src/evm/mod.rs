@@ -1749,10 +1749,11 @@ pub fn _evm_test_payment_in_constructor(log_to: Option<&Path>, debug: bool) {
     }; // make sure the machine notices that time advanced
 
     let last_send = machine.runtime_env._get_last_send().unwrap();
-    let mut expected_bytes = my_addr.to_bytes_be();
-    expected_bytes.extend(Uint256::from_usize(5000).to_bytes_be());
-    assert_eq!(last_send[0], 0u8);
-    assert_eq!(&last_send[1..], expected_bytes);
+    assert_eq!(last_send[0], 3u8);
+    assert_eq!(last_send[1..33], contract.address.to_bytes_be());
+    assert_eq!(last_send[33..65], Uint256::from_u64(1025).to_bytes_be());
+    assert_eq!(last_send[161..193], Uint256::from_u64(5000).to_bytes_be());
+    assert_eq!(last_send.len(), 193);
 
     if let Some(path) = log_to {
         let _ = machine
@@ -1851,10 +1852,11 @@ pub fn evm_test_arbsys(log_to: Option<&Path>, debug: bool) {
     }; // make sure the machine notices that time advanced
 
     let last_send = machine.runtime_env._get_last_send().unwrap();
-    let mut expected_bytes = my_addr.to_bytes_be();
-    expected_bytes.extend(Uint256::from_usize(5000).to_bytes_be());
-    assert_eq!(last_send[0], 0u8);
-    assert_eq!(&last_send[1..], expected_bytes);
+    assert_eq!(last_send[0], 3u8);
+    assert_eq!(last_send[1..33], contract.address.to_bytes_be());
+    assert_eq!(last_send[33..65], my_addr.to_bytes_be());
+    assert_eq!(last_send[161..193], Uint256::from_u64(5000).to_bytes_be());
+    assert_eq!(last_send.len(), 193);
 
     if let Some(path) = log_to {
         let _ = machine
