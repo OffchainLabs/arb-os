@@ -157,8 +157,7 @@ pub fn init_constant_table() -> HashMap<String, Uint256> {
         ("L2MessageType_unsignedContractTx", 1),
         ("L2MessageType_nonmutatingCall", 2),
         ("L2MessageType_batch", 3),
-        ("L2MessageType_signedTx", 4),
-        ("L2MessageType_sequencerBatch", 5),
+        // types 4 and 5 no longer used
         ("L2MessageType_heartbeat", 6),
         ("L2MessageType_signedCompressedTx", 7),
         ("L2MessageType_blsBatch", 8),
