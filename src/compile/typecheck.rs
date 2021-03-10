@@ -207,35 +207,44 @@ fn inline(
             {
                 let found_func = state.0.iter().find(|func| func.name == id);
                 if let Some(func) = found_func {
-                    let mut code: Vec<_> = vec![TypeCheckedStatement {
-                        kind: TypeCheckedStatementKind::Let(
-                            TypeCheckedMatchPattern::new_tuple(
-                                func.args
-                                    .iter()
-                                    .map(|arg| {
-                                        TypeCheckedMatchPattern::new_simple(arg.name, arg.tipe.clone())
-                                    })
-                                    .collect(),
-                                Type::Tuple(func.args.iter().map(|arg| arg.tipe.clone()).collect()),
-                            ),
-                            TypeCheckedExpr {
-                                kind: TypeCheckedExprKind::Tuple(
-                                    args.iter()
-                                        .cloned()
-                                        .map(|mut expr| {
-                                            expr.recursive_apply(strip_returns, &(), &mut ());
-                                            expr
+                    let mut code: Vec<_> = if func.args.len() == 0 {
+                        vec![]
+                    } else {
+                        vec![TypeCheckedStatement {
+                            kind: TypeCheckedStatementKind::Let(
+                                TypeCheckedMatchPattern::new_tuple(
+                                    func.args
+                                        .iter()
+                                        .map(|arg| {
+                                            TypeCheckedMatchPattern::new_simple(
+                                                arg.name,
+                                                arg.tipe.clone(),
+                                            )
                                         })
                                         .collect(),
                                     Type::Tuple(
                                         func.args.iter().map(|arg| arg.tipe.clone()).collect(),
                                     ),
                                 ),
-                                debug_info: DebugInfo::default(),
-                            },
-                        ),
-                        debug_info: DebugInfo::default(),
-                    }];
+                                TypeCheckedExpr {
+                                    kind: TypeCheckedExprKind::Tuple(
+                                        args.iter()
+                                            .cloned()
+                                            .map(|mut expr| {
+                                                expr.recursive_apply(strip_returns, &(), &mut ());
+                                                expr
+                                            })
+                                            .collect(),
+                                        Type::Tuple(
+                                            func.args.iter().map(|arg| arg.tipe.clone()).collect(),
+                                        ),
+                                    ),
+                                    debug_info: DebugInfo::default(),
+                                },
+                            ),
+                            debug_info: DebugInfo::default(),
+                        }]
+                    };
                     code.append(&mut func.code.clone());
                     let last = code.pop();
                     let block_exp = match last {
