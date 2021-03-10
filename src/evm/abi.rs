@@ -1345,7 +1345,7 @@ impl<'a> _ArbOwner<'a> {
     pub fn _finish_code_upload_as_arbos_upgrade(
         &self,
         machine: &mut Machine,
-    ) {
+    ) -> Result<(), ethabi::Error> {
         let _res = self.contract_abi.call_function(
             self.my_address.clone(),
             "finishCodeUploadAsArbosUpgrade",
@@ -1353,9 +1353,8 @@ impl<'a> _ArbOwner<'a> {
             machine,
             Uint256::zero(),
             self.debug,
-        );
-
-        // ignore errors because the upgrade could cause ArbOS to emit weird stuff
+        )?;
+        Ok(())
     }
 
     pub fn _finish_code_upload_as_pluggable(
