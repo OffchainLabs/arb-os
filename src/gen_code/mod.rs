@@ -99,12 +99,14 @@ pub(crate) fn gen_upgrade_code(input: GenUpgrade) -> Result<(), GenCodeError> {
         type_decl_string(&"GlobalsBeforeUpgrade".to_string(), &input_struct)
     )
     .map_err(|_| GenCodeError::new("Failed to write to output file".to_string()))?;
+    writeln!(code, "").unwrap();
     writeln!(
         code,
         "{}",
         type_decl_string(&"GlobalsAfterUpgrade".to_string(), &output_struct)
     )
     .map_err(|_| GenCodeError::new("Failed to write to output file".to_string()))?;
+    writeln!(code, "").unwrap();
     writeln!(
         code,
         "public {}func remapGlobalsForUpgrade(input_globals: GlobalsBeforeUpgrade) -> GlobalsAfterUpgrade {{",

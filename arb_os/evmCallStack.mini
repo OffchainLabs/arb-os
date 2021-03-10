@@ -141,6 +141,10 @@ public impure func evmCallStack_init() {
     globalCallStack = None<EvmCallFrame>;
 }
 
+public impure func evmCallStack_makeEmpty() {
+    globalCallStack = None<EvmCallFrame>;
+}
+
 public impure func evmCallStack_addStorageCharge(units: uint) {
     if let Some(topFrame) = globalCallStack {
         globalCallStack = Some(

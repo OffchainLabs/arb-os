@@ -314,6 +314,10 @@ impl Type {
     }
 
     pub fn display(&self) -> String {
+        self.display_indented(0)
+    }
+
+    fn display_indented(&self, indent_level: usize) -> String {
         match self {
             Type::Void => "void".to_string(),
             Type::Uint => "uint".to_string(),
@@ -326,18 +330,24 @@ impl Type {
                 let mut out = "(".to_string();
                 for s in subtypes {
                     //This should be improved by removing the final trailing comma.
-                    out.push_str(&(s.display() + ", "));
+                    out.push_str(&(s.display_indented(indent_level) + ", "));
                 }
                 out.push(')');
                 out
             }
-            Type::Array(t) => format!("[]{}", t.display()),
-            Type::FixedArray(t, size) => format!("[{}]{}", size, t.display()),
+            Type::Array(t) => format!("[]{}", t.display_indented(indent_level)),
+            Type::FixedArray(t, size) => format!("[{}]{}", size, t.display_indented(indent_level)),
             Type::Struct(fields) => {
                 let mut out = "struct {\n".to_string();
+                for _ in 0..indent_level {
+                    out.push_str("    ");
+                }
                 for field in fields {
                     //This should indent further when dealing with sub-structs
-                    out.push_str(&format!("    {}: {},\n", field.name, field.tipe.display()));
+                    out.push_str(&format!("    {}: {},\n", field.name, field.tipe.display_indented(indent_level+1)));
+                    for _ in 0..indent_level {
+                        out.push_str("    ");
+                    }
                 }
                 out.push('}');
                 out
@@ -357,21 +367,21 @@ impl Type {
                 }
                 out.push_str("func(");
                 for arg in args {
-                    out.push_str(&(arg.display() + ", "));
+                    out.push_str(&(arg.display_indented(indent_level) + ", "));
                 }
                 out.push(')');
                 if **ret != Type::Void {
                     out.push_str(" -> ");
-                    out.push_str(&ret.display());
+                    out.push_str(&ret.display_indented(indent_level));
                 }
                 out
             }
             Type::Map(key, val) => {
-                format!("map<{},{}>", key.display(), val.display())
+                format!("map<{},{}>", key.display_indented(indent_level), val.display_indented(indent_level))
             }
             Type::Any => "any".to_string(),
             Type::Every => "every".to_string(),
-            Type::Option(t) => format!("option<{}>", t.display()),
+            Type::Option(t) => format!("option<{}>", t.display_indented(indent_level)),
         }
     }
 }

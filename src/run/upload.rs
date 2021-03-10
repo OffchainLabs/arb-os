@@ -178,7 +178,7 @@ fn _test_upgrade_arbos_over_itself() {
 
 fn _test_upgrade_arbos_over_itself_impl() -> Result<(), ethabi::Error> {
     let rt_env = RuntimeEnvironment::new(Uint256::from_usize(1111), None);
-    let mut machine = load_from_file(Path::new("arb_os/arbos.mexe"), rt_env);
+    let mut machine = load_from_file(Path::new("arb_os/arbos_before.mexe"), rt_env);
     machine.start_at_zero();
 
     let wallet = machine.runtime_env.new_wallet();
@@ -189,22 +189,26 @@ fn _test_upgrade_arbos_over_itself_impl() -> Result<(), ethabi::Error> {
     arbowner._give_ownership(&mut machine, my_addr, Some(Uint256::zero()))?;
 
     let uploader = CodeUploader::_new_from_file(Path::new("arb_os/arbos.mexe"));
-
     arbowner._start_code_upload(&mut machine)?;
 
+    println!("loading upgrade");
     let mut accum = vec![];
     for buf in uploader.instructions {
         accum.extend(buf);
         if (accum.len() > 3000) {
+            println!(".");
             arbowner._continue_code_upload(&mut machine, accum)?;
             accum = vec![];
         }
     }
     if (accum.len() > 0) {
+        println!(".");
         arbowner._continue_code_upload(&mut machine, accum)?;
     }
 
+    println!("Finishing upgrade");
     arbowner._finish_code_upload_as_arbos_upgrade(&mut machine)?;
+    println!("Upgraded");
 
     let wallet2 = machine.runtime_env.new_wallet();
     let arbsys = ArbSys::new(&wallet2, false);
