@@ -881,6 +881,9 @@ pub fn _test_retryable(log_to: Option<&Path>, debug: bool) -> Result<(), ethabi:
     println!("reprice time {}, timestamp {}", reprice_time, machine.runtime_env.current_timestamp);
     assert!(reprice_time > machine.runtime_env.current_timestamp);
 
+    let lifetime = arb_replayable._get_lifetime(&mut machine)?;
+    machine.runtime_env._advance_time(Uint256::from_u64(20), Some(lifetime.clone()), true);
+
     let keepalive_ret = arb_replayable._keepalive(&mut machine, txid.clone(), keepalive_price)?;
 
     let new_timeout = arb_replayable._get_timeout(&mut machine, txid.clone())?;

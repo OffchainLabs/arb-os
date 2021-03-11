@@ -63,7 +63,6 @@ type RetryableTx = struct {
     callvalue: uint,
     beneficiary: address,
     calldata: ByteArray,
-    expiryTime: uint,
     l1Message: IncomingRequest,
 }
 
@@ -73,20 +72,18 @@ type RetryQueueItem = struct {
 }
 
 // RetryBuffer holds retryable transactions.
-// byTxId holds all active RetryableTx's, indexed by their txId
-// fifo holds RetryQueueItems, which direct us to check for expiration of a particular item at a particular time.
-// Every time an RetryableTx's lifetime is renewed, a fresh fifo item is created,
-//          with checkTime equal to the RetryableTx's new expiry time.
 type RetryBuffer = struct {
-    byTxId: map<uint, RetryableTx>,
-    fifo: Queue,     // not in strict expirationTime order, but this doesn't affect correctness
-    txLifetimeSeconds: uint
+    newMap: map<uint, RetryableTx>,
+    oldMap: map<uint, RetryableTx>,
+    nextTrimTime: uint,
+    txLifetimeSeconds: uint,
 }
 
 public func retryBuffer_new() -> RetryBuffer {
     return struct {
-        byTxId: newmap<uint, RetryableTx>,
-        fifo: queue_new(),
+        newMap: newmap<uint, RetryableTx>,
+        oldMap: newmap<uint, RetryableTx>,
+        nextTrimTime: 0,    // we'll trim the first time this is used, but that's harmless
         txLifetimeSeconds: const::RetryBuffer_DefaultLifetimeSeconds,
     };
 }
@@ -95,52 +92,35 @@ public func retryBuffer_getLifetime(rbuf: RetryBuffer) -> uint {
     return rbuf.txLifetimeSeconds;
 }
 
-// We trim the buffer when it's modified. This removes aged-out items from the buffer.
-// trimTwo will trim up to two entries, and trimOne will trim zero or one entries.
-// These are called by every externally-callable mutating function in this file, except init.
-// We also trim two items whenever we create or update a new item.
-public impure func retryBuffer_trimTwo(rbuf: RetryBuffer) -> RetryBuffer {
-    // remove up to 2 aged-out items from the retryBuffer
-    return xif let Some(rb) = retryBuffer_trimOne(rbuf) {
-        xif let Some(rb2) = retryBuffer_trimOne(rb) {
-            rb2
+impure func retryBuffer_trimIfNeeded(rbuf: RetryBuffer) -> RetryBuffer {
+    let currentTimestamp = inbox_currentTimestamp();
+    return xif (currentTimestamp >= rbuf.nextTrimTime) {
+        rbuf = rbuf with {
+            newMap: newmap<uint, RetryableTx>
+        } with {
+            oldMap: rbuf.newMap
+        } with {
+            nextTrimTime: rbuf.nextTrimTime + rbuf.txLifetimeSeconds
+        };
+        xif (currentTimestamp >= rbuf.nextTrimTime) {
+            rbuf with {
+                oldMap: newmap<uint, RetryableTx>
+            } with {
+                nextTrimTime: currentTimestamp + rbuf.txLifetimeSeconds
+            }
         } else {
-            rb
+            rbuf
         }
     } else {
         rbuf
     };
 }
 
-impure func retryBuffer_trimOne(rbuf: RetryBuffer) -> option<RetryBuffer> {  // returns true iff a tx was trimmed
-    return xif let Some(res) = queue_get(rbuf.fifo) {
-        let (uq, rawQitem) = res;
-        let qitem = unsafecast<RetryQueueItem>(rawQitem);
-        let currentTimestamp = inbox_currentTimestamp();
-        xif (qitem.checkTime < currentTimestamp) {
-            xif let Some(rtx) = rbuf.byTxId[qitem.txId] {
-                if (rtx.expiryTime < currentTimestamp) {
-                    rbuf = retryBuffer_delete(rbuf, qitem.txId, true)?;
-                }
-                Some(rbuf with {  fifo: uq })
-            } else {
-                None<RetryBuffer>
-            }
-        } else {
-             None<RetryBuffer>
-        }
-    } else {
-        None<RetryBuffer>
-    };
-}
-
 public impure func retryBuffer_insert(rbuf: RetryBuffer, rtx: RetryableTx) -> RetryBuffer {
-    rbuf = retryBuffer_trimTwo(rbuf);
+    rbuf = retryBuffer_trimIfNeeded(rbuf);
     let txId = rtx.txId;
     return rbuf with {
-        byTxId: rbuf.byTxId with { [txId] = rtx }
-    } with {
-        fifo: queue_put(rbuf.fifo, struct { txId: txId, checkTime: rtx.expiryTime })
+        newMap: rbuf.newMap with { [txId] = rtx }
     };
 }
 
@@ -161,7 +141,6 @@ impure func retryBuffer_insertNew(
         callvalue: callvalue,
         beneficiary: beneficiary,
         calldata: calldata,
-        expiryTime: inbox_currentTimestamp() + rbuf.txLifetimeSeconds,
         l1Message: l1Message with { requestId: uint(hash(bytes32(l1Message.requestId), bytes32(0))) },
     };
 
@@ -169,12 +148,18 @@ impure func retryBuffer_insertNew(
 }
 
 public func retryBuffer_get(rbuf: RetryBuffer, txId: uint) -> option<RetryableTx> {
-    return rbuf.byTxId[txId];
+    return xif let Some(rtx) = rbuf.newMap[txId] {
+        Some(rtx)
+    } else {
+        rbuf.oldMap[txId]
+    };
 }
 
 public func retryBuffer_getTxTimeout(rbuf: RetryBuffer, txId: uint) -> uint {
-    return xif let Some(rtx) = retryBuffer_get(rbuf, txId) {
-        rtx.expiryTime
+    return xif (rbuf.newMap[txId] != None<RetryableTx>) {
+        rbuf.nextTrimTime + rbuf.txLifetimeSeconds
+    } elseif (rbuf.oldMap[txId] != None<RetryableTx>) {
+        rbuf.nextTrimTime
     } else {
         0
     };
@@ -194,16 +179,13 @@ public impure func retryBuffer_getTxKeepalivePrice(rbuf: RetryBuffer, txId: uint
 }
 
 public impure func retryBuffer_keepalive(rbuf: RetryBuffer, txId: uint) -> option<(RetryBuffer, uint)> {
-    rbuf = retryBuffer_trimTwo(rbuf);
-    let rtx = retryBuffer_get(rbuf, txId)?;
-    let newExpiryTime = rtx.expiryTime + rbuf.txLifetimeSeconds;
-    return xif (newExpiryTime > inbox_currentTimestamp() + 2 * rbuf.txLifetimeSeconds) {
+    rbuf = retryBuffer_trimIfNeeded(rbuf);
+    return xif let Some(_) = rbuf.newMap[txId] {
         None<(RetryBuffer, uint)>
     } else {
-        Some((
-            retryBuffer_insert(rbuf, rtx with { expiryTime: newExpiryTime }),
-            newExpiryTime,
-        ))
+        let rtx = retryBuffer_get(rbuf, txId)?;
+        rbuf = retryBuffer_insert(rbuf, rtx);
+        Some((rbuf, retryBuffer_getTxTimeout(rbuf, txId)))
     };
 }
 
@@ -213,12 +195,14 @@ public impure func retryBuffer_delete(rbuf: RetryBuffer, txId: uint, withRefund:
     return xif let Some(rtx) = retryBuffer_get(rbuf, txId) {
         // delete the tx
         rbuf = rbuf with {
-            byTxId: unsafecast<map<uint, RetryableTx>>(
-                builtin_kvsDelete(unsafecast<Kvs>(rbuf.byTxId), txId)
+            newMap: unsafecast<map<uint, RetryableTx>>(
+                builtin_kvsDelete(unsafecast<Kvs>(rbuf.newMap), txId)
+            )
+        } with {
+            oldMap: unsafecast<map<uint, RetryableTx>>(
+                builtin_kvsDelete(unsafecast<Kvs>(rbuf.oldMap), txId)
             )
         };
-        // tx might still be in retryBuffer.fifo, but that isn't a problem because it's not gettable
-        //         and attempts to delete it again will be no-ops
 
         if (withRefund) {
             // credit the callvalue back to the beneficiary
@@ -342,7 +326,7 @@ public impure func processRetryableTx(req: IncomingRequest) {
 }
 
 public impure func redeemRetryableTxInTx(txToRedeem: uint) -> bool {
-    let rbuf = retryBuffer_trimTwo(getRetryBufferInCurrentContext());
+    let rbuf = retryBuffer_trimIfNeeded(getRetryBufferInCurrentContext());
     return xif let Some(rtx) = retryBuffer_get(rbuf, txToRedeem) {
         xif let Some(rb) = retryBuffer_delete(rbuf, txToRedeem, false) {
             // we just deleted the tx, without a credit-back to the beneficiary
