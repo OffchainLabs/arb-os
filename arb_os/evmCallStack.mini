@@ -229,6 +229,7 @@ public impure func initEvmCallStack(
 
             // pay callvalue from callvalue payer to the called contract
             // payment will only be recorded inside the callframe, so it will be discarded if the call reverts
+            asm((100, request.callvaluePayer, request.calleeAddr, request.callvalue),) { debugprint };
             if let Some(globalAS) = accountStore_transferEthBalance(
                 getGlobalAccountStore(),
                 request.callvaluePayer,

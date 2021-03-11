@@ -4,8 +4,8 @@
 
 //!Creates a fixed list of globally accessible constants.
 
+use crate::evm::abi::{builtin_contract_path, AbiForContract};
 use crate::uint256::Uint256;
-use crate::evm::abi::{AbiForContract, builtin_contract_path};
 use std::collections::HashMap;
 
 ///Creates a fixed list of globally accessible constants.
@@ -208,7 +208,7 @@ pub fn init_constant_table() -> HashMap<String, Uint256> {
         ("Charging_DefaultArbGasDivisor", 10000),
         ("Charging_AssumedBatchCostL1Gas", 50000),
         ("Charging_GasPoolDepthSeconds", 60),
-        ("Charging_RetryableTxRepriceIntervalSeconds", 15*60),   // 15 minutes
+        ("Charging_RetryableTxRepriceIntervalSeconds", 15 * 60), // 15 minutes
         // fee customizability
         ("NetFee_defaultRateNumerator", 15),
         ("NetFee_defaultRateDenominator", 100),
@@ -219,7 +219,7 @@ pub fn init_constant_table() -> HashMap<String, Uint256> {
         ("PluggableModuleID_rollupTracker", 0),
         ("PluggableModuleID_precompile_0x05", 1),
         // retry buffer
-        ("RetryBuffer_DefaultLifetimeSeconds", 60*60*24*7),
+        ("RetryBuffer_DefaultLifetimeSeconds", 60 * 60 * 24 * 7),
         // misc
         ("SecondsPerBlockNumerator", 2),
         ("SecondsPerBlockDenominator", 1),
@@ -246,8 +246,8 @@ pub fn init_constant_table() -> HashMap<String, Uint256> {
         ),
         (
             "EVMLogTopicForL2ToL1Send",
-            "99ecd3620b54462a4f03f96ee9a3618830bb7ed6baab03d81adad709b22d1322"
-            ),
+            "99ecd3620b54462a4f03f96ee9a3618830bb7ed6baab03d81adad709b22d1322",
+        ),
     ] {
         ret.insert(s.to_string(), Uint256::from_string_hex(u).unwrap());
     }
@@ -273,35 +273,35 @@ pub fn init_constant_table() -> HashMap<String, Uint256> {
     ret
 }
 
-fn func_codes_for_builtin_contract(contract_name: &str) -> Result<Vec<(String, Uint256)>, ethabi::Error> {
+fn func_codes_for_builtin_contract(
+    contract_name: &str,
+) -> Result<Vec<(String, Uint256)>, ethabi::Error> {
     let cabi = AbiForContract::new_from_file(&builtin_contract_path(contract_name))?;
     let mut ret = vec![];
     for (_, funcs) in &cabi.contract.functions {
         for func in funcs {
             let func_name = &func.name;
-            ret.push(
-                (
-                    "funcCode_".to_owned() + contract_name + "_" + func_name,
-                    Uint256::from_bytes(&cabi.short_signature_for_function(func_name)?[..]),
-                )
-            )
+            ret.push((
+                "funcCode_".to_owned() + contract_name + "_" + func_name,
+                Uint256::from_bytes(&cabi.short_signature_for_function(func_name)?[..]),
+            ))
         }
     }
     Ok(ret)
 }
 
-fn event_topics_for_builtin_contract(contract_name: &str) -> Result<Vec<(String, Uint256)>, ethabi::Error> {
+fn event_topics_for_builtin_contract(
+    contract_name: &str,
+) -> Result<Vec<(String, Uint256)>, ethabi::Error> {
     let cabi = AbiForContract::new_from_file(&builtin_contract_path(contract_name))?;
     let mut ret = vec![];
     for (_, events) in &cabi.contract.events {
         for event in events {
             let event_name = &event.name;
-            ret.push(
-                (
-                    "eventTopic_".to_owned() + contract_name + "_" + event_name,
-                    Uint256::from_bytes(&event.signature()[..]),
-                )
-            )
+            ret.push((
+                "eventTopic_".to_owned() + contract_name + "_" + event_name,
+                Uint256::from_bytes(&event.signature()[..]),
+            ))
         }
     }
     Ok(ret)

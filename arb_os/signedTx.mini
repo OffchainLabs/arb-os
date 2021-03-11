@@ -50,8 +50,10 @@ public impure func recoverSigner(tx: SignedTx) -> option<address> {
     ) address { ecrecover };
 
     return xif (signer == address(0)) {
+        asm(200,) { debugprint };
         None<address>
     } else {
+        asm(201,) { debugprint };
         Some(signer)
     };
 }

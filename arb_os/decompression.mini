@@ -65,7 +65,8 @@ use std::rlp::rlp_encodeAndHashMessageInfoForSignature;
 
 use retrybuffer::RetryableTx;
 
-use signedTx::SignedTx;
+use std::rlp::SignedTx;
+
 use signedTx::recoverSigner;
 
 

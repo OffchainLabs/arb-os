@@ -405,6 +405,8 @@ public impure func inbox_getNextUnpackedRequest() -> (
                 // done with message, execute loop again to get the next message
             } elseif (msg.kind == const::L1MessageType_predepositContractTx) {
                 if let Some(txRequest) = translatePredepositContractTx(msg) {
+                    asm(1,) { debugprint };
+                    asm(txRequest,) { debugprint };
                     return (None<IncomingRequest>, Some(txRequest));
                 }
                 // else request was malformatted, ignore it and execute loop again to get another
