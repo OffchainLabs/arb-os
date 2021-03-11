@@ -113,25 +113,22 @@ public impure func retryBuffer_trimTwo(rbuf: RetryBuffer) -> RetryBuffer {
 }
 
 impure func retryBuffer_trimOne(rbuf: RetryBuffer) -> option<RetryBuffer> {  // returns true iff a tx was trimmed
-    return xif let Some(res) = queue_get(rbuf.fifo) {
+    let rb = None<RetryBuffer>;
+    if let Some(res) = queue_get(rbuf.fifo) {
         let (uq, rawQitem) = res;
         let qitem = unsafecast<RetryQueueItem>(rawQitem);
         let currentTimestamp = inbox_currentTimestamp();
-        xif (qitem.checkTime < currentTimestamp) {
-            xif let Some(rtx) = rbuf.byTxId[qitem.txId] {
+        if (qitem.checkTime < currentTimestamp) {
+            if let Some(rtx) = rbuf.byTxId[qitem.txId] {
                 if (rtx.expiryTime < currentTimestamp) {
                     rbuf = retryBuffer_delete(rbuf, qitem.txId, true)?;
                 }
-                Some(rbuf with {  fifo: uq })
-            } else {
-                None<RetryBuffer>
+                rbuf = rbuf with {  fifo: uq };
+                rb = Some(rbuf);
             }
-        } else {
-             None<RetryBuffer>
         }
-    } else {
-        None<RetryBuffer>
-    };
+    }
+    return rb;
 }
 
 func retryBuffer_insert(rbuf: RetryBuffer, rtx: RetryableTx) -> RetryBuffer {
