@@ -277,7 +277,7 @@ A block summary is emitted at the end of every L1 block that contains any L2 tra
 A block summary item consists of:
 
 * 1 (uint)
-* block number (uint)
+* Arbitrum block number (uint)
 * timestamp (uint)
 * current ArbGas limit per block (uint)
 * statistics for this block: 5-tuple of
@@ -294,6 +294,7 @@ A block summary item consists of:
   * total wei paid to validators over all time (uint)
   * address receiving validator payments (address encoded as uint)
 * previous block number that had a block summary, or 0 if this is the first block to have a block summary
+* Ethereum block number
 
 ### Outgoing message contents
 
