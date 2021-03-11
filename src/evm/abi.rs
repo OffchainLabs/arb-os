@@ -115,7 +115,6 @@ impl AbiForContract {
 
         let request_id = machine.runtime_env.insert_tx_message(
             Uint256::from_u64(1025),
-            None,
             Uint256::from_usize(1_000_000_000),
             Uint256::zero(),
             Uint256::zero(),
@@ -193,7 +192,6 @@ impl AbiForContract {
 
         machine.runtime_env.insert_tx_message(
             sender_addr,
-            None,
             Uint256::from_usize(100_000_000),
             Uint256::zero(),
             self.address.clone(),
@@ -258,7 +256,7 @@ impl AbiForContract {
 
         machine.runtime_env._insert_tx_message_from_contract(
             sender_addr,
-            None,
+            Some(payment.clone()),
             None,
             None,
             Uint256::from_usize(100_000_000),
@@ -295,9 +293,11 @@ impl AbiForContract {
         let this_function = self.contract.function(func_name)?;
         let calldata = this_function.encode_input(args).unwrap();
 
-        machine.runtime_env.insert_tx_message(
+        machine.runtime_env._insert_tx_message_from_contract(
             sender_addr,
             Some(payment.clone()),
+            None,
+            None,
             Uint256::from_usize(100_000_000),
             Uint256::zero(),
             self.address.clone(),
@@ -1689,7 +1689,6 @@ impl ArbosTest {
         );
         let _tx_id = machine.runtime_env.insert_tx_message(
             caller_addr,
-            None,
             Uint256::from_usize(1000000000),
             Uint256::zero(),
             callee_addr,

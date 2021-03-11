@@ -139,6 +139,21 @@ Then, if the caller's L2 balance (after the L1-to-L2 deposit has occurred) is at
 
 Otherwise, ArbOS will emit a transaction receipt reporting a failure code, with no return data.
 
+**Message type 10: unsigned contract tx with pre-deposit**
+
+The type-specific data is:
+
+* pre-deposit amount (uint)
+* gas refund recipient (address encoded as uint; if zero, this will be replaced with the sender's address)
+* callvalue refund recipient (address encoded as uint; if zero, this will be replaced with the sender's address)
+* ArbGas limit (uint)
+* ArbGas price bid, in wei (uint)
+* destination address (uint)
+* callvalue, in wei (uint)
+* calldata (bytes)
+
+The pre-deposit amount is credited to the caller's L2 ETH account.  Then the remaining fields are processed the same as an L2 message of subtype 1.
+
 ## L2 messages
 
 As noted above, an L2 message is one type of incoming message that can be put into an L2 chain's inbox. The purpose of an L2 message is to convey information, typically a transaction request, to ArbOS. Except where specified here, the EthBridge does not examine or interpret the contents of an L2 message.
@@ -150,7 +165,6 @@ An L2 message consists of:
 
 **Subtype 0: unsigned tx from user** has subtype-specific data of:
 
-* pre-deposit amount
 * ArbGas limit (uint)
 * ArbGas price bid, in wei (uint)
 * sequence number (uint)
@@ -162,7 +176,6 @@ The pre-deposit amount will be deposited into the sender's L2 account, unconditi
 
 **Subtype 1: tx from contract** has subtype-specific data of:
 
-* pre-deposit amount (uint)
 * gas refund recipient (address encoded as uint; if zero, this will be replaced with the sender's address)
 * callvalue refund recipient (address encoded as uint; if zero, this will be replaced with the sender's address)
 * ArbGas limit (uint)
@@ -171,9 +184,8 @@ The pre-deposit amount will be deposited into the sender's L2 account, unconditi
 * callvalue, in wei (uint)
 * calldata (bytes)
 
-When this message reaches the head of the inbox, the following steps occur:
+When this message is ready to execute at L2, the following steps occur:
 
-* add the pre-deposit amount to the caller's L2 account,
 * if the the gas refund recipient is not the sender, transfer (arbGasLimit * arbGasPriceBid) from the sender to the gas refund recipient (reverting the transaction if the sender has insufficient funds), 
 * if the transaction has not reverted yet, and the calldata refund recipient is not the sender, transfer callvalue from the sender to the callvalue refund recipient (reverting the transaction if the sender has insufficient funds),
 * if the transaction has not reverted yet, execute the transaction, with the gas refund recipient paying for the transaction's gas, and the callvalue refund recipient paying for the transaction's callvalue.

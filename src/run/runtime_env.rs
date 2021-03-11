@@ -250,7 +250,6 @@ impl RuntimeEnvironment {
     pub fn insert_tx_message(
         &mut self,
         sender_addr: Uint256,
-        pre_deposit: Option<Uint256>,
         max_gas: Uint256,
         gas_price_bid: Uint256,
         to_addr: Uint256,
@@ -259,7 +258,6 @@ impl RuntimeEnvironment {
     ) -> Uint256 {
         let mut buf = vec![0u8];
         let seq_num = self.get_and_incr_seq_num(&sender_addr.clone());
-        buf.extend(pre_deposit.unwrap_or(Uint256::zero()).to_bytes_be());
         buf.extend(max_gas.to_bytes_be());
         buf.extend(gas_price_bid.to_bytes_be());
         buf.extend(seq_num.to_bytes_be());
@@ -282,7 +280,7 @@ impl RuntimeEnvironment {
         value: Uint256,
         data: &[u8],
     ) -> Uint256 {
-        let mut buf = vec![1u8];
+        let mut buf = vec![];
         buf.extend(pre_deposit.unwrap_or(Uint256::zero()).to_bytes_be());
         buf.extend(gas_refund_recipient.unwrap_or(Uint256::zero()).to_bytes_be());
         buf.extend(callvalue_refund_recipient.unwrap_or(Uint256::zero()).to_bytes_be());
@@ -292,7 +290,7 @@ impl RuntimeEnvironment {
         buf.extend(value.to_bytes_be());
         buf.extend_from_slice(data);
 
-        self.insert_l2_message(sender_addr.clone(), &buf, false)
+        self.insert_l1_message(10u8, sender_addr.clone(), &buf)
     }
 
     pub fn new_batch(&self) -> Vec<u8> {
