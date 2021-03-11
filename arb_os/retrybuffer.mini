@@ -6,16 +6,22 @@ use accounts::getGlobalAccountStore;
 use accounts::setGlobalAccountStore;
 use accounts::accountStore_get;
 use accounts::accountStore_set;
+use accounts::accountStore_getRetryBuffer;
+use accounts::accountStore_setRetryBuffer;
 use accounts::account_addToEthBalance;
 use accounts::account_deductFromEthBalance;
 
+use evmCallStack::evmCallStack_getAccountInCurrentContext;
+use evmCallStack::evmCallStack_setAccountInCurrentContext;
+use evmCallStack::getRetryBufferInCurrentContext;
+use evmCallStack::setRetryBufferInCurrentContext;
 use evmCallStack::evmCallStack_callRetryableTxAndReturn;
 
 use evmlogs::EvmLogs;
 
 use gasAccounting::GasUsage;
 use gasAccounting::txFeeStats_zero;
-use gasAccounting::chargeForRetryableTx;
+use gasAccounting::getFeesForRetryableTx;
 use gasAccounting::getRetryableTxPrice;
 use gasAccounting::txFeeStats_zero;
 
@@ -71,71 +77,75 @@ type RetryQueueItem = struct {
 // fifo holds RetryQueueItems, which direct us to check for expiration of a particular item at a particular time.
 // Every time an RetryableTx's lifetime is renewed, a fresh fifo item is created,
 //          with checkTime equal to the RetryableTx's new expiry time.
-var retryBuffer: struct {
+type RetryBuffer = struct {
     byTxId: map<uint, RetryableTx>,
     fifo: Queue,     // not in strict expirationTime order, but this doesn't affect correctness
     txLifetimeSeconds: uint
-};
+}
 
-public impure func retryBuffer_init() {
-    retryBuffer = struct {
+public func retryBuffer_new() -> RetryBuffer {
+    return struct {
         byTxId: newmap<uint, RetryableTx>,
         fifo: queue_new(),
         txLifetimeSeconds: const::RetryBuffer_DefaultLifetimeSeconds,
     };
 }
 
-public impure func retryBuffer_getLifetime() -> uint {
-    return retryBuffer.txLifetimeSeconds;
+public func retryBuffer_getLifetime(rbuf: RetryBuffer) -> uint {
+    return rbuf.txLifetimeSeconds;
 }
 
 // We trim the buffer when it's modified. This removes aged-out items from the buffer.
 // trimTwo will trim up to two entries, and trimOne will trim zero or one entries.
 // These are called by every externally-callable mutating function in this file, except init.
 // We also trim two items whenever we create or update a new item.
-public impure func retryBuffer_trimTwo() {
+public impure func retryBuffer_trimTwo(rbuf: RetryBuffer) -> RetryBuffer {
     // remove up to 2 aged-out items from the retryBuffer
-    if (retryBuffer_trimOne()) {
-        let _ = retryBuffer_trimOne();
-    }
+    return xif let Some(rb) = retryBuffer_trimOne(rbuf) {
+        xif let Some(rb2) = retryBuffer_trimOne(rb) {
+            rb2
+        } else {
+            rb
+        }
+    } else {
+        rbuf
+    };
 }
 
-impure func retryBuffer_trimOne() -> bool {  // returns true iff a tx was trimmed
-    return xif let Some(res) = queue_get(retryBuffer.fifo) {
+impure func retryBuffer_trimOne(rbuf: RetryBuffer) -> option<RetryBuffer> {  // returns true iff a tx was trimmed
+    return xif let Some(res) = queue_get(rbuf.fifo) {
         let (uq, rawQitem) = res;
         let qitem = unsafecast<RetryQueueItem>(rawQitem);
         let currentTimestamp = inbox_currentTimestamp();
         xif (qitem.checkTime < currentTimestamp) {
-            xif let Some(rtx) = retryBuffer.byTxId[qitem.txId] {
+            xif let Some(rtx) = rbuf.byTxId[qitem.txId] {
                 if (rtx.expiryTime < currentTimestamp) {
-                    let _ = retryBuffer_delete(qitem.txId);
+                    rbuf = retryBuffer_delete(rbuf, qitem.txId, true)?;
                 }
-                retryBuffer = retryBuffer with {
-                   fifo: uq
-                };
-                true
+                Some(rbuf with {  fifo: uq })
             } else {
-                false
+                None<RetryBuffer>
             }
         } else {
-            false
+             None<RetryBuffer>
         }
     } else {
-        false
+        None<RetryBuffer>
     };
 }
 
-public impure func retryBuffer_insert(rtx: RetryableTx) {
-    retryBuffer_trimTwo();
+public impure func retryBuffer_insert(rbuf: RetryBuffer, rtx: RetryableTx) -> RetryBuffer {
+    rbuf = retryBuffer_trimTwo(rbuf);
     let txId = rtx.txId;
-    retryBuffer = retryBuffer with {
-        byTxId: retryBuffer.byTxId with { [txId] = rtx }
+    return rbuf with {
+        byTxId: rbuf.byTxId with { [txId] = rtx }
     } with {
-        fifo: queue_put(retryBuffer.fifo, struct { txId: txId, checkTime: rtx.expiryTime })
+        fifo: queue_put(rbuf.fifo, struct { txId: txId, checkTime: rtx.expiryTime })
     };
 }
 
 impure func retryBuffer_insertNew(
+    rbuf: RetryBuffer,
     txId: uint,
     sender: address,
     destination: address,
@@ -143,7 +153,7 @@ impure func retryBuffer_insertNew(
     beneficiary: address,
     calldata: ByteArray,
     l1Message: IncomingRequest,
-) -> uint {
+) -> (RetryBuffer, uint) {
     let newTx = struct {
         txId: uint(hash(bytes32(txId), bytes32(0))),
         sender: sender,
@@ -151,84 +161,85 @@ impure func retryBuffer_insertNew(
         callvalue: callvalue,
         beneficiary: beneficiary,
         calldata: calldata,
-        expiryTime: inbox_currentTimestamp() + retryBuffer.txLifetimeSeconds,
+        expiryTime: inbox_currentTimestamp() + rbuf.txLifetimeSeconds,
         l1Message: l1Message with { requestId: uint(hash(bytes32(l1Message.requestId), bytes32(0))) },
     };
-    retryBuffer_insert(newTx);
 
-    return newTx.txId;
+    return (retryBuffer_insert(rbuf, newTx), newTx.txId);
 }
 
-public impure func retryBuffer_get(txId: uint) -> option<RetryableTx> {
-    return retryBuffer.byTxId[txId];
+public func retryBuffer_get(rbuf: RetryBuffer, txId: uint) -> option<RetryableTx> {
+    return rbuf.byTxId[txId];
 }
 
-public impure func retryBuffer_getTxTimeout(txId: uint) -> uint {
-    return xif let Some(rtx) = retryBuffer_get(txId) {
+public func retryBuffer_getTxTimeout(rbuf: RetryBuffer, txId: uint) -> uint {
+    return xif let Some(rtx) = retryBuffer_get(rbuf, txId) {
         rtx.expiryTime
     } else {
         0
     };
 }
 
-public impure func retryBuffer_getBeneficiary(txId: uint) -> option<address> {
-    return Some( (retryBuffer_get(txId)?).beneficiary );
+public func retryBuffer_getBeneficiary(rbuf: RetryBuffer, txId: uint) -> option<address> {
+    return Some( (retryBuffer_get(rbuf, txId)?).beneficiary );
 }
 
-public impure func retryBuffer_getLifetime() -> uint {
-    return retryBuffer.txLifetimeSeconds;
+public func retryBuffer_getLifetime(rbuf: RetryBuffer) -> uint {
+    return rbuf.txLifetimeSeconds;
 }
 
-public impure func retryBuffer_getTxKeepalivePrice(txId: uint) -> option<(uint, uint)>{
-    let rtx = retryBuffer_get(txId)?;
+public impure func retryBuffer_getTxKeepalivePrice(rbuf: RetryBuffer, txId: uint) -> option<(uint, uint)>{
+    let rtx = retryBuffer_get(rbuf, txId)?;
     return Some(getRetryableTxPrice(bytearray_size(rtx.calldata)));
 }
 
-public impure func retryBuffer_keepalive(txId: uint) -> option<uint> {
-    retryBuffer_trimTwo();
-    let rtx = retryBuffer_get(txId)?;
-    let newExpiryTime = rtx.expiryTime + retryBuffer.txLifetimeSeconds;
-    return xif (newExpiryTime > inbox_currentTimestamp() + 2 * retryBuffer.txLifetimeSeconds) {
-        None<uint>
+public impure func retryBuffer_keepalive(rbuf: RetryBuffer, txId: uint) -> option<(RetryBuffer, uint)> {
+    rbuf = retryBuffer_trimTwo(rbuf);
+    let rtx = retryBuffer_get(rbuf, txId)?;
+    let newExpiryTime = rtx.expiryTime + rbuf.txLifetimeSeconds;
+    return xif (newExpiryTime > inbox_currentTimestamp() + 2 * rbuf.txLifetimeSeconds) {
+        None<(RetryBuffer, uint)>
     } else {
-        retryBuffer_insert(rtx with { expiryTime: newExpiryTime });
-        Some(newExpiryTime)
+        Some((
+            retryBuffer_insert(rbuf, rtx with { expiryTime: newExpiryTime }),
+            newExpiryTime,
+        ))
     };
 }
 
-public impure func retryBuffer_delete(txId: uint) -> bool {
+public impure func retryBuffer_delete(rbuf: RetryBuffer, txId: uint, withRefund: bool) -> option<RetryBuffer> {
     // don't call retryBuffer_trimTwo here, because this is called by retryBuffer_trimOne, and we don't want to recurse
-    return xif let Some(rtx) = retryBuffer_get(txId) {
+
+    return xif let Some(rtx) = retryBuffer_get(rbuf, txId) {
         // delete the tx
-        retryBuffer = retryBuffer with {
+        rbuf = rbuf with {
             byTxId: unsafecast<map<uint, RetryableTx>>(
-                builtin_kvsDelete(unsafecast<Kvs>(retryBuffer.byTxId), txId)
+                builtin_kvsDelete(unsafecast<Kvs>(rbuf.byTxId), txId)
             )
         };
-
         // tx might still be in retryBuffer.fifo, but that isn't a problem because it's not gettable
         //         and attempts to delete it again will be no-ops
 
-        // now credit the callvalue back to the beneficiary
-        let globalStore = getGlobalAccountStore();
-        setGlobalAccountStore(
-            accountStore_set(
-                globalStore,
+        if (withRefund) {
+            // credit the callvalue back to the beneficiary
+            evmCallStack_setAccountInCurrentContext(
                 rtx.beneficiary,
                 account_addToEthBalance(
-                    accountStore_get(globalStore, rtx.beneficiary),
+                    evmCallStack_getAccountInCurrentContext(rtx.beneficiary),
                     rtx.callvalue,
                 )
-            )
-        );
+            );
+        }
 
-        true
+        Some(rbuf)
     } else {
-        false
+        None<RetryBuffer>
     };
 }
 
 public impure func processRetryableTx(req: IncomingRequest) {
+    // This must be called outside of a transaction.
+
     let sender = req.sender;
     let destination = address(bytearray_get256(req.msgData, 0));
     let callvalue = bytearray_get256(req.msgData, 32);
@@ -241,53 +252,61 @@ public impure func processRetryableTx(req: IncomingRequest) {
 
     if (creditBack == address(0)) { creditBack = sender; }
 
+    let acctStore = getGlobalAccountStore();
+
     // deposited funds go into the sender's account
     if (deposit > 0) {
-        let globalStore = getGlobalAccountStore();
-        setGlobalAccountStore(
-            accountStore_set(
-                globalStore,
-                sender,
-                account_addToEthBalance(accountStore_get(globalStore, sender), deposit)
-            )
+        acctStore = accountStore_set(
+            acctStore,
+            sender,
+            account_addToEthBalance(accountStore_get(acctStore, sender), deposit)
         );
     }
 
     // charge for injecting this message
-    let (submissionFee, subFeeRecipient, feeStats) = chargeForRetryableTx(sender, calldataSize);
+    let (submissionFee, subFeeRecipient, feeStats) = getFeesForRetryableTx(sender, calldataSize);
+
     if (submissionFee <= maxSubmissionCost) {
         let totalDue = callvalue + maxSubmissionCost;
 
-        let globalStore = getGlobalAccountStore();
-        if let Some(senderAcct) = account_deductFromEthBalance(accountStore_get(globalStore, sender), totalDue) {
+        if let Some(senderAcct) = account_deductFromEthBalance(accountStore_get(acctStore, sender), totalDue) {
             // We took maxSubmissionCost + callvalue from the sender.
             // We will distribute those funds as follows:
             //       submissionFee to the subFeeRecipient
             //       maxSubmissionCost-submissionFee to the creditBack address
             //       callvalue to the retryableTx we will create
 
-            globalStore = accountStore_set(globalStore, sender, senderAcct);
+            acctStore = accountStore_set(acctStore, sender, senderAcct);
             if (submissionFee > 0) {
-                globalStore = accountStore_set(
-                    globalStore,
+                acctStore = accountStore_set(
+                    acctStore,
                     subFeeRecipient,
-                    account_addToEthBalance(accountStore_get(globalStore, subFeeRecipient), submissionFee)
+                    account_addToEthBalance(accountStore_get(acctStore, subFeeRecipient), submissionFee)
                 );
             }
             if (submissionFee < maxSubmissionCost) {
-                globalStore = accountStore_set(
-                    globalStore,
+                acctStore = accountStore_set(
+                    acctStore,
                     creditBack,
                     account_addToEthBalance(
-                        accountStore_get(globalStore, creditBack),
+                        accountStore_get(acctStore, creditBack),
                         maxSubmissionCost - submissionFee
                     )
                 );
             }
-            setGlobalAccountStore(globalStore);
 
             // Create a new retryable tx, holding the callvalue
-            let txId = retryBuffer_insertNew(req.requestId, sender, destination, callvalue, beneficiary, calldata, req);
+            let (rbuf, txId) = retryBuffer_insertNew(
+                accountStore_getRetryBuffer(acctStore),
+                req.requestId,
+                sender,
+                destination,
+                callvalue,
+                beneficiary,
+                calldata,
+                req
+            );
+            acctStore = accountStore_setRetryBuffer(acctStore, rbuf);
 
             emitTxReceipt(
                 req,
@@ -309,8 +328,6 @@ public impure func processRetryableTx(req: IncomingRequest) {
         }
     } else {
         // submission cost was higher than the maximum allowed by the request
-
-
         emitTxReceipt(
             req,
             const::TxResultCode_noGasFunds,
@@ -320,31 +337,23 @@ public impure func processRetryableTx(req: IncomingRequest) {
             feeStats,
         );
     }
+    setGlobalAccountStore(acctStore);
 }
 
 public impure func redeemRetryableTxInTx(txToRedeem: uint) -> bool {
-    retryBuffer_trimTwo();
-    return xif let Some(rtx) = retryBuffer_get(txToRedeem) {
-       evmCallStack_callRetryableTxAndReturn(rtx)
+    let rbuf = retryBuffer_trimTwo(getRetryBufferInCurrentContext());
+    return xif let Some(rtx) = retryBuffer_get(rbuf, txToRedeem) {
+        xif let Some(rb) = retryBuffer_delete(rbuf, txToRedeem, false) {
+            // we just deleted the tx, without a credit-back to the beneficiary
+            // note that this delete will be discarded if the tx reverts
+            setRetryBufferInCurrentContext(rb);
+            evmCallStack_callRetryableTxAndReturn(rtx)
+        } else {
+            setRetryBufferInCurrentContext(rbuf);
+            false
+        }
     } else {
+        setRetryBufferInCurrentContext(rbuf);
         false
     };
-}
-
-public impure func retryableCompletedCallback(
-    returnData: ByteArray,
-    rawRtx: any
-) {
-    let rtx = unsafecast<RetryableTx>(rawRtx);
-    let retryableSucceeded = (bytearray_get256(returnData, 0) != 0);
-
-    let _ = retryBuffer_delete(rtx.txId);
-    emitTxReceipt(
-        rtx.l1Message,
-        xif (retryableSucceeded) { const::TxResultCode_success } else { const::TxResultCode_revert },
-        None<ByteArray>,
-        None<EvmLogs>,
-        None<GasUsage>,
-        txFeeStats_zero(),
-    );
 }
