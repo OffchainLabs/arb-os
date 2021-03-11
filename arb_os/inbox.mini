@@ -38,6 +38,9 @@ use output::outputStats_endOfBlock;
 
 use pluggables::callPluggable;
 
+use retrybuffer::RetryableTx;
+use retrybuffer::processRetryableTx;
+
 use std::bytearray::ByteArray;
 use std::bytearray::bytearray_new;
 use std::bytearray::bytearray_size;
@@ -433,6 +436,9 @@ public impure func inbox_getNextUnpackedRequest() -> (
                     let _ = callPluggable(const::PluggableModuleID_rollupTracker, msg.msgData);
                 }
                 // else request was forged or malformatted, ignore it and execute loop again to get another
+            } elseif (msg.kind == const::L1MessageType_submitRetryableTx) {
+                processRetryableTx(msg);
+                // done with message, execute loop again to get the next message
             } else {
                 return (Some(msg), None<TxRequestData>);
             }
@@ -481,12 +487,14 @@ impure func translateUnsignedTx(request: IncomingRequest) -> option<TxRequestDat
             seqNum: seqNum,
             caller: request.sender,
             calleeAddr: address(destAddrAsUint),
+            gasPayer: request.sender,
             value: value,
             calldata: calldata,
             nonMutating: (subtype == const::L2MessageType_nonmutatingCall),
             isConstructor: (destAddrAsUint == 0),
             incomingRequest: request,
             feeStats: txFeeStats_zero(),
+            fromRetryable: None<RetryableTx>,
         }
     );
 }

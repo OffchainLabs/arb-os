@@ -5,7 +5,7 @@
 use crate::compile::miniconstants::init_constant_table;
 use crate::evm::abi::{
     ArbAddressTable, ArbBLS, ArbFunctionTable, ArbSys, ArbosTest, _ArbAggregator, _ArbGasInfo,
-    _ArbOwner, builtin_contract_path,
+    _ArbOwner, builtin_contract_path, _ArbReplayableTx,
 };
 use crate::evm::abi::{FunctionTable, _ArbInfo};
 use crate::run::{load_from_file, RuntimeEnvironment};
@@ -819,6 +819,124 @@ pub fn _evm_test_callback(
     assert_eq!(sends[1][1..33], contract.address.to_bytes_be()[0..32]);
     assert_eq!(sends[1][161..193], [0u8; 32]);
     assert_eq!(sends[1].len(), 210);  // 17 bytes of calldata after 193 bytes of fields
+
+    if let Some(path) = log_to {
+        machine
+            .runtime_env
+            .recorder
+            .to_file(path, machine.get_total_gas_usage().to_u64().unwrap())
+            .unwrap();
+    }
+
+    Ok(())
+}
+
+#[test]
+fn test_retryable() {
+    match _test_retryable(None, false) {
+        Ok(()) => {},
+        Err(e) => panic!("{}", e),
+    }
+}
+
+pub fn _test_retryable(log_to: Option<&Path>, debug: bool) -> Result<(), ethabi::Error> {
+    let rt_env = RuntimeEnvironment::new(Uint256::from_usize(1111), None);
+    let mut machine = load_from_file(Path::new("arb_os/arbos.mexe"), rt_env);
+    machine.start_at_zero();
+
+    let my_addr = Uint256::from_u64(1234);
+
+    let mut add_contract = AbiForContract::new_from_file(&test_contract_path("Add"))?;
+    if add_contract
+        .deploy(&[], &mut machine, Uint256::zero(), None, debug)
+        .is_err()
+    {
+        panic!("failed to deploy Add contract");
+    }
+
+    let beneficiary = Uint256::from_u64(9185);
+
+    let txid = add_contract._send_retryable_tx(
+        my_addr.clone(),
+        "add",
+        &[ethabi::Token::Uint(Uint256::one().to_u256()), ethabi::Token::Uint(Uint256::one().to_u256())],
+        &mut machine,
+        Uint256::zero(),
+        Uint256::zero(),
+        None,
+        Some(beneficiary.clone()),
+    )?;
+    assert!(txid != Uint256::zero());
+    let _gas_used = if debug {
+        machine.debug(None)
+    } else {
+        machine.run(None)
+    };
+
+    let arb_replayable = _ArbReplayableTx::_new(debug);
+    let timeout = arb_replayable._get_timeout(&mut machine, txid.clone())?;
+    assert!(timeout > machine.runtime_env.current_timestamp);
+
+    let (keepalive_price, reprice_time) = arb_replayable._get_keepalive_price(&mut machine, txid.clone())?;
+    assert_eq!(keepalive_price, Uint256::zero());
+    println!("reprice time {}, timestamp {}", reprice_time, machine.runtime_env.current_timestamp);
+    assert!(reprice_time > machine.runtime_env.current_timestamp);
+
+    let keepalive_ret = arb_replayable._keepalive(&mut machine, txid.clone(), keepalive_price)?;
+
+    let new_timeout = arb_replayable._get_timeout(&mut machine, txid.clone())?;
+    assert_eq!(keepalive_ret, new_timeout);
+    assert!(new_timeout > timeout);
+
+    arb_replayable._redeem(&mut machine, txid.clone())?;
+
+    let new_timeout = arb_replayable._get_timeout(&mut machine, txid.clone())?;
+    assert_eq!(new_timeout, Uint256::zero());  // verify that txid has been removed
+
+    // make another one, and have the beneficiary cancel it
+    let txid = add_contract._send_retryable_tx(
+        my_addr.clone(),
+        "add",
+        &[ethabi::Token::Uint(Uint256::one().to_u256()), ethabi::Token::Uint(Uint256::one().to_u256())],
+        &mut machine,
+        Uint256::zero(),
+        Uint256::zero(),
+        None,
+        Some(beneficiary.clone()),
+    )?;
+    assert!(txid != Uint256::zero());
+    let _gas_used = if debug {
+        machine.debug(None)
+    } else {
+        machine.run(None)
+    };
+
+    let out_beneficiary = arb_replayable._get_beneficiary(&mut machine, txid.clone())?;
+    assert_eq!(out_beneficiary, beneficiary);
+
+    arb_replayable._cancel(&mut machine, txid.clone(), beneficiary.clone())?;
+
+    assert_eq!(arb_replayable._get_timeout(&mut machine, txid)?, Uint256::zero());  // verify txid no longer exists
+
+    let amount_to_pay = Uint256::from_u64(1_000_000);
+    let _txid = machine.runtime_env._insert_retryable_tx_message(
+        my_addr.clone(),
+        Uint256::from_u64(7890245789245),    // random non-contract address
+        amount_to_pay.clone(),
+        amount_to_pay.clone(),
+        Uint256::zero(),
+        my_addr.clone(),
+        my_addr.clone(),
+        &[],
+    );
+    let _gas_used = if debug {
+        machine.debug(None)
+    } else {
+        machine.run(None)
+    };
+    let all_logs = machine.runtime_env.get_all_receipt_logs();
+    let last_log = &all_logs[all_logs.len() - 1];
+    assert!(last_log.succeeded());
 
     if let Some(path) = log_to {
         machine
