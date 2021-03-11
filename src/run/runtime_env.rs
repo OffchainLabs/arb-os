@@ -322,33 +322,6 @@ impl RuntimeEnvironment {
         ret
     }
 
-    pub fn make_signed_l2_message(
-        &mut self,
-        sender_addr: Uint256,
-        max_gas: Uint256,
-        gas_price_bid: Uint256,
-        to_addr: Uint256,
-        value: Uint256,
-        calldata: Vec<u8>,
-        wallet: &Wallet,
-    ) -> (Vec<u8>, Vec<u8>) {
-        let seq_num = self.get_and_incr_seq_num(&sender_addr);
-        let tx_for_signing = TransactionRequest::new()
-            .from(sender_addr.to_h160())
-            .to(to_addr.to_h160())
-            .gas(max_gas.to_u256())
-            .gas_price(gas_price_bid.to_u256())
-            .value(value.to_u256())
-            .data(calldata)
-            .nonce(seq_num.to_u256());
-        let tx = wallet.sign_transaction(tx_for_signing).unwrap();
-
-        let rlp_buf = tx.rlp().as_ref().to_vec();
-        let mut buf = vec![4u8];
-        buf.extend(rlp_buf.clone());
-        (buf, keccak256(&rlp_buf).to_vec())
-    }
-
     pub fn make_compressed_and_signed_l2_message(
         &mut self,
         gas_price: Uint256,
@@ -442,33 +415,6 @@ impl RuntimeEnvironment {
         }
 
         self.insert_l2_message(batch_sender.clone(), &buf, false);
-    }
-
-    pub fn append_signed_tx_message_to_batch(
-        &mut self,
-        batch: &mut Vec<u8>,
-        sender_addr: Uint256,
-        max_gas: Uint256,
-        gas_price_bid: Uint256,
-        to_addr: Uint256,
-        value: Uint256,
-        calldata: Vec<u8>,
-        wallet: &Wallet,
-    ) -> Vec<u8> {
-        let (msg, tx_id_bytes) = self.make_signed_l2_message(
-            sender_addr,
-            max_gas,
-            gas_price_bid,
-            to_addr,
-            value,
-            calldata,
-            wallet,
-        );
-        let msg_size: u64 = msg.len().try_into().unwrap();
-        let rlp_encoded_len = Uint256::from_u64(msg_size).rlp_encode();
-        batch.extend(rlp_encoded_len.clone());
-        batch.extend(msg);
-        tx_id_bytes
     }
 
     pub fn _append_compressed_and_signed_tx_message_to_batch(

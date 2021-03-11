@@ -368,14 +368,14 @@ The contents of a Send consist of:
 * Send type (byte)
 * Type-specific data
 
-Currently only one type is supported: a message batch summary.  Its type-specific data consists of:
+Currently only one type is supported: an L2-to-L1 call, which has send type 3.  Its type-specific data consists of:
 
-* batch number (uint)
-* number of messages in batch (uint)
-* Merkle root of message hashes (32 bytes)
-
-The Merkle root is computed using the algorithm defined in the Arbitrum Solidity contracts.
-
-
+* L2 caller (address encoded as uint)
+* L1 destination (address encoded as uint)
+* Arbitrum block number (uint)
+* Ethereum block number (uint)
+* timestamp (uint)
+* callvalue (uint)
+* calldata (sequence of bytes)
 
 

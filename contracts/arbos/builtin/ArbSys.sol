@@ -8,6 +8,7 @@ interface ArbSys {
     function arbBlockNumber() external view returns (uint);
 
     // Send given amount of Eth to dest with from sender.
+    // This is a convenience function, which is equivalent to calling sendTxToL1 with empty calldataForL1.
     function withdrawEth(address dest) external payable;
 
     // Send a transaction to L1
