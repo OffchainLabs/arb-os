@@ -781,22 +781,22 @@ pub fn _evm_test_callback(
     let evmlogs = logs[0]._get_evm_logs();
     assert_eq!(evmlogs.len(), 8);
 
-    assert_eq!(evmlogs[2].vals[0], Uint256::from_bytes(&hex::decode("99ecd3620b54462a4f03f96ee9a3618830bb7ed6baab03d81adad709b22d1322").unwrap()));
+    assert_eq!(evmlogs[2].vals[0], Uint256::from_bytes(&hex::decode("4565b81ee888f638615db5e45d6417af5e29c635c5dbaa1fa7fff30e83c0affa").unwrap()));
     assert_eq!(evmlogs[2].addr, Uint256::from_u64(100));  // log was emitted by ArbSys
-    assert_eq!(evmlogs[2].vals[1], contract.address);
-    let batch_number = &evmlogs[2].vals[2];
+    assert_eq!(evmlogs[2].vals[2], Uint256::zero());  // unique ID = 0
+    let batch_number = &evmlogs[2].vals[3];
     assert_eq!(batch_number, &Uint256::zero());
-    let index_in_batch = Uint256::from_bytes(&evmlogs[2].data[0..32]);
+    let index_in_batch = Uint256::from_bytes(&evmlogs[2].data[32..64]);
     assert_eq!(index_in_batch, Uint256::zero());
     let calldata_size = Uint256::from_bytes(&evmlogs[2].data[(7*32)..(8*32)]);
     assert_eq!(calldata_size, Uint256::from_u64(11));
 
-    assert_eq!(evmlogs[6].vals[0], Uint256::from_bytes(&hex::decode("99ecd3620b54462a4f03f96ee9a3618830bb7ed6baab03d81adad709b22d1322").unwrap()));
+    assert_eq!(evmlogs[6].vals[0], Uint256::from_bytes(&hex::decode("4565b81ee888f638615db5e45d6417af5e29c635c5dbaa1fa7fff30e83c0affa").unwrap()));
     assert_eq!(evmlogs[6].addr, Uint256::from_u64(100));  // log was emitted by ArbSys
-    assert_eq!(evmlogs[6].vals[1], contract.address);
-    let batch_number = &evmlogs[6].vals[2];
+    assert_eq!(evmlogs[6].vals[2], Uint256::one());  // unique ID = 1
+    let batch_number = &evmlogs[6].vals[3];
     assert_eq!(batch_number, &Uint256::zero());
-    let index_in_batch = Uint256::from_bytes(&evmlogs[6].data[0..32]);
+    let index_in_batch = Uint256::from_bytes(&evmlogs[6].data[32..64]);
     assert_eq!(index_in_batch, Uint256::one());
     let calldata_size = Uint256::from_bytes(&evmlogs[6].data[(7*32)..(8*32)]);
     assert_eq!(calldata_size, Uint256::from_u64(17));
