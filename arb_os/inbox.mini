@@ -366,7 +366,7 @@ public impure func inbox_getNextUnpackedRequest() -> (
             // it's not a batch, so process it immediately
             if (msg.kind == const::L1MessageType_endOfBlock) {
                 // it's an end-of-block message, so just trigger end-of-block processing
-                outputStats_endOfBlock(msg.arbBlockNumber, msg.timestamp);
+                outputStats_endOfBlock(msg.arbBlockNumber, msg.ethBlockNumber, msg.timestamp);
                 blockhash_submitHash(msg.arbBlockNumber, msg.ethBlockNumber, globalInbox.inboxHashAccumulator);
             } elseif (msg.kind == const::L1MessageType_L2) {
                 // it's an L2 message, so switch based on the L2 type
