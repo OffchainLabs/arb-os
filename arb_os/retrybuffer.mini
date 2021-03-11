@@ -283,16 +283,17 @@ public impure func processRetryableTx(req: IncomingRequest) {
                     subFeeRecipient,
                     account_addToEthBalance(accountStore_get(acctStore, subFeeRecipient), submissionFee)
                 );
-                if (submissionFee < maxSubmissionCost) {
-                    acctStore = accountStore_set(
-                        acctStore,
-                        creditBack,
-                        account_addToEthBalance(
-                            accountStore_get(acctStore, creditBack),
-                            maxSubmissionCost - submissionFee
-                        )
-                    );
-                }
+            }
+
+            if (submissionFee < maxSubmissionCost) {
+                acctStore = accountStore_set(
+                    acctStore,
+                    creditBack,
+                    account_addToEthBalance(
+                        accountStore_get(acctStore, creditBack),
+                        maxSubmissionCost - submissionFee
+                    )
+                );
             }
 
             // Create a new retryable tx, holding the callvalue
