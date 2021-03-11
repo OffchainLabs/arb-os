@@ -98,7 +98,7 @@ var globalBlockReceiptData: struct {
 
 var logsQueuedForEndOfBlock: Queue;
 
-public impure func outputStats_endOfBlock(blockNum: uint, timestamp: uint) {
+public impure func outputStats_endOfBlock(arbBlockNum: uint, ethBlockNum: uint, timestamp: uint) {
     if ((inbox_currentTimestamp() >= globalBlockReceiptData.nextSendTime) && !outbox_isEmpty() ){
         outbox_send();
         globalBlockReceiptData = globalBlockReceiptData with {
@@ -134,16 +134,17 @@ public impure func outputStats_endOfBlock(blockNum: uint, timestamp: uint) {
 
     asm((
         const::LogType_blockSummary,
-        blockNum,
+        arbBlockNum,
         timestamp,
         globalBlockReceiptData.statsThisBlock,
         globalBlockReceiptData.statsAllTime,
         gasAccounting_summaryToPublish(),
-        globalBlockReceiptData.lastBlockNum
+        globalBlockReceiptData.lastBlockNum,
+        ethBlockNum,
     ),) { log }; 
 
     globalBlockReceiptData = globalBlockReceiptData with {
-        lastBlockNum: blockNum
+        lastBlockNum: arbBlockNum
     };
 
     // now clear current block stats, because we're advancing to a new current block
