@@ -636,7 +636,9 @@ pub fn parse_from_source(
                 format!("extra token: {}, Type: {:?}", &source[offset..end], tok,),
                 Some(lines.location(BytePos::from(offset), file_id).unwrap()),
             ),
-            ParseError::User { error: _ } => unimplemented!(),
+            ParseError::User { error } => {
+                CompileError::new(format!("custom parsing error: {}", error), None)
+            }
         })
 }
 
