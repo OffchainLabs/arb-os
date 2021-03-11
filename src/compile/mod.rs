@@ -10,6 +10,7 @@ use crate::pos::{BytePos, Location};
 use crate::stringtable::StringTable;
 use ast::{Func, GlobalVarDecl, TypeTree};
 use lalrpop_util::lalrpop_mod;
+use lalrpop_util::ParseError;
 use mini::DeclsParser;
 use miniconstants::init_constant_table;
 use serde::{Deserialize, Serialize};
@@ -610,18 +611,24 @@ pub fn parse_from_source(
             &source,
         )
         .map_err(|e| match e {
-            lalrpop_util::ParseError::UnrecognizedToken {
+            ParseError::UnrecognizedToken {
                 token: (offset, tok, end),
                 expected: _,
             } => CompileError::new(
                 format!(
                     "unexpected token: {}, Type: {:?}",
                     &source[offset..end],
-                    tok
+                    tok,
                 ),
                 Some(lines.location(BytePos::from(offset), file_id).unwrap()),
             ),
-            _ => CompileError::new(format!("{:?}", e), None),
+            ParseError::InvalidToken { location: _ } => unimplemented!(),
+            ParseError::UnrecognizedEOF {
+                location: _,
+                expected: _,
+            } => unimplemented!(),
+            ParseError::ExtraToken { token: _ } => unimplemented!(),
+            ParseError::User { error: _ } => unimplemented!(),
         })
 }
 
