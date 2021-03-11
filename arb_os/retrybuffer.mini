@@ -72,11 +72,17 @@ type RetryQueueItem = struct {
 }
 
 // RetryBuffer holds retryable transactions.
+// The ageOutQ holds the ReplayableTxs whose callvalue we are holding.
+// A ReplayableTx is added to the ageOutQ when it is first created.
+// At appropriate times we look at a few items from the ageOutQ.
+//      If an item is no longer in the RetryBuffer, we refund its callvalue and drop it from the ageOutQ.
+//      If the item is still in the RetryBuffer, we put it back into tail of the ageOutQ.
 type RetryBuffer = struct {
     newMap: map<uint, RetryableTx>,
     oldMap: map<uint, RetryableTx>,
     nextTrimTime: uint,
     txLifetimeSeconds: uint,
+    ageOutQ: Queue,
 }
 
 public func retryBuffer_new() -> RetryBuffer {
@@ -85,6 +91,7 @@ public func retryBuffer_new() -> RetryBuffer {
         oldMap: newmap<uint, RetryableTx>,
         nextTrimTime: 0,    // we'll trim the first time this is used, but that's harmless
         txLifetimeSeconds: const::RetryBuffer_DefaultLifetimeSeconds,
+        ageOutQ: queue_new(),
     };
 }
 
@@ -94,7 +101,7 @@ public func retryBuffer_getLifetime(rbuf: RetryBuffer) -> uint {
 
 impure func retryBuffer_trimIfNeeded(rbuf: RetryBuffer) -> RetryBuffer {
     let currentTimestamp = inbox_currentTimestamp();
-    return xif (currentTimestamp >= rbuf.nextTrimTime) {
+    rbuf = xif (currentTimestamp >= rbuf.nextTrimTime) {
         rbuf = rbuf with {
             newMap: newmap<uint, RetryableTx>
         } with {
@@ -114,6 +121,35 @@ impure func retryBuffer_trimIfNeeded(rbuf: RetryBuffer) -> RetryBuffer {
     } else {
         rbuf
     };
+
+    let ageOutTries = 3;
+    while(ageOutTries > 0) {
+        ageOutTries = ageOutTries - 1;
+        if let Some(res) = queue_get(rbuf.ageOutQ) {
+            let (uq, item) = res;
+            let rtx = unsafecast<RetryableTx>(item);
+            if (retryBuffer_contains(rbuf, rtx.txId)) {
+                // rtx is still alive, so put it back into the queue
+                return rbuf with {
+                    ageOutQ: queue_put(uq, rtx)
+                };
+            } else {
+                // rtx has aged out, so refund its callvalue and drop it
+                evmCallStack_setAccountInCurrentContext(
+                    rtx.beneficiary,
+                    account_addToEthBalance(
+                        evmCallStack_getAccountInCurrentContext(rtx.beneficiary),
+                        rtx.callvalue,
+                    ),
+                );
+                rbuf = rbuf with { ageOutQ: uq };
+            }
+        } else {
+            return rbuf;
+        }
+    }
+
+    return rbuf;
 }
 
 public impure func retryBuffer_insert(rbuf: RetryBuffer, rtx: RetryableTx) -> RetryBuffer {
@@ -126,7 +162,7 @@ public impure func retryBuffer_insert(rbuf: RetryBuffer, rtx: RetryableTx) -> Re
 
 impure func retryBuffer_insertNew(
     rbuf: RetryBuffer,
-    txId: uint,
+    requestId: uint,
     sender: address,
     destination: address,
     callvalue: uint,
@@ -134,8 +170,9 @@ impure func retryBuffer_insertNew(
     calldata: ByteArray,
     l1Message: IncomingRequest,
 ) -> (RetryBuffer, uint) {
+    let txId = uint(hash(bytes32(requestId), bytes32(0)));
     let newTx = struct {
-        txId: uint(hash(bytes32(txId), bytes32(0))),
+        txId: txId,
         sender: sender,
         destination: destination,
         callvalue: callvalue,
@@ -144,7 +181,20 @@ impure func retryBuffer_insertNew(
         l1Message: l1Message with { requestId: uint(hash(bytes32(l1Message.requestId), bytes32(0))) },
     };
 
-    return (retryBuffer_insert(rbuf, newTx), newTx.txId);
+    return xif (retryBuffer_contains(rbuf, txId)) {
+        // this should never happen, but handling this case so we don't leak funds if something goes wrong
+        (rbuf, 0)
+    } else {
+        rbuf = retryBuffer_insert(rbuf, newTx);
+        (
+            rbuf with { ageOutQ: queue_put(rbuf.ageOutQ, newTx) },
+            newTx.txId
+        )
+    };
+}
+
+public func retryBuffer_contains(rbuf: RetryBuffer, txId: uint) -> bool {
+    return (rbuf.newMap[txId] != None<RetryableTx>) || (rbuf.oldMap[txId] != None<RetryableTx>);
 }
 
 public func retryBuffer_get(rbuf: RetryBuffer, txId: uint) -> option<RetryableTx> {
