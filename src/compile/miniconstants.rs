@@ -246,7 +246,7 @@ pub fn init_constant_table() -> HashMap<String, Uint256> {
         ),
         (
             "EVMLogTopicForL2ToL1Send",
-            "a05a782e96a47ab7213ad8aaa38a9f9eb8e5e3186309a4434d76542de2ee6671"
+            "5baaa87db386365b5c161be377bc3d8e317e8d98d71a3ca7ed7d555340c8f767"
             ),
     ] {
         ret.insert(s.to_string(), Uint256::from_string_hex(u).unwrap());
