@@ -251,8 +251,8 @@ public impure func processRetryableTx(req: IncomingRequest) {
 
     if (creditBack == address(0)) { creditBack = sender; }
 
-    let acctStore = getGlobalAccountStore();
-    acctStore = acctStore with { retryBuffer: retryBuffer_trimTwo(acctStore.retryBuffer) };
+    let rbuffer = retryBuffer_trimTwo(getGlobalAccountStore().retryBuffer);
+    let acctStore = getGlobalAccountStore() with { retryBuffer: rbuffer };
 
     // deposited funds go into the sender's account
     if (deposit > 0) {
