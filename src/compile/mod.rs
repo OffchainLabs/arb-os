@@ -588,6 +588,19 @@ fn create_type_tree(program_tree: &HashMap<Vec<String>, Module>) -> TypeTree {
         .collect()
 }
 
+fn comma_list(input: &[String]) -> String {
+    let mut base = String::new();
+    if input.len() > 0 {
+        for object in input.iter().take(input.len() - 1) {
+            base.push_str(object);
+            base.push(',');
+            base.push(' ');
+        }
+        base.push_str(&input[input.len() -1]);
+    }
+    base
+}
+
 ///Converts source string `source` into a series of `TopLevelDecl`s, uses identifiers from
 /// `string_table` and records new ones in it as well.  The `file_id` argument is used to construct
 /// file information for the location fields.
@@ -627,7 +640,7 @@ pub fn parse_from_source(
                 lines.location(location.into(), file_id),
             ),
             ParseError::UnrecognizedEOF { location, expected } => CompileError::new(
-                format!("unexpected end of file: expected one of: {:?}", expected),
+                format!("unexpected end of file: expected one of: {}", comma_list( &expected)),
                 lines.location(location.into(), file_id),
             ),
             ParseError::ExtraToken {
