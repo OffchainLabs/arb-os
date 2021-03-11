@@ -622,14 +622,14 @@ pub fn parse_from_source(
                 ),
                 Some(lines.location(BytePos::from(offset), file_id).unwrap()),
             ),
-            ParseError::InvalidToken { location: loc } => CompileError::new(
+            ParseError::InvalidToken { location } => CompileError::new(
                 format!("found invalid token"),
-                lines.location(loc.into(), file_id),
+                lines.location(location.into(), file_id),
             ),
-            ParseError::UnrecognizedEOF {
-                location: _,
-                expected: _,
-            } => unimplemented!(),
+            ParseError::UnrecognizedEOF { location, expected } => CompileError::new(
+                format!("unexpected end of file: expected one of: {:?}", expected),
+                lines.location(location.into(), file_id),
+            ),
             ParseError::ExtraToken { token: _ } => unimplemented!(),
             ParseError::User { error: _ } => unimplemented!(),
         })
