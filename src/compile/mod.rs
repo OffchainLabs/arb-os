@@ -596,7 +596,7 @@ fn comma_list(input: &[String]) -> String {
             base.push(',');
             base.push(' ');
         }
-        base.push_str(&input[input.len() -1]);
+        base.push_str(&input[input.len() - 1]);
     }
     base
 }
@@ -625,13 +625,13 @@ pub fn parse_from_source(
         )
         .map_err(|e| match e {
             ParseError::UnrecognizedToken {
-                token: (offset, tok, end),
-                expected: _,
+                token: (offset, _tok, end),
+                expected,
             } => CompileError::new(
                 format!(
-                    "unexpected token: {}, Type: {:?}",
+                    "unexpected token: {}, expected one of: {}",
                     &source[offset..end],
-                    tok,
+                    comma_list(&expected),
                 ),
                 Some(lines.location(BytePos::from(offset), file_id).unwrap()),
             ),
@@ -640,13 +640,16 @@ pub fn parse_from_source(
                 lines.location(location.into(), file_id),
             ),
             ParseError::UnrecognizedEOF { location, expected } => CompileError::new(
-                format!("unexpected end of file: expected one of: {}", comma_list( &expected)),
+                format!(
+                    "unexpected end of file: expected one of: {}",
+                    comma_list(&expected)
+                ),
                 lines.location(location.into(), file_id),
             ),
             ParseError::ExtraToken {
-                token: (offset, tok, end),
+                token: (offset, _tok, end),
             } => CompileError::new(
-                format!("extra token: {}, Type: {:?}", &source[offset..end], tok,),
+                format!("extra token: {}", &source[offset..end],),
                 Some(lines.location(BytePos::from(offset), file_id).unwrap()),
             ),
             ParseError::User { error } => {
