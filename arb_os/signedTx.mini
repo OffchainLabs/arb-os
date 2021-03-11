@@ -32,60 +32,8 @@ use gasAccounting::txFeeStats_zero;
 
 use messages::TxRequestData;
 
-use retrybuffer::RetryableTx;
+use std::rlp::SignedTx;
 
-
-// A copy of this struct is defined in stdlib/rlp.mini.
-// The declaration there must remain consistent with the one here.
-type SignedTx = struct {
-    seqNum: uint,
-    gasPrice: uint,
-    gasLimit: uint,
-    to: address,
-    value: uint,
-    data: ByteArray,
-    v: uint,
-    r: uint,
-    s: uint
-}
-
-public impure func translateSignedTx(req: IncomingRequest) -> option<TxRequestData> {
-    // Given an IncomingRequest that contains an L2 signed tx message, translate the
-    //    L2 message from the RLP-encoded form it arrived in, into the old format which downstream code expects.
-    // Also, check the signature on the tx, and set:
-    //      - the sender field in the request equal to signer, and
-    //      - the requestID field in the request equal to the Ethereum-compatible tx id,
-    // Return the result, or None if message is malformed or the signature is invalid.
-
-    let rlpData = bytearray_extract(req.msgData, 1, bytearray_size(req.msgData)-1);
-    let (_, signedTx) = rlp_decodeMessageInfo(bytestream_new(rlpData))?;
-    let signer = recoverSigner(signedTx)?;
-    let rlpHash = keccak256(rlpData, 0, bytearray_size(rlpData));
-
-    let newL2message = signedTxToUnsignedBytes(signedTx);
-
-    return Some(
-        struct {
-            maxGas: signedTx.gasLimit,
-            gasPrice: signedTx.gasPrice,
-            seqNum: Some(signedTx.seqNum),
-            caller: signer,
-            calleeAddr: signedTx.to,
-            gasPayer: signer,
-            value: signedTx.value,
-            calldata: signedTx.data,
-            nonMutating: false,
-            isConstructor: (signedTx.to == address(0)),
-            incomingRequest: req with {
-                sender: signer
-            } with {
-                requestId: uint(rlpHash)
-            },
-            feeStats: txFeeStats_zero(),
-            fromRetryable: None<RetryableTx>,
-        }
-    );
-}
 
 public impure func recoverSigner(tx: SignedTx) -> option<address> {
     let rlpHashForSig = bytes32(0);
@@ -106,27 +54,4 @@ public impure func recoverSigner(tx: SignedTx) -> option<address> {
     } else {
         Some(signer)
     };
-}
-
-func signedTxToUnsignedBytes(tx: SignedTx) -> ByteArray {
-    let dataSize = bytearray_size(tx.data);
-    let ret = bytearray_new(0);
-    ret = bytearray_setByte(ret, 0, 0);  // L2 subtype for signed tx
-    ret = bytearray_set256(ret, 1, tx.gasLimit);
-    ret = bytearray_set256(ret, 1+32, tx.gasPrice);
-    ret = bytearray_set256(ret, 1+2*32, tx.seqNum);
-    ret = bytearray_set256(ret, 1+3*32, uint(tx.to));
-    ret = bytearray_set256(ret, 1+4*32, tx.value);
-    ret = bytearray_copy(tx.data, 0, ret, 1+5*32, dataSize);
-    return ret;
-}
-
-public func hashUnsignedL2messageInfo(l2msg: MarshalledBytes, chainId: uint, sender: address) -> bytes32 {
-    return hash(
-        bytes32(sender),
-        hash(
-            bytes32(chainId),
-            marshalledBytes_hash(l2msg),
-        )
-    );
 }

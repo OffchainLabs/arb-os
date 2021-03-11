@@ -160,8 +160,7 @@ pub fn init_constant_table() -> HashMap<String, Uint256> {
         ("L2MessageType_unsignedContractTx", 1),
         ("L2MessageType_nonmutatingCall", 2),
         ("L2MessageType_batch", 3),
-        ("L2MessageType_signedTx", 4),
-        ("L2MessageType_sequencerBatch", 5),
+        // types 4 and 5 no longer used
         ("L2MessageType_heartbeat", 6),
         ("L2MessageType_signedCompressedTx", 7),
         ("L2MessageType_blsBatch", 8),
@@ -195,7 +194,6 @@ pub fn init_constant_table() -> HashMap<String, Uint256> {
         ("LogType_send", 2),
         ("LogType_sendMerkleTree", 3),
         // outgoing message types
-        ("SendType_withdrawETH", 0),
         ("SendType_sendTxToL1", 3),
         // type 5 not used -- was previously buddy contract result
         // AVM send types
