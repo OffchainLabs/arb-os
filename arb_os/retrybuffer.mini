@@ -134,8 +134,7 @@ impure func retryBuffer_trimOne(rbuf: RetryBuffer) -> option<RetryBuffer> {  // 
     };
 }
 
-public impure func retryBuffer_insert(rbuf: RetryBuffer, rtx: RetryableTx) -> RetryBuffer {
-    rbuf = retryBuffer_trimTwo(rbuf);
+func retryBuffer_insert(rbuf: RetryBuffer, rtx: RetryableTx) -> RetryBuffer {
     let txId = rtx.txId;
     return rbuf with {
         byTxId: rbuf.byTxId with { [txId] = rtx }
@@ -253,6 +252,7 @@ public impure func processRetryableTx(req: IncomingRequest) {
     if (creditBack == address(0)) { creditBack = sender; }
 
     let acctStore = getGlobalAccountStore();
+    acctStore = acctStore with { retryBuffer: retryBuffer_trimTwo(acctStore.retryBuffer) };
 
     // deposited funds go into the sender's account
     if (deposit > 0) {
