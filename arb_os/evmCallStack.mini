@@ -607,7 +607,17 @@ public impure func evmCallStack_doCall(
         // no code at that address, so just do eth transfer
         if (balance > 0) {
             return Some(
-                evmCallStack_transferEthFromCurrent(calleeAddr, balance) == Some(())
+                xif (chargeForCallvalue) {
+                    evmCallStack_transferEthFromCurrent(calleeAddr, balance) == Some(())
+                } else {
+                    evmCallStack_setAccount(
+                        calleeAddr,
+                        account_addToEthBalance(
+                            evmCallStack_getAccount(calleeAddr)?,
+                            balance
+                        )
+                    )
+                }
             );
         } else {
             return Some(true);
