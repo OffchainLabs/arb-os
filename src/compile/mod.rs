@@ -630,7 +630,12 @@ pub fn parse_from_source(
                 format!("unexpected end of file: expected one of: {:?}", expected),
                 lines.location(location.into(), file_id),
             ),
-            ParseError::ExtraToken { token: _ } => unimplemented!(),
+            ParseError::ExtraToken {
+                token: (offset, tok, end),
+            } => CompileError::new(
+                format!("extra token: {}, Type: {:?}", &source[offset..end], tok,),
+                Some(lines.location(BytePos::from(offset), file_id).unwrap()),
+            ),
             ParseError::User { error: _ } => unimplemented!(),
         })
 }
