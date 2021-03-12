@@ -100,7 +100,7 @@ var globalBlockReceiptData: struct {
 
 var logsQueuedForEndOfBlock: Queue;
 
-public impure func outputStats_endOfBlock(blockNum: uint, timestamp: uint) {
+public impure func outputStats_endOfBlock(arbBlockNum: uint, ethBlockNum: uint, timestamp: uint) {
     if ((inbox_currentTimestamp() >= globalBlockReceiptData.nextSendTime) && !outbox_isEmpty() ){
         outbox_send();
         globalBlockReceiptData = globalBlockReceiptData with {
@@ -136,16 +136,17 @@ public impure func outputStats_endOfBlock(blockNum: uint, timestamp: uint) {
 
     asm((
         const::LogType_blockSummary,
-        blockNum,
+        arbBlockNum,
         timestamp,
         globalBlockReceiptData.statsThisBlock,
         globalBlockReceiptData.statsAllTime,
         gasAccounting_summaryToPublish(),
-        globalBlockReceiptData.lastBlockNum
+        globalBlockReceiptData.lastBlockNum,
+        ethBlockNum,
     ),) { log }; 
 
     globalBlockReceiptData = globalBlockReceiptData with {
-        lastBlockNum: blockNum
+        lastBlockNum: arbBlockNum
     };
 
     // now clear current block stats, because we're advancing to a new current block
@@ -369,7 +370,7 @@ public impure func sendQueuedMessages(queue: Queue, evmLogs: EvmLogs) -> EvmLogs
     };
 }
 
-type LogWith3Topics = struct {
+type LogWith4Topics = struct {
     sender: address,
     data: struct {
         size: uint,
@@ -378,6 +379,7 @@ type LogWith3Topics = struct {
     topic0: uint,
     topic1: uint,
     topic2: uint,
+    topic3: uint,
 }
 
 impure func updateEvmLogForSendToL1(rawLog: any, state: any) -> (any, any) {
@@ -385,17 +387,17 @@ impure func updateEvmLogForSendToL1(rawLog: any, state: any) -> (any, any) {
     //      the current set of logs, this morphs EVM logs with topic[0] == const::EVMLogTopicPlaceHolderForL2ToL1Send
     //      into proper EVM log items with batch-related fields filled in
 
-    // Cast the log item to a struct that assumes 3 topics. topic0, topic1, and topic2 might not exist,
+    // Cast the log item to a struct that assumes 4 topics. The topics might not exist,
     //      but that's OK because we won't try to access them until after we have verified that they exist.
-    let log = unsafecast<LogWith3Topics>(rawLog);
-    return xif ((asm(log,) uint { tlen } == 5) && (log.topic0 == const::EVMLogTopicForL2ToL1Send)) {
-        // Now we know that the log has 3 topics.
+    let log = unsafecast<LogWith4Topics>(rawLog);
+    return xif ((asm(log,) uint { tlen } == 6) && (log.topic0 == const::EVMLogTopicForL2ToL1Send)) {
+        // Now we know that the log has 4 topics.
         xif let Some(res) = queue_get(unsafecast<Queue>(state)) {
             let (uq, item) = res;
             log = log with {
-                topic2: globalOutbox.batchNumber
+                topic3: globalOutbox.batchNumber
             } with {
-                data: log.data with { buf: setbuffer256(log.data.buf, 0, unsafecast<uint>(item)) }
+                data: log.data with { buf: setbuffer256(log.data.buf, 32, unsafecast<uint>(item)) }
             };
             (log, uq)
         } else {

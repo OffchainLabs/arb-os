@@ -363,7 +363,6 @@ impl AbiForContract {
     pub fn add_function_call_to_batch(
         &self,
         batch: &mut Vec<u8>,
-        sender_addr: Uint256,
         func_name: &str,
         args: &[ethabi::Token],
         machine: &mut Machine,
@@ -373,9 +372,8 @@ impl AbiForContract {
         let this_function = self.contract.function(func_name)?;
         let calldata = this_function.encode_input(args).unwrap();
 
-        let tx_id_bytes = machine.runtime_env.append_signed_tx_message_to_batch(
+        let tx_id_bytes = machine.runtime_env._append_compressed_and_signed_tx_message_to_batch(
             batch,
-            sender_addr,
             Uint256::from_usize(100_000_000),
             Uint256::zero(),
             self.address.clone(),
@@ -1932,7 +1930,7 @@ impl _ArbReplayableTx {
         let (receipts, sends) = self.contract_abi.call_function(
             Uint256::zero(), // send from address zero
             "redeem",
-            &[ethabi::Token::Uint(txid.to_u256())],
+            &[ethabi::Token::FixedBytes(txid.to_bytes_be())],
             machine,
             Uint256::zero(),
             self.debug,
@@ -1956,7 +1954,7 @@ impl _ArbReplayableTx {
         let (receipts, sends) = self.contract_abi.call_function(
             Uint256::zero(), // send from address zero
             "getTimeout",
-            &[ethabi::Token::Uint(txid.to_u256())],
+            &[ethabi::Token::FixedBytes(txid.to_bytes_be())],
             machine,
             Uint256::zero(),
             self.debug,
@@ -2001,7 +1999,7 @@ impl _ArbReplayableTx {
         let (receipts, sends) = self.contract_abi.call_function(
             Uint256::zero(), // send from address zero
             "getKeepalivePrice",
-            &[ethabi::Token::Uint(txid.to_u256())],
+            &[ethabi::Token::FixedBytes(txid.to_bytes_be())],
             machine,
             Uint256::zero(),
             self.debug,
@@ -2026,7 +2024,7 @@ impl _ArbReplayableTx {
         let (receipts, sends) = self.contract_abi.call_function(
             Uint256::zero(), // send from address zero
             "keepalive",
-            &[ethabi::Token::Uint(txid.to_u256())],
+            &[ethabi::Token::FixedBytes(txid.to_bytes_be())],
             machine,
             payment,
             self.debug,
@@ -2049,7 +2047,7 @@ impl _ArbReplayableTx {
         let (receipts, sends) = self.contract_abi.call_function(
             Uint256::zero(), // send from address zero
             "getBeneficiary",
-            &[ethabi::Token::Uint(txid.to_u256())],
+            &[ethabi::Token::FixedBytes(txid.to_bytes_be())],
             machine,
             Uint256::zero(),
             self.debug,
@@ -2073,7 +2071,7 @@ impl _ArbReplayableTx {
         let (receipts, sends) = self.contract_abi.call_function(
             sender,
             "cancel",
-            &[ethabi::Token::Uint(txid.to_u256())],
+            &[ethabi::Token::FixedBytes(txid.to_bytes_be())],
             machine,
             Uint256::zero(),
             self.debug,

@@ -2,6 +2,9 @@
 // Copyright 2020, Offchain Labs, Inc. All rights reserved.
 //
 
+use retryBuffer::RetryBuffer;
+use retryBuffer::retryBuffer_new;
+
 use std::bytearray::ByteArray;
 use std::bytearray::bytearray_new;
 use std::bytearray::bytearray_size;
@@ -22,7 +25,10 @@ use decompression::AggregatorDecompressionState;
 use evmCallStack::evmCallStack_addStorageCharge;
 
 
-type AccountStore = map<address, Account>
+type AccountStore = struct {
+    accounts: map<address, Account>,
+    retryBuffer: RetryBuffer,
+}
 
 type Account = struct {
     addr: address,
@@ -54,7 +60,10 @@ var globalAccountStore: AccountStore;   // needs to be initialized before use
 
 
 public impure func accountStore_init() {   // This must be called first!
-    globalAccountStore = newmap<address, Account>;
+    globalAccountStore = struct {
+        accounts: newmap<address, Account>,
+        retryBuffer: retryBuffer_new(),
+    };
 }
 
 public impure func getGlobalAccountStore() -> AccountStore {
@@ -66,7 +75,7 @@ public impure func setGlobalAccountStore(acctStore: AccountStore) {
 }
 
 public func accountStore_get(acctStore: AccountStore, addr: address) -> Account {
-    return xif let Some(acct) = acctStore[addr] {
+    return xif let Some(acct) = acctStore.accounts[addr] {
         acct
     } else {
         // There is no recorded account at this address, so make a pristine account.
@@ -91,7 +100,17 @@ public func accountStore_set(
     addr: address, 
     acct: Account
 ) -> AccountStore {
-    return acctStore with { [addr] = acct };
+    return acctStore with {
+        accounts: acctStore.accounts with { [addr] = acct }
+    };
+}
+
+public func accountStore_getRetryBuffer(acctStore: AccountStore) -> RetryBuffer {
+    return acctStore.retryBuffer;
+}
+
+public func accountStore_setRetryBuffer(acctStore: AccountStore, rbuf: RetryBuffer) -> AccountStore {
+    return acctStore with { retryBuffer: rbuf };
 }
 
 public func accountStore_getNumAccounts(acctStore: AccountStore) -> uint {
@@ -103,13 +122,20 @@ public func accountStore_destroyAndTransferBalance(
     victimAddr: address,
     recipientAddr: address
 ) -> AccountStore {
-    // Destroy the account at victimAddr, and give its Eth balance to recipientAddr
+    // Destroy the account at victimAddr, and give its Eth balance to recipientAddr.
+    // If recipientAddr == victimAddr, this burns the funds.
 
-    let victim = accountStore_get(acctStore, victimAddr);
+    let victim = accountStore_get(acctStore, recipientAddr);
     let recipient = accountStore_get(acctStore, recipientAddr);
-    return acctStore
-        with { [recipientAddr] = account_addBalance(recipient, victim.ethBalance) }
-        with { [victimAddr] = pristineAccount(victimAddr) };
+    return accountStore_set(
+        xif (victimAddr == recipientAddr) {
+            acctStore
+        } else {
+            accountStore_set(acctStore, recipientAddr, account_addBalance(recipient, victim.ethBalance))
+        },
+        victimAddr,
+        pristineAccount(victimAddr)
+    );
 }
 
 public func account_isEmpty(acct: Account) -> bool {
@@ -307,7 +333,7 @@ public func accountStore_cloneContract(
             contractInfo: Some(oldContractInfo with { storage: storageMap_new() })
         };
     }
-    return Some(acctStore with { [newAddr] = newAccount });
+    return Some(accountStore_set(acctStore, newAddr, newAccount));
 }
 
 public func account_getEthBalance(account: Account) -> uint {
@@ -353,9 +379,15 @@ public func accountStore_transferEthBalance(
             acctStore
         } else {
             let toAcct = accountStore_get(acctStore, to);
-            acctStore
-                with { [from] = fromAcct with { ethBalance: fromAcct.ethBalance - amount }}
-                with { [to] = toAcct with { ethBalance: toAcct.ethBalance + amount }}
+            accountStore_set(
+                accountStore_set(
+                    acctStore,
+                    from,
+                    fromAcct with { ethBalance: fromAcct.ethBalance - amount },
+                ),
+                to,
+                toAcct with { ethBalance: toAcct.ethBalance + amount },
+            )
         }
     );
 }

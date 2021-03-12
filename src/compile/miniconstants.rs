@@ -161,8 +161,7 @@ pub fn init_constant_table() -> HashMap<String, Uint256> {
         ("L2MessageType_unsignedContractTx", 1),
         ("L2MessageType_nonmutatingCall", 2),
         ("L2MessageType_batch", 3),
-        ("L2MessageType_signedTx", 4),
-        ("L2MessageType_sequencerBatch", 5),
+        // types 4 and 5 no longer used
         ("L2MessageType_heartbeat", 6),
         ("L2MessageType_signedCompressedTx", 7),
         ("L2MessageType_blsBatch", 8),
@@ -196,7 +195,6 @@ pub fn init_constant_table() -> HashMap<String, Uint256> {
         ("LogType_send", 2),
         ("LogType_sendMerkleTree", 3),
         // outgoing message types
-        ("SendType_withdrawETH", 0),
         ("SendType_sendTxToL1", 3),
         // type 5 not used -- was previously buddy contract result
         // AVM send types
@@ -249,7 +247,7 @@ pub fn init_constant_table() -> HashMap<String, Uint256> {
         ),
         (
             "EVMLogTopicForL2ToL1Send",
-            "99ecd3620b54462a4f03f96ee9a3618830bb7ed6baab03d81adad709b22d1322"
+            "5baaa87db386365b5c161be377bc3d8e317e8d98d71a3ca7ed7d555340c8f767"
             ),
     ] {
         ret.insert(s.to_string(), Uint256::from_string_hex(u).unwrap());

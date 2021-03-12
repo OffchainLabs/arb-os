@@ -1023,7 +1023,7 @@ public impure func getRetryableTxPrice(calldataSize: uint) -> (uint, uint) {
     );
 }
 
-public impure func chargeForRetryableTx(
+public impure func getFeesForRetryableTx(
     sender: address,
     calldataSize: uint,
 ) -> (uint, address, TxFeeStats) {
