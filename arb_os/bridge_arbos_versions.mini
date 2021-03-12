@@ -1,5 +1,8 @@
 
 // This file is machine-generated. Don't edit it unless you know what you're doing.
+use customize_arbos_bridge_versions::set_gasAccountingInfo_onUpgrade;
+use customize_arbos_bridge_versions::set_globalCurrentRetryableRequest_onUpgrade;
+use customize_arbos_bridge_versions::set_globalAccountStore_onUpgrade;
 
 type GlobalsBeforeUpgrade = struct {
     moduleManager: any,
@@ -86,6 +89,7 @@ type GlobalsAfterUpgrade = struct {
         speedLimitPerSecond: uint,
         pricingParams: any,
         gasAllocatedToThisBlock: uint,
+        retryablePrices: any,
     },
     gasAccountingParams: struct {
         SpeedLimitPerSecond: uint,
@@ -99,6 +103,7 @@ type GlobalsAfterUpgrade = struct {
     evmOpJumpTable: [47]impure func(),
     globalCallStack: option<any>,
     globalCurrentTxRequest: any,
+    globalCurrentRetryableRequest: option<any>,
     inErrorHandler: bool,
     globalIndexedAddressTable: any,
     unreachableMask: uint,
@@ -113,25 +118,26 @@ type GlobalsAfterUpgrade = struct {
 }
 
 public impure func remapGlobalsForUpgrade(input_globals: GlobalsBeforeUpgrade) -> GlobalsAfterUpgrade {
-    let globalInbox = input_globals.globalInbox;
-    let inErrorHandler = input_globals.inErrorHandler;
-    let globalL1GasPriceEstimator = input_globals.globalL1GasPriceEstimator;
+    let globalAccountStore = set_globalAccountStore_onUpgrade(input_globals);
     let globalBlockReceiptData = input_globals.globalBlockReceiptData;
-    let globalChainParams = input_globals.globalChainParams;
-    let gasAccountingParams = input_globals.gasAccountingParams;
-    let evmOpJumpTable = input_globals.evmOpJumpTable;
-    let globalAccountStore = input_globals.globalAccountStore;
-    let globalCallStack = input_globals.globalCallStack;
     let globalIndexedAddressTable = input_globals.globalIndexedAddressTable;
-    let globalCurrentTxRequest = input_globals.globalCurrentTxRequest;
-    let upgradeInProgress = input_globals.upgradeInProgress;
-    let moduleManager = input_globals.moduleManager;
-    let logsQueuedForEndOfBlock = input_globals.logsQueuedForEndOfBlock;
+    let globalL1GasPriceEstimator = input_globals.globalL1GasPriceEstimator;
     let blockhashes = input_globals.blockhashes;
+    let upgradeInProgress = input_globals.upgradeInProgress;
     let globalInputQueue = input_globals.globalInputQueue;
+    let moduleManager = input_globals.moduleManager;
+    let evmOpJumpTable = input_globals.evmOpJumpTable;
     let unreachableMask = input_globals.unreachableMask;
-    let gasAccountingInfo = input_globals.gasAccountingInfo;
+    let globalInbox = input_globals.globalInbox;
+    let logsQueuedForEndOfBlock = input_globals.logsQueuedForEndOfBlock;
+    let inErrorHandler = input_globals.inErrorHandler;
+    let globalCurrentTxRequest = input_globals.globalCurrentTxRequest;
+    let gasAccountingParams = input_globals.gasAccountingParams;
+    let globalCallStack = input_globals.globalCallStack;
+    let globalChainParams = input_globals.globalChainParams;
     let globalOutbox = input_globals.globalOutbox;
+    let gasAccountingInfo = set_gasAccountingInfo_onUpgrade(input_globals);
+    let globalCurrentRetryableRequest = set_globalCurrentRetryableRequest_onUpgrade(input_globals);
     let _jump_table = (asm() GlobalsAfterUpgrade { rget })._jump_table;
     return struct {
         moduleManager: moduleManager,
@@ -146,6 +152,7 @@ public impure func remapGlobalsForUpgrade(input_globals: GlobalsBeforeUpgrade) -
         evmOpJumpTable: evmOpJumpTable,
         globalCallStack: globalCallStack,
         globalCurrentTxRequest: globalCurrentTxRequest,
+        globalCurrentRetryableRequest: globalCurrentRetryableRequest,
         inErrorHandler: inErrorHandler,
         globalIndexedAddressTable: globalIndexedAddressTable,
         unreachableMask: unreachableMask,

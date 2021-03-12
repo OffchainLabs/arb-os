@@ -4,8 +4,12 @@
 
 use bridge_arbos_versions::GlobalsBeforeUpgrade;
 
+use accounts::Account;
+
 use inbox::IncomingRequest;
 use inbox::inbox_currentTimestamp;
+
+use retrybuffer::retryBuffer_new;
 
 
 public func set_globalCurrentRetryableRequest_onUpgrade(before: GlobalsBeforeUpgrade) -> option<any> {
@@ -41,5 +45,14 @@ public func set_gasAccountingInfo_onUpgrade(
         pricingParams: old.pricingParams,
         gasAllocatedToThisBlock: old.gasAllocatedToThisBlock,
         retryablePrices: unsafecast<any>(retryablePrices),
+    };
+}
+
+public func set_globalAccountStore_onUpgrade(
+    before: GlobalsBeforeUpgrade,
+) -> any {
+    return struct {
+        accounts: unsafecast<map<address, Account>>(before.globalAccountStore),
+        retryBuffer: retryBuffer_new(),
     };
 }
