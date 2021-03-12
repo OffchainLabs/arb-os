@@ -260,6 +260,7 @@ public impure func initEvmCallStack(
                 request.callvaluePayer,
                 request.calleeAddr,
                 request.callvalue,
+                chargeForCallvalue,
             ) {
                 globalCallStack = Some(struct {
                     runningAs: request.calleeAddr,
@@ -347,7 +348,7 @@ public impure func initEvmCallStack(
                 getGlobalAccountStore(),
                 request.callvaluePayer,
                 request.calleeAddr,
-                request.callvalue
+                request.callvalue,
                 chargeForCallvalue
             ) {
                 if (callKind != const::EVMCallType_staticcall) {  // commit the transfer, unless it's a static call
@@ -436,7 +437,7 @@ public impure func initEvmCallStackForConstructor(
         acctStore,
         request.callvaluePayer,
         request.calleeAddr,
-        request.value,
+        request.callvalue,
         chargeForCallvalue,
     ) {
         acctStore = uas;

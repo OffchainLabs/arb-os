@@ -1132,6 +1132,7 @@ pub fn evm_xcontract_call_using_batch(
     assert_eq!(logs.len(), 2);
     assert_eq!(sends.len(), 0);
 
+    println!("result code {}", logs[0].get_return_code());
     assert!(logs[0].succeeded());
     assert_eq!(logs[0].get_request_id(), tx_id_1);
     let gas_used_so_far_1 = logs[0].get_gas_used_so_far();

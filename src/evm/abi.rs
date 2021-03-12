@@ -1628,6 +1628,7 @@ impl ArbosTest {
         storage: Vec<u8>,
         calldata: Vec<u8>,
     ) -> Result<Vec<u8>, ethabi::Error> {
+        println!("A");
         self.install_account(
             machine,
             addr.clone(),
@@ -1636,8 +1637,10 @@ impl ArbosTest {
             Some(code),
             Some(storage),
         )?;
+        println!("B");
         let _gas_used = machine.run(None);
         self.call(machine, Uint256::zero(), addr.clone(), calldata, balance)?;
+        println!("C");
         let _gas_used = machine.run(None);
         let ret = self._get_marshalled_storage(machine, addr);
         let _gas_used = machine.run(None);
@@ -1691,6 +1694,13 @@ impl ArbosTest {
             caller_addr.clone(),
             callvalue.clone(),
         );
+        let _arbgas_used = if self.debug {
+            machine.debug(None)
+        } else {
+            machine.run(None)
+        };
+        let num_logs_before = machine.runtime_env.get_all_receipt_logs().len();
+        let num_sends_before = machine.runtime_env.get_all_sends().len();
         let _tx_id = machine.runtime_env.insert_tx_message(
             caller_addr,
             Uint256::from_usize(1000000000),
@@ -1699,8 +1709,6 @@ impl ArbosTest {
             callvalue,
             &calldata,
         );
-        let num_logs_before = machine.runtime_env.get_all_receipt_logs().len();
-        let num_sends_before = machine.runtime_env.get_all_sends().len();
         let _arbgas_used = if self.debug {
             machine.debug(None)
         } else {
