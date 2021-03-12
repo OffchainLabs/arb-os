@@ -1932,7 +1932,7 @@ impl _ArbReplayableTx {
         let (receipts, sends) = self.contract_abi.call_function(
             Uint256::zero(), // send from address zero
             "redeem",
-            &[ethabi::Token::Uint(txid.to_u256())],
+            &[ethabi::Token::FixedBytes(txid.to_bytes_be())],
             machine,
             Uint256::zero(),
             self.debug,
@@ -1956,7 +1956,7 @@ impl _ArbReplayableTx {
         let (receipts, sends) = self.contract_abi.call_function(
             Uint256::zero(), // send from address zero
             "getTimeout",
-            &[ethabi::Token::Uint(txid.to_u256())],
+            &[ethabi::Token::FixedBytes(txid.to_bytes_be())],
             machine,
             Uint256::zero(),
             self.debug,
@@ -1998,7 +1998,7 @@ impl _ArbReplayableTx {
         let (receipts, sends) = self.contract_abi.call_function(
             Uint256::zero(), // send from address zero
             "getKeepalivePrice",
-            &[ethabi::Token::Uint(txid.to_u256())],
+            &[ethabi::Token::FixedBytes(txid.to_bytes_be())],
             machine,
             Uint256::zero(),
             self.debug,
@@ -2026,7 +2026,7 @@ impl _ArbReplayableTx {
         let (receipts, sends) = self.contract_abi.call_function(
             Uint256::zero(), // send from address zero
             "keepalive",
-            &[ethabi::Token::Uint(txid.to_u256())],
+            &[ethabi::Token::FixedBytes(txid.to_bytes_be())],
             machine,
             payment,
             self.debug,
@@ -2049,7 +2049,7 @@ impl _ArbReplayableTx {
         let (receipts, sends) = self.contract_abi.call_function(
             Uint256::zero(), // send from address zero
             "getBeneficiary",
-            &[ethabi::Token::Uint(txid.to_u256())],
+            &[ethabi::Token::FixedBytes(txid.to_bytes_be())],
             machine,
             Uint256::zero(),
             self.debug,
@@ -2073,7 +2073,7 @@ impl _ArbReplayableTx {
         let (receipts, sends) = self.contract_abi.call_function(
             sender,
             "cancel",
-            &[ethabi::Token::Uint(txid.to_u256())],
+            &[ethabi::Token::FixedBytes(txid.to_bytes_be())],
             machine,
             Uint256::zero(),
             self.debug,

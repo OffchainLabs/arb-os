@@ -941,6 +941,26 @@ pub fn _test_retryable(log_to: Option<&Path>, debug: bool) -> Result<(), ethabi:
         Uint256::zero()
     ); // verify txid no longer exists
 
+    let amount_to_pay = Uint256::from_u64(1_000_000);
+    let _txid = machine.runtime_env._insert_retryable_tx_message(
+        my_addr.clone(),
+        Uint256::from_u64(7890245789245),    // random non-contract address
+        amount_to_pay.clone(),
+        amount_to_pay.clone(),
+        Uint256::zero(),
+        my_addr.clone(),
+        my_addr.clone(),
+        &[],
+    );
+    let _gas_used = if debug {
+        machine.debug(None)
+    } else {
+        machine.run(None)
+    };
+    let all_logs = machine.runtime_env.get_all_receipt_logs();
+    let last_log = &all_logs[all_logs.len() - 1];
+    assert!(last_log.succeeded());
+
     if let Some(path) = log_to {
         machine
             .runtime_env
