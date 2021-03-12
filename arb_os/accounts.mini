@@ -283,7 +283,11 @@ public func accountStore_upgradeContractFromEvmCode(
                 code: code,
                 evmJumpTable: evmJumpTable,
                 startCodePoint: initCodePt,
-                storage: (oldAcct.contractInfo?).storage,
+                storage: xif let Some(cinfo) = oldAcct.contractInfo {
+                    cinfo.storage
+                } else {
+                    storageMap_new()
+                },
             })
         }
     ));
