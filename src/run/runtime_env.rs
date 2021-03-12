@@ -200,6 +200,37 @@ impl RuntimeEnvironment {
         msg_id
     }
 
+    pub fn _insert_retryable_tx_message(
+        &mut self,
+        sender: Uint256,
+        destination: Uint256,
+        callvalue: Uint256,
+        deposit: Uint256,
+        max_submission_cost: Uint256,
+        credit_back_address: Uint256,
+        beneficiary: Uint256,
+        calldata: &[u8],
+    ) -> Uint256 {
+        let mut msg = vec![];
+        msg.extend(destination.to_bytes_be());
+        msg.extend(callvalue.to_bytes_be());
+        msg.extend(deposit.to_bytes_be());
+        msg.extend(max_submission_cost.to_bytes_be());
+        msg.extend(credit_back_address.to_bytes_be());
+        msg.extend(beneficiary.to_bytes_be());
+        msg.extend(Uint256::from_usize(calldata.len()).to_bytes_be());
+        msg.extend(calldata);
+
+        let mut buf =
+            self.insert_l1_message(
+                9u8,
+                sender,
+                &msg,
+            ).to_bytes_be();
+        buf.extend(&[0u8; 32]);
+        Uint256::from_bytes(&keccak256(&buf))
+    }
+
     pub fn get_gas_price(&self) -> Uint256 {
         Uint256::_from_gwei(200)
     }

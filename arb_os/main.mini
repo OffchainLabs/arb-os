@@ -76,6 +76,7 @@ impure func main(oldGlobals: GlobalsBeforeUpgrade) {
         chainParams_init();
         output_init();
         decompression_init();
+        inbox_init();
         gasAccounting_init();
         evmCallStack_init();
         evmOps_init();

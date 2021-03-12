@@ -112,9 +112,36 @@ This message type encodes an L2 transaction that is funded by calldata provided 
 
 [This is not yet documented.]
 
+**Message type 9: Send tx to retry buffer**
+
+This message type delivers a transaction, which will be placed in the L2 retry buffer, rather than being executed immediately. 
+
+Type-specific data:
+
+* destination address (address encoded as uint)
+* callvalue, in wei (uint)
+* L1-to-L2 deposit, in wei (uint)
+* maximum submission cost (uint)
+* credit-back address (address encoded as uint)
+* beneficiary (address encoded as uint)
+* calldata size (uint)
+* calldata
+
+If this message is properly formatted, the L1-to-L2 deposit amount will be credited to the sender's L2 ETH account. 
+
+Then, if the caller's L2 balance (after the L1-to-L2 deposit has occurred) is at least callvalue+maximumSubmissionCost, the transaction will proceed. 
+
+* *callvalue+maximumSubmissionCost* will be deducted from the caller's L2 ETH account,
+* *currentSubmissionCost* will be collected by ArbOS as a submission fee,
+* *maximumSubmissionCost-currentSubmissionCost* will be credited to the creditBack address's L2 account,
+* a retryable tx will be created and held in ArbOS's buffer, containing *callvalue*, with the specified beneficiary [if the retryable tx times out or is canceled by the beneficiary, the callvalue will be refunded to the beneficiary]
+* ArbOS will emit a transaction receipt reporting success, with 32 bytes of return data: a transaction ID for the retryable tx (uint) which will be equal to keccak256(submissionID, uint(0) ), where submissionID is the requestID of this message
+
+Otherwise, ArbOS will emit a transaction receipt reporting a failure code, with no return data.
+
 ## L2 messages
 
-As noted above, an L2 message is one type of incoming message that can be put into an L2 chain's inbox. The purpose of an L2 message is to convey information, typically a transaction request, to ArbOS. The EthBridge does not examine or interpret the contents of an L2 message.
+As noted above, an L2 message is one type of incoming message that can be put into an L2 chain's inbox. The purpose of an L2 message is to convey information, typically a transaction request, to ArbOS. Except where specified here, the EthBridge does not examine or interpret the contents of an L2 message.
 
 An L2 message consists of:
 
@@ -277,7 +304,7 @@ A block summary is emitted at the end of every L1 block that contains any L2 tra
 A block summary item consists of:
 
 * 1 (uint)
-* block number (uint)
+* Arbitrum block number (uint)
 * timestamp (uint)
 * current ArbGas limit per block (uint)
 * statistics for this block: 5-tuple of
@@ -294,6 +321,7 @@ A block summary item consists of:
   * total wei paid to validators over all time (uint)
   * address receiving validator payments (address encoded as uint)
 * previous block number that had a block summary, or 0 if this is the first block to have a block summary
+* Ethereum block number
 
 ### Outgoing message contents
 

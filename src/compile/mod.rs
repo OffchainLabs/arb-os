@@ -530,7 +530,9 @@ fn create_program_tree(
         } else {
             seen_paths.insert(name.clone());
         }
-        let path = if name[0] == "std" {
+        let path = if name.len() == 1 {
+            name[0].clone()
+        } else if name[0] == "std" {
             format!("../stdlib/{}", name[1])
         } else if name[0] == "core" {
             format!("../builtin/{}", name[1])
