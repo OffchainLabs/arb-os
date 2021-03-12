@@ -459,6 +459,11 @@ pub fn _evm_test_arbgasinfo(log_to: Option<&Path>, debug: bool) -> Result<(), et
         my_addr.clone(),
         Uint256::_from_eth(100),
     );
+    let _gas_used = if debug {
+        machine.debug(None)
+    } else {
+        machine.run(None)
+    }; // advance time so that sends are emitted
 
     let (l2tx, l1calldata, storage, basegas, conggas, totalgas) =
         arbgasinfo._get_prices_in_wei(&mut machine)?;
@@ -2226,6 +2231,11 @@ pub fn _evm_payment_to_self(log_to: Option<&Path>, debug: bool) -> Result<(), et
         my_addr.clone(),
         Uint256::from_u64(20000),
     );
+    let _ = if debug {
+        machine.debug(None)
+    } else {
+        machine.run(None)
+    };
 
     let arbinfo = _ArbInfo::_new(false);
     let balance = arbinfo._get_balance(&mut machine, &my_addr)?;
@@ -2278,6 +2288,12 @@ pub fn evm_payment_to_empty_address(log_to: Option<&Path>, debug: bool) {
         my_addr.clone(),
         Uint256::from_u64(20000),
     );
+    let _ = if debug {
+        machine.debug(None)
+    } else {
+        machine.run(None)
+    };
+
     let tx_id = machine.runtime_env.insert_tx_message(
         my_addr,
         Uint256::from_u64(1000000000),
@@ -2294,9 +2310,9 @@ pub fn evm_payment_to_empty_address(log_to: Option<&Path>, debug: bool) {
     };
 
     let receipts = machine.runtime_env.get_all_receipt_logs();
-    assert_eq!(receipts.len(), 1);
-    assert_eq!(receipts[0].get_request_id(), tx_id);
-    assert!(receipts[0].succeeded());
+    assert_eq!(receipts.len(), 2);
+    assert_eq!(receipts[1].get_request_id(), tx_id);
+    assert!(receipts[1].succeeded());
 
     if let Some(path) = log_to {
         machine

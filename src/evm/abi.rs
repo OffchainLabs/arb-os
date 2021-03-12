@@ -1636,8 +1636,12 @@ impl ArbosTest {
             Some(code),
             Some(storage),
         )?;
+        let _gas_used = machine.run(None);
         self.call(machine, Uint256::zero(), addr.clone(), calldata, balance)?;
-        self._get_marshalled_storage(machine, addr)
+        let _gas_used = machine.run(None);
+        let ret = self._get_marshalled_storage(machine, addr);
+        let _gas_used = machine.run(None);
+        ret
     }
 
     pub fn install_account(
