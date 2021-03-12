@@ -200,7 +200,7 @@ fn _test_upgrade_arbos_over_itself_impl() -> Result<(), ethabi::Error> {
 
     arbowner._give_ownership(&mut machine, my_addr, Some(Uint256::zero()))?;
 
-    let uploader = CodeUploader::_new_from_file(Path::new("arb_os/arbos.mexe"));
+    let uploader = CodeUploader::_new_from_file(Path::new("arb_os/arbos-upgrade.mexe"));
     arbowner._start_code_upload(&mut machine)?;
 
     let mut accum = vec![];
