@@ -307,7 +307,7 @@ public func accountStore_createBuiltinContract(
         fakeCode = bytearray_setByte(fakeCode, 0, 0xfe);
     }
 
-    return xif (account_isEmpty(oldAcct) || isUpgrade) {
+    return xif (account_isEmpty(oldAcct) || !isUpgrade) {
         Some(
             accountStore_set(
                 acctStore,
@@ -317,7 +317,7 @@ public func accountStore_createBuiltinContract(
                         code: fakeCode,
                         evmJumpTable: newmap<uint, impure func()>,
                         startCodePoint: entryPoint,
-                        storage: xif (isUpgrade) {
+                        storage: xif (isUpgrade && (oldAcct.contractInfo != None<AccountContractInfo>)) {
                             (oldAcct.contractInfo?).storage
                         } else {
                             storageMap_new()
