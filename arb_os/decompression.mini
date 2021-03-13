@@ -225,6 +225,8 @@ public impure func decompressAndVerifyEcdsaSignedTx(
         txRequest with {
             caller: signer
         } with {
+            gasPayer: signer
+        } with {
             incomingRequest: originalRequest with {
                 requestId: uint(keccak256(encodedMessage, 0, bytearray_size(encodedMessage)))
             } with {

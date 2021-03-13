@@ -89,16 +89,7 @@ All other options are ignored at present.
 
 ##### Message type 5: buddy contract creation
 
-This message type is initiated by a call from an L1 contract to the EthBridge. The EthBridge must check that the call came from a contract, and reject it otherwise. 
-
-This message type allows an L1 contract to deploy an L2 contract at an L2 address that is equal to the contract's L1 address.  This L2 deploy will be exactly like any ordinary L2 deploy, except for how the address of the deployed L2 contract is determined.
-
-Type-specific data:
-
-* maximum ArbGas to use (uint)
-* ArbGas price bid, in wei (uint)
-* Callvalue, in wei (uint)
-* constructor code and data, encoded per Ethereum ABI (bytes)
+[This is no longer supported.]
 
 ##### Message type 6: reserved
 
