@@ -23,7 +23,7 @@ use accounts::accountStore_set;
 use accounts::accountStore_getRetryBuffer;
 use accounts::accountStore_setRetryBuffer;
 use accounts::accountStore_transferEthBalance;
-use accounts::accountStore_destroyAndTransferBalance;
+use accounts::accountStore_destroyAccount;
 use accounts::accountStore_cloneContract;
 use accounts::account_setStorageCell;
 use accounts::account_getBalance;
@@ -36,6 +36,7 @@ use accounts::account_setContractInfo;
 use accounts::account_fetchAndIncrSeqNum;
 use accounts::account_incrSeqNum;
 use accounts::account_getStorageSize;
+use accounts::account_isEmpty;
 use accounts::pristineAccount;
 
 use evmOps::evmOp_callAndReturn;
@@ -71,6 +72,7 @@ use gasAccounting::gasAccounting_pauseTxCharges;
 use gasAccounting::gasAccounting_resumeTxCharges;
 use gasAccounting::gasAccounting_getGasChargeAmount;
 use gasAccounting::txFeeStats_zero;
+use gasAccounting::gasAccounting_addToReserveInAcctStore;
 
 use codeSegment::translateEvmCodeSegment;
 
@@ -827,8 +829,8 @@ public impure func evmCallStack_returnFromCall(
                         while( ! queue_isEmpty(sdq) ) {
                             let (q, item) = queue_get(sdq)?;
                             sdq = q;
-                            let (victim, owner) = unsafecast<(address, address)>(item);
-                            acctStore = accountStore_destroyAndTransferBalance(acctStore, victim, owner);
+                            let victim = unsafecast<address>(item);
+                            acctStore = accountStore_destroyAccount(acctStore, victim);
                         }
 
                         // emit queued sends
@@ -1341,14 +1343,37 @@ public impure func evmCallStack_addEvmLogToCurrent(item: any) -> option<()> {
     return Some(());
 }
 
-public impure func evmCallStack_selfDestructCurrentAccount(owner: address) {
+public impure func evmCallStack_selfDestructCurrentAccount(recipient: address) {
     if let Some(topFrame) = globalCallStack {
+        let destructee = topFrame.runningAs;
+        let amount = account_getBalance(topFrame.runningAsAccount);
+
+        // take amount from the current running account
+        topFrame = topFrame with { runningAsAccount: account_setBalance(topFrame.runningAsAccount, 0) };
+
+        if (amount > 0) {
+            // give amount to the correct party, according to the yellow paper's rules
+            let recipientAcct = accountStore_get(topFrame.accountStore, recipient);
+            if ((recipient == topFrame.runningAs) || account_isEmpty(recipientAcct)) {
+                // yellow paper says to burn the funds; instead we'll give them to the chain's reserve fund
+                topFrame = topFrame with {
+                    accountStore: gasAccounting_addToReserveInAcctStore(topFrame.accountStore, amount)
+                };
+            } else {
+                // give funds to owner account
+                topFrame = topFrame with {
+                    accountStore: accountStore_set(
+                        topFrame.accountStore,
+                        recipient,
+                        account_addToEthBalance(recipientAcct, amount)
+                    )
+                };
+            }
+        }
+
         globalCallStack = Some(
             topFrame with {
-                selfDestructQueue: queue_put(
-                    topFrame.selfDestructQueue,
-                    (topFrame.runningAs, owner)
-                )
+                selfDestructQueue: queue_put(topFrame.selfDestructQueue, topFrame.runningAs)
             }
         );
     }

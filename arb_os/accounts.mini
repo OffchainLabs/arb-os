@@ -109,6 +109,9 @@ public func accountStore_setRetryBuffer(acctStore: AccountStore, rbuf: RetryBuff
     return acctStore with { retryBuffer: rbuf };
 }
 
+public func accountStore_destroyAccount(acctStore: AccountStore, addrToDestroy: address) -> AccountStore {
+    return accountStore_set(acctStore, addrToDestroy, pristineAccount(addrToDestroy));
+}
 
 public func accountStore_destroyAndTransferBalance(
     acctStore: AccountStore,
@@ -120,15 +123,19 @@ public func accountStore_destroyAndTransferBalance(
 
     let victim = accountStore_get(acctStore, recipientAddr);
     let recipient = accountStore_get(acctStore, recipientAddr);
-    return accountStore_set(
-        xif (victimAddr == recipientAddr) {
-            acctStore
-        } else {
-            accountStore_set(acctStore, recipientAddr, account_addBalance(recipient, victim.ethBalance))
-        },
-        victimAddr,
-        pristineAccount(victimAddr)
-    );
+    return xif (victimAddr == recipientAddr) {
+        accountStore_set(
+            acctStore,
+            victimAddr,
+            account_addBalance(pristineAccount(victimAddr), victim.ethBalance),
+        )
+    } else {
+        accountStore_set(
+            accountStore_set(acctStore, recipientAddr, account_addBalance(recipient, victim.ethBalance)),
+            victimAddr,
+            pristineAccount(victimAddr),
+        )
+    };
 }
 
 public func account_isEmpty(acct: Account) -> bool {
