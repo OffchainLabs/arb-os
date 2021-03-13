@@ -2,8 +2,8 @@
 // Copyright 2020, Offchain Labs, Inc. All rights reserved.
 //
 
-use retryBuffer::RetryBuffer;
-use retryBuffer::retryBuffer_new;
+use retrybuffer::RetryBuffer;
+use retrybuffer::retryBuffer_new;
 
 use std::bytearray::ByteArray;
 use std::bytearray::bytearray_new;
