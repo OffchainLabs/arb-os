@@ -85,6 +85,9 @@ use output::outbox_append;
 use output::sendQueuedMessages;
 
 use inbox::IncomingRequest;
+use inbox::inbox_currentArbBlockNumber;
+use inbox::inbox_currentEthBlockNumber;
+use inbox::inbox_currentTimestamp;
 
 use retrybuffer::RetryBuffer;
 use retrybuffer::RetryableTx;
@@ -807,7 +810,13 @@ public impure func evmCallStack_returnFromCall(
 
                         if let Some(retryableReq) = globalCurrentRetryableRequest {
                             emitTxReceipt(
-                                retryableReq,
+                                retryableReq with {
+                                    arbBlockNumber: inbox_currentArbBlockNumber()
+                                } with {
+                                    ethBlockNumber: inbox_currentEthBlockNumber()
+                                } with {
+                                    timestamp: inbox_currentTimestamp()
+                                },
                                 const::TxResultCode_success,
                                 None<ByteArray>,
                                 None<EvmLogs>,
