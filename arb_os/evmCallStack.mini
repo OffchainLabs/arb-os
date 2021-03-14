@@ -968,7 +968,7 @@ func storageReclaimedForSDQ(topFrame: EvmCallFrame) -> uint {
         if let Some(res) = queue_get(q) {
             let (uq, rawItem) = res;
             q = uq;
-            let (victim, _) = unsafecast<(address, address)>(rawItem);
+            let victim = unsafecast<address>(rawItem);
             if let Some(sz) = account_getStorageSize(accountStore_get(topFrame.accountStore, victim)) {
                 ret = ret + sz;
             }
@@ -1379,13 +1379,13 @@ public impure func evmCallStack_selfDestructCurrentAccount(recipient: address) {
         if (amount > 0) {
             // give amount to the correct party, according to the yellow paper's rules
             let recipientAcct = accountStore_get(topFrame.accountStore, recipient);
-            if ((recipient == topFrame.runningAs) || account_isEmpty(recipientAcct)) {
-                // yellow paper says to burn the funds; instead we'll give them to the chain's reserve fund
+            if (recipient == topFrame.runningAs) {
+                // yellow paper says to burn the funds; we'll give them to the chain's reserve fund
                 topFrame = topFrame with {
                     accountStore: gasAccounting_addToReserveInAcctStore(topFrame.accountStore, amount)
                 };
             } else {
-                // give funds to owner account
+                // give funds to recipient
                 topFrame = topFrame with {
                     accountStore: accountStore_set(
                         topFrame.accountStore,
@@ -1398,7 +1398,7 @@ public impure func evmCallStack_selfDestructCurrentAccount(recipient: address) {
 
         globalCallStack = Some(
             topFrame with {
-                selfDestructQueue: queue_put(topFrame.selfDestructQueue, topFrame.runningAs)
+                selfDestructQueue: queue_put(topFrame.selfDestructQueue, destructee)
             }
         );
     }
