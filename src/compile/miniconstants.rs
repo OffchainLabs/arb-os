@@ -22,6 +22,7 @@ pub fn init_constant_table() -> HashMap<String, Uint256> {
         ("Address_ArbGasInfo", 108),
         ("Address_ArbAggregator", 109),
         ("Address_ArbRetryableTx", 110),
+        ("Address_ArbStatistics", 111),
         // addresses of dummy builtin contracts
         ("Address_ReservedForEthBridge", 200), // reserved for special EthBridge functionality
         // indices of EVM operations
@@ -252,7 +253,7 @@ pub fn init_constant_table() -> HashMap<String, Uint256> {
         ret.insert(s.to_string(), Uint256::from_string_hex(u).unwrap());
     }
 
-    for builtin in &["ArbRetryableTx"] {
+    for builtin in &["ArbRetryableTx", "ArbStatistics",] {
         let fcodes = match func_codes_for_builtin_contract(builtin) {
             Ok(v) => v,
             Err(e) => panic!("Error accessing builtin function {}: {}", builtin, e),

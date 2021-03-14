@@ -32,6 +32,7 @@ use evmCallStack::evmCallStack_returnFromCall;
 use evmCallStack::evmCallStack_callHitError;
 use evmCallStack::evmCallStack_runningCodeFromAccount;
 use evmCallStack::snapshotAuxStack;
+use evmCallStack::evmCallStack_changeNumAccounts;
 
 use evmCallStack::evmCallFrame_runningAsAccount;
 use evmCallStack::evmCallFrame_runningCodeFromAccount;
@@ -1068,6 +1069,7 @@ impure func doCreationOpcode(value: uint, offset: uint, length: uint, newAddress
                                     )
                                 )
                             ) {
+                                evmCallStack_changeNumAccounts(int(1));
                                 return newAddress;
                             }
                         }

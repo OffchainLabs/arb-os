@@ -16,6 +16,9 @@ use std::storageMap::storageMap_size;
 use std::storageMap::storageMap_get;
 use std::storageMap::storageMap_set;
 
+use core::kvs::Kvs;
+use core::kvs::builtin_kvsSize;
+
 use chainParameters::chainParams_getDefaultAggregator;
 use decompression::AggregatorDecompressionState;
 use evmCallStack::evmCallStack_addStorageCharge;
@@ -24,6 +27,7 @@ use evmCallStack::evmCallStack_addStorageCharge;
 type AccountStore = struct {
     accounts: map<address, Account>,
     retryBuffer: RetryBuffer,
+    numContracts: uint,
 }
 
 type Account = struct {
@@ -59,6 +63,7 @@ public impure func accountStore_init() {   // This must be called first!
     globalAccountStore = struct {
         accounts: newmap<address, Account>,
         retryBuffer: retryBuffer_new(),
+        numContracts: 0,
     };
 }
 
@@ -107,6 +112,18 @@ public func accountStore_getRetryBuffer(acctStore: AccountStore) -> RetryBuffer 
 
 public func accountStore_setRetryBuffer(acctStore: AccountStore, rbuf: RetryBuffer) -> AccountStore {
     return acctStore with { retryBuffer: rbuf };
+}
+
+public func accountStore_getNumAccounts(acctStore: AccountStore) -> uint {
+    return builtin_kvsSize(unsafecast<Kvs>(acctStore.accounts));
+}
+
+public func accountStore_getNumContracts(acctStore: AccountStore) -> uint {
+    return acctStore.numContracts;
+}
+
+public func accountStore_changeNumContracts(acctStore: AccountStore, delta: int) -> AccountStore {
+    return acctStore with { numContracts: uint(int(acctStore.numContracts) + delta) };
 }
 
 public func accountStore_destroyAccount(acctStore: AccountStore, addrToDestroy: address) -> AccountStore {
@@ -274,15 +291,17 @@ public impure func accountStore_createAccountFromEvmCode(
     };
 }
 
+
 public func accountStore_upgradeContractFromEvmCode(
     store: AccountStore,
     addr: address,
     code: ByteArray,
     evmJumpTable: map<uint, impure func()>,
     initCodePt: impure func(),
-) -> option<AccountStore> {
+) -> AccountStore {
     let oldAcct = accountStore_get(store, addr);
-    return Some(accountStore_set(
+    let contractAdded = false;
+    store = accountStore_set(
         store,
         addr,
         oldAcct with {
@@ -293,11 +312,17 @@ public func accountStore_upgradeContractFromEvmCode(
                 storage: xif let Some(cinfo) = oldAcct.contractInfo {
                     cinfo.storage
                 } else {
+                    contractAdded = true;
                     storageMap_new()
                 },
             })
         }
-    ));
+    );
+    return xif (contractAdded) {
+        accountStore_changeNumContracts(store, int(1))
+    } else {
+        store
+    };
 }
 
 public func accountStore_createBuiltinContract(
@@ -337,16 +362,18 @@ public func accountStore_createBuiltinContract(
                 } with {
                     nextSeqNum: xif (isUpgrade) { oldAcct.nextSeqNum } else { 1 }
                 }
-            )
+            ) with {
+                numContracts: acctStore.numContracts + 1
+            }
         )
     } elseif (isUpgrade) {
-        accountStore_upgradeContractFromEvmCode(
+        Some(accountStore_upgradeContractFromEvmCode(
             acctStore,
             addr,
             fakeCode,
             newmap<uint, impure func()>,
             entryPoint,
-        )
+        ))
     } else {
         // There was already an account at that address, so return failure.
         None<AccountStore>
