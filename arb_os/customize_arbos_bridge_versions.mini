@@ -56,6 +56,7 @@ public func set_globalAccountStore_onUpgrade(
     return struct {
         accounts: unsafecast<map<address, Account>>(before.globalAccountStore),
         retryBuffer: retryBuffer_new(),
+        numContracts: 0,
     };
 }
 
