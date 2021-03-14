@@ -18,6 +18,7 @@ use errorHandler::errorHandler;
 
 use accounts::getGlobalAccountStore;
 use accounts::setGlobalAccountStore;
+use accounts::accountStore_changeNumContracts;
 use accounts::accountStore_get;
 use accounts::accountStore_set;
 use accounts::accountStore_getRetryBuffer;
@@ -38,8 +39,6 @@ use accounts::account_incrSeqNum;
 use accounts::account_getStorageSize;
 use accounts::account_isEmpty;
 use accounts::pristineAccount;
-
-use arbstatistics::arbStatistics_addContract;
 
 use evmOps::evmOp_callAndReturn;
 
@@ -795,7 +794,8 @@ public impure func evmCallStack_returnFromCall(
                             feeStats,
                         );
 
-                        arbStatistics_addContract();
+                        // increment global contract count
+                        setGlobalAccountStore(accountStore_changeNumContracts(getGlobalAccountStore(), int(1)));
                     } else {
                         // Compilation of resulting code failed; report an error.
                         emitTxReceipt(
@@ -843,7 +843,10 @@ public impure func evmCallStack_returnFromCall(
                             let (q, item) = queue_get(sdq)?;
                             sdq = q;
                             let victim = unsafecast<address>(item);
-                            acctStore = accountStore_destroyAccount(acctStore, victim);
+                            acctStore = accountStore_changeNumContracts(
+                                accountStore_destroyAccount(acctStore, victim),
+                                -1s,
+                            );
                         }
 
                         // emit queued sends
@@ -1262,6 +1265,15 @@ public impure func evmCallStack_transferEthInCurrentContext(from: address, to: a
             None<()>
         }
     };
+}
+
+public impure func evmCallStack_changeNumAccounts(delta: int) {
+    if let Some(topFrame) = globalCallStack {
+        globalCallStack = Some(
+            topFrame with { accountStore: accountStore_changeNumContracts(topFrame.accountStore, delta) }
+        );
+    }
+    // if not in a stack frame (which shouldn't happen), ignore the problem, the only consequence is inaccurate stats
 }
 
 public impure func evmCallStack_getTopFrameMemoryOrDie() -> ByteArray {

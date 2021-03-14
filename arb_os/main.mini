@@ -167,7 +167,7 @@ impure func initializePreinstalls(isUpgrade: bool) -> option<()> {
             code,
             evmJumpTable,
             initCodePt,
-        )?
+        )
     } else {
         accountStore_createAccountFromEvmCode(
             acctStore,
