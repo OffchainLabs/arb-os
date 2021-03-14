@@ -84,6 +84,7 @@ impure func main(oldGlobals: GlobalsBeforeUpgrade) {
         gasAccounting_init();
         evmCallStack_init();
         evmOps_init();
+        blockhash_init();
         inbox_init();
         accountStore_init();
         txReceipts_init();
