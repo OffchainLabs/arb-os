@@ -1373,7 +1373,7 @@ impl<'a> _ArbOwner<'a> {
         &self,
         machine: &mut Machine,
     ) -> Result<(), ethabi::Error> {
-        let (receipts, _sends) = self.contract_abi.call_function(
+        let _res = self.contract_abi.call_function(
             self.my_address.clone(),
             "finishCodeUploadAsArbosUpgrade",
             &[],
@@ -1381,18 +1381,7 @@ impl<'a> _ArbOwner<'a> {
             Uint256::zero(),
             self.debug,
         )?;
-
-        if receipts.len() != 1 {
-            return Err(ethabi::Error::from("wrong number of receipts"));
-        }
-
-        if receipts[0].succeeded() {
-            Err(ethabi::Error::from(
-                "should have reverted but actually succeeded",
-            ))
-        } else {
-            Ok(())
-        }
+        Ok(())
     }
 
     pub fn _finish_code_upload_as_pluggable(

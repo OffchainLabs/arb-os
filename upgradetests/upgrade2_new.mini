@@ -1,0 +1,33 @@
+
+use bridge2::remapGlobalsForUpgrade;
+use bridge2::GlobalsBeforeUpgrade;
+
+var newGlobal1: option<int>;
+var newGlobal2: uint;
+var newGlobal3: (uint, uint);
+
+
+impure func main(oldGlobals: GlobalsBeforeUpgrade) -> uint {
+    asm(remapGlobalsForUpgrade(oldGlobals),) { rset };
+
+    if (newGlobal1 != Some(-3s)) {
+        asm((1, newGlobal1),) { debugprint };
+        panic;
+    }
+
+    if (newGlobal2 != 5) {
+        asm((2, newGlobal2),) { debugprint };
+        panic;
+    }
+
+    asm(42,) { debugprint };
+    return 2*myExpr(3);
+}
+
+func plusFour(x: uint) -> uint {
+    return x+4;
+}
+
+func myExpr(x: uint) -> uint {
+    return 3*(plusFour(x));
+}

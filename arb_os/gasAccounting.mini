@@ -403,6 +403,19 @@ public impure func gasAccounting_addToReserveInCurrentContext(wei: uint) {
     );
 }
 
+public impure func gasAccounting_addToReserveInAcctStore(acctStore: AccountStore, wei: uint) -> AccountStore {
+    // Add funds to the "reserve" which means paying them to the congestion fee recipient.
+    // This is done in the current context, so if done in a tx this will be reverted if the tx reverts.
+    let reserveAddr = gasAccountingInfo.feeConfig.forCongestion;
+    return accountStore_set(
+        acctStore,
+        reserveAddr,
+        account_addToEthBalance(
+            accountStore_get(acctStore, reserveAddr),
+            wei,
+        ),
+    );
+}
 public impure func gasAccounting_summaryToPublish() -> any {
     // get summary of gas prices and pool at present, for inclusion in block summary log
     let prices = gasAccountingInfo.currentPrices;

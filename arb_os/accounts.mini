@@ -2,8 +2,8 @@
 // Copyright 2020, Offchain Labs, Inc. All rights reserved.
 //
 
-use retryBuffer::RetryBuffer;
-use retryBuffer::retryBuffer_new;
+use retrybuffer::RetryBuffer;
+use retrybuffer::retryBuffer_new;
 
 use std::bytearray::ByteArray;
 use std::bytearray::bytearray_new;
@@ -117,6 +117,10 @@ public func accountStore_getNumAccounts(acctStore: AccountStore) -> uint {
     return builtin_kvsSize(unsafecast<Kvs>(acctStore.accounts));
 }
 
+public func accountStore_destroyAccount(acctStore: AccountStore, addrToDestroy: address) -> AccountStore {
+    return accountStore_set(acctStore, addrToDestroy, pristineAccount(addrToDestroy));
+}
+
 public func accountStore_destroyAndTransferBalance(
     acctStore: AccountStore,
     victimAddr: address,
@@ -127,15 +131,19 @@ public func accountStore_destroyAndTransferBalance(
 
     let victim = accountStore_get(acctStore, recipientAddr);
     let recipient = accountStore_get(acctStore, recipientAddr);
-    return accountStore_set(
-        xif (victimAddr == recipientAddr) {
-            acctStore
-        } else {
-            accountStore_set(acctStore, recipientAddr, account_addBalance(recipient, victim.ethBalance))
-        },
-        victimAddr,
-        pristineAccount(victimAddr)
-    );
+    return xif (victimAddr == recipientAddr) {
+        accountStore_set(
+            acctStore,
+            victimAddr,
+            account_addBalance(pristineAccount(victimAddr), victim.ethBalance),
+        )
+    } else {
+        accountStore_set(
+            accountStore_set(acctStore, recipientAddr, account_addBalance(recipient, victim.ethBalance)),
+            victimAddr,
+            pristineAccount(victimAddr),
+        )
+    };
 }
 
 public func account_isEmpty(acct: Account) -> bool {
@@ -247,7 +255,7 @@ public impure func accountStore_createAccountFromEvmCode(
     code: ByteArray,
     evmJumpTable: map<uint, impure func()>,
     initCodePt: impure func(),
-    storageMap: StorageMap
+    storageMap: StorageMap,
 ) -> option<AccountStore> {
     // Create a new account for a compiled EVM contract.
     // Returns Some(updatedAccountStore), or None if something went wrong.
@@ -274,25 +282,54 @@ public impure func accountStore_createAccountFromEvmCode(
     };
 }
 
-public impure func accountStore_createBuiltinContract(
+
+public func accountStore_upgradeContractFromEvmCode(
+    store: AccountStore,
+    addr: address,
+    code: ByteArray,
+    evmJumpTable: map<uint, impure func()>,
+    initCodePt: impure func(),
+) -> option<AccountStore> {
+    let oldAcct = accountStore_get(store, addr);
+    return Some(accountStore_set(
+        store,
+        addr,
+        oldAcct with {
+            contractInfo: Some(struct {
+                code: code,
+                evmJumpTable: evmJumpTable,
+                startCodePoint: initCodePt,
+                storage: xif let Some(cinfo) = oldAcct.contractInfo {
+                    cinfo.storage
+                } else {
+                    storageMap_new()
+                },
+            })
+        }
+    ));
+}
+
+public func accountStore_createBuiltinContract(
     acctStore: AccountStore,
     addr: address,
     entryPoint: impure func(),
     isArbitrumStyle: bool,
+    isUpgrade: bool,
 ) -> option<AccountStore> {
     arbStatistics_addContract();
 
     let oldAcct = accountStore_get(acctStore, addr);
-    return xif (account_isEmpty(oldAcct)) {
-        // set up fake code for the contract
-        // if Arbitrum style, must give it nonzero size because callers check if size is zero to see if contract exists
-        // otherwise it's an Ethereum precompile which is specified to have null bytearray as its code
-        let fakeCode = bytearray_new(0);
-        if (isArbitrumStyle) {
-            // fake code is a single EVM INVALID instruction
-            fakeCode = bytearray_setByte(fakeCode, 0, 0xfe);
-        }
 
+    // set up fake code for the contract
+    // if Arbitrum style, must give it nonzero size because callers check if size is zero to see if contract exists
+    // otherwise it's an Ethereum precompile which is specified to have null bytearray as its code
+    let fakeCode = bytearray_new(0);
+    if (isArbitrumStyle) {
+        // fake code is a single EVM INVALID instruction
+        fakeCode = bytearray_setByte(fakeCode, 0, 0xfe);
+    }
+
+    return xif (account_isEmpty(oldAcct) || !isUpgrade) {
         Some(
             accountStore_set(
                 acctStore,
@@ -302,12 +339,24 @@ public impure func accountStore_createBuiltinContract(
                         code: fakeCode,
                         evmJumpTable: newmap<uint, impure func()>,
                         startCodePoint: entryPoint,
-                        storage: storageMap_new(),
+                        storage: xif (isUpgrade && (oldAcct.contractInfo != None<AccountContractInfo>)) {
+                            (oldAcct.contractInfo?).storage
+                        } else {
+                            storageMap_new()
+                        },
                     })
                 } with {
-                    nextSeqNum: 1
+                    nextSeqNum: xif (isUpgrade) { oldAcct.nextSeqNum } else { 1 }
                 }
             )
+        )
+    } elseif (isUpgrade) {
+        accountStore_upgradeContractFromEvmCode(
+            acctStore,
+            addr,
+            fakeCode,
+            newmap<uint, impure func()>,
+            entryPoint,
         )
     } else {
         // There was already an account at that address, so return failure.

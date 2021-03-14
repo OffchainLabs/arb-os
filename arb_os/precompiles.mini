@@ -54,36 +54,40 @@ use arbretryable::arbretryable_txcall;
 use arbstatistics::arbStatistics_txcall;
 
 
-public impure func precompiles_init(acctStore: AccountStore) -> option<AccountStore> {
+public impure func precompiles_init(acctStore: AccountStore, isUpgrade: bool) -> option<AccountStore> {
     acctStore = accountStore_createBuiltinContract(
         acctStore,
         address(0x01),
         makeTrampoline(precompile_0x01),
         false,
+        isUpgrade,
     )?;
     acctStore = accountStore_createBuiltinContract(
         acctStore,
         address(0x02),
         makeTrampoline(precompile_0x02),
         false,
+        isUpgrade,
     )?;
     acctStore = accountStore_createBuiltinContract(
         acctStore,
         address(0x03),
         makeTrampoline(precompile_0x03),
         false,
+        isUpgrade,
     )?;
     acctStore = accountStore_createBuiltinContract(
         acctStore,
         address(0x04),
         makeTrampoline(precompile_0x04),
         false,
+        isUpgrade,
     )?;
 
     installPluggable(
         const::PluggableModuleID_precompile_0x05,
         unsafecast<ModuleFunction>(precompile_0x05_pluggable),
-        false,
+        isUpgrade,
     )?;
     acctStore = accountStore_set(
         acctStore,
@@ -100,84 +104,98 @@ public impure func precompiles_init(acctStore: AccountStore) -> option<AccountSt
         address(0x06),
         makeTrampoline(precompile_0x06),
         false,
+        isUpgrade,
     )?;
     acctStore = accountStore_createBuiltinContract(
         acctStore,
         address(0x07),
         makeTrampoline(precompile_0x07),
         false,
+        isUpgrade,
     )?;
     acctStore = accountStore_createBuiltinContract(
         acctStore,
         address(0x08),
         makeTrampoline(precompile_0x08),
         false,
+        isUpgrade,
     )?;
     acctStore = accountStore_createBuiltinContract(
         acctStore,
         address(0x09),
         makeTrampoline(precompile_0x09),
         false,
+        isUpgrade,
     )?;
     acctStore = accountStore_createBuiltinContract(
         acctStore,
         address(const::Address_ArbSys),
         makeTrampoline(arbsys_txcall),
         true,
+        isUpgrade,
     )?;
     acctStore = accountStore_createBuiltinContract(
         acctStore,
         address(const::Address_ArbosTest),
         makeTrampoline(arbosTest_txcall),
         true,
+        isUpgrade,
     )?;
     acctStore = accountStore_createBuiltinContract(
         acctStore,
         address(const::Address_ArbAddressTable),
         makeTrampoline(arbAddressTable_txcall),
         true,
+        isUpgrade,
     )?;
     acctStore = accountStore_createBuiltinContract(
         acctStore,
         address(const::Address_ArbBLS),
         makeTrampoline(arbBLS_txcall),
         true,
+        isUpgrade,
     )?;
     acctStore = accountStore_createBuiltinContract(
         acctStore,
         address(const::Address_ArbFunctionTable),
         makeTrampoline(arbFunctionTable_txcall),
         true,
+        isUpgrade,
     )?;
     acctStore = accountStore_createBuiltinContract(
         acctStore,
         address(const::Address_ArbOwner),
         makeTrampoline(arbowner_txcall),
         true,
+        isUpgrade,
     )?;
     acctStore = accountStore_createBuiltinContract(
         acctStore,
         address(const::Address_ArbGasInfo),
         makeTrampoline(arbgasinfo_txcall),
         true,
+        isUpgrade,
     )?;
     acctStore = accountStore_createBuiltinContract(
         acctStore,
         address(const::Address_ArbAggregator),
         makeTrampoline(arbaggregator_txcall),
         true,
+        isUpgrade,
     )?;
     acctStore = accountStore_createBuiltinContract(
         acctStore,
         address(const::Address_ArbRetryableTx),
         makeTrampoline(arbretryable_txcall),
         true,
+        isUpgrade,
     )?;
     acctStore = accountStore_createBuiltinContract(
         acctStore,
         address(const::Address_ArbStatistics),
         makeTrampoline(arbStatistics_txcall),
         true,
+        isUpgrade,
     )?;
     acctStore = accountStore_createBuiltinContract(
             acctStore,
