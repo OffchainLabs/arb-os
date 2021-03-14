@@ -23,6 +23,9 @@ use accounts::accountStore_transferEthBalance;
 use accounts::account_getNextSeqNum;
 use accounts::account_getAggregatorToPay;
 
+use arbstatistics::arbStatistics_addToStorage;
+use arbstatistics::arbStatistics_addToGasUsed;
+
 use evmCallStack::evmCallStack_isEmpty;
 use evmCallStack::evmCallStack_getAccountInCurrentContext;
 use evmCallStack::evmCallStack_setAccountInCurrentContext;
@@ -492,6 +495,8 @@ public impure func gasAccounting_startTxCharges(
         }
     };
 
+    arbStatistics_addToGasUsed(gasUsedByOS);
+
     asm(maxGas,) { setgas };
     return const::TxResultCode_success;
 }
@@ -504,6 +509,8 @@ public impure func gasAccounting_endTxCharges(storageDelta: int, feeStats: TxFee
     // switch over to charging the OS for gas
     let txState = gasAccountingInfo.txState?;
     let gasToRefund = txState.gasInReserve + switchToChargingOS();
+
+    arbStatistics_addToStorage(storageDelta);
 
     let gasForStorage = xif ((storageDelta > int(0)) && (txState.price > 0)) {
         uint(storageDelta) * (gasAccountingInfo.currentPrices.perStorageCell + txState.price - 1) / txState.price
@@ -572,6 +579,8 @@ public impure func gasAccounting_endTxCharges(storageDelta: int, feeStats: TxFee
     } with {
         txState: None<TxGasState>
     };
+
+    arbStatistics_addToGasUsed(gasUsed);
 
     return Some((
         confirmed,
@@ -705,6 +714,8 @@ public impure func gasAccounting_resumeTxCharges(allocationRequested: uint) -> u
                 gasPool: gasAccountingInfo.congestionState.gasPool - int(osGasUsed)
             }
         };
+
+        arbStatistics_addToGasUsed(osGasUsed);
 
         asm(allocationRequested,) { setgas };  // start charging the application
         allocationRequested

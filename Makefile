@@ -109,6 +109,7 @@ $(ARBOSDIR)/arbos-upgrade.mexe: $(TESTCONTRACTS) $(ARBOSDIR) $(STDDIR) $(BUILTIN
 	$(CARGORUN) compile "arb_os" -o "arb_os/arbos-upgrade.mexe"
 	$(CARGORUN) gen-upgrade-code $(ARBOSDIR)/arbos_before.mexe $(ARBOSDIR)/arbos-upgrade.mexe $(ARBOSDIR)/bridge_arbos_versions.mini customize_arbos_bridge_versions $(ARBOSDIR)/upgrade.toml
 	$(CARGORUN) compile "arb_os" -o "arb_os/arbos-upgrade.mexe"
+	cp $(ARBOSDIR)/bridge_arbos_versions.mini $(ARBOSDIR)/save_bridge_for_debugging.mini
 	cp $(ARBOSDIR)/dummy_version_bridge.mini $(ARBOSDIR)/bridge_arbos_versions.mini
 
 $(BUILTINDIR)/maptest.mexe: $(BUILTINMAOS) $(BUILTINDIR)/maptest.mini

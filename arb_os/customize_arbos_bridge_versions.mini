@@ -5,7 +5,9 @@
 use bridge_arbos_versions::GlobalsBeforeUpgrade;
 
 use accounts::Account;
+use arbstatistics::ArbStatistics;
 
+use arbstatistics::arbStatistics_newForUpgrade;
 use inbox::IncomingRequest;
 use inbox::inbox_currentTimestamp;
 
@@ -54,5 +56,12 @@ public func set_globalAccountStore_onUpgrade(
     return struct {
         accounts: unsafecast<map<address, Account>>(before.globalAccountStore),
         retryBuffer: retryBuffer_new(),
+        numContracts: 0,
     };
+}
+
+public func set_arbStats_onUpgrade(
+    before: GlobalsBeforeUpgrade,
+) -> ArbStatistics {
+    return arbStatistics_newForUpgrade();
 }

@@ -51,6 +51,7 @@ use arbsys::arbBLS_txcall;
 use arbsys::arbFunctionTable_txcall;
 use arbaggregator::arbaggregator_txcall;
 use arbretryable::arbretryable_txcall;
+use arbstatistics::arbStatistics_txcall;
 
 
 public impure func precompiles_init(acctStore: AccountStore, isUpgrade: bool) -> option<AccountStore> {
@@ -186,6 +187,13 @@ public impure func precompiles_init(acctStore: AccountStore, isUpgrade: bool) ->
         acctStore,
         address(const::Address_ArbRetryableTx),
         makeTrampoline(arbretryable_txcall),
+        true,
+        isUpgrade,
+    )?;
+    acctStore = accountStore_createBuiltinContract(
+        acctStore,
+        address(const::Address_ArbStatistics),
+        makeTrampoline(arbStatistics_txcall),
         true,
         isUpgrade,
     )?;
