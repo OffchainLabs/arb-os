@@ -1,0 +1,14 @@
+type OldGlobals = struct {
+    global1: uint,
+    global2: option<int>,
+    jump_table: any,
+}
+
+func main(old: OldGlobals) -> bool {
+    asm(old,) { debugprint };
+    asm(asm(old,) uint { tlen },) { debugprint };
+    if (asm(old,) uint { tlen } != 3) {
+        return false;
+    }
+    return true;
+}

@@ -8,8 +8,10 @@ use accounts::accountStore_init;
 use accounts::getGlobalAccountStore;
 use accounts::setGlobalAccountStore;
 use accounts::accountStore_createAccountFromEvmCode;
+use accounts::accountStore_upgradeContractFromEvmCode;
 use blockhash::blockhash_init;
 use chainParameters::chainParams_init;
+use chainParameters::chainParams_haveDoneInit;
 use codeSegment::codeSegment_init;
 use codeSegment::translateEvmCodeSegment;
 use contractTemplates::getArbInfoCode;
@@ -39,7 +41,6 @@ use std::bytestream::ByteStream;
 use std::bytestream::bytestream_new;
 use std::storageMap::StorageMap;
 
-
 use decompression::decompression_init;
 use gasAccounting::getNextRequestFromCongestionAuction;
 use gasAccounting::txFeeStats_zero;
@@ -47,27 +48,45 @@ use messages::handleL1Request; // return None if message format error; Some(()) 
 use messages::handleL2Request; // return None if message format error; Some(()) if other error; if no error, never return
 use output::emitTxReceipt;
 use arbsys::arbsys_txcall;
-
 use inbox::IncomingRequest;
+use evmCallStack::evmCallStack_makeEmpty;
+
+use bridge_arbos_versions::GlobalsBeforeUpgrade;
+use bridge_arbos_versions::remapGlobalsForUpgrade;
 
 
-impure func main() {
-    errorHandler_init();
-    pluggables_init();
-    codeSegment_init();
-    chainParams_init();
-    output_init();
-    decompression_init();
-    inbox_init();
-    gasAccounting_init();
-    evmCallStack_init();
-    evmOps_init();
-    blockhash_init();
-    accountStore_init();
-    txReceipts_init();
-    rollupTracker_init();
-    if (initializePreinstalls() == None<()>) {
-        panic;   // don't try to run without preinstalls and precompiles
+impure func main(oldGlobals: GlobalsBeforeUpgrade) {
+    if (unsafecast<any>(oldGlobals) != ()) {
+        // this is an upgrade; we're inheriting the state of a previous ArbOS instance
+
+        asm(remapGlobalsForUpgrade(oldGlobals),) { rset };
+
+        // now re-do the initializations that set up pointers into the ArbOS code
+        errorHandler_init();
+        evmOps_init();
+        evmCallStack_makeEmpty();   // clear out the old EVM call stack from before the upgrade
+        if (initializePreinstalls(true) == None<()>) {
+            panic;   // don't try to run without preinstalls and precompiles
+        }
+    } else {
+        // this is a clean start, not an upgrade
+        errorHandler_init();
+        pluggables_init();
+        codeSegment_init();
+        chainParams_init();
+        output_init();
+        decompression_init();
+        inbox_init();
+        gasAccounting_init();
+        evmCallStack_init();
+        evmOps_init();
+        inbox_init();
+        accountStore_init();
+        txReceipts_init();
+        rollupTracker_init();
+        if (initializePreinstalls(false) == None<()>) {
+            panic;   // don't try to run without preinstalls and precompiles
+        }
     }
 
     // initialize any customizations here
@@ -129,7 +148,7 @@ public impure func mainRunLoop() {
     }
 }
 
-impure func initializePreinstalls() -> option<()> {
+impure func initializePreinstalls(isUpgrade: bool) -> option<()> {
     let acctStore = getGlobalAccountStore();
 
     let code = bytearray_unmarshalBytes(getArbInfoCode())?;
@@ -137,19 +156,29 @@ impure func initializePreinstalls() -> option<()> {
         bytestream_new(code),
         false
     )?;
-    acctStore = accountStore_createAccountFromEvmCode(
-        acctStore,
-        getArbInfoAddress(),
-        code,
-        evmJumpTable,
-        initCodePt,
-        getArbInfoStorage()
-    )?;
+    acctStore = xif (isUpgrade) {
+        accountStore_upgradeContractFromEvmCode(
+            acctStore,
+            getArbInfoAddress(),
+            code,
+            evmJumpTable,
+            initCodePt,
+        )?
+    } else {
+        accountStore_createAccountFromEvmCode(
+            acctStore,
+            getArbInfoAddress(),
+            code,
+            evmJumpTable,
+            initCodePt,
+            getArbInfoStorage()
+        )?
+    };
 
     // set up precompiled contracts
-    acctStore = precompiles_init(acctStore)?;
+    acctStore = precompiles_init(acctStore, isUpgrade)?;
 
     setGlobalAccountStore(acctStore);
+
     return Some(());
 }
-

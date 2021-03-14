@@ -8,11 +8,6 @@ use chainParameters::chainParams_getOwner;
 use chainParameters::chainParams_setOwner;
 use chainParameters::chainParams_setSecondsPerSend;
 
-use codeSegment::AvmCodeBuilder;
-use codeSegment::avmCodeBuilder_new;
-use codeSegment::avmCodeBuilder_append;
-use codeSegment::avmCodeBuilder_finish;
-
 use evmCallStack::EvmCallFrame;
 use evmCallStack::evmCallStack_topFrame;
 use evmCallStack::evmCallStack_callHitError;
@@ -46,6 +41,11 @@ use std::bytearray::bytearray_setByte;
 use std::bytearray::bytearray_get256;
 use std::bytearray::bytearray_set256;
 use std::bytearray::bytearray_extract;
+
+use std::avmcodebuilder::AvmCodeBuilder;
+use std::avmcodebuilder::avmCodeBuilder_new;
+use std::avmcodebuilder::avmCodeBuilder_append;
+use std::avmcodebuilder::avmCodeBuilder_finish;
 
 use std::bytestream::bytestream_new;
 

@@ -1,0 +1,33 @@
+
+use std::bytearray::bytearray_fromSizeAndBuffer;
+
+use std::bytestream::bytestream_new;
+
+use std::avmcodebuilder::avmCodeBuilder_new;
+use std::avmcodebuilder::avmCodeBuilder_append;
+use std::avmcodebuilder::avmCodeBuilder_finish;
+
+
+var global1: uint;
+var global2: option<int>;
+
+impure func main() {
+    global1 = 5;
+    global2 = Some(-3s);
+
+    let (sz, buf) = asm() (uint, buffer) { inbox };
+    let stream = bytestream_new(bytearray_fromSizeAndBuffer(sz, buf));
+
+    let builder = avmCodeBuilder_new(false);
+    builder = xif let Some(bu) = avmCodeBuilder_append(builder, stream) {
+        bu
+    } else {
+        panic
+    };
+    let jumpTarget = avmCodeBuilder_finish(builder);
+
+    asm(jumpTarget, 78) { jump };
+
+    // should never get here
+    panic;
+}
