@@ -4,11 +4,13 @@
 
 #![allow(unused_parens)]
 
+use crate::link::LinkedProgram;
+use crate::run::Machine;
 use clap::Clap;
 use compile::{compile_from_file, CompileError};
 use contracttemplates::generate_contract_template_file_or_die;
 use link::{link, postlink_compile};
-use mavm::{Value, CodePt};
+use mavm::{CodePt, Value};
 use pos::try_display_location;
 use run::{
     profile_gen_from_file, replay_from_testlog_file, run_from_file, ProfilerMode,
@@ -21,8 +23,6 @@ use std::io::Read;
 use std::path::Path;
 use std::time::Instant;
 use uint256::Uint256;
-use crate::link::LinkedProgram;
-use crate::run::Machine;
 
 #[cfg(test)]
 mod buffertests;
@@ -113,6 +113,14 @@ struct WasmTest {
     param: Option<usize>,
 }
 
+///Command line options for wasm-test subcommand.
+#[derive(Clap, Debug)]
+struct WasmRun {
+    input: Vec<String>,
+    #[clap(short, long)]
+    param: Option<String>,
+}
+
 ///Main enum for command line arguments.
 #[derive(Clap, Debug)]
 enum Args {
@@ -126,6 +134,7 @@ enum Args {
     MakeTemplates,
     EvmTests(EvmTests),
     WasmTest(WasmTest),
+    WasmRun(WasmRun),
 }
 
 fn main() -> Result<(), CompileError> {
@@ -147,7 +156,7 @@ fn main() -> Result<(), CompileError> {
             let mut buffer = Vec::<u8>::new();
             file.read_to_end(&mut buffer).unwrap();
 
-            wasm::run_jit(&buffer, param as i64);
+            // wasm::run_jit(&buffer, param as i64);
 
             let code = wasm::load(&buffer, param);
             let code_len = code.len();
@@ -161,8 +170,24 @@ fn main() -> Result<(), CompileError> {
             };
             let mut machine = Machine::new(program, env);
             machine.start_at_zero();
-            machine.run(Some(CodePt::new_internal(code_len-1)));
-            machine.debug(Some(CodePt::new_internal(code_len-1)));
+            machine.run(Some(CodePt::new_internal(code_len - 1)));
+            machine.debug(Some(CodePt::new_internal(code_len - 1)));
+        }
+        Args::WasmRun(fname) => {
+            let filenames: Vec<_> = fname.input.clone();
+            if (filenames.len() != 1) {
+                println!("no input");
+                return Ok(());
+            }
+            let param = match fname.param {
+                Some(p) => hex::decode(p).unwrap(),
+                None => vec![],
+            };
+            let mut file = File::open(&filenames[0]).unwrap();
+            let mut buffer = Vec::<u8>::new();
+            file.read_to_end(&mut buffer).unwrap();
+
+            wasm::run_jit(&buffer, &param);
         }
         Args::Compile(compile) => {
             let debug_mode = compile.debug_mode;

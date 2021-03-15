@@ -12,7 +12,7 @@ pub fn zero_hash(sz: u8) -> Uint256 {
     if sz == 32 {
         return Uint256::zero().avm_hash();
     }
-    let h1 = zero_hash(sz/2);
+    let h1 = zero_hash(sz / 2);
     Uint256::avm_hash2(&h1, &h1)
 }
 
@@ -23,7 +23,7 @@ fn hash_buffer_aux(buf: &[u8], pack: bool) -> (Uint256, bool) {
     if buf.len() == 32 {
         let res = Uint256::from_bytes(buf).avm_hash();
         let zero = res == zero_hash(32);
-        return (res, zero)
+        return (res, zero);
     }
     let len = buf.len();
     let (h2, zero2) = hash_buffer_aux(&buf[len / 2..len], false);
@@ -88,13 +88,12 @@ fn test_hash_test() {
     for i in 0..1024 {
         let mut buf: Vec<u8> = Vec::new();
         buf.resize(32 * 1024, 0);
-        buf[i*32] = 123;
+        buf[i * 32] = 123;
         let b = Buffer::empty0();
-        let b = b.set_byte(i*32, 123);
+        let b = b.set_byte(i * 32, 123);
         if i >= 512 {
             assert_eq!(hash_buffer(&buf), hash_full_buffer(&buf));
         }
         assert_eq!(hash_buffer(&buf), b.hash().hash);
     }
-
 }

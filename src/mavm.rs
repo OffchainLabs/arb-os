@@ -339,7 +339,10 @@ fn hash_buf(buf: &[u8]) -> Packed {
     if is_zero_hash(&h2) {
         return pack(&h1);
     }
-    normal(Uint256::avm_hash2(&unpack(&h1), &unpack(&h2)), 1 + h1.size + h1.packed as u8)
+    normal(
+        Uint256::avm_hash2(&unpack(&h1), &unpack(&h2)),
+        1 + h1.size + h1.packed as u8,
+    )
 }
 
 #[allow(dead_code)]
@@ -408,7 +411,11 @@ fn zero_packed(sz: u8) -> Packed {
 }
 
 fn max(a: u64, b: usize) -> u64 {
-    if a > (b as u64) { a } else { b as u64 }
+    if a > (b as u64) {
+        a
+    } else {
+        b as u64
+    }
 }
 
 fn hash_sparse(idx: &[usize], buf: &[u8], sz: u8) -> Packed {
@@ -602,7 +609,7 @@ impl Buffer {
                 let mut nbuf = buf.to_vec().clone();
                 nidx.push(offset);
                 nbuf.push(v);
-                Buffer::sparse(Rc::new(nidx), Rc::new(nbuf), *h,  mx)
+                Buffer::sparse(Rc::new(nidx), Rc::new(nbuf), *h, mx)
             }
             BufferElem::Node(cell, h) => {
                 if needed_height(offset) > calc_height(*h) {
@@ -610,7 +617,12 @@ impl Buffer {
                     vec.push(Buffer::node(cell.clone(), *h, 0));
                     #[cfg(feature = "sparse")]
                     for _i in 1..128 {
-                        vec.push(Buffer::sparse(Rc::new(Vec::new()), Rc::new(Vec::new()), *h, 0));
+                        vec.push(Buffer::sparse(
+                            Rc::new(Vec::new()),
+                            Rc::new(Vec::new()),
+                            *h,
+                            0,
+                        ));
                     }
                     #[cfg(not(feature = "sparse"))]
                     {
@@ -625,7 +637,7 @@ impl Buffer {
                 let mut vec = cell.to_vec().clone();
                 let cell_len = calc_len(*h - 1);
                 vec[offset / cell_len] = vec[offset / cell_len].set_byte(offset % cell_len, v);
-                Buffer::node(Rc::new(vec), *h,  mx)
+                Buffer::node(Rc::new(vec), *h, mx)
             }
         }
     }
@@ -667,7 +679,7 @@ impl Value {
             Value::CodePoint(_) => 1,
             Value::Tuple(_) => 3,
             Value::Buffer(_) => 4,
-            Value::WasmCodePoint(_,_) => 5,
+            Value::WasmCodePoint(_, _) => 5,
             Value::Label(_) => {
                 panic!("tried to run type instruction on a label");
             }
@@ -686,9 +698,10 @@ impl Value {
                     None => Err(label),
                 }
             }
-            Value::WasmCodePoint(v, code) => {
-                Ok(Value::WasmCodePoint(Box::new(v.replace_labels(label_map)?), code.clone()))
-            }
+            Value::WasmCodePoint(v, code) => Ok(Value::WasmCodePoint(
+                Box::new(v.replace_labels(label_map)?),
+                code.clone(),
+            )),
             Value::Tuple(tup) => {
                 let mut new_vec = Vec::new();
                 for v in tup.iter() {
@@ -725,7 +738,10 @@ impl Value {
             Value::CodePoint(cpt) => (Value::CodePoint(cpt.relocate(int_offset, ext_offset)), 0),
             Value::WasmCodePoint(v, code) => {
                 let (new_val, new_func_offset) = v.relocate(int_offset, ext_offset, func_offset);
-                (Value::WasmCodePoint(Box::new(new_val), code.clone()), new_func_offset)
+                (
+                    Value::WasmCodePoint(Box::new(new_val), code.clone()),
+                    new_func_offset,
+                )
             }
             Value::Label(label) => {
                 let (new_label, new_func_offset) =
@@ -781,7 +797,9 @@ impl Value {
                 Value::Int(acc)
             }
             Value::CodePoint(cp) => Value::avm_hash2(&Value::Int(Uint256::one()), &cp.avm_hash()),
-            Value::WasmCodePoint(v, _) => Value::avm_hash2(&Value::Int(Uint256::from_usize(3)), &v.avm_hash()),
+            Value::WasmCodePoint(v, _) => {
+                Value::avm_hash2(&Value::Int(Uint256::from_usize(3)), &v.avm_hash())
+            }
             Value::Label(label) => {
                 Value::avm_hash2(&Value::Int(Uint256::from_usize(2)), &label.avm_hash())
             }
@@ -813,7 +831,7 @@ impl fmt::Display for Value {
                 BufferElem::Sparse(vec1, _, _) => write!(f, "Buffer(Sparse({}))", vec1.len()),
             },
             Value::CodePoint(pc) => write!(f, "CodePoint({})", pc),
-            Value::WasmCodePoint(v,_) => write!(f, "WasmCodePoint({})", v),
+            Value::WasmCodePoint(v, _) => write!(f, "WasmCodePoint({})", v),
             Value::Label(label) => write!(f, "Label({})", label),
             Value::Tuple(tup) => {
                 if tup.is_empty() {

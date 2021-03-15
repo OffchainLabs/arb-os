@@ -8,10 +8,10 @@ use super::runtime_env::RuntimeEnvironment;
 use crate::compile::{CompileError, DebugInfo};
 use crate::link::LinkedProgram;
 use crate::mavm::{AVMOpcode, Buffer, CodePt, Instruction, Opcode, Value};
-use crate::wasm::{run_jit, process_wasm};
 use crate::pos::{try_display_location, Location};
 use crate::run::ripemd160port;
 use crate::uint256::Uint256;
+use crate::wasm::{process_wasm, run_jit};
 use clap::Clap;
 use ethers_core::types::{Signature, H256};
 use std::cmp::{max, Ordering};
@@ -114,7 +114,10 @@ impl ValueStack {
 
     ///If the top `Value` on the stack is a wasm code point, pops the value and returns it as a `WasmCodePt`,
     /// otherwise returns an `ExecutionError`.
-    pub fn pop_wasm_codepoint(&mut self, state: &MachineState) -> Result<(Value,Vec<u8>), ExecutionError> {
+    pub fn pop_wasm_codepoint(
+        &mut self,
+        state: &MachineState,
+    ) -> Result<(Value, Vec<u8>), ExecutionError> {
         let val = self.pop(state)?;
         if let Value::WasmCodePoint(cp, buf) = val {
             Ok((*cp, buf))
@@ -2115,7 +2118,7 @@ impl Machine {
                         let arg = self.stack.pop_usize(&self.state)?;
                         let (_, vec) = self.stack.pop_wasm_codepoint(&self.state)?;
                         println!("Going to run JIT");
-                        let res = run_jit(&vec, arg as i64) as usize;
+                        let res = run_jit(&vec, &vec![]) as usize;
                         self.stack.push(Value::Int(Uint256::from_usize(res)));
                         self.incr_pc();
                         Ok(true)
