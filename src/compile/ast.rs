@@ -344,7 +344,11 @@ impl Type {
                 }
                 for field in fields {
                     //This should indent further when dealing with sub-structs
-                    out.push_str(&format!("    {}: {},\n", field.name, field.tipe.display_indented(indent_level+1)));
+                    out.push_str(&format!(
+                        "    {}: {},\n",
+                        field.name,
+                        field.tipe.display_indented(indent_level + 1)
+                    ));
                     for _ in 0..indent_level {
                         out.push_str("    ");
                     }
@@ -377,7 +381,11 @@ impl Type {
                 out
             }
             Type::Map(key, val) => {
-                format!("map<{},{}>", key.display_indented(indent_level), val.display_indented(indent_level))
+                format!(
+                    "map<{},{}>",
+                    key.display_indented(indent_level),
+                    val.display_indented(indent_level)
+                )
             }
             Type::Any => "any".to_string(),
             Type::Every => "every".to_string(),
