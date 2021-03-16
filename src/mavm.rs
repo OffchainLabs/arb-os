@@ -315,7 +315,7 @@ impl fmt::Display for CodePt {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Buffer {
     root: Rc<BufferNode>,
-    size: usize,
+    size: u128,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -327,7 +327,7 @@ pub enum BufferNode {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct BufferInternal {
     height: usize,
-    capacity: usize,
+    capacity: u128,
     left: Rc<BufferNode>,
     right: Rc<BufferNode>,
     hash_val: Uint256,
@@ -348,14 +348,15 @@ impl Buffer {
             } else {
                 BufferNode::minimal_internal_from_bytes(&contents)
             }),
-            size: contents.len(),
+            size: contents.len() as u128,
         }
     }
 
-    pub fn as_bytes(&self, nbytes: usize) -> Vec<u8> {  // TODO: make this more efficient
+    pub fn as_bytes(&self, nbytes: usize) -> Vec<u8> {
+        // TODO: make this more efficient
         let mut ret = vec![];
         for i in 0..nbytes {
-            ret.push(self.read_byte(i));
+            ret.push(self.read_byte(i as u128));
         }
         ret
     }
@@ -365,10 +366,10 @@ impl Buffer {
     }
 
     pub fn hex_encode(&self) -> String {
-        self.root.hex_encode(self.size)
+        self.root.hex_encode(self.size as usize)
     }
 
-    pub fn read_byte(&self, offset: usize) -> u8 {
+    pub fn read_byte(&self, offset: u128) -> u8 {
         if offset >= self.size {
             0u8
         } else {
@@ -376,7 +377,7 @@ impl Buffer {
         }
     }
 
-    pub fn set_byte(&self, offset: usize, val: u8) -> Self {
+    pub fn set_byte(&self, offset: u128, val: u8) -> Self {
         Buffer {
             root: Rc::new(self.root.set_byte(offset, val)),
             size: if offset >= self.size {
@@ -403,16 +404,17 @@ impl BufferNode {
     }
 
     fn minimal_internal_from_bytes(v: &[u8]) -> Self {
-        let (height, size) = levels_needed(v.len());
+        assert!(v.len() > 32);
+        let (height, size) = levels_needed(v.len() as u128);
         BufferNode::internal_from_bytes(height, size, v)
     }
 
-    fn internal_from_bytes(height: usize, capacity: usize, v: &[u8]) -> Self {
-        if height == 0 {
+    fn internal_from_bytes(height: usize, capacity: u128, v: &[u8]) -> Self {
+        if height == 1 {
             BufferNode::leaf_from_bytes(v)
         } else if v.len() == 0 {
             BufferNode::new_empty_internal(height, capacity)
-        } else if v.len() <= capacity / 2 {
+        } else if v.len() as u128 <= capacity / 2 {
             let left = Rc::new(BufferNode::internal_from_bytes(height - 1, capacity / 2, v));
             let right = Rc::new(BufferNode::new_empty_internal(height - 1, capacity / 2));
             BufferNode::Internal(BufferInternal {
@@ -452,7 +454,7 @@ impl BufferNode {
         }
     }
 
-    fn new_empty_internal(height: usize, capacity: usize) -> Self {
+    fn new_empty_internal(height: usize, capacity: u128) -> Self {
         let child = Rc::new(if height == 1 {
             BufferNode::new_empty()
         } else {
@@ -486,14 +488,14 @@ impl BufferNode {
         }
     }
 
-    fn read_byte(&self, offset: usize) -> u8 {
+    fn read_byte(&self, offset: u128) -> u8 {
         match self {
             BufferNode::Leaf(b) => b[offset as usize],
             BufferNode::Internal(node) => node.read_byte(offset),
         }
     }
 
-    fn set_byte(&self, offset: usize, val: u8) -> Self {
+    fn set_byte(&self, offset: u128, val: u8) -> Self {
         match self {
             BufferNode::Leaf(b) => {
                 if (offset < 32) {
@@ -512,7 +514,7 @@ impl BufferNode {
 }
 
 impl BufferInternal {
-    fn new(height: usize, capacity: usize, left: BufferNode, right: BufferNode) -> Self {
+    fn new(height: usize, capacity: u128, left: BufferNode, right: BufferNode) -> Self {
         BufferInternal {
             height,
             capacity,
@@ -540,27 +542,28 @@ impl BufferInternal {
     }
 
     fn hex_encode(&self, size: usize) -> String {
+        let half_capacity = (self.capacity / 2) as usize;
         if size == 0 {
             "".to_string()
-        } else if size <= self.capacity / 2 {
+        } else if size <= half_capacity {
             self.left.hex_encode(size)
         } else {
-            let mut left_str = self.left.hex_encode(self.capacity / 2);
-            let right_str = self.right.hex_encode(size - self.capacity / 2);
+            let mut left_str = self.left.hex_encode(half_capacity);
+            let right_str = self.right.hex_encode(size - half_capacity);
             left_str.push_str(&right_str);
             left_str
         }
     }
 
-    fn read_byte(&self, offset: usize) -> u8 {
-        if offset <= self.capacity / 2 {
+    fn read_byte(&self, offset: u128) -> u8 {
+        if offset < self.capacity / 2 {
             self.left.read_byte(offset)
         } else {
             self.right.read_byte(offset - self.capacity / 2)
         }
     }
 
-    fn set_byte(&self, offset: usize, val: u8) -> BufferInternal {
+    fn set_byte(&self, offset: u128, val: u8) -> BufferInternal {
         if offset < self.capacity / 2 {
             BufferInternal::new(
                 self.height,
@@ -581,9 +584,9 @@ impl BufferInternal {
     }
 }
 
-fn levels_needed(x: usize) -> (usize, usize) {
+fn levels_needed(x: u128) -> (usize, u128) {
     let mut height = 1;
-    let mut size = 32;
+    let mut size = 32u128;
     while (size < x) {
         height = height + 1;
         size = size * 2;
