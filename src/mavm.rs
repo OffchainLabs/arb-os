@@ -7,9 +7,11 @@ use crate::run::upload::CodeUploader;
 use crate::stringtable::StringId;
 use crate::uint256::Uint256;
 use ethers_core::utils::keccak256;
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use serde_repr::{Deserialize_repr, Serialize_repr};
 use std::{collections::HashMap, fmt, rc::Rc};
+use serde::de::Visitor;
+use rustc_hex::FromHex;
 
 #[derive(PartialEq, Eq, Hash, Debug, Clone, Copy, Serialize, Deserialize)]
 pub enum Label {
@@ -312,7 +314,7 @@ impl fmt::Display for CodePt {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Buffer {
     root: Rc<BufferNode>,
     size: u128,
@@ -386,6 +388,37 @@ impl Buffer {
                 self.size
             },
         }
+    }
+}
+
+struct BufferVisitor;
+
+impl<'de> Visitor<'de> for BufferVisitor {
+    type Value = Buffer;
+    fn expecting(&self, _formatter: &mut fmt::Formatter) -> fmt::Result {
+        unimplemented!()
+    }
+    fn visit_str<E>(self, v: &str) -> Result<Self::Value, E> {
+        println!("{:?}", v.from_hex::<Vec<_>>());
+        unimplemented!()
+    }
+}
+
+impl Serialize for Buffer {
+    fn serialize<S>(&self, serializer: S) -> Result<<S as Serializer>::Ok, <S as Serializer>::Error>
+    where
+        S: Serializer,
+    {
+        serializer.serialize_str(&*format!("{:X?}",self.as_bytes(self.size as usize)))
+    }
+}
+
+impl<'de> Deserialize<'de> for Buffer {
+    fn deserialize<D>(_deserializer: D) -> Result<Self, <D as Deserializer<'de>>::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        unimplemented!()
     }
 }
 
