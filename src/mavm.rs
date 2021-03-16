@@ -344,14 +344,11 @@ impl Buffer {
     }
 
     pub fn from_bytes(contents: Vec<u8>) -> Self {
-        Buffer {
-            root: Rc::new(if contents.len() <= 32 {
-                BufferNode::leaf_from_bytes(&contents)
-            } else {
-                BufferNode::minimal_internal_from_bytes(&contents)
-            }),
-            size: contents.len() as u128,
+        let mut ret = Buffer::new_empty();
+        for i in 0..contents.len() {
+            ret = ret.set_byte(i as u128, contents[i]);
         }
+        ret
     }
 
     pub fn as_bytes(&self, nbytes: usize) -> Vec<u8> {
@@ -427,7 +424,7 @@ impl BufferNode {
         BufferNode::Leaf(vec![0u8; 32])
     }
 
-    pub fn leaf_from_bytes(v: &[u8]) -> Self {
+    pub fn _leaf_from_bytes(v: &[u8]) -> Self {
         assert!(v.len() <= 32);
         let mut buf = vec![0u8; 32];
         for i in 0..v.len() {
@@ -436,19 +433,19 @@ impl BufferNode {
         BufferNode::Leaf(buf)
     }
 
-    fn minimal_internal_from_bytes(v: &[u8]) -> Self {
+    fn _minimal_internal_from_bytes(v: &[u8]) -> Self {
         assert!(v.len() > 32);
-        let (height, size) = levels_needed(v.len() as u128);
-        BufferNode::internal_from_bytes(height, size, v)
+        let (height, size) = _levels_needed(v.len() as u128);
+        BufferNode::_internal_from_bytes(height, size, v)
     }
 
-    fn internal_from_bytes(height: usize, capacity: u128, v: &[u8]) -> Self {
+    fn _internal_from_bytes(height: usize, capacity: u128, v: &[u8]) -> Self {
         if height == 1 {
-            BufferNode::leaf_from_bytes(v)
+            BufferNode::_leaf_from_bytes(v)
         } else if v.len() == 0 {
             BufferNode::new_empty_internal(height, capacity)
         } else if v.len() as u128 <= capacity / 2 {
-            let left = Rc::new(BufferNode::internal_from_bytes(height - 1, capacity / 2, v));
+            let left = Rc::new(BufferNode::_internal_from_bytes(height - 1, capacity / 2, v));
             let right = Rc::new(BufferNode::new_empty_internal(height - 1, capacity / 2));
             BufferNode::Internal(BufferInternal {
                 height,
@@ -463,12 +460,12 @@ impl BufferNode {
             })
         } else {
             let mid = (capacity / 2) as usize;
-            let left = Rc::new(BufferNode::internal_from_bytes(
+            let left = Rc::new(BufferNode::_internal_from_bytes(
                 height - 1,
                 capacity / 2,
                 &v[0..mid],
             ));
-            let right = Rc::new(BufferNode::internal_from_bytes(
+            let right = Rc::new(BufferNode::_internal_from_bytes(
                 height - 1,
                 capacity / 2,
                 &v[mid..],
@@ -617,7 +614,7 @@ impl BufferInternal {
     }
 }
 
-fn levels_needed(x: u128) -> (usize, u128) {
+fn _levels_needed(x: u128) -> (usize, u128) {
     let mut height = 1;
     let mut size = 32u128;
     while (size < x) {
