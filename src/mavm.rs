@@ -406,7 +406,7 @@ impl Serialize for Buffer {
     where
         S: Serializer,
     {
-        serializer.serialize_str(&*format!("{:X?}",self.as_bytes(self.size as usize)))
+        serializer.serialize_str(&*format!("{}",hex::encode(self.as_bytes(self.size as usize))))
     }
 }
 
