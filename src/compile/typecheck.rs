@@ -1078,6 +1078,9 @@ fn typecheck_patvec(
             let mut tc_pats = Vec::new();
             let mut bindings = Vec::new();
             for (i, rhs_type) in tvec.iter().enumerate() {
+                if *rhs_type == Type::Void {
+                    return Err(new_type_error("attempted to assign void in tuple binding".to_string(), location));
+                }
                 let pat = &patterns[i];
                 match &pat.kind {
                     MatchPatternKind::Simple(name) => {
