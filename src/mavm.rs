@@ -7,11 +7,10 @@ use crate::run::upload::CodeUploader;
 use crate::stringtable::StringId;
 use crate::uint256::Uint256;
 use ethers_core::utils::keccak256;
-use serde::{Deserialize, Deserializer, Serialize, Serializer};
+use serde::{Deserialize, Deserializer, Serialize, Serializer, de};
 use serde_repr::{Deserialize_repr, Serialize_repr};
 use std::{collections::HashMap, fmt, rc::Rc};
 use serde::de::Visitor;
-use rustc_hex::FromHex;
 
 #[derive(PartialEq, Eq, Hash, Debug, Clone, Copy, Serialize, Deserialize)]
 pub enum Label {
@@ -392,12 +391,12 @@ struct BufferVisitor;
 
 impl<'de> Visitor<'de> for BufferVisitor {
     type Value = Buffer;
-    fn expecting(&self, _formatter: &mut fmt::Formatter) -> fmt::Result {
-        unimplemented!()
+    fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+        formatter.write_str("Expected hex string")
     }
-    fn visit_str<E>(self, v: &str) -> Result<Self::Value, E> {
-        println!("{:?}", v.from_hex::<Vec<_>>());
-        unimplemented!()
+    fn visit_str<E>(self, v: &str) -> Result<Self::Value, E>
+    where E: de::Error {
+        Ok(Buffer::from_bytes(hex::decode(v).map_err(|_| E::custom("Could not buffer as hex string".to_string()))?))
     }
 }
 
@@ -411,11 +410,11 @@ impl Serialize for Buffer {
 }
 
 impl<'de> Deserialize<'de> for Buffer {
-    fn deserialize<D>(_deserializer: D) -> Result<Self, <D as Deserializer<'de>>::Error>
+    fn deserialize<D>(deserializer: D) -> Result<Self, <D as Deserializer<'de>>::Error>
     where
         D: Deserializer<'de>,
     {
-        unimplemented!()
+        deserializer.deserialize_str(BufferVisitor)
     }
 }
 
