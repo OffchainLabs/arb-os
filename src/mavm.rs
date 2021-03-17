@@ -7,10 +7,10 @@ use crate::run::upload::CodeUploader;
 use crate::stringtable::StringId;
 use crate::uint256::Uint256;
 use ethers_core::utils::keccak256;
-use serde::{Deserialize, Deserializer, Serialize, Serializer, de};
+use serde::de::Visitor;
+use serde::{de, Deserialize, Deserializer, Serialize, Serializer};
 use serde_repr::{Deserialize_repr, Serialize_repr};
 use std::{collections::HashMap, fmt, rc::Rc};
-use serde::de::Visitor;
 
 #[derive(PartialEq, Eq, Hash, Debug, Clone, Copy, Serialize, Deserialize)]
 pub enum Label {
@@ -395,8 +395,12 @@ impl<'de> Visitor<'de> for BufferVisitor {
         formatter.write_str("Expected hex string")
     }
     fn visit_str<E>(self, v: &str) -> Result<Self::Value, E>
-    where E: de::Error {
-        Ok(Buffer::from_bytes(hex::decode(v).map_err(|_| E::custom("Could not buffer as hex string".to_string()))?))
+    where
+        E: de::Error,
+    {
+        Ok(Buffer::from_bytes(hex::decode(v).map_err(|_| {
+            E::custom("Could not buffer as hex string".to_string())
+        })?))
     }
 }
 
@@ -405,7 +409,10 @@ impl Serialize for Buffer {
     where
         S: Serializer,
     {
-        serializer.serialize_str(&*format!("{}",hex::encode(self.as_bytes(self.size as usize))))
+        serializer.serialize_str(&*format!(
+            "{}",
+            hex::encode(self.as_bytes(self.size as usize))
+        ))
     }
 }
 
@@ -444,7 +451,11 @@ impl BufferNode {
         } else if v.len() == 0 {
             BufferNode::new_empty_internal(height, capacity)
         } else if v.len() as u128 <= capacity / 2 {
-            let left = Rc::new(BufferNode::_internal_from_bytes(height - 1, capacity / 2, v));
+            let left = Rc::new(BufferNode::_internal_from_bytes(
+                height - 1,
+                capacity / 2,
+                v,
+            ));
             let right = Rc::new(BufferNode::new_empty_internal(height - 1, capacity / 2));
             BufferNode::Internal(BufferInternal {
                 height,

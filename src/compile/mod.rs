@@ -631,7 +631,7 @@ pub fn parse_from_source(
             lalrpop_util::ParseError::UnrecognizedEOF { location, expected } => CompileError::new(
                 format!(
                     "unexpected end of file: expected one of: {}",
-                    format!("{:?}",&expected)
+                    format!("{:?}", &expected)
                 ),
                 lines.location(location.into(), file_id),
             ),
