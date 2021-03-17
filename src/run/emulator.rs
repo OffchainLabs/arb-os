@@ -590,54 +590,13 @@ impl ProfilerData {
             println!("Enter file to examine");
             let mut command = String::new();
             if stdin().read_line(&mut command).is_ok() {
-                let trimmed_command = command.trim_end();
-                match trimmed_command {
-                    "exit" => return,
-                    _ => match self.data.get(trimmed_command) {
-                        Some(tree) => loop {
-                            command.clear();
-                            let res = stdin().read_line(&mut command);
-                            if res.is_err() {
-                                println!("Error reading line");
-                                continue;
-                            }
-                            if command.trim_end() == "change" {
-                                break;
-                            }
-                            let start_row = match command.trim_end().parse::<usize>() {
-                                Ok(u) => u,
-                                Err(_) => {
-                                    println!("Invalid line number");
-                                    continue;
-                                }
-                            };
-                            command.clear();
-                            let res = stdin().read_line(&mut command);
-                            if res.is_err() {
-                                println!("Error reading line");
-                                continue;
-                            }
-                            let end_row = match command.trim_end().parse::<usize>() {
-                                Ok(u) => u,
-                                Err(_) => {
-                                    println!("Invalid line number");
-                                    continue;
-                                }
-                            };
-                            if start_row > end_row {
-                                println!("Invalid range");
-                                continue;
-                            }
-                            let area_cost: u64 = tree
-                                .range((max(start_row, 1) - 1, 0)..(end_row, 0))
-                                .map(|(_, val)| *val)
-                                .sum();
-                            println!("ArbGas cost of region: {}", area_cost);
-                        },
-                        None => {
-                            println!("Could not find file");
-                        }
-                    },
+                match self.menu(command) {
+                    Ok(ProfilerAction::Exit) => return,
+                    Ok(ProfilerAction::Change) => continue,
+                    Err(message) => {
+                        println!("{}", message);
+                        continue;
+                    }
                 }
             } else {
                 println!("Error reading line, aborting");
@@ -645,6 +604,62 @@ impl ProfilerData {
             }
         }
     }
+
+    fn menu(&self, mut command: String) -> Result<ProfilerAction, String> {
+        let trimmed_command = command.trim_end();
+        if "exit" == trimmed_command {
+            return Ok(ProfilerAction::Exit);
+        }
+        if let Some(tree) = self.data.get(trimmed_command) {
+            loop {
+                command.clear();
+                let res = stdin().read_line(&mut command);
+                if res.is_err() {
+                    println!("Error reading line");
+                    continue;
+                }
+                if command.trim_end() == "change" {
+                    break Ok(ProfilerAction::Change);
+                }
+                let start_row = match command.trim_end().parse::<usize>() {
+                    Ok(u) => u,
+                    Err(_) => {
+                        println!("Invalid line number");
+                        continue;
+                    }
+                };
+                command.clear();
+                let res = stdin().read_line(&mut command);
+                if res.is_err() {
+                    println!("Error reading line");
+                    continue;
+                }
+                let end_row = match command.trim_end().parse::<usize>() {
+                    Ok(u) => u,
+                    Err(_) => {
+                        println!("Invalid line number");
+                        continue;
+                    }
+                };
+                if start_row > end_row {
+                    println!("Invalid range");
+                    continue;
+                }
+                let area_cost: u64 = tree
+                    .range((max(start_row, 1) - 1, 0)..(end_row, 0))
+                    .map(|(_, val)| *val)
+                    .sum();
+                println!("ArbGas cost of region: {}", area_cost);
+            }
+        } else {
+            Err(format!("Could not find file \"{}\"", trimmed_command))
+        }
+    }
+}
+
+pub enum ProfilerAction {
+    Exit,
+    Change,
 }
 
 #[derive(PartialEq, Debug, Clap)]

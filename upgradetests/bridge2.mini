@@ -1,8 +1,8 @@
 
 // This file is machine-generated. Don't edit it unless you know what you're doing.
-use impl2::set_newGlobal2_onUpgrade;
 use impl2::set_newGlobal1_onUpgrade;
 use impl2::set_newGlobal3_onUpgrade;
+use impl2::set_newGlobal2_onUpgrade;
 
 type GlobalsBeforeUpgrade = struct {
     global1: uint,
@@ -18,9 +18,9 @@ type GlobalsAfterUpgrade = struct {
 }
 
 public impure func remapGlobalsForUpgrade(input_globals: GlobalsBeforeUpgrade) -> GlobalsAfterUpgrade {
-    let newGlobal2 = set_newGlobal2_onUpgrade(input_globals);
     let newGlobal1 = set_newGlobal1_onUpgrade(input_globals);
     let newGlobal3 = set_newGlobal3_onUpgrade(input_globals);
+    let newGlobal2 = set_newGlobal2_onUpgrade(input_globals);
     let _jump_table = (asm() GlobalsAfterUpgrade { rget })._jump_table;
     return struct {
         newGlobal1: newGlobal1,

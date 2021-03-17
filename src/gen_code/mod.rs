@@ -60,7 +60,11 @@ pub(crate) fn gen_upgrade_code(input: GenUpgrade) -> Result<(), GenCodeError> {
         ))
     })?;
     writeln!(code, "").unwrap();
-    writeln!(code, "// This file is machine-generated. Don't edit it unless you know what you're doing.").unwrap();
+    writeln!(
+        code,
+        "// This file is machine-generated. Don't edit it unless you know what you're doing."
+    )
+    .unwrap();
     let mut input_fields = get_globals_from_file(&from)?;
     let mut output_fields = get_globals_from_file(&to)?;
     output_fields.push(StructField::new(String::from("_jump_table"), Type::Any));
@@ -124,7 +128,10 @@ pub(crate) fn gen_upgrade_code(input: GenUpgrade) -> Result<(), GenCodeError> {
             writeln!(
                 code,
                 "    {}",
-                let_string(&field.name, &format!("set_{}_onUpgrade(input_globals)", field.name))
+                let_string(
+                    &field.name,
+                    &format!("set_{}_onUpgrade(input_globals)", field.name)
+                )
             )
             .map_err(|_| GenCodeError::new("Failed to write to output file".to_string()))?;
         } else {
@@ -140,7 +147,10 @@ pub(crate) fn gen_upgrade_code(input: GenUpgrade) -> Result<(), GenCodeError> {
         writeln!(
             code,
             "    {}",
-            let_string(&field.name, &format!("set_{}_onUpgrade(input_globals)", field.name))
+            let_string(
+                &field.name,
+                &format!("set_{}_onUpgrade(input_globals)", field.name)
+            )
         )
         .map_err(|_| GenCodeError::new("Failed to write to output file".to_string()))?;
     }
