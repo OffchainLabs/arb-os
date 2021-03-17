@@ -16,5 +16,14 @@ interface ArbAggregator {
     // Set the preferred aggregator.
     // Reverts unless called by the chain owner or the current default aggregator.
     function setDefaultAggregator(address newDefault) external;
+
+    // Get the address where fees to aggregator are sent.
+    // This will often but not always be the same as the aggregator's address.
+    function getFeeCollector(address aggregator) external view returns (address);
+
+    // Set the address where fees to aggregator are sent.
+    // This reverts unless called by the address that would be returned by getFeeCollector(aggregator),
+    //      or by the chain owner.
+    function setFeeCollector(address aggregator, address newFeeCollector) external;
 }
 
