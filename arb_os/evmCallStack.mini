@@ -528,7 +528,7 @@ public impure func evmCallStack_doCall(
             // Add a stipend, charged to the caller, if non-zero value is transferred.
             // This is needed because Ethereum provides a stipend, and some code depends on that.
             // The size of our stipend was chosen experimentally, to make sure a call that will run on Ethereum will run here.
-            gas = gas + 20000;
+            gas = gas + const::ArbitrumNonZeroBalanceCallStipend;
         }
         if (gas > 63*availableGas/64) {
             gas = 63*availableGas/64;  // don't give the callee more than 63/64 of the call's gas
@@ -596,9 +596,14 @@ public impure func evmCallStack_doCall(
             memory: bytearray_new(0),
             storageDelta: topFrame.storageDelta,
             revertOnStorageWrite: // disallow storage write if gas provided < EVM gas cost of storage write
+                                  //       if balance == 0, disallow if gas < EVM gas cost of storage write
+                                  //       if balance > 0, disallow if gas (before 20000 stipend) + EVM stipend
+                                  //                           would have been less than EVM gas cost of storage write
                                   topFrame.revertOnStorageWrite
-                                  || (gas < 5000)
-                                  || ((balance > 0) && (gas < 17700)),
+                                  || ((balance == 0) && (gas < const::EVMWriteL1GasCost))
+                                  || ((balance > 0) && (gas <= (const::EVMWriteL1GasCost
+                                                                + const::ArbitrumNonZeroBalanceCallStipend
+                                                                - const::EVMNonZeroBalanceCallStipend))),
             evmLogs: topFrame.evmLogs,
             selfDestructQueue: topFrame.selfDestructQueue,
             resumeInfo: None<ResumeInfo>,

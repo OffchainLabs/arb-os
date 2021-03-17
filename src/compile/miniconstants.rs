@@ -221,6 +221,10 @@ pub fn init_constant_table() -> HashMap<String, Uint256> {
         ("PluggableModuleID_precompile_0x05", 1),
         // retry buffer
         ("RetryBuffer_DefaultLifetimeSeconds", 60*60*24*7),
+        // gas cost values for re-entrancy protection
+        ("EVMWriteL1GasCost", 5000),
+        ("EVMNonZeroBalanceCallStipend", 2300),
+        ("ArbitrumNonZeroBalanceCallStipend", 20000),
         // misc
         ("SecondsPerBlockNumerator", 2),
         ("SecondsPerBlockDenominator", 1),

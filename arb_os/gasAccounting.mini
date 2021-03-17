@@ -843,8 +843,28 @@ public impure func getNextRequestFromCongestionAuction() -> (
             (const::TxResultCode_success, maybeRequest, maybeTx)
         }
     } else {
-        // fees are disabled, or this tx isn't chargeable, so just approve it
-        (const::TxResultCode_success, maybeRequest, maybeTx)
+        // fees are disabled, or this tx isn't chargeable, so just approve it, but set the units in feeStats first
+        (
+            const::TxResultCode_success,
+            maybeRequest,
+            xif let Some(tx) = maybeTx {
+                Some(tx with {
+                    feeStats: tx.feeStats with {
+                        units: tx.feeStats.units with {
+                            tx: 1
+                        } with {
+                            calldataByte: xif let Some(aggInfo) = tx.incomingRequest.aggregator {
+                                aggInfo.calldataBytes
+                            } else {
+                                0
+                            }
+                        }
+                    }
+                })
+            } else {
+                None<TxRequestData>
+            }
+        )
     };
 }
 
