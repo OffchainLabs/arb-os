@@ -172,10 +172,10 @@ fn test_code_upload_prep() {
     assert_eq!(uploader, reconstituted);
 }
 
-// #[test] Update for new format later
-//fn _test_upgrade_arbos_to_different_version() {
-//    _test_upgrade_arbos_over_itself_impl().unwrap();
-//}
+#[test]
+fn _test_upgrade_arbos_to_different_version() {
+    _test_upgrade_arbos_over_itself_impl().unwrap();
+}
 
 fn _test_upgrade_arbos_over_itself_impl() -> Result<(), ethabi::Error> {
     let rt_env = RuntimeEnvironment::new(Uint256::from_usize(1111), None);
