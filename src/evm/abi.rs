@@ -3,7 +3,7 @@
  */
 
 use crate::mavm::Value;
-use crate::run::{ArbosReceipt, Machine, load_from_file};
+use crate::run::{load_from_file, ArbosReceipt, Machine};
 use crate::uint256::Uint256;
 use crate::RuntimeEnvironment;
 use ethers_core::utils::keccak256;
@@ -372,15 +372,17 @@ impl AbiForContract {
         let this_function = self.contract.function(func_name)?;
         let calldata = this_function.encode_input(args).unwrap();
 
-        let tx_id_bytes = machine.runtime_env._append_compressed_and_signed_tx_message_to_batch(
-            batch,
-            Uint256::from_usize(100_000_000),
-            Uint256::zero(),
-            self.address.clone(),
-            payment,
-            calldata,
-            &wallet,
-        );
+        let tx_id_bytes = machine
+            .runtime_env
+            ._append_compressed_and_signed_tx_message_to_batch(
+                batch,
+                Uint256::from_usize(100_000_000),
+                Uint256::zero(),
+                self.address.clone(),
+                payment,
+                calldata,
+                &wallet,
+            );
 
         Ok((Uint256::from_bytes(&tx_id_bytes)))
     }
@@ -1911,11 +1913,7 @@ impl _ArbReplayableTx {
         }
     }
 
-    pub fn _redeem(
-        &self,
-        machine: &mut Machine,
-        txid: Uint256
-    ) -> Result<(), ethabi::Error> {
+    pub fn _redeem(&self, machine: &mut Machine, txid: Uint256) -> Result<(), ethabi::Error> {
         let (receipts, sends) = self.contract_abi.call_function(
             Uint256::zero(), // send from address zero
             "redeem",
@@ -1928,7 +1926,7 @@ impl _ArbReplayableTx {
         if (receipts.len() < 1) || (receipts.len() > 2) || (sends.len() != 0) {
             println!("{} receipts, {} sends", receipts.len(), sends.len());
             Err(ethabi::Error::from("wrong number of receipts or sends"))
-        } else if receipts[receipts.len()-1].succeeded() {
+        } else if receipts[receipts.len() - 1].succeeded() {
             Ok(())
         } else {
             Err(ethabi::Error::from("reverted"))
@@ -1958,10 +1956,7 @@ impl _ArbReplayableTx {
         }
     }
 
-    pub fn _get_lifetime(
-        &self,
-        machine: &mut Machine,
-    ) -> Result<Uint256, ethabi::Error> {
+    pub fn _get_lifetime(&self, machine: &mut Machine) -> Result<Uint256, ethabi::Error> {
         let (receipts, sends) = self.contract_abi.call_function(
             Uint256::zero(), // send from address zero
             "getLifetime",
@@ -1998,7 +1993,10 @@ impl _ArbReplayableTx {
             Err(ethabi::Error::from("wrong number of receipts or sends"))
         } else if receipts[0].succeeded() {
             let return_data = receipts[0].get_return_data();
-            Ok((Uint256::from_bytes(&return_data[0..32]), Uint256::from_bytes(&return_data[32..64])))
+            Ok((
+                Uint256::from_bytes(&return_data[0..32]),
+                Uint256::from_bytes(&return_data[32..64]),
+            ))
         } else {
             Err(ethabi::Error::from("reverted"))
         }
@@ -2125,16 +2123,19 @@ impl _ArbStatistics {
 }
 
 #[test]
-fn test_arb_statistics() { assert!(_test_arb_stats().is_ok()); }
+fn test_arb_statistics() {
+    assert!(_test_arb_stats().is_ok());
+}
 
-fn _test_arb_stats() -> Result<(), ethabi::Error>{
+fn _test_arb_stats() -> Result<(), ethabi::Error> {
     let rt_env = RuntimeEnvironment::new(Uint256::from_usize(1111), None);
     let mut machine = load_from_file(Path::new("arb_os/arbos.mexe"), rt_env);
     machine.start_at_zero();
 
     let arbstats = _ArbStatistics::_new(false);
 
-    let (arb_blocknum, num_accounts, storage, _arbgas, txs, contracts) = arbstats._get_stats(&mut machine)?;
+    let (arb_blocknum, num_accounts, storage, _arbgas, txs, contracts) =
+        arbstats._get_stats(&mut machine)?;
 
     assert_eq!(arb_blocknum, Uint256::from_u64(0));
     assert_eq!(num_accounts, Uint256::from_u64(22));

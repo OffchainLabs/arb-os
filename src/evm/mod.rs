@@ -5,7 +5,7 @@
 use crate::compile::miniconstants::init_constant_table;
 use crate::evm::abi::{
     ArbAddressTable, ArbBLS, ArbFunctionTable, ArbSys, ArbosTest, _ArbAggregator, _ArbGasInfo,
-    _ArbOwner, builtin_contract_path, _ArbReplayableTx,
+    _ArbOwner, _ArbReplayableTx, builtin_contract_path,
 };
 use crate::evm::abi::{FunctionTable, _ArbInfo};
 use crate::run::{load_from_file, RuntimeEnvironment};
@@ -732,10 +732,7 @@ pub fn _underfunded_nested_call_test(
     Ok(())
 }
 
-pub fn _evm_test_callback(
-    log_to: Option<&Path>,
-    debug: bool,
-) -> Result<(), ethabi::Error> {
+pub fn _evm_test_callback(log_to: Option<&Path>, debug: bool) -> Result<(), ethabi::Error> {
     let rt_env = RuntimeEnvironment::new(Uint256::from_usize(1111), None);
     let mut machine = load_from_file(Path::new("arb_os/arbos.mexe"), rt_env);
     machine.start_at_zero();
@@ -763,9 +760,15 @@ pub fn _evm_test_callback(
     assert_eq!(evmlogs.len(), 3);
     for i in 0..2 {
         assert_eq!(evmlogs[i].addr, contract.address);
-        assert_eq!(evmlogs[i].vals[1], Uint256::from_usize(i+1));
-        assert_eq!(evmlogs[i].data[0..32], Uint256::from_usize(i+11).to_bytes_be()[0..32]);
-        assert_eq!(evmlogs[i].data[32..64], Uint256::from_usize(i+21).to_bytes_be()[0..32]);
+        assert_eq!(evmlogs[i].vals[1], Uint256::from_usize(i + 1));
+        assert_eq!(
+            evmlogs[i].data[0..32],
+            Uint256::from_usize(i + 11).to_bytes_be()[0..32]
+        );
+        assert_eq!(
+            evmlogs[i].data[32..64],
+            Uint256::from_usize(i + 21).to_bytes_be()[0..32]
+        );
     }
 
     let (logs, _) = contract.call_function(
@@ -782,27 +785,41 @@ pub fn _evm_test_callback(
     assert_eq!(evmlogs.len(), 8);
 
     println!("{}", evmlogs[2].vals[0]);
-    assert_eq!(evmlogs[2].vals[0], Uint256::from_bytes(&hex::decode("5baaa87db386365b5c161be377bc3d8e317e8d98d71a3ca7ed7d555340c8f767").unwrap()));
-    assert_eq!(evmlogs[2].addr, Uint256::from_u64(100));  // log was emitted by ArbSys
-    assert_eq!(evmlogs[2].vals[2], Uint256::zero());  // unique ID = 0
+    assert_eq!(
+        evmlogs[2].vals[0],
+        Uint256::from_bytes(
+            &hex::decode("5baaa87db386365b5c161be377bc3d8e317e8d98d71a3ca7ed7d555340c8f767")
+                .unwrap()
+        )
+    );
+    assert_eq!(evmlogs[2].addr, Uint256::from_u64(100)); // log was emitted by ArbSys
+    assert_eq!(evmlogs[2].vals[2], Uint256::zero()); // unique ID = 0
     let batch_number = &evmlogs[2].vals[3];
     assert_eq!(batch_number, &Uint256::zero());
     let index_in_batch = Uint256::from_bytes(&evmlogs[2].data[32..64]);
     assert_eq!(index_in_batch, Uint256::zero());
-    let calldata_size = Uint256::from_bytes(&evmlogs[2].data[(7*32)..(8*32)]);
+    let calldata_size = Uint256::from_bytes(&evmlogs[2].data[(7 * 32)..(8 * 32)]);
     assert_eq!(calldata_size, Uint256::from_u64(11));
 
-    assert_eq!(evmlogs[6].vals[0], Uint256::from_bytes(&hex::decode("5baaa87db386365b5c161be377bc3d8e317e8d98d71a3ca7ed7d555340c8f767").unwrap()));
-    assert_eq!(evmlogs[6].addr, Uint256::from_u64(100));  // log was emitted by ArbSys
-    assert_eq!(evmlogs[6].vals[2], Uint256::one());  // unique ID = 1
+    assert_eq!(
+        evmlogs[6].vals[0],
+        Uint256::from_bytes(
+            &hex::decode("5baaa87db386365b5c161be377bc3d8e317e8d98d71a3ca7ed7d555340c8f767")
+                .unwrap()
+        )
+    );
+    assert_eq!(evmlogs[6].addr, Uint256::from_u64(100)); // log was emitted by ArbSys
+    assert_eq!(evmlogs[6].vals[2], Uint256::one()); // unique ID = 1
     let batch_number = &evmlogs[6].vals[3];
     assert_eq!(batch_number, &Uint256::zero());
     let index_in_batch = Uint256::from_bytes(&evmlogs[6].data[32..64]);
     assert_eq!(index_in_batch, Uint256::one());
-    let calldata_size = Uint256::from_bytes(&evmlogs[6].data[(7*32)..(8*32)]);
+    let calldata_size = Uint256::from_bytes(&evmlogs[6].data[(7 * 32)..(8 * 32)]);
     assert_eq!(calldata_size, Uint256::from_u64(17));
 
-    machine.runtime_env._advance_time(Uint256::one(), None, true);
+    machine
+        .runtime_env
+        ._advance_time(Uint256::one(), None, true);
     let _gas_used = if debug {
         machine.debug(None)
     } else {
@@ -811,14 +828,14 @@ pub fn _evm_test_callback(
 
     let sends = machine.runtime_env.get_all_sends();
     assert_eq!(sends.len(), 2);
-    assert_eq!(sends[0][0], 3u8);   // send type
+    assert_eq!(sends[0][0], 3u8); // send type
     assert_eq!(sends[0][1..33], contract.address.to_bytes_be()[0..32]);
     assert_eq!(sends[0][161..193], [0u8; 32]);
-    assert_eq!(sends[0].len(), 204);  // 11 bytes of calldata after 193 bytes of fields
-    assert_eq!(sends[1][0], 3u8);   // send type
+    assert_eq!(sends[0].len(), 204); // 11 bytes of calldata after 193 bytes of fields
+    assert_eq!(sends[1][0], 3u8); // send type
     assert_eq!(sends[1][1..33], contract.address.to_bytes_be()[0..32]);
     assert_eq!(sends[1][161..193], [0u8; 32]);
-    assert_eq!(sends[1].len(), 210);  // 17 bytes of calldata after 193 bytes of fields
+    assert_eq!(sends[1].len(), 210); // 17 bytes of calldata after 193 bytes of fields
 
     if let Some(path) = log_to {
         machine
@@ -834,7 +851,7 @@ pub fn _evm_test_callback(
 #[test]
 fn test_retryable() {
     match _test_retryable(None, false) {
-        Ok(()) => {},
+        Ok(()) => {}
         Err(e) => panic!("{}", e),
     }
 }
@@ -859,7 +876,10 @@ pub fn _test_retryable(log_to: Option<&Path>, debug: bool) -> Result<(), ethabi:
     let txid = add_contract._send_retryable_tx(
         my_addr.clone(),
         "add",
-        &[ethabi::Token::Uint(Uint256::one().to_u256()), ethabi::Token::Uint(Uint256::one().to_u256())],
+        &[
+            ethabi::Token::Uint(Uint256::one().to_u256()),
+            ethabi::Token::Uint(Uint256::one().to_u256()),
+        ],
         &mut machine,
         Uint256::zero(),
         Uint256::zero(),
@@ -877,9 +897,13 @@ pub fn _test_retryable(log_to: Option<&Path>, debug: bool) -> Result<(), ethabi:
     let timeout = arb_replayable._get_timeout(&mut machine, txid.clone())?;
     assert!(timeout > machine.runtime_env.current_timestamp);
 
-    let (keepalive_price, reprice_time) = arb_replayable._get_keepalive_price(&mut machine, txid.clone())?;
+    let (keepalive_price, reprice_time) =
+        arb_replayable._get_keepalive_price(&mut machine, txid.clone())?;
     assert_eq!(keepalive_price, Uint256::zero());
-    println!("reprice time {}, timestamp {}", reprice_time, machine.runtime_env.current_timestamp);
+    println!(
+        "reprice time {}, timestamp {}",
+        reprice_time, machine.runtime_env.current_timestamp
+    );
     assert!(reprice_time > machine.runtime_env.current_timestamp);
 
     let keepalive_ret = arb_replayable._keepalive(&mut machine, txid.clone(), keepalive_price)?;
@@ -891,13 +915,16 @@ pub fn _test_retryable(log_to: Option<&Path>, debug: bool) -> Result<(), ethabi:
     arb_replayable._redeem(&mut machine, txid.clone())?;
 
     let new_timeout = arb_replayable._get_timeout(&mut machine, txid.clone())?;
-    assert_eq!(new_timeout, Uint256::zero());  // verify that txid has been removed
+    assert_eq!(new_timeout, Uint256::zero()); // verify that txid has been removed
 
     // make another one, and have the beneficiary cancel it
     let txid = add_contract._send_retryable_tx(
         my_addr.clone(),
         "add",
-        &[ethabi::Token::Uint(Uint256::one().to_u256()), ethabi::Token::Uint(Uint256::one().to_u256())],
+        &[
+            ethabi::Token::Uint(Uint256::one().to_u256()),
+            ethabi::Token::Uint(Uint256::one().to_u256()),
+        ],
         &mut machine,
         Uint256::zero(),
         Uint256::zero(),
@@ -916,12 +943,15 @@ pub fn _test_retryable(log_to: Option<&Path>, debug: bool) -> Result<(), ethabi:
 
     arb_replayable._cancel(&mut machine, txid.clone(), beneficiary.clone())?;
 
-    assert_eq!(arb_replayable._get_timeout(&mut machine, txid)?, Uint256::zero());  // verify txid no longer exists
+    assert_eq!(
+        arb_replayable._get_timeout(&mut machine, txid)?,
+        Uint256::zero()
+    ); // verify txid no longer exists
 
     let amount_to_pay = Uint256::from_u64(1_000_000);
     let _txid = machine.runtime_env._insert_retryable_tx_message(
         my_addr.clone(),
-        Uint256::from_u64(7890245789245),    // random non-contract address
+        Uint256::from_u64(7890245789245), // random non-contract address
         amount_to_pay.clone(),
         amount_to_pay.clone(),
         Uint256::zero(),
