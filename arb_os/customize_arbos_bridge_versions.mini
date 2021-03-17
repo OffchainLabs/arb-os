@@ -4,23 +4,17 @@
 
 use bridge_arbos_versions::GlobalsBeforeUpgrade;
 
-use accounts::Account;
-use arbstatistics::ArbStatistics;
 
-use arbstatistics::arbStatistics_newForUpgrade;
-use inbox::IncomingRequest;
-use inbox::inbox_currentTimestamp;
+public func set_globalCurrentRetryableRequest_onUpgrade(g: GlobalsBeforeUpgrade) -> option<any> { return None<any>; }
 
-use retrybuffer::retryBuffer_new;
-
-
-public func set_globalCurrentRetryableRequest_onUpgrade(before: GlobalsBeforeUpgrade) -> option<any> {
-    return None<any>;
+public func set_globalL1GasPriceEstimator_onUpgrade(g: GlobalsBeforeUpgrade) -> struct { estimateWei: uint, fairGasPriceSender: address } {
+    return struct {
+       estimateWei: 0,
+       fairGasPriceSender: address(0),
+   };
 }
 
-public func set_gasAccountingInfo_onUpgrade(
-    before: GlobalsBeforeUpgrade
-) -> struct {
+public func set_gasAccountingInfo_onUpgrade(g: GlobalsBeforeUpgrade) -> struct {
     txState: option<any>,
     feeConfig: any,
     currentPrices: any,
@@ -31,37 +25,98 @@ public func set_gasAccountingInfo_onUpgrade(
     gasAllocatedToThisBlock: uint,
     retryablePrices: any,
 } {
-    let old = before.gasAccountingInfo;
-    let retryablePrices = struct {
-        perTx: 0,
-        perCalldataByte: 0,
-        nextUpdateTimestamp: 0, //inbox_currentTimestamp(),
-    };
     return struct {
-        txState: old.txState,
-        feeConfig: old.feeConfig,
-        currentPrices: old.currentPrices,
-        gasRemainingThisBlock: old.gasRemainingThisBlock,
-        congestionState: old.congestionState,
-        speedLimitPerSecond: old.speedLimitPerSecond,
-        pricingParams: old.pricingParams,
-        gasAllocatedToThisBlock: old.gasAllocatedToThisBlock,
-        retryablePrices: unsafecast<any>(retryablePrices),
+       txState: None<any>,
+       feeConfig: (),
+       currentPrices: (),
+       gasRemainingThisBlock: 0,
+       congestionState: (),
+       speedLimitPerSecond: 0,
+       pricingParams: (),
+       gasAllocatedToThisBlock: 0,
+       retryablePrices: (),
+   };
+}
+
+public func set_logsQueuedForEndOfBlock_onUpgrade(g: GlobalsBeforeUpgrade) -> any { return (); }
+
+public func set_globalInputQueue_onUpgrade(g: GlobalsBeforeUpgrade) -> struct { txQ: any, batchQ: any } {
+    return struct {
+        txQ: (),
+        batchQ: (),
     };
 }
 
-public func set_globalAccountStore_onUpgrade(
-    before: GlobalsBeforeUpgrade,
-) -> any {
+public func set_evmOpJumpTable_onUpgrade(g: GlobalsBeforeUpgrade) -> [47]impure func() {
+    return newfixedarray(47, unsafecast<impure func()>(0));
+}
+
+public func set_globalIndexedAddressTable_onUpgrade(g: GlobalsBeforeUpgrade) -> any { return (); }
+
+public func set_globalAccountStore_onUpgrade(g: GlobalsBeforeUpgrade) -> any { return (); }
+
+public func set_globalChainParams_onUpgrade(g: GlobalsBeforeUpgrade) -> option<any> { return None<any>; }
+
+public func set_upgradeInProgress_onUpgrade(g: GlobalsBeforeUpgrade) -> option<any> { return None<any>; }
+
+public func set_moduleManager_onUpgrade(g: GlobalsBeforeUpgrade) -> any { return (); }
+
+public func set_arbStats_onUpgrade(g: GlobalsBeforeUpgrade) -> any { return (); }
+
+public func set_globalOutbox_onUpgrade(g: GlobalsBeforeUpgrade) -> struct {
+    batch: any,
+    batchNumber: uint,
+    numInBatch: uint,
+ } {
     return struct {
-        accounts: unsafecast<map<address, Account>>(before.globalAccountStore),
-        retryBuffer: retryBuffer_new(),
-        numContracts: 0,
+        batch: (),
+        batchNumber: 0,
+        numInBatch: 0,
     };
 }
 
-public func set_arbStats_onUpgrade(
-    before: GlobalsBeforeUpgrade,
-) -> ArbStatistics {
-    return arbStatistics_newForUpgrade();
+public func set_globalBlockReceiptData_onUpgrade(g: GlobalsBeforeUpgrade) -> struct {
+    data: any,
+    statsThisBlock: any,
+    statsAllTime: any,
+    lastBlockNum: uint,
+    nextSendTime: uint,
+} {
+    return struct {
+        data: (),
+        statsThisBlock: (),
+        statsAllTime: (),
+        lastBlockNum: 0,
+        nextSendTime: 0,
+    };
 }
+
+public func set_globalCallStack_onUpgrade(g: GlobalsBeforeUpgrade) -> option<any> { return None<any>; }
+
+public func set_blockhashes_onUpgrade(g: GlobalsBeforeUpgrade) -> struct { latestBlockNum: uint, oldHashes: [256]bytes32 } {
+    return struct {
+        latestBlockNum: 0,
+        oldHashes: newfixedarray(256, bytes32(0)),
+    };
+}
+
+public func set_globalCurrentTxRequest_onUpgrade(g: GlobalsBeforeUpgrade) -> any { return (); }
+
+public func set_globalInbox_onUpgrade(g: GlobalsBeforeUpgrade) -> any { return (); }
+
+public func set_inErrorHandler_onUpgrade(g: GlobalsBeforeUpgrade) -> bool { return false; }
+
+public func set_gasAccountingParams_onUpgrade(g: GlobalsBeforeUpgrade) -> struct {
+    SpeedLimitPerSecond: uint,
+    GasPoolMax: uint,
+    TxGasLimit: uint,
+} {
+    return struct {
+        SpeedLimitPerSecond: 0,
+        GasPoolMax: 0,
+        TxGasLimit: 0,
+    };
+}
+
+public func set_unreachableMask_onUpgrade(g: GlobalsBeforeUpgrade) -> uint { return 0; }
+
