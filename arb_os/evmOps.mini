@@ -32,6 +32,7 @@ use evmCallStack::evmCallStack_returnFromCall;
 use evmCallStack::evmCallStack_callHitError;
 use evmCallStack::evmCallStack_runningCodeFromAccount;
 use evmCallStack::snapshotAuxStack;
+use evmCallStack::evmCallStack_changeNumAccounts;
 
 use evmCallStack::evmCallFrame_runningAsAccount;
 use evmCallStack::evmCallFrame_runningCodeFromAccount;
@@ -694,7 +695,8 @@ public impure func evmOp_callAndReturn(
     argsOffset: uint,
     argsLength: uint,
     retOffset: uint,
-    retLength: uint
+    retLength: uint,
+    chargeForCallvalue: bool
 ) -> bool {
     let savedAuxStack = snapshotAuxStack();
 
@@ -727,6 +729,7 @@ public impure func evmOp_callAndReturn(
         retLength,
         resumeCodePoint,
         Some(savedAuxStack),
+        chargeForCallvalue,
     );
     return xif let Some(success) = res {
         success
@@ -782,6 +785,7 @@ public impure func evmOp_call(
         retLength,
         resumeCodePoint,
         None<Stack>,
+        true,
     );
     return xif let Some(success) = res {
         success
@@ -822,6 +826,7 @@ public impure func evmOp_callcode(
         retLength,
         resumeCodePoint,
         None<Stack>,
+        true,
     );
     return xif let Some(success) = res {
         success
@@ -861,6 +866,7 @@ public impure func evmOp_delegatecall(
          retLength,
          resumeCodePoint,
          None<Stack>,
+         true,
      );
     return xif let Some(success) = res {
         success
@@ -900,6 +906,7 @@ public impure func evmOp_staticcall(
         retLength,
         resumeCodePoint,
         None<Stack>,
+        true,
     );
     return xif let Some(success) = res {
         success
@@ -1038,6 +1045,7 @@ impure func doCreationOpcode(value: uint, offset: uint, length: uint, newAddress
                 0,
                 0,           // don't copy returndata back into caller's memory
                 0,
+                true,
             );
 
             if (constructorSucceeded) {
@@ -1061,6 +1069,7 @@ impure func doCreationOpcode(value: uint, offset: uint, length: uint, newAddress
                                     )
                                 )
                             ) {
+                                evmCallStack_changeNumAccounts(int(1));
                                 return newAddress;
                             }
                         }

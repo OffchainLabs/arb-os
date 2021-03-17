@@ -13,6 +13,7 @@ arb_os/*.mexe
 arb_os/evmJumpTable.mini
 builtin/*.mao
 builtin/*.mexe
+upgradetests/*.mexe
 stdlib/*.mao
 stdlib/*.mexe
 minitests/*.mao
@@ -28,3 +29,4 @@ contracts/artifacts
 contracts/cache
 contracts/node_modules
 contracts/src/types
+arb_os/save_bridge_for_debugging.mini

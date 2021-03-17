@@ -27,8 +27,11 @@ use evmCallStack::evmCallFrame_runningAsAccount;
 use evmCallStack::evmCallFrame_getParent;
 use evmCallStack::evmCallFrame_getCaller;
 
+use evmOps::evmOp_log4;
 use evmOps::evmOp_return;
 use evmOps::evmOp_revert_knownCodePc;
+use evmOps::evmOp_sload;
+use evmOps::evmOp_sstore;
 
 use accounts::account_getAddress;
 use accounts::account_getNextSeqNum;
@@ -42,6 +45,7 @@ use accounts::account_setAggregatorDecompressionState;
 use std::bytearray::bytearray_new;
 use std::bytearray::bytearray_size;
 use std::bytearray::bytearray_getByte;
+use std::bytearray::bytearray_setByte;
 use std::bytearray::bytearray_get256;
 use std::bytearray::bytearray_set256;
 use std::bytearray::bytearray_extract;
@@ -195,7 +199,7 @@ func getFuncCode(ba: ByteArray) -> uint {
 }
 
 public func arbosVersion() -> uint {
-    return 0;
+    return 1;
 }
 
 impure func arbsys_arbOSVersion(topFrame: EvmCallFrame, calldata: ByteArray) {  // () -> uint
@@ -222,7 +226,7 @@ impure func arbsys_arbBlockNumber(topFrame: EvmCallFrame, calldata: ByteArray) {
     }
 }
 
-impure func arbsys_withdrawEth(topFrame: EvmCallFrame, calldata: ByteArray) { // (address payee) payable -> nil
+impure func arbsys_withdrawEth(topFrame: EvmCallFrame, calldata: ByteArray) { // (address payee) payable -> uint
     if (bytearray_size(calldata) != 36) {
         evmOp_revert_knownCodePc(address(const::Address_ArbSys), 30, 0, 0);
     }
@@ -236,30 +240,16 @@ impure func arbsys_withdrawEth(topFrame: EvmCallFrame, calldata: ByteArray) { //
         if ( ! evmCallStack_setAccount(runningAsAddr, updatedAcct)) {
             evmOp_revert_knownCodePc(address(const::Address_ArbSys), 31, 0, 0);
         }
-        queueMessageForSend(
-            bytearray_set256(
-                bytearray_set256(
-                    bytearray_set256(bytearray_new(0), 0, const::SendType_withdrawETH),
-                    32,
-                    bytearray_get256(calldata, 4),
-                ),
-                64,
-                amount
-            )
-        );
-        if (evmCallStack_addEvmLogToCurrent(
-            (
-                address(const::Address_ArbSys),  // addEvmLogToCurrent will fill this in
-                (32, setbuffer256(newbuffer(), 0, amount)),
-                0xc32d3c7eb0f275cbb5b72b3d3c688269430f30e5b9bb36980396edd9101c615c, // EthWithdrawal(address,uint256)
-                uint(destAddr),
-            )
-        ) == Some(())) {
-            evmOp_return(0, 0);
-        }
-    }
 
-    evmOp_revert_knownCodePc(address(const::Address_ArbSys), 32, 0, 0);
+        let uniqueId = sendTxToL1(senderAddr, destAddr, amount, bytearray_new(0));
+        if (evmCallStack_setTopFrameMemory(bytearray_set256(bytearray_new(0), 0, uniqueId))) {
+            evmOp_return(0, 32);
+        } else {
+            evmOp_revert_knownCodePc(address(const::Address_ArbSys), 32, 0, 0);
+        }
+    } else {
+        evmOp_revert_knownCodePc(address(const::Address_ArbSys), 33, 0, 0);
+    }
 }
 
 impure func arbsys_sendTxToL1(topFrame: EvmCallFrame, calldata: ByteArray) { // (address, bytes) payable -> bool
@@ -267,6 +257,7 @@ impure func arbsys_sendTxToL1(topFrame: EvmCallFrame, calldata: ByteArray) { // 
     let nbytes = bytearray_get256(calldata, 4+2*32);
     let innerCalldata = bytearray_extract(calldata, 4+3*32, nbytes);
 
+    let caller = evmCallFrame_getCaller(topFrame);
     let callvalue = evmCallFrame_getCallvalue(topFrame);
     let runningAsAddr = evmCallFrame_runningAsAddress(topFrame);
     let runningAsAccount = evmCallFrame_getAccount(topFrame, runningAsAddr);
@@ -274,51 +265,124 @@ impure func arbsys_sendTxToL1(topFrame: EvmCallFrame, calldata: ByteArray) { // 
         if ( ! evmCallStack_setAccount(runningAsAddr, updatedAcct)) {
             evmOp_revert_knownCodePc(address(const::Address_ArbSys), 220, 0, 0);
         }
-        queueMessageForSend(
-            bytearray_copy(
-                innerCalldata,
-                0,
+
+        let uniqueId = sendTxToL1(caller, destAddr, callvalue, innerCalldata);
+        if (evmCallStack_setTopFrameMemory(bytearray_set256(bytearray_new(0), 0, uniqueId))) {
+            evmOp_return(0, 32);
+        } else {
+            evmOp_revert_knownCodePc(address(const::Address_ArbSys), 222, 0, 0);
+        }
+    } else {
+        evmOp_revert_knownCodePc(address(const::Address_ArbSys), 223, 0, 0);
+    }
+}
+
+impure func sendTxToL1(caller: address, destination: address, callvalue: uint, calldata: ByteArray) -> uint {
+    let calldataSize = bytearray_size(calldata);
+    queueMessageForSend(
+        bytearray_copy(
+            calldata,
+            0,
+            bytearray_set256(
                 bytearray_set256(
                     bytearray_set256(
                         bytearray_set256(
                             bytearray_set256(
                                 bytearray_set256(
-                                    bytearray_set256(
-                                        bytearray_set256(
-                                            bytearray_new(0),
-                                            0,
-                                            const::SendType_sendTxToL1
-                                        ),
-                                        32,
-                                        uint(evmCallFrame_getCaller(topFrame)),
+                                    bytearray_setByte(
+                                        bytearray_new(0),
+                                        0,
+                                        const::SendType_sendTxToL1
                                     ),
-                                    64,
-                                    uint(destAddr),
+                                    1,
+                                    uint(caller),
                                 ),
-                                96,
-                                inbox_currentArbBlockNumber(),
+                                32+1,
+                                uint(destination),
                             ),
-                            128,
-                            inbox_currentEthBlockNumber(),
+                            2*32+1,
+                            inbox_currentArbBlockNumber(),
                         ),
-                        160,
-                        inbox_currentTimestamp(),
+                        3*32+1,
+                        inbox_currentEthBlockNumber(),
                     ),
-                    192,
-                    callvalue,
+                    4*32+1,
+                    inbox_currentTimestamp(),
                 ),
-                224,
-                nbytes
+                5*32+1,
+                callvalue,
             ),
-        );
-        if (evmCallStack_setTopFrameMemory(bytearray_set256(bytearray_new(0), 0, 1))) {
-            evmOp_return(0, 32);
-        } else {
-            evmOp_revert_knownCodePc(address(const::Address_ArbSys), 221, 0, 0);
-        }
-    } else {
-        evmOp_revert_knownCodePc(address(const::Address_ArbSys), 222, 0, 0);
+            6*32+1,
+            calldataSize,
+        ),
+    );
+
+    // write log data into memory
+    let mem = bytearray_set256(
+        bytearray_set256(
+            bytearray_set256(
+                bytearray_set256(
+                    bytearray_set256(
+                        bytearray_set256(
+                            bytearray_set256(
+                                bytearray_set256(
+                                    bytearray_new(0),
+                                    0,
+                                    uint(caller),
+                                ),
+                                32,
+                                0,  // item number in batch will be filled in later
+                            ),
+                            2*32,
+                            inbox_currentArbBlockNumber(),
+                        ),
+                        3*32,
+                        inbox_currentEthBlockNumber(),
+                    ),
+                    4*32,
+                    inbox_currentTimestamp(),
+                ),
+                5*32,
+                callvalue,
+            ),
+            6*32,
+            7*32,  // offset to beginning of bytes size
+        ),
+        7*32,
+        calldataSize,
+    );
+
+    mem = bytearray_copy(
+        calldata,
+        0,
+        mem,
+        8*32,
+        32*((calldataSize+31)/32),
+    );
+
+    let savedMem = evmCallStack_getTopFrameMemoryOrDie();
+
+    if ( ! evmCallStack_setTopFrameMemory(mem)) {
+        evmOp_revert_knownCodePc(address(const::Address_ArbSys), 230, 0, 0);
     }
+
+    let uniqueId = evmOp_sload(0);
+    evmOp_sstore(0, uniqueId + 1);
+
+    evmOp_log4(
+        0,
+        bytearray_size(mem),
+        const::EVMLogTopicForL2ToL1Send,
+        uint(destination),
+        uniqueId,
+        0,    // batch number will be filled in later
+    );
+
+    if ( ! evmCallStack_setTopFrameMemory(savedMem)) {
+        evmOp_revert_knownCodePc(address(const::Address_ArbSys), 231, 0, 0);
+    }
+
+    return uniqueId;
 }
 
 impure func arbsys_getTransactionCount(topFrame: EvmCallFrame, calldata: ByteArray) { // (address account) -> uint

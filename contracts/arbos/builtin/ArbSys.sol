@@ -8,10 +8,13 @@ interface ArbSys {
     function arbBlockNumber() external view returns (uint);
 
     // Send given amount of Eth to dest with from sender.
-    function withdrawEth(address dest) external payable;
+    // This is a convenience function, which is equivalent to calling sendTxToL1 with empty calldataForL1.
+    // Returns a unique identifier for this L2-to-L1 transaction.
+    function withdrawEth(address destination) external payable returns(uint);
 
     // Send a transaction to L1
-    function sendTxToL1(address destAddr, bytes calldata calldataForL1) external payable;
+    // Returns a unique identifier for this L2-to-L1 transaction.
+    function sendTxToL1(address destination, bytes calldata calldataForL1) external payable returns(uint);
 
     // Return the number of transactions issued by the given external account
     // or the account sequence number of the given contract
@@ -28,5 +31,10 @@ interface ArbSys {
     event EthWithdrawal(address indexed destAddr, uint amount);
     event ERC20Withdrawal(address indexed destAddr, address indexed tokenAddr, uint amount);
     event ERC721Withdrawal(address indexed destAddr, address indexed tokenAddr, uint indexed id);
+
+    event L2ToL1Transaction(address caller, address indexed destination, uint indexed uniqueId,
+                            uint indexed batchNumber, uint indexInBatch,
+                            uint arbBlockNum, uint ethBlockNum, uint timestamp,
+                            uint callvalue, bytes data);
 }
 

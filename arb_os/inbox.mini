@@ -38,6 +38,9 @@ use output::outputStats_endOfBlock;
 
 use pluggables::callPluggable;
 
+use retrybuffer::RetryableTx;
+use retrybuffer::processRetryableTx;
+
 use std::bytearray::ByteArray;
 use std::bytearray::bytearray_new;
 use std::bytearray::bytearray_size;
@@ -56,9 +59,6 @@ use std::keccak::keccak256;
 
 use decompression::decompressAndVerifyEcdsaSignedTx;
 use decompression::decompressAndVerifyBLSSignedTxBatch;
-
-use signedTx::hashUnsignedL2messageInfo;
-use signedTx::translateSignedTx;
 
 
 type Inbox = struct {
@@ -402,19 +402,13 @@ public impure func inbox_getNextUnpackedRequest() -> (
                 //      note that deposit doesn't happen in this case
             } elseif (msg.kind == const::L1MessageType_endOfBlock) {
                 // it's an end-of-block message, so just trigger end-of-block processing
-                outputStats_endOfBlock(msg.arbBlockNumber, msg.timestamp);
+                outputStats_endOfBlock(msg.arbBlockNumber, msg.ethBlockNumber, msg.timestamp);
                 blockhash_submitHash(msg.arbBlockNumber, msg.ethBlockNumber, globalInbox.inboxHashAccumulator);
             } elseif (msg.kind == const::L1MessageType_L2) {
                 // it's an L2 message, so switch based on the L2 type
                 let firstByte = bytearray_getByte(msg.msgData, 0);
                 if (firstByte == const::L2MessageType_heartbeat) {
                     // it's a heartbeat message, don't do anything
-                } elseif (firstByte == const::L2MessageType_signedTx) {
-                    // it's a signed tx; verify sig and then process request or discard
-                    if let Some(txRequest) = translateSignedTx(msg) {
-                        return (None<IncomingRequest>, Some(txRequest));
-                    }
-                    // else signature was invalid, ignore msg and execute loop again to get another
                 } elseif (firstByte == const::L2MessageType_signedCompressedTx) {
                     // it's a single message with compressed headers
                     if let Some(txRequest) = decompressAndVerifyEcdsaSignedTx(msg.msgData, msg) {
@@ -437,16 +431,14 @@ public impure func inbox_getNextUnpackedRequest() -> (
                     }
                     // else request was malformatted, ignore it and execute loop again to get another
                 }
-            } elseif (msg.kind == const::L1MessageType_buddyDeploy) {
-                if let Some(txRequest) = translateBuddyDeployTx(msg) {
-                    return (None<IncomingRequest>, Some(txRequest));
-                }
-                // else request was malformatted, ignore it and execute loop again to get another
             } elseif (msg.kind == const::L1MessageType_rollupProtocolEvent) {
                 if (msg.sender == address(0)) {
                     let _ = callPluggable(const::PluggableModuleID_rollupTracker, msg.msgData);
                 }
                 // else request was forged or malformatted, ignore it and execute loop again to get another
+            } elseif (msg.kind == const::L1MessageType_submitRetryableTx) {
+                processRetryableTx(msg);
+                // done with message, execute loop again to get the next message
             } else {
                 return (Some(msg), None<TxRequestData>);
             }
@@ -495,43 +487,14 @@ impure func translateUnsignedTx(request: IncomingRequest) -> option<TxRequestDat
             seqNum: seqNum,
             caller: request.sender,
             calleeAddr: address(destAddrAsUint),
+            gasPayer: request.sender,
             value: value,
             calldata: calldata,
             nonMutating: (subtype == const::L2MessageType_nonmutatingCall),
             isConstructor: (destAddrAsUint == 0),
             incomingRequest: request,
             feeStats: txFeeStats_zero(),
-        }
-    );
-}
-
-func translateBuddyDeployTx(request: IncomingRequest) -> option<TxRequestData> {
-    let inStream = bytestream_new(request.msgData);
-
-    let (us, maxGas) = bytestream_get256(inStream)?;
-    inStream = us;
-
-    let (us, gasPrice) = bytestream_get256(inStream)?;
-    inStream = us;
-
-    let (us, value) = bytestream_get256(inStream)?;
-    inStream = us;
-
-    let calldata = bytestream_getRemainingBytes(inStream);
-
-    return Some(
-        struct {
-            maxGas: maxGas,
-            gasPrice: gasPrice,
-            seqNum: None<uint>,
-            caller: request.sender,
-            calleeAddr: address(0),
-            value: value,
-            calldata: calldata,
-            nonMutating: false,
-            isConstructor: true,
-            incomingRequest: request,
-            feeStats: txFeeStats_zero(),
+            fromRetryable: None<RetryableTx>,
         }
     );
 }

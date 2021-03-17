@@ -57,7 +57,7 @@ pub fn benchmark_add(iterations: u64, log_to: &Path) -> u64 {
     let my_addr = Uint256::from_u64(1025);
     let contract = match AbiForContract::new_from_file(&test_contract_path("Add")) {
         Ok(mut contract) => {
-            let result = contract.deploy(&[], &mut machine, Uint256::zero(), None, None, false);
+            let result = contract.deploy(&[], &mut machine, Uint256::zero(), None, false);
             if let Ok(contract_addr) = result {
                 assert_ne!(contract_addr, Uint256::zero());
                 contract
@@ -103,10 +103,9 @@ pub fn benchmark_add_batched(iterations: u64, log_to: &Path) -> u64 {
     let wallet = machine.runtime_env.new_wallet();
     let _my_addr = Uint256::from_bytes(wallet.address().as_bytes());
 
-    let my_addr = Uint256::from_u64(1025);
     let contract = match AbiForContract::new_from_file(&test_contract_path("Add")) {
         Ok(mut contract) => {
-            let result = contract.deploy(&[], &mut machine, Uint256::zero(), None, None, false);
+            let result = contract.deploy(&[], &mut machine, Uint256::zero(), None, false);
             if let Ok(contract_addr) = result {
                 assert_ne!(contract_addr, Uint256::zero());
                 contract
@@ -125,7 +124,6 @@ pub fn benchmark_add_batched(iterations: u64, log_to: &Path) -> u64 {
         let _tx_id = contract
             .add_function_call_to_batch(
                 &mut batch,
-                my_addr.clone(),
                 "add",
                 vec![
                     ethabi::Token::Uint(ethabi::Uint::one()),

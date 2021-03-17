@@ -5,6 +5,7 @@
 //!Creates a fixed list of globally accessible constants.
 
 use crate::uint256::Uint256;
+use crate::evm::abi::{AbiForContract, builtin_contract_path};
 use std::collections::HashMap;
 
 ///Creates a fixed list of globally accessible constants.
@@ -20,7 +21,10 @@ pub fn init_constant_table() -> HashMap<String, Uint256> {
         ("Address_ArbOwner", 107),
         ("Address_ArbGasInfo", 108),
         ("Address_ArbAggregator", 109),
-        ("Address_RevertAtL2", 110), // reserved for special EthBridge functionality
+        ("Address_ArbRetryableTx", 110),
+        ("Address_ArbStatistics", 111),
+        // addresses of dummy builtin contracts
+        ("Address_ReservedForEthBridge", 200), // reserved for special EthBridge functionality
         // indices of EVM operations
         ("EvmOp_stop", 0),
         ("EvmOp_sha3", 1),
@@ -147,17 +151,17 @@ pub fn init_constant_table() -> HashMap<String, Uint256> {
         ("L1MessageType_ethDeposit", 0),
         ("L1MessageType_L2", 3),
         ("L1MessageType_chainInit", 4),
-        ("L1MessageType_buddyDeploy", 5),
+        // type 5 not used -- previously was for buddy contract deploy
         ("L1MessageType_endOfBlock", 6),
         ("L1MessageType_L2FundedByL1", 7),
         ("L1MessageType_rollupProtocolEvent", 8),
+        ("L1MessageType_submitRetryableTx", 9),
         // L2 message types
         ("L2MessageType_unsignedEOATx", 0),
         ("L2MessageType_unsignedContractTx", 1),
         ("L2MessageType_nonmutatingCall", 2),
         ("L2MessageType_batch", 3),
-        ("L2MessageType_signedTx", 4),
-        ("L2MessageType_sequencerBatch", 5),
+        // types 4 and 5 no longer used
         ("L2MessageType_heartbeat", 6),
         ("L2MessageType_signedCompressedTx", 7),
         ("L2MessageType_blsBatch", 8),
@@ -191,9 +195,8 @@ pub fn init_constant_table() -> HashMap<String, Uint256> {
         ("LogType_send", 2),
         ("LogType_sendMerkleTree", 3),
         // outgoing message types
-        ("SendType_withdrawETH", 0),
         ("SendType_sendTxToL1", 3),
-        ("SendType_buddyContractResult", 5),
+        // type 5 not used -- was previously buddy contract result
         // AVM send types
         ("AVMSendType_batch", 0),
         // chain initialization options
@@ -206,6 +209,7 @@ pub fn init_constant_table() -> HashMap<String, Uint256> {
         ("Charging_DefaultArbGasDivisor", 10000),
         ("Charging_AssumedBatchCostL1Gas", 50000),
         ("Charging_GasPoolDepthSeconds", 60),
+        ("Charging_RetryableTxRepriceIntervalSeconds", 15*60),   // 15 minutes
         // fee customizability
         ("NetFee_defaultRateNumerator", 15),
         ("NetFee_defaultRateDenominator", 100),
@@ -215,6 +219,12 @@ pub fn init_constant_table() -> HashMap<String, Uint256> {
         // pluggable modules
         ("PluggableModuleID_rollupTracker", 0),
         ("PluggableModuleID_precompile_0x05", 1),
+        // retry buffer
+        ("RetryBuffer_DefaultLifetimeSeconds", 60*60*24*7),
+        // gas cost values for re-entrancy protection
+        ("EVMWriteL1GasCost", 5000),
+        ("EVMNonZeroBalanceCallStipend", 2300),
+        ("ArbitrumNonZeroBalanceCallStipend", 20000),
         // misc
         ("SecondsPerBlockNumerator", 2),
         ("SecondsPerBlockDenominator", 1),
@@ -239,8 +249,65 @@ pub fn init_constant_table() -> HashMap<String, Uint256> {
             // Keccak256 of "Arbitrum BLS signature domain"
             "73a92f91d473214defd5ffa91d036007eb2e6487fffaa551835e988fb24aaa2b",
         ),
+        (
+            "EVMLogTopicForL2ToL1Send",
+            "5baaa87db386365b5c161be377bc3d8e317e8d98d71a3ca7ed7d555340c8f767"
+            ),
     ] {
         ret.insert(s.to_string(), Uint256::from_string_hex(u).unwrap());
     }
+
+    for builtin in &["ArbRetryableTx", "ArbStatistics",] {
+        let fcodes = match func_codes_for_builtin_contract(builtin) {
+            Ok(v) => v,
+            Err(e) => panic!("Error accessing builtin function {}: {}", builtin, e),
+        };
+        for (name, code) in fcodes {
+            ret.insert(name, code);
+        }
+
+        let etopics = match event_topics_for_builtin_contract(builtin) {
+            Ok(v) => v,
+            Err(e) => panic!("Error accessing builtin event {}: {}", builtin, e),
+        };
+        for (name, topic) in etopics {
+            ret.insert(name, topic);
+        }
+    }
+
     ret
+}
+
+fn func_codes_for_builtin_contract(contract_name: &str) -> Result<Vec<(String, Uint256)>, ethabi::Error> {
+    let cabi = AbiForContract::new_from_file(&builtin_contract_path(contract_name))?;
+    let mut ret = vec![];
+    for (_, funcs) in &cabi.contract.functions {
+        for func in funcs {
+            let func_name = &func.name;
+            ret.push(
+                (
+                    "funcCode_".to_owned() + contract_name + "_" + func_name,
+                    Uint256::from_bytes(&cabi.short_signature_for_function(func_name)?[..]),
+                )
+            )
+        }
+    }
+    Ok(ret)
+}
+
+fn event_topics_for_builtin_contract(contract_name: &str) -> Result<Vec<(String, Uint256)>, ethabi::Error> {
+    let cabi = AbiForContract::new_from_file(&builtin_contract_path(contract_name))?;
+    let mut ret = vec![];
+    for (_, events) in &cabi.contract.events {
+        for event in events {
+            let event_name = &event.name;
+            ret.push(
+                (
+                    "eventTopic_".to_owned() + contract_name + "_" + event_name,
+                    Uint256::from_bytes(&event.signature()[..]),
+                )
+            )
+        }
+    }
+    Ok(ret)
 }

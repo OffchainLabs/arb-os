@@ -52,6 +52,7 @@ pub enum TypeCheckedNode<'a> {
     Statement(&'a mut TypeCheckedStatement),
     Expression(&'a mut TypeCheckedExpr),
     StructField(&'a mut TypeCheckedFieldInitializer),
+    Type(&'a mut Type),
 }
 
 impl<'a> AbstractSyntaxTree for TypeCheckedNode<'a> {
@@ -60,6 +61,7 @@ impl<'a> AbstractSyntaxTree for TypeCheckedNode<'a> {
             TypeCheckedNode::Statement(stat) => stat.child_nodes(),
             TypeCheckedNode::Expression(exp) => exp.child_nodes(),
             TypeCheckedNode::StructField(field) => field.child_nodes(),
+            TypeCheckedNode::Type(tipe) => tipe.child_nodes(),
         }
     }
     fn is_pure(&mut self) -> bool {
@@ -67,6 +69,7 @@ impl<'a> AbstractSyntaxTree for TypeCheckedNode<'a> {
             TypeCheckedNode::Statement(stat) => stat.is_pure(),
             TypeCheckedNode::Expression(exp) => exp.is_pure(),
             TypeCheckedNode::StructField(field) => field.is_pure(),
+            TypeCheckedNode::Type(_) => true,
         }
     }
 }
@@ -588,7 +591,7 @@ pub fn typecheck_top_level_decls(
     let global_vars_map = global_vars
         .iter()
         .enumerate()
-        .map(|(idx, var)| (var.name, (var.tipe.clone(), idx)))
+        .map(|(idx, var)| (var.name_id, (var.tipe.clone(), idx)))
         .collect::<HashMap<_, _>>();
     let mut exported_funcs = Vec::new();
 

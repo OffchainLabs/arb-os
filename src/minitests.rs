@@ -4,7 +4,7 @@
 
 use crate::mavm::Value;
 use crate::run::{
-    _bytestack_from_bytes, load_from_file, run_from_file, Machine, RuntimeEnvironment,
+    _bytestack_from_bytes, load_from_file, run, run_from_file, Machine, RuntimeEnvironment,
 };
 use crate::uint256::Uint256;
 use num_bigint::{BigUint, RandBigInt};
@@ -444,15 +444,13 @@ fn test_ripemd160_precompile() {
     crate::evm::_evm_eval_ripemd160(None, false);
 }
 
-#[test]
-fn test_deploy_buddy_contract() {
-    crate::evm::evm_deploy_buddy_contract(None, false);
-}
-
+/*  Disabled this test because the format it uses is no longer supported. Aggregator testing
+    will still exercise this functionality.
 #[test]
 fn test_non_eip155_signed_tx() {
     crate::evm::evm_deploy_using_non_eip159_signature(None, false).unwrap();
 }
+*/
 
 #[test]
 fn test_direct_deploy_and_call_add() {
@@ -519,13 +517,13 @@ fn test_function_table_access() {
 }
 
 #[test]
-fn test_evm_add_code() {
-    crate::evm::_basic_evm_add_test(None, false).unwrap();
+fn test_l2_to_l1_call() {
+    crate::evm::_evm_test_callback(None, false).unwrap();
 }
 
 #[test]
-fn test_same_address_deploy() {
-    crate::evm::_evm_test_same_address_deploy(None, false);
+fn test_evm_add_code() {
+    crate::evm::_basic_evm_add_test(None, false).unwrap();
 }
 
 #[test]
@@ -691,4 +689,64 @@ fn test_precompile5_big() {
             panic!("{}", e);
         }
     }
+}
+
+#[test]
+fn reinterpret_register() {
+    let rt_env = RuntimeEnvironment::new(Uint256::from_usize(1111), None);
+    let mut old_machine =
+        load_from_file(Path::new("upgradetests/regcopy_old.mexe"), rt_env.clone());
+    let _ = run(&mut old_machine, vec![], false);
+    let mut new_machine = load_from_file(Path::new("upgradetests/regcopy_new.mexe"), rt_env);
+    run(&mut new_machine, vec![old_machine.register], false).unwrap();
+    assert_eq!(
+        *new_machine.stack_top().unwrap(),
+        Value::Int(Uint256::one())
+    );
+}
+
+#[test]
+fn small_upgrade() {
+    use crate::run::upload::CodeUploader;
+
+    let rt_env = RuntimeEnvironment::new(Uint256::from_usize(1111), None);
+    let mut machine = load_from_file(Path::new("upgradetests/upgrade1_old.mexe"), rt_env.clone());
+    let uploader = CodeUploader::_new_from_file(Path::new("upgradetests/upgrade1_new.mexe"));
+    let code_bytes = uploader._to_flat_vec();
+    let msg = Value::new_tuple(vec![
+        Value::Int(Uint256::from_usize(code_bytes.len())),
+        Value::new_buffer(code_bytes),
+    ]);
+    machine.runtime_env.insert_full_inbox_contents(vec![msg]);
+    let _ = run(&mut machine, vec![], false);
+
+    //let mut new_machine = load_from_file(Path::new("upgradetests/regcopy_new.mexe"), rt_env);
+    //run(&mut new_machine, vec![machine.register], false).unwrap();
+    println!("Machine state after: {:?}", machine.state);
+    assert_eq!(
+        *machine.stack_top().unwrap(),
+        Value::Int(Uint256::from_u64(42))
+    );
+}
+
+#[test]
+fn small_upgrade_auto_remap() {
+    use crate::run::upload::CodeUploader;
+
+    let rt_env = RuntimeEnvironment::new(Uint256::from_usize(1111), None);
+    let mut machine = load_from_file(Path::new("upgradetests/upgrade2_old.mexe"), rt_env.clone());
+    let uploader = CodeUploader::_new_from_file(Path::new("upgradetests/upgrade2_new.mexe"));
+    let code_bytes = uploader._to_flat_vec();
+    let msg = Value::new_tuple(vec![
+        Value::Int(Uint256::from_usize(code_bytes.len())),
+        Value::new_buffer(code_bytes),
+    ]);
+    machine.runtime_env.insert_full_inbox_contents(vec![msg]);
+    let _ = run(&mut machine, vec![], false);
+
+    println!("Machine state after: {:?}", machine.state);
+    assert_eq!(
+        *machine.stack_top().unwrap(),
+        Value::Int(Uint256::from_u64(42))
+    );
 }

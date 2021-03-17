@@ -18,22 +18,29 @@ use errorHandler::errorHandler;
 
 use accounts::getGlobalAccountStore;
 use accounts::setGlobalAccountStore;
+use accounts::accountStore_changeNumContracts;
 use accounts::accountStore_get;
 use accounts::accountStore_set;
+use accounts::accountStore_getRetryBuffer;
+use accounts::accountStore_setRetryBuffer;
 use accounts::accountStore_transferEthBalance;
-use accounts::accountStore_destroyAndTransferBalance;
+use accounts::accountStore_destroyAccount;
 use accounts::accountStore_cloneContract;
 use accounts::account_setStorageCell;
 use accounts::account_getBalance;
 use accounts::account_setBalance;
 use accounts::account_deductFromEthBalance;
+use accounts::account_addToEthBalance;
 use accounts::account_getAllStorage;
 use accounts::account_getStartCodePoint;
 use accounts::account_setContractInfo;
 use accounts::account_fetchAndIncrSeqNum;
 use accounts::account_incrSeqNum;
 use accounts::account_getStorageSize;
+use accounts::account_isEmpty;
 use accounts::pristineAccount;
+
+use evmOps::evmOp_callAndReturn;
 
 use evmlogs::evmlogs_empty;
 use evmlogs::evmlogs_appendAny;
@@ -66,6 +73,7 @@ use gasAccounting::gasAccounting_pauseTxCharges;
 use gasAccounting::gasAccounting_resumeTxCharges;
 use gasAccounting::gasAccounting_getGasChargeAmount;
 use gasAccounting::txFeeStats_zero;
+use gasAccounting::gasAccounting_addToReserveInAcctStore;
 
 use codeSegment::translateEvmCodeSegment;
 
@@ -78,6 +86,12 @@ use output::outbox_append;
 use output::sendQueuedMessages;
 
 use inbox::IncomingRequest;
+use inbox::inbox_currentArbBlockNumber;
+use inbox::inbox_currentEthBlockNumber;
+use inbox::inbox_currentTimestamp;
+
+use retrybuffer::RetryBuffer;
+use retrybuffer::RetryableTx;
 
 
 // This callframe is used to represent an EVM call in progress.
@@ -124,6 +138,13 @@ type ResumeInfo = struct {            // information used to resume a call after
 
 var globalCallStack: option<EvmCallFrame>;   // call frame of currently running call, if any
 var globalCurrentTxRequest: TxRequestData;  // request that launched the top-level call
+var globalCurrentRetryableRequest: option<IncomingRequest>;  // describes the retryable request we're currently doing, if any
+
+// This is designed to be called if a top-level, non-constructor tx succeeds. First arg is tx's returndata.
+type TxReturndataHook = struct {
+    callback: impure func(ByteArray, any),
+    data: any,
+}
 
 public impure func evmCallStack_currentArbBlockNumber() -> uint {
     return globalCurrentTxRequest.incomingRequest.arbBlockNumber;
@@ -138,6 +159,32 @@ public impure func evmCallStack_currentTimestamp() -> uint {
 }
 
 public impure func evmCallStack_init() {
+    globalCallStack = None<EvmCallFrame>;
+    globalCurrentRetryableRequest = None<IncomingRequest>;
+}
+
+public impure func getRetryBufferInCurrentContext() -> RetryBuffer {
+    let astore = xif let Some(frame) = globalCallStack {
+        frame.accountStore
+    } else {
+        getGlobalAccountStore()
+    };
+    return accountStore_getRetryBuffer(astore);
+}
+
+public impure func setRetryBufferInCurrentContext(rbuf: RetryBuffer) {
+    if let Some(frame) = globalCallStack {
+        globalCallStack = Some(frame with {
+            accountStore: accountStore_setRetryBuffer(frame.accountStore, rbuf)
+        });
+    } else {
+        setGlobalAccountStore(
+            accountStore_setRetryBuffer(getGlobalAccountStore(), rbuf)
+        );
+    }
+}
+
+public impure func evmCallStack_makeEmpty() {
     globalCallStack = None<EvmCallFrame>;
 }
 
@@ -186,6 +233,7 @@ public impure func initEvmCallStack(
     callKind: uint,
     request: TxRequestData,
     sendOnFailure: option<ByteArray>,
+    chargeForCallvalue: bool,
 ) {
     // Set up the call frame for a top-level call, and launch the call's execution.
     if let Some(entryPoint) = account_getStartCodePoint(
@@ -194,12 +242,12 @@ public impure func initEvmCallStack(
             request.calleeAddr
         )
     ) {
-        let startTxResult = gasAccounting_startTxCharges(request.maxGas, request.gasPrice, request.caller);
+        let startTxResult = gasAccounting_startTxCharges(request.maxGas, request.gasPrice, request.gasPayer);
         if (startTxResult == const::TxResultCode_success) {
             if (request.seqNum != None<uint>) {
                 // increment the caller's sequence number, if caller has sufficient balance
                 let acctStore = getGlobalAccountStore();
-                if (account_getBalance(accountStore_get(acctStore, request.caller)) >= request.value) {
+                if ( (!chargeForCallvalue) || (account_getBalance(accountStore_get(acctStore, request.caller)) >= request.value) ){
                     setGlobalAccountStore(
                         accountStore_set(
                             acctStore,
@@ -213,14 +261,16 @@ public impure func initEvmCallStack(
             }
 
             globalCurrentTxRequest = request;
+            globalCurrentRetryableRequest = None<IncomingRequest>;
 
             // pay callvalue from caller to the called contract
             // payment will only be recorded inside the callframe, so it will be discarded if the call reverts
-            if let Some(globalAS) = accountStore_transferEthBalance(
+            if let Some(globalAS) = ethTransferOrGrant(
                 getGlobalAccountStore(),
                 request.caller,
                 request.calleeAddr,
-                request.value
+                request.value,
+                chargeForCallvalue,
             ) {
                 globalCallStack = Some(struct {
                     runningAs: request.calleeAddr,
@@ -289,7 +339,7 @@ public impure func initEvmCallStack(
         if (request.seqNum != None<uint>) {
             // increment the caller's sequence number, if caller has sufficient balance
             let acctStore = getGlobalAccountStore();
-            if (account_getBalance(accountStore_get(acctStore, request.caller)) >= request.value) {
+            if ((!chargeForCallvalue) || (account_getBalance(accountStore_get(acctStore, request.caller)) >= request.value)) {
                 setGlobalAccountStore(
                     accountStore_set(
                         acctStore,
@@ -304,11 +354,12 @@ public impure func initEvmCallStack(
 
         if (request.value > 0) {
             // transfer value to destination address
-            if let Some(globalAS) = accountStore_transferEthBalance(
+            if let Some(globalAS) = ethTransferOrGrant(
                 getGlobalAccountStore(),
                 request.caller,
                 request.calleeAddr,
-                request.value
+                request.value,
+                chargeForCallvalue
             ) {
                 if (callKind != const::EVMCallType_staticcall) {  // commit the transfer, unless it's a static call
                     setGlobalAccountStore(globalAS);
@@ -357,7 +408,8 @@ public impure func initEvmCallStackForConstructor(
     code: ByteArray,
     evmJumpTable: map<uint, impure func()>,
     startPoint: impure func(),
-    request: TxRequestData
+    request: TxRequestData,
+    chargeForCallvalue: bool,
 ) {
     // Set up the call frame for a top-level constructor call, and launch the call's execution.
     // This is called in the context of a new account.
@@ -365,6 +417,7 @@ public impure func initEvmCallStackForConstructor(
     //      code for this new account.
 
     globalCurrentTxRequest = request with { isConstructor: true };
+    globalCurrentRetryableRequest = None<IncomingRequest>;
 
     // Create an accountStore with the caller's sequence number incremented; will decide later whether to commit it
     let acctStore = getGlobalAccountStore();
@@ -389,10 +442,17 @@ public impure func initEvmCallStackForConstructor(
             true,
         )
     );
-    if let Some(uas) = accountStore_transferEthBalance(acctStore, request.caller, request.calleeAddr, request.value) {
+
+    if let Some(uas) = ethTransferOrGrant(
+        acctStore,
+        request.caller,
+        request.calleeAddr,
+        request.value,
+        chargeForCallvalue,
+    ) {
         acctStore = uas;
 
-        let startTxResult = gasAccounting_startTxCharges(request.maxGas, request.gasPrice, request.caller);
+        let startTxResult = gasAccounting_startTxCharges(request.maxGas, request.gasPrice, request.gasPayer);
         if (startTxResult == const::TxResultCode_success) {
             setGlobalAccountStore(acctStoreAfterIncrement);   // commit the incremented sequence number
 
@@ -457,6 +517,7 @@ public impure func evmCallStack_doCall(
     retLength: uint,
     resumeCodePoint: func(),         // jump to this to resume the caller
     resumeAuxStack: option<Stack>,   // aux stack contents to restore on resume, if any
+    chargeForCallvalue: bool,        // whether we need to charge caller for callvalue (i.e., not already charged)
 ) -> option<bool> {   // returns Some(success) if succeed/fail, or None on error
     let topFrame = globalCallStack?;
     let callee = accountStore_get(topFrame.accountStore, calleeAddr);
@@ -467,7 +528,7 @@ public impure func evmCallStack_doCall(
             // Add a stipend, charged to the caller, if non-zero value is transferred.
             // This is needed because Ethereum provides a stipend, and some code depends on that.
             // The size of our stipend was chosen experimentally, to make sure a call that will run on Ethereum will run here.
-            gas = gas + 20000;
+            gas = gas + const::ArbitrumNonZeroBalanceCallStipend;
         }
         if (gas > 63*availableGas/64) {
             gas = 63*availableGas/64;  // don't give the callee more than 63/64 of the call's gas
@@ -505,11 +566,12 @@ public impure func evmCallStack_doCall(
         }
         let updatedAcctStore = topFrame.accountStore;
         if (balance > 0) {
-            if let Some(uas) = accountStore_transferEthBalance(
+            if let Some(uas) = ethTransferOrGrant(
                 updatedAcctStore,
                 callerAddr,
                 calleeAddr,
-                balance
+                balance,
+                chargeForCallvalue,
             ) {
                 updatedAcctStore = uas;
             } else {
@@ -534,9 +596,14 @@ public impure func evmCallStack_doCall(
             memory: bytearray_new(0),
             storageDelta: topFrame.storageDelta,
             revertOnStorageWrite: // disallow storage write if gas provided < EVM gas cost of storage write
+                                  //       if balance == 0, disallow if gas < EVM gas cost of storage write
+                                  //       if balance > 0, disallow if gas (before 20000 stipend) + EVM stipend
+                                  //                           would have been less than EVM gas cost of storage write
                                   topFrame.revertOnStorageWrite
-                                  || (gas < 5000)
-                                  || ((balance > 0) && (gas < 17700)),
+                                  || ((balance == 0) && (gas < const::EVMWriteL1GasCost))
+                                  || ((balance > 0) && (gas <= (const::EVMWriteL1GasCost
+                                                                + const::ArbitrumNonZeroBalanceCallStipend
+                                                                - const::EVMNonZeroBalanceCallStipend))),
             evmLogs: topFrame.evmLogs,
             selfDestructQueue: topFrame.selfDestructQueue,
             resumeInfo: None<ResumeInfo>,
@@ -555,7 +622,17 @@ public impure func evmCallStack_doCall(
         // no code at that address, so just do eth transfer
         if (balance > 0) {
             return Some(
-                evmCallStack_transferEthFromCurrent(calleeAddr, balance) == Some(())
+                xif (chargeForCallvalue) {
+                    evmCallStack_transferEthFromCurrent(calleeAddr, balance) == Some(())
+                } else {
+                    evmCallStack_setAccount(
+                        calleeAddr,
+                        account_addToEthBalance(
+                            evmCallStack_getAccount(calleeAddr)?,
+                            balance
+                        )
+                    )
+                }
             );
         } else {
             return Some(true);
@@ -710,32 +787,20 @@ public impure func evmCallStack_returnFromCall(
                         );
 
                         // emit queued sends
-                        sendQueuedMessages(topFrame.sendQueue);
+                        let updatedEvmLogs = sendQueuedMessages(topFrame.sendQueue, topFrame.evmLogs);
 
                         // Emit log item reporting success
                         emitTxReceipt(
                             globalCurrentTxRequest.incomingRequest,
                             const::TxResultCode_success,
                             Some(returnData),
-                            Some(topFrame.evmLogs),
+                            Some(updatedEvmLogs),
                             Some(gasUsage),
                             feeStats,
                         );
 
-                        if (globalCurrentTxRequest.incomingRequest.kind == 5) {
-                            // successfully created a buddy contract -- announce that as a message
-                            outbox_append(
-                                bytearray_setByte(
-                                    bytearray_set256(
-                                        bytearray_set256(bytearray_new(0), 0, const::SendType_buddyContractResult),
-                                        32,
-                                        uint(globalCurrentTxRequest.incomingRequest.sender)
-                                    ),
-                                    64,
-                                    1,
-                                )
-                            );
-                        }
+                        // increment global contract count
+                        setGlobalAccountStore(accountStore_changeNumContracts(getGlobalAccountStore(), int(1)));
                     } else {
                         // Compilation of resulting code failed; report an error.
                         emitTxReceipt(
@@ -746,25 +811,29 @@ public impure func evmCallStack_returnFromCall(
                             Some(gasUsage),
                             feeStats,
                         );
-                        if (globalCurrentTxRequest.incomingRequest.kind == 5) {
-                            // failed to create a buddy contract -- announce that as a message
-                            outbox_append(
-                                bytearray_setByte(
-                                    bytearray_set256(
-                                        bytearray_set256(bytearray_new(0), 0, const::SendType_buddyContractResult),
-                                        32,
-                                        uint(globalCurrentTxRequest.incomingRequest.sender),
-                                    ),
-                                    64,
-                                    0,
-                                )
-                            );
-                        }
                     }
                 } else {
-                    if (! globalCurrentTxRequest.nonMutating) {
+                    let updatedEvmLogs = xif (! globalCurrentTxRequest.nonMutating) {
                         // It was a successful tx (not a non-mutating call).
                         // We'll commit the results of the tx
+
+                        if let Some(retryableReq) = globalCurrentRetryableRequest {
+                            emitTxReceipt(
+                                retryableReq with {
+                                    arbBlockNumber: inbox_currentArbBlockNumber()
+                                } with {
+                                    ethBlockNumber: inbox_currentEthBlockNumber()
+                                } with {
+                                    timestamp: inbox_currentTimestamp()
+                                },
+                                const::TxResultCode_success,
+                                None<ByteArray>,
+                                None<EvmLogs>,
+                                None<GasUsage>,
+                                txFeeStats_zero(),
+                            );
+                            globalCurrentRetryableRequest = None<IncomingRequest>;
+                        }
 
                         // Save cached account back to main accountStore
                         let acctStore = accountStore_set(
@@ -778,23 +847,30 @@ public impure func evmCallStack_returnFromCall(
                         while( ! queue_isEmpty(sdq) ) {
                             let (q, item) = queue_get(sdq)?;
                             sdq = q;
-                            let (victim, owner) = unsafecast<(address, address)>(item);
-                            acctStore = accountStore_destroyAndTransferBalance(acctStore, victim, owner);
+                            let victim = unsafecast<address>(item);
+                            acctStore = accountStore_changeNumContracts(
+                                accountStore_destroyAccount(acctStore, victim),
+                                -1s,
+                            );
                         }
 
                         // emit queued sends
-                        sendQueuedMessages(topFrame.sendQueue);
+                        let updEvmLogs = sendQueuedMessages(topFrame.sendQueue, topFrame.evmLogs);
 
                         // Save results back to the main globalAccountStore
                         setGlobalAccountStore(acctStore,);
-                    }
+
+                        updEvmLogs
+                    } else {
+                        topFrame.evmLogs
+                    };
 
                     // Emit a log item reporting success
                     emitTxReceipt(
                         globalCurrentTxRequest.incomingRequest,
                         const::TxResultCode_success,
                         Some(returnData),
-                        Some(topFrame.evmLogs),
+                        Some(updatedEvmLogs),
                         Some(gasUsage),
                         feeStats,
                     );
@@ -834,6 +910,62 @@ public impure func evmCallStack_returnFromCall(
     };
 }
 
+public impure func evmCallStack_callRetryableTxAndReturn(rtx: RetryableTx) -> bool {
+    let ret = false;
+    if let Some(topFrame) = globalCallStack {
+        // Save parts of the callframe, then overwrite them before making the call,
+        //     in order to impersonate the original caller.
+        let savedRunningAs = topFrame.runningAs;
+        let savedMemory = topFrame.memory;
+
+        let theFrame = evmCallFrame_setRunningAsAddress(topFrame, rtx.sender);
+        theFrame = theFrame with { memory: rtx.calldata };
+        globalCallStack = Some(theFrame);
+
+        globalCurrentRetryableRequest = Some(rtx.l1Message);
+
+        let retCode = evmOp_callAndReturn(
+            1000000000000000000,    // give all of our gas to the callee
+            rtx.destination,
+            rtx.callvalue,
+            0,
+            bytearray_size(rtx.calldata),
+            0,
+            0,
+            false,    // don't charge for callvalue, because we already took it when rtx was created
+        );
+        ret = xif let Some(newTopFrame) = globalCallStack {
+            // restore saved callframe info
+            newTopFrame = newTopFrame with { memory: savedMemory };
+            newTopFrame = evmCallFrame_setRunningAsAddress(newTopFrame, savedRunningAs);
+            globalCallStack = Some(newTopFrame);
+            retCode
+        } else {
+            false
+        };
+    }
+    return ret;
+}
+
+func ethTransferOrGrant(
+    acctStore: AccountStore,
+    payer: address,
+    recipient: address,
+    amount: uint,
+    chargePayer: bool
+) -> option<AccountStore> {
+    return xif (chargePayer) {
+       accountStore_transferEthBalance(acctStore, payer, recipient, amount)
+   } else {
+       // payer already paid for the amount, so just credit it to the recipient
+       Some(accountStore_set(
+           acctStore,
+           recipient,
+           account_addToEthBalance(accountStore_get(acctStore, recipient), amount),
+       ))
+   };
+}
+
 func storageReclaimedForSDQ(topFrame: EvmCallFrame) -> uint {
     let q = topFrame.selfDestructQueue;
     let ret = 0;
@@ -841,7 +973,7 @@ func storageReclaimedForSDQ(topFrame: EvmCallFrame) -> uint {
         if let Some(res) = queue_get(q) {
             let (uq, rawItem) = res;
             q = uq;
-            let (victim, _) = unsafecast<(address, address)>(rawItem);
+            let victim = unsafecast<address>(rawItem);
             if let Some(sz) = account_getStorageSize(accountStore_get(topFrame.accountStore, victim)) {
                 ret = ret + sz;
             }
@@ -1123,6 +1255,32 @@ public impure func evmCallStack_setAccountInCurrentContext(addr: address, acct: 
     }
 }
 
+public impure func evmCallStack_transferEthInCurrentContext(from: address, to: address, amount: uint) -> option<()> {
+    return xif (from == to) {
+        Some(())  // self-transfer is a no-op
+    } else {
+        xif let Some(updatedFrom) = account_deductFromEthBalance(evmCallStack_getAccountInCurrentContext(from), amount) {
+            evmCallStack_setAccountInCurrentContext(from, updatedFrom);
+            evmCallStack_setAccountInCurrentContext(
+                to,
+                account_addToEthBalance(evmCallStack_getAccountInCurrentContext(to), amount)
+            );
+            Some(())
+        } else {
+            None<()>
+        }
+    };
+}
+
+public impure func evmCallStack_changeNumAccounts(delta: int) {
+    if let Some(topFrame) = globalCallStack {
+        globalCallStack = Some(
+            topFrame with { accountStore: accountStore_changeNumContracts(topFrame.accountStore, delta) }
+        );
+    }
+    // if not in a stack frame (which shouldn't happen), ignore the problem, the only consequence is inaccurate stats
+}
+
 public impure func evmCallStack_getTopFrameMemoryOrDie() -> ByteArray {
     return xif let Some(topFrame) = globalCallStack {
         topFrame.memory
@@ -1215,14 +1373,37 @@ public impure func evmCallStack_addEvmLogToCurrent(item: any) -> option<()> {
     return Some(());
 }
 
-public impure func evmCallStack_selfDestructCurrentAccount(owner: address) {
+public impure func evmCallStack_selfDestructCurrentAccount(recipient: address) {
     if let Some(topFrame) = globalCallStack {
+        let destructee = topFrame.runningAs;
+        let amount = account_getBalance(topFrame.runningAsAccount);
+
+        // take amount from the current running account
+        topFrame = topFrame with { runningAsAccount: account_setBalance(topFrame.runningAsAccount, 0) };
+
+        if (amount > 0) {
+            // give amount to the correct party, according to the yellow paper's rules
+            let recipientAcct = accountStore_get(topFrame.accountStore, recipient);
+            if (recipient == topFrame.runningAs) {
+                // yellow paper says to burn the funds; we'll give them to the chain's reserve fund
+                topFrame = topFrame with {
+                    accountStore: gasAccounting_addToReserveInAcctStore(topFrame.accountStore, amount)
+                };
+            } else {
+                // give funds to recipient
+                topFrame = topFrame with {
+                    accountStore: accountStore_set(
+                        topFrame.accountStore,
+                        recipient,
+                        account_addToEthBalance(recipientAcct, amount)
+                    )
+                };
+            }
+        }
+
         globalCallStack = Some(
             topFrame with {
-                selfDestructQueue: queue_put(
-                    topFrame.selfDestructQueue,
-                    (topFrame.runningAs, owner)
-                )
+                selfDestructQueue: queue_put(topFrame.selfDestructQueue, destructee)
             }
         );
     }
@@ -1230,6 +1411,17 @@ public impure func evmCallStack_selfDestructCurrentAccount(owner: address) {
 
 public func evmCallFrame_runningAsAddress(frame: EvmCallFrame) -> address {
     return frame.runningAs;
+}
+
+public func evmCallFrame_setRunningAsAddress(frame: EvmCallFrame, addr: address) -> EvmCallFrame {
+    let acctStore = accountStore_set(frame.accountStore, frame.runningAs, frame.runningAsAccount);
+    return frame with {
+        runningAs: addr
+    } with {
+        runningAsAccount: accountStore_get(acctStore, addr)
+    } with {
+        accountStore: acctStore
+    };
 }
 
 public func evmCallFrame_runningAsAccount(frame: EvmCallFrame) -> Account {
