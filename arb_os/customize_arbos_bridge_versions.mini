@@ -4,64 +4,6 @@
 
 use bridge_arbos_versions::GlobalsBeforeUpgrade;
 
-use accounts::Account;
-use arbstatistics::ArbStatistics;
-
-use arbstatistics::arbStatistics_newForUpgrade;
-use inbox::IncomingRequest;
-use inbox::inbox_currentTimestamp;
-
-use retrybuffer::retryBuffer_new;
-
-
-public func set_globalCurrentRetryableRequest_onUpgrade(before: GlobalsBeforeUpgrade) -> option<any> {
-    return None<any>;
-}
-
-public func set_gasAccountingInfo_onUpgrade(
-    before: GlobalsBeforeUpgrade
-) -> struct {
-    txState: option<any>,
-    feeConfig: any,
-    currentPrices: any,
-    gasRemainingThisBlock: uint,
-    congestionState: any,
-    speedLimitPerSecond: uint,
-    pricingParams: any,
-    gasAllocatedToThisBlock: uint,
-    retryablePrices: any,
-} {
-    let old = before.gasAccountingInfo;
-    let retryablePrices = struct {
-        perTx: 0,
-        perCalldataByte: 0,
-        nextUpdateTimestamp: 0, //inbox_currentTimestamp(),
-    };
-    return struct {
-        txState: old.txState,
-        feeConfig: old.feeConfig,
-        currentPrices: old.currentPrices,
-        gasRemainingThisBlock: old.gasRemainingThisBlock,
-        congestionState: old.congestionState,
-        speedLimitPerSecond: old.speedLimitPerSecond,
-        pricingParams: old.pricingParams,
-        gasAllocatedToThisBlock: old.gasAllocatedToThisBlock,
-        retryablePrices: unsafecast<any>(retryablePrices),
-    };
-}
-
-public func set_globalAccountStore_onUpgrade(
-    before: GlobalsBeforeUpgrade,
-) -> any {
-    return struct {
-        accounts: unsafecast<map<address, Account>>(before.globalAccountStore),
-        retryBuffer: retryBuffer_new(),
-        numContracts: 0,
-    };
-}
-
-public func set_arbStats_onUpgrade(
-    before: GlobalsBeforeUpgrade,
-) -> ArbStatistics {
-    return arbStatistics_newForUpgrade();
+public func set_globalAccountStore_onUpgrade(input_globals: GlobalsBeforeUpgrade) -> any {
+    return input_globals.globalAccountStore;
 }

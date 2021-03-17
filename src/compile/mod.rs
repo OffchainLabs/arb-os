@@ -628,6 +628,13 @@ pub fn parse_from_source(
                 ),
                 Some(lines.location(BytePos::from(offset), file_id).unwrap()),
             ),
+            lalrpop_util::ParseError::UnrecognizedEOF { location, expected } => CompileError::new(
+                format!(
+                    "unexpected end of file: expected one of: {}",
+                    format!("{:?}",&expected)
+                ),
+                lines.location(location.into(), file_id),
+            ),
             _ => CompileError::new(format!("{:?}", e), None),
         })
 }
