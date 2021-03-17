@@ -16,6 +16,7 @@ use accounts::getGlobalAccountStore;
 use accounts::setGlobalAccountStore;
 use accounts::accountStore_get;
 use accounts::accountStore_set;
+use accounts::accountStore_feeCollectorForAggregator;
 use accounts::account_getBalance;
 use accounts::account_addToEthBalance;
 use accounts::account_deductFromEthBalance;
@@ -940,7 +941,7 @@ impure func payForTxAndL1Gas(
         acctStore = xif let Some(store) = accountStore_transferEthBalance(
             acctStore,
             payer,
-            recipient,
+            accountStore_feeCollectorForAggregator(acctStore, recipient),
             amount - payableToFee,  // safe because payableToFee <= amount <= payer's original balance
         ) {
             store
