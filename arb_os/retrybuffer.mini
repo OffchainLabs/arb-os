@@ -8,6 +8,7 @@ use accounts::accountStore_get;
 use accounts::accountStore_set;
 use accounts::accountStore_getRetryBuffer;
 use accounts::accountStore_setRetryBuffer;
+use accounts::accountStore_transferEthBalance;
 use accounts::account_addToEthBalance;
 use accounts::account_deductFromEthBalance;
 
@@ -233,7 +234,7 @@ public impure func retryBuffer_delete(rbuf: RetryBuffer, txId: uint, withRefund:
     };
 }
 
-public impure func processRetryableTx(req: IncomingRequest) {
+public impure func processRetryableTx(req: IncomingRequest) -> option<TxRequestData> {
     // This must be called outside of a transaction.
 
     let sender = req.sender;
@@ -243,8 +244,10 @@ public impure func processRetryableTx(req: IncomingRequest) {
     let maxSubmissionCost = bytearray_get256(req.msgData, 3*32);
     let creditBack = address(bytearray_get256(req.msgData, 4*32));
     let beneficiary = address(bytearray_get256(req.msgData, 5*32));
-    let calldataSize = bytearray_get256(req.msgData, 6*32);
-    let calldata = bytearray_extract(req.msgData, 7*32, calldataSize);
+    let maxGasForImmediate = bytearray_get256(req.msgData, 6*32);
+    let gasPriceForImmediate = bytearray_get256(req.msgData, 7*32);
+    let calldataSize = bytearray_get256(req.msgData, 8*32);
+    let calldata = bytearray_extract(req.msgData, 9*32, calldataSize);
 
     if (creditBack == address(0)) { creditBack = sender; }
 
@@ -263,10 +266,10 @@ public impure func processRetryableTx(req: IncomingRequest) {
     // charge for injecting this message
     let (submissionFee, subFeeRecipient, feeStats) = getFeesForRetryableTx(sender, calldataSize);
 
-    if (submissionFee <= maxSubmissionCost) {
+    let ret = xif (submissionFee <= maxSubmissionCost) {
         let totalDue = callvalue + maxSubmissionCost;
 
-        if let Some(senderAcct) = account_deductFromEthBalance(accountStore_get(acctStore, sender), totalDue) {
+        xif let Some(senderAcct) = account_deductFromEthBalance(accountStore_get(acctStore, sender), totalDue) {
             // We took maxSubmissionCost + callvalue from the sender.
             // We will distribute those funds as follows:
             //       submissionFee to the subFeeRecipient
@@ -314,6 +317,51 @@ public impure func processRetryableTx(req: IncomingRequest) {
                 None<GasUsage>,
                 feeStats,
             );
+
+            xif ((maxGasForImmediate > 0) && (maxGasForImmediate*gasPriceForImmediate >= gasPriceForImmediate)) { // 2nd check avoids overflow
+                xif let Some(rtx) =  retryBuffer_get(accountStore_getRetryBuffer(acctStore), txId) {
+                    xif let Some(uaStore) = accountStore_transferEthBalance(
+                        acctStore,
+                        sender,
+                        creditBack,
+                        maxGasForImmediate * gasPriceForImmediate,
+                    ) {
+                        acctStore = uaStore;
+
+                        let immediateCalldata = bytearray_new(0);
+                        immediateCalldata = bytearray_set256(
+                            immediateCalldata,
+                            0,
+                            asm(256-32, const::funcCode_ArbRetryableTx_redeem) uint { shl },
+                        );
+                        immediateCalldata = bytearray_set256(immediateCalldata, 4, txId);
+
+                        Some(
+                            struct {
+                                maxGas: maxGasForImmediate,
+                                gasPrice: gasPriceForImmediate,
+                                seqNum: None<uint>,
+                                caller: sender,
+                                calleeAddr: address(const::Address_ArbRetryableTx),
+                                gasPayer: creditBack,
+                                value: 0,
+                                calldata: immediateCalldata,
+                                nonMutating: false,
+                                isConstructor: false,
+                                incomingRequest: req with { requestId: uint(hash(bytes32(req.requestId), bytes32(1))) },
+                                feeStats: txFeeStats_zero(),
+                                fromRetryable: Some(rtx),
+                            }
+                        )
+                    } else {
+                        None<TxRequestData>
+                    }
+                } else {
+                    None<TxRequestData>
+                }
+            } else {
+                None<TxRequestData>
+            }
         } else {
             emitTxReceipt(
                 req,
@@ -323,6 +371,7 @@ public impure func processRetryableTx(req: IncomingRequest) {
                 None<GasUsage>,
                 feeStats,
             );
+            None<TxRequestData>
         }
     } else {
         // submission cost was higher than the maximum allowed by the request
@@ -334,8 +383,12 @@ public impure func processRetryableTx(req: IncomingRequest) {
             None<GasUsage>,
             feeStats,
         );
-    }
+        None<TxRequestData>
+    };
+
     setGlobalAccountStore(acctStore);
+
+    return ret;
 }
 
 public impure func redeemRetryableTxInTx(txToRedeem: uint) -> bool {

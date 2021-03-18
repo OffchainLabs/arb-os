@@ -227,6 +227,8 @@ impl AbiForContract {
         max_submission_cost: Uint256,
         credit_back_address: Option<Uint256>,
         beneficiary: Option<Uint256>,
+        max_gas_immed: Option<Uint256>,
+        gas_price_immed: Option<Uint256>,
     ) -> Result<Uint256, ethabi::Error> {
         let this_function = self.contract.function(func_name)?;
         let calldata = this_function.encode_input(args).unwrap();
@@ -239,6 +241,8 @@ impl AbiForContract {
             max_submission_cost,
             credit_back_address.unwrap_or(sender.clone()),
             beneficiary.unwrap_or(sender),
+            max_gas_immed.unwrap_or(Uint256::zero()),
+            gas_price_immed.unwrap_or(Uint256::zero()),
             &calldata,
         );
 
