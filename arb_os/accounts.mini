@@ -2,6 +2,9 @@
 // Copyright 2020, Offchain Labs, Inc. All rights reserved.
 //
 
+use retrybuffer::RetryBuffer;
+use retrybuffer::retryBuffer_new;
+
 use std::bytearray::ByteArray;
 use std::bytearray::bytearray_new;
 use std::bytearray::bytearray_size;
@@ -13,12 +16,19 @@ use std::storageMap::storageMap_size;
 use std::storageMap::storageMap_get;
 use std::storageMap::storageMap_set;
 
+use core::kvs::Kvs;
+use core::kvs::builtin_kvsSize;
+
 use chainParameters::chainParams_getDefaultAggregator;
 use decompression::AggregatorDecompressionState;
 use evmCallStack::evmCallStack_addStorageCharge;
 
 
-type AccountStore = map<address, Account>
+type AccountStore = struct {
+    accounts: map<address, Account>,
+    retryBuffer: RetryBuffer,
+    numContracts: uint,
+}
 
 type Account = struct {
     addr: address,
@@ -50,7 +60,11 @@ var globalAccountStore: AccountStore;   // needs to be initialized before use
 
 
 public impure func accountStore_init() {   // This must be called first!
-    globalAccountStore = newmap<address, Account>;
+    globalAccountStore = struct {
+        accounts: newmap<address, Account>,
+        retryBuffer: retryBuffer_new(),
+        numContracts: 0,
+    };
 }
 
 public impure func getGlobalAccountStore() -> AccountStore {
@@ -62,7 +76,7 @@ public impure func setGlobalAccountStore(acctStore: AccountStore) {
 }
 
 public func accountStore_get(acctStore: AccountStore, addr: address) -> Account {
-    return xif let Some(acct) = acctStore[addr] {
+    return xif let Some(acct) = acctStore.accounts[addr] {
         acct
     } else {
         // There is no recorded account at this address, so make a pristine account.
@@ -87,22 +101,58 @@ public func accountStore_set(
     addr: address, 
     acct: Account
 ) -> AccountStore {
-    return acctStore with { [addr] = acct };
+    return acctStore with {
+        accounts: acctStore.accounts with { [addr] = acct }
+    };
 }
 
+public func accountStore_getRetryBuffer(acctStore: AccountStore) -> RetryBuffer {
+    return acctStore.retryBuffer;
+}
+
+public func accountStore_setRetryBuffer(acctStore: AccountStore, rbuf: RetryBuffer) -> AccountStore {
+    return acctStore with { retryBuffer: rbuf };
+}
+
+public func accountStore_getNumAccounts(acctStore: AccountStore) -> uint {
+    return builtin_kvsSize(unsafecast<Kvs>(acctStore.accounts));
+}
+
+public func accountStore_getNumContracts(acctStore: AccountStore) -> uint {
+    return acctStore.numContracts;
+}
+
+public func accountStore_changeNumContracts(acctStore: AccountStore, delta: int) -> AccountStore {
+    return acctStore with { numContracts: uint(int(acctStore.numContracts) + delta) };
+}
+
+public func accountStore_destroyAccount(acctStore: AccountStore, addrToDestroy: address) -> AccountStore {
+    return accountStore_set(acctStore, addrToDestroy, pristineAccount(addrToDestroy));
+}
 
 public func accountStore_destroyAndTransferBalance(
     acctStore: AccountStore,
     victimAddr: address,
     recipientAddr: address
 ) -> AccountStore {
-    // Destroy the account at victimAddr, and give its Eth balance to recipientAddr
+    // Destroy the account at victimAddr, and give its Eth balance to recipientAddr.
+    // If recipientAddr == victimAddr, this burns the funds.
 
-    let victim = accountStore_get(acctStore, victimAddr);
+    let victim = accountStore_get(acctStore, recipientAddr);
     let recipient = accountStore_get(acctStore, recipientAddr);
-    return acctStore
-        with { [recipientAddr] = account_addBalance(recipient, victim.ethBalance) }
-        with { [victimAddr] = pristineAccount(victimAddr) };
+    return xif (victimAddr == recipientAddr) {
+        accountStore_set(
+            acctStore,
+            victimAddr,
+            account_addBalance(pristineAccount(victimAddr), victim.ethBalance),
+        )
+    } else {
+        accountStore_set(
+            accountStore_set(acctStore, recipientAddr, account_addBalance(recipient, victim.ethBalance)),
+            victimAddr,
+            pristineAccount(victimAddr),
+        )
+    };
 }
 
 public func account_isEmpty(acct: Account) -> bool {
@@ -214,7 +264,7 @@ public impure func accountStore_createAccountFromEvmCode(
     code: ByteArray,
     evmJumpTable: map<uint, impure func()>,
     initCodePt: impure func(),
-    storageMap: StorageMap
+    storageMap: StorageMap,
 ) -> option<AccountStore> {
     // Create a new account for a compiled EVM contract.
     // Returns Some(updatedAccountStore), or None if something went wrong.
@@ -241,23 +291,59 @@ public impure func accountStore_createAccountFromEvmCode(
     };
 }
 
+
+public func accountStore_upgradeContractFromEvmCode(
+    store: AccountStore,
+    addr: address,
+    code: ByteArray,
+    evmJumpTable: map<uint, impure func()>,
+    initCodePt: impure func(),
+) -> AccountStore {
+    let oldAcct = accountStore_get(store, addr);
+    let contractAdded = false;
+    store = accountStore_set(
+        store,
+        addr,
+        oldAcct with {
+            contractInfo: Some(struct {
+                code: code,
+                evmJumpTable: evmJumpTable,
+                startCodePoint: initCodePt,
+                storage: xif let Some(cinfo) = oldAcct.contractInfo {
+                    cinfo.storage
+                } else {
+                    contractAdded = true;
+                    storageMap_new()
+                },
+            })
+        }
+    );
+    return xif (contractAdded) {
+        accountStore_changeNumContracts(store, int(1))
+    } else {
+        store
+    };
+}
+
 public func accountStore_createBuiltinContract(
     acctStore: AccountStore,
     addr: address,
     entryPoint: impure func(),
     isArbitrumStyle: bool,
+    isUpgrade: bool,
 ) -> option<AccountStore> {
     let oldAcct = accountStore_get(acctStore, addr);
-    return xif (account_isEmpty(oldAcct)) {
-        // set up fake code for the contract
-        // if Arbitrum style, must give it nonzero size because callers check if size is zero to see if contract exists
-        // otherwise it's an Ethereum precompile which is specified to have null bytearray as its code
-        let fakeCode = bytearray_new(0);
-        if (isArbitrumStyle) {
-            // fake code is a single EVM INVALID instruction
-            fakeCode = bytearray_setByte(fakeCode, 0, 0xfe);
-        }
 
+    // set up fake code for the contract
+    // if Arbitrum style, must give it nonzero size because callers check if size is zero to see if contract exists
+    // otherwise it's an Ethereum precompile which is specified to have null bytearray as its code
+    let fakeCode = bytearray_new(0);
+    if (isArbitrumStyle) {
+        // fake code is a single EVM INVALID instruction
+        fakeCode = bytearray_setByte(fakeCode, 0, 0xfe);
+    }
+
+    return xif (account_isEmpty(oldAcct) || !isUpgrade) {
         Some(
             accountStore_set(
                 acctStore,
@@ -267,13 +353,27 @@ public func accountStore_createBuiltinContract(
                         code: fakeCode,
                         evmJumpTable: newmap<uint, impure func()>,
                         startCodePoint: entryPoint,
-                        storage: storageMap_new(),
+                        storage: xif (isUpgrade && (oldAcct.contractInfo != None<AccountContractInfo>)) {
+                            (oldAcct.contractInfo?).storage
+                        } else {
+                            storageMap_new()
+                        },
                     })
                 } with {
-                    nextSeqNum: 1
+                    nextSeqNum: xif (isUpgrade) { oldAcct.nextSeqNum } else { 1 }
                 }
-            )
+            ) with {
+                numContracts: acctStore.numContracts + 1
+            }
         )
+    } elseif (isUpgrade) {
+        Some(accountStore_upgradeContractFromEvmCode(
+            acctStore,
+            addr,
+            fakeCode,
+            newmap<uint, impure func()>,
+            entryPoint,
+        ))
     } else {
         // There was already an account at that address, so return failure.
         None<AccountStore>
@@ -298,7 +398,7 @@ public func accountStore_cloneContract(
             contractInfo: Some(oldContractInfo with { storage: storageMap_new() })
         };
     }
-    return Some(acctStore with { [newAddr] = newAccount });
+    return Some(accountStore_set(acctStore, newAddr, newAccount));
 }
 
 public func account_getEthBalance(account: Account) -> uint {
@@ -344,9 +444,15 @@ public func accountStore_transferEthBalance(
             acctStore
         } else {
             let toAcct = accountStore_get(acctStore, to);
-            acctStore
-                with { [from] = fromAcct with { ethBalance: fromAcct.ethBalance - amount }}
-                with { [to] = toAcct with { ethBalance: toAcct.ethBalance + amount }}
+            accountStore_set(
+                accountStore_set(
+                    acctStore,
+                    from,
+                    fromAcct with { ethBalance: fromAcct.ethBalance - amount },
+                ),
+                to,
+                toAcct with { ethBalance: toAcct.ethBalance + amount },
+            )
         }
     );
 }

@@ -19,6 +19,7 @@ use std::{collections::HashMap, fs::File, io, path::Path};
 #[derive(Debug, Clone)]
 pub struct RuntimeEnvironment {
     pub chain_id: u64,
+    pub chain_address: Uint256,
     pub l1_inbox: Vec<Value>,
     pub current_block_num: Uint256,
     pub current_timestamp: Uint256,
@@ -31,6 +32,7 @@ pub struct RuntimeEnvironment {
     compressor: TxCompressor,
     charging_policy: Option<(Uint256, Uint256, Uint256)>,
     num_wallets: u64,
+    chain_init_message: Vec<u8>,
 }
 
 impl RuntimeEnvironment {
@@ -83,6 +85,7 @@ impl RuntimeEnvironment {
     ) -> Self {
         let mut ret = RuntimeEnvironment {
             chain_id: chain_address.trim_to_u64() & 0xffffffffffff, // truncate to 48 bits
+            chain_address,
             l1_inbox: vec![],
             current_block_num: blocknum,
             current_timestamp: timestamp,
@@ -95,14 +98,23 @@ impl RuntimeEnvironment {
             compressor: TxCompressor::new(),
             charging_policy: charging_policy.clone(),
             num_wallets: 0,
+            chain_init_message: RuntimeEnvironment::get_params_bytes(
+                charging_policy,
+                sequencer_info,
+                owner,
+            ),
         };
 
-        ret.insert_l1_message(
-            4,
-            chain_address,
-            &RuntimeEnvironment::get_params_bytes(charging_policy, sequencer_info, owner),
-        );
+        ret.send_chain_init_message();
         ret
+    }
+
+    pub fn send_chain_init_message(&mut self) {
+        self.insert_l1_message(
+            4,
+            self.chain_address.clone(),
+            &self.chain_init_message.clone(),
+        );
     }
 
     fn get_params_bytes(
@@ -186,6 +198,32 @@ impl RuntimeEnvironment {
         self.recorder.add_msg(l1_msg);
 
         msg_id
+    }
+
+    pub fn _insert_retryable_tx_message(
+        &mut self,
+        sender: Uint256,
+        destination: Uint256,
+        callvalue: Uint256,
+        deposit: Uint256,
+        max_submission_cost: Uint256,
+        credit_back_address: Uint256,
+        beneficiary: Uint256,
+        calldata: &[u8],
+    ) -> Uint256 {
+        let mut msg = vec![];
+        msg.extend(destination.to_bytes_be());
+        msg.extend(callvalue.to_bytes_be());
+        msg.extend(deposit.to_bytes_be());
+        msg.extend(max_submission_cost.to_bytes_be());
+        msg.extend(credit_back_address.to_bytes_be());
+        msg.extend(beneficiary.to_bytes_be());
+        msg.extend(Uint256::from_usize(calldata.len()).to_bytes_be());
+        msg.extend(calldata);
+
+        let mut buf = self.insert_l1_message(9u8, sender, &msg).to_bytes_be();
+        buf.extend(&[0u8; 32]);
+        Uint256::from_bytes(&keccak256(&buf))
     }
 
     pub fn get_gas_price(&self) -> Uint256 {

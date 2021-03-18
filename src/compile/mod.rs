@@ -8,7 +8,7 @@ use crate::link::{ExportedFunc, Import, ImportedFunc};
 use crate::mavm::Instruction;
 use crate::pos::{BytePos, Location};
 use crate::stringtable::StringTable;
-use ast::{Func, GlobalVarDecl, TypeTree};
+use ast::{Func, TypeTree};
 use lalrpop_util::lalrpop_mod;
 use lalrpop_util::ParseError;
 use mini::DeclsParser;
@@ -21,10 +21,11 @@ use std::fs::File;
 use std::hash::{Hash, Hasher};
 use std::io::{self, Read};
 use std::path::Path;
-use typecheck::{AbstractSyntaxTree, TypeCheckedFunc, TypeCheckedNode};
+use typecheck::TypeCheckedFunc;
 
-pub use ast::{DebugInfo, TopLevelDecl, Type};
+pub use ast::{DebugInfo, GlobalVarDecl, StructField, TopLevelDecl, Type};
 pub use source::Lines;
+pub use typecheck::{AbstractSyntaxTree, TypeCheckedNode};
 
 mod ast;
 mod codegen;
@@ -137,7 +138,7 @@ pub struct CompiledProgram {
     ///The list of imported functions imported through the old import/export system
     pub imported_funcs: Vec<ImportedFunc>,
     ///Highest ID used for any global in this program, used for linking
-    pub global_num_limit: usize,
+    pub globals: Vec<GlobalVarDecl>,
     ///Contains list of offsets of the various modules contained in this program
     pub source_file_map: Option<SourceFileMap>,
     ///Map from u64 hashes of file names to the `String`s they originate from
@@ -149,7 +150,7 @@ impl CompiledProgram {
         code: Vec<Instruction>,
         exported_funcs: Vec<ExportedFunc>,
         imported_funcs: Vec<ImportedFunc>,
-        global_num_limit: usize,
+        globals: Vec<GlobalVarDecl>,
         source_file_map: Option<SourceFileMap>,
         file_name_chart: HashMap<u64, String>,
     ) -> Self {
@@ -157,7 +158,7 @@ impl CompiledProgram {
             code,
             exported_funcs,
             imported_funcs,
-            global_num_limit,
+            globals,
             source_file_map,
             file_name_chart,
         }
@@ -175,7 +176,7 @@ impl CompiledProgram {
         int_offset: usize,
         ext_offset: usize,
         func_offset: usize,
-        globals_offset: usize,
+        globals_offset: Vec<GlobalVarDecl>,
         source_file_map: Option<SourceFileMap>,
     ) -> (Self, usize) {
         let mut relocated_code = Vec::new();
@@ -183,7 +184,7 @@ impl CompiledProgram {
         for insn in &self.code {
             let (relocated_insn, new_func_offset) =
                 insn.clone()
-                    .relocate(int_offset, ext_offset, func_offset, globals_offset);
+                    .relocate(int_offset, ext_offset, func_offset, globals_offset.len());
             relocated_code.push(relocated_insn);
             if max_func_offset < new_func_offset {
                 max_func_offset = new_func_offset;
@@ -210,7 +211,11 @@ impl CompiledProgram {
                 relocated_code,
                 relocated_exported_funcs,
                 relocated_imported_funcs,
-                self.global_num_limit + globals_offset,
+                {
+                    let mut new_vec = globals_offset.clone();
+                    new_vec.append(&mut self.globals.clone());
+                    new_vec
+                },
                 source_file_map,
                 self.file_name_chart,
             ),
@@ -473,7 +478,7 @@ pub fn compile_from_folder(
             code_out.to_vec(),
             exported_funcs,
             imported_funcs,
-            global_vars.len(),
+            global_vars,
             Some(SourceFileMap::new(
                 code_out.len(),
                 folder.join(name.clone()).display().to_string(),
@@ -526,7 +531,9 @@ fn create_program_tree(
         } else {
             seen_paths.insert(name.clone());
         }
-        let path = if name[0] == "std" {
+        let path = if name.len() == 1 {
+            name[0].clone()
+        } else if name[0] == "std" {
             format!("../stdlib/{}", name[1])
         } else if name[0] == "core" {
             format!("../builtin/{}", name[1])

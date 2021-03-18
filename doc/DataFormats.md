@@ -89,16 +89,7 @@ All other options are ignored at present.
 
 ##### Message type 5: buddy contract creation
 
-This message type is initiated by a call from an L1 contract to the EthBridge. The EthBridge must check that the call came from a contract, and reject it otherwise. 
-
-This message type allows an L1 contract to deploy an L2 contract at an L2 address that is equal to the contract's L1 address.  This L2 deploy will be exactly like any ordinary L2 deploy, except for how the address of the deployed L2 contract is determined.
-
-Type-specific data:
-
-* maximum ArbGas to use (uint)
-* ArbGas price bid, in wei (uint)
-* Callvalue, in wei (uint)
-* constructor code and data, encoded per Ethereum ABI (bytes)
+[This is no longer supported.]
 
 ##### Message type 6: reserved
 
@@ -112,9 +103,36 @@ This message type encodes an L2 transaction that is funded by calldata provided 
 
 [This is not yet documented.]
 
+**Message type 9: Send tx to retry buffer**
+
+This message type delivers a transaction, which will be placed in the L2 retry buffer, rather than being executed immediately. 
+
+Type-specific data:
+
+* destination address (address encoded as uint)
+* callvalue, in wei (uint)
+* L1-to-L2 deposit, in wei (uint)
+* maximum submission cost (uint)
+* credit-back address (address encoded as uint)
+* beneficiary (address encoded as uint)
+* calldata size (uint)
+* calldata
+
+If this message is properly formatted, the L1-to-L2 deposit amount will be credited to the sender's L2 ETH account. 
+
+Then, if the caller's L2 balance (after the L1-to-L2 deposit has occurred) is at least callvalue+maximumSubmissionCost, the transaction will proceed. 
+
+* *callvalue+maximumSubmissionCost* will be deducted from the caller's L2 ETH account,
+* *currentSubmissionCost* will be collected by ArbOS as a submission fee,
+* *maximumSubmissionCost-currentSubmissionCost* will be credited to the creditBack address's L2 account,
+* a retryable tx will be created and held in ArbOS's buffer, containing *callvalue*, with the specified beneficiary [if the retryable tx times out or is canceled by the beneficiary, the callvalue will be refunded to the beneficiary]
+* ArbOS will emit a transaction receipt reporting success, with 32 bytes of return data: a transaction ID for the retryable tx (uint) which will be equal to keccak256(submissionID, uint(0) ), where submissionID is the requestID of this message
+
+Otherwise, ArbOS will emit a transaction receipt reporting a failure code, with no return data.
+
 ## L2 messages
 
-As noted above, an L2 message is one type of incoming message that can be put into an L2 chain's inbox. The purpose of an L2 message is to convey information, typically a transaction request, to ArbOS. The EthBridge does not examine or interpret the contents of an L2 message.
+As noted above, an L2 message is one type of incoming message that can be put into an L2 chain's inbox. The purpose of an L2 message is to convey information, typically a transaction request, to ArbOS. Except where specified here, the EthBridge does not examine or interpret the contents of an L2 message.
 
 An L2 message consists of:
 

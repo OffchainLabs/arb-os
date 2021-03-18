@@ -35,6 +35,8 @@ use gasAccounting::TxFeeStats;
 
 use output::emitTxReceipt;
 
+use retrybuffer::RetryableTx;
+
 use std::bytearray::bytearray_new;
 use std::bytearray::bytearray_size;
 use std::bytearray::bytearray_extract;
@@ -126,12 +128,14 @@ type TxRequestData = struct {
     seqNum: option<uint>,
     caller: address,
     calleeAddr: address,
+    gasPayer: address,
     value: uint,
     calldata: ByteArray,
     nonMutating: bool,
     isConstructor: bool,
     incomingRequest: IncomingRequest,
     feeStats: TxFeeStats,
+    fromRetryable: option<RetryableTx>,
 }
 
 public impure func handleL2Request(
@@ -199,7 +203,8 @@ public impure func handleL2Request(
                 codeBytes,
                 evmJumpTable,
                 codept,
-                request
+                request,
+                true,
             );  // should never return
         }
     } else {
@@ -209,7 +214,7 @@ public impure func handleL2Request(
             callKind = const::EVMCallType_staticcall;
         }
 
-        initEvmCallStack(callKind, request, None<ByteArray>);  // should never return
+        initEvmCallStack(callKind, request, None<ByteArray>, true);  // should never return
     }
 
     return panic;   // this should never be reached

@@ -4,7 +4,7 @@
 
 use crate::mavm::Value;
 use crate::run::{
-    _bytestack_from_bytes, load_from_file, run_from_file, Machine, RuntimeEnvironment,
+    _bytestack_from_bytes, load_from_file, run, run_from_file, Machine, RuntimeEnvironment,
 };
 use crate::uint256::Uint256;
 use num_bigint::{BigUint, RandBigInt};
@@ -689,4 +689,64 @@ fn test_precompile5_big() {
             panic!("{}", e);
         }
     }
+}
+
+#[test]
+fn reinterpret_register() {
+    let rt_env = RuntimeEnvironment::new(Uint256::from_usize(1111), None);
+    let mut old_machine =
+        load_from_file(Path::new("upgradetests/regcopy_old.mexe"), rt_env.clone());
+    let _ = run(&mut old_machine, vec![], false);
+    let mut new_machine = load_from_file(Path::new("upgradetests/regcopy_new.mexe"), rt_env);
+    run(&mut new_machine, vec![old_machine.register], false).unwrap();
+    assert_eq!(
+        *new_machine.stack_top().unwrap(),
+        Value::Int(Uint256::one())
+    );
+}
+
+#[test]
+fn small_upgrade() {
+    use crate::run::upload::CodeUploader;
+
+    let rt_env = RuntimeEnvironment::new(Uint256::from_usize(1111), None);
+    let mut machine = load_from_file(Path::new("upgradetests/upgrade1_old.mexe"), rt_env.clone());
+    let uploader = CodeUploader::_new_from_file(Path::new("upgradetests/upgrade1_new.mexe"));
+    let code_bytes = uploader._to_flat_vec();
+    let msg = Value::new_tuple(vec![
+        Value::Int(Uint256::from_usize(code_bytes.len())),
+        Value::new_buffer(code_bytes),
+    ]);
+    machine.runtime_env.insert_full_inbox_contents(vec![msg]);
+    let _ = run(&mut machine, vec![], false);
+
+    //let mut new_machine = load_from_file(Path::new("upgradetests/regcopy_new.mexe"), rt_env);
+    //run(&mut new_machine, vec![machine.register], false).unwrap();
+    println!("Machine state after: {:?}", machine.state);
+    assert_eq!(
+        *machine.stack_top().unwrap(),
+        Value::Int(Uint256::from_u64(42))
+    );
+}
+
+#[test]
+fn small_upgrade_auto_remap() {
+    use crate::run::upload::CodeUploader;
+
+    let rt_env = RuntimeEnvironment::new(Uint256::from_usize(1111), None);
+    let mut machine = load_from_file(Path::new("upgradetests/upgrade2_old.mexe"), rt_env.clone());
+    let uploader = CodeUploader::_new_from_file(Path::new("upgradetests/upgrade2_new.mexe"));
+    let code_bytes = uploader._to_flat_vec();
+    let msg = Value::new_tuple(vec![
+        Value::Int(Uint256::from_usize(code_bytes.len())),
+        Value::new_buffer(code_bytes),
+    ]);
+    machine.runtime_env.insert_full_inbox_contents(vec![msg]);
+    let _ = run(&mut machine, vec![], false);
+
+    println!("Machine state after: {:?}", machine.state);
+    assert_eq!(
+        *machine.stack_top().unwrap(),
+        Value::Int(Uint256::from_u64(42))
+    );
 }

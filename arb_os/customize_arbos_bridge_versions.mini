@@ -1,0 +1,9 @@
+//
+// Copyright 2020, Offchain Labs, Inc. All rights reserved.
+//
+
+use bridge_arbos_versions::GlobalsBeforeUpgrade;
+
+public func set_globalAccountStore_onUpgrade(input_globals: GlobalsBeforeUpgrade) -> any {
+    return input_globals.globalAccountStore;
+}

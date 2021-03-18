@@ -672,10 +672,10 @@ impl FromStr for ProfilerMode {
 pub struct Machine {
     stack: ValueStack,
     aux_stack: ValueStack,
-    state: MachineState,
+    pub state: MachineState,
     code: CodeStore,
     static_val: Value,
-    register: Value,
+    pub register: Value,
     err_codepoint: CodePt,
     arb_gas_remaining: Uint256,
     pub runtime_env: RuntimeEnvironment,
@@ -700,6 +700,11 @@ impl Machine {
             total_gas_usage: Uint256::zero(),
             trace_writer: None,
         }
+    }
+
+    #[cfg(test)]
+    pub fn stack_top(&self) -> Option<&Value> {
+        self.stack.contents.last()
     }
 
     ///Pushes 0 to the stack and sets the program counter to the first instruction. Used by the EVM
@@ -2058,7 +2063,7 @@ impl Machine {
                     AVMOpcode::GetBuffer8 => {
                         let offset = self.stack.pop_usize(&self.state)?;
                         let buf = self.stack.pop_buffer(&self.state)?;
-                        self.stack.push_usize(buf.read_byte(offset).into());
+                        self.stack.push_usize(buf.read_byte(offset as u128).into());
                         self.incr_pc();
                         Ok(true)
                     }
@@ -2074,7 +2079,7 @@ impl Machine {
                         }
                         let mut res = [0u8; 8];
                         for i in 0..8 {
-                            res[i] = buf.read_byte(offset + i);
+                            res[i] = buf.read_byte((offset + i) as u128);
                         }
                         self.stack.push_uint(Uint256::from_bytes(&res));
                         self.incr_pc();
@@ -2092,7 +2097,7 @@ impl Machine {
                         }
                         let mut res = [0u8; 32];
                         for i in 0..32 {
-                            res[i] = buf.read_byte(offset + i);
+                            res[i] = buf.read_byte((offset + i) as u128);
                         }
                         self.stack.push_uint(Uint256::from_bytes(&res));
                         self.incr_pc();
@@ -2103,7 +2108,7 @@ impl Machine {
                         let val = self.stack.pop_uint(&self.state)?;
                         let buf = self.stack.pop_buffer(&self.state)?;
                         let bytes = val.to_bytes_be();
-                        let nbuf = buf.set_byte(offset, bytes[31]);
+                        let nbuf = buf.set_byte(offset as u128, bytes[31]);
                         self.stack.push(Value::copy_buffer(nbuf));
                         self.incr_pc();
                         Ok(true)
@@ -2122,7 +2127,7 @@ impl Machine {
                         let mut nbuf = buf;
                         let bytes = val.to_bytes_be();
                         for i in 0..8 {
-                            nbuf = nbuf.set_byte(offset + i, bytes[i]);
+                            nbuf = nbuf.set_byte((offset + i) as u128, bytes[i]);
                         }
                         self.stack.push(Value::copy_buffer(nbuf));
                         self.incr_pc();
@@ -2142,7 +2147,7 @@ impl Machine {
                         let mut nbuf = buf;
                         let bytes = val.to_bytes_be();
                         for i in 0..32 {
-                            nbuf = nbuf.set_byte(offset + i, bytes[i]);
+                            nbuf = nbuf.set_byte((offset + i) as u128, bytes[i]);
                         }
                         self.stack.push(Value::copy_buffer(nbuf));
                         self.incr_pc();

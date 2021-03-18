@@ -1,0 +1,7 @@
+var global1: uint;
+var global2: option<int>;
+
+func main() {
+    global1 = 5;
+    global2 = Some(-3s);
+}
