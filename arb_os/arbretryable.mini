@@ -27,6 +27,8 @@ use std::bytearray::bytearray_size;
 use std::bytearray::bytearray_get256;
 use std::bytearray::bytearray_set256;
 
+use gasAccounting::getRetryableTxPrice;
+
 use retrybuffer::retryBuffer_getLifetime;
 use retrybuffer::retryBuffer_getTxTimeout;
 use retrybuffer::redeemRetryableTxInTx;
@@ -57,6 +59,8 @@ public impure func arbretryable_txcall() {
             arbRetryable_getBeneficiary(topFrame, calldata);
         } elseif (funcCode == const::funcCode_ArbRetryableTx_cancel) {
             arbRetryable_cancel(topFrame, calldata);
+        } elseif (funcCode == const::funcCode_ArbRetryableTx_getSubmissionPrice) {
+            arbRetryable_getSubmissionPrice(topFrame, calldata);
         } else {
             // unrecognized function code
             evmOp_revert_knownPc(1, 0, 0);
@@ -208,6 +212,25 @@ impure func arbRetryable_cancel(topFrame: EvmCallFrame, calldata: ByteArray) {  
         }
     } else {
         evmOp_revert_knownPc(73, 0, 0);
+    }
+}
+
+impure func arbRetryable_getSubmissionPrice(topFrame: EvmCallFrame, calldata: ByteArray) { // (uint) -> (uint, uint)
+    if (bytearray_size(calldata) != 36) {
+        evmOp_revert_knownPc(80, 0, 0);
+    }
+    let dataSize = bytearray_get256(calldata, 4);
+    let (price, nextUpdate) = getRetryableTxPrice(dataSize);
+
+    let mem = bytearray_set256(
+        bytearray_set256(bytearray_new(0), 0, price),
+        32,
+        nextUpdate
+    );
+    if (evmCallStack_setTopFrameMemory(mem)) {
+        evmOp_return(0, 64);
+    } else {
+        evmOp_revert_knownPc(81, 0, 0);
     }
 }
 
