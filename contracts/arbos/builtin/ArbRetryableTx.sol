@@ -15,6 +15,10 @@ interface ArbRetryableTx {
     // The timestamp could be in the past, because aged-out txs might not be discarded immediately.
     function getTimeout(bytes32 txId) external view returns(uint);
 
+    // Return the price, in wei, of submitting a new retryable tx with a given calldata size.
+    // Return value is (price, nextUpdateTimestamp). Price is guaranteed not to change until nextUpdateTimestamp.
+    function getSubmissionPrice(uint calldataSize) external view returns (uint, uint);
+
     // Return the price, in wei, of extending the lifetime of txId by an additional lifetime period.
     // Return value is (price, nextUpdateTimestamp). Price is guaranteed not to change until nextUpdateTimestamp.
     // Revert if txId doesn't exist.
