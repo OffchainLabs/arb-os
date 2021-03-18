@@ -885,6 +885,8 @@ pub fn _test_retryable(log_to: Option<&Path>, debug: bool) -> Result<(), ethabi:
         Uint256::zero(),
         None,
         Some(beneficiary.clone()),
+        None,
+        None,
     )?;
     assert!(txid != Uint256::zero());
     let _gas_used = if debug {
@@ -930,6 +932,8 @@ pub fn _test_retryable(log_to: Option<&Path>, debug: bool) -> Result<(), ethabi:
         Uint256::zero(),
         None,
         Some(beneficiary.clone()),
+        None,
+        None,
     )?;
     assert!(txid != Uint256::zero());
     let _gas_used = if debug {
@@ -957,6 +961,8 @@ pub fn _test_retryable(log_to: Option<&Path>, debug: bool) -> Result<(), ethabi:
         Uint256::zero(),
         my_addr.clone(),
         my_addr.clone(),
+        Uint256::zero(),
+        Uint256::zero(),
         &[],
     );
     let _gas_used = if debug {
