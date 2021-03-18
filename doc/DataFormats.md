@@ -129,7 +129,7 @@ Then, if the caller's L2 balance (after the L1-to-L2 deposit has occurred) is at
 * *maximumSubmissionCost-currentSubmissionCost* will be credited to the creditBack address's L2 account,
 * a retryable tx will be created and held in ArbOS's buffer, containing *callvalue*, with the specified beneficiary [if the retryable tx times out or is canceled by the beneficiary, the callvalue will be refunded to the beneficiary]
 * ArbOS will emit a transaction receipt reporting success, with 32 bytes of return data: a transaction ID for the retryable tx (uint) which will be equal to keccak256(submissionID, uint(0) ), where submissionID is the requestID of this message
-* if "the max gas for immediate redemption request" field is non-zero, and the sender has at least maxgas*gasprice in its ETH account, a transaction is immediately created, as if the sender had called RetryableTx.redeem(retryableTxId), with the specified maxgas and gasprice, and with transaction ID keccak256(submissionID, uint(1)). Any difference between (maxgas x gasprice) and the amount of gas spent by this transaction will be refunded to the beneficiary
+* if "the max gas for immediate redemption request" field is non-zero, and the sender has at least maxgas*gasprice in its ETH account, a transaction is immediately created, as if the sender had called RetryableTx.redeem(retryableTxId), with callvalue 0 and the specified maxgas and gasprice, and with transaction ID keccak256(submissionID, uint(1)). Any difference between (maxgas x gasprice) and the amount of gas spent by this transaction will be refunded to the credit-back address
 
 Otherwise, ArbOS will emit a transaction receipt reporting a failure code, with no return data.
 
