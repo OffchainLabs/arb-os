@@ -212,7 +212,7 @@ impl RuntimeEnvironment {
         max_gas_immed: Uint256,
         gas_price_immed: Uint256,
         calldata: &[u8],
-    ) -> Uint256 {
+    ) -> (Uint256, Option<Uint256>) {
         let mut msg = vec![];
         msg.extend(destination.to_bytes_be());
         msg.extend(callvalue.to_bytes_be());
@@ -226,8 +226,17 @@ impl RuntimeEnvironment {
         msg.extend(calldata);
 
         let mut buf = self.insert_l1_message(9u8, sender, &msg).to_bytes_be();
+        let mut buf2 = buf.clone();
         buf.extend(&[0u8; 32]);
-        Uint256::from_bytes(&keccak256(&buf))
+        buf2.extend(Uint256::one().to_bytes_be());
+        (
+            Uint256::from_bytes(&keccak256(&buf)),
+            if max_gas_immed != Uint256::zero() {
+                Some(Uint256::from_bytes(&keccak256(&buf2)))
+            } else {
+                None
+            }
+        )
     }
 
     pub fn get_gas_price(&self) -> Uint256 {

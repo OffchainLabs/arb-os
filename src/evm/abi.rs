@@ -229,11 +229,11 @@ impl AbiForContract {
         beneficiary: Option<Uint256>,
         max_gas_immed: Option<Uint256>,
         gas_price_immed: Option<Uint256>,
-    ) -> Result<Uint256, ethabi::Error> {
+    ) -> Result<(Uint256, Option<Uint256>), ethabi::Error> {
         let this_function = self.contract.function(func_name)?;
         let calldata = this_function.encode_input(args).unwrap();
 
-        let txid = machine.runtime_env._insert_retryable_tx_message(
+        let (txid, maybe_redeemid) = machine.runtime_env._insert_retryable_tx_message(
             sender.clone(),
             self.address.clone(),
             payment.clone(),
@@ -246,7 +246,7 @@ impl AbiForContract {
             &calldata,
         );
 
-        Ok(txid)
+        Ok((txid, maybe_redeemid))
     }
 
     pub fn _call_function_from_contract(
