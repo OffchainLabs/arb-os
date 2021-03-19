@@ -72,6 +72,7 @@ public impure func messageBatch_get(batch: MessageBatch) -> option<(IncomingRequ
 
     return xif let Some(res) = bytestream_getN(stream, l2MsgLength) {
         let (bs, extractedL2data) = res;
+        let bytesRead = bytestream_bytesReadSoFar(bs) - bytestream_bytesReadSoFar(stream);
         stream = bs;
 
         Some((
@@ -84,7 +85,7 @@ public impure func messageBatch_get(batch: MessageBatch) -> option<(IncomingRequ
             } with {
                 aggregator: Some(struct {
                     aggregator: (batch.template.aggregator?).aggregator,
-                    calldataBytes: bytestream_bytesReadSoFar(bs) - bytestream_bytesReadSoFar(stream),
+                    calldataBytes: bytesRead,
                 })
             },
             batch with {
