@@ -29,3 +29,8 @@ public impure func remapGlobalsForUpgrade(input_globals: GlobalsBeforeUpgrade) -
         _jump_table: _jump_table,
     };
 }
+
+
+func __dummy__() { return; }
+
+
