@@ -337,7 +337,6 @@ pub fn compile_from_folder(
     //Resolution of imports (use statements)
     resolve_imports(&mut programs, &import_map)?;
     //Conversion of programs `HashMap` to `Vec` for typechecking
-    let mut typechecked = vec![];
     let mut progs = vec![];
     let type_tree = create_type_tree(&programs);
     let mut output = vec![programs
@@ -353,51 +352,7 @@ pub fn compile_from_folder(
         out
     });
     //Typechecking loop
-    for Module {
-        imported_funcs,
-        funcs,
-        named_types,
-        global_vars,
-        string_table,
-        func_table: hm,
-        name,
-    } in output
-    {
-        let mut checked_funcs = vec![];
-        let (exported_funcs, global_vars, string_table) = typecheck::typecheck_top_level_decls(
-            funcs,
-            named_types,
-            global_vars,
-            string_table,
-            hm,
-            &mut checked_funcs,
-            &type_tree,
-        )
-        .map_err(|res3| CompileError::new(res3.reason.to_string(), res3.location))?;
-        checked_funcs.iter_mut().for_each(|func| {
-            let detected_purity = func.is_pure();
-            let declared_purity = func.properties.pure;
-            if !detected_purity && declared_purity {
-                println!(
-                    "Warning: func {} is impure but not marked impure",
-                    string_table.name_from_id(func.name)
-                )
-            } else if detected_purity && !declared_purity {
-                println!(
-                    "Warning: func {} is declared impure but does not contain impure code",
-                    string_table.name_from_id(func.name)
-                )
-            }
-        });
-        typechecked.push(TypeCheckedModule::new(
-            checked_funcs,
-            string_table,
-            imported_funcs,
-            exported_funcs,
-            global_vars,
-            name,
-        ));
-    }
+    let mut typechecked = typecheck_programs(&type_tree, output)?;
     /*for module in &mut typechecked {
         for _func in &mut module.checked_funcs {
             func.recursive_apply(print_node, &"    ".to_string(), &mut 0);
@@ -600,6 +555,59 @@ fn create_type_tree(program_tree: &HashMap<Vec<String>, Module>) -> TypeTree {
         })
         .flatten()
         .collect()
+}
+
+fn typecheck_programs(
+    type_tree: &TypeTree,
+    output: Vec<Module>,
+) -> Result<Vec<TypeCheckedModule>, CompileError> {
+    let mut typechecked = vec![];
+    for Module {
+        imported_funcs,
+        funcs,
+        named_types,
+        global_vars,
+        string_table,
+        func_table: hm,
+        name,
+    } in output
+    {
+        let mut checked_funcs = vec![];
+        let (exported_funcs, global_vars, string_table) = typecheck::typecheck_top_level_decls(
+            funcs,
+            named_types,
+            global_vars,
+            string_table,
+            hm,
+            &mut checked_funcs,
+            type_tree,
+        )
+        .map_err(|res3| CompileError::new(res3.reason.to_string(), res3.location))?;
+        checked_funcs.iter_mut().for_each(|func| {
+            let detected_purity = func.is_pure();
+            let declared_purity = func.properties.pure;
+            if !detected_purity && declared_purity {
+                println!(
+                    "Warning: func {} is impure but not marked impure",
+                    string_table.name_from_id(func.name)
+                )
+            } else if detected_purity && !declared_purity {
+                println!(
+                    "Warning: func {} is declared impure but does not contain impure code",
+                    string_table.name_from_id(func.name)
+                )
+            }
+        });
+        typechecked.push(TypeCheckedModule::new(
+            checked_funcs,
+            string_table,
+            imported_funcs,
+            exported_funcs,
+            global_vars,
+            name,
+        ));
+    }
+    Ok(typechecked)
 }
 
 ///Converts source string `source` into a series of `TopLevelDecl`s, uses identifiers from
