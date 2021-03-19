@@ -337,7 +337,6 @@ pub fn compile_from_folder(
     //Resolution of imports (use statements)
     resolve_imports(&mut programs, &import_map)?;
     //Conversion of programs `HashMap` to `Vec` for typechecking
-    let mut progs = vec![];
     let type_tree = create_type_tree(&programs);
     let mut output = vec![programs
         .remove(&if let Some(lib) = library {
@@ -363,35 +362,7 @@ pub fn compile_from_folder(
         typechecked.iter_mut().for_each(|module| module.inline());
     }
     //Codegen loop
-    for TypeCheckedModule {
-        checked_funcs,
-        string_table,
-        imported_funcs,
-        exported_funcs,
-        global_vars,
-        name,
-    } in typechecked
-    {
-        let code_out = codegen::mavm_codegen(
-            checked_funcs,
-            &string_table,
-            &imported_funcs,
-            &global_vars,
-            file_name_chart,
-        )
-        .map_err(|e| CompileError::new(e.reason.to_string(), e.location))?;
-        progs.push(CompiledProgram::new(
-            code_out.to_vec(),
-            exported_funcs,
-            imported_funcs,
-            global_vars,
-            Some(SourceFileMap::new(
-                code_out.len(),
-                folder.join(name.clone()).display().to_string(),
-            )),
-            HashMap::new(),
-        ))
-    }
+    let progs = codegen_programs(typechecked, file_name_chart, folder)?;
     Ok(progs)
 }
 
@@ -608,6 +579,44 @@ fn typecheck_programs(
         ));
     }
     Ok(typechecked)
+}
+
+fn codegen_programs(
+    typechecked: Vec<TypeCheckedModule>,
+    file_name_chart: &mut BTreeMap<u64, String>,
+    folder: &Path,
+) -> Result<Vec<CompiledProgram>, CompileError> {
+    let mut progs = vec![];
+    for TypeCheckedModule {
+        checked_funcs,
+        string_table,
+        imported_funcs,
+        exported_funcs,
+        global_vars,
+        name,
+    } in typechecked
+    {
+        let code_out = codegen::mavm_codegen(
+            checked_funcs,
+            &string_table,
+            &imported_funcs,
+            &global_vars,
+            file_name_chart,
+        )
+        .map_err(|e| CompileError::new(e.reason.to_string(), e.location))?;
+        progs.push(CompiledProgram::new(
+            code_out.to_vec(),
+            exported_funcs,
+            imported_funcs,
+            global_vars,
+            Some(SourceFileMap::new(
+                code_out.len(),
+                folder.join(name.clone()).display().to_string(),
+            )),
+            HashMap::new(),
+        ))
+    }
+    Ok(progs)
 }
 
 ///Converts source string `source` into a series of `TopLevelDecl`s, uses identifiers from
