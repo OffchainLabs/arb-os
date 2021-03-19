@@ -335,55 +335,7 @@ pub fn compile_from_folder(
     //Parsing step
     let (mut programs, import_map) = create_program_tree(folder, library, main, file_name_chart)?;
     //Resolution of imports (use statements)
-    for (name, imports) in &import_map {
-        for import in imports {
-            let import_path = import.path.clone();
-            let (named_type, imp_func) = if let Some(program) = programs.get_mut(&import_path) {
-                //Looks up info from target program
-                let index = program.string_table.get(import.name.clone());
-                let named_type = program.named_types.get(&index).cloned();
-                let imp_func = program.func_table.get(&index).cloned();
-                (named_type, imp_func)
-            } else {
-                return Err(CompileError::new(
-                    format!(
-                        "Internal error: Can not find target file for import \"{}::{}\"",
-                        import.path.get(0).cloned().unwrap_or_else(String::new),
-                        import.name
-                    ),
-                    None,
-                ));
-            };
-            //Modifies origin program to include import
-            let origin_program = programs.get_mut(name).ok_or_else(|| {
-                CompileError::new(
-                    format!(
-                        "Internal error: Can not find originating file for import \"{}::{}\"",
-                        import.path.get(0).cloned().unwrap_or_else(String::new),
-                        import.name
-                    ),
-                    None,
-                )
-            })?;
-            let index = origin_program.string_table.get(import.name.clone());
-            if let Some(named_type) = named_type {
-                origin_program.named_types.insert(index, named_type.clone());
-            } else if let Some(imp_func) = imp_func {
-                origin_program.func_table.insert(index, imp_func.clone());
-                origin_program.imported_funcs.push(ImportedFunc::new(
-                    origin_program.imported_funcs.len(),
-                    index,
-                    &origin_program.string_table,
-                ));
-            } else {
-                println!(
-                    "Warning: import \"{}::{}\" does not correspond to a type or function",
-                    import.path.get(0).cloned().unwrap_or_else(String::new),
-                    import.name
-                );
-            }
-        }
-    }
+    resolve_imports(&mut programs, &import_map)?;
     //Conversion of programs `HashMap` to `Vec` for typechecking
     let mut typechecked = vec![];
     let mut progs = vec![];
@@ -579,6 +531,62 @@ fn create_program_tree(
     Ok((programs, import_map))
 }
 
+fn resolve_imports(
+    programs: &mut HashMap<Vec<String>, Module>,
+    import_map: &HashMap<Vec<String>, Vec<Import>>,
+) -> Result<(), CompileError> {
+    for (name, imports) in import_map {
+        for import in imports {
+            let import_path = import.path.clone();
+            let (named_type, imp_func) = if let Some(program) = programs.get_mut(&import_path) {
+                //Looks up info from target program
+                let index = program.string_table.get(import.name.clone());
+                let named_type = program.named_types.get(&index).cloned();
+                let imp_func = program.func_table.get(&index).cloned();
+                (named_type, imp_func)
+            } else {
+                return Err(CompileError::new(
+                    format!(
+                        "Internal error: Can not find target file for import \"{}::{}\"",
+                        import.path.get(0).cloned().unwrap_or_else(String::new),
+                        import.name
+                    ),
+                    None,
+                ));
+            };
+            //Modifies origin program to include import
+            let origin_program = programs.get_mut(name).ok_or_else(|| {
+                CompileError::new(
+                    format!(
+                        "Internal error: Can not find originating file for import \"{}::{}\"",
+                        import.path.get(0).cloned().unwrap_or_else(String::new),
+                        import.name
+                    ),
+                    None,
+                )
+            })?;
+            let index = origin_program.string_table.get(import.name.clone());
+            if let Some(named_type) = named_type {
+                origin_program.named_types.insert(index, named_type.clone());
+            } else if let Some(imp_func) = imp_func {
+                origin_program.func_table.insert(index, imp_func.clone());
+                origin_program.imported_funcs.push(ImportedFunc::new(
+                    origin_program.imported_funcs.len(),
+                    index,
+                    &origin_program.string_table,
+                ));
+            } else {
+                println!(
+                    "Warning: import \"{}::{}\" does not correspond to a type or function",
+                    import.path.get(0).cloned().unwrap_or_else(String::new),
+                    import.name
+                );
+            }
+        }
+    }
+    Ok(())
+}
+
 ///Constructor for `TypeTree`
 fn create_type_tree(program_tree: &HashMap<Vec<String>, Module>) -> TypeTree {
     program_tree
@@ -631,7 +639,7 @@ pub fn parse_from_source(
             lalrpop_util::ParseError::UnrecognizedEOF { location, expected } => CompileError::new(
                 format!(
                     "unexpected end of file: expected one of: {}",
-                    format!("{:?}",&expected)
+                    format!("{:?}", &expected)
                 ),
                 lines.location(location.into(), file_id),
             ),
