@@ -435,78 +435,17 @@ impl ProfilerData {
             let mut start_point = 0;
             let mut call_start = 0;
             for event in events {
-                match event {
-                    ProfilerEvent::EnterFunc(x) => {
-                        if !in_func {
-                            in_func = true;
-                            start_point = *x;
-                            if !in_callstack {
-                                in_callstack = true;
-                                call_start = *x;
-                            }
-                            if let Some((func, (start, loc))) = &current_call {
-                                if let Some(entry) = called.get_mut(func) {
-                                    (*entry).0 += *x - *start;
-                                } else {
-                                    called.insert(*func, (*x - *start, *loc));
-                                }
-                            }
-                            current_call = None;
-                        } else {
-                            panic!("Enter func event found when already in function");
-                        }
-                    }
-                    ProfilerEvent::CallFunc(x, y) => {
-                        if in_func {
-                            in_func = false;
-                            let end_point = if let Some((funcy, _)) = self.stack_tree.get(x) {
-                                if let Some(event) = funcy.get(*y) {
-                                    match event {
-                                        ProfilerEvent::EnterFunc(x) => *x,
-                                        _ => panic!("Invalid event linked on function call"),
-                                    }
-                                } else {
-                                    panic!("Linked event from function call out of bounds");
-                                }
-                            } else {
-                                panic!("Function call links to invalid codepoint");
-                            };
-                            current_call = Some((
-                                *x,
-                                (
-                                    end_point,
-                                    *self.stack_tree.get(x).map(|(_, l)| l).unwrap_or(&None),
-                                ),
-                            ));
-                            in_func_gas += end_point - start_point;
-                        }
-                    }
-                    ProfilerEvent::Return(x, y) => {
-                        if in_func {
-                            let end_point = if let Some((funcy, _)) = self.stack_tree.get(x) {
-                                if let Some(event) = funcy.get(*y) {
-                                    match event {
-                                        ProfilerEvent::EnterFunc(x) => *x,
-                                        _ => panic!("Invalid event linked on return"),
-                                    }
-                                } else {
-                                    panic!("Linked event from function call out of bounds");
-                                }
-                            } else {
-                                panic!("Return links to invalid codepoint");
-                            };
-                            in_func = false;
-                            in_func_gas += end_point - start_point;
-                            in_callstack = false;
-                            let locy = *self.stack_tree.get(x).map(|(_, l)| l).unwrap_or(&None);
-                            if let Some(entry) = callers.get_mut(x) {
-                                (*entry).0 += end_point - call_start;
-                            } else {
-                                callers.insert(*x, (end_point - call_start, locy));
-                            }
-                        }
-                    }
-                }
+                self.handle_event(
+                    event,
+                    &mut in_func,
+                    &mut start_point,
+                    &mut in_callstack,
+                    &mut call_start,
+                    &mut current_call,
+                    &mut called,
+                    &mut in_func_gas,
+                    &mut callers,
+                )
             }
             formatted_data.insert(in_func_gas, (called, callers, func, location));
         }
@@ -601,6 +540,92 @@ impl ProfilerData {
             } else {
                 println!("Error reading line, aborting");
                 return;
+            }
+        }
+    }
+
+    fn handle_event(
+        &self,
+        event: &ProfilerEvent,
+        in_func: &mut bool,
+        start_point: &mut u64,
+        in_callstack: &mut bool,
+        call_start: &mut u64,
+        current_call: &mut Option<(CodePt, (u64, Option<Location>))>,
+        called: &mut BTreeMap<CodePt, (u64, Option<Location>)>,
+        in_func_gas: &mut u64,
+        callers: &mut BTreeMap<CodePt, (u64, Option<Location>)>,
+    ) {
+        match event {
+            ProfilerEvent::EnterFunc(x) => {
+                if !*in_func {
+                    *in_func = true;
+                    *start_point = *x;
+                    if !*in_callstack {
+                        *in_callstack = true;
+                        *call_start = *x;
+                    }
+                    if let Some((func, (start, loc))) = &current_call {
+                        if let Some(entry) = called.get_mut(func) {
+                            (*entry).0 += *x - *start;
+                        } else {
+                            called.insert(*func, (*x - *start, *loc));
+                        }
+                    }
+                    *current_call = None;
+                } else {
+                    panic!("Enter func event found when already in function");
+                }
+            }
+            ProfilerEvent::CallFunc(x, y) => {
+                if *in_func {
+                    *in_func = false;
+                    let end_point = if let Some((funcy, _)) = self.stack_tree.get(x) {
+                        if let Some(event) = funcy.get(*y) {
+                            match event {
+                                ProfilerEvent::EnterFunc(x) => *x,
+                                _ => panic!("Invalid event linked on function call"),
+                            }
+                        } else {
+                            panic!("Linked event from function call out of bounds");
+                        }
+                    } else {
+                        panic!("Function call links to invalid codepoint");
+                    };
+                    *current_call = Some((
+                        *x,
+                        (
+                            end_point,
+                            *self.stack_tree.get(x).map(|(_, l)| l).unwrap_or(&None),
+                        ),
+                    ));
+                    *in_func_gas += end_point - *start_point;
+                }
+            }
+            ProfilerEvent::Return(x, y) => {
+                if *in_func {
+                    let end_point = if let Some((funcy, _)) = self.stack_tree.get(x) {
+                        if let Some(event) = funcy.get(*y) {
+                            match event {
+                                ProfilerEvent::EnterFunc(x) => *x,
+                                _ => panic!("Invalid event linked on return"),
+                            }
+                        } else {
+                            panic!("Linked event from function call out of bounds");
+                        }
+                    } else {
+                        panic!("Return links to invalid codepoint");
+                    };
+                    *in_func = false;
+                    *in_func_gas += end_point - *start_point;
+                    *in_callstack = false;
+                    let locy = *self.stack_tree.get(x).map(|(_, l)| l).unwrap_or(&None);
+                    if let Some(entry) = callers.get_mut(x) {
+                        (*entry).0 += end_point - *call_start;
+                    } else {
+                        callers.insert(*x, (end_point - *call_start, locy));
+                    }
+                }
             }
         }
     }
