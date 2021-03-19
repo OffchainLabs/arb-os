@@ -1176,8 +1176,17 @@ impl Machine {
             Ordering::Equal => {}
             Ordering::Greater => {
                 stack.push(self.get_pc().unwrap_or(CodePt::new_internal(0)));
-                let zero_codept = CodePt::new_internal(0);
-                let next_codepoint = stack.last().unwrap_or(&zero_codept);
+                let mut zero_codept = CodePt::new_internal(0);
+                let next_codepoint = stack.last_mut().unwrap_or(&mut zero_codept);
+                match next_codepoint {
+                    //next_codepoint initializes to the first codepoint with a new codepoint on the
+                    //auxstack, so the location of this codepoint is not the start of the function
+                    //if the function has no arguments, by going back one codepoint, we hit the
+                    //start of the function, and dont go far enough back to hit locations in the
+                    //previous function
+                    CodePt::Internal(k) => *k -= 1,
+                    _ => {}
+                }
                 let next_len =
                     if let Some((next_info, _)) = loc_map.stack_tree.get_mut(next_codepoint) {
                         if *next_codepoint == *current_codepoint {
