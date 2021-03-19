@@ -22,6 +22,7 @@ use std::io::Read;
 use std::path::{Path, PathBuf};
 use std::time::Instant;
 use uint256::Uint256;
+use crate::run::upload::CodeUploader;
 
 #[cfg(test)]
 mod buffertests;
@@ -119,6 +120,11 @@ struct GenUpgrade {
     config_file: Option<String>,
 }
 
+#[derive(Clap, Debug)]
+struct SerializeUpgrade{
+    input: String,
+}
+
 ///Main enum for command line arguments.
 #[derive(Clap, Debug)]
 enum Args {
@@ -133,6 +139,7 @@ enum Args {
     Reformat(Reformat),
     EvmTests(EvmTests),
     GenUpgradeCode(GenUpgrade),
+    SerializeUpgrade(SerializeUpgrade),
 }
 
 fn main() -> Result<(), CompileError> {
@@ -352,6 +359,10 @@ fn main() -> Result<(), CompileError> {
             } else {
                 println!("Successfully generated code");
             }
+        }
+        Args::SerializeUpgrade(up) => {
+            let the_json = CodeUploader::_new_from_file(Path::new(&up.input))._to_json();
+            print!("{}", the_json.unwrap());
         }
     }
     let total_time = Instant::now() - start_time;
