@@ -332,11 +332,9 @@ pub fn compile_from_folder(
     file_name_chart: &mut BTreeMap<u64, String>,
     inline: bool,
 ) -> Result<Vec<CompiledProgram>, CompileError> {
-    //Parsing step
     let (mut programs, import_map) = create_program_tree(folder, library, main, file_name_chart)?;
-    //Resolution of imports (use statements)
     resolve_imports(&mut programs, &import_map)?;
-    //Conversion of programs `HashMap` to `Vec` for typechecking
+    //Conversion of programs from `HashMap` to `Vec` for typechecking
     let type_tree = create_type_tree(&programs);
     let mut output = vec![programs
         .remove(&if let Some(lib) = library {
@@ -350,18 +348,11 @@ pub fn compile_from_folder(
         out.sort_by(|module1, module2| module2.name.cmp(&module1.name));
         out
     });
-    //Typechecking loop
     let mut typechecked = typecheck_programs(&type_tree, output)?;
-    /*for module in &mut typechecked {
-        for _func in &mut module.checked_funcs {
-            func.recursive_apply(print_node, &"    ".to_string(), &mut 0);
-        }
-    }*/
     //Inlining stage
     if inline {
         typechecked.iter_mut().for_each(|module| module.inline());
     }
-    //Codegen loop
     let progs = codegen_programs(typechecked, file_name_chart, folder)?;
     Ok(progs)
 }
