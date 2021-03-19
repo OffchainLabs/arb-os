@@ -1,0 +1,16 @@
+
+// This file is used for bootstrapping the upgrade build process. Don't edit it unless you know what you're doing.
+
+type GlobalsBeforeUpgrade = struct {
+    unused: uint,
+}
+
+type GlobalsAfterUpgrade = struct {
+    unused: uint,
+}
+
+public func remapGlobalsForUpgrade(input_globals: GlobalsBeforeUpgrade) -> GlobalsAfterUpgrade {
+    return struct {
+        unused: 0,
+    };
+}

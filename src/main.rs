@@ -8,8 +8,8 @@ use crate::link::LinkedProgram;
 use clap::Clap;
 use compile::{compile_from_file, CompileError};
 use contracttemplates::generate_contract_template_file_or_die;
+use gen_code::gen_upgrade_code;
 use link::{link, postlink_compile};
-use mavm::Value;
 use pos::try_display_location;
 use run::{
     profile_gen_from_file, replay_from_testlog_file, run_from_file, ProfilerMode,
@@ -19,7 +19,7 @@ use std::collections::BTreeMap;
 use std::fs::File;
 use std::io;
 use std::io::Read;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::time::Instant;
 use uint256::Uint256;
 
@@ -28,6 +28,7 @@ mod buffertests;
 mod compile;
 mod contracttemplates;
 mod evm;
+mod gen_code;
 mod link;
 mod mavm;
 #[cfg(test)]
@@ -44,13 +45,13 @@ struct CompileStruct {
     #[clap(short, long)]
     debug_mode: bool,
     #[clap(short, long)]
+    test_mode: bool,
+    #[clap(short, long)]
     output: Option<String>,
     #[clap(short, long)]
     compile_only: bool,
     #[clap(short, long)]
     format: Option<String>,
-    #[clap(short, long)]
-    module: bool,
     #[clap(short, long)]
     inline: bool,
 }
@@ -109,6 +110,15 @@ struct EvmTests {
     savelogs: bool,
 }
 
+#[derive(Clap, Debug)]
+struct GenUpgrade {
+    from: PathBuf,
+    to: PathBuf,
+    out_file: PathBuf,
+    impl_file: String,
+    config_file: Option<String>,
+}
+
 ///Main enum for command line arguments.
 #[derive(Clap, Debug)]
 enum Args {
@@ -122,6 +132,7 @@ enum Args {
     MakeTemplates,
     Reformat(Reformat),
     EvmTests(EvmTests),
+    GenUpgradeCode(GenUpgrade),
 }
 
 fn main() -> Result<(), CompileError> {
@@ -131,6 +142,7 @@ fn main() -> Result<(), CompileError> {
     match matches {
         Args::Compile(compile) => {
             let debug_mode = compile.debug_mode;
+            let test_mode = compile.test_mode;
             let mut output = get_output(compile.output.clone()).unwrap();
             let filenames: Vec<_> = compile.input.clone();
             let mut file_name_chart = BTreeMap::new();
@@ -176,14 +188,12 @@ fn main() -> Result<(), CompileError> {
                     }
                 }
 
-                let is_module = compile.module;
-                match link(&compiled_progs, is_module, Some(Value::none())) {
+                match link(&compiled_progs, test_mode) {
                     Ok(linked_prog) => {
                         match postlink_compile(
                             linked_prog,
-                            is_module,
-                            Vec::new(),
                             file_name_chart.clone(),
+                            test_mode,
                             debug_mode,
                         ) {
                             Ok(completed_program) => {
@@ -334,6 +344,14 @@ fn main() -> Result<(), CompileError> {
                 num_failures = num_failures + nf;
             }
             println!("{} successes, {} failures", num_successes, num_failures);
+        }
+        Args::GenUpgradeCode(upgrade) => {
+            let result = gen_upgrade_code(upgrade);
+            if let Err(e) = result {
+                println!("Encountered an error: {}", e);
+            } else {
+                println!("Successfully generated code");
+            }
         }
     }
     let total_time = Instant::now() - start_time;

@@ -1,0 +1,257 @@
+//
+// Copyright 2021, Offchain Labs, Inc. All rights reserved.
+//
+
+use evmCallStack::EvmCallFrame;
+use evmCallStack::evmCallStack_topFrame;
+use evmCallStack::evmCallStack_stackDepth;
+use evmCallStack::evmCallStack_setTopFrameMemory;
+use evmCallStack::evmCallStack_transferEthFromCurrent;
+use evmCallStack::evmCallFrame_getCalldata;
+use evmCallStack::evmCallFrame_getCaller;
+use evmCallStack::evmCallFrame_getCallvalue;
+use evmCallStack::evmCallFrame_getMemory;
+use evmCallStack::evmCallStack_callHitError;
+use evmCallStack::evmCallStack_getAccountInCurrentContext;
+use evmCallStack::evmCallStack_setAccountInCurrentContext;
+use evmCallStack::getRetryBufferInCurrentContext;
+use evmCallStack::setRetryBufferInCurrentContext;
+
+use evmOps::evmOp_log2;
+use evmOps::evmOp_return;
+use evmOps::evmOp_revert_knownPc;
+
+use std::bytearray::ByteArray;
+use std::bytearray::bytearray_new;
+use std::bytearray::bytearray_size;
+use std::bytearray::bytearray_get256;
+use std::bytearray::bytearray_set256;
+
+use gasAccounting::getRetryableTxPrice;
+
+use retrybuffer::retryBuffer_getLifetime;
+use retrybuffer::retryBuffer_getTxTimeout;
+use retrybuffer::redeemRetryableTxInTx;
+use retrybuffer::retryBuffer_getTxKeepalivePrice;
+use retrybuffer::retryBuffer_keepalive;
+use retrybuffer::retryBuffer_getBeneficiary;
+use retrybuffer::retryBuffer_delete;
+
+
+public impure func arbretryable_txcall() {
+    if let Some(topFrame) = evmCallStack_topFrame() {
+        let calldata = evmCallFrame_getCalldata(topFrame);
+        if (bytearray_size(calldata) < 4) {
+            evmOp_revert_knownPc(0, 0, 0);
+        }
+        let funcCode = asm(224, bytearray_get256(calldata, 0)) uint { shr };
+        if (funcCode == const::funcCode_ArbRetryableTx_redeem) {
+            arbRetryable_redeem(topFrame, calldata);
+        } elseif (funcCode == const::funcCode_ArbRetryableTx_getLifetime) {
+            arbRetryable_getLifetime(topFrame, calldata);
+        } elseif (funcCode == const::funcCode_ArbRetryableTx_getTimeout) {
+            arbRetryable_getTimeout(topFrame, calldata);
+        } elseif (funcCode == const::funcCode_ArbRetryableTx_getKeepalivePrice) {
+            arbRetryable_getKeepalivePrice(topFrame, calldata);
+        } elseif (funcCode == const::funcCode_ArbRetryableTx_keepalive) {
+            arbRetryable_keepalive(topFrame, calldata);
+        } elseif (funcCode == const::funcCode_ArbRetryableTx_getBeneficiary) {
+            arbRetryable_getBeneficiary(topFrame, calldata);
+        } elseif (funcCode == const::funcCode_ArbRetryableTx_cancel) {
+            arbRetryable_cancel(topFrame, calldata);
+        } elseif (funcCode == const::funcCode_ArbRetryableTx_getSubmissionPrice) {
+            arbRetryable_getSubmissionPrice(topFrame, calldata);
+        } else {
+            // unrecognized function code
+            evmOp_revert_knownPc(1, 0, 0);
+        }
+    } else {
+        // this shouldn't happen -- should always be called in an EVM tx
+        evmCallStack_callHitError(27);
+    }
+}
+
+impure func arbRetryable_redeem(topFrame: EvmCallFrame, calldata: ByteArray) {  // (txId)
+    if (bytearray_size(calldata) != 36) {
+        evmOp_revert_knownPc(10, 0, 0);
+    }
+
+    // This can only be called directly from L1. Revert if called from L2.
+    if (evmCallStack_stackDepth() != 1) {
+        evmOp_revert_knownPc(11, 0, 0);
+    }
+
+    let txId = bytearray_get256(calldata, 4);
+    if (redeemRetryableTxInTx(txId)) {
+        arbRetryable_emitRedeemed(topFrame, txId);
+        evmOp_return(0, 0);
+    } else {
+        evmOp_revert_knownPc(12, 0, 0);
+    }
+}
+
+impure func arbRetryable_getTimeout(topFrame: EvmCallFrame, calldata: ByteArray) {  // (txId) -> uint
+    if (bytearray_size(calldata) != 36) {
+        evmOp_revert_knownPc(20, 0, 0);
+    }
+    let txId = bytearray_get256(calldata, 4);
+
+    let timeout = retryBuffer_getTxTimeout(
+        getRetryBufferInCurrentContext(),
+        txId
+    );
+    let mem = bytearray_set256(bytearray_new(0), 0, timeout);
+    if (evmCallStack_setTopFrameMemory(mem)) {
+        evmOp_return(0, 32);
+    } else {
+        evmOp_revert_knownPc(21, 0, 0);
+    }
+}
+
+impure func arbRetryable_getLifetime(topFrame: EvmCallFrame, calldata: ByteArray) {  // () -> uint
+    if (bytearray_size(calldata) != 4) {
+        evmOp_revert_knownPc(30, 0, 0);
+    }
+
+    let mem = bytearray_set256(bytearray_new(0), 0, retryBuffer_getLifetime(getRetryBufferInCurrentContext()));
+    if (evmCallStack_setTopFrameMemory(mem)) {
+        evmOp_return(0, 32);
+    } else {
+        evmOp_revert_knownPc(21, 0, 0);
+    }
+}
+
+impure func arbRetryable_getKeepalivePrice(topFrame: EvmCallFrame, calldata: ByteArray) {  // (txId) -> (uint, uint)
+    if (bytearray_size(calldata) != 36) {
+        evmOp_revert_knownPc(40, 0, 0);
+    }
+    let txId = bytearray_get256(calldata, 4);
+    if let Some(res) = retryBuffer_getTxKeepalivePrice(getRetryBufferInCurrentContext(), txId) {
+        let (price, nextUpdate) = res;
+        let mem = bytearray_set256(
+            bytearray_set256(bytearray_new(0), 0, price),
+            32,
+            nextUpdate
+        );
+        if (evmCallStack_setTopFrameMemory(mem)) {
+            evmOp_return(0, 64);
+        } else {
+            evmOp_revert_knownPc(41, 0, 0);
+        }
+    } else {
+        evmOp_revert_knownPc(42, 0, 0);
+    }
+}
+
+impure func arbRetryable_keepalive(topFrame: EvmCallFrame, calldata: ByteArray) {  // (uint) payable -> uint
+    if (bytearray_size(calldata) != 36) {
+        evmOp_revert_knownPc(50, 0, 0);
+    }
+    let caller = evmCallFrame_getCaller(topFrame);
+    let callvalue = evmCallFrame_getCallvalue(topFrame);
+    if (callvalue > 0) {
+        if (evmCallStack_transferEthFromCurrent(caller, callvalue) == None<()>) {
+            evmOp_revert_knownPc(51, 0, 0);
+        }
+    }
+
+    let txId = bytearray_get256(calldata, 4);
+    if let Some(res) = retryBuffer_keepalive(getRetryBufferInCurrentContext(), txId) {
+        let (rbuf, newTimeout) = res;
+        setRetryBufferInCurrentContext(rbuf);
+        if (arbRetryable_emitLifetimeExtended(topFrame, txId, newTimeout) == None<()>) {
+            evmOp_revert_knownPc(52, 0, 0);
+        }
+        let mem = bytearray_set256(bytearray_new(0), 0, newTimeout);
+        if (evmCallStack_setTopFrameMemory(mem)) {
+            evmOp_return(0, 32);
+        } else {
+            evmOp_revert_knownPc(53, 0, 0);
+        }
+    } else {
+        evmOp_revert_knownPc(54, 0, 0);
+    }
+}
+
+impure func arbRetryable_getBeneficiary(topFrame: EvmCallFrame, calldata: ByteArray) {  // (uint) -> address
+    if (bytearray_size(calldata) != 36) {
+        evmOp_revert_knownPc(60, 0, 0);
+    }
+    let txId = bytearray_get256(calldata, 4);
+    if let Some(bene) = retryBuffer_getBeneficiary(getRetryBufferInCurrentContext(), txId) {
+        let mem = bytearray_set256(bytearray_new(0), 0, uint(bene));
+        if (evmCallStack_setTopFrameMemory(mem)) {
+            evmOp_return(0, 32);
+        } else {
+            evmOp_revert_knownPc(61, 0, 0);
+        }
+    } else {
+        evmOp_revert_knownPc(62, 0, 0);
+    }
+}
+
+impure func arbRetryable_cancel(topFrame: EvmCallFrame, calldata: ByteArray) {  // (uint)
+    if (bytearray_size(calldata) != 36) {
+        evmOp_revert_knownPc(70, 0, 0);
+    }
+    let txId = bytearray_get256(calldata, 4);
+
+    let rbuf = getRetryBufferInCurrentContext();
+    if let Some(bene) = retryBuffer_getBeneficiary(rbuf, txId) {
+        let caller = evmCallFrame_getCaller(topFrame);
+        if ((caller != bene) && (caller != address(0))) {
+            evmOp_revert_knownPc(71, 0, 0);
+        }
+
+        if let Some(updatedRbuf) = retryBuffer_delete(rbuf, txId, true) {
+            setRetryBufferInCurrentContext(updatedRbuf);
+            arbRetryable_emitCanceled(topFrame, txId);
+            evmOp_return(0, 0);
+        } else {
+            evmOp_revert_knownPc(72, 0, 0);
+        }
+    } else {
+        evmOp_revert_knownPc(73, 0, 0);
+    }
+}
+
+impure func arbRetryable_getSubmissionPrice(topFrame: EvmCallFrame, calldata: ByteArray) { // (uint) -> (uint, uint)
+    if (bytearray_size(calldata) != 36) {
+        evmOp_revert_knownPc(80, 0, 0);
+    }
+    let dataSize = bytearray_get256(calldata, 4);
+    let (price, nextUpdate) = getRetryableTxPrice(dataSize);
+
+    let mem = bytearray_set256(
+        bytearray_set256(bytearray_new(0), 0, price),
+        32,
+        nextUpdate
+    );
+    if (evmCallStack_setTopFrameMemory(mem)) {
+        evmOp_return(0, 64);
+    } else {
+        evmOp_revert_knownPc(81, 0, 0);
+    }
+}
+
+impure func arbRetryable_emitLifetimeExtended(topFrame: EvmCallFrame, txId: uint, newTimeout: uint) -> option<()> {
+    let savedMem = evmCallFrame_getMemory(topFrame);
+    let mem = bytearray_set256(bytearray_new(0), 0, newTimeout);
+    if ( ! evmCallStack_setTopFrameMemory(mem)) {
+       return None<()>;
+    }
+    evmOp_log2(0, 32, const::eventTopic_ArbRetryableTx_LifetimeExtended, txId);
+    return xif(evmCallStack_setTopFrameMemory(savedMem)) {
+        Some(())
+    } else {
+        None<()>
+    };
+}
+
+impure func arbRetryable_emitRedeemed(topFrame: EvmCallFrame, txId: uint) {
+    evmOp_log2(0, 0, const::eventTopic_ArbRetryableTx_Redeemed, txId);
+}
+
+impure func arbRetryable_emitCanceled(topFrame: EvmCallFrame, txId: uint) {
+    evmOp_log2(0, 0, const::eventTopic_ArbRetryableTx_Canceled, txId);
+}

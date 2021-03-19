@@ -3,8 +3,9 @@
  */
 
 use crate::mavm::Value;
-use crate::run::{ArbosReceipt, Machine};
+use crate::run::{load_from_file, ArbosReceipt, Machine};
 use crate::uint256::Uint256;
+use crate::RuntimeEnvironment;
 use ethers_core::utils::keccak256;
 use ethers_signers::Signer;
 use ethers_signers::Wallet;
@@ -20,7 +21,7 @@ pub fn builtin_contract_path(contract_name: &str) -> String {
 #[derive(Debug, Clone)]
 pub struct AbiForContract {
     code_bytes: Vec<u8>,
-    contract: ethabi::Contract,
+    pub contract: ethabi::Contract,
     pub address: Uint256,
     name: String,
 }
@@ -216,6 +217,38 @@ impl AbiForContract {
         ))
     }
 
+    pub fn _send_retryable_tx(
+        &self,
+        sender: Uint256,
+        func_name: &str,
+        args: &[ethabi::Token],
+        machine: &mut Machine,
+        payment: Uint256,
+        max_submission_cost: Uint256,
+        credit_back_address: Option<Uint256>,
+        beneficiary: Option<Uint256>,
+        max_gas_immed: Option<Uint256>,
+        gas_price_immed: Option<Uint256>,
+    ) -> Result<(Uint256, Option<Uint256>), ethabi::Error> {
+        let this_function = self.contract.function(func_name)?;
+        let calldata = this_function.encode_input(args).unwrap();
+
+        let (txid, maybe_redeemid) = machine.runtime_env._insert_retryable_tx_message(
+            sender.clone(),
+            self.address.clone(),
+            payment.clone(),
+            payment,
+            max_submission_cost,
+            credit_back_address.unwrap_or(sender.clone()),
+            beneficiary.unwrap_or(sender),
+            max_gas_immed.unwrap_or(Uint256::zero()),
+            gas_price_immed.unwrap_or(Uint256::zero()),
+            &calldata,
+        );
+
+        Ok((txid, maybe_redeemid))
+    }
+
     pub fn _call_function_from_contract(
         &self,
         sender_addr: Uint256,
@@ -334,7 +367,6 @@ impl AbiForContract {
     pub fn add_function_call_to_batch(
         &self,
         batch: &mut Vec<u8>,
-        sender_addr: Uint256,
         func_name: &str,
         args: &[ethabi::Token],
         machine: &mut Machine,
@@ -344,16 +376,17 @@ impl AbiForContract {
         let this_function = self.contract.function(func_name)?;
         let calldata = this_function.encode_input(args).unwrap();
 
-        let tx_id_bytes = machine.runtime_env.append_signed_tx_message_to_batch(
-            batch,
-            sender_addr,
-            Uint256::from_usize(100_000_000),
-            Uint256::zero(),
-            self.address.clone(),
-            payment,
-            calldata,
-            &wallet,
-        );
+        let tx_id_bytes = machine
+            .runtime_env
+            ._append_compressed_and_signed_tx_message_to_batch(
+                batch,
+                Uint256::from_usize(100_000_000),
+                Uint256::zero(),
+                self.address.clone(),
+                payment,
+                calldata,
+                &wallet,
+            );
 
         Ok((Uint256::from_bytes(&tx_id_bytes)))
     }
@@ -1346,7 +1379,7 @@ impl<'a> _ArbOwner<'a> {
         &self,
         machine: &mut Machine,
     ) -> Result<(), ethabi::Error> {
-        let (receipts, _sends) = self.contract_abi.call_function(
+        let _res = self.contract_abi.call_function(
             self.my_address.clone(),
             "finishCodeUploadAsArbosUpgrade",
             &[],
@@ -1354,18 +1387,7 @@ impl<'a> _ArbOwner<'a> {
             Uint256::zero(),
             self.debug,
         )?;
-
-        if receipts.len() != 1 {
-            return Err(ethabi::Error::from("wrong number of receipts"));
-        }
-
-        if receipts[0].succeeded() {
-            Err(ethabi::Error::from(
-                "should have reverted but actually succeeded",
-            ))
-        } else {
-            Ok(())
-        }
+        Ok(())
     }
 
     pub fn _finish_code_upload_as_pluggable(
@@ -1877,6 +1899,255 @@ impl _ArbAggregator {
             Err(ethabi::Error::from("reverted"))
         }
     }
+}
+
+pub struct _ArbReplayableTx {
+    pub contract_abi: AbiForContract,
+    debug: bool,
+}
+
+impl _ArbReplayableTx {
+    pub fn _new(debug: bool) -> Self {
+        let mut contract_abi =
+            AbiForContract::new_from_file(&builtin_contract_path("ArbRetryableTx")).unwrap();
+        contract_abi.bind_interface_to_address(Uint256::from_u64(110));
+        _ArbReplayableTx {
+            contract_abi,
+            debug,
+        }
+    }
+
+    pub fn _redeem(&self, machine: &mut Machine, txid: Uint256) -> Result<(), ethabi::Error> {
+        let (receipts, sends) = self.contract_abi.call_function(
+            Uint256::zero(), // send from address zero
+            "redeem",
+            &[ethabi::Token::FixedBytes(txid.to_bytes_be())],
+            machine,
+            Uint256::zero(),
+            self.debug,
+        )?;
+
+        if (receipts.len() < 1) || (receipts.len() > 2) || (sends.len() != 0) {
+            println!("{} receipts, {} sends", receipts.len(), sends.len());
+            Err(ethabi::Error::from("wrong number of receipts or sends"))
+        } else if receipts[receipts.len() - 1].succeeded() {
+            Ok(())
+        } else {
+            Err(ethabi::Error::from("reverted"))
+        }
+    }
+
+    pub fn _get_timeout(
+        &self,
+        machine: &mut Machine,
+        txid: Uint256,
+    ) -> Result<Uint256, ethabi::Error> {
+        let (receipts, sends) = self.contract_abi.call_function(
+            Uint256::zero(), // send from address zero
+            "getTimeout",
+            &[ethabi::Token::FixedBytes(txid.to_bytes_be())],
+            machine,
+            Uint256::zero(),
+            self.debug,
+        )?;
+
+        if (receipts.len() != 1) || (sends.len() != 0) {
+            Err(ethabi::Error::from("wrong number of receipts or sends"))
+        } else if receipts[0].succeeded() {
+            Ok(Uint256::from_bytes(&receipts[0].get_return_data()))
+        } else {
+            Err(ethabi::Error::from("reverted"))
+        }
+    }
+
+    pub fn _get_lifetime(&self, machine: &mut Machine) -> Result<Uint256, ethabi::Error> {
+        let (receipts, sends) = self.contract_abi.call_function(
+            Uint256::zero(), // send from address zero
+            "getLifetime",
+            &[],
+            machine,
+            Uint256::zero(),
+            self.debug,
+        )?;
+
+        if (receipts.len() != 1) || (sends.len() != 0) {
+            Err(ethabi::Error::from("wrong number of receipts or sends"))
+        } else if receipts[0].succeeded() {
+            Ok(Uint256::from_bytes(&receipts[0].get_return_data()))
+        } else {
+            Err(ethabi::Error::from("reverted"))
+        }
+    }
+
+    pub fn _get_keepalive_price(
+        &self,
+        machine: &mut Machine,
+        txid: Uint256,
+    ) -> Result<(Uint256, Uint256), ethabi::Error> {
+        let (receipts, sends) = self.contract_abi.call_function(
+            Uint256::zero(), // send from address zero
+            "getKeepalivePrice",
+            &[ethabi::Token::FixedBytes(txid.to_bytes_be())],
+            machine,
+            Uint256::zero(),
+            self.debug,
+        )?;
+
+        if (receipts.len() != 1) || (sends.len() != 0) {
+            Err(ethabi::Error::from("wrong number of receipts or sends"))
+        } else if receipts[0].succeeded() {
+            let return_data = receipts[0].get_return_data();
+            Ok((
+                Uint256::from_bytes(&return_data[0..32]),
+                Uint256::from_bytes(&return_data[32..64]),
+            ))
+        } else {
+            Err(ethabi::Error::from("reverted"))
+        }
+    }
+
+    pub fn _keepalive(
+        &self,
+        machine: &mut Machine,
+        txid: Uint256,
+        payment: Uint256,
+    ) -> Result<Uint256, ethabi::Error> {
+        let (receipts, sends) = self.contract_abi.call_function(
+            Uint256::zero(), // send from address zero
+            "keepalive",
+            &[ethabi::Token::FixedBytes(txid.to_bytes_be())],
+            machine,
+            payment,
+            self.debug,
+        )?;
+
+        if (receipts.len() != 1) || (sends.len() != 0) {
+            Err(ethabi::Error::from("wrong number of receipts or sends"))
+        } else if receipts[0].succeeded() {
+            Ok(Uint256::from_bytes(&receipts[0].get_return_data()))
+        } else {
+            Err(ethabi::Error::from("reverted"))
+        }
+    }
+
+    pub fn _get_beneficiary(
+        &self,
+        machine: &mut Machine,
+        txid: Uint256,
+    ) -> Result<Uint256, ethabi::Error> {
+        let (receipts, sends) = self.contract_abi.call_function(
+            Uint256::zero(), // send from address zero
+            "getBeneficiary",
+            &[ethabi::Token::FixedBytes(txid.to_bytes_be())],
+            machine,
+            Uint256::zero(),
+            self.debug,
+        )?;
+
+        if (receipts.len() != 1) || (sends.len() != 0) {
+            Err(ethabi::Error::from("wrong number of receipts or sends"))
+        } else if receipts[0].succeeded() {
+            Ok(Uint256::from_bytes(&receipts[0].get_return_data()))
+        } else {
+            Err(ethabi::Error::from("reverted"))
+        }
+    }
+
+    pub fn _cancel(
+        &self,
+        machine: &mut Machine,
+        txid: Uint256,
+        sender: Uint256,
+    ) -> Result<(), ethabi::Error> {
+        let (receipts, sends) = self.contract_abi.call_function(
+            sender,
+            "cancel",
+            &[ethabi::Token::FixedBytes(txid.to_bytes_be())],
+            machine,
+            Uint256::zero(),
+            self.debug,
+        )?;
+
+        if (receipts.len() != 1) || (sends.len() != 0) {
+            Err(ethabi::Error::from("wrong number of receipts or sends"))
+        } else if receipts[0].succeeded() {
+            Ok(())
+        } else {
+            Err(ethabi::Error::from("reverted"))
+        }
+    }
+}
+
+pub struct _ArbStatistics {
+    pub contract_abi: AbiForContract,
+    debug: bool,
+}
+
+impl _ArbStatistics {
+    pub fn _new(debug: bool) -> Self {
+        let mut contract_abi =
+            AbiForContract::new_from_file(&builtin_contract_path("ArbStatistics")).unwrap();
+        contract_abi.bind_interface_to_address(Uint256::from_u64(111));
+        _ArbStatistics {
+            contract_abi,
+            debug,
+        }
+    }
+
+    pub fn _get_stats(
+        &self,
+        machine: &mut Machine,
+    ) -> Result<(Uint256, Uint256, Uint256, Uint256, Uint256, Uint256), ethabi::Error> {
+        let (receipts, sends) = self.contract_abi.call_function(
+            Uint256::zero(), // send from address zero
+            "getStats",
+            &[],
+            machine,
+            Uint256::zero(),
+            self.debug,
+        )?;
+
+        if (receipts.len() != 1) || (sends.len() != 0) {
+            println!("{} receipts, {} sends", receipts.len(), sends.len());
+            Err(ethabi::Error::from("wrong number of receipts or sends"))
+        } else if receipts[0].succeeded() {
+            let retdata = receipts[0].get_return_data();
+            Ok((
+                Uint256::from_bytes(&retdata[0..32]),
+                Uint256::from_bytes(&retdata[32..64]),
+                Uint256::from_bytes(&retdata[64..96]),
+                Uint256::from_bytes(&retdata[96..128]),
+                Uint256::from_bytes(&retdata[128..160]),
+                Uint256::from_bytes(&retdata[160..192]),
+            ))
+        } else {
+            Err(ethabi::Error::from("reverted"))
+        }
+    }
+}
+
+#[test]
+fn test_arb_statistics() {
+    assert!(_test_arb_stats().is_ok());
+}
+
+fn _test_arb_stats() -> Result<(), ethabi::Error> {
+    let rt_env = RuntimeEnvironment::new(Uint256::from_usize(1111), None);
+    let mut machine = load_from_file(Path::new("arb_os/arbos.mexe"), rt_env);
+    machine.start_at_zero();
+
+    let arbstats = _ArbStatistics::_new(false);
+
+    let (arb_blocknum, num_accounts, storage, _arbgas, txs, contracts) =
+        arbstats._get_stats(&mut machine)?;
+
+    assert_eq!(arb_blocknum, Uint256::from_u64(0));
+    assert_eq!(num_accounts, Uint256::from_u64(22));
+    assert_eq!(storage, Uint256::from_u64(0));
+    // assert_eq!(_arbgas, Uint256::from_u64(1_490_972));  // disable this because it will vary over versions
+    assert_eq!(txs, Uint256::from_u64(0));
+    assert_eq!(contracts, Uint256::from_u64(19));
+    Ok(())
 }
 
 struct FunctionTableItem {

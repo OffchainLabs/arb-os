@@ -5,7 +5,7 @@
 //!Contains types and utilities for constructing the mini AST
 
 use super::typecheck::{new_type_error, TypeError};
-use crate::compile::typecheck::PropertiesList;
+use crate::compile::typecheck::{AbstractSyntaxTree, PropertiesList, TypeCheckedNode};
 use crate::link::{value_from_field_list, TUPLE_SIZE};
 use crate::mavm::{Instruction, Value};
 use crate::pos::Location;
@@ -92,6 +92,39 @@ pub enum Type {
     Any,
     Every,
     Option(Box<Type>),
+}
+
+impl AbstractSyntaxTree for Type {
+    fn child_nodes(&mut self) -> Vec<TypeCheckedNode> {
+        match self {
+            Type::Void
+            | Type::Uint
+            | Type::Int
+            | Type::Bool
+            | Type::Bytes32
+            | Type::EthAddress
+            | Type::Buffer
+            | Type::Any
+            | Type::Every
+            | Type::Nominal(_, _) => vec![],
+            Type::Tuple(types) => types.iter_mut().map(|t| TypeCheckedNode::Type(t)).collect(),
+            Type::Array(tipe) | Type::FixedArray(tipe, _) | Type::Option(tipe) => {
+                vec![TypeCheckedNode::Type(tipe)]
+            }
+            Type::Struct(fields) => fields
+                .iter_mut()
+                .map(|field| TypeCheckedNode::Type(&mut field.tipe))
+                .collect(),
+            Type::Func(_, args, ret) => vec![TypeCheckedNode::Type(ret)]
+                .into_iter()
+                .chain(args.iter_mut().map(|t| TypeCheckedNode::Type(t)))
+                .collect(),
+            Type::Map(key, value) => vec![TypeCheckedNode::Type(key), TypeCheckedNode::Type(value)],
+        }
+    }
+    fn is_pure(&mut self) -> bool {
+        true
+    }
 }
 
 impl Type {
@@ -281,6 +314,10 @@ impl Type {
     }
 
     pub fn display(&self) -> String {
+        self.display_indented(0)
+    }
+
+    fn display_indented(&self, indent_level: usize) -> String {
         match self {
             Type::Void => "void".to_string(),
             Type::Uint => "uint".to_string(),
@@ -293,18 +330,28 @@ impl Type {
                 let mut out = "(".to_string();
                 for s in subtypes {
                     //This should be improved by removing the final trailing comma.
-                    out.push_str(&(s.display() + ", "));
+                    out.push_str(&(s.display_indented(indent_level) + ", "));
                 }
                 out.push(')');
                 out
             }
-            Type::Array(t) => format!("[]{}", t.display()),
-            Type::FixedArray(t, size) => format!("[{}]{}", size, t.display()),
+            Type::Array(t) => format!("[]{}", t.display_indented(indent_level)),
+            Type::FixedArray(t, size) => format!("[{}]{}", size, t.display_indented(indent_level)),
             Type::Struct(fields) => {
                 let mut out = "struct {\n".to_string();
+                for _ in 0..indent_level {
+                    out.push_str("    ");
+                }
                 for field in fields {
                     //This should indent further when dealing with sub-structs
-                    out.push_str(&format!("    {}: {},\n", field.name, field.tipe.display()));
+                    out.push_str(&format!(
+                        "    {}: {},\n",
+                        field.name,
+                        field.tipe.display_indented(indent_level + 1)
+                    ));
+                    for _ in 0..indent_level {
+                        out.push_str("    ");
+                    }
                 }
                 out.push('}');
                 out
@@ -324,21 +371,25 @@ impl Type {
                 }
                 out.push_str("func(");
                 for arg in args {
-                    out.push_str(&(arg.display() + ", "));
+                    out.push_str(&(arg.display_indented(indent_level) + ", "));
                 }
                 out.push(')');
                 if **ret != Type::Void {
                     out.push_str(" -> ");
-                    out.push_str(&ret.display());
+                    out.push_str(&ret.display_indented(indent_level));
                 }
                 out
             }
             Type::Map(key, val) => {
-                format!("map<{},{}>", key.display(), val.display())
+                format!(
+                    "map<{},{}>",
+                    key.display_indented(indent_level),
+                    val.display_indented(indent_level)
+                )
             }
             Type::Any => "any".to_string(),
             Type::Every => "every".to_string(),
-            Type::Option(t) => format!("option<{}>", t.display()),
+            Type::Option(t) => format!("option<{}>", t.display_indented(indent_level)),
         }
     }
 }
@@ -455,14 +506,16 @@ pub fn new_func_arg(name: StringId, tipe: Type, debug_info: DebugInfo) -> FuncAr
 ///Represents a declaration of a global mini variable.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct GlobalVarDecl {
-    pub name: StringId,
+    pub name_id: StringId,
+    pub name: String,
     pub tipe: Type,
     pub location: Option<Location>,
 }
 
 impl GlobalVarDecl {
-    pub fn new(name: StringId, tipe: Type, location: Option<Location>) -> Self {
+    pub fn new(name_id: StringId, name: String, tipe: Type, location: Option<Location>) -> Self {
         GlobalVarDecl {
+            name_id,
             name,
             tipe,
             location,

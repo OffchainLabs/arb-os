@@ -53,7 +53,7 @@ pub fn mavm_codegen(
 
     let mut global_var_map = HashMap::new();
     for (idx, gv) in global_vars.iter().enumerate() {
-        global_var_map.insert(gv.name, idx);
+        global_var_map.insert(gv.name_id, idx);
     }
 
     let mut label_gen = LabelGenerator::new();

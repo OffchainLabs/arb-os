@@ -1,0 +1,44 @@
+type OldGlobals = struct {
+    global1: uint,
+    global2: option<int>,
+    jump_table: any,
+}
+
+type NewGlobals = struct {
+    newGlobal1: option<int>,
+    newGlobal2: uint,
+    jump_table: any,
+}
+
+var newGlobal1: option<int>;
+var newGlobal2: uint;
+
+impure func main(old: OldGlobals) -> uint{
+    asm(struct{
+        newGlobal1: None<int>,
+        newGlobal2: 0,
+        jump_table: asm() any { rget },
+    },) { rset };
+
+    newGlobal1 = old.global2;
+    newGlobal2 = old.global1;
+
+    if (newGlobal1 != Some(-3s)) {
+        panic;
+    }
+
+    if (newGlobal2 != 5) {
+        panic;
+    }
+
+    asm(42,) { debugprint };
+    return 2*myExpr(3);
+}
+
+func plusFour(x: uint) -> uint {
+    return x+4;
+}
+
+func myExpr(x: uint) -> uint {
+    return 3*(plusFour(x));
+}
