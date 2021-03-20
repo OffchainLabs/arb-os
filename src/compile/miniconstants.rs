@@ -226,6 +226,7 @@ pub fn init_constant_table() -> HashMap<String, Uint256> {
         ("EVMNonZeroBalanceCallStipend", 2300),
         ("ArbitrumNonZeroBalanceCallStipend", 20000),
         // misc
+        ("TwoToThe32", 1<<32),
         ("SecondsPerBlockNumerator", 2),
         ("SecondsPerBlockDenominator", 1),
         ("DefaultSpeedLimitPerSecond", 100_000_000),
