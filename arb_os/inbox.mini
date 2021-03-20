@@ -295,7 +295,7 @@ type RequestProvenance = struct {
 }
 
 type AggregatorInfo = struct {
-    aggregator: address,
+    aggregator: option<address>,
     calldataBytes: uint,
 }
 
@@ -364,6 +364,14 @@ public impure func inbox_getNextUnpackedRequest() -> (
         } else {
             // it's not a batch, so process it immediately
             if (msg.kind == const::L1MessageType_L2FundedByL1) {
+                // record the calldata usage, so it can be reported in tx receipt
+                msg = msg with {
+                    aggregator: Some(struct {
+                        aggregator: None<address>,
+                        calldataBytes: bytearray_size(msg.msgData),
+                    })
+                };
+
                 // the message carries an ETH deposit
                 // verify the validity of the message, process the deposit, then process the tx
                 let firstByte = bytearray_getByte(msg.msgData, 0);
@@ -405,6 +413,14 @@ public impure func inbox_getNextUnpackedRequest() -> (
                 outputStats_endOfBlock(msg.arbBlockNumber, msg.ethBlockNumber, msg.timestamp);
                 blockhash_submitHash(msg.arbBlockNumber, msg.ethBlockNumber, globalInbox.inboxHashAccumulator);
             } elseif (msg.kind == const::L1MessageType_L2) {
+                // record the calldata usage, so it can be reported in tx receipt
+                msg = msg with {
+                    aggregator: Some(struct {
+                        aggregator: None<address>,
+                        calldataBytes: bytearray_size(msg.msgData),
+                    })
+                };
+
                 // it's an L2 message, so switch based on the L2 type
                 let firstByte = bytearray_getByte(msg.msgData, 0);
                 if (firstByte == const::L2MessageType_heartbeat) {

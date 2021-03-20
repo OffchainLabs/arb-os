@@ -39,7 +39,9 @@ public func messageBatch_tryNew(msg: IncomingRequest) -> option<MessageBatch> {
         // aggregator credit goes to the original aggregator of the request, if any, otherwise to sender of request
         let aggregator = msg.sender;
         if let Some(aggInfo) = msg.aggregator {
-            aggregator = aggInfo.aggregator;
+            if let Some(agg) = aggInfo.aggregator {
+                aggregator = agg;
+            }
         }
 
         Some(
@@ -52,7 +54,7 @@ public func messageBatch_tryNew(msg: IncomingRequest) -> option<MessageBatch> {
                     }
                 } with {
                     aggregator: Some(struct {
-                        aggregator: aggregator,
+                        aggregator: Some(aggregator),
                         calldataBytes: 0,
                     })
                 },
