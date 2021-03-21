@@ -7,10 +7,10 @@ use crate::run::upload::CodeUploader;
 use crate::stringtable::StringId;
 use crate::uint256::Uint256;
 use ethers_core::utils::keccak256;
-use serde::{Deserialize, Deserializer, Serialize, Serializer, de};
+use serde::de::Visitor;
+use serde::{de, Deserialize, Deserializer, Serialize, Serializer};
 use serde_repr::{Deserialize_repr, Serialize_repr};
 use std::{collections::HashMap, fmt, rc::Rc};
-use serde::de::Visitor;
 
 #[derive(PartialEq, Eq, Hash, Debug, Clone, Copy, Serialize, Deserialize)]
 pub enum Label {
@@ -395,8 +395,12 @@ impl<'de> Visitor<'de> for BufferVisitor {
         formatter.write_str("Expected hex string")
     }
     fn visit_str<E>(self, v: &str) -> Result<Self::Value, E>
-    where E: de::Error {
-        Ok(Buffer::from_bytes(hex::decode(v).map_err(|_| E::custom("Could not buffer as hex string".to_string()))?))
+    where
+        E: de::Error,
+    {
+        Ok(Buffer::from_bytes(hex::decode(v).map_err(|_| {
+            E::custom("Could not buffer as hex string".to_string())
+        })?))
     }
 }
 
@@ -405,7 +409,10 @@ impl Serialize for Buffer {
     where
         S: Serializer,
     {
-        serializer.serialize_str(&*format!("{}",hex::encode(self.as_bytes(self.size as usize))))
+        serializer.serialize_str(&*format!(
+            "{}",
+            hex::encode(self.as_bytes(self.size as usize))
+        ))
     }
 }
 
@@ -444,7 +451,11 @@ impl BufferNode {
         } else if v.len() == 0 {
             BufferNode::new_empty_internal(height, capacity)
         } else if v.len() as u128 <= capacity / 2 {
-            let left = Rc::new(BufferNode::_internal_from_bytes(height - 1, capacity / 2, v));
+            let left = Rc::new(BufferNode::_internal_from_bytes(
+                height - 1,
+                capacity / 2,
+                v,
+            ));
             let right = Rc::new(BufferNode::new_empty_internal(height - 1, capacity / 2));
             BufferNode::Internal(BufferInternal {
                 height,
@@ -624,9 +635,205 @@ fn _levels_needed(x: u128) -> (usize, u128) {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum BigTuple {
+    Leaf(Rc<Value>, [u8; 32]),
+    Empty(usize, [u8; 32]),
+    Internal(Rc<BigTupleNode>),
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct BigTupleNode {
+    height: usize,
+    capacity: u128,
+    left: BigTuple,
+    right: BigTuple,
+    internal_hash: [u8; 32],
+}
+
+impl BigTuple {
+    pub fn new_empty() -> Self {
+        BigTuple::Empty(0, [0u8; 32])
+    }
+
+    pub fn from_values(v: &[Value]) -> Self {
+        let mut height = 0;
+        let mut capacity = 1;
+        while (capacity < v.len()) {
+            height = height + 1;
+            capacity = capacity * 2;
+        }
+        BigTuple::from_values_sized(v, height, capacity)
+    }
+
+    pub fn new_empty_with_height(height: usize) -> Self {
+        if height == 0 {
+            BigTuple::new_empty()
+        } else {
+            let ne = BigTuple::new_empty_with_height(height-1);
+            BigTuple::make_from_pair(ne.clone(), ne)
+        }
+    }
+
+    pub fn from_values_sized(v: &[Value], height: usize, capacity: usize) -> Self {
+        if height == 0 {
+            if v[0] == Value::none() {
+                BigTuple::Empty(0, [0u8; 32])
+            } else {
+                BigTuple::Leaf(Rc::new(v[0].clone()), v[0].avm_hash_bytes())
+            }
+        } else {
+            BigTuple::make_from_pair(
+                BigTuple::from_values_sized(&v[0..capacity / 2], height - 1, capacity / 2),
+                BigTuple::from_values_sized(&v[capacity / 2..], height - 1, capacity / 2),
+            )
+        }
+    }
+
+    fn make_from_pair(left: Self, right: Self) -> Self {
+        let mut buf = vec![];
+        buf.extend(&left.get_internal_hash());
+        buf.extend(&right.get_internal_hash());
+        let internal_hash = keccak256(&buf);
+        if left.is_empty() && right.is_empty() {
+            BigTuple::Empty(left.get_height() + 1, internal_hash)
+        } else {
+            BigTuple::Internal(Rc::new(BigTupleNode {
+                height: left.get_height() + 1,
+                capacity: left.get_capacity() * 2,
+                left,
+                right,
+                internal_hash,
+            }))
+        }
+    }
+
+    pub fn is_empty(&self) -> bool {
+        if let BigTuple::Empty(_, _) = self {
+            true
+        } else {
+            false
+        }
+    }
+
+    fn get_height(&self) -> usize {
+        match self {
+            BigTuple::Empty(h, _) => *h,
+            BigTuple::Leaf(_, _) => 0,
+            BigTuple::Internal(n) => n.height,
+        }
+    }
+
+    fn get_capacity(&self) -> u128 {
+        match self {
+            BigTuple::Empty(h, _) => {
+                let mut ret = 1;
+                for _ in 0..*h {
+                    ret = ret * 2
+                }
+                ret
+            }
+            BigTuple::Leaf(_, _) => 1,
+            BigTuple::Internal(n) => n.capacity,
+        }
+    }
+
+    pub fn get_size(&self) -> u128 {
+        match self {
+            BigTuple::Empty(_, _) => 0,
+            BigTuple::Leaf(_, _) => 1,
+            BigTuple::Internal(n) => {
+                if n.right.is_empty() {
+                    n.left.get_size()
+                } else {
+                    n.left.get_capacity() + n.right.get_size()
+                }
+            }
+        }
+    }
+
+    pub fn get(&self, idx: u64) -> Value {
+        match self {
+            BigTuple::Empty(_, _) => Value::none(),
+            BigTuple::Leaf(v, _) => {
+                if idx == 0 {
+                    (**v).clone()
+                } else {
+                    Value::none()
+                }
+            }
+            BigTuple::Internal(n) => {
+                let left_cap = (n.capacity / 2) as u64;
+                if idx < left_cap {
+                    n.left.get(idx)
+                } else {
+                    n.right.get(idx - left_cap)
+                }
+            }
+        }
+    }
+
+    pub fn set(&self, idx: u64, val: Value) -> BigTuple {
+        self.set_internal(idx, val).try_to_shrink()
+    }
+
+    fn set_internal(&self, idx: u64, val: Value) -> BigTuple {
+        if idx as u128 >= self.get_capacity() {
+            self.clone().grow().set_internal(idx, val)
+        } else {
+            match self {
+                BigTuple::Empty(_, _) | BigTuple::Leaf(_, _) => {
+                    BigTuple::Leaf(Rc::new(val.clone()), val.avm_hash_bytes())
+                }
+                BigTuple::Internal(n) => {
+                    let left_cap = (n.left.get_capacity() / 2) as u64;
+                    if idx < left_cap {
+                        BigTuple::make_from_pair(n.left.set_internal(idx, val), n.right.clone())
+                    } else {
+                        BigTuple::make_from_pair(n.left.clone(), n.right.set_internal(idx - left_cap, val))
+                    }
+                }
+            }
+        }
+    }
+
+    fn grow(self) -> Self {
+        BigTuple::make_from_pair(self.clone(), BigTuple::new_empty_with_height(self.get_height()))
+    }
+
+    fn try_to_shrink(self) -> Self {
+        match self {
+            BigTuple::Empty(_, _) => BigTuple::Empty(0, [0u8; 32]),
+            BigTuple::Leaf(_, _) => self,
+            BigTuple::Internal(ref n) => {
+                if n.right.is_empty() {
+                    n.left.clone().try_to_shrink()
+                } else {
+                    self
+                }
+            }
+        }
+    }
+
+    fn get_internal_hash(&self) -> [u8; 32] {
+        match self {
+            BigTuple::Empty(_, h) => *h,
+            BigTuple::Leaf(_, h) => *h,
+            BigTuple::Internal(n) => n.internal_hash,
+        }
+    }
+
+    pub fn avm_hash(&self) -> Value {
+        let mut buf = vec![20u8];
+        buf.extend(self.get_internal_hash()[0..32].to_vec());
+        Value::Int(Uint256::from_bytes(&keccak256(&buf)))
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum Value {
     Int(Uint256),
     Tuple(Rc<Vec<Value>>),
+    BigTuple(BigTuple),
     CodePoint(CodePt),
     Label(Label),
     Buffer(Buffer),
@@ -641,6 +848,10 @@ impl Value {
     ///Creates a single tuple `Value` from a `Vec<Value>`
     pub fn new_tuple(v: Vec<Value>) -> Self {
         Value::Tuple(Rc::new(v))
+    }
+
+    pub fn new_bigtuple(v: &[Value]) -> Self {
+        Value::BigTuple(BigTuple::from_values(v))
     }
 
     pub fn new_buffer(v: Vec<u8>) -> Self {
@@ -661,6 +872,14 @@ impl Value {
                 u._push_byte((10 + tup.len()) as u8);
                 for subval in &**tup {
                     subval._upload(u);
+                }
+            }
+            Value::BigTuple(bt) => {
+                u._push_byte(20u8);
+                let size = bt.get_size();
+                u._push_bytes(&Uint256::_from_u128(size).rlp_encode());
+                for i in 0..size {
+                    bt.get(i as u64)._upload(u);
                 }
             }
             Value::CodePoint(cp) => {
@@ -690,6 +909,7 @@ impl Value {
             Value::CodePoint(_) => 1,
             Value::Tuple(_) => 3,
             Value::Buffer(_) => 4,
+            Value::BigTuple(_) => 5,
             Value::Label(_) => {
                 panic!("tried to run type instruction on a label");
             }
@@ -716,6 +936,13 @@ impl Value {
                 }
                 Ok(Value::new_tuple(new_vec))
             }
+            Value::BigTuple(bt) => {
+                let mut new_vec = Vec::new();
+                for i in 0..bt.get_size() {
+                    new_vec.push(bt.get(i as u64).replace_labels(label_map)?);
+                }
+                Ok(Value::new_bigtuple(&new_vec))
+            }
         }
     }
 
@@ -729,6 +956,8 @@ impl Value {
             let new_tup = Rc::<Vec<Value>>::make_mut(&mut mut_tup);
             new_tup[tlen - 1] = new_tup[tlen - 1].replace_last_none(val);
             Value::new_tuple(new_tup.to_vec())
+        } else if let Value::BigTuple(_) = self {
+            unimplemented!();
         } else {
             panic!();
         }
@@ -756,6 +985,21 @@ impl Value {
                 }
                 (Value::new_tuple(rel_v), max_func_offset)
             }
+            Value::BigTuple(v) => {
+                let mut rel_v = Vec::new();
+                let mut max_func_offset = 0;
+                for i in 0..v.get_size() {
+                    let (new_val, new_func_offset) =
+                        v.get(i as u64)
+                            .clone()
+                            .relocate(int_offset, ext_offset, func_offset);
+                    rel_v.push(new_val);
+                    if (max_func_offset < new_func_offset) {
+                        max_func_offset = new_func_offset;
+                    }
+                }
+                (Value::new_bigtuple(&rel_v), max_func_offset)
+            }
             Value::CodePoint(cpt) => (Value::CodePoint(cpt.relocate(int_offset, ext_offset)), 0),
             Value::Label(label) => {
                 let (new_label, new_func_offset) =
@@ -774,6 +1018,13 @@ impl Value {
                     newv.push(val.clone().xlate_labels(label_map));
                 }
                 Value::new_tuple(newv)
+            }
+            Value::BigTuple(v) => {
+                let mut newv = Vec::new();
+                for i in 0..v.get_size() {
+                    newv.push(v.get(i as u64).clone().xlate_labels(label_map));
+                }
+                Value::new_bigtuple(&newv)
             }
             Value::Label(label) => match label_map.get(&label) {
                 Some(label2) => Value::Label(**label2),
@@ -806,10 +1057,23 @@ impl Value {
                 }
                 Value::Int(acc)
             }
+            Value::BigTuple(v) => v.avm_hash(),
             Value::CodePoint(cp) => Value::avm_hash2(&Value::Int(Uint256::one()), &cp.avm_hash()),
             Value::Label(label) => {
                 Value::avm_hash2(&Value::Int(Uint256::from_usize(2)), &label.avm_hash())
             }
+        }
+    }
+
+    pub fn avm_hash_bytes(&self) -> [u8; 32] {
+        match self.avm_hash() {
+            Value::Int(ui) => {
+                let mut ret = [0u8; 32];
+                let raw = ui.to_bytes_be();
+                for i in 0..32 { ret[i] = raw[i]; }
+                ret
+            },
+            _ => panic!(),
         }
     }
 
@@ -851,6 +1115,17 @@ impl fmt::Display for Value {
                     }
                     write!(f, "{})", s)
                 }
+            }
+            Value::BigTuple(bt) => {
+                let mut s = "BigTuple(".to_owned();
+                for i in 0..bt.get_size() {
+                    if i == 0 {
+                        s = format!("{}{}", s, bt.get(i as u64));
+                    } else {
+                        s = format!("{}, {}", s, bt.get(i as u64));
+                    }
+                }
+                write!(f, "{})", s)
             }
         }
     }
@@ -936,6 +1211,9 @@ pub enum AVMOpcode {
     Tlen,
     Xget,
     Xset,
+    Bget,
+    Bset,
+    Bnew,
     Breakpoint = 0x60,
     Log,
     Send = 0x70,
@@ -999,6 +1277,9 @@ impl Opcode {
             "tset" => Opcode::AVMOpcode(AVMOpcode::Tset),
             "tget" => Opcode::AVMOpcode(AVMOpcode::Tget),
             "tlen" => Opcode::AVMOpcode(AVMOpcode::Tlen),
+            "bget" => Opcode::AVMOpcode(AVMOpcode::Bget),
+            "bset" => Opcode::AVMOpcode(AVMOpcode::Bset),
+            "bnew" => Opcode::AVMOpcode(AVMOpcode::Bnew),
             "pop" => Opcode::AVMOpcode(AVMOpcode::Pop),
             "stackempty" => Opcode::AVMOpcode(AVMOpcode::StackEmpty),
             "auxpush" => Opcode::AVMOpcode(AVMOpcode::AuxPush),
@@ -1102,6 +1383,9 @@ impl AVMOpcode {
             AVMOpcode::AuxStackEmpty => "auxstackempty",
             AVMOpcode::Xget => "xget",
             AVMOpcode::Xset => "xset",
+            AVMOpcode::Bget => "bget",
+            AVMOpcode::Bset => "bset",
+            AVMOpcode::Bnew => "bnew",
             AVMOpcode::Dup0 => "dup0",
             AVMOpcode::Dup1 => "dup1",
             AVMOpcode::Dup2 => "dup2",
@@ -1233,6 +1517,8 @@ impl AVMOpcode {
             0x52 => Some(AVMOpcode::Tlen),
             0x53 => Some(AVMOpcode::Xget),
             0x54 => Some(AVMOpcode::Xset),
+            0x55 => Some(AVMOpcode::Bget),
+            0x56 => Some(AVMOpcode::Bset),
             0x60 => Some(AVMOpcode::Breakpoint),
             0x61 => Some(AVMOpcode::Log),
             0x70 => Some(AVMOpcode::Send),
@@ -1321,6 +1607,9 @@ impl AVMOpcode {
             AVMOpcode::Tlen => 0x52,
             AVMOpcode::Xget => 0x53,
             AVMOpcode::Xset => 0x54,
+            AVMOpcode::Bget => 0x55,
+            AVMOpcode::Bset => 0x56,
+            AVMOpcode::Bnew => 0x57,
             AVMOpcode::Breakpoint => 0x60,
             AVMOpcode::Log => 0x61,
             AVMOpcode::Send => 0x70,

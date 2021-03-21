@@ -7,7 +7,7 @@
 use super::runtime_env::RuntimeEnvironment;
 use crate::compile::{CompileError, DebugInfo};
 use crate::link::LinkedProgram;
-use crate::mavm::{AVMOpcode, Buffer, CodePt, Instruction, Value};
+use crate::mavm::{AVMOpcode, BigTuple, Buffer, CodePt, Instruction, Value};
 use crate::pos::{try_display_location, Location};
 use crate::run::blake2b::blake2bf_instruction;
 use crate::run::ripemd160port;
@@ -70,6 +70,8 @@ impl ValueStack {
     pub fn push_bool(&mut self, val: bool) {
         self.push_uint(if val { Uint256::one() } else { Uint256::zero() })
     }
+
+    pub fn push_bigtuple(&mut self, bt: BigTuple) { self.push(Value::BigTuple(bt)); }
 
     pub fn push_buffer(&mut self, val: Buffer) {
         self.push(Value::Buffer(val));
@@ -145,6 +147,20 @@ impl ValueStack {
         }
     }
 
+    ///If the top `Value` on the stack is not greater than the max usize, pops the value and returns
+    /// it as a `usize`, otherwise returns an `ExecutionError`
+    pub fn pop_u64(&mut self, state: &MachineState) -> Result<u64, ExecutionError> {
+        let val = self.pop_uint(state)?;
+        match val.to_u64() {
+            Some(u) => Ok(u),
+            None => Err(ExecutionError::new(
+                "expected small integer on stack",
+                state,
+                Some(Value::Int(val)),
+            )),
+        }
+    }
+
     ///If the top `Value` on self is a tuple, pops the `Value` and returns the contained values of
     /// self as a vector. Otherwise returns an `ExecutionError`.
     pub fn pop_tuple(&mut self, state: &MachineState) -> Result<Vec<Value>, ExecutionError> {
@@ -155,6 +171,21 @@ impl ValueStack {
         } else {
             Err(ExecutionError::new(
                 "expected tuple on stack",
+                state,
+                Some(val),
+            ))
+        }
+    }
+
+    ///If the top `Value` on self is a tuple, pops the `Value` and returns the contained values of
+    /// self as a vector. Otherwise returns an `ExecutionError`.
+    pub fn pop_bigtuple(&mut self, state: &MachineState) -> Result<BigTuple, ExecutionError> {
+        let val = self.pop(state)?;
+        if let Value::BigTuple(v) = val {
+            Ok(v)
+        } else {
+            Err(ExecutionError::new(
+                "expected bigtuple on stack",
                 state,
                 Some(val),
             ))
@@ -1221,6 +1252,9 @@ impl Machine {
                 AVMOpcode::Swap2 => 1,
                 AVMOpcode::Tget => 2,
                 AVMOpcode::Tset => 40,
+                AVMOpcode::Bget => 10,
+                AVMOpcode::Bset => 100,
+                AVMOpcode::Bnew => 1,
                 AVMOpcode::Tlen => 2,
                 AVMOpcode::Xget => 3,
                 AVMOpcode::Xset => 41,
@@ -1406,9 +1440,29 @@ impl Machine {
                             ))
                         }
                     }
+                    AVMOpcode::Bset => {
+                        let idx = self.stack.pop_u64(&self.state)?;
+                        let tup = self.stack.pop_bigtuple(&self.state)?;
+                        let val = self.stack.pop(&self.state)?;
+                        self.stack.push_bigtuple(tup.set(idx, val));
+                        self.incr_pc();
+                        Ok(true)
+                    }
+                    AVMOpcode::Bnew => {
+                        self.stack.push_bigtuple(BigTuple::new_empty());
+                        self.incr_pc();
+                        Ok(true)
+                    }
                     AVMOpcode::Tlen => {
                         let tup = self.stack.pop_tuple(&self.state)?;
                         self.stack.push_usize(tup.len());
+                        self.incr_pc();
+                        Ok(true)
+                    }
+                    AVMOpcode::Bget => {
+                        let idx = self.stack.pop_u64(&self.state)?;
+                        let tup = self.stack.pop_bigtuple(&self.state)?;
+                        self.stack.push(tup.get(idx).clone());
                         self.incr_pc();
                         Ok(true)
                     }

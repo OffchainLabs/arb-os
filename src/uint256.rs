@@ -32,6 +32,12 @@ impl Uint256 {
         }
     }
 
+    pub fn _from_u128(x: u128) -> Self {
+        Uint256 {
+            val: BigUint::from(x),
+        }
+    }
+
     pub fn from_bool(b: bool) -> Self {
         if b {
             Uint256::one()
