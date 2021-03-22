@@ -873,7 +873,7 @@ pub fn _test_retryable(log_to: Option<&Path>, debug: bool) -> Result<(), ethabi:
 
     let beneficiary = Uint256::from_u64(9185);
 
-    let (txid, _) = add_contract._send_retryable_tx(
+    let (_, txid, _) = add_contract._send_retryable_tx(
         my_addr.clone(),
         "add",
         &[
@@ -916,7 +916,7 @@ pub fn _test_retryable(log_to: Option<&Path>, debug: bool) -> Result<(), ethabi:
     assert_eq!(new_timeout, Uint256::zero()); // verify that txid has been removed
 
     // make another one, and have the beneficiary cancel it
-    let (txid, _) = add_contract._send_retryable_tx(
+    let (_, txid, _) = add_contract._send_retryable_tx(
         my_addr.clone(),
         "add",
         &[
@@ -931,6 +931,7 @@ pub fn _test_retryable(log_to: Option<&Path>, debug: bool) -> Result<(), ethabi:
         None,
         None,
     )?;
+
     assert!(txid != Uint256::zero());
     let _gas_used = if debug {
         machine.debug(None)
@@ -970,7 +971,7 @@ pub fn _test_retryable(log_to: Option<&Path>, debug: bool) -> Result<(), ethabi:
     let last_log = &all_logs[all_logs.len() - 1];
     assert!(last_log.succeeded());
 
-    let (txid, redeemid) = add_contract._send_retryable_tx(
+    let (_submit_txid, txid, redeemid) = add_contract._send_retryable_tx(
         my_addr.clone(),
         "add",
         &[
@@ -1003,6 +1004,33 @@ pub fn _test_retryable(log_to: Option<&Path>, debug: bool) -> Result<(), ethabi:
     let second_to_last = receipts[receipts.len() - 2].clone();
     assert!(second_to_last.succeeded());
     assert_eq!(second_to_last.get_request_id(), txid);
+
+    let num_receipts_before = receipts.len();
+    let (submit_txid, _inner_txid, maybe_redeem_id) = machine.runtime_env._insert_retryable_tx_message(
+        my_addr.clone(),
+        add_contract.address,
+        Uint256::zero(),
+        Uint256::_from_eth(1),
+        Uint256::_from_gwei(1_000_000),
+        my_addr.clone(),
+        my_addr.clone(),
+        Uint256::from_u64(10_000_000),
+        Uint256::zero(),
+        &[],
+    );
+
+    let _gas_used = if debug {
+        machine.debug(None)
+    } else {
+        machine.run(None)
+    };
+
+    let new_receipts = &machine.runtime_env.get_all_receipt_logs()[num_receipts_before..];
+    assert_eq!(new_receipts.len(), 2);
+    assert!(new_receipts[0].succeeded());
+    assert_eq!(new_receipts[0].get_request_id(), submit_txid);
+    assert!( ! new_receipts[1].succeeded());
+    assert_eq!(new_receipts[1].get_request_id(), maybe_redeem_id.unwrap());
 
     if let Some(path) = log_to {
         machine
