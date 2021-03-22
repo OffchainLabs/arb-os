@@ -138,7 +138,13 @@ type ResumeInfo = struct {            // information used to resume a call after
 
 var globalCallStack: option<EvmCallFrame>;   // call frame of currently running call, if any
 var globalCurrentTxRequest: TxRequestData;  // request that launched the top-level call
-var globalCurrentRetryableRequest: option<IncomingRequest>;  // describes the retryable request we're currently doing, if any
+
+type IncomingRequestAndLogs = struct {
+    req: IncomingRequest,
+    evmLogs: EvmLogs,
+}
+
+var globalCurrentRetryableRequest: option<IncomingRequestAndLogs>;  // describes the retryable request we're currently doing, if any
 
 // This is designed to be called if a top-level, non-constructor tx succeeds. First arg is tx's returndata.
 type TxReturndataHook = struct {
@@ -160,7 +166,7 @@ public impure func evmCallStack_currentTimestamp() -> uint {
 
 public impure func evmCallStack_init() {
     globalCallStack = None<EvmCallFrame>;
-    globalCurrentRetryableRequest = None<IncomingRequest>;
+    globalCurrentRetryableRequest = None<IncomingRequestAndLogs>;
 }
 
 public impure func getRetryBufferInCurrentContext() -> RetryBuffer {
@@ -261,7 +267,7 @@ public impure func initEvmCallStack(
             }
 
             globalCurrentTxRequest = request;
-            globalCurrentRetryableRequest = None<IncomingRequest>;
+            globalCurrentRetryableRequest = None<IncomingRequestAndLogs>;
 
             // pay callvalue from caller to the called contract
             // payment will only be recorded inside the callframe, so it will be discarded if the call reverts
@@ -417,7 +423,7 @@ public impure func initEvmCallStackForConstructor(
     //      code for this new account.
 
     globalCurrentTxRequest = request with { isConstructor: true };
-    globalCurrentRetryableRequest = None<IncomingRequest>;
+    globalCurrentRetryableRequest = None<IncomingRequestAndLogs>;
 
     // Create an accountStore with the caller's sequence number incremented; will decide later whether to commit it
     let acctStore = getGlobalAccountStore();
@@ -817,9 +823,9 @@ public impure func evmCallStack_returnFromCall(
                         // It was a successful tx (not a non-mutating call).
                         // We'll commit the results of the tx
 
-                        if let Some(retryableReq) = globalCurrentRetryableRequest {
+                        if let Some(reqAndLogs) = globalCurrentRetryableRequest {
                             emitTxReceipt(
-                                retryableReq with {
+                                reqAndLogs.req with {
                                     arbBlockNumber: inbox_currentArbBlockNumber()
                                 } with {
                                     ethBlockNumber: inbox_currentEthBlockNumber()
@@ -828,11 +834,11 @@ public impure func evmCallStack_returnFromCall(
                                 },
                                 const::TxResultCode_success,
                                 None<ByteArray>,
-                                None<EvmLogs>,
+                                Some(reqAndLogs.evmLogs),
                                 None<GasUsage>,
                                 txFeeStats_zero(),
                             );
-                            globalCurrentRetryableRequest = None<IncomingRequest>;
+                            globalCurrentRetryableRequest = None<IncomingRequestAndLogs>;
                         }
 
                         // Save cached account back to main accountStore
@@ -917,12 +923,17 @@ public impure func evmCallStack_callRetryableTxAndReturn(rtx: RetryableTx) -> bo
         //     in order to impersonate the original caller.
         let savedRunningAs = topFrame.runningAs;
         let savedMemory = topFrame.memory;
+        let savedEvmLogs = topFrame.evmLogs;
 
         let theFrame = evmCallFrame_setRunningAsAddress(topFrame, rtx.sender);
-        theFrame = theFrame with { memory: rtx.calldata };
+        theFrame = theFrame with {
+            memory: rtx.calldata
+        } with {
+            evmLogs: evmlogs_empty()
+        };
         globalCallStack = Some(theFrame);
 
-        globalCurrentRetryableRequest = Some(rtx.l1Message);
+        globalCurrentRetryableRequest = Some(struct { req: rtx.l1Message, evmLogs: evmlogs_empty(), });
 
         let retCode = evmOp_callAndReturn(
             1000000000000000000,    // give all of our gas to the callee
@@ -934,9 +945,21 @@ public impure func evmCallStack_callRetryableTxAndReturn(rtx: RetryableTx) -> bo
             0,
             false,    // don't charge for callvalue, because we already took it when rtx was created
         );
+
         ret = xif let Some(newTopFrame) = globalCallStack {
+            // save evm logs to emit in inner tx's receipt
+            if let Some(retryableReq) = globalCurrentRetryableRequest {
+                globalCurrentRetryableRequest = Some(
+                    retryableReq with { evmLogs: newTopFrame.evmLogs }
+                );
+            }
+
             // restore saved callframe info
-            newTopFrame = newTopFrame with { memory: savedMemory };
+            newTopFrame = newTopFrame with {
+                memory: savedMemory
+            } with {
+                evmLogs: savedEvmLogs
+            };
             newTopFrame = evmCallFrame_setRunningAsAddress(newTopFrame, savedRunningAs);
             globalCallStack = Some(newTopFrame);
             retCode
