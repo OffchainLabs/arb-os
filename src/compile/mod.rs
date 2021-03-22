@@ -336,24 +336,24 @@ pub fn compile_from_folder(
     resolve_imports(&mut programs, &import_map)?;
     //Conversion of programs from `HashMap` to `Vec` for typechecking
     let type_tree = create_type_tree(&programs);
-    let mut output = vec![programs
+    let mut modules = vec![programs
         .remove(&if let Some(lib) = library {
             vec![lib.to_string(), main.to_string()]
         } else {
             vec![main.to_string()]
         })
         .expect("no main")];
-    output.append(&mut {
+    modules.append(&mut {
         let mut out: Vec<_> = programs.values().cloned().collect();
         out.sort_by(|module1, module2| module2.name.cmp(&module1.name));
         out
     });
-    let mut typechecked = typecheck_programs(&type_tree, output)?;
+    let mut typechecked_modules = typecheck_programs(&type_tree, modules)?;
     //Inlining stage
     if inline {
-        typechecked.iter_mut().for_each(|module| module.inline());
+        typechecked_modules.iter_mut().for_each(|module| module.inline());
     }
-    let progs = codegen_programs(typechecked, file_name_chart, folder)?;
+    let progs = codegen_programs(typechecked_modules, file_name_chart, folder)?;
     Ok(progs)
 }
 
@@ -521,7 +521,7 @@ fn create_type_tree(program_tree: &HashMap<Vec<String>, Module>) -> TypeTree {
 
 fn typecheck_programs(
     type_tree: &TypeTree,
-    output: Vec<Module>,
+    modules: Vec<Module>,
 ) -> Result<Vec<TypeCheckedModule>, CompileError> {
     let mut typechecked = vec![];
     for Module {
@@ -532,7 +532,7 @@ fn typecheck_programs(
         string_table,
         func_table: hm,
         name,
-    } in output
+    } in modules
     {
         let mut checked_funcs = vec![];
         let (exported_funcs, global_vars, string_table) = typecheck::typecheck_top_level_decls(
@@ -573,7 +573,7 @@ fn typecheck_programs(
 }
 
 fn codegen_programs(
-    typechecked: Vec<TypeCheckedModule>,
+    typechecked_modules: Vec<TypeCheckedModule>,
     file_name_chart: &mut BTreeMap<u64, String>,
     folder: &Path,
 ) -> Result<Vec<CompiledProgram>, CompileError> {
@@ -585,7 +585,7 @@ fn codegen_programs(
         exported_funcs,
         global_vars,
         name,
-    } in typechecked
+    } in typechecked_modules
     {
         let code_out = codegen::mavm_codegen(
             checked_funcs,
