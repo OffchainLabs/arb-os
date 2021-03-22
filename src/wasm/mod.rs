@@ -18,7 +18,7 @@ struct Control {
     is_loop: bool,
 }
 
-const LEVEL: usize = 4;
+const LEVEL: usize = 5;
 
 fn block_len(bt: &BlockType) -> usize {
     match *bt {
@@ -45,6 +45,10 @@ fn num_func_returns(ft: &FunctionType) -> usize {
 
 fn simple_op(op: AVMOpcode) -> Instruction {
     Instruction::from_opcode(Opcode::AVMOpcode(op), DebugInfo::from(None))
+}
+
+fn debug_op(str: String) -> Instruction {
+    Instruction::debug(str)
 }
 
 fn immed_op(op: AVMOpcode, v: Value) -> Instruction {
@@ -169,7 +173,7 @@ fn set64_from_buffer(loc: usize) -> Instruction {
 }
 
 fn adjust_stack(res: &mut Vec<Instruction>, diff: usize, num: usize) {
-    println!("adjust remove {} save {}", diff, num);
+    res.push(debug_op(format!("adjust remove {} save {}", diff, num)));
     if diff == 0 {
         return;
     }
@@ -208,11 +212,13 @@ fn set_buffer(res: &mut Vec<Instruction>) {
 
 fn get_buffer_len(res: &mut Vec<Instruction>) {
     res.push(simple_op(AVMOpcode::Rget));
+    res.push(debug_op("Getting buffer length".to_string()));
     res.push(immed_op(AVMOpcode::Tget, int_from_usize(3)));
 }
 
 fn set_buffer_len(res: &mut Vec<Instruction>) {
     res.push(simple_op(AVMOpcode::Rget));
+    res.push(debug_op("Setting buffer length".to_string()));
     res.push(immed_op(AVMOpcode::Tset, int_from_usize(3)));
     res.push(simple_op(AVMOpcode::Rset));
 }
@@ -762,9 +768,9 @@ fn handle_function(
         rets
     );
 
-    for op in func.code().elements().iter() {
+    for (idx_inf, op) in func.code().elements().iter().enumerate() {
         eprintln!(
-            "handling {} / {}; {:?} ... label {} len {}",
+            "handling ptr {} frames {}; {:?} ... label {} len {}",
             ptr,
             stack.len(),
             op,
@@ -772,9 +778,17 @@ fn handle_function(
             res.len()
         );
         let cur_len = res.len();
+        res.push(debug_op(format!("{:?} level {} func {} idx {}", *op, ptr, idx, idx_inf)));
         match &*op {
-            Unreachable => res.push(simple_op(AVMOpcode::Panic)),
             Nop => res.push(simple_op(AVMOpcode::Noop)),
+            Unreachable => {
+                res.push(simple_op(AVMOpcode::Panic));
+                if stack.len() == 0 {
+                    break;
+                }
+                let c: &Control = &stack[stack.len()-1];
+                ptr = c.level;
+            },
             Block(bt) => {
                 let end_label = label;
                 label = label + 1;
@@ -786,6 +800,100 @@ fn handle_function(
                     target: end_label,
                     ..def
                 });
+            }
+            If(bt) => {
+                ptr = ptr - 1;
+                bptr = bptr + 1;
+                let else_label = label;
+                let end_label = label + 1;
+                let rets = block_len(&bt);
+                eprintln!(
+                    "Level if {} rets {} end label {} else label {}",
+                    ptr, rets, end_label, else_label
+                );
+                stack.push(Control {
+                    level: ptr + rets,
+                    rets: rets,
+                    target: end_label,
+                    else_label,
+                    is_ite: true,
+                    ..def
+                });
+                label = label + 2;
+                res.push(simple_op(AVMOpcode::IsZero));
+                cjump(&mut res, else_label);
+            }
+            Else => {
+                let mut c: Control = stack.pop().unwrap();
+                eprintln!(
+                    "Level else {} end label {} else label {} rets {}",
+                    c.level, c.target, c.else_label, c.rets
+                );
+                ptr = c.level - c.rets;
+                jump(&mut res, c.target);
+                res.push(mk_label(c.else_label));
+                c.else_label = 0;
+                stack.push(c);
+            }
+            End => {
+                if stack.len() == 0 {
+                    break;
+                }
+                let c: Control = stack.pop().unwrap();
+                bptr = bptr - 1;
+                if c.is_ite {
+                    if c.else_label != 0 {
+                        res.push(mk_label(c.else_label));
+                    }
+                }
+                if !c.is_loop {
+                    res.push(mk_label(c.target));
+                }
+                if c.level != ptr {
+                    eprintln!("End block mismatch {} != {} rets {}", ptr, c.level, c.rets);
+                    panic!("End block mismatch {}");
+                }
+                ptr = c.level;
+            }
+            Loop(bt) => {
+                let start_label = label;
+                label = label + 1;
+                bptr = bptr + 1;
+                let rets = block_len(&bt);
+                stack.push(Control {
+                    level: ptr + rets,
+                    rets: rets,
+                    target: start_label,
+                    is_loop: true,
+                    ..def
+                });
+                res.push(mk_label(start_label));
+            }
+            Drop => {
+                ptr = ptr - 1;
+                res.push(simple_op(AVMOpcode::Pop));
+            }
+            Br(x) => {
+                let c = &stack[stack.len() - (*x as usize) - 1];
+                eprintln!("Debug br {:?} {}", c, c.level);
+                adjust_stack(&mut res, ptr - c.level, c.rets);
+                ptr = ptr - c.rets;
+                jump(&mut res, c.target);
+            }
+            BrIf(x) => {
+                let c = &stack[stack.len() - (*x as usize) - 1];
+                res.push(debug_op(format!("Debug brif {:?} ptr {} next level: {} + {}", c, ptr, c.level, c.rets)));
+                eprintln!("Debug brif {:?} ptr {} next level: {} + {}", c, ptr, c.level, c.rets);
+                let continue_label = label;
+                let end_label = label + 1;
+                label = label + 2;
+                cjump(&mut res, continue_label);
+                jump(&mut res, end_label);
+                res.push(mk_label(continue_label));
+                adjust_stack(&mut res, ptr - c.level - 1, c.rets);
+                jump(&mut res, c.target);
+                res.push(mk_label(end_label));
+                ptr = ptr - 1;
             }
             GetLocal(x) => {
                 // First get stack frame
@@ -821,95 +929,6 @@ fn handle_function(
             I64Const(x) => {
                 res.push(push_value(Value::Int(Uint256::from_usize(*x as usize))));
                 ptr = ptr + 1;
-            }
-            If(bt) => {
-                ptr = ptr - 1;
-                bptr = bptr + 1;
-                let else_label = label;
-                let end_label = label + 1;
-                let rets = block_len(&bt);
-                eprintln!(
-                    "Level if {} rets {} end label {} else label {}",
-                    ptr, rets, end_label, else_label
-                );
-                stack.push(Control {
-                    level: ptr,
-                    rets: rets,
-                    target: end_label,
-                    else_label,
-                    is_ite: true,
-                    ..def
-                });
-                label = label + 2;
-                res.push(simple_op(AVMOpcode::IsZero));
-                cjump(&mut res, else_label);
-            }
-            Else => {
-                let mut c: Control = stack.pop().unwrap();
-                eprintln!(
-                    "Level else {} end label {} else label {}",
-                    c.level, c.target, c.else_label
-                );
-                ptr = c.level;
-                jump(&mut res, c.target);
-                res.push(mk_label(c.else_label));
-                c.else_label = 0;
-                stack.push(c);
-            }
-            End => {
-                if stack.len() == 0 {
-                    break;
-                }
-                let c: Control = stack.pop().unwrap();
-                bptr = bptr - 1;
-                if c.is_ite {
-                    if c.else_label != 0 {
-                        res.push(mk_label(c.else_label));
-                    }
-                }
-                if !c.is_loop {
-                    res.push(mk_label(c.target));
-                }
-                ptr = c.level + c.rets;
-            }
-            Loop(bt) => {
-                let start_label = label;
-                label = label + 1;
-                bptr = bptr + 1;
-                let rets = block_len(&bt);
-                stack.push(Control {
-                    level: ptr,
-                    rets: rets,
-                    target: start_label,
-                    is_loop: true,
-                    ..def
-                });
-                res.push(mk_label(start_label));
-            }
-            Drop => {
-                ptr = ptr - 1;
-                res.push(simple_op(AVMOpcode::Pop));
-            }
-            Br(x) => {
-                let c = &stack[stack.len() - (*x as usize) - 1];
-                eprintln!("Debug br {:?} {}", c, c.level);
-                adjust_stack(&mut res, ptr - c.level, c.rets);
-                ptr = ptr - c.rets;
-                jump(&mut res, c.target);
-            }
-            BrIf(x) => {
-                let c = &stack[stack.len() - (*x as usize) - 1];
-                eprintln!("Debug brif {:?} ptr {} next level {}", c, ptr, c.level);
-                let continue_label = label;
-                let end_label = label + 1;
-                label = label + 2;
-                cjump(&mut res, continue_label);
-                jump(&mut res, end_label);
-                res.push(mk_label(continue_label));
-                adjust_stack(&mut res, ptr - c.level - 1, c.rets);
-                jump(&mut res, c.target);
-                res.push(mk_label(end_label));
-                ptr = ptr - 1;
             }
             // Just keep the expression stack
             Call(x) => {
@@ -1449,7 +1468,9 @@ fn handle_function(
                 res.push(mk_label(end_label));
                 label = label + 2;
             }
-            _ => {}
+            i => {
+                panic!("Unknown opcode {:?}", i);
+            }
         }
 
         let mut gas_acc = 0;
@@ -1660,7 +1681,6 @@ pub fn get_answer64(answer: wasmtime::Func) -> i32 {
     let answer = answer.get0::<i32>().unwrap();
 
     let result = answer().unwrap();
-    println!("Answer: {:?}", result);
     result as i32
 }
 
@@ -1668,10 +1688,10 @@ pub fn get_answer32(answer: wasmtime::Func, param: i64) -> i32 {
     let answer = answer.get1::<i64, i32>().unwrap();
 
     let result = answer(param as i64).unwrap();
-    println!("Answer: {:?}", result);
     result
 }
 
+/*
 pub fn run_jit(buffer: &[u8], data: &[u8]) -> i64 {
     use std::cell::RefCell;
     use std::rc::Rc;
@@ -1745,11 +1765,20 @@ pub fn run_jit(buffer: &[u8], data: &[u8]) -> i64 {
     };*/
     return res;
 }
+*/
 
-struct JitWasm {
+pub struct JitWasm {
     instance: wasmtime::Instance,
     cell: std::rc::Rc<std::cell::RefCell<Buffer>>,
     len_cell: std::rc::Rc<std::cell::RefCell<i32>>,
+}
+
+use std::fmt;
+
+impl fmt::Debug for JitWasm {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "JitWasm")
+    }
 }
 
 impl JitWasm {
@@ -1772,22 +1801,18 @@ impl JitWasm {
         let len1 = len_cell.clone();
         let len2 = len_cell.clone();
 
-        //    cell2.replace_with(|buf| buf.set_byte(2, 111));
-
-        let read_func = Func::wrap(&store, move |offset: i32, a: i32| {
+        let read_func = Func::wrap(&store, move |offset: i32| {
             let ret = cell1.borrow().read_byte(offset as usize) as i32;
-            // println!("read {} {} {}", a, offset, ret);
             ret
         });
 
-        let write_func = Func::wrap(&store, move |offset: i32, a: i32, v: i32| {
-            // println!("write {} {} {}", offset, v, a);
+        let write_func = Func::wrap(&store, move |offset: i32, v: i32| {
             cell2.replace_with(|buf| buf.set_byte(offset as usize, v as u8));
         });
 
         let len_func = Func::wrap(&store, move || len1.borrow().clone() as i32);
 
-        let set_len_func = Func::wrap(&store, move |nlen: i32| len2.replace_with(|_| nlen));
+        let set_len_func = Func::wrap(&store, move |nlen: i32| { len2.replace_with(|_| nlen); });
 
         let error_func = Func::wrap(&store, || {
             panic!("Unknown import");
@@ -1852,7 +1877,7 @@ fn get_func_imports(m: &Module) -> Vec<&ImportEntry> {
     }
 }
 
-pub fn process_wasm(buffer: &[u8], param: usize) -> Vec<Instruction> {
+pub fn process_wasm(buffer: &[u8]) -> Vec<Instruction> {
     let module = parity_wasm::deserialize_buffer::<Module>(buffer).unwrap();
     assert!(module.code_section().is_some());
 
@@ -1935,7 +1960,7 @@ pub fn process_wasm(buffer: &[u8], param: usize) -> Vec<Instruction> {
 
     // Add test argument to the frame
     init.push(get_frame());
-    init.push(push_value(Value::Int(Uint256::from_usize(param))));
+    init.push(push_value(Value::Int(Uint256::from_usize(2))));
     init.push(set64_from_buffer(0));
     init.push(set_frame());
 
@@ -1959,7 +1984,8 @@ pub fn process_wasm(buffer: &[u8], param: usize) -> Vec<Instruction> {
 
     for (idx, f) in get_func_imports(&module).iter().enumerate() {
         init.push(mk_func_label(idx));
-        if f.field().starts_with("read_buffer") {
+        if f.field().contains("read") {
+            init.push(debug_op("Read".to_string()));
             // Get buffer
             get_buffer(&mut init);
             // Get param
@@ -1967,21 +1993,22 @@ pub fn process_wasm(buffer: &[u8], param: usize) -> Vec<Instruction> {
             init.push(get64_from_buffer(0));
             init.push(simple_op(AVMOpcode::GetBuffer8));
         }
-        if f.field().starts_with("write_buffer") {
+        if f.field().contains("write") {
+            init.push(debug_op("Write".to_string()));
             // Get buffer
             get_buffer(&mut init);
             // Get params
             init.push(get_frame());
-            init.push(get64_from_buffer(0));
-            init.push(get_frame());
             init.push(get64_from_buffer(1));
+            init.push(get_frame());
+            init.push(get64_from_buffer(0));
             init.push(simple_op(AVMOpcode::SetBuffer8));
             set_buffer(&mut init);
         }
-        if f.field().starts_with("len_buffer") {
+        if f.field().contains("getlen") {
             get_buffer_len(&mut init);
         }
-        if f.field().starts_with("set_len_buffer") {
+        if f.field().contains("setlen") {
             init.push(get_frame());
             init.push(get64_from_buffer(0));
             set_buffer_len(&mut init);
@@ -2026,6 +2053,11 @@ pub fn process_wasm(buffer: &[u8], param: usize) -> Vec<Instruction> {
 
     // Cleaning up
     init.push(mk_func_label(f_count + 1));
+    init.push(debug_op("Cleaning up".to_string()));
+    init.push(simple_op(AVMOpcode::Rget));
+    init.push(immed_op(AVMOpcode::Tget, int_from_usize(2)));
+    init.push(simple_op(AVMOpcode::Rget));
+    init.push(immed_op(AVMOpcode::Tget, int_from_usize(3)));
     init.push(simple_op(AVMOpcode::AuxPop));
     init.push(simple_op(AVMOpcode::Pop));
     init.push(simple_op(AVMOpcode::AuxPop));
@@ -2035,8 +2067,8 @@ pub fn process_wasm(buffer: &[u8], param: usize) -> Vec<Instruction> {
     init
 }
 
-pub fn load(buffer: &[u8], param: usize) -> Vec<Instruction> {
-    let init = process_wasm(buffer, param);
+pub fn load(buffer: &[u8], param: &[u8]) -> Vec<Instruction> {
+    let init = process_wasm(buffer);
     let mut op_buf = vec![];
     let mut immed_buf = vec![];
     let mut has_immed_buf = vec![];
@@ -2060,8 +2092,8 @@ pub fn load(buffer: &[u8], param: usize) -> Vec<Instruction> {
     // println!("Table {}", tab);
     let res = clear_labels(res);
     let mut a = vec![];
-    a.push(push_value(int_from_usize(4)));
-    a.push(push_value(Value::new_buffer(vec![123, 234, 12, 56])));
+    a.push(push_value(int_from_usize(param.len())));
+    a.push(push_value(Value::new_buffer(param.to_vec())));
     a.push(push_value(tab));
     for i in 3..res.len() {
         a.push(res[i].clone());

@@ -11,7 +11,7 @@ use crate::mavm::{AVMOpcode, Buffer, CodePt, Instruction, Opcode, Value};
 use crate::pos::{try_display_location, Location};
 use crate::run::ripemd160port;
 use crate::uint256::Uint256;
-use crate::wasm::{process_wasm, run_jit};
+use crate::wasm::{process_wasm, JitWasm};
 use clap::Clap;
 use ethers_core::types::{Signature, H256};
 use std::cmp::{max, Ordering};
@@ -117,7 +117,7 @@ impl ValueStack {
     pub fn pop_wasm_codepoint(
         &mut self,
         state: &MachineState,
-    ) -> Result<(Value, Vec<u8>), ExecutionError> {
+    ) -> Result<(Value, usize), ExecutionError> {
         let val = self.pop(state)?;
         if let Value::WasmCodePoint(cp, buf) = val {
             Ok((*cp, buf))
@@ -226,7 +226,11 @@ impl fmt::Display for ValueStack {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         writeln!(f, "Stack[")?;
         for i in self.contents.iter().rev() {
-            writeln!(f, "{};;", i)?;
+            if let Value::Tuple(_) = i {
+                writeln!(f, "Tuple;;")?;
+            } else {
+                writeln!(f, "{};;", i)?;
+            }
         }
         write!(f, "]")
     }
@@ -703,7 +707,7 @@ impl FromStr for ProfilerMode {
 ///Represents the state of execution of a AVM program including the code it is compiled from.
 #[derive(Debug)]
 pub struct Machine {
-    stack: ValueStack,
+    pub stack: ValueStack,
     aux_stack: ValueStack,
     state: MachineState,
     code: CodeStore,
@@ -715,6 +719,8 @@ pub struct Machine {
     file_name_chart: BTreeMap<u64, String>,
     total_gas_usage: Uint256,
     trace_writer: Option<BufWriter<File>>,
+    wasm_instances: Vec<JitWasm>,
+    counter: usize,
 }
 
 impl Machine {
@@ -732,6 +738,8 @@ impl Machine {
             file_name_chart: program.file_name_chart,
             total_gas_usage: Uint256::zero(),
             trace_writer: None,
+            wasm_instances: Vec::new(),
+            counter: 0,
         }
     }
 
@@ -890,7 +898,10 @@ impl Machine {
                     println!("Register contents: {}", self.register);
                 }
                 if !self.stack.is_empty() {
-                    println!("Stack top: {}", self.stack.top().unwrap());
+                    println!("Stack size: {}", self.stack.num_items());
+                }
+                if !self.stack.is_empty() {
+                    // println!("Stack top: {}", self.stack.top().unwrap());
                 }
                 if let Some(code) = self.next_opcode() {
                     if code.debug_info.attributes.breakpoint {
@@ -900,8 +911,11 @@ impl Machine {
                     if let Some(imm) = code.immediate {
                         println!("Immediate: {}", imm);
                     }
+                    if let Some(str) = code.debug_str {
+                        println!("*************************** Debug: {}", str);
+                    }
                     if let Some(location) = code.debug_info.location {
-                        let line = location.line.to_usize();
+                            let line = location.line.to_usize();
                         let column = location.column.to_usize();
                         if let Some(filename) = self.file_name_chart.get(&location.file_id) {
                             println!(
@@ -1343,6 +1357,12 @@ impl Machine {
                     } else {
                         self.arb_gas_remaining = Uint256::max_int();
                         return Err(ExecutionError::new("Out of ArbGas", &self.state, None));
+                    }
+                }
+                if let Some(_) = insn.debug_str {
+                    self.counter = self.counter + 1;
+                    if self.counter % 100000 == 0 {
+                        println!("Wasm instruction {}", self.counter);
                     }
                 }
                 match insn.opcode {
@@ -2072,6 +2092,7 @@ impl Machine {
                         let buf = self.stack.pop_buffer(&self.state)?;
                         let bytes = val.to_bytes_be();
                         let nbuf = buf.set_byte(offset, bytes[31]);
+                        // println!("setting buffer offset {} value {} bytes {:?}", offset, val, bytes[31]);
                         self.stack.push(Value::copy_buffer(nbuf));
                         self.incr_pc();
                         Ok(true)
@@ -2116,10 +2137,12 @@ impl Machine {
                     }
                     Opcode::AVMOpcode(AVMOpcode::RunWasm) => {
                         let arg = self.stack.pop_usize(&self.state)?;
-                        let (_, vec) = self.stack.pop_wasm_codepoint(&self.state)?;
+                        let buf = self.stack.pop_buffer(&self.state)?;
+                        let (_, idx) = self.stack.pop_wasm_codepoint(&self.state)?;
                         println!("Going to run JIT");
-                        let res = run_jit(&vec, &vec![]) as usize;
-                        self.stack.push(Value::Int(Uint256::from_usize(res)));
+                        let (nbuf, len) = self.wasm_instances[idx].run(buf, arg);
+                        self.stack.push(Value::Int(Uint256::from_usize(len)));
+                        self.stack.push(Value::Buffer(nbuf));
                         self.incr_pc();
                         Ok(true)
                     }
@@ -2130,7 +2153,7 @@ impl Machine {
                         for i in 0..offset {
                             vec.push(buf.read_byte(i));
                         }
-                        let init = process_wasm(&vec, 0);
+                        let init = process_wasm(&vec);
                         let (code_vec, _) = crate::wasm::resolve_labels(init.clone());
                         let code_vec = crate::wasm::clear_labels(code_vec);
                         let mut labels = vec![];
@@ -2152,7 +2175,9 @@ impl Machine {
                         }
                         let tab = crate::wasm::make_table(&labels_rev);
                         let val = Value::new_tuple(vec![Value::CodePoint(code_pt), tab.clone()]);
-                        self.stack.push(Value::WasmCodePoint(Box::new(val), vec));
+                        let instance = JitWasm::new(&vec);
+                        self.wasm_instances.push(instance);
+                        self.stack.push(Value::WasmCodePoint(Box::new(val), self.wasm_instances.len() - 1));
                         self.incr_pc();
 
                         // Testing: push table, then jump to code point

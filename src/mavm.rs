@@ -96,6 +96,7 @@ pub struct Instruction {
     pub opcode: Opcode,
     pub immediate: Option<Value>,
     pub debug_info: DebugInfo,
+    pub debug_str: Option<String>,
 }
 
 impl MiniProperties for Instruction {
@@ -110,6 +111,16 @@ impl Instruction {
             opcode,
             immediate,
             debug_info,
+            debug_str: None,
+        }
+    }
+
+    pub fn debug(str: String) -> Self {
+        Instruction {
+            opcode: Opcode::AVMOpcode(AVMOpcode::Noop),
+            immediate: None,
+            debug_info: DebugInfo::from(None),
+            debug_str: Some(str),
         }
     }
 
@@ -650,7 +661,7 @@ pub enum Value {
     CodePoint(CodePt),
     Label(Label),
     Buffer(Buffer),
-    WasmCodePoint(Box<Value>, Vec<u8>),
+    WasmCodePoint(Box<Value>, usize),
 }
 
 impl Value {

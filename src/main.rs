@@ -10,7 +10,7 @@ use clap::Clap;
 use compile::{compile_from_file, CompileError};
 use contracttemplates::generate_contract_template_file_or_die;
 use link::{link, postlink_compile};
-use mavm::{CodePt, Value};
+use mavm::{Buffer, CodePt, Value};
 use pos::try_display_location;
 use run::{
     profile_gen_from_file, replay_from_testlog_file, run_from_file, ProfilerMode,
@@ -110,7 +110,7 @@ struct EvmTests {
 struct WasmTest {
     input: Vec<String>,
     #[clap(short, long)]
-    param: Option<usize>,
+    param: Option<String>,
 }
 
 ///Command line options for wasm-test subcommand.
@@ -149,8 +149,8 @@ fn main() -> Result<(), CompileError> {
                 return Ok(());
             }
             let param = match fname.param {
-                Some(p) => p,
-                None => 123,
+                Some(p) => hex::decode(p).unwrap(),
+                None => vec![],
             };
             let mut file = File::open(&filenames[0]).unwrap();
             let mut buffer = Vec::<u8>::new();
@@ -158,7 +158,7 @@ fn main() -> Result<(), CompileError> {
 
             // wasm::run_jit(&buffer, param as i64);
 
-            let code = wasm::load(&buffer, param);
+            let code = wasm::load(&buffer, &param);
             let code_len = code.len();
             let env = RuntimeEnvironment::new(Uint256::from_usize(1111), None);
             let program = LinkedProgram {
@@ -171,7 +171,21 @@ fn main() -> Result<(), CompileError> {
             let mut machine = Machine::new(program, env);
             machine.start_at_zero();
             machine.run(Some(CodePt::new_internal(code_len - 1)));
-            machine.debug(Some(CodePt::new_internal(code_len - 1)));
+            // machine.debug(Some(CodePt::new_internal(code_len - 1)));
+            let len = machine.stack.nth(0);
+            let buf = machine.stack.nth(1);
+            match (len, buf) {
+                (Some(Value::Int(a)), Some(Value::Buffer(buf))) => {
+                    let len = a.to_usize().unwrap();
+                    let mut res = vec![];
+                    for i in 0..len {
+                        // println!("{}", buf.read_byte(i));
+                        res.push(buf.read_byte(i))
+                    }
+                    println!("Result {}", hex::encode(res));
+                }
+                _ => println!("Unexpected output")
+            };
         }
         Args::WasmRun(fname) => {
             let filenames: Vec<_> = fname.input.clone();
@@ -187,7 +201,15 @@ fn main() -> Result<(), CompileError> {
             let mut buffer = Vec::<u8>::new();
             file.read_to_end(&mut buffer).unwrap();
 
-            wasm::run_jit(&buffer, &param);
+            // wasm::run_jit(&buffer, &param);
+            let a = wasm::JitWasm::new(&buffer);
+            let buf = Buffer::new(param.to_vec());
+            let (buf, len) = a.run(buf, param.len());
+            let mut res = vec![];
+            for i in 0..len {
+                res.push(buf.read_byte(i))
+            }
+            println!("Result {}", hex::encode(res));
         }
         Args::Compile(compile) => {
             let debug_mode = compile.debug_mode;
