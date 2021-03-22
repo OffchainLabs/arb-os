@@ -351,7 +351,9 @@ pub fn compile_from_folder(
     let mut typechecked_modules = typecheck_programs(&type_tree, modules)?;
     //Inlining stage
     if inline {
-        typechecked_modules.iter_mut().for_each(|module| module.inline());
+        typechecked_modules
+            .iter_mut()
+            .for_each(|module| module.inline());
     }
     let progs = codegen_programs(typechecked_modules, file_name_chart, folder)?;
     Ok(progs)
