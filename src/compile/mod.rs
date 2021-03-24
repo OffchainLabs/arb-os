@@ -267,7 +267,6 @@ impl CompiledProgram {
 pub fn compile_from_file(
     path: &Path,
     file_name_chart: &mut BTreeMap<u64, String>,
-    _debug: bool,
     inline: bool,
 ) -> Result<Vec<CompiledProgram>, CompileError> {
     let library = path
