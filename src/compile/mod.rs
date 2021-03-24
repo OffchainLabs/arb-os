@@ -4,7 +4,7 @@
 
 //! Contains utilities for compiling mini source code.
 
-use crate::link::{ExportedFunc, Import, ImportedFunc};
+use crate::link::{link, postlink_compile, ExportedFunc, Import, ImportedFunc, LinkedProgram};
 use crate::mavm::Instruction;
 use crate::pos::{BytePos, Location};
 use crate::stringtable::StringTable;
@@ -22,6 +22,7 @@ use std::io::{self, Read};
 use std::path::Path;
 use typecheck::TypeCheckedFunc;
 
+use crate::CompileStruct;
 pub use ast::{DebugInfo, GlobalVarDecl, StructField, TopLevelDecl, Type};
 pub use source::Lines;
 pub use typecheck::{AbstractSyntaxTree, TypeCheckedNode};
@@ -225,7 +226,7 @@ impl CompiledProgram {
     ///Writes self to output in format "format".  Supported values are: "pretty", "json", or
     /// "bincode" if None is specified, json is used, and if an invalid format is specified this
     /// value appended by "invalid format: " will be written instead
-    pub fn to_output(&self, output: &mut dyn io::Write, format: Option<&str>) {
+    pub fn _to_output(&self, output: &mut dyn io::Write, format: Option<&str>) {
         match format {
             Some("pretty") => {
                 writeln!(output, "exported: {:?}", self.exported_funcs).unwrap();
@@ -257,6 +258,41 @@ impl CompiledProgram {
             }
         }
     }
+}
+
+pub fn compiler_invoke(
+    filenames: &[String],
+    file_name_chart: &mut BTreeMap<u64, String>,
+    compile: &CompileStruct,
+) -> Result<LinkedProgram, CompileError> {
+    let mut compiled_progs = Vec::new();
+    for filename in filenames {
+        let path = Path::new(filename);
+        compile_from_file(path, file_name_chart, compile.inline)
+            .map_err(|mut e| {
+                e.description = format!("Compile error: {}", e.description);
+                e
+            })?
+            .into_iter()
+            .for_each(|prog| {
+                file_name_chart.extend(prog.file_name_chart.clone());
+                compiled_progs.push(prog)
+            });
+    }
+    let linked_prog = link(&compiled_progs, compile.test_mode).map_err(|mut e| {
+        e.description = format!("Linking error: {}", e.description);
+        e
+    })?;
+    postlink_compile(
+        linked_prog,
+        file_name_chart.clone(),
+        compile.test_mode,
+        compile.debug_mode,
+    )
+    .map_err(|mut e| {
+        e.description = format!("Linking error: {}", e.description);
+        e
+    })
 }
 
 ///Returns either a CompiledProgram generated from source code at path, otherwise returns a

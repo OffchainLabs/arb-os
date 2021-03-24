@@ -4,13 +4,12 @@
 
 #![allow(unused_parens)]
 
+use crate::compile::compiler_invoke;
 use crate::link::LinkedProgram;
 use clap::Clap;
-use compile::{compile_from_file, CompileError};
+use compile::CompileError;
 use contracttemplates::generate_contract_template_file_or_die;
 use gen_code::gen_upgrade_code;
-use link::{link, postlink_compile};
-use pos::try_display_location;
 use run::{
     profile_gen_from_file, replay_from_testlog_file, run_from_file, ProfilerMode,
     RuntimeEnvironment,
@@ -40,7 +39,7 @@ mod uint256;
 
 ///Command line options for compile subcommand.
 #[derive(Clap, Debug)]
-struct CompileStruct {
+pub struct CompileStruct {
     input: Vec<String>,
     #[clap(short, long)]
     debug_mode: bool,
@@ -48,8 +47,6 @@ struct CompileStruct {
     test_mode: bool,
     #[clap(short, long)]
     output: Option<String>,
-    #[clap(short, long)]
-    compile_only: bool,
     #[clap(short, long)]
     format: Option<String>,
     #[clap(short, long)]
@@ -141,85 +138,11 @@ fn main() -> Result<(), CompileError> {
 
     match matches {
         Args::Compile(compile) => {
-            let debug_mode = compile.debug_mode;
-            let test_mode = compile.test_mode;
             let mut output = get_output(compile.output.clone()).unwrap();
             let filenames: Vec<_> = compile.input.clone();
             let mut file_name_chart = BTreeMap::new();
-            if compile.compile_only {
-                let filename = &filenames[0];
-                let path = Path::new(filename);
-                match compile_from_file(path, &mut file_name_chart, compile.inline) {
-                    Ok(mut compiled_program) => {
-                        compiled_program.iter_mut().for_each(|prog| {
-                            prog.file_name_chart.extend(file_name_chart.clone());
-                            prog.to_output(&mut *output, compile.format.as_deref());
-                        });
-                    }
-                    Err(e) => {
-                        println!(
-                            "Compilation error: {}\n{}",
-                            e,
-                            try_display_location(e.location, &file_name_chart, true)
-                        );
-                        return Err(e);
-                    }
-                }
-            } else {
-                let mut compiled_progs = Vec::new();
-                for filename in &filenames {
-                    let path = Path::new(filename);
-                    match compile_from_file(path, &mut file_name_chart, compile.inline)
-                    {
-                        Ok(compiled_program) => {
-                            compiled_program.into_iter().for_each(|prog| {
-                                file_name_chart.extend(prog.file_name_chart.clone());
-                                compiled_progs.push(prog)
-                            });
-                        }
-                        Err(e) => {
-                            println!(
-                                "Compilation error: {}\n{}",
-                                e,
-                                try_display_location(e.location, &file_name_chart, true)
-                            );
-                            return Err(e);
-                        }
-                    }
-                }
-
-                match link(&compiled_progs, test_mode) {
-                    Ok(linked_prog) => {
-                        match postlink_compile(
-                            linked_prog,
-                            file_name_chart.clone(),
-                            test_mode,
-                            debug_mode,
-                        ) {
-                            Ok(completed_program) => {
-                                completed_program
-                                    .to_output(&mut *output, compile.format.as_deref());
-                            }
-                            Err(e) => {
-                                println!(
-                                    "Linking error: {}\n{}",
-                                    e,
-                                    try_display_location(e.location, &file_name_chart, true)
-                                );
-                                return Err(e);
-                            }
-                        }
-                    }
-                    Err(e) => {
-                        println!(
-                            "Linking error: {}\n{}",
-                            e,
-                            try_display_location(e.location, &file_name_chart, true)
-                        );
-                        return Err(e);
-                    }
-                }
-            }
+            compiler_invoke(&filenames, &mut file_name_chart, &compile)?
+                .to_output(&mut *output, compile.format.as_deref());
         }
 
         Args::Run(run) => {
