@@ -261,14 +261,13 @@ impl CompiledProgram {
 }
 
 pub fn compiler_invoke(
-    filenames: &[String],
-    file_name_chart: &mut BTreeMap<u64, String>,
     compile: &CompileStruct,
 ) -> Result<LinkedProgram, CompileError> {
+    let mut file_name_chart = BTreeMap::new();
     let mut compiled_progs = Vec::new();
-    for filename in filenames {
+    for filename in &compile.input {
         let path = Path::new(filename);
-        compile_from_file(path, file_name_chart, compile.inline)
+        compile_from_file(path, &mut file_name_chart, compile.inline)
             .map_err(|mut e| {
                 e.description = format!("Compile error: {}", e.description);
                 e

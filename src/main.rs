@@ -14,7 +14,6 @@ use run::{
     profile_gen_from_file, replay_from_testlog_file, run_from_file, ProfilerMode,
     RuntimeEnvironment,
 };
-use std::collections::BTreeMap;
 use std::fs::File;
 use std::io;
 use std::io::Read;
@@ -139,9 +138,7 @@ fn main() -> Result<(), CompileError> {
     match matches {
         Args::Compile(compile) => {
             let mut output = get_output(compile.output.clone()).unwrap();
-            let filenames: Vec<_> = compile.input.clone();
-            let mut file_name_chart = BTreeMap::new();
-            compiler_invoke(&filenames, &mut file_name_chart, &compile)?
+            compiler_invoke(&compile)?
                 .to_output(&mut *output, compile.format.as_deref());
         }
 
