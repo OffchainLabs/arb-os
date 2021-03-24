@@ -196,7 +196,10 @@ fn _test_upgrade_arbos_over_itself_impl() -> Result<(), ethabi::Error> {
     let arbowner = _ArbOwner::_new(&wallet, false);
 
     let arbsys_orig_binding = ArbSys::new(&wallet, false);
-    assert_eq!(arbsys_orig_binding._arbos_version(&mut machine)?, Uint256::one());
+    assert_eq!(
+        arbsys_orig_binding._arbos_version(&mut machine)?,
+        Uint256::one()
+    );
 
     arbowner._give_ownership(&mut machine, my_addr, Some(Uint256::zero()))?;
 

@@ -235,7 +235,7 @@ impl RuntimeEnvironment {
                 Some(Uint256::from_bytes(&keccak256(&buf2)))
             } else {
                 None
-            }
+            },
         )
     }
 
