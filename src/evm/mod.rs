@@ -481,7 +481,7 @@ pub fn _evm_test_arbgasinfo(log_to: Option<&Path>, debug: bool) -> Result<(), et
         l2tx, l1calldata, storage, basegas, conggas, totalgas
     );
     assert_eq!(l2tx, Uint256::from_u64(642483725000000));
-    assert_eq!(l1calldata, Uint256::from_u64(2778308000000));
+    assert_eq!(l1calldata, Uint256::from_u64(173644250000));
     assert_eq!(storage, Uint256::from_u64(301990000000000));
     assert_eq!(basegas, Uint256::from_u64(15099500));
     assert!(conggas.is_zero());
@@ -493,7 +493,7 @@ pub fn _evm_test_arbgasinfo(log_to: Option<&Path>, debug: bool) -> Result<(), et
         l2tx, l1calldata, storage
     );
     assert_eq!(l2tx, Uint256::from_u64(42550000));
-    assert_eq!(l1calldata, Uint256::from_u64(184000));
+    assert_eq!(l1calldata, Uint256::from_u64(11500));
     assert_eq!(storage, Uint256::from_u64(20000000));
 
     let (speed_limit, gas_pool_max, tx_gas_limit) =

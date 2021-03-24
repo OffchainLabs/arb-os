@@ -31,6 +31,7 @@ use std::bytestream::bytestream_skipBytes;
 use std::bytestream::bytestream_bytesReadSoFar;
 use std::bytestream::bytestream_bytesRemaining;
 use std::bytestream::bytestream_getRemainingBytes;
+use std::bytestream::bytestream_getCalldataUnits;
 
 use std::expandingIntArray::ExpandingIntArray;
 use std::expandingIntArray::expandingIntArray_new;
@@ -275,7 +276,10 @@ public impure func decompressAndVerifyBLSSignedTxBatch(
         let (us, txData) = bytestream_getN(stream, txSize)?;
         stream = us;
 
-        let fullDataSize = bytestream_bytesReadSoFar(stream)-bytestream_bytesReadSoFar(startStream);
+        let fullDataSize = bytestream_getCalldataUnits(
+            startStream,
+            bytestream_bytesReadSoFar(stream)-bytestream_bytesReadSoFar(startStream),
+        );
 
         signerKeys = signerKeys with {
             [i] = account_getBlsKey(accountStore_get(getGlobalAccountStore(), signerAddr))?
@@ -318,7 +322,7 @@ public impure func decompressAndVerifyBLSSignedTxBatch(
             } with {
                 aggregator: Some(struct {
                     aggregator: Some(aggregator),
-                    calldataBytes: fullDataSize + 64/numMsgs,   // charge for your data plus your share of the signature
+                    calldataUnits: fullDataSize + 64*16/numMsgs,   // charge for your data plus your share of the signature
                 })
             }
         };

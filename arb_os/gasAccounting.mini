@@ -77,7 +77,7 @@ var gasAccountingInfo: struct {
 
 type GasPrices = struct {    // all prices in this struct are denominated in wei
     perL2Tx: uint,
-    perL1CalldataByte: uint,
+    perL1CalldataUnit: uint,
     perStorageCell: uint,
     perArbGasBase: uint,
     perArbGasCongestion: uint,
@@ -93,7 +93,7 @@ type CongestionState = struct {
 
 type PricingParameters = struct {
     l1GasPerL2Tx: uint,
-    l1GasPerL1Calldata: uint,
+    l1GasPerL1CalldataUnit: uint,
     l1GasPerStorage: uint,
     arbGasDivisor: uint,      // base ArbGas price is L1 gas price / arbGasDivisor
 }
@@ -127,7 +127,7 @@ type GasUsage = struct {
 
 type RetryablePrices = struct {
     perTx: uint,
-    perCalldataByte: uint,
+    perCalldataByte: uint,      // charge per byte, rather than per unit, because this covers cost of storage
     nextUpdateTimestamp: uint,
 }
 
@@ -138,7 +138,7 @@ public impure func gasAccounting_init() {    // initialize on boot, before we ha
 
     let pricingParams = struct {
         l1GasPerL2Tx: const::Charging_DefaultL1GasPerL2Tx,
-        l1GasPerL1Calldata: const::Charging_DefaultL1GasPerCalldataByte,
+        l1GasPerL1CalldataUnit: const::Charging_DefaultL1GasPerCalldataUnit,
         l1GasPerStorage: const::Charging_DefaultL1GasPerStorage,
         arbGasDivisor: const::Charging_DefaultArbGasDivisor,
     };
@@ -242,7 +242,7 @@ impure func setPrices(
         (
             struct {
                 perL2Tx: fixedPoint_mulByUintTrunc(feeConfig.baseFeeMultiplier, params.l1GasPerL2Tx * l1GasPrice),
-                perL1CalldataByte: fixedPoint_mulByUintTrunc(feeConfig.baseFeeMultiplier, params.l1GasPerL1Calldata * l1GasPrice),
+                perL1CalldataUnit: fixedPoint_mulByUintTrunc(feeConfig.baseFeeMultiplier, params.l1GasPerL1CalldataUnit * l1GasPrice),
                 perStorageCell: params.l1GasPerStorage * l1GasPrice,
                 perArbGasBase: perArbGasBase,
                 perArbGasCongestion: perArbGasCongestion,
@@ -254,7 +254,7 @@ impure func setPrices(
         (
             struct {
                 perL2Tx: 0,
-                perL1CalldataByte: 0,
+                perL1CalldataUnit: 0,
                 perStorageCell: 0,
                 perArbGasBase: 0,
                 perArbGasCongestion: 0,
@@ -288,7 +288,7 @@ public impure func gasAccounting_getPricesInWei() -> (uint, uint, uint, uint, ui
     let prices = gasAccountingInfo.currentPrices;
     return (
         prices.perL2Tx,
-        prices.perL1CalldataByte,
+        prices.perL1CalldataUnit,
         prices.perStorageCell,
         prices.perArbGasBase,
         prices.perArbGasCongestion,
@@ -309,7 +309,7 @@ public impure func gasAccounting_getPricesInArbGas() -> (uint, uint, uint) {  //
     let arbGasPrice = prices.perArbGasTotal;
     return (
         (prices.perL2Tx + arbGasPrice - 1) / arbGasPrice,            // price per L2 tx
-        (prices.perL1CalldataByte + arbGasPrice - 1) / arbGasPrice,  // price per L1 calldata byte
+        (prices.perL1CalldataUnit + arbGasPrice - 1) / arbGasPrice,  // price per L1 calldata unit
         (prices.perStorageCell + arbGasPrice - 1) / arbGasPrice,     // price per storage cell
     );
 }
@@ -337,7 +337,7 @@ public impure func gasAccounting_setFeesEnabled(enabled: bool) {
 
 public impure func gasAccounting_setChargingParams(
     l1GasPerL2Tx: uint,
-    l1GasPerL2Calldata: uint,
+    l1GasPerL2CalldataUnit: uint,
     l1GasPerStorage: uint,
     arbGasDivisor: uint,
     netFeeRecipient: address,
@@ -346,7 +346,7 @@ public impure func gasAccounting_setChargingParams(
     gasAccountingInfo = gasAccountingInfo with {
         pricingParams: struct {
             l1GasPerL2Tx: l1GasPerL2Tx,
-            l1GasPerL1Calldata: l1GasPerL2Calldata,
+            l1GasPerL1CalldataUnit: l1GasPerL2CalldataUnit,
             l1GasPerStorage: l1GasPerStorage,
             arbGasDivisor: arbGasDivisor,
         }
@@ -421,7 +421,7 @@ public impure func gasAccounting_summaryToPublish() -> any {
     let prices = gasAccountingInfo.currentPrices;
     return (
         prices.perL2Tx,
-        prices.perL1CalldataByte,
+        prices.perL1CalldataUnit,
         prices.perStorageCell,
         prices.perArbGasBase,
         prices.perArbGasCongestion,
@@ -795,13 +795,13 @@ public impure func getNextRequestFromCongestionAuction() -> (
 
             if let Some(aggInfo) = tx.incomingRequest.aggregator {
                 if let Some(theAggregator) = aggInfo.aggregator {
-                    let feeForTxAndCalldata = prices.perL2Tx + prices.perL1CalldataByte * aggInfo.calldataBytes;
+                    let feeForTxAndCalldata = prices.perL2Tx + prices.perL1CalldataUnit * aggInfo.calldataUnits;
 
                     // reimburse aggregator for tx and calldata, and collect network fee
                     let (fullyPaid, feeStats) = payForTxAndL1Gas(
                         tx.gasPayer,
                         theAggregator,
-                        aggInfo.calldataBytes,
+                        aggInfo.calldataUnits,
                         gasAccountingInfo.feeConfig,
                         prices,
                         tx.feeStats
@@ -828,7 +828,7 @@ public impure func getNextRequestFromCongestionAuction() -> (
                     tx = tx with {
                         feeStats: tx.feeStats with {
                             units: tx.feeStats.units with {
-                                calldataByte: aggInfo.calldataBytes
+                                calldataUnit: aggInfo.calldataUnits
                             }
                         }
                     };
@@ -863,8 +863,8 @@ public impure func getNextRequestFromCongestionAuction() -> (
                         units: tx.feeStats.units with {
                             tx: 1
                         } with {
-                            calldataByte: xif let Some(aggInfo) = tx.incomingRequest.aggregator {
-                                aggInfo.calldataBytes
+                            calldataUnit: xif let Some(aggInfo) = tx.incomingRequest.aggregator {
+                                aggInfo.calldataUnits
                             } else {
                                 0
                             }
@@ -881,7 +881,7 @@ public impure func getNextRequestFromCongestionAuction() -> (
 impure func payForTxAndL1Gas(
     payer: address,
     recipient: address,
-    calldataBytes: uint,
+    calldataUnits: uint,
     feeConfig: FeeConfig,
     prices: GasPrices,
     feeStats: TxFeeStats
@@ -897,11 +897,11 @@ impure func payForTxAndL1Gas(
         prices = prices with {
             perL2Tx: fixedPoint_mulByUintTrunc(feeConfig.shareForNetFee, prices.perL2Tx)
         } with {
-            perL1CalldataByte: fixedPoint_mulByUintTrunc(feeConfig.shareForNetFee, prices.perL1CalldataByte)
+            perL1CalldataUnit: fixedPoint_mulByUintTrunc(feeConfig.shareForNetFee, prices.perL1CalldataUnit)
         };
     }
 
-    let fullAmount = prices.perL2Tx + prices.perL1CalldataByte * calldataBytes;
+    let fullAmount = prices.perL2Tx + prices.perL1CalldataUnit * calldataUnits;
     if (fullAmount == 0) {
         return (
             true,
@@ -909,7 +909,7 @@ impure func payForTxAndL1Gas(
                 units: feeStats.units with {
                     tx: 1
                 } with {
-                    calldataByte: calldataBytes
+                    calldataUnit: calldataUnits
                 }
             },
         );
@@ -967,13 +967,13 @@ impure func payForTxAndL1Gas(
             units: feeStats.units with {
                 tx: 1
             } with {
-                calldataByte: calldataBytes
+                calldataUnit: calldataUnits
             }
         } with {
             weiPaid: feeStats.weiPaid with {
                 tx: amountForTx
             } with {
-                calldataByte: amount - amountForTx   // safe because amount >= amountForTx
+                calldataUnit: amount - amountForTx   // safe because amount >= amountForTx
             }
         }
     );
@@ -1068,11 +1068,12 @@ public impure func getRetryableTxPrice(calldataSize: uint) -> (uint, uint) {
 
 public impure func getFeesForRetryableTx(
     sender: address,
-    calldataSize: uint,
+    calldataSize: uint,  // in bytes
 ) -> (uint, address, TxFeeStats) {
     return xif (gasAccountingInfo.feeConfig.enabled) {
         let prices = gasAccountingInfo.retryablePrices;
-        let totalDue = prices.perTx + calldataSize * prices.perCalldataByte;
+        let calldataUnitPrice = prices.perCalldataByte / 16;  // use this to avoid roundoff issues
+        let totalDue = prices.perTx + calldataSize * 16 * calldataUnitPrice;
 
         let feeStats = txFeeStats_zero();
         (
@@ -1082,19 +1083,19 @@ public impure func getFeesForRetryableTx(
                 price: feeStats.price with {
                     tx: prices.perTx
                 } with {
-                    calldataByte: prices.perCalldataByte
+                    calldataUnit: calldataUnitPrice
                 }
             } with {
-                units: feeStats.price with {
+                units: feeStats.units with {
                     tx: 1
                 } with {
-                    calldataByte: calldataSize
+                    calldataUnit: 16 * calldataSize
                 }
             } with {
                 weiPaid: feeStats.weiPaid with {
                     tx: prices.perTx
                 } with {
-                    calldataByte: calldataSize * prices.perCalldataByte
+                    calldataUnit: calldataSize * 16 * calldataUnitPrice
                 }
             }
         )
@@ -1158,7 +1159,7 @@ public impure func updateBatchSizeEstimate(size: uint, batchSender: address) {
 
 type FourResources = struct {
     tx: uint,
-    calldataByte: uint,
+    calldataUnit: uint,
     storage: uint,
     compute: uint,
 }
@@ -1174,7 +1175,7 @@ type TxFeeStats = struct {
 public func txFeeStats_zero() -> TxFeeStats {
     let frZero = struct {
         tx: 0,
-        calldataByte: 0,
+        calldataUnit: 0,
         storage: 0,
         compute: 0,
     };
@@ -1190,7 +1191,7 @@ public func txFeeStats_setPrices(stats: TxFeeStats, prices: GasPrices) -> TxFeeS
     return stats with {
         price: struct {
             tx: prices.perL2Tx,
-            calldataByte: prices.perL1CalldataByte,
+            calldataUnit: prices.perL1CalldataUnit,
             storage: prices.perStorageCell,
             compute: prices.perArbGasTotal,
         }

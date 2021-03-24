@@ -47,6 +47,7 @@ use std::bytearray::bytearray_size;
 use std::bytearray::bytearray_fromSizeAndBuffer;
 use std::bytearray::bytearray_getByte;
 use std::bytearray::bytearray_get256;
+use std::bytearray::bytearray_getCalldataUnits;
 
 use std::bytestream::ByteStream;
 use std::bytestream::bytestream_new;
@@ -296,7 +297,7 @@ type RequestProvenance = struct {
 
 type AggregatorInfo = struct {
     aggregator: option<address>,
-    calldataBytes: uint,
+    calldataUnits: uint,
 }
 
 func hashIncomingRequest(req: IncomingRequest) -> bytes32 {
@@ -368,7 +369,7 @@ public impure func inbox_getNextUnpackedRequest() -> (
                 msg = msg with {
                     aggregator: Some(struct {
                         aggregator: None<address>,
-                        calldataBytes: bytearray_size(msg.msgData),
+                        calldataUnits: bytearray_getCalldataUnits(msg.msgData),
                     })
                 };
 
@@ -417,7 +418,7 @@ public impure func inbox_getNextUnpackedRequest() -> (
                 msg = msg with {
                     aggregator: Some(struct {
                         aggregator: None<address>,
-                        calldataBytes: bytearray_size(msg.msgData),
+                        calldataUnits: bytearray_getCalldataUnits(msg.msgData),
                     })
                 };
 
