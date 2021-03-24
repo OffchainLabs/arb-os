@@ -283,7 +283,9 @@ public impure func decompressAndVerifyBLSSignedTxBatch(
 
         let aggregator = originalRequest.sender;
         if let Some(aggInfo) = originalRequest.aggregator {
-            aggregator = aggInfo.aggregator;
+            if let Some(agg) = aggInfo.aggregator {
+                aggregator = agg;
+            }
         }
 
         let (_, newTx) = decompressTx(bytestream_new(txData), Some(signerAddr), None<FunctionTable>)?;
@@ -315,7 +317,7 @@ public impure func decompressAndVerifyBLSSignedTxBatch(
                 msgData: txData
             } with {
                 aggregator: Some(struct {
-                    aggregator: aggregator,
+                    aggregator: Some(aggregator),
                     calldataBytes: fullDataSize + 64/numMsgs,   // charge for your data plus your share of the signature
                 })
             }
