@@ -9,6 +9,7 @@ use crate::mavm::Instruction;
 use crate::pos::{BytePos, Location};
 use crate::stringtable::StringTable;
 use ast::{Func, TypeTree};
+use clap::Clap;
 use lalrpop_util::lalrpop_mod;
 use mini::DeclsParser;
 use miniconstants::init_constant_table;
@@ -22,7 +23,6 @@ use std::io::{self, Read};
 use std::path::Path;
 use typecheck::TypeCheckedFunc;
 
-use crate::CompileStruct;
 pub use ast::{DebugInfo, GlobalVarDecl, StructField, TopLevelDecl, Type};
 pub use source::Lines;
 pub use typecheck::{AbstractSyntaxTree, TypeCheckedNode};
@@ -33,6 +33,22 @@ pub mod miniconstants;
 mod source;
 mod typecheck;
 lalrpop_mod!(mini);
+
+///Command line options for compile subcommand.
+#[derive(Clap, Debug)]
+pub struct CompileStruct {
+    input: Vec<String>,
+    #[clap(short, long)]
+    debug_mode: bool,
+    #[clap(short, long)]
+    test_mode: bool,
+    #[clap(short, long)]
+    pub output: Option<String>,
+    #[clap(short, long)]
+    pub format: Option<String>,
+    #[clap(short, long)]
+    inline: bool,
+}
 
 ///Represents the contents of a source file after parsing.
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
@@ -70,6 +86,40 @@ struct TypeCheckedModule {
     global_vars: Vec<GlobalVarDecl>,
     ///The name of the module, this may be removed later.
     name: String,
+}
+
+impl CompileStruct {
+    pub fn invoke(&self) -> Result<LinkedProgram, CompileError> {
+        let mut file_name_chart = BTreeMap::new();
+        let mut compiled_progs = Vec::new();
+        for filename in &self.input {
+            let path = Path::new(filename);
+            compile_from_file(path, &mut file_name_chart, self.inline)
+                .map_err(|mut e| {
+                    e.description = format!("Compile error: {}", e.description);
+                    e
+                })?
+                .into_iter()
+                .for_each(|prog| {
+                    file_name_chart.extend(prog.file_name_chart.clone());
+                    compiled_progs.push(prog)
+                });
+        }
+        let linked_prog = link(&compiled_progs, self.test_mode).map_err(|mut e| {
+            e.description = format!("Linking error: {}", e.description);
+            e
+        })?;
+        postlink_compile(
+            linked_prog,
+            file_name_chart.clone(),
+            self.test_mode,
+            self.debug_mode,
+        )
+        .map_err(|mut e| {
+            e.description = format!("Linking error: {}", e.description);
+            e
+        })
+    }
 }
 
 impl Module {
@@ -258,40 +308,6 @@ impl CompiledProgram {
             }
         }
     }
-}
-
-pub fn compiler_invoke(
-    compile: &CompileStruct,
-) -> Result<LinkedProgram, CompileError> {
-    let mut file_name_chart = BTreeMap::new();
-    let mut compiled_progs = Vec::new();
-    for filename in &compile.input {
-        let path = Path::new(filename);
-        compile_from_file(path, &mut file_name_chart, compile.inline)
-            .map_err(|mut e| {
-                e.description = format!("Compile error: {}", e.description);
-                e
-            })?
-            .into_iter()
-            .for_each(|prog| {
-                file_name_chart.extend(prog.file_name_chart.clone());
-                compiled_progs.push(prog)
-            });
-    }
-    let linked_prog = link(&compiled_progs, compile.test_mode).map_err(|mut e| {
-        e.description = format!("Linking error: {}", e.description);
-        e
-    })?;
-    postlink_compile(
-        linked_prog,
-        file_name_chart.clone(),
-        compile.test_mode,
-        compile.debug_mode,
-    )
-    .map_err(|mut e| {
-        e.description = format!("Linking error: {}", e.description);
-        e
-    })
 }
 
 ///Returns either a CompiledProgram generated from source code at path, otherwise returns a

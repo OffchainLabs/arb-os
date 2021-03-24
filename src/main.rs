@@ -4,7 +4,7 @@
 
 #![allow(unused_parens)]
 
-use crate::compile::compiler_invoke;
+use crate::compile::CompileStruct;
 use crate::link::LinkedProgram;
 use clap::Clap;
 use compile::CompileError;
@@ -35,22 +35,6 @@ pub mod pos;
 mod run;
 mod stringtable;
 mod uint256;
-
-///Command line options for compile subcommand.
-#[derive(Clap, Debug)]
-pub struct CompileStruct {
-    input: Vec<String>,
-    #[clap(short, long)]
-    debug_mode: bool,
-    #[clap(short, long)]
-    test_mode: bool,
-    #[clap(short, long)]
-    output: Option<String>,
-    #[clap(short, long)]
-    format: Option<String>,
-    #[clap(short, long)]
-    inline: bool,
-}
 
 ///Command line options for run subcommand.
 #[derive(Clap, Debug)]
@@ -138,7 +122,8 @@ fn main() -> Result<(), CompileError> {
     match matches {
         Args::Compile(compile) => {
             let mut output = get_output(compile.output.clone()).unwrap();
-            compiler_invoke(&compile)?
+            compile
+                .invoke()?
                 .to_output(&mut *output, compile.format.as_deref());
         }
 
