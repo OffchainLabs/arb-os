@@ -23,6 +23,18 @@ pub mod rolluptest;
 mod runtime_env;
 pub mod upload;
 
+pub fn run_from_file(
+    path: &Path,
+    args: Vec<Value>,
+    debug: bool,
+) -> Result<Vec<Value>, (ExecutionError, StackTrace)> {
+    run_from_file_and_env(
+        path,
+        args,
+        RuntimeEnvironment::new(Uint256::from_usize(1111), None),
+        debug,
+    )
+}
 ///Executes the file located at path, or starts the debugger if debug is set to true.
 ///
 /// The args argument specifies the arguments to the executable.  These will be placed on the stack
@@ -34,7 +46,7 @@ pub mod upload;
 ///
 /// This function will panic if the specified path cannot be opened or does not contain a valid
 /// mini executable.
-pub fn run_from_file(
+pub fn run_from_file_and_env(
     path: &Path,
     args: Vec<Value>,
     env: RuntimeEnvironment,

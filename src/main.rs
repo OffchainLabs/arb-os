@@ -226,8 +226,7 @@ fn main() -> Result<(), CompileError> {
             let filename = run.input;
             let debug = run.debug;
             let path = Path::new(&filename);
-            let env = RuntimeEnvironment::new(Uint256::from_usize(1111), None);
-            match run_from_file(path, Vec::new(), env, debug) {
+            match run_from_file(path, Vec::new(), debug) {
                 Ok(logs) => {
                     println!("Logs: {:?}", logs);
                 }
