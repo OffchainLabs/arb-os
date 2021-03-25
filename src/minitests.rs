@@ -10,9 +10,7 @@ use rlp::RlpStream;
 use std::convert::TryInto;
 use std::path::Path;
 
-#[test]
-fn test_arraytest() {
-    let path = Path::new("builtin/arraytest.mexe");
+fn test_from_file(path: &Path) {
     let res = run_from_file(path, vec![], false);
     match res {
         Ok(res) => {
@@ -25,185 +23,73 @@ fn test_arraytest() {
 }
 
 #[test]
+fn test_arraytest() {
+    test_from_file(Path::new("builtin/arraytest.mexe"));
+}
+
+#[test]
 fn test_kvstest() {
-    let path = Path::new("builtin/kvstest.mexe");
-    let res = run_from_file(path, vec![], false);
-    match res {
-        Ok(res) => {
-            assert_eq!(res[0], Value::Int(Uint256::zero()));
-        }
-        Err(e) => {
-            panic!("{}\n{}", e.0, e.1);
-        }
-    }
+    test_from_file(Path::new("builtin/kvstest.mexe"));
 }
 
 #[test]
 fn test_storage_map() {
-    let path = Path::new("stdlib/storageMapTest.mexe");
-    let res = run_from_file(path, vec![], false);
-    match res {
-        Ok(res) => {
-            assert_eq!(res[0], Value::Int(Uint256::zero()));
-        }
-        Err(e) => {
-            panic!("{}\n{}", e.0, e.1);
-        }
-    }
+    test_from_file(Path::new("stdlib/storageMapTest.mexe"));
 }
 
 #[test]
 fn test_queuetest() {
-    let path = Path::new("stdlib/queuetest.mexe");
-    let res = run_from_file(path, vec![], false);
-    match res {
-        Ok(res) => {
-            assert_eq!(res[0], Value::Int(Uint256::zero()));
-        }
-        Err(e) => {
-            panic!("{}\n{}", e.0, e.1);
-        }
-    }
+    test_from_file(Path::new("stdlib/queuetest.mexe"));
 }
 
 #[test]
 fn test_globaltest() {
-    let path = Path::new("builtin/globaltest.mexe");
-    let res = run_from_file(path, vec![], false);
-    match res {
-        Ok(res) => {
-            assert_eq!(res[0], Value::Int(Uint256::zero()));
-        }
-        Err(e) => {
-            panic!("{}\n{}", e.0, e.1);
-        }
-    }
+    test_from_file(Path::new("builtin/globaltest.mexe"));
 }
 
 #[test]
 fn test_pqtest() {
-    let path = Path::new("stdlib/priorityqtest.mexe");
-    let res = run_from_file(path, vec![], false);
-    match res {
-        Ok(res) => {
-            assert_eq!(res[0], Value::Int(Uint256::zero()));
-        }
-        Err(e) => {
-            panic!("{}\n{}", e.0, e.1);
-        }
-    }
+    test_from_file(Path::new("stdlib/priorityqtest.mexe"));
 }
 
 #[test]
 fn test_bytearray() {
-    let path = Path::new("stdlib/bytearraytest.mexe");
-    let res = run_from_file(path, vec![], false);
-    match res {
-        Ok(res) => {
-            assert_eq!(res[0], Value::Int(Uint256::zero()));
-        }
-        Err(e) => {
-            panic!("{}\n{}", e.0, e.1);
-        }
-    }
+    test_from_file(Path::new("stdlib/bytearraytest.mexe"));
 }
 
 #[test]
 fn test_map() {
-    let path = Path::new("builtin/maptest.mexe");
-    let res = run_from_file(path, vec![], false);
-    match res {
-        Ok(res) => {
-            assert_eq!(res[0], Value::Int(Uint256::zero()));
-        }
-        Err(e) => {
-            panic!("{}\n{}", e.0, e.1);
-        }
-    }
+    test_from_file(Path::new("builtin/maptest.mexe"));
 }
 
 #[test]
 fn test_keccak() {
-    let path = Path::new("stdlib/keccaktest.mexe");
-    let res = run_from_file(path, vec![], false);
-    match res {
-        Ok(res) => {
-            assert_eq!(res[0], Value::Int(Uint256::zero()));
-        }
-        Err(e) => {
-            panic!("{}\n{}", e.0, e.1);
-        }
-    }
+    test_from_file(Path::new("stdlib/keccaktest.mexe"));
 }
 
 #[test]
 fn test_bls() {
-    let path = Path::new("stdlib/blstest.mexe");
-    let res = run_from_file(path, vec![], false);
-    match res {
-        Ok(res) => {
-            assert_eq!(res[0], Value::Int(Uint256::zero()));
-        }
-        Err(e) => {
-            panic!("{}\n{}", e.0, e.1);
-        }
-    }
+    test_from_file(Path::new("stdlib/blstest.mexe"));
 }
 
 #[test]
 fn test_sha256() {
-    let path = Path::new("stdlib/sha256test.mexe");
-    let res = run_from_file(path, vec![], false);
-    match res {
-        Ok(res) => {
-            assert_eq!(res[0], Value::Int(Uint256::zero()));
-        }
-        Err(e) => {
-            panic!("{}\n{}", e.0, e.1);
-        }
-    }
+    test_from_file(Path::new("stdlib/sha256test.mexe"));
 }
 
 #[test]
 fn test_fixedpoint() {
-    let path = Path::new("stdlib/fixedpointtest.mexe");
-    let res = run_from_file(path, vec![], false);
-    match res {
-        Ok(res) => {
-            assert_eq!(res[0], Value::Int(Uint256::zero()));
-        }
-        Err(e) => {
-            panic!("{}\n{}", e.0, e.1);
-        }
-    }
+    test_from_file(Path::new("stdlib/fixedpointtest.mexe"));
 }
 
 #[test]
 fn test_ripemd160() {
-    let path = Path::new("stdlib/ripemd160test.mexe");
-    let res = run_from_file(path, vec![], false);
-    match res {
-        Ok(res) => {
-            assert_eq!(res[0], Value::Int(Uint256::zero()));
-        }
-        Err(e) => {
-            panic!("{}\n{}", e.0, e.1);
-        }
-    }
+    test_from_file(Path::new("stdlib/ripemd160test.mexe"));
 }
 
 #[test]
 fn test_biguint() {
-    let path = Path::new("stdlib/biguinttest.mexe");
-    let res = run_from_file(path, vec![], false);
-    match res {
-        Ok(res) => {
-            assert_eq!(res[0], Value::Int(Uint256::zero()));
-        }
-        Err(e) => {
-            panic!("{}\n{}", e.0, e.1);
-        }
-    }
+    test_from_file(Path::new("stdlib/biguinttest.mexe"));
 }
 
 #[test]
@@ -259,7 +145,6 @@ fn test_rlp() {
     }
 }
 
-#[cfg(test)]
 fn encode_list3(testvec: (Uint256, Vec<u8>, Uint256)) -> Vec<u8> {
     let mut stream = RlpStream::new_list(3);
     stream
@@ -269,7 +154,6 @@ fn encode_list3(testvec: (Uint256, Vec<u8>, Uint256)) -> Vec<u8> {
     stream.out()
 }
 
-#[cfg(test)]
 fn test_rlp_uint(ui: Uint256, correct_result: Vec<u8>) {
     let path = Path::new("stdlib/rlptest.mexe");
     let res = run_from_file(
@@ -287,7 +171,6 @@ fn test_rlp_uint(ui: Uint256, correct_result: Vec<u8>) {
     }
 }
 
-#[cfg(test)]
 fn test_rlp_bytearray(input: Vec<u8>, correct_result: Vec<u8>) {
     let path = Path::new("stdlib/rlptest.mexe");
     let res = run_from_file(
@@ -332,16 +215,7 @@ fn test_rlp_list3(testvec: (Uint256, Vec<u8>, Uint256), correct_result: Vec<u8>)
 
 #[test]
 fn test_codeload() {
-    let path = Path::new("minitests/codeloadtest.mexe");
-    let res = run_from_file(path, vec![], false);
-    match res {
-        Ok(res) => {
-            assert_eq!(res[0], Value::Int(Uint256::zero()));
-        }
-        Err(e) => {
-            panic!("{}\n{}", e.0, e.1);
-        }
-    }
+    test_from_file(Path::new("minitests/codeloadtest.mexe"));
 }
 
 #[test]
