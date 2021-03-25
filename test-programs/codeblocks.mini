@@ -1,0 +1,10 @@
+
+func main() -> (uint, uint) {
+    let x = 0;
+    let y = {
+        let x = 4;
+        x = x + 1;
+        x * x
+    };
+    return (x, y);
+}
