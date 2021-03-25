@@ -4,8 +4,7 @@
 
 use crate::mavm::Value;
 use crate::run::{
-    _bytestack_from_bytes, load_from_file, load_from_file_and_env, run, run_from_file, Machine,
-    RuntimeEnvironment,
+    _bytestack_from_bytes, load_from_file, run, run_from_file, Machine, RuntimeEnvironment,
 };
 use crate::uint256::Uint256;
 use num_bigint::{BigUint, RandBigInt};
@@ -728,8 +727,7 @@ fn small_upgrade() {
 fn small_upgrade_auto_remap() {
     use crate::run::upload::CodeUploader;
 
-    let mut machine =
-        load_from_file(Path::new("upgradetests/upgrade2_old.mexe"));
+    let mut machine = load_from_file(Path::new("upgradetests/upgrade2_old.mexe"));
     let uploader = CodeUploader::_new_from_file(Path::new("upgradetests/upgrade2_new.mexe"));
     let code_bytes = uploader._to_flat_vec();
     let msg = Value::new_tuple(vec![

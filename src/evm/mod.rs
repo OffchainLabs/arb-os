@@ -722,8 +722,7 @@ pub fn _underfunded_nested_call_test(
 }
 
 pub fn _evm_test_callback(log_to: Option<&Path>, debug: bool) -> Result<(), ethabi::Error> {
-    let rt_env = RuntimeEnvironment::new(Uint256::from_usize(1111), None);
-    let mut machine = load_from_file_and_env(Path::new("arb_os/arbos.mexe"), rt_env);
+    let mut machine = load_from_file(Path::new("arb_os/arbos.mexe"));
     machine.start_at_zero();
 
     let mut contract = AbiForContract::new_from_file(&test_contract_path("Callback"))?;
@@ -846,8 +845,7 @@ fn test_retryable() {
 }
 
 pub fn _test_retryable(log_to: Option<&Path>, debug: bool) -> Result<(), ethabi::Error> {
-    let rt_env = RuntimeEnvironment::new(Uint256::from_usize(1111), None);
-    let mut machine = load_from_file_and_env(Path::new("arb_os/arbos.mexe"), rt_env);
+    let mut machine = load_from_file(Path::new("arb_os/arbos.mexe"));
     machine.start_at_zero();
 
     let my_addr = Uint256::from_u64(1234);
@@ -973,8 +971,7 @@ pub fn evm_test_create(
     debug: bool,
     _profile: bool,
 ) -> Result<bool, ethabi::Error> {
-    let rt_env = RuntimeEnvironment::new(Uint256::from_usize(1111), None);
-    let mut machine = load_from_file_and_env(Path::new("arb_os/arbos.mexe"), rt_env);
+    let mut machine = load_from_file(Path::new("arb_os/arbos.mexe"));
     machine.start_at_zero();
 
     let my_addr = Uint256::from_usize(1025);
@@ -1798,8 +1795,7 @@ pub fn _evm_xcontract_call_using_compressed_batch_2(
 }
 
 pub fn evm_direct_deploy_add(log_to: Option<&Path>, debug: bool) {
-    let rt_env = RuntimeEnvironment::new(Uint256::from_usize(1111), None);
-    let mut machine = load_from_file_and_env(Path::new("arb_os/arbos.mexe"), rt_env);
+    let mut machine = load_from_file(Path::new("arb_os/arbos.mexe"));
     machine.start_at_zero();
 
     match AbiForContract::new_from_file(&test_contract_path("Add")) {
@@ -1826,8 +1822,7 @@ pub fn evm_direct_deploy_add(log_to: Option<&Path>, debug: bool) {
 }
 
 pub fn _evm_test_payment_in_constructor(log_to: Option<&Path>, debug: bool) {
-    let rt_env = RuntimeEnvironment::new(Uint256::from_usize(1111), None);
-    let mut machine = load_from_file_and_env(Path::new("arb_os/arbos.mexe"), rt_env);
+    let mut machine = load_from_file(Path::new("arb_os/arbos.mexe"));
     machine.start_at_zero();
 
     let my_addr = Uint256::from_usize(1025);
@@ -1904,8 +1899,7 @@ pub fn _evm_test_payment_in_constructor(log_to: Option<&Path>, debug: bool) {
 
 pub fn evm_test_arbsys(log_to: Option<&Path>, debug: bool) {
     use std::convert::TryFrom;
-    let rt_env = RuntimeEnvironment::new(Uint256::from_usize(1111), None);
-    let mut machine = load_from_file_and_env(Path::new("arb_os/arbos.mexe"), rt_env);
+    let mut machine = load_from_file(Path::new("arb_os/arbos.mexe"));
     machine.start_at_zero();
 
     let my_addr = Uint256::from_usize(1025);
@@ -2069,8 +2063,7 @@ pub fn evm_direct_deploy_and_call_add(log_to: Option<&Path>, debug: bool) {
 
 pub fn _evm_test_contract_call(log_to: Option<&Path>, debug: bool) {
     use std::convert::TryFrom;
-    let rt_env = RuntimeEnvironment::new(Uint256::from_usize(1111), None);
-    let mut machine = load_from_file_and_env(Path::new("arb_os/arbos.mexe"), rt_env);
+    let mut machine = load_from_file(Path::new("arb_os/arbos.mexe"));
     machine.start_at_zero();
 
     let my_addr = Uint256::from_usize(1025);
@@ -2203,8 +2196,7 @@ fn evm_reverter_factory_test() {
 }
 
 fn _evm_reverter_factory_test_impl() {
-    let rt_env = RuntimeEnvironment::new(Uint256::from_usize(1111), None);
-    let mut machine = load_from_file_and_env(Path::new("arb_os/arbos.mexe"), rt_env);
+    let mut machine = load_from_file(Path::new("arb_os/arbos.mexe"));
     machine.start_at_zero();
 
     let _contract = match AbiForContract::new_from_file(&test_contract_path("ReverterFactory")) {
@@ -2235,8 +2227,7 @@ fn _evm_reverter_factory_test_impl() {
 }
 
 pub fn _evm_payment_to_self(log_to: Option<&Path>, debug: bool) -> Result<(), ethabi::Error> {
-    let rt_env = RuntimeEnvironment::new(Uint256::from_usize(1111), None);
-    let mut machine = load_from_file_and_env(Path::new("arb_os/arbos.mexe"), rt_env);
+    let mut machine = load_from_file(Path::new("arb_os/arbos.mexe"));
     machine.start_at_zero();
 
     let my_addr = Uint256::from_u64(1025);
@@ -2287,8 +2278,7 @@ pub fn _evm_payment_to_self(log_to: Option<&Path>, debug: bool) -> Result<(), et
 }
 
 pub fn evm_payment_to_empty_address(log_to: Option<&Path>, debug: bool) {
-    let rt_env = RuntimeEnvironment::new(Uint256::from_usize(1111), None);
-    let mut machine = load_from_file_and_env(Path::new("arb_os/arbos.mexe"), rt_env);
+    let mut machine = load_from_file(Path::new("arb_os/arbos.mexe"));
     machine.start_at_zero();
 
     let my_addr = Uint256::from_u64(1025);
