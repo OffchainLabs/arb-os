@@ -2423,8 +2423,7 @@ pub fn _evm_ecpairing_precompile(_log_to: Option<&Path>, debug: bool) {
 }
 
 fn _evm_ecpairing_precompile_test_one(calldata: &str, result: bool, debug: bool) {
-    let rt_env = RuntimeEnvironment::new(Uint256::from_usize(1111), None);
-    let mut machine = load_from_file_and_env(Path::new("arb_os/arbos.mexe"), rt_env);
+    let mut machine = load_from_file(Path::new("arb_os/arbos.mexe"));
     machine.start_at_zero();
 
     let my_addr = Uint256::from_u64(1025);
@@ -2461,8 +2460,7 @@ fn _evm_ecpairing_precompile_test_one(calldata: &str, result: bool, debug: bool)
 }
 
 pub fn _evm_eval_ripemd160(log_to: Option<&Path>, debug: bool) {
-    let rt_env = RuntimeEnvironment::new(Uint256::from_usize(1111), None);
-    let mut machine = load_from_file_and_env(Path::new("arb_os/arbos.mexe"), rt_env);
+    let mut machine = load_from_file(Path::new("arb_os/arbos.mexe"));
     machine.start_at_zero();
 
     let my_addr = Uint256::from_u64(1025);
