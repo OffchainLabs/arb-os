@@ -2540,7 +2540,8 @@ fn _evm_bad_receipt_revert_test_impl() {
 
     let my_addr = Uint256::from_u64(1025);
 
-    let add_contract = AbiForContract::new_from_file(&test_contract_path("Add")).unwrap();
+    let mut add_contract = AbiForContract::new_from_file(&test_contract_path("Add")).unwrap();
+    let _ = add_contract.deploy(&[], &mut machine, Uint256::zero(), None, false).unwrap();
     let (receipts, _) = add_contract.call_function(
         my_addr.clone(),
         "add",
@@ -2568,8 +2569,7 @@ fn _evm_bad_receipt_revert_test_impl() {
 
     let receipts = machine.runtime_env.get_all_receipt_logs();
     assert_eq!(receipts.len(), total_receipts_before+1);
-    assert_eq!(receipts[total_receipts_before].get_return_code(), Uint256::one());
-    assert_eq!(receipts[total_receipts_before].get_request_id(), txid);
+    assert_eq!(receipts[total_receipts_before].get_return_code(), Uint256::from_u64(9));
 }
 
 pub fn make_logs_for_all_arbos_tests() {

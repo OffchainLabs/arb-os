@@ -239,10 +239,18 @@ public impure func initEvmCallStack(
     if let Some(entryPoint) = account_getStartCodePoint(
         accountStore_get(
             getGlobalAccountStore(),
+
             request.calleeAddr
         )
     ) {
-        let startTxResult = gasAccounting_startTxCharges(request.maxGas, request.gasPrice, request.gasPayer);
+        globalCurrentTxRequest = request;
+        globalCurrentRetryableRequest = None<IncomingRequest>;
+
+        let startTxResult = xif(request.maxGas < const::Charging_MinArbGasForContractTx) {
+            const::TxResultCode_belowMinimumTxGas
+        } else {
+            gasAccounting_startTxCharges(request.maxGas, request.gasPrice, request.gasPayer)
+        };
         if (startTxResult == const::TxResultCode_success) {
             if (request.seqNum != None<uint>) {
                 // increment the caller's sequence number, if caller has sufficient balance
@@ -259,9 +267,6 @@ public impure func initEvmCallStack(
                     );
                 }
             }
-
-            globalCurrentTxRequest = request;
-            globalCurrentRetryableRequest = None<IncomingRequest>;
 
             // pay callvalue from caller to the called contract
             // payment will only be recorded inside the callframe, so it will be discarded if the call reverts
@@ -452,7 +457,11 @@ public impure func initEvmCallStackForConstructor(
     ) {
         acctStore = uas;
 
-        let startTxResult = gasAccounting_startTxCharges(request.maxGas, request.gasPrice, request.gasPayer);
+        let startTxResult = xif(request.maxGas < const::Charging_MinArbGasForContractTx) {
+            const::TxResultCode_belowMinimumTxGas
+        } else {
+            gasAccounting_startTxCharges(request.maxGas, request.gasPrice, request.gasPayer)
+        };
         if (startTxResult == const::TxResultCode_success) {
             setGlobalAccountStore(acctStoreAfterIncrement);   // commit the incremented sequence number
 
@@ -902,7 +911,8 @@ public impure func evmCallStack_returnFromCall(
             );
         }
 
-        // Now discard any AVM stack contents and jump back to the main run loop.
+        // Now discard any EVM and AVM stack contents and jump back to the main run loop.
+        globalCallStack = None<EvmCallFrame>;
         emptyAvmStack();
         restoreAuxStackAndCall(mainRunLoop, None<Stack>, true);  // should never return
         evmCallStack_callHitError(9);

@@ -182,6 +182,7 @@ pub fn init_constant_table() -> HashMap<String, Uint256> {
         ("TxResultCode_formatError", 6),
         ("TxResultCode_cannotDeployAtAddress", 7),
         ("TxResultCode_exceededTxGasLimit", 8),
+        ("TxResultCode_belowMinimumTxGas", 9),
         ("TxResultCode_unknownFailure", 255),
         // EVM call types
         ("EVMCallType_call", 0),
@@ -203,6 +204,7 @@ pub fn init_constant_table() -> HashMap<String, Uint256> {
         ("InitOption_setChargingParams", 2),
         ("InitOption_setDefaultAggregator", 3),
         // charging mechanism
+        ("Charging_MinArbGasForContractTx", 5000),
         ("Charging_DefaultL1GasPerL2Tx", 3700),
         ("Charging_DefaultL1GasPerCalldataByte", 16),
         ("Charging_DefaultL1GasPerStorage", 2000),
