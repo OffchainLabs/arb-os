@@ -92,21 +92,19 @@ public impure func arbsys_txcall() {
             evmOp_revert_knownCodePc(address(const::Address_ArbSys), 0, 0, 0);
         }
         let funcCode = getFuncCode(calldata);
-        if (funcCode == 0x051038F2) {
+        if (funcCode == const::funcCode_ArbSys_arbOSVersion) {
             arbsys_arbOSVersion(topFrame, calldata);
-        } elseif(funcCode == 0xa3b1b31d) {
+        } elseif(funcCode == const::funcCode_ArbSys_arbBlockNumber) {
             arbsys_arbBlockNumber(topFrame, calldata);
-        } elseif(funcCode == 0x25e16063) {
+        } elseif(funcCode == const::funcCode_ArbSys_withdrawEth) {
             arbsys_withdrawEth(topFrame, calldata);
-        } elseif(funcCode == 0x928c169a) {
+        } elseif(funcCode == const::funcCode_ArbSys_sendTxToL1) {
             arbsys_sendTxToL1(topFrame, calldata);
-        } elseif(funcCode == 0x23ca0cd2) {
+        } elseif(funcCode == const::funcCode_ArbSys_getTransactionCount) {
             arbsys_getTransactionCount(topFrame, calldata);
-        } elseif(funcCode == 0xa169625f) {
+        } elseif(funcCode == const::funcCode_ArbSys_getStorageAt) {
             arbsys_getStorageAt(topFrame, calldata);
-        } elseif(funcCode == 0x3dcfdac7) {
-            arbsys_getPcTable(topFrame, calldata);
-        } elseif (funcCode == 0x08bd624c) {
+        } elseif (funcCode == const::funcCode_ArbSys_isTopLevelCall) {
             arbsys_isTopLevelCall(topFrame, calldata);
         } else {
             // unrecognized function code
@@ -126,19 +124,19 @@ public impure func arbAddressTable_txcall() {
         }
         let funcCode = getFuncCode(calldata);
 
-        if(funcCode == 0x4420e486) {
+        if(funcCode == const::funcCode_ArbAddressTable_register) {
             arbAddressTable_register(topFrame, calldata);
-        } elseif(funcCode == 0xd4b6b5da) {
+        } elseif(funcCode == const::funcCode_ArbAddressTable_lookup) {
             arbAddressTable_lookup(topFrame, calldata);
-        } elseif(funcCode == 0xa5025222) {
+        } elseif(funcCode == const::funcCode_ArbAddressTable_addressExists) {
             arbAddressTable_addressExists(topFrame, calldata);
-        } elseif(funcCode == 0x949d225d) {
+        } elseif(funcCode == const::funcCode_ArbAddressTable_size) {
             arbAddressTable_size(topFrame, calldata);
-        } elseif(funcCode == 0x8a186788) {
+        } elseif(funcCode == const::funcCode_ArbAddressTable_lookupIndex) {
             arbAddressTable_lookupIndex(topFrame, calldata);
-        } elseif(funcCode == 0x31862ada) {
+        } elseif(funcCode == const::funcCode_ArbAddressTable_decompress) {
             arbAddressTable_decompress(topFrame, calldata);
-        } elseif(funcCode == 0xf6a455a2) {
+        } elseif(funcCode == const::funcCode_ArbAddressTable_compress) {
             arbAddressTable_compress(topFrame, calldata);
         } else {
             // unrecognized function code
@@ -157,9 +155,9 @@ public impure func arbBLS_txcall() {
             evmOp_revert_knownCodePc(address(const::Address_ArbBLS), 0, 0, 0);
         }
         let funcCode = getFuncCode(calldata);
-        if (funcCode == 0x375a7c7f) {
+        if (funcCode == const::funcCode_ArbBLS_register) {
             arbBLS_register(topFrame, calldata);
-        } elseif(funcCode == 0x857cdbb8) {
+        } elseif(funcCode == const::funcCode_ArbBLS_getPublicKey) {
             arbBLS_getPublicKey(topFrame, calldata);
         } else {
             // unrecognized function code
@@ -178,11 +176,11 @@ public impure func arbFunctionTable_txcall() {
             evmOp_revert_knownCodePc(address(const::Address_ArbFunctionTable), 0, 0, 0);
         }
         let funcCode = getFuncCode(calldata);
-        if (funcCode == 0xce2ae159) {
+        if (funcCode == const::funcCode_ArbFunctionTable_upload) {
             arbFunctionTable_upload(topFrame, calldata);
-        } elseif(funcCode == 0x88987068) {
+        } elseif(funcCode == const::funcCode_ArbFunctionTable_size) {
             arbFunctionTable_size(topFrame, calldata);
-        } elseif(funcCode == 0xb464631b) {
+        } elseif(funcCode == const::funcCode_ArbFunctionTable_get) {
             arbFunctionTable_get(topFrame, calldata);
         } else {
             // unrecognized function code
@@ -426,36 +424,6 @@ impure func arbsys_getStorageAt(topFrame: EvmCallFrame, calldata: ByteArray) {
         evmOp_return(0, 32);
     } else {
         evmOp_revert_knownCodePc(address(const::Address_ArbSys), 51, 0, 0);
-    }
-}
-
-impure func arbsys_getPcTable(topFrame: EvmCallFrame, calldata: ByteArray) {
-    if (bytearray_size(calldata) <= 4) {
-        evmOp_revert_knownCodePc(address(const::Address_ArbSys), 60, 0, 0);
-    }
-    if let Some(pcTable) = pcTableForCode(bytearray_extract(calldata, 4, bytearray_size(calldata)-4)) {
-        let mem = evmCallStack_getTopFrameMemoryOrDie();
-        mem = bytearray_set256(mem, 0, 64);
-        let offset = 64;
-        loop {
-            if let Some(res) = stack_pop(pcTable) {
-                let (upct, item) = res;
-                pcTable = upct;
-                let (evmPc, avmCpHash) = unsafecast<(uint, bytes32)>(item);
-                mem = bytearray_set256(
-                    bytearray_set256(mem, offset, evmPc),
-                    offset+32,
-                    uint(avmCpHash),
-                );
-                offset = offset + 64;
-            } else {
-                // done reading data, finish building returndata then return
-                mem = bytearray_set256(mem, 32, (offset-64)/32);
-                evmOp_return(0, offset);
-            }
-        }
-    } else {
-        evmOp_revert_knownCodePc(address(const::Address_ArbSys), 61, 0, 0);
     }
 }
 

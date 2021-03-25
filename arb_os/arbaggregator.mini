@@ -39,13 +39,13 @@ public impure func arbaggregator_txcall() {
             evmOp_revert_knownPc(0, 0, 0);
         }
         let funcCode = asm(224, bytearray_get256(calldata, 0)) uint { shr };
-        if (funcCode == 0x52f10740) {
+        if (funcCode == const::funcCode_ArbAggregator_getPreferredAggregator) {
             arbaggregator_getPreferredAggregator(topFrame, calldata);
-        } elseif (funcCode == 0x6e928a6e) {
+        } elseif (funcCode == const::funcCode_ArbAggregator_setPreferredAggregator) {
             arbaggregator_setPreferredAggregator(topFrame, calldata);
-        } elseif (funcCode == 0x875883f2) {
+        } elseif (funcCode == const::funcCode_ArbAggregator_getDefaultAggregator) {
             arbaggregator_getDefaultAggregator(topFrame, calldata);
-        } elseif (funcCode == 0x0ffd6650) {
+        } elseif (funcCode == const::funcCode_ArbAggregator_setDefaultAggregator) {
             arbaggregator_setDefaultAggregator(topFrame, calldata);
         } else {
             // unrecognized function code

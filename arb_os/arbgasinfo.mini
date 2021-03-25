@@ -29,11 +29,11 @@ public impure func arbgasinfo_txcall() {
             evmOp_revert_knownPc(0, 0, 0);
         }
         let funcCode = asm(224, bytearray_get256(calldata, 0)) uint { shr };
-        if (funcCode == 0x41b247a8) {
+        if (funcCode == const::funcCode_ArbGasInfo_getPricesInWei) {
             arbgasinfo_getPricesInWei(topFrame, calldata);
-        } elseif (funcCode == 0x02199f34) {
+        } elseif (funcCode == const::funcCode_ArbGasInfo_getPricesInArbGas) {
             arbgasinfo_getPricesInArbGas(topFrame, calldata);
-        } elseif (funcCode == 0x612af178) {
+        } elseif (funcCode == const::funcCode_ArbGasInfo_getGasAccountingParams) {
             arbgasinfo_getGasAccountingParams(topFrame, calldata);
         } else {
             // unrecognized function code

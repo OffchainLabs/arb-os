@@ -71,29 +71,29 @@ public impure func arbowner_txcall() {
             evmOp_revert_knownCodePc(address(const::Address_ArbOwner), 1, 0, 0);
         }
         let funcCode = asm(224, bytearray_get256(calldata, 0)) uint { shr };
-        if (funcCode == 0xe3a0a148) {
+        if (funcCode == const::funcCode_ArbOwner_giveOwnership) {
             arbowner_giveOwnership(topFrame, calldata);
-        } elseif (funcCode == 0x31acdf5e) {
+        } elseif (funcCode == const::funcCode_ArbOwner_startCodeUpload) {
             arbowner_startCodeUpload(topFrame, calldata);
-        } elseif (funcCode == 0x56331f75) {
+        } elseif (funcCode == const::funcCode_ArbOwner_continueCodeUpload) {
             arbowner_continueCodeUpload(topFrame, calldata);
-        } elseif (funcCode == 0xfbb53a17) {
+        } elseif (funcCode == const::funcCode_ArbOwner_finishCodeUploadAsArbosUpgrade) {
            arbowner_finishCodeUploadAsArbosUpgrade(topFrame, calldata);
-        } elseif (funcCode == 0xf4f4e136) {
+        } elseif (funcCode == const::funcCode_ArbOwner_finishCodeUploadAsPluggable) {
            arbowner_finishCodeUploadAsPluggable(topFrame, calldata);
-        } elseif (funcCode == 0xc3bf429d) {
+        } elseif (funcCode == const::funcCode_ArbOwner_addToReserveFunds) {
             arbowner_addToReserveFunds(topFrame, calldata);
-        } elseif (funcCode == 0xa901dd92) {
+        } elseif (funcCode == const::funcCode_ArbOwner_setFeesEnabled) {
             arbowner_setFeesEnabled(topFrame, calldata);
-        } elseif (funcCode == 0x08df6923) {
+        } elseif (funcCode == const::funcCode_ArbOwner_getFeeRecipients) {
             arbowner_getFeeRecipients(topFrame, calldata);
-        } elseif (funcCode == 0xc6cabb40) {
+        } elseif (funcCode == const::funcCode_ArbOwner_setFeeRecipients) {
             arbowner_setFeeRecipients(topFrame, calldata);
-        } elseif (funcCode == 0xba7f4cc6) {
+        } elseif (funcCode == const::funcCode_ArbOwner_setFairGasPriceSender) {
             arbowner_setFairGasPriceSender(topFrame, calldata);
-        } elseif (funcCode == 0x29854f47) {
+        } elseif (funcCode == const::funcCode_ArbOwner_setSecondsPerSend) {
             arbowner_setSecondsPerSend(topFrame, calldata);
-        } elseif (funcCode == 0x8ea93643) {
+        } elseif (funcCode == const::funcCode_ArbOwner_setGasAccountingParams) {
             arbowner_setGasAccountingParams(topFrame, calldata);
         } else {
             // unrecognized function code
