@@ -12,6 +12,8 @@ use rlp::RlpStream;
 use std::convert::TryInto;
 use std::path::Path;
 
+mod integration;
+
 #[test]
 fn test_arraytest() {
     let path = Path::new("builtin/arraytest.mexe");

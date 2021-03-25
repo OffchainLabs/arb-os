@@ -21,8 +21,6 @@ use std::path::{Path, PathBuf};
 use std::time::Instant;
 use uint256::Uint256;
 
-#[cfg(test)]
-mod buffertests;
 mod compile;
 mod contracttemplates;
 mod evm;

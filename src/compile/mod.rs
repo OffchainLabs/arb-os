@@ -35,19 +35,19 @@ mod typecheck;
 lalrpop_mod!(mini);
 
 ///Command line options for compile subcommand.
-#[derive(Clap, Debug)]
+#[derive(Clap, Debug, Default)]
 pub struct CompileStruct {
-    input: Vec<String>,
+    pub input: Vec<String>,
     #[clap(short, long)]
-    debug_mode: bool,
+    pub debug_mode: bool,
     #[clap(short, long)]
-    test_mode: bool,
+    pub test_mode: bool,
     #[clap(short, long)]
     pub output: Option<String>,
     #[clap(short, long)]
     pub format: Option<String>,
     #[clap(short, long)]
-    inline: bool,
+    pub inline: bool,
 }
 
 ///Represents the contents of a source file after parsing.
