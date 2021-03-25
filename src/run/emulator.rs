@@ -1394,8 +1394,9 @@ impl Machine {
                         self.incr_pc();
                         Ok(true)
                     }
-                    AVMOpcode::Zero |
-                    AVMOpcode::Panic => Err(ExecutionError::new("panicked", &self.state, None)),
+                    AVMOpcode::Zero | AVMOpcode::Panic => {
+                        Err(ExecutionError::new("panicked", &self.state, None))
+                    }
                     AVMOpcode::Jump => {
                         self.state = MachineState::Running(self.stack.pop_codepoint(&self.state)?);
                         Ok(true)

@@ -3,7 +3,6 @@
 use impl2::set_newGlobal1_onUpgrade;
 use impl2::set_newGlobal2_onUpgrade;
 use impl2::set_newGlobal3_onUpgrade;
-use impl2::set_newGlobal2_onUpgrade;
 
 type GlobalsBeforeUpgrade = struct {
     global1: uint,
@@ -22,7 +21,6 @@ public impure func remapGlobalsForUpgrade(input_globals: GlobalsBeforeUpgrade) -
     let newGlobal1 = set_newGlobal1_onUpgrade(input_globals);
     let newGlobal2 = set_newGlobal2_onUpgrade(input_globals);
     let newGlobal3 = set_newGlobal3_onUpgrade(input_globals);
-    let newGlobal2 = set_newGlobal2_onUpgrade(input_globals);
     let _jump_table = (asm() GlobalsAfterUpgrade { rget })._jump_table;
     return struct {
         newGlobal1: newGlobal1,
