@@ -308,7 +308,7 @@ impl CodeStore {
     /// to the start of that segment.
     fn create_segment(&mut self) -> CodePt {
         self.segments.push(vec![Instruction::from_opcode(
-            AVMOpcode::Panic,
+            AVMOpcode::Zero,
             DebugInfo::default(),
         )]);
         CodePt::new_in_segment(self.segments.len() - 1, 0)
@@ -1168,6 +1168,7 @@ impl Machine {
     pub(crate) fn next_op_gas(&self) -> Option<u64> {
         if let MachineState::Running(pc) = self.state {
             Some(match self.code.get_insn(pc)?.opcode {
+                AVMOpcode::Zero => 5,
                 AVMOpcode::Plus => 3,
                 AVMOpcode::Mul => 3,
                 AVMOpcode::Minus => 3,
@@ -1334,6 +1335,7 @@ impl Machine {
                         self.incr_pc();
                         Ok(true)
                     }
+                    AVMOpcode::Zero |
                     AVMOpcode::Panic => Err(ExecutionError::new("panicked", &self.state, None)),
                     AVMOpcode::Jump => {
                         self.state = MachineState::Running(self.stack.pop_codepoint(&self.state)?);
