@@ -5,7 +5,6 @@
 use crate::mavm::Value;
 use crate::run::{load_from_file, ArbosReceipt, Machine};
 use crate::uint256::Uint256;
-use crate::RuntimeEnvironment;
 use ethers_core::utils::keccak256;
 use ethers_signers::Signer;
 use ethers_signers::Wallet;
@@ -2128,8 +2127,7 @@ fn test_arb_statistics() {
 }
 
 fn _test_arb_stats() -> Result<(), ethabi::Error> {
-    let rt_env = RuntimeEnvironment::new(Uint256::from_usize(1111), None);
-    let mut machine = load_from_file(Path::new("arb_os/arbos.mexe"), rt_env);
+    let mut machine = load_from_file(Path::new("arb_os/arbos.mexe"));
     machine.start_at_zero();
 
     let arbstats = _ArbStatistics::_new(false);

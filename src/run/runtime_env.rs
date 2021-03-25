@@ -3,7 +3,7 @@
  */
 
 use crate::mavm::{Buffer, Value};
-use crate::run::{load_from_file, ProfilerMode};
+use crate::run::{load_from_file_and_env, ProfilerMode};
 use crate::uint256::Uint256;
 use ethers_core::rand::rngs::StdRng;
 use ethers_core::rand::SeedableRng;
@@ -1281,7 +1281,7 @@ impl RtEnvRecorder {
         // returns true iff result matches
         let mut rt_env = RuntimeEnvironment::new(Uint256::from_usize(1111), None);
         rt_env.insert_full_inbox_contents(self.inbox.clone());
-        let mut machine = load_from_file(Path::new("arb_os/arbos.mexe"), rt_env);
+        let mut machine = load_from_file_and_env(Path::new("arb_os/arbos.mexe"), rt_env);
         if let Some(trace_file_name) = trace_file {
             machine.add_trace_writer(trace_file_name);
         }

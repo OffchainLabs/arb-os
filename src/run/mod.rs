@@ -9,6 +9,7 @@ use crate::mavm::{CodePt, Value};
 use emulator::{ExecutionError, StackTrace};
 use std::{fs::File, io::Read, path::Path};
 
+use crate::uint256::Uint256;
 pub use emulator::{Machine, ProfilerMode};
 pub use runtime_env::{
     _bytes_from_bytestack, _bytestack_from_bytes, generic_compress_token_amount,
@@ -39,15 +40,22 @@ pub fn run_from_file(
     env: RuntimeEnvironment,
     debug: bool,
 ) -> Result<Vec<Value>, (ExecutionError, StackTrace)> {
-    let mut machine = load_from_file(path, env);
+    let mut machine = load_from_file_and_env(path, env);
     run(&mut machine, args, debug)
+}
+
+pub fn load_from_file(path: &Path) -> Machine {
+    load_from_file_and_env(
+        path,
+        RuntimeEnvironment::new(Uint256::from_usize(1111), None),
+    )
 }
 
 ///Generates a `Machine` from the given path and `RuntimeEnvironment`. See `RuntimeEnvironment` for
 /// more details.
 ///
 /// Will panic if the path cannot be opened or doesn't represent a valid mini executable.
-pub fn load_from_file(path: &Path, env: RuntimeEnvironment) -> Machine {
+pub fn load_from_file_and_env(path: &Path, env: RuntimeEnvironment) -> Machine {
     let display = path.display();
 
     let mut file = match File::open(&path) {
@@ -101,7 +109,7 @@ pub fn profile_gen_from_file(
     env: RuntimeEnvironment,
     mode: ProfilerMode,
 ) {
-    let mut machine = load_from_file(path, env);
+    let mut machine = load_from_file_and_env(path, env);
     let profile = machine.profile_gen(args, mode);
     profile.profiler_session();
 }

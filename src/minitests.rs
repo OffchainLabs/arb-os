@@ -4,7 +4,8 @@
 
 use crate::mavm::Value;
 use crate::run::{
-    _bytestack_from_bytes, load_from_file, run, run_from_file, Machine, RuntimeEnvironment,
+    _bytestack_from_bytes, load_from_file, load_from_file_and_env, run, run_from_file, Machine,
+    RuntimeEnvironment,
 };
 use crate::uint256::Uint256;
 use num_bigint::{BigUint, RandBigInt};
@@ -646,8 +647,7 @@ fn test_call_to_precompile5(
 
 #[test]
 fn test_precompile5_small() {
-    let rt_env = RuntimeEnvironment::new(Uint256::from_usize(1111), None);
-    let mut machine = load_from_file(Path::new("arb_os/arbos.mexe"), rt_env);
+    let mut machine = load_from_file(Path::new("arb_os/arbos.mexe"));
     machine.start_at_zero();
     let my_addr = Uint256::from_usize(1025);
 
@@ -669,8 +669,7 @@ fn test_precompile5_small() {
 
 #[test]
 fn test_precompile5_big() {
-    let rt_env = RuntimeEnvironment::new(Uint256::from_usize(1111), None);
-    let mut machine = load_from_file(Path::new("arb_os/arbos.mexe"), rt_env);
+    let mut machine = load_from_file(Path::new("arb_os/arbos.mexe"));
     machine.start_at_zero();
     let my_addr = Uint256::from_usize(1025);
 
@@ -693,11 +692,9 @@ fn test_precompile5_big() {
 
 #[test]
 fn reinterpret_register() {
-    let rt_env = RuntimeEnvironment::new(Uint256::from_usize(1111), None);
-    let mut old_machine =
-        load_from_file(Path::new("upgradetests/regcopy_old.mexe"), rt_env.clone());
+    let mut old_machine = load_from_file(Path::new("upgradetests/regcopy_old.mexe"));
     let _ = run(&mut old_machine, vec![], false);
-    let mut new_machine = load_from_file(Path::new("upgradetests/regcopy_new.mexe"), rt_env);
+    let mut new_machine = load_from_file(Path::new("upgradetests/regcopy_new.mexe"));
     run(&mut new_machine, vec![old_machine.register], false).unwrap();
     assert_eq!(
         *new_machine.stack_top().unwrap(),
@@ -708,9 +705,7 @@ fn reinterpret_register() {
 #[test]
 fn small_upgrade() {
     use crate::run::upload::CodeUploader;
-
-    let rt_env = RuntimeEnvironment::new(Uint256::from_usize(1111), None);
-    let mut machine = load_from_file(Path::new("upgradetests/upgrade1_old.mexe"), rt_env.clone());
+    let mut machine = load_from_file(Path::new("upgradetests/upgrade1_old.mexe"));
     let uploader = CodeUploader::_new_from_file(Path::new("upgradetests/upgrade1_new.mexe"));
     let code_bytes = uploader._to_flat_vec();
     let msg = Value::new_tuple(vec![
@@ -734,7 +729,8 @@ fn small_upgrade_auto_remap() {
     use crate::run::upload::CodeUploader;
 
     let rt_env = RuntimeEnvironment::new(Uint256::from_usize(1111), None);
-    let mut machine = load_from_file(Path::new("upgradetests/upgrade2_old.mexe"), rt_env.clone());
+    let mut machine =
+        load_from_file_and_env(Path::new("upgradetests/upgrade2_old.mexe"), rt_env.clone());
     let uploader = CodeUploader::_new_from_file(Path::new("upgradetests/upgrade2_new.mexe"));
     let code_bytes = uploader._to_flat_vec();
     let msg = Value::new_tuple(vec![

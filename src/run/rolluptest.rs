@@ -67,8 +67,7 @@ pub fn _insert_rollup_debug(rt_env: &mut RuntimeEnvironment) {
 }
 
 pub fn _do_rollup_tracker_ops() {
-    let rt_env = RuntimeEnvironment::_new_with_owner(Uint256::from_usize(1111), None);
-    let mut machine = load_from_file(Path::new("arb_os/arbos.mexe"), rt_env);
+    let mut machine = load_from_file(Path::new("arb_os/arbos.mexe"));
     machine.start_at_zero();
 
     let wallet = machine.runtime_env.new_wallet();

@@ -2,7 +2,7 @@
 // Modifications are Copyright 2021, Offchain Labs, Inc.  All rights reserved.
 
 use crate::mavm::Buffer;
-use crate::run::{load_from_file, RuntimeEnvironment};
+use crate::run::{load_from_file_and_env, RuntimeEnvironment};
 use crate::uint256::Uint256;
 use std::convert::TryInto;
 use std::path::Path;
@@ -305,7 +305,7 @@ fn _test_eth_blake_precompile_impl() {
     ];
 
     let rt_env = RuntimeEnvironment::new(Uint256::from_usize(1111), None);
-    let mut machine = load_from_file(Path::new("arb_os/arbos.mexe"), rt_env);
+    let mut machine = load_from_file_and_env(Path::new("arb_os/arbos.mexe"), rt_env);
     machine.start_at_zero();
 
     let my_addr = Uint256::from_u64(1025);
